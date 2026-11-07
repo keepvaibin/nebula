@@ -6,7 +6,7 @@ class Butterfly : public LiveActor {
 public:
     Butterfly(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

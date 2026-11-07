@@ -17,10 +17,10 @@ namespace {
     NEW_NERVE(GamePauseSequenceSceneInformation, GamePauseSequence, SceneInformation);
 };  // namespace
 
-GamePauseSequence::GamePauseSequence() : LayoutActor("\203\174\201\133\203\131\211\346\226\312\212\307\227\235" /* ポーズ画面管理 */, true), mMenuType(ActivePause), mPauseMenu(nullptr), mWindowMenuFunc(nullptr) {
+GamePauseSequence::GamePauseSequence() : LayoutActor("ポーズ画面管理", true), mMenuType(ActivePause), mPauseMenu(nullptr), mWindowMenuFunc(nullptr) {
 }
 
-void GamePauseSequence::init(const JMapInfoIter& rIter) {
+void GamePauseSequence::init(const TableIter& rIter) {
     if (!MR::isStageDisablePauseMenu()) {
         mPauseMenu = new PauseMenu();
         mPauseMenu->initWithoutIter();

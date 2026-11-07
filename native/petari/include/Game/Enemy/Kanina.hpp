@@ -21,7 +21,7 @@ public:
     Kanina(const char*);
 
     virtual ~Kanina();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
@@ -43,7 +43,7 @@ public:
     bool receiveHipDrop(HitSensor*, HitSensor*);
     bool receiveInvincibleAttack(HitSensor*, HitSensor*);
     bool isStateStayOnGround() const;
-    void initForType(const JMapInfoIter&, KaninaType);
+    void initForType(const TableIter&, KaninaType);
     bool isPlayerBackward(f32) const;
     bool isStatePossibleToAttack() const;
     bool isStateBlink() const;

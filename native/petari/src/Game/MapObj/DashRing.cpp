@@ -4,7 +4,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -16,7 +16,7 @@
 DashRing::~DashRing() {
 }
 
-void DashRing::initCommon(const JMapInfoIter& rIter, const char* pName) {
+void DashRing::initCommon(const TableIter& rIter, const char* pName) {
     MR::initDefaultPos(this, rIter);
 
     mActiveTime = 0;
@@ -43,13 +43,13 @@ void DashRing::initCommon(const JMapInfoIter& rIter, const char* pName) {
     mSpeedScale = 2.5f;
     mDoTurn = true;
 
-    if (MR::checkJMapDataEntries(rIter)) {
+    if (MR::checkTableEntries(rIter)) {
         s32 arg0 = -1;
         s32 arg1 = -1;
         s32 arg2 = -1;
 
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
 
         if (arg0 != -1) {
             mBoostTime = arg0;
@@ -59,12 +59,12 @@ void DashRing::initCommon(const JMapInfoIter& rIter, const char* pName) {
             mMaxDuration = arg1;
         }
 
-        if (MR::getJMapInfoArg2NoInit(rIter, &arg2) && arg2 != -1) {
+        if (MR::getPlacementArg2NoInit(rIter, &arg2) && arg2 != -1) {
             mSpeedScale = arg2 / 100.0f;
         }
 
         s32 arg3 = -1;
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
 
         if (arg3 != -1) {
             mDoTurn = false;

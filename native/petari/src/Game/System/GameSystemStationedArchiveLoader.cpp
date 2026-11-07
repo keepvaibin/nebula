@@ -63,7 +63,7 @@ void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
     mCondition->mIsDataMario = isDataMario;
 }
 
-GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder() {
+GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("常駐データ初期化"), mHeapHolder() {
     initNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers));
 }
 

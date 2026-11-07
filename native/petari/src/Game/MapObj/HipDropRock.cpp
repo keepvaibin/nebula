@@ -4,7 +4,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -26,7 +26,7 @@ HipDropRock::HipDropRock(const char* pName) : LiveActor(pName), mBreakModel(), m
     mBreakModelMtx.identity();
 }
 
-void HipDropRock::init(const JMapInfoIter& rIter) {
+void HipDropRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("HipDropRock", nullptr, false);
     initBreakModel();
@@ -39,7 +39,7 @@ void HipDropRock::init(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);
     HipDropRock::initItem(rIter);
-    MR::getJMapInfoArg7NoInit(rIter, &mObjArg7);
+    MR::getPlacementArg7NoInit(rIter, &mObjArg7);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoCast(mBreakModel, rIter);
@@ -125,15 +125,15 @@ void HipDropRock::initBreakModel() {
     MR::makeMtxMoment(&mtx, v2);
     mBreakModelMtx.concat(mtx);
 
-    mBreakModel = MR::createModelObjMapObj("\203\161\203\162\220\316\211\363\202\352\203\202\203\146\203\213" /* ヒビ石壊れモデル */, "HipDropRockBreak", mBreakModelMtx);
+    mBreakModel = MR::createModelObjMapObj("ヒビ石壊れモデル", "HipDropRockBreak", mBreakModelMtx);
     mBreakModel->initWithoutIter();
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
 }
 
-void HipDropRock::initItem(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mItemType);
-    MR::getJMapInfoArg1NoInit(rIter, &mStarPieceNum);
+void HipDropRock::initItem(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mItemType);
+    MR::getPlacementArg1NoInit(rIter, &mStarPieceNum);
 
     if (mItemType == 1 && mStarPieceNum == -1) {
         mStarPieceNum = ::sDefaultStarPeaceNum;

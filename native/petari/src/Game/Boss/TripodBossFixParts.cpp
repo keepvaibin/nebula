@@ -5,7 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -48,7 +48,7 @@ TripodBossFixParts::TripodBossFixParts(const char* pName)
     : TripodBossFixPartsBase(pName), _E4(-1), _E8(180), mHasCollision(), _ED(true), _EE(), mIsPlayingWarning() {
 }
 
-void TripodBossFixParts::init(const JMapInfoIter& rIter) {
+void TripodBossFixParts::init(const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
     setName(objName);
@@ -79,8 +79,8 @@ void TripodBossFixParts::init(const JMapInfoIter& rIter) {
         initClippingSphere();
     }
 
-    MR::getJMapInfoArg1NoInit(rIter, &_E4);
-    MR::getJMapInfoArg2NoInit(rIter, &_E8);
+    MR::getPlacementArg1NoInit(rIter, &_E4);
+    MR::getPlacementArg2NoInit(rIter, &_E8);
 
     if (_ED) {
         initBreakMovement(_E4);
@@ -104,7 +104,7 @@ void TripodBossFixParts::init(const JMapInfoIter& rIter) {
     makeActorDead();
 }
 
-void TripodBossFixParts::initSensor(const JMapInfoIter& rIter) {
+void TripodBossFixParts::initSensor(const TableIter& rIter) {
     initHitSensor(1);
 
     if (MR::isMapPartsPressOn(rIter)) {

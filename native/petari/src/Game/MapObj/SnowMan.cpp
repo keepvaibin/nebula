@@ -27,7 +27,7 @@ namespace NrvSnowMan {
 SnowMan::SnowMan(const char* pName) : LiveActor(pName), mHeadCollisionParts(), mBodyCollisionParts(), mAnimScaleCtrl(), mAnimScaleParam() {
 }
 
-void SnowMan::init(const JMapInfoIter& rrIter) {
+void SnowMan::init(const TableIter& rrIter) {
     MR::initDefaultPos(this, rrIter);
     initModelManagerWithAnm("SnowMan", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);

@@ -45,7 +45,7 @@ inline void FireBubble::initHitSensors(const char* const hitSensor1, const char*
     MR::addHitSensorAtJointEnemy(this, hitSensor1, hitSensor2, 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
-void FireBubble::init(const JMapInfoIter& rIter) {
+void FireBubble::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         initMapToolInfo(rIter);
     }
@@ -133,7 +133,7 @@ bool FireBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
     return false;
 }
 
-void FireBubble::initMapToolInfo(const JMapInfoIter& rIter) {
+void FireBubble::initMapToolInfo(const TableIter& rIter) {
     mIsValidInfo = true;
 
     MR::initDefaultPos(this, rIter);
@@ -225,7 +225,7 @@ bool FireBubble::tryChaseEnd() {
 }
 
 bool FireBubble::tryReflect() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         Vec2f starPointerScreenVelocity(*MR::getStarPointerScreenVelocity(*MR::getStarPointerLastPointedPort(this)));
         if (::cReflectCursorSpeed < starPointerScreenVelocity.length()) {
             MR::onCalcGravity(this);

@@ -89,10 +89,10 @@ void Mario::startSlider() {
         if (getPlayer()->mMovementStates._B) {
             if (getPlayer()->mMovementStates.jumping) {
                 mDrawStates._14 = true;
-                playSound("\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 尻ドロップ着地 */);
-                playSound("\220\272\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 声尻ドロップ着地 */);
-                playEffectRT("\221\256\220\253\220\113\203\150\203\215\203\142\203\166" /* 属性尻ドロップ */, _368, mPosition);
-                startPadVib("\215\305\213\255" /* 最強 */);
+                playSound("尻ドロップ着地");
+                playSound("声尻ドロップ着地");
+                playEffectRT("属性尻ドロップ", _368, mPosition);
+                startPadVib("最強");
                 startCamVib(0);
                 MR::removeAllClingingKarikari();
             }
@@ -109,7 +109,7 @@ bool MarioSlider::start() {
     MR::vecKillElement(_14, getPlayer()->_368, &_14);
     _20 = getFrontVec();
     getPlayer()->cancelSquatMode();
-    changeAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */);
+    changeAnimation("スライダー尻", "スライダー尻");
     _40 = 10;
     _38 = 0.0f;
     _3C = 0.0f;
@@ -196,7 +196,7 @@ bool MarioSlider::update() {
             }
 
             calcWallHit();
-            playSound("\215\342\212\212\202\350" /* 坂滑り */);
+            playSound("坂滑り");
             return true;
         }
     }
@@ -206,11 +206,11 @@ bool MarioSlider::update() {
 
 bool MarioSlider::close() {
     if (getPlayer()->isSwimming()) {
-        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */);
+        stopAnimation("スライダー尻");
     } else if (getPlayer()->mMovementStates.jumping) {
-        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\227\216\211\272" /* 落下 */);
+        stopAnimation("スライダー尻", "落下");
     } else {
-        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("スライダー尻", "基本");
     }
 
     return true;

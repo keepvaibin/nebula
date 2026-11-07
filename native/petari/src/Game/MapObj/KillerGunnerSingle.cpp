@@ -24,7 +24,7 @@ namespace NrvKillerGunnerSingle {
 KillerGunnerSingle::KillerGunnerSingle(const char* pName) : LiveActor(pName) {
 }
 
-void KillerGunnerSingle::init(const JMapInfoIter& rIter) {
+void KillerGunnerSingle::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KillerGunnerSingle", nullptr, false);
     MR::connectToSceneEnvironment(this);
@@ -78,7 +78,7 @@ void KillerGunnerSingle::exeCharge() {
 
 void KillerGunnerSingle::exeShoot() {
     if (MR::isFirstStep(this)) {
-        MR::startRumbleWithShakeCameraWeak(this, "\222\206" /* 中 */, "\216\343" /* 弱 */, 500.0f, 1000.0f);
+        MR::startRumbleWithShakeCameraWeak(this, "中", "弱", 500.0f, 1000.0f);
     }
 
     if (MR::isStep(this, 0)) {

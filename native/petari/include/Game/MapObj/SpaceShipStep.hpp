@@ -7,7 +7,7 @@ public:
     SpaceShipStep(const char*);
 
     virtual ~SpaceShipStep();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {

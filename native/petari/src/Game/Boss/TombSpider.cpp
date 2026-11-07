@@ -44,7 +44,7 @@ TombSpider::TombSpider(const char* pName)
       mAction2nd(nullptr), mDemo(nullptr), mNoctilucaActive(false), mCameraInfo(nullptr) {
 }
 
-void TombSpider::init(const JMapInfoIter& rIter) {
+void TombSpider::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("TombSpider", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -106,7 +106,7 @@ void TombSpider::exeWaitPlayer() {
 
     if (mDemo->isStartDemoGateOpen()) {
         setNerve(GET_NERVE(TombSpider, TombSpiderNrvWaitDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\203\121\201\133\203\147\203\111\201\133\203\166\203\223\203\146\203\202[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* ゲートオープンデモ[トゥームスパイダー] */, GET_NERVE(TombSpider, TombSpiderNrvDemoGateOpen),
+        MR::requestStartDemoMarioPuppetable(this, "ゲートオープンデモ[トゥームスパイダー]", GET_NERVE(TombSpider, TombSpiderNrvDemoGateOpen),
                                             nullptr);
     }
 }
@@ -122,7 +122,7 @@ void TombSpider::exeDemoGateOpen() {
 void TombSpider::exeActionCocoon() {
     if (MR::updateActorState(this, mActionCocoon)) {
         setNerve(GET_NERVE(TombSpider, TombSpiderNrvWaitDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\217\157\214\273" /* 出現 */, GET_NERVE(TombSpider, TombSpiderNrvDemoCocoonBreak), nullptr);
+        MR::requestStartDemoMarioPuppetable(this, "出現", GET_NERVE(TombSpider, TombSpiderNrvDemoCocoonBreak), nullptr);
     }
 }
 
@@ -152,7 +152,7 @@ void TombSpider::exeDemoBattle1stStartJumpToPlayer() {
 void TombSpider::exeAction1st() {
     if (MR::updateActorState(this, mAction1st)) {
         setNerve(GET_NERVE(TombSpider, TombSpiderNrvWaitDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\202\120\211\361\220\355\217\111\227\271" /* １回戦終了 */, GET_NERVE(TombSpider, TombSpiderNrvDemoBattle1stEnd), nullptr);
+        MR::requestStartDemoMarioPuppetable(this, "１回戦終了", GET_NERVE(TombSpider, TombSpiderNrvDemoBattle1stEnd), nullptr);
     }
 }
 
@@ -179,7 +179,7 @@ void TombSpider::exeDemoBattle2ndStart() {
 void TombSpider::exeAction2nd() {
     if (MR::updateActorState(this, mAction2nd)) {
         setNerve(GET_NERVE(TombSpider, TombSpiderNrvWaitDemo));
-        MR::requestStartDemoMarioPuppetable(this, "\216\200\226\123" /* 死亡 */, GET_NERVE(TombSpider, TombSpiderNrvDemoDeath), nullptr);
+        MR::requestStartDemoMarioPuppetable(this, "死亡", GET_NERVE(TombSpider, TombSpiderNrvDemoDeath), nullptr);
     }
 }
 

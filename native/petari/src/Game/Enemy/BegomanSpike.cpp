@@ -132,7 +132,7 @@ BegomanSpike::BegomanSpike(const char* pName) : BegomanBase(pName), mHead(), mBr
     mWaterColumnMatrix.identity();
 }
 
-void BegomanSpike::init(const JMapInfoIter& rIter) {
+void BegomanSpike::init(const TableIter& rIter) {
     initCore(rIter, "BegomanSpike", false);
     initUseSwitchB(rIter, MR::Functor(this, &BegomanSpike::onSwitchB));
     MR::declareCoin(this, 1);
@@ -143,11 +143,11 @@ void BegomanSpike::init(const JMapInfoIter& rIter) {
     MR::setEffectHostMtx(this, "WaterColumn", mWaterColumnMatrix);
     initSound(8, false);
     initShadow(70.0f, "Center");
-    mHead = new BegomanHead(this, "\203\147\203\121\223\252" /* トゲ頭 */, "BegomanSpikeHead", mHeadMatrix, MR::DrawBufferType_Enemy, false);
+    mHead = new BegomanHead(this, "トゲ頭", "BegomanSpikeHead", mHeadMatrix, MR::DrawBufferType_Enemy, false);
     MR::initLightCtrl(mHead);
     mHead->_9C = &_B4;
     mHead->initWithoutIter();
-    mBrokenModel = new ModelObj("\203\170\201\133\203\123\203\175\203\223\211\363\202\352\203\202\203\146\203\213" /* ベーゴマン壊れモデル */, "BegomanBrokenPiece", getBaseMtx(), MR::DrawBufferType_Enemy, -2, -2, false);
+    mBrokenModel = new ModelObj("ベーゴマン壊れモデル", "BegomanBrokenPiece", getBaseMtx(), MR::DrawBufferType_Enemy, -2, -2, false);
     mBrokenModel->mScale.set(mScale);
     mBrokenModel->initWithoutIter();
     MR::invalidateClipping(mBrokenModel);

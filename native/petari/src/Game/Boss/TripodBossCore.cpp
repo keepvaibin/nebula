@@ -32,7 +32,7 @@ namespace NrvTripodBossCore {
 TripodBossCore::TripodBossCore(const char* pName) : TripodBossFixPartsBase(pName), mBreakModel(), mBloomModel() {
 }
 
-void TripodBossCore::init(const JMapInfoIter& rIter) {
+void TripodBossCore::init(const TableIter& rIter) {
     TripodBossFixPartsBase::init(rIter);
     initModelManagerWithAnm("TripodBossCore", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
@@ -42,13 +42,13 @@ void TripodBossCore::init(const JMapInfoIter& rIter) {
     MR::initCollisionParts(this, "TripodBossCore", getSensor("body"), nullptr);
     initSound(4, false);
 
-    mBreakModel = MR::createModelObjMapObjStrongLight("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "TripodBossCoreBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjMapObjStrongLight("壊れモデル", "TripodBossCoreBreak", getBaseMtx());
     mBreakModel->initWithoutIter();
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
     MR::addTripodBossPartsMovement(mBreakModel);
 
-    mBloomModel = MR::createModelObjBloomModel("\203\165\203\213\201\133\203\200\203\202\203\146\203\213" /* ブルームモデル */, "TripodBossCoreBloom", getBaseMtx());
+    mBloomModel = MR::createModelObjBloomModel("ブルームモデル", "TripodBossCoreBloom", getBaseMtx());
     mBloomModel->initWithoutIter();
     MR::invalidateClipping(mBloomModel);
     mBloomModel->makeActorDead();

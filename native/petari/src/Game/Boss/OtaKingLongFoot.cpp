@@ -30,7 +30,7 @@ OtaKingLongFoot::OtaKingLongFoot(LiveActor* pHost, s32 demoBckStep, const char* 
     : PartsModel(pHost, pName, "OtaKingLongFoot", nullptr, MR::DrawBufferType_Enemy, false), mDemoBckStep(demoBckStep), mScaleController(nullptr) {
 }
 
-void OtaKingLongFoot::init(const JMapInfoIter& rIter) {
+void OtaKingLongFoot::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::initLightCtrl(this);
     initSensor();

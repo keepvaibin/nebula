@@ -10,10 +10,10 @@ namespace NrvGalaxySelectBackButton {
     NEW_NERVE(GalaxySelectBackButtonNrvDecide, GalaxySelectBackButton, Decide);
 };  // namespace NrvGalaxySelectBackButton
 
-GalaxySelectBackButton::GalaxySelectBackButton() : LayoutActor("\203\115\203\203\203\211\203\116\203\126\201\133\221\111\221\360\226\337\202\351\203\173\203\136\203\223" /* ギャラクシー選択戻るボタン */, true) {
+GalaxySelectBackButton::GalaxySelectBackButton() : LayoutActor("ギャラクシー選択戻るボタン", true) {
 }
 
-void GalaxySelectBackButton::init(const JMapInfoIter&) {
+void GalaxySelectBackButton::init(const TableIter&) {
     initLayoutManager("BackButton", 1);
     MR::connectToSceneLayout(this);
 

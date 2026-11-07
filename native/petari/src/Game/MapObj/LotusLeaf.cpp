@@ -35,7 +35,7 @@ namespace NrvLotusLeaf {
 LotusLeaf::LotusLeaf(const char* pName) : LiveActor(pName), mInitPos(gZeroVec), mShakeSpeed(), mShakePeriod() {
 }
 
-void LotusLeaf::init(const JMapInfoIter& rIter) {
+void LotusLeaf::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mInitPos.set(mPosition);
     initModelManagerWithAnm("LotusLeaf", nullptr, false);

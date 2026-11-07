@@ -21,7 +21,7 @@ public:
     /// @param pModelName A pointer to the null-terminated name of the model.
     BenefitItemObj(const char* pName, const char* pModelName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();

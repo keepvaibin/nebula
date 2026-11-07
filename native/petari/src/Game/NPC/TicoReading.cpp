@@ -3,7 +3,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -14,13 +14,13 @@ namespace NrvTicoReading {
 TicoReading::TicoReading(const char* pName) : LiveActor(pName) {
 }
 
-void TicoReading::init(const JMapInfoIter& rIter) {
+void TicoReading::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Tico", nullptr, false);
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     s32 animFrame = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &animFrame);
+    MR::getPlacementArg0NoInit(rIter, &animFrame);
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, animFrame);
     initEffectKeeper(0, nullptr, false);

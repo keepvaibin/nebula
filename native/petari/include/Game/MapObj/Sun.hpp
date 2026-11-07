@@ -9,5 +9,5 @@ public:
     Sun(const char* pName);
 
     virtual ~Sun();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 };

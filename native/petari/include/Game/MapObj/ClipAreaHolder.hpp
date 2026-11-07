@@ -12,7 +12,7 @@ class ClipAreaHolder : public DeriveActorGroup< ClipArea > {
 public:
     ClipAreaHolder(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     bool isInArea(const Vec3f&, f32) const;
 

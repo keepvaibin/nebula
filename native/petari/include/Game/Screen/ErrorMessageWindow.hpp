@@ -19,7 +19,7 @@ public:
     /// @brief Creates a new `ErrorMessageWindow`.
     ErrorMessageWindow();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     bool isAnimEnd() const;

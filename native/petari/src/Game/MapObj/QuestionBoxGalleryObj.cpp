@@ -3,7 +3,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -19,7 +19,7 @@ namespace NrvQuestionBoxGalleryObj {
 QuestionBoxGalleryObj::QuestionBoxGalleryObj(const char* pName) : MapObjActor(pName) {
 }
 
-void QuestionBoxGalleryObj::init(const JMapInfoIter& rIter) {
+void QuestionBoxGalleryObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo rInitInfo;
 
@@ -53,7 +53,7 @@ void QuestionBoxGalleryObj::init(const JMapInfoIter& rIter) {
     startMapPartsFunctions();
 
     bool arg0 = false;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0) {
         initNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOnWait));

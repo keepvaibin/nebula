@@ -10,7 +10,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -40,10 +40,10 @@ ScenarioStarter::ScenarioStarter(const char* pName)
     _A8.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void ScenarioStarter::init(const JMapInfoIter& rIter) {
+void ScenarioStarter::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mFlightTime);
+    MR::getPlacementArg0NoInit(rIter, &mFlightTime);
     initShootPath(rIter);
 
     mSpinDriverCamera = new SpinDriverCamera();
@@ -52,7 +52,7 @@ void ScenarioStarter::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::addHitSensor(this, "body", ACTMES_GROUP_LOD_LOW, 8, 200.0f, Vec3f(0.0f));
     MR::invalidateClipping(this);
-    mWelcomeLayout = MR::createSimpleLayout("Welcome\225\134\216\246" /* Welcome表示 */, "Welcome", 1);
+    mWelcomeLayout = MR::createSimpleLayout("Welcome表示", "Welcome", 1);
     mWelcomeLayout->kill();
     MR::registerDemoSimpleCastAll(mWelcomeLayout);
     mTitle = new ScenarioTitle();
@@ -188,10 +188,10 @@ void ScenarioStarter::exeShowWelcomeLayout() {
     }
 }
 
-void ScenarioStarter::initShootPath(const JMapInfoIter& rIter) {
+void ScenarioStarter::initShootPath(const TableIter& rIter) {
     initRailRider(rIter);
     mInitalPlayerRotation = 0.0f;
-    MR::getJMapInfoArg5NoInit(rIter, &mInitalPlayerRotation);
+    MR::getPlacementArg5NoInit(rIter, &mInitalPlayerRotation);
     _B8 = new SpinDriverShootPath();
     _B8->init(rIter);
     _B8->calcInitPose(&_C0, &_CC, &_D8, mInitalPlayerRotation);

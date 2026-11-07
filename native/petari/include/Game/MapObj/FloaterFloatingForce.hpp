@@ -8,7 +8,7 @@ public:
     FloaterFloatingForce(LiveActor*, const char*);
 
     virtual ~FloaterFloatingForce();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void start();
 
     virtual void updateHostTrans(Vec3f*) const {

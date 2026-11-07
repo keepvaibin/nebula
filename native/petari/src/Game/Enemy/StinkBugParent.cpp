@@ -71,7 +71,7 @@ StinkBugParent::StinkBugParent(const char* pName) : StinkBugBase(pName) {
     mIsChildAlive = true;
 }
 
-void StinkBugParent::init(const JMapInfoIter& rIter) {
+void StinkBugParent::init(const TableIter& rIter) {
     StinkBugBase::init(rIter);
     initHitSensor(2);
     MR::addHitSensorEye(this, "body", 4, 250.0f, Vec3f(0.0f, 150.0f, 0.0f));
@@ -85,7 +85,7 @@ void StinkBugParent::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, 8);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionNerve(this, GET_NERVE(StinkBugParent, StinkBugParentNrvDemoAnger), "\203\137\203\201\201\133\203\127\222\206" /* ダメージ中 */);
+        MR::registerDemoActionNerve(this, GET_NERVE(StinkBugParent, StinkBugParentNrvDemoAnger), "ダメージ中");
     }
 
     _B0 = 50.0f;
@@ -322,8 +322,8 @@ void StinkBugParent::exeDemoAnger() {
         MR::startBck(this, "Anger");
         MR::startBrk(this, "Anger");
         MR::resetPosition(this, _98);
-        MR::setPlayerPosAndWait("\216\161\230\101\202\352\203\112\203\201\203\200\203\126\203\146\203\202\214\343\203\174\203\103\203\223\203\147" /* 子連れカメムシデモ後ポイント */);
-        MR::findNamePos("\216\161\230\101\202\352\203\112\203\201\203\200\203\126\203\146\203\202\214\343\203\174\203\103\203\223\203\147" /* 子連れカメムシデモ後ポイント */, &v1, nullptr);
+        MR::setPlayerPosAndWait("子連れカメムシデモ後ポイント");
+        MR::findNamePos("子連れカメムシデモ後ポイント", &v1, nullptr);
         MR::turnDirectionToTargetUseGroundNormalDegree(this, &_8C, v1, 180.0f);
     }
 
@@ -464,7 +464,7 @@ bool StinkBugParent::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 void StinkBugParent::jumpBackPlayerFromChild() const {
     Vec3f v10, v9, v8;
-    MR::findNamePos("\216\161\230\101\202\352\203\112\203\201\203\200\203\126\203\146\203\202\214\343\203\174\203\103\203\223\203\147" /* 子連れカメムシデモ後ポイント */, &v10, nullptr);
+    MR::findNamePos("子連れカメムシデモ後ポイント", &v10, nullptr);
     v9.sub(v10, *MR::getPlayerPos());
     MR::normalize(v9, &v8);
     Vec3f v7 = -v8;

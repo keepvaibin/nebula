@@ -16,7 +16,7 @@ TombSpiderGland::TombSpiderGland(LiveActor* pActor, const char* pName, const Vec
     initFixedPosition(rPos, a1, pJointName);
 }
 
-void TombSpiderGland::init(const JMapInfoIter& rIter) {
+void TombSpiderGland::init(const TableIter& rIter) {
     PartsModel::init(rIter);
     MR::startBrk(this, "Battle1st");
     initNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvWait));

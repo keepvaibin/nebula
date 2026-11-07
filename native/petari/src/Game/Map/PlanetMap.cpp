@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -34,7 +34,7 @@ PlanetMap::PlanetMap(const char* pName, const char* pModelName)
     : LiveActor(pName), mModelName(pModelName), _90(0.0f, 0.0f, 0.0f), mLODCtrl(), mBloomModel(), mWaterModel(), mIndirectModel() {
 }
 
-void PlanetMap::init(const JMapInfoIter& rIter) {
+void PlanetMap::init(const TableIter& rIter) {
     MR::getObjectName(&mModelName, rIter);
     if (MR::isValidInfo(rIter)) {
     }
@@ -93,10 +93,10 @@ void PlanetMap::makeActorDead() {
     LiveActor::makeActorDead();
 }
 
-void PlanetMap::initClipping(const JMapInfoIter& rIter) {
+void PlanetMap::initClipping(const TableIter& rIter) {
     f32 radius = 0.0f;
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg1NoInit(rIter, &radius);
+        MR::getPlacementArg1NoInit(rIter, &radius);
     }
 
     PlanetMapClippingInfo* pInfo = ::findClippingInfo(mModelName);
@@ -119,7 +119,7 @@ void PlanetMap::initClipping(const JMapInfoIter& rIter) {
     }
 }
 
-void PlanetMap::initModel(const char* pModelName, const JMapInfoIter& rIter) {
+void PlanetMap::initModel(const char* pModelName, const TableIter& rIter) {
     initModelManagerWithAnm(pModelName, nullptr, false);
     f32 farClippingDistance = getFarClipDistance();
     mLODCtrl = MR::createLodCtrlPlanet(this, rIter, farClippingDistance);
@@ -184,7 +184,7 @@ FurPlanetMap::FurPlanetMap(const char* pName) : PlanetMap(pName, nullptr) {
 PlanetMap::~PlanetMap() {
 }
 
-void FurPlanetMap::init(const JMapInfoIter& rIter) {
+void FurPlanetMap::init(const TableIter& rIter) {
     PlanetMap::init(rIter);
     MR::initFurPlanet(this);
 }
@@ -192,7 +192,7 @@ void FurPlanetMap::init(const JMapInfoIter& rIter) {
 RailPlanetMap::RailPlanetMap(const char* pName) : PlanetMap(pName, nullptr) {
 }
 
-void RailPlanetMap::init(const JMapInfoIter& rIter) {
+void RailPlanetMap::init(const TableIter& rIter) {
     PlanetMap::init(rIter);
     initRailRider(rIter);
 }

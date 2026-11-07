@@ -2,7 +2,7 @@
 
 
 class DemoExecutor;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class Nerve;
 class TalkMessageCtrl;
@@ -25,7 +25,7 @@ namespace DemoExecutorFunction {
     bool isRegisteredDemoActionNerve(const DemoExecutor*, const LiveActor*);
 
     bool tryCreateDemoTalkAnimCtrlForActor(DemoExecutor*, LiveActor*, const char*, const char*);
-    bool tryCreateDemoTalkAnimCtrlForScene(DemoExecutor*, LiveActor*, const JMapInfoIter&, const char*, const char*, s32, s32);
+    bool tryCreateDemoTalkAnimCtrlForScene(DemoExecutor*, LiveActor*, const TableIter&, const char*, const char*, s32, s32);
 
     void registerDemoTalkMessageCtrl(DemoExecutor*, LiveActor*, TalkMessageCtrl*);
     void setDemoTalkMessageCtrl(DemoExecutor*, const LiveActor*, TalkMessageCtrl*);

@@ -8,7 +8,7 @@
 CameraContext::~CameraContext() {
 }
 
-CameraContext::CameraContext() : NameObj("\203\112\203\201\203\211\203\122\203\223\203\145\203\114\203\130\203\147" /* カメラコンテキスト */) {
+CameraContext::CameraContext() : NameObj("カメラコンテキスト") {
     initParams();
 }
 

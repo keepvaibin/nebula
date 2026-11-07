@@ -5,7 +5,7 @@
 class MarioSearchLight : public PartsModel {
 public:
     MarioSearchLight(LiveActor* pActor);
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
     virtual void updateHitSensor(HitSensor* pSensor);
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

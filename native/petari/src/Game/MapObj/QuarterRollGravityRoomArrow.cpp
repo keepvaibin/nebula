@@ -15,7 +15,7 @@ namespace NrvQuarterRollGravityRoomArrow {
 QuarterRollGravityRoomArrow::QuarterRollGravityRoomArrow(const char* pName) : MapObjActor(pName) {
 }
 
-void QuarterRollGravityRoomArrow::init(const JMapInfoIter& rIter) {
+void QuarterRollGravityRoomArrow::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info = MapObjActorInitInfo();
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

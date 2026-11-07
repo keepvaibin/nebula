@@ -8,7 +8,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -217,10 +217,10 @@ void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {
 }
 
-void BrightObj::init(const JMapInfoIter& rIter) {
+void BrightObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mRadius);
+    MR::getPlacementArg0NoInit(rIter, &mRadius);
 
     MR::invalidateClipping(this);
 
@@ -335,14 +335,14 @@ void BrightObjBase::getNowCenter(Vec2f* pDst) const {
     pDst->set(mNowCenter);
 }
 
-void BrightSun::init(const JMapInfoIter& rIter) {
+void BrightSun::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::invalidateClipping(this);
 
     MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 
-    mSun = new Sun("\221\276\227\172" /* 太陽 */);
+    mSun = new Sun("太陽");
     mSun->initWithoutIter();
 
     MR::tryRegisterDemoCast(this, rIter);

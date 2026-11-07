@@ -7,7 +7,7 @@ public:
     IceStepNoSlip(MtxPtr);
 
     virtual ~IceStepNoSlip();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
 
     void exeAppear();
@@ -19,7 +19,7 @@ public:
     WaterLeakPipe(const char*);
 
     virtual ~WaterLeakPipe();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim() {};
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 

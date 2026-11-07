@@ -23,11 +23,11 @@ namespace {
     static const s32 sVs2DemoAppearVoiceTiming = 60;
 };  // namespace
 
-BossKameckDemoPosition::BossKameckDemoPosition() : LiveActor("\203\114\203\203\203\130\203\147\210\312\222\165" /* キャスト位置 */) {
+BossKameckDemoPosition::BossKameckDemoPosition() : LiveActor("キャスト位置") {
     makeActorDead();
 }
 
-void BossKameckDemoPosition::init(const JMapInfoIter& rIter) {
+void BossKameckDemoPosition::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BossKameckBattleDemo", nullptr, false);
 
@@ -55,8 +55,8 @@ namespace NrvBossKamecBattleDemo {
     NEW_NERVE(BossKameckBattleDemoNrvDownVs2, BossKameckBattleDemo, DownVs2);
 };  // namespace NrvBossKamecBattleDemo
 
-BossKameckBattleDemo::BossKameckBattleDemo(BossKameck* pBoss, const JMapInfoIter& rIter)
-    : BossKameckAction("\203\173\203\130\203\112\203\201\203\142\203\116\220\355\203\146\203\202" /* ボスカメック戦デモ */, pBoss), mDemoPos(), mCurDemoName(), mDemoNerve() {
+BossKameckBattleDemo::BossKameckBattleDemo(BossKameck* pBoss, const TableIter& rIter)
+    : BossKameckAction("ボスカメック戦デモ", pBoss), mDemoPos(), mCurDemoName(), mDemoNerve() {
     mDemoPos = new BossKameckDemoPosition();
     mDemoPos->init(rIter);
 }
@@ -98,31 +98,31 @@ void BossKameckBattleDemo::exeTryStartDemo() {
 }
 
 void BossKameckBattleDemo::startDemoAppearVs1() {
-    startTryDemo("\203\112\203\201\203\142\203\116\223\157\217\352Vs1" /* カメック登場Vs1 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvWaitAppearVs1));
+    startTryDemo("カメック登場Vs1", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvWaitAppearVs1));
     MR::hideModelAndOnCalcAnim(mHost);
     MR::invalidateShadowAll(mHost);
 }
 
 void BossKameckBattleDemo::startDemoAppearVs2() {
-    startTryDemo("\203\112\203\201\203\142\203\116\223\157\217\352Vs2" /* カメック登場Vs2 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvWaitAppearVs2));
+    startTryDemo("カメック登場Vs2", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvWaitAppearVs2));
     MR::hideModelAndOnCalcAnim(mHost);
     MR::invalidateShadowAll(mHost);
 }
 
 void BossKameckBattleDemo::startDemoPowerUpVs1() {
-    startTryDemo("\203\112\203\201\203\142\203\116\203\160\203\217\201\133\203\101\203\142\203\166Vs1" /* カメックパワーアップVs1 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvPowerUpVs1));
+    startTryDemo("カメックパワーアップVs1", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvPowerUpVs1));
 }
 
 void BossKameckBattleDemo::startDemoPowerUpVs2() {
-    startTryDemo("\203\112\203\201\203\142\203\116\203\160\203\217\201\133\203\101\203\142\203\166Vs2" /* カメックパワーアップVs2 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvPowerUpVs2));
+    startTryDemo("カメックパワーアップVs2", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvPowerUpVs2));
 }
 
 void BossKameckBattleDemo::startDemoDownVs1() {
-    startTryDemo("\203\173\203\130\203\112\203\201\203\142\203\116\203\137\203\105\203\223Lv1" /* ボスカメックダウンLv1 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvDownVs1));
+    startTryDemo("ボスカメックダウンLv1", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvDownVs1));
 }
 
 void BossKameckBattleDemo::startDemoDownVs2() {
-    startTryDemo("\203\173\203\130\203\112\203\201\203\142\203\116\203\137\203\105\203\223Lv2" /* ボスカメックダウンLv2 */, GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvDownVs2));
+    startTryDemo("ボスカメックダウンLv2", GET_NERVE(BossKamecBattleDemo, BossKameckBattleDemoNrvDownVs2));
 }
 
 void BossKameckBattleDemo::exeWaitAppearVs1() {
@@ -166,7 +166,7 @@ void BossKameckBattleDemo::exeAppearVs1() {
         BossKameckDemoPosition* pos = mDemoPos;
         MR::endAnimCamera(pos, pos->mCameraInfo, "DemoBossKameckStart", 0, true);
         pos->makeActorDead();
-        MR::endDemo(mHost, "\203\112\203\201\203\142\203\116\223\157\217\352Vs1" /* カメック登場Vs1 */);
+        MR::endDemo(mHost, "カメック登場Vs1");
         mHost->endDemo();
         kill();
     }
@@ -216,7 +216,7 @@ void BossKameckBattleDemo::exeAppearVs2() {
         BossKameckDemoPosition* pos = mDemoPos;
         MR::endAnimCamera(pos, pos->mCameraInfo, "DemoBossKameckStart2", 0, true);
         pos->makeActorDead();
-        MR::endDemo(mHost, "\203\112\203\201\203\142\203\116\223\157\217\352Vs2" /* カメック登場Vs2 */);
+        MR::endDemo(mHost, "カメック登場Vs2");
         mHost->endDemo();
         kill();
     }
@@ -241,7 +241,7 @@ void BossKameckBattleDemo::exePowerUpVs1() {
     updateCastPose();
 
     if (MR::isActionEnd(mHost)) {
-        MR::endDemo(mHost, "\203\112\203\201\203\142\203\116\203\160\203\217\201\133\203\101\203\142\203\166Vs1" /* カメックパワーアップVs1 */);
+        MR::endDemo(mHost, "カメックパワーアップVs1");
         BossKameckDemoPosition* pos = mDemoPos;
         const char* powerUpName = "DemoBossKameckPowerUp";
         MR::endAnimCamera(pos, pos->mCameraInfo, powerUpName, 0, true);
@@ -273,7 +273,7 @@ void BossKameckBattleDemo::exePowerUpVs2() {
     updateCastPose();
 
     if (MR::isActionEnd(mHost)) {
-        MR::endDemo(mHost, "\203\112\203\201\203\142\203\116\203\160\203\217\201\133\203\101\203\142\203\166Vs2" /* カメックパワーアップVs2 */);
+        MR::endDemo(mHost, "カメックパワーアップVs2");
         BossKameckDemoPosition* pos = mDemoPos;
         const char* powerUpName = "DemoBossKameckPowerUp2";
         MR::endAnimCamera(pos, pos->mCameraInfo, powerUpName, 0, true);
@@ -318,7 +318,7 @@ void BossKameckBattleDemo::exeDownVs1() {
     }
 
     if (MR::isActionEnd(mHost)) {
-        MR::endDemo(mHost, "\203\173\203\130\203\112\203\201\203\142\203\116\203\137\203\105\203\223Lv1" /* ボスカメックダウンLv1 */);
+        MR::endDemo(mHost, "ボスカメックダウンLv1");
         BossKameckDemoPosition* pos = mDemoPos;
         const char* powerUpName = "DemoBossKameckDown";
         MR::endAnimCamera(pos, pos->mCameraInfo, powerUpName, 0, true);
@@ -364,7 +364,7 @@ void BossKameckBattleDemo::exeDownVs2() {
     }
 
     if (MR::isActionEnd(mHost)) {
-        MR::endDemo(mHost, "\203\173\203\130\203\112\203\201\203\142\203\116\203\137\203\105\203\223Lv2" /* ボスカメックダウンLv2 */);
+        MR::endDemo(mHost, "ボスカメックダウンLv2");
         BossKameckDemoPosition* pos = mDemoPos;
         const char* powerUpName = "DemoBossKameckDown2";
         MR::endAnimCamera(pos, pos->mCameraInfo, powerUpName, 0, true);

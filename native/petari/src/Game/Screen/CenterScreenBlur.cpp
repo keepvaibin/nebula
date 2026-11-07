@@ -12,10 +12,10 @@ namespace NrvCenterScreenBlur {
     NEW_NERVE(CenterScreenBlurNrvFadeOut, CenterScreenBlur, FadeOut);
 };  // namespace NrvCenterScreenBlur
 
-CenterScreenBlur::CenterScreenBlur() : LiveActor("\211\346\226\312\222\206\220\123\203\165\203\211\201\133" /* 画面中心ブラー */), mTime(), mFadeIn(), mFadeOut(), mOffset(), mAlpha(), mBlendRate() {
+CenterScreenBlur::CenterScreenBlur() : LiveActor("画面中心ブラー"), mTime(), mFadeIn(), mFadeOut(), mOffset(), mAlpha(), mBlendRate() {
 }
 
-void CenterScreenBlur::init(const JMapInfoIter& rIter) {
+void CenterScreenBlur::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_ImageEffect, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_CenterScreenBlur);
     MR::invalidateClipping(this);
     MR::registerDemoSimpleCastAll(this);

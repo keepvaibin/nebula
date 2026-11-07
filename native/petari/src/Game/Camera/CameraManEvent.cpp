@@ -27,7 +27,7 @@ CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pC
 CameraManEvent::ChunkFIFOItem::ChunkFIFOItem() {
 }
 
-void CameraManEvent::init(const JMapInfoIter& rIter) {
+void CameraManEvent::init(const TableIter& rIter) {
 }
 
 void CameraManEvent::calc() {

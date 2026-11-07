@@ -21,7 +21,7 @@ FountainBig::FountainBig(const char* pName) : LiveActor(pName) {
 FountainBig::~FountainBig() {
 }
 
-void FountainBig::init(const JMapInfoIter& rIter) {
+void FountainBig::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("FountainBig", nullptr, false);
     MR::connectToSceneMapObj(this);

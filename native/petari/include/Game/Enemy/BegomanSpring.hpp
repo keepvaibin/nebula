@@ -11,7 +11,7 @@ class BegomanSpring : public BegomanBase {
 public:
     BegomanSpring(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void makeActorDead();
     virtual void kill();
@@ -29,7 +29,7 @@ public:
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
 
-    void initEventCameras(const JMapInfoIter& rIter);
+    void initEventCameras(const TableIter& rIter);
     void exeNoCalcWait();
     void exeWait();
     void exeSignAttack();

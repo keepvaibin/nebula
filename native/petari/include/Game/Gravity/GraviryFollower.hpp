@@ -7,7 +7,7 @@ class PlanetGravity;
 
 class GraviryFollower : public BaseMatrixFollower {
 public:
-    GraviryFollower(GlobalGravityObj* pGravityObj, const JMapInfoIter& rIter);
+    GraviryFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter);
 
     virtual void setGravityFollowHost(const NameObj* pHost);
     virtual void update();
@@ -16,5 +16,5 @@ public:
 };
 
 namespace MR {
-    bool addBaseMatrixFollowerGravity(GlobalGravityObj* pGravityObj, const JMapInfoIter& rIter);
+    bool addBaseMatrixFollowerGravity(GlobalGravityObj* pGravityObj, const TableIter& rIter);
 };  // namespace MR

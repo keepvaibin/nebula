@@ -12,7 +12,7 @@ class Kameck : public LiveActor {
 public:
     Kameck(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void makeActorDead();
     virtual void appear();
     virtual void kill();
@@ -25,8 +25,8 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void initBeam();
-    void initJMapParam(const JMapInfoIter& rIter);
-    void initDemo(const JMapInfoIter& rIter);
+    void initPlacementParam(const TableIter& rIter);
+    void initDemo(const TableIter& rIter);
     void exeWait();
     void exeAppear();
     void exeHit();

@@ -10,10 +10,10 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     RunawayTico(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void appearBushComment(const Vec3f&);
     void appearHoleComment(const Vec3f&);

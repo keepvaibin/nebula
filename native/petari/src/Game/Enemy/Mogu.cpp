@@ -10,7 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -47,7 +47,7 @@ Mogu::Mogu(const char* pName)
       mIsCannonFleet(false) {
 }
 
-void Mogu::init(const JMapInfoIter& rIter) {
+void Mogu::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         MR::useStageSwitchWriteDead(this, rIter);
@@ -55,7 +55,7 @@ void Mogu::init(const JMapInfoIter& rIter) {
         MR::useStageSwitchSleep(this, rIter);
 
         s32 value = -1;
-        MR::getJMapInfoArg0NoInit(rIter, &value);
+        MR::getPlacementArg0NoInit(rIter, &value);
 
         if (value != -1) {
             _B4 = false;
@@ -97,11 +97,11 @@ void Mogu::init(const JMapInfoIter& rIter) {
     _90 = new FixedPosition(this, "ArmR2", Vec3f(67.38f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     // "Rock-throwing stone"
-    mStone = new MoguStone("\223\212\220\316\227\160\202\314\220\316" /* 投石用の石 */, "MoguStone");
+    mStone = new MoguStone("投石用の石", "MoguStone");
     mStone->initWithoutIter();
 
     // "Burrow model"
-    mHole = new ModelObj("\221\203\214\212\203\202\203\146\203\213" /* 巣穴モデル */, "MoguHole", nullptr, -2, -2, -2, false);
+    mHole = new ModelObj("巣穴モデル", "MoguHole", nullptr, -2, -2, -2, false);
     mHole->mPosition.set(mPosition);
     mHole->mRotation.set(mRotation);
     mHole->initWithoutIter();
@@ -181,7 +181,7 @@ void Mogu::exeAppear() {
     }
 
     // "Strong"
-    if (MR::isStarPointerPointing2POnTriggerButton(this, "\213\255" /* 強 */, true, false)) {
+    if (MR::isStarPointerPointing2POnTriggerButton(this, "強", true, false)) {
         MR::start2PAttackAssistSound();
         setNerve(GET_NERVE(Mogu, HostTypeNrvSwoonStart));
         return;
@@ -224,7 +224,7 @@ void Mogu::exeSearch() {
         }
     }
 
-    if (MR::isStarPointerPointing2POnTriggerButton(this, "\213\255" /* 強 */, true, false)) {
+    if (MR::isStarPointerPointing2POnTriggerButton(this, "強", true, false)) {
         MR::start2PAttackAssistSound();
         setNerve(GET_NERVE(Mogu, HostTypeNrvSwoonStart));
         return;
@@ -290,7 +290,7 @@ void Mogu::exeThrow() {
         MR::startSound(this, "SE_EM_MOGU_TAKE_ITEM");
     }
 
-    if (MR::isStarPointerPointing2POnTriggerButton(this, "\213\255" /* 強 */, true, false)) {
+    if (MR::isStarPointerPointing2POnTriggerButton(this, "強", true, false)) {
         MR::start2PAttackAssistSound();
         setNerve(GET_NERVE(Mogu, HostTypeNrvSwoonStart));
         return;

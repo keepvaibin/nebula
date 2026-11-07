@@ -8,7 +8,7 @@ class InformationMessage : public LayoutActor {
 public:
     InformationMessage();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     void appearWithButtonLayout();

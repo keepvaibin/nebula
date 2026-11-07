@@ -7,7 +7,7 @@ class CameraManPause : public CameraMan {
 public:
     CameraManPause(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual void calc();
     virtual void notifyActivate();

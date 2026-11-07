@@ -6,7 +6,7 @@
 class NameObj;
 class NameObjArchiveListCollector;
 class LiveActor;
-class JMapInfoIter;
+class TableIter;
 
 // The game's side of plugins (nebula_mod_api.h). An event no plugin wants is one load and one branch.
 namespace NebulaMods {
@@ -75,7 +75,7 @@ namespace NebulaMods {
         return sHasStageRules ? stageRuleSlow(pStage, pAskedName) : -1;
     }
     // With a mod on: an object a level places whose archive isn't anywhere. It's left out and the log says so, not a stop.
-    bool isMissingFiles(const char* pName, const JMapInfoIter& rIter);
+    bool isMissingFiles(const char* pName, const TableIter& rIter);
     // A name a level places that a mod has made as another of the game's objects: that object's name. The name itself otherwise.
     const char* objectLike(const char* pName);
     // What a model named by an object of that class comes from.

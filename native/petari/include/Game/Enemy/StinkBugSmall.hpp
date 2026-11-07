@@ -10,7 +10,7 @@ public:
     StinkBugSmall(const char*);
 
     virtual ~StinkBugSmall();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

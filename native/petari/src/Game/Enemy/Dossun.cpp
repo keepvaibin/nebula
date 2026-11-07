@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -50,7 +50,7 @@ Dossun::Dossun(const char* pName) : LiveActor(pName) {
     mHasShadow = false;
 }
 
-void Dossun::init(const JMapInfoIter& rIter) {
+void Dossun::init(const TableIter& rIter) {
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchSleep(this, rIter);
     initMapToolInfo(rIter);
@@ -87,13 +87,13 @@ void Dossun::appear() {
     }
 }
 
-void Dossun::initMapToolInfo(const JMapInfoIter& rIter) {
+void Dossun::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mMovementDist);
-    MR::getJMapInfoArg1NoInit(rIter, &mRisenWaitTime);
-    MR::getJMapInfoArg2NoInit(rIter, &mShadowType);
+    MR::getPlacementArg0NoInit(rIter, &mMovementDist);
+    MR::getPlacementArg1NoInit(rIter, &mRisenWaitTime);
+    MR::getPlacementArg2NoInit(rIter, &mShadowType);
     s32 shadowType = -1;
-    MR::getJMapInfoArg3NoInit(rIter, &shadowType);
+    MR::getPlacementArg3NoInit(rIter, &shadowType);
     mHasShadow = shadowType != -1;
     MR::setGroupClipping(this, rIter, 16);
     _98.set(mPosition);
@@ -183,7 +183,7 @@ void Dossun::exeFalling() {
 void Dossun::exeOnGround() {
     if (MR::isFirstStep(this)) {
         mPosition.set(_98);
-        MR::startRumbleWithShakeCameraNormalWeak(this, "\222\206" /* 中 */, "\216\343" /* 弱 */, ::sCamShakeDistanceStrong, ::sCamShakeDistanceWeak);
+        MR::startRumbleWithShakeCameraNormalWeak(this, "中", "弱", ::sCamShakeDistanceStrong, ::sCamShakeDistanceWeak);
         MR::startSound(this, "SE_OJ_DOSSUN_LAND");
         MR::emitEffect(this, "Land");
     }

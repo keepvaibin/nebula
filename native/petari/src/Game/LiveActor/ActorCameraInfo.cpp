@@ -1,11 +1,11 @@
 #include "Game/LiveActor/ActorCameraInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
-ActorCameraInfo::ActorCameraInfo(const JMapInfoIter& rIter) : mCameraSetID(-1), mZoneID() {
+ActorCameraInfo::ActorCameraInfo(const TableIter& rIter) : mCameraSetID(-1), mZoneID() {
     s32 cameraSetID = -1;
 
-    if (MR::getJMapInfoCameraSetID(rIter, &cameraSetID)) {
+    if (MR::getPlacementCameraSetID(rIter, &cameraSetID)) {
         mCameraSetID = cameraSetID;
     }
 

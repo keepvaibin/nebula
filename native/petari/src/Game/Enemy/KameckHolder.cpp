@@ -3,7 +3,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-KameckHolder::KameckHolder(s32 numMax) : DeriveActorGroup< Kameck >("\203\112\203\201\203\142\203\116\212\307\227\235" /* カメック管理 */, numMax) {
+KameckHolder::KameckHolder(s32 numMax) : DeriveActorGroup< Kameck >("カメック管理", numMax) {
 }
 
 void KameckHolder::startDemoAppear() {

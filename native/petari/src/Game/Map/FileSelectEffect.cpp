@@ -14,7 +14,7 @@ namespace {
 FileSelectEffect::FileSelectEffect(const char* pName) : LiveActor(pName), mEffectFrame() {
 }
 
-void FileSelectEffect::init(const JMapInfoIter& rIter) {
+void FileSelectEffect::init(const TableIter& rIter) {
     initModelManagerWithAnm("MiniatureGalaxySelect", nullptr, false);
     MR::connectToSceneMapObj(this);
     MR::invalidateClipping(this);

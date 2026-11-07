@@ -14,7 +14,7 @@ public:
 
     GamePauseSequence();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void initWindowMenu(const MR::FunctorBase&);
     void startPause(MenuType);

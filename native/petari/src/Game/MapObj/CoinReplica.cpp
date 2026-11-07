@@ -31,14 +31,14 @@ void CoinReplica::removeCoin() {
     }
 }
 
-void CoinReplica::init(const JMapInfoIter& rIter) {
-    mCoin = static_cast< Coin* >(MR::createCoin(this, "\203\122\203\103\203\223(\203\214\203\166\203\212\203\112\227\160)" /* コイン(レプリカ用) */));
+void CoinReplica::init(const TableIter& rIter) {
+    mCoin = static_cast< Coin* >(MR::createCoin(this, "コイン(レプリカ用)"));
     MR::initDefaultPos(mCoin, rIter);
     mCoin->initWithoutIter();
     mCoin->appearNonActive();
 
     s32 calcGravity;
-    MR::getJMapInfoArg0WithInit(rIter, &calcGravity);
+    MR::getPlacementArg0WithInit(rIter, &calcGravity);
 
     if (MR::isExistStageSwitchA(rIter) || MR::isExistStageSwitchB(rIter)) {
         StageSwitchCtrl* switchCtrl = MR::createStageSwitchCtrl(this, rIter);

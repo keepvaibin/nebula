@@ -19,7 +19,7 @@ namespace NrvGalaxyNamePlate {
 };  // namespace NrvGalaxyNamePlate
 
 GalaxyNamePlate::GalaxyNamePlate(const char* pGalaxyName, bool param2)
-    : LayoutActor("\203\115\203\203\203\211\203\116\203\126\201\133\226\274\203\166\203\214\201\133\203\147" /* ギャラクシー名プレート */, true), mGalaxyName(pGalaxyName), _24(false), _25(false), mShowBalloonNozzle(true), mDrawerEntry(nullptr),
+    : LayoutActor("ギャラクシー名プレート", true), mGalaxyName(pGalaxyName), _24(false), _25(false), mShowBalloonNozzle(true), mDrawerEntry(nullptr),
       _2C(0), _30(true) {
     initLayoutManager("GalaxyNamePlate", 3);
 
@@ -33,7 +33,7 @@ GalaxyNamePlate::GalaxyNamePlate(const char* pGalaxyName, bool param2)
     MR::startAnim(this, "OneLine", 2);
 }
 
-void GalaxyNamePlate::init(const JMapInfoIter& rIter) {
+void GalaxyNamePlate::init(const TableIter& rIter) {
     initNerve(GET_NERVE(GalaxyNamePlate, GalaxyNamePlateNrvAppear));
 }
 

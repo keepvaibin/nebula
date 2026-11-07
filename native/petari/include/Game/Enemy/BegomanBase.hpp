@@ -43,12 +43,12 @@ public:
     f32 getRailPushVelHBoss() const;
     f32 getRailPushJumpBoss() const;
 
-    void initCore(const JMapInfoIter&, const char*, bool);
+    void initCore(const TableIter&, const char*, bool);
     void initEffect(s32);
     void initEffectAndStarPointerBind();
     void initShadow(f32, const char*);
     void initSensor(s32, f32, f32, const char*);
-    void initUseSwitchB(const JMapInfoIter&, const MR::FunctorBase&);
+    void initUseSwitchB(const TableIter&, const MR::FunctorBase&);
 
     bool calcJointLocator1(Pos3f*, const JointControllerInfo&);
     void calcAnimCore(Pos3f*);
@@ -125,7 +125,7 @@ class BegomanAttackPermitter : public LiveActor {
 public:
     BegomanAttackPermitter(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     bool requestAttack(BegomanBase*);

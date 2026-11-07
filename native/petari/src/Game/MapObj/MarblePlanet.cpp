@@ -24,7 +24,7 @@ MarblePlanet::MarblePlanet(const char* pName) : LiveActor(pName) {
     mRemainingElectrons = 3;
 }
 
-void MarblePlanet::init(const JMapInfoIter& rIter) {
+void MarblePlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("MarblePlanet", 0, false);
     MR::connectToScenePlanet(this);
@@ -37,7 +37,7 @@ void MarblePlanet::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFar(this, -1.0f);
     MR::needStageSwitchWriteDead(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mNumElectrons);
+    MR::getPlacementArg0NoInit(rIter, &mNumElectrons);
     mRemainingElectrons = mNumElectrons;
     initCoreAndElectron();
     MR::declarePowerStar(this);
@@ -150,7 +150,7 @@ bool MarblePlanet::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
 }
 
 void MarblePlanet::initCoreAndElectron() {
-    mCorePlanetModel = MR::createModelObjMapObj("\203\162\201\133\213\312\230\146\220\257\203\122\203\101" /* ビー玉惑星コア */, "MarblePlanetCore", getBaseMtx());
+    mCorePlanetModel = MR::createModelObjMapObj("ビー玉惑星コア", "MarblePlanetCore", getBaseMtx());
     MR::invalidateClipping(mCorePlanetModel);
     MR::startBck(mCorePlanetModel, "MarblePlanetCore");
     MR::startBtk(mCorePlanetModel, "MarblePlanetCore");
@@ -177,7 +177,7 @@ void MarblePlanet::initCoreAndElectron() {
             position.scaleAdd(1000.0f, front, *pos);
             Vec3f rotation;
             rotation.setAll< f32 >((360.0f * i) / mNumElectrons);
-            mPlanetElectrons[i] = new MarblePlanetElectron(this, position, rotation, "\203\162\201\133\213\312\230\146\220\257\223\144\216\161" /* ビー玉惑星電子 */);
+            mPlanetElectrons[i] = new MarblePlanetElectron(this, position, rotation, "ビー玉惑星電子");
             mPlanetElectrons[i]->initWithoutIter();
         }
     }
@@ -194,7 +194,7 @@ MarblePlanetElectron::MarblePlanetElectron(LiveActor* pPlanet, const Vec3f& rPos
     mRotation.set(rRotation);
 }
 
-void MarblePlanetElectron::init(const JMapInfoIter& rIter) {
+void MarblePlanetElectron::init(const TableIter& rIter) {
     initModelManagerWithAnm("MarblePlanetElectron", 0, false);
     MR::connectToScenePlanet(this);
     initHitSensor(1);
@@ -204,7 +204,7 @@ void MarblePlanetElectron::init(const JMapInfoIter& rIter) {
     MR::addEffectHitNormal(this, 0);
     initSound(4, false);
     MR::invalidateClipping(this);
-    mElectronShadow = new MarblePlanetElectronShadow(this, mParentPlanet->mPosition, "\223\144\216\161\211\145" /* 電子影 */);
+    mElectronShadow = new MarblePlanetElectronShadow(this, mParentPlanet->mPosition, "電子影");
     mElectronShadow->initWithoutIter();
     MR::calcGravity(this);
     mGravity.negate();
@@ -310,7 +310,7 @@ MarblePlanetElectronShadow::MarblePlanetElectronShadow(LiveActor* pElectronPtr, 
     _90 = &rVec;
 }
 
-void MarblePlanetElectronShadow::init(const JMapInfoIter& rIter) {
+void MarblePlanetElectronShadow::init(const TableIter& rIter) {
     initModelManagerWithAnm("MarblePlanetElectronShadow", 0, false);
     MR::connectToScenePlanet(this);
     MR::invalidateClipping(this);

@@ -3,7 +3,7 @@
 #include <nebula_geometry.hpp>
 
 class Koopa;
-class JMapInfoIter;
+class TableIter;
 class KoopaFireStairs;
 class KoopaBattleMapStair;
 class LiveActor;
@@ -21,7 +21,7 @@ class ActorCameraInfo;
 
 class KoopaParts {
 public:
-    KoopaParts(Koopa* pKoopa, const JMapInfoIter& rIter);
+    KoopaParts(Koopa* pKoopa, const TableIter& rIter);
 
     KoopaFireStairs* emitFireStairsToPos(const KoopaBattleMapStair* pMapStair, const Vec3f& rPosition, bool useFront);
     void killFireStairsAll();

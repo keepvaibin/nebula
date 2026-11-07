@@ -10,13 +10,13 @@ namespace NrvMarioLauncherAttractor {
 MarioLauncherAttractor::MarioLauncherAttractor(const char* pName) : LiveActor(pName), mGravityCreator() {
 }
 
-void MarioLauncherAttractor::init(const JMapInfoIter& rIter) {
+void MarioLauncherAttractor::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("MarioLauncherAttractor", nullptr, false);
 
     // Create and initialize gravity
     mGravityCreator = new PointGravityCreator();
-    mGravityCreator->createFromJMap(rIter);
+    mGravityCreator->createFromPlacement(rIter);
     PlanetGravity* pGravity = mGravityCreator->getGravity();
     pGravity->mGravityType = GRAVITY_TYPE_MARIO_LAUNCHER;
 

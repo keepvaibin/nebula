@@ -13,7 +13,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -36,7 +36,7 @@ namespace {
     const s32 cOpenDisappearStep = 75;
     const s32 cOpenMiniatureAppearStep = 45;
     const s32 cOpenTotalFrame = 150;
-    const char* const cDemoNameDomeLecture2 = "\203\150\201\133\203\200\203\214\203\116\203\140\203\203\201\133\202\121" /* ドームレクチャー２ */;
+    const char* const cDemoNameDomeLecture2 = "ドームレクチャー２";
 
     const char* getGalayNameFromObjectName(const char* pObjName) {
         return pObjName + strlen("Mini");
@@ -81,7 +81,7 @@ MiniatureGalaxy::MiniatureGalaxy(const char* pName)
     mPosMtx.identity();
 }
 
-void MiniatureGalaxy::init(const JMapInfoIter& rIter) {
+void MiniatureGalaxy::init(const TableIter& rIter) {
     MR::getObjectName(&mObjectName, rIter);
     mGalaxyName = ::getGalayNameFromObjectName(mObjectName);
 
@@ -89,7 +89,7 @@ void MiniatureGalaxy::init(const JMapInfoIter& rIter) {
     mInitPos.set(mPosition);
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     mType = arg0;
 
     initModelManagerWithAnm(isUseKoopaFaceModel() ? "MiniKoopaGalaxy" : mObjectName, nullptr, false);
@@ -217,11 +217,11 @@ void MiniatureGalaxy::kill() {
     mOrbit->kill();
 }
 
-void MiniatureGalaxy::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void MiniatureGalaxy::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     const char* objectName;
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     s32 type = arg0;
 
     MR::getObjectName(&objectName, rIter);
@@ -356,22 +356,22 @@ void MiniatureGalaxy::initPartsModel() {
         pModelName = "MiniatureGalaxyUnknownKoopa";
     }
 
-    mUnknownModel = ::createGalaxyPart("Unknown\203\202\203\146\203\213" /* Unknownモデル */, pModelName, getBaseMtx(), false);
+    mUnknownModel = ::createGalaxyPart("Unknownモデル", pModelName, getBaseMtx(), false);
     ::initGalaxyPart(mUnknownModel);
 
-    mShadowModel = ::createGalaxyPart("\211\145\203\202\203\146\203\213" /* 影モデル */, "MiniatureGalaxyShadow", mShadowBaseMtx, true);
+    mShadowModel = ::createGalaxyPart("影モデル", "MiniatureGalaxyShadow", mShadowBaseMtx, true);
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(mShadowModel);
     MR::prepareMaterials(mShadowModel);
     ::initGalaxyPart(mShadowModel);
 
-    mSelectModel = ::createGalaxyPart("\221\111\221\360\216\236\203\202\203\146\203\213" /* 選択時モデル */, "MiniatureGalaxySelect", mPosMtx, false);
+    mSelectModel = ::createGalaxyPart("選択時モデル", "MiniatureGalaxySelect", mPosMtx, false);
     ::initGalaxyPart(mSelectModel);
 
     if (mType == MiniatureGalaxyType_Hatena) {
         return;
     }
 
-    mStarPlateModel = ::createGalaxyPart("\203\130\203\136\201\133\220\224\203\202\203\146\203\213" /* スター数モデル */, "MiniatureGalaxyStarNumber", mPosMtx, true);
+    mStarPlateModel = ::createGalaxyPart("スター数モデル", "MiniatureGalaxyStarNumber", mPosMtx, true);
 
     s32 powerStarNum = MR::getPowerStarNumToOpenGalaxy(mGalaxyName);
 

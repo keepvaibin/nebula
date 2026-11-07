@@ -54,7 +54,7 @@ TicoEat::TicoEat(const char* pName) : Tico(pName) {
     _198 = 0;
 }
 
-void TicoEat::init(const JMapInfoIter& rIter) {
+void TicoEat::init(const TableIter& rIter) {
     mScaleController = new AnimScaleController(&::sParam);
     mReactionNerve = GET_NERVE(TicoEat, TicoEatNrvReaction);
     _178 = MR::getJointMtx(this, "Center");
@@ -198,7 +198,7 @@ void TicoEat::exeEatEnd() {
 TicoComet::TicoComet(const char* pName) : TicoEat(pName) {
 }
 
-void TicoComet::init(const JMapInfoIter& rIter) {
+void TicoComet::init(const TableIter& rIter) {
     NPCActorCaps caps("TicoComet");
     NPCActorItem item("TicoComet");
     caps.setDefault();

@@ -14,7 +14,7 @@ public:
 
     virtual ~CameraTargetObj() {};
 
-    virtual void init(const JMapInfoIter&) {};
+    virtual void init(const TableIter&) {};
 
     virtual void movement() = 0;
 
@@ -185,7 +185,7 @@ class CameraTargetDemoActor : public LiveActor {
 public:
     CameraTargetDemoActor(MtxPtr, const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
         return (const MtxPtr)mMtx.mMtx;
     }

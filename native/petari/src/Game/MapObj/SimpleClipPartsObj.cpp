@@ -14,7 +14,7 @@ namespace NrvSimpleClipPartsObj {
 SimpleClipPartsObj::SimpleClipPartsObj(const char* pName) : MapObjActor(pName) {
 }
 
-void SimpleClipPartsObj::init(const JMapInfoIter& rrIter) {
+void SimpleClipPartsObj::init(const TableIter& rrIter) {
     MapObjActor::init(rrIter);
     MapObjActorInitInfo info;
     info.setupRailMover();

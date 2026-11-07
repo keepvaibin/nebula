@@ -29,35 +29,35 @@ namespace NrvKoopaSequencerVs2 {
     NEW_NERVE(KoopaSequencerVs2NrvWaitDemo, KoopaSequencerVs2, WaitDemo);
 };  // namespace NrvKoopaSequencerVs2
 
-KoopaSequencerVs2::KoopaSequencerVs2() : KoopaSequencer("\203\116\203\142\203\160\220\355\201\151\202\165\202\223\202\121\220\151\215\163\226\360\201\152" /* クッパ戦（Ｖｓ２進行役） */, 2), mSubSequenceBattle(), mBattleMain() {
+KoopaSequencerVs2::KoopaSequencerVs2() : KoopaSequencer("クッパ戦（Ｖｓ２進行役）", 2), mSubSequenceBattle(), mBattleMain() {
 }
 
-void KoopaSequencerVs2::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
+void KoopaSequencerVs2::init(Koopa* pKoopa, const TableIter& rIter) {
     KoopaSequencer::init(pKoopa, rIter);
-    KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+    KoopaFunction::setKoopaPos(mKoopa, "デモ中心");
     MR::startBck(mKoopa, "DemoKoopaVs2Start");
 
     initNerve(GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvWaitDemoBattleStart));
     KoopaFunction::initKoopaPartsVs2(mKoopa);
 
-    mBattleMain = new KoopaBattleMain("\203\116\203\142\203\160\220\355\223\254\201\151\202\165\202\223\202\121\201\152" /* クッパ戦闘（Ｖｓ２） */, mKoopa);
+    mBattleMain = new KoopaBattleMain("クッパ戦闘（Ｖｓ２）", mKoopa);
     mBattleMain->init();
 
     mSubSequenceBattle = new KoopaSubSequenceBattle(mKoopa, this, mBattleMain);
     mSubSequenceBattle->init();
 
-    MR::initDemoSheetTalkAnim(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\121\226\173\220\355\212\112\216\156" /* クッパＶｓ２本戦開始 */, "DemoKoopaVs2Start", nullptr);
-    MR::initDemoSheetTalkAnimWithMessageName(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\121\203\137\203\105\203\223" /* クッパＶｓ２ダウン */, "DemoKoopaVs1Down", "DemoKoopaVs2Down");
+    MR::initDemoSheetTalkAnim(mKoopa, rIter, "クッパＶｓ２本戦開始", "DemoKoopaVs2Start", nullptr);
+    MR::initDemoSheetTalkAnimWithMessageName(mKoopa, rIter, "クッパＶｓ２ダウン", "DemoKoopaVs1Down", "DemoKoopaVs2Down");
 
     MR::declareStarPiece(mKoopa, 30);
 }
 
 void KoopaSequencerVs2::exeWaitDemoBattleStart() {
     if (MR::isFirstStep(this)) {
-        KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+        KoopaFunction::setKoopaPos(mKoopa, "デモ中心");
     }
 
-    if (MR::tryStartTimeKeepDemoMarioPuppetable(mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\121\226\173\220\355\212\112\216\156" /* クッパＶｓ２本戦開始 */, nullptr)) {
+    if (MR::tryStartTimeKeepDemoMarioPuppetable(mKoopa, "クッパＶｓ２本戦開始", nullptr)) {
         setNerve(GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvDemoBattleStart));
     }
 }
@@ -85,11 +85,11 @@ void KoopaSequencerVs2::exeBattle() {
 
 void KoopaSequencerVs2::exeWaitDemoDown() {
     if (MR::isFirstStep(this)) {
-        KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+        KoopaFunction::setKoopaPos(mKoopa, "デモ中心");
 
         setNerve(GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvWaitDemo));
 
-        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\121\203\137\203\105\203\223" /* クッパＶｓ２ダウン */, GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvDemoDown),
+        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "クッパＶｓ２ダウン", GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvDemoDown),
                                                     nullptr, nullptr);
     }
 }
@@ -111,10 +111,10 @@ void KoopaSequencerVs2::exeDemoDown() {
     if (MR::isDemoLastStep()) {
         MR::overlayWithPreviousScreen(3);
 
-        MR::setPlayerPosAndWait("\203\137\203\105\203\223\203\146\203\202\214\343\201\151\203\175\203\212\203\111\201\152" /* ダウンデモ後（マリオ） */);
+        MR::setPlayerPosAndWait("ダウンデモ後（マリオ）");
 
         Vec3f namePos;
-        MR::findNamePos("\203\146\203\202\222\206\220\123" /* デモ中心 */, &namePos, nullptr);
+        MR::findNamePos("デモ中心", &namePos, nullptr);
 
         MR::startAfterBossBGM();
 

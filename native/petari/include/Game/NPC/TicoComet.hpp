@@ -7,7 +7,7 @@ class TicoEat : public Tico {
 public:
     TicoEat(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual void startReactionSound();
@@ -31,7 +31,7 @@ class TicoComet : public TicoEat {
 public:
     TicoComet(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startReactionSound();
 
     bool branchFunc(u32);

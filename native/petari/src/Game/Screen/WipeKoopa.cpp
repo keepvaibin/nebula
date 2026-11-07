@@ -13,10 +13,10 @@ namespace {
     NEW_NERVE(WipeKoopaNrvClose, WipeKoopa, Close);
 };  // namespace
 
-WipeKoopa::WipeKoopa() : WipeLayoutBase("\203\116\203\142\203\160" /* クッパ */), mFrame(::sAnimFrame) {
+WipeKoopa::WipeKoopa() : WipeLayoutBase("クッパ"), mFrame(::sAnimFrame) {
 }
 
-void WipeKoopa::init(const JMapInfoIter& rIter) {
+void WipeKoopa::init(const TableIter& rIter) {
     initNerve(GET_NERVE_ANON(WipeKoopaNrvWait));
     initLayoutManager("WipeKoopa", 1);
 }

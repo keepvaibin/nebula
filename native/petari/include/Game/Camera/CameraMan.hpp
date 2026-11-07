@@ -10,7 +10,7 @@ class CameraMan : public NameObj {
 public:
     CameraMan(const char*);
 
-    virtual void init(const JMapInfoIter&) {
+    virtual void init(const TableIter&) {
     }
     virtual void movement();
     virtual void calc() {

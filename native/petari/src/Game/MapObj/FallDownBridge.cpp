@@ -2,8 +2,8 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -35,7 +35,7 @@ namespace NrvFallDownBridge {
 FallDownBridge::FallDownBridge(const char* pName) : LiveActor(pName), _8C(0.0f, 1250.0f, 0.0f), _98(), _9C(), _A0(0.0f), _A4(90.0f), _A8() {
 }
 
-void FallDownBridge::init(const JMapInfoIter& rIter) {
+void FallDownBridge::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     const char* pName = nullptr;

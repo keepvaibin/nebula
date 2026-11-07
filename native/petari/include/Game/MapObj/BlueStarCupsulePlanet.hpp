@@ -17,7 +17,7 @@ class BlueStarCupsulePlanet : public LiveActor, public GCaptureTargetable {
 public:
     BlueStarCupsulePlanet(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();

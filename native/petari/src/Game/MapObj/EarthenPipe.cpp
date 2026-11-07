@@ -51,18 +51,18 @@ EarthenPipe::EarthenPipe(const char* pName) : LiveActor(pName) {
     _BC.identity();
 }
 
-void EarthenPipe::init(const JMapInfoIter& rIter) {
+void EarthenPipe::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_EarthenPipeMediator);
     MR::getSceneObj< EarthenPipeMediator >(SceneObj_EarthenPipeMediator)->entry(this, rIter);
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mHorizExitForce);
-    MR::getJMapInfoArg1NoInit(rIter, &mVertExitForce);
-    MR::getJMapInfoArg2NoInit(rIter, &mPipeMode);
-    MR::getJMapInfoArg4NoInit(rIter, &mMusicChangeIdx);
-    MR::getJMapInfoArg5NoInit(rIter, &mMusicState);
-    MR::getJMapInfoArg6NoInit(rIter, &mIsIgnoreGravity);
+    MR::getPlacementArg0NoInit(rIter, &mHorizExitForce);
+    MR::getPlacementArg1NoInit(rIter, &mVertExitForce);
+    MR::getPlacementArg2NoInit(rIter, &mPipeMode);
+    MR::getPlacementArg4NoInit(rIter, &mMusicChangeIdx);
+    MR::getPlacementArg5NoInit(rIter, &mMusicState);
+    MR::getPlacementArg6NoInit(rIter, &mIsIgnoreGravity);
     s32 arg7 = 0;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
     bool isWaterPipe = false;
 
     if (MR::isObjectName(rIter, "EarthenPipeInWater")) {
@@ -138,7 +138,7 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
     MR::setEffectHostMtx(this, "LavaAppear", _BC.mMtx);
     MR::setEffectHostMtx(this, "LavaVanish", _BC.mMtx);
     initSound(4, false);
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\217\157\214\273" /* 出現 */);
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "出現");
     initNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
 
     if ((mPipeMode - 1) <= 1u) {
@@ -150,7 +150,7 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
     }
 
     if (isWaterPipe) {
-        mPipeStreamModel = MR::createPartsModelMapObj(this, "\223\171\212\307\220\205\227\254" /* 土管水流 */, "EarthenPipeStream", nullptr);
+        mPipeStreamModel = MR::createPartsModelMapObj(this, "土管水流", "EarthenPipeStream", nullptr);
         MR::setClippingTypeSphere(mPipeStreamModel, 500.0f);
         MR::tryStartAllAnim(mPipeStreamModel, "EarthenPipeStream");
         mPipeStreamModel->appear();
@@ -182,7 +182,7 @@ void EarthenPipe::makeActorAppeared() {
 
 bool EarthenPipe::tryShowUp() {
     MR::invalidateClipping(this);
-    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\217\157\214\273" /* 出現 */);
+    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "出現");
     if (mPipeMode != 1 && mPipeMode != 2) {
         return false;
     }
@@ -193,7 +193,7 @@ bool EarthenPipe::tryShowUp() {
 
 bool EarthenPipe::tryHideDown() {
     MR::validateClipping(this);
-    MR::endMultiActorCamera(this, mCameraInfo, "\217\157\214\273" /* 出現 */, true);
+    MR::endMultiActorCamera(this, mCameraInfo, "出現", true);
 
     if (!mPipeMode || (mPipeMode - 3) <= 1u) {
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid));
@@ -511,16 +511,16 @@ void EarthenPipe::processBgmPlayerOut() {
     }
 }
 
-EarthenPipeMediator::EarthenPipeMediator() : NameObj("\223\171\212\307\222\207\211\356\216\322" /* 土管仲介者 */) {
+EarthenPipeMediator::EarthenPipeMediator() : NameObj("土管仲介者") {
     mNumEntries = 0;
     mPipeEntries = nullptr;
     mPipeEntryRoom = 32;
     mPipeEntries = new Entry[mPipeEntryRoom];
 }
 
-void EarthenPipeMediator::entry(EarthenPipe* pPipe, const JMapInfoIter& rIter) {
+void EarthenPipeMediator::entry(EarthenPipe* pPipe, const TableIter& rIter) {
     s32 pipeID = -1;
-    MR::getJMapInfoArg3NoInit(rIter, &pipeID);
+    MR::getPlacementArg3NoInit(rIter, &pipeID);
 
     for (s32 i = 0; i < mNumEntries; i++) {
         EarthenPipeMediator::Entry* entry = &mPipeEntries[i];

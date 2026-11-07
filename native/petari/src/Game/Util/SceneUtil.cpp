@@ -14,9 +14,9 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/PlacedHiddenStarScenarioTable.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapLinkInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementLink.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -25,9 +25,9 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
-    const JMapIdInfo cInitializeStartIdInfo(0, 0);
+    const PlacementId cInitializeStartIdInfo(0, 0);
 
-    void getRailInfoFromRailId(JMapInfoIter* pIter, const JMapInfo** ppInfo, const StageDataHolder* pHolder, int railId) {
+    void getRailInfoFromRailId(TableIter* pIter, const Table** ppInfo, const StageDataHolder* pHolder, int railId) {
         *pIter = pHolder->getCommonPathPointInfo(ppInfo, railId);
     }
 
@@ -153,7 +153,7 @@ namespace MR {
             return false;
         }
 
-        return NameObjFinder::find("\203\126\203\151\203\212\203\111\203\130\203\136\201\133\203\136\201\133" /* シナリオスターター */);
+        return NameObjFinder::find("シナリオスターター");
     }
 
     bool isStageSuddenDeathDodoryu() {
@@ -196,7 +196,7 @@ namespace MR {
         getSceneNameObjMovementController()->requestPlaySceneFor(MovementControlType_4, nullptr);
     }
 
-    const JMapIdInfo& getCurrentMarioStartIdInfo() {
+    const PlacementId& getCurrentMarioStartIdInfo() {
         return *SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mStartIdInfo;
     }
 
@@ -205,12 +205,12 @@ namespace MR {
     }
 
     bool getMarioStartPose(s32 marioNo, Vec3f* pTrans, Vec3f* pRotate) {
-        const JMapInfoIter iter = getStageDataHolder()->makeMarioJMapInfoIter(JMapIdInfo(marioNo, 0));
+        const TableIter iter = getStageDataHolder()->makeMarioTableIter(PlacementId(marioNo, 0));
         if (!iter.isValid()) {
             return false;
         }
-        MR::getJMapInfoTrans(iter, pTrans);
-        MR::getJMapInfoRotate(iter, pRotate);
+        MR::getPlacementTrans(iter, pTrans);
+        MR::getPlacementRotate(iter, pRotate);
         return true;
     }
 
@@ -218,7 +218,7 @@ namespace MR {
         return getStageDataHolder()->getCurrentStartZoneId();
     }
 
-    const JMapIdInfo& getInitializeStartIdInfo() {
+    const PlacementId& getInitializeStartIdInfo() {
         return ::cInitializeStartIdInfo;
     }
 
@@ -232,25 +232,25 @@ namespace MR {
         return getStageDataHolder()->getGeneralPosNum();
     }
 
-    void getGeneralPosData(const char** ppName, Vec3f* pPosition, Vec3f* pRotation, JMapLinkInfo** ppLinkInfo, int index) {
-        JMapInfoIter iter = getStageDataHolder()->getGeneralPosInfoFromDataIndex(index);
+    void getGeneralPosData(const char** ppName, Vec3f* pPosition, Vec3f* pRotation, PlacementLink** ppLinkInfo, int index) {
+        TableIter iter = getStageDataHolder()->getGeneralPosInfoFromDataIndex(index);
         iter.getValue("PosName", ppName);
-        getJMapInfoTrans(iter, pPosition);
-        getJMapInfoRotate(iter, pRotation);
-        *ppLinkInfo = new JMapLinkInfo(iter, false);
+        getPlacementTrans(iter, pPosition);
+        getPlacementRotate(iter, pRotation);
+        *ppLinkInfo = new PlacementLink(iter, false);
     }
 
-    s32 getChildObjNum(const JMapInfoIter& rIter) {
+    s32 getChildObjNum(const TableIter& rIter) {
         return getStageDataHolder()->findPlacedStageDataHolder(rIter)->getChildObjNum(rIter);
     }
 
-    void getChildObjName(const char** ppName, const JMapInfoIter& rIter, int index) {
-        JMapInfoIter childIter = getStageDataHolder()->findPlacedStageDataHolder(rIter)->getChildObjInfoFromDataIndex(rIter, index);
+    void getChildObjName(const char** ppName, const TableIter& rIter, int index) {
+        TableIter childIter = getStageDataHolder()->findPlacedStageDataHolder(rIter)->getChildObjInfoFromDataIndex(rIter, index);
         getObjectName(ppName, childIter);
     }
 
-    void initChildObj(NameObj* pObj, const JMapInfoIter& rIter, int index) {
-        JMapInfoIter childIter = getStageDataHolder()->findPlacedStageDataHolder(rIter)->getChildObjInfoFromDataIndex(rIter, index);
+    void initChildObj(NameObj* pObj, const TableIter& rIter, int index) {
+        TableIter childIter = getStageDataHolder()->findPlacedStageDataHolder(rIter)->getChildObjInfoFromDataIndex(rIter, index);
         pObj->init(childIter);
     }
 
@@ -296,13 +296,13 @@ namespace MR {
         return 1;
     }
 
-    void getRailInfo(JMapInfoIter* pRailIter, const JMapInfo** ppPointInfo, const JMapInfoIter& rIter) {
+    void getRailInfo(TableIter* pRailIter, const Table** ppPointInfo, const TableIter& rIter) {
         s32 railId = -1;
         getRailId(rIter, &railId);
         ::getRailInfoFromRailId(pRailIter, ppPointInfo, getStageDataHolder()->findPlacedStageDataHolder(rIter), railId);
     }
 
-    bool getNextLinkRailInfo(JMapInfoIter* pRailIter, const JMapInfo** ppPointInfo, const JMapInfoIter& rIter) {
+    bool getNextLinkRailInfo(TableIter* pRailIter, const Table** ppPointInfo, const TableIter& rIter) {
         s32 railId;
         getNextLinkRailID(rIter, &railId);
         if (railId == -1) {
@@ -318,7 +318,7 @@ namespace MR {
         return getStageDataHolder()->getCurrentStartCameraId();
     }
 
-    void getStartCameraIdInfoFromStartDataIndex(JMapIdInfo* pInfo, int index) {
+    void getStartCameraIdInfoFromStartDataIndex(PlacementId* pInfo, int index) {
         getStageDataHolder()->getStartCameraIdInfoFromStartDataIndex(pInfo, index);
     }
 
@@ -330,11 +330,11 @@ namespace MR {
         return 0;
     }
 
-    void getCameraRailInfo(JMapInfoIter* pRailIter, const JMapInfo** ppPointInfo, s32 railId, s32 zoneId) {
+    void getCameraRailInfo(TableIter* pRailIter, const Table** ppPointInfo, s32 railId, s32 zoneId) {
         ::getRailInfoFromRailId(pRailIter, ppPointInfo, getStageDataHolder()->getStageDataHolderFromZoneId(zoneId), railId);
     }
 
-    bool getCameraRailInfoFromRailDataIndex(JMapInfoIter* pRailIter, const JMapInfo** ppPointInfo, int index, s32 zoneId) {
+    bool getCameraRailInfoFromRailDataIndex(TableIter* pRailIter, const Table** ppPointInfo, int index, s32 zoneId) {
         *pRailIter = getStageDataHolder()->getStageDataHolderFromZoneId(zoneId)->getCommonPathPointInfoFromRailDataIndex(ppPointInfo, index);
         return isEqualRailUsage(*pRailIter, "Camera");
     }
@@ -389,11 +389,11 @@ namespace MR {
         return getStageDataHolder()->mStageDataHolderCount > 0;
     }
 
-    s32 getPlacedZoneId(const JMapInfoIter& rIter) {
+    s32 getPlacedZoneId(const TableIter& rIter) {
         return getStageDataHolder()->findPlacedStageDataHolder(rIter)->mZoneID;
     }
 
-    const Pos3f* getZonePlacementMtx(const JMapInfoIter& rIter) {
+    const Pos3f* getZonePlacementMtx(const TableIter& rIter) {
         return &getStageDataHolder()->findPlacedStageDataHolder(rIter)->mPlacementMtx;
     }
 

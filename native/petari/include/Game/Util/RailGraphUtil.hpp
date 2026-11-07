@@ -2,7 +2,7 @@
 
 #include "Game/Map/RailGraphIter.hpp"
 #include "Game/Map/RailGraphNode.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 class RailGraphNodeSelecter {
@@ -11,7 +11,7 @@ public:
 };
 
 namespace MR {
-    RailGraph* createRailGraphFromJMap(const JMapInfoIter& rIter);
+    RailGraph* createRailGraphFromPlacement(const TableIter& rIter);
     RailGraphIter* createRailGraphIter(const RailGraph* pRailGraph);
     void moveNextNode(RailGraphIter* pRailGraphIter);
     void moveNodeNearPosition(RailGraphIter* pRailGraphIter, const Vec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector);

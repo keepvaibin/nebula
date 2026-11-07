@@ -37,7 +37,7 @@ FlipPanel::FlipPanel(const char* pName) : MapObjActor(pName) {
     mIsReverse = false;
 }
 
-void FlipPanel::init(const JMapInfoIter& rIter) {
+void FlipPanel::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -270,7 +270,7 @@ FlipPanelObserver::FlipPanelObserver(const char* pName) : LiveActor(pName) {
     ::sBloomSyncStep = 0;
 }
 
-void FlipPanelObserver::init(const JMapInfoIter& rIter) {
+void FlipPanelObserver::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     initHitSensor(1);
@@ -281,7 +281,7 @@ void FlipPanelObserver::init(const JMapInfoIter& rIter) {
     _8C = MR::joinToGroupArray(this, rIter, 0, groupSize);
     MR::useStageSwitchWriteA(this, rIter);
     initSound(2, false);
-    MR::getJMapInfoArg7NoInit(rIter, &mPowerStarId);
+    MR::getPlacementArg7NoInit(rIter, &mPowerStarId);
 
     if (mPowerStarId != -1) {
         if (!mPowerStarId) {
@@ -291,7 +291,7 @@ void FlipPanelObserver::init(const JMapInfoIter& rIter) {
         }
     }
 
-    MR::getJMapInfoArg0NoInit(rIter, &mDemoDelay);
+    MR::getPlacementArg0NoInit(rIter, &mDemoDelay);
     mDemoDelay += 0x28;
 
     if (MR::isEqualStageName("HeavensDoorGalaxy")) {

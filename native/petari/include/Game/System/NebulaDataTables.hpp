@@ -5,7 +5,7 @@ class NebulaArena;
 
 // Two tables of the game's data, files of the store's NebulaData folder. Each is read once, the first time it is asked for.
 namespace NebulaDataTables {
-    // The galaxies' information and the story's progress (BCSV, as JMapInfo reads them).
+    // The galaxies' information and the story's progress (BCSV, as Table reads them).
     const void* getGalaxyInfoTable();
     // A galaxy a mod adds: a row after the game's. Only before the table is first read.
     struct AddedGalaxy {

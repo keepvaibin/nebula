@@ -28,7 +28,7 @@ FirePressureRadiate::FirePressureRadiate(const char* pName) : LiveActor(pName) {
     mRadiateMtx.identity();
 }
 
-void FirePressureRadiate::init(const JMapInfoIter& rIter) {
+void FirePressureRadiate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("FirePressure", nullptr, false);
     MR::connectToSceneNoShadowedMapObjStrongLight(this);
@@ -41,14 +41,14 @@ void FirePressureRadiate::init(const JMapInfoIter& rIter) {
     MR::setEffectHostMtx(this, "Fire", mRadiateMtx.mMtx);
     MR::setEffectHostMtx(this, "FireInd", mRadiateMtx.mMtx);
     initSound(4, false);
-    MR::getJMapInfoArg0NoInit(rIter, &mCannonRotation);
-    MR::getJMapInfoArg1NoInit(rIter, &mWaitTime);
-    MR::getJMapInfoArg2NoInit(rIter, &mShootTime);
+    MR::getPlacementArg0NoInit(rIter, &mCannonRotation);
+    MR::getPlacementArg1NoInit(rIter, &mWaitTime);
+    MR::getPlacementArg2NoInit(rIter, &mShootTime);
     mJointController = MR::createJointDelegatorWithNullChildFunc(this, &FirePressureRadiate::calcJointCannon, "Cannon1");
     MR::initJointTransform(this);
     MR::calcGravity(this);
     MR::setGroupClipping(this, rIter, 16);
-    mGroup = MR::joinToGroupArray(this, rIter, "\203\164\203\100\203\103\203\101\203\166\203\214\203\142\203\126\203\203\201\133\201\151\225\372\216\313\201\152\214\122\222\143" /* ファイアプレッシャー（放射）軍団 */, 16);
+    mGroup = MR::joinToGroupArray(this, rIter, "ファイアプレッシャー（放射）軍団", 16);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &FirePressureRadiate::startRelax), nullptr);

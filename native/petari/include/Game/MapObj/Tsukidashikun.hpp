@@ -6,7 +6,7 @@ class Tsukidashikun : public MapObjActor {
 public:
     Tsukidashikun(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
     void exeSign();

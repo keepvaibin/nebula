@@ -20,7 +20,7 @@ SoundEmitterSphere::SoundEmitterSphere(int formType, const char* pName)
     : AreaObj(formType, pName), mSoundObj(), _40(0.0f, 0.0f, 0.0f), mSoundName(), mSoundIndex() {
 }
 
-void SoundEmitterSphere::init(const JMapInfoIter& rIter) {
+void SoundEmitterSphere::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mSoundName = ::cSoundNameTable[mObjArg0];

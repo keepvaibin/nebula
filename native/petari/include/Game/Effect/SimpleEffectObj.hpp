@@ -7,7 +7,7 @@ public:
     SimpleEffectObj(const char*);
 
     virtual ~SimpleEffectObj() {};
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();
 

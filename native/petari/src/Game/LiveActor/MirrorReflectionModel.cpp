@@ -24,7 +24,7 @@ MirrorReflectionModel::MirrorReflectionModel(const LiveActor* pActor, const char
     MR::connectToSceneMirrorMapObjDecoration(this);
 }
 
-void MirrorReflectionModel::init(const JMapInfoIter& rIter) {
+void MirrorReflectionModel::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     MR::registerDemoSimpleCastAll(this);
     makeActorAppeared();

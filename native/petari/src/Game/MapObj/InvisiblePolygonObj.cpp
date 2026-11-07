@@ -2,7 +2,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
@@ -11,7 +11,7 @@ InvisiblePolygonObj::InvisiblePolygonObj(const char* pName) : LiveActor(pName) {
     mBaseMtx.identity();
 }
 
-void InvisiblePolygonObj::init(const JMapInfoIter& rIter) {
+void InvisiblePolygonObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     initCollision(rIter);
@@ -38,7 +38,7 @@ void InvisiblePolygonObj::initBaseMtx() {
 InvisiblePolygonObj::~InvisiblePolygonObj() {
 }
 
-void InvisiblePolygonObj::initCollision(const JMapInfoIter& rIter) {
+void InvisiblePolygonObj::initCollision(const TableIter& rIter) {
     initBaseMtx();
 
     const char* pName = nullptr;

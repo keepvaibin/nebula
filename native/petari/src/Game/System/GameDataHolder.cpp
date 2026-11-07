@@ -10,7 +10,7 @@
 #include "Game/System/StarPieceAlmsStorage.hpp"
 #include "Game/System/StoryProgressTable.hpp"
 #include "Game/System/UserFile.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <cstdio>
 
@@ -29,7 +29,7 @@ GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     mSpinDriverPathStorage = new SpinDriverPathStorage();
     mStarPieceAlmsStorage = new StarPieceAlmsStorage();
 
-    mMapInfo = new JMapInfo();
+    mMapInfo = new Table();
     mMapInfo->attach(NebulaDataTables::getStoryProgressTable());
 
     mChunkHolder = new BinaryDataChunkHolder(4096 + 1024 * NebulaDataTables::addedGalaxyCount() + mAllGalaxyStorage->getExtraBytes(), 6);
@@ -122,11 +122,11 @@ s32 GameDataHolder::getPictureBookChapterCanRead() const {
 }
 
 s32 GameDataHolder::getPictureBookChapterAlreadyRead() const {
-    return mEventValueChecker->getValue("\212\107\226\173\212\371\223\307\217\315" /* 絵本既読章 */);
+    return mEventValueChecker->getValue("絵本既読章");
 }
 
 void GameDataHolder::setPictureBookChapterAlreadyRead(int value) {
-    setGameEventValue("\212\107\226\173\212\371\223\307\217\315" /* 絵本既読章 */, value);
+    setGameEventValue("絵本既読章", value);
 }
 
 void GameDataHolder::setRaceBestTime(const char* pName, u32 value) {
@@ -283,7 +283,7 @@ bool GameDataHolder::isCompleteMarioAndLuigi() const {
 }
 
 bool GameDataHolder::isPassedStoryEvent(const char* pEventName) const {
-    JMapInfoIter iter = mMapInfo->findElement("name", pEventName, 0);
+    TableIter iter = mMapInfo->findElement("name", pEventName, 0);
 
     u32 progress = 0;
     iter.getValue("progress", &progress);
@@ -291,7 +291,7 @@ bool GameDataHolder::isPassedStoryEvent(const char* pEventName) const {
 }
 
 void GameDataHolder::followStoryEventByName(const char* pEventName) {
-    JMapInfoIter iter = mMapInfo->findElement("name", pEventName, 0);
+    TableIter iter = mMapInfo->findElement("name", pEventName, 0);
 
     u32 progress = 0;
     iter.getValue("progress", &progress);

@@ -21,7 +21,7 @@ namespace {
 };  // namespace
 
 WaterAreaHolder::WaterAreaHolder()
-    : NameObj("\220\205\203\107\203\212\203\101\225\333\216\235" /* 水エリア保持 */), mNumOceanBowls(0), mOceanBowls(), mNumOceanRings(0), mOceanRings(), mNumOceanSpheres(0),
+    : NameObj("水エリア保持"), mNumOceanBowls(0), mOceanBowls(), mNumOceanRings(0), mOceanRings(), mNumOceanSpheres(0),
       mOceanSpheres(), mNumWhirlPools(0), mWhirlPools(), mNumWhirlPoolAccelerators(0), mWhirlPoolAccelerators(),
       mCamInWater(false), mCameraFilter(nullptr), mUseBloom(false) {
     mWaterInfo.clear();

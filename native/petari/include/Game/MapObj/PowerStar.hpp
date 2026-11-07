@@ -13,7 +13,7 @@ public:
     PowerStar(const char*);
 
     virtual ~PowerStar();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -34,11 +34,11 @@ public:
     static s32 getBtpFrameCurrentStage(s32);
     static bool isCurrentStageKoopaVs3();
     static void initShadowPowerStar(LiveActor*, bool);
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
-    void initMapToolInfo(const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel();
     void initSensorGrandStar();
-    void initShadow(const JMapInfoIter&);
+    void initShadow(const TableIter&);
     void initPosture();
     void endAppearDemo();
     PowerStarAppearPoint* getNearestAppearPoint(const Vec3f&) const;

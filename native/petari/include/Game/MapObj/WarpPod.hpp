@@ -4,7 +4,7 @@
 
 class WarpPod;
 class ActorCameraInfo;
-class JMapIdInfo;
+class PlacementId;
 class LiveActorGroup;
 class JUTTexture;
 
@@ -30,10 +30,10 @@ class WarpPod : public LiveActor {
 public:
     /// @brief Creates a new `WarpPod`.
     /// @param pName A pointer to the null-terminated name of the object.
-    WarpPod(const char* pName) : LiveActor(pName), mJMapIdInfo(nullptr) {
+    WarpPod(const char* pName) : LiveActor(pName), mPlacementId(nullptr) {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;
     virtual void appear();
@@ -48,7 +48,7 @@ public:
     void initDraw();
     void drawCylinder(u32) const;
 
-    JMapIdInfo* mJMapIdInfo;
+    PlacementId* mPlacementId;
     s32 mGroupId;
     ActorCameraInfo* mCamInfo;
     char* mEventCameraName;

@@ -6,7 +6,7 @@ class WipeKoopa : public WipeLayoutBase {
 public:
     WipeKoopa();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void wipe(s32);
     virtual void forceClose();
     virtual void forceOpen();

@@ -7,10 +7,10 @@
 
 class ElectricRailPoint : public LiveActor {
 public:
-    ElectricRailPoint(const char* name = "\223\144\214\202\203\214\201\133\203\213\223\137" /* 電撃レール点 */);
+    ElectricRailPoint(const char* name = "電撃レール点");
 
     virtual ~ElectricRailPoint();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     bool mHasShadow;
@@ -49,7 +49,7 @@ class ElectricRail : public ElectricRailDrawn {
 public:
     ElectricRail(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void drawWith(MaterialDraw& rMaterial) const;
     virtual void makeActorAppeared();
@@ -57,7 +57,7 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void disappear();
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initSensor();
     void initPoints();
     void initSeparators();
@@ -65,7 +65,7 @@ public:
     void drawRail(TypedDraw& rDraw, f32) const;
     void drawPlane(f32, f32, f32, f32);
     void drawPlaneGX(TypedDraw&, f32, f32, f32, f32) const;
-    void initShadow(const JMapInfoIter&);
+    void initShadow(const TableIter&);
     void updateHitSensorPos();
     void calcGravity(Vec3f*, const Vec3f&) const;
 

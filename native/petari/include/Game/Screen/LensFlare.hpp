@@ -74,8 +74,8 @@ public:
     virtual ~LensFlareDirector();
 
     /// @brief Intializes the `LensFlareDirector` while being placed into a scene.
-    /// @param rIter The reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param rIter The reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter);
 
     virtual void movement();
     void pauseOff();

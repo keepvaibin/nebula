@@ -18,7 +18,7 @@ WaterBazookaCapsule::WaterBazookaCapsule(LiveActor* pActor, const char* pName)
     : PartsModel(pActor, pName, "WaterBazookaCapsule", nullptr, MR::DrawBufferType_Enemy, false) {
 }
 
-void WaterBazookaCapsule::init(const JMapInfoIter& rIter) {
+void WaterBazookaCapsule::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 

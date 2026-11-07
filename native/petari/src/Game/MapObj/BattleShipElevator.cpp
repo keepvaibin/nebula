@@ -13,7 +13,7 @@ namespace NrvBattleShipElevator {
 BattleShipElevator::BattleShipElevator(const char* pName) : MapObjActor(pName) {
 }
 
-void BattleShipElevator::init(const JMapInfoIter& rIter) {
+void BattleShipElevator::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -50,7 +50,7 @@ bool BattleShipElevator::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 
     if (MR::isMsgFloorTouch(msg)) {
         if (MR::isOnPlayer(getSensor("body"))) {
-            MR::requestStartTimeKeepDemoMarioPuppetable(this, "\203\107\203\214\203\170\201\133\203\136\201\133\217\343\217\270" /* エレベーター上昇 */, GET_NERVE(BattleShipElevator, BattleShipElevatorNrvMove), nullptr,
+            MR::requestStartTimeKeepDemoMarioPuppetable(this, "エレベーター上昇", GET_NERVE(BattleShipElevator, BattleShipElevatorNrvMove), nullptr,
                                                         nullptr);
         }
     }

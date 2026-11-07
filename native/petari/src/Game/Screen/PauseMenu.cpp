@@ -39,12 +39,12 @@ namespace NrvPauseMenu {
 };  // namespace NrvPauseMenu
 
 PauseMenu::PauseMenu()
-    : LayoutActor("\203\174\201\133\203\131\203\201\203\152\203\205\201\133" /* ポーズメニュー */, true), _20(), _24(), _28(0.0f, 50.0f), _30(), mLuigiLetter(), _38(), mStageTitleOffset(0.0f, 39.0f),
+    : LayoutActor("ポーズメニュー", true), _20(), _24(), _28(0.0f, 50.0f), _30(), mLuigiLetter(), _38(), mStageTitleOffset(0.0f, 39.0f),
       mCoinNumPos(0.0f, 0.0f), mStarPieceNumPos(0.0f, 0.0f), _54(true) {
     mSettingsButton = nullptr;
 }
 
-void PauseMenu::init(const JMapInfoIter& rIter) {
+void PauseMenu::init(const TableIter& rIter) {
     initLayoutManager("PauseMenu", 1);
     MR::createAndAddPaneCtrl(this, "BG", 1);
     MR::createAndAddPaneCtrl(this, "PicStagebase", 1);

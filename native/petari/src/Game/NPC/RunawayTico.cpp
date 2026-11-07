@@ -31,9 +31,9 @@ namespace NrvRunawayTico {
 RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mObjArg1(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
 }
 
-void RunawayTico::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void RunawayTico::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 == -1) {
         pCollector->addArchive("TicoBaby");
@@ -44,12 +44,12 @@ void RunawayTico::makeArchiveList(NameObjArchiveListCollector* pCollector, const
     }
 }
 
-void RunawayTico::init(const JMapInfoIter& rIter) {
+void RunawayTico::init(const TableIter& rIter) {
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     s32 arg1 = 0;
     s32 colorID = arg0;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     mObjArg1 = arg1;
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
@@ -71,12 +71,12 @@ void RunawayTico::init(const JMapInfoIter& rIter) {
         mCameraInfo = MR::createActorCameraInfo(rIter);
         MR::initAnimCamera(this, mCameraInfo, "DemoMeetTico");
 
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::setDemoTrans), "\203\140\203\122\202\306\202\314\217\157\211\357\202\242[\212\112\216\156]" /* チコとの出会い[開始] */);
-        MR::registerDemoActionNerve(this, GET_NERVE(RunawayTico, RunawayTicoNrvGuide1), "\203\140\203\122\202\306\202\314\217\157\211\357\202\242[\203\140\203\122\225\317\220\147]" /* チコとの出会い[チコ変身] */);
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::startRunaway), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\212\112\216\156]" /* ウサギ追いかけ[開始] */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::setDemoTrans), "チコとの出会い[開始]");
+        MR::registerDemoActionNerve(this, GET_NERVE(RunawayTico, RunawayTicoNrvGuide1), "チコとの出会い[チコ変身]");
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::startRunaway), "ウサギ追いかけ[開始]");
         setNerve(GET_NERVE(RunawayTico, RunawayTicoNrvGuide0));
     } else if (mObjArg1 == 2) {
-        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::setPosAllCaught), "\215\202\230\117\217\157\214\273[\203\164\203\106\201\133\203\150\203\103\203\223]" /* 高楼出現[フェードイン] */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::setPosAllCaught), "高楼出現[フェードイン]");
         makeActorDead();
     }
 
@@ -96,7 +96,7 @@ void RunawayTico::appearBushComment(const Vec3f& rPos) {
     MR::forwardNodeNextBranchLeft(mMsgCtrl);
     appear();
     setPosAfterCaught(rPos);
-    MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
+    MR::requestStartDemoMarioPuppetable(this, "ぼやき", GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
 void RunawayTico::appearHoleComment(const Vec3f& rPos) {
@@ -104,7 +104,7 @@ void RunawayTico::appearHoleComment(const Vec3f& rPos) {
     MR::forwardNodeCurrentBranchLeft(mMsgCtrl);
     appear();
     setPosAfterCaught(rPos);
-    MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
+    MR::requestStartDemoMarioPuppetable(this, "ぼやき", GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
 void RunawayTico::appearPipeComment(const Vec3f& rPos) {
@@ -112,7 +112,7 @@ void RunawayTico::appearPipeComment(const Vec3f& rPos) {
     MR::forwardNodeCurrentBranchRight(mMsgCtrl);
     appear();
     setPosAfterCaught(rPos);
-    MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
+    MR::requestStartDemoMarioPuppetable(this, "ぼやき", GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
 void RunawayTico::appearMamaComment(const Vec3f& rPos) {
@@ -121,7 +121,7 @@ void RunawayTico::appearMamaComment(const Vec3f& rPos) {
     MR::forwardNode(mMsgCtrl);
     appear();
     setPosAfterCaught(rPos);
-    MR::requestStartDemoMarioPuppetable(this, "\202\332\202\342\202\253" /* ぼやき */, GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
+    MR::requestStartDemoMarioPuppetable(this, "ぼやき", GET_NERVE(RunawayTico, RunawayTicoNrvAppear), GET_NERVE(RunawayTico, RunawayTicoNrvWait));
 }
 
 void RunawayTico::setPosAfterCaught(const Vec3f& rPos) {
@@ -170,7 +170,7 @@ void RunawayTico::setDemoTrans() {
 
 void RunawayTico::exeGuide0() {
     if (MR::isFirstStep(this)) {
-        MR::startTimeKeepDemoMarioPuppetable(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */, nullptr);
+        MR::startTimeKeepDemoMarioPuppetable(this, "チコガイドデモ", nullptr);
         MR::onGameEventFlagEndTicoGuideDemo();
         MR::endStartPosCamera();
         MR::startAnimCameraTargetPlayer(this, mCameraInfo, "DemoMeetTico", 0, 1.0f);
@@ -210,7 +210,7 @@ void RunawayTico::exeGuide1() {
         MR::hideModel(this);
     }
 
-    if (MR::isDemoPartLastStep("\203\140\203\122\202\306\202\314\217\157\211\357\202\242[\203\105\203\124\203\115\223\246\221\226]" /* チコとの出会い[ウサギ逃走] */)) {
+    if (MR::isDemoPartLastStep("チコとの出会い[ウサギ逃走]")) {
         MR::startStartPosCamera(true);
         MR::endAnimCamera(this, mCameraInfo, "DemoMeetTico", -1, true);
         MR::startStageBGM("MBGM_GALAXY_24", false);
@@ -246,8 +246,8 @@ void RunawayTico::exeWhiteIn() {
 
     if (MR::isStep(this, ::sDemoFadeIn)) {
         MR::openWipeWhiteFade(::sDemoFadeOut);
-        MR::endDemo(this, "\202\332\202\342\202\253" /* ぼやき */);
-        MR::startTimeKeepDemoMarioPuppetable(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */, "\215\202\230\117\217\157\214\273[\203\146\203\202]" /* 高楼出現[デモ] */);
+        MR::endDemo(this, "ぼやき");
+        MR::startTimeKeepDemoMarioPuppetable(this, "チコガイドデモ", "高楼出現[デモ]");
         kill();
     }
 }
@@ -286,7 +286,7 @@ void RunawayTico::exeTalk() {
             MR::startNPCTalkCamera(getMsgCtrl(), getBaseMtx(), 1.0f, 0);
             setNerve(GET_NERVE(RunawayTico, RunawayTicoNrvWhiteOut));
         } else {
-            MR::endDemo(this, "\202\332\202\342\202\253" /* ぼやき */);
+            MR::endDemo(this, "ぼやき");
             setNerveWait();
         }
     }

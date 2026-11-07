@@ -14,7 +14,7 @@ public:
     MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe);
 
     virtual ~MiiFaceParts();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 

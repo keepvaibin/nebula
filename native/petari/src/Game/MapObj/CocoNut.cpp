@@ -31,7 +31,7 @@ CocoNut::CocoNut(const char* pName)
 CocoNut::~CocoNut() {
 }
 
-void CocoNut::init(const JMapInfoIter& rIter) {
+void CocoNut::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     initModel();
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
@@ -52,7 +52,7 @@ void CocoNut::init(const JMapInfoIter& rIter) {
 
     s32 stack_8;
 
-    if (MR::getJMapInfoClippingGroupID(rIter, &stack_8)) {
+    if (MR::getPlacementClippingGroupID(rIter, &stack_8)) {
         MR::setGroupClipping(this, rIter, 32);
         _15E = true;
     } else {
@@ -637,7 +637,7 @@ const char* CocoNut::getBreakEffectName() {
     return watermelonMode ? "BreakWatermelon" : "CocoNutBreak";
 }
 
-void CocoNut::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void CocoNut::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     pCollector->addArchive(getModelName());
 }
 
@@ -798,11 +798,11 @@ bool CocoNut::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-void CocoNut::initMapToolInfo(const JMapInfoIter& rIter) {
+void CocoNut::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mSphericalShadow);
-    MR::getJMapInfoArg1NoInit(rIter, &mRespawnWhenOutOfView);
-    MR::getJMapInfoArg2NoInit(rIter, &mContinueRolling);
+    MR::getPlacementArg0NoInit(rIter, &mSphericalShadow);
+    MR::getPlacementArg1NoInit(rIter, &mRespawnWhenOutOfView);
+    MR::getPlacementArg2NoInit(rIter, &mContinueRolling);
     _D0 = 55.0f * mScale.x;
     mSpawnPosition.set(mPosition);
 }

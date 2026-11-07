@@ -10,7 +10,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -46,11 +46,11 @@ Takobo::Takobo(const char* pName) : LiveActor(pName), _8C(), _90(0, 0, 1), _A0()
     mSpinController = nullptr;
 }
 
-void Takobo::init(const JMapInfoIter& rIter) {
+void Takobo::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _A4.set(mPosition);
     s32 arg = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
 
     if (arg > 0) {
         _A1 = 1;
@@ -73,7 +73,7 @@ void Takobo::init(const JMapInfoIter& rIter) {
     mGravity.set(-stack_24);
 
     arg = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &arg);
 
     if (arg == 0) {
         mtx.getXDir(_B0);
@@ -90,14 +90,14 @@ void Takobo::init(const JMapInfoIter& rIter) {
     }
 
     arg = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg);
+    MR::getPlacementArg2NoInit(rIter, &arg);
 
     if (arg != -1) {
         _C0 = arg;
     }
 
     arg = -1;
-    MR::getJMapInfoArg3NoInit(rIter, &arg);
+    MR::getPlacementArg3NoInit(rIter, &arg);
 
     if (arg != -1) {
         _C4 = arg;
@@ -119,7 +119,7 @@ void Takobo::init(const JMapInfoIter& rIter) {
     MR::initLightCtrl(this);
     appear();
     getSensor("attack")->invalidate();
-    mBox = new SpinningBox("\203\130\203\163\203\152\203\223\203\117\203\173\203\142\203\116\203\130" /* スピニングボックス */);
+    mBox = new SpinningBox("スピニングボックス");
     mBox->mIsIceBox = true;
     mBox->initWithoutIter();
 }
@@ -156,7 +156,7 @@ void Takobo::control() {
 
     if (isNerve(GET_NERVE(Takobo, HostTypeNrvWait)) || isNerve(GET_NERVE(Takobo, HostTypeNrvMove)) || isNerve(GET_NERVE(Takobo, HostTypeNrvAttack)) ||
         isNerve(GET_NERVE(Takobo, HostTypeNrvHitReaction))) {
-        if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+        if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
             setNerve(GET_NERVE(Takobo, HostTypeNrvDpdPointed));
             return;
         }
@@ -381,7 +381,7 @@ void Takobo::exeDpdPointed() {
     }
 
     MR::startDPDFreezeLevelSound(this);
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Takobo, HostTypeNrvWait));
     } else {
         mVelocity.zero();

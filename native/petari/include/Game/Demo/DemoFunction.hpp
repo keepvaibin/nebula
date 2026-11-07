@@ -4,8 +4,8 @@
 class DemoDirector;
 class DemoCastGroupHolder;
 class DemoExecutor;
-class JMapInfo;
-class JMapInfoIter;
+class Table;
+class TableIter;
 class LayoutActor;
 class LiveActor;
 class NameObj;
@@ -31,7 +31,7 @@ namespace DemoFunction {
     bool tryCreateDemoTalkAnimCtrlForActor(LiveActor*, const char*, const char*);
     bool tryCreateDemoTalkAnimCtrlForActorDirect(LiveActor*, const char*, const char*, const char*);
 
-    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor*, const JMapInfoIter&, const char*, const char*, s32, s32);
+    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor*, const TableIter&, const char*, const char*, s32, s32);
 
     bool tryStartDemoRegistered(LiveActor*, const char*);
     bool tryStartDemoRegisteredMarioPuppetable(LiveActor*, const char*);
@@ -51,7 +51,7 @@ namespace DemoFunction {
     bool isDemoSuspendOrLastPartLastStep();
     const char* getCurrentDemoPartNameMain(const char*);
 
-    bool isTargetDemoCast(LiveActor*, const JMapInfoIter&, const char*, s32);
+    bool isTargetDemoCast(LiveActor*, const TableIter&, const char*, s32);
 
     bool isRegisteredDemoActionAppear(const LiveActor*);
     bool isRegisteredDemoActionFunctor(const LiveActor*);
@@ -69,14 +69,14 @@ namespace DemoFunction {
     void resumeTimeKeepDemo(const char*);
     bool isPauseTimeKeepDemo(const char*);
 
-    bool tryCreateDemoTalkAnimCtrlForSceneDirect(LiveActor*, const char*, const JMapInfoIter&, const char*, const char*, s32, s32);
+    bool tryCreateDemoTalkAnimCtrlForSceneDirect(LiveActor*, const char*, const TableIter&, const char*, const char*, s32, s32);
     void registerDemoTalkMessageCtrl(LiveActor*, TalkMessageCtrl*);
     void registerDemoTalkMessageCtrlDirect(LiveActor*, TalkMessageCtrl*, const char*);
     void setDemoTalkMessageCtrlDirect(const LiveActor*, TalkMessageCtrl*, const char*);
 
     ResourceHolder* loadDemoArchive();
 
-    s32 createSheetParser(const DemoExecutor*, const char*, JMapInfo**);
+    s32 createSheetParser(const DemoExecutor*, const char*, Table**);
 
     bool isDemoPartTalk(const char*);
 };  // namespace DemoFunction

@@ -9,7 +9,7 @@ class Pole : public LiveActor {
 public:
     Pole(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void calcAnim();
     virtual void attackSensor(HitSensor*, HitSensor*);

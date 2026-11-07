@@ -28,7 +28,7 @@ namespace {
 };  // namespace
 
 CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection)
-    : LiveActor("\203\204\203\126\202\314\226\330\202\314\227\164" /* ヤシの木の葉 */), mGroup(pGroup), mTipPosition(0.0f), mRestTipPosition(0.0f),
+    : LiveActor("ヤシの木の葉"), mGroup(pGroup), mTipPosition(0.0f), mRestTipPosition(0.0f),
       mRestUp(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisX(pJointMtx[0][0], pJointMtx[1][0], pJointMtx[2][0]),
       mAxisY(pJointMtx[0][1], pJointMtx[1][1], pJointMtx[2][1]), mAxisZ(pJointMtx[0][2], pJointMtx[1][2], pJointMtx[2][2]), mJointMtx(pJointMtx),
       mWindStep(), mWindStartStep(), mWindAccel(0.0f), mWindDirection(pWindDirection) {
@@ -39,7 +39,7 @@ CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJoi
     mTipPosition.set(mRestTipPosition);
 }
 
-void CoconutTreeLeaf::init(const JMapInfoIter& rIter) {
+void CoconutTreeLeaf::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionPartsFromResourceHolder(this, "CoconutTreeLeaf", getSensor("body"), MR::getResourceHolder(mGroup), mJointMtx);
@@ -151,7 +151,7 @@ CoconutTreeLeafGroup::CoconutTreeLeafGroup(const char* pName)
     : LiveActor(pName), mNumLeaves(), mLeaves(), mWindDirection(0.0f, 0.0f, 1.0f), mDistanceToPlayer() {
 }
 
-void CoconutTreeLeafGroup::init(const JMapInfoIter& rIter) {
+void CoconutTreeLeafGroup::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("CoconutTreeLeaf", nullptr, false);
     MR::connectToSceneMapObjNoCalcAnim(this);

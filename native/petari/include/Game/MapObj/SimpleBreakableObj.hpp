@@ -21,7 +21,7 @@ public:
     SimpleBreakableObj(const char*);
 
     virtual ~SimpleBreakableObj();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void control() override;
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;

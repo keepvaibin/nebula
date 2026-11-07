@@ -18,7 +18,7 @@ TombSpiderVitalSpot::TombSpiderVitalSpot(LiveActor* pActor, const char* pName, c
     initFixedPosition(rPos, a1, pJointName);
 }
 
-void TombSpiderVitalSpot::init(const JMapInfoIter& rIter) {
+void TombSpiderVitalSpot::init(const TableIter& rIter) {
     PartsModel::init(rIter);
     initNerve(GET_NERVE(TombSpiderVitalSpot, TombSpiderVitalSpotNrvWait));
     makeActorAppeared();

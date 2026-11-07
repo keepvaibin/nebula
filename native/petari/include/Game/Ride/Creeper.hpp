@@ -48,7 +48,7 @@ public:
 
     virtual ~Creeper();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void draw() const;
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);

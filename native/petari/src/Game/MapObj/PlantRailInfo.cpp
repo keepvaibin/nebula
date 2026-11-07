@@ -5,7 +5,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-PlantRailInfo::PlantRailInfo(const JMapInfoIter& rIter, f32 speed) : mRailSpeed(speed), mNumPlantPoints(), mPlantPoints(), mRailRider() {
+PlantRailInfo::PlantRailInfo(const TableIter& rIter, f32 speed) : mRailSpeed(speed), mNumPlantPoints(), mPlantPoints(), mRailRider() {
     mRailRider = new RailRider(rIter);
     mRailRider->setSpeed(mRailSpeed);
 

@@ -10,7 +10,7 @@ class Petari : public LiveActor {
 public:
     Petari(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -43,10 +43,10 @@ public:
     void endEscape();
 
     void initHitSensors();
-    void initFootPrint(const JMapInfoIter& rIter);
+    void initFootPrint(const TableIter& rIter);
     void updateFootPrint();
     void initFrontVec();
-    void initStarPiece(const JMapInfoIter& rIter);
+    void initStarPiece(const TableIter& rIter);
     bool reflectStarPointer2P();
     bool tryShiftApproach();
     bool tryApproachEnd();

@@ -4,8 +4,8 @@
 #include "Game/MapObj/ArrowSwitchMultiHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -27,13 +27,13 @@ ArrowSwitchTarget::ArrowSwitchTarget(const char* pName) : NameObj(pName), mIdInf
     MR::createArrowSwitchMultiHolder();
 }
 
-void ArrowSwitchTarget::init(const JMapInfoIter& rIter) {
+void ArrowSwitchTarget::init(const TableIter& rIter) {
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
-    mIdInfo = new JMapIdInfo(arg0, rIter);
+    mIdInfo = new PlacementId(arg0, rIter);
 
-    MR::getJMapInfoArg1WithInit(rIter, &mTargetIndex);
+    MR::getPlacementArg1WithInit(rIter, &mTargetIndex);
     mStageSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 }
 
@@ -77,15 +77,15 @@ void ArrowSwitchMulti::registerTarget(ArrowSwitchTarget* pTarget) {
     }
 }
 
-void ArrowSwitchMulti::init(const JMapInfoIter& rIter) {
+void ArrowSwitchMulti::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("ArrowSwitch", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
-    mIdInfo = new JMapIdInfo(arg0, rIter);
+    mIdInfo = new PlacementId(arg0, rIter);
 
     if (MR::isInAreaObj("PlaneModeCube", mPosition)) {
         initHitSensor(1);

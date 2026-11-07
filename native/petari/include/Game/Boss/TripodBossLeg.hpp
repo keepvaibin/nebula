@@ -15,7 +15,7 @@ public:
     TripodBossLeg(const char* pName);
 
     virtual ~TripodBossLeg();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();

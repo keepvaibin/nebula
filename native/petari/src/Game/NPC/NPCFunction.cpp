@@ -4,7 +4,7 @@
 #include "Game/NPC/NPCParameter.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <cstdio>
 
 void NPCFunction::createNPCData() {
@@ -28,7 +28,7 @@ bool NPCFunction::getNPCItemData(NPCActorItem* pItem, s32 idx) {
 
     pItemReader->copy(pItem);
 
-    JMapInfo mapInfo = JMapInfo();
+    Table mapInfo = Table();
     mapInfo.attach(pHolder->mFileInfoTable->getRes(resName));
 
     pItemReader->read(&mapInfo, idx);

@@ -10,9 +10,9 @@ class MogucchiHillPiece : public LiveActor {
 public:
     /// @brief Creates a new `MogucchiHillPiece`.
     /// @param pName A pointer to the null-terminated name of the object.
-    MogucchiHillPiece(const char* pName = "\203\202\203\117\203\142\203\140\222\313\203\163\201\133\203\130" /* モグッチ塚ピース */);
+    MogucchiHillPiece(const char* pName = "モグッチ塚ピース");
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -44,7 +44,7 @@ class MogucchiHill : public LiveActor {
 public:
     MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     virtual bool notifyAppearAttackToPlayer(HitSensor* pSender, HitSensor* pReceiver) {
         return false;

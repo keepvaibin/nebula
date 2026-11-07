@@ -7,7 +7,7 @@ public:
     FireBarBall(LiveActor*);
 
     virtual ~FireBarBall();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void startClipped();
     virtual void endClipped();
@@ -23,14 +23,14 @@ public:
     FireBar(const char*);
 
     virtual ~FireBar();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void updateHitSensor(HitSensor*);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void exeWait();
-    void initFireBarBall(const JMapInfoIter&);
+    void initFireBarBall(const TableIter&);
     void fixFireBarBall();
 
     FireBarBall** mFireBalls;

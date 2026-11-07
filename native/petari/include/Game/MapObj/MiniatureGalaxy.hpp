@@ -27,7 +27,7 @@ class MiniatureGalaxy : public LiveActor {
 public:
     MiniatureGalaxy(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -35,7 +35,7 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void initPartsModel();
     void setScale(f32);

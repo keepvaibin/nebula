@@ -8,7 +8,7 @@ class CoinReplica : public NameObj {
 public:
     CoinReplica(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void activeCoin();
     void activeCoinWithGravity();

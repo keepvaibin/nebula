@@ -1,6 +1,6 @@
 #include "Game/System/AlreadyDoneFlagInGalaxy.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include <algorithm>
 
@@ -55,11 +55,11 @@ void AlreadyDoneFlagInGalaxy::clear() {
     mDoneInfos.clear();
 }
 
-u32 AlreadyDoneFlagInGalaxy::setupFlag(const char* pName, const JMapInfoIter& rIter, u32* a3) {
+u32 AlreadyDoneFlagInGalaxy::setupFlag(const char* pName, const TableIter& rIter, u32* a3) {
     u32 result;
 
     s32 linkID = -1;
-    MR::getJMapInfoLinkID(rIter, &linkID);
+    MR::getPlacementLinkID(rIter, &linkID);
     s32 zoneID = MR::getPlacedZoneId(rIter);
 
     AlreadyDoneInfo info;

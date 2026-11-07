@@ -5,8 +5,8 @@
 #include "Game/MapObj/MapPartsFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -52,7 +52,7 @@ void LavaHomeSeesaw::calcAndSetBaseMtx() {
     }
 }
 
-void LavaHomeSeesaw::init(const JMapInfoIter& rIter) {
+void LavaHomeSeesaw::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* name;
     MR::getObjectName(&name, rIter);

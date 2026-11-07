@@ -40,7 +40,7 @@ bool BackButton::isPointing() const {
 BackButton::~BackButton() {
 }
 
-void BackButton::init(const JMapInfoIter& rIter) {
+void BackButton::init(const TableIter& rIter) {
     initLayoutManager("BackButton", 1);
     MR::createAndAddPaneCtrl(this, "Back", 1);
 

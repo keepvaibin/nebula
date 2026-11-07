@@ -1,4 +1,4 @@
-#include "Game/Util/JMapLinkInfo.hpp"
+#include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -6,7 +6,7 @@ namespace {
     static const char* sFollowInfoTagName[3] = {"MapParts_ID", "Obj_ID", "ChildObjId"};
     static const char* sInfoNameTable[3] = {"mappartsinfo", "objinfo", "childobjinfo"};
 
-    s32 getInfoType(const JMapInfo* pInfo) {
+    s32 getInfoType(const Table* pInfo) {
         const char* pName = pInfo->getName();
 
         for (s32 i = 0; i < 3; i++) {
@@ -19,7 +19,7 @@ namespace {
     }
 };  // namespace
 
-JMapLinkInfo::JMapLinkInfo(const JMapInfoIter& rIter, bool linked) {
+PlacementLink::PlacementLink(const TableIter& rIter, bool linked) {
     _0 = -1;
     _4 = -1;
     _8 = -1;
@@ -31,7 +31,7 @@ JMapLinkInfo::JMapLinkInfo(const JMapInfoIter& rIter, bool linked) {
     }
 }
 
-bool JMapLinkInfo::isValid() const {
+bool PlacementLink::isValid() const {
     bool ret = false;
     if (_0 >= 0 && _4 >= 0) {
         if (_8 >= 0) {
@@ -42,13 +42,13 @@ bool JMapLinkInfo::isValid() const {
     return ret;
 }
 
-void JMapLinkInfo::invalidate() {
+void PlacementLink::invalidate() {
     _0 = -1;
     _4 = -1;
     _8 = -1;
 }
 
-void JMapLinkInfo::setLinkedInfo(const JMapInfoIter& rIter) {
+void PlacementLink::setLinkedInfo(const TableIter& rIter) {
     invalidate();
 
     if (rIter.isValid()) {
@@ -62,7 +62,7 @@ void JMapLinkInfo::setLinkedInfo(const JMapInfoIter& rIter) {
     }
 }
 
-void JMapLinkInfo::setLinkInfo(const JMapInfoIter& rIter) {
+void PlacementLink::setLinkInfo(const TableIter& rIter) {
     invalidate();
 
     if (rIter.isValid()) {

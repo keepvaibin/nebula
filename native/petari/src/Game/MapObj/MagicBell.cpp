@@ -18,7 +18,7 @@ MagicBell::MagicBell(const char* pName) : LiveActor(pName) {
     mHitMarkPosition.z = 0.0f;
 }
 
-void MagicBell::init(const JMapInfoIter& rIter) {
+void MagicBell::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Bell", nullptr, false);
     mSurface2Mtx = MR::getJointMtx(this, "polySurface2");
@@ -149,7 +149,7 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 }
 
 bool MagicBell::tryRing() {
-    if (!MR::isExecScenarioStarter() && MR::isStarPointerPointing(this, 0, 0, "\216\343" /* 弱 */)) {
+    if (!MR::isExecScenarioStarter() && MR::isStarPointerPointing(this, 0, 0, "弱")) {
         Vec2f* v4(MR::getStarPointerScreenVelocity(0));
         if (((v4->x * v4->x) + (v4->y * v4->y)) > 64.0f) {
             Vec3f v12;

@@ -4,9 +4,9 @@
 
 class CocoNutBall : public LiveActor {
 public:
-    CocoNutBall(const char* pName = "\203\204\203\126\202\314\216\300\222\145" /* ヤシの実弾 */);
+    CocoNutBall(const char* pName = "ヤシの実弾");
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void calcAndSetBaseMtx();

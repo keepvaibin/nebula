@@ -30,7 +30,7 @@ void ChooChooTrain::endClipped() {
     }
 }
 
-void ChooChooTrain::init(const JMapInfoIter& rIter) {
+void ChooChooTrain::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         if (MR::isConnectedWithRail(rIter)) {
         }
@@ -51,14 +51,14 @@ void ChooChooTrain::init(const JMapInfoIter& rIter) {
     MR::onCalcGravity(this);
     s32 arg = -1;
     s32 defTrainParts = 3;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
 
     if (arg > 0) {
         defTrainParts = arg;
     }
 
     arg = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &arg);
 
     if (arg > 0) {
         mRailSpeed = arg;
@@ -69,7 +69,7 @@ void ChooChooTrain::init(const JMapInfoIter& rIter) {
     int i;
 
     for (i = 0; i < defTrainParts; i++) {
-        ModelObj* pObj = new ModelObj("\213\104\216\324\203\174\203\142\203\174\213\161\216\324" /* 汽車ポッポ客車 */, "ChooChooTrainBody", nullptr, -2, MR::MovementType_CollisionMapObj,
+        ModelObj* pObj = new ModelObj("汽車ポッポ客車", "ChooChooTrainBody", nullptr, -2, MR::MovementType_CollisionMapObj,
                                       MR::CalcAnimType_CollisionMapObj, false);
         pObj->initWithoutIter();
         MR::initCollisionParts(pObj, "ChooChooTrainBody", getSensor("body"), nullptr);

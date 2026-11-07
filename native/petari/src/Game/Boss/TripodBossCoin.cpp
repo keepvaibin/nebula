@@ -2,7 +2,7 @@
 #include "Game/Boss/TripodBossAccesser.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/Coin.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -16,12 +16,12 @@ TripodBossCoin::TripodBossCoin(const char* pName) : NameObj(pName), mCoin(), mSp
     _14.identity();
 }
 
-void TripodBossCoin::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoMatrixFromRT(rIter, &_14);
+void TripodBossCoin::init(const TableIter& rIter) {
+    MR::getPlacementMatrixFromRT(rIter, &_14);
     MR::connectToSceneMapObjDecorationMovement(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mJointID);
+    MR::getPlacementArg0NoInit(rIter, &mJointID);
 
-    mCoin = static_cast< Coin* >(MR::createCoin(this, "\203\122\203\103\203\223(\216\117\213\162\203\173\203\130\227\160)" /* コイン(三脚ボス用) */));
+    mCoin = static_cast< Coin* >(MR::createCoin(this, "コイン(三脚ボス用)"));
     mCoin->initWithoutIter();
 
     mSpine = new Spine(this, GET_NERVE(TripodBossCoin, TripodBossCoinNrvNonActive));

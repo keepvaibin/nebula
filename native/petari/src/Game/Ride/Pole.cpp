@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -83,16 +83,16 @@ Pole::Pole(const char* pName)
     mBaseMtx.identity();
 }
 
-void Pole::init(const JMapInfoIter& rIter) {
+void Pole::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mBasePos.set(mPosition);
     mHeight = ::sHeightRate * mScale.y;
     mScale.set(1.0f, 1.0f, 1.0f);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mDisableHandstand);
-    MR::getJMapInfoArg1NoInit(rIter, &mInvertStick);
+    MR::getPlacementArg0NoInit(rIter, &mDisableHandstand);
+    MR::getPlacementArg1NoInit(rIter, &mInvertStick);
     s32 use9mCollision = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &use9mCollision);
+    MR::getPlacementArg2NoInit(rIter, &use9mCollision);
 
     if (use9mCollision == 1) {
         mUsePole9mCollision = true;

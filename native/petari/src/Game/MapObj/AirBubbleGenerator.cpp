@@ -4,7 +4,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -25,7 +25,7 @@ AirBubbleGenerator::~AirBubbleGenerator() {
 AirBubbleGenerator::AirBubbleGenerator(const char* pName) : LiveActor(pName), _8C(), mWaitTime(180), mBubbleLifeTime(-1) {
 }
 
-void AirBubbleGenerator::init(const JMapInfoIter& rIter) {
+void AirBubbleGenerator::init(const TableIter& rIter) {
     MR::createAirBubbleHolder();
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AirBubbleGenerator", nullptr, false);
@@ -35,8 +35,8 @@ void AirBubbleGenerator::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorReceiver(this);
     MR::initCollisionParts(this, "AirBubbleGenerator", getSensor(nullptr), nullptr);
-    MR::getJMapInfoArg0NoInit(rIter, &mWaitTime);
-    MR::getJMapInfoArg1NoInit(rIter, &mBubbleLifeTime);
+    MR::getPlacementArg0NoInit(rIter, &mWaitTime);
+    MR::getPlacementArg1NoInit(rIter, &mBubbleLifeTime);
     initSound(2, false);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {

@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 
 class ArrowSwitchTarget;
-class JMapIdInfo;
+class PlacementId;
 
 class ArrowSwitchMulti : public LiveActor {
 public:
@@ -11,7 +11,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ArrowSwitchMulti(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
@@ -21,7 +21,7 @@ public:
     void exeWait();
     void exeRotate();
 
-    JMapIdInfo* mIdInfo;
+    PlacementId* mIdInfo;
     ArrowSwitchTarget* mTargetArray[4];
     f32 mRotAngle;
     f32 mRotSpeed;
@@ -36,13 +36,13 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     ArrowSwitchTarget(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
 
     void onTarget();
     void offTarget();
 
-    JMapIdInfo* mIdInfo;
+    PlacementId* mIdInfo;
     StageSwitchCtrl* mStageSwitchCtrl;
     s32 mTargetIndex;
 };

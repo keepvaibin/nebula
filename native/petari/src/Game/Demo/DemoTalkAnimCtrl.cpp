@@ -25,7 +25,7 @@ DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char
       mHaveBtp(false), mHaveBrk(false), mHaveBva(false) {
 }
 
-void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const JMapInfoIter& rIter) {
+void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const TableIter& rIter) {
     char buf[0x100];
     nebula_snprintf(buf, sizeof(buf), "%s.canm", a2);
     initForActor(a1);
@@ -58,7 +58,7 @@ namespace {
         DemoSubPartKeeper* subpartkeeper = exec->mSubPartKeeper;
         for (int i = 0; i < subpartkeeper->mNumSubPartInfos; i++) {
             subpart = &subpartkeeper->mSubPartInfos[i];
-            if (MR::isEqualString(pMainPartName, subpart->mMainPartName) && MR::isEqualSubString(subpart->mSubPartName, "\211\357\230\142\203\101\203\152\203\201\203\213\201\133\203\166" /* 会話アニメループ */)) {
+            if (MR::isEqualString(pMainPartName, subpart->mMainPartName) && MR::isEqualSubString(subpart->mSubPartName, "会話アニメループ")) {
                 return subpart->mMainPartStep;
             }
         }

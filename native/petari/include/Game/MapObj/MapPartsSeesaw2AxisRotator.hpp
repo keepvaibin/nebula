@@ -7,7 +7,7 @@ public:
     MapPartsSeesaw2AxisRotator(LiveActor*, const char*, f32);
 
     virtual ~MapPartsSeesaw2AxisRotator();
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual bool isWorking() const override;
     virtual void start() override;
     virtual void end() override;

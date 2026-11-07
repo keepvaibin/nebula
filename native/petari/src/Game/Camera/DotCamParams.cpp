@@ -1,9 +1,9 @@
 #include "Game/Camera/DotCamParams.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <cstdio>
 #include <cstring>
 
-template bool JMapInfoIter::getValue< s32 >(const char*, s32*) const;
+template bool TableIter::getValue< s32 >(const char*, s32*) const;
 
 DotCamReaderInBin::DotCamReaderInBin(const void* pData) : mVersion(), _8(), mMapInfo() {
     init(pData);

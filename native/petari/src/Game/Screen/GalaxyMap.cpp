@@ -41,7 +41,7 @@ namespace {
 };  // namespace
 
 GalaxyMap::GalaxyMap()
-    : LayoutActor("\203\115\203\203\203\211\203\116\203\126\201\133\201\105\223\126\225\266\221\344\203\175\203\142\203\166" /* ギャラクシー・天文台マップ */, true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
+    : LayoutActor("ギャラクシー・天文台マップ", true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
       _70(), _71(true) {
 }
 
@@ -61,7 +61,7 @@ template <>
 inline MR::Vector< MR::AssignableArray< GalaxyMapTicoIcon* > >::~Vector() {
 }
 
-void GalaxyMap::init(const JMapInfoIter& rIter) {
+void GalaxyMap::init(const TableIter& rIter) {
     initLayoutManager("MapGrandGalaxy", 1);
     initPaneCtrlPointing();
     initDomeIcon();
@@ -476,7 +476,7 @@ namespace {
 };  // namespace
 
 void GalaxyMap::initPaneCtrlPointing() {
-    JMapInfo galaxyInfo;
+    Table galaxyInfo;
     galaxyInfo.attach(NebulaDataTables::getGalaxyInfoTable());
     ::initIconArray(mIcon, new GalaxyMapIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     ::initIconArray(mCometIcon, new GalaxyMapCometIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());

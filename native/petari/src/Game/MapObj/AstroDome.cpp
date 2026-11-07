@@ -17,7 +17,7 @@ namespace NrvAstroDome {
 AstroDome::AstroDome(const char* pName) : MapObjActor(pName) {
 }
 
-void AstroDome::init(const JMapInfoIter& rIter) {
+void AstroDome::init(const TableIter& rIter) {
     MapObjActorInitInfo info;
     info.setupModelName(AstroMapObjFunction::getModelName("AstroDome", AstroMapObjFunction::getDomeIdFromArg0(rIter)));
     info.setupNerve(GET_NERVE(AstroDome, AstroDomeNrvWait));

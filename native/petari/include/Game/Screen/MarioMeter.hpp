@@ -10,7 +10,7 @@ public:
     MarioMeter(const char*);
 
     virtual ~MarioMeter();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void initLifeCount(s32);
     void setLifeCount(s32);

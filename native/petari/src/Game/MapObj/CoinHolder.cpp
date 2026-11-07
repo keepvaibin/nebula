@@ -124,7 +124,7 @@ CoinHostInfo* CoinHolder::findHostInfo(const NameObj* pObj) const {
     return nullptr;
 }
 
-void CoinHolder::init(const JMapInfoIter& rIter) {
+void CoinHolder::init(const TableIter& rIter) {
     createCoins();
 }
 
@@ -145,7 +145,7 @@ Coin* CoinHolder::takeDeadCoin() {
 void CoinHolder::createCoins() {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (int i = 0; i < ::sCreateCoinNum; i++) {
-        Coin* pCoin = new Coin("\203\122\203\103\203\223(\213\244\227\160)" /* コイン(共用) */);
+        Coin* pCoin = new Coin("コイン(共用)");
         pCoin->initWithoutIter();
         registerActor(pCoin);
     }

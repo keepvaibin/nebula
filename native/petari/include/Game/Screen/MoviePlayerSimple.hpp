@@ -25,7 +25,7 @@ public:
     /// @brief Destroys the `MoviePlayerSimple`.
     virtual ~MoviePlayerSimple();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
 
     void startMovie(const char*, bool);

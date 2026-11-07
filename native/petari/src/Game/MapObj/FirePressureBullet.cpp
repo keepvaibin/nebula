@@ -16,7 +16,7 @@ FirePressureBullet::FirePressureBullet(const char* pName) : LiveActor(pName) {
     _A1 = false;
 }
 
-void FirePressureBullet::init(const JMapInfoIter& rIter) {
+void FirePressureBullet::init(const TableIter& rIter) {
     initModelManagerWithAnm("FireBullet", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);

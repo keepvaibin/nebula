@@ -19,20 +19,20 @@
 #include "Game/Util/SceneUtil.hpp"
 
 GameSceneLayoutHolder::GameSceneLayoutHolder()
-    : NameObj("\203\121\201\133\203\200\203\126\201\133\203\223\202\314\203\214\203\103\203\101\203\105\203\147\225\333\216\235" /* ゲームシーンのレイアウト保持 */), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
+    : NameObj("ゲームシーンのレイアウト保持"), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
       mMissLayout(nullptr), mNoteCounter(nullptr), mYesNoLayout(nullptr), mPurpleCoinCounter(nullptr), _30(false), _31(false),
       mCounterLayoutCtrl(nullptr), mIsActiveDefaultGameLayout(true) {
     MR::joinToNameObjGroup(this, "IgnorePauseNameObj");
     MR::connectToSceneLayoutMovement(this);
 
-    mMarioMeter = new MarioMeter("\203\175\203\212\203\111\203\201\201\133\203\136\201\133" /* マリオメーター */);
+    mMarioMeter = new MarioMeter("マリオメーター");
     mMarioMeter->initWithoutIter();
 
     mCounterLayoutCtrl = new CounterLayoutController();
     mCounterLayoutCtrl->initWithoutIter();
     mCounterLayoutCtrl->setHPMeter(mMarioMeter);
 
-    mCameraInfo = new CameraInfo("\203\112\203\201\203\211\217\356\225\361\225\134\216\246" /* カメラ情報表示 */);
+    mCameraInfo = new CameraInfo("カメラ情報表示");
     mCameraInfo->initWithoutIter();
 
     mInformationMessage = new InformationMessage();
@@ -44,10 +44,10 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
     mMissLayout = new MissLayout();
     mMissLayout->initWithoutIter();
 
-    mMarioSubMeter = new MarioSubMeter("\203\175\203\212\203\111\203\124\203\165\203\201\201\133\203\136\201\133" /* マリオサブメーター */);
+    mMarioSubMeter = new MarioSubMeter("マリオサブメーター");
     mMarioSubMeter->initWithoutIter();
 
-    mNoteCounter = new NoteCounter("\211\271\225\204\203\112\203\105\203\223\203\136" /* 音符カウンタ */);
+    mNoteCounter = new NoteCounter("音符カウンタ");
     mNoteCounter->initWithoutIter();
     MR::hideLayout(mNoteCounter);
 
@@ -64,7 +64,7 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 }
 
 void GameSceneLayoutHolder::createPurpleCoinCounter() {
-    mPurpleCoinCounter = new PurpleCoinCounter("\203\160\201\133\203\166\203\213\203\122\203\103\203\223\203\112\203\105\203\223\203\136" /* パープルコインカウンタ */);
+    mPurpleCoinCounter = new PurpleCoinCounter("パープルコインカウンタ");
     mPurpleCoinCounter->initWithoutIter();
 }
 

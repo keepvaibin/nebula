@@ -13,16 +13,16 @@ namespace NrvMapPartsRailRotator {
 };  // namespace NrvMapPartsRailRotator
 
 MapPartsRailRotator::MapPartsRailRotator(LiveActor* pHost)
-    : MapPartsFunction(pHost, "\203\214\203\103\203\213\211\361\223\135" /* レイル回転 */), mRotateAxis(), mRotateType(), mRotateSpeed(), mTargetAngle(), mAngle(), mHostRotateMtx() {
+    : MapPartsFunction(pHost, "レイル回転"), mRotateAxis(), mRotateType(), mRotateSpeed(), mTargetAngle(), mAngle(), mHostRotateMtx() {
     _2C.identity();
     _5C.identity();
 }
 
-void MapPartsRailRotator::init(const JMapInfoIter&) {
+void MapPartsRailRotator::init(const TableIter&) {
     initNerve(GET_NERVE(MapPartsRailRotator, HostTypeWait));
 }
 
-void MapPartsRailRotator::initWithRotateMtx(const JMapInfoIter& rIter, MtxPtr pMtx) {
+void MapPartsRailRotator::initWithRotateMtx(const TableIter& rIter, MtxPtr pMtx) {
     mHostRotateMtx = pMtx;
     init(rIter);
 }
@@ -109,7 +109,7 @@ void MapPartsRailRotator::updateInfo(s32 point) {
 
     f32 angle = -1.0f;
     MR::getMapPartsArgRailRotateAngle(&angle, mHost, point);
-    angle *= getJMapArgAngleFactor();
+    angle *= getPlacementArgAngleFactor();
     mTargetAngle = angle;
     MR::getMapPartsArgRailRotateAxis(&mRotateAxis, mHost, point);
     MR::getMapPartsArgRailRotateType(&mRotateType, mHost, point);

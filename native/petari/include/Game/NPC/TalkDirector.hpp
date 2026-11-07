@@ -35,7 +35,7 @@ public:
     TalkDirector(const char*);
 
     virtual ~TalkDirector();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     bool request(TalkMessageCtrl*, bool);

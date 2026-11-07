@@ -1,6 +1,6 @@
 #include "Game/Map/GroupSwitchWatcher.hpp"
 #include "Game/Map/StageSwitch.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -8,11 +8,11 @@ GroupSwitchWatcher::GroupSwitchWatcher(const char* pName)
     : LiveActor(pName), mSwitchCtrl(nullptr), mNumSwitches(-1), mLogicType(-1), mActionType(-1) {
 }
 
-void GroupSwitchWatcher::init(const JMapInfoIter& rIter) {
+void GroupSwitchWatcher::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mNumSwitches);
-    MR::getJMapInfoArg1NoInit(rIter, &mLogicType);
-    MR::getJMapInfoArg2NoInit(rIter, &mActionType);
+    MR::getPlacementArg0NoInit(rIter, &mNumSwitches);
+    MR::getPlacementArg1NoInit(rIter, &mLogicType);
+    MR::getPlacementArg2NoInit(rIter, &mActionType);
     mSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
     MR::invalidateClipping(this);
     makeActorAppeared();

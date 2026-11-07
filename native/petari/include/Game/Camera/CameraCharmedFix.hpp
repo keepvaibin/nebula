@@ -4,7 +4,7 @@
 
 class CameraCharmedFix : public Camera {
 public:
-    CameraCharmedFix(const char* pName = "\203\124\203\223\203\173\203\112\203\201\203\211" /* サンボカメラ */);
+    CameraCharmedFix(const char* pName = "サンボカメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

@@ -8,7 +8,7 @@ class JumpBranch : public LiveActor {
 public:
     JumpBranch(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void updateHitSensor(HitSensor* pSensor);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

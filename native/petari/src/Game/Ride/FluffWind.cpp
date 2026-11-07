@@ -41,7 +41,7 @@ void FluffWindEffect::initEffectInfo(const Vec3f& rFront, const Vec3f& rUp, cons
     }
 }
 
-void FluffWindEffect::init(const JMapInfoIter&) {
+void FluffWindEffect::init(const TableIter&) {
     makeActorAppeared();
 }
 
@@ -73,7 +73,7 @@ void FluffWindEffect::startClipped() {
 FluffWind::FluffWind(const char* pName) : LiveActor(pName), mNumEffects(), mEffects() {
 }
 
-void FluffWind::init(const JMapInfoIter& rIter) {
+void FluffWind::init(const TableIter& rIter) {
     initRailRider(rIter);
     initEffectKeeper(0, "FluffWind", false);
     MR::invalidateClipping(this);
@@ -90,7 +90,7 @@ void FluffWind::init(const JMapInfoIter& rIter) {
         Vec3f dir;
         MR::calcRailPosAndDirectionAtCoord(&pos, &dir, this, currentRailPos);
 
-        FluffWindEffect* effect = new FluffWindEffect("\202\355\202\275\202\260\203\107\203\164\203\106\203\116\203\147" /* わたげエフェクト */);
+        FluffWindEffect* effect = new FluffWindEffect("わたげエフェクト");
         effect->initEffectInfo(pos, dir, Vec3f(0.0f, 1.0f, 0.0f), "FluffWind", -1.0f);
         effect->initWithoutIter();
 
@@ -111,7 +111,7 @@ void FluffWind::makeActorDead() {
     LiveActor::makeActorDead();
 }
 
-FluffWindHolder::FluffWindHolder() : LiveActorGroup("\202\355\202\275\202\260\225\227" /* わたげ風 */, 8) {
+FluffWindHolder::FluffWindHolder() : LiveActorGroup("わたげ風", 8) {
 }
 
 void FluffWindHolder::calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) const {

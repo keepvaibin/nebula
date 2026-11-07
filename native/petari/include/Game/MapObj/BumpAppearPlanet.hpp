@@ -8,7 +8,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     BumpAppearPlanet(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
 

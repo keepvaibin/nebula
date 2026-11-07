@@ -24,7 +24,7 @@ RevolvingWay::RevolvingWay(const char* pName) : LiveActor(pName), mRotateQuat(0.
     mRadius = 500.0f;
 }
 
-void RevolvingWay::init(const JMapInfoIter& rIter) {
+void RevolvingWay::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RevolvingWay", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -58,7 +58,7 @@ void RevolvingWay::exeWait() {
 
 void RevolvingWay::addAccelMoment() {
     Vec3f rotateMoment;
-    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::isHeldFire(PLAYER_1) &&
+    if (MR::isStarPointerPointing(this, 0, true, "弱") && MR::isHeldFire(PLAYER_1) &&
         MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, mRadius, 0)) {
         mFriction += rotateMoment * 0.04f;
         f32 mag = mFriction.length();

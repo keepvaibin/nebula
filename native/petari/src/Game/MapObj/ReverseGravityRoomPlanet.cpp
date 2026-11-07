@@ -13,7 +13,7 @@ namespace NrvReverseGravityRoomPlanet {
 ReverseGravityRoomPlanet::ReverseGravityRoomPlanet(const char* pName) : MapObjActor(pName) {
 }
 
-void ReverseGravityRoomPlanet::init(const JMapInfoIter& rIter) {
+void ReverseGravityRoomPlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

@@ -11,7 +11,7 @@ class HipDropSwitch : public LiveActor {
 public:
     HipDropSwitch(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAnim();
     virtual void control();

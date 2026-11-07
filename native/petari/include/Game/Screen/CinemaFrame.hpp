@@ -6,7 +6,7 @@ class CinemaFrame : public LayoutActor {
 public:
     CinemaFrame(bool param1);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
 
     void tryScreenToFrame();

@@ -26,7 +26,7 @@ namespace NrvBossStinkBugActionFlyLow {
     NEW_NERVE(BossStinkBugActionFlyLowNrvTurn, BossStinkBugActionFlyLow, Turn);
 };  // namespace NrvBossStinkBugActionFlyLow
 
-BossStinkBugActionFlyLow::BossStinkBugActionFlyLow(BossStinkBug* pStinkBug) : BossStinkBugActionBase("\203\173\203\130\203\112\203\201\203\200\203\126\222\341\213\363\220\355" /* ボスカメムシ低空戦 */, pStinkBug), _64(0.0f) {
+BossStinkBugActionFlyLow::BossStinkBugActionFlyLow(BossStinkBug* pStinkBug) : BossStinkBugActionBase("ボスカメムシ低空戦", pStinkBug), _64(0.0f) {
     _38 = 14.0f;
     _3C = 900.0f;
     _44 = -400.0f;

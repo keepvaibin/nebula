@@ -24,8 +24,8 @@
 
 
 namespace {
-    static const char* sLauncherCameraName = "\221\345\226\103" /* 大砲 */;
-    static const char* sLauncherFlightCameraName = "\221\345\226\103\224\362\215\163" /* 大砲飛行 */;
+    static const char* sLauncherCameraName = "大砲";
+    static const char* sLauncherFlightCameraName = "大砲飛行";
 
     CameraContext* getCameraContext() {
         return MR::getSceneObj< CameraContext >(SceneObj_CameraContext);

@@ -11,7 +11,7 @@ public:
     /// @brief Destroys the `AirBubbleGenerator`.
     virtual ~AirBubbleGenerator();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exeWait();

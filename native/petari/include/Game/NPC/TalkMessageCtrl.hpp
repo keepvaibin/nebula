@@ -79,8 +79,8 @@ public:
 
     virtual ~TalkMessageCtrl();
 
-    void createMessage(const JMapInfoIter&, const char*);
-    void createMessageDirect(const JMapInfoIter&, const char*);
+    void createMessage(const TableIter&, const char*);
+    void createMessageDirect(const TableIter&, const char*);
     u32 getMessageID() const;
     bool requestTalk();
     bool requestTalkForce();

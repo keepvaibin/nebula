@@ -2,12 +2,12 @@
 
 #include "Game/System/NerveExecutor.hpp"
 
-class JMapInfoIter;
+class TableIter;
 class Tico;
 
 class TicoDemoGetPower : public NerveExecutor {
 public:
-    TicoDemoGetPower(Tico*, const JMapInfoIter&);
+    TicoDemoGetPower(Tico*, const TableIter&);
 
     void startDemo();
 

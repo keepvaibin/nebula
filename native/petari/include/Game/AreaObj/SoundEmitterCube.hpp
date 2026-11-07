@@ -10,7 +10,7 @@ public:
 
     virtual ~SoundEmitterCube();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     AudAnmSoundObject* mSoundObj;

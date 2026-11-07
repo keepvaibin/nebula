@@ -6,7 +6,7 @@ class BossKameckBarrier : public LiveActor {
 public:
     BossKameckBarrier(const char*, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void exeWait();

@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -109,7 +109,7 @@ DharmaSambo::DharmaSambo(const char* pName)
       mAnimScaleController() {
 }
 
-void DharmaSambo::init(const JMapInfoIter& rIter) {
+void DharmaSambo::init(const TableIter& rIter) {
     s32 i;
     MR::initDefaultPos(this, rIter);
     mInitialPos.set(mPosition);
@@ -143,7 +143,7 @@ void DharmaSambo::init(const JMapInfoIter& rIter) {
 
     for (i = 0; i < ::hBodyPartsNum; i++) {
         MR::hideJoint(this, joint_name[i]);
-        DharmaSamboParts* part = new DharmaSamboParts(this, "\202\276\202\351\202\334\203\124\203\223\203\173\203\160\201\133\203\143" /* だるまサンボパーツ */, "DharmaSamboParts", nullptr, 18, 43, -2);
+        DharmaSamboParts* part = new DharmaSamboParts(this, "だるまサンボパーツ", "DharmaSamboParts", nullptr, 18, 43, -2);
         part->initWithoutIter();
         part->mOriginalIndex = i;
         part->setHead(i == ::hBodyPartsNum - 1);
@@ -727,7 +727,7 @@ bool DharmaSambo::decCountAndTryToHide(bool hide) {
 
 bool DharmaSambo::isStarPointerPointingParts() {
     for (s32 i = 0; i < mParts.size(); i++) {
-        if (!MR::isDead(mParts[i]) && MR::isStarPointerPointing2POnPressButton(mParts[i], "\216\343" /* 弱 */, true, false)) {
+        if (!MR::isDead(mParts[i]) && MR::isStarPointerPointing2POnPressButton(mParts[i], "弱", true, false)) {
             return true;
         }
     }
@@ -741,7 +741,7 @@ DharmaSamboParts::DharmaSamboParts(DharmaSambo* pHost, const char* pName, const 
       mSpinHitController(), mHitDistance(-1.0f), mIsHead() {
 }
 
-void DharmaSamboParts::init(const JMapInfoIter& rIter) {
+void DharmaSamboParts::init(const TableIter& rIter) {
     mSpinHitController = new SpinHitController(this, 0, false);
     initNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
     f32 scale = mScale.y;

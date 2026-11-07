@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -24,7 +24,7 @@ public:
     const Vec3f* calcAndGetEdgeNormal(int);
     const Vec3f* calcAndGetPos(int);
     void calcForceMovePower(Vec3f*, const Vec3f&) const;
-    JMapInfoIter getAttributes() const;
+    TableIter getAttributes() const;
     Pos3f* getBaseMtx() const;
     Pos3f* getBaseInvMtx() const;
     Pos3f* getPrevBaseMtx() const;

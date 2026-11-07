@@ -6,7 +6,7 @@ class QuestionBoxGalleryObj : public MapObjActor {
 public:
     QuestionBoxGalleryObj(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);

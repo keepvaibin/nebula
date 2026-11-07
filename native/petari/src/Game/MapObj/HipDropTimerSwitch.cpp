@@ -6,8 +6,8 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -41,7 +41,7 @@ HipDropTimerSwitch::HipDropTimerSwitch(const char* pName)
     _9C.identity();
 }
 
-void HipDropTimerSwitch::init(const JMapInfoIter& rIter) {
+void HipDropTimerSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("HipDropTimerSwitch", nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
@@ -57,8 +57,8 @@ void HipDropTimerSwitch::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(HipDropSwitch, HipDropTimerSwitchNrvOff));
     MR::needStageSwitchWriteA(this, rIter);
     MR::tryRegisterDemoCast(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimerMax);
-    MR::getJMapInfoArg1NoInit(rIter, &mTimerSFXType);
+    MR::getPlacementArg0NoInit(rIter, &mTimerMax);
+    MR::getPlacementArg1NoInit(rIter, &mTimerSFXType);
 
     if (mTimerSFXType <= 0) {
         mTimerSFXType = 0;
@@ -184,7 +184,7 @@ void HipDropTimerSwitch::exeOff() {
     }
 
     // "Weak"
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mIsLightPressed = true;
     }
 

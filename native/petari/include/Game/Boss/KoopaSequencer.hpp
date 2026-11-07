@@ -3,7 +3,7 @@
 #include "Game/System/NerveExecutor.hpp"
 
 class HitSensor;
-class JMapInfoIter;
+class TableIter;
 class Koopa;
 class KoopaBattleStairsBase;
 class KoopaDemoJumpToPlanet;
@@ -14,7 +14,7 @@ public:
     KoopaSequencer(const char* pName, s32 vs);
 
     virtual ~KoopaSequencer() {};
-    virtual void init(Koopa* pKoopa, const JMapInfoIter& rIter);
+    virtual void init(Koopa* pKoopa, const TableIter& rIter);
     virtual void update();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

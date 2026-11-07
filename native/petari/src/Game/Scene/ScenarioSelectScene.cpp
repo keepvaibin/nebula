@@ -43,13 +43,13 @@ namespace {
 };  // namespace
 
 ScenarioSelectScene::ScenarioSelectScene()
-    : Scene("\203\126\203\151\203\212\203\111\221\111\221\360\203\126\201\133\203\223" /* シナリオ選択シーン */), _14(), _15(), _16(), mScenarioLayout(), mCinemaFrame(), _28(), mEffectSystem(), mCameraContext() {
+    : Scene("シナリオ選択シーン"), _14(), _15(), _16(), mScenarioLayout(), mCinemaFrame(), _28(), mEffectSystem(), mCameraContext() {
 }
 
 void ScenarioSelectScene::init() {
     _20 = ::createDrawBuffer();
     _24 = ::createDrawBuffer();
-    mEffectSystem = new EffectSystem("\203\107\203\164\203\106\203\116\203\147\203\126\203\130\203\145\203\200" /* エフェクトシステム */, false);
+    mEffectSystem = new EffectSystem("エフェクトシステム", false);
     mEffectSystem->initWithoutIter();
     mEffectSystem->entry(MR::getParticleResourceHolder(), 0x20);
     mCameraContext = new CameraContext();

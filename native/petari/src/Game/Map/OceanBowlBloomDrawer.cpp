@@ -7,10 +7,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("\203\111\201\133\203\126\203\203\203\223\203\173\203\105\203\213[\203\165\203\213\201\133\203\200\225\140\211\346]" /* オーシャンボウル[ブルーム描画] */), mHost(pHost) {
+OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("オーシャンボウル[ブルーム描画]"), mHost(pHost) {
 }
 
-void OceanBowlBloomDrawer::init(const JMapInfoIter&) {
+void OceanBowlBloomDrawer::init(const TableIter&) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanBowlBloomDrawer);
 }
 

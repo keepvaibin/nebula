@@ -58,7 +58,7 @@ namespace NrvBossKameckStateBattle {
 };  // namespace NrvBossKameckStateBattle
 
 BossKameckStateBattle::BossKameckStateBattle(BossKameck* pBoss)
-    : ActorStateBase< BossKameck >("\203\173\203\130\203\112\203\201\203\142\203\116\220\355\223\254\217\363\221\324" /* ボスカメック戦闘状態 */, pBoss), mMoveRail(), mBattlePattarn(), mBeam(), mBeamEventListener(),
+    : ActorStateBase< BossKameck >("ボスカメック戦闘状態", pBoss), mMoveRail(), mBattlePattarn(), mBeam(), mBeamEventListener(),
       _20(0.0f, 0.0f, 0.0f), _2C(-1), _30(1), _34(), _38(), mIsFinal(), mIsVs2() {
 }
 

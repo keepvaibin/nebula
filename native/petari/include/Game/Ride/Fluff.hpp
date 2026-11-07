@@ -10,7 +10,7 @@ class Fluff : public LiveActor {
 public:
     Fluff(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

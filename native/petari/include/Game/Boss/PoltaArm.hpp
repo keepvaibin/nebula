@@ -8,7 +8,7 @@ public:
     PoltaArm(const char* pName, const char* pModelName, MtxPtr pMtx);
 
     virtual ~PoltaArm();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void makeActorDead();
     virtual void control();

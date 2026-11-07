@@ -15,7 +15,7 @@ KirairaChain::~KirairaChain() {
 }
 
 KirairaChain::KirairaChain(const LiveActor* pHost)
-    : LiveActor("\203\114\203\211\203\103\203\211\202\314\215\275" /* キライラの鎖 */), mHost(pHost), mIsCut(), mCutPos(0.0f, 0.0f, 0.0f), mRailStart(0.0f, 0.0f, 0.0f), mRailEnd(0.0f, 0.0f, 0.0f),
+    : LiveActor("キライラの鎖"), mHost(pHost), mIsCut(), mCutPos(0.0f, 0.0f, 0.0f), mRailStart(0.0f, 0.0f, 0.0f), mRailEnd(0.0f, 0.0f, 0.0f),
       mFixPointTopDir(1.0f, 0.0f, 0.0f), mFixPointBottomDir(1.0f, 0.0f, 0.0f), mPointCount(), mPoints(), _138(), mAccelPointIdx(),
       mAccelTimer(), mAccel(0.0f, 0.0f, 0.0f), mClippingCenter(0.0f, 0.0f, 0.0f), mModelDrawer(), mFixPointTop(),
       mFixPointBottom() {
@@ -205,15 +205,15 @@ void KirairaChain::control() {
     updatePoints();
 }
 
-void KirairaChain::init(const JMapInfoIter& rIter) {
+void KirairaChain::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_KirairaChain);
     initPoints();
 
-    mModelDrawer = new SimpleModelDrawer(this, "\203\114\203\211\203\103\203\211\202\314\215\275\225\140\211\346" /* キライラの鎖描画 */, "KirairaChain", -1);
+    mModelDrawer = new SimpleModelDrawer(this, "キライラの鎖描画", "KirairaChain", -1);
     mModelDrawer->initWithoutIter();
 
-    mFixPointTop = MR::createModelObjEnemy("\203\114\203\211\203\103\203\211\202\314\214\305\222\350\223\137[Top]" /* キライラの固定点[Top] */, "KirairaFixPointTop", mFixPointTopMtx.toMtxPtr());
-    mFixPointBottom = MR::createModelObjEnemy("\203\114\203\211\203\103\203\211\202\314\214\305\222\350\223\137[Bottom]" /* キライラの固定点[Bottom] */, "KirairaFixPointBottom", mFixPointBottomMtx.toMtxPtr());
+    mFixPointTop = MR::createModelObjEnemy("キライラの固定点[Top]", "KirairaFixPointTop", mFixPointTopMtx.toMtxPtr());
+    mFixPointBottom = MR::createModelObjEnemy("キライラの固定点[Bottom]", "KirairaFixPointBottom", mFixPointBottomMtx.toMtxPtr());
 
     mFixPointTop->appear();
     mFixPointBottom->appear();

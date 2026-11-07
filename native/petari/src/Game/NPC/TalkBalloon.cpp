@@ -55,7 +55,7 @@ void TalkBalloon::create(const char* pLayoutName, bool arg2, bool isTalkLayout) 
     }
 }
 
-void TalkBalloon::init(const JMapInfoIter& rIter) {
+void TalkBalloon::init(const TableIter& rIter) {
     kill();
 }
 
@@ -159,7 +159,7 @@ TalkBalloonShort::TalkBalloonShort(const char* pName) : TalkBalloon(pName), _2C(
     initNerve(GET_NERVE(TalkBalloonShort, TalkBalloonShortNrvOpen));
 }
 
-void TalkBalloonShort::init(const JMapInfoIter& rIter) {
+void TalkBalloonShort::init(const TableIter& rIter) {
     TalkBalloon::create("TalkBalloonStretch", true, false);
 }
 
@@ -248,7 +248,7 @@ TalkBalloonEvent::TalkBalloonEvent(const char* pName) : TalkBalloon(pName), _2C(
     initNerve(GET_NERVE(TalkBalloonEvent, TalkBalloonEventNrvWait));
 }
 
-void TalkBalloonEvent::init(const JMapInfoIter& rIter) {
+void TalkBalloonEvent::init(const TableIter& rIter) {
     create("TalkBalloonEvent", 1, 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosition", 1);
 }
@@ -372,7 +372,7 @@ TalkBalloonSign::TalkBalloonSign(const char* pName) : TalkBalloonEvent(pName) {
     _2C = 2;
 }
 
-void TalkBalloonSign::init(const JMapInfoIter& rIter) {
+void TalkBalloonSign::init(const TableIter& rIter) {
     TalkBalloon::create("SignBoardBalloon", false, true);
     MR::createAndAddPaneCtrl(this, "AButtonPosition", 1);
 }
@@ -393,7 +393,7 @@ void TalkBalloonInfo::close() {
 TalkBalloonIcon::TalkBalloonIcon(const char* pName) : TalkBalloonShort(pName) {
 }
 
-void TalkBalloonIcon::init(const JMapInfoIter& rIter) {
+void TalkBalloonIcon::init(const TableIter& rIter) {
     TalkBalloon::create("TalkBalloonLetter", false, false);
 }
 
@@ -414,22 +414,22 @@ TalkBalloonHolder::TalkBalloonHolder() : _14() {
     mBalloonShortArray = new TalkBalloonShort*[4];
 
     for (u32 i = 0; i < 4; i++) {
-        TalkBalloonShort* temp = new TalkBalloonShort("\211\357\230\142\220\201\202\253\217\157\202\265[\212\310\210\325\211\357\230\142]" /* 会話吹き出し[簡易会話] */);
+        TalkBalloonShort* temp = new TalkBalloonShort("会話吹き出し[簡易会話]");
         mBalloonShortArray[i] = temp;
         mBalloonShortArray[i]->initWithoutIter();
         mBalloonShortArray[i]->kill();
     }
 
-    mBalloonEvent = new TalkBalloonEvent("\211\357\230\142\220\201\202\253\217\157\202\265[\203\103\203\170\203\223\203\147]" /* 会話吹き出し[イベント] */);
+    mBalloonEvent = new TalkBalloonEvent("会話吹き出し[イベント]");
     mBalloonEvent->initWithoutIter();
     mBalloonEvent->kill();
-    mBalloonInfo = new TalkBalloonInfo("\211\357\230\142\220\201\202\253\217\157\202\265[\203\103\203\223\203\164\203\110\203\201\201\133\203\126\203\207\203\223]" /* 会話吹き出し[インフォメーション] */);
+    mBalloonInfo = new TalkBalloonInfo("会話吹き出し[インフォメーション]");
     mBalloonInfo->initWithoutIter();
     mBalloonInfo->kill();
-    mBalloonSign = new TalkBalloonSign("\211\357\230\142\220\201\202\253\217\157\202\265[\212\305\224\302]" /* 会話吹き出し[看板] */);
+    mBalloonSign = new TalkBalloonSign("会話吹き出し[看板]");
     mBalloonSign->initWithoutIter();
     mBalloonSign->kill();
-    mBalloonIcon = new TalkBalloonIcon("\211\357\230\142\220\201\202\253\217\157\202\265[\203\101\203\103\203\122\203\223]" /* 会話吹き出し[アイコン] */);
+    mBalloonIcon = new TalkBalloonIcon("会話吹き出し[アイコン]");
     mBalloonIcon->initWithoutIter();
     mBalloonIcon->kill();
 

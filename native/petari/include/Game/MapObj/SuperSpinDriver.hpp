@@ -11,7 +11,7 @@ class SuperSpinDriver : public LiveActor {
 public:
     SuperSpinDriver(const char*, s32);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -22,16 +22,16 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initParamFromJMapInfo(const JMapInfoIter&);
+    void initParamFromPlacement(const TableIter&);
     void initGravityAxis();
     void initSensor();
     void initEmptyModel();
-    void initEventCamera(const JMapInfoIter&);
-    void initShootPath(const JMapInfoIter&);
-    void initShootPathDraw(const JMapInfoIter&);
+    void initEventCamera(const TableIter&);
+    void initShootPath(const TableIter&);
+    void initShootPathDraw(const TableIter&);
     void initColor();
     void initOperateRing();
-    void initAppearState(const JMapInfoIter&);
+    void initAppearState(const TableIter&);
     bool canBind(HitSensor*, HitSensor*) const;
     bool tryBind(HitSensor*, HitSensor*);
     bool tryEndCapture();

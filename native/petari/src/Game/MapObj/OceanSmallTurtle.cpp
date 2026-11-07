@@ -35,12 +35,12 @@ OceanSmallTurtle::OceanSmallTurtle(const char* pName)
     mEffectMtx.identity();
 }
 
-void OceanSmallTurtle::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mAccelRate);
+void OceanSmallTurtle::init(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mAccelRate);
     mAccelRate /= 100.0f;
 
-    MR::getJMapInfoArg1NoInit(rIter, &mArg1);
-    MR::getJMapInfoRotate(rIter, &mInfoRotate);
+    MR::getPlacementArg1NoInit(rIter, &mArg1);
+    MR::getPlacementRotate(rIter, &mInfoRotate);
 
     MR::initDefaultPosForMercator(this, rIter, true);
     mMercatorPos.set(mPosition);

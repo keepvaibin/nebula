@@ -20,10 +20,10 @@ namespace NrvHomeButtonLayout {
     NEW_NERVE(HomeButtonLayoutActive, HomeButtonLayout, Active);
 };  // namespace NrvHomeButtonLayout
 
-HomeButtonLayout::HomeButtonLayout() : LayoutActor("HOME\203\173\203\136\203\223" /* HOMEボタン */, false), mIsInitialized(false), mForcedClosed(false) {
+HomeButtonLayout::HomeButtonLayout() : LayoutActor("HOMEボタン", false), mIsInitialized(false), mForcedClosed(false) {
 }
 
-void HomeButtonLayout::init(const JMapInfoIter& rIter) {
+void HomeButtonLayout::init(const TableIter& rIter) {
     // The host keeps the menu (NebulaHomeMenu).
     mIsInitialized = true;
     initNerve(GET_NERVE(HomeButtonLayout, HomeButtonLayoutDeactive));

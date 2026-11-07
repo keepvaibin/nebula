@@ -15,7 +15,7 @@ BlackHole::BlackHole(const char* pName) : LiveActor(pName), mBlackHoleModel(), _
     _D8.identity();
 }
 
-void BlackHole::init(const JMapInfoIter& rIter) {
+void BlackHole::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     initModel();
     MR::connectToSceneMapObj(this);
@@ -121,14 +121,14 @@ void BlackHole::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     setNerve(GET_NERVE(BlackHole, BlackHoleNrvDemo));
 }
 
-void BlackHole::initMapToolInfo(const JMapInfoIter& rIter) {
+void BlackHole::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchReadAppear(this, rIter);
 
     if (MR::isEqualObjectName(rIter, "BlackHoleCube")) {
         initCubeBox();
-        setName("\203\165\203\211\203\142\203\116\203\172\201\133\203\213[\203\114\203\205\201\133\203\165\216\167\222\350]" /* ブラックホール[キューブ指定] */);
+        setName("ブラックホール[キューブ指定]");
     }
 
     if (_A4 == nullptr) {
@@ -142,7 +142,7 @@ void BlackHole::initMapToolInfo(const JMapInfoIter& rIter) {
 
     f32 arg0;
 
-    if (MR::getJMapInfoArg0NoInit(rIter, &arg0)) {
+    if (MR::getPlacementArg0NoInit(rIter, &arg0)) {
         _9C = arg0 / 1000.0f;
     } else if (_A4 == nullptr) {
         _9C = mScale.x;
@@ -153,7 +153,7 @@ void BlackHole::initMapToolInfo(const JMapInfoIter& rIter) {
 
 void BlackHole::initModel() {
     initModelManagerWithAnm("BlackHoleRange", nullptr, false);
-    mBlackHoleModel = MR::createModelObjMapObj("\203\122\203\101\203\202\203\146\203\213" /* コアモデル */, "BlackHole", getBaseMtx());
+    mBlackHoleModel = MR::createModelObjMapObj("コアモデル", "BlackHole", getBaseMtx());
     mBlackHoleModel->makeActorDead();
     updateModelScale(_9C, _9C);
 }

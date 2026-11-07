@@ -16,7 +16,7 @@ namespace {
     };
 };  // namespace
 
-void SimpleMapObj::init(const JMapInfoIter& rIter) {
+void SimpleMapObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -39,7 +39,7 @@ void SimpleEnvironmentObj::connectToScene(const MapObjActorInitInfo& rInfo) {
     }
 }
 
-void SimpleMapObjFarMax::init(const JMapInfoIter& rIter) {
+void SimpleMapObjFarMax::init(const TableIter& rIter) {
     SimpleMapObj::init(rIter);
     MR::setClippingFarMax(this);
 }
@@ -86,7 +86,7 @@ void SimpleMirrorObj::calcAndSetBaseMtx() {
     }
 }
 
-void SimpleMirrorReflectionObj::init(const JMapInfoIter& rIter) {
+void SimpleMirrorReflectionObj::init(const TableIter& rIter) {
     SimpleMapObj::init(rIter);
     MR::invalidateClipping(this);
 }
@@ -111,7 +111,7 @@ SimpleSeesawObj::SimpleSeesawObj(const char* pName) : MapObjActor(pName) {
     _C4.identity();
 }
 
-void SimpleSeesawObj::init(const JMapInfoIter& rIter) {
+void SimpleSeesawObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -132,7 +132,7 @@ void SimpleMapObjPush::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-void UFOKinokoUnderConstruction::init(const JMapInfoIter& rIter) {
+void UFOKinokoUnderConstruction::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupFarClipping(-1.0f);
@@ -157,7 +157,7 @@ void UFOKinokoUnderConstruction::init(const JMapInfoIter& rIter) {
 }
 
 namespace MR {
-    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
         const char* archive;
 
         if (MR::isUFOKinokoUnderConstruction()) {
@@ -170,7 +170,7 @@ namespace MR {
     }
 };  // namespace MR
 
-void SimpleEnvironmentObj::init(const JMapInfoIter& rIter) {
+void SimpleEnvironmentObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -182,7 +182,7 @@ void SimpleTextureSwitchChangeObj::changeTexture() {
     MR::setBtkFrameAndStop(this, getChangedTextureNo());
 }
 
-void SimpleMirrorObj::init(const JMapInfoIter& rIter) {
+void SimpleMirrorObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     bool hasMtx = false;

@@ -8,7 +8,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -43,7 +43,7 @@ UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
     _B4 = nullptr;
 }
 
-void UFOBase::init(const JMapInfoIter& rIter) {
+void UFOBase::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* name;
     MR::getObjectName(&name, rIter);
@@ -179,7 +179,7 @@ void UFOBase::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-void UFOBase::initSubModel(const JMapInfoIter& rIter, const char* name) {
+void UFOBase::initSubModel(const TableIter& rIter, const char* name) {
     mLODCtrl = MR::createLodCtrlMapObj(this, rIter, 100.0f);
     if (MR::isExistSubModel(name, "Bloom")) {
         char buf[0x100];

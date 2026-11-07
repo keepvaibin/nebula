@@ -6,7 +6,7 @@ class AreaObj;
 
 class AreaObjFollower : public BaseMatrixFollower {
 public:
-    AreaObjFollower(AreaObj*, const JMapInfoIter&);
+    AreaObjFollower(AreaObj*, const TableIter&);
 
     virtual void update();
 
@@ -15,5 +15,5 @@ public:
 };
 
 namespace MR {
-    bool addBaseMatrixFollowerAreaObj(AreaObj*, const JMapInfoIter&);
+    bool addBaseMatrixFollowerAreaObj(AreaObj*, const TableIter&);
 };  // namespace MR

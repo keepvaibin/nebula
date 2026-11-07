@@ -9,7 +9,7 @@ class QuestionCoin : public LiveActor {
 public:
     QuestionCoin(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -19,7 +19,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initFromJMapInfoArg(const JMapInfoIter&);
+    void initFromPlacementArg(const TableIter&);
     void initShadow();
     void updateActorMtx();
     void exeWait() {

@@ -4,7 +4,7 @@
 #include "Game/Map/SleepControllerHolder.hpp"
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <algorithm>
 
@@ -30,17 +30,17 @@ AreaObj::AreaObj(int formType, const char* pName)
     }
 }
 
-void AreaObj::init(const JMapInfoIter& rIter) {
+void AreaObj::init(const TableIter& rIter) {
     mForm->init(rIter);
     MR::addBaseMatrixFollowerAreaObj(this, rIter);
-    MR::getJMapInfoArg0WithInit(rIter, &mObjArg0);
-    MR::getJMapInfoArg1WithInit(rIter, &mObjArg1);
-    MR::getJMapInfoArg2WithInit(rIter, &mObjArg2);
-    MR::getJMapInfoArg3WithInit(rIter, &mObjArg3);
-    MR::getJMapInfoArg4WithInit(rIter, &mObjArg4);
-    MR::getJMapInfoArg5WithInit(rIter, &mObjArg5);
-    MR::getJMapInfoArg6WithInit(rIter, &mObjArg6);
-    MR::getJMapInfoArg7WithInit(rIter, &mObjArg7);
+    MR::getPlacementArg0WithInit(rIter, &mObjArg0);
+    MR::getPlacementArg1WithInit(rIter, &mObjArg1);
+    MR::getPlacementArg2WithInit(rIter, &mObjArg2);
+    MR::getPlacementArg3WithInit(rIter, &mObjArg3);
+    MR::getPlacementArg4WithInit(rIter, &mObjArg4);
+    MR::getPlacementArg5WithInit(rIter, &mObjArg5);
+    MR::getPlacementArg6WithInit(rIter, &mObjArg6);
+    MR::getPlacementArg7WithInit(rIter, &mObjArg7);
 
     mSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 

@@ -54,10 +54,10 @@ namespace NrvKoopaSequencerVs3 {
 };  // namespace NrvKoopaSequencerVs3
 
 KoopaSequencerVs3::KoopaSequencerVs3()
-    : KoopaSequencer("\203\116\203\142\203\160\220\355\201\151\202\165\202\223\202\122\220\151\215\163\226\360\201\152" /* クッパ戦（Ｖｓ３進行役） */, 3), mBattleLv1(), mBattleLv2(), mBattleMain(), mDemoFallToPlanetLv2(), mDemoFallToPlanetLv3() {
+    : KoopaSequencer("クッパ戦（Ｖｓ３進行役）", 3), mBattleLv1(), mBattleLv2(), mBattleMain(), mDemoFallToPlanetLv2(), mDemoFallToPlanetLv3() {
 }
 
-void KoopaSequencerVs3::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
+void KoopaSequencerVs3::init(Koopa* pKoopa, const TableIter& rIter) {
     KoopaSequencer::init(pKoopa, rIter);
     initNerve(GET_NERVE(KoopaSequencerVs3, KoopaSequencerVs3NrvWaitPlayer));
     KoopaFunction::initKoopaVs3(mKoopa);
@@ -76,22 +76,22 @@ void KoopaSequencerVs3::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
     mBattleLv2 = new KoopaBattleVs3Lv2(mKoopa);
     mBattleLv2->init();
 
-    mBattleMain = new KoopaBattleMain("\203\116\203\142\203\160\220\355\223\254\201\151\202\165\202\223\202\122\202\153\202\226\202\122\201\152" /* クッパ戦闘（Ｖｓ３Ｌｖ３） */, mKoopa);
+    mBattleMain = new KoopaBattleMain("クッパ戦闘（Ｖｓ３Ｌｖ３）", mKoopa);
     mBattleMain->init();
 
-    MR::initDemoSheetTalkAnim(KoopaFunction::getKoopaDemoKoopaJr(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\203\163\201\133\203\140\223\157\217\352" /* クッパＶｓ３ピーチ登場 */, "DemoKoopaMeetPeach", nullptr);
+    MR::initDemoSheetTalkAnim(KoopaFunction::getKoopaDemoKoopaJr(mKoopa), rIter, "クッパＶｓ３ピーチ登場", "DemoKoopaMeetPeach", nullptr);
 
-    MR::initTalkAnimDemoCast(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\203\163\201\133\203\140\223\157\217\352" /* クッパＶｓ３ピーチ登場 */, "DemoKoopaMeetPeach");
-    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoPeach(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\203\163\201\133\203\140\223\157\217\352" /* クッパＶｓ３ピーチ登場 */, "DemoKoopaMeetPeach");
-    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJrShip(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\203\163\201\133\203\140\223\157\217\352" /* クッパＶｓ３ピーチ登場 */, "DemoKoopaMeetPeach");
+    MR::initTalkAnimDemoCast(mKoopa, rIter, "クッパＶｓ３ピーチ登場", "DemoKoopaMeetPeach");
+    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoPeach(mKoopa), rIter, "クッパＶｓ３ピーチ登場", "DemoKoopaMeetPeach");
+    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJrShip(mKoopa), rIter, "クッパＶｓ３ピーチ登場", "DemoKoopaMeetPeach");
 
     KoopaFunction::initKoopaAnimCamera(mKoopa, "DemoKoopaBattleStairsVs3Start");
 
-    MR::initDemoSheetTalkAnim(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\226\173\220\355\212\112\216\156" /* クッパＶｓ３本戦開始 */, "DemoKoopaVs3Start", nullptr);
+    MR::initDemoSheetTalkAnim(mKoopa, rIter, "クッパＶｓ３本戦開始", "DemoKoopaVs3Start", nullptr);
 
-    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJr(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\226\173\220\355\212\112\216\156" /* クッパＶｓ３本戦開始 */, "DemoKoopaVs3Start");
-    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoPeach(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\226\173\220\355\212\112\216\156" /* クッパＶｓ３本戦開始 */, "DemoKoopaVs3Start");
-    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJrShip(mKoopa), rIter, "\203\116\203\142\203\160\202\165\202\223\202\122\226\173\220\355\212\112\216\156" /* クッパＶｓ３本戦開始 */, "DemoKoopaVs3Start");
+    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJr(mKoopa), rIter, "クッパＶｓ３本戦開始", "DemoKoopaVs3Start");
+    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoPeach(mKoopa), rIter, "クッパＶｓ３本戦開始", "DemoKoopaVs3Start");
+    MR::initTalkAnimDemoCast(KoopaFunction::getKoopaDemoKoopaJrShip(mKoopa), rIter, "クッパＶｓ３本戦開始", "DemoKoopaVs3Start");
 
     KoopaFunction::initKoopaAnimCamera(mKoopa, "DemoKoopaVs3Down");
 
@@ -100,7 +100,7 @@ void KoopaSequencerVs3::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
 
 void KoopaSequencerVs3::exeWaitPlayer() {
     if (MR::isFirstStep(this)) {
-        KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+        KoopaFunction::setKoopaPos(mKoopa, "デモ中心");
 
         MR::startAction(mKoopa, "Wait");
 
@@ -125,7 +125,7 @@ void KoopaSequencerVs3::exeWaitPlayer() {
         }
     }
 
-    if (MR::isDemoActive("\203\116\203\142\203\160\202\165\202\223\202\122\203\163\201\133\203\140\223\157\217\352" /* クッパＶｓ３ピーチ登場 */) && MR::isDemoLastStep()) {
+    if (MR::isDemoActive("クッパＶｓ３ピーチ登場") && MR::isDemoLastStep()) {
         KoopaFunction::endKoopaDemoMeetPeach(mKoopa);
     }
 
@@ -144,7 +144,7 @@ void KoopaSequencerVs3::exeBattleStairs() {
 
         setNerve(GET_NERVE(KoopaSequencerVs3, KoopaSequencerVs3NrvWaitDemo));
 
-        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\122\226\173\220\355\212\112\216\156" /* クッパＶｓ３本戦開始 */,
+        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "クッパＶｓ３本戦開始",
                                                     GET_NERVE(KoopaSequencerVs3, KoopaSequencerVs3NrvDemoBattleStart), nullptr, nullptr);
     }
 }
@@ -242,7 +242,7 @@ void KoopaSequencerVs3::exeBattleFinal() {
 }
 
 void KoopaSequencerVs3::exeWaitDemoDown() {
-    if (KoopaFunction::tryStartKoopaAndMarioCameraDemo(mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\122\203\137\203\105\203\223" /* クッパＶｓ３ダウン */, "DemoKoopaVs3Down", "\203\137\203\105\203\223\203\146\203\202" /* ダウンデモ */)) {
+    if (KoopaFunction::tryStartKoopaAndMarioCameraDemo(mKoopa, "クッパＶｓ３ダウン", "DemoKoopaVs3Down", "ダウンデモ")) {
         setNerve(GET_NERVE(KoopaSequencerVs3, KoopaSequencerVs3NrvDemoDown));
     }
 }
@@ -285,8 +285,8 @@ void KoopaSequencerVs3::exeDemoDown() {
         MR::overlayWithPreviousScreen(3);
     }
 
-    if (KoopaFunction::tryEndKoopaCameraDemo(mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\122\203\137\203\105\203\223" /* クッパＶｓ３ダウン */, "DemoKoopaVs3Down")) {
-        MR::setPlayerPosAndWait("\203\137\203\105\203\223\203\146\203\202\214\343\201\151\203\175\203\212\203\111\201\152" /* ダウンデモ後（マリオ） */);
+    if (KoopaFunction::tryEndKoopaCameraDemo(mKoopa, "クッパＶｓ３ダウン", "DemoKoopaVs3Down")) {
+        MR::setPlayerPosAndWait("ダウンデモ後（マリオ）");
 
         MR::requestAppearPowerStar(mKoopa, KoopaFunction::getKoopaPlanetLv3(mKoopa)->mPosition);
         KoopaFunction::startKoopaPlateDamageAnimPowerStarAppear(mKoopa);

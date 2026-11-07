@@ -33,17 +33,17 @@ namespace {
         {"KinokoLifeUp", {0.0f, 40.0f, 0.0f}, 13, nullptr, false},
     };
 
-    s32 getItemType(const JMapInfoIter& rIter) {
+    s32 getItemType(const TableIter& rIter) {
         s32 type = 0;
 
         if (MR::isValidInfo(rIter)) {
-            MR::getJMapInfoArg6NoInit(rIter, &type);
+            MR::getPlacementArg6NoInit(rIter, &type);
         }
 
         return type;
     }
 
-    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, int itemIdx) {
+    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const TableIter& rIter, s32 a3, int itemIdx) {
         const DummyDisplayModelInfo* pInfo;
         s32 modelId = MR::getDummyDisplayModelId(rIter, a3);
 
@@ -94,7 +94,7 @@ DummyDisplayModel::DummyDisplayModel(LiveActor* pHost, const DummyDisplayModelIn
     }
 }
 
-void DummyDisplayModel::init(const JMapInfoIter& rIter) {
+void DummyDisplayModel::init(const TableIter& rIter) {
     PartsModel::init(rIter);
 
     if (mModelInfo->mAnim != nullptr) {
@@ -198,7 +198,7 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
 }
 
 namespace MR {
-    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, const Vec3f& a4, const Vec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const TableIter& rIter, s32 a3, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, a3, -1);
 
         if (mdl == nullptr) {
@@ -209,7 +209,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, const char* pName, s32 a4) {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const TableIter& rIter, const char* pName, s32 a4) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, a4, -1);
 
         if (mdl == nullptr) {
@@ -220,7 +220,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const JMapInfoIter& rIter, MtxPtr mtx, s32 a3, const Vec3f& a4, const Vec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor* pHost, const TableIter& rIter, MtxPtr mtx, s32 a3, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, a3, -1);
 
         if (mdl == nullptr) {
@@ -231,7 +231,7 @@ namespace MR {
         return mdl;
     }
 
-    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, const JMapInfoIter& rIter, const Vec3f& a4, const Vec3f& a5) {
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, const TableIter& rIter, const Vec3f& a4, const Vec3f& a5) {
         DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, rIter, -1, 0x21);
 
         if (mdl == nullptr) {
@@ -243,16 +243,16 @@ namespace MR {
     }
 
     DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, s32 a2, const Vec3f& a3, const Vec3f& a4) {
-        DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, JMapInfoIter(), a2, 0x21);
+        DummyDisplayModel* mdl = ::tryCreateDummyModel(pHost, TableIter(), a2, 0x21);
         mdl->initFixedPosition(a3, a4, nullptr);
         return mdl;
     }
 
-    s32 getDummyDisplayModelId(const JMapInfoIter& rIter, s32 a2) {
+    s32 getDummyDisplayModelId(const TableIter& rIter, s32 a2) {
         s32 arg = -1;
 
         if (MR::isValidInfo(rIter)) {
-            MR::getJMapInfoArg7NoInit(rIter, &arg);
+            MR::getPlacementArg7NoInit(rIter, &arg);
         }
 
         if (arg == -1 && a2 != -1) {
@@ -266,7 +266,7 @@ namespace MR {
         return static_cast< const DummyDisplayModel* >(pActor)->mItemType;
     }
 
-    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
         s32 id = MR::getDummyDisplayModelId(rIter, -1);
 
         if (id >= 0) {

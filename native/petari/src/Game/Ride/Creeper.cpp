@@ -13,7 +13,7 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -136,13 +136,13 @@ Creeper::Creeper(const char* pName)
     mTopMtx.identity();
 }
 
-void Creeper::init(const JMapInfoIter& rIter) {
+void Creeper::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mBendRate);
-    MR::getJMapInfoArg1NoInit(rIter, &mJumpSpeedFront);
-    MR::getJMapInfoArg2NoInit(rIter, &mJumpSpeedUp);
-    MR::getJMapInfoArg3NoInit(rIter, &mBendRateBee);
+    MR::getPlacementArg0NoInit(rIter, &mBendRate);
+    MR::getPlacementArg1NoInit(rIter, &mJumpSpeedFront);
+    MR::getPlacementArg2NoInit(rIter, &mJumpSpeedUp);
+    MR::getPlacementArg3NoInit(rIter, &mBendRateBee);
 
     mBendRate /= ::sDefaultBendRate;
     if (mBendRateBee > 0.0f) {
@@ -162,7 +162,7 @@ void Creeper::init(const JMapInfoIter& rIter) {
 
     initNerve(GET_NERVE(Creeper, CreeperNrvFree));
 
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "掴まり");
 
     MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
 
@@ -170,8 +170,8 @@ void Creeper::init(const JMapInfoIter& rIter) {
 
     mTexture = new JUTTexture(MR::loadTexFromArc("Creeper.arc", "Stalk.bti"));
 
-    mFlowerModel = MR::createPartsModelNoSilhouettedMapObj(this, "\211\324\201\151\202\302\202\351\211\324\201\152" /* 花（つる花） */, "CreeperFlower", mTopMtx.toMtxPtr());
-    mLeafModel = MR::createPartsModelNoSilhouettedMapObj(this, "\227\164\201\151\202\302\202\351\211\324\201\152" /* 葉（つる花） */, "CreeperLeaf", nullptr);
+    mFlowerModel = MR::createPartsModelNoSilhouettedMapObj(this, "花（つる花）", "CreeperFlower", mTopMtx.toMtxPtr());
+    mLeafModel = MR::createPartsModelNoSilhouettedMapObj(this, "葉（つる花）", "CreeperLeaf", nullptr);
 
     MR::registerDemoSimpleCastAll(mFlowerModel);
     MR::registerDemoSimpleCastAll(mLeafModel);
@@ -224,7 +224,7 @@ void Creeper::exeHangDown() {
     mHangSpeed = MR::clamp(mHangSpeed, 0.0f, ::sHangDownSpeedMax);
 
     if (MR::isRailReachedNearGoal(this, ::sHangEndCoord)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, true);
+        MR::endMultiActorCamera(this, mCameraInfo, "掴まり", true);
         MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         MR::startSound(mRider, "SE_PV_JUMP_S");
         MR::startSound(this, "SE_OJ_CREEPER_SWING");
@@ -311,7 +311,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         MR::tryRumblePadMiddle(this, PLAYER_1);
 
-        MR::startMultiActorCameraNoTarget(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+        MR::startMultiActorCameraNoTarget(this, mCameraInfo, "掴まり");
         return true;
     }
 
@@ -324,7 +324,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     }
 
     if (MR::isMsgRushCancel(msg)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, true);
+        MR::endMultiActorCamera(this, mCameraInfo, "掴まり", true);
         MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         mRider = nullptr;
         setNerve(GET_NERVE(Creeper, CreeperNrvFreeInvalid));
@@ -403,7 +403,7 @@ bool Creeper::tryJump() {
     launch = launchFront * mJumpSpeedFront - mGravity * mJumpSpeedUp;
 
     MR::startBckPlayer("GrowPlantJump");
-    MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, true);
+    MR::endMultiActorCamera(this, mCameraInfo, "掴まり", true);
     MR::endBindAndPlayerForceWeakGravityJump(this, launch);
 
     MR::setPlayerSwingInhibitTimer(::sStepInvalidSpin);

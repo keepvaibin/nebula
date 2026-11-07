@@ -9,7 +9,7 @@ class BombHeiLauncher : public LiveActor {
 public:
     BombHeiLauncher(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

@@ -5,7 +5,7 @@
 
 class CameraTwistedPassage : public Camera {
 public:
-    CameraTwistedPassage(const char* pName = "\202\313\202\266\202\352\211\361\230\114\203\112\203\201\203\211" /* ねじれ回廊カメラ */);
+    CameraTwistedPassage(const char* pName = "ねじれ回廊カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

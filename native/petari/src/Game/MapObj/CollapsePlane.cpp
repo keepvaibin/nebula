@@ -21,7 +21,7 @@ CollapsePlane::CollapsePlane(const char* pName)
     : MapObjActor(pName), mScaleController(), mStateBindStartPointer(), mJointController(), mCollapseStep(-1), mCollapseTime(::sDefaultCollapseTime) {
 }
 
-void CollapsePlane::init(const JMapInfoIter& rIter) {
+void CollapsePlane::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -43,7 +43,7 @@ void CollapsePlane::init(const JMapInfoIter& rIter) {
 
     MR::initCollisionPartsAutoEqualScale(this, "Move", getSensor(nullptr), MR::getJointMtx(this, "Plane"));
     MR::validateCollisionParts(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mCollapseTime);
+    MR::getPlacementArg0NoInit(rIter, &mCollapseTime);
 }
 
 void CollapsePlane::exeWait() {

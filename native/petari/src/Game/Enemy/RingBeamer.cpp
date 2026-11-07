@@ -6,7 +6,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -21,7 +21,7 @@ namespace NrvRingBeamer {
 RingBeamer::RingBeamer(const char* pName) : LiveActor(pName), mBeams() {
 }
 
-void RingBeamer::init(const JMapInfoIter& rIter) {
+void RingBeamer::init(const TableIter& rIter) {
     initModelManagerWithAnm("RingBeamer", nullptr, false);
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemy(this);
@@ -46,10 +46,10 @@ void RingBeamer::init(const JMapInfoIter& rIter) {
     }
     f32 arg0 = 20.0f;
     s32 arg1 = 100;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
     for (int i = 0; i < 3; i++) {
-        mBeams[i] = new RingBeam("\203\212\203\223\203\117\203\162\201\133\203\200" /* リングビーム */, this, false, false);
+        mBeams[i] = new RingBeam("リングビーム", this, false, false);
         mBeams[i]->init(rIter);
         mBeams[i]->setSpeed(arg0);
         mBeams[i]->setLife(arg1);

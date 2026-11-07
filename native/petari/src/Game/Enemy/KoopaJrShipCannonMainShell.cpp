@@ -33,7 +33,7 @@ KoopaJrShipCannonMainShell::KoopaJrShipCannonMainShell(const char* pName) : Cann
 CannonShellBase::~CannonShellBase() {
 }
 
-void KoopaJrShipCannonMainShell::init(const JMapInfoIter& rIter) {
+void KoopaJrShipCannonMainShell::init(const TableIter& rIter) {
     mScale.setAll< f32 >(getBaseScale());
 
     initModelManagerWithAnm("KoopaJrShipCannonMainShell", nullptr, false);
@@ -121,7 +121,7 @@ f32 KoopaJrShipCannonMainShell::getBaseScale() const {
 }
 
 void KoopaJrShipCannonMainShell::explosion() {
-    MR::startRumbleWithShakeCameraWeak(this, "\213\255" /* 強 */, "\222\206" /* 中 */, ::sCameraShakeDistance, ::sCameraShakeDistance * 2);
+    MR::startRumbleWithShakeCameraWeak(this, "強", "中", ::sCameraShakeDistance, ::sCameraShakeDistance * 2);
     MR::emitEffect(this, "Explosion");
     MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_FIRE");
     kill();
@@ -148,7 +148,7 @@ void KoopaJrShipCannonMainShell::exeFly() {
 namespace CannonShellUtil {
     void registerKoopaJrShipCannonMainShell(CannonShellHolder* pHolder, int shellNum) {
         for (s32 i = 0; i < shellNum; i++) {
-            KoopaJrShipCannonMainShell* pShell = new KoopaJrShipCannonMainShell("\203\201\203\103\203\223\226\103\222\145" /* メイン砲弾 */);
+            KoopaJrShipCannonMainShell* pShell = new KoopaJrShipCannonMainShell("メイン砲弾");
             pShell->initWithoutIter();
             pShell->makeActorDead();
             pHolder->registerCannonShell(pShell);

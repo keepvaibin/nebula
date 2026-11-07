@@ -7,7 +7,7 @@ public:
     SunshadeMapParts(const char*);
 
     virtual ~SunshadeMapParts();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
 
     CollisionParts* mCollision;

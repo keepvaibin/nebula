@@ -3,14 +3,14 @@
 #include "Game/System/NerveExecutor.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class SurfingGuidance;
 class TalkMessageCtrl;
 
 class SurfRayTutorial : public NerveExecutor {
 public:
-    SurfRayTutorial(LiveActor*, TalkMessageCtrl*, const JMapInfoIter&);
+    SurfRayTutorial(LiveActor*, TalkMessageCtrl*, const TableIter&);
 
     bool update();
     void exeTutorialAllStart();

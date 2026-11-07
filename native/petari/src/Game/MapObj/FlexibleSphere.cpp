@@ -10,7 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -37,7 +37,7 @@ static void flexibleCoordinates(MaterialDraw& rDraw) {
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {
 }
 
-void FlexibleSphere::init(const JMapInfoIter& rIter) {
+void FlexibleSphere::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     char arcName[256];
@@ -85,11 +85,11 @@ void FlexibleSphere::init(const JMapInfoIter& rIter) {
         s32 arg3 = -1;
         s32 arg4 = -1;
 
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
-        MR::getJMapInfoArg4NoInit(rIter, &arg4);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg4NoInit(rIter, &arg4);
 
         if (arg0 != -1) {
             mMaxScale = arg0 / 10000.0f;
@@ -224,7 +224,7 @@ void FlexibleSphere::control() {
         }
 
         if (MR::isActorOnPlayer(this)) {
-            MR::tryRumblePad(this, "\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */, PLAYER_1);
+            MR::tryRumblePad(this, "マリオ[しびれ]", PLAYER_1);
         }
     }
 }

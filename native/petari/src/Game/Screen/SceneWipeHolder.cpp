@@ -6,20 +6,20 @@
 #include "Game/Screen/WipeRing.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-SceneWipeHolder::SceneWipeHolder() : WipeHolderBase(8, "\203\126\201\133\203\223\203\217\203\103\203\166\225\333\216\235" /* シーンワイプ保持 */) {
+SceneWipeHolder::SceneWipeHolder() : WipeHolderBase(8, "シーンワイプ保持") {
     WipeLayoutBase* pWipeLayout;
 
-    pWipeLayout = new WipeRing(1, "\211\176\203\217\203\103\203\166" /* 円ワイプ */);
+    pWipeLayout = new WipeRing(1, "円ワイプ");
     addWipeLayout(pWipeLayout);
     MR::connectToSceneWipeLayout(pWipeLayout);
     MR::joinToNameObjGroup(pWipeLayout, "IgnorePauseNameObj");
 
-    pWipeLayout = new WipeFade("\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */, Color8(0, 0, 0, 255));
+    pWipeLayout = new WipeFade("フェードワイプ", Color8(0, 0, 0, 255));
     addWipeLayout(pWipeLayout);
     MR::connectToSceneWipeLayout(pWipeLayout);
     MR::joinToNameObjGroup(pWipeLayout, "IgnorePauseNameObj");
 
-    pWipeLayout = new WipeFade("\224\222\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* 白フェードワイプ */, Color8(255, 255, 255, 255));
+    pWipeLayout = new WipeFade("白フェードワイプ", Color8(255, 255, 255, 255));
     addWipeLayout(pWipeLayout);
     MR::connectToSceneWipeLayout(pWipeLayout);
     MR::joinToNameObjGroup(pWipeLayout, "IgnorePauseNameObj");

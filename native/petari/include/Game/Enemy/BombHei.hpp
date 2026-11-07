@@ -14,7 +14,7 @@ public:
 
     enum Type { BOMB_HEI = 0, BOMB = 1 };
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
@@ -27,7 +27,7 @@ public:
     virtual bool receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void setGroupClipping(const JMapInfoIter& rIter);
+    void setGroupClipping(const TableIter& rIter);
     void startCountdown();
     void endCountdown();
 

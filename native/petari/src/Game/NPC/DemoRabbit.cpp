@@ -43,7 +43,7 @@ namespace NrvDemoRabbit {
 DemoRabbit::DemoRabbit(const char* pName) : NPCActor(pName) {
 }
 
-void DemoRabbit::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void DemoRabbit::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (MR::getDemoCastID(rIter) == 0) {
         pCollector->addArchive("TrickRabbitBaby");
     } else {
@@ -51,7 +51,7 @@ void DemoRabbit::makeArchiveList(NameObjArchiveListCollector* pCollector, const 
     }
 }
 
-void DemoRabbit::init(const JMapInfoIter& rIter) {
+void DemoRabbit::init(const TableIter& rIter) {
     NPCActorCaps caps("DemoRabbit");
     caps.setDefault();
     caps.mObjectName = "TrickRabbit";
@@ -65,14 +65,14 @@ void DemoRabbit::init(const JMapInfoIter& rIter) {
             caps.mWaitNerve = GET_NERVE(DemoRabbit, DemoRabbitNrvAppear);
             caps.mObjectName = "TrickRabbitBaby";
             MR::invalidateClipping(this);
-            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvTalk0), "\203\140\203\122\202\306\202\314\217\157\211\357\202\242[\203\105\203\124\203\115\211\357\230\142]" /* チコとの出会い[ウサギ会話] */);
-            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvGuide), "\203\140\203\122\202\306\202\314\217\157\211\357\202\242[\203\105\203\124\203\115\223\246\221\226]" /* チコとの出会い[ウサギ逃走] */);
-            MR::registerDemoActionFunctor(this, MR::Functor(this, &DemoRabbit::fadeOut), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\203\164\203\106\201\133\203\150\203\101\203\105\203\147]" /* ウサギ追いかけ[フェードアウト] */);
-            MR::registerDemoActionFunctor(this, MR::Functor(this, &DemoRabbit::fadeIn), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\203\164\203\106\201\133\203\150\203\103\203\223]" /* ウサギ追いかけ[フェードイン] */);
-            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvTalk1), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\211\357\230\142]" /* ウサギ追いかけ[会話] */);
-            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvRunaway), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\223\246\221\226]" /* ウサギ追いかけ[逃走] */);
+            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvTalk0), "チコとの出会い[ウサギ会話]");
+            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvGuide), "チコとの出会い[ウサギ逃走]");
+            MR::registerDemoActionFunctor(this, MR::Functor(this, &DemoRabbit::fadeOut), "ウサギ追いかけ[フェードアウト]");
+            MR::registerDemoActionFunctor(this, MR::Functor(this, &DemoRabbit::fadeIn), "ウサギ追いかけ[フェードイン]");
+            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvTalk1), "ウサギ追いかけ[会話]");
+            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvRunaway), "ウサギ追いかけ[逃走]");
         } else {
-            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvRunaway), "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\223\246\221\226]" /* ウサギ追いかけ[逃走] */);
+            MR::registerDemoActionNerve(this, GET_NERVE(DemoRabbit, DemoRabbitNrvRunaway), "ウサギ追いかけ[逃走]");
             caps.mWaitNerve = GET_NERVE(DemoRabbit, DemoRabbitNrvDemo);
         }
     }
@@ -286,7 +286,7 @@ void DemoRabbit::exeGoal() {
     }
 
     if (MR::isNearPlayer(mMsgCtrl, 500.0f)) {
-        MR::startTimeKeepDemoMarioPuppetable(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */, "\203\105\203\124\203\115\222\307\202\242\202\251\202\257[\203\164\203\106\201\133\203\150\203\101\203\105\203\147]" /* ウサギ追いかけ[フェードアウト] */);
+        MR::startTimeKeepDemoMarioPuppetable(this, "チコガイドデモ", "ウサギ追いかけ[フェードアウト]");
     } else {
         MR::tryTalkNearPlayer(mMsgCtrl);
     }

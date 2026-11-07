@@ -132,13 +132,13 @@ void Mario::startSwim() {
     if (!isStatusActive(MarioStatus_Swim)) {
         if (getPlayer()->isDamaging()) {
             mSwim->_9D = 4;
-            playSound("\220\205\227\216\211\272\223\313\223\374" /* 水落下突入 */);
+            playSound("水落下突入");
         } else if (getPlayer()->getMovementStates().jumping) {
             mSwim->_9D = 1;
-            playSound("\220\205\227\216\211\272\223\313\223\374" /* 水落下突入 */);
+            playSound("水落下突入");
         } else {
             mSwim->_9D = 0;
-            playSound("\220\205\225\340\215\163\223\313\223\374" /* 水歩行突入 */);
+            playSound("水歩行突入");
         }
 
         changeStatus(mSwim);
@@ -309,11 +309,11 @@ bool MarioSwim::start() {
     u32 r1e = 0, r1d = 0;
     _1D = false;
     _1E = 0;
-    if (isAnimationRun("\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 飛び込みジャンプ */)) {
+    if (isAnimationRun("飛び込みジャンプ")) {
         r1e = 1;
     }
 
-    if (isAnimationRun("\214\343\225\373\224\362\202\321\215\236\202\335\203\127\203\203\203\223\203\166" /* 後方飛び込みジャンプ */)) {
+    if (isAnimationRun("後方飛び込みジャンプ")) {
         r1e = 1;
         getPlayer()->setFrontVecKeepUp(-getFrontVec(), 1.0f);
     }
@@ -336,15 +336,15 @@ bool MarioSwim::start() {
 
     getPlayer()->_10.digitalJump = false;
 
-    if (isAnimationRun("\203\212\203\223\203\117\203\137\203\142\203\126\203\205" /* リングダッシュ */)) {
+    if (isAnimationRun("リングダッシュ")) {
         r1e = 2;
     }
 
-    if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */)) {
+    if (isAnimationRun("水泳スピン移動")) {
         r1e = 3;
     }
 
-    if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* 水泳スピンジャンプ */)) {
+    if (isAnimationRun("水泳スピンジャンプ")) {
         r1e = 3;
     }
 
@@ -352,8 +352,8 @@ bool MarioSwim::start() {
     MR::normalize(&mFrontVec);
     stopAnimationUpper(nullptr);
     // Basic Swimming
-    changeAnimation(nullptr, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
-    changeAnimationNonStop("\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+    changeAnimation(nullptr, "水泳基本");
+    changeAnimationNonStop("水泳基本");
     getPlayer()->mMovementStates._1 = false;
     f32 fr1f = mDistToFloor;
 
@@ -400,12 +400,12 @@ bool MarioSwim::start() {
             mForwardSpeed = 10.0f;
 
             if (mJetTimer != 0) {
-                changeAnimationNonStop("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+                changeAnimationNonStop("水泳ジェット");
             } else {
-                changeAnimation("\220\205\211\152\203\127\203\203\203\223\203\166\203\137\203\103\203\165\211\361\223\135" /* 水泳ジャンプダイブ回転 */);
+                changeAnimation("水泳ジャンプダイブ回転");
             }
 
-            playEffect("\220\205\226\312\202\171\222\276\215\176" /* 水面Ｚ沈降 */);
+            playEffect("水面Ｚ沈降");
 
             switch (r1e) {
             case 0:
@@ -430,12 +430,12 @@ bool MarioSwim::start() {
             MR::normalize(&stack_38);
             getPlayer()->forceSetHeadVecKeepSide(stack_38);
         } else if (r1d) {
-            changeAnimation("\220\205\217\343\203\137\203\201\201\133\203\127\222\205\220\205" /* 水上ダメージ着水 */);
+            changeAnimation("水上ダメージ着水");
             mSinkTimer = mActor->getConst().getTable()->mJumpDamageSinkTimer;
             mKnockbackTimer = 0x78;
         } else {
             mForwardSpeed = (0.2f + 0.1f * fr1f) * mActor->getConst().getTable()->mSwimFrontMaxSpeed;
-            changeAnimation("\220\205\211\152\203\127\203\203\203\223\203\166\203\137\203\103\203\165" /* 水泳ジャンプダイブ */);
+            changeAnimation("水泳ジャンプダイブ");
 
             mActor->setBlendMtxTimer(8);
             mActionLockTimer = 15;
@@ -480,10 +480,10 @@ bool MarioSwim::start() {
     }
 
     if (r1e == 2) {
-        if (!isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */)) {
-            changeAnimation("\220\205\211\152\203\127\203\106\203\142\203\147\212\112\216\156" /* 水泳ジェット開始 */, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+        if (!isAnimationRun("水泳ジェット")) {
+            changeAnimation("水泳ジェット開始", "水泳ジェット");
         } else {
-            changeAnimation(nullptr, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+            changeAnimation(nullptr, "水泳ジェット");
         }
     }
 
@@ -527,7 +527,7 @@ bool MarioSwim::update() {
         Vec3f stack_194;
         MR::vecKillElement(mSurfaceNorm - getTrans(), getAirGravityVec(), &stack_194);
         if (stack_194.length() > 100.0f || -mWaterDepth >= getPlayer()->mVerticalSpeed || mKnockbackTimer != 0 || mWallStickTimer != 0) {
-            if (!isAnimationRun("\220\205\211\152\203\127\203\203\203\223\203\166\203\137\203\103\203\165" /* 水泳ジャンプダイブ */)) {
+            if (!isAnimationRun("水泳ジャンプダイブ")) {
                 if (mJetTimer != 0) {
                     doJetJump(1);
                     return false;
@@ -585,12 +585,12 @@ bool MarioSwim::update() {
             } else {
                 u32 tmp = 0x1E;
                 // Surface Paddle
-                if (isAnimationRun("\220\205\217\343\210\352\221\176\202\253" /* 水上一掻き */)) {
+                if (isAnimationRun("水上一掻き")) {
                     tmp = 0x1E;
                 }
 
                 if (checkLvlA()) {
-                    if (_9C && (!isAnimationRun("\220\205\217\343\210\352\221\176\202\253" /* 水上一掻き */) || !mSurfacePaddleHoldTimer)) {
+                    if (_9C && (!isAnimationRun("水上一掻き") || !mSurfacePaddleHoldTimer)) {
                         mSurfacePaddleHoldTimer++;
                     }
 
@@ -642,7 +642,7 @@ bool MarioSwim::update() {
     } else if (mWaterDepth > -30.0f) {
         if (!mActionLockTimer && !mZSinkTimer && !mSinkTimer && mJetTimer == 0) {
             getAnimator()->forceSetBlendWeight(::cWeightTable);
-            changeAnimation("\220\205\211\152\217\343\217\270\214\304\213\172" /* 水泳上昇呼吸 */);
+            changeAnimation("水泳上昇呼吸");
         }
 
         if (!mSinkTimer) {
@@ -665,10 +665,10 @@ bool MarioSwim::update() {
             stack_188 += getGravityVec() * res2;
             getPlayer()->tryForcePowerJump(stack_188, false);
             mNextAction = EXIT_ACTION_POWER_JUMP;
-            if (isAnimationRun("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */)) {
-                changeAnimationNonStop("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */);
+            if (isAnimationRun("水泳スピン移動")) {
+                changeAnimationNonStop("水泳スピン移動");
             } else {
-                changeAnimationNonStop("\220\205\211\152\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* 水泳スピンジャンプ */);
+                changeAnimationNonStop("水泳スピンジャンプ");
             }
 
             return false;
@@ -687,7 +687,7 @@ bool MarioSwim::update() {
             getPlayer()->tryForcePowerJump(mActor->getLastMove() * 2.0f + mUpVec * 10.0f, false);
 
             mNextAction = EXIT_ACTION_POWER_JUMP;
-            changeAnimationNonStop("\203\212\203\223\203\117\203\137\203\142\203\126\203\205" /* リングダッシュ */);
+            changeAnimationNonStop("リングダッシュ");
             return false;
         }
     } else {
@@ -715,7 +715,7 @@ bool MarioSwim::update() {
 
             if (mJetTimer != 0 && getPlayer()->mVerticalSpeed < 100.0f) {
                 mFloorContactTimer = 2;
-                playEffect("\220\205\222\352\220\332\220\107" /* 水底接触 */);
+                playEffect("水底接触");
                 mForwardSpeed *= mActor->getConst().getTable()->mTurboReductionHitFloor;
             }
         }
@@ -724,9 +724,9 @@ bool MarioSwim::update() {
     }
 
     if (mFloorContactTimer != 0) {
-        playSound("\220\205\222\352\220\332\220\107" /* 水底接触 */);
+        playSound("水底接触");
         if (--mFloorContactTimer == 0) {
-            stopEffect("\220\205\222\352\220\332\220\107" /* 水底接触 */);
+            stopEffect("水底接触");
         }
     }
 
@@ -772,10 +772,10 @@ bool MarioSwim::update() {
 
                     mStickInputXInertia *= fr1c;
                 } else if (checkTrgZ() && !check7Aand7C()) {
-                    stopAnimationUpper("\220\205\211\152\220\205\226\312\217\211\212\372\210\332\223\256" /* 水泳水面初期移動 */);
-                    changeAnimation("\220\205\211\152\220\366\202\350" /* 水泳潜り */);
-                    playEffect("\220\205\226\312\202\171\222\276\215\176" /* 水面Ｚ沈降 */);
-                    playSound("\220\205\226\312\220\366\202\350" /* 水面潜り */, -1);
+                    stopAnimationUpper("水泳水面初期移動");
+                    changeAnimation("水泳潜り");
+                    playEffect("水面Ｚ沈降");
+                    playSound("水面潜り", -1);
                     mZSinkTimer = mActor->getConst().getTable()->mZsinkStartTimer;
                 } else if (!checkLvlZ()) {
                     res = 0.0f;
@@ -793,9 +793,9 @@ bool MarioSwim::update() {
         } else {
             if (mRingDashTimer == 0 && mDistToFloor > 200.0f && checkTrgZ() && !mZSinkTimer && !mSinkTimer && mJetTimer == 0 && !check7Aand7C()) {
                 stopAnimation(nullptr);
-                changeAnimation("\220\205\211\152\220\366\202\350" /* 水泳潜り */);
-                playSound("\220\205\222\206\220\366\202\350" /* 水中潜り */);
-                playEffect("\220\205\226\312\202\171\222\276\215\176" /* 水面Ｚ沈降 */);
+                changeAnimation("水泳潜り");
+                playSound("水中潜り");
+                playEffect("水面Ｚ沈降");
                 mZSinkTimer = mActor->getConst().getTable()->mZsinkStartTimer;
             }
 
@@ -839,8 +839,8 @@ bool MarioSwim::update() {
             mVerticalAngle += res * (mStickInputYInertia * mActor->getConst().getTable()->mSwimRotSpeedX);
         }
 
-        if ((mForwardSpeed < ::cTurnMotionSpeed || mIsOnSurface || checkLvlA() || checkLvlZ()) && isAnimationRun("\220\205\211\152\210\352\221\176\202\253" /* 水泳一掻き */) &&
-            isAnimationTerminate("\220\205\211\152\210\352\221\176\202\253" /* 水泳一掻き */)) {
+        if ((mForwardSpeed < ::cTurnMotionSpeed || mIsOnSurface || checkLvlA() || checkLvlZ()) && isAnimationRun("水泳一掻き") &&
+            isAnimationTerminate("水泳一掻き")) {
             stopAnimation(nullptr);
         }
 
@@ -851,7 +851,7 @@ bool MarioSwim::update() {
             if (!mIsSwimmingAtSurface && mKnockbackTimer == 0 && mWaterDepth < -400.0f) {
                 mIdleWaitTimer++;
                 if (MR::getRandom() < 0.03f) {
-                    playSound("\220\205\222\206\203\105\203\107\203\103\203\147" /* 水中ウエイト */);
+                    playSound("水中ウエイト");
                 }
             }
 
@@ -944,14 +944,14 @@ bool MarioSwim::update() {
             }
 
             if (!check7Aand7C() && mJetTimer == 0) {
-                changeAnimation("\220\205\211\152\203\136\201\133\203\223\211\272" /* 水泳ターン下 */);
+                changeAnimation("水泳ターン下");
             }
 
             r1b = false;
         }
 
         if (r1b) {
-            stopAnimation("\220\205\211\152\203\136\201\133\203\223\211\272" /* 水泳ターン下 */);
+            stopAnimation("水泳ターン下");
         }
 
         if (mZSinkTimer != 0) {
@@ -1022,7 +1022,7 @@ bool MarioSwim::update() {
     spin();
     Vec3f stack_110;
     stack_110 = getPlayer()->_1FC;
-    if (mJumpDiveTimer != 0 || mSinkTimer != 0 || isAnimationRun("\220\205\211\152\203\127\203\203\203\223\203\166\203\137\203\103\203\165\211\361\223\135" /* 水泳ジャンプダイブ回転 */) || isAnimationRun("\220\205\211\152\220\366\202\350" /* 水泳潜り */)) {
+    if (mJumpDiveTimer != 0 || mSinkTimer != 0 || isAnimationRun("水泳ジャンプダイブ回転") || isAnimationRun("水泳潜り")) {
         stack_110.cross(stack_14C, stack_140);
     }
 
@@ -1331,7 +1331,7 @@ void MarioSwim::decideVelocity() {
 
             _1E = 0;
 
-            if (!MarioModule::isAnimationTerminate("\220\205\211\152\210\352\221\176\202\253" /* 水泳一掻き */)) {
+            if (!MarioModule::isAnimationTerminate("水泳一掻き")) {
                 if (_1D) {
                     return;
                 }
@@ -1348,11 +1348,11 @@ void MarioSwim::decideVelocity() {
             _1D = false;
             mActionLockTimer = 60;
             mSwimYAccTimer = 50;
-            if (!MarioModule::isAnimationRun("\220\205\211\152\220\366\202\350" /* 水泳潜り */) && !MarioModule::isAnimationRun("\220\205\211\152\203\127\203\203\203\223\203\166\203\137\203\103\203\165\211\361\223\135" /* 水泳ジャンプダイブ回転 */)) {
+            if (!MarioModule::isAnimationRun("水泳潜り") && !MarioModule::isAnimationRun("水泳ジャンプダイブ回転")) {
                 getAnimator()->forceSetBlendWeight(::cWeightTableSP);
                 stopAnimation(nullptr);
-                changeAnimationNonStop("\220\205\211\152\210\352\221\176\202\253" /* 水泳一掻き */);
-                playSound("\220\205\222\206\210\352\221\176\202\253" /* 水中一掻き */);
+                changeAnimationNonStop("水泳一掻き");
+                playSound("水中一掻き");
                 mDashTimer = 40;
             }
         } else {
@@ -1367,7 +1367,7 @@ void MarioSwim::decideVelocity() {
                     mForwardSpeed *= mActor->getConst().getTable()->mSwimStopIne;
                 }
 
-                if (MarioModule::isAnimationRun("\220\205\211\152\217\343\217\270\214\304\213\172" /* 水泳上昇呼吸 */)) {
+                if (MarioModule::isAnimationRun("水泳上昇呼吸")) {
                     mForwardSpeed *= 0.95f;
                 }
 
@@ -1394,7 +1394,7 @@ void MarioSwim::decideVelocity() {
                         mForwardSpeed += acc * mActor->getConst().getTable()->mSwimSpinSurfaceAccRatio;
                     }
 
-                    playSound("\220\205\226\312\203\130\203\163\203\223" /* 水面スピン */);
+                    playSound("水面スピン");
                 } else {
                     mForwardSpeed *= 0.96f;
                 }
@@ -1407,7 +1407,7 @@ void MarioSwim::decideVelocity() {
                         mForwardSpeed += acc * mActor->getConst().getTable()->mSwimSpinAccRatio;
                     }
 
-                    playSound("\220\205\222\206\203\130\203\163\203\223" /* 水中スピン */);
+                    playSound("水中スピン");
                 } else {
                     mForwardSpeed *= 0.96f;
                 }
@@ -1455,16 +1455,16 @@ void MarioSwim::decideAnimation() {
         return;
     }
 
-    if (isAnimationRun("\220\205\211\152\220\205\226\312\217\211\212\372\210\332\223\256" /* 水泳水面初期移動 */)) {
+    if (isAnimationRun("水泳水面初期移動")) {
         if (getStickP() < 0.1f) {
             stopAnimationUpper(nullptr);
         }
     }
 
-    if (isAnimationRun(nullptr) && !isAnimationRun("\220\205\211\152\217\343\217\270\214\304\213\172" /* 水泳上昇呼吸 */)) {
+    if (isAnimationRun(nullptr) && !isAnimationRun("水泳上昇呼吸")) {
         if (MR::abs(getStickX()) < 0.1f) {
-            stopAnimation("\220\205\211\152\203\136\201\133\203\223\215\266" /* 水泳ターン左 */);
-            stopAnimation("\220\205\211\152\203\136\201\133\203\223\211\105" /* 水泳ターン右 */);
+            stopAnimation("水泳ターン左");
+            stopAnimation("水泳ターン右");
         }
 
         return;
@@ -1479,7 +1479,7 @@ void MarioSwim::decideAnimation() {
 
     if (!mIsOnSurface) {
         if (checkLvlA()) {
-            playSound("\220\205\222\206\203\157\203\136\221\253" /* 水中バタ足 */);
+            playSound("水中バタ足");
             animIndex = 2;
         } else {
             animIndex = 3;
@@ -1489,9 +1489,9 @@ void MarioSwim::decideAnimation() {
                 }
             } else if (MR::abs(getStickX()) > 0.1f && mVerticalAngle < 1.6534699f && mForwardSpeed < ::cTurnMotionSpeed) {
                 if (getStickX() < 0.0f) {
-                    changeAnimation("\220\205\211\152\203\136\201\133\203\223\215\266" /* 水泳ターン左 */);
+                    changeAnimation("水泳ターン左");
                 } else {
-                    changeAnimation("\220\205\211\152\203\136\201\133\203\223\211\105" /* 水泳ターン右 */);
+                    changeAnimation("水泳ターン右");
                 }
 
                 return;
@@ -1500,10 +1500,10 @@ void MarioSwim::decideAnimation() {
     } else {
         // Surface logic
         if (getStickP() > 0.1f) {
-            playSound("\220\205\226\312\203\157\203\136\221\253" /* 水面バタ足 */);
+            playSound("水面バタ足");
 
-            if (isAnimationRun("\220\205\211\152\217\343\217\270\214\304\213\172" /* 水泳上昇呼吸 */)) {
-                stopAnimation("\220\205\211\152\217\343\217\270\214\304\213\172" /* 水泳上昇呼吸 */);
+            if (isAnimationRun("水泳上昇呼吸")) {
+                stopAnimation("水泳上昇呼吸");
                 if (mIsSwimmingAtSurface == false) {
                     _1B = true;
                 }
@@ -1513,7 +1513,7 @@ void MarioSwim::decideAnimation() {
 
             if (_1B) {
                 getAnimator()->forceSetBlendWeight(&::cWeightTable[4]);
-                changeAnimationUpper("\220\205\211\152\220\205\226\312\217\211\212\372\210\332\223\256" /* 水泳水面初期移動 */);
+                changeAnimationUpper("水泳水面初期移動");
                 _1B = false;
                 return;
             }
@@ -1541,7 +1541,7 @@ void MarioSwim::decideAnimation() {
 void MarioSwim::decideEffect(bool isReset) {
     u8 oldState = mEffectState;
     if (mIsOnSurface) {
-        if (isAnimationRun("\220\205\211\152\220\205\226\312\217\211\212\372\210\332\223\256" /* 水泳水面初期移動 */) || mForwardSpeed > 2.5f) {
+        if (isAnimationRun("水泳水面初期移動") || mForwardSpeed > 2.5f) {
             mEffectState = 1;
         } else {
             mEffectState = 0;
@@ -1563,26 +1563,26 @@ void MarioSwim::decideEffect(bool isReset) {
         switch (oldState) {
         case 0:
             if (mEffectState != 1) {
-                stopEffect("\220\205\226\312\203\105\203\107\203\103\203\147\224\147\226\344" /* 水面ウエイト波紋 */);
+                stopEffect("水面ウエイト波紋");
             }
 
             break;
 
         case 1:
-            stopEffect("\220\205\226\312\211\152\202\254" /* 水面泳ぎ */);
+            stopEffect("水面泳ぎ");
             if (mEffectState != 0) {
-                stopEffect("\220\205\226\312\203\105\203\107\203\103\203\147\224\147\226\344" /* 水面ウエイト波紋 */);
+                stopEffect("水面ウエイト波紋");
             }
 
             break;
 
         case 2:
-            stopEffect("\220\205\222\206\220\147\221\314\226\101" /* 水中身体泡 */);
+            stopEffect("水中身体泡");
             break;
         }
 
         if ((mEffectState < 2 && oldState >= 2) || isReset) {
-            stopEffect("\220\205\222\206\214\373\226\101" /* 水中口泡 */);
+            stopEffect("水中口泡");
         }
 
         switch (mEffectState) {
@@ -1598,17 +1598,17 @@ void MarioSwim::decideEffect(bool isReset) {
 
                 const Vec3f& lastMove = mActor->getLastMove();
 
-                playEffectRTW("\220\205\226\312\211\152\202\254" /* 水面泳ぎ */, mSurfacePos, mSurfaceNorm + projected + lastMove);
+                playEffectRTW("水面泳ぎ", mSurfacePos, mSurfaceNorm + projected + lastMove);
             } else {
-                stopEffect("\220\205\226\312\211\152\202\254" /* 水面泳ぎ */);
+                stopEffect("水面泳ぎ");
             }
 
             break;
         case 2:
-            playEffect("\220\205\222\206\220\147\221\314\226\101" /* 水中身体泡 */);
+            playEffect("水中身体泡");
 
         case 3:
-            playEffect("\220\205\222\206\214\373\226\101" /* 水中口泡 */);
+            playEffect("水中口泡");
             break;
         }
     }
@@ -1619,10 +1619,10 @@ void MarioSwim::decideEffect(bool isReset) {
 
         const Vec3f& lastMove = mActor->getLastMove();
 
-        playEffectRTW("\220\205\226\312\203\105\203\107\203\103\203\147\224\147\226\344" /* 水面ウエイト波紋 */, mSurfacePos, mSurfaceNorm + projected + lastMove);
+        playEffectRTW("水面ウエイト波紋", mSurfacePos, mSurfaceNorm + projected + lastMove);
 
         if (MR::getRandom() < 0.03f) {
-            playSound("\220\205\226\312\203\105\203\107\203\103\203\147" /* 水面ウエイト */);
+            playSound("水面ウエイト");
         }
     }
 }
@@ -1641,11 +1641,11 @@ bool MarioSwim::close() {
     }
 
     stopAnimationUpper(nullptr);
-    stopAnimation("\220\205\217\343\203\130\203\163\203\223" /* 水上スピン */);        // Surface Spin
-    stopAnimation("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);        // Swim Spin
-    stopAnimation("\220\205\211\152\203\127\203\106\203\142\203\147\212\112\216\156" /* 水泳ジェット開始 */);  // Swim Jet Start
-    stopEffect("\220\205\222\352\220\332\220\107" /* 水底接触 */);             // Water Bottom Contact
-    stopEffect("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);           // Swim Spin Effect
+    stopAnimation("水上スピン");        // Surface Spin
+    stopAnimation("水泳スピン");        // Swim Spin
+    stopAnimation("水泳ジェット開始");  // Swim Jet Start
+    stopEffect("水底接触");             // Water Bottom Contact
+    stopEffect("水泳スピン");           // Swim Spin Effect
 
     if (mActor->getCarrySensor()) {
         LiveActor* shell = mActor->getCarrySensor()->mHost;
@@ -1661,13 +1661,13 @@ bool MarioSwim::close() {
     if (mNextAction != EXIT_ACTION_SURFACE) {
         // If not surfacing, decide between Fall or Basic based on vertical state
         if (getPlayer()->mMovementStates.jumping) {
-            stopAnimation("\220\205\211\152\212\356\226\173" /* 水泳基本 */, "\227\216\211\272" /* 落下 */);
+            stopAnimation("水泳基本", "落下");
         } else {
-            stopAnimation("\220\205\211\152\212\356\226\173" /* 水泳基本 */, "\212\356\226\173" /* 基本 */);
+            stopAnimation("水泳基本", "基本");
         }
     } else {
-        if (isDefaultAnimationRun("\220\205\211\152\212\356\226\173" /* 水泳基本 */)) {
-            changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        if (isDefaultAnimationRun("水泳基本")) {
+            changeAnimation(nullptr, "基本");
         }
     }
 
@@ -1675,8 +1675,8 @@ bool MarioSwim::close() {
 
     if (mNextAction == EXIT_ACTION_JUMP || mNextAction == EXIT_ACTION_SLIDE) {
         mActor->setBlendMtxTimer(16);
-        changeAnimation("\220\205\211\152\227\244\202\244\202\277\202\240\202\260" /* 水泳陸うちあげ */);  // Landing from water
-        playSound("\220\205\225\340\215\163\222\105\217\157" /* 水歩行脱出 */);
+        changeAnimation("水泳陸うちあげ");  // Landing from water
+        playSound("水歩行脱出");
 
         f32 stickP = getStickP();
         getPlayer()->mWalkSpeed = stickP;
@@ -1711,8 +1711,8 @@ bool MarioSwim::close() {
 
     if (mNextAction == EXIT_ACTION_POWER_JUMP) {
 
-        playEffectRT("\220\205\226\312\203\127\203\203\203\223\203\166\220\205\222\214" /* 水面ジャンプ水柱 */, mSurfacePos, mSurfaceNorm);
-        playSound("\220\205\203\127\203\203\203\223\203\166\222\105\217\157" /* 水ジャンプ脱出 */);
+        playEffectRT("水面ジャンプ水柱", mSurfacePos, mSurfaceNorm);
+        playSound("水ジャンプ脱出");
 
         _1B2 = true;
         mWaterDistanceTarget = 0.0f;
@@ -1724,12 +1724,12 @@ bool MarioSwim::close() {
     if (mNextAction == EXIT_ACTION_FALL) {
         Vec3f trans = getTrans();
 
-        playEffectRT("\220\205\226\312\203\127\203\203\203\223\203\166\220\205\222\214" /* 水面ジャンプ水柱 */, -mSurfacePos, trans + mSurfacePos * mDistToFloor);
+        playEffectRT("水面ジャンプ水柱", -mSurfacePos, trans + mSurfacePos * mDistToFloor);
 
         getPlayer()->setGroundNorm(-getAirGravityVec());
 
         if (mJetTimer != 0) {
-            changeAnimationNonStop("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+            changeAnimationNonStop("水泳ジェット");
         }
     }
 
@@ -2029,9 +2029,9 @@ bool MarioSwim::surfacePaddle() {
     }
 
     stopAnimation(nullptr);
-    changeAnimation("\220\205\217\343\210\352\221\176\202\253" /* 水上一掻き */);
+    changeAnimation("水上一掻き");
     // Surface Paddle
-    playSound("\220\205\226\312\210\352\221\176\202\253" /* 水面一掻き */);
+    playSound("水面一掻き");
     mDashTimer = 40;
 
     return true;
@@ -2105,23 +2105,23 @@ void MarioSwim::spin() {
 
     stopAnimationUpper(nullptr);
     if (!mIsOnSurface) {
-        changeAnimation("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
-        playSound("\220\205\222\206\203\130\203\163\203\223\212\112\216\156" /* 水中スピン開始 */);
+        changeAnimation("水泳スピン");
+        playSound("水中スピン開始");
     } else {
-        changeAnimation("\220\205\217\343\203\130\203\163\203\223" /* 水上スピン */);
-        playSound("\220\205\226\312\203\130\203\163\203\223\212\112\216\156" /* 水面スピン開始 */);
+        changeAnimation("水上スピン");
+        playSound("水面スピン開始");
     }
 
     mActor->setPunchHitTimer(40);
-    playEffect("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
+    playEffect("水泳スピン");
 }
 
 void MarioSwim::startSpinDash() {
-    stopEffect("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
+    stopEffect("水泳スピン");
 
     if (_78) {
-        stopAnimation("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
-        stopAnimation("\220\205\217\343\203\130\203\163\203\223" /* 水上スピン */);
+        stopAnimation("水泳スピン");
+        stopAnimation("水上スピン");
         return;
     }
 
@@ -2139,9 +2139,9 @@ void MarioSwim::startSpinDash() {
     }
 
     if (!mIsOnSurface) {
-        changeAnimation("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */);
+        changeAnimation("水泳スピン移動");
     } else {
-        changeAnimation("\220\205\217\343\203\130\203\163\203\223\210\332\223\256" /* 水上スピン移動 */);
+        changeAnimation("水上スピン移動");
     }
 
     mActor->setPunchHitTimer(mSpinDashTimer);
@@ -2158,7 +2158,7 @@ void MarioSwim::hitPunch(const Vec3f& rPunchDir) {
         mKnockbackVel = rPunchDir;
         _78 = true;
 
-        stopAnimation("\203\101\203\142\203\160\201\133\203\160\203\223\203\140" /* アッパーパンチ */);
+        stopAnimation("アッパーパンチ");
     }
 }
 
@@ -2219,7 +2219,7 @@ void MarioSwim::jet() {
 
         if (checkLvlZ()) {
             if (checkTrgZ() || mStateTimer < 2) {
-                playSound("\213\124\203\165\203\214\201\133\203\114" /* 亀ブレーキ */);
+                playSound("亀ブレーキ");
                 MR::emitEffect(mActor->getCarrySensor()->mHost, "BrakeLamp");
             }
 
@@ -2236,7 +2236,7 @@ void MarioSwim::jet() {
             }
 
         } else {
-            playSound("\213\124\203\127\203\106\203\142\203\147\211\152\202\254" /* 亀ジェット泳ぎ */);
+            playSound("亀ジェット泳ぎ");
             MR::forceDeleteEffect(mActor->getCarrySensor()->mHost, "BrakeLamp");
         }
 
@@ -2265,7 +2265,7 @@ void MarioSwim::jet() {
 void MarioSwim::resetJet() {
     if (mJetTimer != 0) {
         if (isStatusActiveS(this)) {
-            getAnimator()->changeDefault("\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+            getAnimator()->changeDefault("水泳基本");
         }
     }
 
@@ -2284,9 +2284,9 @@ void MarioSwim::dropJet(bool isDamage) {
     }
 
     if (isDamage) {
-        changeAnimation("\220\205\211\152\203\127\203\106\203\142\203\147\217\111\227\271" /* 水泳ジェット終了 */, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+        changeAnimation("水泳ジェット終了", "水泳基本");
     } else {
-        changeAnimation("\220\205\211\152\213\124\223\212\202\260" /* 水泳亀投げ */, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+        changeAnimation("水泳亀投げ", "水泳基本");
     }
 
     if (mActor->getCarrySensor()) {
@@ -2316,11 +2316,11 @@ bool MarioSwim::startJet(u32 type) {
 
     forceStopSpin();
     // Swim Jet
-    if (!isAnimationRun("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */)) {
+    if (!isAnimationRun("水泳ジェット")) {
         // Swim Jet Start
-        changeAnimation("\220\205\211\152\203\127\203\106\203\142\203\147\212\112\216\156" /* 水泳ジェット開始 */, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+        changeAnimation("水泳ジェット開始", "水泳ジェット");
     } else {
-        changeAnimation(nullptr, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+        changeAnimation(nullptr, "水泳ジェット");
     }
 
     mJetCooldownTimer = 20;
@@ -2335,13 +2335,13 @@ void MarioSwim::forceStopSpin() {
     _84 = 0.0f;
 
     // Swim Spin
-    stopAnimation("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
-    stopAnimation("\220\205\211\152\203\130\203\163\203\223\210\332\223\256" /* 水泳スピン移動 */);
+    stopAnimation("水泳スピン");
+    stopAnimation("水泳スピン移動");
     // Surface Spin
-    stopAnimation("\220\205\217\343\203\130\203\163\203\223" /* 水上スピン */);
-    stopAnimation("\220\205\217\343\203\130\203\163\203\223\210\332\223\256" /* 水上スピン移動 */);
+    stopAnimation("水上スピン");
+    stopAnimation("水上スピン移動");
 
-    stopEffect("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
+    stopEffect("水泳スピン");
 }
 
 void MarioSwim::addFaint(const Vec3f& rFaintDir) {
@@ -2357,10 +2357,10 @@ void MarioSwim::addFaint(const Vec3f& rFaintDir) {
     dropJet(false);
     mKnockbackTimer = mActor->getConst().getTable()->mWaterInnerFaintTime;
 
-    changeAnimation("\220\205\211\152\203\137\203\201\201\133\203\127" /* 水泳ダメージ */);
-    playSound("\220\205\222\206\203\137\203\201\201\133\203\127" /* 水中ダメージ */);
-    playSound("\220\272\220\205\222\206\203\137\203\201\201\133\203\127" /* 声水中ダメージ */);
-    playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    changeAnimation("水泳ダメージ");
+    playSound("水中ダメージ");
+    playSound("声水中ダメージ");
+    playSound("ダメージ");
 
     startPadVib(2);
     mKnockbackVel = rFaintDir;
@@ -2395,9 +2395,9 @@ void MarioSwim::addDamage(const Vec3f& rDamageDir) {
     mForwardSpeed = 0.0f;
 
     if (mDamageType == 0) {
-        playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+        playSound("ダメージ");
     } else {
-        playSound("\225\307\217\325\223\313" /* 壁衝突 */);
+        playSound("壁衝突");
     }
 
     if (mIsOnSurface) {
@@ -2406,9 +2406,9 @@ void MarioSwim::addDamage(const Vec3f& rDamageDir) {
 
         Vec3f jumpVel = mUpVec * mActor->getConst().getTable()->mWaterSurfaceDamageJump + surfaceKnockback;
         getPlayer()->tryForcePowerJump(jumpVel, false);
-        changeAnimationNonStop("\220\205\217\343\203\137\203\201\201\133\203\127\222\206" /* 水上ダメージ中 */);
-        playSound("\220\205\226\312\203\137\203\201\201\133\203\127" /* 水面ダメージ */);
-        playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
+        changeAnimationNonStop("水上ダメージ中");
+        playSound("水面ダメージ");
+        playSound("声小ダメージ");
 
         mFrontVec = -surfaceKnockback;
         mNextAction = EXIT_ACTION_POWER_JUMP;
@@ -2424,13 +2424,13 @@ void MarioSwim::addDamage(const Vec3f& rDamageDir) {
         mDamageType = 0;
     } else {
         mKnockbackTimer = mActor->getConst().getTable()->mWaterInnerDamageTime;
-        changeAnimation("\220\205\211\152\203\137\203\201\201\133\203\127\222\206" /* 水泳ダメージ中 */);
+        changeAnimation("水泳ダメージ中");
 
         mKnockbackVel = rDamageDir;
         mKnockbackVel.setLength(mActor->getConst().getTable()->mSwimDamageSpeed);
 
-        playSound("\220\205\222\206\203\137\203\201\201\133\203\127" /* 水中ダメージ */);
-        playSound("\220\272\220\205\222\206\203\137\203\201\201\133\203\127" /* 声水中ダメージ */);
+        playSound("水中ダメージ");
+        playSound("声水中ダメージ");
 
         if (mDamageType == 0) {
             decLife();
@@ -2446,7 +2446,7 @@ void MarioSwim::addDamage(const Vec3f& rDamageDir) {
     }
 
     startPadVib(3);
-    playEffect("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    playEffect("ダメージ");
     mActionLockTimer = 0;
     forceStopSpin();
     mForwardSpeed = 0.0f;
@@ -2490,7 +2490,7 @@ void MarioSwim::updateTilt() {
         targetTiltX = (getStickX() * FloatUtil::PI()) / 5.0f;
     }
 
-    if (isAnimationRun("\220\205\211\152\203\136\201\133\203\223\215\266" /* 水泳ターン左 */) || isAnimationRun("\220\205\211\152\203\136\201\133\203\223\211\105" /* 水泳ターン右 */) || isAnimationRun("\220\205\211\152\203\136\201\133\203\223\211\272" /* 水泳ターン下 */)) {
+    if (isAnimationRun("水泳ターン左") || isAnimationRun("水泳ターン右") || isAnimationRun("水泳ターン下")) {
         f32 stickX = getStickX();
         targetTiltX = (MR::clamp(stickX / 0.7f, -1.0f, 1.0f) * FloatUtil::PI()) / 8.0f;
     }
@@ -2771,9 +2771,9 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
                 }
 
                 if (mJetTimer != 0 && isReflect) {
-                    playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
-                    playSound("\213\124\225\307\203\161\203\142\203\147" /* 亀壁ヒット */);
-                    changeAnimation("\220\205\211\152\203\127\203\106\203\142\203\147\225\307\203\136\201\133\203\223" /* 水泳ジェット壁ターン */);
+                    playEffectTrans("壁ヒット", getPlayer()->getWallPos());
+                    playSound("亀壁ヒット");
+                    changeAnimation("水泳ジェット壁ターン");
                 }
 
                 mForwardSpeed *= speedReduction;
@@ -2789,8 +2789,8 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
             if (!sendPunch(pSensor, true)) {
                 mForwardSpeed = 0.0f;
                 forceStopSpin();
-                changeAnimation("\220\205\211\152\225\307\203\161\203\142\203\147" /* 水泳壁ヒット */);
-                playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
+                changeAnimation("水泳壁ヒット");
+                playEffectTrans("壁ヒット", getPlayer()->getWallPos());
                 startCamVib(0);
                 mKnockbackTimer = 60;
                 mKnockbackVel = rNormal * 6.0f;
@@ -2801,7 +2801,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
             if (!sendPunch(pSensor, false)) {
                 mSpinTimer = 0;
                 mForwardSpeed = 0.0f;
-                playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
+                playEffectTrans("壁ヒット", getPlayer()->getWallPos());
                 startCamVib(2);
                 mKnockbackTimer = 30;
                 mKnockbackVel = rNormal * 6.0f;
@@ -2817,8 +2817,8 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
             }
 
             mForwardSpeed = 0.0f;
-            changeAnimation("\220\205\211\152\225\307\203\161\203\142\203\147" /* 水泳壁ヒット */);
-            playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
+            changeAnimation("水泳壁ヒット");
+            playEffectTrans("壁ヒット", getPlayer()->getWallPos());
             startCamVib(0);
             mKnockbackTimer = 60;
             mKnockbackVel = rNormal * 6.0f;
@@ -2846,7 +2846,7 @@ void MarioSwim::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
             }
         }
 
-        stopEffect("\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */);
+        stopEffect("水泳スピン");
     }
 }
 
@@ -2885,10 +2885,10 @@ void MarioSwim::incOxygen() {
 
     if (mOxygen == mActor->getConst().getTable()->mOxygenMax) {
         // Play "Full" sound
-        playSound("\216\137\221\146\212\256\221\123\211\361\225\234" /* 酸素完全回復 */);
+        playSound("酸素完全回復");
     } else {
         // Play "Recovering" sound
-        playSound("\216\137\221\146\211\361\225\234" /* 酸素回復 */);
+        playSound("酸素回復");
     }
 
     mOxygenWarningTimer = 120;
@@ -2921,7 +2921,7 @@ void MarioSwim::decOxygen(u16 amount) {
     }
 
     if (mOxygen == 0) {
-        playSound("\226\263\216\137\221\146\214\170\215\220" /* 無酸素警告 */);
+        playSound("無酸素警告");
     }
 }
 
@@ -2987,10 +2987,10 @@ void MarioSwim::updateLifeByTime() {
             if (mOxygen != mActor->getConst().getTable()->mOxygenMax) {
                 mOxygen += 32;
                 if (mOxygen > mActor->getConst().getTable()->mOxygenMax) {
-                    playSound("\220\205\226\312\216\137\221\146\212\256\221\123\211\361\225\234" /* 水面酸素完全回復 */);
+                    playSound("水面酸素完全回復");
                     mOxygen = mActor->getConst().getTable()->mOxygenMax;
                 } else {
-                    playSound("\220\205\226\312\216\137\221\146\211\361\225\234" /* 水面酸素回復 */);
+                    playSound("水面酸素回復");
                 }
 
                 mOxygenWarningTimer = 180;
@@ -3018,14 +3018,14 @@ void MarioSwim::doDecLifeByCold() {
         decLife();
 
         if (mJetTimer != 0) {
-            changeAnimation("\220\205\211\152\203\137\203\201\201\133\203\127\213\124" /* 水泳ダメージ亀 */);
+            changeAnimation("水泳ダメージ亀");
         } else {
-            changeAnimation("\220\205\211\152\203\137\203\201\201\133\203\127" /* 水泳ダメージ */);
+            changeAnimation("水泳ダメージ");
         }
 
-        playSound("\220\205\222\206\203\137\203\201\201\133\203\127" /* 水中ダメージ */);
-        playSound("\220\272\227\342\220\205\203\137\203\201\201\133\203\127" /* 声冷水ダメージ */);
-        playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+        playSound("水中ダメージ");
+        playSound("声冷水ダメージ");
+        playSound("ダメージ");
         startPadVib(2);
 
         mActor->_BC4 = 16;
@@ -3038,9 +3038,9 @@ bool MarioSwim::passRing(const HitSensor* pSensor) {
         mRingDashChargeTimer = mActor->getConst().getTable()->mSwimRingDashChargeTime;
 
         if (mJetTimer == 0) {
-            changeAnimation("\203\212\203\223\203\117\203\137\203\142\203\126\203\205\217\200\224\365" /* リングダッシュ準備 */);
+            changeAnimation("リングダッシュ準備");
         } else {
-            changeAnimation("\203\112\203\201\216\235\202\277\203\212\203\223\203\117\217\200\224\365" /* カメ持ちリング準備 */);
+            changeAnimation("カメ持ちリング準備");
         }
     }
 
@@ -3053,7 +3053,7 @@ bool MarioSwim::passRing(const HitSensor* pSensor) {
     mRingDashSpeedScale = host->mSpeedScale;
     mRingDashTimer = host->mBoostTime;
 
-    playSound("\213\124\211\301\221\254" /* 亀加速 */);
+    playSound("亀加速");
 
     return true;
 }
@@ -3079,9 +3079,9 @@ f32 MarioSwim::calcRingAcc() {
             if (mRingDashChargeTimer == 0) {
                 startPadVib(3);
                 if (mJetTimer == 0) {
-                    changeAnimation("\203\212\203\223\203\117\203\137\203\142\203\126\203\205" /* リングダッシュ */);
+                    changeAnimation("リングダッシュ");
                 } else {
-                    changeAnimation("\203\112\203\201\216\235\202\277\203\212\203\223\203\117" /* カメ持ちリング */);
+                    changeAnimation("カメ持ちリング");
                 }
             }
 
@@ -3184,12 +3184,12 @@ void MarioSwim::updateOxygenWatch() {
     }
 
     if (mOxygen == (mActor->getConst().getTable()->mOxygenMax / 4)) {
-        playSound("\216\137\221\146\214\270\217\255\214\170\215\220" /* 酸素減少警告 */);
+        playSound("酸素減少警告");
     }
 
     if (mOxygen == (mActor->getConst().getTable()->mOxygenMax / 2)) {
         mOxygenWarningTimer = 180;
-        playSound("\216\137\221\146\214\270\217\255\214\170\215\220" /* 酸素減少警告 */);
+        playSound("酸素減少警告");
     }
 
     if (mOxygenWarningTimer != 0) {
@@ -3261,6 +3261,6 @@ void MarioSwim::doJetJump(u8 type) {
         getPlayer()->tryForcePowerJump(finalVelocity, false);
 
         mNextAction = EXIT_ACTION_POWER_JUMP;
-        changeAnimationNonStop("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+        changeAnimationNonStop("水泳ジェット");
     }
 }

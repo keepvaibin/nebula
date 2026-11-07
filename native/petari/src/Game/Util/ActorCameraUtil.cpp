@@ -13,17 +13,17 @@
 namespace {
     void createActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo) {
         if (pInfo->mCameraSetID & 0x8000) {
-            nebula_snprintf(pName, nameSize, "%s\213\244\222\312%03d" /* %s共通%03d */, pActor->getName(), pInfo->mCameraSetID - 0x8000);
+            nebula_snprintf(pName, nameSize, "%s共通%03d", pActor->getName(), pInfo->mCameraSetID - 0x8000);
         } else {
-            nebula_snprintf(pName, nameSize, "%s\214\305\227\114%03d" /* %s固有%03d */, pActor->getName(), pInfo->mCameraSetID);
+            nebula_snprintf(pName, nameSize, "%s固有%03d", pActor->getName(), pInfo->mCameraSetID);
         }
     }
 
     void createMultiActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         if (pInfo->mCameraSetID & 0x8000) {
-            nebula_snprintf(pName, nameSize, "%s\213\244\222\312%s%03d" /* %s共通%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
+            nebula_snprintf(pName, nameSize, "%s共通%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
         } else {
-            nebula_snprintf(pName, nameSize, "%s\214\305\227\114%s%03d" /* %s固有%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID);
+            nebula_snprintf(pName, nameSize, "%s固有%s%03d", pActor->getName(), pEventName, pInfo->mCameraSetID);
         }
     }
 };  // namespace
@@ -39,11 +39,11 @@ namespace MR {
         declareEventCameraAnim(pInfo, actorEventName, getResourceHolder(pActor)->mFileInfoTable->getRes(animName));
     }
 
-    ActorCameraInfo* createActorCameraInfo(const JMapInfoIter& rIter) {
+    ActorCameraInfo* createActorCameraInfo(const TableIter& rIter) {
         return new ActorCameraInfo(rIter);
     }
 
-    bool createActorCameraInfoIfExist(const JMapInfoIter& rIter, ActorCameraInfo** ppInfo) {
+    bool createActorCameraInfoIfExist(const TableIter& rIter, ActorCameraInfo** ppInfo) {
         ActorCameraInfo newInfo(rIter);
 
         if (newInfo.mCameraSetID == -1) {
@@ -55,11 +55,11 @@ namespace MR {
         return true;
     }
 
-    bool initActorCamera(const LiveActor* pActor, const JMapInfoIter& rIter, ActorCameraInfo** ppInfo) {
+    bool initActorCamera(const LiveActor* pActor, const TableIter& rIter, ActorCameraInfo** ppInfo) {
         return initMultiActorCamera(pActor, rIter, ppInfo, nullptr);
     }
 
-    bool initMultiActorCamera(const LiveActor* pActor, const JMapInfoIter& rIter, ActorCameraInfo** ppInfo, const char* pEventName) {
+    bool initMultiActorCamera(const LiveActor* pActor, const TableIter& rIter, ActorCameraInfo** ppInfo, const char* pEventName) {
         if (*ppInfo == nullptr) {
             *ppInfo = createActorCameraInfo(rIter);
         }

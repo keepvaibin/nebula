@@ -42,12 +42,12 @@ void MercatorRotateParts::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-void MercatorRotateParts::init(const JMapInfoIter& rIter) {
+void MercatorRotateParts::init(const TableIter& rIter) {
     char objName[0x100];
     MR::getMapPartsObjectName(objName, sizeof(objName), rIter);
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoTrans(rIter, &mLocalTrans);
-    MR::getJMapInfoRotate(rIter, &mLocalRotate);
+    MR::getPlacementTrans(rIter, &mLocalTrans);
+    MR::getPlacementRotate(rIter, &mLocalRotate);
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);

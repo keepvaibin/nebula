@@ -6,7 +6,7 @@
 
 class CannonShellHolder;
 class HomingKiller;
-class JMapInfoIter;
+class TableIter;
 class Kameck;
 class KoopaJr;
 class ModelObj;
@@ -16,15 +16,15 @@ class KoopaJrShip : public LiveActor {
 public:
     KoopaJrShip(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
     void initShells();
-    void initKoopaJr(const JMapInfoIter&);
-    void initKameck(const JMapInfoIter&);
+    void initKoopaJr(const TableIter&);
+    void initKameck(const TableIter&);
     void initKiller();
     bool receiveMsgJetTurtleAttack(HitSensor*, HitSensor*);
     s32 getNumShootShells() const;
@@ -58,7 +58,7 @@ public:
     void exeBreakEnd();
     void exeTurnFront();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     inline bool isNextStateDamage(s32& x) {
         return --x <= 0;

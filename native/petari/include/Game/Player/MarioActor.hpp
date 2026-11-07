@@ -74,7 +74,7 @@ public:
     MarioActor(const char*);
 
     virtual ~MarioActor();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void movement();
     virtual void draw() const;

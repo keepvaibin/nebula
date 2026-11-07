@@ -24,7 +24,7 @@ BreakableCage::BreakableCage(const char* pName)
     mMtx.identity();
 }
 
-void BreakableCage::init(const JMapInfoIter& rIter) {
+void BreakableCage::init(const TableIter& rIter) {
     Vec3f sensorOffset(::cHitSensorOffsetCage);
     const char* pName;
     f32 sensorRadius = 300.0f;
@@ -44,7 +44,7 @@ void BreakableCage::init(const JMapInfoIter& rIter) {
         sensorRadius = 425.0f;
     } else if (MR::isEqualString(pName, "BreakableTrash")) {
         mCageType = CAGE_TRASH;
-        MR::joinToGroupArray(this, rIter, "\203\123\203\176\212\307\227\235" /* ゴミ管理 */, 32);
+        MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
     }
 
     f32 scaledRadius = sensorRadius * mScale.x;
@@ -170,7 +170,7 @@ bool BreakableCage::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     return result;
 }
 
-void BreakableCage::initMapToolInfo(const JMapInfoIter& rIter) {
+void BreakableCage::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchReadAppear(this, rIter);
     MR::useStageSwitchWriteA(this, rIter);
@@ -178,24 +178,24 @@ void BreakableCage::initMapToolInfo(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
 
     if (mCageType == CAGE_NORMAL) {
-        MR::getJMapInfoArg0WithInit(rIter, &mRotationSpeed);
+        MR::getPlacementArg0WithInit(rIter, &mRotationSpeed);
         mRotationSpeed *= 0.01f;
     }
 
     if (isTypeCage()) {
-        MR::getJMapInfoArg1NoInit(rIter, &mIgnoreGravity);
+        MR::getPlacementArg1NoInit(rIter, &mIgnoreGravity);
     } else {
         mIgnoreGravity = true;
     }
 
-    MR::getJMapInfoArg2NoInit(rIter, &mDelayDeadActivate);
+    MR::getPlacementArg2NoInit(rIter, &mDelayDeadActivate);
 }
 
-void BreakableCage::initModel(const char* pName, const JMapInfoIter& rIter) {
+void BreakableCage::initModel(const char* pName, const TableIter& rIter) {
     initModelManagerWithAnm(pName, nullptr, false);
 
     if (isTypeCage()) {
-        ModelObj* pBreakModel = MR::createModelObjMapObjStrongLight("\211\363\202\352\202\351\342\304\211\363\202\352\203\202\203\146\203\213" /* 壊れる籠壊れモデル */, "BreakableCageBreak", mMtx.toMtxPtr());
+        ModelObj* pBreakModel = MR::createModelObjMapObjStrongLight("壊れる籠壊れモデル", "BreakableCageBreak", mMtx.toMtxPtr());
         mBreakModel = pBreakModel;
         pBreakModel->initWithoutIter();
         mBreakModel->mScale.set(mScale);
@@ -263,7 +263,7 @@ bool BreakableCage::isAppearPowerStar() const {
 bool BreakableCage::tryBreak() {
     if (isNerve(GET_NERVE(BreakableCage, BreakableCageNrvWait))) {
         if (mCameraInfo != nullptr) {
-            MR::requestStartDemoWithoutCinemaFrame(this, "\224\152\211\363" /* 破壊 */, GET_NERVE(BreakableCage, BreakableCageNrvBreak),
+            MR::requestStartDemoWithoutCinemaFrame(this, "破壊", GET_NERVE(BreakableCage, BreakableCageNrvBreak),
                                                    GET_NERVE(BreakableCage, BreakableCageNrvWaitStartDemoBreak));
         } else {
             setNerve(GET_NERVE(BreakableCage, BreakableCageNrvBreak));
@@ -385,7 +385,7 @@ void BreakableCage::exeBreak() {
 
         if (mCameraInfo != nullptr) {
             MR::endActorCamera(this, getCamInfo(), false);
-            MR::endDemo(this, "\224\152\211\363" /* 破壊 */);
+            MR::endDemo(this, "破壊");
         }
 
         kill();

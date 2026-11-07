@@ -31,7 +31,7 @@ namespace NrvLavaSteam {
 LavaSteam::LavaSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f), mEffectScale(1.0f, 1.0f, 1.0f) {
 }
 
-void LavaSteam::init(const JMapInfoIter& rIter) {
+void LavaSteam::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("LavaSteam", nullptr, false);
     initEffectKeeper(0, nullptr, false);

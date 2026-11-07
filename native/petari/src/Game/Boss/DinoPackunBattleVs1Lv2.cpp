@@ -21,7 +21,7 @@ namespace NrvDinoPackunBattleVs1Lv2 {
     NEW_NERVE(DinoPackunBattleVs1Lv2NrvDamage, DinoPackunBattleVs1Lv2, Damage);
 };  // namespace NrvDinoPackunBattleVs1Lv2
 
-DinoPackunBattleVs1Lv2::DinoPackunBattleVs1Lv2(DinoPackun* pPackun) : DinoPackunAction("\203\211\203\130\203\147" /* ラスト */, pPackun) {
+DinoPackunBattleVs1Lv2::DinoPackunBattleVs1Lv2(DinoPackun* pPackun) : DinoPackunAction("ラスト", pPackun) {
     mStateDamage = nullptr;
     _18 = 1;
     initNerve(GET_NERVE(DinoPackunBattleVs1Lv2, DinoPackunBattleVs1Lv2NrvStart));

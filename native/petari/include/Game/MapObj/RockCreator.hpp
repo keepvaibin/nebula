@@ -9,12 +9,12 @@ class RockCreator : public LiveActor {
 public:
     RockCreator(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
 
     void invalidate();
-    void initMapToolInfo(const JMapInfoIter& rIter);
+    void initMapToolInfo(const TableIter& rIter);
     void create();
 
     void exeActive();

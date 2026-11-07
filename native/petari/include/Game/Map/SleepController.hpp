@@ -1,13 +1,13 @@
 #pragma once
 
 
-class JMapInfoIter;
+class TableIter;
 class SwitchEventListener;
 class SwitchIdInfo;
 
 class SleepController {
 public:
-    SleepController(const JMapInfoIter&, SwitchEventListener*);
+    SleepController(const TableIter&, SwitchEventListener*);
 
     void initSync();
     void update();

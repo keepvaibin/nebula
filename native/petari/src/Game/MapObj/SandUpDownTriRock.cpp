@@ -19,7 +19,7 @@ SandUpDownTriRock::SandUpDownTriRock(const char* pName) : MapObjActor(pName), mR
     }
 }
 
-void SandUpDownTriRock::init(const JMapInfoIter& rIter) {
+void SandUpDownTriRock::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
 
     MapObjActorInitInfo info;
@@ -31,7 +31,7 @@ void SandUpDownTriRock::init(const JMapInfoIter& rIter) {
     info.setupNerve(GET_NERVE(SandUpDownTriRock, SandUpDownTriRockNrvWait));
     initialize(rIter, info);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mRestStep);
+    MR::getPlacementArg0NoInit(rIter, &mRestStep);
 
     for (s32 i = 0; i < ARRAY_SIZE(mRockCollisionParts); i++) {
         char name[256];

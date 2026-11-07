@@ -6,11 +6,11 @@ namespace {
     static const s32 sMaxTakoHeiInk = 16;
 };  // namespace
 
-TakoHeiInkHolder::TakoHeiInkHolder() : DeriveActorGroup< TakoHeiInk >("\203\136\203\122\203\167\203\103\226\156\212\307\227\235" /* タコヘイ墨管理 */, ::sMaxTakoHeiInk) {
+TakoHeiInkHolder::TakoHeiInkHolder() : DeriveActorGroup< TakoHeiInk >("タコヘイ墨管理", ::sMaxTakoHeiInk) {
     TakoHeiInk* pInk;
 
     for (int i = 0; i < ::sMaxTakoHeiInk; i++) {
-        pInk = new TakoHeiInk("\203\136\203\122\203\167\203\103\226\156" /* タコヘイ墨 */);
+        pInk = new TakoHeiInk("タコヘイ墨");
         pInk->initWithoutIter();
         registerActor(pInk);
     }

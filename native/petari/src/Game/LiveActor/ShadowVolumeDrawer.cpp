@@ -12,7 +12,7 @@ namespace {
     static Color8 sDebugShapeColor(0xFF, 0, 0, 0x80);
 };  // namespace
 
-ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("\203\126\203\203\203\150\203\105\203\173\203\212\203\205\201\133\203\200\225\140\211\346\217\211\212\372\211\273" /* シャドウボリューム描画初期化 */) {
+ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("シャドウボリューム描画初期化") {
 }
 
 ShadowVolumeDrawer::ShadowVolumeDrawer(const char* pName) : ShadowDrawer(pName) {

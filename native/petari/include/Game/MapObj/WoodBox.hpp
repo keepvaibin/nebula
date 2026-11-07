@@ -10,7 +10,7 @@ public:
     WoodBox(const char*);
 
     virtual ~WoodBox();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcViewAndEntry();
     virtual void kill();
     virtual void control();

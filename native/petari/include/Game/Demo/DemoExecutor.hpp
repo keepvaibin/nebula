@@ -23,7 +23,7 @@ public:
 
     virtual const char* getName() const = 0;
     virtual const char* getTypeString() const = 0;
-    virtual void initCast(LiveActor*, const JMapInfoIter&) {};
+    virtual void initCast(LiveActor*, const TableIter&) {};
     virtual void start() {
     }
 
@@ -60,10 +60,10 @@ public:
     /// @brief Creates a new `DemoExecutor`
     DemoExecutor(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
-    virtual void registerDemoActor(LiveActor*, const JMapInfoIter&);
+    virtual void registerDemoActor(LiveActor*, const TableIter&);
 
     void start(NameObj*, const char*, s32);
     void startPart(NameObj*, const char*, const char*, s32);

@@ -6,7 +6,7 @@ class ShootingStar : public LiveActor {
 public:
     ShootingStar(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void appearPreShooting();

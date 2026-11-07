@@ -22,7 +22,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -67,7 +67,7 @@ namespace MR {
         return isFileExist(path, false);
     }
 
-    void initDefaultPose(NPCActor* pActor, const JMapInfoIter& rIter) {
+    void initDefaultPose(NPCActor* pActor, const TableIter& rIter) {
         initDefaultPosAndQuat(pActor, rIter);
         pActor->setInitPose();
     }
@@ -239,7 +239,7 @@ namespace MR {
         endTalkCamera(interpolate, frames);
     }
 
-    void initDefaultPosAndQuat(NPCActor* pActor, const JMapInfoIter& rIter) {
+    void initDefaultPosAndQuat(NPCActor* pActor, const TableIter& rIter) {
         initDefaultPos(pActor, rIter);
         makeQuatRotateDegree(&pActor->_A0, pActor->mRotation);
         pActor->setInitPose();
@@ -248,7 +248,7 @@ namespace MR {
     PartsModel* createNPCGoods(LiveActor* pActor, const char* pModelName, const char* pJointName) {
         PartsModel* pGoods = nullptr;
         if (!isNullOrEmptyString(pModelName) && isNPCItemFileExist(pModelName) && isExistJoint(pActor, pJointName)) {
-            pGoods = createPartsModelNpcAndFix(pActor, "\203\117\203\142\203\131" /* グッズ */, pModelName, pJointName);
+            pGoods = createPartsModelNpcAndFix(pActor, "グッズ", pModelName, pJointName);
             pGoods->appear();
             if (getLightNumMax(pGoods) > 0) {
                 initLightCtrl(pGoods);
@@ -261,7 +261,7 @@ namespace MR {
     PartsModel* createIndirectNPCGoods(LiveActor* pActor, const char* pModelName, const char* pJointName) {
         PartsModel* pGoods = nullptr;
         if (!isNullOrEmptyString(pModelName) && isNPCItemFileExist(pModelName) && isExistJoint(pActor, pJointName)) {
-            pGoods = createPartsModelIndirectNpc(pActor, "\203\117\203\142\203\131" /* グッズ */, pModelName, getJointMtx(pActor, pJointName));
+            pGoods = createPartsModelIndirectNpc(pActor, "グッズ", pModelName, getJointMtx(pActor, pJointName));
             pGoods->appear();
             if (getLightNumMax(pGoods) > 0) {
                 initLightCtrl(pGoods);
@@ -617,8 +617,8 @@ namespace MR {
 };  // namespace MR
 
 TakeOutStar::TakeOutStar(NPCActor* pActor, const char* pActionName, const char* pAnimName, const Nerve* pNerve)
-    : NerveExecutor("\203\160\203\217\201\133\203\130\203\136\201\133\216\346\202\350\217\157\202\265\203\146\203\202\216\300\215\163\216\322" /* パワースター取り出しデモ実行者 */), mActor(pActor), mNerve(pNerve), mActionName(pActionName), mAnimName(pAnimName) {
-    mStarModel = MR::createPowerStarDemoModel(mActor, "\203\160\203\217\201\133\203\130\203\136\201\133\203\146\203\202\203\202\203\146\203\213" /* パワースターデモモデル */, pActor->getBaseMtx());
+    : NerveExecutor("パワースター取り出しデモ実行者"), mActor(pActor), mNerve(pNerve), mActionName(pActionName), mAnimName(pAnimName) {
+    mStarModel = MR::createPowerStarDemoModel(mActor, "パワースターデモモデル", pActor->getBaseMtx());
     mStarModel->makeActorDead();
 
     initNerve(GET_NERVE(TakeOutStar, TakeOutStarNrvAnim));
@@ -700,7 +700,7 @@ void TakeOutStar::exeDemo() {
 void TakeOutStar::exeTerm() {
 }
 
-FadeStarter::FadeStarter(NPCActor* pActor, s32 a2) : NerveExecutor("\203\164\203\106\201\133\203\150\212\112\216\156\220\247\214\344" /* フェード開始制御 */), mActor(pActor), _C(), _10(a2) {
+FadeStarter::FadeStarter(NPCActor* pActor, s32 a2) : NerveExecutor("フェード開始制御"), mActor(pActor), _C(), _10(a2) {
     initNerve(GET_NERVE(FadeStarter, FadeStarterNrvFade));
 }
 
@@ -742,7 +742,7 @@ void FadeStarter::exeFade() {
 void FadeStarter::exeTerm() {
 }
 
-DemoStarter::DemoStarter(NPCActor* pActor) : NerveExecutor("\203\146\203\202\212\112\216\156\220\247\214\344" /* デモ開始制御 */), mActor(pActor) {
+DemoStarter::DemoStarter(NPCActor* pActor) : NerveExecutor("デモ開始制御"), mActor(pActor) {
     initNerve(GET_NERVE(DemoStarter, DemoStarterNrvInit));
 }
 

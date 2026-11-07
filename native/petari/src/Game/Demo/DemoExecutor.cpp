@@ -12,7 +12,7 @@
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <algorithm>
@@ -22,7 +22,7 @@ DemoExecutor::DemoExecutor(const char* pName)
       mSoundKeeper(), mSheetKeeper(), _40(), _44(), _48(), _4C(-1), _50(), mActor(), mTalkAnimCtrl(), mTalkMessageCtrl() {
 }
 
-void DemoExecutor::init(const JMapInfoIter& rIter) {
+void DemoExecutor::init(const TableIter& rIter) {
     DemoCastGroup::init(rIter);
 
     mSheetName = MR::getDemoSheetName(rIter);
@@ -44,7 +44,7 @@ void DemoExecutor::init(const JMapInfoIter& rIter) {
     DemoFunction::registerDemoExecutor(this);
 }
 
-void DemoExecutor::registerDemoActor(LiveActor* pActor, const JMapInfoIter& rIter) {
+void DemoExecutor::registerDemoActor(LiveActor* pActor, const TableIter& rIter) {
     DemoCastGroup::registerDemoActor(pActor, rIter);
     mCameraKeeper->initCast(pActor, rIter);
     mActionKeeper->initCast(pActor, rIter);

@@ -10,7 +10,7 @@ public:
     KoopaFireStairs(const char* pName, bool);
 
     virtual ~KoopaFireStairs();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void makeActorDead();
     virtual void calcAndSetBaseMtx();

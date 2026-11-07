@@ -8,7 +8,7 @@ namespace {
 HazeCube::HazeCube(int formType, const char* pName) : AreaObj(formType, pName), mDistance(::sDefaultDistance) {
 }
 
-void HazeCube::init(const JMapInfoIter& rIter) {
+void HazeCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     if (mObjArg0 >= 0) {

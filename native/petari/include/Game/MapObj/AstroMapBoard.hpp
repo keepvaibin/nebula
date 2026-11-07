@@ -7,7 +7,7 @@ public:
     AstroMapBoard(const char*);
 
     virtual ~AstroMapBoard();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void connectToScene(const MapObjActorInitInfo&);
 

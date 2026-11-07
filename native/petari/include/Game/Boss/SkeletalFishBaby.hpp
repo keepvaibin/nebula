@@ -14,7 +14,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     SkeletalFishBaby(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -33,7 +33,7 @@ public:
     void exeDead();
     bool calcJoint(Pos3f*, const JointControllerInfo&);
     bool damage(const Vec3f&, bool);
-    void initRail(const JMapInfoIter&);
+    void initRail(const TableIter&);
     void initJoint();
     void initSensor();
     bool isAttackable() const;

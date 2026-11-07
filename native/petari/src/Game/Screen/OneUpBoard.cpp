@@ -16,10 +16,10 @@ namespace NrvOneUpBoard {
     NEW_NERVE(HostTypeAppear, OneUpBoard, Appear);
 };  // namespace NrvOneUpBoard
 
-OneUpBoard::OneUpBoard() : LayoutActor("1UP\203\173\201\133\203\150" /* 1UPボード */, true) {
+OneUpBoard::OneUpBoard() : LayoutActor("1UPボード", true) {
 }
 
-void OneUpBoard::init(const JMapInfoIter& rIter) {
+void OneUpBoard::init(const TableIter& rIter) {
     initLayoutManager("OneUp", 2);
     initNerve(GET_NERVE(OneUpBoard, HostTypeWait));
     MR::connectToSceneLayout(this);

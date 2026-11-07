@@ -30,7 +30,7 @@ ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int d
     }
 }
 
-void ModelObj::init(const JMapInfoIter& rIter) {
+void ModelObj::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
@@ -43,7 +43,7 @@ void ModelObj::calcAndSetBaseMtx() {
     }
 }
 
-void ModelObjNpc::init(const JMapInfoIter& rIter) {
+void ModelObjNpc::init(const TableIter& rIter) {
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
     mJointCtrl = new ActorJointCtrl(this);
 

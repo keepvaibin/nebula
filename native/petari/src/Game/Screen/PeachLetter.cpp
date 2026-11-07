@@ -16,7 +16,7 @@ namespace NrvPeachLetter {
 PeachLetter::PeachLetter(const char* pName) : LayoutActor(pName, true), mAButtonIcon() {
 }
 
-void PeachLetter::init(const JMapInfoIter&) {
+void PeachLetter::init(const TableIter&) {
     initLayoutManager("PeachLetter", 1);
 
     mAButtonIcon = new IconAButton(false, false);
@@ -75,6 +75,6 @@ void PeachLetter::exeEnd() {
     }
 }
 
-void PeachLetter::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void PeachLetter::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     pCollector->addArchive("PeachLetter");
 }

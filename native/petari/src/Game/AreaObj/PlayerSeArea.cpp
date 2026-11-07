@@ -5,7 +5,7 @@
 PlayerSeArea::PlayerSeArea(int formType, const char* pName) : AreaObj(formType, pName) {
 }
 
-void PlayerSeArea::init(const JMapInfoIter& rIter) {
+void PlayerSeArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 

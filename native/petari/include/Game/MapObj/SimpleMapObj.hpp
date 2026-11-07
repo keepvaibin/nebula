@@ -19,7 +19,7 @@ public:
     virtual ~SimpleMapObj() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };
 
 class SimpleEnvironmentObj : public MapObjActor {
@@ -28,7 +28,7 @@ public:
     }
 
     virtual ~SimpleEnvironmentObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
 
@@ -40,7 +40,7 @@ public:
     virtual ~SimpleMapObjFarMax() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };
 
 class SimpleMapObjPush : public SimpleMapObj {
@@ -66,7 +66,7 @@ public:
     SimpleSeesawObj(const char*);
 
     virtual ~SimpleSeesawObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     Mtx34f _C4;
@@ -77,7 +77,7 @@ public:
     SimpleMirrorObj(const char* pName, const char* a2 = nullptr, MtxPtr = nullptr);
 
     virtual ~SimpleMirrorObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
 
     MtxPtr mMtx;
@@ -89,7 +89,7 @@ public:
     }
 
     virtual ~SimpleMirrorReflectionObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
 
@@ -111,7 +111,7 @@ public:
     }
 
     virtual ~UFOKinokoUnderConstruction();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 };
 
 class GlaringLight : public SimpleMapObj {
@@ -124,5 +124,5 @@ public:
 };
 
 namespace MR {
-    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector*, const JMapInfoIter&);
+    void makeArchiveListUFOKinokoUnderConstruction(NameObjArchiveListCollector*, const TableIter&);
 };  // namespace MR

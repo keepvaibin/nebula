@@ -6,7 +6,7 @@ class ItemBlock : public LiveActor {
 public:
     ItemBlock(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void appear();
     virtual void kill();
@@ -15,7 +15,7 @@ public:
     virtual void control();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void checkKind(const JMapInfoIter&);
+    void checkKind(const TableIter&);
     void initBlock();
     bool tryStartJumpPunch();
     void exeStandby();

@@ -10,7 +10,7 @@ public:
         CameraType_UpdateWithTarget = 1,
         CameraType_FollowWorldPos = 2,
     };
-    CameraDPD(const char* pName = "DPD\221\200\215\354\203\112\203\201\203\211" /* DPD操作カメラ */);
+    CameraDPD(const char* pName = "DPD操作カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

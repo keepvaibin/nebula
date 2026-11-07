@@ -18,7 +18,7 @@ KoopaFigureBall::KoopaFigureBall(const char* pName, Koopa* pKoopa, f32 myFloat, 
     mBaseMtx.identity();
 }
 
-void KoopaFigureBall::init(const JMapInfoIter& rIter) {
+void KoopaFigureBall::init(const TableIter& rIter) {
     initBinder(mRadius, 0.0f, 0);
 
     MR::onCalcGravity(this);

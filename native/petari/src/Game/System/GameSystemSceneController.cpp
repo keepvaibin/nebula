@@ -17,7 +17,7 @@
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -54,7 +54,7 @@ SceneControlInfo::SceneControlInfo() : mStartIdInfo() {
     mStage[0] = '\0';
     mScenarioNo = 1;
     mSelectedScenarioNo = 1;
-    mStartIdInfo = new JMapIdInfo(MR::getInitializeStartIdInfo());
+    mStartIdInfo = new PlacementId(MR::getInitializeStartIdInfo());
 }
 
 void SceneControlInfo::setScene(const char* pSceneName) {
@@ -65,7 +65,7 @@ void SceneControlInfo::setStage(const char* pStageName) {
     nebula_snprintf(mStage, sizeof(mStage), "%s", pStageName);
 }
 
-void SceneControlInfo::setStartIdInfo(const JMapIdInfo& rInfo) {
+void SceneControlInfo::setStartIdInfo(const PlacementId& rInfo) {
     *mStartIdInfo = rInfo;
 }
 
@@ -80,7 +80,7 @@ GameSystemSceneController::GameSystemSceneController()
 }
 
 void GameSystemSceneController::initAfterStationedResourceLoaded() {
-    mScenarioParser = new ScenarioDataParser("\203\126\203\151\203\212\203\111\203\146\201\133\203\136\211\360\220\315" /* シナリオデータ解析 */);
+    mScenarioParser = new ScenarioDataParser("シナリオデータ解析");
     mScenarioParser->initWithoutIter();
 
     mPlayTimerScene->init();

@@ -12,7 +12,7 @@ class Mogu : public LiveActor {
 public:
     Mogu(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void endClipped();
     virtual void control();

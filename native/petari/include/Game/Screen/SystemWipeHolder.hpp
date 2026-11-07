@@ -9,8 +9,8 @@ public:
     SystemWipeHolder();
 
     /// @brief Intializes the `SystemWipeHolder` while being placed into a scene.
-    /// @param rIter The reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param rIter The reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter);
 
     virtual void movement();
 

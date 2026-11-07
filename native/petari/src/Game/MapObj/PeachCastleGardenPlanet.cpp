@@ -16,7 +16,7 @@ PeachCastleGardenPlanet::PeachCastleGardenPlanet(const char* pName) : MapObjActo
 PeachCastleGardenPlanet::~PeachCastleGardenPlanet() {
 }
 
-void PeachCastleGardenPlanet::init(const JMapInfoIter& rIter) {
+void PeachCastleGardenPlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoPlanet(&info);

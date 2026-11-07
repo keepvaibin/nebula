@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JMapInfo;
+class Table;
 
 struct KC_PrismData {
     f32 mHeight;
@@ -101,14 +101,14 @@ public:
     Vec3f getPos(const KC_PrismData*, int) const;
     KC_PrismData* getPrismData(u32) const;
     s32 getTriangleNum() const;
-    JMapInfoIter getAttributes(u32) const;
+    TableIter getAttributes(u32) const;
     s32* searchBlock(s32*, const u32&, const u32&, const u32&) const;
     bool isInsideMinMaxInLocalSpace(const V3u&) const;
     bool outCheck(const Vec3f*, const Vec3f*, V3u*, V3u*) const;
     void objectSpaceToLocalSpace(V3u*, const Vec3f&) const;
 
     KCLFile* mFile;
-    JMapInfo* mapInfo;
+    Table* mapInfo;
     f32 mMaxVertexDistance;
     KCLFile mModel;  // the view of a cooked file
 };

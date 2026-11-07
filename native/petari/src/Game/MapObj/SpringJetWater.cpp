@@ -24,7 +24,7 @@ namespace NrvSpringJetWater {
 SpringJetWater::SpringJetWater(const char* pName) : LiveActor(pName), mObjName(), mUp(0.0f, 1.0f, 0.0f) {
 }
 
-void SpringJetWater::init(const JMapInfoIter& rIter) {
+void SpringJetWater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Pos3f mtx;
     mtx.identity();
@@ -98,7 +98,7 @@ void SpringJetWater::exeWait() {
 
     MR::startLevelSound(this, "SE_OJ_LV_SPR_JET_WATER_WAIT");
 
-    if (MR::isDemoPartFirstStep("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */)) {
+    if (MR::isDemoPartFirstStep("湧き水上昇")) {
         MR::deleteEffect(this, "Wait");
         setNerve(GET_NERVE(SpringJetWater, HostTypeJet));
     }
@@ -114,7 +114,7 @@ void SpringJetWater::exeJet() {
 
     MR::startLevelSound(this, "SE_OJ_LV_SPR_JET_WATER_JET");
 
-    if (MR::isDemoPartLastStep("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */)) {
+    if (MR::isDemoPartLastStep("湧き水上昇")) {
         setNerve(GET_NERVE(SpringJetWater, HostTypeEnd));
     }
 }

@@ -1,11 +1,11 @@
 #include "Game/MapObj/MapPartsRailGuideHolder.hpp"
 #include "Game/MapObj/MapPartsRailGuideDrawer.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
-MapPartsRailGuideHolder::MapPartsRailGuideHolder() : NameObj("\203\214\201\133\203\213\203\113\203\103\203\150\225\333\216\235" /* レールガイド保持 */), mNumRailGuides() {
+MapPartsRailGuideHolder::MapPartsRailGuideHolder() : NameObj("レールガイド保持"), mNumRailGuides() {
 }
 
-MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHost, const char* pModelName, const JMapInfoIter& rIter) {
+MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHost, const char* pModelName, const TableIter& rIter) {
     s32 railId = -1;
     rIter.getValue("CommonPath_ID", &railId);
     MapPartsRailGuideDrawer* pDrawer = find(railId);
@@ -21,7 +21,7 @@ MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHo
     return pDrawer;
 }
 
-void MapPartsRailGuideHolder::init(const JMapInfoIter& rIter) {
+void MapPartsRailGuideHolder::init(const TableIter& rIter) {
 }
 
 MapPartsRailGuideDrawer* MapPartsRailGuideHolder::find(s32 railId) {

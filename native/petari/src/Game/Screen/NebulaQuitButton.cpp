@@ -52,7 +52,7 @@ namespace {
 NebulaQuitButton::NebulaQuitButton(const char* pName) : LayoutActor(pName, true), mButton(nullptr), mShownFrames(0), mIsDecided(false) {
 }
 
-void NebulaQuitButton::init(const JMapInfoIter& rIter) {
+void NebulaQuitButton::init(const TableIter& rIter) {
     initLayoutManager("FileSelect", 1);
 
     // Its own name for the canvas rules (LayoutAspect): the file select's Start follows the right and bottom edges,

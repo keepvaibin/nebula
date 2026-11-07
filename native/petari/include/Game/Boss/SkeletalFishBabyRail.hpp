@@ -9,7 +9,7 @@ public:
     SkeletalFishBabyRail(const char*);
 
     virtual ~SkeletalFishBabyRail();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     s32 _8C;
 };

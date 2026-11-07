@@ -13,7 +13,7 @@ namespace NrvBossKameckBarrier {
 BossKameckBarrier::BossKameckBarrier(const char* pName, const char* pModelName) : LiveActor(pName), mModelName(pModelName) {
 }
 
-void BossKameckBarrier::init(const JMapInfoIter& rIter) {
+void BossKameckBarrier::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     if (u32 bits = 0; NebulaHost::codePatch(NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y, &bits)) {
         f32 offset;

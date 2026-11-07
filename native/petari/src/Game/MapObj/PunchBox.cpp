@@ -6,7 +6,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -21,7 +21,7 @@ namespace NrvPunchBox {
 PunchBox::PunchBox(const char* pName) : LiveActor(pName) {
 }
 
-void PunchBox::init(const JMapInfoIter& rIter) {
+void PunchBox::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PunchBox", nullptr, false);
 
@@ -42,8 +42,8 @@ void PunchBox::init(const JMapInfoIter& rIter) {
     s32 arg1 = 1;
 
     if (rIter.isValid()) {
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
     }
 
     mCoinCount = arg0;

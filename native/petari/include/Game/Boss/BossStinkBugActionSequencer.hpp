@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
 class BossStinkBug;
 class BossStinkBugActionBase;
@@ -16,7 +16,7 @@ class HitSensor;
 
 class BossStinkBugActionSequencer : public NerveExecutor {
 public:
-    BossStinkBugActionSequencer(BossStinkBug* pStinkbug, const JMapInfoIter& rIter);
+    BossStinkBugActionSequencer(BossStinkBug* pStinkbug, const TableIter& rIter);
 
     bool isValidFollowId(s32 id) const;
     void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

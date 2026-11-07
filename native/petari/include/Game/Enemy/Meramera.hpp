@@ -12,7 +12,7 @@ class Meramera : public LiveActor {
 public:
     Meramera(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();
     virtual void startClipped();
@@ -25,12 +25,12 @@ public:
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initElementType(const JMapInfoIter&);
+    void initElementType(const TableIter&);
     void initEffect();
     void initSensor();
     void initBind();
     void initShadow();
-    void initAppearState(const JMapInfoIter&);
+    void initAppearState(const TableIter&);
     bool requestDamage(HitSensor*, HitSensor*);
     bool requestFire(HitSensor*, HitSensor*);
     bool requestForceRunaway();

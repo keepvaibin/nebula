@@ -35,7 +35,7 @@ WipeRing::WipeRing(bool isCenterOnPlayer, const char* pName)
     : WipeLayoutBase(pName), mCenterPos(0.0f, 0.0f), mAnimFrame(::sAnimFrame), mWipeOutFrame(), mWipeInFrame(), mIsCenterOnPlayer(isCenterOnPlayer) {
 }
 
-void WipeRing::init(const JMapInfoIter& rIter) {
+void WipeRing::init(const TableIter& rIter) {
     initLayoutManager("WipeRing", 1);
     MR::createAndAddPaneCtrl(this, "Ring", 1);
     MR::setFollowPos(&mCenterPos, this, "Ring");

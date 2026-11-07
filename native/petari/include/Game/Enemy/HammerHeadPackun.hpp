@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 class PartsModel;
@@ -11,7 +11,7 @@ class HammerHeadPackun : public LiveActor {
 public:
     HammerHeadPackun(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();
     virtual void control();
@@ -36,7 +36,7 @@ public:
     void initPosture();
     void initSensor();
     void initShadow();
-    void initLeaf(const JMapInfoIter&);
+    void initLeaf(const TableIter&);
     bool isTargetInRange() const;
     bool isInFieldOfView(const Vec3f&) const;
     bool isAttackSensorValid() const;

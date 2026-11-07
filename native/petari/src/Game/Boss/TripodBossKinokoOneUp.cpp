@@ -1,7 +1,7 @@
 #include "Game/Boss/TripodBossKinokoOneUp.hpp"
 #include "Game/Boss/TripodBossAccesser.hpp"
 #include "Game/MapObj/BenefitItemOneUp.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -15,14 +15,14 @@ TripodBossKinokoOneUp::TripodBossKinokoOneUp(const char* pName) : LiveActor(pNam
     _BC.identity();
 }
 
-void TripodBossKinokoOneUp::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoMatrixFromRT(rIter, &_8C);
+void TripodBossKinokoOneUp::init(const TableIter& rIter) {
+    MR::getPlacementMatrixFromRT(rIter, &_8C);
     MR::connectToSceneMapObjDecorationMovement(this);
     MR::invalidateClipping(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mJointID);
+    MR::getPlacementArg0NoInit(rIter, &mJointID);
     initNerve(GET_NERVE(TripodBossKinokoOneUp, TripodBossKinokoOneUpNrvActive));
 
-    mOneUp = new BenefitItemOneUp("1UP\203\114\203\155\203\122" /* 1UPキノコ */);
+    mOneUp = new BenefitItemOneUp("1UPキノコ");
     mOneUp->setFollowMtx(_BC);
     mOneUp->initWithoutIter();
     MR::invalidateClipping(mOneUp);

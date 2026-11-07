@@ -6,7 +6,7 @@ class StarPointerCommandStream : public LayoutActor {
 public:
     StarPointerCommandStream(const Vec2f*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     void start(const Vec3f*, bool);

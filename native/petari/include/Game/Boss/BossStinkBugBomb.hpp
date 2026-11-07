@@ -6,7 +6,7 @@ class BossStinkBugBomb : public LiveActor {
 public:
     BossStinkBugBomb(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

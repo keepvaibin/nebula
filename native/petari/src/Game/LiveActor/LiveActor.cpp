@@ -34,7 +34,7 @@ LiveActor::LiveActor(const char* pName)
     MR::getClippingDirector()->registerActor(this);
 }
 
-void LiveActor::init(const JMapInfoIter& rIter) {
+void LiveActor::init(const TableIter& rIter) {
 }
 
 void LiveActor::appear() {
@@ -393,7 +393,7 @@ void LiveActor::initBinder(f32 radius, f32 offsetY, u32 planeNum) {
     }
 }
 
-void LiveActor::initRailRider(const JMapInfoIter& rIter) {
+void LiveActor::initRailRider(const TableIter& rIter) {
     mRailRider = new RailRider(rIter);
 }
 
@@ -456,7 +456,7 @@ void LiveActor::initActorCollisionParts(const char* pParam1, HitSensor* pParam2,
     MR::invalidateCollisionParts(this);
 }
 
-void LiveActor::initStageSwitch(const JMapInfoIter& rIter) {
+void LiveActor::initStageSwitch(const TableIter& rIter) {
     mStageSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 }
 

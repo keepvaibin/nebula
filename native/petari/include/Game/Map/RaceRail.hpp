@@ -10,7 +10,7 @@ public:
     PlayerRacer(const char*);
 
     virtual ~PlayerRacer();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void initRacer();
     virtual void prepRacer(const RaceManager*);
@@ -31,7 +31,7 @@ public:
     RaceRail(const char*);
 
     virtual ~RaceRail();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     PlayerRacer* mPlayerRacer;
 };

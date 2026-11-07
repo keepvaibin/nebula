@@ -6,7 +6,7 @@ class ScenarioTitle : public LayoutActor {
 public:
     ScenarioTitle();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void start();
     void end();

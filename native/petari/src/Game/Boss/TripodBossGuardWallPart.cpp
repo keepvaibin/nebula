@@ -28,7 +28,7 @@ namespace NrvTripodBossGuardWallPart {
 TripodBossGuardWallPart::TripodBossGuardWallPart(const char* pName) : LiveActor(pName), mHostMtx(), mPlacementAngle(), mStartTiming() {
 }
 
-void TripodBossGuardWallPart::init(const JMapInfoIter& rIter) {
+void TripodBossGuardWallPart::init(const TableIter& rIter) {
     initModelManagerWithAnm("TripodBossGuardWall", nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_TripodBoss, MR::DrawType_None);
     initHitSensor(2);

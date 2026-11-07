@@ -10,7 +10,7 @@ public:
     PunchingKinoko(const char*);
 
     virtual ~PunchingKinoko();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();
     virtual void makeActorDead();
@@ -23,7 +23,7 @@ public:
 
     void initShadow();
     void initSensor();
-    void initCamera(const JMapInfoIter&);
+    void initCamera(const TableIter&);
     void initJointControl();
 
     bool requestPunch(HitSensor*, HitSensor*);

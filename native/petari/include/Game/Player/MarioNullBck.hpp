@@ -8,7 +8,7 @@ public:
 
     virtual ~MarioNullBck();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
 
     void getLastPos(Vec3f*);

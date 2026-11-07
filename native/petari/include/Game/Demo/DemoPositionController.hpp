@@ -6,7 +6,7 @@ class ActorCameraInfo;
 
 class DemoPositionController : public LiveActor {
 public:
-    DemoPositionController(const char*, const JMapInfoIter&);
+    DemoPositionController(const char*, const TableIter&);
 
     virtual void control();
 

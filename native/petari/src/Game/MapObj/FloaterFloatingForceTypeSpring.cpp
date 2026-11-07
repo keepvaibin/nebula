@@ -37,7 +37,7 @@ FloaterFloatingForceTypeSpring::FloaterFloatingForceTypeSpring(LiveActor* pHost,
     : FloaterFloatingForce(pHost, pName), mSpringForce(), mVelocity(gZeroVec), _48() {
 }
 
-void FloaterFloatingForceTypeSpring::init(const JMapInfoIter& rIter) {
+void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
     FloaterFloatingForce::init(rIter);
 
     f32 rotateSpeed = 0.0f;

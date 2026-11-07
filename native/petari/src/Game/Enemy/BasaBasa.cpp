@@ -10,7 +10,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -49,7 +49,7 @@ BasaBasa::BasaBasa(const char* pName)
       _A8(2000.0f), _AC(0.0f), _B4(0), _B8(0.0f), _BC(0.0f, 0.0f, 0.0f), mIsIceModel(false), _CC(0.0f, 0.0f, 0.0f), _E4(-1.0f), _E8(0), _EC(0) {
 }
 
-void BasaBasa::init(const JMapInfoIter& rIter) {
+void BasaBasa::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objName;
     MR::getObjectName(&objName, rIter);
@@ -81,8 +81,8 @@ void BasaBasa::init(const JMapInfoIter& rIter) {
     mStampController = new AnimStampController();
     mSpinHitController = new SpinHitController(this, 20, 20, 5, 0.0f, 20.0f, 10.0f, 3, false);
     initHangModel();
-    MR::getJMapInfoArg0NoInit(rIter, &_A8);
-    MR::getJMapInfoArg1NoInit(rIter, &_E4);
+    MR::getPlacementArg0NoInit(rIter, &_A8);
+    MR::getPlacementArg1NoInit(rIter, &_E4);
     if (-1.0f == _E4) {
         _E4 = 1000.0f + _A8;
     }
@@ -425,7 +425,7 @@ void BasaBasa::exeDPDSwoon() {
 
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, 1, 0)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", 1, 0)) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvAirWait));
     }
 }
@@ -651,7 +651,7 @@ bool BasaBasa::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver
 
 void BasaBasa::initHangModel() {
     const char* modelName = mIsIceModel ? "BasaBasaIceHang" : "BasaBasaHang";
-    mHangModel = MR::createModelObjEnemy("\202\324\202\347\211\272\202\252\202\350\203\202\203\146\203\213" /* ぶら下がりモデル */, modelName, MR::getJointMtx(this, "JointRoot"));
+    mHangModel = MR::createModelObjEnemy("ぶら下がりモデル", modelName, MR::getJointMtx(this, "JointRoot"));
     mHangModel->initWithoutIter();
     mHangModel->kill();
 }
@@ -689,7 +689,7 @@ bool BasaBasa::tryClippingAndResetPos() {
 }
 
 bool BasaBasa::trySetNerveDPDSwoon() {
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         return false;
     }
 

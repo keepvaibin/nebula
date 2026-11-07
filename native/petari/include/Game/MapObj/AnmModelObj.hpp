@@ -10,7 +10,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AnmModelObj(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control() {
     }
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {
@@ -49,7 +49,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AnmModelSwitchMove(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isOnStartAnmTrigger() const;
 };
 
@@ -69,7 +69,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AnmModelGroundOnMove(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool isOnStartAnmTrigger() const;
     virtual bool isKilledAtMoveDone() const {
@@ -83,7 +83,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AnmModelBindMove(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual bool isOnStartAnmTrigger() const;
@@ -101,7 +101,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     AnmModelSwitchMoveEventCamera(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isDone() const;
     virtual void startInner();
     virtual void stopInner();

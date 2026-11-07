@@ -83,7 +83,7 @@ public:
     EventSequencer();
 
     virtual ~EventSequencer();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
 
     void startEvent(const char* pName);

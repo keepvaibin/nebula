@@ -5,7 +5,7 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const char* const cDemoName = "\203\112\203\115\217\157\214\273" /* カギ出現 */;
+    static const char* const cDemoName = "カギ出現";
 };  // namespace
 
 namespace NrvKeySwitch {
@@ -22,7 +22,7 @@ KeySwitch::KeySwitch(const char* pName) : LiveActor(pName) {
     mCurDemoFrame = -1;
 }
 
-void KeySwitch::init(const JMapInfoIter& rIter) {
+void KeySwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KeySwitch", 0, false);
     MR::connectToSceneMapObjDecoration(this);
@@ -67,7 +67,7 @@ void KeySwitch::init(const JMapInfoIter& rIter) {
     }
 }
 
-void KeySwitch::initKeySwitchByOwner(const JMapInfoIter& rIter) {
+void KeySwitch::initKeySwitchByOwner(const TableIter& rIter) {
     initWithoutIter();
     MR::needStageSwitchWriteA(this, rIter);
     MR::initActorCamera(this, rIter, &mCameraInfo);

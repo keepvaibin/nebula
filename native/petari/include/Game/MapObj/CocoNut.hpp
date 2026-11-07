@@ -10,7 +10,7 @@ public:
     CocoNut(const char*);
 
     virtual ~CocoNut();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void startClipped();
     virtual void calcAndSetBaseMtx();
@@ -19,9 +19,9 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel();
     void initSensor();
     void initEffect();

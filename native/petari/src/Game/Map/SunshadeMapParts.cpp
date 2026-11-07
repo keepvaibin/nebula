@@ -23,7 +23,7 @@ namespace MR {
 SunshadeMapParts::~SunshadeMapParts() {
 }
 
-void SunshadeMapParts::init(const JMapInfoIter& rIter) {
+void SunshadeMapParts::init(const TableIter& rIter) {
     GeneralMapParts::init(rIter);
     MR::createSunshadeMapHolder();
     mCollision = MR::tryCreateCollisionSunshade(this, getSensor("body"));

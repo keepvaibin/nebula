@@ -11,7 +11,7 @@ public:
     FirePressureBulletHolder(const char* pName);
 
     virtual ~FirePressureBulletHolder();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     FirePressureBullet* callEmptyBullet();
 

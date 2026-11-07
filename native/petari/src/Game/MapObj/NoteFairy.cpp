@@ -44,14 +44,14 @@ NoteFairy::NoteFairy(const char* pName) : LiveActor(pName) {
     mCameraInfo = nullptr;
 }
 
-void NoteFairy::init(const JMapInfoIter& rIter) {
+void NoteFairy::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     s32 noteNum = -1;
-    MR::getJMapInfoArg0WithInit(rIter, &noteNum);
-    MR::getJMapInfoArg1NoInit(rIter, &mAppearanceSpeed);
-    MR::getJMapInfoArg2NoInit(rIter, &mTimeLimit);
+    MR::getPlacementArg0WithInit(rIter, &noteNum);
+    MR::getPlacementArg1NoInit(rIter, &mAppearanceSpeed);
+    MR::getPlacementArg2NoInit(rIter, &mTimeLimit);
     mAppearanceType = -1;
-    MR::getJMapInfoArg3WithInit(rIter, &mAppearanceType);
+    MR::getPlacementArg3WithInit(rIter, &mAppearanceType);
 
     switch (mAppearanceType) {
     case -1:
@@ -70,10 +70,10 @@ void NoteFairy::init(const JMapInfoIter& rIter) {
         break;
     }
 
-    MR::getJMapInfoArg4WithInit(rIter, &mSong);
-    MR::getJMapInfoArg5WithInit(rIter, &mCompletionJingle);
+    MR::getPlacementArg4WithInit(rIter, &mSong);
+    MR::getPlacementArg5WithInit(rIter, &mCompletionJingle);
     s32 arg6;
-    MR::getJMapInfoArg6WithInit(rIter, &arg6);
+    MR::getPlacementArg6WithInit(rIter, &arg6);
 
     if (arg6 > 0) {
         _CF = false;
@@ -82,7 +82,7 @@ void NoteFairy::init(const JMapInfoIter& rIter) {
     }
 
     s32 powerStarType = 0;
-    MR::getJMapInfoArg7NoInit(rIter, &powerStarType);
+    MR::getPlacementArg7NoInit(rIter, &powerStarType);
 
     if (powerStarType != 0) {
         MR::declarePowerStar(this);
@@ -155,7 +155,7 @@ void NoteFairy::init(const JMapInfoIter& rIter) {
             MR::moveCoord(this, mNoteCoord);
         }
 
-        mNoteArray[i] = new Note("\211\271\225\204" /* 音符 */, MR::getRailDirection(this), this);
+        mNoteArray[i] = new Note("音符", MR::getRailDirection(this), this);
         mNoteArray[i]->mPosition.set(stack_24);
         mNoteArray[i]->initWithoutIter();
         mNoteArray[i]->mCounter = mTimeLimit;
@@ -300,7 +300,7 @@ void NoteFairy::exeAppearNoteBloom() {
     }
 
     if (!_CC && !_CD && MR::isStep(this, 60) && mAppearanceType != -1) {
-        MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+        MR::endDemo(this, "出現");
         MR::endActorCamera(this, mCameraInfo, false);
     }
 
@@ -321,7 +321,7 @@ void NoteFairy::exeAppearNoteBloom() {
 
     if (_B0 >= mMelodyNoteNum) {
         if (_CC) {
-            MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+            MR::endDemo(this, "出現");
             MR::endActorCamera(this, mCameraInfo, false);
         }
 
@@ -404,9 +404,9 @@ void NoteFairy::enterDemoAppear(const Nerve* pNerve, bool hasNoFrame) {
     MR::startActorCameraTargetSelf(this, mCameraInfo);
 
     if (hasNoFrame) {
-        MR::requestStartDemo(this, "\217\157\214\273" /* 出現 */, pNerve, nullptr);
+        MR::requestStartDemo(this, "出現", pNerve, nullptr);
     } else {
-        MR::requestStartDemoWithoutCinemaFrame(this, "\217\157\214\273" /* 出現 */, pNerve, nullptr);
+        MR::requestStartDemoWithoutCinemaFrame(this, "出現", pNerve, nullptr);
     }
 
     MR::requestMovementOn(MR::getSceneObj< NoteGroup >(SceneObj_NoteGroup));

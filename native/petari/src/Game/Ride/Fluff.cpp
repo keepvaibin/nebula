@@ -58,7 +58,7 @@ Fluff::Fluff(const char* pName)
     mBaseMtx.identity();
 }
 
-void Fluff::init(const JMapInfoIter& rIter) {
+void Fluff::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::calcActorAxis(&mSide, &mUp, &mFront, this);
@@ -84,9 +84,9 @@ void Fluff::init(const JMapInfoIter& rIter) {
 
     MR::useStageSwitchWriteA(this, rIter);
 
-    mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     MR::setClippingTypeSphere(this, 800.0f);
-    mModel = MR::createModelObjMapObj("\202\355\202\275\202\260\202\314\227\164" /* わたげの葉 */, "FluffLeaf", nullptr);
+    mModel = MR::createModelObjMapObj("わたげの葉", "FluffLeaf", nullptr);
     MR::copyTransRotateScale(this, mModel);
     mModel->initWithoutIter();
     initNerve(GET_NERVE(Fluff, FluffNrvFreeWaitOnGround));

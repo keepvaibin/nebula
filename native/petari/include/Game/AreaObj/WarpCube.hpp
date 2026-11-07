@@ -3,7 +3,7 @@
 #include "Game/AreaObj/AreaObj.hpp"
 
 class ActorCameraInfo;
-class JMapIdInfo;
+class PlacementId;
 
 class WarpCube : public AreaObj {
 public:
@@ -12,11 +12,11 @@ public:
 
     virtual ~WarpCube();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;
 
-    JMapIdInfo* mMapIdInfo;
+    PlacementId* mMapIdInfo;
     ActorCameraInfo* mCameraInfo;
     char* mEventName;
     u16 mInvalidateTimer;

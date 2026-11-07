@@ -42,11 +42,11 @@ bool MarioBlown::start() {
     _24 = false;
     _25 = false;
 
-    changeAnimation("\225\307\203\161\203\142\203\147" /* 壁ヒット */, "\212\356\226\173" /* 基本 */);
-    playSound("\220\272\225\307\221\314\223\226\202\275\202\350" /* 声壁体当たり */);
-    playSound("\225\307\217\325\223\313" /* 壁衝突 */);
+    changeAnimation("壁ヒット", "基本");
+    playSound("声壁体当たり");
+    playSound("壁衝突");
 
-    playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
+    playEffectTrans("壁ヒット", getPlayer()->getWallPos());
 
     getPlayer()->mMovementStates._1 = false;
     getPlayer()->mMovementStates.jumping = true;
@@ -72,7 +72,7 @@ bool MarioBlown::update() {
         addVelocity(_18);
         _18 += mActor->_240 * mActor->getConst().getTable()->mGravityBlown;
         if (mTimer > 120) {
-            changeAnimation("\222\206\203\137\203\201\201\133\203\127\213\363\222\206" /* 中ダメージ空中 */);
+            changeAnimation("中ダメージ空中");
         }
 
         if (mTimer > 60) {
@@ -93,9 +93,9 @@ bool MarioBlown::update() {
             }
 
             if (_14 != 2 || mTimer >= 3) {
-                playSound("\220\201\202\301\224\362\202\321\223\174\202\352" /* 吹っ飛び倒れ */);
-                changeAnimation("\225\307\203\161\203\142\203\147\222\205\222\156" /* 壁ヒット着地 */);
-                playEffect("\213\244\222\312\225\307\203\161\203\142\203\147\222\205\222\156" /* 共通壁ヒット着地 */);
+                playSound("吹っ飛び倒れ");
+                changeAnimation("壁ヒット着地");
+                playEffect("共通壁ヒット着地");
                 MR::vecKillElement(_18, mActor->_240, &_18);
             }
 
@@ -113,7 +113,7 @@ bool MarioBlown::update() {
         addVelocity(_18);
         _18.mult(0.95f);
 
-        if (!isAnimationRun("\225\307\203\161\203\142\203\147\222\205\222\156" /* 壁ヒット着地 */)) {
+        if (!isAnimationRun("壁ヒット着地")) {
             return false;
         }
 
@@ -143,10 +143,10 @@ bool MarioBlown::close() {
         getPlayer()->stopJump();
     }
 
-    stopAnimation("\225\307\203\161\203\142\203\147" /* 壁ヒット */);
+    stopAnimation("壁ヒット");
 
     if (_25) {
-        stopAnimation("\225\307\203\161\203\142\203\147\222\205\222\156" /* 壁ヒット着地 */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("壁ヒット着地", "基本");
     }
 
     mActor->setBlendMtxTimer(6);

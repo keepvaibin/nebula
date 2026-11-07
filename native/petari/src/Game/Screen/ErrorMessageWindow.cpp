@@ -13,10 +13,10 @@ namespace {
     NEW_NERVE(ErrorMessageWindowDisappearBeforeAppear, ErrorMessageWindow, DisappearBeforeAppear);
 };  // namespace
 
-ErrorMessageWindow::ErrorMessageWindow() : LayoutActor("\203\107\203\211\201\133\203\201\203\142\203\132\201\133\203\127\225\134\216\246" /* エラーメッセージ表示 */, false), mMessageId(nullptr), mTexture(nullptr) {
+ErrorMessageWindow::ErrorMessageWindow() : LayoutActor("エラーメッセージ表示", false), mMessageId(nullptr), mTexture(nullptr) {
 }
 
-void ErrorMessageWindow::init(const JMapInfoIter& rIter) {
+void ErrorMessageWindow::init(const TableIter& rIter) {
     initLayoutManagerNoConvertFilename("ErrorMessageWindow", 1);
     initNerve(GET_NERVE_ANON(ErrorMessageWindowHide));
     kill();

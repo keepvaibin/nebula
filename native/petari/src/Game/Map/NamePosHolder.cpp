@@ -1,10 +1,10 @@
 #include "Game/Map/NamePosHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/JMapLinkInfo.hpp"
+#include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-NamePosHolder::NamePosHolder() : NameObj("\210\312\222\165\203\145\201\133\203\165\203\213\225\333\216\235" /* 位置テーブル保持 */), mPosNum(), mInfos() {
+NamePosHolder::NamePosHolder() : NameObj("位置テーブル保持"), mPosNum(), mInfos() {
     mPosNum = MR::getGeneralPosNum();
     mInfos = new NamePosInfo[mPosNum];
 
@@ -19,8 +19,8 @@ NamePosHolder::NamePosHolder() : NameObj("\210\312\222\165\203\145\201\133\203\1
 NamePosInfo::NamePosInfo() {
 }
 
-bool NamePosHolder::tryRegisterLinkObj(const NameObj* pObj, const JMapInfoIter& rIter) {
-    JMapLinkInfo info = JMapLinkInfo(rIter, true);
+bool NamePosHolder::tryRegisterLinkObj(const NameObj* pObj, const TableIter& rIter) {
+    PlacementLink info = PlacementLink(rIter, true);
 
     for (s32 i = 0; i < mPosNum; i++) {
         NamePosInfo* currInfo = &mInfos[i];

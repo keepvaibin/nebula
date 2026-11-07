@@ -36,7 +36,7 @@ namespace NrvBombBirdBomb {
 BombBirdBomb::BombBirdBomb(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f, 1.0f), _9C(0.0f, 0.0f, 0.0f) {
 }
 
-void BombBirdBomb::init(const JMapInfoIter& rIter) {
+void BombBirdBomb::init(const TableIter& rIter) {
     initModelManagerWithAnm("BombBirdBomb", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);

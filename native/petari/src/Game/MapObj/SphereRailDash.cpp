@@ -3,7 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -21,7 +21,7 @@ SphereRailDash::SphereRailDash(const char* pName)
     : LiveActor(pName), _8C(), _90(0.0f, 0.0f, 0.0f), _9C(200.0f), _A0(50.0f), _B0(), _B4(), _B8(), _BC() {
 }
 
-void SphereRailDash::init(const JMapInfoIter& rIter) {
+void SphereRailDash::init(const TableIter& rIter) {
     initNerve(GET_NERVE(SphereRailDash, SphereRailDashNrvWait));
     initRailRider(rIter);
     MR::moveCoordToStartPos(this);
@@ -30,8 +30,8 @@ void SphereRailDash::init(const JMapInfoIter& rIter) {
     MR::addHitSensor(this, "body", ATYPE_SPHERE_DASH, 5, 200.0f, railPosition);
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
-    MR::getJMapInfoArg0NoInit(rIter, &_9C);
-    MR::getJMapInfoArg1NoInit(rIter, &_A0);
+    MR::getPlacementArg0NoInit(rIter, &_9C);
+    MR::getPlacementArg1NoInit(rIter, &_A0);
     appear();
 }
 

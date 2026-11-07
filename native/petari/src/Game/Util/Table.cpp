@@ -1,26 +1,26 @@
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
 #include "Game/Util/ByteView.hpp"
 
-JMapInfo::JMapInfo() {
+Table::Table() {
     mData = nullptr;
     mName = "Undifined";
 }
 
-JMapInfo::~JMapInfo() {
+Table::~Table() {
 }
 
-bool JMapInfo::attach(const void* pData) {
+bool Table::attach(const void* pData) {
     if (pData == nullptr) {
         return false;
     }
-    mData = static_cast< const JMapData* >(pData);
+    mData = static_cast< const TableData* >(pData);
     // A table the importer cooked reads its field count below 64 K; one still big-endian, at least 16 M.
     if (static_cast< u32 >(mData->mNumFields) >= 0x10000) {
         const u8* pHead = static_cast< const u8* >(pData);
-        NEBULA_PANIC("JMapInfo: a table not in host order (the importer cooks it): %02x%02x%02x%02x %02x%02x%02x%02x "
+        NEBULA_PANIC("Table: a table not in host order (the importer cooks it): %02x%02x%02x%02x %02x%02x%02x%02x "
                               "%02x%02x%02x%02x %02x%02x%02x%02x",
                               pHead[0], pHead[1], pHead[2], pHead[3], pHead[4], pHead[5], pHead[6], pHead[7], pHead[8],
                               pHead[9], pHead[10], pHead[11], pHead[12], pHead[13], pHead[14], pHead[15]);
@@ -28,15 +28,15 @@ bool JMapInfo::attach(const void* pData) {
     return true;
 }
 
-void JMapInfo::setName(const char* pName) {
+void Table::setName(const char* pName) {
     mName = pName;
 }
 
-const char* JMapInfo::getName() const {
+const char* Table::getName() const {
     return mName;
 }
 
-s32 JMapInfo::searchItemInfo(const char* pKey) const {
+s32 Table::searchItemInfo(const char* pKey) const {
     if (!dataExists()) {
         return -1;
     }
@@ -53,7 +53,7 @@ s32 JMapInfo::searchItemInfo(const char* pKey) const {
     return -1;
 }
 
-s32 JMapInfo::getValueType(const char* pItem) const {
+s32 Table::getValueType(const char* pItem) const {
     s32 itemId = searchItemInfo(pItem);
 
     if (itemId < 0) {
@@ -62,8 +62,8 @@ s32 JMapInfo::getValueType(const char* pItem) const {
     return mData->mItems[itemId].mType;
 }
 
-bool JMapInfo::getValueFast(int entryIndex, int itemIndex, const char** pValueOut) const {
-    const JMapItem* item = &mData->mItems[itemIndex];
+bool Table::getValueFast(int entryIndex, int itemIndex, const char** pValueOut) const {
+    const TableColumn* item = &mData->mItems[itemIndex];
     const char* valuePtr = getEntryAddress(mData, mData->mDataOffset, entryIndex) + item->mOffsData;
 
     switch (item->mType) {
@@ -82,8 +82,8 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, const char** pValueOu
     return true;
 }
 
-bool JMapInfo::getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const {
-    const JMapItem* item = &mData->mItems[itemIndex];
+bool Table::getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const {
+    const TableColumn* item = &mData->mItems[itemIndex];
     const char* valuePtr = getEntryAddress(mData, mData->mDataOffset, entryIndex) + item->mOffsData;
 
     u32 rawValue;
@@ -106,8 +106,8 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const
     return true;
 }
 
-bool JMapInfo::getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const {
-    const JMapItem* item = &mData->mItems[itemIndex];
+bool Table::getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const {
+    const TableColumn* item = &mData->mItems[itemIndex];
     if (item->mShift != 0) {
         goto FAIL;
     }
@@ -141,20 +141,20 @@ FAIL:
     return false;
 }
 
-JMapInfoIter MR::findJMapInfoElementNoCase(const JMapInfo* pInfo, const char* key, const char* searchValue, int startIndex) {
+TableIter MR::findTableElementNoCase(const Table* pInfo, const char* key, const char* searchValue, int startIndex) {
     int entryIndex = startIndex;
     const char* value;
     while (entryIndex < pInfo->getNumEntries()) {
         pInfo->getValue< const char* >(entryIndex, key, &value);
         if (MR::isEqualStringCase(value, searchValue)) {
-            return JMapInfoIter(pInfo, entryIndex);
+            return TableIter(pInfo, entryIndex);
         }
         entryIndex++;
     }
     return pInfo->end();
 }
 
-JMapInfoIter JMapInfo::findElementBinary(const char* key, const char* value) const {
+TableIter Table::findElementBinary(const char* key, const char* value) const {
     int low = 0;
     int high = getNumEntries();
 
@@ -164,7 +164,7 @@ JMapInfoIter JMapInfo::findElementBinary(const char* key, const char* value) con
         getValue< const char* >(mid, key, &nextVal);
         int comparison = strcmp(nextVal, value);
         if (comparison == 0) {
-            return JMapInfoIter(this, mid);
+            return TableIter(this, mid);
         } else if (comparison < 0) {
             low = mid + 1;
         } else {

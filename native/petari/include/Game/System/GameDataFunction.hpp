@@ -4,7 +4,7 @@
 
 class GameDataHolder;
 class GameDataSomeScenarioAccessor;
-class JMapInfoIter;
+class TableIter;
 
 namespace GameDataFunction {
     bool isDataMario();
@@ -29,7 +29,7 @@ namespace GameDataFunction {
     void setGameEventValue(const char*, u16);
     bool isOnGameEventValueForBit(const char*, int);
     void setGameEventValueForBit(const char*, int, bool);
-    s32 setupAlreadyDoneFlag(const char*, const JMapInfoIter&, u32*);
+    s32 setupAlreadyDoneFlag(const char*, const TableIter&, u32*);
     void updateAlreadyDoneFlag(int, u32);
     void restoreGalaxyCometStatus(int, u16*, u16*);
     void setRaceBestTime(const char*, u32);

@@ -9,7 +9,7 @@ AstroEffectObj::AstroEffectObj(const char* pName) : SimpleEffectObj(pName) {
     _9C = -1;
 }
 
-void AstroEffectObj::init(const JMapInfoIter& rIter) {
+void AstroEffectObj::init(const TableIter& rIter) {
     SimpleEffectObj::init(rIter);
     _9C = AstroMapObjFunction::getDomeIdFromArg0(rIter);
     MR::registerDemoSimpleCastAll(this);

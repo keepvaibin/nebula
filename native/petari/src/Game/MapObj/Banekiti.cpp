@@ -20,7 +20,7 @@ inline void Banekiti::initStarPointer() {
     MR::initStarPointerTarget(this, 120.0f, offset);
 }
 
-void Banekiti::init(const JMapInfoIter& rIter) {
+void Banekiti::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Banekiti", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);

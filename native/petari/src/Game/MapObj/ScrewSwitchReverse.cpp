@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -28,7 +28,7 @@ namespace NrvScrewSwitchReverse {
 ScrewSwitchReverse::ScrewSwitchReverse(const char* pName) : LiveActor(pName), mHost(), mIsForceJump() {
 }
 
-void ScrewSwitchReverse::init(const JMapInfoIter& rIter) {
+void ScrewSwitchReverse::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::needStageSwitchWriteA(this, rIter);
@@ -52,7 +52,7 @@ void ScrewSwitchReverse::init(const JMapInfoIter& rIter) {
 
     s32 shadowLength = ::sDefaultShadowLength;
     f32 arg7 = shadowLength;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
 
     if (arg7 > 0.0f) {
         Vec3f pos(mPosition);
@@ -64,7 +64,7 @@ void ScrewSwitchReverse::init(const JMapInfoIter& rIter) {
         MR::calcGravity(this);
     }
 
-    MR::getJMapInfoArg0NoInit(rIter, &mIsForceJump);
+    MR::getPlacementArg0NoInit(rIter, &mIsForceJump);
 
     initNerve(GET_NERVE(ScrewSwitchReverse, ScrewSwitchReverseNrvWait));
 

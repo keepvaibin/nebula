@@ -11,7 +11,7 @@ public:
     WaterPressureBulletHolder(const char* pName);
 
     virtual ~WaterPressureBulletHolder();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     WaterPressureBullet* callEmptyBullet();
 

@@ -77,7 +77,7 @@ class NPCActor : public LiveActor {
 public:
     NPCActor(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -87,12 +87,12 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     static void addArchive(NameObjArchiveListCollector*, const NPCActorItem&);
-    static void makeArchiveListDefault(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveListDefault(NameObjArchiveListCollector*, const TableIter&);
 
-    bool initTalkCtrl(const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
-    bool initTalkCtrlDirect(const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    bool initTalkCtrl(const TableIter&, const char*, const Vec3f&, MtxPtr);
+    bool initTalkCtrlDirect(const TableIter&, const char*, const Vec3f&, MtxPtr);
     bool calcJointScale(Pos3f*, const JointControllerInfo&);
     bool turnToPlayer();
     bool turnToPlayer(f32);
@@ -134,7 +134,7 @@ public:
 
     void setInitPose();
 
-    void initialize(const JMapInfoIter&, const NPCActorCaps&);
+    void initialize(const TableIter&, const NPCActorCaps&);
 
     void equipment(const NPCActorItem&, bool);
 

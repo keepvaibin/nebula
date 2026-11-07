@@ -18,7 +18,7 @@ public:
     EffectSystem(const char*, bool);
 
     virtual ~EffectSystem();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     ParticleEmitter* createEmitter(u16, u8, u8);
     void forceDeleteEmitter(ParticleEmitter*) const;

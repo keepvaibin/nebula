@@ -1,7 +1,7 @@
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 
 ZoneSwitch::ZoneSwitch() : mFlags(nullptr), mWords(0) {
 }
@@ -36,8 +36,8 @@ void ZoneSwitch::set(int index, bool isOn) {
     }
 }
 
-SwitchIdInfo::SwitchIdInfo(s32 switchID, const JMapInfoIter& rIter) : mIDInfo(), mIsGlobal(switchID >= 1000) {
-    mIDInfo = new JMapIdInfo(switchID, rIter);
+SwitchIdInfo::SwitchIdInfo(s32 switchID, const TableIter& rIter) : mIDInfo(), mIsGlobal(switchID >= 1000) {
+    mIDInfo = new PlacementId(switchID, rIter);
 }
 
 s32 SwitchIdInfo::getSwitchNo() const {
@@ -170,7 +170,7 @@ bool StageSwitchCtrl::isOnAnyOneSwitchAfterB(int index) const {
     return false;
 }
 
-SwitchIdInfo* StageSwitchFunction::createSwitchIdInfo(const char* pSwitchName, const JMapInfoIter& rIter, bool) {
+SwitchIdInfo* StageSwitchFunction::createSwitchIdInfo(const char* pSwitchName, const TableIter& rIter, bool) {
     s32 switchNo;
     bool hasSwitch = rIter.getValue< s32 >(pSwitchName, &switchNo);
 
@@ -216,18 +216,18 @@ bool StageSwitchFunction::isOnSwitchBySwitchIdInfo(const SwitchIdInfo& rIdInfo) 
     return pContainer->getZoneSwitch(rIdInfo)->get(switchNo);
 }
 
-StageSwitchCtrl* MR::createStageSwitchCtrl(NameObj*, const JMapInfoIter& rIter) {
+StageSwitchCtrl* MR::createStageSwitchCtrl(NameObj*, const TableIter& rIter) {
     return new StageSwitchCtrl(rIter);
 }
 
 StageSwitchContainer::~StageSwitchContainer() {
 }
 
-StageSwitchContainer::StageSwitchContainer() : NameObj("\203\130\203\145\201\133\203\127\203\130\203\103\203\142\203\140" /* ステージスイッチ */), mSwitches(), mGlobalSwitches() {
+StageSwitchContainer::StageSwitchContainer() : NameObj("ステージスイッチ"), mSwitches(), mGlobalSwitches() {
     mGlobalSwitches = new ZoneSwitch();
 }
 
-StageSwitchCtrl::StageSwitchCtrl(const JMapInfoIter& rIter) : mSwitchA(), mSwitchB(), mSwitchAppear(), mSwitchDead() {
+StageSwitchCtrl::StageSwitchCtrl(const TableIter& rIter) : mSwitchA(), mSwitchB(), mSwitchAppear(), mSwitchDead() {
     mSwitchA = StageSwitchFunction::createSwitchIdInfo("SW_A", rIter, true);
     mSwitchB = StageSwitchFunction::createSwitchIdInfo("SW_B", rIter, true);
     mSwitchAppear = StageSwitchFunction::createSwitchIdInfo("SW_APPEAR", rIter, false);

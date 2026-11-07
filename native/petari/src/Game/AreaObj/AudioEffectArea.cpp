@@ -7,7 +7,7 @@
 AudioEffectArea::AudioEffectArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(), _40() {
 }
 
-void AudioEffectArea::init(const JMapInfoIter& rIter) {
+void AudioEffectArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 

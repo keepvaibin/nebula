@@ -17,7 +17,7 @@ namespace NrvWalkerStateBlowDamage {
 };  // namespace NrvWalkerStateBlowDamage
 
 WalkerStateBlowDamage::WalkerStateBlowDamage(LiveActor* pHost, Vec3f* pDirection, WalkerStateBlowDamageParam* pBlowDamageParam)
-    : ActorStateBase< LiveActor >("\220\201\202\253\224\362\202\321\203\137\203\201\201\133\203\127\217\363\221\324" /* 吹き飛びダメージ状態 */, pHost), mDirection(pDirection), mBlowDamageParam(pBlowDamageParam) {
+    : ActorStateBase< LiveActor >("吹き飛びダメージ状態", pHost), mDirection(pDirection), mBlowDamageParam(pBlowDamageParam) {
     initNerve(GET_NERVE(WalkerStateBlowDamage, WalkerStateBlowDamageNrvBlow));
 }
 

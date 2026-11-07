@@ -10,7 +10,7 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -53,7 +53,7 @@ inline void PackunPetit::initStarPointer(const char* hitSensor) {
     MR::initStarPointerTargetAtJoint(this, hitSensor, 100.0f, offs);
 }
 
-void PackunPetit::init(const JMapInfoIter& rIter) {
+void PackunPetit::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PackunPetit", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -73,7 +73,7 @@ void PackunPetit::init(const JMapInfoIter& rIter) {
     initStarPointer("Head");
     mScaleController = new AnimScaleController(nullptr);
     mStarPointerState = new WalkerStateBindStarPointer(this, mScaleController);
-    MR::getJMapInfoArg0NoInit(rIter, &mDontTurn);
+    MR::getPlacementArg0NoInit(rIter, &mDontTurn);
     MR::calcFrontVec(&_94, this);
     initBlowModel();
     initNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
@@ -452,7 +452,7 @@ bool PackunPetit::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 void PackunPetit::initBlowModel() {
-    mBlownModel = MR::createModelObjMapObjStrongLight("\220\201\202\301\224\362\202\321\203\202\203\146\203\213" /* 吹っ飛びモデル */, "PackunPetitHead", nullptr);
+    mBlownModel = MR::createModelObjMapObjStrongLight("吹っ飛びモデル", "PackunPetitHead", nullptr);
     mBlownModel->initWithoutIter();
     MR::initShadowVolumeSphere(mBlownModel, 70.0f);
     MR::invalidateClipping(mBlownModel);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Util/Functor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
 
 /// @brief The most basic form of an object.
@@ -15,8 +15,8 @@ public:
     virtual ~NameObj();
 
     /// @brief Intializes the `NameObj` while being placed into a scene.
-    /// @param rIter A reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param rIter A reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter);
 
     /// @brief Intializes the `NameObj` after being placed into a scene.
     virtual void initAfterPlacement();
@@ -29,7 +29,7 @@ public:
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 
-    /// @brief Initializes the `NameObj` without an iterator over a `JMapInfo`.
+    /// @brief Initializes the `NameObj` without an iterator over a `Table`.
     void initWithoutIter();
 
     /// @brief Updates the name of the `NameObj`.
@@ -52,7 +52,7 @@ public:
     void syncWithFlags();
 
     // Loading-only continuation. Actors may yield before the scene is made playable.
-    virtual bool initStep(const JMapInfoIter& iter, uint64_t) { init(iter); return true; }
+    virtual bool initStep(const TableIter& iter, uint64_t) { init(iter); return true; }
 
     const char* mName;  ///< A string to identify the NameObj.
     u16 mFlag;          ///< Flags in relation to movement.

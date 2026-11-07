@@ -52,7 +52,7 @@ void CollisionShadow::setMode(u32 mode) {
     _C = mode;
 }
 
-CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211\145\203\126\203\203\203\150\203\105" /* 投影シャドウ */) {
+CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャドウ") {
     _2F0.zero();
     _300 = nullptr;
     _305 = false;

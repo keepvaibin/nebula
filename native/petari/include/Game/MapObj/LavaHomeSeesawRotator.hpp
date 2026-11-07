@@ -7,7 +7,7 @@ public:
     LavaHomeSeesawRotator(LiveActor*, const char*, f32);
 
     virtual ~LavaHomeSeesawRotator();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool isWorking() const {
         return true;
     }

@@ -30,7 +30,7 @@ KoopaFireStairs::KoopaFireStairs(const char* pName, bool a2)
     : LiveActor(pName), mIsKoopaJr(a2), mStair(), _94(0.0f, 0.0f, 1.0f), _A0(0.0f, 0.0f, 0.0f), _AC(0.0f, 1.0f, 0.0f), mBreakModel() {
 }
 
-void KoopaFireStairs::init(const JMapInfoIter& rIter) {
+void KoopaFireStairs::init(const TableIter& rIter) {
     initModelManagerWithAnm("MeteorStrike", nullptr, false);
     MR::startBrk(this, "MeteorStrike");
 
@@ -49,7 +49,7 @@ void KoopaFireStairs::init(const JMapInfoIter& rIter) {
 
     MR::invalidateClipping(this);
 
-    mBreakModel = MR::createModelObjEnemy("\203\116\203\142\203\160\203\201\203\145\203\111\201\151\211\363\202\352\201\152" /* クッパメテオ（壊れ） */, "MeteorStrikeBreak", getBaseMtx());
+    mBreakModel = MR::createModelObjEnemy("クッパメテオ（壊れ）", "MeteorStrikeBreak", getBaseMtx());
     mBreakModel->kill();
     MR::invalidateClipping(mBreakModel);
 

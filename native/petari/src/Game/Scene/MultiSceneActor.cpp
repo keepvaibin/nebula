@@ -18,7 +18,7 @@ MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool
     mModelManager->init(pModelName, nullptr, param3);
 }
 
-void MultiSceneActor::init(const JMapInfoIter& rIter) {
+void MultiSceneActor::init(const TableIter& rIter) {
 }
 
 void MultiSceneActor::movement() {
@@ -57,7 +57,7 @@ void MultiSceneActor::calcAnim() {
     // The star-select sky (ScenarioSelectLayout) is one quad at z = -1000 sized for 16:9: a wider picture scales it
     // about its centre so it still covers the screen. The base matrix is rotation and translation only.
     if (MR::isScreen16Per9() && MR::getDisplay().wide &&
-        strcmp(mName, "\203\126\203\151\203\212\203\111\221\111\221\360\202\314\213\363" /* シナリオ選択の空 */) == 0) {
+        strcmp(mName, "シナリオ選択の空") == 0) {
         const f32 k = MR::getDisplay().layout_width / NebulaFrameClock::cLayoutWidth;
         if (k > 1.0f) {
             const f32 offsetZ = pModel->mBaseScale.z * (1.0f - k) * -1000.0f;

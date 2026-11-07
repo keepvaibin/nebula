@@ -14,7 +14,7 @@ GalaxyMapTicoIcon::GalaxyMapTicoIcon(int exclamationGalaxyIndex, const char* pGa
     nebula_snprintf(mPaneName, paneNameLen, "%s", pPaneName);
 }
 
-void GalaxyMapTicoIcon::init(const JMapInfoIter&) {
+void GalaxyMapTicoIcon::init(const TableIter&) {
     initLayoutManager("MapTicoIcon", 3);
     MR::startAnim(this, "Appear", 0);
 }

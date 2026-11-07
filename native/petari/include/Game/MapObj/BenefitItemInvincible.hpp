@@ -7,7 +7,7 @@ public:
     BenefitItemInvincible(const char*);
 
     virtual ~BenefitItemInvincible();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appearThrowUp();
     virtual void initModelAndEfx();
     virtual void exeCatch();

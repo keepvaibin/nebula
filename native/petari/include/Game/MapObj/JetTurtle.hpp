@@ -10,7 +10,7 @@ public:
     JetTurtle(const char*);
 
     virtual ~JetTurtle();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void control();
@@ -33,7 +33,7 @@ public:
     void exeRestart();
     void exeDrop();
 
-    void init2(const JMapInfoIter&, s32);
+    void init2(const TableIter&, s32);
     void becomeSlowType();
     void becomeFastType();
     void appearAndTryTaken();
@@ -70,7 +70,7 @@ public:
     }
 
     virtual ~GoldenTurtle();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void resetPosition();
     virtual void reset(u32);
     virtual void exeThrowing();

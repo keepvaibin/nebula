@@ -6,7 +6,7 @@ class DodoryuStateLv1 : public DodoryuStateBase {
 public:
     DodoryuStateLv1(Dodoryu* pHost, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     virtual void start();

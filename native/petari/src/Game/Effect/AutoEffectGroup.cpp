@@ -1,14 +1,14 @@
 #include "Game/Effect/AutoEffectGroup.hpp"
 #include "Game/Effect/AutoEffectInfo.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
 AutoEffectGroup::AutoEffectGroup(const char* pName, int capacity) : mName(pName), mEffects(), mCapacity(), mCount() {
     mEffects = new AutoEffectInfo*[capacity];
     mCapacity = capacity;
 }
 
-void AutoEffectGroup::add(const JMapInfoIter& rIter) {
+void AutoEffectGroup::add(const TableIter& rIter) {
     AutoEffectInfo* pInfo = new AutoEffectInfo;
     pInfo->init(rIter);
     const s32 index = mCount++;
@@ -36,7 +36,7 @@ namespace MR {
         }
 
         AutoEffectGroup* createAutoEffectGroup(const char* pName) {
-            JMapInfoIter iter = findJMapInfoElementNoCase(getAutoEffectListBinary(), "GroupName", pName, 0);
+            TableIter iter = findTableElementNoCase(getAutoEffectListBinary(), "GroupName", pName, 0);
 
             if (!iter.isValid()) {
                 return nullptr;
@@ -46,7 +46,7 @@ namespace MR {
 
             while (iter != getAutoEffectListBinary()->end()) {
                 pGroup->add(iter);
-                iter = findJMapInfoElementNoCase(getAutoEffectListBinary(), "GroupName", pName, iter.mIndex + 1);
+                iter = findTableElementNoCase(getAutoEffectListBinary(), "GroupName", pName, iter.mIndex + 1);
             }
 
             return pGroup;

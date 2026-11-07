@@ -14,7 +14,7 @@ public:
     BreakableCage(const char* pName);
 
     virtual ~BreakableCage();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void calcAndSetBaseMtx();
@@ -25,8 +25,8 @@ public:
         return mCameraInfo;
     }
 
-    void initMapToolInfo(const JMapInfoIter& rIter);
-    void initModel(const char* pName, const JMapInfoIter& rIter);
+    void initMapToolInfo(const TableIter& rIter);
+    void initModel(const char* pName, const TableIter& rIter);
     void initBaseMtxForCage();
     bool isTypeCage() const;
     bool isAppearPowerStar() const;

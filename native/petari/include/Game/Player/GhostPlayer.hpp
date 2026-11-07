@@ -7,7 +7,7 @@ class CameraTargetMtx;
 class FixedPosition;
 class GhostPacket;
 class HitSensor;
-class JMapInfoIter;
+class TableIter;
 class JetTurtleShadow;
 class NameObjArchiveListCollector;
 class RaceManagerLayout;
@@ -24,11 +24,11 @@ namespace MR {
 
 class GhostPlayer : public LiveActor {
 public:
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     GhostPlayer(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void appear();
     virtual void control();

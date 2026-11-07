@@ -12,7 +12,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -79,17 +79,17 @@ namespace NrvNokonokoLand {
 };  // namespace NrvNokonokoLand
 
 NokonokoLand::NokonokoLand(const char* pName)
-    : LiveActor(pName), mJetTurtle(new JetTurtle("\227\244\203\155\203\122\227\160\203\127\203\106\203\142\203\147\213\124" /* 陸ノコ用ジェット亀 */)), mRailPointPassChecker(new MapPartsRailPointPassChecker(this)),
+    : LiveActor(pName), mJetTurtle(new JetTurtle("陸ノコ用ジェット亀")), mRailPointPassChecker(new MapPartsRailPointPassChecker(this)),
       mAnimScaleController(nullptr), mBindStarPointerState(nullptr), mTurtleType(0), mAppearPos(gZeroVec), mTurnAxis(Vec3f(0.0f, 1.0f, 0.0f)) {
     mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void NokonokoLand::init(const JMapInfoIter& rIter) {
+void NokonokoLand::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* pObjectName = nullptr;
     MR::getObjectName(&pObjectName, rIter);
     initModelManagerWithAnm(pObjectName, nullptr, false);
-    MR::getJMapInfoArg0NoInit(rIter, &mTurtleType);
+    MR::getPlacementArg0NoInit(rIter, &mTurtleType);
     MR::startBrk(this, "NokonokoLand");
     MR::setBrkFrameAndStop(this, mTurtleType);
 
@@ -364,7 +364,7 @@ bool NokonokoLand::tryRattle() {
 }
 
 bool NokonokoLand::tryBindStarPointer() {
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         return false;
     }
     if (!isStateWalk()) {

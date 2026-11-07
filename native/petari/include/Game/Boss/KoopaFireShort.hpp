@@ -9,7 +9,7 @@ public:
     KoopaFireShort(const Koopa* pKoopa);
 
     virtual ~KoopaFireShort();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

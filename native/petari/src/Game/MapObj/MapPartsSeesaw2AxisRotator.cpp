@@ -21,14 +21,14 @@ namespace NrvMapPartsSeesaw2AxisRotator {
 };  // namespace NrvMapPartsSeesaw2AxisRotator
 
 MapPartsSeesaw2AxisRotator::MapPartsSeesaw2AxisRotator(LiveActor* pHost, const char* pMoveSound, f32 moveSoundSpeed)
-    : MapPartsRotatorBase(pHost, "\203\126\201\133\203\134\201\133(2\216\262)" /* シーソー(2軸) */), mRotateAngle(), mInertiaConst(::sInertiaConstDefault), mRestoreForce(::sRestoreForceDefault),
+    : MapPartsRotatorBase(pHost, "シーソー(2軸)"), mRotateAngle(), mInertiaConst(::sInertiaConstDefault), mRestoreForce(::sRestoreForceDefault),
       mUp(0.0f, 1.0f, 0.0f), mHipDrop(), mRotateSpeed(), mMoveSound(pMoveSound), mMoveSoundSpeed(moveSoundSpeed) {
     mRotateMtx.identity();
     mBaseMtx.identity();
     mBaseMtxInv.identity();
 }
 
-void MapPartsSeesaw2AxisRotator::init(const JMapInfoIter& rIter) {
+void MapPartsSeesaw2AxisRotator::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeWait));
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
     s32 inertia = 0;

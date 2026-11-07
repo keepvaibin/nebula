@@ -16,8 +16,8 @@ namespace NrvBossStinkBugOpeningDemo {
     NEW_NERVE(BossStinkBugOpeningDemoNrvDemo, BossStinkBugOpeningDemo, Demo);
 };  // namespace NrvBossStinkBugOpeningDemo
 
-BossStinkBugOpeningDemo::BossStinkBugOpeningDemo(BossStinkBug* pStinkBug, const JMapInfoIter& rIter)
-    : BossStinkBugActionBase("\203\111\201\133\203\166\203\152\203\223\203\117\203\146\203\202" /* オープニングデモ */, pStinkBug), mDemoPositionController(nullptr) {
+BossStinkBugOpeningDemo::BossStinkBugOpeningDemo(BossStinkBug* pStinkBug, const TableIter& rIter)
+    : BossStinkBugActionBase("オープニングデモ", pStinkBug), mDemoPositionController(nullptr) {
     initNerve(GET_NERVE(BossStinkBugOpeningDemo, BossStinkBugOpeningDemoNrvDemo));
     mDemoPositionController = new DemoPositionController("BossStinkBugDemo", rIter);
     mDemoPositionController->initAnimCamera("OpeningDemo");
@@ -26,7 +26,7 @@ BossStinkBugOpeningDemo::BossStinkBugOpeningDemo(BossStinkBug* pStinkBug, const 
 void BossStinkBugOpeningDemo::appear() {
     ActorStateBase::appear();
     setNerve(GET_NERVE(BossStinkBugOpeningDemo, BossStinkBugOpeningDemoNrvTryStart));
-    MR::requestStartDemoMarioPuppetable(this, getHost(), "\203\173\203\130\203\112\203\201\203\200\203\126\203\111\201\133\203\166\203\152\203\223\203\117\203\146\203\202" /* ボスカメムシオープニングデモ */,
+    MR::requestStartDemoMarioPuppetable(this, getHost(), "ボスカメムシオープニングデモ",
                                         GET_NERVE(BossStinkBugOpeningDemo, BossStinkBugOpeningDemoNrvDemo), nullptr);
 }
 
@@ -46,7 +46,7 @@ void BossStinkBugOpeningDemo::exeDemo() {
 
     if (MR::isBckStopped(getHost())) {
         mDemoPositionController->endDemo("OpeningDemo");
-        MR::endDemo(getHost(), "\203\173\203\130\203\112\203\201\203\200\203\126\203\111\201\133\203\166\203\152\203\223\203\117\203\146\203\202" /* ボスカメムシオープニングデモ */);
+        MR::endDemo(getHost(), "ボスカメムシオープニングデモ");
         kill();
     }
 }

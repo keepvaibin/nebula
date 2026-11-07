@@ -49,7 +49,7 @@ namespace {
 Candlestand::Candlestand(const char* pName) : MapObjActor(pName), mItem(-1), mHasItemAppear(), mSpinPtclCb() {
 }
 
-void Candlestand::init(const JMapInfoIter& rIter) {
+void Candlestand::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -71,7 +71,7 @@ void Candlestand::init(const JMapInfoIter& rIter) {
     const char* pObjName = mObjectName;
     ::getParam(pObjName);
     ::getParam(pObjName);
-    MR::getJMapInfoArg0NoInit(rIter, &mItem);
+    MR::getPlacementArg0NoInit(rIter, &mItem);
     if (mItem == -1) {
         MR::declareCoin(this, 1);
     }

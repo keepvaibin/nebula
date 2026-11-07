@@ -240,7 +240,7 @@ CameraTargetDemoActor::CameraTargetDemoActor(MtxPtr pMtx, const char* pName) : L
     mMtx.set(pMtx);
 }
 
-void CameraTargetDemoActor::init(const JMapInfoIter& rIter) {
+void CameraTargetDemoActor::init(const TableIter& rIter) {
     LiveActor::init(rIter);
     makeActorAppeared();
 }

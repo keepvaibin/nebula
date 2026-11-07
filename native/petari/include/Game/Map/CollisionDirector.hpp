@@ -11,7 +11,7 @@ public:
     CollisionDirector();
     virtual ~CollisionDirector();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void movement();
 

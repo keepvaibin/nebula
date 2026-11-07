@@ -11,7 +11,7 @@ public:
     Mogucchi(const char*);
     virtual ~Mogucchi();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void kill();

@@ -8,7 +8,7 @@ class GroupSwitchWatcher : public LiveActor {
 public:
     GroupSwitchWatcher(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     StageSwitchCtrl* mSwitchCtrl;

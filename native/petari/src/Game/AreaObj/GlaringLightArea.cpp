@@ -11,7 +11,7 @@ GlaringLightAreaMgr::GlaringLightAreaMgr(s32 maxNum, const char* pName) : AreaOb
 GlaringLightArea::GlaringLightArea(int formType, const char* pName) : AreaObj(formType, pName), mSoundObj(), mPos(0.0f, 0.0f, 0.0f) {
 }
 
-void GlaringLightArea::init(const JMapInfoIter& rIter) {
+void GlaringLightArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     Vec3f pos;

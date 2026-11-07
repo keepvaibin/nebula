@@ -6,7 +6,7 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -20,7 +20,7 @@ namespace {
     };
 
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
-    static const char* sPartName = "\203\116\203\142\203\160\202\151\202\222\201\104\203\146\203\202" /* クッパＪｒ．デモ */;
+    static const char* sPartName = "クッパＪｒ．デモ";
     static const char* sJointNameKoopaJrPos = "obj";
     static const s32 sBgmStartStep = 309;
     static const Anim sAnim[] = {
@@ -42,7 +42,7 @@ namespace {
 DemoKoopaJrShip::DemoKoopaJrShip(const char* pName) : LiveActor(pName), mKoopaJrObj(), mAnimCameraIndex(-1) {
 }
 
-void DemoKoopaJrShip::init(const JMapInfoIter& rIter) {
+void DemoKoopaJrShip::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KoopaJrShip", nullptr, false);
     initAnimID(rIter);
@@ -132,8 +132,8 @@ void DemoKoopaJrShip::control() {
     jointMtx.mult(::sKoopaJrPos, mKoopaJrObj->mPosition);
 }
 
-void DemoKoopaJrShip::initAnimID(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mAnimCameraIndex);
+void DemoKoopaJrShip::initAnimID(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mAnimCameraIndex);
 
     u32 animNum = ARRAY_SIZE(::sAnim);
 
@@ -149,8 +149,8 @@ void DemoKoopaJrShip::initAnimID(const JMapInfoIter& rIter) {
     }
 }
 
-void DemoKoopaJrShip::createKoopaJrObj(const JMapInfoIter& rIter) {
-    mKoopaJrObj = new KoopaJr("\203\116\203\142\203\160Jr" /* クッパJr */);
+void DemoKoopaJrShip::createKoopaJrObj(const TableIter& rIter) {
+    mKoopaJrObj = new KoopaJr("クッパJr");
     mKoopaJrObj->init(rIter);
     mKoopaJrObj->makeActorDead();
 }

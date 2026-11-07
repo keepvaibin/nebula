@@ -5,7 +5,7 @@
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -37,20 +37,20 @@ HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), _15C(-1), mArg0(), _1A0
     _190.zero();
 }
 
-void HoneyBee::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void HoneyBee::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
     NPCActorItem npcItem = objName;
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (MR::getNPCItemData(&npcItem, arg0)) {
         NPCActor::addArchive(pCollector, npcItem);
     }
 }
 
-void HoneyBee::init(const JMapInfoIter& rIter) {
+void HoneyBee::init(const TableIter& rIter) {
     f32 radius;
     NPCActorCaps caps = "HoneyBee";
     caps.setDefault();
@@ -65,7 +65,7 @@ void HoneyBee::init(const JMapInfoIter& rIter) {
     caps._70 = "Center";
 
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     mArg0 = arg0;
 
     setDefaultsParam();

@@ -107,12 +107,12 @@ void MarioActor::resetCondition() {
 
     if (mMario->isStatusActive(MarioStatus_Swim) && inWater) {
         if (_468) {
-            mMario->changeAnimation("\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */);
+            mMario->changeAnimation("水泳ジェット", "水泳ジェット");
         } else {
-            mMario->changeAnimation(nullptr, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+            mMario->changeAnimation(nullptr, "水泳基本");
         }
     } else {
-        mMario->changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+        mMario->changeAnimation(nullptr, "基本");
 
         if (_468) {
             mMarioAnim->waterToGround();
@@ -132,11 +132,11 @@ void MarioActor::resetCondition() {
     mMario->_154.zero();
     mMario->mVerticalSpeed = 0.0f;
     mMario->_474->mIdx = -1;
-    stopEffect("\202\242\202\242\212\276" /* いい汗 */);
-    stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216\203\213\203\103\201\133\203\127" /* ホッパー尻落ルイージ */);
-    stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216" /* ホッパー尻落 */);
-    stopEffect("\220\113\227\216\203\213\203\103\201\133\203\127" /* 尻落ルイージ */);
-    stopEffect("\220\113\227\216" /* 尻落 */);
+    stopEffect("いい汗");
+    stopEffect("ホッパー尻落ルイージ");
+    stopEffect("ホッパー尻落");
+    stopEffect("尻落ルイージ");
+    stopEffect("尻落");
 
     _9C4->kill();
     MR::offCalcAnim(_9C4);
@@ -155,8 +155,8 @@ void MarioActor::beginRush() {
     _924 = _7E4[0];
     mMarioAnim->clearAllJointTransform();
     MR::invalidateHitSensors(this);
-    stopEffect("\213\244\222\312\225\307\216\350\216\103\202\350" /* 共通壁手擦り */);
-    stopEffect("\203\130\203\163\203\223\203\211\203\103\203\147" /* スピンライト */);
+    stopEffect("共通壁手擦り");
+    stopEffect("スピンライト");
     bool spinCatch = selectSpinCatchInRush(_924->mHost->mName);
     if (mPlayerMode == PlayerMode_Bee && selectHideFlyMeter(_924)) {
         MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
@@ -176,7 +176,7 @@ void MarioActor::beginRush() {
     }
 
     if (selectLandEffect(_924)) {
-        playEffect("\223\301\216\352\222\205\222\156" /* 特殊着地 */);
+        playEffect("特殊着地");
     }
 
     switch (_924->mType) {
@@ -379,7 +379,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
                 mMario->mMovementStates.jumping = true;
                 mMario->mMovementStates._1 = false;
             } else {
-                changeAnimation("\212\356\226\173" /* 基本 */);
+                changeAnimation("基本");
             }
 
             updateGravityVec(true, true);
@@ -428,7 +428,7 @@ bool MarioActor::takeSensor(HitSensor* pSensor) {
         return false;
     }
 
-    changeAnimation("\203\112\203\165\224\262\202\253" /* カブ抜き */);
+    changeAnimation("カブ抜き");
     changeNullAnimation("PullOut", -1);
     _424 = pSensor;
     memorizeSensorThrow(pSensor);

@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -71,7 +71,7 @@ SpinningBox::SpinningBox(const char* pName)
       mIsIceBox(false), mSpinAngle(0.0f) {
 }
 
-void SpinningBox::init(const JMapInfoIter& rIter) {
+void SpinningBox::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
     }
@@ -91,7 +91,7 @@ void SpinningBox::init(const JMapInfoIter& rIter) {
 
     if (mIsIceBox) {
         MR::initCollisionParts(this, "IceBox", getSensor("body"), nullptr);
-        setName("\203\101\203\103\203\130\203\173\203\142\203\116\203\130" /* アイスボックス */);
+        setName("アイスボックス");
     } else {
         MR::initCollisionPartsAutoEqualScaleOne(this, "SpinningBox", getSensor("body"), nullptr);
     }
@@ -189,7 +189,7 @@ void SpinningBox::exeWait() {
         MR::validateClipping(this);
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(SpinningBox, HostTypeNrvPointed));
         return;
     }
@@ -220,7 +220,7 @@ void SpinningBox::exeSliding() {
         MR::invalidateClipping(this);
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(SpinningBox, HostTypeNrvPointed));
         return;
     }
@@ -267,7 +267,7 @@ void SpinningBox::exeSpinning() {
         MR::invalidateClipping(this);
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(SpinningBox, HostTypeNrvPointed));
         return;
     }
@@ -328,7 +328,7 @@ void SpinningBox::exePointed() {
     mRotateSpeed *= ::hPointedRotDamp;
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(SpinningBox, HostTypeNrvWait));
     }
 }

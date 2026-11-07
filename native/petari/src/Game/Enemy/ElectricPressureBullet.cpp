@@ -18,7 +18,7 @@ namespace NrvElectricPressureBullet {
 ElectricPressureBullet::ElectricPressureBullet(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f), _98(), _9C(0.0f) {
 }
 
-void ElectricPressureBullet::init(const JMapInfoIter& rIter) {
+void ElectricPressureBullet::init(const TableIter& rIter) {
     initModelManagerWithAnm("ElectricBullet", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);
@@ -82,7 +82,7 @@ void ElectricPressureBullet::exeFly() {
 }
 
 void ElectricPressureBullet::control() {
-    if (MR::isStarPointerPointing2POnTriggerButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnTriggerButton(this, "弱", true, false)) {
         kill();
     }
 }

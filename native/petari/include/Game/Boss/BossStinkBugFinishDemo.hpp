@@ -3,11 +3,11 @@
 #include "Game/Boss/BossStinkBugActionBase.hpp"
 
 class DemoPositionController;
-class JMapInfoIter;
+class TableIter;
 
 class BossStinkBugFinishDemo : public BossStinkBugActionBase {
 public:
-    BossStinkBugFinishDemo(BossStinkBug* pHost, const JMapInfoIter& rIter);
+    BossStinkBugFinishDemo(BossStinkBug* pHost, const TableIter& rIter);
 
     virtual void appear();
 

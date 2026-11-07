@@ -8,7 +8,7 @@ public:
     FirePressureBullet(const char*);
 
     virtual ~FirePressureBullet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);

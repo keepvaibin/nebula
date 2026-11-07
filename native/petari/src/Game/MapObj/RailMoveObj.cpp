@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -35,7 +35,7 @@ RailMoveObj::RailMoveObj(const char* pName) : MapObjActor(pName) {
     _D0 = 0;
 }
 
-void RailMoveObj::init(const JMapInfoIter& rIter) {
+void RailMoveObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -195,7 +195,7 @@ void RailMoveObj::exeMove() {
 RailMoveObjPress::RailMoveObjPress(const char* pName) : RailMoveObj(pName) {
 }
 
-void RailMoveObjPress::init(const JMapInfoIter& rIter) {
+void RailMoveObjPress::init(const TableIter& rIter) {
     RailMoveObj::init(rIter);
     MR::setBodySensorType(this, ATYPE_MAP_OBJ_PRESS);
 }
@@ -217,7 +217,7 @@ void RailMoveIndirectObj::connectToScene(const MapObjActorInitInfo& rInfo) {
     MR::connectToSceneIndirectMapObj(this);
 }
 
-void RailMoveObjSwitchShadow::init(const JMapInfoIter& rIter) {
+void RailMoveObjSwitchShadow::init(const TableIter& rIter) {
     RailMoveObj::init(rIter);
     MR::invalidateShadow(this, 0);
 }
@@ -234,7 +234,7 @@ RailDemoMoveObj::RailDemoMoveObj(const char* pName) : RailMoveObj(pName) {
     mDemoControl = 0;
 }
 
-void RailDemoMoveObj::init(const JMapInfoIter& rIter) {
+void RailDemoMoveObj::init(const TableIter& rIter) {
     RailMoveObj::init(rIter);
     mDemoControl = new DemoCtrlBase(this, mObjectName);
     mDemoControl->init(rIter);
@@ -289,7 +289,7 @@ bool RailDemoMoveObj::endMove() {
 RailRotateMoveObj::RailRotateMoveObj(const char* pName) : RailMoveObj(pName) {
 }
 
-void RailRotateMoveObj::setupInitInfo(const JMapInfoIter& rIter, MapObjActorInitInfo* pInfo) {
+void RailRotateMoveObj::setupInitInfo(const TableIter& rIter, MapObjActorInitInfo* pInfo) {
     pInfo->setupRailRotator();
 }
 

@@ -111,19 +111,19 @@ bool MarioFaint::start() {
 
     if (_18.dot(getPlayer()->mFrontVec) > 0.0f) {
         getPlayer()->setFrontVecKeepUp(_18);
-        changeAnimation("\214\343\225\373\217\254\203\137\203\201\201\133\203\127" /* 後方小ダメージ */);
+        changeAnimation("後方小ダメージ");
     } else {
         getPlayer()->setFrontVecKeepUp(-_18);
-        changeAnimation("\221\117\225\373\217\254\203\137\203\201\201\133\203\127" /* 前方小ダメージ */);
+        changeAnimation("前方小ダメージ");
     }
 
     if (mNoDamage) {
-        changeAnimation("\203\155\201\133\203\137\203\201\201\133\203\127" /* ノーダメージ */);
+        changeAnimation("ノーダメージ");
     }
 
-    playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
-    playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
-    playEffect("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    playSound("声小ダメージ");
+    playSound("ダメージ");
+    playEffect("ダメージ");
     startPadVib(2);
 
     addVelocity(_18);
@@ -152,8 +152,8 @@ bool MarioFaint::start() {
 
 bool MarioFaint::close() {
     if (getPlayer()->getMovementStates()._1) {
-        stopAnimation("\214\343\225\373\217\254\203\137\203\201\201\133\203\127" /* 後方小ダメージ */);
-        stopAnimation("\221\117\225\373\217\254\203\137\203\201\201\133\203\127" /* 前方小ダメージ */, "\212\356\226\173" /* 基本 */);
+        stopAnimation("後方小ダメージ");
+        stopAnimation("前方小ダメージ", "基本");
     }
 
     if (mTookDamage) {

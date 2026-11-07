@@ -1220,7 +1220,7 @@ void Mario::checkBaseTransPoint() {
             continue;
         }
 
-        addTrans(*normal * (hit->_60 - 1.0f), "\202\337\202\350\202\261\202\335" /* めりこみ */);
+        addTrans(*normal * (hit->_60 - 1.0f), "めりこみ");
 
         if (!mMovementStates._1 && mMovementStates.jumping && !isRising() && normal->dot(*getGravityVec()) < -0.99f) {
             addVelocity(mFrontVec, 5.0f);
@@ -1341,7 +1341,7 @@ void Mario::checkHeadPoint() {
         } else if (_1FC.dot(reaction) < 0.0f) {
             mMovementStates._1 = true;
             mJumpVec.zero();
-            changeAnimation("\213\363\222\206\210\352\211\361\223\135" /* 空中一回転 */);
+            changeAnimation("空中一回転");
         }
     }
 
@@ -1600,7 +1600,7 @@ bool Mario::updateBinderInfo() {
             Vec3f horizontal;
 
             if (firstCeiling && (MR::vecKillElement(mJumpVec, normal, &horizontal) < 0.0f || mPrevDrawStates._1E) && calcAngleD(normal) > 100.0f) {
-                if (strcmp(triangle->mSensor->mHost->mName, "\203\175\203\223\203\172\201\133\203\213\202\314\202\323\202\275(\203\116\203\142\203\160\221\104)" /* マンホールのふた(クッパ船) */)) {
+                if (strcmp(triangle->mSensor->mHost->mName, "マンホールのふた(クッパ船)")) {
                     mJumpVec = horizontal;
                 }
 
@@ -1681,7 +1681,7 @@ bool Mario::checkGround() {
 
     Vec3f normal;
 
-    if (isAnimationRun("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */)) {
+    if (isAnimationRun("崖ふんばり")) {
         normal = -*getGravityVec();
     } else {
         normal = *_45C->getNormal(0);
@@ -1737,7 +1737,7 @@ bool Mario::checkGround() {
         count = 4;
     }
 
-    if (isAnimationRun("\225\307\211\237\202\265" /* 壁押し */, 0)) {
+    if (isAnimationRun("壁押し", 0)) {
         count = 4;
     }
 
@@ -1835,7 +1835,7 @@ bool Mario::checkGround() {
                 bool moved = false;
 
                 if (!mMovementStates._8) {
-                    addTrans(mFrontVec * 6.0f, "\221\117\225\373WKFALL" /* 前方WKFALL */);
+                    addTrans(mFrontVec * 6.0f, "前方WKFALL");
                     moved = true;
                 }
 
@@ -1847,24 +1847,24 @@ bool Mario::checkGround() {
                 } else if (!hit[1]) {
                     if ((mMovementStates._1A || mMovementStates._8 || mMovementStates._19) && mSideVec.dot(getWallNorm()) < 0.0f) {
                         if (moved) {
-                            addTrans(-mSideVec * 3.0f - mFrontVec * 6.0f, "+\213\164-\215\266WKFALL" /* +逆-左WKFALL */);
+                            addTrans(-mSideVec * 3.0f - mFrontVec * 6.0f, "+逆-左WKFALL");
                         }
 
                         break;
                     } else {
-                        addTrans(mSideVec * 3.0f, "+\215\266WKFALL" /* +左WKFALL */);
+                        addTrans(mSideVec * 3.0f, "+左WKFALL");
                         moved = true;
                     }
 
                 } else {
                     if ((mMovementStates._1A || mMovementStates._8 || mMovementStates._19) && -mSideVec.dot(getWallNorm()) < 0.0f) {
                         if (moved) {
-                            addTrans(mSideVec * 3.0f - mFrontVec * 6.0f, "+\213\164-\211\105WKFALL" /* +逆-右WKFALL */);
+                            addTrans(mSideVec * 3.0f - mFrontVec * 6.0f, "+逆-右WKFALL");
                         }
 
                         break;
                     } else {
-                        addTrans(-mSideVec * 3.0f, "+\211\105WKFALL" /* +右WKFALL */);
+                        addTrans(-mSideVec * 3.0f, "+右WKFALL");
                         moved = true;
                     }
                 }
@@ -1879,14 +1879,14 @@ bool Mario::checkGround() {
 
                 if (_3CE < 24 && mJumpVec.dot(mFrontVec) >= 0.0f && _960 != CollisionFloorCode_Slide) {
                     if (!mMovementStates._8 && !mMovementStates._32) {
-                        addTrans(mFrontVec * 3.0f, "+\214\343\202\3531WKFALL" /* +後ろ1WKFALL */);
+                        addTrans(mFrontVec * 3.0f, "+後ろ1WKFALL");
                         mDrawStates._A = true;
                     }
 
                 } else {
                     if (!mMovementStates._19) {
                         mDrawStates._18 = true;
-                        addTrans(mFrontVec * -6.0f, "+\214\343\202\3532WKFALL" /* +後ろ2WKFALL */);
+                        addTrans(mFrontVec * -6.0f, "+後ろ2WKFALL");
                         mDrawStates._A = true;
                     }
 
@@ -2187,7 +2187,7 @@ void Mario::updateCubeCode() {
 
     if (MR::getAreaObj("FallsCube", mActor->_2AC) != nullptr) {
         touchWater();
-        playEffectRTZ("\220\205\225\307\203\161\203\142\203\147" /* 水壁ヒット */, mHeadVec, mActor->_2AC);
+        playEffectRTZ("水壁ヒット", mHeadVec, mActor->_2AC);
     }
 
     if (MR::getAreaObj("HeavySteeringCube", mPosition) != nullptr) {

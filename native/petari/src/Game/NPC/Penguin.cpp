@@ -6,7 +6,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -40,12 +40,12 @@ namespace NrvPenguin {
 
 RemovableTurtle::RemovableTurtle(LiveActor* pHost, bool isGolden) {
     if (isGolden) {
-        mShellModel = new TurtlePartsModel(pHost, "\203\171\203\223\203\115\203\223\227\160\203\123\201\133\203\213\203\146\203\223\203\122\203\105\203\211" /* ペンギン用ゴールデンコウラ */, "KouraShine", nullptr,
+        mShellModel = new TurtlePartsModel(pHost, "ペンギン用ゴールデンコウラ", "KouraShine", nullptr,
                                            MR::DrawBufferType_NoSilhouettedMapObjStrongLight, false);
-        mJetTurtle = new GoldenTurtle("\203\123\201\133\203\213\203\146\203\223\215\142\227\205" /* ゴールデン甲羅 */);
+        mJetTurtle = new GoldenTurtle("ゴールデン甲羅");
     } else {
-        mShellModel = new PartsModel(pHost, "\203\171\203\223\203\115\203\223\227\160\203\122\203\105\203\211" /* ペンギン用コウラ */, "Koura", nullptr, MR::DrawBufferType_NoSilhouettedMapObjStrongLight, false);
-        mJetTurtle = new JetTurtle("\203\127\203\106\203\142\203\147\213\124\202\263\202\361" /* ジェット亀さん */);
+        mShellModel = new PartsModel(pHost, "ペンギン用コウラ", "Koura", nullptr, MR::DrawBufferType_NoSilhouettedMapObjStrongLight, false);
+        mJetTurtle = new JetTurtle("ジェット亀さん");
     }
 
     mShellModel->_99 = true;
@@ -84,9 +84,9 @@ bool RemovableTurtle::tryAttach() {
 Penguin::Penguin(const char* pName) : NPCActor(pName), mBehavior(Behavior_Default), mStepToDive() {
 }
 
-void Penguin::init(const JMapInfoIter& rIter) {
+void Penguin::init(const TableIter& rIter) {
     MR::initDefaultPosAndQuat(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mBehavior);
+    MR::getPlacementArg0NoInit(rIter, &mBehavior);
     initModelManagerWithAnm("Penguin", nullptr, false);
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
@@ -123,7 +123,7 @@ void Penguin::init(const JMapInfoIter& rIter) {
     }
 
     s32 color = 0;
-    MR::getJMapInfoArg7NoInit(rIter, &color);
+    MR::getPlacementArg7NoInit(rIter, &color);
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, color);
 

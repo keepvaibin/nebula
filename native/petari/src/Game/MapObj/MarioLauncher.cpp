@@ -15,8 +15,8 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -84,7 +84,7 @@ namespace NrvMarioLauncher {
 };  // namespace NrvMarioLauncher
 
 MarioLauncher::MarioLauncher(const char* pName)
-    : LiveActor(pName), mLayout(), mShell(), mHost(), mIsInAttractor(), mCameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */) {
+    : LiveActor(pName), mLayout(), mShell(), mHost(), mIsInAttractor(), mCameraTargetMtx("カメラターゲットダミー") {
     mEffectMtxSmoke.identity();
     mEffectMtxGravity.identity();
     mPlayerBaseMtx.identity();
@@ -92,12 +92,12 @@ MarioLauncher::MarioLauncher(const char* pName)
     mPlayerMtx.identity();
 }
 
-void MarioLauncher::init(const JMapInfoIter& rIter) {
+void MarioLauncher::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("MarioLauncher", nullptr, false);
     initNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvWait));
 
-    mShell = new MarioLauncherShell("\210\332\223\256\227\160\222\145\212\333" /* 移動用弾丸 */);
+    mShell = new MarioLauncherShell("移動用弾丸");
     mShell->init(rIter);
     mLayout = new MarioLauncherLayout();
     mLayout->init(rIter);
@@ -120,7 +120,7 @@ void MarioLauncher::init(const JMapInfoIter& rIter) {
     MR::declareLauncherFlightCamera();
 
     mLauncherType = LauncherType_Front;
-    MR::getJMapInfoArg0NoInit(rIter, &mLauncherType);
+    MR::getPlacementArg0NoInit(rIter, &mLauncherType);
 
     MR::startBck(this, "Wait");
 
@@ -136,14 +136,14 @@ void MarioLauncher::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void MarioLauncherShell::init(const JMapInfoIter& rIter) {
+void MarioLauncherShell::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     initBinder(::sShellRadius, ::sShellOffset, 8);
     makeActorDead();
 }
 
-void MarioLauncherLayout::init(const JMapInfoIter& rIter) {
+void MarioLauncherLayout::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayout();
 }

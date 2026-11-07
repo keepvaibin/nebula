@@ -8,8 +8,8 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -50,12 +50,12 @@ LavaProminence::LavaProminence(const char* pName)
     _18C.identity();
 }
 
-void LavaProminence::init(const JMapInfoIter& rIter) {
+void LavaProminence::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _16C.setEuler(mRotation);
-    MR::getJMapInfoArg0NoInit(rIter, &mWaitTime);
-    MR::getJMapInfoArg1NoInit(rIter, &mMoveSpeed);
-    MR::getJMapInfoArg3NoInit(rIter, &mMoveRailEndOffset);
+    MR::getPlacementArg0NoInit(rIter, &mWaitTime);
+    MR::getPlacementArg1NoInit(rIter, &mMoveSpeed);
+    MR::getPlacementArg3NoInit(rIter, &mMoveRailEndOffset);
     MR::useStageSwitchReadA(this, rIter);
     const char* name = nullptr;
     MR::getObjectName(&name, rIter);

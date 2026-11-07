@@ -8,7 +8,7 @@ public:
     MagicBell(const char*);
 
     virtual ~MagicBell();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const;
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);

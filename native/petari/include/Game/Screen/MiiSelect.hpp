@@ -29,8 +29,8 @@ public:
     MiiSelect(const char* pName);
 
     /// @brief Intializes the `MiiSelect` while being placed into a scene.
-    /// @param[in] rIter The reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param[in] rIter The reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter);
 
     virtual void calcAnim();
     virtual void appear();

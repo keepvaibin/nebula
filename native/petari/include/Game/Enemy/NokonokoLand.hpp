@@ -11,7 +11,7 @@ class NokonokoLand : public LiveActor {
 public:
     NokonokoLand(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();

@@ -24,7 +24,7 @@ public:
 
     ElectricBall(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)mBaseMtx.mMtx;
@@ -33,7 +33,7 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void initBalls(const JMapInfoIter&);
+    void initBalls(const TableIter&);
     Ball* getNearestBall();
     void startMove();
 

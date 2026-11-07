@@ -3,7 +3,7 @@
 #include "Game/Boss/TripodBossBreakMovement.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -15,10 +15,10 @@ TripodBossFixPartsBase::TripodBossFixPartsBase(const char* pName)
     _8C.identity();
 }
 
-void TripodBossFixPartsBase::init(const JMapInfoIter& rIter) {
+void TripodBossFixPartsBase::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     _BC = mPosition;
-    MR::getJMapInfoArg0NoInit(rIter, &mJointID);
+    MR::getPlacementArg0NoInit(rIter, &mJointID);
     MR::addTripodBossParts(this);
     MR::invalidateClipping(this);
 }
@@ -105,6 +105,6 @@ void TripodBossFixPartsBase::updateTripodMatrix() {
 }
 
 void TripodBossFixPartsBase::initBreakMovement(s32 level) {
-    mBreakMovement = new TripodBossBreakMovement("\216\117\213\162\203\173\203\130\203\160\201\133\203\143\224\152\211\363\213\223\223\256" /* 三脚ボスパーツ破壊挙動 */);
+    mBreakMovement = new TripodBossBreakMovement("三脚ボスパーツ破壊挙動");
     mBreakMovement->setBreakDownLevel(level);
 }

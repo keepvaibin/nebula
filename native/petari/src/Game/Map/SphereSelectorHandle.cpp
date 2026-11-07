@@ -54,9 +54,9 @@ SphereSelectorHandle::SphereSelectorHandle(const char* pName)
     _90.identity();
 }
 
-void SphereSelectorHandle::init(const JMapInfoIter& rIter) {
+void SphereSelectorHandle::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Environment, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_None);
-    MR::getJMapInfoArg0NoInit(rIter, &mIsFileSelectMode);
+    MR::getPlacementArg0NoInit(rIter, &mIsFileSelectMode);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait));
     MR::tryRegisterDemoCast(this, rIter);

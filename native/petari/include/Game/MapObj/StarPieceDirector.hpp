@@ -81,7 +81,7 @@ public:
 
     virtual ~StarPieceShooter();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 

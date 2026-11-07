@@ -15,7 +15,7 @@ namespace NrvLavaBallRisingPlanetLava {
 LavaBallRisingPlanetLava::LavaBallRisingPlanetLava(const char* pName) : MapObjActor(pName) {
 }
 
-void LavaBallRisingPlanetLava::init(const JMapInfoIter& rIter) {
+void LavaBallRisingPlanetLava::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

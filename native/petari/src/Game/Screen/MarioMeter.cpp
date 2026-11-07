@@ -58,9 +58,9 @@ void MarioMeter::deactivate() {
 MarioMeter::~MarioMeter() {
 }
 
-void MarioMeter::init(const JMapInfoIter& rIter) {
-    mHitPointMeter = new MeterLayout("\222\312\217\355HP\203\201\201\133\203\136\201\133" /* 通常HPメーター */, "HitPointMeter");
+void MarioMeter::init(const TableIter& rIter) {
+    mHitPointMeter = new MeterLayout("通常HPメーター", "HitPointMeter");
     mHitPointMeter->initWithoutIter();
-    mSuddenDeathMeter = new SuddenDeathMeter("\203\124\203\150\203\223\203\146\203\130HP\203\201\201\133\203\136\201\133" /* サドンデスHPメーター */, "SuddenDeathMeter");
+    mSuddenDeathMeter = new SuddenDeathMeter("サドンデスHPメーター", "SuddenDeathMeter");
     mSuddenDeathMeter->initWithoutIter();
 }

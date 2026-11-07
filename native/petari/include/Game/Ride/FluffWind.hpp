@@ -8,7 +8,7 @@ class FluffWindEffect : public LiveActor {
 public:
     FluffWindEffect(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void makeActorDead();
     virtual void startClipped();
 
@@ -25,7 +25,7 @@ class FluffWind : public LiveActor {
 public:
     FluffWind(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void makeActorDead();
 
     s32 mNumEffects;

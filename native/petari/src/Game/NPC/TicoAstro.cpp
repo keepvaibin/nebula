@@ -1,15 +1,15 @@
 #include "Game/NPC/TicoAstro.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 
 TicoAstro::TicoAstro(const char* pName) : Tico(pName) {
 }
 
-void TicoAstro::init(const JMapInfoIter& rIter) {
+void TicoAstro::init(const TableIter& rIter) {
     Tico::init(rIter);
     s32 arg2 = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
 
     switch (arg2) {
     case 0:

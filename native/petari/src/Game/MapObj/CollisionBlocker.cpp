@@ -8,7 +8,7 @@ namespace {
 CollisionBlocker::CollisionBlocker(const char* pName) : LiveActor(pName) {
 }
 
-void CollisionBlocker::init(const JMapInfoIter& rIter) {
+void CollisionBlocker::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initHitSensor(1);
 

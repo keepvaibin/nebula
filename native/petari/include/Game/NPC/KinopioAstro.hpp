@@ -22,14 +22,14 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     KinopioAstro(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     bool dispLetter(LayoutActor*) const;
     bool isDispLetterIcon() const;
-    void createLetterIcon(const JMapInfoIter&);
+    void createLetterIcon(const TableIter&);
     bool branchFunc(u32);
     bool eventFunc(u32);
     void startDemo();

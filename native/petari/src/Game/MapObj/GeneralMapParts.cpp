@@ -22,7 +22,7 @@ GeneralMapParts::GeneralMapParts(const char* pName)
       mRailMover(), mRotator(), mGuideDrawer(), mRailPosture(), mIsCameraEnded(), mIsPaused() {
 }
 
-void GeneralMapParts::init(const JMapInfoIter& rIter) {
+void GeneralMapParts::init(const TableIter& rIter) {
     MapParts::init(rIter);
     MR::getMapPartsArgShadowType(&mShadowType, rIter);
     MR::initMapPartsShadow(this, rIter);
@@ -179,7 +179,7 @@ void GeneralMapParts::calcAndSetBaseMtx() {
     }
 }
 
-void GeneralMapParts::initMapPartsFunction(const JMapInfoIter& rIter) {
+void GeneralMapParts::initMapPartsFunction(const TableIter& rIter) {
     mAppearController = new MapPartsAppearController(this);
     mAppearController->init(rIter);
     mFunctionArray.push_back(mAppearController);
@@ -209,7 +209,7 @@ void GeneralMapParts::initMapPartsFunction(const JMapInfoIter& rIter) {
     }
 }
 
-void GeneralMapParts::initSensorType(const JMapInfoIter& rIter) {
+void GeneralMapParts::initSensorType(const TableIter& rIter) {
     if (MR::isMapPartsPressOn(rIter)) {
         MR::setBodySensorTypePress(this);
     } else if (!isFixed()) {
@@ -219,7 +219,7 @@ void GeneralMapParts::initSensorType(const JMapInfoIter& rIter) {
     }
 }
 
-void GeneralMapParts::initGravity(const JMapInfoIter& rIter) {
+void GeneralMapParts::initGravity(const TableIter& rIter) {
     MR::addBaseMatrixFollowTarget(this, rIter, nullptr, nullptr);
 
     if (!MR::isMapPartsShadowTypeNone(mShadowType)) {

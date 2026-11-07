@@ -18,7 +18,7 @@ MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)
 MiiFaceParts::~MiiFaceParts() {
 }
 
-void MiiFaceParts::init(const JMapInfoIter& rIter) {
+void MiiFaceParts::init(const TableIter& rIter) {
     _90 = new u8[mRecipe->getModelBufferSize()];
     mCharModel = new MiiCharModel;
     _D1 = true;

@@ -1,24 +1,24 @@
 #pragma once
 
 class LiveActor;
-class JMapInfoIter;
+class TableIter;
 
 namespace MR {
     class FunctorBase;
 
-    bool useStageSwitchReadA(LiveActor*, const JMapInfoIter&);
-    bool useStageSwitchReadB(LiveActor*, const JMapInfoIter&);
-    bool useStageSwitchReadAppear(LiveActor*, const JMapInfoIter&);
-    void useStageSwitchSleep(LiveActor*, const JMapInfoIter&);
-    bool useStageSwitchWriteA(LiveActor*, const JMapInfoIter&);
-    bool useStageSwitchWriteB(LiveActor*, const JMapInfoIter&);
-    bool useStageSwitchWriteDead(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchReadA(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchReadB(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchReadAppear(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchWriteA(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchWriteB(LiveActor*, const JMapInfoIter&);
-    bool needStageSwitchWriteDead(LiveActor*, const JMapInfoIter&);
+    bool useStageSwitchReadA(LiveActor*, const TableIter&);
+    bool useStageSwitchReadB(LiveActor*, const TableIter&);
+    bool useStageSwitchReadAppear(LiveActor*, const TableIter&);
+    void useStageSwitchSleep(LiveActor*, const TableIter&);
+    bool useStageSwitchWriteA(LiveActor*, const TableIter&);
+    bool useStageSwitchWriteB(LiveActor*, const TableIter&);
+    bool useStageSwitchWriteDead(LiveActor*, const TableIter&);
+    bool needStageSwitchReadA(LiveActor*, const TableIter&);
+    bool needStageSwitchReadB(LiveActor*, const TableIter&);
+    bool needStageSwitchReadAppear(LiveActor*, const TableIter&);
+    bool needStageSwitchWriteA(LiveActor*, const TableIter&);
+    bool needStageSwitchWriteB(LiveActor*, const TableIter&);
+    bool needStageSwitchWriteDead(LiveActor*, const TableIter&);
     bool isValidSwitchA(const LiveActor*);
     bool isValidSwitchB(const LiveActor*);
     bool isValidSwitchAppear(const LiveActor*);

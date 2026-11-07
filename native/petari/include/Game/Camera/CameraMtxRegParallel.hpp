@@ -4,7 +4,7 @@
 
 class CameraMtxRegParallel : public Camera {
 public:
-    CameraMtxRegParallel(const char* pName = "\203\175\203\147\203\212\203\116\203\130\203\214\203\127\203\130\203\136\225\300\215\163\203\112\203\201\203\211" /* マトリクスレジスタ並行カメラ */);
+    CameraMtxRegParallel(const char* pName = "マトリクスレジスタ並行カメラ");
     virtual ~CameraMtxRegParallel();
 
     virtual void reset();

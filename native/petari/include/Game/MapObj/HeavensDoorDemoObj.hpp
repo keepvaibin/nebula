@@ -6,7 +6,7 @@ class HeavensDoorDemoObj : public MapObjActor {
 public:
     HeavensDoorDemoObj(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();
     virtual void connectToScene(const MapObjActorInitInfo&);

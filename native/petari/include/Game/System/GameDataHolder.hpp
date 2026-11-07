@@ -7,7 +7,7 @@ class GameDataPlayerStatus;
 class GameDataSomeScenarioAccessor;
 class GameEventFlagChecker;
 class GameEventValueChecker;
-class JMapInfo;
+class Table;
 class ScenarioProgressTestRun;
 class SpinDriverPathStorage;
 class StarPieceAlmsStorage;
@@ -70,7 +70,7 @@ public:
     GameDataAllGalaxyStorage* mAllGalaxyStorage;
     SpinDriverPathStorage* mSpinDriverPathStorage;
     StarPieceAlmsStorage* mStarPieceAlmsStorage;
-    JMapInfo* mMapInfo;
+    Table* mMapInfo;
     ScenarioProgressTestRun* mScenarioProgressTestRun;
     BinaryDataChunkHolder* mChunkHolder;
     char mName[16];

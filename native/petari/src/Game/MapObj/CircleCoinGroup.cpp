@@ -7,8 +7,8 @@ CircleCoinGroup::CircleCoinGroup(const char* pName) : CoinGroup(pName) {
     mCoinRadius = 200.0f;
 }
 
-void CircleCoinGroup::initCoinArray(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg2NoInit(rIter, &mCoinRadius);
+void CircleCoinGroup::initCoinArray(const TableIter& rIter) {
+    MR::getPlacementArg2NoInit(rIter, &mCoinRadius);
     MR::initDefaultPos(this, rIter);
 }
 
@@ -50,5 +50,5 @@ CircleCoinGroup::~CircleCoinGroup() {
 }
 
 const char* CircleCoinGroup::getCoinName() const {
-    return mIsPurpleCoinGroup ? "\203\160\201\133\203\166\203\213\203\122\203\103\203\223(\211\176\214\140\224\172\222\165)" /* パープルコイン(円形配置) */ : "\203\122\203\103\203\223(\211\176\214\140\224\172\222\165)" /* コイン(円形配置) */;
+    return mIsPurpleCoinGroup ? "パープルコイン(円形配置)" : "コイン(円形配置)";
 }

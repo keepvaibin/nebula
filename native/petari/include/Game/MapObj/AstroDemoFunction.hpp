@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 
 namespace MR {

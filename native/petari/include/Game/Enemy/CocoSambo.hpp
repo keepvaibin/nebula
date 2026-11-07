@@ -9,7 +9,7 @@ class CocoSamboHead : public PartsModel {
 public:
     CocoSamboHead(LiveActor*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -35,7 +35,7 @@ class CocoSambo : public LiveActor {
 public:
     CocoSambo(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();
@@ -44,7 +44,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initMapToolInfo(const JMapInfoIter& rIter);
+    void initMapToolInfo(const TableIter& rIter);
     void initSensor();
     bool isPointing();
     bool tryDpdPointing(const Nerve*);

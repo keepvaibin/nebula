@@ -9,7 +9,7 @@ public:
     /// @brief Creates a new `PictureBookCloseButton`.
     PictureBookCloseButton(bool);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void control();
 

@@ -4,14 +4,14 @@
 
 class ArrowSwitchMulti;
 class ArrowSwitchTarget;
-class JMapIdInfo;
+class PlacementId;
 
 class ArrowSwitchMultiHolder : public DeriveActorGroup< ArrowSwitchMulti > {
 public:
     /// @brief Creates a new `ArrowSwitchMultiHolder`.
     ArrowSwitchMultiHolder();
 
-    ArrowSwitchMulti* findSwitch(const JMapIdInfo*);
+    ArrowSwitchMulti* findSwitch(const PlacementId*);
 };
 
 namespace MR {

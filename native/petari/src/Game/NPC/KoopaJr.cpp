@@ -31,7 +31,7 @@ namespace NrvKoopaJr {
 KoopaJr::KoopaJr(const char* pName) : NPCActor(pName), mIsInvalidAppearStarPiece(), mIsShipBattleTalk() {
 }
 
-void KoopaJr::init(const JMapInfoIter& rIter) {
+void KoopaJr::init(const TableIter& rIter) {
     NPCActor::init(rIter);
     initModelManagerWithAnm("KoopaJr", nullptr, false);
 
@@ -61,7 +61,7 @@ void KoopaJr::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, ::sStarPieceNum);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &KoopaJr::startShipBattleTalk), "\203\116\203\142\203\160Jr\211\357\230\142" /* クッパJr会話 */);
+        MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &KoopaJr::startShipBattleTalk), "クッパJr会話");
     }
 
     MR::onCalcShadow(this, nullptr);

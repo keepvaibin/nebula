@@ -28,7 +28,7 @@ namespace NrvAstroDomeCameraController {
 AstroDomeCameraController::AstroDomeCameraController(const char* pName) : LiveActor(pName), mStartPos(gZeroVec), mEaseRate(), mZeroPos(gZeroVec) {
 }
 
-void AstroDomeCameraController::init(const JMapInfoIter& rIter) {
+void AstroDomeCameraController::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
 
     MR::invalidateClipping(this);

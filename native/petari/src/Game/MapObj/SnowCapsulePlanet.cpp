@@ -18,7 +18,7 @@ SnowCapsulePlanet::SnowCapsulePlanet(const char* pName) : MapObjActor(pName) {
 SnowCapsulePlanet::~SnowCapsulePlanet() {
 }
 
-void SnowCapsulePlanet::init(const JMapInfoIter& rIter) {
+void SnowCapsulePlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoPlanet(&info);

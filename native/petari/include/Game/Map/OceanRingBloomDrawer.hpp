@@ -9,7 +9,7 @@ public:
     OceanRingBloomDrawer(OceanRing*);
 
     virtual ~OceanRingBloomDrawer();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
 
     OceanRing* mRing;

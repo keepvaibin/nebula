@@ -6,7 +6,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -26,7 +26,7 @@ BigBubbleGenerator::BigBubbleGenerator(const char* pName)
     MR::createBigBubbleHolder();
 }
 
-void BigBubbleGenerator::init(const JMapInfoIter& rIter) {
+void BigBubbleGenerator::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AirBubbleGenerator", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -36,20 +36,20 @@ void BigBubbleGenerator::init(const JMapInfoIter& rIter) {
 
     MR::initCollisionParts(this, "AirBubbleGenerator", getSensor(nullptr), nullptr);
     initNerve(GET_NERVE(BigBubbleGenerator, BigBubbleGeneratorNrvNonActive));
-    initFromJMapParam(rIter);
+    initFromPlacementParam(rIter);
     makeActorAppeared();
 }
 
-void BigBubbleGenerator::initFromJMapParam(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mSpawnTimer);
-    if (MR::getJMapInfoArg1NoInit(rIter, &mMinSize)) {
+void BigBubbleGenerator::initFromPlacementParam(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mSpawnTimer);
+    if (MR::getPlacementArg1NoInit(rIter, &mMinSize)) {
         mMinSize /= 100.0f;
     }
-    if (MR::getJMapInfoArg2NoInit(rIter, &mMaxSize)) {
+    if (MR::getPlacementArg2NoInit(rIter, &mMaxSize)) {
         mMaxSize /= 100.0f;
     }
-    MR::getJMapInfoArg3WithInit(rIter, &mLimitterID);
-    MR::getJMapInfoArg4WithInit(rIter, &mShape);
+    MR::getPlacementArg3WithInit(rIter, &mLimitterID);
+    MR::getPlacementArg4WithInit(rIter, &mShape);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::listenStageSwitchOnOffAppear(this, MR::Functor(this, &BigBubbleGenerator::onActive), MR::Functor(this, &BigBubbleGenerator::offActive));

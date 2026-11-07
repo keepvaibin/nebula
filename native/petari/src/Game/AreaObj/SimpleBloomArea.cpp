@@ -5,7 +5,7 @@ SimpleBloomArea::SimpleBloomArea(int formType, const char* pName)
     : ImageEffectArea(IMAGE_EFFECT_TYPE_SIMPLE_BLOOM, formType, pName), mMaskFilterColor(), mThreshold(128), mIntensity(76) {
 }
 
-void SimpleBloomArea::init(const JMapInfoIter& rIter) {
+void SimpleBloomArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::createSimpleBloom();
 

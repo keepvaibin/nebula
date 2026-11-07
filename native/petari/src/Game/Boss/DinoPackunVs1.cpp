@@ -19,7 +19,7 @@ namespace NrvDinoPackunVs1 {
     NEW_NERVE(DinoPackunVs1NrvDownDemo, DinoPackunVs1, DownDemo);
 };  // namespace NrvDinoPackunVs1
 
-DinoPackunVs1::DinoPackunVs1(DinoPackun* pPackun) : DinoPackunSequencer("\203\146\203\102\203\155\203\160\203\142\203\116\203\2231\220\355\226\332\220\151\215\163" /* ディノパックン1戦目進行 */, pPackun) {
+DinoPackunVs1::DinoPackunVs1(DinoPackun* pPackun) : DinoPackunSequencer("ディノパックン1戦目進行", pPackun) {
     mDemo = nullptr;
     mEgg = nullptr;
     mBattleLv1 = nullptr;

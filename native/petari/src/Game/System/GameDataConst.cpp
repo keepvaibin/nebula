@@ -6,10 +6,10 @@
 #include <cstdio>
 
 s32 GameDataConst::getPowerStarNumToOpenGalaxy(const char* pGalaxyName) {
-    JMapInfo info;
+    Table info;
     info.attach(NebulaDataTables::getGalaxyInfoTable());
 
-    JMapInfoIter element = info.findElement< const char* >("name", pGalaxyName, 0);
+    TableIter element = info.findElement< const char* >("name", pGalaxyName, 0);
 
     u32 powerStarNum = 0;
     element.getValue< u32 >("PowerStarNum", &powerStarNum);
@@ -68,10 +68,10 @@ bool GameDataConst::isGalaxyAppearGreenDriver(const char* pGalaxyName) {
 }
 
 u32 GameDataConst::getIncludedGrandGalaxyId(const char* pGalaxyName) {
-    JMapInfo info;
+    Table info;
     info.attach(NebulaDataTables::getGalaxyInfoTable());
 
-    JMapInfoIter element = info.findElement< const char* >("name", pGalaxyName, 0);
+    TableIter element = info.findElement< const char* >("name", pGalaxyName, 0);
 
     u32 grandGalaxyNo = 0;
     element.getValue< u32 >("GrandGalaxyNo", &grandGalaxyNo);

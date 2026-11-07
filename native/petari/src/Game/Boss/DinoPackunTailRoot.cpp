@@ -11,7 +11,7 @@ typedef bool (DinoPackunTailRoot::*func)(Pos3f*, const JointControllerInfo&);
 DinoPackunTailRoot::DinoPackunTailRoot(const char* name, DinoPackun* pPackun) : DinoPackunTailNode(name, pPackun) {
 }
 
-void DinoPackunTailRoot::init(const JMapInfoIter& rIter) {
+void DinoPackunTailRoot::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     makeActorAppeared();
 }

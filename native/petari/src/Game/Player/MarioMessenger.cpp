@@ -5,7 +5,7 @@
 
 #define MSG_SIZE 32
 
-MarioMessenger::MarioMessenger(HitSensor* pSender) : NameObj("\203\175\203\212\203\111\203\201\203\142\203\132\203\223\203\127\203\203\201\133" /* マリオメッセンジャー */), mSender(pSender) {
+MarioMessenger::MarioMessenger(HitSensor* pSender) : NameObj("マリオメッセンジャー"), mSender(pSender) {
     mReceiverArray = new HitSensor*[MSG_SIZE];
     mMsgArray = new u32[MSG_SIZE];
     mArraySize = 0;

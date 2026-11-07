@@ -21,7 +21,7 @@ namespace NrvTombSpiderActionCocoon {
     NEW_NERVE(TombSpiderActionCocoonNrvBreak, TombSpiderActionCocoon, Break);
 };  // namespace NrvTombSpiderActionCocoon
 
-TombSpiderActionCocoon::TombSpiderActionCocoon(TombSpider* pParent) : TombSpiderActionBase(pParent, "\202\334\202\344\217\363\221\324[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* まゆ状態[トゥームスパイダー] */) {
+TombSpiderActionCocoon::TombSpiderActionCocoon(TombSpider* pParent) : TombSpiderActionBase(pParent, "まゆ状態[トゥームスパイダー]") {
 }
 
 void TombSpiderActionCocoon::init() {

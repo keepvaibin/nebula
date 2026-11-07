@@ -7,7 +7,7 @@ class SandCapsulePressGround : public MapObjActor {
 public:
     SandCapsulePressGround(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {
     }

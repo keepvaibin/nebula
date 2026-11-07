@@ -7,8 +7,8 @@ public:
     FirePressure(const char*);
 
     virtual ~FirePressure();
-    virtual void init(const JMapInfoIter&);
-    virtual void initBullet(const JMapInfoIter&);
+    virtual void init(const TableIter&);
+    virtual void initBullet(const TableIter&);
     virtual bool shotBullet(f32);
 
     void calcGunPointFromCannon(Pos3f*);

@@ -4,14 +4,14 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
 namespace {
     static int sActorNumMax = 2560;
 };  // namespace
 
-ClippingActorHolder::ClippingActorHolder() : NameObj("\203\116\203\212\203\142\203\163\203\223\203\117\203\101\203\116\203\136\201\133\225\333\216\235" /* クリッピングアクター保持 */), mActorNum(), _10(), _14(), _18(), _1C(), mViewGroupCtrl(), mPlanets(), mPlanetNum() {
+ClippingActorHolder::ClippingActorHolder() : NameObj("クリッピングアクター保持"), mActorNum(), _10(), _14(), _18(), _1C(), mViewGroupCtrl(), mPlanets(), mPlanetNum() {
     _10 = new ClippingActorInfoList(::sActorNumMax);
     _14 = new ClippingActorInfoList(::sActorNumMax);
     _18 = new ClippingActorInfoList(::sActorNumMax);
@@ -35,10 +35,10 @@ void ClippingActorHolder::registerActor(LiveActor* pActor) {
     mActorNum++;
 }
 
-void ClippingActorHolder::initSystemInfo(LiveActor* pActor, const JMapInfoIter& rIter) {
+void ClippingActorHolder::initSystemInfo(LiveActor* pActor, const TableIter& rIter) {
     s32 viewGroupID = -1;
 
-    if (MR::getJMapInfoViewGroupID(rIter, &viewGroupID)) {
+    if (MR::getPlacementViewGroupID(rIter, &viewGroupID)) {
         mViewGroupCtrl->initActorInfo(find(pActor), viewGroupID);
     }
 }
@@ -86,7 +86,7 @@ const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo
     return ground;
 }
 
-void ClippingActorHolder::entryLodCtrl(LodCtrl* pLodCtrl, const JMapInfoIter& rIter) {
+void ClippingActorHolder::entryLodCtrl(LodCtrl* pLodCtrl, const TableIter& rIter) {
     mViewGroupCtrl->entryLodCtrl(pLodCtrl, rIter);
 }
 
@@ -158,7 +158,7 @@ void ClippingActorHolder::removeFromClippingTarget(LiveActor* pActor) {
     _18->add(pActorInfo);
 }
 
-ClippingActorInfo* ClippingActorHolder::startGroupClipping(LiveActor* pActor, const JMapInfoIter& rIter) {
+ClippingActorInfo* ClippingActorHolder::startGroupClipping(LiveActor* pActor, const TableIter& rIter) {
     ClippingActorInfo* pActorInfo = nullptr;
 
     if (_10->isInList(pActor)) {

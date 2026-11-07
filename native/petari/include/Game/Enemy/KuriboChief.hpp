@@ -16,7 +16,7 @@ class KuriboChief : public LiveActor {
 public:
     KuriboChief(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
@@ -28,8 +28,8 @@ public:
 
     void initSensor();
     void initState();
-    void initKeySwitch(const JMapInfoIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    void initKeySwitch(const TableIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
     bool requestStagger(HitSensor*, HitSensor*);
     bool requestBlowDown(HitSensor*, HitSensor*);
     bool tryFind();

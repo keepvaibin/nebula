@@ -5,7 +5,7 @@
 SwitchSynchronizer::SwitchSynchronizer(const char* pName) : NameObj(pName), mSwitchCtrl(), mIsCheckSameSwitchState(true) {
 }
 
-void SwitchSynchronizer::init(const JMapInfoIter& rIter) {
+void SwitchSynchronizer::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
 
     mSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);

@@ -5,7 +5,7 @@
 class CollisionPartsFilterBase;
 class HitInfo;
 class HitSensor;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class Triangle;
 class TriangleFilterBase;
@@ -63,11 +63,11 @@ namespace MR {
     const char* getFloorCodeString(const Triangle*);
     const char* getWallCodeString(const Triangle*);
     const char* getSoundCodeString(const Triangle*);
-    s32 getFloorCodeIndex(const JMapInfoIter&);
-    s32 getSoundCodeIndex(const JMapInfoIter&);
+    s32 getFloorCodeIndex(const TableIter&);
+    s32 getSoundCodeIndex(const TableIter&);
     s32 getFloorCodeIndex(const Triangle*);
     s32 getWallCodeIndex(const Triangle*);
-    bool isGroundCodeWaterIter(const JMapInfoIter&);
+    bool isGroundCodeWaterIter(const TableIter&);
     bool isGroundCodeDeath(const Triangle*);
     bool isGroundCodeDamage(const Triangle*);
     bool isGroundCodeIce(const Triangle*);

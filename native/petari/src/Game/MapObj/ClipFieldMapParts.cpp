@@ -28,7 +28,7 @@ void ClipFieldMapParts::connectToScene() {
 ClipFieldMapParts::~ClipFieldMapParts() {
 }
 
-void ClipFieldMapParts::init(const JMapInfoIter& rIter) {
+void ClipFieldMapParts::init(const TableIter& rIter) {
     GeneralMapParts::init(rIter);
     MR::needStageSwitchReadA(this, rIter);
     getSensor("body")->setType(ATYPE_CLIP_FIELD_MAP_PARTS);

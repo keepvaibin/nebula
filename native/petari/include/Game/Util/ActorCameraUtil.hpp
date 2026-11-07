@@ -4,15 +4,15 @@
 
 class ActorCameraInfo;
 class CameraTargetArg;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 
 namespace MR {
     void initAnimCamera(const LiveActor*, const ActorCameraInfo*, const char*);
-    ActorCameraInfo* createActorCameraInfo(const JMapInfoIter&);
-    bool createActorCameraInfoIfExist(const JMapInfoIter&, ActorCameraInfo**);
-    bool initActorCamera(const LiveActor*, const JMapInfoIter&, ActorCameraInfo**);
-    bool initMultiActorCamera(const LiveActor*, const JMapInfoIter&, ActorCameraInfo**, const char*);
+    ActorCameraInfo* createActorCameraInfo(const TableIter&);
+    bool createActorCameraInfoIfExist(const TableIter&, ActorCameraInfo**);
+    bool initActorCamera(const LiveActor*, const TableIter&, ActorCameraInfo**);
+    bool initMultiActorCamera(const LiveActor*, const TableIter&, ActorCameraInfo**, const char*);
     bool initMultiActorCameraNoInit(const LiveActor*, ActorCameraInfo*, const char*);
     void initActorCameraProgrammable(const LiveActor*);
     bool startActorCameraNoTarget(const LiveActor*, const ActorCameraInfo*, s32 = -1);

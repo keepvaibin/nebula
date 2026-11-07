@@ -12,7 +12,7 @@ namespace {
 GalaxyMapTitle::GalaxyMapTitle() : LayoutActor("MapTitle", true), mMessageID(nullptr) {
 }
 
-void GalaxyMapTitle::init(const JMapInfoIter& rIter) {
+void GalaxyMapTitle::init(const TableIter& rIter) {
     initLayoutManager("MapTitle", 1);
     initNerve(GET_NERVE_ANON(GalaxyMapTitleHide));
     kill();

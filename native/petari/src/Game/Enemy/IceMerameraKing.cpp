@@ -13,7 +13,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -72,7 +72,7 @@ IceMerameraKing::IceMerameraKing(const char* pName)
       _100(0, 0, 0, 1), _110(0.0f, 0.0f, 0.0f), _11C(0.0f), _120(false), _121(false) {
 }
 
-void IceMerameraKing::init(const JMapInfoIter& rIter) {
+void IceMerameraKing::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         _C8.set(mPosition);
@@ -105,7 +105,7 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     MR::tryRegisterDemoCast(this, rIter);
     mIce.init(6);
     for (s32 i = 0; i < 6; i++) {
-        ThrowingIce* newIce = new ThrowingIce("\223\212\235\261\227\160\202\314\225\130" /* 投擲用の氷 */);
+        ThrowingIce* newIce = new ThrowingIce("投擲用の氷");
         newIce->initWithoutIter();
         mIce.push_back(newIce);
         MR::tryRegisterDemoCast(newIce, rIter);
@@ -116,7 +116,7 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     _A8->initWithoutIter();
     _A8->mRotation.set(mRotation);
     _A8->makeActorDead();
-    _AC = new ModelObj("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, "IceMerameraKingBreak", nullptr, -2, -2, -2, false);
+    _AC = new ModelObj("壊れモデル", "IceMerameraKingBreak", nullptr, -2, -2, -2, false);
     _AC->initWithoutIter();
     _AC->mScale.set(mScale);
     _AC->makeActorDead();
@@ -125,7 +125,7 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     mModelArray = new Meramera*[childNum];
 
     for (s32 i = 0; i < _F0; i++) {
-        mModelArray[i] = new Meramera("\203\201\203\211\203\201\203\211" /* メラメラ */);
+        mModelArray[i] = new Meramera("メラメラ");
         MR::initChildObj(mModelArray[i], rIter, i);
         mModelArray[i]->makeActorDead();
         MR::tryRegisterDemoCast(mModelArray[i], rIter);
@@ -137,11 +137,11 @@ void IceMerameraKing::init(const JMapInfoIter& rIter) {
     mJointController = MR::createJointDelegatorWithNullChildFunc(this, &IceMerameraKing::calcJoint, "JointRoot");
     makeActorAppeared();
     MR::emitEffect(this, "BodyIce");
-    mCameraTarget = new CameraTargetDemoActor(getBaseMtx(), "\203\101\203\116\203\136\201\133\222\215\226\332" /* アクター注目 */);
+    mCameraTarget = new CameraTargetDemoActor(getBaseMtx(), "アクター注目");
     mCameraTarget->initWithoutIter();
     mCameraTarget->mPosition.set(_C8);
     mCameraTarget->mRotation.set(_D4);
-    mCameraTarget->setName("\203\201\203\211\203\114\203\223\222\215\226\332\203\136\201\133\203\121\203\142\203\147" /* メラキン注目ターゲット */);
+    mCameraTarget->setName("メラキン注目ターゲット");
     MR::tryRegisterDemoCast(mCameraTarget, rIter);
 }
 
@@ -205,9 +205,9 @@ void IceMerameraKing::control() {
         MR::startLevelSound(this, "SE_BM_LV_ICEMERAKING_WAIT");
     }
 
-    if (MR::isDemoActive("\203\201\203\211\203\114\203\223\203\111\201\133\203\166\203\152\203\223\203\117" /* メラキンオープニング */)) {
+    if (MR::isDemoActive("メラキンオープニング")) {
         MR::startSystemLevelSE("SE_DM_LV_MUTE_BGM");
-        if (MR::isDemoPartLastStep("\203\112\203\201\203\211\212\361\202\351" /* カメラ寄る */)) {
+        if (MR::isDemoPartLastStep("カメラ寄る")) {
             MR::playLevelMarioPinchBGM(_120);
             _120 = true;
             _121 = true;
@@ -420,10 +420,10 @@ void IceMerameraKing::exeDamage() {
 
     if (MR::isGreaterStep(this, 60)) {
         if (_EC == 1) {
-            if (MR::tryStartDemoRegisteredMarioPuppetable(this, "\223\173\202\350\203\146\203\202" /* 怒りデモ */)) {
+            if (MR::tryStartDemoRegisteredMarioPuppetable(this, "怒りデモ")) {
                 setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd));
             }
-        } else if (MR::tryStartDemoRegisteredMarioPuppetable(this, "\223\173\202\350\203\146\203\202" /* 怒りデモ */)) {
+        } else if (MR::tryStartDemoRegisteredMarioPuppetable(this, "怒りデモ")) {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo1st));
         }
     }
@@ -553,7 +553,7 @@ void IceMerameraKing::exeAngryDemo() {
     }
     MR::playLevelMarioPinchBGM(true);
 
-    if (MR::isDemoPartLastStep("\223\173\202\350\203\146\203\202" /* 怒りデモ */)) {
+    if (MR::isDemoPartLastStep("怒りデモ")) {
         if (!(_EC > 2)) {
             MR::appearStarPiece(this, mPosition - mGravity * 200.0f, 8, 15.0f, 70.0f, false);
         } else {
@@ -607,7 +607,7 @@ void IceMerameraKing::exeDeathDemo() {
     }
 
     if (MR::isActionEnd(this) && MR::isHiddenModel(this) && MR::isHiddenModel(_AC)) {
-        MR::endDemo(this, "\203\201\203\211\203\114\203\223\203\111\201\133\203\166\203\152\203\223\203\117" /* メラキンオープニング */);
+        MR::endDemo(this, "メラキンオープニング");
     }
 
     if (!MR::isDemoActive()) {
@@ -652,8 +652,8 @@ bool IceMerameraKing::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
 
         if (_EC == 0) {
             MR::stopMarioPinchBGMSoon();
-            MR::requestStartTimeKeepDemo(this, "\203\201\203\211\203\114\203\223\203\111\201\133\203\166\203\152\203\223\203\117" /* メラキンオープニング */, GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemo),
-                                         GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemoWait), "\216\200\226\123\203\146\203\202" /* 死亡デモ */);
+            MR::requestStartTimeKeepDemo(this, "メラキンオープニング", GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemo),
+                                         GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemoWait), "死亡デモ");
         } else {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvDamage));
         }
@@ -665,8 +665,8 @@ bool IceMerameraKing::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
         _EC--;
 
         if (_EC == 0) {
-            MR::requestStartTimeKeepDemo(this, "\203\201\203\211\203\114\203\223\203\111\201\133\203\166\203\152\203\223\203\117" /* メラキンオープニング */, GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemo),
-                                         GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemoWait), "\216\200\226\123\203\146\203\202" /* 死亡デモ */);
+            MR::requestStartTimeKeepDemo(this, "メラキンオープニング", GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemo),
+                                         GET_NERVE(IceMerameraKing, HostTypeNrvDeathDemoWait), "死亡デモ");
         } else {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvDamage));
         }
@@ -783,7 +783,7 @@ namespace {
     static const char* hScaleJointName[] = {"WideInSide", "WideOutSide", "Hirgh1"};
 };  // namespace
 
-IceMerameraKingShockWave::IceMerameraKingShockWave() : ModelObj("\217\325\214\202" /* 衝撃 */, "IceMerameraKingShock", nullptr, -2, -2, -2, false) {
+IceMerameraKingShockWave::IceMerameraKingShockWave() : ModelObj("衝撃", "IceMerameraKingShock", nullptr, -2, -2, -2, false) {
     initHitSensor(2);
     MR::addHitSensorEnemyAttack(this, "circle", 16, 15.0f, Vec3f(0.0f, -100.0f, 0.0f));
     MR::addHitSensorEnemyAttack(this, "circle_end", 16, 24.0f, Vec3f(0.0f, -100.0f, 0.0f));

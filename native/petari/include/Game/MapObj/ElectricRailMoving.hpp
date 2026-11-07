@@ -7,10 +7,10 @@
 
 class ElectricRailMovingPoint : public LiveActor {
 public:
-    ElectricRailMovingPoint(const char* pName = "\210\332\223\256\223\144\214\202\203\214\201\133\203\213\223\137" /* 移動電撃レール点 */);
+    ElectricRailMovingPoint(const char* pName = "移動電撃レール点");
 
     virtual ~ElectricRailMovingPoint();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     u8 _8C;
@@ -22,15 +22,15 @@ public:
     ElectricRailMoving(const char*);
 
     virtual ~ElectricRailMoving();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void drawWith(MaterialDraw& rMaterial) const;
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void disappear();
     bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*) const;
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initSensor();
-    void initRail(const JMapInfoIter&);
+    void initRail(const TableIter&);
     void initPoints();
     void initMesh();
     void drawRail(TypedDraw& rDraw, f32) const;

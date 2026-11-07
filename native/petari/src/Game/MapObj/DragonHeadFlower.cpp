@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -43,7 +43,7 @@ namespace {
     }
 };  // namespace
 
-void DragonHeadFlower::init(const JMapInfoIter& rIter) {
+void DragonHeadFlower::init(const TableIter& rIter) {
     const char* pModelName = nullptr;
 
     if (!MR::getObjectName(&pModelName, rIter)) {

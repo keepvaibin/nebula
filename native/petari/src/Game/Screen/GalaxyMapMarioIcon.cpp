@@ -2,10 +2,10 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 
-GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("\203\175\203\212\203\111" /* マリオ */, true), _20(pParam1), _24(pParam2) {
+GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("マリオ", true), _20(pParam1), _24(pParam2) {
 }
 
-void GalaxyMapMarioIcon::init(const JMapInfoIter& rIter) {
+void GalaxyMapMarioIcon::init(const TableIter& rIter) {
     f32 animFrame;
 
     initLayoutManager("IconMario", 2);

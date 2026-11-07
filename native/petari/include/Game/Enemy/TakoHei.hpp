@@ -11,7 +11,7 @@ public:
     TakoHei(const char*);
 
     virtual ~TakoHei();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();

@@ -10,7 +10,7 @@ public:
     NoteFairy(const char*);
 
     virtual ~NoteFairy();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);

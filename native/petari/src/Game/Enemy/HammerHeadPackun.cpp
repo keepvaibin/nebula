@@ -8,8 +8,8 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointRumbler.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -55,7 +55,7 @@ namespace {
     NEW_NERVE_ONEND(HammerHeadPackunNrvNumb, HammerHeadPackun, Numb, Numb);
 };  // namespace
 
-void HammerHeadPackun::init(const JMapInfoIter& rIter) {
+void HammerHeadPackun::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initPosture();
     initModelManagerWithAnm("PackunFlower", nullptr, false);
@@ -289,7 +289,7 @@ void HammerHeadPackun::exeNumb() {
         mJointRumbler->start();
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mNumbTime = 0;
     }
 
@@ -329,7 +329,7 @@ inline bool HammerHeadPackun::checkBlowAttack() const {
 
 void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!checkBlowAttack() && MR::isSensor(pSender, "blow") && MR::getSensorHost(pReceiver) &&
-        !strcmp(MR::getSensorHost(pReceiver)->mName, "\203\160\203\223\203\140\203\223\203\117\203\114\203\155\203\122" /* パンチングキノコ */)) {
+        !strcmp(MR::getSensorHost(pReceiver)->mName, "パンチングキノコ")) {
         f32 recvRadius = pReceiver->mRadius;
         f32 sendRadius = pSender->mRadius;
         f32 temp = recvRadius / (sendRadius + recvRadius);
@@ -440,20 +440,20 @@ void HammerHeadPackun::initShadow() {
     mGravity.set(-_94);
 }
 
-inline s32 JMapInfo_getEntries(const JMapInfo* jmap) {
-    return jmap->mData ? (s32)jmap->mData->mNumEntries : 0;
+inline s32 tableEntries(const Table* table) {
+    return table->mData ? (s32)table->mData->mNumEntries : 0;
 }
 
-inline bool JMapInfo_inRange(const JMapInfoIter& rIter) {
-    return rIter.mInfo && rIter.mIndex >= 0 && rIter.mIndex < JMapInfo_getEntries(rIter.mInfo);
+inline bool Placement_inRange(const TableIter& rIter) {
+    return rIter.mInfo && rIter.mIndex >= 0 && rIter.mIndex < tableEntries(rIter.mInfo);
 }
 
-void HammerHeadPackun::initLeaf(const JMapInfoIter& rIter) {
-    mLeafModel = new PartsModel(this, "\203\160\203\142\203\116\203\223\202\314\227\164" /* パックンの葉 */, "PackunLeaf", nullptr, 18, false);
+void HammerHeadPackun::initLeaf(const TableIter& rIter) {
+    mLeafModel = new PartsModel(this, "パックンの葉", "PackunLeaf", nullptr, 18, false);
     MR::initLightCtrl(mLeafModel);
     s32 arg = -1;
-    if (JMapInfo_inRange(rIter)) {
-        MR::getJMapInfoArg0NoInit(rIter, &arg);
+    if (Placement_inRange(rIter)) {
+        MR::getPlacementArg0NoInit(rIter, &arg);
     }
 
     if (arg > 0) {
@@ -557,7 +557,7 @@ void HammerHeadPackun::verticalizeFrontVec() {
 }
 
 bool HammerHeadPackun::tryShiftNumb() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb));
         return true;
     }

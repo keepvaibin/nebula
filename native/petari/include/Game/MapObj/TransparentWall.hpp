@@ -7,7 +7,7 @@ public:
     TransparentWall(const char*);
 
     virtual ~TransparentWall();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     s32 _BC;

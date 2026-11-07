@@ -8,7 +8,7 @@ class ChipCounter : public LayoutActor {
 public:
     ChipCounter(const char*, s32);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void setCount(s32);

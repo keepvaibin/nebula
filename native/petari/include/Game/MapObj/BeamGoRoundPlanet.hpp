@@ -10,7 +10,7 @@ public:
     BeamGoRoundBeam(MtxPtr);
 
     virtual ~BeamGoRoundBeam();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void calcAndSetBaseMtx();
     virtual void updateHitSensor(HitSensor*);
@@ -26,7 +26,7 @@ public:
     BeamGoRoundPlanet(const char*);
 
     virtual ~BeamGoRoundPlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 
     void initBeam();

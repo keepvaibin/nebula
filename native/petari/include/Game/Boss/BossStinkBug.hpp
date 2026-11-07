@@ -22,7 +22,7 @@ public:
 
     BossStinkBug(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -34,7 +34,7 @@ public:
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void start();
-    void initCamera(const JMapInfoIter&);
+    void initCamera(const TableIter&);
     void initSensor();
     void initCollision();
     void disposeBomb();

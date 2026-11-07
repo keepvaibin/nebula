@@ -18,7 +18,7 @@ SoundEmitterCube::~SoundEmitterCube() {
 SoundEmitterCube::SoundEmitterCube(int formType, const char* pName) : AreaObj(formType, pName), mSoundObj(), _40(0.0f, 0.0f, 0.0f), mSoundName() {
 }
 
-void SoundEmitterCube::init(const JMapInfoIter& rIter) {
+void SoundEmitterCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mSoundName = ::cSoundNameTable[mObjArg0];

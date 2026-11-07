@@ -46,7 +46,7 @@ MapObjActor::MapObjActor(const char* pName, const char* pObjName)
       mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)) {
 }
 
-void MapObjActor::init(const JMapInfoIter& rIter) {
+void MapObjActor::init(const TableIter& rIter) {
     if (mObjectName != nullptr) {
         return;
     }
@@ -109,7 +109,7 @@ void MapObjActor::kill() {
     LiveActor::kill();
 }
 
-void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInfo& rInfo) {
+void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& rInfo) {
     bool hasRail = MR::isConnectedWithRail(rIter);
     if (rInfo.mSetDefaultPosition) {
         MR::initDefaultPos(this, rIter);
@@ -560,10 +560,10 @@ bool MapObjActor::tryCreateBreakModel(const MapObjActorInitInfo& rInfo) {
 
     if (MR::isEqualString(mObjectName, "SandUpDownTowerBreakableWallB")) {
         MtxPtr baseMtx = getBaseMtx();
-        mModelObj = MR::createModelObjMapObj("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, buf, baseMtx);
+        mModelObj = MR::createModelObjMapObj("壊れモデル", buf, baseMtx);
     } else {
         MtxPtr baseMtx = getBaseMtx();
-        mModelObj = MR::createModelObjMapObjStrongLight("\211\363\202\352\203\202\203\146\203\213" /* 壊れモデル */, buf, baseMtx);
+        mModelObj = MR::createModelObjMapObjStrongLight("壊れモデル", buf, baseMtx);
     }
 
     mModelObj->makeActorDead();

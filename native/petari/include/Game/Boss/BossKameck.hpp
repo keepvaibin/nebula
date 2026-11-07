@@ -15,7 +15,7 @@ class BossKameck : public LiveActor {
 public:
     BossKameck(const char*, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorDead();
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -34,8 +34,8 @@ public:
     void setPose(MtxPtr);
     void killAllBeam();
     void updatePose();
-    void initKameckHolder(const JMapInfoIter&);
-    void initMoveRail(const JMapInfoIter&);
+    void initKameckHolder(const TableIter&);
+    void initMoveRail(const TableIter&);
     void appearStarPieceToUp(s32);
     void startDemo();
     void hitBeam(s32);

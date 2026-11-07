@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
@@ -28,9 +28,9 @@ PenguinStudent::PenguinStudent(const char* pName) : NPCActor(pName) {
     _15C = -1;
 }
 
-void PenguinStudent::init(const JMapInfoIter& rIter) {
+void PenguinStudent::init(const TableIter& rIter) {
     MR::initDefaultPosAndQuat(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &_15C);
+    MR::getPlacementArg0NoInit(rIter, &_15C);
     initModelManagerWithAnm("Penguin", nullptr, false);
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
@@ -59,7 +59,7 @@ void PenguinStudent::init(const JMapInfoIter& rIter) {
         setNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvSlow));
     } else {
         s32 arg1 = 10;
-        MR::getJMapInfoArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg1NoInit(rIter, &arg1);
         _168 = 100.0f * arg1;
     }
 
@@ -67,7 +67,7 @@ void PenguinStudent::init(const JMapInfoIter& rIter) {
     _110 = 0.3f;
     MR::useStageSwitchReadA(this, rIter);
     s32 arg7 = 0;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, arg7);
     MR::onCalcShadow(this, nullptr);

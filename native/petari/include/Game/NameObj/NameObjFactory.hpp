@@ -2,10 +2,10 @@
 
 class NameObj;
 class NameObjArchiveListCollector;
-class JMapInfoIter;
+class TableIter;
 
 typedef NameObj* (*CreatorFuncPtr)(const char*);
-typedef void (*ArchiveFuncPtr)(NameObjArchiveListCollector*, const JMapInfoIter&);
+typedef void (*ArchiveFuncPtr)(NameObjArchiveListCollector*, const TableIter&);
 
 namespace {
     template < typename T >
@@ -33,9 +33,9 @@ namespace NameObjFactory {
     };
 
     CreatorFuncPtr getCreator(const char*);
-    void requestMountObjectArchives(const char*, const JMapInfoIter&);
-    bool isReadResourceFromStore(const char*, const JMapInfoIter&);
+    void requestMountObjectArchives(const char*, const TableIter&);
+    bool isReadResourceFromStore(const char*, const TableIter&);
     bool isPlayerArchiveLoaderObj(const char*);
     const Name2CreateFunc* getName2CreateFunc(const char*, const Name2CreateFunc*);
-    void getMountObjectArchiveList(NameObjArchiveListCollector*, const char*, const JMapInfoIter&);
+    void getMountObjectArchiveList(NameObjArchiveListCollector*, const char*, const TableIter&);
 };  // namespace NameObjFactory

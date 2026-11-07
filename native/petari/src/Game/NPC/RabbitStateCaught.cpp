@@ -30,7 +30,7 @@ namespace NrvRabbitStateCaught {
 };  // namespace NrvRabbitStateCaught
 
 RabbitStateCaught::RabbitStateCaught(LiveActor* pHost, TalkMessageCtrl* pTalkCtrl)
-    : ActorStateBase("\202\244\202\263\202\254\225\337\202\334\202\350\217\363\221\324" /* うさぎ捕まり状態 */, pHost), mCaughtStartMarioQuat(0.0f, 0.0f, 0.0f, 1.0f), mCaughtStartMarioTrans(0.0f, 0.0f, 0.0f),
+    : ActorStateBase("うさぎ捕まり状態", pHost), mCaughtStartMarioQuat(0.0f, 0.0f, 0.0f, 1.0f), mCaughtStartMarioTrans(0.0f, 0.0f, 0.0f),
       mTalkCtrl(pTalkCtrl), mPowerStarModel(), mUsePowerStarModel(true) {
     mCaughtLandMarioBaseMtx.identity();
 }
@@ -43,7 +43,7 @@ void RabbitStateCaught::init() {
     initNerve(GET_NERVE(RabbitStateCaught, RabbitStateCaughtNrvCaught));
 
     if (mUsePowerStarModel) {
-        mPowerStarModel = MR::createPowerStarDemoModel(mHost, "\203\160\203\217\201\133\203\130\203\136\201\133\203\146\203\202\203\202\203\146\203\213" /* パワースターデモモデル */, mCaughtLandMarioBaseMtx);
+        mPowerStarModel = MR::createPowerStarDemoModel(mHost, "パワースターデモモデル", mCaughtLandMarioBaseMtx);
         mPowerStarModel->initWithoutIter();
         MR::invalidateClipping(mPowerStarModel);
         mPowerStarModel->makeActorDead();
@@ -53,7 +53,7 @@ void RabbitStateCaught::init() {
 void RabbitStateCaught::appear() {
     mIsDead = false;
 
-    MR::requestStartDemoMarioPuppetable(this, mHost, "\225\337\202\334\202\350" /* 捕まり */, GET_NERVE(RabbitStateCaught, RabbitStateCaughtNrvCaught),
+    MR::requestStartDemoMarioPuppetable(this, mHost, "捕まり", GET_NERVE(RabbitStateCaught, RabbitStateCaughtNrvCaught),
                                         GET_NERVE(RabbitStateCaught, RabbitStateCaughtNrvTryStartDemo));
 }
 

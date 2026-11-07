@@ -20,7 +20,7 @@ class NebulaAchievementToast : public LayoutActor {
 public:
     NebulaAchievementToast();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     // GameScene: one frame of play, and the drawing at the end of its 2D.

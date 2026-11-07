@@ -4,7 +4,7 @@
 
 class CameraTowerPos : public CameraTowerBase {
 public:
-    CameraTowerPos(const char* pName = "\223\203\203\112\203\201\203\211\201\151\203\124\203\165\203\136\201\133\203\121\203\142\203\147\225\164\202\253\201\152" /* 塔カメラ（サブターゲット付き） */);
+    CameraTowerPos(const char* pName = "塔カメラ（サブターゲット付き）");
     virtual ~CameraTowerPos();
 
     virtual void reset();

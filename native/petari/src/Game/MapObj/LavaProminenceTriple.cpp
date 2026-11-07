@@ -23,7 +23,7 @@ LavaProminenceTriple::LavaProminenceTriple(const char* pName)
     mBloomMtx.identity();
 }
 
-void LavaProminenceTriple::init(const JMapInfoIter& rIter) {
+void LavaProminenceTriple::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Quat4f rot;
     rot.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
@@ -31,8 +31,8 @@ void LavaProminenceTriple::init(const JMapInfoIter& rIter) {
     rot.getXDir(mSide);
     mBaseRot = rot;
 
-    MR::getJMapInfoArg0NoInit(rIter, &mRotateVel);
-    MR::getJMapInfoArg1NoInit(rIter, &mDefaultAppearTime);
+    MR::getPlacementArg0NoInit(rIter, &mRotateVel);
+    MR::getPlacementArg1NoInit(rIter, &mDefaultAppearTime);
     mAppearTime = mDefaultAppearTime;
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {

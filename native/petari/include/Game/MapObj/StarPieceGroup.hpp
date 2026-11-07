@@ -8,7 +8,7 @@ class StarPieceGroup : public LiveActor {
 public:
     StarPieceGroup(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void makeActorAppeared();
     virtual void makeActorDead();

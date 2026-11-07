@@ -36,11 +36,11 @@
 
 
 namespace {
-    char sWipeCircle[] = "\211\176\203\217\203\103\203\166" /* 円ワイプ */;
-    char sWipeFade[] = "\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */;
-    char sWipeWhiteFade[] = "\224\222\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* 白フェードワイプ */;
-    char sWipeGameOver[] = "\203\121\201\133\203\200\203\111\201\133\203\157\201\133" /* ゲームオーバー */;
-    char sWipeKoopa[] = "\203\116\203\142\203\160" /* クッパ */;
+    char sWipeCircle[] = "円ワイプ";
+    char sWipeFade[] = "フェードワイプ";
+    char sWipeWhiteFade[] = "白フェードワイプ";
+    char sWipeGameOver[] = "ゲームオーバー";
+    char sWipeKoopa[] = "クッパ";
     char sSoundOneUp[] = "SE_SY_1UP";
 
     CaptureScreenDirector* getCaptureScreenDirector() {

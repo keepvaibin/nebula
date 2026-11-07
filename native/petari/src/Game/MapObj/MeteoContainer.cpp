@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -18,7 +18,7 @@ namespace NrvMeteoContainer {
 MeteoContainer::MeteoContainer(const char* pName) : LiveActor(pName) {
 }
 
-void MeteoContainer::init(const JMapInfoIter& rIter) {
+void MeteoContainer::init(const TableIter& rIter) {
     const char* objName = nullptr;
 
     if (!MR::getObjectName(&objName, rIter)) {

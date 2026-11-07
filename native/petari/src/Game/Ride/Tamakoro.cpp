@@ -118,7 +118,7 @@ Tamakoro::Tamakoro(const char* pName)
     mBgmCtrl = new AudTamakoroBgmCtrl();
 }
 
-void Tamakoro::init(const JMapInfoIter& rIter) {
+void Tamakoro::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Tamakoro", nullptr, false);
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_IndirectMapObjStrongLight, MR::DrawType_None);
@@ -140,7 +140,7 @@ void Tamakoro::init(const JMapInfoIter& rIter) {
 
     if (mHasTutorial) {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvStandByTutorial));
-        mTutorial = new TamakoroTutorial("\203\136\203\175\203\122\203\215\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* タマコロチュートリアル */);
+        mTutorial = new TamakoroTutorial("タマコロチュートリアル");
         mTutorial->mHost = this;
         MR::initChildObj(mTutorial, rIter, 0);
     }
@@ -608,7 +608,7 @@ void Tamakoro::exeBindStartLand() {
 
 void Tamakoro::exeTutorial() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */);
+        MR::startBckPlayerJ("タマコロ移動");
         MR::zeroVelocity(this);
         mAccelDir.zero();
         mAccelRate = 0.0f;
@@ -632,7 +632,7 @@ void Tamakoro::exeTutorial() {
 
 void Tamakoro::exeWait() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */);
+        MR::startBckPlayerJ("タマコロ移動");
     }
     reactionCollision();
     addVelocityOperate();
@@ -728,7 +728,7 @@ void Tamakoro::exeJumpHole() {
     if (MR::isFirstStep(this)) {
         MR::tryRumblePadWeak(this, PLAYER_1);
         MR::offBind(this);
-        MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\202\265\202\341\202\252\202\335" /* タマコロしゃがみ */);
+        MR::startBckPlayerJ("タマコロしゃがみ");
         mAccelDir.zero();
         mAccelRate = 0.0f;
         mMarioOffsetVelocity = 0.0f;
@@ -809,7 +809,7 @@ void Tamakoro::exeDashRailEnd() {
 
 void Tamakoro::exeRideRail() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */);
+        MR::startBckPlayerJ("タマコロ移動");
         MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 

@@ -15,7 +15,7 @@ namespace {
     public:
         Pulse(const char* pName) : LiveActor(pName), mBase(0.0f), mTime(0) {}
 
-        virtual void init(const JMapInfoIter& rIter) {
+        virtual void init(const TableIter& rIter) {
             if (rIter.isValid()) {
                 MR::initDefaultPos(this, rIter);
             }

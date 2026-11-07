@@ -16,7 +16,7 @@ public:
 
     virtual ~BombTeresa() {
     }
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void control();
@@ -29,7 +29,7 @@ public:
 
     void initTongue();
     void initSensor();
-    void initFromJMapParam(const JMapInfoIter&);
+    void initFromPlacementParam(const TableIter&);
     void exeAppear();
     void exeShadowAppear();
     void exeBallAppear();

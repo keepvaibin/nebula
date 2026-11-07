@@ -9,7 +9,7 @@ NormalMapTestObj::NormalMapTestObj(const char* pName) : NormalMapBase(pName) {
 NormalMapTestObj::~NormalMapTestObj() {
 }
 
-void NormalMapTestObj::init(const JMapInfoIter& rrIter) {
+void NormalMapTestObj::init(const TableIter& rrIter) {
     MR::initDefaultPos(this, rrIter);
     NormalMapBase::setup("NormalMapTestObj");
     initHitSensor(1);

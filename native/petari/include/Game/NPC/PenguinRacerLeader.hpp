@@ -9,7 +9,7 @@ class PenguinRacerLeader : public PenguinRacer {
 public:
     PenguinRacerLeader(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void resetRacer(const RaceManager* pRaceManager);
     virtual void exitRacer();
 

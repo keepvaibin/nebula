@@ -2,7 +2,7 @@
 #include "Game/AreaObj/AreaForm.hpp"
 #include "Game/MapObj/DynamicCollisionObj.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -23,7 +23,7 @@ CollisionArea::CollisionArea(int formType, const char* pName) : AreaObj(formType
     mIsValid = false;
 }
 
-void CollisionArea::init(const JMapInfoIter& rIter) {
+void CollisionArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 
@@ -34,10 +34,10 @@ void CollisionArea::init(const JMapInfoIter& rIter) {
     _5C = 0;
     _60 = -1;
 
-    MR::getJMapInfoArg0NoInit(rIter, &_50);
-    MR::getJMapInfoArg1NoInit(rIter, &_54);
-    MR::getJMapInfoArg2NoInit(rIter, &_5C);
-    MR::getJMapInfoArg3NoInit(rIter, &_60);
+    MR::getPlacementArg0NoInit(rIter, &_50);
+    MR::getPlacementArg1NoInit(rIter, &_54);
+    MR::getPlacementArg2NoInit(rIter, &_5C);
+    MR::getPlacementArg3NoInit(rIter, &_60);
 
     _58 = false;
 
@@ -440,13 +440,13 @@ AreaPolygon::~AreaPolygon() {
 CollisionArea::~CollisionArea() {
 }
 
-AreaPolygon::AreaPolygon() : DynamicCollisionObj("\203\107\203\212\203\101\203\174\203\212\203\123\203\223" /* エリアポリゴン */) {
+AreaPolygon::AreaPolygon() : DynamicCollisionObj("エリアポリゴン") {
     mForm = nullptr;
     _128 = nullptr;
     _12C.zero();
 }
 
-void AreaPolygon::init(const JMapInfoIter& rIter) {
+void AreaPolygon::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
     } else {

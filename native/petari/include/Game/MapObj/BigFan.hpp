@@ -8,7 +8,7 @@ class BigFan : public LiveActor {
 public:
     BigFan(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void initWindModel();

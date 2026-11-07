@@ -7,7 +7,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Map/PlanetMapCreator.hpp"
 #include "Game/NameObj/ModelChangableObjFactory.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
@@ -35,7 +35,7 @@ void PlacementInfoOrdered::sort() {
         if (NameObjFactory::isPlayerArchiveLoaderObj(pSet->mName)) {
             pSet->mPriority = 0;
         } else {
-            const JMapInfoIter& rIter = static_cast< Index* >(pSet->mList.mHead->mValue)->mInfoIter;
+            const TableIter& rIter = static_cast< Index* >(pSet->mList.mHead->mValue)->mInfoIter;
             bool fromStore;
             if (pSet->mShapeId != -1) {
                 fromStore = MR::isReadResourceFromStoreAtModelChangableObj(pSet->mName, pSet->mShapeId);
@@ -101,7 +101,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             mPlacementLink = nullptr;
             continue;
         }
-        const JMapInfoIter& iter = static_cast<Index*>(mPlacementLink->mValue)->getInfoIter();
+        const TableIter& iter = static_cast<Index*>(mPlacementLink->mValue)->getInfoIter();
         if (!NebulaMods::isMissingFiles(set->mName, iter)) {
             NebulaLoadTrace::Scope trace(set->mName);
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
@@ -120,7 +120,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
     return true;
 }
 
-void PlacementInfoOrdered::insert(const Identifier& rIdentifier, const JMapInfoIter& rIter) {
+void PlacementInfoOrdered::insert(const Identifier& rIdentifier, const TableIter& rIter) {
     SameIdSet* pSet = find(rIdentifier);
     if (pSet == nullptr) {
         pSet = createSameIdSet(rIdentifier);
@@ -160,7 +160,7 @@ PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::createSameIdSet(const Ide
     return pSet;
 }
 
-PlacementInfoOrdered::Index* PlacementInfoOrdered::createIndex(const JMapInfoIter& rIter) {
+PlacementInfoOrdered::Index* PlacementInfoOrdered::createIndex(const TableIter& rIter) {
     Index* pIndex = &mIndexArray[mIndexCount];
     mIndexCount++;
     pIndex->mInfoIter = rIter;
@@ -179,14 +179,14 @@ PlacementInfoOrdered::SameIdSet::SameIdSet() : Identifier(), mList() {
 PlacementInfoOrdered::SameIdSet::~SameIdSet() {
 }
 
-void PlacementInfoOrdered::attach(const JMapInfo* pInfo, PlacementInfoOrdered* pAfterScenario) {
+void PlacementInfoOrdered::attach(const Table* pInfo, PlacementInfoOrdered* pAfterScenario) {
     s32 count = pInfo->getNumEntries();
     for (s32 i = 0; i < count; i++) {
-        JMapInfoIter iter(pInfo, i);
+        TableIter iter(pInfo, i);
         const char* pName = "";
         MR::getObjectName(&pName, iter);
         s32 shapeId = -1;
-        MR::getJMapInfoShapeIdWithInit(iter, &shapeId);
+        MR::getPlacementShapeIdWithInit(iter, &shapeId);
         Identifier identifier(pName, shapeId);
         if (pAfterScenario != nullptr && shapeId == -1 && PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(pName)) {
             pAfterScenario->insert(identifier, iter);

@@ -34,7 +34,7 @@ ItemBlock::ItemBlock(const char* pName) : LiveActor(pName) {
     mNoCalcAnim = false;
 }
 
-void ItemBlock::init(const JMapInfoIter& rIter) {
+void ItemBlock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     checkKind(rIter);
     initBlock();
@@ -44,7 +44,7 @@ void ItemBlock::init(const JMapInfoIter& rIter) {
     initSound(4, false);
     initNerve(GET_NERVE(ItemBlock, ItemBlockNrvStandby));
     s32 arg = -1;
-    MR::getJMapInfoArg4NoInit(rIter, &arg);
+    MR::getPlacementArg4NoInit(rIter, &arg);
     MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
     MR::setShadowVolumeStartDropOffset(this, 0, 77.0f);
 
@@ -86,7 +86,7 @@ void ItemBlock::endClipped() {
     MR::emitEffect(this, "Glow");
 }
 
-void ItemBlock::checkKind(const JMapInfoIter& rIter) {
+void ItemBlock::checkKind(const TableIter& rIter) {
     const char* name = nullptr;
     MR::getObjectName(&name, rIter);
 
@@ -111,7 +111,7 @@ void ItemBlock::checkKind(const JMapInfoIter& rIter) {
 
     if (mKind == 2 || mKind == 4) {
         arg = -1;
-        MR::getJMapInfoArg0NoInit(rIter, &arg);
+        MR::getPlacementArg0NoInit(rIter, &arg);
 
         if (arg >= 0) {
             mItemCount = arg;
@@ -121,7 +121,7 @@ void ItemBlock::checkKind(const JMapInfoIter& rIter) {
     }
 
     if (mKind == 1 || mKind == 3) {
-        MR::getJMapInfoArg1NoInit(rIter, &arg);
+        MR::getPlacementArg1NoInit(rIter, &arg);
 
         if (arg == -1) {
             mTimer = ::cTimerLimit;
@@ -131,7 +131,7 @@ void ItemBlock::checkKind(const JMapInfoIter& rIter) {
     }
 
     arg = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg);
+    MR::getPlacementArg2NoInit(rIter, &arg);
     mCalcShadow = !(arg - 1);
 }
 

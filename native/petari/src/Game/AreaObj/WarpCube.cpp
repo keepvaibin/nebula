@@ -6,8 +6,8 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -108,23 +108,23 @@ void WarpCube::draw() const {
     TDDraw::drawSphere(site, cubePos + up * 120.0f, 120.0f, flags, 16);
 }
 
-void WarpCube::init(const JMapInfoIter& rIter) {
+void WarpCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     s32 groupID = -1;
-    MR::getJMapInfoGroupID(rIter, &groupID);
+    MR::getPlacementGroupID(rIter, &groupID);
 
     if (groupID >= 0) {
-        mMapIdInfo = new JMapIdInfo(groupID, rIter);
+        mMapIdInfo = new PlacementId(groupID, rIter);
     }
 
     mCameraInfo = new ActorCameraInfo(rIter);
 
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
     char eventName[0x100];
-    nebula_sprintf(eventName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupID, arg0 + 65);
+    nebula_sprintf(eventName, "ワープカメラ %d-%c", groupID, arg0 + 65);
 
     MR::declareEventCamera(mCameraInfo, eventName);
 

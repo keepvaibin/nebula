@@ -24,7 +24,7 @@ BeeFlowerHover::BeeFlowerHover(const char* pName)
     _8C.identity();
 }
 
-void BeeFlowerHover::init(const JMapInfoIter& rIter) {
+void BeeFlowerHover::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BeeFlowerHover", 0, false);
     MR::connectToSceneMapObj(this);
@@ -54,7 +54,7 @@ void BeeFlowerHover::init(const JMapInfoIter& rIter) {
     }
 
     s32 drop_length = -1;
-    MR::getJMapInfoArg7NoInit(rIter, &drop_length);
+    MR::getPlacementArg7NoInit(rIter, &drop_length);
     if (drop_length != -1) {
         MR::setShadowDropLength(this, 0, drop_length);
     }
@@ -71,7 +71,7 @@ void BeeFlowerHover::init(const JMapInfoIter& rIter) {
         MR::calcGravity(this);
     }
 
-    MR::getJMapInfoArg0NoInit(rIter, &_BC);
+    MR::getPlacementArg0NoInit(rIter, &_BC);
     _BC /= 100.0f;
     mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f);
     mLodCtrlPlanet->validate();

@@ -6,7 +6,7 @@ class SpringJetWater : public LiveActor {
 public:
     SpringJetWater(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void startClipped();
     virtual void endClipped();

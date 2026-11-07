@@ -4,7 +4,7 @@
 
 class RailRider {
 public:
-    RailRider(const JMapInfoIter&);
+    RailRider(const TableIter&);
     RailRider(s32, s32);
 
     void move();
@@ -29,7 +29,7 @@ public:
     s32 getPointNum() const;
     void copyPointPos(Vec3f*, s32) const;
     f32 getPointCoord(s32) const;
-    void initBezierRail(const JMapInfoIter&, const JMapInfo*);
+    void initBezierRail(const TableIter&, const Table*);
     bool getPointArgS32NoInit(const char*, s32*, s32) const;
     bool getPointArgS32WithInit(const char*, s32*, s32) const;
     bool getCurrentPointArgS32NoInit(const char*, s32*) const;

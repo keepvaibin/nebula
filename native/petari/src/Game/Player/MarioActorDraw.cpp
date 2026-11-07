@@ -252,7 +252,7 @@ void MarioActor::initIceMario() {
 
     _B4C = new IceStep*[20];
     for (u32 i = 0; i < 20; i++) {
-        _B4C[i] = new IceStep("\203\101\203\103\203\130\217\260" /* アイス床 */);
+        _B4C[i] = new IceStep("アイス床");
         _B4C[i]->initWithoutIter();
         _B4C[i]->kill();
     }
@@ -302,7 +302,7 @@ void MarioActor::initTeresaMario() {
         return;
     }
 
-    _9A4 = new MarioParts(this, "\203\145\203\214\203\124\202\314\224\347" /* テレサの皮 */, modelName, nullptr);
+    _9A4 = new MarioParts(this, "テレサの皮", modelName, nullptr);
     if (gIsLuigi) {
         _9A4->_9C = "TeresaMario";
     }

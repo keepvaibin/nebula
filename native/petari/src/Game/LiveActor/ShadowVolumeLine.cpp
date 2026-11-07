@@ -6,7 +6,7 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\203\211\203\103\203\223]" /* 影描画[ボリュームライン] */) {
+ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("影描画[ボリュームライン]") {
     mFromShadowController = 0;
     mToShadowController = 0;
     mFromWidth = 100.0f;

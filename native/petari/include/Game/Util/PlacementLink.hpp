@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 
-class JMapLinkInfo {
+class PlacementLink {
 public:
-    JMapLinkInfo(const JMapInfoIter&, bool);
+    PlacementLink(const TableIter&, bool);
 
-    bool operator==(const JMapLinkInfo& rOther) const {
+    bool operator==(const PlacementLink& rOther) const {
         if (!isValid() || !rOther.isValid()) {
             return false;
         }
@@ -16,8 +16,8 @@ public:
 
     void invalidate();
     bool isValid() const;
-    void setLinkedInfo(const JMapInfoIter&);
-    void setLinkInfo(const JMapInfoIter&);
+    void setLinkedInfo(const TableIter&);
+    void setLinkInfo(const TableIter&);
 
     s32 _0;
     s32 _4;

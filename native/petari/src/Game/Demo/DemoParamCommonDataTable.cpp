@@ -10,9 +10,9 @@ namespace {
     };
 
     const Param sDataTable[] = {
-        {"SeaBottomBigDoorA", 0.1f, 2.2f, "\222\206" /* 中 */},
-        {"SeaBottomBigDoorB", 0.1f, 2.2f, "\222\206" /* 中 */},
-        {"SeaBottomBigDoorC", 0.1f, 2.2f, "\222\206" /* 中 */},
+        {"SeaBottomBigDoorA", 0.1f, 2.2f, "中"},
+        {"SeaBottomBigDoorB", 0.1f, 2.2f, "中"},
+        {"SeaBottomBigDoorC", 0.1f, 2.2f, "中"},
     };
 
     const Param* getParam(const char* pParamName) {

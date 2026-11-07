@@ -21,10 +21,10 @@ namespace NrvBossBegomanHead {
 };  // namespace NrvBossBegomanHead
 
 BossBegomanHead::BossBegomanHead(LiveActor* pParent, MtxPtr pMtx)
-    : PartsModel(pParent, "\203\130\203\103\203\142\203\140\223\252" /* スイッチ頭 */, "BossBegomanHead", pMtx, MR::DrawBufferType_Enemy, false), mAngle(), mJointDelegator() {
+    : PartsModel(pParent, "スイッチ頭", "BossBegomanHead", pMtx, MR::DrawBufferType_Enemy, false), mAngle(), mJointDelegator() {
 }
 
-void BossBegomanHead::init(const JMapInfoIter& rIter) {
+void BossBegomanHead::init(const TableIter& rIter) {
     initNerve(GET_NERVE(BossBegomanHead, HostTypeNrvDemoWait));
 
     mJointDelegator = MR::createJointDelegatorWithNullChildFunc(this, &BossBegomanHead::calcJointEdge, "Edge");

@@ -12,7 +12,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -44,7 +44,7 @@ ElectricRailPoint::~ElectricRailPoint() {
 ElectricRailPoint::ElectricRailPoint(const char* pName) : LiveActor(pName), mHasShadow(true), mIsActive(true) {
 }
 
-void ElectricRailPoint::init(const JMapInfoIter& rIter) {
+void ElectricRailPoint::init(const TableIter& rIter) {
     initModelManagerWithAnm("ElectricRailPoint", nullptr, 0);
     MR::connectToSceneMapObjDecoration(this);
 
@@ -89,7 +89,7 @@ void ElectricRailSeparator::setup(const Vec3f& rVec1, const Vec3f& rVec2, const 
 }
 
 ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, ElectricRailSeparator* pSeparator, s32 count)
-    : ShadowVolumeDrawer("\211\145\225\140\211\346[\223\144\214\202\203\214\201\133\203\213\203\173\203\212\203\205\201\133\203\200]" /* 影描画[電撃レールボリューム] */), mHost(pActor) {
+    : ShadowVolumeDrawer("影描画[電撃レールボリューム]"), mHost(pActor) {
     mMesh.init(count * 8 + 2);
     writeShadowVolumeShape(pSeparator, count);
     mMesh.send();
@@ -194,9 +194,9 @@ ElectricRail::ElectricRail(const char* name)
       mEaseIn(30.0f), mShadowDrawer(), mIsCalcGravity() {
 }
 
-void ElectricRail::init(const JMapInfoIter& rIter) {
+void ElectricRail::init(const TableIter& rIter) {
     s32 railType = 0;
-    MR::getJMapInfoArg3NoInit(rIter, &railType);
+    MR::getPlacementArg3NoInit(rIter, &railType);
     ElectricRailFunction::registerRail(this, static_cast< ElectricRailType >(railType));
 
     MR::connectToSceneMapObjMovement(this);
@@ -208,7 +208,7 @@ void ElectricRail::init(const JMapInfoIter& rIter) {
     MR::calcRailClippingInfo(&mPosition, &radius, this, 100.0f, 500.0f);
     MR::setClippingTypeSphere(this, radius, &mPosition);
 
-    MR::getJMapInfoArg4NoInit(rIter, &mIsCalcGravity);
+    MR::getPlacementArg4NoInit(rIter, &mIsCalcGravity);
 
     if (mIsCalcGravity && !MR::calcGravityVectorOrZero(this, mPosition, &mGravity, nullptr, 0)) {
         MR::calcDropShadowVector(this, mPosition, &mGravity, nullptr, 0);
@@ -309,10 +309,10 @@ void ElectricRail::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgEnemyAttackElectric(pReceiver, pSender);
 }
 
-void ElectricRail::initMapToolInfo(const JMapInfoIter& rIter) {
+void ElectricRail::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mRailHeight);
+    MR::getPlacementArg0NoInit(rIter, &mRailHeight);
 
     if (MR::useStageSwitchReadA(this, rIter)) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &ElectricRail::disappear));
@@ -493,12 +493,12 @@ void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4)
     }
 }
 
-void ElectricRail::initShadow(const JMapInfoIter& rIter) {
+void ElectricRail::initShadow(const TableIter& rIter) {
     f32 arg1;
-    MR::getJMapInfoArg1WithInit(rIter, &arg1);
+    MR::getPlacementArg1WithInit(rIter, &arg1);
 
     f32 arg2;
-    MR::getJMapInfoArg2WithInit(rIter, &arg2);
+    MR::getPlacementArg2WithInit(rIter, &arg2);
 
     if (!(0.0f < arg1 || 0.0f < arg2)) {
         return;

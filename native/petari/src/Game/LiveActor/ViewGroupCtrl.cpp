@@ -4,7 +4,7 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Map/StageSwitch.hpp"
@@ -51,9 +51,9 @@ void ViewGroupCtrl::initMadeDuringPlay(ClippingActorInfo* pInfo) {
 void ViewGroupCtrl::endInitViewGroupTable() {
 }
 
-void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const JMapInfoIter& rIter) {
+void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const TableIter& rIter) {
     s32 groupID = -1;
-    if (MR::getJMapInfoViewGroupID(rIter, &groupID)) {
+    if (MR::getPlacementViewGroupID(rIter, &groupID)) {
         pCtrl->mViewGroupID = groupID;
         if (mViewCtrlCount >= mLodCtrlCapacity) {
             const s32 grown = mLodCtrlCapacity * 2;

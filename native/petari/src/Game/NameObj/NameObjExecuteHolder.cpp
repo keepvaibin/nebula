@@ -450,6 +450,6 @@ namespace MR {
 };  // namespace MR
 
 NameObjExecuteHolder::NameObjExecuteHolder(int size)
-    : NameObj("connectToScene\217\356\225\361\225\333\216\235" /* connectToScene情報保持 */), mExecuteArray(), mExecuteArrayMaxSize(size), mExecuteArraySize(), _18(), _19(), _1A(), _1B(), _1C() {
+    : NameObj("connectToScene情報保持"), mExecuteArray(), mExecuteArrayMaxSize(size), mExecuteArraySize(), _18(), _19(), _1A(), _1B(), _1C() {
     mExecuteArray = new NameObjExecuteInfo[mExecuteArrayMaxSize];
 }

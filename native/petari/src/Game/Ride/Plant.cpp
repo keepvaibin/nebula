@@ -18,7 +18,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -91,16 +91,16 @@ Plant::Plant(const char* pName)
     mTopMtx.identity();
 }
 
-void Plant::init(const JMapInfoIter& pMapInfoIter) {
+void Plant::init(const TableIter& pMapInfoIter) {
     MR::createSceneObj(SceneObj_PlantStalkDrawInit);
     MR::createSceneObj(SceneObj_PlantLeafDrawInit);
 
 
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_None, MR::DrawType_Plant);
 
-    MR::getJMapInfoArg0NoInit(pMapInfoIter, &mJumpSpeed);
-    MR::getJMapInfoArg1NoInit(pMapInfoIter, &mJumpSpeedOffsetY);
-    MR::getJMapInfoArg2NoInit(pMapInfoIter, &mPlayAppearDemo);
+    MR::getPlacementArg0NoInit(pMapInfoIter, &mJumpSpeed);
+    MR::getPlacementArg1NoInit(pMapInfoIter, &mJumpSpeedOffsetY);
+    MR::getPlacementArg2NoInit(pMapInfoIter, &mPlayAppearDemo);
 
     initSound(8, false);
     initNerve(GET_NERVE(Plant, PlantNrvWaitFar));
@@ -112,14 +112,14 @@ void Plant::init(const JMapInfoIter& pMapInfoIter) {
     mStalk = new PlantStalk();
     mStalk->init(pMapInfoIter);
 
-    mSeedPartsModel = new PartsModel(this, "\216\355\201\151\220\114\202\321\220\101\225\250\201\152" /* 種（伸び植物） */, "PlantSeed", mSeedMtx, -1, false);
+    mSeedPartsModel = new PartsModel(this, "種（伸び植物）", "PlantSeed", mSeedMtx, -1, false);
     mSeedPartsModel->initWithoutIter();
     MR::initShadowVolumeSphere(mSeedPartsModel, 50.0f);
     mSeedPartsModel->mPosition.set(mPosition);
     mSeedMtx.setTrans(mPosition);
 
     updateTopMtx();
-    mTopPartsModel = new PartsModel(this, "\220\346\222\133\201\151\220\114\202\321\220\101\225\250\201\152" /* 先端（伸び植物） */, "PlantTop", mTopMtx, -1, false);
+    mTopPartsModel = new PartsModel(this, "先端（伸び植物）", "PlantTop", mTopMtx, -1, false);
     mTopPartsModel->initWithoutIter();
     mTopPartsModel->kill();
 
@@ -129,8 +129,8 @@ void Plant::init(const JMapInfoIter& pMapInfoIter) {
     MR::addHitSensorMapObj(this, "seed", 5, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
     MR::addHitSensorRide(this, "Ride", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
-    MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "\217\157\214\273\203\146\203\202" /* 出現デモ */);
-    MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+    MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "出現デモ");
+    MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "掴まり");
 
     if (MR::useStageSwitchReadAppear(this, pMapInfoIter)) {
         MR::syncStageSwitchAppear(this);
@@ -173,8 +173,8 @@ void Plant::exeSeedWait() {
 }
 
 void Plant::exeWaitDemoWaitGrowUp() {
-    if (MR::tryStartDemoWithoutCinemaFrame(this, "\220\114\202\321\220\101\225\250\201\151\220\254\222\267\201\152" /* 伸び植物（成長） */)) {
-        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\217\157\214\273\203\146\203\202" /* 出現デモ */, CameraTargetArg(mTopPartsModel));
+    if (MR::tryStartDemoWithoutCinemaFrame(this, "伸び植物（成長）")) {
+        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "出現デモ", CameraTargetArg(mTopPartsModel));
         MR::requestMovementOn(mSeedPartsModel);
         setNerve(GET_NERVE(Plant, PlantNrvDemoWaitGrowUp));
     }
@@ -337,7 +337,7 @@ void Plant::exeHangDown() {
     updateBindLeaf();
 
     if (MR::isRailReachedNearGoal(this, ::sHangReachedDistance)) {
-        MR::endMultiActorCameraAtLanding(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+        MR::endMultiActorCameraAtLanding(this, mCameraInfo, "掴まり");
         MR::startBckPlayer("GrowPlantJump");
         MR::endBindAndPlayerJump(this, Vec3f(0.0f, 0.0f, 0.0f), 0);
         mRider = nullptr;
@@ -507,7 +507,7 @@ bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
         MR::startSound(mRider, "SE_PV_CATCH");
-        MR::startMultiActorCameraNoTarget(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+        MR::startMultiActorCameraNoTarget(this, mCameraInfo, "掴まり");
         return true;
     }
 
@@ -522,7 +522,7 @@ bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isMsgRushCancel(msg)) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */, false);
+        MR::endMultiActorCamera(this, mCameraInfo, "掴まり", false);
         mRider = nullptr;
         setNerve(GET_NERVE(Plant, PlantNrvGrowthWaitInvalid));
         return true;
@@ -556,8 +556,8 @@ bool Plant::updateGrowUp() {
 
     if (growStalk) {
         if (mPlayAppearDemo) {
-            MR::endDemo(this, "\220\114\202\321\220\101\225\250\201\151\220\254\222\267\201\152" /* 伸び植物（成長） */);
-            MR::endMultiActorCamera(this, mCameraInfo, "\217\157\214\273\203\146\203\202" /* 出現デモ */, false);
+            MR::endDemo(this, "伸び植物（成長）");
+            MR::endMultiActorCamera(this, mCameraInfo, "出現デモ", false);
         }
 
         if (mRider != nullptr) {
@@ -677,7 +677,7 @@ bool Plant::tryReachGoal() {
     MR::startSound(mRider, "SE_PM_JUMP_L");
     MR::startSound(mRider, "SE_PV_JUMP_JOY");
 
-    MR::endMultiActorCameraAtLanding(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
+    MR::endMultiActorCameraAtLanding(this, mCameraInfo, "掴まり");
     MR::endBindAndPlayerForceWeakGravityJump(this, endUp);
     mRider = nullptr;
 

@@ -8,7 +8,7 @@ public:
     ClippingJudge(const char*);
 
     virtual ~ClippingJudge();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual void movement();
 

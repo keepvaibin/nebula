@@ -9,7 +9,7 @@ public:
     PressureMessenger(MsgSharedGroup*, const char*);
 
     virtual ~PressureMessenger(){};
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeSync();
 
@@ -30,14 +30,14 @@ public:
 
     virtual ~PressureBase(){};
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
-    virtual void initBullet(const JMapInfoIter&);
+    virtual void initBullet(const TableIter&);
     virtual bool shotBullet(f32);
 
     void exeBound();

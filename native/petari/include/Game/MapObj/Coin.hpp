@@ -25,7 +25,7 @@ class Coin : public LiveActor {
 public:
     Coin(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -33,8 +33,8 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initShadow(const JMapInfoIter&);
-    void setShadowAndPoseModeFromJMapIter(const JMapInfoIter&);
+    void initShadow(const TableIter&);
+    void setShadowAndPoseModeFromPlacementIter(const TableIter&);
     void exeNonActive();
     void exeFix();
     void exeFixHide();
@@ -65,8 +65,8 @@ public:
     void setCannotTime(s32);
     void calcRebouond();
     void attenuateVelocity();
-    static bool isNeedBubble(const JMapInfoIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static bool isNeedBubble(const TableIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     CoinHostInfo* mHostInfo;
     FlashingCtrl* mFlashCtrl;

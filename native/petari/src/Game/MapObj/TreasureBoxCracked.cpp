@@ -42,11 +42,11 @@ TreasureBoxCracked::TreasureBoxCracked(const char* pName)
     mTopMtx.identity();
 }
 
-void TreasureBoxCracked::init(const JMapInfoIter& rIter) {
+void TreasureBoxCracked::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::useStageSwitchWriteA(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
-    MR::getJMapInfoArg2NoInit(rIter, &mOpenCondition);
+    MR::getPlacementArg2NoInit(rIter, &mOpenCondition);
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
 
@@ -284,13 +284,13 @@ bool TreasureBoxCracked::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitS
     return false;
 }
 
-void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
+void TreasureBoxCracked::initItem(const TableIter& rIter) {
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
 
     if (MR::isEqualSubString(objectName, "Empty")) {
         mItemType = 0;
-        MR::getJMapInfoArg0NoInit(rIter, &mWaitForSwitchOn);
+        MR::getPlacementArg0NoInit(rIter, &mWaitForSwitchOn);
         return;
     }
 
@@ -308,7 +308,7 @@ void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
         mItemType = 6;
     } else if (MR::isEqualSubString(objectName, "PowerStar")) {
         mItemType = 7;
-        MR::getJMapInfoArg3WithInit(rIter, &mPowerStarId);
+        MR::getPlacementArg3WithInit(rIter, &mPowerStarId);
 
         if (mPowerStarId != -1) {
             MR::declarePowerStar(this, mPowerStarId);
@@ -332,7 +332,7 @@ void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
     }
 
     if (mItemType == 1) {
-        mItem = static_cast< LiveActor* >(MR::createCoin(this, "\203\122\203\103\203\223" /* コイン */));
+        mItem = static_cast< LiveActor* >(MR::createCoin(this, "コイン"));
     } else if (mItemType == 2) {
         mItem = initYellowChip(rIter);
     } else if (mItemType == 3) {
@@ -340,9 +340,9 @@ void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
     } else if (mItemType == 4) {
         mItem = initKinokoOneUp(rIter);
     } else if (mItemType == 5) {
-        mItem = new BenefitItemLifeUp("\203\211\203\103\203\164\202\164\202\157\203\114\203\155\203\122" /* ライフＵＰキノコ */);
+        mItem = new BenefitItemLifeUp("ライフＵＰキノコ");
     } else if (mItemType == 6) {
-        mItem = new AirBubble("\213\363\213\103\226\101" /* 空気泡 */);
+        mItem = new AirBubble("空気泡");
     }
 
     initItemTrans();
@@ -377,26 +377,26 @@ void TreasureBoxCracked::initItemTrans() {
     mItem->mRotation.set(mRotation);
 }
 
-LiveActor* TreasureBoxCracked::initYellowChip(const JMapInfoIter& rIter) {
+LiveActor* TreasureBoxCracked::initYellowChip(const TableIter& rIter) {
     s32 groupId;
-    MR::getJMapInfoArg0WithInit(rIter, &groupId);
-    YellowChip* chip = new YellowChip("\203\103\203\107\203\215\201\133\203\140\203\142\203\166" /* イエローチップ */);
+    MR::getPlacementArg0WithInit(rIter, &groupId);
+    YellowChip* chip = new YellowChip("イエローチップ");
     chip->setHost(this);
     chip->setGroupID(groupId);
     return chip;
 }
 
-LiveActor* TreasureBoxCracked::initBlueChip(const JMapInfoIter& rIter) {
+LiveActor* TreasureBoxCracked::initBlueChip(const TableIter& rIter) {
     s32 groupId;
-    MR::getJMapInfoArg0WithInit(rIter, &groupId);
-    BlueChip* chip = new BlueChip("\203\165\203\213\201\133\203\140\203\142\203\166" /* ブルーチップ */);
+    MR::getPlacementArg0WithInit(rIter, &groupId);
+    BlueChip* chip = new BlueChip("ブルーチップ");
     chip->setHost(this);
     chip->setGroupID(groupId);
     return chip;
 }
 
-LiveActor* TreasureBoxCracked::initKinokoOneUp(const JMapInfoIter& rIter) {
-    return new BenefitItemOneUp("\202\120\202\164\202\157\203\114\203\155\203\122" /* １ＵＰキノコ */);
+LiveActor* TreasureBoxCracked::initKinokoOneUp(const TableIter& rIter) {
+    return new BenefitItemOneUp("１ＵＰキノコ");
 }
 
 bool TreasureBoxCracked::checkItemPos() {

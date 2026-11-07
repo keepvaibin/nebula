@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JMapIdInfo;
+class PlacementId;
 
 namespace MR {
     void requestChangeScene(const char*);
@@ -9,7 +9,7 @@ namespace MR {
     void requestChangeStageInGameAfterLoadingGameData();
     void requestChangeStageAfterStageClear();
     void requestChangeStageAfterMiss();
-    void requestChangeStageInGameMoving(const char*, s32, const JMapIdInfo&);
+    void requestChangeStageInGameMoving(const char*, s32, const PlacementId&);
     void requestChangeStageInGameMoving(const char*, s32);
     void requestChangeSceneAfterGameOver();
     void requestChangeSceneAfterBoot();

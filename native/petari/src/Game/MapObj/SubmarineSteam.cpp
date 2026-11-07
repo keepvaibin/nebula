@@ -23,7 +23,7 @@ namespace NrvSubmarineSteam {
 SubmarineSteam::SubmarineSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f) {
 }
 
-void SubmarineSteam::init(const JMapInfoIter& rIter) {
+void SubmarineSteam::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
 

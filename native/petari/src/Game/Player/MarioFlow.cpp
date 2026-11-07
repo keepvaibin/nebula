@@ -8,7 +8,7 @@ bool Mario::doFlow() {
         return false;
     }
 
-    if (isAnimationRun("\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */)) {
+    if (isAnimationRun("空中ひねり")) {
         return false;
     }
 
@@ -21,7 +21,7 @@ bool MarioFlow::start() {
     _12 = 0;
     _14 = 0;
 
-    changeAnimationNonStop("\222\206\203\137\203\201\201\133\203\127" /* 中ダメージ */);
+    changeAnimationNonStop("中ダメージ");
     startPadVib(2);
 
     getPlayer()->mMovementStates._1 = false;
@@ -50,7 +50,7 @@ bool MarioFlow::update() {
         _18 += mActor->_240 * mActor->getConst().getTable()->mGravityFlow;
 
         if (_12 == 20) {
-            changeAnimation("\222\206\203\137\203\201\201\133\203\127\213\363\222\206" /* 中ダメージ空中 */);
+            changeAnimation("中ダメージ空中");
         }
 
         if (_12 > 30 && mActor->isRequestRush()) {
@@ -62,10 +62,10 @@ bool MarioFlow::update() {
         if (getPlayer()->getMovementStates()._1) {
             getPlayer()->mMovementStates.jumping = false;
 
-            changeAnimation("\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */);
+            changeAnimation("中ダメージ着地");
 
-            playEffect("\213\244\222\312\203\137\203\201\201\133\203\127\222\205\222\156" /* 共通ダメージ着地 */);
-            playSound("\220\201\202\301\224\362\202\321\223\174\202\352" /* 吹っ飛び倒れ */);
+            playEffect("共通ダメージ着地");
+            playSound("吹っ飛び倒れ");
 
             MR::vecKillElement(_18, mActor->_240, &_18);
 
@@ -84,7 +84,7 @@ bool MarioFlow::update() {
             _18.y *= 0.95f;
             _18.z *= 0.95f;
 
-            if (!isAnimationRun("\222\206\203\137\203\201\201\133\203\127\222\205\222\156" /* 中ダメージ着地 */)) {
+            if (!isAnimationRun("中ダメージ着地")) {
                 return false;
             }
 
@@ -103,8 +103,8 @@ bool MarioFlow::update() {
 }
 
 bool MarioFlow::close() {
-    stopAnimation("\203\137\203\201\201\133\203\127" /* ダメージ */);
-    stopAnimation("\203\137\203\201\201\133\203\127\222\205\222\156" /* ダメージ着地 */, "\212\356\226\173" /* 基本 */);
+    stopAnimation("ダメージ");
+    stopAnimation("ダメージ着地", "基本");
 
     return true;
 }

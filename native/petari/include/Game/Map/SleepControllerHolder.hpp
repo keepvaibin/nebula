@@ -15,7 +15,7 @@ public:
 
     virtual void movement();
 
-    void add(NameObj*, const JMapInfoIter&, SwitchEventListener*);
+    void add(NameObj*, const TableIter&, SwitchEventListener*);
     void initSync();
 
 private:
@@ -24,6 +24,6 @@ private:
 
 namespace SleepControlFunc {
     void initSyncSleepController();
-    void addSleepControl(AreaObj*, const JMapInfoIter&);
-    void addSleepControl(LiveActor*, const JMapInfoIter&);
+    void addSleepControl(AreaObj*, const TableIter&);
+    void addSleepControl(LiveActor*, const TableIter&);
 };  // namespace SleepControlFunc

@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
@@ -27,9 +27,9 @@ SoundEmitter::SoundEmitter(const char* pName) : LiveActor(pName) {
     _8C = -1;
 }
 
-void SoundEmitter::init(const JMapInfoIter& rIter) {
+void SoundEmitter::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &_8C);
+    MR::getPlacementArg0NoInit(rIter, &_8C);
     MR::connectToSceneMapObjMovement(this);
     MR::registerDemoSimpleCastAll(this);
 
@@ -90,7 +90,7 @@ void SoundEmitter::exePlaySound() {
     } break;
     case 0x16:
     case 0x17: {
-        if (MR::isDemoActive("\203\215\203\133\203\142\203\136\217\363\213\265\220\340\226\276\203\146\203\202" /* ロゼッタ状況説明デモ */)) {
+        if (MR::isDemoActive("ロゼッタ状況説明デモ")) {
             return;
         }
     } break;

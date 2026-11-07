@@ -8,12 +8,12 @@ class UFOKinoko : public MapObjActor {
 public:
     UFOKinoko(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     void startMove();
 

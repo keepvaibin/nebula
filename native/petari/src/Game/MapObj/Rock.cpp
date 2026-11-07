@@ -9,7 +9,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -80,19 +80,19 @@ Rock::Rock(f32 moveSpeed, const char* pName)
     mBaseMtx.identity();
 }
 
-void Rock::init(const JMapInfoIter& rIter) {
+void Rock::init(const TableIter& rIter) {
     mRockType = Rock::getType(rIter);
 
     if (mRockType != NormalRock) {
         switch (mRockType) {
         case WanwanRolling:
-            setName("\203\217\203\223\203\217\203\223" /* ワンワン */);
+            setName("ワンワン");
             break;
         case WanwanRollingMini:
-            setName("\203\176\203\152\203\217\203\223\203\217\203\223" /* ミニワンワン */);
+            setName("ミニワンワン");
             break;
         case WanwanRollingGold:
-            setName("\203\123\201\133\203\213\203\150\203\217\203\223\203\217\203\223" /* ゴールドワンワン */);
+            setName("ゴールドワンワン");
             MR::declarePowerStar(this);
             break;
         default:
@@ -116,7 +116,7 @@ void Rock::init(const JMapInfoIter& rIter) {
 
     f32 shadowDrop;
 
-    if (MR::getJMapInfoArg4NoInit(rIter, &shadowDrop)) {
+    if (MR::getPlacementArg4NoInit(rIter, &shadowDrop)) {
         MR::initShadowVolumeCylinder(this, ::cBinderRadius * getRadius());
         MR::setShadowDropLength(this, nullptr, shadowDrop);
     } else {
@@ -181,7 +181,7 @@ s32 Rock::getAppearFrame() {
     return ::cAppearMoveFrame + ::cAppearRumbleFrame + ::cAppearStopFrame;
 }
 
-Rock::Type Rock::getType(const JMapInfoIter& rIter) {
+Rock::Type Rock::getType(const TableIter& rIter) {
     if (MR::isEqualObjectName(rIter, "WanwanRolling")) {
         return WanwanRolling;
     }
@@ -388,17 +388,17 @@ bool Rock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-void Rock::initMapToolInfo(const JMapInfoIter& rIter) {
+void Rock::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mAppearPos.set(mPosition);
 
     mRadius = getRadius() * ::cBinderRadius;
     mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);
 
-    MR::getJMapInfoArg3NoInit(rIter, &mAppearTime);
+    MR::getPlacementArg3NoInit(rIter, &mAppearTime);
 
     if (mRockType == NormalRock) {
-        MR::getJMapInfoArg5NoInit(rIter, &mSlowDownOnAttack);
+        MR::getPlacementArg5NoInit(rIter, &mSlowDownOnAttack);
     }
 
     if (!MR::isZeroGravity(this)) {
@@ -415,14 +415,14 @@ void Rock::initModel() {
     switch (mRockType) {
     case NormalRock:
         initModelManagerWithAnm("Rock", nullptr, false);
-        mBreakModel = MR::createModelObjMapObjStrongLight("\203\123\203\215\203\123\203\215\212\342\211\363\202\352\203\202\203\146\203\213" /* ゴロゴロ岩壊れモデル */, "RockBreak", nullptr);
+        mBreakModel = MR::createModelObjMapObjStrongLight("ゴロゴロ岩壊れモデル", "RockBreak", nullptr);
         mBreakModel->initWithoutIter();
         mBreakModel->mScale.set(mScale);
         mBreakModel->makeActorDead();
         break;
     case WanwanRolling:
         initModelManagerWithAnm("WanwanRolling", nullptr, false);
-        mBreakModel = MR::createModelObjMapObjStrongLight("\203\217\203\223\203\217\203\223\211\363\202\352\203\202\203\146\203\213" /* ワンワン壊れモデル */, "WanwanRollingBreak", nullptr);
+        mBreakModel = MR::createModelObjMapObjStrongLight("ワンワン壊れモデル", "WanwanRollingBreak", nullptr);
         mBreakModel->initWithoutIter();
         mBreakModel->mScale.set(mScale);
         mBreakModel->makeActorDead();
@@ -432,7 +432,7 @@ void Rock::initModel() {
         break;
     case WanwanRollingGold:
         initModelManagerWithAnm("WanwanRollingGold", nullptr, false);
-        mBreakModel = MR::createModelObjMapObjStrongLight("\203\123\201\133\203\213\203\150\203\217\203\223\203\217\203\223\211\363\202\352\203\202\203\146\203\213" /* ゴールドワンワン壊れモデル */, "WanwanRollingGoldBreak", nullptr);
+        mBreakModel = MR::createModelObjMapObjStrongLight("ゴールドワンワン壊れモデル", "WanwanRollingGoldBreak", nullptr);
         mBreakModel->initWithoutIter();
         mBreakModel->mScale.set(mScale);
         mBreakModel->makeActorDead();
@@ -583,7 +583,7 @@ void Rock::startRollLevelSound(bool resetTimer) {
 }
 
 bool Rock::tryFreeze(const Nerve* pNerve) {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mFreezeTime = 0;
         mFreezePos.set(mPosition);
         mUnfreezeNerve = pNerve;
@@ -619,7 +619,7 @@ void Rock::setBtkForEnvironmentMap(LiveActor* pActor, const char* pBtkName) {
 }
 
 void Rock::rumblePadAndCamera() {
-    MR::startRumbleWithShakeCameraWeak(this, "\213\255" /* 強 */, "\222\206" /* 中 */, ::cRumbleDistance, ::cRumbleDistance * 2);
+    MR::startRumbleWithShakeCameraWeak(this, "強", "中", ::cRumbleDistance, ::cRumbleDistance * 2);
 
     f32 dist = MR::calcDistanceToPlayer(this);
 
@@ -961,7 +961,7 @@ void Rock::exeFreeze() {
     v1 *= rumbleOffset;
     mPosition.add(mFreezePos, v1);
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Rock, RockNrvFreeze));
         return;
     }

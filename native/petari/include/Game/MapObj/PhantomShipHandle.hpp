@@ -8,7 +8,7 @@ class PhantomShipHandle : public LiveActor {
 public:
     PhantomShipHandle(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 

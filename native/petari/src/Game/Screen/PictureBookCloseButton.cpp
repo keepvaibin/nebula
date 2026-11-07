@@ -12,10 +12,10 @@ namespace NrvPictureBookCloseButton {
 };  // namespace NrvPictureBookCloseButton
 
 PictureBookCloseButton::PictureBookCloseButton(bool canCloseWithPad)
-    : LayoutActor("\212\107\226\173\225\302\202\266\202\351\203\173\203\136\203\223" /* 絵本閉じるボタン */, true), mPaneCtrl(nullptr), mCanCloseWithPad(canCloseWithPad) {
+    : LayoutActor("絵本閉じるボタン", true), mPaneCtrl(nullptr), mCanCloseWithPad(canCloseWithPad) {
 }
 
-void PictureBookCloseButton::init(const JMapInfoIter& rIter) {
+void PictureBookCloseButton::init(const TableIter& rIter) {
     initLayoutManager("BackButton", 1);
     MR::connectToSceneLayoutDecoration(this);
 

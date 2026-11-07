@@ -11,7 +11,7 @@ public:
     /// @brief Creates a new `NPCDirector`.
     NPCDirector();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     
     NPCCapsParameterReader* mCapsParameterReader;
     NPCItemParameterReader* mItemParameterReader;

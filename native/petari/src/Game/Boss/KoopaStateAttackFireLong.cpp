@@ -21,7 +21,7 @@ namespace NrvKoopaStateAttackFireLong {
 };  // namespace NrvKoopaStateAttackFireLong
 
 KoopaStateAttackFireLong::KoopaStateAttackFireLong(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[\211\212\230\101\222\145\215\125\214\202]" /* State[炎連弾攻撃] */, pKoopa), mMaxFire(::sEmitNumMax), mFireEmitted(-1) {
+    : ActorStateBase< Koopa >("State[炎連弾攻撃]", pKoopa), mMaxFire(::sEmitNumMax), mFireEmitted(-1) {
 }
 
 void KoopaStateAttackFireLong::init() {

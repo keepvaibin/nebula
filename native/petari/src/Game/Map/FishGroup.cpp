@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -57,7 +57,7 @@ Fish::Fish(const char* pName, FishGroup* pGroup, int fishType, bool canEscape)
       mTimeToSearchPlayer(MR::getRandom(::sTimeToSearchPlayerMin, ::sTimeToSearchPlayerMax)), mStepToMove(), mEscapePos() {
 }
 
-void Fish::init(const JMapInfoIter& rIter) {
+void Fish::init(const TableIter& rIter) {
     updateFollowPointPos();
     mPosition.set(mFollowPos);
     mFront.set(MR::getRailDirection(mGroup));
@@ -234,7 +234,7 @@ FishGroup::FishGroup(const char* pName)
     : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f), mFishNum(::sDefaultFishNum), mFish(), mSpeed(::sDefaultGroupSpeed), mClippingCenter(0.0f, 0.0f, 0.0f) {
 }
 
-void FishGroup::init(const JMapInfoIter& rIter) {
+void FishGroup::init(const TableIter& rIter) {
     MR::connectToSceneEnemyMovement(this);
     MR::initDefaultPos(this, rIter);
     MR::calcActorAxisY(&mUp, this);
@@ -242,13 +242,13 @@ void FishGroup::init(const JMapInfoIter& rIter) {
     MR::moveCoordToNearestPos(this, mPosition);
 
     int fishType = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &mFishNum);
+    MR::getPlacementArg0NoInit(rIter, &mFishNum);
 
     bool canEscape = false;
-    MR::getJMapInfoArg1NoInit(rIter, &canEscape);
+    MR::getPlacementArg1NoInit(rIter, &canEscape);
 
     bool calcGravity = false;
-    MR::getJMapInfoArg2NoInit(rIter, &calcGravity);
+    MR::getPlacementArg2NoInit(rIter, &calcGravity);
     if (calcGravity) {
         MR::onCalcGravity(this);
     }
@@ -270,7 +270,7 @@ void FishGroup::init(const JMapInfoIter& rIter) {
 
     mFish = new Fish*[mFishNum];
     for (int i = 0; i < mFishNum; i++) {
-        mFish[i] = new Fish("\213\233" /* 魚 */, this, fishType, canEscape);
+        mFish[i] = new Fish("魚", this, fishType, canEscape);
         mFish[i]->initWithoutIter();
     }
 

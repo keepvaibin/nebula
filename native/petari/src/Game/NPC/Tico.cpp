@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -54,7 +54,7 @@ Tico::Tico(const char* pName)
     : NPCActor(pName), _15C(), _160(0.0f, 0.0f, 0.0f), _16C(), mDemoGetPower(), _174(), _178(), _17C(255, 255, 255, 255), _180(), mDemoStarter(this) {
 }
 
-void Tico::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void Tico::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (MR::isObjectName(rIter, "TicoBaby")) {
         pCollector->addArchive("TicoBaby");
         return;
@@ -66,10 +66,10 @@ void Tico::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapIn
 }
 
 void Tico::initBase(s32 color) {
-    initBase(JMapInfoIter(), color);
+    initBase(TableIter(), color);
 }
 
-void Tico::initBase(const JMapInfoIter& rIter, s32 color) {
+void Tico::initBase(const TableIter& rIter, s32 color) {
     NPCActorCaps caps("Tico");
     caps.setDefault();
     caps.mMessage = 0;
@@ -117,7 +117,7 @@ void Tico::initBase(const JMapInfoIter& rIter, s32 color) {
     _178 = MR::getJointMtx(this, "Body");
 }
 
-void Tico::initMessage(const JMapInfoIter& rIter, const char* pMessageId) {
+void Tico::initMessage(const TableIter& rIter, const char* pMessageId) {
     if (initTalkCtrl(rIter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
@@ -128,7 +128,7 @@ void Tico::initMessage(const JMapInfoIter& rIter, const char* pMessageId) {
 }
 
 void Tico::initMessage(const char* pMessageId) {
-    JMapInfoIter iter;
+    TableIter iter;
 
     if (initTalkCtrlDirect(iter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
@@ -139,12 +139,12 @@ void Tico::initMessage(const char* pMessageId) {
     MR::offRootNodeAutomatic(_174);
 }
 
-void Tico::init(const JMapInfoIter& rIter) {
+void Tico::init(const TableIter& rIter) {
     s32 color = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &color);
+    MR::getPlacementArg0NoInit(rIter, &color);
     s32 behavior = 0;
     s32 clr = color;
-    MR::getJMapInfoArg1NoInit(rIter, &behavior);
+    MR::getPlacementArg1NoInit(rIter, &behavior);
     _15C = behavior;
 
     if (MR::isObjectName(rIter, "TicoBaby")) {
@@ -162,17 +162,17 @@ void Tico::init(const JMapInfoIter& rIter) {
             makeActorDead();
         }
 
-        if (MR::isDemoCast(this, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202" /* チコガイドデモ */)) {
+        if (MR::isDemoCast(this, "チコガイドデモ")) {
             if (clr == -1) {
                 _15C = 5;
             } else {
                 _15C = 6;
             }
         } else {
-            if (MR::isDemoCast(this, "\220\302\203\140\203\122\225\317\220\147" /* 青チコ変身 */)) {
+            if (MR::isDemoCast(this, "青チコ変身")) {
                 _15C = 1;
             } else {
-                if (MR::isDemoCast(this, "\220\324\202\242\203\130\203\136\201\133" /* 赤いスター */)) {
+                if (MR::isDemoCast(this, "赤いスター")) {
                     _15C = 9;
                     MR::useStageSwitchWriteA(this, rIter);
                     MR::useStageSwitchWriteB(this, rIter);
@@ -375,14 +375,14 @@ void Tico::exeBlue0() {
 
     if (MR::tryTalkNearPlayerAtEndAndStartTalkAction(this)) {
         setNerve(GET_NERVE(Tico, TicoNrvBlue1));
-        MR::startTimeKeepDemo(this, "\220\302\203\140\203\122\225\317\220\147" /* 青チコ変身 */, nullptr);
+        MR::startTimeKeepDemo(this, "青チコ変身", nullptr);
     }
 }
 
 void Tico::exeBlue1() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Fly");
-        MR::setRailCoordSpeed(this, (MR::getRailTotalLength(this) / MR::getDemoPartTotalStep("\220\302\203\140\203\122\225\317\220\147[\210\332\223\256]" /* 青チコ変身[移動] */)));
+        MR::setRailCoordSpeed(this, (MR::getRailTotalLength(this) / MR::getDemoPartTotalStep("青チコ変身[移動]")));
     }
 
     MR::moveCoordAndFollowTrans(this);
@@ -393,7 +393,7 @@ void Tico::exeBlue1() {
 }
 
 void Tico::exeRed0() {
-    if (MR::tryStartTimeKeepDemoMarioPuppetable(this, "\220\324\202\242\203\130\203\136\201\133" /* 赤いスター */, "\220\324\202\242\203\130\203\136\201\133[\212\112\216\156]" /* 赤いスター[開始] */)) {
+    if (MR::tryStartTimeKeepDemoMarioPuppetable(this, "赤いスター", "赤いスター[開始]")) {
         setNerve(GET_NERVE(Tico, TicoNrvWait));
     }
 }
@@ -416,7 +416,7 @@ void Tico::exeRed2() {
     }
 
     if (mDemoStarter.update()) {
-        MR::tryStartTimeKeepDemoMarioPuppetable(this, "\220\324\202\242\203\130\203\136\201\133" /* 赤いスター */, "\220\324\202\242\203\130\203\136\201\133[\212\112\216\156]" /* 赤いスター[開始] */);
+        MR::tryStartTimeKeepDemoMarioPuppetable(this, "赤いスター", "赤いスター[開始]");
         setNerve(GET_NERVE(Tico, TicoNrvWait));
     }
 }

@@ -11,7 +11,7 @@ class Note : public LiveActor {
 public:
     Note(const char*, const Vec3f&, NoteFairy*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
@@ -44,7 +44,7 @@ class NoteGroup : public LiveActorGroup {
 public:
     NoteGroup();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     f32 mRotation;

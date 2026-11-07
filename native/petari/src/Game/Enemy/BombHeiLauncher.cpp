@@ -4,7 +4,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -26,7 +26,7 @@ BombHeiLauncher::BombHeiLauncher(const char* pName) : LiveActor(pName), mBomb(),
     mConnector = new MapObjConnector(this);
 }
 
-void BombHeiLauncher::init(const JMapInfoIter& rIter) {
+void BombHeiLauncher::init(const TableIter& rIter) {
     bool isBombHeiLauncher = true;
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
@@ -66,10 +66,10 @@ void BombHeiLauncher::init(const JMapInfoIter& rIter) {
     makeActorDead();
 
     if (isBombHeiLauncher) {
-        mBomb = new BombHei("\203\173\203\200\225\272" /* ボム兵 */);
+        mBomb = new BombHei("ボム兵");
         mBomb->mType = BombHei::BOMB_HEI;
     } else {
-        mBomb = new BombHei("\203\173\203\200" /* ボム */);
+        mBomb = new BombHei("ボム");
         mBomb->mType = BombHei::BOMB;
     }
 
@@ -78,7 +78,7 @@ void BombHeiLauncher::init(const JMapInfoIter& rIter) {
     mBomb->setGroupClipping(rIter);
 
     s32 ignoreCollisionArg = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &ignoreCollisionArg);
+    MR::getPlacementArg2NoInit(rIter, &ignoreCollisionArg);
     if (ignoreCollisionArg != -1) {
         mBomb->mExplosionIgnoreCollision = true;
     }

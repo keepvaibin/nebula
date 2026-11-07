@@ -15,7 +15,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
@@ -26,12 +26,12 @@
 #include "Game/Util/TalkUtil.hpp"
 
 namespace {
-    const char* const cDemoNameDomeLecture1 = "\203\150\201\133\203\200\203\214\203\116\203\140\203\203\201\133\202\120" /* ドームレクチャー１ */;
-    const char* const cDemoNameDomeLecture2 = "\203\150\201\133\203\200\203\214\203\116\203\140\203\203\201\133\202\121" /* ドームレクチャー２ */;
-    const char* const cDemoNameButlerReport = "\203\157\203\147\203\211\201\133\225\361\215\220" /* バトラー報告 */;
-    const char* const cDemoNameStarPiece1 = "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\221\117\224\274" /* スターピース解説前半 */;
-    const char* const cDemoNameStarPiece2 = "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */;
-    const char* const cDemoNameGreenDriver = "\203\157\203\147\203\211\201\133\203\117\203\212\201\133\203\223\203\150\203\211\203\103\203\157\220\340\226\276" /* バトラーグリーンドライバ説明 */;
+    const char* const cDemoNameDomeLecture1 = "ドームレクチャー１";
+    const char* const cDemoNameDomeLecture2 = "ドームレクチャー２";
+    const char* const cDemoNameButlerReport = "バトラー報告";
+    const char* const cDemoNameStarPiece1 = "スターピース解説前半";
+    const char* const cDemoNameStarPiece2 = "スターピース解説後半";
+    const char* const cDemoNameGreenDriver = "バトラーグリーンドライバ説明";
     const char* const cMessageId[] = {
         "AstroDome_Butler001", "AstroDome_Butler002",   "AstroDome_Butler003",   "AstroDome_Butler006",
         "AstroDome_Butler007", "AstroGalaxy_Butler005", "AstroGalaxy_Butler006",
@@ -57,9 +57,9 @@ Butler::Butler(const char* pName) : NPCActor(pName) {
     _171 = false;
 }
 
-void Butler::init(const JMapInfoIter& rIter) {
+void Butler::init(const TableIter& rIter) {
     const char* dome;
-    MR::getJMapInfoArg0NoInit(rIter, &_170);
+    MR::getPlacementArg0NoInit(rIter, &_170);
     NPCActorCaps caps = "Butler";
     caps.setDefault();
     caps.mSensorJoint = "Body";
@@ -167,7 +167,7 @@ void Butler::startDemoDomeLecture2() {
         i = 1;
     }
 
-    DemoFunction::setDemoTalkMessageCtrlDirect(this, mTalkMessage[i], "\203\150\201\133\203\200\203\214\203\116\203\140\203\203\201\133\202\121" /* ドームレクチャー２ */);
+    DemoFunction::setDemoTalkMessageCtrlDirect(this, mTalkMessage[i], "ドームレクチャー２");
     MR::invalidateClipping(this);
     LiveActor::appear();
     setNerve(GET_NERVE(Butler, ButlerNrvDemo));
@@ -253,7 +253,7 @@ void Butler::control() {
 
     if (_160) {
         bool temp = _171;
-        if (MR::isStarPointerPointing1P(this, "\216\343" /* 弱 */, false, false)) {
+        if (MR::isStarPointerPointing1P(this, "弱", false, false)) {
             _171 = true;
         } else {
             _171 = false;
@@ -302,7 +302,7 @@ bool Butler::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) 
     }
 }
 
-void Butler::initTalkCtrlArray(const JMapInfoIter& rIter) {
+void Butler::initTalkCtrlArray(const TableIter& rIter) {
     mTalkMessage = new TalkMessageCtrl*[0x7];
 
     for (s32 i = 0; i < 7; i++) {
@@ -311,17 +311,17 @@ void Butler::initTalkCtrlArray(const JMapInfoIter& rIter) {
 }
 
 namespace {
-    inline void initButlerDemo(Butler* pActor, const JMapInfoIter& rIter, const char* pDemoName, const char* pAnimName, TalkMessageCtrl* pTalkCtrl,
+    inline void initButlerDemo(Butler* pActor, const TableIter& rIter, const char* pDemoName, const char* pAnimName, TalkMessageCtrl* pTalkCtrl,
                                const MR::FunctorBase& rStart, const MR::FunctorBase& rReset) {
         MR::initDemoSheetTalkAnim(pActor, rIter, pDemoName, pAnimName, pTalkCtrl);
-        MR::registerDemoActionFunctorDirect(pActor, rStart, pDemoName, "\212\112\216\156" /* 開始 */);
-        MR::registerDemoActionFunctorDirect(pActor, rReset, pDemoName, "\203\157\203\147\203\211\201\133\203\212\203\132\203\142\203\147" /* バトラーリセット */);
+        MR::registerDemoActionFunctorDirect(pActor, rStart, pDemoName, "開始");
+        MR::registerDemoActionFunctorDirect(pActor, rReset, pDemoName, "バトラーリセット");
     }
 };  // namespace
 
-void Butler::initForAstroDome(const JMapInfoIter& rIter) {
+void Butler::initForAstroDome(const TableIter& rIter) {
     MR::tryRegisterDemoCast(this, rIter);
-    AstroDemoFunction::tryRegisterDemo(this, "\203\160\203\217\201\133\203\130\203\136\201\133\213\101\212\322" /* パワースター帰還 */, rIter);
+    AstroDemoFunction::tryRegisterDemo(this, "パワースター帰還", rIter);
 
     static void (Butler::*pResetReport)() = &Butler::killIfBatlerMapAppear;
     static void (Butler::*pStartReport)(const char*) = &Butler::startDemoButlerReport;
@@ -357,15 +357,15 @@ void Butler::initForAstroDome(const JMapInfoIter& rIter) {
     }
 }
 
-void Butler::initForAstroGalaxy(const JMapInfoIter& rIter) {
+void Butler::initForAstroGalaxy(const TableIter& rIter) {
     const char* nameGreenDriver = ::cDemoNameGreenDriver;
     MR::registerDemoCast(this, nameGreenDriver, rIter);
     DemoFunction::registerDemoTalkMessageCtrlDirect(this, mTalkMessage[5], nameGreenDriver);
-    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &Butler::startDemoButlerReport, nameGreenDriver), nameGreenDriver, "\212\112\216\156" /* 開始 */);
-    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &Butler::tryStartShowGalaxyMap), nameGreenDriver, "\203\175\203\142\203\166\225\134\216\246" /* マップ表示 */);
+    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &Butler::startDemoButlerReport, nameGreenDriver), nameGreenDriver, "開始");
+    MR::registerDemoActionFunctorDirect(this, MR::Functor(this, &Butler::tryStartShowGalaxyMap), nameGreenDriver, "マップ表示");
     const char* grandStarName = AstroDemoFunction::getGrandStarReturnDemoName(0);
     AstroDemoFunction::tryRegisterDemo(this, grandStarName, rIter);
-    AstroDemoFunction::tryRegisterDemo(this, "\203\215\203\133\203\142\203\136\217\363\213\265\220\340\226\276\203\146\203\202" /* ロゼッタ状況説明デモ */, rIter);
+    AstroDemoFunction::tryRegisterDemo(this, "ロゼッタ状況説明デモ", rIter);
     AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(this);
 
     if (MR::isButlerMapAppear()) {
@@ -375,7 +375,7 @@ void Butler::initForAstroGalaxy(const JMapInfoIter& rIter) {
     }
 }
 
-TalkMessageCtrl* Butler::createTalkCtrl(const JMapInfoIter& rIter, const char* pTalk) {
+TalkMessageCtrl* Butler::createTalkCtrl(const TableIter& rIter, const char* pTalk) {
     Vec3f vec;
     vec.setZeroVec();
 
@@ -426,12 +426,12 @@ bool Butler::tryStartStarPieceReaction() {
         isNerveOn = isNerve(mWaitNerve) || isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
 
         if (!isNerveOn && _164 == 5) {
-            MR::requestStartTimeKeepDemoMarioPuppetable(this, "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */, nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
+            MR::requestStartTimeKeepDemoMarioPuppetable(this, "スターピース解説後半", nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
             return true;
         }
 
         if (_164 > 5 && !isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction)) && !isNerve(GET_NERVE(Butler, ButlerNrvWaitStartDemo))) {
-            MR::requestStartTimeKeepDemoMarioPuppetable(this, "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */, nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
+            MR::requestStartTimeKeepDemoMarioPuppetable(this, "スターピース解説後半", nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
             return true;
         } else {
             return false;
@@ -453,7 +453,7 @@ void Butler::exeStarPieceReaction() {
 
     if (mButlerState->update()) {
         if (reaction) {
-            MR::requestStartTimeKeepDemoMarioPuppetable(this, "\203\130\203\136\201\133\203\163\201\133\203\130\211\360\220\340\214\343\224\274" /* スターピース解説後半 */, nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
+            MR::requestStartTimeKeepDemoMarioPuppetable(this, "スターピース解説後半", nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
         } else {
             forceNerveToWait();
         }
@@ -478,11 +478,11 @@ void Butler::exeDemoStarPiece2() {
         MR::resetPlayerEffect();
     }
 
-    if (MR::isDemoPartStep("\220\340\226\276\202\120\201\250\220\340\226\276\202\121" /* 説明１→説明２ */, 29)) {
+    if (MR::isDemoPartStep("説明１→説明２", 29)) {
         MR::overlayWithPreviousScreen(2);
     }
 
-    if (MR::isDemoPartLastStep("\217\111\227\271" /* 終了 */)) {
+    if (MR::isDemoPartLastStep("終了")) {
         MR::onGameEventFlagEndButlerStarPieceLecture();
         setNerve(GET_NERVE(Butler, ButlerNrvDemo));
     }

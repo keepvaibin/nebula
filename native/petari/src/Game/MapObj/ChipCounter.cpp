@@ -26,7 +26,7 @@ namespace NrvChipCounter {
 ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), _30(1.0f) {
 }
 
-void ChipCounter::init(const JMapInfoIter& rIter) {
+void ChipCounter::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
 
     switch (mType) {
@@ -50,7 +50,7 @@ void ChipCounter::init(const JMapInfoIter& rIter) {
     MR::startAnim(this, "ShowHide", 1);
     MR::setAnimFrameAndStop(this, _30 * 20.0f, 1);
 
-    mCollectCounter = new CollectCounter("\217\127\202\337\220\224\216\232" /* 集め数字 */);
+    mCollectCounter = new CollectCounter("集め数字");
     mCollectCounter->initWithoutIter();
 
     kill();
@@ -135,7 +135,7 @@ void ChipCounter::requestComplete(s32 a1) {
 
     mGroupId = a1;
 
-    MR::requestStartDemoWithoutCinemaFrame(this, "\203\140\203\142\203\166\203\122\203\223\203\166\203\212\201\133\203\147" /* チップコンプリート */, GET_NERVE(ChipCounter, ChipCounterNrvComplete),
+    MR::requestStartDemoWithoutCinemaFrame(this, "チップコンプリート", GET_NERVE(ChipCounter, ChipCounterNrvComplete),
                                            GET_NERVE(ChipCounter, ChipCounterNrvTryDemo));
 }
 
@@ -248,7 +248,7 @@ void ChipCounter::exeCompleteOut() {
 
         mCollectCounter->kill();
 
-        MR::endDemo(this, "\203\140\203\142\203\166\203\122\203\223\203\166\203\212\201\133\203\147" /* チップコンプリート */);
+        MR::endDemo(this, "チップコンプリート");
 
         MR::noticeEndChipCompleteDemo(mType, mGroupId);
     }

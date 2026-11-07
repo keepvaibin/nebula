@@ -14,7 +14,7 @@
 #include "Game/Scene/MultiSceneActor.hpp"
 #include "Game/Scene/MultiSceneEffectKeeper.hpp"
 #include "Game/Screen/PaneEffectKeeper.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -129,7 +129,7 @@ namespace MR {
             return getParticleResourceHolder()->getAutoEffectNum(pName);
         }
 
-        JMapInfo* getAutoEffectListBinary() {
+        Table* getAutoEffectListBinary() {
             return getParticleResourceHolder()->getAutoEffectListBinary();
         }
 
@@ -297,8 +297,8 @@ namespace MR {
         }
 
         AutoEffectInfo* createAutoEffect(const char* pGroupName, const char* pUniqueName) {
-            JMapInfo* pInfo = getAutoEffectListBinary();
-            JMapInfoIter iter = pInfo->findElement("UniqueName", pUniqueName, 0);
+            Table* pInfo = getAutoEffectListBinary();
+            TableIter iter = pInfo->findElement("UniqueName", pUniqueName, 0);
             const char* pName = "";
             iter.getValue("GroupName", &pName);
             AutoEffectInfo* pEffectInfo = new AutoEffectInfo();

@@ -6,12 +6,12 @@
 FloaterFloatingForce::~FloaterFloatingForce() {
 }
 
-FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "\225\202\227\315" /* 浮力 */), _18(pName), _1C(gZeroVec) {
+FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "浮力"), _18(pName), _1C(gZeroVec) {
     _28 = Vec3f(0.0f, 1.0f, 0.0f);
     mMoveConditionType = 0.0f;
 }
 
-void FloaterFloatingForce::init(const JMapInfoIter& rIter) {
+void FloaterFloatingForce::init(const TableIter& rIter) {
     s32 moveConditionType = 0;
     MR::getMapPartsArgMoveConditionType(&moveConditionType, rIter);
     mMoveConditionType = moveConditionType;

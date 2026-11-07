@@ -23,7 +23,7 @@ public:
     DinoPackun(const char*);
 
     virtual ~DinoPackun();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void makeActorDead();
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -34,10 +34,10 @@ public:
 
     void initTail();
     void initFootPrint();
-    void initDemoPosition(const JMapInfoIter&);
+    void initDemoPosition(const TableIter&);
     void initEggShell();
     void initBall();
-    void initCamera(const JMapInfoIter&);
+    void initCamera(const TableIter&);
     void initScaleJointController();
     void startHitReaction();
     bool isHitReaction(s32) const;

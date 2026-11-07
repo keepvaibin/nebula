@@ -30,7 +30,7 @@ bool SpiderMapBlock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSenso
 SpiderMapBlock::~SpiderMapBlock() {
 }
 
-void SpiderMapBlock::init(const JMapInfoIter& rIter) {
+void SpiderMapBlock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mPosZ = mPosition.z;
     initModelManagerWithAnm("SpiderMapBlock", nullptr, false);

@@ -14,7 +14,7 @@ namespace {
 FileSelectNumber::FileSelectNumber(const char* pName) : LayoutActor(pName, true), mNumber(-1), mSelectAnimCtrl() {
 }
 
-void FileSelectNumber::init(const JMapInfoIter& rIter) {
+void FileSelectNumber::init(const TableIter& rIter) {
     initLayoutManager("FileNumber", 2);
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE_ANON(FileSelectNumberNrvWait));
@@ -99,7 +99,7 @@ namespace FileSelectNumberSub {
     NEW_NERVE(SelectAnimControllerNrvSelectOutStart, SelectAnimController, SelectOutStart);
     NEW_NERVE(SelectAnimControllerNrvSelectOut, SelectAnimController, SelectOut);
 
-    SelectAnimController::SelectAnimController(LayoutActor* pHost) : NerveExecutor("\203\132\203\214\203\116\203\147\203\101\203\152\203\201\220\247\214\344" /* セレクトアニメ制御 */), mHost(pHost) {
+    SelectAnimController::SelectAnimController(LayoutActor* pHost) : NerveExecutor("セレクトアニメ制御"), mHost(pHost) {
         initNerve(GET_NERVE_GLOBAL(SelectAnimControllerNrvSelectOut));
     }
 

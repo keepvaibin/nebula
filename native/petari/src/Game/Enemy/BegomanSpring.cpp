@@ -13,7 +13,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -113,7 +113,7 @@ BegomanSpring::BegomanSpring(const char* pName)
     mWaterColumnMatrix.identity();
 }
 
-void BegomanSpring::init(const JMapInfoIter& rIter) {
+void BegomanSpring::init(const TableIter& rIter) {
     initCore(rIter, "BegomanSpring", false);
     mHidePos.set(mPosition);
     const char* pObjectName = "\0";
@@ -124,9 +124,9 @@ void BegomanSpring::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isEqualString(pObjectName, "BegomanSpringHide")) {
-        setName("\211\102\202\352\203\157\203\154\203\170\201\133\203\123\203\175\203\223" /* 隠れバネベーゴマン */);
+        setName("隠れバネベーゴマン");
         mType = 1;
-        mBaby = new BegomanBaby("\211\102\202\352\203\157\203\154\203\170\201\133\203\123\203\175\203\223\203\170\203\162\201\133" /* 隠れバネベーゴマンベビー */);
+        mBaby = new BegomanBaby("隠れバネベーゴマンベビー");
         mBaby->mPosition.set(mPosition);
         mBaby->initWithoutIter();
         mBaby->makeActorDead();
@@ -166,7 +166,7 @@ void BegomanSpring::init(const JMapInfoIter& rIter) {
     }
 }
 
-void BegomanSpring::initEventCameras(const JMapInfoIter& rIter) {
+void BegomanSpring::initEventCameras(const TableIter& rIter) {
     mCameraInfo = new ActorCameraInfo(rIter);
     if (mCameraInfo->mCameraSetID != -1) {
         mEventCamera = new MultiEventCamera();

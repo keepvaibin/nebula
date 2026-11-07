@@ -6,12 +6,12 @@
 SpinDriverShootPath::SpinDriverShootPath() : mRailRider(), mPath(), mStartPosition(0.0f, 0.0f, 0.0f), mUsesParabolic() {
 }
 
-void SpinDriverShootPath::init(const JMapInfoIter& rIter) {
+void SpinDriverShootPath::init(const TableIter& rIter) {
     mRailRider = new RailRider(rIter);
     mUsesParabolic = false;
 }
 
-void SpinDriverShootPath::initUsingParabolic(const JMapInfoIter& rIter, const Vec3f& rStartingPosition) {
+void SpinDriverShootPath::initUsingParabolic(const TableIter& rIter, const Vec3f& rStartingPosition) {
     mRailRider = new RailRider(rIter);
     mUsesParabolic = mRailRider->getPointNum() <= 2;
 

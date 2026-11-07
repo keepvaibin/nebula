@@ -301,12 +301,12 @@ void SmallStoneMember::movementByHost(SmallStone* pHost) {
 SmallStoneMember::~SmallStoneMember() {
 }
 
-void SmallStone::init(const JMapInfoIter& rIter) {
+void SmallStone::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     MR::initDefaultPos(this, rIter);
     mMemberCount = 8;
     s32 arg = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
 
     if (arg == -1) {
         mPlacementOffset = 0.0f;
@@ -315,7 +315,7 @@ void SmallStone::init(const JMapInfoIter& rIter) {
     }
 
     arg = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg);
+    MR::getPlacementArg1NoInit(rIter, &arg);
 
     if (arg == -1) {
         mUseGravity = true;
@@ -334,7 +334,7 @@ void SmallStone::init(const JMapInfoIter& rIter) {
     }
 
     arg = -1;
-    MR::getJMapInfoArg2NoInit(rIter, &arg);
+    MR::getPlacementArg2NoInit(rIter, &arg);
 
     if (arg == -1) {
         mIsStarPiece = false;

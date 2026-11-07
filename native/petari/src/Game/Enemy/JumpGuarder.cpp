@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -64,7 +64,7 @@ void JumpEmitter::kill() {
     endEventCamera();
 }
 
-void JumpEmitter::initEventCamera(const JMapInfoIter& rIter) {
+void JumpEmitter::initEventCamera(const TableIter& rIter) {
     mCameraInfo = new ActorCameraInfo(rIter);
 
     if (mCameraInfo->mCameraSetID != -1) {
@@ -458,10 +458,10 @@ JumpGuarder::JumpGuarder(const char* pName)
     mNumActiveBabies = 0;
 }
 
-void JumpGuarder::init(const JMapInfoIter& rIter) {
+void JumpGuarder::init(const TableIter& rIter) {
     initModelManagerWithAnm("JumpGuarder", nullptr, false);
     // "Jump guarder head"
-    mHeadModel = MR::createPartsModelNoSilhouettedMapObj(this, "\203\127\203\203\203\223\203\166\203\113\201\133\203\137\201\133\223\252" /* ジャンプガーダー頭 */, "JumpGuarderHead", _90);
+    mHeadModel = MR::createPartsModelNoSilhouettedMapObj(this, "ジャンプガーダー頭", "JumpGuarderHead", _90);
     MR::initLightCtrl(mHeadModel);
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemy(this);
@@ -490,9 +490,9 @@ void JumpGuarder::init(const JMapInfoIter& rIter) {
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     makeActorAppeared();
     s32 babySpeedModifier = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &mNumCoins);
-    MR::getJMapInfoArg1NoInit(rIter, &babySpeedModifier);
-    MR::getJMapInfoArg2NoInit(rIter, &mNumBabies);
+    MR::getPlacementArg0NoInit(rIter, &mNumCoins);
+    MR::getPlacementArg1NoInit(rIter, &babySpeedModifier);
+    MR::getPlacementArg2NoInit(rIter, &mNumBabies);
 
     switch (babySpeedModifier) {
     case 0:
@@ -519,7 +519,7 @@ void JumpGuarder::init(const JMapInfoIter& rIter) {
 }
 
 // "Baby Begoman"
-JumpGuarderBaby::JumpGuarderBaby() : BegomanBaby("\203\170\203\162\201\133\203\170\201\133\203\123\203\175\203\223" /* ベビーベーゴマン */) {
+JumpGuarderBaby::JumpGuarderBaby() : BegomanBaby("ベビーベーゴマン") {
 }
 
 void JumpGuarder::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

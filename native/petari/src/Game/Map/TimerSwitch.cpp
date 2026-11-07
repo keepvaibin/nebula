@@ -1,15 +1,15 @@
 #include "Game/Map/TimerSwitch.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 TimerSwitch::TimerSwitch(const char* pName) : LiveActor(pName), mTimeLimit(-1), mTimeLeft(-1) {
 }
 
-void TimerSwitch::init(const JMapInfoIter& rIter) {
+void TimerSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimeLimit);
+    MR::getPlacementArg0NoInit(rIter, &mTimeLimit);
     MR::needStageSwitchWriteA(this, rIter);
     MR::needStageSwitchReadB(this, rIter);
     MR::invalidateClipping(this);

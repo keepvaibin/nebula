@@ -8,7 +8,7 @@ public:
     PalmIsland(const char*);
 
     virtual ~PalmIsland();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeFloat();
     void exeWait();

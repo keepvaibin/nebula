@@ -13,7 +13,7 @@ public:
     GalaxyMapCometIcon(const char*, LayoutActor*, const char*);
 
     virtual ~GalaxyMapCometIcon();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void calcAnim();
     virtual void appear();
     virtual void control();

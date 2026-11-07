@@ -2,10 +2,10 @@
 #include "Game/Demo/DemoCastGroup.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-DemoCastGroupHolder::DemoCastGroupHolder() : NameObjGroup("\203\146\203\202\212\326\214\127\216\322\203\117\203\213\201\133\203\166\225\333\216\235" /* デモ関係者グループ保持 */, 32) {
+DemoCastGroupHolder::DemoCastGroupHolder() : NameObjGroup("デモ関係者グループ保持", 32) {
 }
 
-bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const JMapInfoIter& rIter, const JMapIdInfo& rInfo) const {
+bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const TableIter& rIter, const PlacementId& rInfo) const {
     for (s32 i = 0; i < getObjNum(); i++) {
         if (getCastGroup(i)->tryRegisterDemoActor(pActor, rIter, rInfo)) {
             return true;
@@ -15,7 +15,7 @@ bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const JMapInfo
     return false;
 }
 
-bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const char* pName, const JMapInfoIter& rIter) const {
+bool DemoCastGroupHolder::tryRegisterDemoActor(LiveActor* pActor, const char* pName, const TableIter& rIter) const {
     for (s32 i = 0; i < getObjNum(); i++) {
         if (getCastGroup(i)->tryRegisterDemoActor(pActor, pName, rIter)) {
             return true;

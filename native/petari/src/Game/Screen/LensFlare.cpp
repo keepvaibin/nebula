@@ -124,7 +124,7 @@ void LensFlareModel::notifyInArea() {
     }
 }
 
-LensFlareRing::LensFlareRing() : LensFlareModel("\203\214\203\223\203\131\203\164\203\214\203\101\203\212\203\223\203\117" /* レンズフレアリング */, "LensFlare"), _A0() {
+LensFlareRing::LensFlareRing() : LensFlareModel("レンズフレアリング", "LensFlare"), _A0() {
     mScale.x = 0.135f;
     mScale.y = 0.135f;
     mScale.z = 0.135f;
@@ -148,7 +148,7 @@ void LensFlareRing::controlAnim() {
     MR::setBckFrameAndStop(this, frame);
 }
 
-LensFlareGlow::LensFlareGlow() : LensFlareModel("\203\117\203\214\203\101\201\151\211\176\214\140\201\152" /* グレア（円形） */, "GlareGlow") {
+LensFlareGlow::LensFlareGlow() : LensFlareModel("グレア（円形）", "GlareGlow") {
     _94 = 0.05f;
 }
 
@@ -162,7 +162,7 @@ void LensFlareGlow::controlAnim() {
     MR::setBrkFrame(this, (1.0f - _8C * _90) * MR::getBrkCtrl(this)->getEnd());
 }
 
-LensFlareLine::LensFlareLine() : LensFlareModel("\203\117\203\214\203\101\201\151\203\211\203\103\203\223\201\152" /* グレア（ライン） */, "GlareLine") {
+LensFlareLine::LensFlareLine() : LensFlareModel("グレア（ライン）", "GlareLine") {
     _94 = 0.05f;
 }
 
@@ -176,13 +176,13 @@ void LensFlareLine::controlAnim() {
 }
 
 LensFlareDirector::LensFlareDirector()
-    : NameObj("\203\214\203\223\203\131\203\164\203\214\203\101\212\307\227\235" /* レンズフレア管理 */), mRing(), mGlow(), mLine(), mBrightObjCount(), mAsker(Frame::newProbeAsker()), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C() {
+    : NameObj("レンズフレア管理"), mRing(), mGlow(), mLine(), mBrightObjCount(), mAsker(Frame::newProbeAsker()), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C() {
 }
 
 LensFlareDirector::~LensFlareDirector() {
 }
 
-void LensFlareDirector::init(const JMapInfoIter& rIter) {
+void LensFlareDirector::init(const TableIter& rIter) {
     mRing = new LensFlareRing();
     mGlow = new LensFlareGlow();
     mLine = new LensFlareLine();

@@ -2,14 +2,14 @@
 
 
 class ActorCameraInfo;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 
 class DemoCtrlBase {
 public:
     DemoCtrlBase(LiveActor*, const char*);
 
-    void init(const JMapInfoIter&);
+    void init(const TableIter&);
     void end();
     void update();
     bool isDone() const;

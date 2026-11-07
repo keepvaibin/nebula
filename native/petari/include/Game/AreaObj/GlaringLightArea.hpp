@@ -9,7 +9,7 @@ public:
     GlaringLightArea(int, const char*);
 
     virtual ~GlaringLightArea();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     virtual const char* getManagerName() const {

@@ -5,7 +5,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -24,7 +24,7 @@ namespace NrvNeedlePlant {
 NeedlePlant::NeedlePlant(const char* pName) : MapObjActor(pName), mObjArg0(-1) {
 }
 
-void NeedlePlant::init(const JMapInfoIter& rIter) {
+void NeedlePlant::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();
@@ -39,7 +39,7 @@ void NeedlePlant::init(const JMapInfoIter& rIter) {
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, 0);
     MR::initStarPointerTarget(this, mScale.x * 150.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));
-    MR::getJMapInfoArg0NoInit(rIter, &mObjArg0);
+    MR::getPlacementArg0NoInit(rIter, &mObjArg0);
 
     if (mObjArg0 == -1) {
         MR::declareCoin(this, 1);

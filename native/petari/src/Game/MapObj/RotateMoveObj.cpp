@@ -12,7 +12,7 @@ namespace NrvRotateMoveObj {
     NEW_NERVE(HostTypeStop, RotateMoveObj, Stop);
 };  // namespace NrvRotateMoveObj
 
-void RotateMoveObj::init(const JMapInfoIter& rIter) {
+void RotateMoveObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

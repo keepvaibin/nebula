@@ -36,12 +36,12 @@ namespace NrvScenarioSelectStar {
 };  // namespace NrvScenarioSelectStar
 
 ScenarioSelectStar::ScenarioSelectStar(EffectSystem* pSystem)
-    : MultiSceneActor("\203\126\203\151\203\212\203\111\221\111\221\360\202\314\203\130\203\136\201\133" /* シナリオ選択のスター */, "PowerStar", false), mStarCollectedStatus(0), mScenarioNo(1), mStarId(0), mIsPointing(false),
+    : MultiSceneActor("シナリオ選択のスター", "PowerStar", false), mStarCollectedStatus(0), mScenarioNo(1), mStarId(0), mIsPointing(false),
       mRotateSpeed(0.0f), mBasePos(gZeroVec), mTranslationOnSelect(gZeroVec), mAppearFrame(::cAppearFrame), mScaleOnSelect(1.0f) {
     initEffect(pSystem, 0, "ScenarioStar");
 }
 
-void ScenarioSelectStar::init(const JMapInfoIter& rIter) {
+void ScenarioSelectStar::init(const TableIter& rIter) {
     initNerve(GET_NERVE(ScenarioSelectStar, ScenarioSelectStarNrvNotPointing));
 }
 

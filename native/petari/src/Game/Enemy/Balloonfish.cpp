@@ -6,7 +6,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -37,7 +37,7 @@ Balloonfish::Balloonfish(const char* pName)
     : LiveActor(pName), mAnimScaleController(), mNerveBeforeBind(), mQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateAngle(::hRotateAngle) {
 }
 
-void Balloonfish::init(const JMapInfoIter& rIter) {
+void Balloonfish::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         MR::needStageSwitchReadAppear(this, rIter);
@@ -109,7 +109,7 @@ void Balloonfish::exeWait() {
     }
 
     // "weak"
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mNerveBeforeBind = mSpine->getCurrentNerve();
         setNerve(GET_NERVE(Balloonfish, HostTypeNrvStarPointerBind));
         return;
@@ -168,7 +168,7 @@ void Balloonfish::exeDash() {
     }
 
     // "weak"
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mNerveBeforeBind = mSpine->getCurrentNerve();
         setNerve(GET_NERVE(Balloonfish, HostTypeNrvStarPointerBind));
         return;
@@ -189,7 +189,7 @@ void Balloonfish::exeStarPointerBind() {
     mVelocity.zero();
 
     // "weak"
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(mNerveBeforeBind);
     }
 }

@@ -30,7 +30,7 @@ SamboHead::SamboHead(const char* pName) : LiveActor(pName), mSpinCtrl(), mScaleC
     _B0 = 0;
 }
 
-void SamboHead::init(const JMapInfoIter& rIter) {
+void SamboHead::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         MR::useStageSwitchWriteDead(this, rIter);
@@ -40,7 +40,7 @@ void SamboHead::init(const JMapInfoIter& rIter) {
 
         MR::useStageSwitchReadA(this, rIter);
         s32 arg0 = -1;
-        MR::getJMapInfoArg0NoInit(rIter, &arg0);
+        MR::getPlacementArg0NoInit(rIter, &arg0);
 
         if (arg0 == -1) {
             _B0 = false;

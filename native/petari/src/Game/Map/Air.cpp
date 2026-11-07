@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -21,16 +21,16 @@ Air::Air(const char* pName) : LiveActor(pName) {
     mDistance = 70.0f;
 }
 
-void Air::init(const JMapInfoIter& rIter) {
+void Air::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* object_name = 0;
     MR::getObjectName(&object_name, rIter);
     initModel(object_name);
     MR::connectToSceneAir(this);
     MR::useStageSwitchReadA(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mDistance);
+    MR::getPlacementArg0NoInit(rIter, &mDistance);
     s32 arg_1 = -1;
-    MR::getJMapInfoArg1NoInit(rIter, &arg_1);
+    MR::getPlacementArg1NoInit(rIter, &arg_1);
     _8D = arg_1 + 1;
     MR::tryStartAllAnim(this, object_name);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
@@ -43,7 +43,7 @@ void Air::init(const JMapInfoIter& rIter) {
     if (registered) {
         bool val = true;
 
-        bool ret = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeOut), "\217\301\226\305" /* 消滅 */);
+        bool ret = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeOut), "消滅");
 
         if (!ret) {
             ret = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeIn), nullptr);
@@ -180,7 +180,7 @@ PriorDrawAir::PriorDrawAir(const char* pName) : Air(pName) {
     MR::getSceneObj< PriorDrawAirHolder >(SceneObj_PriorDrawAirHolder)->add(this);
 }
 
-PriorDrawAirHolder::PriorDrawAirHolder() : NameObj("\220\346\225\140\211\346\221\345\213\103\225\333\216\235" /* 先描画大気保持 */) {
+PriorDrawAirHolder::PriorDrawAirHolder() : NameObj("先描画大気保持") {
     mAirCount = 0;
 }
 

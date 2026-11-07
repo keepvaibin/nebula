@@ -33,11 +33,11 @@ void SpringStep::setSpringBaseValue(f32 val) {
 }
 
 MapPartsFloatingForce::MapPartsFloatingForce(LiveActor* pActor)
-    : MapPartsFunction(pActor, "\225\202\227\315" /* 浮力 */), mSpringStep(), mObjectName(), _20(), mRotateAngle(), mRotateSpeed(), mRotateAccelType(), _30(gZeroVec),
+    : MapPartsFunction(pActor, "浮力"), mSpringStep(), mObjectName(), _20(), mRotateAngle(), mRotateSpeed(), mRotateAccelType(), _30(gZeroVec),
       mUpDirection(0.0f, 1.0f, 0.0f), _48(), _4C(), _50(0.0f, 0.0f, 0.0f), _5C() {
 }
 
-void MapPartsFloatingForce::init(const JMapInfoIter& rIter) {
+void MapPartsFloatingForce::init(const TableIter& rIter) {
     initNerve(GET_NERVE(MapPartsFloatingForce, HostTypeWait));
     MR::getMapPartsArgRotateAccelType(&mRotateAccelType, rIter);
 
@@ -54,7 +54,7 @@ void MapPartsFloatingForce::setObjectName(const char* pName) {
     mObjectName = pName;
 }
 
-void MapPartsFloatingForce::initForNormalMotion(const JMapInfoIter& rIter) {
+void MapPartsFloatingForce::initForNormalMotion(const TableIter& rIter) {
     s32 conditionType = 0;
     MR::getMapPartsArgMoveConditionType(&conditionType, rIter);
     _20 = conditionType;
@@ -62,7 +62,7 @@ void MapPartsFloatingForce::initForNormalMotion(const JMapInfoIter& rIter) {
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
 }
 
-void MapPartsFloatingForce::initForSpringMotion(const JMapInfoIter& rIter) {
+void MapPartsFloatingForce::initForSpringMotion(const TableIter& rIter) {
     s32 conditionType = 0;
     MR::getMapPartsArgMoveConditionType(&conditionType, rIter);
     _20 = conditionType;

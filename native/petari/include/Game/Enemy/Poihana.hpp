@@ -12,7 +12,7 @@ public:
     Poihana(const char* pName);
 
     virtual ~Poihana();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

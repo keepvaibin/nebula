@@ -7,7 +7,7 @@ class PTimerSwitch : public LiveActor {
 public:
     PTimerSwitch(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();

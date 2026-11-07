@@ -2,7 +2,7 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -54,7 +54,7 @@ void LavaGalaxyParts::control() {
     }
 }
 
-void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
+void LavaGalaxyParts::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     const char* objectName;
@@ -87,7 +87,7 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
 
     f32 arg0 = -1.0f;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     pName = objectName;
     bool isNonFloatingOrLavaStep;

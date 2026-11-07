@@ -26,14 +26,14 @@ namespace NrvSphereSelector {
 };  // namespace NrvSphereSelector
 
 SphereSelector::SphereSelector()
-    : LiveActor("\203\130\203\164\203\102\203\101\203\132\203\214\203\116\203\136\201\133" /* スフィアセレクター */), mSphereGroup(), mHandle(), mSelectedTarget(), _98(), mPointingTarget(), _A4(), _A8(0.0f, 0.0f),
+    : LiveActor("スフィアセレクター"), mSphereGroup(), mHandle(), mSelectedTarget(), _98(), mPointingTarget(), _A4(), _A8(0.0f, 0.0f),
       mIsPointingInvalid(), _B1() {
 }
 
-void SphereSelector::init(const JMapInfoIter& rIter) {
+void SphereSelector::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecorationMovement(this);
     MR::invalidateClipping(this);
-    mSphereGroup = new LiveActorGroup("\203\130\203\164\203\102\203\101\203\132\203\214\203\116\203\136\201\133\203\101\203\116\203\136\201\133\203\117\203\213\201\133\203\166" /* スフィアセレクターアクターグループ */, 32);
+    mSphereGroup = new LiveActorGroup("スフィアセレクターアクターグループ", 32);
     initNerve(GET_NERVE(SphereSelector, SphereSelectorNrvSelectStart));
     makeActorDead();
 }

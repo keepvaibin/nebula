@@ -8,7 +8,7 @@ class DriftWood : public MapObjActor {
 public:
     DriftWood(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
     virtual void calcAndSetBaseMtx();
 

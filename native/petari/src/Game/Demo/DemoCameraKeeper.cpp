@@ -20,7 +20,7 @@ DemoCameraInfo::DemoCameraInfo()
       mIsContinuous(), _1C(), _20(), _24() {
 }
 
-void DemoCameraKeeper::initCast(LiveActor* pActor, const JMapInfoIter& rIter) {
+void DemoCameraKeeper::initCast(LiveActor* pActor, const TableIter& rIter) {
     for (s32 i = 0; i < _4; i++) {
         DemoCameraInfo* curInfo = &_8[i];
         if (!DemoFunction::isTargetDemoCast(pActor, rIter, curInfo->mCameraTargetName, curInfo->mCameraTargetCastID)) {
@@ -52,7 +52,7 @@ void DemoCameraKeeper::end() {
     _C = -1;
 }
 
-void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const JMapInfoIter& rIter) {
+void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const TableIter& rIter) {
     ActorCameraInfo* cameraInfo = new ActorCameraInfo(-1, MR::getPlacedZoneId(rIter));
     pInfo->_20 = cameraInfo;
     MR::declareEventCamera(cameraInfo, pInfo->_1C);
@@ -122,8 +122,8 @@ void DemoCameraKeeper::endCurrentCamera() {
     _10 = nullptr;
 }
 
-DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const JMapInfoIter& rIter) : mExecutor(pExecutor), _4(), _8(), _C(-1), _10() {
-    JMapInfo* map = nullptr;
+DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIter) : mExecutor(pExecutor), _4(), _8(), _C(-1), _10() {
+    Table* map = nullptr;
     _4 = DemoFunction::createSheetParser(mExecutor, ::sSheetName, &map);
 
     _8 = new DemoCameraInfo[_4];

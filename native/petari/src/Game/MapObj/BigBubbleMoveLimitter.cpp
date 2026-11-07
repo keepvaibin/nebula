@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/BigBubbleHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 BigBubbleMoveLimitter::BigBubbleMoveLimitter(const char* pName, s32 limitterType)
@@ -11,18 +11,18 @@ BigBubbleMoveLimitter::BigBubbleMoveLimitter(const char* pName, s32 limitterType
       mType(limitterType) {
 }
 
-void BigBubbleMoveLimitter::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0NoInit(rIter, &mID);
-    MR::getJMapInfoArg1WithInit(rIter, &mLimitMarginType);
+void BigBubbleMoveLimitter::init(const TableIter& rIter) {
+    MR::getPlacementArg0NoInit(rIter, &mID);
+    MR::getPlacementArg1WithInit(rIter, &mLimitMarginType);
 
     Pos3f mtx;
-    MR::getJMapInfoMatrixFromRT(rIter, &mtx);
+    MR::getPlacementMatrixFromRT(rIter, &mtx);
     mtx.getTrans(mPosition);
     mtx.getYDir(mAxis);
     mtx.getXYZDir(mSide, mUp, mFront);
 
     Vec3f scale;
-    MR::getJMapInfoScale(rIter, &scale);
+    MR::getPlacementScale(rIter, &scale);
     mCylinderRadius = scale.x * 500.0f;
     mCylinderHeight = scale.y * 500.0f;
     mPlaneWidth = scale.x * 500.0f;

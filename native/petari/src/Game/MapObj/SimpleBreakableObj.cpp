@@ -11,7 +11,7 @@ namespace {
     const s32 sDefaultItemNumCoin = 1;
     const s32 sDefaultItemNumStarPiece = 5;
     const char* const cBckNameBreak = "Break";
-    const char* const cDemoName = "\222\215\226\332\203\112\203\201\203\211" /* 注目カメラ */;
+    const char* const cDemoName = "注目カメラ";
 };  // namespace
 
 namespace NrvSimpleBreakableObj {
@@ -25,7 +25,7 @@ SimpleBreakableObj::SimpleBreakableObj(const char* pName)
       mItemType(-1), mItemNum(-1), mKinokoOneUp(), mPlayRiddleSound(), mBreakEnded(), _E6() {
 }
 
-void SimpleBreakableObj::init(const JMapInfoIter& rIter) {
+void SimpleBreakableObj::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -54,9 +54,9 @@ void SimpleBreakableObj::init(const JMapInfoIter& rIter) {
         mBreakFlags |= 0x20;
     }
 
-    MR::getJMapInfoArg3NoInit(rIter, &mItemType);
+    MR::getPlacementArg3NoInit(rIter, &mItemType);
     s32 itemNum = -1;
-    MR::getJMapInfoArg6NoInit(rIter, &itemNum);
+    MR::getPlacementArg6NoInit(rIter, &itemNum);
 
     switch (mItemType) {
     case -1:
@@ -75,13 +75,13 @@ void SimpleBreakableObj::init(const JMapInfoIter& rIter) {
         break;
     }
 
-    MR::getJMapInfoArg7NoInit(rIter, &mSwitchDeadDelay);
+    MR::getPlacementArg7NoInit(rIter, &mSwitchDeadDelay);
     s32 playRiddleSound = -1;
-    MR::getJMapInfoArg4NoInit(rIter, &playRiddleSound);
+    MR::getPlacementArg4NoInit(rIter, &playRiddleSound);
     mPlayRiddleSound = playRiddleSound == 1;
 
     if (MR::initActorCamera(this, rIter, &mCameraInfo)) {
-        MR::getJMapInfoArg5NoInit(rIter, &mBreakOffsetFrame);
+        MR::getPlacementArg5NoInit(rIter, &mBreakOffsetFrame);
     } else {
         mCameraInfo = nullptr;
     }
@@ -181,7 +181,7 @@ void SimpleBreakableObj::setStateBreak() {
         return;
     }
 
-    MR::startRumbleWithShakeCameraWeak(this, "\222\206" /* 中 */, "\222\206" /* 中 */, 1000.0f, FLOAT_MAX);
+    MR::startRumbleWithShakeCameraWeak(this, "中", "中", 1000.0f, FLOAT_MAX);
     MR::invalidateCollisionParts(this);
     MR::stopScene(5);
     startBreak();
@@ -256,7 +256,7 @@ void SimpleBreakableObj::appearItem() {
 void SimpleBreakableObj::exeTryStartDemo() {
     if (MR::tryStartDemoWithoutCinemaFrame(this, ::cDemoName)) {
         MR::startActorCameraTargetSelf(this, mCameraInfo);
-        MR::startRumbleWithShakeCameraWeak(this, "\222\206" /* 中 */, "\222\206" /* 中 */, 1000.0f, FLOAT_MAX);
+        MR::startRumbleWithShakeCameraWeak(this, "中", "中", 1000.0f, FLOAT_MAX);
         MR::invalidateCollisionParts(this);
         setNerve(GET_NERVE(SimpleBreakableObj, HostTypeDemo));
     }

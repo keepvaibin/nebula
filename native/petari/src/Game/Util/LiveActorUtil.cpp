@@ -69,9 +69,9 @@ namespace {
     const char* createSubModelObjName(const LiveActor* pActor, const char* pSubName) {
         u32 subLength = strlen(pSubName);
         u32 actorLength = strlen(pActor->mName);
-        u32 length = actorLength + subLength + strlen("\201\151\201\152" /* （） */) + 1;
+        u32 length = actorLength + subLength + strlen("（）") + 1;
         char* pBuffer = new char[length];
-        nebula_snprintf(pBuffer, length, "%s\201\151%s\201\152" /* %s（%s） */, pActor->mName, pSubName);
+        nebula_snprintf(pBuffer, length, "%s（%s）", pActor->mName, pSubName);
         return pBuffer;
     }
 
@@ -334,7 +334,7 @@ namespace MR {
             return nullptr;
         }
 
-        const char* objName = ::createSubModelObjName(pActor, "\213\276\223\340\203\202\203\146\203\213" /* 鏡内モデル */);
+        const char* objName = ::createSubModelObjName(pActor, "鏡内モデル");
         MirrorActor* mirror = new MirrorActor(pActor, objName, pModelName);
         mirror->initWithoutIter();
         return mirror;
@@ -565,24 +565,24 @@ namespace MR {
         pDst->mScale.set(pSrc->mScale);
     }
 
-    void initDefaultPos(LiveActor* pActor, const JMapInfoIter& rIter) {
+    void initDefaultPos(LiveActor* pActor, const TableIter& rIter) {
         if (!rIter.isValid()) {
             return;
         }
 
-        MR::getJMapInfoTrans(rIter, &pActor->mPosition);
-        MR::getJMapInfoRotate(rIter, &pActor->mRotation);
-        MR::getJMapInfoScale(rIter, &pActor->mScale);
+        MR::getPlacementTrans(rIter, &pActor->mPosition);
+        MR::getPlacementRotate(rIter, &pActor->mRotation);
+        MR::getPlacementScale(rIter, &pActor->mScale);
 
         pActor->mRotation.x = MR::repeat(pActor->mRotation.x, 0.0f, 360.0f);
         pActor->mRotation.y = MR::repeat(pActor->mRotation.y, 0.0f, 360.0f);
         pActor->mRotation.z = MR::repeat(pActor->mRotation.z, 0.0f, 360.0f);
     }
 
-    void initDefaultPosNoRepeat(LiveActor* pActor, const JMapInfoIter& rIter) {
-        MR::getJMapInfoTrans(rIter, &pActor->mPosition);
-        MR::getJMapInfoRotate(rIter, &pActor->mRotation);
-        MR::getJMapInfoScale(rIter, &pActor->mScale);
+    void initDefaultPosNoRepeat(LiveActor* pActor, const TableIter& rIter) {
+        MR::getPlacementTrans(rIter, &pActor->mPosition);
+        MR::getPlacementRotate(rIter, &pActor->mRotation);
+        MR::getPlacementScale(rIter, &pActor->mScale);
     }
 
     bool isValidMovement(const LiveActor* pActor) {
@@ -694,7 +694,7 @@ namespace MR {
         }
     }
 
-    void setGroupClipping(LiveActor* pActor, const JMapInfoIter& rIter, int a3) {
+    void setGroupClipping(LiveActor* pActor, const TableIter& rIter, int a3) {
         MR::getClippingDirector()->joinToGroupClipping(pActor, rIter, a3);
     }
 
@@ -1146,14 +1146,14 @@ namespace MR {
         return pGroup;
     }
 
-    MsgSharedGroup* joinToGroupArray(LiveActor* pActor, const JMapInfoIter& rIter, const char* pName, s32 maxCount) {
+    MsgSharedGroup* joinToGroupArray(LiveActor* pActor, const TableIter& rIter, const char* pName, s32 maxCount) {
         if (!rIter.isValid()) {
             return nullptr;
         }
 
         s32 groupId;
 
-        if (getJMapInfoGroupID(rIter, &groupId)) {
+        if (getPlacementGroupID(rIter, &groupId)) {
             LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
             return (MsgSharedGroup*)pGroupArray->entry(pActor, rIter, pName, maxCount);
         }
@@ -2545,19 +2545,19 @@ namespace MR {
         return pModel;
     }
 
-    LodCtrl* createLodCtrlNPC(LiveActor* pActor, const JMapInfoIter& rIter) {
+    LodCtrl* createLodCtrlNPC(LiveActor* pActor, const TableIter& rIter) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
         return pLod;
     }
 
-    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
+    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const TableIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
         pLod->createFarModel(MR::DrawBufferType_PlanetLow, -1, MR::DrawBufferType_Sky);
         pLod->setFarClipping(farClip);
         return pLod;
     }
 
-    LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
+    LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const TableIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
         pLod->createFarModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
         pLod->setFarClipping(farClip);

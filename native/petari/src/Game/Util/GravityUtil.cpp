@@ -24,7 +24,7 @@ namespace {
         return MR::getSceneObj< PlanetGravityManager >(SceneObj_PlanetGravityManager);
     }
 
-    void getJMapInfoArgPlus(const JMapInfoIter& rIter, const char* pFieldName, f32* pDest) {
+    void getPlacementArgPlus(const TableIter& rIter, const char* pFieldName, f32* pDest) {
         f32 result;
 
         if (rIter.getValue(pFieldName, &result) && result >= 0.0f) {
@@ -32,7 +32,7 @@ namespace {
         }
     }
 
-    void getJMapInfoArgPlus(const JMapInfoIter& rIter, const char* pFieldName, s32* pDest) {
+    void getPlacementArgPlus(const TableIter& rIter, const char* pFieldName, s32* pDest) {
         s32 result;
 
         if (rIter.getValue(pFieldName, &result) && result >= 0.0f) {
@@ -125,32 +125,32 @@ namespace MR {
         return pGravity->mGravityPower == GRAVITY_POWER_LIGHT;
     }
 
-    void settingGravityParamFromJMap(PlanetGravity* pGravity, const JMapInfoIter& rIter) {
+    void settingGravityParamFromPlacement(PlanetGravity* pGravity, const TableIter& rIter) {
         f32 range = pGravity->mRange;
-        ::getJMapInfoArgPlus(rIter, ::cRange, &range);
+        ::getPlacementArgPlus(rIter, ::cRange, &range);
         pGravity->mRange = range;
 
         f32 distant = pGravity->getDistant();
-        ::getJMapInfoArgPlus(rIter, ::cDistant, &distant);
+        ::getPlacementArgPlus(rIter, ::cDistant, &distant);
         pGravity->mDistant = distant;
 
         s32 priority = pGravity->mPriority;
-        ::getJMapInfoArgPlus(rIter, ::cPriority, &priority);
+        ::getPlacementArgPlus(rIter, ::cPriority, &priority);
         pGravity->setPriority(priority);
 
         s32 id = pGravity->mGravityId;
-        ::getJMapInfoArgPlus(rIter, ::cGravityId, &id);
+        ::getPlacementArgPlus(rIter, ::cGravityId, &id);
         pGravity->mGravityId = id;
 
-        getJMapInfoGravityType(rIter, pGravity);
-        getJMapInfoGravityPower(rIter, pGravity);
+        getPlacementGravityType(rIter, pGravity);
+        getPlacementGravityPower(rIter, pGravity);
 
         s32 inverse = pGravity->mIsInverse != false;
-        ::getJMapInfoArgPlus(rIter, ::cInverse, &inverse);
+        ::getPlacementArgPlus(rIter, ::cInverse, &inverse);
         pGravity->mIsInverse = inverse;
     }
 
-    void getJMapInfoGravityType(const JMapInfoIter& rIter, PlanetGravity* pGravity) {
+    void getPlacementGravityType(const TableIter& rIter, PlanetGravity* pGravity) {
         const char* pType = nullptr;
 
         if (rIter.getValue(::cGravityType, &pType)) {
@@ -164,7 +164,7 @@ namespace MR {
         }
     }
 
-    void getJMapInfoGravityPower(const JMapInfoIter& rIter, PlanetGravity* pGravity) {
+    void getPlacementGravityPower(const TableIter& rIter, PlanetGravity* pGravity) {
         const char* pPower = nullptr;
 
         if (rIter.getValue(::cPower, &pPower)) {

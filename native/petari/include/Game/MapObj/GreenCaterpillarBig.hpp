@@ -7,7 +7,7 @@ public:
     GreenCaterpillarBigBody(LiveActor*, MtxPtr);
 
     virtual ~GreenCaterpillarBigBody();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
@@ -24,7 +24,7 @@ public:
     GreenCaterpillarBig(const char*);
 
     virtual ~GreenCaterpillarBig();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();
@@ -36,7 +36,7 @@ public:
     void exeRest();
     void exeEndAdjust();
     void exeEnd();
-    void initBodyParts(const JMapInfoIter&);
+    void initBodyParts(const TableIter&);
     bool tryGenerateBodyParts();
     void fixBodyPartsOnRail();
     void leaveApple();

@@ -34,7 +34,7 @@ namespace {
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("\203\200\201\133\203\162\201\133\203\166\203\214\203\103\203\204\201\133" /* ムービープレイヤー */, true), JKRDisposer(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
+    : LayoutActor("ムービープレイヤー", true), JKRDisposer(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
     mMovie = new Movie();
     mMovie->mMovieName = "";
     mMovie->mBuffer = nullptr;
@@ -53,7 +53,7 @@ MoviePlayerSimple::~MoviePlayerSimple() {
     NebulaArena::destroy(mHeap);
 }
 
-void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
+void MoviePlayerSimple::init(const TableIter& rIter) {
     MR::connectToSceneMovie(this);
 
     mStream = new MovieStream();

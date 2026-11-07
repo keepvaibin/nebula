@@ -3,7 +3,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -16,7 +16,7 @@ namespace NrvItemAppearStone {
 ItemAppearStone::ItemAppearStone(const char* pName) : LiveActor(pName) {
 }
 
-void ItemAppearStone::init(const JMapInfoIter& rIter) {
+void ItemAppearStone::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* model_name = 0;
     MR::getObjectName(&model_name, rIter);

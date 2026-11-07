@@ -11,7 +11,7 @@ class PlantStalk : public LiveActor {
 public:
     PlantStalk();
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void drawGrowUp(TypedDraw& rDraw) const;
 

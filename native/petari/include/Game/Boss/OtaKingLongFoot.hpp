@@ -8,7 +8,7 @@ class OtaKingLongFoot : public PartsModel {
 public:
     OtaKingLongFoot(LiveActor* pHost, s32, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

@@ -10,7 +10,7 @@ public:
     LavaGalaxyParts(const char*);
 
     virtual ~LavaGalaxyParts();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void makeActorDead();

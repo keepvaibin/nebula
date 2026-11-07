@@ -201,14 +201,14 @@ namespace NrvPowerStarList {
 };  // namespace NrvPowerStarList
 
 PowerStarList::PowerStarList()
-    : LayoutActor("\221\123\203\160\203\217\201\133\203\130\203\136\201\133\203\212\203\130\203\147" /* 全パワースターリスト */, true), mArrowUpButtonCtrl(), mArrowDownButtonCtrl(), mSysInfoWindow(), mPageNo() {
+    : LayoutActor("全パワースターリスト", true), mArrowUpButtonCtrl(), mArrowDownButtonCtrl(), mSysInfoWindow(), mPageNo() {
     mSeparatorArray = new Separator[4]();
 }
 
 PowerStarList::Separator::Separator() {
 }
 
-void PowerStarList::init(const JMapInfoIter& rIter) {
+void PowerStarList::init(const TableIter& rIter) {
     initLayoutManager("AllStarList", 1);
     MR::createAndAddPaneCtrl(this, "PicBG", 1);
     MR::createAndAddPaneCtrl(this, "List1", 1);

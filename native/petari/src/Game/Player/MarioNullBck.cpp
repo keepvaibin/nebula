@@ -10,7 +10,7 @@ MarioNullBck::MarioNullBck(const char* pName) : LiveActor(pName) {
 MarioNullBck::~MarioNullBck() {
 }
 
-void MarioNullBck::init(const JMapInfoIter& rIter) {
+void MarioNullBck::init(const TableIter& rIter) {
     initModelManagerWithAnm("MarioDummyItem", nullptr, false);
     MR::startBck(this, "PickUpBall");
     makeActorDead();

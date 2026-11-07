@@ -23,11 +23,11 @@ LavaStrangeRock::~LavaStrangeRock() {
 LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_3), _90(), mLodCtrlPlanet() {
 }
 
-void LavaStrangeRock::init(const JMapInfoIter& rIter) {
+void LavaStrangeRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 + 1 <= 1U) {
         _90 = 0;
@@ -42,10 +42,10 @@ void LavaStrangeRock::init(const JMapInfoIter& rIter) {
 
     if (MR::isEqualString(objName, "LavaStrangeRockTable")) {
         mRockType = Type_2;
-        setName("\227\156\212\342\212\357\212\342\221\344\214\140" /* 溶岩奇岩台形 */);
+        setName("溶岩奇岩台形");
     } else if (MR::isEqualString(objName, "LavaStrangeRockL")) {
         mRockType = Type_1;
-        setName("\227\156\212\342\212\357\212\342\221\345" /* 溶岩奇岩大 */);
+        setName("溶岩奇岩大");
     } else {
         mRockType = Type_0;
     }
@@ -63,11 +63,11 @@ void LavaStrangeRock::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-void LavaStrangeRock::initModelAndClipping(const JMapInfoIter& rIter) {
+void LavaStrangeRock::initModelAndClipping(const TableIter& rIter) {
     MR::setGroupClipping(this, rIter, 16);
 
     s32 arg3 = 0;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
 
     switch (mRockType) {
     case Type_0:

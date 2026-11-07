@@ -62,7 +62,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         }
 
         if (playerMode != 0) {
-            playEffect("\203\101\203\103\203\145\203\200\215\304\203\121\203\142\203\147" /* アイテム再ゲット */);
+            playEffect("アイテム再ゲット");
         }
 
         return;
@@ -105,7 +105,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         break;
 
     case 4:
-        stopAnimation("\203\156\203\140\224\362\215\163\222\206" /* ハチ飛行中 */);
+        stopAnimation("ハチ飛行中");
 
         if (!mMario->isSwimming()) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
@@ -116,7 +116,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         break;
 
     case 3:
-        stopEffect("\203\101\203\103\203\130\222\206" /* アイス中 */);
+        stopEffect("アイス中");
 
         changeHandMaterial();
 
@@ -128,7 +128,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         break;
 
     case 1:
-        stopEffect("\226\263\223\107\222\206" /* 無敵中 */);
+        stopEffect("無敵中");
 
         _A6E = 0;
 
@@ -156,16 +156,16 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         MR::startBtp(this, "TornadoElement");
 
         if (isJumping()) {
-            changeAnimation("\203\107\203\214\203\201\203\223\203\147\203\121\203\142\203\147" /* エレメントゲット */);
+            changeAnimation("エレメントゲット");
         } else {
-            changeAnimation("\203\107\203\214\203\201\203\223\203\147\203\121\203\142\203\147\220\332\222\156\222\206" /* エレメントゲット接地中 */);
+            changeAnimation("エレメントゲット接地中");
         }
         break;
 
     case 1:
         _3DC = mConst->getTable()->mMetalHoldTime;
 
-        playEffect("\226\263\223\107\222\206" /* 無敵中 */);
+        playEffect("無敵中");
 
         MR::startSubBGM("BGM_MUTEKI_A", false);
 
@@ -190,11 +190,11 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
             case 4:
             case 5:
             case 6:
-                playSound("\216\364\202\242\211\360\217\234" /* 呪い解除 */, -1);
+                playSound("呪い解除", -1);
                 break;
 
             default:
-                playSound("\225\317\220\147\211\360\217\234" /* 変身解除 */, -1);
+                playSound("変身解除", -1);
                 break;
             }
         }
@@ -204,12 +204,12 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
 
         if (mMario->isSwimming()) {
             if (_468 == 0) {
-                changeAnimation(nullptr, "\220\205\211\152\212\356\226\173" /* 水泳基本 */);
+                changeAnimation(nullptr, "水泳基本");
             }
         } else if (isJumping()) {
-            changeAnimation(nullptr, "\227\216\211\272" /* 落下 */);
+            changeAnimation(nullptr, "落下");
         } else {
-            changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+            changeAnimation(nullptr, "基本");
         }
 
         if (_4A4 != nullptr) {
@@ -255,7 +255,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         break;
 
     case 3:
-        playEffect("\203\101\203\103\203\130\222\206" /* アイス中 */);
+        playEffect("アイス中");
 
         MR::startSubBGM("BGM_ICE_A", false);
 
@@ -292,18 +292,18 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
 
     if (mPlayerMode == 0) {
         if (mTransforming) {
-            MR::endDemo(this, "\203\175\203\212\203\111\225\317\220\147" /* マリオ変身 */);
+            MR::endDemo(this, "マリオ変身");
             mTransforming = false;
         }
 
         if (myBool) {
             _3D8 = 30;
-            mMario->startPadVib("\203\175\203\212\203\111[\225\317\220\147\211\360\217\234]" /* マリオ[変身解除] */);
+            mMario->startPadVib("マリオ[変身解除]");
         } else {
             _3D8 = 2;
         }
 
-        playEffect("\225\317\220\147\211\360\217\234" /* 変身解除 */);
+        playEffect("変身解除");
     } else {
         if (_3D8 == 0 || _3D6 == 0) {
             mPowerupCollected = true;
@@ -312,9 +312,9 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
 
             MR::stopAnimFrame(this);
 
-            playEffect("\225\317\220\147" /* 変身 */);
+            playEffect("変身");
 
-            mMario->startPadVib("\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */);
+            mMario->startPadVib("マリオ[変身]");
 
             mPowerupCollected = false;
         }
@@ -335,13 +335,13 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
 }
 
 void MarioActor::resetPlayerModeOnDamage() {
-    if (isActionOk("\203\137\203\201\201\133\203\127\211\360\217\234" /* ダメージ解除 */)) {
+    if (isActionOk("ダメージ解除")) {
         setPlayerMode(0, true);
     }
 }
 
 void MarioActor::resetPlayerModeOnNoDamage() {
-    if (isActionOk("\203\155\201\133\203\137\203\201\201\133\203\127\211\360\217\234" /* ノーダメージ解除 */)) {
+    if (isActionOk("ノーダメージ解除")) {
         setPlayerMode(0, true);
     }
 }

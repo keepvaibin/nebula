@@ -19,11 +19,11 @@ FlameGun::FlameGun(const char* pName) : LiveActor(pName) {
     mState = -1;
 }
 
-void FlameGun::init(const JMapInfoIter& rIter) {
+void FlameGun::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::setGroupClipping(this, rIter, 32);
     s32 arg = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg);
+    MR::getPlacementArg0NoInit(rIter, &arg);
     mState = arg;
 
     if (MR::useStageSwitchReadA(this, rIter)) {

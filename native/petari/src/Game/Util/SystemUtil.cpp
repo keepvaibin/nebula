@@ -122,11 +122,11 @@ namespace MR {
     }
 
     // The output is 60 Hz: no PAL television to suggest PAL60 for.
-    JMapIdInfo* getPlayerRestartIdInfo() {
+    PlacementId* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }
 
-    void setPlayerRestartIdInfo(const JMapIdInfo& rInfo) {
+    void setPlayerRestartIdInfo(const PlacementId& rInfo) {
         ::getGameDataTemporaryInGalaxy()->setPlayerRestartIdInfo(rInfo);
     }
 };  // namespace MR

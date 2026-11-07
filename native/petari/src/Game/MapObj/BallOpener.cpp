@@ -35,7 +35,7 @@ BallOpener::BallOpener(const char* pName)
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
-void BallOpener::init(const JMapInfoIter& rIter) {
+void BallOpener::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BallOpener", nullptr, false);
     MR::connectToSceneMapObj(this);

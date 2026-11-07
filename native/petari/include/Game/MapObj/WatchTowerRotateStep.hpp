@@ -10,10 +10,10 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     WatchTowerRotateStep(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
 
-    void initLift(const JMapInfoIter& rIter);
+    void initLift(const TableIter& rIter);
     void attachLift();
 
     void exeWait();

@@ -9,7 +9,7 @@ public:
     SeaGull(SeaGullGroup* pGroup);
 
     virtual ~SeaGull();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
@@ -39,7 +39,7 @@ public:
     SeaGullGroup(const char* pName);
 
     virtual ~SeaGullGroup();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     Vec3f* updatePosInfo(s32* pPointIndex, bool isReverse) const;
 

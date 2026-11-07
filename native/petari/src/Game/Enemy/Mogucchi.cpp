@@ -10,7 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -50,9 +50,9 @@ Mogucchi::Mogucchi(const char* pName)
 Mogucchi::~Mogucchi() {
 }
 
-void Mogucchi::init(const JMapInfoIter& rIter) {
+void Mogucchi::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mMaxStrollSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mMaxStrollSpeed);
     initModelManagerWithAnm("Mogucchi", nullptr, false);
     MR::connectToSceneEnemy(this);
     initSensor();
@@ -276,7 +276,7 @@ void Mogucchi::createMogucchiHill() {
     }
 
     // "Mogucchi hill"
-    mHill = new MogucchiHill(this, railLength, "\203\202\203\117\203\142\203\140\222\313" /* モグッチ塚 */);
+    mHill = new MogucchiHill(this, railLength, "モグッチ塚");
     mHill->initWithoutIter();
     if (railLength > 5) {
         mHill->setAppearNum(mHill->_94 - 5);
@@ -300,7 +300,7 @@ void Mogucchi::updateStrollSpeed() {
 
 void Mogucchi::reflectStarPointer2P() {
     // "Weak"
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         if (!mIsStoppedByP2) {
             mIsStoppedByP2 = true;
             MR::startDPDHitSound();
@@ -335,7 +335,7 @@ void Mogucchi::updatePosition() {
 
 void Mogucchi::createHole() {
     // "Mogucchi hole"
-    mHole = new ModelObj("\203\202\203\117\203\142\203\140\214\212" /* モグッチ穴 */, "MogucchiHole", mNewHolePos, MR::DrawBufferType_MapObjStrongLight, -2, -2, false);
+    mHole = new ModelObj("モグッチ穴", "MogucchiHole", mNewHolePos, MR::DrawBufferType_MapObjStrongLight, -2, -2, false);
     mHole->initWithoutIter();
 }
 

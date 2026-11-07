@@ -12,7 +12,7 @@ public:
 
     HomingKiller(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -24,7 +24,7 @@ public:
     void appear(const Vec3f&, const Vec3f&);
     bool isMoveStart() const;
     void setChaseStartEndDistance(f32, f32);
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void calcInitPosture();
     void updateVelocity();
     void updateRotateZ(const Vec3f&);
@@ -101,7 +101,7 @@ class HomingKillerLauncher : public LiveActor {
 public:
     HomingKillerLauncher(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

@@ -112,24 +112,24 @@ void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const Pos3f& rViewMtx
 }
 
 void ParticleDrawExecutor::initDrawAdaptor() {
-    _4 = new NameObjAdaptor("3D\203\160\201\133\203\145\203\102\203\116\203\213" /* 3Dパーティクル */);
+    _4 = new NameObjAdaptor("3Dパーティクル");
     ::connectToSceneDrawAdaptor(_4, MR::Functor(this, &ParticleDrawExecutor::draw3D), MR::DrawType_EffectDraw3D);
 
-    _8 = new NameObjAdaptor("2D\203\160\201\133\203\145\203\102\203\116\203\213" /* 2Dパーティクル */);
+    _8 = new NameObjAdaptor("2Dパーティクル");
     ::connectToSceneDrawAdaptor(_8, MR::Functor(this, &ParticleDrawExecutor::draw2D), MR::DrawType_EffectDraw2D);
 
-    _C = new NameObjAdaptor("\203\103\203\223\203\137\203\103\203\214\203\116\203\147\203\160\201\133\203\145\203\102\203\116\203\213" /* インダイレクトパーティクル */);
+    _C = new NameObjAdaptor("インダイレクトパーティクル");
     ::connectToSceneDrawAdaptor(_C, MR::Functor(this, &ParticleDrawExecutor::drawIndirect), MR::DrawType_EffectDrawIndirect);
 
-    _10 = new NameObjAdaptor("\203\103\203\223\203\137\203\103\203\214\203\116\203\147\214\343\203\160\201\133\203\145\203\102\203\116\203\213" /* インダイレクト後パーティクル */);
+    _10 = new NameObjAdaptor("インダイレクト後パーティクル");
     ::connectToSceneDrawAdaptor(_10, MR::Functor(this, &ParticleDrawExecutor::drawAfterIndirect), MR::DrawType_EffectDrawAfterIndirect);
 
-    _14 = new NameObjAdaptor("2D\203\202\203\146\203\213\227\160\203\160\201\133\203\145\203\102\203\116\203\213" /* 2Dモデル用パーティクル */);
+    _14 = new NameObjAdaptor("2Dモデル用パーティクル");
     ::connectToSceneDrawAdaptor(_14, MR::Functor(this, &ParticleDrawExecutor::drawFor2DModel), MR::DrawType_EffectDrawFor2DModel);
 
-    _18 = new NameObjAdaptor("\203\165\203\213\201\133\203\200\227\160\203\160\201\133\203\145\203\102\203\116\203\213" /* ブルーム用パーティクル */);
+    _18 = new NameObjAdaptor("ブルーム用パーティクル");
     ::connectToSceneDrawAdaptor(_18, MR::Functor(this, &ParticleDrawExecutor::drawForBloomEffect), MR::DrawType_EffectDrawForBloomEffect);
 
-    _1C = new NameObjAdaptor("\203\103\203\201\201\133\203\127\203\107\203\164\203\106\203\116\203\147\214\343\203\160\201\133\203\145\203\102\203\116\203\213" /* イメージエフェクト後パーティクル */);
+    _1C = new NameObjAdaptor("イメージエフェクト後パーティクル");
     ::connectToSceneDrawAdaptor(_1C, MR::Functor(this, &ParticleDrawExecutor::drawAfterImageEffect), MR::DrawType_EffectDrawAfterImageEffect);
 }

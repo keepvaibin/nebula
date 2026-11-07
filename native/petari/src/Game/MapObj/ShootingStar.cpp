@@ -37,26 +37,26 @@ ShootingStar::ShootingStar(const char* pName)
       mWaitForNextShootTime(::sWaitForNextShootTime), mFallHeight(::sFallHeight) {
 }
 
-void ShootingStar::init(const JMapInfoIter& rIter) {
+void ShootingStar::init(const TableIter& rIter) {
     initModelManagerWithAnm("ShootingStar", nullptr, false);
     MR::connectToSceneMapObj(this);
     MR::initDefaultPos(this, rIter);
     mBasePos = mPosition;
     s32 arg0 = 5;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     mNumBurstStarPiece = arg0;
     arg0 = ::sWaitForNextShootTime;
-    MR::getJMapInfoArg1NoInit(rIter, &arg0);
+    MR::getPlacementArg1NoInit(rIter, &arg0);
     mWaitForNextShootTime = arg0;
     f32 arg2 = -1.0f;
-    MR::getJMapInfoArg2NoInit(rIter, &arg2);
+    MR::getPlacementArg2NoInit(rIter, &arg2);
 
     if (arg2 != -1.0f) {
         mFallHeight = arg2;
     }
 
     arg0 = 5;
-    MR::getJMapInfoArg3NoInit(rIter, &arg0);
+    MR::getPlacementArg3NoInit(rIter, &arg0);
     MR::declareStarPiece(this, arg0);
     initBinder(100.0f, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));

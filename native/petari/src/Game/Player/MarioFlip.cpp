@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 bool Mario::doFlipJump(const Vec3f& rVec) {
-    if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
+    if (isAnimationRun("壁はじき")) {
         return false;
     }
 
@@ -17,7 +17,7 @@ bool Mario::doFlipJump(const Vec3f& rVec) {
     vec -= getGravityVec()->scaleInline(mActor->mConst->getTable()->mWallSpinHopGround);
     tryForcePowerJump(vec, true);
 
-    changeAnimation("\225\307\202\315\202\266\202\253" /* 壁はじき */);
+    changeAnimation("壁はじき");
 
     stopPunch();
     mMovementStates._2B = true;
@@ -33,9 +33,9 @@ bool Mario::doFlipBackRoll(const Vec3f& rVec) {
 
     if (doFlipLarge(vec20)) {
         checkDamage();
-        changeAnimationNonStop("\214\343\223\135\202\323\202\301\202\306\202\321" /* 後転ふっとび */);
+        changeAnimationNonStop("後転ふっとび");
 
-        mDamage->setStrings("\214\343\223\135\202\323\202\301\202\306\202\321\213\363\222\206" /* 後転ふっとび空中 */, "\214\343\223\135\202\323\202\301\202\306\202\321\222\205\222\156" /* 後転ふっとび着地 */);
+        mDamage->setStrings("後転ふっとび空中", "後転ふっとび着地");
 
         Vec3f vec28;
         MR::vecKillElement(rVec, getAirGravityVec(), &vec28);
@@ -53,11 +53,11 @@ bool MarioFlip::start() {
     _24 = 0.0f;
     _28 = -0.75f;
 
-    changeAnimation("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
+    changeAnimation("はねとばされ");
 
-    playSound("\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */);
-    playSound("\225\307\217\325\223\313" /* 壁衝突 */);
-    playEffect("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    playSound("声小ダメージ");
+    playSound("壁衝突");
+    playEffect("ダメージ");
     startPadVib(2);
 
     addVelocity(_18);
@@ -67,7 +67,7 @@ bool MarioFlip::start() {
 
 bool MarioFlip::update() {
     if (_12 == 0) {
-        changeAnimationNonStop("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
+        changeAnimationNonStop("はねとばされ");
     }
 
     _12++;
@@ -92,7 +92,7 @@ bool MarioFlip::update() {
     case 0:
         _24 += _28;
         _28 *= 0.98f;
-        playSound("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
+        playSound("はねとばされ");
         addVelocity(velocity);
         _18.scale(mActor->mConst->getTable()->mFlipFriction1);
         if (_12 == mActor->mConst->getTable()->mFlipTimer1) {
@@ -103,7 +103,7 @@ bool MarioFlip::update() {
     case 1:
         _24 += _28;
         _28 *= 0.97f;
-        playSound("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
+        playSound("はねとばされ");
         if (!getPlayer()->mMovementStates._1) {
             return false;
         }
@@ -119,17 +119,17 @@ bool MarioFlip::update() {
         addVelocity(velocity);
         _18.scale(mActor->mConst->getTable()->mFlipFriction2);
         _28 *= 0.97f;
-        playSound("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
+        playSound("はねとばされ");
         _24 += _28;
         if (MR::isAngleBetween(_24, -0.1f, 0.1f)) {
-            changeAnimation("\202\315\202\313\202\306\202\316\202\263\202\352\217\111\227\271" /* はねとばされ終了 */);
+            changeAnimation("はねとばされ終了");
             _14++;
         }
 
         break;
     case 3:
         _24 = 0.0f;
-        if (!isAnimationRun("\202\315\202\313\202\306\202\316\202\263\202\352\217\111\227\271" /* はねとばされ終了 */)) {
+        if (!isAnimationRun("はねとばされ終了")) {
             return false;
         }
 
@@ -144,8 +144,8 @@ bool MarioFlip::update() {
         f32 incoming = MR::vecKillElement(_18, normal, &tangent);
         if (incoming < 0.0f) {
             stopAnimation(nullptr);
-            changeAnimationNonStop("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
-            playEffectTrans("\225\307\203\161\203\142\203\147" /* 壁ヒット */, getPlayer()->getWallPos());
+            changeAnimationNonStop("はねとばされ");
+            playEffectTrans("壁ヒット", getPlayer()->getWallPos());
             _18 = tangent + normal * -incoming * 1.2f;
             addVelocity(_18, 2.0f);
             _28 *= 1.2f;
@@ -238,8 +238,8 @@ void MarioFlip::setVec(const Vec3f& rVec) {
 bool MarioFlip::close() {
     setYangleOffset(0.0f);
 
-    stopAnimation("\202\315\202\313\202\306\202\316\202\263\202\352" /* はねとばされ */);
-    stopAnimation("\202\315\202\313\202\306\202\316\202\263\202\352\217\111\227\271" /* はねとばされ終了 */);
+    stopAnimation("はねとばされ");
+    stopAnimation("はねとばされ終了");
 
     if (mActor->mHealth == 0) {
         if (!getPlayer()->getMovementStates()._1) {

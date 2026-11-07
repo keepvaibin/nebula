@@ -3,7 +3,7 @@
 #include "Game/Util/MessageUtil.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class TalkMessageCtrl;
 class TalkMessageFuncBase;
@@ -71,9 +71,9 @@ namespace MR {
     void registerKillFunc(TalkMessageCtrl*, const TalkMessageFuncBase&);
     void setMessageArg(TalkMessageCtrl*, int);
     void setMessageArg(TalkMessageCtrl*, const char16_t*);
-    TalkMessageCtrl* createTalkCtrl(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
-    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const JMapInfoIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrl(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
+    TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const TableIter&, const char*, const Vec3f&, MtxPtr);
     bool tryTalkNearPlayer(TalkMessageCtrl*);
     bool tryTalkNearPlayerAtEnd(TalkMessageCtrl*);
     bool tryTalkForce(TalkMessageCtrl*);

@@ -9,7 +9,7 @@ public:
     /// @brief Creates a new `GameStageClearSequence`.
     GameStageClearSequence();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void startPowerStarGetDemo();
     void startGrandStarGetDemo();

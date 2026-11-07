@@ -8,7 +8,7 @@ DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPad
 
     char buf[0x100];
     nebula_snprintf(buf, sizeof(buf), "MoviePadRumble%s.arc", pName);
-    JMapInfo* map = MR::createCsvParser(buf, "PadRumbleData.bcsv");
+    Table* map = MR::createCsvParser(buf, "PadRumbleData.bcsv");
 
     mNumPadRumbleEntries = MR::getCsvDataElementNum(map);
     PadRumbleInfo* infos = new PadRumbleInfo[mNumPadRumbleEntries];

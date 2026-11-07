@@ -16,7 +16,7 @@ class TombSpider : public LiveActor {
 public:
     TombSpider(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void updateHitSensor(HitSensor* pSensor);
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

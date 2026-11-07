@@ -7,7 +7,7 @@ public:
     SnowCapsulePlanet(const char*);
 
     virtual ~SnowCapsulePlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeCloseWait();
     void exeOpenWait();

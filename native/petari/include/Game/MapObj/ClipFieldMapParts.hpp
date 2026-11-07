@@ -9,7 +9,7 @@ public:
     ClipFieldMapParts(const char* pName);
 
     virtual ~ClipFieldMapParts();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void connectToScene();
 };

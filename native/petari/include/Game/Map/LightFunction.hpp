@@ -3,7 +3,7 @@
 #include "Game/Map/LightDataHolder.hpp"
 #include "Game/Map/LightZoneDataHolder.hpp"
 
-class JMapInfo;
+class Table;
 class LightAreaHolder;
 struct PointLightInfo;
 class ResourceHolder;
@@ -14,9 +14,9 @@ public:
     static void initLightRegisterAll();
     static void initLightData();
     static ResourceHolder* loadLightArchive();
-    static s32 createLightDataParser(JMapInfo**);
-    static s32 createZoneDataParser(const char*, JMapInfo**);
-    static void getAreaLightLightData(JMapInfo*, int, AreaLightInfo*);
+    static s32 createLightDataParser(Table**);
+    static s32 createZoneDataParser(const char*, Table**);
+    static void getAreaLightLightData(Table*, int, AreaLightInfo*);
     static const char* getDefaultAreaLightName();
     static s32 getDefaultStepInterpolate();
     static void registerPlayerLightCtrl(const ActorLightCtrl*);

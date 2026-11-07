@@ -11,7 +11,7 @@ public:
 
     virtual ~MirrorCamera();
 
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual void movement() override;
 
     void setMirrorMapInfo(const Vec3f&, const Vec3f&);

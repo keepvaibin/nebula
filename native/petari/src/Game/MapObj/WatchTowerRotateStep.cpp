@@ -20,7 +20,7 @@ namespace NrvWatchTowerRotateStep {
 WatchTowerRotateStep::WatchTowerRotateStep(const char* pName) : LiveActor(pName), mRotateVec(0.0f, 0.0f, 0.0f), mLift() {
 }
 
-void WatchTowerRotateStep::init(const JMapInfoIter& rIter) {
+void WatchTowerRotateStep::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WatchTowerRotateStep", nullptr, false);
     MR::connectToSceneMapObj(this);
@@ -91,13 +91,13 @@ void WatchTowerRotateStep::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-void WatchTowerRotateStep::initLift(const JMapInfoIter& rIter) {
+void WatchTowerRotateStep::initLift(const TableIter& rIter) {
     mLift = new PartsModel*[LIFT_NUM];
 
     for (s32 i = 0; i < LIFT_NUM; i++) {
         MtxPtr mtx = MR::getJointMtx(this, i + 1);
 
-        mLift[i] = new PartsModel(this, "\225\250\214\251\202\314\223\203\203\212\203\164\203\147" /* 物見の塔リフト */, "WatchTowerRotateStepLift", mtx, -1, false);
+        mLift[i] = new PartsModel(this, "物見の塔リフト", "WatchTowerRotateStepLift", mtx, -1, false);
         mLift[i]->mIsCalcOwnMtx = false;
 
         MR::initCollisionParts(mLift[i], "WatchTowerRotateStepLift", getSensor(nullptr), nullptr);

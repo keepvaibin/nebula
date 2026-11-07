@@ -48,11 +48,11 @@ bool MarioFreeze::notice() {
 }
 
 bool MarioFreeze::start() {
-    changeAnimationNonStop("\225\130\214\213" /* 氷結 */);
+    changeAnimationNonStop("氷結");
 
-    playSound("\220\272\225\130\203\137\203\201\201\133\203\127" /* 声氷ダメージ */);
-    playSound("\225\130\203\137\203\201\201\133\203\127" /* 氷ダメージ */);
-    playSound("\203\137\203\201\201\133\203\127" /* ダメージ */);
+    playSound("声氷ダメージ");
+    playSound("氷ダメージ");
+    playSound("ダメージ");
 
     startPadVib(3);
     mActor->decLife(0);
@@ -80,11 +80,11 @@ bool MarioFreeze::update() {
             }
         } else if (mFreezeTimer < 120 && mActor->mHealth != 0 && mActor->isRequestSpin()) {
             addVelocity(getFrontVec(), -10.0f);
-            changeAnimation("\222\156\217\343\202\320\202\313\202\350" /* 地上ひねり */);
+            changeAnimation("地上ひねり");
 
-            playSound("\220\272\203\130\203\163\203\223" /* 声スピン */);
-            playSound("\203\130\203\163\203\223\203\127\203\203\203\223\203\166" /* スピンジャンプ */);
-            playSound("\225\130\203\137\203\201\201\133\203\127\217\111\227\271" /* 氷ダメージ終了 */);
+            playSound("声スピン");
+            playSound("スピンジャンプ");
+            playSound("氷ダメージ終了");
 
             mActor->hideFreezeModel();
             mIsFrozen = false;
@@ -95,7 +95,7 @@ bool MarioFreeze::update() {
     if (mFreezeTimer == 0) {
         if (_18 != 0) {
             if (mActor->mHealth != 0) {
-                playSound("\220\272\225\130\203\137\203\201\201\133\203\127\217\111\227\271" /* 声氷ダメージ終了 */);
+                playSound("声氷ダメージ終了");
                 return false;
             }
         } else {
@@ -113,8 +113,8 @@ bool MarioFreeze::update() {
                     mActor->forceGameOver();
                 }
             } else if (getPlayer()->getMovementStates()._1) {
-                changeAnimation("\225\130\214\213\211\360\217\234" /* 氷結解除 */);
-                playSound("\225\130\203\137\203\201\201\133\203\127\217\111\227\271" /* 氷ダメージ終了 */);
+                changeAnimation("氷結解除");
+                playSound("氷ダメージ終了");
                 mActor->hideFreezeModel();
                 mIsFrozen = false;
             }
@@ -147,7 +147,7 @@ bool MarioFreeze::close() {
     _1C = 120;
 
     if (mIsFrozen) {
-        playSound("\225\130\203\137\203\201\201\133\203\127\217\111\227\271" /* 氷ダメージ終了 */);
+        playSound("氷ダメージ終了");
         mActor->hideFreezeModel();
     }
 

@@ -9,7 +9,7 @@ public:
     DinoPackunDemoPosition(const char* pName);
 
     virtual ~DinoPackunDemoPosition();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
 
     void startOpeningDemo();

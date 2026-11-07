@@ -15,7 +15,7 @@ namespace NrvFallingSmallRock {
 FallingSmallRock::FallingSmallRock(const char* pName) : LiveActor(pName) {
 }
 
-void FallingSmallRock::init(const JMapInfoIter& rIter) {
+void FallingSmallRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initSound(4, false);
     initBinder(10.0f, 800.0f, 0);

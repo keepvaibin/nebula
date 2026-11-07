@@ -3,14 +3,14 @@
 #include "Game/NPC/NPCActor.hpp"
 
 class ButlerStateStarPieceReaction;
-class JMapInfoIter;
+class TableIter;
 class TalkMessageCtrl;
 
 class Butler : public NPCActor {
 public:
     Butler(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
     virtual void control();
@@ -26,10 +26,10 @@ public:
     void tryStartShowGalaxyMap();
     void resetStatus();
     bool messageBranchFunc(u32);
-    void initTalkCtrlArray(const JMapInfoIter&);
-    void initForAstroDome(const JMapInfoIter&);
-    void initForAstroGalaxy(const JMapInfoIter&);
-    TalkMessageCtrl* createTalkCtrl(const JMapInfoIter&, const char*);
+    void initTalkCtrlArray(const TableIter&);
+    void initForAstroDome(const TableIter&);
+    void initForAstroGalaxy(const TableIter&);
+    TalkMessageCtrl* createTalkCtrl(const TableIter&, const char*);
     void forceNerveToWait();
     void tryReplaceStarPieceIfExecLecture();
     bool tryStartStarPieceReaction();

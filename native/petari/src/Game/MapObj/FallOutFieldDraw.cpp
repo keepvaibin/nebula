@@ -20,7 +20,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 
@@ -72,13 +72,13 @@ namespace {
     }
 }  // namespace
 
-void FallOutFieldDraw::init(const JMapInfoIter& rIter) {
+void FallOutFieldDraw::init(const TableIter& rIter) {
     if (!MR::isValidInfo(rIter)) {
         return;
     }
 
     bool arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
     _C = arg0;
 
     if (MR::isExistStageSwitchAppear(rIter)) {

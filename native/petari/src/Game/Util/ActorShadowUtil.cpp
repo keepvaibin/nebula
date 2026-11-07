@@ -18,7 +18,7 @@
 namespace MR {
     void initShadowFromCSV(LiveActor* pActor, const char* pName) {
         ResourceHolder* pResourceHolder = getResourceHolder(pActor);
-        JMapInfo* pInfo = tryCreateCsvParser(pResourceHolder, "%s.bcsv", pName);
+        Table* pInfo = tryCreateCsvParser(pResourceHolder, "%s.bcsv", pName);
 
         if (pInfo == nullptr) {
             pActor->initShadowControllerList(1);
@@ -27,40 +27,40 @@ namespace MR {
 
         pActor->initShadowControllerList(pInfo->getNumEntries());
 
-        for (JMapInfoIter iter = pInfo->begin(); iter.isValid(); iter.mIndex++) {
+        for (TableIter iter = pInfo->begin(); iter.isValid(); iter.mIndex++) {
             ActorShadow::addShadowFromCSV(pActor, iter);
         }
     }
 
     void initShadowSurfaceCircle(LiveActor* pActor, f32 radius) {
         pActor->initShadowControllerList(1);
-        addShadowSurfaceCircle(pActor, "\220\205\226\312\212\333\211\145" /* 水面丸影 */, radius);
+        addShadowSurfaceCircle(pActor, "水面丸影", radius);
     }
 
     void initShadowVolumeSphere(LiveActor* pActor, f32 radius) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeSphere(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\213\205)" /* ボリューム影(球) */, radius);
+        addShadowVolumeSphere(pActor, "ボリューム影(球)", radius);
     }
 
     void initShadowVolumeOval(LiveActor* pActor, const Vec3f& rSize) {
         pActor->initShadowControllerList(1);
-        const char* pName = "\203\173\203\212\203\205\201\133\203\200\211\145(\221\310\213\205)" /* ボリューム影(楕球) */;
+        const char* pName = "ボリューム影(楕球)";
         addShadowVolumeOval(pActor, pName, rSize, pActor->getBaseMtx());
     }
 
     void initShadowVolumeCylinder(LiveActor* pActor, f32 radius) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeCylinder(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\211\176\222\214)" /* ボリューム影(円柱) */, radius);
+        addShadowVolumeCylinder(pActor, "ボリューム影(円柱)", radius);
     }
 
     void initShadowVolumeBox(LiveActor* pActor, const Vec3f& rSize) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeBox(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\203\173\203\142\203\116\203\130)" /* ボリューム影(ボックス) */, rSize);
+        addShadowVolumeBox(pActor, "ボリューム影(ボックス)", rSize);
     }
 
     void initShadowVolumeFlatModel(LiveActor* pActor, const char* pModelName) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeFlatModel(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\224\302\203\202\203\146\203\213)" /* ボリューム影(板モデル) */, pModelName);
+        addShadowVolumeFlatModel(pActor, "ボリューム影(板モデル)", pModelName);
     }
 
     void initShadowController(LiveActor* pActor, u32 numShadows) {
@@ -135,12 +135,12 @@ namespace MR {
 
     void initShadowVolumeBox(LiveActor* pActor, const Vec3f& rSize, MtxPtr pMtx) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeBox(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\203\173\203\142\203\116\203\130)" /* ボリューム影(ボックス) */, rSize, pMtx);
+        addShadowVolumeBox(pActor, "ボリューム影(ボックス)", rSize, pMtx);
     }
 
     void initShadowVolumeFlatModel(LiveActor* pActor, const char* pModelName, MtxPtr pMtx) {
         pActor->initShadowControllerList(1);
-        addShadowVolumeFlatModel(pActor, "\203\173\203\212\203\205\201\133\203\200\211\145(\224\302\203\202\203\146\203\213)" /* ボリューム影(板モデル) */, pModelName, pMtx);
+        addShadowVolumeFlatModel(pActor, "ボリューム影(板モデル)", pModelName, pMtx);
     }
 
     void setShadowDropPositionPtr(LiveActor* pActor, const char* pName, const Vec3f* pPos) {

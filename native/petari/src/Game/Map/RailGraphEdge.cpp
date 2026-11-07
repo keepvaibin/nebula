@@ -59,7 +59,7 @@ void RailGraphEdge::setNextEdge(s32 a1, s32 a2) {
     }
 }
 
-void RailGraphEdge::setArgs(const JMapInfo* pInfo, s32 a2) {
+void RailGraphEdge::setArgs(const Table* pInfo, s32 a2) {
     pInfo->getValue< s32 >(a2, "point_arg0", &mPointArg0);
     pInfo->getValue< s32 >(a2, "point_arg1", &mPointArg1);
     pInfo->getValue< s32 >(a2, "point_arg2", &mPointArg2);

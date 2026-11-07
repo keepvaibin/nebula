@@ -2,7 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
-class JMapIdInfo;
+class PlacementId;
 class LiveActor;
 class LiveActorGroup;
 
@@ -13,11 +13,11 @@ public:
     virtual ~DemoCastGroup() {
     }
 
-    virtual void init(const JMapInfoIter&);
-    virtual bool tryRegisterDemoActor(LiveActor*, const JMapInfoIter&, const JMapIdInfo&);
-    virtual bool tryRegisterDemoActor(LiveActor*, const char*, const JMapInfoIter&);
-    virtual void registerDemoActor(LiveActor*, const JMapInfoIter&);
+    virtual void init(const TableIter&);
+    virtual bool tryRegisterDemoActor(LiveActor*, const TableIter&, const PlacementId&);
+    virtual bool tryRegisterDemoActor(LiveActor*, const char*, const TableIter&);
+    virtual void registerDemoActor(LiveActor*, const TableIter&);
 
-    JMapIdInfo* mInfo;
+    PlacementId* mInfo;
     LiveActorGroup* mGroup;
 };

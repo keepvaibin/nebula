@@ -12,7 +12,7 @@ public:
     TicoFat(const char*);
 
     virtual ~TicoFat();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
@@ -22,12 +22,12 @@ public:
     virtual void receiveStarPiece(s32);
     virtual void startEat();
     virtual bool enableAppear();
-    virtual void initStarPieceSaveData(const JMapInfoIter&);
+    virtual void initStarPieceSaveData(const TableIter&);
     virtual void addStarPieceSaveData(s32);
     virtual void disappear(bool);
     virtual void appearInformation() const;
 
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     const char* getActionName(const char*);
     void setCameraParam();

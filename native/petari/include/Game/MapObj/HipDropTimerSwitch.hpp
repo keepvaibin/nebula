@@ -12,7 +12,7 @@ public:
     HipDropTimerSwitch(const char*);
 
     virtual ~HipDropTimerSwitch();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAnim();
     virtual void control();

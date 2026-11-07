@@ -9,7 +9,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FootPrint.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -55,7 +55,7 @@ inline void Petari::initHitSensors() {
     MR::addHitSensorEnemy(this, ::sSpinSensorName, 32, 100.0f, Vec3f(::sSpinSensorOffset));
 }
 
-void Petari::init(const JMapInfoIter& rIter) {
+void Petari::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Petari", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -359,7 +359,7 @@ void Petari::exeFreeze() {
 
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE_ANON(PetariNrvWait));
     }
 }
@@ -456,8 +456,8 @@ bool Petari::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) 
     return false;
 }
 
-void Petari::initFootPrint(const JMapInfoIter& rIter) {
-    mFootPrint = new FootPrint("\203\171\203\136\203\212\202\314\221\253\220\325" /* ペタリの足跡 */, 32);
+void Petari::initFootPrint(const TableIter& rIter) {
+    mFootPrint = new FootPrint("ペタリの足跡", 32);
 
     ResTIMG* texture = MR::getTexFromArc("Footprint.bti", this);
     mFootPrint->setTexture(texture);
@@ -466,7 +466,7 @@ void Petari::initFootPrint(const JMapInfoIter& rIter) {
     mFootPrint->_34 = 40.0f;
     mFootPrint->mMinPrintDistance = 100.0f;
 
-    MR::getJMapInfoArg0NoInit(rIter, &mFootprintYOffs);
+    MR::getPlacementArg0NoInit(rIter, &mFootprintYOffs);
 }
 
 void Petari::initFrontVec() {
@@ -475,8 +475,8 @@ void Petari::initFrontVec() {
     mtx.getZDir(mFront);
 }
 
-void Petari::initStarPiece(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg1NoInit(rIter, &mStarPieceTotal);
+void Petari::initStarPiece(const TableIter& rIter) {
+    MR::getPlacementArg1NoInit(rIter, &mStarPieceTotal);
     MR::declareStarPiece(this, mStarPieceTotal);
     mStarPieceRemaining = mStarPieceTotal;
 }
@@ -749,7 +749,7 @@ void Petari::appearStarPieceAll() {
 }
 
 bool Petari::reflectStarPointer2P() {
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         return false;
     }
 

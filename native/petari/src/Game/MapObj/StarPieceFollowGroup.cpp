@@ -4,7 +4,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -25,23 +25,23 @@ StarPieceFollowGroup::StarPieceFollowGroup(const char* pName)
     : LiveActor(pName), mPieces(nullptr), _90(nullptr), mNumPiecesTotal(6), mNumPiecesUse(0), mRadius(350.0f), mAngle(0.0f), mTimeLimit(1200) {
 }
 
-void StarPieceFollowGroup::init(const JMapInfoIter& rIter) {
+void StarPieceFollowGroup::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     s32 arg0 = -1;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
     if (arg0 != -1) {
         mNumPiecesTotal = arg0;
     }
 
-    MR::getJMapInfoArg1NoInit(rIter, &mTimeLimit);
-    MR::getJMapInfoArg2NoInit(rIter, &mRadius);
+    MR::getPlacementArg1NoInit(rIter, &mTimeLimit);
+    MR::getPlacementArg2NoInit(rIter, &mRadius);
 
     initNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
 
     mPieces = new StarPiece*[mNumPiecesTotal];
     _90 = new Vec3f[mNumPiecesTotal];
     for (int i = 0; i < mNumPiecesTotal; i++) {
-        mPieces[i] = new StarPiece("\203\164\203\110\203\215\201\133\203\130\203\136\201\133\203\163\201\133\203\130" /* フォロースターピース */);
+        mPieces[i] = new StarPiece("フォロースターピース");
         mPieces[i]->initWithoutIter();
         mPieces[i]->makeActorDead();
     }

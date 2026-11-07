@@ -8,7 +8,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -140,7 +140,7 @@ HanachanParts::HanachanParts(Hanachan* pHost, s32 partsIndex, const char* pName,
     }
 }
 
-void HanachanParts::init(const JMapInfoIter& rIter) {
+void HanachanParts::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_Enemy, MR::DrawType_None);
     initNerve(GET_NERVE(Hanachan, HanachanPartsNrvWalk));
     initHitSensor(1);
@@ -774,7 +774,7 @@ void HanachanParts::changeHeadCalmDown() {
 Hanachan::Hanachan(const char* pName) : LiveActor(pName), mAttackPos(0, 0, 0), mFrontDir(0, 0, 1), mIsChasePlayer(true), mScaleController() {
 }
 
-void Hanachan::init(const JMapInfoIter& rIter) {
+void Hanachan::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::isConnectedWithRail(rIter);
     }
@@ -783,7 +783,7 @@ void Hanachan::init(const JMapInfoIter& rIter) {
     initRailRider(rIter);
 
     s32 arg0 = 0;
-    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 == 1) {
         mIsChasePlayer = false;
@@ -800,11 +800,11 @@ void Hanachan::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, 6);
     appear();
 
-    mBodyParts[0] = new HanachanParts(this, 0, "\223\252\203\160\201\133\203\143" /* 頭パーツ */, "HanachanHead");
-    mBodyParts[1] = new HanachanParts(this, 1, "\221\314\203\160\201\133\203\143" /* 体パーツ */, "HanachanBodyS");
-    mBodyParts[2] = new HanachanParts(this, 2, "\221\314\203\160\201\133\203\143" /* 体パーツ */, "HanachanBody");
-    mBodyParts[3] = new HanachanParts(this, 3, "\221\314\203\160\201\133\203\143" /* 体パーツ */, "HanachanBodyS");
-    mBodyParts[4] = new HanachanParts(this, 4, "\221\314\203\160\201\133\203\143" /* 体パーツ */, "HanachanBody");
+    mBodyParts[0] = new HanachanParts(this, 0, "頭パーツ", "HanachanHead");
+    mBodyParts[1] = new HanachanParts(this, 1, "体パーツ", "HanachanBodyS");
+    mBodyParts[2] = new HanachanParts(this, 2, "体パーツ", "HanachanBody");
+    mBodyParts[3] = new HanachanParts(this, 3, "体パーツ", "HanachanBodyS");
+    mBodyParts[4] = new HanachanParts(this, 4, "体パーツ", "HanachanBody");
 
     mBodyParts[0]->initWithoutIter();
     mBodyParts[1]->initWithoutIter();
@@ -1260,7 +1260,7 @@ void Hanachan::setDelayAllPartsAtId(s32 id, s32 delay, s32 step) {
 
 bool Hanachan::isStarPointerPointing() {
     for (s32 i = 0; i < mBodyParts.size(); i++) {
-        if (MR::isStarPointerPointing2POnPressButton(mBodyParts[i], "\216\343" /* 弱 */, true, false)) {
+        if (MR::isStarPointerPointing2POnPressButton(mBodyParts[i], "弱", true, false)) {
             return true;
         }
     }

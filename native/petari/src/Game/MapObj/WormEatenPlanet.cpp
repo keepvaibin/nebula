@@ -22,7 +22,7 @@ WormEatenPlanet::WormEatenPlanet(const char* pName)
     : LiveActor(pName), mCaterpillar(), mWormEatenHill(), mSecondHill(), mThirdHill(), mFourthHill(), mLodCtrl() {
 }
 
-void WormEatenPlanet::init(const JMapInfoIter& rIter) {
+void WormEatenPlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WormEatenPlanet", nullptr, false);
     MR::connectToScenePlanet(this);
@@ -47,7 +47,7 @@ void WormEatenPlanet::init(const JMapInfoIter& rIter) {
     MR::listenStageSwitchOnA(this, MR::Functor(this, &WormEatenPlanet::startSecondDemo));
     MR::listenStageSwitchOnB(this, MR::Functor(this, &WormEatenPlanet::startThirdDemo));
 
-    mCaterpillar = new GreenCaterpillarBig("\222\216\220\110\202\242\230\146\220\257\203\111\203\111\203\200\203\103\203\200\203\103" /* 虫食い惑星オオムイムイ */);
+    mCaterpillar = new GreenCaterpillarBig("虫食い惑星オオムイムイ");
     mCaterpillar->init(rIter);
 
     initWormEatenHill();
@@ -56,9 +56,9 @@ void WormEatenPlanet::init(const JMapInfoIter& rIter) {
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoCast(mCaterpillar, rIter);
-        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvSecondWait), "\203\111\203\111\203\200\203\103\203\200\203\103\217\157\214\273\202\120\211\361\226\332" /* オオムイムイ出現１回目 */);
-        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvThirdWait), "\203\111\203\111\203\200\203\103\203\200\203\103\217\157\214\273\202\121\211\361\226\332" /* オオムイムイ出現２回目 */);
-        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvFourthWait), "\203\111\203\111\203\200\203\103\203\200\203\103\217\157\214\273\202\122\211\361\226\332" /* オオムイムイ出現３回目 */);
+        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvSecondWait), "オオムイムイ出現１回目");
+        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvThirdWait), "オオムイムイ出現２回目");
+        MR::registerDemoActionNerve(this, GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvFourthWait), "オオムイムイ出現３回目");
     }
 
     initNerve(GET_NERVE(WormEatenPlanet, WormEatenPlanetNrvFirstWait));
@@ -134,7 +134,7 @@ void WormEatenPlanet::initWormEatenHill() {
         nebula_snprintf(jointName, sizeof(jointName), "ConnectParts%c", i + 'A');
         MtxPtr jointMtx = MR::getJointMtx(this, jointName);
 
-        mWormEatenHill[i] = new PartsModel(this, "\220\110\202\242\224\152\202\350\222\313" /* 食い破り塚 */, "WormEatenHill", jointMtx, -1, false);
+        mWormEatenHill[i] = new PartsModel(this, "食い破り塚", "WormEatenHill", jointMtx, -1, false);
         mWormEatenHill[i]->initWithoutIter();
         mWormEatenHill[i]->makeActorDead();
     }
@@ -156,9 +156,9 @@ bool WormEatenPlanet::tryGenerateWormEatenHill() {
 }
 
 void WormEatenPlanet::startSecondDemo() {
-    MR::requestStartTimeKeepDemo(this, "\203\200\203\103\203\200\203\103\217\157\214\273" /* ムイムイ出現 */, nullptr, nullptr, "\203\111\203\111\203\200\203\103\203\200\203\103\217\157\214\273\202\121\211\361\226\332" /* オオムイムイ出現２回目 */);
+    MR::requestStartTimeKeepDemo(this, "ムイムイ出現", nullptr, nullptr, "オオムイムイ出現２回目");
 }
 
 void WormEatenPlanet::startThirdDemo() {
-    MR::requestStartTimeKeepDemo(this, "\203\200\203\103\203\200\203\103\217\157\214\273" /* ムイムイ出現 */, nullptr, nullptr, "\203\111\203\111\203\200\203\103\203\200\203\103\217\157\214\273\202\122\211\361\226\332" /* オオムイムイ出現３回目 */);
+    MR::requestStartTimeKeepDemo(this, "ムイムイ出現", nullptr, nullptr, "オオムイムイ出現３回目");
 }

@@ -14,7 +14,7 @@ namespace {
     }
 };  // namespace
 
-ReturnDemoRailMove::ReturnDemoRailMove(LiveActor* pDemoStarter, LiveActor* pPowerStar, const JMapInfoIter& rIter, bool isGrandstar,
+ReturnDemoRailMove::ReturnDemoRailMove(LiveActor* pDemoStarter, LiveActor* pPowerStar, const TableIter& rIter, bool isGrandstar,
                                        Pos3f* pTransform)
     : mDemoStarter(pDemoStarter), mPowerStar(pPowerStar), mIsGrandStar(isGrandstar), mTransform(pTransform), mShootPath(nullptr),
       mPathDrawer(nullptr), mForward(0.0f, 0.0f, 1.0f) {

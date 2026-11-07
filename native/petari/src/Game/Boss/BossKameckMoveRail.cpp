@@ -1,13 +1,13 @@
 #include "Game/Boss/BossKameckMoveRail.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
 BossKameckMoveRail::BossKameckMoveRail(const char* pName) : LiveActor(pName), _8C(), _90() {
 }
 
-void BossKameckMoveRail::init(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg0WithInit(rIter, &_8C);
+void BossKameckMoveRail::init(const TableIter& rIter) {
+    MR::getPlacementArg0WithInit(rIter, &_8C);
     initRailRider(rIter);
     makeActorDead();
     _90 = 0;

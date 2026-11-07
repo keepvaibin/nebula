@@ -27,12 +27,12 @@ namespace NrvKoopaDemoPowerUp {
 KoopaDemoPowerUp::~KoopaDemoPowerUp() {
 }
 
-KoopaDemoPowerUp::KoopaDemoPowerUp(Koopa* pKoopa) : ActorStateBase< Koopa >("Demo[\203\160\203\217\201\133\203\101\203\142\203\166]" /* Demo[パワーアップ] */, pKoopa) {
+KoopaDemoPowerUp::KoopaDemoPowerUp(Koopa* pKoopa) : ActorStateBase< Koopa >("Demo[パワーアップ]", pKoopa) {
 }
 
 void KoopaDemoPowerUp::init() {
-    KoopaFunction::initKoopaCamera(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */);
-    KoopaFunction::initKoopaCamera(getHost(), "\215\305\217\111\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* 最終パワーアップデモ */);
+    KoopaFunction::initKoopaCamera(getHost(), "パワーアップデモ");
+    KoopaFunction::initKoopaCamera(getHost(), "最終パワーアップデモ");
 
     MR::createCenterScreenBlur();
     initNerve(GET_NERVE(KoopaDemoPowerUp, KoopaDemoPowerUpNrvWaitDemo));
@@ -47,36 +47,36 @@ void KoopaDemoPowerUp::appear() {
 void KoopaDemoPowerUp::kill() {
     mIsDead = true;
 
-    KoopaFunction::endKoopaCamera(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */, false);
-    KoopaFunction::endKoopaCamera(getHost(), "\215\305\217\111\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* 最終パワーアップデモ */, false);
+    KoopaFunction::endKoopaCamera(getHost(), "パワーアップデモ", false);
+    KoopaFunction::endKoopaCamera(getHost(), "最終パワーアップデモ", false);
 }
 
 void KoopaDemoPowerUp::exeWaitDemo() {
-    if (!MR::tryStartDemoMarioPuppetable(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */)) {
+    if (!MR::tryStartDemoMarioPuppetable(getHost(), "パワーアップデモ")) {
         return;
     }
 
     if (KoopaFunction::isKoopaVs1(getHost()) || KoopaFunction::isKoopaVs2(getHost())) {
-        KoopaFunction::setKoopaPos(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202\201\151\203\116\203\142\203\160\201\152" /* パワーアップデモ（クッパ） */);
-        MR::setPlayerPosAndWait("\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202\201\151\203\175\203\212\203\111\201\152" /* パワーアップデモ（マリオ） */);
+        KoopaFunction::setKoopaPos(getHost(), "パワーアップデモ（クッパ）");
+        MR::setPlayerPosAndWait("パワーアップデモ（マリオ）");
 
         if (KoopaFunction::isKoopaLv3(getHost())) {
             MR::startAction(getHost(), "DemoKoopaPowerUpFinal");
-            KoopaFunction::startKoopaTargetCamera(getHost(), "\215\305\217\111\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* 最終パワーアップデモ */);
+            KoopaFunction::startKoopaTargetCamera(getHost(), "最終パワーアップデモ");
 
             MR::onSwitchB(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
         } else {
             MR::startAction(getHost(), "DemoKoopaPowerUp");
-            KoopaFunction::startKoopaTargetCamera(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */);
+            KoopaFunction::startKoopaTargetCamera(getHost(), "パワーアップデモ");
 
             MR::onSwitchA(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
         }
     } else {
-        KoopaFunction::setKoopaPos(getHost(), "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202\202\153\202\226\202\122\201\151\203\116\203\142\203\160\201\152" /* パワーアップデモＬｖ３（クッパ） */);
-        MR::setPlayerPosAndWait("\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202\202\153\202\226\202\122\201\151\203\175\203\212\203\111\201\152" /* パワーアップデモＬｖ３（マリオ） */);
+        KoopaFunction::setKoopaPos(getHost(), "パワーアップデモＬｖ３（クッパ）");
+        MR::setPlayerPosAndWait("パワーアップデモＬｖ３（マリオ）");
 
         MR::startAction(getHost(), "DemoKoopaPowerUpFinal");
-        KoopaFunction::startKoopaTargetCamera(getHost(), "\215\305\217\111\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* 最終パワーアップデモ */);
+        KoopaFunction::startKoopaTargetCamera(getHost(), "最終パワーアップデモ");
 
         MR::onSwitchA(KoopaFunction::getKoopaPowerUpSwitch(getHost()));
     }
@@ -106,12 +106,12 @@ void KoopaDemoPowerUp::exeDemo() {
     }
 
     if (KoopaFunction::isKoopaVs3(mHost) || KoopaFunction::isKoopaLv3(mHost)) {
-        KoopaFunction::endKoopaCamera(mHost, "\215\305\217\111\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* 最終パワーアップデモ */, false);
+        KoopaFunction::endKoopaCamera(mHost, "最終パワーアップデモ", false);
     } else {
-        KoopaFunction::endKoopaCamera(mHost, "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */, false);
+        KoopaFunction::endKoopaCamera(mHost, "パワーアップデモ", false);
     }
 
-    MR::endDemo(mHost, "\203\160\203\217\201\133\203\101\203\142\203\166\203\146\203\202" /* パワーアップデモ */);
+    MR::endDemo(mHost, "パワーアップデモ");
 
     Vec3f gravity;
     gravity.negate(mHost->mGravity);

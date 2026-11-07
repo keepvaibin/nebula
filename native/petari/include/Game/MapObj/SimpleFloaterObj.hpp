@@ -8,7 +8,7 @@ public:
     SimpleFloaterObj(const char*);
 
     virtual ~SimpleFloaterObj();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     void exeWait();
     inline bool isVelocityClose() {

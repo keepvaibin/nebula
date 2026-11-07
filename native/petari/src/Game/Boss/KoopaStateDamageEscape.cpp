@@ -71,7 +71,7 @@ namespace NrvKoopaStateDamageEscape {
 };  // namespace NrvKoopaStateDamageEscape
 
 KoopaStateDamageEscape::KoopaStateDamageEscape(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[\223\246\221\226]" /* State[逃走] */, pKoopa), mEscapeTime(-1), mMaxEscapeTime(-1), _18(-1), mIsTurnClockwise(), mIsLastHit(),
+    : ActorStateBase< Koopa >("State[逃走]", pKoopa), mEscapeTime(-1), mMaxEscapeTime(-1), _18(-1), mIsTurnClockwise(), mIsLastHit(),
       mEscapeRunParam(&::sEscapeRunParamLv1), mDamageTailRunParam(&::sDamageTailRunParam), mMaxRunFrames(::sDamageTailStep),
       mRotateVelocity(::sDamageTailRunStartSpeed), mJumpAwayVelocity(::sDownFlyUpSpeed) {
 }
@@ -79,10 +79,10 @@ KoopaStateDamageEscape::KoopaStateDamageEscape(Koopa* pKoopa)
 void KoopaStateDamageEscape::init() {
     initNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvEscapeStart));
 
-    KoopaFunction::initKoopaCamera(mHost, "\223\246\221\226\212\112\216\156" /* 逃走開始 */);
-    KoopaFunction::initKoopaCamera(mHost, "\223\246\221\226" /* 逃走 */);
-    KoopaFunction::initKoopaCamera(mHost, "\223\246\221\226\201\151\220\113\224\366\203\137\203\201\201\133\203\127\201\152" /* 逃走（尻尾ダメージ） */);
-    KoopaFunction::initKoopaCamera(mHost, "\223\246\221\226\203\137\203\105\203\223" /* 逃走ダウン */);
+    KoopaFunction::initKoopaCamera(mHost, "逃走開始");
+    KoopaFunction::initKoopaCamera(mHost, "逃走");
+    KoopaFunction::initKoopaCamera(mHost, "逃走（尻尾ダメージ）");
+    KoopaFunction::initKoopaCamera(mHost, "逃走ダウン");
 
     kill();
 }
@@ -90,7 +90,7 @@ void KoopaStateDamageEscape::init() {
 void KoopaStateDamageEscape::appear() {
     mIsDead = false;
 
-    KoopaFunction::endKoopaCamera(mHost, "\223\246\221\226\212\112\216\156" /* 逃走開始 */, false);
+    KoopaFunction::endKoopaCamera(mHost, "逃走開始", false);
     MR::validateHitSensor(mHost, "ReceiverTail");
     MR::validateHitSensor(mHost, "ReceiverTailTop");
 
@@ -148,9 +148,9 @@ void KoopaStateDamageEscape::kill() {
 
     mIsDead = true;
 
-    KoopaFunction::endKoopaCamera(mHost, "\223\246\221\226" /* 逃走 */, false);
-    KoopaFunction::endKoopaCamera(mHost, "\223\246\221\226\201\151\220\113\224\366\203\137\203\201\201\133\203\127\201\152" /* 逃走（尻尾ダメージ） */, false);
-    KoopaFunction::endKoopaCamera(mHost, "\223\246\221\226\203\137\203\105\203\223" /* 逃走ダウン */, false);
+    KoopaFunction::endKoopaCamera(mHost, "逃走", false);
+    KoopaFunction::endKoopaCamera(mHost, "逃走（尻尾ダメージ）", false);
+    KoopaFunction::endKoopaCamera(mHost, "逃走ダウン", false);
 
     MR::invalidateHitSensor(mHost, "ReceiverTail");
     MR::invalidateHitSensor(mHost, "ReceiverTailTop");
@@ -279,7 +279,7 @@ void KoopaStateDamageEscape::exeEscapeStart() {
         MR::startAction(mHost, "EscapeRunStart");
         MR::setVelocityJump(mHost, ::sEscapeStartJumpSpeed);
 
-        KoopaFunction::startKoopaCamera(mHost, "\223\246\221\226\212\112\216\156" /* 逃走開始 */);
+        KoopaFunction::startKoopaCamera(mHost, "逃走開始");
         KoopaFunction::startBreakKoopaTailThorn(mHost);
 
         MR::startSound(mHost, "SE_BM_KOOPA_BURN");
@@ -321,7 +321,7 @@ void KoopaStateDamageEscape::exeEscapeStartLand() {
 void KoopaStateDamageEscape::exeEscapeRun() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "EscapeRun");
-        KoopaFunction::startKoopaCamera(mHost, "\223\246\221\226" /* 逃走 */);
+        KoopaFunction::startKoopaCamera(mHost, "逃走");
     }
 
     KoopaFunction::escapeKoopaFromPlayer(mHost, *mEscapeRunParam);
@@ -391,7 +391,7 @@ void KoopaStateDamageEscape::exeDamageTailRunStart() {
 
         MR::setVelocity(pKoopa, KoopaFunction::getKoopaFront(pKoopa) * mRotateVelocity);
 
-        KoopaFunction::startKoopaCamera(mHost, "\223\246\221\226\201\151\220\113\224\366\203\137\203\201\201\133\203\127\201\152" /* 逃走（尻尾ダメージ） */);
+        KoopaFunction::startKoopaCamera(mHost, "逃走（尻尾ダメージ）");
 
         MR::invalidateHitSensor(mHost, "ReceiverTail");
         MR::invalidateHitSensor(mHost, "ReceiverTailTop");
@@ -488,7 +488,7 @@ void KoopaStateDamageEscape::exeDown() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "Down");
         MR::setVelocityJumpAwayFromPlayer(mHost, 35.0f, mJumpAwayVelocity);
-        KoopaFunction::startKoopaCamera(mHost, "\223\246\221\226\203\137\203\105\203\223" /* 逃走ダウン */);
+        KoopaFunction::startKoopaCamera(mHost, "逃走ダウン");
         MR::emitEffect(mHost, "DownSmoke");
     }
 

@@ -769,7 +769,7 @@ class NebulaSettingsScreen : public LayoutActor {
 public:
     NebulaSettingsScreen();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void step(const NebulaSettingsView& rView, s32 homeView);
     void drawMenu() const;
@@ -1001,7 +1001,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mKits.mButton = &mButtonKit;
 }
 
-void NebulaSettingsScreen::init(const JMapInfoIter& rIter) {
+void NebulaSettingsScreen::init(const TableIter& rIter) {
     initLayoutManager("SysInfoWindow", 0);
     LayoutManager* pManager = getLayoutManager();
     static const char cLayoutName[] = "NebulaSettingsMenu";

@@ -9,7 +9,7 @@ class LavaProminenceTriple : public LiveActor {
 public:
     LavaProminenceTriple(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
     virtual void calcAndSetBaseMtx();

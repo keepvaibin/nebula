@@ -15,7 +15,7 @@ public:
     virtual ~CoinHolder() {
     }
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     bool hopCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rVelocity);
     bool appearCoinFix(const NameObj* pObj, const Vec3f& rPosition, s32 count);

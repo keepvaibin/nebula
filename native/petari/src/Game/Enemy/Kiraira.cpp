@@ -9,7 +9,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -52,7 +52,7 @@ Kiraira::Kiraira(const char* pName)
       mIsForceDetonated(false), mEyesOpen(true), mSharedGroup(nullptr), mChain(nullptr) {
 }
 
-void Kiraira::init(const JMapInfoIter& rIter) {
+void Kiraira::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Kiraira", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -72,13 +72,13 @@ void Kiraira::init(const JMapInfoIter& rIter) {
     if (mIsRail) {
         initRailRider(rIter);
         MR::initAndSetRailClipping(&mRailVec, this, 100.0f, 500.0f);
-        MR::getJMapInfoArg0NoInit(rIter, &mRailCoordSpeed);
+        MR::getPlacementArg0NoInit(rIter, &mRailCoordSpeed);
         MR::setRailCoordSpeed(this, mRailCoordSpeed);
     }
     initNerve(GET_NERVE(Kiraira, KirairaNrvWait));
     MR::useStageSwitchWriteB(this, rIter);
     MR::setGroupClipping(this, rIter, 16);
-    mSharedGroup = MR::joinToGroupArray(this, rIter, "\203\114\203\211\203\103\203\211\214\122\222\143" /* キライラ軍団 */, 16);
+    mSharedGroup = MR::joinToGroupArray(this, rIter, "キライラ軍団", 16);
     MR::addToAttributeGroupSearchTurtle(this);
     if (!mIsRail) {
         mChain = new KirairaChain(this);
@@ -348,7 +348,7 @@ void Kiraira::driftOnRail() {
 
 void Kiraira::explode() {
     closeEyes();
-    MR::startRumbleWithShakeCameraStrong(this, "\213\255" /* 強 */, "\222\206" /* 中 */, ::sCameraShakeDistance, ::sNoCameraShakeDistance);
+    MR::startRumbleWithShakeCameraStrong(this, "強", "中", ::sCameraShakeDistance, ::sNoCameraShakeDistance);
     if (mIsForceDetonated) {
         MR::sendMsgExplosionToNearActor(getSensor("eye"), -1.0f);
     }

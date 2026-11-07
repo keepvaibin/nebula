@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
@@ -67,7 +67,7 @@ void StarPieceGroup::forceKillStarPieceAll(bool withEffect) {
     }
 }
 
-void StarPieceGroup::init(const JMapInfoIter& rIter) {
+void StarPieceGroup::init(const TableIter& rIter) {
     initSound(3, false);
     const char* objectName = nullptr;
     MR::getObjectName(&objectName, rIter);
@@ -87,14 +87,14 @@ void StarPieceGroup::init(const JMapInfoIter& rIter) {
     if (isFlow) {
         mNumPieces = 1;
         mRailSpeed = 10.0f;
-        MR::getJMapInfoArg0NoInit(rIter, &mRailSpeed);
-        MR::getJMapInfoArg1NoInit(rIter, &mNumPieces);
+        MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
+        MR::getPlacementArg1NoInit(rIter, &mNumPieces);
     } else {
         mNumPieces = 6;
-        MR::getJMapInfoArg0NoInit(rIter, &mNumPieces);
-        MR::getJMapInfoArg1NoInit(rIter, &mCircleRadius);
-        MR::getJMapInfoArg2NoInit(rIter, &arg2);
-        MR::getJMapInfoArg5NoInit(rIter, &_A4);
+        MR::getPlacementArg0NoInit(rIter, &mNumPieces);
+        MR::getPlacementArg1NoInit(rIter, &mCircleRadius);
+        MR::getPlacementArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg5NoInit(rIter, &_A4);
         MR::joinToGroupArray(this, rIter, nullptr, 32);
     }
 
@@ -130,7 +130,7 @@ void StarPieceGroup::init(const JMapInfoIter& rIter) {
     MR::declareStarPiece(this, mNumPieces);
 
     for (u32 i = 0; i < mNumPieces; i++) {
-        mPieces[i] = new StarPiece("\203\117\203\213\201\133\203\166\203\130\203\136\201\133\203\163\201\133\203\130" /* グループスターピース */);
+        mPieces[i] = new StarPiece("グループスターピース");
         if (isFlow) {
             mPieces[i]->initAndSetRailMoveFromGroup(rIter);
         } else {

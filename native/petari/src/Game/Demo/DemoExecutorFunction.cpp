@@ -87,7 +87,7 @@ namespace DemoExecutorFunction {
         return true;
     }
 
-    bool tryCreateDemoTalkAnimCtrlForScene(DemoExecutor* pExecutor, LiveActor* pActor, const JMapInfoIter& rIter, const char* a4, const char* a5,
+    bool tryCreateDemoTalkAnimCtrlForScene(DemoExecutor* pExecutor, LiveActor* pActor, const TableIter& rIter, const char* a4, const char* a5,
                                            s32 a6, s32 a7) {
         DemoTalkAnimCtrl* pTalkAnimCtrl = new DemoTalkAnimCtrl(pActor, pExecutor->mName, a5);
 

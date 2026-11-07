@@ -11,7 +11,7 @@ class NebulaQuitButton : public LayoutActor {
 public:
     NebulaQuitButton(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     // Shown while true (after it has held a few frames); it finishes an animation it has started before reversing.

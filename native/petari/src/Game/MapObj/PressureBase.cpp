@@ -33,7 +33,7 @@ namespace NrvPressureBase {
 PressureMessenger::PressureMessenger(MsgSharedGroup* pGroup, const char* pName) : LiveActor(pName), mSharedGroup(pGroup), mWaitSyncTime() {
 }
 
-void PressureMessenger::init(const JMapInfoIter& rIter) {
+void PressureMessenger::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
@@ -54,7 +54,7 @@ PressureBase::PressureBase(const char* pName)
       mBallSpeed(::sDefaultFirstSpeed), mShotType(), mIsShortShot(), mMessenger(), mGroup(), _BC() {
 }
 
-void PressureBase::init(const JMapInfoIter& rIter) {
+void PressureBase::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objName;
     MR::getObjectName(&objName, rIter);
@@ -72,24 +72,24 @@ void PressureBase::init(const JMapInfoIter& rIter) {
     mJointController = MR::createJointDelegatorWithNullChildFunc(this, &PressureBase::calcJointCannonV, "Cannon1");
     MR::initJointTransform(this);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mBaseAngle);
-    MR::getJMapInfoArg1NoInit(rIter, &mWaitTime);
+    MR::getPlacementArg0NoInit(rIter, &mBaseAngle);
+    MR::getPlacementArg1NoInit(rIter, &mWaitTime);
 
     s32 frame = MR::getBckFrameMax(this, "ShotStart");
     mIsShortShot = (mWaitTime < frame);
 
     initBullet(rIter);
-    MR::getJMapInfoArg2NoInit(rIter, &mBallSpeed);
-    MR::getJMapInfoArg3NoInit(rIter, &mShotType);
+    MR::getPlacementArg2NoInit(rIter, &mBallSpeed);
+    MR::getPlacementArg3NoInit(rIter, &mShotType);
     MR::calcGravity(this);
 
     MR::setGroupClipping(this, rIter, 32);
-    mGroup = MR::joinToGroupArray(this, rIter, "\203\166\203\214\203\142\203\126\203\203\201\133\214\122\222\143" /* プレッシャー軍団 */, 32);
+    mGroup = MR::joinToGroupArray(this, rIter, "プレッシャー軍団", 32);
     if (mGroup != nullptr) {
         PressureBase* actor = static_cast< PressureBase* >(mGroup->getActor(0));
 
         if (this == actor) {
-            mMessenger = new PressureMessenger(mGroup, "\203\166\203\214\203\142\203\126\203\203\201\133\223\257\212\372\203\201\203\142\203\132\203\223\203\127\203\203\201\133" /* プレッシャー同期メッセンジャー */);
+            mMessenger = new PressureMessenger(mGroup, "プレッシャー同期メッセンジャー");
             mMessenger->initWithoutIter();
         }
     }
@@ -269,7 +269,7 @@ void PressureBase::startRelax() {
     }
 }
 
-void PressureBase::initBullet(const JMapInfoIter&) {
+void PressureBase::initBullet(const TableIter&) {
 }
 
 bool PressureBase::shotBullet(f32) {

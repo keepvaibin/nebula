@@ -19,7 +19,7 @@ GalaxyMapGalaxyDetail::GalaxyMapGalaxyDetail() : LayoutActor("GalaxyDetail", tru
     mInfoLayoutSetter = nullptr;
 }
 
-void GalaxyMapGalaxyDetail::init(const JMapInfoIter& rIter) {
+void GalaxyMapGalaxyDetail::init(const TableIter& rIter) {
     u32 layerNum = GalaxyInfoLayoutSetter::getAnimLayerNum();
     initLayoutManager("GalaxyDetail", layerNum);
     mInfoLayoutSetter = new GalaxyInfoLayoutSetter(this);

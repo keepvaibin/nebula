@@ -261,7 +261,7 @@ bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
 
     stopJump();
 
-    MR::startGlobalEventCameraNoTarget("\210\370\202\253\226\337\202\265" /* 引き戻し */);
+    MR::startGlobalEventCameraNoTarget("引き戻し");
 
     return true;
 }
@@ -318,31 +318,31 @@ bool MarioWarp::start() {
 
     _56 = _54;
     if (_45 == 3) {
-        playEffect("\210\370\202\253\226\337\202\265\226\101" /* 引き戻し泡 */);
+        playEffect("引き戻し泡");
     }
 
     if (_45 == 1) {
-        playEffect("\203\217\201\133\203\166\203\174\203\142\203\150\203\165\203\211\201\133" /* ワープポッドブラー */);
-        playSound("\203\217\201\133\203\166\203\174\203\142\203\150\223\374\202\350" /* ワープポッド入り */);
+        playEffect("ワープポッドブラー");
+        playSound("ワープポッド入り");
     }
 
     if (_45 == 2) {
-        playSound("\220\272\217\254\203\127\203\203\203\223\203\166" /* 声小ジャンプ */);
+        playSound("声小ジャンプ");
     } else {
-        playSound("\220\272\215\121\202\304" /* 声慌て */);
+        playSound("声慌て");
     }
 
     switch (_45) {
     case 0:
         break;
     case 3:
-        changeAnimationNonStop("\210\370\202\253\226\337\202\265" /* 引き戻し */);
+        changeAnimationNonStop("引き戻し");
         break;
     case 1:
-        changeAnimationNonStop("\203\174\203\142\203\150\203\217\201\133\203\166\212\112\216\156" /* ポッドワープ開始 */);
+        changeAnimationNonStop("ポッドワープ開始");
         break;
     case 2:
-        changeAnimationNonStop("\202\265\202\341\202\252\202\335\203\127\203\203\203\223\203\166" /* しゃがみジャンプ */);
+        changeAnimationNonStop("しゃがみジャンプ");
         break;
     }
 
@@ -370,11 +370,11 @@ bool MarioWarp::update() {
     clearVelocity();
     if (_54) {
         if (_45 == 1 || _45 == 3) {
-            playSound("\210\370\202\253\226\337\202\265\212\356\226\173" /* 引き戻し基本 */);
+            playSound("引き戻し基本");
         }
 
         if (_45 == 1) {
-            playSound("\203\217\201\133\203\166\203\174\203\142\203\150\210\332\223\256" /* ワープポッド移動 */);
+            playSound("ワープポッド移動");
         }
 
         _54--;
@@ -410,7 +410,7 @@ bool MarioWarp::update() {
     case 2:
         break;
     case 0:
-        playSound("\230\146\220\257\212\321\222\312\222\206" /* 惑星貫通中 */);
+        playSound("惑星貫通中");
         break;
     case 1:
     case 3: {
@@ -435,29 +435,29 @@ bool MarioWarp::update() {
             volume = 100;
         }
 
-        playSound("\210\370\202\253\226\337\202\265\212\356\226\173" /* 引き戻し基本 */);
-        playSound("\210\370\202\253\226\337\202\265\225\202\227\126" /* 引き戻し浮遊 */, volume);
+        playSound("引き戻し基本");
+        playSound("引き戻し浮遊", volume);
         if (_45 == 1) {
-            playSound("\203\217\201\133\203\166\203\174\203\142\203\150\210\332\223\256" /* ワープポッド移動 */);
+            playSound("ワープポッド移動");
         }
 
         break;
     }
     }
 
-    if (_58 == 1 && !isAnimationRun("\203\174\203\142\203\150\203\217\201\133\203\166\217\111\227\271" /* ポッドワープ終了 */)) {
+    if (_58 == 1 && !isAnimationRun("ポッドワープ終了")) {
         return false;
     }
 
     if (_88 == 0) {
         if (_45 == 1 && getPlayerMode() != 6) {
             if (_58 != 1) {
-                playSound("\203\217\201\133\203\166\203\174\203\142\203\150\217\157" /* ワープポッド出 */);
+                playSound("ワープポッド出");
             }
 
             _58 = 1;
             mActor->_481 = false;
-            changeAnimation("\203\174\203\142\203\150\203\217\201\133\203\166\217\111\227\271" /* ポッドワープ終了 */);
+            changeAnimation("ポッドワープ終了");
             WarpPodMgr* manager = MR::getWarpPodManager();
             if (manager != nullptr) {
                 manager->endEventCamera();
@@ -478,21 +478,21 @@ bool MarioWarp::close() {
     Mario* player = getPlayer();
     player->_420 = 16;
     stopAnimation(nullptr);
-    changeAnimation(nullptr, "\212\356\226\173" /* 基本 */);
+    changeAnimation(nullptr, "基本");
     switch (_45) {
     case 0:
-        playSound("\230\146\220\257\212\321\222\312\217\111\227\271" /* 惑星貫通終了 */);
+        playSound("惑星貫通終了");
         break;
     case 3:
-        playSound("\210\370\202\253\226\337\202\265\226\101\224\152\227\364" /* 引き戻し泡破裂 */);
-        stopEffectForce("\210\370\202\253\226\337\202\265\226\101" /* 引き戻し泡 */);
-        playEffect("\210\370\202\253\226\337\202\265\226\101\224\152\227\364" /* 引き戻し泡破裂 */);
+        playSound("引き戻し泡破裂");
+        stopEffectForce("引き戻し泡");
+        playEffect("引き戻し泡破裂");
         break;
     case 1:
-        stopEffect("\203\217\201\133\203\166\203\174\203\142\203\150\203\165\203\211\201\133" /* ワープポッドブラー */);
+        stopEffect("ワープポッドブラー");
         break;
     case 2:
-        changeAnimation("\202\265\202\341\202\252\202\335\203\127\203\203\203\223\203\166\222\205\222\156" /* しゃがみジャンプ着地 */);
+        changeAnimation("しゃがみジャンプ着地");
         break;
     }
 
@@ -524,14 +524,14 @@ bool MarioWarp::close() {
 
     switch (_45) {
     case 0: {
-        playSound("\220\272\222\206\203\127\203\203\203\223\203\166" /* 声中ジャンプ */);
+        playSound("声中ジャンプ");
         const MarioConstTable* table = mActor->getConst().getTable();
         getPlayer()->tryForcePowerJump(_2C * table->mWarpPodJumpY + _38 * table->mWarpPodJumpX, false);
         break;
     }
 
     case 3: {
-        MR::endGlobalEventCamera("\210\370\202\253\226\337\202\265" /* 引き戻し */, -1, true);
+        MR::endGlobalEventCamera("引き戻し", -1, true);
         if (getPlayerMode() != 1) {
             mActor->_A6E = 0;
         }
@@ -541,7 +541,7 @@ bool MarioWarp::close() {
         getPlayer()->mMovementStates._2B = true;
         getPlayer()->_402 = 0;
         getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
-        changeAnimation("\227\216\211\272" /* 落下 */);
+        changeAnimation("落下");
         Mario* player = getPlayer();
         player->_42A = 0;
         player->_430 = 0;
@@ -553,7 +553,7 @@ bool MarioWarp::close() {
         }
 
         if (getPlayerMode() != 6) {
-            playSound("\220\272\222\206\203\127\203\203\203\223\203\166" /* 声中ジャンプ */);
+            playSound("声中ジャンプ");
             getPlayer()->tryForcePowerJump(_2C * 12.0f + _38 * 5.0f, false);
         }
 

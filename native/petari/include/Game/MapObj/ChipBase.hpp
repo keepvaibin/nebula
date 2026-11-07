@@ -16,17 +16,17 @@ public:
     virtual ~ChipBase() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initModel(const JMapInfoIter&);
+    void initModel(const TableIter&);
     void initSensor();
-    void initShadow(const JMapInfoIter&);
-    void initJMapParam(const JMapInfoIter&);
+    void initShadow(const TableIter&);
+    void initPlacementParam(const TableIter&);
     void deactive();
     void setGroupID(s32);
     void setHost(LiveActor*);
@@ -47,8 +47,8 @@ public:
     }
     void exeGot();
     bool isGettable() const;
-    static bool isNeedBubble(const JMapInfoIter&);
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+    static bool isNeedBubble(const TableIter&);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&);
 
     FlashingCtrl* mFlashingCtrl;
     MapPartsRailMover* mRailMover;

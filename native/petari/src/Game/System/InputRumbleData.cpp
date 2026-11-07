@@ -4,7 +4,7 @@
 
 static RumblePattern gRumblePatternTable[] = {
     {
-        "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */,
+        "最強【長】",
         100,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
@@ -25,7 +25,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\215\305\213\255" /* 最強 */,
+        "最強",
         30,
         {
             RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
@@ -36,7 +36,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\213\255" /* 強 */,
+        "強",
         30,
         {
             RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
@@ -47,7 +47,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\222\206" /* 中 */,
+        "中",
         30,
         {
             RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_OFF,
@@ -58,7 +58,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\216\343" /* 弱 */,
+        "弱",
         30,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
@@ -69,7 +69,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\224\367\216\343" /* 微弱 */,
+        "微弱",
         30,
         {
             RUMBLE_ON, RUMBLE_OFF, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
@@ -80,7 +80,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\203\130\203\212\203\142\203\166\203\101\203\142\203\166]" /* マリオ[スリップアップ] */,
+        "マリオ[スリップアップ]",
         25,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
@@ -90,7 +90,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\213\124\223\212\202\260]" /* マリオ[亀投げ] */,
+        "マリオ[亀投げ]",
         10,
         {
             RUMBLE_OFF,
@@ -106,7 +106,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\203\172\203\142\203\160\201\133\202\275\202\337]" /* マリオ[ホッパーため] */,
+        "マリオ[ホッパーため]",
         5,
         {
             RUMBLE_ON,
@@ -117,7 +117,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */,
+        "マリオ[変身]",
         60,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
@@ -132,7 +132,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\225\317\220\147\211\360\217\234]" /* マリオ[変身解除] */,
+        "マリオ[変身解除]",
         30,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
@@ -143,7 +143,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */,
+        "マリオ[しびれ]",
         60,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
@@ -158,7 +158,7 @@ static RumblePattern gRumblePatternTable[] = {
         },
     },
     {
-        "\203\175\203\212\203\111[\202\302\202\324\202\352]" /* マリオ[つぶれ] */,
+        "マリオ[つぶれ]",
         120,
         {
             RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,

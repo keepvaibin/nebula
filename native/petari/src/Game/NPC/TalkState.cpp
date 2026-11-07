@@ -304,7 +304,7 @@ TalkStateHolder::TalkStateHolder() {
     mAButton = new IconAButton(true, false);
     mAButton->initWithoutIter();
 
-    mBalloonShort = new TalkBalloonShort("\211\357\230\142\220\201\202\253\217\157\202\265[\215\207\220\254\211\357\230\142]" /* 会話吹き出し[合成会話] */);
+    mBalloonShort = new TalkBalloonShort("会話吹き出し[合成会話]");
     mBalloonShort->initWithoutIter();
     mBalloonShort->initInterval();
     mBalloonShort->kill();

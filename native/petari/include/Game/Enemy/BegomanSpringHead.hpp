@@ -19,7 +19,7 @@ public:
     BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx);
 
     virtual ~BegomanSpringHead();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     bool isSpringHop();
     s32 getHopEndBckFrameMax();

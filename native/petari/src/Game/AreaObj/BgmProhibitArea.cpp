@@ -35,7 +35,7 @@ namespace {
 BgmProhibitArea::BgmProhibitArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(), _3D(), _40(0.0f, 0.0f, 0.0f) {
 }
 
-void BgmProhibitArea::init(const JMapInfoIter& rIter) {
+void BgmProhibitArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 }

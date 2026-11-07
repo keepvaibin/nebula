@@ -13,8 +13,8 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -46,7 +46,7 @@ namespace MR {
 };  // namespace MR
 
 WarpPodMgr::WarpPodMgr(const char* pName) : NameObj(pName) {
-    _10 = new LiveActorGroup("\203\217\201\133\203\166\203\174\203\142\203\150\214\121" /* ワープポッド群 */, 128);
+    _10 = new LiveActorGroup("ワープポッド群", 128);
     _C = nullptr;
     _14 = 0;
 
@@ -54,7 +54,7 @@ WarpPodMgr::WarpPodMgr(const char* pName) : NameObj(pName) {
 }
 
 WarpPod* WarpPodMgr::getPairPod(const LiveActor* pParam1) {
-    if (static_cast< const WarpPod* >(pParam1)->mJMapIdInfo == nullptr) {
+    if (static_cast< const WarpPod* >(pParam1)->mPlacementId == nullptr) {
         return nullptr;
     }
 
@@ -65,11 +65,11 @@ WarpPod* WarpPodMgr::getPairPod(const LiveActor* pParam1) {
             continue;
         }
 
-        if (pWarpPod->mJMapIdInfo == nullptr) {
+        if (pWarpPod->mPlacementId == nullptr) {
             continue;
         }
 
-        if (*pWarpPod->mJMapIdInfo == *static_cast< const WarpPod* >(pParam1)->mJMapIdInfo) {
+        if (*pWarpPod->mPlacementId == *static_cast< const WarpPod* >(pParam1)->mPlacementId) {
             return pWarpPod;
         }
     }
@@ -118,20 +118,20 @@ void WarpPodMgr::draw() const {
     MR::mDrawTimer++;
 }
 
-void WarpPod::init(const JMapInfoIter& rIter) {
+void WarpPod::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_WarpPodMgr);
 
-    MR::joinToGroup(this, "\203\217\201\133\203\166\203\174\203\142\203\150\214\121" /* ワープポッド群 */);
+    MR::joinToGroup(this, "ワープポッド群");
 
     LiveActor::init(rIter);
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WarpPod", nullptr, false);
 
     s32 groupId = -1;
-    MR::getJMapInfoGroupID(rIter, &groupId);
+    MR::getPlacementGroupID(rIter, &groupId);
 
     if (groupId >= 0) {
-        mJMapIdInfo = new JMapIdInfo(groupId, rIter);
+        mPlacementId = new PlacementId(groupId, rIter);
     }
 
     mGroupId = groupId;
@@ -144,13 +144,13 @@ void WarpPod::init(const JMapInfoIter& rIter) {
     s32 arg7 = -1;
 
     if (MR::isValidInfo(rIter)) {
-        MR::getJMapInfoArg1NoInit(rIter, &mVisibilityState);
-        MR::getJMapInfoArg2NoInit(rIter, &mArg2);
-        MR::getJMapInfoArg3NoInit(rIter, &mArg3);
-        MR::getJMapInfoArg4NoInit(rIter, &mGrandstarReq);
-        MR::getJMapInfoArg5NoInit(rIter, &mCameraTime);
-        MR::getJMapInfoArg6NoInit(rIter, &mGlowColorIndex);
-        MR::getJMapInfoArg7NoInit(rIter, &arg7);
+        MR::getPlacementArg1NoInit(rIter, &mVisibilityState);
+        MR::getPlacementArg2NoInit(rIter, &mArg2);
+        MR::getPlacementArg3NoInit(rIter, &mArg3);
+        MR::getPlacementArg4NoInit(rIter, &mGrandstarReq);
+        MR::getPlacementArg5NoInit(rIter, &mCameraTime);
+        MR::getPlacementArg6NoInit(rIter, &mGlowColorIndex);
+        MR::getPlacementArg7NoInit(rIter, &arg7);
     }
 
     if (arg7 == 1) {
@@ -162,10 +162,10 @@ void WarpPod::init(const JMapInfoIter& rIter) {
     mCamInfo = new ActorCameraInfo(rIter);
 
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
     char eventCameraName[256];
-    nebula_sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
+    nebula_sprintf(eventCameraName, "ワープカメラ %d-%c", groupId, arg0 + 65);
     MR::declareEventCamera(mCamInfo, eventCameraName);
 
     const size_t eventCameraSize = strlen(eventCameraName) + 1;
@@ -295,7 +295,7 @@ void WarpPod::initPair() {
     }
 
     char buf[256];
-    nebula_sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
+    nebula_sprintf(buf, "wPod出現カメラ %d", mGroupId);
 
     const size_t size = strlen(buf) + 1;
     _9C = new char[size];
@@ -347,7 +347,7 @@ void WarpPod::control() {
         return;
     }
 
-    if (!MR::tryStartDemoWithoutCinemaFrame(this, "\217\157\214\273" /* 出現 */)) {
+    if (!MR::tryStartDemoWithoutCinemaFrame(this, "出現")) {
         return;
     }
 
@@ -378,7 +378,7 @@ void WarpPod::movement() {
             MR::validateClipping(this);
 
             if (_CC) {
-                MR::endDemo(this, "\217\157\214\273" /* 出現 */);
+                MR::endDemo(this, "出現");
             }
 
             mPairPod->glowEffect();

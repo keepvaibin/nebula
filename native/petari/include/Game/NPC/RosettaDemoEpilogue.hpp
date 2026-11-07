@@ -2,7 +2,7 @@
 
 #include "Game/System/NerveExecutor.hpp"
 
-class JMapInfoIter;
+class TableIter;
 class Rosetta;
 
 class RosettaDemoEpilogue : public NerveExecutor {
@@ -10,7 +10,7 @@ public:
     /// @brief Creates a new `RosettaDemoEpilogue`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
     /// @param rIter TODO.
-    RosettaDemoEpilogue(Rosetta* pRosetta, const JMapInfoIter& rIter);
+    RosettaDemoEpilogue(Rosetta* pRosetta, const TableIter& rIter);
 
     void startDemo();
     void exeDemo();

@@ -9,14 +9,14 @@ class CoinGroup : public LiveActor {
 public:
     CoinGroup(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
 
-    virtual void initCoinArray(const JMapInfoIter&) = 0;
+    virtual void initCoinArray(const TableIter&) = 0;
     virtual void placementCoin() {
     }
     virtual const char* getCoinName() const {
-        return "\203\122\203\103\203\223(\203\117\203\213\201\133\203\166\224\172\222\165)" /* コイン(グループ配置) */;
+        return "コイン(グループ配置)";
     }
 
     void killCoinAll();

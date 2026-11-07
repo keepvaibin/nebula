@@ -30,7 +30,7 @@ namespace MR {
 };  // namespace MR
 
 PlayerActionGuidance::PlayerActionGuidance()
-    : LayoutActor("\203\166\203\214\203\103\203\204\201\133\203\101\203\116\203\126\203\207\203\223\203\113\203\103\203\137\203\223\203\130" /* プレイヤーアクションガイダンス */, true), mSpinLayout(), mTamakoroLayout(), mCurrentLayout(), mGuidanceState(3),
+    : LayoutActor("プレイヤーアクションガイダンス", true), mSpinLayout(), mTamakoroLayout(), mCurrentLayout(), mGuidanceState(3),
       mGuidancePrevState(3), _34(), _35(), _36(), _37() {
 }
 
@@ -60,7 +60,7 @@ void PlayerActionGuidance::control() {
     }
 }
 
-void PlayerActionGuidance::init(const JMapInfoIter& rIter) {
+void PlayerActionGuidance::init(const TableIter& rIter) {
     MR::connectToSceneLayoutMovement(this);
     initNerve(GET_NERVE_ANON(PlayerActionGuidanceWaitFocusIn));
     startAnimAllLayout("Appear");
@@ -77,7 +77,7 @@ void PlayerActionGuidance::createSpinLayout() {
         return;
     }
 
-    mSpinLayout = new SimpleLayout("\203\130\203\163\203\223\203\113\203\103\203\137\203\223\203\130" /* スピンガイダンス */, "SpinGuidance", 1, -1);
+    mSpinLayout = new SimpleLayout("スピンガイダンス", "SpinGuidance", 1, -1);
     mSpinLayout->appear();
 }
 
@@ -86,7 +86,7 @@ void PlayerActionGuidance::createTamakoroLayout() {
         return;
     }
 
-    mTamakoroLayout = new SimpleLayout("\202\275\202\334\202\261\202\353\203\113\203\103\203\137\203\223\203\130" /* たまころガイダンス */, "BallGuidance", 1, -1);
+    mTamakoroLayout = new SimpleLayout("たまころガイダンス", "BallGuidance", 1, -1);
     mTamakoroLayout->appear();
 }
 

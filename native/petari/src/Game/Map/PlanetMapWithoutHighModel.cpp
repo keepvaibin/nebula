@@ -13,7 +13,7 @@ void PlanetMapWithoutHighModel::connectToScene(const MapObjActorInitInfo&) {
 PlanetMapWithoutHighModel::~PlanetMapWithoutHighModel() {
 }
 
-void PlanetMapWithoutHighModel::init(const JMapInfoIter& rIter) {
+void PlanetMapWithoutHighModel::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

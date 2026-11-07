@@ -12,7 +12,7 @@ class AstroDomeGalaxySelector : public LiveActor {
 public:
     AstroDomeGalaxySelector(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);

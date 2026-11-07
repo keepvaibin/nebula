@@ -14,7 +14,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -37,11 +37,11 @@ namespace {
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
 };  // namespace
 
-void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     NPCActorItem item("Kinopio");
 
     s32 arg1 = 0;
-    MR::getJMapInfoArg1NoInit(rIter, &arg1);
+    MR::getPlacementArg1NoInit(rIter, &arg1);
 
     if (arg1 == 2) {
         if (!MR::isEqualStageName("PeachCastleFinalGalaxy")) {
@@ -60,7 +60,7 @@ void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, cons
         NPCActor::addArchive(pCollector, item);
     } else {
         s32 arg7 = -1;
-        MR::getJMapInfoArg7NoInit(rIter, &arg7);
+        MR::getPlacementArg7NoInit(rIter, &arg7);
 
         if (MR::getNPCItemData(&item, arg7)) {
             NPCActor::addArchive(pCollector, item);
@@ -89,7 +89,7 @@ bool KinopioAstro::isDispLetterIcon() const {
     return _195 || _194;
 }
 
-void KinopioAstro::createLetterIcon(const JMapInfoIter& rIter) {
+void KinopioAstro::createLetterIcon(const TableIter& rIter) {
     mLetterIconTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Kinopio000", Vec3f(0.0f, 122.0f, 0.0f), nullptr);
     MR::setDistanceToTalk(mLetterIconTalkCtrl, ::sMessangerTalkDistance);
 }
@@ -150,7 +150,7 @@ void KinopioAstro::endDemo() {
     popNerve();
 }
 
-void KinopioAstro::init(const JMapInfoIter& rIter) {
+void KinopioAstro::init(const TableIter& rIter) {
     Kinopio::init(rIter);
     if (mMsgCtrl != nullptr) {
         MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &KinopioAstro::eventFunc));
@@ -167,17 +167,17 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
     }
 
     if (mObjArg0 == 2) {
-        if (MR::isDemoCast(this, "\203\213\203\103\201\133\203\127\216\270\347\110\203\146\203\202" /* ルイージ失踪デモ */)) {
+        if (MR::isDemoCast(this, "ルイージ失踪デモ")) {
             Vec3f followOffset(MR::getMessageBalloonFollowOffset(mMsgCtrl));
             TalkMessageCtrl* pMsgCtrl = MR::createTalkCtrlDirectOnRootNodeAutomatic(this, rIter, "AstroGalaxy_Kinopio100", followOffset, nullptr);
             MR::registerEventFunc(pMsgCtrl, TalkMessageFunc(this, &KinopioAstro::eventFunc));
-            DemoFunction::registerDemoTalkMessageCtrlDirect(this, pMsgCtrl, "\203\213\203\103\201\133\203\127\216\270\347\110\203\146\203\202" /* ルイージ失踪デモ */);
-            MR::registerDemoActionFunctor(this, MR::Functor(this, &KinopioAstro::startDemo), "\212\112\216\156" /* 開始 */);
-            MR::registerDemoActionFunctor(this, MR::Functor(this, &KinopioAstro::endDemo), "\217\111\227\271" /* 終了 */);
+            DemoFunction::registerDemoTalkMessageCtrlDirect(this, pMsgCtrl, "ルイージ失踪デモ");
+            MR::registerDemoActionFunctor(this, MR::Functor(this, &KinopioAstro::startDemo), "開始");
+            MR::registerDemoActionFunctor(this, MR::Functor(this, &KinopioAstro::endDemo), "終了");
         }
 
         if (MR::isAnyPlayerLeftSupply()) {
-            mPeachLetter = new PeachLetter("\203\163\201\133\203\140\225\120\202\251\202\347\202\314\216\350\216\206" /* ピーチ姫からの手紙 */);
+            mPeachLetter = new PeachLetter("ピーチ姫からの手紙");
             mPeachLetter->initWithoutIter();
             _194 = true;
             if (MR::isLuigiLeftSupply()) {

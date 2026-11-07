@@ -12,7 +12,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -131,7 +131,7 @@ BossBegoman::BossBegoman(const char* pName)
     mHeadMtx.identity();
 }
 
-void BossBegoman::init(const JMapInfoIter& rIter) {
+void BossBegoman::init(const TableIter& rIter) {
     initCore(rIter, "BossBegoman", true);
 
     MR::calcGravity(this);
@@ -161,7 +161,7 @@ void BossBegoman::init(const JMapInfoIter& rIter) {
     mPath = new ParabolicPath();
 
     s32 arg7 = -1;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
 
     if (arg7 == -1) {
         mFollowerKind = FollowerKind_BabyFollower;
@@ -173,7 +173,7 @@ void BossBegoman::init(const JMapInfoIter& rIter) {
     mBabyFollowers = new BegomanBaby*[mBabyFollowerNum];
 
     for (int i = 0; i < mBabyFollowerNum; i++) {
-        BegomanBaby* newBaby = new BegomanBaby("\216\161\225\252\203\170\203\162\201\133" /* 子分ベビー */);
+        BegomanBaby* newBaby = new BegomanBaby("子分ベビー");
         mBabyFollowers[i] = newBaby;
         newBaby->mHost = this;
         newBaby->mPosition.set(this->mPosition);
@@ -185,7 +185,7 @@ void BossBegoman::init(const JMapInfoIter& rIter) {
     mSpikeFollowers = new BegomanSpike*[mSpikeFollowerNum];
 
     for (int i = 0; i < mSpikeFollowerNum; i++) {
-        BegomanSpike* spike = new BegomanSpike("\216\161\225\252\203\147\203\121" /* 子分トゲ */);
+        BegomanSpike* spike = new BegomanSpike("子分トゲ");
         mSpikeFollowers[i] = spike;
         spike->mPosition.set(this->mPosition);
         spike->initWithoutIter();

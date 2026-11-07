@@ -7,7 +7,7 @@ public:
     SpaceMine(const char* pName);
 
     virtual ~SpaceMine();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

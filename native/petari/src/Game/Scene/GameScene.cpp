@@ -65,7 +65,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"

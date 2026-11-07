@@ -3,7 +3,7 @@
 #include <nebula_geometry.hpp>
 
 class GravityInfo;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 class NameObj;
 class PlanetGravity;
@@ -23,7 +23,7 @@ namespace MR {
     bool calcAttractMarioLauncherOrZero(const LiveActor* pActor, Vec3f* pDest, GravityInfo* pInfo, uintptr_t host);
     bool isZeroGravity(const LiveActor* pActor);
     bool isLightGravity(const GravityInfo& rInfo);
-    void settingGravityParamFromJMap(PlanetGravity* pGravity, const JMapInfoIter& rIter);
-    void getJMapInfoGravityType(const JMapInfoIter& rIter, PlanetGravity* pGravity);
-    void getJMapInfoGravityPower(const JMapInfoIter& rIter, PlanetGravity* pGravity);
+    void settingGravityParamFromPlacement(PlanetGravity* pGravity, const TableIter& rIter);
+    void getPlacementGravityType(const TableIter& rIter, PlanetGravity* pGravity);
+    void getPlacementGravityPower(const TableIter& rIter, PlanetGravity* pGravity);
 };  // namespace MR

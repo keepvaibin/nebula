@@ -27,10 +27,10 @@ namespace NrvSunakazeKunTrap {
 };  // namespace NrvSunakazeKunTrap
 
 SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rParam2)
-    : ModelObj("\203\130\203\151\203\112\203\133\227\160\203\147\203\211\203\142\203\166" /* スナカゼ用トラップ */, "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), _94(rParam2) {
+    : ModelObj("スナカゼ用トラップ", "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), _94(rParam2) {
 }
 
-void SunakazeKunTrap::init(const JMapInfoIter& rIter) {
+void SunakazeKunTrap::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEnemyAttack(this, "attack", 4, 40.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowVolumeCylinder(this, 40.0f);
@@ -81,16 +81,16 @@ Sandstorm::Sandstorm(const char* pName)
       mTrapModel() {
 }
 
-void Sandstorm::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void Sandstorm::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     bool useTrapModel = false;
-    MR::getJMapInfoArg0NoInit(rIter, &useTrapModel);
+    MR::getPlacementArg0NoInit(rIter, &useTrapModel);
 
     if (useTrapModel) {
         pCollector->addArchive("SunakazeKunTrap");
     }
 }
 
-void Sandstorm::init(const JMapInfoIter& rIter) {
+void Sandstorm::init(const TableIter& rIter) {
     const char* objName;
 
     MR::initDefaultPos(this, rIter);
@@ -119,7 +119,7 @@ void Sandstorm::init(const JMapInfoIter& rIter) {
     MR::initActorCamera(this, rIter, &_8C);
 
     bool useTrapModel = false;
-    MR::getJMapInfoArg0NoInit(rIter, &useTrapModel);
+    MR::getPlacementArg0NoInit(rIter, &useTrapModel);
 
     if (useTrapModel) {
         initTrapModel();
@@ -377,7 +377,7 @@ void Sandstorm::initSandstormParam() {
         arcName = "TwisterSanSlim.arc";
     }
 
-    JMapInfo* csvParser = MR::createCsvParser(arcName, ::sParamFileName);
+    Table* csvParser = MR::createCsvParser(arcName, ::sParamFileName);
 
     MR::getCsvDataF32(&mSensorHeight, csvParser, "SensorHeight", 0);
     MR::getCsvDataF32(&mSizeUpRate, csvParser, "SizeUpRate", 0);

@@ -33,7 +33,7 @@ RunawayRabbitCollect::RunawayRabbitCollect(const char* pName)
     : LiveActor(pName), mRabbit(), mRabbitNum(), mLinkedRabbitCount(), mCaughtRabbitCount(), mCompleteRabbitCount(), mBgmState() {
 }
 
-void RunawayRabbitCollect::init(const JMapInfoIter& rIter) {
+void RunawayRabbitCollect::init(const TableIter& rIter) {
     MR::connectToSceneNpcMovement(this);
     mRabbitNum = 0;
     mTicoNum = 0;
@@ -56,11 +56,11 @@ void RunawayRabbitCollect::init(const JMapInfoIter& rIter) {
     for (s32 i = 0; i < MR::getChildObjNum(rIter); i++) {
         MR::getChildObjName(&childObjName, rIter, i);
         if (MR::isEqualString(childObjName, "RunawayRabbit")) {
-            mRabbit[mRabbitNum] = new RunawayRabbit("\213\205\226\312\223\246\202\260\203\105\203\124\203\115" /* 球面逃げウサギ */, this);
+            mRabbit[mRabbitNum] = new RunawayRabbit("球面逃げウサギ", this);
             MR::initChildObj(mRabbit[mRabbitNum], rIter, i);
             mRabbitNum++;
         } else if (MR::isEqualString(childObjName, "RunawayTico")) {
-            mTico[mTicoNum] = new RunawayTico("\223\246\202\260\203\140\203\122" /* 逃げチコ */);
+            mTico[mTicoNum] = new RunawayTico("逃げチコ");
             MR::initChildObj(mTico[mTicoNum], rIter, i);
             mTicoNum++;
         }

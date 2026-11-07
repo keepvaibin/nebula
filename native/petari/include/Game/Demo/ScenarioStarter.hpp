@@ -12,10 +12,10 @@ public:
     ScenarioStarter(const char*);
 
     virtual ~ScenarioStarter();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initShootPath(const JMapInfoIter&);
+    void initShootPath(const TableIter&);
     void exeWaitScenarioCameraEnd();
     void exeWaitToStart();
     void exeCinemaFrameBlank();

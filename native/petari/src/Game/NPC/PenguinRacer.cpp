@@ -12,7 +12,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -55,7 +55,7 @@ namespace NrvPenguinRacer {
 PenguinRacer::PenguinRacer(const char* pName) : NPCActor(pName), mRaceDisabled(), mMoveSpeed(0.0f), mSpeed(1.0f), mRailPointNo() {
 }
 
-void PenguinRacer::init(const JMapInfoIter& rIter) {
+void PenguinRacer::init(const TableIter& rIter) {
     MR::initDefaultPose(this, rIter);
     initModel();
 
@@ -113,19 +113,19 @@ void PenguinRacer::initBind() {
     initBinder(::sSensorRadius, ::sSensorRadius, 0);
 }
 
-void PenguinRacer::initColor(const JMapInfoIter& rIter) {
+void PenguinRacer::initColor(const TableIter& rIter) {
     s32 color = 0;
-    MR::getJMapInfoArg7NoInit(rIter, &color);
+    MR::getPlacementArg7NoInit(rIter, &color);
 
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, color);
 }
 
-void PenguinRacer::initEtc(const JMapInfoIter& rIter) {
+void PenguinRacer::initEtc(const TableIter& rIter) {
     mParam.setMoveAction("RacerWait", "Turn");
     mParam.setTalkAction("RacerTalk", "TalkTurn");
     setDefaults();
-    MR::getJMapInfoArg0NoInit(rIter, &mRaceDisabled);
+    MR::getPlacementArg0NoInit(rIter, &mRaceDisabled);
 }
 
 bool PenguinRacer::tryReaction() {

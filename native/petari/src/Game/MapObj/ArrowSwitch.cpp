@@ -5,7 +5,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -30,7 +30,7 @@ ArrowSwitch::ArrowSwitch(const char* pName)
     : LiveActor(pName), mRotAngle(), mRotYTargetIndex(), mRotSpeed(), mSwitchType(-1), mLockAfterRotate(), mIsRotPlus(true), _9E(), mIsPunch() {
 }
 
-void ArrowSwitch::init(const JMapInfoIter& rIter) {
+void ArrowSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mScale.set(::sTestScale);
     initModelManagerWithAnm("ArrowSwitch", nullptr, false);
@@ -56,11 +56,11 @@ void ArrowSwitch::init(const JMapInfoIter& rIter) {
 
     initSound(4, false);
     initNerve(GET_NERVE(ArrowSwitch, ArrowSwitchNrvWait));
-    MR::getJMapInfoArg0WithInit(rIter, &mSwitchType);
-    MR::getJMapInfoArg1WithInit(rIter, &mLockAfterRotate);
+    MR::getPlacementArg0WithInit(rIter, &mSwitchType);
+    MR::getPlacementArg1WithInit(rIter, &mLockAfterRotate);
 
     s32 shadowDropLength = -1;
-    MR::getJMapInfoArg2WithInit(rIter, &shadowDropLength);
+    MR::getPlacementArg2WithInit(rIter, &shadowDropLength);
 
     if (shadowDropLength >= 0) {
         MR::setShadowDropLength(this, nullptr, shadowDropLength);

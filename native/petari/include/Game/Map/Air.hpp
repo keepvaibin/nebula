@@ -8,7 +8,7 @@ class Air : public LiveActor {
 public:
     Air(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void initModel(const char*);
     virtual void setFarClipping();

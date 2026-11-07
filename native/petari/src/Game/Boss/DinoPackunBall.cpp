@@ -24,7 +24,7 @@ DinoPackunBall::DinoPackunBall(const char* pName, DinoPackun* pParent)
     _D4.identity();
 }
 
-void DinoPackunBall::init(const JMapInfoIter& rIter) {
+void DinoPackunBall::init(const TableIter& rIter) {
     MR::connectToSceneEnemyDecorationMovement(this);
 
     initBinder(135.0f, 0.0f, 0);

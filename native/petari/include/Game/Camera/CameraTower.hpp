@@ -4,7 +4,7 @@
 
 class CameraTower : public Camera {
 public:
-    CameraTower(const char* pName = "\223\203\203\112\203\201\203\211" /* 塔カメラ */);
+    CameraTower(const char* pName = "塔カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

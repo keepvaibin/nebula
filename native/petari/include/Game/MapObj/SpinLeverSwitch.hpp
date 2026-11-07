@@ -8,7 +8,7 @@ class SpinLeverSwitch : public LiveActor {
 public:
     SpinLeverSwitch(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

@@ -11,7 +11,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -107,16 +107,16 @@ HomingKiller::HomingKiller(const char* pName)
     mEffectMtx.identity();
 }
 
-void HomingKiller::init(const JMapInfoIter& rIter) {
+void HomingKiller::init(const TableIter& rIter) {
     const char* objectName = "HomingKiller";
     if (MR::isValidInfo(rIter)) {
         MR::getObjectName(&objectName, rIter);
         if (MR::isEqualObjectName(rIter, "Torpedo")) {
             mType = Type_Torpedo;
-            setName("\203\147\201\133\203\163\201\133\203\150" /* トーピード */);
+            setName("トーピード");
         } else if (MR::isEqualObjectName(rIter, "MagnumKiller")) {
             mType = Type_MagnumKiller;
-            setName("\203\175\203\117\203\151\203\200\203\114\203\211\201\133" /* マグナムキラー */);
+            setName("マグナムキラー");
         }
     }
 
@@ -127,9 +127,9 @@ void HomingKiller::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objectName, nullptr, false);
 
     if (mType == Type_Torpedo) {
-        mPropeller = MR::createPartsModelEnemyAndFix(this, "\203\147\201\133\203\163\201\133\203\150\203\166\203\215\203\171\203\211" /* トーピードプロペラ */, "TorpedoPropeller", nullptr, Vec3f(0.0f, 0.0f, 0.0f),
+        mPropeller = MR::createPartsModelEnemyAndFix(this, "トーピードプロペラ", "TorpedoPropeller", nullptr, Vec3f(0.0f, 0.0f, 0.0f),
                                                      Vec3f(0.0f, 0.0f, 0.0f), nullptr);
-        mTorpedoLight = MR::createModelObjMapObj("\203\147\201\133\203\163\201\133\203\150\203\211\203\103\203\147" /* トーピードライト */, "TorpedoLight", getBaseMtx());
+        mTorpedoLight = MR::createModelObjMapObj("トーピードライト", "TorpedoLight", getBaseMtx());
         MR::invalidateClipping(mTorpedoLight);
         mTorpedoLight->makeActorDead();
     }
@@ -355,20 +355,20 @@ bool HomingKiller::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
     return MR::tryForceKillIfMsgStartPowerStarGet(this, msg);
 }
 
-void HomingKiller::initMapToolInfo(const JMapInfoIter& rIter) {
+void HomingKiller::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mChaseStartDist);
+    MR::getPlacementArg0NoInit(rIter, &mChaseStartDist);
 
     s32 turnRadius = 3;
-    MR::getJMapInfoArg1NoInit(rIter, &turnRadius);
+    MR::getPlacementArg1NoInit(rIter, &turnRadius);
     mChaseRotateSpeed = 1.0f - turnRadius * 0.0001f;
 
-    MR::getJMapInfoArg2NoInit(rIter, &mIsLinearShot);
+    MR::getPlacementArg2NoInit(rIter, &mIsLinearShot);
     if (mType == Type_MagnumKiller) {
         mIsLinearShot = true;
     }
 
-    MR::getJMapInfoArg3NoInit(rIter, &mUseFullSightAngle);
+    MR::getPlacementArg3NoInit(rIter, &mUseFullSightAngle);
     if (!mUseFullSightAngle) {
         mChaseStartAngle = ::cChaseStartAngle / 2;
     }
@@ -551,7 +551,7 @@ bool HomingKiller::tryFreeze(const Nerve* pUnfreezeNerve) {
         return false;
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         mFreezeTime = 0;
         mFreezePos.set(mPosition);
         mUnfreezeNerve = pUnfreezeNerve;
@@ -841,7 +841,7 @@ void HomingKiller::exeFreeze() {
         updateRotateZ(target);
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(HomingKiller, HomingKillerNrvFreeze));
         return;
     }
@@ -903,7 +903,7 @@ void HomingKiller::exeBreak() {
             MR::releaseSoundHandle(this, "SE_EM_KILLER_EXPLOSION");
         }
 
-        MR::startRumbleWithShakeCameraWeak(this, "\213\255" /* 強 */, "\222\206" /* 中 */, ::cCameraShakeDistance, ::cCameraShakeDistance * 2);
+        MR::startRumbleWithShakeCameraWeak(this, "強", "中", ::cCameraShakeDistance, ::cCameraShakeDistance * 2);
     }
 
     if (!MR::isEffectValid(this, "Explosion")) {
@@ -932,17 +932,17 @@ void HomingKiller::exeGoToTarget() {
     }
 }
 
-HomingKillerLauncher::HomingKillerLauncher(const char* pName) : LiveActor("\203\172\201\133\203\176\203\223\203\117\203\114\203\211\201\133\203\211\203\223\203\140\203\203\201\133" /* ホーミングキラーランチャー */), mKiller() {
+HomingKillerLauncher::HomingKillerLauncher(const char* pName) : LiveActor("ホーミングキラーランチャー"), mKiller() {
 }
 
-void HomingKillerLauncher::init(const JMapInfoIter& rIter) {
+void HomingKillerLauncher::init(const TableIter& rIter) {
     MR::connectToSceneEnemyMovement(this);
     MR::initDefaultPos(this, rIter);
     MR::needStageSwitchReadAppear(this, rIter);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(HomingKiller, HomingKillerLauncherNrvAppearKiller));
     MR::syncStageSwitchAppear(this);
-    mKiller = new HomingKiller("\203\172\201\133\203\176\203\223\203\117\203\114\203\211\201\133" /* ホーミングキラー */);
+    mKiller = new HomingKiller("ホーミングキラー");
     mKiller->init(rIter);
     makeActorDead();
 }

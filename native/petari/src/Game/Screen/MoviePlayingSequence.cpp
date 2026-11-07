@@ -289,7 +289,7 @@ void MoviePlayingSequence::exePlayWait() {
 
         if (MR::isEqualStringCase(mInfo->mMovieName, "/MovieData/PrologueA.thp")) {
             MarioAccess::readyRemoteDemo();
-            MR::setPlayerPosOnGroundAndWait("\203\212\203\130\203\136\201\133\203\147" /* リスタート */);
+            MR::setPlayerPosOnGroundAndWait("リスタート");
             MR::startBckPlayer("Wait");
         }
     }

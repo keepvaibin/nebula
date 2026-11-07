@@ -17,7 +17,7 @@ bool MercatorFixParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* p
 MercatorFixParts::~MercatorFixParts() {
 }
 
-void MercatorFixParts::init(const JMapInfoIter& rIter) {
+void MercatorFixParts::init(const TableIter& rIter) {
     char objectName[256];
     MR::getMapPartsObjectName(objectName, sizeof(objectName), rIter);
     MR::initDefaultPosForMercator(this, rIter, false);

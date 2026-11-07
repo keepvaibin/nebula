@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -13,7 +13,7 @@
 ClipAreaMovable::ClipAreaMovable(const char* pName) : ClipArea(pName), mMapPartsRailMover(), mMapPartsRotator() {
 }
 
-void ClipAreaMovable::init(const JMapInfoIter& rIter) {
+void ClipAreaMovable::init(const TableIter& rIter) {
     initBaseMatrix(rIter);
     MR::connectToScene(this, MR::MovementType_ClippedMapParts, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_ClipArea);
     MR::setGroupClipping(this, rIter, 0x40);
@@ -44,7 +44,7 @@ void ClipAreaMovable::control() {
     updateMatrix();
 }
 
-void ClipAreaMovable::initMoveFunction(const JMapInfoIter& rIter) {
+void ClipAreaMovable::initMoveFunction(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         initRailRider(rIter);
 

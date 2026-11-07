@@ -40,7 +40,7 @@ inline void HipDropSwitch::initStarPointerTarget() {
     MR::initStarPointerTarget(this, 150.0f, targetOffs);
 }
 
-void HipDropSwitch::init(const JMapInfoIter& rIter) {
+void HipDropSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("HipDropSwitch", nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
@@ -147,7 +147,7 @@ void HipDropSwitch::exeOff() {
         mSpringValue->reset();
     }
 
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         _CE = true;
     }
 

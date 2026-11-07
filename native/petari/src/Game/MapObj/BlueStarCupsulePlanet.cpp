@@ -9,7 +9,7 @@
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -48,7 +48,7 @@ BlueStarCupsulePlanet::BlueStarCupsulePlanet(const char* pName) : LiveActor(pNam
     MR::createGCapture();
 }
 
-void BlueStarCupsulePlanet::init(const JMapInfoIter& rIter) {
+void BlueStarCupsulePlanet::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getObjectName(&mName, rIter);
     initModelManagerWithAnm(mName, nullptr, false);
@@ -185,7 +185,7 @@ void BlueStarCupsulePlanet::exePointable() {
 
     if (!isPointable()) {
         setNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvWait));
-    } else if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
+    } else if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱")) {
         if (MR::requestGCaptureTarget(this)) {
             MR::invalidateClipping(this);
             setNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvHitPointer));
@@ -212,7 +212,7 @@ void BlueStarCupsulePlanet::exeHitPointer() {
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
 
     bool pointable = isPointable();
-    if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) && pointable) {
+    if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱") && pointable) {
         MR::requestGCaptureTarget(this);
     }
 

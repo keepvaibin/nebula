@@ -12,7 +12,7 @@ public:
     KirairaChain(const LiveActor*);
     virtual ~KirairaChain();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void control();
 

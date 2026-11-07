@@ -7,11 +7,11 @@ namespace {
 };  // namespace
 
 // "Kabokuri flame holder"
-KabokuriFireHolder::KabokuriFireHolder() : DeriveActorGroup< KabokuriFire >("\203\112\203\173\203\116\203\212\211\212\212\307\227\235" /* カボクリ炎管理 */, ::sMaxKabokuriFire) {
+KabokuriFireHolder::KabokuriFireHolder() : DeriveActorGroup< KabokuriFire >("カボクリ炎管理", ::sMaxKabokuriFire) {
     KabokuriFire* pFire;
 
     for (int i = 0; i < ::sMaxKabokuriFire; i++) {
-        pFire = new KabokuriFire("\203\112\203\173\203\116\203\212\211\212" /* カボクリ炎 */);  // "Kabokuri flame"
+        pFire = new KabokuriFire("カボクリ炎");  // "Kabokuri flame"
         pFire->initWithoutIter();
         registerActor(pFire);
     }

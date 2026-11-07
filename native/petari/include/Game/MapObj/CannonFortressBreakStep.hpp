@@ -10,7 +10,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     CannonFortressBreakStep(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
 

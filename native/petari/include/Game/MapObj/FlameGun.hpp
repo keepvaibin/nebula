@@ -7,7 +7,7 @@ public:
     FlameGun(const char* pName);
 
     virtual ~FlameGun();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void endClipped();
     virtual void updateHitSensor(HitSensor* pSensor);

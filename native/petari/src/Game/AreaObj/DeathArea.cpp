@@ -5,7 +5,7 @@
 DeathArea::DeathArea(int formType, const char* pName) : AreaObj(formType, pName) {
 }
 
-void DeathArea::init(const JMapInfoIter& rIter) {
+void DeathArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 }

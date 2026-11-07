@@ -19,7 +19,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     TrickRabbitSnow(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

@@ -11,7 +11,7 @@ public:
     OceanRingPipe(const OceanRing*, f32, f32);
 
     virtual ~OceanRingPipe();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     void initPoints();

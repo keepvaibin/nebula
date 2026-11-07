@@ -97,7 +97,7 @@ FileSelectItem::FileSelectItem(s32 a1, bool a2, const FileSelectIconID& rID, con
     }
 }
 
-void FileSelectItem::init(const JMapInfoIter& rIter) {
+void FileSelectItem::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     MR::createSceneObj(SceneObj_MiiFacePartsHolder);
     createNew();
@@ -393,22 +393,22 @@ void FileSelectItem::control() {
 }
 
 void FileSelectItem::createNew() {
-    mPlanetMapObj = MR::createPartsModelMapObj(this, "\203\152\203\205\201\133\203\164\203\106\203\103\203\130" /* ニューフェイス */, "FileSelectDataPlanet", _A4);
+    mPlanetMapObj = MR::createPartsModelMapObj(this, "ニューフェイス", "FileSelectDataPlanet", _A4);
     mPlanetMapObj->mScale.set(30.0f);
     mPlanetMapObj->makeActorDead();
 }
 
 void FileSelectItem::createFellows() {
     for (u32 i = 0; i < 5; i++) {
-        mModels[i] = new FileSelectModel(::sFellowModel[i], _D4, "\203\114\203\203\203\211\203\164\203\106\203\103\203\130" /* キャラフェイス */);
+        mModels[i] = new FileSelectModel(::sFellowModel[i], _D4, "キャラフェイス");
     }
 }
 
 void FileSelectItem::createMii() {
     if (_8C || !mIconID->isMii()) {
-        mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */, 0);
+        mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Miiフェイス", 0);
     } else {
-        mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */,
+        mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Miiフェイス",
                                                                 MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
@@ -420,7 +420,7 @@ void FileSelectItem::createMii() {
 }
 
 void FileSelectItem::createNumber() {
-    _A0 = new FileSelectNumber("\203\164\203\100\203\103\203\213\224\324\215\206" /* ファイル番号 */);
+    _A0 = new FileSelectNumber("ファイル番号");
     _A0->initWithoutIter();
     _A0->setNumber(_140);
 }
@@ -772,7 +772,7 @@ void FileSelectItem::deleteCompleteEffect() {
 
 namespace FileSelectItemSub {
 
-    ScaleController::ScaleController() : NerveExecutor("\203\164\203\100\203\103\203\213\203\132\203\214\203\116\203\136\203\101\203\103\203\122\203\223\203\124\203\103\203\131\212\307\227\235" /* ファイルセレクタアイコンサイズ管理 */) {
+    ScaleController::ScaleController() : NerveExecutor("ファイルセレクタアイコンサイズ管理") {
         _8 = 1.0f;
         initNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall));
     }
@@ -795,7 +795,7 @@ namespace FileSelectItemSub {
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), 30);
     }
 
-    BlinkController::BlinkController(FileSelectItem* pItem) : NerveExecutor("\203\164\203\100\203\103\203\213\203\132\203\214\203\116\203\136\203\101\203\103\203\122\203\223\217\165\202\253\212\307\227\235" /* ファイルセレクタアイコン瞬き管理 */) {
+    BlinkController::BlinkController(FileSelectItem* pItem) : NerveExecutor("ファイルセレクタアイコン瞬き管理") {
         mItem = pItem;
         _C = 0;
         _10 = 0;

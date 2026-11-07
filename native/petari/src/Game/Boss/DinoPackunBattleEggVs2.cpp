@@ -24,7 +24,7 @@ namespace NrvDinoPackunBattleEgg {
     NEW_NERVE(DinoPackunBattleEggVs2NrvDamage, DinoPackunBattleEggVs2, Damage);
 };  // namespace NrvDinoPackunBattleEgg
 
-DinoPackunBattleEggVs2::DinoPackunBattleEggVs2(DinoPackun* pPackun) : DinoPackunAction("2\211\361\220\355\227\221\203\157\203\147\203\213" /* 2回戦卵バトル */, pPackun) {
+DinoPackunBattleEggVs2::DinoPackunBattleEggVs2(DinoPackun* pPackun) : DinoPackunAction("2回戦卵バトル", pPackun) {
     mStateDamage = nullptr;
     mTrackFireHolder = nullptr;
     mStateFire = nullptr;

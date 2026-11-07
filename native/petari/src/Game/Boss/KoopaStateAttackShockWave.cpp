@@ -30,7 +30,7 @@ namespace NrvKoopaStateAttackShockWave {
 };  // namespace NrvKoopaStateAttackShockWave
 
 KoopaStateAttackShockWave::KoopaStateAttackShockWave(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[\217\325\214\202\224\147\215\125\214\202]" /* State[衝撃波攻撃] */, pKoopa), mMaxAttacks(1), mAttacks(), mJumpVelocity(::sJumpSpeed), mGravity(::sJumpGravity),
+    : ActorStateBase< Koopa >("State[衝撃波攻撃]", pKoopa), mMaxAttacks(1), mAttacks(), mJumpVelocity(::sJumpSpeed), mGravity(::sJumpGravity),
       mJumpDelay(::sLandStep) {
 }
 

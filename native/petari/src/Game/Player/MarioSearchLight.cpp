@@ -25,10 +25,10 @@
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
 
-MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "\203\124\201\133\203\140\203\211\203\103\203\147" /* サーチライト */, "SearchLightCone", nullptr, -1, 0), _9C(), _A0(), _A4() {
+MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "サーチライト", "SearchLightCone", nullptr, -1, 0), _9C(), _A0(), _A4() {
 }
 
-void MarioSearchLight::init(const JMapInfoIter& rParam1) {
+void MarioSearchLight::init(const TableIter& rParam1) {
     PartsModel::init(rParam1);
     initHitSensor(1);
     _9C = 0.0f;

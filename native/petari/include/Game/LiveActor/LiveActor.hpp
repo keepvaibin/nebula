@@ -30,8 +30,8 @@ public:
     LiveActor(const char* pName);
 
     /// @brief Intializes the `LiveActor` while being placed into a scene.
-    /// @param rIter A reference to an iterator over a `JMapInfo`.
-    virtual void init(const JMapInfoIter& rIter) override;
+    /// @param rIter A reference to an iterator over a `Table`.
+    virtual void init(const TableIter& rIter) override;
 
     virtual void movement() override;
     virtual void calcAnim() override;
@@ -135,12 +135,12 @@ public:
     void initNerve(const Nerve*);
     void initHitSensor(int);
     void initBinder(f32, f32, u32);
-    void initRailRider(const JMapInfoIter& rIter);
+    void initRailRider(const TableIter& rIter);
     void initEffectKeeper(int, const char*, bool);
     void initSound(int, bool);
     void initShadowControllerList(u32);
     void initActorCollisionParts(const char*, HitSensor*, ResourceHolder*, MtxPtr, bool, bool);
-    void initStageSwitch(const JMapInfoIter& rIter);
+    void initStageSwitch(const TableIter& rIter);
     void initActorStarPointerTarget(f32, const Vec3f*, MtxPtr, Vec3f);
     void initActorLightCtrl();
     void addToSoundObjHolder();

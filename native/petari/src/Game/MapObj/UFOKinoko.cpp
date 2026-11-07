@@ -14,16 +14,16 @@ namespace NrvUFOKinoko {
 UFOKinoko::UFOKinoko(const char* pName) : MapObjActor(pName) {
 }
 
-void UFOKinoko::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void UFOKinoko::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     bool arg7 = false;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
 
     if (arg7) {
         pCollector->addArchive("UFOKinokoLow");
     }
 }
 
-void UFOKinoko::init(const JMapInfoIter& rIter) {
+void UFOKinoko::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     s32 argShadowType = -1;
     MR::getMapPartsArgShadowType(&argShadowType, rIter);
@@ -47,7 +47,7 @@ void UFOKinoko::init(const JMapInfoIter& rIter) {
     MapObjActorUtil::setupInitInfoColorChangeArg0(&info, rIter);
 
     bool arg7 = true;
-    MR::getJMapInfoArg7NoInit(rIter, &arg7);
+    MR::getPlacementArg7NoInit(rIter, &arg7);
 
     if (arg7) {
         info.setupNoUseLodCtrl();
@@ -57,7 +57,7 @@ void UFOKinoko::init(const JMapInfoIter& rIter) {
     MapObjActorUtil::startRotator(this);
 
     if (MR::isDemoCast(this, nullptr)) {
-        MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &UFOKinoko::startMove), "\202\164\202\145\202\156\203\114\203\155\203\122\223\157\217\352" /* ＵＦＯキノコ登場 */);
+        MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &UFOKinoko::startMove), "ＵＦＯキノコ登場");
     }
 }
 

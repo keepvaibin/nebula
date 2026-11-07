@@ -3,7 +3,7 @@
 #include "Game/Util/Color.hpp"
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include <nebula_geometry.hpp>
 
@@ -43,7 +43,7 @@ public:
 
     StarPiece(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void makeActorAppeared();
@@ -55,8 +55,8 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initAndSetFloatingFromGroup(const JMapInfoIter&);
-    void initAndSetRailMoveFromGroup(const JMapInfoIter&);
+    void initAndSetFloatingFromGroup(const TableIter&);
+    void initAndSetRailMoveFromGroup(const TableIter&);
 
     void setColor(s32);
     static s32 getNumColor();

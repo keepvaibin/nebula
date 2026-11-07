@@ -8,7 +8,7 @@ KoopaSequencer::KoopaSequencer(const char* pName, s32 vs)
     : NerveExecutor(pName), mKoopa(), mPowerUp(), mBattleStairs(), mJumpToPlanet(), mLv(1), mVs(vs), mIsAngry() {
 }
 
-void KoopaSequencer::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
+void KoopaSequencer::init(Koopa* pKoopa, const TableIter& rIter) {
     mKoopa = pKoopa;
 
     mPowerUp = new KoopaDemoPowerUp(mKoopa);

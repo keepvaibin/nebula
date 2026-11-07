@@ -10,7 +10,7 @@ public:
     OceanHomeMapCtrl();
 
     virtual ~OceanHomeMapCtrl();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void movement();
 
     void entryMapRing(PlanetMap*);

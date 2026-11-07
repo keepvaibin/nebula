@@ -110,7 +110,7 @@ void StarPointerLayout::initWithPort(s32 channel) {
     mCommandStream->setPortAndColor(mPadChannel, &::sColorA[mPadChannel]);
     mCommandStream->initWithoutIter();
 
-    mNumber = new StarPointerNumber(this, mPadChannel, "\203\130\203\136\201\133\203\174\203\103\203\223\203\136\203\151\203\223\203\157\201\133" /* スターポインタナンバー */);
+    mNumber = new StarPointerNumber(this, mPadChannel, "スターポインタナンバー");
     mNumber->initWithoutIter();
     mNumber->appear();
 

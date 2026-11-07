@@ -89,12 +89,12 @@ void MercatorRailMoveParts::updatePose() {
     mRotateMtx.set(mtx);
 }
 
-void MercatorRailMoveParts::init(const JMapInfoIter& rIter) {
+void MercatorRailMoveParts::init(const TableIter& rIter) {
     char objName[256];
     MR::getMapPartsObjectName(objName, sizeof(objName), rIter);
     MR::initDefaultPosForMercator(this, rIter, false);
-    MR::getJMapInfoTrans(rIter, &mLocalTrans);
-    MR::getJMapInfoRotateLocal(rIter, &mLocalRotation);
+    MR::getPlacementTrans(rIter, &mLocalTrans);
+    MR::getPlacementRotateLocal(rIter, &mLocalRotation);
     initModelManagerWithAnm(objName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);

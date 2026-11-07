@@ -18,7 +18,7 @@ public:
     /// @brief Creates a new `GalaxyNamePlateDrawer`.
     GalaxyNamePlateDrawer();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
 
     GalaxyNamePlatePrioritied* registerPlate(const LayoutActor*);

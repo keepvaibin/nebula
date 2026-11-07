@@ -17,14 +17,14 @@ public:
     virtual void movement() override;
 
     void registerActor(LiveActor*);
-    void initSystemInfo(LiveActor*, const JMapInfoIter&);
+    void initSystemInfo(LiveActor*, const TableIter&);
     void initViewGroupTable();
-    void entryLodCtrl(LodCtrl*, const JMapInfoIter&);
+    void entryLodCtrl(LodCtrl*, const TableIter&);
     void validateClipping(LiveActor*);
     void invalidateClipping(LiveActor*);
     void addToClippingTarget(LiveActor*);
     void removeFromClippingTarget(LiveActor*);
-    ClippingActorInfo* startGroupClipping(LiveActor*, const JMapInfoIter&);
+    ClippingActorInfo* startGroupClipping(LiveActor*, const TableIter&);
     void setTypeToSphere(LiveActor*, f32, const Vec3f*);
     void setFarClipLevel(LiveActor*, s32);
     ClippingActorInfo* find(const LiveActor*) const;

@@ -14,7 +14,7 @@ namespace NrvSpaceShipStep {
 SpaceShipStep::SpaceShipStep(const char* pName) : MapObjActor(pName), _C4(0.0f, 0.0f, 0.0f), _D0(), _D4() {
 }
 
-void SpaceShipStep::init(const JMapInfoIter& rIter) {
+void SpaceShipStep::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     info.setupDefaultPos();

@@ -15,7 +15,7 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -34,7 +34,7 @@ const NebulaColor8 lightColor[] = {
 };
 
 namespace {
-    const char* const cAppearDemoName = "\203\160\203\217\201\133\203\130\203\136\201\133\217\157\214\273" /* パワースター出現 */;
+    const char* const cAppearDemoName = "パワースター出現";
     const char* const cStageClearAnimNameKoopaVs3 = "GrandStarGetKoopaVs3";
 
     void setupColor(LiveActor* pActor, bool useFrame, int frame) {
@@ -85,7 +85,7 @@ PowerStar::PowerStar(const char* pName)
     _134.identity();
 }
 
-void PowerStar::init(const JMapInfoIter& rIter) {
+void PowerStar::init(const TableIter& rIter) {
     mIsGrandStar = MR::isEqualObjectName(rIter, "GrandStar");
 
     initMapToolInfo(rIter);
@@ -128,8 +128,8 @@ void PowerStar::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        MR::registerDemoActionNerve(this, GET_NERVE(PowerStar, PowerStarNrvWeakNoRotate), "\203\176\203\152\221\276\227\172\217\301\216\270" /* ミニ太陽消失 */);
-        MR::registerDemoActionNerve(this, GET_NERVE(PowerStar, PowerStarNrvWeakToWait), "\203\117\203\211\203\223\203\150\203\130\203\136\201\133\225\234\212\210" /* グランドスター復活 */);
+        MR::registerDemoActionNerve(this, GET_NERVE(PowerStar, PowerStarNrvWeakNoRotate), "ミニ太陽消失");
+        MR::registerDemoActionNerve(this, GET_NERVE(PowerStar, PowerStarNrvWeakToWait), "グランドスター復活");
         MR::registerDemoSimpleCastAll(this);
     }
 
@@ -282,10 +282,10 @@ bool PowerStar::isCurrentStageKoopaVs3() {
 void PowerStar::initShadowPowerStar(LiveActor* pActor, bool a2) {
     MR::initShadowFromCSV(pActor, "Shadow");
     MR::invalidateShadowAll(pActor);
-    MR::validateShadowGroup(pActor, a2 ? "\211\176\222\214" /* 円柱 */ : "\222\312\217\355" /* 通常 */);
+    MR::validateShadowGroup(pActor, a2 ? "円柱" : "通常");
 }
 
-void PowerStar::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void PowerStar::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     if (MR::isPowerStarGetDemoWithLuigiCurrentGalaxy()) {
         pCollector->addArchive("LuigiNPC");
     }
@@ -349,16 +349,16 @@ bool PowerStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-void PowerStar::initMapToolInfo(const JMapInfoIter& rIter) {
+void PowerStar::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg0NoInit(rIter, &mPowerStarId);
-    MR::getJMapInfoArg1NoInit(rIter, &_125);
-    MR::getJMapInfoArg2NoInit(rIter, &_126);
-    MR::getJMapInfoArg4NoInit(rIter, &_127);
+    MR::getPlacementArg0NoInit(rIter, &mPowerStarId);
+    MR::getPlacementArg1NoInit(rIter, &_125);
+    MR::getPlacementArg2NoInit(rIter, &_126);
+    MR::getPlacementArg4NoInit(rIter, &_127);
     mAppearPosition.set(mPosition);
     mInitRotation.set(mRotation);
     MR::registerPowerStar(this, mPowerStarId);
-    MR::joinToGroupArray(this, rIter, "\203\160\203\217\201\133\203\130\203\136\201\133\217\157\214\273\203\174\203\103\203\223\203\147\203\117\203\213\201\133\203\166" /* パワースター出現ポイントグループ */, 0x10);
+    MR::joinToGroupArray(this, rIter, "パワースター出現ポイントグループ", 0x10);
 
     if (mPowerStarId > 0) {
         if (!MR::hasPowerStarInCurrentStage(mPowerStarId)) {
@@ -388,14 +388,14 @@ void PowerStar::initModel() {
 
     if (mIsGrandStar) {
         MtxPtr pMtx = (MtxPtr)&mBaseMtx;
-        const char* pName = "\203\117\203\211\203\223\203\150\203\130\203\136\201\133\203\146\203\202\203\202\203\146\203\213" /* グランドスターデモモデル */;
+        const char* pName = "グランドスターデモモデル";
 
         mPowerStarModelObj = MR::createModelObjIndirectMapObj(pName, mIsGrandStar ? "GrandStar" : "PowerStar", pMtx);
 
         ::setupColorGrandStar(mPowerStarModelObj, mColorFrame_v == 4);
     } else {
         MtxPtr pMtx = (MtxPtr)&mBaseMtx;
-        const char* pName = "\203\160\203\217\201\133\203\130\203\136\201\133\203\146\203\202\203\202\203\146\203\213" /* パワースターデモモデル */;
+        const char* pName = "パワースターデモモデル";
 
         mPowerStarModelObj = MR::createModelObjNoSilhouettedMapObj(pName, mIsGrandStar ? "GrandStar" : "PowerStar", pMtx);
 
@@ -406,7 +406,7 @@ void PowerStar::initModel() {
     mPowerStarModelObj->makeActorDead();
 
     if (MR::isPowerStarGetDemoWithLuigiCurrentGalaxy()) {
-        mLuigiNPC = MR::createModelObjNpc("\203\213\203\103\201\133\203\127\203\146\203\202\203\202\203\146\203\213" /* ルイージデモモデル */, "LuigiNPC", (MtxPtr)&mBaseMtx);
+        mLuigiNPC = MR::createModelObjNpc("ルイージデモモデル", "LuigiNPC", (MtxPtr)&mBaseMtx);
 
         MR::initLightCtrl(mLuigiNPC);
         MR::invalidateClipping(mLuigiNPC);
@@ -438,14 +438,14 @@ void PowerStar::initSensorGrandStar() {
     MR::addHitSensorMtx(this, body6Name, ATYPE_POWER_STAR_BIND, 8, 80.0f, getBaseMtx(), body6Offs);
 }
 
-void PowerStar::initShadow(const JMapInfoIter& rIter) {
+void PowerStar::initShadow(const TableIter& rIter) {
     if (!mIsGrandStar) {
         bool arg3 = false;
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
         bool thing = arg3;
         MR::initShadowFromCSV(this, "Shadow");
         MR::invalidateShadowAll(this);
-        MR::validateShadowGroup(this, thing ? "\211\176\222\214" /* 円柱 */ : "\222\312\217\355" /* 通常 */);
+        MR::validateShadowGroup(this, thing ? "円柱" : "通常");
     } else {
         MR::initShadowFromCSV(this, "Shadow");
     }

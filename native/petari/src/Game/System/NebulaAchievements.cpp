@@ -7,7 +7,7 @@
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/NebulaText.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
@@ -234,7 +234,7 @@ namespace {
     Galaxies checkGalaxies() {
         Galaxies result = {false, true, true, true, true, true, true, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0, galaxyNum = 0;
-        JMapInfo galaxies;
+        Table galaxies;
         galaxies.attach(NebulaDataTables::getGalaxyInfoTable());
         for (s32 i = 0; i < galaxies.getNumEntries(); i++) {
             const char* pPane = nullptr;

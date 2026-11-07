@@ -2,19 +2,19 @@
 #include "Game/Demo/DemoCastGroupHolder.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/System/MessageHolder.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/Table.hpp"
 
 DemoCastSubGroup::DemoCastSubGroup(const char* pName) : DemoCastGroup(pName) {
     mExecutor = nullptr;
 }
 
-void DemoCastSubGroup::init(const JMapInfoIter& rIter) {
+void DemoCastSubGroup::init(const TableIter& rIter) {
     DemoCastGroup::init(rIter);
     DemoFunction::getDemoCastSubGroupHolder()->registerObj(this);
 }
 
-bool DemoCastSubGroup::tryRegisterDemoActor(LiveActor* pActor, const JMapInfoIter& rIter, const JMapIdInfo& rInfo) {
+bool DemoCastSubGroup::tryRegisterDemoActor(LiveActor* pActor, const TableIter& rIter, const PlacementId& rInfo) {
     if (!DemoCastGroup::tryRegisterDemoActor(pActor, rIter, rInfo)) {
         return false;
     }

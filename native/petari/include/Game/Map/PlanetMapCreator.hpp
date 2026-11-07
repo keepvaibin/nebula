@@ -35,9 +35,9 @@ public:
     PlanetMapCreator(const char*);
 
     CreatorFuncPtr getCreateFunc(const char*);
-    void makeArchiveListPlanet(NameObjArchiveListCollector*, const JMapInfoIter&, const char*);
-    void createPlanetMapDataTable(JMapInfo*);
-    void addTableData(const JMapInfo*, s32);
+    void makeArchiveListPlanet(NameObjArchiveListCollector*, const TableIter&, const char*);
+    void createPlanetMapDataTable(Table*);
+    void addTableData(const Table*, s32);
     PlanetMapData* getTableData(const char*) const;
     bool isScenarioForceLow(const PlanetMapData*) const;
 
@@ -57,7 +57,7 @@ public:
 
 class PlanetMapCreatorFunction {
 public:
-    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&, const char*);
+    static void makeArchiveList(NameObjArchiveListCollector*, const TableIter&, const char*);
 
     static bool isLoadArchiveAfterScenarioSelected(const char*);
     static bool isRegisteredObj(const char*);

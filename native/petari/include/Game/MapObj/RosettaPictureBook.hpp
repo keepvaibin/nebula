@@ -12,13 +12,13 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     RosettaPictureBook(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
+    static void makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter);
 
     void exeWait();
     void exeDemoWait();

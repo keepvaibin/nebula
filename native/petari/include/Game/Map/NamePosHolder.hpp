@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include <nebula_geometry.hpp>
 
-class JMapLinkInfo;
+class PlacementLink;
 
 /// @brief Class that contains the NamePos attributes. NamePos defines the spawn location of other actors (ie Power Stars)
 class NamePosInfo {
@@ -13,7 +13,7 @@ public:
     const char* mName;         ///< The name of the NamePos.
     Vec3f mPosition;          ///< The position of the NamePos.
     Vec3f mRotation;         ///< The rotation of the NamePos.
-    JMapLinkInfo* mLinkInfo;  ///< The information to link this NamePos to other objects.
+    PlacementLink* mLinkInfo;  ///< The information to link this NamePos to other objects.
     const NameObj* _20;
 };
 
@@ -22,7 +22,7 @@ class NamePosHolder : public NameObj {
 public:
     NamePosHolder();
 
-    bool tryRegisterLinkObj(const NameObj*, const JMapInfoIter&);
+    bool tryRegisterLinkObj(const NameObj*, const TableIter&);
     bool find(const NameObj*, const char*, Vec3f*, Vec3f*) const;
 
     s32 mPosNum;           ///< The number of NamePosInfo instances.

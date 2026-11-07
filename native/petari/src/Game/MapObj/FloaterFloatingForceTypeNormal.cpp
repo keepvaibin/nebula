@@ -28,7 +28,7 @@ FloaterFloatingForceTypeNormal::FloaterFloatingForceTypeNormal(LiveActor* pActor
     : FloaterFloatingForce(pActor, pName), mRotateAngle(), mRotateSpeed(), _40(), _44() {
 }
 
-void FloaterFloatingForceTypeNormal::init(const JMapInfoIter& rIter) {
+void FloaterFloatingForceTypeNormal::init(const TableIter& rIter) {
     FloaterFloatingForce::init(rIter);
     MR::getMapPartsArgRotateSpeed(&mRotateSpeed, rIter);
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);

@@ -9,7 +9,7 @@ class Balloonfish : public LiveActor {
 public:
     Balloonfish(const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void control();

@@ -4,7 +4,7 @@
 
 class CameraParallel : public Camera {
 public:
-    CameraParallel(const char* pName = "\225\275\215\163\203\112\203\201\203\211" /* 平行カメラ */);
+    CameraParallel(const char* pName = "平行カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

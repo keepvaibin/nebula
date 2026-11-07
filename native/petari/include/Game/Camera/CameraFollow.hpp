@@ -4,7 +4,7 @@
 
 class CameraFollow : public Camera {
 public:
-    CameraFollow(const char* pName = "\203\164\203\110\203\215\201\133\203\112\203\201\203\211" /* フォローカメラ */);
+    CameraFollow(const char* pName = "フォローカメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

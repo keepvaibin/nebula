@@ -6,7 +6,7 @@ class StarPieceSpot : public LiveActor {
 public:
     StarPieceSpot(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void emit();

@@ -12,7 +12,7 @@ DeadLeaves::DeadLeaves(const char* pName) : MapObjActor(pName) {
     mItemType = -1;
 }
 
-void DeadLeaves::init(const JMapInfoIter& rIter) {
+void DeadLeaves::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -24,7 +24,7 @@ void DeadLeaves::init(const JMapInfoIter& rIter) {
     info.setupHitSensorParam(8, 70.0f, sensor);
     info.setupNerve(GET_NERVE(DeadLeaves, DeadLeavesNrvWait));
     initialize(rIter, info);
-    MR::getJMapInfoArg0NoInit(rIter, &mItemType);
+    MR::getPlacementArg0NoInit(rIter, &mItemType);
 
     if (mItemType == 0) {
         MR::declareCoin(this, 1);

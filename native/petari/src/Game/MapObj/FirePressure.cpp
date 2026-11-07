@@ -13,12 +13,12 @@ FirePressure::FirePressure(const char* pName) : PressureBase(pName) {
     mDisableCollsion = false;
 }
 
-void FirePressure::init(const JMapInfoIter& rIter) {
+void FirePressure::init(const TableIter& rIter) {
     PressureBase::init(rIter);
-    MR::getJMapInfoArg7NoInit(rIter, &mDisableCollsion);
+    MR::getPlacementArg7NoInit(rIter, &mDisableCollsion);
 }
 
-void FirePressure::initBullet(const JMapInfoIter& rIter) {
+void FirePressure::initBullet(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_FirePressureBulletHolder);
 }
 

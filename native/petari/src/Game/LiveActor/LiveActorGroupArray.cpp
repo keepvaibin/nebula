@@ -2,8 +2,8 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementId.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
@@ -18,19 +18,19 @@ namespace {
     };
 
     struct HasGroupId {
-        bool operator()(const MsgSharedGroup* pGroup, const JMapIdInfo& rIdInfo) const {
+        bool operator()(const MsgSharedGroup* pGroup, const PlacementId& rIdInfo) const {
             return *pGroup->mIdInfo == rIdInfo;
         }
     };
 };  // namespace
 
-MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const JMapInfoIter& rIter)
+MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const TableIter& rIter)
     : LiveActorGroup(mGroupName, numMax), mIdInfo(), mMsg(-1), mSensor(), mSensorName() {
     MR::copyString(mGroupName, pName, sizeof(mGroupName));
-    JMapIdInfo* pIdInfo = new JMapIdInfo();
+    PlacementId* pIdInfo = new PlacementId();
 
     if (pIdInfo != nullptr) {
-        JMapIdInfo newInfo = MR::createJMapIdInfoFromGroupId(rIter);
+        PlacementId newInfo = MR::createPlacementIdFromGroupId(rIter);
         pIdInfo->_0 = newInfo._0;
         pIdInfo->mZoneID = newInfo.mZoneID;
     }
@@ -38,7 +38,7 @@ MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const JMapInfoIter
     mIdInfo = pIdInfo;
 }
 
-void MsgSharedGroup::init(const JMapInfoIter& rIter) {
+void MsgSharedGroup::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MsgSharedGroup, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
@@ -65,14 +65,14 @@ void MsgSharedGroup::sendMsgToGroupMember(u32 msg, HitSensor* pSensor, const cha
 LiveActorGroupArray::LiveActorGroupArray(const char* pName) : NameObj(pName), mGroups() {
 }
 
-void LiveActorGroupArray::init(const JMapInfoIter& rIter) {
+void LiveActorGroupArray::init(const TableIter& rIter) {
 }
 
 LiveActorGroup* LiveActorGroupArray::getLiveActorGroup(const LiveActor* pActor) const {
     return findGroup(pActor);
 }
 
-LiveActorGroup* LiveActorGroupArray::createGroup(const JMapInfoIter& rIter, const char* pName, s32 numMax) {
+LiveActorGroup* LiveActorGroupArray::createGroup(const TableIter& rIter, const char* pName, s32 numMax) {
     MsgSharedGroup* pGroup;
 
     pGroup = new MsgSharedGroup(pName, numMax, rIter);
@@ -83,8 +83,8 @@ LiveActorGroup* LiveActorGroupArray::createGroup(const JMapInfoIter& rIter, cons
     return pGroup;
 }
 
-LiveActorGroup* LiveActorGroupArray::findGroup(const JMapInfoIter& rIter) const {
-    const JMapIdInfo idInfo = MR::createJMapIdInfoFromGroupId(rIter);
+LiveActorGroup* LiveActorGroupArray::findGroup(const TableIter& rIter) const {
+    const PlacementId idInfo = MR::createPlacementIdFromGroupId(rIter);
     MsgSharedGroup* const* it =
         std::find_if(mGroups.begin(), mGroups.end(), [&](const auto& item) { return HasGroupId()(item, idInfo); });
 
@@ -105,9 +105,9 @@ LiveActorGroup* LiveActorGroupArray::findGroup(const LiveActor* pActor) const {
     return nullptr;
 }
 
-LiveActorGroup* LiveActorGroupArray::entry(LiveActor* pActor, const JMapInfoIter& rIter, const char* pName, s32 numMax) {
+LiveActorGroup* LiveActorGroupArray::entry(LiveActor* pActor, const TableIter& rIter, const char* pName, s32 numMax) {
     s32 groupID = -1;
-    MR::getJMapInfoGroupID(rIter, &groupID);
+    MR::getPlacementGroupID(rIter, &groupID);
 
     // Function scope: pName points here past the if block .
     char defaultName[256];

@@ -11,7 +11,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -62,8 +62,8 @@ Teresa::Teresa(const char* pName)
     _FE = 0;
 }
 
-void Teresa::init(const JMapInfoIter& rIter) {
-    initFromJMapParam(rIter);
+void Teresa::init(const TableIter& rIter) {
+    initFromPlacementParam(rIter);
     _C8.set(mPosition);
     mWallHitPos.set(mPosition);
 
@@ -111,7 +111,7 @@ void Teresa::init(const JMapInfoIter& rIter) {
     setStartNerve();
 }
 
-void Teresa::initDummyModel(const JMapInfoIter& rIter) {
+void Teresa::initDummyModel(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         mDisplayModel = MR::createDummyDisplayModel(this, rIter, "SklRoot", -1);
     }
@@ -120,7 +120,7 @@ void Teresa::initDummyModel(const JMapInfoIter& rIter) {
         mDisplayModel->kill();
 
         if (MR::getDummyDisplayModelId(rIter, -1) == 6) {
-            mKeySwitch = new KeySwitch("\214\256\203\130\203\103\203\142\203\140" /* 鍵スイッチ */);
+            mKeySwitch = new KeySwitch("鍵スイッチ");
             mKeySwitch->initKeySwitchByOwner(rIter);
             _FC = 0;
         }
@@ -131,12 +131,12 @@ void Teresa::initDummyModel(const JMapInfoIter& rIter) {
     }
 }
 
-void Teresa::initFromJMapParam(const JMapInfoIter& rIter) {
+void Teresa::initFromPlacementParam(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         mScale.mult(1.0f);
         MR::makeQuatAndFrontFromRotate(&_94, &mWallNormal, this);
-        MR::getJMapInfoArg0WithInit(rIter, &mAppearanceType);
+        MR::getPlacementArg0WithInit(rIter, &mAppearanceType);
     }
 }
 
@@ -445,7 +445,7 @@ bool Teresa::tryCheseEnd() {
 }
 
 bool Teresa::tryShay() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Teresa, TeresaNrvShay));
         return true;
     }

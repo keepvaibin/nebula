@@ -89,7 +89,7 @@ class DodoryuStateLv2 : public DodoryuStateBase {
 public:
     DodoryuStateLv2(Dodoryu* pHost, DodoryuChaseParam* pChaseParam, const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     virtual void start();

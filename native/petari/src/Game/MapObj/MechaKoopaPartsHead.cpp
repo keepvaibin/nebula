@@ -8,10 +8,10 @@ namespace {
     static const s32 sStepForWhiteFadeIn = 60;
     static const s32 sStepToBreakFaceEffect = 120;
     static const s32 sStepToExplosionEffect = 300;
-    static const char* const sDemoPartNameBreak = "\211\363\202\352\212\112\216\156" /* 壊れ開始 */;
-    static const char* const sDemoPartNameFadeOut = "\203\164\203\106\201\133\203\150\203\101\203\105\203\147" /* フェードアウト */;
-    static const char* const sDemoPartNameWhite = "\224\222\211\346\226\312" /* 白画面 */;
-    static const char* const sDemoPartNameFadeIn = "\203\164\203\106\201\133\203\150\203\103\203\223" /* フェードイン */;
+    static const char* const sDemoPartNameBreak = "壊れ開始";
+    static const char* const sDemoPartNameFadeOut = "フェードアウト";
+    static const char* const sDemoPartNameWhite = "白画面";
+    static const char* const sDemoPartNameFadeIn = "フェードイン";
 };  // namespace
 
 namespace NrvMechaKoopaPartsHead {
@@ -26,7 +26,7 @@ namespace NrvMechaKoopaPartsHead {
 MechaKoopaPartsHead::MechaKoopaPartsHead(const char* pName) : MapObjActor(pName) {
 }
 
-void MechaKoopaPartsHead::init(const JMapInfoIter& rIter) {
+void MechaKoopaPartsHead::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo initInfo;
     initInfo.setupDefaultPos();
@@ -95,7 +95,7 @@ void MechaKoopaPartsHead::exeDemoWhiteWait() {
             MR::offSwitchA(this);
         }
 
-        MR::setPlayerPos("\224\232\224\152\203\146\203\202\214\343\203\175\203\212\203\111" /* 爆破デモ後マリオ */);
+        MR::setPlayerPos("爆破デモ後マリオ");
         MR::setPlayerStateWait();
     }
 }

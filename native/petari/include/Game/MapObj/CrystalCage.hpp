@@ -11,7 +11,7 @@ class CrystalCage : public LiveActor {
 public:
     CrystalCage(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -19,7 +19,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 
     void forceBreak();
-    void initMapToolInfo(const JMapInfoIter&);
+    void initMapToolInfo(const TableIter&);
     void initModel(const char*);
     void tryOnSwitchDead();
     void exeWait();

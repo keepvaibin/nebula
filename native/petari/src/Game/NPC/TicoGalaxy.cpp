@@ -3,7 +3,7 @@
 #include "Game/NPC/TicoStarRing.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -16,7 +16,7 @@ namespace {
 TicoGalaxy::TicoGalaxy(const char* pName) : TicoFat(pName), mGalaxyName() {
 }
 
-void TicoGalaxy::init(const JMapInfoIter& rIter) {
+void TicoGalaxy::init(const TableIter& rIter) {
     TicoFat::init(rIter);
 
     _1F0 = 2;
@@ -26,7 +26,7 @@ void TicoGalaxy::init(const JMapInfoIter& rIter) {
         MR::forwardNode(mMsgCtrl);
     }
 
-    mStarRing = new TicoStarRing("\203\130\203\136\201\133\203\212\203\223\203\117\203\140\203\122" /* スターリングチコ */);
+    mStarRing = new TicoStarRing("スターリングチコ");
     mStarRing->initWithoutIter();
 }
 
@@ -57,8 +57,8 @@ bool TicoGalaxy::enableAppear() {
     return MR::isAppearGalaxy(mGalaxyName);
 }
 
-void TicoGalaxy::initStarPieceSaveData(const JMapInfoIter& rIter) {
-    MR::getJMapInfoArg7WithInit(rIter, &_1EC);
+void TicoGalaxy::initStarPieceSaveData(const TableIter& rIter) {
+    MR::getPlacementArg7WithInit(rIter, &_1EC);
     mGalaxyName = GameEventFlagTable::getExclamationGalaxyNameFromIndex(_1EC);
     _1E4 = GameEventFlagTable::getStarPieceNumToOpenExclamationGalaxy(mGalaxyName);
     s32 starPieceNum = MR::getStarPieceNumGivingToTicoGalaxy(_1EC);

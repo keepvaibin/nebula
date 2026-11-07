@@ -4,8 +4,8 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
@@ -24,7 +24,7 @@ namespace NrvTimerMoveWall {
 TimerMoveWall::TimerMoveWall(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer), mMoveLenght(::sDefaultMoveLength) {
 }
 
-void TimerMoveWall::init(const JMapInfoIter& rIter) {
+void TimerMoveWall::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil util;
@@ -32,8 +32,8 @@ void TimerMoveWall::init(const JMapInfoIter& rIter) {
     info.setupSound(4);
     info.setupNerve(GET_NERVE(TimerMoveWall, TimerMoveWallNrvWait));
     initialize(rIter, info);
-    MR::getJMapInfoArg0NoInit(rIter, &mTimer);
-    MR::getJMapInfoArg1NoInit(rIter, &mMoveLenght);
+    MR::getPlacementArg0NoInit(rIter, &mTimer);
+    MR::getPlacementArg1NoInit(rIter, &mMoveLenght);
 }
 
 inline void TimerMoveWall::exeWait() {

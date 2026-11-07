@@ -7,6 +7,6 @@ public:
     PlanetMapWithoutHighModel(const char*);
 
     virtual ~PlanetMapWithoutHighModel();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 };

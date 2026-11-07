@@ -4,7 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/System/GameDataFunction.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NPCUtil.hpp"
@@ -43,7 +43,7 @@ void NebulaAchievementLuma::tryCreate() {
     pLuma->initWithoutIter();
 }
 
-void NebulaAchievementLuma::init(const JMapInfoIter& rIter) {
+void NebulaAchievementLuma::init(const TableIter& rIter) {
     // Its place, before the actor is set up (with no placement entry it keeps the position it has).
     Vec3f start(0.0f, 0.0f, 0.0f);
     Vec3f startRotate(0.0f, 0.0f, 0.0f);

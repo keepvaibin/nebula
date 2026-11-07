@@ -4,14 +4,14 @@
 
 class ActorCameraInfo;
 class BckCtrlData;
-class JMapInfoIter;
+class TableIter;
 class LiveActor;
 
 class DemoTalkAnimCtrl : public NerveExecutor {
 public:
     DemoTalkAnimCtrl(LiveActor*, const char*, const char*);
 
-    void initForScene(const char*, const char*, const JMapInfoIter&);
+    void initForScene(const char*, const char*, const TableIter&);
     void updateCamera();
     void createBckCtrlData(BckCtrlData*, s32) const;
     void initForActor(const char*);

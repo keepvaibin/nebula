@@ -3,7 +3,7 @@
 #include "Game/Util/Color.hpp"
 
 #include "Game/Animation/AnmPlayer.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 #include <NebulaGpu.h>
@@ -70,8 +70,8 @@ namespace MR {
     bool isPressedRoofAndGround(const LiveActor*);
     bool isPressedMovingWall(const LiveActor*);
 
-    void initDefaultPos(LiveActor*, const JMapInfoIter&);
-    void initDefaultPosNoRepeat(LiveActor*, const JMapInfoIter&);
+    void initDefaultPos(LiveActor*, const TableIter&);
+    void initDefaultPosNoRepeat(LiveActor*, const TableIter&);
 
     bool isValidMovement(const LiveActor*);
     bool isValidCalcAnim(const LiveActor*);
@@ -91,7 +91,7 @@ namespace MR {
     void setClippingFarMax(LiveActor*);
     void setClippingFar(LiveActor*, f32);
 
-    void setGroupClipping(LiveActor*, const JMapInfoIter&, int);
+    void setGroupClipping(LiveActor*, const TableIter&, int);
     void validateClipping(LiveActor*);
     void invalidateClipping(LiveActor*);
 
@@ -344,7 +344,7 @@ namespace MR {
     void offCalcGravity(LiveActor*);
 
     LiveActorGroup* joinToGroup(LiveActor*, const char*);
-    MsgSharedGroup* joinToGroupArray(LiveActor*, const JMapInfoIter&, const char*, s32);
+    MsgSharedGroup* joinToGroupArray(LiveActor*, const TableIter&, const char*, s32);
     LiveActorGroup* getGroupFromArray(const LiveActor*);
     LiveActor* getPairedGroupMember(const LiveActor*);
 
@@ -424,9 +424,9 @@ namespace MR {
     PartsModel* createPartsModelEnemyAndFix(LiveActor*, const char*, const char*, MtxPtr, const Vec3f&, const Vec3f&, const char*);
     PartsModel* createPartsModelNpcAndFix(LiveActor*, const char*, const char*, const char*);
 
-    LodCtrl* createLodCtrlNPC(LiveActor*, const JMapInfoIter&);
-    LodCtrl* createLodCtrlPlanet(LiveActor*, const JMapInfoIter&, f32);
-    LodCtrl* createLodCtrlMapObj(LiveActor*, const JMapInfoIter&, f32);
+    LodCtrl* createLodCtrlNPC(LiveActor*, const TableIter&);
+    LodCtrl* createLodCtrlPlanet(LiveActor*, const TableIter&, f32);
+    LodCtrl* createLodCtrlMapObj(LiveActor*, const TableIter&, f32);
 
     Flag* createMapFlag(const char*, const char*, const Vec3f*, const Vec3f&, f32, f32, f32, s32, s32, f32);
 

@@ -8,7 +8,7 @@ public:
     AllLiveActorGroup();
 
     void startInitActorSystemInfo();
-    void initActorSystemInfo(const JMapInfoIter&);
+    void initActorSystemInfo(const TableIter&);
     void endInitActorSystemInfo();
 
     s32 mActorNum;
@@ -17,6 +17,6 @@ public:
 namespace MR {
     AllLiveActorGroup* getAllLiveActorGroup();
     void startInitLiveActorSystemInfo();
-    void initLiveActorSystemInfo(const JMapInfoIter&);
+    void initLiveActorSystemInfo(const TableIter&);
     void endInitLiveActorSystemInfo();
 };  // namespace MR

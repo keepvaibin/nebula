@@ -39,7 +39,7 @@ SandCapsulePressGround::SandCapsulePressGround(const char* pName) : MapObjActor(
     _DC.identity();
 }
 
-void SandCapsulePressGround::init(const JMapInfoIter& rIter) {
+void SandCapsulePressGround::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);

@@ -9,7 +9,7 @@ class AstroDomeSky : public LiveActor {
 public:
     AstroDomeSky(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);

@@ -6,7 +6,7 @@ class BegomanSpike : public BegomanBase {
 public:
     BegomanSpike(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
     virtual void calcAnim();

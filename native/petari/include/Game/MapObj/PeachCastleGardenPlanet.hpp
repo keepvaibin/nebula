@@ -9,7 +9,7 @@ public:
     PeachCastleGardenPlanet(const char*);
 
     virtual ~PeachCastleGardenPlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
 

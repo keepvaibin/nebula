@@ -32,7 +32,7 @@ WhirlPoolAccelerator::WhirlPoolAccelerator(const char* pName)
       mTexOffsetU0(MR::getRandom()), mTexOffsetV0(MR::getRandom()), mTexture(), mClippingCenter(0.0f, 0.0f, 0.0f) {
 }
 
-void WhirlPoolAccelerator::init(const JMapInfoIter& rIter) {
+void WhirlPoolAccelerator::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, -1, -1, MR::DrawType_WhirlPoolAccelerator);
     MR::initDefaultPos(this, rIter);
     mRadius = 100.0f * mScale.x;

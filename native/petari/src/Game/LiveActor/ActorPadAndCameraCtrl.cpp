@@ -1,7 +1,7 @@
 #include "Game/LiveActor/ActorPadAndCameraCtrl.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -16,7 +16,7 @@ namespace {
 
 ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, const Vec3f* pPosition)
     : _0(pModelManager), _4(pPosition), _8(pModelManager->getResourceHolder()), _C(), mInfoNum(), mInfo() {
-    JMapInfo* parser = MR::tryCreateCsvParser(_8, "%s.bcsv", ::sFileName);
+    Table* parser = MR::tryCreateCsvParser(_8, "%s.bcsv", ::sFileName);
     if (!parser) {
         return;
     }
@@ -111,19 +111,19 @@ namespace {
             return;
         }
 
-        if (MR::isEqualStringCase(pName, "\215\305\213\255" /* 最強 */)) {
+        if (MR::isEqualStringCase(pName, "最強")) {
             MR::shakeCameraVeryStrong();
-        } else if (MR::isEqualStringCase(pName, "\213\255" /* 強 */)) {
+        } else if (MR::isEqualStringCase(pName, "強")) {
             MR::shakeCameraStrong();
-        } else if (MR::isEqualStringCase(pName, "\222\206\213\255" /* 中強 */)) {
+        } else if (MR::isEqualStringCase(pName, "中強")) {
             MR::shakeCameraNormalStrong();
-        } else if (MR::isEqualStringCase(pName, "\222\206" /* 中 */)) {
+        } else if (MR::isEqualStringCase(pName, "中")) {
             MR::shakeCameraNormal();
-        } else if (MR::isEqualStringCase(pName, "\222\206\216\343" /* 中弱 */)) {
+        } else if (MR::isEqualStringCase(pName, "中弱")) {
             MR::shakeCameraNormalWeak();
-        } else if (MR::isEqualStringCase(pName, "\216\343" /* 弱 */)) {
+        } else if (MR::isEqualStringCase(pName, "弱")) {
             MR::shakeCameraWeak();
-        } else if (MR::isEqualStringCase(pName, "\215\305\216\343" /* 最弱 */)) {
+        } else if (MR::isEqualStringCase(pName, "最弱")) {
             MR::shakeCameraVeryWeak();
         }
     }

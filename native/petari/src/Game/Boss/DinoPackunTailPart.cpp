@@ -20,7 +20,7 @@ DinoPackunTailPart::DinoPackunTailPart(const char* pName, DinoPackun* pParent) :
     _D9 = 1;
 }
 
-void DinoPackunTailPart::init(const JMapInfoIter& rIter) {
+void DinoPackunTailPart::init(const TableIter& rIter) {
     initNerve(GET_NERVE(DinoPackunTailPart, DinoPackunTailPartNrvWait));
     MR::onCalcGravity(this);
     initBinder(_D4, 0.0f, 0);

@@ -10,7 +10,7 @@ public:
     PoltaRock(const char*);
 
     virtual ~PoltaRock();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();
     virtual void calcAndSetBaseMtx();

@@ -7,7 +7,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -76,19 +76,19 @@ Snakehead::Snakehead(const char* pName)
     mBodyMtx.identity();
 }
 
-void Snakehead::init(const JMapInfoIter& rIter) {
+void Snakehead::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
     initModelManagerWithAnm(objectName, nullptr, false);
 
-    MR::getJMapInfoArg0NoInit(rIter, &mForwardSpeed);
-    MR::getJMapInfoArg1NoInit(rIter, &mBackwardSpeed);
-    MR::getJMapInfoArg2NoInit(rIter, &mActivationRadius);
+    MR::getPlacementArg0NoInit(rIter, &mForwardSpeed);
+    MR::getPlacementArg1NoInit(rIter, &mBackwardSpeed);
+    MR::getPlacementArg2NoInit(rIter, &mActivationRadius);
 
     s32 arg3 = 0;
-    MR::getJMapInfoArg3NoInit(rIter, &arg3);
+    MR::getPlacementArg3NoInit(rIter, &arg3);
 
     _E8 = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + arg3 * 2);
 

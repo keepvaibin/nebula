@@ -7,7 +7,7 @@ public:
     Jiraira(const char*);
 
     virtual ~Jiraira();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();
     virtual void control();

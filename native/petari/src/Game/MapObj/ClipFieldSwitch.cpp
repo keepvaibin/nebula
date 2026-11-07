@@ -31,7 +31,7 @@ void ClipFieldSwitch::control() {
     }
 }
 
-void ClipFieldSwitch::init(const JMapInfoIter& rIter) {
+void ClipFieldSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     MR::useStageSwitchWriteA(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);

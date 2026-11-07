@@ -22,7 +22,7 @@ SubmarineVolcanoBigColumn::SubmarineVolcanoBigColumn(const char* pName) : LiveAc
     mIsSmallColumn = false;
 }
 
-void SubmarineVolcanoBigColumn::init(const JMapInfoIter& rIter) {
+void SubmarineVolcanoBigColumn::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objName;
     MR::getObjectName(&objName, rIter);
@@ -70,7 +70,7 @@ void SubmarineVolcanoBigColumn::exeWait() {
 
 void SubmarineVolcanoBigColumn::exeBreak() {
     if (MR::isFirstStep(this)) {
-        MR::startRumbleWithShakeCameraWeak(this, "\213\255" /* 強 */, "\216\343" /* 弱 */, ::sShakeDistance, FLOAT_MAX);
+        MR::startRumbleWithShakeCameraWeak(this, "強", "弱", ::sShakeDistance, FLOAT_MAX);
         MR::hideModel(this);
         MR::invalidateHitSensors(this);
         MR::invalidateCollisionParts(this);
@@ -106,7 +106,7 @@ bool SubmarineVolcanoBigColumn::receiveMsgEnemyAttack(u32 msg, HitSensor* pSende
 void SubmarineVolcanoBigColumn::initBreakModel(const char* pModelName) {
     char modelName[256];
     nebula_snprintf(modelName, sizeof(modelName), "%sBreak", pModelName);
-    mBreakModel = MR::createModelObjMapObj("\212\103\222\352\211\316\216\122\220\316\222\214\211\363\202\352\203\202\203\146\203\213" /* 海底火山石柱壊れモデル */, modelName, getBaseMtx());
+    mBreakModel = MR::createModelObjMapObj("海底火山石柱壊れモデル", modelName, getBaseMtx());
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
 }

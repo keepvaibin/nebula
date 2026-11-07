@@ -46,7 +46,7 @@ TrampleStar::TrampleStar(const char* pName) : LiveActor(pName), mIsLod(false) {
 TrampleStar::~TrampleStar() {
 }
 
-void TrampleStar::init(const JMapInfoIter& rIter) {
+void TrampleStar::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_FlexibleSphere);
 

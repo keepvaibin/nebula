@@ -10,7 +10,7 @@ class LavaHomeSeesaw : public LiveActor {
 public:
     LavaHomeSeesaw(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();
     virtual void calcAndSetBaseMtx();

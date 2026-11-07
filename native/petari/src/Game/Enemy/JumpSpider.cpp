@@ -9,7 +9,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -61,7 +61,7 @@ namespace NrvJumpSpider {
 JumpSpider::JumpSpider(const char* pName) : LiveActor(pName), mSpinHitController(), mScaleController(), _94(0, 0, 1), _A0(0, 0, 0) {
 }
 
-void JumpSpider::init(const JMapInfoIter& rIter) {
+void JumpSpider::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
         MR::useStageSwitchWriteDead(this, rIter);
@@ -140,7 +140,7 @@ void JumpSpider::control() {
     if (!isNerve(GET_NERVE(JumpSpider, HostTypeNrvStampFall)) && !isNerve(GET_NERVE(JumpSpider, HostTypeNrvStampDeath)) &&
         !isNerve(GET_NERVE(JumpSpider, HostTypeNrvHitBlow)) && !isNerve(GET_NERVE(JumpSpider, HostTypeNrvDpdPointed)) &&
         !isNerve(GET_NERVE(JumpSpider, HostTypeNrvStarPieceHit)) && !isNerve(GET_NERVE(JumpSpider, HostTypeNrvStarPieceHitLand)) &&
-        !isNerve(GET_NERVE(JumpSpider, HostTypeNrvStarPieceHitWait)) && MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+        !isNerve(GET_NERVE(JumpSpider, HostTypeNrvStarPieceHitWait)) && MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvDpdPointed));
     }
 }
@@ -292,7 +292,7 @@ void JumpSpider::exeDpdPointed() {
 
     MR::startDPDFreezeLevelSound(this);
 
-    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(JumpSpider, HostTypeNrvDpdPointedEnd));
     } else {
         mVelocity.zero();

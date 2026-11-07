@@ -9,7 +9,7 @@ public:
     BossKameckVs1();
 
     virtual void start();
-    virtual void init(BossKameck*, const JMapInfoIter&);
+    virtual void init(BossKameck*, const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 

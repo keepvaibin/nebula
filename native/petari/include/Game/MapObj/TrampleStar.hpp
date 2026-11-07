@@ -23,7 +23,7 @@ public:
 
     virtual ~TrampleStar();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void calcAnim();
     virtual void control();

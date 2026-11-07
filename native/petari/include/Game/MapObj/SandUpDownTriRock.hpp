@@ -10,7 +10,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     SandUpDownTriRock(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);

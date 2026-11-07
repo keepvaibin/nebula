@@ -37,7 +37,7 @@ LightCylinder::LightCylinder(const char* pName, MtxPtr pHostMtx, const Color8& r
     }
 }
 
-void LightCylinder::init(const JMapInfoIter& rIter) {
+void LightCylinder::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -50,7 +50,7 @@ void LightCylinder::init(const JMapInfoIter& rIter) {
     initLightVolume(nullptr);
 }
 
-void LightCylinder::initLightCylinderByOwner(const JMapInfoIter& rIter) {
+void LightCylinder::initLightCylinderByOwner(const TableIter& rIter) {
     MapObjActorInitInfo info;
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
@@ -64,7 +64,7 @@ void LightCylinder::initLightCylinderByOwner(const JMapInfoIter& rIter) {
 void LightCylinder::initLightVolume(const char* pName) {
     char modelName[0x100];
     nebula_snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
-    VolumeModelDrawer* lightVolume = new VolumeModelDrawer("\214\365" /* 光 */, modelName, mHostMtx ? mHostMtx : getBaseMtx());
+    VolumeModelDrawer* lightVolume = new VolumeModelDrawer("光", modelName, mHostMtx ? mHostMtx : getBaseMtx());
     mLightVolume = lightVolume;
     lightVolume->mColor.set(mColor);
 }
@@ -88,7 +88,7 @@ void LightCylinder::connectToScene(const MapObjActorInitInfo&) {
 SwingLight::SwingLight(const char* pName) : MapObjActor(pName), mLightCylinder() {
 }
 
-void SwingLight::init(const JMapInfoIter& rIter) {
+void SwingLight::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
@@ -109,7 +109,7 @@ void SwingLight::initCaseNoUseSwitchA(const MapObjActorInitInfo&) {
     appearLight();
 }
 
-void SwingLight::makeSubModels(const JMapInfoIter& rIter, const MapObjActorInitInfo&) {
+void SwingLight::makeSubModels(const TableIter& rIter, const MapObjActorInitInfo&) {
     const char* modelName = ::getGlaringLightModelName(mObjectName);
     mLightCylinder = new LightCylinder(modelName, getBaseMtx(), Color8(0));
     mLightCylinder->initLightCylinderByOwner(rIter);

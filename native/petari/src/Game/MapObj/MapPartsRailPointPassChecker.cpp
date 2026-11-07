@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
-MapPartsRailPointPassChecker::MapPartsRailPointPassChecker(LiveActor* pActor) : MapPartsFunction(pActor, "\203\214\201\133\203\213\223\137\222\312\211\337\203\140\203\106\203\142\203\112\201\133" /* レール点通過チェッカー */) {
+MapPartsRailPointPassChecker::MapPartsRailPointPassChecker(LiveActor* pActor) : MapPartsFunction(pActor, "レール点通過チェッカー") {
     mRailPointNo = -1;
 }
 

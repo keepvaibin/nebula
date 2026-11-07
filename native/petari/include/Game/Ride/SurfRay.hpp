@@ -13,7 +13,7 @@ public:
     /// @param padChannel The player.
     SurfRay(const char* pName, s32 padChannel = 0);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);

@@ -26,7 +26,7 @@ PalmIsland::PalmIsland(const char* pName) : LiveActor(pName) {
     _9C = 0;
 }
 
-void PalmIsland::init(const JMapInfoIter& rIter) {
+void PalmIsland::init(const TableIter& rIter) {
     HitSensor* sensor;
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("PalmIsland", nullptr, false);

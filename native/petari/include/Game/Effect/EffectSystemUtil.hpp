@@ -5,7 +5,7 @@
 class AutoEffectInfo;
 class EffectKeeper;
 class EffectSystem;
-class JMapInfo;
+class Table;
 class EmitterCore;
 class EmitterManager;
 class LayoutActor;
@@ -33,7 +33,7 @@ namespace MR {
                                s32 animCount, f32 startFrame, f32 endFrame, bool deleteOnEnd);
         void addEffectSyncBck(MultiEmitter* pEmitter, const ModelManager* pModelManager, const char* pAnimName);
         int getAutoEffectNum(const char* pName);
-        JMapInfo* getAutoEffectListBinary();
+        Table* getAutoEffectListBinary();
         void setupMultiEmitter(EffectKeeper* pKeeper, const ModelManager* pModelManager, const AutoEffectInfo* pInfo);
         void setupMultiEmitterSyncBck(EffectKeeper* pKeeper, const ModelManager* pModelManager, const AutoEffectInfo* pInfo);
         void registerAutoEffectInfoGroup(EffectKeeper* pKeeper, const LiveActor* pActor, const char* pName);

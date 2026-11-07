@@ -10,7 +10,7 @@ CubeCameraArea::CubeCameraArea(int formType, const char* pName) : AreaObj(formTy
 
 s32 CubeCameraArea::sCubeCategory = 0;
 
-void CubeCameraArea::init(const JMapInfoIter& rIter) {
+void CubeCameraArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     const char* valid;

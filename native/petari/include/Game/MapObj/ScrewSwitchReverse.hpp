@@ -6,7 +6,7 @@ class ScrewSwitchReverse : public LiveActor {
 public:
     ScrewSwitchReverse(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void updateBindActorMtx();

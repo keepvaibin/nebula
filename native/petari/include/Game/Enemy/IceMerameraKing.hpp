@@ -18,7 +18,7 @@ class IceMerameraKing : public LiveActor {
 public:
     IceMerameraKing(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();

@@ -11,8 +11,8 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapInfo.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/Table.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -90,7 +90,7 @@ Metbo::Metbo(const char* pName) : LiveActor(pName) {
     mIsClipped = false;
 }
 
-void Metbo::init(const JMapInfoIter& rIter) {
+void Metbo::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Metbo", nullptr, false);
     MR::connectToSceneEnemy(this);
@@ -111,7 +111,7 @@ void Metbo::init(const JMapInfoIter& rIter) {
 
     MR::initShadowVolumeSphere(this, 80.0f);
     s32 arg;
-    mIsClipped = MR::getJMapInfoClippingGroupID(rIter, &arg);
+    mIsClipped = MR::getPlacementClippingGroupID(rIter, &arg);
     MR::setGroupClipping(this, rIter, 32);
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);

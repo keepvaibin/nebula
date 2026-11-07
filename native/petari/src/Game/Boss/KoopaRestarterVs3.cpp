@@ -5,7 +5,7 @@
 KoopaRestarterVs3::KoopaRestarterVs3(const char* pName) : LiveActor(pName) {
 }
 
-void KoopaRestarterVs3::init(const JMapInfoIter& rIter) {
+void KoopaRestarterVs3::init(const TableIter& rIter) {
     MR::needStageSwitchReadAppear(this, rIter);
     MR::syncStageSwitchAppear(this);
 

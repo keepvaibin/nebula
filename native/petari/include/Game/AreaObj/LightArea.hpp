@@ -6,7 +6,7 @@ class LightArea : public AreaObj {
 public:
     LightArea(int, const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
 
     virtual const char* getManagerName() const {
         return "LightArea";

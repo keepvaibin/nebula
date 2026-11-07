@@ -23,13 +23,13 @@ LavaGeyser::LavaGeyser(const char* pName) : LiveActor(pName) {
     _B4 = 0.0f;
 }
 
-void LavaGeyser::init(const JMapInfoIter& iter) {
+void LavaGeyser::init(const TableIter& iter) {
     MR::initDefaultPos(this, iter);
     Quat4f quat1;
     quat1.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
     quat1.getYDir(_A0);
-    MR::getJMapInfoArg0NoInit(iter, &mArg0);
-    MR::getJMapInfoArg1NoInit(iter, &mArg1);
+    MR::getPlacementArg0NoInit(iter, &mArg0);
+    MR::getPlacementArg1NoInit(iter, &mArg1);
     MR::useStageSwitchReadA(this, iter);
     initModelManagerWithAnm("LavaGeyser", nullptr, false);
     MR::startBtk(this, "LavaGeyser");

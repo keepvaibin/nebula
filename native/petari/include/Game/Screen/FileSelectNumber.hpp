@@ -30,7 +30,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     FileSelectNumber(const char* pName);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
 

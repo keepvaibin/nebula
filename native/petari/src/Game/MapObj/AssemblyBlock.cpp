@@ -4,7 +4,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -25,7 +25,7 @@ namespace {
     // static const f32 sFloatAccelMax = _;
     // static const f32 sFloatCycleTune = _;
     static const f32 sFloatRotSpeedNoSign = 0.1f;
-    static const char* const sReturnPosName = "\215\207\221\314\203\165\203\215\203\142\203\116\214\314\213\275\223\137" /* 合体ブロック故郷点 */;
+    static const char* const sReturnPosName = "合体ブロック故郷点";
 };  // namespace
 
 namespace NrvAssemblyBlock {
@@ -44,7 +44,7 @@ AssemblyBlock::AssemblyBlock(const char* pName)
     _EC.identity();
 }
 
-void AssemblyBlock::init(const JMapInfoIter& rIter) {
+void AssemblyBlock::init(const TableIter& rIter) {
     Vec3f stack_3C;
     Vec3f stack_30;
     Vec3f stack_24;
@@ -94,14 +94,14 @@ void AssemblyBlock::init(const JMapInfoIter& rIter) {
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, this);
     MR::setClippingTypeSphere(this, boundingRadius + _124.distance(stack_24), &_124);
-    MR::getJMapInfoArg0NoInit(rIter, &mPlayerSearchDistance);
+    MR::getPlacementArg0NoInit(rIter, &mPlayerSearchDistance);
 
     if (mPlayerSearchDistance <= 0.0f) {
         mPlayerSearchDistance = boundingRadius * 2.0f;
     }
 
-    MR::getJMapInfoArg1NoInit(rIter, &mTimer);
-    MR::getJMapInfoArg7NoInit(rIter, &mObjArg7);
+    MR::getPlacementArg1NoInit(rIter, &mTimer);
+    MR::getPlacementArg7NoInit(rIter, &mObjArg7);
 
     if (MR::getRandom(0, 2)) {
         mFloatRotateSpeed = ::sFloatRotSpeedNoSign;
@@ -259,7 +259,7 @@ bool AssemblyBlock::tryStartAssemble() {
 }
 
 bool AssemblyBlock::tryStartReturn() {
-    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+    if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         return false;
     }
 

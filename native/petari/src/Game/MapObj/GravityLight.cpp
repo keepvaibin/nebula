@@ -7,7 +7,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/BaseMatrixFollowTargetHolder.hpp"
 #include "Game/Util/Color.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -32,7 +32,7 @@ GravityLight::GravityLight(const char* pName)
     mBaseMtx.identity();
 }
 
-void GravityLight::init(const JMapInfoIter& rIter) {
+void GravityLight::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::makeMtxTR(mBaseMtx, mPosition, mRotation);

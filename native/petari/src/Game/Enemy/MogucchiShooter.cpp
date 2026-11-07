@@ -46,7 +46,7 @@ MogucchiShooter::MogucchiShooter(LiveActor* pActor, const char* pName)
     : PartsModel(pActor, pName, "MogucchiShooter", nullptr, MR::DrawBufferType_Enemy, false), mFront(0.0f, 0.0f, 0.0f) {
 }
 
-void MogucchiShooter::init(const JMapInfoIter& rIter) {
+void MogucchiShooter::init(const TableIter& rIter) {
     initEffectKeeper(1, nullptr, false);
     MR::addEffectHitNormal(this, nullptr);
     initSound(1, false);

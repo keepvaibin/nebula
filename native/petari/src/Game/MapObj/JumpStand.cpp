@@ -18,7 +18,7 @@ JumpStand::JumpStand(const char* pName) : LiveActor(pName), mBindedActor(), mIsM
     _90.identity();
 }
 
-void JumpStand::init(const JMapInfoIter& rIter) {
+void JumpStand::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("JumpStand", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);

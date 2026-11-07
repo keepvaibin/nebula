@@ -10,7 +10,7 @@ public:
     KoopaBattleMapPlanet(const char*, const char*, bool, bool, bool);
 
     virtual ~KoopaBattleMapPlanet();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;
     }

@@ -32,7 +32,7 @@ void BenefitItemInvincible::exeCatch() {
     kill();
 }
 
-void BenefitItemInvincible::init(const JMapInfoIter& rIter) {
+void BenefitItemInvincible::init(const TableIter& rIter) {
     BenefitItemObj::init(rIter);
 
     if (_D8) {

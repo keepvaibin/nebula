@@ -128,7 +128,7 @@ namespace GameDataFunction {
         getCurrentGameDataHolder()->setGameEventValueForBit(pName, index, isOn);
     }
 
-    s32 setupAlreadyDoneFlag(const char* pZoneName, const JMapInfoIter& rIter, u32* pParam3) {
+    s32 setupAlreadyDoneFlag(const char* pZoneName, const TableIter& rIter, u32* pParam3) {
         return ::getGameDataTemporaryInGalaxy()->setupAlreadyDoneFlag(pZoneName, rIter, pParam3);
     }
 

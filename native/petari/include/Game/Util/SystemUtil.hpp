@@ -2,7 +2,7 @@
 
 
 class GameSystemObjHolder;
-class JMapIdInfo;
+class PlacementId;
 class NameObj;
 class ParticleResourceHolder;
 
@@ -39,6 +39,6 @@ namespace MR {
     void destroySceneMessage();
     void resetSystemAndGameStatus();
     void stopAllSound(u32);
-    JMapIdInfo* getPlayerRestartIdInfo();
-    void setPlayerRestartIdInfo(const JMapIdInfo&);
+    PlacementId* getPlayerRestartIdInfo();
+    void setPlayerRestartIdInfo(const PlacementId&);
 };  // namespace MR

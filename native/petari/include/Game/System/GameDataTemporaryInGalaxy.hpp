@@ -2,8 +2,8 @@
 
 
 class AlreadyDoneFlagInGalaxy;
-class JMapIdInfo;
-class JMapInfoIter;
+class PlacementId;
+class TableIter;
 
 class GameDataTemporaryInGalaxy {
 public:
@@ -11,7 +11,7 @@ public:
     GameDataTemporaryInGalaxy();
 
     void resetPlayerRestartIdInfo();
-    void setPlayerRestartIdInfo(const JMapIdInfo&);
+    void setPlayerRestartIdInfo(const PlacementId&);
     void resetRaceBestTime();
     bool isStageCleared() const;
     void resetStageResultPowerStarParam();
@@ -22,11 +22,11 @@ public:
     s32 getStarPieceNum() const;
     void resetStageResultParam();
     void clearAlreadyDoneFlag();
-    s32 setupAlreadyDoneFlag(const char*, const JMapInfoIter&, u32*);
+    s32 setupAlreadyDoneFlag(const char*, const TableIter&, u32*);
     void updateAlreadyDoneFlag(int, u32);
     void receiveStageResultParam(const char*, s32, int, int);
 
-    JMapIdInfo* mPlayerRestartIdInfo;
+    PlacementId* mPlayerRestartIdInfo;
     bool _4;
     u32 _8;
     s16 mPowerStarId;

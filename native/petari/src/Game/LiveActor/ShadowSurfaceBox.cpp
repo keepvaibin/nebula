@@ -12,7 +12,7 @@
 ShadowSurfaceBox::~ShadowSurfaceBox() {
 }
 
-ShadowSurfaceBox::ShadowSurfaceBox() : ShadowSurfaceDrawer("\211\145\225\140\211\346[\220\205\226\312\203\173\203\142\203\116\203\130]" /* 影描画[水面ボックス] */), mSize(100.0f) {
+ShadowSurfaceBox::ShadowSurfaceBox() : ShadowSurfaceDrawer("影描画[水面ボックス]"), mSize(100.0f) {
 }
 
 void ShadowSurfaceBox::setSize(const Vec3f& pSize) {

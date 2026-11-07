@@ -16,7 +16,7 @@ namespace NrvDinoPackunDemo {
 DinoPackunDemoPosition::DinoPackunDemoPosition(const char* pName) : LiveActor(pName) {
 }
 
-void DinoPackunDemoPosition::init(const JMapInfoIter& rIter) {
+void DinoPackunDemoPosition::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoPositionNrvOpeningDemo));
     initModelManagerWithAnm("DinoPackunDemoPosition", nullptr, false);

@@ -7,7 +7,7 @@ public:
     SphereRailDash(const char*);
 
     virtual ~SphereRailDash();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void exeWait();

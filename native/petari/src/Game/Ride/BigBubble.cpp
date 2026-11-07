@@ -116,7 +116,7 @@ BigBubble::BigBubble(const char* pName)
     }
 }
 
-void BigBubble::init(const JMapInfoIter& rIter) {
+void BigBubble::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mBaseMtx.setTrans(mPosition);
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_None);
@@ -940,7 +940,7 @@ bool BigBubble::addAccelPointing(s32 padChannel) {
         return false;
     }
 
-    if (MR::isStarPointerPointing(this, padChannel, true, "\216\343" /* 弱 */)) {
+    if (MR::isStarPointerPointing(this, padChannel, true, "弱")) {
         return false;
     }
 

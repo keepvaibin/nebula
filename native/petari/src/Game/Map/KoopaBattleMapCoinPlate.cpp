@@ -23,7 +23,7 @@ void KoopaBattleMapCoinPlate::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mBaseMtx);
 }
 
-void KoopaBattleMapCoinPlate::init(const JMapInfoIter& rIter) {
+void KoopaBattleMapCoinPlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::calcGravity(this);

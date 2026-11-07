@@ -259,7 +259,7 @@ namespace GameSequenceFunction {
 
 
     void storeSceneStartGameDataHolder() {
-        if (!GameDataFunction::isPassedStoryEvent("\203\140\203\122\203\113\203\103\203\150\203\146\203\202\217\111\227\271" /* チコガイドデモ終了 */) || GameDataFunction::hasGrandStar(1)) {
+        if (!GameDataFunction::isPassedStoryEvent("チコガイドデモ終了") || GameDataFunction::hasGrandStar(1)) {
             ::getSaveDataHandleSequence()->backupCurrentUserFile();
         }
     }
@@ -277,7 +277,7 @@ namespace GameSequenceFunction {
         NebulaMods::fire(NEBULA_MOD_EVENT_GAME_SAVE);
         ::getGameSequenceProgress()->getGalaxyCometScheduler()->updateStateToGameData();
 
-        if (GameDataFunction::isPassedStoryEvent("\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */) && !GameDataFunction::hasGrandStar(1)) {
+        if (GameDataFunction::isPassedStoryEvent("ピーチ城浮上後") && !GameDataFunction::hasGrandStar(1)) {
             ::getSaveDataHandleSequence()->startSaveBackup(isConfirmRemind, isSaveAndQuitMsg);
         } else {
             ::getSaveDataHandleSequence()->startSave(isConfirmRemind, isSaveAndQuitMsg);

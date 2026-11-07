@@ -12,7 +12,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -62,7 +62,7 @@ StarPiece::StarPiece(const char* pName)
     mFlags.isLaunched = false;
 }
 
-void StarPiece::initAndSetFloatingFromGroup(const JMapInfoIter& rIter) {
+void StarPiece::initAndSetFloatingFromGroup(const TableIter& rIter) {
     mGroupType = groupType_FloatingGroup;
     MR::incNumStarPieceGettable(0);
     init(rIter);
@@ -70,7 +70,7 @@ void StarPiece::initAndSetFloatingFromGroup(const JMapInfoIter& rIter) {
     mFlags.isGroup = true;
 }
 
-void StarPiece::initAndSetRailMoveFromGroup(const JMapInfoIter& rIter) {
+void StarPiece::initAndSetRailMoveFromGroup(const TableIter& rIter) {
     mGroupType = groupType_RailMoveGroup;
     MR::incNumStarPieceGettable(0);
     init(rIter);
@@ -78,7 +78,7 @@ void StarPiece::initAndSetRailMoveFromGroup(const JMapInfoIter& rIter) {
     mFlags.isGroup = true;
 }
 
-void StarPiece::init(const JMapInfoIter& rIter) {
+void StarPiece::init(const TableIter& rIter) {
     s32 arg3 = -1;
 
     if (MR::isValidInfo(rIter)) {
@@ -87,7 +87,7 @@ void StarPiece::init(const JMapInfoIter& rIter) {
         }
 
         MR::initDefaultPos(this, rIter);
-        MR::getJMapInfoArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg3NoInit(rIter, &arg3);
         // unused
         const char* objName = nullptr;
         MR::getObjectName(&objName, rIter);
@@ -133,7 +133,7 @@ void StarPiece::init(const JMapInfoIter& rIter) {
 
     if (MR::isValidInfo(rIter)) {
         s32 arg4 = -1;
-        MR::getJMapInfoArg4NoInit(rIter, &arg4);
+        MR::getPlacementArg4NoInit(rIter, &arg4);
 
         if (arg4 == 0) {
             MR::onCalcShadow(this, nullptr);
@@ -1075,7 +1075,7 @@ void StarPiece::tryGotJudge() {
     }
 
     if (mGettableDelayCounter < 0) {
-        bool isPointing = MR::isStarPointerPointing1Por2P(this, "\216\343" /* 弱 */, false, false);
+        bool isPointing = MR::isStarPointerPointing1Por2P(this, "弱", false, false);
         MR::getStarPointerLastPointedPort(this);
 
         if (isPointing == true) {

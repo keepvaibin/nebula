@@ -11,11 +11,11 @@ public:
 
     virtual ~MapPartsRailRotator() {
     }
-    virtual void init(const JMapInfoIter&) override;
+    virtual void init(const TableIter&) override;
     virtual bool isWorking() const override;
     virtual void start() override;
     virtual void end() override;
-    virtual f32 getJMapArgAngleFactor() const {
+    virtual f32 getPlacementArgAngleFactor() const {
         return 1.0f;
     }
 
@@ -29,7 +29,7 @@ public:
     void calcRotateAxisDir(AxisType, Vec3f*) const;
     void updateRotateMtx(AxisType, f32);
 
-    void initWithRotateMtx(const JMapInfoIter&, MtxPtr);
+    void initWithRotateMtx(const TableIter&, MtxPtr);
 
     void exeRotate();
     void exeWait() {

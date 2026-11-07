@@ -20,7 +20,7 @@ FileSelectSky::~FileSelectSky() {
 FileSelectSky::FileSelectSky(const char* pName) : LiveActor(pName), mAngleX(), mAngleY(), mProjmapEffectMtxSetter() {
 }
 
-void FileSelectSky::init(const JMapInfoIter& rIter) {
+void FileSelectSky::init(const TableIter& rIter) {
     initModelManagerWithAnm("CometNearOrbitSky", nullptr, false);
     mScale.x = 0.8f;
     mScale.y = 0.8f;

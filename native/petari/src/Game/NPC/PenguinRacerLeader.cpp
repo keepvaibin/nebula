@@ -20,7 +20,7 @@ namespace NrvPenguinRacerLeader {
 PenguinRacerLeader::PenguinRacerLeader(const char* pName) : PenguinRacer(pName), mTakeOutStar(), mCameraInfo() {
 }
 
-void PenguinRacerLeader::init(const JMapInfoIter& rIter) {
+void PenguinRacerLeader::init(const TableIter& rIter) {
     MR::initDefaultPose(this, rIter);
     initModel();
 
@@ -57,7 +57,7 @@ void PenguinRacerLeader::init(const JMapInfoIter& rIter) {
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
     makeActorAppeared();
 
-    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\211\357\230\142" /* 会話 */);  // conversation
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "会話");  // conversation
 
     NPCActorItem item("PenguinRacerLeader");
     MR::getNPCItemData(&item, 0);
@@ -83,7 +83,7 @@ bool PenguinRacerLeader::eventFunc(u32 state) {
 
     if (state == 1) {
         if (mTakeOutStar->takeOut()) {
-            MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, false);
+            MR::endMultiActorCamera(this, mCameraInfo, "会話", false);
             return true;
         }
         return false;
@@ -94,7 +94,7 @@ bool PenguinRacerLeader::eventFunc(u32 state) {
 
 void PenguinRacerLeader::exeWait() {
     if (!tryReaction() && MR::tryTalkNearPlayerAndStartTalkAction(this) && mRaceDisabled == 0) {
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話");
         setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvPre));
     }
 }
@@ -108,7 +108,7 @@ void PenguinRacerLeader::exePre() {
         RaceManagerFunction::startRaceWithWipe();
         setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvReady));
     } else {
-        MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, false);
+        MR::endMultiActorCamera(this, mCameraInfo, "会話", false);
         setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvWait));
     }
 }
@@ -121,7 +121,7 @@ void PenguinRacerLeader::exePost() {
         return;
     }
 
-    MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, true);
+    MR::endMultiActorCamera(this, mCameraInfo, "会話", true);
 
     if (RaceManagerFunction::getRaceRank() == 1) {
         setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvTalk));
@@ -144,7 +144,7 @@ void PenguinRacerLeader::resetRacer(const RaceManager* pRaceManager) {
     PenguinRacer::resetRacer(pRaceManager);
     turnToPlayer(180.0f);
     calcAndSetBaseMtx();
-    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */, 0);
+    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話", 0);
     setNerve(GET_NERVE(PenguinRacerLeader, PenguinRacerLeaderNrvPost));
 }
 

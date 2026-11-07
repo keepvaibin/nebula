@@ -4,7 +4,7 @@
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 
 class ItemGenerator;
@@ -18,7 +18,7 @@ public:
     Kuribo(const char*);
 
     virtual ~Kuribo();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
     virtual void kill();
@@ -33,7 +33,7 @@ public:
 
     void initState();
     void initSensor();
-    void initAppearState(const JMapInfoIter&);
+    void initAppearState(const TableIter&);
     bool requestDead();
     bool requestFlatDown(HitSensor*, HitSensor*);
     bool requestHipDropDown(HitSensor*, HitSensor*);

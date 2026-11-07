@@ -11,7 +11,7 @@ public:
     CrystalCageMoving(const char*);
 
     virtual ~CrystalCageMoving();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();
     virtual void updateHitSensor(HitSensor*);
@@ -28,7 +28,7 @@ public:
     void exeDemoTicoChange();
     void endBreakBig();
     void crashMario(HitSensor*, HitSensor*);
-    void initDummyModel(const JMapInfoIter&);
+    void initDummyModel(const TableIter&);
     void startBreakDemo();
     bool isNerveTypeEnd() const;
 

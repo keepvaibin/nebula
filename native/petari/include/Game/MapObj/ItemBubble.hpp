@@ -30,7 +30,7 @@ public:
     ItemBubble(const char*);
 
     virtual ~ItemBubble();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();

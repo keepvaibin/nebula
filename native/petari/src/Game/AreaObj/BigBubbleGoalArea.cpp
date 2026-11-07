@@ -6,7 +6,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
@@ -17,12 +17,12 @@ BigBubbleGoalArea::BigBubbleGoalArea(int formType, const char* pName)
     : AreaObj(formType, pName), mTrans(0.0f, 0.0f, 0.0f), mMeterCapacity(1.0f), mMeterDisplayAmount(), mMeterAmount() {
 }
 
-void BigBubbleGoalArea::init(const JMapInfoIter& rIter) {
+void BigBubbleGoalArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mMeterCapacity = mObjArg0 <= 0 ? 1.0f : mObjArg0;
 
-    MR::getJMapInfoTrans(rIter, &mTrans);
+    MR::getPlacementTrans(rIter, &mTrans);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_BigBubbleGoal);
 }
 

@@ -25,7 +25,7 @@ namespace {
     }
 };  // namespace
 
-LodCtrl::LodCtrl(LiveActor* pActor, const JMapInfoIter& rIter)
+LodCtrl::LodCtrl(LiveActor* pActor, const TableIter& rIter)
     : mActor(pActor), mFarModel(nullptr), mFollowsView(hasDistanceModels(pActor)), mNear(&sOff), mFar(&sOff), mHidden(&sOff),
       mViewGroupID(-1) {
     MR::getClippingDirector()->entryLodCtrl(this, rIter);

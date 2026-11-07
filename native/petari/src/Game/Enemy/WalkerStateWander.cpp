@@ -21,7 +21,7 @@ WalkerStateWanderParam::WalkerStateWanderParam() : mWaitTime(120), mWalkTime(120
 }
 
 WalkerStateWander::WalkerStateWander(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateWanderParam* pWanderParam)
-    : ActorStateBase< LiveActor >("\203\116\203\212\203\173\201\133\214\136\202\244\202\353\202\302\202\253\217\363\221\324" /* クリボー型うろつき状態 */, pHost), mDirection(pDirection), mTerritoryMover(nullptr), mStateParam(pStateParam),
+    : ActorStateBase< LiveActor >("クリボー型うろつき状態", pHost), mDirection(pDirection), mTerritoryMover(nullptr), mStateParam(pStateParam),
       mWanderParam(pWanderParam) {
     initNerve(GET_NERVE(WalkerStateWander, WalkerStateWanderNrvWait));
 

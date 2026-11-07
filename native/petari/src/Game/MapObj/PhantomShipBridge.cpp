@@ -16,7 +16,7 @@ PhantomShipBridge::PhantomShipBridge(const char* pName) : LiveActor(pName) {
     mIsNutShipBridge = 0;
 }
 
-void PhantomShipBridge::init(const JMapInfoIter& rIter) {
+void PhantomShipBridge::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* objName;
     MR::getObjectName(&objName, rIter);

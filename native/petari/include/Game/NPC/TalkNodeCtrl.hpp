@@ -45,7 +45,7 @@ class TalkNodeCtrl {
 public:
     TalkNodeCtrl();
 
-    void createFlowNodeDirect(TalkMessageCtrl*, const JMapInfoIter&, const char*, ActorCameraInfo**);
+    void createFlowNodeDirect(TalkMessageCtrl*, const TableIter&, const char*, ActorCameraInfo**);
     void resetFlowNode();
     void resetTempFlowNode();
     void recordTempFlowNode();
@@ -63,8 +63,8 @@ public:
     void readMessage();
     const char16_t* getSubMessage() const;
     void forwardCurrentBranchNode(bool);
-    void createFlowNode(TalkMessageCtrl*, const JMapInfoIter&, const char*, ActorCameraInfo**);
-    void initNodeRecursive(TalkMessageCtrl*, const JMapInfoIter&, ActorCameraInfo*, RecursiveHelper*);
+    void createFlowNode(TalkMessageCtrl*, const TableIter&, const char*, ActorCameraInfo**);
+    void initNodeRecursive(TalkMessageCtrl*, const TableIter&, ActorCameraInfo*, RecursiveHelper*);
 
     char* _0;
     s32 mCurrentNodeIdx;

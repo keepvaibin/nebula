@@ -2,7 +2,7 @@
 
 
 class IntermissionScene;
-class JMapIdInfo;
+class PlacementId;
 class NameObjHolder;
 class NameObjListExecutor;
 class Nerve;
@@ -20,13 +20,13 @@ public:
 
     void setScene(const char*);
     void setStage(const char*);
-    void setStartIdInfo(const JMapIdInfo&);
+    void setStartIdInfo(const PlacementId&);
 
     char mScene[32];
     char mStage[32];
     s32 mScenarioNo;
     s32 mSelectedScenarioNo;
-    JMapIdInfo* mStartIdInfo;
+    PlacementId* mStartIdInfo;
 };
 
 enum SceneInitializeState {

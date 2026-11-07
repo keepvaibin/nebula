@@ -34,7 +34,7 @@ public:
 
     Penguin(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
@@ -62,7 +62,7 @@ public:
         MR::emitEffect(this, "HandyGlow");
     }
 
-    virtual void init(const JMapInfoIter& rIter) {
+    virtual void init(const TableIter& rIter) {
         initEffectKeeper(8, "koura", false);
         initSound(8, false);
         MR::invalidateClipping(this);

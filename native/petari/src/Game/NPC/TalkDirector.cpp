@@ -81,7 +81,7 @@ TalkDirector::TalkDirector(const char* pName)
 TalkDirector::~TalkDirector() {
 }
 
-void TalkDirector::init(const JMapInfoIter& rIter) {
+void TalkDirector::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_TalkDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
     mBalloonHolder = new TalkBalloonHolder();
     mStateHolder = new TalkStateHolder();
@@ -274,7 +274,7 @@ void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool a
         break;
     case 1:
         // "Discussion"
-        MR::tryStartDemoMarioPuppetable(pCtrl->mHostActor, "\211\357\230\142" /* 会話 */);
+        MR::tryStartDemoMarioPuppetable(pCtrl->mHostActor, "会話");
         MR::requestMovementOn(this);
         mBalloonHolder->pauseOff();
         mStateHolder->pauseOff();
@@ -293,7 +293,7 @@ void TalkDirector::termTalk() {
     if (mMessageInfo.isCameraNormal()) {
         MR::endNPCTalkCamera(false, -1);
     } else if (mMessageInfo.isCameraEvent()) {
-        MR::endMultiActorCamera(mHostActor, mCameraInfo, "\211\357\230\142" /* 会話 */, false);
+        MR::endMultiActorCamera(mHostActor, mCameraInfo, "会話", false);
     }
 
     if (!mIsInvalidClipping) {
@@ -309,7 +309,7 @@ void TalkDirector::termTalk() {
         MR::resumeTimeKeepDemo(control->mHostActor);
         break;
     case 1:
-        MR::endDemo(control->mHostActor, "\211\357\230\142" /* 会話 */);
+        MR::endDemo(control->mHostActor, "会話");
         break;
     }
 

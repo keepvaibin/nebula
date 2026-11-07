@@ -546,7 +546,7 @@ bool MR::isExistFileInArc(const ResourceHolder* pHolder, const char* pFormat, ..
 }
 
 namespace {
-    JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
+    Table* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
         char buf[0x100];
         nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
@@ -554,41 +554,41 @@ namespace {
             return nullptr;
         }
 
-        JMapInfo* pInfo = new JMapInfo();
+        Table* pInfo = new Table();
         pInfo->attach(pHolder->mFileInfoTable->getRes(buf));
 
         return pInfo;
     }
 };  // namespace
 
-JMapInfo* MR::createCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
+Table* MR::createCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
 
     return ::tryCreateCsvParserLocal(pHolder, pFormat, list);
 }
 
-JMapInfo* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {
+Table* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {
     ResourceHolder* pResourceHolder = SingletonHolder< ResourceHolderManager >::get()->createAndAdd(pArchive, nullptr);
 
     return MR::createCsvParser(pResourceHolder, "%s", pFormat);
 }
 
-JMapInfo* MR::tryCreateCsvParser(const LiveActor* pActor, const char* pFormat, ...) {
+Table* MR::tryCreateCsvParser(const LiveActor* pActor, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
 
     return ::tryCreateCsvParserLocal(getResourceHolder(pActor), pFormat, list);
 }
 
-JMapInfo* MR::tryCreateCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
+Table* MR::tryCreateCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
 
     return ::tryCreateCsvParserLocal(pHolder, pFormat, list);
 }
 
-s32 MR::getCsvDataElementNum(const JMapInfo* pMapInfo) {
+s32 MR::getCsvDataElementNum(const Table* pMapInfo) {
     if (pMapInfo->mData != nullptr) {
         return pMapInfo->mData->mNumEntries;
     }
@@ -596,11 +596,11 @@ s32 MR::getCsvDataElementNum(const JMapInfo* pMapInfo) {
     return 0;
 }
 
-void MR::getCsvDataStr(const char** pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     pMapInfo->getValue(idx, pKey, pOut);
 }
 
-void MR::getCsvDataStrOrNULL(const char** pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataStrOrNULL(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     getCsvDataStr(pOut, pMapInfo, pKey, idx);
 
     if (*pOut[0] == 0) {
@@ -608,25 +608,25 @@ void MR::getCsvDataStrOrNULL(const char** pOut, const JMapInfo* pMapInfo, const 
     }
 }
 
-void MR::getCsvDataS32(s32* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataS32(s32* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     pMapInfo->getValue< s32 >(idx, pKey, pOut);
 }
 
-void MR::getCsvDataU8(u8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataU8(u8* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     s32 val = 0;
     pMapInfo->getValue< s32 >(idx, pKey, &val);
     *pOut = val;
 }
 
-void MR::getCsvDataF32(f32* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataF32(f32* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     pMapInfo->getValue(idx, pKey, pOut);
 }
 
-void MR::getCsvDataBool(bool* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataBool(bool* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     pMapInfo->getValue(idx, pKey, pOut);
 }
 
-void MR::getCsvDataVec(Vec* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataVec(Vec* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
     nebula_snprintf(key, sizeof(key), "%sX", pKey);
     getCsvDataF32(&pOut->x, pMapInfo, key, idx);
@@ -636,7 +636,7 @@ void MR::getCsvDataVec(Vec* pOut, const JMapInfo* pMapInfo, const char* pKey, s3
     getCsvDataF32(&pOut->z, pMapInfo, key, idx);
 }
 
-void MR::getCsvDataColor(NebulaColor8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataColor(NebulaColor8* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
     nebula_snprintf(key, sizeof(key), "%sR", pKey);
     getCsvDataU8(&pOut->r, pMapInfo, key, idx);
@@ -665,7 +665,7 @@ void MR::declarePowerStar(const NameObj* pObj, s32 id) {
 }
 
 void MR::declarePowerStarCoin100() {
-    declareEventPowerStar("\202\120\202\117\202\117\226\207\203\122\203\103\203\223" /* １００枚コイン */, -1, true);
+    declareEventPowerStar("１００枚コイン", -1, true);
 }
 
 void MR::appearPowerStarContinueCurrentDemo(const NameObj* pObj, const Vec3f& rParam2) {
@@ -697,7 +697,7 @@ void MR::requestAppearPowerStar(const NameObj* pObj, const LiveActor* pActor, f3
 }
 
 void MR::requestAppearPowerStarCoin100() {
-    appearEventPowerStar("\202\120\202\117\202\117\226\207\203\122\203\103\203\223" /* １００枚コイン */, -1, nullptr, false, false);
+    appearEventPowerStar("１００枚コイン", -1, nullptr, false, false);
 }
 
 bool MR::isEndPowerStarAppearDemo(const NameObj* pObj) {
@@ -792,7 +792,7 @@ void MR::initStarPieceGetCSSound() {
 BenefitItemOneUp* MR::createKinokoOneUp() {
     BenefitItemOneUp* pKinokoOneUp;
 
-    pKinokoOneUp = new BenefitItemOneUp("\202\120\202\164\202\157\203\114\203\155\203\122(create)" /* １ＵＰキノコ(create) */);
+    pKinokoOneUp = new BenefitItemOneUp("１ＵＰキノコ(create)");
     pKinokoOneUp->initWithoutIter();
     pKinokoOneUp->makeActorDead();
 
@@ -822,7 +822,7 @@ void MR::appearKinokoOneUpPop(BenefitItemObj* pBenefitObj, MtxPtr pMtx, f32 spee
 BenefitItemLifeUp* MR::createKinokoSuper() {
     BenefitItemLifeUp* pKinokoSuper;
 
-    pKinokoSuper = new BenefitItemLifeUp("\203\130\201\133\203\160\201\133\203\114\203\155\203\122" /* スーパーキノコ */);
+    pKinokoSuper = new BenefitItemLifeUp("スーパーキノコ");
     pKinokoSuper->initWithoutIter();
     pKinokoSuper->makeActorDead();
 
@@ -846,31 +846,31 @@ bool MR::tryRumblePad(const void* pParam1, const char* pPatternName, s32 channel
 }
 
 bool MR::tryRumblePadVeryStrongLong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "最強【長】");
 }
 
 bool MR::tryRumblePadVeryStrong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "最強");
 }
 
 bool MR::tryRumblePadStrong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "強");
 }
 
 bool MR::tryRumblePadMiddle(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
+    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "中");
 }
 
 bool MR::tryRumblePadWeak(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "弱");
 }
 
 bool MR::tryRumblePadVeryWeak(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "微弱");
 }
 
 bool MR::tryRumbleDefaultHit(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "強");
 }
 
 void MR::shakeCameraVeryStrong() {
@@ -917,7 +917,7 @@ bool MR::isSame(const NameObj* pObj1, const NameObj* pObj2) {
     return pObj1 == pObj2;
 }
 
-bool MR::tryRegisterNamePosLinkObj(const NameObj* pObj, const JMapInfoIter& rIter) {
+bool MR::tryRegisterNamePosLinkObj(const NameObj* pObj, const TableIter& rIter) {
     return MR::getNamePosHolder()->tryRegisterLinkObj(pObj, rIter);
 }
 

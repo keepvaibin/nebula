@@ -5,7 +5,7 @@
 
 class CameraMedianPlanet : public Camera {
 public:
-    CameraMedianPlanet(const char* pName = "\222\206\223\137\222\215\226\332\203\166\203\211\203\154\203\142\203\147\203\112\203\201\203\211" /* 中点注目プラネットカメラ */);
+    CameraMedianPlanet(const char* pName = "中点注目プラネットカメラ");
     virtual ~CameraMedianPlanet();
 
     virtual void reset();

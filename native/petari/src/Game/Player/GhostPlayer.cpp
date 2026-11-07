@@ -24,7 +24,7 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -46,34 +46,34 @@ namespace {
         const char* pSoundBV;
     };
 
-    const AnimSoundInfo sAnimSoundTable[] = {{"\203\127\203\203\203\223\203\166" /* ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\203\127\203\203\203\223\203\166B" /* ジャンプB */, "SE_BM_GHOST_MARIO_JUMP_M", "SE_BV_GHOST_MARIO_JUMP_M"},
-                                             {"\203\127\203\203\203\223\203\166C" /* ジャンプC */, "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
-                                             {"\225\307\203\127\203\203\203\223\203\166" /* 壁ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\226\204\202\334\202\350\222\105\217\157\203\127\203\203\203\223\203\166" /* 埋まり脱出ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\225\235\202\306\202\321" /* 幅とび */, "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
-                                             {"\202\265\202\341\202\252\202\335\203\127\203\203\203\223\203\166" /* しゃがみジャンプ */, "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
-                                             {"\212\122\202\302\202\251\202\334\202\350\212\112\216\156" /* 崖つかまり開始 */, nullptr, "SE_BV_GHOST_MARIO_HANG"},
-                                             {"\212\122\202\302\202\251\202\334\202\350\217\111\227\271" /* 崖つかまり終了 */, nullptr, "SE_BV_GHOST_MARIO_CLIMB"},
-                                             {"\225\307\211\237\202\265" /* 壁押し */, nullptr, "SE_BV_GHOST_MARIO_HANG"},
-                                             {"\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\112\216\156" /* ヒップドロップ開始 */, "SE_BM_GHOST_MARIO_HIP_DROP_TURN", "SE_BV_GHOST_MARIO_HIPDROP_S"},
-                                             {"\203\161\203\142\203\166\203\150\203\215\203\142\203\166\222\205\222\156" /* ヒップドロップ着地 */, "SE_BM_GHOST_MARIO_HIP_DROP_LAND", "SE_BV_GHOST_MARIO_HIPDROP_E"},
-                                             {"\226\204\202\334\202\350\222\105\217\157\203\127\203\203\203\223\203\166" /* 埋まり脱出ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\220\205\211\152\203\130\203\163\203\223" /* 水泳スピン */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\220\205\211\152\203\127\203\106\203\142\203\147\212\112\216\156" /* 水泳ジェット開始 */, nullptr, "SE_BV_GHOST_MARIO_SWM_ACCEL"},
-                                             {"\203\112\203\201\216\235\202\277\203\212\203\223\203\117\217\200\224\365" /* カメ持ちリング準備 */, nullptr, "SE_BV_GHOST_MARIO_TAKE"},
-                                             {"\203\112\203\201\216\235\202\277\203\212\203\223\203\117" /* カメ持ちリング */, nullptr, "SE_BV_GHOST_MARIO_SWM_ACCEL"},
-                                             {"\223\212\202\260" /* 投げ */, nullptr, "SE_BV_GHOST_MARIO_THROW"},
-                                             {"\213\363\222\206\202\320\202\313\202\350" /* 空中ひねり */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\222\156\217\343\202\320\202\313\202\350" /* 地上ひねり */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\213\363\203\160\203\223\203\140" /* 空パンチ */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\203\101\203\103\203\130\202\320\202\313\202\350" /* アイスひねり */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\203\101\203\103\203\130\202\320\202\313\202\350\210\332\223\256" /* アイスひねり移動 */, "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
-                                             {"\203\130\203\120\201\133\203\147\203\101\203\116\203\132\203\213\203\127\203\203\203\223\203\166" /* スケートアクセルジャンプ */, "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
-                                             {"\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\1662" /* スケートジャンプ2 */, "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
-                                             {"\225\130\217\343\227\315\215\163\211\105" /* 氷上力行右 */, nullptr, "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\225\130\217\343\227\315\215\163\215\266" /* 氷上力行左 */, nullptr, "SE_BV_GHOST_MARIO_JUMP_S"},
-                                             {"\203\126\203\207\201\133\203\147\203\127\203\203\203\223\203\166" /* ショートジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"}};
+    const AnimSoundInfo sAnimSoundTable[] = {{"ジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"ジャンプB", "SE_BM_GHOST_MARIO_JUMP_M", "SE_BV_GHOST_MARIO_JUMP_M"},
+                                             {"ジャンプC", "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
+                                             {"壁ジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"埋まり脱出ジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"幅とび", "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
+                                             {"しゃがみジャンプ", "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
+                                             {"崖つかまり開始", nullptr, "SE_BV_GHOST_MARIO_HANG"},
+                                             {"崖つかまり終了", nullptr, "SE_BV_GHOST_MARIO_CLIMB"},
+                                             {"壁押し", nullptr, "SE_BV_GHOST_MARIO_HANG"},
+                                             {"ヒップドロップ開始", "SE_BM_GHOST_MARIO_HIP_DROP_TURN", "SE_BV_GHOST_MARIO_HIPDROP_S"},
+                                             {"ヒップドロップ着地", "SE_BM_GHOST_MARIO_HIP_DROP_LAND", "SE_BV_GHOST_MARIO_HIPDROP_E"},
+                                             {"埋まり脱出ジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"水泳スピン", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"水泳ジェット開始", nullptr, "SE_BV_GHOST_MARIO_SWM_ACCEL"},
+                                             {"カメ持ちリング準備", nullptr, "SE_BV_GHOST_MARIO_TAKE"},
+                                             {"カメ持ちリング", nullptr, "SE_BV_GHOST_MARIO_SWM_ACCEL"},
+                                             {"投げ", nullptr, "SE_BV_GHOST_MARIO_THROW"},
+                                             {"空中ひねり", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"地上ひねり", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"空パンチ", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"アイスひねり", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"アイスひねり移動", "SE_BM_GHOST_MARIO_SPIN", "SE_BV_GHOST_MARIO_SPIN"},
+                                             {"スケートアクセルジャンプ", "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
+                                             {"スケートジャンプ2", "SE_BM_GHOST_MARIO_JUMP_L", "SE_BV_GHOST_MARIO_JUMP_L"},
+                                             {"氷上力行右", nullptr, "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"氷上力行左", nullptr, "SE_BV_GHOST_MARIO_JUMP_S"},
+                                             {"ショートジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"}};
 
     static const AnimSoundInfo* getAnimSoundInfo(const char* pAnimName) {
         for (u32 i = 0; i < ARRAY_SIZE(sAnimSoundTable); i++) {
@@ -110,7 +110,7 @@ namespace NrvGhostPlayer {
     NEW_NERVE(HostTypeNrvRun, GhostPlayer, Wait);
 };  // namespace NrvGhostPlayer
 
-void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const TableIter& rIter) {
     char archiveName[256];
     nebula_snprintf(archiveName, sizeof(archiveName), "GhostData%s", MR::getCurrentStageName());
 
@@ -131,11 +131,11 @@ GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), _90(), mCameraIn
     mHasJetTurtle = false;
 }
 
-void GhostPlayer::init(const JMapInfoIter& rIter) {
+void GhostPlayer::init(const TableIter& rIter) {
     char gstPath[256];
     char arcPath[256];
 
-    mRaceManagerLayout = new RaceManagerLayout("\203\214\201\133\203\130\212\307\227\235\227\160\203\214\203\103\203\101\203\105\203\147" /* レース管理用レイアウト */);
+    mRaceManagerLayout = new RaceManagerLayout("レース管理用レイアウト");
     mRaceManagerLayout->init(rIter);
 
     mCurrentPacket = nullptr;
@@ -183,12 +183,12 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     _90 = 0;
     mCameraInfo = nullptr;
     if (MR::isValidInfo(rIter)) {
-        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */);
-        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\214\201\133\203\130\212\112\216\1562" /* レース開始2 */);
-        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\214\201\133\203\130\212\112\216\1563" /* レース開始3 */);
-        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\203\214\201\133\203\130\217\111\227\271" /* レース終了 */);
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "レース開始1");
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "レース開始2");
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "レース開始3");
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "レース終了");
     }
-    mCameraTargetMtx = new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */);
+    mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
     initNerve(GET_NERVE(GhostPlayer, HostTypeNrvWait));
     MR::needStageSwitchReadAppear(this, rIter);
     MR::syncStageSwitchAppear(this);
@@ -197,7 +197,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     _112 = true;
     MR::getRotatedAxisZ(&mInitialDirection, mRotation);
     NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
-    mJetTurtleShadow = new JetTurtleShadow("\203\112\203\201\203\126\203\203\203\150\203\105\203\202\203\146\203\213" /* カメシャドウモデル */);
+    mJetTurtleShadow = new JetTurtleShadow("カメシャドウモデル");
     mJetTurtleShadow->initWithoutIter();
     mHandRPos = new FixedPosition(this, "HandR", Vec3f(15.59f, 42.5f, 42.93f), Vec3f(-17.05f, -0.7f, 113.55f));
     MR::declareStarPiece(this, 50);
@@ -290,27 +290,27 @@ void GhostPlayer::exePreStartDemo0() {
         Pos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
         cameraTargetMatrix->set(getBaseMtx());
 
-        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */, CameraTargetArg(mCameraTargetMtx));
-        warpPosition("\203\123\201\133\203\130\203\147\203\146\203\202\203\123\201\133\203\130\203\147\210\312\222\165" /* ゴーストデモゴースト位置 */);
+        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "レース開始1", CameraTargetArg(mCameraTargetMtx));
+        warpPosition("ゴーストデモゴースト位置");
     }
 
     if (getNerveStep() == 1) {
         Mtx playerPosMtx;
         Vec3f playerPosVec;
 
-        MR::findNamePos("\203\123\201\133\203\130\203\147\203\146\203\202\203\175\203\212\203\111\210\312\222\165" /* ゴーストデモマリオ位置 */, playerPosMtx);
+        MR::findNamePos("ゴーストデモマリオ位置", playerPosMtx);
         MR::extractMtxTrans(playerPosMtx, &playerPosVec);
         MR::setPlayerPosAndWait(playerPosVec);
         MR::setPlayerBaseMtx(playerPosMtx);
-        MR::startBckPlayerJ("\203\214\201\133\203\130\214\251\202\351" /* レース見る */);
+        MR::startBckPlayerJ("レース見る");
         MR::resetPlayerEffect();
-        MR::tryStartDemo(this, "\203\214\201\133\203\130\217\200\224\365" /* レース準備 */);
+        MR::tryStartDemo(this, "レース準備");
         MR::requestMovementOn(this);
         MR::requestMovementOnPlayer();
     }
     if (getNerveStep() == 60) {
         mIsHidden = false;
-        setAnimation("\203\123\201\133\203\130\203\147\217\157\214\273" /* ゴースト出現 */);
+        setAnimation("ゴースト出現");
         MR::validateShadow(this, nullptr);
     }
     if (getNerveStep() == 107) {
@@ -323,19 +323,19 @@ void GhostPlayer::exePreStartDemo0() {
         MR::startSound(this, "SE_BV_GHOST_MARIO_PROVOKE");
     }
     if (getNerveStep() == 240) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */, false);
+        MR::endMultiActorCamera(this, mCameraInfo, "レース開始1", false);
         Pos3f* cameraTargetMatrix = &mCameraTargetMtx->mMatrix;
         cameraTargetMatrix->set(getBaseMtx());
-        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1562" /* レース開始2 */, CameraTargetArg(mCameraTargetMtx));
+        MR::startMultiActorCameraTargetOther(this, mCameraInfo, "レース開始2", CameraTargetArg(mCameraTargetMtx));
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvPreStartDemo1));
-        setAnimation("\203\214\201\133\203\130\214\251\202\351" /* レース見る */);
+        setAnimation("レース見る");
     } else if (isRequestSkipDemo()) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1561" /* レース開始1 */, false);
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1563" /* レース開始3 */);
+        MR::endMultiActorCamera(this, mCameraInfo, "レース開始1", false);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "レース開始3");
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvPreStartDemo2));
         if (getNerveStep() < 60) {
             mIsHidden = false;
-            setAnimation("\203\123\201\133\203\130\203\147\217\157\214\273" /* ゴースト出現 */);
+            setAnimation("ゴースト出現");
             MR::validateShadow(this, nullptr);
         }
     }
@@ -350,12 +350,12 @@ bool GhostPlayer::isRequestSkipDemo() const {
 
 void GhostPlayer::exePreStartDemo1() {
     if (getNerveStep() == 240) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1562" /* レース開始2 */, false);
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1563" /* レース開始3 */);
+        MR::endMultiActorCamera(this, mCameraInfo, "レース開始2", false);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "レース開始3");
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvPreStartDemo2));
     } else if (isRequestSkipDemo()) {
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1562" /* レース開始2 */, false);
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1563" /* レース開始3 */);
+        MR::endMultiActorCamera(this, mCameraInfo, "レース開始2", false);
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "レース開始3");
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvPreStartDemo2));
     }
 }
@@ -367,22 +367,22 @@ void GhostPlayer::exePreStartDemo2() {
         mRaceManagerLayout->playCountAndGo();
         mRaceManagerLayout->hideRecordPane();
         mRaceManagerLayout->hideBestRecordPane();
-        setAnimation("\203\123\201\133\203\130\203\147\203\214\201\133\203\130\212\112\216\156" /* ゴーストレース開始 */);
-        MR::startBckPlayerJ("\203\214\201\133\203\130\212\112\216\156" /* レース開始 */);
+        setAnimation("ゴーストレース開始");
+        MR::startBckPlayerJ("レース開始");
 
         Mtx raceStartMarioPos;
-        MR::findNamePos("\203\214\201\133\203\130\212\112\216\156\216\236\203\175\203\212\203\111\210\312\222\165" /* レース開始時マリオ位置 */, raceStartMarioPos);
+        MR::findNamePos("レース開始時マリオ位置", raceStartMarioPos);
         MR::setPlayerBaseMtx(raceStartMarioPos);
 
         mPosition = mStartPos;
-        MR::endDemo(this, "\203\214\201\133\203\130\217\200\224\365" /* レース準備 */);
+        MR::endDemo(this, "レース準備");
     }
 
     if (MR::getPlayerPressedCrouch()) {
-        MR::startBckPlayerJ("\203\214\201\133\203\130\203\116\203\211\203\105\203\140\203\223\203\117\212\112\216\156" /* レースクラウチング開始 */);
+        MR::startBckPlayerJ("レースクラウチング開始");
         MR::startSoundPlayer("SE_PV_SQUAT");
     } else if (MR::isReleasedCrouch(PLAYER_1)) {
-        MR::startBckPlayerJ("\203\214\201\133\203\130\212\112\216\156" /* レース開始 */);
+        MR::startBckPlayerJ("レース開始");
     }
 
     if (getNerveStep() % 60 == 0) {
@@ -411,9 +411,9 @@ void GhostPlayer::exePreStartDemo2() {
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun));
         MR::onPlayerControl(true);
         MR::noticePlayerDashChance();
-        MR::startBckPlayerJ("\212\356\226\173" /* 基本 */);
+        MR::startBckPlayerJ("基本");
         MR::startSystemSE("SE_SY_RACE_START");
-        MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\212\112\216\1563" /* レース開始3 */, false);
+        MR::endMultiActorCamera(this, mCameraInfo, "レース開始3", false);
     }
 }
 
@@ -425,13 +425,13 @@ void GhostPlayer::exeWinDemo() {
 
         Vec3f playerPosVec;
         Mtx playerPosMtx;
-        MR::findNamePos("\225\211\202\257\216\236\203\175\203\212\203\111\210\312\222\165" /* 負け時マリオ位置 */, playerPosMtx);
+        MR::findNamePos("負け時マリオ位置", playerPosMtx);
         MR::extractMtxTrans(playerPosMtx, &playerPosVec);
         MR::setPlayerPosAndWait(playerPosVec);
         MR::setPlayerBaseMtx(playerPosMtx);
 
-        MR::startBckPlayerJ("\203\214\201\133\203\130\214\251\202\351" /* レース見る */);
-        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\203\214\201\133\203\130\217\111\227\271" /* レース終了 */);
+        MR::startBckPlayerJ("レース見る");
+        MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "レース終了");
         mIsDemoCameraActive = true;
 
         HitSensor* sensorBody = getSensor("body");
@@ -446,9 +446,9 @@ void GhostPlayer::exeWinDemo() {
         MR::startSubBGM("BGM_RACE_LOSE", false);
         mRaceManagerLayout->appear();
         mRaceManagerLayout->playLose();
-        setAnimation("\203\123\201\133\203\130\203\147\217\237\227\230" /* ゴースト勝利 */);
+        setAnimation("ゴースト勝利");
         MR::startSound(this, "SE_BV_GHOST_MARIO_WIN");
-        MR::tryStartDemo(this, "\203\214\201\133\203\130\217\111\227\271" /* レース終了 */);
+        MR::tryStartDemo(this, "レース終了");
         MR::requestMovementOn(this);
         MR::requestMovementOnPlayer();
         if (mPowerStarTarget != nullptr) {
@@ -464,20 +464,20 @@ void GhostPlayer::exeWinDemo() {
 
     if (MR::isStep(this, 180)) {
         if (mIsDemoCameraActive) {
-            MR::endMultiActorCamera(this, mCameraInfo, "\203\214\201\133\203\130\217\111\227\271" /* レース終了 */, true);
+            MR::endMultiActorCamera(this, mCameraInfo, "レース終了", true);
             mIsDemoCameraActive = false;
         }
-        MR::endDemo(this, "\203\214\201\133\203\130\217\111\227\271" /* レース終了 */);
+        MR::endDemo(this, "レース終了");
         MR::forceKillPlayerByGhostRace();
     }
 }
 
 void GhostPlayer::exeLostDemo() {
     if (MR::isFirstStep(this)) {
-        warpPosition("\225\211\202\257\216\236\203\175\203\212\203\111\210\312\222\165" /* 負け時マリオ位置 */);
+        warpPosition("負け時マリオ位置");
         mXanimePlayer->changeAnimation("DieSwimEvent");
         mVelocity.zero();
-        setAnimation("\203\214\201\133\203\130\225\211\202\257" /* レース負け */);
+        setAnimation("レース負け");
     }
 }
 
@@ -508,10 +508,10 @@ void GhostPlayer::initAnimation() {
     mXanimePlayer = new XanimePlayer(MR::getModel(this), pResource);
     mXanimePlayer->duplicateSimpleGroup();
     mModelManager->mXanimePlayer = mXanimePlayer;
-    mXanimePlayer->setDefaultAnimation("\212\356\226\173" /* 基本 */);
+    mXanimePlayer->setDefaultAnimation("基本");
     mXanimePlayer->getCore()->enableJointTransform(MR::getModelData(this));
     mXanimePlayerUpper = new XanimePlayer(MR::getModel(this), pResource, mXanimePlayer);
-    mXanimePlayerUpper->changeAnimation("\212\356\226\173" /* 基本 */);
+    mXanimePlayerUpper->changeAnimation("基本");
 }
 
 void GhostPlayer::setAnimation(const char* pName) {
@@ -683,14 +683,14 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
         ::playSound(this, animName);
 
         bool isSpecialAnim = false;
-        if (strcmp(animName, "\212\356\226\173" /* 基本 */) == 0) {
+        if (strcmp(animName, "基本") == 0) {
             isSpecialAnim = true;
             setAnimationWeight(mAnimTrackWeights);
-        } else if (strcmp(animName, "\225\307\211\237\202\265" /* 壁押し */) == 0) {
+        } else if (strcmp(animName, "壁押し") == 0) {
             isSpecialAnim = true;
-        } else if (strcmp(animName, "\202\265\202\341\202\252\202\335\225\340\202\253" /* しゃがみ歩き */) == 0) {
+        } else if (strcmp(animName, "しゃがみ歩き") == 0) {
             isSpecialAnim = true;
-        } else if (strcmp(animName, "\202\252\202\361\202\316\202\350\221\226\202\350" /* がんばり走り */) == 0) {
+        } else if (strcmp(animName, "がんばり走り") == 0) {
             isSpecialAnim = true;
         }
 
@@ -708,41 +708,41 @@ u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {
         const char* currentAnimName = mXanimePlayer->getCurrentAnimationName();
         ::playSound(this, currentAnimName);
 
-        if (strcmp(currentAnimName, "\212\356\226\173" /* 基本 */) == 0) {
+        if (strcmp(currentAnimName, "基本") == 0) {
             isSpecialAnim = true;
             setAnimationWeight(mAnimTrackWeights);
         }
-        if (strcmp(currentAnimName, "\225\307\211\237\202\265" /* 壁押し */) == 0) {
+        if (strcmp(currentAnimName, "壁押し") == 0) {
             isSpecialAnim = true;
         }
-        if (strcmp(currentAnimName, "\202\265\202\341\202\252\202\335\225\340\202\253" /* しゃがみ歩き */) == 0) {
+        if (strcmp(currentAnimName, "しゃがみ歩き") == 0) {
             isSpecialAnim = true;
         }
-        if (strcmp(currentAnimName, "\202\252\202\361\202\316\202\350\221\226\202\350" /* がんばり走り */) == 0) {
+        if (strcmp(currentAnimName, "がんばり走り") == 0) {
             isSpecialAnim = true;
         }
-        if (strcmp(currentAnimName, "\203\130\203\120\201\133\203\147\203\101\203\116\203\132\203\213\203\127\203\203\203\223\203\166" /* スケートアクセルジャンプ */) == 0) {
+        if (strcmp(currentAnimName, "スケートアクセルジャンプ") == 0) {
             isSpecialAnim = true;
         }
-        if (strcmp(currentAnimName, "\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\1662" /* スケートジャンプ2 */) == 0) {
+        if (strcmp(currentAnimName, "スケートジャンプ2") == 0) {
             isSpecialAnim = true;
         }
-        if (strcmp(currentAnimName, "\203\130\203\120\201\133\203\147\203\127\203\203\203\223\203\1663" /* スケートジャンプ3 */) == 0) {
+        if (strcmp(currentAnimName, "スケートジャンプ3") == 0) {
             isSpecialAnim = true;
         }
 
-        if (strstr(currentAnimName, "\220\205\211\152\203\127\203\106\203\142\203\147" /* 水泳ジェット */) != nullptr) {
+        if (strstr(currentAnimName, "水泳ジェット") != nullptr) {
             mHasJetTurtle = true;
-        } else if (strstr(currentAnimName, "\203\112\203\201\216\235\202\277" /* カメ持ち */) != nullptr) {
+        } else if (strstr(currentAnimName, "カメ持ち") != nullptr) {
             mHasJetTurtle = true;
-        } else if (strstr(currentAnimName, "\223\212\202\260" /* 投げ */) != nullptr) {
+        } else if (strstr(currentAnimName, "投げ") != nullptr) {
             mHasJetTurtle = false;
             mXanimePlayerUpper->stopAnimation();
             MR::getModelData(this)->getJointAt(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
         }
 
-        if (mHasJetTurtle && (strcmp(currentAnimName, "\212\356\226\173" /* 基本 */) != 0 || strcmp(currentAnimName, "\203\127\203\203\203\223\203\166" /* ジャンプ */) != 0)) {
-            mXanimePlayerUpper->changeAnimation("\202\320\202\353\202\242\203\105\203\107\203\103\203\147" /* ひろいウエイト */);
+        if (mHasJetTurtle && (strcmp(currentAnimName, "基本") != 0 || strcmp(currentAnimName, "ジャンプ") != 0)) {
+            mXanimePlayerUpper->changeAnimation("ひろいウエイト");
             mXanimePlayerUpper->overWriteMtxCalc(MR::getJointIndex(this, "PartsControl"));
         }
 

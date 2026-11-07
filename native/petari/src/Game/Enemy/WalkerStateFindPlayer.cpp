@@ -22,7 +22,7 @@ WalkerStateFindPlayerParam::WalkerStateFindPlayerParam() : mJumpStartStep(30), m
 
 WalkerStateFindPlayer::WalkerStateFindPlayer(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam,
                                              WalkerStateFindPlayerParam* pFindPlayerParam)
-    : ActorStateBase< LiveActor >("\225\340\215\163\214\136\203\166\203\214\203\103\203\204\201\133\224\255\214\251\213\223\223\256" /* 歩行型プレイヤー発見挙動 */, pHost), mDirection(pDirection), mStateParam(pStateParam),
+    : ActorStateBase< LiveActor >("歩行型プレイヤー発見挙動", pHost), mDirection(pDirection), mStateParam(pStateParam),
       mFindPlayerParam(pFindPlayerParam) {
     initNerve(GET_NERVE(WalkerStateFindPlayer, WalkerStateFindPlayerNrvFind));
     if (mFindPlayerParam == nullptr) {

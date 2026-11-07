@@ -72,7 +72,7 @@ SpiderThread::SpiderThread(const char* pName)
     }
 }
 
-void SpiderThread::init(const JMapInfoIter& rIter) {
+void SpiderThread::init(const TableIter& rIter) {
 }
 
 void SpiderThread::initThread(const Vec3f& rPos) {

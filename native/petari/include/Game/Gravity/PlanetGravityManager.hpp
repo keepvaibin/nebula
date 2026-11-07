@@ -18,8 +18,8 @@ public:
     }
 
     /// @brief Effectively does nothing.
-    /// @param rIter Reference to the JMapInfoIter that supplies BCSV information.
-    virtual void init(const JMapInfoIter& rIter);
+    /// @param rIter Reference to the TableIter that supplies BCSV information.
+    virtual void init(const TableIter& rIter);
 
     /// @brief Calculates the total gravity vector at the specified position in space. If the object that requests gravity
     /// matches the host of one or more gravity instances, these instances won't be taken into account when calculating

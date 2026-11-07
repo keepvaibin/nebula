@@ -55,8 +55,8 @@ Kameck::Kameck(const char* pName)
     mBeamEventListener = new SmallKameckBeamEventListener(this);
 }
 
-void Kameck::init(const JMapInfoIter& rIter) {
-    initJMapParam(rIter);
+void Kameck::init(const TableIter& rIter) {
+    initPlacementParam(rIter);
     initModelManagerWithAnm("Kameck", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
@@ -109,20 +109,20 @@ void Kameck::initBeam() {
     }
 }
 
-void Kameck::initJMapParam(const JMapInfoIter& rIter) {
+void Kameck::initPlacementParam(const TableIter& rIter) {
     if (!MR::isValidInfo(rIter)) {
         return;
     }
 
     MR::initDefaultPos(this, rIter);
-    MR::getJMapInfoArg3NoInit(rIter, &mActiveDistance);
+    MR::getPlacementArg3NoInit(rIter, &mActiveDistance);
 
     if (mBeamType != KameckBeam::BeamType_FireBall1) {
         return;
     }
 
     s32 arg0;
-    MR::getJMapInfoArg0WithInit(rIter, &arg0);
+    MR::getPlacementArg0WithInit(rIter, &arg0);
 
     if (arg0 >= 3) {
         mBeamType = KameckBeam::BeamType_FireBall3;
@@ -133,13 +133,13 @@ void Kameck::initJMapParam(const JMapInfoIter& rIter) {
     }
 }
 
-void Kameck::initDemo(const JMapInfoIter& rIter) {
+void Kameck::initDemo(const TableIter& rIter) {
     if (!MR::tryRegisterDemoCast(this, rIter)) {
         return;
     }
 
-    MR::registerDemoActionFunctor(this, MR::Functor(this, &Kameck::startDemoAppear), "\203\125\203\122\203\112\203\201\203\142\203\116\223\157\217\352" /* ザコカメック登場 */);
-    MR::registerDemoActionFunctor(this, MR::Functor(this, &Kameck::killForce), "\203\125\203\122\203\112\203\201\203\142\203\116\213\255\220\247\216\200\226\123" /* ザコカメック強制死亡 */);
+    MR::registerDemoActionFunctor(this, MR::Functor(this, &Kameck::startDemoAppear), "ザコカメック登場");
+    MR::registerDemoActionFunctor(this, MR::Functor(this, &Kameck::killForce), "ザコカメック強制死亡");
     makeActorDead();
 }
 

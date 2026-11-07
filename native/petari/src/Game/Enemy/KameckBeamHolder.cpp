@@ -10,32 +10,32 @@ namespace {
     static const s32 sMaxKameckBeamTurtle = 16;
 };  // namespace
 
-KameckBeamHolder::KameckBeamHolder() : DeriveActorGroup< KameckBeam >("\203\112\203\201\203\142\203\116\203\162\201\133\203\200\212\307\227\235" /* カメックビーム管理 */, ::sMaxKameckBeam) {
+KameckBeamHolder::KameckBeamHolder() : DeriveActorGroup< KameckBeam >("カメックビーム管理", ::sMaxKameckBeam) {
     KameckBeam* pBeam;
 
     for (s32 i = 0; i < ::sMaxKameckBeam; i++) {
-        pBeam = new KameckBeam("\203\112\203\201\203\142\203\116\203\162\201\133\203\200" /* カメックビーム */);
+        pBeam = new KameckBeam("カメックビーム");
         pBeam->initWithoutIter();
         registerActor(pBeam);
     }
 }
 
-KameckFireBallHolder::KameckFireBallHolder() : DeriveActorGroup< KameckFireBall >("\203\112\203\201\203\142\203\116\211\316\202\314\213\312\212\307\227\235" /* カメック火の玉管理 */, ::sMaxKameckFireBall) {
+KameckFireBallHolder::KameckFireBallHolder() : DeriveActorGroup< KameckFireBall >("カメック火の玉管理", ::sMaxKameckFireBall) {
     KameckFireBall* pFireBall;
 
     for (s32 i = 0; i < ::sMaxKameckFireBall; i++) {
-        pFireBall = new KameckFireBall("\203\112\203\201\203\142\203\116\203\162\201\133\203\200\227\160\211\212" /* カメックビーム用炎 */);
+        pFireBall = new KameckFireBall("カメックビーム用炎");
         pFireBall->initWithoutIter();
         pFireBall->makeActorDead();
         registerActor(pFireBall);
     }
 }
 
-KameckBeamTurtleHolder::KameckBeamTurtleHolder() : DeriveActorGroup< KameckTurtle >("\203\112\203\201\203\142\203\116\203\162\201\133\203\200\227\160\203\112\203\201\212\307\227\235" /* カメックビーム用カメ管理 */, ::sMaxKameckBeamTurtle) {
+KameckBeamTurtleHolder::KameckBeamTurtleHolder() : DeriveActorGroup< KameckTurtle >("カメックビーム用カメ管理", ::sMaxKameckBeamTurtle) {
     KameckTurtle* pTurtle;
 
     for (s32 i = 0; i < ::sMaxKameckBeamTurtle; i++) {
-        pTurtle = new KameckTurtle("\203\112\203\201\203\142\203\116\203\162\201\133\203\200\227\160\203\112\203\201" /* カメックビーム用カメ */);
+        pTurtle = new KameckTurtle("カメックビーム用カメ");
         pTurtle->initWithoutIter();
         pTurtle->makeActorDead();
         registerActor(pTurtle);

@@ -41,7 +41,7 @@ public:
     virtual ~SkeletalFishBoss() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAnim();
     virtual void appear();
@@ -77,7 +77,7 @@ public:
     void initHead();
     void initScarFlash();
     void initBreakModel();
-    void initSwitch(const JMapInfoIter&);
+    void initSwitch(const TableIter&);
     void createGuards();
     void initShadow();
     void initCamera();
@@ -143,7 +143,7 @@ public:
     virtual ~SkeletalFishBossScarFlash() {
     }
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void appear();
     virtual void control();
 };

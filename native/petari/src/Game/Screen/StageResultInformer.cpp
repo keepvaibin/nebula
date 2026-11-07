@@ -113,12 +113,12 @@ void DisplayInformationForResult::exeIdle() {
 }
 
 StageResultInformer::StageResultInformer()
-    : LayoutActor("\203\212\203\125\203\213\203\147\222\312\222\155" /* リザルト通知 */, true), mInformationDisplayer(), mSequenceChecker(), mIconAButton(), _30(), _31() {
+    : LayoutActor("リザルト通知", true), mInformationDisplayer(), mSequenceChecker(), mIconAButton(), _30(), _31() {
     mInformationDisplayer = new DisplayInformationForResult(this);
     mSequenceChecker = new StageResultSequenceChecker();
 }
 
-void StageResultInformer::init(const JMapInfoIter& rIter) {
+void StageResultInformer::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("ResultWindow", 2);
     mIconAButton = MR::createAndSetupIconAButton(this, true, false);

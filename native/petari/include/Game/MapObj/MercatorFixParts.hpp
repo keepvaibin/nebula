@@ -9,7 +9,7 @@ public:
     MercatorFixParts(const char*);
 
     virtual ~MercatorFixParts();
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     MapPartsAppearController* mAppearController;

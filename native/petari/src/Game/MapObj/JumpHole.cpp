@@ -36,7 +36,7 @@ JumpHole::JumpHole(const char* pName)
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
-void JumpHole::init(const JMapInfoIter& rIter) {
+void JumpHole::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("JumpHole", nullptr, false);
     MR::connectToSceneMapObj(this);

@@ -28,7 +28,7 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     Dodoryu(const char* pName);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void startClipped();
     virtual void endClipped();
@@ -77,7 +77,7 @@ public:
     void calcRabbitDir(Vec3f*) const;
     void displayRabbitMessage();
     void initHitSensor();
-    void initSwitch(const JMapInfoIter&);
+    void initSwitch(const TableIter&);
     void createMogucchiHill();
     void createDodoryuBank();
     void turnUpVecTo(const Vec3f&);
@@ -112,7 +112,7 @@ public:
     /// @brief Creates a new `DodoryuBank`.
     DodoryuBank();
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
 
     void exeAppear();
 
@@ -121,9 +121,9 @@ public:
 
 class DodoryuRabbit : public ModelObj {
 public:
-    DodoryuRabbit(Dodoryu* pDodoryu, const JMapInfoIter& rIter);
+    DodoryuRabbit(Dodoryu* pDodoryu, const TableIter& rIter);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
@@ -158,7 +158,7 @@ class DodoryuLeadHill : public LiveActor {
 public:
     DodoryuLeadHill(Dodoryu* pHost);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
 

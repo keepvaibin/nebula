@@ -16,7 +16,7 @@
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
-#include "Game/Util/JMapIdInfo.hpp"
+#include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"

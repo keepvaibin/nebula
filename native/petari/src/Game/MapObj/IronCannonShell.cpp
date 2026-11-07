@@ -27,12 +27,12 @@ IronCannonLauncherPoint::IronCannonLauncherPoint(const char* pName)
     : LiveActor(pName), mShellHolder(), mShotInterval(::sDefaultShotInterval), mBulletSpeed(::sDefaultBulletSpeed) {
 }
 
-void IronCannonLauncherPoint::init(const JMapInfoIter& rIter) {
+void IronCannonLauncherPoint::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelAndConnectToScene();
     initBullet();
-    MR::getJMapInfoArg0NoInit(rIter, &mShotInterval);
-    MR::getJMapInfoArg1NoInit(rIter, &mBulletSpeed);
+    MR::getPlacementArg0NoInit(rIter, &mShotInterval);
+    MR::getPlacementArg1NoInit(rIter, &mBulletSpeed);
     initEffectKeeper(0, "IronCannonLauncherPoint", false);
 
     bool isAppear = false;
@@ -79,7 +79,7 @@ void IronCannonLauncherPoint::initBullet() {
     mShellHolder = new CannonShellHolder(3);
 
     for (s32 i = 0; i < 3; i++) {
-        IronCannonShell* pShell = new IronCannonShell("\203\114\203\203\203\155\203\223\222\145\226\103\221\344\202\314\222\145" /* キャノン弾砲台の弾 */);
+        IronCannonShell* pShell = new IronCannonShell("キャノン弾砲台の弾");
         pShell->initWithoutIter();
         pShell->makeActorDead();
         mShellHolder->registerCannonShell(pShell);
@@ -118,7 +118,7 @@ IronCannonLauncher::IronCannonLauncher(const char* pName) : IronCannonLauncherPo
 IronCannonLauncherPoint::~IronCannonLauncherPoint() {
 }
 
-void IronCannonLauncher::init(const JMapInfoIter& rIter) {
+void IronCannonLauncher::init(const TableIter& rIter) {
     IronCannonLauncherPoint::init(rIter);
 
     MR::useStageSwitchReadA(this, rIter);

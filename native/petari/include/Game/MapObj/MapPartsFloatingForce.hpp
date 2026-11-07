@@ -23,12 +23,12 @@ public:
     MapPartsFloatingForce(LiveActor* pActor);
 
     virtual ~MapPartsFloatingForce();
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void start();
 
     void setObjectName(const char* pName);
-    void initForNormalMotion(const JMapInfoIter& rIter);
-    void initForSpringMotion(const JMapInfoIter& rIter);
+    void initForNormalMotion(const TableIter& rIter);
+    void initForSpringMotion(const TableIter& rIter);
     void updateVelocity();
     void updateVelocitySpring();
     bool tryOn();

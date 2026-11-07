@@ -9,7 +9,7 @@
 #include "Game/System/NebulaHost.hpp"
 
 BloomEffectSimple::BloomEffectSimple()
-    : ImageEffectBase("\212\310\210\325\203\165\203\213\201\133\203\200" /* 簡易ブルーム */), mMaskFilter(), mThreshold(205), mIntensity(0.3f) {
+    : ImageEffectBase("簡易ブルーム"), mMaskFilter(), mThreshold(205), mIntensity(0.3f) {
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
 }

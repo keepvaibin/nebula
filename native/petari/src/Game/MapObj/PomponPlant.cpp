@@ -17,7 +17,7 @@ namespace NrvPomponPlant {
 PomponPlant::PomponPlant(const char* pName) : LiveActor(pName), mItemType(-1), mItemCount(1), mCanGenItem(true) {
 }
 
-void PomponPlant::init(const JMapInfoIter& rIter) {
+void PomponPlant::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     const char* modelName = nullptr;
     MR::getObjectName(&modelName, rIter);
@@ -28,8 +28,8 @@ void PomponPlant::init(const JMapInfoIter& rIter) {
     MR::initStarPointerTarget(this, ::sSensorRadius, Vec3f(::sSensorOffset));
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
-    MR::getJMapInfoArg0NoInit(rIter, &mItemType);
-    MR::getJMapInfoArg1NoInit(rIter, &mItemCount);
+    MR::getPlacementArg0NoInit(rIter, &mItemType);
+    MR::getPlacementArg1NoInit(rIter, &mItemCount);
 
     if (mItemType == -1) {
         MR::declareCoin(this, mItemCount);

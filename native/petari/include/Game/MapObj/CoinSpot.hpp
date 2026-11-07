@@ -6,7 +6,7 @@ class CoinSpot : public LiveActor {
 public:
     CoinSpot(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
     void initSensor();

@@ -15,11 +15,11 @@ namespace NrvDinoPackunFire {
     NEW_NERVE(DinoPackunFireNrvGround, DinoPackunFire, Ground);
 };  // namespace NrvDinoPackunFire
 
-DinoPackunFireHolder::DinoPackunFireHolder(s32 numMax) : DeriveActorGroup< DinoPackunFire >("\203\146\203\102\203\155\203\160\203\142\203\116\203\223\211\212\212\307\227\235" /* ディノパックン炎管理 */, numMax) {
+DinoPackunFireHolder::DinoPackunFireHolder(s32 numMax) : DeriveActorGroup< DinoPackunFire >("ディノパックン炎管理", numMax) {
     DinoPackunFire* pFire;
 
     for (s32 i = 0; i < numMax; i++) {
-        pFire = new DinoPackunFire("\203\146\203\102\203\155\203\160\203\142\203\116\203\223\211\212" /* ディノパックン炎 */);
+        pFire = new DinoPackunFire("ディノパックン炎");
         pFire->initWithoutIter();
         registerActor(pFire);
     }
@@ -32,7 +32,7 @@ DinoPackunFire::DinoPackunFire(const char* pName) : LiveActor(pName) {
     _8C.w = 1.0f;
 }
 
-void DinoPackunFire::init(const JMapInfoIter& rIter) {
+void DinoPackunFire::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("DinoPackunFireBall", nullptr, false);
     MR::connectToSceneEnemy(this);

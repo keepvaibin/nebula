@@ -4,11 +4,11 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-ClippingDirector::ClippingDirector() : NameObj("\203\116\203\212\203\142\203\163\203\223\203\117\216\167\212\366" /* クリッピング指揮 */), mJudge(nullptr), mActorHolder(nullptr), mGroupHolder(nullptr) {
-    mJudge = new ClippingJudge("\203\116\203\212\203\142\203\163\203\223\203\117\224\273\222\350\216\322" /* クリッピング判定者 */);
+ClippingDirector::ClippingDirector() : NameObj("クリッピング指揮"), mJudge(nullptr), mActorHolder(nullptr), mGroupHolder(nullptr) {
+    mJudge = new ClippingJudge("クリッピング判定者");
     mJudge->initWithoutIter();
 
     mActorHolder = new ClippingActorHolder();
@@ -34,13 +34,13 @@ void ClippingDirector::registerActor(LiveActor* pActor) {
     mActorHolder->registerActor(pActor);
 }
 
-void ClippingDirector::initActorSystemInfo(LiveActor* pActor, const JMapInfoIter& rIter) {
+void ClippingDirector::initActorSystemInfo(LiveActor* pActor, const TableIter& rIter) {
     mActorHolder->initSystemInfo(pActor, rIter);
 }
 
-void ClippingDirector::joinToGroupClipping(LiveActor* pActor, const JMapInfoIter& rIter, int a3) {
+void ClippingDirector::joinToGroupClipping(LiveActor* pActor, const TableIter& rIter, int a3) {
     s32 clippingID = -1;
-    MR::getJMapInfoClippingGroupID(rIter, &clippingID);
+    MR::getPlacementClippingGroupID(rIter, &clippingID);
 
     if (clippingID >= 0) {
         ClippingActorInfo* inf = mActorHolder->startGroupClipping(pActor, rIter);
@@ -48,7 +48,7 @@ void ClippingDirector::joinToGroupClipping(LiveActor* pActor, const JMapInfoIter
     }
 }
 
-void ClippingDirector::entryLodCtrl(LodCtrl* pLod, const JMapInfoIter& rIter) {
+void ClippingDirector::entryLodCtrl(LodCtrl* pLod, const TableIter& rIter) {
     mActorHolder->entryLodCtrl(pLod, rIter);
 }
 

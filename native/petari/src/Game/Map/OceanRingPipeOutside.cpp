@@ -24,10 +24,10 @@ namespace {
 };  // namespace
 
 OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
-    : LiveActor("\203\111\201\133\203\126\203\203\203\223\203\212\203\223\203\117\202\314\212\117\221\244" /* オーシャンリングの外側 */), mRingPipe(pPipe), mTexU(0.0f), mWaterPipeIndirectTex(nullptr), mWaterPipeHighLightTex(nullptr) {
+    : LiveActor("オーシャンリングの外側"), mRingPipe(pPipe), mTexU(0.0f), mWaterPipeIndirectTex(nullptr), mWaterPipeHighLightTex(nullptr) {
 }
 
-void OceanRingPipeOutside::init(const JMapInfoIter& rIter) {
+void OceanRingPipeOutside::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeOutside);
     initMesh();
     MR::invalidateClipping(this);

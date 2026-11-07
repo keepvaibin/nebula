@@ -19,7 +19,7 @@ namespace {
     NEW_NERVE(GameSceneScenarioOpeningCameraStatePlay, GameSceneScenarioOpeningCameraState, Play);
 };  // namespace
 
-GameSceneScenarioOpeningCameraState::GameSceneScenarioOpeningCameraState() : NerveExecutor("\203\126\203\151\203\212\203\111\212\112\216\156\203\112\203\201\203\211\215\304\220\266" /* シナリオ開始カメラ再生 */) {
+GameSceneScenarioOpeningCameraState::GameSceneScenarioOpeningCameraState() : NerveExecutor("シナリオ開始カメラ再生") {
     mBaseMtx.identity();
     initNerve(GET_NERVE_ANON(GameSceneScenarioOpeningCameraStatePlay));
     mScenarioTitle = new ScenarioTitle();
@@ -47,8 +47,8 @@ void GameSceneScenarioOpeningCameraState::start() {
 
     Vec3f namePos;
 
-    if (MR::tryFindNamePos("\203\130\203\136\201\133\203\147\203\112\203\201\203\211\203\175\203\212\203\111\215\300\225\127" /* スタートカメラマリオ座標 */, &namePos, nullptr)) {
-        MR::setPlayerPos("\203\130\203\136\201\133\203\147\203\112\203\201\203\211\203\175\203\212\203\111\215\300\225\127" /* スタートカメラマリオ座標 */);
+    if (MR::tryFindNamePos("スタートカメラマリオ座標", &namePos, nullptr)) {
+        MR::setPlayerPos("スタートカメラマリオ座標");
     }
 }
 

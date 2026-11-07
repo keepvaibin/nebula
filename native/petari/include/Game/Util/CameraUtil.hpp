@@ -6,7 +6,7 @@ class LiveActor;
 class ActorCameraInfo;
 class CameraTargetArg;
 class NameObj;
-class JMapInfoIter;
+class TableIter;
 
 namespace MR {
     bool calcScreenPosition(Vec2f*, const Vec3f&);

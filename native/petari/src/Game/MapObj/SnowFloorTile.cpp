@@ -38,7 +38,7 @@ SnowFloorTile::~SnowFloorTile() {
 SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName), _F8(), _FC() {
 }
 
-void SnowFloorTile::init(const JMapInfoIter& rIter) {
+void SnowFloorTile::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mTextureSize = ::sTextureSize * mScale.x;
     mTextureShift = 0;
@@ -82,7 +82,7 @@ void SnowFloorTile::init(const JMapInfoIter& rIter) {
     mDirtyFrames = 2;
 }
 
-void SnowFloorTile::initLocalPoint(const JMapInfoIter& rIter) {
+void SnowFloorTile::initLocalPoint(const TableIter& rIter) {
     mRight.set(1.0f, 0.0f, 0.0f);
     mUp.set(0.0f, 1.0f, 0.0f);
     mForward.set(0.0f, 0.0f, 1.0f);
@@ -398,7 +398,7 @@ void SnowFloorTile::createTexture() {
 
 void SnowFloorTile::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pReceiver)) {
-        if (MR::isEqualString(pReceiver->mHost->mName, "\203\175\203\212\203\111\211\212\213\205" /* マリオ炎球 */)) {
+        if (MR::isEqualString(pReceiver->mHost->mName, "マリオ炎球")) {
             Vec3f localPoint;
             calcLocalPoint(pReceiver->mPosition, &localPoint, 200.0f);
             doErase(Vec2f(localPoint.x, localPoint.y), 30.0f / mCellSize, ::cHipdropDigAmount);

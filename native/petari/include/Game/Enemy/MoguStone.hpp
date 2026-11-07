@@ -8,7 +8,7 @@ class MoguStone : public ModelObj {
 public:
     MoguStone(const char*, const char*);
 
-    virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -35,7 +35,7 @@ class ThrowingIce : public MoguStone {
 public:
     ThrowingIce(const char*);
 
-    virtual void init(const JMapInfoIter&);
+    virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual void doBehavior();
