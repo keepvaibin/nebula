@@ -169,8 +169,8 @@ if(NOT WIN32)
         set_source_files_properties(${rt}/mod_hook_posix.cpp PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_LIST_DIR}/../../runtime/include/galaxy/hde_shim")
     endif()
 endif()
-# Mod import (archives) on the desktop systems; Android and iOS take no mods.
-if(NOT ANDROID AND NOT IOS)
+# Mod import (folders and archives).
+if(NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
     include("${nebula_root}/cmake/archive_deps.cmake")
     target_sources(galaxy_render_vk PRIVATE ${rt}/mod_import.cpp)
@@ -222,4 +222,20 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
+
+# The launcher's mod import on Android (libnebula_mods.so): the game's own importer, in the launcher's process.
+if(ANDROID)
+    add_library(nebula_mods SHARED
+        "${CMAKE_CURRENT_SOURCE_DIR}/mod_import_jni.cpp"
+        ${rt}/mod_import.cpp
+        ${rt}/mods.cpp
+        ${rt}/mod_xml.cpp
+        ${rt}/luma.cpp
+        ${rt}/texture_categories.cpp
+        ${rt}/disc_files.cpp
+        ${rt}/atomic_file.cpp)
+    target_include_directories(nebula_mods PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")
+    target_link_libraries(nebula_mods PRIVATE nebula_archive log)
+    target_link_options(nebula_mods PRIVATE "-Wl,--gc-sections")
+endif()
 

@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -91,6 +92,10 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
         if (uri != null) model.choose(uri)
     }
     val choose = { pick.launch(arrayOf("*/*")) }
+    val pickMod = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) model.importMod(uri)
+    }
+    val chooseMod = { pickMod.launch(arrayOf("*/*")) }
     BackHandler(enabled = model.screen in setOf(Screen.Disc, Screen.Settings, Screen.About, Screen.Licenses)) {
         model.back()
     }
@@ -107,11 +112,31 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 Screen.Disc -> DiscScreen(model, onChoose = choose)
                 Screen.Import -> ImportScreen(model, onPlay = { model.importDone(context) })
                 Screen.Home -> HomeScreen(model, onPlay = { model.launchGame(context) })
-                Screen.Settings -> SettingsScreen(model, onChoose = choose, onShareLog = onShareLog)
+                Screen.Settings -> SettingsScreen(model, onChoose = choose, onChooseMod = chooseMod, onShareLog = onShareLog)
                 Screen.About -> AboutScreen(model)
                 Screen.Licenses -> LicenseScreen(model)
             }
         }
+    }
+    model.modResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { model.modResult = null },
+            icon = {
+                if (result.ok) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Night.Lavender)
+                else Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Night.Error)
+            },
+            title = { Text(if (result.ok) "${result.name} is ready" else "That file could not be imported") },
+            text = {
+                Text(
+                    if (result.ok) "Turn it on under Mods in the game's settings." +
+                        (if (result.message.contains(", BUT ")) "
+
+${result.message}" else "")
+                    else result.message,
+                )
+            },
+            confirmButton = { TextButton(onClick = { model.modResult = null }) { Text("OK") } },
+        )
     }
     model.gameExit?.let { exit ->
         AlertDialog(
@@ -420,7 +445,7 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
 }.distinct()
 
 @Composable
-private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLog: () -> Unit) {
+private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onChooseMod: () -> Unit, onShareLog: () -> Unit) {
     var confirmRemove by remember { mutableStateOf(false) }
     val controls = model.controls
     Column(Modifier.fillMaxSize()) {
@@ -447,14 +472,19 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
 
                 SectionTitle("Mods")
                 GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp)) {
-                    val pickMod = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-                        if (uri != null) model.importMod(uri)
-                    }
+                    val progress = model.modProgress
                     NavigationRow(
                         Icons.Rounded.Add,
                         "Import a mod or texture pack",
-                        model.modMessage ?: "A .zip file. Turn it on under Mods in the game's settings",
-                    ) { pickMod.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*")) }
+                        if (progress != null) "Importing... ${(progress * 100).roundToInt()}%"
+                        else "A .luma, .zip, .7z or .rar file. Turn it on under Mods in the game's settings",
+                    ) { if (progress == null) onChooseMod() }
+                    if (progress != null) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 14.dp),
+                        )
+                    }
                 }
 
                 SectionTitle("Help")

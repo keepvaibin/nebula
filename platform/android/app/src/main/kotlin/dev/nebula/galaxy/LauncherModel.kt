@@ -71,16 +71,26 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var recordNextRun by mutableStateOf(GameFiles.controls(application).getBoolean(GameFiles.RECORD_NEXT_RUN, false))
         private set
 
-    var modMessage by mutableStateOf<String?>(null)
+    /** The mod import under way (its share done, 0 to 1), or null. */
+    var modProgress by mutableStateOf<Float?>(null)
         private set
+
+    /** How the last mod import ended, shown until the player closes it. */
+    var modResult by mutableStateOf<ModImportResult?>(null)
 
     /** A mod or texture pack from a file the player picked, in the background; the game shows it under Mods. */
     fun importMod(uri: Uri) {
-        modMessage = "Importing..."
+        if (modProgress != null) return
+        modProgress = 0f
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
-            val message = runCatching { "${ModImport.import(app, uri)} is ready: turn it on under Mods in the game's settings" }
-                .getOrElse { it.message ?: "That file could not be imported" }
-            android.os.Handler(android.os.Looper.getMainLooper()).post { modMessage = message }
+            val result = runCatching {
+                ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
+            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: "That file could not be read") }
+            main.post {
+                modProgress = null
+                modResult = result
+            }
         }.start()
     }
 
