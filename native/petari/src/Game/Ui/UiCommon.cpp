@@ -4,29 +4,38 @@
 #include <cstdio>
 #include <string.h>
 
-// A pane's quad: position, colour, as many coordinates as its material reads.
+// A pane's quad: position, colour, its matrix number (0: the quad's own; the renderer numbers merged neighbours'
+// from the first one's), as many coordinates as its material reads.
 template < u32 N >
 struct LayoutQuadVertex {
     f32 x, y, z;
     Rgba8 color;
+    u32 matrix;
     f32 uv[N + (N == 0 ? 1 : 0)][2];
 };
 
+namespace {
+    constexpr u32 cQuadMatrixAt = 16;
+}  // namespace
+
 template < u32 N >
 struct VertexLayout< LayoutQuadVertex< N > > {
-    static constexpr u32 count = 1 + N;
+    static constexpr u32 count = 2 + N;
     static constexpr u16 cStride = sizeof(LayoutQuadVertex< N >);
+    static_assert(offsetof(LayoutQuadVertex< N >, matrix) == cQuadMatrixAt, "NEBULA_INPUT_MATRIX's place");
+    static_assert(cStride % 4 == 0, "four vertices fill whole 16-byte ring rooms: neighbouring quads sit whole vertices apart");
     static const NebulaLayoutInput* inputs() {
-        static constexpr NebulaLayoutInput list[9] = {
+        static constexpr NebulaLayoutInput list[10] = {
+            {NEBULA_INPUT_MATRIX, 0, 3, 0, cQuadMatrixAt, cStride},
             {NEBULA_INPUT_COLOR0, 0, 2, 0, 12, cStride},
-            {NEBULA_INPUT_COORD0, 0, 1, 0, 16, cStride},
-            {NEBULA_INPUT_COORD0 + 1, 0, 1, 0, 24, cStride},
-            {NEBULA_INPUT_COORD0 + 2, 0, 1, 0, 32, cStride},
-            {NEBULA_INPUT_COORD0 + 3, 0, 1, 0, 40, cStride},
-            {NEBULA_INPUT_COORD0 + 4, 0, 1, 0, 48, cStride},
-            {NEBULA_INPUT_COORD0 + 5, 0, 1, 0, 56, cStride},
-            {NEBULA_INPUT_COORD0 + 6, 0, 1, 0, 64, cStride},
-            {NEBULA_INPUT_COORD0 + 7, 0, 1, 0, 72, cStride},
+            {NEBULA_INPUT_COORD0, 0, 1, 0, 20, cStride},
+            {NEBULA_INPUT_COORD0 + 1, 0, 1, 0, 28, cStride},
+            {NEBULA_INPUT_COORD0 + 2, 0, 1, 0, 36, cStride},
+            {NEBULA_INPUT_COORD0 + 3, 0, 1, 0, 44, cStride},
+            {NEBULA_INPUT_COORD0 + 4, 0, 1, 0, 52, cStride},
+            {NEBULA_INPUT_COORD0 + 5, 0, 1, 0, 60, cStride},
+            {NEBULA_INPUT_COORD0 + 6, 0, 1, 0, 68, cStride},
+            {NEBULA_INPUT_COORD0 + 7, 0, 1, 0, 76, cStride},
         };
         return list;
     }
@@ -55,6 +64,7 @@ namespace {
             rOut.y = rBase.y + ((corner & 2) != 0 ? rSize.height : 0.0f);
             rOut.z = 0.0f;
             rOut.color = pColors != nullptr ? Rgba8(pColors[corner]) : Rgba8(0, 0, 0, 0);
+            rOut.matrix = 0;
             for (u32 c = 0; c < N; c++) {
                 rOut.uv[c][0] = pCoords[c][corner].x;
                 rOut.uv[c][1] = pCoords[c][corner].y;

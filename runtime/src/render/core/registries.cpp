@@ -142,6 +142,17 @@ std::uint32_t Registries::take_mesh_ids(std::uint32_t count) {
 
 namespace {
 
+PipelineEntry entry_of(const NebulaPipelineDesc& desc) {
+    PipelineEntry entry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)};
+    for (std::uint32_t i = 0; i < desc.input_count && i < NEBULA_LAYOUT_MAX_INPUTS; ++i) {
+        const NebulaLayoutInput& input = desc.inputs[i];
+        if (input.semantic == NEBULA_INPUT_MATRIX && input.stream == 0u && input.format == 3u) {
+            entry.matrix_at = input.offset;
+        }
+    }
+    return entry;
+}
+
 // What a model's file says, with no device involved.
 void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes) {
     const auto& header = *static_cast<const NebulaModelHeader*>(file);
@@ -377,7 +388,7 @@ void Registries::restart(gpu::Device* device) {
         place_slot(reinterpret_cast<const float (*)[4]>(record->cpu.get()), record->vertex_rows, record->pixel_rows);
     }
     for (const NebulaPipelineDesc& desc : all_pipelines_) {
-        incoming_.pipelines.push_back(PipelineEntry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)});
+        incoming_.pipelines.push_back(entry_of(desc));
     }
     std::vector<const TableKey*> keys(next_table_, nullptr);
     for (const auto& [hash, bucket] : table_by_hash_) {
@@ -437,7 +448,7 @@ std::uint32_t Registries::pipeline_register(const NebulaPipelineDesc& desc) {
     }
     const std::uint32_t id = static_cast<std::uint32_t>(all_pipelines_.size());
     all_pipelines_.push_back(desc);
-    incoming_.pipelines.push_back(PipelineEntry{desc, program_reads_world(desc.vertex), program_lit(desc.pixel)});
+    incoming_.pipelines.push_back(entry_of(desc));
     bucket.push_back(id);
     return id;
 }

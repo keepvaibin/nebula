@@ -283,10 +283,13 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     }
 
     // The frame's vertices for this walk: copied once a walk, positions moved at t where an item's pair has as many.
+    walk_ring_cpu_ = nullptr;
+    walk_index_cpu_ = nullptr;
     if (list.ring_vertex_bytes != 0u) {
         const UploadRing::Allocation vertices = renderer_.vertex_ring().allocate(list.ring_vertex_bytes, 16u);
         std::memcpy(vertices.cpu, list.ring_vertices, list.ring_vertex_bytes);
         walk_.ring_vertices = vertices.gpu;
+        walk_ring_cpu_ = vertices.cpu;
         if (between && before != nullptr && !now.cut) {
             for (std::uint32_t i = 0; i < list.item_count; ++i) {
                 const NebulaFrameItem& item = list.items[i];
@@ -327,6 +330,7 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         const UploadRing::Allocation indices = renderer_.index_ring().allocate(bytes, 4u);
         std::memcpy(indices.cpu, list.ring_indices, bytes);
         walk_.ring_indices = indices.gpu;
+        walk_index_cpu_ = reinterpret_cast<std::uint32_t*>(indices.cpu);
     }
 
     // Views: their terms at t, and where the projection was on the frame before.
@@ -357,6 +361,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_views_.assign(list.view_count, WalkView{});
     walk_constants_.assign(list.constants_count, core::StaticSlot{});
     walk_constants_known_.assign(list.constants_count, 0u);
+    walk_material_at_.assign(list.constants_count, NEBULA_NONE32);
+    walk_lerped_.clear();
     ++walk_view_stamp_;
     walk_rows_cpu_ = rows;
 }
@@ -456,46 +462,138 @@ const core::StaticSlot& RenderCore::walk_material(std::uint32_t index) {
     slot.vertex_rows = vertex.gpu;
     slot.pixel_rows = pixel.gpu;
 
-    const NebulaFrameConstants* other = nullptr;
-    if (walk_.between && !walk_.now->constants_before.empty() && walk_.now->constants_before[index] != NEBULA_NONE32) {
-        const NebulaFrameConstants& candidate = walk_.before->list->constants[walk_.now->constants_before[index]];
-        if (candidate.slot == NEBULA_NONE32 && candidate.vertex_rows == constants.vertex_rows &&
-            candidate.pixel_rows == constants.pixel_rows && candidate.coord_row_count == constants.coord_row_count &&
-            (constants.coord_row_count == 0u || std::memcmp(candidate.coord_rows, constants.coord_rows,
-                constants.coord_row_count * sizeof(constants.coord_rows[0])) == 0) && !walk_.now->cut) {
-            other = &candidate;
-        }
-    }
-    if (other == nullptr) {
-        std::memcpy(vertex.cpu, constants.rows, vertex_bytes);
-        std::memcpy(pixel.cpu, constants.rows + constants.vertex_rows, pixel_bytes);
-        return slot;
-    }
-    const float t = walk_.time.t;
-    const std::size_t count = std::size_t{constants.vertex_rows} + constants.pixel_rows;
-    walk_lerped_.resize(count * 4u);
-    const float* a = &other->rows[0][0];
-    const float* b = &constants.rows[0][0];
-    for (std::size_t i = 0; i < count * 4u; ++i) {
-        walk_lerped_[i] = std::isfinite(a[i]) && std::isfinite(b[i]) ? a[i] + (b[i] - a[i]) * t : b[i];
-    }
-    // Coordinate matrices move as matrices: scrolling unwraps, and a step shows the new cell.
-    for (std::uint32_t i = 0; i < constants.coord_row_count; ++i) {
-        const auto row = constants.coord_rows[i];
-        if (row + 3u > count) {
-            continue;
-        }
-        const float* ma = &other->rows[row][0];
-        const float* mb = &constants.rows[row][0];
-        bool spatial = false;
-        for (unsigned component = 0; component < 12u; ++component) {
-            spatial = spatial || ((component & 3u) != 3u && ma[component] != mb[component]);
-        }
-        tex_matrix_at(ma, mb, spatial, t, walk_lerped_.data() + row * 4u);
-    }
-    std::memcpy(vertex.cpu, walk_lerped_.data(), vertex_bytes);
-    std::memcpy(pixel.cpu, walk_lerped_.data() + std::size_t{constants.vertex_rows} * 4u, pixel_bytes);
+    const float* rows = walk_material_rows(index);
+    std::memcpy(vertex.cpu, rows, vertex_bytes);
+    std::memcpy(pixel.cpu, rows + std::size_t{constants.vertex_rows} * 4u, pixel_bytes);
     return slot;
+}
+
+// The list's own rows, or at t: once a walk, kept in walk_lerped_ for walk_same_material.
+const float* RenderCore::walk_material_rows(std::uint32_t index) {
+    constexpr std::uint32_t kAsListed = NEBULA_NONE32 - 1u;
+    const NebulaFrameConstants& constants = walk_.now->list->constants[index];
+    std::uint32_t& at = walk_material_at_[index];
+    if (at == NEBULA_NONE32) {
+        at = kAsListed;
+        const NebulaFrameConstants* other = nullptr;
+        if (walk_.between && !walk_.now->constants_before.empty() && walk_.now->constants_before[index] != NEBULA_NONE32) {
+            const NebulaFrameConstants& candidate = walk_.before->list->constants[walk_.now->constants_before[index]];
+            if (candidate.slot == NEBULA_NONE32 && candidate.vertex_rows == constants.vertex_rows &&
+                candidate.pixel_rows == constants.pixel_rows && candidate.coord_row_count == constants.coord_row_count &&
+                (constants.coord_row_count == 0u || std::memcmp(candidate.coord_rows, constants.coord_rows,
+                    constants.coord_row_count * sizeof(constants.coord_rows[0])) == 0) && !walk_.now->cut) {
+                other = &candidate;
+            }
+        }
+        const std::size_t count = std::size_t{constants.vertex_rows} + constants.pixel_rows;
+        if (other != nullptr && count != 0u) {
+            const float t = walk_.time.t;
+            const std::size_t first = walk_lerped_.size();
+            walk_lerped_.resize(first + count * 4u);
+            float* out = walk_lerped_.data() + first;
+            const float* a = &other->rows[0][0];
+            const float* b = &constants.rows[0][0];
+            for (std::size_t i = 0; i < count * 4u; ++i) {
+                out[i] = std::isfinite(a[i]) && std::isfinite(b[i]) ? a[i] + (b[i] - a[i]) * t : b[i];
+            }
+            // Coordinate matrices move as matrices: scrolling unwraps, and a step shows the new cell.
+            for (std::uint32_t i = 0; i < constants.coord_row_count; ++i) {
+                const auto row = constants.coord_rows[i];
+                if (row + 3u > count) {
+                    continue;
+                }
+                const float* ma = &other->rows[row][0];
+                const float* mb = &constants.rows[row][0];
+                bool spatial = false;
+                for (unsigned component = 0; component < 12u; ++component) {
+                    spatial = spatial || ((component & 3u) != 3u && ma[component] != mb[component]);
+                }
+                tex_matrix_at(ma, mb, spatial, t, out + row * 4u);
+            }
+            at = static_cast<std::uint32_t>(first);
+        }
+    }
+    return at == kAsListed ? reinterpret_cast<const float*>(constants.rows) : walk_lerped_.data() + at;
+}
+
+bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
+    const NebulaFrameList& list = *walk_.now->list;
+    if (same_material(list, a, b)) {
+        return true;
+    }
+    const NebulaFrameConstants& ca = list.constants[a];
+    const NebulaFrameConstants& cb = list.constants[b];
+    if (ca.slot != NEBULA_NONE32 || cb.slot != NEBULA_NONE32 || ca.vertex_rows != cb.vertex_rows || ca.pixel_rows != cb.pixel_rows) {
+        return false;
+    }
+    const std::size_t bytes = (std::size_t{ca.vertex_rows} + ca.pixel_rows) * 16u;
+    if (bytes == 0u) {
+        return true;
+    }
+    (void)walk_material_rows(a);
+    const float* rb = walk_material_rows(b);
+    return std::memcmp(walk_material_rows(a), rb, bytes) == 0;  // a's again: b's may have grown walk_lerped_
+}
+
+// Ring draws after `first` join its draw while they differ from it only in their rows, vertices and indices. Each
+// joining draw's vertices name their rows by matrix number from the first draw's rows (the rows lie in block order, six
+// a matrix), and its indices count from the first draw's vertices. The patches go into this walk's copies of the ring,
+// which each draw pass reads once per walk.
+std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at, std::uint32_t& index_count) {
+    const NebulaFrameList& list = *walk_.now->list;
+    const NebulaFrameItem& head = list.items[first];
+    const std::uint32_t stride = head.mesh;
+    index_count = head.count;
+    if (walk_ring_cpu_ == nullptr || walk_index_cpu_ == nullptr || stride == 0u) {
+        return 1u;
+    }
+    const auto rows_of = [&](const NebulaFrameItem& item) {
+        return std::int64_t{walk_block_rows_[item.block]} + std::int64_t{item.matrix} * kRowsPerMatrix;
+    };
+    const auto world_of = [&](const NebulaFrameItem& item) {
+        return std::int64_t{walk_block_world_[item.block]} + std::int64_t{item.matrix} * kRowsPerMatrix;
+    };
+    const std::int64_t head_rows = rows_of(head), head_world = world_of(head);
+    std::uint32_t count = 1u;
+    while (first + count < end) {
+        const NebulaFrameItem& next = list.items[first + count];
+        if (next.flags != head.flags || next.pipeline != head.pipeline || next.textures != head.textures || next.view != head.view ||
+            next.light_set != head.light_set || next.mesh != stride || next.line_width != head.line_width ||
+            next.point_size != head.point_size || next.first != head.first + index_count || next.ring_at < head.ring_at ||
+            (next.ring_at - head.ring_at) % stride != 0u) {
+            break;
+        }
+        const std::int64_t rows = rows_of(next) - head_rows;
+        // A wide draw's second position (stride - 16) is moved at t in the same copy: its matrix field stays as listed.
+        if (rows < 0 || rows % kRowsPerMatrix != 0 || world_of(next) - head_world != rows ||
+            (rows != 0 && (matrix_at == NEBULA_NONE32 || (head.flags & NEBULA_ITEM_WIDE) != 0u))) {
+            break;
+        }
+        if (!walk_same_material(next.constants, head.constants)) {
+            break;
+        }
+        index_count += next.count;
+        ++count;
+    }
+    const auto* vertices = static_cast<const std::byte*>(list.ring_vertices);
+    for (std::uint32_t k = 1u; k < count; ++k) {
+        const NebulaFrameItem& item = list.items[first + k];
+        const auto add_matrix = static_cast<std::uint32_t>((rows_of(item) - head_rows) / kRowsPerMatrix);
+        if (add_matrix != 0u) {
+            for (std::uint32_t v = 0; v < item.ring_count; ++v) {
+                const std::size_t at = std::size_t{item.ring_at} + std::size_t{v} * stride + matrix_at;
+                std::uint32_t matrix;
+                std::memcpy(&matrix, vertices + at, sizeof(matrix));
+                matrix += add_matrix;
+                std::memcpy(walk_ring_cpu_ + at, &matrix, sizeof(matrix));
+            }
+        }
+        const std::uint32_t add_vertex = (item.ring_at - head.ring_at) / stride;
+        for (std::uint32_t n = 0; n < item.count; ++n) {
+            walk_index_cpu_[item.first + n] = list.ring_indices[item.first + n] + add_vertex;
+        }
+    }
+    return count;
 }
 
 void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
@@ -658,7 +756,7 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         if (mesh != nullptr) {
             while (i + instances < end) {
                 const NebulaFrameItem& next = list.items[i + instances];
-                if (next.mesh != item.mesh || next.pipeline != item.pipeline || !same_material(list, next.constants, item.constants) ||
+                if (next.mesh != item.mesh || next.pipeline != item.pipeline || !walk_same_material(next.constants, item.constants) ||
                     next.textures != item.textures || next.view != item.view || next.flags != item.flags ||
                     next.line_width != item.line_width || next.point_size != item.point_size) {
                     break;
@@ -673,6 +771,11 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
                 }
                 ++instances;
             }
+        }
+        // Consecutive ring draws of one material are one draw.
+        std::uint32_t ring_index_count = item.count;
+        if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && aux != 1u) {
+            instances = merge_ring_run(i, end, entry.matrix_at, ring_index_count);
         }
         NEBULA_INSPECT_ITEM(*this, i, instances, pass, aux, pipeline, entry);
 
@@ -717,7 +820,7 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
             encoder.set_stream(gpu::kStreamZero, {renderer_.zero_stream(16u), 16u, 0u});
             if ((item.flags & NEBULA_ITEM_INDEXED) != 0u) {
                 encoder.set_indices(walk_.ring_indices, list.ring_index_count * 4u, 4u);
-                encoder.draw_indexed(item.count, 1u, item.first, 0);
+                encoder.draw_indexed(ring_index_count, 1u, item.first, 0);
             } else {
                 encoder.draw(item.count, 1u, item.first);
             }
