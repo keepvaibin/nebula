@@ -243,6 +243,7 @@ namespace {
         f32 mLabelWidth;
         f32 mValueWidth;
         bool mIndented;
+        s32 mOnPlace;  // the number drawn before its label (a mod on), 0 for none
         // A row of buttons: their words in the played language, those unavailable (a bit each), and where each was
         // drawn (its centre and width).
         s32 mButtonCount;
@@ -1338,14 +1339,17 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         const bool modOn = i < static_cast< s32 >(rView.row_count) && modList(rView.rows[i]) == 1 &&
                            (rView.rows[i].flags & NEBULA_SETTINGS_ROW_HEADING) == 0;
         onPlace += modOn ? 1 : 0;
+        const s32 place = modOn ? onPlace : 0;
         const bool shown = i < static_cast< s32 >(rView.row_count);
         rRow.mRoot->SetVisible(shown);
-        if (!shown || (samePage && i < static_cast< s32 >(pShown->row_count) &&
+        // A row whose data is unchanged keeps its text unless its number moved (a mod above it left the list).
+        if (!shown || (samePage && rRow.mOnPlace == place && i < static_cast< s32 >(pShown->row_count) &&
                        memcmp(&rView.rows[i], &pShown->rows[i], sizeof(NebulaSettingsRow)) == 0)) {
             continue;
         }
         const NebulaSettingsRow& rData = rView.rows[i];
         const bool heading = (rData.flags & NEBULA_SETTINGS_ROW_HEADING) != 0;
+        rRow.mOnPlace = place;
         // A mod's own option ("  NAME") keeps its indent.
         rRow.mIndented = rData.label[0] == ' ' && rData.label[1] == ' ';
         translateLine(text, 128, rRow.mIndented ? rData.label + 2 : rData.label, (rData.flags & NEBULA_SETTINGS_ROW_LABEL_NAME) != 0);
