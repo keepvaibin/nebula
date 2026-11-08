@@ -77,8 +77,9 @@ public final class PadSensors implements InputManager.InputDeviceListener {
     private Handler handler;
     private InputManager input;
 
+    /** `context` is read at start(), not here: an activity's own field is made before the activity has its context. */
     public PadSensors(Context context, Sink sink) {
-        this.context = context.getApplicationContext();
+        this.context = context;
         this.sink = sink;
     }
 
@@ -109,7 +110,7 @@ public final class PadSensors implements InputManager.InputDeviceListener {
         thread = new HandlerThread("pad-sensors", Process.THREAD_PRIORITY_URGENT_DISPLAY);
         thread.start();
         handler = new Handler(thread.getLooper());
-        input = context.getSystemService(InputManager.class);
+        input = context.getApplicationContext().getSystemService(InputManager.class);
         if (input != null) {
             input.registerInputDeviceListener(this, handler);
         }
