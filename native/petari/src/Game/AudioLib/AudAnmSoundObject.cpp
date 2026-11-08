@@ -103,15 +103,9 @@ void AudAnmSoundObject::skip(f32 time) {
 
     f32 speed = time - mLifeTime;
     if (!mIsReversed) {
+        // Past the loop's end: back to its start without sounding the rest.
         if (speed < 0.0f) {
             speed += mLoopEndFrame - mLoopStartFrame;
-            while (mLoopSoundIndex < mLoopEndSoundIndex) {
-                if (mIsReversed) {
-                    mLoopSoundIndex--;
-                } else {
-                    mLoopSoundIndex++;
-                }
-            }
             mLifeTime = time;
             mLoopSoundIndex = mLoopStartSoundIndex;
             if (mTime < 0xFFFF) {
@@ -120,22 +114,11 @@ void AudAnmSoundObject::skip(f32 time) {
         }
         updateSoundLifeTime_(time, speed);
         while (mLoopSoundIndex < mSoundAnimation->getNumSounds() && mSoundAnimation->getSound(mLoopSoundIndex)->isNotingOn(time, false)) {
-            if (mIsReversed) {
-                mLoopSoundIndex--;
-            } else {
-                mLoopSoundIndex++;
-            }
+            mLoopSoundIndex++;
         }
     } else {
         if (speed > 0.0f) {
             speed -= mLoopEndFrame - mLoopStartFrame;
-            while (mLoopSoundIndex >= mLoopStartSoundIndex) {
-                if (mIsReversed) {
-                    mLoopSoundIndex--;
-                } else {
-                    mLoopSoundIndex++;
-                }
-            }
             mLifeTime = time;
             mLoopSoundIndex = mLoopEndSoundIndex - 1;
             if (mTime < 0xFFFF) {
@@ -144,11 +127,7 @@ void AudAnmSoundObject::skip(f32 time) {
         }
         updateSoundLifeTime_(time, speed);
         while (mLoopSoundIndex >= 0 && mSoundAnimation->getSound(mLoopSoundIndex)->isNotingOn(time, true)) {
-            if (mIsReversed) {
-                mLoopSoundIndex--;
-            } else {
-                mLoopSoundIndex++;
-            }
+            mLoopSoundIndex--;
         }
     }
 
