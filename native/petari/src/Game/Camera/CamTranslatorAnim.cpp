@@ -3,10 +3,7 @@
 #include "Game/Camera/CameraParamChunk.hpp"
 
 void CamTranslatorAnim::setParam(const CameraParamChunk* pChunk) {
-    CameraAnim* camera = mCamera;
-
-    // mNum1 is used to store the pointer to the data
-    camera->setParam(pChunk->mGeneralParam->mAnimData, pChunk->mGeneralParam->mDist);
+    mCamera->setParam(pChunk->mGeneralParam->mAnimData, pChunk->mGeneralParam->mDist);
 }
 
 Camera* CamTranslatorAnim::CamTranslatorAnim::getCamera() const {

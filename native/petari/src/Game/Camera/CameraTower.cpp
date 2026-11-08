@@ -109,19 +109,8 @@ void CameraTower::arrangeRoundingPose() {
     f32 length, angleX, angleY;
     MR::crossToPolar(CameraLocalUtil::getWatchPos(this), pos, &length, &angleX, &angleY);
 
-    f32 target = mRoundIntervalNum * ::sRoundInterval;
-    if (target > mAngleYSpeed) {
-        mAngleYSpeed += ::sRoundAddition;
-        if (target <= mAngleYSpeed) {
-            mAngleYSpeed = target;
-            mIsRounding = false;
-        }
-    } else {
-        mAngleYSpeed -= ::sRoundAddition;
-        if (target >= mAngleYSpeed) {
-            mAngleYSpeed = target;
-            mIsRounding = false;
-        }
+    if (!CameraLocalUtil::approachRoundAngle(&mAngleYSpeed, mRoundIntervalNum * ::sRoundInterval, ::sRoundAddition)) {
+        mIsRounding = false;
     }
 
     Vec3f newPos;

@@ -7,7 +7,7 @@ CamTranslatorWaterPlanetBoss::CamTranslatorWaterPlanetBoss(CameraWaterPlanetBoss
 void CamTranslatorWaterPlanetBoss::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    mCamera->setParam(general->mAxis.y, general->mAxis.x, general->mDist, general->mNum1 != 0, pChunk->mGeneralParam->mWPoint, general->mAxis.z,
+    mCamera->setParam(general->mAxis.y, general->mAxis.x, general->mDist, general->mNum1 != 0, general->mWPoint, general->mAxis.z,
                       general->mUp.x, general->mUp.y, general->mUp.z);
 }
 

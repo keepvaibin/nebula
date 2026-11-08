@@ -7,31 +7,23 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const f32 sKarikariViewRate = 0.8f;
-    static const s32 sKarikariCounterMax = 30;
-    static const f32 sPlayerRadius = 75.0f;
+    const f32 sKarikariViewRate = 0.8f;
+    const s32 sKarikariCounterMax = 30;
+    const f32 sPlayerRadius = 75.0f;
+
+    // The view angle (radians) whose tangent is 1/0.3 of the player's radius seen from dist.
+    f32 calcFovy(f32 dist) {
+        f32 fovAngle = MR::asin(::sPlayerRadius / dist);
+
+        return MR::atan2((dist * MR::tan(fovAngle)) / 0.3f, dist);
+    }
 };  // namespace
 
 CamKarikariEffector::CamKarikariEffector() : mCounter(0) {
 }
 
-namespace {
-    inline Vec3f calcPlayerFocusPos(const Vec3f& rOffset) {
-        const Vec3f* pOffset = &rOffset;
-
-        return *MR::getPlayerPos() + *pOffset;
-    }
-
-    inline f32 calcFovy(f32 dist) {
-        f32 fovAngle = MR::asin(75.0f / dist);
-
-        return MR::atan2((dist * MR::tan(fovAngle)) / 0.3f, dist);
-    }
-}
-
 void CamKarikariEffector::update(CameraMan* pCameraMan) {
     if (MR::isPlayerDead()) {
-        CameraLocalUtil::setFovy(pCameraMan, CameraLocalUtil::getFovy(pCameraMan));
         return;
     }
 
@@ -67,7 +59,7 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
 
     Vec3f playerUp;
     MR::getPlayerUpVec(&playerUp);
-    Vec3f playerFocusPos = calcPlayerFocusPos(playerUp * ::sPlayerRadius);
+    Vec3f playerFocusPos = *MR::getPlayerPos() + playerUp * ::sPlayerRadius;
 
     Vec3f diffPlayerPos = playerFocusPos - CameraLocalUtil::getPos(pCameraMan);
     Vec3f toPlayerPos(diffPlayerPos);
@@ -78,14 +70,13 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
     rot.setRotate(toWatchPos, toPlayerPos, rotRatio);
     rot.transform(diffWatchPos);
 
-    CameraLocalUtil::setPos(pCameraMan, CameraLocalUtil::getPos(pCameraMan));
     CameraLocalUtil::setWatchPos(pCameraMan, diffWatchPos + CameraLocalUtil::getPos(pCameraMan));
 
     Vec3f camUp(CameraLocalUtil::getUpVec(pCameraMan));
     rot.transform(camUp);
     CameraLocalUtil::setUpVec(pCameraMan, camUp);
 
-    f32 fovy = calcFovy(diffPlayerPos.length());
+    f32 fovy = ::calcFovy(diffPlayerPos.length());
 
     if (fovy < CameraLocalUtil::getFovy(pCameraMan) * MR::pi() / 180.0f) {
         CameraLocalUtil::setFovy(pCameraMan, (fovy * 180.0f * t) / MR::pi() + (1.0f - t) * CameraLocalUtil::getFovy(pCameraMan));

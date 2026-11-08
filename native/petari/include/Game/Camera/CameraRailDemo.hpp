@@ -12,10 +12,12 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(s32, s32, s32, s32, f32);
+    void setParam(s32 zoneID, s32 railID, s32 calcType, s32 demoTime, f32 dampRatio);
     void calcLinear();
     void calcEaseInOut();
     void calcDamp();
+    f32 calcTimeRate() const;
+    void placeOnRail(f32 coord);
 
     RailRider* mRailRider;
     s32 mCalcType;

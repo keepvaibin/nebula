@@ -48,17 +48,14 @@ bool CameraShakeTask::isEnd() const {
 
 void CameraShakeTask::startCommon(u32 delay) {
     mDelay = delay;
-    CameraShakePattern* pattern = mPattern;
     mHasEnded = false;
-    pattern->mFrame = 0;
-    pattern->start();
+    mPattern->mFrame = 0;
+    mPattern->start();
 }
 
 void CameraShakeTask::updatePattern() {
-    CameraShakePattern* pattern = mPattern;
-
-    pattern->mFrame++;
-    pattern->update();
+    mPattern->mFrame++;
+    mPattern->update();
 
     if (mPattern->isEnd()) {
         if (!mIsInfinite) {
@@ -75,10 +72,8 @@ void CameraShakeTask::updateInterval() {
             return;
         }
 
-        CameraShakePattern* pattern = mPattern;
-
-        pattern->mFrame = 0;
-        pattern->start();
+        mPattern->mFrame = 0;
+        mPattern->start();
     } else {
         mHasEnded = true;
     }

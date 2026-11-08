@@ -12,9 +12,9 @@ public:
     virtual CameraTargetObj* calc();
     virtual CamTranslatorBase* createTranslator();
 
-    void setParam(s32, s32, f32, f32, f32, s32);
+    void setParam(s32 zoneID, s32 railID, f32 stopMargin, f32 railSpeedMax, f32 accel, s32 marginScale);
 
-    f32 getStopLength() {
+    f32 getStopLength() const {
         return mRailSpeed * mRailSpeed / (mRailAccel * 2.0f);
     }
 

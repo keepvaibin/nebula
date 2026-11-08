@@ -5,13 +5,13 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const f32 sRate = 0.5f;
-    static const f32 sAngleX = 0.12f;
-    static const f32 sAngleY = 0.7f;
+    const f32 sRate = 0.5f;
+    const f32 sAngleX = 0.12f;
+    const f32 sAngleY = 0.7f;
 };  // namespace
 
 CameraTalk::CameraTalk(const char* pName)
-    : Camera(pName), mPos(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mHeight(120.0f), mDist(450.0f), mAxisReversed() {
+    : Camera(pName), mPos(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mHeight(120.0f), mDist(450.0f) {
 }
 
 void CameraTalk::reset() {
@@ -45,11 +45,6 @@ CameraTargetObj* CameraTalk::calc() {
 
     Vec3f orientCross = posDiff.cross(front);
     f32 orientation = orientCross.dot(up);
-    if (orientation >= 0.0f) {
-        mAxisReversed = true;
-    } else {
-        mAxisReversed = false;
-    }
 
     Pos3f transMtx;
     transMtx.makeTrans(0.0f, 0.0f, mDist);

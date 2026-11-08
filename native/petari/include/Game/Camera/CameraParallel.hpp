@@ -30,5 +30,4 @@ public:
     bool mIsRounding;
     f32 mRoundTarget;
     f32 mRoundAngle;
-    f32 mRoundAddition;
 };

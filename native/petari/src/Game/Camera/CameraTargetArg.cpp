@@ -4,44 +4,20 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Player/MarioActor.hpp"
 
-CameraTargetArg::CameraTargetArg(const LiveActor* pLiveActor) {
-    mLiveActor = pLiveActor;
-    mTargetObj = nullptr;
-    mTargetMtx = nullptr;
-    mMarioActor = nullptr;
+CameraTargetArg::CameraTargetArg(const LiveActor* pLiveActor)
+    : mTargetObj(nullptr), mTargetMtx(nullptr), mLiveActor(pLiveActor), mMarioActor(nullptr) {
 }
 
+// The first set of: target object, target matrix, actor, player.
 void CameraTargetArg::setTarget() const {
-    CameraTargetObj* obj = mTargetObj;
-
-    if (obj != nullptr) {
-        CameraDirector* director = MR::getCameraDirector();
-        director->setTarget(obj);
-        return;
-    }
-
-    CameraTargetMtx* mtx = mTargetMtx;
-
-    if (mtx != nullptr) {
-        mtx->invalidateLastMove();
-
-        CameraDirector* director = MR::getCameraDirector();
-        director->setTarget(mTargetMtx);
-        return;
-    }
-
-    const LiveActor* liveActor = mLiveActor;
-
-    if (liveActor != nullptr) {
-        CameraDirector* director = MR::getCameraDirector();
-        director->setTargetActor(liveActor);
-        return;
-    }
-
-    MarioActor* marioActor = mMarioActor;
-
-    if (marioActor != nullptr) {
-        CameraDirector* director = MR::getCameraDirector();
-        director->setTargetPlayer(marioActor);
+    if (mTargetObj != nullptr) {
+        MR::getCameraDirector()->setTarget(mTargetObj);
+    } else if (mTargetMtx != nullptr) {
+        mTargetMtx->invalidateLastMove();
+        MR::getCameraDirector()->setTarget(mTargetMtx);
+    } else if (mLiveActor != nullptr) {
+        MR::getCameraDirector()->setTargetActor(mLiveActor);
+    } else if (mMarioActor != nullptr) {
+        MR::getCameraDirector()->setTargetPlayer(mMarioActor);
     }
 }

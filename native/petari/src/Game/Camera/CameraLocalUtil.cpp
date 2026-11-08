@@ -211,6 +211,17 @@ namespace CameraLocalUtil {
         MR::normalize(pUp);
     }
 
+    Vec3f getNormalizedOr(const Vec3f& rVec, const Vec3f& rDefault) {
+        Vec3f vec = rVec;
+        if (MR::isNearZero(vec)) {
+            vec.set(rDefault);
+        } else {
+            MR::normalize(&vec);
+        }
+
+        return vec;
+    }
+
     void makeWatchOffset(Vec3f* pDst, Camera* pCamera, CameraTargetObj* pTarget, f32 scale) {
         f32 offset;
         if (pCamera->mIsLOfsErpOff || pCamera->mCameraMan->mRequestLOfsReset) {
@@ -352,6 +363,70 @@ namespace CameraLocalUtil {
         pMtx->setZDir(front);
         pMtx->setTrans(rWatchPos);
         return true;
+    }
+
+    void makeGroundWatchPoint(Vec3f* pDst, Camera* pCamera, Vec3f* pLastWatchPoint, bool* pIsFirstFrame) {
+        CameraTargetObj* pTarget = getTarget(pCamera);
+        Vec3f watchPoint;
+        makeWatchPoint(&watchPoint, pCamera, pTarget, 0.1f / 15.0f);
+
+        watchPoint = watchPoint - pTarget->getPosition() + pTarget->getGroundPos();
+
+        if (*pIsFirstFrame) {
+            *pIsFirstFrame = false;
+        } else {
+            Vec3f prevDir = *pLastWatchPoint - pTarget->getPosition();
+            f32 prevUp = pTarget->getUpVec().dot(prevDir);
+
+            Vec3f watchDir = watchPoint - pTarget->getPosition();
+            f32 newUp = pTarget->getUpVec().dot(watchDir);
+
+            f32 length = newUp * 0.05f + prevUp * 0.95f;
+
+            watchPoint.set(pTarget->getPosition() + pTarget->getUpVec() * length);
+        }
+
+        pLastWatchPoint->set(watchPoint);
+        pDst->set(watchPoint);
+    }
+
+    bool approachRoundAngle(f32* pAngle, f32 target, f32 step) {
+        if (target > *pAngle) {
+            *pAngle += step;
+            if (*pAngle >= target) {
+                *pAngle = target;
+                return false;
+            }
+        } else {
+            *pAngle -= step;
+            if (*pAngle <= target) {
+                *pAngle = target;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    f32 calcRoundTarget(f32* pAngle, bool isRight, f32 roundDiv) {
+        f32 roundInterval = MR::toRadian(360.0f / roundDiv);
+        s32 divNum = (*pAngle < 0.0f ? -1 : 1) * (s32)(((roundInterval / 2) + MR::abs(*pAngle)) / roundInterval);
+
+        if (isRight) {
+            divNum += 1;
+            if (divNum > roundDiv / 2) {
+                divNum -= roundDiv;
+                *pAngle -= MR::pi() * 2.0f;
+            }
+        } else {
+            divNum -= 1;
+            if (divNum < -roundDiv / 2) {
+                divNum += roundDiv;
+                *pAngle += MR::pi() * 2.0f;
+            }
+        }
+
+        return divNum * roundInterval;
     }
 
     bool calcTowerIdealPos(Vec3f* pPos, Vec3f* pAxis, const Vec3f& rWPoint, const Vec3f& rWatchPos, f32 angleX, f32 dist) {
