@@ -21,12 +21,17 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void setTrackFire(DinoPackunTrackFireHolder*);
-    void setFireBall(DinoPackunFireHolder*);
+    void setTrackFire(DinoPackunTrackFireHolder* pHolder);
+    void setFireBall(DinoPackunFireHolder* pHolder);
     void setMiddleBattle();
     void setLastBattle();
+    void setBattleLevel(s32 level);
+    bool isMovingNerve() const;
+    f32 calcWiggleSign(s32 period) const;
     bool tryAwake();
-    void updateOnOffFireTail(s32, s32, s32);
+    void startChaseAction();
+    void updateChaseMouthFire();
+    void updateOnOffFireTail(s32 period, s32 coolSteps, s32 signSteps);
     bool emitFireMouth();
     bool emitFireTail();
 
@@ -50,10 +55,10 @@ public:
     DinoPackunStateFire* mStateFire;
     Vec3f mLastFireTailPos;
     s32 mWalkTurnSide;
-    u8 mHasFireTail;
-    u8 mHasFireMouth;
-    u8 mIsShortWalk;
-    u8 mIsAngry;
-    u8 mIsFireOnAwake;
-    u8 mIsCrazyOnAwake;
+    bool mHasFireTail;
+    bool mHasFireMouth;
+    bool mIsShortWalk;
+    bool mIsAngry;
+    bool mIsFireOnAwake;
+    bool mIsCrazyOnAwake;
 };
