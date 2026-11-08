@@ -18,7 +18,7 @@ public:
     void update();
     void end();
     bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    s32 calcFireAttackStep(KoopaBattleMapStair*, f32, s32, const Vec3f&) const;
+    s32 calcFireAttackStep(KoopaBattleMapStair* pBattleMapStair, f32 fireSpeed, s32 emitStep, const Vec3f& rFireStartPos) const;
 
     Koopa* mKoopa;
     LiveActorGroup* mStairsGroup;

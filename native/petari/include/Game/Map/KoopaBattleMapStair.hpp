@@ -35,9 +35,12 @@ public:
 
     s32 mTimeToBreak;  // Obj_arg0
     s32 mFireAttackStep;
-    s32 mArg1;   // Obj_arg1
-    s32 mArg5;   // Obj_arg5
-    bool mArg6;  // Obj_arg6
+    // Obj_arg1: the landing Koopa fires at this stair from.
+    s32 mLevel;
+    // Obj_arg5: the edge point (offset table index) fire aims at; -1 aims at the nearest.
+    s32 mTargetCorner;
+    // Obj_arg6: Koopa jumps on once this stair's attack is answered.
+    bool mIsJumpAfterAttack;
     s32 mType;   // Obj_arg2
     bool mIsBig;
     bool mIsTurn;

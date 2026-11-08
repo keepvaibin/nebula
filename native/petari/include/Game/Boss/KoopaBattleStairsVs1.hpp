@@ -6,9 +6,11 @@ class KoopaFireStairs;
 
 class KoopaBattleStairsVs1 : public KoopaBattleStairsBase {
 public:
+    // Koopa stands on one of three landings; a stair's level (Obj_arg1) names the landing it is fired from.
+    static const s32 cLandingNum = 3;
+
     KoopaBattleStairsVs1(Koopa* pKoopa);
 
-    virtual ~KoopaBattleStairsVs1();
     virtual s32 registerStair(KoopaBattleMapStair* pStair);
 
     void exeWaitDemo();
@@ -21,21 +23,21 @@ public:
 
     bool tryAttackRequest();
     bool tryRequestedToMoveNextPos();
+    bool isAttackedAllStairs() const;
 
     KoopaBattleMapStair* mFarBattleMapStair;
     KoopaBattleMapStair* mNearBattleMapStair;
     KoopaFireStairs* mFarFireStairs;
     KoopaFireStairs* mNearFireStairs;
+    // The stair whose fire is still to be emitted this attack.
     KoopaBattleMapStair* mFireStair;
-    bool mCanJump;
-    Vec3f mJumpPos0;
-    Vec3f mJumpPos1;
-    Vec3f mJumpPos2;
-    s32 mStairNum0;
-    s32 mStairNum1;
-    s32 mStairNum2;
-    s32 mAvailableStairs;
-    s32 mJumpIdx;
+    bool mIsJumpRequested;
+    Vec3f mFireStartPos[cLandingNum];
+    s32 mStairNum[cLandingNum];
+    // Attack requests answered so far, over every landing.
+    s32 mAttackCount;
+    // The landing Koopa is on; from cLandingNum on, the demo centre.
+    s32 mLandingIndex;
     Vec3f mOldPosition;
     Vec3f mNewPosition;
     Vec3f mNewDirection;

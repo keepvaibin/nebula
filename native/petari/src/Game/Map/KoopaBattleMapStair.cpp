@@ -10,27 +10,31 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-struct OffsetPair {
-    f32 x;
-    f32 z;
-};
-
 namespace {
-    static const s32 sDefaultTimeToBreak = 300;
-    static const f32 sNormalHalfWidthX = 200.0f;
-    static const f32 sNormalHalfWidthZ = 300.0f;
-    static const f32 sHalfHeight = 100.0f;
-    static const f32 sBigHalfWidthX = 600.0f;
-    static const f32 sBigHalfWidthZ = 400.0f;
-    static const f32 sTurnHalfWidthX = 140.0f;
-    static const f32 sTurnHalfWidthZ = 300.0f;
-    static const s32 sDefaultStepWaitFall = 60;
-    static const s32 sDefaultStepFall = 240;
-    static const f32 sFallGravity = 0.03f;
-    static const f32 sFallSpeedMax = 1.5f;
-    static const OffsetPair offset_table[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
-                                              {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
-};  // namespace
+    struct EdgeOffset {
+        f32 x;
+        f32 z;
+    };
+
+    const s32 cDefaultTimeToBreak = 300;
+    const f32 cNormalHalfWidthX = 200.0f;
+    const f32 cNormalHalfWidthZ = 300.0f;
+    const f32 cHalfHeight = 100.0f;
+    const f32 cBigHalfWidthX = 600.0f;
+    const f32 cBigHalfWidthZ = 400.0f;
+    const f32 cTurnHalfWidthX = 140.0f;
+    const f32 cTurnHalfWidthZ = 300.0f;
+    const s32 cDefaultStepWaitFall = 60;
+    const s32 cDefaultStepFall = 240;
+    const f32 cFallGravity = 0.03f;
+    const f32 cFallSpeedMax = 1.5f;
+    const f32 cClippingRadius = 500.0f;
+    const f32 cBigClippingRadius = 800.0f;
+    const f32 cDisappearBrkRate = 0.25f;
+    // The eight edge and corner points round the stair top, in units of the half widths.
+    const EdgeOffset cEdgeOffset[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
+                                      {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
+}  // namespace
 
 namespace NrvKoopaBattleMapStair {
     NEW_NERVE(KoopaBattleMapStairNrvWaitSwitch, KoopaBattleMapStair, WaitSwitch);
@@ -41,19 +45,19 @@ namespace NrvKoopaBattleMapStair {
 };  // namespace NrvKoopaBattleMapStair
 
 KoopaBattleMapStair::KoopaBattleMapStair(const char* pName)
-    : LiveActor(pName), mTimeToBreak(::sDefaultTimeToBreak), mFireAttackStep(-1), mArg1(), mArg5(-1), mArg6(), mType(), mIsBig(), mIsTurn(), mIsKoopaAttack(),
-      mTargetPos(0.0f, 0.0f, 0.0f), mWaitFallStep(::sDefaultStepWaitFall), mFallStep(::sDefaultStepFall) {
+    : LiveActor(pName), mTimeToBreak(::cDefaultTimeToBreak), mFireAttackStep(-1), mLevel(), mTargetCorner(-1), mIsJumpAfterAttack(), mType(), mIsBig(),
+      mIsTurn(), mIsKoopaAttack(), mTargetPos(0.0f, 0.0f, 0.0f), mWaitFallStep(::cDefaultStepWaitFall), mFallStep(::cDefaultStepFall) {
 }
 
 void KoopaBattleMapStair::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mTimeToBreak);
-    MR::getPlacementArg1NoInit(rIter, &mArg1);
+    MR::getPlacementArg1NoInit(rIter, &mLevel);
     MR::getPlacementArg2NoInit(rIter, &mType);
     MR::getPlacementArg3NoInit(rIter, &mWaitFallStep);
     MR::getPlacementArg4NoInit(rIter, &mFallStep);
-    MR::getPlacementArg5NoInit(rIter, &mArg5);
-    MR::getPlacementArg6NoInit(rIter, &mArg6);
+    MR::getPlacementArg5NoInit(rIter, &mTargetCorner);
+    MR::getPlacementArg6NoInit(rIter, &mIsJumpAfterAttack);
 
     const char* objName = nullptr;
     MR::getObjectName(&objName, rIter);
@@ -75,11 +79,7 @@ void KoopaBattleMapStair::init(const TableIter& rIter) {
     initNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitSwitch));
     MR::needStageSwitchReadA(this, rIter);
 
-    if (mIsBig) {
-        MR::setClippingTypeSphere(this, 800.0f);
-    } else {
-        MR::setClippingTypeSphere(this, 500.0f);
-    }
+    MR::setClippingTypeSphere(this, mIsBig ? ::cBigClippingRadius : ::cClippingRadius);
 
     makeActorAppeared();
 }
@@ -91,11 +91,7 @@ void KoopaBattleMapStair::initAfterPlacement() {
 }
 
 bool KoopaBattleMapStair::isRequestAttackVs1() const {
-    if (isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire)) && MR::isStep(this, mFireAttackStep)) {
-        return true;
-    }
-
-    return false;
+    return isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire)) && MR::isStep(this, mFireAttackStep);
 }
 
 s32 KoopaBattleMapStair::calcRemainTimeToBreak() const {
@@ -103,71 +99,51 @@ s32 KoopaBattleMapStair::calcRemainTimeToBreak() const {
 }
 
 bool KoopaBattleMapStair::isRequestAttackVs3() const {
-    if (!mIsKoopaAttack && isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire))) {
-        if (MR::isStep(this, mFireAttackStep) || mFireAttackStep < 0) {
-            return true;
-        }
-    }
-
-    return false;
+    return !mIsKoopaAttack && isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire)) &&
+           (MR::isStep(this, mFireAttackStep) || mFireAttackStep < 0);
 }
 
 namespace {
-    void updateNearestPos(Vec3f* pPos, f32* pDist, const Vec3f& rCandidatePos, const Vec3f& rReferencePos, s32 targetIndex, s32 index) {
-        if (targetIndex >= 0) {
-            if (targetIndex == index) {
+    // A chosen corner takes that point outright; with none (-1) the point nearest the reference wins, ties to the later one.
+    void updateTargetPos(Vec3f* pPos, f32* pDist, const Vec3f& rCandidatePos, const Vec3f& rReferencePos, s32 targetCorner, s32 corner) {
+        if (targetCorner >= 0) {
+            if (targetCorner == corner) {
                 pPos->set(rCandidatePos);
             }
-        } else {
-            f32 dist = rCandidatePos.distance(rReferencePos);
-
-            if (dist > *pDist) {
-                return;
-            }
-
-            pPos->set(rCandidatePos);
-            *pDist = dist;
+            return;
         }
+
+        f32 dist = rCandidatePos.distance(rReferencePos);
+        if (dist > *pDist) {
+            return;
+        }
+
+        pPos->set(rCandidatePos);
+        *pDist = dist;
     }
+}  // namespace
 
-    inline void updateOffsetPos(Vec3f* pPos, f32* pDist, const Vec3f& rCenter, const Vec3f& rX, const Vec3f& rZ, f32 width, f32 depth,
-                                const OffsetPair& rOffset, const Vec3f& rOrigin, s32 selection, s32 index) {
-        Vec3f candidate = rCenter + (rX * width * rOffset.x) + (rZ * depth * rOffset.z);
-
-        updateNearestPos(pPos, pDist, candidate, rOrigin, selection, index);
-    }
-
-    inline void updateTurnPos(Vec3f* pPos, f32* pDist, const Vec3f& rCenter, const Vec3f& rX, const Vec3f& rZ, const Vec3f& rOrigin) {
-        updateNearestPos(pPos, pDist, rCenter + rZ * ::sTurnHalfWidthZ - rX * ::sTurnHalfWidthX, rOrigin, -1, -1);
-    }
-};  // namespace
-
+// Starts at the top centre; returns the distance to the centre, or to the nearest point when no corner is chosen and one is nearer.
 f32 KoopaBattleMapStair::calcAndSetTargetPos(Vec3f* pPos, const Vec3f& rReferencePos) {
     Vec3f axisZ;
     Vec3f axisY;
     Vec3f axisX;
     MR::calcActorAxis(&axisX, &axisY, &axisZ, this);
 
-    Vec3f center = (axisY * ::sHalfHeight) + mPosition;
+    Vec3f center = (axisY * ::cHalfHeight) + mPosition;
     f32 distance = center.distance(rReferencePos);
     pPos->set(center);
 
-    if (mIsBig) {
-        s32 targetIndex = mArg5;
-
-        for (s32 i = 0; i < ARRAY_SIZE(::offset_table); i++) {
-            const OffsetPair& rOffset = ::offset_table[i];
-            updateOffsetPos(pPos, &distance, center, axisX, axisZ, ::sBigHalfWidthX, ::sBigHalfWidthZ, rOffset, rReferencePos, targetIndex, i);
-        }
-    } else if (mIsTurn) {
-        updateTurnPos(pPos, &distance, center, axisX, axisZ, rReferencePos);
+    if (!mIsBig && mIsTurn) {
+        updateTargetPos(pPos, &distance, center + axisZ * ::cTurnHalfWidthZ - axisX * ::cTurnHalfWidthX, rReferencePos, -1, -1);
     } else {
-        const OffsetPair* pOffset;
-        s32 targetIndex = mArg5;
+        const f32 halfWidthX = mIsBig ? ::cBigHalfWidthX : ::cNormalHalfWidthX;
+        const f32 halfWidthZ = mIsBig ? ::cBigHalfWidthZ : ::cNormalHalfWidthZ;
 
-        for (s32 i = 0; i < ARRAY_SIZE(::offset_table); i++) {
-            pOffset = &::offset_table[i];
-            updateOffsetPos(pPos, &distance, center, axisX, axisZ, ::sNormalHalfWidthX, ::sNormalHalfWidthZ, *pOffset, rReferencePos, targetIndex, i);
+        for (s32 i = 0; i < ARRAY_SIZE(::cEdgeOffset); i++) {
+            const EdgeOffset& rOffset = ::cEdgeOffset[i];
+            Vec3f candidate = center + (axisX * halfWidthX * rOffset.x) + (axisZ * halfWidthZ * rOffset.z);
+            updateTargetPos(pPos, &distance, candidate, rReferencePos, mTargetCorner, i);
         }
     }
 
@@ -237,8 +213,8 @@ void KoopaBattleMapStair::exeFall() {
         MR::startAllAnim(this, "Fall");
     }
 
-    MR::addVelocityToGravity(this, ::sFallGravity);
-    MR::restrictVelocity(this, ::sFallSpeedMax);
+    MR::addVelocityToGravity(this, ::cFallGravity);
+    MR::restrictVelocity(this, ::cFallSpeedMax);
     MR::startLevelSound(this, "SE_OJ_LV_STAIR_BREAK");
 
     if (MR::isStep(this, mFallStep)) {
@@ -250,11 +226,11 @@ void KoopaBattleMapStair::exeFall() {
 void KoopaBattleMapStair::exeDisappear() {
     if (MR::isFirstStep(this)) {
         MR::startAllAnim(this, "Disappear");
-        MR::setBrkRate(this, 0.25f);
+        MR::setBrkRate(this, ::cDisappearBrkRate);
     }
 
-    MR::addVelocityToGravity(this, ::sFallGravity);
-    MR::restrictVelocity(this, ::sFallSpeedMax);
+    MR::addVelocityToGravity(this, ::cFallGravity);
+    MR::restrictVelocity(this, ::cFallSpeedMax);
 
     if (MR::isBrkStopped(this)) {
         kill();
