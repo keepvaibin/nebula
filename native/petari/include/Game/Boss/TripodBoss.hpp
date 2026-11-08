@@ -44,6 +44,16 @@ public:
         SUB_PART_ID_END_JOINT,
     };
 
+    enum RIDE_STATE {
+        RIDE_ON,     // riding, and was last step
+        RIDE_START,  // got on this step
+        RIDE_OFF,
+        RIDE_LEAVE,  // got off this step
+    };
+
+    static const s32 cBodyBone = 21;  // bones 0-20 are the legs, 7 each
+    static const s32 cBoneNum = 22;
+
     /// @brief Creates a new `TripodBoss`.
     /// @param pName A pointer to the null-terminated name of the object.
     TripodBoss(const char*);
@@ -91,13 +101,13 @@ public:
     void setJointAttachBaseMatrix(const Pos3f&, s32);
     void addStepPoint(TripodBossStepPoint*);
     void getBodyMatrix(Pos3f*) const;
-    void getJointMatrix(Pos3f*, s32) const;
-    void getJointAttachMatrix(Pos3f*, s32) const;
+    void getJointMatrix(Pos3f* pMtx, s32 boneID) const;
+    void getJointAttachMatrix(Pos3f* pMtx, s32 boneID) const;
     void requestStartStepSequence(s32);
     TripodBossStepSequence* getCurrentStepSequence();
     TripodBossStepSequence* getNextStepSequence();
     TripodBossStepSequence* findStepSequence(s32) const;
-    void calcLegUpVector(Vec3f*, const Vec3f&);
+    void calcLegUpVector(Vec3f* pUp, const Vec3f& rFootPos);
     void calcDemoMovement();
     void calcBodyMovement();
     void calcLegMovement();
@@ -109,8 +119,7 @@ public:
     void checkRideMario();
     const Pos3f* getLegMatrixPtr(PART_ID, SUB_PART_ID) const;
     void changeBgmState();
-    static s32 getPartIDFromBoneID(s32);
-    void setAttachBaseMatrix(const Pos3f&);
+    static s32 getPartIDFromBoneID(s32 boneID);
 
     void exeTryStartDemo();
     void exeNonActive();
@@ -134,14 +143,10 @@ public:
         return mStepPoints[idx];
     }
 
-    inline bool isStateSomething() {
-        return (mRideMarioState == 0) || (mRideMarioState == 1);
-    }
-
     Pos3f mBodyMtx;
     Pos3f mDummyModelMtx;
     Pos3f mDemoStartMtx;
-    TripodBossBone mBossBones[22];
+    TripodBossBone mBossBones[cBoneNum];
     TripodBossLeg* mLegs[3];
     TripodBossStepPoint* mStepPoints[3];
     TripodBossMovableArea* mMovableArea;
@@ -168,10 +173,10 @@ public:
     s32 mCurrentStepSeq;
     s32 mNextStepSeq;
     s32 mRideMarioTimer;
-    s32 mRideMarioState;
-    u8 mIsPartsHidden;
+    s32 mRideMarioState;  // RIDE_STATE
+    bool mIsPartsHidden;
     s32 mBgmState;
-    u8 mIsBgmChangePending;
+    bool mIsBgmChangePending;
     ActorCameraInfo* mEventCamera;
 };
 
