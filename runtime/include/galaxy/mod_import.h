@@ -2,8 +2,9 @@
 // Importing a mod into the mods folder (mods.h): a folder, or an archive libarchive reads (zip, 7z, RAR 4 and 5,
 // tar and its compressions). The files go to a hidden staging folder inside the mods folder first and take the mod's
 // name only when complete, so a failed or cancelled import leaves nothing half there. An archive's single top folder
-// (with only notes beside it) is the mod's folder. A mod imported under a name already present replaces that mod and
-// keeps its settings (an update). Entries that would leave the folder (absolute, drive or `..` paths), device names and
+// (with only notes beside it) is the mod's folder. A mod whose files are exactly those of a mod already there, under
+// any name, is not added again. A mod imported under a name already present replaces that mod and keeps its settings
+// (an update). Entries that would leave the folder (absolute, drive or `..` paths), device names and
 // links are refused, and so is an archive that unpacks past the importer's limits.
 #pragma once
 
@@ -26,9 +27,11 @@ struct ImportResult {
     bool ok = false;
     std::string id;             // the mod's folder name
     bool replaced = false;      // a mod of that name was there (updated)
+    bool already = false;       // a mod with exactly these files was there (id names it): nothing was added
     std::uint64_t files = 0;
     std::uint64_t bytes = 0;
     std::string kinds;          // what it holds, as the MODS page lists it ("RIIVOLUTION, TEXTURES")
+    std::string title;          // its name as the MODS page shows it (its own, else its folder's)
     std::string message;        // shown to the player: what was imported, or why it failed
 };
 

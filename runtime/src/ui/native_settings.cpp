@@ -2266,9 +2266,12 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
                 const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
                 s_mod_import_value = text;
             };
-            const galaxy::mods::ImportResult result =
-                folder.empty() ? galaxy::mods::ImportResult{false, {}, false, 0, 0, {}, "NO MODS FOLDER"}
-                               : galaxy::mods::import_mod(sources[i], folder, progress);
+            galaxy::mods::ImportResult result;
+            if (folder.empty()) {
+                result.message = "NO MODS FOLDER";
+            } else {
+                result = galaxy::mods::import_mod(sources[i], folder, progress);
+            }
             std::cerr << "[mods] import " << galaxy::path_text(sources[i]) << ": " << result.message << " (" << result.files
                       << " files, " << (result.bytes >> 20u) << " MB)\n";
             (result.ok ? imported : failed) += 1u;

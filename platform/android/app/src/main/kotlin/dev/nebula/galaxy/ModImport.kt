@@ -16,6 +16,8 @@ data class ModImportResult(
     val message: String,
     /** Several imports' answer: its own title over [message]. */
     val title: String? = null,
+    /** A mod with exactly these files was there already (under [name]): nothing was added. */
+    val already: Boolean = false,
 )
 
 /**
@@ -64,8 +66,11 @@ object ModImport {
             val answer = String(importFile(copy.path.toByteArray(Charsets.UTF_8), data.path.toByteArray(Charsets.UTF_8)) { done, total ->
                 if (total > 0) onProgress(0.5f + 0.5f * minOf(done, total) / total)
                 true
-            }, Charsets.UTF_8).split('\n', limit = 4)
-            return ModImportResult(answer[0] == "1", name.substringBeforeLast('.').ifEmpty { name }, answer.getOrElse(1) { "" }, answer.getOrElse(2) { "" }, answer.getOrElse(3) { "" })
+            }, Charsets.UTF_8).split('\n', limit = 5)
+            // The mod's own name as the game's Mods page shows it; the file's name if the import named none.
+            val title = answer.getOrElse(3) { "" }.ifEmpty { name.substringBeforeLast('.').ifEmpty { name } }
+            return ModImportResult(answer[0] == "1" || answer[0] == "2", title, answer.getOrElse(1) { "" }, answer.getOrElse(2) { "" },
+                answer.getOrElse(4) { "" }, already = answer[0] == "2")
         } finally {
             incoming.deleteRecursively()
         }

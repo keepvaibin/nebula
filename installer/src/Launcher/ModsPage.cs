@@ -863,7 +863,9 @@ namespace Nebula.Launcher
                             if (Json.Bool(one, "ok"))
                             {
                                 imported.Add(Json.Str(one, "id"));
-                                messages.Add(Json.Bool(one, "replaced") ? NebulaText.Of("Updated {0}", Json.Str(one, "id")) : NebulaText.Of("Imported {0}", Json.Str(one, "id")));
+                                messages.Add(Json.Bool(one, "already") ? NebulaText.Of("{0} is already in your mods", Json.Str(one, "title"))
+                                             : Json.Bool(one, "replaced") ? NebulaText.Of("Updated {0}", Json.Str(one, "id"))
+                                             : NebulaText.Of("Imported {0}", Json.Str(one, "id")));
                             }
                             else messages.Add(Capitalize(Json.Str(one, "message")));
                         }

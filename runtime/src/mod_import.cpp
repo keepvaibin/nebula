@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -147,6 +148,101 @@ void lift_top_folder(const fs::path& staging) {
             fs::rename(entry.path(), target, error);
         }
         fs::remove_all(moved, error);
+    }
+}
+
+// A file's path inside its mod folder, '/'-separated UTF-8.
+std::string relative_key(const fs::path& file, const fs::path& root) {
+    const std::u8string text = file.lexically_relative(root).generic_u8string();
+    return std::string(reinterpret_cast<const char*>(text.data()), text.size());
+}
+
+// Every file of a mod folder by its path inside it, with its size; clutter left out.
+std::map<std::string, std::uint64_t> file_sizes(const fs::path& root) {
+    std::map<std::string, std::uint64_t> out;
+    std::error_code error;
+    fs::recursive_directory_iterator it(root, error);
+    for (const fs::recursive_directory_iterator end{}; !error && it != end; it.increment(error)) {
+        if (system_clutter(utf8(it->path().filename()))) {
+            if (it->is_directory(error)) it.disable_recursion_pending();
+            continue;
+        }
+        if (it->is_regular_file(error)) out[relative_key(it->path(), root)] = it->file_size(error);
+    }
+    return out;
+}
+
+bool same_bytes(const fs::path& a, const fs::path& b, std::vector<char>& one, std::vector<char>& two) {
+    std::ifstream first(a, std::ios::binary);
+    std::ifstream second(b, std::ios::binary);
+    if (!first || !second) return false;
+    while (first && second) {
+        first.read(one.data(), static_cast<std::streamsize>(one.size()));
+        second.read(two.data(), static_cast<std::streamsize>(two.size()));
+        if (first.gcount() != second.gcount() ||
+            std::memcmp(one.data(), two.data(), static_cast<std::size_t>(first.gcount())) != 0) {
+            return false;
+        }
+    }
+    return first.eof() && second.eof();
+}
+
+// Whether the mod folder `other` holds exactly the files staged (same paths, sizes and bytes; clutter aside). Most
+// folders differ at their first file, so a mods folder of large packs is not read through.
+bool same_mod(const fs::path& staging, const std::map<std::string, std::uint64_t>& files, const fs::path& other,
+              std::vector<char>& one, std::vector<char>& two) {
+    std::error_code error;
+    std::size_t seen = 0;
+    fs::recursive_directory_iterator it(other, error);
+    for (const fs::recursive_directory_iterator end{}; !error && it != end; it.increment(error)) {
+        if (system_clutter(utf8(it->path().filename()))) {
+            if (it->is_directory(error)) it.disable_recursion_pending();
+            continue;
+        }
+        if (it->is_directory(error)) continue;
+        if (!it->is_regular_file(error)) return false;
+        const auto found = files.find(relative_key(it->path(), other));
+        if (found == files.end() || found->second != it->file_size(error)) return false;
+        ++seen;
+    }
+    if (error || seen != files.size()) return false;
+    for (const auto& [name, size] : files) {
+        if (size != 0u && !same_bytes(staging / from_utf8(name), other / from_utf8(name), one, two)) return false;
+    }
+    return true;
+}
+
+// The mod already in `mods_folder` with exactly the staged files (`id`'s own folder first), or empty.
+std::string identical_mod(const fs::path& staging, const fs::path& mods_folder, const std::string& id) {
+    const std::map<std::string, std::uint64_t> files = file_sizes(staging);
+    if (files.empty()) return {};
+    std::vector<char> one(std::size_t{1} << 20u);
+    std::vector<char> two(one.size());
+    std::error_code error;
+    if (fs::is_directory(mods_folder / from_utf8(id), error) && same_mod(staging, files, mods_folder / from_utf8(id), one, two)) {
+        return id;
+    }
+    for (const auto& entry : fs::directory_iterator(mods_folder, error)) {
+        const std::string name = utf8(entry.path().filename());
+        if (name.empty() || name.front() == '.' || name == id || !entry.is_directory(error)) continue;
+        if (same_mod(staging, files, entry.path(), one, two)) return name;
+    }
+    return {};
+}
+
+// Its name and what it holds, as the MODS page lists them.
+void describe(ImportResult& result) {
+    result.title = result.id;
+    for (const ModInfo& mod : scan_mods()) {
+        if (mod.id != result.id) continue;
+        if (!mod.pack_title.empty()) result.title = mod.pack_title;
+        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files || mod.loose, "FILES"},
+                                       std::pair{mod.textures, "TEXTURES"}, std::pair{mod.movies, "MOVIES"}}) {
+            if (on) result.kinds += result.kinds.empty() ? name : std::string(", ") + name;
+        }
+        if (result.kinds.empty() && !mod.problem.empty() && !result.already) {
+            result.message = "IMPORTED " + result.id + ", BUT " + mod.problem;
+        }
     }
 }
 
@@ -382,6 +478,17 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
     if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
         result.id = folder_name(manifest->id);
     }
+    // The same pack again (under any file name, as a browser's "(1)" copy, or the folder it came from): nothing is
+    // added or replaced, and the player is told where it is.
+    if (const std::string same = identical_mod(writer.staging, mods_folder, result.id); !same.empty()) {
+        fs::remove_all(writer.staging, error);
+        result.id = same;
+        result.already = true;
+        result.ok = true;
+        describe(result);
+        result.message = "ALREADY IN YOUR MODS: " + result.title;
+        return result;
+    }
     // In place: an existing mod of that name is replaced (its settings, kept by name, stay).
     const fs::path final_folder = mods_folder / from_utf8(result.id);
     fs::path previous;
@@ -406,17 +513,7 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
     if (!previous.empty()) fs::remove_all(previous, error);
     writer.state.done = writer.state.total;
     writer.report(true);
-    // What it holds, as the MODS page will list it.
-    for (const ModInfo& mod : scan_mods()) {
-        if (mod.id != result.id) continue;
-        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files || mod.loose, "FILES"},
-                                       std::pair{mod.textures, "TEXTURES"}, std::pair{mod.movies, "MOVIES"}}) {
-            if (on) result.kinds += result.kinds.empty() ? name : std::string(", ") + name;
-        }
-        if (result.kinds.empty() && !mod.problem.empty()) {
-            result.message = "IMPORTED " + result.id + ", BUT " + mod.problem;
-        }
-    }
+    describe(result);
     result.ok = true;
     if (result.message.empty()) {
         result.message = (result.replaced ? "UPDATED " : "IMPORTED ") + result.id +
