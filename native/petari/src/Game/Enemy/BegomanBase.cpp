@@ -150,10 +150,10 @@ void BegomanBase::initCore(const TableIter& rIter, const char* pModelArcName, bo
         mInitPos.set(mPosition);
         MR::setGroupClipping(this, rIter, ::hGroupClippingNum);
 
-        // Placement arg0 set: the begoman returns home while switch A is off.
-        s32 arg0 = -1;
-        MR::getPlacementArg0NoInit(rIter, &arg0);
-        mCanTrySetReturn = arg0 != -1;
+        // Placement arg 0 set: the begoman returns home while switch A is off.
+        s32 returnHome = -1;
+        MR::getPlacementArg0NoInit(rIter, &returnHome);
+        mCanTrySetReturn = returnHome != -1;
     }
 
     MR::connectToSceneEnemy(this);

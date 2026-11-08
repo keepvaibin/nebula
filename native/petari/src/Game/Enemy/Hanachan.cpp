@@ -767,14 +767,9 @@ void Hanachan::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
 
-    s32 arg0 = 0;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-
-    if (arg0 == 1) {
-        mIsChasePlayer = false;
-    } else {
-        mIsChasePlayer = true;
-    }
+    s32 noChase = 0;
+    MR::getPlacementArg0NoInit(rIter, &noChase);
+    mIsChasePlayer = noChase != 1;
 
     MR::useStageSwitchWriteDead(this, rIter);
     MR::connectToSceneEnemyMovement(this);

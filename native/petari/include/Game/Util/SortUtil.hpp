@@ -19,27 +19,28 @@ namespace MR {
         }
     }
 
+    // Orders three elements so the median ends up at `third` (the pivot slot).
     template < typename TCompare, typename TIt >
-    void sort132(TIt a1, TIt a2, TIt a3, TCompare compare) {
-        bool b1 = !compare(*a3, *a1);
-        bool b2 = !compare(*a2, *a3);
+    void sort132(TIt first, TIt second, TIt third, TCompare compare) {
+        bool thirdNotBeforeFirst = !compare(*third, *first);
+        bool secondNotBeforeThird = !compare(*second, *third);
 
-        if (!b1 || !b2) {
-            if (!b1 && !b2) {
-                std::swap(*a1, *a2);
+        if (!thirdNotBeforeFirst || !secondNotBeforeThird) {
+            if (!thirdNotBeforeFirst && !secondNotBeforeThird) {
+                std::swap(*first, *second);
                 return;
             }
 
-            if (compare(*a2, *a1)) {
-                std::swap(*a1, *a2);
+            if (compare(*second, *first)) {
+                std::swap(*first, *second);
             }
 
-            if (b1) {
-                std::swap(*a2, *a3);
+            if (thirdNotBeforeFirst) {
+                std::swap(*second, *third);
                 return;
             }
 
-            std::swap(*a1, *a3);
+            std::swap(*first, *third);
         }
     }
 

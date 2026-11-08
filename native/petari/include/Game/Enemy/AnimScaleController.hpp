@@ -37,7 +37,7 @@ public:
     void setParamTight();
     void startHitReaction();
     void startPointerHitVibration();
-    bool isHitReaction(s32) const;
+    bool isHitReaction(s32 maxStep) const;
 
     void stopAndReset();
     void resetScale();

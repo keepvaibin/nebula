@@ -35,9 +35,9 @@ Jiraira::Jiraira(const char* pName) : LiveActor(pName), mBodyCollision(), mExplo
 void Jiraira::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
-        s32 arg1 = mExplodeRadius;
-        MR::getPlacementArg1NoInit(rIter, &arg1);
-        mExplodeRadius = arg1;
+        s32 explodeRadius = mExplodeRadius;
+        MR::getPlacementArg1NoInit(rIter, &explodeRadius);
+        mExplodeRadius = explodeRadius;
         MR::useStageSwitchWriteDead(this, rIter);
     }
     initModelManagerWithAnm("Jiraira", nullptr, false);

@@ -51,10 +51,10 @@ void TripodBossKillerGenerater::init(const TableIter& rIter) {
     mKiller = new HomingKiller("ホーミングキラー");
     mKiller->initWithoutIter();
 
-    s32 arg2;
-    MR::getPlacementArg2WithInit(rIter, &arg2);
+    s32 chase;
+    MR::getPlacementArg2WithInit(rIter, &chase);
 
-    if (arg2 == 0) {
+    if (chase == 0) {
         mKiller->mDisableChase = true;
     }
 

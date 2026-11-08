@@ -140,13 +140,13 @@ void AnimScaleController::exeCrush() {
     }
 }
 
-bool AnimScaleController::isHitReaction(s32 a1) const {
+bool AnimScaleController::isHitReaction(s32 maxStep) const {
     if (!isNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvHitReaction))) {
         return false;
     }
 
-    if (a1 > 0) {
-        return MR::isLessStep(this, a1);
+    if (maxStep > 0) {
+        return MR::isLessStep(this, maxStep);
     }
     return true;
 }
