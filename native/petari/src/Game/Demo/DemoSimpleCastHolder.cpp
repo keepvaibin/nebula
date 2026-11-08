@@ -2,10 +2,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-DemoSimpleCastHolder::DemoSimpleCastHolder(s32 liveActorCount, s32 layoutActorCount, s32 nameObjCount) {
-    mLiveActors.init(liveActorCount);
-    mLayoutActors.init(layoutActorCount);
-    mNameObjs.init(nameObjCount);
+DemoSimpleCastHolder::DemoSimpleCastHolder(s32 liveActorCapacity, s32 layoutActorCapacity, s32 nameObjCapacity) {
+    mLiveActors.init(liveActorCapacity);
+    mLayoutActors.init(layoutActorCapacity);
+    mNameObjs.init(nameObjCapacity);
 }
 
 void DemoSimpleCastHolder::registerActor(LiveActor* pActor) {
