@@ -56,11 +56,7 @@ bool Mario::doObjWarp(LiveActor* pActor) {
     return false;
 }
 
-bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
-    if (isStatusActive(MarioStatus_Warp)) {
-        return false;
-    }
-
+bool Mario::doPointWarp(const Vec3f& rTarget, const Vec3f& rEndFront, s32 frames) {
     if (isStatusActive(MarioStatus_Warp)) {
         return false;
     }
@@ -71,14 +67,14 @@ bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
 
     mActor->setBlendMtxTimer(16);
 
-    mWarp->mTargetPos = rVec1;
+    mWarp->mTargetPos = rTarget;
     mWarp->mStartPos = mPosition;
-    mWarp->mEndFront = rVec2;
+    mWarp->mEndFront = rEndFront;
     mWarp->mKind = 2;
     mWarp->mInputFree = false;
 
-    if (myInt != 0) {
-        mWarp->mPointFrames = myInt;
+    if (frames != 0) {
+        mWarp->mPointFrames = frames;
     } else {
         mWarp->mPointFrames = 90;
     }
@@ -218,11 +214,7 @@ void Mario::doCubeWarp() {
     mArrivedWarpCube = nullptr;
 }
 
-bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
-    if (isStatusActive(MarioStatus_Warp)) {
-        return false;
-    }
-
+bool Mario::doPointWarpRecovery(const Vec3f& rTarget, const Vec3f& rEndFront) {
     if (isStatusActive(MarioStatus_Warp)) {
         return false;
     }
@@ -233,9 +225,9 @@ bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
 
     mActor->setBlendMtxTimer(16);
 
-    mWarp->mTargetPos = rVec1;
+    mWarp->mTargetPos = rTarget;
     mWarp->mStartPos = mPosition;
-    mWarp->mEndFront = rVec2;
+    mWarp->mEndFront = rEndFront;
     mWarp->mEndUp.zero();
     mWarp->mKind = 3;
     mWarp->mInputFree = false;

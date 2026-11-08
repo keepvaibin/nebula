@@ -77,7 +77,7 @@ public:
     void playEffectSRT(const char*, f32, const Vec3f&, const Vec3f&);
     void stopEffect(const char*);
     void stopEffectForce(const char*);
-    void playSound(const char*, s32 a2 = -1);
+    void playSound(const char*, s32 timing = -1);
     void stopSound(const char*, u32);
     void startCamVib(u32);
     Vec3f& getCamPos() const;

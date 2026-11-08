@@ -6,13 +6,13 @@
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 
-void MarioActor::addRushSensor(HitSensor* pSensor, bool myBool) {
+void MarioActor::addRushSensor(HitSensor* pSensor, bool isNear) {
     if (!MR::isSensorAutoRush(pSensor) && !MR::isSensorRush(pSensor)) {
         return;
     }
 
     mRushSensors.at(mRushSensorCount) = pSensor;
-    mRushSensorNear.at(mRushSensorCount) = myBool;
+    mRushSensorNear.at(mRushSensorCount) = isNear;
     mRushSensorCount++;
 }
 
@@ -72,7 +72,7 @@ void MarioActor::checkPriorRushTarget() {
     }
 }
 
-HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
+HitSensor* MarioActor::getNearestRushTarget(bool autoOnly) const {
     if (!mRushSensorCount) {
         return nullptr;
     }
@@ -105,7 +105,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
                 size1 = size3;
             }
 
-            if (myBool && target->mRadius < size1) {
+            if (autoOnly && target->mRadius < size1) {
                 return nullptr;
             }
 
@@ -132,7 +132,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             continue;
         }
 
-        if (myBool && !MR::isSensorAutoRush(mRushSensors[idx])) {
+        if (autoOnly && !MR::isSensorAutoRush(mRushSensors[idx])) {
             continue;
         }
 
@@ -150,7 +150,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             size1 = size3;
         }
 
-        if ((mRushSensorNear[idx] || !myBool || !(mRushSensors[idx]->mRadius + 20.0f < size1)) && size1 < maxRadius) {
+        if ((mRushSensorNear[idx] || !autoOnly || !(mRushSensors[idx]->mRadius + 20.0f < size1)) && size1 < maxRadius) {
             out = mRushSensors[idx];
             maxRadius = size1;
         }
