@@ -373,7 +373,6 @@ bool Kanina::receiveFireBall(HitSensor* pSender, HitSensor* pReceiver) {
 
 void Kanina::doDamageFireBall(HitSensor* pSender, HitSensor* pReceiver) {
     MR::setVelocityBlowAttack(this, pSender, pReceiver, ::sPunchDamageVelocity, ::sPunchUpperVec, 4);
-    MR::isNearZero(mVelocity);
     Vec3f vec;
     MR::vecKillElement(mVelocity, -mGravity, &vec);
     MR::normalizeOrZero(&vec);

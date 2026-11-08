@@ -2,85 +2,66 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-PlanetGravityManager::PlanetGravityManager(const char* pName) : NameObj(pName) {
-    mMaxGravities = 128;
-    mGravities = new PlanetGravity*[mMaxGravities];
-    mNumGravities = 0;
-}
+namespace {
+    // A starting capacity: registerGravity grows past it.
+    const s32 sFirstCapacity = 128;
+};  // namespace
 
-void PlanetGravityManager::init(const TableIter& rIter) {
+PlanetGravityManager::PlanetGravityManager(const char* pName)
+    : NameObj(pName), mGravities(new PlanetGravity*[::sFirstCapacity]), mMaxGravities(::sFirstCapacity), mNumGravities(0) {
 }
 
 bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, uintptr_t host) const {
-    Vec3f totalGravity;
-    totalGravity.zero();
-
-    PlanetGravity** pGravities = mGravities;
+    Vec3f totalGravity(0.0f, 0.0f, 0.0f);
     bool hasCalculated = false;
 
-    if (pInfo) {
+    if (pInfo != nullptr) {
         pInfo->init();
     }
 
     f32 largestScalar = -1.0f;
     s32 largestPriority = -1;
 
-    while (pGravities != &mGravities[mNumGravities]) {
-        // Is gravity valid/active?
-        bool validGravity = false;
+    for (s32 i = 0; i < mNumGravities; i++) {
+        PlanetGravity* gravity = mGravities[i];
 
-        if ((*pGravities)->mActivated && (*pGravities)->mValidFollower && (*pGravities)->mAppeared) {
-            validGravity = true;
+        if (!gravity->mActivated || !gravity->mValidFollower || !gravity->mAppeared || (gravityType & gravity->mGravityType) == 0 ||
+            host == reinterpret_cast< uintptr_t >(gravity->mHost)) {
+            continue;
         }
 
-        // Gravity is valid, matches specified gravity type(s) and does not have same host
-        if (validGravity && ((gravityType & (*pGravities)->mGravityType) != 0) && (host != (uintptr_t)(*pGravities)->mHost)) {
-            // Is priority lower -> end of list reached as it's sorted in descending order
-            s32 priority = (*pGravities)->mPriority;
-
-            if (priority < largestPriority) {
-                break;
-            }
-
-            // Calculate gravity
-            Vec3f gravityVec;
-
-            if ((*pGravities)->calcGravity(&gravityVec, rPosition)) {
-                bool storeInfo = false;
-                f32 scalar = gravityVec.length();
-
-                // If same priority, add gravity vector to total result
-                if (priority == largestPriority) {
-                    totalGravity += gravityVec;
-                    hasCalculated = true;
-
-                    if (largestScalar < scalar) {
-                        storeInfo = true;
-                    }
-                }
-                // If larger priority, total gravity gets overriden
-                else if (priority > largestPriority) {
-                    largestPriority = priority;
-                    hasCalculated = true;
-                    storeInfo = true;
-                    totalGravity = gravityVec;
-                }
-
-                // Try to store gravity info if necessary
-                if (pInfo && storeInfo) {
-                    largestScalar = scalar;
-                    pInfo->mGravityVector = gravityVec;
-                    pInfo->mLargestPriority = largestPriority;
-                    pInfo->mGravityInstance = *pGravities;
-                }
-            }
+        // Sorted by priority, highest first: nothing past a lower one can apply.
+        const s32 priority = gravity->mPriority;
+        if (priority < largestPriority) {
+            break;
         }
 
-        pGravities++;
+        Vec3f gravityVec;
+        if (!gravity->calcGravity(&gravityVec, rPosition)) {
+            continue;
+        }
+
+        const f32 scalar = gravityVec.length();
+        bool storeInfo;
+        if (priority == largestPriority) {
+            totalGravity += gravityVec;
+            storeInfo = largestScalar < scalar;
+        } else {
+            largestPriority = priority;
+            totalGravity = gravityVec;
+            storeInfo = true;
+        }
+        hasCalculated = true;
+
+        if (pInfo != nullptr && storeInfo) {
+            largestScalar = scalar;
+            pInfo->mGravityVector = gravityVec;
+            pInfo->mLargestPriority = largestPriority;
+            pInfo->mGravityInstance = gravity;
+        }
     }
 
-    // Store normalized vector as result if necessary
-    if (pGravity) {
+    if (pGravity != nullptr) {
         MR::normalizeOrZero(&totalGravity);
         *pGravity = totalGravity;
     }
@@ -95,23 +76,18 @@ void PlanetGravityManager::registerGravity(PlanetGravity* pGravity) {
         mMaxGravities *= 2;
     }
 
-    int index = mNumGravities++;
-    mGravities[index] = pGravity;
+    mGravities[mNumGravities++] = pGravity;
 
     sortGravities();
 }
 
-inline void PlanetGravityManager::sortGravities() {
-    for (s32 i = mNumGravities - 1; i >= 1; i--) {
-        if (mGravities[i]->mPriority > mGravities[i - 1]->mPriority) {
-            bubbleDown(i);
-        } else {
-            break;
-        }
+void PlanetGravityManager::sortGravities() {
+    for (s32 i = mNumGravities - 1; i >= 1 && mGravities[i]->mPriority > mGravities[i - 1]->mPriority; i--) {
+        bubbleDown(i);
     }
 }
 
-inline void PlanetGravityManager::bubbleDown(int i) {
+void PlanetGravityManager::bubbleDown(int i) {
     PlanetGravity* temp = mGravities[i - 1];
     mGravities[i - 1] = mGravities[i];
     mGravities[i] = temp;
