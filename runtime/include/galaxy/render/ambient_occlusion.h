@@ -3,6 +3,7 @@
 // Ambient occlusion of the D3D12 renderer's 3D scene.
 
 #include "galaxy/windows_api.h"
+#include "galaxy/render/gpu_use.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -57,7 +58,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         unsigned width = 0;
         unsigned height = 0;
-        D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        gpu::Use use = gpu::Use::ComputeRead;
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -67,7 +68,7 @@ private:
     std::vector<std::uint32_t> object_tiles_;
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,
                        std::uint64_t frame_index, unsigned frames_in_flight);
-    void transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state);
+    void transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use);
     [[nodiscard]] ID3D12PipelineState* apply_pipeline(unsigned samples, bool hdr, bool view);
 
     ID3D12Device* device_ = nullptr;

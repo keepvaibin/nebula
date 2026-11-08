@@ -1,5 +1,6 @@
 // PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/render/post_process.h"
+#include "barriers_d3d12.h"
 #include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
 
@@ -374,17 +375,16 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
     clear.Format = format;
     clear.DepthStencil.Depth = 1.0f;
     clear.DepthStencil.Stencil = 0;
-    const D3D12_RESOURCE_STATES initial =
-        depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    const gpu::Use initial = depth ? gpu::Use::DepthWrite : gpu::Use::PixelRead;
     if (FAILED(device_->CreateCommittedResource(
-            &heap, D3D12_HEAP_FLAG_NONE, &rd, initial, &clear,
+            &heap, D3D12_HEAP_FLAG_NONE, &rd, legacy_state(initial), &clear,
             IID_PPV_ARGS(&target.resource)))) {
         return false;
     }
     target.width = width;
     target.height = height;
     target.format = format;
-    target.state = initial;
+    target.use = initial;
     if (depth) {
         target.rtv = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
         device_->CreateDepthStencilView(target.resource.Get(), nullptr, target.rtv);
@@ -396,19 +396,14 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
     return true;
 }
 
-void PostProcessor::transition(ID3D12GraphicsCommandList* list, Target& target,
-                               D3D12_RESOURCE_STATES state) {
-    if (target.state == state) {
+void PostProcessor::transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use) {
+    if (target.use == use) {
         return;
     }
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource = target.resource.Get();
-    b.Transition.StateBefore = target.state;
-    b.Transition.StateAfter = state;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    list->ResourceBarrier(1, &b);
-    target.state = state;
+    BarriersD3D12 uses{list};
+    uses.texture(target.resource.Get(), target.use, use);
+    uses.issue();
+    target.use = use;
 }
 
 bool PostProcessor::record_lookup_upload(ID3D12GraphicsCommandList* list,
@@ -457,13 +452,9 @@ bool PostProcessor::record_lookup_upload(ID3D12GraphicsCommandList* list,
         dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         dst.SubresourceIndex = 0;
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-        D3D12_RESOURCE_BARRIER b{};
-        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        b.Transition.pResource = destination;
-        b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        list->ResourceBarrier(1, &b);
+        BarriersD3D12 uses{list};
+        uses.texture(destination, gpu::Use::CopyDest, gpu::Use::PixelRead);
+        uses.issue();
         staging.push_back(std::move(buffer));
         return true;
     };
@@ -536,33 +527,33 @@ bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& s
     Constants c{};
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
-        transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        transition(list, antialiased_, gpu::Use::ColorWrite);
         list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
         draw(list, srv_ring, fxaa_.Get(), {source}, viewport, c);
-        transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        transition(list, antialiased_, gpu::Use::PixelRead);
         return true;
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = stencil_.rtv;
-    transition(list, edges_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    transition(list, edges_, gpu::Use::ColorWrite);
     list->ClearRenderTargetView(edges_.rtv, kZero, 0, nullptr);
     list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     list->OMSetRenderTargets(1, &edges_.rtv, FALSE, &dsv);
     list->OMSetStencilRef(1);
     draw(list, srv_ring, smaa_edges_.Get(), {source}, viewport, c);
-    transition(list, edges_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    transition(list, weights_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    transition(list, edges_, gpu::Use::PixelRead);
+    transition(list, weights_, gpu::Use::ColorWrite);
     list->ClearRenderTargetView(weights_.rtv, kZero, 0, nullptr);
     list->OMSetRenderTargets(1, &weights_.rtv, FALSE, &dsv);
     draw(list, srv_ring, smaa_weights_.Get(),
          {edges_.resource.Get(), area_texture_.Get(), search_texture_.Get()},
          viewport, c);
-    transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    transition(list, weights_, gpu::Use::PixelRead);
+    transition(list, antialiased_, gpu::Use::ColorWrite);
     list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
     draw(list, srv_ring, smaa_blend_.Get(), {source, weights_.resource.Get()},
          viewport, c);
-    transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, antialiased_, gpu::Use::PixelRead);
     return true;
 }
 
@@ -611,18 +602,17 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     if (pass == AaRun::kNone) {
         return pass;
     }
-    D3D12_RESOURCE_BARRIER to_copy{};
-    to_copy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    to_copy.Transition.pResource = color;
-    to_copy.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    to_copy.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    to_copy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    list->ResourceBarrier(1, &to_copy);
-    transition(list, antialiased_, D3D12_RESOURCE_STATE_COPY_DEST);
+    // The scene and the copy change in one call each way.
+    BarriersD3D12 to_copy{list};
+    to_copy.texture(color, gpu::Use::ColorWrite, gpu::Use::CopySource);
+    to_copy.texture(antialiased_.resource.Get(), antialiased_.use, gpu::Use::CopyDest);
+    to_copy.issue();
     list->CopyResource(antialiased_.resource.Get(), color);
-    transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    std::swap(to_copy.Transition.StateBefore, to_copy.Transition.StateAfter);
-    list->ResourceBarrier(1, &to_copy);
+    BarriersD3D12 back{list};
+    back.texture(color, gpu::Use::CopySource, gpu::Use::ColorWrite);
+    back.texture(antialiased_.resource.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
+    back.issue();
+    antialiased_.use = gpu::Use::PixelRead;
 
     ID3D12Resource* source = antialiased_.resource.Get();
     list->SetGraphicsRootSignature(root_signature_.Get());
@@ -638,20 +628,20 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = stencil_.rtv;
-    transition(list, edges_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    transition(list, edges_, gpu::Use::ColorWrite);
     list->ClearRenderTargetView(edges_.rtv, kZero, 0, nullptr);
     list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
     list->OMSetRenderTargets(1, &edges_.rtv, FALSE, &dsv);
     list->OMSetStencilRef(1);
     draw(list, srv_ring, smaa_edges_.Get(), {source}, viewport, c);
-    transition(list, edges_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    transition(list, weights_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    transition(list, edges_, gpu::Use::PixelRead);
+    transition(list, weights_, gpu::Use::ColorWrite);
     list->ClearRenderTargetView(weights_.rtv, kZero, 0, nullptr);
     list->OMSetRenderTargets(1, &weights_.rtv, FALSE, &dsv);
     draw(list, srv_ring, smaa_weights_.Get(),
          {edges_.resource.Get(), area_texture_.Get(), search_texture_.Get()},
          viewport, c);
-    transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, weights_, gpu::Use::PixelRead);
     list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
     draw(list, srv_ring, scene_pass_pipeline(true, samples), {source, weights_.resource.Get()},
          viewport, c);
@@ -764,13 +754,9 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     to.pResource = source.Get();
     to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     list->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource = source.Get();
-    b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    list->ResourceBarrier(1, &b);
+    BarriersD3D12 uses{list.Get()};
+    uses.texture(source.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
+    uses.issue();
     ID3D12DescriptorHeap* heaps[] = {ring.heap()};
     list->SetDescriptorHeaps(1, heaps);
 
@@ -783,7 +769,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
             fail(passes[i], "NO MEMORY");
             continue;
         }
-        transition(list.Get(), antialiased_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        transition(list.Get(), antialiased_, gpu::Use::CopySource);
         D3D12_TEXTURE_COPY_LOCATION src{};
         src.pResource = antialiased_.resource.Get();
         src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -793,7 +779,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         dst.PlacedFootprint.Offset = i * sizeof(pattern);
         dst.PlacedFootprint.Footprint = {kColorFormat, kSize, kSize, 1, kPitch};
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-        transition(list.Get(), antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        transition(list.Get(), antialiased_, gpu::Use::PixelRead);
         recorded[i] = true;
     }
     if (FAILED(list->Close())) {
@@ -907,7 +893,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
             constants.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
             constants.origin[2] = 1;
         } else {
-            transition(list, scaled_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            transition(list, scaled_, gpu::Use::ColorWrite);
             list->OMSetRenderTargets(1, &scaled_.rtv, FALSE, nullptr);
             out_viewport = window_sized;
             constants.origin[0] = 0;
@@ -923,7 +909,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         into(!plan.rcas, vp, e);
         draw(list, srv_ring, (plan.rcas ? easu_ : easu_window_).Get(), {image}, vp, e);
         if (plan.rcas) {
-            transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            transition(list, scaled_, gpu::Use::PixelRead);
             image = scaled_.resource.Get();
         }
     } else if (plan.resample) {
@@ -936,7 +922,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         into(plan.resample_to_target, vp, r);
         draw(list, srv_ring, (plan.resample_to_target ? resample_window_ : resample_).Get(), {image}, vp, r);
         if (!plan.resample_to_target) {
-            transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            transition(list, scaled_, gpu::Use::PixelRead);
             image = scaled_.resource.Get();
         }
     }

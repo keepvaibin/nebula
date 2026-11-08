@@ -2,6 +2,7 @@
 // TextureStore's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
 
 #include "galaxy/render/gpu_texture_backend.h"
+#include "barriers_d3d12.h"
 
 #include <bit>
 #include <sstream>
@@ -179,13 +180,9 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {
     if (reused) {
         // A retired texture rests in the shader-resource state; the copies need copy-destination.
-        D3D12_RESOURCE_BARRIER bar{};
-        bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        bar.Transition.pResource   = texture;
-        bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        bar.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-        upload_list_->ResourceBarrier(1, &bar);
+        BarriersD3D12 uses{upload_list_};
+        uses.texture(texture, gpu::Use::PixelRead, gpu::Use::CopyDest);
+        uses.issue();
     }
     for (unsigned l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max<std::uint32_t>(1u, width >> l);
@@ -210,13 +207,9 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
 
         upload_list_->CopyTextureRegion(&copy_dst, 0, 0, 0, &copy_src, nullptr);
     }
-    D3D12_RESOURCE_BARRIER bar{};
-    bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    bar.Transition.pResource   = texture;
-    bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    bar.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    upload_list_->ResourceBarrier(1, &bar);
+    BarriersD3D12 uses{upload_list_};
+    uses.texture(texture, gpu::Use::CopyDest, gpu::Use::PixelRead);
+    uses.issue();
 }
 
 }  // namespace galaxy::render

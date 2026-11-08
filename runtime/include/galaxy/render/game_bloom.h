@@ -3,6 +3,7 @@
 // The game's bloom on the D3D12 renderer, at the internal resolution.
 
 #include "galaxy/windows_api.h"
+#include "galaxy/render/gpu_use.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -92,7 +93,7 @@ private:
         unsigned width = 0;
         unsigned height = 0;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-        D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
+        gpu::Use use = gpu::Use::CopyDest;
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -100,7 +101,7 @@ private:
     };
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height, bool unordered,
                        std::uint64_t frame_index, unsigned frames_in_flight, const wchar_t* name);
-    void transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state);
+    void transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use);
     bool copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Target& target, const wchar_t* name,
                     std::uint64_t frame_index, unsigned frames_in_flight);
     void retire(std::uint64_t frame_index);
