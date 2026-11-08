@@ -21,21 +21,21 @@ struct BegomanSound {
 
 class BegomanBase : public LiveActor {
 public:
-    BegomanBase(const char*);
+    BegomanBase(const char* pName);
 
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void kill();
-    virtual void makeActorDead();
-    virtual void startClipped();
     virtual void control();
     virtual void calcAndSetBaseMtx();
+    // 0 is the boss.
     virtual u32 getKind() const = 0;
-    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
+    // Returns true when the contact has lasted long enough to knock the begoman away.
+    virtual bool onTouchElectric(const Vec3f& rRailPos, const Vec3f& rRailDir);
     virtual bool setNerveReturn() = 0;
     virtual void setNerveLaunch();
     virtual const Nerve* getNerveWait() = 0;
-    virtual void addVelocityOnPushedFromElectricRail(const Vec3f&, const Vec3f&);
+    virtual void addVelocityOnPushedFromElectricRail(const Vec3f& rRailPos, const Vec3f& rRailDir);
     virtual bool requestAttack();
     const BegomanSound* getSoundNormal();
     const BegomanSound* getSoundBoss();
@@ -43,59 +43,65 @@ public:
     f32 getRailPushVelHBoss() const;
     f32 getRailPushJumpBoss() const;
 
-    void initCore(const TableIter&, const char*, bool);
-    void initEffect(s32);
+    void initCore(const TableIter& rIter, const char* pModelArcName, bool);
+    void initEffect(s32 extraEffectNum);
     void initEffectAndStarPointerBind();
-    void initShadow(f32, const char*);
-    void initSensor(s32, f32, f32, const char*);
-    void initUseSwitchB(const TableIter&, const MR::FunctorBase&);
+    void initShadow(f32 radius, const char* pJointName);
+    void initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadius, const char* pSensorJointName);
+    void initUseSwitchB(const TableIter& rIter, const MR::FunctorBase& rFunctor);
 
-    bool calcJointLocator1(Pos3f*, const JointControllerInfo&);
-    void calcAnimCore(Pos3f*);
+    bool calcJointLocator1(Pos3f* pPos, const JointControllerInfo&);
+    void calcAnimCore(Pos3f* pPos);
 
-    void exeNoCalcWaitCore(f32, const Nerve*);
+    bool isPlayerWaking() const;
+    void setNerveAttackOr(const Nerve* pAttackNerve, const Nerve* pOtherNerve);
+
+    void exeNoCalcWaitCore(f32 tolerance, const Nerve* pNerve);
     void finishNoCalcWait();
-    void exeWaitCore(const MR::ActorMoveParam&, const Nerve*, const Nerve*, const Nerve*);
-    void exeSignAttackCore(const MR::ActorMoveParam&, const Nerve*);
-    void exePursueCore(const MR::ActorMoveParam&, const Nerve*, const Nerve*, const BegomanSound&, f32);
-    void exeTurnCore(const MR::ActorMoveParam&, const Nerve*, const Nerve*, bool);
-    void exeBrakeCore(const Nerve*);
-    void exeStepBackCore(const MR::ActorMoveParam&, const Nerve*);
-    void exeProvokeCore(const MR::ActorMoveParam&, const Nerve*);
-    void exeHitReactionCore(const MR::ActorMoveParam&, const Nerve*);
-    void exeTiredCore(const MR::ActorMoveParam&, const Nerve*);
-    void exeReturnCore(const Nerve*);
-    void exeKeepDistanceCore(const Nerve*, const Nerve*, const Nerve*, f32, f32);
+    void exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pAttackNerve, const Nerve* pNoAttackNerve, const Nerve* pFarNerve);
+    void exeSignAttackCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve);
+    void exePursueCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pBrakeNerve, const Nerve* pTurnNerve, const BegomanSound& rSound, f32 speedRate);
+    void exeTurnCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pBrakeNerve, const Nerve* pPursueNerve, bool notCheckRail);
+    void exeBrakeCore(const Nerve* pNerve);
+    void exeStepBackCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve);
+    void exeProvokeCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve);
+    void exeHitReactionCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve);
+    void exeTiredCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve);
+    void exeReturnCore(const Nerve* pNerve);
+    void exeKeepDistanceCore(const Nerve* pWaitNerve, const Nerve* pAttackNerve, const Nerve* pBrakeNerve, f32 farDist, f32 nearDist);
     void exeLaunch();
     void exeBindStarPointer();
     void finishBindStarPointer();
 
-    static void launchBegomanCore(LiveActor*, BegomanBase**, s32, f32, f32, f32, const Vec3f*);
-    static void launchBegoman(LiveActor*, BegomanBase**, s32, f32, f32, f32, const Vec3f*);
-    static void launchBegomanBabyFromGuarder(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const Vec3f*);
-    static void launchBegomanBabyLauncher(LiveActor*, BegomanBaby**, s32, f32, f32, f32, const Vec3f*);
+    // pFront null: the launcher's own front.
+    static void launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const Vec3f* pFront);
+    static void launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+                                             const Vec3f* pFront);
+    static void launchBegomanBabyLauncher(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+                                          const Vec3f* pFront);
 
     void updateTargetVec();
     void updateRotateY(f32 speed, f32 tolerance = 0.005f);
-    void addVelocityEscapeToSide(f32);
-    void calcDirectionAwayFromRail(Vec3f*, const Vec3f&, const Vec3f&);
-    void pushedFromElectricRail(HitSensor*, const Vec3f&, const Vec3f&, f32, f32, bool);
-    bool checkTouchElectricRail(bool);
+    void addVelocityEscapeToSide(f32 velocity);
+    void calcDirectionAwayFromRail(Vec3f* pOut, const Vec3f& rRailPos, const Vec3f& rRailDir);
+    void pushedFromElectricRail(HitSensor* pSensor, const Vec3f& rRailPos, const Vec3f& rRailDir, f32 awaySpeed, f32 outSpeed, bool limit);
+    bool checkTouchElectricRail(bool notCheckPush);
 
-    bool reboundPlaneWithEffect(const Vec3f&, f32, f32, const char*);
-    void reboundWallAndGround(Vec3f*, bool);
+    bool reboundPlaneWithEffect(const Vec3f& rNormal, f32 rate, f32 cosAngleMin, const char* pEffectName);
+    void reboundWallAndGround(Vec3f* pFront, bool emitGroundSpark);
 
-    void preventSwingby(f32);
-    void preventSlopeBlow(f32);
-    void dampingVerticalAndParallelVelocity(f32, f32);
-    void calcBlowReaction(const Vec3f&, const Vec3f&, f32, f32);
+    void preventSwingby(f32 damp);
+    void preventSlopeBlow(f32 damp);
+    // Scales the upward and ground-plane velocity by rate * damp + (1 - rate).
+    void dampingVerticalAndParallelVelocity(f32 damp, f32 rate);
+    void calcBlowReaction(const Vec3f& rAttackerPos, const Vec3f& rHitPos, f32 blowStrengthParallel, f32 blowStrengthVertical);
 
     bool isNearInitPos() const;
-    bool isFallNextMove(f32, f32);
+    bool isFallNextMove(f32 dist, f32 depth);
     bool trySetReturnNerve();
-    bool tryAndSetStarPointerBind(const Nerve*);
+    bool tryAndSetStarPointerBind(const Nerve* pNerve);
     bool incAndCheckTiredCounter();
-    bool isInWaterAndSetWaterNerve(const Nerve*, Pos3f*);
+    bool isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, Pos3f* pPos);
 
     JointControlDelegator< BegomanBase >* mBaseDelegator;
 
@@ -109,6 +115,7 @@ public:
     Quat4f mSpinQuat;
 
     s32 mTiredCounter;
+    // Consecutive frames touching an electric rail.
     s32 mElectricCounter;
 
     Vec3f mInitPos;
@@ -123,16 +130,16 @@ public:
 
 class BegomanAttackPermitter : public LiveActor {
 public:
-    BegomanAttackPermitter(const char*);
+    BegomanAttackPermitter(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
-    bool requestAttack(BegomanBase*);
+    bool requestAttack(BegomanBase* pBegoman);
 
     void exeWait();
     void exeReceive();
-    inline void exePermit();
+    void exePermit();
 
     BegomanBase* mBegoman;
 
