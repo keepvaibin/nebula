@@ -907,10 +907,13 @@ private:
     s32 mPointerRow;  // the row the pointer asked for
     s32 mHoverRow;
     s32 mHoverTab;
-    // The list held down by the pointer: where, the scroll then, and whether it drags the list (let go where it was
-    // pressed, the row under it is clicked).
+    // The list held down by the pointer: where, what was under it (an arrow, a slider), the scroll then, and whether it
+    // drags the list (let go where it was pressed, what is under it is clicked).
     bool mPressing;
     s32 mPressRow;
+    s32 mPressArrow;
+    bool mPressSlider;
+    f32 mPressX;
     f32 mPressY;
     f32 mPressScroll;
     bool mScrollDrag;
@@ -960,7 +963,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
       mQuestionText(nullptr), mProgressTrack(nullptr), mProgressFill(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
       mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
-      mHoverTab(-1), mPressing(false), mPressRow(-1), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mSwipeFrames(0), mDraggedAt(-1), mHoverArrow(0),
+      mHoverTab(-1), mPressing(false), mPressRow(-1), mPressArrow(0), mPressSlider(false), mPressX(0.0f), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mSwipeFrames(0), mDraggedAt(-1), mHoverArrow(0),
       mHoverSlider(false), mHeldArrow(0), mHeldFrames(0), mSliderRow(-1), mHoverRowButton(-1), mHoverButton(nullptr), mScaleX(1.0f), mWidth(0.0f), mHeight(0.0f), mPanelWidth(0.0f),
       mPanelHeight(0.0f), mLeft(0.0f), mRight(0.0f), mTitleY(0.0f), mTabY(0.0f), mListTop(0.0f), mListBottom(0.0f), mStatusY(0.0f),
       mHintsY(0.0f), mFooterY(0.0f), mValueRight(0.0f) {
@@ -1822,21 +1825,48 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mPointerRow = mHoverRow;
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
     }
-    // The list held down: moved, it is dragged (by pointing and holding A); let go where it was
-    // pressed, the row there is clicked.
+    // The list held down: what the press does waits for the pointer's first move, so a finger scrolling the list over
+    // an arrow or a slider changes nothing. Up or down past cDragStart drags the list; along a slider, the slider
+    // follows; held still on an arrow, it steps and goes on stepping. Let go where it was pressed, what is there is
+    // clicked: an arrow steps (going round at its ends), a slider takes the step under the pointer, a row its own.
     if (mPressing) {
         if (MR::isHeldJump(PLAYER_1)) {
-            if (!mScrollDrag && __builtin_fabsf(y - mPressY) > cDragStart) {
+            const f32 across = __builtin_fabsf(x - mPressX);
+            const f32 along = __builtin_fabsf(y - mPressY);
+            if (!mScrollDrag && mPressSlider && across > cDragStart && across >= along) {
+                mPressing = false;
+                mSliderRow = mPressRow;
+                dragSlider(rView, x);
+                return;
+            }
+            if (!mScrollDrag && along > cDragStart) {
                 mScrollDrag = true;
             }
             if (mScrollDrag) {
                 mScrollTarget = mPressScroll + (y - mPressY);
+                return;
+            }
+            if (mPressArrow != 0 && ++mHeldFrames >= cRepeatDelay) {
+                mPressing = false;
+                NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mPressArrow * 2);
+                mHeldArrow = mPressArrow;
+                mHeldFrames = cRepeatDelay;
             }
             return;
         }
         mPressing = false;
         if (!mScrollDrag && mPressRow >= 0 && mPressRow == mHoverRow) {
-            clickRow(rView, mPressRow);
+            if (mPressArrow != 0) {
+                if (mHoverArrow == mPressArrow) {
+                    NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mPressArrow * 2);
+                }
+            } else if (mPressSlider) {
+                mSliderRow = mPressRow;
+                dragSlider(rView, mPressX);
+                mSliderRow = -1;
+            } else {
+                clickRow(rView, mPressRow);
+            }
         } else if (mScrollDrag) {
             mDraggedAt = static_cast< s32 >(rView.selected);
         }
@@ -1850,24 +1880,20 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         NebulaHost::settingsInput(mHoverButton->mAction, 0);
     } else if (mHoverTab >= 0) {
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_PAGE, mHoverTab);
-    } else if (mHoverRow >= 0 && (mHoverArrow != 0 || mHoverSlider)) {
-        // An arrow steps the setting at once, going round at its ends; a slider takes the step under the pointer.
-        mPointerMode = true;
-        mPointerRow = mHoverRow;
-        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
-        if (mHoverArrow != 0) {
-            NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mHoverArrow * 2);
-            mHeldArrow = mHoverArrow;
-            mHeldFrames = 0;
-        } else {
-            mSliderRow = mHoverRow;
-            dragSlider(rView, x);
-        }
     } else if (!hasModLists(rView) && x >= mLeft && x <= mRight && y <= mListTop && y >= mListBottom) {
         mPressing = true;
         mPressRow = mHoverRow;
+        mPressArrow = mHoverRow >= 0 ? mHoverArrow : 0;
+        mPressSlider = mHoverRow >= 0 && mHoverSlider;
+        mPressX = x;
         mPressY = y;
         mPressScroll = mScroll;
+        mHeldFrames = 0;
+        if (mPressArrow != 0 || mPressSlider) {
+            mPointerMode = true;
+            mPointerRow = mHoverRow;
+            NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
+        }
     }
 }
 
