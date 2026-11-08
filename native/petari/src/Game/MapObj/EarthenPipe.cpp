@@ -22,28 +22,31 @@ namespace NrvEarthenPipe {
     NEW_NERVE(EarthenPipeNrvHideDown, EarthenPipe, HideDown);
 };  // namespace NrvEarthenPipe
 
-EarthenPipe::EarthenPipe(const char* pName) : LiveActor(pName) {
-    mBasePos.x = 0.0f;
-    mBasePos.y = 0.0f;
-    mBasePos.z = 0.0f;
-    mUp.x = 0.0f;
-    mUp.y = 1.0f;
-    mUp.z = 0.0f;
-    mPipeLength = 100.0f;
-    mIsIgnoreGravity = false;
-    mPipeMode = 0;
-    mTargetPipe = 0;
-    mTopJointMtx = nullptr;
-    mBottomJointMtx = nullptr;
-    mHostActor = nullptr;
-    mHorizExitForce = 5.0f;
-    mVertExitForce = 20.0f;
-    mMusicChangeIdx = -1;
-    mMusicState = -1;
-    mIsRabbitWait = 0;
-    mPipeStreamModel = nullptr;
-    mIsWaterFlowing = 0;
-    mCameraInfo = nullptr;
+namespace {
+    // Placement arg 2.
+    enum PipeMode {
+        PIPE_NORMAL = 0,
+        // Hidden; rises to take the player in and sinks again after.
+        PIPE_HIDDEN_RETURN = 1,
+        // Hidden; rises the first time and then stays as a normal pipe.
+        PIPE_HIDDEN_ONCE = 2,
+        // Short collision.
+        PIPE_SHORT = 3,
+        // Usable again once the player is sRearmDistance away, not only after landing.
+        PIPE_REARM_WHEN_AWAY = 4,
+    };
+
+    const f32 sRearmDistance = 100.0f;
+
+    bool isPlayerAway(const LiveActor* pActor) {
+        return !MR::isNearPlayer(pActor, sRearmDistance);
+    }
+};  // namespace
+
+EarthenPipe::EarthenPipe(const char* pName)
+    : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mPipeLength(100.0f), mIsIgnoreGravity(false), mPipeMode(PIPE_NORMAL),
+      mTargetPipe(nullptr), mTopJointMtx(nullptr), mBottomJointMtx(nullptr), mHostActor(nullptr), mHorizExitForce(5.0f), mVertExitForce(20.0f),
+      mMusicChangeIdx(-1), mMusicState(-1), mIsRabbitWait(false), mPipeStreamModel(nullptr), mIsWaterFlowing(false), mCameraInfo(nullptr) {
     mPlayerMtx.identity();
     mPlayerInStartMtx.identity();
     mPlayerInEndMtx.identity();
@@ -60,13 +63,9 @@ void EarthenPipe::init(const TableIter& rIter) {
     MR::getPlacementArg4NoInit(rIter, &mMusicChangeIdx);
     MR::getPlacementArg5NoInit(rIter, &mMusicState);
     MR::getPlacementArg6NoInit(rIter, &mIsIgnoreGravity);
-    s32 arg7 = 0;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
-    bool isWaterPipe = false;
-
-    if (MR::isObjectName(rIter, "EarthenPipeInWater")) {
-        isWaterPipe = true;
-    }
+    s32 colorFrame = 0;
+    MR::getPlacementArg7NoInit(rIter, &colorFrame);
+    bool isWaterPipe = MR::isObjectName(rIter, "EarthenPipeInWater");
 
     mBasePos.set(mPosition);
     MR::calcGravity(this);
@@ -74,39 +73,31 @@ void EarthenPipe::init(const TableIter& rIter) {
     mTopJointMtx = MR::getJointMtx(this, "Top");
     mBottomJointMtx = MR::getJointMtx(this, "Bottom");
     MR::startBrk(this, "EarthenPipe");
-    MR::setBrkFrameAndStop(this, arg7);
-    Pos3f v25;
-    v25.identity();
-    MR::makeMtxTR(v25, this);
-    Vec3f v23;
-    v25.getZDir(v23);
+    MR::setBrkFrameAndStop(this, colorFrame);
+    Pos3f placeMtx;
+    placeMtx.identity();
+    MR::makeMtxTR(placeMtx, this);
+    Vec3f front;
+    placeMtx.getZDir(front);
 
+    // The pipe points up its placement (or against gravity); the bottom joint sits 50 below the top.
     if (mIsIgnoreGravity) {
-        v25.getYDir(mUp);
+        placeMtx.getYDir(mUp);
     } else {
-        mUp.set(mGravity);
-        f32 _x = mUp.x;
-        f32 mult = -1.0f;
-        f32 x = _x * mult;
-        f32 y = mUp.y * mult;
-        f32 z = mUp.z * mult;
-
-        mUp.x = x;
-        mUp.y = y;
-        mUp.z = z;
+        mUp = mGravity * -1.0f;
     }
 
-    Pos3f v24;
-    v24.identity();
-    MR::makeMtxUpFrontPos(&v24, mUp, v23, mBasePos);
-    NebulaMtxCopy(v24, mTopJointMtx);
-    mLavaEffectMtx.setInline(v24);
-    Vec3f v22(mBasePos);
-    Vec3f v21(mUp);
-    v21.scale(50.0f);
-    v22.sub(v21);
-    v24.setTrans(v22);
-    NebulaMtxCopy(v24, mBottomJointMtx);
+    Pos3f jointMtx;
+    jointMtx.identity();
+    MR::makeMtxUpFrontPos(&jointMtx, mUp, front, mBasePos);
+    NebulaMtxCopy(jointMtx, mTopJointMtx);
+    mLavaEffectMtx.setInline(jointMtx);
+    Vec3f bottomPos(mBasePos);
+    Vec3f bottomOffset(mUp);
+    bottomOffset.scale(50.0f);
+    bottomPos.sub(bottomOffset);
+    jointMtx.setTrans(bottomPos);
+    NebulaMtxCopy(jointMtx, mBottomJointMtx);
     MR::setBaseTRMtx(this, mTopJointMtx);
     MR::connectToSceneMapObjNoCalcAnimStrongLight(this);
 
@@ -123,15 +114,15 @@ void EarthenPipe::init(const TableIter& rIter) {
         MR::addHitSensorBinder(this, "BinderWaterLower", 8, 80.0f, Vec3f(0.0f, 50.0f, 0.0f));
     }
 
-    if (mPipeMode == 3) {
+    if (mPipeMode == PIPE_SHORT) {
         MR::initCollisionParts(this, "EarthenPipeS", getSensor("binder"), mTopJointMtx);
     } else {
         MR::initCollisionParts(this, "EarthenPipe", getSensor("binder"), mTopJointMtx);
     }
 
-    f32 v14 = (100.0f * mScale.y);
+    // The placement Y scale is the pipe length (in 100s); the model is moved, not stretched.
+    mPipeLength = 100.0f * mScale.y;
     mScale.y = 1.0f;
-    mPipeLength = v14;
     calcTrans(1.0f);
     initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "LavaAppear", mLavaEffectMtx.mMtx);
@@ -140,7 +131,7 @@ void EarthenPipe::init(const TableIter& rIter) {
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "出現");
     initNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
 
-    if ((mPipeMode - 1) <= 1u) {
+    if (mPipeMode == PIPE_HIDDEN_RETURN || mPipeMode == PIPE_HIDDEN_ONCE) {
         MR::invalidateCollisionParts(this);
         calcTrans(0.0f);
         MR::invalidateHitSensors(this);
@@ -153,10 +144,9 @@ void EarthenPipe::init(const TableIter& rIter) {
         MR::setClippingTypeSphere(mPipeStreamModel, 500.0f);
         MR::tryStartAllAnim(mPipeStreamModel, "EarthenPipeStream");
         mPipeStreamModel->appear();
-        mIsWaterFlowing = 1;
-    } else {
-        mIsWaterFlowing = 0;
     }
+
+    mIsWaterFlowing = isWaterPipe;
 
     MR::useStageSwitchReadA(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);
@@ -182,7 +172,7 @@ void EarthenPipe::makeActorAppeared() {
 bool EarthenPipe::tryShowUp() {
     MR::invalidateClipping(this);
     MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "出現");
-    if (mPipeMode != 1 && mPipeMode != 2) {
+    if (mPipeMode != PIPE_HIDDEN_RETURN && mPipeMode != PIPE_HIDDEN_ONCE) {
         return false;
     }
 
@@ -194,31 +184,25 @@ bool EarthenPipe::tryHideDown() {
     MR::validateClipping(this);
     MR::endMultiActorCamera(this, mCameraInfo, "出現", true);
 
-    if (!mPipeMode || (mPipeMode - 3) <= 1u) {
+    // Every mode that stays up waits for the player to leave; any other (PIPE_HIDDEN_RETURN, or a value outside
+    // the enum) sinks.
+    if (mPipeMode == PIPE_HIDDEN_ONCE) {
+        mPipeMode = PIPE_NORMAL;
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid));
         return false;
-    } else {
-        if (mPipeMode == 2) {
-            mPipeMode = 0;
-            setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid));
-            return false;
-        } else {
-            setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToHideDown));
-            return true;
-        }
     }
+
+    if (mPipeMode == PIPE_NORMAL || mPipeMode == PIPE_SHORT || mPipeMode == PIPE_REARM_WHEN_AWAY) {
+        setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid));
+        return false;
+    }
+
+    setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToHideDown));
+    return true;
 }
 
 bool EarthenPipe::isNerveShowUp() const {
-    bool ret;
-
-    if (isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp))) {
-        ret = true;
-    } else {
-        ret = false;
-    }
-
-    return ret;
+    return isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp));
 }
 
 void EarthenPipe::exeWait() {
@@ -229,7 +213,7 @@ void EarthenPipe::exeWait() {
                 if (mPipeStreamModel != nullptr) {
                     mPipeStreamModel->appear();
                     MR::startAction(mPipeStreamModel, "Appear");
-                    mIsWaterFlowing = 1;
+                    mIsWaterFlowing = true;
                 }
             }
         } else if (MR::isValidHitSensor(this, "binder")) {
@@ -238,7 +222,7 @@ void EarthenPipe::exeWait() {
                 mPipeStreamModel->kill();
             }
 
-            mIsWaterFlowing = 0;
+            mIsWaterFlowing = false;
         }
     }
 }
@@ -249,10 +233,8 @@ void EarthenPipe::exeReady() {
     }
 
     MR::blendMtx(mPlayerInStartMtx.mMtx, mPlayerInEndMtx.mMtx, MR::calcNerveRate(this, MR::getBckFrameMaxPlayer()), mPlayerMtx.mMtx);
-    if (MR::isBckStoppedPlayer()) {
-        if (!MR::isPlayerDead()) {
-            setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvPlayerIn));
-        }
+    if (MR::isBckStoppedPlayer() && !MR::isPlayerDead()) {
+        setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvPlayerIn));
     }
 }
 
@@ -294,50 +276,45 @@ void EarthenPipe::exePlayerOut() {
 
     if (MR::isBckStopped(mHostActor)) {
         MtxPtr baseMtx = mTargetPipe->getBaseMtx();
-        Vec3f v6((baseMtx)[0][2], (baseMtx)[1][2], (baseMtx)[2][2]);
-        Vec3f v5((baseMtx)[0][1], (baseMtx)[1][1], (baseMtx)[2][1]);
-        v6 *= (mTargetPipe->mHorizExitForce);
-        v5 *= (mTargetPipe->mVertExitForce);
-        Vec3f v4(v5);
+        // Jumps out up the target pipe, and forward unless the pipe is under water.
+        Vec3f exitFront(baseMtx[0][2], baseMtx[1][2], baseMtx[2][2]);
+        Vec3f exitUp(baseMtx[0][1], baseMtx[1][1], baseMtx[2][1]);
+        exitFront *= mTargetPipe->mHorizExitForce;
+        exitUp *= mTargetPipe->mVertExitForce;
+        Vec3f exitVel(exitUp);
 
         if (!MR::isInWater(mTargetPipe->mPosition)) {
-            v4.add(v6);
+            exitVel.add(exitFront);
         }
 
         MR::startSound(mHostActor, "SE_PM_JUMP_M");
         MR::startSound(mHostActor, "SE_PV_JUMP_JOY");
         MR::startBckPlayer("EarthenPipeJump", 0);
-        MR::endBindAndPlayerForceWeakGravityJumpInputOff(this, v4);
+        MR::endBindAndPlayerForceWeakGravityJumpInputOff(this, exitVel);
         mHostActor = nullptr;
         mTargetPipe->tryHideDown();
 
-        if (!mIsRabbitWait) {
-            if (MR::isValidSwitchB(this)) {
-                MR::onSwitchB(this);
-            }
+        if (!mIsRabbitWait && MR::isValidSwitchB(this)) {
+            MR::onSwitchB(this);
         }
 
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid));
     }
 }
 
-inline bool isNear(const LiveActor* actor) {
-    return !(MR::isNearPlayer(actor, 100.0f));
-}
-
+// Usable again once the player has landed (or swum or, for PIPE_REARM_WHEN_AWAY, moved) away.
 void EarthenPipe::exeInvalid() {
-    if ((MR::isGreaterStep(this, 30) && MR::isOnGroundPlayer()) || (mPipeMode == 4 && isNear(this)) || (MR::isPlayerSwimming() && isNear(this))) {
+    if ((MR::isGreaterStep(this, 30) && MR::isOnGroundPlayer()) || (mPipeMode == PIPE_REARM_WHEN_AWAY && ::isPlayerAway(this)) ||
+        (MR::isPlayerSwimming() && ::isPlayerAway(this))) {
         MR::validateClipping(this);
         MR::validateHitSensors(this);
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
     }
 }
 
-void EarthenPipe::exeHide() {
-}
+void EarthenPipe::exeHide() {}
 
-void EarthenPipe::exeShow() {
-}
+void EarthenPipe::exeShow() {}
 
 void EarthenPipe::exeWaitToHideDown() {
     if (MR::isStep(this, 40)) {
@@ -401,13 +378,14 @@ void EarthenPipe::control() {
 
 bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgAutoRushBegin(msg)) {
-        if (!(!isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid)) && !isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHide)) &&
-              !isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) && !isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp)) &&
-              !isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToHideDown)) && !isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHideDown)) &&
-              !MR::isPlayerDead())) {
+        if (isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvInvalid)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHide)) ||
+            isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToShowUp)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp)) ||
+            isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWaitToHideDown)) || isNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHideDown)) ||
+            MR::isPlayerDead()) {
             return false;
         }
 
+        // Out of water the player must be over the mouth: within 50 across, not more than 5 below the top.
         Vec3f diff = *MR::getPlayerPos() - Vec3f(mTopJointMtx[0][3], mTopJointMtx[1][3], mTopJointMtx[2][3]);
         Vec3f delta = diff;
         MR::vecKillElement(delta, mGravity, &delta);
@@ -430,7 +408,8 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
         MR::setBaseTRMtx(mHostActor, mPlayerMtx);
         return true;
     }
-    if (msg == ACTMES_HEAVENSDOOR_RUNAWAY_RABBIT_WAIT) {  // Do we have an inline for this?
+    // While the runaway rabbit waits, using the pipe does not set switch B.
+    if (msg == ACTMES_HEAVENSDOOR_RUNAWAY_RABBIT_WAIT) {
         mIsRabbitWait = true;
     }
     if (msg == ACTMES_HEAVENSDOOR_RUNAWAY_RABBIT_START) {
@@ -446,9 +425,10 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return false;
 }
 
-void EarthenPipe::calcTrans(f32 a1) {
+// Raises the pipe top to rate of its length above the base.
+void EarthenPipe::calcTrans(f32 rate) {
     mPosition.set(mUp);
-    mPosition.scale(a1 * mPipeLength);
+    mPosition.scale(rate * mPipeLength);
     mPosition.add(mBasePos);
 
     (mTopJointMtx)[0][3] = mPosition.x;
