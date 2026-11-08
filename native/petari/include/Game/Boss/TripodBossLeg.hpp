@@ -15,20 +15,20 @@ public:
     TripodBossLeg(const char* pName);
 
     virtual ~TripodBossLeg();
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    void initShadow(const char*);
-    void setBody(TripodBoss*);
-    void setMovableArea(TripodBossMovableArea*);
-    void setIKParam(f32, f32, const Vec3f&, const Vec3f&, const Vec3f&);
-    void setStepTarget(TripodBossStepPoint*);
+    void initShadow(const char* pName);
+    void setBody(TripodBoss* pBoss);
+    void setMovableArea(TripodBossMovableArea* pArea);
+    void setIKParam(f32 rootLength, f32 middleLength, const Vec3f& rRootLocalPos, const Vec3f& rSide, const Vec3f& rUp);
+    void setStepTarget(TripodBossStepPoint* pPoint);
     void setWait();
-    void setForceEndPoint(const Vec3f&);
-    void setDemoEffectTiming(bool);
+    void setForceEndPoint(const Vec3f& rPoint);
+    void setDemoEffectTiming(bool isOn);
     const Pos3f& getRootJointMatrix() const;
     const Pos3f& getMiddleJointMatrix() const;
     const Pos3f& getEndJointMatrix() const;
@@ -36,7 +36,7 @@ public:
     const Pos3f& getRootLocalYZMatrix() const;
     const Pos3f& getAnkleLocalXMatrix() const;
     const Pos3f& getAnkleLocalXZMatrix() const;
-    void requestStepTarget(TripodBossStepPoint*);
+    void requestStepTarget(TripodBossStepPoint* pPoint);
     void requestLeaveOut();
     void requestBreak();
     void requestStartDemo();
@@ -49,16 +49,17 @@ public:
     bool canStep() const;
     bool canCancelStep() const;
     bool canWeighting() const;
-    void addToTargetPower(const Vec3f&, f32);
+    void addToTargetPower(const Vec3f& rTarget, f32 power);
     void addIKLimitPower();
-    void addAccelUpLeg(TripodBossStepPoint*, f32);
-    f32 calcLegHeight(TripodBossStepPoint*) const;
+    void moveEndPoint(f32 damping);
+    void addAccelUpLeg(TripodBossStepPoint* pPoint, f32 accel);
+    f32 calcLegHeight(TripodBossStepPoint* pPoint) const;
     void updatePose();
     void updateIKPose();
     bool bindEndPosition();
-    void separateLocalAxisRootJoint(const Pos3f&);
+    void separateLocalAxisRootJoint(const Pos3f& rBodyMtx);
     void separateAnkleJointLocalAxis();
-    void updateAnkleUp(f32);
+    void updateAnkleUp(f32 legHeight);
     void updateAnkleSlerpToBasePose();
     void updateAnkleLanding();
     void updateAnkleShadowMatrix();
@@ -90,17 +91,17 @@ public:
     Quat4f mAnkleStartQuat;
     Quat4f mAnkleLandingQuat;
     Vec3f mRootLocalPos;
-    Vec3f mForceEndPoint;
+    Vec3f mForceEndPoint;  // the foot
     Vec3f mEndVelocity;
     Vec3f mEndTarget;
-    s32 mPoseMode;
+    s32 mPoseMode;  // 0: root from the body, leg up from the boss; 1: local root, world target (demo)
     f32 mLandingHeight;
     bool mIsAttackHit;
     bool mIsPressPlayer;
-    s32 mDemoEffectTiming;
+    s32 mDemoEffectTiming;  // 0 off, 1 the first step on, 2 held on
     AudAnmSoundObject* mSoundObj;
 };
 
 namespace MR {
-    void separateMatrixRotateYZX(Pos3f*, Pos3f*, const Pos3f&, const Pos3f&);
+    void separateMatrixRotateYZX(Pos3f* pYMtx, Pos3f* pYZMtx, const Pos3f& rBase, const Pos3f& rTarget);
 };  // namespace MR
