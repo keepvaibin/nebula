@@ -2,7 +2,6 @@
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 MultiEventCamera::MultiEventCamera() : mName(), mCameraNum(), mCameraIndex(-1), mFrame(), mFrameNum(), mCameraType(), mCameraInfo(), mTarget() {

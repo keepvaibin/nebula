@@ -34,7 +34,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <cstdio>
 
 namespace {
     const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};

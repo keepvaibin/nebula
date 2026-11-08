@@ -6,7 +6,6 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
-#include <cmath>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

@@ -4,7 +4,6 @@
 #include "Game/System/ConfigDataMisc.hpp"
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
 #include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
-#include <cstdio>
 
 ConfigDataCreateChunk::ConfigDataCreateChunk() : mIsCreated() {
     initializeData();

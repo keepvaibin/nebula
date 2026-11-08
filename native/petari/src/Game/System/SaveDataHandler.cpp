@@ -8,7 +8,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <cstdio>
 #include <cstring>
 
 namespace {

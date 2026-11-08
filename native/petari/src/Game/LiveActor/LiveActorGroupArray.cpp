@@ -7,7 +7,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include <cstdio>
 #include <cstring>
 
 namespace {

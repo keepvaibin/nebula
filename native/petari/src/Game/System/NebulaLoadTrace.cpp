@@ -4,7 +4,6 @@
 
 #if defined(NEBULA_DEV)
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <cstdlib>
 
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/System/NebulaHost.hpp"

@@ -12,7 +12,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace {
     const char* cFollowJointName = "Move";

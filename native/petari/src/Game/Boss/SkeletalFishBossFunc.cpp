@@ -1,6 +1,5 @@
 #include "Game/Boss/SkeletalFishBossFunc.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

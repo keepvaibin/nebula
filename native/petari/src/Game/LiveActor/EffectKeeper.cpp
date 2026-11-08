@@ -12,7 +12,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <algorithm>
-#include <cstdio>
 
 namespace {
     const char* cAttributeEffectTag = "Attr";

@@ -12,7 +12,6 @@
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/Table.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

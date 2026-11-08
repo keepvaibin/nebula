@@ -1,6 +1,5 @@
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPadRumbleEntries() {

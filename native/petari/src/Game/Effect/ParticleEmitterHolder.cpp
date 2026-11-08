@@ -5,7 +5,6 @@
 
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"
-#include <algorithm>
 
 ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters) : mEffectSystem(pEffectSystem) {
     mFirst.mEmitters.init(numEmitters);

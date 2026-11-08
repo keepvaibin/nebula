@@ -3,7 +3,6 @@
 #include "Game/System/GameEventFlag.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 s32 GameDataConst::getPowerStarNumToOpenGalaxy(const char* pGalaxyName) {

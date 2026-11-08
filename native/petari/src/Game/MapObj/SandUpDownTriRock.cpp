@@ -3,7 +3,6 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 
 namespace NrvSandUpDownTriRock {
     NEW_NERVE(SandUpDownTriRockNrvWait, SandUpDownTriRock, Wait);

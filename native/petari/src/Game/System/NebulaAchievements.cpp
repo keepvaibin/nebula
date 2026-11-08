@@ -10,7 +10,6 @@
 #include "Game/Util/Table.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

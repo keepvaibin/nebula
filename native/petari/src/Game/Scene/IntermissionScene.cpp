@@ -5,7 +5,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include <cstdio>
 #include <cstdarg>
 
 IntermissionScene::IntermissionScene() : Scene("IntermissionScene") {

@@ -10,7 +10,6 @@
 #include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <cstring>
 
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,

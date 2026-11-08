@@ -19,7 +19,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 

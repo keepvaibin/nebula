@@ -8,7 +8,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

@@ -18,7 +18,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <cstdio>
 
 namespace {
     const char* cFollowJointName = "Move";

@@ -2,7 +2,6 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 
 namespace {
     static const s32 sDemoCameraZoomOutStartFrame = 630;

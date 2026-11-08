@@ -4,7 +4,6 @@
 #include "Game/MapObj/FallOutFieldDraw.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/Material.hpp"
-#include <cstring>
 
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/StageSwitch.hpp"

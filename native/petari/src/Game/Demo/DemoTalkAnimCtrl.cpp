@@ -13,23 +13,22 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
-DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char* a4)
-    : NerveExecutor(a3), mActor(pActor), mExecutorName(a3), mStartPartName(a4), mPartName(nullptr), mAnimName(""), mCameraName(""), mCameraInfo(nullptr), mAnimFrame(0),
+DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* pExecutorName, const char* pStartPartName)
+    : NerveExecutor(pExecutorName), mActor(pActor), mExecutorName(pExecutorName), mStartPartName(pStartPartName), mPartName(nullptr), mAnimName(""), mCameraName(""), mCameraInfo(nullptr), mAnimFrame(0),
       mIsActive(true), mIsScene(false), mIsTalkPart(false), mInterpole(0), mCameraStartStep(0), mCameraEndStep(0), mHavePlayerBck(false), mHaveCamera(false), mHaveBck(false), mHaveBtk(false), mHaveBpk(false),
       mHaveBtp(false), mHaveBrk(false), mHaveBva(false) {
 }
 
-void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const TableIter& rIter) {
-    MR::FormattedName buf("%s.canm", a2);
-    initForActor(a1);
+void DemoTalkAnimCtrl::initForScene(const char* pAnimName, const char* pCameraName, const TableIter& rIter) {
+    MR::FormattedName buf("%s.canm", pCameraName);
+    initForActor(pAnimName);
     mIsScene = true;
     mIsActive = mStartPartName == nullptr;
     mHaveCamera = MR::getResourceHolder(mActor)->mFileInfoTable->isExistRes(buf.c_str());
-    mHavePlayerBck = MR::isExistBck(MR::getPlayerDemoActor(), a1);
+    mHavePlayerBck = MR::isExistBck(MR::getPlayerDemoActor(), pAnimName);
     if (mHaveCamera) {
-        mCameraName = a2;
+        mCameraName = pCameraName;
         mCameraInfo = MR::createActorCameraInfo(rIter);
         MR::initAnimCamera(mActor, mCameraInfo, mCameraName);
     }
@@ -76,18 +75,18 @@ void DemoTalkAnimCtrl::createBckCtrlData(BckCtrlData* pBck, s32 totalSteps) cons
     }
 }
 
-void DemoTalkAnimCtrl::initForActor(const char* a1) {
+void DemoTalkAnimCtrl::initForActor(const char* pAnimName) {
     mIsScene = false;
     mIsActive = true;
     mHaveCamera = false;
     mHavePlayerBck = false;
-    mAnimName = a1;
+    mAnimName = pAnimName;
     mPartName = nullptr;
     mAnimFrame = 0;
     mIsTalkPart = false;
     mCameraInfo = nullptr;
     mCameraName = "";
-    mHaveBck = MR::isExistBck(mActor, a1);
+    mHaveBck = MR::isExistBck(mActor, pAnimName);
     mHaveBtk = MR::isExistBtk(mActor, mAnimName);
     mHaveBpk = MR::isExistBpk(mActor, mAnimName);
     mHaveBtp = MR::isExistBtp(mActor, mAnimName);

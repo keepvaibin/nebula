@@ -16,7 +16,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <cstring>
 
 namespace {
     static const f32 sDefaultPointIntervalU = 40.0f;

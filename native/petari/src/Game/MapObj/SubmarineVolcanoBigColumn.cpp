@@ -3,7 +3,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/AirBubbleHolder.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

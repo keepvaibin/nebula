@@ -9,7 +9,6 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Particle/EmitterCore.hpp"
-#include <algorithm>
 #include <cstring>
 
 

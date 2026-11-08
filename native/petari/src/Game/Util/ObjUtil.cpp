@@ -44,7 +44,6 @@
 #include "Game/Util/SwitchEventFunctorListener.hpp"
 #include <nebula_geometry.hpp>
 
-#include <cstdio>
 #include <cstdarg>
 #include "Game/Util/StringUtil.hpp"
 

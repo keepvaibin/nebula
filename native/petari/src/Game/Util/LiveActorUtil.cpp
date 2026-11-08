@@ -34,7 +34,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/FurMulti.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

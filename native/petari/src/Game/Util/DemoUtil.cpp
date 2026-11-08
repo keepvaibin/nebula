@@ -297,64 +297,64 @@ namespace MR {
     }
 
     bool requestStartTimeKeepDemo(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve,
-                                  const char* pParam5) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+                                  const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
-    bool requestStartTimeKeepDemo(NameObj* pObj, const char* pName, const char* pParam3) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, MR::MovementControlType_Demo, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+    bool requestStartTimeKeepDemo(NameObj* pObj, const char* pName, const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pPartName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoMarioPuppetable(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
-                                                 const Nerve* pCannotStartDemoNerve, const char* pParam5) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                 const Nerve* pCannotStartDemoNerve, const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoMarioPuppetable(NerveExecutor* pExecutor, LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
-                                                 const Nerve* pCannotStartDemoNerve, const char* pParam6) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pExecutor, pActor, pName, pParam6, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                 const Nerve* pCannotStartDemoNerve, const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pExecutor, pActor, pName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
-    bool requestStartTimeKeepDemoMarioPuppetable(NameObj* pObj, const char* pName, const char* pParam3) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+    bool requestStartTimeKeepDemoMarioPuppetable(NameObj* pObj, const char* pName, const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pPartName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoWithoutCinemaFrame(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
-                                                    const Nerve* pCannotStartDemoNerve, const char* pParam4) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+                                                    const Nerve* pCannotStartDemoNerve, const char* pPartName) {
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_None,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
-    bool requestStartDemoRegistered(LiveActor* pActor, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve, const char* pParam4) {
+    bool requestStartDemoRegistered(LiveActor* pActor, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve, const char* pPartName) {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pActor);
 
         if (executor == nullptr) {
             return false;
         }
 
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoRegisteredMarioPuppetable(LiveActor* pActor, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve,
-                                                   const char* pParam4) {
+                                                   const char* pPartName) {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pActor);
 
         if (executor == nullptr) {
             return false;
         }
 
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pPartName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
                                                               DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
                                                               DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
@@ -371,32 +371,33 @@ namespace MR {
         tryInitDemoSheetTalkAnim(pActor, rIter, pName1, pName2, pTalkCtrl);
     }
 
-    void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const TableIter& rIter, const char* pParam3, const char* pParam4,
-                                              const char* pParam5) {
-        TalkMessageCtrl* talkCtrl = MR::createTalkCtrl(pActor, rIter, pParam5, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
+    void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName,
+                                              const char* pMessageName) {
+        TalkMessageCtrl* talkCtrl = MR::createTalkCtrl(pActor, rIter, pMessageName, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
         MR::onRootNodeAutomatic(talkCtrl);
-        MR::tryInitDemoSheetTalkAnim(pActor, rIter, pParam3, pParam4, talkCtrl);
+        MR::tryInitDemoSheetTalkAnim(pActor, rIter, pDemoName, pFileBaseName, talkCtrl);
     }
 
-    void initDemoSheetTalkAnimFunctor(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2,
+    void initDemoSheetTalkAnimFunctor(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName,
                                       TalkMessageCtrl* pTalkCtrl, const MR::FunctorBase& rFunctor) {
-        if (tryInitDemoSheetTalkAnim(pActor, rIter, pName1, pName2, pTalkCtrl)) {
-            DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pName1, nullptr);
+        if (tryInitDemoSheetTalkAnim(pActor, rIter, pDemoName, pFileBaseName, pTalkCtrl)) {
+            DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pDemoName, nullptr);
         }
     }
 
-    bool tryInitDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pParam3, const char* pParam4,
+    // pFileBaseName names the talk animation files and, without pTalkCtrl, the talk message too.
+    bool tryInitDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName,
                                   TalkMessageCtrl* pTalkCtrl) {
-        if (tryRegisterDemoCast(pActor, pParam3, rIter)) {
+        if (tryRegisterDemoCast(pActor, pDemoName, rIter)) {
             if (pTalkCtrl == nullptr) {
-                pTalkCtrl = MR::createTalkCtrl(pActor, rIter, pParam4, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
+                pTalkCtrl = MR::createTalkCtrl(pActor, rIter, pFileBaseName, Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
                 MR::onRootNodeAutomatic(pTalkCtrl);
             }
 
-            DemoFunction::registerDemoTalkMessageCtrlDirect(pActor, pTalkCtrl, pParam3);
-            DemoFunction::tryCreateDemoTalkAnimCtrlForSceneDirect(pActor, pParam3, rIter, pParam4, nullptr, 0, 0);
+            DemoFunction::registerDemoTalkMessageCtrlDirect(pActor, pTalkCtrl, pDemoName);
+            DemoFunction::tryCreateDemoTalkAnimCtrlForSceneDirect(pActor, pDemoName, rIter, pFileBaseName, nullptr, 0, 0);
 
             return true;
         }

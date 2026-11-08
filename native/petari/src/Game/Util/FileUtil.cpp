@@ -8,7 +8,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <cstring>
 
 namespace {
     NebulaArena* getHoldingArena() {

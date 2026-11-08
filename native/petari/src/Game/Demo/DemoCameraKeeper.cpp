@@ -9,7 +9,6 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace {
     extern char sSheetName[];

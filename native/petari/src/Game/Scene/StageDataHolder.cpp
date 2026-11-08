@@ -14,7 +14,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include <cstdio>
 
 template TableIter Table::findElement< s32 >(const char*, s32, int) const;
 template TableIter Table::findElement< const char* >(const char*, const char*, int) const;

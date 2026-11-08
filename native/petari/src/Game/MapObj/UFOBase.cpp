@@ -20,7 +20,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <cstddef>
-#include <cstdio>
 
 namespace NrvUFOBase {
     NEW_NERVE(UFOBaseNrvWait, UFOBase, Wait);

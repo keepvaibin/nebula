@@ -23,7 +23,6 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace {
     enum {

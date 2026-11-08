@@ -8,7 +8,6 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace MR {

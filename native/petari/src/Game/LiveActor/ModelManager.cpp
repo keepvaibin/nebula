@@ -13,7 +13,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 ModelManager::ModelManager()

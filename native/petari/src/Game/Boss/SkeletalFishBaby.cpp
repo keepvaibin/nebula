@@ -19,7 +19,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Render/ModelData.hpp"
-#include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

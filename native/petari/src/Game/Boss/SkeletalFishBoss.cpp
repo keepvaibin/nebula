@@ -39,7 +39,6 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
-#include <cstdio>
 
 namespace {
     // One collision part per row, following the joint.

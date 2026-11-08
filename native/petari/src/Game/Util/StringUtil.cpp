@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstring>
 #include <cstdarg>
-#include <cstdio>
 #include <nebula_format.h>
 
 namespace {

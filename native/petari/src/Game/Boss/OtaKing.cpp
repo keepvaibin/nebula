@@ -13,7 +13,6 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 
-#include <cstdio>
 
 namespace NrvOtaKing {
     NEW_NERVE(OtaKingNrvWaitOnSwitch, OtaKing, WaitOnSwitch);

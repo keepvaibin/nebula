@@ -6,7 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 #include "Game/Util/ByteView.hpp"
 
 namespace MR {

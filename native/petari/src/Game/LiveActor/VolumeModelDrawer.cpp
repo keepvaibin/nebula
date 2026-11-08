@@ -8,7 +8,6 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 VolumeModelDrawInit::VolumeModelDrawInit() : NameObj("ボリュームモデル描画初期化") {

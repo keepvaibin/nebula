@@ -6,7 +6,6 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SwitchEventFunctorListener.hpp"
-#include <algorithm>
 
 namespace {
     SleepControllerHolder* getSleepControllerHolder() {

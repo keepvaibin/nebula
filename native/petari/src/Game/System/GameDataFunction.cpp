@@ -14,7 +14,6 @@
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

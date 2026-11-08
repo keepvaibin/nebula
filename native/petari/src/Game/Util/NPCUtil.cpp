@@ -28,7 +28,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include <cstdio>
 
 namespace {
     const s32 sStarAppearSeStep = 103;

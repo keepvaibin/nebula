@@ -17,7 +17,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <cstdio>
 
 namespace {
     const char* const cDemoMovePartName = "移動";
