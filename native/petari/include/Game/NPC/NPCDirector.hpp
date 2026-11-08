@@ -2,7 +2,6 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
-class NPCCapsParameterReader;
 class NPCItemParameterReader;
 class ResourceHolder;
 
@@ -11,8 +10,7 @@ public:
     NPCDirector();
 
     virtual void init(const TableIter& rIter);
-    
-    NPCCapsParameterReader* mCapsParameterReader;
+
     NPCItemParameterReader* mItemParameterReader;
     ResourceHolder* mDataResourceHolder;
 };
