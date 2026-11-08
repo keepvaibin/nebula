@@ -297,14 +297,7 @@ void Rock::calcAndSetBaseMtx() {
 }
 
 void Rock::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    // smells like inline
-    bool b = false;
-
-    if (isBodySensor(pSender) && !isNerve(GET_NERVE(Rock, RockNrvBreak))) {
-        b = true;
-    }
-
-    if (!b) {
+    if (!isBodySensor(pSender) || isNerve(GET_NERVE(Rock, RockNrvBreak))) {
         return;
     }
 
@@ -371,14 +364,9 @@ bool Rock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 bool Rock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    // smells like inline
-    bool b = false;
+    const bool isBodyIntact = isBodySensor(pReceiver) && !isNerve(GET_NERVE(Rock, RockNrvBreak));
 
-    if (isBodySensor(pReceiver) && !isNerve(GET_NERVE(Rock, RockNrvBreak))) {
-        b = true;
-    }
-
-    if (b && mRockType != WanwanRollingGold) {
+    if (isBodyIntact && mRockType != WanwanRollingGold) {
         if (MR::isMsgExplosionAttack(msg) || MR::isMsgToEnemyAttackBlow(msg) || isRockSensor(pSender)) {
             setNerveBreak(true);
             return true;

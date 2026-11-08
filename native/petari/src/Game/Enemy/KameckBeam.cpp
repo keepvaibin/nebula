@@ -416,7 +416,7 @@ void KameckBeam::exeFire() {
         MR::deleteEffect(this, "BeamFireBurn");
     }
 
-    // Possible inline or a while loop
+    // Gone once every fire ball it made is dead.
     bool killBeam = true;
     for (u32 i = 0; i < ARRAY_SIZE(mKameckFireBalls); i++) {
         if (mKameckFireBalls[i] != nullptr && !MR::isDead(mKameckFireBalls[i])) {

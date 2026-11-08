@@ -438,7 +438,8 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
         f32 vel = MR::getPlayerVelocity()->dot(mFront);
 
         Vec3f swingVel = mFront;
-        if (MR::abs(vel) < 3.0f && 3.0f < projGrabPointVel) {  // is this a bug??
+        // A slow player takes the hang point's speed, but only when it swings forward (no abs on it).
+        if (MR::abs(vel) < 3.0f && 3.0f < projGrabPointVel) {
             vel = projGrabPointVel;
         }
         swingVel.scale(vel);

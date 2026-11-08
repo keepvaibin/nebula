@@ -454,8 +454,8 @@ namespace MR {
         getCameraDirector()->startSubjectiveCamera(camType);
     }
 
-    void endSubjectiveCamera(s32 camType) {
-        getCameraDirector()->endSubjectiveCamera(camType);
+    void endSubjectiveCamera(s32 endType) {
+        getCameraDirector()->endSubjectiveCamera(endType);
     }
 
     void declareEventCameraProgrammable(const char* pEventName) {

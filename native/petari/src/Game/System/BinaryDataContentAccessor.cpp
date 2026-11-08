@@ -51,7 +51,6 @@ s32 BinaryDataContentAccessor::getDataSize() const {
     return MR::loadSaveU16(mData + 2);
 }
 
-// stripped
 s32 BinaryDataContentAccessor::getAttributeNum() const {
     return MR::loadSaveU16(mData + 0);
 }

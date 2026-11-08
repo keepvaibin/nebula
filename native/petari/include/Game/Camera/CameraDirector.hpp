@@ -107,7 +107,7 @@ public:
     void startTalkCamera(const Vec3f&, const Vec3f&, f32, f32, s32);
     void endTalkCamera(bool, s32);
     void startSubjectiveCamera(s32);
-    void endSubjectiveCamera(s32);
+    void endSubjectiveCamera(s32 endType);
     bool isAnimCameraEnd(s32, const char*) const;
     u32 getAnimCameraFrame(s32, const char*) const;
     void pauseOnAnimCamera(s32, const char*);

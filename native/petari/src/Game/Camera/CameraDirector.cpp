@@ -565,8 +565,9 @@ void CameraDirector::startSubjectiveCamera(s32 camType) {
     }
 }
 
-void CameraDirector::endSubjectiveCamera(s32 camType) {
-    bool forceEnd = camType == 0 || camType == 1;  // type ?? or ForceClose
+// endType 0 and 1 end at once (no blur, frame count reset); other values blur out.
+void CameraDirector::endSubjectiveCamera(s32 endType) {
+    bool forceEnd = endType == 0 || endType == 1;
 
     if (mIsSubjectiveCamera == true) {
         mIsSubjectiveCamera = false;
@@ -596,8 +597,6 @@ u32 CameraDirector::getAnimCameraFrame(s32 zoneID, const char* pName) const {
 
     return 0;
 }
-
-// getAnimCameraCurrentFrame
 
 void CameraDirector::pauseOnAnimCamera(s32 zoneID, const char* pName) {
     if (getCurrentCameraMan() == mCameraManEvent) {

@@ -128,7 +128,6 @@ void JumpEmitter::updateRotate() {
 
     MR::normalize(&playerPos);
 
-    // Possible inline.
     f32 newAngle;
     if (playerPos.z == 0.0f) {
         if (playerPos.x >= 0.0f) {

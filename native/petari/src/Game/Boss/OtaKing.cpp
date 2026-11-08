@@ -492,7 +492,6 @@ bool OtaKing::isValidBubbleAttack() const {
     }
 }
 
-// fabricated inline used in multiple functions
 bool OtaKing::isDamageNerve() {
     return isNerve(GET_NERVE(OtaKing, OtaKingNrvDamage)) || isNerve(GET_NERVE(OtaKing, OtaKingNrvPowerUp)) ||
            isNerve(GET_NERVE(OtaKing, OtaKingNrvDown));
