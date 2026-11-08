@@ -6,11 +6,11 @@
 
 class Swinger {
 public:
-    Swinger(const Vec3f*, MtxPtr, f32, f32, f32, const Vec3f*);
+    Swinger(const Vec3f* pPivot, MtxPtr pBaseMtx, f32 length, f32 gravityAccel, f32 damping, const Vec3f* pGravity);
 
     void update();
-    void accel(const Vec3f&);
-    void updateSwingMtx(const Vec3f&);
+    void accel(const Vec3f& rAccel);
+    void updateSwingMtx(const Vec3f& rPivot);
 
     const Vec3f* mPivot;
     Vec3f mTipPos;

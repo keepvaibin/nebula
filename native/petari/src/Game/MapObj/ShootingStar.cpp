@@ -8,13 +8,15 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sFallHeight = 2000.0f;
-    static const f32 sFallRotateYAngle = 10.0f;
-    static const f32 sFallVelScale = 25.0f;
-    static const s32 sShootingLimitTime = 360;
-    static const s32 sPreShootingTime = 20;
-    static const s32 sWaitForNextShootTime = 240;
-    static const f32 sLaunchYVel = 40.0f;
+    const f32 sFallHeight = 2000.0f;
+    const f32 sFallRotateYAngle = 10.0f;
+    const f32 sFallVelScale = 25.0f;
+    const s32 sShootingLimitTime = 360;
+    const s32 sPreShootingTime = 20;
+    const s32 sWaitForNextShootTime = 240;
+    const f32 sLaunchYVel = 40.0f;
+    const f32 sLaunchHVel = 15.0f;
+    const s32 sDefaultStarPieceNum = 5;
 };  // namespace
 
 namespace NrvShootingStar {
@@ -24,31 +26,36 @@ namespace NrvShootingStar {
 };  // namespace NrvShootingStar
 
 ShootingStar::ShootingStar(const char* pName)
-    : LiveActor(pName), mBasePos(0, 0, 0), mFallAxis(0, 0, 1), mGravityPreShoot(0, -1, 0), mNumBurstStarPiece(5),
-      mWaitForNextShootTime(::sWaitForNextShootTime), mFallHeight(::sFallHeight) {
+    : LiveActor(pName), mBasePos(0, 0, 0), mFallAxis(0, 0, 1), mGravityPreShoot(0, -1, 0), mNumBurstStarPiece(sDefaultStarPieceNum),
+      mWaitForNextShootTime(sWaitForNextShootTime), mFallHeight(sFallHeight) {
 }
 
+// Falls along its local -Y from its fall height onto the placed point and bursts into star pieces, again after a wait
+// until its declared pieces run out. Args: 0 pieces per burst, 1 the wait, 2 the fall height, 3 the pieces in all.
 void ShootingStar::init(const TableIter& rIter) {
     initModelManagerWithAnm("ShootingStar", nullptr, false);
     MR::connectToSceneMapObj(this);
     MR::initDefaultPos(this, rIter);
     mBasePos = mPosition;
-    s32 arg0 = 5;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    mNumBurstStarPiece = arg0;
-    arg0 = ::sWaitForNextShootTime;
-    MR::getPlacementArg1NoInit(rIter, &arg0);
-    mWaitForNextShootTime = arg0;
-    f32 arg2 = -1.0f;
-    MR::getPlacementArg2NoInit(rIter, &arg2);
 
-    if (arg2 != -1.0f) {
-        mFallHeight = arg2;
+    s32 burstNum = sDefaultStarPieceNum;
+    MR::getPlacementArg0NoInit(rIter, &burstNum);
+    mNumBurstStarPiece = burstNum;
+
+    s32 waitTime = sWaitForNextShootTime;
+    MR::getPlacementArg1NoInit(rIter, &waitTime);
+    mWaitForNextShootTime = waitTime;
+
+    f32 fallHeight = -1.0f;
+    MR::getPlacementArg2NoInit(rIter, &fallHeight);
+    if (fallHeight != -1.0f) {
+        mFallHeight = fallHeight;
     }
 
-    arg0 = 5;
-    MR::getPlacementArg3NoInit(rIter, &arg0);
-    MR::declareStarPiece(this, arg0);
+    s32 totalNum = sDefaultStarPieceNum;
+    MR::getPlacementArg3NoInit(rIter, &totalNum);
+    MR::declareStarPiece(this, totalNum);
+
     initBinder(100.0f, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));
     initNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
@@ -78,9 +85,10 @@ void ShootingStar::appearPreShooting() {
 }
 
 void ShootingStar::control() {
-    mRotation.y = MR::repeatDegree(mRotation.y + ::sFallRotateYAngle);
+    mRotation.y = MR::repeatDegree(mRotation.y + sFallRotateYAngle);
 }
 
+// Appears at the top of its fall, growing.
 void ShootingStar::exePreShooting() {
     if (MR::isFirstStep(this)) {
         MR::calcGravityVector(this, &mGravityPreShoot, nullptr, 0);
@@ -89,43 +97,48 @@ void ShootingStar::exePreShooting() {
         mPosition.set(mBasePos);
         mPosition.add(mFallAxis * mFallHeight);
         mVelocity.zero();
+
         if (!MR::isValidSwitchAppear(this)) {
             MR::invalidateClipping(this);
         }
     }
 
-    mScale.set(static_cast< f32 >(getNerveStep()) / ::sPreShootingTime);
+    mScale.set(static_cast< f32 >(getNerveStep()) / sPreShootingTime);
 
-    if (MR::isGreaterStep(this, ::sPreShootingTime)) {
+    if (MR::isGreaterStep(this, sPreShootingTime)) {
         setNerve(GET_NERVE(ShootingStar, HostTypeNrvShooting));
     }
 }
 
+// Falls until it hits something (bursting), or starts over after the time limit.
 void ShootingStar::exeShooting() {
     if (MR::isFirstStep(this)) {
-        mVelocity = -mFallAxis * ::sFallVelScale;
+        mVelocity = -mFallAxis * sFallVelScale;
         MR::emitEffect(this, "ShootingStarBlur");
         mScale.set(1.0f, 1.0f, 1.0f);
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_STAR_PIECE_FALL");
-    if (MR::isGreaterStep(this, ::sShootingLimitTime)) {
+
+    if (MR::isGreaterStep(this, sShootingLimitTime)) {
         setNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
         MR::deleteEffect(this, "ShootingStarBlur");
         return;
     }
 
-    if (MR::isBinded(this)) {
-        setNerve(GET_NERVE(ShootingStar, HostTypeNrvWaitForNextShoot));
-
-        if (MR::appearStarPiece(this, mPosition, mNumBurstStarPiece, 15.0f, ::sLaunchYVel, false)) {
-            MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-        } else {
-            MR::startSound(this, "SE_OJ_STAR_PIECE_NOT_BURST");
-        }
-
-        MR::deleteEffect(this, "ShootingStarBlur");
+    if (!MR::isBinded(this)) {
+        return;
     }
+
+    setNerve(GET_NERVE(ShootingStar, HostTypeNrvWaitForNextShoot));
+
+    if (MR::appearStarPiece(this, mPosition, mNumBurstStarPiece, sLaunchHVel, sLaunchYVel, false)) {
+        MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
+    } else {
+        MR::startSound(this, "SE_OJ_STAR_PIECE_NOT_BURST");
+    }
+
+    MR::deleteEffect(this, "ShootingStarBlur");
 }
 
 void ShootingStar::exeWaitForNextShoot() {
@@ -142,7 +155,7 @@ void ShootingStar::exeWaitForNextShoot() {
         MR::invalidateShadow(this, nullptr);
     }
 
-    if (!MR::getDeclareRemnantStarPieceCount(this)) {
+    if (MR::getDeclareRemnantStarPieceCount(this) == 0) {
         kill();
     }
 
