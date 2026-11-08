@@ -37,6 +37,7 @@ public:
     s32 mWaitTime;
     s32 mAttackTime;
     s32 mEnergy;
-    f32 mPosZ;
-    bool mInDemo;
+    // Body z at appear; a chance hit puts the body back there.
+    f32 mBattlePosZ;
+    bool mIsDemoChance;
 };

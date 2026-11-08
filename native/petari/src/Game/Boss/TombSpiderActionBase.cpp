@@ -14,23 +14,77 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-// NOTE: this function order is how it appears in the debug symbol map, because that order lets the .data section match.
-
 namespace {
-    static const s32 sEnergyMax = 3;
-    static const s32 sStepAttackLoopSensorValidate = 20;
-    static const s32 sStepAttackLoopMin = 30;
-    static const s32 sStepChanceStartEndSign1 = -480;
-    static const s32 sStepChanceStartEndSign2 = -240;
-    static const f32 sChanceStartEndSignAnimRate1 = 1.0f;
-    static const f32 sChanceStartEndSignAnimRate2 = 2.0f;
-    static const s32 sStepChanceEndDemo = 120;
-    static const s32 sStepChanceEndAnim = 30;
-};  // namespace
+    const s32 cEnergyMax = 3;
+    const s32 cStepAttackLoopSensorValidate = 20;
+    // After a hit the acid keeps going this long.
+    const s32 cStepAttackLoopMin = 30;
+    // Steps before the chance ends at which the end-sign animation starts, then doubles in speed.
+    const s32 cStepChanceEndSign1 = -480;
+    const s32 cStepChanceEndSign2 = -240;
+    const f32 cChanceEndSignAnimRate1 = 1.0f;
+    const f32 cChanceEndSignAnimRate2 = 2.0f;
+    const s32 cStepChanceEndDemo = 120;
+    const s32 cStepChanceEndAnim = 30;
+    const s32 cGlandNum = 4;
+    const s32 cVitalSpotNum = 3;
+
+    TombSpiderGland* getGland(const TombSpider* pParent, s32 index) {
+        switch (index) {
+        case 0:
+            return TombSpiderFunction::getGlandFrontL(pParent);
+        case 1:
+            return TombSpiderFunction::getGlandFrontR(pParent);
+        case 2:
+            return TombSpiderFunction::getGlandRearL(pParent);
+        default:
+            return TombSpiderFunction::getGlandRearR(pParent);
+        }
+    }
+
+    TombSpiderVitalSpot* getVitalSpot(const TombSpider* pParent, s32 index) {
+        switch (index) {
+        case 0:
+            return TombSpiderFunction::getVitalSpotC(pParent);
+        case 1:
+            return TombSpiderFunction::getVitalSpotL(pParent);
+        default:
+            return TombSpiderFunction::getVitalSpotR(pParent);
+        }
+    }
+
+    void startUndamagedGlandAction(TombSpider* pParent, const char* pActionName) {
+        for (s32 i = 0; i < cGlandNum; i++) {
+            if (!getGland(pParent, i)->isDamage()) {
+                MR::startAction(getGland(pParent, i), pActionName);
+            }
+        }
+    }
+
+    void startAttackGlandAction(TombSpider* pParent, const char* pActionName) {
+        for (s32 i = 0; i < cGlandNum; i++) {
+            if (TombSpiderFunction::isAttackEnable(getGland(pParent, i))) {
+                MR::startAction(getGland(pParent, i), pActionName);
+            }
+        }
+    }
+
+    void startChanceVitalSpots(const TombSpider* pParent) {
+        for (s32 i = 0; i < cVitalSpotNum; i++) {
+            getVitalSpot(pParent, i)->startChance();
+        }
+    }
+
+    void endChanceVitalSpots(const TombSpider* pParent) {
+        for (s32 i = 0; i < cVitalSpotNum; i++) {
+            getVitalSpot(pParent, i)->endChance();
+        }
+    }
+}  // namespace
 
 TombSpiderActionBase::TombSpiderActionBase(TombSpider* pParent, const char* pName)
     : ActorStateBase< TombSpider >(pName, pParent), mParent(pParent), mRotateAccel(0.0f), mRotateSpeed(0.0f), mHitStep(-1), mWaitTime(0),
-      mAttackTime(0), mEnergy(::sEnergyMax), mPosZ(0.0f), mInDemo(true) {
+      mAttackTime(0), mEnergy(::cEnergyMax), mBattlePosZ(0.0f), mIsDemoChance(true) {
 }
 
 void TombSpiderActionBase::init() {
@@ -38,39 +92,19 @@ void TombSpiderActionBase::init() {
 }
 
 void TombSpiderActionBase::appear() {
-    mPosZ = mParent->mPosition.z;
-    mEnergy = ::sEnergyMax;
+    mBattlePosZ = mParent->mPosition.z;
+    mEnergy = ::cEnergyMax;
     mIsDead = false;
 }
 
 bool TombSpiderActionBase::updateWait(s32 minWaitTime, s32 maxWaitTime) {
     if (MR::isFirstStep(this)) {
         MR::startAction(mParent, "Wait");
-
-        if (!TombSpiderFunction::getGlandFrontL(mParent)->isDamage()) {
-            MR::startAction(TombSpiderFunction::getGlandFrontL(mParent), "Wait");
-        }
-
-        if (!TombSpiderFunction::getGlandFrontR(mParent)->isDamage()) {
-            MR::startAction(TombSpiderFunction::getGlandFrontR(mParent), "Wait");
-        }
-
-        if (!TombSpiderFunction::getGlandRearL(mParent)->isDamage()) {
-            MR::startAction(TombSpiderFunction::getGlandRearL(mParent), "Wait");
-        }
-
-        if (!TombSpiderFunction::getGlandRearR(mParent)->isDamage()) {
-            MR::startAction(TombSpiderFunction::getGlandRearR(mParent), "Wait");
-        }
-
+        ::startUndamagedGlandAction(mParent, "Wait");
         mWaitTime = MR::getRandom(minWaitTime, maxWaitTime);
     }
 
-    if (MR::isStep(this, mWaitTime)) {
-        return true;
-    }
-
-    return false;
+    return MR::isStep(this, mWaitTime);
 }
 
 bool TombSpiderActionBase::updateDamageEye() {
@@ -81,11 +115,7 @@ bool TombSpiderActionBase::updateDamageEye() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
 bool TombSpiderActionBase::updateDamageHip() {
@@ -96,11 +126,7 @@ bool TombSpiderActionBase::updateDamageHip() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
 bool TombSpiderActionBase::updateDamageGland() {
@@ -112,33 +138,13 @@ bool TombSpiderActionBase::updateDamageGland() {
         MR::startSound(mParent, "SE_BM_TSPIDER_DAMAGE_GLAND");
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
 bool TombSpiderActionBase::updateAttackStart() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mParent, "AttackStart");
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandFrontL(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandFrontL(mParent), "AttackStart");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandFrontR(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandFrontR(mParent), "AttackStart");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandRearL(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandRearL(mParent), "AttackStart");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandRearR(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandRearR(mParent), "AttackStart");
-        }
-
+        ::startAttackGlandAction(mParent, "AttackStart");
         MR::startSound(mParent, "SE_BM_TSPIDER_PRE_ACID");
     }
 
@@ -150,6 +156,7 @@ bool TombSpiderActionBase::updateAttackStart() {
     return false;
 }
 
+// The body turns toward the player while acid sprays; a hit (mHitStep) cuts the spray short.
 bool TombSpiderActionBase::updateAttackLoop(s32 minAttackTime, s32 maxAttackTime, f32 rotateAccel, f32 maxRotateSpeed) {
     if (MR::isFirstStep(this)) {
         mRotateSpeed = 0.0f;
@@ -162,28 +169,14 @@ bool TombSpiderActionBase::updateAttackLoop(s32 minAttackTime, s32 maxAttackTime
             mRotateAccel = -rotateAccel;
         }
 
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandFrontL(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandFrontL(mParent), "AttackLoop");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandFrontR(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandFrontR(mParent), "AttackLoop");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandRearL(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandRearL(mParent), "AttackLoop");
-        }
-
-        if (TombSpiderFunction::isAttackEnable(TombSpiderFunction::getGlandRearR(mParent))) {
-            MR::startAction(TombSpiderFunction::getGlandRearR(mParent), "AttackLoop");
-        }
+        ::startAttackGlandAction(mParent, "AttackLoop");
 
         TombSpiderFunction::startAcid(mParent);
         mHitStep = -1;
         mAttackTime = MR::getRandom(minAttackTime, maxAttackTime);
     }
 
-    if (MR::isStep(this, ::sStepAttackLoopSensorValidate)) {
+    if (MR::isStep(this, ::cStepAttackLoopSensorValidate)) {
         TombSpiderFunction::validateAttackSensor(mParent);
     }
 
@@ -194,12 +187,7 @@ bool TombSpiderActionBase::updateAttackLoop(s32 minAttackTime, s32 maxAttackTime
 
     MR::startLevelSound(mParent, "SE_BM_LV_TSPIDER_ACID");
 
-    if (mHitStep >= 0 && MR::isStep(this, mHitStep + ::sStepAttackLoopMin)) {
-        TombSpiderFunction::endAcid(mParent);
-        return true;
-    }
-
-    if (MR::isGreaterStep(this, mAttackTime)) {
+    if ((mHitStep >= 0 && MR::isStep(this, mHitStep + ::cStepAttackLoopMin)) || MR::isGreaterStep(this, mAttackTime)) {
         TombSpiderFunction::endAcid(mParent);
         return true;
     }
@@ -213,28 +201,18 @@ bool TombSpiderActionBase::updateAttackEnd() {
         MR::startSound(mParent, "SE_BM_TSPIDER_ACID_END");
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
+// The first chance plays as a demo; later ones play in battle.
 bool TombSpiderActionBase::updateChanceStart() {
-    if (mInDemo) {
-        return updateChanceStartDemo();
-    } else {
-        return updateChanceStartNoDemo();
-    }
+    return mIsDemoChance ? updateChanceStartDemo() : updateChanceStartNoDemo();
 }
 
 bool TombSpiderActionBase::updateChanceStartNoDemo() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mParent, "ChanceStart");
-
-        TombSpiderFunction::getVitalSpotC(mParent)->startChance();
-        TombSpiderFunction::getVitalSpotL(mParent)->startChance();
-        TombSpiderFunction::getVitalSpotR(mParent)->startChance();
+        ::startChanceVitalSpots(mParent);
 
         TombSpiderFunction::invalidateMainPartsSensor(mParent);
         TombSpiderFunction::invalidateGlandSensor(mParent);
@@ -261,10 +239,7 @@ bool TombSpiderActionBase::updateChanceStartDemo() {
 
         MR::sendMsgToAllLiveActor(ACTMES_TOMB_SPIDER_DEMO_START, nullptr);
         MR::startAction(mParent, "ChanceStart");
-
-        TombSpiderFunction::getVitalSpotC(mParent)->startChance();
-        TombSpiderFunction::getVitalSpotL(mParent)->startChance();
-        TombSpiderFunction::getVitalSpotR(mParent)->startChance();
+        ::startChanceVitalSpots(mParent);
     }
 
     if (MR::isBckStopped(mParent)) {
@@ -276,6 +251,7 @@ bool TombSpiderActionBase::updateChanceStartDemo() {
     return false;
 }
 
+// The end sign plays once at the first sign step, then loops, at double speed from the second.
 bool TombSpiderActionBase::updateChanceWait(s32 waitEndTime) {
     if (MR::isFirstStep(this)) {
         MR::startAction(mParent, "ChanceWait");
@@ -283,25 +259,21 @@ bool TombSpiderActionBase::updateChanceWait(s32 waitEndTime) {
         MR::startSpiderThreadChance();
     }
 
-    if (MR::isStep(this, waitEndTime + ::sStepChanceStartEndSign1)) {
+    if (MR::isStep(this, waitEndTime + ::cStepChanceEndSign1)) {
         MR::startAction(mParent, "ChanceWaitEndSign");
-        MR::setBckRate(mParent, ::sChanceStartEndSignAnimRate1);
+        MR::setBckRate(mParent, ::cChanceEndSignAnimRate1);
     }
 
     if (MR::isBckOneTimeAndStopped(mParent)) {
         MR::startAction(mParent, "ChanceWaitEndSign");
-        if (MR::isGreaterStep(this, waitEndTime + ::sStepChanceStartEndSign2)) {
-            MR::setBckRate(mParent, ::sChanceStartEndSignAnimRate2);
-        } else if (MR::isGreaterStep(this, waitEndTime + ::sStepChanceStartEndSign1)) {
-            MR::setBckRate(mParent, ::sChanceStartEndSignAnimRate1);
+        if (MR::isGreaterStep(this, waitEndTime + ::cStepChanceEndSign2)) {
+            MR::setBckRate(mParent, ::cChanceEndSignAnimRate2);
+        } else if (MR::isGreaterStep(this, waitEndTime + ::cStepChanceEndSign1)) {
+            MR::setBckRate(mParent, ::cChanceEndSignAnimRate1);
         }
     }
 
-    if (MR::isStep(this, waitEndTime)) {
-        return true;
-    }
-
-    return false;
+    return MR::isStep(this, waitEndTime);
 }
 
 bool TombSpiderActionBase::updateChanceDamage() {
@@ -311,7 +283,7 @@ bool TombSpiderActionBase::updateChanceDamage() {
 
     if (MR::isBckStopped(mParent)) {
         TombSpiderFunction::killThreadAttacherAll(mParent);
-        mParent->mPosition.z = mPosZ;
+        mParent->mPosition.z = mBattlePosZ;
         return true;
     }
 
@@ -319,20 +291,13 @@ bool TombSpiderActionBase::updateChanceDamage() {
 }
 
 bool TombSpiderActionBase::updateChanceEnd() {
-    if (mInDemo) {
-        return updateChanceEndDemo();
-    } else {
-        return updateChanceEndNoDemo();
-    }
+    return mIsDemoChance ? updateChanceEndDemo() : updateChanceEndNoDemo();
 }
 
 bool TombSpiderActionBase::updateChanceEndNoDemo() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mParent, "ChanceEnd");
-
-        TombSpiderFunction::getVitalSpotC(mParent)->endChance();
-        TombSpiderFunction::getVitalSpotL(mParent)->endChance();
-        TombSpiderFunction::getVitalSpotR(mParent)->endChance();
+        ::endChanceVitalSpots(mParent);
 
         TombSpiderFunction::invalidateVitalSpotSensor(mParent);
         MR::offSwitchA(mParent);
@@ -361,15 +326,13 @@ bool TombSpiderActionBase::updateChanceEndDemo() {
         MR::sendMsgToAllLiveActor(ACTMES_TOMB_SPIDER_DEMO_START, nullptr);
     }
 
-    if (MR::isStep(this, ::sStepChanceEndAnim)) {
+    if (MR::isStep(this, ::cStepChanceEndAnim)) {
         MR::startAction(mParent, "ChanceEnd");
-        TombSpiderFunction::getVitalSpotC(mParent)->endChance();
-        TombSpiderFunction::getVitalSpotL(mParent)->endChance();
-        TombSpiderFunction::getVitalSpotR(mParent)->endChance();
+        ::endChanceVitalSpots(mParent);
     }
 
-    if (MR::isStep(this, ::sStepChanceEndDemo)) {
-        mInDemo = false;
+    if (MR::isStep(this, ::cStepChanceEndDemo)) {
+        mIsDemoChance = false;
         TombSpiderFunction::endTombSpiderDemo(mParent, "チャンス終了", "チャンス開始[トゥームスパイダー]");
         return true;
     }
@@ -378,19 +341,19 @@ bool TombSpiderActionBase::updateChanceEndDemo() {
 }
 
 bool TombSpiderActionBase::tryWaitChanceStartDemo(const Nerve* pNerve) {
-    if (!mInDemo) {
+    if (!mIsDemoChance) {
         return false;
     }
-    // inline? this string appears later than this
+
     MR::requestStartDemoMarioPuppetable(this, mParent, "チャンス開始", pNerve, nullptr);
     return true;
 }
 
 bool TombSpiderActionBase::tryWaitChanceEndDemo(const Nerve* pNerve) {
-    if (!mInDemo) {
+    if (!mIsDemoChance) {
         return false;
     }
-    // inline? this string appears later than this
+
     MR::requestStartDemoMarioPuppetable(this, mParent, "チャンス終了", pNerve, nullptr);
     return true;
 }
