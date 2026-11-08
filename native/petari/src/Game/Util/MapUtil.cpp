@@ -90,48 +90,50 @@ namespace MR {
         return pTriangle->getNormal(0);
     }
 
-    bool isWallPolygon(const Vec3f& rParam1, const Vec3f& rParam2) {
-        if (isNearZero(rParam1)) {
+    bool isWallPolygon(const Vec3f& rNormal, const Vec3f& rGravity) {
+        if (isNearZero(rNormal)) {
             return false;
         }
 
-        return isWallPolygon(rParam1.dot(rParam2));
+        return isWallPolygon(rNormal.dot(rGravity));
     }
 
-    bool isFloorPolygon(const Vec3f& rParam1, const Vec3f& rParam2) {
-        if (isNearZero(rParam1)) {
+    bool isFloorPolygon(const Vec3f& rNormal, const Vec3f& rGravity) {
+        if (isNearZero(rNormal)) {
             return false;
         }
 
-        return isFloorPolygon(rParam1.dot(rParam2));
+        return isFloorPolygon(rNormal.dot(rGravity));
     }
 
-    bool isFloorPolygonCos(const Vec3f& rParam1, const Vec3f& rParam2, f32 param3) {
-        if (isNearZero(rParam1)) {
+    // A floor no steeper than acos(minCos).
+    bool isFloorPolygonCos(const Vec3f& rNormal, const Vec3f& rGravity, f32 minCos) {
+        if (isNearZero(rNormal)) {
             return false;
         }
 
-        if (-rParam1.dot(rParam2) < param3) {
+        if (-rNormal.dot(rGravity) < minCos) {
             return false;
         }
 
-        return isFloorPolygon(rParam1.dot(rParam2));
+        return isFloorPolygon(rNormal.dot(rGravity));
     }
 
-    bool isWallPolygon(f32 param1) {
-        return MR::abs(param1) < 0.34202015f;
+    // normalDotGravity: the polygon's normal dotted with gravity. Within 70 degrees of upright is a wall.
+    bool isWallPolygon(f32 normalDotGravity) {
+        return MR::abs(normalDotGravity) < 0.34202015f;  // cos 70
     }
 
-    bool isFloorPolygon(f32 param1) {
-        if (isWallPolygon(param1)) {
+    bool isFloorPolygon(f32 normalDotGravity) {
+        if (isWallPolygon(normalDotGravity)) {
             return false;
         }
 
-        return param1 < 0.0f;
+        return normalDotGravity < 0.0f;
     }
 
-    bool isCeilingPolygon(f32 param1) {
-        if (isWallPolygon(param1) || isFloorPolygon(param1)) {
+    bool isCeilingPolygon(f32 normalDotGravity) {
+        if (isWallPolygon(normalDotGravity) || isFloorPolygon(normalDotGravity)) {
             return false;
         }
 
@@ -313,12 +315,12 @@ namespace MR {
         return &sSortBuffer[sortIndex].mParentTriangle;
     }
 
-    bool isExistMapCollision(const Vec3f& rParam1, const Vec3f& rParam2) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
+    bool isExistMapCollision(const Vec3f& rStart, const Vec3f& rDirection) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rStart, rDirection, 1, nullptr, nullptr) != 0;
     }
 
-    bool isExistMoveLimitCollision(const Vec3f& rParam1, const Vec3f& rParam2) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
+    bool isExistMoveLimitCollision(const Vec3f& rStart, const Vec3f& rDirection) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->checkStrikeLine(rStart, rDirection, 1, nullptr, nullptr) != 0;
     }
 
     bool isExistMapCollisionExceptActor(const Vec3f& rStart, const Vec3f& rDirection, const LiveActor* pActor) {
@@ -326,12 +328,12 @@ namespace MR {
         return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rStart, rDirection, 1, &filter, nullptr) != 0;
     }
 
-    bool checkStrikePointToMap(const Vec3f& rParam1, HitInfo* pParam2) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikePoint(rParam1, pParam2) != 0;
+    bool checkStrikePointToMap(const Vec3f& rPosition, HitInfo* pHitInfo) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikePoint(rPosition, pHitInfo) != 0;
     }
 
-    bool checkStrikeBallToMap(const Vec3f& rParam1, f32 param2) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBall(rParam1, param2, false, nullptr, nullptr) != 0;
+    bool checkStrikeBallToMap(const Vec3f& rPosition, f32 ballRadius) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBall(rPosition, ballRadius, false, nullptr, nullptr) != 0;
     }
 
     bool calcMapGround(const Vec3f& rPos, Vec3f* pGround, f32 length) {
@@ -355,8 +357,8 @@ namespace MR {
         return ::getFirstPolyOnLineCategory(pGround, nullptr, hit.mHitPos, direction, nullptr, &filter, 0);
     }
 
-    bool isFallNextMove(const LiveActor* pActor, f32 param2, f32 param3, f32 param4, const TriangleFilterBase* pParam5) {
-        return isFallNextMove(pActor->mPosition, pActor->mVelocity, pActor->mGravity, param2, param3, param4, pParam5);
+    bool isFallNextMove(const LiveActor* pActor, f32 forwardDistance, f32 upperDistance, f32 lowerDistance, const TriangleFilterBase* pTriangleFilter) {
+        return isFallNextMove(pActor->mPosition, pActor->mVelocity, pActor->mGravity, forwardDistance, upperDistance, lowerDistance, pTriangleFilter);
     }
 
     bool isFallNextMove(const Vec3f& rPos, const Vec3f& rVelocity, const Vec3f& rGravity, f32 forwardDistance, f32 upperDistance,
@@ -404,12 +406,12 @@ namespace MR {
         *pVelocity = rPoint - previousPoint;
     }
 
-    u32 createAreaPolygonList(Triangle* pTriangle, u32 param2, const Vec3f& rParam3, const Vec3f& rParam4) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonList(pTriangle, param2, rParam3, rParam4);
+    u32 createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rStart, const Vec3f& rEnd) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonList(pTriangles, maxTriangles, rStart, rEnd);
     }
 
-    u32 createAreaPolygonListArray(Triangle* pTriangle, u32 param2, Vec3f* pParam3, u32 param4) {
-        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonListArray(pTriangle, param2, pParam3, param4);
+    u32 createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, Vec3f* pVertices, u32 vertexCount) {
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonListArray(pTriangles, maxTriangles, pVertices, vertexCount);
     }
 
     bool trySetMoveLimitCollision(LiveActor* pActor) {

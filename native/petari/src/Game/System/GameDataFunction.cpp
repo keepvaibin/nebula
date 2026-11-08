@@ -129,12 +129,12 @@ namespace GameDataFunction {
         getCurrentGameDataHolder()->setGameEventValueForBit(pName, index, isOn);
     }
 
-    s32 setupAlreadyDoneFlag(const char* pZoneName, const TableIter& rIter, u32* pParam3) {
-        return ::getGameDataTemporaryInGalaxy()->setupAlreadyDoneFlag(pZoneName, rIter, pParam3);
+    s32 setupAlreadyDoneFlag(const char* pName, const TableIter& rIter, u32* pIsDone) {
+        return ::getGameDataTemporaryInGalaxy()->setupAlreadyDoneFlag(pName, rIter, pIsDone);
     }
 
-    void updateAlreadyDoneFlag(int param1, u32 param2) {
-        ::getGameDataTemporaryInGalaxy()->updateAlreadyDoneFlag(param1, param2);
+    void updateAlreadyDoneFlag(int index, u32 isDone) {
+        ::getGameDataTemporaryInGalaxy()->updateAlreadyDoneFlag(index, isDone);
     }
 
     void restoreGalaxyCometStatus(int cometId, u16* pCometStatus, u16* pPastSecond) {

@@ -293,12 +293,12 @@ namespace MR {
         return GameDataFunction::hasGrandStar(2);
     }
 
-    s32 setupAlreadyDoneFlag(const char* pParam1, const TableIter& rIter, u32* pParam3) {
-        return GameDataFunction::setupAlreadyDoneFlag(pParam1, rIter, pParam3);
+    s32 setupAlreadyDoneFlag(const char* pName, const TableIter& rIter, u32* pIsDone) {
+        return GameDataFunction::setupAlreadyDoneFlag(pName, rIter, pIsDone);
     }
 
-    void updateAlreadyDoneFlag(int param1, u32 param2) {
-        GameDataFunction::updateAlreadyDoneFlag(param1, param2);
+    void updateAlreadyDoneFlag(int index, u32 isDone) {
+        GameDataFunction::updateAlreadyDoneFlag(index, isDone);
     }
 
     bool isOnGameEventFlagGalaxyOpen(const char* pKey) {
@@ -353,20 +353,20 @@ namespace MR {
         return GameDataConst::isGrandStar(MR::getCurrentStageName(), starId);
     }
 
-    bool hasPowerStarInCurrentStageWithDeclarer(const char* pParam1, s32 param2) {
-        return MR::isSuccessEventPowerStar(pParam1, param2);
+    bool hasPowerStarInCurrentStageWithDeclarer(const char* pDeclarer, s32 starNum) {
+        return MR::isSuccessEventPowerStar(pDeclarer, starNum);
     }
 
-    bool isPowerStarGreenInCurrentStageWithDeclarer(const char* pParam1, s32 param2) {
-        return MR::isGreenEventPowerStar(pParam1, param2);
+    bool isPowerStarGreenInCurrentStageWithDeclarer(const char* pDeclarer, s32 starNum) {
+        return MR::isGreenEventPowerStar(pDeclarer, starNum);
     }
 
-    bool isPowerStarRedInCurrentStageWithDeclarer(const char* pParam1, s32 param2) {
-        return MR::isRedEventPowerStar(pParam1, param2);
+    bool isPowerStarRedInCurrentStageWithDeclarer(const char* pDeclarer, s32 starNum) {
+        return MR::isRedEventPowerStar(pDeclarer, starNum);
     }
 
-    bool isGrandStarInCurrentStageWithDeclarer(const char* pParam1, s32 param2) {
-        return MR::isGrandEventPowerStar(pParam1, param2);
+    bool isGrandStarInCurrentStageWithDeclarer(const char* pDeclarer, s32 starNum) {
+        return MR::isGrandEventPowerStar(pDeclarer, starNum);
     }
 
     bool hasPowerStarAtResultSequence() {
@@ -457,23 +457,23 @@ namespace MR {
         GameDataFunction::setGameEventValueForBit("WarpPodSaveBits", bit, isOn);
     }
 
-    s32 registerStorageSpinDriverPathDrawRange(const NameObj* pParam1, const TableIter& rIter, int param3, f32* pParam4) {
+    s32 registerStorageSpinDriverPathDrawRange(const NameObj* pObj, const TableIter& rIter, int spinDriverId, f32* pDrawRange) {
         const char* pStageName = MR::getCurrentStageName();
         int scenarioNo = MR::getCurrentScenarioNo();
         int zoneId = MR::getPlacedZoneId(rIter);
 
-        if (param3 <= 0) {
+        if (spinDriverId <= 0) {
             return -1;
         }
 
-        return GameDataFunction::registerStorageSpinDriverPathDrawRange(pStageName, scenarioNo, zoneId, param3, pParam4);
+        return GameDataFunction::registerStorageSpinDriverPathDrawRange(pStageName, scenarioNo, zoneId, spinDriverId, pDrawRange);
     }
 
-    void updateStorageSpinDriverPathDrawRange(int param1, f32 param2) {
+    void updateStorageSpinDriverPathDrawRange(int spinDriverIndex, f32 drawRange) {
         const char* pStageName = MR::getCurrentStageName();
         s32 scenarioNo = MR::getCurrentScenarioNo();
 
-        GameDataFunction::updateStorageSpinDriverPathDrawRange(pStageName, scenarioNo, param1, param2);
+        GameDataFunction::updateStorageSpinDriverPathDrawRange(pStageName, scenarioNo, spinDriverIndex, drawRange);
     }
 
     s32 getStarPieceNumGivingToTicoSeed(int index) {
@@ -523,12 +523,12 @@ namespace MR {
         GameSequenceFunction::forceToNextStateGalaxyCometScheduler();
     }
 
-    bool isGalaxyCometLandInStage(const char* pParam1) {
-        return GameSequenceFunction::isGalaxyCometLand(pParam1);
+    bool isGalaxyCometLandInStage(const char* pGalaxyName) {
+        return GameSequenceFunction::isGalaxyCometLand(pGalaxyName);
     }
 
-    s32 getEncounterGalaxyCometPowerStarId(const char* pParam1) {
-        return GameSequenceFunction::getEncounterGalaxyCometPowerStarId(pParam1);
+    s32 getEncounterGalaxyCometPowerStarId(const char* pGalaxyName) {
+        return GameSequenceFunction::getEncounterGalaxyCometPowerStarId(pGalaxyName);
     }
 
     bool isGalaxyPurpleCometLaunch() {

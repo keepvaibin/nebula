@@ -52,16 +52,16 @@ namespace {
     static const Vec3f sDefaultPlayerPos = Vec3f(0, 0, 0);
 };  // namespace
 
-bool MR::isJudgedToClipFrustum(const Vec3f& rParam1, f32 param2) {
-    return MR::getClippingJudge()->isJudgedToClipFrustum(rParam1, param2);
+bool MR::isJudgedToClipFrustum(const Vec3f& rCenter, f32 radius) {
+    return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius);
 }
 
-bool MR::isJudgedToClipFrustum100m(const Vec3f& rParam1, f32 param2) {
-    return MR::getClippingJudge()->isJudgedToClipFrustum(rParam1, param2, 6);
+bool MR::isJudgedToClipFrustum100m(const Vec3f& rCenter, f32 radius) {
+    return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius, 6);
 }
 
-bool MR::isJudgedToClipFrustum300m(const Vec3f& rParam1, f32 param2) {
-    return MR::getClippingJudge()->isJudgedToClipFrustum(rParam1, param2, 4);
+bool MR::isJudgedToClipFrustum300m(const Vec3f& rCenter, f32 radius) {
+    return MR::getClippingJudge()->isJudgedToClipFrustum(rCenter, radius, 4);
 }
 
 bool MR::isJudgedToNearClip(const Vec3f& rPos, f32 distance) {
@@ -397,10 +397,10 @@ NameObjGroup* MR::joinToNameObjGroup(NameObj* pObj, const char* pGroupName) {
     return pObjGroup;
 }
 
-NameObjGroup* MR::joinToMovementOnOffGroup(const char* pName, NameObj* pObj, u32 a3) {
+NameObjGroup* MR::joinToMovementOnOffGroup(const char* pName, NameObj* pObj, u32 numMax) {
     MovementOnOffGroupHolder* pGroupHolder = MR::getSceneObj< MovementOnOffGroupHolder >(SceneObj_MovementOnOffGroupHolder);
 
-    return pGroupHolder->joinToGroup(pName, pObj, a3);
+    return pGroupHolder->joinToGroup(pName, pObj, numMax);
 }
 
 void MR::onMovementOnOffGroup(const char* pGroupName) {
@@ -659,8 +659,8 @@ void MR::declarePowerStarCoin100() {
     declareEventPowerStar("１００枚コイン", -1, true);
 }
 
-void MR::appearPowerStarContinueCurrentDemo(const NameObj* pObj, const Vec3f& rParam2) {
-    appearEventPowerStar(pObj->getName(), -1, &rParam2, true, false);
+void MR::appearPowerStarContinueCurrentDemo(const NameObj* pObj, const Vec3f& rPos) {
+    appearEventPowerStar(pObj->getName(), -1, &rPos, true, false);
 }
 
 void MR::appearPowerStarWithoutDemo(const NameObj* pObj) {
@@ -671,20 +671,21 @@ void MR::requestAppearPowerStar(const NameObj* pObj) {
     appearEventPowerStar(pObj->getName(), -1, nullptr, false, false);
 }
 
-void MR::requestAppearPowerStar(const NameObj* pObj, const Vec3f& rParam2) {
-    appearEventPowerStar(pObj->getName(), -1, &rParam2, false, false);
+void MR::requestAppearPowerStar(const NameObj* pObj, const Vec3f& rPos) {
+    appearEventPowerStar(pObj->getName(), -1, &rPos, false, false);
 }
 
-void MR::requestAppearPowerStar(const NameObj* pObj, s32 param2, const Vec3f& rParam3) {
-    appearEventPowerStar(pObj->getName(), param2, &rParam3, false, false);
+void MR::requestAppearPowerStar(const NameObj* pObj, s32 starNum, const Vec3f& rPos) {
+    appearEventPowerStar(pObj->getName(), starNum, &rPos, false, false);
 }
 
-void MR::requestAppearPowerStar(const NameObj* pObj, const LiveActor* pActor, f32 flt) {
+// The star appears upOffset along the actor's up axis.
+void MR::requestAppearPowerStar(const NameObj* pObj, const LiveActor* pActor, f32 upOffset) {
     MtxPtr baseMtx = pActor->getBaseMtx();
-    Vec3f baseMtxY(baseMtx[1][0], baseMtx[1][1], baseMtx[1][2]);
-    baseMtxY.scale(flt);
-    baseMtxY.add(pActor->mPosition);
-    appearEventPowerStar(pObj->getName(), -1, &baseMtxY, false, false);
+    Vec3f starPos(baseMtx[1][0], baseMtx[1][1], baseMtx[1][2]);
+    starPos.scale(upOffset);
+    starPos.add(pActor->mPosition);
+    appearEventPowerStar(pObj->getName(), -1, &starPos, false, false);
 }
 
 void MR::requestAppearPowerStarCoin100() {
@@ -703,41 +704,41 @@ ModelObj* MR::createPowerStarDemoModel(const NameObj* pObj, const char* pName, M
     return pPowerStarDemoModel;
 }
 
-void MR::declareCoin(const NameObj* pObj, s32 param2) {
-    if (param2 <= 0) {
+void MR::declareCoin(const NameObj* pObj, s32 count) {
+    if (count <= 0) {
         return;
     }
 
     MR::createCoinHolder();
-    MR::getCoinHolder()->declare(pObj, param2);
+    MR::getCoinHolder()->declare(pObj, count);
 }
 
 s32 MR::getDeclareRemnantCoinCount(const NameObj* pObj) {
     return MR::getCoinHolder()->getDeclareRemnantCoinCount(pObj);
 }
 
-void MR::hopCoin(const NameObj* pObj, const Vec3f& rParam2, const Vec3f& rParam3) {
-    MR::getCoinHolder()->hopCoin(pObj, rParam2, rParam3);
+void MR::hopCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rDirection) {
+    MR::getCoinHolder()->hopCoin(pObj, rPosition, rDirection);
 }
 
-void MR::appearCoinFix(const NameObj* pObj, const Vec3f& rParam2, s32 param3) {
-    MR::getCoinHolder()->appearCoinFix(pObj, rParam2, param3);
+void MR::appearCoinFix(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
+    MR::getCoinHolder()->appearCoinFix(pObj, rPosition, count);
 }
 
-void MR::appearCoinPop(const NameObj* pObj, const Vec3f& rParam2, s32 param3) {
-    MR::getCoinHolder()->appearCoinPop(pObj, rParam2, param3);
+void MR::appearCoinPop(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
+    MR::getCoinHolder()->appearCoinPop(pObj, rPosition, count);
 }
 
-void MR::appearCoinPopToDirection(const NameObj* pObj, const Vec3f& rParam2, const Vec3f& rParam3, s32 param4) {
-    MR::getCoinHolder()->appearCoinPopToDirection(pObj, rParam2, rParam3, param4);
+void MR::appearCoinPopToDirection(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rVelocity, s32 count) {
+    MR::getCoinHolder()->appearCoinPopToDirection(pObj, rPosition, rVelocity, count);
 }
 
-void MR::appearCoinToVelocity(const NameObj* pObj, const Vec3f& rParam2, const Vec3f& rParam3, s32 param4) {
-    MR::getCoinHolder()->appearCoinToVelocity(pObj, rParam2, rParam3, param4);
+void MR::appearCoinToVelocity(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rVelocity, s32 count) {
+    MR::getCoinHolder()->appearCoinToVelocity(pObj, rPosition, rVelocity, count);
 }
 
-void MR::appearCoinCircle(const NameObj* pObj, const Vec3f& rParam2, s32 param3) {
-    MR::getCoinHolder()->appearCoinCircle(pObj, rParam2, param3);
+void MR::appearCoinCircle(const NameObj* pObj, const Vec3f& rPosition, s32 count) {
+    MR::getCoinHolder()->appearCoinCircle(pObj, rPosition, count);
 }
 
 void MR::declareStarPiece(const NameObj* pObj, s32 num) {
@@ -764,12 +765,13 @@ void MR::hopStarPiece(const NameObj* pObj, const Vec3f& rVec1, const Vec3f& rVec
     getStarPieceDirector()->hopPiece(pObj, rVec1, rVec2);
 }
 
-bool MR::appearStarPiece(const NameObj* pObj, const Vec3f& rVec1, s32 a1, f32 f1, f32 f2, bool a2) {
-    return getStarPieceDirector()->appearPiece(pObj, rVec1, a1, f1, f2, false, a2);
+bool MR::appearStarPiece(const NameObj* pObj, const Vec3f& rPosition, s32 count, f32 randomRange, f32 speed, bool notCheckInWater) {
+    return getStarPieceDirector()->appearPiece(pObj, rPosition, count, randomRange, speed, false, notCheckInWater);
 }
 
-bool MR::appearStarPieceToDirection(const NameObj* pObj, const Vec3f& rVec1, const Vec3f& rVec2, s32 a1, f32 f1, f32 f2, bool a2) {
-    return getStarPieceDirector()->appearPieceToDirection(pObj, rVec1, rVec2, a1, f1, f2, false, a2);
+bool MR::appearStarPieceToDirection(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rUp, s32 count, f32 randomRange, f32 speed,
+                                    bool notCheckInWater) {
+    return getStarPieceDirector()->appearPieceToDirection(pObj, rPosition, rUp, count, randomRange, speed, false, notCheckInWater);
 }
 
 void MR::initStarPieceGetCSSound() {
@@ -820,8 +822,8 @@ BenefitItemLifeUp* MR::createKinokoSuper() {
     return pKinokoSuper;
 }
 
-void MR::appearKinokoSuper(BenefitItemLifeUp* pKinokoSuper, MtxPtr pMtx, f32 param3) {
-    appearKinokoOneUpPop(pKinokoSuper, pMtx, param3);
+void MR::appearKinokoSuper(BenefitItemLifeUp* pKinokoSuper, MtxPtr pMtx, f32 speed) {
+    appearKinokoOneUpPop(pKinokoSuper, pMtx, speed);
 }
 
 void MR::stopScene(s32 frame) {
@@ -832,36 +834,36 @@ void MR::stopSceneForDefaultHit(s32 frame) {
     MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->requestStopSceneDelay(frame, 2);
 }
 
-bool MR::tryRumblePad(const void* pParam1, const char* pPatternName, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
+bool MR::tryRumblePad(const void* pRequester, const char* pPatternName, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, pPatternName);
 }
 
-bool MR::tryRumblePadVeryStrongLong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "最強【長】");
+bool MR::tryRumblePadVeryStrongLong(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "最強【長】");
 }
 
-bool MR::tryRumblePadVeryStrong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "最強");
+bool MR::tryRumblePadVeryStrong(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "最強");
 }
 
-bool MR::tryRumblePadStrong(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "強");
+bool MR::tryRumblePadStrong(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "強");
 }
 
-bool MR::tryRumblePadMiddle(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "中");
+bool MR::tryRumblePadMiddle(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pRequester, "中");
 }
 
-bool MR::tryRumblePadWeak(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "弱");
+bool MR::tryRumblePadWeak(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "弱");
 }
 
-bool MR::tryRumblePadVeryWeak(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "微弱");
+bool MR::tryRumblePadVeryWeak(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "微弱");
 }
 
-bool MR::tryRumbleDefaultHit(const void* pParam1, s32 channel) {
-    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "強");
+bool MR::tryRumbleDefaultHit(const void* pRequester, s32 channel) {
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pRequester, "強");
 }
 
 void MR::shakeCameraVeryStrong() {
@@ -943,8 +945,8 @@ bool MR::tryFindNamePos(const char* pName, MtxPtr pMtx) {
     return MR::tryFindLinkNamePos(nullptr, pName, pMtx);
 }
 
-bool MR::tryFindNamePos(const char* pName, Vec3f* pParam2, Vec3f* pParam3) {
-    return MR::tryFindLinkNamePos(nullptr, pName, pParam2, pParam3);
+bool MR::tryFindNamePos(const char* pName, Vec3f* pPos, Vec3f* pRot) {
+    return MR::tryFindLinkNamePos(nullptr, pName, pPos, pRot);
 }
 
 void MR::findLinkNamePos(const NameObj* pObj, const char* pName, MtxPtr pMtx) {
@@ -963,7 +965,7 @@ bool MR::tryFindLinkNamePos(const NameObj* pObj, const char* pName, MtxPtr pMtx)
     return false;
 }
 
-bool MR::tryFindLinkNamePos(const NameObj* pObj, const char* pName, Vec3f* pParam3, Vec3f* pParam4) {
-    return getNamePosHolder()->find(pObj, pName, pParam3, pParam4);
+bool MR::tryFindLinkNamePos(const NameObj* pObj, const char* pName, Vec3f* pPos, Vec3f* pRot) {
+    return getNamePosHolder()->find(pObj, pName, pPos, pRot);
 }
 
