@@ -6,12 +6,11 @@ class GalaxyNamePlate;
 
 class AstroMapObj : public MapObjActor {
 public:
-    AstroMapObj(const char*);
+    AstroMapObj(const char* pName);
 
     virtual ~AstroMapObj() {};
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) {};
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) {};
@@ -20,33 +19,38 @@ public:
 
     void exeOpen();
     void exeWait();
-    void exeAlive();
     void exeRevival();
 
     void setStateAlive();
     void setStateDead();
     void selectNrvWait();
     bool isPlayMachineSE() const;
-    void tryStartAllAnimAndEffect(const char*);
+    void tryStartAllAnimAndEffect(const char* pAnimName);
     bool isEndRevival() const;
-    bool isAlreadyOpen(const char*, s32);
     void setStateDoorOpenOrClose();
     void startDemo();
 
     const Table* mNamePlateTable;
     GalaxyNamePlate* mNamePlate;
-    const char* mObjName;  // Uhh...
+    // The placement name; MapObjActor::mObjectName is the model name, which can add the dome's.
+    const char* mObjName;
     CollisionParts* mCloseCollision;
     CollisionParts* mOpenCollision;
     s32 mDomeId;
+    const char* mEngineSound;
+    const char* mRevivalSound;
+    bool mIsDoor;
+    bool mIsDomeEntrance;
+    bool mIsStarPlate;
+    bool mIsKitchenEntrance;
 };
 
 class AstroSimpleObj : public SimpleMapObjFarMax {
 public:
-    AstroSimpleObj(const char*);
+    AstroSimpleObj(const char* pName);
 
     virtual ~AstroSimpleObj() {};
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
     const Table* mNamePlateTable;
