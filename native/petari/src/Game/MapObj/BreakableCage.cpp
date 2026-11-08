@@ -147,27 +147,15 @@ void BreakableCage::calcAndSetBaseMtx() {
 }
 
 bool BreakableCage::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    bool result;
-
-    if (MR::isMsgJetTurtleAttack(msg)) {
-        result = tryBreak();
-    } else {
-        result = false;
-    }
-
-    return result;
+    return MR::isMsgJetTurtleAttack(msg) && tryBreak();
 }
 
 bool BreakableCage::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    bool result;
-
     if (MR::isMsgEnemyAttackFire(msg) || MR::isMsgEnemyAttackFireStrong(msg)) {
-        result = false;
-    } else {
-        result = tryBreak();
+        return false;
     }
 
-    return result;
+    return tryBreak();
 }
 
 void BreakableCage::initMapToolInfo(const TableIter& rIter) {
@@ -365,7 +353,7 @@ void BreakableCage::exeBreak() {
     } else if (isTypeCage()) {
         canDoSwitch = MR::isBckStopped(mBreakModel);
     } else {
-        canDoSwitch = MR::isEffectValid(this, "Break") == false;
+        canDoSwitch = !MR::isEffectValid(this, "Break");
     }
 
     if (canDoSwitch) {

@@ -177,10 +177,10 @@ void DragonHeadFlower::exeRailMove() {
         MR::showModel(mPlayerSensor->mHost);
     }
 
-    f32 f1 = mParabolaDistance * mParabolaProgress;
-    f32 f2 = mParabolaProgress * (mParabolaVel + mParabolaAccel * mParabolaProgress);
+    f32 along = mParabolaDistance * mParabolaProgress;
+    f32 fall = mParabolaProgress * (mParabolaVel + mParabolaAccel * mParabolaProgress);
 
-    Vec3f targetPos(mParabolaStartPos + mEndGravity * f2 + mParabolaDirection * f1);
+    Vec3f targetPos(mParabolaStartPos + mEndGravity * fall + mParabolaDirection * along);
     Vec3f prevPos(mPlayerSensor->mHost->mPosition);
 
     mPlayerSensor->mHost->mPosition.set(targetPos);

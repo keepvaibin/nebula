@@ -379,7 +379,7 @@ bool KoopaBattleMain::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 void KoopaBattleMain::startMainAttack() {
-    if (mIsMainAttackStarted == false) {
+    if (!mIsMainAttackStarted) {
         mIsMainAttackStarted = true;
 
         if (KoopaFunction::isKoopaVs2(mHost)) {

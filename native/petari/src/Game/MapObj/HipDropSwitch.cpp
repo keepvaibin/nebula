@@ -111,7 +111,7 @@ bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
 bool HipDropSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgFloorTouch(msg) && mSpringModel->mHitSensor == pReceiver) {
         mIsOnPlayer = true;
-        return mWasOnPlayer == false;
+        return !mWasOnPlayer;
     }
 
     return false;

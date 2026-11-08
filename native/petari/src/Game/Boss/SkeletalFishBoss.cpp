@@ -428,9 +428,7 @@ void SkeletalFishBoss::exeDead() {
         resetCamera();
     } else {
         ActorCameraInfo info = ActorCameraInfo();
-        bool isCameraActive = MR::isEventCameraActive(&info, "デモ終了後カメラ") == false;
-
-        if (isCameraActive) {
+        if (!MR::isEventCameraActive(&info, "デモ終了後カメラ")) {
             kill();
         }
     }

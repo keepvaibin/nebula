@@ -146,7 +146,7 @@ namespace GameSequenceFunction {
     }
 
     bool hasPowerStarYetAtResultSequence() {
-        if (hasStageResultSequence() == false) {
+        if (!hasStageResultSequence()) {
             return false;
         }
 
@@ -156,7 +156,7 @@ namespace GameSequenceFunction {
     }
 
     bool isPowerStarAtResultSequence(const char* pClearedStageName, s32 clearedPowerStarId) {
-        if (hasStageResultSequence() == false) {
+        if (!hasStageResultSequence()) {
             return false;
         }
 

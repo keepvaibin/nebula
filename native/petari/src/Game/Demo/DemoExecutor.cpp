@@ -150,15 +150,15 @@ bool DemoExecutor::tryStartDemoSystemPart(const char* pPartName, MR::MovementCon
         item->setupStartDemoPart(pPartName);
     }
 
-    bool result = false;
+    bool isStarted = false;
 
     if (movementType == MR::MovementControlType_Demo) {
-        result = MR::tryStartTimeKeepDemo(this, mName, nullptr);
+        isStarted = MR::tryStartTimeKeepDemo(this, mName, nullptr);
     } else if (movementType == MR::MovementControlType_DemoMarioPuppetable) {
-        result = MR::tryStartTimeKeepDemoMarioPuppetable(this, mName, nullptr);
+        isStarted = MR::tryStartTimeKeepDemoMarioPuppetable(this, mName, nullptr);
     }
 
-    if (!result) {
+    if (!isStarted) {
         return false;
     }
 

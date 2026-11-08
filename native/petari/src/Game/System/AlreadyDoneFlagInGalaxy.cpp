@@ -26,8 +26,8 @@ bool AlreadyDoneInfo::isEqual(const AlreadyDoneInfo& otherInfo) const {
     return otherInfo.mNameHash == mNameHash && otherInfo.mZoneId == mZoneId && otherInfo.mLinkId == mLinkId;
 }
 
-void AlreadyDoneInfo::set(bool flag) {
-    mIsDone = flag;
+void AlreadyDoneInfo::set(bool isDone) {
+    mIsDone = isDone;
 }
 
 AlreadyDoneFlagInGalaxy::AlreadyDoneFlagInGalaxy(int numInfos) : mDoneInfos() {

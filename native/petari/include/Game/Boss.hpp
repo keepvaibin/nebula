@@ -7,7 +7,7 @@
 #include "Game/Boss/BossKameckAction.hpp"
 #include "Game/Boss/BossKameckBarrier.hpp"
 #include "Game/Boss/BossKameckBattleDemo.hpp"
-#include "Game/Boss/BossKameckBattlePattarn.hpp"
+#include "Game/Boss/BossKameckBattlePattern.hpp"
 #include "Game/Boss/BossKameckMoveRail.hpp"
 #include "Game/Boss/BossKameckSequencer.hpp"
 #include "Game/Boss/BossKameckStateBattle.hpp"

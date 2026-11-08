@@ -270,7 +270,7 @@ void PlantGroup::control() {
             if (::sScratchVel * ::sScratchVel < velocity.squared()) {
                 Vec3f pos(*MR::getStarPointerWorldPosUsingDepth(1));
 
-                if (mMembers[i]->tryPush(pos, ::sPointerTouchRadius, 2) == true) {
+                if (mMembers[i]->tryPush(pos, ::sPointerTouchRadius, 2)) {
                     MR::tryRumblePadVeryWeak(this, 1);
                     break;
                 }
@@ -423,7 +423,7 @@ void PlantMember::exeShakeStrong() {
 }
 
 bool PlantMember::generateItem(PlantGroup* pGroup) {
-    if (mHasItem == true) {
+    if (mHasItem) {
         Vec3f velocity(-mGravity);
         velocity.scale(::sCoinVel);
 

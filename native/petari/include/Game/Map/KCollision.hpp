@@ -84,21 +84,29 @@ public:
 
     KCollisionServer();
 
-    void init(void*, const void*);
-    void setData(void*);
+    void init(void* pData, const void* pMapData);
+    void setData(void* pData);
     // A model the game built (no file): DynamicCollisionObj.
-    void setModel(KCLFile*);
-    void initModel(KCLFile*, const void*);
+    void setModel(KCLFile* pModel);
+    void initModel(KCLFile* pModel, const void* pMapData);
     bool calcFarthestVertexDistance();
-    KC_PrismData* checkPoint(Fxyz*, f32, f32*);
-    u32 checkArea3D(Fxyz*, Fxyz*, KC_PrismData**, u32);
-    u32 checkSphere(Fxyz*, f32, f32, u32, KC_PrismData**, f32*, u8*);
-    u32 checkSphereWithThickness(Fxyz*, f32, f32, u32, KC_PrismData**, f32*, u8*, f32);
-    KC_PrismData* checkArrow(const Vec3f&, const Vec3f&, f32*, u8*, u32*, KC_PrismData**, u32) const;
-    bool KCHitSphere(KC_PrismData*, Fxyz*, f32, f32, f32*, u8*);
-    bool KCHitSphereWithThickness(KC_PrismData*, Fxyz*, f32, f32, f32*, u8*, f32);
-    bool isNearParallelNormal(const KC_PrismData*) const;
-    bool KCHitArrow(KC_PrismData*, const Vec3f&, const Vec3f&, f32*, u8*) const;
+    KC_PrismData* checkPoint(Fxyz* pPoint, f32 param, f32* pDist);
+    u32 checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u32 maxCount);
+    // A hit part (HitInfo::mHitPart): 1 the face, 2-4 the edge of edge plane 0-2 (vertices 0-2, 0-1, 1-2), 5-7 vertex 0-2
+    // (where edge planes 0-1, 1-2, 2-0 meet).
+    u32 checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts);
+    u32 checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts,
+                                 f32 thickness);
+    KC_PrismData* checkArrow(const Vec3f& rOrigin, const Vec3f& rDir, f32* pDists, u8* pHitParts, u32* pCount, KC_PrismData** pOut,
+                             u32 maxCount) const;
+    u32 checkSpherePrisms(Fxyz* pCenter, f32 radius, f32 threshold, bool isThick, u32 maxCount, KC_PrismData** pOut, f32* pDists,
+                          u8* pHitParts);
+    bool hitSpherePrism(KC_PrismData* pPrism, Fxyz* pCenter, f32 radius, f32 threshold, f32* pDist, u8* pHitPart, bool isThick);
+    // Defined and used in KCollision.cpp only.
+    template < typename Visit >
+    void visitPrismsInBlocks(const V3u& rPointMin, const V3u& rPointMax, Visit visit) const;
+    bool isNearParallelNormal(const KC_PrismData* pPrism) const;
+    bool KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, const Vec3f& rDir, f32* pDist, u8* pHitPart) const;
     s32 toIndex(const KC_PrismData*) const;
     Vec3f* getFaceNormal(const KC_PrismData*) const;
     Vec3f* getEdgeNormal1(const KC_PrismData*) const;

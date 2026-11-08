@@ -7,6 +7,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/MapUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
@@ -250,23 +251,11 @@ namespace CameraLocalUtil {
     }
 
     bool tryCameraReset() {
-        if (getCameraDirector()->isEnableToReset()) {
-            return testCameraPadButtonReset();
-        }
-
-        return false;
+        return getCameraDirector()->isEnableToReset() && testCameraPadButtonReset();
     }
 
     bool tryCameraResetTrigger() {
-        if (!getCameraDirector()->isEnableToReset()) {
-            return false;
-        }
-
-        if (getCameraDirector()->isSubjectiveCamera()) {
-            return false;
-        }
-
-        return testCameraPadTriggerReset();
+        return getCameraDirector()->isEnableToReset() && testCameraPadTriggerReset();
     }
 
     bool testCameraPadButtonReset() {
@@ -365,6 +354,103 @@ namespace CameraLocalUtil {
         return true;
     }
 
+    bool calcTowerIdealPos(Vec3f* pPos, Vec3f* pAxis, const Vec3f& rWPoint, const Vec3f& rWatchPos, f32 angleX, f32 dist) {
+        if (MR::isNearZero(*pAxis)) {
+            pAxis->set(0.0f, 1.0f, 0.0f);
+        } else {
+            pAxis->normalize();
+        }
+
+        Vec3f front = rWatchPos - rWPoint;
+        front.set(front - *pAxis * pAxis->dot(front));
+        if (MR::isNearZero(front)) {
+            return false;
+        }
+
+        MR::normalize(&front);
+
+        Vec3f up(0.0f, 1.0f, 0.0f);
+        Vec3f side = front.cross(up);
+
+        Quat4f rot;
+        rot.setRotate(side, angleX);
+        rot.transform(front);
+
+        pPos->set(front * dist + rWatchPos);
+        return true;
+    }
+
+    f32 calcFollowFrame(const Camera* pCamera, const Vec3f& rWatchPos, const Vec3f& rGravUp, f32 distMin, f32 distMax, bool isSideReorthogonalized,
+                        Vec3f* pFront, Vec3f* pUp, Vec3f* pSide) {
+        Vec3f watchFront = rWatchPos - getPos(pCamera);
+        f32 dist = watchFront.length();
+
+        if (MR::isNearZero(watchFront)) {
+            watchFront.cross(getTarget(pCamera)->getSideVec(), rGravUp);
+        } else if (dist < distMin) {
+            dist = distMin;
+        } else if (dist > distMax) {
+            dist = distMax;
+        }
+        MR::normalize(&watchFront);
+
+        Vec3f camFront = getWatchPos(pCamera) - getPos(pCamera);
+        MR::normalize(&camFront);
+        Quat4f rotFront;
+        rotFront.setRotate(camFront, watchFront);
+
+        pFront->set(watchFront);
+        pUp->set(getUpVec(pCamera));
+        rotFront.transform(*pUp);
+        pSide->cross(*pUp, *pFront);
+        *pSide -= rGravUp * rGravUp.dot(*pSide);
+        MR::normalize(pSide);
+
+        pUp->cross(*pFront, *pSide);
+        if (isSideReorthogonalized) {
+            pSide->cross(*pUp, *pFront);
+        }
+
+        if (rGravUp.dot(*pUp) < 0.0f) {
+            Quat4f upsideDownRot;
+            if (pFront->dot(rGravUp) < 0.0f) {
+                upsideDownRot.setRotate(*pFront, -rGravUp);
+            } else {
+                upsideDownRot.setRotate(*pFront, rGravUp);
+            }
+            upsideDownRot.transform(*pFront);
+            upsideDownRot.transform(*pSide);
+            upsideDownRot.transform(*pUp);
+        }
+
+        return dist;
+    }
+
+    f32 updateMoveCollision(s32* pCount, Vec3f* pLastMoveDir, const CameraTargetObj* pTarget, const Vec3f& rPos, const Vec3f& rLine) {
+        const f32 cCollideRate = 0.03f;
+        const s32 cCollideCountMax = 60;
+        const f32 cLastMoveLen = 5.0f;
+
+        f32 lastMoveLen = pTarget->getLastMove().length();
+        if (lastMoveLen > cLastMoveLen) {
+            pLastMoveDir->set(pTarget->getLastMove());
+            MR::normalize(pLastMoveDir);
+        }
+
+        if (lastMoveLen > cLastMoveLen && Collision::checkStrikeLineToMap(rPos, rLine, 0, nullptr, nullptr) != 0) {
+            (*pCount)++;
+            if (*pCount > cCollideCountMax) {
+                *pCount = cCollideCountMax;
+            }
+        } else {
+            (*pCount)--;
+            if (*pCount < 0) {
+                *pCount = 0;
+            }
+        }
+
+        return *pCount * cCollideRate / cCollideCountMax;
+    }
 
     void arrangeDistanceByFovy(Camera* pCamera, Vec3f pos, f32 offset) {
         Vec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
@@ -401,38 +487,44 @@ namespace CameraLocalUtil {
         setPos(pCamera, getWatchPos(pCamera) + viewDir);
     }
 
-    inline void keepAwayWatchPos(CameraMan* pCameraMan, Camera* pCamera, Vec3f* watchPos, const Vec3f& pos) {
-        Vec3f dir = *watchPos - pos;
-        f32 length = dir.length();
+    namespace {
+        const f32 cSafeWatchDistance = 300.0f;
 
-        if (length < 300.0f) {
-            if (length < 1.0f) {
-                watchPos->set(pos + CameraLocalUtil::getWatchPos(pCameraMan) - CameraLocalUtil::getPos(pCameraMan));
-            } else {
-                dir.normalize();
-                watchPos->set(pos + dir * 300.0f);
+        // A watch point closer than cSafeWatchDistance is pushed out to it; one on the camera keeps the man's view vector.
+        void keepAwayWatchPos(const CameraMan* pCameraMan, Vec3f* pWatchPos, const Vec3f& rPos) {
+            Vec3f dir = *pWatchPos - rPos;
+            f32 length = dir.length();
+
+            if (length < cSafeWatchDistance) {
+                if (length < 1.0f) {
+                    pWatchPos->set(rPos + getWatchPos(pCameraMan) - getPos(pCameraMan));
+                } else {
+                    dir.normalize();
+                    pWatchPos->set(rPos + dir * cSafeWatchDistance);
+                }
             }
         }
-    }
 
-    inline void calcSafeUpVec(CameraMan* pCameraMan, Camera* pCamera, Vec3f* up, const Vec3f& watchPos, const Vec3f& pos) {
-        Vec3f camWatchDir = watchPos - pos;
-        MR::normalize(&camWatchDir);
-        MR::normalizeOrZero(up);
+        // An up vector that is zero or near the view direction is the man's up turned onto the new view direction.
+        void calcSafeUpVec(const CameraMan* pCameraMan, Vec3f* pUp, const Vec3f& rWatchPos, const Vec3f& rPos) {
+            Vec3f camWatchDir = rWatchPos - rPos;
+            MR::normalize(&camWatchDir);
+            MR::normalizeOrZero(pUp);
 
-        if (MR::isNearZero(*up) || MR::abs(camWatchDir.dot(*up)) > 0.98f) {
-            Vec3f watchDir = getWatchPos(pCameraMan) - getPos(pCameraMan);
-            MR::normalize(&watchDir);
-            if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
-                up->set(getUpVec(pCameraMan));
-            } else {
-                Quat4f rot;
-                rot.setRotate(watchDir, camWatchDir);
-                rot.transform(getUpVec(pCameraMan), *up);
+            if (MR::isNearZero(*pUp) || MR::abs(camWatchDir.dot(*pUp)) > 0.98f) {
+                Vec3f watchDir = getWatchPos(pCameraMan) - getPos(pCameraMan);
+                MR::normalize(&watchDir);
+                if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
+                    pUp->set(getUpVec(pCameraMan));
+                } else {
+                    Quat4f rot;
+                    rot.setRotate(watchDir, camWatchDir);
+                    rot.transform(getUpVec(pCameraMan), *pUp);
+                }
+                recalcUpVec(pUp, camWatchDir);
             }
-            recalcUpVec(up, camWatchDir);
         }
-    }
+    }  // namespace
 
     void calcSafePose(CameraMan* pCameraMan, Camera* pCamera) {
         Vec3f pos = getPos(pCamera);
@@ -443,8 +535,8 @@ namespace CameraLocalUtil {
             return;
         }
 
-        keepAwayWatchPos(pCameraMan, pCamera, &watchPos, pos);
-        calcSafeUpVec(pCameraMan, pCamera, &up, watchPos, pos);
+        keepAwayWatchPos(pCameraMan, &watchPos, pos);
+        calcSafeUpVec(pCameraMan, &up, watchPos, pos);
 
         setPos(pCameraMan, pos);
         setUpVec(pCameraMan, up);

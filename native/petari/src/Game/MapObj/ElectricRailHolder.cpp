@@ -177,57 +177,30 @@ void ElectricRailHolder::registerRail(const LiveActor* pActor, ElectricRailType 
     mRailItems.mCount++;
 }
 
+namespace {
+    // By ElectricRailType: the model, and its colour frame (0 yellow, 1 red).
+    struct RailModelInfo {
+        const char* mName;
+        const char* mModelName;
+        f32 mColorFrame;
+    };
+
+    const RailModelInfo cRailModelInfos[] = {
+        {"電撃レールモデル(黄)", "ElectricRail", 0.0f},
+        {"電撃レールモデル(赤)", "ElectricRail", 1.0f},
+        {"移動電撃レールモデル(黄)", "ElectricRailMoving", 0.0f},
+        {"移動電撃レールモデル(赤)", "ElectricRailMoving", 1.0f},
+    };
+}  // namespace
+
 ModelObj* ElectricRailHolder::createModel(ElectricRailType railType) const {
-    ModelObj* pModel;
-    const char* pModelName;
-    const char* pName;
+    const RailModelInfo& rInfo = cRailModelInfos[railType];
+    ModelObj* pModel =
+        new ModelObj(rInfo.mName, rInfo.mModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
+    pModel->initWithoutIter();
 
-    switch (railType) {
-    case ElectricRail_Red:
-        pModelName = "ElectricRail";
-        pName = "電撃レールモデル(黄)";
-        pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
-        pModel->initWithoutIter();
-
-        MR::startBtk(pModel, "ElectricRail");
-        MR::startBrk(pModel, "ElectricRail");
-        MR::setBrkFrameAndStop(pModel, 0.0f);
-
-        break;
-    case ElectricRail_Yellow:
-        pModelName = "ElectricRail";
-        pName = "電撃レールモデル(赤)";
-        pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
-        pModel->initWithoutIter();
-
-        MR::startBtk(pModel, "ElectricRail");
-        MR::startBrk(pModel, "ElectricRail");
-        MR::setBrkFrameAndStop(pModel, 1.0f);
-
-        break;
-    case ElectricRail_YellowMoving:
-        pModelName = "ElectricRailMoving";
-        pName = "移動電撃レールモデル(黄)";
-        pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
-        pModel->initWithoutIter();
-
-        MR::startBtk(pModel, "ElectricRailMoving");
-        MR::startBrk(pModel, "ElectricRailMoving");
-        MR::setBrkFrameAndStop(pModel, 0.0f);
-
-        break;
-    case ElectricRail_RedMoving:;
-        pModelName = "ElectricRailMoving";
-        pName = "移動電撃レールモデル(赤)";
-        pModel = new ModelObj(pName, pModelName, nullptr, MR::DrawBufferType_None, MR::MovementType_None, MR::CalcAnimType_None, false);
-        pModel->initWithoutIter();
-
-        MR::startBtk(pModel, "ElectricRailMoving");
-        MR::startBrk(pModel, "ElectricRailMoving");
-        MR::setBrkFrameAndStop(pModel, 1.0f);
-
-        break;
-    }
-
+    MR::startBtk(pModel, rInfo.mModelName);
+    MR::startBrk(pModel, rInfo.mModelName);
+    MR::setBrkFrameAndStop(pModel, rInfo.mColorFrame);
     return pModel;
 }

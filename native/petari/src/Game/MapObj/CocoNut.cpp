@@ -868,13 +868,7 @@ void CocoNut::exeMove() {
 
 void CocoNut::exeInWater() {
     if (MR::isFirstStep(this)) {
-        mVelocity.zero();
-        MR::offBind(this);
-        MR::offCalcGravity(this);
-        MR::hideModel(this);
-        MR::invalidateHitSensors(this);
-        MR::clearHitSensors(this);
-        MR::deleteEffectAll(this);
+        statusToHide();
         MR::makeMtxUpNoSupportPos(&mSmokeMtx, -mGravity, mPosition);
         MR::emitEffect(this, "WaterColumn");
         MR::startSound(this, "SE_OJ_FALL_IN_WATER_M");

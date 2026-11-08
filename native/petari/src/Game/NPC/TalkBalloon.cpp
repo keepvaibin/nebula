@@ -34,8 +34,8 @@ namespace NrvTalkBalloonEvent {
 TalkBalloon::TalkBalloon(const char* pName) : LayoutActor(pName, true), mMessageCtrl(), mTextFormer(), mHasBeak(), mIsBeakMoving() {
 }
 
-void TalkBalloon::create(const char* pLayoutName, bool arg2, bool isTalkLayout) {
-    mHasBeak = arg2;
+void TalkBalloon::create(const char* pLayoutName, bool hasBeak, bool isTalkLayout) {
+    mHasBeak = hasBeak;
 
     if (isTalkLayout) {
         MR::connectToSceneTalkLayout(this);

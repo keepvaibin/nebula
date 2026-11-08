@@ -25,18 +25,18 @@ namespace {
     }
 
     void getPlacementArgPlus(const TableIter& rIter, const char* pFieldName, f32* pDest) {
-        f32 result;
+        f32 value;
 
-        if (rIter.getValue(pFieldName, &result) && result >= 0.0f) {
-            *pDest = result;
+        if (rIter.getValue(pFieldName, &value) && value >= 0.0f) {
+            *pDest = value;
         }
     }
 
     void getPlacementArgPlus(const TableIter& rIter, const char* pFieldName, s32* pDest) {
-        s32 result;
+        s32 value;
 
-        if (rIter.getValue(pFieldName, &result) && result >= 0.0f) {
-            *pDest = result;
+        if (rIter.getValue(pFieldName, &value) && value >= 0) {
+            *pDest = value;
         }
     }
 
@@ -145,7 +145,7 @@ namespace MR {
         getPlacementGravityType(rIter, pGravity);
         getPlacementGravityPower(rIter, pGravity);
 
-        s32 inverse = pGravity->mIsInverse != false;
+        s32 inverse = pGravity->mIsInverse;
         ::getPlacementArgPlus(rIter, ::cInverse, &inverse);
         pGravity->mIsInverse = inverse;
     }

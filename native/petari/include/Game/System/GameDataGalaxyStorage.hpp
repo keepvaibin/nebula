@@ -51,11 +51,11 @@ public:
     bool hasPowerStar() const;
     bool isAlreadyVisited() const;
     s32 getMaxCoinNum() const;
-    void setPowerStarFlag(bool);
-    void setFlagAlreadyVisited(bool);
-    void updateMaxCoinNum(int);
+    void setPowerStarFlag(bool isOwned);
+    void setFlagAlreadyVisited(bool isVisited);
+    void updateMaxCoinNum(int coinNum);
 
-    void setBitFlagAccordingToBool(u8*, bool);
+    void setBitFlagAccordingToBool(u8* pFlags, bool isOn);
 
     GameDataSomeGalaxyStorage* mSomeGalaxyStorage;
     u32 mScenarioNum;

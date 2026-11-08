@@ -30,5 +30,5 @@ void ShadowSurfaceCircle::draw() const {
     controller->getProjectionPos(&pos);
     controller->getProjectionNormal(&normal);
     TypedDraw site(ShadowSurfaceDrawInit::material(), nullptr, MR::getCameraViewMtx());
-    TDDraw::drawFillCircle(site, pos + normal * 1.0f, -normal, radius, 128, 20);
+    TDDraw::drawFillCircle(site, pos + normal, -normal, radius, 128, 20);
 }

@@ -737,11 +737,11 @@ namespace MR {
 
     bool addVelocityKeepHeightUseShadow(LiveActor* pActor, f32 height, f32 speed, f32 range, const char* pName) {
         if (pName != nullptr) {
-            if (isShadowProjected(pActor, pName) == false) {
+            if (!isShadowProjected(pActor, pName)) {
                 return false;
             }
         } else {
-            if (isShadowProjectedAny(pActor) == false) {
+            if (!isShadowProjectedAny(pActor)) {
                 return false;
             }
         }
@@ -760,11 +760,11 @@ namespace MR {
 
     bool addVelocityKeepHeightUseShadow(LiveActor* pActor, f32 height, f32 speedDown, f32 speedUp, f32 range, const char* pName) {
         if (pName != nullptr) {
-            if (isShadowProjected(pActor, pName) == false) {
+            if (!isShadowProjected(pActor, pName)) {
                 return false;
             }
         } else {
-            if (isShadowProjectedAny(pActor) == false) {
+            if (!isShadowProjectedAny(pActor)) {
                 return false;
             }
         }

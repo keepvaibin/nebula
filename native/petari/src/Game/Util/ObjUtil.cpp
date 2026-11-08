@@ -430,72 +430,58 @@ NameObjAdaptor* MR::createAdaptorAndConnectToDrawBloomModel(const char* pName, c
     return pAdaptor;
 }
 
+namespace {
+    // A listener calling pOnFunctor and pOffFunctor (nullptr: none).
+    SwitchEventFunctorListener* createSwitchListener(const MR::FunctorBase* pOnFunctor, const MR::FunctorBase* pOffFunctor) {
+        SwitchEventFunctorListener* pListener = new SwitchEventFunctorListener();
+
+        if (pOnFunctor != nullptr) {
+            pListener->setOnFunctor(*pOnFunctor);
+        }
+
+        if (pOffFunctor != nullptr) {
+            pListener->setOffFunctor(*pOffFunctor);
+        }
+
+        return pListener;
+    }
+}  // namespace
+
 void MR::listenNameObjStageSwitchOnAppear(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerAppear(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOnOffAppear(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                              const MR::FunctorBase& rOffFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-    pListener->setOffFunctor(rOffFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerAppear(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOnA(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerA(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOnOffA(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                         const MR::FunctorBase& rOffFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-    pListener->setOffFunctor(rOffFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerA(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOnB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOffB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOffFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOffFunctor(rOffFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(nullptr, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);
 }
 
 void MR::listenNameObjStageSwitchOnOffB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                         const MR::FunctorBase& rOffFunctor) {
-    SwitchEventFunctorListener* pListener;
-
-    pListener = new SwitchEventFunctorListener();
-    pListener->setOnFunctor(rOnFunctor);
-    pListener->setOffFunctor(rOffFunctor);
-
+    SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);
 }
 
@@ -530,7 +516,7 @@ namespace {
         char buf[0x100];
         nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
-        return pHolder->mFileInfoTable->isExistRes(buf) != false;
+        return pHolder->mFileInfoTable->isExistRes(buf);
     }
 };  // namespace
 

@@ -18,24 +18,24 @@ void DiskTorusGravity::setDirection(const Vec3f& rDirection) {
     mLocalDirection = rDirection;
 }
 
-void DiskTorusGravity::setRadius(f32 val) {
-    mRadius = val;
+void DiskTorusGravity::setRadius(f32 radius) {
+    mRadius = radius;
 }
 
-void DiskTorusGravity::setDiskRadius(f32 val) {
-    if (val < 0.0f) {
+void DiskTorusGravity::setDiskRadius(f32 diskRadius) {
+    if (diskRadius < 0.0f) {
         mDiskRadius = 0.0f;
     } else {
-        mDiskRadius = val;
+        mDiskRadius = diskRadius;
     }
 }
 
-void DiskTorusGravity::setEdgeType(s32 val) {
-    mEdgeType = val;
+void DiskTorusGravity::setEdgeType(s32 edgeType) {
+    mEdgeType = edgeType;
 }
 
-void DiskTorusGravity::setBothSide(bool val) {
-    mEnableBothSide = val;
+void DiskTorusGravity::setBothSide(bool isBothSide) {
+    mEnableBothSide = isBothSide;
 }
 
 void DiskTorusGravity::updateMtx(const Pos3f& rMtx) {

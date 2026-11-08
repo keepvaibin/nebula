@@ -163,10 +163,10 @@ void CameraParamChunk::load(DotCamReader* pReader, CameraHolder* pHolder) {
     pReader->getValueVec("vpanaxis", &mExParam.mVPanAxis);
 
     for (u32 i = 0; i < 6; i++) {
-        s32 flag;
+        s32 bit;
 
-        if (pReader->getValueInt(::sFlagName[i], &flag)) {
-            mExParam.mFlag |= flag << i;
+        if (pReader->getValueInt(::sFlagName[i], &bit)) {
+            mExParam.mFlag |= bit << i;
         }
     }
 
@@ -225,19 +225,19 @@ CameraParamChunkGame::CameraParamChunkGame(CameraHolder* pHolder, const CameraPa
 void CameraParamChunkGame::load(DotCamReader* pReader, CameraHolder* pHolder) {
     CameraParamChunk::load(pReader, pHolder);
 
-    s32 val;
-    if (pReader->getValueInt("gflag.thru", &val)) {
-        mThru = val;
+    s32 value;
+    if (pReader->getValueInt("gflag.thru", &value)) {
+        mThru = value;
     } else {
         mThru = 0;
     }
 
-    if (pReader->getValueInt("gflag.enableEndErpFrame", &val)) {
-        mEnableEndErpFrame = val;
+    if (pReader->getValueInt("gflag.enableEndErpFrame", &value)) {
+        mEnableEndErpFrame = value;
     }
 
-    if (pReader->getValueInt("gflag.camendint", &val)) {
-        mCamEndInt = val;
+    if (pReader->getValueInt("gflag.camendint", &value)) {
+        mCamEndInt = value;
     }
 }
 
@@ -260,26 +260,26 @@ CameraParamChunkEvent::CameraParamChunkEvent(CameraHolder* pHolder, const Camera
 void CameraParamChunkEvent::load(DotCamReader* pReader, CameraHolder* pHolder) {
     CameraParamChunk::load(pReader, pHolder);
 
-    s32 val;
+    s32 value;
 
-    if (pReader->getValueInt("eflag.enableErpFrame", &val)) {
-        mEnableErpFrame = val;
+    if (pReader->getValueInt("eflag.enableErpFrame", &value)) {
+        mEnableErpFrame = value;
     }
 
-    if (pReader->getValueInt("eflag.enableEndErpFrame", &val)) {
-        mEnableEndErpFrame = val;
+    if (pReader->getValueInt("eflag.enableEndErpFrame", &value)) {
+        mEnableEndErpFrame = value;
     }
 
-    if (pReader->getValueInt("camendint", &val)) {
-        mCamEndInt = val;
+    if (pReader->getValueInt("camendint", &value)) {
+        mCamEndInt = value;
     }
 
-    if (pReader->getValueInt("evfrm", &val)) {
-        mEvFrame = val;
+    if (pReader->getValueInt("evfrm", &value)) {
+        mEvFrame = value;
     }
 
-    if (pReader->getValueInt("evpriority", &val)) {
-        mEvPriority = val;
+    if (pReader->getValueInt("evpriority", &value)) {
+        mEvPriority = value;
     }
 }
 

@@ -132,7 +132,7 @@ void LavaStrangeRock::exeWait() {
             return;
         }
 
-        if (MR::checkHitSegmentSphere(*MR::getPlayerCenterPos(), mPosition, mPosition + hitOffset, radius, nullptr) != true) {
+        if (!MR::checkHitSegmentSphere(*MR::getPlayerCenterPos(), mPosition, mPosition + hitOffset, radius, nullptr)) {
             return;
         }
 

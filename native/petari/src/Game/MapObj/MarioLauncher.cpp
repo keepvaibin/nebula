@@ -640,7 +640,7 @@ bool MarioLauncher::doLanding(s32 msg) {
 }
 
 bool MarioLauncher::testHitCollision() {
-    return MR::isBinded(mShell) != false;
+    return MR::isBinded(mShell);
 }
 
 bool MarioLauncher::isBreak(const Triangle* pTriangle) {

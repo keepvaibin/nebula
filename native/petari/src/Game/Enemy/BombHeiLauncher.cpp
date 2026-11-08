@@ -121,10 +121,6 @@ void BombHeiLauncher::offSwitchA() {
 }
 
 void BombHeiLauncher::exeLauncherWait() {
-    if (MR::isFirstStep(this)) {
-        // stripped debug code
-    }
-
     if (!mIsActive) {
         return;
     }

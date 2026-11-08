@@ -23,6 +23,17 @@ namespace {
         pStartInfo->mPartName = pPartName;
     }
 
+    // A request that cannot start yet: pStartInfo (its starter set) completed and queued under pRequester.
+    template < typename Requester >
+    void queueStartDemo(DemoStartInfo* pStartInfo, Requester* pRequester, const char* pDemoName, const char* pPartName,
+                        MR::MovementControlType movementType, DemoStartInfo::DemoType demoType, DemoStartInfo::CinemaFrameType frameType,
+                        DemoStartInfo::StarPointerType pointerType, DemoStartInfo::DeleteEffectType deleteEffectType) {
+        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
+        ::setDemoStartInfoCommon(pStartInfo, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
+        requestHolder->registerStartDemoInfo(*pStartInfo);
+        requestHolder->pushRequest(pRequester, pDemoName);
+    }
+
     void startStarPointerMode(DemoStartInfo::StarPointerType pointerType, NameObj* pDemoStarter) {
         switch (pointerType) {
         case DemoStartInfo::StarPointerType_DemoWithStarPointer:
@@ -109,15 +120,10 @@ namespace DemoStartRequestUtil {
             pActor->setNerve(pNoDemoNerve);
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mActor = pActor;
         startInfo.mDemoNerve = pDemoNerve;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pActor, pDemoName);
+        ::queueStartDemo(&startInfo, pActor, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }
@@ -142,15 +148,10 @@ namespace DemoStartRequestUtil {
             pActor->setNerve(pNoDemoNerve);
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mLayout = pActor;
         startInfo.mDemoNerve = pDemoNerve;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pActor, pDemoName);
+        ::queueStartDemo(&startInfo, pActor, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }
@@ -172,16 +173,11 @@ namespace DemoStartRequestUtil {
             pExecutor->setNerve(pNoDemoNerve);
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mNerveExecutor = pExecutor;
         startInfo.mDemoNerve = pDemoNerve;
         startInfo.mNerveExecutorHost = pActor;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pExecutor, pDemoName);
+        ::queueStartDemo(&startInfo, pExecutor, pDemoName, nullptr, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }
@@ -204,15 +200,10 @@ namespace DemoStartRequestUtil {
             pActor->setNerve(pNoDemoNerve);
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mActor = pActor;
         startInfo.mDemoNerve = pDemoNerve;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pActor, pDemoName);
+        ::queueStartDemo(&startInfo, pActor, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }
@@ -235,16 +226,11 @@ namespace DemoStartRequestUtil {
             pExecutor->setNerve(pNoDemoNerve);
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mNerveExecutor = pExecutor;
         startInfo.mDemoNerve = pDemoNerve;
         startInfo.mNerveExecutorHost = pActor;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pExecutor, pDemoName);
+        ::queueStartDemo(&startInfo, pExecutor, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }
@@ -258,14 +244,9 @@ namespace DemoStartRequestUtil {
             return true;
         }
 
-        DemoStartRequestHolder* requestHolder = DemoFunction::getDemoDirector()->mStartRequestHolder;
-
         DemoStartInfo startInfo;
         startInfo.mNameObj = pObj;
-        ::setDemoStartInfoCommon(&startInfo, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
-
-        requestHolder->registerStartDemoInfo(startInfo);
-        requestHolder->pushRequest(pObj, pDemoName);
+        ::queueStartDemo(&startInfo, pObj, pDemoName, pPartName, movementType, demoType, frameType, pointerType, deleteEffectType);
 
         return false;
     }

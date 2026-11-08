@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Game/Camera/CameraTowerBase.hpp"
+#include "Game/Camera/Camera.hpp"
 
-class CameraTowerPos : public CameraTowerBase {
+class CameraTowerPos : public Camera {
 public:
     CameraTowerPos(const char* pName = "塔カメラ（サブターゲット付き）");
     virtual ~CameraTowerPos();

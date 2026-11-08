@@ -75,17 +75,22 @@ u8 ChordInfo::getBassNote() const {
     return mCurChord->mBass;
 }
 
-u8 ChordInfo::getThird() {
+// The first of the chord's four tones (isChordTone) or its note list (an octave up when below the root) loStep..hiStep
+// semitones over the root, as a pitch class; NULL_NOTE for none or no chord. isSkipThird passes over a note equal to the
+// third.
+u8 ChordInfo::findInterval(bool isChordTone, u8 loStep, u8 hiStep, bool isSkipThird) {
     if (!isAvailable()) {
         return NULL_NOTE;
     }
 
     u8 root = getRoot();
-    u8 lo = root + 3;
-    u8 hi = root + 5;
+    u8 lo = root + loStep;
+    u8 hi = root + hiStep;
+    const u8* pNotes = isChordTone ? mCurChord->mChordTone : mChordNoteList;
+    s32 noteNum = isChordTone ? 4 : NUM_CHORD_NOTES;
 
-    for (s32 i = 0; i < 4; i++) {
-        u8 note = getChordTone(i);
+    for (s32 i = 0; i < noteNum; i++) {
+        u8 note = pNotes[i];
 
         if (note == NULL_NOTE) {
             continue;
@@ -95,160 +100,36 @@ u8 ChordInfo::getThird() {
             note += OCTAVE;
         }
 
-        if (note >= lo && note <= hi) {
+        if (note >= lo && note <= hi && !(isSkipThird && note == getThird())) {
             return note % OCTAVE;
         }
     }
 
     return NULL_NOTE;
+}
+
+u8 ChordInfo::getThird() {
+    return findInterval(true, 3, 5, false);
 }
 
 u8 ChordInfo::getFifth() {
-    if (!isAvailable()) {
-        return NULL_NOTE;
-    }
-
-    u8 root = getRoot();
-    u8 lo = root + 6;
-    u8 hi = root + 8;
-
-    for (s32 i = 0; i < 4; i++) {
-        u8 note = getChordTone(i);
-
-        if (note == NULL_NOTE) {
-            continue;
-        }
-
-        if (note < root) {
-            note += OCTAVE;
-        }
-
-        if (note >= lo && note <= hi) {
-            return note % OCTAVE;
-        }
-    }
-
-    return NULL_NOTE;
+    return findInterval(true, 6, 8, false);
 }
 
 u8 ChordInfo::getSeventh() {
-    if (!isAvailable()) {
-        return NULL_NOTE;
-    }
-
-    u8 root = getRoot();
-    u8 lo = root + 9;
-    u8 hi = root + 11;
-
-    for (s32 i = 0; i < 4; i++) {
-        u8 note = getChordTone(i);
-
-        if (note == NULL_NOTE) {
-            continue;
-        }
-
-        if (note < root) {
-            note += OCTAVE;
-        }
-
-        if (note >= lo && note <= hi) {
-            return note % OCTAVE;
-        }
-    }
-
-    return NULL_NOTE;
+    return findInterval(true, 9, 11, false);
 }
 
 u8 ChordInfo::getSixth() {
-    if (!isAvailable()) {
-        return NULL_NOTE;
-    }
-
-    u8 root = getRoot();
-    u8 lo = root + 8;
-    u8 hi = root + 9;
-
-    for (s32 i = 0; i < NUM_CHORD_NOTES; i++) {
-        u8 note = mChordNoteList[i];
-
-        if (note == NULL_NOTE) {
-            continue;
-        }
-
-        if (note < root) {
-            note += OCTAVE;
-        }
-
-        note &= 0xFF;
-
-        if (note >= lo && note <= hi) {
-            return note % OCTAVE;
-        }
-    }
-
-    return NULL_NOTE;
+    return findInterval(false, 8, 9, false);
 }
 
 u8 ChordInfo::getNinth() {
-    if (!isAvailable()) {
-        return NULL_NOTE;
-    }
-
-    u8 root = getRoot();
-    u8 lo = root + 1;
-    u8 hi = root + 3;
-
-    for (s32 i = 0; i < NUM_CHORD_NOTES; i++) {
-        u8 note = mChordNoteList[i];
-
-        if (note == NULL_NOTE) {
-            continue;
-        }
-
-        note &= 0xFF;
-
-        if (note < root) {
-            note += OCTAVE;
-        }
-
-        if (note >= lo && note <= hi) {
-            if (note != getThird()) {
-                return note % OCTAVE;
-            }
-        }
-    }
-
-    return NULL_NOTE;
+    return findInterval(false, 1, 3, true);
 }
 
 u8 ChordInfo::getEleventh() {
-    if (!isAvailable()) {
-        return NULL_NOTE;
-    }
-
-    u8 root = getRoot();
-    u8 lo = (root + 5);
-    u8 hi = (root + 6);
-
-    for (s32 i = 0; i < NUM_CHORD_NOTES; i++) {
-        u8 note = mChordNoteList[i];
-
-        if (note == NULL_NOTE) {
-            continue;
-        }
-
-        if (note < root) {
-            note += OCTAVE;
-        }
-
-        note &= 0xFF;
-
-        if (note >= lo && note <= hi) {
-            return note % OCTAVE;
-        }
-    }
-
-    return NULL_NOTE;
+    return findInterval(false, 5, 6, false);
 }
 
 bool ChordInfo::isOnChord(u8 note, bool includeAdd, bool includeBass) {

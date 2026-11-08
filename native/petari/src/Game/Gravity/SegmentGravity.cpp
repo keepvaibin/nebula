@@ -81,14 +81,13 @@ void SegmentGravity::setSideVector(const Vec3f& rSideVec) {
     updateLocalParam();
 }
 
-void SegmentGravity::setValidSideDegree(f32 val) {
-    mValidSideDegree = val;
-    ;
+void SegmentGravity::setValidSideDegree(f32 validSideDegree) {
+    mValidSideDegree = validSideDegree;
     updateLocalParam();
 }
 
-void SegmentGravity::setEdgeValid(u32 index, bool val) {
-    mEdges[index != 0] = val;
+void SegmentGravity::setEdgeValid(u32 index, bool isValid) {
+    mEdges[index != 0] = isValid;
 }
 
 void SegmentGravity::updateLocalParam() {

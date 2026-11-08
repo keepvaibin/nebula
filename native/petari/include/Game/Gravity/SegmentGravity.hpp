@@ -11,8 +11,8 @@ public:
 
     void setGravityPoint(u32 index, const Vec3f& rGravityPoint);
     void setSideVector(const Vec3f& rSideVec);
-    void setValidSideDegree(f32 val);
-    void setEdgeValid(u32 index, bool val);
+    void setValidSideDegree(f32 validSideDegree);
+    void setEdgeValid(u32 index, bool isValid);
     void updateLocalParam();
 
     // Represents the centers of each base of the cylinder

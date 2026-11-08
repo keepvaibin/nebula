@@ -257,7 +257,7 @@ void StarPieceGroup::placementPieceOnRail() {
 
     if (mNumPieces == 1) {
         coordDistBetweenPieces = 0.0f;
-    } else if (MR::isLoopRail(this) == false) {
+    } else if (!MR::isLoopRail(this)) {
         coordDistBetweenPieces = railLength / (mNumPieces - 1.0f);
     } else {
         coordDistBetweenPieces = railLength / mNumPieces;

@@ -34,7 +34,6 @@
 #include "Game/Render/Material.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
 #include "Game/Util/StringUtil.hpp"

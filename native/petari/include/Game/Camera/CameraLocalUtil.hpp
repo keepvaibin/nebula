@@ -68,6 +68,16 @@ namespace CameraLocalUtil {
     bool testCameraPadTriggerRoundRight();
     void slerpCamera(Quat4f*, const Quat4f&, const Quat4f&, f32, bool);
     bool makeTowerCameraMtx(Pos3f*, const Pos3f&, const Vec3f&, const Vec3f&, const Vec3f&);
+    // pAxis is normalized (Y when zero). *pPos is rWatchPos plus dist along the watch point's offset from the axis through rWPoint,
+    // pitched by angleX about the side of world up. False, and *pPos untouched, when the watch point is on the axis.
+    bool calcTowerIdealPos(Vec3f* pPos, Vec3f* pAxis, const Vec3f& rWPoint, const Vec3f& rWatchPos, f32 angleX, f32 dist);
+    // The water and flying cameras' frame: front toward rWatchPos, the camera's up carried through the turn, side level with rGravUp,
+    // never upside down. Returns the camera distance, clamped to [distMin, distMax] unless the camera is on the watch point.
+    f32 calcFollowFrame(const Camera* pCamera, const Vec3f& rWatchPos, const Vec3f& rGravUp, f32 distMin, f32 distMax, bool isSideReorthogonalized,
+                        Vec3f* pFront, Vec3f* pUp, Vec3f* pSide);
+    // *pCount (0-60) counts frames the line rPos to rPos + rLine hits the map while the target moves more than 5 a frame;
+    // *pLastMoveDir keeps the last such move. Returns the turn rate toward *pLastMoveDir.
+    f32 updateMoveCollision(s32* pCount, Vec3f* pLastMoveDir, const CameraTargetObj* pTarget, const Vec3f& rPos, const Vec3f& rLine);
     void arrangeDistanceByFovy(Camera*, Vec3f, f32);
     void arrangeDistanceByPushAndPull(Camera*, f32, f32);
     void calcSafePose(CameraMan*, Camera*);

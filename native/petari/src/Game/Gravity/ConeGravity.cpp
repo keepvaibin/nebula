@@ -16,12 +16,12 @@ void ConeGravity::setLocalMatrix(const Pos3f& rMtx) {
     updateIdentityMtx();
 }
 
-void ConeGravity::setEnableBottom(bool val) {
-    mEnableBottom = val;
+void ConeGravity::setEnableBottom(bool isEnable) {
+    mEnableBottom = isEnable;
 }
 
-void ConeGravity::setTopCutRate(f32 val) {
-    mTopCutRate = val < 0.0f ? 0.0f : val > 1.0f ? 1.0f : val;
+void ConeGravity::setTopCutRate(f32 topCutRate) {
+    mTopCutRate = topCutRate < 0.0f ? 0.0f : topCutRate > 1.0f ? 1.0f : topCutRate;
 }
 
 inline f32 absfInline(f32& orig, f32 v) {

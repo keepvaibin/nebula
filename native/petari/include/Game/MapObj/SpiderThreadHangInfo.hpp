@@ -12,7 +12,7 @@ public:
     void startBind(LiveActor*, const Vec3f*, SpiderThreadPart*, s32, const Vec3f&, s32);
     void endBind();
     void startHang();
-    void endHang(bool);
+    void endHang(bool isCancel);
     void updateHang();
     void copyInfo(const SpiderThreadHangInfo*);
 

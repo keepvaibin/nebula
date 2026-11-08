@@ -820,10 +820,9 @@ void Rock::exeMove() {
 
     if (mSlowDownTimer > ::cSlowMoveFrame - ::cSlowMoveRumbleFrame) {
         s32 step = ::cSlowMoveFrame - mSlowDownTimer;
-        f32 f1 = MR::sinDegree(MR::repeatDegree(step * ::cAppearRumbleSpeed));
-        f1 = ::cAppearRumbleAngle * f1;
+        f32 rumble = ::cAppearRumbleAngle * MR::sinDegree(MR::repeatDegree(step * ::cAppearRumbleSpeed));
         f32 remaining = ::cSlowMoveRumbleFrame - step;
-        rotateSpeed += remaining * f1 / ::cSlowMoveRumbleFrame;
+        rotateSpeed += remaining * rumble / ::cSlowMoveRumbleFrame;
     }
 
     updateRotateX(mRotation.x + rotateSpeed);

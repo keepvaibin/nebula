@@ -11,13 +11,13 @@ class LiveActor;
 
 class ActorJointCtrl {
 public:
-    ActorJointCtrl(LiveActor*);
+    ActorJointCtrl(LiveActor* pActor);
 
-    void startDynamicCtrl(const char*, s32);
-    void endDynamicCtrl(const char*, s32);
+    void startDynamicCtrl(const char* pName, s32 time);
+    void endDynamicCtrl(const char* pName, s32 time);
     void resetDynamicCtrl();
-    void startFaceCtrl(s32);
-    void endFaceCtrl(s32);
+    void startFaceCtrl(s32 time);
+    void endFaceCtrl(s32 time);
     void setIKEndPosition(const char* pName, const Vec3f& rPos, f32 rate);
     void setIKEndDirection(const char* pName, const Vec3f& rDirection, f32 rate);
     void endIKCtrlAll();

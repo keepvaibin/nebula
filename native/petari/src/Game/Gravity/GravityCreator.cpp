@@ -89,9 +89,9 @@ void DiskGravityCreator::settingFromPlacementArgs(s32 bothSides, s32 edgeGravity
 
     // A negative angle is the whole disk.
     if (validDegree >= 0) {
-        mGravityInstance->setValidDegee(validDegree);
+        mGravityInstance->setValidDegree(validDegree);
     } else {
-        mGravityInstance->setValidDegee(360.0f);
+        mGravityInstance->setValidDegree(360.0f);
     }
 }
 

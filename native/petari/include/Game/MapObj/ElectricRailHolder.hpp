@@ -3,7 +3,8 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
 
-enum ElectricRailType { ElectricRail_Red, ElectricRail_Yellow, ElectricRail_YellowMoving, ElectricRail_RedMoving };
+// ElectricRail's arg 3, ElectricRailMoving's arg 4 + 2.
+enum ElectricRailType { ElectricRail_Yellow, ElectricRail_Red, ElectricRail_YellowMoving, ElectricRail_RedMoving };
 
 class MaterialDraw;
 class MaterialEntry;

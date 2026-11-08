@@ -31,7 +31,7 @@ public:
     void initSensor();
     void initEffect();
     bool isBreakByWall() const;
-    bool isBodySensor(HitSensor*) const;  // stripped
+    bool isBodySensor(HitSensor* pSensor) const;
     bool move(f32);
     void calcBaseMtx(Pos3f*) const;
     bool isInClippingRange() const;
@@ -46,7 +46,7 @@ public:
     void moveOnRail(f32, f32, bool);
     bool isForceInvalidBindSection() const;
     bool tryBreakReachedGoal();
-    bool isMoveEnabled() const;          // stripped
+    bool isMoveEnabled() const;
 
     void exeAppear();
     void exeAppearMoveInvalidBind();

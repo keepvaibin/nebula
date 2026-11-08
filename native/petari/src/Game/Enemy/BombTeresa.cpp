@@ -94,9 +94,9 @@ void BombTeresa::initFromPlacementParam(const TableIter& rIter) {
         mScale.mult(1.0f);
         MR::makeQuatAndFrontFromRotate(&mPoseQuat, &mFront, this);
         mInitPos = mPosition;
-        bool arg1Bool;
-        MR::getPlacementArg1WithInit(rIter, &arg1Bool);
-        mDisableRespawning = arg1Bool == false;
+        bool isRespawning;
+        MR::getPlacementArg1WithInit(rIter, &isRespawning);
+        mDisableRespawning = !isRespawning;
         MR::useStageSwitchWriteDead(this, rIter);
     }
 }

@@ -22,17 +22,13 @@ namespace AstroDemoFunction {
     }
 
     int getActiveGrandStarReturnDemoIndex() {
-        s32 result;
         for (u32 index = 0; index < ARRAY_SIZE(::cGrandStarReturnDemoTable); index++) {
             if (MR::isDemoActive(::cGrandStarReturnDemoTable[index])) {
-                result = index;
-                goto found;
+                return index;
             }
         }
 
-        result = -1;
-    found:
-        return result;
+        return -1;
     }
 
     void tryRegisterDemo(LiveActor* pActor, const char* pDemoName, const TableIter& rIter) {

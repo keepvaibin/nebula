@@ -249,9 +249,7 @@ void MapPartsRailMover::endRotateAtPoint() {
 }
 
 void MapPartsRailMover::calcMoveSpeed(f32* pMoveSpeed) const {
-    bool isNotNear = MR::isNearZero(mAcceleration, 0.0001f) == false;
-
-    if (isNotNear) {
+    if (!MR::isNearZero(mAcceleration, 0.0001f)) {
         *pMoveSpeed = MR::getRailCoordSpeed(mHost);
     } else {
         s32 calcType = 0;

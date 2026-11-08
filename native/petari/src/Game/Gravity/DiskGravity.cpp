@@ -29,21 +29,21 @@ void DiskGravity::setSideDirection(const Vec3f& rSideDir) {
     updateLocalParam();
 }
 
-void DiskGravity::setRadius(f32 val) {
-    mLocalRadius = val;
+void DiskGravity::setRadius(f32 radius) {
+    mLocalRadius = radius;
 }
 
-void DiskGravity::setValidDegee(f32 val) {
-    mValidDegree = val;
+void DiskGravity::setValidDegree(f32 validDegree) {
+    mValidDegree = validDegree;
     updateLocalParam();
 }
 
-void DiskGravity::setBothSide(bool val) {
-    mEnableBothSide = val;
+void DiskGravity::setBothSide(bool isBothSide) {
+    mEnableBothSide = isBothSide;
 }
 
-void DiskGravity::setEnableEdgeGravity(bool val) {
-    mEnableEdgeGravity = val;
+void DiskGravity::setEnableEdgeGravity(bool isEnable) {
+    mEnableEdgeGravity = isEnable;
 }
 
 bool DiskGravity::calcOwnGravityVector(Vec3f* pDest, f32* pDistance, const Vec3f& rPosition) const {

@@ -281,8 +281,8 @@ void SphereSelectorFunction::selectStart() {
     ::getSphereSelector()->appear();
 }
 
-void SphereSelectorFunction::selectCancel(bool b) {
-    if (b) {
+void SphereSelectorFunction::selectCancel(bool isSePlayed) {
+    if (isSePlayed) {
         ::getSphereSelector()->mIsSePlayed = true;
     }
 
@@ -297,8 +297,8 @@ void SphereSelectorFunction::confirmStart() {
     ::getSphereSelector()->setNerve(GET_NERVE(SphereSelector, SphereSelectorNrvConfirmStart));
 }
 
-void SphereSelectorFunction::confirmCancel(bool b) {
-    if (b) {
+void SphereSelectorFunction::confirmCancel(bool isSePlayed) {
+    if (isSePlayed) {
         ::getSphereSelector()->mIsSePlayed = true;
     }
 

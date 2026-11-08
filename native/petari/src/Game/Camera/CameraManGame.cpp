@@ -362,58 +362,7 @@ void CameraManGame::checkReset() {
 }
 
 void CameraManGame::setSafePose() {
-    Vec3f pos = Vec3f(CameraLocalUtil::getPos(mCamera));
-    Vec3f watchPos = Vec3f(CameraLocalUtil::getWatchPos(mCamera));
-    Vec3f up = Vec3f(CameraLocalUtil::getUpVec(mCamera));
-
-    if (MR::isNan(pos) || MR::isNan(watchPos) || MR::isNan(up)) {
-        return;
-    }
-
-    keepAwayWatchPos(&watchPos, pos);
-    calcSafeUpVec(&up, pos, watchPos);
-
-    CameraLocalUtil::setPos(this, pos);
-    CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchPos(this, watchPos);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getWatchUpVec(mCamera));
-    CameraLocalUtil::setGlobalOffset(this, CameraLocalUtil::getGlobalOffset(mCamera));
-    CameraLocalUtil::setLocalOffset(this, CameraLocalUtil::getLocalOffset(mCamera));
-    CameraLocalUtil::setFovy(this, CameraLocalUtil::getFovy(mCamera));
-    CameraLocalUtil::setRoll(this, CameraLocalUtil::getRoll(mCamera));
-}
-
-void CameraManGame::keepAwayWatchPos(Vec3f* watchPos, const Vec3f& pos) {
-    Vec3f dir = *watchPos - pos;
-    f32 length = dir.length();
-
-    if (length < ::sMinDistance) {
-        if (length < 1.0f) {
-            watchPos->set(pos + CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this));
-        } else {
-            dir.normalize();
-            watchPos->set(pos + dir * ::sMinDistance);
-        }
-    }
-}
-
-void CameraManGame::calcSafeUpVec(Vec3f* up, const Vec3f& pos, const Vec3f& watchPos) {
-    Vec3f camWatchDir = watchPos - pos;
-    MR::normalize(&camWatchDir);
-    MR::normalizeOrZero(up);
-
-    if (MR::isNearZero(*up) || MR::abs(camWatchDir.dot(*up)) > 0.98f) {
-        Vec3f watchDir = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
-        MR::normalize(&watchDir);
-        if (MR::abs(camWatchDir.dot(watchDir)) > 0.98f) {
-            up->set(CameraLocalUtil::getUpVec(this));
-        } else {
-            Quat4f rot;
-            rot.setRotate(watchDir, camWatchDir);
-            rot.transform(CameraLocalUtil::getUpVec(this), *up);
-        }
-        CameraLocalUtil::recalcUpVec(up, camWatchDir);
-    }
+    CameraLocalUtil::calcSafePose(this, mCamera);
 }
 
 void CameraManGame::createDefaultCamera() {

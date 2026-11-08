@@ -51,7 +51,7 @@ void CoinSpot::exeWait() {
         mIsInTornado = false;
     }
 
-    if (mIsInTornado == true) {
+    if (mIsInTornado) {
         setNerve(GET_NERVE(CoinSpot, CoinSpotNrvIsInTornado));
     }
 }

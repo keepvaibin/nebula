@@ -406,40 +406,41 @@ namespace MR {
         pDst->set(q);
     }
 
-    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rFront, const Vec3f& rUp, f32 upRate, f32 frontRate) {
-        blendQuatFrontUp(pDst, *pDst, rFront, rUp, upRate, frontRate);
+    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate) {
+        blendQuatFrontUp(pDst, *pDst, rUp, rFront, upRate, frontRate);
     }
 
-    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFront, const Vec3f& rUp, f32 frontRate, f32 upRate) {
+    // The front (Z) toward rFront first, then the up (Y) toward rUp across the new front.
+    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate) {
         Quat4f q;
         q.set(rSrc);
-        Vec3f up;
-        q.getZDir(up);
-
-        bool isUpSame = up.dot(rUp) >= 0.0f ? false : isSameDirection(up, rUp);
-        if (isUpSame) {
-            turnRandomVector(&up, up, 0.001f);
-        }
-
-        Quat4f upRot;
-        upRot.setRotate(up, rUp, upRate);
-        q.mult(upRot);
-
         Vec3f front;
-        q.getYDir(front);
-        q.getZDir(up);
+        q.getZDir(front);
 
-        Vec3f targetFront = rFront.killElement(up);
-        MR::normalizeOrZero(&targetFront);
-
-        bool isFrontSame = front.dot(targetFront) >= 0.0f ? false : isSameDirection(front, targetFront);
+        bool isFrontSame = front.dot(rFront) >= 0.0f ? false : isSameDirection(front, rFront);
         if (isFrontSame) {
             turnRandomVector(&front, front, 0.001f);
         }
 
         Quat4f frontRot;
-        frontRot.setRotate(front, targetFront, frontRate);
+        frontRot.setRotate(front, rFront, frontRate);
         q.mult(frontRot);
+
+        Vec3f up;
+        q.getYDir(up);
+        q.getZDir(front);
+
+        Vec3f targetUp = rUp.killElement(front);
+        MR::normalizeOrZero(&targetUp);
+
+        bool isUpSame = up.dot(targetUp) >= 0.0f ? false : isSameDirection(up, targetUp);
+        if (isUpSame) {
+            turnRandomVector(&up, up, 0.001f);
+        }
+
+        Quat4f upRot;
+        upRot.setRotate(up, targetUp, upRate);
+        q.mult(upRot);
 
         q.normalize();
         pDst->set(q);

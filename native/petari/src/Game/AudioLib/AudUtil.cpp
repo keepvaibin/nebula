@@ -1,27 +1,23 @@
 #include "Game/AudioLib/AudUtil.hpp"
 
 namespace AudUtil {
-    f32 linearMax(s32 val, s32 max, f32 end) {
-        f32 ret;
-        if (val <= 0.0f) {
-            ret = 0.0f;
-        } else if (val >= max) {
-            ret = end;
-        } else {
-            ret = end * val / max;
+    f32 linearMax(s32 value, s32 max, f32 end) {
+        if (value <= 0.0f) {
+            return 0.0f;
         }
-        return ret;
+        if (value >= max) {
+            return end;
+        }
+        return end * value / max;
     }
 
-    f32 linearMinMax(s32 val, s32 min, s32 max, f32 start, f32 end) {
-        f32 ret;
-        if (val <= min) {
-            ret = start;
-        } else if (val >= max) {
-            ret = end;
-        } else {
-            ret = start + (end - start) * (val - min) / (max - min);
+    f32 linearMinMax(s32 value, s32 min, s32 max, f32 start, f32 end) {
+        if (value <= min) {
+            return start;
         }
-        return ret;
+        if (value >= max) {
+            return end;
+        }
+        return start + (end - start) * (value - min) / (max - min);
     }
 };  // namespace AudUtil

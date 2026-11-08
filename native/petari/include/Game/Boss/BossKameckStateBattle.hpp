@@ -4,7 +4,7 @@
 #include <nebula_geometry.hpp>
 
 class BossKameck;
-class BossKameckBattlePattarn;
+class BossKameckBattlePattern;
 class BossKameckMoveRail;
 class HitSensor;
 class KameckBeam;
@@ -21,12 +21,12 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
     void setMoveRail(BossKameckMoveRail*);
-    void setBattlePattarn(BossKameckBattlePattarn*);
+    void setBattlePattern(BossKameckBattlePattern* pBattlePattern);
     bool requestDamage(HitSensor*, HitSensor*);
     bool requestGuard(HitSensor*, HitSensor*);
     bool tryAttackWait();
     bool trySummonKameck();
-    bool tryChargeBram();
+    bool tryChargeBeam();
     void startMove();
     void exeWait();
     void exeMove();
@@ -46,7 +46,7 @@ public:
     bool isEnableGuard() const;
 
     BossKameckMoveRail* mMoveRail;
-    BossKameckBattlePattarn* mBattlePattarn;
+    BossKameckBattlePattern* mBattlePattern;
     KameckBeam* mBeam;
     KameckBeamEventListener* mBeamEventListener;
     Vec3f mMoveTarget;

@@ -470,7 +470,7 @@ namespace MR {
     }
 
     bool isTimeKeepDemoActive() {
-        if (DemoFunction::getDemoDirector()->mIsActive == false) {
+        if (!DemoFunction::getDemoDirector()->mIsActive) {
             return false;
         }
 
@@ -506,7 +506,7 @@ namespace MR {
     }
 
     bool isDemoPartStep(const char* pName, s32 step) {
-        if (isDemoPartActive(pName) == false) {
+        if (!isDemoPartActive(pName)) {
             return false;
         }
 
@@ -514,7 +514,7 @@ namespace MR {
     }
 
     bool isDemoPartFirstStep(const char* pName) {
-        if (isDemoPartActive(pName) == false) {
+        if (!isDemoPartActive(pName)) {
             return false;
         }
 
@@ -522,7 +522,7 @@ namespace MR {
     }
 
     bool isDemoPartLastStep(const char* pName) {
-        if (isDemoPartActive(pName) == false) {
+        if (!isDemoPartActive(pName)) {
             return false;
         }
 
@@ -530,7 +530,7 @@ namespace MR {
     }
 
     bool isDemoPartLessEqualStep(const char* pName, s32 step) {
-        if (isDemoPartActive(pName) == false) {
+        if (!isDemoPartActive(pName)) {
             return false;
         }
 
@@ -538,7 +538,7 @@ namespace MR {
     }
 
     bool isDemoPartGreaterStep(const char* pName, s32 step) {
-        if (isDemoPartActive(pName) == false) {
+        if (!isDemoPartActive(pName)) {
             return false;
         }
 
@@ -583,7 +583,7 @@ namespace MR {
     }
 
     bool isSystemTalking() {
-        if (isExistSceneObj(SceneObj_TalkDirector) == false) {
+        if (!isExistSceneObj(SceneObj_TalkDirector)) {
             return false;
         }
 
@@ -591,7 +591,7 @@ namespace MR {
     }
 
     bool isNormalTalking() {
-        if (isExistSceneObj(SceneObj_TalkDirector) == false) {
+        if (!isExistSceneObj(SceneObj_TalkDirector)) {
             return false;
         }
 
@@ -599,7 +599,7 @@ namespace MR {
     }
 
     LiveActor* getTalkingActor() {
-        if (isExistSceneObj(SceneObj_TalkDirector) == false) {
+        if (!isExistSceneObj(SceneObj_TalkDirector)) {
             return nullptr;
         }
 

@@ -159,11 +159,11 @@ SoundHandle* SoundAnimator::getFreeHandle(const SoundAnimationSound* pAnimation)
     return nullptr;
 }
 
-u32 SoundAnimator::getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 f1) {
+u32 SoundAnimator::getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed) {
     return pAnimation->getSoundID();
 }
 
-bool SoundAnimator::playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 f1) {
+bool SoundAnimator::playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed) {
     if (pAnimation->playsOnlyOnce()) {
         if (mTime != pAnimation->mPlayTime) {
             return false;

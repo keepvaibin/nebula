@@ -217,7 +217,7 @@ namespace {
 };  // namespace
 
 bool GameEventFlagIter::isEnd() const {
-    if (GameEventFlagIter::isValid() == false) {
+    if (!GameEventFlagIter::isValid()) {
         return true;
     }
 

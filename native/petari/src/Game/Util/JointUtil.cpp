@@ -4,7 +4,6 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Render/Material.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JUtility/JUTNameTab.hpp>
 
 namespace MR {
     Joint* getJoint(Model* pModel, const char* pName) {

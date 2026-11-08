@@ -73,7 +73,7 @@ namespace MR {
     }
 
     bool isActiveClipArea() {
-        return ::getClipAreaHolder()->mIsActive != false;
+        return ::getClipAreaHolder()->mIsActive;
     }
 
     void activateClipArea() {

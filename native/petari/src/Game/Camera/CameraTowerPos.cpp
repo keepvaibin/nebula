@@ -5,14 +5,14 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const f32 sAttenuation = 0.05f;
+    const f32 sAttenuation = 0.05f;
 };  // namespace
 
 CameraTowerPos::~CameraTowerPos() {
 }
 
 CameraTowerPos::CameraTowerPos(const char* pName)
-    : CameraTowerBase(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleYMaxSpeed(), mAngleX(), mDist(1000.0f), mAngleXRate(0.5f),
+    : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleYMaxSpeed(), mAngleX(), mDist(1000.0f), mAngleXRate(0.5f),
       mPos(0.0f, 0.0f, 0.0f) {
 }
 
@@ -35,27 +35,12 @@ void CameraTowerPos::calcIdealPose(bool arrange) {
     inv.invert(inv);
     inv.mult(watchPos, watchPos);
 
-    if (MR::isNearZero(mAxis)) {
-        mAxis.set(0.0f, 1.0f, 0.0f);
-    } else {
-        mAxis.normalize();
-    }
-
-    Vec3f front = watchPos - mWPoint;
-    front.set(front - mAxis * mAxis.dot(front));
-    if (MR::isNearZero(front)) {
+    Vec3f pos;
+    if (!CameraLocalUtil::calcTowerIdealPos(&pos, &mAxis, mWPoint, watchPos, mAngleX, mDist)) {
         return;
     }
-    MR::normalize(&front);
 
     Vec3f up(0.0f, 1.0f, 0.0f);
-    Vec3f side = front.cross(up);
-
-    Quat4f rot;
-    rot.setRotate(side, mAngleX);
-    rot.transform(front);
-
-    Vec3f pos = front * mDist + watchPos;
 
     if (arrange) {
         arrangeHorizontalPose(watchPos, pos);

@@ -7,10 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const f32 sCollideRate = 0.03f;
-    static const s32 sCollideCountMax = 60;
-    static const f32 sLastMoveLen = 5.0f;
-    static const s32 sRoundingFrame = 60;
+    const s32 sRoundingFrame = 60;
 };  // namespace
 
 CameraWaterFollow::CameraWaterFollow(const char* pName)
@@ -34,51 +31,8 @@ CameraTargetObj* CameraWaterFollow::calc() {
     CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    Vec3f watchFront = watchPos - CameraLocalUtil::getPos(this);
-    f32 camDist = watchFront.length();
-
-    f32 dist;
-    if (MR::isNearZero(watchFront)) {
-        watchFront.cross(CameraLocalUtil::getTarget(this)->getSideVec(), gravUp);
-        dist = camDist;
-    } else {
-        dist = camDist;
-        if (dist < mDistMin) {
-            dist = mDistMin;
-        } else if (dist > mDistMax) {
-            dist = mDistMax;
-        }
-    }
-    MR::normalize(&watchFront);
-
-    Vec3f camUp = CameraLocalUtil::getUpVec(this);
-    Vec3f camFront = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
-    MR::normalize(&camFront);
-    Quat4f rotFront;
-    rotFront.setRotate(camFront, watchFront);
-
     Vec3f front, up, side;
-    front.set(watchFront);
-    up.set(camUp);
-    rotFront.transform(up);
-    side.cross(up, front);
-    side -= gravUp * gravUp.dot(side);
-    MR::normalize(&side);
-
-    up.cross(front, side);
-    side.cross(up, front);
-
-    if (gravUp.dot(up) < 0.0f) {
-        Quat4f upsideDownRot;
-        if (front.dot(gravUp) < 0.0f) {
-            upsideDownRot.setRotate(front, -gravUp);
-        } else {
-            upsideDownRot.setRotate(front, gravUp);
-        }
-        upsideDownRot.transform(front);
-        upsideDownRot.transform(side);
-        upsideDownRot.transform(up);
-    }
+    f32 dist = CameraLocalUtil::calcFollowFrame(this, watchPos, gravUp, mDistMin, mDistMax, true, &front, &up, &side);
 
     Vec3f gravSide = CameraLocalUtil::getTarget(this)->getSideVec();
     gravSide -= gravUp * gravUp.dot(gravSide);
@@ -125,26 +79,10 @@ CameraTargetObj* CameraWaterFollow::calc() {
     rot.transform(up);
 
     Vec3f pos = watchPos - front * dist;
-    f32 lastMoveLen = CameraLocalUtil::getTarget(this)->getLastMove().length();
-    if (lastMoveLen > ::sLastMoveLen) {
-        mLastMoveDir.set(CameraLocalUtil::getTarget(this)->getLastMove());
-        MR::normalize(&mLastMoveDir);
-    }
-
-    if (lastMoveLen > ::sLastMoveLen && Collision::checkStrikeLineToMap(pos, front * dist, 0, nullptr, nullptr) != 0) {
-        mCollideCount++;
-        if (mCollideCount > ::sCollideCountMax) {
-            mCollideCount = ::sCollideCountMax;
-        }
-    } else {
-        mCollideCount--;
-        if (mCollideCount < 0) {
-            mCollideCount = 0;
-        }
-    }
+    f32 collideRate = CameraLocalUtil::updateMoveCollision(&mCollideCount, &mLastMoveDir, CameraLocalUtil::getTarget(this), pos, front * dist);
 
     if (mCollideCount > 0) {
-        rot.setRotate(front, mLastMoveDir, mCollideCount * ::sCollideRate / ::sCollideCountMax);
+        rot.setRotate(front, mLastMoveDir, collideRate);
         rot.transform(front);
         rot.transform(up);
     }

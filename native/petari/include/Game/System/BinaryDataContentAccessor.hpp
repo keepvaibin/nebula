@@ -27,7 +27,7 @@ public:
 
     s32 getHeaderSize() const;
     s32 getDataSize() const;
-    s32 getAttributeNum() const;  // stripped
+    s32 getAttributeNum() const;
     void* getPointer(const char* pAttributeName, u8* pData) const;
 
     u8* mData;

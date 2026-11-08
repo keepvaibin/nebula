@@ -11,7 +11,6 @@
 #include "Game/Render/Material.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
 #include <nebula_format.h>

@@ -195,21 +195,21 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
 }
 
 void MapObjActorUtil::setupInitInfoColorChangeArg0(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    pInitInfo->mColorChangeArg = arg0;
+    s32 colorChange = -1;
+    MR::getPlacementArg0NoInit(rIter, &colorChange);
+    pInitInfo->mColorChangeArg = colorChange;
 }
 
 void MapObjActorUtil::setupInitInfoTextureChangeArg1(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
-    s32 arg1 = -1;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    pInitInfo->mTextureChangeArg = arg1;
+    s32 textureChange = -1;
+    MR::getPlacementArg1NoInit(rIter, &textureChange);
+    pInitInfo->mTextureChangeArg = textureChange;
 }
 
 void MapObjActorUtil::setupInitInfoShadowLengthArg2(MapObjActorInitInfo* pInitInfo, const TableIter& rIter) {
-    f32 arg2 = -1.0f;
-    MR::getPlacementArg2NoInit(rIter, &arg2);
-    pInitInfo->mShadowLength = arg2;
+    f32 shadowLength = -1.0f;
+    MR::getPlacementArg2NoInit(rIter, &shadowLength);
+    pInitInfo->mShadowLength = shadowLength;
 }
 
 void MapObjActorUtil::setupInitInfoSeesaw(MapObjActorInitInfo* pInitInfo, const TableIter& rIter, const char* pName, f32 radius) {

@@ -44,7 +44,7 @@ bool StageResultSequenceChecker::isJustGetGreenStarFirst() const {
 }
 
 bool StageResultSequenceChecker::isJustCompleteGalaxy() const {
-    return mCheckListPrev.mIsCompleteGalaxy == false && mCheckListAfter.mIsCompleteGalaxy == true;
+    return !mCheckListPrev.mIsCompleteGalaxy && mCheckListAfter.mIsCompleteGalaxy;
 }
 
 s32 StageResultSequenceChecker::getPrevPowerStarNum() const {

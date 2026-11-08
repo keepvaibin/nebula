@@ -81,7 +81,7 @@ bool SyncBckEffectChecker::checkPass(f32 frame) const {
         return checkPassIfRate0(frame);
     }
 
-    return mPlayer->checkPass(frame) == true;
+    return mPlayer->checkPass(frame);
 }
 
 bool SyncBckEffectChecker::checkPassIfRate0(f32 frame) const {

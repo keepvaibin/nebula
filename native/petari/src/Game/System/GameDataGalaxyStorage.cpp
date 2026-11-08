@@ -38,12 +38,12 @@ s32 GameDataSomeScenarioAccessor::getMaxCoinNum() const {
     return MR::clamp(mSomeGalaxyStorage->getMaxCoinNum(mScenarioNum - 1), 0, NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999));
 }
 
-void GameDataSomeScenarioAccessor::setPowerStarFlag(bool val) {
-    setBitFlagAccordingToBool(mSomeGalaxyStorage->mPowerStarOwnedFlags, val);
+void GameDataSomeScenarioAccessor::setPowerStarFlag(bool isOwned) {
+    setBitFlagAccordingToBool(mSomeGalaxyStorage->mPowerStarOwnedFlags, isOwned);
 }
 
-void GameDataSomeScenarioAccessor::setFlagAlreadyVisited(bool val) {
-    setBitFlagAccordingToBool(mSomeGalaxyStorage->mAlreadyVisitedFlags, val);
+void GameDataSomeScenarioAccessor::setFlagAlreadyVisited(bool isVisited) {
+    setBitFlagAccordingToBool(mSomeGalaxyStorage->mAlreadyVisitedFlags, isVisited);
 }
 
 void GameDataSomeScenarioAccessor::updateMaxCoinNum(int coinNum) {
@@ -54,12 +54,12 @@ void GameDataSomeScenarioAccessor::updateMaxCoinNum(int coinNum) {
     }
 }
 
-void GameDataSomeScenarioAccessor::setBitFlagAccordingToBool(u8* pFlags, bool val) {
+void GameDataSomeScenarioAccessor::setBitFlagAccordingToBool(u8* pFlags, bool isOn) {
     const s32 scenarioNo = mScenarioNum - 1;
     if (scenarioNo >= mSomeGalaxyStorage->mSlots) {
         return;
     }
-    if (val) {
+    if (isOn) {
         pFlags[scenarioNo >> 3] |= (1 << (scenarioNo & 7));
     } else {
         pFlags[scenarioNo >> 3] &= ~(1 << (scenarioNo & 7));

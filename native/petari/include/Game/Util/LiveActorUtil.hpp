@@ -302,7 +302,7 @@ namespace MR {
     HitSensor* getBindedPlaneSensor(const LiveActor*, int);
     Vec3f* getBindedFixReactionVector(const LiveActor*);
 
-    void setBinderOffsetVec(LiveActor*, const Vec3f*, bool);
+    void setBinderOffsetVec(LiveActor* pActor, const Vec3f* pVec, bool isInHostFrame);
     void setBinderRadius(LiveActor*, f32);
     f32 getBinderRadius(const LiveActor*);
     void setBinderIgnoreMovingCollision(LiveActor*);

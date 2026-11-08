@@ -11,23 +11,24 @@ ActorJointCtrl::ActorJointCtrl(LiveActor* pActor) : mActor(pActor), mIsIdle(true
     mJointCtrlHolder = ActorJoint::createIKJointCtrlHolder(mActor);
 }
 
-void ActorJointCtrl::startDynamicCtrl(const char* pName, s32 val) {
-    mJointCtrlKeeper->startCtrl(pName, val);
+void ActorJointCtrl::startDynamicCtrl(const char* pName, s32 time) {
+    mJointCtrlKeeper->startCtrl(pName, time);
 }
-void ActorJointCtrl::endDynamicCtrl(const char* pName, s32 val) {
-    mJointCtrlKeeper->endCtrl(pName, val);
+
+void ActorJointCtrl::endDynamicCtrl(const char* pName, s32 time) {
+    mJointCtrlKeeper->endCtrl(pName, time);
 }
 
 void ActorJointCtrl::resetDynamicCtrl() {
     mJointCtrlKeeper->reset();
 }
 
-void ActorJointCtrl::startFaceCtrl(s32 val) {
-    mFaceJointCtrl->startCtrl(val);
+void ActorJointCtrl::startFaceCtrl(s32 time) {
+    mFaceJointCtrl->startCtrl(time);
 }
 
-void ActorJointCtrl::endFaceCtrl(s32 val) {
-    mFaceJointCtrl->endCtrl(val);
+void ActorJointCtrl::endFaceCtrl(s32 time) {
+    mFaceJointCtrl->endCtrl(time);
 }
 
 void ActorJointCtrl::setIKEndPosition(const char* pName, const Vec3f& rPos, f32 rate) {
