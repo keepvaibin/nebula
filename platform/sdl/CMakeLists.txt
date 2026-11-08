@@ -213,6 +213,12 @@ set(host_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
+    # A real Wii Remote on a DolphinBar (wiimote_hid.h over wiimote_link_android.cpp).
+    list(APPEND host_sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/wiimote_link_android.cpp"
+        ${rt}/wiimote_hid.cpp
+        ${rt}/wiimote_protocol.cpp
+        ${rt}/input/wiimote_input.cpp)
     add_library(main SHARED ${host_sources})
     target_link_libraries(main PRIVATE android log nativewindow)
 else()

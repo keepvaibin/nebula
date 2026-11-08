@@ -43,6 +43,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- A DolphinBar plugged in (Wii Remotes over USB): Android offers Nebula, and "always" lets the game
+                 open the bar from then on without asking (WiimoteUsb). -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/wiimote_usb" />
         </activity>
 
         <!-- The game, in its own process: one run per process (the native game starts once). -->

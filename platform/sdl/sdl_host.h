@@ -95,6 +95,8 @@ struct InputState {
     std::uint64_t finger_land_ms = 0;
     float finger_land_x = 0.0f;
     float finger_land_y = 0.0f;
+    // Since it came down, the finger has gone past the system's touch slop (a still fingertip's tremor stays inside).
+    bool finger_moved = false;
     int window_width = 0;
     int window_height = 0;
     bool window_focused = true;

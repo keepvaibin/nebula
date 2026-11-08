@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Wii Remotes over USB: a DolphinBar in its mode 4 reports every slot under the remote's own ids. -->
+<resources>
+    <usb-device vendor-id="1406" product-id="774" />
+    <usb-device vendor-id="1406" product-id="816" />
+</resources>
