@@ -7,23 +7,19 @@ namespace {
 
     void calcBezierHandlePoint(Vec3f* pHandle1, Vec3f* pHandle2, const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPointC,
                                f32 diagonalRate) {
-        Vec3f v1(rPointA - rPointB);
-        Vec3f v2(rPointC - rPointB);
-        f32 distAB = v1.length();
-        f32 distCB = v2.length();
+        // Both handles at B lie on one tangent through B (BA scaled to BC's length, minus BC), each at diagonalRate of its
+        // side's projection on it. A point on B divides by zero; the handles are then not finite, as in the original.
+        Vec3f toA(rPointA - rPointB);
+        Vec3f toC(rPointC - rPointB);
+        f32 distAB = toA.length();
+        f32 distCB = toC.length();
 
-        if (MR::isNearZero(distAB) || MR::isNearZero(distCB)) {
-            pHandle1->set(rPointB + v1 * diagonalRate);
-            pHandle2->set(rPointB + v2 * diagonalRate);
-            // no return??
-        }
+        Vec3f tangent;
+        tangent.set(toA * (distCB / distAB) - toC);
+        MR::normalizeOrZero(&tangent);
 
-        Vec3f v3;
-        v3.set(v1 * (distCB / distAB) - v2);
-        MR::normalizeOrZero(&v3);
-
-        pHandle1->set(rPointB + v3 * (diagonalRate * v1.dot(v3)));
-        pHandle2->set(rPointB + v3 * (diagonalRate * v2.dot(v3)));
+        pHandle1->set(rPointB + tangent * (diagonalRate * toA.dot(tangent)));
+        pHandle2->set(rPointB + tangent * (diagonalRate * toC.dot(tangent)));
     }
 };  // namespace
 

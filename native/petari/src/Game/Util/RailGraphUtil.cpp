@@ -129,22 +129,22 @@ namespace MR {
     }
 
     s32 getSelectEdgeArg0(const RailGraphIter* pIter) {
-        return pIter->getCurrentEdge()->mPointArg0;
+        return pIter->getCurrentEdge()->mPointArg[0];
     }
 
     s32 getSelectEdgeArg1(const RailGraphIter* pIter) {
-        return pIter->getCurrentEdge()->mPointArg1;
+        return pIter->getCurrentEdge()->mPointArg[1];
     }
 
     s32 getSelectEdgeArg2(const RailGraphIter* pIter) {
-        return pIter->getCurrentEdge()->mPointArg2;
+        return pIter->getCurrentEdge()->mPointArg[2];
     }
 
     s32 getSelectEdgeArg3(const RailGraphIter* pIter) {
-        return pIter->getCurrentEdge()->mPointArg3;
+        return pIter->getCurrentEdge()->mPointArg[3];
     }
 
     s32 getWatchEdgeArg7(const RailGraphIter* pIter) {
-        return pIter->getWatchEdge()->mPointArg7;
+        return pIter->getWatchEdge()->mPointArg[7];
     }
 };  // namespace MR

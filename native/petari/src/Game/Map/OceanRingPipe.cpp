@@ -95,48 +95,50 @@ void OceanRingPipe::initPoints() {
         MR::calcDistanceToCurrentAndNextRailPoint(this, &currDist, &nextDist);
         f32 sumDist = currDist + nextDist;
 
-        f32 flt = mWidthArg / 100.0f;
-        f32 flt2 = mWidthArg / 100.0f;
-        MR::getCurrentRailPointArg1NoInit(this, &flt);
-        MR::getNextRailPointArg1NoInit(this, &flt2);
+        // A rail point's arg 1 overrides the pipe's width there; between points the width blends by distance.
+        f32 currPointWidth = mWidthArg / 100.0f;
+        f32 nextPointWidth = mWidthArg / 100.0f;
+        MR::getCurrentRailPointArg1NoInit(this, &currPointWidth);
+        MR::getNextRailPointArg1NoInit(this, &nextPointWidth);
 
-        f32 f3 = 1.0f;
-        Vec3f v1(side);
+        f32 widthScale = 1.0f;
+        Vec3f normal(side);
 
         if (sumDist > 0.0f) {
-            f3 = ((flt * nextDist + flt2 * currDist) / sumDist) / (mWidthArg / 100.0f);
-            f32 fff = flt - flt2;
+            widthScale = ((currPointWidth * nextDist + nextPointWidth * currDist) / sumDist) / (mWidthArg / 100.0f);
+            const f32 widthDiff = currPointWidth - nextPointWidth;
 
-            if (MR::abs(fff) > 0.0001f) {
-                Vec3f v2(side);
-                Vec3f v3(side);
-                v2.scale(flt);
-                v3.scale(flt2);
+            // Where the width changes, the normal is square to the wall line from 300 behind to 300 ahead (and to gravity).
+            if (MR::abs(widthDiff) > 0.0001f) {
+                Vec3f wallBehind(side);
+                Vec3f wallAhead(side);
+                wallBehind.scale(currPointWidth);
+                wallAhead.scale(nextPointWidth);
 
                 Vec3f railPos;
                 MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) - 300.0f, 0.0f, MR::getRailTotalLength(this)));
-                v2.add(railPos);
+                wallBehind.add(railPos);
 
                 MR::calcRailPosAtCoord(&railPos, this, MR::repeat(MR::getRailCoord(this) + 300.0f, 0.0f, MR::getRailTotalLength(this)));
-                v3.add(railPos);
+                wallAhead.add(railPos);
 
-                v2.sub(v3);
-                v1.cross(-grav, v2);
-                MR::normalize(&v1);
+                wallBehind.sub(wallAhead);
+                normal.cross(-grav, wallBehind);
+                MR::normalize(&normal);
             }
         }
 
         for (s32 j = 0; j < mNumSides; j++) {
-            Vec3f v4(side);
-            v4.scale(mWidth * f3);
-            v4.add(MR::getRailPos(this));
+            Vec3f pos(side);
+            pos.scale(mWidth * widthScale);
+            pos.add(MR::getRailPos(this));
 
-            mPositions[idx].set< f32 >(v4.x, v4.y, v4.z);
-            mNormals[idx].set< f32 >(v1.x * 2.0f, v1.y * 2.0f, v1.z * 2.0f);
+            mPositions[idx].set< f32 >(pos.x, pos.y, pos.z);
+            mNormals[idx].set< f32 >(normal.x * 2.0f, normal.y * 2.0f, normal.z * 2.0f);
             idx++;
 
             mtx.mult(side, side);
-            mtx.mult(v1, v1);
+            mtx.mult(normal, normal);
         }
 
         MR::moveCoord(this, length);
