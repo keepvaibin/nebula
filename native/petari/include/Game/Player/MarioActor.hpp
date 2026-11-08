@@ -47,7 +47,11 @@ struct ResTIMG;
 struct SmokeEffectEntry;
 class MatrixControl;
 
-enum SPECIAL_STATUS_FOR_CAMERA { CASE_0, CASE_1 };
+// What CameraTargetObj::isCameraStateOn asks the player.
+enum SPECIAL_STATUS_FOR_CAMERA {
+    CameraStatus_FireDance,
+    CameraStatus_HeliJump,  // the helicopter jump off a trampled sensor of type 0x1F (jump kind 11)
+};
 
 enum PlayerMode {
     PlayerMode_Normal,
@@ -58,8 +62,7 @@ enum PlayerMode {
     PlayerMode_Hopper,
     PlayerMode_Teresa,
     PlayerMode_Foo,
-    PlayerMode_8,
-    PlayerMode_Tornado
+    PlayerMode_Tornado = 9,  // no mode is 8
 };
 
 template < int SIZE, class T, class U >

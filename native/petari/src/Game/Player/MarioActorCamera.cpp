@@ -64,14 +64,14 @@ u32 MarioActor::getSpecialMode() const {
 
 bool MarioActor::isCameraStateOn(SPECIAL_STATUS_FOR_CAMERA status) const {
     switch (status) {
-    case CASE_0:
+    case CameraStatus_FireDance:
         if (mMario->isStatusActive(MarioStatus_FireDance)) {
             return true;
         }
 
         break;
 
-    case CASE_1:
+    case CameraStatus_HeliJump:
         if (isJumping() && mMario->mJumpKind == 11) {
             return true;
         }
