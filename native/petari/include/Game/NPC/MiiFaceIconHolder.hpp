@@ -12,7 +12,7 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     MiiFaceIconHolder(u32 iconNum, const char* pName);
 
-    /// @brief Creates the icon texture for the first Mii character with an open request.
+    /// @brief Draws every icon with an open request.
     void drawIcons();
 
     /// @brief Associates `pIcon` with the underlying array.

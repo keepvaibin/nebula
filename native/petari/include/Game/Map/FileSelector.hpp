@@ -3,7 +3,9 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/FileSelectIconID.hpp"
 
-struct MiiCreateID;
+namespace Mii {
+    struct Id;
+}  // namespace Mii
 
 namespace nw4r {
     namespace ut {
@@ -91,13 +93,13 @@ public:
     void validateRotateAllItems();
     FileSelectIconID::EFellowID getUserFileFellowID(s32 id) const;
     bool isUserFileMiiIdValid(s32 id) const;
-    u16 getUserFileMiiIndex(s32 id) const;
+    u32 getUserFileMiiIndex(s32 id) const;
     bool isUserFileCorrupted(s32 id) const;
     bool isUserFileAppearLuigi(s32 id) const;
     bool isUserFileLuigi(s32 id) const;
     void setUserFileMario(s32 id, bool isMario);
     void storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId);
-    void getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const;
+    void getMiiId(Mii::Id* pCreateId, const FileSelectIconID& rIconId) const;
     void getIconId(FileSelectIconID* pIconId, s32 id) const;
     s32 getMissCount(s32 id) const;
     void playSelectedME();
@@ -173,7 +175,7 @@ public:
     TitleSequenceProduct* mTitle;
     MiiSelect* mMiiSelect;
     MiiConfirmIcon* mMiiConfirmIcon;
-    MiiCreateID* mMiiId;
+    Mii::Id* mMiiId;
     Manual2P* mManual;
     bool mIsMiiSelectStartFirst;
     s32 mBgmState;

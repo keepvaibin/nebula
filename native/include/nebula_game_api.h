@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 138u
+#define NEBULA_GAME_API_VERSION 139u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -853,9 +853,11 @@ typedef struct NebulaHostServices {
        that image's place while the image's texels are what they are now (a texture pack's name for them wins). NULL:
        what was handed over for `texture` goes. The renderer takes a copy. */
     void (*texture_hd)(void* user, uint32_t texture, const void* hd);
-    /* The Mii in a slot of the Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
-       an empty slot. */
-    int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
+    /* The Miis in the player's Mii library (any number; nebula_game_mii_changed says when it changed). */
+    uint32_t (*mii_count)(void* user);
+    /* The library's Mii at `place` (0 to mii_count - 1): 1 when there is one (`mii` filled when not NULL), 0 past
+       its Miis. */
+    int32_t (*mii_record)(void* user, uint32_t place, NebulaMii* mii);
     /* Nanoseconds on a steady clock from an arbitrary start (never 0): the game's durations and pacing. */
     uint64_t (*clock_ns)(void* user);
     /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the game's clock counts from

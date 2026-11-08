@@ -1820,13 +1820,13 @@ uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
 }
 #endif
 
-// The Mii library's file (mii_import.h) in the data folder; a save folder's database (or an earlier Nebula's) is
-// where it starts the first time, so the Miis it holds stay in their slots. The game reads the slots as typed records.
+// The Mii library's file (mii_import.h) in the data folder; a Wii save folder's Mii database (or an earlier Nebula's)
+// is where it starts the first time. The game reads its Miis by place as typed records.
 fs::path mii_library_path() {
     return gSaveRoot / "nebula-miis.txt";
 }
 fs::path console_mii_database_path() {
-    return gSaveRoot / "shared2/menu/FaceLib/RFL_DB.dat";
+    return gSaveRoot / fs::path(galaxy::host::wii_mii_database_member());
 }
 
 NebulaMii nebula_mii(const galaxy::host::MiiFields& f) {
@@ -1883,8 +1883,12 @@ NebulaMii nebula_mii(const galaxy::host::MiiFields& f) {
     return m;
 }
 
-int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
-    const std::optional<galaxy::host::MiiFields> fields = galaxy::host::mii_library_slot(slot);
+uint32_t svc_mii_count(void*) {
+    return galaxy::host::mii_library_count();
+}
+
+int32_t svc_mii_record(void*, uint32_t place, NebulaMii* mii) {
+    const std::optional<galaxy::host::MiiFields> fields = galaxy::host::mii_library_mii(place);
     if (!fields) {
         return 0;
     }
@@ -2110,7 +2114,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
         // The renderer's newest picture, or black while the game shows black.
         submit_frame(present, black != 0);
     }
-    // Miis imported from the settings while the game runs: the game reads its slots again.
+    // Miis imported from the settings while the game runs: the game reads the library again.
     if (const auto placed = galaxy::host::take_mii_installs(); !placed.empty()) {
         gModule.mii_changed();
         std::fprintf(stderr, "[mii] %zu imported while running\n", placed.size());
@@ -3606,6 +3610,7 @@ int main(int argc, char** argv) {
     services.pipeline_register = svc_pipeline_register;
     services.submit_frame = svc_submit_frame;
     services.probe_results = svc_probe_results;
+    services.mii_count = svc_mii_count;
     services.mii_record = svc_mii_record;
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;

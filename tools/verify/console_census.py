@@ -12,6 +12,9 @@ SKIP = (
     "crates/nebula-import/src/cook/mod.rs",
     "crates/nebula-import/src/cook/formats.rs",
     "crates/nebula-import/src/cook/native_data.rs",
+    "crates/nebula-import/src/cook/mii_parts.rs",
+    "runtime/include/galaxy/mii_formats.h",
+    "runtime/src/mii_formats.cpp",
     "docs/",
     "native/tools/native_inventory.py",
     "native/tools/boundary.py",
@@ -37,7 +40,7 @@ GROUPS = {
     # Batch 7: one game thread, so its locks, thread slots and the host's thread services.
     "threads": r"\bGameMutex|\bMutexHolder|\bGameThreads|\bthread_slots|\bNEBULA_THREAD_SLOTS|\bNebulaHostThread|\bthread_adopt|\bthreads_dump|\bnebula_threads|\bsListMutex|\bsMappedLock|\bnebula_host_lock|\bNEBULA_HOST_LOCK",
 }
-CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads", "loading"}
+CLOSED = {"math", "j3d", "audio", "audio_sync", "particles", "threads", "loading", "rfl"}
 CASE_FREE = {"j3d", "jsystem", "nw4r"}
 
 compiled = {k: re.compile(v, re.I if k in CASE_FREE else 0) for k, v in GROUPS.items()}

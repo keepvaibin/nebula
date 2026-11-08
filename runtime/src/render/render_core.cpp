@@ -2156,6 +2156,8 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         if (entry.texture_ops != nullptr) {
             texture_store_.apply_ops(*entry.texture_ops, freed_textures_);
             entry.texture_ops.reset();
+        } else {
+            texture_store_.release_held(freed_textures_);
         }
         retired_tables_.clear();
         registries_.forget_textures(freed_textures_, retired_tables_);

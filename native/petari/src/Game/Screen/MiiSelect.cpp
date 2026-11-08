@@ -10,7 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include <MiiLib.h>
+#include "Game/Mii/Mii.hpp"
 
 namespace {
     NEW_NERVE(MiiSelectNrvAppear, MiiSelect, Appear);
@@ -26,12 +26,11 @@ namespace {
     static const CallbackFuncPtr func[2] = {&MiiSelect::callbackLeft, &MiiSelect::callbackRight};
 };  // namespace
 
-// MiiDatabase.c: the database's Miis changed (Mii import while the game runs).
-extern "C" u32 __NebulaMiiGeneration;
+// The library's generation the picker last collected (Miis imported while the game runs change it).
 static u32 sCollectedMiiGeneration = 0;
 
 MiiSelect::MiiSelect(const char* pName)
-    : LayoutActor(pName, true), _28(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), _1EC(), _1F0(), _1F4(), _1F8(), _1FC(),
+    : LayoutActor(pName, true), _28(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), mMiiIndices(), mMiiIndexRoom(), _1EC(), _1F0(), _1F4(), _1F8(), _1FC(),
       _200(), _204(new FileSelectIconID()) {
     for (int i = 0; i < ARRAY_SIZE(_20); i++) {
         _20[i] = nullptr;
@@ -54,7 +53,7 @@ void MiiSelect::appear() {
     LayoutActor::appear();
     setNerve(GET_NERVE_ANON(MiiSelectNrvAppear));
     // Miis imported since the file select collected them (FileSelector::exeTitleEnd): collected again.
-    if (sCollectedMiiGeneration != __NebulaMiiGeneration) {
+    if (sCollectedMiiGeneration != Mii::generation()) {
         collectValidMiiIndex();
     }
     _1EC = 0;
@@ -332,25 +331,27 @@ void MiiSelect::collectValidMiiIndex() {
     // From empty each time: the picker collects again when Miis were imported since (appear).
     mFavoriteMiiNum = 0;
     mMiiNum = 0;
-    sCollectedMiiGeneration = __NebulaMiiGeneration;
-    for (u32 i = 0; i < MII_DB_CHAR_MAX; i++) {
-        if (!MiiIsAvailableOfficialData(i)) {
-            continue;
-        }
+    sCollectedMiiGeneration = Mii::generation();
+    const u32 count = Mii::libraryCount();
+    if (mMiiIndexRoom < count) {
+        delete[] mMiiIndices;
+        mMiiIndices = new u32[count];
+        mMiiIndexRoom = count;
+    }
+    // Two passes over the library: its favourites, then the others, each in the library's order.
+    for (u32 pass = 0; pass < 2; pass++) {
+        for (u32 i = 0; i < count; i++) {
+            Mii::Character mii;
 
-        MiiAdditionalInfo additionalInfo;
-
-        if (MiiGetAdditionalInfo(&additionalInfo, MiiDataSource_Official, nullptr, i) != MiiErrcode_Success) {
-            continue;
-        }
-
-        // At most ten favourites (the array's size): a database made elsewhere can mark more.
-        if (additionalInfo.favorite == 1 && mFavoriteMiiNum < ARRAY_SIZE(mFavoriteMiiIndices)) {
-            mFavoriteMiiIndices[mFavoriteMiiNum] = static_cast< u16 >(i);
-            mFavoriteMiiNum++;
-        } else {
-            mMiiIndices[mMiiNum] = static_cast< u16 >(i);
-            mMiiNum++;
+            if (!Mii::character(Mii::Ref{Mii::SourceLibrary, i}, &mii) || (mii.favorite != 0) != (pass == 0)) {
+                continue;
+            }
+            mMiiIndices[mFavoriteMiiNum + mMiiNum] = i;
+            if (pass == 0) {
+                mFavoriteMiiNum++;
+            } else {
+                mMiiNum++;
+            }
         }
     }
 }
@@ -419,10 +420,8 @@ void MiiSelect::getIconID(FileSelectIconID* pIconID, s32 param2) const {
 
             v++;
         }
-    } else if (param2 < mFavoriteMiiNum + mFellowIconNum) {
-        pIconID->setMiiIndex(mFavoriteMiiIndices[param2 - mFellowIconNum]);
     } else {
-        pIconID->setMiiIndex(mMiiIndices[param2 - mFavoriteMiiNum - mFellowIconNum]);
+        pIconID->setMiiIndex(mMiiIndices[param2 - mFellowIconNum]);
     }
 }
 
@@ -476,7 +475,7 @@ namespace MiiSelectSub {
     }
 
     inline void setPointedMiiName(MiiSelect* pHost, s32 index) {
-        char16_t name[MII_NAME_LEN + 1];
+        char16_t name[Mii::NameLength + 1];
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), pHost->makeIconID(index));
         MR::setTextBoxMessageRecursive(pHost, "TxtName", name);
     }

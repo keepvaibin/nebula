@@ -1,14 +1,14 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Mii/MiiHead.hpp"
+#include "Game/NPC/MiiFaceRecipe.hpp"
 #include <nebula_geometry.hpp>
 
-
 class FixedPosition;
-class MiiFaceRecipe;
-struct MiiCharModel;
-struct MiiDrawCoreSetting;
 
+// A Mii's head as an actor: its head built at the holder's draw (the first after it was made or its Mii changed), placed
+// each frame from its own place or a joint it follows.
 class MiiFaceParts : public LiveActor {
 public:
     MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe);
@@ -18,21 +18,23 @@ public:
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 
-    void drawOpa(const MiiDrawCoreSetting* pSetting) const;
-    void drawXlu(const MiiDrawCoreSetting* pSetting) const;
-    void initFixedPosition(MtxPtr, const Vec3f&, const Vec3f&);
+    void drawOpa(const Mii::Style& rStyle) const;
+    void drawXlu(const Mii::Style& rStyle) const;
+    void initFixedPosition(MtxPtr pJoint, const Vec3f& rLocalTrans, const Vec3f& rLocalRotate);
     void changeExpressionNormal();
     void changeExpressionBlink();
+    // The head of the Mii `rRecipe` names, built at the next draw.
     void changeFaceModel(const MiiFaceRecipe& rRecipe);
-    void initFaceModel();
-    bool tryChangeExpression(u32 expression);
+    // Builds the head when it waits to be (MiiFacePartsHolder at its draw).
+    void buildIfWaiting();
+    bool isWaitingToBuild() const { return mWaiting; }
+    bool tryChangeExpression(Mii::Expression expression);
 
-    MiiCharModel* mCharModel;
-    void* _90;
-    MiiFaceRecipe* mRecipe;
-    Pos3f _98;
-    MtxPtr _C8;
-    FixedPosition* _CC;
-    bool _D0;
-    bool _D1;
+private:
+    Mii::Head mHead;
+    MiiFaceRecipe mRecipe;
+    Pos3f mBaseMtx;
+    MtxPtr mFollowMtx;
+    FixedPosition* mFixedPosition;
+    bool mWaiting;
 };

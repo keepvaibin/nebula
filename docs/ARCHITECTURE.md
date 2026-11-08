@@ -9,7 +9,7 @@ their code differs (Petari's `VERSION` switches between them, five places), the 
 
 | Path | Contents |
 |---|---|
-| `native/petari` | The game: Petari's game code, JSystem, NW4R and MiiLib (a fork, see [PROVENANCE.md](PROVENANCE.md)) |
+| `native/petari` | The game: Petari's game code, JSystem and NW4R (a fork, see [PROVENANCE.md](PROVENANCE.md)); its Miis are native (`Game/Mii`) |
 | `native/math` | The game's math library |
 | `native/host` | `NebulaNative.exe`'s entry point: loads the game module and connects it to the services below |
 | `native/include/nebula_game_api.h` | The C interface between the game module and the host |

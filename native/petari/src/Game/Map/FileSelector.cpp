@@ -135,7 +135,7 @@ namespace NrvFileSelector {
 
 FileSelector::FileSelector(const char* pName)
     : LiveActor(pName), mCameraController(), mSky(), mItems(), mOperationButton(), mBackButton(), mBrosButton(), mInfoMessage(), mSysInfoWindow(),
-      _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new MiiCreateID()), mManual(), mIsMiiSelectStartFirst(),
+      _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new Mii::Id()), mManual(), mIsMiiSelectStartFirst(),
       mBgmState(), mSelectEffect()
       ,
       mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
@@ -472,7 +472,7 @@ bool FileSelector::updateQuitQuestion() {
 }
 
 void FileSelector::createFileInfo() {
-    mFileInfo = new FileSelectInfo(MII_NAME_LEN + 1, "ファイル情報");
+    mFileInfo = new FileSelectInfo(Mii::NameLength + 1, "ファイル情報");
     mFileInfo->initWithoutIter();
 }
 
@@ -705,7 +705,7 @@ namespace {
 
 void FileSelector::setFileInfo(s32 id) {
     NebulaCalendar::Date date;
-    u16 nameBuffer[MII_NAME_LEN + 1];
+    u16 nameBuffer[Mii::NameLength + 1];
     char16_t dateBuffer[32];
     char16_t timeBuffer[32];
 
@@ -844,7 +844,7 @@ namespace {
         }
 
         u32 tempIconId;
-        MiiCreateID tempMiiId;
+        Mii::Id tempMiiId;
         FileSelectIconID iconId = FileSelectIconID();
 
         if (pSelector->mUserFile[id - 1].getIconId(&tempIconId)) {
@@ -894,26 +894,17 @@ FileSelectIconID::EFellowID FileSelector::getUserFileFellowID(s32 id) const {
 }
 
 bool FileSelector::isUserFileMiiIdValid(s32 id) const {
-    MiiCreateID createId;
-    u16 index;
+    Mii::Id createId;
 
-    if (mUserFile[id - 1].getMiiId(&createId)) {
-        if (MiiSearchOfficialData(&createId, &index) == TRUE) {
-            return MiiIsAvailableOfficialData(index) == TRUE;
-        }
-    }
-
-    return false;
+    return mUserFile[id - 1].getMiiId(&createId) && Mii::find(createId, nullptr);
 }
 
-u16 FileSelector::getUserFileMiiIndex(s32 id) const {
-    MiiCreateID createId;
-    u16 index;
+u32 FileSelector::getUserFileMiiIndex(s32 id) const {
+    Mii::Id createId;
+    u32 index;
 
-    if (mUserFile[id - 1].getMiiId(&createId)) {
-        if (MiiSearchOfficialData(&createId, &index)) {
-            return index;
-        }
+    if (mUserFile[id - 1].getMiiId(&createId) && Mii::find(createId, &index)) {
+        return index;
     }
 
     return 0;
@@ -962,25 +953,24 @@ void FileSelector::storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId
     GameSequenceFunction::startSaveAllUserFileSequence();
 }
 
-void FileSelector::getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const {
-    MiiAdditionalInfo additionalInfo;
-    u16 index = rIconId.getMiiIndex();
+void FileSelector::getMiiId(Mii::Id* pCreateId, const FileSelectIconID& rIconId) const {
+    Mii::Character mii;
 
-    if (MiiGetAdditionalInfo(&additionalInfo, MiiDataSource_Official, nullptr, index) == MiiErrcode_Success) {
-        *pCreateId = additionalInfo.createID;
+    if (Mii::character(Mii::Ref{Mii::SourceLibrary, rIconId.getMiiIndex()}, &mii)) {
+        *pCreateId = Mii::idOf(mii);
     }
 }
 
 void FileSelector::getIconId(FileSelectIconID* pIconId, s32 id) const {
     u32 iconId;
-    MiiCreateID miiId;
+    Mii::Id miiId;
 
     if (mUserFile[id - 1].getIconId(&iconId)) {
         FileSelectIconID::EFellowID fellowId = getUserFileFellowID(id);
 
         pIconId->setFellowID(fellowId);
     } else if (mUserFile[id - 1].getMiiId(&miiId) && isUserFileMiiIdValid(id)) {
-        u16 miiIndex = getUserFileMiiIndex(id);
+        u32 miiIndex = getUserFileMiiIndex(id);
 
         pIconId->setMiiIndex(miiIndex);
     } else {
@@ -1281,7 +1271,7 @@ void FileSelector::exeDemo() {
         return;
     }
 
-    char16_t name[MII_NAME_LEN + 1];
+    char16_t name[Mii::NameLength + 1];
     FileSelectIconID iconId = FileSelectIconID();
 
     getIconId(&iconId, _B4->_140);
@@ -1476,7 +1466,7 @@ void FileSelector::exeCopySave() {
 
 void FileSelector::exeCopySaveMii() {
     if (MR::isFirstStep(this)) {
-        MiiCreateID createId;
+        Mii::Id createId;
 
         if (_B4->_146 && mUserFile[_B4->_140 - 1].getMiiId(&createId)) {
             GameSequenceFunction::storeMiiOrIconIdUserFileSequence(_B4->_140, &createId, nullptr);
@@ -1669,7 +1659,7 @@ void FileSelector::exeMiiConfirm() {
                                    SysInfoWindow::MessageType_System);
         }
 
-        u16 name[MII_NAME_LEN + 1];
+        u16 name[Mii::NameLength + 1];
         FileSelectIconID iconId = FileSelectIconID();
 
         mMiiSelect->getSelectedID(&iconId);

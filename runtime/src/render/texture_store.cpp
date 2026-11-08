@@ -421,19 +421,28 @@ void TextureStore::keep(ChunkRef chunk) {
     }
 }
 
+// The last list has walked for good: what it freed goes now.
+void TextureStore::release_held(std::vector<std::uint32_t>& freed) {
+    for (const std::uint32_t id : held_frees_) {
+        if (!is_target(id)) {
+            free_entry(id);
+        }
+        freed.push_back(id);
+    }
+    held_frees_.clear();
+}
+
 void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
     if (!backend_.has_upload_list()) {
         throw std::runtime_error("[TextureStore] ops without an upload list");
     }
+    release_held(freed);
     for (Op& op : ops.list) {
         switch (op.kind) {
         case Op::Kind::Create: create_entry(op); break;
         case Op::Kind::Update: update_entry(op); break;
         case Op::Kind::Free:
-            free_entry(op.id);
-            freed.push_back(op.id);
-            break;
-        case Op::Kind::FreeTarget: freed.push_back(op.id); break;
+        case Op::Kind::FreeTarget: held_frees_.push_back(op.id); break;
         case Op::Kind::BuiltIn: apply_built_in(op); break;
         }
         op.staged.chunk.reset();

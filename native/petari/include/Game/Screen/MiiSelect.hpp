@@ -85,11 +85,12 @@ public:
 private:
     ButtonPaneController* _20[2];
     MR::BitArray* _28;
-    u16 mFellowIconNum;
-    u16 mFavoriteMiiNum;
-    u32 mFavoriteMiiIndices[10];
-    u16 mMiiNum;
-    u32 mMiiIndices[100];  // every Mii the database holds (decompiled as 10 and padding to 0x1EC)
+    u32 mFellowIconNum;
+    // The library's Miis the picker shows: its favourites first, then the others.
+    u32 mFavoriteMiiNum;
+    u32 mMiiNum;
+    u32* mMiiIndices;
+    u32 mMiiIndexRoom;
     s32 _1EC;
     s32 _1F0;
     nw4r::lyt::TexMap* _1F4;

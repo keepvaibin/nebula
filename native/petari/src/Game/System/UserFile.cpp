@@ -3,9 +3,9 @@
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <MiiLib.h>
+#include "Game/Mii/Mii.hpp"
 
-#define USER_NAME_SIZE (MII_NAME_LEN + 1)
+#define USER_NAME_SIZE (Mii::NameLength + 1)
 
 UserFile::UserFile()
     : mGameDataHolder(nullptr), mConfigDataHolder(nullptr), mIsPlayerMario(true), mIsGameDataCorrupted(false), mIsConfigDataCorrupted(false),

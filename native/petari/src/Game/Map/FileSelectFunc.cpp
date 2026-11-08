@@ -2,7 +2,7 @@
 #include "Game/Map/FileSelectIconID.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
-#include <MiiLib.h>
+#include "Game/Mii/Mii.hpp"
 
 namespace {
     /// @brief The array of message identifiers corresponding to File Selection Screen icon names.
@@ -14,7 +14,7 @@ namespace {
 
 namespace FileSelectFunc {
     u32 getMiiNameBufferSize() {
-        return MII_NAME_LEN + 1;
+        return Mii::NameLength + 1;
     }
 
     void copyMiiName(u16* pName, const FileSelectIconID& rIcon) {
@@ -24,11 +24,10 @@ namespace FileSelectFunc {
 
             MR::copyMemory(pName, pMessage, getMiiNameBufferSize() * sizeof(char16_t));
         } else if (rIcon.isMii()) {
-            MiiAdditionalInfo info;
-            MiiErrcode err = MiiGetAdditionalInfo(&info, MiiDataSource_Official, nullptr, rIcon.getMiiIndex());
+            Mii::Character mii;
 
-            if (err == MiiErrcode_Success) {
-                MR::copyMemory(pName, info.name, getMiiNameBufferSize() * sizeof(char16_t));
+            if (Mii::character(Mii::Ref{Mii::SourceLibrary, rIcon.getMiiIndex()}, &mii)) {
+                Mii::copyName(mii, reinterpret_cast< char16_t* >(pName));
             }
         }
     }

@@ -30,8 +30,11 @@ struct MiiFileContents {
 // A create ID no console made (all of its time or console bits zero: tools write 80000000 00000000).
 [[nodiscard]] bool mii_placeholder_id(const MiiRecord& record) noexcept;
 
-// A Wii Mii database (RFL_DB.dat): the Mii in each of its slots that holds one; none when the bytes are not one.
-[[nodiscard]] std::vector<std::pair<unsigned, MiiRecord>> read_wii_mii_database(std::span<const std::byte> bytes);
+// A Wii Mii database (RFL_DB.dat): its Miis in its slots' order, empty slots left out; none when the bytes are not
+// one.
+[[nodiscard]] std::vector<MiiRecord> read_wii_mii_database(std::span<const std::byte> bytes);
+// Where a Wii save folder (a NAND copy) keeps its Mii database.
+[[nodiscard]] std::string_view wii_mii_database_member() noexcept;
 
 // A Wii Mii record's fields as numbers (its bitfields, names in host byte order, create ID as stored).
 [[nodiscard]] MiiFields decode_wii_mii(const MiiRecord& record) noexcept;

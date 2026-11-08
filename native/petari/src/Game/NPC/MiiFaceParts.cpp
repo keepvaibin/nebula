@@ -1,17 +1,12 @@
 #include "Game/NPC/MiiFaceParts.hpp"
-#include "Game/LiveActor/Nerve.hpp"
-#include "Game/NPC/MiiFaceRecipe.hpp"
+#include "Game/NPC/MiiFacePartsHolder.hpp"
+#include "Game/Render/Model.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Render/Model.hpp"
-#include "Game/System/NebulaArena.hpp"
-#include <MiiLib.h>
 
 MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)
-    : LiveActor(pName), mCharModel(nullptr), _90(nullptr), mRecipe(nullptr), _CC(nullptr), _D0(false) {
-    mRecipe = new MiiFaceRecipe(rRecipe);
-
+    : LiveActor(pName), mRecipe(rRecipe), mFollowMtx(nullptr), mFixedPosition(nullptr), mWaiting(true) {
     MR::createSceneObj(SceneObj_MiiFacePartsHolder);
 }
 
@@ -19,98 +14,69 @@ MiiFaceParts::~MiiFaceParts() {
 }
 
 void MiiFaceParts::init(const TableIter& rIter) {
-    _90 = new u8[mRecipe->getModelBufferSize()];
-    mCharModel = new MiiCharModel;
-    _D1 = true;
 }
 
 void MiiFaceParts::calcAnim() {
-    if (_CC != nullptr) {
-        _CC->calc();
-        mPosition.set< f32 >(_C8[0][3], _C8[1][3], _C8[2][3]);
-        NebulaMtxCopy(_C8, _98);
+    if (mFixedPosition != nullptr) {
+        mFixedPosition->calc();
+        mPosition.set< f32 >(mFollowMtx[0][3], mFollowMtx[1][3], mFollowMtx[2][3]);
+        NebulaMtxCopy(mFollowMtx, mBaseMtx);
     } else {
-        MR::makeMtxTR(_98, mPosition, mRotation);
+        MR::makeMtxTR(mBaseMtx, mPosition, mRotation);
     }
-    MR::preScaleMtx(_98, mScale);
+    MR::preScaleMtx(mBaseMtx, mScale);
 }
 
 void MiiFaceParts::calcViewAndEntry() {
+    if (!mHead.isBuilt()) {
+        return;
+    }
     Mtx viewMtx;
-
-    if (_D1) {
-        return;
-    }
-
-    MR::multMtx(viewMtx, _98, ModelSys::mViewMtx);
-    MiiSetMtx(mCharModel, viewMtx);
+    MR::multMtx(viewMtx, mBaseMtx, ModelSys::mViewMtx);
+    mHead.setMatrix(viewMtx);
 }
 
-void MiiFaceParts::drawOpa(const MiiDrawCoreSetting* pSetting) const {
-    if (_D1) {
-        return;
-    }
-
-    if (pSetting != nullptr) {
-        MiiDrawOpaCore(mCharModel, pSetting);
-    } else {
-        MiiDrawOpa(mCharModel);
-    }
+void MiiFaceParts::drawOpa(const Mii::Style& rStyle) const {
+    mHead.drawOpa(rStyle);
 }
 
-void MiiFaceParts::drawXlu(const MiiDrawCoreSetting* pSetting) const {
-    if (_D1) {
-        return;
-    }
-
-    if (pSetting != nullptr) {
-        MiiDrawXluCore(mCharModel, pSetting);
-    } else {
-        MiiDrawXlu(mCharModel);
-    }
+void MiiFaceParts::drawXlu(const Mii::Style& rStyle) const {
+    mHead.drawXlu(rStyle);
 }
 
-void MiiFaceParts::initFixedPosition(MtxPtr pParam1, const Vec3f& rParam2, const Vec3f& rParam3) {
-    _CC = new FixedPosition(pParam1, rParam2, rParam3);
-    _C8 = _CC->mMtx;
+void MiiFaceParts::initFixedPosition(MtxPtr pJoint, const Vec3f& rLocalTrans, const Vec3f& rLocalRotate) {
+    mFixedPosition = new FixedPosition(pJoint, rLocalTrans, rLocalRotate);
+    mFollowMtx = mFixedPosition->mMtx;
 }
 
 void MiiFaceParts::changeExpressionNormal() {
-    tryChangeExpression(MiiExp_Normal);
+    tryChangeExpression(Mii::ExpressionNormal);
 }
 
 void MiiFaceParts::changeExpressionBlink() {
-    tryChangeExpression(MiiExp_Blink);
+    tryChangeExpression(Mii::ExpressionBlink);
 }
 
 void MiiFaceParts::changeFaceModel(const MiiFaceRecipe& rRecipe) {
-    mRecipe->mIndex = rRecipe.mIndex;
-    mRecipe->mDataSource = rRecipe.mDataSource;
-
-    if (rRecipe.mDataSource == MiiDataSource_Middle) {
-        mRecipe->setDatabase(rRecipe.mMiddleDB);
-    }
-
-    _D0 = true;
+    mRecipe.mRef = rRecipe.mRef;
+    mWaiting = true;
 }
 
-void MiiFaceParts::initFaceModel() {
-    mRecipe->initFaceModel(mCharModel, _90);
-
-    _D0 = false;
-    _D1 = false;
+void MiiFaceParts::buildIfWaiting() {
+    if (!mWaiting) {
+        return;
+    }
+    mWaiting = false;
+    Mii::Character mii;
+    if (mRecipe.character(&mii)) {
+        mHead.build(mii, mRecipe.mExpressions, mRecipe.mFaceSize);
+    }
 }
 
-bool MiiFaceParts::tryChangeExpression(u32 expression) {
-    if (_D1) {
+bool MiiFaceParts::tryChangeExpression(Mii::Expression expression) {
+    if (!mHead.isBuilt() || !mRecipe.hasExpression(expression)) {
         return false;
     }
-
-    if (!mRecipe->hasExpression(MiiExpression(expression))) {
-        return false;
-    }
-
-    MiiSetExpression(mCharModel, MiiExpression(expression));
-
+    mHead.setExpression(expression);
     return true;
 }

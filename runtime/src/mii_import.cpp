@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 #include <mutex>
+#include <utility>
 
 namespace galaxy::host {
 namespace {
@@ -120,8 +121,8 @@ bool stored_id(const MiiRecord& record) {
            (static_cast<std::uint8_t>(id[0]) & kTemporaryId) == 0u;
 }
 
-// The same Mii whatever its create ID (one exported twice by a tool that writes none) and favourite flag (one past
-// the ten favourites was imported without it).
+// The same Mii whatever its create ID (one exported twice by a tool that writes none) and favourite flag (a choice
+// about the Mii, not the Mii; earlier builds cleared it past ten favourites).
 bool same_mii(MiiFields a, MiiFields b) {
     a.create_id = b.create_id = {};
     a.favorite = b.favorite = 0;
@@ -169,7 +170,7 @@ struct Library {
     MiiPreparer prepare;
     std::vector<std::pair<unsigned, MiiFields>> installs;
     std::atomic<bool> pending{false};
-    MiiLibrary miis;
+    MiiCollection miis;
     bool loaded = false;
     bool damaged = false;  // the file exists and is not a library: imports leave it alone
 };
@@ -179,8 +180,8 @@ Library& library() {
     return instance;
 }
 
-// The library from its file; without one, from the console's database (its Miis in their slots, where saves that use
-// them point), written as the file.
+// The library from its file; without one, from the save folder's Wii Mii database (its Miis in its order), written as
+// the file.
 void load(Library& lib) {
     if (lib.loaded) {
         return;
@@ -194,10 +195,10 @@ void load(Library& lib) {
     std::error_code error;
     if (std::filesystem::exists(lib.file, error)) {
         const std::vector<std::byte> bytes = read_file(lib.file);
-        const std::optional<MiiLibrary> read =
+        std::optional<MiiCollection> read =
             read_mii_library(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
         if (read) {
-            lib.miis = *read;
+            lib.miis = std::move(*read);
         } else {
             lib.damaged = true;
         }
@@ -210,8 +211,9 @@ void load(Library& lib) {
     if (console.empty()) {
         return;
     }
-    for (const auto& [slot, record] : console) {
-        lib.miis.slots[slot] = decode_wii_mii(record);
+    lib.miis.miis.reserve(console.size());
+    for (const MiiRecord& record : console) {
+        lib.miis.miis.push_back(decode_wii_mii(record));
     }
     (void)io::write_file_atomically(lib.file, write_mii_library(lib.miis));
 }
@@ -252,36 +254,31 @@ std::string result_text(const MiiMergeResult& r) {
     if (r.updated != 0u) text += ", UPDATED " + std::to_string(r.updated);
     if (r.duplicates != 0u) text += ", " + std::to_string(r.duplicates) + " ALREADY HERE";
     if (r.invalid != 0u) text += ", " + std::to_string(r.invalid) + " NOT VALID";
-    if (r.no_room != 0u) text += ", " + std::to_string(r.no_room) + " NO ROOM (100 MAX)";
-    if (r.unfavorited != 0u) text += ", " + std::to_string(r.unfavorited) + " NOT FAVOURITES (10 MAX)";
     if (r.converted != 0u) text += ", " + std::to_string(r.converted) + " FROM NEWER CONSOLES";
     return text;
 }
 
 }  // namespace
 
-std::string write_mii_library(const MiiLibrary& library) {
+std::string write_mii_library(const MiiCollection& library) {
     std::string out(kLibraryFormat);
     out.push_back('\n');
-    for (std::size_t slot = 0; slot < kMiiLibrarySlots; ++slot) {
-        const std::optional<MiiFields>& mii = library.slots[slot];
-        if (!mii) {
-            continue;
-        }
-        out += std::to_string(slot);
+    for (std::size_t place = 0; place < library.miis.size(); ++place) {
+        const MiiFields& mii = library.miis[place];
+        out += std::to_string(place);
         for (const NumberField& f : kNumbers) {
             out += ' ';
             out += f.name;
             out += '=';
-            out += std::to_string((*mii).*f.member);
+            out += std::to_string(mii.*f.member);
         }
-        out += " name=" + hex(mii->name) + " creator=" + hex(mii->creator) + " create_id=" + hex(mii->create_id);
+        out += " name=" + hex(mii.name) + " creator=" + hex(mii.creator) + " create_id=" + hex(mii.create_id);
         out.push_back('\n');
     }
     return out;
 }
 
-std::optional<MiiLibrary> read_mii_library(std::string_view text) {
+std::optional<MiiCollection> read_mii_library(std::string_view text) {
     const auto next_line = [&text]() {
         const std::size_t end = text.find('\n');
         std::string_view line = text.substr(0, end);
@@ -292,15 +289,15 @@ std::optional<MiiLibrary> read_mii_library(std::string_view text) {
     if (next_line() != kLibraryFormat) {
         return std::nullopt;
     }
-    MiiLibrary library;
+    // Each line's place and Mii; the places only order them (a place written twice keeps its later line).
+    std::vector<std::pair<std::uint64_t, MiiFields>> placed;
     while (!text.empty()) {
         std::string_view line = next_line();
         const std::size_t space = line.find(' ');
-        unsigned slot = kMiiLibrarySlots;
-        const std::string_view slot_text = line.substr(0, space);
-        const auto [end, error] = std::from_chars(slot_text.data(), slot_text.data() + slot_text.size(), slot);
-        if (error != std::errc{} || end != slot_text.data() + slot_text.size() || slot >= kMiiLibrarySlots ||
-            space == std::string_view::npos) {
+        std::uint64_t place = 0;
+        const std::string_view place_text = line.substr(0, space);
+        const auto [end, error] = std::from_chars(place_text.data(), place_text.data() + place_text.size(), place);
+        if (error != std::errc{} || end != place_text.data() + place_text.size() || space == std::string_view::npos) {
             continue;
         }
         MiiFields mii;
@@ -332,8 +329,17 @@ std::optional<MiiLibrary> read_mii_library(std::string_view text) {
             }
         }
         if (has_id(mii)) {
-            library.slots[slot] = mii;
+            placed.emplace_back(place, mii);
         }
+    }
+    std::stable_sort(placed.begin(), placed.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    MiiCollection library;
+    library.miis.reserve(placed.size());
+    for (std::size_t i = 0; i < placed.size(); ++i) {
+        if (i + 1u < placed.size() && placed[i + 1u].first == placed[i].first) {
+            continue;
+        }
+        library.miis.push_back(placed[i].second);
     }
     return library;
 }
@@ -344,10 +350,10 @@ std::vector<MiiRecord> read_miis(std::span<const std::byte> bytes, std::string* 
     return std::move(contents.miis);
 }
 
-MiiMergeResult merge_miis(MiiLibrary& library, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
+MiiMergeResult merge_miis(MiiCollection& library, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
                           std::vector<std::pair<unsigned, MiiFields>>* placed) {
     MiiMergeResult result;
-    auto& slots = library.slots;
+    std::vector<MiiFields>& held = library.miis;
     // Fresh create IDs: the Wii's Mii ID (its type bits, then 4-second units since 2006-01-01) and this console's.
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     std::uint32_t next_time = static_cast<std::uint32_t>(
@@ -359,63 +365,42 @@ MiiMergeResult merge_miis(MiiLibrary& library, std::span<const MiiRecord> miis, 
         }
         const bool placeholder = mii_placeholder_id(record);
         MiiFields mii = decode_wii_mii(record);
-        std::size_t id_slot = kMiiLibrarySlots;
-        std::size_t free_slot = kMiiLibrarySlots;
+        std::size_t id_at = held.size();
         bool duplicate = false;
-        unsigned favorites = 0u;
-        for (std::size_t slot = 0; slot < kMiiLibrarySlots; ++slot) {
-            if (!slots[slot]) {
-                free_slot = std::min(free_slot, slot);
-                continue;
-            }
-            favorites += slots[slot]->favorite != 0u ? 1u : 0u;
-            duplicate = duplicate || same_mii(*slots[slot], mii);
-            if (slots[slot]->create_id == mii.create_id) id_slot = slot;
+        for (std::size_t at = 0; at < held.size() && !duplicate; ++at) {
+            duplicate = same_mii(held[at], mii);
+            if (held[at].create_id == mii.create_id) id_at = at;
         }
         if (duplicate) {
             ++result.duplicates;
             continue;
         }
-        if (id_slot != kMiiLibrarySlots && !placeholder) {
+        if (id_at != held.size() && !placeholder) {
             // The same Mii (a console's create ID), changed: over its old self, where saves that use it point.
-            if (mii.favorite != 0u && slots[id_slot]->favorite == 0u && favorites >= kMiiFavoriteLimit) {
-                mii.favorite = 0u;
-                ++result.unfavorited;
-            }
-            slots[id_slot] = mii;
+            held[id_at] = mii;
             ++result.updated;
-            if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(id_slot), mii);
+            if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(id_at), mii);
             continue;
         }
-        if (free_slot == kMiiLibrarySlots) {
-            ++result.no_room;
-            continue;
-        }
-        if (placeholder || id_slot != kMiiLibrarySlots) {
+        if (placeholder || id_at != held.size()) {
             // A create ID of its own: its type bits kept (special or not), unique in the library.
             const std::uint32_t type = static_cast<std::uint32_t>(mii.create_id[0] & 0xE0u) << 24u;
             for (;;) {
                 set_create_id(mii, (type != 0u ? type : 0x80000000u) | (next_time++ & 0x1FFFFFFFu));
-                const bool taken = std::any_of(slots.begin(), slots.end(), [&mii](const std::optional<MiiFields>& s) {
-                    return s && s->create_id == mii.create_id;
-                });
+                const bool taken = std::any_of(held.begin(), held.end(),
+                                               [&mii](const MiiFields& m) { return m.create_id == mii.create_id; });
                 if (!taken) break;
             }
         }
-        if (mii.favorite != 0u && favorites >= kMiiFavoriteLimit) {
-            mii.favorite = 0u;
-            ++result.unfavorited;
-        }
-        slots[free_slot] = mii;
+        held.push_back(mii);
         ++result.added;
-        if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(free_slot), mii);
+        if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(held.size() - 1u), mii);
     }
     return result;
 }
 
-unsigned count_miis(const MiiLibrary& library) {
-    return static_cast<unsigned>(std::count_if(library.slots.begin(), library.slots.end(),
-                                               [](const std::optional<MiiFields>& s) { return s.has_value(); }));
+unsigned count_miis(const MiiCollection& library) {
+    return static_cast<unsigned>(library.miis.size());
 }
 
 void set_mii_library(const std::filesystem::path& file, const std::filesystem::path& console_database,
@@ -448,7 +433,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         if (message != nullptr) *message = "THE MII LIBRARY FILE IS DAMAGED";
         return total;
     }
-    MiiLibrary miis = lib.miis;
+    MiiCollection miis = lib.miis;
     unsigned unreadable = 0u;
     unsigned unkept = 0u;
     std::vector<std::pair<unsigned, MiiFields>> placed;
@@ -467,8 +452,6 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         total.updated += r.updated;
         total.duplicates += r.duplicates;
         total.invalid += r.invalid;
-        total.no_room += r.no_room;
-        total.unfavorited += r.unfavorited;
         total.converted += contents.converted;
     }
     if (!placed.empty()) {
@@ -476,7 +459,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
             if (message != nullptr) *message = "COULD NOT WRITE THE MII LIBRARY";
             return MiiMergeResult{};
         }
-        lib.miis = miis;
+        lib.miis = std::move(miis);
         lib.installs.insert(lib.installs.end(), placed.begin(), placed.end());
         lib.pending.store(true, std::memory_order_release);
     }
@@ -525,7 +508,7 @@ std::optional<unsigned> mii_library_file_count(const std::filesystem::path& file
         return std::nullopt;
     }
     const std::vector<std::byte> bytes = read_file(file);
-    const std::optional<MiiLibrary> read =
+    const std::optional<MiiCollection> read =
         read_mii_library(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
     if (!read) {
         return std::nullopt;
@@ -540,14 +523,14 @@ unsigned mii_library_count() {
     return count_miis(lib.miis);
 }
 
-std::optional<MiiFields> mii_library_slot(unsigned slot) {
+std::optional<MiiFields> mii_library_mii(unsigned place) {
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);
     load(lib);
-    if (slot >= kMiiLibrarySlots) {
+    if (place >= lib.miis.miis.size()) {
         return std::nullopt;
     }
-    return lib.miis.slots[slot];
+    return lib.miis.miis[place];
 }
 
 std::vector<std::pair<unsigned, MiiFields>> take_mii_installs() {

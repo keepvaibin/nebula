@@ -4,6 +4,7 @@
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -38,7 +39,7 @@ MiiRecord mii(std::uint32_t id, std::uint8_t flags = 0x80u) {
     return record;
 }
 
-// A Wii field (MiiLib MII_Endian.h position and width).
+// A Wii field (its bit position and width).
 unsigned field(const MiiRecord& r, unsigned pos, unsigned len) {
     const std::size_t unit = (pos >> 4u) * 2u;
     const unsigned word = static_cast<unsigned>(r[unit]) << 8u | static_cast<unsigned>(r[unit + 1u]);
@@ -58,7 +59,7 @@ std::uint16_t facelib_crc(std::span<const std::byte> bytes) {
     return crc;
 }
 
-// An empty Wii Mii database (RFL_DB.dat): its magic and size.
+// An empty Wii Mii database: its magic and size.
 std::vector<std::byte> console_database() {
     std::vector<std::byte> db(0x1F1E0u);
     db[0] = std::byte{'R'};
@@ -113,8 +114,10 @@ bool wii_formats() {
     ok &= expect(read_miis(database, &error).empty(), "an empty database");
     std::copy(two.begin(), two.end(), database.begin() + 4 + 7 * 0x4A);
     ok &= expect(read_miis(database, &error).size() == 1u, "a database's Miis");
-    const auto slots = galaxy::host::read_wii_mii_database(database);
-    ok &= expect(slots.size() == 1u && slots[0].first == 7u, "a database's Miis by slot");
+    const MiiRecord nine = mii(9u);
+    std::copy(nine.begin(), nine.end(), database.begin() + 4 + 3 * 0x4A);
+    const auto in_order = galaxy::host::read_wii_mii_database(database);
+    ok &= expect(in_order.size() == 2u && in_order[0] == nine && in_order[1] == two, "a database's Miis in its order");
 
     // A DS Mii: the Wii's 16-bit units and names little-endian.
     MiiRecord wii = mii(7u);
@@ -216,16 +219,15 @@ bool merging() {
     using galaxy::host::MiiFields;
     using galaxy::host::merge_miis;
     bool ok = true;
-    galaxy::host::MiiLibrary db;
+    galaxy::host::MiiCollection db;
     ok &= expect(galaxy::host::count_miis(db) == 0u, "an empty library holds none");
     std::vector<std::pair<unsigned, MiiFields>> placed;
     const std::vector<MiiRecord> miis{mii(1u), mii(2u), mii(1u), mii(4u, 0xA0u)};
     const auto r = merge_miis(db, miis, {}, &placed);
-    ok &= expect(r.added == 2u && r.duplicates == 1u && r.invalid == 1u && r.no_room == 0u,
-                 "two added, a duplicate, a temporary ID refused");
-    ok &= expect(placed.size() == 2u && placed[0].first == 0u && placed[1].first == 1u, "the first free slots");
+    ok &= expect(r.added == 2u && r.duplicates == 1u && r.invalid == 1u, "two added, a duplicate, a temporary ID refused");
+    ok &= expect(placed.size() == 2u && placed[0].first == 0u && placed[1].first == 1u, "in order");
     ok &= expect(galaxy::host::count_miis(db) == 2u, "two held");
-    ok &= expect(db.slots[1] == galaxy::host::decode_wii_mii(mii(2u)), "held as its fields");
+    ok &= expect(db.miis.size() == 2u && db.miis[1] == galaxy::host::decode_wii_mii(mii(2u)), "held as its fields");
     const auto again = merge_miis(db, std::vector<MiiRecord>{mii(2u)}, {}, nullptr);
     ok &= expect(again.added == 0u && again.duplicates == 1u, "importing again adds nothing");
     const auto refused = merge_miis(db, std::vector<MiiRecord>{mii(9u)}, [](MiiRecord&) { return false; }, nullptr);
@@ -237,7 +239,7 @@ bool merging() {
     placed.clear();
     const auto update = merge_miis(db, std::vector<MiiRecord>{changed}, {}, &placed);
     ok &= expect(update.updated == 1u && placed.size() == 1u && placed[0].first == 1u, "a changed Mii updated");
-    ok &= expect(db.slots[1]->height == 99u, "its new fields kept");
+    ok &= expect(db.miis[1].height == 99u && db.miis.size() == 2u, "its new fields kept in its place");
 
     // Placeholder create IDs (tools write 80000000 00000000): fresh ones, each unique; the same Mii again a duplicate.
     MiiRecord a = mii(0u);
@@ -253,27 +255,39 @@ bool merging() {
                      (placed[0].second.create_id[0] & 0xE0u) == 0x80u && placed[0].second.create_id[4] == 'N',
                  "each a fresh create ID of its own");
 
-    // Favourites: at most the Wii's ten.
+    // Favourites: as many as are imported.
     std::vector<MiiRecord> favorites;
-    for (std::uint32_t i = 20u; i < 31u; ++i) {
+    for (std::uint32_t i = 20u; i < 45u; ++i) {
         MiiRecord f = mii(i);
         f[1] |= std::byte{1};
         favorites.push_back(f);
     }
     const auto fav = merge_miis(db, favorites, {}, nullptr);
-    ok &= expect(fav.added == 11u && fav.unfavorited == 1u, "the eleventh favourite added as an ordinary Mii");
+    const auto favorite_count = std::count_if(db.miis.begin(), db.miis.end(),
+                                              [](const MiiFields& m) { return m.favorite != 0u; });
+    ok &= expect(fav.added == 25u && favorite_count == 25, "every favourite kept");
 
+    // Past the Wii's 100 Miis: the library grows.
     std::vector<MiiRecord> many;
-    for (std::uint32_t i = 100u; i < 210u; ++i) many.push_back(mii(i));
-    const auto full = merge_miis(db, many, {}, nullptr);
-    ok &= expect(full.added == 85u && full.no_room == 25u, "100 slots at most");
-    ok &= expect(galaxy::host::count_miis(db) == 100u, "full");
+    for (std::uint32_t i = 100u; i < 400u; ++i) many.push_back(mii(i));
+    const auto grown = merge_miis(db, many, {}, nullptr);
+    ok &= expect(grown.added == 300u && galaxy::host::count_miis(db) == 329u, "no limit on Miis");
 
-    // The library file: every field and slot read back as written.
+    // The library file: every field and place read back as written.
     const std::string text = galaxy::host::write_mii_library(db);
     const auto read = galaxy::host::read_mii_library(text);
-    ok &= expect(read.has_value() && read->slots == db.slots, "the file holds the library");
+    ok &= expect(read.has_value() && *read == db, "the file holds the library");
     ok &= expect(!galaxy::host::read_mii_library("RNOD").has_value(), "anything else is not a library");
+
+    // A file of an earlier build (the Wii's slots, gaps between them): its Miis in their slots' order, gaps closed;
+    // a damaged place number is no reason for a huge library.
+    const std::size_t first_line = text.find('\n') + 1u;
+    const std::size_t after_place = text.find(' ', first_line);
+    const std::string fields = text.substr(after_place, text.find('\n', first_line) - after_place);
+    const std::string old_file = "nebula-mii-library 1\n99" + fields + "\n4000000000" + fields + "\n7" + fields + "\n";
+    const auto old_read = galaxy::host::read_mii_library(old_file);
+    ok &= expect(old_read.has_value() && old_read->miis.size() == 3u && old_read->miis[0] == db.miis[0],
+                 "gaps closed, in order");
     return ok;
 }
 
@@ -284,7 +298,7 @@ bool library() {
     std::filesystem::remove_all(root, error);
     std::filesystem::create_directories(root / "miis", error);
     const std::filesystem::path file = root / "miis.txt";
-    const std::filesystem::path console = root / "RFL_DB.dat";
+    const std::filesystem::path console = root / "wii_miis.dat";
     // The library starts from the console's database (a Mii in slot 5) when its file does not exist.
     std::vector<std::byte> database = console_database();
     const MiiRecord ten = mii(10u);
@@ -293,8 +307,9 @@ bool library() {
     write_file(root / "miis" / "a.mii", mii(11u));
     write_file(root / "miis" / "notes.txt", std::vector<std::byte>(5u, std::byte{'x'}));
     galaxy::host::set_mii_library(file, console, root / "miis", {});
-    ok &= expect(galaxy::host::mii_library_count() == 1u && galaxy::host::mii_library_slot(5u).has_value(),
-                 "the console's Mii in its slot");
+    ok &= expect(galaxy::host::mii_library_count() == 1u && galaxy::host::mii_library_mii(0u).has_value() &&
+                     !galaxy::host::mii_library_mii(1u).has_value(),
+                 "the console's Mii first");
     ok &= expect(std::filesystem::exists(file), "the library file written from it");
     std::string message;
     const auto r = galaxy::host::import_mii_folder(&message);
@@ -302,7 +317,7 @@ bool library() {
     ok &= expect(message == "ADDED 1, 1 FILE(S) NOT MII DATA", "the message");
     ok &= expect(galaxy::host::mii_library_count() == 2u, "the library holds it");
     const auto installs = galaxy::host::take_mii_installs();
-    ok &= expect(installs.size() == 1u && installs[0].first == 0u, "queued for the running game");
+    ok &= expect(installs.size() == 1u && installs[0].first == 1u, "queued for the running game");
     ok &= expect(galaxy::host::take_mii_installs().empty(), "once");
     // The next start reads the library's file, not the console's database.
     std::filesystem::remove(console, error);
