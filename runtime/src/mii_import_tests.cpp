@@ -339,6 +339,26 @@ bool library() {
                      !std::filesystem::exists(root / "miis" / "huge.mii"),
                  "a huge file is not read");
 
+    // The launcher's add (Android): the file's Miis counted, kept in the folder under its name, once; not Mii data
+    // kept nowhere; the library file's count as the library's.
+    {
+        const MiiRecord c = mii(15u);
+        const std::span<const std::byte> c_bytes(c.data(), c.size());
+        const auto add = galaxy::host::add_to_mii_folder(root / "miis", "picked/c.mii", c_bytes);
+        ok &= expect(add.miis == 1u && add.kept && add.error.empty() && std::filesystem::exists(root / "miis" / "c.mii"),
+                     "the launcher's file kept in the folder");
+        const auto again_add = galaxy::host::add_to_mii_folder(root / "miis", "c.mii", c_bytes);
+        ok &= expect(again_add.kept && !std::filesystem::exists(root / "miis" / "c (2).mii"), "the same file kept once");
+        const std::vector<std::byte> text_file(5u, std::byte{'x'});
+        const auto not_mii = galaxy::host::add_to_mii_folder(root / "miis", "notes2.txt", text_file);
+        ok &= expect(not_mii.miis == 0u && !not_mii.kept && !not_mii.error.empty() &&
+                         !std::filesystem::exists(root / "miis" / "notes2.txt"),
+                     "not Mii data kept nowhere");
+        const auto count = galaxy::host::mii_library_file_count(file);
+        ok &= expect(count && *count == galaxy::host::mii_library_count(), "the library file's count");
+        ok &= expect(!galaxy::host::mii_library_file_count(root / "none.txt"), "no file, no count");
+    }
+
     // A damaged library file is left alone.
     write_file(file, std::vector<std::byte>(3u, std::byte{'?'}));
     galaxy::host::set_mii_library(file, console, root / "miis", {});

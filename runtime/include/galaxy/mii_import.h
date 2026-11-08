@@ -93,6 +93,20 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
 MiiMergeResult import_mii_folder(std::string* message);
 // The Miis in the library; 0 without one.
 [[nodiscard]] unsigned mii_library_count();
+
+// A file's Miis kept in an import folder, for the next start to import with the game's checks (Android's launcher,
+// whose process has no game). `miis`: how many the file holds (none: `error` says why); `kept`: the copy is there
+// (a file of the same bytes already kept counts).
+struct MiiFolderAdd {
+    unsigned miis = 0;
+    unsigned converted = 0;
+    bool kept = false;
+    std::string error;
+};
+[[nodiscard]] MiiFolderAdd add_to_mii_folder(const std::filesystem::path& folder, const std::filesystem::path& name,
+                                             std::span<const std::byte> bytes);
+// The Miis in a library file; none when it is missing or not a library.
+[[nodiscard]] std::optional<unsigned> mii_library_file_count(const std::filesystem::path& file);
 // The Mii in a slot of the library (as the game reads it), none for an empty slot.
 [[nodiscard]] std::optional<MiiFields> mii_library_slot(unsigned slot);
 // The game thread: the Miis written since the last call, by slot.
