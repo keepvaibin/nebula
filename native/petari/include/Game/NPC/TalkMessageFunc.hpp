@@ -26,8 +26,8 @@ public:
         return new TalkMessageFuncM(*this);
     }
 
-    virtual TalkMessageFuncM* clone(NebulaArena* pHeap) const {
-        return new (pHeap, 0) TalkMessageFuncM(*this);
+    virtual TalkMessageFuncM* clone(NebulaArena* pArena) const {
+        return new (pArena, 0) TalkMessageFuncM(*this);
     };
 
     T mCaller;

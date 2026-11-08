@@ -22,8 +22,8 @@ public:
         u32 mSize;
     };
 
-    // The folder at pPath of the store, its bytes loaded for pHeap: fatal when the store has none.
-    static AssetFolder* mount(const char* pPath, NebulaArena* pHeap);
+    // The folder at pPath of the store, its bytes loaded for pArena: fatal when the store has none.
+    static AssetFolder* mount(const char* pPath, NebulaArena* pArena);
 
     AssetFolder(s32 entry, void* pBytes);
 
@@ -40,7 +40,7 @@ public:
     // The index-th entry of a folder (getEntry(), or an item's mEntry): false past the end.
     bool getItem(s32 folder, u32 index, Item* pItem) const;
     // The folder at "/a/b" below this one as an AssetFolder of its own, in the same block: fatal when there is none.
-    AssetFolder* getSubFolder(const char* pPath, NebulaArena* pHeap) const;
+    AssetFolder* getSubFolder(const char* pPath, NebulaArena* pArena) const;
 
     s32 getEntry() const {
         return mEntry;

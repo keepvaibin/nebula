@@ -41,8 +41,8 @@ namespace GameAssets {
     // Holds pFolder under pPath until pArena goes.
     void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena, bool game = false);
 
-    // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
-    // current heap when null): null when there is no such file. A block has a zero past the file.
-    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize);
-    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize);
+    // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pArena (the
+    // current arena when null): null when there is no such file. A block has a zero past the file.
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pArena, u32* pSize);
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pArena, u32* pSize);
 }  // namespace GameAssets

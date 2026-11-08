@@ -66,12 +66,12 @@ private:
 
 class SpkSoundHolder : SoundGlobal< SpkSoundHolder > {
 public:
-    SpkSoundHolder(NebulaArena* pHeap);
+    SpkSoundHolder(NebulaArena* pArena);
 
     bool startSound(s32, s32, SpkSoundHandle*);
     void freeDeadSound(s32);
     void framework();
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     NebulaList< SpkSound > mSoundList[4];
 };

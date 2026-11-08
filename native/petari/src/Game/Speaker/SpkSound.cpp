@@ -134,7 +134,7 @@ void SpkSound::kill() {
     setState(State_DEAD);
 }
 
-SpkSoundHolder::SpkSoundHolder(NebulaArena* pHeap) : SoundGlobal(true), mHeap(pHeap) {
+SpkSoundHolder::SpkSoundHolder(NebulaArena* pArena) : SoundGlobal(true), mArena(pArena) {
 }
 
 bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHandle) {
@@ -157,7 +157,7 @@ bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHan
         }
     }
 
-    SpkSound* sound = new (mHeap, 0) SpkSound();
+    SpkSound* sound = new (mArena, 0) SpkSound();
 
     if (pHandle != nullptr) {
         sound->attachHandle(pHandle);

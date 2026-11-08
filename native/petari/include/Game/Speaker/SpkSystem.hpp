@@ -15,7 +15,7 @@ public:
     static void disconnect(s32);
     static f32 getDeviceVolume(s32);
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     SpkData* mData;
     SpkSoundHolder* mSoundHolder;
 };

@@ -124,7 +124,7 @@ public:
     bool mIsTrigSeBlocked;  // blocks startSound
     bool mIsLevelSeBlocked;  // blocks startLevelSound
     s32 mSeMuteFrames;
-    SoundArchive* mSectionHeap;
+    SoundArchive* mSoundArchive;
     AudAudience< 4 > mAudience;
     AudDopplerAudible< 4 >* mAudible;
     AudSoundObject* mSystemSeObject;

@@ -40,7 +40,7 @@ void AirBubbleHolder::init(const TableIter& rIter) {
 }
 
 void AirBubbleHolder::createAirBubbles() {
-    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
+    NebulaArena::CurrentScope scope(Arenas::scene());
     for (s32 i = 0; i < ::sCreateAirBubbleNum; i++) {
         AirBubble* pAirBubble = new AirBubble("空気アワ(共用)");
         pAirBubble->initWithoutIter();

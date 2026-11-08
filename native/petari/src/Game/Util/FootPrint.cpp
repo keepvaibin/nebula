@@ -53,7 +53,7 @@ FootPrintInfo::FootPrintInfo() {
 }
 
 void FootPrint::setTexture(ResTIMG* img) {
-    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
+    NebulaArena::CurrentScope scope(Arenas::scene());
     mTexture = new JUTTexture(img);
 }
 

@@ -204,10 +204,10 @@ public:
     }
 
     // Game thread, before the clock starts.
-    static SoundEngine* create(NebulaArena* pHeap);
-    void setupBank(const BankFile* pFile, u32 size, NebulaArena* pHeap);
-    void setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pHeap);
-    void setupWaveBanks(u32 count, NebulaArena* pHeap);
+    static SoundEngine* create(NebulaArena* pArena);
+    void setupBank(const BankFile* pFile, u32 size, NebulaArena* pArena);
+    void setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pArena);
+    void setupWaveBanks(u32 count, NebulaArena* pArena);
     void startClock();
     SoundRing& ring() {
         return mRing;

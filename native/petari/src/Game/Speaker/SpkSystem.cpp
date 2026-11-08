@@ -2,18 +2,18 @@
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-SpkSystem::SpkSystem(NebulaArena* pHeap) : SoundGlobal(true), mData() {
-    if (pHeap == nullptr) {
-        pHeap = NebulaArena::current();
+SpkSystem::SpkSystem(NebulaArena* pArena) : SoundGlobal(true), mData() {
+    if (pArena == nullptr) {
+        pArena = NebulaArena::current();
     }
 
-    mHeap = pHeap;
-    mSoundHolder = new (pHeap, 0) SpkSoundHolder(pHeap);
+    mArena = pArena;
+    mSoundHolder = new (pArena, 0) SpkSoundHolder(pArena);
     SpkSpeakerCtrl::setup();
 }
 
 void SpkSystem::setResource(AssetFolder* pArchive, u16 tableOffset, u16 waveOffset) {
-    mData = new (mHeap, 0) SpkData(pArchive);
+    mData = new (mArena, 0) SpkData(pArchive);
     mData->loadTable(tableOffset);
     mData->loadWave(waveOffset);
 }

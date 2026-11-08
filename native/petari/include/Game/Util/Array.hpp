@@ -5,7 +5,7 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace MR {
-    /// @brief A full table: twice the room, in the heap it lies in, and the old one goes. Pointers into it do not survive this.
+    /// @brief A full table: twice the room, in the arena it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {
         T* const pNew = new (NebulaArena::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
@@ -16,7 +16,7 @@ namespace MR {
         return pNew;
     }
 
-    /// @brief A heap array of mMaxSize; grow() doubles it (16 when empty).
+    /// @brief An arena array of mMaxSize; grow() doubles it (16 when empty).
     template < class T >
     class AssignableArray {
     public:

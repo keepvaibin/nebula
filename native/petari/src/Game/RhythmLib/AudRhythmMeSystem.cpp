@@ -17,14 +17,14 @@ namespace {
     }
 }  // namespace
 
-AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pHeap, u32 numSeqParsers, bool hasMgr)
+AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pArena, u32 numSeqParsers, bool hasMgr)
     : SoundGlobal< AudRhythmMeSystem >(true), mBgmIdx(), mBeatTrack(), mMeMgr() {
     if (numSeqParsers != 0) {
         setUsingRhythmParser(0);
     }
 
     if (hasMgr) {
-        mMeMgr = new (pHeap, 0) AudMeMgr(pHeap);
+        mMeMgr = new (pArena, 0) AudMeMgr(pArena);
     }
 }
 

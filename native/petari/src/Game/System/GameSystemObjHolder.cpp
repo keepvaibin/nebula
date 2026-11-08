@@ -35,14 +35,14 @@ void GameSystemObjHolder::initAfterSystemArchiveLoaded() {
 
 void GameSystemObjHolder::initMessageResource() {
     AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive");
-    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive");
+    NebulaArena* pArena = MR::getArchiveArena("ErrorMessageArchive");
 
     MR::FormattedName systemMessagePath;
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
     systemMessagePath.format("/%s/MessageData/System", languagePrefix);
 
-    MR::addArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pHeap), pHeap, "/Memory/SystemMessage");
-    MR::addArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow", pHeap), pHeap, "/Memory/ErrorMessageWindow");
+    MR::addArchive(pArchive->getSubFolder(systemMessagePath.c_str(), pArena), pArena, "/Memory/SystemMessage");
+    MR::addArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow", pArena), pArena, "/Memory/ErrorMessageWindow");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow");
 

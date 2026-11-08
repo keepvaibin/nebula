@@ -35,7 +35,7 @@ class SoundRing {
 public:
     static const u32 cChunkCommands = 255;
 
-    void setup(NebulaArena* pHeap);
+    void setup(NebulaArena* pArena);
 
     // Game thread: a record to fill, then send() makes it the reader's and returns sent().
     SoundCommand& next();
@@ -72,7 +72,7 @@ private:
     Chunk* newChunk();
     void freeLeft();
 
-    NebulaArena* mHeap = nullptr;
+    NebulaArena* mArena = nullptr;
     // Writer.
     Chunk* mTail = nullptr;
     u32 mTailIndex = 0;
