@@ -357,7 +357,7 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux)
+    begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux, clear != nullptr)
                                  : draw_layout_.pass_for(scene_variant(), clear != nullptr);
     // The scene target's own variants (a texture target's colour has another format).
     if (discard_color && aux == 0u && !target_pass_active_) {
@@ -373,11 +373,11 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     scene_.depth_dirty |= clear != nullptr && scene_.samples > 1u;
     // The set's own size: the scene target, or a target pass's smaller target (E-07).
     begin.renderArea = {{0, 0}, {scene_.color->width, scene_.color->height}};
-    VkClearValue values[2]{};
+    VkClearValue values[3]{};  // an aux target clears to zero
     if (clear != nullptr) {
         std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
         values[1].depthStencil = {clear->reversed_depth, 0u};  // reversed-Z, as clear_scene's
-        begin.clearValueCount = 2;
+        begin.clearValueCount = aux != 0u ? 3u : 2u;
         begin.pClearValues = values;
     }
     gpu_pass(current_pass_);
@@ -916,21 +916,40 @@ VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
 }
 
 bool RendererVk::begin_motion_scene() {
+    const bool cleared = std::exchange(motion_cleared_, false);
     if (!scene_motion_ || !ensure_motion_targets()) {
         return false;
     }
-    clear_motion_targets();
+    if (!cleared) {
+        clear_motion_targets();
+    }
     return true;
 }
 
-void RendererVk::clear_motion_targets() {
+bool RendererVk::begin_cleared_motion_scene(std::uint32_t clear_rgba) {
+    // scene_temporal_begin's conditions, which the scene's begin tests next.
+    if (scene_pass_open_ || target_pass_active_ || output_scene_active_ || !temporal_ || !temporal_mode() ||
+        scene_map_.width != temporal_render_w_ || scene_map_.height != temporal_render_h_ || scene_.samples != 1u ||
+        !ensure_motion_targets()) {
+        return false;
+    }
+    if (!motion_pass_only()) {
+        clear_motion_targets(false);  // the reactive mask, while no pass is open
+    }
+    const SceneClearValues clear = make_scene_clear_values(clear_rgba, 0u);
+    begin_scene_pass_with(1u, &clear, false, "begin_cleared_motion_scene");
+    motion_cleared_ = true;
+    return true;
+}
+
+void RendererVk::clear_motion_targets(bool motion) {
     end_scene_pass();
     const VkClearColorValue zero{};
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
     // Nothing reads the reactive mask when the scene is one pass (motion_pass_only), and nothing writes it.
     const bool reactive = !motion_pass_only();
     for (const vk::Texture* target : {motion_.motion.get(), motion_.reactive.get()}) {
-        if (target == motion_.reactive.get() && !reactive) {
+        if ((target == motion_.reactive.get() && !reactive) || (target == motion_.motion.get() && !motion)) {
             continue;
         }
         image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

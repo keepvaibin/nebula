@@ -1127,9 +1127,11 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             walk_draw_pass(pass);
             break;
         case NEBULA_PASS_CLEAR: {
-            const bool starts_hdr = !target_open_ && (pass.clear_channels & 5u) == 5u &&
-                p + 1u < list.pass_count && list.passes[p + 1u].kind == NEBULA_PASS_SCENE_BEGIN &&
-                enhanced_lighting_ && get_render_config().wide_scene && !renderer_.temporal_mode();
+            // The whole frame cleared just before the scene begins: the scene's own pass can open with the clear.
+            const bool starts_scene = !target_open_ && (pass.clear_channels & 5u) == 5u &&
+                p + 1u < list.pass_count && list.passes[p + 1u].kind == NEBULA_PASS_SCENE_BEGIN;
+            const bool starts_hdr = starts_scene && enhanced_lighting_ && get_render_config().wide_scene &&
+                !renderer_.temporal_mode();
             SceneClearValues clear = make_scene_clear_values(pass.clear_rgba, 0u);
             if (starts_hdr) {
                 // The skipped SDR attachment would have rounded the clear before widening it to FP16.
@@ -1139,7 +1141,8 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                     clear.color[c] = std::round(clear.color[c] * levels) / levels;
                 }
             }
-            if (!starts_hdr || !renderer_.begin_wide_scene(true, &clear)) {
+            if ((!starts_hdr || !renderer_.begin_wide_scene(true, &clear)) &&
+                (!starts_scene || starts_hdr || !renderer_.begin_cleared_motion_scene(pass.clear_rgba))) {
                 renderer_.clear_scene(pass.clear_rgba, (pass.clear_channels & 1u) != 0u, (pass.clear_channels & 2u) != 0u,
                                       (pass.clear_channels & 4u) != 0u, 0u, 0u, kFrameUnits, kFrameUnits, target_open_ ? 1u : 0u);
             }
