@@ -461,15 +461,16 @@ void PackunPetit::initBlowModel() {
 }
 
 void PackunPetit::punchDown(HitSensor* pSender, HitSensor* pReceiver) {
-    Vec3f v6;
-    v6.sub(pReceiver->mPosition, pSender->mPosition);
-    v6.orthogonalize(mGravity);
-    MR::normalize(&v6);
+    // Knocked away from the hit at 20, up at 40.
+    Vec3f away;
+    away.sub(pReceiver->mPosition, pSender->mPosition);
+    away.orthogonalize(mGravity);
+    MR::normalize(&away);
 
-    Vec3f v5;
-    v5.scale(20.0f, v6);
-    v5.scaleAdd(-40.0f, mGravity, v5);
-    mBlownModel->mVelocity.set(v5);
+    Vec3f velocity;
+    velocity.scale(20.0f, away);
+    velocity.scaleAdd(-40.0f, mGravity, velocity);
+    mBlownModel->mVelocity.set(velocity);
     setNerve(GET_NERVE(PackunPetit, PackunPetitNrvPunchDown));
 }
 

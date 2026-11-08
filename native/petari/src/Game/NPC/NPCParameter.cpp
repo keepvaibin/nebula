@@ -12,25 +12,25 @@ template void MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::push_back(N
 NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec) : NPCParameterBase(pName), mValue(pVec) {
 }
 
-void NPCParameterV3f::read(Table* pInfo, s32 a2) {
+void NPCParameterV3f::read(Table* pInfo, s32 entry) {
     MR::FormattedName key("%sX", mName);
-    pInfo->getValue(a2, key.c_str(), &mValue->x);
+    pInfo->getValue(entry, key.c_str(), &mValue->x);
     key.format("%sY", mName);
-    pInfo->getValue(a2, key.c_str(), &mValue->y);
+    pInfo->getValue(entry, key.c_str(), &mValue->y);
     key.format("%sZ", mName);
-    pInfo->getValue(a2, key.c_str(), &mValue->z);
+    pInfo->getValue(entry, key.c_str(), &mValue->z);
 }
 
 NPCParameterReader::NPCParameterReader(const char* pName) : NPCParameterBase(pName), MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >() {
 }
 
-void NPCParameterReader::read(Table* pInfo, s32 a2) {
-    if (a2 <= -1 || a2 >= pInfo->getNumEntries()) {
+void NPCParameterReader::read(Table* pInfo, s32 entry) {
+    if (entry <= -1 || entry >= pInfo->getNumEntries()) {
         return;
     }
 
     for (NPCParameterBase** pIter = begin(); pIter != end(); pIter++) {
-        (*pIter)->read(pInfo, a2);
+        (*pIter)->read(pInfo, entry);
     }
 }
 

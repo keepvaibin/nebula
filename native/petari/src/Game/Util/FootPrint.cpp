@@ -91,7 +91,7 @@ void FootPrint::movement() {
     }
 }
 
-bool FootPrint::addPrint(const Vec3f& rPos, const Vec3f& rArg2, const Vec3f& rArg3, bool arg4) {
+bool FootPrint::addPrint(const Vec3f& rPos, const Vec3f& rUp, const Vec3f& rNormal, bool isFlipX) {
     mIsFading = false;
 
     if (mPrintNum > 0 && rPos.distance(mLastPrintPos) < mMinPrintDistance) {
@@ -100,11 +100,11 @@ bool FootPrint::addPrint(const Vec3f& rPos, const Vec3f& rArg2, const Vec3f& rAr
 
     mLastPrintPos = rPos;
     mPrints[mRotatingPrintIndex].mPos = rPos;
-    mPrints[mRotatingPrintIndex].mUp = rArg2;
-    mPrints[mRotatingPrintIndex].mNormal = rArg3;
+    mPrints[mRotatingPrintIndex].mUp = rUp;
+    mPrints[mRotatingPrintIndex].mNormal = rNormal;
     mPrints[mRotatingPrintIndex].mTimeLeft = ::sFadeOutTime;
     mPrints[mRotatingPrintIndex].mIsValid = true;
-    mPrints[mRotatingPrintIndex].mIsFlipX = arg4;
+    mPrints[mRotatingPrintIndex].mIsFlipX = isFlipX;
 
     mRotatingPrintIndex++;
     mPrintNum++;
@@ -141,17 +141,18 @@ void FootPrint::draw() const {
         material.setColor(0, color.r, color.g, color.b, color.a);
 
         Vec3f cross = mPrints[i].mUp.cross(mPrints[i].mNormal);
-        Vec3f v1;
+        // Prints alternate sides; each sits 5 units off the ground.
+        Vec3f printPos;
         if ((i & 1) != 0) {
-            v1 = mPrints[i].mPos + cross * mSideOffset;
+            printPos = mPrints[i].mPos + cross * mSideOffset;
         } else {
-            v1 = mPrints[i].mPos - cross * mSideOffset;
+            printPos = mPrints[i].mPos - cross * mSideOffset;
         }
 
-        v1 += mPrints[i].mNormal * 5.0f;
+        printPos += mPrints[i].mNormal * 5.0f;
 
         TypedDraw site = TDDraw::site(material, 0);
-        TDDraw::drawTexture3D(site, v1, mPrints[i].mNormal, mPrints[i].mUp, mWidth, mHeight, nullptr, mPrints[i].mIsFlipX != false, false);
+        TDDraw::drawTexture3D(site, printPos, mPrints[i].mNormal, mPrints[i].mUp, mWidth, mHeight, nullptr, mPrints[i].mIsFlipX != false, false);
     }
 
     TDDraw::close();

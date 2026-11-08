@@ -9,13 +9,13 @@
 #include <nebula_geometry.hpp>
 #include <algorithm>
 
-MultiSceneEffectKeeper::MultiSceneEffectKeeper(const char*, ModelManager* pModelManager, int a3, const char* pResName)
+MultiSceneEffectKeeper::MultiSceneEffectKeeper(const char*, ModelManager* pModelManager, int extraEmitterNum, const char* pResName)
     : mEmitter(), mResName(pResName) {
     if (mResName == nullptr) {
         mResName = pModelManager->getModelResourceHolder()->getModelName();
     }
 
-    s32 num = a3 + MR::getParticleResourceHolder()->getAutoEffectNum(mResName);
+    s32 num = extraEmitterNum + MR::getParticleResourceHolder()->getAutoEffectNum(mResName);
     mEmitter.init(num);
 }
 
