@@ -122,43 +122,27 @@ SoundHandle* AudSoundObject::startLevelSound(const char* pName) {
     return startLevelSound(id);
 }
 
-SoundHandle* AudSoundObject::startSoundParam(SoundID soundID, s32 volume, s32 a2) {
+SoundHandle* AudSoundObject::startSoundParam(SoundID soundID, s32 level, s32 subLevel) {
     SoundHandle* handle = startSound(soundID);
     if (handle != nullptr && handle->isSoundAttached()) {
-        modifySe_Kawamura(handle, volume);
-        modifySe_Takezawa(handle, volume, a2);
-        modifySe_Gohara(handle, volume, a2);
+        modifySe(handle, level, subLevel);
     }
 
     return handle;
 }
 
-SoundHandle* AudSoundObject::startLevelSoundParam(SoundID soundID, s32 volume, s32 a2) {
+SoundHandle* AudSoundObject::startLevelSoundParam(SoundID soundID, s32 level, s32 subLevel) {
     SoundHandle* handle = startLevelSound(soundID);
     if (handle != nullptr && handle->isSoundAttached()) {
-        modifySe_Kawamura(handle, volume);
-        modifySe_Takezawa(handle, volume, a2);
-        modifySe_Gohara(handle, volume, a2);
+        modifySe(handle, level, subLevel);
     }
 
     return handle;
 }
 
-SoundHandle* AudSoundObject::startLevelSoundParam(const char* pName, s32 volume, s32 a2) {
+SoundHandle* AudSoundObject::startLevelSoundParam(const char* pName, s32 level, s32 subLevel) {
     SoundID id = convertNameToLevelSEID(pName);
-    return startLevelSoundParam(id, volume, a2);
-}
-
-bool AudSoundObject::modifyLimitedSound(SoundID soundID) {
-    if (modifyLimitedSound_Kawamura(soundID)) {
-        return true;
-    }
-
-    if (modifyLimitedSound_Takezawa(soundID)) {
-        return true;
-    }
-
-    return false;
+    return startLevelSoundParam(id, level, subLevel);
 }
 
 bool AudSoundObject::isPlayingID(SoundID soundID) {
@@ -333,7 +317,8 @@ void AudSoundObject::setCutoffToPort(SoundHandle* pHandle, SoundID soundID) {
 }
 
 SoundID AudSoundObject::convertSoundIdFromSeVersion(SoundID soundID) const {
-    if (mSeVersion == 1) {  // TODO: enum
+    // Kuribo::SeVersion_2D and Metbo::SeVersion_2D; no other actor's sounds have a case below.
+    if (mSeVersion == 1) {
         switch (soundID) {
         case SE_EM_KURIBO_LAND:
             return SE_EM_KURIBO_LAND_2D;

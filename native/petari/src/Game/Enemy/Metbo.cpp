@@ -104,9 +104,9 @@ void Metbo::init(const TableIter& rIter) {
     initSound(4, false);
 
     if (MR::isEqualStageName("KoopaBattleVs2Galaxy")) {
-        MR::setSeVersion(this, 1);
+        MR::setSeVersion(this, SeVersion_2D);
     } else {
-        MR::setSeVersion(this, 0);
+        MR::setSeVersion(this, SeVersion_NORMAL);
     }
 
     MR::initShadowVolumeSphere(this, 80.0f);
