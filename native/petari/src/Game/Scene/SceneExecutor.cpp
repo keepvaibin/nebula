@@ -37,11 +37,9 @@ void SceneFunction::executeMovementList() {
     CategoryList::execute(MR::MovementType_ScreenEffect);
     CategoryList::execute(MR::MovementType_SensorHitChecker);
     CategoryList::execute(MR::MovementType_MsgSharedGroup);
-    CategoryList::execute(MR::MovementType_UNK_0x07);
     CategoryList::execute(MR::MovementType_EffectUpdateCheck);
     CategoryList::execute(MR::MovementType_TalkDirector);
     CategoryList::execute(MR::MovementType_DemoDirector);
-    CategoryList::execute(MR::MovementType_UNK_0x0C);
     CategoryList::execute(MR::MovementType_ClippedMapParts);
     CategoryList::execute(MR::MovementType_Planet);
     CategoryList::execute(MR::MovementType_CollisionMapObj);
@@ -54,7 +52,6 @@ void SceneFunction::executeMovementList() {
     CategoryList::execute(MR::MovementType_Environment);
     CategoryList::execute(MR::MovementType_MapObj);
     CategoryList::execute(MR::MovementType_MapObjDecoration);
-    CategoryList::execute(MR::MovementType_UNK_0x15);
     CategoryList::execute(MR::MovementType_NPC);
     CategoryList::execute(MR::MovementType_Ride);
     CategoryList::execute(MR::MovementType_Player);
@@ -103,7 +100,6 @@ void SceneFunction::executeCalcAnimList() {
     CategoryList::execute(MR::CalcAnimType_Item);
     CategoryList::execute(MR::CalcAnimType_Layout);
     CategoryList::execute(MR::CalcAnimType_LayoutDecoration);
-    CategoryList::execute(MR::CalcAnimType_UNK_0x12);
     CategoryList::execute(MR::CalcAnimType_MirrorMapObj);
     CategoryList::execute(MR::MovementType_ShadowControllerHolder);
     CategoryList::execute(MR::CalcAnimType_AnimParticle);
@@ -213,14 +209,10 @@ void SceneFunction::executeDrawBufferListNormalXlu() {
 
 void SceneFunction::executeDrawListOpa() {
     Frame::phase(MotionSignal::ScenePhase_ListOpa);
-    CategoryList::execute(MR::DrawType_0x3);
     MR::resetDrawState();
-    CategoryList::execute(MR::DrawType_0x52);
     CategoryList::execute(MR::DrawType_WhirlPoolAccelerator);
     CategoryList::execute(MR::DrawType_OceanRingPipeOutside);
-    CategoryList::execute(MR::DrawType_0x32);
     CategoryList::execute(MR::DrawType_SwingRope);
-    CategoryList::execute(MR::DrawType_0x1);
     CategoryList::execute(MR::DrawType_PlantStalk);
     CategoryList::execute(MR::DrawType_Plant);
     CategoryList::execute(MR::DrawType_Creeper);
@@ -235,7 +227,6 @@ void SceneFunction::executeDrawListOpa() {
     CategoryList::execute(MR::DrawType_AstroDomeOrbit);
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_Player);
-    CategoryList::execute(MR::DrawType_0x23);
     CategoryList::execute(MR::DrawType_Fur);
     CategoryList::execute(MR::DrawType_OceanSphere);
     CategoryList::execute(MR::DrawType_Flag);
@@ -245,7 +236,6 @@ void SceneFunction::executeDrawListXlu() {
     Frame::phase(MotionSignal::ScenePhase_ListXlu);
     MR::resetDrawState();
     CategoryList::execute(MR::DrawType_VolumeModel);
-    CategoryList::execute(MR::DrawType_0x30);
     if (!MR::isDrawSpinDriverPathAtOpa()) {
         CategoryList::execute(MR::DrawType_SpinDriverPathDrawer);
     }
@@ -275,7 +265,7 @@ void SceneFunction::executeDrawAfterIndirect() {
     CategoryList::drawOpa(MR::DrawBufferType_IndirectNpc);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectEnemy);
     CategoryList::drawOpa(MR::DrawBufferType_GlaringLight);
-    CategoryList::drawOpa(MR::DrawBufferType_UNK_0x17);
+    CategoryList::drawOpa(MR::DrawBufferType_PlayerParts);
     CategoryList::drawOpa(MR::DrawBufferType_CrystalBox);
     CategoryList::drawXlu(MR::DrawBufferType_IndirectPlanet);
     CategoryList::drawXlu(MR::DrawBufferType_IndirectMapObj);
@@ -283,17 +273,15 @@ void SceneFunction::executeDrawAfterIndirect() {
     CategoryList::drawXlu(MR::DrawBufferType_IndirectNpc);
     CategoryList::drawXlu(MR::DrawBufferType_IndirectEnemy);
     CategoryList::drawXlu(MR::DrawBufferType_GlaringLight);
-    CategoryList::drawXlu(MR::DrawBufferType_UNK_0x17);
+    CategoryList::drawXlu(MR::DrawBufferType_PlayerParts);
     CategoryList::drawXlu(MR::DrawBufferType_CrystalBox);
     MR::resetDrawState();
-    CategoryList::execute(MR::DrawType_0x11);
     CategoryList::execute(MR::DrawType_GCapture);
     CategoryList::execute(MR::DrawType_WaterRoad);
     CategoryList::execute(MR::DrawType_BigBubble);
     CategoryList::execute(MR::DrawType_ElectricRailHolder);
     CategoryList::execute(MR::DrawType_OceanRing);
     CategoryList::execute(MR::DrawType_OceanBowl);
-    CategoryList::execute(MR::DrawType_0x20);
     CategoryList::execute(MR::DrawType_EffectDrawIndirect);
     CategoryList::execute(MR::DrawType_EffectDrawAfterIndirect);
     CategoryList::execute(MR::DrawType_OceanRingPipeInside);
@@ -333,8 +321,6 @@ void SceneFunction::executeDrawList2DNormal() {
     CategoryList::execute(MR::DrawType_TalkLayout);
     CategoryList::execute(MR::DrawType_TalkPartsLayout);
     MR::drawInitFor2DModel();
-    CategoryList::drawOpa(MR::DrawBufferType_0x25);
-    CategoryList::drawXlu(MR::DrawBufferType_0x25);
     CategoryList::execute(MR::DrawType_EffectDraw2D);
     CategoryList::execute(MR::DrawType_EffectDrawFor2DModel);
 }
