@@ -1477,7 +1477,7 @@ namespace {
                 addedPages++;
             }
         }
-        // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, the glyphs, the pages
+        // One block that lasts the game (the permanent arena): the sheets, the glyphs, the pages
         // and their blocks.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
         const u32 glyphBytes = (glyphs * sizeof(Ui::FontGlyph) + 31u) & ~31u;
