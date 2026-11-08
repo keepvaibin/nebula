@@ -36,7 +36,7 @@ public:
     void omitTutorial() const;
     void nextTutorial();
     void prevTutorial();
-    void startTimerSound(s32, s32);
+    void startTimerSound(s32 step, s32 level);
 
     LiveActor* mHost;
     bool mIsTutorialPass;

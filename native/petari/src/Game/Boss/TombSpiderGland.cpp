@@ -10,10 +10,10 @@ namespace NrvTombSpiderGland {
     NEW_NERVE(TombSpiderGlandNrvDamageWait, TombSpiderGland, DamageWait);
 };  // namespace NrvTombSpiderGland
 
-TombSpiderGland::TombSpiderGland(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& a1, const char* pJointName)
+TombSpiderGland::TombSpiderGland(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName)
     : PartsModel(pActor, pName, "TombSpiderGland", nullptr, MR::DrawBufferType_Enemy, false) {
     MR::initLightCtrl(this);
-    initFixedPosition(rPos, a1, pJointName);
+    initFixedPosition(rPos, rRotate, pJointName);
 }
 
 void TombSpiderGland::init(const TableIter& rIter) {

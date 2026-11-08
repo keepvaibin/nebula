@@ -12,10 +12,10 @@ namespace NrvTombSpiderVitalSpot {
     NEW_NERVE(TombSpiderVitalSpotNrvRecover, TombSpiderVitalSpot, Recover);
 };  // namespace NrvTombSpiderVitalSpot
 
-TombSpiderVitalSpot::TombSpiderVitalSpot(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& a1, const char* pJointName)
+TombSpiderVitalSpot::TombSpiderVitalSpot(LiveActor* pActor, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName)
     : PartsModel(pActor, pName, "TombSpiderVitalSpot", nullptr, MR::DrawBufferType_Enemy, false) {
     MR::initLightCtrl(this);
-    initFixedPosition(rPos, a1, pJointName);
+    initFixedPosition(rPos, rRotate, pJointName);
 }
 
 void TombSpiderVitalSpot::init(const TableIter& rIter) {

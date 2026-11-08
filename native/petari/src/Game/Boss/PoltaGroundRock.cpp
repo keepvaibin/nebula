@@ -62,10 +62,10 @@ void PoltaGroundRock::start(LiveActor* pOwner, const Vec3f& rVec1) {
     mGroundPos.set(rVec1);
     MR::calcGravity(this, rVec1);
     mPosition.scaleAdd(500.0f, mGravity, mGroundPos);
-    Pos3f v9;
-    MR::makeMtxUpNoSupportPos(&v9, -mGravity, mPosition);
-    MR::rotateMtxLocalY(v9, MR::getRandom(0.0f, TWO_PI));
-    v9.getQuat(mPoseQuat);
+    Pos3f poseMtx;
+    MR::makeMtxUpNoSupportPos(&poseMtx, -mGravity, mPosition);
+    MR::rotateMtxLocalY(poseMtx, MR::getRandom(0.0f, TWO_PI));
+    poseMtx.getQuat(mPoseQuat);
     MR::validateCollisionParts(this);
     MR::showModel(this);
     appear();

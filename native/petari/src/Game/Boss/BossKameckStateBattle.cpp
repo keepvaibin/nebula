@@ -261,15 +261,15 @@ void BossKameckStateBattle::exeHideMove() {
 
     MR::startLevelSound(mHost, "SE_BM_LV_KAMECK_HIDE_MOVE");
 
-    f32 v2;
+    f32 maxSpeed;
 
     if (mIsFinal) {
-        v2 = 20.0f;
+        maxSpeed = 20.0f;
     } else {
-        v2 = 15.0f;
+        maxSpeed = 15.0f;
     }
 
-    MR::addVelocityMoveToTarget(mHost, mMoveTarget, v2 * 0.1f, v2, 0.0f, 400.0f);
+    MR::addVelocityMoveToTarget(mHost, mMoveTarget, maxSpeed * 0.1f, maxSpeed, 0.0f, 400.0f);
     MR::addVelocityKeepHeight(mHost, mMoveTarget, 0.0f, 0.5f, 50.0f);
     MR::attenuateVelocity(mHost, 0.9f);
     MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, ::sTurnPlayerDegree);

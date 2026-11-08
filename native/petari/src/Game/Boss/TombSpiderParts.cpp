@@ -62,15 +62,15 @@ void TombSpiderParts::init() {
 }
 
 namespace {
-    TombSpiderGland* createGland(TombSpider* pParent, const char* pName, const Vec3f& rPos, const Vec3f& a1, const char* pJointName) {
-        TombSpiderGland* gland = new TombSpiderGland(pParent, pName, rPos, a1, pJointName);
+    TombSpiderGland* createGland(TombSpider* pParent, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName) {
+        TombSpiderGland* gland = new TombSpiderGland(pParent, pName, rPos, rRotate, pJointName);
         gland->initWithoutIter();
         MR::registerDemoSimpleCastAll(gland);
         return gland;
     }
 
-    TombSpiderVitalSpot* createVitalSpot(TombSpider* pParent, const char* pName, const Vec3f& rPos, const Vec3f& a1, const char* pJointName) {
-        TombSpiderVitalSpot* vitalSpot = new TombSpiderVitalSpot(pParent, pName, rPos, a1, pJointName);
+    TombSpiderVitalSpot* createVitalSpot(TombSpider* pParent, const char* pName, const Vec3f& rPos, const Vec3f& rRotate, const char* pJointName) {
+        TombSpiderVitalSpot* vitalSpot = new TombSpiderVitalSpot(pParent, pName, rPos, rRotate, pJointName);
         vitalSpot->initWithoutIter();
         MR::registerDemoSimpleCastAll(vitalSpot);
         return vitalSpot;

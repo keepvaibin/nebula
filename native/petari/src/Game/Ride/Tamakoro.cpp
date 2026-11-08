@@ -204,11 +204,11 @@ void Tamakoro::updateRingUpVec() {
     Vec3f up = -mGravity;
 
     if (!MR::isNearZero(mAccelDir)) {
-        Vec3f v1;
-        Vec3f up2 = -mGravity;
-        v1.scaleAdd(mAccelRate, mAccelDir, up2);
-        MR::normalizeOrZero(&v1);
-        MR::turnVecToVecDegree(&up, up, v1, ::sRingMaxDegree, Vec3f(0, 1, 0));
+        Vec3f tiltUp;
+        Vec3f gravityUp = -mGravity;
+        tiltUp.scaleAdd(mAccelRate, mAccelDir, gravityUp);
+        MR::normalizeOrZero(&tiltUp);
+        MR::turnVecToVecDegree(&up, up, tiltUp, ::sRingMaxDegree, Vec3f(0, 1, 0));
     }
 
     MR::turnVecToVecDegree(&mRingUp, mRingUp, up, ::sRingMaxAngleSpeed, Vec3f(0, 1, 0));

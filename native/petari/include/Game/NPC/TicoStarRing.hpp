@@ -9,7 +9,7 @@ public:
     virtual void init(const TableIter&);
     virtual void kill();
 
-    void initialize(LiveActor*, LiveActor*, const char*);
+    void initialize(LiveActor* pTicoGalaxy, LiveActor* pAppearActor, const char* pGalaxyName);
 
     void exeWait();
 

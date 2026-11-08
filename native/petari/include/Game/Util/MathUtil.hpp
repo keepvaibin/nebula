@@ -153,7 +153,7 @@ namespace MR {
     void makeQuatRotateRadian(Quat4f* pQuat, const Vec3f& rRot);
     void makeQuatRotateDegree(Quat4f* pQuat, const Vec3f& rRot);
     void makeQuatFromVec(Quat4f* pQuat, const Vec3f& rFront, const Vec3f& rUp);
-    void makeQuatSideUp(Quat4f* pParam1, const Vec3f& rParam2, const Vec3f& rParam3);
+    void makeQuatSideUp(Quat4f* pDst, const Vec3f& rSide, const Vec3f& rUp);
     void makeQuatUpFront(Quat4f* pQuat, const Vec3f& rUp, const Vec3f& rFront);
     void makeQuatUpNoSupport(Quat4f* pQuat, const Vec3f& rUp);
     void blendQuatUpFront(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
