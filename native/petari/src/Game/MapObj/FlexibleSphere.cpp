@@ -19,23 +19,36 @@
 #include <nebula_math.h>
 #include "Game/Util/StringUtil.hpp"
 
-#define GROW true
-#define SHRINK false
+namespace {
+    // Placement args 0-2 are scales in ten-thousandths.
+    const f32 cArgScaleUnit = 10000.0f;
+    const f32 cDefaultMaxScale = 1.0f;
+    const f32 cDefaultMinScale = 0.1f;
+    const f32 cDefaultScaleRate = 0.002f;
+    const f32 cQuakeHearDistance = 4000.0f;
+    const u16 cQuakeFrames = 60;
+    const s32 cTimerSoundInterval = 60;
 
-f32 scale = 1.0f;
-static void flexibleCoordinates(MaterialDraw& rDraw) {
-    Mtx mtx;
-    NebulaMtxScale(mtx, scale, scale, 0.0f);
+    // The texture coordinate scale of the sphere being drawn: the surface pattern keeps its size as the sphere shrinks.
+    // Set by draw() just before directDraw() runs the hook.
+    f32 sCoordScale = 1.0f;
 
-    rDraw.applyPass(NEBULA_FORM_PASS_FLEXIBLE_COORDINATES);
-    rDraw.setCoordinate(0, mtx);
-    rDraw.setCoordinate(1, mtx);
-    rDraw.setCoordinate(2, mtx);
-}
+    void flexibleCoordinates(MaterialDraw& rDraw) {
+        Mtx mtx;
+        NebulaMtxScale(mtx, sCoordScale, sCoordScale, 0.0f);
+
+        rDraw.applyPass(NEBULA_FORM_PASS_FLEXIBLE_COORDINATES);
+        rDraw.setCoordinate(0, mtx);
+        rDraw.setCoordinate(1, mtx);
+        rDraw.setCoordinate(2, mtx);
+    }
+};  // namespace
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {
 }
 
+// Grows to its max scale and shrinks to its min, quaking at each end, once the player stands on it (or switch A turns
+// on). Arg 3 = 1 shrinks only, with a countdown, and vanishes at the min.
 void FlexibleSphere::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
@@ -53,7 +66,7 @@ void FlexibleSphere::init(const TableIter& rIter) {
 
     MR::initCollisionParts(this, arcName.c_str(), getSensor("body"), nullptr);
 
-    mGrowDirection = GROW;
+    mIsGrowing = true;
 
     MR::connectToScene(this, MR::MovementType_Planet, MR::CalcAnimType_Planet, MR::DrawBufferType_None, MR::DrawType_FlexibleSphere);
 
@@ -61,8 +74,9 @@ void FlexibleSphere::init(const TableIter& rIter) {
     MR::setClippingTypeSphere(this, 3000.0f);
     MR::setClippingFarMax(this);
 
-    PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
-    model->setDrawHook(flexibleCoordinates);
+    // ModelUtil makes FlexibleSphere models PlayerModels.
+    PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
+    pModel->setDrawHook(flexibleCoordinates);
 
     if (MR::isValidInfo(rIter)) {
         MR::useStageSwitchReadA(this, rIter);
@@ -71,45 +85,43 @@ void FlexibleSphere::init(const TableIter& rIter) {
 
     makeActorAppeared();
 
-    mMaxScale = 1.0f;
-    mMinScale = 0.1f;
-    mScaleRate = 0.002f;
+    mMaxScale = cDefaultMaxScale;
+    mMinScale = cDefaultMinScale;
+    mScaleRate = cDefaultScaleRate;
     mVanishOnShrinkEnd = false;
 
     if (MR::isValidInfo(rIter)) {
-        s32 arg0 = -1;
-        s32 arg1 = -1;
-        s32 arg2 = -1;
-        s32 arg3 = -1;
+        s32 maxScale = -1;
+        s32 minScale = -1;
+        s32 scaleRate = -1;
+        s32 vanishType = -1;
 
-        MR::getPlacementArg0NoInit(rIter, &arg0);
-        MR::getPlacementArg1NoInit(rIter, &arg1);
-        MR::getPlacementArg2NoInit(rIter, &arg2);
-        MR::getPlacementArg3NoInit(rIter, &arg3);
+        MR::getPlacementArg0NoInit(rIter, &maxScale);
+        MR::getPlacementArg1NoInit(rIter, &minScale);
+        MR::getPlacementArg2NoInit(rIter, &scaleRate);
+        MR::getPlacementArg3NoInit(rIter, &vanishType);
 
-        if (arg0 != -1) {
-            mMaxScale = arg0 / 10000.0f;
+        if (maxScale != -1) {
+            mMaxScale = maxScale / cArgScaleUnit;
         }
 
-        if (arg1 != -1) {
-            mMinScale = arg1 / 10000.0f;
+        if (minScale != -1) {
+            mMinScale = minScale / cArgScaleUnit;
         }
 
-        if (arg2 != -1) {
-            mScaleRate = arg2 / 10000.0f;
+        if (scaleRate != -1) {
+            mScaleRate = scaleRate / cArgScaleUnit;
         }
 
-        if (arg3 == 1) {
-            mVanishOnShrinkEnd = true;
-        }
+        mVanishOnShrinkEnd = vanishType == 1;
     }
 
     mShakeTimer = 0;
     mEnabled = false;
 
     if (mVanishOnShrinkEnd) {
-        mGrowDirection = SHRINK;
-        mTimer = (mScale.x - mMinScale) / mScaleRate;
+        mIsGrowing = false;
+        mTimer = static_cast< s32 >((mScale.x - mMinScale) / mScaleRate);
     }
 }
 
@@ -125,111 +137,122 @@ void FlexibleSphere::kill() {
     LiveActor::kill();
 }
 
+// Nothing moves while a quake shakes the camera.
 void FlexibleSphere::control() {
     if (mShakeTimer != 0) {
-        if (MR::calcDistanceToPlayer(mPosition) < 4000.0f) {
-            MR::startLevelSound(this, "SE_AT_LV_EARTHQUAKE");
-        }
-
-        if (--mShakeTimer == 0) {
-            MR::stopShakingCamera(this);
-            MR::validateClipping(this);
-        }
+        updateQuake();
         return;
     }
 
-    if (!mEnabled) {
-        if (MR::isValidSwitchA(this)) {
-            if (MR::isOnSwitchA(this)) {
-                mEnabled = true;
-                if (MR::isRegisteredEffect(this, "Wind")) {
-                    MR::emitEffect(this, "Wind");
-                }
-            } else {
-                return;
-            }
-        } else {
-            if (MR::isActorOnPlayer(this)) {
-                mEnabled = true;
-            } else {
-                return;
-            }
-        }
+    if (!mEnabled && !tryStart()) {
+        return;
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_FLEX_SPHERE_MOVE", ((mScale.x - mMinScale) / (mMaxScale - mMinScale)) * 100.0f);
 
-    bool quake = false;
-    if (mGrowDirection != SHRINK) {
-        f32 scale = mScale.x;
+    f32 scale = mScale.x;
+
+    if (mIsGrowing) {
         if (scale < mMaxScale) {
             scale = scale + mScaleRate;
-            mScale.x = scale;
-            mScale.y = scale;
-            mScale.z = scale;
+            mScale.set(scale);
         } else {
-            mGrowDirection = SHRINK;
-            quake = true;
+            mIsGrowing = false;
+            startQuake();
         }
+        return;
+    }
+
+    if (scale > mMinScale) {
+        scale = scale - mScaleRate;
+        mScale.set(scale);
+
+        if (mVanishOnShrinkEnd) {
+            updateVanishTimer();
+        }
+    } else if (mVanishOnShrinkEnd) {
+        MR::startSystemSE("SE_SY_TIMER_A_0");
+        MR::startSound(this, "SE_OJ_FLEX_SPHERE_VANISH");
+        kill();
     } else {
-        // mGrowDirection == SHRINK
-        f32 scale = mScale.x;
-        if (scale > mMinScale) {
-            bool vanishOnEnd = mVanishOnShrinkEnd;
-            scale = scale - mScaleRate;
-            mScale.x = scale;
-            mScale.y = scale;
-            mScale.z = scale;
+        mIsGrowing = true;
+        startQuake();
+    }
+}
 
-            if (vanishOnEnd && mTimer > 0) {
-                if (!MR::isPlayerDead()) {
-                    if (!MR::isPowerStarGetDemoActive() && mTimer % 60 == 0) {
-                        if (mTimer <= 120) {
-                            MR::startSystemSE("SE_SY_TIMER_A_QUASI_0");
-                        } else if (mTimer <= 600) {
-                            MR::startSystemSE("SE_SY_TIMER_A_1");
-                        } else {
-                            MR::startSystemSE("SE_SY_TIMER_A_2");
-                        }
-                    }
-                }
-                mTimer--;
-            }
+// Switch A when it has one, else the player standing on it.
+bool FlexibleSphere::tryStart() {
+    if (MR::isValidSwitchA(this)) {
+        if (!MR::isOnSwitchA(this)) {
+            return false;
+        }
 
+        mEnabled = true;
+
+        if (MR::isRegisteredEffect(this, "Wind")) {
+            MR::emitEffect(this, "Wind");
+        }
+
+        return true;
+    }
+
+    if (!MR::isActorOnPlayer(this)) {
+        return false;
+    }
+
+    mEnabled = true;
+    return true;
+}
+
+// Ticks once a second, faster-sounding in the last ten seconds and the last two; quiet while the player is dead or a star
+// is being collected.
+void FlexibleSphere::updateVanishTimer() {
+    if (mTimer <= 0) {
+        return;
+    }
+
+    if (!MR::isPlayerDead() && !MR::isPowerStarGetDemoActive() && mTimer % cTimerSoundInterval == 0) {
+        if (mTimer <= 120) {
+            MR::startSystemSE("SE_SY_TIMER_A_QUASI_0");
+        } else if (mTimer <= 600) {
+            MR::startSystemSE("SE_SY_TIMER_A_1");
         } else {
-            if (mVanishOnShrinkEnd) {
-                MR::startSystemSE("SE_SY_TIMER_A_0");
-                MR::startSound(this, "SE_OJ_FLEX_SPHERE_VANISH");
-                kill();
-            } else {
-                mGrowDirection = GROW;
-                quake = true;
-            }
+            MR::startSystemSE("SE_SY_TIMER_A_2");
         }
     }
 
-    if (quake && mShakeTimer == 0) {
-        mShakeTimer = 60;
-        if (MR::calcDistanceToPlayer(mPosition) < 4000.0f) {
-            MR::shakeCameraInfinity(this, 0.2f, 3.0f);
-            MR::invalidateClipping(this);
-        }
+    mTimer--;
+}
 
-        if (MR::isActorOnPlayer(this)) {
-            MR::tryRumblePad(this, "マリオ[しびれ]", PLAYER_1);
-        }
+void FlexibleSphere::startQuake() {
+    mShakeTimer = cQuakeFrames;
+
+    if (MR::calcDistanceToPlayer(mPosition) < cQuakeHearDistance) {
+        MR::shakeCameraInfinity(this, 0.2f, 3.0f);
+        MR::invalidateClipping(this);
+    }
+
+    if (MR::isActorOnPlayer(this)) {
+        MR::tryRumblePad(this, "マリオ[しびれ]", PLAYER_1);
+    }
+}
+
+void FlexibleSphere::updateQuake() {
+    if (MR::calcDistanceToPlayer(mPosition) < cQuakeHearDistance) {
+        MR::startLevelSound(this, "SE_AT_LV_EARTHQUAKE");
+    }
+
+    if (--mShakeTimer == 0) {
+        MR::stopShakingCamera(this);
+        MR::validateClipping(this);
     }
 }
 
 void FlexibleSphere::draw() const {
     if (!MR::isDead(this)) {
-        PlayerModel* model = static_cast< PlayerModel* >(MR::getModel(this));
-        model->viewCalc2();
-        scale = 0.05f / mScale.x + 0.95f;
-        model->directDraw();
+        PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
+        pModel->viewCalc2();
+        sCoordScale = 0.05f / mScale.x + 0.95f;
+        pModel->directDraw();
     }
-}
-
-bool FlexibleSphere::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
 }
