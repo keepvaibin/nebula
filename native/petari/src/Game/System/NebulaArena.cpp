@@ -1,7 +1,6 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <new>
 #include <stdlib.h>
 #include <string.h>

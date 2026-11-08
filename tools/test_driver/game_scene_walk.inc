@@ -96,7 +96,7 @@
                                 : form == PlayerMode_Tornado  ? pPlayer->mTornadoMario != nullptr
                                                               : true;
             if (loaded) {
-                JUTNativeLog("test: form %u\n", form);
+                nebula_log("test: form %u\n", form);
                 pPlayer->setPlayerMode(form, true);
             }
         }
@@ -106,11 +106,11 @@
             s32 count = 0;
             if (testWaterPoint(index, &pos, &pKind, &count)) {
                 if (fresh) {
-                    JUTNativeLog("test: water %d/%d %s %.0f %.0f %.0f in %d swam %u\n", count > 0 ? index % count : 0, count, pKind, pos.x, pos.y, pos.z, MR::isInWater(pos) ? 1 : 0, sTestSwimFrames);
+                    nebula_log("test: water %d/%d %s %.0f %.0f %.0f in %d swam %u\n", count > 0 ? index % count : 0, count, pKind, pos.x, pos.y, pos.z, MR::isInWater(pos) ? 1 : 0, sTestSwimFrames);
                 }
                 MR::setPlayerPos(pos);
             } else if (fresh) {
-                JUTNativeLog("test: water none swam %u\n", sTestSwimFrames);
+                nebula_log("test: water none swam %u\n", sTestSwimFrames);
             }
             return;
         }
@@ -165,7 +165,7 @@
                 }
             }
             if (sTarget != nullptr) {
-                JUTNativeLog("test: actor %s %.0f %.0f %.0f\n", MR::getModelResName(sTarget), sTarget->mPosition.x, sTarget->mPosition.y, sTarget->mPosition.z);
+                nebula_log("test: actor %s %.0f %.0f %.0f\n", MR::getModelResName(sTarget), sTarget->mPosition.x, sTarget->mPosition.y, sTarget->mPosition.z);
             }
         }
         if (sTarget != nullptr && !MR::isDead(sTarget)) {

@@ -1,5 +1,5 @@
 #include "Game/Screen/NebulaAchievementToast.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include <nebula_module.h>
 
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/LayoutHolder.hpp"
@@ -205,7 +205,7 @@ void NebulaAchievementToast::loadTextures() {
             mTextures[i] = MR::createLytTexMap(pIcon->mArchive, pIcon->mTexture);
         }
         if (mTextures[i] == nullptr) {
-            JUTNativeLog("NebulaAchievementToast: no %s in %s\n", pIcon->mTexture, pIcon->mArchive);
+            nebula_log("NebulaAchievementToast: no %s in %s\n", pIcon->mTexture, pIcon->mArchive);
         }
     }
     if (mTextures[0] != nullptr) {

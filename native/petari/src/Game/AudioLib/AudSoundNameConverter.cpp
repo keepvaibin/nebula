@@ -1,7 +1,7 @@
 #include "Game/AudioLib/AudSoundNameConverter.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Sound/SoundTable.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include <nebula_module.h>
 
 namespace {
     // The prefixes of the game's sound categories: sound effects ("SE_" then two letters), then the other kinds.
@@ -71,7 +71,7 @@ void AudSoundNameConverter::init() {
     }
 #if defined(NEBULA_DEV)
     if (heldTwice != 0) {
-        JUTNativeLog("sound names: %u of %u held twice (the first is used)\n", heldTwice, count);
+        nebula_log("sound names: %u of %u held twice (the first is used)\n", heldTwice, count);
     }
 #else
     (void)heldTwice;

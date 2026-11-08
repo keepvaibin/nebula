@@ -7,7 +7,7 @@
 #include "Game/System/Arenas.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include <nebula_module.h>
 #include <cstring>
 
 namespace {
@@ -133,7 +133,7 @@ bool SaveDataHandler::readNative() {
     const u32 count = readU32(mBuffer + 12);
     if (version != cVersion || count > (mReadLength - cHeaderSize) / cRowSize ||
         readU32(mBuffer + 8) != crc32(mBuffer + cHeaderSize, mReadLength - cHeaderSize)) {
-        JUTNativeLog("save: %s is damaged\n", cReadNames[mReadIndex]);
+        nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
         return false;
     }
 
@@ -142,7 +142,7 @@ bool SaveDataHandler::readNative() {
     for (u32 i = 0; i < count; i++) {
         const u32 size = readU32(mBuffer + cHeaderSize + i * cRowSize + cRowNameSize);
         if (size > mReadLength - place) {
-            JUTNativeLog("save: %s is damaged\n", cReadNames[mReadIndex]);
+            nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
             return false;
         }
         place += size;
@@ -162,7 +162,7 @@ bool SaveDataHandler::readNative() {
         place += size;
     }
 
-    JUTNativeLog("save: read %s\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s\n", cReadNames[mReadIndex]);
     return true;
 }
 
@@ -171,7 +171,7 @@ bool SaveDataHandler::readOld() {
     NebulaSaveFormat::Header header;
     const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(mBuffer, mReadLength, header);
     if (error != NebulaSaveFormat::Error::None) {
-        JUTNativeLog("save: %s: %s\n", cReadNames[mReadIndex], NebulaSaveFormat::message(error));
+        nebula_log("save: %s: %s\n", cReadNames[mReadIndex], NebulaSaveFormat::message(error));
         return false;
     }
 
@@ -221,7 +221,7 @@ bool SaveDataHandler::readOld() {
 
     gOldSaveOrder = false;
     delete pUserFile;
-    JUTNativeLog("save: read %s, an old save\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s, an old save\n", cReadNames[mReadIndex]);
     return true;
 }
 
