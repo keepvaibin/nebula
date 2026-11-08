@@ -7,10 +7,7 @@
 namespace {
     static const s32 sCreateCoinNum = 32;
     const f32 sRandomizeVel = 4.0f;
-    // sRandomizeVelSplash
-    // sCoinVelHorizon
     const f32 sCoinVelVertical = 25.0f;
-    // sCoinVelPlayer
     const f32 sCircleVelHRatio = 0.25f;
     const f32 sCircleVelLength = 30.0f;
 };  // namespace

@@ -6,8 +6,6 @@
 namespace {
     const f32 sRotateSpeedNormal = 1.0f;
     const f32 sRotateSpeedFast = 1.0f;
-    // sDeadTime
-    // sAppearValidDistance
     const f32 sSensorRadius = 100.0f;
     const f32 sDistanceNear = 1500.0f;
     const f32 sDistanceFar = 1450.0f;

@@ -15,7 +15,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    // sShadowBoxSize
     const f32 sUpperHeight = 1000.0f;
     const s32 sUpperFrame = 180;
     const f32 sFallingSpeed = 30.0f;

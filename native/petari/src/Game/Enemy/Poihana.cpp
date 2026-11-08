@@ -49,13 +49,11 @@ namespace {
     static const f32 sChaseRadius = 1100.0f;
     static const f32 sChargeStartDistance = 100.0f;
     static const s32 sDefaultShootHeight = 1000;
-    // sStickTune
     static const s32 sBindOffTiming = 2;
     static const s32 sBindOnTiming = 30;
     static const f32 sDistanceForNeedBack = 2000.0f;
     static const f32 sJudgeForGoBackRadius = 100.0f;
     static const s32 sStepForNonSearch = 120;
-    // sStepForShockStop
     static const f32 sShockReactionY = -30.0f;
     static const f32 sDistanceForHipDropShock = 500.0f;
     static const s32 sStepForSwoon = 110;

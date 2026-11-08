@@ -22,11 +22,6 @@ namespace {
     static const s32 sDefaultTimeWait = 180;
     static const s32 sTimeSign = 90;
     static const f32 sDefaultMoveSpeed = 20.0f;
-    // sSubScale
-    // sScaleMin
-    // sSubNum
-    // sExtraMoveLength
-    // sDefaultCoordBeforeLanding
 };  // namespace
 
 namespace NrvLavaProminence {

@@ -14,14 +14,15 @@ public:
     virtual f32 calcJumpPower() const;
     virtual bool doBrake() const;
     virtual void update(const Vec3f&);
-    virtual void clacXY(f32*, f32*);
+    virtual void calcXY(f32* pX, f32* pY);
 
-    void getPadAcceleration(Vec3f*) const;
+    void getPadAcceleration(Vec3f* pAccel) const;
     bool testBrake() const;
 
     bool isMainHand() const {
         return mPad == Pad_Core;
     }
 
-    Pad mPad;  // determines whether wiimote or nunchuck is used for control
+    // Which hand's tilt steers: the main controller or the sub one.
+    Pad mPad;
 };

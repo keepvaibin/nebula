@@ -22,35 +22,22 @@
 
 namespace {
     const f32 hFarDistToPursuePlayer = 2000.0f;
-    // hPursuePlayerTurnLimitRadian
-    // hSearchTurnLimitRadian
     const f32 hCommonGravity = 0.5f;
     const f32 hBlowGravity = 1.0f;
     const f32 hOverturnGravity = 2.0f;
     const f32 hOverturnBoundGravity = 1.0f;
     const f32 hRecoverGravity = 1.0f;
     const f32 hWallHitEndGravity = 2.0f;
-    // hGroundDamp
-    // hAirDampH
-    // hAirDampV
-    // hUpdateUpRate
-    // hUpdateFrontRate
-    // hInfectionDelay
     const f32 hTrampleJumpVelV = 5.0f;
     const f32 hBecomeAngryJumpVelV = 5.0f;
     const f32 hOverturnJumpVelV = 25.0f;
     const f32 hOverturnBoundJumpVelV = 15.0f;
     const f32 hRecoverJumpVelV = 17.0f;
     const f32 hWallHitEndJumpVelV = 20.0f;
-    // hToRailDiv
     const s32 hAngryPursueTime = 300;
-    // hAngryEndTime
-    // hOverturnRate
-    // hRecoverRate
     const s32 hOverturnTime = 180;
     const f32 hWalkSpeed = 4.0f;
     const f32 hAngrySpeed = 13.0f;
-    // hPartsToRailMul
     const s32 hWalkStep = 8;
     const f32 hWalkAnimRate = 1.0f;
     const f32 hAngryAnimRate = 3.0f;
@@ -78,8 +65,6 @@ namespace {
     const s32 hRecoverGetupSeTime = 63;
     const s32 hOverturnBoundSeTime = 29;
     const f32 hAngryEndJumpVelV = 0.0f;
-    // hToPrevVelMul
-    // hPushPartsVel
     const s32 hTrampleInit = 0;
     const s32 hTrampleInterval = 0;
     const s32 hTrampleAnimBegin = 0;

@@ -13,12 +13,9 @@ namespace {
     const f32 sBallToCenterFreq = 0.98f;
     const f32 sBallToCenterEndFreq = 0.7f;
     const s32 sForceSetCenterTime = 180;
-    // sLaunchVelocity
     const s32 sLaunchFixTime = 20;
     const s32 sSetUpTime = 45;
     const f32 sLaunchValidHeight = 160.0f;
-    // sOpenVelocityRateH
-    // sOpenVelocityV
 };  // namespace
 
 namespace NrvBallOpener {

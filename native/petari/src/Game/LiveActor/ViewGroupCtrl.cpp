@@ -10,7 +10,6 @@
 #include "Game/Map/StageSwitch.hpp"
 
 namespace {
-    // sLodCtrlNumMax
     const u32 sAllLodCtrlNumMax = 0x100;
 };  // namespace
 

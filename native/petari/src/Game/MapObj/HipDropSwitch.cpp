@@ -18,7 +18,6 @@
 
 namespace {
     static const s32 sOnSomethingAcc = 0;
-    // sSwitchOnDelayTime
 };  // namespace
 
 namespace NrvHipDropSwitch {

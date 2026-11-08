@@ -8,7 +8,6 @@ namespace {
     const f32 hBreakSize = 400.0f;
     const f32 hBreakOffsetY = 120.0f;
     const f32 hCircleRadius = 300.0f;
-    // hBreakEffectSize
     const f32 hCollisionRadius = 20.0f;
     const f32 hWindRadius = 800.0f;
     const f32 hMaxAnimRate = 4.0f;

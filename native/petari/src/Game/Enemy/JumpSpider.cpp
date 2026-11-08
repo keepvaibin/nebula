@@ -21,22 +21,11 @@
 
 
 namespace {
-    // hCommonGravity
-    // hNoPowerGravity
     static const f32 hGroundDamp = 0.8f;
     static const f32 hAirDampH = 0.98f;
     static const f32 hAirDampV = 0.98f;
-    // hOnGroundTime
-    // hJumpDistance
     static const f32 hJumpVelV = 1.0f;
-    // hStampDeathFallVel
     static const s32 hStampDeathTime = 20;
-    // hSearchTurnLimitRadian
-    // hJumpTurnLimitRadian
-    // hToPreJumpRestRadian
-    // hWaitTime
-    // hHideTime
-    // hWaitUnderGroundTime
     static const s32 hNoPowerWaitTime = 240;
 };  // namespace
 

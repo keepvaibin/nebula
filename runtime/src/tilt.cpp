@@ -69,7 +69,7 @@ Vec3 remote_gravity(Section section, const Vec3& relative_in) noexcept {
     switch (section) {
     case Section::StarBall: {
         // Flat controller -> upright remote (top up, A face toward the
-        // player), then the 10-degree lean of clacXY's neutral.
+        // player), then the 10-degree lean of calcXY's neutral.
         const Vec3 g{-u[0], -u[1], u[2]};
         const float c = std::cos(kStarBallLeanDegrees * kDegrees);
         const float s = std::sin(kStarBallLeanDegrees * kDegrees);

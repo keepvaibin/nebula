@@ -42,16 +42,11 @@ namespace {
     const f32 hEscapeRunVelV = 30.0f;
     const f32 hEscapeWaitDist = 800.0f;
     const f32 hEscapeWaitJumpVel = 30.0f;
-    // hGravity
-    // hTurnLimitRadian
-    // hUpdateUpRate
     const f32 hInitPosRange = 1250.0f;
     const s32 hAppearTime = 600;
     const s32 hBodyPartsNum = 4;
     const f32 hWaitUnderGroundDistance = 800.0f;
     const s32 hWaitUnderGroundTime = 120;
-    // hPursueVel
-    // hPursueStopDist
     const f32 hPursueGoAddDist = 100.0f;
     const s32 hToAttackTime = 120;
     const s32 hAttackTurnTime = 90;
