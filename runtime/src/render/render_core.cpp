@@ -1574,6 +1574,10 @@ void RenderCore::drop_device_state() {
     walk_rows_cpu_ = nullptr;
     walk_views_.clear();
     walk_constants_known_.clear();
+    walk_material_at_.clear();
+    walk_lerped_.clear();
+    walk_ring_cpu_ = nullptr;
+    walk_index_cpu_ = nullptr;
     generated_written_.clear();
     scene_phase_ = target_open_ = temporal_scene_ = motion_scene_ = false;
     black_shown_ = picture_made_in_chunk_ = false;

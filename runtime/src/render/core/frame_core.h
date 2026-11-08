@@ -106,6 +106,8 @@ struct PipelineEntry {
     NebulaPipelineDesc desc{};
     bool reads_world = false;  // its vertex program reads the world rows
     bool lit_form = false;     // its pixel program lights at the pixel
+    // Where its vertices keep their matrix number (NEBULA_INPUT_MATRIX, one uint, stream 0), or none.
+    std::uint32_t matrix_at = NEBULA_NONE32;
 };
 
 // The view constant (b0, program.hlsli).

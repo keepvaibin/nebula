@@ -223,6 +223,13 @@ private:
     void walk_draw_pass(const NebulaFramePass& pass);
     const WalkView& walk_view(std::uint32_t index, const NebulaFramePass& pass);
     const core::StaticSlot& walk_material(std::uint32_t index);
+    // A frame constants entry's rows as this walk uploads them: the list's own, or at t.
+    [[nodiscard]] const float* walk_material_rows(std::uint32_t index);
+    // One material at this walk's t: one entry, one registered slot, or rows the same to the byte.
+    [[nodiscard]] bool walk_same_material(std::uint32_t a, std::uint32_t b);
+    // The ring draws from `first` that are one draw with it; their indices in `index_count`.
+    [[nodiscard]] std::uint32_t merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at,
+                                               std::uint32_t& index_count);
     void walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
     [[nodiscard]] bool item_culled(const NebulaFrameItem& item, const NebulaFramePass& pass, std::uint32_t state,
                                    const core::GpuMesh* mesh) noexcept;
@@ -262,6 +269,9 @@ private:
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
+    std::vector<std::uint32_t> walk_material_at_;  // per entry: its rows' place in walk_lerped_, the list's, or not yet
+    std::byte* walk_ring_cpu_ = nullptr;            // this walk's copies of the ring's vertices and indices
+    std::uint32_t* walk_index_cpu_ = nullptr;
     std::uint64_t walk_view_stamp_ = 0u;
     gpu::Address walk_rows_ring_ = 0u, walk_vertex_ring_ = 0u, walk_ring_previous_ = 0u;
     const float (*walk_rows_cpu_)[4] = nullptr;

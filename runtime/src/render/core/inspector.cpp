@@ -329,6 +329,8 @@ struct Access {
             for (std::uint32_t n = 0u; n < instances; ++n) {
                 write_item(core, s.dump, index + n, pass, aux, nullptr);
             }
+            // One GPU draw: its first item and how many items it draws (instanced meshes, merged ring draws).
+            std::fprintf(s.dump, "D\t%u\t%u\t%u\n", pass.layer, index, instances);
         }
         if (c.show != 0u || c.stage >= 0) {
             core::PipelineEntry shown = entry;
