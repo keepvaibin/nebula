@@ -1,31 +1,42 @@
 #include "Game/MapObj/SpinDriverOperateRing.hpp"
-#include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    static const f32 sOperateAccel = 0.5f;
-    static const f32 sToPlaneRate = 0.05f;
-    static const f32 sDirectionRate = 0.1f;
-};  // namespace
+    const f32 sOperateAccel = 0.5f;
+    const f32 sToPlaneRate = 0.05f;
+    const f32 sDirectionRate = 0.1f;
+    // Offset at radius rate 1.
+    const f32 sMaxOffset = 500.0f;
+    const f32 sOperatePowerScale = 2.0f;
+    // Pointer distance below which the pull weakens linearly.
+    const f32 sOperateFullPowerDist = 50.0f;
+    // Past this offset rate, pull away from the centre fades out.
+    const f32 sOperateLimitStartRate = 0.5f;
+    const f32 sToCenterStartRate = 0.1f;
+    const f32 sToCenterMinRate = 0.0001f;
+    const f32 sAttenuate = 0.94f;
 
-namespace NrvSpinDriverOperateRing {
-    NEW_NERVE(SpinDriverOperateRingNrvWait, SpinDriverOperateRing, Wait);
-};  // namespace NrvSpinDriverOperateRing
+    // SpinDriverOperateRing::mOperateState.
+    enum OperateState {
+        OperateState_None,
+        // The pointer is on the plane.
+        OperateState_Point,
+        // ... and A is held: the ring follows it.
+        OperateState_Hold,
+    };
+}  // namespace
 
 SpinDriverOperateRing::SpinDriverOperateRing(const char* pName)
-    : LiveActor(pName), mCenter(0, 0, 0), mOffset(0, 0, 0), mAccelerate(0, 0, 0), mDirection(0, 0, 0), mOperateState(), mPointerPos(0.0f, 0.0f, 0.0f),
-      mRadiusRate(), mOffsetLength(), mOffsetRate() {
+    : LiveActor(pName), mCenter(0, 0, 0), mOffset(0, 0, 0), mAccelerate(0, 0, 0), mDirection(0, 0, 0), mPointerPos(0.0f, 0.0f, 0.0f), mRadiusRate(),
+      mOffsetLength(), mOffsetRate(), mOperateState(OperateState_None) {
 }
 
 void SpinDriverOperateRing::init(const TableIter& rIter) {
     makeActorAppeared();
     MR::invalidateClipping(this);
-}
-
-void SpinDriverOperateRing::control() {
 }
 
 void SpinDriverOperateRing::setRadiusRate(f32 rate) {
@@ -36,42 +47,42 @@ void SpinDriverOperateRing::reset() {
     resetVelocityAndTrans();
 }
 
-void SpinDriverOperateRing::update(const Vec3f& a1, const Vec3f& a2) {
-    mCenter.set(a1);
+void SpinDriverOperateRing::update(const Vec3f& rCenter, const Vec3f& rShootDir) {
+    mCenter.set(rCenter);
 
     if (mRadiusRate <= 0.0f) {
         resetVelocityAndTrans();
         return;
     }
 
-    updateControlPoint(a2);
+    updateControlPoint(rShootDir);
+    addAccelToOperatePlane(rShootDir);
 
-    addAccelToOperatePlane(a2);
-
-    Vec3f direction;
-    addAccelOperate(&direction, a2);
+    Vec3f operateAccel;
+    addAccelOperate(&operateAccel);
 
     addAccelToCenter();
     attenuateVelocity();
 
-    updateDirection(direction);
+    updateDirection(operateAccel);
     updatePosition();
 }
 
+// The offset stays inside the ring; at the edge the outward velocity is dropped.
 void SpinDriverOperateRing::updatePosition() {
     mOffset += mAccelerate;
     mOffsetLength = mOffset.length();
-    mOffsetRate = mOffsetLength / (mRadiusRate * 500.0f);
+    mOffsetRate = mOffsetLength / (mRadiusRate * ::sMaxOffset);
 
-    Vec3f vec24(0.0f, 0.0f, 0.0f);
+    Vec3f offsetDir(0.0f, 0.0f, 0.0f);
     if (!MR::isNearZero(mOffsetLength)) {
-        vec24 = mOffset * (1.0f / mOffsetLength);
+        offsetDir = mOffset * (1.0f / mOffsetLength);
     }
 
     if (mOffsetRate > 1.0f) {
-        f32 dot = mAccelerate.dot(vec24);
-        if (dot > 0.0f) {
-            mAccelerate -= vec24 * dot;
+        f32 outward = mAccelerate.dot(offsetDir);
+        if (outward > 0.0f) {
+            mAccelerate -= offsetDir * outward;
         }
 
         mOffset = mOffset.scaleInline(1.0f / mOffsetRate);
@@ -79,16 +90,13 @@ void SpinDriverOperateRing::updatePosition() {
     }
 }
 
-void SpinDriverOperateRing::updateControlPoint(const Vec3f& rVec) {
-    if (MR::isStarPointerInScreen(PLAYER_1) && MR::calcStarPointerPosOnPlane(&mPointerPos, mCenter, rVec, PLAYER_1, false)) {
-        mOperateState = 1;
-
-        if (MR::isHeldFire(PLAYER_1)) {
-            mOperateState = 2;
-        }
-    } else {
-        mOperateState = 0;
+void SpinDriverOperateRing::updateControlPoint(const Vec3f& rShootDir) {
+    if (!MR::isStarPointerInScreen(PLAYER_1) || !MR::calcStarPointerPosOnPlane(&mPointerPos, mCenter, rShootDir, PLAYER_1, false)) {
+        mOperateState = OperateState_None;
+        return;
     }
+
+    mOperateState = MR::isHeldFire(PLAYER_1) ? OperateState_Hold : OperateState_Point;
 }
 
 void SpinDriverOperateRing::updateDirection(const Vec3f& rNewDir) {
@@ -103,63 +111,58 @@ void SpinDriverOperateRing::resetVelocityAndTrans() {
     mOffsetRate = 0.0f;
 }
 
-void SpinDriverOperateRing::addAccelToOperatePlane(const Vec3f& rVec) {
-    f32 dot = -rVec.dot(mOffset);
-    mAccelerate += rVec.scaleInline(::sToPlaneRate * dot);
+void SpinDriverOperateRing::addAccelToOperatePlane(const Vec3f& rShootDir) {
+    f32 dot = -rShootDir.dot(mOffset);
+    mAccelerate += rShootDir.scaleInline(::sToPlaneRate * dot);
 }
 
-void SpinDriverOperateRing::addAccelOperate(Vec3f* pVec, const Vec3f& rVec) {
-    Vec3f dpdVec;
-    calcOperatePowerByPointer(&dpdVec);
-    dpdVec.scale(2.0f);
+void SpinDriverOperateRing::addAccelOperate(Vec3f* pAccel) {
+    Vec3f accel;
+    calcOperatePowerByPointer(&accel);
+    accel.scale(::sOperatePowerScale);
 
-    if (mOffsetRate > 0.5f) {
-        Vec3f vec44(-mOffset / mOffsetLength);
-        f32 dot = vec44.dot(dpdVec);
-        f32 norm = MR::normalize(mOffsetRate, 0.5f, 1.0f);
+    if (mOffsetRate > ::sOperateLimitStartRate) {
+        Vec3f toCenter(-mOffset / mOffsetLength);
+        f32 dot = toCenter.dot(accel);
+        f32 limitRate = MR::normalize(mOffsetRate, ::sOperateLimitStartRate, 1.0f);
 
         if (dot < 0.0f) {
-            dpdVec -= vec44 * dot * norm;
+            accel -= toCenter * dot * limitRate;
         }
     }
 
-    pVec->set(dpdVec);
-    mAccelerate += dpdVec;
+    pAccel->set(accel);
+    mAccelerate += accel;
 }
 
 void SpinDriverOperateRing::addAccelToCenter() {
-    f32 norm = MR::normalize(mOffsetRate, 0.1f, 1.0f);
+    f32 rate = MR::normalize(mOffsetRate, ::sToCenterStartRate, 1.0f);
 
-    if (norm > 0.0001f) {
-        f32 scalar = ((::sOperateAccel * norm) / mOffsetLength);
+    if (rate > ::sToCenterMinRate) {
+        f32 scalar = ((::sOperateAccel * rate) / mOffsetLength);
         mAccelerate -= mOffset * scalar;
     }
 }
 
 void SpinDriverOperateRing::attenuateVelocity() {
-    mAccelerate.x *= 0.94f;
-    mAccelerate.y *= 0.94f;
-    mAccelerate.z *= 0.94f;
+    mAccelerate.x *= ::sAttenuate;
+    mAccelerate.y *= ::sAttenuate;
+    mAccelerate.z *= ::sAttenuate;
 }
 
-void SpinDriverOperateRing::calcOperatePowerByPointer(Vec3f* pVec) const {
-    if (mOperateState == 2) {
-        pVec->set(mPointerPos - mCenter - mOffset);
-
-        Vec3f vec(mPointerPos - mCenter - mOffset);
-        f32 scalar;
-        MR::separateScalarAndDirection(&scalar, &vec, vec);
-
-        if (scalar < 50.0f) {
-            f32 scale = scalar / 50.0f;
-            pVec->set(vec * scale);
-        } else {
-            pVec->set(vec);
-        }
-    } else {
-        pVec->zero();
+void SpinDriverOperateRing::calcOperatePowerByPointer(Vec3f* pPower) const {
+    if (mOperateState != OperateState_Hold) {
+        pPower->zero();
+        return;
     }
-}
 
-void SpinDriverOperateRing::exeWait() {
+    Vec3f dir(mPointerPos - mCenter - mOffset);
+    f32 dist;
+    MR::separateScalarAndDirection(&dist, &dir, dir);
+
+    if (dist < ::sOperateFullPowerDist) {
+        pPower->set(dir * (dist / ::sOperateFullPowerDist));
+    } else {
+        pPower->set(dir);
+    }
 }
