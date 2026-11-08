@@ -89,13 +89,13 @@ void JumpSpider::init(const TableIter& rIter) {
 
 void JumpSpider::initAfterPlacement() {
     MR::calcGravity(this);
-    Vec3f v15(mPosition - mGravity * 10.0f);
-    Vec3f v1, v2;
+    Vec3f lineStart(mPosition - mGravity * 10.0f);
+    Vec3f floorNormal, floorPos;
 
-    if (MR::getFirstPolyNormalOnLineToMap(&v1, v15, mGravity * 300.0f, &v2, nullptr)) {
-        mJumpPos.set(v2);
-        mPosition.set(v2);
-        mGravity.set(-v1);
+    if (MR::getFirstPolyNormalOnLineToMap(&floorNormal, lineStart, mGravity * 300.0f, &floorPos, nullptr)) {
+        mJumpPos.set(floorPos);
+        mPosition.set(floorPos);
+        mGravity.set(-floorNormal);
     } else {
         kill();
         return;

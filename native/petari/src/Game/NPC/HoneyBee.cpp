@@ -30,7 +30,7 @@ namespace NrvHoneyBee {
     NEW_NERVE(HoneyBeeNrvFlyLectureB, HoneyBee, FlyLectureB);
 };  // namespace NrvHoneyBee
 
-HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), mRailPointNo(-1), mArg0(), mFloatOffset() {
+HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), mRailPointNo(-1), mInitAction(), mFloatOffset() {
     mTalkMtx.identity();
     mClippingCenter.zero();
 }
@@ -49,15 +49,15 @@ void HoneyBee::init(const TableIter& rIter) {
     caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvWait);
     caps.mScaleJoint = "Center";
 
-    s32 arg0 = 0;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    mArg0 = arg0;
+    s32 initAction = InitAction_Wait;
+    MR::getPlacementArg0NoInit(rIter, &initAction);
+    mInitAction = initAction;
 
     setDefaultsParam();
     mUseReactionActions = 0;
     mSwingReactDist = 450.0f;
 
-    switch (mArg0) {
+    switch (mInitAction) {
     case InitAction_Wait:
         mUseReactionActions = 1;
         break;
@@ -101,7 +101,7 @@ void HoneyBee::init(const TableIter& rIter) {
     NPCActor::initialize(rIter, caps);
     NPCActorItem item = ("HoneyBee");
 
-    switch (mArg0) {
+    switch (mInitAction) {
     case InitAction_FlyLectureA:
     case InitAction_FlyLectureB:
         radius = 0.0f;
@@ -115,7 +115,7 @@ void HoneyBee::init(const TableIter& rIter) {
         break;
     }
 
-    MR::getNPCItemData(&item, mArg0);
+    MR::getNPCItemData(&item, mInitAction);
     NPCActor::equipment(item, false);
     MR::initFur(this);
 }
@@ -149,7 +149,7 @@ void HoneyBee::control() {
     MR::extractMtxTrans(mTalkMtx, &mClippingCenter);
     mTalkMtx[1][3] = 80.0f + (((9.0f * a) + mTalkMtx[1][3]) / 10.0f);
 
-    if (mArg0 != InitAction_Sleep && mArg0 != InitAction_Stick) {
+    if (mInitAction != InitAction_Sleep && mInitAction != InitAction_Stick) {
         mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, 120.0f);
     }
 }
@@ -178,11 +178,11 @@ void HoneyBee::exeFly() {
     MR::moveCoordAndFollowTrans(this, ::sFlyMoveSpeed);
 
     if (mRailPointNo != MR::getCurrentRailPointNo(this)) {
-        s32 arg0 = 0;
+        s32 isFlying = 0;
         mRailPointNo = MR::getCurrentRailPointNo(this);
-        MR::getRailPointArg0WithInit(this, mRailPointNo, &arg0);
+        MR::getRailPointArg0WithInit(this, mRailPointNo, &isFlying);
 
-        if (arg0 == 0) {
+        if (isFlying == 0) {
             if (!MR::isBckPlaying(this, "WalkWait")) {
                 MR::startBck(this, "Wait");
             }

@@ -44,15 +44,15 @@ void RingBeamer::init(const TableIter& rIter) {
     for (int i = 0; i < 5; i++) {
         mBeams[i] = nullptr;
     }
-    f32 arg0 = 20.0f;
-    s32 arg1 = 100;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    MR::getPlacementArg1NoInit(rIter, &arg1);
+    f32 beamSpeed = 20.0f;
+    s32 beamLife = 100;
+    MR::getPlacementArg0NoInit(rIter, &beamSpeed);
+    MR::getPlacementArg1NoInit(rIter, &beamLife);
     for (int i = 0; i < 3; i++) {
         mBeams[i] = new RingBeam("リングビーム", this, false, false);
         mBeams[i]->init(rIter);
-        mBeams[i]->setSpeed(arg0);
-        mBeams[i]->setLife(arg1);
+        mBeams[i]->setSpeed(beamSpeed);
+        mBeams[i]->setLife(beamLife);
     }
     MR::startBckWithInterpole(this, "Open", 0);
     MR::setBckFrameAndStop(this, 0.0);

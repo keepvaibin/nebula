@@ -140,10 +140,10 @@ void BlackHole::initMapToolInfo(const TableIter& rIter) {
         mRadius = size.length();
     }
 
-    f32 arg0;
+    f32 scalePerMille;
 
-    if (MR::getPlacementArg0NoInit(rIter, &arg0)) {
-        mModelScale = arg0 / 1000.0f;
+    if (MR::getPlacementArg0NoInit(rIter, &scalePerMille)) {
+        mModelScale = scalePerMille / 1000.0f;
     } else if (mCubeBox == nullptr) {
         mModelScale = mScale.x;
     } else {
@@ -174,9 +174,9 @@ bool BlackHole::isInCubeBox(const Vec3f& rVec) const {
     return mCubeBox->intersectsPoint(pos);
 }
 
-void BlackHole::updateModelScale(f32 a1, f32 a2) {
-    mScale.setAll< f32 >(a1);
-    mBlackHoleModel->mScale.setAll< f32 >(0.5f * a2);
+void BlackHole::updateModelScale(f32 rangeScale, f32 coreScale) {
+    mScale.setAll< f32 >(rangeScale);
+    mBlackHoleModel->mScale.setAll< f32 >(0.5f * coreScale);
 }
 
 void BlackHole::exeWait() {

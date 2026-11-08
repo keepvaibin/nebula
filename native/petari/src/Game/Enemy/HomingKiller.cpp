@@ -696,14 +696,12 @@ bool HomingKiller::isChasing() const {
 void HomingKiller::exeAppear() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Start");
-        bool a1 = mType == Type_MagnumKiller;
-        if (!a1) {
+        if (mType != Type_MagnumKiller) {
             MR::startBpk(this, "Move");
             MR::startBrk(this, "Move");
         }
 
-        bool a2 = mType == Type_Torpedo;
-        if (a2) {
+        if (mType == Type_Torpedo) {
             MR::startBck(mPropeller, "RotateTorpedo");
             mTorpedoLight->appear();
             MR::startBck(mTorpedoLight, "Appear");
@@ -742,8 +740,7 @@ void HomingKiller::exeAppear() {
         setBckRate(1.0f, true);
         MR::emitEffect(this, "Shoot");
         MR::validateShadow(this, nullptr);
-        bool a3 = mType == Type_MagnumKiller;
-        if (a3) {
+        if (mType == Type_MagnumKiller) {
             MR::startSound(this, "SE_EM_MAGKILLER_FIRING");
             setNerve(GET_NERVE(HomingKiller, HomingKillerNrvMove));
         } else {

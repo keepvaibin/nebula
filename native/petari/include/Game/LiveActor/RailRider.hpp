@@ -5,15 +5,15 @@
 class RailRider {
 public:
     RailRider(const TableIter&);
-    RailRider(s32, s32);
+    RailRider(s32 railId, s32 zoneId);
 
     void move();
     void moveToNearestPos(const Vec3f&);
     void moveToNearestPoint(const Vec3f&);
     void moveToNextPoint();
     void reverse();
-    void calcPosAtCoord(Vec3f*, f32) const;
-    void calcDirectionAtCoord(Vec3f*, f32) const;
+    void calcPosAtCoord(Vec3f*, f32 coord) const;
+    void calcDirectionAtCoord(Vec3f*, f32 coord) const;
     f32 calcNearestPos(const Vec3f&) const;
     f32 getTotalLength() const;
     f32 getPartLength(int) const;

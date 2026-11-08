@@ -25,16 +25,16 @@ public:
 };
 
 namespace MR {
-    void createChipHolder(s32);
-    ChipHolder* getChipHolder(s32);
-    void registerChipGroup(s32, ChipGroup* pChipGroup);
-    void registerChip(s32, ChipBase*, s32);
-    void noticeGetChip(s32, ChipBase*, s32);
-    void showChipCounter(s32, s32);
-    void hideChipCounter(s32, s32);
-    void requestStartChipCompleteDemo(s32, s32);
-    void noticeEndChipCompleteDemo(s32, s32);
-    s32 getGotChipCount(s32, s32);
+    void createChipHolder(s32 chipType);
+    ChipHolder* getChipHolder(s32 chipType);
+    void registerChipGroup(s32 chipType, ChipGroup* pChipGroup);
+    void registerChip(s32 chipType, ChipBase*, s32 groupId);
+    void noticeGetChip(s32 chipType, ChipBase*, s32 groupId);
+    void showChipCounter(s32 chipType, s32 groupId);
+    void hideChipCounter(s32 chipType, s32 groupId);
+    void requestStartChipCompleteDemo(s32 chipType, s32 groupId);
+    void noticeEndChipCompleteDemo(s32 chipType, s32 groupId);
+    s32 getGotChipCount(s32 chipType, s32 groupId);
     void activateChipLayout();
     void deactivateChipLayout();
 };  // namespace MR

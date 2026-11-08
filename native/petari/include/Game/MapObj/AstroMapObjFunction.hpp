@@ -20,7 +20,8 @@ public:
     static s32 getDomeIdFromArg0(const TableIter&);
     static const char* getModelName(const char*, s32);
     static const Table* createAstroNamePlateParser();
-    static bool trySetAndShowNamePlate(GalaxyNamePlate*, const Table*, const Vec3f&, const char*, s32, bool);
+    static bool trySetAndShowNamePlate(GalaxyNamePlate*, const Table* pInfo, const Vec3f& rPos, const char* pObjName, s32 domeId,
+                                       bool needsOpen);
     static bool tryRegisterMultiDemoAndFunction(const char*, LiveActor*, const TableIter&, const MR::FunctorBase&);
     static void initilizePeculiar(const char*, LiveActor*, const TableIter&);
 };

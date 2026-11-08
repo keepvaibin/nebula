@@ -12,11 +12,11 @@ RailRider::RailRider(const TableIter& rIter)
     initBezierRail(iter, info);
 }
 
-RailRider::RailRider(s32 a1, s32 a2)
+RailRider::RailRider(s32 railId, s32 zoneId)
     : mBezierRail(), mCoord(), mSpeed(), mIsNotReverse(true), mCurPos(0.0f), mCurDirection(1.0f, 0.0f, 0.0f), mStartPos(0.0f), mEndPos(0.0f) {
     const Table* info = nullptr;
     TableIter iter;
-    MR::getCameraRailInfo(&iter, &info, a1, a2);
+    MR::getCameraRailInfo(&iter, &info, railId, zoneId);
     initBezierRail(iter, info);
 }
 
@@ -68,12 +68,12 @@ void RailRider::reverse() {
     syncPosDir();
 }
 
-void RailRider::calcPosAtCoord(Vec3f* pOutVec, f32 a2) const {
-    mBezierRail->calcPos(pOutVec, a2);
+void RailRider::calcPosAtCoord(Vec3f* pOutVec, f32 coord) const {
+    mBezierRail->calcPos(pOutVec, coord);
 }
 
-void RailRider::calcDirectionAtCoord(Vec3f* pOutVec, f32 a2) const {
-    mBezierRail->calcDirection(pOutVec, a2);
+void RailRider::calcDirectionAtCoord(Vec3f* pOutVec, f32 coord) const {
+    mBezierRail->calcDirection(pOutVec, coord);
 }
 
 f32 RailRider::calcNearestPos(const Vec3f& rPos) const {

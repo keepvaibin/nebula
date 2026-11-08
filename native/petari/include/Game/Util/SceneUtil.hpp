@@ -63,7 +63,7 @@ namespace MR {
     s32 getCurrentStartCameraId();
     void getStartCameraIdInfoFromStartDataIndex(PlacementId*, int);
     s32 getPlacedRailNum(s32);
-    void getCameraRailInfo(TableIter*, const Table**, s32, s32);
+    void getCameraRailInfo(TableIter*, const Table**, s32 railId, s32 zoneId);
     bool getCameraRailInfoFromRailDataIndex(TableIter*, const Table**, int, s32);
     void getStageCameraData(void**, s32*, s32);
     void getCurrentScenarioStartAnimCameraData(void**, s32*);

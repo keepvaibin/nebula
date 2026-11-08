@@ -35,6 +35,6 @@ public:
     s32 mRailPointNo;
     Mtx34f mTalkMtx;
     Vec3f mClippingCenter;
-    s32 mArg0;
+    s32 mInitAction;
     f32 mFloatOffset;
 };

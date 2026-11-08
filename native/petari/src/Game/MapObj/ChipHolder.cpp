@@ -66,17 +66,17 @@ void MR::noticeGetChip(s32 chipType, ChipBase* pChip, s32 groupId) {
     incPlayerOxygen(8);
 }
 
-void MR::showChipCounter(s32 chipType, s32 param2) {
+void MR::showChipCounter(s32 chipType, s32 groupId) {
     ChipHolder* holder = getChipHolder(chipType);
-    return holder->mChipCounter->requestShow(param2, holder->findChipGroup(param2)->getGotCount());
+    holder->mChipCounter->requestShow(groupId, holder->findChipGroup(groupId)->getGotCount());
 }
 
-void MR::hideChipCounter(s32 chipType, s32 param2) {
-    getChipHolder(chipType)->mChipCounter->requestHide(param2);
+void MR::hideChipCounter(s32 chipType, s32 groupId) {
+    getChipHolder(chipType)->mChipCounter->requestHide(groupId);
 }
 
-void MR::requestStartChipCompleteDemo(s32 chipType, s32 param2) {
-    getChipHolder(chipType)->mChipCounter->requestComplete(param2);
+void MR::requestStartChipCompleteDemo(s32 chipType, s32 groupId) {
+    getChipHolder(chipType)->mChipCounter->requestComplete(groupId);
 }
 
 void MR::noticeEndChipCompleteDemo(s32 chipType, s32 groupId) {

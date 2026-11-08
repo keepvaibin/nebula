@@ -62,12 +62,11 @@ void ElectricPressureBullet::exeFly() {
     MR::startLevelSound(this, "SE_EM_LV_ELECBUBLLET_FLY");
     if (MR::isGreaterEqualStep(this, 10)) {
         if (MR::isLessStep(this, 150)) {
-            s32 v2 = getNerveStep();
-            if (!(v2 % 5)) {
-                Vec3f v3;
-                v3.sub(*MR::getPlayerCenterPos(), mPosition);
-                MR::normalize(&v3);
-                MR::turnVecToVecDegree(&mFront, mFront, v3, 4.0f, Vec3f(0, 1, 0));
+            if (getNerveStep() % 5 == 0) {
+                Vec3f toPlayer;
+                toPlayer.sub(*MR::getPlayerCenterPos(), mPosition);
+                MR::normalize(&toPlayer);
+                MR::turnVecToVecDegree(&mFront, mFront, toPlayer, 4.0f, Vec3f(0, 1, 0));
                 mVelocity.scale(mSpeed, mFront);
             }
         }

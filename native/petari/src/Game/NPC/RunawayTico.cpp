@@ -26,33 +26,32 @@ namespace NrvRunawayTico {
     NEW_NERVE(RunawayTicoNrvTalk, RunawayTico, Talk);
 };  // namespace NrvRunawayTico
 
-RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mObjArg1(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
+RunawayTico::RunawayTico(const char* pName) : Tico(pName), mCameraInfo(), mRole(), mDemoCastID(), mIsStartRunaway(), mIsAllCaught() {
 }
 
 void RunawayTico::init(const TableIter& rIter) {
-    s32 arg0 = 0;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    s32 arg1 = 0;
-    s32 colorID = arg0;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    mObjArg1 = arg1;
+    s32 colorID = 0;
+    MR::getPlacementArg0NoInit(rIter, &colorID);
+    s32 role = 0;
+    MR::getPlacementArg1NoInit(rIter, &role);
+    mRole = role;
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         mDemoCastID = MR::getDemoCastID(rIter);
 
         if (mDemoCastID > 0) {
             colorID = 0;
-            mObjArg1 = 2;
+            mRole = Role_AllCaught;
         } else {
             colorID = -1;
-            mObjArg1 = 1;
+            mRole = Role_Meet;
         }
     }
 
     initBase(rIter, colorID);
     initMessage(rIter, "RunawayTico");
 
-    if (mObjArg1 == 1) {
+    if (mRole == Role_Meet) {
         mCameraInfo = MR::createActorCameraInfo(rIter);
         MR::initAnimCamera(this, mCameraInfo, "DemoMeetTico");
 
@@ -60,7 +59,7 @@ void RunawayTico::init(const TableIter& rIter) {
         MR::registerDemoActionNerve(this, GET_NERVE(RunawayTico, RunawayTicoNrvGuide1), "チコとの出会い[チコ変身]");
         MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::startRunaway), "ウサギ追いかけ[開始]");
         setNerve(GET_NERVE(RunawayTico, RunawayTicoNrvGuide0));
-    } else if (mObjArg1 == 2) {
+    } else if (mRole == Role_AllCaught) {
         MR::registerDemoActionFunctor(this, MR::Functor(this, &RunawayTico::setPosAllCaught), "高楼出現[フェードイン]");
         makeActorDead();
     }
@@ -72,7 +71,7 @@ void RunawayTico::init(const TableIter& rIter) {
 }
 
 void RunawayTico::initAfterPlacement() {
-    if (mObjArg1 == 1 && MR::isOnGameEventFlagEndTicoGuideDemo()) {
+    if (mRole == Role_Meet && MR::isOnGameEventFlagEndTicoGuideDemo()) {
         makeActorDead();
     }
 }

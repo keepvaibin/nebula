@@ -30,8 +30,11 @@ public:
     void exeAppear();
     void exeTalk();
 
+    // Placement arg 1, overridden by a demo cast: the meeting demo's Tico, or the one placed when all are caught.
+    enum Role { Role_Meet = 1, Role_AllCaught = 2 };
+
     ActorCameraInfo* mCameraInfo;
-    s32 mObjArg1;
+    s32 mRole;
     s32 mDemoCastID;
     bool mIsStartRunaway;
     bool mIsAllCaught;

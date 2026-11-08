@@ -138,12 +138,12 @@ void SandCapsulePressGround::exeDisappearDemo() {
         MR::overlayWithPreviousScreen(5);
         MR::offSwitchA(this);
 
-        Vec3f v8;
-        v8.add(mLowerPos, mUpperPos);
-        v8.x /= 2.0f;
-        v8.y /= 2.0f;
-        v8.z /= 2.0f;
-        MR::resetPosition(this, v8);
+        Vec3f center;
+        center.add(mLowerPos, mUpperPos);
+        center.x /= 2.0f;
+        center.y /= 2.0f;
+        center.z /= 2.0f;
+        MR::resetPosition(this, center);
         MR::startBck(this, "MoveAway");
         MR::stopShakingCamera(this);
         MR::shakeCameraNormal();
