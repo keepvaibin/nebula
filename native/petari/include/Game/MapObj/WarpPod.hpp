@@ -45,7 +45,12 @@ public:
     void startEventCamera() const;
     void endEventCamera();
     void initDraw();
-    void drawCylinder(u32) const;
+    void drawCylinder() const;
+
+    // Opens by the saved warp pod path flag (arg 3 = 0).
+    bool isSavedPath() const {
+        return mPathOpenType == 0;
+    }
 
     PlacementId* mPlacementId;
     s32 mGroupId;
@@ -56,16 +61,16 @@ public:
     u16 mCameraStep;
     s32 mVisibilityState;
     s32 mArg2;
-    s32 mArg3;
+    s32 mPathOpenType;
     s32 mPathFlagIndex;
     s32 mGrandstarReq;
     s32 mCameraTime;
     s32 mGlowColorIndex;
     Vec3f* mPathPoints;
     u16 mNumPathPoints;
-    bool mArg7;
+    bool mDrawsPath;
     bool mIsInactive;
-    u8 mIsPairCameraOn;
+    bool mIsPairCameraOn;
     bool mIsAppearDemoPending;
     WarpPod* mPairPod;
     JUTTexture* mGlowTexture;
