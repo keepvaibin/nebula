@@ -33,14 +33,7 @@ const Pos3f& CameraContext::getInvViewMtx() const {
 }
 
 f32 CameraContext::getAspect() const {
-    if (MR::isScreen16Per9()) {
-        if (MR::getDisplay().wide) {
-            return MR::getDisplay().content_aspect;
-        }
-        return 16.0f / 9.0f;
-    } else {
-        return static_cast< f32 >(MR::getScreenWidth()) / MR::getScreenHeight();
-    }
+    return MR::getScreenAspect();
 }
 
 // The vertical field of view the picture is drawn with: the camera's, and below 4:3 (the native build's wide shapes) widened

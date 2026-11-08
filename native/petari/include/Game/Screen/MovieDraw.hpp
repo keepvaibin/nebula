@@ -6,10 +6,10 @@
 namespace MovieDraw {
     // The planes are sampled linearly (else nearest).
     void setLinearFilter(bool linear);
+    // The frame's planes, decoded since the last upload, as textures.
+    void uploadPlanes(u8* pY, u8* pU, u8* pV, u16 textureWidth, u16 textureHeight);
     // The frame at `x`, `y` (`width` x `height`) on a `screenWidth` x `screenHeight` screen; the planes are
     // `textureWidth` x `textureHeight`.
-    // The frame's planes, decoded since the last upload, as textures.
-    void uploadPlanes(u8* pY, u8* pU, u8* pV, s16 textureWidth, s16 textureHeight);
-    void drawFrame(u16 screenWidth, u16 screenHeight, u8* pY, u8* pU, u8* pV, s16 x, s16 y, s16 textureWidth,
-                   s16 textureHeight, s16 width, s16 height);
+    void drawFrame(f32 screenWidth, f32 screenHeight, u8* pY, u8* pU, u8* pV, u16 textureWidth, u16 textureHeight, f32 x,
+                   f32 y, f32 width, f32 height);
 };  // namespace MovieDraw

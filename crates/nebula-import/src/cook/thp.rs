@@ -1,8 +1,8 @@
 //! Movies (B-60): a THP file rewritten for the native game, in host order. The video stays JPEG (the decoder's input);
 //! the sound becomes PCM16; the frame sizes and the file header become plain numbers.
 //!
-//! The file: `NMOV`, the frame count, frame rate, largest frame, first frame's size, width, height, audio tracks, then
-//! zeros to `HEADER` bytes; then the frames, each `next frame's size, video size, one track's audio size, 0`, the
+//! The file: `NMOV`, the frame count, frame rate, largest frame, first frame's size, width, height, audio tracks, the
+//! picture's shape (f32, width / height as shown), then zeros to `HEADER` bytes; then the frames, each `next frame's size, video size, one track's audio size, 0`, the
 //! video, each track's audio record, padded to 32 bytes. An audio record: its stereo sample count (u32), then the samples,
 //! left and right in turn, PCM16 (movie_audio.h).
 
@@ -14,6 +14,14 @@ const FRAME_HEADER: usize = 0x10;
 /// A disc audio record's header: the second channel's offset, the samples, each channel's eight predictor pairs and its two
 /// history samples.
 const AUDIO_HEADER: usize = 0x50;
+/// The game draws a THP across the whole width of a 16:9 picture this many lines tall, its height in those lines: its
+/// pixels are wider than tall (the disc's 640 x 368 shows at 2.2 to 1).
+const PICTURE_LINES: f32 = 456.0;
+
+/// A THP's shape as the game shows it.
+fn display_aspect(height: u32) -> f32 {
+    16.0 / 9.0 * PICTURE_LINES / height as f32
+}
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_be_bytes(bytes.get(at..at + 4).context("a field past the movie's end")?.try_into().unwrap()))
@@ -107,6 +115,9 @@ pub fn movie(bytes: &[u8]) -> Result<Vec<u8>> {
         bail!("a frame other than video, then audio");
     }
     let (width, height) = (be32(bytes, info + 20)?, be32(bytes, info + 24)?);
+    if width == 0 || height == 0 || width > 0x4000 || height > 0x4000 {
+        bail!("a {width} x {height} picture");
+    }
     let tracks = if components > 1 { be32(bytes, info + 32 + 12)? as usize } else { 0 };
     if components > 2 {
         bail!("{} audio components in a frame", components - 1);
@@ -170,6 +181,7 @@ pub fn movie(bytes: &[u8]) -> Result<Vec<u8>> {
     out[20..24].copy_from_slice(&width.to_le_bytes());
     out[24..28].copy_from_slice(&height.to_le_bytes());
     out[28..32].copy_from_slice(&(tracks as u32).to_le_bytes());
+    out[32..36].copy_from_slice(&display_aspect(height).to_le_bytes());
     Ok(out)
 }
 
@@ -213,6 +225,8 @@ mod tests {
         assert_eq!(&cooked[..4], MAGIC);
         assert_eq!(u32::from_le_bytes(cooked[4..8].try_into().unwrap()), 2);
         assert_eq!(u32::from_le_bytes(cooked[20..24].try_into().unwrap()), 640);
+        let aspect = f32::from_le_bytes(cooked[32..36].try_into().unwrap());
+        assert!((aspect - 16.0 / 9.0 * 456.0 / 368.0).abs() < 1e-5);
         let frame = &cooked[HEADER..];
         assert_eq!(u32::from_le_bytes(frame[4..8].try_into().unwrap()), 8);
         assert_eq!(frame[FRAME_HEADER], 0xFF);
@@ -231,6 +245,8 @@ mod tests {
         put(&mut thp, 0x20, 0x30);
         put(&mut thp, 0x30, 2);
         thp[0x35] = 1;
+        put(&mut thp, 0x44, 640);
+        put(&mut thp, 0x48, 368);
         put(&mut thp, 0x50 + 12, tracks);
         thp
     }
@@ -239,6 +255,13 @@ mod tests {
     fn header_counts_are_refused_before_their_allocations() {
         assert!(movie(&header_only(u32::MAX, 1)).unwrap_err().to_string().contains("frames of"));
         assert!(movie(&header_only(1, u32::MAX)).unwrap_err().to_string().contains("frames of"));
+    }
+
+    #[test]
+    fn a_picture_of_no_size_is_refused() {
+        let mut thp = header_only(1, 1);
+        put(&mut thp, 0x48, 0);
+        assert!(movie(&thp).unwrap_err().to_string().contains("picture"));
     }
 
     #[test]

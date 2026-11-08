@@ -177,27 +177,18 @@ namespace MR {
         return material;
     }
 
-    void fillScreenArea(TypedDraw& rDraw, const Vec2s& rMin, const Vec2s& rMax) {
+    void fillScreenArea(TypedDraw& rDraw, const Vec2f& rMin, const Vec2f& rMax) {
         VertexP* vtx = rDraw.vertices< VertexP >(NEBULA_PRIMITIVE_QUADS, 4);
-        {
-            u16 maxX = rMax.x;
-            u16 minX = rMin.x;
-            u16 minY = rMin.y;
-            u16 maxY = rMax.y;
-
-            *vtx++ = {static_cast< f32 >(static_cast< u16 >(minX)), static_cast< f32 >(static_cast< u16 >(minY)), 0.0f};
-            *vtx++ = {static_cast< f32 >(static_cast< u16 >(maxX)), static_cast< f32 >(static_cast< u16 >(minY)), 0.0f};
-            *vtx++ = {static_cast< f32 >(static_cast< u16 >(maxX)), static_cast< f32 >(static_cast< u16 >(maxY)), 0.0f};
-            *vtx++ = {static_cast< f32 >(static_cast< u16 >(minX)), static_cast< f32 >(static_cast< u16 >(maxY)), 0.0f};
-        }
+        *vtx++ = {rMin.x, rMin.y, 0.0f};
+        *vtx++ = {rMax.x, rMin.y, 0.0f};
+        *vtx++ = {rMax.x, rMax.y, 0.0f};
+        *vtx++ = {rMin.x, rMax.y, 0.0f};
     }
 
     void fillScreen(const NebulaColor8& color, bool opaque) {
         const SiteMaterial material = fillScreenSetup(color, opaque);
         TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
-        u16 width = getScreenWidth();
-        u16 height = getScreenHeight();
-        fillScreenArea(site, Vec2s(0, 0), Vec2s(width, height));
+        fillScreenArea(site, Vec2f(0.0f, 0.0f), Vec2f(getScreenWidth(), getScreenHeight()));
     }
 
     // The material of a shadow volume: a flat colour behind what is drawn, nothing but the stencil written.

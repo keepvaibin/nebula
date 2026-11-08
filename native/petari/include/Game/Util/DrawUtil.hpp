@@ -26,7 +26,8 @@ namespace MR {
     void clearStencil();
     // A fill's material, under an orthographic projection of the screen.
     SiteMaterial fillScreenSetup(const NebulaColor8&, bool opaque = false);
-    void fillScreenArea(TypedDraw&, const Vec2s&, const Vec2s&);
+    // The rectangle from rMin to rMax, screen units.
+    void fillScreenArea(TypedDraw&, const Vec2f& rMin, const Vec2f& rMax);
     void fillScreen(const NebulaColor8&, bool opaque = false);
     // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
     // writes as the drawing state has them (each pass sets them).

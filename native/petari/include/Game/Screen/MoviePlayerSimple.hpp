@@ -5,50 +5,41 @@
 #include "Game/Screen/MovieStream.hpp"
 class NebulaArena;
 
-struct Movie {
-    const char* mMovieName;
-    MovieVideoInfo mVideoInfo;
-    u8* mBuffer;
-    u32 mCurrentFrame;
-    bool _18;
-    bool _19;
-    s32 mFrameRateDefault;
-    s32 _20;
-    u32 _24;
-};
-
+// The scene's movie: as large as the screen holds it at its own shape, centred, black around it; its time is its
+// sound's, or the game's steps for a movie with none.
 class MoviePlayerSimple : public LayoutActor, public JKRDisposer {
 public:
-    /// @brief Creates a new `MoviePlayerSimple`.
     MoviePlayerSimple();
-
-    /// @brief Destroys the `MoviePlayerSimple`.
     virtual ~MoviePlayerSimple();
 
     virtual void init(const TableIter&);
     virtual void draw() const;
 
-    void startMovie(const char*, bool);
+    void startMovie(const char* pName, bool loop);
     void stopMovie();
     bool isMovieActive() const;
     bool isMoviePlaying() const;
+    // The frame on the screen (-1 before the first), and the movie's frames.
     s32 getCurrentFrame() const;
     s32 getTotalFrame() const;
-    void setFrameRateDefault();
     void setVolume(f32, s32);
     void setUnpauseHomeButtonFlag();
     void exeSimpleOff();
     void exeOpen();
     void exePlaying();
     void exeSimpleSuspend();
-    void play(bool);
-    void stop();
-    void drawCinemaFrame() const;
 
 private:
-    Movie* mMovie;
-    NebulaArena* mHeap;
+    void play(bool loop);
+    void stop();
+    void drawBands(f32 x, f32 y, f32 width, f32 height) const;
+
+    const char* mMovieName;
+    // The decoded picture's planes, from mArena while a movie is open.
+    u8* mBuffer;
+    NebulaArena* mArena;
     MovieStream* mStream;
-    bool _44;
-    bool _45;
+    bool mLoop;
+    // Whether input was being checked before the movie took it, for when it ends.
+    bool mInputCheckedBefore;
 };

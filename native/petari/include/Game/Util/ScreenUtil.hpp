@@ -8,6 +8,8 @@ struct ResTIMG;
 
 namespace MR {
     s32 getScreenWidth();
+    // The picture's shape as shown, width / height.
+    f32 getScreenAspect();
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
     // aspect and the layout canvas follow it (wide == 0: 16:9).
     inline const NebulaDisplay& getDisplay() {
