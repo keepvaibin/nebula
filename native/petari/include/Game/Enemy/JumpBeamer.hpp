@@ -6,14 +6,17 @@ class RingBeam;
 
 class JumpBeamer : public JumpEmitter {
 public:
-    JumpBeamer(const char*);
+    static const s32 sBeamCount = 3;
 
-    virtual void init(const TableIter&);
+    JumpBeamer(const char* pName);
+
+    virtual void init(const TableIter& rIter);
     virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
+    bool isHeldBySwitchB() const;
     void syncSwitchOffB();
     void exeHide();
     void exeUp();
@@ -28,5 +31,5 @@ public:
     void exeClose();
     void exeInter();
 
-    RingBeam** mBeams;
+    RingBeam* mBeams[sBeamCount];
 };
