@@ -6,7 +6,7 @@ InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrig
 }
 
 void InputButtons::update() {
-    const PlayerInputSample* const pSample = mPad->getSample(0);
+    const PlayerInputSample* const pSample = mPad->getSample();
     if (pSample == nullptr) {
         return;
     }

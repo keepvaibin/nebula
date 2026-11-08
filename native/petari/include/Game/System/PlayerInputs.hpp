@@ -29,7 +29,7 @@ public:
     void read(s32 chan);
     void requestReset();
     u32 takeSpinPresses(s32 hand);
-    PlayerInputSample* getSample(u32);
+    PlayerInputSample* getSample();
 
     NebulaInputDevice mDevice;
 
