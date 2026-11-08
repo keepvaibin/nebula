@@ -27,7 +27,7 @@ bool MarioActor::canTakePowerUp(s32 playerMode) const {
     }
 }
 
-void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
+void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
     playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
 
     if (mPlayerMode == playerMode) {
@@ -185,7 +185,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
     case 0:
         MR::startBtp(this, "ElementEnd");
 
-        if (myBool) {
+        if (withMorph) {
             switch (mPrevPlayerMode) {
             case 4:
             case 5:
@@ -296,7 +296,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
             mTransforming = false;
         }
 
-        if (myBool) {
+        if (withMorph) {
             mMorphTimer = 30;
             mMario->startPadVib("マリオ[変身解除]");
         } else {

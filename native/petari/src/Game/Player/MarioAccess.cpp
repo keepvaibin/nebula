@@ -48,8 +48,8 @@ namespace MarioAccess {
         return false;
     }
 
-    bool isOnGround(u32 a1) {
-        if (a1 != 0) {
+    bool isOnGround(u32 playerNo) {
+        if (playerNo != 0) {
             return false;
         }
 
@@ -192,8 +192,8 @@ namespace MarioAccess {
         getPlayerActor()->getMario()->mWalkingResist = walkingResist;
     }
 
-    void forceFly(const Vec3f& rVec1, const Vec3f& rVec2, s32 a3) {
-        getPlayerActor()->getMario()->doPointWarp(rVec1, rVec2, a3);
+    void forceFly(const Vec3f& rTarget, const Vec3f& rEndFront, s32 frames) {
+        getPlayerActor()->getMario()->doPointWarp(rTarget, rEndFront, frames);
     }
 
     void setJumpVec(const Vec3f& rJumpVec) {
@@ -240,10 +240,10 @@ namespace MarioAccess {
         getPlayerActor()->mCameraSideVec = getPlayerActor()->getMario()->mSideVec;
     }
 
-    void setFrontVecTarget(const Vec3f& rVec, u16 a2) {
+    void setFrontVecTarget(const Vec3f& rVec, u16 frontMode) {
         MarioActor* actor = getPlayerActor();
         actor->mRushEndFront = rVec;
-        actor->mRushEndFrontMode = a2;
+        actor->mRushEndFrontMode = frontMode;
     }
 
     void getThrowVec(Vec3f* pOut) {
@@ -381,15 +381,13 @@ namespace MarioAccess {
         getPlayerActor()->changeAnimationNonStop(pAnimName);
     }
 
-    void changeAnimationE(const char* pAnimName, s32 a2) {
-        // unused
-        getPlayerActor();
+    void changeAnimationE(const char* pAnimName, s32 interpoleFrame) {
         if (getPlayerActor()->mForceKilled) {
             return;
         }
 
         if (getPlayerActor()->getMario()->isPlayerModeTeresa()) {
-            getPlayerActor()->changeTeresaAnimation(pAnimName, a2);
+            getPlayerActor()->changeTeresaAnimation(pAnimName, interpoleFrame);
             return;
         }
 
@@ -399,11 +397,8 @@ namespace MarioAccess {
 
         MR::startBck(getPlayerActor(), pAnimName);
 
-        // unused
-        getPlayerActor();
-
-        if (a2 >= 0) {
-            getPlayerActor()->mMarioAnim->getXanimePlayer()->changeInterpoleFrame(a2);
+        if (interpoleFrame >= 0) {
+            getPlayerActor()->mMarioAnim->getXanimePlayer()->changeInterpoleFrame(interpoleFrame);
         }
 
         getPlayerActor()->setBlink(pAnimName);
@@ -730,8 +725,8 @@ namespace MarioAccess {
         return getPlayerActor()->isAnimationRun("水泳ジェット");
     }
 
-    void changeItemStatus(s32 a1) {
-        switch (a1) {
+    void changeItemStatus(s32 itemStatus) {
+        switch (itemStatus) {
         case 0:
         case 8:
             getPlayerActor()->setPlayerMode(PlayerMode_Normal, true);

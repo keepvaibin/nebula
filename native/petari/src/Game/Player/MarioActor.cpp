@@ -1250,12 +1250,12 @@ void MarioActor::updateSwingAction() {
         NebulaAchievements::countStat(NebulaStat_Spins, 1);
         bool didSpinPunch = true;
         if (!mMario->mMovementStates.tornado && isJumping() && !mMario->isDamaging() && !mMario->mMovementStates.spinBlocked) {
-            bool tmp = false;
+            bool subSpin = false;
             if (mSubSpinTrigger) {
-                tmp = true;
+                subSpin = true;
             }
 
-            mMario->trySpinJump(tmp);
+            mMario->trySpinJump(subSpin);
             setPunchHitTimer(0x19);
             tryReleaseBombTeresa();
             if (requestSpinJump2P) {
@@ -2057,10 +2057,10 @@ void MarioActor::calcAndSetBaseMtx() {
     Mtx34f mtx;
     mtx.set(getModel()->getBaseTRMtx());
 
-    bool b1 = false;
+    bool hostSetBase = false;
     if (mInRush) {
-        b1 = mRushSensor->receiveMessage(ACTMES_UPDATE_BASEMTX, getSensor("body"));
-        if (b1) {
+        hostSetBase = mRushSensor->receiveMessage(ACTMES_UPDATE_BASEMTX, getSensor("body"));
+        if (hostSetBase) {
             Vec3f frontVec;
             Vec3f headVec;
             reinterpret_cast< Rot3f* >(getBaseMtx())->getYDir(headVec);
@@ -2095,7 +2095,7 @@ void MarioActor::calcAndSetBaseMtx() {
                 mMario->mSwim->resetAndFixPose();
             }
 
-            b1 = true;
+            hostSetBase = true;
             if (mInDemo) {
                 mDemoBaseKept = true;
             }
@@ -2105,7 +2105,7 @@ void MarioActor::calcAndSetBaseMtx() {
     }
 
     Mtx receivedMtx;
-    if (b1) {
+    if (hostSetBase) {
         Vec3f vec(*getPosition());
         Vec3f* pPosition = &mPosition;
         MR::extractMtxTrans(getBaseMtx(), pPosition);
@@ -2122,34 +2122,34 @@ void MarioActor::calcAndSetBaseMtx() {
         mMario->updateGroundInfo();
     }
 
-    if (mInRush && !b1) {
+    if (mInRush && !hostSetBase) {
         Vec3f vec;
         MR::extractMtxTrans(getBaseMtx(), &vec);
         mRushMove = *getPosition() - vec;
     }
 
-    Pos3f mtx2;
-    NebulaMtxIdentity(mtx2);
+    Pos3f baseMtx;
+    NebulaMtxIdentity(baseMtx);
 
-    mMario->createAngleMtx(mtx2, b1);
+    mMario->createAngleMtx(baseMtx, hostSetBase);
 
     if (mDemoBaseKept == 1) {
         getRealPos("CapPosition", &mHeadPos);
 
         if ((mHeadPos - mPosition).length() > 500.0f) {
-            NebulaMtxCopy(getBaseMtx(), mtx2);
-            MR::setMtxTrans(mtx2, 0.0f, 0.0f, 0.0f);
+            NebulaMtxCopy(getBaseMtx(), baseMtx);
+            MR::setMtxTrans(baseMtx, 0.0f, 0.0f, 0.0f);
         }
     }
 
-    NebulaMtxConcat(mtx2, MR::tmpMtxRotYRad(mMario->mYAngleOffset), mtx2);
+    NebulaMtxConcat(baseMtx, MR::tmpMtxRotYRad(mMario->mYAngleOffset), baseMtx);
 
     if (mPlayerMode == 6) {
-        updateBaseMtxTeresa(mtx2);
+        updateBaseMtxTeresa(baseMtx);
     }
 
     bool isAir;
-    if (!b1 && mPlayerMode == 4 && !mMario->isStatusActive(MarioStatus_Stick) && !mMario->isStatusActive(MarioStatus_SideStep) &&
+    if (!hostSetBase && mPlayerMode == 4 && !mMario->isStatusActive(MarioStatus_Stick) && !mMario->isStatusActive(MarioStatus_SideStep) &&
         !mMario->isStatusActive(MarioStatus_Bury) && !getMovementStates().slopeSlide && !getMovementStates().squat &&
         ((isAir = getMario()->getMovementStates().hipDrop && getMario()->getMovementStates().jumping), !isAir)) {
         mBeePoseGravity = mMario->mAirGravityVec;
@@ -2174,9 +2174,9 @@ void MarioActor::calcAndSetBaseMtx() {
 
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, &vec5, dot);
-        NebulaMtxConcat(pTranslation, mtx2, mtx2);
-        NebulaMtxConcat(rotation, mtx2, mtx2);
-        NebulaMtxConcat(MR::tmpMtxTrans(vec), mtx2, mtx2);
+        NebulaMtxConcat(pTranslation, baseMtx, baseMtx);
+        NebulaMtxConcat(rotation, baseMtx, baseMtx);
+        NebulaMtxConcat(MR::tmpMtxTrans(vec), baseMtx, baseMtx);
         Vec3f poseAccel(mBeePoseGravity * getConst().getTable()->mBeePoseDelayAccel);
         MR::vecKillElement(poseAccel, mBeePoseDir, &poseAccel);
         mBeePoseVelocity = mBeePoseVelocity + poseAccel;
@@ -2223,20 +2223,20 @@ void MarioActor::calcAndSetBaseMtx() {
 
         mBeePoseVelocity.scale(friction);
         if (!MR::isSameDirection(mBeePoseDir, mMario->mFrontVec)) {
-            MR::makeMtxUpFront(&mtx2, -mBeePoseDir, mMario->getFrontVec());
+            MR::makeMtxUpFront(&baseMtx, -mBeePoseDir, mMario->getFrontVec());
         } else if (!MR::isSameDirection(mMario->mPostureUpVec, mMario->getFrontVec())) {
-            MR::makeMtxUpFront(&mtx2, mMario->mPostureUpVec, mMario->getFrontVec());
+            MR::makeMtxUpFront(&baseMtx, mMario->mPostureUpVec, mMario->getFrontVec());
         } else {
-            MR::makeMtxUpFront(&mtx2, mMario->mHeadVec, mMario->getFrontVec());
+            MR::makeMtxUpFront(&baseMtx, mMario->mHeadVec, mMario->getFrontVec());
         }
 
         if (mMario->mTargetWalkSpeedIndex > 2 || isJumping()) {
             mBeePoseTrans = mBeePoseTrans * getConst().getTable()->mBeePoseTransBlendingRatioMove +
                    (mBeePoseHeadPos - *getPosition()) * (1.0f - getConst().getTable()->mBeePoseTransBlendingRatioMove);
-            MR::setMtxTrans(mtx2, mBeePoseTrans.x, mBeePoseTrans.y, mBeePoseTrans.z);
+            MR::setMtxTrans(baseMtx, mBeePoseTrans.x, mBeePoseTrans.y, mBeePoseTrans.z);
         } else {
             mBeePoseTrans.scale(getConst().getTable()->mBeePoseTransBlendingRatioStop);
-            MR::setMtxTrans(mtx2, mBeePoseTrans.x, mBeePoseTrans.y, mBeePoseTrans.z);
+            MR::setMtxTrans(baseMtx, mBeePoseTrans.x, mBeePoseTrans.y, mBeePoseTrans.z);
         }
     } else {
         mBeePoseVelocity.zero();
@@ -2245,11 +2245,11 @@ void MarioActor::calcAndSetBaseMtx() {
         mBeePoseGravity = getGravityVector();
     }
 
-    MR::addTransMtx(mtx2, *getPosition());
+    MR::addTransMtx(baseMtx, *getPosition());
 
-    if (b1) {
+    if (hostSetBase) {
         Mtx inverse;
-        NebulaMtxInverse(mtx2, inverse);
+        NebulaMtxInverse(baseMtx, inverse);
         NebulaMtxConcat(inverse, receivedMtx, mBaseCorrectionMtx.mMtx);
         XjointTransform* pJoint = mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(0);
         pJoint->mBaseMtx = mBaseCorrectionMtx.mMtx;
@@ -2280,7 +2280,7 @@ void MarioActor::calcAndSetBaseMtx() {
                         mPressScale = scale;
                     }
 
-                    MR::setMtxTrans(mtx2, mPosition.x, mPosition.y, mPosition.z);
+                    MR::setMtxTrans(baseMtx, mPosition.x, mPosition.y, mPosition.z);
                     if (mMario->mFloorCode != 27) {
                         mCareMovingObject = true;
                     }
@@ -2346,30 +2346,30 @@ void MarioActor::calcAndSetBaseMtx() {
         remaining *= static_cast< f32 >(val - 1) / val;
         mBlendMtxRate = 1.0f - remaining;
 
-        MR::blendMtx(mtx, mtx2, mBlendMtxRate, mtx2);
+        MR::blendMtx(mtx, baseMtx, mBlendMtxRate, baseMtx);
         mBlendMtxTimer--;
     }
 
-    NebulaMtxCopy(mtx2, mBaseMtx.mMtx);
+    NebulaMtxCopy(baseMtx, mBaseMtx.mMtx);
 
     if (mPressScale != 1.0f) {
-        scaleMtx(mtx2);
+        scaleMtx(baseMtx);
     }
 
-    NebulaMtxCopy(mtx2, getModel()->mBaseTransformMtx);
+    NebulaMtxCopy(baseMtx, getModel()->mBaseTransformMtx);
     getModel()->mBaseScale = mScale;
 
     mBaseMtxForced = false;
 }
 
-void MarioActor::setBlendMtxTimer(u16 a1) {
-    if (a1 == 0) {
+void MarioActor::setBlendMtxTimer(u16 frames) {
+    if (frames == 0) {
         mBlendMtxRate = 1.0f;
     } else {
         mBlendMtxRate = 0.0f;
     }
 
-    mBlendMtxTimer = a1;
+    mBlendMtxTimer = frames;
 }
 
 void MarioActor::getGroundPos(Vec3f* pDst) const {
@@ -2591,28 +2591,28 @@ void MarioActor::calcCenterPos() {
         }
     }
 
-    f32 val;
+    f32 centerHeight;
     if (mMario->getMovementStates().squat) {
         f32 radius = mBinder->mRadius;
         f32 height = 40.0f;
-        val = 0.8f * radius + 0.2f * height;
-        mBinder->mRadius = val;
+        centerHeight = 0.8f * radius + 0.2f * height;
+        mBinder->mRadius = centerHeight;
     } else {
         f32 radius = mBinder->mRadius;
         f32 height = 60.0f;
-        val = 0.9f * radius + 0.1f * height;
-        mBinder->mRadius = val;
+        centerHeight = 0.9f * radius + 0.1f * height;
+        mBinder->mRadius = centerHeight;
     }
 
-    if (mPlayerMode == 6) {
+    if (mPlayerMode == PlayerMode_Teresa) {
         f32 radius = mBinder->mRadius;
         f32 height = 100.0f;
-        f32 val2 = 0.8f * radius + 0.2f * height;
-        val = 20.0f + val2;
-        mBinder->mRadius = val2;
+        f32 teresaRadius = 0.8f * radius + 0.2f * height;
+        centerHeight = 20.0f + teresaRadius;
+        mBinder->mRadius = teresaRadius;
     }
 
-    mCenterPos = mPosition + centerDir * val;
+    mCenterPos = mPosition + centerDir * centerHeight;
 }
 
 void MarioActor::calcHeadPos() {
@@ -2622,12 +2622,12 @@ void MarioActor::calcHeadPos() {
     MR::extractMtxTrans(mtx, &mHeadPos);
 }
 
-void MarioActor::setPress(u8 myChar, s32 myInt) {
+void MarioActor::setPress(u8 kind, s32 frames) {
     if (mPressTimer != 0) {
         return;
     }
 
-    if (myChar == 0 && mMario->calcDistToCeil(false) >= 160.0f) {
+    if (kind == 0 && mMario->calcDistToCeil(false) >= 160.0f) {
         return;
     }
 
@@ -2651,11 +2651,11 @@ void MarioActor::setPress(u8 myChar, s32 myInt) {
 
     mVelocity.zero();
 
-    if (myInt == 0) {
-        myInt = 240;
+    if (frames == 0) {
+        frames = 240;
     }
 
-    mPressTimer = myInt;
+    mPressTimer = frames;
 
     mMario->mMovementStates.hipDrop = false;
     mMario->mMovementStates.tornado = false;
@@ -2675,7 +2675,7 @@ void MarioActor::setPress(u8 myChar, s32 myInt) {
     mMarioAnim->setSpeed(0.0f);
 
     mAnimationFrozen = true;
-    mPressKind = myChar;
+    mPressKind = kind;
     mBindOn = false;
 
     mMario->playSound("プレスダメージ");

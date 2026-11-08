@@ -844,8 +844,8 @@ void MarioAnimator::change(const char* pName) {
     if (bck != nullptr) {
         const XanimeGroupInfo* info = mXanimePlayer->mCurrentAnimation;
         if (info->mAttribute == 2) {
-            f32 arg1 = info->mLoop, arg2 = info->mEnd;
-            getPlayer()->startBas(bck, false, arg1, arg2);
+            f32 loopFrame = info->mLoop, endFrame = info->mEnd;
+            getPlayer()->startBas(bck, false, loopFrame, endFrame);
         } else {
             getPlayer()->startBas(bck, false, 0.0f, 0.0f);
         }

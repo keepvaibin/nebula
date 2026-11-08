@@ -1219,9 +1219,9 @@ void MarioEffect::doCubeEffect() {
 
     AreaObj* area = MR::getAreaObj("EffectCylinder", mActor->mPosition);
     if (area != nullptr) {
-        s32 arg0 = MR::getAreaObjArg(area, 0);
+        s32 cubeArg = MR::getAreaObjArg(area, 0);
         mCubeArg1 = MR::getAreaObjArg(area, 1);
-        mCubeArg0 = arg0;
+        mCubeArg0 = cubeArg;
     } else {
     }
 
@@ -1280,7 +1280,7 @@ void MarioActor::stopSpinTicoEffect(bool force) {
 MarioEffect::~MarioEffect() {
 }
 
-void MultiEmitter::setGlobalScale(f32 scale, s32 a2) {
+void MultiEmitter::setGlobalScale(f32 scale, s32 idx) {
     Vec3f scaleVec(scale, scale, scale);
-    setGlobalScale(scaleVec, a2);
+    setGlobalScale(scaleVec, idx);
 }

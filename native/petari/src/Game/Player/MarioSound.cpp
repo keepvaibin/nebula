@@ -305,7 +305,7 @@ void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
     }
 }
 
-void Mario::startBas(const char* pAnimName, bool arg2, f32 startFrame, f32 speed) {
+void Mario::startBas(const char* pAnimName, bool isLoop, f32 startFrame, f32 speed) {
     if (mActor->mSoundObject != nullptr) {
         ResourceHolder* pHolder = MR::getResourceHolder(mActor);
         const SoundAnimation* pRes = nullptr;
@@ -315,7 +315,7 @@ void Mario::startBas(const char* pAnimName, bool arg2, f32 startFrame, f32 speed
         }
 
         if (pRes != nullptr) {
-            mActor->mSoundObject->startAnimation(pRes, arg2, startFrame, speed);
+            mActor->mSoundObject->startAnimation(pRes, isLoop, startFrame, speed);
         } else {
             mActor->mSoundObject->removeAnimation();
         }

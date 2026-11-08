@@ -466,8 +466,8 @@ void MarioActor::createIceFloor(const Vec3f& rVec) {
     createIceFloor(rVec, vec);
 }
 
-void MarioActor::createIceFloor(const Vec3f& rVec1, const Vec3f& rVec2) {
-    mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rVec1, rVec2);
+void MarioActor::createIceFloor(const Vec3f& rPos, const Vec3f& rRotation) {
+    mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rPos, rRotation);
 
     mIceStepIndex = (mIceStepIndex + 1) % 20;
 
@@ -476,18 +476,18 @@ void MarioActor::createIceFloor(const Vec3f& rVec1, const Vec3f& rVec2) {
     }
 }
 
-void MarioActor::createIceWall(const Vec3f& rVec1, const Vec3f& rVec2) {
+void MarioActor::createIceWall(const Vec3f& rPos, const Vec3f& rNormal) {
     Pos3f mtx;
     mtx.identity();
     Vec3f upVec;
     getUpVec(&upVec);
 
-    MR::makeMtxFrontUp(&mtx, getGravityVector(), rVec2);
+    MR::makeMtxFrontUp(&mtx, getGravityVector(), rNormal);
 
     Vec3f vec;
     mtx.getEuler(vec);
     vec *= 180.0f / PI;
-    mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rVec1, vec);
+    mIceSteps[mIceStepIndex]->setOn(mIceStepIndex, rPos, vec);
 
     mIceStepIndex = (mIceStepIndex + 1) % 20;
 

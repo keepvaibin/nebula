@@ -121,13 +121,13 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
     }
 }
 
-bool MarioActor::sendPunch(HitSensor* pSensor, bool myBool) {
+bool MarioActor::sendPunch(HitSensor* pSensor, bool isSpinAttack) {
     if (isDamaging()) {
         mPunchHitTimer = false;
         return false;
     }
 
-    if (myBool && mPlayerMode == 3) {
+    if (isSpinAttack && mPlayerMode == PlayerMode_Ice) {
         bool out = doFreezeAttack(pSensor);
 
         if (out && !selectCustomEffectSpinHitSound(pSensor->mHost->mName)) {
@@ -141,7 +141,7 @@ bool MarioActor::sendPunch(HitSensor* pSensor, bool myBool) {
     bool out = MR::sendMsgPlayerPunch(pSensor, getSensor("body"));
     mAttacking = false;
 
-    if (myBool && out && !selectCustomEffectSpinHitSound(pSensor->mHost->mName)) {
+    if (isSpinAttack && out && !selectCustomEffectSpinHitSound(pSensor->mHost->mName)) {
         MR::startSpinHitSound(this);
     }
 

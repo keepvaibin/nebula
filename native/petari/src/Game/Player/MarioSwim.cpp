@@ -608,7 +608,7 @@ bool MarioSwim::update() {
                 }
 
                 bool canPaddleJump = false;
-                if ((!mZSinkTimer || (mSpinTimer != 0 || mSpinDashTimer != 0)) && (mSurfacePaddleHoldTimer >= tmp || mPaddleJumpReady)) {
+                if ((!mZSinkTimer || (mSpinTimer != 0 || mSpinDashTimer != 0)) && (mSurfacePaddleHoldTimer >= paddleHoldFrames || mPaddleJumpReady)) {
                     canPaddleJump = true;
                 }
 

@@ -7,16 +7,16 @@
 #include "Game/Util/ModelUtil.hpp"
 #include <nebula_math.h>
 
-MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool a4, MtxPtr mtx1, MtxPtr mtx2)
-    : PartsModel(pActor, pName, pModelName, mtx2, a4 ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), mEffectName() {
+MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool inCrystalBox, MtxPtr pFixedMtx, MtxPtr pMtx)
+    : PartsModel(pActor, pName, pModelName, pMtx, inCrystalBox ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), mEffectName() {
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
         MR::initLightCtrl(this);
     }
 
-    if (mtx1 != nullptr) {
-        initFixedPosition(mtx1, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    if (pFixedMtx != nullptr) {
+        initFixedPosition(pFixedMtx, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
         offFixedPosNormalizeScale();
     }
 }

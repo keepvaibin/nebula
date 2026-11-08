@@ -12,25 +12,25 @@
 #include <nebula_math.h>
 
 void Mario::mainMove() {
-    Vec3f vec1;
-    MR::setNan(vec1);
+    Vec3f moveDir;
+    MR::setNan(moveDir);
 
-    bool a1 = false;
+    bool keepFront = false;
 
     if (mDrawStates.homingLockOn) {
-        a1 = true;
+        keepFront = true;
     }
 
     if (mMovementStates.slopeSlide) {
         mTargetWalkSpeedIndex = 0;
         mWalkSpeed = 0.0f;
-        a1 = true;
+        keepFront = true;
 
         playSound("坂滑り");
     }
 
     if (mCorrectionTurnTimer) {
-        a1 = true;
+        keepFront = true;
     }
 
     mMovementStates.onSkatableFloor = false;
@@ -53,7 +53,7 @@ void Mario::mainMove() {
         return;
     }
 
-    bool a2 = false;
+    bool startJump = false;
     bool isRequestJump = mActor->isRequestJump();
 
     if (!isRequestJump && mActor->isRequestJump2P() && mJump2PDelayTimer == 0) {
@@ -81,15 +81,15 @@ void Mario::mainMove() {
             mSkate->exitJump();
             closeStatus(mSkate);
         } else {
-            a2 = true;
+            startJump = true;
         }
     }
 
     if (mDashChanceTimer != 0) {
         mDashChanceTimer--;
-        if (a2 && checkSquat(false)) {
+        if (startJump && checkSquat(false)) {
             if (mStickPos.z >= 0.5f) {
-                a2 = false;
+                startJump = false;
                 mDashChanceTimer = 0;
                 mWalkSpeed = 5.0f;
                 mItemDashTimer = 180;
@@ -98,8 +98,8 @@ void Mario::mainMove() {
                 playSound("ダッシュ加速強成功");
                 playSound("声物ジャンプ");
             }
-        } else if (a2 && mStickPos.z >= 0.5f) {
-            a2 = false;
+        } else if (startJump && mStickPos.z >= 0.5f) {
+            startJump = false;
             mDashChanceTimer = 0;
             mWalkSpeed = 2.0f;
             mItemDashTimer = 60;
@@ -108,7 +108,7 @@ void Mario::mainMove() {
         }
     }
 
-    if (a2) {
+    if (startJump) {
         saveLastSafetyTrans();
         tryJump();
         beforeJumping2D();
@@ -155,16 +155,16 @@ void Mario::mainMove() {
             mMoveFrontVec = mFrontVec;
         }
 
-        vec1 = mMoveFrontVec;
+        moveDir = mMoveFrontVec;
 
         calcShadowDir(mMoveFrontVec, &mMoveDirOnShadow);
         mWeakStickIgnoreTimer = 10;
     } else if (!(mTargetWalkSpeedIndex != 0 && mPrevWalkSpeedIndex) && (!isAnimationRun("ブレーキ") && !isAnimationRun("ターンブレーキ") && !mMovementStates.turnStickNeutral &&
                                                          !mMovementStates.tornado && mWalkSpeed < 0.05f && !mDrawStates.homingLockOn)) {
-        bool a3 = true;
+        bool stickTaken = true;
         if (mWeakStickIgnoreTimer != 0) {
             if (mStickPos.z < 0.75f) {
-                a3 = false;
+                stickTaken = false;
                 mWeakStickIgnoreTimer--;
                 mStickPos.set(0.0f);
             } else {
@@ -172,9 +172,9 @@ void Mario::mainMove() {
             }
         }
 
-        if (a3) {
-            calcMoveDir(mStickPos.x, mStickPos.y, &vec1, true);
-            calcShadowDir(vec1, &mMoveDirOnShadow);
+        if (stickTaken) {
+            calcMoveDir(mStickPos.x, mStickPos.y, &moveDir, true);
+            calcShadowDir(moveDir, &mMoveDirOnShadow);
             calcShadowDir(mFrontVec, &mFrontOnShadow);
 
             f32 angle = MR::pi() * 10.0f / 180.0f;
@@ -192,7 +192,7 @@ void Mario::mainMove() {
                     turnTime = 30;
                 }
 
-                if (!a1) {
+                if (!keepFront) {
                     setFrontVecKeepUp(mMoveDirOnShadow, turnTime);
                 }
 
@@ -208,11 +208,11 @@ void Mario::mainMove() {
 
                 changeAnimationUpperWeak("その場足踏み上半身");
                 return;
-            } else if (!a1) {
+            } else if (!keepFront) {
                 setFrontVecKeepUp(mMoveDirOnShadow);
             }
         } else {
-            vec1 = mMoveFrontVec;
+            moveDir = mMoveFrontVec;
         }
     } else {
         f32 stickposX = mStickPos.x;
@@ -238,9 +238,9 @@ void Mario::mainMove() {
             }
         }
 
-        calcMoveDir(stickposX, stickposY, &vec1, true);
+        calcMoveDir(stickposX, stickposY, &moveDir, true);
 
-        calcShadowDir(vec1, &mMoveDirOnShadow);
+        calcShadowDir(moveDir, &mMoveDirOnShadow);
     }
 
     calcShadowDir(mFrontVec, &mFrontOnShadow);
@@ -275,22 +275,22 @@ void Mario::mainMove() {
         }
 
         if (isAnimationRun("ブレーキ")) {
-            a1 = true;
+            keepFront = true;
         }
 
         if (mMovementStates.turnStickNeutral) {
-            a1 = true;
+            keepFront = true;
         }
     } else {
         if (!mMovementStates.onIce && !mMovementStates.squat && mMovementStates.turnStickNeutral == true && !mMovementStates.tornado && !mMovementStates.slopeSlide &&
             !isStatusActive(MarioStatus_Skate) && dot2 < MR::cos(mActor->getConst().getTable()->mTurnSlipAngle) && !mMovementStates.turnBrake) {
             if (mMovementStates.onSkatableFloor) {
-                a1 = true;
+                keepFront = true;
             }
 
             mTurnFrontVec = mTurnSlipFrontVec;
 
-            if (!a1) {
+            if (!keepFront) {
                 setFrontVecKeepUp(-mTurnFrontVec);
             }
 
@@ -352,7 +352,7 @@ void Mario::mainMove() {
         if (isActiveTask(&Mario::taskOnSlipTurn)) {
             if (isAnimationRun("ターンブレーキ滑り床")) {
                 setFrontVecKeepUp(-mTurnFrontVec);
-                a1 = true;
+                keepFront = true;
 
                 stopAnimation("ターンブレーキ滑り床");
                 mCorrectionTurnTimer = 0;
@@ -384,7 +384,7 @@ void Mario::mainMove() {
         turnAngleSpeed = mActor->getConst().getTable()->mTurnAngleSpeedTornado;
     }
 
-    bool a4;
+    bool checkTurnBack;
 
     if (!mMovementStates.turnBrake) {
         Vec3f cross(mPrevMoveDirOnShadow.cross(mMoveDirOnShadow));
@@ -393,10 +393,10 @@ void Mario::mainMove() {
         stick.z = 0.0f;
         NebulaVecCrossProduct(&mPrevStickDir, &stick, &cross);
 
-        a4 = true;
+        checkTurnBack = true;
 
         if (mMovementStates.mode2D) {
-            a4 = false;
+            checkTurnBack = false;
         }
 
         do {
@@ -406,7 +406,7 @@ void Mario::mainMove() {
                 break;
             }
 
-            if (MR::isNearZero(mPrevTurnCross) && a4) {
+            if (MR::isNearZero(mPrevTurnCross) && checkTurnBack) {
                 bool isEqual = false;
                 bool equalXY = FloatUtil::epsilonEquals(mPrevStickDir.x, stick.x, FloatUtil::epsilon()) &&
                                FloatUtil::epsilonEquals(mPrevStickDir.y, stick.y, FloatUtil::epsilon());
@@ -419,7 +419,7 @@ void Mario::mainMove() {
                     mMovementStates.turning = true;
                     break;
                 }
-            } else if (cross.dot(mPrevTurnCross) > 0.0f && a4) {
+            } else if (cross.dot(mPrevTurnCross) > 0.0f && checkTurnBack) {
                 mMovementStates.turning = true;
                 break;
             }
@@ -566,7 +566,7 @@ void Mario::mainMove() {
                 mCorrectionAngle = MR::pi();
             }
 
-            if (!a1) {
+            if (!keepFront) {
                 setFrontVecKeepUp(vec2);
             }
         }
@@ -577,7 +577,7 @@ void Mario::mainMove() {
                 MR::vecRotAxis(mFrontOnShadow, mMoveDirOnShadow, mHeadVec, &blendSphere, 22.5f * MR::pi() / 180.0f);
             }
 
-            if (!a1) {
+            if (!keepFront) {
                 setFrontVecKeepUp(blendSphere);
             }
         }
@@ -631,14 +631,14 @@ void Mario::mainMove() {
 
     addVelocity(vec2);
 
-    mMoveFrontVec = vec1;
+    mMoveFrontVec = moveDir;
 
     if (mMovementStates.squat) {
         if (mTargetWalkSpeedIndex != 0) {
-            mPrevMoveFrontVec = vec1;
+            mPrevMoveFrontVec = moveDir;
         }
     } else if (mTurnReadyTimer == 0) {
-        mPrevMoveFrontVec = vec1;
+        mPrevMoveFrontVec = moveDir;
     }
 
     if (mMovementStates.frontWallGlancing && mFrontFloorHeight > 120.0f) {

@@ -388,7 +388,7 @@ void Mario::updateMorphResetTimer() {
         return;
     }
 
-    mActor->setPlayerMode(0, true);
+    mActor->setPlayerMode(PlayerMode_Normal, true);
     return;
 }
 
@@ -594,20 +594,20 @@ void Mario::fixHeadFrontVecByGravity() {
         return;
     }
 
-    bool b1 = true;
+    bool alongFront = true;
 
-    Vec3f cross3;
-    cross3.cross(mHeadVec, minusGravDir);
+    Vec3f headSide;
+    headSide.cross(mHeadVec, minusGravDir);
 
-    if (MR::isNearZero(cross3)) {
+    if (MR::isNearZero(headSide)) {
         if (MR::abs(minusGravDir.dot(mSideVec)) < MR::abs(minusGravDir.dot(mFrontVec))) {
-            b1 = false;
+            alongFront = false;
         }
-    } else if (MR::abs(cross3.dot(mFrontVec)) < MR::abs(cross3.dot(mSideVec))) {
-        b1 = false;
+    } else if (MR::abs(headSide.dot(mFrontVec)) < MR::abs(headSide.dot(mSideVec))) {
+        alongFront = false;
     }
 
-    if (b1) {
+    if (alongFront) {
         Vec3f newHeadVec;
 
         if (!MR::vecBlendSphere(mHeadVec, minusGravDir, &newHeadVec, rotateHeadVecSpeedByGravity)) {
@@ -828,7 +828,7 @@ bool Mario::createCorrectionMtx(MtxPtr pMtx, Vec3f* pOut) {
         Vec3f vec2(0.0f, 1.0f, 0.0f);
 
         if (mMovementStates.mode2D && !isStatusActive(MarioStatus_Talk)) {
-            bool b1 = false;
+            bool sameSide = false;
             f32 dot = mFrontVec.dot(getCamDirX());
 
             if (mPostureUpVec.dot(getCamDirY()) < 0.0f) {
@@ -836,12 +836,12 @@ bool Mario::createCorrectionMtx(MtxPtr pMtx, Vec3f* pOut) {
             }
 
             if (dot < 0.0f && mCorrectionAngle < 0.0f) {
-                b1 = true;
+                sameSide = true;
             } else if (dot > 0.0f && mCorrectionAngle > 0.0f) {
-                b1 = true;
+                sameSide = true;
             }
 
-            if (b1) {
+            if (sameSide) {
                 NebulaMtxRotAxisRad(pMtx, vec2, -mCorrectionAngle);
             } else {
                 NebulaMtxRotAxisRad(pMtx, vec2, mCorrectionAngle);
@@ -1750,7 +1750,7 @@ void Mario::actionMain() {
 void Mario::updateGroundInfo() {
     checkMap();
     if (isEnableCheckGround()) {
-        bool b1 = !mMovementStates.jumping && !mMovementStates.onGround;
+        bool wasInAir = !mMovementStates.jumping && !mMovementStates.onGround;
 
         mMovementStates.onGround = checkGround();
 
@@ -1760,7 +1760,7 @@ void Mario::updateGroundInfo() {
             mEdgePushTimer = 0;
         }
 
-        if (b1 && mMovementStates.onGround && isDefaultAnimationRun("落下")) {
+        if (wasInAir && mMovementStates.onGround && isDefaultAnimationRun("落下")) {
             changeAnimation(nullptr, "基本");
         }
 
@@ -1864,8 +1864,8 @@ bool Mario::postureCtrl(MtxPtr) {
     return false;
 }
 
-void Mario::createAngleMtx(MtxPtr pMtx, bool a2) {
-    if (!(isNonFixHeadVec() || a2)) {
+void Mario::createAngleMtx(MtxPtr pMtx, bool hostSetBase) {
+    if (!(isNonFixHeadVec() || hostSetBase)) {
         fixHeadFrontVecByGravity();
     }
 
@@ -1976,15 +1976,15 @@ const Vec3f* Mario::getGravityVec() const {
         return &mAirGravityVec;
     }
 
-    bool b1 = true;
+    bool slipKind = true;
     if (mJumpKind == 0xc) {
-        b1 = false;
+        slipKind = false;
     } else if (mJumpKind == 0xd) {
-        b1 = false;
+        slipKind = false;
     }
 
     bool noSlip = !isSlipFloorCode(mFloorCode);
-    if (noSlip && b1) {
+    if (noSlip && slipKind) {
         bool noHopper = !isPlayerModeHopper();
         if (noHopper) {
             bool noTeresa = !isPlayerModeTeresa();
