@@ -26,8 +26,9 @@ public:
     void exeTalk();
     void exeTalkCancel();
     void exeGoodBye();
-    bool isGreaterEqualStepAndRandom(s32) const;
-    bool isSameRailActor(const LiveActor*) const;
+    bool isGreaterEqualStepAndRandom(s32 step) const;
+    bool isNrvTalking() const;
+    bool isSameRailActor(const LiveActor* pActor) const;
 
     Vec3f mFront;
     LiveActor* mTalkPartner;

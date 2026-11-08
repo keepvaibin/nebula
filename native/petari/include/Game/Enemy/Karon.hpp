@@ -8,9 +8,8 @@ class TerritoryMover;
 
 class Karon : public LiveActor {
 public:
-    Karon(const char*);
+    Karon(const char* pName);
 
-    virtual ~Karon();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void kill();
@@ -22,7 +21,14 @@ public:
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    bool isFallNextMove(bool);
+    bool isFallNextMove(bool isAlongVelocity);
+    bool isFindPlayer() const;
+    bool isNrvBroken() const;
+    bool isNrvDisabled() const;
+    void startBroken(const char* pActionName);
+    void updateBroken(bool isBindBeforeKill);
+    void keepVelocityAlongGravity();
+    void appearStarPieceBurst();
 
     void exeFixWait();
     void exeWait();

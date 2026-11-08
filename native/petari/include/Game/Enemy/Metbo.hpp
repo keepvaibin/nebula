@@ -47,15 +47,14 @@ public:
     void exeRecover();
     void exePointerSwoon();
     void endPointerSwoon();
-    void moveOrFall(const MR::ActorMoveParam&, const Vec3f*);
-    void startSwoon(bool);
+    void moveOrFall(const MR::ActorMoveParam& rParam, const Vec3f* pTarget);
+    void startSwoon(bool isFromPlayer);
     bool tryNonActive();
     bool trySearch();
     bool tryPointerSwoon();
     bool isNrvNormal() const;
-
-    inline bool isNrvDown() const;
-    inline bool isNrvSwoon() const;
+    bool isNrvDown() const;
+    bool isNrvSwoon() const;
 
     SpinHitController* mSpinHitController;
     AnimScaleController* mAnimScaleController;
