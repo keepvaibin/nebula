@@ -58,18 +58,18 @@ void PenguinStudent::init(const TableIter& rIter) {
         mRemovableTurtle = new RemovableTurtle(this, true);
         setNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvSlow));
     } else {
-        s32 arg1 = 10;
-        MR::getPlacementArg1NoInit(rIter, &arg1);
-        mRailOffset = 100.0f * arg1;
+        s32 railSpacing = 10;
+        MR::getPlacementArg1NoInit(rIter, &railSpacing);
+        mRailOffset = 100.0f * railSpacing;
     }
 
     mUseReactionActions = false;
     mRailAccel = 0.3f;
     MR::useStageSwitchReadA(this, rIter);
-    s32 arg7 = 0;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
+    s32 colorFrame = 0;
+    MR::getPlacementArg7NoInit(rIter, &colorFrame);
     MR::startBrk(this, "ColorChange");
-    MR::setBrkFrameAndStop(this, arg7);
+    MR::setBrkFrameAndStop(this, colorFrame);
     MR::onCalcShadow(this, nullptr);
     if (mMsgCtrl != nullptr) {
         MR::registerBranchFunc(mMsgCtrl, TalkMessageFunc_Inline(this, &PenguinStudent::branchFunc));
@@ -115,11 +115,12 @@ void PenguinStudent::exeSwim() {
     MR::setRailCoord(this, MR::getRailCoord(mActor) - mRailOffset);
     MR::moveCoordAndFollowTrans(this);
     MR::followRailPose(this, mRailPoseRate, 1.0f);
-    Vec3f v19, v20, v21;
-    MR::calcUpVec(&v20, this);
-    MR::calcFrontVec(&v19, this);
-    MR::rotAxisVecRad(v20, v19, &v21, 0.017453292f * (getNerveStep() % 360));
-    mPosition.set(mPosition + v21 * speed);
+    // The swimmer circles the rail: up turns one degree a step about the front.
+    Vec3f front, up, circleDir;
+    MR::calcUpVec(&up, this);
+    MR::calcFrontVec(&front, this);
+    MR::rotAxisVecRad(up, front, &circleDir, 0.017453292f * (getNerveStep() % 360));
+    mPosition.set(mPosition + circleDir * speed);
     if (mMsgCtrl) {
         MR::tryTalkNearPlayer(mMsgCtrl);
     }

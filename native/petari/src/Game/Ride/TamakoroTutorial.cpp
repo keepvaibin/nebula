@@ -330,13 +330,13 @@ bool TamakoroTutorial::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 
         if (isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait)) || isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverFront)) ||
             isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverBack))) {
-            Vec3f v1 = pSender->mPosition;
-            v1 -= pReceiver->mPosition;
-            Vec3f v2;
+            Vec3f toSender = pSender->mPosition;
+            toSender -= pReceiver->mPosition;
+            Vec3f front;
 
-            MR::calcFrontVec(&v2, this);
+            MR::calcFrontVec(&front, this);
 
-            if (0.0f < v2.dot(v1)) {
+            if (0.0f < front.dot(toSender)) {
                 setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvTrampleBack));
             } else {
                 setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvTrampleFront));
@@ -370,12 +370,12 @@ void TamakoroTutorial::updateHitSensor(HitSensor* pSensor) {
     pSensor->mPosition.add(upVec * dot);
 }
 
-void TamakoroTutorial::startTimerSound(s32 step, s32 param2) {
+void TamakoroTutorial::startTimerSound(s32 step, s32 level) {
     if (step == 20) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", param2);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", level);
     }
 
     if (step == 40) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", param2);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", level);
     }
 }

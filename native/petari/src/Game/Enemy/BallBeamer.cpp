@@ -44,24 +44,17 @@ void BallBeamer::init(const TableIter& rIter) {
     }
 
     mBeams = new RingBeam*[12];
+    f32 beamSpeed = 12.0f;
+    s32 beamLife = 530;
+    s32 shadowMode = -1;
+    MR::getPlacementArg0NoInit(rIter, &beamSpeed);
+    MR::getPlacementArg1NoInit(rIter, &beamLife);
+    MR::getPlacementArg2NoInit(rIter, &shadowMode);
     for (int i = 0; i < 12; i++) {
-        mBeams[i] = nullptr;
-    }
-    f32 arg0 = 12.0f;
-    s32 arg1 = 530;
-    s32 arg2 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    MR::getPlacementArg2NoInit(rIter, &arg2);
-    for (int i = 0; i < 12; i++) {
-        if (arg2 == 0) {
-            mBeams[i] = new RingBeam("リングビーム", this, true, true);
-        } else {
-            mBeams[i] = new RingBeam("リングビーム", this, true, false);
-        }
+        mBeams[i] = new RingBeam("リングビーム", this, true, shadowMode == 0);
         mBeams[i]->init(rIter);
-        mBeams[i]->setSpeed(arg0);
-        mBeams[i]->setLife(arg1);
+        mBeams[i]->setSpeed(beamSpeed);
+        mBeams[i]->setLife(beamLife);
     }
     mHeadCollisionMtx.setInline(MR::getJointMtx(this, "Head"));
     MR::initCollisionParts(this, "Head", getSensor("Body"), mHeadCollisionMtx.toMtxPtr());

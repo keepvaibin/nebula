@@ -21,10 +21,10 @@ public:
     void startDemoTimeKeep(NameObj*, const char*, MR::MovementControlType, bool, const char*);
     void startDemoExecutor(NameObj*, const char*, MR::MovementControlType, const char*);
     const char* getCurrentDemoName() const;
-    void endDemo(NameObj*, const char*, bool);
-    bool isExistTimeKeepDemo(const char*) const;
+    void endDemo(NameObj* pRequester, const char* pDemoName, bool waitCameraInterpolating);
+    bool isExistTimeKeepDemo(const char* pDemoName) const;
     bool registerDemoCast(LiveActor*, const TableIter&);
-    bool registerDemoCast(LiveActor*, const char*, const TableIter&);
+    bool registerDemoCast(LiveActor*, const char* pDemoName, const TableIter&);
     void registerDemoSimpleCast(LiveActor*);
     void registerDemoSimpleCast(LayoutActor*);
     void registerDemoSimpleCast(NameObj*);

@@ -21,9 +21,9 @@ namespace MR {
     bool tryRegisterDemoActionNerve(const LiveActor*, const Nerve*, const char*);
     bool tryRegisterDemoCast(LiveActor*, const char*, const TableIter&);
     void registerDemoCast(LiveActor*, const char*, const TableIter&);
-    void initTalkAnimDemoCast(LiveActor*, const TableIter&, const char*, const char*);
-    void registerDemoActionFunctorDirect(const LiveActor*, const MR::FunctorBase&, const char*, const char*);
-    bool tryRegisterDemoActionFunctorDirect(const LiveActor*, const MR::FunctorBase&, const char*, const char*);
+    void initTalkAnimDemoCast(LiveActor*, const TableIter&, const char* pDemoName, const char* pFileBaseName);
+    void registerDemoActionFunctorDirect(const LiveActor*, const MR::FunctorBase&, const char* pDemoName, const char* pPartName);
+    bool tryRegisterDemoActionFunctorDirect(const LiveActor*, const MR::FunctorBase&, const char* pDemoName, const char* pPartName);
     bool tryStartDemoRegistered(LiveActor*, const char*);
     bool tryStartDemoRegisteredMarioPuppetable(LiveActor*, const char*);
     void registerDemoSimpleCastAll(LiveActor*);
@@ -59,7 +59,7 @@ namespace MR {
     bool requestStartDemoRegisteredMarioPuppetable(LiveActor*, const Nerve*, const Nerve*, const char*);
     void endDemo(NameObj*, const char*);
     void endDemoWaitCameraInterpolating(NameObj*, const char*);
-    void initDemoSheetTalkAnim(LiveActor*, const TableIter&, const char*, const char*, TalkMessageCtrl*);
+    void initDemoSheetTalkAnim(LiveActor*, const TableIter&, const char* pDemoName, const char* pFileBaseName, TalkMessageCtrl*);
     void initDemoSheetTalkAnimWithMessageName(LiveActor*, const TableIter&, const char*, const char*, const char*);
     void initDemoSheetTalkAnimFunctor(LiveActor*, const TableIter&, const char*, const char*, TalkMessageCtrl*, const MR::FunctorBase&);
     bool tryInitDemoSheetTalkAnim(LiveActor*, const TableIter&, const char*, const char*, TalkMessageCtrl*);

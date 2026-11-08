@@ -33,7 +33,7 @@ namespace NrvCaretaker {
     NEW_NERVE(CaretakerNrvAppearedStar, Caretaker, AppearedStar);
 };  // namespace NrvCaretaker
 
-Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mObjArg0(-1), mTidyTimeLimit(::sTidyTimeLimit) {
+Caretaker::Caretaker(const char* pName) : NPCActor(pName), mBombTimerLayout(), mTidyTimeLimit(::sTidyTimeLimit) {
 }
 
 void Caretaker::init(const TableIter& rIter) {
@@ -46,16 +46,14 @@ void Caretaker::init(const TableIter& rIter) {
     caps.mWaitNerve = GET_NERVE(Caretaker, CaretakerNrvTalk);
     caps.mSensorSize = 100.0f;
     initialize(rIter, caps);
-    s32 arg3 = 0;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
-    mBodyColorFrame = arg3;
+    s32 bodyColorFrame = 0;
+    MR::getPlacementArg3NoInit(rIter, &bodyColorFrame);
 
-    s32 arg4 = 0;
-    MR::getPlacementArg4NoInit(rIter, &arg4);
-    mObjArg4 = arg4;
+    s32 talkAnim = 0;
+    MR::getPlacementArg4NoInit(rIter, &talkAnim);
 
     MR::startBrk(this, "BodyColor");
-    MR::setBrkFrameAndStop(this, mBodyColorFrame);
+    MR::setBrkFrameAndStop(this, bodyColorFrame);
     MR::startBtk(this, "Dirt");
     MR::setBtkFrameAndStop(this, 0.0f);
 
@@ -71,11 +69,11 @@ void Caretaker::init(const TableIter& rIter) {
     mRailPoseRate = 0.05f;
     mIsRailOnGround = 1;
 
-    setAnim(mObjArg4);
+    setAnim(talkAnim);
 
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    mObjArg0 = arg0;
+    // Obj_arg0 -1 or 1: a plain helper; anything else runs the tidy-up star game.
+    s32 starGame = -1;
+    MR::getPlacementArg0NoInit(rIter, &starGame);
 
     MR::startBckNoInterpole(this, "Wait");
     MR::calcAnimDirect(this);
@@ -85,7 +83,7 @@ void Caretaker::init(const TableIter& rIter) {
         MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &Caretaker::eventFuncComet));
     }
 
-    if (mObjArg0 != -1 && mObjArg0 != 1) {
+    if (starGame != -1 && starGame != 1) {
         setDefaults4("TalkAngry", "SpinHit", "Trampled", "SpinHit");
         mParam.setMoveAction("Wait", "Wait");
         mParam.setTalkAction("TalkNormal", "TalkNormal");
@@ -93,8 +91,6 @@ void Caretaker::init(const TableIter& rIter) {
 
         MR::getNPCItemData(&item, 0);
         equipment(item, false);
-
-        mObjArg0 = 0;
 
         if (MR::isExistRail(this)) {
             MR::moveCoordAndFollowTrans(this);

@@ -141,12 +141,12 @@ bool RingBeamShadowDrawer::isDraw() const {
     return MR::isValidDraw(mHost);
 }
 
-RingBeam::RingBeam(const char* pName, LiveActor* arg1, bool arg2, bool arg3) : LiveActor(pName) {
-    mHost = arg1;
+RingBeam::RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow) : LiveActor(pName) {
+    mHost = pHost;
     mSpeed = 20.0f;
     mLife = 100;
-    mIsFollowGravity = arg2;
-    mHasShadow = arg3;
+    mIsFollowGravity = isFollowGravity;
+    mHasShadow = hasShadow;
     mShadowDrawer = nullptr;
     mShadowModel = nullptr;
 }

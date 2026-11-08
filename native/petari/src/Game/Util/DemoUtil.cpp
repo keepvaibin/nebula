@@ -59,21 +59,21 @@ namespace MR {
         DemoFunction::getDemoDirector()->registerDemoCast(pActor, pName, rIter);
     }
 
-    void initTalkAnimDemoCast(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2) {
-        DemoFunction::getDemoDirector()->registerDemoCast(pActor, pName1, rIter);
-        DemoFunction::tryCreateDemoTalkAnimCtrlForActorDirect(pActor, pName1, pName2, nullptr);
+    void initTalkAnimDemoCast(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName) {
+        DemoFunction::getDemoDirector()->registerDemoCast(pActor, pDemoName, rIter);
+        DemoFunction::tryCreateDemoTalkAnimCtrlForActorDirect(pActor, pDemoName, pFileBaseName, nullptr);
     }
 
-    void registerDemoActionFunctorDirect(const LiveActor* pActor, const MR::FunctorBase& rFunctor, const char* pName1, const char* pName2) {
-        DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pName1, pName2);
+    void registerDemoActionFunctorDirect(const LiveActor* pActor, const MR::FunctorBase& rFunctor, const char* pDemoName, const char* pPartName) {
+        DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pDemoName, pPartName);
     }
 
-    bool tryRegisterDemoActionFunctorDirect(const LiveActor* pActor, const MR::FunctorBase& rFunctor, const char* pName1, const char* pName2) {
-        if (!DemoFunction::isRegisteredDemoActionFunctor(pActor, pName1)) {
+    bool tryRegisterDemoActionFunctorDirect(const LiveActor* pActor, const MR::FunctorBase& rFunctor, const char* pDemoName, const char* pPartName) {
+        if (!DemoFunction::isRegisteredDemoActionFunctor(pActor, pDemoName)) {
             return false;
         }
 
-        DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pName1, pName2);
+        DemoFunction::registerDemoActionFunctorFunction(pActor, rFunctor, pDemoName, pPartName);
 
         return true;
     }
@@ -367,8 +367,8 @@ namespace MR {
         DemoFunction::getDemoDirector()->endDemo(pObj, pName, true);
     }
 
-    void initDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pName1, const char* pName2, TalkMessageCtrl* pTalkCtrl) {
-        tryInitDemoSheetTalkAnim(pActor, rIter, pName1, pName2, pTalkCtrl);
+    void initDemoSheetTalkAnim(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName, TalkMessageCtrl* pTalkCtrl) {
+        tryInitDemoSheetTalkAnim(pActor, rIter, pDemoName, pFileBaseName, pTalkCtrl);
     }
 
     void initDemoSheetTalkAnimWithMessageName(LiveActor* pActor, const TableIter& rIter, const char* pDemoName, const char* pFileBaseName,

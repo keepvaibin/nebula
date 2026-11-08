@@ -184,25 +184,26 @@ void BossKameck::killAllBeam() {
 }
 
 void BossKameck::updatePose() {
-    Vec3f v19;
-    Vec3f v18;
-    v19.set(-mGravity);
-    v18.killElement(mVelocity - mLastVelocity, mGravity);
-    f32 mag = v18.length();
+    // Up leans into the change of velocity across gravity, by up to 4 at an acceleration of 3.
+    Vec3f up;
+    Vec3f sideAccel;
+    up.set(-mGravity);
+    sideAccel.killElement(mVelocity - mLastVelocity, mGravity);
+    f32 mag = sideAccel.length();
 
     if (!MR::isNearZero(mag)) {
-        f32 v4 = MR::normalize(mag, 0.0f, 3.0f);
+        f32 lean = MR::normalize(mag, 0.0f, 3.0f);
 
-        v19 += v18 * ((4.0f * v4) / mag);
+        up += sideAccel * ((4.0f * lean) / mag);
 
-        if (!MR::isNearZero(v19)) {
-            MR::normalize(&v19);
+        if (!MR::isNearZero(up)) {
+            MR::normalize(&up);
         } else {
-            v19.set(-mGravity);
+            up.set(-mGravity);
         }
     }
 
-    MR::blendQuatUpFront(&mPoseQuat, v19, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+    MR::blendQuatUpFront(&mPoseQuat, up, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 }
 
 void BossKameck::initKameckHolder(const TableIter& rIter) {

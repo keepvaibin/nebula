@@ -85,8 +85,8 @@ const char* DemoDirector::getCurrentDemoName() const {
     return nullptr;
 }
 
-void DemoDirector::endDemo(NameObj* pParam1, const char* pParam2, bool param3) {
-    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_END, 0, nullptr, pParam2);
+void DemoDirector::endDemo(NameObj* pRequester, const char* pDemoName, bool waitCameraInterpolating) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_END, 0, nullptr, pDemoName);
     if (DemoStartRequestUtil::isExistStartDemoRequest(mStartRequestHolder)) {
         MR::sendMsgToAllLiveActor(ACTMES_END_DEMO, nullptr);
 
@@ -94,14 +94,14 @@ void DemoDirector::endDemo(NameObj* pParam1, const char* pParam2, bool param3) {
 
         doDemoEndRequest();
         startDemoRequested();
-    } else if (param3 && !MR::isCameraInterpolatingNearlyEnd() && mMovementType != MR::MovementControlType_StopEnemy) {
+    } else if (waitCameraInterpolating && !MR::isCameraInterpolatingNearlyEnd() && mMovementType != MR::MovementControlType_StopEnemy) {
         mIsWaitingCamera = true;
 
         MR::sendMsgToAllLiveActor(ACTMES_END_DEMO, nullptr);
 
         mExecutor = nullptr;
 
-        MR::getSceneObj< SceneNameObjMovementController >(SceneObj_SceneNameObjMovementController)->requestStopSceneOverwrite(pParam1);
+        MR::getSceneObj< SceneNameObjMovementController >(SceneObj_SceneNameObjMovementController)->requestStopSceneOverwrite(pRequester);
     } else {
         MR::sendMsgToAllLiveActor(ACTMES_END_DEMO, nullptr);
 
@@ -111,9 +111,9 @@ void DemoDirector::endDemo(NameObj* pParam1, const char* pParam2, bool param3) {
     }
 }
 
-bool DemoDirector::isExistTimeKeepDemo(const char* pParam1) const {
+bool DemoDirector::isExistTimeKeepDemo(const char* pDemoName) const {
     for (int i = 0; i < mCastGroupHolder->getObjNum(); i++) {
-        if (MR::isName(mCastGroupHolder->getCastGroup(i), pParam1)) {
+        if (MR::isName(mCastGroupHolder->getCastGroup(i), pDemoName)) {
             return true;
         }
     }
@@ -141,12 +141,12 @@ bool DemoDirector::registerDemoCast(LiveActor* pActor, const TableIter& rIter) {
     return mCastSubGroupHolder->tryRegisterDemoActor(pActor, rIter, idInfo);
 }
 
-bool DemoDirector::registerDemoCast(LiveActor* pActor, const char* pParam2, const TableIter& rIter) {
-    if (mCastGroupHolder->tryRegisterDemoActor(pActor, pParam2, rIter)) {
+bool DemoDirector::registerDemoCast(LiveActor* pActor, const char* pDemoName, const TableIter& rIter) {
+    if (mCastGroupHolder->tryRegisterDemoActor(pActor, pDemoName, rIter)) {
         return true;
     }
 
-    return mCastSubGroupHolder->tryRegisterDemoActor(pActor, pParam2, rIter);
+    return mCastSubGroupHolder->tryRegisterDemoActor(pActor, pDemoName, rIter);
 }
 
 void DemoDirector::registerDemoSimpleCast(LiveActor* pActor) {

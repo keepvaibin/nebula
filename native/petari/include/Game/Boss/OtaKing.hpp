@@ -53,7 +53,7 @@ public:
     void startDemo();
     void appearStarPiece();
     void initLongFoot(const TableIter& rIter);
-    bool tryThrowCocoNutOrFireBallIfWait(s32);
+    bool tryThrowCocoNutOrFireBallIfWait(s32 waitFrame);
 
     void exeWaitOnSwitch();
     void exeAppearDemo();

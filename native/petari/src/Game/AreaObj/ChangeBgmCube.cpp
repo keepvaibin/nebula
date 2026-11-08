@@ -11,6 +11,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
 
+namespace {
+    // Obj_arg0: what entering the cube does.
+    enum Mode {
+        Mode_Start,       // start stage BGM obj_arg1 (or the stage's own), with track state obj_arg2
+        Mode_StopToNext,  // fade out over obj_arg1 frames into BGM obj_arg2
+        Mode_TrackMute,   // track state obj_arg1 over obj_arg2 frames
+    };
+};  // namespace
+
 ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), mIsInside() {
 }
 
@@ -77,7 +86,7 @@ void ChangeBgmCube::movement() {
         s32 objArg2 = mObjArg2;
 
         switch (objArg0) {
-        case 0: {
+        case Mode_Start: {
             if (objArg1 < 0) {
                 MR::startCurrentStageBGM();
                 break;
@@ -120,7 +129,7 @@ void ChangeBgmCube::movement() {
             }
             break;
         }
-        case 1: {
+        case Mode_StopToNext: {
             if (mObjArg3 != 1) {
                 if (MR::isGalaxyRedCometAppearInCurrentStage()) {
                     break;
@@ -131,10 +140,10 @@ void ChangeBgmCube::movement() {
                 }
             }
 
-            s32 arg1 = objArg1;
+            s32 fadeTime = objArg1;
 
-            if (arg1 < 0) {
-                arg1 = 90;
+            if (fadeTime < 0) {
+                fadeTime = 90;
             }
 
             if (objArg2 >= 0) {
@@ -151,21 +160,21 @@ void ChangeBgmCube::movement() {
                 }
             }
 
-            MR::stopStageBGM(arg1);
+            MR::stopStageBGM(fadeTime);
             break;
         }
-        case 2:
+        case Mode_TrackMute:
             if (objArg1 < 0) {
                 AudBgm* stageBgm = AudWrap::getStageBgm();
 
                 if (stageBgm != nullptr) {
-                    s32 arg2 = 30;
+                    s32 fadeTime = 30;
 
                     if (objArg2 >= 0) {
-                        arg2 = objArg2;
+                        fadeTime = objArg2;
                     }
 
-                    stageBgm->changeTrackMuteState(0, arg2);
+                    stageBgm->changeTrackMuteState(0, fadeTime);
                 }
             } else {
                 s32 bgmState = AudStageBgmTable::getBgmState(MR::getCurrentStageName(), objArg1);
@@ -174,13 +183,13 @@ void ChangeBgmCube::movement() {
                     AudBgm* stageBgm = AudWrap::getStageBgm();
 
                     if (stageBgm != nullptr) {
-                        s32 arg2 = 30;
+                        s32 fadeTime = 30;
 
                         if (objArg2 >= 0) {
-                            arg2 = objArg2;
+                            fadeTime = objArg2;
                         }
 
-                        stageBgm->changeTrackMuteState(bgmState, arg2);
+                        stageBgm->changeTrackMuteState(bgmState, fadeTime);
                     }
                 }
             }
