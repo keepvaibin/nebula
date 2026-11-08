@@ -67,6 +67,7 @@ void ScenarioSelectScene::init() {
 }
 
 void ScenarioSelectScene::start() {
+    mEffectSystem->startScene();
     _15 = 0;
     _16 = 0;
     setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvInvalidScenarioSelect));
