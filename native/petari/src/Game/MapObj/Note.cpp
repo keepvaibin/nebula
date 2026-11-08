@@ -95,14 +95,14 @@ void Note::control() {
 }
 
 void Note::calcAndSetBaseMtx() {
-    Pos3f stack_44;
-    MR::makeMtxUpFront(&stack_44, -mGravity, mRailDirection);
+    Pos3f baseMtx;
+    MR::makeMtxUpFront(&baseMtx, -mGravity, mRailDirection);
     Mtx mtxRotateY;
-    f32 val = MR::getSceneObj< NoteGroup >(SceneObj_NoteGroup)->mRotation;
-    MR::makeMtxRotateY(mtxRotateY, val);
-    MR::multMtx(stack_44, mtxRotateY, stack_44);
-    stack_44.setTrans(mPosition);
-    MR::setBaseTRMtx(this, stack_44);
+    f32 groupRotation = MR::getSceneObj< NoteGroup >(SceneObj_NoteGroup)->mRotation;
+    MR::makeMtxRotateY(mtxRotateY, groupRotation);
+    MR::multMtx(baseMtx, mtxRotateY, baseMtx);
+    baseMtx.setTrans(mPosition);
+    MR::setBaseTRMtx(this, baseMtx);
 }
 
 void Note::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

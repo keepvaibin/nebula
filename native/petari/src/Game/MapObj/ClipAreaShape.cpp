@@ -45,9 +45,10 @@ bool ClipAreaShapeSphere::isInArea(const Vec3f& rVec) const {
 void ClipAreaShapeSphere::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const Vec3f& rVec) const {
     pPos->set(rPos);
 
-    Vec3f stack_14 = (Vec3f(rVec.scaleInline(mRadius)));
-    stack_14.scale(0.0099999998f);
-    MR::preScaleMtx(pPos->toMtxPtr(), stack_14);
+    // The volume model is 100 units across.
+    Vec3f volumeScale(rVec.scaleInline(mRadius));
+    volumeScale.scale(0.01f);
+    MR::preScaleMtx(pPos->toMtxPtr(), volumeScale);
 }
 
 bool ClipAreaShapeBox::isInArea(const Vec3f& rVec) const {

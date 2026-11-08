@@ -26,7 +26,7 @@ public:
 
 class AreaFormCube : public AreaForm {
 public:
-    AreaFormCube(int);
+    AreaFormCube(int cubeType);
 
     virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;

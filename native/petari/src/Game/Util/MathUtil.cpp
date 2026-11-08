@@ -1081,25 +1081,21 @@ namespace MR {
         return VecKillElement(rSrc, rKillDir, pDst);
     }
 
-    void vecScaleAdd(const register Vec3f* pA1, const register Vec3f* pA2, register f32 a3) {
-        // The original stores through pA1, declared const.
-        Vec3f* dst = const_cast< Vec3f* >(pA1);
-        dst->x = pA2->x * a3 + pA1->x;
-        dst->y = pA2->y * a3 + pA1->y;
-        dst->z = pA2->z * a3 + pA1->z;
+    void vecScaleAdd(Vec3f* pDst, const Vec3f* pAdd, f32 scale) {
+        pDst->x = pAdd->x * scale + pDst->x;
+        pDst->y = pAdd->y * scale + pDst->y;
+        pDst->z = pAdd->z * scale + pDst->z;
     }
 
-    void PSvecBlend(const register Vec3f* pA1, const register Vec3f* pA2, register Vec3f* pA3, register f32 a4, register f32 a5) {
-        const f32 x = pA2->x * a5 + pA1->x * a4;
-        const f32 y = pA2->y * a5 + pA1->y * a4;
-        const f32 z = pA2->z * a5 + pA1->z * a4;
-        pA3->x = x;
-        pA3->y = y;
-        pA3->z = z;
-    }
-
+    // pDst may be rFrom or rTo: every component is read before any is written.
     void vecBlend(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pDst, f32 rate) {
-        PSvecBlend(&rFrom, &rTo, pDst, 1.0f - rate, rate);
+        const f32 invRate = 1.0f - rate;
+        const f32 x = rTo.x * rate + rFrom.x * invRate;
+        const f32 y = rTo.y * rate + rFrom.y * invRate;
+        const f32 z = rTo.z * rate + rFrom.z * invRate;
+        pDst->x = x;
+        pDst->y = y;
+        pDst->z = z;
     }
 
     void vecBlendNormal(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate) {
@@ -1431,11 +1427,12 @@ namespace MR {
         return MR::abs(1.0f - rVec.length()) <= tolerance;
     }
 
+    // All bits set in each component: a quiet NaN.
     void setNan(Vec3f& rDst) {
-        Vec3< int >* tmp = (Vec3< int >*)&rDst;
-        tmp->x = -1;
-        tmp->y = -1;
-        tmp->z = -1;
+        const f32 nan = __builtin_bit_cast(f32, 0xFFFFFFFFu);
+        rDst.x = nan;
+        rDst.y = nan;
+        rDst.z = nan;
     }
 
     bool isNan(const Vec3f& rVec) {

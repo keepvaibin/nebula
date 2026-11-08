@@ -294,10 +294,10 @@ bool MarblePlanetElectron::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiv
 }
 
 void MarblePlanetElectron::crashElectron(HitSensor* pSensor) {
-    Vec3f stack_8;
-    stack_8.sub(pSensor->mHost->mPosition, mPosition);
-    MR::normalize(&stack_8);
-    mVelocity.scaleAdd(-5.0f, stack_8, mVelocity);
+    Vec3f toOther;
+    toOther.sub(pSensor->mHost->mPosition, mPosition);
+    MR::normalize(&toOther);
+    mVelocity.scaleAdd(-5.0f, toOther, mVelocity);
     MR::normalize(mVelocity, &mFront);
     mVelocity.x *= 1.2f;
     mVelocity.y *= 1.2f;
@@ -319,12 +319,12 @@ void MarblePlanetElectronShadow::init(const TableIter& rIter) {
 
 void MarblePlanetElectronShadow::calcAndSetBaseMtx() {
     mPosition.set(*mGroundPos);
-    Vec3f stack_8;
-    stack_8.sub(mParentElectron->mPosition, *mGroundPos);
-    MR::normalize(&stack_8);
-    Pos3f up_mtx;
-    MR::makeMtxUpNoSupportPos(&up_mtx, stack_8, *mGroundPos);
-    MR::setBaseTRMtx(this, up_mtx);
+    Vec3f up;
+    up.sub(mParentElectron->mPosition, *mGroundPos);
+    MR::normalize(&up);
+    Pos3f baseMtx;
+    MR::makeMtxUpNoSupportPos(&baseMtx, up, *mGroundPos);
+    MR::setBaseTRMtx(this, baseMtx);
 }
 
 MarblePlanet::~MarblePlanet() {

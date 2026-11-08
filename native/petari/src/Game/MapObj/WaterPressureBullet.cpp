@@ -62,15 +62,15 @@ void WaterPressureBullet::control() {
     if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "弱", true, false)) {
         kill();
     } else {
-        Vec3f stack_8;
+        Vec3f targetDir;
 
         if (MR::isNearZero(mVelocity)) {
-            stack_8.set(*getGravity());
+            targetDir.set(*getGravity());
         } else {
-            stack_8.set(*getVelocity());
+            targetDir.set(*getVelocity());
         }
 
-        MR::turnVecToVecCosOnPlane(&mFront, stack_8, mSide, MR::cosDegree(2.5f));
+        MR::turnVecToVecCosOnPlane(&mFront, targetDir, mSide, MR::cosDegree(2.5f));
     }
 }
 

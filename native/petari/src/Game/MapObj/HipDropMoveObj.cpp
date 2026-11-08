@@ -153,10 +153,10 @@ void HipDropDemoMoveObj::moveStart() {
 
 void HipDropDemoMoveObj::moving() {
     if (MR::isDemoActive()) {
-        Pos3f stack_8;
-        stack_8.set(MR::getJointMtx(this, ::cMoveJointName));
-        stack_8.concat(stack_8, mMtx);
-        stack_8.getTrans(MR::getPlayerDemoActor()->mPosition);
-        MR::setPlayerBaseMtx((MtxPtr)&stack_8);
+        Pos3f playerMtx;
+        playerMtx.set(MR::getJointMtx(this, ::cMoveJointName));
+        playerMtx.concat(playerMtx, mMtx);
+        playerMtx.getTrans(MR::getPlayerDemoActor()->mPosition);
+        MR::setPlayerBaseMtx(playerMtx);
     }
 }

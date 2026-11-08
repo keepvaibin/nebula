@@ -326,8 +326,8 @@ namespace MR {
     void sortSmall(s32 length, f32* pSortArray, s32* pIndexArray);
 
     f32 vecKillElement(const Vec3f& rSrc, const Vec3f& rKillDir, Vec3f* pDst);
-    void vecScaleAdd(const Vec3f* pScale, const Vec3f* pAdd, f32 scale);
-    void PSvecBlend(const Vec3f* pFrom, const Vec3f* pTo, Vec3f* pDst, f32 invRate, f32 rate);
+    // *pDst += *pAdd * scale.
+    void vecScaleAdd(Vec3f* pDst, const Vec3f* pAdd, f32 scale);
     void vecBlend(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pDst, f32 rate);
     void vecBlendNormal(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate);
     bool vecBlendSphere(const Vec3f& rFrom, const Vec3f& rTo, Vec3f* pVec, f32 rate);

@@ -11,24 +11,24 @@
 
 namespace {
     const u16 sTextureSize = 32;
-    u16 sStripCount = 16;
+    const u16 sStripCount = 16;
     const s16 sLayerCount = 12;
-    s16 sColorR = 220;
-    s16 sColorStepR = -3;
-    s16 sColorG = 220;
-    s16 sColorStepG = -3;
-    s16 sColorB = 250;
-    s16 sColorStepB = -3;
-    s16 sColorA = 64;
-    s16 sColorStepA = 8;
-    s16 sLayerHeight = 6;
-    f32 cPointerDigAmount = 30.0f;
-    f32 cPlayerDigAmount = 600.0f;
-    f32 cFireballDigAmount = 200.0f;
-    f32 cSwingDigAmount = 20.0f;
-    f32 cSwingDigRadius = 100.0f;
-    f32 cHipdropDigAmount = 1000.0f;
-    f32 cHipdropDigRadius = 50.0f;
+    const s16 sColorR = 220;
+    const s16 sColorStepR = -3;
+    const s16 sColorG = 220;
+    const s16 sColorStepG = -3;
+    const s16 sColorB = 250;
+    const s16 sColorStepB = -3;
+    const s16 sColorA = 64;
+    const s16 sColorStepA = 8;
+    const s16 sLayerHeight = 6;
+    const f32 cPointerDigAmount = 30.0f;
+    const f32 cPlayerDigAmount = 600.0f;
+    const f32 cFireballDigAmount = 200.0f;
+    const f32 cSwingDigAmount = 20.0f;
+    const f32 cSwingDigRadius = 100.0f;
+    const f32 cHipdropDigAmount = 1000.0f;
+    const f32 cHipdropDigRadius = 50.0f;
 };  // namespace
 
 SnowFloorTile::~SnowFloorTile() {

@@ -39,15 +39,12 @@ bool FirePressure::shotBullet(f32 a1) {
 
 void FirePressure::calcGunPointFromCannon(Pos3f* pOutPoint) {
     Pos3f jointMtx(MR::getJointMtx(this, "Cannon1"));
-    Vec3f stack_2C;
-    jointMtx.getXDir(stack_2C);
-    Vec3f stack_20;
-    jointMtx.getTrans(stack_20);
-    stack_20.scaleAdd(200.0f, stack_2C, stack_20);
-    pOutPoint->setInline(jointMtx);
-    Vec3f stack_14;
-    jointMtx.getYDir(stack_14);
-    Vec3f stack_8;
-    jointMtx.getZDir(stack_8);
-    MR::makeMtxFrontUpPos(pOutPoint, stack_2C, stack_14, stack_20);
+    Vec3f front;
+    jointMtx.getXDir(front);
+    Vec3f muzzlePos;
+    jointMtx.getTrans(muzzlePos);
+    muzzlePos.scaleAdd(200.0f, front, muzzlePos);
+    Vec3f up;
+    jointMtx.getYDir(up);
+    MR::makeMtxFrontUpPos(pOutPoint, front, up, muzzlePos);
 }
