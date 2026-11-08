@@ -718,6 +718,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
         runtime/src/render/vk/ambient_occlusion_vk.cpp
         runtime/src/render/vk/temporal_upscaler_vk.cpp
+        runtime/src/render/vk/sgsr2_vk.cpp
         runtime/src/render/vk/streamline_vk.cpp
         runtime/src/render/vk/ffx_vk_forward.cpp
         runtime/src/render/vk/fsr_frame_generation_vk.cpp

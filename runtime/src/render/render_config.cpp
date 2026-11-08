@@ -160,7 +160,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss", "xess"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss", "xess", "sgsr2"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
     } else if (std::strcmp(key, "frame_generation") == 0) {
         cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);

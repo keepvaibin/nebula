@@ -82,6 +82,12 @@ Belen Masia, Fernando Navarro and Diego Gutierrez. License: `third_party/smaa/LI
 <https://github.com/GPUOpen-Effects/FidelityFX-FSR>. Copyright (c) 2021 Advanced Micro Devices, Inc.
 License: `third_party/fidelityfx-fsr1/LICENSE.txt`.
 
+## Snapdragon Game Super Resolution 2 (BSD 3-clause)
+
+`runtime/src/render/sgsr2.hlsl` is adapted from the two-pass fragment shaders of
+<https://github.com/SnapdragonStudios/snapdragon-gsr> (d926f07). Copyright (c) 2023-2024, Qualcomm Innovation Center,
+Inc. License: `third_party/snapdragon-gsr/LICENSE.txt`.
+
 ## NVIDIA Streamline 2.14.1 headers (MIT)
 
 `third_party/streamline/include/` holds unmodified headers from

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Temporal upscaling of the Vulkan scene (AMD FidelityFX FSR 3.1).
+// Temporal upscaling of the Vulkan scene (AMD FidelityFX FSR 3.1, Intel XeSS, Qualcomm Snapdragon Game Super Resolution 2).
 
 #include <volk.h>
 
@@ -64,6 +64,12 @@ void temporal_barriers(const TemporalUpscaleInputs& in, bool back);
 // or when the device lacks what it asked for (Context::create).
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
                                                                      unsigned output_width, unsigned output_height, unsigned quality);
+
+// Snapdragon Game Super Resolution 2 (sgsr2_vk.cpp): two fragment passes on any Vulkan device. `output_format`: the
+// output image's, which the history shares. Null when a pipeline or image cannot be made.
+[[nodiscard]] std::unique_ptr<TemporalUpscaler> create_sgsr2_upscaler(unsigned render_width, unsigned render_height,
+                                                                      unsigned output_width, unsigned output_height,
+                                                                      VkFormat output_format);
 
 // Whether this build holds it (GALAXY_WITH_FSR3_VK).
 [[nodiscard]] bool fsr3_compiled() noexcept;

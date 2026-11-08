@@ -18,6 +18,7 @@ extern const unsigned char galaxy_post_ffx_fsr1_h[];
 extern const unsigned char galaxy_post_game_bloom_hlsl[];
 extern const unsigned char galaxy_post_ambient_occlusion_hlsl[];
 extern const unsigned char galaxy_post_scene_camera_hlsl[];
+extern const unsigned char galaxy_post_sgsr2_hlsl[];
 }  // namespace galaxy::render
 
 namespace galaxy::render::vk {
@@ -116,6 +117,14 @@ inline std::string camera_source() {
 
 inline std::string bloom_source() {
     return annotate(reinterpret_cast<const char*>(galaxy_post_game_bloom_hlsl), kBloomBindings);
+}
+
+// sgsr2.hlsl's registers: t0-t3 sampled and s0 in set 0 (the convert pass binds t0 and s0 only), the constants pushed.
+constexpr RegisterBinding kSgsrBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
+                                             {"t3", 0, 3},       {"s0", 0, 4}};
+
+inline std::string sgsr2_source() {
+    return annotate(reinterpret_cast<const char*>(galaxy_post_sgsr2_hlsl), kSgsrBindings);
 }
 
 }  // namespace galaxy::render::vk

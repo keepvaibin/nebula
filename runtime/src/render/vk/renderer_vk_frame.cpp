@@ -743,7 +743,7 @@ bool RendererVk::temporal_mode() const {
     }
 #endif
     return (upscaler == 2u && fsr3_available() && vk::Context::get().temporal_upscaling()) ||
-           (upscaler == 4u && vk::Context::get().xess_upscaling());
+           (upscaler == 4u && vk::Context::get().xess_upscaling()) || upscaler == 5u;
 }
 
 void RendererVk::prepare_temporal_upscaler() {
@@ -802,6 +802,14 @@ void RendererVk::prepare_temporal_upscaler() {
         return;
     }
 #endif
+    if (kind == 5u) {
+        // Two pipelines and three images: made here, as the frame begins.
+        temporal_ = vk::create_sgsr2_upscaler(rw, rh, ow, oh, vk::kSceneColorFormat);
+        if (temporal_) {
+            std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
+        }
+        return;
+    }
     const vk::Context& context = vk::Context::get();
     // Until it is ready the scene renders at the render scale without the upscale.
     temporal_pending_ = std::async(std::launch::async, [instance = context.instance(), device = context.device(),
@@ -1241,7 +1249,7 @@ bool RendererVk::begin_output_scene(bool resolve_msaa_only) {
     if (temporal) {
         const FrameMap upscaled_map(temporal_output_w_, temporal_output_h_);
         if (!upscaled_map.empty() && upscaled_map.width >= scene_map_.width &&
-            ensure_output_set(upscaled_map, true) && record_temporal_upscale(upscaled_map)) {
+            ensure_output_set(upscaled_map, temporal_kind_ != 5u) && record_temporal_upscale(upscaled_map)) {
             swap_scene_sets();
             take_fg_hudless_scene();
             bind_scene();
