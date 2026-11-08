@@ -316,7 +316,7 @@ bool MarioActor::tryJumpRush() {
         return false;
     }
 
-    if (mMario->isStatusActive(MarioStatus_13)) {
+    if (mMario->isStatusActive(MarioStatus_RecoveryOrWarp)) {
         return false;
     }
 
@@ -380,7 +380,7 @@ void MarioActor::tryRushInRush() {
         return;
     }
 
-    HitSensor* sensor924 = mRushSensor;
+    HitSensor* rushSensor = mRushSensor;
     if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
         return;
     }
@@ -394,7 +394,7 @@ void MarioActor::tryRushInRush() {
         return;
     }
 
-    if (isFixJumpRushSensor(target) && isLandEffectRushSensor(sensor924)) {
+    if (isFixJumpRushSensor(target) && isLandEffectRushSensor(rushSensor)) {
         mMario->mMovementStates.launchKind = false;
 
         playEffect("スーパースピンドライバ終了");

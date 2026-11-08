@@ -12,7 +12,7 @@ public:
     virtual bool close();
     virtual bool update();
 
-    f32 vecKillActor240(const Vec3f& rVec) {
+    f32 setVelocityOffGravity(const Vec3f& rVec) {
         return MR::vecKillElement(rVec, mActor->mGravityVec, &mVelocity);
     }
 

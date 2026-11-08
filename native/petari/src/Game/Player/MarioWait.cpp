@@ -111,7 +111,7 @@ bool MarioWait::checkStart() {
         return false;
     }
 
-    bool damaged = mActor->is481or482On();
+    bool damaged = mActor->isHidden();
     if (damaged) {
         mTimer = 0;
         return false;

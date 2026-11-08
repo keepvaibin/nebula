@@ -178,15 +178,15 @@ void Mario::mainMove() {
             calcShadowDir(mFrontVec, &mFrontOnShadow);
 
             f32 angle = MR::pi() * 10.0f / 180.0f;
-            f32 f1;
+            f32 turnAngle;
             if (mMovementStates.mode2D) {
-                f1 = MR::diffAngleAbsHorizontal(mFrontOnShadow, mMoveDirOnShadow, m2DPlaneNormal);
+                turnAngle = MR::diffAngleAbsHorizontal(mFrontOnShadow, mMoveDirOnShadow, m2DPlaneNormal);
                 angle = MR::pi() * 90.0f / 180.0f;
             } else {
-                f1 = MR::diffAngleAbsHorizontal(mFrontOnShadow, mMoveDirOnShadow, *getGravityVec());
+                turnAngle = MR::diffAngleAbsHorizontal(mFrontOnShadow, mMoveDirOnShadow, *getGravityVec());
             }
 
-            if (f1 > angle) {
+            if (turnAngle > angle) {
                 u32 turnTime = mActor->getConst().getTable()->mStandingTurnTime;
                 if (mActor->isBeeWallWalk() != false) {
                     turnTime = 30;
@@ -459,13 +459,13 @@ void Mario::mainMove() {
             mPrevTurnCross = cross;
             mPrevMoveDirOnShadow = mMoveDirOnShadow;
 
-            f32 f1 = 1.0f;
+            f32 weakTurnRatio = 1.0f;
 
             if (mWeakTurnTimer < mActor->getConst().getTable()->mWeakTurnTime && mTargetWalkSpeedIndex > 4) {
-                f1 = static_cast< f32 >(mWeakTurnTimer) / static_cast< f32 >(mActor->getConst().getTable()->mWeakTurnTime);
+                weakTurnRatio = static_cast< f32 >(mWeakTurnTimer) / static_cast< f32 >(mActor->getConst().getTable()->mWeakTurnTime);
             }
 
-            turnAngleSpeed *= MR::sqrt(f1);
+            turnAngleSpeed *= MR::sqrt(weakTurnRatio);
         } else {
             if (mWeakTurnTimer != 0) {
                 mWeakTurnTimer--;
@@ -517,11 +517,11 @@ void Mario::mainMove() {
                 f32 diffAngleAbs = MR::diffAngleAbs(mFrontVec, mMoveDirOnShadow);
 
                 if (diffAngleAbs > 0.0f) {
-                    f32 f1 = turnAngleSpeed / diffAngleAbs;
-                    MR::clamp01(&f1);
+                    f32 blend = turnAngleSpeed / diffAngleAbs;
+                    MR::clamp01(&blend);
 
-                    if (mActor->isBeeWallWalk() != false && f1 > 0.1f) {
-                        f1 = 0.1f;
+                    if (mActor->isBeeWallWalk() != false && blend > 0.1f) {
+                        blend = 0.1f;
                     }
 
                     if (getPlayer()->mActionStates.heavySteeringTurn) {
@@ -534,15 +534,15 @@ void Mario::mainMove() {
                             ratio += (1.0f - ratio) * ((diffAngleAbs - minAngle) / (maxAngle - minAngle));
                         }
 
-                        f1 *= ratio;
+                        blend *= ratio;
 
-                        f32 f2 = 1.0f - ((MR::pi() - diffAngleAbs) / MR::pi());
-                        MR::clamp01(&f2);
+                        f32 reverseRatio = 1.0f - ((MR::pi() - diffAngleAbs) / MR::pi());
+                        MR::clamp01(&reverseRatio);
 
-                        mWalkSpeed *= 1.0f - 0.1f * f2;
+                        mWalkSpeed *= 1.0f - 0.1f * reverseRatio;
                     }
 
-                    if (!MR::vecBlendSphere(mFrontVec, mMoveDirOnShadow, &vec2, f1)) {
+                    if (!MR::vecBlendSphere(mFrontVec, mMoveDirOnShadow, &vec2, blend)) {
                         mWeakTurnTimer = 0;
                         MR::vecRotAxis(mFrontOnShadow, mMoveDirOnShadow, mHeadVec, &vec2, 22.5f * MR::pi() / 180.0f);
                     }
@@ -613,11 +613,11 @@ void Mario::mainMove() {
 
         MR::normalize(&vec4);
 
-        f32 f1 = (1.1f - mWalkSpeed) * mActor->getConst().getTable()->mInertiaIceTurn;
+        f32 iceBlend = (1.1f - mWalkSpeed) * mActor->getConst().getTable()->mInertiaIceTurn;
 
-        MR::clamp01(&f1);
+        MR::clamp01(&iceBlend);
 
-        MR::vecBlendSphere(vec4, vec3, &vec2, f1);
+        MR::vecBlendSphere(vec4, vec3, &vec2, iceBlend);
 
         MR::normalize(&vec2);
 

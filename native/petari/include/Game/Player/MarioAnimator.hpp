@@ -72,12 +72,6 @@ public:
     void squatSpinCheck();
     void walkinClose();
 
-    inline void f1(const char* name) {
-        getPlayer()->startBas(nullptr, false, 0.0f, 0.0f);
-
-        mXanimePlayer->setDefaultAnimation(name);
-    }
-
     inline bool isTeresaClear() const {
         return !isPlayerModeTeresa();
     }

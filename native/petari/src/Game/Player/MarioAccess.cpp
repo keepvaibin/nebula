@@ -86,7 +86,7 @@ namespace MarioAccess {
     }
 
     bool isInRush() {
-        return getPlayerActor()->mInRush || getPlayerActor()->getMario()->isStatusActive(MarioStatus_13);
+        return getPlayerActor()->mInRush || getPlayerActor()->getMario()->isStatusActive(MarioStatus_RecoveryOrWarp);
     }
 
     bool isSquat() {
@@ -507,7 +507,7 @@ namespace MarioAccess {
             return;
         }
 
-        if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->mPlayerMode == PlayerMode_Hopper) {
+        if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_RecoveryOrWarp) || getPlayerActor()->mPlayerMode == PlayerMode_Hopper) {
             offControl();
             getPlayerActor()->getMario()->mActionStates.remoteDemoSkipped = true;
             return;
@@ -622,8 +622,8 @@ namespace MarioAccess {
         return getPlayerActor()->isAnimationRun("水泳ジェット");
     }
 
-    void calcWorldPadDir(Vec3f* pOut, f32 f1, f32 f2) {
-        getPlayerActor()->getMario()->calcWorldPadDir(pOut, f1, f2, false);
+    void calcWorldPadDir(Vec3f* pOut, f32 stickX, f32 stickY) {
+        getPlayerActor()->getMario()->calcWorldPadDir(pOut, stickX, stickY, false);
     }
 
     void preventRush() {
@@ -701,7 +701,7 @@ namespace MarioAccess {
     }
 
     void endRemoteDemo(const RushEndInfo* pEndInfo) {
-        if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->getMario()->isStatusActive(MarioStatus_Talk) ||
+        if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_RecoveryOrWarp) || getPlayerActor()->getMario()->isStatusActive(MarioStatus_Talk) ||
             getPlayerActor()->getMario()->mActionStates.remoteDemoSkipped || !getPlayerActor()->mInDemo) {
             getPlayerActor()->mRemoteDemo = false;
             return;

@@ -669,11 +669,11 @@ public:
         mCorrectionTurnTimer = 0;
     }
 
-    inline void set3BC(u16 val) {
+    inline void setAirTimer(u16 val) {
         mAirTimer = val;
     }
 
-    inline void set41E(u16 val) {
+    inline void setDamageAfterTimer(u16 val) {
         mDamageAfterTimer = val;
     }
 

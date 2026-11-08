@@ -46,45 +46,43 @@ void Mario::check2DMode() {
     }
 }
 
-void Mario::calcMoveDir2D(f32 a1, f32 a2, Vec3f* pOut) {
-    if (a1 != 0.0f) {
-        a2 = 0.0f;
+void Mario::calcMoveDir2D(f32 stickX, f32 stickY, Vec3f* pOut) {
+    if (stickX != 0.0f) {
+        stickY = 0.0f;
     }
 
-    Vec3f stack_8C;
-    Vec3f stack_80;
-    Vec3f stack_74;
-    Vec3f stack_68;
-    Vec3f stack_5C;
+    Vec3f up;
+    Vec3f normal;
+    Vec3f alongGround;
+    Vec3f down;
 
-    stack_8C = mSide2D;
-    stack_80 = mUp2D;
-    stack_74 = mNormal2D;
+    up = mUp2D;
+    normal = mNormal2D;
 
-    Vec3f stack_50(m2DGroundNorm);
-    stack_68.cross(stack_74, stack_50);
-    MR::normalize(&stack_68);
+    Vec3f groundNorm(m2DGroundNorm);
+    alongGround.cross(normal, groundNorm);
+    MR::normalize(&alongGround);
 
-    if (stack_50.dot(stack_80) < 0.0f) {
-        stack_68 = -stack_68;
+    if (groundNorm.dot(up) < 0.0f) {
+        alongGround = -alongGround;
     }
 
-    stack_5C = -stack_80;
-    Vec3f stack_44(mMoveUpVec);
+    down = -up;
+    Vec3f prevMoveUp(mMoveUpVec);
 
-    if (mMoveUpVec.dot(stack_50) <= 0.0f) {
-        mMoveUpVec = stack_50;
+    if (mMoveUpVec.dot(groundNorm) <= 0.0f) {
+        mMoveUpVec = groundNorm;
     } else {
-        MR::vecBlendSphere(mMoveUpVec, stack_50, &mMoveUpVec, 0.1f);
+        MR::vecBlendSphere(mMoveUpVec, groundNorm, &mMoveUpVec, 0.1f);
     }
 
     if (MR::isNearZero(mMoveUpVec)) {
-        mMoveUpVec = stack_44;
+        mMoveUpVec = prevMoveUp;
     } else {
         MR::normalize(&mMoveUpVec);
     }
 
-    *pOut = stack_68 * a1 - stack_5C * a2;
+    *pOut = alongGround * stickX - down * stickY;
 }
 
 void Mario::calcShadowDir2D(const Vec3f& rVec, Vec3f* pOut) {
@@ -109,13 +107,13 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     NebulaMtxMultVecSR(m2DRotateMtx, &mSide2D, &mSide2D);
     NebulaMtxMultVecSR(m2DRotateMtx, &mNormal2D, &mNormal2D);
 
-    Vec3f stack_38(0.0f, 1.0f, 0.0f);
+    Vec3f worldY(0.0f, 1.0f, 0.0f);
     Vec3f* camDirZ = &getCamDirZ();
-    f32 angle = MR::diffAngleSignedHorizontal(getCamDirY(), stack_38, *camDirZ);
+    f32 angle = MR::diffAngleSignedHorizontal(getCamDirY(), worldY, *camDirZ);
 
-    Vec3f stack_2C(1.0f, 0.0f, 0.0f);
+    Vec3f worldX(1.0f, 0.0f, 0.0f);
     camDirZ = &getCamDirZ();
-    const f32 absHorizontal = MR::diffAngleAbsHorizontal(getCamDirX(), stack_2C, *camDirZ);
+    const f32 absHorizontal = MR::diffAngleAbsHorizontal(getCamDirX(), worldX, *camDirZ);
     if (absHorizontal >= 3.0415928f && MR::abs(angle) >= 3.0415928f) {
         angle = 0.0f;
         rStickX = -rStickX;

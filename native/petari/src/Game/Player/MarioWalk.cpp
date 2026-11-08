@@ -284,26 +284,26 @@ void Mario::decideWalkAnimation() {
         } else {
             f32 weights[] = {0, 0, 0, 0};
             if (mTargetWalkSpeedIndex != 0) {
-                f32 f1 = 1.0f;
+                f32 sinkBlend = 1.0f;
                 if (mTargetWalkSpeedIndex <= 3) {
                     if (mTargetWalkSpeedIndex == 2) {
-                        f1 = 0.75f;
+                        sinkBlend = 0.75f;
                     }
 
                     if (mTargetWalkSpeedIndex == 3) {
-                        f1 = 0.5f;
+                        sinkBlend = 0.5f;
                     }
 
-                    weights[0] = f1;
-                    weights[1] = 1.0f - f1;
+                    weights[0] = sinkBlend;
+                    weights[1] = 1.0f - sinkBlend;
                 } else {
                     if (mTargetWalkSpeedIndex >= 5) {
-                        f1 = static_cast< f32 >(mSinkTimer) / 100.0f;
+                        sinkBlend = static_cast< f32 >(mSinkTimer) / 100.0f;
                     }
 
-                    f1 = MR::clamp(f1, 0.0f, 1.0f);
-                    weights[1] = f1;
-                    weights[2] = 1.0f - f1;
+                    sinkBlend = MR::clamp(sinkBlend, 0.0f, 1.0f);
+                    weights[1] = sinkBlend;
+                    weights[2] = 1.0f - sinkBlend;
                 }
             } else {
                 weights[3] = 1.0f;
@@ -353,22 +353,22 @@ void Mario::decideWalkAnimation() {
     mPrevAnimFrame = animFrame;
 
     f32* footStep = ::sFootStep;
-    f32 f3 = 0.0f;
+    f32 stepLength = 0.0f;
 
     if (mActor->mBeeWallWalk != 0) {
         footStep = ::sFootStepBeeWallWalk;
     }
 
     for (int i = 0; i < ARRAY_SIZE(*::sWeightTable); i++) {
-        f3 += footStep[i] * ::sWeightTable[mTargetWalkSpeedIndex][i];
+        stepLength += footStep[i] * ::sWeightTable[mTargetWalkSpeedIndex][i];
     }
 
     f32 animationSpeed;
 
-    if (f3 == 0.0f) {
+    if (stepLength == 0.0f) {
         animationSpeed = 0.33f;
     } else {
-        animationSpeed = 0.5f * (60.0f * ((0.01f * (mWalkSpeed * mActor->getConst().getTable()->mWalkSpeed)) / f3));
+        animationSpeed = 0.5f * (60.0f * ((0.01f * (mWalkSpeed * mActor->getConst().getTable()->mWalkSpeed)) / stepLength));
     }
 
     if (mSlipPower > 0.0f && !mDrawStates.slopeRunUp) {
@@ -395,30 +395,30 @@ void Mario::decideWalkAnimation() {
         diffFromTargetSpeed = (diffFromTargetSpeed * factor) + (sqrt * (1.0f - factor));
     }
 
-    f32 f4 = mActor->getConst().getTable()->mStartSpinAnimeRatio;
-    f32 f5 = 1.0f + 4.0f * diffFromTargetSpeed;
+    f32 spinStartRatio = mActor->getConst().getTable()->mStartSpinAnimeRatio;
+    f32 spinInertia = 1.0f + 4.0f * diffFromTargetSpeed;
 
-    if (f5 > 2.0f) {
-        f5 = 2.0f;
+    if (spinInertia > 2.0f) {
+        spinInertia = 2.0f;
     }
 
-    if (f5 < 1.0f) {
-        f5 = 1.0f;
+    if (spinInertia < 1.0f) {
+        spinInertia = 1.0f;
     }
 
     if (getTargetWalkSpeed() < ::sWalkTargetTable[6]) {
-        f5 = 1.0f;
+        spinInertia = 1.0f;
     }
 
     if (getFloorCode() == 32 && mTargetWalkSpeedIndex != 0) {
-        f5 = 1.2f;
+        spinInertia = 1.2f;
     }
 
-    f32 f6 = f4 * (0.5f * (60.0f * ((getTargetWalkSpeed() * mActor->getConst().getTable()->mWalkSpeed * 0.01f) / footStep[2])));
-    f32 factor2 = 2.0f - f5;
+    f32 spinStartSpeed = spinStartRatio * (0.5f * (60.0f * ((getTargetWalkSpeed() * mActor->getConst().getTable()->mWalkSpeed * 0.01f) / footStep[2])));
+    f32 factor2 = 2.0f - spinInertia;
 
-    if (animationSpeed < f6) {
-        animationSpeed = animationSpeed * factor2 + f6 * (1.0f - factor2);
+    if (animationSpeed < spinStartSpeed) {
+        animationSpeed = animationSpeed * factor2 + spinStartSpeed * (1.0f - factor2);
     }
 
     if (mSinkTimer != 0 && mTargetWalkSpeedIndex != 0 && animationSpeed < 1.0f) {
@@ -426,7 +426,7 @@ void Mario::decideWalkAnimation() {
     }
 
     animationSpeed *= (1.0f - mWalkingResist);
-    mSpinInertiaBlend = f5 - 1.0f;
+    mSpinInertiaBlend = spinInertia - 1.0f;
     getAnimator()->getXanimePlayer()->changeSpeed(animationSpeed);
 
     if (!mActor->mInDemo && mTargetWalkSpeedIndex == 0 && mActor->mHealth == 1 && mActor->mMaxHealth > 2 &&
@@ -438,13 +438,13 @@ void Mario::decideWalkAnimation() {
 
     checkWallPush();
 
-    f32 f7 = 0.9f;
+    f32 runSpeedMin = 0.9f;
 
     if (gIsLuigi) {
-        f7 = 0.3f;
+        runSpeedMin = 0.3f;
     }
 
-    if (mTargetWalkSpeedIndex > 5 && mWalkSpeed > f7 && !mDrawStates.slopeRunUp && !mMovementStates.onSkatableFloor) {
+    if (mTargetWalkSpeedIndex > 5 && mWalkSpeed > runSpeedMin && !mDrawStates.slopeRunUp && !mMovementStates.onSkatableFloor) {
         mBrakeFirstTimer = mActor->getConst().getTable()->mBrakeFirstTimer;
     }
 
@@ -559,19 +559,19 @@ void Mario::updateBrakeAnimation() {
 
 void Mario::updateWalkSpeed() {
     f32 targetWalkSpeed = getTargetWalkSpeed();
-    f32 f2 = 1.0f;
+    f32 slowStart = 1.0f;
 
     if (targetWalkSpeed == 0.0f) {
         mSlowStartTimer = getActor()->getConst().getTable()->mSlowStartTime;
     }
 
     if (mSlowStartTimer != 0) {
-        f2 = getActor()->getConst().getTable()->mSlowStartTime - mSlowStartTimer;
-        f2 /= getActor()->getConst().getTable()->mSlowStartTime;
+        slowStart = getActor()->getConst().getTable()->mSlowStartTime - mSlowStartTimer;
+        slowStart /= getActor()->getConst().getTable()->mSlowStartTime;
         mSlowStartTimer--;
     }
 
-    targetWalkSpeed *= f2 * f2;
+    targetWalkSpeed *= slowStart * slowStart;
     if (mMovementStates.tornado || isStatusActive(17)) {
         targetWalkSpeed *= getActor()->getConst().getTable()->mTornadoMultiply;
     }

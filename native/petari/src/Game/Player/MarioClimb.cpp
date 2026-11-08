@@ -46,7 +46,7 @@ bool MarioClimb::close() {
         stopAnimation("匍匐前進", "基本");
     } else {
         stopAnimation("匍匐前進", "落下");
-        getPlayer()->set3BC(8);
+        getPlayer()->setAirTimer(8);
     }
 
     return true;

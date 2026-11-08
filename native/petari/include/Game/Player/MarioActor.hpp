@@ -68,7 +68,7 @@ class SoundDopplerChannel;
 class SoundDopplerAbsPos;
 typedef AudGenericAudible< 4, SoundDopplerChannel, SoundDopplerAbsPos > AudGeneric;
 
-extern bool gIsLuigi;  // (cc68 - 10000)(r13)
+extern bool gIsLuigi;  // set by MarioActor::init2 from MR::isPlayerLuigi
 
 class MarioActor : public LiveActor {
 public:
@@ -554,7 +554,7 @@ public:
         return mMario->getMovementStates().onGround && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0;
     }
 
-    inline const bool is481or482On() const {
+    inline const bool isHidden() const {
         return mHidden || mHiddenByDemo;
     }
 

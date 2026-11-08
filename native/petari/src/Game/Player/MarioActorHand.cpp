@@ -97,7 +97,7 @@ void MarioActor::updateHand() {
         hideHands = true;
     }
 
-    if (MR::isHiddenModel(this) || is481or482On() || hideHands) {
+    if (MR::isHiddenModel(this) || isHidden() || hideHands) {
         mHandsHidden = true;
         return;
     }

@@ -139,11 +139,11 @@ public:
         worthlesser = true;
     }
 
-    inline Vec3f getPlayer380() const {
+    inline Vec3f getTouchedWallNorm() const {
         return getPlayer()->mWallNorm;
     }
 
-    inline bool check7Aand7C() const {
+    inline bool isSpinning() const {
         return mSpinTimer || mSpinDashTimer;
     }
 

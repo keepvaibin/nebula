@@ -576,9 +576,9 @@ void MarioAnimator::setTilt() {
     Mario* player3 = getPlayer();
     f32 vertAngle = -player3->mSpinInertiaBlend;
     vertAngle *= PI;
-    f32 f4 = 0.9f * mTiltDown + 0.1f * lookDown;
-    f32 f5 = vertAngle / 4.0f;
-    mTiltDown = 0.97f * f4 + 0.03f * f5;
+    f32 eased = 0.9f * mTiltDown + 0.1f * lookDown;
+    f32 target = vertAngle / 4.0f;
+    mTiltDown = 0.97f * eased + 0.03f * target;
 
     Vec3f rotation(0.0f, mTiltSide, mTiltDown);
     MR::orderRotateMtx(0, rotation, mTiltMtx.toMtxPtr());
