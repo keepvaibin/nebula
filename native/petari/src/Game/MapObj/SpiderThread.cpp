@@ -144,13 +144,13 @@ void SpiderThread::draw() const {
 }
 
 void SpiderThread::startActorBind(LiveActor* pActor, const Vec3f** pPointPos, const Vec3f** pNeutralPos, const Vec3f** pUp, const Vec3f& rPos,
-                                  const Vec3f& rVel, s32 a1) {
+                                  const Vec3f& rVel, s32 priority) {
     s32 nearestIndex = 0;
     s32 pointNum = 0;
     findNearestPointPos(pPointPos, pNeutralPos, &nearestIndex, &pointNum, rPos);
 
     SpiderThreadHangInfo* hangInfo = getActorHangInfo(mNumHangInfos);
-    hangInfo->startBind(pActor, &pActor->mPosition, mCircleParts[nearestIndex], pointNum, rVel, a1);
+    hangInfo->startBind(pActor, &pActor->mPosition, mCircleParts[nearestIndex], pointNum, rVel, priority);
     *pUp = &hangInfo->mThreadPart->mUp;
     mNumHangInfos++;
 }

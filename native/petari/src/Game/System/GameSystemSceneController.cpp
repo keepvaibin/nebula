@@ -515,8 +515,8 @@ const Nerve* GameSystemSceneController::getNextNerveOnResetProcessing() const {
     return nextNerve;
 }
 
-bool GameSystemSceneController::tryDestroyFileCacheHeap(bool param1) {
-    if (!param1 && SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap != nullptr && isSameAtNextSceneAndStage()) {
+bool GameSystemSceneController::tryDestroyFileCacheHeap(bool isForce) {
+    if (!isForce && SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap != nullptr && isSameAtNextSceneAndStage()) {
         return false;
     }
 

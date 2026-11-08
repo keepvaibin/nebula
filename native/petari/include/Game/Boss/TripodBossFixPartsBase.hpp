@@ -18,7 +18,7 @@ public:
     virtual void activateTripodBoss();
 
     void initClippingSphere();
-    void setClippingSphere(const Vec3f&, f32);
+    void setClippingSphere(const Vec3f& rCenter, f32 radius);
     void startBreakMovement();
     void updateBreakMovementMatrix();
     void updateTripodMatrix();

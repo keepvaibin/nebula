@@ -306,14 +306,14 @@ void TombSpiderFunction::startTombSpiderDemo(TombSpider* pParent, const char* pD
     MR::setBckRate(MR::getPlayerDemoActor(), 0.0f);
 }
 
-void TombSpiderFunction::startTombSpiderAnimCameraDemo(TombSpider* pParent, const char* pDemoName, const char* pCameraName, s32 a1) {
+void TombSpiderFunction::startTombSpiderAnimCameraDemo(TombSpider* pParent, const char* pDemoName, const char* pCameraName, s32 frame) {
     if (pCameraName == nullptr) {
         pCameraName = pDemoName;
     }
 
     pauseOffTombSpiderParts(pParent);
     MR::setBckRate(MR::getPlayerDemoActor(), 0.0f);
-    MR::startAnimCameraTargetSelf(getPlanet(pParent), pParent->mCameraInfo, pCameraName, a1, 1.0f);
+    MR::startAnimCameraTargetSelf(getPlanet(pParent), pParent->mCameraInfo, pCameraName, frame, 1.0f);
 }
 
 void TombSpiderFunction::endTombSpiderDemo(TombSpider* pParent, const char* pDemoName, const char* pCameraName) {

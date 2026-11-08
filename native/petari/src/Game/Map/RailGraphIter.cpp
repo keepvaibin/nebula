@@ -16,8 +16,8 @@ void RailGraphIter::moveNodeNext() {
     mCurrentNode = next_node;
 }
 
-void RailGraphIter::setNode(s32 a1) {
-    mCurrentNode = a1;
+void RailGraphIter::setNode(s32 nodeIndex) {
+    mCurrentNode = nodeIndex;
     mPrevNode = -1;
     mSelectedEdge = -1;
     mNextEdge = -1;

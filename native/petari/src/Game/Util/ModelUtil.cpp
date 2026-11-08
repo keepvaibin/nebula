@@ -173,9 +173,9 @@ namespace MR {
         *pFogEnd = fogEnd;
     }
 
-    bool isUseTex(Material* pMaterial, u32 a2) {
+    bool isUseTex(Material* pMaterial, u32 textureIndex) {
         for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
-            if (pMaterial->getTextureIndex(idx) == a2 && pMaterial->usesMap(idx)) {
+            if (pMaterial->getTextureIndex(idx) == textureIndex && pMaterial->usesMap(idx)) {
                 return true;
             }
         }

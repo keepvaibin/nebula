@@ -57,7 +57,7 @@ namespace TombSpiderFunction {
     ModelObj* getCocoon(const TombSpider*);
 
     void startTombSpiderDemo(TombSpider*, const char*, const char*);
-    void startTombSpiderAnimCameraDemo(TombSpider*, const char*, const char*, s32);
+    void startTombSpiderAnimCameraDemo(TombSpider* pParent, const char* pDemoName, const char* pCameraName, s32 frame);
     void endTombSpiderDemo(TombSpider*, const char*, const char*);
     void endTombSpiderAnimCameraDemo(TombSpider*, const char*, const char*);
 

@@ -389,8 +389,8 @@ void CameraDirector::closeCreatingCameraChunk() {
     mCameraManGame->startStartPosCamera(false);
 }
 
-void CameraDirector::initCameraCodeCollection(const char* a1, s32 a2) {
-    mCameraCreator->initCameraCodeCollection(a1, a2);
+void CameraDirector::initCameraCodeCollection(const char* pName, s32 zoneId) {
+    mCameraCreator->initCameraCodeCollection(pName, zoneId);
 }
 
 void CameraDirector::registerCameraCode(u32 code) {

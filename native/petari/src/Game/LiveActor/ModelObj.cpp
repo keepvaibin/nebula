@@ -6,7 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, int movementType, int calcAnimType, bool a7)
+ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, int movementType, int calcAnimType, bool deferMaterials)
     : LiveActor(pName), mMtx(pMtx) {
     if (drawBufferType < MR::DrawBufferType_None) {
         drawBufferType = MR::DrawBufferType_MapObj;
@@ -20,7 +20,7 @@ ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int d
         calcAnimType = MR::CalcAnimType_MapObjDecoration;
     }
 
-    initModelManagerWithAnm(pModelName, nullptr, a7);
+    initModelManagerWithAnm(pModelName, nullptr, deferMaterials);
     MR::connectToScene(this, movementType, calcAnimType, drawBufferType, MR::DrawType_None);
     initSound(8, false);
     initEffectKeeper(8, nullptr);

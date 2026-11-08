@@ -15,7 +15,7 @@ void BinaryDataChunkHolder::addChunk(BinaryDataChunkBase* pChunk) {
     mChunks[numChunks] = pChunk;
 }
 
-u32 BinaryDataChunkHolder::makeFileBinary(u8* pData, u32 a2) {
+u32 BinaryDataChunkHolder::makeFileBinary(u8* pData, u32 capacity) {
     s32 offset = 0;
 
     MR::zeroMemory(pData, 4);

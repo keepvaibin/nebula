@@ -563,7 +563,7 @@ bool JumpGuarder::isHit(const LiveActor* pActor) const {
     return true;
 }
 
-bool MR::enableGroupAttack(LiveActor* pActor, f32 arg2, f32 arg3) {
+bool MR::enableGroupAttack(LiveActor* pActor, f32 radius, f32 height) {
     LiveActorGroup* group = MR::getGroupFromArray(pActor);
 
     if (isValidSwitchA(pActor) && !isOnSwitchA(pActor)) {
@@ -584,5 +584,5 @@ bool MR::enableGroupAttack(LiveActor* pActor, f32 arg2, f32 arg3) {
         }
     }
 
-    return isNearPlayerPose(closest, arg2, arg3);
+    return isNearPlayerPose(closest, radius, height);
 }

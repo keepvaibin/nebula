@@ -302,8 +302,8 @@ void GameDataHolder::resetAllData() {
     mStarPieceAlmsStorage->initializeData();
 }
 
-u32 GameDataHolder::makeFileBinary(u8* pData, u32 a2) {
-    return mChunkHolder->makeFileBinary(pData, a2);
+u32 GameDataHolder::makeFileBinary(u8* pData, u32 capacity) {
+    return mChunkHolder->makeFileBinary(pData, capacity);
 }
 
 bool GameDataHolder::loadFromFileBinary(const char* pName, const u8* pData, u32 dataSize) {

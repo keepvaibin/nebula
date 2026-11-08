@@ -757,8 +757,8 @@ f32 MapObjActorUtil::getSeesaw1AxisAngularSpeed(const MapObjActor* pActor) {
     return static_cast< MapPartsSeesaw1AxisRotator* >(pActor->mRotator)->mAngularVelocity;
 }
 
-void MapObjActorUtil::forceRotateSeesaw1Axis(const MapObjActor* pActor, f32 a2) {
-    static_cast< MapPartsSeesaw1AxisRotator* >(pActor->mRotator)->mAngularAccel = a2;
+void MapObjActorUtil::forceRotateSeesaw1Axis(const MapObjActor* pActor, f32 angularAccel) {
+    static_cast< MapPartsSeesaw1AxisRotator* >(pActor->mRotator)->mAngularAccel = angularAccel;
 }
 
 void MapObjActorUtil::startRotator(const MapObjActor* pActor) {

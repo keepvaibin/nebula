@@ -39,8 +39,8 @@ namespace MR {
         MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->loadLightPlayer();
     }
 
-    void initActorLightInfoLightType(LiveActor* pActor, s32 a2) {
-        pActor->mActorLightCtrl->mLightType = a2;
+    void initActorLightInfoLightType(LiveActor* pActor, s32 lightType) {
+        pActor->mActorLightCtrl->mLightType = lightType;
     }
 
     void initActorLightInfoDrawBuffer(LiveActor* pActor, DrawBuffer* pDrawBuffer) {

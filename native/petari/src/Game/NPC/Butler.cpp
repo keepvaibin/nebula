@@ -260,9 +260,7 @@ bool Butler::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
                     MR::startSystemSE("SE_SY_STAR_PIECE_STOCK_MAX");
                 }
             } else {
-                bool v1 = isNerve(mWaitNerve) || isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
-
-                if (v1) {
+                if (isNerve(mWaitNerve) || isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction))) {
                     setNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
                 }
             }

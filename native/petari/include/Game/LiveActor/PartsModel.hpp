@@ -6,7 +6,8 @@ class FixedPosition;
 
 class PartsModel : public LiveActor {
 public:
-    PartsModel(LiveActor*, const char*, const char*, MtxPtr, int, bool);
+    // A negative drawBufferType takes MapObj.
+    PartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool deferMaterials);
 
     virtual void init(const TableIter&) override;
     virtual void movement() override;

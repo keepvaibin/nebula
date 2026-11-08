@@ -16,9 +16,9 @@ GameCameraCreator::GameCameraCreator(CameraParamChunkHolder* pChunkHolder) {
     memset(&mCodes[0], 0, sizeof(mCodes));
 }
 
-void GameCameraCreator::initCameraCodeCollection(const char* pName, s32 a2) {
+void GameCameraCreator::initCameraCodeCollection(const char* pName, s32 zoneId) {
     mName = pName;
-    mZoneId = a2;
+    mZoneId = zoneId;
 }
 
 void GameCameraCreator::registerCameraCode(u32 code) {
