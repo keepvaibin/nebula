@@ -49,7 +49,7 @@ public:
     void forceScaleOn();
 
     void initSyncBck(XanimePlayer*, const char*, s32, f32);
-    void onDeleteSyncBck(bool, f32);
+    void onDeleteSyncBck(f32);
     void addSyncBck(const XanimePlayer*, const char*);
     void setContinueBckEnd(bool);
     void onCreateSyncClipping();
@@ -64,7 +64,7 @@ public:
     void setGlobalRotationDegree(const Vec3f&, s32);
 
     void allocateEmitter(const char*);
-    SingleEmitter* getValidEmitter(s32, bool);
+    SingleEmitter* getValidEmitter(s32);
     void createOneTimeEmitter();
     void createForeverEmitter();
 
@@ -88,23 +88,9 @@ public:
     // In MarioEffect
     void setGlobalScale(f32, s32);
 
-    inline bool isFlagOn(u16 flag) const {
-        u16 mask = mFlags & flag;
-        return mask == flag;
-    }
-
-    inline bool isFlagOff(u16 flag) const {
-        u16 mask = mFlags & flag;
-        return mask != flag;
-    }
-
-    inline void turnFlagOn(u16 flag) {
-        mFlags |= flag;
-    }
-
-    inline void turnFlagOff(u16 flag) {
-        mFlags &= ~flag;
-    }
+    // In MultiEmitterAccess (used only there)
+    template < typename F >
+    void forEachValid(s32 idx, const F& rApply);
 
     MR::AssignableArray< SingleEmitter > mEmitters;
     MR::InlineVector< MultiEmitter*, 4 > mChildren;
@@ -114,5 +100,6 @@ public:
     const AutoEffectInfo* mAutoInfo;  // the effect's table row; none for effects made by code
     f32 mLightAffect;                 // near 0: the emitters keep their own colours
     u16 mHash;
-    u8 mFlags;
+    bool mCreateOnUnclipped;     // onCreateSyncClipping: made again when the actor comes back into view
+    bool mForceDeleteOnClipped;  // onForceDeleteSyncClipping: gone at once when the actor is clipped
 };

@@ -12,10 +12,10 @@ SpkSystem::SpkSystem(NebulaArena* pArena) : SoundGlobal(true), mData() {
     SpkSpeakerCtrl::setup();
 }
 
-void SpkSystem::setResource(AssetFolder* pArchive, u16 tableOffset, u16 waveOffset) {
+void SpkSystem::setResource(AssetFolder* pArchive, u16 tableIndex, u16 waveIndex) {
     mData = new (mArena, 0) SpkData(pArchive);
-    mData->loadTable(tableOffset);
-    mData->loadWave(waveOffset);
+    mData->loadTable(tableIndex);
+    mData->loadWave(waveIndex);
 }
 
 void SpkSystem::framework() {

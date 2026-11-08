@@ -11,7 +11,7 @@ ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, 
     mFirst.mNext = nullptr;
 }
 
-void ParticleEmitterHolder::update(bool param1) {
+void ParticleEmitterHolder::update(bool ignorePause) {
     for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
     for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         EmitterCore* pBaseEmitter = pEmitter->mEmitter;
@@ -19,20 +19,19 @@ void ParticleEmitterHolder::update(bool param1) {
             continue;
         }
 
-        if (param1 != (pBaseEmitter->getGroupID() == 1)) {
+        // Group 1 is the 3D pause-ignoring group.
+        if (ignorePause != (pBaseEmitter->getGroupID() == 1)) {
             continue;
         }
 
-        const bool shouldDelete = pBaseEmitter->checkStatus(0x8) && pBaseEmitter->getParticleNumber() == 0;
-
-        if (shouldDelete) {
+        if (pBaseEmitter->isEnableDeleteEmitter()) {
             mEffectSystem->forceDeleteEmitter(pEmitter);
-        } else if (!pEmitter->mStopped) {
+        } else if (!pEmitter->mUpdated) {
             if (MR::Effect::getLinkSingleEmitter(pBaseEmitter) != nullptr) {
                 pBaseEmitter->getEmitterCallBackPtr()->init(pBaseEmitter);
             }
 
-            pEmitter->mStopped = true;
+            pEmitter->mUpdated = true;
         }
     }
 }

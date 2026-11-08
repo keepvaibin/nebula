@@ -14,11 +14,8 @@ public:
     SpkWave();
 
     void setResource(void*);
-    s32 getWaveSize(s32) const;
-    u32 getLoopStartPos(s32) const;
-    u32 getLoopEndPos(s32) const;
-    s16* getWave(s32) const;
-    WaveData* getWaveData(s32) const;
+    // The wave's header and samples, by the file's offset table (a u32 per wave from byte 8).
+    const WaveData* getWaveData(s32) const;
 
-    void* mResource;  // Raw data of AudioRes/SpkRes/SpkRes
+    void* mResource;  // the speaker archive's wave file
 };

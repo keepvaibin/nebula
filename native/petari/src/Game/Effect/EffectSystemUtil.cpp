@@ -110,12 +110,12 @@ namespace MR {
         }
 
         void initEffectSyncBck(EffectKeeper* pKeeper, const ModelManager* pModelManager, const char* pEffectName, const char* pAnimName,
-                               s32 animCount, f32 startFrame, f32 endFrame, bool deleteOnEnd) {
+                               s32 animCount, f32 startFrame, f32 endFrame) {
             // A mod's model with no animations: the effect is played by name.
             if (pModelManager->mXanimePlayer == nullptr) {
                 return;
             }
-            pKeeper->registerSyncBckEffect(pModelManager->mXanimePlayer, pEffectName, pAnimName, animCount, startFrame, endFrame, deleteOnEnd);
+            pKeeper->registerSyncBckEffect(pModelManager->mXanimePlayer, pEffectName, pAnimName, animCount, startFrame, endFrame);
         }
 
         void addEffectSyncBck(MultiEmitter* pEmitter, const ModelManager* pModelManager, const char* pAnimName) {
@@ -151,7 +151,7 @@ namespace MR {
             MultiEmitter* pEmitter = pKeeper->getEmitter(pInfo->getName());
             if (!hasStringSpace(pInfo->mAnimName)) {
                 const char* pAnimName = pInfo->mAnimName;
-                initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, 1, pInfo->mStartFrame, pInfo->mEndFrame, false);
+                initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, 1, pInfo->mStartFrame, pInfo->mEndFrame);
             } else {
                 const char* const pAnimNames = pInfo->mAnimName;
                 u32 start = 0;
@@ -161,7 +161,7 @@ namespace MR {
                         const char* pAnimName = nullptr;
                         findBckNameStringInResource(&pAnimName, pModelManager->getResourceHolder(), name.c_str());
                         if (pEmitter->mSyncBck == nullptr) {
-                            initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, ::countAnimNames(pAnimNames), 0.0f, -1.0f, false);
+                            initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, ::countAnimNames(pAnimNames), 0.0f, -1.0f);
                         } else {
                             addEffectSyncBck(pEmitter, pModelManager, pAnimName);
                         }
@@ -171,7 +171,7 @@ namespace MR {
                 }
             }
 
-            pEmitter->setContinueBckEnd(!((pInfo->mFlag & AutoEffectInfo::FLAG_CONTINUE_ANIM_END) - AutoEffectInfo::FLAG_CONTINUE_ANIM_END));
+            pEmitter->setContinueBckEnd((pInfo->mFlag & AutoEffectInfo::FLAG_CONTINUE_ANIM_END) != 0);
         }
 
         void registerAutoEffectInfoGroup(EffectKeeper* pKeeper, const LiveActor* pActor, const char* pName) {
@@ -288,11 +288,9 @@ namespace MR {
             }
         }
 
-        AutoEffectInfo* createAutoEffect(const char* pGroupName, const char* pUniqueName) {
+        AutoEffectInfo* createAutoEffect(const char* pUniqueName) {
             Table* pInfo = getAutoEffectListBinary();
             TableIter iter = pInfo->findElement("UniqueName", pUniqueName, 0);
-            const char* pName = "";
-            iter.getValue("GroupName", &pName);
             AutoEffectInfo* pEffectInfo = new AutoEffectInfo();
             pEffectInfo->init(iter);
             return pEffectInfo;

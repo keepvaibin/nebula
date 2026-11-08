@@ -27,22 +27,18 @@ const char* ParticleResourceHolder::getParticleName(u32 index) const {
 
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
     const Table* pInfo = mParticleNames;
-    int middle;
-    int last;
     int first = 0;
-    last = pInfo->getNumEntries() - 1;
-
-    const char* pEntryName;
+    int last = pInfo->getNumEntries() - 1;
 
     while (first < last) {
-        middle = (first + last) / 2;
-        const char* pEntryName = "";
+        const int middle = (first + last) / 2;
+        const char* pMiddleName = "";
 
-        if (!pInfo->getValue(middle, "name", &pEntryName)) {
+        if (!pInfo->getValue(middle, "name", &pMiddleName)) {
             return 0xFFFF;
         }
 
-        const int comparison = strcmp(pEntryName, pName);
+        const int comparison = strcmp(pMiddleName, pName);
 
         if (comparison == 0) {
             return middle;
@@ -50,14 +46,12 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
 
         if (comparison < 0) {
             first = middle + 1;
-        }
-
-        if (comparison >= 0) {
+        } else {
             last = middle;
         }
     }
 
-    pEntryName = "";
+    const char* pEntryName = "";
 
     if (!pInfo->getValue(first, "name", &pEntryName)) {
         return 0xFFFF;

@@ -30,15 +30,9 @@ ParticleCalcExecutor::ParticleCalcExecutor(const EffectSystem* pEffectSystem, bo
 void ParticleCalcExecutor::movementNormal() {
     if (mMovementEnabled && mUpdateRequested) {
         mEffectSystem->mEmitterHolder->update(false);
-        mEffectSystem->mEmitterManager->calc(0);
-        mEffectSystem->mEmitterManager->calc(1);
-        mEffectSystem->mEmitterManager->calc(2);
-        mEffectSystem->mEmitterManager->calc(3);
-        mEffectSystem->mEmitterManager->calc(4);
-        mEffectSystem->mEmitterManager->calc(5);
-        mEffectSystem->mEmitterManager->calc(6);
-        mEffectSystem->mEmitterManager->calc(7);
-        mEffectSystem->mEmitterManager->calc(8);
+        for (u8 group = 0; group <= 8; group++) {
+            mEffectSystem->mEmitterManager->calc(group);
+        }
     }
 
     mUpdateRequested = false;

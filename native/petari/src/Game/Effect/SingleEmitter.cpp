@@ -35,7 +35,7 @@ bool SingleEmitter::isOneTime() const {
     if (mEmitter) {
         return !mEmitter->isContinuousParticle();
     } else {
-        return !mSpawn;
+        return mSpawn == SINGLE_EMITTER_ONE_TIME_SPAWN;
     }
 }
 

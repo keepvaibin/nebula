@@ -24,4 +24,5 @@ public:
 
     EmitterCore* mEmitter;
     bool mPaused;
+    bool mUpdated;  // set by its first holder update, which starts a linked emitter's callback
 };

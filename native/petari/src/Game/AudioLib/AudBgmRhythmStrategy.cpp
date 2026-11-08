@@ -31,7 +31,7 @@ void AudBgmRhythmStrategy::reject() {
 
     AudWrap::getRhythmMeSystem()->rejectSeq(mBgmIdx);
     if (isDominant()) {
-        AudWrap::getSystem()->getChordInfo()->invalidiate();  // [sic]
+        AudWrap::getSystem()->getChordInfo()->invalidate();
     }
     mBgm = nullptr;
     mBgmIdx = -1;
@@ -60,7 +60,7 @@ bool AudBgmRhythmStrategy::setDominant() {
     if (id != 0xFFFF) {
         AudWrap::getSystem()->getChordInfo()->loadChordInfo(id, false);
     } else {
-        AudWrap::getSystem()->getChordInfo()->invalidiate();  // [sic]
+        AudWrap::getSystem()->getChordInfo()->invalidate();
     }
 
     return true;

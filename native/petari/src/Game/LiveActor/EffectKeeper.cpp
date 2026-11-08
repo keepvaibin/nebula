@@ -99,7 +99,7 @@ void EffectKeeper::setBinder(const Binder* pBinder) {
 }
 
 void EffectKeeper::addEffect(const char* pEffectName, LiveActor* pActor) {
-    MR::Effect::addAutoEffect(this, pActor, MR::Effect::createAutoEffect(mName, pEffectName));
+    MR::Effect::addAutoEffect(this, pActor, MR::Effect::createAutoEffect(pEffectName));
 }
 
 void EffectKeeper::registerEffect(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale,
@@ -120,7 +120,7 @@ void EffectKeeper::registerEffectWithoutSRT(const char* pName, const char* pUniq
 }
 
 void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEffectName, const char* pBckName, s32 capacity, f32 startFrame,
-                                         f32 endFrame, bool deleteOnEnd) {
+                                         f32 endFrame) {
     if (mSyncBckChecker == nullptr) {
         mSyncBckChecker = new SyncBckEffectChecker(pPlayer);
     }
@@ -128,7 +128,7 @@ void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEff
     MultiEmitter* emitter = getEmitter(pEffectName);
 
     emitter->initSyncBck(pPlayer, pBckName, capacity, startFrame);
-    emitter->onDeleteSyncBck(deleteOnEnd, endFrame);
+    emitter->onDeleteSyncBck(endFrame);
 }
 
 MultiEmitter* EffectKeeper::createEmitter(const char* pEffectName) {

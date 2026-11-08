@@ -30,7 +30,6 @@ void AudMe::requestStart(u32 trackBound, u32 place) {
 }
 
 void AudMe::start() {
-    updateTimedParams(true);
     mLink.start(mTrackBound, AudMeMgr::getInstance()->programData(), mPlace, sound());
 }
 
@@ -109,7 +108,7 @@ void AudMe::update() {
     }
 
     if (mLink.exists()) {
-        updateTimedParams(false);
+        updateTimedParams();
         mLink.frame(sound());
 
         if (mLink.status() == MeTrack::STATUS_FREE) {
@@ -145,11 +144,7 @@ void AudMe::initTimed() {
     }
 }
 
-void AudMe::updateTimedParams(bool immediate) {
-    if (immediate) {
-        return;
-    }
-
+void AudMe::updateTimedParams() {
     for (s32 i = 0; i < TIMED_PARAMS; i++) {
         if (mMoveParams[i].mDelta != 0.0f) {
             mMoveParams[i].mValue += mMoveParams[i].mDelta;
@@ -332,7 +327,7 @@ bool AudMeMgr::isRequestedMe(u32 place) {
 }
 
 void AudMeMgr::setOuterPlayingParam(s32 meId, AudMe* pMe) {
-    AudMePlayingParams* params = &mParams.mParams[meId];
+    const AudMePlayingParams* params = &mParams.mParams[meId];
     f32 vol = params->mChordVolume / 127.0f;
     vol *= vol;
     f32 pan = params->mPan / 127.0f;
@@ -349,6 +344,6 @@ void AudMePlayingParamsHolder::setResource(void* pRes) {
 
     mNumEntries = numEntries;
     mBase = static_cast< const u8* >(pRes);
-    mParams = reinterpret_cast< AudMePlayingParams* >(static_cast< u8* >(pRes) + entryOff);
+    mParams = reinterpret_cast< const AudMePlayingParams* >(mBase + entryOff);
     mNameOffsets = reinterpret_cast< const u32* >(mBase + namesOff);
 }
