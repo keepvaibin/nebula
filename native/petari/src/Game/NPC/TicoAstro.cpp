@@ -8,10 +8,11 @@ TicoAstro::TicoAstro(const char* pName) : Tico(pName) {
 
 void TicoAstro::init(const TableIter& rIter) {
     Tico::init(rIter);
-    s32 arg2 = -1;
-    MR::getPlacementArg2NoInit(rIter, &arg2);
+    // Present while the green star count is above this (0-2).
+    s32 greenStarThreshold = -1;
+    MR::getPlacementArg2NoInit(rIter, &greenStarThreshold);
 
-    switch (arg2) {
+    switch (greenStarThreshold) {
     case 0:
         if (MR::calcCurrentGreenStarNum() <= 0) {
             makeActorDead();

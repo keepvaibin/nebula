@@ -81,7 +81,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
         isFlow = false;
     }
 
-    s32 arg2 = -1;
+    s32 placeAtPathPoints = -1;
     MR::initDefaultPos(this, rIter);
 
     if (isFlow) {
@@ -93,7 +93,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
         mNumPieces = 6;
         MR::getPlacementArg0NoInit(rIter, &mNumPieces);
         MR::getPlacementArg1NoInit(rIter, &mCircleRadius);
-        MR::getPlacementArg2NoInit(rIter, &arg2);
+        MR::getPlacementArg2NoInit(rIter, &placeAtPathPoints);
         MR::getPlacementArg5NoInit(rIter, &mLifeStep);
         MR::joinToGroupArray(this, rIter, nullptr, 32);
     }
@@ -104,7 +104,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
     if (isRail) {
         mIsRail = true;
         initRailRider(rIter);
-        if (arg2 == 1) {
+        if (placeAtPathPoints == 1) {
             mNumPieces = MR::getRailPointNum(this);
             mPlaceAtPathPoints = true;
         } else {

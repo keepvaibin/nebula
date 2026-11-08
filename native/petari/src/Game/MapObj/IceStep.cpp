@@ -82,15 +82,15 @@ void IceStep::exeHit() {
     }
 }
 
-void IceStep::setOn(u32 a1, const Vec3f& rPosition, const Vec3f& rRotation) {
+void IceStep::setOn(u32 stepIndex, const Vec3f& rPosition, const Vec3f& rRotation) {
     mPosition = rPosition;
     mRotation = rRotation;
 
     MR::offUpdateCollisionParts(this);
     MR::onUpdateCollisionPartsOnetimeImmediately(this);
 
-    s32 scale = a1 / 2;
-    if (a1 % 2) {
+    s32 scale = stepIndex / 2;
+    if (stepIndex % 2) {
         scale -= 10;
     }
 

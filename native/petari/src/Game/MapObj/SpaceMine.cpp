@@ -45,10 +45,10 @@ void SpaceMine::init(const TableIter& rIter) {
         info.setupShadow(nullptr);
     }
 
-    s32 arg1 = -1;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
+    s32 useBinder = -1;
+    MR::getPlacementArg1NoInit(rIter, &useBinder);
 
-    if (arg1 != -1) {
+    if (useBinder != -1) {
         info.setupBinder(::sSensorRadius, 0.0f);
     }
 

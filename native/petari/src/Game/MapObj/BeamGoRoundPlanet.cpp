@@ -40,11 +40,11 @@ void BeamGoRoundBeam::updateHitSensor(HitSensor* pSensor) {
     f32 radius = pSensor->mRadius;
     Vec3f up;
     MR::calcUpVec(&up, this);
-    Vec3f v7;
-    v7.scaleAdd(radius, up, mPosition);
-    Vec3f v6;
-    v6.scaleAdd(2700.0f - radius, up, v7);
-    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), v7, v6);
+    Vec3f lineStart;
+    lineStart.scaleAdd(radius, up, mPosition);
+    Vec3f lineEnd;
+    lineEnd.scaleAdd(2700.0f - radius, up, lineStart);
+    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), lineStart, lineEnd);
 }
 
 void BeamGoRoundBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

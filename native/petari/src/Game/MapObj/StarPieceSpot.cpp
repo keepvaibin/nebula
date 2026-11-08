@@ -23,9 +23,9 @@ void StarPieceSpot::emit() {
 void StarPieceSpot::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    s32 arg0 = 5;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    MR::declareStarPiece(this, arg0);
+    s32 starPieceNum = 5;
+    MR::getPlacementArg0NoInit(rIter, &starPieceNum);
+    MR::declareStarPiece(this, starPieceNum);
 
     initSound(1, false);
 

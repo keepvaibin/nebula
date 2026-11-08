@@ -149,13 +149,13 @@ void LavaProminence::moveOnRail() {
     MR::calcGravity(this);
 }
 
-void LavaProminence::updateEffectClipping(bool a1) {
+void LavaProminence::updateEffectClipping(bool isMoving) {
     if (!mEmitDropEffect) {
-        if (!a1 || MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
+        if (!isMoving || MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
             MR::deleteEffect(this, "DropEffect");
             mEmitDropEffect = true;
         }
-    } else if (a1 && !MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
+    } else if (isMoving && !MR::isJudgedToClipFrustum(mPosition, getSensor("body")->getRadius())) {
         MR::emitEffect(this, "DropEffect");
         mEmitDropEffect = false;
     }

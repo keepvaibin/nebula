@@ -36,10 +36,10 @@ void UFOKinoko::init(const TableIter& rIter) {
 
     MapObjActorUtil::setupInitInfoColorChangeArg0(&info, rIter);
 
-    bool arg7 = true;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
+    bool noUseLod = true;
+    MR::getPlacementArg7NoInit(rIter, &noUseLod);
 
-    if (arg7) {
+    if (noUseLod) {
         info.setupNoUseLodCtrl();
     }
 

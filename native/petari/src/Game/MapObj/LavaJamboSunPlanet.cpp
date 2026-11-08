@@ -68,9 +68,9 @@ void LavaJamboSunPlanet::exeMove() {
     mMoveSpeed *= 0.1f;
     MR::moveCoordAndFollowTrans(this, mMoveSpeed);
     MR::startLevelSound(this, "SE_AT_LV_JUMBO_SUN_MOVE");
-    s32 v3 = -1;
-    MR::getCurrentRailPointArg1NoInit(this, &v3);
-    if (v3 == 1) {
+    s32 pointAction = -1;
+    MR::getCurrentRailPointArg1NoInit(this, &pointAction);
+    if (pointAction == 1) {
         setNerve(GET_NERVE(LavaJamboSunPlanet, HostTypePause));
     } else if (MR::isRailReachedGoal(this)) {
         setNerve(GET_NERVE(LavaJamboSunPlanet, HostTypeWait));
