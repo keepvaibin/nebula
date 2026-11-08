@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraTripodBoss.hpp"
-#include "Game/Camera/CamTranslatorTripodBoss.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 
 CameraTripodBoss::~CameraTripodBoss() {
@@ -8,8 +8,10 @@ CameraTripodBoss::~CameraTripodBoss() {
 CameraTripodBoss::CameraTripodBoss(const char* pName) : CameraTower(pName), mAngleY() {
 }
 
-CamTranslatorBase* CameraTripodBoss::createTranslator() {
-    return new CamTranslatorTripodBoss(this);
+void CameraTripodBoss::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mUp.x, general->mUp.y));
+    mAngleY = general->mUp.z;
 }
 
 void CameraTripodBoss::arrangeRound() {

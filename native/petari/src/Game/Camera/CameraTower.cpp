@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraTower.hpp"
-#include "Game/Camera/CamTranslatorTower.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
@@ -80,8 +80,9 @@ CameraTargetObj* CameraTower::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraTower::createTranslator() {
-    return new CamTranslatorTower(this);
+void CameraTower::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, general->mAxis, general->mDist, Vec2f(general->mAngleB, MR::pi() * (1.0f - general->mAngleA) * 0.5f));
 }
 
 bool CameraTower::isEnableToRoundLeft() const {

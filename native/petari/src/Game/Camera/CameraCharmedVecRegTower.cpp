@@ -1,5 +1,6 @@
 #include "Game/Camera/CameraCharmedVecRegTower.hpp"
-#include "Game/Camera/CamTranslatorCharmedVecRegTower.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
+#include "Game/Util.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -86,6 +87,12 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraCharmedVecRegTower::createTranslator() {
-    return new CamTranslatorCharmedVecRegTower(this);
+void CameraCharmedVecRegTower::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    Vec3f axis = general->mAxis;
+    MR::normalizeOrZero(&axis);
+    if (MR::isNearZero(axis)) {
+        axis.set< f32 >(0.0f, 1.0f, 0.0f);
+    }
+    setParam(general->mString.getCharPtr(), general->mWPoint, axis, general->mAngleA, general->mAngleB, general->mDist, general->mNum1 != 0);
 }

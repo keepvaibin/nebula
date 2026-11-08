@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraRailDemo.hpp"
-#include "Game/Camera/CamTranslatorRailDemo.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraRailHolder.hpp"
@@ -38,8 +38,8 @@ void CameraRailDemo::setParam(s32 zoneID, s32 railID, s32 calcType, s32 demoTime
     mDampRatio = dampRatio;
 }
 
-CamTranslatorBase* CameraRailDemo::createTranslator() {
-    return new CamTranslatorRailDemo(this);
+void CameraRailDemo::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(pChunk->getZoneID(), pChunk->mGeneralParam->mNum1 >> 16, pChunk->mGeneralParam->mNum2, pChunk->mGeneralParam->mNum1 & 0xFFFF, pChunk->mGeneralParam->mDist);
 }
 
 void CameraRailDemo::calcLinear() {

@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraWaterPlanetBoss.hpp"
-#include "Game/Camera/CamTranslatorWaterPlanetBoss.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -128,6 +128,7 @@ CameraTargetObj* CameraWaterPlanetBoss::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraWaterPlanetBoss::createTranslator() {
-    return new CamTranslatorWaterPlanetBoss(this);
+void CameraWaterPlanetBoss::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.y, general->mAxis.x, general->mDist, general->mNum1 != 0, general->mWPoint, general->mAxis.z, general->mUp.x, general->mUp.y, general->mUp.z);
 }

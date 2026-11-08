@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraInwardSphere.hpp"
-#include "Game/Camera/CamTranslatorInwardSphere.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -105,8 +105,9 @@ CameraTargetObj* CameraInwardSphere::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraInwardSphere::createTranslator() {
-    return new CamTranslatorInwardSphere(this);
+void CameraInwardSphere::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAngleA, general->mDist, general->mAngleB);
 }
 
 void CameraInwardSphere::calcGravityCenter() {

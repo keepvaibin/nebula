@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraFooFighterPlanet.hpp"
-#include "Game/Camera/CamTranslatorFooFighterPlanet.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -119,8 +119,9 @@ CameraTargetObj* CameraFooFighterPlanet::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraFooFighterPlanet::createTranslator() {
-    return new CamTranslatorFooFighterPlanet(this);
+void CameraFooFighterPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.x, general->mAxis.y, general->mAngleA);
 }
 
 void CameraFooFighterPlanet::goRoundBehind(Vec3f& rPos, Vec3f& rWatchPos, Vec3f& rUp) {

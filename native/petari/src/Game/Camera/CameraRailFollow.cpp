@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraRailFollow.hpp"
-#include "Game/Camera/CamTranslatorRailFollow.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraRailHolder.hpp"
@@ -110,6 +110,6 @@ void CameraRailFollow::setParam(s32 zoneID, s32 railID, f32 stopMargin, f32 rail
     mMarginScale = marginScale;
 }
 
-CamTranslatorBase* CameraRailFollow::createTranslator() {
-    return new CamTranslatorRailFollow(this);
+void CameraRailFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(pChunk->getZoneID(), pChunk->mGeneralParam->mNum1, pChunk->mGeneralParam->mDist, pChunk->mGeneralParam->mWPoint.x, pChunk->mGeneralParam->mWPoint.y, pChunk->mGeneralParam->mNum2);
 }

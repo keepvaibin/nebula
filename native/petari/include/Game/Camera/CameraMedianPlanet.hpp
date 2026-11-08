@@ -10,7 +10,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void getPrevFront(Vec3f*);
     void constrainDipAngle(Vec3f*);

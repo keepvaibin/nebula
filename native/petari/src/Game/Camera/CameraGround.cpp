@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraGround.hpp"
-#include "Game/Camera/CamTranslatorGround.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -27,6 +27,6 @@ CameraTargetObj* CameraGround::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraGround::createTranslator() {
-    return new CamTranslatorGround(this);
+void CameraGround::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(Vec2f(pChunk->mGeneralParam->mAngleA, pChunk->mGeneralParam->mAngleB), pChunk->mGeneralParam->mDist, pChunk->mGeneralParam->mUp);
 }

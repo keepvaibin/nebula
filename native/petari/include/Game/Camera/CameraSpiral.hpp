@@ -12,7 +12,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(s32 easeType, s32 endTime, s32 startTime, f32 offYStart, f32 offYEnd, f32 distStart, f32 distEnd, f32 angleStart, f32 angleEnd) {
         mEndTime = endTime;

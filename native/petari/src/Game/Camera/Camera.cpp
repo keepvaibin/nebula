@@ -24,10 +24,6 @@ void Camera::setZoneMtx(s32 zoneID) {
     }
 }
 
-CamTranslatorBase* Camera::createTranslator() {
-    return new CamTranslatorDummy(this);
-}
-
 void Camera::createVPanObj() {
     mVPan = new CameraHeightArrange(this);
 }

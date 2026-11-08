@@ -17,7 +17,7 @@ public:
     virtual bool isCorrectingErpPositionOff() const {
         return true;
     }
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(u32 cameraType, bool isFovyFixed) {
         mCameraType = cameraType;

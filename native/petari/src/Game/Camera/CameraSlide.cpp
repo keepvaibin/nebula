@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraSlide.hpp"
-#include "Game/Camera/CamTranslatorSlide.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -52,6 +52,20 @@ CameraTargetObj* CameraSlide::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraSlide::createTranslator() {
-    return new CamTranslatorSlide(this);
+void CameraSlide::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    Vec3f axis = general->mAxis;
+    if (MR::isNearZero(axis)) {
+        axis.set< f32 >(1.0f, 0.0f, 0.0f);
+    }
+    MR::normalize(&axis);
+    Vec3f up = general->mUp;
+    if (MR::isNearZero(axis) || MR::isSameDirection(axis, up)) {
+        up.set< f32 >(0.0f, 1.0f, 0.0f);
+        Quat4f rot;
+        rot.setRotate(Vec3f(1.0f, 0.0f, 0.0f), axis);
+        rot.transform(up);
+    }
+    MR::normalize(&up);
+    setParam(axis, up, general->mWPoint, general->mAngleA, general->mDist);
 }

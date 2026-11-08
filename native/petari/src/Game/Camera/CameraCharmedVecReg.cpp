@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraCharmedVecReg.hpp"
-#include "Game/Camera/CamTranslatorCharmedVecReg.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -91,6 +91,7 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraCharmedVecReg::createTranslator() {
-    return new CamTranslatorCharmedVecReg(this);
+void CameraCharmedVecReg::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mString.getCharPtr(), general->mDist, general->mAxis.x, general->mAxis.y, general->mAxis.z, general->mAngleA, general->mAngleB);
 }

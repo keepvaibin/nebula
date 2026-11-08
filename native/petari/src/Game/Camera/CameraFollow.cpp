@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraFollow.hpp"
-#include "Game/Camera/CamTranslatorFollow.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/Camera.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
@@ -75,8 +75,9 @@ void CameraFollow::setParam(f32 maxDist, f32 minDist, f32 pitchMin, f32 pitchRan
     mCheckWall = checkWall;
 }
 
-CamTranslatorBase* CameraFollow::createTranslator() {
-    return new CamTranslatorFollow(this);
+void CameraFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.x, general->mAxis.y, general->mAngleA, general->mAngleB, general->mDist, general->mNum1 > 0);
 }
 
 bool CameraFollow::isEnableToRoundLeft() const {

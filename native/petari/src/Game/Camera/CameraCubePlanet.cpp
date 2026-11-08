@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraCubePlanet.hpp"
-#include "Game/Camera/CamTranslatorCubePlanet.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -45,6 +45,7 @@ CameraTargetObj* CameraCubePlanet::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraCubePlanet::createTranslator() {
-    return new CamTranslatorCubePlanet(this);
+void CameraCubePlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mDist, general->mAngleA, general->mAngleB);
 }

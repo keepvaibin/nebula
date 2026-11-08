@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraMedianTower.hpp"
-#include "Game/Camera/CamTranslatorMedianTower.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -69,8 +69,9 @@ CameraTargetObj* CameraMedianTower::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraMedianTower::createTranslator() {
-    return new CamTranslatorMedianTower(this);
+void CameraMedianTower::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mString.getCharPtr(), general->mWPoint, general->mAxis, general->mAngleA, general->mUp.x, general->mUp.y, general->mUp.z);
 }
 
 void CameraMedianTower::calcFovyPos(Vec3f* pFovPos, const Vec3f& rFront, const Vec3f& rVec, const Vec3f& rPos) {

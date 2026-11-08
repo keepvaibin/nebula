@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraTwistedPassage.hpp"
-#include "Game/Camera/CamTranslatorTwistedPassage.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraRailHolder.hpp"
@@ -86,8 +86,8 @@ void CameraTwistedPassage::setParam(s32 zoneId, s32 railId, f32 distMin, f32 dis
     mDistMax = distMax;
 }
 
-CamTranslatorBase* CameraTwistedPassage::createTranslator() {
-    return new CamTranslatorTwistedPassage(this);
+void CameraTwistedPassage::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(pChunk->getZoneID(), pChunk->mGeneralParam->mNum1, pChunk->mGeneralParam->mAxis.x, pChunk->mGeneralParam->mAxis.y);
 }
 
 void CameraTwistedPassage::initStartPos() {

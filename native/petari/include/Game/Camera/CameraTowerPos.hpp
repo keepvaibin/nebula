@@ -12,7 +12,7 @@ public:
     virtual bool isEnableToReset() const {
         return true;
     }
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(const Vec3f& wPoint, const Vec3f& axis, f32 dist, const Vec2f& angle, f32 angleXRate) {
         mWPoint.set(wPoint);

@@ -10,7 +10,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(s32 zoneID, s32 railID, f32 stopMargin, f32 railSpeedMax, f32 accel, s32 marginScale);
 

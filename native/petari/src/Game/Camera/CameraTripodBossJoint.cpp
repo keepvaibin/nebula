@@ -1,6 +1,7 @@
 #include "Game/Camera/CameraTripodBossJoint.hpp"
 #include "Game/Boss/TripodBossAccesser.hpp"
-#include "Game/Camera/CamTranslatorTripodBossJoint.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
+#include "Game/Util/MathUtil.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 
@@ -33,8 +34,9 @@ CameraTargetObj* CameraTripodBossJoint::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraTripodBossJoint::createTranslator() {
-    return new CamTranslatorTripodBossJoint(this);
+void CameraTripodBossJoint::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(Vec2f(180.0f * general->mAngleB / MR::pi(), 180.0f * general->mAngleA / MR::pi()), general->mDist, general->mNum1, general->mAxis);
 }
 
 void CameraTripodBossJoint::calcIdealPose() {

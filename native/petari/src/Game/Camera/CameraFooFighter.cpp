@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraFooFighter.hpp"
-#include "Game/Camera/CamTranslatorFooFighter.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -91,6 +91,7 @@ CameraTargetObj* CameraFooFighter::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraFooFighter::createTranslator() {
-    return new CamTranslatorFooFighter(this);
+void CameraFooFighter::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.y, general->mAxis.x, general->mDist);
 }

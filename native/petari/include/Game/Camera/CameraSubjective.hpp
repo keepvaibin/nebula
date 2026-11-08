@@ -11,7 +11,6 @@ public:
     virtual bool isCollisionOff() const {
         return true;
     }
-    virtual CamTranslatorBase* createTranslator();
 
     Vec2f mAngleVel;
     Vec2f mAngle;

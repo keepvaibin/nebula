@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraParallel.hpp"
-#include "Game/Camera/CamTranslatorParallel.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
@@ -35,8 +35,9 @@ CameraTargetObj* CameraParallel::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraParallel::createTranslator() {
-    return new CamTranslatorParallel(this);
+void CameraParallel::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(Vec2f(180.0f * general->mAngleB / MR::pi(), 180.0f * general->mAngleA / MR::pi()), general->mDist, general->mNum1 == 1);
 }
 
 bool CameraParallel::isEnableToRoundLeft() const {

@@ -1,6 +1,6 @@
 #include "Game/Camera/CameraCharmedTripodBoss.hpp"
 #include "Game/Boss/TripodBossAccesser.hpp"
-#include "Game/Camera/CamTranslatorCharmedTripodBoss.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -81,6 +81,7 @@ void CameraCharmedTripodBoss::setParam(s32 jointID, Vec3f up, const Vec3f& wPoin
     mJointId = jointID;
 }
 
-CamTranslatorBase* CameraCharmedTripodBoss::createTranslator() {
-    return new CamTranslatorCharmedTripodBoss(this);
+void CameraCharmedTripodBoss::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mNum1, CameraLocalUtil::getNormalizedOr(general->mUp, Vec3f(0.0f, 1.0f, 0.0f)), general->mWPoint, Vec2f(general->mAxis.x, general->mAxis.y));
 }

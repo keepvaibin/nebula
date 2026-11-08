@@ -8,7 +8,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
     virtual bool isEnableToRoundLeft() const;
     virtual bool isEnableToRoundRight() const;
     virtual bool isEnableToReset() const;

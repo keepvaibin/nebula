@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraRaceFollow.hpp"
-#include "Game/Camera/CamTranslatorRaceFollow.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraMan.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -78,8 +78,9 @@ CameraTargetObj* CameraRaceFollow::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraRaceFollow::createTranslator() {
-    return new CamTranslatorRaceFollow(this);
+void CameraRaceFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint.x, general->mWPoint.y, general->mAngleA * MR::pi() / 180.0f, general->mNum1 != 0, general->mWPoint.z);
 }
 
 void CameraRaceFollow::goRound() {

@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraMtxRegParallel.hpp"
-#include "Game/Camera/CamTranslatorMtxRegParallel.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -20,8 +20,9 @@ CameraTargetObj* CameraMtxRegParallel::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraMtxRegParallel::createTranslator() {
-    return new CamTranslatorMtxRegParallel(this);
+void CameraMtxRegParallel::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mString.getCharPtr(), general->mDist, Vec2f(general->mAngleB, general->mAngleA), general->mWPoint);
 }
 
 void CameraMtxRegParallel::calcIdealPose() {

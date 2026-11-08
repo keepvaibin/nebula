@@ -8,7 +8,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(f32 distMin, f32 distMax, f32 angleX) {
         mDistMin = distMin;

@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraDead.hpp"
-#include "Game/Camera/CamTranslatorDead.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/Camera.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -62,6 +62,7 @@ CameraTargetObj* CameraDead::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraDead::createTranslator() {
-    return new CamTranslatorDead(this);
+void CameraDead::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mDist, general->mNum1, general->mNum2);
 }
