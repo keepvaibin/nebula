@@ -70,7 +70,7 @@ void ScreenBlurEffect::drawBlur() const {
     projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
     Frame::setPerspective(projectionMtx);
 
-    const SiteMaterial material = blurMaterial(mFullTexture, mHalfTexture, static_cast< u8 >(static_cast< s32 >(get_10() * 220.0f * mIntensity)));
+    const SiteMaterial material = blurMaterial(mFullTexture, mHalfTexture, static_cast< u8 >(static_cast< s32 >(getFadeLevel() * 220.0f * mIntensity)));
     TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
 
     f32 y = MR::tanDegree(MR::getRenderFovy() * 0.5f) * mScale;

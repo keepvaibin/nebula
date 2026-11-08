@@ -154,10 +154,10 @@ void DepthOfFieldBlur::createBlurTexture() const {
     ImageEffectLocalUtil::drawTexture(mFrameKey, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setupDrawTexture();
     Frame::targetEnd(mQuarter->mImage, NEBULA_TARGET_RGB);
-    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, mQuarterTexture, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
+    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, mQuarterTexture, mIntensity * getFadeLevel() * 0.005f, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {
-    ImageEffectLocalUtil::drawQuad(finalMaterial(mQuarterTexture, mDepthRampTexture, mHalfTexture, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f))));
+    ImageEffectLocalUtil::drawQuad(finalMaterial(mQuarterTexture, mDepthRampTexture, mHalfTexture, static_cast< u8 >((s32)(mIntensity * getFadeLevel() * 255.0f))));
     ImageEffectLocalUtil::setupDrawTexture();
 }

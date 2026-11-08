@@ -21,7 +21,7 @@ void BloomEffectSimple::draw() const {
 
     // Drawn by the renderer at the frame's own size: the threshold, the channel, the ring's tap weight, the intensity
     // and the ring's vertical radius per unit.
-    const u8 alpha = 255.0f * mIntensity * get_10();
+    const u8 alpha = 255.0f * mIntensity * getFadeLevel();
     const u32 tap = static_cast< u8 >(static_cast< s32 >(255.0f * 1.0f / 8));
     const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;
     u32 verticalBits;
