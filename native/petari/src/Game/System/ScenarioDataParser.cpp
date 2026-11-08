@@ -1,6 +1,6 @@
 #include "Game/Util/SortUtil.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
-#include "Game/System/GalaxyNameSortTable.hpp"
+#include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
@@ -19,8 +19,7 @@ template const bool Table::getValue< s32 >(int, const char*, s32*) const;
 namespace {
     struct GalaxyNameSortLt {
         bool operator()(const ScenarioData* pLhs, const ScenarioData* pRhs) const {
-            return static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(pLhs->mGalaxyName)) <
-                   static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(pRhs->mGalaxyName));
+            return pLhs->mSortKey < pRhs->mSortKey;
         }
     };
 
@@ -172,6 +171,8 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
     }
     mScenarioData = new ScenarioData*[galaxyNum > 0 ? galaxyNum : 1];
 
+    Table galaxyInfo;
+    galaxyInfo.attach(NebulaDataTables::getGalaxyInfoTable());
     for (u32 i = 0; static_cast< u32 >(mScenarioDataNum) < galaxyNum && GameAssets::folderEntry("/StageData", i, &dirent); i++) {
         const u32 galaxyNameLength = getGalaxyNameLength(dirent);
         if (galaxyNameLength == 0) {
@@ -180,7 +181,10 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName) {
 
         MR::FormattedName filePath;
         filePath.format("/StageData/%s", dirent.mName);
-        mScenarioData[mScenarioDataNum++] = new ScenarioData(dirent.mName, galaxyNameLength, filePath.c_str());
+        ScenarioData* const pData = new ScenarioData(dirent.mName, galaxyNameLength, filePath.c_str());
+        const TableIter row = galaxyInfo.findElement("name", static_cast< const char* >(pData->mGalaxyName), 0);
+        pData->mSortKey = row == galaxyInfo.end() ? 0xFFFFFFFFu : static_cast< u32 >(row.mIndex);
+        mScenarioData[mScenarioDataNum++] = pData;
     }
 
     MR::sort(mScenarioData, mScenarioData + mScenarioDataNum, GalaxyNameSortLt());

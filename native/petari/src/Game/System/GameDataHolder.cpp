@@ -5,7 +5,6 @@
 #include "Game/System/GameEventFlagStorage.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GameEventValueChecker.hpp"
-#include "Game/System/ScenarioProgressTestRun.hpp"
 #include "Game/System/SpinDriverPathStorage.hpp"
 #include "Game/System/StarPieceAlmsStorage.hpp"
 #include "Game/System/StoryProgressTable.hpp"
@@ -20,8 +19,7 @@ namespace {
 
 GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     : mUserFile(pUserFile), mEventFlagChecker(), mEventValueChecker(), mPlayerStatus(), mAllGalaxyStorage(), mSpinDriverPathStorage(),
-      mStarPieceAlmsStorage(), mMapInfo(), mScenarioProgressTestRun(), mChunkHolder() {
-    mScenarioProgressTestRun = new ScenarioProgressTestRun(this);
+      mStarPieceAlmsStorage(), mMapInfo(), mChunkHolder() {
     mAllGalaxyStorage = new GameDataAllGalaxyStorage();
     mEventFlagChecker = new GameEventFlagChecker(this);
     mEventValueChecker = new GameEventValueChecker();

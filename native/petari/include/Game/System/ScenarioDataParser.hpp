@@ -23,7 +23,7 @@ public:
 private:
     static constexpr u32 cNoSlot = 0xFFFFFFFFu;
 
-    // Every stage folder with a scenario file, in GalaxyNameSortTable order; built once, sized to the folders.
+    // Every stage folder with a scenario file, in galaxy info table order; built once, sized to the folders.
     ScenarioData** mScenarioData = nullptr;
     s32 mScenarioDataNum = 0;
     // Open addressing on the case-folded name, at most half full: an index into mScenarioData, or cNoSlot.
@@ -61,6 +61,8 @@ public:
     Table* mScenarioData;
     char* mGalaxyName;
     Table* mZoneList;
+    // Its row in the galaxy info table; one not listed sorts last.
+    u32 mSortKey = 0xFFFFFFFFu;
 };
 
 namespace ScenarioDataFunction {

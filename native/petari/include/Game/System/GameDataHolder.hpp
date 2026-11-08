@@ -8,7 +8,6 @@ class GameDataSomeScenarioAccessor;
 class GameEventFlagChecker;
 class GameEventValueChecker;
 class Table;
-class ScenarioProgressTestRun;
 class SpinDriverPathStorage;
 class StarPieceAlmsStorage;
 class UserFile;
@@ -71,7 +70,6 @@ public:
     SpinDriverPathStorage* mSpinDriverPathStorage;
     StarPieceAlmsStorage* mStarPieceAlmsStorage;
     Table* mMapInfo;
-    ScenarioProgressTestRun* mScenarioProgressTestRun;
     BinaryDataChunkHolder* mChunkHolder;
     char mName[16];
     const UserFile* mUserFile;
