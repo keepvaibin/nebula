@@ -40,11 +40,12 @@ GameDataHolder::GameDataHolder(const UserFile* pUserFile)
 
     resetAllData();
 
-    nebula_snprintf(mName, sizeof(mName), "mario1");
+    mIsMario = true;
+    mUser = 1;
 }
 
 bool GameDataHolder::isDataMario() const {
-    return strstr(mName, "mario") != nullptr;
+    return mIsMario;
 }
 
 s32 GameDataHolder::getGalaxyNumCanOpen() const {
@@ -304,7 +305,8 @@ u32 GameDataHolder::makeFileBinary(u8* pData, u32 capacity) {
     return mChunkHolder->makeFileBinary(pData, capacity);
 }
 
-bool GameDataHolder::loadFromFileBinary(const char* pName, const u8* pData, u32 dataSize) {
-    nebula_snprintf(mName, sizeof(mName), "%s", pName);
+bool GameDataHolder::loadFromFileBinary(SaveFileId file, const u8* pData, u32 dataSize) {
+    mIsMario = file.mKind == SaveFileId::Kind_Mario;
+    mUser = file.mUser;
     return mChunkHolder->loadFromFileBinary(pData, dataSize);
 }

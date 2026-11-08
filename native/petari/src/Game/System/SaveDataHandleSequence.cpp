@@ -201,9 +201,9 @@ void SaveDataHandleSequence::restoreUserFile(UserFile* pUserFile, int index, boo
 
 void SaveDataHandleSequence::backupCurrentUserFile() {
     mCurrentUserFile->makeGameDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromGameDataBinary(mCurrentUserFile->getGameDataName(), mTempBuffer, mSaveDataHandler->getFileRoom());
+    mBackupUserFile->loadFromGameDataBinary(mCurrentUserFile->getGameDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
     mCurrentUserFile->makeConfigDataBinary(mTempBuffer, mSaveDataHandler->getFileRoom());
-    mBackupUserFile->loadFromConfigDataBinary(mCurrentUserFile->getConfigDataName(), mTempBuffer, mSaveDataHandler->getFileRoom());
+    mBackupUserFile->loadFromConfigDataBinary(mCurrentUserFile->getConfigDataFile(), mTempBuffer, mSaveDataHandler->getFileRoom());
 }
 
 void SaveDataHandleSequence::exeNoOperation() {
@@ -448,21 +448,17 @@ UserFile* SaveDataHandleSequence::getBackupUserFile() {
 }
 
 void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int index) {
-    char dataName[16];
-    nebula_snprintf(dataName, sizeof(dataName), "config%1d", index);
-
+    const SaveFileId file = {SaveFileId::Kind_Config, index};
     u32 size;
-    const u8* const pData = mSaveDataHandler->getFile(dataName, &size);
-    pUserFile->loadFromConfigDataBinary(dataName, pData, size);
+    const u8* const pData = mSaveDataHandler->getFile(file, &size);
+    pUserFile->loadFromConfigDataBinary(file, pData, size);
 }
 
 void SaveDataHandleSequence::restoreUserFileGameData(UserFile* pUserFile, int index, bool isPlayerMario) {
-    char dataName[16];
-    nebula_snprintf(dataName, sizeof(dataName), "%s%1d", isPlayerMario ? "mario" : "luigi", index);
-
+    const SaveFileId file = {isPlayerMario ? SaveFileId::Kind_Mario : SaveFileId::Kind_Luigi, index};
     u32 size;
-    const u8* const pData = mSaveDataHandler->getFile(dataName, &size);
-    pUserFile->loadFromGameDataBinary(dataName, pData, size);
+    const u8* const pData = mSaveDataHandler->getFile(file, &size);
+    pUserFile->loadFromGameDataBinary(file, pData, size);
 
     pUserFile->mIsPlayerMario = isPlayerMario;
 }

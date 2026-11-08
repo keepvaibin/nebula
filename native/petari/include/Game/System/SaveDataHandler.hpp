@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/SaveFileId.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include <nebula_types.h>
 
@@ -16,7 +17,7 @@ public:
     bool acceptLoaded();
     void initializeUserFileMemory(int, const UserFile*);
     void copyUserFileMemory(int, int);
-    const u8* getFile(const char* pName, u32* pSize) const;
+    const u8* getFile(SaveFileId, u32* pSize) const;
     void storeUserFile(const UserFile*);
     void requestSaveSaveData();
     // Room for any one file the game makes.
@@ -25,8 +26,8 @@ public:
     SaveRequest::Result getLastResult() const;
 
 private:
+    // Indexed by user, then kind.
     struct File {
-        char mName[16];
         u8* mData;
         u32 mSize;
         u32 mRoom;
@@ -34,8 +35,9 @@ private:
 
     bool readNative();
     bool readOld();
-    File* findFile(const char*) const;
-    void setFile(const char*, const u8*, u32);
+    // Null for a user past the last.
+    File* findFile(SaveFileId) const;
+    void setFile(SaveFileId, const u8*, u32);
 
     SaveRequest* mSaveRequest;
     int mReadIndex;

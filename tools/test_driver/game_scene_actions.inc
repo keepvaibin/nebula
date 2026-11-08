@@ -21,9 +21,9 @@
                 sPendingStarId = action.scenario;
             }
         } else if (action.kind == NEBULA_TEST_SET_PLAYER) {
-            // GameDataHolder::isDataMario reads the file's name ("mario1" or "luigi1").
-            nebula_snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
-                     action.scenario != 0 ? "luigi" : "mario");
+            // The file played is user 1's Mario or Luigi file.
+            GameDataFunction::getCurrentGameDataHolder()->mIsMario = action.scenario == 0;
+            GameDataFunction::getCurrentGameDataHolder()->mUser = 1;
         } else if (action.kind == NEBULA_TEST_SET_GRAND_STARS) {
             // Grand Star n is the first star of its galaxy (SpecialStarGrand1-7 derive from these).
             static const char* const kGrandStarGalaxies[] = {"HeavensDoorGalaxy",    "TriLegLv1Galaxy",
@@ -61,8 +61,9 @@
             } else if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
                 MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
             } else if (strcmp(action.stage, "LuigiFile") == 0) {
-                // The file played as a Luigi file from here (its name; the stage built next reads it).
-                nebula_snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "luigi1");
+                // The file played as user 1's Luigi file from here (the stage built next reads it).
+                GameDataFunction::getCurrentGameDataHolder()->mIsMario = false;
+                GameDataFunction::getCurrentGameDataHolder()->mUser = 1;
             } else if (strcmp(action.stage, "SpinAndStarPointer") == 0) {
                 // The story's grant of the spin and the pointer (the Gateway's Luma), which an early save lacks.
                 MR::onGameEventFlagEnableToSpinAndStarPointer();
