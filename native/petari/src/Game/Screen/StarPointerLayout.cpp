@@ -45,15 +45,9 @@ namespace {
     static const f32 sHoldRadius = 45;
     static const f32 sHandRadius = 20;
 
-    // static const _32 sStepRadian =
     static const s32 hGripTime = 20;
     static const s32 hReleaseTime = 30;
     static const s32 hHideRumbleTime = 30;
-    // static const _32 hInvalidateWaitFrame =
-    // static const _32 sStarVelZeroRange =
-    // static const _32 sStarRateScale =
-    // static const _32 sStarRateMax =
-    // static const _32 h16x9ScaleX =
     static const f32 sRotateMult = 900.0f;
     // static const f32 sRotateHandMult =
     static const f32 hEndAnimRate = 2.0f;

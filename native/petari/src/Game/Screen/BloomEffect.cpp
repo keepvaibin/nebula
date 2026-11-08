@@ -56,7 +56,7 @@ void BloomEffect::postDraw() const {
 
     // Drawn by the renderer at the frame's own size: the threshold, both blurs' tap weights, the intensity and the
     // rings' horizontal radius per unit.
-    const u8 intensity = mBloomIntensity * get_10();
+    const u8 intensity = mBloomIntensity * getFadeLevel();
     const u32 tap1 = static_cast< u8 >(static_cast< s32 >(mIntensity1 * 255.0f));
     const u32 tap2 = static_cast< u8 >(static_cast< s32 >(mIntensity2 * 255.0f));
     Frame::bloom(NEBULA_PASS_BLOOM_NORMAL, mThreshold | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,

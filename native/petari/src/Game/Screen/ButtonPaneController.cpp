@@ -24,12 +24,9 @@ namespace NrvButtonPaneController {
 
 ButtonPaneController::ButtonPaneController(LayoutActor* pHost, const char* pPaneName, const char* pBoundingPaneName, u32 animIndex, bool param5)
     : NerveExecutor(pPaneName), mHost(pHost), mPaneName(pPaneName), mBoundingPaneName(pBoundingPaneName), mAnimIndex(animIndex), mReleaseOnDecide(param5),
-      mPointingAnimStartFrame(0.0f), mIsSelected(false), mIsPointing(false), mDisappearsAfterDecide(true), mIsPointingExternal(false), mAppearAnimName("ButtonAppear"),
+      mPointingAnimStartFrame(0.0f), mIsSelected(false), mIsPointing(false), mDisappearsAfterDecide(true), mIsPointingExternal(false), mIsActive(false), mAppearAnimName("ButtonAppear"),
       mWaitAnimName("ButtonWait"), mDecideAnimName("ButtonDecide"), mPointingAnimName("ButtonSelectIn"), mNotPointingAnimName("ButtonSelectOut"),
-      mDisappearAnimName("ButtonEnd")
-      ,
-      mIsNebulaFocusable(true)
-{
+      mDisappearAnimName("ButtonEnd"), mIsNebulaFocusable(true) {
     if (!MR::isExistPaneCtrl(pHost, pPaneName)) {
         MR::createAndAddPaneCtrl(pHost, pPaneName, 1);
     }

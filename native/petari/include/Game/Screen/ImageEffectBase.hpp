@@ -29,7 +29,7 @@ public:
         return _C || _D;
     }
 
-    f32 get_10() const {
+    f32 getFadeLevel() const {
         return mFadeLevel;
     }
 
