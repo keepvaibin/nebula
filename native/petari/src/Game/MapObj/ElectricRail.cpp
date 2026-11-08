@@ -20,15 +20,62 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
+    // One per rail level; arg 0 (the level count) is at most this many.
     const char* cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
-    // const f32 cStepInterval;
-    // const f32 cPointSensorRadius;
-    // const f32 cRailRadius;
-    // const f32 cSeparateInterval;
-    // const f32 cSeparateTexRate;
-    // const f32 cRailShadowWidth;
-    // const f32 cRailDisappearFrame;
-    // const f32 cShadowVolumeHeight;
+
+    const f32 cLevelHeight = 100.0f;
+    const f32 cPointSensorRadius = 35.0f;
+    const f32 cRailRadius = 30.0f;
+    const f32 cSeparateInterval = 200.0f;
+    const f32 cSeparateTexRate = 0.5f;
+    const f32 cRailShadowWidth = 20.0f;
+    const s32 cRailDisappearFrame = 20;
+    const f32 cShadowVolumeHeight = 300.0f;
+
+    // One level's strip across the rail from (side0, up0) to (side1, up1) at each separator, u running along the rail.
+    void writePlaneStrip(VertexPT* pVtx, const ElectricRailSeparator* pSeparators, s32 separatorCount, s32 level, f32 side0, f32 up0, f32 side1,
+                         f32 up1) {
+        for (s32 j = 0; j < separatorCount; j++) {
+            const ElectricRailSeparator& rSeparator = pSeparators[j];
+            const Vec3f& rSide = rSeparator.mSide;
+            const Vec3f& rUp = rSeparator.mUp;
+            f32 u = cSeparateTexRate * j;
+
+            Vec3f center(rSeparator.mPos);
+            Vec3f lift(rUp);
+            lift.scale(cLevelHeight * level);
+            center.add(center, lift);
+
+            *pVtx++ = {((center.x + (rSide.x * side0)) + (rUp.x * up0)), ((center.y + (rSide.y * side0)) + (rUp.y * up0)),
+                       ((center.z + (rSide.z * side0)) + (rUp.z * up0)), u, 0.0f};
+            *pVtx++ = {((center.x + (rSide.x * side1)) + (rUp.x * up1)), ((center.y + (rSide.y * side1)) + (rUp.y * up1)),
+                       ((center.z + (rSide.z * side1)) + (rUp.z * up1)), u, 1.0f};
+        }
+    }
+
+    void putVertex(VertexP*& rVtx, const Vec3f& rPos) {
+        *rVtx++ = {rPos.x, rPos.y, rPos.z};
+    }
+
+    // A shadow wall edge: the rail's right or left edge, then the same point pushed down the volume.
+    void putWallEdge(VertexP*& rVtx, const ElectricRailSeparator& rSeparator, bool isRight) {
+        Vec3f side;
+        side.scale(cRailShadowWidth, rSeparator.mSide);
+        Vec3f drop;
+        drop.scale(cShadowVolumeHeight, rSeparator.mOffsetDir);
+
+        Vec3f edge;
+        if (isRight) {
+            edge.add(rSeparator.mPos, side);
+        } else {
+            edge.sub(rSeparator.mPos, side);
+        }
+
+        Vec3f dropped;
+        dropped.add(edge, drop);
+        putVertex(rVtx, edge);
+        putVertex(rVtx, dropped);
+    }
 };  // namespace
 
 namespace NrvElectricRail {
@@ -44,22 +91,22 @@ ElectricRailPoint::ElectricRailPoint(const char* pName) : LiveActor(pName), mHas
 }
 
 void ElectricRailPoint::init(const TableIter& rIter) {
-    initModelManagerWithAnm("ElectricRailPoint", nullptr, 0);
+    initModelManagerWithAnm("ElectricRailPoint", nullptr, false);
     MR::connectToSceneMapObjDecoration(this);
 
     if (mHasShadow) {
-        MR::initShadowVolumeSphere(this, 35.0);
-
-        MR::onCalcShadowOneTime(this, 0);
-        MR::onCalcShadowDropGravityOneTime(this, 0);
+        MR::initShadowVolumeSphere(this, cPointSensorRadius);
+        MR::onCalcShadowOneTime(this, nullptr);
+        MR::onCalcShadowDropGravityOneTime(this, nullptr);
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, 35.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, cPointSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
     makeActorAppeared();
 }
 
+// Shocks while the rail is live; once it has vanished the post is only solid.
 void ElectricRailPoint::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (mIsActive) {
         MR::sendMsgEnemyAttackElectric(pReceiver, pSender);
@@ -71,26 +118,26 @@ void ElectricRailPoint::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 ElectricRailSeparator::ElectricRailSeparator() : mPos(gZeroVec), mSide(gZeroVec), mUp(gZeroVec), mFront(gZeroVec), mOffsetDir(gZeroVec) {
 }
 
-void ElectricRailSeparator::setup(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3) {
-    mOffsetDir.set(rVec3);
-    mPos.set(rVec1);
-    mFront.set(rVec2);
-
+// A frame at `rPos` facing back along `rRailDir`, up against `rOffsetDir` (gravity) where it can be.
+void ElectricRailSeparator::setup(const Vec3f& rPos, const Vec3f& rRailDir, const Vec3f& rOffsetDir) {
+    mOffsetDir.set(rOffsetDir);
+    mPos.set(rPos);
+    mFront.set(rRailDir);
     mFront.negate();
 
-    Vec3f upVec = -rVec3;
+    Vec3f up = -rOffsetDir;
 
-    if (MR::isSameDirection(upVec, mFront)) {
+    if (MR::isSameDirection(up, mFront)) {
         MR::makeAxisCrossPlane(&mSide, &mUp, mFront);
     } else {
-        MR::makeAxisFrontUp(&mSide, &mUp, mFront, upVec);
+        MR::makeAxisFrontUp(&mSide, &mUp, mFront, up);
     }
 }
 
-ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, ElectricRailSeparator* pSeparator, s32 count)
+ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, ElectricRailSeparator* pSeparators, s32 separatorCount)
     : ShadowVolumeDrawer("影描画[電撃レールボリューム]"), mHost(pActor) {
-    mMesh.init(count * 8 + 2);
-    writeShadowVolumeShape(pSeparator, count);
+    mMesh.init(separatorCount * 8 + 2);
+    writeShadowVolumeShape(pSeparators, separatorCount);
     mMesh.send();
 }
 
@@ -106,93 +153,64 @@ bool ElectricRailShadowDrawer::isDraw() const {
     return MR::isValidDraw(mHost);
 }
 
-void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSeparator, s32 val) {
-    VertexP* vtx = mMesh.strip(val * 4 + 2);
+// A box swept along the rail and pushed down the gravity: the walls as one strip (along the left edge, back along the
+// right, closed at the start), then the rail-side cap and the far cap.
+void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSeparators, s32 separatorCount) {
+    VertexP* vtx = mMesh.strip(separatorCount * 4 + 2);
 
-    ElectricRailSeparator* separator;
-    Vec3f vec24, vec30, vec3C, vec48;
-
-    for (s32 i = 0; i < val; i++) {
-        separator = &pSeparator[i];
-
-        vec3C.scale(20.0f, separator->mSide);
-
-        vec48.scale(300.0f, separator->mOffsetDir);
-
-        vec24.sub(separator->mPos, vec3C);
-
-        vec30.add(vec24, vec48);
-
-        *vtx++ = {vec24.x, vec24.y, vec24.z};
-        *vtx++ = {vec30.x, vec30.y, vec30.z};
+    for (s32 i = 0; i < separatorCount; i++) {
+        putWallEdge(vtx, pSeparators[i], false);
     }
 
-    for (s32 i = 0; i < val; i++) {
-        separator = &pSeparator[val - i - 1];
-
-        vec3C.scale(20.0f, separator->mSide);
-
-        vec48.scale(300.0f, separator->mOffsetDir);
-
-        vec24.add(separator->mPos, vec3C);
-
-        vec30.add(vec24, vec48);
-
-        *vtx++ = {vec24.x, vec24.y, vec24.z};
-        *vtx++ = {vec30.x, vec30.y, vec30.z};
+    for (s32 i = separatorCount - 1; i >= 0; i--) {
+        putWallEdge(vtx, pSeparators[i], true);
     }
 
-    vec3C.scale(20.0f, pSeparator->mSide);
+    putWallEdge(vtx, pSeparators[0], false);
 
-    vec48.scale(300.0f, pSeparator->mOffsetDir);
+    vtx = mMesh.strip(separatorCount * 2);
 
-    vec24.sub(pSeparator->mPos, vec3C);
+    for (s32 i = 0; i < separatorCount; i++) {
+        const ElectricRailSeparator& rSeparator = pSeparators[i];
+        Vec3f side;
+        side.scale(cRailShadowWidth, rSeparator.mSide);
 
-    vec30.add(vec24, vec48);
-
-    *vtx++ = {vec24.x, vec24.y, vec24.z};
-    *vtx++ = {vec30.x, vec30.y, vec30.z};
-
-    vtx = mMesh.strip(val * 2);
-
-    for (s32 i = 0; i < val; i++) {
-        separator = &pSeparator[i];
-
-        vec3C.scale(20.0f, separator->mSide);
-
-        vec24.add(separator->mPos, vec3C);
-
-        vec30.sub(separator->mPos, vec3C);
-
-        *vtx++ = {vec24.x, vec24.y, vec24.z};
-        *vtx++ = {vec30.x, vec30.y, vec30.z};
+        Vec3f right;
+        right.add(rSeparator.mPos, side);
+        Vec3f left;
+        left.sub(rSeparator.mPos, side);
+        putVertex(vtx, right);
+        putVertex(vtx, left);
     }
 
-    vtx = mMesh.strip(val * 2);
+    vtx = mMesh.strip(separatorCount * 2);
 
-    for (s32 i = 0; i < val; i++) {
-        separator = &pSeparator[val - i - 1];
+    for (s32 i = separatorCount - 1; i >= 0; i--) {
+        const ElectricRailSeparator& rSeparator = pSeparators[i];
+        Vec3f side;
+        side.scale(cRailShadowWidth, rSeparator.mSide);
+        Vec3f drop;
+        drop.scale(cShadowVolumeHeight, rSeparator.mOffsetDir);
 
-        vec3C.scale(20.0f, separator->mSide);
-
-        vec48.scale(300.0f, separator->mOffsetDir);
-
-        vec24.add(separator->mPos, vec3C);
-        vec24.add(vec24, vec48);
-
-        vec30.sub(separator->mPos, vec3C);
-        vec30.add(vec30, vec48);
-
-        *vtx++ = {vec24.x, vec24.y, vec24.z};
-        *vtx++ = {vec30.x, vec30.y, vec30.z};
+        Vec3f right;
+        right.add(rSeparator.mPos, side);
+        right.add(right, drop);
+        Vec3f left;
+        left.sub(rSeparator.mPos, side);
+        left.add(left, drop);
+        putVertex(vtx, right);
+        putVertex(vtx, left);
     }
 }
 
-ElectricRail::ElectricRail(const char* name)
-    : ElectricRailDrawn(name), mPoints(), mPointCount(), mSensorPositions(), mSeparators(), mSeparatorCount(), mRailHeight(1),
-      mEaseIn(30.0f), mShadowDrawer(), mIsCalcGravity() {
+ElectricRail::ElectricRail(const char* pName)
+    : ElectricRailDrawn(pName), mPoints(nullptr), mPointCount(0), mSensorPositions(nullptr), mSeparators(nullptr), mSeparatorCount(0), mRailHeight(1),
+      mEaseIn(cRailRadius), mShadowDrawer(nullptr), mIsCalcGravity(false) {
 }
 
+// Args: 0 levels stacked up the gravity (posts and sensors on each), 1 line shadow drop length, 2 volume shadow drop
+// length, 3 the holder's rail type, 4 one gravity for the whole rail (taken at its center). Rail points with arg 0 get
+// no post.
 void ElectricRail::init(const TableIter& rIter) {
     s32 railType = 0;
     MR::getPlacementArg3NoInit(rIter, &railType);
@@ -221,7 +239,7 @@ void ElectricRail::init(const TableIter& rIter) {
     initSeparators();
     initMesh();
     initShadow(rIter);
-    initSound(4, 1);
+    initSound(4, true);
 
     mSoundObject->setTrans(mSensorPositions);
 
@@ -243,24 +261,17 @@ void ElectricRail::init(const TableIter& rIter) {
     }
 }
 
+// Switch A already on: starts vanished.
 void ElectricRail::initAfterPlacement() {
-    if (!MR::isValidSwitchA(this)) {
+    if (!MR::isValidSwitchA(this) || !MR::isOnSwitchA(this)) {
         return;
     }
 
-    if (!MR::isOnSwitchA(this)) {
-        return;
-    }
-
-    MR::invalidateHitSensors(this);
-
-    for (s32 i = 0; i < mPointCount; i++) {
-        mPoints[i].mIsActive = false;
-    }
-
+    deactivate();
     setNerve(GET_NERVE(ElectricRail, ElectricRailNrvDisappeared));
 }
 
+// Waiting, the prebuilt mesh; vanishing, the narrowing rail written each frame.
 void ElectricRail::drawWith(MaterialDraw& rMaterial) const {
     if (!MR::isValidDraw(this)) {
         return;
@@ -296,12 +307,17 @@ void ElectricRail::disappear() {
     }
 }
 
-void ElectricRail::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (!MR::isSensorPlayer(pReceiver)) {
-        return;
-    }
+void ElectricRail::deactivate() {
+    MR::invalidateHitSensors(this);
 
-    if (MR::isPlayerSquat()) {
+    for (s32 i = 0; i < mPointCount; i++) {
+        mPoints[i].mIsActive = false;
+    }
+}
+
+// Ducking under it is safe.
+void ElectricRail::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (!MR::isSensorPlayer(pReceiver) || MR::isPlayerSquat()) {
         return;
     }
 
@@ -324,89 +340,68 @@ void ElectricRail::initSensor() {
     mSensorPositions = new Vec3f[mRailHeight];
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        MR::addHitSensorPosMapObj(this, ::cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &mSensorPositions[i], Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorPosMapObj(this, cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &mSensorPositions[i], Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     updateHitSensorPos();
 }
 
+// A post on every level of each rail point without arg 0; only the bottom ones cast a shadow.
 void ElectricRail::initPoints() {
-    ElectricRailPoint* point;
     s32 railPointNum = MR::getRailPointNum(this);
-    mPointCount = 0;
 
-    s32 curRail = 0;
-
-    while (curRail < railPointNum) {
-        s32 curRailPointArg = -1;
-
-        bool ret = MR::getRailPointArg0NoInit(this, curRail, &curRailPointArg);
-
-        if (!ret) {
-            mPointCount++;
+    s32 postPointCount = 0;
+    for (s32 i = 0; i < railPointNum; i++) {
+        s32 noPost = -1;
+        if (!MR::getRailPointArg0NoInit(this, i, &noPost)) {
+            postPointCount++;
         }
-
-        curRail++;
     }
 
-    mPointCount *= mRailHeight;
+    mPointCount = postPointCount * mRailHeight;
     mPoints = new ElectricRailPoint[mPointCount];
 
-    s32 curPointIdx = 0;
-    s32 curRailPoint = 0;
-    s32 flag = 0;
-
-    while (curRailPoint < MR::getRailPointNum(this)) {
-        s32 tempArg = -1;
-        bool ret = MR::getRailPointArg0NoInit(this, curRailPoint, &tempArg);
-
-        if (!ret) {
-            point = &mPoints[curPointIdx];
-            Vec3f pos;
-            MR::calcRailPointPos(&pos, this, curRailPoint);
-            point->mPosition.set(pos);
-            curPointIdx++;
-
-            if (mRailHeight > 1) {
-                Vec3f outGrav;
-                calcGravity(&outGrav, pos);
-                outGrav.scale(-100.0f);
-
-                s32 curHeight = 1;
-
-                while (curHeight < mRailHeight) {
-                    point = &mPoints[curPointIdx];
-                    pos.add(outGrav);
-                    point->mPosition.set(pos);
-                    point->mHasShadow = flag;
-                    curPointIdx++;
-                    curHeight++;
-                }
-            }
+    s32 pointIdx = 0;
+    for (s32 i = 0; i < railPointNum; i++) {
+        s32 noPost = -1;
+        if (MR::getRailPointArg0NoInit(this, i, &noPost)) {
+            continue;
         }
 
-        curRailPoint++;
+        Vec3f pos;
+        MR::calcRailPointPos(&pos, this, i);
+        mPoints[pointIdx++].mPosition.set(pos);
+
+        if (mRailHeight > 1) {
+            Vec3f levelStep;
+            calcGravity(&levelStep, pos);
+            levelStep.scale(-cLevelHeight);
+
+            for (s32 level = 1; level < mRailHeight; level++) {
+                ElectricRailPoint& rPoint = mPoints[pointIdx++];
+                pos.add(levelStep);
+                rPoint.mPosition.set(pos);
+                rPoint.mHasShadow = false;
+            }
+        }
     }
 
-    s32 curPoint = 0;
-
-    while (curPoint < mPointCount) {
-        mPoints[curPoint].initWithoutIter();
-        curPoint++;
+    for (s32 i = 0; i < mPointCount; i++) {
+        mPoints[i].initWithoutIter();
     }
 }
 
+// A frame every interval along the rail, and one at its end (its start again on a loop).
 void ElectricRail::initSeparators() {
-    mSeparatorCount = static_cast< s32 >(MR::getRailTotalLength(this) / 200.0f) + 1;
+    mSeparatorCount = static_cast< s32 >(MR::getRailTotalLength(this) / cSeparateInterval) + 1;
     mSeparators = new ElectricRailSeparator[mSeparatorCount];
 
-    Vec3f railPos, gravity;
+    Vec3f railPos;
+    Vec3f gravity;
 
     for (s32 i = 0; i < mSeparatorCount - 1; i++) {
-        MR::setRailCoord(this, i * 200.0f);
-
+        MR::setRailCoord(this, i * cSeparateInterval);
         railPos.set(MR::getRailPos(this));
-
         calcGravity(&gravity, railPos);
 
         if (MR::isNearZero(gravity)) {
@@ -423,9 +418,7 @@ void ElectricRail::initSeparators() {
     }
 
     railPos.set(MR::getRailPos(this));
-
     calcGravity(&gravity, railPos);
-
     mSeparators[mSeparatorCount - 1].setup(railPos, MR::getRailDirection(this), gravity);
 
     MR::moveCoordToStartPos(this);
@@ -433,90 +426,55 @@ void ElectricRail::initSeparators() {
 
 void ElectricRail::initMesh() {
     mMesh.init(mSeparatorCount * 4 * mRailHeight);
-    drawPlane(30.0, 30.0, -30.0, -30.0);
-    drawPlane(-30.0, 30.0, 30.0, -30.0);
+    drawPlane(cRailRadius, cRailRadius, -cRailRadius, -cRailRadius);
+    drawPlane(-cRailRadius, cRailRadius, cRailRadius, -cRailRadius);
     mMesh.send();
 }
 
-void ElectricRail::drawRail(TypedDraw& rDraw, f32 a1) const {
-    drawPlaneGX(rDraw, a1, a1, -a1, -a1);
-    drawPlaneGX(rDraw, -a1, a1, a1, -a1);
+// Two crossed planes of half-width `radius` along each level.
+void ElectricRail::drawRail(TypedDraw& rDraw, f32 radius) const {
+    drawPlaneGX(rDraw, radius, radius, -radius, -radius);
+    drawPlaneGX(rDraw, -radius, radius, radius, -radius);
 }
 
-void ElectricRail::drawPlane(f32 a1, f32 a2, f32 a3, f32 a4) {
-    const Vec3f* pUp;
-
-    for (s32 i = 0; i < mRailHeight; i++) {
-        VertexPT* vtx = mMesh.strip(2 * mSeparatorCount);
-
-        for (s32 j = 0; j < mSeparatorCount; j++) {
-            ElectricRailSeparator* s = &mSeparators[j];
-            Vec3f v21(s->mPos);
-
-            f32 v15 = 0.5f * j;
-
-            pUp = &s->mUp;
-            Vec3f v20(*pUp);
-            v20.scale(100.0f * i);
-            v21.add(v21, v20);
-
-            *vtx++ = {((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
-                           ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)), v15, 0.0f};
-
-            *vtx++ = {((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
-                           ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)), v15, 1.0f};
-        }
+void ElectricRail::drawPlane(f32 side0, f32 up0, f32 side1, f32 up1) {
+    for (s32 level = 0; level < mRailHeight; level++) {
+        writePlaneStrip(mMesh.strip(2 * mSeparatorCount), mSeparators, mSeparatorCount, level, side0, up0, side1, up1);
     }
 }
 
-void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4) const {
-    const Vec3f* pUp;
-
-    for (s32 i = 0; i < mRailHeight; i++) {
-        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount);
-
-        for (s32 j = 0; j < mSeparatorCount; j++) {
-            ElectricRailSeparator* s = &mSeparators[j];
-            Vec3f v21(s->mPos);
-            f32 v15 = 0.5f * j;
-
-            pUp = &s->mUp;
-            Vec3f v20(*pUp);
-            v20.scale(100.0f * i);
-            v21.add(v21, v20);
-
-            *vtx++ = {((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)), ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)), v15, 0.0f};
-
-            *vtx++ = {((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)), ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)), v15, 1.0f};
-        }
+void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const {
+    for (s32 level = 0; level < mRailHeight; level++) {
+        writePlaneStrip(rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount), mSeparators, mSeparatorCount, level, side0, up0,
+                        side1, up1);
     }
 }
 
+// A positive arg 2 drops the swept volume shadow; else a positive arg 1 drops a line shadow between the end posts.
 void ElectricRail::initShadow(const TableIter& rIter) {
-    f32 arg1;
-    MR::getPlacementArg1WithInit(rIter, &arg1);
+    f32 lineDropLength;
+    MR::getPlacementArg1WithInit(rIter, &lineDropLength);
 
-    f32 arg2;
-    MR::getPlacementArg2WithInit(rIter, &arg2);
+    f32 volumeDropLength;
+    MR::getPlacementArg2WithInit(rIter, &volumeDropLength);
 
-    if (!(0.0f < arg1 || 0.0f < arg2)) {
+    if (!(0.0f < lineDropLength || 0.0f < volumeDropLength)) {
         return;
     }
 
-    bool flag = 0.0f < arg2;
-
+    bool isVolume = 0.0f < volumeDropLength;
     f32 dropLength;
 
-    if (flag) {
+    if (isVolume) {
         MR::initShadowController(this, 2);
-        dropLength = arg2;
+        dropLength = volumeDropLength;
     } else {
         MR::initShadowController(this, 3);
-        dropLength = arg1;
+        dropLength = lineDropLength;
     }
 
-    MR::addShadowVolumeCylinder(this, "start", 20.0);
-    MR::addShadowVolumeCylinder(this, "end", 20.0);
+    MR::addShadowVolumeCylinder(this, "start", cRailShadowWidth);
+    MR::addShadowVolumeCylinder(this, "end", cRailShadowWidth);
 
     Vec3f startPos;
     MR::calcRailStartPos(&startPos, this);
@@ -533,13 +491,14 @@ void ElectricRail::initShadow(const TableIter& rIter) {
     MR::onCalcShadowDropPrivateGravity(this, "start");
     MR::onCalcShadowDropPrivateGravity(this, "end");
 
-    if (flag) {
+    if (isVolume) {
         mShadowDrawer = new ElectricRailShadowDrawer(this, mSeparators, mSeparatorCount);
     } else {
-        MR::addShadowVolumeLine(this, "line", this, "start", 20.0, this, "end", 20.0);
+        MR::addShadowVolumeLine(this, "line", this, "start", cRailShadowWidth, this, "end", cRailShadowWidth);
     }
 }
 
+// The bottom sensor follows the rail point nearest the player; the others stack a level apart above it.
 void ElectricRail::updateHitSensorPos() {
     MR::calcNearestRailPos(mSensorPositions, this, *MR::getPlayerCenterPos());
 
@@ -547,36 +506,32 @@ void ElectricRail::updateHitSensorPos() {
         return;
     }
 
-    Vec3f gravity;
-    calcGravity(&gravity, *mSensorPositions);
-    gravity.scale(-100.0);
+    Vec3f levelStep;
+    calcGravity(&levelStep, *mSensorPositions);
+    levelStep.scale(-cLevelHeight);
 
     for (s32 i = 1; i < mRailHeight; i++) {
-        mSensorPositions[i].add(mSensorPositions[i - 1], gravity);
+        mSensorPositions[i].add(mSensorPositions[i - 1], levelStep);
     }
 }
 
-void ElectricRail::calcGravity(Vec3f* pOut, const Vec3f& rA2) const {
+void ElectricRail::calcGravity(Vec3f* pOut, const Vec3f& rPos) const {
     if (mIsCalcGravity) {
         pOut->set(mGravity);
-    } else if (!MR::calcGravityVectorOrZero(this, rA2, pOut, nullptr, 0)) {
-        MR::calcDropShadowVector(this, rA2, pOut, nullptr, 0);
+    } else if (!MR::calcGravityVectorOrZero(this, rPos, pOut, nullptr, 0)) {
+        MR::calcDropShadowVector(this, rPos, pOut, nullptr, 0);
     }
 }
 
 void ElectricRail::exeDisappear() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_ELEC_RAIL_VANISH");
-        MR::invalidateHitSensors(this);
-
-        for (s32 i = 0; i < mPointCount; i++) {
-            mPoints[i].mIsActive = false;
-        }
+        deactivate();
     }
 
-    mEaseIn = MR::calcNerveEaseInValue(this, 20, 30.0, 0.0);
+    mEaseIn = MR::calcNerveEaseInValue(this, cRailDisappearFrame, cRailRadius, 0.0f);
 
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cRailDisappearFrame)) {
         setNerve(GET_NERVE(ElectricRail, ElectricRailNrvDisappeared));
     }
 }
