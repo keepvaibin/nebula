@@ -9,7 +9,7 @@
 
 bool Mario::checkWallJumpCode() {
     if (checkWallFloorCode(11) || checkWallFloorCode(6) || checkWallFloorCode(34) || checkWallFloorCode(7) || checkWallFloorCode(8)) {
-        if (mMovementStates._1 || isAnimationRun(mHipDropLandAnim)) {
+        if (mMovementStates.onGround || isAnimationRun(mHipDropLandAnim)) {
             stopWalk();
             push(getWallNorm() * 10.0f);
             tryPushToVelocity();
@@ -51,7 +51,7 @@ bool Mario::doSideStep() {
     if (mActor->mTakeCount) {
         return false;
     }
-    if (mHitStates._5) {
+    if (mHitStates.karikariClinging) {
         return false;
     }
     if (mCeilDist < 200.0f) {
@@ -74,7 +74,7 @@ bool Mario::doSideStep() {
     if (mFloorCode == 2) {
         return false;
     }
-    if (!getPlayer()->mMovementStates._8) {
+    if (!getPlayer()->mMovementStates.frontWall) {
         return false;
     }
     const Triangle* wall = getPlayer()->getWallPolygon();
@@ -109,13 +109,13 @@ bool MarioSideStep::close() {
 }
 
 bool MarioSideStep::update() {
-    if (!getPlayer()->mMovementStates._8) {
+    if (!getPlayer()->mMovementStates.frontWall) {
         return false;
     }
-    if (getPlayer()->mHitStates._5) {
+    if (getPlayer()->mHitStates.karikariClinging) {
         return false;
     }
-    if (getPlayer()->mDrawStates._A) {
+    if (getPlayer()->mDrawStates.atEdge) {
         return false;
     }
     if (MR::isNormalTalking()) {
@@ -146,7 +146,7 @@ bool MarioSideStep::update() {
             if (forward > 0.707f) {
                 getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
             }
-            getPlayer()->mMovementStates._8 = false;
+            getPlayer()->mMovementStates.frontWall = false;
             return false;
         } else {
             side *= (1.0f + 0.25f * forward) * getStickP();
@@ -170,7 +170,7 @@ bool MarioSideStep::update() {
         getPlayer()->tryWallPunch();
         return false;
     }
-    if (!getPlayer()->mMovementStates._1) {
+    if (!getPlayer()->mMovementStates.onGround) {
         getPlayer()->keepDistFrontWall();
         getPlayer()->tryDrop();
         return false;

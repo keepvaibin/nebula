@@ -15,7 +15,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 void MarioActor::forceKill(u32 type) {
-    if (mMario->getMovementStates()._1F) {
+    if (mMario->getMovementStates().invincible) {
         return;
     }
 

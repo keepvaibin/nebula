@@ -24,10 +24,10 @@ bool MarioFlow::start() {
     changeAnimationNonStop("中ダメージ");
     startPadVib(2);
 
-    getPlayer()->mMovementStates._1 = false;
+    getPlayer()->mMovementStates.onGround = false;
     getPlayer()->mMovementStates.jumping = true;
-    getPlayer()->mMovementStates._B = false;
-    getPlayer()->mMovementStates._2B = true;
+    getPlayer()->mMovementStates.hipDrop = false;
+    getPlayer()->mMovementStates.spinBlocked = true;
 
     _18 = getFrontVec() * mActor->mConst->getTable()->mJumpDistFlow;
     _18 += -mActor->_240 * mActor->mConst->getTable()->mJumpHeightFlow;
@@ -59,7 +59,7 @@ bool MarioFlow::update() {
             return false;
         }
 
-        if (getPlayer()->getMovementStates()._1) {
+        if (getPlayer()->getMovementStates().onGround) {
             getPlayer()->mMovementStates.jumping = false;
 
             changeAnimation("中ダメージ着地");
@@ -74,7 +74,7 @@ bool MarioFlow::update() {
         }
         break;
     case 1:
-        if (getPlayer()->getMovementStates()._1 == false) {
+        if (getPlayer()->getMovementStates().onGround == false) {
             getPlayer()->mMovementStates.jumping = true;
             _14 = 0;
         } else {

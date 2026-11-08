@@ -6,12 +6,12 @@
 #include "Game/Util/MathUtil.hpp"
 
 void Mario::checkBump() {
-    if (!mMovementStates.jumping && !mMovementStates._A && mMovementStates._1) {
+    if (!mMovementStates.jumping && !mMovementStates.squat && mMovementStates.onGround) {
         if (!isStatusActive(MarioStatus_Hang) && !isStatusActive(MarioStatus_Wall) && !isStatusActive(MarioStatus_Swim) &&
             !isStatusActive(MarioStatus_Climb)) {
             if (!isDamaging() && getPlayerMode() != 5 && !isSwimming()) {
                 if (isStickOn()) {
-                    if (!mCorrectionEaseTimer && (mMovementStates._23 == 0)) {
+                    if (!mCorrectionEaseTimer && (mMovementStates.slopeSlide == 0)) {
                         if (mBumpPolygon->isValid()) {
                             const char* floor = MR::getFloorCodeString(mBumpPolygon);
 
@@ -51,7 +51,7 @@ void Mario::startBump(const Vec3f& rVec) {
     changeStatus(mBump);
     mVelocity.zero();
     mTurnSlipTimer = 0;
-    mMovementStates._10 = 0;
+    mMovementStates.turnStickNeutral = 0;
     mBumpGravityVec = -(*mBumpPolygon->getNormal(0));
     Vec3f v19;
     MR::vecKillElement(-(*mBumpPolygon->getNormal(0)), mSideVec, &v19);

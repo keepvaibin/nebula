@@ -15,7 +15,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (!getMovementStates()._1) {
+    if (!getMovementStates().onGround) {
         return true;
     }
 
@@ -23,7 +23,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (getMovementStates()._A) {
+    if (getMovementStates().squat) {
         return true;
     }
 
@@ -31,7 +31,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (getMovementStates()._1B) {
+    if (getMovementStates().damaged) {
         return true;
     }
 
@@ -39,7 +39,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (getPlayer()->getMovementStates()._23) {
+    if (getPlayer()->getMovementStates().slopeSlide) {
         return true;
     }
 
@@ -51,10 +51,6 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (mActionStates.debugMode) {
-        return true;
-    }
-
     if (mFloorCode == 27) {
         return true;
     }
@@ -63,11 +59,11 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (getDrawStates()._B) {
+    if (getDrawStates().enforcedMove) {
         return true;
     }
 
-    if (getMovementStates()._18) {
+    if (getMovementStates().baseRotated) {
         return true;
     }
 
@@ -91,15 +87,15 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (getMovementStates()._37) {
+    if (getMovementStates().mode2D) {
         return true;
     }
 
-    if (getMovementStates()._3A) {
+    if (getMovementStates().mode25D) {
         return true;
     }
 
-    if (mActionStates._15) {
+    if (mActionStates.circular2D) {
         return true;
     }
 

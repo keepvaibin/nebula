@@ -222,25 +222,25 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
     }
 
     if (mMario->isStatusActive(MarioStatus_Wall)) {
-        if (mMario->mMovementStates._8) {
+        if (mMario->mMovementStates.frontWall) {
             floor = mMario->mWallFloorCodes[0];
-        } else if (mMario->mMovementStates._19) {
+        } else if (mMario->mMovementStates.backWall) {
             floor = mMario->mWallFloorCodes[1];
-        } else if (mMario->mMovementStates._1A) {
+        } else if (mMario->mMovementStates.sideWall) {
             floor = mMario->mWallFloorCodes[2];
         }
     }
 
-    if (mMario->mDrawStates.mIsUnderwater) {
+    if (mMario->mDrawStates.inWater) {
         floor = 0x17;
     }
 
-    if (mMario->mDrawStates._13) {
+    if (mMario->mDrawStates.inShallowWater) {
         floor = 0x17;
     }
 
     if (flags & 0x2) {
-        if (mMario->mDrawStates._1D) {
+        if (mMario->mDrawStates.onWaterFloor) {
             floor = 0x17;
         }
     }
@@ -288,11 +288,11 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         break;
     }
 
-    if (mMario->mDrawStates.mIsUnderwater || mMario->mDrawStates._13) {
+    if (mMario->mDrawStates.inWater || mMario->mDrawStates.inShallowWater) {
         materialIndex = 1;
     }
 
-    if (!mMario->mMovementStates._1) {
+    if (!mMario->mMovementStates.onGround) {
         if (mMario->mSwim->_1B2 != 0) {
             if (mMario->mSwim->_1B8 < 400.0f) {
                 materialIndex = 1;
@@ -1063,15 +1063,15 @@ void MarioActor::updateEffect() {
     s32 effectB = 0;
     s32 effectC = 0;
 
-    if (mMario->mMovementStates._4) {
+    if (mMario->mMovementStates.turnBrake) {
         effectA = 1;
     }
 
-    if (mMario->mMovementStates._F && mMario->mMovementStates._1) {
+    if (mMario->mMovementStates.tornado && mMario->mMovementStates.onGround) {
         effectA = 1;
     }
 
-    if (mMario->mMovementStates._1 && mMario->mSpinInertiaBlend > 0.1f) {
+    if (mMario->mMovementStates.onGround && mMario->mSpinInertiaBlend > 0.1f) {
         effectA = 1;
     }
 
@@ -1079,7 +1079,7 @@ void MarioActor::updateEffect() {
         effectA = 1;
     }
 
-    if (getMovementStates()._34 || getMovementStates()._35) {
+    if (getMovementStates().onIce || getMovementStates().onSkatableFloor) {
         if (mMario->mWalkSpeed > 0.1f) {
             effectA = 1;
         }
@@ -1115,7 +1115,7 @@ void MarioActor::updateEffect() {
     mEffectFlags._2 = effectC;
 
     effectA = 0;
-    if (getMovementStates()._23 && !getMovementStates()._18 && getMovementStates()._1) {
+    if (getMovementStates().slopeSlide && !getMovementStates().baseRotated && getMovementStates().onGround) {
         effectA = 1;
     }
 
@@ -1217,11 +1217,6 @@ void MarioEffect::playSwingEffect() {
 }
 
 void MarioEffect::doCubeEffect() {
-    Mario* mario = getPlayer();
-    if (mario->mMovementStates.debugMode) {
-        return;
-    }
-
     s32 unsetArg = -1;
     _10 = unsetArg;
     _C = unsetArg;
@@ -1251,9 +1246,9 @@ void MarioEffect::doCubeEffect() {
         _18 = 0;
     }
 
-    if (getPlayer()->mActionStates._1) {
+    if (getPlayer()->mActionStates.swingEffectPending) {
         playSwingEffect();
-        getPlayer()->mActionStates._1 = 0;
+        getPlayer()->mActionStates.swingEffectPending = 0;
     }
 }
 

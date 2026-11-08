@@ -6,23 +6,23 @@
 #include "Game/Util/MathUtil.hpp"
 
 void Mario::checkTornado() {
-    if (mMovementStates._1) {
-        mMovementStates._2B = false;
+    if (mMovementStates.onGround) {
+        mMovementStates.spinBlocked = false;
     }
 }
 
 void Mario::resetTornado() {
-    mMovementStates._F = false;
+    mMovementStates.tornado = false;
     mTornadoTimer = 0;
     mYAngleOffset = 0.0f;
     mHandScaleX = 1.0f;
 }
 
 void Mario::calcTornadoTilt() {
-    bool spinning = mMovementStates._F != 0;
+    bool spinning = mMovementStates.tornado != 0;
     bool flying = false;
     if (getPlayerMode() == PlayerMode_Bee) {
-        if (mMovementStates.jumping && mMovementStates._11) {
+        if (mMovementStates.jumping && mMovementStates.beeFly) {
             flying = true;
         }
     }
@@ -67,12 +67,12 @@ void Mario::forceStopTornado() {
         cancelTornadoJump();
     }
 
-    mDrawStates._8 = true;
+    mDrawStates.endTornado = true;
 }
 
 void Mario::doSpinWallEffect() {
-    if ((!mMovementStates._8 || !mFrontWallTriangle->mSensor->isType(0x55)) && (!mMovementStates._19 || !mBackWallTriangle->mSensor->isType(0x55)) &&
-        (!mMovementStates._1A || !mSideWallTriangle->mSensor->isType(0x55))) {
+    if ((!mMovementStates.frontWall || !mFrontWallTriangle->mSensor->isType(0x55)) && (!mMovementStates.backWall || !mBackWallTriangle->mSensor->isType(0x55)) &&
+        (!mMovementStates.sideWall || !mSideWallTriangle->mSensor->isType(0x55))) {
         playSound("壁反射");
         playSound("声スピンキャンセル");
         playEffect("壁スパーク");

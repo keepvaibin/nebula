@@ -103,8 +103,8 @@ bool MarioFoo::start() {
     MR::normalize(&_30);
 
     stopAnimationUpper(nullptr);
-    getPlayer()->mMovementStates._1 = false;
-    getPlayer()->mMovementStates._A = false;
+    getPlayer()->mMovementStates.onGround = false;
+    getPlayer()->mMovementStates.squat = false;
     _18 = 0;
     if (checkLvlA()) {
         _12 = 1;
@@ -137,7 +137,7 @@ bool MarioFoo::update() {
 
     _3C = -getGravityVec();
     jet();
-    if (getPlayer()->mHitStates._9) {
+    if (getPlayer()->mHitStates.jet) {
         if (_6B0) {
             _6B0--;
         }
@@ -228,7 +228,7 @@ bool MarioFoo::update() {
         blend *= 0.5f;
     }
 
-    if (getPlayer()->mHitStates._9) {
+    if (getPlayer()->mHitStates.jet) {
         targetAngle = 1.0471976f;
         if (getStickY() > 0.1f) {
             f32 ratio = 1.1f * (getStickY() - 0.1f);
@@ -362,7 +362,7 @@ bool MarioFoo::close() {
     case 3:
         changeAnimation("フーファイター解除");
         getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
-        getPlayer()->mActionStates._21 = true;
+        getPlayer()->mActionStates.fooFlying = true;
         break;
     }
 
@@ -381,7 +381,7 @@ bool MarioFoo::close() {
     mActor->_F44 = true;
     mActor->resetWaterLife();
     _54 = 0.0f;
-    getPlayer()->mActionStates._7 = true;
+    getPlayer()->mActionStates.swimExited = true;
     return true;
 }
 
@@ -417,7 +417,7 @@ void MarioFoo::jet() {
         }
 
         _AE = 1;
-        getPlayer()->mHitStates._9 = true;
+        getPlayer()->mHitStates.jet = true;
     } else if (_14 < 8) {
         _AC++;
         _AE = 1;
@@ -634,7 +634,7 @@ void MarioFoo::draw3D() const {
     Vec3f nextLeftEdge[2];
     Vec3f nextRightEdge[2];
 
-    if (getPlayer()->mHitStates._9) {
+    if (getPlayer()->mHitStates.jet) {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
         material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;

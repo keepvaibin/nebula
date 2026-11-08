@@ -178,7 +178,7 @@ void MarioAnimator::throwClose() {
 }
 
 void MarioAnimator::squatSpinCheck() {
-    if (!getPlayer()->mMovementStates._A && getFrame() >= 40.0f) {
+    if (!getPlayer()->mMovementStates.squat && getFrame() >= 40.0f) {
         stopAnimation(nullptr);
     }
 }

@@ -20,7 +20,7 @@ void Mario::stopPunch() {
 void Mario::startMagic() {
     if (!mMovementStates.jumping) {
         if (!mActor->mTakeCount) {
-            if (!mMovementStates._23) {
+            if (!mMovementStates.slopeSlide) {
                 if (!isStatusActive(MarioStatus_Slider)) {
                     if (isSkatableFloor()) {
                         doSkate();
@@ -28,7 +28,7 @@ void Mario::startMagic() {
                         clearSlope();
                         changeStatus(mMagic);
                         stopAnimationUpper(nullptr);
-                        mActionStates._1 = 1;
+                        mActionStates.swingEffectPending = 1;
                     }
                 }
             }

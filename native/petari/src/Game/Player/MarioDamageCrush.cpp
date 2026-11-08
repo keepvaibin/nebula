@@ -4,12 +4,12 @@
 #include "Game/Player/MarioState.hpp"
 
 bool Mario::requestCrush() {
-    mActionStates._18 = true;
+    mActionStates.crushRequested = true;
     return true;
 }
 
 bool Mario::tryCrush() {
-    if (mMovementStates._1F) {
+    if (mMovementStates.invincible) {
         return false;
     }
 
@@ -17,7 +17,7 @@ bool Mario::tryCrush() {
         return false;
     }
 
-    if (mMovementStates.jumping || !mMovementStates._1) {
+    if (mMovementStates.jumping || !mMovementStates.onGround) {
         setTrans(mShadowPos, nullptr);
     }
 
@@ -39,7 +39,7 @@ MarioCrush::MarioCrush(MarioActor* pActor) : MarioState(pActor, MarioStatus_Crus
 }
 
 bool MarioCrush::close() {
-    getPlayer()->mMovementStates._3C = true;
+    getPlayer()->mMovementStates.scaleBody = true;
     mActor->mScale.set(1.0f);
     stopAnimation("しびれ");
     getPlayer()->set41E(120);
@@ -51,7 +51,7 @@ bool MarioCrush::start() {
     startPadVib("マリオ[しびれ]");
     playSound("声しびれ");
 
-    getPlayer()->mMovementStates._3C = true;
+    getPlayer()->mMovementStates.scaleBody = true;
     mActor->mScale.set(1.0f, 0.2f, 1.0f);
     startPadVib(3);
 
@@ -79,13 +79,13 @@ bool MarioCrush::update() {
 
         _12 = 1;
 
-        if (!getPlayer()->getMovementStates()._1) {
+        if (!getPlayer()->getMovementStates().onGround) {
             mTimer = 10;
         } else {
             mTimer = 30;
         }
 
-        if (getPlayer()->getMovementStates()._1) {
+        if (getPlayer()->getMovementStates().onGround) {
             changeAnimation("しびれ回復");
         }
     }

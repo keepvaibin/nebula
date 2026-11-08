@@ -17,10 +17,6 @@ void MarioActor::addRushSensor(HitSensor* pSensor, bool myBool) {
 }
 
 bool MarioActor::tryStandardRush() {
-    if (mMario->mMovementStates.debugMode) {
-        return false;
-    }
-
     bool automatic = true;
     if (isRequestRush()) {
         automatic = false;
@@ -267,7 +263,7 @@ bool MarioActor::tryStartRush(bool automatic) {
     }
 
     HitSensor* target = getNearestRushTarget(automatic);
-    if (getMovementStates()._F && mMario->isRising() && target == _928) {
+    if (getMovementStates().tornado && mMario->isRising() && target == _928) {
         return false;
     }
 
@@ -313,10 +309,6 @@ bool MarioActor::tryStartRush(bool automatic) {
 
 bool MarioActor::tryJumpRush() {
     if (mHealth == 0) {
-        return false;
-    }
-
-    if (mMario->getMovementStates().debugMode) {
         return false;
     }
 
@@ -403,7 +395,7 @@ void MarioActor::tryRushInRush() {
     }
 
     if (isFixJumpRushSensor(target) && isLandEffectRushSensor(sensor924)) {
-        mMario->mMovementStates._3E = false;
+        mMario->mMovementStates.launchKind = false;
 
         playEffect("スーパースピンドライバ終了");
     }

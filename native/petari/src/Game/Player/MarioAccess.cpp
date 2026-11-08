@@ -27,7 +27,7 @@ namespace MarioAccess {
     }
 
     bool isOnActor(const LiveActor* pActor) {
-        if (getPlayerActor()->getMario()->mHitStates._13) {
+        if (getPlayerActor()->getMario()->mHitStates.groundSameSensor) {
             Triangle* marioGroundPolygon = getPlayerActor()->getMario()->mGroundPolygon;
             if (marioGroundPolygon->isValid()) {
                 return marioGroundPolygon->mSensor->mHost == pActor;
@@ -36,7 +36,7 @@ namespace MarioAccess {
             return false;
         }
 
-        if (getPlayerActor()->getMario()->mHitStates._14 || (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMovementStates()._2)) {
+        if (getPlayerActor()->getMario()->mHitStates.groundEvenSlope || (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMovementStates().shadowFound)) {
             Triangle* marioTri = getPlayerActor()->getMario()->mShadowPolygon;
             if (!marioTri->isValid()) {
                 return false;
@@ -57,11 +57,11 @@ namespace MarioAccess {
             return MR::isOnGround(getPlayerActor()->mRushSensor->mHost);
         }
 
-        return getPlayerActor()->getMovementStates()._1;
+        return getPlayerActor()->getMovementStates().onGround;
     }
 
     bool isHipDropFalling() {
-        if (getPlayerActor()->getMovementStates().jumping && getPlayerActor()->getMovementStates()._B && !getPlayerActor()->getMovementStates()._1 &&
+        if (getPlayerActor()->getMovementStates().jumping && getPlayerActor()->getMovementStates().hipDrop && !getPlayerActor()->getMovementStates().onGround &&
             !getPlayerActor()->isJumpRising()) {
             return true;
         }
@@ -70,7 +70,7 @@ namespace MarioAccess {
     }
 
     bool isHipDropLand() {
-        return getPlayerActor()->getDrawStates()._14;
+        return getPlayerActor()->getDrawStates().hipDropLand;
     }
 
     bool isSwingAction() {
@@ -78,7 +78,7 @@ namespace MarioAccess {
             return false;
         }
 
-        if (getPlayerActor()->getMovementStates()._F) {
+        if (getPlayerActor()->getMovementStates().tornado) {
             return true;
         }
 
@@ -90,7 +90,7 @@ namespace MarioAccess {
     }
 
     bool isSquat() {
-        return getPlayerActor()->getMovementStates()._A && getPlayerActor()->getMovementStates()._1;
+        return getPlayerActor()->getMovementStates().squat && getPlayerActor()->getMovementStates().onGround;
     }
 
     bool isParalyzing() {
@@ -110,11 +110,11 @@ namespace MarioAccess {
             return true;
         }
 
-        return getPlayerActor()->getMario()->mActionStates._21;
+        return getPlayerActor()->getMario()->mActionStates.fooFlying;
     }
 
     bool isNeedBrakingCamera() {
-        return getPlayerActor()->getMario()->mHitStates._9;
+        return getPlayerActor()->getMario()->mHitStates.jet;
     }
 
     CubeCameraArea* getCameraCubeCode() {
@@ -131,7 +131,7 @@ namespace MarioAccess {
 
     Triangle* getGroundingPolygon(u32) {
         if (isSwimming()) {
-            if (getPlayerActor()->getMovementStates()._2) {
+            if (getPlayerActor()->getMovementStates().shadowFound) {
                 return getPlayerActor()->getMario()->mShadowPolygon;
             }
 
@@ -150,7 +150,7 @@ namespace MarioAccess {
     }
 
     Triangle* getShadowingPolygon() {
-        if (getPlayerActor()->getMovementStates()._2) {
+        if (getPlayerActor()->getMovementStates().shadowFound) {
             return getPlayerActor()->getMario()->mShadowPolygon;
         }
 
@@ -201,12 +201,12 @@ namespace MarioAccess {
     }
 
     void forceJump(const Vec3f& rVec, u32) {
-        getPlayerActor()->getMario()->mMovementStates._21 = true;
+        getPlayerActor()->getMario()->mMovementStates.squatLocked = true;
         getPlayerActor()->getMario()->tryForceJumpDelay(rVec);
     }
 
     void freeJump(const Vec3f& rVec, u32) {
-        getPlayerActor()->getMario()->mMovementStates._21 = true;
+        getPlayerActor()->getMario()->mMovementStates.squatLocked = true;
         getPlayerActor()->getMario()->tryFreeJumpDelay(rVec);
     }
 
@@ -265,7 +265,7 @@ namespace MarioAccess {
         getPlayerActor()->mPosition.set(rTrans);
         getPlayerActor()->getMario()->mPosition = rTrans;
 
-        if (getPlayerActor()->getMovementStates()._37) {
+        if (getPlayerActor()->getMovementStates().mode2D) {
             getPlayerActor()->getMario()->m2DPlanePos = rTrans;
         }
 
@@ -512,11 +512,11 @@ namespace MarioAccess {
 
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->mPlayerMode == PlayerMode_Hopper) {
             offControl();
-            getPlayerActor()->getMario()->mActionStates._20 = true;
+            getPlayerActor()->getMario()->mActionStates.remoteDemoSkipped = true;
             return;
         }
 
-        getPlayerActor()->getMario()->mActionStates._20 = false;
+        getPlayerActor()->getMario()->mActionStates.remoteDemoSkipped = false;
 
         if (getPlayerActor()->_934) {
             getPlayerActor()->mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
@@ -707,7 +707,7 @@ namespace MarioAccess {
 
     void endRemoteDemo(const RushEndInfo* pEndInfo) {
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->getMario()->isStatusActive(MarioStatus_Talk) ||
-            getPlayerActor()->getMario()->mActionStates._20 || !getPlayerActor()->_EA4) {
+            getPlayerActor()->getMario()->mActionStates.remoteDemoSkipped || !getPlayerActor()->_EA4) {
             getPlayerActor()->_3C0 = false;
             return;
         }
@@ -763,7 +763,7 @@ namespace MarioAccess {
             getPlayerActor()->setPlayerMode(PlayerMode_Invincible, true);
             break;
         case 9:
-            getPlayerActor()->getMario()->mMovementStates._F = true;
+            getPlayerActor()->getMario()->mMovementStates.tornado = true;
             getPlayerActor()->getMario()->mTornadoTimer = 3;
             break;
         case 10:

@@ -7,18 +7,18 @@
 #include <nebula_math.h>
 
 void Mario::check2DMode() {
-    mMovementStates._37 = false;
-    mActionStates._15 = false;
+    mMovementStates.mode2D = false;
+    mActionStates.circular2D = false;
 
     AreaObj* area = MR::getAreaObj("PlaneModeCube", mPosition);
     if (area != nullptr) {
-        mMovementStates._37 = true;
+        mMovementStates.mode2D = true;
 
         Vec3f rotate;
         MR::calcCubeRotate(area, &rotate);
         MR::makeMtxTR(m2DRotateMtx, 0.0f, 0.0f, 0.0f, rotate.x, rotate.y, rotate.z);
 
-        if (!(mPrevMovementStates._37)) {
+        if (!(mPrevMovementStates.mode2D)) {
             m2DPlanePos = mPosition;
             MR::getRotatedAxisZ(&m2DPlaneNormal, rotate);
             MR::calcCubePos(area, &m2DCubePos);
@@ -29,9 +29,9 @@ void Mario::check2DMode() {
             Vec3f rotate;
             MR::calcCubeRotate(area, &rotate);
             NebulaMtxCopy(MR::tmpMtxRotYDeg(rotate.y), m2DRotateMtx);
-            mActionStates._15 = true;
+            mActionStates.circular2D = true;
 
-            if (!((mPrevActionStatesLow >> 10) & 1)) {
+            if (!mPrevActionStates.circular2D) {
                 m2DPlanePos = mPosition;
                 MR::getRotatedAxisZ(&m2DPlaneNormal, rotate);
                 MR::calcCubePos(area, &m2DCubePos);
@@ -39,7 +39,7 @@ void Mario::check2DMode() {
         }
     }
 
-    mMovementStates._3A = false;
+    mMovementStates.mode25D = false;
     area = MR::getAreaObj("PipeModeCube", mPosition);
     if (area != nullptr) {
         set25Dmode(area);
@@ -95,8 +95,8 @@ void Mario::calcShadowDir2D(const Vec3f& rVec, Vec3f* pOut) {
 void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     bool isNearHalfPi = false;
 
-    if (mActionStates.turning && mMovementStates._1 && !mMovementStates.jumping) {
-        mActionStates.turning = false;
+    if (mActionStates.gravityTurned && mMovementStates.onGround && !mMovementStates.jumping) {
+        mActionStates.gravityTurned = false;
         clear2DStick();
     }
 

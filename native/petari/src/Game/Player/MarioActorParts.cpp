@@ -79,7 +79,7 @@ void MarioActor::updateBeeWingAnimation() {
     }
 
     s32 val;
-    if (getMovementStates()._1 || mMario->isStatusActive(MarioStatus_Stick)) {
+    if (getMovementStates().onGround || mMario->isStatusActive(MarioStatus_Stick)) {
         val = 0;
     } else {
         val = mMario->mAirWalkTimer != 0 ? 2 : 3;
@@ -115,10 +115,10 @@ void MarioActor::updateTornado() {
         return;
     }
 
-    if (mMario->getMovementStates()._F && mMario->mTornadoTimer > 1) {
+    if (mMario->getMovementStates().tornado && mMario->mTornadoTimer > 1) {
         mTornadoMario->show();
     } else if ((!isAnimationRun("空中ひねり") || mMario->mJumpKind != 8) && !mMario->isStatusActive(MarioStatus_Magic)) {
-        if (mMario->getDrawStates()._8 || _990 != 0) {
+        if (mMario->getDrawStates().endTornado || _990 != 0) {
             mTornadoMario->hideForce();
         } else {
             mTornadoMario->hide();
@@ -260,8 +260,8 @@ void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
 }
 
 void MarioActor::updateSpecialModeAnimation() {
-    if (!mMario->mMovementStates._A && mMario->getCurrentStatus() == MarioStatus_None) {
-        if (mMario->mMovementStates._1 && mMario->mFloorCode == 0x20 && mMarioAnim->isAnimationStop()) {
+    if (!mMario->mMovementStates.squat && mMario->getCurrentStatus() == MarioStatus_None) {
+        if (mMario->mMovementStates.onGround && mMario->mFloorCode == 0x20 && mMarioAnim->isAnimationStop()) {
             mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "泥低速歩行");
             mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "泥高速歩行");
             _B96 = 2;
@@ -287,7 +287,7 @@ void MarioActor::updateSpecialModeAnimation() {
     }
     if (_B96) {
         _B96--;
-        if (!_B96 && mMario->mMovementStates._1 && mMarioAnim->isAnimationStop()) {
+        if (!_B96 && mMario->mMovementStates.onGround && mMarioAnim->isAnimationStop()) {
             mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "鈍行");
             mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "歩行");
         }
@@ -308,7 +308,7 @@ void MarioActor::shootFireBall() {
         return;
     if (isAnimationRun("ファイアスピン"))
         return;
-    if (getMovementStates()._8) {
+    if (getMovementStates().frontWall) {
         sendMsgToSensor(mMario->getWallPolygon()->mSensor, ACTMES_FIREBALL_ATTACK);
         changeAnimation("ファイアスピン");
         return;
@@ -416,11 +416,11 @@ void MarioActor::updateThrowVector() {
     if (sensor && !MR::isExistInAttributeGroupSearchTurtle(sensor->mHost))
         sensor = nullptr;
     if (sensor && mTakeCount) {
-        if (!getDrawStates()._5) {
+        if (!getDrawStates().homingLockOn) {
             if (mThrowTarget && mTakeCandidate != mThrowTarget)
                 mThrowTarget = nullptr;
         }
-        if (!getDrawStates()._5) {
+        if (!getDrawStates().homingLockOn) {
             if (!_47C)
                 _484 = mCenterPos;
             _47C++;
@@ -442,7 +442,7 @@ void MarioActor::updateThrowVector() {
                 mThrowTarget = nullptr;
             }
         }
-    } else if (!getDrawStates()._5) {
+    } else if (!getDrawStates().homingLockOn) {
         if (_47C)
             _47C--;
         if (!_47C)

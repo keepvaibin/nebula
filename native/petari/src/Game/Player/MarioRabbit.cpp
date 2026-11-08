@@ -51,7 +51,7 @@ bool MarioRabbit::start() {
     _14 = -mActor->getConst().getTable()->mRabbitFirstJump;
     _26 = 0;
     _2A = 0;
-    if (getPlayer()->mDrawStates._10) {
+    if (getPlayer()->mDrawStates.wallDamageCheck) {
         _14 *= 0.25f;
         _18 = getPlayer()->getWallNorm() * mActor->getConst().getTable()->mRabbitFirstJump * 0.5f;
         getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
@@ -81,7 +81,7 @@ void MarioRabbit::forceJump() {
 }
 
 void MarioRabbit::impact() {
-    if (!getPlayer()->mDrawStates._10) {
+    if (!getPlayer()->mDrawStates.wallDamageCheck) {
         if (_18.length() > 2.0f * mActor->getConst().getTable()->mRabbitMoveSpeed) {
             _18.setLength(2.0f * mActor->getConst().getTable()->mRabbitMoveSpeed);
         }
@@ -90,14 +90,14 @@ void MarioRabbit::impact() {
     }
 
     getPlayer()->stopJump();
-    getPlayer()->mMovementStates._1 = false;
+    getPlayer()->mMovementStates.onGround = false;
     getPlayer()->mMovementStates.jumping = true;
     getPlayer()->initJumpParam();
     Mario* player = getPlayer();
     player->mInvincibleJump = 0;
     player->mJumpKind = 0;
-    getPlayer()->mMovementStates._22 = false;
-    getPlayer()->mMovementStates._2B = false;
+    getPlayer()->mMovementStates.inputLocked = false;
+    getPlayer()->mMovementStates.spinBlocked = false;
     if (_28) {
         switch (_68) {
         case 0:
@@ -139,17 +139,17 @@ bool MarioRabbit::update() {
         return false;
     }
 
-    getPlayer()->mMovementStates._30 = false;
+    getPlayer()->mMovementStates.hangBlocked = false;
     getPlayer()->checkWallStick();
     if (_69) {
         _69--;
     }
 
-    if (!getPlayer()->mMovementStates.jumping && !getPlayer()->mMovementStates._1) {
-        getPlayer()->mMovementStates._1 = true;
+    if (!getPlayer()->mMovementStates.jumping && !getPlayer()->mMovementStates.onGround) {
+        getPlayer()->mMovementStates.onGround = true;
     }
 
-    if (getPlayer()->mMovementStates._1) {
+    if (getPlayer()->mMovementStates.onGround) {
         if (_6A) {
             playSound("ホッパー跳ね返り");
             _6A = 0;
@@ -168,7 +168,7 @@ bool MarioRabbit::update() {
 
             _28 = 0;
             _27 = 0;
-            if (!getPlayer()->mMovementStates._B) {
+            if (!getPlayer()->mMovementStates.hipDrop) {
                 getPlayer()->mMovementStates.jumping = false;
             }
 

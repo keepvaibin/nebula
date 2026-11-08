@@ -87,7 +87,7 @@ void MarioActor::updateHand() {
     if (mCurrModel == 1) {
         hideHands = true;
     }
-    if (getMovementStates()._F) {
+    if (getMovementStates().tornado) {
         hideHands = true;
     }
     if (mMario->isStatusActive(MarioStatus_FpView)) {

@@ -446,7 +446,7 @@ void MarioActor::drawMarioModel() const {
     }
 
     if (mTornadoMario != nullptr) {
-        if (mMario->mMovementStates._F) {
+        if (mMario->mMovementStates.tornado) {
             if (mMario->mTornadoTimer > 2) {
                 return;
             }
@@ -653,7 +653,7 @@ void MarioActor::updateFace() {
         return;
     }
 
-    if (MR::isHiddenModel(this) || is481or482On() || mMario->mMovementStates._F || _1C3) {
+    if (MR::isHiddenModel(this) || is481or482On() || mMario->mMovementStates.tornado || _1C3) {
         MR::hideModel(_A5C);
         return;
     }
@@ -741,7 +741,7 @@ void MarioActor::drawIndirect() const {
     drawModelBlur();
     drawIndirectModel();
 
-    if (mMario->mHitStates._3) {
+    if (mMario->mHitStates.swimLifeDrain) {
         drawColdWaterDamage();
     }
 
@@ -768,7 +768,7 @@ void MarioActor::drawIndirectModel() const {
     drawReflectModel();
 
     if (mTornadoMario != nullptr) {
-        if (mMario->mMovementStates._F) {
+        if (mMario->mMovementStates.tornado) {
             if (mMario->mTornadoTimer > 2) {
                 return;
             }

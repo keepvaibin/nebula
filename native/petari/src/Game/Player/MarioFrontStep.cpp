@@ -30,7 +30,7 @@ bool Mario::doFrontStep() {
         return false;
     }
 
-    if (mHitStates._5) {
+    if (mHitStates.karikariClinging) {
         return false;
     }
 
@@ -90,7 +90,7 @@ MarioFrontStep::MarioFrontStep(MarioActor* pActor) : MarioState(pActor, MarioSta
 bool MarioFrontStep::update() {
     getPlayer()->stopWalk();
 
-    if (getPlayer()->mHitStates._5) {
+    if (getPlayer()->mHitStates.karikariClinging) {
         return false;
     }
 
@@ -128,7 +128,7 @@ bool MarioFrontStep::update() {
         return false;
     }
 
-    if (!getPlayer()->getMovementStates()._1) {
+    if (!getPlayer()->getMovementStates().onGround) {
         getPlayer()->tryDrop();
         return false;
     }

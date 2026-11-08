@@ -33,8 +33,8 @@ void Mario::stopWalk() {
     getAnimator()->initWalkWeight();
     getAnimator()->resetTilt();
 
-    mMovementStates._10 = false;
-    mMovementStates._23 = false;
+    mMovementStates.turnStickNeutral = false;
+    mMovementStates.slopeSlide = false;
     cancelSquatMode();
 
     mMovementStates.turning = false;
@@ -48,26 +48,26 @@ void Mario::stopWalk() {
 }
 
 void Mario::cancelSquatMode() {
-    if (!mMovementStates._A) {
+    if (!mMovementStates.squat) {
         return;
     }
 
     calcDistToCeil(false);
 
-    if (mPrevMovementStates._A || mMovementStates._A) {
-        mActionStates._F = true;
+    if (mPrevMovementStates.squat || mMovementStates.squat) {
+        mActionStates.squatEnded = true;
     }
 
-    mMovementStates._A = false;
-    mPrevMovementStates._A = false;
+    mMovementStates.squat = false;
+    mPrevMovementStates.squat = false;
     stopAnimation("しゃがみ基本");
 
-    if (mMovementStates._1 || !mMovementStates.jumping) {
+    if (mMovementStates.onGround || !mMovementStates.jumping) {
         if (!isSwimming()) {
             changeAnimation(nullptr, "基本");
         }
 
-        if (!isAnimationRun("サマーソルト") && mActionStates._F) {
+        if (!isAnimationRun("サマーソルト") && mActionStates.squatEnded) {
             if (mWalkSpeed > 0.1f) {
                 changeAnimationUpperWeak("しゃがみ終了");
             } else {
@@ -76,11 +76,11 @@ void Mario::cancelSquatMode() {
         }
     }
 
-    mMovementStates._26 = false;
+    mMovementStates.squatWalk = false;
 }
 
 f32 Mario::getTargetWalkSpeed() const {
-    if (mMovementStates._A) {
+    if (mMovementStates.squat) {
         return 0.0f;
     }
 
@@ -110,7 +110,7 @@ void Mario::decideSquatWalkAnimation() {
     const f32 walkWeights2[] = {0.0f, 1.0f, 0.0f, 0.0f};
     mSpinInertiaBlend = 0.0f;
 
-    if (!mMovementStates._A) {
+    if (!mMovementStates.squat) {
         if (mWalkSpeed > 0.1f) {
             stopAnimation("しゃがみ", "基本");
             changeAnimationUpperWeak("しゃがみ終了");
@@ -118,7 +118,7 @@ void Mario::decideSquatWalkAnimation() {
             changeAnimation("しゃがみ終了", "基本");
         }
 
-        mMovementStates._26 = false;
+        mMovementStates.squatWalk = false;
         return;
     }
 
@@ -126,12 +126,12 @@ void Mario::decideSquatWalkAnimation() {
         stopAnimation(nullptr);
     }
 
-    if (!mPrevMovementStates._A || !isAnimationRun("しゃがみ基本")) {
+    if (!mPrevMovementStates.squat || !isAnimationRun("しゃがみ基本")) {
         stopAnimation("歩行制動ブレーキ", 1);
         changeAnimation(nullptr, "しゃがみ基本");
         stopAnimation("飛び込み準備", 4);
         getAnimator()->setWalkWeight(&walkWeights1[0]);
-        mMovementStates._26 = false;
+        mMovementStates.squatWalk = false;
         if (!mMovementStates.jumping && !isAnimationRun("サマーソルト")) {
             playSound("声しゃがむ");
         }
@@ -142,16 +142,16 @@ void Mario::decideSquatWalkAnimation() {
             mWalkSpeed = mActor->getConst().getTable()->mSquatWalkMinSpeed;
             getAnimator()->setWalkWeight(&walkWeights2[0]);
             mTargetWalkSpeedIndex = 1;
-            mMovementStates._26 = true;
+            mMovementStates.squatWalk = true;
         } else {
             getAnimator()->setWalkWeight(&walkWeights1[0]);
             mTargetWalkSpeedIndex = 0;
-            mMovementStates._26 = false;
+            mMovementStates.squatWalk = false;
         }
     } else if (!isStickOn()) {
         getAnimator()->setWalkWeight(&walkWeights1[0]);
         mTargetWalkSpeedIndex = 0;
-    } else if (mMovementStates._26) {
+    } else if (mMovementStates.squatWalk) {
         MarioConstTable* table = mActor->getConst().getTable();
         mWalkSpeed = (table->mSquatWalkMaxSpeed - table->mSquatWalkMinSpeed) * mStickPos.z + table->mSquatWalkMinSpeed;
         getAnimator()->setWalkWeight(&walkWeights2[0]);
@@ -161,7 +161,7 @@ void Mario::decideSquatWalkAnimation() {
     if (isAnimationRun("しゃがみ基本")) {
         f32 animspeed = mActor->getConst().getTable()->mSquatWalkStep;
         animspeed = 60.0f / animspeed * mWalkSpeed;
-        if (!mMovementStates._26) {
+        if (!mMovementStates.squatWalk) {
             animspeed = 1.0f;
         }
 
@@ -175,7 +175,7 @@ void Mario::decideSquatWalkAnimation() {
     f32 animFrame = getAnimator()->getFrame();
 
     if (mTargetWalkSpeedIndex != 0) {
-        if (mDrawStates.mIsUnderwater || mDrawStates._13) {
+        if (mDrawStates.inWater || mDrawStates.inShallowWater) {
             if (mPrevAnimFrame > animFrame) {
                 playSound("水跳ね左足小");
                 playEffect("水はね左弱");
@@ -188,7 +188,7 @@ void Mario::decideSquatWalkAnimation() {
                 playEffectSRT("水波紋", 0.2f, mRippleRotate, (mGroundPos + mSideVec * 20.0f) + mGroundNorm * mRippleHeight);
             }
         }
-    } else if (mDrawStates.mIsUnderwater && mActor->_37C % 64 == 0) {
+    } else if (mDrawStates.inWater && mActor->_37C % 64 == 0) {
         playEffectSRT("水波紋", 0.2f, mRippleRotate, (mShadowPos + mSideVec * (MR::getRandom() - 0.5f) * 20.0f) + mGroundNorm * mRippleHeight);
     }
 
@@ -226,7 +226,7 @@ void Mario::decideWalkSpeed() {
         }
     }
 
-    if (mDrawStates.mIsUnderwater && mTargetWalkSpeedIndex > 6) {
+    if (mDrawStates.inWater && mTargetWalkSpeedIndex > 6) {
         mTargetWalkSpeedIndex = 6;
     }
 
@@ -265,7 +265,7 @@ void Mario::decideWalkAnimation() {
     if (mTargetWalkSpeedIndex == 0 && mWalkSpeed < 0.2f && isBlendWaitGround()) {
         getAnimator()->controlWaitAnimation();
     } else {
-        getPlayer()->mActionStates._F = false;
+        getPlayer()->mActionStates.squatEnded = false;
 
         if (getPlayer()->mTargetWalkSpeedIndex == 0 && mSwim->_1B2) {
             bool prepare = !isPlayerModeBee();
@@ -317,7 +317,7 @@ void Mario::decideWalkAnimation() {
 
     f32 animFrame = getAnimator()->getFrame();
     if (mTargetWalkSpeedIndex != 0) {
-        if (mDrawStates.mIsUnderwater || mDrawStates._13) {
+        if (mDrawStates.inWater || mDrawStates.inShallowWater) {
             if (mPrevAnimFrame > animFrame) {
                 if (mTargetWalkSpeedIndex >= 2) {
                     if (mTargetWalkSpeedIndex < 6) {
@@ -346,7 +346,7 @@ void Mario::decideWalkAnimation() {
                 playEffectSRT("水波紋", 0.2f, mRippleRotate, (mGroundPos + mSideVec * 20.0f) + mGroundNorm * mRippleHeight);
             }
         }
-    } else if (mDrawStates.mIsUnderwater && mActor->_37C % 64 == 0) {
+    } else if (mDrawStates.inWater && mActor->_37C % 64 == 0) {
         playEffectSRT("水波紋", 0.2f, mRippleRotate, (mShadowPos + mSideVec * (MR::getRandom() - 0.5f) * 20.0f) + mGroundNorm * mRippleHeight);
     }
 
@@ -371,7 +371,7 @@ void Mario::decideWalkAnimation() {
         animationSpeed = 0.5f * (60.0f * ((0.01f * (mWalkSpeed * mActor->getConst().getTable()->mWalkSpeed)) / f3));
     }
 
-    if (mSlipPower > 0.0f && !mDrawStates._4) {
+    if (mSlipPower > 0.0f && !mDrawStates.slopeRunUp) {
         animationSpeed *= 1.0f + ((mSlipPower / 10.0f) * mActor->getConst().getTable()->mSlopeAnimeRatio);
 
         if (mSlipPower > 5.0f && animationSpeed > 4.0f) {
@@ -444,7 +444,7 @@ void Mario::decideWalkAnimation() {
         f7 = 0.3f;
     }
 
-    if (mTargetWalkSpeedIndex > 5 && mWalkSpeed > f7 && !mDrawStates._4 && !mMovementStates._35) {
+    if (mTargetWalkSpeedIndex > 5 && mWalkSpeed > f7 && !mDrawStates.slopeRunUp && !mMovementStates.onSkatableFloor) {
         mBrakeFirstTimer = mActor->getConst().getTable()->mBrakeFirstTimer;
     }
 
@@ -453,7 +453,7 @@ void Mario::decideWalkAnimation() {
     }
 
     if (mTargetWalkSpeedIndex == 0) {
-        if (mBrakeFirstTimer != 0 && !isSlipPolygon(mGroundPolygon) && !mDrawStates._5) {
+        if (mBrakeFirstTimer != 0 && !isSlipPolygon(mGroundPolygon) && !mDrawStates.homingLockOn) {
             doBrakingAnimation();
             mBrakeTimer = mActor->getConst().getTable()->mBrakeSecondTimer;
         }
@@ -484,7 +484,7 @@ void Mario::doBrakingAnimation() {
 }
 
 void Mario::checkWallPush() {
-    if (mTargetWalkSpeedIndex != 0 && (mMovementStates._8 || mMovementStates._32) && checkWallJumpCode()) {
+    if (mTargetWalkSpeedIndex != 0 && (mMovementStates.frontWall || mMovementStates.frontWallGlancing) && checkWallJumpCode()) {
         return;
     }
 
@@ -492,23 +492,23 @@ void Mario::checkWallPush() {
     bool sideStep = false;
     f32 wallPushAngleRange = getActor()->getConst().getTable()->mWallPushAngleRange;
 
-    bool checkAngle = mTargetWalkSpeedIndex != 0 && mMovementStates._8;
+    bool checkAngle = mTargetWalkSpeedIndex != 0 && mMovementStates.frontWall;
 
     if (checkAngle && angle < MR::toRadian(wallPushAngleRange)) {
         sideStep = true;
     }
 
-    if (mDrawStates._A) {
+    if (mDrawStates.atEdge) {
         sideStep = false;
     }
 
-    if (mDrawStates._C) {
+    if (mDrawStates.onSlipFloor) {
         sideStep = false;
     }
 
     if (calcAngleD(getWallNorm()) < getActor()->getConst().getTable()->mForceWallAngle) {
         sideStep = false;
-        if (mMovementStates._8 && mTargetWalkSpeedIndex != 0) {
+        if (mMovementStates.frontWall && mTargetWalkSpeedIndex != 0) {
             mTargetWalkSpeedIndex = 1;
             mWalkSpeed = 0.0f;
         }
@@ -546,13 +546,13 @@ void Mario::updateBrakeAnimation() {
         return;
     }
 
-    if (mMovementStates._8 || mMovementStates._32) {
+    if (mMovementStates.frontWall || mMovementStates.frontWallGlancing) {
         stopAnimation(nullptr);
         mBrakeTimer = 0;
         mBrakeFirstTimer = 0;
         mTurnSlipTimer = 0;
         mTurnReadyTimer = 0;
-    } else if (!MR::isDemoActive() && mMovementStates._1) {
+    } else if (!MR::isDemoActive() && mMovementStates.onGround) {
         playSound("ルイージ滑り");
     }
 }
@@ -572,12 +572,12 @@ void Mario::updateWalkSpeed() {
     }
 
     targetWalkSpeed *= f2 * f2;
-    if (mMovementStates._F || isStatusActive(17)) {
+    if (mMovementStates.tornado || isStatusActive(17)) {
         targetWalkSpeed *= getActor()->getConst().getTable()->mTornadoMultiply;
     }
 
-    bool press = mMovementStates._A;
-    if (mMovementStates._A && mHitStates._F) {
+    bool press = mMovementStates.squat;
+    if (mMovementStates.squat && mHitStates.ceilingNear) {
         press = false;
         if (mFloorCodeReader->getCode(mCeilPolygon) == 29) {
             press = true;
@@ -596,12 +596,12 @@ void Mario::updateWalkSpeed() {
             }
         }
 
-        if (mMovementStates._1 && (strstr(getGroundPolygon()->mSensor->mHost->mName, "TriPod") != nullptr ||
+        if (mMovementStates.onGround && (strstr(getGroundPolygon()->mSensor->mHost->mName, "TriPod") != nullptr ||
                                    strstr(getGroundPolygon()->mSensor->mHost->mName, "Tripod") != nullptr)) {
             press = false;
         }
 
-        if (mMovementStates._1 && mCeilSensor == getGroundPolygon()->getSensor()) {
+        if (mMovementStates.onGround && mCeilSensor == getGroundPolygon()->getSensor()) {
             press = false;
         }
 
@@ -610,25 +610,25 @@ void Mario::updateWalkSpeed() {
             mActor->setPress(0, 0);
         }
     } else {
-        mMovementStates._A = false;
+        mMovementStates.squat = false;
 
         if (mDashChanceTimer == 0 && mItemDashTimer == 0 && checkSquat(false) && mSinkTimer <= 32 && !isStatusActive(31)) {
             if (!checkLockOnHoming()) {
-                mMovementStates._A = true;
+                mMovementStates.squat = true;
             }
 
-            if (!press && mMovementStates._A && (mMovementStates._8 || mMovementStates._32)) {
+            if (!press && mMovementStates.squat && (mMovementStates.frontWall || mMovementStates.frontWallGlancing)) {
                 mTargetWalkSpeedIndex = 0;
                 mWalkSpeed = 0.0f;
             }
         }
 
-        if (mHitStates._F && !mMovementStates._A && isAnimationRun("しゃがみ終了")) {
-            mMovementStates._A = true;
+        if (mHitStates.ceilingNear && !mMovementStates.squat && isAnimationRun("しゃがみ終了")) {
+            mMovementStates.squat = true;
         }
 
-        if (!mMovementStates._A && press) {
-            mMovementStates._A = true;
+        if (!mMovementStates.squat && press) {
+            mMovementStates.squat = true;
             cancelSquatMode();
             mBrakeFirstTimer = 0;
         }
@@ -638,13 +638,13 @@ void Mario::updateWalkSpeed() {
         targetWalkSpeed = 0.0f;
     }
 
-    if (mMovementStates._10) {
+    if (mMovementStates.turnStickNeutral) {
         targetWalkSpeed = 0.0f;
     }
 
     f32 inertia = decideInertia(targetWalkSpeed);
 
-    if (!mMovementStates._A && getPlayerMode() == 1) {
+    if (!mMovementStates.squat && getPlayerMode() == 1) {
         if (mWalkSpeed >= 0.9999f) {
             targetWalkSpeed *= getActor()->getConst().getTable()->mDashMultiply;
             if (targetWalkSpeed > mWalkSpeed) {
@@ -688,11 +688,11 @@ void Mario::decideOnIceAnimation() {
 }
 
 void Mario::updateOnSand() {
-    if (mMovementStates._1F) {
+    if (mMovementStates.invincible) {
         return;
     }
 
-    if (mMovementStates._1) {
+    if (mMovementStates.onGround) {
         if (mFloorCode == 27 || mFloorCode == 28) {
             if (!strcmp(MR::getSoundCodeString(mShadowPolygon), "Sand") && mSinkTimer < 64) {
                 mSinkTimer++;
@@ -757,7 +757,7 @@ void Mario::updateOnSand() {
 }
 
 void Mario::updateOnPoison() {
-    if (mMovementStates._1) {
+    if (mMovementStates.onGround) {
         if (checkCurrentFloorCodeSevere(18)) {
             if (mPoisonTimer == 0) {
                 mActor->decLife(0);
@@ -790,7 +790,7 @@ void Mario::updateOnPoison() {
 }
 
 void Mario::updateOnWater() {
-    if (mMovementStates._1) {
+    if (mMovementStates.onGround) {
         switch (mFloorCode) {
         case 20:
         case 21:
@@ -805,13 +805,13 @@ void Mario::updateOnWater() {
             case 21:
                 mRippleHeight += 20.0f;
             case 22:
-                mDrawStates.mIsUnderwater = true;
+                mDrawStates.inWater = true;
             }
         }
 
         if (mFloorCode == 23 && mPolygonFloorCode == 23) {
             touchWater();
-            mDrawStates._13 = true;
+            mDrawStates.inShallowWater = true;
             mRippleHeight = 3.0f;
             mRippleRotate = mGroundNorm;
         }
@@ -822,6 +822,6 @@ void Mario::updateOnWater() {
     case 21:
     case 22:
     case 23:
-        mDrawStates._1D = true;
+        mDrawStates.onWaterFloor = true;
     }
 }

@@ -51,9 +51,9 @@ void MarioAnimator::controlWaitAnimation() {
             mXanimePlayer->changeTrackAnimation(2, "坂左ウエイト");
         }
 
-        if (getPlayer()->mActionStates._F) {
+        if (getPlayer()->mActionStates.squatEnded) {
             forceSetBlendWeight(weights);
-            getPlayer()->mActionStates._F = false;
+            getPlayer()->mActionStates.squatEnded = false;
         } else {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
@@ -73,9 +73,9 @@ void MarioAnimator::controlWaitAnimation() {
             mXanimePlayer->changeTrackAnimation(2, "坂後ウエイト");
         }
 
-        if (getPlayer()->mActionStates._F) {
+        if (getPlayer()->mActionStates.squatEnded) {
             forceSetBlendWeight(weights);
-            getPlayer()->mActionStates._F = false;
+            getPlayer()->mActionStates.squatEnded = false;
         } else {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
@@ -151,19 +151,19 @@ bool MarioWait::checkStart() {
         cancel = true;
     }
 
-    if (getPlayer()->mHitStates._5) {
+    if (getPlayer()->mHitStates.karikariClinging) {
         cancel = true;
     }
 
-    if (getPlayer()->mMovementStates._23) {
+    if (getPlayer()->mMovementStates.slopeSlide) {
         cancel = true;
     }
 
-    if (getPlayer()->mMovementStates._A) {
+    if (getPlayer()->mMovementStates.squat) {
         cancel = true;
     }
 
-    if (getPlayer()->mDrawStates.mIsUnderwater) {
+    if (getPlayer()->mDrawStates.inWater) {
         cancel = true;
     }
 
@@ -226,11 +226,11 @@ bool MarioWait::update() {
         cancel = true;
     }
 
-    if (getPlayer()->mHitStates._5) {
+    if (getPlayer()->mHitStates.karikariClinging) {
         cancel = true;
     }
 
-    if (getPlayerMode() != PlayerMode_Teresa && !getPlayer()->mMovementStates._1) {
+    if (getPlayerMode() != PlayerMode_Teresa && !getPlayer()->mMovementStates.onGround) {
         cancel = true;
     }
 

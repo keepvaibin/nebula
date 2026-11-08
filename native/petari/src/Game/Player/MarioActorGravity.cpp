@@ -38,7 +38,7 @@ u8 MarioActor::getGravityLevel() const {
 }
 
 bool MarioActor::checkBeeWallStick(Vec3f& rVec) {
-    if (getMovementStates()._8 && mMario->checkWallCode("Fur", false) && mBeeWallWalk == 0 && !_9F2) {
+    if (getMovementStates().frontWall && mMario->checkWallCode("Fur", false) && mBeeWallWalk == 0 && !_9F2) {
         Vec3f head = mMario->mHeadVec;
 
         mBeeWallWalk = 5;
@@ -58,7 +58,7 @@ bool MarioActor::checkBeeWallStick(Vec3f& rVec) {
         setBlendMtxTimer(2);
 
         _38C = 5;
-        mMario->mMovementStates._38 = false;
+        mMario->mMovementStates.jumpBuffered = false;
         _214->_305 = true;
 
         return true;
@@ -68,7 +68,7 @@ bool MarioActor::checkBeeWallStick(Vec3f& rVec) {
 }
 
 bool MarioActor::checkBeeFloorStick(Vec3f& rVec) {
-    if (mMario->getMovementStates()._1 && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0) {
+    if (mMario->getMovementStates().onGround && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0) {
         mBeeWallWalk = 5;
         rVec = -mMario->mGroundNorm;
 
@@ -179,7 +179,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
             gravity = _24C;
         } else if (angle >= MR::pi() * 0.4f) {
             if (!isJumping()) {
-                mMario->mActionStates._1A = true;
+                mMario->mActionStates.steepGravityStop = true;
             } else {
                 if (mMario->mJumpKind == 11) {
                     mMario->mJumpKind = 0;
@@ -196,7 +196,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
             _334 = 15;
             _30C = mMario->mHeadVec;
             if (!MR::isNearZero(gravity)) {
-                if (angle >= MR::pi() * (2.0f / 3.0f) || !mMario->mMovementStates._37) {
+                if (angle >= MR::pi() * (2.0f / 3.0f) || !mMario->mMovementStates.mode2D) {
                     mMario->cutGravityElementFromJumpVec(false);
                     mMario->mJumpVec.mult(0.5f);
                 } else {
@@ -208,15 +208,15 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
             }
 
             mMario->clear2DStick();
-            mMario->mActionStates.turning = true;
+            mMario->mActionStates.gravityTurned = true;
             _3AA = 15;
-            if (!getMovementStates()._37) {
+            if (!getMovementStates().mode2D) {
                 mMario->mJumpFrontVec = -mMario->mJumpFrontVec;
             }
         }
 
         if (MR::isNearZero(gravity)) {
-            mMario->mActionStates.turning = true;
+            mMario->mActionStates.gravityTurned = true;
         }
     } else {
         _334 = 0;
@@ -247,7 +247,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
         MR::normalize(&gravity);
         _3A0 = 0;
     } else {
-        if (!mMario->mMovementStates._1) {
+        if (!mMario->mMovementStates.onGround) {
             gravity = _240;
         } else {
             gravity = -mMario->mGroundNorm;
@@ -272,20 +272,20 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
     calcCenterPos();
     f32 height = 70.0f;
     Vec3f up;
-    if (getDrawStates()._F) {
+    if (getDrawStates().wallGravity) {
         MR::vecBlendSphere(mMario->mHeadVec, mMario->mWallNorm, &up, 0.5f * _984);
     } else {
         MR::vecBlendSphere(mMario->mHeadVec, mMario->mGroundNorm, &up, _984);
     }
 
     Vec3f oldOffset(_2C4);
-    if (mMario->mMovementStates._A) {
+    if (mMario->mMovementStates.squat) {
         height = 50.0f;
     }
 
-    if (mMario->mMovementStates._1) {
+    if (mMario->mMovementStates.onGround) {
         _2C4 = up * height;
-    } else if (mMario->mActionStates._23 || _934) {
+    } else if (mMario->mActionStates.jumpTakeoff || _934) {
         Vec3f offset = -_240 * 70.0f;
         if (_334 || mMario->calcPolygonAngleD(mMario->mGroundPolygon) >= 59.0f) {
             MR::vecBlend(_2C4, offset, &_2C4, 0.1f);
@@ -301,7 +301,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
         _3AA--;
         f32 rate = static_cast< f32 >(_3AA) / 15.0f;
         _2C4 = _2C4 * (1.0f - rate) + oldOffset * rate;
-        mMario->mActionStates.turning = true;
+        mMario->mActionStates.gravityTurned = true;
     }
 
     if (_334) {
@@ -319,9 +319,9 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
 }
 
 bool MarioActor::checkBeeCeilStick(Vec3f& rVec) {
-    if ((mMario->isCeiling() || getDrawStates()._15) && mBeeWallWalk == 0 && _9F2 == 0) {
+    if ((mMario->isCeiling() || getDrawStates().headHit) && mBeeWallWalk == 0 && _9F2 == 0) {
         bool out = false;
-        if (getDrawStates()._15) {
+        if (getDrawStates().headHit) {
             out = true;
         } else {
             const char* pWallCodeString = MR::getWallCodeString(mMario->mCeilPolygon);
@@ -345,7 +345,7 @@ bool MarioActor::checkBeeCeilStick(Vec3f& rVec) {
 void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
     if (mBeeWallWalk != 0) {
         bool detach = false;
-        bool fur = getDrawStates()._19;
+        bool fur = getDrawStates().onFur;
         if (!fur) {
             const char* pWallCode = MR::getWallCodeString(mMario->mShadowPolygon);
             if (pWallCode != nullptr && strcmp(pWallCode, "Fur") == 0) {
@@ -388,8 +388,8 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
                 detach = true;
             }
         } else {
-            if (mMario->mMovementStates._B) {
-                mMario->mMovementStates._B = false;
+            if (mMario->mMovementStates.hipDrop) {
+                mMario->mMovementStates.hipDrop = false;
             }
 
             detach = true;

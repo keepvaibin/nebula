@@ -10,8 +10,8 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
         return;
     }
 
-    if (mActionStates.turning && mMovementStates._1 && !mMovementStates.jumping) {
-        mActionStates.turning = false;
+    if (mActionStates.gravityTurned && mMovementStates.onGround && !mMovementStates.jumping) {
+        mActionStates.gravityTurned = false;
         clear2DStick();
         m2DStickHold = false;
     }

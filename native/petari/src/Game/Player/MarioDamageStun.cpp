@@ -30,13 +30,13 @@ bool MarioStun::update() {
         }
 
         _12 = 1;
-        if (!getPlayer()->mMovementStates._1) {
+        if (!getPlayer()->mMovementStates.onGround) {
             _14 = 0xa;
         } else {
             _14 = 0x1e;
         }
 
-        if (getPlayer()->mMovementStates._1) {
+        if (getPlayer()->mMovementStates.onGround) {
             changeAnimation("しびれ回復");
         }
     }

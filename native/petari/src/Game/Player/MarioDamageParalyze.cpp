@@ -4,7 +4,7 @@
 #include "Game/Player/MarioState.hpp"
 
 bool Mario::doParalyze() {
-    if (mMovementStates._1F) {
+    if (mMovementStates.invincible) {
         return false;
     }
 
@@ -20,7 +20,7 @@ bool Mario::doParalyze() {
         return false;
     }
 
-    if (mMovementStates._1B) {
+    if (mMovementStates.damaged) {
         return false;
     }
 
@@ -68,7 +68,7 @@ bool MarioParalyze::start() {
 bool MarioParalyze::update() {
     if (mTimer != 0) {
         mTimer--;
-        if (_12 != 0 && getPlayer()->getMovementStates()._1) {
+        if (_12 != 0 && getPlayer()->getMovementStates().onGround) {
             addVelocity(getFrontVec(), -3.0f);
         }
     }
@@ -80,19 +80,19 @@ bool MarioParalyze::update() {
 
         _12 = 1;
 
-        if (!getPlayer()->getMovementStates()._1) {
+        if (!getPlayer()->getMovementStates().onGround) {
             mTimer = 10;
         } else {
             mTimer = 30;
         }
 
-        if (getPlayer()->getMovementStates()._1) {
+        if (getPlayer()->getMovementStates().onGround) {
             changeAnimation("電気ダメージ終了");
             playSound("声電気ダメージ終了");
         }
 
         if (mActor->mHealth == 0) {
-            if (!getPlayer()->mMovementStates._1) {
+            if (!getPlayer()->mMovementStates.onGround) {
                 mActor->forceGameOverNonStop();
             } else {
                 mActor->forceGameOver();
@@ -107,7 +107,7 @@ bool MarioParalyze::update() {
 
 bool MarioParalyze::close() {
     if (mActor->mHealth == 0) {
-        if (!getPlayer()->mMovementStates._1) {
+        if (!getPlayer()->mMovementStates.onGround) {
             mActor->forceGameOverNonStop();
         } else {
             mActor->forceGameOver();
@@ -121,7 +121,7 @@ bool MarioParalyze::close() {
 
     _16 = 120;
 
-    if (!getPlayer()->isStatusActive(MarioStatus_Swim) && !getPlayer()->getMovementStates()._1) {
+    if (!getPlayer()->isStatusActive(MarioStatus_Swim) && !getPlayer()->getMovementStates().onGround) {
         getPlayer()->tryFreeJump(getFrontVec() * -10.0f, true);
     }
 

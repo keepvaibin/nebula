@@ -9,30 +9,30 @@
 
 void Mario::lockGroundCheck(void* owner, bool simple) {
     mGroundCheckOwner = owner;
-    mActionStates._5 = simple;
-    mActionStates._4 = true;
-    mMovementStates._36 = simple;
+    mActionStates.groundCheckSimple = simple;
+    mActionStates.groundCheckLocked = true;
+    mMovementStates.simpleGroundCheck = simple;
 }
 
 void Mario::unlockGroundCheck(void* owner) {
     if (!owner || mGroundCheckOwner == owner) {
         mGroundCheckOwner = nullptr;
-        mActionStates._4 = false;
+        mActionStates.groundCheckLocked = false;
     }
 }
 
 bool Mario::isUseSimpleGroundCheck() const {
-    if (mActionStates._4) {
-        return mActionStates._5;
+    if (mActionStates.groundCheckLocked) {
+        return mActionStates.groundCheckSimple;
     }
-    if (mMovementStates._23) {
+    if (mMovementStates.slopeSlide) {
         return true;
     }
     if (isPlayerModeTeresa()) {
         return true;
     }
-    if (!mMovementStates._1) {
-        return mMovementStates._23;
+    if (!mMovementStates.onGround) {
+        return mMovementStates.slopeSlide;
     }
     if (calcAngleD(mGroundNorm) > mActor->getConst().getTable()->mFlatAngle - 5.0f) {
         Triangle ground;
@@ -65,7 +65,7 @@ bool Mario::checkGroundOnSlope() {
     Triangle ground;
     bool hit;
     bool missingGround = false;
-    mMovementStates._14 = true;
+    mMovementStates.groundMissing = true;
     f32 distance;
     if (mMovementStates.jumping && isRising()) {
         distance = 10.0f;
@@ -74,7 +74,7 @@ bool Mario::checkGroundOnSlope() {
     } else {
         distance = 60.0f;
     }
-    if (mMovementStates._1) {
+    if (mMovementStates.onGround) {
         f32 angle = calcAngleD(mGroundNorm) - 30.0f;
         if (angle < 0.0f) {
             angle = 0.0f;
@@ -115,8 +115,8 @@ bool Mario::checkGroundOnSlope() {
     if (!groundCount) {
         missingGround = true;
     }
-    if (mMovementStates._D) {
-        mMovementStates._D = false;
+    if (mMovementStates.forceGroundOnce) {
+        mMovementStates.forceGroundOnce = false;
         Vec3f offset(mGroundPos - mPosition);
         f32 vertical = MR::vecKillElement(offset, *getGravityVec(), &offset);
         addTrans(*getGravityVec() * vertical, "force Trans");
@@ -126,28 +126,28 @@ bool Mario::checkGroundOnSlope() {
         return false;
     }
     if (missingGround) {
-        mMovementStates._14 = true;
+        mMovementStates.groundMissing = true;
         return false;
     }
-    mMovementStates._14 = false;
+    mMovementStates.groundMissing = false;
     Vec3f down(-mGroundNorm);
     Vec3f position(mGroundPos);
-    if (mActionStates._22) {
-        mActionStates._22 = false;
-        mHitStates._C = true;
-    } else if ((mMovementStates._23 || mTargetWalkSpeedIndex) && getPlayerMode() != PlayerMode_Teresa) {
+    if (mActionStates.slopePushed) {
+        mActionStates.slopePushed = false;
+        mHitStates.slopePushed = true;
+    } else if ((mMovementStates.slopeSlide || mTargetWalkSpeedIndex) && getPlayerMode() != PlayerMode_Teresa) {
         if (MR::abs((position - mPosition).dot(down)) < distance) {
             Vec3f offset(position - mPosition);
             f32 vertical = MR::vecKillElement(offset, down, &offset);
             if (!MR::isNearZero(vertical, 1.0f)) {
-                mDrawStates._0 = false;
+                mDrawStates.snappedToGround = false;
                 Vec3f displacement(down * vertical);
                 f32 ratio = MR::clamp(mWalkSpeed, 0.0f, 1.0f);
-                if (!mMovementStates._23) {
+                if (!mMovementStates.slopeSlide) {
                     displacement *= ratio;
                 }
                 bool notSlipping = !isSlipFloorCode(mFloorCode);
-                if (!notSlipping && !mDrawStates._4 && !mPrevDrawStates._4) {
+                if (!notSlipping && !mDrawStates.slopeRunUp && !mPrevDrawStates.slopeRunUp) {
                     mVelocityAfter += displacement;
                 }
             }
@@ -157,11 +157,11 @@ bool Mario::checkGroundOnSlope() {
     if (mVerticalSpeed < 5.0f) {
         return true;
     }
-    if (mDrawStates._6) {
+    if (mDrawStates.binderFloorHit) {
         return true;
     }
     if (groundCount) {
         return true;
     }
-    return mDrawStates._0;
+    return mDrawStates.snappedToGround;
 }
