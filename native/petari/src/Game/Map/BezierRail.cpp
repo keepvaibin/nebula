@@ -7,184 +7,157 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
-inline void getCsvDataStr(const char** pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
-    pMapInfo->getValue(idx, pKey, pOut);
-}
-
-inline s32 getCsvDataElementNum(const Table* pMapInfo) {
-    return pMapInfo->getNumEntries();
-}
-
-inline int adjustNextIndex(int index, int pointNum) {
-    int nextIndex = index + 1;
-    int adjust = (nextIndex / pointNum);
-    return nextIndex - adjust * pointNum;
-}
-
 namespace {
+    const int cLengthSegments = 10;        // Simpson pairs per length integral
+    const f32 cParamTolerance = 0.01f;     // getParam stops within this length
+    const s32 cParamIterations = 5;
+    const f32 cDirectionStep = 0.01f;      // param step for a zero-velocity direction
+    const f32 cNearestSampleStep = 100.0f; // length between getNearestParam samples
+
+    int getNextIndex(int index, int pointNum) {
+        return (index + 1) % pointNum;
+    }
+
     void calcRailDirection(Vec3f* pOut, const RailPart* pRailPart, f32 t) {
         pRailPart->calcVelocity(pOut, t);
 
-        f32 v8;
-
         if (MR::isNearZero(*pOut)) {
+            f32 tStart = t;
+            f32 tEnd;
             if (t < 0.5f) {
-                v8 = 0.01f + t;
+                tEnd = cDirectionStep + t;
             } else {
-                v8 = t;
-                t = t - 0.01f;
+                tEnd = t;
+                tStart = t - cDirectionStep;
             }
 
-            Vec3f pos;
-            pRailPart->calcPos(&pos, t);
-            pRailPart->calcPos(pOut, v8);
-
-            pOut->sub(pos);
+            Vec3f start;
+            pRailPart->calcPos(&start, tStart);
+            pRailPart->calcPos(pOut, tEnd);
+            pOut->sub(start);
         }
 
         MR::normalize(pOut);
     }
 };  // namespace
 
+// Power basis: pos(t) = mStart + 3t * mCtrlDegree1 + 3t^2 * mCtrlDegree2 + t^3 * mCtrlDegree3.
 void BezierRailPart::set(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const Vec3f& rPoint2Ctrl, const Vec3f& rPoint2) {
-    Vec3f v21, v20, v19, v18, v17, v16;
+    Vec3f d1(rPoint1Ctrl);
+    d1.sub(rPoint1);
+    Vec3f d2(rPoint2Ctrl);
+    d2.sub(rPoint1Ctrl);
+    Vec3f d3(rPoint2);
+    d3.sub(rPoint2Ctrl);
 
-    Vec3f v15(rPoint1Ctrl);
-    v15.sub(rPoint1);
-
-    v21 = v15;
-    Vec3f v14(rPoint2Ctrl);
-    v14.sub(rPoint1Ctrl);
-
-    v20 = v14;
-    Vec3f v13(rPoint2);
-    v13.sub(rPoint2Ctrl);
-
-    v19 = v13;
-    Vec3f v12(v20);
-    v12.sub(v21);
-
-    v18 = v12;
-    Vec3f v11(v19);
-    v11.sub(v20);
-
-    v17 = v11;
-    Vec3f v10(v17);
-    v10.sub(v18);
-
-    v16 = v10;
     mStart = rPoint1;
-    mCtrlDegree1 = v21;
-    mCtrlDegree2 = v18;
-    mCtrlDegree3 = v16;
+    mCtrlDegree1 = d1;
+    mCtrlDegree2.sub(d2, d1);
+    mCtrlDegree3.sub(d3, d2);
+    mCtrlDegree3.sub(mCtrlDegree2);
 
-    mLength = getLength(0.0f, 1.0f, 10);
+    mLength = getLength(0.0f, 1.0f, cLengthSegments);
 }
 
 void BezierRailPart::calcPos(Vec3f* pOut, f32 t) const {
-    f32 v7 = 3.0f * t;
-    f32 v10 = 3.0f * t * t;
-    f32 v9 = t * t * t;
+    f32 w1 = 3.0f * t;
+    f32 w2 = 3.0f * t * t;
+    f32 w3 = t * t * t;
 
-    Vec3f v16(mCtrlDegree1);
-    Vec3f v15(mCtrlDegree2);
-    Vec3f v14(mCtrlDegree3);
+    Vec3f term1(mCtrlDegree1);
+    Vec3f term2(mCtrlDegree2);
+    Vec3f term3(mCtrlDegree3);
 
-    v16.scale(v7);
-    v15.scale(v10);
-    v14.scale(v9);
+    term1.scale(w1);
+    term2.scale(w2);
+    term3.scale(w3);
 
     pOut->set(mStart);
-    pOut->add(v16);
-    pOut->add(v15);
-    pOut->add(v14);
+    pOut->add(term1);
+    pOut->add(term2);
+    pOut->add(term3);
 }
 
 void BezierRailPart::calcVelocity(Vec3f* pOut, f32 t) const {
-    f32 v5 = t * t;
-    f32 v7 = 2.0f * t;
+    f32 w3 = t * t;
+    f32 w2 = 2.0f * t;
 
-    Vec3f v12(mCtrlDegree3);
-    Vec3f v11(mCtrlDegree2);
-    v12.scale(v5);
-    v11.scale(v7);
+    Vec3f term3(mCtrlDegree3);
+    Vec3f term2(mCtrlDegree2);
+    term3.scale(w3);
+    term2.scale(w2);
 
     pOut->set(mCtrlDegree1);
-    pOut->add(v11);
-    pOut->add(v12);
+    pOut->add(term2);
+    pOut->add(term3);
     pOut->scale(3.0f);
 }
 
-f32 BezierRailPart::getLength(f32 t1, f32 t2, int k) const {
-    f32 len1, len2;
-
-    f32 m3 = (1.0f / 2.0f) * (getVelocityLength(t1) + getVelocityLength(t2));
+// Simpson's rule over 2 * segments steps with the end samples at half weight, floored to 1/1024.
+// Rail coordinates are measured in these lengths, so the weights stay as they are.
+f32 BezierRailPart::getLength(f32 t1, f32 t2, int segments) const {
+    f32 endsHalf = (1.0f / 2.0f) * (getVelocityLength(t1) + getVelocityLength(t2));
 
     f32 tDiff = (t2 - t1);
-    f32 temp = (1.0f / (k * 2.0));
-    f32 delta = tDiff * temp;
+    f32 stepRate = (1.0f / (segments * 2.0));
+    f32 step = tDiff * stepRate;
 
-    len1 = 0.0f;
-    len2 = 0.0f;
+    f32 oddSum = 0.0f;
+    f32 evenSum = 0.0f;
 
-    for (s32 seg = 1; seg <= k; seg++) {
-        s32 idxA = ((seg * 2) - 1);
-        s32 idxB = (seg * 2);
+    for (s32 seg = 1; seg <= segments; seg++) {
+        s32 oddIndex = ((seg * 2) - 1);
+        s32 evenIndex = (seg * 2);
 
-        f32 tA = t1 + delta * idxA;
-        f32 tB = t1 + delta * idxB;
+        f32 tOdd = t1 + step * oddIndex;
+        f32 tEven = t1 + step * evenIndex;
 
-        len1 += getVelocityLength(tA);
+        oddSum += getVelocityLength(tOdd);
 
-        if (seg != k) {
-            len2 += getVelocityLength(tB);
+        if (seg != segments) {
+            evenSum += getVelocityLength(tEven);
         }
     }
 
-    f32 len = floor(1024.0f * static_cast< f32 >((1.0 / 3.0) * delta * ((len1 * 4.0f) + (m3 + (len2 * 2.0f)))));
+    f32 len = floor(1024.0f * static_cast< f32 >((1.0 / 3.0) * step * ((oddSum * 4.0f) + (endsHalf + (evenSum * 2.0f)))));
     f32 rescale = 1.0f / 1024.0f;
     len *= rescale;
     return len;
 }
 
-f32 BezierRailPart::getParam(f32 t) const {
-    f32 param = t / mLength;
-    f32 railLength = getLength(0.0f, param, 10);
+// Newton steps from the uniform guess; param stays clamped to 0..1.
+f32 BezierRailPart::getParam(f32 targetLength) const {
+    f32 param = targetLength / mLength;
+    f32 length = getLength(0.0f, param, cLengthSegments);
 
-    if (MR::abs(t - railLength) <= 0.01f) {
+    if (MR::abs(targetLength - length) <= cParamTolerance) {
         return param;
     }
 
-    f32 length = railLength;
-    for (s32 count = 0; count < 5; count++) {
-        f32 mag = getVelocityLength(param);
-        param = FloatUtil::clamp(param + (t - length) / mag, 0.0f, 1.0f);
-        length = getLength(0.0f, param, 10);
+    for (s32 count = 0; count < cParamIterations; count++) {
+        f32 speed = getVelocityLength(param);
+        param = FloatUtil::clamp(param + (targetLength - length) / speed, 0.0f, 1.0f);
+        length = getLength(0.0f, param, cLengthSegments);
 
-        f32 limit = 0.01f;
-        if (MR::abs(t - length) <= limit) {
+        if (MR::abs(targetLength - length) <= cParamTolerance) {
             return param;
         }
-    }
-
-    if (length < 0.0f || 1.0f < param) {
-        param = FloatUtil::clamp(param, 0.0f, 1.0f);
     }
 
     return param;
 }
 
-f32 BezierRailPart::getNearestParam(const Vec3f& rPos, f32 delta) const {
+f32 BezierRailPart::getNearestParam(const Vec3f& rPos, f32 step) const {
     f32 nearestParam = -1.0f;
-    f32 nearestMag = FLOAT_MAX;
+    f32 nearestDistSq = FLOAT_MAX;
 
-    for (f32 t = 0.0f; t <= 1.0f; t += delta) {
+    for (f32 t = 0.0f; t <= 1.0f; t += step) {
         Vec3f pos;
         calcPos(&pos, t);
-        f32 mag = pos.squared(rPos);
-        if (mag < nearestMag) {
+        f32 distSq = pos.squared(rPos);
+        if (distSq < nearestDistSq) {
             nearestParam = t;
-            nearestMag = mag;
+            nearestDistSq = distSq;
         }
     }
 
@@ -216,66 +189,64 @@ f32 BezierRail::getPartLength(int idx) const {
 
 void BezierRail::calcPos(Vec3f* pOut, f32 t) const {
     const RailPart* part;
-    f32 param;
+    f32 partPos;
 
-    getIncludedSection(&part, &param, t, 1);
-    part->calcPos(pOut, part->getParam(param));
+    getIncludedSection(&part, &partPos, t, 1);
+    part->calcPos(pOut, part->getParam(partPos));
 }
 
 void BezierRail::calcDirection(Vec3f* pOut, f32 t) const {
     const RailPart* part;
-    f32 param;
+    f32 partPos;
 
-    getIncludedSection(&part, &param, t, 1);
-    ::calcRailDirection(pOut, part, part->getParam(param));
+    getIncludedSection(&part, &partPos, t, 1);
+    calcRailDirection(pOut, part, part->getParam(partPos));
 }
 
 void BezierRail::calcPosDir(Vec3f* pPos, Vec3f* pDir, f32 t) const {
     const RailPart* part;
-    f32 param;
+    f32 partPos;
 
-    getIncludedSection(&part, &param, t, 1);
-    f32 val = part->getParam(param);
-    part->calcPos(pPos, val);
-    ::calcRailDirection(pDir, part, val);
+    getIncludedSection(&part, &partPos, t, 1);
+    f32 param = part->getParam(partPos);
+    part->calcPos(pPos, param);
+    calcRailDirection(pDir, part, param);
 }
 
 f32 BezierRail::getNearestRailPosCoord(const Vec3f& rPos) const {
     RailPart* part = mRailParts;
     int idx = 0;
 
-    f32 length = part->getTotalLength();
-    f32 nearestParam = part->getNearestParam(rPos, 100.0f / length);
+    f32 nearestParam = part->getNearestParam(rPos, cNearestSampleStep / part->getTotalLength());
 
     Vec3f pos;
     part->calcPos(&pos, nearestParam);
     pos.sub(rPos);
 
-    f32 sqrt = pos.squared();
+    f32 nearestDistSq = pos.squared();
 
     for (int i = 1; i < mNumRailParts; i++) {
         RailPart* curPart = getRailPart(i);
 
-        f32 curPartLength = curPart->getTotalLength();
-        f32 curNearParam = curPart->getNearestParam(rPos, 100.0f / curPartLength);
+        f32 curNearParam = curPart->getNearestParam(rPos, cNearestSampleStep / curPart->getTotalLength());
         curPart->calcPos(&pos, curNearParam);
 
         pos.sub(rPos);
-        f32 curSqrt = pos.squared();
+        f32 curDistSq = pos.squared();
 
-        if (curSqrt < sqrt) {
-            sqrt = curSqrt;
+        if (curDistSq < nearestDistSq) {
+            nearestDistSq = curDistSq;
             idx = i;
             nearestParam = curNearParam;
         }
     }
 
-    f32 val = !idx ? 0.0f : mPointCoords[idx - 1];
-    return (val + getRailPart(idx)->getLength(0.0f, nearestParam, 10));
+    f32 partStart = idx == 0 ? 0.0f : mPointCoords[idx - 1];
+    return (partStart + getRailPart(idx)->getLength(0.0f, nearestParam, cLengthSegments));
 }
 
 f32 BezierRail::getRailPosCoord(int idx) const {
-    if (!idx) {
+    if (idx == 0) {
         return 0.0f;
     }
 
@@ -287,8 +258,7 @@ f32 BezierRail::getRailPosCoord(int idx) const {
 }
 
 void BezierRail::calcCurrentRailCtrlPointIter(TableIter* pIter, f32 t, bool forward) const {
-    int idx = getCurrentCtrlPointIndex(t, forward);
-    calcRailCtrlPointIter(pIter, idx);
+    calcRailCtrlPointIter(pIter, getCurrentCtrlPointIndex(t, forward));
 }
 
 void BezierRail::calcRailCtrlPointIter(TableIter* pIter, int idx) const {
@@ -296,24 +266,15 @@ void BezierRail::calcRailCtrlPointIter(TableIter* pIter, int idx) const {
     pIter->mInfo = mInfo;
 }
 
-void BezierRail::getIncludedSection(const RailPart** pRailParts, f32* pPos, f32 t, int direction) const {
+// Forward, a point coordinate belongs to the part after it; backward, to the part before it.
+void BezierRail::getIncludedSection(const RailPart** pRailPart, f32* pPos, f32 t, int direction) const {
     f32 pos = normalizePos(t, direction);
-    f32 partPos = 0.0f;
     s32 idx = -1;
 
     if (direction > 0) {
         for (s32 i = 0; i < mNumRailParts; i++) {
             if (!(mPointCoords[i] <= pos) || i == mNumRailParts - 1) {
                 idx = i;
-
-                f32 newPos;
-                if (i == 0) {
-                    newPos = pos;
-                } else {
-                    s32 j = i - 1;
-                    newPos = pos - mPointCoords[j];
-                }
-                partPos = newPos;
                 break;
             }
         }
@@ -321,22 +282,14 @@ void BezierRail::getIncludedSection(const RailPart** pRailParts, f32* pPos, f32 
         for (s32 i = mNumRailParts - 1; i >= 0; i--) {
             if (i == 0 || (mPointCoords[i - 1] < pos && pos <= mPointCoords[i])) {
                 idx = i;
-
-                f32 newPos;
-                if (i == 0) {
-                    newPos = pos;
-                } else {
-                    s32 j = i - 1;
-                    newPos = pos - mPointCoords[j];
-                }
-                partPos = newPos;
                 break;
             }
         }
     }
 
+    f32 partPos = idx == 0 ? pos : pos - mPointCoords[idx - 1];
     RailPart* part = getRailPart(idx);
-    pRailParts[0] = part;
+    *pRailPart = part;
     *pPos = FloatUtil::clamp(partPos, 0.0f, part->getTotalLength());
 }
 
@@ -347,8 +300,7 @@ int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
         return 0;
     }
 
-    f32 totalLength = getTotalLength();
-    if (MR::isNearZero(totalLength - pos)) {
+    if (MR::isNearZero(getTotalLength() - pos)) {
         return !mIsClosed ? mPointNum - 1 : 0;
     }
 
@@ -360,11 +312,9 @@ int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
         }
     } else {
         for (int i = mNumRailParts - 1; i >= 0; i--) {
-            f32 f = i > 0 ? mPointCoords[i - 1] : 0.0f;
-
-            f32 pointCoord = mPointCoords[i];
-            if (f < pos && pos <= pointCoord) {
-                return adjustNextIndex(i, mPointNum);
+            f32 partStart = i > 0 ? mPointCoords[i - 1] : 0.0f;
+            if (partStart < pos && pos <= mPointCoords[i]) {
+                return getNextIndex(i, mPointNum);
             }
         }
     }
@@ -377,27 +327,26 @@ BezierRail::BezierRail(const TableIter& rIter, const Table* pInfo) {
     mIter = new TableIter(rIter);
 
     const char* closedValue = "";
-    const Table* info = rIter.mInfo;
-
-    getCsvDataStr(&closedValue, info, "closed", rIter.mIndex);
+    rIter.mInfo->getValue(rIter.mIndex, "closed", &closedValue);
     mIsClosed = MR::isEqualString(closedValue, "CLOSE");
 
-    mPointNum = getCsvDataElementNum(pInfo);
+    mPointNum = pInfo->getNumEntries();
 
     mNumRailParts = mPointNum - 1;
     if (mIsClosed) {
         mNumRailParts++;
     }
 
-    f32 pointCoord = 0.0f;
-    f32 railStartCoord = 0.0f;
-
     mRailParts = new RailPart[mNumRailParts];
     mPointCoords = new f32[mNumRailParts];
 
+    // Kahan summation: compensation holds the low bits pointCoord dropped.
+    f32 pointCoord = 0.0f;
+    f32 compensation = 0.0f;
+
     for (int i = 0; i < mNumRailParts; i++) {
         TableIter iterPoint1 = TableIter(pInfo, i);
-        TableIter iterPoint2 = TableIter(pInfo, adjustNextIndex(i, mPointNum));
+        TableIter iterPoint2 = TableIter(pInfo, getNextIndex(i, mPointNum));
 
         Vec3f point1;
         Vec3f point2;
@@ -411,14 +360,10 @@ BezierRail::BezierRail(const TableIter& rIter, const Table* pInfo) {
 
         mRailParts[i].init(point1, point1Ctrl, point2Ctrl, point2);
 
-        // this is the strangest way to do this calculation I have ever seen
-        f32 railEndCoord = railStartCoord;
+        f32 term = compensation + mRailParts[i].getTotalLength();
         f32 prevPointCoord = pointCoord;
-        f32 railLength = mRailParts[i].getTotalLength();
-        railEndCoord += railLength;
-        pointCoord += railEndCoord;
-        railEndCoord -= pointCoord - prevPointCoord;
+        pointCoord += term;
+        compensation = term - (pointCoord - prevPointCoord);
         mPointCoords[i] = pointCoord;
-        railStartCoord = railEndCoord;
     }
 }
