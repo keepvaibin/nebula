@@ -16,8 +16,8 @@ MtxPtr MarioActor::getMapBaseMtx() const {
 }
 
 bool MarioActor::isFastRise() const {
-    if (_934) {
-        if (_938.dot(getGravityVec()) < -60.0f) {
+    if (mInRush) {
+        if (mRushMove.dot(getGravityVec()) < -60.0f) {
             return true;
         }
     }
@@ -107,7 +107,7 @@ const Vec3f& MarioActor::getTransForCamera() const {
 }
 
 void MarioActor::updateTransForCamera() {
-    if (_EA5) {
+    if (mBaseMtxForced) {
         return;
     }
 
@@ -124,34 +124,34 @@ void MarioActor::updateTransForCamera() {
     mCameraTrans = mPosition + Vec3f(mMario->mLookOfs);  // matches now. result of getter?
 
     if (mMario->isSwimming() && mMario->mSwim->isOnWaterSurface()) {
-        if (_332 < 100) {
-            _332++;
+        if (mCameraLiftTimer < 100) {
+            mCameraLiftTimer++;
         }
-    } else if (_332 != 0) {
-        _332--;
+    } else if (mCameraLiftTimer != 0) {
+        mCameraLiftTimer--;
     }
 
-    mCameraTrans += mMario->mHeadVec * _332;
+    mCameraTrans += mMario->mHeadVec * mCameraLiftTimer;
 }
 
 void MarioActor::updateForCamera() {
-    if (_EA5) {
+    if (mBaseMtxForced) {
         return;
     }
 
-    if (!(_300 == mMario->mHeadVec)) {
-        _300 = mMario->mHeadVec;
-        _330 = mConst->getTable()->mCameraHeadRotationTimer;
+    if (!(mCameraUpTarget == mMario->mHeadVec)) {
+        mCameraUpTarget = mMario->mHeadVec;
+        mCameraUpTimer = mConst->getTable()->mCameraHeadRotationTimer;
     }
 
-    if (_330 != 0) {
-        _330--;
+    if (mCameraUpTimer != 0) {
+        mCameraUpTimer--;
 
-        if (!MR::vecBlendSphere(mUpVec, _300, &mUpVec, 1.0f - static_cast< f32 >(_330) / mConst->getTable()->mCameraHeadRotationTimer)) {
-            mUpVec = _300;
+        if (!MR::vecBlendSphere(mUpVec, mCameraUpTarget, &mUpVec, 1.0f - static_cast< f32 >(mCameraUpTimer) / mConst->getTable()->mCameraHeadRotationTimer)) {
+            mUpVec = mCameraUpTarget;
         }
     }
 
-    _2DC = mMario->mFrontVec;
-    _2E8 = mMario->mSideVec;
+    mCameraFrontVec = mMario->mFrontVec;
+    mCameraSideVec = mMario->mSideVec;
 }

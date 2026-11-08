@@ -69,7 +69,6 @@ namespace MarioAccess {
     void progressAnimation();
     const char* getCurrentBckName();
     void setAnimationBlendWeight(const f32*);
-    void setSpot(f32, u32);
     void offControl();
     bool isOffControl();
     void onControl(bool);

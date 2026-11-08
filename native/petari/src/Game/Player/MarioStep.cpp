@@ -165,24 +165,24 @@ void Mario::startStep(const Vec3f& rVec) {
 }
 
 MarioStep::MarioStep(MarioActor* pActor) : MarioState(pActor, MarioStatus_Step) {
-    _14 = 0.0f;
-    _18 = 0.0f;
+    mBlendFrames = 0.0f;
+    mStartSpeed = 0.0f;
 }
 
 bool MarioStep::start() {
-    _18 = getPlayer()->mWalkSpeed;
-    MR::clamp(_18, 0.0f, 1.0f);
+    mStartSpeed = getPlayer()->mWalkSpeed;
+    MR::clamp(mStartSpeed, 0.0f, 1.0f);
 
-    s32 v2 = 20 - static_cast< s32 >(16.0f * _18);
+    s32 v2 = 20 - static_cast< s32 >(16.0f * mStartSpeed);
 
     if (v2 < 4) {
         v2 = 4;
     }
 
     mActor->setBlendMtxTimer(v2);
-    _14 = static_cast< u16 >(v2);
+    mBlendFrames = static_cast< u16 >(v2);
 
-    if (isAnimationRun(nullptr) && !mActor->_3E5) {
+    if (isAnimationRun(nullptr) && !mActor->mPunchSensorOn) {
         stopAnimation(nullptr);
     }
 
@@ -212,8 +212,8 @@ bool MarioStep::update() {
         _278 = 0.5f;
     }
 
-    f32 v7 = _14 - _278;
-    _14 -= _278;
+    f32 v7 = mBlendFrames - _278;
+    mBlendFrames -= _278;
 
     if (v7 < 0.0f) {
         return false;

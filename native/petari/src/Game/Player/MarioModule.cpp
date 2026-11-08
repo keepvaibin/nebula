@@ -30,7 +30,7 @@ bool MarioModule::isInputDisable() const {
     if (isAnimationRun("ステージインB")) {
         return true;
     }
-    return mActor->_3C0;
+    return mActor->mRemoteDemo;
 }
 
 Mario* MarioModule::getPlayer() const {
@@ -94,7 +94,7 @@ bool MarioModule::isPlayerModeFoo() const {
 }
 
 void MarioModule::changeAnimation(const char* pAnim1, const char* pAnim2) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         if (pAnim2) {
             mActor->mMarioAnim->changeDefault(pAnim2);
         }
@@ -105,7 +105,7 @@ void MarioModule::changeAnimation(const char* pAnim1, const char* pAnim2) {
 }
 
 void MarioModule::changeAnimationNonStop(const char* pAnim) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         if (pAnim) {
             changeAnimation(pAnim);
         }
@@ -117,7 +117,7 @@ void MarioModule::changeAnimationNonStop(const char* pAnim) {
 }
 
 void MarioModule::changeAnimationWithAttr(const char* pAnim, u32 attribute) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         if (pAnim) {
             changeAnimation(pAnim);
         }
@@ -126,7 +126,7 @@ void MarioModule::changeAnimationWithAttr(const char* pAnim, u32 attribute) {
 }
 
 void MarioModule::stopAnimation(const char* pAnim1, const char* pAnim2) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         if (pAnim2) {
             mActor->mMarioAnim->changeDefault(pAnim2);
         }
@@ -152,7 +152,7 @@ bool MarioModule::isAnimationRun(const char* pAnimName) const {
         return pXanimePlayer->mCurrentAnimation != pXanimePlayer->mDefaultAnimation;
     } else {
         bool run = mActor->mMarioAnim->mXanimePlayer->isRun(pAnimName);
-        if (mActor->mMarioAnim->_6C) {
+        if (mActor->mMarioAnim->mUpperRunning) {
             run |= mActor->mMarioAnim->mXanimePlayerUpper->isRun(pAnimName);
         }
         return run;
@@ -186,7 +186,7 @@ const char* MarioModule::getCurrentBckName() const {
 }
 
 void MarioModule::changeAnimationUpper(const char* pAnim1, const char* pAnim2) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         mActor->mMarioAnim->changeDefaultUpper(pAnim2);
         if (pAnim1) {
             mActor->mMarioAnim->changeUpper(pAnim1);
@@ -195,7 +195,7 @@ void MarioModule::changeAnimationUpper(const char* pAnim1, const char* pAnim2) {
 }
 
 void MarioModule::changeAnimationUpperWeak(const char* pAnim1, const char* pAnim2) {
-    if (!mActor->mMarioAnim->_6C && !mActor->_B90) {
+    if (!mActor->mMarioAnim->mUpperRunning && !mActor->mAnimationFrozen) {
         mActor->mMarioAnim->changeDefaultUpper(pAnim2);
         if (pAnim1) {
             mActor->mMarioAnim->changeUpper(pAnim1);
@@ -204,7 +204,7 @@ void MarioModule::changeAnimationUpperWeak(const char* pAnim1, const char* pAnim
 }
 
 void MarioModule::stopAnimationUpper(const char* pAnim1, const char* pAnim2) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         mActor->mMarioAnim->changeDefaultUpper(pAnim2);
         mActor->mMarioAnim->stopUpper(pAnim1);
     }
@@ -219,7 +219,7 @@ f32 MarioModule::getAnimationFrame() const {
 }
 
 void MarioModule::changeAnimation(const char* pAnim, u32 index) {
-    if (!mActor->_B90) {
+    if (!mActor->mAnimationFrozen) {
         changeAnimation(pAnim);
         getPlayer()->mIndexedAnimeOn[index] = 1;
     }
@@ -240,7 +240,7 @@ bool MarioModule::isAnimationRun(const char* pAnim, u32 index) {
 }
 
 void MarioModule::stopAnimation(const char* pAnim, u32 index) {
-    if (!mActor->_B90 && mActor->getMario()->mIndexedAnimeOn[index]) {
+    if (!mActor->mAnimationFrozen && mActor->getMario()->mIndexedAnimeOn[index]) {
         stopAnimation(pAnim);
         getPlayer()->mIndexedAnimeOn[index] = 0;
     }
@@ -327,7 +327,7 @@ void MarioModule::addTrans(const Vec3f& rShift, const char* pName) {
 
 f32 MarioModule::cutGravityElementFromJumpVec(bool useActorGravity) {
     if (useActorGravity) {
-        return MR::vecKillElement(mActor->getMario()->mJumpVec, mActor->_240, &mActor->getMario()->mJumpVec);
+        return MR::vecKillElement(mActor->getMario()->mJumpVec, mActor->mGravityVec, &mActor->getMario()->mJumpVec);
     } else {
         Vec3f* pJumpVec = &mActor->mMario->mJumpVec;
         return MR::vecKillElement(*pJumpVec, mActor->getGravityVec(), pJumpVec);
@@ -486,7 +486,7 @@ bool MarioModule::checkSquat(bool a1) {
     if (mActor->mTakeCount) {
         return false;
     }
-    if (mActor->_B94 != 0) {
+    if (mActor->mBombTeresaTimer != 0) {
         return false;
     }
     if (mActor->mBeeWallWalk != 0) {

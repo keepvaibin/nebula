@@ -13,16 +13,17 @@ static MatrixMap morph_bitmap[] = {{"ジャンプ系バインド", 0x1111100F},
                                    {"スピン回復エフェクト", 0x10002000},
                                    {""}};
 
-static MatrixSelectList select_list[] = {{8, {"ノーマル", "メタル", "ファイア", "アイス", "ハチ", "ホッパー", "テレサ", "フー"} /* フー */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {6, {"×NG", "OK○", "FIRE", "ICE", "消える", "回転のみ"} /* 回転のみ */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {2, {"×NG", "OK○"} /* OK○ */},
-                                         {3, {"×NG", "OK○", "頭突き"} /* 頭突き */},
-                                         {3, {"×NG", "エフェクト＋音", "音のみ"} /* 音のみ */}};
+// The columns and their choices, as the table's authors named them:
+// static MatrixSelectList select_list[] = {{8, {"ノーマル", "メタル", "ファイア", "アイス", "ハチ", "ホッパー", "テレサ", "フー"} /* フー */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {6, {"×NG", "OK○", "FIRE", "ICE", "消える", "回転のみ"} /* 回転のみ */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {2, {"×NG", "OK○"} /* OK○ */},
+//                                          {3, {"×NG", "OK○", "頭突き"} /* 頭突き */},
+//                                          {3, {"×NG", "エフェクト＋音", "音のみ"} /* 音のみ */}};
 
 static MatrixMap auto_bind_bitmap[] = {{"ウォータープレッシャーの弾", 0x10112222},
                                        {"ポール", 0x11111000},
@@ -39,8 +40,9 @@ static MatrixMap auto_bind_bitmap[] = {{"ウォータープレッシャーの弾
                                        {"空中ブランコ", 0x11111000},
                                        {""}};
 
-static MatrixSelectList auto_bind_selecterlist[] = {{8, {"ノーマル", "メタル", "ファイア", "アイス", "ハチ", "ホッパー", "テレサ", "フー"} /* フー */},
-                                                    {4, {"×スルー", "OK○", "変身解除", "移動中不可"} /* 移動中不可 */}};
+// The columns and their choices, as the table's authors named them:
+// static MatrixSelectList auto_bind_selecterlist[] = {{8, {"ノーマル", "メタル", "ファイア", "アイス", "ハチ", "ホッパー", "テレサ", "フー"} /* フー */},
+//                                                     {4, {"×スルー", "OK○", "変身解除", "移動中不可"} /* 移動中不可 */}};
 
 static MatrixMap auto_efx_bitmap[] = {
     {"わたげ発生源", 0x20000000},
@@ -120,30 +122,31 @@ static MatrixMap auto_efx_bitmap[] = {
     {""},
 };
 
-static MatrixSelectList auto_efx_selecterlist[] = {{19,
-                                                    {"スピンヒット振動",
-                                                    "スピーカー音",
-                                                    "スピンキャッチ許可",
-                                                    "SHDホーミング許可(地形)",
-                                                    "地形移動無視",
-                                                    "ハチ出立",
-                                                    "乗換センサ",
-                                                    "青い炎エフェクト",
-                                                    "水柱エフェクト",
-                                                    "ダメージ中RUSH",
-                                                    "ナナメつぶし許可",
-                                                    "カメを捨てない",
-                                                    "ハチ回復",
-                                                    "ハチメータ消去",
-                                                    "テレサ時は無視",
-                                                    "リバインド制限",
-                                                    "HD中ラッシュ",
-                                                    "食い込み除外",
-                                                    "水陸移動特殊処理",
-                                                    "着地エフェクト",
-                                                    "影を消す",
-                                                    "ダメージ中跳ねる"} /* ダメージ中跳ねる */},
-                                                   {2, {"□マリオ側で立てる", "[v]オブジェ側で立てる"} /* [v]オブジェ側で立てる */}};
+// The columns and their choices, as the table's authors named them:
+// static MatrixSelectList auto_efx_selecterlist[] = {{19,
+//                                                     {"スピンヒット振動",
+//                                                     "スピーカー音",
+//                                                     "スピンキャッチ許可",
+//                                                     "SHDホーミング許可(地形)",
+//                                                     "地形移動無視",
+//                                                     "ハチ出立",
+//                                                     "乗換センサ",
+//                                                     "青い炎エフェクト",
+//                                                     "水柱エフェクト",
+//                                                     "ダメージ中RUSH",
+//                                                     "ナナメつぶし許可",
+//                                                     "カメを捨てない",
+//                                                     "ハチ回復",
+//                                                     "ハチメータ消去",
+//                                                     "テレサ時は無視",
+//                                                     "リバインド制限",
+//                                                     "HD中ラッシュ",
+//                                                     "食い込み除外",
+//                                                     "水陸移動特殊処理",
+//                                                     "着地エフェクト",
+//                                                     "影を消す",
+//                                                     "ダメージ中跳ねる"} /* ダメージ中跳ねる */},
+//                                                    {2, {"□マリオ側で立てる", "[v]オブジェ側で立てる"} /* [v]オブジェ側で立てる */}};
 
 static MatrixValueTable talking_head_height[] = {
     {"クッパJｒ", 300.0f}, {"ルイージ", 200.0f}, {"ピーチ姫", 180.0f},       {"ペンギンコーチ", 500.0f},       {"ペンギン仙人", 500.0f},
@@ -151,114 +154,114 @@ static MatrixValueTable talking_head_height[] = {
     {"ロゼッタ", 240.0f},  {"ウサギ", 100.0f},   {"いたずらウサギ", 100.0f}, {"シャッチー（会話用）", 220.0f}, {""}};
 
 void MarioActor::initActionMatrix() {
-    _FBC = new MatrixControl("変身中のマリオ行動表", morph_bitmap, select_list, -1);
-    _FC0 = new MatrixControl("マリオ状態とオートバインド対応表", auto_bind_bitmap, auto_bind_selecterlist, 1);
-    _FC4 = new MatrixControl("メッセージ送信応答時のエフェクト", auto_efx_bitmap, auto_efx_selecterlist, 1);
+    mMorphActionTable = new MatrixControl("変身中のマリオ行動表", morph_bitmap, true);
+    mAutoBindTable = new MatrixControl("マリオ状態とオートバインド対応表", auto_bind_bitmap, true);
+    mMessageEffectTable = new MatrixControl("メッセージ送信応答時のエフェクト", auto_efx_bitmap, false);
 
-    _FC8 = new MatrixValueGetter("キャラの身長", talking_head_height);
+    mFaceHeightTable = new MatrixValueGetter("キャラの身長", talking_head_height);
 }
 
 bool MarioActor::isActionOk(const char* pName) const {
-    return _FBC->getValue(pName, mPlayerMode);
+    return mMorphActionTable->getValue(pName, mPlayerMode);
 }
 
 u8 MarioActor::selectAction(const char* pName) const {
-    return _FBC->getValue(pName, mPlayerMode);
+    return mMorphActionTable->getValue(pName, mPlayerMode);
 }
 
 bool MarioActor::selectAutoBind(const char* pName, u8* pValue) const {
-    return _FC0->getValueOrNone(pName, mPlayerMode, pValue);
+    return mAutoBindTable->getValueOrNone(pName, mPlayerMode, pValue);
 }
 
 bool MarioActor::selectCustomEffectSpinHitSound(const char* pName) const {
-    return _FC4->getBitOrNone(pName, 0);
+    return mMessageEffectTable->getBitOrNone(pName, 0);
 }
 
 bool MarioActor::selectSpinCatchInRush(const char* pName) const {
-    return _FC4->getBitOrNone(pName, 2);
+    return mMessageEffectTable->getBitOrNone(pName, 2);
 }
 
 bool MarioActor::selectHomingInSuperHipDrop(const char* pName) const {
-    return !_FC4->isExist(pName) ? false : _FC4->getBit(pName, 3);
+    return !mMessageEffectTable->isExist(pName) ? false : mMessageEffectTable->getBit(pName, 3);
 }
 
 bool MarioActor::selectNotHomingSensor(const HitSensor* pSensor) const {
-    return !_FC4->isExist(pSensor->mHost->mName) ? false : !_FC4->getBit(pSensor->mHost->mName, 3);
+    return !mMessageEffectTable->isExist(pSensor->mHost->mName) ? false : !mMessageEffectTable->getBit(pSensor->mHost->mName, 3);
 }
 
 bool MarioActor::selectInvalidMovingCollision(const char* pName) const {
-    return !_FC4->isExist(pName) ? false : _FC4->getBit(pName, 4);
+    return !mMessageEffectTable->isExist(pName) ? false : mMessageEffectTable->getBit(pName, 4);
 }
 
 bool MarioActor::selectQuickResetBeeWallGravity(const char* pName) const {
-    return !_FC4->isExist(pName) ? false : _FC4->getBit(pName, 5);
+    return !mMessageEffectTable->isExist(pName) ? false : mMessageEffectTable->getBit(pName, 5);
 }
 
 bool MarioActor::selectJumpRushSensor(const char* pName) const {
-    return !_FC4->isExist(pName) ? false : _FC4->getBit(pName, 6);
+    return !mMessageEffectTable->isExist(pName) ? false : mMessageEffectTable->getBit(pName, 6);
 }
 
 bool MarioActor::selectDamageFireColor(const char* pName) const {
-    return _FC4->getBitOrNone(pName, 7);
+    return mMessageEffectTable->getBitOrNone(pName, 7);
 }
 
 bool MarioActor::selectWaterInOutEffect(const char* pName) const {
-    return _FC4->getBitOrNone(pName, 8);
+    return mMessageEffectTable->getBitOrNone(pName, 8);
 }
 
 bool MarioActor::selectOnDamageRush(const char* pName) const {
-    return _FC4->getBitOrNone(pName, 9);
+    return mMessageEffectTable->getBitOrNone(pName, 9);
 }
 
 bool MarioActor::selectTiltPress(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 10);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 10);
 }
 
 bool MarioActor::selectHandyRush(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 11);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 11);
 }
 
 bool MarioActor::selectRecoverFlyMeter(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 12);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 12);
 }
 
 bool MarioActor::selectHideFlyMeter(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 13);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 13);
 }
 
 bool MarioActor::selectTeresaThru(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 14);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 14);
 }
 
 bool MarioActor::selectRebindTimer(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 15);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 15);
 }
 
 bool MarioActor::selectHipDropRush(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 16);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 16);
 }
 
 bool MarioActor::selectPushOff(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 17);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 17);
 }
 
 bool MarioActor::selectWaterInOutRush(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 18);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 18);
 }
 
 bool MarioActor::selectLandEffect(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 19);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 19);
 }
 
 bool MarioActor::selectNoShadow(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 20);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 20);
 }
 
 bool MarioActor::selectDamagePop(const HitSensor* pSensor) const {
-    return _FC4->getBitOrNone(pSensor->mHost->mName, 21);
+    return mMessageEffectTable->getBitOrNone(pSensor->mHost->mName, 21);
 }
 
 f32 MarioActor::getFaceLookHeight(const char* pName) const {
     f32 value;
-    return _FC8->getValue(pName, &value) ? value : 150.0f;
+    return mFaceHeightTable->getValue(pName, &value) ? value : 150.0f;
 }

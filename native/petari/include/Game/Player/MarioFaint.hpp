@@ -15,9 +15,9 @@ public:
     void setVec(const Vec3f&);
 
     u16 mTimer;
-    u16 _14;
-    u16 _16;
-    Vec3f _18;
+    u16 mAfterTimer;  // frames after it: no new damage
+    u16 mStep;  // update's step
+    Vec3f mVelocity;  // the slide's velocity
     bool mNoDamage;
     bool mTookDamage;
 };

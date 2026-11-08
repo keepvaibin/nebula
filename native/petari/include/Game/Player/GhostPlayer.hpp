@@ -72,20 +72,17 @@ public:
     // The frame applied and the next made current, or 0 at the last frame (where the recording stops).
     u32 receiveGhostFrame();
 
-    u32 _8C;
-    u32 _90;
     ActorCameraInfo* mCameraInfo;
     XanimePlayer* mXanimePlayer;
     XanimePlayer* mXanimePlayerUpper;
     Mtx mTargetRotationMtx;
     f32 mAnimTrackWeights[4];
     Vec3f mStartPos;
-    u32 _EC[3];  // unused
     Vec3f mTargetRotation;
     Vec3f mInitialDirection;
     bool mIsHidden;
     bool mWaitingToStart;
-    bool _112;
+    bool mSkippingLeadIn;  // the recording's frames are skipped until its fourth track's weight is 0.9 or less
     bool mKilledByStar;
     bool mIsDemoCameraActive;
     bool mHasJetTurtle;

@@ -21,7 +21,7 @@ bool Mario::doObjWarp(LiveActor* pActor) {
     WarpPod* pPod = MR::getWarpPodManager()->getPairPod(pActor);
 
     if (pPod != nullptr) {
-        mWarp->_4C = pActor;
+        mWarp->mPod = pActor;
 
         mVelocity.zero();
 
@@ -35,14 +35,14 @@ bool Mario::doObjWarp(LiveActor* pActor) {
         MR::calcActorAxisY(&axisY, pActor);
         MR::calcActorAxisY(&pairAxisY, pPod);
 
-        mWarp->_14 = pPod->mPosition + pairAxisY * 160.0f;
-        mWarp->_20 = pActor->mPosition + axisY * 160.0f;
+        mWarp->mTargetPos = pPod->mPosition + pairAxisY * 160.0f;
+        mWarp->mStartPos = pActor->mPosition + axisY * 160.0f;
 
-        MR::getRotatedAxisZ(&mWarp->_38, pPod->mRotation);
-        MR::getRotatedAxisY(&mWarp->_2C, pPod->mRotation);
+        MR::getRotatedAxisZ(&mWarp->mEndFront, pPod->mRotation);
+        MR::getRotatedAxisY(&mWarp->mEndUp, pPod->mRotation);
 
-        mWarp->_45 = pPod->mVisibilityState;
-        mWarp->_44 = pPod->mArg2;
+        mWarp->mKind = pPod->mVisibilityState;
+        mWarp->mInputFree = pPod->mArg2;
 
         stopWalk();
 
@@ -71,16 +71,16 @@ bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
 
     mActor->setBlendMtxTimer(16);
 
-    mWarp->_14 = rVec1;
-    mWarp->_20 = mPosition;
-    mWarp->_38 = rVec2;
-    mWarp->_45 = 2;
-    mWarp->_44 = false;
+    mWarp->mTargetPos = rVec1;
+    mWarp->mStartPos = mPosition;
+    mWarp->mEndFront = rVec2;
+    mWarp->mKind = 2;
+    mWarp->mInputFree = false;
 
     if (myInt != 0) {
-        mWarp->_48 = myInt;
+        mWarp->mPointFrames = myInt;
     } else {
-        mWarp->_48 = 90;
+        mWarp->mPointFrames = 90;
     }
 
     changeStatus(mWarp);
@@ -91,43 +91,42 @@ bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
 }
 
 bool Mario::isVisibleRecoveryWarpBubble() const {
-    if (isStatusActive(MarioStatus_Warp) && mWarp->_45 == 3) {
+    if (isStatusActive(MarioStatus_Warp) && mWarp->mKind == 3) {
         return true;
     }
 
     return false;
 }
 
-MarioWarp::MarioWarp(MarioActor* pActor) : MarioState(pActor, MarioStatus_Warp), _52(), _58(-1) {
-    _4C = nullptr;
-    _48 = 0;
+MarioWarp::MarioWarp(MarioActor* pActor) : MarioState(pActor, MarioStatus_Warp), mEndAnimStarted(-1) {
+    mPod = nullptr;
+    mPointFrames = 0;
 
-    _14.zero();
-    _20.zero();
-    _2C.zero();
-    _38.zero();
+    mTargetPos.zero();
+    mStartPos.zero();
+    mEndUp.zero();
+    mEndFront.zero();
 
-    _44 = false;
-    _45 = 0;
-    _50 = false;
+    mInputFree = false;
+    mKind = 0;
 
-    _54 = 0;
-    _56 = 0;
+    mEnterTimer = 0;
+    mEnterLength = 0;
 
-    _5C.zero();
-    _68.zero();
-    _74.zero();
+    mArcAxis.zero();
+    mArcCenter.zero();
+    mArcStart.zero();
 
-    _88 = 0;
-    _80 = 0.0f;
-    _84 = 0.0f;
-    _8C = 0;
+    mTimer = 0;
+    mArcStartAngle = 0.0f;
+    mArcEndAngle = 0.0f;
+    mLength = 0;
 }
 
 void MarioWarp::calcAxis() {
     Vec3f axis;
     Vec3f normal;
-    Vec3f displacement = _14 - getTrans();
+    Vec3f displacement = mTargetPos - getTrans();
     f32 distance = displacement.length();
     axis.cross(displacement, getGravityVec());
     MR::normalizeOrZero(&axis);
@@ -135,31 +134,31 @@ void MarioWarp::calcAxis() {
     normal.cross(axis, displacement);
     MR::normalizeOrZero(&normal);
     f32 angle = PI / 4.0f;
-    if (_45 == 3) {
+    if (mKind == 3) {
         angle = PI * 0.4f;
     }
 
     f32 radius = (0.5f * distance) / MR::sin(angle);
     f32 height = MR::sqrt(radius * radius - 0.5f * (0.5f * distance * distance));
-    _5C = axis;
-    _68 = midpoint + normal * height;
-    _74 = -normal * radius;
-    _84 = angle;
-    _80 = -angle;
-    _88 = radius / 25.0f;
-    if (_88 == 0) {
-        _88 = 1;
+    mArcAxis = axis;
+    mArcCenter = midpoint + normal * height;
+    mArcStart = -normal * radius;
+    mArcEndAngle = angle;
+    mArcStartAngle = -angle;
+    mTimer = radius / 25.0f;
+    if (mTimer == 0) {
+        mTimer = 1;
     }
 
-    if (_88 < 120) {
-        _88 = 120;
+    if (mTimer < 120) {
+        mTimer = 120;
     }
 
-    if (_45 == 2) {
-        _88 = _48;
+    if (mKind == 2) {
+        mTimer = mPointFrames;
     }
 
-    _8C = _88;
+    mLength = mTimer;
 }
 
 void Mario::doCubeWarp() {
@@ -191,17 +190,17 @@ void Mario::doCubeWarp() {
 
         mVelocity.zero();
         stopWalk();
-        mActor->_38C = 10;
+        mActor->mStunTimer = 10;
 
         mArrivedWarpCube = pPairCube;
-        mWarp->_14 = cubePos;
+        mWarp->mTargetPos = cubePos;
 
         MR::calcCubePos(pWarpCube, &cubePos);
-        mWarp->_20 = cubePos;
-        mWarp->_38.zero();
-        mWarp->_2C.zero();
-        mWarp->_45 = 0;
-        mWarp->_44 = 0;
+        mWarp->mStartPos = cubePos;
+        mWarp->mEndFront.zero();
+        mWarp->mEndUp.zero();
+        mWarp->mKind = 0;
+        mWarp->mInputFree = 0;
 
         stopWalk();
 
@@ -234,12 +233,12 @@ bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
 
     mActor->setBlendMtxTimer(16);
 
-    mWarp->_14 = rVec1;
-    mWarp->_20 = mPosition;
-    mWarp->_38 = rVec2;
-    mWarp->_2C.zero();
-    mWarp->_45 = 3;
-    mWarp->_44 = false;
+    mWarp->mTargetPos = rVec1;
+    mWarp->mStartPos = mPosition;
+    mWarp->mEndFront = rVec2;
+    mWarp->mEndUp.zero();
+    mWarp->mKind = 3;
+    mWarp->mInputFree = false;
 
     changeStatus(mWarp);
 
@@ -251,72 +250,71 @@ bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
 }
 
 void MarioWarp::updateJump() {
-    if (_88 == 0) {
+    if (mTimer == 0) {
         return;
     }
 
-    f32 angle = (_8C - _88 - 0.5f * _8C) / _8C;
+    f32 angle = (mLength - mTimer - 0.5f * mLength) / mLength;
     angle *= PI;
     f32 progress = (1.0f + MR::sin(angle)) / 2.0f;
-    if (_45 == 2) {
-        progress = 1.0f - static_cast< f32 >(_88 - 1) / _8C;
+    if (mKind == 2) {
+        progress = 1.0f - static_cast< f32 >(mTimer - 1) / mLength;
     }
 
     Mtx rotation;
     Vec3f offset;
-    NebulaMtxRotAxisRad(rotation, &_5C, _80 * (1.0f - progress) + _84 * progress);
-    NebulaMtxMultVecSR(rotation, &_74, &offset);
-    Vec3f position = _68 + offset;
+    NebulaMtxRotAxisRad(rotation, &mArcAxis, mArcStartAngle * (1.0f - progress) + mArcEndAngle * progress);
+    NebulaMtxMultVecSR(rotation, &mArcStart, &offset);
+    Vec3f position = mArcCenter + offset;
     f32 followRate = 0.5f;
-    if (_45 == 2) {
+    if (mKind == 2) {
         followRate = 1.0f;
     }
 
-    if (_45 == 3) {
-        f32 remaining = static_cast< f32 >(_88) / _8C;
+    if (mKind == 3) {
+        f32 remaining = static_cast< f32 >(mTimer) / mLength;
         followRate = (1.0f - remaining) + followRate * remaining;
-        position = position * remaining + _14 * (1.0f - remaining);
+        position = position * remaining + mTargetPos * (1.0f - remaining);
     }
 
     addTrans((position - getTrans()) * followRate, "Module");
-    if (_45 == 2) {
-        getPlayer()->setFrontVecKeepUp(_38, 0.2f);
+    if (mKind == 2) {
+        getPlayer()->setFrontVecKeepUp(mEndFront, 0.2f);
     }
 }
 
 bool MarioWarp::start() {
-    _52 = 0;
-    _58 = 0;
-    switch (_45) {
+    mEndAnimStarted = 0;
+    switch (mKind) {
     case 0:
     case 2:
-        _54 = 1;
+        mEnterTimer = 1;
         break;
     case 1:
-        _54 = 60;
+        mEnterTimer = 60;
         break;
     case 3:
-        _54 = 40;
+        mEnterTimer = 40;
         break;
     }
 
-    _56 = _54;
-    if (_45 == 3) {
+    mEnterLength = mEnterTimer;
+    if (mKind == 3) {
         playEffect("引き戻し泡");
     }
 
-    if (_45 == 1) {
+    if (mKind == 1) {
         playEffect("ワープポッドブラー");
         playSound("ワープポッド入り");
     }
 
-    if (_45 == 2) {
+    if (mKind == 2) {
         playSound("声小ジャンプ");
     } else {
         playSound("声慌て");
     }
 
-    switch (_45) {
+    switch (mKind) {
     case 0:
         break;
     case 3:
@@ -330,15 +328,15 @@ bool MarioWarp::start() {
         break;
     }
 
-    mActor->_F44 = 0;
+    mActor->mBindOn = 0;
     const Vec3f& position = mActor->mPosition;
     addTrans(position - getTrans(), "Module");
     update();
-    if (_45 == 3 && getPlayerMode() != 1) {
-        mActor->_A6E = 2;
+    if (mKind == 3 && getPlayerMode() != 1) {
+        mActor->mBlurState = 2;
     }
 
-    if (!_44) {
+    if (!mInputFree) {
         getPlayer()->mMovementStates.spinBlocked = true;
     }
 
@@ -346,51 +344,51 @@ bool MarioWarp::start() {
 }
 
 bool MarioWarp::update() {
-    if (!_44) {
+    if (!mInputFree) {
         getPlayer()->mMovementStates.spinBlocked = true;
         getPlayer()->mMovementStates.inputLocked = true;
     }
 
     clearVelocity();
-    if (_54) {
-        if (_45 == 1 || _45 == 3) {
+    if (mEnterTimer) {
+        if (mKind == 1 || mKind == 3) {
             playSound("引き戻し基本");
         }
 
-        if (_45 == 1) {
+        if (mKind == 1) {
             playSound("ワープポッド移動");
         }
 
-        _54--;
-        Vec3f displacement = _20 - getTrans();
-        addTrans(displacement * (1.0f - static_cast< f32 >(_54) / _56), "Module");
-        if (_54 == 0) {
+        mEnterTimer--;
+        Vec3f displacement = mStartPos - getTrans();
+        addTrans(displacement * (1.0f - static_cast< f32 >(mEnterTimer) / mEnterLength), "Module");
+        if (mEnterTimer == 0) {
             calcAxis();
-            if (_45 == 1 && getPlayerMode() != 6) {
+            if (mKind == 1 && getPlayerMode() != 6) {
                 MarioActor* actor = mActor;
-                actor->_481 = true;
+                actor->mHiddenByDemo = true;
                 actor->updateHand();
                 actor->updateFace();
             }
         }
 
-        if (_4C != nullptr) {
-            MR::getWarpPodManager()->startEventCamera(_4C);
+        if (mPod != nullptr) {
+            MR::getWarpPodManager()->startEventCamera(mPod);
         }
 
         return true;
     }
 
     updateJump();
-    if (_45 == 0) {
-        Vec3f offset = getTrans() - _20;
-        Vec3f direction = _14 - _20;
+    if (mKind == 0) {
+        Vec3f offset = getTrans() - mStartPos;
+        Vec3f direction = mTargetPos - mStartPos;
         MR::normalize(&direction);
         f32 distance = MR::vecKillElement(offset, direction, &offset);
-        addTrans((_20 + direction * distance) - getTrans(), "Module");
+        addTrans((mStartPos + direction * distance) - getTrans(), "Module");
     }
 
-    switch (_45) {
+    switch (mKind) {
     case 2:
         break;
     case 0:
@@ -399,11 +397,11 @@ bool MarioWarp::update() {
     case 1:
     case 3: {
         s32 volume;
-        if (_88 == 0) {
+        if (mTimer == 0) {
             volume = 0;
         } else {
-            f32 halfway = _8C / 2.0f;
-            f32 elapsed = _8C - _88;
+            f32 halfway = mLength / 2.0f;
+            f32 elapsed = mLength - mTimer;
             if (elapsed < halfway) {
                 volume = 100.0f * (elapsed / halfway);
             } else {
@@ -421,7 +419,7 @@ bool MarioWarp::update() {
 
         playSound("引き戻し基本");
         playSound("引き戻し浮遊", volume);
-        if (_45 == 1) {
+        if (mKind == 1) {
             playSound("ワープポッド移動");
         }
 
@@ -429,18 +427,18 @@ bool MarioWarp::update() {
     }
     }
 
-    if (_58 == 1 && !isAnimationRun("ポッドワープ終了")) {
+    if (mEndAnimStarted == 1 && !isAnimationRun("ポッドワープ終了")) {
         return false;
     }
 
-    if (_88 == 0) {
-        if (_45 == 1 && getPlayerMode() != 6) {
-            if (_58 != 1) {
+    if (mTimer == 0) {
+        if (mKind == 1 && getPlayerMode() != 6) {
+            if (mEndAnimStarted != 1) {
                 playSound("ワープポッド出");
             }
 
-            _58 = 1;
-            mActor->_481 = false;
+            mEndAnimStarted = 1;
+            mActor->mHiddenByDemo = false;
             changeAnimation("ポッドワープ終了");
             WarpPodMgr* manager = MR::getWarpPodManager();
             if (manager != nullptr) {
@@ -450,7 +448,7 @@ bool MarioWarp::update() {
             return false;
         }
     } else {
-        _88--;
+        mTimer--;
     }
 
     return true;
@@ -463,7 +461,7 @@ bool MarioWarp::close() {
     player->mMoveLockTimer = 16;
     stopAnimation(nullptr);
     changeAnimation(nullptr, "基本");
-    switch (_45) {
+    switch (mKind) {
     case 0:
         playSound("惑星貫通終了");
         break;
@@ -480,20 +478,20 @@ bool MarioWarp::close() {
         break;
     }
 
-    mActor->_F44 = 1;
+    mActor->mBindOn = 1;
     WarpCubeMgr* cubes = static_cast< WarpCubeMgr* >(MR::getAreaObjManager("WarpCube"));
     if (cubes != nullptr) {
         cubes->endEventCamera();
     }
 
-    if (_45 != 1) {
+    if (mKind != 1) {
         WarpPodMgr* pods = MR::getWarpPodManager();
         if (pods != nullptr) {
             pods->endEventCamera();
         }
     } else {
-        if (_88 != 0 || getPlayerMode() == 6) {
-            mActor->_481 = false;
+        if (mTimer != 0 || getPlayerMode() == 6) {
+            mActor->mHiddenByDemo = false;
             WarpPodMgr* pods = MR::getWarpPodManager();
             if (pods != nullptr) {
                 pods->endEventCamera();
@@ -502,22 +500,22 @@ bool MarioWarp::close() {
 
         WarpPodMgr* pods = MR::getWarpPodManager();
         if (pods != nullptr) {
-            pods->notifyWarpEnd(static_cast< WarpPod* >(_4C));
+            pods->notifyWarpEnd(static_cast< WarpPod* >(mPod));
         }
     }
 
-    switch (_45) {
+    switch (mKind) {
     case 0: {
         playSound("声中ジャンプ");
         const MarioConstTable* table = mActor->getConst().getTable();
-        getPlayer()->tryForcePowerJump(_2C * table->mWarpPodJumpY + _38 * table->mWarpPodJumpX, false);
+        getPlayer()->tryForcePowerJump(mEndUp * table->mWarpPodJumpY + mEndFront * table->mWarpPodJumpX, false);
         break;
     }
 
     case 3: {
         MR::endGlobalEventCamera("引き戻し", -1, true);
         if (getPlayerMode() != 1) {
-            mActor->_A6E = 0;
+            mActor->mBlurState = 0;
         }
 
         getPlayer()->mMovementStates.onGround = false;
@@ -533,17 +531,17 @@ bool MarioWarp::close() {
     }
     case 1:
         if (getPlayerMode() != 1) {
-            mActor->_A6E = 0;
+            mActor->mBlurState = 0;
         }
 
         if (getPlayerMode() != 6) {
             playSound("声中ジャンプ");
-            getPlayer()->tryForcePowerJump(_2C * 12.0f + _38 * 5.0f, false);
+            getPlayer()->tryForcePowerJump(mEndUp * 12.0f + mEndFront * 5.0f, false);
         }
 
         break;
     case 2:
-        getPlayer()->setFrontVecKeepUp(_38);
+        getPlayer()->setFrontVecKeepUp(mEndFront);
         break;
     }
 
@@ -553,6 +551,6 @@ bool MarioWarp::close() {
         getPlayer()->mMovementStates.inputLocked = false;
     }
 
-    _4C = nullptr;
+    mPod = nullptr;
     return true;
 }

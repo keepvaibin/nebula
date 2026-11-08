@@ -12,7 +12,7 @@ public:
     virtual bool close();
     virtual bool update();
 
-    u16 _12;
-    u16 _14;
-    Vec3f _18;
+    u16 mTimer;  // frames in the step
+    u16 mStep;  // update's step
+    Vec3f mVelocity;  // the flow's velocity
 };

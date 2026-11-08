@@ -18,6 +18,4 @@ public:
     Vec3f mFrontVec2;
     Vec3f mSideVec2;
 
-    f32 _50;
-    f32 _54;
 };

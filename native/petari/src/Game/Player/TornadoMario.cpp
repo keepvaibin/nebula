@@ -61,9 +61,7 @@ void TornadoMario::show() {
         mIsVisible = true;
         MR::startBck(this, "MarioTornadoStart");
         MR::startBtk(this, "MarioTornadoStart");
-        _8E = false;
         MR::showModel(this);
-        _8C = true;
     }
 }
 

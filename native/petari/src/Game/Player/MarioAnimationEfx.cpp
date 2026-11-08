@@ -150,7 +150,7 @@ void MarioAnimator::stageInCheck() {
 }
 
 void MarioAnimator::throwCheck() {
-    if (mActor->_38C == 0 && getStickP() && !getPlayer()->mMovementStates.jumping) {
+    if (mActor->mStunTimer == 0 && getStickP() && !getPlayer()->mMovementStates.jumping) {
         stopAnimation(nullptr);
     }
 }

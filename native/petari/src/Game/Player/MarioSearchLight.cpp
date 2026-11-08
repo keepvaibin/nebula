@@ -25,15 +25,15 @@
 #include "Game/System/NebulaArena.hpp"
 #include <nebula_math.h>
 
-MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "サーチライト", "SearchLightCone", nullptr, -1, 0), _9C(), _A0(), _A4() {
+MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "サーチライト", "SearchLightCone", nullptr, -1, 0), mBeamDistance(), mHitTimer(), mTarget() {
 }
 
 void MarioSearchLight::init(const TableIter& rParam1) {
     PartsModel::init(rParam1);
     initHitSensor(1);
-    _9C = 0.0f;
-    _A4 = nullptr;
-    _A0 = 0;
+    mBeamDistance = 0.0f;
+    mTarget = nullptr;
+    mHitTimer = 0;
     MR::addHitSensorCallback(this, "eye", ATYPE_EYE, 4, 100.0f);
 }
 
@@ -50,41 +50,41 @@ void MarioSearchLight::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (pReceiver != _A4) {
+    if (pReceiver != mTarget) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
-    _A4 = pReceiver;
-    _A0 = 30;
+    mTarget = pReceiver;
+    mHitTimer = 30;
 }
 
 void MarioSearchLight::updateHitSensor(HitSensor* pSensor) {
     Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
 
-    Vec3f frontPosition = mPosition + frontVec * _9C;
+    Vec3f frontPosition = mPosition + frontVec * mBeamDistance;
 
     pSensor->mPosition.x = frontPosition.x;
     pSensor->mPosition.y = frontPosition.y;
     pSensor->mPosition.z = frontPosition.z;
 
-    _9C += 80.0f;
-    if (_9C > 2000.0f) {
-        _9C = 0.0f;
+    mBeamDistance += 80.0f;
+    if (mBeamDistance > 2000.0f) {
+        mBeamDistance = 0.0f;
     }
 
-    if (_A4 != nullptr) {
-        if (!_A4->mValidByHost) {
-            _A4 = nullptr;
+    if (mTarget != nullptr) {
+        if (!mTarget->mValidByHost) {
+            mTarget = nullptr;
         }
     }
 
-    if (_A0 != 0) {
-        _A0--;
+    if (mHitTimer != 0) {
+        mHitTimer--;
     }
 
-    if (_A0 == 0) {
-        _A4 = nullptr;
+    if (mHitTimer == 0) {
+        mTarget = nullptr;
     }
 }
 

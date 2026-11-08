@@ -5,13 +5,8 @@
 
 struct MatrixMap {
     const char* mName;
-    u32 _4;
-    u8* _8;
-};
-
-struct MatrixSelectList {
-    u8 mCount;
-    const char* _4[32];
+    u32 mBits;      // one nibble per column, the first column highest
+    u8* mValues;    // the nibbles unpacked (tables built with values)
 };
 
 struct MatrixValueTable {
@@ -21,7 +16,8 @@ struct MatrixValueTable {
 
 class MatrixControl : public NameObj {
 public:
-    MatrixControl(const char*, MatrixMap*, MatrixSelectList*, s32);
+    // `values`: the rows' nibbles are values (getValue); otherwise only bits (getBit).
+    MatrixControl(const char* pName, MatrixMap* pMap, bool values);
 
     virtual ~MatrixControl();
 
@@ -31,12 +27,8 @@ public:
     bool isExist(const char*) const;
     bool getBitOrNone(const char*, u8) const;
 
-    MatrixMap* _C;
-    MatrixSelectList* _10;
-    MR::NameIndex mIndex;  // a row's name to its index in _C
-    s32 _18;
-    bool _1C;
-    bool _1D;
+    MatrixMap* mMap;
+    MR::NameIndex mIndex;  // a row's name to its index in mMap
 };
 
 class MatrixValueGetter : public NameObj {
@@ -47,6 +39,6 @@ public:
 
     bool getValue(const char*, f32*) const;
 
-    MatrixValueTable* _C;
-    MR::NameIndex mIndex;  // a row's name to its index in _C
+    MatrixValueTable* mTable;
+    MR::NameIndex mIndex;  // a row's name to its index in mTable
 };

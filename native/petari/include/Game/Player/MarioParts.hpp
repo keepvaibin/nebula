@@ -9,5 +9,5 @@ public:
 
     virtual void init(const TableIter&);
 
-    const char* _9C;
+    const char* mEffectName;  // the effect keeper's name, set before init
 };

@@ -201,7 +201,7 @@ void Mario::updateOnimasu() {
                 bool insideY = MR::isInRange(localPosition.y, -320.0f, 320.0f);
                 bool insideZ = MR::isInRange(localPosition.z, -320.0f, 320.0f);
                 if (insideY && insideZ) {
-                    mActor->_3B4 = axisX;
+                    mActor->mPressAxis = axisX;
                     mActor->setPress(0, 0);
                 } else {
                     if (insideZ) {
@@ -223,7 +223,7 @@ void Mario::updateOnimasu() {
                 bool insideX = MR::isInRange(localPosition.x, -320.0f, 320.0f);
                 bool insideZ = MR::isInRange(localPosition.z, -320.0f, 320.0f);
                 if (insideX && insideZ) {
-                    mActor->_3B4 = axisY;
+                    mActor->mPressAxis = axisY;
                     if (gravityY < 0.0f) {
                         mActor->setPress(0, 0);
                     }
@@ -247,7 +247,7 @@ void Mario::updateOnimasu() {
                 bool insideX = MR::isInRange(localPosition.x, -320.0f, 320.0f);
                 bool insideY = MR::isInRange(localPosition.y, -320.0f, 320.0f);
                 if (insideX && insideY) {
-                    mActor->_3B4 = axisZ;
+                    mActor->mPressAxis = axisZ;
                     mActor->setPress(0, 0);
                 } else {
                     if (insideY) {

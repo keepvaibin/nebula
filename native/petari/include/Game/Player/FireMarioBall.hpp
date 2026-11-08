@@ -21,6 +21,5 @@ public:
     HitSensor* isBindedAny() const;
     bool tryToKill();
 
-    u32 _8C;
-    u16 _90;
+    u16 mBindTimer;  // frames left bound before a wall kills it
 };

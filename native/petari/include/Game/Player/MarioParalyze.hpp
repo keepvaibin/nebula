@@ -12,8 +12,8 @@ public:
     virtual bool close();
     virtual bool update();
 
-    u16 _12;
+    u16 mRecovering;  // the recovery runs: a rush or A ends it
     u16 mTimer;
-    u16 _16;
+    u16 mAfterTimer;  // frames after it: no new damage
     bool mNotDecLife;
 };

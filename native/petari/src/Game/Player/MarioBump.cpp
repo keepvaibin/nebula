@@ -62,30 +62,28 @@ void Mario::startBump(const Vec3f& rVec) {
 }
 
 MarioBump::MarioBump(MarioActor* pActor) : MarioState(pActor, MarioStatus_Bump) {
-    _12 = 0;
-    _14 = 0.0f;
-    _18.zero();
+    mBlendTimer = 0;
+    mStartSpeed = 0.0f;
 }
 
 bool MarioBump::start() {
-    _14 = getPlayer()->mWalkSpeed;
+    mStartSpeed = getPlayer()->mWalkSpeed;
 
-    MR::clamp(_14, 0.0f, 1.0f);
+    MR::clamp(mStartSpeed, 0.0f, 1.0f);
 
-    s32 blendTimer = 0x14 - static_cast< s32 >(16.0f * _14);
+    s32 blendTimer = 0x14 - static_cast< s32 >(16.0f * mStartSpeed);
 
     if (blendTimer < 4) {
         blendTimer = 4;
     }
 
     mActor->setBlendMtxTimer(static_cast< u16 >(blendTimer));
-    _12 = static_cast< u16 >(blendTimer);
+    mBlendTimer = static_cast< u16 >(blendTimer);
 
     if (isAnimationRun(nullptr)) {
         stopAnimation(nullptr);
     }
 
-    _18 = getFrontVec();
     return true;
 }
 
@@ -104,12 +102,12 @@ bool MarioBump::update() {
         getPlayer()->mWalkSpeed = val;
         getPlayer()->updateWalkSpeed();
 
-        if (_12) {
-            --_12;
+        if (mBlendTimer) {
+            --mBlendTimer;
         }
     }
 
-    if (_12 == 0) {
+    if (mBlendTimer == 0) {
         return false;
     }
 

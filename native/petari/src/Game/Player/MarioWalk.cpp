@@ -188,7 +188,7 @@ void Mario::decideSquatWalkAnimation() {
                 playEffectSRT("水波紋", 0.2f, mRippleRotate, (mGroundPos + mSideVec * 20.0f) + mGroundNorm * mRippleHeight);
             }
         }
-    } else if (mDrawStates.inWater && mActor->_37C % 64 == 0) {
+    } else if (mDrawStates.inWater && mActor->mFrameCount % 64 == 0) {
         playEffectSRT("水波紋", 0.2f, mRippleRotate, (mShadowPos + mSideVec * (MR::getRandom() - 0.5f) * 20.0f) + mGroundNorm * mRippleHeight);
     }
 
@@ -267,7 +267,7 @@ void Mario::decideWalkAnimation() {
     } else {
         getPlayer()->mActionStates.squatEnded = false;
 
-        if (getPlayer()->mTargetWalkSpeedIndex == 0 && mSwim->_1B2) {
+        if (getPlayer()->mTargetWalkSpeedIndex == 0 && mSwim->mDeepWater) {
             bool prepare = !isPlayerModeBee();
             if (prepare) {
                 changeAnimation("飛び込み準備", 4);
@@ -346,7 +346,7 @@ void Mario::decideWalkAnimation() {
                 playEffectSRT("水波紋", 0.2f, mRippleRotate, (mGroundPos + mSideVec * 20.0f) + mGroundNorm * mRippleHeight);
             }
         }
-    } else if (mDrawStates.inWater && mActor->_37C % 64 == 0) {
+    } else if (mDrawStates.inWater && mActor->mFrameCount % 64 == 0) {
         playEffectSRT("水波紋", 0.2f, mRippleRotate, (mShadowPos + mSideVec * (MR::getRandom() - 0.5f) * 20.0f) + mGroundNorm * mRippleHeight);
     }
 
@@ -429,7 +429,7 @@ void Mario::decideWalkAnimation() {
     mSpinInertiaBlend = f5 - 1.0f;
     getAnimator()->getXanimePlayer()->changeSpeed(animationSpeed);
 
-    if (!mActor->_EA4 && mTargetWalkSpeedIndex == 0 && mActor->mHealth == 1 && mActor->mMaxHealth > 2 &&
+    if (!mActor->mInDemo && mTargetWalkSpeedIndex == 0 && mActor->mHealth == 1 && mActor->mMaxHealth > 2 &&
         (mRunningBas == nullptr || strcmp(mRunningBas, "DamageWait"))) {
         getAnimator()->getXanimePlayer()->changeTrackAnimation(3, "ダメージウエイト");
         startBas("DamageWait", false, 0.0f, 0.0f);
@@ -606,7 +606,7 @@ void Mario::updateWalkSpeed() {
         }
 
         if (mCeilSensor != nullptr && press) {
-            mActor->_3B4 = mGroundNorm;
+            mActor->mPressAxis = mGroundNorm;
             mActor->setPress(0, 0);
         }
     } else {
@@ -769,7 +769,7 @@ void Mario::updateOnPoison() {
                 }
 
                 startCamVib(0);
-                mActor->_BC4 = 1;
+                mActor->mDamageFlashTimer = 1;
             }
 
             if (mPoisonTimer < 255) {

@@ -50,7 +50,7 @@ void Mario::checkEnforceMoveInner() {
 
         mDrawStates.enforcedMove = 1;
 
-        if (!mActor->_F44) {
+        if (!mActor->mBindOn) {
             addTrans(mVelocity, nullptr);
         } else {
             bool v11 = false;
@@ -228,7 +228,7 @@ u32 Mario::moveRelativePosition(u32) {
         return 0;
     }
 
-    if (mActor->_EA4 && !isStatusActive(MarioStatus_Talk)) {
+    if (mActor->mInDemo && !isStatusActive(MarioStatus_Talk)) {
         invalidateRelativePosition();
         return 0;
     }

@@ -14,5 +14,5 @@ public:
     void getLastPos(Vec3f*);
     bool getFramePos(f32, Vec3f*, Vec3f*);
 
-    u16 _8C;
+    u16 mLastFrame;  // the frame last set (getFramePos)
 };

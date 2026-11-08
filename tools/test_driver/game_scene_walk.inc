@@ -88,11 +88,11 @@
             const u16 form = kForms[static_cast< u32 >(index) % (sizeof(kForms) / sizeof(kForms[0]))];
             // Only what this stage loaded: a form's models come with the stage's item, as in play.
             MarioActor* pPlayer = MarioAccess::getPlayerActor();
-            const bool loaded = form == PlayerMode_Invincible ? pPlayer->_9C8 != nullptr
-                                : form == PlayerMode_Ice      ? pPlayer->_9C0 != nullptr
-                                : form == PlayerMode_Bee      ? pPlayer->_9E4 != nullptr
-                                : form == PlayerMode_Teresa   ? pPlayer->_9A4 != nullptr
-                                : form == PlayerMode_Hopper   ? pPlayer->_A00 != nullptr
+            const bool loaded = form == PlayerMode_Invincible ? pPlayer->mInvincibleModel != nullptr
+                                : form == PlayerMode_Ice      ? pPlayer->mIceModel != nullptr
+                                : form == PlayerMode_Bee      ? pPlayer->mBeeModel != nullptr
+                                : form == PlayerMode_Teresa   ? pPlayer->mTeresaModel != nullptr
+                                : form == PlayerMode_Hopper   ? pPlayer->mHopperModel != nullptr
                                 : form == PlayerMode_Tornado  ? pPlayer->mTornadoMario != nullptr
                                                               : true;
             if (loaded) {

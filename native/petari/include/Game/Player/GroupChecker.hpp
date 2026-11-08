@@ -25,5 +25,4 @@ public:
     bool isExist(const NameObj*, s32);
 
     GroupChecker* mGroups[2];
-    u32 _14;
 };

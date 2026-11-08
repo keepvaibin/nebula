@@ -19,7 +19,6 @@ void EventGameOver::init(u16 eventFrame, u16 sequenceFrame) {
     MR::stopSubBGM(10);
     playSound("声最終ダメージ");
     playSound("最後の一撃");
-    _28 = 20.0f;
 }
 
 void EventGameOver::sound(u16 eventFrame, u16 sequenceFrame) {
@@ -29,9 +28,6 @@ void EventGameOver::sound(u16 eventFrame, u16 sequenceFrame) {
         MR::startSubBGM("BGM_GAMEOVER", false);
         break;
     }
-}
-
-void EventGameOver::updateAfter() {
 }
 
 void EventGameOver::reqLayout(u16 eventFrame, u16 sequenceFrame) {

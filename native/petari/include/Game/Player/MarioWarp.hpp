@@ -15,25 +15,22 @@ public:
     void calcAxis();
     void updateJump();
 
-    u8 _12;
-    Vec3f _14;
-    Vec3f _20;
-    Vec3f _2C;
-    Vec3f _38;
-    u8 _44;
-    u8 _45;
-    u32 _48;
-    LiveActor* _4C;
-    bool _50;
-    u16 _52;
-    u16 _54;
-    u16 _56;
-    u16 _58;
-    Vec3f _5C;
-    Vec3f _68;
-    Vec3f _74;
-    f32 _80;
-    f32 _84;
-    s32 _88;
-    s32 _8C;
+    Vec3f mTargetPos;  // where the warp ends
+    Vec3f mStartPos;  // where the warp starts
+    Vec3f mEndUp;  // the end's up (the power jump out)
+    Vec3f mEndFront;  // the end's front
+    u8 mInputFree;  // spin and input stay on (the pod's arg2)
+    u8 mKind;  // 0 cube, 1 pod, 2 point, 3 recovery
+    u32 mPointFrames;  // the point warp's frames (doPointWarp)
+    LiveActor* mPod;  // the warp pod (doObjWarp)
+    u16 mEnterTimer;  // frames left of the move to the start
+    u16 mEnterLength;  // the move's frames
+    u16 mEndAnimStarted;  // the end animation started
+    Vec3f mArcAxis;  // the arc's axis (calcAxis)
+    Vec3f mArcCenter;  // the arc's center
+    Vec3f mArcStart;  // the start's offset from the center
+    f32 mArcStartAngle;  // the arc's start angle
+    f32 mArcEndAngle;  // the arc's end angle
+    s32 mTimer;  // frames left of the travel
+    s32 mLength;  // the travel's frames
 };

@@ -13,7 +13,6 @@ public:
     virtual bool close();
     virtual bool start();
 
-    u16 _12;
-    const LiveActor* _14;
+    const LiveActor* mPartner;  // the actor he talks to
     bool mIsUpdate;
 };

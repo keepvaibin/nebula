@@ -28,7 +28,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
         msg = ACTMES_ENEMY_ATTACK;
     }
 
-    if (_934) {
+    if (mInRush) {
         if (!mMario->isEnableAddDamage()) {
             return false;
         }
@@ -53,9 +53,9 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
         return true;
     }
 
-    if (!_FCC && !_FCD) {
+    if (!mAttacking && !mTrampling) {
         if (!cylinderHitCheck(pSender, nullptr)) {
-            if (msg == ACTMES_ENEMY_ATTACK_FLIP_ROT && _3E5) {
+            if (msg == ACTMES_ENEMY_ATTACK_FLIP_ROT && mPunchSensorOn) {
                 Vec3f direction(pReceiver->mPosition);
                 direction -= pSender->mPosition;
                 if (MR::isNearZero(direction)) {
@@ -143,9 +143,9 @@ bool MarioActor::tryAttackMsg(u32 msg, const HitSensor* pSensor, bool* pHandled)
     case ACTMES_ENEMY_ATTACK_FIRERUN:
     case ACTMES_ENEMY_ATTACK_FIRERUN_STRONG:
         if (selectDamageFireColor(pSensor->mHost->mName)) {
-            _1B4 = true;
+            mBlueFireDamage = true;
         } else {
-            _1B4 = false;
+            mBlueFireDamage = false;
         }
 
         mMario->doFireObjHitWithInitialDamage();
@@ -232,7 +232,7 @@ bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
         break;
 
     case ACTMES_ENEMY_ATTACK_COUNTER_HIPDROP:
-        _988 = 2;
+        mTrampleJumpStep = 2;
         trampleJump(mConst->getTable()->mTrampleNormal, mConst->getTable()->mTrampleLong);
         break;
 
@@ -251,7 +251,7 @@ bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
 
 bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     mMario->resetSleepTimer();
-    if (pSender == _424) {
+    if (pSender == mTakenSensor) {
         return false;
     }
 
@@ -272,7 +272,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    if (_934) {
+    if (mInRush) {
         return MR::sendMsgPush(mRushSensor, pSender);
     }
 
@@ -339,9 +339,9 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (_934) {
+    if (mInRush) {
         if (msg == ACTMES_INHALE_BLACK_HOLE && mRushSensor->isType(ATYPE_MARIO_LAUNCHER_BIND)) {
-            if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || _934) {
+            if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || mInRush) {
                 RushEndInfo info(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f), false, 0);
                 endRush(&info);
             }
@@ -500,10 +500,10 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         tryReleaseDirect(pSender);
         break;
     case ACTMES_SHAKE_OFF_BEE:
-        _9F2 = 60;
+        mBeeStickInhibit = 60;
         break;
     case ACTMES_PUDDLE_TOUCH_GROUND:
-        _3A8 = 3;
+        mFloorMaterialHold = 3;
         break;
     case ACTMES_BOMB_TERESA_TONGUE_TOUCH:
         if (mTakeCount != 0) {
@@ -515,7 +515,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         }
 
         if (!mPlayerMode || mPlayerMode == PlayerMode_Invincible) {
-            _B94 = 2;
+            mBombTeresaTimer = 2;
             changeAnimationUpper("ハンマー投げ回転中");
             return true;
         }
@@ -529,7 +529,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 bool MarioActor::receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
-    if (_934) {
+    if (mInRush) {
         return false;
     }
 
@@ -542,9 +542,9 @@ bool MarioActor::receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
         if (!mMario->mSwim->startJet(type)) {
             return false;
         }
-    } else if (pSender != _424) {
+    } else if (pSender != mTakenSensor) {
         return false;
-    } else if (_B92 == 0) {
+    } else if (mNullAnimationKind == 0) {
         mMarioAnim->updateTakingAnimation(pSender);
     }
 
@@ -558,15 +558,15 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
     f32 radius = pSensor->mRadius;
     Vec3f delta = pSensor->mPosition - (mCenterPos + pMario->mPushVec + pMario->mPushVelocity + mVelocity);
     Vec3f radial;
-    f32 axial = MR::vecKillElement(delta, _4C4, &radial);
+    f32 axial = MR::vecKillElement(delta, mBodyDown, &radial);
     f32 spherePenetration = 100.0f + radius - delta.length();
     if (spherePenetration < 0.0f) {
         return false;
     }
 
     if (axial > -radius) {
-        f32 radialPenetration = radius + _4B0 - radial.length();
-        f32 axialPenetration = radius + _4B4 - axial;
+        f32 radialPenetration = radius + mBodyRadius - radial.length();
+        f32 axialPenetration = radius + mBodyHeight - axial;
         if (radialPenetration > 0.0f && axialPenetration > 0.0f) {
             if (pPush != nullptr) {
                 MR::normalizeOrZero(&radial);
@@ -577,7 +577,7 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
                 } else if (radialPenetration < axialPenetration) {
                     pPush->add(-radial * radialPenetration);
                 } else {
-                    pPush->add(-_4C4 * axialPenetration);
+                    pPush->add(-mBodyDown * axialPenetration);
                     pPush->add(-radial);
                 }
             }
@@ -590,13 +590,13 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
         return false;
     }
 
-    axial = MR::vecKillElement(delta, _4B8, &radial);
+    axial = MR::vecKillElement(delta, mBodyUp, &radial);
     if (axial < -radius) {
         return false;
     }
 
-    f32 radialPenetration = radius + _4B0 - radial.length();
-    f32 axialPenetration = radius + _4B4 - axial;
+    f32 radialPenetration = radius + mBodyRadius - radial.length();
+    f32 axialPenetration = radius + mBodyHeight - axial;
     if (radialPenetration > 0.0f && axialPenetration > 0.0f) {
         if (pPush != nullptr) {
             MR::normalizeOrZero(&radial);
@@ -607,7 +607,7 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
             } else if (radialPenetration < axialPenetration) {
                 pPush->add(-radial * radialPenetration);
             } else {
-                pPush->add(-_4B8 * axialPenetration);
+                pPush->add(-mBodyUp * axialPenetration);
                 pPush->add(-radial);
             }
         }

@@ -1809,8 +1809,8 @@ void Mario::playSoundTeresaFlying() {
 
     s32 timing = 100;
     if (getCurrentStatus() == 0x1C) {
-        if (mWait->_14 == 0) {
-            timing = 100 - static_cast< s32 >(mWait->_16);
+        if (mWait->mStep == 0) {
+            timing = 100 - static_cast< s32 >(mWait->mTimer);
             if (timing < 0) {
                 timing = 0;
             }

@@ -17,8 +17,7 @@ void JetTurtleShadow::calcType0(MtxPtr pMtx) {
 void JetTurtleShadow::drawType0() const {
     PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
 
-    pModel->mFlags.clear();
-    pModel->mFlags._14 = true;
+    pModel->mDrawPasses = PlayerModel::Pass_Reflection;
 
     Frame::setZScaleOffset(1.0f, 0.0f);
 
@@ -28,8 +27,7 @@ void JetTurtleShadow::drawType0() const {
 void JetTurtleShadow::drawType1() const {
     PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
 
-    pModel->mFlags.clear();
-    pModel->mFlags._19 = true;
+    pModel->mDrawPasses = PlayerModel::Pass_ScreenCoordinates;
 
     pModel->directDraw();
 }

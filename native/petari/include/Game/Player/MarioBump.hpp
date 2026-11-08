@@ -12,7 +12,6 @@ public:
     virtual bool close();
     virtual bool update();
 
-    u16 _12;
-    f32 _14;
-    Vec3f _18;
+    u16 mBlendTimer;  // frames left of the blend
+    f32 mStartSpeed;  // the walk speed at the start
 };

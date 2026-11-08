@@ -15,22 +15,21 @@ public:
     bool calcFirstVector();
     void updateJump();
 
-    u8 _11;
-    u8 _12;
-    u16 _14;
-    u16 _16;
-    u16 _18;
-    u16 _1A;
-    Vec3f _1C;
-    Vec3f _28;
-    Vec3f _34;
-    Vec3f _40;
-    Vec3f _4C;
-    Vec3f _58;
-    Vec3f _64;
-    Vec3f _70;
-    f32 _7C;
-    f32 _80;
-    f32 _84;
-    u16 _88;
+    u8 mPullBack;  // a PullBackCylinder sent him (MarioCollision)
+    u16 mTurnTimer;  // frames the front turns to mJumpFront
+    u16 mTimer;  // frames left of the pull (the sound's volume)
+    u16 mJumpLength;  // the jump's frames (200 and up)
+    u16 mStep;  // update's step
+    Vec3f mJumpFront;  // the last move's horizontal part
+    Vec3f mJumpVertical;  // the last move's vertical part
+    Vec3f mTargetPos;  // where he is taken: the last safe point
+    Vec3f mStartPos;  // where the pull started
+    Vec3f mPullBackCenter;  // the cylinder's center
+    Vec3f mPullBackUp;  // the cylinder's up
+    Vec3f mArcAxis;  // the jump arc's axis
+    Vec3f mArcDir;  // the start's direction from the target
+    f32 mArcAngle;  // the arc's angle so far
+    f32 mArcStep;  // the arc's angle per frame
+    f32 mArcRadius;  // the arc's radius
+    u16 mJumpTimer;  // frames left of the jump
 };

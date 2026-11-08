@@ -122,7 +122,7 @@ void Mario::checkHang() {
             setTrans(mFrontFloorPos, nullptr);
             setFrontVecKeepUp(-getWallNorm());
             mHang->recordWallPolygon(mFrontWallTriangle);
-            mHang->_1E = started;
+            mHang->mJustStarted = started;
         }
     } else if (back && isEnableBackHang()) {
         Vec3f position;
@@ -193,7 +193,7 @@ void Mario::checkHang() {
             }
 
             mHang->recordHangNorm(normal);
-            mHang->_1E = 0;
+            mHang->mJustStarted = 0;
         }
     } else if (side && isEnableSideHang()) {
         Vec3f position;
@@ -252,7 +252,7 @@ void Mario::checkHang() {
             }
 
             mHang->recordHangNorm(normal);
-            mHang->_1E = 0;
+            mHang->mJustStarted = 0;
         }
     }
 
@@ -481,40 +481,39 @@ bool Mario::isEnableSideHang() {
 }
 
 void MarioHang::recordWallPolygon(const Triangle* pTriangle) {
-    *_20 = *pTriangle;
+    *mWallPolygon = *pTriangle;
     mWallSensor = pTriangle->mSensor;
     Pos3f matrix;
-    MR::makeMtxWithoutScale(&matrix, *_20->getBaseInvMtx());
-    NebulaMtxMultVecSR(matrix.toMtxPtr(), _20->getNormal(0), &_28);
-    _34 = *_20->getNormal(0);
+    MR::makeMtxWithoutScale(&matrix, *mWallPolygon->getBaseInvMtx());
+    NebulaMtxMultVecSR(matrix.toMtxPtr(), mWallPolygon->getNormal(0), &mLocalNormal);
+    mWallNormal = *mWallPolygon->getNormal(0);
 }
 
 void MarioHang::recordHangNorm(const Vec3f& rNormal) {
-    _34 = rNormal;
+    mWallNormal = rNormal;
     Pos3f matrix;
-    MR::makeMtxWithoutScale(&matrix, *_20->getBaseInvMtx());
-    NebulaMtxMultVecSR(matrix.toMtxPtr(), &rNormal, &_28);
+    MR::makeMtxWithoutScale(&matrix, *mWallPolygon->getBaseInvMtx());
+    NebulaMtxMultVecSR(matrix.toMtxPtr(), &rNormal, &mLocalNormal);
 }
 
 void MarioHang::forceDrop() {
-    _1C = 1;
+    mLetGo = 1;
 }
 
 MarioHang::MarioHang(MarioActor* pActor) : MarioState(pActor, MarioStatus_Hang) {
-    _12 = 0;
-    _14 = 0;
-    _16 = 0;
+    mClimbStep = 0;
+    mTimer = 0;
+    mSlipUpTimer = 0;
     mHangTimer = 0;
-    _1A = 0;
-    _1B = 0;
-    _1C = 0;
-    _1D = 0;
-    _1E = 0;
-    _28.zero();
-    _34.zero();
+    mSlipUp = 0;
+    mClimbQueued = 0;
+    mLetGo = 0;
+    mDropQueued = 0;
+    mJustStarted = 0;
+    mLocalNormal.zero();
+    mWallNormal.zero();
     mWallSensor = nullptr;
-    _20 = new Triangle;
-    _24 = new Triangle;
+    mWallPolygon = new Triangle;
 }
 
 bool MarioHang::start() {
@@ -522,18 +521,18 @@ bool MarioHang::start() {
     stopAnimationUpper(nullptr);
     changeAnimation("崖つかまり開始", "崖つかまり中");
     mActor->setBlendMtxTimer(mActor->getConst().getTable()->mHangBlendTime);
-    _12 = 0;
-    _14 = 0;
-    _16 = 0;
-    _1B = 0;
-    _1C = 0;
-    _1D = 0;
-    _1A = 0;
+    mClimbStep = 0;
+    mTimer = 0;
+    mSlipUpTimer = 0;
+    mClimbQueued = 0;
+    mLetGo = 0;
+    mDropQueued = 0;
+    mSlipUp = 0;
     Mario* pPlayer = getPlayer();
     pPlayer->mCorrectionAngle = 0.0f;
     pPlayer->mCorrectionEaseTimer = 0;
     pPlayer->mCorrectionTurnTimer = 0;
-    mActor->_F44 = 0;
+    mActor->mBindOn = 0;
     return true;
 }
 
@@ -541,26 +540,26 @@ bool MarioHang::update() {
     getPlayer()->mDrawStates.atEdge = false;
     Pos3f matrix;
     matrix.identity();
-    MR::makeMtxWithoutScale(&matrix, *_20->getBaseMtx());
+    MR::makeMtxWithoutScale(&matrix, *mWallPolygon->getBaseMtx());
     Vec3f normal;
-    NebulaMtxMultVecSR(matrix.toMtxPtr(), &_28, &normal);
+    NebulaMtxMultVecSR(matrix.toMtxPtr(), &mLocalNormal, &normal);
     getPlayer()->setFrontVecKeepUp(-normal);
-    _34 = normal;
-    _14++;
-    if (_16) {
-        _16--;
-        if (!_16) {
-            _1A = 1;
+    mWallNormal = normal;
+    mTimer++;
+    if (mSlipUpTimer) {
+        mSlipUpTimer--;
+        if (!mSlipUpTimer) {
+            mSlipUp = 1;
         } else {
             return true;
         }
     }
 
-    if (_1A) {
+    if (mSlipUp) {
         return false;
     }
 
-    if (MR::isSameMtx(_20->getBaseMtx()->toMtxPtr(), _20->getPrevBaseMtx()->toMtxPtr())) {
+    if (MR::isSameMtx(mWallPolygon->getBaseMtx()->toMtxPtr(), mWallPolygon->getPrevBaseMtx()->toMtxPtr())) {
         if (getPlayer()->mRelativeSensor != nullptr) {
             addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
             mActor->setBlendMtxTimer(16);
@@ -568,16 +567,16 @@ bool MarioHang::update() {
             return false;
         }
     } else {
-        if (getPlayer()->mMovementStates.sideWall && _14 > 2) {
+        if (getPlayer()->mMovementStates.sideWall && mTimer > 2) {
             Vec3f movement(mActor->getLastMove());
             if (movement.dot(getPlayer()->getSideWallNorm()) < 0.0f) {
-                _1C = 1;
+                mLetGo = 1;
             }
         }
 
         Mario* pPlayer = getPlayer();
         if (pPlayer->mRelativeMove.dot(getFrontVec()) > 0.707f && getPlayer()->mFrontWallDist < 45.0f && !isAnimationRun("崖つかまり開始")) {
-            _1C = 1;
+            mLetGo = 1;
         }
     }
 
@@ -591,14 +590,14 @@ bool MarioHang::update() {
         }
     }
 
-    if (_1C) {
+    if (mLetGo) {
         addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
         mActor->setBlendMtxTimer(16);
         stopAnimation("崖つかまり中", "基本");
         return false;
     }
 
-    switch (_12) {
+    switch (mClimbStep) {
     case 0:
         if (getPlayer()->mVerticalSpeed < 160.0f) {
             if (getPlayer()->getShadowNorm().dot(getGravityVec()) < -0.707f) {
@@ -610,11 +609,11 @@ bool MarioHang::update() {
         }
 
         if (!getPlayer()->mMovementStates.onGround) {
-            _1C = 1;
+            mLetGo = 1;
         }
 
         if (getPlayer()->calcDistToCeilHead() < 80.0f) {
-            _1C = 1;
+            mLetGo = 1;
         }
 
         break;
@@ -627,7 +626,7 @@ bool MarioHang::update() {
         }
 
         playSound("声崖つかまり終了");
-        _12++;
+        mClimbStep++;
         return true;
     case 2:
         if (!getPlayer()->mMovementStates.onGround) {
@@ -642,7 +641,7 @@ bool MarioHang::update() {
         return true;
     }
 
-    if (_1C) {
+    if (mLetGo) {
         addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
         mActor->setBlendMtxTimer(16);
         stopAnimation("崖つかまり中", "基本");
@@ -658,27 +657,27 @@ bool MarioHang::update() {
     }
 
     u8 direction = 0;
-    if (!_16) {
+    if (!mSlipUpTimer) {
         direction = getPlayer()->checkStickFrontBack();
         if (getStickP() < 0.95f) {
             direction = 0;
         }
 
-        if (_1D) {
+        if (mDropQueued) {
             direction = 2;
         }
     }
 
     switch (direction) {
     case 1:
-        if (_14 > 18) {
+        if (mTimer > 18) {
             tryClimb(false);
         }
 
         break;
     case 2:
         if (isAnimationRun("崖つかまり開始") && getAnimator()->getFrame() < 20.0f) {
-            _1D = 1;
+            mDropQueued = 1;
         } else {
             addTrans(getPlayer()->mFrontVec * -100.0f, "Module");
             mActor->setBlendMtxTimer(16);
@@ -695,12 +694,12 @@ bool MarioHang::update() {
         break;
     }
 
-    if (_1B && !_12 && _14 > 18) {
-        _12 = 1;
-        _14 = 0;
+    if (mClimbQueued && !mClimbStep && mTimer > 18) {
+        mClimbStep = 1;
+        mTimer = 0;
     }
 
-    if (!_12 && _14 == 2) {
+    if (!mClimbStep && mTimer == 2) {
         playSound("声崖つかまり");
     }
 
@@ -720,13 +719,13 @@ bool MarioHang::close() {
 
     getPlayer()->setWallCancel();
     mHangTimer = 120;
-    if (_1A) {
+    if (mSlipUp) {
         getPlayer()->tryHangSlipUp();
     } else {
         getPlayer()->mActionStates.squatEnded = true;
     }
 
-    mActor->_F44 = 1;
+    mActor->mBindOn = 1;
     return true;
 }
 
@@ -741,7 +740,7 @@ bool MarioHang::notice() {
 }
 
 void MarioHang::tryClimb(bool jump) {
-    if (_12) {
+    if (mClimbStep) {
         return;
     }
 
@@ -764,7 +763,7 @@ void MarioHang::tryClimb(bool jump) {
         bool right = MR::getFirstPolyOnLineToMap(nullptr, &sideTriangle, getTrans() - getGravityVec() * 30.0f + getPlayer()->mSideVec * 15.0f,
                                                  getPlayer()->mSideVec * -55.0f);
         if (right && left) {
-            _1C = 1;
+            mLetGo = 1;
             return;
         }
 
@@ -778,45 +777,45 @@ void MarioHang::tryClimb(bool jump) {
     }
 
     if (i == 3) {
-        _1C = 1;
+        mLetGo = 1;
         return;
     }
 
     if (isAnimationRun("崖つかまり開始")) {
-        if (_1E && jump && getAnimationFrame() < 30.0f) {
-            _16 = 5;
+        if (mJustStarted && jump && getAnimationFrame() < 30.0f) {
+            mSlipUpTimer = 5;
             changeAnimationNonStop("つかまりスリップアップ準備");
         }
 
-        _1B = 1;
+        mClimbQueued = 1;
         return;
     }
 
-    _12 = 1;
-    _14 = 0;
+    mClimbStep = 1;
+    mTimer = 0;
 }
 bool MarioHang::postureCtrl(MtxPtr pMatrix) {
     Vec3f up;
     Vec3f direction(getPlayer()->mHeadVec);
-    direction += _34;
+    direction += mWallNormal;
     if (MR::isNearZero(direction)) {
         return false;
     }
 
-    if (!_12) {
-        if (MR::isSameDirection(getPlayer()->mGroundNorm, _34, 0.01f)) {
+    if (!mClimbStep) {
+        if (MR::isSameDirection(getPlayer()->mGroundNorm, mWallNormal, 0.01f)) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -_34, getPlayer()->mGroundNorm);
+        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -mWallNormal, getPlayer()->mGroundNorm);
     } else {
-        f32 blend = MR::clamp(_14 / 30.0f, 0.0f, 1.0f);
+        f32 blend = MR::clamp(mTimer / 30.0f, 0.0f, 1.0f);
         MR::vecBlendSphere(getPlayer()->mGroundNorm, getPlayer()->mHeadVec, &up, blend);
-        if (MR::isSameDirection(up, _34, 0.01f)) {
+        if (MR::isSameDirection(up, mWallNormal, 0.01f)) {
             return false;
         }
 
-        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -_34, up);
+        MR::makeMtxFrontUp(reinterpret_cast< Pos3f* >(pMatrix), -mWallNormal, up);
     }
 
     return true;

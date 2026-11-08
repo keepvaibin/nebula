@@ -15,7 +15,7 @@ public:
 
     bool move();
 
-    u16 _12;
-    u16 _14;
-    f32 _18;
+    u16 mTimer;  // frames left of the step
+    u16 mStep;  // update's step
+    f32 mVerticalSpeed;  // the hop's speed along the gravity
 };

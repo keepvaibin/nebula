@@ -24,5 +24,4 @@ GroupCheckManager::~GroupCheckManager() {
 GroupCheckManager::GroupCheckManager(const char* pName) : NameObj(pName) {
     mGroups[0] = new GroupChecker("カメサーチ対象物グループ", 0x20);
     mGroups[1] = new GroupChecker("スピニングボックス反射グループ", 0x8);
-    _14 = 2;
 }

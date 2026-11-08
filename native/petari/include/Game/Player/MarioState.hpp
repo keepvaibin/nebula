@@ -71,7 +71,7 @@ public:
 
     u32 getNoticedStatus() const;
 
-    MarioState* _8;
+    MarioState* mNextState;  // the next state in Mario's active list (MarioState.cpp walks it)
     u32 mStatusId;
-    bool _10;
+    bool mClosing;  // close is running (no re-entry)
 };

@@ -22,11 +22,11 @@ void Mario::checkWallStick() {
     }
 
     if (!checkWallJumpCode() && isEnableStickWall()) {
-        if (mActor->_334) {
+        if (mActor->mGravityJumpTimer) {
             Vec3f horizontal;
-            f32 vertical = MR::vecKillElement(mJumpVec, mActor->_240, &horizontal);
+            f32 vertical = MR::vecKillElement(mJumpVec, mActor->mGravityVec, &horizontal);
             horizontal.setLength(-0.25f);
-            mJumpVec = mActor->_240 * vertical + horizontal;
+            mJumpVec = mActor->mGravityVec * vertical + horizontal;
             return;
         }
 
@@ -72,35 +72,35 @@ s32 Mario::checkStickFrontBack() {
 }
 
 MarioWall::MarioWall(MarioActor* pActor) : MarioState(pActor, MarioStatus_Wall) {
-    _14 = 0;
-    _18 = 0;
-    _1C = 0;
-    _1D = 0;
-    _1E = 0;
-    _20 = 0.0f;
-    _24.zero();
-    _30.zero();
+    mStickTimer = 0;
+    mSlideTimer = 0;
+    mCancel = 0;
+    mOnBinderFloor = 0;
+    mIceWall = 0;
+    mSlideSpeed = 0.0f;
+    mWallVec.zero();
+    mTriangleJumpDir.zero();
 }
 
 void MarioWall::initTriangleJump() {
     Mario* player = getPlayer();
-    MR::vecKillElement(player->mJumpVec, getGravityVec(), &_30);
-    MR::normalizeOrZero(&_30);
-    _14 = 0;
+    MR::vecKillElement(player->mJumpVec, getGravityVec(), &mTriangleJumpDir);
+    MR::normalizeOrZero(&mTriangleJumpDir);
+    mStickTimer = 0;
 }
 
 u32 MarioWall::isCancel() {
     if (getPlayer()->mMovementStates.onGround) {
-        _1C = 0;
+        mCancel = 0;
     }
 
-    if (_1C && getPlayer()->mMovementStates.frontWall) {
-        if (_24.dot(getPlayer()->getWallNorm()) < mActor->getConst().getTable()->mWallStickCancelAngle) {
-            _1C = 0;
+    if (mCancel && getPlayer()->mMovementStates.frontWall) {
+        if (mWallVec.dot(getPlayer()->getWallNorm()) < mActor->getConst().getTable()->mWallStickCancelAngle) {
+            mCancel = 0;
         }
     }
 
-    return _1C;
+    return mCancel;
 }
 
 bool Mario::fixWallingPosition(bool immediate) {
@@ -243,8 +243,8 @@ bool Mario::checkWallCodeNorm(u16 code, Vec3f* pNormal, bool frontBackOnly) cons
 }
 
 void Mario::setWallCancel() {
-    mWall->_1C = 1;
-    mWall->_24 = getWallNorm();
+    mWall->mCancel = 1;
+    mWall->mWallVec = getWallNorm();
 }
 
 void Mario::keepDistFrontWall() {
@@ -302,10 +302,10 @@ bool Mario::isEnableStickWall() {
     }
 
     if (isAnimationRun("空中ひねり")) {
-        if (mActor->_945 < 25) {
+        if (mActor->mPunchFrame < 25) {
             return false;
         }
-    } else if (mActor->isPunching() && mActor->_945 < 15) {
+    } else if (mActor->isPunching() && mActor->mPunchFrame < 15) {
         return false;
     }
 
@@ -317,7 +317,7 @@ bool Mario::isEnableStickWall() {
 
     Vec3f horizontal;
     if (mMovementStates.backWall) {
-        MR::vecKillElement(mJumpVec, mActor->_240, &horizontal);
+        MR::vecKillElement(mJumpVec, mActor->mGravityVec, &horizontal);
         if (mBackWallTriangle->getNormal(0)->dot(horizontal) > 0.0f) {
             return false;
         }
@@ -370,7 +370,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    Vec3f position(mActor->_2AC);
+    Vec3f position(mActor->mHeadPos);
     f32 distance = 120.0f;
     if (mMovementStates.backWall) {
         distance = -120.0f;
@@ -384,20 +384,20 @@ bool Mario::isEnableStickWall() {
 }
 
 bool MarioWall::start() {
-    _18 = 0;
-    _20 = 0.0f;
+    mSlideTimer = 0;
+    mSlideSpeed = 0.0f;
     changeAnimation("壁くっつき");
     startPadVib(0u);
-    _1D = 0;
+    mOnBinderFloor = 0;
     initTriangleJump();
-    _1E = 0;
+    mIceWall = 0;
 
     if (getPlayerMode() == PlayerMode_Ice && getPlayer()->getWallPolygon()->mSensor->isType(0x57)) {
         MarioActor* actor = mActor;
         actor->createIceWall(getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 30.0f, getPlayer()->getWallNorm());
         playEffectRT("氷壁ジャンプ", getPlayer()->getWallNorm(), getPlayer()->getWallPos() - getPlayer()->getWallNorm() * 15.0f);
         playSound("スケート着地");
-        _1E = 1;
+        mIceWall = 1;
     }
 
     return true;
@@ -405,7 +405,7 @@ bool MarioWall::start() {
 
 bool MarioWall::update() {
     bool release = false;
-    if (mActor->_334) {
+    if (mActor->mGravityJumpTimer) {
         return false;
     }
 
@@ -413,12 +413,12 @@ bool MarioWall::update() {
         return false;
     }
 
-    if ((isStatusActiveID(MarioStatus_Rabbit) || mActor->_37C - getPlayer()->mJumpFrame < 6) && startJump()) {
+    if ((isStatusActiveID(MarioStatus_Rabbit) || mActor->mFrameCount - getPlayer()->mJumpFrame < 6) && startJump()) {
         return false;
     }
 
     if (getPlayer()->mDrawStates.binderFloorHit) {
-        if (_1D) {
+        if (mOnBinderFloor) {
             Vec3f horizontal;
             MarioActor* actor = mActor;
             if (MR::vecKillElement(actor->getLastMove(), getGravityVec(), &horizontal) < 1.0f) {
@@ -427,12 +427,12 @@ bool MarioWall::update() {
         }
 
         getPlayer()->mMovementStates.onGround = true;
-        _1D = 1;
+        mOnBinderFloor = 1;
     } else {
-        _1D = 0;
+        mOnBinderFloor = 0;
     }
 
-    _14++;
+    mStickTimer++;
     if (getPlayer()->mMovementStates.onGround && !release) {
         if (getPlayer()->mVerticalSpeed < 80.0f) {
             if (!isOnSlipGround()) {
@@ -448,19 +448,19 @@ bool MarioWall::update() {
         }
     }
 
-    if (_14 >= getActor()->getConst().getTable()->mWallReleaseTime + getActor()->getConst().getTable()->mWallStickTime) {
+    if (mStickTimer >= getActor()->getConst().getTable()->mWallReleaseTime + getActor()->getConst().getTable()->mWallStickTime) {
         release = true;
     }
 
-    if (_14 >= 3 && !getPlayer()->mMovementStates.frontWall && !getPlayer()->mMovementStates.frontWallGlancing) {
+    if (mStickTimer >= 3 && !getPlayer()->mMovementStates.frontWall && !getPlayer()->mMovementStates.frontWallGlancing) {
         release = true;
     }
 
     if (release) {
         if (!getPlayer()->mMovementStates.onGround) {
-            _1C = 1;
+            mCancel = 1;
             Vec3f normal(getPlayer()->getWallNorm());
-            _24 = normal;
+            mWallVec = normal;
             getPlayer()->setFrontVecKeepUp(-normal);
         }
 
@@ -474,7 +474,7 @@ bool MarioWall::update() {
     }
 
     if (checkTrgA() && startJump()) {
-        if (_1E) {
+        if (mIceWall) {
             playSound("スケートジャンプ");
         }
 
@@ -504,32 +504,32 @@ bool MarioWall::update() {
     switch (side) {
     case 1:
         blend = 0.7f;
-        if (_14 > getActor()->getConst().getTable()->mWallStickTime) {
-            _14 = getActor()->getConst().getTable()->mWallStickTime;
+        if (mStickTimer > getActor()->getConst().getTable()->mWallStickTime) {
+            mStickTimer = getActor()->getConst().getTable()->mWallStickTime;
         }
 
-        _18 = 0;
+        mSlideTimer = 0;
         speed = getActor()->getConst().getTable()->mWallDropSpeedStop;
         changeAnimation("壁くっつき");
         stopEffect("共通壁手擦り");
         break;
     case 2:
-        if (_1E) {
-            if (_14 < getActor()->getConst().getTable()->mWallStickTimeIce - 15) {
-                _14 = getActor()->getConst().getTable()->mWallStickTimeIce - 15;
+        if (mIceWall) {
+            if (mStickTimer < getActor()->getConst().getTable()->mWallStickTimeIce - 15) {
+                mStickTimer = getActor()->getConst().getTable()->mWallStickTimeIce - 15;
             }
-        } else if (_14 < 165) {
-            _14 = 165;
+        } else if (mStickTimer < 165) {
+            mStickTimer = 165;
         }
 
-        if (!_18) {
-            _18 = 1;
+        if (!mSlideTimer) {
+            mSlideTimer = 1;
         }
 
         stopEffect("共通壁手擦り");
         break;
     case 0:
-        if (_14 < getActor()->getConst().getTable()->mWallStickTime) {
+        if (mStickTimer < getActor()->getConst().getTable()->mWallStickTime) {
             stopEffect("共通壁手擦り");
         } else {
             if (!isAnimationRun("壁くっつき")) {
@@ -543,32 +543,32 @@ bool MarioWall::update() {
         break;
     }
 
-    if (_18) {
-        _18++;
+    if (mSlideTimer) {
+        mSlideTimer++;
     }
 
-    if (_14 < getActor()->getConst().getTable()->mWallStickTime) {
+    if (mStickTimer < getActor()->getConst().getTable()->mWallStickTime) {
         blend = 1.0f;
     }
 
-    if (_1E) {
-        if (_14 > getActor()->getConst().getTable()->mWallStickTimeIce) {
-            _1C = 1;
-            _24 = getPlayer()->getWallNorm();
+    if (mIceWall) {
+        if (mStickTimer > getActor()->getConst().getTable()->mWallStickTimeIce) {
+            mCancel = 1;
+            mWallVec = getPlayer()->getWallNorm();
             return false;
         }
 
         return true;
     }
 
-    _20 = _20 * blend + speed * (1.0f - blend);
-    addVelocity(getPlayer()->mWallTopHead, -_20);
+    mSlideSpeed = mSlideSpeed * blend + speed * (1.0f - blend);
+    addVelocity(getPlayer()->mWallTopHead, -mSlideSpeed);
     if (side <= 1) {
         f32 ratio;
-        if (_14 < getActor()->getConst().getTable()->mWallStickTime) {
+        if (mStickTimer < getActor()->getConst().getTable()->mWallStickTime) {
             ratio = 0.0f;
         } else {
-            ratio = 1.0f - (_14 - getActor()->getConst().getTable()->mWallStickTime) * getActor()->getConst().getTable()->mWallSideMoveRatio;
+            ratio = 1.0f - (mStickTimer - getActor()->getConst().getTable()->mWallStickTime) * getActor()->getConst().getTable()->mWallSideMoveRatio;
         }
 
         getPlayer()->moveWallSlide(MR::clamp(ratio, 0.0f, 1.0f));
@@ -596,13 +596,13 @@ bool MarioWall::startJump() {
     }
 
     Vec3f velocity(getPlayer()->getWallNorm());
-    _24 = velocity;
-    if (!getPlayer()->mDrawStates.wallJumpForbidden && _14 < 15 && !MR::isNearZero(_30)) {
-        f32 dot = velocity.dot(-_30);
+    mWallVec = velocity;
+    if (!getPlayer()->mDrawStates.wallJumpForbidden && mStickTimer < 15 && !MR::isNearZero(mTriangleJumpDir)) {
+        f32 dot = velocity.dot(-mTriangleJumpDir);
         if (dot < mActor->getConst().getTable()->mWallTriJumpMargin && dot > 0.0f) {
             Mtx rotation;
             Vec3f axis;
-            axis.cross(-_30, velocity);
+            axis.cross(-mTriangleJumpDir, velocity);
             NebulaMtxRotAxisRad(rotation, &axis, MR::acos(dot));
             NebulaMtxMultVec(rotation, &velocity, &velocity);
         }
@@ -612,7 +612,7 @@ bool MarioWall::startJump() {
     velocity += getGravityVec() * -mActor->getConst().getTable()->mWallJumpPowerY;
     getPlayer()->tryWallJump(velocity, true);
     playEffect("共通壁ジャンプ");
-    _1C = 1;
+    mCancel = 1;
     getPlayer()->mMovementStates.spinBlocked = false;
     return true;
 }
@@ -627,13 +627,13 @@ bool MarioWall::startBackJump(u32 type) {
         return false;
     }
 
-    _24 = velocity;
+    mWallVec = velocity;
     velocity.scale(mActor->getConst().getTable()->mWallBackJumpPowerXZ);
     velocity += getGravityVec() * -mActor->getConst().getTable()->mWallBackJumpPowerY;
     getPlayer()->tryWallJump(velocity, false);
     switch (type) {
     case 0: {
-        playEffectRTZ("結界ヒット", _24, getPlayer()->getWallPos());
+        playEffectRTZ("結界ヒット", mWallVec, getPlayer()->getWallPos());
         playSound("結界ヒット");
         Mario* player = getPlayer();
         player->mAirWalkTimer = 0;
@@ -643,7 +643,7 @@ bool MarioWall::startBackJump(u32 type) {
     }
 
     case 1:
-        playEffectRTZ("水壁ヒット", _24, getPlayer()->getWallPos());
+        playEffectRTZ("水壁ヒット", mWallVec, getPlayer()->getWallPos());
         playSound("水弾かれ");
         break;
     case 2:
@@ -652,7 +652,7 @@ bool MarioWall::startBackJump(u32 type) {
     }
 
     startPadVib(2);
-    _1C = 1;
+    mCancel = 1;
     getPlayer()->mMovementStates.spinBlocked = true;
     return true;
 }
@@ -681,7 +681,7 @@ bool Mario::fixWallingDist() {
             Vec3f correction;
             MR::vecKillElement(position - mPosition, *getGravityVec(), &correction);
             if (!MR::isNearZero(correction)) {
-                Vec3f relative(correction + mActor->_288);
+                Vec3f relative(correction + mActor->mLastPushMove);
                 if (MR::abs(relative.x) < MR::abs(correction.x)) {
                     correction.x = relative.x;
                 }

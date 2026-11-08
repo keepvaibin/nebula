@@ -20,7 +20,7 @@ bool Mario::checkPressDamage() {
             mHang->forceDrop();
         } else {
             mActor->setPress(0, 0);
-            if (mActor->_390) {
+            if (mActor->mPressTimer) {
                 return true;
             }
             mPushVec.zero();
@@ -36,7 +36,7 @@ bool Mario::checkPressDamage() {
         return true;
     }
     if (checkWallFloorCode(0x1D) && mMovementStates.onGround && getFloorCode() != 0x1D) {
-        mActor->_3B4 = mGroundNorm;
+        mActor->mPressAxis = mGroundNorm;
         mActor->setPress(4, 120);
         return true;
     }
@@ -64,7 +64,7 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
     } else {
         position = mPosition;
     }
-    if (!atCurrentPosition && !mActor->_390) {
+    if (!atCurrentPosition && !mActor->mPressTimer) {
         position += mVelocity;
     }
     f32 height;
@@ -95,14 +95,14 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
         }
         if (MR::getFirstPolyOnLineToMap(&hitPosition, &floor, origin - *ceiling.getNormal(0) * 10.0f, *ceiling.getNormal(0) * height)) {
             if (ceiling.mSensor != floor.mSensor && (MR::isSensorPressObj(ceiling.mSensor) || MR::isSensorPressObj(floor.mSensor))) {
-                if (!atCurrentPosition && !mActor->_390) {
+                if (!atCurrentPosition && !mActor->mPressTimer) {
                     if (!checkVerticalPress(true)) {
                         mVelocity.zero();
                         return false;
                     }
                     return true;
                 }
-                mActor->_3B4 = mGroundNorm;
+                mActor->mPressAxis = mGroundNorm;
                 return true;
             }
         } else if (!atCurrentPosition && MR::isSensorPressObj(ceiling.mSensor)) {
@@ -117,15 +117,15 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
             }
             Vec3f pushDirection;
             bool blended = MR::vecBlendSphere(*ceiling.getNormal(0), *floor.getNormal(0), &pushDirection, 0.5f);
-            if (!mActor->_390) {
+            if (!mActor->mPressTimer) {
                 if (mMovementStates.onGround) {
                     if (mGroundPolygon->mSensor == ceiling.mSensor) {
                         if (blended) {
                             push(pushDirection * displacement.length());
                         }
                     } else {
-                        mActor->_F48 = ceiling.mSensor;
-                        mActor->_3B4 = mGroundNorm;
+                        mActor->mPressCeilingSensor = ceiling.mSensor;
+                        mActor->mPressAxis = mGroundNorm;
                         return true;
                     }
                 } else if (blended) {
@@ -148,7 +148,7 @@ bool Mario::checkSidePressPre() {
                 return false;
             }
             if (mFrontWallTriangle->getNormal(0)->dot(*mBackWallTriangle->getNormal(0)) < -0.5f) {
-                mActor->_3B4 = getWallNorm();
+                mActor->mPressAxis = getWallNorm();
                 return true;
             }
         }
@@ -160,7 +160,7 @@ bool Mario::checkSidePressPre() {
         Vec3f horizontal;
         MR::vecKillElement(mPosition - mBackWallPos, getAirGravityVec(), &horizontal);
         if (horizontal.length() < 100.0f) {
-            mActor->_3B4 = getWallNorm();
+            mActor->mPressAxis = getWallNorm();
             return true;
         }
     }
@@ -292,7 +292,7 @@ bool Mario::checkSidePress() {
                     } else {
                         mActor->setPress(1, 0);
                     }
-                    mActor->_3B4 = firstNormal;
+                    mActor->mPressAxis = firstNormal;
                     return true;
                 }
             }

@@ -111,8 +111,7 @@ namespace NrvGhostPlayer {
     NEW_NERVE(HostTypeNrvRun, GhostPlayer, Wait);
 };  // namespace NrvGhostPlayer
 
-GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), _90(), mCameraInfo(), mXanimePlayer() {
-    _8C = 0;
+GhostPlayer::GhostPlayer(const char* pName) : LiveActor(pName), mCameraInfo(), mXanimePlayer() {
     mTargetRotation.zero();
     mKilledByStar = false;
     mPowerStarTarget = nullptr;
@@ -178,7 +177,6 @@ void GhostPlayer::init(const TableIter& rIter) {
     MR::onCalcShadowDropGravity(this, nullptr);
     initSound(6, false);
     MR::invalidateClipping(this);
-    _90 = 0;
     mCameraInfo = nullptr;
     if (MR::isValidInfo(rIter)) {
         MR::initMultiActorCamera(this, rIter, &mCameraInfo, "レース開始1");
@@ -192,7 +190,7 @@ void GhostPlayer::init(const TableIter& rIter) {
     MR::syncStageSwitchAppear(this);
     makeActorDead();
     mWaitingToStart = true;
-    _112 = true;
+    mSkippingLeadIn = true;
     MR::getRotatedAxisZ(&mInitialDirection, mRotation);
     NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
     mJetTurtleShadow = new JetTurtleShadow("カメシャドウモデル");
@@ -243,11 +241,11 @@ void GhostPlayer::control() {
         u32 packetDelayTimer = 0;
         while (true) {
             mFrame += receiveGhostFrame();
-            if (_112) {
+            if (mSkippingLeadIn) {
                 if (mXanimePlayer->mWeights[3] > 0.9f) {
                     continue;
                 }
-                _112 = false;
+                mSkippingLeadIn = false;
                 packetDelayTimer = 10;
                 continue;
             }
@@ -591,7 +589,7 @@ void GhostPlayer::draw() const {
 
     PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(this));
     model->viewCalc2();
-    model->mFlags.clear();
+    model->mDrawPasses = 0;
     model->directDraw();
     if (mHasJetTurtle) {
         mJetTurtleShadow->drawType1();

@@ -24,7 +24,6 @@ void EventFireDown::init(u16 eventFrame, u16 sequenceFrame) {
     MarioAccess::getPlayerActor()->changeGameOverAnimation();
     playSound("声最終ダメージ");
     playSound("最後の一撃");
-    _28 = 20.0f;
     MR::startPlayerDownWipe();
     MR::startMissLayout();
 }
@@ -32,10 +31,6 @@ void EventFireDown::init(u16 eventFrame, u16 sequenceFrame) {
 void EventFireDown::sound(u16 eventFrame, u16 sequenceFrame) {
     MR::setSoundVolumeSetting(2, 20);
     MR::startSubBGM("BGM_MISS", false);
-}
-
-void EventFireDown::updateAfter() {
-    setSpot(_28, _24);
 }
 
 void EventFireDown::sound2(u16 eventFrame, u16 sequenceFrame) {

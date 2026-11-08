@@ -5,7 +5,7 @@
 void Mario::startTalk(const LiveActor* pActor) {
     stopWalk();
 
-    mTalk->_14 = pActor;
+    mTalk->mPartner = pActor;
 
     changeStatus(mTalk);
 }
@@ -14,13 +14,13 @@ void Mario::endTalk() {
     closeStatus(mTalk);
 }
 
-MarioTalk::MarioTalk(MarioActor* pActor) : MarioState(pActor, MarioStatus_Talk), _14(), mIsUpdate() {
+MarioTalk::MarioTalk(MarioActor* pActor) : MarioState(pActor, MarioStatus_Talk), mPartner(), mIsUpdate() {
 }
 
 bool MarioTalk::update() {
     if (mIsUpdate) {
         Vec3f vec;
-        MR::vecKillElement(_14->mPosition - getTrans(), getAirGravityVec(), &vec);
+        MR::vecKillElement(mPartner->mPosition - getTrans(), getAirGravityVec(), &vec);
 
         if (!MR::normalizeOrZero(&vec)) {
             getPlayer()->setFrontVecKeepUp(vec, static_cast< u32 >(16));
@@ -54,8 +54,8 @@ bool MarioTalk::close() {
 }
 
 bool MarioTalk::start() {
-    bool val = mActor->_B90;
-    mActor->_B90 = false;
+    bool val = mActor->mAnimationFrozen;
+    mActor->mAnimationFrozen = false;
 
     if (mActor->mTakeCount == 0) {
         stopAnimationUpper(nullptr);
@@ -64,7 +64,7 @@ bool MarioTalk::start() {
     changeAnimationNonStop("見る");
 
     if (val) {
-        mActor->_B90 = true;
+        mActor->mAnimationFrozen = true;
     }
 
     mIsUpdate = true;

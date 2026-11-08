@@ -317,7 +317,7 @@ void Mario::updateAndClearStrideParameter() {
     mDrawStates = DrawStates();
     mHitStates = HitStates();
     if (mMovementStates.onGround) {
-        mWall->_1C = 0;
+        mWall->mCancel = 0;
     }
 
     if (mActionStates.gravityFlipPending) {
@@ -341,7 +341,7 @@ void Mario::checkKeyLock() {
         mMovementStates.inputLocked = false;
     }
 
-    if (mActor->_37C < 0x4b) {
+    if (mActor->mFrameCount < 0x4b) {
         mMovementStates.inputLocked = true;
     }
 
@@ -454,7 +454,7 @@ void Mario::doExtraServices() {
         }
     }
 
-    if (getCurrentStatus() != 0 || mActor->_3C0 != 0 || mActor->_EA4) {
+    if (getCurrentStatus() != 0 || mActor->mRemoteDemo != 0 || mActor->mInDemo) {
         mActionStates.uTurn = 0;
     }
 }
@@ -538,7 +538,7 @@ void Mario::checkForceGrounding() {
 void Mario::fixHeadFrontVecByGravity() {
     Vec3f _368Start(mGroundNorm);
 
-    if (MR::diffAngleAbs(mActor->mCamDirZ, mActor->_FA8) >= MR::toRadian(45.0f) && isStickOn()) {
+    if (MR::diffAngleAbs(mActor->mCamDirZ, mActor->mPrevCamDirZ) >= MR::toRadian(45.0f) && isStickOn()) {
         mCameraTurnHold = true;
         mDrawStates.moveDirKept = true;
 
@@ -550,7 +550,7 @@ void Mario::fixHeadFrontVecByGravity() {
         mDrawStates.moveDirKept = false;
     }
 
-    if (!mCameraTurnHold && mActor->_370) {
+    if (!mCameraTurnHold && mActor->mGravitySameAhead) {
         mDrawStates.moveDirKept = false;
     }
 
@@ -566,8 +566,8 @@ void Mario::fixHeadFrontVecByGravity() {
     f32 rotateHeadVecSpeedByGravity;
 
     if (minusGravDir.dot(mHeadVec) < 0.0f) {
-        if (mActor->_334 != 0) {
-            f32 lerpFactor = (static_cast< f32 >(mActor->_334) / 15.0f);
+        if (mActor->mGravityJumpTimer != 0) {
+            f32 lerpFactor = (static_cast< f32 >(mActor->mGravityJumpTimer) / 15.0f);
             rotateHeadVecSpeedByGravity = (lerpFactor * mActor->getConst().getTable()->mRotateHeadVecSpeedByGravityM) +
                                           ((1.0f - lerpFactor) * mActor->getConst().getTable()->mRotateHeadVecSpeedByGravityL);
         } else {
@@ -673,7 +673,7 @@ void Mario::fixHeadFrontVecByGravity() {
         MR::normalize(&mHeadVec);
     }
 
-    bool needsFix = mCameraTurnHold ? true : !mActor->_370;
+    bool needsFix = mCameraTurnHold ? true : !mActor->mGravitySameAhead;
     if (needsFix && mDrawStates.moveDirKept && !MR::isNearZero(mHeadVec - mGravityFixSideVec) && !MR::isNearZero(mHeadVec + mGravityFixSideVec)) {
         mSideVec = mGravityFixSideVec;
         MR::normalize(&mSideVec);
@@ -782,7 +782,7 @@ bool Mario::isNonFixHeadVec() const {
         return true;
     }
 
-    if (mActor->_EA5) {
+    if (mActor->mBaseMtxForced) {
         return true;
     }
 
@@ -790,7 +790,7 @@ bool Mario::isNonFixHeadVec() const {
         return false;
     }
 
-    return mActor->_EA4;
+    return mActor->mInDemo;
 }
 
 void Mario::createDirectionMtx(MtxPtr pMtx) {
@@ -1223,7 +1223,7 @@ bool Mario::isInvincible() const {
     if (mMovementStates.invincible) {
         return true;
     } else {
-        return mActor->_3D8 != false;
+        return mActor->mMorphTimer != false;
     }
 }
 
@@ -1456,7 +1456,7 @@ void Mario::writeBackPhyisicalVector() {
             rising = true;
         }
 
-        if (mActor->_334 != 0) {
+        if (mActor->mGravityJumpTimer != 0) {
             mTouchedWalls.clear();
         }
 
@@ -1518,8 +1518,8 @@ void Mario::writeBackPhyisicalVector() {
                 }
             }
         }
-    } else if (!mHitStates.slopePushed && mActor->_288.dot(mGroundNorm) < 0.707f && !MR::isNearZero(mActor->_288, 1.0f)) {
-        Vec3f stack_a4(mActor->_288);
+    } else if (!mHitStates.slopePushed && mActor->mLastPushMove.dot(mGroundNorm) < 0.707f && !MR::isNearZero(mActor->mLastPushMove, 1.0f)) {
+        Vec3f stack_a4(mActor->mLastPushMove);
         MR::normalizeOrZero(&stack_a4);
         Vec3f stack_98;
         f32 f2 = MR::vecKillElement(mVelocity, stack_a4, &stack_98);
@@ -1919,7 +1919,7 @@ void Mario::updateLookOfs() {
         return;
     }
 
-    if (mActor->_934) {
+    if (mActor->mInRush) {
         MR::vecBlend(mLookOfs, vec, &mLookOfs, 0.3f);
     }
 
@@ -2024,7 +2024,7 @@ const Vec3f* Mario::getGravityVec() const {
         if (noHopper) {
             bool noTeresa = !isPlayerModeTeresa();
             if (noTeresa && !isDamaging() && !isStatusActive(MarioStatus_Swim) && !isStatusActive(MarioStatus_Blown) &&
-                !isStatusActive(MarioStatus_13) && mJumpKind != 5 && mActor->_334 == 0 && mMovementStates.jumping && !mMovementStates.inputLocked && mAirTimer < 8) {
+                !isStatusActive(MarioStatus_13) && mJumpKind != 5 && mActor->mGravityJumpTimer == 0 && mMovementStates.jumping && !mMovementStates.inputLocked && mAirTimer < 8) {
                 return &mGroundDown;
             }
         }

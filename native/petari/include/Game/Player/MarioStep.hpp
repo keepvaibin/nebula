@@ -12,6 +12,6 @@ public:
     virtual bool close();
     virtual bool update();
 
-    f32 _14;
-    f32 _18;
+    f32 mBlendFrames;  // the step's blend frames, counted down by the walk speed
+    f32 mStartSpeed;  // the walk speed at the start
 };

@@ -17,19 +17,11 @@ public:
     bool startJump();
     bool setStickSensor(const HitSensor*);
 
-    Vec3f _14;
-    Vec3f _20;
-    Vec3f _2C;
-    Vec3f _38;
-    f32 _44;
-    Triangle* _48;
-    u32 _4C;
-    u8 _50;
-    u8 _51;
-    u8 _52;
-    u8 _53;
-    Vec3f _54;
-    Vec3f _60;
-    Vec3f _6C;
-    Vec3f _78;
+    Vec3f mStickPos;  // his point on the flower
+    Vec3f mStickDir;  // the flower center's direction to him
+    Vec3f mFlowerUp;  // the flower's up (the stick jump's direction)
+    Vec3f mFlowerPos;  // the flower sensor's center
+    f32 mFlowerRadius;  // the flower sensor's radius
+    Vec3f mPoseFront;  // the pose's front (postureCtrl)
+    Vec3f mPoseUp;  // the pose's up
 };

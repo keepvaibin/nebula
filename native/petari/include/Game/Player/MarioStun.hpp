@@ -12,8 +12,6 @@ public:
     virtual bool close();
     virtual bool update();
 
-    u8 _11;
-    u16 _12;
-    u16 _14;
-    u16 _16;
+    u16 mRecovering;  // the recovery runs: a rush or A ends it
+    u16 mRecoverTimer;  // frames until he can act (60, then 10 or 30)
 };

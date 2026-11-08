@@ -89,31 +89,28 @@ public:
     XanimeResourceTable* mResourceTable;
     XanimePlayer* mXanimePlayer;
     XanimePlayer* mXanimePlayerUpper;
-    u8 _14;
-    u8 _15;
-    u8 _16;
-    f32 _18;
-    f32 _1C;
-    f32 _20;
-    f32 _24;
-    Mtx34f _28;
-    f32 _58;
-    f32 _5C;
-    Vec3f _60;
-    bool _6C;
-    f32 _70;
-    u32 _74;
-    u16 _78;
-    Mtx34f _7C;
-    Mtx34f _AC;
-    Mtx34f _DC;
-    bool _10C;
-    bool _10D;
+    u8 mWalkState;  // the walk animation's state (from mTargetWalkSpeedIndex)
+    u8 mPrevWalkState;  // the walk state last applied (0xFF: apply again)
+    u8 mWaitPhase;  // the wait animation's phase (1, 2)
+    f32 mWalkWeights[4];  // the four walk tracks' weights
+    Mtx34f mTiltMtx;  // the upper body's tilt (setTilt)
+    f32 mTiltSide;  // the tilt to the side, smoothed
+    f32 mTiltDown;  // the look down, smoothed
+    Vec3f mTiltPrevFront;  // the front at the last tilt
+    bool mUpperRunning;  // an upper-body animation is running
+    f32 mRumblePower;  // the joint rumble's strength
+    u32 mRumbleTimer;  // frames of the joint rumble
+    u16 mWaitHoldTimer;  // frames the wait animation holds (controlWaitAnimation)
+    Mtx34f mHomingMtx;  // the homing turn (setHoming)
+    Mtx34f mHipMtx;  // the hip's rumble, or the upper body's turn
+    Mtx34f mMirrorMtx;  // the mirror's matrix (switchMirrorMode)
+    bool mMirrorChecked;  // the mirror test ran for this animation
+    bool mMirror;  // the animation is mirrored
     bool mUpperDefaultSet;
     bool mCallbackEnded;
-    f32 _110;
+    f32 mHomingAngle;  // the homing's horizontal angle, smoothed
     const char* mCurrBck;
-    f32 _118;
+    f32 mRumbleHipRot;  // last frame's hip rumble
 
     s32 mCallbackId;
     MR::NameIndex mCallbackTable;  // an animation's name to its index in marioCallbackTable

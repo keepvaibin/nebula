@@ -324,7 +324,7 @@ f32 Mario::calcDistToCeilOnPress() {
 f32 Mario::calcDistToCeilHead() {
     Triangle triangle;
     Vec3f hitPos;
-    Vec3f start = mActor->_2AC - mFrontVec * 40.0f;
+    Vec3f start = mActor->mHeadPos - mFrontVec * 40.0f;
 
     if (MR::getFirstPolyOnLineToMap(&hitPos, &triangle, start, -getAirGravityVec() * 80.0f)) {
         *getTmpPolygon() = triangle;
@@ -535,14 +535,14 @@ void Mario::checkAllWall(const Vec3f& rPosition, f32 radius) {
 
         if (isThroughWall(triangle)) {
             through = true;
-            mActor->_F44 = false;
+            mActor->mBindOn = false;
         } else {
             walls[side] = hit;
         }
     }
 
     if (!through && getPlayerMode() == PlayerMode_Teresa && !isStatusActive(MarioStatus_Recovery)) {
-        mActor->_F44 = true;
+        mActor->mBindOn = true;
     }
 
     if (count >= 1U) {
@@ -1221,9 +1221,9 @@ void Mario::checkHeadPoint() {
 
     if (isStatusActive(MarioStatus_Damage)) {
         mActor->calcHeadPos();
-        center = mActor->_2AC;
+        center = mActor->mHeadPos;
 
-        if (!mDamage->_18) {
+        if (!mDamage->mStep) {
             radius = 50.0f;
         }
 
@@ -1232,7 +1232,7 @@ void Mario::checkHeadPoint() {
 
     if (mMovementStates.launchKind) {
         mActor->calcHeadPos();
-        center = mActor->_2AC + mPrevVelocity * 2.0f;
+        center = mActor->mHeadPos + mPrevVelocity * 2.0f;
     }
 
     if (getPlayerMode() == PlayerMode_Bee && !getPlayer()->mMovementStates.slopeSlide && !getPlayer()->mMovementStates.squat &&
@@ -1241,7 +1241,7 @@ void Mario::checkHeadPoint() {
             return;
         }
 
-        center = mActor->_2AC;
+        center = mActor->mHeadPos;
     }
 
     if (isSwimming()) {
@@ -1346,7 +1346,7 @@ void Mario::calcShadowPos() {
     f32 offset = 100.0f;
     Vec3f start = mPosition - *getGravityVec() * offset;
 
-    if ((getCurrentStatus() == MarioStatus_Hang && mHang->_12 < 2) || mActor->_EA4) {
+    if ((getCurrentStatus() == MarioStatus_Hang && mHang->mClimbStep < 2) || mActor->mInDemo) {
         mActor->getRealPos("Spine1", &start);
     }
 
@@ -1474,7 +1474,7 @@ bool Mario::updateBinderInfo() {
                     }
 
                     if (mMovementStates.groundMissing) {
-                        pLastMove = &mActor->_288;
+                        pLastMove = &mActor->mLastPushMove;
 
                         if (MR::diffAngleAbsHorizontal(*pLastMove, pushDirection, getAirGravityVec()) >= 2.3561945f) {
                             if (mShadowPolygon->isValid()) {
@@ -1503,7 +1503,7 @@ bool Mario::updateBinderInfo() {
 
                         if (mMovementStates.jumping && !isRising()) {
                             Vec3f horizontal;
-                            pLastMove = &mActor->_27C;
+                            pLastMove = &mActor->mMovementMove;
 
                             if (MR::isNearZero(MR::vecKillElement(*pLastMove, getAirGravityVec(), &horizontal)) &&
                                 (mMovementStates.frontWall || mMovementStates.backWall || mMovementStates.sideWall)) {
@@ -1987,7 +1987,7 @@ bool Mario::checkGround() {
             moveBack = false;
         }
 
-        if (mActor->_288.dot(mFrontVec) < 0.0f) {
+        if (mActor->mLastPushMove.dot(mFrontVec) < 0.0f) {
             if (moveBack) {
                 addTrans(-mFrontVec * 6.0f, "no-g(back)");
             }
@@ -2002,7 +2002,7 @@ bool Mario::checkGround() {
         return false;
     }
 
-    if (!mActor->_EA4 && getCurrentStatus() != MarioStatus_Hang) {
+    if (!mActor->mInDemo && getCurrentStatus() != MarioStatus_Hang) {
         if ((mMovementStates.jumping && groundCount) || (mMovementStates.onGround && mVerticalSpeed >= 5.0f)) {
             Vec3f direction;
             f32 distance = MR::vecKillElement(mGroundPos - mShadowPos, mGroundNorm, &direction);
@@ -2120,9 +2120,9 @@ void Mario::updateCubeCode() {
             MR::calcCylinderPos(&position, pullBack);
             MR::calcCylinderUpVec(&up, pullBack);
             MarioRecovery* recovery = mRecovery;
-            recovery->_4C = position;
-            recovery->_58 = up;
-            recovery->_12 = true;
+            recovery->mPullBackCenter = position;
+            recovery->mPullBackUp = up;
+            recovery->mPullBack = true;
         }
     }
 
@@ -2160,9 +2160,9 @@ void Mario::updateCubeCode() {
         }
     }
 
-    if (MR::getAreaObj("FallsCube", mActor->_2AC) != nullptr) {
+    if (MR::getAreaObj("FallsCube", mActor->mHeadPos) != nullptr) {
         touchWater();
-        playEffectRTZ("水壁ヒット", mHeadVec, mActor->_2AC);
+        playEffectRTZ("水壁ヒット", mHeadVec, mActor->mHeadPos);
     }
 
     if (MR::getAreaObj("HeavySteeringCube", mPosition) != nullptr) {

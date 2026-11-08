@@ -155,10 +155,6 @@ bool EventSequence::isMissLayoutClosed(u16 sequenceFrame) {
     return (MR::isMissLayoutAnimEnd() && sequenceFrame > 15);
 }
 
-void EventSequence::setSpot(f32 param1, u32 param2) {
-    MR::setPlayerSpot(param1, param2);
-}
-
 void EventSequence::decLeft(u16 eventFrame, u16 sequenceFrame) {
     MR::decPlayerLeft();
 }

@@ -48,10 +48,10 @@ bool Mario::doFlipBackRoll(const Vec3f& rVec) {
 }
 
 bool MarioFlip::start() {
-    _12 = 0;
-    _14 = 0;
-    _24 = 0.0f;
-    _28 = -0.75f;
+    mTimer = 0;
+    mStep = 0;
+    mYAngle = 0.0f;
+    mYSpeed = -0.75f;
 
     changeAnimation("はねとばされ");
 
@@ -60,23 +60,23 @@ bool MarioFlip::start() {
     playEffect("ダメージ");
     startPadVib(2);
 
-    addVelocity(_18);
+    addVelocity(mVelocity);
 
     return true;
 }
 
 bool MarioFlip::update() {
-    if (_12 == 0) {
+    if (mTimer == 0) {
         changeAnimationNonStop("はねとばされ");
     }
 
-    _12++;
-    Vec3f velocity(_18);
-    Vec3f direction(_18);
+    mTimer++;
+    Vec3f velocity(mVelocity);
+    Vec3f direction(mVelocity);
     MR::normalizeOrZero(&direction);
     f32 control;
-    if (_12 < 30) {
-        control = static_cast< f32 >(_12) / 30.0f;
+    if (mTimer < 30) {
+        control = static_cast< f32 >(mTimer) / 30.0f;
     } else {
         control = 1.0f;
     }
@@ -84,51 +84,51 @@ bool MarioFlip::update() {
     Vec3f lateral;
     f32 along = MR::vecKillElement(getWorldPadDir(), direction, &lateral);
     if (along <= 0.0f) {
-        _18 += direction * mActor->mConst->getTable()->mFlipFriction3 * along * control;
+        mVelocity += direction * mActor->mConst->getTable()->mFlipFriction3 * along * control;
     }
 
-    _18 += lateral * mActor->mConst->getTable()->mFlipFriction3;
-    switch (_14) {
+    mVelocity += lateral * mActor->mConst->getTable()->mFlipFriction3;
+    switch (mStep) {
     case 0:
-        _24 += _28;
-        _28 *= 0.98f;
+        mYAngle += mYSpeed;
+        mYSpeed *= 0.98f;
         playSound("はねとばされ");
         addVelocity(velocity);
-        _18.scale(mActor->mConst->getTable()->mFlipFriction1);
-        if (_12 == mActor->mConst->getTable()->mFlipTimer1) {
-            _14++;
+        mVelocity.scale(mActor->mConst->getTable()->mFlipFriction1);
+        if (mTimer == mActor->mConst->getTable()->mFlipTimer1) {
+            mStep++;
         }
 
         break;
     case 1:
-        _24 += _28;
-        _28 *= 0.97f;
+        mYAngle += mYSpeed;
+        mYSpeed *= 0.97f;
         playSound("はねとばされ");
         if (!getPlayer()->mMovementStates.onGround) {
             return false;
         }
 
         addVelocity(velocity);
-        _18.scale(mActor->mConst->getTable()->mFlipFriction2);
-        if (_12 == mActor->getConst().getTable()->mFlipTimer1 + mActor->mConst->getTable()->mFlipTimer2) {
-            _14++;
+        mVelocity.scale(mActor->mConst->getTable()->mFlipFriction2);
+        if (mTimer == mActor->getConst().getTable()->mFlipTimer1 + mActor->mConst->getTable()->mFlipTimer2) {
+            mStep++;
         }
 
         break;
     case 2:
         addVelocity(velocity);
-        _18.scale(mActor->mConst->getTable()->mFlipFriction2);
-        _28 *= 0.97f;
+        mVelocity.scale(mActor->mConst->getTable()->mFlipFriction2);
+        mYSpeed *= 0.97f;
         playSound("はねとばされ");
-        _24 += _28;
-        if (MR::isAngleBetween(_24, -0.1f, 0.1f)) {
+        mYAngle += mYSpeed;
+        if (MR::isAngleBetween(mYAngle, -0.1f, 0.1f)) {
             changeAnimation("はねとばされ終了");
-            _14++;
+            mStep++;
         }
 
         break;
     case 3:
-        _24 = 0.0f;
+        mYAngle = 0.0f;
         if (!isAnimationRun("はねとばされ終了")) {
             return false;
         }
@@ -136,29 +136,29 @@ bool MarioFlip::update() {
         break;
     }
 
-    _24 = MR::normalizeAngleAbs(_24);
-    setYangleOffset(_24);
+    mYAngle = MR::normalizeAngleAbs(mYAngle);
+    setYangleOffset(mYAngle);
     if (getPlayer()->mMovementStates.frontWall || getPlayer()->mMovementStates.sideWall || getPlayer()->mMovementStates.backWall) {
         Vec3f normal(getPlayer()->getWallNorm());
         Vec3f tangent;
-        f32 incoming = MR::vecKillElement(_18, normal, &tangent);
+        f32 incoming = MR::vecKillElement(mVelocity, normal, &tangent);
         if (incoming < 0.0f) {
             stopAnimation(nullptr);
             changeAnimationNonStop("はねとばされ");
             playEffectTrans("壁ヒット", getPlayer()->getWallPos());
-            _18 = tangent + normal * -incoming * 1.2f;
-            addVelocity(_18, 2.0f);
-            _28 *= 1.2f;
-            getPlayer()->setFrontVecKeepUp(-_18);
+            mVelocity = tangent + normal * -incoming * 1.2f;
+            addVelocity(mVelocity, 2.0f);
+            mYSpeed *= 1.2f;
+            getPlayer()->setFrontVecKeepUp(-mVelocity);
         }
     }
 
-    if (_14 >= 1 && checkTrgA()) {
+    if (mStep >= 1 && checkTrgA()) {
         getPlayer()->tryJump();
         return false;
     }
 
-    if (_14 == 3 && getStickP() != 0.0f) {
+    if (mStep == 3 && getStickP() != 0.0f) {
         return false;
     }
 
@@ -206,33 +206,33 @@ bool Mario::doFlipLarge(const Vec3f& rVec) {
     return flipLarge(rVec);
 }
 
-MarioFlip::MarioFlip(MarioActor* pActor) : MarioState(pActor, MarioStatus_Flip), _12(), _14() {
-    _18.zero();
-    _24 = 0.0f;
-    _28 = 0.0f;
+MarioFlip::MarioFlip(MarioActor* pActor) : MarioState(pActor, MarioStatus_Flip), mTimer(), mStep() {
+    mVelocity.zero();
+    mYAngle = 0.0f;
+    mYSpeed = 0.0f;
 }
 
 void MarioFlip::setVec(const Vec3f& rVec) {
-    MR::vecKillElement(rVec, mActor->_240, &_18);
+    MR::vecKillElement(rVec, mActor->mGravityVec, &mVelocity);
 
-    if (mActor->_3E5) {
-        _18.setLength(mActor->mConst->getTable()->mSlideDistFlipSpin);
+    if (mActor->mPunchSensorOn) {
+        mVelocity.setLength(mActor->mConst->getTable()->mSlideDistFlipSpin);
     } else {
-        _18.setLength(mActor->mConst->getTable()->mSlideDistFlip);
+        mVelocity.setLength(mActor->mConst->getTable()->mSlideDistFlip);
     }
 
-    addVelocity(_18, 5.0f);
+    addVelocity(mVelocity, 5.0f);
 
-    _12 = 0;
-    _14 = 0;
-    _28 = -0.75f;
+    mTimer = 0;
+    mStep = 0;
+    mYSpeed = -0.75f;
 
     if (getPlayer()->isStatusActive(MarioStatus_Hang)) {
-        _18.zero();
+        mVelocity.zero();
         return;
     }
 
-    getPlayer()->setFrontVecKeepUp(-_18);
+    getPlayer()->setFrontVecKeepUp(-mVelocity);
 }
 
 bool MarioFlip::close() {
