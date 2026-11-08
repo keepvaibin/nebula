@@ -3376,65 +3376,66 @@ bool hidden_window_mode_enabled() {
 
 NativeSettingsView build_native_settings_view();
 
+void native_settings_test_frame(std::uint32_t frame) {
+    // GALAXY_TEST_SETTINGS_OPEN=<page>[:<frame>]: hidden test runs open the menu on that page once, at that game
+    // frame.
+    static int test_page = -1;
+    static unsigned long test_frame = 0u;
+    static const bool test_read = [] {
+        char value[32]{};
+        std::size_t length = 0u;
+        if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_open) == 0 && length > 1u) {
+            char* end = nullptr;
+            test_page = static_cast<int>(std::strtol(value, &end, 10));
+            if (end != nullptr && *end == ':') test_frame = std::strtoul(end + 1, nullptr, 10);
+        }
+        return true;
+    }();
+    (void)test_read;
+    static bool test_opened = false;
+    if (test_page >= 0 && !test_opened && frame >= test_frame) {
+        test_opened = true;
+        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+        s_native_settings_tab.store(static_cast<unsigned>(test_page) % kNativeSettingsTabCount, std::memory_order_relaxed);
+        s_native_settings_row.store(0u, std::memory_order_relaxed);
+        set_native_settings_visible(true);
+    }
+    // GALAXY_TEST_SETTINGS_KEYS=<frame>:<key>,...: keys pressed in the menu at those game frames (up, down, left,
+    // right, enter, esc, tab, backspace, space; f1 opens and closes the menu).
+    static const std::vector<std::pair<unsigned long, std::uintptr_t>> test_keys = [] {
+        std::vector<std::pair<unsigned long, std::uintptr_t>> keys;
+        static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
+        std::size_t length = 0u;
+        if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_keys) != 0 || length <= 1u) return keys;
+        static constexpr std::pair<std::string_view, std::uintptr_t> kNames[] = {
+            {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
+            {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
+        std::string_view rest(value);
+        while (!rest.empty()) {
+            const std::size_t comma = rest.find(',');
+            const std::string_view item = rest.substr(0, comma);
+            rest = comma == std::string_view::npos ? std::string_view() : rest.substr(comma + 1u);
+            const std::size_t colon = item.find(':');
+            if (colon == std::string_view::npos) continue;
+            const unsigned long at = std::strtoul(std::string(item.substr(0, colon)).c_str(), nullptr, 10);
+            for (const auto& [name, key] : kNames) {
+                if (item.substr(colon + 1u) == name) keys.emplace_back(at, key);
+            }
+        }
+        return keys;
+    }();
+    static std::size_t next_key = 0u;
+    while (next_key < test_keys.size() && frame >= test_keys[next_key].first) {
+        handle_native_settings_key(test_keys[next_key].second, false);
+        ++next_key;
+    }
+}
+
 void draw_native_settings_overlay(UiCanvas& renderer) {
     poll_dlss_download();
     {
-        // GALAXY_TEST_SETTINGS_OPEN=<page>[:<present>]: hidden test runs open the menu on that page
-        // once, at that present.
-        static int test_page = -1;
-        static unsigned long test_present = 0u;
-        static const bool test_read = [] {
-            char value[32]{};
-            std::size_t length = 0u;
-            if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_open) == 0 && length > 1u) {
-                char* end = nullptr;
-                test_page = static_cast<int>(std::strtol(value, &end, 10));
-                if (end != nullptr && *end == ':') test_present = std::strtoul(end + 1, nullptr, 10);
-            }
-            return true;
-        }();
-        (void)test_read;
         static unsigned long presents = 0u;
-        static bool test_opened = false;
-        if (test_page >= 0 && !test_opened && ++presents >= test_present) {
-            test_opened = true;
-            const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-            s_native_settings_tab.store(static_cast<unsigned>(test_page) % kNativeSettingsTabCount,
-                                        std::memory_order_relaxed);
-            s_native_settings_row.store(0u, std::memory_order_relaxed);
-            set_native_settings_visible(true);
-        }
-        // GALAXY_TEST_SETTINGS_KEYS=<present>:<key>,...: keys pressed in the menu at those presents (up, down, left,
-        // right, enter, esc, tab, backspace, space; f1 opens and closes the menu).
-        static const std::vector<std::pair<unsigned long, std::uintptr_t>> test_keys = [] {
-            std::vector<std::pair<unsigned long, std::uintptr_t>> keys;
-            static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
-            std::size_t length = 0u;
-            if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_settings_keys) != 0 || length <= 1u) return keys;
-            static constexpr std::pair<std::string_view, std::uintptr_t> kNames[] = {
-                {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
-                {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
-            std::string_view rest(value);
-            while (!rest.empty()) {
-                const std::size_t comma = rest.find(',');
-                const std::string_view item = rest.substr(0, comma);
-                rest = comma == std::string_view::npos ? std::string_view() : rest.substr(comma + 1u);
-                const std::size_t colon = item.find(':');
-                if (colon == std::string_view::npos) continue;
-                const unsigned long at = std::strtoul(std::string(item.substr(0, colon)).c_str(), nullptr, 10);
-                for (const auto& [name, key] : kNames) {
-                    if (item.substr(colon + 1u) == name) keys.emplace_back(at, key);
-                }
-            }
-            return keys;
-        }();
-        static unsigned long key_presents = 0u;
-        static std::size_t next_key = 0u;
-        ++key_presents;
-        while (next_key < test_keys.size() && key_presents >= test_keys[next_key].first) {
-            handle_native_settings_key(test_keys[next_key].second, false);
-            ++next_key;
-        }
+        ++presents;
         // GALAXY_TEST_WINDOW_SIZES=<present>:<width>x<height>,...: the window resized at those presents, whatever is
         // open (a live resize).
         struct TestSize {
@@ -3459,7 +3460,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             return sizes;
         }();
         static std::size_t next_size = 0u;
-        while (next_size < test_sizes.size() && key_presents >= test_sizes[next_size].at) {
+        while (next_size < test_sizes.size() && presents >= test_sizes[next_size].at) {
             test_resize_window(test_sizes[next_size].width, test_sizes[next_size].height);
             ++next_size;
         }

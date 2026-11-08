@@ -2102,6 +2102,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     if (frame >= kBootFrames) {
         end_boot_fast("start's frames run out");
     }
+    galaxy::render::host_window::native_settings_test_frame(frame);
     {
         // While the start runs ahead, one frame a display period goes to the screen.
         bool present = true;
