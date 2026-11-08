@@ -14,7 +14,8 @@ public:
     /// @brief Creates a new `XanimeFrameCtrl`.
     XanimeFrameCtrl();
 
-    s32 _14;
+    // Frames left to blend in from the previous animation's pose.
+    s32 mInterpoleFrame;
 };
 
 class XanimePlayer {
@@ -76,27 +77,32 @@ public:
 
     Model* mModel;
     ModelData* mModelData;
-    f32 _08;
+    // XanimeCore's blend from the frozen pose (0) to the new animation (1).
+    f32 mInterpoleRatio;
+    // XanimeCore::mPoseBlendRatio: blend from last frame's pose (0) to this frame's (1); 1 once an animation ran (walk lowers it).
     f32 _0C;
     f32 mWeights[4];
+    // The frame control in use: _24[mNextFrameCtrlIndex] once swapFrameCtrl ran.
     XanimeFrameCtrl* _20;
     XanimeFrameCtrl _24[2];
+    // Index into _24 of the running animation's control.
     u8 _54;
-    u8 _55;
+    u8 mNextFrameCtrlIndex;
     const char* mCurrentBckName;
     const XanimeGroupInfo* mDefaultAnimation;
     const XanimeGroupInfo* mCurrentAnimation;
     const XanimeGroupInfo* mPrevAnimation;
-    const XanimeGroupInfo* _68;
+    // Started by the next updateAfterMovement.
+    const XanimeGroupInfo* mPendingAnimation;
     XanimeCore* mCore;
     XanimeResourceTable* mResourceTable;
     XanimeGroupInfo* mSimpleGroup;
-    s32 _78;
-    bool _7C;
-    bool _7D;
+    bool mIsStarted;
+    bool mHasDefaultAnimation;
+    // A one-shot or hold animation that ended returns to the default one (the rush states clear it).
     bool _7E;
-    bool _7F;
-    bool _80;
-    f32 _84;
-    bool _88;
+    bool mIsPrepared;
+    // The frame before this movement's update, read until calcAnm.
+    f32 mPrevFrame;
+    bool mHasPrevFrame;
 };

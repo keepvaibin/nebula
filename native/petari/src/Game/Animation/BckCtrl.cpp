@@ -162,7 +162,7 @@ void BckCtrlFunction::reflectBckCtrlData(const BckCtrlData& rData, XanimePlayer*
     if (rData.mStartFrame >= 0 && rData.mStartFrame <= pFrameCtrl->getEnd()) {
         pFrameCtrl->setStart(rData.mStartFrame);
         pFrameCtrl->setLoop(rData.mStartFrame);
-        pPlayer->_84 = pPlayer->_20->getFrame();
+        pPlayer->mPrevFrame = pFrameCtrl->getFrame();
     }
 
     if (rData.mEndFrame >= 0 && rData.mEndFrame <= pFrameCtrl->getEnd()) {

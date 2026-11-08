@@ -11,11 +11,12 @@ class XtransformInfo {
 public:
     XtransformInfo();
 
-    Vec3f _0;
-    Vec3f _C;
+    Vec3f mScale;
+    Vec3f mTranslate;
     Quaternion mRotation;
 };
 
+// Per-joint offsets an actor applies on top of the animation (scale, local matrices, translations).
 class XjointTransform {
 public:
     XjointTransform();
@@ -24,16 +25,18 @@ public:
         mScale.set(scale);
     }
 
-    Joint* _0;
-    u32 _4;
+    Joint* mJoint;
+    // The joint whose child list holds this one, or NEBULA_NONE32.
+    u32 mParentIndex;
     Vec3f mScale;
     Vec3f _14;
-    Vec3f _20;
+    // Added to the joint's final matrix translation (never set: always zero).
+    Vec3f mPostTranslate;
     Vec3f _2C;
     Vec3f _38;
-    TransformInfo _44;
     MtxPtr _64;
-    uintptr_t _68;
+    // A local matrix concatenated after _64 (MR::setJointTransformLocalMtx).
+    MtxPtr mLocalMtx;
     MtxPtr _6C;
 };
 
@@ -41,11 +44,13 @@ class XjointInfo {
 public:
     XjointInfo();
 
-    XtransformInfo _0;
-    XtransformInfo _28;
-    Vec3f _50;
-    f32 _5C;
-    f32 _60;
+    // The pose captured by doFreeze, blended away over XanimeCore::mInterpoleRatio.
+    XtransformInfo mFrozen;
+    // The pose this joint had last frame.
+    XtransformInfo mLast;
+    // calcBlendSpecial's per-joint blend (1 = done) and its step per frame, set by freezeCopy.
+    f32 mSpecialBlend;
+    f32 mSpecialBlendStep;
 };
 
 class XanimeTrack {
@@ -54,23 +59,23 @@ public:
     }
 
     void init();
-    void setFrame(f32 frame) {
-        _8 = frame;
-        _C = 1;
-    }
 
     f32 getWeight() const {
         return mWeight;
     }
 
-    Clip* _0;
+    Clip* mClip;
     f32 mWeight;
-    f32 _8;
-    u8 _C;
 };
 
 class XanimeCore : public MtxCalc {
 public:
+    enum ScaleMode {
+        ScaleMode_Basic = 0,
+        ScaleMode_SoftImage = 1,
+        ScaleMode_Maya = 2,
+    };
+
     XanimeCore(u32, u32, u8);
     XanimeCore(u32, XanimeCore*);
 
@@ -94,7 +99,6 @@ public:
     void initT(ModelData*);
     void reconfigJointTransform(ModelData*);
     void updateFrame();
-    void fixT(Vec3f*);
 
     void enableJointTransform(ModelData*);
 
@@ -108,17 +112,32 @@ public:
         return &mTransformList[index];
     }
 
-    u8 _4;
+private:
+    f32 sumTrackWeight() const;
+    void blendTracks(u32 joint, f32 totalWeight, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation) const;
+    void blendWithFrozenAndLast(u32 joint, f32 blend, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation);
+    void captureFrozen(u32 joint);
+    void divideParentTransformScale(MtxPtr pMtx, u32 joint) const;
+    void applyLocalMatrices(MtxPtr pMtx, u32 joint) const;
+    Vec3f calcTransformScale(const Vec3f& rScale, u32 joint) const;
+
+public:
+    // The model's ScaleMode.
+    u8 mScaleMode;
     u8 mTrackCount;
+    // Calc mode: 0 normal, 1 calcBlendSpecial only, 2 last pose through calcScaleBlendSpecial (set by the player animator).
     u8 _6;
     u32 mJointCount;
-    u16 _C;
     XjointInfo* mJointList;
     XjointTransform* mTransformList;
     XanimeTrack* mTrackList;
-    f32 _1C;
-    f32 _20;
+    // Blend from each joint's frozen pose (0) to the animation (1).
+    f32 mInterpoleRatio;
+    // Blend from last frame's pose (0) to this frame's (1).
+    f32 mPoseBlendRatio;
+    // Every track's frame as a fraction of its length.
     f32 mFrameRatio;
-    u8 _28;
-    u8 _29;
+    // doFreeze asks; the next updateFrame turns it into mIsCaptureFrozen for one calc.
+    bool mIsFreezeRequested;
+    bool mIsCaptureFrozen;
 };
