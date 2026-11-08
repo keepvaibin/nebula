@@ -36,6 +36,7 @@ namespace nw4r {
         f32 TextWriterBase< CharType >::Print(StreamType str, int length) {
             TextWriterBase< CharType > myCopy = *this;
             f32 width = myCopy.PrintImpl(str, length);
+            EndRun();
             SetCursor(myCopy.GetCursorX(), myCopy.GetCursorY());
             return width;
         }
