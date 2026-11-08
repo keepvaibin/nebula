@@ -89,7 +89,7 @@ public:
     LensFlareRing* mRing;
     LensFlareGlow* mGlow;
     LensFlareLine* mLine;
-    MR::FixedArray< BrightObjBase*, 16 > mBrightObjArray;
+    MR::InlineArray< BrightObjBase*, 16 > mBrightObjArray;
     u32 mBrightObjCount;
     struct NebulaScreenProbe* mProbes = nullptr;
     u32 mProbeCapacity = 0;

@@ -107,7 +107,7 @@ public:
     }
 
     MR::AssignableArray< SingleEmitter > mEmitters;
-    MR::Vector< MR::FixedArray< MultiEmitter*, 4 > > mChildren;
+    MR::InlineVector< MultiEmitter*, 4 > mChildren;
     MultiEmitterCallBack* mCallBack;
     MultiEmitterParticleCallBack* mParticleCallBack;
     SyncBckEffectInfo* mSyncBck;

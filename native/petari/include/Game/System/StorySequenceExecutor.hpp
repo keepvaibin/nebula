@@ -92,11 +92,11 @@ public:
     void setNextStageToAstroGalaxy(GalaxyMoveArgument*);
     void setNextStageToAstroDome(GalaxyMoveArgument*);
     const StorySequenceExecutorType::DemoSequenceInfo* isExecuteDemoLuigiMissing(const GalaxyMoveArgument*) const;
-    void getOptionalDemoForClearGalaxy(MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >*,
+    void getOptionalDemoForClearGalaxy(MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >*,
                                        const GalaxyMoveArgument*) const;
     static bool isEqualStageStopCometScheduler(const char*);
     void prepareDemoSequence(const StorySequenceExecutorType::DemoSequenceInfo*);
-    void prepareDemoSequence(const MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >&);
+    void prepareDemoSequence(const MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >&);
     void prepareDemoSequenceButlerFortressDiscover(const GalaxyMoveArgument*, const DemoFortressDiscoverCheckList&);
     bool tryStartDemo(const char*);
     bool tryStartSave();
@@ -115,7 +115,7 @@ public:
     NameObj* mSaveObj;
     const char* mStageName;  // MR::internName
     s32 mScenarioNo;
-    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > mDemoSequences;
-    MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > mDynamicDemoInfos;
+    MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > mDemoSequences;
+    MR::InlineVector< StorySequenceExecutorType::DemoSequenceInfo, 8 > mDynamicDemoInfos;
     bool mIsSaveStarted;
 };

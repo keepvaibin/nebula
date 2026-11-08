@@ -150,20 +150,12 @@ namespace MR {
         s32 mSize;
     };
 
-    /// @brief A contiguous array with room for N in itself; a Vector over it past that moves to the arena it lies in.
+    /// @brief A contiguous array with room for N in itself; grow() moves it to twice the room in the arena it lies in (an
+    /// InlineVector does when full).
     template < class T, int N >
-    class FixedArray {
+    class InlineArray {
     public:
         typedef T Item;
-        template < class X >
-        struct RemovePtr {
-            typedef X Type;
-        };
-        template < class X >
-        struct RemovePtr< X* > {
-            typedef X Type;
-        };
-        typedef typename RemovePtr< T >::Type Base;
 
         void grow() {
             const s32 num = size();
@@ -221,7 +213,7 @@ namespace MR {
         s32 mMovedSize = 0;
     };
 
-    /// @brief mCount items over a storage T (AssignableArray or FixedArray); push_back and insert grow the storage when full.
+    /// @brief mCount items over a storage T (AssignableArray or InlineArray); push_back and insert grow the storage when full.
     template < class T >
     class Vector {
     public:
@@ -325,6 +317,10 @@ namespace MR {
         T mArray;
         s32 mCount;
     };
+
+    /// @brief A Vector with room for N in itself before it moves to the arena it lies in.
+    template < class T, int N >
+    using InlineVector = Vector< InlineArray< T, N > >;
 
     template < class T >
     AssignableArray< T >::~AssignableArray() {

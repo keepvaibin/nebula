@@ -95,7 +95,7 @@ public:
     Vec3f calcSensorDirection(const HitSensor*, const HitSensor*) const;
     void moveBodyAlongHead();
 
-    MR::FixedArray< HanachanParts*, 5 > mBodyParts;
+    MR::InlineArray< HanachanParts*, 5 > mBodyParts;
     Vec3f mAttackPos;
     Vec3f mFrontDir;
     bool mIsChasePlayer;

@@ -58,5 +58,5 @@ private:
     ResourceHolderManagerName2Resource* find(const char* pName);
 
 private:
-    MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
+    MR::InlineVector< ResourceHolderManagerName2Resource, 512 > mResourceArray;
 };

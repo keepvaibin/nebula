@@ -637,8 +637,8 @@ void StorySequenceExecutor::decideNextEventForClearGalaxy(GalaxyMoveArgument* pM
                 }
 
                 if (mDemoSequences.size() > 0) {
-                    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > arr =
-                        MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >();
+                    MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > arr =
+                        MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >();
 
                     getOptionalDemoForClearGalaxy(&arr, pMoveArgument);
                     prepareDemoSequence(arr);
@@ -646,8 +646,8 @@ void StorySequenceExecutor::decideNextEventForClearGalaxy(GalaxyMoveArgument* pM
                 }
             }
 
-            MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > arr =
-                MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >();
+            MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > arr =
+                MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >();
 
             getOptionalDemoForClearGalaxy(&arr, pMoveArgument);
 
@@ -801,7 +801,7 @@ const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::isExec
 }
 
 void StorySequenceExecutor::getOptionalDemoForClearGalaxy(
-    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >* pDemos, const GalaxyMoveArgument* pMoveArgument) const {
+    MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >* pDemos, const GalaxyMoveArgument* pMoveArgument) const {
     const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo = isExecuteDemoLuigiMissing(pMoveArgument);
 
     if (pDemoInfo != nullptr) {
@@ -842,7 +842,7 @@ void StorySequenceExecutor::prepareDemoSequence(const StorySequenceExecutorType:
 }
 
 void StorySequenceExecutor::prepareDemoSequence(
-    const MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >& rDemos) {
+    const MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >& rDemos) {
     for (const StorySequenceExecutorType::DemoSequenceInfo* const* ppDemoInfo = rDemos.begin(); ppDemoInfo < rDemos.end(); ppDemoInfo++) {
         prepareDemoSequence(*ppDemoInfo);
     }

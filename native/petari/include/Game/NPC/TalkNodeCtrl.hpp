@@ -31,7 +31,7 @@ public:
 class RecursiveHelper {
 public:
     inline bool hasNode(const TalkNode*) const;
-    MR::FixedArray< TalkNode*, 64 > mStack;
+    MR::InlineArray< TalkNode*, 64 > mStack;
     s32 mIndex;
 };
 

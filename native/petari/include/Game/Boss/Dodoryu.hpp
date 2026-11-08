@@ -87,7 +87,7 @@ public:
     Pos3f mBaseMtx;
     Vec3f mCameraRegisterPos;
     u32 mStateIndex;
-    MR::Vector< MR::FixedArray< DodoryuStateBase*, 16 > > mState;
+    MR::InlineVector< DodoryuStateBase*, 16 > mState;
     DodoryuSub::MoveStateHolder* mMoveStateHolder;
     DodoryuHill* mHill;
     DodoryuLeadHill* mLeadHill;
