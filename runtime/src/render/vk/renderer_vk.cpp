@@ -1606,9 +1606,10 @@ void RendererVk::report_present_timing() {
             const std::int64_t vsync = timing.vsync_ns != 0 ? timing.vsync_ns : kRetraceNs;
             const auto earliest = static_cast<std::int64_t>(past[i].earliestPresentTime);
             if (actual > requested + half_vsync && earliest > requested + half_vsync) {
-                // At most four vsyncs: a stall (a pipeline built on the draw, the app put away) is not the device's pace.
+                // At most four vsyncs, and a vsync more per late frame: a stall (the app put away, a GPU hitch) is not
+                // the device's pace.
                 const std::int64_t needed = std::clamp<std::int64_t>(earliest - timing.called[at], 0, 4 * vsync);
-                timing.lead_ns = std::max(timing.lead_ns, needed);
+                timing.lead_ns = std::max(timing.lead_ns, std::min(needed, std::max(timing.lead_ns, vsync) + vsync));
                 timing.lead_max = std::max(timing.lead_max, needed);
                 timing.on_time_run = 0;
             } else if (actual <= requested + half_vsync && ++timing.on_time_run >= 240u) {
