@@ -11,7 +11,7 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/MessageHolder.hpp"
-#include "Game/System/RenderMode.hpp"
+#include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -90,7 +90,7 @@ namespace MR {
     }
 
     bool isScreen16Per9() {
-        return isAspectRatioFlag16Per9();
+        return NebulaSystemSettings::isWidescreen();
     }
 
     void initSceneMessage() {
@@ -111,7 +111,6 @@ namespace MR {
         getGameSystemObjHolder()->mAudioSystem->stopAllSound(param1);
     }
 
-    // The output is 60 Hz: no PAL television to suggest PAL60 for.
     PlacementId* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }
