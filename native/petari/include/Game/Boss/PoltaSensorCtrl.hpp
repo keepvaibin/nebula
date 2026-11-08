@@ -7,34 +7,35 @@ class HitSensor;
 
 class PoltaSensorCtrl {
 public:
-    PoltaSensorCtrl(Polta*);
+    // The sizes of the sensor tables in PoltaSensorCtrl.cpp.
+    static const s32 cCoreSensorNum = 1;
+    static const s32 cBodySensorNum = 3;
+    static const s32 cArmSensorNum = 11;
 
-    s32 getSensorCount() const;
-    inline s32 getCoreSensorCount() const {
-        return 1;
-    };
-    inline s32 getBodySensorCount() const {
-        return 3;
-    };
-    inline s32 getArmSensorCount() const {
-        return 11;
-    };
-    void setScreamSensorSize(f32);
+    PoltaSensorCtrl(Polta* pPolta);
+
+    // Every sensor initSensor adds: the tables plus scream and head.
+    s32 getSensorCount() const {
+        return cCoreSensorNum + cBodySensorNum + 2 * cArmSensorNum + 2;
+    }
+
+    void setScreamSensorSize(f32 screamSensorSize);
     void initSensor();
-    bool isCoreSensor(const HitSensor*) const;
-    bool isBodySensor(const HitSensor*) const;
-    bool isLeftArmSensor(const HitSensor*) const;
-    bool isRightArmSensor(const HitSensor*) const;
-    bool isHeadSensor(const HitSensor*) const;
-    bool isScreamSensor(const HitSensor*) const;
+    bool isCoreSensor(const HitSensor* pSensor) const;
+    bool isBodySensor(const HitSensor* pSensor) const;
+    bool isLeftArmSensor(const HitSensor* pSensor) const;
+    bool isRightArmSensor(const HitSensor* pSensor) const;
+    bool isHeadSensor(const HitSensor* pSensor) const;
+    bool isScreamSensor(const HitSensor* pSensor) const;
 
+private:
     Polta* mPoltaPtr;
     HitSensor* mScreamSensor;
     HitSensor* mHeadSensor;
-    HitSensor** mCoreSensors;      // (1 element)
-    HitSensor** mBodySensors;      // (3 elements)
-    HitSensor** mLeftArmSensors;   // (11 elements)
-    HitSensor** mRightArmSensors;  // (11 elements)
+    HitSensor* mCoreSensors[cCoreSensorNum];
+    HitSensor* mBodySensors[cBodySensorNum];
+    HitSensor* mLeftArmSensors[cArmSensorNum];
+    HitSensor* mRightArmSensors[cArmSensorNum];
 };
 
 struct PoltaSensorListEntry {
