@@ -1,6 +1,6 @@
 #include "Game/Camera/CameraTripodPlanet.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
@@ -8,12 +8,11 @@ CameraTripodPlanet::CameraTripodPlanet(const char* pName)
     : Camera(pName), mAxis(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mAngleX(), mAngleY(), mDist(1000.0f) {
 }
 
-void CameraTripodPlanet::reset() {
-}
-
 CameraTargetObj* CameraTripodPlanet::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
 
     Pos3f mtx = mZoneMatrix;
     Pos3f inv = mtx;
@@ -22,7 +21,7 @@ CameraTargetObj* CameraTripodPlanet::calc() {
     Vec3f localWatchPos = watchPos;
     inv.mult(localWatchPos, localWatchPos);
 
-    Vec3f localPos = CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f localPos = target->getPosition();
     inv.mult(localPos, localPos);
 
     Vec3f rotUp = localPos - mWPoint;
@@ -41,7 +40,6 @@ CameraTargetObj* CameraTripodPlanet::calc() {
     rotFront.cross(rotSide, rotUp);
 
     Pos3f baseMtx;
-    baseMtx.identity();
     baseMtx.setXDir(rotSide);
     baseMtx.setYDir(rotUp);
     baseMtx.setZDir(rotFront);
@@ -72,9 +70,9 @@ CameraTargetObj* CameraTripodPlanet::calc() {
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
+    CameraLocalUtil::setWatchUpVec(this, target->getUpVec());
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraTripodPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {

@@ -1,6 +1,6 @@
 #include "Game/Camera/CameraTrundle.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
@@ -8,12 +8,11 @@ CameraTrundle::CameraTrundle(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(1.0f, 0.0f, 0.0f), mDist(2000.0f), mAngleX(), mAngleY(), mDotMax() {
 }
 
-void CameraTrundle::reset() {
-}
-
 CameraTargetObj* CameraTrundle::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
 
     Vec3f watchPoint = mWPoint;
     mZoneMatrix.mult(watchPoint, watchPoint);
@@ -21,12 +20,12 @@ CameraTargetObj* CameraTrundle::calc() {
     Vec3f side = mAxis;
     mZoneMatrix.mult33(side);
 
-    Vec3f up = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
+    Vec3f up = target->getPosition() - watchPoint;
     up.sub(side * side.dot(up));
 
     Vec3f camZ = up.cross(side);
     if (MR::isNearZero(camZ)) {
-        return CameraLocalUtil::getTarget(this);
+        return target;
     }
     MR::normalize(&camZ);
 
@@ -37,7 +36,7 @@ CameraTargetObj* CameraTrundle::calc() {
     up.cross(side, camZ);
 
     if (!MR::isNearZero(mDotMax)) {
-        f32 rate = (CameraLocalUtil::getTarget(this)->getPosition() - watchPoint).dot(side) / mDotMax;
+        f32 rate = (target->getPosition() - watchPoint).dot(side) / mDotMax;
         if (rate > 1.0f) {
             rate = 1.0f;
         }
@@ -50,11 +49,11 @@ CameraTargetObj* CameraTrundle::calc() {
     }
 
     CameraLocalUtil::setWatchPos(this, watchPos);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
+    CameraLocalUtil::setWatchUpVec(this, target->getUpVec());
     CameraLocalUtil::setPos(this, watchPos - camZ * mDist);
     CameraLocalUtil::setUpVec(this, up);
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraTrundle::setParamFromChunk(const CameraParamChunk* pChunk) {

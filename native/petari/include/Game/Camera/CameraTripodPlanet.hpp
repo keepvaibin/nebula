@@ -6,7 +6,6 @@ class CameraTripodPlanet : public Camera {
 public:
     CameraTripodPlanet(const char* pName = "三脚惑星カメラ");
 
-    virtual void reset();
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 

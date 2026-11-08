@@ -6,9 +6,9 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const f32 sPartialRate = 0.5f;
-    static const f32 sAngularVel = 0.5f;
-    static const s32 sInterpolate = 120;
+    const f32 sPartialRate = 0.5f;
+    const f32 sAngularVel = 0.5f;
+    const s32 sInterpolate = 120;
 };  // namespace
 
 CameraMedianTower::CameraMedianTower(const char* pName)
@@ -24,11 +24,13 @@ void CameraMedianTower::reset() {
 }
 
 CameraTargetObj* CameraMedianTower::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
 
     Vec3f pos;
-    pos.set(CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate);
+    pos.set(target->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate);
 
     Vec3f watchPos = mWPoint;
     mZoneMatrix.mult(watchPos, watchPos);
@@ -66,7 +68,7 @@ CameraTargetObj* CameraMedianTower::calc() {
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
     updateReset(newPos, watchPos, axis);
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraMedianTower::setParamFromChunk(const CameraParamChunk* pChunk) {

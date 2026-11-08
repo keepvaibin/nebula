@@ -1,9 +1,6 @@
 #include "Game/Camera/CameraTripodBoss.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
-
-CameraTripodBoss::~CameraTripodBoss() {
-}
+#include "Game/Camera/CameraParamChunk.hpp"
 
 CameraTripodBoss::CameraTripodBoss(const char* pName) : CameraTower(pName), mAngleY() {
 }

@@ -6,7 +6,6 @@ class CameraSlide : public Camera {
 public:
     CameraSlide(const char* pName = "スライドカメラ");
 
-    virtual void reset();
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 

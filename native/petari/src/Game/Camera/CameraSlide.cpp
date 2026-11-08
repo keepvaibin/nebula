@@ -1,14 +1,11 @@
 #include "Game/Camera/CameraSlide.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 CameraSlide::CameraSlide(const char* pName)
     : Camera(pName), mAxis(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mAngleA(0.0f), mDist(1000.0f) {
-}
-
-void CameraSlide::reset() {
 }
 
 CameraTargetObj* CameraSlide::calc() {
@@ -36,20 +33,21 @@ CameraTargetObj* CameraSlide::calc() {
     Vec3f watchPoint = mWPoint;
     mtx.mult(watchPoint, watchPoint);
 
-    Vec3f camZ = CameraLocalUtil::getTarget(this)->getPosition() - watchPoint;
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+    Vec3f camZ = target->getPosition() - watchPoint;
     Vec3f watchPos = side * side.dot(camZ) + watchPoint;
 
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
     watchPos.add(watchOffset);
 
     Vec3f pos = watchPos + front * mDist;
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
+    CameraLocalUtil::setWatchUpVec(this, target->getUpVec());
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraSlide::setParamFromChunk(const CameraParamChunk* pChunk) {
