@@ -244,12 +244,12 @@ void Mario::decideWalkSpeed() {
         }
 
         if (mTargetWalkSpeedIndex > 2) {
-            getAnimator()->getXanimePlayer()->_0C = 0.5f;
+            getAnimator()->getXanimePlayer()->mPoseBlendRatio = 0.5f;
         } else {
-            getAnimator()->getXanimePlayer()->_0C = 1.0f;
+            getAnimator()->getXanimePlayer()->mPoseBlendRatio = 1.0f;
         }
     } else {
-        f32 speed = getAnimator()->getXanimePlayer()->_0C;
+        f32 speed = getAnimator()->getXanimePlayer()->mPoseBlendRatio;
         f32 new0C = speed;
         new0C += 0.1f;
 
@@ -257,7 +257,7 @@ void Mario::decideWalkSpeed() {
             new0C = 1.0f;
         }
 
-        getAnimator()->getXanimePlayer()->_0C = new0C;
+        getAnimator()->getXanimePlayer()->mPoseBlendRatio = new0C;
     }
 }
 
@@ -474,7 +474,7 @@ void Mario::decideWalkAnimation() {
 
 void Mario::doBrakingAnimation() {
     changeAnimation("歩行制動ブレーキ", 1);
-    getAnimator()->getXanimePlayer()->_20->mAttribute = 1;
+    getAnimator()->getXanimePlayer()->mFrameCtrl->mAttribute = 1;
     if (gIsLuigi) {
         getAnimator()->getXanimePlayer()->changeSpeed(0.5f);
     }

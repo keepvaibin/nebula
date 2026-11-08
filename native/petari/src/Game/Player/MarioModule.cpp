@@ -109,7 +109,7 @@ void MarioModule::changeAnimationNonStop(const char* pAnim) {
         if (pAnim) {
             changeAnimation(pAnim);
         }
-        XanimeFrameCtrl* pFrameCtrl = mActor->mMarioAnim->mXanimePlayer->_20;
+        XanimeFrameCtrl* pFrameCtrl = mActor->mMarioAnim->mXanimePlayer->mFrameCtrl;
         if (pFrameCtrl->getAttribute() == 0) {
             pFrameCtrl->setAttribute(1);
         }
@@ -121,7 +121,7 @@ void MarioModule::changeAnimationWithAttr(const char* pAnim, u32 attribute) {
         if (pAnim) {
             changeAnimation(pAnim);
         }
-        mActor->mMarioAnim->mXanimePlayer->_20->setAttribute(attribute);
+        mActor->mMarioAnim->mXanimePlayer->mFrameCtrl->setAttribute(attribute);
     }
 }
 
@@ -253,7 +253,7 @@ void MarioModule::setJointGlobalMtx(u32 a1, MtxPtr mtx) {
     } else {
         pTransform += a1;
     }
-    pTransform->_64 = mtx;
+    pTransform->mBaseMtx = mtx;
 }
 
 void MarioModule::setYangleOffset(f32 offset) {

@@ -36,6 +36,13 @@ namespace {
         pMtx[2][3] += rTranslate.z;
     }
 
+    // Adds +0 to the translation, turning a -0 into +0 (bit identity of the matrices).
+    void addZeroTranslation(MtxPtr pMtx) {
+        pMtx[0][3] += 0.0f;
+        pMtx[1][3] += 0.0f;
+        pMtx[2][3] += 0.0f;
+    }
+
     void setTranslation(MtxPtr pMtx, const Vec3f& rTranslate) {
         pMtx[0][3] = rTranslate.x;
         pMtx[1][3] = rTranslate.y;
@@ -80,19 +87,16 @@ XjointTransform::XjointTransform() {
     mJoint = nullptr;
     mParentIndex = NEBULA_NONE32;
     mScale.set(1.0f);
-    _14.set(1.0f);
-    _64 = nullptr;
-    _6C = nullptr;
+    mExtraScale.set(1.0f);
+    mBaseMtx = nullptr;
+    mMirrorMtx = nullptr;
     mLocalMtx = nullptr;
-    mPostTranslate.x = 0.0f;
-    mPostTranslate.y = 0.0f;
-    mPostTranslate.z = 0.0f;
-    _2C.x = 0.0f;
-    _2C.y = 0.0f;
-    _2C.z = 0.0f;
-    _38.x = 0.0f;
-    _38.y = 0.0f;
-    _38.z = 0.0f;
+    mTranslateOffset.x = 0.0f;
+    mTranslateOffset.y = 0.0f;
+    mTranslateOffset.z = 0.0f;
+    mWorldTranslate.x = 0.0f;
+    mWorldTranslate.y = 0.0f;
+    mWorldTranslate.z = 0.0f;
 }
 
 void XanimeCore::shareJointTransform(const XanimeCore* pOther) {
@@ -141,7 +145,7 @@ void XanimeCore::initMember(u32 trackCount) {
     mFrameRatio = 0.0f;
     mIsFreezeRequested = false;
     mIsCaptureFrozen = false;
-    _6 = 0;
+    mCalcMode = CalcMode_Normal;
     mTrackList = new XanimeTrack[trackCount];
 
     for (u32 i = 0; i < trackCount; i++) {
@@ -358,8 +362,8 @@ void XanimeCore::applyLocalMatrices(MtxPtr pMtx, u32 joint) const {
         return;
     }
 
-    if (mTransformList[joint]._64 != nullptr) {
-        NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
+    if (mTransformList[joint].mBaseMtx != nullptr) {
+        NebulaMtxConcat(pMtx, mTransformList[joint].mBaseMtx, pMtx);
     }
 
     if (mTransformList[joint].mLocalMtx != nullptr) {
@@ -371,9 +375,9 @@ Vec3f XanimeCore::calcTransformScale(const Vec3f& rScale, u32 joint) const {
     Vec3f scale(rScale);
 
     if (mTransformList != nullptr) {
-        scale.x *= mTransformList[joint].mScale.x * mTransformList[joint]._14.x;
-        scale.y *= mTransformList[joint].mScale.y * mTransformList[joint]._14.y;
-        scale.z *= mTransformList[joint].mScale.z * mTransformList[joint]._14.z;
+        scale.x *= mTransformList[joint].mScale.x * mTransformList[joint].mExtraScale.x;
+        scale.y *= mTransformList[joint].mScale.y * mTransformList[joint].mExtraScale.y;
+        scale.z *= mTransformList[joint].mScale.z * mTransformList[joint].mExtraScale.z;
     }
 
     return scale;
@@ -396,7 +400,7 @@ void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate
     setTranslation(pMtx, rTranslate);
 
     if (mTransformList != nullptr) {
-        addTranslation(pMtx, mTransformList[joint]._2C);
+        addTranslation(pMtx, mTransformList[joint].mTranslateOffset);
     }
 
     applyScale(Skeleton::mModel, joint, pMtx, calcTransformScale(rScale, joint));
@@ -408,22 +412,22 @@ void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate
 
     NebulaMtxConcat(Skeleton::mCurrentMtx, pMtx, Skeleton::mCurrentMtx);
 
-    if (mTransformList != nullptr && mTransformList[joint]._6C != nullptr) {
+    if (mTransformList != nullptr && mTransformList[joint].mMirrorMtx != nullptr) {
         Vec3f translate;
         MR::extractMtxTrans(Skeleton::mCurrentMtx, &translate);
         MR::setMtxTrans(Skeleton::mCurrentMtx, 0.0f, 0.0f, 0.0f);
-        NebulaMtxConcat(mTransformList[joint]._6C, Skeleton::mCurrentMtx, Skeleton::mCurrentMtx);
+        NebulaMtxConcat(mTransformList[joint].mMirrorMtx, Skeleton::mCurrentMtx, Skeleton::mCurrentMtx);
         MR::setMtxTrans(Skeleton::mCurrentMtx, translate.x, translate.y, translate.z);
     }
 
     if (mTransformList != nullptr) {
-        addTranslation(Skeleton::mCurrentMtx, mTransformList[joint]._38);
+        addTranslation(Skeleton::mCurrentMtx, mTransformList[joint].mWorldTranslate);
     }
 
     NebulaMtxCopy(Skeleton::mCurrentMtx, pMtx);
 
     if (mTransformList != nullptr) {
-        addTranslation(pMtx, mTransformList[joint].mPostTranslate);
+        addZeroTranslation(pMtx);
     }
 
     Skeleton::mParentS.x = rScale.x;
@@ -470,7 +474,7 @@ void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) 
     pMtx[2][3] = rTranslate.z * rCurrentScale.z;
 
     if (mTransformList != nullptr) {
-        addTranslation(pMtx, mTransformList[joint]._2C);
+        addTranslation(pMtx, mTransformList[joint].mTranslateOffset);
     }
 
     NebulaMtxConcat(Skeleton::mCurrentMtx, pMtx, Skeleton::mCurrentMtx);
@@ -491,7 +495,7 @@ void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) 
     }
 
     if (mTransformList != nullptr) {
-        addTranslation(pMtx, mTransformList[joint].mPostTranslate);
+        addZeroTranslation(pMtx);
     }
 }
 
@@ -570,12 +574,12 @@ XtransformInfo::XtransformInfo() {
 void XanimeCore::calc() {
     Skeleton::mCurrentMtxCalc = this;
 
-    if (_6 == 1) {
+    if (mCalcMode == CalcMode_BlendSpecial) {
         calcBlendSpecial();
         return;
     }
 
-    if (_6 == 2) {
+    if (mCalcMode == CalcMode_ScaleBlendSpecial) {
         calcScaleBlendSpecial();
         return;
     }

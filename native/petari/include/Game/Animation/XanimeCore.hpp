@@ -28,16 +28,20 @@ public:
     Joint* mJoint;
     // The joint whose child list holds this one, or NEBULA_NONE32.
     u32 mParentIndex;
+    // Actor scale; divided back out of the children's matrices.
     Vec3f mScale;
-    Vec3f _14;
-    // Added to the joint's final matrix translation (never set: always zero).
-    Vec3f mPostTranslate;
-    Vec3f _2C;
-    Vec3f _38;
-    MtxPtr _64;
-    // A local matrix concatenated after _64 (MR::setJointTransformLocalMtx).
+    // A second scale multiplied in with mScale (JointRumbler, the player's arms); children keep it.
+    Vec3f mExtraScale;
+    // Added to the animated translation (the player's shoulders, arm swing and correction offset).
+    Vec3f mTranslateOffset;
+    // Added to the concatenated matrix, so children carry it (the player's joint-0 position, Maya scale only).
+    Vec3f mWorldTranslate;
+    // Concatenated first (the player's tilt, look and correction matrices), or null.
+    MtxPtr mBaseMtx;
+    // Concatenated after mBaseMtx (MR::setJointTransformLocalMtx), or null.
     MtxPtr mLocalMtx;
-    MtxPtr _6C;
+    // Applied to the concatenated matrix's rotation, translation kept (the player's mirror mode, Maya scale only), or null.
+    MtxPtr mMirrorMtx;
 };
 
 class XjointInfo {
@@ -74,6 +78,13 @@ public:
         ScaleMode_Basic = 0,
         ScaleMode_SoftImage = 1,
         ScaleMode_Maya = 2,
+    };
+
+    // What calc runs (the player animator switches it around its own model calcs).
+    enum CalcMode {
+        CalcMode_Normal = 0,
+        CalcMode_BlendSpecial = 1,
+        CalcMode_ScaleBlendSpecial = 2,
     };
 
     XanimeCore(u32, u32, u8);
@@ -125,8 +136,8 @@ public:
     // The model's ScaleMode.
     u8 mScaleMode;
     u8 mTrackCount;
-    // Calc mode: 0 normal, 1 calcBlendSpecial only, 2 last pose through calcScaleBlendSpecial (set by the player animator).
-    u8 _6;
+    // A CalcMode.
+    u8 mCalcMode;
     u32 mJointCount;
     XjointInfo* mJointList;
     XjointTransform* mTransformList;

@@ -160,7 +160,7 @@ void ModelManager::stopBva() {
 }
 
 FrameCtrl* ModelManager::getBckCtrl() const {
-    return mXanimePlayer->_20;
+    return mXanimePlayer->getFrameCtrl();
 }
 
 FrameCtrl* ModelManager::getBtkCtrl() const {
@@ -184,7 +184,7 @@ FrameCtrl* ModelManager::getBvaCtrl() const {
 }
 
 bool ModelManager::isBckStopped() const {
-    return mXanimePlayer->_24[mXanimePlayer->_54].checkState(1);
+    return mXanimePlayer->isTerminate();
 }
 
 bool ModelManager::isBtkStopped() const {
