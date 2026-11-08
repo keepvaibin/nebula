@@ -904,15 +904,15 @@ void SurfRay::updateSound() {
 }
 
 void SurfRay::updateRiderMtx() {
-    MtxPtr mtx1 = MR::getJointMtx(this, "Center");
-    Pos3f mtx;
-    mtx.setInline(mtx1);
+    MtxPtr centerMtx = MR::getJointMtx(this, "Center");
+    Pos3f riderMtx;
+    riderMtx.setInline(centerMtx);
 
-    mtx[0][3] += mtx1[0][1] * 55.0f + mtx1[0][2] * 12.0f;
-    mtx[1][3] += mtx1[1][1] * 55.0f + mtx1[1][2] * 12.0f;
-    mtx[2][3] += mtx1[2][1] * 55.0f + mtx1[2][2] * 12.0f;
+    riderMtx[0][3] += centerMtx[0][1] * 55.0f + centerMtx[0][2] * 12.0f;
+    riderMtx[1][3] += centerMtx[1][1] * 55.0f + centerMtx[1][2] * 12.0f;
+    riderMtx[2][3] += centerMtx[2][1] * 55.0f + centerMtx[2][2] * 12.0f;
 
-    MR::setBaseTRMtx(mRider, mtx);
+    MR::setBaseTRMtx(mRider, riderMtx);
 }
 
 // Probes the body, 100 ahead, 150 above, 150 to each side across gravity and 150 to each side of the board; the

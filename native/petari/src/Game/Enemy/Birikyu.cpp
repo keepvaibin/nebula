@@ -279,32 +279,32 @@ void BirikyuWithFace::init(const TableIter& rIter) {
 }
 
 void BirikyuWithFace::calcAndSetBaseMtx() {
-    Pos3f vec3;
-    vec3.identity();
+    Pos3f baseMtx;
+    baseMtx.identity();
     if (mHasRail) {
-        Vec3f vec(MR::getRailDirection(this));
+        Vec3f railDir(MR::getRailDirection(this));
         if (mIsFaceReversed) {
-            vec.negate();
+            railDir.negate();
         }
 
         if (!MR::isRailGoingToEnd(this)) {
-            vec.negate();
+            railDir.negate();
         }
 
-        Vec3f vec2(mCircleAxis);
-        if (MR::isSameDirection(vec2, vec)) {
-            MR::makeMtxSideFront(&vec3, vec, mCircleFront);
+        Vec3f axis(mCircleAxis);
+        if (MR::isSameDirection(axis, railDir)) {
+            MR::makeMtxSideFront(&baseMtx, railDir, mCircleFront);
         } else {
-            MR::makeMtxSideUp(&vec3, vec, vec2);
+            MR::makeMtxSideUp(&baseMtx, railDir, axis);
         }
     } else {
-        vec3.makeRotate(mCircleAxis, mCircleAngle);
+        baseMtx.makeRotate(mCircleAxis, mCircleAngle);
     }
 
-    vec3.mMtx[0][3] = mPosition.x;
-    vec3.mMtx[1][3] = mPosition.y;
-    vec3.mMtx[2][3] = mPosition.z;
-    MR::setBaseTRMtx(this, vec3);
+    baseMtx.mMtx[0][3] = mPosition.x;
+    baseMtx.mMtx[1][3] = mPosition.y;
+    baseMtx.mMtx[2][3] = mPosition.z;
+    MR::setBaseTRMtx(this, baseMtx);
 }
 
 f32 BirikyuWithFace::getHitRadius() const {

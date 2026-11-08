@@ -76,16 +76,16 @@ void TripodBossKillerGeneraterCircle::placementGenerater() {
         mtx.setEulerX(-MR::toRadian(mCannonPitch));
         mtx.setTrans(0.0f, 0.0f, mRadius);
 
-        Pos3f mtx2;
-        mtx2.identity();
-        mtx2.setRotate(-MR::toRadian(mCirclePitch), MR::toRadian(mAngleTable[i]), 0.0f);
-        mtx2.concat(mtx2, mtx);
-        MR::addTransMtx(mtx2, Vec3f(0.0f, mHeight, 0.0f));
+        Pos3f cannonMtx;
+        cannonMtx.identity();
+        cannonMtx.setRotate(-MR::toRadian(mCirclePitch), MR::toRadian(mAngleTable[i]), 0.0f);
+        cannonMtx.concat(cannonMtx, mtx);
+        MR::addTransMtx(cannonMtx, Vec3f(0.0f, mHeight, 0.0f));
 
         Pos3f trMtx;
         MR::makeMtxTR(trMtx, mPosition, mRotation);
-        mtx2.concat(trMtx, mtx2);
+        cannonMtx.concat(trMtx, cannonMtx);
 
-        mGenerater[i].setLocalMatrix(mtx2);
+        mGenerater[i].setLocalMatrix(cannonMtx);
     }
 }

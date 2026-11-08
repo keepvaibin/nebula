@@ -128,13 +128,13 @@ CameraTargetObj* CameraPointer::calc() {
     panXMtx.identity();
     panXMtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -mBlendPointPos.x * mAngleXRange);
 
-    Pos3f mtx3;
-    mtx3.identity();
-    mtx3.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), -mAngleX);
+    Pos3f tiltMtx;
+    tiltMtx.identity();
+    tiltMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), -mAngleX);
 
     Pos3f rotMtx;
     rotMtx.concat(panXMtx, panYMtx);
-    rotMtx.concat(mtx3, rotMtx);
+    rotMtx.concat(tiltMtx, rotMtx);
     rotMtx.concat(mMtx, rotMtx);
     Vec3f front;
     rotMtx.getZDir(front);

@@ -62,19 +62,19 @@ SiteMaterial OceanRingPipeOutside::loadMaterial() const {
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
 
-    Pos3f mtx2;
-    mtx2.identity();
-    mtx2.set(MR::getCameraViewMtx());
-    mtx2.zeroTrans();
+    Pos3f envMtx;
+    envMtx.identity();
+    envMtx.set(MR::getCameraViewMtx());
+    envMtx.zeroTrans();
 
     Pos3f scaleMtx;
     scaleMtx.identity();
     scaleMtx.scale(::sEnvMapScale);
 
-    static Mtx qMtx2 = {{0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+    static Mtx texRemap = {{0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 
-    MR::multMtx(mtx2, scaleMtx, mtx2);
-    MR::multMtx(mtx2, qMtx2, mtx2);
+    MR::multMtx(envMtx, scaleMtx, envMtx);
+    MR::multMtx(envMtx, texRemap, envMtx);
 
     // runtime/src/render/materials/ocean_ring_pipe_outside.hlsl: the highlight texture (1) by the normal, warped by
     // the indirect texture (0) at sIndirectScale texels a step, over sStageColor0 with light 2's rim; opaque, depth tested
@@ -84,7 +84,7 @@ SiteMaterial OceanRingPipeOutside::loadMaterial() const {
     material.init(NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
                        true, mRingPipe->mIsCameraInside ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
     material.setMatrix(3, 0, mtx.toMtxPtr());
-    material.setMatrix(3, 1, mtx2);
+    material.setMatrix(3, 1, envMtx);
     material.setColor(0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
     material.constants[4] = ::sIndirectScale;
     material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
