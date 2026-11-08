@@ -385,9 +385,6 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         }
 
         break;
-    case Story::Step_ChangeScene:
-        MR::requestChangeScene(pDemoInfo->mName);
-        break;
     case Story::Step_ChangeSceneTitle:
         MR::requestChangeSceneTitle();
         forceStop();
@@ -966,7 +963,7 @@ void StorySequenceExecutor::setBeforeStageScenario(const GalaxyMoveArgument& rMo
     const char* pStageName = nullptr;
     s32 scenarioNo = -1;
 
-    if (MR::isEqualSceneName("Game")) {
+    if (MR::isCurrentScene(SceneKind_Game)) {
         if (rMoveArgument.mMoveType == GalaxyMoveArgument::Type_AfterStageClear) {
             pStageName = GameSequenceFunction::getClearedStageName();
             scenarioNo = GameSequenceFunction::getClearedPowerStarId();

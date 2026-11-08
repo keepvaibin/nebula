@@ -1,39 +1,34 @@
 #include "Game/Scene/SceneFactory.hpp"
+#include "Game/Scene/BootScene.hpp"
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
-#include "Game/Scene/BootScene.hpp"
-#include <algorithm>
-
-namespace {
-    struct Name2CreateFunc {
-        bool operator==(const char* pName) const {
-            return strcmp(mName, pName) == 0;
-        }
-
-        const char* mName;
-        Scene* (*mCreateFunc)();
-    };
-
-    template < typename T >
-    Scene* createScene() {
-        return new T();
-    }
-
-    const Name2CreateFunc cCreateTable[] = {
-        {"Game", createScene< GameScene >},
-        {"Intermission", createScene< IntermissionScene >},
-        {"Boot", createScene< BootScene >},
-    };
-};  // namespace
 
 namespace MR {
-    Scene* createScene(const char* pName) {
-        const Name2CreateFunc* pIter = std::find(::cCreateTable, ::cCreateTable + ARRAY_SIZE(::cCreateTable), pName);
-
-        if (pIter == &::cCreateTable[ARRAY_SIZE(::cCreateTable)]) {
-            return nullptr;
+    Scene* createScene(SceneKind kind) {
+        switch (kind) {
+        case SceneKind_Game:
+            return new GameScene();
+        case SceneKind_Intermission:
+            return new IntermissionScene();
+        case SceneKind_Boot:
+            return new BootScene();
+        case SceneKind_None:
+            break;
         }
+        return nullptr;
+    }
 
-        return (*pIter->mCreateFunc)();
+    const char* getSceneKindName(SceneKind kind) {
+        switch (kind) {
+        case SceneKind_Game:
+            return "Game";
+        case SceneKind_Intermission:
+            return "Intermission";
+        case SceneKind_Boot:
+            return "Boot";
+        case SceneKind_None:
+            break;
+        }
+        return "";
     }
 };  // namespace MR
