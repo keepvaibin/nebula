@@ -98,6 +98,13 @@ namespace MR {
         return isScreen16Per9() ? NebulaFrameClock::cWideScreenWidth : static_cast< s32 >(NebulaFrameClock::cLayoutWidth);
     }
 
+    f32 getScreenAspect() {
+        if (isScreen16Per9()) {
+            return getDisplay().wide ? getDisplay().content_aspect : 16.0f / 9.0f;
+        }
+        return static_cast< f32 >(getScreenWidth()) / getScreenHeight();
+    }
+
     s32 getScreenMargin() {
         return getScreenWidth() * 0.045f;
     }

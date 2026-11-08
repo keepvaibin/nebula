@@ -3,9 +3,6 @@
 #include <nebula_math.h>
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
@@ -28,7 +25,7 @@ namespace MovieDraw {
         sLinear = linear;
     }
 
-    void uploadPlanes(u8* pY, u8* pU, u8* pV, s16 textureWidth, s16 textureHeight) {
+    void uploadPlanes(u8* pY, u8* pU, u8* pV, u16 textureWidth, u16 textureHeight) {
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);
         const u16 chromaHeight = static_cast< u16 >(textureHeight >> 1);
         RenderTexture::linear(pY, NEBULA_TEXTURE_LINEAR_L8, textureWidth, textureHeight, 1);
@@ -36,8 +33,8 @@ namespace MovieDraw {
         RenderTexture::linear(pV, NEBULA_TEXTURE_LINEAR_L8, chromaWidth, chromaHeight, 1);
     }
 
-    void drawFrame(u16 screenWidth, u16 screenHeight, u8* pY, u8* pU, u8* pV, s16 x, s16 y, s16 textureWidth,
-                   s16 textureHeight, s16 width, s16 height) {
+    void drawFrame(f32 screenWidth, f32 screenHeight, u8* pY, u8* pU, u8* pV, u16 textureWidth, u16 textureHeight, f32 x,
+                   f32 y, f32 width, f32 height) {
         // The screen in its own pixels, the frame as it is.
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, screenHeight, 0.0f, screenWidth, 0.0f, -1.0f);
@@ -56,9 +53,9 @@ namespace MovieDraw {
         setPlane(material, 2, pV, chromaWidth, chromaHeight);
         TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
-        *vtx++ = {static_cast< f32 >(x), static_cast< f32 >(y), 0.0f, 0.0f, 0.0f};
-        *vtx++ = {static_cast< f32 >(static_cast< s16 >(x + width)), static_cast< f32 >(y), 0.0f, 1.0f, 0.0f};
-        *vtx++ = {static_cast< f32 >(static_cast< s16 >(x + width)), static_cast< f32 >(static_cast< s16 >(y + height)), 0.0f, 1.0f, 1.0f};
-        *vtx++ = {static_cast< f32 >(x), static_cast< f32 >(static_cast< s16 >(y + height)), 0.0f, 0.0f, 1.0f};
+        *vtx++ = {x, y, 0.0f, 0.0f, 0.0f};
+        *vtx++ = {x + width, y, 0.0f, 1.0f, 0.0f};
+        *vtx++ = {x + width, y + height, 0.0f, 1.0f, 1.0f};
+        *vtx++ = {x, y + height, 0.0f, 0.0f, 1.0f};
     }
 };  // namespace MovieDraw
