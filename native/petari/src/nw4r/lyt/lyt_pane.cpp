@@ -21,8 +21,6 @@ namespace nw4r {
 
 namespace nw4r {
     namespace lyt {
-        NW4R_UT_RUNTIME_TYPEINFO_ROOT_DEFINITION(Pane);
-
         namespace detail {
             PaneBase::PaneBase() {
             }
@@ -49,6 +47,7 @@ namespace nw4r {
 
         Pane::Pane(const UiPaneData* pRes, const ResBlockSet& rBlockSet) {
             Init();
+            mKind = pRes->mKind;
 
             mBasePosition = pRes->mBasePosition;
 
@@ -88,6 +87,7 @@ namespace nw4r {
         }
 
         void Pane::Init() {
+            mKind = UiPaneKind_Pane;
             mpParent = NULL;
             mpMaterial = NULL;
             mbUserAllocated = false;

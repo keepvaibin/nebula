@@ -26,7 +26,6 @@
 #include <nw4r/lyt/texMap.h>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
-#include <nw4r/ut/RuntimeTypeInfo.h>
 #include <nebula_math.h>
 #include <nebula_format.h>
 
@@ -582,14 +581,7 @@ void LayoutManager::initGroupCtrlList() {
 }
 
 void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
-    nw4r::lyt::TextBox* pTextBox;
-
-    const nw4r::ut::detail::RuntimeTypeInfo* pTextBoxRuntimeInfo = &nw4r::lyt::TextBox::typeInfo;
-    if (pPane != nullptr && pPane->GetRuntimeTypeInfo()->IsDerivedFrom(pTextBoxRuntimeInfo)) {
-        pTextBox = static_cast< nw4r::lyt::TextBox* >(pPane);
-    } else {
-        pTextBox = nullptr;
-    }
+    nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
 
     char userData[9];
     LayoutCoreUtil::getPaneUserData(pPane, userData);
@@ -675,7 +667,7 @@ void LayoutManager::replaceIndDummyTexture() {
 
     for (u32 paneIdx = 0; paneIdx < mPaneCount; paneIdx++) {
         nw4r::lyt::Pane* pCurrPane = mPaneInfoList[paneIdx].mPane;
-        nw4r::lyt::Picture* pPicPane = nw4r::ut::DynamicCast< nw4r::lyt::Picture* >(pCurrPane);
+        nw4r::lyt::Picture* pPicPane = nw4r::lyt::PaneCast< nw4r::lyt::Picture >(pCurrPane);
 
         if (pPicPane == nullptr) {
             continue;

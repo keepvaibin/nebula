@@ -3,7 +3,6 @@
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/pane.h"
 #include "nw4r/ut/Color.h"
-#include "nw4r/ut/RuntimeTypeInfo.h"
 
 namespace nw4r {
     namespace ut {
@@ -21,7 +20,7 @@ namespace nw4r {
 
         class TextBox : public Pane {
         public:
-            NW4R_UT_RUNTIME_TYPEINFO;
+            static constexpr UiPaneKind cKind = UiPaneKind_TextBox;
 
             TextBox(const UiPaneData*, const ResBlockSet&);
 

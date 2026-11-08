@@ -22,7 +22,7 @@ namespace nw4r {
                 Material* pMaterial;
             };
 
-            NW4R_UT_RTTI_DECL(Window);
+            static constexpr UiPaneKind cKind = UiPaneKind_Window;
 
             Window(const UiPaneData*, const ResBlockSet&);
 

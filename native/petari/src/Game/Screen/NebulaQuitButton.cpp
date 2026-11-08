@@ -28,10 +28,7 @@ namespace {
     }
 
     nw4r::lyt::TextBox* asTextBox(nw4r::lyt::Pane* pPane) {
-        if (pPane == nullptr || !pPane->GetRuntimeTypeInfo()->IsDerivedFrom(&nw4r::lyt::TextBox::typeInfo)) {
-            return nullptr;
-        }
-        return static_cast< nw4r::lyt::TextBox* >(pPane);
+        return nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
     }
 
     // The pill's straight middle (one of its three pieces) and its two caps, which hold on to the middle's ends.

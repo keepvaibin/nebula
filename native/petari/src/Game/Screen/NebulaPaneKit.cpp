@@ -45,7 +45,7 @@ nw4r::lyt::Pane* NebulaPaneKit::make(const char* pName, const char* pNewName) co
 
 nw4r::lyt::Window* NebulaPaneKit::makeWindow(const char* pName, const char* pNewName) const {
     nw4r::lyt::Pane* pPane = make(pName, pNewName);
-    nw4r::lyt::Window* pWindow = pPane != nullptr ? nw4r::ut::DynamicCast< nw4r::lyt::Window* >(pPane) : nullptr;
+    nw4r::lyt::Window* pWindow = nw4r::lyt::PaneCast< nw4r::lyt::Window >(pPane);
     if (pPane != nullptr && pWindow == nullptr) {
         nw4r::lyt::Layout::DeleteObj(pPane);
     }
@@ -57,11 +57,11 @@ nw4r::lyt::TextBox* NebulaPaneKit::makeText(const char* pName, const char* pNewN
     if (pPane == nullptr) {
         return nullptr;
     }
-    if (!pPane->GetRuntimeTypeInfo()->IsDerivedFrom(&nw4r::lyt::TextBox::typeInfo)) {
+    nw4r::lyt::TextBox* pText = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
+    if (pText == nullptr) {
         nw4r::lyt::Layout::DeleteObj(pPane);
         return nullptr;
     }
-    nw4r::lyt::TextBox* pText = static_cast< nw4r::lyt::TextBox* >(pPane);
     LayoutCoreUtil::initTextBoxPane(pText, nullptr, length);
     LayoutCoreUtil::setTextBoxMessage(pText, u"");
     return pText;

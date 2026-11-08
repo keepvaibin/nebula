@@ -10,7 +10,7 @@ namespace nw4r {
 
         class Picture : public Pane {
         public:
-            NW4R_UT_RTTI_DECL(Picture);
+            static constexpr UiPaneKind cKind = UiPaneKind_Picture;
 
             Picture(u8 texNum);
             Picture(const TexMap& texMap);
