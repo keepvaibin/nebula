@@ -10,35 +10,34 @@ class ParabolicPath;
 
 class Meramera : public LiveActor {
 public:
-    Meramera(const char*);
+    Meramera(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
+    virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void startClipped();
     virtual void endClipped();
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initElementType(const TableIter&);
+    void initElementType(const TableIter& rIter);
     void initEffect();
     void initSensor();
     void initBind();
     void initShadow();
-    void initAppearState(const TableIter&);
-    bool requestDamage(HitSensor*, HitSensor*);
-    bool requestFire(HitSensor*, HitSensor*);
+    void initAppearState(const TableIter& rIter);
+    bool requestDamage(HitSensor* pSender, HitSensor* pReceiver);
+    bool requestFire(HitSensor* pSender, HitSensor* pReceiver);
     bool requestForceRunaway();
-    bool requestDownForce(HitSensor*, HitSensor*);
-    bool requestDown(HitSensor*, HitSensor*);
-    bool requestAttack(HitSensor*, HitSensor*);
-    bool requestFlatDown(HitSensor*, HitSensor*);
-    bool sendMsgElementAttack(HitSensor*, HitSensor*);
+    bool requestDownForce(HitSensor* pSender, HitSensor* pReceiver);
+    bool requestDown(HitSensor* pSender, HitSensor* pReceiver);
+    bool requestAttack(HitSensor* pSender, HitSensor* pReceiver);
+    bool requestFlatDown(HitSensor* pSender, HitSensor* pReceiver);
+    bool sendMsgElementAttack(HitSensor* pSender, HitSensor* pReceiver);
     bool tryWalk();
     bool tryWalkEnd();
     bool tryEndShrink();
@@ -67,9 +66,9 @@ public:
     void exeChaseTurn();
     void exeDamage();
     void exeRunaway();
+    // Also ends StartDiving.
     void endRunaway();
     void exeStartDiving();
-    void endStartDiving();
     void exeDiving();
     void exeSink();
     void exeFloat();
@@ -80,9 +79,9 @@ public:
     void exeFlatDown();
 
     void exeBindStarPointer();
+    // Also ends BindStarPointerNoFire.
     void endBindStarPointer();
     void exeBindStarPointerNoFire();
-    void endBindStarPointerNoFire();
     void exeReadyRestart();
 
     bool isAffectedSpin() const;
@@ -90,30 +89,32 @@ public:
     bool isPushMoved() const;
     bool isEnableFireball() const;
     bool isEnableChase() const;
-    void addToTargetMovingAccel(const Vec3f&, f32, f32);
-    void addMovingAccel(const Vec3f&, f32, f32);
+    void addToTargetMovingAccel(const Vec3f& rTarget, f32 accel, f32 turnCos);
+    void addMovingAccel(const Vec3f& rDir, f32 accel, f32 turnCos);
     void addRunawayJumpPower();
-    void addOverWallAccel(const Vec3f&);
+    void addOverWallAccel(const Vec3f& rDir);
     void updatePose();
     void updateExtinguishMtx();
     bool checkDirectDivingPoint();
-    bool checkDivingPoint(f32, f32);
-    bool checkDivingPointMore(f32);
+    bool checkDivingPoint(f32 dist, f32 angleDegree);
+    bool checkDivingPointMore(f32 dist);
+    // On lava (fire) or water (ice).
     bool isHitRecover() const;
-    bool findDivingPoint(Vec3f, const Vec3f&);
+    bool findDivingPoint(Vec3f start, const Vec3f& rProbe);
     void resetAppear();
-    void emitEffectHead(s32);
-    void deleteEffectHead(bool);
+    void emitEffectHead(s32 effectType);
+    void deleteEffectHead(bool useForce);
+    void startBodyEffect(s32 bodyEffectType, const char* pAnimName);
     void emitEffectHeatBody();
     void emitEffectCoolDownBody();
     void emitEffectColdBody();
-    void turnFireDirectionToSpin(f32);
+    void turnFireDirectionToSpin(f32 degree);
     void startWaitLevelSound();
     void startChaseLevelSound();
 
-    inline bool isSensor(const HitSensor*, const char*) const;
+    inline bool isSensor(const HitSensor* pSensor, const char* pName) const;
     inline bool isActionDisabled() const;
-    inline Vec3f getDistanceToPlayer() const;
+    inline Vec3f calcVecToPlayer() const;
 
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mWalkerStateBindStarPointer;
@@ -131,13 +132,16 @@ public:
     Vec3f mDivePos;
     Vec3f mDiveDir;
     Vec3f mDiveUp;
+    // Ground-plane distance to the last move target; -1 before any.
     f32 mTargetDistance;
     f32 mChaseDistance;
-    s32 mAppearStatus;  // Obj_arg0
+    // Placement arg0: Status_Runaway, Status_Float, or -1 for wait.
+    s32 mAppearStatus;
     s32 mElementType;
     s32 mEffectType;
     s32 mBodyEffectType;
     s32 mRunawayTimer;
     bool mCanDive;
-    bool mIsValidRestart;  // Obj_arg2
+    // Placement arg2: respawn at home after a kill.
+    bool mIsValidRestart;
 };
