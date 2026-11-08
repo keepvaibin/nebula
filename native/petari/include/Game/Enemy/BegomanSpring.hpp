@@ -23,13 +23,17 @@ public:
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual u32 getKind() const {
-        return 2;
+        return Kind_Spring;
     }
     virtual bool onTouchElectric(const Vec3f& rPos, const Vec3f& rDirection);
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
 
     void initEventCameras(const TableIter& rIter);
+    bool isNrvStarPointerBindable() const;
+    bool isNrvBroken() const;
+    void keepVelocityAlongGravity();
+    void tryHopEndBefore(s32 endStep);
     void exeNoCalcWait();
     void exeWait();
     void exeSignAttack();
@@ -67,7 +71,7 @@ public:
     Vec3f mCameraStartPos;
     bool mIsCameraActive;
     ActorCameraInfo* mCameraInfo;
-    s32 mType;
+    bool mIsHideType;
     BegomanBaby* mBaby;
     Vec3f mHidePos;
 };

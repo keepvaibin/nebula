@@ -980,13 +980,13 @@ void BegomanAttackPermitter::control() {
 }
 
 // One begoman attacks at a time: requests gather for hReceiveLimitTime steps, the one nearest the player wins and keeps the
-// permit while it keeps asking. The boss (kind 0) attacks whenever no permit is out.
+// permit while it keeps asking. The boss attacks whenever no permit is out.
 bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
     if (MR::isValidSwitchA(pBegoman) && !MR::isOnSwitchA(pBegoman)) {
         return false;
     }
 
-    if (pBegoman->getKind() == 0) {
+    if (pBegoman->getKind() == BegomanBase::Kind_Boss) {
         return !isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
     }
 

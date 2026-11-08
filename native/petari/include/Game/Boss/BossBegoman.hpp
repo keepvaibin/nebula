@@ -28,7 +28,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual u32 getKind() const {
-        return 0;
+        return Kind_Boss;
     }
     virtual bool onTouchElectric(const Vec3f& rRailPos, const Vec3f& rRailDir);
     virtual bool setNerveReturn();
