@@ -32,14 +32,13 @@ public:
     bool requestLoveHit(HitSensor*, HitSensor*);
     bool requestSearchLightDead();
     void setStartNerve();
-    bool tryAppearFromWallEnd();
-    bool tryAppearFromGroundEnd();
+    bool tryAppearEnd();
     bool tryRailTurn();
     bool tryRailTurnEnd();
     bool tryWalk();
     bool tryWalkEnd();
     bool tryChase();
-    bool tryCheseEnd();
+    bool tryChaseEnd();
     bool tryShay();
     bool tryShayEnd();
     bool tryLoveFind();
@@ -55,6 +54,7 @@ public:
     bool tryHideWallEnd();
     bool tryAscension();
     void endAppear();
+    void updateAppear(const Vec3f& rDir, const char* pAction);
     void exeAppearFromWall();
     void exeAppearFromGround();
     void exeWait();
@@ -79,7 +79,9 @@ public:
     void updateDriftAnimScale();
     void updateDriftTransparency();
     void updateNormalTransparency();
-    void setTransparency(f32);
+    void setTransparency(f32 val);
+    bool isAppearing() const;
+    bool isHidden() const;
     bool canAttack() const;
     bool canDrift() const;
     bool canSearchLightDead() const;
@@ -91,8 +93,7 @@ public:
     void endAppearFromWall();
 
     inline bool isNotNear() const {
-        bool isNearPlayer = MR::isNearPlayer(this, 2000.0f) == false;
-        return isNearPlayer;
+        return !MR::isNearPlayer(this, 2000.0f);
     }
 
     PartsModel* mDisplayModel;
@@ -106,6 +107,6 @@ public:
     f32 mWalkRange;
     f32 mTransparency;
     s32 mAppearanceType;
-    u8 mHasCoin;
-    u8 mIsChief;
+    bool mHasCoin;
+    bool mIsChief;
 };
