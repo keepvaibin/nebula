@@ -6,7 +6,6 @@
 #include "Game/AudioLib/AudSoundObjHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Sound/Sound.hpp"
-#include <JSystem/JGadget/hashcode.hpp>
 
 namespace {
     // Sequence ports the player foot and land sounds and the low-pass filter read.
