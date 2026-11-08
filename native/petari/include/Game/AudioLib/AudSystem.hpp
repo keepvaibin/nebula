@@ -5,7 +5,6 @@
 #include "Game/AudioLib/AudLimitedSound.hpp"
 #include "Game/Sound/SoundAudible.hpp"
 #include "Game/Sound/SoundAudience.hpp"
-#include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/Sound/SoundSystem.hpp"
 #include "Game/Sound/SoundManager.hpp"
 #include <nebula_geometry.hpp>
@@ -125,7 +124,6 @@ public:
     bool mIsTrigSeBlocked;  // blocks startSound
     bool mIsLevelSeBlocked;  // blocks startLevelSound
     s32 mSeMuteFrames;
-    StdSoundInfo* mSoundInfo;
     SoundArchive* mSectionHeap;
     AudAudience< 4 > mAudience;
     AudDopplerAudible< 4 >* mAudible;

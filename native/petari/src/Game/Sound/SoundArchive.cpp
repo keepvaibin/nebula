@@ -1,7 +1,7 @@
 #include "Game/Sound/SoundArchive.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/Sound/SoundTable.hpp"
-#include "Game/Sound/SoundTableInfo.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -135,9 +135,8 @@ bool SoundArchive::getSeqData(SoundID id, SeqData* pOut) {
             return true;
         }
     }
-    SoundTableInfo* pInfo = SoundGlobal< SoundTableInfo >::getInstance();
     AssetFolder::Item item;
-    if (mSeqArchive != nullptr && pInfo != nullptr && mSeqArchive->getItem(mSeqArchive->getEntry(), pInfo->getBgmSeqResourceID(id), &item)) {
+    if (mSeqArchive != nullptr && mSeqArchive->getItem(mSeqArchive->getEntry(), StdSoundInfo::getInstance()->getBgmSeqResourceID(id), &item)) {
         pOut->set(checkedProgram(item.mData, item.mSize), 0);
         return true;
     }

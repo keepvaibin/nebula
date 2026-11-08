@@ -1,10 +1,8 @@
 #include "Game/Sound/StreamManager.hpp"
 #include "Game/Sound/SoundHandles.hpp"
-#include "Game/Sound/SoundInfo.hpp"
-#include "Game/Sound/StreamSource.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 
 StreamManager::StreamManager(bool setInstance) : SoundGlobal< StreamManager >(setInstance) {
-    streamDataMgr_ = nullptr;
     soundStrategyMgr = nullptr;
     mAudience = nullptr;
     mParams.init();
@@ -16,27 +14,19 @@ bool StreamManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* pos
         (*handle)->stop();
     }
 
-    s32 streamFileEntry = streamDataMgr_->getStreamFileEntry(id);
+    const StdSoundInfo* info = StdSoundInfo::getInstance();
+    s32 streamFileEntry = info->getStreamFileEntry(id);
     if (streamFileEntry < 0) {
         return false;
     }
 
     StreamSound* stream = newStream_();
-    SoundInfo* soundInfo = SoundGlobal< SoundInfo >::getInstance();
-
-    int category = -1;
-    if (soundInfo != nullptr) {
-        category = soundInfo->getCategory(id);
-    }
-
     if (stream == nullptr) {
         return false;
     }
 
-    stream->startID_(id, streamFileEntry, posPtr, mAudience, category);
-    if (soundInfo != nullptr) {
-        soundInfo->getStreamInfo(id, stream);
-    }
+    stream->startID_(id, streamFileEntry, posPtr, mAudience, id.getGroupID());
+    info->applyStream(id, stream);
 
     if (handle != nullptr) {
         stream->attachHandle(handle);
