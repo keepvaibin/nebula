@@ -1,4 +1,5 @@
 #include "galaxy/input_bindings.h"
+#include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
 #include "galaxy/c_locale_number.h"
 
@@ -467,7 +468,7 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         tuning.stick_deadzone = 7849.0f / 32767.0f;
         tuning.pointer_deadzone = 8689.0f / 32767.0f;
         tuning.pointer_speed = 2.4f;
-        tuning.pointer_hide_seconds = 4.0f;
+        tuning.pointer_hide_seconds = kDefaultPointerHideSeconds;
         break;
     case ControlScheme::SwitchPro:
     case ControlScheme::SwitchPro2:
@@ -478,14 +479,14 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         tuning.pointer_speed = 2.4f;
         tuning.motion_shake = MotionShake::Remote;
         tuning.shake_sensitivity = 3;
-        tuning.pointer_hide_seconds = 4.0f;
+        tuning.pointer_hide_seconds = kDefaultPointerHideSeconds;
         break;
     case ControlScheme::Generic:
         // Uncalibrated sticks: a wider centre than the calibrated pads.
         tuning.stick_deadzone = 0.15f;
         tuning.pointer_deadzone = 0.15f;
         tuning.pointer_speed = 2.4f;
-        tuning.pointer_hide_seconds = 4.0f;
+        tuning.pointer_hide_seconds = kDefaultPointerHideSeconds;
         break;
     }
     return tuning;
@@ -501,7 +502,7 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
     }
     if (scheme_is_gamepad(scheme)) {
         // Still-pointer hiding (pointer_control.h kDefaultPointerHide*).
-        tuning.pointer_hide_seconds = 4.0f;
+        tuning.pointer_hide_seconds = kDefaultPointerHideSeconds;
         tuning.pointer_hide_radius = 0.12f;
     }
     return tuning;
@@ -549,6 +550,11 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
                 tuning.rumble = current_tuning.rumble;
                 ++changed;
             }
+        }
+        if (version < 7u && scheme_is_gamepad(scheme) && tuning.pointer_hide_seconds == kVersion6PointerHideSeconds &&
+            current_tuning.pointer_hide_seconds != kVersion6PointerHideSeconds) {
+            tuning.pointer_hide_seconds = current_tuning.pointer_hide_seconds;
+            ++changed;
         }
     }
     return changed;

@@ -74,7 +74,8 @@ inline constexpr float kPointerVisibleLimit = 1.02f;
 inline constexpr float kPointerHideFilterSeconds = 0.1f;
 inline constexpr float kDefaultPointerHideRadius = 0.12f;
 
-inline constexpr float kDefaultPointerHideSeconds = 4.0f;
+// Five seconds, as in the game's Switch release: long enough that a pause to look never loses the pointer.
+inline constexpr float kDefaultPointerHideSeconds = 5.0f;
 struct PointerRestHide {
     bool hidden = false;
     bool anchored = false;
@@ -91,7 +92,7 @@ struct PointerRestHide {
 
 // Keyboard and mouse, in play: the mouse-owned pointer hides after kMouseHideSeconds without a
 // mouse move or a held mouse button, and shows again with either. Any other owner resets it.
-inline constexpr float kMouseHideSeconds = 4.5f;
+inline constexpr float kMouseHideSeconds = kDefaultPointerHideSeconds;
 
 struct MouseRestHide {
     std::uint64_t since_us = 0;
