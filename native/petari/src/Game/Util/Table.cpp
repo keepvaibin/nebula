@@ -1,6 +1,6 @@
 #include "Game/Util/Table.hpp"
+#include "Game/Util/HashUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
 
 Table::Table() : mData(nullptr), mName("Undifined") {
@@ -36,7 +36,7 @@ s32 Table::searchItemInfo(const char* pKey) const {
     }
 
     const s32 nFields = getNumFields();
-    const u32 hash = JGadget::getHashCode(pKey);
+    const u32 hash = MR::getHashCode(pKey);
     const TableColumn* pColumns = mData->columns();
 
     for (int i = 0; i < nFields; ++i) {
