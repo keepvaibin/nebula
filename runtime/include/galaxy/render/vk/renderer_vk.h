@@ -371,10 +371,13 @@ private:
 
     // Frame recording.
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
-    void begin_scene_pass(const SceneClearValues* clear = nullptr);
+    // `caller` (the calling function's name) counts why the scene target was opened again (GpuWindow::opens).
+    void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
     // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask); a pass open with another one ends.
-    void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false);
-    void end_scene_pass();
+    void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
+                               const char* caller = __builtin_FUNCTION());
+    void end_scene_pass(const char* caller = __builtin_FUNCTION());
+    const char* scene_pass_closed_by_ = "frame start";
     void reset_draw_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
     // Presentation post-processing: SMAA or FXAA of the scene, FSR 1 or the box resample, RCAS.
@@ -758,6 +761,15 @@ private:
         unsigned frames = 0;
         std::uint64_t passes = 0;
         std::uint64_t copies = 0;
+        // Each scene target pass by what closed the one before it and what opened it: on a tiled GPU every opening
+        // loads the colour, depth and stencil from memory and its end stores them again.
+        struct Open {
+            const char* closed = nullptr;
+            const char* opened = nullptr;
+            bool cleared = false;
+            std::uint64_t count = 0;
+        };
+        std::array<Open, 24> opens{};
     };
     GpuWindow gpu_window_;
     struct PresentStats {

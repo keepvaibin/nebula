@@ -1428,6 +1428,14 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
                          static_cast<double>(gpu_window_.passes) / 600.0,
                          static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width,
                          scene_map_.height, swapchain_.image.width, swapchain_.image.height);
+            std::fprintf(stderr, "[vk-gpu] scene target opened a frame (closed by > opened by):");
+            for (const GpuWindow::Open& open : gpu_window_.opens) {
+                if (open.count != 0u) {
+                    std::fprintf(stderr, " %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
+                                 static_cast<double>(open.count) / 600.0);
+                }
+            }
+            std::fprintf(stderr, "\n");
         }
         if (!trace_present_stats_enabled() && profile_samples_ != 0u) {
             static constexpr const char* names[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
@@ -1740,11 +1748,10 @@ void RendererVk::gpu_pass(GpuPass pass) {
 
 void RendererVk::prepare_gpu_pass_queries() {
     const bool full = ::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false);
-    const bool diagnostics = ::galaxy::diagnostics_recording();
-    // A prime stride samples across real/generated/present-only cadence instead of repeatedly hitting one phase.
+    // A prime stride samples across real/generated/present-only cadence instead of repeatedly hitting one phase: one
+    // frame in 61, a timestamp at each pass boundary (no pass is split), so every log has each pass's GPU time.
     // Developer profiling can explicitly record every submission.
-    // Pools are retained until shutdown, but no queries are recorded while diagnostics are off.
-    profile_frame_ = timestamps_ != VK_NULL_HANDLE && (full || (diagnostics && frame_index_ % 61u == 0u));
+    profile_frame_ = timestamps_ != VK_NULL_HANDLE && (full || frame_index_ % 61u == 0u);
     if (!profile_frame_) return;
     const VkDevice device = vk::Context::get().device();
     if (pass_queries_ == VK_NULL_HANDLE) {

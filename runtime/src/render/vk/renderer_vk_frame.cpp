@@ -343,11 +343,11 @@ void RendererVk::apply_window_size() {
               << "x" << wanted.height << '\n';
 }
 
-void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
-    begin_scene_pass_with(0u, clear);
+void RendererVk::begin_scene_pass(const SceneClearValues* clear, const char* caller) {
+    begin_scene_pass_with(0u, clear, false, caller);
 }
 
-void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear, bool discard_color) {
+void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear, bool discard_color, const char* caller) {
     if (scene_pass_open_) {
         if (scene_pass_aux_ == aux) {
             return;
@@ -379,6 +379,17 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
     scene_pass_open_ = true;
     ++gpu_window_.passes;
+    for (GpuWindow::Open& open : gpu_window_.opens) {
+        if (open.count == 0u) {
+            open = GpuWindow::Open{scene_pass_closed_by_, caller, clear != nullptr, 1u};
+            break;
+        }
+        if (open.cleared == (clear != nullptr) && std::strcmp(open.closed, scene_pass_closed_by_) == 0 &&
+            std::strcmp(open.opened, caller) == 0) {
+            ++open.count;
+            break;
+        }
+    }
     encoder_.forget_rects();
     // Dynamic state and bindings outlive the pass, but the renderer's own passes in between changed them.
     if (bound_.viewport_valid) {
@@ -389,12 +400,13 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     }
 }
 
-void RendererVk::end_scene_pass() {
+void RendererVk::end_scene_pass(const char* caller) {
     if (!scene_pass_open_) {
         return;
     }
     vkCmdEndRenderPass(commands_);
     scene_pass_open_ = false;
+    scene_pass_closed_by_ = caller;
     gpu_pass(current_pass_);
 }
 

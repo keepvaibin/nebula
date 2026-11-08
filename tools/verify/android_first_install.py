@@ -46,6 +46,36 @@ def wait_for(text, seconds, tap=True):
     return False
 
 
+def pick_file(name):
+    """The system picker lists the newest files first: a disc image under newer files is found through its search."""
+    if wait_for(name, 10):
+        return True
+    found = re.search(r'content-desc="Search"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', screen_text())
+    if not found:
+        return False
+    a, b, c, d = map(int, found.groups())
+    shell('input tap %d %d' % ((a + c) // 2, (b + d) // 2))
+    time.sleep(2)
+    shell('input text %s' % name.replace(' ', '%s'))
+    shell('input keyevent KEYCODE_ENTER')
+    # The search box holds the name too: tap a row below it (a suggestion runs the search, a result is the file).
+    row = r'text="%s" resource-id="(?!com.google.android.documentsui:id/search_src_text)[^"]*"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+    for _ in range(2):
+        end = time.time() + 15
+        found = None
+        while time.time() < end and not found:
+            time.sleep(1)
+            found = re.search(row % re.escape(name), screen_text())
+        if not found:
+            return False
+        a, b, c, d = map(int, found.groups())
+        shell('input tap %d %d' % ((a + c) // 2, (b + d) // 2))
+        time.sleep(3)
+        if 'search_src_text' not in screen_text():
+            return True
+    return True
+
+
 def fail(reason):
     print('FAIL:', reason)
     log = adb('logcat', '-d', '-s', 'Nebula').stdout.decode('utf8', 'replace')
@@ -82,7 +112,7 @@ def main():
     shell('am start -n %s/.LauncherActivity' % PACKAGE)
     if not wait_for('Choose disc image', 30):
         return fail('no setup screen on a first install')
-    if not wait_for(disc, 30):
+    if not pick_file(disc):
         return fail('the file picker does not show ' + disc)
     if not wait_for('Set up', 120):
         return fail('the disc image was not accepted')
