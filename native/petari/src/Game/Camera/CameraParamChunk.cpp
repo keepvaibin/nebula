@@ -6,7 +6,7 @@
 #include <cstring>
 
 namespace {
-    static const char* sFlagName[] = {"flag.noreset",     "flag.nofovy",       "flag.lofserpoff",
+    const char* const sFlagName[] = {"flag.noreset",     "flag.nofovy",       "flag.lofserpoff",
                                       "flag.antibluroff", "flag.collisionoff", "flag.subjectiveoff"};
 
     static CameraParamChunk::ExParam sUndoExParam = CameraParamChunk::ExParam();

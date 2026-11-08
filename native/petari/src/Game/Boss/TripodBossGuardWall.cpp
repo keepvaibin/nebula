@@ -23,7 +23,7 @@ namespace {
         s32 mStartTiming;
     };
 
-    static WallPartPlacementAngle sWallPartPlacementAngleTable[] = {{0.0f, 4},    {45.0f, 8},   {90.0f, 12},  {135.0f, 16},
+    const WallPartPlacementAngle sWallPartPlacementAngleTable[] = {{0.0f, 4},    {45.0f, 8},   {90.0f, 12},  {135.0f, 16},
                                                                     {180.0f, 20}, {225.0f, 24}, {270.0f, 28}, {315.0f, 32}};
     static const s32 sEventCameraStartTime = 150;
     static const s32 sEventAnimeStartTime = 180;

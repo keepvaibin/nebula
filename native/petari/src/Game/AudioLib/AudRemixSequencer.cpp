@@ -8,7 +8,7 @@
 #include "Game/Sound/SoundHandles.hpp"
 
 namespace {
-    static const char* cRemixNoteTrackSeId[] = {
+    const char* const cRemixNoteTrackSeId[] = {
         "SE_RS_REMIX_NOTE_GET_TRK0",  "SE_RS_REMIX_NOTE_GET_TRK1",  "SE_RS_REMIX_NOTE_GET_TRK2",  "SE_RS_REMIX_NOTE_GET_TRK3",
         "SE_RS_REMIX_NOTE_GET_TRK4",  "SE_RS_REMIX_NOTE_GET_TRK5",  "SE_RS_REMIX_NOTE_GET_TRK6",  "SE_RS_REMIX_NOTE_GET_TRK7",
         "SE_RS_REMIX_NOTE_GET_TRK8",  "SE_RS_REMIX_NOTE_GET_TRK9",  "SE_RS_REMIX_NOTE_GET_TRK10", "SE_RS_REMIX_NOTE_GET_TRK11",

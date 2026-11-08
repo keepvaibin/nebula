@@ -29,7 +29,7 @@
 #include <nebula_math.h>
 
 namespace {
-    const char* sSensorNameList[] = {"Body", "BodyHipDrop"};
+    const char* const sSensorNameList[] = {"Body", "BodyHipDrop"};
 
     struct CollisionInfo {
         const char* mCollisionName;
@@ -39,7 +39,7 @@ namespace {
 
     const CollisionInfo sCollisionInfo[] = {{"Body", "Body", "Body"}, {"BodyGround", "Body", "Body"}, {"BodyHipDrop", "Body", "BodyHipDrop"}};
 
-    const char* sLegJointNameList[] = {"RightFootA3", "LeftFootA3", "RightFootB3", "LeftFootB3", "RightFootC3", "LeftFootC3"};
+    const char* const sLegJointNameList[] = {"RightFootA3", "LeftFootA3", "RightFootB3", "LeftFootB3", "RightFootC3", "LeftFootC3"};
 
     static Vec3f sAppearStarPieceOffset(0.0f, 200.0f, 0.0f);
 };  // namespace

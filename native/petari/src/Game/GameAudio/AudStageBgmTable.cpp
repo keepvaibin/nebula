@@ -12,7 +12,7 @@ namespace {
         u32 mBgmStates[8];
     };
 
-    StageBgm sStageBgmSet[] = {
+    const StageBgm sStageBgmSet[] = {
         {
             "OceanRingGalaxy",
             {-1, MBGM_GALAXY_03, MBGM_GALAXY_18, MBGM_GALAXY_01_TOMB, -1, -1},

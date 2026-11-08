@@ -29,14 +29,13 @@ namespace {
 
     const char* const cAstroNamePlateArcName = "AstroNamePlateData";
     const char* const cAstroNamePlateFileName = "AstroNamePlateData.bcsv";
-    const char* cAstroDomeNameTable[] = {"AstroDomeObservatory", "AstroDomeWell",    "AstroDomeKitchen",
-                                         "AstroDomeBedRoom",     "AstroDomeMachine", "AstroDomeTower"};
-    const char* cAstroDomeSkyNameTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
-    const char* cAstroDomeEntranceNameTable[] = {"AstroDomeEntranceObservatory", "AstroDomeEntranceWell",    "AstroDomeEntranceKitchen",
-                                                 "AstroDomeEntranceBedRoom",     "AstroDomeEntranceMachine", "AstroDomeEntranceTower"};
-    const char* cAstroStarPlateNameTable[] = {"AstroStarPlateObservatory", "AstroStarPlateWell",    "AstroStarPlateKitchen",
-                                              "AstroStarPlateBedRoom",     "AstroStarPlateMachine", "AstroStarPlateTower"};
-    // const char* sNamePlatePosDataTable = ...;
+    const char* const cAstroDomeNameTable[] = {"AstroDomeObservatory", "AstroDomeWell",    "AstroDomeKitchen",
+                                               "AstroDomeBedRoom",     "AstroDomeMachine", "AstroDomeTower"};
+    const char* const cAstroDomeSkyNameTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
+    const char* const cAstroDomeEntranceNameTable[] = {"AstroDomeEntranceObservatory", "AstroDomeEntranceWell",    "AstroDomeEntranceKitchen",
+                                                       "AstroDomeEntranceBedRoom",     "AstroDomeEntranceMachine", "AstroDomeEntranceTower"};
+    const char* const cAstroStarPlateNameTable[] = {"AstroStarPlateObservatory", "AstroStarPlateWell",    "AstroStarPlateKitchen",
+                                                    "AstroStarPlateBedRoom",     "AstroStarPlateMachine", "AstroStarPlateTower"};
 
     s32 getNumGrandStarForRevival(const char* pObjName, s32 domeId) {
         const char* modelName = AstroMapObjFunction::getModelName(pObjName, domeId);
@@ -189,7 +188,7 @@ s32 AstroMapObjFunction::getDomeIdFromArg0(const TableIter& rIter) {
 }
 
 const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) {
-    const char** nameTable = nullptr;
+    const char* const* nameTable = nullptr;
 
     if (MR::isEqualString(pObjName, "AstroDome")) {
         nameTable = ::cAstroDomeNameTable;

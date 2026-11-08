@@ -23,7 +23,7 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
-    static const char* sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
+    const char* const sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
     static const Vec sStarPointerTargetOffset[] = {{
                                                        0.0f,
                                                        0.0f,

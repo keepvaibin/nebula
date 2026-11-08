@@ -81,7 +81,7 @@ public:
     f32 mAppearDistance;
     f32 mAppearDistanceMax;
     u32 mModelNum;
-    const char** mModelNameTable;
+    const char* const* mModelNameTable;
     const char* mJointName;
     const char* mAutoEffectName;
     bool mHasLightCtrl;

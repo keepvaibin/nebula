@@ -42,15 +42,16 @@
 #include <cstdio>
 
 namespace {
-    static const SkeletalFishBoss::SensorToCollider sColInfo[0xE] = {
+    // One collision part per row, following the joint.
+    const SkeletalFishBoss::SensorToCollider sColInfo[] = {
         {"Joint01", "BackBone01"},        {"Joint02", "BackBone02"},         {"Joint03", "BackBone03"}, {"Joint04", "BackBone04"},
         {"Joint05", "BackBone05"},        {"Joint06", "BackBone06"},         {"Joint07", "BackBone07"}, {"Joint08", "BackBone08"},
         {"Joint09", "BackBone09"},        {"Joint10", "BackBone10"},         {"Joint11", "BackBone11"}, {"Joint12", "BackFin"},
         {"LeftFinJoint", "LeftFinJoint"}, {"RightFinJoint", "RightFinJoint"}};
 
-    static const SkeletalFishBoss::JointToShadow sShadowInfo[] = {{"Shadow00", "Joint02", "SkeletalFishBossShadow"}};
+    const SkeletalFishBoss::JointToShadow sShadowInfo[] = {{"Shadow00", "Joint02", "SkeletalFishBossShadow"}};
 
-    static SkeletalFishBoss::HitPos sHitPosData[0x10] = {
+    const SkeletalFishBoss::HitPos sHitPosData[] = {
         {"Wound0", "Head", {26.144243f, 414.56268f, 552.1146f}},     {"Wound1", "Head", {-618.77576f, 55.65544f, 163.1091f}},
         {"Wound10", "Head", {597.2239f, 92.83909f, 188.59679f}},     {"Wound11", "Head", {4.24828f, -134.68741f, 869.9156f}},
         {"Wound2", "Head", {88.67339f, 10.598214f, -206.06902f}},    {"Wound3", "Head", {331.39523f, 37.908966f, 794.4394f}},
@@ -642,9 +643,9 @@ void SkeletalFishBoss::initJoint() {
 }
 
 void SkeletalFishBoss::initCollision() {
-    mPartsArray = new CollisionParts*[0xE];
+    mPartsArray = new CollisionParts*[ARRAY_SIZEU(::sColInfo)];
 
-    for (u32 i = 0; i < 0xE; i++) {
+    for (u32 i = 0; i < ARRAY_SIZEU(::sColInfo); i++) {
         mPartsArray[i] = MR::createCollisionPartsFromLiveActor(this, ::sColInfo[i].mColliderName, mBossHead->getSensor("body"),
                                                                MR::getJointMtx(this, ::sColInfo[i].mJointName), MR::CollisionScaleType_Default);
         MR::validateCollisionParts(mPartsArray[i]);
@@ -711,7 +712,7 @@ void SkeletalFishBoss::initCamera() {
 }
 
 void SkeletalFishBoss::validateCollision() {
-    for (u32 i = 0; i < 0xE; i++) {
+    for (u32 i = 0; i < ARRAY_SIZEU(::sColInfo); i++) {
         MR::validateCollisionParts(mPartsArray[i]);
     }
 
@@ -721,7 +722,7 @@ void SkeletalFishBoss::validateCollision() {
 }
 
 void SkeletalFishBoss::invalidateCollision() {
-    for (u32 i = 0; i < 0xE; i++) {
+    for (u32 i = 0; i < ARRAY_SIZEU(::sColInfo); i++) {
         MR::invalidateCollisionParts(mPartsArray[i]);
     }
 
@@ -739,7 +740,7 @@ void SkeletalFishBoss::getMouthSensorCenterPos(Vec3f& rPos, f32 a2) const {
 }
 
 void SkeletalFishBoss::updateCollision() {
-    for (u32 i = 0; i < 0xE; i++) {
+    for (u32 i = 0; i < ARRAY_SIZEU(::sColInfo); i++) {
         mPartsArray[i]->setMtx();
     }
 
@@ -993,7 +994,8 @@ bool SkeletalFishBoss::isEnableToBeDamaged() const {
 SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)
     : PartsModel(pActor, "スカルシャーク頭", "SkeletalFishBossHeadA", nullptr, MR::DrawBufferType_Enemy, false), mIsEyeLightOn(true) {
     initFixedPosition("Head");
-    initHitSensor(17);
+    // The body and one sensor per wound.
+    initHitSensor(1 + ARRAY_SIZE(::sHitPosData));
     MR::addHitSensorAtJointEnemy(this, "body", "Head", 8, 400.0f, Vec3f(0.0f, -120.0f, 320.0f));
 
     for (u32 i = 0; i < ARRAY_SIZE(::sHitPosData); i++) {

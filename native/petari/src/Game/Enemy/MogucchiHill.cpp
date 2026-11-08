@@ -10,7 +10,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const char* sPieceModelTable[] = {
+    const char* const sPieceModelTable[] = {
         "MogucchiHillA",
         "MogucchiHillB",
         "MogucchiHillC",

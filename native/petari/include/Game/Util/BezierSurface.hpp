@@ -31,17 +31,3 @@ public:
     s32 mDivideLevel;
     bool mIsLit;
 };
-
-typedef f32 TrianglePatchCoefs[13];
-
-struct TrianglePatch {
-    TrianglePatchCoefs* mCoefTable;
-    TrianglePatchCoefs* mCoefTangentSTable;
-    TrianglePatchCoefs* mCoefTangentTTable;
-    s32 mNumPoints;
-    const u16* mTriangleStripOrder;
-    u16 mNumTriangleStripPoints;
-    const u16* mLineStripOrder;
-    u16 mNumLineStripPoints;
-    const Vec* mTriangleST;
-};

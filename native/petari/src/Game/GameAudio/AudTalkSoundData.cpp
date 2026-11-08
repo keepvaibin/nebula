@@ -3,7 +3,7 @@
 #include "Game/Sound/Sound.hpp"
 
 namespace {
-    SoundID cTalkSoundList[] = {
+    const SoundID cTalkSoundList[] = {
         // 0x00
         -1,
         SE_SV_KINOPIO_TALK_HEY,

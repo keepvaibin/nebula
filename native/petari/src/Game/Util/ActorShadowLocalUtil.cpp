@@ -17,7 +17,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const char* sShadowDefineFileName[] = {"SurfaceCircle",  "SurfaceOval",    "SurfaceBox", "VolumeSphere",    "VolumeOval",
+    const char* const sShadowDefineFileName[] = {"SurfaceCircle",  "SurfaceOval",    "SurfaceBox", "VolumeSphere",    "VolumeOval",
                                                   "VolumeOvalPole", "VolumeCylinder", "VolumeBox",  "VolumeFlatModel", "VolumeLine"};
     template < typename T >
     T* createShadowDrawer(LiveActor* pActor, const TableIter& rIter, bool surface) {

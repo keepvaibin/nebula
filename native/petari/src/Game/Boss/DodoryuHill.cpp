@@ -2,7 +2,7 @@
 #include "Game/Boss/Dodoryu.hpp"
 
 namespace {
-    inline void setHillTable(MogucchiHill* pHill, const char** pModelNames, u32 count) {
+    inline void setHillTable(MogucchiHill* pHill, const char* const* pModelNames, u32 count) {
         pHill->mModelNum = count;
         pHill->mModelNameTable = pModelNames;
     }
@@ -11,7 +11,7 @@ namespace {
         pHill->mAutoEffectName = pEffectName;
     }
 
-    static const char* sDodoryuHillModel[] = {
+    const char* const sDodoryuHillModel[] = {
         "DodoryuHillA",
         "DodoryuHillB",
         "DodoryuHillC",
@@ -19,7 +19,7 @@ namespace {
 };  // namespace
 
 DodoryuHill::DodoryuHill(Dodoryu* pHost) : MogucchiHill(pHost, 50, "ドドリュウ塚"), mHost(pHost) {
-    setHillTable(this, ::sDodoryuHillModel, 3);
+    setHillTable(this, ::sDodoryuHillModel, ARRAY_SIZE(::sDodoryuHillModel));
     const char* pJoint = "MogucchiHill";
     const char* pEffect = "DodoryuHill";
     setHillNames(this, pJoint, pEffect);
