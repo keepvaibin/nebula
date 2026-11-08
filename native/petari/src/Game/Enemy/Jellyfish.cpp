@@ -36,48 +36,46 @@ namespace NrvJellyfish {
 };  // namespace NrvJellyfish
 
 namespace {
-    static Color8 sPointLightColor(255, 50, 202, 255);
+    const Color8 sPointLightColor(255, 50, 202, 255);
+    const f32 sFindDistance = 1000.0f;
+    const f32 sThreatDistance = 1500.0f;
+    const f32 sThreatFaceAngle = 35.0f;
+    const f32 sMaxTiltAngle = 30.0f;
+    const f32 sWaitTurnDegree = 0.2f;
+    const f32 sThreatTurnDegree = 1.5f;
+    const f32 sKnockOutSpeed = 40.0f;
+    const s32 sWaitSteps = 280;
+    const s32 sDeathSteps = 30;
 };  // namespace
 
 Jellyfish::Jellyfish(const char* pName)
-    : LiveActor(pName), mController(), mWaveStep(), mFront(0.0f, 0.0f, 1.0f), mIsConnectedRail(), mRailSpeed(5.0f), mRailGoalWaitStep(60), mIsRailTurnBack(), mClipCenter(0.0f, 0.0f, 0.0f) {
+    : LiveActor(pName), mController(nullptr), mBindStarPtr(nullptr), mWaveStep(0), mFront(0.0f, 0.0f, 1.0f), mIsConnectedRail(false), mRailSpeed(5.0f),
+      mRailGoalWaitStep(60), mIsRailTurnBack(false), mClipCenter(0.0f, 0.0f, 0.0f) {
 }
 
 void Jellyfish::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-
     initModelManagerWithAnm("Jellyfish", nullptr, false);
-
     MR::connectToSceneEnemy(this);
-
     MR::addToAttributeGroupSearchTurtle(this);
 
     initHitSensor(1);
-    Vec3f offset;
-    offset.set(0.0f, 30.0f, 0.0f);
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_ENEMY, 8, 100.0f, offset);
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_ENEMY, 8, 100.0f, Vec3f(0.0f, 30.0f, 0.0f));
 
     initBinder(130.0f, 0.0f, 0);
     MR::offBind(this);
-
-    mController = new AnimScaleController(nullptr);
-
     initEffectKeeper(2, nullptr);
-
     MR::addEffectHitNormal(this, nullptr);
-
     initSound(4, false);
-
     MR::initShadowVolumeSphere(this, 100.0f);
     MR::setShadowDropLength(this, nullptr, 1900.0f);
-
     MR::declareCoin(this, 1);
-
     MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mController = new AnimScaleController(nullptr);
     mBindStarPtr = new WalkerStateBindStarPointer(this, mController);
 
+    // On a rail: arg 0 the speed, arg 1 the wait at the goal, arg 2 = 1 to jump back to the start instead of turning round.
     if (MR::isConnectedWithRail(rIter)) {
         mIsConnectedRail = true;
 
@@ -88,30 +86,24 @@ void Jellyfish::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
         MR::getPlacementArg1NoInit(rIter, &mRailGoalWaitStep);
 
-        s32 arg2 = 0;
-        MR::getPlacementArg2NoInit(rIter, &arg2);
-        mIsRailTurnBack = arg2 == 1;
+        s32 turnBack = 0;
+        MR::getPlacementArg2NoInit(rIter, &turnBack);
+        mIsRailTurnBack = turnBack == 1;
     }
 
     MR::calcFrontVec(&mFront, this);
-
     initNerve(GET_NERVE(Jellyfish, JellyfishNrvWait));
-
     makeActorAppeared();
 }
 
 void Jellyfish::kill() {
     MR::emitEffect(this, "Death");
-
     MR::appearCoinPop(this, mPosition, 1);
-
     LiveActor::kill();
 }
 
 void Jellyfish::control() {
-    const Vec3f& rPosition = mPosition;
-    MR::requestPointLight(this, Vec3f(rPosition), ::sPointLightColor, 0.9999f, -1);
-
+    MR::requestPointLight(this, mPosition, sPointLightColor, 0.9999f, -1);
     mController->updateNerve();
 
     if (!isNerve(GET_NERVE(Jellyfish, JellyfishNrvDeath))) {
@@ -123,15 +115,13 @@ void Jellyfish::control() {
             }
         }
 
+        // Bobs along gravity, one degree of the wave a step.
         f32 wave = MR::sinDegree(mWaveStep + 45);
-        const Vec3f& rGravity = mGravity;
-        mVelocity.scale(wave, rGravity);
-
+        mVelocity.scale(wave, mGravity);
         mWaveStep++;
     }
 
-    if (tryPointerSwoon()) {
-    }
+    tryPointerSwoon();
 }
 
 void Jellyfish::calcAndSetBaseMtx() {
@@ -156,7 +146,6 @@ void Jellyfish::exeFind() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "SearchOn");
         MR::startBrk(this, "SearchOn");
-
         MR::startSound(this, "SE_EM_JELLYFISH_FIND");
     }
 
@@ -174,32 +163,23 @@ void Jellyfish::exeThreat() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_JELLYFISH_WAIT");
-
     faceToMario();
-
-    if (selectNerveThreat()) {
-        return;
-    }
+    selectNerveThreat();
 }
 
 void Jellyfish::exeDeath() {
     if (MR::isFirstStep(this)) {
         MR::onBind(this);
-
         MR::invalidateHitSensors(this);
         MR::invalidateClipping(this);
-
         MR::stopScene(5);
-
         MR::startBck(this, "Death");
         MR::startBrk(this, "Death");
-
         MR::startBlowHitSound(this);
-
         MR::startSound(this, "SE_EM_JELLYFISH_HIT_PUNCH");
     }
 
-    if (MR::isStep(this, 30) || MR::isBinded(this)) {
+    if (MR::isStep(this, sDeathSteps) || MR::isBinded(this)) {
         MR::startSound(this, "SE_EM_JELLYFISH_DEAD");
         kill();
     }
@@ -209,12 +189,11 @@ void Jellyfish::exeAttack() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Attack");
         MR::startBrk(this, "Attack");
-
         MR::startSound(this, "SE_EM_JELLYFISH_ATTACK");
     }
 
     if (MR::isBckStopped(this)) {
-        if (!MR::isNearPlayer(this, 1500.0f)) {
+        if (!MR::isNearPlayer(this, sThreatDistance)) {
             setNerve(GET_NERVE(Jellyfish, JellyfishNrvWait));
         } else {
             selectNerveThreat();
@@ -248,12 +227,12 @@ void Jellyfish::exePointerSwoon() {
 }
 
 void Jellyfish::exeWaitWithLeftTurn() {
-    MR::rotateVecDegree(&mFront, mGravity, -0.2f);
+    MR::rotateVecDegree(&mFront, mGravity, -sWaitTurnDegree);
     selectNerveAfterWait();
 }
 
 void Jellyfish::exeWaitWithRightTurn() {
-    MR::rotateVecDegree(&mFront, mGravity, 0.2f);
+    MR::rotateVecDegree(&mFront, mGravity, sWaitTurnDegree);
     selectNerveAfterWait();
 }
 
@@ -282,7 +261,9 @@ bool Jellyfish::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     if (MR::isMsgStarPieceAttack(msg)) {
         mController->startHitReaction();
         return true;
-    } else if (MR::isMsgPlayerHitAll(msg)) {
+    }
+
+    if (MR::isMsgPlayerHitAll(msg)) {
         knockOut(pSender, pReceiver);
         return true;
     }
@@ -306,7 +287,6 @@ void Jellyfish::threatTurn() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_JELLYFISH_WAIT");
-
     faceToMario();
 
     if (MR::isBckStopped(this)) {
@@ -314,58 +294,46 @@ void Jellyfish::threatTurn() {
     }
 }
 
-bool Jellyfish::faceToMario() {
-    Vec3f v13;
-    const Vec3f& rPosition = mPosition;
-    v13.sub(*MR::getPlayerPos(), rPosition);
-    MR::normalizeOrZero(&v13);
-    Vec3f v12;
-    MR::calcSideVec(&v12, this);
+// Turns toward the player, tilting at most 30 degrees off level; a turn nerve also spins it, slowing over the animation.
+void Jellyfish::faceToMario() {
+    Vec3f toPlayer;
+    toPlayer.sub(*MR::getPlayerPos(), mPosition);
+    MR::normalizeOrZero(&toPlayer);
+    Vec3f side;
+    MR::calcSideVec(&side, this);
 
-    if (!MR::isNearZero(v13)) {
-        MR::turnVecToVecCosOnPlane(&mFront, v13, v12, MR::cosDegree(0.5f));
-        Vec3f v11;
-        Vec3f v10;
-        const Vec3f& rGravity = mGravity;
-        v10.negate(rGravity);
-        const Vec3f& rUp = v10;
-        MR::turnVecToPlane(&v11, mFront, rUp);
-        MR::clampVecAngleDeg(&mFront, v11, 30.0f);
+    if (!MR::isNearZero(toPlayer)) {
+        MR::turnVecToVecCosOnPlane(&mFront, toPlayer, side, MR::cosDegree(0.5f));
+        Vec3f up;
+        up.negate(mGravity);
+        Vec3f levelFront;
+        MR::turnVecToPlane(&levelFront, mFront, up);
+        MR::clampVecAngleDeg(&mFront, levelFront, sMaxTiltAngle);
     }
 
     if (!isNerve(GET_NERVE(Jellyfish, JellyfishNrvThreat))) {
         f32 frameMax = MR::getBckFrameMax(this, "SearchRotate");
-        f32 v8;
-        f32 v7 = (1.0f - (getNerveStep() / frameMax));
-        if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithLeftTurn))) {
-            v8 = 1.0f;
-        } else {
-            v8 = -1.0f;
-        }
+        f32 restRate = (1.0f - (getNerveStep() / frameMax));
+        f32 sign = isNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithLeftTurn)) ? 1.0f : -1.0f;
 
-        Vec3f v9;
-        const Vec3f& rGravity = mGravity;
-        v9.negate(rGravity);
-        const Vec3f& rUp = v9;
-        MR::rotateVecDegree(&mFront, rUp, (v8 * (1.5f * v7)));
+        Vec3f up;
+        up.negate(mGravity);
+        MR::rotateVecDegree(&mFront, up, (sign * (sThreatTurnDegree * restRate)));
     }
-
-    return true;
 }
 
 void Jellyfish::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f toReceiverDir;
     MR::normalize(pReceiver->mPosition - pSender->mPosition, &toReceiverDir);
-
-    mVelocity.scale(40.0f, toReceiverDir);
-
+    mVelocity.scale(sKnockOutSpeed, toReceiverDir);
     mFront.negate(toReceiverDir);
-
     setNerve(GET_NERVE(Jellyfish, JellyfishNrvDeath));
 }
 
+// Near the player it finds; otherwise every wait period picks a plain wait or (from a plain wait) a slow turn either way.
+// A rail that jumps back never turns.
 bool Jellyfish::selectNerveAfterWait() {
-    if (MR::isNearPlayer(this, 1000.0f)) {
+    if (MR::isNearPlayer(this, sFindDistance)) {
         setNerve(GET_NERVE(Jellyfish, JellyfishNrvFind));
         return true;
     }
@@ -374,73 +342,64 @@ bool Jellyfish::selectNerveAfterWait() {
         return false;
     }
 
-    if (MR::isStep(this, 280)) {
-        s32 randomVal;
-        if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvWait))) {
-            randomVal = MR::getRandom(0, 3);
-        } else {
-            randomVal = 0;
-        }
-
-        if (randomVal == 0) {
-            setNerve(GET_NERVE(Jellyfish, JellyfishNrvWait));
-        } else if (randomVal == 1) {
-            setNerve(GET_NERVE(Jellyfish, JellyfishNrvWaitWithRightTurn));
-        } else {
-            setNerve(GET_NERVE(Jellyfish, JellyfishNrvWaitWithLeftTurn));
-        }
-
-        return true;
+    if (!MR::isStep(this, sWaitSteps)) {
+        return false;
     }
 
-    return false;
+    s32 pick = isNerve(GET_NERVE(Jellyfish, JellyfishNrvWait)) ? MR::getRandom(0, 3) : 0;
+    if (pick == 0) {
+        setNerve(GET_NERVE(Jellyfish, JellyfishNrvWait));
+    } else if (pick == 1) {
+        setNerve(GET_NERVE(Jellyfish, JellyfishNrvWaitWithRightTurn));
+    } else {
+        setNerve(GET_NERVE(Jellyfish, JellyfishNrvWaitWithLeftTurn));
+    }
+
+    return true;
 }
 
+// Facing the player within the angle threatens; otherwise turns toward the player's side. False when it keeps threatening.
 bool Jellyfish::selectNerveThreat() {
-    if (!MR::isNearPlayer(this, 1500.0f)) {
+    if (!MR::isNearPlayer(this, sThreatDistance)) {
         setNerve(GET_NERVE(Jellyfish, JellyfishNrvWait));
         return true;
     }
 
-    Vec3f vec2C;
-    vec2C.sub(*MR::getPlayerPos(), mPosition);
-    MR::normalizeOrZero(&vec2C);
+    Vec3f toPlayerDir;
+    toPlayerDir.sub(*MR::getPlayerPos(), mPosition);
+    MR::normalizeOrZero(&toPlayerDir);
 
-    Vec3f vec38;
-    MR::turnVecToPlane(&vec38, vec2C, mGravity);
+    Vec3f levelToPlayer;
+    MR::turnVecToPlane(&levelToPlayer, toPlayerDir, mGravity);
 
-    Vec3f vec44;
-    MR::turnVecToPlane(&vec44, mFront, mGravity);
+    Vec3f levelFront;
+    MR::turnVecToPlane(&levelFront, mFront, mGravity);
 
-    if (vec44.angle(vec38) * _180_PI < 35.0f) {
+    if (levelFront.angle(levelToPlayer) * _180_PI < sThreatFaceAngle) {
         if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvThreat))) {
             return false;
         }
 
         setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreat));
+        return true;
+    }
+
+    Vec3f toPlayer;
+    toPlayer.sub(*MR::getPlayerPos(), mPosition);
+    Vec3f side;
+    MR::calcSideVec(&side, this);
+
+    if (toPlayer.dot(side) > 0.0f) {
+        setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithLeftTurn));
     } else {
-        Vec3f vec50;
-        vec50.sub(*MR::getPlayerPos(), mPosition);
-
-        Vec3f sideVec;
-        MR::calcSideVec(&sideVec, this);
-
-        if (vec50.dot(sideVec) > 0.0f) {
-            setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithLeftTurn));
-        } else {
-            setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithRightTurn));
-        }
+        setNerve(GET_NERVE(Jellyfish, JellyfishNrvThreatWithRightTurn));
     }
 
     return true;
 }
 
 bool Jellyfish::tryPointerSwoon() {
-    if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvPointerSwoon))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvDeath))) {
+    if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvPointerSwoon)) || isNerve(GET_NERVE(Jellyfish, JellyfishNrvDeath))) {
         return false;
     }
 
