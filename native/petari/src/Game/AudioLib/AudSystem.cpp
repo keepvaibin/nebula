@@ -194,7 +194,7 @@ void AudSystem::calc() {
 }
 
 bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
-    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
+    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
     }
 
@@ -202,11 +202,11 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
         return false;
     }
 
-    if (mIsTrigSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mIsTrigSeBlocked && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
         return false;
     }
 
@@ -214,7 +214,7 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
-    if (soundID.getGroupID() != 0xD && mHomeButtonMenuState != 0) {  // disable non-home-menu sounds if menu is not cleared
+    if (soundID.getGroupID() != AudGroup_HomeSe && mHomeButtonMenuState != MenuState_Off) {  // only the HOME menu's own while it is up
         return false;
     }
 
@@ -227,7 +227,7 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
 }
 
 bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
-    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
+    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
     }
 
@@ -235,11 +235,11 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
         return false;
     }
 
-    if (mIsLevelSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mIsLevelSeBlocked && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
         return false;
     }
 
@@ -247,7 +247,7 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         return false;
     }
 
-    if (soundID.getGroupID() != 0xD && mHomeButtonMenuState != 0) {  // disable non-home-menu sounds if menu is not cleared
+    if (soundID.getGroupID() != AudGroup_HomeSe && mHomeButtonMenuState != MenuState_Off) {  // only the HOME menu's own while it is up
         return false;
     }
 
@@ -271,7 +271,7 @@ void AudSystem::switchToLuigi(SoundID soundID, SoundHandle* pHandle) {
         return;
     }
 
-    if (soundID.getGroupID() != 0x1) {  // SE_PV
+    if (soundID.getGroupID() != AudGroup_VoiceSe) {
         return;
     }
 
@@ -552,11 +552,11 @@ bool AudSystem::isEnableStartSound(SoundID soundID) {
         return false;
     }
 
-    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
+    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
         return false;
     }
 
@@ -808,11 +808,11 @@ bool AudSystem::isAlreadyPlayingSoundNear(SoundID soundID, const Vec3f* pPos, f3
 
 void AudSystem::setVolumeZeroForce(s32 menuType) {
     for (s32 category = 0; category < cEffectCategoryNum; category++) {
-        if (category == 0xD) {  // HOMESE
+        if (category == AudGroup_HomeSe) {
             continue;
         }
 
-        if (menuType == MenuType_Pause && category == 0x0) {  // pause and SE_SY
+        if (menuType == MenuType_Pause && category == AudGroup_SystemSe) {
             continue;
         }
 
