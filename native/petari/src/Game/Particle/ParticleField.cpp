@@ -61,27 +61,27 @@ void FieldAir::prepare(EmitterWork* pWork, ParticleField* pBlock) {
 }
 
 void FieldVortex::prepare(EmitterWork* pWork, ParticleField* pBlock) {
-    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &field_0x10);
-    MR::normalizeOrZero(&field_0x10);
-    field_0x1c = pBlock->getPos().z * pBlock->getPos().z;
-    field_0x20 = 1.0f / field_0x1c;
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &mAxis);
+    MR::normalizeOrZero(&mAxis);
+    mRadiusSq = pBlock->getPos().z * pBlock->getPos().z;
+    mInvRadiusSq = 1.0f / mRadiusSq;
 }
 
 void FieldVortex::calc(EmitterWork*, ParticleField* pBlock, ParticleCore* pParticle) {
     Vec3f radial;
-    radial.scale(field_0x10.dot(pParticle->mLocalPosition), field_0x10);
+    radial.scale(mAxis.dot(pParticle->mLocalPosition), mAxis);
     radial.sub(pParticle->mLocalPosition, radial);
     f32 distanceSquared = radial.squared();
     f32 magnitude;
-    if (distanceSquared > field_0x1c) {
+    if (distanceSquared > mRadiusSq) {
         magnitude = pBlock->getMagRndm();
     } else {
-        f32 rate = distanceSquared * field_0x20;
+        f32 rate = distanceSquared * mInvRadiusSq;
         magnitude = (1.0f - rate) * pBlock->getMag() + rate * pBlock->getMagRndm();
     }
 
     MR::normalizeOrZero(&radial);
-    mAccel.cross(radial, field_0x10);
+    mAccel.cross(radial, mAxis);
     mAccel.scale(magnitude);
     calcAffect(pBlock, pParticle);
 }
@@ -91,23 +91,20 @@ void FieldConvection::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     Vec3f tangent;
     tangent.cross(pBlock->getPos(), pBlock->getDir());
     radial.cross(pBlock->getDir(), tangent);
-    NebulaMtxMultVecSR(pWork->mGlobalRot, &radial, &field_0x10);
-    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &field_0x1c);
-    NebulaMtxMultVecSR(pWork->mGlobalRot, &tangent, &field_0x28);
-    MR::normalizeOrZero(&field_0x10);
-    MR::normalizeOrZero(&field_0x1c);
-    MR::normalizeOrZero(&field_0x28);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &radial, &mRadial);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &mAxis);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &tangent, &mTangent);
+    MR::normalizeOrZero(&mRadial);
+    MR::normalizeOrZero(&mAxis);
+    MR::normalizeOrZero(&mTangent);
 }
 
 void FieldSpin::prepare(EmitterWork* pWork, ParticleField* pBlock) {
     Vec3f axis;
-    Mtx rotation;
     NebulaMtxMultVecSR(pWork->mGlobalRot, &pBlock->getDir(), &axis);
     MR::normalizeOrZero(&axis);
-    NebulaMtxRotAxisRad(rotation, &axis, pBlock->getMag());
-    field_0x10.set< f32 >(rotation[0][0], rotation[1][0], rotation[2][0]);
-    field_0x1c.set< f32 >(rotation[0][1], rotation[1][1], rotation[2][1]);
-    field_0x28.set< f32 >(rotation[0][2], rotation[1][2], rotation[2][2]);
+    NebulaMtxRotAxisRad(mRotation, &axis, pBlock->getMag());
+    mRotation[0][3] = mRotation[1][3] = mRotation[2][3] = 0.0f;
 }
 
 void FieldAir::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
@@ -150,12 +147,12 @@ void FieldNewton::calc(EmitterWork* work, ParticleField* block, ParticleCore* pt
 
 void FieldConvection::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
     Vec3f vec1, vec2, vec3;
-    vec1.scale(field_0x10.dot(ptcl->mLocalPosition), field_0x10);
-    vec3.scale(field_0x28.dot(ptcl->mLocalPosition), field_0x28);
+    vec1.scale(mRadial.dot(ptcl->mLocalPosition), mRadial);
+    vec3.scale(mTangent.dot(ptcl->mLocalPosition), mTangent);
     vec1.add(vec3);
     vec1.setLength(vec1, block->getVal1());
     vec2.sub(ptcl->mLocalPosition, vec1);
-    vec3.cross(field_0x1c, vec1);
+    vec3.cross(mAxis, vec1);
     mAccel.cross(vec3, vec2);
     mAccel.setLength(block->getMag());
     calcAffect(block, ptcl);
@@ -180,19 +177,8 @@ void FieldDrag::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl
 }
 
 void FieldSpin::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
-    Mtx mtx;
-    mtx[0][0] = field_0x10.x;
-    mtx[1][0] = field_0x10.y;
-    mtx[2][0] = field_0x10.z;
-    mtx[0][1] = field_0x1c.x;
-    mtx[1][1] = field_0x1c.y;
-    mtx[2][1] = field_0x1c.z;
-    mtx[0][2] = field_0x28.x;
-    mtx[1][2] = field_0x28.y;
-    mtx[2][2] = field_0x28.z;
-    mtx[0][3] = mtx[1][3] = mtx[2][3] = 0.0f;
     Vec vec;
-    NebulaMtxMultVecSR(mtx, &ptcl->mLocalPosition, &vec);
+    NebulaMtxMultVecSR(mRotation, &ptcl->mLocalPosition, &vec);
     mAccel.set< f32 >(vec.x - ptcl->mLocalPosition.x, vec.y - ptcl->mLocalPosition.y, vec.z - ptcl->mLocalPosition.z);
     calcAffect(block, ptcl);
 }

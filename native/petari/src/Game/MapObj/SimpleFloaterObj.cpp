@@ -18,9 +18,9 @@ namespace NrvSimpleFloaterObj {
 };  // namespace NrvSimpleFloaterObj
 
 SimpleFloaterObj::SimpleFloaterObj(const char* pName) : LiveActor(pName) {
-    _8C = 0;
-    _90 = nullptr;
-    _94.set(0.0f, 0.0f, 0.0f);
+    mObjName = 0;
+    mFloatingForce = nullptr;
+    mEffectPos.set(0.0f, 0.0f, 0.0f);
 }
 
 SimpleFloaterObj::~SimpleFloaterObj() {
@@ -28,22 +28,22 @@ SimpleFloaterObj::~SimpleFloaterObj() {
 
 void SimpleFloaterObj::init(const TableIter& rrIter) {
     MR::initDefaultPos(this, rrIter);
-    MR::getObjectName(&_8C, rrIter);
-    initModelManagerWithAnm(_8C, nullptr, false);
+    MR::getObjectName(&mObjName, rrIter);
+    initModelManagerWithAnm(mObjName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     HitSensor* mSensor = getSensor(nullptr);
-    MR::initCollisionParts(this, _8C, mSensor, nullptr);
-    initEffectKeeper(0, nullptr, false);
-    _94.set(mPosition);
-    MR::setEffectHostSRT(this, ::cEffectName, &_94, &mRotation, nullptr);
+    MR::initCollisionParts(this, mObjName, mSensor, nullptr);
+    initEffectKeeper(0, nullptr);
+    mEffectPos.set(mPosition);
+    MR::setEffectHostSRT(this, ::cEffectName, &mEffectPos, &mRotation, nullptr);
     initSound(4, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
-    _90 = new MapPartsFloatingForce(this);
-    _90->init(rrIter);
-    _90->setObjectName(_8C);
-    _90->start();
+    mFloatingForce = new MapPartsFloatingForce(this);
+    mFloatingForce->init(rrIter);
+    mFloatingForce->setObjectName(mObjName);
+    mFloatingForce->start();
     initNerve(GET_NERVE(SimpleFloaterObj, SimpleFloaterObjNrvWait));
     makeActorAppeared();
 }
@@ -58,5 +58,5 @@ void SimpleFloaterObj::exeWait() {
         MR::deleteEffect(this, ::cEffectName);
     }
 
-    _90->movement();
+    mFloatingForce->movement();
 }

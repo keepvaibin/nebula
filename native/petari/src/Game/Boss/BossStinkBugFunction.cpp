@@ -33,7 +33,7 @@ void BossStinkBugFunction::moveRail(BossStinkBug* pStinkBug, f32 f1, f32 f2, f32
     MR::moveCoord(pStinkBug, f1);
     Vec3f railPos(MR::getRailPos(pStinkBug));
     addHeightOffset(&railPos, pStinkBug, f2);
-    MR::turnDirectionDegree(pStinkBug, &pStinkBug->_EC, MR::getRailDirection(pStinkBug), 10.0f);
+    MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
     addLocalHeightOffset(&railPos, pStinkBug, f3);
     pStinkBug->mPosition.set(railPos);
 }
@@ -42,7 +42,7 @@ void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const Vec3f& 
     if (MR::isRailGoingToEnd(pStinkBug) == a1) {
         MR::reverseRailDirection(pStinkBug);
     }
-    MR::rotateVecDegree(&pStinkBug->_EC, rVec, pStinkBug->mGravity, MR::getEaseInOutValue(f1, 0.0f, 1.0f, 1.0f) * 180.0f * -(a1 ? 1.0f : -1.0f));
+    MR::rotateVecDegree(&pStinkBug->mFront, rVec, pStinkBug->mGravity, MR::getEaseInOutValue(f1, 0.0f, 1.0f, 1.0f) * 180.0f * -(a1 ? 1.0f : -1.0f));
 }
 
 void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rVec1, f32 f1, f32 f2, f32 f3, f32 f4, f32 f5, bool a1) {
@@ -67,7 +67,7 @@ void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rVec1,
     f32 rollAngle = f1 * (1.0f - temp) + (90.0f * flt1) * temp;
     pStinkBug->mRotation.z = MR::repeat(rollAngle, -180.0f, 360.0f);
 
-    MR::rotateVecDegree(&pStinkBug->_EC, rVec1, pStinkBug->mGravity, MR::getEaseInOutValue(f2, 0.0f, 1.0f, 1.0f) * 180.0f * -flt1);
+    MR::rotateVecDegree(&pStinkBug->mFront, rVec1, pStinkBug->mGravity, MR::getEaseInOutValue(f2, 0.0f, 1.0f, 1.0f) * 180.0f * -flt1);
     addLocalHeightOffset(&railPos, pStinkBug, f5);
     pStinkBug->mPosition.set(railPos);
 }
@@ -80,9 +80,9 @@ void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const Vec3f& rV
     addLocalHeightOffset(&railPos, pStinkBug, f4);
     Vec3f dif = railPos - pStinkBug->mPosition;
     if (MR::isNearZero(dif)) {
-        MR::turnDirectionDegree(pStinkBug, &pStinkBug->_EC, dif, 2.0f);
+        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, dif, 2.0f);
     } else {
-        MR::turnDirectionDegree(pStinkBug, &pStinkBug->_EC, MR::getRailDirection(pStinkBug), 10.0f);
+        MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
     }
     pStinkBug->mPosition.scaleAdd(1.0f - f1, rVec, railPos);
 }

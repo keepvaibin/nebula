@@ -11,23 +11,23 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
-RestartCube::RestartCube(int formType, const char* pName) : AreaObj(formType, pName), mIdInfo(), _40(-1), _44(-1), _48() {
+RestartCube::RestartCube(int formType, const char* pName) : AreaObj(formType, pName), mIdInfo(), mBgmIndex(-1), mBgmStateIndex(-1), mIsBgmChanged() {
 }
 
 void RestartCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mIdInfo = new PlacementId(mObjArg0, rIter);
-    _40 = mObjArg1;
-    _44 = mObjArg2;
-    _48 = false;
+    mBgmIndex = mObjArg1;
+    mBgmStateIndex = mObjArg2;
+    mIsBgmChanged = false;
 }
 
 void RestartCube::updatePlayerRestartIdInfo() {
     if (mObjArg3 == -1 || MR::isOnGroundPlayer()) {
         MR::setPlayerRestartIdInfo(*mIdInfo);
 
-        if (!_48 && !MR::isCubeBgmChangeInvalid() && _40 >= 0) {
+        if (!mIsBgmChanged && !MR::isCubeBgmChangeInvalid() && mBgmIndex >= 0) {
             changeBgm();
         }
     }
@@ -38,22 +38,22 @@ RestartCube::~RestartCube() {
 
 void RestartCube::changeBgm() {
     if (MR::isPowerStarGetDemoActive()) {
-        _48 = true;
+        mIsBgmChanged = true;
         return;
     }
 
     if (MR::isPlayingStageBgmID(STM_STAR_EXIST)) {
-        _48 = true;
+        mIsBgmChanged = true;
         return;
     }
 
     if (MR::isPlayingStageBgmID(STM_STAR_EXIST_2)) {
-        _48 = true;
+        mIsBgmChanged = true;
         return;
     }
 
     if (MR::isPlayerDead()) {
-        _48 = true;
+        mIsBgmChanged = true;
         return;
     }
 
@@ -61,7 +61,7 @@ void RestartCube::changeBgm() {
         return;
     }
 
-    u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), _40);
+    u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), mBgmIndex);
 
     if (bgmId != -1) {
         u32 currBGM = AudWrap::getBgmMgr()->mCurrentBGM[AudBgmMgr::BgmType_Stage];
@@ -85,8 +85,8 @@ void RestartCube::changeBgm() {
         }
     }
 
-    if (_44 >= 0) {
-        s32 state = AudStageBgmTable::getBgmState(MR::getCurrentStageName(), _44);
+    if (mBgmStateIndex >= 0) {
+        s32 state = AudStageBgmTable::getBgmState(MR::getCurrentStageName(), mBgmStateIndex);
 
         if (state >= 0) {
             AudBgm* stageBgm = AudWrap::getStageBgm();

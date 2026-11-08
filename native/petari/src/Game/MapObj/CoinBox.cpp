@@ -29,7 +29,7 @@ void CoinBox::init(const TableIter& rIter) {
     setNerve(GET_NERVE(CoinBox, CoinBoxNrvWait));
     MR::declareCoin(this, 1);
     MR::setClippingFar50m(this);
-    initEffectKeeper(1, "Coin", false);
+    initEffectKeeper(1, "Coin");
 }
 
 void CoinBox::exeWait() {

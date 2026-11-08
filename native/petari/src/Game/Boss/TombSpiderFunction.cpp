@@ -378,9 +378,8 @@ bool TombSpiderFunction::isRotateLeftToPlayer(const TombSpider* pParent) {
     return front.cross(dir).z > 0.0f;
 }
 
+// Unwraps the rotation by a turn so the step toward the player's angle goes the way isRotateLeftToPlayer says.
 f32 TombSpiderFunction::calcRotateSpeedToPlayer(TombSpider* pParent, s32 ratio) {
-    // TODO: this matches but is probably written differently
-
     MR::repeatDegree(&pParent->mRotation.z);
     f32 angle = MR::repeatDegree(MR::calcRotateZ(pParent->mPosition, *MR::getPlayerPos()) + 90.0f);
 

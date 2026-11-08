@@ -77,18 +77,18 @@ public:
     CameraTargetMtx* mCamTargetMtx;
     ActorCameraInfo* mCameraInfo;
     DinoPackunSequencer* mSequence;
-    JointControlDelegator< DinoPackun >* _B4;
-    AnimScaleController* _B8;
-    Quat4f _BC;
-    Vec4f _CC;
-    Vec3f _DC;
-    Vec3f _E8;
-    s32 _F4;
+    JointControlDelegator< DinoPackun >* mScaleJointCtrl;
+    AnimScaleController* mAnimScaleCtrl;
+    Quat4f mPoseQuat;
+    Vec4f mStartQuat;
+    Vec3f mStartPos;
+    Vec3f mFront;
+    s32 mCameraRegisterId;
     Vec3f mCameraVec;
-    f32 _104;
-    f32 _108;
-    s32 _10C;
-    u8 _110;
+    f32 mAimTailRateSpeed;
+    f32 mAimTailRate;
+    s32 mDamageCameraState;
+    u8 mIsPreCalcAnim;
 };
 
 namespace MR {

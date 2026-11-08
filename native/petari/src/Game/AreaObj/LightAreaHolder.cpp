@@ -26,7 +26,7 @@ bool LightAreaHolder::tryFindLightID(const Vec3f& rArea, ZoneLightID* pLightID) 
         if (pLightID->isTargetArea(pLightArea)) {
             return false;
         } else {
-            pLightID->_0 = pLightArea->mPlacedZoneID;
+            pLightID->mZoneId = pLightArea->mPlacedZoneID;
             pLightID->mLightID = pLightArea->mObjArg0;
 
             return true;

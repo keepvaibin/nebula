@@ -18,8 +18,8 @@ namespace NrvBallBeamer {
     NEW_NERVE(BallBeamerNrvInter, BallBeamer, Inter);
 };  // namespace NrvBallBeamer
 
-BallBeamer::BallBeamer(const char* pName) : LiveActor(pName), mBeams(), _90() {
-    _98.identity();
+BallBeamer::BallBeamer(const char* pName) : LiveActor(pName), mBeams(), mIsSwitchOn() {
+    mHeadCollisionMtx.identity();
 }
 
 void BallBeamer::init(const TableIter& rIter) {
@@ -31,7 +31,7 @@ void BallBeamer::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorPush(this, "Body", 8, 120.0f, Vec3f(0.0f, -20.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 120.0f);
-    initEffectKeeper(3, nullptr, false);
+    initEffectKeeper(3, nullptr);
     initSound(2, false);
     initNerve(GET_NERVE(BallBeamer, BallBeamerNrvWait));
     makeActorAppeared();
@@ -63,18 +63,18 @@ void BallBeamer::init(const TableIter& rIter) {
         mBeams[i]->setSpeed(arg0);
         mBeams[i]->setLife(arg1);
     }
-    _98.setInline(MR::getJointMtx(this, "Head"));
-    MR::initCollisionParts(this, "Head", getSensor("Body"), _98.toMtxPtr());
+    mHeadCollisionMtx.setInline(MR::getJointMtx(this, "Head"));
+    MR::initCollisionParts(this, "Head", getSensor("Body"), mHeadCollisionMtx.toMtxPtr());
     MR::validateCollisionParts(this);
 }
 
 void BallBeamer::syncSwitchOnA() {
-    _90 = true;
+    mIsSwitchOn = true;
     BallBeamer::setupAttack();
 }
 
 void BallBeamer::syncSwitchOffA() {
-    _90 = false;
+    mIsSwitchOn = false;
 }
 
 void BallBeamer::syncSwitchOnB() {
@@ -143,7 +143,7 @@ void BallBeamer::exeInter() {
     }
 
     if (MR::isGreaterEqualStep(this, 120)) {
-        if (_90) {
+        if (mIsSwitchOn) {
             setNerve(GET_NERVE(BallBeamer, BallBeamerNrvAttack));
         } else {
             setNerve(GET_NERVE(BallBeamer, BallBeamerNrvWait));

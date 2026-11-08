@@ -40,6 +40,6 @@ public:
     TalkMessageCtrl* mTalkCtrl;
     TalkMessageCtrl* mTalkCtrlAutomatic;
     Vec3f mPadAccel;
-    bool _A4;
-    bool _A5;
+    bool mIsTrampled;
+    bool mCanTalk;
 };

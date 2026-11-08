@@ -45,7 +45,7 @@ namespace {
 
 Petari::Petari(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(nullptr), mFootPrint(nullptr), mFootprintYOffs(0.0f), mRequestSmoke(true), mFront(0.0f, 0.0f, 1.0f),
-      mTargetDir(0.0f, 0.0f, 1.0f), mMeanderStep(0), mMeanderAngle(0.0f), mStarPieceTotal(20), mStarPieceRemaining(20), _D0(0) {
+      mTargetDir(0.0f, 0.0f, 1.0f), mMeanderStep(0), mMeanderAngle(0.0f), mStarPieceTotal(20), mStarPieceRemaining(20) {
     mHeadMtx.identity();
 }
 
@@ -62,7 +62,7 @@ void Petari::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensors();
     initBinder(60.0f, 60.0f, 0);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffect(this, "PointerTouchManual");
     MR::setEffectHostMtx(this, "PointerTouchManual", mHeadMtx);
     initSound(4, false);
@@ -129,7 +129,7 @@ void Petari::exeWait() {
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.92f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
 
     if (MR::isStep(this, 60)) {
         if (MR::isHiddenModel(this)) {
@@ -163,7 +163,7 @@ void Petari::exeApproach() {
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.92f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
 
     updateFootPrint();
 
@@ -229,7 +229,7 @@ void Petari::exeSwoonStart() {
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.985f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.985f, 3.0f});
 
     MR::setNerveAtBckStopped(this, GET_NERVE_ANON(PetariNrvSwoon));
 }
@@ -245,7 +245,7 @@ void Petari::exeSwoon() {
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.0f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.0f, 3.0f});
 
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
     MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvSwoonEnd), 180);
@@ -265,7 +265,7 @@ void Petari::exeSwoonEnd() {
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.0f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.0f, 3.0f});
 
     if (MR::isBckOneTimeAndStopped(this)) {
         MR::startSound(this, "SE_EM_CHANGE_SMOKE");
@@ -345,19 +345,19 @@ void Petari::exeKickOut() {
 
 void Petari::exeFreeze() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::emitEffectWithScale(this, "PointerTouchManual", 0.8f, -1);
         mVelocity.zero();
-        mAnimScaleCtrl->startDpdHitVibration();
+        mAnimScaleCtrl->startPointerHitVibration();
     }
 
     f32 v3 = 0.0f;
     if (!MR::isBindedGround(this)) {
         v3 = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, v3, 1.3, 0.92f, 3.0f);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 
     if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE_ANON(PetariNrvWait));
@@ -401,7 +401,7 @@ void Petari::control() {
 }
 
 void Petari::calcAndSetBaseMtx() {
-    Vec3f scale = mAnimScaleCtrl->_C * mScale;
+    Vec3f scale = mAnimScaleCtrl->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -461,9 +461,9 @@ void Petari::initFootPrint(const TableIter& rIter) {
 
     ResTIMG* texture = MR::getTexFromArc("Footprint.bti", this);
     mFootPrint->setTexture(texture);
-    mFootPrint->_2C = 25.0f;
-    mFootPrint->_30 = 30.0f;
-    mFootPrint->_34 = 40.0f;
+    mFootPrint->mSideOffset = 25.0f;
+    mFootPrint->mHeight = 30.0f;
+    mFootPrint->mWidth = 40.0f;
     mFootPrint->mMinPrintDistance = 100.0f;
 
     MR::getPlacementArg0NoInit(rIter, &mFootprintYOffs);
@@ -601,7 +601,7 @@ void Petari::moveTowardTargetDirection(f32 vel, f32 f2, f32 angle) {
     if (!MR::isBindedGround(this)) {
         vel = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, vel, 1.3f, f2, angle);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {vel, 1.3f, f2, angle});
 }
 
 void Petari::updateFootPrint() {

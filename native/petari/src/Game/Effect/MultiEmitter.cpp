@@ -13,31 +13,32 @@
 #include <cstring>
 
 
-MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pScale, const Vec3f* pRotation, const Vec3f* pTranslation, const Vec3f& rVec)
-    : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
-    mCallBack = new MultiEmitterCallBack(this, pScale, pRotation, pTranslation, rVec);
+MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset)
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    mCallBack = new MultiEmitterCallBack(this, pTranslation, pRotation, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
     allocateEmitter(pName);
 }
 
-MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rVec)
-    : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
-    mCallBack = new MultiEmitterCallBack(this, pMtx, rVec);
+MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rOffset)
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    mCallBack = new MultiEmitterCallBack(this, pMtx, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
     allocateEmitter(pName);
 }
 
-MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pTranslation, const Vec3f& rVec)
-    : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
-    mCallBack = new MultiEmitterCallBack(this, pMtx, pTranslation, rVec);
+MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pScale, const Vec3f& rOffset)
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    mCallBack = new MultiEmitterCallBack(this, pMtx, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
     allocateEmitter(pName);
 }
 
-MultiEmitter::MultiEmitter(const char* pName) : mEmitters(), mCallBack(), mParticleCallBack(), _24(), _28(), _2C(), _30(), mHash(), mFlags() {
+MultiEmitter::MultiEmitter(const char* pName)
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
     mCallBack = new MultiEmitterCallBack(this, Vec3f(0.0f, 0.0f, 0.0f));
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -124,8 +125,8 @@ bool MultiEmitter::isExistOneTimeEmitter() const {
     return false;
 }
 
-void MultiEmitter::setHostSRT(const Vec3f* pScale, const Vec3f* pRotation, const Vec3f* pTranslation) {
-    mCallBack->setHostSRT(pScale, pRotation, pTranslation);
+void MultiEmitter::setHostSRT(const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale) {
+    mCallBack->setHostSRT(pTranslation, pRotation, pScale);
 }
 
 void MultiEmitter::setHostMtx(MtxPtr pMtx) {
@@ -133,7 +134,7 @@ void MultiEmitter::setHostMtx(MtxPtr pMtx) {
 }
 
 void MultiEmitter::setOffset(const Vec3f& rOffset) {
-    mCallBack->_18.set(rOffset);
+    mCallBack->mOffset.set(rOffset);
 }
 
 void MultiEmitter::setBaseScale(f32 scale) {
@@ -162,8 +163,6 @@ void MultiEmitter::create(EffectSystem* pSystem) {
         pSystem->createSingleEmitter(pEmitter, mCallBack, mParticleCallBack);
     }
 
-    mCallBack->resetFollowCurrent();
-
     for (MultiEmitter** pEmitter = mChildren.begin(); pEmitter != mChildren.end(); pEmitter++) {
         (*pEmitter)->create(pSystem);
     }
@@ -188,25 +187,25 @@ void MultiEmitter::forceScaleOn() {
 }
 
 void MultiEmitter::initSyncBck(XanimePlayer* pPlayer, const char* pName, s32 capacity, f32 startFrame) {
-    _24 = new SyncBckEffectInfo(pPlayer, pName, capacity, 0.0f, -1.0f, false);
-    _24->mStartFrame = startFrame;
+    mSyncBck = new SyncBckEffectInfo(pPlayer, pName, capacity, 0.0f, -1.0f, false);
+    mSyncBck->mStartFrame = startFrame;
 }
 
 void MultiEmitter::onDeleteSyncBck(bool deleteOnEnd, f32 endFrame) {
-    if (_24 != nullptr) {
-        _24->mEndFrame = endFrame;
+    if (mSyncBck != nullptr) {
+        mSyncBck->mEndFrame = endFrame;
     }
 }
 
 void MultiEmitter::addSyncBck(const XanimePlayer* pPlayer, const char* pName) {
-    if (_24 != nullptr) {
-        _24->addBck(pPlayer, pName);
+    if (mSyncBck != nullptr) {
+        mSyncBck->addBck(pPlayer, pName);
     }
 }
 
 void MultiEmitter::setContinueBckEnd(bool continueAnimEnd) {
-    if (_24 != nullptr) {
-        _24->mContinueAnimEnd = continueAnimEnd;
+    if (mSyncBck != nullptr) {
+        mSyncBck->mContinueAnimEnd = continueAnimEnd;
     }
 }
 
@@ -223,7 +222,7 @@ void MultiEmitter::stopEmitterOnClipped() {
         forceDeleteEmitter();
     } else if (isFlagOn(EmitterStatus_RateStepEmit)) {
         deleteEmitter();
-    } else if (_24 != nullptr) {
+    } else if (mSyncBck != nullptr) {
         stopCalcEmitter(-1);
         stopDrawParticle(-1);
     }
@@ -239,7 +238,7 @@ void MultiEmitter::stopEmitterOnClipped() {
 void MultiEmitter::playEmitterOffClipped() {
     if (isFlagOn(EmitterStatus_FirstEmit)) {
         create(MR::getEffectSystem());
-    } else if (_24 != nullptr) {
+    } else if (mSyncBck != nullptr) {
         playCalcEmitter(-1);
         playDrawParticle(-1);
     }

@@ -19,9 +19,9 @@ namespace {
     static const s32 sStepForLaugh = 120;
     static const s32 sStepToAngerBlur = 40;
     static const s32 sAngerBlurTime = 60;
-    volatile static const f32 sAngerBlurOffset = 100.0f;
+    static const f32 sAngerBlurOffset = 100.0f;
     static const s32 sExplosionBlurTime = 50;
-    volatile static const f32 sExplosionBlurOffset = 100.0f;
+    static const f32 sExplosionBlurOffset = 100.0f;
     static const f32 sTurnRate = 1.0f;
     static const f32 sLimitAngleOfTurn = 30.0f;
 };  // namespace
@@ -47,7 +47,7 @@ MogucchiShooter::MogucchiShooter(LiveActor* pActor, const char* pName)
 }
 
 void MogucchiShooter::init(const TableIter& rIter) {
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(1, false);
     MR::calcFrontVec(&mFront, this);

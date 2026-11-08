@@ -2,6 +2,8 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
+struct SimpleEffectData;
+
 class SimpleEffectObj : public LiveActor {
 public:
     SimpleEffectObj(const char*);
@@ -19,11 +21,9 @@ public:
         return 50.0f;
     };
 
-    virtual Vec3f* getClippingCenterOffset() const {
-        // A zero offset.
-        static Vec3f vec;
-        vec.set(0.0f, 0.0f, 0.0f);
-        return &vec;
+    // From the object's position.
+    virtual Vec3f getClippingCenterOffset() const {
+        return Vec3f(0.0f, 0.0f, 0.0f);
     };
 
     virtual bool isSyncClipping() const {
@@ -37,15 +37,19 @@ public:
     void exeWait();
     void exeMove();
 
-    const char* _8C;
-    Vec3f _90;
+    const char* mObjName;
+    const SimpleEffectData* mData;  // null: the effect only
+    Vec3f mClippingCenter;
 };
 
-typedef struct {
-    const char* _0;
-    const char* _4;
-    const char* _8;
-    s32 _C;
-    const char* _10;
-    s32 _14;
-} s_effectDataTable;
+// What an effect object of one name does besides its effect.
+struct SimpleEffectData {
+    const char* mName;
+    const char* mStartSound;  // when it starts
+    const char* mLevelSound;  // every step while it plays
+    s32 mShake;               // camera shake when it starts: cNoShake, 0 strong, 1 normal, 2 weak
+    const char* mRumble;      // pad rumble at mRumbleStep
+    s32 mRumbleStep;
+
+    static constexpr s32 cNoShake = -1;
+};

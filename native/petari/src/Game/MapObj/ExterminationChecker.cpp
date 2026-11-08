@@ -41,8 +41,8 @@ ExterminationChecker::ExterminationChecker(const char* pName) : LiveActor(pName)
     mKeySwitchPos.x = 0.0f;
     mKeySwitchPos.y = 0.0f;
     mKeySwitchPos.z = 0.0f;
-    _A0 = 1;
-    _A1 = 0;
+    mIsPowerStar = 1;
+    mIsKeySwitch = 0;
 }
 
 void ExterminationChecker::init(const TableIter& rIter) {
@@ -61,12 +61,12 @@ void ExterminationChecker::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
     MR::useStageSwitchSleep(this, rIter);
 
-    if (_A1) {
+    if (mIsKeySwitch) {
         mKeySwitch = new KeySwitch("全滅用キースイッチ");
         mKeySwitch->initKeySwitchByOwner(rIter);
     }
 
-    if (_A0) {
+    if (mIsPowerStar) {
         MR::declarePowerStar(this);
     }
 
@@ -93,11 +93,11 @@ void ExterminationChecker::exeWatching() {
         return;
     }
 
-    if (_A0) {
+    if (mIsPowerStar) {
         setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvTryStartDemoAppear));
     }
 
-    if (_A1) {
+    if (mIsKeySwitch) {
         setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvAppearKeySwitch));
     }
 }
@@ -137,15 +137,15 @@ void ExterminationChecker::exeAppearKeySwitch() {
 namespace MR {
     NameObj* createExterminationPowerStar(const char* pName) {
         ExterminationChecker* checker = new ExterminationChecker(pName);
-        checker->_A0 = 1;
-        checker->_A1 = 0;
+        checker->mIsPowerStar = 1;
+        checker->mIsKeySwitch = 0;
         return checker;
     }
 
     NameObj* createExterminationKeySwitch(const char* pName) {
         ExterminationChecker* checker = new ExterminationChecker(pName);
-        checker->_A0 = 0;
-        checker->_A1 = 1;
+        checker->mIsPowerStar = 0;
+        checker->mIsKeySwitch = 1;
         return checker;
     }
 };  // namespace MR

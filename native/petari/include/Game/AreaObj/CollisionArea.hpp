@@ -17,11 +17,10 @@ public:
     void invalidate();
     void validate();
 
-    u8 _120[4];
     AreaForm* mForm;
-    MtxPtr _128;
-    Vec3f _12C;
-    f32 _138;
+    MtxPtr mFollowMtx;
+    Vec3f mSize;
+    f32 mOffset;
 };
 
 class CollisionArea : public AreaObj {
@@ -35,16 +34,14 @@ public:
 
     bool hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal);
 
-    u32 _3C;
-    f32 _40;
-    Vec3f _44;
-    s32 _50;
-    s32 _54;
-    bool _58;
-    u8 _59[3];
-    s32 _5C;
-    s32 _60;
+    u32 mOutsideAxisCount;
+    f32 mInsideDepth;
+    Vec3f mCenter;
+    s32 mPushType;
+    s32 mTeresaType;
+    bool mIsTeresaPass;
+    s32 mHitRadius;
+    s32 mSurfaceMask;
     AreaPolygon* mPolygon;
     bool mIsValid;
-    u8 _69[3];
 };

@@ -20,16 +20,14 @@ public:
     void exeStartBreak();
     void exeBreak();
 
-    Pos3f _8C;
+    Pos3f mMtx;
     SpringValue* mSpring;
-    Vec3f _C0;
-    Vec3f _CC;
-    Vec3f _D8;
-    Vec3f _E4;
-    f32 _F0;
-    f32 _F4;
-    f32 _F8;
-    u32 _FC;
-    s32 _100;
-    u32 _104;
+    Vec3f mPos;
+    Vec3f mMoment;
+    Vec3f mBreakVelocity;
+    Vec3f mFlyDir;
+    f32 mFlyDirRandomRate;
+    f32 mFlySpeed;
+    f32 mDamping;
+    s32 mJointIndex;
 };

@@ -26,8 +26,8 @@ namespace NrvSamboHead {
     NEW_NERVE(HostTypeNrvBindStarPointerEnd, SamboHead, BindStarPointerEnd);
 };  // namespace NrvSamboHead
 
-SamboHead::SamboHead(const char* pName) : LiveActor(pName), mSpinCtrl(), mScaleController(), mBindStarPointer(), _98(0, 0, 1), _A4(0, 0, 0) {
-    _B0 = 0;
+SamboHead::SamboHead(const char* pName) : LiveActor(pName), mSpinCtrl(), mScaleController(), mBindStarPointer(), mFront(0, 0, 1), mInitPos(0, 0, 0) {
+    mIsPursueAlways = 0;
 }
 
 void SamboHead::init(const TableIter& rIter) {
@@ -43,16 +43,16 @@ void SamboHead::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &arg0);
 
         if (arg0 == -1) {
-            _B0 = false;
+            mIsPursueAlways = false;
         } else {
-            _B0 = true;
+            mIsPursueAlways = true;
         }
     }
 
-    _A4.set(mPosition);
+    mInitPos.set(mPosition);
     initModelManagerWithAnm("SamboHead", nullptr, false);
     Pos3f mtx = getBaseMtx();
-    mtx.getZDir(_98);
+    mtx.getZDir(mFront);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     f32 scale_y = mScale.y;
@@ -60,7 +60,7 @@ void SamboHead::init(const TableIter& rIter) {
     MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", 0x20, 100.0f * scale_y, Vec3f(0.0f, 100.0f * scale_y, 0.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(SamboHead, HostTypeNrvWaitUnderGround));
     MR::onCalcGravity(this);
@@ -118,7 +118,7 @@ void SamboHead::control() {
 void SamboHead::exeWaitUnderGround() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "AppearMini");
-        mPosition.set(_A4);
+        mPosition.set(mInitPos);
         MR::invalidateShadow(this, nullptr);
         getSensor("body")->invalidate();
     }
@@ -183,17 +183,17 @@ void SamboHead::exeWait() {
     MR::killVelocityOnGroundH(this);
     f32 dist = MR::calcDistanceToPlayer(this);
 
-    if (800.0f < dist && !_B0) {
+    if (800.0f < dist && !mIsPursueAlways) {
         if (MR::isGreaterStep(this, 120)) {
             setNerve(GET_NERVE(SamboHead, HostTypeNrvHide));
         }
     } else {
-        if (dist < 500.0f || _B0) {
+        if (dist < 500.0f || mIsPursueAlways) {
             Vec3f v4;
             MR::calcVecToPlayerH(&v4, this, nullptr);
 
-            if (MR::turnVecToVecRadian(&_98, _98, v4, 0.05f, mGravity) < 0.015f) {
-                if (_B0) {
+            if (MR::turnVecToVecRadian(&mFront, mFront, v4, 0.05f, mGravity) < 0.015f) {
+                if (mIsPursueAlways) {
                     setNerve(GET_NERVE(SamboHead, HostTypeNrvPursue));
                 } else {
                     setNerve(GET_NERVE(SamboHead, HostTypeNrvPrePursue));
@@ -202,7 +202,7 @@ void SamboHead::exeWait() {
         } else {
             Vec3f v3;
             MR::calcVecToPlayerH(&v3, this, nullptr);
-            MR::turnVecToVecRadian(&_98, _98, v3, 0.05f, mGravity);
+            MR::turnVecToVecRadian(&mFront, mFront, v3, 0.05f, mGravity);
         }
     }
 }
@@ -214,7 +214,7 @@ void SamboHead::exePrePursue() {
 
     Vec3f v2;
     MR::calcVecToPlayerH(&v2, this, nullptr);
-    MR::turnVecToVecRadian(&_98, _98, v2, 0.05f, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, v2, 0.05f, mGravity);
 
     if (MR::isActionEnd(this) && MR::isOnGround(this)) {
         setNerve(GET_NERVE(SamboHead, HostTypeNrvPursue));
@@ -232,13 +232,13 @@ void SamboHead::exePursue() {
 
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Run");
-        mVelocity.set(_98 * 7.0f);
+        mVelocity.set(mFront * 7.0f);
         MR::addVelocityJump(this, 25.0f);
     }
 
     MR::applyVelocityDampAndGravity(this, 1.5f, 0.80f, 0.98f, 0.98f, 1.0f);
     MR::killVelocityOnGroundH(this);
-    MR::turnVecToVecRadian(&_98, _98, v3, 0.05f, mGravity);
+    MR::turnVecToVecRadian(&mFront, mFront, v3, 0.05f, mGravity);
 
     if (MR::isOnGround(this)) {
         setNerve(GET_NERVE(SamboHead, HostTypeNrvPursueEnd));
@@ -275,7 +275,7 @@ void SamboHead::exeHitToPlayer() {
     if (MR::isGreaterStep(this, 58)) {
         Vec3f v2;
         MR::calcVecToPlayerH(&v2, this, nullptr);
-        MR::turnVecToVecRadian(&_98, _98, v2, 0.05f, mGravity);
+        MR::turnVecToVecRadian(&mFront, mFront, v2, 0.05f, mGravity);
     }
 
     if (MR::isActionEnd(this)) {
@@ -351,10 +351,10 @@ void SamboHead::exeBuryDeath() {
 
 void SamboHead::exeBindStarPointer() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
     if (MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(SamboHead, HostTypeNrvBindStarPointerEnd))) {
         return;
     }
@@ -508,9 +508,9 @@ bool SamboHead::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 
 void SamboHead::calcAndSetBaseMtx() {
     Pos3f mtx;
-    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _98);
+    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 

@@ -20,15 +20,12 @@ public:
 
     const OceanRing* mOceanRing;
     Vec3f mPosition;
-    int _10;
-    int _14;
-    bool _18;
-    u8 _19;
-    u8 _1A;
-    u8 _1B;
-    f32 _1C;
-    f32 _20;
-    f32 _24;
+    int mStartIndex;
+    int mNumPoints;
+    bool mIsClosed;
+    f32 mTexU0;
+    f32 mTexU1;
+    f32 mTexU2;
     // The ring's surface as the renderer draws it from far away.
     SiteMesh< VertexPCT3 > mMesh;
 };
@@ -57,12 +54,11 @@ public:
     const OceanRing* mRing;
     s32 mDrawerCount;
     OceanRingPartDrawer** mPartDrawers;
-    f32 _C;
-    f32 _10;
-    f32 _14;
-    f32 _18;
-    f32 _1C;
-    f32 _20;
+    f32 mTex0U;
+    f32 mTex0V;
+    f32 mTex1U;
+    f32 mTex1V;
+    f32 mTex2V;
     JUTTexture* mWaterTex;
     JUTTexture* mWaterIndTex;
     // The ring's surface as the renderer draws it from far away.

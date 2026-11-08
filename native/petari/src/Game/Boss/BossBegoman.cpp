@@ -37,48 +37,22 @@ namespace {
     static const f32 hSpikeLaunchVelV = 20.0f;
     static const f32 hSideCheckOffsetY = 80.0f;
     static const f32 hSideCheckDot = 0.25f;
-    // static const _32 sCommonDampVel = _;
-    // static const _32 sCommonAirDamp = _;
-    // static const _32 sCommonGravity = _;
-    // static const _32 sReboundEnemyAddVel = _;
-    // static const _32 sReboundPlayerAddVel = _;
-    // static const _32 sPreventSwingbyDamp = _;
     static const s32 sDefaultLife = 3;
-    // static const _32 sCommonAddRotate = _;
-    // static const _32 sAddAttackRate = _;
-    // static const _32 sInitAttackRate = _;
-    // static const _32 hShadowSize = _;
-    // static const _32 hShadowScale = _;
-    // static const _32 hStarPieceEmitNum1st = _;
-    // static const _32 hStarPieceEmitNum2nd = _;
-    // static const _32 hEdgeRecoverTime = _;
     static const f32 sWaitRotate = 0.15f;
     static const f32 sSignAttackRotate = 0.5f;
-    // static const _32 sRatio = _;
     static const f32 sPursueRotate = 0.5f;
     static const f32 sTurnRotate = 0.4f;
-    // static const _32 hFrontSparkLength = _;
     static const s32 sOnWeakTime = 420;
     static const s32 hOnWeakSignSubTime = 240;
     static const s32 hOnWeakSignFastSubTime = 360;
     static const f32 hSignSlowRate = 0.5f;
     static const f32 hSignFastRate = 2.0f;
     static const s32 hOnWeakTurnTime = 30;
-    // static const _32 sOnWeakUpdateFrontDegree = _;
-    // static const _32 hOnWeakEscapeRange = _;
-    // static const _32 hEscapeRate = _;
-    // static const _32 hEscapeSideRate = _;
-    // static const _32 hOnWeakVelocity = _;
     static const f32 hOnWeakSideVel = 0.35f;
     static const f32 sBrakeRotate = 0.2f;
     static const f32 sProvokeRotate = 0.3f;
-    // static const _32 sShakeTime = _;
-    // static const _32 sShakeDampVel = _;
-    // static const _32 sShakeRotate = _;
     static const s32 sTrampleReactionOnSwitchTime = 80;
-    // static const _32 sTrampleReactionDampVel = _;
     static const f32 sTrampleReactionRotate = 0.25f;
-    // static const _32 sTrampBlowVel = _;
     static const s32 sAwareTime = 60;
     static const f32 sAwareRotate = 0.1f;
     static const f32 sHitReactionRotate = 0.25f;
@@ -89,14 +63,10 @@ namespace {
     static const s32 sDeathStopSceneTime = 5;
     static const s32 sElectricDeathTime = 60;
     static const s32 sElectricReturnTime = 60;
-    // static const _32 sElectricReturnDampVelGround = _;
-    // static const _32 sElectricReturnVel = _;
     static const s32 sJumpToInitPosTime = 60;
-    // static const _32 sJumpToInitPosMaxHeight = _;
     static const f32 sJumpToInitPosRotate = 0.1f;
     static const f32 hKeepDistFar = 800.0f;
     static const f32 hKeepDistNear = 600.0f;
-    // static const _32 sRotNeedleSeMaxVolumeSpeed = _;
 };  // namespace
 
 namespace NrvBossBegoman {
@@ -127,7 +97,7 @@ namespace NrvBossBegoman {
 
 BossBegoman::BossBegoman(const char* pName)
     : BegomanBase(pName), mBabyFollowers(), mSpikeFollowers(), mBabyFollowerNum(), mSpikeFollowerNum(), mFollowerKind(FollowerKind_BothFollower),
-      mPath(), mHead(), mHealth(::sDefaultLife), _150(0.2f), mOpeningDemoInfo() {
+      mPath(), mHead(), mHealth(::sDefaultLife), mPursueSpeedRate(0.2f), mOpeningDemoInfo() {
     mHeadMtx.identity();
 }
 
@@ -251,14 +221,14 @@ void BossBegoman::control() {
     if (isNerve(GET_NERVE(BossBegoman, HostTypeNrvPursue)) || isNerve(GET_NERVE(BossBegoman, HostTypeNrvTurn))) {
         f32 max = 1.0f;
         f32 new150;
-        if (_150 + 0.001f >= max) {
+        if (mPursueSpeedRate + 0.001f >= max) {
             new150 = max;
         } else {
-            new150 = _150 + 0.001f;
+            new150 = mPursueSpeedRate + 0.001f;
         }
-        _150 = new150;
+        mPursueSpeedRate = new150;
     } else {
-        _150 = 0.2f;
+        mPursueSpeedRate = 0.2f;
     }
 
     if (MR::isStep(this, 1)) {
@@ -418,7 +388,7 @@ void BossBegoman::exePursue() {
     }
 
     updateRotateY(::sPursueRotate);
-    exePursueCore(::hPursueParam, GET_NERVE(BossBegoman, HostTypeNrvBrake), GET_NERVE(BossBegoman, HostTypeNrvTurn), *getSoundBoss(), _150);
+    exePursueCore(::hPursueParam, GET_NERVE(BossBegoman, HostTypeNrvBrake), GET_NERVE(BossBegoman, HostTypeNrvTurn), *getSoundBoss(), mPursueSpeedRate);
 }
 
 void BossBegoman::exeTurn() {
@@ -448,10 +418,10 @@ void BossBegoman::exeOnWeak() {
     updateRotateY(0.4f);
 
     if (MR::calcDistanceToPlayer(mPosition) < 600.0f) {
-        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hOnWeakParam._0, ::hOnWeakParam._4, ::hOnWeakParam._8, ::hOnWeakParam._C);
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hOnWeakParam);
         addVelocityEscapeToSide(::hOnWeakSideVel);
     } else {
-        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hOnWeakNoMoveParam._0, ::hOnWeakNoMoveParam._4, ::hOnWeakNoMoveParam._8, ::hOnWeakNoMoveParam._C);
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hOnWeakNoMoveParam);
     }
 
     if (isNerve(GET_NERVE(BossBegoman, HostTypeNrvOnWeakTurn))) {
@@ -529,7 +499,7 @@ void BossBegoman::exeTrampleReaction() {
     }
 
     updateRotateY(::sTrampleReactionRotate);
-    MR::moveAndTurnToPlayer(this, &mFaceVec, 0.0f, 3.0f, 0.95f, 3.0f);
+    MR::moveAndTurnToPlayer(this, &mFaceVec, {0.0f, 3.0f, 0.95f, 3.0f});
 
     if (mHead->isSwitchOn()) {
         if (MR::isGreaterStep(this, ::sTrampleReactionOnSwitchTime)) {
@@ -546,7 +516,7 @@ void BossBegoman::exeAware() {
     }
 
     updateRotateY(::sAwareRotate);
-    MR::moveAndTurnToPlayer(this, &mFaceVec, 0.0f, 3.0f, 0.95f, 0.0f);
+    MR::moveAndTurnToPlayer(this, &mFaceVec, {0.0f, 3.0f, 0.95f, 0.0f});
     edgeRecoverCore();
 
     if (MR::isGreaterStep(this, ::sAwareTime)) {
@@ -569,8 +539,7 @@ void BossBegoman::exeBlow() {
 
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam._0, ::hHitReactionParam._4, ::hHitReactionParam._8,
-                               ::hHitReactionParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (MR::isGreaterStep(this, ::sBlowFrame) && MR::isOnGround(this)) {
@@ -671,7 +640,7 @@ void BossBegoman::exeElectricReturn() {
     }
 
     reboundWallAndGround(&mFaceVec, false);
-    MR::moveAndTurnToPlayer(this, &mFaceVec, 0.0f, 3.0f, 0.8f, 0.0f);
+    MR::moveAndTurnToPlayer(this, &mFaceVec, {0.0f, 3.0f, 0.8f, 0.0f});
 
     if (MR::isGreaterStep(this, ::sElectricReturnTime)) {
         mFaceVec.set(mTargetVec);

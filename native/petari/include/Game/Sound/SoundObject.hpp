@@ -31,6 +31,5 @@ public:
     }
 
     bool mIsAllocated;
-    u32 _10;
     Vec3f* mPos;
 };

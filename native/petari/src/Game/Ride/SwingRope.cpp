@@ -1,8 +1,6 @@
 #include "Game/Ride/SwingRope.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/SledRopePoint.hpp"
@@ -66,8 +64,6 @@ namespace {
     static const f32 sHangPointBlendRateAxisZ = 0.1f;
     static const f32 sPointBlendRateAxisZ = 0.5f;
     static const f32 sFootPointAxisBlendRate = 0.3f;
-    // static const f32 sDebugPointSpeed =
-    // static const s32 sDebugPointNo =
 };  // namespace
 
 namespace NrvSwingRope {

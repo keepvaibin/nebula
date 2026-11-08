@@ -63,7 +63,7 @@ void LavaProminenceTriple::init(const TableIter& rIter) {
         MR::addHitSensorCallbackMapObj(this, "attack", 1, 80.0f * mScale.y);
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setGroupClipping(this, rIter, 16);
 
     if (mIsEnvironment) {

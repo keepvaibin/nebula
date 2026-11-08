@@ -45,8 +45,8 @@ public:
 
     s32 mHideStep;
     s32 mAppearStep;
-    Vec3f _98;
-    bool _A4;
+    Vec3f mKnockDir;
+    bool mIsSpinCountered;
     bool mIsValidPop;
     f32 mPopAccel;
     f32 mPopSpeed;

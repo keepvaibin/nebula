@@ -80,6 +80,5 @@ public:
     Camera* mCamera;
     ChunkFIFOItemPair mItems[NR_FIFO_ITEMS];
     CameraParamChunkEvent* mChunk;
-    u32 _B8;
     bool mRequestReset;
 };

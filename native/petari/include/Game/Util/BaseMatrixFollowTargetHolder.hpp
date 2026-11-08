@@ -36,8 +36,8 @@ public:
     const MtxPtr getHostBaseMtx() const;
     bool isValid(s32) const;
 
-    Mtx34f _0;
-    const Pos3f* _30;
+    Mtx34f mInvHostMtx;
+    const Pos3f* mHostBaseMtx;
     LiveActor* mActor;
     const PlacementLink* mLinkInfo;
     BaseMatrixFollowValidater* mValidater;

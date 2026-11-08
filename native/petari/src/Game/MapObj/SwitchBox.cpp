@@ -17,28 +17,22 @@ void SwitchBox::init(const TableIter& rIter) {
     MR::connectToSceneMapObjNoCalcAnim(this);
     initSound(2, false);
     initNerve(GET_NERVE(SwitchBox, SwitchBoxNrvWait));
-    initEffectKeeper(3, nullptr, false);
+    initEffectKeeper(3, nullptr);
     f32 newScale = mScale.x * 90.0f;
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, newScale, Vec3f(0.0f, newScale, 0.0f));
 
-    s32 local_38 = 1;
+    s32 hasShadow = 1;
 
     if (MR::checkTableEntries(rIter)) {
-        MR::getPlacementArg1NoInit(rIter, &local_38);
+        MR::getPlacementArg1NoInit(rIter, &hasShadow);
     }
 
     setNerve(GET_NERVE(SwitchBox, SwitchBoxNrvWait));
     MR::initCollisionParts(this, "SwitchBox", getSensor("body"), nullptr);
     MR::validateClipping(this);
 
-    _92 = 0;
-
-    if (local_38) {
-        _92 = 1;
-    }
-
-    if (_92) {
+    if (hasShadow) {
         MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
         MR::setShadowVolumeStartDropOffset(this, nullptr, 77.0f);
         MR::setShadowVolumeEndDropOffset(this, nullptr, 150.0f);
@@ -62,18 +56,18 @@ void SwitchBox::initAfterPlacement() {
 }
 
 void SwitchBox::exeWait() {
-    if (_8c != 0) {
-        --_8c;
+    if (mFloorTouchTimer != 0) {
+        --mFloorTouchTimer;
     }
 
-    if (_8e != 0) {
-        --_8e;
-        if (_8e == 0) {
-            _90 = 1;
+    if (mHitCoolDown != 0) {
+        --mHitCoolDown;
+        if (mHitCoolDown == 0) {
+            mHitPoint = 1;
         }
     }
 
-    if (_90 == 0) {
+    if (mHitPoint == 0) {
         setNerve(GET_NERVE(SwitchBox, SwitchBoxNrvHit));
     }
 }
@@ -95,9 +89,9 @@ void SwitchBox::exeHit() {
 void SwitchBox::appear() {
     MR::offSwitchDead(this);
 
-    _90 = 1;
-    _8e = 0;
-    _8c = 0;
+    mHitPoint = 1;
+    mHitCoolDown = 0;
+    mFloorTouchTimer = 0;
 
     LiveActor::appear();
     MR::showModel(this);
@@ -110,15 +104,15 @@ void SwitchBox::kill() {
 }
 
 void SwitchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
-    if (_90 != 0) {
-        --_90;
+    if (mHitPoint != 0) {
+        --mHitPoint;
     }
 
-    if (_90 == 0) {
+    if (mHitPoint == 0) {
         MR::invalidateCollisionParts(this);
     }
 
-    _8e = 30;
+    mHitCoolDown = 30;
 
     if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::startSound(this, "SE_OJ_S_BLOCK_BREAK_W");
@@ -130,19 +124,19 @@ void SwitchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool SwitchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgPlayerUpperPunch(msg) && _90 != 0) {
+    if (MR::isMsgPlayerUpperPunch(msg) && mHitPoint != 0) {
         doHit(pSender, pReceiver);
         pSender->receiveMessage(ACTMES_REFLECT_V, pReceiver);
         return true;
     }
 
-    if (MR::isMsgPlayerHitAll(msg) && _90 != 0) {
+    if (MR::isMsgPlayerHitAll(msg) && mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
     }
 
     if (MR::isMsgPlayerHipDrop(msg) || MR::isMsgPlayerHipDropFloor(msg)) {
-        if (_8c != 0) {
+        if (mFloorTouchTimer != 0) {
             doHit(pSender, pReceiver);
             return true;
         }
@@ -154,7 +148,7 @@ bool SwitchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 }
 
 bool SwitchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (_90 != 0) {
+    if (mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
     }
@@ -164,15 +158,15 @@ bool SwitchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 
 bool SwitchBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_IS_PUNCH_ENABLE) {
-        return _90;
+        return mHitPoint;
     }
 
     if (msg == ACTMES_IS_BROKEN) {
-        return !_90;
+        return !mHitPoint;
     }
 
     if (MR::isMsgFloorTouch(msg)) {
-        _8c = 2;
+        mFloorTouchTimer = 2;
     }
 
     return false;

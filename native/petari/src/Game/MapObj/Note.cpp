@@ -19,22 +19,20 @@ namespace NrvNote {
 
 Note::Note(const char* pName, const Vec3f& rRailDirection, NoteFairy* pParent) : LiveActor(pName) {
     mParentFairy = pParent;
-    _90.set(0.0f);
     mRailDirection = rRailDirection;
     mCounter = 0;
-    _AC = 0.0f;
+    mBrkFrame = 0.0f;
     mIsCountdown = false;
     mFlashCtrl = nullptr;
 }
 
 void Note::init(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_NoteGroup);
-    _90.set(mPosition);
     initModelManagerWithAnm("Note", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(Note, NoteNrvWait));
     mFlashCtrl = new FlashingCtrl(this, true);
@@ -58,7 +56,7 @@ void Note::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Note");
         f32 framemax = MR::getBrkFrameMax(this, "Note");
-        MR::setBrkFrame(this, MR::repeat(_AC, 0.0f, framemax));
+        MR::setBrkFrame(this, MR::repeat(mBrkFrame, 0.0f, framemax));
     }
 
     if (mIsCountdown) {

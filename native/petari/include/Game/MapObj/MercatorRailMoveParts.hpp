@@ -28,6 +28,5 @@ public:
     Mtx34f mRotateMtx;
     Vec3f mLocalTrans;
     Vec3f mLocalRotation;
-    Vec3f _E0;
     bool mIsNotMoving;
 };

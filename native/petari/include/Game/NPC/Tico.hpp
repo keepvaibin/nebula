@@ -49,13 +49,13 @@ public:
 
     static const f32 sFloatSeMinVolume;
 
-    u32 _15C;
-    Vec3f _160;
-    f32 _16C;
+    u32 mBehavior;
+    Vec3f mPrevPos;
+    f32 mFloatOffset;
     TicoDemoGetPower* mDemoGetPower;
-    TalkMessageCtrl* _174;
-    MtxPtr _178;
-    Color8 _17C;
-    const Nerve* _180;
+    TalkMessageCtrl* mTicoTalkCtrl;
+    MtxPtr mLightJointMtx;
+    Color8 mLightColor;
+    const Nerve* mMetaNerve;
     DemoStarter mDemoStarter;
 };

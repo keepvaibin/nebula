@@ -14,7 +14,7 @@ namespace {
     // sMinAnimRate
     const f32 sCheckLineLength = 1000.0f;
     const f32 sCoinVel = 30.0f;
-    const f32 sDPDTouchRadius = 100.0f;
+    const f32 sPointerTouchRadius = 100.0f;
     const f32 sScratchVel = 6.0f;
     const s32 hGenerateItemTouch = 1;
     const s32 sHintEffectEmitInterval = 300;
@@ -83,7 +83,7 @@ void PlantGroup::init(const TableIter& rIter) {
 
     initMember(itemCount, rIter);
     initSound(4, false);
-    initEffectKeeper(0, "Bush", false);
+    initEffectKeeper(0, "Bush");
     MR::setEffectHostSRT(this, "HintShakeLeaf", &mHintPosition, &mHintRotation, nullptr);
     MR::initStarPointerTarget(this, 0.0f, Vec3f(0.0f));
     MR::useStageSwitchSleep(this, rIter);
@@ -273,7 +273,7 @@ void PlantGroup::control() {
             if (::sScratchVel * ::sScratchVel < velocity.squared()) {
                 Vec3f pos(*MR::getStarPointerWorldPosUsingDepth(1));
 
-                if (mMembers[i]->tryPush(pos, ::sDPDTouchRadius, 2) == true) {
+                if (mMembers[i]->tryPush(pos, ::sPointerTouchRadius, 2) == true) {
                     MR::tryRumblePadVeryWeak(this, 1);
                     break;
                 }
@@ -354,9 +354,7 @@ void PlantGroup::endClipped() {
 }
 
 void PlantMember::init(const TableIter&) {
-    _90 = 1.0f;
     mTouchType = 3;
-    _9C = false;
     mHasItem = false;
     MR::onCalcAnim(this);
     initNerve(GET_NERVE(PlantMember, HostTypeNrvWait));

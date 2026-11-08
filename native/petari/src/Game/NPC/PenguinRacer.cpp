@@ -23,7 +23,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    // static const f32 sBrake = ;
     static const f32 sGoalBrake = 0.005f;
     static const f32 sFallBrake = 0.002f;
     static const s32 sTurnFrame = 60;
@@ -67,7 +66,7 @@ void PenguinRacer::init(const TableIter& rIter) {
     initSound(8, false);
     initShadow();
     initBind();
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
 
     initColor(rIter);
@@ -133,21 +132,21 @@ bool PenguinRacer::tryReaction() {
 }
 
 void PenguinRacer::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_PENGUIN_TRAMPLED");
         MR::startSound(this, "SE_SV_PENGUIN_S_TRAMPLED");
     }
 
     if (isPointingSe()) {
         MR::startSound(this, "SE_SV_PENGUIN_S_POINTED_2P");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_PENGUIN_S_SPIN_HIT");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_PENGUIN_S_STAR_PIECE");
     }
 
@@ -175,21 +174,21 @@ void PenguinRacer::control() {
             if (!MR::isHiddenModel(this)) {
                 mLodCtrl->invalidate();
                 MR::hideModelAndOnCalcAnim(this);
-                if (_94 != nullptr) {
-                    MR::hideModel(_94);
+                if (mGoods0 != nullptr) {
+                    MR::hideModel(mGoods0);
                 }
-                if (_98 != nullptr) {
-                    MR::hideModel(_98);
+                if (mGoods1 != nullptr) {
+                    MR::hideModel(mGoods1);
                 }
             }
         } else {
             if (MR::isHiddenModel(this)) {
                 MR::showModel(this);
-                if (_94 != nullptr) {
-                    MR::showModel(_94);
+                if (mGoods0 != nullptr) {
+                    MR::showModel(mGoods0);
                 }
-                if (_98 != nullptr) {
-                    MR::showModel(_98);
+                if (mGoods1 != nullptr) {
+                    MR::showModel(mGoods1);
                 }
                 mLodCtrl->validate();
             }
@@ -484,11 +483,11 @@ void PenguinRacer::prepRacer(const RaceManager* pRaceManager) {
     MR::setBckFrameAtRandom(this);
     MR::resetPosition(this);
     MR::requestMovementOn(this);
-    if (_94 != nullptr) {
-        MR::requestMovementOn(_94);
+    if (mGoods0 != nullptr) {
+        MR::requestMovementOn(mGoods0);
     }
-    if (_98 != nullptr) {
-        MR::requestMovementOn(_98);
+    if (mGoods1 != nullptr) {
+        MR::requestMovementOn(mGoods1);
     }
 
     setNerve(GET_NERVE(PenguinRacer, PenguinRacerNrvRacePrep));

@@ -54,7 +54,7 @@ Syati::Syati(const char* pName)
     : LiveActor(pName), mClippingRange(), mClippingVec(0.0f, 0.0f, 0.0f), mTalkMessageCtrl(), mActorCameraInfo(), mHideOnShoreMode(-1),
       mPlayerPoseSetterInWater(), mBlinkTimer(0xF0), mJointControlDelegator(), mRaceManagerLayout(), mPrizeRingGroup(), mNumRings(5),
       mStarSpawnType(-1), mSwimMode(-1), mPrizeRingLife(-1), mPrizeRingCount(), mCurrentRailPointNo(-1) {
-    _8C.set(0.0f, 0.0f, 0.0f, 1.0f);
+    mPoseQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
     mMarioMoveLocalOffsetVec.zero();
     mBalloonFollowMtx.identity();
     mPrizeRingGroup = new LiveActorGroup("リング保持", 5);
@@ -88,7 +88,7 @@ void Syati::init(const TableIter& rIter) {
     MR::calcModelBoundingRadius(&mClippingRange, this);
     MR::setClippingTypeSphere(this, mClippingRange);
     MR::validateClipping(this);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     if (mSwimMode) {
         MR::initEffectSyncBck(this, "Ripple", ::cBckForRipple);
@@ -144,12 +144,12 @@ void Syati::exeFadeoutBeforeTalk() {
 void Syati::exeWaitBlank() {
     if (MR::isFirstStep(this)) {
         mMarioMoveLocalOffsetVec.set(mSwimMode == 0 ? ::sMarioMoveLocalOffsetDeepSea : ::sMarioMoveLocalOffsetRing);
-        mPlayerPoseSetterInWater->_1C = 0;
+        mPlayerPoseSetterInWater->mStep = 0;
         mPlayerPoseSetterInWater->update();
 
         MR::tryPlayerKillTakingActor();
         MR::startBckPlayer("SwimWait");
-        MR::makeQuatFromRotate(&_8C, this);
+        MR::makeQuatFromRotate(&mPoseQuat, this);
     }
 
     if (MR::isStep(this, 0x1E)) {
@@ -162,23 +162,23 @@ void Syati::exeWaitBlank() {
 }
 
 void PlayerPoseSetterInWater::update() {
-    _1C++;
-    _1C = (_1C + 90) % 90;
+    mStep++;
+    mStep = (mStep + 90) % 90;
 
 
     Pos3f syatiMtx;
-    syatiMtx.setQuat(_C);
-    syatiMtx.setTrans(_0);
+    syatiMtx.setQuat(mSyatiQuat);
+    syatiMtx.setTrans(mSyatiPos);
 
     Vec3f offsetPos;
     offsetPos.zero();
-    if (_20 != nullptr) {
-        offsetPos.set(*_20);
+    if (mOffset != nullptr) {
+        offsetPos.set(*mOffset);
     }
 
     syatiMtx.mult(offsetPos, offsetPos);
 
-    Vec3f forward = _0;
+    Vec3f forward = mSyatiPos;
     Vec3f syatiUp;
     syatiMtx.getYDir(syatiUp);
     syatiUp.scale(450.0f);
@@ -463,11 +463,11 @@ void Syati::initRings(const TableIter& rIter) {
 }
 
 PlayerPoseSetterInWater::PlayerPoseSetterInWater(const Vec3f& rVec, Syati* pSyati)
-    : _0(rVec), _C(pSyati->_8C), _1C(), _20(&pSyati->mMarioMoveLocalOffsetVec) {
+    : mSyatiPos(rVec), mSyatiQuat(pSyati->mPoseQuat), mStep(), mOffset(&pSyati->mMarioMoveLocalOffsetVec) {
 }
 
 void Syati::initPose() {
-    MR::makeQuatFromRotate(&_8C, this);
+    MR::makeQuatFromRotate(&mPoseQuat, this);
     mPlayerPoseSetterInWater = new PlayerPoseSetterInWater(mPosition, this);
 }
 
@@ -523,13 +523,13 @@ void Syati::updatePoseByRail() {
         directionOnPlane.set(railDirectionOnPlane);
     }
 
-    MR::vecBlend(_9C, directionOnPlane, &_9C, 0.04f);
-    Vec3f turnAxis = railDirectionOnPlane.cross(_9C);
+    MR::vecBlend(mRailDirBlend, directionOnPlane, &mRailDirBlend, 0.04f);
+    Vec3f turnAxis = railDirectionOnPlane.cross(mRailDirBlend);
     MR::normalizeOrZero(&turnAxis);
     Quat4f roll;
     roll.set(0.0f, 0.0f, 0.0f, 1.0f);
     Vec3f up = -mGravity;
-    f32 dot = railDirectionOnPlane.dot(_9C);
+    f32 dot = railDirectionOnPlane.dot(mRailDirBlend);
     f32 rad = MR::acos(dot);
 
     if (dot < 1.0f) {
@@ -545,7 +545,7 @@ void Syati::updatePoseByRail() {
         Quat4f rotation;
         MR::makeQuatFromVec(&rotation, direction, up);
         rotation.mult(rotation, roll);
-        _8C.slerp(rotation, 0.04);
+        mPoseQuat.slerp(rotation, 0.04);
     }
 }
 
@@ -684,7 +684,7 @@ void Syati::emitRing() {
 }
 
 void Syati::setupBalloonFollowMtx(const Vec3f& rVec) {
-    mBalloonFollowMtx.setQuat(_8C);
+    mBalloonFollowMtx.setQuat(mPoseQuat);
     mBalloonFollowMtx.setTrans(mPosition);
 
     Vec3f position = rVec;
@@ -718,7 +718,7 @@ bool Syati::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo) {
     }
 
     Vec3f front;
-    _8C.getZDir(front);
+    mPoseQuat.getZDir(front);
     MR::normalize(&front);
     Quat4f rotation;
     rotation.set(0.0f, 0.0f, 0.0f, 1.0f);
@@ -735,7 +735,7 @@ void Syati::control() {
 }
 
 void Syati::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mPoseQuat);
     mJointControlDelegator->registerCallBack();
 }
 

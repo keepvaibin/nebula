@@ -250,18 +250,18 @@ void PenguinSkater::blendBaseMatrixToMario(f32 blendRate) const {
 }
 
 void PenguinSkater::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_PENGUIN_TRAMPLED");
         MR::startSound(this, "SE_SV_PENGUIN_S_TRAMPLED");
     }
     if (isPointingSe()) {
         MR::startSound(this, "SE_SV_PENGUIN_S_POINTED_2P");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_PENGUIN_S_SPIN_HIT");
     }
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_PENGUIN_S_STAR_PIECE");
     }
     if (MR::tryStartReactionAndPopNerve(this)) {

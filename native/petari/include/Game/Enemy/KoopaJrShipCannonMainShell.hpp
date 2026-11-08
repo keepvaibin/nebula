@@ -20,7 +20,7 @@ public:
     void exeWait();
     void exeFly();
 
-    Quat4f _8C;
+    Quat4f mRotateQuat;
 };
 
 namespace CannonShellUtil {

@@ -7,7 +7,6 @@
 
 namespace {
     static const f32 sLocalOffsetRateScale = 0.05f;
-    // static const f32 sBaseSpeed =
 };  // namespace
 
 CameraHeightArrange::~CameraHeightArrange() {

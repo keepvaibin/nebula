@@ -12,7 +12,7 @@ MapPartsRailPosture::~MapPartsRailPosture() {
 
 MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御") {
     mMovePosture = 0;
-    _18.identity();
+    mPostureMtx.identity();
 }
 
 void MapPartsRailPosture::init(const TableIter& rIter) {
@@ -29,7 +29,7 @@ void MapPartsRailPosture::start() {
 }
 
 void MapPartsRailPosture::end() {
-    _18.identity();
+    mPostureMtx.identity();
     setNerve(GET_NERVE(MapPartsRailPosture, HostTypeDoNothing));
 }
 
@@ -77,13 +77,13 @@ void MapPartsRailPosture::exeMove() {
         }
 
         Vec3f v7;
-        _18.getXDir(v7);
+        mPostureMtx.getXDir(v7);
         MR::normalize(&v7);
 
         if (MR::isSameDirection(v7, v8)) {
-            MR::makeMtxFrontNoSupport(&_18, v8);
+            MR::makeMtxFrontNoSupport(&mPostureMtx, v8);
         } else {
-            MR::makeMtxFrontUp(&_18, v8, v9);
+            MR::makeMtxFrontUp(&mPostureMtx, v8, v9);
         }
     }
 }

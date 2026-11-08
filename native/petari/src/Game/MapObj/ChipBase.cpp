@@ -20,7 +20,6 @@ namespace {
     static const f32 sBodyHitRadius = 80.0f;
     static const f32 sShadowRadius = 50.0f;
     static const f32 sBaseScale = 1.0f;
-    // static const f32 sLife = 0.0f;
     static const s32 sCannotGetTime = 40;
     static const f32 sBodyHitYOffset = 0.0f;
 };  // namespace
@@ -46,7 +45,7 @@ void ChipBase::init(const TableIter& rIter) {
     initModel(rIter);
     initSensor();
     initShadow(rIter);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(ChipBase, ChipBaseNrvWait));
 
@@ -186,7 +185,7 @@ void ChipBase::makeActorDead() {
 void ChipBase::control() {
     if (mRailMover != nullptr) {
         mRailMover->movement();
-        mPosition.set(mRailMover->_28);
+        mPosition.set(mRailMover->mStartPos);
         MR::setClippingRangeIncludeShadow(this, &mClippingRange, 100.0f);
     }
 }

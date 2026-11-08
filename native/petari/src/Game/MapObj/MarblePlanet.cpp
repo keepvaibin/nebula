@@ -32,7 +32,7 @@ void MarblePlanet::init(const TableIter& rIter) {
     MR::addHitSensorEnemy(this, "core", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "MarblePlanet", getSensor(0), 0);
     mWatermelonCollision = MR::createCollisionPartsFromLiveActor(this, "WaterMelon", getSensor(0), MR::CollisionScaleType_Unk2);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(4, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFar(this, -1.0f);
@@ -187,9 +187,9 @@ MarblePlanetElectron::MarblePlanetElectron(LiveActor* pPlanet, const Vec3f& rPos
     : LiveActor(pName) {
     mParentPlanet = static_cast< MarblePlanet* >(pPlanet);
     mElectronShadow = 0;
-    _94.x = 0.0f;
-    _94.y = 0.0f;
-    _94.z = 1.0f;
+    mFront.x = 0.0f;
+    mFront.y = 0.0f;
+    mFront.z = 1.0f;
     mPosition.set(rPosition);
     mRotation.set(rRotation);
 }
@@ -200,7 +200,7 @@ void MarblePlanetElectron::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", 8, 500.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(200.0f, 0.0f, 0);
-    initEffectKeeper(1, 0, false);
+    initEffectKeeper(1, 0);
     MR::addEffectHitNormal(this, 0);
     initSound(4, false);
     MR::invalidateClipping(this);
@@ -212,18 +212,18 @@ void MarblePlanetElectron::init(const TableIter& rIter) {
     Pos3f mtx;
     MR::makeMtxUpNoSupportPos(&mtx, mGravity, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    MR::calcFrontVec(&_94, this);
+    MR::calcFrontVec(&mFront, this);
     MR::startBck(this, "MarblePlanetElectron");
     initNerve(GET_NERVE(MarblePlanetElectron, MarblePlanetElectronNrvMove));
     makeActorAppeared();
 }
 
 void MarblePlanetElectron::exeMove() {
-    MR::turnDirectionToGround(this, &_94);
+    MR::turnDirectionToGround(this, &mFront);
     MR::attenuateVelocity(this, 0.99f);
     f32 mag = mVelocity.length();
     f32 scale = (mag >= 13.0f ? mag : 13.0f);
-    mVelocity.scale(scale, _94);
+    mVelocity.scale(scale, mFront);
     MR::startLevelSound(this, "SE_OJ_LV_MARBLE_ROTATE");
 }
 
@@ -298,7 +298,7 @@ void MarblePlanetElectron::crashElectron(HitSensor* pSensor) {
     stack_8.sub(pSensor->mHost->mPosition, mPosition);
     MR::normalize(&stack_8);
     mVelocity.scaleAdd(-5.0f, stack_8, mVelocity);
-    MR::normalize(mVelocity, &_94);
+    MR::normalize(mVelocity, &mFront);
     mVelocity.x *= 1.2f;
     mVelocity.y *= 1.2f;
     mVelocity.z *= 1.2f;
@@ -307,7 +307,7 @@ void MarblePlanetElectron::crashElectron(HitSensor* pSensor) {
 
 MarblePlanetElectronShadow::MarblePlanetElectronShadow(LiveActor* pElectronPtr, const Vec3f& rVec, const char* pName) : LiveActor(pName) {
     mParentElectron = static_cast< MarblePlanetElectron* >(pElectronPtr);
-    _90 = &rVec;
+    mGroundPos = &rVec;
 }
 
 void MarblePlanetElectronShadow::init(const TableIter& rIter) {
@@ -318,12 +318,12 @@ void MarblePlanetElectronShadow::init(const TableIter& rIter) {
 }
 
 void MarblePlanetElectronShadow::calcAndSetBaseMtx() {
-    mPosition.set(*_90);
+    mPosition.set(*mGroundPos);
     Vec3f stack_8;
-    stack_8.sub(mParentElectron->mPosition, *_90);
+    stack_8.sub(mParentElectron->mPosition, *mGroundPos);
     MR::normalize(&stack_8);
     Pos3f up_mtx;
-    MR::makeMtxUpNoSupportPos(&up_mtx, stack_8, *_90);
+    MR::makeMtxUpNoSupportPos(&up_mtx, stack_8, *mGroundPos);
     MR::setBaseTRMtx(this, up_mtx);
 }
 

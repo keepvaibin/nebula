@@ -38,5 +38,4 @@ public:
     u32 mLastBGM[2];
     AudBgmKeeper mKeeper;
     AudBgmVolumeController mVolumeController[2];
-    bool _8FC;
 };

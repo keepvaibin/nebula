@@ -30,6 +30,6 @@ public:
     KoopaFigureBall* mFigureBall;
     s32 mRollDelay;
     s32 mRollTime;
-    bool _1C;
-    bool _1D;
+    bool mIsHitPlayer;
+    bool mIsStartNow;
 };

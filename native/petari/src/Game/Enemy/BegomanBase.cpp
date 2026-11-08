@@ -35,15 +35,8 @@ namespace {
     const MR::ActorMoveParam hKeepDistanceFarParam = {0.35f, 1.0f, 0.95f, 3.0f};
     const MR::ActorMoveParam hKeepDistanceNearParam = {-0.22f, 1.0f, 0.95f, 3.0f};
     const MR::ActorMoveParam hKeepDistanceWaitParam = {0.0f, 1.0f, 0.95f, 3.0f};
-    // static const _32 hElectricPushAwayVel = _;
-    // static const _32 hElectricPushFromPosVel = _;
-    // static const _32 hElectricFarPushAwayVel = _;
-    // static const _32 hElectricFarPushFromPosVel = _;
     static const s32 hElectricTouchTime = 40;
-    // static const _32 hReboundGroundVel = _;
     static const f32 hReboundWallAddVel = 5.0f;
-    // static const _32 hReboundRailRatio = _;
-    // static const _32 hDiscoverRange = _;
     static const f32 hNoCalcWaitRotate = 0.15f;
     static const f32 hBlendGravityRate = 0.1f;
     static const f32 hRailPushH = 10.0f;
@@ -61,16 +54,10 @@ namespace {
     static const s32 hTurnTime = 60;
     static const s32 hTurnTimeCanNotAttack = 30;
     static const s32 hBrakeTime = 50;
-    // static const _32 hBrakeBackVel = _;
     static const s32 hProvokeTime = 120;
-    // static const _32 hTiredBeginCount = _;
-    // static const s32 hTiredTime = _;
     static const s32 hReturnWaitTime = 180;
-    // static const _32 hReturnEndDistance = _;
     static const f32 hKeepDistanceToWaitDist = 1200.0f;
     static const f32 hKeepDistSideVel = 0.6f;
-    // static const _32 hLaunchGravity = _;
-    // static const _32 hLaunchDampVelGround = _;
     static const s32 hReceiveLimitTime = 2;
     static const s32 hPermitLimitTime = 30;
     static const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
@@ -84,8 +71,8 @@ namespace NrvBegomanAttackPermitter {
 };  // namespace NrvBegomanAttackPermitter
 
 BegomanBase::BegomanBase(const char* pName)
-    : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), _A8(0.0f, 0.0f, -1.0f), _B4(1.0f, 1.0f, 1.0f),
-      _C0(0, 0, 0, 1), _D0(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
+    : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), mLastGravity(0.0f, 0.0f, -1.0f), mAnimScale(1.0f, 1.0f, 1.0f),
+      mPoseQuat(0, 0, 0, 1), mSpinQuat(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mCanTrySetReturn() {
     mIsTouchElectricRail = false;
     mInvertSideVec = false;
@@ -124,8 +111,8 @@ void BegomanBase::initCore(const TableIter& rIter, const char* pModelArcName, bo
     MR::onCalcGravity(this);
     MR::initLightCtrl(this);
 
-    _C0.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
-    _C0.getZDir(mFaceVec);
+    mPoseQuat.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
+    mPoseQuat.getZDir(mFaceVec);
     mRotation.set(0.0f);
 }
 
@@ -157,7 +144,7 @@ void BegomanBase::initShadow(f32 radius, const char* pJointName) {
 }
 
 void BegomanBase::initEffect(s32 extraEffectNum) {
-    initEffectKeeper(extraEffectNum + 3, nullptr, false);
+    initEffectKeeper(extraEffectNum + 3, nullptr);
 
     MR::addEffect(this, "BegomanSpark");
     MR::addEffect(this, "BegomanHit");
@@ -227,11 +214,11 @@ void BegomanBase::control() {
         blendVec.set(upVec);
     }
 
-    MR::makeQuatUpFront(&_C0, blendVec, mFaceVec);
-    _A8.set(mGravity);
+    MR::makeQuatUpFront(&mPoseQuat, blendVec, mFaceVec);
+    mLastGravity.set(mGravity);
 
     yRotationQuat.setRotate(0.0f, 1.0f, 0.0f, mRotation.y);
-    NebulaQuatMultiply(&yRotationQuat, &_D0, &_D0);
+    NebulaQuatMultiply(&yRotationQuat, &mSpinQuat, &mSpinQuat);
 }
 
 void BegomanBase::startClipped() {
@@ -272,7 +259,7 @@ void BegomanBase::exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve*
         MR::startAction(this, "Wait");
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (!isNearInitPos()) {
@@ -323,7 +310,7 @@ void BegomanBase::exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve*
 }
 
 void BegomanBase::exeSignAttackCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (!requestAttack()) {
@@ -356,7 +343,7 @@ void BegomanBase::exePursueCore(const MR::ActorMoveParam& rMoveParam, const Nerv
         return;
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0 * f1, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, {rMoveParam.mMoveSpeed * f1, rMoveParam.mGravity, rMoveParam.mDamp, rMoveParam.mTurnDegree});
 
     if (MR::isGreaterStep(this, ::hPursueDashFrame)) {
         reboundWallAndGround(&mFaceVec, false);
@@ -403,7 +390,7 @@ void BegomanBase::exeTurnCore(const MR::ActorMoveParam& rMoveParam, const Nerve*
     }
 
     f32 nerveValue = MR::calcNerveValue(this, ::hTurnTime, ::hTurnStartDegree, ::hTurnEndDegree);
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, nerveValue);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, {rMoveParam.mMoveSpeed, rMoveParam.mGravity, rMoveParam.mDamp, nerveValue});
     reboundWallAndGround(&mFaceVec, true);
 
     if (!notCheckRail) {
@@ -444,10 +431,9 @@ void BegomanBase::exeBrakeCore(const Nerve* pNerve) {
     }
 
     if (MR::isOnGround(this)) {
-        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeParam._0, ::hBrakeParam._4, ::hBrakeParam._8, ::hBrakeParam._C);
+        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeParam);
     } else {
-        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeOnAirParam._0, ::hBrakeOnAirParam._4, ::hBrakeOnAirParam._8,
-                                   ::hBrakeOnAirParam._C);
+        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeOnAirParam);
     }
 
     reboundWallAndGround(&mFaceVec, true);
@@ -466,7 +452,7 @@ void BegomanBase::exeStepBackCore(const MR::ActorMoveParam& rMoveParam, const Ne
     if (MR::isFirstStep(this)) {
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     if (MR::isOnGround(this)) {
         setNerve(pNerve);
     }
@@ -477,7 +463,7 @@ void BegomanBase::exeProvokeCore(const MR::ActorMoveParam& rMoveParam, const Ner
         MR::startAction(this, "Provoke");
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     reboundWallAndGround(&mFaceVec, false);
 
     Vec3f* gravity;
@@ -494,7 +480,7 @@ void BegomanBase::exeHitReactionCore(const MR::ActorMoveParam& rMoveParam, const
         MR::startAction(this, "HitReaction");
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (MR::isActionEnd(this)) {
@@ -507,7 +493,7 @@ void BegomanBase::exeTiredCore(const MR::ActorMoveParam& rMoveParam, const Nerve
         MR::startAction(this, "Tired");
     }
 
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (MR::isGreaterStep(this, 120)) {
@@ -521,11 +507,9 @@ void BegomanBase::exeReturnCore(const Nerve* pNerve) {
     }
 
     if (MR::isLessStep(this, ::hReturnWaitTime)) {
-        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnWaitParam._0, ::hReturnWaitParam._4, ::hReturnWaitParam._8,
-                                ::hReturnWaitParam._C);
+        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnWaitParam);
     } else {
-        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnMoveParam._0, ::hReturnMoveParam._4, ::hReturnMoveParam._8,
-                                ::hReturnMoveParam._C);
+        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnMoveParam);
     }
 
     reboundWallAndGround(&mFaceVec, false);
@@ -547,15 +531,12 @@ void BegomanBase::exeKeepDistanceCore(const Nerve* pNerve1, const Nerve* pNerve2
     }
 
     if (farDist < distToPlayer) {
-        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceFarParam._0, ::hKeepDistanceFarParam._4, ::hKeepDistanceFarParam._8,
-                                ::hKeepDistanceFarParam._C);
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceFarParam);
     } else if (distToPlayer < nearDist) {
-        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceNearParam._0, ::hKeepDistanceNearParam._4, ::hKeepDistanceNearParam._8,
-                                ::hKeepDistanceNearParam._C);
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceNearParam);
         addVelocityEscapeToSide(::hKeepDistSideVel);
     } else {
-        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceWaitParam._0, ::hKeepDistanceWaitParam._4, ::hKeepDistanceWaitParam._8,
-                                ::hKeepDistanceWaitParam._C);
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceWaitParam);
     }
 
     if (isFallNextMove(150.0f, 150.0f)) {
@@ -892,7 +873,7 @@ void BegomanBase::pushedFromElectricRail(HitSensor* pSensor, const Vec3f& rVec1,
 
 void BegomanBase::preventSwingby(f32 f1) {
     if (!MR::isOnGround(this)) {
-        f32 mag = (mGravity - _A8).length();
+        f32 mag = (mGravity - mLastGravity).length();
         mag *= 0.5f;
         dampingVerticalAndParallelVelocity(f1, mag);
     }
@@ -978,20 +959,20 @@ void BegomanBase::calcAnimCore(Pos3f* pPos) {
 
 bool BegomanBase::calcJointLocator1(Pos3f* pPos, const JointControllerInfo& rJointInfo) {
     Pos3f v9;
-    Quat4f rotation(_D0);
+    Quat4f rotation(mSpinQuat);
     v9.makeQuat(rotation);
     pPos->concat(*pPos, v9);
     return true;
 }
 
 void BegomanBase::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _C0);
+    MR::setBaseTRMtx(this, mPoseQuat);
 
     if (mScaleControler != nullptr) {
         Vec3f scale;
 
-        scale.set(mScaleControler->_C);
-        _B4.set(scale);
+        scale.set(mScaleControler->mScale);
+        mAnimScale.set(scale);
         scale *= mScale;
         MR::setBaseScale(this, scale);
     }
@@ -1003,7 +984,7 @@ bool BegomanBase::requestAttack() {
     return MR::getSceneObj< BegomanAttackPermitter >(SceneObj_BegomanAttackPermitter)->requestAttack(this);
 }
 
-BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), _8C(), mBegoman(), mDistToPlayer(99999.0f), _98() {
+BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), mBegoman(), mDistToPlayer(99999.0f), mHasRequest() {
 }
 
 void BegomanAttackPermitter::init(const TableIter& rIter) {
@@ -1014,7 +995,7 @@ void BegomanAttackPermitter::init(const TableIter& rIter) {
 }
 
 void BegomanAttackPermitter::control() {
-    _98 = false;
+    mHasRequest = false;
 }
 
 bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
@@ -1026,7 +1007,7 @@ bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
         return !isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
     }
 
-    _98 = true;
+    mHasRequest = true;
 
     if (isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvReceive)) || isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait))) {
         if (mBegoman == nullptr) {
@@ -1046,7 +1027,6 @@ bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
     }
 
     if (isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit))) {
-        _8C = mBegoman;
         if (mBegoman == pBegoman) {
             // nerve is already HostTypeNrvPermit if code gets here??
             setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
@@ -1059,14 +1039,13 @@ bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
 
 void BegomanAttackPermitter::exeWait() {
     if (MR::isFirstStep(this)) {
-        _8C = nullptr;
         mBegoman = nullptr;
         mDistToPlayer = 99999.0f;
     }
 }
 
 void BegomanAttackPermitter::exeReceive() {
-    if (!_98) {
+    if (!mHasRequest) {
         setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait));
     } else if (MR::isGreaterStep(this, ::hReceiveLimitTime)) {
         setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));

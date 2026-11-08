@@ -29,17 +29,15 @@ public:
     void sendPoint(VertexPT*&, const Vec3f&, f32, f32) const;
 
     SpinDriverShootPath* mShootPath;
-    Vec3f* _90;
-    Vec3f* _94;
-    Vec3f* _98;
-    f32* _9C;
+    Vec3f* mPositions;
+    Vec3f* mSides;
+    Vec3f* mUps;
+    f32* mCoords;
     s32 mPositionCount;
-    u32 _A4;
-    u32 _A8;
-    f32 _AC;
-    f32 _B0;
+    f32 mCoord;
+    f32 mMaxCoord;
     s32 mColor;
-    f32 _B8;
+    f32 mEndCut;
     f32 mFadeScale;
     f32 mMaskLength;
 };

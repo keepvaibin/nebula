@@ -8,11 +8,10 @@ DinoPackunTail::DinoPackunTail(u32 nodeCount) {
     mNodes = nullptr;
     mMaxNodes = 0;
     mNumNodes = 0;
-    _C = 1.0f;
-    _10 = 1.0f;
-    _14 = 0.0f;
-    _18 = 0.0f;
-    _1C = 1;
+    mBendRate = 1.0f;
+    mDistanceRate = 1.0f;
+    mHostVelocityRate = 0.0f;
+    mIsActive = 1;
     mNodes = new DinoPackunTailNode*[nodeCount];
     mMaxNodes = nodeCount;
 }
@@ -21,8 +20,8 @@ void DinoPackunTail::addTailNode(DinoPackunTailNode* pNode) {
     if (mNumNodes != 0) {
         u32 prev = mNumNodes - 1;
         DinoPackunTailNode* prevNode = mNodes[prev];
-        prevNode->_B8 = pNode;
-        pNode->_B4 = prevNode;
+        prevNode->mNextNode = pNode;
+        pNode->mPrevNode = prevNode;
     }
 
     u32 num = mNumNodes;
@@ -31,7 +30,7 @@ void DinoPackunTail::addTailNode(DinoPackunTailNode* pNode) {
 }
 
 void DinoPackunTail::activate() {
-    _1C = 1;
+    mIsActive = 1;
     u32 count = mNumNodes;
 
     for (u32 i = 0; i < count; i++) {
@@ -41,7 +40,7 @@ void DinoPackunTail::activate() {
 }
 
 void DinoPackunTail::deactivate() {
-    _1C = 0;
+    mIsActive = 0;
     u32 count = mNumNodes;
 
     for (u32 i = 0; i < count; i++) {
@@ -74,7 +73,7 @@ void DinoPackunTail::unlockEndNodePosition() {
 }
 
 void DinoPackunTail::registerPreCalcJointCallBack() {
-    if (_1C) {
+    if (mIsActive) {
         u32 count = mNumNodes;
 
         for (u32 i = 0; i < count; i++) {
@@ -84,7 +83,7 @@ void DinoPackunTail::registerPreCalcJointCallBack() {
 }
 
 void DinoPackunTail::registerJointCallBack() {
-    if (_1C) {
+    if (mIsActive) {
         u32 count = mNumNodes;
 
         for (u32 i = 0; i < count; i++) {
@@ -94,21 +93,10 @@ void DinoPackunTail::registerJointCallBack() {
 }
 
 void DinoPackunTail::updateJoint() {
-    if (_1C) {
+    if (mIsActive) {
         addAccelKeepDistance();
         addAccelKeepBend();
         addAccelToBck();
-
-        DinoPackunTailNode* node;
-        DinoPackunTailNode** nodes;
-        u32 count = mNumNodes;
-
-        for (u32 i = 1; i < count; i++) {
-            node = mNodes[i];
-            Vec3f direction = node->_9C - (node->mPosition + node->mVelocity);
-            nodes = mNodes;
-            MR::addVelocity(nodes[i], direction * _14);
-        }
     }
 }
 
@@ -134,7 +122,7 @@ void DinoPackunTail::addAccelKeepBend() {
             if (MR::makeAxisAndCosignVecToVec(&v16, &v11, v19, v17) && v11 < 1.1f) {
                 f32 bendPower = mNodes[i]->getKeepBendPower();
                 f32 rate = 1.0f - MR::normalize(v11, -1.0f, 1.1f);
-                f32 v8 = _C * (rate * bendPower);
+                f32 v8 = mBendRate * (rate * bendPower);
                 Vec3f v15 = v17.cross(v16);
                 MR::normalize(&v15);
                 nodes = mNodes;
@@ -173,7 +161,7 @@ void DinoPackunTail::addAccelKeepDistance() {
         MR::separateScalarAndDirection(&scalar, &v17, v17);
         f32 linkLength = getNode(i)->getLinkLength();
         DinoPackunTailNode** nodes = mNodes;
-        f32 v7 = ((0.9f * (_10 * (linkLength - scalar))) / 2);
+        f32 v7 = ((0.9f * (mDistanceRate * (linkLength - scalar))) / 2);
         nodes[i]->addNodeVelocityHost(v17 * v7);
 
         if (i != 0) {
@@ -185,7 +173,7 @@ void DinoPackunTail::addAccelKeepDistance() {
 }
 
 void DinoPackunTail::addAccelToBck() {
-    if (_18 <= 0.0f) {
+    if (mHostVelocityRate <= 0.0f) {
         return;
     }
 
@@ -193,9 +181,9 @@ void DinoPackunTail::addAccelToBck() {
     const u32 nodeCount = mNumNodes;
     for (u32 i = 1; i < nodeCount; i++) {
         Vec3f v8;
-        v8.set(mNodes[i]->_9C - mNodes[i]->mPosition);
+        v8.set(mNodes[i]->mJointPos - mNodes[i]->mPosition);
         nodes = mNodes;
-        nodes[i]->addNodeVelocityHost(v8 * _18);
+        nodes[i]->addNodeVelocityHost(v8 * mHostVelocityRate);
     }
 }
 

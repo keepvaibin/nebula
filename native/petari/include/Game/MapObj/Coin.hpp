@@ -9,15 +9,13 @@ class CoinHostInfo {
 public:
     CoinHostInfo() {
         mHostActor = nullptr;
-        _4 = 0;
-        _8 = 0;
-        _C = 0;
+        mDeclared = 0;
+        mAppeared = 0;
     }
 
     const NameObj* mHostActor;
-    s32 _4;
-    s32 _8;
-    u32 _C;
+    s32 mDeclared;
+    s32 mAppeared;
 };
 
 class Coin : public LiveActor {
@@ -71,12 +69,11 @@ public:
     PartsModel* mAirBubble;
     Vec3f mDropPosition;
     Vec3f mClippingRange;
-    int _B0;
+    int mLife;
     s32 mCannotTime;
     bool mIsInWater;
-    bool _B9;  // obj_arg3
-    bool _BA;  // obj_arg4
-    bool _BB;
+    bool mIsCalcShadowAlways;  // obj_arg3
+    bool mIsPoseFromRotation;  // obj_arg4
     bool mIsPurpleCoin;
     bool mIsNeedBubble;
 };

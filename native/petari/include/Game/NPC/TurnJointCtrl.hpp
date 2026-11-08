@@ -44,9 +44,8 @@ public:
     f32 mPositiveDegreeMax;
     f32 mNegativeDegreeMax;
     Vec3f mStarePos;
-    Vec3f _50;
-    f32 _5C;
-    f32 _60;
+    f32 mStareDist;
+    f32 mStareRate;
     s32 mCtrlFrames;
     bool mEnabled;
 };

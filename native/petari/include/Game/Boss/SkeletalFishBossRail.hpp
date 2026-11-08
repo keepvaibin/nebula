@@ -16,8 +16,7 @@ public:
     void createFillUpNamePosID();
     void linkFillUpNamePosID();
 
-    s32 _8C;
+    s32 mRailId;
     bool* mFillUpFlags;
     s32* mNamePosIDs;
-    f32 _98;
 };

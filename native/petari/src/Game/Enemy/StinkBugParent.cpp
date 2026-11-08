@@ -88,7 +88,7 @@ void StinkBugParent::init(const TableIter& rIter) {
         MR::registerDemoActionNerve(this, GET_NERVE(StinkBugParent, StinkBugParentNrvDemoAnger), "ダメージ中");
     }
 
-    _B0 = 50.0f;
+    mTerritoryAngle = 50.0f;
     mRadius = 1200.0f;
     MR::startBrk(this, "Anger");
     MR::setBrkFrameAndStop(this, 0.0f);
@@ -99,7 +99,7 @@ void StinkBugParent::init(const TableIter& rIter) {
 void StinkBugParent::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Wait");
-        MR::resetPosition(this, _98);
+        MR::resetPosition(this, mInitPos);
     }
 
     fixInitPos();
@@ -158,7 +158,7 @@ void StinkBugParent::exeDash() {
 
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_L_DASH");
 
-    if (!MR::isNear(this, _98, mRadius) || MR::isBindedWall(this)) {
+    if (!MR::isNear(this, mInitPos, mRadius) || MR::isBindedWall(this)) {
         mVelocity.zero();
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvDashEnd));
         MR::startSound(this, "SE_EM_STINKBUG_L_DASH_END");
@@ -187,11 +187,11 @@ void StinkBugParent::exeBack() {
 
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_L_BACK");
 
-    if (MR::isNear(this, _98, (2.0f * ::getParam(mIsChildAlive)->mDashDistance))) {
+    if (MR::isNear(this, mInitPos, (2.0f * ::getParam(mIsChildAlive)->mDashDistance))) {
         setNerve(GET_NERVE(StinkBugParent, StinkBugParentNrvWait));
     } else {
         Vec3f a1;
-        a1.sub(_98, mPosition);
+        a1.sub(mInitPos, mPosition);
         MR::normalize(&a1);
         MR::turnVecToPlane(&a1, a1, mGravity);
         mVelocity.scale(::getParam(mIsChildAlive)->mDashDistance, a1);
@@ -321,10 +321,10 @@ void StinkBugParent::exeDemoAnger() {
         MR::overlayWithPreviousScreen(2);
         MR::startBck(this, "Anger");
         MR::startBrk(this, "Anger");
-        MR::resetPosition(this, _98);
+        MR::resetPosition(this, mInitPos);
         MR::setPlayerPosAndWait("子連れカメムシデモ後ポイント");
         MR::findNamePos("子連れカメムシデモ後ポイント", &v1, nullptr);
-        MR::turnDirectionToTargetUseGroundNormalDegree(this, &_8C, v1, 180.0f);
+        MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, v1, 180.0f);
     }
 
     MR::startLevelSound(this, "SE_EV_LV_STINKBUG_L_ANGRY");
@@ -332,8 +332,8 @@ void StinkBugParent::exeDemoAnger() {
 
     if (MR::isBckStopped(this)) {
         Vec3f v2, v3;
-        v2.scaleAdd(200.0f, _8C, mPosition);
-        v3.scaleAdd(-1.0f, mGravity, _8C);
+        v2.scaleAdd(200.0f, mFront, mPosition);
+        v3.scaleAdd(-1.0f, mGravity, mFront);
         MR::normalize(&v3);
         MR::appearStarPieceToDirection(this, v2, v3, 8, 25.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_F");
@@ -367,7 +367,7 @@ void StinkBugParent::control() {
 
 void StinkBugParent::calcAndSetBaseMtx() {
     Pos3f mtx;
-    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
+    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
 }
 
@@ -389,7 +389,7 @@ void StinkBugParent::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         }
 
         if (MR::isSensorEye(pSender) && isShakeChance() && !MR::isPlayerHipDropFalling()) {
-            MR::sendMsgEnemyAttackFlipToDir(pReceiver, pSender, _8C);
+            MR::sendMsgEnemyAttackFlipToDir(pReceiver, pSender, mFront);
             return;
         }
     }

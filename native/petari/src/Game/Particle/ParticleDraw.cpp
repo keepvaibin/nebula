@@ -479,73 +479,76 @@ namespace {
     }
 }  // namespace
 
-void ParticleDrawBillboard(EmitterWork* work, ParticleCore* param_1) {
-    if (param_1->checkStatus(8) == 0) {
-        Vec3f local_48;
-        NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
-        Mtx local_38;
-        local_38[0][0] = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
-        local_38[0][3] = local_48.x;
-        local_38[1][1] = work->mGlobalPtclScl.y * param_1->mParticleScaleY;
-        local_38[1][3] = local_48.y;
-        local_38[2][2] = 1.0f;
-        local_38[2][3] = local_48.z;
-        local_38[2][1] = 0.0f;
-        local_38[2][0] = 0.0f;
-        local_38[1][2] = 0.0f;
-        local_38[1][0] = 0.0f;
-        local_38[0][2] = 0.0f;
-        local_38[0][1] = 0.0f;
-        setParticleMtx(local_38);
-        loadProjection(work, local_38);
+// A camera-facing quad at the particle, scaled, in view space.
+void ParticleDrawBillboard(EmitterWork* work, ParticleCore* ptcl) {
+    if (ptcl->checkStatus(ParticleStatus_Invisible) == 0) {
+        Vec3f viewPos;
+        NebulaMtxMultVec(work->mPosCamMtx, &ptcl->mPosition, &viewPos);
+        Mtx mtx;
+        mtx[0][0] = work->mGlobalPtclScl.x * ptcl->mParticleScaleX;
+        mtx[0][3] = viewPos.x;
+        mtx[1][1] = work->mGlobalPtclScl.y * ptcl->mParticleScaleY;
+        mtx[1][3] = viewPos.y;
+        mtx[2][2] = 1.0f;
+        mtx[2][3] = viewPos.z;
+        mtx[2][1] = 0.0f;
+        mtx[2][0] = 0.0f;
+        mtx[1][2] = 0.0f;
+        mtx[1][0] = 0.0f;
+        mtx[0][2] = 0.0f;
+        mtx[0][1] = 0.0f;
+        setParticleMtx(mtx);
+        loadProjection(work, mtx);
         ParticleDraw::quad(false);
     }
 }
 
-void ParticleDrawRotBillboard(EmitterWork* work, ParticleCore* param_1) {
-    if (param_1->checkStatus(8) == 0) {
-        Vec3f local_48;
-        NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
+// The billboard turned by the particle's angle about the view axis.
+void ParticleDrawRotBillboard(EmitterWork* work, ParticleCore* ptcl) {
+    if (ptcl->checkStatus(ParticleStatus_Invisible) == 0) {
+        Vec3f viewPos;
+        NebulaMtxMultVec(work->mPosCamMtx, &ptcl->mPosition, &viewPos);
         f32 sinRot, cosRot;
-        Angle::sinCosShort(param_1->mRotateAngle, &sinRot, &cosRot);
-        f32 particleX = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
-        f32 particleY = work->mGlobalPtclScl.y * param_1->mParticleScaleY;
+        Angle::sinCosShort(ptcl->mRotateAngle, &sinRot, &cosRot);
+        f32 particleX = work->mGlobalPtclScl.x * ptcl->mParticleScaleX;
+        f32 particleY = work->mGlobalPtclScl.y * ptcl->mParticleScaleY;
 
-        Mtx local_38;
-        local_38[0][0] = cosRot * particleX;
-        local_38[0][1] = -sinRot * particleY;
-        local_38[0][3] = local_48.x;
-        local_38[1][0] = sinRot * particleX;
-        local_38[1][1] = cosRot * particleY;
-        local_38[1][3] = local_48.y;
-        local_38[2][2] = 1.0f;
-        local_38[2][3] = local_48.z;
-        local_38[2][1] = 0.0f;
-        local_38[2][0] = 0.0f;
-        local_38[1][2] = 0.0f;
-        local_38[0][2] = 0.0f;
-        setParticleMtx(local_38);
-        loadProjection(work, local_38);
+        Mtx mtx;
+        mtx[0][0] = cosRot * particleX;
+        mtx[0][1] = -sinRot * particleY;
+        mtx[0][3] = viewPos.x;
+        mtx[1][0] = sinRot * particleX;
+        mtx[1][1] = cosRot * particleY;
+        mtx[1][3] = viewPos.y;
+        mtx[2][2] = 1.0f;
+        mtx[2][3] = viewPos.z;
+        mtx[2][1] = 0.0f;
+        mtx[2][0] = 0.0f;
+        mtx[1][2] = 0.0f;
+        mtx[0][2] = 0.0f;
+        setParticleMtx(mtx);
+        loadProjection(work, mtx);
         ParticleDraw::quad(false);
     }
 }
 
-void ParticleDrawRotation(EmitterWork* param_0, ParticleCore* param_1) {
-    if (param_1->checkStatus(8) == 0) {
+// A world-space plane: the emitter's rotation axis and plane type, at the particle.
+void ParticleDrawRotation(EmitterWork* work, ParticleCore* ptcl) {
+    if (ptcl->checkStatus(ParticleStatus_Invisible) == 0) {
         f32 sinRot, cosRot;
-        Angle::sinCosShort(param_1->mRotateAngle, &sinRot, &cosRot);
-        f32 particleX = param_0->mGlobalPtclScl.x * param_1->mParticleScaleX;
-        f32 particleY = param_0->mGlobalPtclScl.y * param_1->mParticleScaleY;
-        Mtx auStack_88;
-        rotationOf(param_0->mRotType, sinRot, cosRot, auStack_88);
-        scalePlane(param_0->mPlaneType, auStack_88, particleX, particleY);
-        auStack_88[0][3] = param_1->mPosition.x;
-        auStack_88[1][3] = param_1->mPosition.y;
-        auStack_88[2][3] = param_1->mPosition.z;
-        NebulaMtxConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
-        setParticleMtx(auStack_88);
-        loadProjection(param_0, auStack_88);
-        ParticleDraw::quad(param_0->mListType != 0);
+        Angle::sinCosShort(ptcl->mRotateAngle, &sinRot, &cosRot);
+        f32 particleX = work->mGlobalPtclScl.x * ptcl->mParticleScaleX;
+        f32 particleY = work->mGlobalPtclScl.y * ptcl->mParticleScaleY;
+        Mtx mtx;
+        rotationOf(work->mRotType, sinRot, cosRot, mtx);
+        scalePlane(work->mPlaneType, mtx, particleX, particleY);
+        mtx[0][3] = ptcl->mPosition.x;
+        mtx[1][3] = ptcl->mPosition.y;
+        mtx[2][3] = ptcl->mPosition.z;
+        NebulaMtxConcat(work->mPosCamMtx, mtx, mtx);
+        setParticleMtx(mtx);
+        loadProjection(work, mtx);
+        ParticleDraw::quad(work->mListType != 0);
     }
 }
 

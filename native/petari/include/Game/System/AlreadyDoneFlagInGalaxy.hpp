@@ -12,15 +12,15 @@ public:
     void init(const char*, s32, s32);
     bool isEqual(const AlreadyDoneInfo&) const;
     void set(bool);
-    u16 mask() const;
 
     bool operator==(const AlreadyDoneInfo& other) const {
         return isEqual(other);
     }
 
-    u16 _0;
-    u16 _2;
-    u16 _4;
+    u32 mNameHash;
+    bool mIsDone;
+    s32 mZoneId;
+    s32 mLinkId;
 };
 
 class AlreadyDoneFlagInGalaxy {

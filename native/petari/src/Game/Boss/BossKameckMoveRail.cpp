@@ -3,21 +3,21 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
-BossKameckMoveRail::BossKameckMoveRail(const char* pName) : LiveActor(pName), _8C(), _90() {
+BossKameckMoveRail::BossKameckMoveRail(const char* pName) : LiveActor(pName), mRailNo(), mStoppablePointNum() {
 }
 
 void BossKameckMoveRail::init(const TableIter& rIter) {
-    MR::getPlacementArg0WithInit(rIter, &_8C);
+    MR::getPlacementArg0WithInit(rIter, &mRailNo);
     initRailRider(rIter);
     makeActorDead();
-    _90 = 0;
+    mStoppablePointNum = 0;
     s32 pointNum = MR::getRailPointNum(this);
     for (s32 i = 0; i < pointNum; i++) {
         s32 val = -1;
         MR::getRailPointArg0WithInit(this, i, &val);
 
         if (val != 0) {
-            _90++;
+            mStoppablePointNum++;
         }
     }
 }
@@ -47,10 +47,10 @@ s32 BossKameckMoveRail::calcRandomIndex(s32 idx) const {
 }
 
 s32 BossKameckMoveRail::calcRandomStoppableIndex(s32 idx) const {
-    s32 last = _90 - 1;
+    s32 last = mStoppablePointNum - 1;
 
     if (idx < 0) {
-        last = _90;
+        last = mStoppablePointNum;
     }
 
     s32 rand = (last <= 0) ? 0 : MR::getRandom(0, last);

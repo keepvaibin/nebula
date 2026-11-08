@@ -705,7 +705,7 @@ namespace Nebula.Launcher
             long namesAt = HeaderSize + nodes.Count;
             var pak = new byte[namesAt + names.Count];
             System.Text.Encoding.ASCII.GetBytes("NBSTORE").CopyTo(pak, 0);
-            BitConverter.GetBytes(2u).CopyTo(pak, 8);
+            BitConverter.GetBytes(BuildInfo.StoreVersion).CopyTo(pak, 8);
             BitConverter.GetBytes((uint)directories.Length + 1).CopyTo(pak, 12);
             BitConverter.GetBytes((long)HeaderSize).CopyTo(pak, 16);
             BitConverter.GetBytes(namesAt).CopyTo(pak, 32);
@@ -750,6 +750,12 @@ namespace Nebula.Launcher
             string pak = Path.Combine(Path.GetTempPath(), "nebula-launcher-test-" + Guid.NewGuid().ToString("N") + ".pak");
             File.WriteAllBytes(pak, TestPak("RMGP01", "EuEnglish", "EuGerman", "EuFrench", "LayoutData", "EuSpanish", "EuItalian"));
             Check(GameDisc.GameId(pak) == "RMGP01", "game.pak's game id reads");
+            Check(GameDisc.IsCurrentVersion(pak), "a store of this build's version is current");
+            byte[] stale = TestPak("RMGP01", "EuEnglish");
+            BitConverter.GetBytes(BuildInfo.StoreVersion - 1).CopyTo(stale, 8);
+            File.WriteAllBytes(pak, stale);
+            Check(!GameDisc.IsCurrentVersion(pak), "a store of another version needs Setup to read the game again");
+            File.WriteAllBytes(pak, TestPak("RMGP01", "EuEnglish", "EuGerman", "EuFrench", "LayoutData", "EuSpanish", "EuItalian"));
             var europe = GeneralSettings.Offered(pak);
             Check(string.Join(",", europe) == "0,1,2,3,4,5", "Europe's disc offers Automatic and its five languages");
             File.WriteAllBytes(pak, TestPak("RMGJ01", "JpJapanese", "LayoutData"));

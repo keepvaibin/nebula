@@ -8,7 +8,8 @@ class TypedDraw;
 
 class OctahedronBezierSurface {
 public:
-    OctahedronBezierSurface(u32);
+    // flags: BezierSurface's, for each face.
+    OctahedronBezierSurface(u32 flags);
 
     virtual void movement();
     virtual void calcAnim();

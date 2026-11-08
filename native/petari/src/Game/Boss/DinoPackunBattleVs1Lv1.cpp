@@ -95,7 +95,7 @@ bool DinoPackunBattleVs1Lv1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
 }
 
 bool DinoPackunBattleVs1Lv1::tryFind() {
-    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1000.0f, 80.0f)) {
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, 1000.0f, 80.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs1Lv1, DinoPackunBattleVs1Lv1NrvFind));
         return true;
     }
@@ -115,7 +115,7 @@ void DinoPackunBattleVs1Lv1::exeStart() {
 
 void DinoPackunBattleVs1Lv1::exeTurn() {
     if (MR::isFirstStep(this)) {
-        if (_10 > 0.0f) {
+        if (mSide > 0.0f) {
             MR::startBck(getHost(), "TurnRight");
         } else {
             MR::startBck(getHost(), "TurnLeft");

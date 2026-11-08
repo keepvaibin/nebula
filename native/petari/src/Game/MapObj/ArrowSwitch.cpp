@@ -27,7 +27,7 @@ namespace NrvArrowSwitch {
 };  // namespace NrvArrowSwitch
 
 ArrowSwitch::ArrowSwitch(const char* pName)
-    : LiveActor(pName), mRotAngle(), mRotYTargetIndex(), mRotSpeed(), mSwitchType(-1), mLockAfterRotate(), mIsRotPlus(true), _9E(), mIsPunch() {
+    : LiveActor(pName), mRotAngle(), mRotYTargetIndex(), mRotSpeed(), mSwitchType(-1), mLockAfterRotate(), mIsRotPlus(true), mIsPunch() {
 }
 
 void ArrowSwitch::init(const TableIter& rIter) {

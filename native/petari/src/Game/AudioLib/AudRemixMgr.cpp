@@ -29,12 +29,11 @@ void AudRemixMgr::setRemixSeqResource(void* ptr) {
         pGroupData->mIndex = i;
         pGroupData->mTrackCount = *newPtr++;
         pGroupData->mNoteCount = *newPtr++;
-        pGroupData->_C = newPtr;
         newPtr += pGroupData->mNoteCount;
         pGroupData->mRemixTracks = new (mHeap, 0) RemixNoteTrackData[pGroupData->mTrackCount];
         for (int j = 0; j < pGroupData->mTrackCount; j++) {
-            pGroupData->mRemixTracks[j]._0 = *newPtr++;
-            pGroupData->mRemixTracks[j]._4 = reinterpret_cast< RemixNoteData* >(newPtr);
+            pGroupData->mRemixTracks[j].mTrackNo = *newPtr++;
+            pGroupData->mRemixTracks[j].mNotes = reinterpret_cast< RemixNoteData* >(newPtr);
             newPtr += pGroupData->mNoteCount * 4;
         }
     }

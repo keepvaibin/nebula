@@ -60,6 +60,6 @@ public:
     WalkerStateChase* mStateChase;
     WalkerStateStagger* mStateStagger;
     WalkerStateBindStarPointer* mStateBindStarPointer;
-    Quat4f _A8;
-    Vec3f _B8;
+    Quat4f mRotateQuat;
+    Vec3f mFront;
 };

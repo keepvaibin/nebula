@@ -17,7 +17,6 @@ public:
     f32 mRadius;
     f32 mTexCoord;
     u8 mAlpha;
-    bool _39;
 };
 
 class WhirlPoolAccelerator : public LiveActor {

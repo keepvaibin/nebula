@@ -1,17 +1,10 @@
 #include "Game/Player/GroupChecker.hpp"
-#include "Game/Util/HashUtil.hpp"
 
-GroupChecker::GroupChecker(const char* pName, u32 a2) : NameObj(pName) {
-    mHashTable = new HashSortTable(a2);
-}
-
-void GroupChecker::initAfterPlacement() {
-    mHashTable->sort();
+GroupChecker::GroupChecker(const char* pName, u32 capacity) : NameObj(pName), mNames(capacity) {
 }
 
 void GroupChecker::add(const NameObj* pObj) {
-    const char* name = pObj->mName;
-    mHashTable->add(name, 0, true);
+    mNames.add(pObj->mName, 0);
 }
 
 void GroupCheckManager::add(const NameObj* object, s32 index) {
@@ -19,7 +12,7 @@ void GroupCheckManager::add(const NameObj* object, s32 index) {
 }
 
 bool GroupCheckManager::isExist(const NameObj* object, s32 index) {
-    return mGroups[index]->mHashTable->search(object->mName, static_cast< HashSortValue* >(nullptr));
+    return mGroups[index]->mNames.find(object->mName) != MR::NameIndex::cNoValue;
 }
 
 GroupChecker::~GroupChecker() {

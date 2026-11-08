@@ -64,13 +64,10 @@ public:
     Vec3f mAppearPosition;
     Vec3f mInitRotation;
     Vec3f mInitPosition;
-    Pos3f _B8;
+    Pos3f mPostureMtx;
     Pos3f mBaseMtx;
     ModelObj* mPowerStarModelObj;
-    u8 _11C;
-    u8 _11D;
-    u8 _11E;
-    u8 _11F;
+    u8 mIsForceAppear;
 
     // this isn't what they wrote but oh well
     union {
@@ -79,12 +76,12 @@ public:
     };
 
     bool mIsGrandStar;
-    bool _125;
-    bool _126;
-    bool _127;
+    bool mIsRiseOnGravity;
+    bool mIsNoPostureFront;
+    bool mIsCameraActorPose;
     ActorCameraInfo* mCameraInfo;
     PowerStarAppearPoint* mCameraActor;
     ModelObj* mLuigiNPC;
-    Mtx34f _134;
-    bool _164;
+    Mtx34f mPlayerMtx;
+    bool mIsWeak;
 };

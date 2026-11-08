@@ -50,7 +50,6 @@ public:
     WalkerStateBindStarPointer* mStateBindStartPointer;
     Quat4f mRotationQuat;
     Vec3f mFrontVec;
-    s32 _B8;
     bool mIsFloating;
 
     /// @brief Drops fire on every point of the rail reached, except the first one.

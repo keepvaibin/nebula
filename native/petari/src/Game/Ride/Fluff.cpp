@@ -17,8 +17,6 @@ namespace {
     static const f32 sRideStartUpAccel = 0.2f;
     static const f32 sRideGravity = 0.15f;
     static const f32 sRideFrictionRate = 0.98f;
-    // static const f32 sRideUpSpeedMax =
-    // static const f32 sRideDownSpeedMax =
     static const f32 sRideMoveFrontAccel = 0.2f;
     static const f32 sRideFrontSpeedMax = 6.0f;
     static const f32 sRideFrontBlendRate = 0.1f;
@@ -77,7 +75,7 @@ void Fluff::init(const TableIter& rIter) {
     MR::addHitSensorAtJointRide(this, "DamageHead", "Head", 8, 100.0f, Vec3f(80.0f, 0.0f, 0.0f));
 
     initBinder(50.0f, -80.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(6, false);
     MR::calcGravity(this);
     MR::initShadowVolumeSphere(this, 60.0f);

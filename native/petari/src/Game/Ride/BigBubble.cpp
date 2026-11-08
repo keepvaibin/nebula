@@ -1,4 +1,5 @@
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/BezierSurface.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/BigBubbleDrawer.hpp"
 #include "Game/Ride/BigBubble.hpp"
@@ -16,8 +17,6 @@
 #include <nebula_math.h>
 
 namespace {
-    // static const s32 sBrakeInPointerTime
-    // static const f32 sBrakeFric
     static const f32 sNormalFric = 0.992f;
     static const f32 sBuoyancyAccel = 0.03f;
     static const f32 sPushedAccel = 0.18f;
@@ -27,21 +26,12 @@ namespace {
     static const f32 sBaseRadiusSphere = 150.0f;
     static const f32 sBaseRadiusCube = 180.0f;
     static const f32 sBaseRadiusOctahedron = 120.0f;
-    // static const s32 sNeedPushPointInTime
-    // static const f32 sPushPower
-    // static const f32 sInPushPower
-    // static const s32 sPushInvelidTime
-    // static const s32 sUnInvertPushTime
-    // static const s32 sPushAccelTime
-    // static const f32 sPointScreenAccelMin
-    // static const f32 sPointScreenAccelMax
     static const f32 sPointAccelMin = 0.0f;
     static const f32 sPointAccelMax = 1.0f;
     static const f32 sPointAccelDistanceMin = 50.0f;
     static const f32 sPointAccelDistanceMax = 1000.0f;
     static const f32 sPointAccelDeformPowerRate = 1.5f;
     static const f32 sStarPieceDeformPower = 15.0f;
-    // static const f32 sMeshScaleK =
     static const f32 sMeshScaleFreq = 0.93f;
     static const f32 sPushMeshPower = 0.02f;
     static const f32 sPressPower = 10.0f;
@@ -54,7 +44,6 @@ namespace {
     static const f32 sMaxSpinSpeed = 0.2f;
     static const f32 sCaptureStartVolume = 0.75f;
     static const f32 sCaptureEndVolume = 0.25f;
-    // static const s32 sObstructCaptureTime =
     static const f32 sWindMinDistance = 0.0f;
     static const f32 sWindMaxDistance = 0.5f;
     static const f32 sWindAccel = 0.25f;
@@ -63,7 +52,6 @@ namespace {
     static const s32 sReduceSizeInterval = 120;
     static const f32 sReduceVolume = 0.5f;
     static const f32 sMaxVolume = 5.0f;
-    // static const f32 sMargeableVolume
     static const s32 sAppearTime = 30;
     static const f32 sAppearAddMoment = 0.03f;
     static const s32 sWarningCycle = 40;
@@ -100,12 +88,12 @@ namespace NrvBigBubble {
 
 BigBubble::BigBubble(const char* pName)
     : LiveActor(pName), mSurface(), mMoveLimitter(), mHost(), mRider(), mMergeBubble(), mBubbleQuat(0, 0, 0, 1), mRiderQuat(0, 0, 0, 1),
-      mRiderPos(0.0f, 0.0f, 0.0f), mSpawnPosition(0.0f, 0.0f, 0.0f), _18C(0.0f, 0.0f, 0.0f), mPointerPos(0.0f, 0.0f, 0.0f),
+      mRiderPos(0.0f, 0.0f, 0.0f), mSpawnPosition(0.0f, 0.0f, 0.0f), mPointerPos(0.0f, 0.0f, 0.0f),
       mPushDirection(0.0f, 0.0f, 0.0f), mMoment(0.0f, 0.0f, 0.0f), mCoriolisAccel(1.0f, 0.0f, 0.0f), mInterpolateRate(), mPointAccel(),
-      mPushInvalidTime(), mReduceVolumeTimer(), _208(), mMergeIndex(-1), mShapeType(-1), _214(), mAppearRadius(1.0f), mVolume(1.0f), mDrawZ(),
-      mBinderRadius(), mWarningColor(255, 0, 0, 0), mIsObstruct(), _22D(), mIsHidden(), mIsExitLimitter(), mIsBroken(), mIsShrinkable(true),
+      mPushInvalidTime(), mReduceVolumeTimer(), mMergeIndex(-1), mShapeType(-1), mAppearRadius(1.0f), mVolume(1.0f), mDrawZ(),
+      mBinderRadius(), mWarningColor(255, 0, 0, 0), mIsObstruct(), mIsHidden(), mIsExitLimitter(), mIsBroken(), mIsShrinkable(true),
       mIsAttached(true) {
-    mSurface = new OctahedronBezierSurface(3);
+    mSurface = new OctahedronBezierSurface(BezierSurface::FLAG_NORMAL | BezierSurface::FLAG_TEX);
     mEffectMtx.identity();
     mBaseMtx.identity();
 
@@ -123,7 +111,7 @@ void BigBubble::init(const TableIter& rIter) {
     BigBubble::initSensor();
     initNerve(GET_NERVE(BigBubble, BigBubbleNrvWait));
     initBinder(getBaseRadius(), 0, 16);
-    initEffectKeeper(0, "BigBubble", false);
+    initEffectKeeper(0, "BigBubble");
     MR::setEffectHostMtx(this, "PushWind", mEffectMtx);
     initSound(6, false);
     MR::onCalcGravity(this);
@@ -184,10 +172,6 @@ void BigBubble::control() {
         if (!mIsHidden) {
             updateMeshPoint();
         }
-    }
-
-    if (_208 > 0) {
-        _208--;
     }
 
     if (mPushInvalidTime > 0) {

@@ -77,11 +77,11 @@ namespace NrvPowerStar {
 
 PowerStar::PowerStar(const char* pName)
     : LiveActor(pName), mPowerStarId(-1), mIsInDemo(false), mAppearPosition(gZeroVec), mInitRotation(gZeroVec), mInitPosition(gZeroVec),
-      mPowerStarModelObj(nullptr), _11C(0), mColorFrame(0), mIsGrandStar(false), _125(false), _126(false), _127(false), mCameraInfo(nullptr),
-      mCameraActor(nullptr), mLuigiNPC(nullptr), _164(false) {
-    _B8.identity();
+      mPowerStarModelObj(nullptr), mIsForceAppear(0), mColorFrame(0), mIsGrandStar(false), mIsRiseOnGravity(false), mIsNoPostureFront(false), mIsCameraActorPose(false), mCameraInfo(nullptr),
+      mCameraActor(nullptr), mLuigiNPC(nullptr), mIsWeak(false) {
+    mPostureMtx.identity();
     mBaseMtx.identity();
-    _134.identity();
+    mPlayerMtx.identity();
 }
 
 void PowerStar::init(const TableIter& rIter) {
@@ -99,7 +99,7 @@ void PowerStar::init(const TableIter& rIter) {
         MR::addHitSensor(this, "body", ATYPE_POWER_STAR_BIND, 8, 75.0f, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     if (MR::isGalaxyGhostCometAppearInCurrentStage()) {
         MR::invalidateClipping(this);
@@ -307,7 +307,7 @@ void PowerStar::calcAndSetBaseMtx() {
     // FIXME
     mtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
 
-    mtx2.concat(_B8, mtx);
+    mtx2.concat(mPostureMtx, mtx);
     mtx2.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx2);
 }
@@ -345,9 +345,9 @@ bool PowerStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 void PowerStar::initMapToolInfo(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mPowerStarId);
-    MR::getPlacementArg1NoInit(rIter, &_125);
-    MR::getPlacementArg2NoInit(rIter, &_126);
-    MR::getPlacementArg4NoInit(rIter, &_127);
+    MR::getPlacementArg1NoInit(rIter, &mIsRiseOnGravity);
+    MR::getPlacementArg2NoInit(rIter, &mIsNoPostureFront);
+    MR::getPlacementArg4NoInit(rIter, &mIsCameraActorPose);
     mAppearPosition.set(mPosition);
     mInitRotation.set(mRotation);
     MR::registerPowerStar(this, mPowerStarId);
@@ -449,26 +449,26 @@ void PowerStar::initPosture() {
     Pos3f mtx;
     MR::makeMtxRotate(mtx, mInitRotation);
 
-    if (!_126) {
+    if (!mIsNoPostureFront) {
         Vec3f zDir;
         mtx.getZDir(zDir);
 
         Vec3f up = -mGravity;
         if (!MR::isSameDirection(up, zDir)) {
-            MR::makeMtxUpFront(&_B8, up, zDir);
+            MR::makeMtxUpFront(&mPostureMtx, up, zDir);
         } else {
-            MR::makeMtxUpNoSupport(&_B8, up);
+            MR::makeMtxUpNoSupport(&mPostureMtx, up);
         }
     } else {
-        _B8.set(mtx);
+        mPostureMtx.set(mtx);
     }
 
-    _B8.zeroTrans();
+    mPostureMtx.zeroTrans();
     mRotation.y = 0.0f;
 }
 
 void PowerStar::endAppearDemo() {
-    if (!_11C) {
+    if (!mIsForceAppear) {
         MR::endDemo(this, ::cAppearDemoName);
     }
 
@@ -518,7 +518,7 @@ void PowerStar::requestAppearOrWait() {
     if (MR::isDemoCast(this, 0)) {
         setNerve(GET_NERVE(PowerStar, PowerStarNrvWeak));
     } else if (mIsInDemo) {
-        if (_11C) {
+        if (mIsForceAppear) {
             MR::invalidateClipping(this);
             MR::requestMovementOn(this);
 
@@ -536,7 +536,7 @@ void PowerStar::requestAppearOrWait() {
 }
 
 void PowerStar::calcAppearDemoRiseTrans(Vec3f* pOutTrans, f32 a2) const {
-    if (_125) {
+    if (mIsRiseOnGravity) {
         MR::calcGravityVector(this, mInitPosition, pOutTrans, 0, 0);
         pOutTrans->x *= -a2;
         pOutTrans->y = (pOutTrans->y * -a2);
@@ -546,7 +546,7 @@ void PowerStar::calcAppearDemoRiseTrans(Vec3f* pOutTrans, f32 a2) const {
         vec.y = a2;
         vec.x = 0.0f;
         vec.z = 0.0f;
-        _B8.mult(vec, *pOutTrans);
+        mPostureMtx.mult(vec, *pOutTrans);
     }
 
     pOutTrans->add(mInitPosition);
@@ -573,7 +573,7 @@ void PowerStar::processWait(f32 val) {
         }
     }
 
-    if (!_164) {
+    if (!mIsWeak) {
         if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startLevelSound(this, "SE_OJ_LV_POW_STAR_EXIST_W");
         } else {
@@ -633,7 +633,7 @@ void PowerStar::exeAppearDemoMove() {
 
         Vec3f zVec(0.0f, 0.0f, 0.0f);
         zVec.y = MR::sin(step * PI) * val2;
-        _B8.mult(zVec, zVec);
+        mPostureMtx.mult(zVec, zVec);
         mPosition.add(zVec);
     } else {
         if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
@@ -678,7 +678,7 @@ void PowerStar::exeAppearDemoKoopa() {
 
         MR::forceDeleteEffect(this, "Light");
 
-        mBaseMtx.set(_B8);
+        mBaseMtx.set(mPostureMtx);
 
         mBaseMtx.setTrans(mInitPosition);
 
@@ -689,7 +689,7 @@ void PowerStar::exeAppearDemoKoopa() {
         isStageKoopaVs3 = MR::isStageKoopaVs3();
         MR::startBck(mPowerStarModelObj, isStageKoopaVs3 ? "DemoKoopaGrandStarVs3" : "DemoKoopaGrandStar");
 
-        _134.set(MR::getPlayerBaseMtx());
+        mPlayerMtx.set(MR::getPlayerBaseMtx());
 
         MR::setPlayerBaseMtx(mBaseMtx);
     }
@@ -715,7 +715,7 @@ void PowerStar::exeAppearDemoKoopa() {
     }
 
     if (MR::isBckStopped(mPowerStarModelObj)) {
-        MR::setPlayerBaseMtx(_134);
+        MR::setPlayerBaseMtx(mPlayerMtx);
         mPosition.set(mAppearPosition);
 
         MR::showModelIfHidden(this);
@@ -754,7 +754,7 @@ void PowerStar::exeWeak() {
         }
     }
 
-    _164 = true;
+    mIsWeak = true;
 
     processWait(0.3f);
 }
@@ -764,7 +764,7 @@ void PowerStar::exeWeakNoRotate() {
         mRotation.y = 45.0f;
     }
 
-    _164 = true;
+    mIsWeak = true;
 
     processWait(0.0f);
 }
@@ -776,7 +776,7 @@ void PowerStar::exeWeakToWait() {
         }
     }
 
-    _164 = false;
+    mIsWeak = false;
 
     processWait(MR::calcNerveEaseInValue(this, 30, 0.3f, mIsGrandStar ? 2.0f : 3.0f));
     MR::setNerveAtStep(this, GET_NERVE(PowerStar, PowerStarNrvWait), 30);
@@ -798,11 +798,11 @@ void PowerStar::exeStageClearDemo() {
     }
 
     if (MR::isStep(this, 1)) {
-        if (_127) {
+        if (mIsCameraActorPose) {
             MR::makeMtxTR(mBaseMtx, mCameraActor);
             mBaseMtx.zeroTrans();
         } else {
-            mBaseMtx.set(_B8);
+            mBaseMtx.set(mPostureMtx);
         }
 
         MR::forceDeleteEffect(this, "Light");

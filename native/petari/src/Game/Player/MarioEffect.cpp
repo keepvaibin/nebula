@@ -86,7 +86,7 @@ namespace {
 
     void addMarioEffectAtJoint(LiveActor* pActor, const char* pEffectName, const char* pJointName, const char* pGroupName) {
         MtxPtr mtx = pJointName != nullptr ? MR::getJointMtx(pActor, pJointName) : pActor->getBaseMtx();
-        pActor->mEffectKeeper->registerEffect(pEffectName, mtx, &pActor->mScale, pGroupName, pJointName);
+        pActor->mEffectKeeper->registerEffect(pEffectName, mtx, &pActor->mScale, pGroupName);
     }
 
 };  // namespace
@@ -199,13 +199,10 @@ void MarioActor::initMaterialEffect() {
         entry++;
     }
 
-    _BA4 = new HashSortTable(entryCount);
-    entry = cMaterialEffectTable;
-    for (int i = 0; i < entryCount; i++) {
-        _BA4->add(cMaterialEffectTable[i].mName, reinterpret_cast< HashSortValue >(&cMaterialEffectTable[i]), false);
+    mMaterialEffects.reset(entryCount);
+    for (u32 i = 0; i < entryCount; i++) {
+        mMaterialEffects.add(cMaterialEffectTable[i].mName, i);
     }
-
-    _BA4->sort();
 }
 
 s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
@@ -307,8 +304,11 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
 }
 
 MultiEmitter* MarioActor::playMaterialEffect(const char* pName) {
-    MaterialEffectEntry* entry = nullptr;
-    _BA4->search(pName, reinterpret_cast< HashSortValue* >(&entry));
+    const u32 index = mMaterialEffects.find(pName);
+    if (index == MR::NameIndex::cNoValue) {
+        return nullptr;
+    }
+    MaterialEffectEntry* entry = &cMaterialEffectTable[index];
 
     const s32 materialIndex = getFloorMaterialIndex(entry->mFlag.byte0());
     if (materialIndex == -1) {
@@ -353,8 +353,11 @@ MultiEmitter* MarioActor::playMaterialEffect(const char* pName) {
 }
 
 void MarioActor::stopMaterialEffect(const char* pName) {
-    MaterialEffectEntry* entry = nullptr;
-    _BA4->search(pName, reinterpret_cast< HashSortValue* >(&entry));
+    const u32 index = mMaterialEffects.find(pName);
+    if (index == MR::NameIndex::cNoValue) {
+        return;
+    }
+    MaterialEffectEntry* entry = &cMaterialEffectTable[index];
 
     if (entry->mCurrent != nullptr) {
         MR::deleteEffect(this, entry->mCurrent);
@@ -429,10 +432,10 @@ void MarioActor::initCommonEffect() {
             break;
         }
 
-        MR::FormattedName name;
+        // A material's effect is named by the entry's name from its materialIndex'th byte: the table's strings, which
+        // the keeper holds by pointer.
+        const char* const name = entry->mName;
         for (u32 materialIndex = 0; materialIndex < 7; materialIndex++) {
-            name.format("%s", entry->mName);
-
             const u8 flag2 = entry->mFlags.byte2();
             if ((flag2 & 0x8) && materialIndex != 1) {
                 continue;
@@ -465,13 +468,13 @@ void MarioActor::initCommonEffect() {
 
             if (flag2 != 0) {
                 const char* effectName = effectList[variant];
-                mEffectKeeper->registerEffectWithoutSRT(effectName, name.c_str() + materialIndex);
+                mEffectKeeper->registerEffectWithoutSRT(effectName, name + materialIndex);
             } else {
                 const u8 flag0 = entry->mFlags.byte0();
                 switch (flag0) {
                 case 0: {
                     const char* effectName = effectList[variant];
-                    const char* hostName = name.c_str() + materialIndex;
+                    const char* hostName = name + materialIndex;
                     mEffectKeeper->registerEffectWithoutSRT(effectName, hostName);
                     const Vec3f* rot = &mRotation;
                     const Vec3f* pos = &mPosition;
@@ -480,13 +483,13 @@ void MarioActor::initCommonEffect() {
                 }
 
                 case 1:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "FootR", name.c_str() + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "FootR", name + materialIndex);
                     break;
                 case 2:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "HandR", name.c_str() + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "HandR", name + materialIndex);
                     break;
                 case 3:
-                    ::addMarioEffectAtJoint(this, effectList[variant], "Spine1", name.c_str() + materialIndex);
+                    ::addMarioEffectAtJoint(this, effectList[variant], "Spine1", name + materialIndex);
                     break;
                 default:
                     break;
@@ -494,11 +497,11 @@ void MarioActor::initCommonEffect() {
             }
 
             if ((entry->mFlags.byte1() & 0x1) != 0) {
-                MR::getEffect(this, name.c_str() + materialIndex)->forceFollowOn();
+                MR::getEffect(this, name + materialIndex)->forceFollowOn();
             }
 
             if ((entry->mFlags.byte1() & 0x2) != 0) {
-                MR::getEffect(this, name.c_str() + materialIndex)->forceScaleOn();
+                MR::getEffect(this, name + materialIndex)->forceScaleOn();
             }
         }
 
@@ -715,7 +718,7 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
 
 void MarioActor::initEffect() {
     _B98 = 0;
-    initEffectKeeper(0xB8, "Mario", true);
+    initEffectKeeper(0xB8, "Mario");
     initCommonEffect();
     initMaterialEffect();
 
@@ -801,7 +804,7 @@ void MarioActor::initEffect() {
 
     {
         const char* groupName = "雪煙レベル";
-        mEffectKeeper->registerEffect("CrestGetFlyC", _D1C.toMtxPtr(), groupName, nullptr);
+        mEffectKeeper->registerEffect("CrestGetFlyC", _D1C.toMtxPtr(), groupName);
     }
 
     const Vec3f* scale = &mScale;
@@ -835,7 +838,7 @@ void MarioActor::initEffect() {
 
     {
         const char* groupName = "ラケット消去";
-        mEffectKeeper->registerEffect("TestMarioBaobabooPowerDown", _DAC.toMtxPtr(), groupName, nullptr);
+        mEffectKeeper->registerEffect("TestMarioBaobabooPowerDown", _DAC.toMtxPtr(), groupName);
     }
 
     {
@@ -873,8 +876,6 @@ void MarioActor::initEffect() {
     }
 
     MR::getEffect(this, "パンチブラー右")->forceFollowOn();
-
-    mEffectKeeper->finalizeSort();
 
     ModelObj* obj = new ModelObj("WaterColumn", "WaterColumn", nullptr, -2, -2, -2, false);
     _BA8 = obj;

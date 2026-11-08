@@ -13,20 +13,14 @@ namespace {
     static const f32 sFrontVecBlendRate = 0.2f;
     static const f32 sUpVecBlendRate = 0.04f;
     static const f32 sTurnPlayerLimit = 0.98f;
-    // static const s32 sWaitTime =
-    // static const s32 mMoveHideTime =
-    // static const f32 sMoveSpeed =
     static const s32 sGuardTime = 50;
-    // static const f32 sGuardTurnSpeed =
     static const f32 sAttackRange = 2000.0f;
     static const s32 sAttackWaitTime = 60;
-    // static const s32 sShootTiming =
     static const f32 sBeamSpeed = 12.0f;
     static const f32 sHitHorizontalPower = 25.0f;
     static const f32 sHitVerticalPower = 25.0f;
     static const f32 sDownGravityAccel = 1.0f;
     static const f32 sDownFreq = 0.99f;
-    // static const s32 sPressTime =
 };  // namespace
 
 namespace NrvKameck {
@@ -69,7 +63,7 @@ void Kameck::init(const TableIter& rIter) {
     initBinder(70.0f, 0.0f, 0);
     MR::offBind(this);
     initBeam();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::initStarPointerTarget(this, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mAnimScaleController = new AnimScaleController(nullptr);
@@ -173,7 +167,7 @@ void Kameck::startClipped() {
 
 void Kameck::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mRotateQuat);
-    MR::setBaseScale(this, mAnimScaleController->_C * mScale);
+    MR::setBaseScale(this, mAnimScaleController->mScale * mScale);
 }
 
 void Kameck::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

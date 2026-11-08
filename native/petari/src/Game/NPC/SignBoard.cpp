@@ -31,7 +31,7 @@ void SignBoard::init(const TableIter& rIter) {
     new FollowCollisionArea(Vec3f(130.0f, 160.0f, 20.0f), getBaseMtx(), 80.0f);
 
     Vec3f up;
-    MR::getUpVecFromQuat(&up, _A0);
+    MR::getUpVecFromQuat(&up, mPoseQuat);
 
     MR::setShadowProjection(this, nullptr, mPosition, up, true);
     MR::offCalcShadow(this, nullptr);

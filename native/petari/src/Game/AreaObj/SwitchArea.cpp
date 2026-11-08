@@ -15,9 +15,9 @@ void SwitchArea::movement() {
         return;
     }
 
-    bool bVar1 = !isValidSwitchB() || isOnSwitchB();
+    bool enabled = !isValidSwitchB() || isOnSwitchB();
 
-    if (bVar1 && isInVolume(*MR::getPlayerPos())) {
+    if (enabled && isInVolume(*MR::getPlayerPos())) {
         if (mObjArg1 == -1) {
             onSwitchA();
         } else {

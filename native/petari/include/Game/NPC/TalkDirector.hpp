@@ -20,13 +20,11 @@ public:
 
     static const u32 cReadbackChannel = 2;
 
-    f32 _8;  // the depth at the balloon's point, 0 near to 1 far
+    f32 mDepth;  // the depth at the balloon's point, 0 near to 1 far
     Vec2f mScreenPos;
-    Vec3f _14;
-    f32 _20;
-    u8 _pad[0x18];
-    f32 _3C;
-    u8 _pad2[0x14];
+    Vec3f mWorldPos;
+    f32 mProjection[7];
+    f32 mViewport[6];
     u32 mAsker;  // the asker its probes carry
 };
 
@@ -67,20 +65,18 @@ public:
     TalkBalloonHolder* mBalloonHolder;
     TalkStateHolder* mStateHolder;
     TalkMessageCtrl* mMsgCtrl;
-    TalkMessageCtrl* _3C;
-    TalkMessageCtrl* _40;
-    TalkMessageCtrl* _44;
+    TalkMessageCtrl* mBalloonCtrl;
+    TalkMessageCtrl* mRequestCtrl;
+    TalkMessageCtrl* mLastTalkCtrl;
     TalkState* mTalkState;
-    bool _4C;
-    bool _4D;
-    bool _4E;
+    bool mIsTalkStart;
+    bool mIsTalkEnd;
+    bool mIsInvalidTalk;
     bool mIsInvalidClipping;
-    bool _50;
+    bool mIsNext;
     s32 mDemoType;
-    bool _58;
-    bool _59;
-    bool _5A;
-    bool _5B;
+    bool mIsSkipTerm;
+    bool mIsPlayerTalk;
     TalkMessageInfo mMessageInfo;
     ActorCameraInfo* mCameraInfo;
     LiveActor* mHostActor;
@@ -96,13 +92,10 @@ public:
     bool mIsKinopioExplorerTalkGoFinalBattle;
     bool mIsEndLuigiHideAndSeek;
     bool mIsKinopioExplorerCompleteTrickComet;
-    bool _7C;
-    bool _7D;
     bool mHasOneGreenStar;
     bool mHasTwoGreenStars;
     bool mHasThreeGreenStars;
     bool mIsUnlockedRedDriver;
-    bool _82;
     bool mIsActiveLuigiHideAndSeek;
     bool mIsGalaxyPurpleCometLaunch;
     bool misRosettaTalkTorchLecture;

@@ -34,14 +34,14 @@ public:
 
     DinoPackun* mParent;
     Vec3f mNodeDirection;
-    Vec3f _9C;
-    Vec3f _A8;
-    LiveActor* _B4;
-    LiveActor* _B8;
-    MtxPtr _BC;
-    JointControlDelegator< DinoPackunTailNode >* _C0;
-    JointControlDelegator< DinoPackunTailNode >* _C4;
+    Vec3f mJointPos;
+    Vec3f mJointFront;
+    LiveActor* mPrevNode;
+    LiveActor* mNextNode;
+    MtxPtr mJointMtx;
+    JointControlDelegator< DinoPackunTailNode >* mPreCalcJointCtrl;
+    JointControlDelegator< DinoPackunTailNode >* mJointCtrl;
     f32 mLinkLength;
     f32 mKeepBendPower;
-    u8 _D0;
+    u8 mIsLocked;
 };

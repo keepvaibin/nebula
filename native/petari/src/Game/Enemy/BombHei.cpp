@@ -32,31 +32,23 @@ namespace {
     static const f32 hGravityPhysicsOnGround = 0.5f;
     static const f32 hSpinHitJumpVel = 10.0f;
     static const f32 hPushedAcc = 2.0f;
-    // static const f32 hNearDistance =  // TODO: some combination of these two is used in exeExplode
-    // static const f32 hFarDistance =
     static const s32 hExplodeTime = 8;
-    // static const s32 hHideTime =
     static const s32 hWaitTime = 180;
     static const s32 hWalkTime = 160;
     static const f32 hWalkVel = 0.5f;
     static const f32 hPursueVel = 1.5f;
     static const f32 hPursueVelFast = 2.0f;
     static const f32 hPrePursueJumpVel = 10.0f;
-    // static const f32 hPursueHitJumpVel =
-    // static const f32 hPursueHitBackVelH =
     static const s32 hPursueHitTime = 38;
-    // static const f32 hRecoverRotateRate =
     static const f32 hGravityThrown = 0.75;
     static const f32 hThrownDampVel = 0.98f;
     static const f32 hThrownReboundRate = 0.8f;
     static const f32 hThrownReboundMin = 0.0f;
-    // static const f32 hThrownToStopValue =
     static const f32 hTurnVecValue = 2.0f;
     static const s32 hThrownCanNotGotTime = 120;
     static const f32 hMultVelAngle = 1.0f;
     static const s32 hThrownOffCalcGravityTime = 30;
     static const f32 hGroundCosine = 0.75f;
-    // static const s32 hStaticTime =
     static const f32 hStopDampValue = 0.8f;
     static const f32 hToStopVelLen = 5.0f;
     static const f32 hThrowVelH = 25.0f;
@@ -146,7 +138,7 @@ void BombHei::init(const TableIter& rIter) {
     MR::onCalcGravity(this);
 
     initSound(4, false);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     initHitSensor(2);
     f32 scl = mScale.y;
@@ -278,8 +270,7 @@ void BombHei::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    MR::moveAndTurnToPlayer(this, &mFront, ::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction,
-                            ::hNoMoveNoTurnParam.mTurnRate);
+    MR::moveAndTurnToPlayer(this, &mFront, {::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction, ::hNoMoveNoTurnParam.mTurnRate});
 
     if (MR::isGreaterStep(this, ::hWaitTime)) {
         setNerve(GET_NERVE(BombHei, HostTypeNrvWalk));
@@ -311,8 +302,7 @@ void BombHei::exeWalk() {
         }
     }
 
-    MR::moveAndTurnToDirection(this, &mFront, mTargetFront, ::hWalkParam.mSpeedH, ::hWalkParam.mGravAccel, ::hWalkParam.mFriction,
-                               ::hWalkParam.mTurnRate);
+    MR::moveAndTurnToDirection(this, &mFront, mTargetFront, {::hWalkParam.mSpeedH, ::hWalkParam.mGravAccel, ::hWalkParam.mFriction, ::hWalkParam.mTurnRate});
 
     if (MR::isGreaterStep(this, ::hWalkTime)) {
         setNerve(GET_NERVE(BombHei, HostTypeNrvWait));
@@ -345,12 +335,10 @@ void BombHei::exePursue() {
 
     if (isNerve(GET_NERVE(BombHei, HostTypeNrvPursueFast))) {
         MR::tryStartBck(this, "CountDown");
-        MR::moveAndTurnToPlayer(this, &mFront, ::hPursueFastFarParam.mSpeedH, ::hPursueFastFarParam.mGravAccel, ::hPursueFastFarParam.mFriction,
-                                ::hPursueFastFarParam.mTurnRate);
+        MR::moveAndTurnToPlayer(this, &mFront, {::hPursueFastFarParam.mSpeedH, ::hPursueFastFarParam.mGravAccel, ::hPursueFastFarParam.mFriction, ::hPursueFastFarParam.mTurnRate});
     } else {
         MR::tryStartBck(this, "Run");
-        MR::moveAndTurnToPlayer(this, &mFront, ::hPursueFarParam.mSpeedH, ::hPursueFarParam.mGravAccel, ::hPursueFarParam.mFriction,
-                                ::hPursueFarParam.mTurnRate);
+        MR::moveAndTurnToPlayer(this, &mFront, {::hPursueFarParam.mSpeedH, ::hPursueFarParam.mGravAccel, ::hPursueFarParam.mFriction, ::hPursueFarParam.mTurnRate});
     }
 
     if (isNerve(GET_NERVE(BombHei, HostTypeNrvPursue)) && mCountdown > 0 && mCountdown < ::hBrkRateUpTime) {
@@ -369,8 +357,7 @@ void BombHei::exePursueHit() {
         MR::startSound(this, "SE_EM_BOMBHEI_HIT");
     }
 
-    MR::moveAndTurnToPlayer(this, &mFront, ::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction,
-                            ::hNoMoveNoTurnParam.mTurnRate);
+    MR::moveAndTurnToPlayer(this, &mFront, {::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction, ::hNoMoveNoTurnParam.mTurnRate});
 
     if (!MR::isNearZero(mGravity)) {
         MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
@@ -393,8 +380,7 @@ void BombHei::exeSpinHit() {
         MR::invalidateExCollisionParts(this);
     }
 
-    MR::moveAndTurnToPlayer(this, &mFront, ::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction,
-                            ::hNoMoveNoTurnParam.mTurnRate);
+    MR::moveAndTurnToPlayer(this, &mFront, {::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction, ::hNoMoveNoTurnParam.mTurnRate});
 
     if (!MR::isNearZero(mGravity)) {
         MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
@@ -456,7 +442,7 @@ void BombHei::exePhysics() {
             return;
         }
 
-        mBinder->_1EC._5 = 1;
+        mBinder->mIsStopAtFirstHit = 1;
     }
 
     MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
@@ -481,7 +467,7 @@ void BombHei::exeStop() {
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, -mGravity, radius);
     }
 
-    mBinder->_1EC._5 = 1;
+    mBinder->mIsStopAtFirstHit = 1;
 }
 
 void BombHei::exeThrown() {
@@ -583,7 +569,7 @@ void BombHei::calcAndSetBaseMtx() {
     Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
     mtx.getYDir(mBinderOffset);
     mBinderOffset.mult(::hTranslateHeight);

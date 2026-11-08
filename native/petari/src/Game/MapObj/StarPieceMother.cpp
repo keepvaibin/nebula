@@ -14,7 +14,7 @@ namespace NrvStarPieceMother {
     NEW_NERVE(HostTypeNrvWait, StarPieceMother, Wait);
 };  // namespace NrvStarPieceMother
 
-StarPieceMother::StarPieceMother(const char* pName) : LiveActor(pName), mStarPieceArray(), _90(), _94(6), _98(), _9C(), _A0(10.0f) {
+StarPieceMother::StarPieceMother(const char* pName) : LiveActor(pName), mStarPieceArray(), mRailCoords(), mNumPieces(6), mNextPiece(), mRailSpeed(10.0f) {
 }
 
 void StarPieceMother::init(const TableIter& rIter) {
@@ -52,19 +52,19 @@ void StarPieceMother::init(const TableIter& rIter) {
     s32 arg = -1;
     MR::getPlacementArg0NoInit(rIter, &arg);
     if (arg != -1) {
-        _94 = arg;
+        mNumPieces = arg;
     }
 
-    mStarPieceArray = new StarPiece*[_94];
-    _90 = new f32[_94];
+    mStarPieceArray = new StarPiece*[mNumPieces];
+    mRailCoords = new f32[mNumPieces];
 
-    for (u32 idx = 0; idx < _94; idx++) {
+    for (u32 idx = 0; idx < mNumPieces; idx++) {
         mStarPieceArray[idx] = new StarPiece("スターピースマザーピース");
         mStarPieceArray[idx]->initAndSetFloatingFromGroup(rIter);
         mStarPieceArray[idx]->makeActorDead();
 
         if (MR::isValidSwitchA(this)) {
-            mStarPieceArray[idx]->mFlags._1 = false;
+            mStarPieceArray[idx]->mFlags.isGettable = false;
         }
     }
 
@@ -84,7 +84,7 @@ void StarPieceMother::init(const TableIter& rIter) {
         arg = -1;
         MR::getPlacementArg2NoInit(rIter, &arg);
         if (arg != -1 && arg != 0) {
-            _A0 = static_cast< f32 >(arg);
+            mRailSpeed = static_cast< f32 >(arg);
         }
 
         makeActorDead();
@@ -113,13 +113,13 @@ void StarPieceMother::exeMoveOnRail() {
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_STAR_PIECE_MO_MV");
-    MR::moveCoordAndFollowTrans(this, _A0);
+    MR::moveCoordAndFollowTrans(this, mRailSpeed);
 
     f32 railCoord = MR::getRailCoord(this);
-    if (_90[_98] <= railCoord) {
-        mStarPieceArray[_98]->appear();
+    if (mRailCoords[mNextPiece] <= railCoord) {
+        mStarPieceArray[mNextPiece]->appear();
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-        _98++;
+        mNextPiece++;
     }
 
     if (MR::isRailReachedGoal(this)) {
@@ -131,33 +131,33 @@ void StarPieceMother::placementPieceOnRail(f32 distance) {
     Vec3f railPos;
     MR::calcRailPosAtCoord(&railPos, this, distance);
     mStarPieceArray[0]->mPosition.set(railPos);
-    _90[0] = distance;
+    mRailCoords[0] = distance;
 
     f32 step = 0.0f;
     f32 difference = MR::getRailTotalLength(this) - distance;
-    if (1 < _94) {
-        step = 1.0f / (_94 - 1.0f);
+    if (1 < mNumPieces) {
+        step = 1.0f / (mNumPieces - 1.0f);
         step *= difference;
     }
 
-    for (int idx = 1; idx < _94; idx++) {
+    for (int idx = 1; idx < mNumPieces; idx++) {
         distance += step;
         f32 value = distance >= difference ? difference : distance;
         MR::calcRailPosAtCoord(&railPos, this, value);
         mStarPieceArray[idx]->mPosition.set(railPos);
-        _90[idx] = value;
+        mRailCoords[idx] = value;
     }
 }
 
 void StarPieceMother::onSwitchA() {
-    for (u32 idx = 0; idx < _94; idx++) {
-        mStarPieceArray[idx]->mFlags._1 = true;
+    for (u32 idx = 0; idx < mNumPieces; idx++) {
+        mStarPieceArray[idx]->mFlags.isGettable = true;
     }
 }
 
 void StarPieceMother::offSwitchA() {
-    for (u32 idx = 0; idx < _94; idx++) {
-        mStarPieceArray[idx]->mFlags._1 = false;
+    for (u32 idx = 0; idx < mNumPieces; idx++) {
+        mStarPieceArray[idx]->mFlags.isGettable = false;
     }
 }
 
@@ -169,7 +169,7 @@ void StarPieceMother::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void StarPieceMother::emitStarPieces() {
-    for (u32 idx = 0; idx < _94; idx++) {
+    for (u32 idx = 0; idx < mNumPieces; idx++) {
         Vec3f position;
         position.set(*MR::getPlayerCenterPos());
         position.sub(mPosition);

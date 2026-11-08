@@ -8,6 +8,5 @@ public:
 
     void bringFriction(f32, f32);
 
-    f32 _8C;
-    f32 _90;
+    f32 mFriction;
 };

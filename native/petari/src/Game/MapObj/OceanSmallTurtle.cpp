@@ -13,7 +13,6 @@ namespace NrvOceanSmallTurtle {
 };  // namespace NrvOceanSmallTurtle
 
 namespace {
-    // static const f32 sRisingSpeed;
     static const f32 sRisingSpeedAtFloatSignal = 0.5f;
     static const f32 sCatchRailSpeed = 2.0f;
     static const f32 sJudgeForCatchRail = 100.0f;
@@ -54,7 +53,7 @@ void OceanSmallTurtle::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
 
     MR::initCollisionParts(this, "OceanSmallTurtle", getSensor("body"), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initRailRider(rIter);
 
@@ -186,7 +185,7 @@ void OceanSmallTurtle::exeCatchRail() {
     mVelocity.zero();
     mRailMover->start();
 
-    MR::convertMercatorPlaneToSphereTransAndRotate(&mMercatorPos, &mRotation, mRailMover->_28, true);
+    MR::convertMercatorPlaneToSphereTransAndRotate(&mMercatorPos, &mRotation, mRailMover->mStartPos, true);
 
     setNerve(GET_NERVE(OceanSmallTurtle, OceanSmallTurtleNrvRailMove));
 }
@@ -201,7 +200,7 @@ void OceanSmallTurtle::exeRailMove() {
     mRailMover->movement();
     MR::startLevelSound(this, "SE_OJ_LV_O_SML_TURTLE_MOVE");
 
-    MR::convertMercatorPlaneToSphereTransAndRotate(&mMercatorPos, &mRotation, mRailMover->_28, true);
+    MR::convertMercatorPlaneToSphereTransAndRotate(&mMercatorPos, &mRotation, mRailMover->mStartPos, true);
 
     if (isNeedsForBound()) {
         mBoundTimer = 0;

@@ -78,9 +78,9 @@ void FireBarBall::controlEmitEffect() {
 FireBar::FireBar(const char* pName) : LiveActor(pName) {
     mFireBalls = nullptr;
     mFireBallCount = 5;
-    _94.x = 0.0f;
-    _94.y = 0.0f;
-    _94.z = 0.0f;
+    mFront.x = 0.0f;
+    mFront.y = 0.0f;
+    mFront.z = 0.0f;
     mFireBarSpeed = -1.0f;
     mStickCount = 1;
     mStickDistance = 140.0f;
@@ -94,7 +94,7 @@ void FireBar::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
     MR::addHitSensorCallbackEnemyAttack(this, "fire", 8, 30.0f);
     MR::initCollisionParts(this, "FireBarCore", getSensor("body"), 0);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(3, false);
     MR::calcGravity(this);
 
@@ -137,7 +137,7 @@ void FireBar::init(const TableIter& rIter) {
 
     mFireBarSpeed = 0.1f * fireBallSpeed;
     mFireBallCount = mStickCount * numFireBalls;
-    MR::calcFrontVec(&_94, this);
+    MR::calcFrontVec(&mFront, this);
     initFireBarBall(rIter);
     MR::setGroupClipping(this, rIter, 0x20);
     MR::setClippingTypeSphere(this, (mFireBallCount + 1) * 100.0f);
@@ -149,7 +149,7 @@ void FireBar::init(const TableIter& rIter) {
 void FireBar::exeWait() {
     Vec3f up_vec;
     MR::calcUpVec(&up_vec, this);
-    MR::rotateVecDegree(&_94, up_vec, mFireBarSpeed);
+    MR::rotateVecDegree(&mFront, up_vec, mFireBarSpeed);
     MR::startLevelSound(this, "SE_OJ_LV_FIRE_BAR_CENTER");
     fixFireBarBall();
 }
@@ -187,11 +187,11 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
     MR::calcUpVec(&up, this);
 
     Vec3f start;
-    start.scale(mStickDistance, _94);
+    start.scale(mStickDistance, mFront);
     start.scaleAdd(50.0f, up, start);
 
     Vec3f end;
-    end.scale(mStickDistance + 100.0f * (fireBallCount - 1), _94);
+    end.scale(mStickDistance + 100.0f * (fireBallCount - 1), mFront);
     end.scaleAdd(50.0f, up, end);
 
     for (s32 i = 0; i < mStickCount; i++) {
@@ -245,7 +245,7 @@ void FireBar::initFireBarBall(const TableIter& rIter) {
 
 void FireBar::fixFireBarBall() {
     Vec3f scaled;
-    scaled.scale(100.0f, _94);
+    scaled.scale(100.0f, mFront);
 
     Vec3f final_pos;
     final_pos.zero();

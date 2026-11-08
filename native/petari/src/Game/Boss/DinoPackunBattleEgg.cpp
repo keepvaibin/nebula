@@ -24,7 +24,6 @@ namespace NrvDinoPackunBattleEgg {
 
 DinoPackunBattleEgg::DinoPackunBattleEgg(DinoPackun* pParent) : DinoPackunAction("1回戦卵バトル", pParent) {
     mStateDamage = nullptr;
-    _18 = 1.0f;
 }
 
 void DinoPackunBattleEgg::init() {
@@ -74,19 +73,7 @@ bool DinoPackunBattleEgg::receiveMsgPush(HitSensor* pSender, HitSensor* pReceive
             removeVelocity(getHost(), v11);
         }
 
-        if (isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) && getHost()->_E8.dot(v11) < 0.0f) {
-            Vec3f v10;
-            MR::calcSideVec(&v10, getHost());
-
-            f32 v9;
-
-            if (v10.dot(v11) > 0.0f) {
-                v9 = 1.0f;
-            } else {
-                v9 = -1.0f;
-            }
-
-            _18 = v9;
+        if (isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) && getHost()->mFront.dot(v11) < 0.0f) {
             setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
         }
 

@@ -11,7 +11,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
 
-ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), _3C() {
+ChangeBgmCube::ChangeBgmCube(int formType, const char* pName) : AreaObj(formType, pName), mIsInside() {
 }
 
 void ChangeBgmCube::init(const TableIter& rIter) {
@@ -68,7 +68,7 @@ void ChangeBgmCube::movement() {
     }
 
     if (isInVolume(*MR::getPlayerPos())) {
-        if (_3C) {
+        if (mIsInside) {
             return;
         }
 
@@ -187,8 +187,8 @@ void ChangeBgmCube::movement() {
             break;
         }
 
-        _3C = true;
+        mIsInside = true;
     } else {
-        _3C = false;
+        mIsInside = false;
     }
 }

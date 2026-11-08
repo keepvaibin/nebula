@@ -397,13 +397,8 @@ void LiveActor::initRailRider(const TableIter& rIter) {
     mRailRider = new RailRider(rIter);
 }
 
-void LiveActor::initEffectKeeper(int a1, const char* a2, bool doSort) {
+void LiveActor::initEffectKeeper(int a1, const char* a2) {
     mEffectKeeper = new EffectKeeper(getName(), MR::getModelResourceHolder(this), a1, a2);
-
-    if (doSort) {
-        mEffectKeeper->enableSort();
-    }
-
     mEffectKeeper->init(this);
 
     if (mBinder != nullptr) {

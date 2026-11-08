@@ -6,7 +6,6 @@
 #include "Game/Util/CollisionShapeUtil.hpp"
 
 namespace {
-    // static const s32 sIntervalTime = 120;
     static const s32 sSteamTime = 90;
     static const s32 sAppearTime = 82;
     static const s32 sDisappearTime = 90;
@@ -34,7 +33,7 @@ LavaSteam::LavaSteam(const char* pName) : LiveActor(pName), mUp(0.0f, 1.0f, 0.0f
 void LavaSteam::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("LavaSteam", nullptr, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostSRT(this, "Sign", &mPosition, &mRotation, &mEffectScale);
 
     initHitSensor(1);

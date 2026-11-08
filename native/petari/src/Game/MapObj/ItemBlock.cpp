@@ -3,10 +3,8 @@
 #include "Game/Util.hpp"
 
 namespace {
-    // static const f32 cVanishEffectScale = ;
     static const s32 cAppearItemStep = 1;
     static const f32 cAppearItemOffsetY = 100.0f;
-    // static const f32 cVelocityCoin =
     static const s32 cTimerLimit = 240;
     static const s32 hNumTimerLastPiece = 11;
     static const f32 hLastBonusSplashRangeH = 10.0f;
@@ -29,7 +27,6 @@ ItemBlock::ItemBlock(const char* pName) : LiveActor(pName) {
     mKind = 0;
     mTimer = 0;
     mItemCount = 8;
-    _98 = 0;
     mCalcShadow = false;
     mNoCalcAnim = false;
 }
@@ -40,7 +37,7 @@ void ItemBlock::init(const TableIter& rIter) {
     initBlock();
     MR::connectToSceneMapObjStrongLight(this);
     MR::useStageSwitchSleep(this, rIter);
-    initEffectKeeper(1, "CoinBlock", false);
+    initEffectKeeper(1, "CoinBlock");
     initSound(4, false);
     initNerve(GET_NERVE(ItemBlock, ItemBlockNrvStandby));
     s32 arg = -1;

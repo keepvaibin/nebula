@@ -51,9 +51,6 @@ public:
     f32 mCoord;
     f32 mSpeed;
     bool mIsNotReverse;
-    u8 _D;
-    u8 _E;
-    u8 _F;
     Vec3f mCurPos;
     Vec3f mCurDirection;
     Vec3f mStartPos;

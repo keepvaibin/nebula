@@ -19,5 +19,5 @@ public:
 
     u8 padding[0xC];
     const char* mActionName;
-    bool _20;
+    bool mIsClockwise;
 };

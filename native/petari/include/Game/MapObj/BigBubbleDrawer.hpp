@@ -24,5 +24,4 @@ public:
 
     JUTTexture* mBubbleTexture;
     JUTTexture* mRainbowTexture;
-    f32 _8;
 };

@@ -1,9 +1,6 @@
 #include "Game/System/PauseButtonCheckerInGame.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 
-namespace {
-};  // namespace
-
 PauseButtonCheckerInGame::PauseButtonCheckerInGame()
     : mPlusHoldFrame(0), mMinusHoldFrame(0)
       ,

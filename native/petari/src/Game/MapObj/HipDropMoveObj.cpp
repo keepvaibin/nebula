@@ -27,7 +27,7 @@ void HipDropMoveObj::init(const TableIter& rIter) {
     MR::getObjectName(&mModelName, rIter);
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneMapObj(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initHitSensor(1);
     HitSensor* pSensor = MR::addHitSensorAtJointMapObj(this, "body", ::cSwitchJointName, 0, 225.0f, Vec3f(0.0f, 0.0f, 0.0f));

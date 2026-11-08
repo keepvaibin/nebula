@@ -8,7 +8,7 @@
 #include "Game/Camera/CameraCharmedVecReg.hpp"
 #include "Game/Camera/CameraCharmedVecRegTower.hpp"
 #include "Game/Camera/CameraCubePlanet.hpp"
-#include "Game/Camera/CameraDPD.hpp"
+#include "Game/Camera/CameraPointer.hpp"
 #include "Game/Camera/CameraDead.hpp"
 #include "Game/Camera/CameraFix.hpp"
 #include "Game/Camera/CameraFixedPoint.hpp"
@@ -100,7 +100,7 @@ namespace {
         {"CAM_TYPE_FOO_FIGHTER_PLANET", "フーファイタープラネット", createCamera< CameraFooFighterPlanet >, true},
         {"CAM_TYPE_BLACK_HOLE", "ブラックホール", createCamera< CameraBlackHole >, false},
         {"CAM_TYPE_ANIM", "アニメ", createCamera< CameraAnim >, false},
-        {"CAM_TYPE_DPD", "ＤＰＤ", createCamera< CameraDPD >, true},
+        {"CAM_TYPE_DPD", "ＤＰＤ", createCamera< CameraPointer >, true},
         {"CAM_TYPE_WATER_FOLLOW", "水中フォロー", createCamera< CameraWaterFollow >, true},
         {"CAM_TYPE_WATER_PLANET", "水中プラネット", createCamera< CameraWaterPlanet >, true},
         {"CAM_TYPE_WATER_PLANET_BOSS", "水中プラネットボス", createCamera< CameraWaterPlanetBoss >, true},

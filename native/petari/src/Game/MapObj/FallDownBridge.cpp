@@ -32,7 +32,7 @@ namespace NrvFallDownBridge {
     NEW_NERVE(FallDownBridgeNrvQuake, FallDownBridge, Quake);
 };  // namespace NrvFallDownBridge
 
-FallDownBridge::FallDownBridge(const char* pName) : LiveActor(pName), _8C(0.0f, 1250.0f, 0.0f), _98(), _9C(), _A0(0.0f), _A4(90.0f), _A8() {
+FallDownBridge::FallDownBridge(const char* pName) : LiveActor(pName), mClipCenter(0.0f, 1250.0f, 0.0f), mAngle(), mAngleSpeed(), mMinAngle(0.0f), mMaxAngle(90.0f), mIsFallen() {
 }
 
 void FallDownBridge::init(const TableIter& rIter) {
@@ -50,7 +50,7 @@ void FallDownBridge::init(const TableIter& rIter) {
     MR::initCollisionParts(this, pName, getSensor("body"), nullptr);
     initSound(4, false);
 
-    MR::setClippingTypeSphere(this, 2600.0f, &_8C);
+    MR::setClippingTypeSphere(this, 2600.0f, &mClipCenter);
 
     initNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvWait));
 
@@ -58,62 +58,62 @@ void FallDownBridge::init(const TableIter& rIter) {
 }
 
 void FallDownBridge::control() {
-    f32 val = MR::sin(MR::toRadian(MR::abs(_98) - 9.090277f));
+    f32 val = MR::sin(MR::toRadian(MR::abs(mAngle) - 9.090277f));
 
-    if (_98 < 0.0f) {
+    if (mAngle < 0.0f) {
         val = -val;
     }
 
-    _9C += val * 0.06f;
-    _98 += _9C;
+    mAngleSpeed += val * 0.06f;
+    mAngle += mAngleSpeed;
 
-    if (!_A8 && MR::abs(_9C) >= 0.06f) {
+    if (!mIsFallen && MR::abs(mAngleSpeed) >= 0.06f) {
         MR::startLevelSound(this, "SE_OJ_LV_CHAL_FD_BRIDGE_FL");
     }
 
     bool ret = false;
 
-    if (_98 > _A4) {
-        _98 = _A4;
+    if (mAngle > mMaxAngle) {
+        mAngle = mMaxAngle;
         ret = true;
     }
 
-    if (_98 < _A0) {
-        _98 = _A0;
+    if (mAngle < mMinAngle) {
+        mAngle = mMinAngle;
         ret = true;
     }
 
     if (ret) {
-        if (MR::abs(_9C) > ::sShakeCameraNormalVelocity) {
+        if (MR::abs(mAngleSpeed) > ::sShakeCameraNormalVelocity) {
             MR::startSound(this, "SE_OJ_CHAL_FD_BRIDGE_END");
             MR::shakeCameraNormal();
         } else {
-            if (MR::abs(_9C) > ::sShakeCameraWeakVelocity) {
+            if (MR::abs(mAngleSpeed) > ::sShakeCameraWeakVelocity) {
                 MR::shakeCameraWeak();
             }
         }
 
-        _9C *= -0.5f;
+        mAngleSpeed *= -0.5f;
 
-        if (MR::abs(_9C) < 0.06f) {
-            _9C = 0.0f;
+        if (MR::abs(mAngleSpeed) < 0.06f) {
+            mAngleSpeed = 0.0f;
 
-            if (MR::abs(_98) > 9.090277f) {
-                _A8 = true;
+            if (MR::abs(mAngle) > 9.090277f) {
+                mIsFallen = true;
             }
         }
     }
 
-    if (MR::abs(_98) < 0.1f && MR::abs(_9C) < 0.06f) {
-        _98 = 0.0f;
-        _9C = 0.0f;
+    if (MR::abs(mAngle) < 0.1f && MR::abs(mAngleSpeed) < 0.06f) {
+        mAngle = 0.0f;
+        mAngleSpeed = 0.0f;
     }
 
-    _9C *= 0.99f;
+    mAngleSpeed *= 0.99f;
 }
 
 bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (!_A8 && isNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvWait)) && (msg == ACTMES_BALL_DASH_WALL || msg == ACTMES_BALL_TOUCH_WALL)) {
+    if (!mIsFallen && isNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvWait)) && (msg == ACTMES_BALL_DASH_WALL || msg == ACTMES_BALL_TOUCH_WALL)) {
         LiveActor* pHost = pSender->mHost;
 
         if (!MR::isBindedWall(pHost)) {
@@ -148,7 +148,7 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
             val = -val;
         }
 
-        _9C += val;
+        mAngleSpeed += val;
 
         setNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvQuake));
 
@@ -169,7 +169,7 @@ void FallDownBridge::calcAndSetBaseMtx() {
 
     Vec3f vecC4;
 
-    if (_98 >= 0.0f) {
+    if (mAngle >= 0.0f) {
         vecC4.set< f32 >(0.0f, 0.0f, 0.0f);
     } else {
         vecC4.set(mScale.x * 400.0f, 0.0f, 0.0f);
@@ -179,7 +179,7 @@ void FallDownBridge::calcAndSetBaseMtx() {
 
     Pos3f baseMtx;
     baseMtx.identity();
-    baseMtx.makeRotate(Vec3f(0, 0, 1), MR::toRadian(_98));
+    baseMtx.makeRotate(Vec3f(0, 0, 1), MR::toRadian(mAngle));
 
     baseMtx.concat(baseMtx, mtx88);
 
@@ -189,7 +189,7 @@ void FallDownBridge::calcAndSetBaseMtx() {
 
     MR::setBaseTRMtx(this, baseMtx);
 
-    baseMtx.mult(::sBaseClipCentor, _8C);
+    baseMtx.mult(::sBaseClipCentor, mClipCenter);
 }
 
 void FallDownBridge::exeWait() {

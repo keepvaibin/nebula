@@ -89,11 +89,10 @@ public:
     DemoWipeKeeper* mWipeKeeper;
     DemoSoundKeeper* mSoundKeeper;
     MR::Vector< MR::FixedArray< DemoSheetKeeperBase*, 2 > > mSheetKeeper;
-    StageSwitchCtrl* _40;
-    NameObj* _44;
-    const char* _48;
-    s32 _4C;
-    bool _50;
+    StageSwitchCtrl* mStageSwitchCtrl;
+    NameObj* mDemoStarter;
+    const char* mDemoName;
+    s32 mEndType;
     MR::Vector< MR::FixedArray< LiveActor*, 192 > > mActor;
     MR::Vector< MR::FixedArray< DemoTalkAnimCtrl*, 8 > > mTalkAnimCtrl;
     MR::Vector< MR::FixedArray< DemoTalkMessageCtrl, 8 > > mTalkMessageCtrl;

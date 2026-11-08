@@ -20,11 +20,11 @@ FirePressureRadiate::FirePressureRadiate(const char* pName) : LiveActor(pName) {
     mCannonRotation = 0.0f;
     mWaitTime = 300;
     mShootTime = 300;
-    _CC = -1;
-    _D0 = 0.0f;
-    _D4 = 500.0f;
+    mRadiateStep = -1;
+    mRadiateLength = 0.0f;
+    mRadiateMaxLength = 500.0f;
     mGroup = nullptr;
-    _DC = 0;
+    mIsGroupLeader = 0;
     mRadiateMtx.identity();
 }
 
@@ -37,7 +37,7 @@ void FirePressureRadiate::init(const TableIter& rIter) {
     MR::addHitSensorAtJointMapObj(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
     MR::addHitSensorCallbackEnemyAttack(this, "radiate", 8, 50.0f);
     MR::invalidateHitSensor(this, "radiate");
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "Fire", mRadiateMtx.mMtx);
     MR::setEffectHostMtx(this, "FireInd", mRadiateMtx.mMtx);
     initSound(4, false);
@@ -82,7 +82,7 @@ void FirePressureRadiate::initAfterPlacement() {
             }
         }
 
-        _DC = first == this;
+        mIsGroupLeader = first == this;
     }
 }
 
@@ -101,7 +101,7 @@ void FirePressureRadiate::exeRelax() {
 }
 
 void FirePressureRadiate::exeSyncWait() {
-    if (_DC) {
+    if (mIsGroupLeader) {
         if (MR::isStep(this, 60)) {
             mGroup->sendMsgToGroupMember(ACTMES_GROUP_MOVE_START, getSensor("body"), "body");
         }
@@ -128,7 +128,7 @@ void FirePressureRadiate::exeRadiate() {
 
     if (MR::isStep(this, 25)) {
         MR::validateHitSensor(this, "radiate");
-        _CC = 0;
+        mRadiateStep = 0;
     }
 
     if (MR::isGreaterEqualStep(this, mShootTime)) {
@@ -150,7 +150,7 @@ void FirePressureRadiate::exeRadiateMargin() {
             setNerve(GET_NERVE(FirePressureRadiate, FirePressureRadiateNrvWait));
         }
 
-        if (_DC) {
+        if (mIsGroupLeader) {
             mGroup->sendMsgToGroupMember(ACTMES_GROUP_MOVE_STOP, getSensor("body"), "body");
         }
     }
@@ -163,14 +163,14 @@ void FirePressureRadiate::exeWait() {
 }
 
 void FirePressureRadiate::control() {
-    if (_CC != -1) {
-        if (_CC < 70) {
-            f32 liner = MR::getLinerValue(_CC / 70.0f, 51.0f, _D4, 1.0f);
-            _D0 = liner;
-            _CC = _CC + 1;
+    if (mRadiateStep != -1) {
+        if (mRadiateStep < 70) {
+            f32 liner = MR::getLinerValue(mRadiateStep / 70.0f, 51.0f, mRadiateMaxLength, 1.0f);
+            mRadiateLength = liner;
+            mRadiateStep = mRadiateStep + 1;
         } else {
-            _CC = -1;
-            _D0 = _D4;
+            mRadiateStep = -1;
+            mRadiateLength = mRadiateMaxLength;
         }
     }
 }
@@ -217,7 +217,7 @@ void FirePressureRadiate::updateHitSensor(HitSensor* pSensor) {
     Vec3f start;
     NebulaVecScaleAdd(&direction, &position, &start, 50.0f);
     Vec3f end;
-    NebulaVecScaleAdd(&direction, &start, &end, _D0 - 50.0f);
+    NebulaVecScaleAdd(&direction, &start, &end, mRadiateLength - 50.0f);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), start, end);
 }
 

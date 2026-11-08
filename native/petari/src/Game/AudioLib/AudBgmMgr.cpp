@@ -3,7 +3,7 @@
 #include "Game/AudioLib/AudBgmKeeper.hpp"
 #include "Game/Sound/Sound.hpp"
 
-AudBgmMgr::AudBgmMgr() : _8FC(false) {
+AudBgmMgr::AudBgmMgr() {
     for (int idx = 0; idx < 2; idx++) {
         mBgm[idx] = nullptr;
         mNextBGM[idx] = -1;
@@ -15,11 +15,6 @@ AudBgmMgr::AudBgmMgr() : _8FC(false) {
 void AudBgmMgr::movement() {
     volDownStageBgmWhenSubBgmPlaying();
     for (int idx = 0; idx < 2; idx++) {
-        if (_8FC) {
-            mVolumeController[idx].mIsMuted = true;
-        } else {
-            mVolumeController[idx].mIsMuted = false;
-        }
         mVolumeController[idx].update();
         if (mBgm[idx] != nullptr) {
             mBgm[idx]->movement();

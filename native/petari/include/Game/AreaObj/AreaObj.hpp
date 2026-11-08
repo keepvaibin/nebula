@@ -37,7 +37,7 @@ public:
     }
 
     bool isValid() const {
-        return mIsValid && _15 && mIsAwake;
+        return mIsValid && mIsFollowValid && mIsAwake;
     }
 
     void awake() {
@@ -56,7 +56,7 @@ public:
     AreaForm* mForm;
     int mFormType;
     bool mIsValid;
-    bool _15;
+    bool mIsFollowValid;
     bool mIsAwake;
     s32 mObjArg0;
     s32 mObjArg1;
@@ -85,5 +85,5 @@ public:
     }
 
     MR::Vector< MR::AssignableArray< AreaObj* > > mArray;
-    s32 _18;
+    s32 mMaxCount;
 };

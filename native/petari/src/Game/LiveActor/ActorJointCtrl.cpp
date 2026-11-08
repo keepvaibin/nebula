@@ -4,22 +4,11 @@
 #include "Game/LiveActor/IKJointCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
-ActorJointCtrl::ActorJointCtrl(LiveActor* pActor) {
-    mActor = pActor;
-    mJointCtrlKeeper = 0;
-    mFaceJointCtrl = 0;
-    mJointCtrlHolder = 0;
-    _10 = 1;
-    _11 = 0;
-
+ActorJointCtrl::ActorJointCtrl(LiveActor* pActor) : mActor(pActor), mIsIdle(true) {
     mJointCtrlKeeper = new DynamicJointCtrlKeeper(mActor);
     mFaceJointCtrl = new FaceJointCtrl(mActor);
     mFaceJointCtrl->init();
     mJointCtrlHolder = ActorJoint::createIKJointCtrlHolder(mActor);
-
-    if (mJointCtrlHolder) {
-        _11 = 1;
-    }
 }
 
 void ActorJointCtrl::startDynamicCtrl(const char* pName, s32 val) {
@@ -61,13 +50,10 @@ void ActorJointCtrl::update() {
 void ActorJointCtrl::startUpdate() {
     if (mJointCtrlHolder) {
         mJointCtrlHolder->startUpdate();
-    }
-
-    if (_11) {
         mActor->calcAnim();
     }
 
-    _10 = 0;
+    mIsIdle = false;
 }
 
 void ActorJointCtrl::endUpdate() {
@@ -83,11 +69,11 @@ void ActorJointCtrl::endUpdate() {
         mJointCtrlHolder->endUpdate();
     }
 
-    _10 = 1;
+    mIsIdle = true;
 }
 
 void ActorJointCtrl::setCallBackFunction() {
-    if (_10) {
+    if (mIsIdle) {
         if (mJointCtrlKeeper) {
             mJointCtrlKeeper->setCallBackFunction();
         }

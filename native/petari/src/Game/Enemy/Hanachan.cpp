@@ -155,7 +155,7 @@ void HanachanParts::init(const TableIter& rIter) {
 
     initBinder(100.0f, 100.0f, 0);
 
-    initEffectKeeper(1, mPartsType == PartsType_Head ? "HanachanHead" : "HanachanBody", false);
+    initEffectKeeper(1, mPartsType == PartsType_Head ? "HanachanHead" : "HanachanBody");
     MR::addEffect(this, "PointerTouch");
     MR::initLightCtrl(this);
     initSound(2, false);
@@ -374,7 +374,7 @@ void HanachanParts::calcAndSetBaseMtx() {
     mtx.setTrans(mPosition);
 
     MR::setBaseTRMtx(this, mtx);
-    MR::setBaseScale(this, mHost->mScaleController->_C * mScale);
+    MR::setBaseScale(this, mHost->mScaleController->mScale * mScale);
 }
 
 void HanachanParts::exeWalk() {
@@ -722,13 +722,13 @@ void HanachanParts::exeBlow() {
 
 void HanachanParts::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::stopBck(this);
         mVelocity.zero();
         MR::emitEffect(this, "PointerTouch");
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 }
 
 void HanachanParts::endStarPointerBind() {
@@ -1124,7 +1124,7 @@ void Hanachan::exeBlow() {
 void Hanachan::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
         setNerveAllParts(GET_NERVE(Hanachan, HanachanPartsNrvStarPointerBind));
-        mScaleController->startDpdHitVibration();
+        mScaleController->startPointerHitVibration();
     }
 
     if (MR::isGreaterStep(this, ::hBindMinStep) && !isStarPointerPointing()) {

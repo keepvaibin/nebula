@@ -30,9 +30,9 @@ public:
 
     void calcToTargetMatrixByFirstPose(Pos3f* pMatrix, const Pos3f& rRootMatrix, const Vec3f& rRootPosition, const Vec3f& rDirection) const;
 
-    Pos3f _0;
-    Pos3f _30;
-    Pos3f _60;
+    Pos3f mPose;
+    Pos3f mRootMtx;
+    Pos3f mMiddleMtx;
     f32 mRootBoneLength;
     f32 mMiddleBoneLength;
 };

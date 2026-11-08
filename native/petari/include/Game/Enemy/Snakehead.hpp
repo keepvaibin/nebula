@@ -32,28 +32,28 @@ public:
     void exeRest();
     void exeMoveBack();
     void exeTurtleDown();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
     void choiceAndStartBck(const char*);
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
     bool isNearPlayerFromRail() const;
 
     bool isSmall() {
-        return _E8 == SnakeheadType_SmallWait || _E8 == SnakeheadType_SmallMove;
+        return mType == SnakeheadType_SmallWait || mType == SnakeheadType_SmallMove;
     }
 
     bool isMove() {
-        return _E8 == SnakeheadType_SmallMove || _E8 == SnakeheadType_BigMove;
+        return mType == SnakeheadType_SmallMove || mType == SnakeheadType_BigMove;
     }
 
     AnimScaleController* mController;
     WalkerStateBindStarPointer* mStarPointer;
     Pos3f mBodyMtx;
-    Vec3f _C4;
+    Vec3f mSmokePos;
     f32 mForwardSpeed;
     f32 mBackwardSpeed;
     f32 mActivationRadius;
     Vec3f mRailCenter;
-    SnakeheadType _E8;
+    SnakeheadType mType;
     BenefitItemOneUp* mItem;
 };

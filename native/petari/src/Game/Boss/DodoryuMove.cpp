@@ -6,7 +6,6 @@
 #include "Game/Util/RailUtil.hpp"
 
 namespace {
-    // static const f32 sRailSpeed = _;
     static const f32 sRailAccel = 0.05f;
     static const f32 sEscapeAccel = 0.05f;
 };  // namespace
@@ -41,7 +40,7 @@ namespace DodoryuSub {
 
     void MoveStateHolder::shiftRail(f32 param1) {
         mNextState = mRailState;
-        mRailState->_14 = param1;
+        mRailState->mSpeed = param1;
     }
 
     void MoveStateHolder::shiftChase(f32 param1, f32 param2, f32 param3, f32 param4) {
@@ -51,33 +50,33 @@ namespace DodoryuSub {
 
         MoveStateChase* pChaseState = mChaseState;
 
-        pChaseState->_10 = param1;
-        pChaseState->_14 = param2;
-        pChaseState->_18 = param3;
-        pChaseState->_1C = param4;
+        pChaseState->mAccel = param1;
+        pChaseState->mLateralDamping = param2;
+        pChaseState->mMaxSpeed = param3;
+        pChaseState->mTurnAngle = param4;
 
         MoveStateDetour* pDetourState = mDetourState;
 
-        pDetourState->_10 = param1;
-        pDetourState->_14 = param2;
-        pDetourState->_18 = param3;
-        pDetourState->_1C = param4;
+        pDetourState->mAccel = param1;
+        pDetourState->mLateralDamping = param2;
+        pDetourState->mMaxSpeed = param3;
+        pDetourState->mTurnAngle = param4;
     }
 
     void MoveStateHolder::shiftEscape(f32 param1, s32 param2, s32 param3, f32 param4, f32 param5) {
         if (mCurrentState != mEscapeState) {
             mNextState = mEscapeState;
-            mEscapeState->_10 = 0;
+            mEscapeState->mDirStepLeft = 0;
         }
 
         MoveStateEscape* pEscapeState = mEscapeState;
 
-        pEscapeState->_24 = param1;
-        pEscapeState->_28 = param1;
-        pEscapeState->_14 = param2;
-        pEscapeState->_18 = param3;
-        pEscapeState->_1C = param4;
-        pEscapeState->_20 = param5;
+        pEscapeState->mMaxSpeed = param1;
+        pEscapeState->mSpeed = param1;
+        pEscapeState->mDirStepMin = param2;
+        pEscapeState->mDirStepMax = param3;
+        pEscapeState->mDirAngleMax = param4;
+        pEscapeState->mTurnAngle = param5;
     }
 
     void MoveStateHolder::shiftJumpOut(f32 param1, f32 param2) {
@@ -87,8 +86,8 @@ namespace DodoryuSub {
 
         MoveStateJumpOut* pJumpOutState = mJumpOutState;
 
-        pJumpOutState->_10 = param2;
-        pJumpOutState->_14 = param1;
+        pJumpOutState->mTurnAngle = param2;
+        pJumpOutState->mSpeed = param1;
     }
 
     void MoveStateHolder::shiftNull() {
@@ -97,29 +96,29 @@ namespace DodoryuSub {
 
     void MoveStateHolder::brake() {
         if (mCurrentState == mEscapeState) {
-            mEscapeState->_28 = 0.0f;
+            mEscapeState->mSpeed = 0.0f;
         } else if (mCurrentState == mChaseState) {
             mChaseState->mHost->mVelocity.zero();
         } else if (mCurrentState == mRailState) {
-            mRailState->_14 = 0.0f;
+            mRailState->mSpeed = 0.0f;
         }
     }
 
     void MoveStateHolder::setRailSpeed(f32 speed) {
-        mRailState->_14 = speed;
+        mRailState->mSpeed = speed;
     }
 
-    MoveStateRail::MoveStateRail(MoveStateHolder* pHolder) : MoveState(pHolder), _10(8.0f), _14(8.0f) {
+    MoveStateRail::MoveStateRail(MoveStateHolder* pHolder) : MoveState(pHolder), mMaxSpeed(8.0f), mSpeed(8.0f) {
     }
 
     void MoveStateRail::execute() {
-        _14 += ::sRailAccel;
+        mSpeed += ::sRailAccel;
 
-        if (_14 > _10) {
-            _14 = _10;
+        if (mSpeed > mMaxSpeed) {
+            mSpeed = mMaxSpeed;
         }
 
-        MR::moveCoord(mHost, _14);
+        MR::moveCoord(mHost, mSpeed);
         Pos3f baseMtx = mHost->mBaseMtx;
         Vec3f front;
         baseMtx.getZDir(front);
@@ -137,12 +136,12 @@ namespace DodoryuSub {
         Vec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
 
         if (DodoryuUtil::calcVerticalizedDir(mHost, &toPlayer, toPlayer)) {
-            DodoryuUtil::turnToward(mHost, toPlayer, _1C);
+            DodoryuUtil::turnToward(mHost, toPlayer, mTurnAngle);
 
             Vec3f accelDir;
             mHost->mBaseMtx.getZDir(accelDir);
 
-            DodoryuUtil::accelerate(mHost, accelDir, _10, _14, _18);
+            DodoryuUtil::accelerate(mHost, accelDir, mAccel, mLateralDamping, mMaxSpeed);
         }
 
         if (mHost->checkWallWithVelocity()) {
@@ -167,10 +166,10 @@ namespace DodoryuSub {
             Vec3f yDir;
             mHost->mBaseMtx.getYDir(yDir);
 
-            accelDir.cross(yDir, mHost->_134);
+            accelDir.cross(yDir, mHost->mWallNormal);
         }
 
-        DodoryuUtil::accelerate(mHost, accelDir, _10, _14, _18);
+        DodoryuUtil::accelerate(mHost, accelDir, mAccel, mLateralDamping, mMaxSpeed);
         DodoryuUtil::addVelocity(mHost, false);
 
         if (!mHost->snapToWall()) {
@@ -189,31 +188,31 @@ namespace DodoryuSub {
     bool MoveStateDetour::isPlayerOppositeFromWall() const {
         Vec3f toPlayer = *MR::getPlayerPos() - mHost->mPosition;
 
-        return mHost->_134.dot(toPlayer) > 0.0f;
+        return mHost->mWallNormal.dot(toPlayer) > 0.0f;
     }
 
     MoveStateEscape::MoveStateEscape(MoveStateHolder* pHolder)
-        : MoveState(pHolder), _10(), _14(60), _18(60), _1C(), _20(), _28(), _2C(0.0f, 0.0f, 0.0f) {
+        : MoveState(pHolder), mDirStepLeft(), mDirStepMin(60), mDirStepMax(60), mDirAngleMax(), mTurnAngle(), mSpeed(), mDir(0.0f, 0.0f, 0.0f) {
     }
 
     void MoveStateEscape::execute() {
-        if (_10 == 0) {
-            _10 = MR::getRandom(_14, _18 + 1);
+        if (mDirStepLeft == 0) {
+            mDirStepLeft = MR::getRandom(mDirStepMin, mDirStepMax + 1);
 
-            DodoryuUtil::calcEscapeDir(mHost, &_2C, _1C);
+            DodoryuUtil::calcEscapeDir(mHost, &mDir, mDirAngleMax);
         }
 
-        _28 += ::sEscapeAccel;
+        mSpeed += ::sEscapeAccel;
 
-        if (_28 > _24) {
-            _28 = _24;
+        if (mSpeed > mMaxSpeed) {
+            mSpeed = mMaxSpeed;
         }
 
-        DodoryuUtil::turnToward(mHost, _2C, _20);
+        DodoryuUtil::turnToward(mHost, mDir, mTurnAngle);
 
         Vec3f newVelocity;
         mHost->mBaseMtx.getZDir(newVelocity);
-        newVelocity.setLength(_28);
+        newVelocity.setLength(mSpeed);
 
         mHost->mVelocity.set(newVelocity);
 
@@ -224,14 +223,14 @@ namespace DodoryuSub {
         DodoryuUtil::addVelocity(mHost, true);
         mHost->mVelocity.zero();
 
-        _10--;
+        mDirStepLeft--;
 
-        if (_10 < 0) {
-            _10 = 0;
+        if (mDirStepLeft < 0) {
+            mDirStepLeft = 0;
         }
     }
 
-    MoveStateJumpOut::MoveStateJumpOut(MoveStateHolder* pHolder) : MoveState(pHolder), _10(3.0f), _14(1.0f) {
+    MoveStateJumpOut::MoveStateJumpOut(MoveStateHolder* pHolder) : MoveState(pHolder), mTurnAngle(3.0f), mSpeed(1.0f) {
     }
 
     void MoveStateJumpOut::execute() {
@@ -239,10 +238,10 @@ namespace DodoryuSub {
         Vec3f awayFromPlayer = rPosition - *MR::getPlayerPos();
 
         DodoryuUtil::calcVerticalizedDir(mHost, &awayFromPlayer, awayFromPlayer);
-        DodoryuUtil::turnToward(mHost, awayFromPlayer, _10);
+        DodoryuUtil::turnToward(mHost, awayFromPlayer, mTurnAngle);
 
         Dodoryu* pHost = mHost;
-        pHost->mVelocity.set(awayFromPlayer * _14);
+        pHost->mVelocity.set(awayFromPlayer * mSpeed);
 
         if (mHost->checkWallWithVelocity()) {
             DodoryuUtil::rotateVelocityByWall(mHost);

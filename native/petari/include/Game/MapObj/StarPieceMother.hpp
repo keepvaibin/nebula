@@ -22,9 +22,8 @@ public:
 
 private:
     StarPiece** mStarPieceArray;
-    f32* _90;
-    s32 _94;
-    u32 _98;
-    u32 _9C;
-    f32 _A0;
+    f32* mRailCoords;
+    s32 mNumPieces;
+    u32 mNextPiece;
+    f32 mRailSpeed;
 };

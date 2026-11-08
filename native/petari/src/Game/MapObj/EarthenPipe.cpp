@@ -23,32 +23,31 @@ namespace NrvEarthenPipe {
 };  // namespace NrvEarthenPipe
 
 EarthenPipe::EarthenPipe(const char* pName) : LiveActor(pName) {
-    _8C.x = 0.0f;
-    _8C.y = 0.0f;
-    _8C.z = 0.0f;
-    _98.x = 0.0f;
-    _98.y = 1.0f;
-    _98.z = 0.0f;
-    _A4 = 100.0f;
+    mBasePos.x = 0.0f;
+    mBasePos.y = 0.0f;
+    mBasePos.z = 0.0f;
+    mUp.x = 0.0f;
+    mUp.y = 1.0f;
+    mUp.z = 0.0f;
+    mPipeLength = 100.0f;
     mIsIgnoreGravity = false;
     mPipeMode = 0;
-    _B0 = 0;
+    mTargetPipe = 0;
     mTopJointMtx = nullptr;
     mBottomJointMtx = nullptr;
     mHostActor = nullptr;
-    _180 = 0.0f;
     mHorizExitForce = 5.0f;
     mVertExitForce = 20.0f;
     mMusicChangeIdx = -1;
     mMusicState = -1;
-    _194 = 0;
+    mIsRabbitWait = 0;
     mPipeStreamModel = nullptr;
-    _19C = 0;
+    mIsWaterFlowing = 0;
     mCameraInfo = nullptr;
-    _F0.identity();
-    _120.identity();
-    _150.identity();
-    _BC.identity();
+    mPlayerMtx.identity();
+    mPlayerInStartMtx.identity();
+    mPlayerInEndMtx.identity();
+    mLavaEffectMtx.identity();
 }
 
 void EarthenPipe::init(const TableIter& rIter) {
@@ -69,7 +68,7 @@ void EarthenPipe::init(const TableIter& rIter) {
         isWaterPipe = true;
     }
 
-    _8C.set(mPosition);
+    mBasePos.set(mPosition);
     MR::calcGravity(this);
     initModelManagerWithAnm("EarthenPipe", nullptr, false);
     mTopJointMtx = MR::getJointMtx(this, "Top");
@@ -83,27 +82,27 @@ void EarthenPipe::init(const TableIter& rIter) {
     v25.getZDir(v23);
 
     if (mIsIgnoreGravity) {
-        v25.getYDir(_98);
+        v25.getYDir(mUp);
     } else {
-        _98.set(mGravity);
-        f32 _x = _98.x;
+        mUp.set(mGravity);
+        f32 _x = mUp.x;
         f32 mult = -1.0f;
         f32 x = _x * mult;
-        f32 y = _98.y * mult;
-        f32 z = _98.z * mult;
+        f32 y = mUp.y * mult;
+        f32 z = mUp.z * mult;
 
-        _98.x = x;
-        _98.y = y;
-        _98.z = z;
+        mUp.x = x;
+        mUp.y = y;
+        mUp.z = z;
     }
 
     Pos3f v24;
     v24.identity();
-    MR::makeMtxUpFrontPos(&v24, _98, v23, _8C);
+    MR::makeMtxUpFrontPos(&v24, mUp, v23, mBasePos);
     NebulaMtxCopy(v24, mTopJointMtx);
-    _BC.setInline(v24);
-    Vec3f v22(_8C);
-    Vec3f v21(_98);
+    mLavaEffectMtx.setInline(v24);
+    Vec3f v22(mBasePos);
+    Vec3f v21(mUp);
     v21.scale(50.0f);
     v22.sub(v21);
     v24.setTrans(v22);
@@ -132,11 +131,11 @@ void EarthenPipe::init(const TableIter& rIter) {
 
     f32 v14 = (100.0f * mScale.y);
     mScale.y = 1.0f;
-    _A4 = v14;
+    mPipeLength = v14;
     calcTrans(1.0f);
-    initEffectKeeper(0, nullptr, false);
-    MR::setEffectHostMtx(this, "LavaAppear", _BC.mMtx);
-    MR::setEffectHostMtx(this, "LavaVanish", _BC.mMtx);
+    initEffectKeeper(0, nullptr);
+    MR::setEffectHostMtx(this, "LavaAppear", mLavaEffectMtx.mMtx);
+    MR::setEffectHostMtx(this, "LavaVanish", mLavaEffectMtx.mMtx);
     initSound(4, false);
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "出現");
     initNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
@@ -154,9 +153,9 @@ void EarthenPipe::init(const TableIter& rIter) {
         MR::setClippingTypeSphere(mPipeStreamModel, 500.0f);
         MR::tryStartAllAnim(mPipeStreamModel, "EarthenPipeStream");
         mPipeStreamModel->appear();
-        _19C = 1;
+        mIsWaterFlowing = 1;
     } else {
-        _19C = 0;
+        mIsWaterFlowing = 0;
     }
 
     MR::useStageSwitchReadA(this, rIter);
@@ -230,7 +229,7 @@ void EarthenPipe::exeWait() {
                 if (mPipeStreamModel != nullptr) {
                     mPipeStreamModel->appear();
                     MR::startAction(mPipeStreamModel, "Appear");
-                    _19C = 1;
+                    mIsWaterFlowing = 1;
                 }
             }
         } else if (MR::isValidHitSensor(this, "binder")) {
@@ -239,7 +238,7 @@ void EarthenPipe::exeWait() {
                 mPipeStreamModel->kill();
             }
 
-            _19C = 0;
+            mIsWaterFlowing = 0;
         }
     }
 }
@@ -249,7 +248,7 @@ void EarthenPipe::exeReady() {
         MR::startBckPlayer("EarthenPipeReady");
     }
 
-    MR::blendMtx(_120.mMtx, _150.mMtx, MR::calcNerveRate(this, MR::getBckFrameMaxPlayer()), _F0.mMtx);
+    MR::blendMtx(mPlayerInStartMtx.mMtx, mPlayerInEndMtx.mMtx, MR::calcNerveRate(this, MR::getBckFrameMaxPlayer()), mPlayerMtx.mMtx);
     if (MR::isBckStoppedPlayer()) {
         if (!MR::isPlayerDead()) {
             setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvPlayerIn));
@@ -265,8 +264,8 @@ void EarthenPipe::exePlayerIn() {
     }
 
     if (MR::isBckStopped(mHostActor) && !MR::isPlayerDead()) {
-        _F0.setInline(_B0->getBaseMtx());
-        if (_B0->tryShowUp()) {
+        mPlayerMtx.setInline(mTargetPipe->getBaseMtx());
+        if (mTargetPipe->tryShowUp()) {
             setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvTargetPipeShowUp));
         } else {
             setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvPlayerOut));
@@ -279,8 +278,8 @@ void EarthenPipe::exeTargetPipeShowUp() {
         MR::hidePlayer();
     }
 
-    if (!_B0->isNerveShowUp()) {
-        _F0.setInline(_B0->getBaseMtx());
+    if (!mTargetPipe->isNerveShowUp()) {
+        mPlayerMtx.setInline(mTargetPipe->getBaseMtx());
         MR::showPlayer();
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvPlayerOut));
     }
@@ -294,14 +293,14 @@ void EarthenPipe::exePlayerOut() {
     }
 
     if (MR::isBckStopped(mHostActor)) {
-        MtxPtr baseMtx = _B0->getBaseMtx();
+        MtxPtr baseMtx = mTargetPipe->getBaseMtx();
         Vec3f v6((baseMtx)[0][2], (baseMtx)[1][2], (baseMtx)[2][2]);
         Vec3f v5((baseMtx)[0][1], (baseMtx)[1][1], (baseMtx)[2][1]);
-        v6 *= (_B0->mHorizExitForce);
-        v5 *= (_B0->mVertExitForce);
+        v6 *= (mTargetPipe->mHorizExitForce);
+        v5 *= (mTargetPipe->mVertExitForce);
         Vec3f v4(v5);
 
-        if (!MR::isInWater(_B0->mPosition)) {
+        if (!MR::isInWater(mTargetPipe->mPosition)) {
             v4.add(v6);
         }
 
@@ -310,9 +309,9 @@ void EarthenPipe::exePlayerOut() {
         MR::startBckPlayer("EarthenPipeJump", 0);
         MR::endBindAndPlayerForceWeakGravityJumpInputOff(this, v4);
         mHostActor = nullptr;
-        _B0->tryHideDown();
+        mTargetPipe->tryHideDown();
 
-        if (!_194) {
+        if (!mIsRabbitWait) {
             if (MR::isValidSwitchB(this)) {
                 MR::onSwitchB(this);
             }
@@ -395,7 +394,7 @@ void EarthenPipe::exeHideDown() {
 
 void EarthenPipe::control() {
     MR::updateMaterial(this);
-    if (_19C) {
+    if (mIsWaterFlowing) {
         MR::startLevelSound(this, "SE_OJ_LV_PIPE_IN_WATER");
     }
 }
@@ -412,35 +411,35 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
         Vec3f diff = *MR::getPlayerPos() - Vec3f(mTopJointMtx[0][3], mTopJointMtx[1][3], mTopJointMtx[2][3]);
         Vec3f delta = diff;
         MR::vecKillElement(delta, mGravity, &delta);
-        if (!MR::isPlayerSwimming() && delta.length() > 50.0f && diff.dot(_98) < -5.0f) {
+        if (!MR::isPlayerSwimming() && delta.length() > 50.0f && diff.dot(mUp) < -5.0f) {
             return false;
         }
         mHostActor = MR::getSensorHost(pSender);
         MR::invalidateClipping(this);
-        _120.set(MR::getPlayerBaseMtx());
-        _F0.set(_120);
+        mPlayerInStartMtx.set(MR::getPlayerBaseMtx());
+        mPlayerMtx.set(mPlayerInStartMtx);
         Vec3f camPos = MR::getCamPos();
         camPos.sub(mPosition);
         MR::normalize(&camPos);
-        MR::makeMtxUpFrontPos(&_150, _98, camPos, mPosition);
+        MR::makeMtxUpFrontPos(&mPlayerInEndMtx, mUp, camPos, mPosition);
         MR::invalidateHitSensors(this);
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvReady));
         return true;
     }
     if (MR::isMsgUpdateBaseMtx(msg)) {
-        MR::setBaseTRMtx(mHostActor, _F0);
+        MR::setBaseTRMtx(mHostActor, mPlayerMtx);
         return true;
     }
     if (msg == ACTMES_HEAVENSDOOR_RUNAWAY_RABBIT_WAIT) {  // Do we have an inline for this?
-        _194 = true;
+        mIsRabbitWait = true;
     }
     if (msg == ACTMES_HEAVENSDOOR_RUNAWAY_RABBIT_START) {
-        _194 = false;
+        mIsRabbitWait = false;
         return true;
     }
     if (MR::isMsgRushCancel(msg)) {
         mHostActor = nullptr;
-        _B0->tryHideDown();
+        mTargetPipe->tryHideDown();
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvWait));
         return true;
     }
@@ -448,9 +447,9 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 void EarthenPipe::calcTrans(f32 a1) {
-    mPosition.set(_98);
-    mPosition.scale(a1 * _A4);
-    mPosition.add(_8C);
+    mPosition.set(mUp);
+    mPosition.scale(a1 * mPipeLength);
+    mPosition.add(mBasePos);
 
     (mTopJointMtx)[0][3] = mPosition.x;
     (mTopJointMtx)[1][3] = mPosition.y;
@@ -462,7 +461,7 @@ void EarthenPipe::calcTrans(f32 a1) {
 }
 
 void EarthenPipe::processBgmPlayerIn() {
-    s32 idx = _B0->mMusicChangeIdx;
+    s32 idx = mTargetPipe->mMusicChangeIdx;
     if (idx >= 0) {
         u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), idx);
         if (bgmId != -1) {
@@ -472,7 +471,7 @@ void EarthenPipe::processBgmPlayerIn() {
                 return;
             }
 
-            s32 state = _B0->mMusicState;
+            s32 state = mTargetPipe->mMusicState;
             if (state >= 0) {
                 s32 bgmState = AudStageBgmTable::getBgmState(MR::getCurrentStageName(), state);
                 if (bgmState >= 0) {
@@ -487,7 +486,7 @@ void EarthenPipe::processBgmPlayerIn() {
 }
 
 void EarthenPipe::processBgmPlayerOut() {
-    s32 idx = _B0->mMusicChangeIdx;
+    s32 idx = mTargetPipe->mMusicChangeIdx;
     if (idx >= 0) {
         u32 bgmId = AudStageBgmTable::getBgmId(MR::getCurrentStageName(), idx);
         if (bgmId != -1) {
@@ -497,7 +496,7 @@ void EarthenPipe::processBgmPlayerOut() {
             }
 
             AudWrap::startStageBgm(bgmId, false);
-            s32 state = _B0->mMusicState;
+            s32 state = mTargetPipe->mMusicState;
             if (state >= 0) {
                 s32 bgmState = AudStageBgmTable::getBgmState(MR::getCurrentStageName(), state);
                 if (bgmState >= 0) {
@@ -526,9 +525,9 @@ void EarthenPipeMediator::entry(EarthenPipe* pPipe, const TableIter& rIter) {
         EarthenPipeMediator::Entry* entry = &mPipeEntries[i];
 
         if (pipeID == entry->mPipeID) {
-            entry->_4 = pPipe;
-            entry->_0->_B0 = pPipe;
-            entry->_4->_B0 = entry->_0;
+            entry->mSecond = pPipe;
+            entry->mFirst->mTargetPipe = pPipe;
+            entry->mSecond->mTargetPipe = entry->mFirst;
             return;
         }
     }
@@ -539,8 +538,8 @@ void EarthenPipeMediator::entry(EarthenPipe* pPipe, const TableIter& rIter) {
     }
 
     EarthenPipeMediator::Entry* entry = &mPipeEntries[mNumEntries];
-    entry->_0 = pPipe;
-    entry->_4 = nullptr;
+    entry->mFirst = pPipe;
+    entry->mSecond = nullptr;
     entry->mPipeID = pipeID;
     mNumEntries++;
 }

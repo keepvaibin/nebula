@@ -19,7 +19,6 @@ namespace {
     static const f32 sRunawayTurnStartLimit = 10.0f;
     static const f32 sRunawayTurnLimit = 1.5f;
     static const s32 sRunawayTurnDeccelTime = 30;
-    // static const f32 sAwayTargetVelocityRate;
     static const f32 sWallJumpPowerV = 30.0f;
     static const f32 sAppearJumpPowerV = 20.0f;
     static const f32 sNearGoalDistance = 130.0f;
@@ -78,7 +77,7 @@ void DemoRabbit::init(const TableIter& rIter) {
     MR::onCalcShadow(this, nullptr);
     MR::onCalcGravity(this);
 
-    _A0.getZDir(mFrontVec);
+    mPoseQuat.getZDir(mFrontVec);
 
     if (isNerve(GET_NERVE(DemoRabbit, DemoRabbitNrvAppear))) {
         makeActorDead();
@@ -96,7 +95,7 @@ void DemoRabbit::initAfterPlacement() {
 }
 
 void DemoRabbit::control() {
-    MR::blendQuatUpFront(&_A0, -mGravity, mFrontVec, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+    MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFrontVec, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 
     if (MR::isBindedGround(this)) {
         mAirTimer = 0;

@@ -2,35 +2,35 @@
 
 RailGraphIter::RailGraphIter(const RailGraph* pGraph) {
     mGraph = pGraph;
-    _4 = -1;
+    mCurrentNode = -1;
     mSelectedEdge = -1;
     mNextEdge = -1;
-    _10 = -1;
+    mPrevNode = -1;
 }
 
 void RailGraphIter::moveNodeNext() {
     s32 selected_edge = mSelectedEdge;
-    _10 = _4;
+    mPrevNode = mCurrentNode;
     RailGraphEdge* edge = mGraph->getEdge(selected_edge);
-    s32 next_node = edge->getNextNode(_10);
-    _4 = next_node;
+    s32 next_node = edge->getNextNode(mPrevNode);
+    mCurrentNode = next_node;
 }
 
 void RailGraphIter::setNode(s32 a1) {
-    _4 = a1;
-    _10 = -1;
+    mCurrentNode = a1;
+    mPrevNode = -1;
     mSelectedEdge = -1;
     mNextEdge = -1;
 }
 
 void RailGraphIter::watchStartEdge() {
-    RailGraphNode* node = mGraph->getNode(_4);
-    mNextEdge = node->_C;
+    RailGraphNode* node = mGraph->getNode(mCurrentNode);
+    mNextEdge = node->mFirstEdge;
 }
 
 void RailGraphIter::watchNextEdge() {
     RailGraphEdge* edge = mGraph->getEdge(mNextEdge);
-    s32 next_edge = edge->getNextEdge(_4);
+    s32 next_edge = edge->getNextEdge(mCurrentNode);
     mNextEdge = next_edge;
 }
 
@@ -48,7 +48,7 @@ void RailGraphIter::selectEdge(s32 edge) {
 
 bool RailGraphIter::isWatchedPrevEdge() const {
     RailGraphEdge* edge = mGraph->getEdge(mNextEdge);
-    return edge->getNextNode(_4) == _10;
+    return edge->getNextNode(mCurrentNode) == mPrevNode;
 }
 
 bool RailGraphIter::isSelectedEdge() const {
@@ -56,18 +56,18 @@ bool RailGraphIter::isSelectedEdge() const {
 }
 
 RailGraphNode* RailGraphIter::getCurrentNode() const {
-    return mGraph->getNode(_4);
+    return mGraph->getNode(mCurrentNode);
 }
 
 RailGraphNode* RailGraphIter::getNextNode() const {
     RailGraphEdge* edge = mGraph->getEdge(mSelectedEdge);
-    s32 next = edge->getNextNode(_4);
+    s32 next = edge->getNextNode(mCurrentNode);
     return mGraph->getNode(next);
 }
 
 RailGraphNode* RailGraphIter::getWatchNode() const {
     RailGraphEdge* edge = mGraph->getEdge(mNextEdge);
-    s32 next_node = edge->getNextNode(_4);
+    s32 next_node = edge->getNextNode(mCurrentNode);
     return mGraph->getNode(next_node);
 }
 

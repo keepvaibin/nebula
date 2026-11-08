@@ -89,6 +89,6 @@ public:
     BossBegomanHead* mHead;
     Pos3f mHeadMtx;
     s32 mHealth;
-    f32 _150;
+    f32 mPursueSpeedRate;
     ActorCameraInfo* mOpeningDemoInfo;
 };

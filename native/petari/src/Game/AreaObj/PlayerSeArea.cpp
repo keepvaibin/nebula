@@ -9,14 +9,14 @@ void PlayerSeArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
 
-    _3C = mObjArg0;
+    mSeType = mObjArg0;
 }
 
 PlayerSeArea::~PlayerSeArea() {
 }
 
 void PlayerSeArea::movement() {
-    if (!isInVolume(*MR::getPlayerPos()) || _3C != 0) {
+    if (!isInVolume(*MR::getPlayerPos()) || mSeType != 0) {
         return;
     }
 

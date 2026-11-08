@@ -21,7 +21,7 @@ namespace {
 KameckBeamEventListener::KameckBeamEventListener() {
 }
 
-KameckBeamCollisionFilter::KameckBeamCollisionFilter(const Vec3f* pVec, f32 f) : _4(pVec), _8(f) {
+KameckBeamCollisionFilter::KameckBeamCollisionFilter(const Vec3f* pVec, f32 f) : mClipCenter(pVec), mClipRadius(f) {
 }
 
 bool KameckBeamCollisionFilter::isInvalidParts(const CollisionParts* pCollisionParts) const {
@@ -35,7 +35,7 @@ bool KameckBeamCollisionFilter::isInvalidParts(const CollisionParts* pCollisionP
         return false;
     }
 
-    if (sensorType == ATYPE_CLIP_FIELD_MAP_PARTS && !MR::isInClipArea(*_4, _8)) {
+    if (sensorType == ATYPE_CLIP_FIELD_MAP_PARTS && !MR::isInClipArea(*mClipCenter, mClipRadius)) {
         return true;
     }
 
@@ -51,7 +51,7 @@ namespace NrvKameckBeam {
 };  // namespace NrvKameckBeam
 
 KameckBeam::KameckBeam(const char* pName)
-    : LiveActor(pName), mEventListener(), mKameckTurtle(), mFollowMtx(), _A4(0, 0, 1), mWandLocalPosition(0, 0, 0), mBeamKind(BeamType_FireBall1) {
+    : LiveActor(pName), mEventListener(), mKameckTurtle(), mFollowMtx(), mShootDir(0, 0, 1), mWandLocalPosition(0, 0, 0), mBeamKind(BeamType_FireBall1) {
     for (u32 i = 0; i < ARRAY_SIZE(mKameckFireBalls); i++) {
         mKameckFireBalls[i] = nullptr;
     }
@@ -64,7 +64,7 @@ void KameckBeam::init(const TableIter& rIter) {
     initSound(4, false);
     initBinder(::sBeamRadius, 0.0f, 0);
     MR::setKameckBeamCollisionFilter(this);
-    initEffectKeeper(0, "BossKameckBeam", false);
+    initEffectKeeper(0, "BossKameckBeam");
     MR::setEffectHostSRT(this, "BeamTurtleReady", &mPosition, nullptr, nullptr);
     MR::setEffectHostSRT(this, "BeamFireReady", &mPosition, nullptr, nullptr);
     MR::setEffectHostSRT(this, "BeamTurtle", &mPosition, nullptr, nullptr);
@@ -226,7 +226,7 @@ void KameckBeam::requestShoot(const Vec3f& rDir, f32 speed) {
     MR::validateShadow(this, nullptr);
     mFollowMtx = nullptr;
     setNerve(GET_NERVE(KameckBeam, KameckBeamNrvShoot));
-    _A4.set(rDir);
+    mShootDir.set(rDir);
     mVelocity.set(rDir * speed);
 }
 
@@ -283,7 +283,7 @@ bool KameckBeam::tryChangeTurtle() {
     MR::invalidateHitSensors(this);
     MR::forceDeleteEffectAll(this);
     mKameckTurtle->mPosition.set(mPosition);
-    mKameckTurtle->appearDirection(_A4);
+    mKameckTurtle->appearDirection(mShootDir);
     setNerve(GET_NERVE(KameckBeam, KameckBeamNrvJetTurtle));
 
     return true;
@@ -305,7 +305,7 @@ bool KameckBeam::tryChangeFire() {
     }
 
     Vec3f result;
-    result.killElement(_A4, mGravity);
+    result.killElement(mShootDir, mGravity);
 
     if (MR::isNearZero(result)) {
         MR::makeAxisVerticalZX(&result, mGravity);

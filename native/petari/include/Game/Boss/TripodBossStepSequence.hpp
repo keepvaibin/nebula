@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 
 class TripodBossStepPoint;
 
+// The step points of one sequence, lowest priority first; it grows with what placement adds.
 class TripodBossStepSequence {
 public:
     /// @brief Creates a new `TripodBossStepSequence`.
@@ -16,8 +18,7 @@ public:
     bool isEmpty() const;
     void reset();
 
-    TripodBossStepPoint* mStepPoints[32];
+    MR::AssignableArray< TripodBossStepPoint* > mStepPoints;
     s32 mCurrentPoint;
     s32 mPointNum;
-    bool _88;
 };

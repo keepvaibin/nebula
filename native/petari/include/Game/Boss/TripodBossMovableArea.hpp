@@ -8,9 +8,9 @@ class HitResult {
 public:
     HitResult();
 
-    Vec3f _0;
-    Vec3f _C;
-    Vec3f _18;
+    Vec3f mHitPos;
+    Vec3f mPushedPos;
+    Vec3f mNormal;
 };
 
 class TripodBossMovableArea {
@@ -32,6 +32,6 @@ public:
     Vec3f mBaseAxis;
     Vec3f mFront;
     f32 mRadius;
-    f32 _2C;
-    f32 _30;
+    f32 mRangeMin;
+    f32 mRangeMax;
 };

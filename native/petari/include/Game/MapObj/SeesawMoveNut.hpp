@@ -16,5 +16,5 @@ public:
 
     f32 mSpeed;
     f32 mPrevAngularSpeed;
-    s32 _CC;
+    s32 mBackHomeStep;
 };

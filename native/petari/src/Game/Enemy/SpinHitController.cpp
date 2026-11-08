@@ -14,14 +14,14 @@ SpinHitController::SpinHitController(const NameObj* pObj, s32 a2, s32 a3, s32 a4
 }
 
 void SpinHitController::setParameter(const NameObj* pObj, s32 a2, s32 a3, s32 a4, f32 a5, f32 a6, f32 a7, s32 a8, bool a9) {
-    _0 = a2;
-    _4 = a3;
-    _8 = a4;
-    _C = a5;
-    _10 = a6;
-    _14 = a7;
-    _19 = a9;
-    _1C = a8;
+    mFlyStepMax = a2;
+    mFlyStepMin = a3;
+    mStopSceneFrames = a4;
+    mGravityAccel = a5;
+    mHorizontalSpeed = a6;
+    mVerticalSpeed = a7;
+    mIsCoin = a9;
+    mItemNum = a8;
 }
 
 void SpinHitController::start(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3) {
@@ -29,44 +29,44 @@ void SpinHitController::start(LiveActor* pActor, const Vec3f& a2, const Vec3f& a
     v9 -= a2;
     MR::vecKillElement(v9, pActor->mGravity, &v9);
     MR::normalizeOrZero(&v9);
-    v9 *= _10;
-    f32 val = _14;
+    v9 *= mHorizontalSpeed;
+    f32 val = mVerticalSpeed;
     Vec3f v8(pActor->mGravity);
     v8 *= val;
     v9 -= v8;
     pActor->mVelocity.x = v9.x;
     pActor->mVelocity.y = v9.y;
     pActor->mVelocity.z = v9.z;
-    _18 = true;
+    mIsStopScene = true;
 }
 
 void SpinHitController::startWithoutStopScene(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3) {
     start(pActor, a2, a3);
-    _18 = false;
+    mIsStopScene = false;
 }
 
 bool SpinHitController::execute(LiveActor* pActor) {
     if (MR::isFirstStep(pActor)) {
         MR::invalidateClipping(pActor);
 
-        if (_18) {
-            MR::stopSceneForDefaultHit(_8);
+        if (mIsStopScene) {
+            MR::stopSceneForDefaultHit(mStopSceneFrames);
         }
     }
 
-    f32 val = _C;
+    f32 val = mGravityAccel;
     Vec3f v12(pActor->mGravity);
     v12 *= val;
     pActor->mVelocity.add(v12);
 
-    if (MR::isStep(pActor, _4)) {
+    if (MR::isStep(pActor, mFlyStepMin)) {
         emitItem(pActor);
     }
 
-    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, 1)) || MR::isGreaterStep(pActor, _0)) {
+    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, 1)) || MR::isGreaterStep(pActor, mFlyStepMax)) {
         MR::validateClipping(pActor);
         pActor->kill();
-        if (MR::isLessStep(pActor, _4)) {
+        if (MR::isLessStep(pActor, mFlyStepMin)) {
             emitItem(pActor);
         }
 
@@ -77,16 +77,16 @@ bool SpinHitController::execute(LiveActor* pActor) {
 }
 
 void SpinHitController::emitItem(LiveActor* pActor) {
-    if (_1C != 0) {
-        if (_19) {
-            MR::appearCoinPop(pActor, pActor->mPosition, _1C);
+    if (mItemNum != 0) {
+        if (mIsCoin) {
+            MR::appearCoinPop(pActor, pActor->mPosition, mItemNum);
         } else {
-            MR::appearStarPiece(pActor, pActor->mPosition, _1C, 10.0f, 40.0f, false);
+            MR::appearStarPiece(pActor, pActor->mPosition, mItemNum, 10.0f, 40.0f, false);
             if (pActor->mSoundObject != nullptr) {
                 MR::startSound(pActor, "SE_OJ_STAR_PIECE_BURST");
             }
         }
 
-        _1C = 0;
+        mItemNum = 0;
     }
 }

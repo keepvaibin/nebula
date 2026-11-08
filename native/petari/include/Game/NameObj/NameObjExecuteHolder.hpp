@@ -4,6 +4,17 @@
 
 class LiveActor;
 
+// Where an object is in the scene's movement or draw lists. Requests before initConnectting only mark the wish.
+enum NameObjConnectState {
+    NameObjConnect_None,
+    NameObjConnect_WantedBeforeInit,
+    NameObjConnect_UnwantedBeforeInit,
+    NameObjConnect_Connected,
+    NameObjConnect_ConnectPending,
+    NameObjConnect_Disconnected,
+    NameObjConnect_DisconnectPending,
+};
+
 class NameObjExecuteInfo {
     friend class NameObjExecuteHolder;
 
@@ -14,13 +25,13 @@ public:
 
     void setConnectInfo(NameObj*, int, int, int, int);
     void initConnectting();
-    void requestConnect(u8*);
-    void requestDisconnect(u8*, bool);
+    // True: the request leaves a change pending.
+    static bool requestConnect(s8* pState);
+    static bool requestDisconnect(s8* pState);
     void executeRequirementConnectMovement();
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();
     void executeRequirementDisconnectDraw();
-    void executeRequirementDisconnectDrawDelay();
     void requestMovementOn(int);
     void requestMovementOff(int);
     void findLightInfo() const;
@@ -31,13 +42,13 @@ public:
 
 private:
     NameObj* mExecutedObj;
-    s8 _4;
-    s8 _5;
+    s8 mMovementState;  // NameObjConnectState
+    s8 mDrawState;      // NameObjConnectState
     s8 mMovementType;
     s8 mCalcAnimType;
     s8 mDrawType;
     s8 mDrawBufferType;
-    s16 _A;
+    s16 mDrawBufferIndex;
 };
 
 class NameObjExecuteHolder : public NameObj {
@@ -55,20 +66,28 @@ public:
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();
     void executeRequirementDisconnectDraw();
-    void executeRequirementDisconnectDrawDelay();
     void requestMovementOn(int);
     void requestMovementOff(int);
     NameObjExecuteInfo* getConnectToSceneInfo(const NameObj*) const;
 
 private:
+    // Objects with a pending change, by index; run in index order, as the game's full scans did.
+    struct PendingList {
+        s32* mIndices;
+        s32 mCount;
+        s32 mCapacity;
+    };
+
+    static void push(PendingList*, s32 index);
+    void run(PendingList*, void (NameObjExecuteInfo::*pExecute)());
+
     NameObjExecuteInfo* mExecuteArray;
     s32 mExecuteArrayMaxSize;
     s32 mExecuteArraySize;
-    bool _18;
-    bool _19;
-    bool _1A;
-    bool _1B;
-    bool _1C;
+    PendingList mConnectMovement;
+    PendingList mDisconnectMovement;
+    PendingList mConnectDraw;
+    PendingList mDisconnectDraw;
 };
 
 namespace MR {
@@ -85,7 +104,6 @@ namespace MR {
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();
     void executeRequirementDisconnectDraw();
-    void executeRequirementDisconnectDrawDelay();
     void requestMovementOnWithCategory(int);
     void requestMovementOffWithCategory(int);
     void findActorLightInfo(const LiveActor*);

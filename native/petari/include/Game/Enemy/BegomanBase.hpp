@@ -102,11 +102,11 @@ public:
     Vec3f mFaceVec;
     Vec3f mTargetVec;
 
-    Vec3f _A8;
-    Vec3f _B4;
+    Vec3f mLastGravity;
+    Vec3f mAnimScale;
 
-    Quat4f _C0;
-    Quat4f _D0;
+    Quat4f mPoseQuat;
+    Quat4f mSpinQuat;
 
     s32 mTiredCounter;
     s32 mElectricCounter;
@@ -134,10 +134,9 @@ public:
     void exeReceive();
     inline void exePermit();
 
-    BegomanBase* _8C;
     BegomanBase* mBegoman;
 
     f32 mDistToPlayer;
 
-    bool _98;
+    bool mHasRequest;
 };

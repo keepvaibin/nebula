@@ -12,10 +12,8 @@ struct LightInfo {
 
 struct LightInfoCoin {
     LightInfo base;
-    struct {
-        NebulaColor8 _14;
-        f32 _18;
-    };
+    NebulaColor8 mSpecularColor;
+    f32 mShininess;
 };
 
 struct ActorLightInfo {
@@ -51,5 +49,5 @@ public:
 
     s32 mLightCount;
     AreaLightInfo* mLights;
-    LightInfoCoin _8;
+    LightInfoCoin mCoinLight;
 };

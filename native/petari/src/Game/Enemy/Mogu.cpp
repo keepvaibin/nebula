@@ -43,7 +43,7 @@ namespace NrvMogu {
 };  // namespace NrvMogu
 
 Mogu::Mogu(const char* pName)
-    : LiveActor(pName), mAnimScaleController(nullptr), _90(nullptr), mStone(nullptr), mHole(nullptr), mSight(0, 0, 1), _A8(0, 1, 0), _B4(true),
+    : LiveActor(pName), mAnimScaleController(nullptr), mStoneHoldPos(nullptr), mStone(nullptr), mHole(nullptr), mSight(0, 0, 1), mUp(0, 1, 0), mThrowOnGravity(true),
       mIsCannonFleet(false) {
 }
 
@@ -58,9 +58,9 @@ void Mogu::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &value);
 
         if (value != -1) {
-            _B4 = false;
+            mThrowOnGravity = false;
         } else {
-            _B4 = true;
+            mThrowOnGravity = true;
         }
     }
 
@@ -68,7 +68,7 @@ void Mogu::init(const TableIter& rIter) {
 
     Pos3f mtx;
     mtx.setInline(getBaseMtx());
-    mtx.getYDir(_A8);
+    mtx.getYDir(mUp);
 
     MR::connectToSceneEnemy(this);
     MR::declareStarPiece(this, 3);
@@ -83,18 +83,18 @@ void Mogu::init(const TableIter& rIter) {
     v2 *= scaleY;
 
     MR::addHitSensorAtJointEnemy(this, "body", "Head", 32, 150.0f * scaleY, v2);
-    initEffectKeeper(false, nullptr, false);
+    initEffectKeeper(false, nullptr);
     MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 50.0f, 0.0f));
     initSound(4, 0);
     initNerve(GET_NERVE(Mogu, HostTypeNrvSearch));
-    mGravity.set(-_A8);
+    mGravity.set(-mUp);
     MR::initShadowVolumeSphere(this, 60.0f * mScale.y);
     MR::invalidateShadow(this, nullptr);
     MR::initLightCtrl(this);
     mAnimScaleController = new AnimScaleController(nullptr);
     makeActorAppeared();
 
-    _90 = new FixedPosition(this, "ArmR2", Vec3f(67.38f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mStoneHoldPos = new FixedPosition(this, "ArmR2", Vec3f(67.38f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     // "Rock-throwing stone"
     mStone = new MoguStone("投石用の石", "MoguStone");
@@ -177,7 +177,7 @@ void Mogu::exeAppear() {
         MR::startSound(this, "SE_EM_MOGU_APPEAR");
         Vec3f v1;
         MR::calcVecToPlayerH(&v1, this, nullptr);
-        MR::turnVecToVecRadian(&mSight, mSight, v1, PI, _A8);
+        MR::turnVecToVecRadian(&mSight, mSight, v1, PI, mUp);
     }
 
     // "Strong"
@@ -206,7 +206,7 @@ void Mogu::exeAppear() {
 bool Mogu::isPlayerExistUp() {
     Vec3f toPlayerCenter = *MR::getPlayerCenterPos() - mPosition;
 
-    if (_A8.dot(toPlayerCenter) < 0.0f) {
+    if (mUp.dot(toPlayerCenter) < 0.0f) {
         return false;
     }
 
@@ -238,7 +238,7 @@ void Mogu::exeSearch() {
     if (isNerve(GET_NERVE(Mogu, HostTypeNrvTurn))) {
         Vec3f v1;
         MR::calcVecToPlayerH(&v1, this, nullptr);
-        MR::turnVecToVecRadian(&mSight, mSight, v1, 0.03f, _A8);
+        MR::turnVecToVecRadian(&mSight, mSight, v1, 0.03f, mUp);
     }
 
     f32 distanceToPlayer = MR::calcDistanceToPlayer(this);
@@ -318,7 +318,7 @@ void Mogu::exeThrow() {
 
         Vec3f* stonePos = &mStone->mPosition;
 
-        mStone->emit(_B4, *stonePos, mStone->mPosition + mSight * killElementOut.length() + v4, 15.0f);
+        mStone->emit(mThrowOnGravity, *stonePos, mStone->mPosition + mSight * killElementOut.length() + v4, 15.0f);
         MR::startSound(this, "SE_EM_MOGU_THROW");
     }
 
@@ -434,7 +434,7 @@ void Mogu::exeHitBlow() {
         MR::validateShadow(this, nullptr);
         Vec3f vecToPlayerH;
         MR::calcVecToPlayerH(&vecToPlayerH, this, nullptr);
-        MR::turnVecToVecRadian(&mSight, mSight, vecToPlayerH, PI, _A8);
+        MR::turnVecToVecRadian(&mSight, mSight, vecToPlayerH, PI, mUp);
     }
     MR::applyVelocityDampAndGravity(this, 2.0f, 0.8f, 0.98f, 0.98f, 1.0f);
 
@@ -531,13 +531,13 @@ bool Mogu::tryPunchHitted(HitSensor* pSender, HitSensor* pReceiver, bool arg3) {
 
 void Mogu::calcAndSetBaseMtx() {
     Pos3f mtx;
-    MR::makeMtxUpFrontPos(&mtx, _A8, mSight, mPosition);
+    MR::makeMtxUpFrontPos(&mtx, mUp, mSight, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    Vec3f scale = mAnimScaleController->_C * mScale;
+    Vec3f scale = mAnimScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 
     if (isNerve(GET_NERVE(Mogu, HostTypeNrvThrow)) && MR::isLessStep(this, 47)) {
-        _90->calc();
-        _90->mMtx.getTrans(mStone->mPosition);
+        mStoneHoldPos->calc();
+        mStoneHoldPos->mMtx.getTrans(mStone->mPosition);
     }
 }

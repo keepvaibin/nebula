@@ -2,7 +2,6 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Particle/ParticleDraw.hpp"
 #include "Game/Render/Material.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/System/NebulaArena.hpp"

@@ -43,7 +43,7 @@ bool ClipAreaHolder::isInArea(const Vec3f& rParam1, f32 param2) const {
     return false;
 }
 
-ClipAreaCollisionFilter::ClipAreaCollisionFilter(const Vec3f* pParam1, f32 param2) : _04(pParam1), _08(param2) {
+ClipAreaCollisionFilter::ClipAreaCollisionFilter(const Vec3f* pParam1, f32 param2) : mClipCenter(pParam1), mClipRadius(param2) {
 }
 
 bool ClipAreaCollisionFilter::isInvalidParts(const CollisionParts* pParts) const {
@@ -52,7 +52,7 @@ bool ClipAreaCollisionFilter::isInvalidParts(const CollisionParts* pParts) const
     }
 
     if (pParts->mHitSensor->isType(ATYPE_CLIP_FIELD_MAP_PARTS)) {
-        if (!MR::isInClipArea(*_04, _08)) {
+        if (!MR::isInClipArea(*mClipCenter, mClipRadius)) {
             return true;
         }
     }

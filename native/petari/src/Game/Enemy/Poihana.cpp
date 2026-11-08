@@ -92,12 +92,12 @@ namespace NrvPoihana {
     NEW_NERVE(PoihanaNrvDrown, Poihana, Drown);
     NEW_NERVE(PoihanaNrvHide, Poihana, Hide);
     NEW_NERVE(PoihanaNrvAppear, Poihana, Appear);
-    NEW_NERVE_ONEND(PoihanaNrvDPDSwoon, Poihana, DPDSwoon, DPDSwoon);
+    NEW_NERVE_ONEND(PoihanaNrvPointerSwoon, Poihana, PointerSwoon, PointerSwoon);
 };  // namespace NrvPoihana
 
 Poihana::Poihana(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mCamInfo(), mBindedActor(), mLaunchIntensity(), mRespawnPos(0.0f), mHomePos(0.0f),
-      mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(POIHANA_BEHAVIOR_NORMAL), mCanDrown(), mWaterColumn(), mIsActive(), _E5() {
+      mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(POIHANA_BEHAVIOR_NORMAL), mCanDrown(), mWaterColumn(), mIsActive() {
 }
 
 void Poihana::init(const TableIter& rIter) {
@@ -122,7 +122,7 @@ void Poihana::init(const TableIter& rIter) {
 
     mIsActive = true;
     MR::setGroupClipping(this, rIter, 0x20);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(4, false);
 
     MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
@@ -174,7 +174,7 @@ void Poihana::control() {
         controlVelocity();
         calcMyGravity();
 
-        if (!tryDrown() && !tryDPDSwoon() && tryHipDropShock()) {
+        if (!tryDrown() && !tryPointerSwoon() && tryHipDropShock()) {
             return;
         }
     }
@@ -190,7 +190,7 @@ void Poihana::calcAndSetBaseMtx() {
 
     MR::setBaseTRMtx(this, baseMtx);
 
-    Vec3f scale = mAnimScaleCtrl->_C * mScale;
+    Vec3f scale = mAnimScaleCtrl->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -524,7 +524,7 @@ void Poihana::exeAppear() {
     }
 }
 
-void Poihana::exeDPDSwoon() {
+void Poihana::exePointerSwoon() {
     if (MR::isFirstStep(this)) {
         MR::invalidateHitSensor(this, "binder");
     }
@@ -532,7 +532,7 @@ void Poihana::exeDPDSwoon() {
     MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(Poihana, PoihanaNrvWait));
 }
 
-void Poihana::endDPDSwoon() {
+void Poihana::endPointerSwoon() {
     mBindStarPointer->kill();
 
     MR::setSensorOffset(this, "binder", ::sNormalBinderPos);
@@ -851,7 +851,7 @@ bool Poihana::tryDrown() {
     return true;
 }
 
-bool Poihana::tryDPDSwoon() {
+bool Poihana::tryPointerSwoon() {
     if (!isNerveTypeWalkOrWait()) {
         return false;
     }
@@ -860,7 +860,7 @@ bool Poihana::tryDPDSwoon() {
         return false;
     }
 
-    setNerve(GET_NERVE(Poihana, PoihanaNrvDPDSwoon));
+    setNerve(GET_NERVE(Poihana, PoihanaNrvPointerSwoon));
     return true;
 }
 

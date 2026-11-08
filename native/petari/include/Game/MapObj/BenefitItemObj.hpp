@@ -11,7 +11,7 @@ class ShadowClipActor : public LiveActor {
 public:
     virtual void endClipped();
 
-    LiveActor* _8C;
+    LiveActor* mHost;
 };
 
 class BenefitItemObj : public LiveActor {
@@ -50,48 +50,39 @@ public:
     void setFollowMtx(MtxPtr);
     void calcAndSetBaseMtxInMovement();
 
-    u32 _8C;
-    u32 _90;
-    u32 _94;
-    Vec3f _98;
-    Vec3f _A4;
-    s16 _B0;
-    s16 _B2;
-    s16 _B4;
-    s16 _B6;
-    s16 _B8;
-    s16 _BA;
-    Vec3f _BC;
-    Vec3f _C8;
+    Vec3f mBlendFront;
+    Vec3f mUp;
+    s16 mEscapeLife;
+    s16 mFlashPeriod;
+    s16 mFlashHideTime;
+    s16 mFlashCounter;
+    s16 mHideCounter;
+    Vec3f mEscapeVelocity;
+    Vec3f mFallVelocity;
     MtxPtr mFollowMtx;
-    u8 _D8;
-    u8 _D9;
-    u8 _DA;
-    u8 _DB;
-    u8 _DC;
-    u8 _DD;
-    u8 _DE;
-    u8 _DF;
-    u8 _E0;
-    u8 _E1;
-    u8 _E2;
-    u8 _E3;
-    u8 _E4;
-    u8 _E5;
-    u8 _E6;
-    u8 _E7;
-    f32 _E8;
-    f32 _EC;
-    Mtx34f _F0;
-    const char* _120;
+    u8 mIsDisabled;
+    u8 mAppearType;
+    u8 mEscapeType;
+    u8 mRotateFlags;
+    u8 mShadowType;
+    u8 mIsThrownHigh;
+    u8 mHasAppearPicture;
+    u8 mIsActive;
+    u8 mIsWaitingAppear;
+    u8 mIsItemMoving;
+    u8 mIsOnRail;
+    u8 mHasAppearCamera;
+    u8 mIsInAir;
+    u8 mIsDemoPending;
+    f32 mRailSpeed;
+    f32 mRotateY;
+    Mtx34f mModelMtx;
+    const char* mModelName;
     FlashingCtrl* mFlashCtrl;
     ActorCameraInfo* mCameraInfo;
-    u32 _12C;
-    u32 _130;
+    u32 mCameraFrames;
     LiveActor* mHitSensorActor;
-    u8 _138;
-    u8 _139;
-    u16 _13A;
+    u16 mSensorInvalidStep;
 };
 
 namespace NrvBenefitItemObj {

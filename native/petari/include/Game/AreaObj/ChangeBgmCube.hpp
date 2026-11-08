@@ -10,5 +10,5 @@ public:
     virtual void init(const TableIter&);
     virtual void movement();
 
-    u8 _3C;
+    u8 mIsInside;
 };

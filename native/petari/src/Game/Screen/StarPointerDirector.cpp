@@ -155,7 +155,7 @@ void StarPointerTransformHolder::movement() {
 }
 
 StarPointerPeekZ::StarPointerPeekZ() : mAsker(Frame::newProbeAsker()) {
-    mInfos = new DpdInfo*[2];
+    mInfos = new PointerInfo*[2];
 }
 
 void StarPointerPeekZ::setDrawSyncToken() {

@@ -12,10 +12,6 @@ namespace MR {
     struct ActorMoveParam;
 };  // namespace MR
 
-namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pVec, const MR::ActorMoveParam& rMoveParam);
-};  // namespace MR
-
 class KoopaBattleBase : public ActorStateBase< Koopa > {
 public:
     KoopaBattleBase(const char* pName, Koopa* pKoopa);

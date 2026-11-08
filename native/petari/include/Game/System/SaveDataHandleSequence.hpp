@@ -80,11 +80,11 @@ public:
     SaveErrorSequence* mSaveErrorSequence;
     SysInfoWindow* mSysInfoWindowConfirm;
     SysInfoWindow* mSysInfoWindowSave;
-    s32 _24;
+    s32 mResultState;
     bool mIsConfirmRemind;
     bool mIsSaveAndQuitMsg;
-    bool _2A;
-    bool _2B;
+    bool mIsCorrupted;
+    bool mIsNoSaveMode;
     UserFile* mWorkUserFile;
     const Nerve* mNerveForError;
     u8* mTempBuffer;

@@ -25,7 +25,7 @@ void PicketSwitch::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensor(this, ATYPE_SWITCH);
     MR::initCollisionPartsAutoEqualScale(this, pName, getSensor(0), MR::getJointMtx(this, "Picket"));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(PicketSwitch, PicketSwitchNrvWait));
     makeActorAppeared();

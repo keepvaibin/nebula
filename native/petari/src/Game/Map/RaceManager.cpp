@@ -20,7 +20,6 @@
 
 
 namespace {
-    // static const _ sTimeOutSecond = _;
     static const s32 sBgmStartStep = 166;
 };  // namespace
 
@@ -168,7 +167,7 @@ namespace NrvRaceManager {
 
 RaceManager::RaceManager()
     : LiveActor("レース管理"), mLayout(nullptr), mRacerNum(0), mAudienceNum(0), mRank(0), mBestTime(0), mTime(0), mPlayerRacer(nullptr) {
-    _FC.identity();
+    mGoalInvMtx.identity();
 }
 
 void RaceManager::init(const TableIter& rIter) {
@@ -486,9 +485,9 @@ void RaceManager::entry(PlayerRacer* pRacer) {
     mPlayerRacer = pRacer;
     Vec3f endDir, endPos;
     MR::calcRailEndPointPosAndDirection(&endPos, &endDir, pRacer);
-    MR::makeMtxFrontUp(&_FC, endDir, Vec3f(0.0f, 1.0f, 0.0f));
-    MR::setMtxTrans(_FC, endPos.x, endPos.y, endPos.z);
-    _FC.invert(_FC);
+    MR::makeMtxFrontUp(&mGoalInvMtx, endDir, Vec3f(0.0f, 1.0f, 0.0f));
+    MR::setMtxTrans(mGoalInvMtx, endPos.x, endPos.y, endPos.z);
+    mGoalInvMtx.invert(mGoalInvMtx);
     entry(static_cast< AbstractRacer* >(pRacer));
 }
 
@@ -502,8 +501,8 @@ void RaceManager::entry(AbstractAudience* pAudience) {
 
 bool RaceManager::isGoal(const AbstractRacer* pRacer) const {
     Vec3f currInnProd, prevInnProd;
-    _FC.mult(pRacer->mCurrPosition, currInnProd);
-    _FC.mult(pRacer->mPrevPosition, prevInnProd);
+    mGoalInvMtx.mult(pRacer->mCurrPosition, currInnProd);
+    mGoalInvMtx.mult(pRacer->mPrevPosition, prevInnProd);
     return prevInnProd.z < 0.0f && currInnProd.z > 0.0f;
 }
 

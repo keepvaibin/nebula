@@ -64,13 +64,11 @@ public:
     void stageClear();
     inline bool isPlayMovie() const;
 
-    u32 _14;
     GameSceneScenarioOpeningCameraState* mScenarioCamera;
     GameScenePauseControl* mPauseCtrl;
     GamePauseSequence* mPauseSeq;
     GameStageClearSequence* mStageClearSeq;
     bool mDraw3D;
-    u8 _29;
     unsigned mInitializePhase = 0;
     unsigned mReservePiecesLeft = 70;
 };

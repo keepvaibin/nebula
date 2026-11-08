@@ -12,7 +12,7 @@ namespace NrvPhantomShipBridge {
 };  // namespace NrvPhantomShipBridge
 
 PhantomShipBridge::PhantomShipBridge(const char* pName) : LiveActor(pName) {
-    _8C = nullptr;
+    mMoveCollision = nullptr;
     mIsNutShipBridge = 0;
 }
 
@@ -27,13 +27,13 @@ void PhantomShipBridge::init(const TableIter& rIter) {
 
     MR::connectToSceneCollisionMapObj(this);
     initNerve(GET_NERVE(PhantomShipBridge, HostTypeWait));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
     MR::addMessageSensorMapObjMoveCollision(this, "move");
-    _8C = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("move"), MR::getJointMtx(this, "Move"), MR::CollisionScaleType_Unk2);
-    MR::validateCollisionParts(_8C);
+    mMoveCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("move"), MR::getJointMtx(this, "Move"), MR::CollisionScaleType_Unk2);
+    MR::validateCollisionParts(mMoveCollision);
     initSound(4, false);
     MR::setClippingTypeSphere(this, 2000.0f);
     makeActorAppeared();
@@ -51,7 +51,7 @@ void PhantomShipBridge::init(const TableIter& rIter) {
 
 void PhantomShipBridge::calcAnim() {
     LiveActor::calcAnim();
-    _8C->setMtx();
+    mMoveCollision->setMtx();
 }
 
 void PhantomShipBridge::startMoveA() {
@@ -66,7 +66,7 @@ void PhantomShipBridge::setStateMoveA() {
     MR::startBck(this, "MoveA");
     MR::setBckFrameAndStop(this, MR::getBckCtrl(this)->getEnd());
     MR::calcAnimDirect(this);
-    _8C->forceResetAllMtxAndSetUpdateMtxOneTime();
+    mMoveCollision->forceResetAllMtxAndSetUpdateMtxOneTime();
     setNerve(GET_NERVE(PhantomShipBridge, HostTypeWait));
 }
 

@@ -36,5 +36,5 @@ public:
     s32 mCount;
     s32 mType;
     s32 mGroupId;
-    f32 _30;
+    f32 mShowRate;
 };

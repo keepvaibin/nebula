@@ -11,7 +11,7 @@ public:
             return false;
         }
 
-        return _0 == rOther._0 && _4 == rOther._4 && _8 == rOther._8;
+        return mLinkId == rOther.mLinkId && mZoneId == rOther.mZoneId && mInfoType == rOther.mInfoType;
     }
 
     void invalidate();
@@ -19,7 +19,7 @@ public:
     void setLinkedInfo(const TableIter&);
     void setLinkInfo(const TableIter&);
 
-    s32 _0;
-    s32 _4;
-    s32 _8;
+    s32 mLinkId;
+    s32 mZoneId;
+    s32 mInfoType;
 };

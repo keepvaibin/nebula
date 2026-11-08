@@ -48,10 +48,10 @@ namespace NrvSphereSelectorHandle {
 };  // namespace NrvSphereSelectorHandle
 
 SphereSelectorHandle::SphereSelectorHandle(const char* pName)
-    : LiveActor(pName), mIsFileSelectMode(), _C0(0.0f, 0.0f, -1.0f), mRotateSpeed(), mTargetRotateSpeed(), _D4(), _D8(), _DC(1.0f, 0.0f, 0.0f),
-      _E8(0.0f, 1.0f, 0.0f), _F4(), _10C(), _110(gZeroVec), _11C(0.0f, 1.0f, 0.0f), _128() {
+    : LiveActor(pName), mIsFileSelectMode(), mFront(0.0f, 0.0f, -1.0f), mRotateSpeed(), mTargetRotateSpeed(), mRotateSpeedX(), mPrevRotateSpeedX(), mSide(1.0f, 0.0f, 0.0f),
+      mUp(0.0f, 1.0f, 0.0f), mPointerVelocities(), mNotPointingStep(), mIsRotateBgm() {
     clearPointerVelocity();
-    _90.identity();
+    mBaseMtx.identity();
 }
 
 void SphereSelectorHandle::init(const TableIter& rIter) {
@@ -68,16 +68,16 @@ void SphereSelectorHandle::init(const TableIter& rIter) {
 
 void SphereSelectorHandle::appear() {
     LiveActor::appear();
-    _C0.negate(MR::getCamZdir());
-    _C0.y = 0.0f;
-    MR::normalize(&_C0);
+    mFront.negate(MR::getCamZdir());
+    mFront.y = 0.0f;
+    MR::normalize(&mFront);
     resetRotateParam();
-    _10C = 0;
+    mNotPointingStep = 0;
     clearPointerVelocity();
     mRotation.zero();
-    _DC.cross(Vec3f(0.0f, 1.0f, 0.0f), _C0);
-    MR::rotateVecDegree(&_E8, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateAppearX);
-    MR::normalize(&_E8);
+    mSide.cross(Vec3f(0.0f, 1.0f, 0.0f), mFront);
+    MR::rotateVecDegree(&mUp, Vec3f(0.0f, 1.0f, 0.0f), mSide, ::cRotateAppearX);
+    MR::normalize(&mUp);
     MR::setStageBGMState(::cBgmAppearState, ::cBgmAppearFrames);
     setNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait));
 }
@@ -105,9 +105,9 @@ void SphereSelectorHandle::control() {
     changeBgmRotateState();
     playRotateSE();
     if (isPointing() || MR::isDemoActive()) {
-        _10C = 0;
+        mNotPointingStep = 0;
     } else {
-        _10C++;
+        mNotPointingStep++;
     }
 }
 
@@ -168,35 +168,35 @@ bool SphereSelectorHandle::tryRelease() {
 }
 
 void SphereSelectorHandle::clearPointerVelocity() {
-    for (int i = 0; i < ARRAY_SIZE(_F4); i++) {
-        _F4[i].zero();
+    for (int i = 0; i < ARRAY_SIZE(mPointerVelocities); i++) {
+        mPointerVelocities[i].zero();
     }
 }
 
 void SphereSelectorHandle::stackPointerVelocity() {
-    for (u32 i = 1; i < ARRAY_SIZE(_F4); i++) {
-        _F4[i].set(_F4[i - 1]);
+    for (u32 i = 1; i < ARRAY_SIZE(mPointerVelocities); i++) {
+        mPointerVelocities[i].set(mPointerVelocities[i - 1]);
     }
 
-    _F4[0].set(*MR::getStarPointerScreenVelocity(PLAYER_1));
+    mPointerVelocities[0].set(*MR::getStarPointerScreenVelocity(PLAYER_1));
 }
 
 Vec2f* SphereSelectorHandle::getPointerVelocity() {
     u32 max = 0;
-    for (u32 i = 1; i < ARRAY_SIZE(_F4); i++) {
-        if (_F4[max].length() < _F4[i].length()) {
+    for (u32 i = 1; i < ARRAY_SIZE(mPointerVelocities); i++) {
+        if (mPointerVelocities[max].length() < mPointerVelocities[i].length()) {
             max = i;
         }
     }
 
-    return &_F4[max];
+    return &mPointerVelocities[max];
 }
 
 void SphereSelectorHandle::resetRotateParam() {
     mRotateSpeed = 0.0f;
     mTargetRotateSpeed = 0.0f;
-    _D4 = 0.0f;
-    _D8 = 0.0f;
+    mRotateSpeedX = 0.0f;
+    mPrevRotateSpeedX = 0.0f;
 }
 
 void SphereSelectorHandle::rotateAxisY() {
@@ -207,57 +207,57 @@ void SphereSelectorHandle::rotateAxisY() {
 }
 
 void SphereSelectorHandle::rotateAxisX() {
-    MR::clampBoth(&_D4, _D8 - ::cRotateSpeedChangeMax, _D8 + ::cRotateSpeedChangeMax);
-    MR::clampBoth(&_D4, -::cRotateSpeedMaxX, ::cRotateSpeedMaxX);
-    _D8 = _D4;
-    MR::rotateVecDegree(&_E8, _DC, _D4);
-    MR::normalize(&_E8);
+    MR::clampBoth(&mRotateSpeedX, mPrevRotateSpeedX - ::cRotateSpeedChangeMax, mPrevRotateSpeedX + ::cRotateSpeedChangeMax);
+    MR::clampBoth(&mRotateSpeedX, -::cRotateSpeedMaxX, ::cRotateSpeedMaxX);
+    mPrevRotateSpeedX = mRotateSpeedX;
+    MR::rotateVecDegree(&mUp, mSide, mRotateSpeedX);
+    MR::normalize(&mUp);
 
     Vec3f rotateMinUp;
-    MR::rotateVecDegree(&rotateMinUp, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMinX);
+    MR::rotateVecDegree(&rotateMinUp, Vec3f(0.0f, 1.0f, 0.0f), mSide, ::cRotateMinX);
     Vec3f rotateMaxUp;
-    MR::rotateVecDegree(&rotateMaxUp, Vec3f(0.0f, 1.0f, 0.0f), _DC, ::cRotateMaxX);
+    MR::rotateVecDegree(&rotateMaxUp, Vec3f(0.0f, 1.0f, 0.0f), mSide, ::cRotateMaxX);
 
-    if (_E8.dot(_C0) < rotateMinUp.dot(_C0)) {
-        _E8.set(rotateMinUp);
-    } else if (rotateMaxUp.dot(_C0) < _E8.dot(_C0)) {
-        _E8.set(rotateMaxUp);
+    if (mUp.dot(mFront) < rotateMinUp.dot(mFront)) {
+        mUp.set(rotateMinUp);
+    } else if (rotateMaxUp.dot(mFront) < mUp.dot(mFront)) {
+        mUp.set(rotateMaxUp);
     }
 }
 
 void SphereSelectorHandle::updateBaseMtx() {
     Pos3f mtx;
-    MR::makeMtxUpFront(&mtx, _E8, _C0);
+    MR::makeMtxUpFront(&mtx, mUp, mFront);
     mtx.zeroTrans();
     Pos3f mtx2;
     mtx2.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
-    _90.concat(mtx, mtx2);
-    _90.setTrans(mPosition);
+    mBaseMtx.concat(mtx, mtx2);
+    mBaseMtx.setTrans(mPosition);
 }
 
 void SphereSelectorHandle::changeBgmRotateState() {
-    if (MR::abs(_D4) > ::cDemoRotateSpeedY || MR::abs(mRotateSpeed) > ::cDemoRotateSpeedY) {
-        if (!_128) {
+    if (MR::abs(mRotateSpeedX) > ::cDemoRotateSpeedY || MR::abs(mRotateSpeed) > ::cDemoRotateSpeedY) {
+        if (!mIsRotateBgm) {
             MR::setStageBGMState(::cBgmRotateState, ::cBgmRotateFrames);
         }
 
-        _128 = true;
+        mIsRotateBgm = true;
         return;
     }
 
-    if (_128) {
+    if (mIsRotateBgm) {
         MR::setStageBGMState(::cBgmNotRotateState, ::cBgmNotRotateFrames);
     }
 
-    _128 = false;
+    mIsRotateBgm = false;
 }
 
 void SphereSelectorHandle::playRotateSE() {
-    if (!(MR::abs(_D4) > ::cDemoRotateSpeedY) && !(MR::abs(mRotateSpeed) > ::cDemoRotateSpeedY)) {
+    if (!(MR::abs(mRotateSpeedX) > ::cDemoRotateSpeedY) && !(MR::abs(mRotateSpeed) > ::cDemoRotateSpeedY)) {
         return;
     }
 
-    f32 verticalRate = MR::abs(_D4) / 2.0f;
+    f32 verticalRate = MR::abs(mRotateSpeedX) / 2.0f;
     f32 horizontalRate = MR::abs(mRotateSpeed) / 5.0f;
     f32 rate = verticalRate > horizontalRate ? verticalRate : horizontalRate;
 
@@ -266,7 +266,7 @@ void SphereSelectorHandle::playRotateSE() {
     }
 
     MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_1", static_cast< s32 >(100.0f * rate));
-    if (!(MR::abs(mRotateSpeed) >= 4.0f) && !(MR::abs(_D4) >= 1.6f)) {
+    if (!(MR::abs(mRotateSpeed) >= 4.0f) && !(MR::abs(mRotateSpeedX) >= 1.6f)) {
         return;
     }
 
@@ -289,7 +289,7 @@ void SphereSelectorHandle::exeWait() {
         SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
     }
 
-    if (_10C > ::cDemoRotateStartFrame) {
+    if (mNotPointingStep > ::cDemoRotateStartFrame) {
         setNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvDemoRotate));
     }
 }
@@ -308,13 +308,13 @@ void SphereSelectorHandle::exeHold() {
             mRotateSpeed = MR::getLinerValue(::cHoldReduceRate, mRotateSpeed, mTargetRotateSpeed, 1.0f);
         }
 
-        _D4 = ::cHoldRotateRateX * getPointerVelocity()->y;
-        if (_D4 * _D8 < 0.0f || MR::abs(_D4) < MR::abs(_D8)) {
-            _D4 = MR::getLinerValue(::cHoldReduceRate, _D4, _D8, 1.0f);
+        mRotateSpeedX = ::cHoldRotateRateX * getPointerVelocity()->y;
+        if (mRotateSpeedX * mPrevRotateSpeedX < 0.0f || MR::abs(mRotateSpeedX) < MR::abs(mPrevRotateSpeedX)) {
+            mRotateSpeedX = MR::getLinerValue(::cHoldReduceRate, mRotateSpeedX, mPrevRotateSpeedX, 1.0f);
         }
-    } else if (_10C > ::cHoldReduceOutScreenFrame) {
+    } else if (mNotPointingStep > ::cHoldReduceOutScreenFrame) {
         mRotateSpeed *= ::cSpinReduceRate;
-        _D4 *= ::cSpinReduceRate;
+        mRotateSpeedX *= ::cSpinReduceRate;
     }
 
     if (tryRelease()) {
@@ -324,12 +324,12 @@ void SphereSelectorHandle::exeHold() {
 
 void SphereSelectorHandle::exeSpin() {
     mRotateSpeed *= ::cSpinReduceRate;
-    _D4 *= ::cSpinReduceRate;
+    mRotateSpeedX *= ::cSpinReduceRate;
     if (MR::isStarPointerInScreen(PLAYER_1)) {
         SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
     }
 
-    if (MR::isNearZero(mRotateSpeed) && MR::isNearZero(_D4)) {
+    if (MR::isNearZero(mRotateSpeed) && MR::isNearZero(mRotateSpeedX)) {
         setNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait));
     }
 }
@@ -340,7 +340,7 @@ void SphereSelectorHandle::exeDemoRotate() {
         SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
     }
 
-    if (_10C == 0) {
+    if (mNotPointingStep == 0) {
         setNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait));
     }
 }
@@ -360,7 +360,6 @@ void SphereSelectorHandle::exeGalaxyConfirmStart() {
     s32 confirmStartCancelFrame = SphereSelectorFunction::getConfirmStartCancelFrame();
     if (MR::isFirstStep(this)) {
         setStateConfirmStartAtFirstStep();
-        _110.zero();
     }
 
     MR::setNerveAtStep(this, GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvGalaxyConfirmWait), confirmStartCancelFrame);
@@ -372,7 +371,7 @@ void SphereSelectorHandle::exeGalaxyConfirmCancel() {
         MR::setStageBGMState(::cBgmNotConfirmState, ::cBgmNotConfirmFrames);
     }
 
-    mPosition.lerp(_110, Vec3f(0.0f, 0.0f, 0.0f), MR::calcNerveEaseInRate(this, confirmStartCancelFrame));
+    mPosition.zero();
     MR::setNerveAtStep(this, GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait), confirmStartCancelFrame);
 }
 
@@ -396,6 +395,6 @@ void SphereSelectorHandle::exeInvalidRotate() {
 
 void SphereSelectorHandle::exeGalaxyConfirmWait() {
     if (MR::isFirstStep(this)) {
-        mPosition.set(_110);
+        mPosition.zero();
     }
 }

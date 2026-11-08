@@ -23,7 +23,7 @@ public:
     void exeDeath();
     void exeAttack();
     void exeRailGoal();
-    void exeDPDSwoon();
+    void exePointerSwoon();
     void exeWaitWithLeftTurn();
     void exeWaitWithRightTurn();
     void exeThreatWithLeftTurn();
@@ -34,15 +34,15 @@ public:
     void knockOut(HitSensor*, HitSensor*);
     bool selectNerveAfterWait();
     bool selectNerveThreat();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
 
     AnimScaleController* mController;
     WalkerStateBindStarPointer* mBindStarPtr;
-    s32 _94;
-    Vec3f _98;
+    s32 mWaveStep;
+    Vec3f mFront;
     bool mIsConnectedRail;
-    f32 _A8;
-    s32 _AC;
-    bool _B0;
-    Vec3f _B4;
+    f32 mRailSpeed;
+    s32 mRailGoalWaitStep;
+    bool mIsRailTurnBack;
+    Vec3f mClipCenter;
 };

@@ -12,7 +12,6 @@ public:
 
     void resetPlayerRestartIdInfo();
     void setPlayerRestartIdInfo(const PlacementId&);
-    void resetRaceBestTime();
     bool isStageCleared() const;
     void resetStageResultPowerStarParam();
     void resetStageResultStarPieceParam();
@@ -27,14 +26,12 @@ public:
     void receiveStageResultParam(const char*, s32, int, int);
 
     PlacementId* mPlayerRestartIdInfo;
-    bool _4;
-    u32 _8;
+    bool mIsRetry;
+    u32 mClearState;
     s16 mPowerStarId;
     const char* mStageName;  // MR::internName
     int mStarPieceNum;
     int mLast1upStarPieceNum;
     int mCoinNum;
-    u32 _4C;
-    u32 _50;
     AlreadyDoneFlagInGalaxy* mAlreadyDoneFlag;
 };

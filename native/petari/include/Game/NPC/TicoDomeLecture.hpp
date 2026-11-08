@@ -14,6 +14,6 @@ public:
     void exeMove();
     void exeMetamorphosis();
 
-    Vec3f _8C;
-    Vec3f _98;
+    Vec3f mInitPos;
+    Vec3f mInitRotation;
 };

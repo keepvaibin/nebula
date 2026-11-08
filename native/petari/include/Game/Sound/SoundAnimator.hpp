@@ -9,39 +9,50 @@
 struct SoundParams;
 class SoundHandles;
 
+// One sound of a sound animation as the importer cooks it (crates/nebula-import cook/native_data.rs bas, NBAS).
 class SoundAnimationSound {
 public:
-    // TODO: why are some normal rlwinm and other extri and some dont matter?
+    enum Flag : u32 {
+        cForwardOnly = 0x1,
+        cReverseOnly = 0x2,
+        cStopOnAnimationChange = 0x4,
+        cOnce = 0x8,
+        cStopOnNoteOff = 0x10,
+        cStopOnSpeedZero = 0x20,
+        cLifeTime = 0x40,
+        cAtIntervals = 0x80,
+    };
+
     bool playsOnlyForward() const {
-        return (mFlags & 1) != 0;  // 0x01
+        return (mFlags & cForwardOnly) != 0;
     }
 
     bool playsOnlyReverse() const {
-        return (mFlags & 2) != 0;  // 0x02
+        return (mFlags & cReverseOnly) != 0;
     }
 
     bool stopsWhenAnimationChanges() const {
-        return (mFlags & 4) != 0;  // 0x04
+        return (mFlags & cStopOnAnimationChange) != 0;
     }
 
     bool playsOnlyOnce() const {
-        return (mFlags & 8) != 0;  // 0x08
+        return (mFlags & cOnce) != 0;
     }
 
     bool stopsWhenNoteOff() const {
-        return (mFlags & 0x10) != 0;  // 0x10
+        return (mFlags & cStopOnNoteOff) != 0;
     }
 
     bool stopsWhenSpeedIsZero() const {
-        return (mFlags & 0x20) != 0;  // 0x20
+        return (mFlags & cStopOnSpeedZero) != 0;
     }
 
     bool setsLifeTime() const {
-        return mFlags & 0x40;  // 0x40
+        return (mFlags & cLifeTime) != 0;
     }
 
     bool playsAtIntervals() const {
-        return (mFlags & 0x80) != 0;  // 0x80
+        return (mFlags & cAtIntervals) != 0;
     }
 
     bool isNoting(f32 time) const {
@@ -94,59 +105,42 @@ public:
         return mSoundID;
     }
 
-    // A BAS entry, read in place (host order, as the importer cooks it: native_data.rs bas).
     SoundID mSoundID;
     f32 mNoteOnTime;
     f32 mNoteOffTime;
     f32 mBasePitch;
-     // u32 mFlags;
-    // The flags are bits of the word (the accessors above test mFlags).
-    u32 mFlags;
+    u32 mFlags;  // Flag bits
     u8 mBaseVolume;
     s8 mPitchDelta;
     u8 mPlayTime;
     u8 mBasePan;
     s8 mVolumeDelta;
     u8 mRepeatInterval;
-    s8 _1A;
-    u32 _1C;
 };
 
-class SoundAnimation;
+static_assert(sizeof(SoundAnimationSound) == 28, "the cooked NBAS record");
 
-class SoundAnimationControl {
-public:
-    virtual ~SoundAnimationControl() = 0;
-    virtual SoundAnimationSound* getSound(const SoundAnimation*, int) = 0;
-    virtual u16 getNumSounds(const SoundAnimation*) = 0;
-};
-
+// A sound animation as the importer cooks it (NBAS): this header, then mNumSounds sounds.
 class SoundAnimation {
 public:
+    // pFile, checked once when its archive is mounted (a file the importer did not cook is fatal).
+    static SoundAnimation* load(void* pFile, const char* pName);
+
     u32 getStartSoundIndex(f32) const;
     u32 getEndSoundIndex(f32) const;
-    u16 getNumSounds() const {
-        if (mControl != nullptr) {
-            return mControl->getNumSounds(this);
-        } else {
-            return mNumSounds;
-        }
+    s32 getNumSounds() const {
+        return static_cast< s32 >(mNumSounds);
     }
 
-    const SoundAnimationSound* getSound(int i_index) const {
-        if (mControl != nullptr) {
-            return mControl->getSound(this, i_index);
-        } else {
-            return &mSounds + i_index;
-        }
+    const SoundAnimationSound* getSound(int index) const {
+        return reinterpret_cast< const SoundAnimationSound* >(this + 1) + index;
     }
 
-    u16 mNumSounds;
-    // BAS files hold 0 here.
-    u32 mControlSlot;
-    static constexpr SoundAnimationControl* mControl = nullptr;
-    SoundAnimationSound mSounds;
+    char mMagic[4];  // "NBAS"
+    u32 mNumSounds;
 };
+
+static_assert(sizeof(SoundAnimation) == 8, "the cooked NBAS header");
 
 class SoundAnimator {
 public:

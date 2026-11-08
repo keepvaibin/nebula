@@ -105,11 +105,11 @@ Vec3f* KoopaFunction::getKoopaFrontPtr(Koopa* pKoopa) {
 }
 
 bool KoopaFunction::isKoopaSightPlayer(const Koopa* pKoopa, const MR::ActorSightParam& rSightParam) {
-    return MR::isInSightFanPlayer(pKoopa, pKoopa->mFront, rSightParam._0, rSightParam._4, rSightParam._8);
+    return MR::isInSightFanPlayer(pKoopa, pKoopa->mFront, rSightParam.mDistance, rSightParam.mHorizontalDegree, rSightParam.mVerticalDegree);
 }
 
 bool KoopaFunction::escapeKoopaFromPlayer(Koopa* pKoopa, const MR::ActorMoveParam& rMoveParam) {
-    MR::escapeFromPlayer(pKoopa, &pKoopa->mFront, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::escapeFromPlayer(pKoopa, &pKoopa->mFront, rMoveParam);
     return MR::sendMsgEnemyAttackToBindedSensor(pKoopa, getKoopaMessageSensor(pKoopa));
 }
 
@@ -497,7 +497,7 @@ void KoopaFunction::tryRestartKoopa() {
 }
 
 bool KoopaFunction::moveAndTurnKoopaToPlayer(Koopa* pKoopa, const MR::ActorMoveParam& rMoveParam) {
-    MR::moveAndTurnToPlayer(pKoopa, &pKoopa->mFront, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToPlayer(pKoopa, &pKoopa->mFront, rMoveParam);
     return MR::sendMsgEnemyAttackToBindedSensor(pKoopa, getKoopaMessageSensor(pKoopa));
 }
 

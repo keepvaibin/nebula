@@ -29,7 +29,7 @@ void SubmarineSteam::init(const TableIter& rIter) {
 
     const char* objName = nullptr;
     MR::getObjectName(&objName, rIter);
-    initEffectKeeper(0, objName, false);
+    initEffectKeeper(0, objName);
 
     initHitSensor(1);
     HitSensor* sensor = MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(0.0f, ::sSensorOffsetY, 0.0f));

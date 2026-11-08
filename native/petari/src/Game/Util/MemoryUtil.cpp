@@ -7,12 +7,12 @@
 
 namespace MR {
     CurrentHeapRestorer::CurrentHeapRestorer(NebulaArena* pHeap) {
-        _0 = NebulaArena::getCurrentHeap();
+        mPrevHeap = NebulaArena::getCurrentHeap();
         MR::becomeCurrentHeap(pHeap);
     }
 
     CurrentHeapRestorer::~CurrentHeapRestorer() {
-        MR::becomeCurrentHeap(_0);
+        MR::becomeCurrentHeap(mPrevHeap);
     }
 
     NebulaArena* getCurrentHeap() {

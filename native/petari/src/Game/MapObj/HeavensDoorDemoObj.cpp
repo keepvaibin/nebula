@@ -16,7 +16,7 @@ namespace NrvHeavensDoorDemoObj {
 };  // namespace NrvHeavensDoorDemoObj
 
 HeavensDoorDemoObj::HeavensDoorDemoObj(const char* pName) : MapObjActor(pName) {
-    _C4 = false;
+    mIsInsideCageDemo = false;
 }
 
 void HeavensDoorDemoObj::init(const TableIter& rIter) {
@@ -91,12 +91,12 @@ void HeavensDoorDemoObj::exeVanish() {
 }
 
 void HeavensDoorDemoObj::kill() {
-    _C4 = false;
+    mIsInsideCageDemo = false;
     MapObjActor::kill();
 }
 
 void HeavensDoorDemoObj::control() {
-    if (_C4) {
+    if (mIsInsideCageDemo) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 }
@@ -111,5 +111,5 @@ void HeavensDoorDemoObj::connectToScene(const MapObjActorInitInfo& info) {
 
 void HeavensDoorDemoObj::startInsideCageDemo() {
     MR::StageEffect::shakeCameraMoving(this, mObjectName);
-    _C4 = true;
+    mIsInsideCageDemo = true;
 }

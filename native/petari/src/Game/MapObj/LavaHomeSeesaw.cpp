@@ -14,18 +14,18 @@
 
 #include "math_types.hpp"
 
-LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), _94(gZeroVec), mYOffset() {
+LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), mGroundPos(gZeroVec), mYOffset() {
 }
 
 void LavaHomeSeesaw::initAfterPlacement() {
     Vec3f gravity(mGravity);
     gravity *= 1000.0f;
-    if (!MR::getFirstPolyOnLineToMap(&_94, nullptr, mPosition, gravity)) {
-        MR::calcMapGroundUpper(&_94, this);
+    if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, gravity)) {
+        MR::calcMapGroundUpper(&mGroundPos, this);
     }
 
-    mYOffset = mPosition.distance(_94);
-    if ((mPosition - _94).dot(mGravity) < 0.0f) {
+    mYOffset = mPosition.distance(mGroundPos);
+    if ((mPosition - mGroundPos).dot(mGravity) < 0.0f) {
         mYOffset *= -1.0f;
     }
 

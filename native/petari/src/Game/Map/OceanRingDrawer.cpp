@@ -1,8 +1,6 @@
 #include "Game/Map/OceanRingDrawer.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRing.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -34,18 +32,18 @@ namespace {
 OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4, bool a5, f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2)
     : mPosition(0.0f, 0.0f, 0.0f) {
     mOceanRing = pRing;
-    _10 = a3;
-    _14 = a4;
-    _18 = a5;
-    _1C = *pTexCoordU0;
-    _20 = *pTexCoordU1;
-    _24 = *pTexCoordU2;
+    mStartIndex = a3;
+    mNumPoints = a4;
+    mIsClosed = a5;
+    mTexU0 = *pTexCoordU0;
+    mTexU1 = *pTexCoordU1;
+    mTexU2 = *pTexCoordU2;
     initMesh(pTexCoordU0, pTexCoordU1, pTexCoordU2);
 
     for (int i = 0; i < a4; i++) {
         int v12 = a3 + i;
 
-        if (i == a4 - 1 && _18) {
+        if (i == a4 - 1 && mIsClosed) {
             v12 = 0;
         }
 
@@ -56,7 +54,7 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
 }
 
 void OceanRingPartDrawer::initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
-    mMesh.init( 2 * mOceanRing->mStride * (_14 - 1));
+    mMesh.init( 2 * mOceanRing->mStride * (mNumPoints - 1));
     drawGD(pTexCoordU0, pTexCoordU1, pTexCoordU2);
     mMesh.send();
 }
@@ -83,16 +81,16 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
 
     f28 = f30 * f21;
     f29 = 0.1f * f21;
-    f27 = _1C;
-    f25 = _20;
-    f23 = _24;
-    f26 = _1C;
-    f24 = _20;
-    f22 = _24;
-    for (s32 i = 0; i < _14 - 1; i++) {
-        s32 index = _10 + i;
+    f27 = mTexU0;
+    f25 = mTexU1;
+    f23 = mTexU2;
+    f26 = mTexU0;
+    f24 = mTexU1;
+    f22 = mTexU2;
+    for (s32 i = 0; i < mNumPoints - 1; i++) {
+        s32 index = mStartIndex + i;
         s32 indexPlusOne = index + 1;
-        if (i == _14 - 2 && _18) {
+        if (i == mNumPoints - 2 && mIsClosed) {
             indexPlusOne = 0;
         }
 
@@ -128,7 +126,7 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
         f27 = f26;
         f25 = f24;
         f23 = f22;
-        if (i != _14 - 1) {
+        if (i != mNumPoints - 1) {
             *pTexCoordU0 += 0.05f * f21;
             *pTexCoordU1 += 0.05f * f21;
             *pTexCoordU2 += 0.1f * f21;
@@ -150,16 +148,16 @@ void OceanRingPartDrawer::drawDynamic(TypedDraw& rDraw) const {
 
     f28 = f30 * f21;
     f29 = 0.1f * f21;
-    f27 = _1C;
-    f25 = _20;
-    f23 = _24;
-    f26 = _1C;
-    f24 = _20;
-    f22 = _24;
-    for (s32 i = 0; i < _14 - 1; i++) {
-        s32 index = _10 + i;
+    f27 = mTexU0;
+    f25 = mTexU1;
+    f23 = mTexU2;
+    f26 = mTexU0;
+    f24 = mTexU1;
+    f22 = mTexU2;
+    for (s32 i = 0; i < mNumPoints - 1; i++) {
+        s32 index = mStartIndex + i;
         s32 indexPlusOne = index + 1;
-        if (i == _14 - 2 && _18) {
+        if (i == mNumPoints - 2 && mIsClosed) {
             indexPlusOne = 0;
         }
 
@@ -208,14 +206,14 @@ void OceanRingPartDrawer::drawDynamicBloom(TypedDraw& rDraw) const {
     f32 f21 = 1.0f;
 
     f28 = f30 * f21;
-    f27 = _1C;
-    f25 = _20;
-    f26 = _1C;
-    f24 = _20;
-    for (s32 i = 0; i < _14 - 1; i++) {
-        s32 index = _10 + i;
+    f27 = mTexU0;
+    f25 = mTexU1;
+    f26 = mTexU0;
+    f24 = mTexU1;
+    for (s32 i = 0; i < mNumPoints - 1; i++) {
+        s32 index = mStartIndex + i;
         s32 indexPlusOne = index + 1;
-        if (i == _14 - 2 && _18) {
+        if (i == mNumPoints - 2 && mIsClosed) {
             indexPlusOne = 0;
         }
 
@@ -252,12 +250,11 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mRing = pOceanRing;
     mDrawerCount = 0;
     mPartDrawers = nullptr;
-    _C = 0.0f;
-    _10 = 0.0f;
-    _14 = 0.0f;
-    _18 = 0.0f;
-    _1C = 0.0f;
-    _20 = 0.0f;
+    mTex0U = 0.0f;
+    mTex0V = 0.0f;
+    mTex1U = 0.0f;
+    mTex1V = 0.0f;
+    mTex2V = 0.0f;
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
 
@@ -268,12 +265,11 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
 }
 
 void OceanRingDrawer::update() {
-    _C = MR::repeat(_C + ::sTexSpeed0U, 0.0f, 1.0f);
-    _10 = MR::repeat(_10 + ::sTexSpeed0V, 0.0f, 1.0f);
-    _14 = MR::repeat(_14 + ::sTexSpeed1U, 0.0f, 1.0f);
-    _18 = MR::repeat(_18 + ::sTexSpeed1V, 0.0f, 1.0f);
-    _1C = MR::repeat(_1C + 0.0f, 0.0f, 1.0f);
-    _20 = MR::repeat(_20 + ::sTexSpeed2V, 0.0f, 1.0f);
+    mTex0U = MR::repeat(mTex0U + ::sTexSpeed0U, 0.0f, 1.0f);
+    mTex0V = MR::repeat(mTex0V + ::sTexSpeed0V, 0.0f, 1.0f);
+    mTex1U = MR::repeat(mTex1U + ::sTexSpeed1U, 0.0f, 1.0f);
+    mTex1V = MR::repeat(mTex1V + ::sTexSpeed1V, 0.0f, 1.0f);
+    mTex2V = MR::repeat(mTex2V + ::sTexSpeed2V, 0.0f, 1.0f);
 }
 
 void OceanRingDrawer::draw() const {
@@ -405,14 +401,14 @@ SiteMaterial OceanRingDrawer::loadMaterial() const {
                        NEBULA_CULL_NONE);
     Mtx34f mtx;
     mtx.identity();
-    mtx.mMtx[0][2] = _C;
-    mtx.mMtx[1][2] = _10;
+    mtx.mMtx[0][2] = mTex0U;
+    mtx.mMtx[1][2] = mTex0V;
     material.setMatrix(3, 0, mtx.toMtxPtr());
-    mtx.mMtx[0][2] = _14;
-    mtx.mMtx[1][2] = _18;
+    mtx.mMtx[0][2] = mTex1U;
+    mtx.mMtx[1][2] = mTex1V;
     material.setMatrix(3, 1, mtx.toMtxPtr());
-    mtx.mMtx[0][2] = _1C;
-    mtx.mMtx[1][2] = _20;
+    mtx.mMtx[0][2] = 0.0f;
+    mtx.mMtx[1][2] = mTex2V;
     material.setMatrix(3, 2, mtx.toMtxPtr());
     Pos3f projection;
     MR::calcTexProjectionMtx(&projection);
@@ -448,11 +444,11 @@ SiteMaterial OceanRingDrawer::loadMaterialBloom() const {
                        NEBULA_CULL_NONE);
     Mtx34f mtx;
     mtx.identity();
-    mtx.mMtx[0][2] = _C;
-    mtx.mMtx[1][2] = _10;
+    mtx.mMtx[0][2] = mTex0U;
+    mtx.mMtx[1][2] = mTex0V;
     material.setMatrix(2, 0, mtx.toMtxPtr());
-    mtx.mMtx[0][2] = _14;
-    mtx.mMtx[1][2] = _18;
+    mtx.mMtx[0][2] = mTex1U;
+    mtx.mMtx[1][2] = mTex1V;
     material.setMatrix(2, 1, mtx.toMtxPtr());
     material.setColor(0, 80, 80, 80, v19);
     material.setColor(4, 80, 80, 80, 255);

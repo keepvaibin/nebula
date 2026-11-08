@@ -27,7 +27,7 @@ public:
     void calcUV(Vec2f*, const Vec3f&) const;
     void calcLocalBoxSize(Vec3f*) const;
 
-    Mtx34f _3C;
+    Mtx34f mPlacementMtx;
 };
 
 namespace MR {

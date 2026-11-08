@@ -24,21 +24,21 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        f32 _10;
-        f32 _14;
+        f32 mMaxSpeed;
+        f32 mSpeed;
     };
 
     class MoveStateChase : public MoveState {
     public:
-        MoveStateChase(MoveStateHolder* pHolder) : MoveState(pHolder), _10(), _14(), _18(), _1C() {
+        MoveStateChase(MoveStateHolder* pHolder) : MoveState(pHolder), mAccel(), mLateralDamping(), mMaxSpeed(), mTurnAngle() {
         }
 
         virtual void execute();
 
-        f32 _10;
-        f32 _14;
-        f32 _18;
-        f32 _1C;
+        f32 mAccel;
+        f32 mLateralDamping;
+        f32 mMaxSpeed;
+        f32 mTurnAngle;
     };
 
     class MoveStateDetour : public MoveState {
@@ -49,10 +49,10 @@ namespace DodoryuSub {
 
         bool isPlayerOppositeFromWall() const;
 
-        f32 _10;
-        f32 _14;
-        f32 _18;
-        f32 _1C;
+        f32 mAccel;
+        f32 mLateralDamping;
+        f32 mMaxSpeed;
+        f32 mTurnAngle;
     };
 
     class MoveStateEscape : public MoveState {
@@ -61,14 +61,14 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        s32 _10;
-        s32 _14;
-        s32 _18;
-        f32 _1C;
-        f32 _20;
-        f32 _24;
-        f32 _28;
-        Vec3f _2C;
+        s32 mDirStepLeft;
+        s32 mDirStepMin;
+        s32 mDirStepMax;
+        f32 mDirAngleMax;
+        f32 mTurnAngle;
+        f32 mMaxSpeed;
+        f32 mSpeed;
+        Vec3f mDir;
     };
 
     class MoveStateJumpOut : public MoveState {
@@ -77,8 +77,8 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        f32 _10;
-        f32 _14;
+        f32 mTurnAngle;
+        f32 mSpeed;
     };
 
     class MoveStateNull : public MoveState {

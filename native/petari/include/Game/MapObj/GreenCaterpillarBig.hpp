@@ -44,8 +44,8 @@ public:
     GreenCaterpillarBigBody** mBodyArray;
     s32 mBodyArrayLength;
     s32 mCurBodyParts;
-    s32 _98;
-    u8 _9C;
-    u8 _9D;
+    s32 mRailPointNo;
+    u8 mIsEnteringHole;
+    u8 mIsLeavingApple;
     LodCtrl* mPlanetLOD;
 };

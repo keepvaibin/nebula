@@ -3,13 +3,13 @@
 #include <nebula_geometry.hpp>
 
 class EffectSystem;
-class NameObjAdaptor;
 
+// Draws an effect system's particles in each of the scene's particle passes.
 class ParticleDrawExecutor {
 public:
-    ParticleDrawExecutor(const EffectSystem*, bool);
+    // `connect`: each pass gets its own draw object in the scene (the scene's effect system, not the scenario select's).
+    ParticleDrawExecutor(const EffectSystem*, bool connect);
 
-    static void initDraw();
     void draw3D() const;
     void draw2D() const;
     void drawIndirect() const;
@@ -21,16 +21,9 @@ public:
     void drawWithViewMtxAfterIndirect(const Pos3f&) const;
     void drawWithViewMtxForBloomEffect(const Pos3f&) const;
     void drawWithViewMtxAfterImageEffect(const Pos3f&) const;
-    void initDrawAdaptor();
 
     const EffectSystem* mHost;
-    NameObjAdaptor* _4;
-    NameObjAdaptor* _8;
-    NameObjAdaptor* _C;
-    NameObjAdaptor* _10;
-    NameObjAdaptor* _14;
-    NameObjAdaptor* _18;
-    NameObjAdaptor* _1C;
-    bool _20;
-    bool _21;
+
+private:
+    void connectToScene();
 };

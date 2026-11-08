@@ -4,13 +4,13 @@
 
 SingleEmitter::SingleEmitter() {
     mEmitter = nullptr;
-    _4 = 0;
+    mResourceId = 0;
     mGroupId = 0;
     mSpawn = SINGLE_EMITTER_UNDEF_SPAWN;
 }
 
-void SingleEmitter::init(u16 unk) {
-    _4 = unk;
+void SingleEmitter::init(u16 resourceId) {
+    mResourceId = resourceId;
 }
 
 void SingleEmitter::deleteEmitter() {
@@ -22,7 +22,7 @@ void SingleEmitter::deleteEmitter() {
 void SingleEmitter::scanParticleEmitter(EffectSystem* pSystem) {
     ParticleEmitter* emitter;
     if (mSpawn == SINGLE_EMITTER_UNDEF_SPAWN) {
-        emitter = pSystem->createEmitter(_4, mGroupId, 0);
+        emitter = pSystem->createEmitter(mResourceId, mGroupId, 0);
         if (emitter == nullptr) {
             return;
         }

@@ -12,8 +12,8 @@ public:
     }
 
     void* mResource;
-    u32 _4;
-    void* _8;
+    u32 mSize;
+    void* mData;
     char* mName;
     u32 mHashCode;
 };

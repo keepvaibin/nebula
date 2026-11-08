@@ -33,7 +33,7 @@ AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("キャプチャ用�
 void AstroDomeBlueStar::CaptureActor::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecorationMovement(this);
 
-    initEffectKeeper(0, "GCapture", false);
+    initEffectKeeper(0, "GCapture");
 
     MR::setEffectHostMtx(this, "LightSplash", mHostMtx);
     MR::setEffectHostMtx(this, "RibbonPoint", mHostMtx);
@@ -112,7 +112,7 @@ void AstroDomeBlueStar::init(const TableIter& rIter) {
     MR::addHitSensorPosBinder(this, "bind", 16, 80.0f, &vec, Vec3f(0.0f, 0.0f, 0.0f));
     getSensor("bind")->invalidate();
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::initActorCamera(this, rIter, &mCameraInfo);
     initSound(6, false);
     MR::initStarPointerTarget(this, 200.0f);

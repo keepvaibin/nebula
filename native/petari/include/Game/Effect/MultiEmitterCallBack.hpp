@@ -4,7 +4,8 @@
 #include <nebula_geometry.hpp>
 #include "Game/Particle/EmitterCallBack.hpp"
 
-enum { FORCE_FOLLOW_ON = 0x1, FORCE_FOLLOW_OFF = 0x2, FORCE_SCALE_ON = 0x10, RESET_FOLLOW_CURRENT = 0x40, BASE_SCALE = 0x100 };
+// mFlags: forced following (each wins over the effect's own setting) and a base scale.
+enum { FORCE_FOLLOW_ON = 0x1, FORCE_FOLLOW_OFF = 0x2, FORCE_SCALE_ON = 0x10, BASE_SCALE = 0x100 };
 
 class MultiEmitter;
 
@@ -16,66 +17,53 @@ public:
     virtual void init(EmitterCore*) {};
 };
 
+// Places an effect's emitters on its host: a matrix, or translation/rotation/scale vectors.
 class MultiEmitterCallBack : public MultiEmitterCallBackBase {
 public:
-    struct FlagSRT {
-        bool mScale;
-        bool mRotation;
-        bool mTranslation;
+    // Which parts of the host the emitters take this frame.
+    struct Follow {
+        bool mTranslation = false;
+        bool mRotation = false;
+        bool mScale = false;
 
-        inline bool isTransform() const {
-            return mScale || mRotation || mTranslation ? true : false;
-        }
+        bool any() const { return mTranslation || mRotation || mScale; }
     };
 
-    MultiEmitterCallBack(const MultiEmitter*, const Vec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, const Vec3f*, const Vec3f*, const Vec3f*, const Vec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const Vec3f&);
-    MultiEmitterCallBack(const MultiEmitter*, MtxPtr, const Vec3f*, const Vec3f&);
+    MultiEmitterCallBack(const MultiEmitter*, const Vec3f& rOffset);
+    MultiEmitterCallBack(const MultiEmitter*, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset);
+    MultiEmitterCallBack(const MultiEmitter*, MtxPtr pMtx, const Vec3f& rOffset);
+    MultiEmitterCallBack(const MultiEmitter*, MtxPtr pMtx, const Vec3f* pScale, const Vec3f& rOffset);
 
     void execute(EmitterCore*);
-    void setHostSRT(const Vec3f*, const Vec3f*, const Vec3f*);
+    void init(EmitterCore*);
+    void setHostSRT(const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale);
     void setHostMtx(MtxPtr);
     void setBaseScale(f32);
     void forceFollowOn();
     void forceFollowOff();
     void forceScaleOn();
-    void resetFollowCurrent();
-    void init(EmitterCore*);
-    void setSRTFromHostMtx(EmitterCore*, MtxPtr, const FlagSRT&, bool);
-    void setSRTFromHostSRT(EmitterCore*, const FlagSRT&, bool);
-    void setScaleFromHostScale(EmitterCore*, const Vec3f&, bool, bool);
-    void effectLight(EmitterCore*);
-    void followSRT(EmitterCore*, bool);
+
     void setColor(EmitterCore*);
-    void isFollowSRT(FlagSRT*, bool) const;
 
-    inline bool isFlagOn(u16 flag) const {
-        u16 mask = mFlags & flag;
-        return mask == flag;
-    }
-
-    inline bool isFlagOff(u16 flag) const {
-        u16 mask = mFlags & flag;
-        return mask != flag;
-    }
-
-    inline void turnFlagOn(u16 flag) {
-        mFlags |= flag;
-    }
-
-    inline void turnFlagOff(u16 flag) {
-        mFlags &= ~flag;
-    }
+    bool isFlagOn(u16 flag) const { return (mFlags & flag) == flag; }
+    void turnFlagOn(u16 flag) { mFlags |= flag; }
 
     const MultiEmitter* mEmitter;
-    const Vec3f* mScale;
-    const Vec3f* mRotation;
-    const Vec3f* mTranslation;
-    MtxPtr mMtx;
-    Vec3f _18;
+    const Vec3f* mHostTranslation;
+    const Vec3f* mHostRotation;
+    const Vec3f* mHostScale;
+    MtxPtr mHostMtx;
+    Vec3f mOffset;  // in the host's rotated (and, when scale is followed, scaled) frame
     f32 mBaseScale;
     Color8 mPrmColor;
     Color8 mEnvColor;
     u16 mFlags;
+
+private:
+    // `atCreate`: the emitter is being created (the effect's "affect" bits), else a frame (its "follow" bits).
+    Follow follows(bool atCreate) const;
+    void follow(EmitterCore*, bool atCreate);
+    void followHostMtx(EmitterCore*, const Follow&, bool atCreate);
+    void followHostSRT(EmitterCore*, const Follow&, bool atCreate);
+    void setScale(EmitterCore*, const Vec3f& rHostScale, bool followScale, bool atCreate);
 };

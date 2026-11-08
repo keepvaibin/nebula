@@ -15,12 +15,7 @@
 
 namespace {
     static const s32 sOpeningHideFrame = 60;
-    // static const s32 sOpeningAppearFrame = _;
-    // static const s32 sOpeningAppearRumbleStep = _;
-    // static const s32 sOpeningHideRumbleStep = _;
     static const s32 sOpeningAppearSmileSoundStep = 55;
-    // static const s32 sAppearRumbleStep = _;
-    // static const s32 sDownRumbleStep = _;
     static const s32 sDieSoundStep = 242;
 };  // namespace
 
@@ -82,7 +77,7 @@ void DodoryuDemoOpening::end() {
 
     Pos3f playerResetMtx;
     mHost->getPlayerResetMtx(&playerResetMtx, 0);
-    mHost->_150 = false;
+    mHost->mIsRumbling = false;
 
     MR::setPlayerBaseMtx(playerResetMtx.toMtxPtr());
     MR::setPlayerStateWait();
@@ -97,7 +92,7 @@ void DodoryuDemoOpening::exeDemoWait() {
     MR::invalidateShadowAll(mHost);
     MR::startSystemSE("SE_DM_MEET_BOSS");
     MR::startStageBGM("BGM_PINCH_3", false);
-    MR::startAnimCameraTargetOther(mHost, &mActorCameraInfo, "OpeningDemo", CameraTargetArg(mHost->_148), 0, 1.0f);
+    MR::startAnimCameraTargetOther(mHost, &mActorCameraInfo, "OpeningDemo", CameraTargetArg(mHost->mDemoCameraTarget), 0, 1.0f);
     mHost->pauseOff();
     MR::hidePlayer();
     MR::startBck(mHost, "EffectWalk");
@@ -118,8 +113,8 @@ void DodoryuDemoOpening::exeUnderground() {
         mHost->startHill();
 
         Dodoryu* pHost = mHost;
-        pHost->_150 = true;
-        pHost->_154 = 0;
+        pHost->mIsRumbling = true;
+        pHost->mRumbleStep = 0;
     }
 
     MR::startLevelSound(mHost, "SE_BM_LV_DODORYU_MOVE_U_SHALLOW");
@@ -176,7 +171,7 @@ void DodoryuDemoOpening::exeWalk() {
     turnToRabbit();
 
     if (MR::isGreaterEqualStep(this, 60)) {
-        mHost->_150 = false;
+        mHost->mIsRumbling = false;
 
         setNerve(GET_NERVE_ANON(DodoryuDemoOpeningNrvOpeningHideReady));
     }
@@ -204,8 +199,8 @@ void DodoryuDemoOpening::exeHide() {
         MR::startBck(mHost, "EffectWalk");
 
         Dodoryu* pHost = mHost;
-        pHost->_150 = true;
-        pHost->_154 = 0;
+        pHost->mIsRumbling = true;
+        pHost->mRumbleStep = 0;
         mHost->startLeadHillBck("EffectWalk");
     }
 }

@@ -1,7 +1,6 @@
 #include "Game/Map/OceanBowl.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanBowlBloomDrawer.hpp"
 #include "Game/Map/OceanBowlPoint.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
@@ -16,7 +15,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
-#include "Game/Render/TypedDraw.hpp"
 
 // These are from the debug symbol map
 namespace {
@@ -45,7 +43,7 @@ namespace {
 
 OceanBowl::OceanBowl(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRadius(), mWaveX(), mWaveZ(), mTexU0(), mTexV0(),
-      mTexU1(), mTexV1(), mTexU2(), mTexV2(), _A98(5.0f / 120.0f), mVtxTex0Array(), mVtxTex1Array(), mVtxTex2Array(), mVtxTex3Array(), mWaterTex(),
+      mTexU1(), mTexV1(), mTexU2(), mTexV2(), mTexStep(5.0f / 120.0f), mVtxTex0Array(), mVtxTex1Array(), mVtxTex2Array(), mVtxTex3Array(), mWaterTex(),
       mWaterIndirectTex(), mMaskTex(), mBloomDrawer(), mIsClipped() {
     for (s32 x = 0; x < 25; x++) {
         for (s32 y = 0; y < 25; y++) {
@@ -96,8 +94,8 @@ bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInf
     fb *= PI;
     fb *= 0.5f;
 
-    pInfo->_4 = MR::cos(fb) * B0;
-    pInfo->_4 += fa;
+    pInfo->mDepth = MR::cos(fb) * B0;
+    pInfo->mDepth += fa;
 
     pInfo->mCamWaterDepth = -fa;
     pInfo->mWaveHeight = OceanBowlPoint::calcHeightStatic(mWaveX, mWaveZ, rPos.x, rPos.z);
@@ -208,7 +206,7 @@ void OceanBowl::initPoints() {
     f32 f10 = 0.0f;
 
     f32 f11 = 0.0f;
-    f32 f12 = _A98;
+    f32 f12 = mTexStep;
 
     for (s32 x = 0; x < 24; x++) {
         f32 r13 = 0.0f;
@@ -238,7 +236,7 @@ void OceanBowl::initPoints() {
             mVtxTex3Array[index + 1] = r30;
             mVtxTex3Array[index + 2] = f11;
             mVtxTex3Array[index + 3] = r30;
-            r30 += _A98;
+            r30 += mTexStep;
 
             index += 4;
         }
@@ -250,7 +248,7 @@ void OceanBowl::initPoints() {
         f5 += ::sTexRate0;
         f7 += ::sTexRate1;
         f9 += ::sTexRate2;
-        f12 += _A98;
+        f12 += mTexStep;
     }
 }
 

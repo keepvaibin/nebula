@@ -45,10 +45,10 @@ public:
     }
 
     TalkMessageCtrl** mTalkMessage;
-    bool _160;
-    s32 _164;
-    s32 _168;
+    bool mIsStarPieceLecture;
+    s32 mStarPieceHitCount;
+    s32 mReplaceStep;
     ButlerStateStarPieceReaction* mButlerState;
-    bool _170;
-    bool _171;
+    bool mIsAstroDome;
+    bool mIsPointed;
 };

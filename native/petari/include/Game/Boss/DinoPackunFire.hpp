@@ -25,5 +25,5 @@ public:
     void exeShot();
     void exeGround();
 
-    Quat4f _8C;
+    Quat4f mRollQuat;
 };

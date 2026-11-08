@@ -10,7 +10,7 @@ namespace NrvPeachCastleGardenPlanet {
     NEW_NERVE(PeachCastleGardenPlanetNrvDamage, PeachCastleGardenPlanet, Damage);
 };  // namespace NrvPeachCastleGardenPlanet
 
-PeachCastleGardenPlanet::PeachCastleGardenPlanet(const char* pName) : MapObjActor(pName), _C4() {
+PeachCastleGardenPlanet::PeachCastleGardenPlanet(const char* pName) : MapObjActor(pName) {
 }
 
 PeachCastleGardenPlanet::~PeachCastleGardenPlanet() {
@@ -22,7 +22,7 @@ void PeachCastleGardenPlanet::init(const TableIter& rIter) {
     MapObjActorUtil::setupInitInfoPlanet(&info);
     info.setupNerve(GET_NERVE(PeachCastleGardenPlanet, PeachCastleGardenPlanetNrvWait));
     MapObjActor::initialize(rIter, info);
-    _C4 = MR::createIndirectPlanetModel(this, nullptr);
+    MR::createIndirectPlanetModel(this, nullptr);
 }
 
 void PeachCastleGardenPlanet::startDamage() {

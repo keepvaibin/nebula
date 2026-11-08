@@ -3,6 +3,7 @@
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Player/MarioModule.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include <nebula_geometry.hpp>
 
@@ -10,7 +11,6 @@ class AreaObj;
 class CubeCameraArea;
 class FloorCode;
 class GravityInfo;
-class HashSortTable;
 class HitInfo;
 class HitSensor;
 class MarioAbyssDamage;
@@ -992,7 +992,7 @@ public:
     u16 _964[3];
     u16 _96A;
 
-    HashSortTable* _96C;  // Sounds
+    MR::NameIndex mSounds;  // a sound's name to its index in soundlist
     const char* _970;     // Sounds or somthing
     MarioModuleTask* _974;
 

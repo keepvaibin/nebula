@@ -37,7 +37,7 @@ void KoopaBattleMapCoinPlate::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::initCollisionParts(this, "KoopaPlateCoin", MR::addHitSensor(this, "Attack", ATYPE_KOOPA_COIN_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f)),
                            mBaseMtx);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
     MR::setEffectBaseScale(this, "Hit", 2.5f);

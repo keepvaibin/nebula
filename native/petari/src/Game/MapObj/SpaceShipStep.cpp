@@ -11,7 +11,7 @@ namespace NrvSpaceShipStep {
     NEW_NERVE(SpaceShipStepNrvBreak, SpaceShipStep, Break);
 };  // namespace NrvSpaceShipStep
 
-SpaceShipStep::SpaceShipStep(const char* pName) : MapObjActor(pName), _C4(0.0f, 0.0f, 0.0f), _D0(), _D4() {
+SpaceShipStep::SpaceShipStep(const char* pName) : MapObjActor(pName), mRailClippingCenter(0.0f, 0.0f, 0.0f), mHiddenStep(), mHasBeenSeen() {
 }
 
 void SpaceShipStep::init(const TableIter& rIter) {
@@ -27,7 +27,7 @@ void SpaceShipStep::init(const TableIter& rIter) {
     initialize(rIter, info);
     f32 radius = 0.0f;
     MR::calcModelBoundingRadius(&radius, this);
-    MR::initAndSetRailClipping(&_C4, this, 100.0f, radius);
+    MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, radius);
 }
 
 void SpaceShipStep::exeWait() {
@@ -89,14 +89,14 @@ bool SpaceShipStep::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
 }
 
 void SpaceShipStep::updateResetToInitPosCheck() {
-    if (!_D4) {
-        _D4 = MR::isJudgedToClipFrustum(mPosition, 700.0f) == false;
+    if (!mHasBeenSeen) {
+        mHasBeenSeen = MR::isJudgedToClipFrustum(mPosition, 700.0f) == false;
     } else {
         if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait)) || !MR::isJudgedToClipFrustum(mPosition, 700.0f)) {
-            _D0 = 0;
+            mHiddenStep = 0;
         } else {
-            if (_D0 < 240) {
-                _D0++;
+            if (mHiddenStep < 240) {
+                mHiddenStep++;
             } else {
                 MapObjActorUtil::resetRailMoverToInitPos(this);
 
@@ -111,8 +111,8 @@ void SpaceShipStep::updateResetToInitPosCheck() {
                     setNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvMove));
                 }
 
-                _D0 = 0;
-                _D4 = 0;
+                mHiddenStep = 0;
+                mHasBeenSeen = 0;
             }
         }
     }

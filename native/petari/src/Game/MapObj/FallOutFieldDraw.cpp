@@ -1,16 +1,11 @@
+#include <nebula_game_api.h>
 #include "Game/Render/FrameList.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/MapObj/FallOutFieldDraw.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/Material.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include <JSystem/JUtility/JUTTexture.hpp>
-#include <nebula_game_api.h>
 #include <cstring>
 
-extern "C" const NebulaHostServices* nebula_host(void);
-#include "Game/Render/FrameList.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
@@ -25,14 +20,11 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/ScreenUtil.hpp"
 
 namespace {
-    // static const s32 sBlurCount = _;
-    // static const f32 sBlurRadius = _;
-    // static const f32 sBlurIntensity = _;
     static Color8 sFillColor = Color8(0, 0, 0, 255);
     static Color8 sEdgeColor = Color8(0, 46, 200, 128);
 };  // namespace
 
-FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
+FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), mFillInsideVolume() {
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
     mDepthKey = ImageEffectLocalUtil::createFrameKey();
@@ -79,7 +71,7 @@ void FallOutFieldDraw::init(const TableIter& rIter) {
 
     bool arg0;
     MR::getPlacementArg0WithInit(rIter, &arg0);
-    _C = arg0;
+    mFillInsideVolume = arg0;
 
     if (MR::isExistStageSwitchAppear(rIter)) {
         MR::listenNameObjStageSwitchOnOffAppear(this, MR::createStageSwitchCtrl(this, rIter), MR::Functor(this, &FallOutFieldDraw::activate),
@@ -107,7 +99,7 @@ void FallOutFieldDraw::draw() const {
 
     // What the field fills, by the volumes' stencil (arg 0: inside them, else outside), marked in the depth with the
     // nearest value there is, which nothing in the map reaches. The fill below writes the depth again.
-    const u8 filled = _C ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO;
+    const u8 filled = mFillInsideVolume ? NEBULA_STENCIL_IF_SET : NEBULA_STENCIL_IF_ZERO;
     Frame::setZScaleOffset(0.0f, 0.0f);
     ImageEffectLocalUtil::drawQuad(flatMaterial(::sFillColor, false, filled));
 
@@ -119,7 +111,7 @@ void FallOutFieldDraw::draw() const {
     mask.init(NEBULA_SHADER_FRAME_DEPTH, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false, NEBULA_CULL_NONE);
     mask.mState.color_write = 0;
     mask.mState.alpha_write = 1;
-    mask.constants[0] = _C ? 1.0f : 2.0f;
+    mask.constants[0] = mFillInsideVolume ? 1.0f : 2.0f;
     mask.setTexture(0, mDepthKey);
     ImageEffectLocalUtil::drawQuad(mask);
     Frame::targetEnd(mMask->mImage, NEBULA_TARGET_ALPHA);

@@ -30,5 +30,5 @@ public:
     bool updateCoolDown(s32);
     bool updateAttackHit();
 
-    f32 _10;
+    f32 mSide;
 };

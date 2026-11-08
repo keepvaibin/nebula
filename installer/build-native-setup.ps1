@@ -72,6 +72,8 @@ try {
     $cooker = Join-Path $targetDir 'release\nebula_import.dll'
 
     $publicKey = (Get-Content -LiteralPath (Join-Path $installer 'release-public-key.xml') -Raw).Trim()
+    # The store version the importer writes and the game reads (one file for all of them).
+    $storeVersion = [uint32](Get-Content -LiteralPath (Join-Path $repo 'runtime\include\galaxy\store_version.inc') -Raw).Trim()
     $buildInfoPath = Join-Path $work 'BuildInfo.cs'
     [IO.File]::WriteAllText($buildInfoPath, @"
 namespace Nebula
@@ -82,6 +84,7 @@ namespace Nebula
         public const string Commit = "$commit";
         public const string Repository = "$Repository";
         public const string ReleasePublicKeyXml = "$($publicKey.Replace('"', '\"'))";
+        public const uint StoreVersion = $storeVersion;
     }
 }
 "@, (New-Object Text.UTF8Encoding $false))

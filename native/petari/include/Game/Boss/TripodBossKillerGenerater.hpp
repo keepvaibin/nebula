@@ -39,10 +39,10 @@ public:
     void exeRestart();
     void exeBreak();
 
-    Pos3f _E4;
+    Pos3f mLocalMtx;
     HomingKiller* mKiller;
     f32 mCanShootSettingPlayerDistance;
     s32 mActiveLabel;
     bool mHasCollision;
-    bool _121;
+    bool mIsWaitPlayerAway;
 };

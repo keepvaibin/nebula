@@ -14,7 +14,7 @@ public:
     Vec3f mPosition;          ///< The position of the NamePos.
     Vec3f mRotation;         ///< The rotation of the NamePos.
     PlacementLink* mLinkInfo;  ///< The information to link this NamePos to other objects.
-    const NameObj* _20;
+    const NameObj* mRegisteredObj;
 };
 
 /// @brief Class that contains the array of NamePosInfo instances.

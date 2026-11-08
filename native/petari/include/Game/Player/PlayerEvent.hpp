@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include "Game/Util/HashUtil.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class EventSequence;
 
@@ -90,11 +90,16 @@ public:
 
     template < typename T >
     void addEventSequence(const char* pName) {
-        mHashTable->add(pName, reinterpret_cast< HashSortValue >(new T()), false);
+        mNames.add(pName, mNumSequences);
+        mSequences[mNumSequences++] = new T();
     }
 
 private:
-    HashSortTable* mHashTable;
+    static const u32 cSequenceNum = 6;
+
+    MR::NameIndex mNames;  // an event's name to its index in mSequences
+    EventSequence* mSequences[cSequenceNum];
+    u32 mNumSequences;
     EventSequence* mSequence;
     u16 mSequenceFrame;
 };

@@ -354,9 +354,7 @@ int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
 
     if (forward) {
         for (int i = 0; i < mNumRailParts; i++) {
-            // this matches but is probably not written like this.
-            f32 pointCoord = mPointCoords[i];
-            if (!(pointCoord <= pos)) {
+            if (pos < mPointCoords[i]) {
                 return i;
             }
         }

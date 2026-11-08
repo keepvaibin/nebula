@@ -1983,7 +1983,7 @@ bool MarioSwim::getWaterAreaInfo(WaterInfo* pInfo, const Vec3f& rPos, Vec2f* pOu
 
     if (pOutVec != nullptr) {
         pOutVec->x = -pInfo->mCamWaterDepth;
-        pOutVec->y = pInfo->_4;
+        pOutVec->y = pInfo->mDepth;
     }
 
     if (mIsOnSurface) {

@@ -19,7 +19,6 @@ namespace {
     static const s32 sBreakStopStep = 4;
     static const s32 sBreakStopFrame = 30;
     static const f32 sBreakStopDistance = 1000.0f;
-    // static const f32 sStartEventForceJumpRange = _;
     static const f32 sStartEventForceJumpPlayerPower = 40.0f;
 };  // namespace
 

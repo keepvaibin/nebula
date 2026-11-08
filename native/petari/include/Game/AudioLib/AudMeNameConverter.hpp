@@ -1,22 +1,15 @@
 #pragma once
 
 #include "Game/Util/SingletonHolder.hpp"
-#include "Game/Sound/Sound.hpp"
+#include "Game/Util/NameIndex.hpp"
 
-struct AudMeNameData {
-    const char* mName;
-    u32 mID;
-    u32 mHash;
-};
-
+// The rhythm system's ME names to their indices in its parameter table.
 class AudMeNameConverter : public AudSingletonHolder< AudMeNameConverter > {
 public:
-    /// @brief Creates a new `AudMeNameConverter`.
     AudMeNameConverter();
 
     void init();
     u32 getMeID(const char*) const;
 
-    u32 mNumEntries;
-    AudMeNameData* mEntries;
+    MR::NameIndex mIndex;
 };

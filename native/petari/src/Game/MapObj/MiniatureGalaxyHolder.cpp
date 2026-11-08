@@ -14,21 +14,21 @@ namespace {
 };  // namespace
 
 MiniatureGalaxyHolder::MiniatureGalaxyHolder()
-    : LiveActor("ミニチュアギャラクシー保持"), mMiniatureGalaxyGroup(), _90(), mCometGalaxy(), mCometID(-1), _9C() {
+    : LiveActor("ミニチュアギャラクシー保持"), mMiniatureGalaxyGroup(), mIsRegistered(), mCometGalaxy(), mCometID(-1) {
     mMiniatureGalaxyGroup = new LiveActorGroup("ミニチュアギャラクシーグループ", 16);
 }
 
 void MiniatureGalaxyHolder::registerActor(LiveActor* pActor, const TableIter& rIter) {
     mMiniatureGalaxyGroup->registerActor(pActor);
 
-    if (_90) {
+    if (mIsRegistered) {
         return;
     }
 
     MR::tryRegisterDemoCast(this, rIter);
     MR::registerDemoActionFunctor(this, MR::Functor(this, &MiniatureGalaxyHolder::killAllMiniatureGalaxy), "飛び出す");
 
-    _90 = true;
+    mIsRegistered = true;
 }
 
 void MiniatureGalaxyHolder::init(const TableIter& rIter) {
@@ -97,7 +97,6 @@ s32 MiniatureGalaxyHolder::calcIndex(const LiveActor* pActor) const {
 void MiniatureGalaxyHolder::updateCometStatus() {
     mCometGalaxy = nullptr;
     mCometID = -1;
-    _9C = 0;
 
     for (int i = 0; i < mMiniatureGalaxyGroup->getObjNum(); i++) {
         MiniatureGalaxy* miniatureGalaxy = static_cast< MiniatureGalaxy* >(mMiniatureGalaxyGroup->getActor(i));

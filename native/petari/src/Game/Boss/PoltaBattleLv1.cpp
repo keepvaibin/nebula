@@ -23,11 +23,11 @@ namespace NrvPoltaBattleLv1 {
     NEW_NERVE(PoltaBattleLv1NrvDamageCore, PoltaBattleLv1, DamageCore);
 };  // namespace NrvPoltaBattleLv1
 
-PoltaBattleLv1::PoltaBattleLv1(Polta* pPolta) : PoltaActionBase("ポルタ1戦目", pPolta), mPoltaHealth(3), _24() {
+PoltaBattleLv1::PoltaBattleLv1(Polta* pPolta) : PoltaActionBase("ポルタ1戦目", pPolta), mPoltaHealth(3), mAttackIndex() {
     initNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvWait));
     mStateStagger = new PoltaStateStagger(pPolta);
     mStateGroundRockAttack = new PoltaStateGroundRockAttack(pPolta);
-    mStateGroundRockAttack->_10 = 4;
+    mStateGroundRockAttack->mRockNum = 4;
     mStateGenerateRock = new PoltaStateGenerateRock(pPolta);
     mStateGenerateRock->mMaxIndexIntoPattern = 5;
     mStateGenerateRock->mEndDelayStep = 120;
@@ -44,7 +44,7 @@ void PoltaBattleLv1::appear() {
     PoltaFunction::killLeftArm(getHost());
     PoltaFunction::killRightArm(getHost());
     setNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvWait));
-    _24 = 0;
+    mAttackIndex = 0;
     PoltaFunction::emitEffectShadow(getHost());
 }
 
@@ -123,12 +123,12 @@ bool PoltaBattleLv1::isEnableSensor(const HitSensor* pSensor) const {
 void PoltaBattleLv1::exeWait() {
     updateWait();
     if (MR::isGreaterStep(this, 90)) {
-        if (_24 == 2 && PoltaFunction::getCountDeadGroundRock(getHost()) >= 4) {
+        if (mAttackIndex == 2 && PoltaFunction::getCountDeadGroundRock(getHost()) >= 4) {
             setNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvGenerateGroundRock));
         } else {
             setNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvGenerateRock));
         }
-        _24 = (_24 + 4) % 3;
+        mAttackIndex = (mAttackIndex + 4) % 3;
     }
 }
 

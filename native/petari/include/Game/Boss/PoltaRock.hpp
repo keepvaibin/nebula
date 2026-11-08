@@ -34,8 +34,8 @@ public:
     }
 
     Polta* mOwner;
-    Quat4f _90;
-    Vec3f _A0;
-    Vec3f _AC;
+    Quat4f mRollQuat;
+    Vec3f mChaseDir;
+    Vec3f mLocalPos;
     s32 mType;
 };

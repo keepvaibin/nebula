@@ -163,7 +163,7 @@ void GhostPlayer::init(const TableIter& rIter) {
         initModelManagerWithAnm("GhostMario", nullptr, false);
     }
 
-    initEffectKeeper(5, "GhostMario", false);
+    initEffectKeeper(5, "GhostMario");
     MR::connectToScene(this, MR::MovementType_Player, MR::CalcAnimType_Player, MR::DrawBufferType_None, MR::DrawType_Player);
     MR::initDefaultPos(this, rIter);
     mStartPos = mPosition;

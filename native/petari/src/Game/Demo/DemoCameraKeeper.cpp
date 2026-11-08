@@ -17,45 +17,45 @@ namespace {
 
 DemoCameraInfo::DemoCameraInfo()
     : mPartName(), mCameraTargetName(), mCameraTargetCastID(-1), mAnimCameraName(), mAnimCameraStartFrame(-1), mAnimCameraEndFrame(-1),
-      mIsContinuous(), _1C(), _20(), _24() {
+      mIsContinuous(), mCameraName(), mCameraInfo(), mTargetActor() {
 }
 
 void DemoCameraKeeper::initCast(LiveActor* pActor, const TableIter& rIter) {
-    for (s32 i = 0; i < _4; i++) {
-        DemoCameraInfo* curInfo = &_8[i];
+    for (s32 i = 0; i < mNumInfos; i++) {
+        DemoCameraInfo* curInfo = &mInfos[i];
         if (!DemoFunction::isTargetDemoCast(pActor, rIter, curInfo->mCameraTargetName, curInfo->mCameraTargetCastID)) {
             continue;
         }
 
-        curInfo->_24 = pActor;
+        curInfo->mTargetActor = pActor;
         initActorCamera(curInfo, rIter);
     }
 }
 
 void DemoCameraKeeper::start() {
-    _C = 0;
+    mCurrentIndex = 0;
 }
 
 void DemoCameraKeeper::update() {
-    if (_C < 0 || _4 <= _C) {
+    if (mCurrentIndex < 0 || mNumInfos <= mCurrentIndex) {
         return;
     }
 
-    for (s32 i = 0; i < _4; i++) {
-        DemoCameraInfo* curInfo = &_8[i];
+    for (s32 i = 0; i < mNumInfos; i++) {
+        DemoCameraInfo* curInfo = &mInfos[i];
         executeType(curInfo);
     }
 }
 
 void DemoCameraKeeper::end() {
     endCurrentCamera();
-    _C = -1;
+    mCurrentIndex = -1;
 }
 
 void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const TableIter& rIter) {
     ActorCameraInfo* cameraInfo = new ActorCameraInfo(-1, MR::getPlacedZoneId(rIter));
-    pInfo->_20 = cameraInfo;
-    MR::declareEventCamera(cameraInfo, pInfo->_1C);
+    pInfo->mCameraInfo = cameraInfo;
+    MR::declareEventCamera(cameraInfo, pInfo->mCameraName);
     if (pInfo->mAnimCameraName == nullptr) {
         return;
     }
@@ -63,19 +63,19 @@ void DemoCameraKeeper::initActorCamera(DemoCameraInfo* pInfo, const TableIter& r
     MR::FormattedName animCameraName;
     DemoCameraFunction::makeAnimCameraName(animCameraName, pInfo);
 
-    MR::initAnimCamera(pInfo->_24, pInfo->_20, animCameraName.c_str());
+    MR::initAnimCamera(pInfo->mTargetActor, pInfo->mCameraInfo, animCameraName.c_str());
 }
 
 void DemoCameraKeeper::executeType(const DemoCameraInfo* pInfo) {
     // A row naming a cast nobody plays: it never got a camera.
-    if (pInfo->_20 == nullptr) {
+    if (pInfo->mCameraInfo == nullptr) {
         return;
     }
 
     if (MR::isDemoPartFirstStep(pInfo->mPartName)) {
         endCurrentCamera();
-        _10 = pInfo;
-        executeFirst(_10);
+        mCurrentInfo = pInfo;
+        executeFirst(mCurrentInfo);
         return;
     }
 
@@ -83,24 +83,24 @@ void DemoCameraKeeper::executeType(const DemoCameraInfo* pInfo) {
         return;
     }
 
-    executeLast(_10);
-    _C++;
+    executeLast(mCurrentInfo);
+    mCurrentIndex++;
 }
 
 void DemoCameraKeeper::executeFirst(const DemoCameraInfo* pInfo) {
     MR::FormattedName animCameraName;
 
-    if (pInfo->_24 != nullptr) {
+    if (pInfo->mTargetActor != nullptr) {
         if (pInfo->mAnimCameraName != nullptr) {
             MR::removeExtensionString(animCameraName, pInfo->mAnimCameraName);
-            MR::startAnimCameraTargetSelf(pInfo->_24, pInfo->_20, animCameraName.c_str(), pInfo->mAnimCameraStartFrame, 1.0f);
+            MR::startAnimCameraTargetSelf(pInfo->mTargetActor, pInfo->mCameraInfo, animCameraName.c_str(), pInfo->mAnimCameraStartFrame, 1.0f);
         } else {
-            MR::startEventCamera(pInfo->_20, pInfo->_1C, CameraTargetArg(pInfo->_24));
+            MR::startEventCamera(pInfo->mCameraInfo, pInfo->mCameraName, CameraTargetArg(pInfo->mTargetActor));
         }
     } else if (DemoCameraFunction::isCameraTargetMario(pInfo)) {
-        MR::startEventCameraTargetPlayer(pInfo->_20, pInfo->_1C);
+        MR::startEventCameraTargetPlayer(pInfo->mCameraInfo, pInfo->mCameraName);
     } else {
-        MR::startEventCameraNoTarget(pInfo->_20, pInfo->_1C);
+        MR::startEventCameraNoTarget(pInfo->mCameraInfo, pInfo->mCameraName);
     }
 }
 
@@ -111,27 +111,27 @@ void DemoCameraKeeper::executeLast(const DemoCameraInfo* pInfo) {
     }
 
     MR::removeExtensionString(animCameraName, pInfo->mAnimCameraName);
-    MR::endAnimCamera(pInfo->_24, pInfo->_20, animCameraName.c_str(), pInfo->mAnimCameraEndFrame, true);
+    MR::endAnimCamera(pInfo->mTargetActor, pInfo->mCameraInfo, animCameraName.c_str(), pInfo->mAnimCameraEndFrame, true);
 }
 
 void DemoCameraKeeper::endCurrentCamera() {
-    if (_10 != nullptr) {
-        MR::endEventCamera(_10->_20, _10->_1C, _10->mIsContinuous != false);
+    if (mCurrentInfo != nullptr) {
+        MR::endEventCamera(mCurrentInfo->mCameraInfo, mCurrentInfo->mCameraName, mCurrentInfo->mIsContinuous != false);
     }
 
-    _10 = nullptr;
+    mCurrentInfo = nullptr;
 }
 
-DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIter) : mExecutor(pExecutor), _4(), _8(), _C(-1), _10() {
+DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIter) : mExecutor(pExecutor), mNumInfos(), mInfos(), mCurrentIndex(-1), mCurrentInfo() {
     Table* map = nullptr;
-    _4 = DemoFunction::createSheetParser(mExecutor, ::sSheetName, &map);
+    mNumInfos = DemoFunction::createSheetParser(mExecutor, ::sSheetName, &map);
 
-    _8 = new DemoCameraInfo[_4];
+    mInfos = new DemoCameraInfo[mNumInfos];
 
     s32 executorNameLen = strlen(mExecutor->mName);
 
-    for (s32 i = 0; i < _4; i++) {
-        DemoCameraInfo* curInfo = &_8[i];
+    for (s32 i = 0; i < mNumInfos; i++) {
+        DemoCameraInfo* curInfo = &mInfos[i];
         map->getValue< const char* >(i, "PartName", &curInfo->mPartName);
         map->getValue< const char* >(i, "CameraTargetName", &curInfo->mCameraTargetName);
         map->getValue< s32 >(i, "CameraTargetCastID", &curInfo->mCameraTargetCastID);
@@ -151,7 +151,7 @@ DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIt
 
         nebula_snprintf(aninName, animNameLen, "%s[%s]", mExecutor->mName, curInfo->mPartName);
 
-        curInfo->_1C = aninName;
+        curInfo->mCameraName = aninName;
         if (curInfo->mCameraTargetName == nullptr || DemoCameraFunction::isCameraTargetMario(curInfo)) {
             initActorCamera(curInfo, rIter);
         }

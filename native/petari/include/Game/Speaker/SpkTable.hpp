@@ -1,20 +1,20 @@
 #pragma once
 
+#include <nebula_types.h>
 
-// The sound table in host order, as the importer cooks it (native_data.rs speaker).
+// A sound of the speaker's table as the importer cooks it (native_data.rs speaker).
 struct SpkParameters {
     u16 mWaveID;
-    u8 _2;
-    u8 mVolume;
     u16 mReleaseTime;
-    u16 _padding;  // (?)
+    u8 mVolume;
 };
+static_assert(sizeof(SpkParameters) == 6, "the cook's speaker record");
 
+// The cooked table: the count, the record and name table offsets from the file's start.
 struct SpkFile {
-    u32 count;
-    u32 parametersOffset;
-    u32 namesOffset;
-    u32 initialized;
+    u32 mCount;
+    u32 mParametersOffset;
+    u32 mNamesOffset;
 };
 
 class SpkTable {
@@ -23,13 +23,13 @@ public:
 
     void setResource(void*);
 
-    SpkParameters* getParameters(int idx) {
+    const SpkParameters* getParameters(int idx) const {
         return &mParameters[idx];
     }
 
     bool mInitialized;
     s32 mResourceCount;
-    SpkParameters* mParameters;
+    const SpkParameters* mParameters;
     // The file and its name offsets from the file's start.
     const u8* mBase;
     const u32* mNameOffsets;

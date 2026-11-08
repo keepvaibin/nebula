@@ -30,7 +30,7 @@ public:
     void calcMoveVelocity();
     bool tryStop();
 
-    Vec3f _C4;
-    Vec3f _D0;
-    Pos3f _DC;
+    Vec3f mLowerPos;
+    Vec3f mUpperPos;
+    Pos3f mEffectMtx;
 };

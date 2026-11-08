@@ -45,7 +45,7 @@ namespace NrvAstroDomeGalaxySelector {
 };  // namespace NrvAstroDomeGalaxySelector
 
 AstroDomeGalaxySelector::AstroDomeGalaxySelector(const char* pName)
-    : LiveActor(pName), mCameraController(), mBackButton(), mInfo(), mConfirmLayout(), _9C() {
+    : LiveActor(pName), mCameraController(), mBackButton(), mInfo(), mConfirmLayout(), mIsBackButtonPointed() {
 }
 
 void AstroDomeGalaxySelector::init(const TableIter& rIter) {
@@ -181,13 +181,13 @@ void AstroDomeGalaxySelector::exeGalaxySelect() {
         if (!SphereSelectorFunction::isHandleHolding() && mBackButton->isPointing()) {
             SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(2));
 
-            if (!_9C) {
+            if (!mIsBackButtonPointed) {
                 MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
             }
 
-            _9C = true;
+            mIsBackButtonPointed = true;
         } else {
-            _9C = false;
+            mIsBackButtonPointed = false;
         }
 
         if (SphereSelectorFunction::isPointingTarget(this)) {

@@ -69,7 +69,7 @@ void Koopa::init(const TableIter& rIter) {
     mSensorCtrl->initSensor();
 
     initBinder(200.0f, 200.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(16, false);
 
     mJointCtrl = new ActorJointCtrl(this);

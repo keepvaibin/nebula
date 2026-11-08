@@ -12,6 +12,6 @@ public:
     u32 mMoveType;
     const char* mStageName;
     s32 mScenarioNo;
-    s32 _C;
+    s32 mSelectedScenarioNo;
     PlacementId mIDInfo;
 };

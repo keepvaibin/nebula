@@ -32,8 +32,8 @@ public:
     DemoTimePartInfo* mMainPartInfos;
     DemoTimePartInfo* mSubPartInfos;
     s32 mNumPartInfos;
-    s32 _10;
+    s32 mElapsedStep;
     s32 mCurrentStep;
-    s32 _18;
+    s32 mPartIndex;
     bool mIsPaused;
 };

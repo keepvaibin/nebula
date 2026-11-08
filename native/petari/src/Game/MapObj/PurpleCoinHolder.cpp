@@ -7,7 +7,6 @@
 
 namespace {
     static const s32 sMaxPurpleCoin = 256;
-    // static const s32 sGetIncrementCount = _;
 };  // namespace
 
 PurpleCoinHolder::PurpleCoinHolder() : DeriveActorGroup< Coin >("パープルコイン管理", ::sMaxPurpleCoin), mStarter() {

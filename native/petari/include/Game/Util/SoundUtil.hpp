@@ -118,8 +118,8 @@ namespace MR {
     void startCSSound2P(const char*, const char*);
     void startSpinHitSound(const LiveActor*);
     void startBlowHitSound(const LiveActor*);
-    void startDPDHitSound();
-    void startDPDFreezeLevelSound(const LiveActor*);
+    void startPointerHitSound();
+    void startPointerFreezeLevelSound(const LiveActor*);
     void start2PJumpAssistSound();
     void start2PJumpAssistJustSound();
     void start2PAttackAssistSound();

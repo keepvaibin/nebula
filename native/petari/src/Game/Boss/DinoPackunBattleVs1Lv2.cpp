@@ -23,7 +23,7 @@ namespace NrvDinoPackunBattleVs1Lv2 {
 
 DinoPackunBattleVs1Lv2::DinoPackunBattleVs1Lv2(DinoPackun* pPackun) : DinoPackunAction("ラスト", pPackun) {
     mStateDamage = nullptr;
-    _18 = 1;
+    mIsStartFromDemo = 1;
     initNerve(GET_NERVE(DinoPackunBattleVs1Lv2, DinoPackunBattleVs1Lv2NrvStart));
     mStateDamage = new DinoPackunStateDamage(pPackun);
     mStateDamage->setDamageNormal();
@@ -36,7 +36,7 @@ void DinoPackunBattleVs1Lv2::appear() {
 
     mIsDead = false;
 
-    if (_18) {
+    if (mIsStartFromDemo) {
         setNerve(GET_NERVE(DinoPackunBattleVs1Lv2, DinoPackunBattleVs1Lv2NrvStart));
     } else {
         setNerve(GET_NERVE(DinoPackunBattleVs1Lv2, DinoPackunBattleVs1Lv2NrvFind));
@@ -111,15 +111,15 @@ void DinoPackunBattleVs1Lv2::setLastBattle() {
 }
 
 void DinoPackunBattleVs1Lv2::setStartFromDemo() {
-    _18 = true;
+    mIsStartFromDemo = true;
 }
 
 void DinoPackunBattleVs1Lv2::setStartContinueBattle() {
-    _18 = false;
+    mIsStartFromDemo = false;
 }
 
 bool DinoPackunBattleVs1Lv2::tryFind() {
-    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1300.0f, 90.0f)) {
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, 1300.0f, 90.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs1Lv2, DinoPackunBattleVs1Lv2NrvFind));
         return true;
     }
@@ -146,8 +146,8 @@ void DinoPackunBattleVs1Lv2::exeTurn() {
 
     Vec3f side;
     MR::calcSideVec(&side, getHost());
-    MR::turnDirectionDegree(getHost(), &getHost()->_E8, side * _10, 1.0f);
-    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, 1.3f);
+    MR::turnDirectionDegree(getHost(), &getHost()->mFront, side * mSide, 1.0f);
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, 1.3f);
     getHost()->updateRunVelocity();
     getHost()->updateFootPrintNerve(getNerveStep(), 50);
 

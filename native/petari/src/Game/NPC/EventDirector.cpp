@@ -4,11 +4,10 @@
 #include "Game/NPC/CometEventKeeper.hpp"
 #include "Game/NPC/PowerStarEventKeeper.hpp"
 #include "Game/NPC/StageStateKeeper.hpp"
-#include "Game/NPC/TimeAttackEventKeeper.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 
 EventDirector::EventDirector()
-    : NameObj("イベント指揮"), mPowerStarEventKeeper(), mStageStateKeeper(), mPowerStarHolder(), mCometEventKeeper(), mTimeAttackEventKeeper() {
+    : NameObj("イベント指揮"), mPowerStarEventKeeper(), mStageStateKeeper(), mPowerStarHolder(), mCometEventKeeper() {
 }
 
 void EventDirector::init(const TableIter& rIter) {
@@ -18,12 +17,10 @@ void EventDirector::init(const TableIter& rIter) {
     mPowerStarHolder->initWithoutIter();
     mCometEventKeeper = new CometEventKeeper();
     mCometEventKeeper->init();
-    mTimeAttackEventKeeper = new TimeAttackEventKeeper();
-    mTimeAttackEventKeeper->init(mCometEventKeeper->isStartTimeLimitEvent());
 }
 
-void MR::declareEventPowerStar(const char* pParam1, s32 param2, bool param3) {
-    EventFunction::getPowerStarEventKeeper()->declareStar(pParam1, "ゾーン無し", param2, param3);
+void MR::declareEventPowerStar(const char* pDemoName, s32 starId, bool killInDemo) {
+    EventFunction::getPowerStarEventKeeper()->declareStar(pDemoName, starId, killInDemo);
 }
 
 PowerStarEventKeeper* EventFunction::getPowerStarEventKeeper() {
@@ -42,22 +39,16 @@ CometEventKeeper* EventFunction::getCometEventKeeper() {
     return MR::getSceneObj< EventDirector >(SceneObj_EventDirector)->mCometEventKeeper;
 }
 
-TimeAttackEventKeeper* EventFunction::getTimeAttackEventKeeper() {
-    return MR::getSceneObj< EventDirector >(SceneObj_EventDirector)->mTimeAttackEventKeeper;
-}
-
 bool EventFunction::isStartCometEvent(const char* pParam1) {
     return getCometEventKeeper()->isStartEvent(pParam1);
 }
 
 void EventFunction::startCometEvent() {
     getCometEventKeeper()->startCometEventIfExist();
-    getTimeAttackEventKeeper()->startEventIfExecute();
 }
 
 void EventFunction::endCometEvent() {
     getCometEventKeeper()->endCometEvent();
-    getTimeAttackEventKeeper()->endEvent();
 }
 
 namespace MR {
@@ -65,10 +56,8 @@ namespace MR {
         EventFunction::getPowerStarEventKeeper()->initStarInfoTableAfterPlacement();
     }
 
-    void declareEventPowerStar(const NameObj* pParam1, s32 param2, bool param3) {
-        const char* pVar1 = pParam1->mName;
-
-        EventFunction::getPowerStarEventKeeper()->declareStar(pVar1, nullptr, param2, param3);
+    void declareEventPowerStar(const NameObj* pDemoObj, s32 starId, bool killInDemo) {
+        EventFunction::getPowerStarEventKeeper()->declareStar(pDemoObj->mName, starId, killInDemo);
     }
 
     bool isSuccessEventPowerStar(const char* pParam1, s32 param2) {

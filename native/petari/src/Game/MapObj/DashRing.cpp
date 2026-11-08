@@ -72,7 +72,7 @@ void DashRing::initCommon(const TableIter& rIter, const char* pName) {
     }
 
     initSound(3, false);
-    initEffectKeeper(3, nullptr, false);
+    initEffectKeeper(3, nullptr);
 
     appear();
 

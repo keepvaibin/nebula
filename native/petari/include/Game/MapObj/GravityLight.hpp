@@ -29,5 +29,4 @@ public:
     MapPartsRotator* mMapPartsRotator;
     f32 mRadius;
     Vec3f mCenter;
-    bool _D8;
 };

@@ -18,7 +18,6 @@ namespace {
     static const s32 sFlyLectureWaitStep = 120;
     static const s32 sHipLectureWaitStep = 120;
     static const f32 sFlyMoveSpeed = 5.0f;
-    // static const f32 sMessageOffsetY = _;
 };  // namespace
 
 namespace NrvHoneyBee {
@@ -31,9 +30,9 @@ namespace NrvHoneyBee {
     NEW_NERVE(HoneyBeeNrvFlyLectureB, HoneyBee, FlyLectureB);
 };  // namespace NrvHoneyBee
 
-HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), _15C(-1), mArg0(), _1A0() {
-    _160.identity();
-    _190.zero();
+HoneyBee::HoneyBee(const char* pName) : NPCActor(pName), mRailPointNo(-1), mArg0(), mFloatOffset() {
+    mTalkMtx.identity();
+    mClippingCenter.zero();
 }
 
 void HoneyBee::init(const TableIter& rIter) {
@@ -41,26 +40,26 @@ void HoneyBee::init(const TableIter& rIter) {
     NPCActorCaps caps = "HoneyBee";
     caps.setDefault();
     caps.mBinder = false;
-    caps._6C = "Center";
+    caps.mPointerJoint = "Center";
     caps.mSensorJoint = "Center";
     caps.mSensorSize = 70.0f;
     caps.mSensorOffset.x = 0.0f;
     caps.mSensorOffset.y = -20.0f;
     caps.mSensorOffset.z = 0.0f;
     caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvWait);
-    caps._70 = "Center";
+    caps.mScaleJoint = "Center";
 
     s32 arg0 = 0;
     MR::getPlacementArg0NoInit(rIter, &arg0);
     mArg0 = arg0;
 
     setDefaultsParam();
-    _128 = 0;
-    _12C = 450.0f;
+    mUseReactionActions = 0;
+    mSwingReactDist = 450.0f;
 
     switch (mArg0) {
     case InitAction_Wait:
-        _128 = 1;
+        mUseReactionActions = 1;
         break;
     case InitAction_JumpLecture:
         caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvJumpLecture);
@@ -76,23 +75,23 @@ void HoneyBee::init(const TableIter& rIter) {
         break;
     case InitAction_Gatekeeper:
         mParam.setSingleAction("GatekeeperWait");
-        _128 = 1;
+        mUseReactionActions = 1;
         break;
     case InitAction_DropLecture:
         caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvDropLecture);
         break;
     case InitAction_Flustered:
         mParam.setSingleAction("Flustered");
-        _128 = 1;
+        mUseReactionActions = 1;
         break;
     case InitAction_FlyLectureA:
         caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvFlyLectureA);
-        caps.mTalkMtx = _160;
+        caps.mTalkMtx = mTalkMtx;
         caps.mMessageOffset.zero();
         break;
     case InitAction_FlyLectureB:
         caps.mWaitNerve = GET_NERVE(HoneyBee, HoneyBeeNrvFlyLectureB);
-        caps.mTalkMtx = _160;
+        caps.mTalkMtx = mTalkMtx;
         caps.mMessageOffset.zero();
         break;
     default:
@@ -106,12 +105,12 @@ void HoneyBee::init(const TableIter& rIter) {
     case InitAction_FlyLectureA:
     case InitAction_FlyLectureB:
         radius = 0.0f;
-        _160.set(getBaseMtx());
-        MR::extractMtxTrans(_160, &_190);
+        mTalkMtx.set(getBaseMtx());
+        MR::extractMtxTrans(mTalkMtx, &mClippingCenter);
         MR::calcModelBoundingRadius(&radius, this);
         MR::setShadowDropPositionAtJoint(this, nullptr, "Center", Vec3f(0.0f, 0.0f, 0.0f));
         MR::onCalcShadow(this, nullptr);
-        MR::setClippingTypeSphere(this, radius, &_190);
+        MR::setClippingTypeSphere(this, radius, &mClippingCenter);
         mLodCtrl->invalidate();
         break;
     }
@@ -122,36 +121,36 @@ void HoneyBee::init(const TableIter& rIter) {
 }
 
 void HoneyBee::calcAndSetBaseMtx() {
-    MR::calcAndSetFloatBaseMtx(this, _1A0);
+    MR::calcAndSetFloatBaseMtx(this, mFloatOffset);
 }
 
 void HoneyBee::control() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_HONEYBEE_TRAMPLED");
     }
 
     if (NPCActor::isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_HONEYBEE_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_HONEYBEE_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_HONEYBEE_STAR_PIECE_HIT");
     }
 
     NPCActor::control();
-    f32 a = _160[1][3] - 80.0f;
-    _160.set(MR::getJointMtx(this, "Center"));
-    MR::extractMtxTrans(_160, &_190);
-    _160[1][3] = 80.0f + (((9.0f * a) + _160[1][3]) / 10.0f);
+    f32 a = mTalkMtx[1][3] - 80.0f;
+    mTalkMtx.set(MR::getJointMtx(this, "Center"));
+    MR::extractMtxTrans(mTalkMtx, &mClippingCenter);
+    mTalkMtx[1][3] = 80.0f + (((9.0f * a) + mTalkMtx[1][3]) / 10.0f);
 
     if (mArg0 != InitAction_Sleep && mArg0 != InitAction_Stick) {
-        _1A0 = MR::calcFloatOffset(this, _1A0, 120.0f);
+        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, 120.0f);
     }
 }
 
@@ -178,10 +177,10 @@ void HoneyBee::exeFly() {
 
     MR::moveCoordAndFollowTrans(this, ::sFlyMoveSpeed);
 
-    if (_15C != MR::getCurrentRailPointNo(this)) {
+    if (mRailPointNo != MR::getCurrentRailPointNo(this)) {
         s32 arg0 = 0;
-        _15C = MR::getCurrentRailPointNo(this);
-        MR::getRailPointArg0WithInit(this, _15C, &arg0);
+        mRailPointNo = MR::getCurrentRailPointNo(this);
+        MR::getRailPointArg0WithInit(this, mRailPointNo, &arg0);
 
         if (arg0 == 0) {
             if (!MR::isBckPlaying(this, "WalkWait")) {

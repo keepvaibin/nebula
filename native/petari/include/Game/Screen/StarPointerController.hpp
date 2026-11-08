@@ -2,9 +2,9 @@
 
 #include <nebula_geometry.hpp>
 
-class DpdInfo {
+class PointerInfo {
 public:
-    DpdInfo();
+    PointerInfo();
 
     Vec2f mPos;
     bool mInScreen;
@@ -23,7 +23,7 @@ public:
     void storeDataFromCallback(const f32*, const f32*);
     void storePastPointingData();
     void calcPastPointingPosOnScreen(Vec2f*, s32) const;
-    void updateDpdInfo();
+    void updatePointerInfo();
     void updateAdditionalInfo();
 
     void forcePointerOut();
@@ -43,8 +43,8 @@ public:
     }
 
     s32 mPadChannel;
-    DpdInfo mPastInfo;
-    DpdInfo mInfo;
+    PointerInfo mPastInfo;
+    PointerInfo mInfo;
     Vec2f mScreenPos;
     s32 mOutScreenTime;
     Vec2f* mPastPosition;

@@ -20,18 +20,17 @@ public:
     void addAccelOperate(Vec3f*, const Vec3f&);
     void addAccelToCenter();
     void attenuateVelocity();
-    void calcOperatePowerByDPD(Vec3f*) const;
+    void calcOperatePowerByPointer(Vec3f*) const;
 
     void exeWait();
 
-    Vec3f _8C;
-    Vec3f _98;
-    Vec3f _A4;
+    Vec3f mCenter;
+    Vec3f mOffset;
     Vec3f mAccelerate;
     Vec3f mDirection;
-    Vec3f _C8;
+    Vec3f mPointerPos;
     f32 mRadiusRate;
-    f32 _D8;
-    f32 _DC;
-    s32 _E0;
+    f32 mOffsetLength;
+    f32 mOffsetRate;
+    s32 mOperateState;
 };

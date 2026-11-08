@@ -16,8 +16,6 @@ namespace {
     static const f32 sBindYOffset = 60.0f;
     static const f32 sUpVecBlendRate = 0.1f;
     static const f32 sFrontVecBlendRate = 0.2f;
-    // static const f32 sStarPieceHitAccelH = _;
-    // static const f32 sStarPieceHitAccelV = _;
     static const f32 sPressureRange = 600.0f;
     static const f32 sNormalAccel = 0.7f;
     static const f32 sPressureAccel = 1.5f;
@@ -54,7 +52,7 @@ void TrickRabbitFreeRun::init(const TableIter& rIter) {
 
     mFootPrint = TrickRabbitUtil::createRabbitFootPrint(this);
 
-    initEffectKeeper(0, nullptr, 0);
+    initEffectKeeper(0, nullptr);
     MR::onEmitEffectSyncClipping(this, "Light");
     MR::onForceDeleteEffectSyncClipping(this, "Light");
     initSensor();
@@ -189,7 +187,7 @@ bool TrickRabbitFreeRun::requestCaught() {
 void TrickRabbitFreeRun::exeWaitStart() {
     if (MR::isFirstStep(this)) {
         mStateWaitStart->setTalkActionName("StartEvent");
-        mStateWaitStart->_1C = true;
+        mStateWaitStart->mIsKillAfterTalk = true;
     }
 
     if (MR::updateActorState(this, mStateWaitStart)) {
@@ -208,7 +206,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
         MR::startEventBGM(MR::EventBgmID_Chase);
     }
 
-    MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam._0, ::sStartAwayParam._4, ::sStartAwayParam._8, ::sStartAwayParam._C);
+    MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam);
 
     if (MR::checkPassBckFrame(this, 3.0f)) {
         startJumpSound();
@@ -279,7 +277,7 @@ void TrickRabbitFreeRun::exePowerStarDemo() {
 void TrickRabbitFreeRun::exeGiveUp() {
     if (MR::isFirstStep(this)) {
         mStateWaitStart->setTalkActionName("GiveUpTalk");
-        mStateWaitStart->_1C = false;
+        mStateWaitStart->mIsKillAfterTalk = false;
     }
 
     MR::updateActorState(this, mStateWaitStart);

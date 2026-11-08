@@ -23,7 +23,7 @@ ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupDa
 }
 
 void ViewGroupCtrl::initActorInfo(ClippingActorInfo* pInfo, s32 groupID) {
-    pInfo->_12 = groupID;
+    pInfo->mViewGroupId = groupID;
 
     if (groupID >= mMaxViewGroupId) {
         mMaxViewGroupId = groupID + 1;
@@ -31,20 +31,15 @@ void ViewGroupCtrl::initActorInfo(ClippingActorInfo* pInfo, s32 groupID) {
 }
 
 void ViewGroupCtrl::initViewGroup(ClippingActorInfoList* pList) {
-    for (s32 i = 0; i < pList->_4; i++) {
-        s32 id = pList->mClippingActorList[i]->_12;
-
-        if (id < 0) {
-            id = mMaxViewGroupId;
-        }
-
-        pList->mClippingActorList[i]->_14 = &mViewGroupData[id];
+    for (s32 i = 0; i < pList->mCount; i++) {
+        ClippingActorInfo* pInfo = pList->mClippingActorList[i];
+        pInfo->mViewGroup = &mViewGroupData[pInfo->mViewGroupId < 0 ? mMaxViewGroupId : pInfo->mViewGroupId];
     }
 }
 
 void ViewGroupCtrl::initMadeDuringPlay(ClippingActorInfo* pInfo) {
     if (mViewGroupData != nullptr) {
-        pInfo->_14 = &mViewGroupData[mMaxViewGroupId];
+        pInfo->mViewGroup = &mViewGroupData[mMaxViewGroupId];
     }
 }
 
@@ -71,34 +66,26 @@ void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const TableIter& rIter) {
 }
 
 void ViewGroupCtrl::update() {
-    ViewGroupCtrlDataEntry* entry;
     if (!mViewCubeMgr) {
         return;
     }
 
     for (s32 i = 0; i < mMaxViewGroupId; i++) {
-        entry = &mViewGroupData[i];
-        entry->_0 = false;
-        entry->_1 = false;
-        entry->_2 = false;
-        entry->_3 = false;
-        entry->_4 = false;
+        mViewGroupData[i].clear();
     }
 
     for (s32 i = 0; i < mViewCubeMgr->getNumAreaObj(); i++) {
         AreaObj* area = mViewCubeMgr->getAreaObj(i);
         if (area->isInVolume(*MR::getPlayerPos())) {
             ViewGroupCtrlDataEntry* entry = &mViewGroupData[area->mObjArg0];
-            entry->_0 = true;
+            entry->mIsPlayerInside = true;
             if (area->mObjArg1 == 1) {
-                entry->_1 = true;
-            } else if (area->mObjArg1 == 2) {
-                entry->_2 = true;
+                entry->mIsNear = true;
             } else if (area->mObjArg1 == 3) {
-                entry->_3 = true;
+                entry->mIsFar = true;
             } else if (area->mObjArg1 == 4 && !(mPlanetsFromStart && area->mSwitchCtrl->isValidSwitchAppear())) {
-                entry->_0 = false;
-                entry->_4 = true;
+                entry->mIsPlayerInside = false;
+                entry->mIsHidden = true;
             }
         }
     }
@@ -120,12 +107,7 @@ void ViewGroupCtrl::startInitViewGroupTable() {
 
     mViewGroupData = new ViewGroupCtrlDataEntry[mMaxViewGroupId + 1];
     for (s32 i = 0; i < mMaxViewGroupId + 1; i++) {
-        ViewGroupCtrlDataEntry* entry = &mViewGroupData[i];
-        entry->_0 = false;
-        entry->_1 = false;
-        entry->_2 = false;
-        entry->_3 = false;
-        entry->_4 = false;
+        mViewGroupData[i].clear();
     }
 
     for (s32 i = 0; i < mViewCtrlCount; i++) {
@@ -136,6 +118,6 @@ void ViewGroupCtrl::startInitViewGroupTable() {
         }
 
         ViewGroupCtrlDataEntry* entry = &mViewGroupData[groupID];
-        ctrl->setViewCtrlPtr(&entry->_1, &entry->_3, &entry->_4);
+        ctrl->setViewCtrlPtr(&entry->mIsNear, &entry->mIsFar, &entry->mIsHidden);
     }
 }

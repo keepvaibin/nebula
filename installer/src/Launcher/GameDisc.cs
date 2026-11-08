@@ -26,6 +26,22 @@ namespace Nebula.Launcher
             catch (UnauthorizedAccessException) { return null; }
         }
 
+        /// <summary>False when game.pak was read and holds another store version than this build's game reads (it
+        /// refuses it): Setup must read the game again. True when it cannot be read: the game reports that itself.</summary>
+        public static bool IsCurrentVersion(string pak)
+        {
+            try
+            {
+                using (var file = new FileStream(pak, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    var header = new byte[HeaderSize];
+                    return !ReadHeader(file, header) || BitConverter.ToUInt32(header, 8) == BuildInfo.StoreVersion;
+                }
+            }
+            catch (IOException) { return true; }
+            catch (UnauthorizedAccessException) { return true; }
+        }
+
         /// <summary>The language folders at the root of game.pak, in its order; empty when it cannot be read.</summary>
         public static List<string> LanguageFolders(string pak)
         {

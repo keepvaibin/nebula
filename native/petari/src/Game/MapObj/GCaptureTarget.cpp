@@ -38,7 +38,7 @@ void GCaptureTarget::init(const TableIter& rIter) {
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
     MR::getPlacementArg0WithInit(rIter, &mReleaseDistance);
     MR::getPlacementArg1NoInit(rIter, &mPointableRange);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(GCaptureTarget, GCaptureTargetNrvWait));
     MR::initShadowVolumeSphere(this, 50.0f);
@@ -130,7 +130,7 @@ void GCaptureTarget::endClipped() {
 void GCaptureTarget::control() {
     if (mRailMover != nullptr) {
         mRailMover->movement();
-        mPosition.set(mRailMover->_28);
+        mPosition.set(mRailMover->mStartPos);
     }
 }
 

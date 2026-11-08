@@ -1,15 +1,15 @@
 #include "Game/Boss/TripodBossStepSequence.hpp"
 #include "Game/Boss/TripodBossStepPoint.hpp"
 
-TripodBossStepSequence::TripodBossStepSequence() : mCurrentPoint(), mPointNum(), _88(true) {
-    for (s32 i = 0; i < ARRAY_SIZE(mStepPoints); i++) {
-        mStepPoints[i] = nullptr;
-    }
+TripodBossStepSequence::TripodBossStepSequence() : mCurrentPoint(), mPointNum() {
 }
 
 void TripodBossStepSequence::addStepPoint(TripodBossStepPoint* pPoint) {
     s32 sortPriority = pPoint->mSequencePriority;
 
+    if (mPointNum == mStepPoints.size()) {
+        mStepPoints.grow();
+    }
     mPointNum++;
 
     for (s32 i = mPointNum - 1; i > 0; i--) {
@@ -33,7 +33,7 @@ s32 TripodBossStepSequence::getCurrentWaitTime() const {
 }
 
 TripodBossStepPoint* TripodBossStepSequence::getCurrentStepPoint() {
-    return mStepPoints[mCurrentPoint];
+    return mPointNum == 0 ? nullptr : mStepPoints[mCurrentPoint];
 }
 
 void TripodBossStepSequence::nextStep() {
@@ -45,7 +45,7 @@ void TripodBossStepSequence::nextStep() {
 }
 
 bool TripodBossStepSequence::isEmpty() const {
-    return mStepPoints[mCurrentPoint] == nullptr;
+    return mPointNum == 0;
 }
 
 void TripodBossStepSequence::reset() {

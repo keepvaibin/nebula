@@ -6,7 +6,6 @@
 namespace {
     static const f32 sWindAccelBattle = 0.5f;
     static const f32 sWindAccelChance = 1.0f;
-    // static const _32 sWindAccelDamage =
     static const f32 sWindAccelBattleEndTarget = 2.0f;
     static const f32 sWindAccelBattleEndCurrent = 100.0f;
     static const f32 sWindAccelSpeedBattleEnd = 0.4f;

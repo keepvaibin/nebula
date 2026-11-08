@@ -38,7 +38,7 @@ void SpiderMapBlock::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, "SpiderMapBlock", getSensor("body"), nullptr);
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
     initSound(4, false);
     MR::declareCoin(this, 1);
     makeActorAppeared();

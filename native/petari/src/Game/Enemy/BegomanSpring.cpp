@@ -148,7 +148,7 @@ void BegomanSpring::init(const TableIter& rIter) {
     initEffectAndStarPointerBind();
     MR::setEffectHostMtx(this, "WaterColumn", mWaterColumnMatrix);
     mHead = new BegomanSpringHead(this, mHeadMatrix);
-    mHead->_9C = &_B4;
+    mHead->mHostScale = &mAnimScale;
     mHead->initWithoutIter();
     initSensor(1, 70.0f, 140.0f, "Center");
     MR::addHitSensorMtx(this, "trample", ATYPE_PLAYER_AUTO_JUMP, 8, 130.0f * mScale.y, MR::getJointMtx(mHead, "SpringJoint5"),
@@ -400,7 +400,7 @@ void BegomanSpring::exeShake() {
 
     updateRotateY(::sShakeRotate, ::sCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SHAKE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hWaitParam._0, ::hWaitParam._4, ::hWaitParam._8, ::hWaitParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hWaitParam);
     reboundWallAndGround(&mFaceVec, false);
 
     const Vec3f& rGravity = mGravity;
@@ -424,7 +424,7 @@ void BegomanSpring::exeTrample() {
     }
 
     updateRotateY(::sTrampleRotate, ::sCommonAddRotate);
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam._0, ::hStopParam._4, ::hStopParam._8, ::hStopParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
     reboundWallAndGround(&mFaceVec, false);
 
     const Vec3f& rGravity = mGravity;
@@ -468,7 +468,7 @@ void BegomanSpring::exeBlow() {
 
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam._0, ::hHitReactionParam._4, ::hHitReactionParam._8, ::hHitReactionParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
     if (MR::isStep(this, ::sBlowFrame - mHead->getHopEndBckFrameMax())) {
         MR::startBck(this, "HopEnd");

@@ -11,9 +11,6 @@ MercatorRailMoveParts::MercatorRailMoveParts(const char* pName) : LiveActor(pNam
     mRailMover = nullptr;
     mRailRotator = nullptr;
     mAppearController = nullptr;
-    _E0.x = 0.0f;
-    _E0.y = 0.0f;
-    _E0.z = 0.0f;
     mIsNotMoving = false;
     mRotateMtx.identity();
 }
@@ -54,19 +51,19 @@ void MercatorRailMoveParts::control() {
 
     Vec3f trans;
     Pos3f rotate;
-    MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->_28, false);
+    MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->mStartPos, false);
     mPosition.set(trans);
 }
 
 void MercatorRailMoveParts::calcAndSetBaseMtx() {
     Vec3f trans;
     Pos3f rotate;
-    MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->_28, false);
+    MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mRailMover->mStartPos, false);
     Pos3f baseMtx;
     baseMtx.identity();
 
     if (mRailRotator->isWorking()) {
-        baseMtx.concat(mRailRotator->_5C, baseMtx);
+        baseMtx.concat(mRailRotator->mRotateMtx, baseMtx);
     } else {
         baseMtx.set(mRotateMtx);
     }
@@ -84,7 +81,7 @@ void MercatorRailMoveParts::updatePose() {
     MR::makeMtxRotate(mtx.toMtxPtr(), mLocalRotation.x, mLocalRotation.y, mLocalRotation.z);
 
     if (mRailRotator->isWorking()) {
-        mtx.concat(mRailRotator->_5C, mtx);
+        mtx.concat(mRailRotator->mRotateMtx, mtx);
     }
 
     mRotateMtx.set(mtx);

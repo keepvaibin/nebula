@@ -13,11 +13,11 @@ namespace NrvTripodBossCoin {
 };  // namespace NrvTripodBossCoin
 
 TripodBossCoin::TripodBossCoin(const char* pName) : NameObj(pName), mCoin(), mSpine(), mJointID(-1) {
-    _14.identity();
+    mPlacementMtx.identity();
 }
 
 void TripodBossCoin::init(const TableIter& rIter) {
-    MR::getPlacementMatrixFromRT(rIter, &_14);
+    MR::getPlacementMatrixFromRT(rIter, &mPlacementMtx);
     MR::connectToSceneMapObjDecorationMovement(this);
     MR::getPlacementArg0NoInit(rIter, &mJointID);
 
@@ -41,7 +41,7 @@ void TripodBossCoin::exeNonActive() {
 
 void TripodBossCoin::exeActive() {
     Pos3f mtx;
-    mtx.set(_14);
+    mtx.set(mPlacementMtx);
 
     MR::concatTripodBossAttachJointMatrix(&mtx, mJointID);
 

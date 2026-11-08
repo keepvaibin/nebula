@@ -47,8 +47,8 @@ namespace NrvKoopaBattleStairsVs1 {
 };  // namespace NrvKoopaBattleStairsVs1
 
 KoopaBattleStairsVs1::KoopaBattleStairsVs1(Koopa* pKoopa)
-    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFarFireStairs(), mNearFireStairs(), _20(), mCanJump(),
-      mJumpPos0(0.0f, 0.0f, 0.0f), mJumpPos1(0.0f, 0.0f, 0.0f), mJumpPos2(0.0f, 0.0f, 0.0f), _4C(), _50(), _54(), mAvailableStairs(), mJumpIdx(),
+    : KoopaBattleStairsBase(pKoopa), mFarBattleMapStair(), mNearBattleMapStair(), mFarFireStairs(), mNearFireStairs(), mFireStair(), mCanJump(),
+      mJumpPos0(0.0f, 0.0f, 0.0f), mJumpPos1(0.0f, 0.0f, 0.0f), mJumpPos2(0.0f, 0.0f, 0.0f), mStairNum0(), mStairNum1(), mStairNum2(), mAvailableStairs(), mJumpIdx(),
       mOldPosition(0.0f, 0.0f, 0.0f), mNewPosition(0.0f, 0.0f, 0.0f), mNewDirection(0.0f, 0.0f, 1.0f) {
     initNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvWaitDemo));
 
@@ -75,15 +75,15 @@ s32 KoopaBattleStairsVs1::registerStair(KoopaBattleMapStair* pBattleMapStair) {
     if (pBattleMapStair->mArg1 == 1) {
         vec = &mJumpPos1;
         if (pBattleMapStair->isTypeNormal()) {
-            _50++;
+            mStairNum1++;
         }
     } else if (pBattleMapStair->mArg1 == 2) {
         vec = &mJumpPos2;
         if (pBattleMapStair->isTypeNormal()) {
-            _54++;
+            mStairNum2++;
         }
     } else if (pBattleMapStair->isTypeNormal()) {
-        _4C++;
+        mStairNum0++;
     }
 
     return calcFireAttackStep(pBattleMapStair, ::sFireSpeed, ::sStepToEmitFire, *vec);
@@ -146,17 +146,17 @@ void KoopaBattleStairsVs1::exeWait() {
 
 void KoopaBattleStairsVs1::exeAttackFire() {
     if (tryRequestedToMoveNextPos()) {
-        _20 = nullptr;
+        mFireStair = nullptr;
         setNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvJumpToNextPosStart));
         return;
     }
 
     if (MR::isStep(this, ::sStepToEmitFire)) {
-        emitFireStairs(mKoopa, _20);
-        _20 = nullptr;
+        emitFireStairs(mKoopa, mFireStair);
+        mFireStair = nullptr;
     }
 
-    KoopaBattleMapStair* pBattleMapStair = _20;
+    KoopaBattleMapStair* pBattleMapStair = mFireStair;
     if (MR::isLessStep(this, ::sStepToEmitFire) && tryAttackRequest()) {
         emitFireStairs(mKoopa, pBattleMapStair);
 
@@ -171,9 +171,9 @@ void KoopaBattleStairsVs1::exeAttackFire() {
     }
 
     if (MR::isGreaterStep(this, ::sFireAttackStep)) {
-        if (mCanJump || (mJumpIdx == 0 && mAvailableStairs >= _4C) || (mJumpIdx == 1 && mAvailableStairs >= _4C + _50) ||
-            (mJumpIdx == 2 && mAvailableStairs >= _4C + _50 + _54)) {
-            _20 = nullptr;
+        if (mCanJump || (mJumpIdx == 0 && mAvailableStairs >= mStairNum0) || (mJumpIdx == 1 && mAvailableStairs >= mStairNum0 + mStairNum1) ||
+            (mJumpIdx == 2 && mAvailableStairs >= mStairNum0 + mStairNum1 + mStairNum2)) {
+            mFireStair = nullptr;
             setNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvJumpToNextPosStart));
             return;
         }
@@ -267,7 +267,7 @@ bool KoopaBattleStairsVs1::tryAttackRequest() {
 
         if (pBattleMapStair->isRequestAttackVs1()) {
             success = true;
-            _20 = pBattleMapStair;
+            mFireStair = pBattleMapStair;
             mAvailableStairs++;
         }
     }

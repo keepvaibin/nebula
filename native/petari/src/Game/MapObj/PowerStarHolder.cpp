@@ -32,7 +32,7 @@ void PowerStarHolder::requestAppearPowerStar(int starNum, const Vec3f* pPos, boo
     }
 
     if (forceAppear) {
-        star->_11C = true;
+        star->mIsForceAppear = true;
         star->appear();
     } else {
         star->requestAppear();

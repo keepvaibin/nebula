@@ -29,7 +29,7 @@ namespace {
     const f32 hOverturnFallJumpVelV = 30.0f;
     const s32 hOverturnTime = 240;
     const f32 hRecoverJumpVelV = 24.0f;
-    const volatile f32 hDistNoCalcWait = 1000.0f;
+    const f32 hDistNoCalcWait = 1000.0f;
     const s32 hSeachTime = 50;
     const s32 hEscapeSeachTime = 20;
     const f32 hPreEscapeTurnLimitDegree = 9.0f;
@@ -104,7 +104,7 @@ void KoteBug::init(const TableIter& rIter) {
     initBinder(70.0f * scale, 70.0f * scale, 0);
     initHitSensor(1);
     MR::addHitSensorAtJointEnemy(this, "body", "Center", 32, 100.0f * scale, Vec3f(0.0f, 20.0f * scale, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(KoteBug, HostTypeNrvWait));
     MR::initStarPointerTarget(this, 110.0f, Vec3f(0.0f, 80.0f, 0.0f));
@@ -361,7 +361,7 @@ void KoteBug::exeOverturn() {
     MR::startLevelSound(this, "SE_EM_LV_KOTEBUG_OVERTURN");
     MR::applyVelocityDampAndGravity(this, ::hCommonGravity, ::hGroundDamp, ::hAirDampH, ::hAirDampV, 1.0f);
     MR::killVelocityOnGroundH(this);
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
     if (MR::isGreaterStep(this, ::hOverturnTime)) {
         setNerve(GET_NERVE(KoteBug, HostTypeNrvPreRecover));
     }
@@ -441,7 +441,7 @@ void KoteBug::exeStampDeath() {
         MR::forceBindOnGround(this, 0.0f, 1.0f);
     }
 
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
     if (MR::isGreaterStep(this, ::hStampDeathTime)) {
         MR::startSound(this, "SE_EM_EXPLODE_S");
         MR::appearCoinPop(this, mPosition, 1);
@@ -631,12 +631,12 @@ bool KoteBug::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 void KoteBug::calcAndSetBaseMtx() {
     Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
-    Pos3f stampMtx(mStampController->_14);
+    Pos3f stampMtx(mStampController->mMtx);
     mtx.concat(stampMtx, mtx);
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);
 
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
     mJointController->registerCallBack();
 }

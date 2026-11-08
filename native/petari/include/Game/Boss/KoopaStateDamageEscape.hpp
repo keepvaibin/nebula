@@ -41,7 +41,6 @@ public:
 private:
     s32 mEscapeTime;
     s32 mMaxEscapeTime;
-    s32 _18;
     bool mIsTurnClockwise;
     bool mIsLastHit;
     MR::ActorMoveParam* mEscapeRunParam;

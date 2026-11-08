@@ -18,6 +18,6 @@ public:
     void exeDoNothing();
     void exeMove();
 
-    Pos3f _18;
+    Pos3f mPostureMtx;
     s32 mMovePosture;
 };

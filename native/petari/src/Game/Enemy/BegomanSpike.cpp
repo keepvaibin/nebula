@@ -145,7 +145,7 @@ void BegomanSpike::init(const TableIter& rIter) {
     initShadow(70.0f, "Center");
     mHead = new BegomanHead(this, "トゲ頭", "BegomanSpikeHead", mHeadMatrix, MR::DrawBufferType_Enemy, false);
     MR::initLightCtrl(mHead);
-    mHead->_9C = &_B4;
+    mHead->mHostScale = &mAnimScale;
     mHead->initWithoutIter();
     mBrokenModel = new ModelObj("ベーゴマン壊れモデル", "BegomanBrokenPiece", getBaseMtx(), MR::DrawBufferType_Enemy, -2, -2, false);
     mBrokenModel->mScale.set(mScale);
@@ -374,7 +374,7 @@ void BegomanSpike::exeTrampleReaction() {
     }
 
     updateRotateY(::sTrampleReactionRotate, ::sCommonAddRotate);
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam._0, ::hStopParam._4, ::hStopParam._8, ::hStopParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
     reboundWallAndGround(&mFaceVec, false);
     if (MR::isGreaterStep(this, ::sTrampleReactionTime)) {
         setNerve(GET_NERVE(BegomanSpike, HostTypeNrvProvoke));
@@ -409,7 +409,7 @@ void BegomanSpike::exeBlow() {
 
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam._0, ::hHitReactionParam._4, ::hHitReactionParam._8, ::hHitReactionParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
     if (MR::isGreaterStep(this, ::sBlowFrame) && MR::isOnGround(this)) {
         MR::startBck(this, "Turn");

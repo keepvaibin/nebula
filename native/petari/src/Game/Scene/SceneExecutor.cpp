@@ -24,7 +24,6 @@ void SceneFunction::executeMovementList() {
     }
 
     MR::getSceneNameObjMovementController()->movement();
-    MR::executeRequirementDisconnectDrawDelay();
     CategoryList::execute(MR::MovementType_StopSceneDelayRequest);
     CategoryList::execute(MR::MovementType_Camera);
     CategoryList::execute(MR::MovementType_MirrorCamera);
@@ -83,7 +82,6 @@ void SceneFunction::executeMovementList() {
 
 void SceneFunction::executeMovementListOnPlayingMovie() {
     MR::getSceneNameObjMovementController()->movement();
-    MR::executeRequirementDisconnectDrawDelay();
     CategoryList::execute(MR::MovementType_StopSceneDelayRequest);
     CategoryList::execute(MR::MovementType_Layout);
     CategoryList::execute(MR::MovementType_LayoutDecoration);

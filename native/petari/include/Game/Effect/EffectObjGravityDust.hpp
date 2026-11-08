@@ -15,12 +15,11 @@ public:
     virtual f32 getFarClipDistance() const {
         return 50.0f;
     }
-    virtual Vec3f* getClippingCenterOffset() const;
+    virtual Vec3f getClippingCenterOffset() const;
     virtual bool isSyncClipping() const {
         return true;
     }
 
 private:
-    GravityDustParticleCallBack* _9C;
-    f32 _A0;
+    GravityDustParticleCallBack* mParticleCallBack;
 };

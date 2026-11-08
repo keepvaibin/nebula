@@ -7,7 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-AudCameraWatcher::AudCameraWatcher() : NameObj("AudCameraWatcher"), _C(0) {
+AudCameraWatcher::AudCameraWatcher() : NameObj("AudCameraWatcher") {
 }
 
 void AudCameraWatcher::playAtmosphereSE() {

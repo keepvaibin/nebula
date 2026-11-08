@@ -21,7 +21,7 @@ namespace {
 
 TurnJointCtrl::TurnJointCtrl(LiveActor* pActor)
     : mActor(pActor), mCtrlRate(new JointCtrlRate()), mHorizontalDegreeMax(45.0f), mPositiveDegreeMax(22.5f), mNegativeDegreeMax(22.5f),
-      mStarePos(0.0f, 0.0f, 0.0f), _5C(1000.0f), _60(0.04f), mCtrlFrames(60), mEnabled(true) {
+      mStarePos(0.0f, 0.0f, 0.0f), mStareDist(1000.0f), mStareRate(0.04f), mCtrlFrames(60), mEnabled(true) {
     mFace.mEnabled = false;
     mFace.mBlendRate = 0.0f;
     mFace.mJointController = nullptr;
@@ -80,21 +80,21 @@ void TurnJointCtrl::invalidate() {
 }
 
 void TurnJointCtrl::setStarePos(const Vec3f& rPos) {
-    if (!mEnabled && MR::isNearZero(mCtrlRate->_0)) {
+    if (!mEnabled && MR::isNearZero(mCtrlRate->mRate)) {
         return;
     }
 
-    if (MR::isNear(mActor, rPos, _5C)) {
-        if (MR::isNearZero(mCtrlRate->_0)) {
+    if (MR::isNear(mActor, rPos, mStareDist)) {
+        if (MR::isNearZero(mCtrlRate->mRate)) {
             mCtrlRate->startCtrl(mCtrlFrames);
         }
     } else {
-        if (MR::isNearZero(mCtrlRate->_0 - 1.0f)) {
+        if (MR::isNearZero(mCtrlRate->mRate - 1.0f)) {
             mCtrlRate->endCtrl(mCtrlFrames);
         }
     }
 
-    MR::vecBlendSphere(mStarePos, rPos, &mStarePos, _60);
+    MR::vecBlendSphere(mStarePos, rPos, &mStarePos, mStareRate);
 }
 
 void TurnJointCtrl::update() {
@@ -102,7 +102,7 @@ void TurnJointCtrl::update() {
 }
 
 void TurnJointCtrl::setCallBackFunction() {
-    if (!mEnabled && MR::isNearZero(mCtrlRate->_0)) {
+    if (!mEnabled && MR::isNearZero(mCtrlRate->mRate)) {
         return;
     }
 
@@ -140,7 +140,7 @@ void TurnJointCtrl::getMtxDir(Vec3f* pDir, const Pos3f* pMtx, AXIS axis) {
 }
 
 bool TurnJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const Ctrl& rCtrl) {
-    if (!mEnabled && MR::isNearZero(mCtrlRate->_0)) {
+    if (!mEnabled && MR::isNearZero(mCtrlRate->mRate)) {
         return false;
     }
 
@@ -172,10 +172,10 @@ bool TurnJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const Ctrl& rCtrl) {
         MR::vecBlendSphere(front, projected, &projected, rCtrl.mBlendRate);
 
         if (verticalAxis.dot(cross) > 0.0f) {
-            const f32 rate = mCtrlRate->_0;
+            const f32 rate = mCtrlRate->mRate;
             ::makeMtxRotVecDegree(rotation, projected, front, mPositiveDegreeMax * rate);
         } else {
-            const f32 rate = mCtrlRate->_0;
+            const f32 rate = mCtrlRate->mRate;
             ::makeMtxRotVecDegree(rotation, projected, front, mNegativeDegreeMax * rate);
         }
 
@@ -189,7 +189,7 @@ bool TurnJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const Ctrl& rCtrl) {
         getMtxDir(&front, pMtx, rCtrl.mFrontAxis);
         MR::vecBlendSphere(front, projected, &projected, rCtrl.mBlendRate);
 
-        const f32 rate = mCtrlRate->_0;
+        const f32 rate = mCtrlRate->mRate;
         ::makeMtxRotVecDegree(rotation, projected, front, mHorizontalDegreeMax * rate);
         NebulaMtxConcat(rotation, result, result);
     }

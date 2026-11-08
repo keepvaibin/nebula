@@ -57,8 +57,8 @@ public:
     void setupBalloonFollowMtx(const Vec3f& rVec);
     bool calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo);
 
-    Quat4f _8C;
-    Vec3f _9C;
+    Quat4f mPoseQuat;
+    Vec3f mRailDirBlend;
     f32 mClippingRange;
     Vec3f mClippingVec;
     TalkMessageCtrl* mTalkMessageCtrl;
@@ -69,7 +69,6 @@ public:
     Vec3f mMarioMoveLocalOffsetVec;
     Pos3f mBalloonFollowMtx;
     JointControlDelegator< Syati >* mJointControlDelegator;
-    Mtx34f _10C;
     RaceManagerLayout* mRaceManagerLayout;
     LiveActorGroup* mPrizeRingGroup;
     s32 mNumRings;
@@ -85,8 +84,8 @@ public:
     inline PlayerPoseSetterInWater(const Vec3f& rVec, Syati* pSyati);
     void update();
 
-    Vec3f _0;
-    Quat4f _C;
-    s32 _1C;
-    Vec* _20;
+    Vec3f mSyatiPos;
+    Quat4f mSyatiQuat;
+    s32 mStep;
+    Vec* mOffset;
 };

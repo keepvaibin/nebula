@@ -30,6 +30,6 @@ public:
     SmallKameckBeamEventListener* mEventListener;
     JetTurtle* mTurtle;
     Quat4f mRotateQuat;
-    Vec3f _A4;
-    Vec3f _B0;
+    Vec3f mFront;
+    Vec3f mRunDir;
 };

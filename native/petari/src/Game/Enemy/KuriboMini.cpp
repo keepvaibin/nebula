@@ -78,18 +78,18 @@ KuriboMini::KuriboMini(const char* pName) : LiveActor(pName) {
     mStateChase = nullptr;
     mStateStagger = nullptr;
     mStateBindStarPointer = nullptr;
-    _A8.x = 0.0f;
-    _A8.y = 0.0f;
-    _A8.z = 0.0f;
-    _A8.w = 1.0f;
-    _B8.set(0.0f, 0.0f, 1.0f);
+    mRotateQuat.x = 0.0f;
+    mRotateQuat.y = 0.0f;
+    mRotateQuat.z = 0.0f;
+    mRotateQuat.w = 1.0f;
+    mFront.set(0.0f, 0.0f, 1.0f);
 }
 
 void KuriboMini::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("KuriboMini", nullptr, false);
     MR::connectToSceneEnemy(this);
-    MR::makeQuatAndFrontFromRotate(&_A8, &_B8, this);
+    MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFront, this);
     MR::onCalcGravity(this);
     MR::initLightCtrl(this);
     MR::declareStarPiece(this, 3);
@@ -97,7 +97,7 @@ void KuriboMini::init(const TableIter& rIter) {
     mItemGenerator = new ItemGenerator();
     mScaleController = new AnimScaleController(nullptr);
     initSound(4, false);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::initStarPointerTarget(this, 40.0f, Vec3f(0.0f, 60.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 40.0f);
     initSensor();
@@ -134,10 +134,10 @@ void KuriboMini::initSensor() {
 }
 
 void KuriboMini::initState() {
-    mStateFindPlayer = new WalkerStateFindPlayer(this, &_B8, &::sParam.mStateParam, &::sParam.mFindPlayerParam);
-    mStateWander = new WalkerStateWander(this, &_B8, &::sParam.mStateParam, &::sParam.mWanderParam);
-    mStateChase = new WalkerStateChase(this, &_B8, &::sParam.mStateParam, &::sParam.mChaseParam);
-    mStateStagger = new WalkerStateStagger(this, &_B8, &::sParam.mStateParam, &::sParam.mStaggerParam);
+    mStateFindPlayer = new WalkerStateFindPlayer(this, &mFront, &::sParam.mStateParam, &::sParam.mFindPlayerParam);
+    mStateWander = new WalkerStateWander(this, &mFront, &::sParam.mStateParam, &::sParam.mWanderParam);
+    mStateChase = new WalkerStateChase(this, &mFront, &::sParam.mStateParam, &::sParam.mChaseParam);
+    mStateStagger = new WalkerStateStagger(this, &mFront, &::sParam.mStateParam, &::sParam.mStaggerParam);
     mStateBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 }
 
@@ -158,13 +158,13 @@ void KuriboMini::kill() {
 }
 
 void KuriboMini::control() {
-    MR::blendQuatFromGroundAndFront(&_A8, this, _B8, 0.05f, 0.5f);
+    MR::blendQuatFromGroundAndFront(&mRotateQuat, this, mFront, 0.05f, 0.5f);
     mScaleController->updateNerve();
 }
 
 void KuriboMini::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _A8);
-    MR::setBaseScale(this, mScaleController->_C * mScale);
+    MR::setBaseTRMtx(this, mRotateQuat);
+    MR::setBaseScale(this, mScaleController->mScale * mScale);
 }
 
 void KuriboMini::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -456,7 +456,7 @@ void KuriboMini::exeAttackSuccess() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Hit");
     }
-    MR::turnDirectionToPlayerDegree(this, &_B8, 5.0f);
+    MR::turnDirectionToPlayerDegree(this, &mFront, 5.0f);
     calcPassiveMovement();
 
     if (tryDeadMap() || tryPointBind()) {
@@ -509,7 +509,7 @@ void KuriboMini::exeBlowDown() {
     }
 
     calcPassiveMovement();
-    MR::turnDirectionDegree(this, &_B8, -mVelocity, 30.0f);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
 
     if (MR::isGreaterStep(this, 30)) {
         kill();

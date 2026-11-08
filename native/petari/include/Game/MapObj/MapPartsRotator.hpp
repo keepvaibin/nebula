@@ -70,10 +70,10 @@ public:
     }
 
     bool isRotateClockwise() const {
-        return 0.0f < _18;
+        return 0.0f < mTargetRotateSpeed;
     }
 
-    f32 _18;
+    f32 mTargetRotateSpeed;
     f32 mRotateAngle;
     s32 mRotateStopTime;
     f32 mTargetAngle;
@@ -85,6 +85,6 @@ public:
     s32 mSignMotionType;
     Pos3f mBaseHostMtx;
     Pos3f mRotateMtx;
-    f32 _A0;
+    f32 mSignAngle;
     bool mIsOnReverse;
 };

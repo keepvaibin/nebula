@@ -60,7 +60,7 @@ void RainCloud::init(const TableIter& rIter) {
     }
 
     MR::initCollisionParts(this, "RainCloud", getSensor("body"), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     if (!mNoRain) {
         MR::setEffectHostMtx(this, "Splash", mSplashMtx);
@@ -207,7 +207,7 @@ void RainCloud::control() {
 
     if (mRailMover != nullptr && !isNerve(GET_NERVE(RainCloud, RainCloudNrvEnd))) {
         mRailMover->movement();
-        mPosition.set(mRailMover->_28);
+        mPosition.set(mRailMover->mStartPos);
         if (MR::isMapPartsRailMovePassedEndPointRepeat(mRailMover)) {
             setNerve(GET_NERVE(RainCloud, RainCloudNrvDisappear));
             return;

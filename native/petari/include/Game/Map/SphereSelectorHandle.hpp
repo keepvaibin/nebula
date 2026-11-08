@@ -12,7 +12,7 @@ public:
     virtual void control();
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&_90;
+        return (MtxPtr)&mBaseMtx;
     }
 
     void validateRotate();
@@ -47,17 +47,15 @@ public:
 
 public:
     bool mIsFileSelectMode;
-    Pos3f _90;
-    Vec3f _C0;
+    Pos3f mBaseMtx;
+    Vec3f mFront;
     f32 mRotateSpeed;
     f32 mTargetRotateSpeed;
-    f32 _D4;
-    f32 _D8;
-    Vec3f _DC;
-    Vec3f _E8;
-    Vec2f _F4[3];
-    s32 _10C;
-    Vec3f _110;
-    Vec3f _11C;
-    bool _128;
+    f32 mRotateSpeedX;
+    f32 mPrevRotateSpeedX;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec2f mPointerVelocities[3];
+    s32 mNotPointingStep;
+    bool mIsRotateBgm;
 };

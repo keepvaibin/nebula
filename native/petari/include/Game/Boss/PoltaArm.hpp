@@ -35,10 +35,9 @@ public:
 
     ModelObj* mFormationModel;
     ModelObj* mBreakModel;
-    Pos3f _98;
-    s32 _C8;
-    s32 _CC;
+    Pos3f mBreakModelMtx;
+    s32 mHitPoint;
+    s32 mHitPointMax;
     s32 mBrokenCounter;
-    s32 _D4;
     bool mIsLeftArm;
 };

@@ -40,16 +40,16 @@ void JumpBeamer::control() {
     Mtx34f mtx;
     mtx.identity();
     MR::makeMtxTRS(mtx, Vec3f(0.0f, 0.0f, 0.0f), head->mRotation, head->mScale);
-    _90.setInline(mBodyJointMtx);
+    mHeadMtx.setInline(mBodyJointMtx);
     Mtx34f v5;
-    v5.concat(_90, mtx);
-    _90.setInline(v5);
+    v5.concat(mHeadMtx, mtx);
+    mHeadMtx.setInline(v5);
     updateEventCamera();
 }
 
 void JumpBeamer::init(const TableIter& rIter) {
     initModelManagerWithAnm("JumpBeamerBody", nullptr, false);
-    mHeadModel = MR::createPartsModelMapObjStrongLight(this, "ジャンプビーマー頭", "JumpBeamerHead", _90);
+    mHeadModel = MR::createPartsModelMapObjStrongLight(this, "ジャンプビーマー頭", "JumpBeamerHead", mHeadMtx);
     MR::initLightCtrl(mHeadModel);
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemy(this);
@@ -62,7 +62,7 @@ void JumpBeamer::init(const TableIter& rIter) {
     getSensor("Jump")->invalidate();
     MR::initShadowVolumeSphere(this, 140.0f);
     MR::invalidateShadow(this, nullptr);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(8, false);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(JumpBeamer, JumpBeamerNrvHide));

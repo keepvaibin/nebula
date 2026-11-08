@@ -2,7 +2,6 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -41,7 +40,7 @@ void OceanRingPipeOutside::movement() {
 }
 
 void OceanRingPipeOutside::initMesh() {
-    mMesh.init(2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
+    mMesh.init(2 * mRingPipe->mNumSegments * (mRingPipe->mNumSides - 1));
     sendGD();
     mMesh.send();
 }
@@ -83,7 +82,7 @@ SiteMaterial OceanRingPipeOutside::loadMaterial() const {
     // state's (the site never sets them).
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
-                       true, mRingPipe->_90 ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+                       true, mRingPipe->mIsCameraInside ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
     material.setMatrix(3, 0, mtx.toMtxPtr());
     material.setMatrix(3, 1, mtx2);
     material.setColor(0, ::sStageColor0.r, ::sStageColor0.g, ::sStageColor0.b, ::sStageColor0.a);
@@ -105,18 +104,18 @@ void OceanRingPipeOutside::sendGD() {
     f29 = 1.0f;
     f28 = 0.0f;
 
-    for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
+    for (s32 i = 0; i < mRingPipe->mNumSides - 1; i++) {
         f32 f27 = 0.0f;
-        vv = mRingPipe->_98;
+        vv = mRingPipe->mNumSegments;
         VertexPNT* vtx = mMesh.strip((u16)(vv << 1));
-        for (s32 j = 0; j < mRingPipe->_98; j++) {
-            v = j * mRingPipe->_9C;
+        for (s32 j = 0; j < mRingPipe->mNumSegments; j++) {
+            v = j * mRingPipe->mNumSides;
             u16 cl2 = i + v + 1;
             u16 cl = i + v;
             const auto vertex = [this](u16 at, f32 s, f32 t) {
-                const Vec3f& rPlace = mRingPipe->_A0[at];
-                const Vec3s& rNormal = mRingPipe->_A4[at];
-                return VertexPNT{rPlace.x, rPlace.y, rPlace.z, rNormal.x / 16384.0f, rNormal.y / 16384.0f, rNormal.z / 16384.0f, s, t};
+                const Vec3f& rPlace = mRingPipe->mPositions[at];
+                const Vec3f& rNormal = mRingPipe->mNormals[at];
+                return VertexPNT{rPlace.x, rPlace.y, rPlace.z, rNormal.x, rNormal.y, rNormal.z, s, t};
             };
             *vtx++ = vertex(cl2, f27, f29);
             *vtx++ = vertex(cl, f27, f28);

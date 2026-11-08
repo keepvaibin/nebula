@@ -20,8 +20,8 @@ namespace NrvStarPieceGroup {
 };  // namespace NrvStarPieceGroup
 
 StarPieceGroup::StarPieceGroup(const char* pName)
-    : LiveActor(pName), mPieces(), mRailCoords(), _94(), _95(), mNumPieces(), mCircleRadius(400.0f), mIsRail(), mPlaceAtPathPoints(), _A4(-1),
-      mRailSpeed(10.0f), _AC(0.0f, 0.0f, 0.0f) {
+    : LiveActor(pName), mPieces(), mRailCoords(), mHasAppeared(), mIsAppearEffect(), mNumPieces(), mCircleRadius(400.0f), mIsRail(), mPlaceAtPathPoints(), mLifeStep(-1),
+      mRailSpeed(10.0f), mRailClippingCenter(0.0f, 0.0f, 0.0f) {
 }
 
 bool StarPieceGroup::isExistAnyStarPiece() {
@@ -38,12 +38,12 @@ void StarPieceGroup::forceReplaceStarPieceAll() {
     placementAllPiece();
     for (int i = 0; i < mNumPieces; i++) {
         mPieces[i]->appearFromGroup();
-        if (_95) {
+        if (mIsAppearEffect) {
             MR::emitEffect(mPieces[i], "Appear");
         }
     }
 
-    if (_95) {
+    if (mIsAppearEffect) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 }
@@ -94,7 +94,7 @@ void StarPieceGroup::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &mNumPieces);
         MR::getPlacementArg1NoInit(rIter, &mCircleRadius);
         MR::getPlacementArg2NoInit(rIter, &arg2);
-        MR::getPlacementArg5NoInit(rIter, &_A4);
+        MR::getPlacementArg5NoInit(rIter, &mLifeStep);
         MR::joinToGroupArray(this, rIter, nullptr, 32);
     }
 
@@ -142,14 +142,14 @@ void StarPieceGroup::init(const TableIter& rIter) {
         }
 
         if (MR::isValidSwitchA(this)) {
-            mPieces[i]->mFlags._1 = false;
+            mPieces[i]->mFlags.isGettable = false;
         }
     }
 
     MR::connectToSceneMapObjMovement(this);
 
     if (isRail) {
-        MR::initAndSetRailClipping(&_AC, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, 500.0f);
     }
 
     MR::validateClipping(this);
@@ -168,26 +168,26 @@ void StarPieceGroup::init(const TableIter& rIter) {
         makeActorDead();
         MR::syncStageSwitchAppear(this);
     } else {
-        _95 = false;
+        mIsAppearEffect = false;
         makeActorAppeared();
     }
 
-    _95 = true;
+    mIsAppearEffect = true;
 }
 
 void StarPieceGroup::makeActorAppeared() {
     LiveActor::makeActorAppeared();
 
-    if (_94) {
+    if (mHasAppeared) {
         makeActorDead();
     } else {
-        _94 = true;
+        mHasAppeared = true;
         forceReplaceStarPieceAll();
     }
 }
 
 void StarPieceGroup::appear() {
-    if (!_94) {
+    if (!mHasAppeared) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
 
@@ -200,10 +200,10 @@ void StarPieceGroup::makeActorDead() {
 }
 
 void StarPieceGroup::control() {
-    if (_A4 != -1) {
+    if (mLifeStep != -1) {
         MR::invalidateClipping(this);
-        _A4--;
-        if (_A4 <= 0) {
+        mLifeStep--;
+        if (mLifeStep <= 0) {
             kill();
         }
     }
@@ -290,13 +290,13 @@ void StarPieceGroup::placementPieceOnRailPoint() {
 
 void StarPieceGroup::onSwitchA() {
     for (u32 i = 0; i < mNumPieces; i++) {
-        mPieces[i]->mFlags._1 = true;
+        mPieces[i]->mFlags.isGettable = true;
     }
 }
 
 void StarPieceGroup::offSwitchA() {
     for (u32 i = 0; i < mNumPieces; i++) {
-        mPieces[i]->mFlags._1 = false;
+        mPieces[i]->mFlags.isGettable = false;
     }
 }
 

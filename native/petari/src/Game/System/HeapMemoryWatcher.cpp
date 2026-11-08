@@ -1,39 +1,22 @@
-#include <nebula_game_api.h>
-
-extern "C" const NebulaHostServices* nebula_host(void);
-
 #include "Game/System/HeapMemoryWatcher.hpp"
-#include "Game/System/GameAssets.hpp"
-#include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-
 namespace {
-    NebulaArena* createArena(NebulaArena* pHeap) {
-        NebulaArena* heap = NebulaArena::create(pHeap);
-
-        if (MR::isEqualCurrentHeap(heap)) {
-            NebulaArena::sRootHeap->becomeCurrentHeap();
-        }
-
-        return heap;
-    }
-
-    void destroyHeapAndSetNULL(NebulaArena** pHeap) {
-        if (*pHeap != nullptr) {
-            NebulaArena::destroy(*pHeap);
-            *pHeap = nullptr;
+    void destroyArena(NebulaArena** ppArena) {
+        if (*ppArena != nullptr) {
+            NebulaArena::destroy(*ppArena);
+            *ppArena = nullptr;
         }
     }
 };  // namespace
 
 void HeapMemoryWatcher::createFileCacheHeapOnGameHeap() {
-    mFileCacheHeap = ::createArena(mGameHeap);
+    mFileCacheHeap = NebulaArena::create(mGameHeap);
 }
 
 void HeapMemoryWatcher::createSceneHeapOnGameHeap() {
-    mSceneHeap = ::createArena(mGameHeap);
+    mSceneHeap = NebulaArena::create(mGameHeap);
 }
 
 void HeapMemoryWatcher::setCurrentHeapToPermanent() {
@@ -49,34 +32,27 @@ void HeapMemoryWatcher::setCurrentHeapToSceneHeap() {
 }
 
 void HeapMemoryWatcher::destroySceneHeap() {
-    ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mSceneHeap));
+    ::destroyArena(&mSceneHeap);
 }
 
+// The scene's objects go before the cached files they use.
 void HeapMemoryWatcher::destroyGameHeap() {
-    if (mSceneHeap != nullptr) {
-        ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mSceneHeap));
-    }
-
-    if (mFileCacheHeap != nullptr) {
-        ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mFileCacheHeap));
-    }
-
-    ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mGameHeap));
+    ::destroyArena(&mSceneHeap);
+    ::destroyArena(&mFileCacheHeap);
+    ::destroyArena(&mGameHeap);
     createGameHeap();
 }
 
 void HeapMemoryWatcher::createHeaps() {
-    MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(NebulaArena::sRootHeap);
-    mPermanent = ::createArena(NebulaArena::sRootHeap);
+    mPermanent = NebulaArena::create(NebulaArena::sRootHeap);
     mPermanent->becomeSystemHeap();
     createGameHeap();
 }
 
 void HeapMemoryWatcher::createGameHeap() {
-    mGameHeap = ::createArena(NebulaArena::sRootHeap);
+    mGameHeap = NebulaArena::create(NebulaArena::sRootHeap);
 }
 
-HeapMemoryWatcher::HeapMemoryWatcher()
-    : mPermanent(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr) {
+HeapMemoryWatcher::HeapMemoryWatcher() : mPermanent(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr) {
     createHeaps();
 }

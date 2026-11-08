@@ -63,7 +63,7 @@ void MeteorStrike::init(const TableIter& rIter) {
     }
 
     initBinder(::cBinderRadius, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     MR::setEffectHostMtx(this, "LavaColumnAttrDefault", mLavaColumnPos);
     MR::setEffectHostMtx(this, "LavaColumnAttrDamageFire", mLavaColumnPos);

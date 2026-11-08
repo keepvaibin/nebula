@@ -8,7 +8,6 @@ class RailGraphNode {
 public:
     RailGraphNode();
 
-    Vec3f _0;
-    s32 _C;
-    u32 _10;
+    Vec3f mPos;
+    s32 mFirstEdge;
 };

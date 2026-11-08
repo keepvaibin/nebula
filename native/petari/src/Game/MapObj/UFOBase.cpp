@@ -34,13 +34,13 @@ UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
     mLODCtrl = nullptr;
     mModel = nullptr;
     mRailMover = nullptr;
-    _9C.x = 0.0f;
-    _9C.y = 0.0f;
-    _9C.z = 1.0f;
-    _A8 = 0.0f;
-    _AC = 0;
-    _B0 = false;
-    _B4 = nullptr;
+    mFront.x = 0.0f;
+    mFront.y = 0.0f;
+    mFront.z = 1.0f;
+    mRotateSpeed = 0.0f;
+    mMoveConditionType = 0;
+    mIsRailDone = false;
+    mObjName = nullptr;
 }
 
 void UFOBase::init(const TableIter& rIter) {
@@ -48,13 +48,13 @@ void UFOBase::init(const TableIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);
     initModelManagerWithAnm(name, nullptr, false);
-    _B4 = name;
+    mObjName = name;
     MR::connectToSceneCollisionMapObj(this);
     initHitSensor(1);
     initSensorType();
     MR::initCollisionParts(this, name, getSensor(nullptr), nullptr);
     mCollisionParts = MR::tryCreateCollisionMoveLimit(this, getBaseMtx(), getSensor(nullptr));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     if (MR::isConnectedWithRail(rIter)) {
@@ -71,13 +71,13 @@ void UFOBase::init(const TableIter& rIter) {
     MR::addBaseMatrixFollowTarget(this, rIter, nullptr, nullptr);
     initSubModel(rIter, name);
     MR::tryRegisterDemoCast(this, rIter);
-    MR::calcFrontVec(&_9C, this);
-    MR::getMapPartsArgRotateSpeed(&_A8, rIter);
-    _A8 *= 0.01f;
-    MR::getMapPartsArgMoveConditionType(&_AC, rIter);
+    MR::calcFrontVec(&mFront, this);
+    MR::getMapPartsArgRotateSpeed(&mRotateSpeed, rIter);
+    mRotateSpeed *= 0.01f;
+    MR::getMapPartsArgMoveConditionType(&mMoveConditionType, rIter);
     MR::tryStartAllAnim(this, name);
 
-    if (MR::isMoveStartTypeUnconditional(_AC)) {
+    if (MR::isMoveStartTypeUnconditional(mMoveConditionType)) {
         initNerve(GET_NERVE(UFOBase, UFOBaseNrvWait));
     } else {
         initNerve(GET_NERVE(UFOBase, UFOBaseNrvWaitForPlayerOn));
@@ -101,12 +101,12 @@ void UFOBase::exeMove() {
     if (MR::isFirstStep(this)) {
         if (mRailMover) {
             mRailMover->start();
-            if (MR::isEqualString("UFOBattleStageC", _B4)) {
+            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
                 MR::startSound(this, "SE_OJ_UFO_BTL_C_START");
             }
         }
     }
-    MR::rotateVecDegree(&_9C, mGravity, _A8);
+    MR::rotateVecDegree(&mFront, mGravity, mRotateSpeed);
 }
 
 void UFOBase::exeBreak() {
@@ -139,33 +139,33 @@ void UFOBase::control() {
     }
     mLODCtrl->update();
 
-    if (MR::isEqualString("UFONormalB", _B4)) {
+    if (MR::isEqualString("UFONormalB", mObjName)) {
         MR::startLevelSound(this, "SE_OJ_LV_UFO_NORM_B_WORK");
-    } else if (MR::isEqualString("UFOBattleStageD", _B4)) {
+    } else if (MR::isEqualString("UFOBattleStageD", mObjName)) {
         MR::startLevelSound(this, "SE_OJ_LV_UFO_BTL_D_ROTATE");
     }
 
     if (mRailMover) {
         mRailMover->movement();
-        mPosition.x = mRailMover->_28.x;
-        mPosition.y = mRailMover->_28.y;
-        mPosition.z = mRailMover->_28.z;
+        mPosition.x = mRailMover->mStartPos.x;
+        mPosition.y = mRailMover->mStartPos.y;
+        mPosition.z = mRailMover->mStartPos.z;
         if (mRailMover->isWorking()) {
-            if (MR::isEqualString("UFOBattleStageC", _B4)) {
+            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
                 MR::startLevelSound(this, "SE_OJ_LV_UFO_BTL_C_MOVE");
             } else {
                 MR::startLevelSound(this, "SE_OJ_LV_UFO_MOVE");
             }
         }
-        if (mRailMover->isDone() && !_B0) {
+        if (mRailMover->isDone() && !mIsRailDone) {
             MR::tryRumblePadMiddle(this, PLAYER_1);
             MR::shakeCameraNormal();
-            if (MR::isEqualString("UFOBattleStageC", _B4)) {
+            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
                 MR::startSound(this, "SE_OJ_UFO_BTL_C_STOP");
             } else {
                 MR::startSound(this, "SE_OJ_UFO_MOVE_END");
             }
-            _B0 = true;
+            mIsRailDone = true;
         }
     }
 }
@@ -175,7 +175,7 @@ void UFOBase::calcAndSetBaseMtx() {
     Pos3f mtx;
     mtx.identity();
     MR::calcUpVec(&vec, this);
-    MR::makeMtxUpFrontPos(&mtx, vec, _9C, mPosition);
+    MR::makeMtxUpFrontPos(&mtx, vec, mFront, mPosition);
     MR::setBaseTRMtx(this, mtx);
 }
 

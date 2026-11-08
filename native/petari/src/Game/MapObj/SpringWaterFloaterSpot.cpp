@@ -16,23 +16,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 
-namespace {
-    // static const sRisingSpeed;
-    // static const sRisingSpeedAtFloatSignal;
-    // static const sBoundAmpMax;
-    // static const sBoundTime;
-    // static const sStartFloatPower;
-    // static const sRambleSide;
-    // static const sRambleRotX;
-    // static const sDefaultAccelRate;
-    // static const sAccelMax;
-    // static const sStepForFloatSignal;
-    // static const sStepToRisingForFloatSignal;
-    // static const sEffectRippleOffset;
-    // static const sWaveSeStepsMin;
-    // static const sWaveSeStepsMax;
-};  // namespace
-
 namespace NrvSpringWaterFloaterSpot {
     NEW_NERVE(SpringWaterFloaterSpotNrvWait, SpringWaterFloaterSpot, Wait);
     NEW_NERVE(SpringWaterFloaterSpotNrvFloatSignal, SpringWaterFloaterSpot, FloatSignal);
@@ -41,7 +24,7 @@ namespace NrvSpringWaterFloaterSpot {
 };  // namespace NrvSpringWaterFloaterSpot
 
 SpringWaterFloaterSpot::SpringWaterFloaterSpot(const char* pName)
-    : LiveActor(pName), _8C(), _90(20.0f), mHeight(), _A4(), mBoundStep(), _AC(0.0f, 0.0f, 0.0f), mBoundSize(), _C8(), mNeedsBound(), _CA(),
+    : LiveActor(pName), mRiseSpeed(), mRiseAccel(20.0f), mHeight(), mWaterCheckOffset(), mBoundStep(), mFloatPos(0.0f, 0.0f, 0.0f), mBoundSize(), mIsOnPlayer(), mNeedsBound(), mHasSurfaced(),
       mFloatTimer() {
 }
 
@@ -54,7 +37,7 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
     MR::getObjectName(&objectName, rIter);
     initModelManagerWithAnm(objectName, nullptr, false);
 
-    _CC.set(getBaseMtx());
+    mFloatMtx.set(getBaseMtx());
 
     MR::connectToSceneCollisionMapObj(this);
 
@@ -62,7 +45,7 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, objectName, getSensor("body"), nullptr);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, 0);
 
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
@@ -75,12 +58,12 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
 
     MR::tryRegisterDemoCast(this, rIter);
 
-    MR::getPlacementArg0NoInit(rIter, &_90);
-    _90 /= 100.0f;
+    MR::getPlacementArg0NoInit(rIter, &mRiseAccel);
+    mRiseAccel /= 100.0f;
 
-    MR::getPlacementArg1NoInit(rIter, &_A4);
+    MR::getPlacementArg1NoInit(rIter, &mWaterCheckOffset);
 
-    _AC.set(mPosition);
+    mFloatPos.set(mPosition);
 
     initNerve(GET_NERVE(SpringWaterFloaterSpot, SpringWaterFloaterSpotNrvWait));
 
@@ -88,7 +71,7 @@ void SpringWaterFloaterSpot::init(const TableIter& rIter) {
 }
 
 void SpringWaterFloaterSpot::control() {
-    _C8 = MR::isOnPlayer(getSensor(nullptr));
+    mIsOnPlayer = MR::isOnPlayer(getSensor(nullptr));
 
     if (isNerve(GET_NERVE(SpringWaterFloaterSpot, SpringWaterFloaterSpotNrvFloatUp))) {
         floatFloater();
@@ -96,17 +79,17 @@ void SpringWaterFloaterSpot::control() {
 
     boundFloater();
 
-    _AC.add(mVelocity);
-    MR::makeMtxUpNoSupportPos(&_CC, -mGravity, _AC);
+    mFloatPos.add(mVelocity);
+    MR::makeMtxUpNoSupportPos(&mFloatMtx, -mGravity, mFloatPos);
 
     Vec3f vec20;
-    Vec3f vec14(0.0f, -70.0f + _A4, 0.0f);
-    NebulaMtxMultVec(_CC, vec14, vec20);
-    _CC.setTrans(vec20);
+    Vec3f vec14(0.0f, -70.0f + mWaterCheckOffset, 0.0f);
+    NebulaMtxMultVec(mFloatMtx, vec14, vec20);
+    mFloatMtx.setTrans(vec20);
 }
 
 void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
-    mPosition.set(_AC);
+    mPosition.set(mFloatPos);
 
     Pos3f baseMtx;
     MR::makeMtxTR(baseMtx, this);
@@ -126,7 +109,7 @@ void SpringWaterFloaterSpot::calcAndSetBaseMtx() {
 void SpringWaterFloaterSpot::exeWait() {
     Vec3f up(-mGravity);
     Vec3f vec1C;
-    vec1C.scale(_A4, up);
+    vec1C.scale(mWaterCheckOffset, up);
 
     if (MR::isInWater(this, vec1C)) {
         if (mHeight >= 90.0f) {
@@ -237,16 +220,16 @@ void SpringWaterFloaterSpot::floatFloater() {
     up.negate(mGravity);
 
     Vec3f scaledUp;
-    scaledUp.scale(_A4, up);
+    scaledUp.scale(mWaterCheckOffset, up);
 
     if (MR::isInWater(this, scaledUp)) {
         if (mHeight >= 90.0f) {
-            mVelocity.scale(1.0f + _8C, up);
+            mVelocity.scale(1.0f + mRiseSpeed, up);
 
             mHeight = 90.0f;
 
-            if (_8C < 40.0f) {
-                _8C += _90;
+            if (mRiseSpeed < 40.0f) {
+                mRiseSpeed += mRiseAccel;
             }
 
             return;
@@ -257,16 +240,16 @@ void SpringWaterFloaterSpot::floatFloater() {
         return;
     }
 
-    if (!_CA) {
+    if (!mHasSurfaced) {
         MR::emitEffect(this, "Ripple");
-        MR::setEffectHostMtx(this, "Ripple", _CC);
+        MR::setEffectHostMtx(this, "Ripple", mFloatMtx);
 
         mBoundStep = 0;
         mNeedsBound = true;
     }
 
-    _CA = true;
-    _8C = 0.0f;
+    mHasSurfaced = true;
+    mRiseSpeed = 0.0f;
 
     mRotation.set(mInitialRotation);
     mVelocity.zero();
@@ -278,11 +261,11 @@ bool SpringWaterFloaterSpot::isModelLongSide() {
 }
 
 bool SpringWaterFloaterSpot::isNeedsForBound() {
-    if (_C8 && MR::isPlayerJumpRising() && MR::checkPlayerActionTrigger()) {
+    if (mIsOnPlayer && MR::isPlayerJumpRising() && MR::checkPlayerActionTrigger()) {
         return true;
     }
 
-    if (!_C8 && MR::isOnPlayer(getSensor(nullptr))) {
+    if (!mIsOnPlayer && MR::isOnPlayer(getSensor(nullptr))) {
         return true;
     }
 

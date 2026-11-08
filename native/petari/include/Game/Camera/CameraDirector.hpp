@@ -158,7 +158,6 @@ public:
     CameraManEvent* mCameraManEvent;
     CameraManPause* mCameraManPause;
     CameraManSubjective* mCameraManSubjective;
-    bool _58;
     MR::GrowTable< CameraEvent, 2 > mEvents;
     u32 mEventNum;
     bool mIsStartCameraActive;
@@ -171,11 +170,8 @@ public:
     bool mIsSubjectiveCamera;
     bool mIsStartSubjectiveCamera;
     s32 mSubjectiveFrame;
-    u32 _1B8;
     f32 mNearZ;
     Pos3f mViewMtx;
     bool mIsSubjectiveCalced;
-    bool _1F1;
     bool mIsCameraNG;
-    u8 _1F3;
 };

@@ -4,7 +4,6 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/Render/Model.hpp"
 
 namespace {
     const char* dummy_name = "NULL";

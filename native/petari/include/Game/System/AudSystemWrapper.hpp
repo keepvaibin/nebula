@@ -3,9 +3,7 @@
 
 class AudSystem;
 class NebulaArena;
-class NebulaArena;
 class AssetFolder;
-class NebulaArena;
 
 class AudSystemWrapper {
 public:
@@ -34,6 +32,5 @@ public:
     AssetFolder* mJaiRemixSeqRes;
     NebulaArena* mSpkHeap;
     AssetFolder* mSpkRes;
-    bool _28;
     bool mIsResetDone;
 };

@@ -126,7 +126,7 @@ void TypicalDoorOpen::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
     MR::listenStageSwitchOnB(this, MR::Functor< TypicalDoor >(this, &TypicalDoor::close));
 }
 
-DarknessRoomDoor::DarknessRoomDoor(const char* pName) : TypicalDoor(pName), _CC() {
+DarknessRoomDoor::DarknessRoomDoor(const char* pName) : TypicalDoor(pName), mIsNormalDraw() {
 }
 
 TypicalDoor::~TypicalDoor() {
@@ -135,14 +135,14 @@ TypicalDoor::~TypicalDoor() {
 void DarknessRoomDoor::init(const TableIter& rIter) {
     s32 arg0 = -1;
     MR::getPlacementArg0NoInit(rIter, &arg0);
-    _CC = arg0 != -1;
+    mIsNormalDraw = arg0 != -1;
     TypicalDoor::init(rIter);
     MR::useStageSwitchReadA(this, rIter);
 }
 
 void DarknessRoomDoor::control() {
     MapObjActor::control();
-    if (!_CC && MR::isValidSwitchA(this)) {
+    if (!mIsNormalDraw && MR::isValidSwitchA(this)) {
         if (MR::isOnSwitchA(this)) {
             validateCollision();
         } else {
@@ -152,7 +152,7 @@ void DarknessRoomDoor::control() {
 }
 
 void DarknessRoomDoor::connectToScene(const MapObjActorInitInfo& rIter) {
-    if (_CC) {
+    if (mIsNormalDraw) {
         MapObjActor::connectToScene(rIter);
     } else {
         MR::connectToClippedMapParts(this);

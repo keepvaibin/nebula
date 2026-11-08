@@ -7,12 +7,19 @@ class ClippingActorInfoList;
 class TableIter;
 class LodCtrl;
 
+// This frame's view cubes of one group around the player.
 struct ViewGroupCtrlDataEntry {
-    bool _0;
-    bool _1;
-    bool _2;
-    bool _3;
-    bool _4;
+    void clear() {
+        mIsPlayerInside = false;
+        mIsNear = false;
+        mIsFar = false;
+        mIsHidden = false;
+    }
+
+    bool mIsPlayerInside;  // in a cube that does not hide the group
+    bool mIsNear;          // models at their near level
+    bool mIsFar;           // models at their far level
+    bool mIsHidden;
 };
 
 class ViewGroupCtrl {

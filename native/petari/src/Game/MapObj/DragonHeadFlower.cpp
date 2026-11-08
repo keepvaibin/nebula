@@ -59,7 +59,7 @@ void DragonHeadFlower::init(const TableIter& rIter) {
 
     ::initFlowerSensors(this);
 
-    initEffectKeeper(2, nullptr, false);
+    initEffectKeeper(2, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(DragonHeadFlower, DragonHeadFlowerNrvWait));
 

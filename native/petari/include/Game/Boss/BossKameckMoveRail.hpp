@@ -12,6 +12,6 @@ public:
     s32 calcRandomIndex(s32) const;
     s32 calcRandomStoppableIndex(s32) const;
 
-    s32 _8C;
-    s32 _90;
+    s32 mRailNo;
+    s32 mStoppablePointNum;
 };

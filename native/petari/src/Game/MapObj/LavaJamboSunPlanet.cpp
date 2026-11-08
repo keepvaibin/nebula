@@ -19,8 +19,8 @@ namespace NrvLavaJamboSunPlanet {
 LavaJamboSunPlanet::LavaJamboSunPlanet(const char* pName) : LiveActor(pName) {
     mBloomModel = nullptr;
     mLodCtrl = nullptr;
-    _94 = 0.0f;
-    _98.setZeroVec();
+    mMoveSpeed = 0.0f;
+    mClipCenter.setZeroVec();
 }
 
 void LavaJamboSunPlanet::init(const TableIter& rIter) {
@@ -31,7 +31,7 @@ void LavaJamboSunPlanet::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "LavaJamboSunPlanet", bodySensor, nullptr);
     initNerve(GET_NERVE(LavaJamboSunPlanet, HostTypeWait));
     initRailRider(rIter);
-    MR::initAndSetRailClipping(&_98, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
     MR::needStageSwitchReadA(this, rIter);
     MR::needStageSwitchReadB(this, rIter);
     MR::connectToScenePlanet(this);
@@ -64,9 +64,9 @@ void LavaJamboSunPlanet::exeWait() {
 }
 
 void LavaJamboSunPlanet::exeMove() {
-    MR::getMapPartsArgMoveSpeed(&_94, this);
-    _94 *= 0.1f;
-    MR::moveCoordAndFollowTrans(this, _94);
+    MR::getMapPartsArgMoveSpeed(&mMoveSpeed, this);
+    mMoveSpeed *= 0.1f;
+    MR::moveCoordAndFollowTrans(this, mMoveSpeed);
     MR::startLevelSound(this, "SE_AT_LV_JUMBO_SUN_MOVE");
     s32 v3 = -1;
     MR::getCurrentRailPointArg1NoInit(this, &v3);

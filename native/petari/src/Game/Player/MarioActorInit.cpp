@@ -288,7 +288,6 @@ void MarioActor::initMember() {
     _B9C = 0;
     _B9E = 0;
     _BA0 = nullptr;
-    _BA4 = nullptr;
     _BA8 = 0;
     _BAC.zero();
     _BB8.zero();

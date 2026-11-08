@@ -2,7 +2,7 @@
 #include "Game/Util.hpp"
 
 AreaFormCube::AreaFormCube(int a1) {
-    _8 = a1;
+    mCubeType = a1;
     mTranslation.x = 0.0f;
     mTranslation.y = 0.0f;
     mTranslation.z = 0.0f;
@@ -39,17 +39,17 @@ bool AreaFormCube::isInVolume(const Vec3f& rPos) const {
 }
 
 void AreaFormCube::calcWorldPos(Vec3f* pPos) const {
-    if (_4 != nullptr) {
-        _4->mult(mTranslation, *pPos);
+    if (mFollowMtx != nullptr) {
+        mFollowMtx->mult(mTranslation, *pPos);
     } else {
         pPos->set(mTranslation);
     }
 }
 
 void AreaFormCube::calcWorldRotate(Vec3f* pOut) const {
-    const Pos3f* pFollowMtx = _4;
+    const Pos3f* pFollowMtx = mFollowMtx;
     if (pFollowMtx != nullptr) {
-        Pos3f stack = _48;
+        Pos3f stack = mBaseMtx;
         stack.zeroTrans();
         stack.concat(*pFollowMtx, stack);
         stack.getEulerXYZ(*pOut);
@@ -63,21 +63,21 @@ void AreaFormCube::calcWorldBox(DirBox3f* pBox) const {
     Pos3f pos;
     calcWorldMtx(&pos);
 
-    pBox->_0.x = pos.mMtx[0][0];
-    pBox->_C.x = pos.mMtx[0][1];
-    pBox->_18.x = pos.mMtx[0][2];
-    pBox->_24.x = pos.mMtx[0][3];
-    pBox->_0.y = pos.mMtx[1][0];
-    pBox->_C.y = pos.mMtx[1][1];
-    pBox->_18.y = pos.mMtx[1][2];
-    pBox->_24.y = pos.mMtx[1][3];
-    pBox->_0.z = pos.mMtx[2][0];
-    pBox->_C.z = pos.mMtx[2][1];
-    pBox->_18.z = pos.mMtx[2][2];
-    pBox->_24.z = pos.mMtx[2][3];
+    pBox->mAxisX.x = pos.mMtx[0][0];
+    pBox->mAxisY.x = pos.mMtx[0][1];
+    pBox->mAxisZ.x = pos.mMtx[0][2];
+    pBox->mCorner.x = pos.mMtx[0][3];
+    pBox->mAxisX.y = pos.mMtx[1][0];
+    pBox->mAxisY.y = pos.mMtx[1][1];
+    pBox->mAxisZ.y = pos.mMtx[1][2];
+    pBox->mCorner.y = pos.mMtx[1][3];
+    pBox->mAxisX.z = pos.mMtx[2][0];
+    pBox->mAxisY.z = pos.mMtx[2][1];
+    pBox->mAxisZ.z = pos.mMtx[2][2];
+    pBox->mCorner.z = pos.mMtx[2][3];
 
-    pBox->_30.sub(mBounding.f, mBounding.i);
-    pos.mult(mBounding.i, pBox->_24);
+    pBox->mSize.sub(mBounding.f, mBounding.i);
+    pos.mult(mBounding.i, pBox->mCorner);
 }
 
 void AreaFormCube::calcLocalPos(Vec3f* pPos, const Vec3f& rPos) const {
@@ -91,9 +91,9 @@ f32 AreaFormCube::getBaseSize() {
 }
 
 void AreaFormCube::updateBoxParam() {
-    MR::makeMtxRotate(_48, mRotation.x, mRotation.y, mRotation.z);
+    MR::makeMtxRotate(mBaseMtx, mRotation.x, mRotation.y, mRotation.z);
 
-    _48.setTrans(mTranslation);
+    mBaseMtx.setTrans(mTranslation);
 
     Vec3f v10(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
     Vec3f v9(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
@@ -101,7 +101,7 @@ void AreaFormCube::updateBoxParam() {
     mBounding.i.set(v10);
     mBounding.f.set(v9);
 
-    if (_8 == 1) {
+    if (mCubeType == 1) {
         Vec3f temp(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
 
         mBounding.i += temp;
@@ -110,11 +110,11 @@ void AreaFormCube::updateBoxParam() {
 }
 
 void AreaFormCube::calcWorldMtx(Pos3f* pPos) const {
-    const Pos3f* pFollowMtx = _4;
+    const Pos3f* pFollowMtx = mFollowMtx;
     if (pFollowMtx != nullptr) {
-        pPos->concat(*pFollowMtx, _48);
+        pPos->concat(*pFollowMtx, mBaseMtx);
     } else {
-        pPos->set(_48);
+        pPos->set(mBaseMtx);
     }
 }
 
@@ -126,8 +126,8 @@ AreaFormSphere::AreaFormSphere() {
 }
 
 void AreaFormSphere::calcUpVec(Vec3f* pOut) const {
-    if (_4 != nullptr) {
-        _4->mult33(mUp, *pOut);
+    if (mFollowMtx != nullptr) {
+        mFollowMtx->mult33(mUp, *pOut);
         MR::normalize(pOut);
     } else {
         pOut->set(mUp);
@@ -135,8 +135,8 @@ void AreaFormSphere::calcUpVec(Vec3f* pOut) const {
 }
 
 void AreaFormSphere::calcPos(Vec3f* pOut) const {
-    if (_4 != nullptr) {
-        _4->mult(mTranslation, *pOut);
+    if (mFollowMtx != nullptr) {
+        mFollowMtx->mult(mTranslation, *pOut);
     } else {
         pOut->set(mTranslation);
     }
@@ -153,7 +153,7 @@ AreaFormBowl::AreaFormBowl() {
     mTranslation.x = 0.0f;
     mTranslation.y = 0.0f;
     mTranslation.z = 0.0f;
-    _20 = 0.0f;
+    mRadius = 0.0f;
 }
 
 void AreaFormBowl::init(const TableIter& rIter) {
@@ -161,8 +161,8 @@ void AreaFormBowl::init(const TableIter& rIter) {
 
     f32 scale_x;
     rIter.getValue< f32 >("scale_x", &scale_x);
-    _20 = scale_x;
-    _20 *= 500.0f;
+    mRadius = scale_x;
+    mRadius *= 500.0f;
 
     Vec3f rotation;
     MR::getPlacementRotate(rIter, &rotation);
@@ -170,7 +170,7 @@ void AreaFormBowl::init(const TableIter& rIter) {
 }
 
 bool AreaFormBowl::isInVolume(const Vec3f& rPos) const {
-    if ((rPos - mTranslation).length() > _20) {
+    if ((rPos - mTranslation).length() > mRadius) {
         return false;
     }
 
@@ -199,8 +199,8 @@ AreaFormCylinder::AreaFormCylinder() {
 }
 
 void AreaFormCylinder::calcPos(Vec3f* pPos) const {
-    if (_4 != nullptr) {
-        _4->mult(mTranslation, *pPos);
+    if (mFollowMtx != nullptr) {
+        mFollowMtx->mult(mTranslation, *pPos);
     } else {
         pPos->set(mTranslation);
     }
@@ -215,8 +215,8 @@ void AreaFormCylinder::calcCenterPos(Vec3f* pCenterPos) const {
 }
 
 void AreaFormCylinder::calcUpVec(Vec3f* pUpVec) const {
-    if (_4 != nullptr) {
-        _4->mult33(mRotation, *pUpVec);
+    if (mFollowMtx != nullptr) {
+        mFollowMtx->mult33(mRotation, *pUpVec);
         MR::normalize(pUpVec);
     } else {
         pUpVec->set(mRotation);

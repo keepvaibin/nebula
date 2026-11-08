@@ -2,6 +2,18 @@
 #include "Game/Sound/Sound.hpp"
 #include "Game/Sound/SoundHandles.hpp"
 
+SoundAnimation* SoundAnimation::load(void* pFile, const char* pName) {
+    if (pFile == nullptr) {
+        return nullptr;
+    }
+    SoundAnimation* pAnimation = static_cast< SoundAnimation* >(pFile);
+    const char* pMagic = pAnimation->mMagic;
+    if (pMagic[0] != 'N' || pMagic[1] != 'B' || pMagic[2] != 'A' || pMagic[3] != 'S') {
+        NEBULA_PANIC("SoundAnimation: %s: a sound animation the importer did not cook", pName);
+    }
+    return pAnimation;
+}
+
 u32 SoundAnimation::getStartSoundIndex(f32 time) const {
     int idx;
     for (idx = 0; idx < getNumSounds(); idx++) {

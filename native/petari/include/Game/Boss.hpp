@@ -121,8 +121,6 @@
 #include "Game/Boss/PoltaStateStagger.hpp"
 #include "Game/Boss/PoltaWaitStart.hpp"
 #include "Game/Boss/SkeletalFishBaby.hpp"
-#include "Game/Boss/SkeletalFishBabyRail.hpp"
-#include "Game/Boss/SkeletalFishBabyRailHolder.hpp"
 #include "Game/Boss/SkeletalFishBoss.hpp"
 #include "Game/Boss/SkeletalFishBossBattleDirector.hpp"
 #include "Game/Boss/SkeletalFishBossFunc.hpp"

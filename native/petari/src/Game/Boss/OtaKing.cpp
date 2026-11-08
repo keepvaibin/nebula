@@ -117,7 +117,7 @@ namespace {
 };  // namespace
 
 OtaKing::OtaKing(const char* pName)
-    : LiveActor(pName), mMagma(), mCocoNutBallArray(), mFireBallArray(), mFireBubbleArray(), mThrowPos(), mHits(), _EC(), mTurnSpeed(), mSoundObj(),
+    : LiveActor(pName), mMagma(), mCocoNutBallArray(), mFireBallArray(), mFireBubbleArray(), mThrowPos(), mHits(), mThrowNum(), mTurnSpeed(), mSoundObj(),
       mSoundObjPos(gZeroVec), mBubbleAppearPos(), mDownCocoNut(), mAnimCamera(), mIsLv2(), mScaleController() {
     MR::zeroMemory(mFeet, sizeof(mFeet));
     MR::zeroMemory(mLongFeet, sizeof(mLongFeet));
@@ -130,7 +130,7 @@ void OtaKing::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSensor();
-    initEffectKeeper(0, "OtaKing", false);
+    initEffectKeeper(0, "OtaKing");
     MR::setClippingTypeSphere(this, 3000.0f);
     initSound(8, false);
     mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, MR::getCurrentHeap());
@@ -191,7 +191,7 @@ void OtaKing::control() {
 
 void OtaKing::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -232,7 +232,7 @@ bool OtaKing::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
         a1 = MR::max(a1, 1);
     }
 
-    bool b1 = rallyBall->_9C <= a1;
+    bool b1 = rallyBall->mRallyNum <= a1;
 
     bool isReceiverBody = pReceiver == getSensor("body");
 
@@ -276,7 +276,7 @@ bool OtaKing::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
                     return true;
                 } else if (isNerve(GET_NERVE(OtaKing, OtaKingNrvThrowCocoNut)) || isNerve(GET_NERVE(OtaKing, OtaKingNrvHitBack))) {
-                    _EC = 2;
+                    mThrowNum = 2;
                     return true;
                 }
             }
@@ -314,18 +314,18 @@ void OtaKing::initModel(const TableIter& rIter) {
     mCocoNutBallArray = new CocoNutBall[3];
     for (int i = 0; i < 3; i++) {
         mCocoNutBallArray[i].initWithoutIter();
-        mCocoNutBallArray[i]._8C = this;
-        mCocoNutBallArray[i]._BE = true;
-        mCocoNutBallArray[i]._D8 = true;
-        mCocoNutBallArray[i]._D4 = 5000.0f;
+        mCocoNutBallArray[i].mHost = this;
+        mCocoNutBallArray[i].mIsHeightLimited = true;
+        mCocoNutBallArray[i].mIsRallyBgm = true;
+        mCocoNutBallArray[i].mKillDistance = 5000.0f;
 
         float arg;
         if (MR::getPlacementArg0NoInit(rIter, &arg)) {
-            mCocoNutBallArray[i]._C0 = arg;
+            mCocoNutBallArray[i].mHeightMax = arg;
         }
 
         if (MR::getPlacementArg2NoInit(rIter, &arg)) {
-            mCocoNutBallArray[i]._C4 = arg;
+            mCocoNutBallArray[i].mHeightMin = arg;
         }
     }
 
@@ -543,8 +543,8 @@ void OtaKing::throwCocoNut() {
     f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
     f32 random = MR::getRandom(::cThrowAngleMin, ::cThrowAngleMax);
 
-    cocoNut->appearAndThrow(trans, angle + (_EC % 2 == mHits % 2 ? random : -random));
-    _EC++;
+    cocoNut->appearAndThrow(trans, angle + (mThrowNum % 2 == mHits % 2 ? random : -random));
+    mThrowNum++;
 }
 
 void OtaKing::throwFireBall() {
@@ -812,7 +812,7 @@ void OtaKing::exeWait() {
     }
 
     if (tryThrowCocoNutOrFireBallIfWait(::cWaitFrame)) {
-        _EC = 0;
+        mThrowNum = 0;
     }
 }
 
@@ -852,7 +852,7 @@ void OtaKing::exeThrowCocoNut() {
             } else {
                 setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowFireBallWait));
             }
-        } else if (_EC >= 2) {
+        } else if (mThrowNum >= 2) {
             setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowFireBallWait));
         } else {
             setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowCocoNutWait));
@@ -1176,7 +1176,7 @@ void OtaKing::exeHitBack() {
             } else {
                 setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowFireBallWait));
             }
-        } else if (_EC >= 2) {
+        } else if (mThrowNum >= 2) {
             setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowFireBallWait));
         } else {
             setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowCocoNutWait));

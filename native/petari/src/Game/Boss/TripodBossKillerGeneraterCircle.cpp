@@ -10,10 +10,10 @@ struct SetUpData {
     const char* mName;
     const f32* mAngleTable;
     s32 mAngleNum;
-    f32 _C;
-    f32 _10;
-    f32 _14;
-    f32 _18;
+    f32 mRadius;
+    f32 mCirclePitch;
+    f32 mCannonPitch;
+    f32 mHeight;
     u32 mActiveLabel;
     bool mHasCollision;
 };
@@ -42,7 +42,7 @@ TripodBossKillerGeneraterCircle::~TripodBossKillerGeneraterCircle() {
 }
 
 TripodBossKillerGeneraterCircle::TripodBossKillerGeneraterCircle(const char* pName)
-    : NameObj(pName), mGenerater(), mPosition(0.0f, 0.0f, 0.0f), mAngleTable(), mAngleNum(), _30(), _34(), _38(), _3C(), _40() {
+    : NameObj(pName), mGenerater(), mPosition(0.0f, 0.0f, 0.0f), mAngleTable(), mAngleNum(), mHeight(), mRadius(), mCirclePitch(), mCannonPitch() {
 }
 
 void TripodBossKillerGeneraterCircle::init(const TableIter& rIter) {
@@ -56,10 +56,10 @@ void TripodBossKillerGeneraterCircle::init(const TableIter& rIter) {
 
     mAngleTable = dataPtr->mAngleTable;
     mAngleNum = dataPtr->mAngleNum;
-    _34 = dataPtr->_C;
-    _38 = dataPtr->_10;
-    _3C = dataPtr->_14;
-    _30 = dataPtr->_18;
+    mRadius = dataPtr->mRadius;
+    mCirclePitch = dataPtr->mCirclePitch;
+    mCannonPitch = dataPtr->mCannonPitch;
+    mHeight = dataPtr->mHeight;
 
     mGenerater = new TripodBossKillerGenerater[mAngleNum];
 
@@ -76,14 +76,14 @@ void TripodBossKillerGeneraterCircle::placementGenerater() {
     for (s32 i = 0; i < mAngleNum; i++) {
         Pos3f mtx;
         mtx.identity();
-        mtx.setEulerX(-MR::toRadian(_3C));
-        mtx.setTrans(0.0f, 0.0f, _34);
+        mtx.setEulerX(-MR::toRadian(mCannonPitch));
+        mtx.setTrans(0.0f, 0.0f, mRadius);
 
         Pos3f mtx2;
         mtx2.identity();
-        mtx2.setRotate(-MR::toRadian(_38), MR::toRadian(mAngleTable[i]), 0.0f);
+        mtx2.setRotate(-MR::toRadian(mCirclePitch), MR::toRadian(mAngleTable[i]), 0.0f);
         mtx2.concat(mtx2, mtx);
-        MR::addTransMtx(mtx2, Vec3f(0.0f, _30, 0.0f));
+        MR::addTransMtx(mtx2, Vec3f(0.0f, mHeight, 0.0f));
 
         Pos3f trMtx;
         MR::makeMtxTR(trMtx, mPosition, mRotation);

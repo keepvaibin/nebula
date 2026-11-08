@@ -19,10 +19,9 @@ public:
     void updateCometStatus();
 
     LiveActorGroup* mMiniatureGalaxyGroup;
-    bool _90;
+    bool mIsRegistered;
     MiniatureGalaxy* mCometGalaxy;
     s32 mCometID;
-    s32 _9C;
 };
 
 class MiniatureGalaxyFunction {

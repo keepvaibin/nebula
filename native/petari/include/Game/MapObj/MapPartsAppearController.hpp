@@ -24,5 +24,5 @@ public:
 
     s32 mSignMotionType;
     PostureHolder* mPostureHolder;
-    u8 _20;
+    u8 mIsAppeared;
 };

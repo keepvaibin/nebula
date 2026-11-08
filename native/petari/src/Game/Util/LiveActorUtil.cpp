@@ -1132,10 +1132,7 @@ namespace MR {
     }
 
     void setBinderIgnoreMovingCollision(LiveActor* pActor) {
-        s8* pFlags = (s8*)&pActor->mBinder->_1EC;
-        s32 flags = *pFlags;
-        flags &= 0xFFFFFF7F;
-        *pFlags = flags;
+        pActor->mBinder->mIsMoveWithCollision = false;
     }
 
     LiveActorGroup* joinToGroup(LiveActor* pActor, const char* pGroupName) {
@@ -1966,7 +1963,7 @@ namespace MR {
     void setBinderOffsetVec(LiveActor* pActor, const Vec3f* pVec, bool b) {
         Binder* binder = pActor->mBinder;
         binder->mOffsetVec = pVec;
-        binder->_1EC._4 = b;
+        binder->mIsOffsetInHostFrame = b;
     }
 
     void setBinderRadius(LiveActor* pActor, f32 radius) {
@@ -2199,7 +2196,7 @@ namespace MR {
         Pos3f mtx;
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pName, pSensor, mtx, scaleType, 0);
-        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
         return pParts;
     }
 
@@ -2223,7 +2220,7 @@ namespace MR {
         const char* pCollisionName = "MoveLimit";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 3);
-        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2247,7 +2244,7 @@ namespace MR {
         const char* pCollisionName = "WaterSurface";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 2);
-        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2271,7 +2268,7 @@ namespace MR {
         const char* pCollisionName = "Sunshade";
         mtx.set(pMtx);
         CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 1);
-        pParts->_0 = reinterpret_cast< Pos3f* >(pMtx);
+        pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
             validateCollisionParts(pParts);
@@ -2328,18 +2325,18 @@ namespace MR {
     }
 
     f32 getCollisionBoundingSphereRange(const LiveActor* pActor) {
-        return pActor->mCollisionParts->_D8;
+        return pActor->mCollisionParts->mBoundingRadius;
     }
 
     bool isValidCollisionParts(LiveActor* pActor) {
-        return pActor->mCollisionParts->_CC;
+        return pActor->mCollisionParts->mIsValid;
     }
 
     void validateCollisionParts(LiveActor* pActor) {
         validateCollisionParts(pActor->mCollisionParts);
         CollisionParts* pParts = pActor->mCollisionParts;
 
-        if (pParts->_0 != nullptr) {
+        if (pParts->mFollowMtx != nullptr) {
             pParts->updateBoundingSphereRange();
         } else {
             pParts->updateBoundingSphereRange(pActor->mScale);
@@ -2349,11 +2346,11 @@ namespace MR {
     }
 
     void validateCollisionParts(CollisionParts* pParts) {
-        if (!pParts->_CC) {
+        if (!pParts->mIsValid) {
             pParts->addToBelongZone();
         }
 
-        pParts->_CC = true;
+        pParts->mIsValid = true;
     }
 
     void invalidateCollisionParts(LiveActor* pActor) {
@@ -2361,40 +2358,40 @@ namespace MR {
     }
 
     void invalidateCollisionParts(CollisionParts* pParts) {
-        if (pParts->_CC) {
+        if (pParts->mIsValid) {
             pParts->removeFromBelongZone();
         }
 
-        pParts->_CC = false;
+        pParts->mIsValid = false;
     }
 
     void validateExCollisionParts(LiveActor* pActor) {
-        *(u8*)&pActor->mBinder->_1EC |= 0x20;
+        pActor->mBinder->mIsExCollisionValid = true;
     }
 
     void invalidateExCollisionParts(LiveActor* pActor) {
-        *(u8*)&pActor->mBinder->_1EC &= ~0x20;
+        pActor->mBinder->mIsExCollisionValid = false;
     }
 
     void onUpdateCollisionParts(LiveActor* pActor) {
         CollisionParts* pParts = pActor->mCollisionParts;
 
-        if (!pParts->_CC) {
+        if (!pParts->mIsValid) {
             validateCollisionParts(pActor);
         }
 
-        pActor->mCollisionParts->_CD = true;
+        pActor->mCollisionParts->mIsUpdate = true;
     }
 
     void onUpdateCollisionPartsOnetimeImmediately(LiveActor* pActor) {
         CollisionParts* pParts = pActor->mCollisionParts;
 
-        if (!pParts->_CC) {
+        if (!pParts->mIsValid) {
             validateCollisionParts(pActor);
         }
 
         pParts = pActor->mCollisionParts;
-        pParts->_CE = true;
+        pParts->mIsUpdateOnce = true;
         makeMtxTR(pActor->getBaseMtx(), pActor);
         setCollisionMtx(pActor, pActor->mCollisionParts);
         pParts->updateMtx();
@@ -2403,17 +2400,17 @@ namespace MR {
     void offUpdateCollisionParts(LiveActor* pActor) {
         CollisionParts* pParts = pActor->mCollisionParts;
 
-        if (!pParts->_CC) {
+        if (!pParts->mIsValid) {
             validateCollisionParts(pActor);
         }
 
-        pActor->mCollisionParts->_CD = false;
+        pActor->mCollisionParts->mIsUpdate = false;
     }
 
     void resetAllCollisionMtx(LiveActor* pActor) {
         CollisionParts* pParts = pActor->mCollisionParts;
 
-        if (pParts->_0 != nullptr) {
+        if (pParts->mFollowMtx != nullptr) {
             pParts->resetAllMtx();
             return;
         }
@@ -2515,14 +2512,14 @@ namespace MR {
     PartsModel* createPartsModelNpc(LiveActor* pHost, const char* pName, const char* pModelName, MtxPtr pMtx) {
         PartsModel* pModel = new PartsModel(pHost, pName, pModelName, pMtx, MR::DrawBufferType_NPC, false);
         pModel->initWithoutIter();
-        pModel->_99 = true;
+        pModel->mIsShownWhileHostHidden = true;
         return pModel;
     }
 
     PartsModel* createPartsModelIndirectNpc(LiveActor* pHost, const char* pName, const char* pModelName, MtxPtr pMtx) {
         PartsModel* pModel = new PartsModel(pHost, pName, pModelName, pMtx, MR::DrawBufferType_IndirectNpc, false);
         pModel->initWithoutIter();
-        pModel->_99 = true;
+        pModel->mIsShownWhileHostHidden = true;
         return pModel;
     }
 
@@ -2538,7 +2535,7 @@ namespace MR {
         PartsModel* pModel = new PartsModel(pHost, pName, pModelName, nullptr, MR::DrawBufferType_NPC, false);
         pModel->initFixedPosition(pJointName);
         pModel->initWithoutIter();
-        pModel->_99 = true;
+        pModel->mIsShownWhileHostHidden = true;
         return pModel;
     }
 
@@ -2636,11 +2633,11 @@ namespace MR {
     }
 
     void setCollisionMtx(LiveActor* pActor, CollisionParts* pParts) {
-        if (!pParts->_CC) {
+        if (!pParts->mIsValid) {
             return;
         }
 
-        if (pParts->_0 != nullptr) {
+        if (pParts->mFollowMtx != nullptr) {
             pParts->setMtx();
             return;
         }

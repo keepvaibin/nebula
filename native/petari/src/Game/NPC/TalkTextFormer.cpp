@@ -96,18 +96,18 @@ namespace MR {
     }
 };  // namespace MR
 
-TalkTextFormer::TalkTextFormer(LayoutActor* pActor, const char* pPaneName) : mHostActor(pActor), mMsg(), _8(), mPaneName(pPaneName) {
+TalkTextFormer::TalkTextFormer(LayoutActor* pActor, const char* pPaneName) : mHostActor(pActor), mMsg(), mFormMode(), mPaneName(pPaneName) {
 }
 
 void TalkTextFormer::formMessage(const char16_t* pMessage, s32 mode) {
     mMsg = pMessage;
-    _8 = mode;
+    mFormMode = mode;
     if (NebulaText::isTalk(pMessage)) {
         NebulaText::fitTalk(pMessage, ::findTextBox(mHostActor, mPaneName));
     }
 
     MR::setTextBoxMessageRecursive(mHostActor, mPaneName, mMsg);
-    MR::initTagProcessorRecursive(mHostActor, mPaneName, _8);
+    MR::initTagProcessorRecursive(mHostActor, mPaneName, mFormMode);
 }
 
 void TalkTextFormer::setArg(const CustomTagArg& rTag, s32 argIndex) {
@@ -117,14 +117,14 @@ void TalkTextFormer::setArg(const CustomTagArg& rTag, s32 argIndex) {
         MR::setTextBoxArgStringRecursive(mHostActor, mPaneName, rTag.mCharArg, argIndex);
     }
 
-    MR::initTagProcessorRecursive(mHostActor, mPaneName, _8);
+    MR::initTagProcessorRecursive(mHostActor, mPaneName, mFormMode);
 }
 
 bool TalkTextFormer::nextPage() {
     const char16_t* pMessage = MR::getNextMessagePage(mMsg);
     if (pMessage != nullptr) {
         mMsg = pMessage;
-        formMessage(pMessage, _8);
+        formMessage(pMessage, mFormMode);
         return true;
     }
 
@@ -154,7 +154,7 @@ void TalkTextFormer::updateTalkingAtTextSpeed() {
 }
 
 bool TalkTextFormer::isTextAppearedAll() const {
-    if (_8 == 2) {
+    if (mFormMode == 2) {
         return true;
     }
 

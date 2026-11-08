@@ -18,7 +18,7 @@ void OceanFloaterLandParts::init(const TableIter& rIter) {
     MR::getObjectName(&mObjectName, rIter);
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm(mObjectName, nullptr, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     if (MR::isEqualString(mObjectName, "OceanFloaterChurch")) {
         MR::setEffectHostSRT(this, "Rise", &mRailEndPos, nullptr, nullptr);
@@ -154,7 +154,7 @@ void OceanFloaterLandParts::exeMove() {
     }
 
     mRailMover->movement();
-    mPosition.set(mRailMover->_28);
+    mPosition.set(mRailMover->mStartPos);
 
     if (!mRailMover->isWorking() && !mIsMoving) {
         MR::startSound(this, "SE_OJ_HUGE_FLOATER_MOVE_ED");

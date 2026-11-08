@@ -13,7 +13,7 @@ namespace {
 namespace NrvCollapsePlane {
     NEW_NERVE(CollapsePlaneNrvWait, CollapsePlane, Wait);
     NEW_NERVE(CollapsePlaneNrvCollapse, CollapsePlane, Collapse);
-    NEW_NERVE(CollapsePlaneNrvDPDStop, CollapsePlane, DPDStop);
+    NEW_NERVE(CollapsePlaneNrvPointerStop, CollapsePlane, PointerStop);
     NEW_NERVE(CollapsePlaneNrvEnd, CollapsePlane, End);
 };  // namespace NrvCollapsePlane
 
@@ -31,7 +31,7 @@ void CollapsePlane::init(const TableIter& rIter) {
     info.setupProjmapMtx(false);
     info.setupNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvWait));
     initialize(rIter, info);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::initStarPointerTarget(this, mScale.x * 200.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mScaleController = new AnimScaleController(nullptr);
@@ -70,7 +70,7 @@ void CollapsePlane::exeCollapse() {
     }
 }
 
-void CollapsePlane::exeDPDStop() {
+void CollapsePlane::exePointerStop() {
     if (mCollapseStep == -1 && MR::isOnPlayer(this)) {
         mCollapseStep = 0;
     }
@@ -95,13 +95,13 @@ void CollapsePlane::calcAndSetBaseMtx() {
     }
 
     if (MR::isInitializeStateEnd()) {
-        MR::setBaseScale(this, mScaleController->_C * mScale);
+        MR::setBaseScale(this, mScaleController->mScale * mScale);
     }
 }
 
 void CollapsePlane::control() {
     mScaleController->updateNerve();
-    tryDPDStop();
+    tryPointerStop();
 }
 
 bool CollapsePlane::calcJointPlane(Pos3f* pMtx, const JointControllerInfo&) {
@@ -116,8 +116,8 @@ bool CollapsePlane::calcJointPlane(Pos3f* pMtx, const JointControllerInfo&) {
     return true;
 }
 
-bool CollapsePlane::tryDPDStop() {
-    if (isNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvDPDStop))) {
+bool CollapsePlane::tryPointerStop() {
+    if (isNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvPointerStop))) {
         return false;
     }
 
@@ -129,7 +129,7 @@ bool CollapsePlane::tryDPDStop() {
         return false;
     }
 
-    setNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvDPDStop));
+    setNerve(GET_NERVE(CollapsePlane, CollapsePlaneNrvPointerStop));
 
     return true;
 }

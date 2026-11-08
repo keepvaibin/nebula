@@ -13,5 +13,5 @@ public:
 
     void selectNrvWait();
 
-    s32 _9C;
+    s32 mDomeId;
 };

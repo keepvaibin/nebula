@@ -36,7 +36,7 @@ void WormEatenPlanet::init(const TableIter& rIter) {
     MR::invalidateCollisionParts(mThirdHill);
     MR::invalidateCollisionParts(mFourthHill);
     MR::tryCreateCollisionMoveLimit(this, getSensor("body"));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     f32 radius;
     MR::calcModelBoundingRadius(&radius, this);
     radius += 1000.0f;
@@ -75,11 +75,11 @@ void WormEatenPlanet::exeSecondWait() {
         MR::invalidateCollisionParts(this);
     }
 
-    if (mCaterpillar->_9C) {
+    if (mCaterpillar->mIsEnteringHole) {
         tryGenerateWormEatenHill();
     }
 
-    if (mCaterpillar->_9D) {
+    if (mCaterpillar->mIsLeavingApple) {
         tryGenerateWormEatenHill();
     }
 }
@@ -91,11 +91,11 @@ void WormEatenPlanet::exeThirdWait() {
         MR::invalidateCollisionParts(mSecondHill);
     }
 
-    if (mCaterpillar->_9C) {
+    if (mCaterpillar->mIsEnteringHole) {
         tryGenerateWormEatenHill();
     }
 
-    if (mCaterpillar->_9D) {
+    if (mCaterpillar->mIsLeavingApple) {
         tryGenerateWormEatenHill();
     }
 }
@@ -107,7 +107,7 @@ void WormEatenPlanet::exeFourthWait() {
         MR::invalidateCollisionParts(mThirdHill);
     }
 
-    if (mCaterpillar->_9D) {
+    if (mCaterpillar->mIsLeavingApple) {
         tryGenerateWormEatenHill();
     }
 }

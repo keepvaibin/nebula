@@ -1125,10 +1125,6 @@ namespace {
             createNameObj< SkeletalFishBaby >,
         },
         {
-            "SkeletalFishBabyRail",
-            createNameObj< SkeletalFishBabyRail >,
-        },
-        {
             "SkeletalFishBossRail",
             createNameObj< SkeletalFishBossRail >,
         },

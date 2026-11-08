@@ -44,7 +44,7 @@ void RandomEffectObj::control() {
     if (mSeStep >= 0) {
         mSeStep++;
 
-        if (MR::isEqualString(_8C, "FireworksA")) {
+        if (MR::isEqualString(mObjName, "FireworksA")) {
             if (mSeStep == 40) {
                 MR::startSound(this, "SE_OJ_FIREWORK_SEA_EXPLODE");
             }
@@ -57,9 +57,9 @@ void RandomEffectObj::control() {
         return;
     }
 
-    MR::emitEffect(this, _8C);
+    MR::emitEffect(this, mObjName);
 
-    if (MR::isEqualString(_8C, "FireworksA")) {
+    if (MR::isEqualString(mObjName, "FireworksA")) {
         MR::startSound(this, "SE_OJ_FIREWORK_SEA_SHOOT");
     }
 

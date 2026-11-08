@@ -15,7 +15,7 @@ namespace NrvBegomanSpringHead {
 
 void BegomanHead::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
-    Vec3f scale = *_9C * mScale;
+    Vec3f scale = *mHostScale * mScale;
     MR::setBaseScale(this, scale);
 }
 

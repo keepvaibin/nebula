@@ -29,15 +29,15 @@ namespace NrvJiraira {
     NEW_NERVE(HostTypeNrvExplode, Jiraira, Explode);
 };  // namespace NrvJiraira
 
-Jiraira::Jiraira(const char* pName) : LiveActor(pName), _8C(), _90(500.0f) {
+Jiraira::Jiraira(const char* pName) : LiveActor(pName), mBodyCollision(), mExplodeRadius(500.0f) {
 }
 
 void Jiraira::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);
-        s32 arg1 = _90;
+        s32 arg1 = mExplodeRadius;
         MR::getPlacementArg1NoInit(rIter, &arg1);
-        _90 = arg1;
+        mExplodeRadius = arg1;
         MR::useStageSwitchWriteDead(this, rIter);
     }
     initModelManagerWithAnm("Jiraira", nullptr, false);
@@ -53,14 +53,14 @@ void Jiraira::init(const TableIter& rIter) {
     offset2.x = 0.0f;
     offset2.y = 30.0f * scaleY;
     offset2.z = 0.0f;
-    MR::addHitSensorEnemyAttack(this, "explode", 16, (_90 * scaleY), offset2);
+    MR::addHitSensorEnemyAttack(this, "explode", 16, (mExplodeRadius * scaleY), offset2);
     MR::initCollisionPartsAutoEqualScaleOne(this, "Jiraira", getSensor("body"), MR::getJointMtx(this, "Jiraira"));
     CollisionParts* colPart = MR::createCollisionPartsFromLiveActor(this, "Button", getSensor("body"), MR::getJointMtx(this, "Button"),
                                                                     MR::CollisionScaleType_NotUsingScale);
-    _8C = colPart;
+    mBodyCollision = colPart;
     MR::validateCollisionParts(colPart);
     initSound(6, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initNerve(GET_NERVE(Jiraira, HostTypeNrvWait));
     MR::invalidateClipping(this);
     appear();
@@ -79,7 +79,7 @@ void Jiraira::kill() {
 }
 
 void Jiraira::control() {
-    _8C->setMtx();
+    mBodyCollision->setMtx();
 }
 
 void Jiraira::exeWait() {
@@ -121,7 +121,7 @@ void Jiraira::exeExplode() {
     if (MR::isStep(this, ::hExplodeTime)) {
         getSensor("explode")->invalidate();
     } else if (MR::isLessStep(this, ::hExplodeTime)) {
-        getSensor("explode")->mRadius = _90 * getNerveStep() / 8.0f;
+        getSensor("explode")->mRadius = mExplodeRadius * getNerveStep() / 8.0f;
     }
 
     if (MR::isGreaterStep(this, ::hPreRecoverTime)) {

@@ -42,8 +42,8 @@ namespace NrvKoopaStateAttackRoll {
 };  // namespace NrvKoopaStateAttackRoll
 
 KoopaStateAttackRoll::KoopaStateAttackRoll(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[ローリング攻撃]", pKoopa), mFigureBall(), mRollDelay(::sWaitToStartStep), mRollTime(::sRollGroundStep), _1C(),
-      _1D() {
+    : ActorStateBase< Koopa >("State[ローリング攻撃]", pKoopa), mFigureBall(), mRollDelay(::sWaitToStartStep), mRollTime(::sRollGroundStep), mIsHitPlayer(),
+      mIsStartNow() {
 }
 
 void KoopaStateAttackRoll::init() {
@@ -69,7 +69,7 @@ void KoopaStateAttackRoll::appear() {
     MR::validateHitSensor(mHost, "AttackRollReceiver");
     MR::validateHitSensor(mHost, "AttackRollStarPiece");
 
-    _1C = false;
+    mIsHitPlayer = false;
 
     if (KoopaFunction::isKoopaVs3(mHost)) {
         if (KoopaFunction::isKoopaLv2(mHost)) {
@@ -93,8 +93,8 @@ void KoopaStateAttackRoll::appear() {
                 mRollDelay = ::sWaitToStartStep;
             }
 
-            if (_1D) {
-                _1D = false;
+            if (mIsStartNow) {
+                mIsStartNow = false;
                 mRollDelay = 0;
             }
         }
@@ -138,7 +138,7 @@ bool KoopaStateAttackRoll::tryCalcAndSetBaseMtx() {
 
 bool KoopaStateAttackRoll::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver) && MR::isSensor(pSender, "AttackRoll") && MR::sendMsgEnemyAttackMaximum(pReceiver, pSender)) {
-        _1C = true;
+        mIsHitPlayer = true;
         return true;
     }
 

@@ -21,7 +21,7 @@ namespace NrvDinoPackunStateDamage {
     NEW_NERVE(DinoPackunStateDamageNrvLastDamage, DinoPackunStateDamage, LastDamage);
 };  // namespace NrvDinoPackunStateDamage
 
-DinoPackunStateDamage::DinoPackunStateDamage(DinoPackun* pHost) : ActorStateBase< DinoPackun >("ディノパックンダメージ状態", pHost), _10(), _14(1) {
+DinoPackunStateDamage::DinoPackunStateDamage(DinoPackun* pHost) : ActorStateBase< DinoPackun >("ディノパックンダメージ状態", pHost), mPunchedDir(), mDamageType(1) {
     initNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched));
 }
 
@@ -45,7 +45,7 @@ bool DinoPackunStateDamage::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSens
     if (msg == ACTMES_DINO_PACKUN_BALL_ATTACK && isNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPulled))) {
         MR::emitEffectHitBetweenSensors(getHost(), pSender, pReceiver, 0.0f, "Hit");
 
-        switch (_14) {
+        switch (mDamageType) {
         case 0:
             setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvEggBroken));
             break;
@@ -66,15 +66,15 @@ bool DinoPackunStateDamage::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSens
 }
 
 void DinoPackunStateDamage::setDamageEgg() {
-    _14 = 0;
+    mDamageType = 0;
 }
 
 void DinoPackunStateDamage::setDamageNormal() {
-    _14 = 1;
+    mDamageType = 1;
 }
 
 void DinoPackunStateDamage::setDamageLast() {
-    _14 = 2;
+    mDamageType = 2;
 }
 
 void DinoPackunStateDamage::exePunched() {
@@ -87,7 +87,7 @@ void DinoPackunStateDamage::exePunched() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    getHost()->adjustTailRootPosition(!_14 ? ::sEggOutPosition : ::sOutPosition, 0.1f);
+    getHost()->adjustTailRootPosition(!mDamageType ? ::sEggOutPosition : ::sOutPosition, 0.1f);
     getHost()->updateNormalVelocity();
 }
 
@@ -98,7 +98,7 @@ void DinoPackunStateDamage::exePulled() {
     if (MR::isFirstStep(this)) {
         getHost()->startDemo();
 
-        if (_14) {
+        if (mDamageType) {
             Vec3f v20;
             MR::calcSideVec(&v20, getHost());
             Vec3f v19;
@@ -110,23 +110,23 @@ void DinoPackunStateDamage::exePulled() {
 
             if (v19.dot(stack_14) > 0.7f) {
                 MR::startBck(getHost(), "PunchedTailTop");
-                _10 = 3;
+                mPunchedDir = 3;
             } else if (v20.dot(stack_14) < 0.0f) {
                 MR::startBck(getHost(), "PunchedTailRight");
-                _10 = 2;
+                mPunchedDir = 2;
             } else {
                 MR::startBck(getHost(), "PunchedTailLeft");
-                _10 = 1;
+                mPunchedDir = 1;
             }
         }
     }
 
-    getHost()->adjustTailRootPosition(!_14 ? ::sEggOutPosition : ::sOutPosition, 0.1f);
+    getHost()->adjustTailRootPosition(!mDamageType ? ::sEggOutPosition : ::sOutPosition, 0.1f);
 
     if (v21.distance(getHost()->mPosition) > 800.0f) {
         Vec3f v15;
         getHost()->mTail->getTailNodePosition(&v15, 3);
-        MR::turnDirectionFromTargetDegree(getHost(), &getHost()->_E8, v15, 6.0f);
+        MR::turnDirectionFromTargetDegree(getHost(), &getHost()->mFront, v15, 6.0f);
     }
 
     getHost()->updateNormalVelocity();
@@ -179,7 +179,7 @@ void DinoPackunStateDamage::exeDamage() {
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_DAMAGE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
 
-        switch (_10) {
+        switch (mPunchedDir) {
         case 3:
             MR::startBck(getHost(), "DamageTop");
             break;
@@ -202,7 +202,7 @@ void DinoPackunStateDamage::exeLastDamage() {
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_LAST_DAMAGE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
 
-        switch (_10) {
+        switch (mPunchedDir) {
         case 3:
             MR::startBck(getHost(), "LastDamageTop");
             break;

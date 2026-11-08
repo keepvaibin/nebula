@@ -13,7 +13,7 @@ public:
     void setAudioEffectParam(s32);
     void playEffectSound(s32);
 
-    s32 _C;
-    s32 _10;
-    s32 _14;
+    s32 mEffectType;
+    s32 mAppliedType;
+    s32 mPriority;
 };

@@ -21,8 +21,6 @@ public:
     virtual void resetRacer(const RaceManager*);
     virtual void exitRacer();
 
-    u32 _B0;
-    u32 _B4;
     ActorCameraInfo* mCameraInfo;
 };
 

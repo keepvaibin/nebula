@@ -3,8 +3,8 @@
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioModule.hpp"
+#include "Game/Util/NameIndex.hpp"
 
-class HashSortTable;
 class MarioActor;
 class XanimeResourceTable;
 class XanimePlayer;
@@ -116,5 +116,5 @@ public:
     f32 _118;
 
     s32 mCallbackId;
-    HashSortTable* mCallbackTable;
+    MR::NameIndex mCallbackTable;  // an animation's name to its index in marioCallbackTable
 };

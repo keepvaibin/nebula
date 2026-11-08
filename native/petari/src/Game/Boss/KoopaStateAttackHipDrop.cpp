@@ -28,8 +28,6 @@ namespace {
     static const s32 sJumpWaitAirStepVs2 = 15;
     static const s32 sJumpWaitAirStepVs3 = 15;
     static const f32 sJumpWaitAirTurnSpeed = 2.0f;
-    // static const f32 sJumpAttackDownSpeed = _;
-    // static const f32 sJumpAttackGravity = _;
 };  // namespace
 
 namespace NrvKoopaStateAttackHipDrop {

@@ -27,7 +27,7 @@ void SpinLeverSwitch::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
     MR::addHitSensorAtJointMapObj(this, "spin", "Spin", 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "SpinLeverSwitch", getSensor("body"), nullptr);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(4, false);
     bool isWait = MR::useStageSwitchWriteA(this, rIter);
     MR::setGroupClipping(this, rIter, 16);

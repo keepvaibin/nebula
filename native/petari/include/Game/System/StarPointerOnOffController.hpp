@@ -89,7 +89,6 @@ public:
         return mMode == mode;
     }
 
-    bool _8;
     MR::FixedArray< RequestInfo*, 16 > mRequests;
     s32 mModeCounter[StarPointerMode_Count];
     bool mRequested[StarPointerMode_Count];

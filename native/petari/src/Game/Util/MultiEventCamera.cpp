@@ -5,11 +5,11 @@
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
-MultiEventCamera::MultiEventCamera() : mName(), mCameraNum(), _8(-1), _C(), _10(), mCameraType(), mCameraInfo(), mTarget() {
+MultiEventCamera::MultiEventCamera() : mName(), mCameraNum(), mCameraIndex(-1), mFrame(), mFrameNum(), mCameraType(), mCameraInfo(), mTarget() {
 }
 
 bool MultiEventCamera::isEnd() const {
-    return _8 < 0;
+    return mCameraIndex < 0;
 }
 
 void MultiEventCamera::setUp(const char* pName, const ActorCameraInfo* pCameraInfo, s32 cameraNum) {
@@ -41,8 +41,8 @@ void MultiEventCamera::start(const CameraTargetArg& rParam1, s32 param2) {
         return;
     }
 
-    _C = 0;
-    _8 = param2;
+    mFrame = 0;
+    mCameraIndex = param2;
     mTarget = rParam1;
 
     startCamera();
@@ -53,14 +53,14 @@ void MultiEventCamera::update() {
         return;
     }
 
-    if (_10 <= _C && _8 < mCameraNum - 1) {
-        _C = 0;
-        _8++;
+    if (mFrameNum <= mFrame && mCameraIndex < mCameraNum - 1) {
+        mFrame = 0;
+        mCameraIndex++;
 
         startCamera();
     }
 
-    _C++;
+    mFrame++;
 }
 
 void MultiEventCamera::nextForce() {
@@ -68,9 +68,9 @@ void MultiEventCamera::nextForce() {
         return;
     }
 
-    if (_8 < mCameraNum - 1) {
-        _C = 0;
-        _8++;
+    if (mCameraIndex < mCameraNum - 1) {
+        mFrame = 0;
+        mCameraIndex++;
 
         startCamera();
     } else {
@@ -122,15 +122,15 @@ void MultiEventCamera::declareEventCamera(s32 param1) {
 }
 
 void MultiEventCamera::startCamera() {
-    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, _8);
+    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, mCameraIndex);
 
     MR::startEventCamera(mCameraInfo, name.c_str(), mTarget);
 
-    _10 = MR::getEventCameraFrames(mCameraInfo, name.c_str());
+    mFrameNum = MR::getEventCameraFrames(mCameraInfo, name.c_str());
 }
 
 void MultiEventCamera::endCamera(s32 type) {
-    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, _8);
+    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, mCameraIndex);
 
     switch (type) {
     case CameraType_Soon:
@@ -141,11 +141,11 @@ void MultiEventCamera::endCamera(s32 type) {
         break;
     }
 
-    _8 = -1;
+    mCameraIndex = -1;
 }
 
 void MultiEventCamera::changeTarget(const CameraTargetArg& rTarget) {
-    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, _8);
+    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, mCameraIndex);
 
     MR::changeEventCameraTarget(mCameraInfo, name.c_str(), rTarget);
 }

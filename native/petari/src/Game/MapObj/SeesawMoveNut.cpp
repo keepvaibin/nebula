@@ -84,7 +84,7 @@ void SeesawMoveNut::exeHalfway() {
 void SeesawMoveNut::exeEdge() {
     if (isEnableStart()) {
         MapObjActorUtil::startRotator(this);
-        _CC = 0;
+        mBackHomeStep = 0;
         setNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvHalfway));
     } else {
         autoBackHome();
@@ -92,7 +92,7 @@ void SeesawMoveNut::exeEdge() {
 }
 
 void SeesawMoveNut::autoBackHome() {
-    if (_CC >= 180) {
+    if (mBackHomeStep >= 180) {
         if (isNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvEdge)) && MR::getRailCoord(this) == MR::getRailTotalLength(this)) {
             MapObjActorUtil::startRotator(this);
             setNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvHalfway));
@@ -105,9 +105,9 @@ void SeesawMoveNut::autoBackHome() {
     }
 
     if (MR::isOnPlayer(this)) {
-        _CC = 0;
+        mBackHomeStep = 0;
     } else {
-        _CC++;
+        mBackHomeStep++;
     }
 }
 

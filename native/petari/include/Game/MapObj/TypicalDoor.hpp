@@ -41,5 +41,5 @@ public:
     void validateCollision();
     void invalidateCollision();
 
-    bool _CC;
+    bool mIsNormalDraw;
 };

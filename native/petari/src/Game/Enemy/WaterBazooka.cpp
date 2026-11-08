@@ -85,7 +85,7 @@ void WaterBazooka::init(const TableIter& rIter) {
     mCannonCollisionParts = MR::createCollisionPartsFromLiveActor(this, "AllRoot", getSensor("body"), MR::CollisionScaleType_Unk2);
     MR::validateCollisionParts(mCannonCollisionParts);
 
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
 
     initSound(4, false);
@@ -511,7 +511,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
         MR::deleteEffect(this, "DamageSmokeS2");
         MR::deleteEffect(this, "DamageSmokeL1");
         MR::deleteEffect(this, "DamageSmokeL2");
-        mShooter->_99 = true;
+        mShooter->mIsShownWhileHostHidden = true;
         mShooter->explosion();
         mCapsule->kill();
         mBreakModel->makeActorAppeared();
@@ -626,7 +626,7 @@ void WaterBazooka::makeActorDead() {
     mCapsule->makeActorDead();
     mBreakModel->makeActorDead();
     mDemoActor->makeActorDead();
-    mCannonCollisionParts->_CC = false;
+    mCannonCollisionParts->mIsValid = false;
     LiveActor::makeActorDead();
 }
 

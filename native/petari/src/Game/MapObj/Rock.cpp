@@ -465,9 +465,9 @@ void Rock::initSensor() {
 
 void Rock::initEffect() {
     if (mRockType == WanwanRollingMini) {
-        initEffectKeeper(0, "WanwanRolling", false);
+        initEffectKeeper(0, "WanwanRolling");
     } else {
-        initEffectKeeper(0, nullptr, false);
+        initEffectKeeper(0, nullptr);
     }
 
     MR::setEffectHostMtx(this, "Smoke", mBaseMtx);
@@ -946,12 +946,12 @@ void Rock::exeFreeze() {
         MR::deleteEffect(this, "Smoke");
 
         if (mFreezeTime == 0) {
-            MR::startDPDHitSound();
+            MR::startPointerHitSound();
         }
     }
 
     mFreezeTime++;
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 
     f32 rumbleOffset = ::cFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(mFreezeTime * ::cFreezeRumbleSpeed)) *
                        static_cast< f32 >(::cFreezeFrame - getNerveStep()) / ::cFreezeFrame;

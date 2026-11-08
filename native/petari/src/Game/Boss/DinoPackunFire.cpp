@@ -26,10 +26,10 @@ DinoPackunFireHolder::DinoPackunFireHolder(s32 numMax) : DeriveActorGroup< DinoP
 }
 
 DinoPackunFire::DinoPackunFire(const char* pName) : LiveActor(pName) {
-    _8C.x = 0.0f;
-    _8C.y = 0.0f;
-    _8C.z = 0.0f;
-    _8C.w = 1.0f;
+    mRollQuat.x = 0.0f;
+    mRollQuat.y = 0.0f;
+    mRollQuat.z = 0.0f;
+    mRollQuat.w = 1.0f;
 }
 
 void DinoPackunFire::init(const TableIter& rIter) {
@@ -50,7 +50,7 @@ void DinoPackunFire::init(const TableIter& rIter) {
     MR::onCalcShadow(this, nullptr);
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     makeActorDead();
 }
@@ -64,7 +64,7 @@ void DinoPackunFire::control() {
 }
 
 void DinoPackunFire::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mRollQuat);
 }
 
 void DinoPackunFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -89,7 +89,7 @@ void DinoPackunFire::exeShot() {
         MR::startAction(this, "Move");
     }
 
-    MR::rotateQuatRollBall(&_8C, mVelocity, -mGravity, (150.0f * mScale.x));
+    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, (150.0f * mScale.x));
     MR::addVelocityToGravity(this, 2.0f);
     MR::attenuateVelocity(this, 0.98f);
     MR::reboundVelocityFromCollision(this, 0.80f, 15.0f, 0.40f);

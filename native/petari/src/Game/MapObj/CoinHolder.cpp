@@ -22,7 +22,7 @@ CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sC
 bool CoinHolder::hopCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rDirection) {
     CoinHostInfo* hostInfo = findHostInfo(pObj);
 
-    if (hostInfo->_8 >= hostInfo->_4) {
+    if (hostInfo->mAppeared >= hostInfo->mDeclared) {
         return false;
     }
 
@@ -100,7 +100,7 @@ CoinHostInfo* CoinHolder::declare(const NameObj* pObj, s32 count) {
         mHostInfos.push_back(hostInfo);
     }
 
-    hostInfo->_4 += count;
+    hostInfo->mDeclared += count;
     return hostInfo;
 }
 
@@ -111,7 +111,7 @@ s32 CoinHolder::getDeclareRemnantCoinCount(const NameObj* pObj) const {
         return 0;
     }
 
-    return hostInfo->_4 - hostInfo->_8;
+    return hostInfo->mDeclared - hostInfo->mAppeared;
 }
 
 CoinHostInfo* CoinHolder::findHostInfo(const NameObj* pObj) const {
@@ -176,7 +176,7 @@ bool CoinHolder::appearCoin(const NameObj* pObj, const Vec3f& rPosition, const V
 
     bool appeared = false;
     for (s32 i = 0; i < count; i++) {
-        if (pHostInfo->_8 >= pHostInfo->_4) {
+        if (pHostInfo->mAppeared >= pHostInfo->mDeclared) {
             break;
         }
 

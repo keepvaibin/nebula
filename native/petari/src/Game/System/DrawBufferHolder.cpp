@@ -3,12 +3,6 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <algorithm>
 
-namespace {
-    // static const char* sDrawTypeCameraName = ;
-    // static const char* sPermitMultiCategoryArciveName = ;
-
-};  // namespace
-
 DrawBufferHolder::DrawBufferHolder() : mTableInitialized() {
 }
 

@@ -42,8 +42,8 @@ private:
     ModelObj* mScenery;
     ModelObj* mMarioPosDummyModel;
     CameraTargetMtx* mCameraTarget;
-    Mtx34f _A0;
-    bool _D0;
+    Mtx34f mPlayerBaseMtx;
+    bool mUseSwitchA;
 };
 
 class PrologueHolder : public NameObj {

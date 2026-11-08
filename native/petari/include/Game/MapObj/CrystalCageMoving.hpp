@@ -33,8 +33,8 @@ public:
     bool isNerveTypeEnd() const;
 
     ModelObj* mTicoModel;
-    Pos3f _C8;
+    Pos3f mDummyModelMtx;
     ActorCameraInfo* mCameraInfo;
-    Vec3f _FC;
-    u8 _108;
+    Vec3f mStartPos;
+    u8 mIsCoreShown;
 };

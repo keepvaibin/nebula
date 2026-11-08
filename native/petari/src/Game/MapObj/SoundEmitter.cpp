@@ -24,12 +24,12 @@ namespace NrvSoundEmitter {
 };  // namespace NrvSoundEmitter
 
 SoundEmitter::SoundEmitter(const char* pName) : LiveActor(pName) {
-    _8C = -1;
+    mSoundType = -1;
 }
 
 void SoundEmitter::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::getPlacementArg0NoInit(rIter, &_8C);
+    MR::getPlacementArg0NoInit(rIter, &mSoundType);
     MR::connectToSceneMapObjMovement(this);
     MR::registerDemoSimpleCastAll(this);
 
@@ -64,7 +64,7 @@ void SoundEmitter::exePlaySound() {
     s32 v3 = -1;
 
     if (rider != nullptr) {
-        switch (_8C) {
+        switch (mSoundType) {
         case 0xd:
         case 0x11:
         case 0x12: {
@@ -80,7 +80,7 @@ void SoundEmitter::exePlaySound() {
         mPosition.z = mRailRider->mCurPos.z;
     }
 
-    switch (_8C) {
+    switch (mSoundType) {
     case 9:
     case 0xA:
     case 0xB: {
@@ -104,8 +104,8 @@ void SoundEmitter::exePlaySound() {
     } break;
     }
 
-    if (_8C >= 0) {
-        MR::startLevelSound(this, ::sSeTable[_8C], -1, -1, v3);
+    if (mSoundType >= 0) {
+        MR::startLevelSound(this, ::sSeTable[mSoundType], -1, -1, v3);
     }
 }
 

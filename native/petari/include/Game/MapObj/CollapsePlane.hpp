@@ -20,10 +20,10 @@ public:
 
     void exeWait();
     void exeCollapse();
-    void exeDPDStop();
+    void exePointerStop();
     void exeEnd();
     bool calcJointPlane(Pos3f*, const JointControllerInfo&);
-    bool tryDPDStop();
+    bool tryPointerStop();
 
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStateBindStartPointer;

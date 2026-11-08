@@ -20,7 +20,7 @@ void BeamGoRoundBeam::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_IndirectMapObj, MR::DrawType_VolumeModel);
     initHitSensor(1);
     MR::addHitSensorCallbackEnemyAttack(this, "beam", 4, 100.0f);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     mModelDrawer = new VolumeModelDrawer("ビームボリューム", "BeamGoRoundBeamVolume", getBaseMtx());
     mBloomModel = MR::createModelObjBloomModel("ビームブルーム", "BeamGoRoundBeamBloom", getBaseMtx());
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
@@ -62,8 +62,8 @@ namespace NrvBeamGoRoundPlanet {
 
 BeamGoRoundPlanet::BeamGoRoundPlanet(const char* pName) : MapObjActor(pName) {
     mBeams = nullptr;
-    _C8 = nullptr;
-    _CC = nullptr;
+    mMove1Collision = nullptr;
+    mMove2Collision = nullptr;
 }
 
 void BeamGoRoundPlanet::init(const TableIter& rIter) {
@@ -76,16 +76,16 @@ void BeamGoRoundPlanet::init(const TableIter& rIter) {
     info.setupFarClipping(-1.0f);
     info.setupNerve(GET_NERVE(BeamGoRoundPlanet, BeamGoRoundPlanetNrvWait));
     initialize(rIter, info);
-    _C8 = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move1"), MR::CollisionScaleType_Unk2);
-    _CC = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move2"), MR::CollisionScaleType_Unk2);
-    MR::validateCollisionParts(_CC);
-    MR::validateCollisionParts(_C8);
+    mMove1Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move1"), MR::CollisionScaleType_Unk2);
+    mMove2Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move2"), MR::CollisionScaleType_Unk2);
+    MR::validateCollisionParts(mMove2Collision);
+    MR::validateCollisionParts(mMove1Collision);
     initBeam();
 }
 
 void BeamGoRoundPlanet::exeWait() {
-    _CC->setMtx();
-    _C8->setMtx();
+    mMove2Collision->setMtx();
+    mMove1Collision->setMtx();
     MR::startLevelSound(this, "SE_OJ_LV_BEAM_GO_ROUND");
 }
 

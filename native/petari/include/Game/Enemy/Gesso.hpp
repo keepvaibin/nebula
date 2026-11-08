@@ -29,7 +29,7 @@ public:
     bool isMarioUp() const;
     bool isMarioLeft() const;
     bool tryChangeHighSpeedMode();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
 
     void exeComeFromBox();
     void exeWait();
@@ -41,19 +41,19 @@ public:
     void exeAttack();
     void exePunchDown();
     void exeComeBack();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
     void exeRotate();
 
 private:
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStateBindStarPointer;
-    Vec3f _94;
-    Vec3f _A0;
-    Vec3f _AC;
-    Vec3f _B8;
-    s32 _C4;
-    Vec3f _C8;
+    Vec3f mInitPos;
+    Vec3f mFront;
+    Vec3f mUp;
+    Vec3f mUpTarget;
+    s32 mClipStep;
+    Vec3f mPushVelocity;
     bool mIsMarioLeft;
     bool mIsHighSpeedMode;
 };

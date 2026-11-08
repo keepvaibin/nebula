@@ -23,5 +23,4 @@ public:
     f32 mAngleX;
     f32 mAngleY;
     f32 mDist;
-    bool _70;
 };

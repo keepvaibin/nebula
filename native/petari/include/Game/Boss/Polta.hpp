@@ -69,9 +69,9 @@ public:
     ActorCameraInfo* mCameraInfo;
     ModelObj* mBreakModel;
     ModelObj* mFormationModel;
-    Quat4f _B4;
-    Vec3f _C4;
-    Quat4f _D0;
-    Vec3f _E0;
-    f32 _EC;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
+    Quat4f mStartQuat;
+    Vec3f mStartPos;
+    f32 mRotateSpeed;
 };

@@ -1,8 +1,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/GameFrame.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/FrameList.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <NebulaGpu.h>

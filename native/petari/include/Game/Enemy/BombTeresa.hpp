@@ -81,17 +81,15 @@ public:
     JointControlDelegator< BombTeresa >* mJointDelegator2;
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mBindStarPointer;
-    Quat4f _9C;
-    Vec3f _AC;
-    Vec3f _B8;
-    Vec3f _C4;
-    Vec3f _D0;
-    f32 _DC;
-    f32 _E0;
-    f32 _E4;
-    s32 _E8;
-    bool _EC;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
+    Vec3f mTonguePos;
+    Vec3f mInitPos;
+    f32 mTongueRate;
+    f32 mDriftPullSpeed;
+    f32 mDriftSpinSpeed;
+    s32 mDriftStep;
+    bool mIsDriftRelease;
     bool mDisableRespawning;
-    bool _EE;
-    bool _EF;
+    bool mIsWanderAfterWait;  // Polta's (BombTeresaHolder): out of the player's reach it wanders after 60 steps of waiting
 };

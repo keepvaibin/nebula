@@ -15,14 +15,14 @@ namespace NrvTeresaWater {
     NEW_NERVE(TeresaWaterNrvMove, TeresaWater, Move);
     NEW_NERVE(TeresaWaterNrvHit, TeresaWater, Hit);
     NEW_NERVE(TeresaWaterNrvStun, TeresaWater, Stun);
-    NEW_NERVE_ONEND(TeresaWaterNrvDPDSwoon, TeresaWater, DPDSwoon, DPDSwoon);
+    NEW_NERVE_ONEND(TeresaWaterNrvPointerSwoon, TeresaWater, PointerSwoon, PointerSwoon);
 };  // namespace NrvTeresaWater
 
-TeresaWater::TeresaWater(const char* pName) : LiveActor(pName), _8C(), _90() {
-    _94.set(0.0f, 0.0f, 1.0f);
-    _A0.set(0.0f, 0.0f, 0.0f);
-    _AC.set(0.0f, 0.0f, 0.0f);
-    _B8 = nullptr;
+TeresaWater::TeresaWater(const char* pName) : LiveActor(pName), mScaleCtrl(), mBindStarPointer() {
+    mFront.set(0.0f, 0.0f, 1.0f);
+    mFarPos.set(0.0f, 0.0f, 0.0f);
+    mInitPos.set(0.0f, 0.0f, 0.0f);
+    mTarget = nullptr;
 }
 
 void TeresaWater::init(const TableIter& rIter) {
@@ -35,21 +35,21 @@ void TeresaWater::init(const TableIter& rIter) {
     sensorOffset.y = 0.0f;
     sensorOffset.z = 0.0f;
     MR::addHitSensorAtJointEnemySimple(this, "body", "SklRoot", 8, 60.0f, sensorOffset);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(4, false);
     Vec3f ptrPos;
     ptrPos.set(0.0f, 0.0f, 0.0f);
     MR::initStarPointerTargetAtJoint(this, "SklRoot", 100.0f, ptrPos);
 
-    _8C = new AnimScaleController(nullptr);
-    _90 = new WalkerStateBindStarPointer(this, _8C);
+    mScaleCtrl = new AnimScaleController(nullptr);
+    mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleCtrl);
     MR::declareCoin(this, 1);
-    MR::calcFrontVec(&_94, this);
+    MR::calcFrontVec(&mFront, this);
     f32 arg0 = ::sDefaultMoveLength;
     MR::getPlacementArg0NoInit(rIter, &arg0);
-    _AC.set(mPosition);
-    _A0.scaleAdd(arg0, _94, _AC);
-    _B8 = &_A0;
+    mInitPos.set(mPosition);
+    mFarPos.scaleAdd(arg0, mFront, mInitPos);
+    mTarget = &mFarPos;
     MR::initShadowVolumeCylinder(this, 100.0f);
     initNerve(GET_NERVE(TeresaWater, TeresaWaterNrvMove));
 
@@ -66,14 +66,14 @@ void TeresaWater::exeMove() {
         MR::startBck(this, "Wait");
     }
 
-    MR::moveAndTurnToTarget(this, &_94, *_B8, ::sMoveParam._0, ::sMoveParam._4, ::sMoveParam._8, ::sMoveParam._C);
-    MR::attenuateVelocityExceptDirection(this, _94, ::sSideFriction);
+    MR::moveAndTurnToTarget(this, &mFront, *mTarget, ::sMoveParam);
+    MR::attenuateVelocityExceptDirection(this, mFront, ::sSideFriction);
 
-    if (MR::isNear(this, *_B8, ::sTargetRadius)) {
-        if (_B8 == &_A0) {
-            _B8 = &_AC;
+    if (MR::isNear(this, *mTarget, ::sTargetRadius)) {
+        if (mTarget == &mFarPos) {
+            mTarget = &mInitPos;
         } else {
-            _B8 = &_A0;
+            mTarget = &mFarPos;
         }
     }
 }
@@ -109,13 +109,13 @@ void TeresaWater::kill() {
 }
 
 void TeresaWater::control() {
-    _8C->updateNerve();
+    mScaleCtrl->updateNerve();
 
     if (isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvMove))) {
         MR::startLevelSound(this, "SE_EM_LV_TERESA_MOVE");
     }
 
-    if (tryDPDSwoon()) {
+    if (tryPointerSwoon()) {
         return;
     }
 }
@@ -126,10 +126,10 @@ void TeresaWater::calcAndSetBaseMtx() {
     up.negate();
 
     Pos3f mtx;
-    MR::calcMtxFromGravityAndZAxis(&mtx, this, up, _94);
+    MR::calcMtxFromGravityAndZAxis(&mtx, this, up, mFront);
     MR::setBaseTRMtx(this, mtx);
 
-    MR::setBaseScale(this, _8C->_C * mScale);
+    MR::setBaseScale(this, mScaleCtrl->mScale * mScale);
 }
 
 void TeresaWater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -141,7 +141,7 @@ void TeresaWater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (!isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvDPDSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
+    if (!isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvPointerSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
         setNerve(GET_NERVE(TeresaWater, TeresaWaterNrvHit));
     } else {
         MR::sendMsgPush(pReceiver, pSender);
@@ -168,28 +168,28 @@ bool TeresaWater::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool TeresaWater::tryDPDSwoon() {
+bool TeresaWater::tryPointerSwoon() {
     if (isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvStun))) {
         return false;
     }
 
-    if (isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvDPDSwoon))) {
+    if (isNerve(GET_NERVE(TeresaWater, TeresaWaterNrvPointerSwoon))) {
         return false;
     }
 
-    if (!_90->tryStartPointBind()) {
+    if (!mBindStarPointer->tryStartPointBind()) {
         return false;
     }
 
-    setNerve(GET_NERVE(TeresaWater, TeresaWaterNrvDPDSwoon));
+    setNerve(GET_NERVE(TeresaWater, TeresaWaterNrvPointerSwoon));
 
     return true;
 }
 
-void TeresaWater::endDPDSwoon() {
-    _90->kill();
+void TeresaWater::endPointerSwoon() {
+    mBindStarPointer->kill();
 }
 
-void TeresaWater::exeDPDSwoon() {
-    MR::updateActorStateAndNextNerve(this, _90, GET_NERVE(TeresaWater, TeresaWaterNrvMove));
+void TeresaWater::exePointerSwoon() {
+    MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(TeresaWater, TeresaWaterNrvMove));
 }

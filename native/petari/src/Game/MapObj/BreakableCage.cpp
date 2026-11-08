@@ -58,7 +58,7 @@ void BreakableCage::init(const TableIter& rIter) {
     MR::initCollisionParts(this, pModelName, getSensor("body"), nullptr);
 
     if (!isTypeCage()) {
-        initEffectKeeper(0, pName, false);
+        initEffectKeeper(0, pName);
     }
 
     MR::setClippingTypeSphere(this, 100.0f + scaledRadius);

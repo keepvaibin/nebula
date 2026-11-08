@@ -25,7 +25,7 @@ DinoPackunTrackFireHolder::DinoPackunTrackFireHolder(s32 max) : DeriveActorGroup
 }
 
 DinoPackunTrackFire::DinoPackunTrackFire(const char* pName) : LiveActor(pName) {
-    _8C.identity();
+    mMtx.identity();
 }
 
 void DinoPackunTrackFire::init(const TableIter& rIter) {
@@ -46,13 +46,13 @@ void DinoPackunTrackFire::init(const TableIter& rIter) {
     initNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvWait));
     MR::onCalcGravity(this);
     MR::invalidateClipping(this);
-    initEffectKeeper(0, "DinoPackunTrackFire", false);
+    initEffectKeeper(0, "DinoPackunTrackFire");
     initSound(4, false);
     makeActorDead();
 }
 
 void DinoPackunTrackFire::control() {
-    MR::makeMtxUpNoSupportPos(&_8C, -mGravity, mPosition);
+    MR::makeMtxUpNoSupportPos(&mMtx, -mGravity, mPosition);
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         kill();

@@ -36,9 +36,9 @@ public:
     f32 mCannonRotation;
     s32 mWaitTime;
     s32 mShootTime;
-    s32 _CC;
-    f32 _D0;
-    f32 _D4;
+    s32 mRadiateStep;
+    f32 mRadiateLength;
+    f32 mRadiateMaxLength;
     MsgSharedGroup* mGroup;
-    bool _DC;
+    bool mIsGroupLeader;
 };

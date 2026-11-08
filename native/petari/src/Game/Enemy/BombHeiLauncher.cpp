@@ -51,7 +51,7 @@ void BombHeiLauncher::init(const TableIter& rIter) {
     MR::onCalcGravity(this);
 
     initSound(6, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     initHitSensor(2);
     MR::addBodyMessageSensorEnemy(this);

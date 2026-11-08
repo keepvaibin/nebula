@@ -16,12 +16,9 @@ namespace {
         "MogucchiHillC",
     };
     static const f32 sPieceSensorRadius = 120.0f;
-    // static const f32 sPieceLargeSensorRadius = _;
     static const f32 sMinScale = 0.6f;
     static const s32 sCrumbleFrame = 40;
-    // static const s32 sPieceInterval = _;
     static const f32 sAppearDist = 300.0f;
-    // static const s32 sNaturallyNum = _;
 };  // namespace
 
 namespace {
@@ -35,8 +32,8 @@ namespace {
     NEW_NERVE(MogucchiHillNrvWait, MogucchiHill, Wait);
 };  // namespace
 
-MogucchiHillPiece::MogucchiHillPiece(const char* pName) : LiveActor(pName), mHost(), mModelName(), mJointName(), mAutoEffectName(), _CC(), _CD() {
-    _9C.identity();
+MogucchiHillPiece::MogucchiHillPiece(const char* pName) : LiveActor(pName), mHost(), mModelName(), mJointName(), mAutoEffectName(), mIsHostLeft(), mIsHostTouching() {
+    mMtx.identity();
 }
 
 void MogucchiHillPiece::init(const TableIter& rIter) {
@@ -46,7 +43,7 @@ void MogucchiHillPiece::init(const TableIter& rIter) {
     MR::addHitSensorAtJointMapObj(this, "body", mJointName, 8, mScale.x * ::sPieceSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 
     if (mAutoEffectName != nullptr) {
-        initEffectKeeper(0, mAutoEffectName, false);
+        initEffectKeeper(0, mAutoEffectName);
     }
 
     if (mHasLightCtrl) {
@@ -75,7 +72,7 @@ void MogucchiHillPiece::appear() {
     setNerve(GET_NERVE_ANON(MogucchiHillPieceNrvPieceAppear));
     MR::hideModel(this);
 
-    _CC = false;
+    mIsHostLeft = false;
 
     MR::validateClipping(this);
 }
@@ -105,11 +102,11 @@ void MogucchiHillPiece::exeWait() {
         return;
     }
 
-    if (!_CD) {
-        _CC = true;
+    if (!mIsHostTouching) {
+        mIsHostLeft = true;
     }
 
-    _CD = false;
+    mIsHostTouching = false;
 }
 
 void MogucchiHillPiece::exeCrumble() {
@@ -156,7 +153,7 @@ void MogucchiHillPiece::setSize(f32 size) {
 }
 
 void MogucchiHillPiece::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _9C);
+    MR::setBaseTRMtx(this, mMtx);
 }
 
 void MogucchiHillPiece::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -250,9 +247,9 @@ bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
         return false;
     }
 
-    _CD = true;
+    mIsHostTouching = true;
 
-    if (!_CC) {
+    if (!mIsHostLeft) {
         return false;
     }
 
@@ -270,13 +267,13 @@ bool MogucchiHillPiece::isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiv
 }
 
 MogucchiHill::MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName)
-    : LiveActor(pName), mHost(pHost), _90(), _94(pieceCount), _98(), _CC(), _D0(100.0f), _D4(150.0f), _D8(3), mModelNameTable(::sPieceModelTable),
-      mJointName("MogucchiHill"), mAutoEffectName("MogucchiHill"), mHasLightCtrl(), _EC(), _F0(), mAppearNum() {
+    : LiveActor(pName), mHost(pHost), mPieces(), mPieceNum(pieceCount), mPieceIndex(), mHasReserveMtx(), mAppearDistance(100.0f), mAppearDistanceMax(150.0f), mModelNum(3), mModelNameTable(::sPieceModelTable),
+      mJointName("MogucchiHill"), mAutoEffectName("MogucchiHill"), mHasLightCtrl(), mSizeAnimState(), mSizeStep(), mAppearNum() {
     if (pieceCount > 100) {
-        _94 = 100;
+        mPieceNum = 100;
     }
 
-    mAppearNum = _94;
+    mAppearNum = mPieceNum;
 
     mReserveMtx.identity();
 }
@@ -296,7 +293,7 @@ void MogucchiHill::start() {
 
     setNerve(GET_NERVE_ANON(MogucchiHillNrvMove));
 
-    _F0 = 3;
+    mSizeStep = 3;
 }
 
 void MogucchiHill::end() {
@@ -304,40 +301,40 @@ void MogucchiHill::end() {
 }
 
 void MogucchiHill::startNaturally() {
-    _EC = 1;
+    mSizeAnimState = 1;
 
     start();
 }
 
 void MogucchiHill::endNaturally() {
-    _EC = 2;
+    mSizeAnimState = 2;
 }
 
 void MogucchiHill::killPieces(MogucchiHillPiece* pIter) {
-    s32 index = pIter - _90 - 2;
+    s32 index = pIter - mPieces - 2;
 
     for (s32 i = 0; i < 3; i++) {
-        index = _94 != 0 ? (index + _94 + 1) % _94 : index + 1;
+        index = mPieceNum != 0 ? (index + mPieceNum + 1) % mPieceNum : index + 1;
 
-        if (MR::isDead(&_90[index])) {
+        if (MR::isDead(&mPieces[index])) {
             continue;
         }
 
-        _90[index].destroy();
+        mPieces[index].destroy();
     }
 }
 
 void MogucchiHill::pauseOff() {
     MR::requestMovementOn(this);
 
-    for (u32 i = 0; i < _94; i++) {
-        MR::requestMovementOn(&_90[i]);
+    for (u32 i = 0; i < mPieceNum; i++) {
+        MR::requestMovementOn(&mPieces[i]);
     }
 }
 
 void MogucchiHill::killAllPieces() {
-    for (u32 i = 0; i < _94; i++) {
-        _90[i].makeActorDead();
+    for (u32 i = 0; i < mPieceNum; i++) {
+        mPieces[i].makeActorDead();
     }
 }
 
@@ -350,29 +347,29 @@ void MogucchiHill::exeMove() {
         reserveCurrentMtx();
     }
 
-    if (_CC && getDistanceFromReserveMtx() >= _D0) {
+    if (mHasReserveMtx && getDistanceFromReserveMtx() >= mAppearDistance) {
         appearPiece();
     }
 
-    if (getDistanceFromReserveMtx() >= _D4) {
+    if (getDistanceFromReserveMtx() >= mAppearDistanceMax) {
         reserveCurrentMtx();
     }
 }
 
 void MogucchiHill::exeWait() {
-    _F0 = 0;
+    mSizeStep = 0;
 }
 
 void MogucchiHill::createPieces() {
-    _90 = new MogucchiHillPiece[_94]();
+    mPieces = new MogucchiHillPiece[mPieceNum]();
 
-    s32 modelCount = _D8;
+    s32 modelCount = mModelNum;
     s32 previousModel = MR::getRandom(0, modelCount);
     s32 secondPreviousModel = -2;
     s32 model;
     s32 thirdPreviousModel = -3;
 
-    for (u32 i = 0; i < _94; i++) {
+    for (u32 i = 0; i < mPieceNum; i++) {
         s32 offset = MR::getRandom(0, modelCount - 1);
         model = previousModel + offset + 1;
         model = (model + modelCount) % modelCount;
@@ -388,9 +385,9 @@ void MogucchiHill::createPieces() {
         secondPreviousModel = previousModel;
         previousModel = model;
 
-        _90[i].mHost = this;
-        _90[i].mScale.setAll< f32 >(mScale.x);
-        _90[i].initWithModelName(mModelNameTable[model], mJointName, mAutoEffectName, mHasLightCtrl);
+        mPieces[i].mHost = this;
+        mPieces[i].mScale.setAll< f32 >(mScale.x);
+        mPieces[i].initWithModelName(mModelNameTable[model], mJointName, mAutoEffectName, mHasLightCtrl);
     }
 }
 
@@ -398,56 +395,56 @@ void MogucchiHill::appearPiece() {
     killPieceOverAppear();
     killPieceIfAlive();
 
-    switch (_EC) {
+    switch (mSizeAnimState) {
     case 0:
         break;
     case 1:
-        _F0++;
+        mSizeStep++;
 
-        if (_F0 >= 3) {
-            _F0 = 3;
-            _EC = 0;
+        if (mSizeStep >= 3) {
+            mSizeStep = 3;
+            mSizeAnimState = 0;
         }
 
         break;
     case 2:
-        _F0--;
+        mSizeStep--;
 
-        if (_F0 <= 0) {
-            _F0 = 0;
+        if (mSizeStep <= 0) {
+            mSizeStep = 0;
             setNerve(GET_NERVE_ANON(MogucchiHillNrvWait));
-            _EC = 0;
+            mSizeAnimState = 0;
             return;
         }
 
         break;
     }
 
-    if (_F0 != 0) {
-        _90[_98].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (_F0 - 1) / 2.0f));
-        MogucchiHillPiece* pPiece = &_90[_98];
-        pPiece->_9C.setInline(mReserveMtx);
-        pPiece->_9C.getTrans(pPiece->mPosition);
+    if (mSizeStep != 0) {
+        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / 2.0f));
+        MogucchiHillPiece* pPiece = &mPieces[mPieceIndex];
+        pPiece->mMtx.setInline(mReserveMtx);
+        pPiece->mMtx.getTrans(pPiece->mPosition);
         pPiece->appear();
-        s32 count = _94;
-        s32 index = _98;
-        _CC = false;
-        _98 = count != 0 ? (index + count + 1) % count : index + 1;
+        s32 count = mPieceNum;
+        s32 index = mPieceIndex;
+        mHasReserveMtx = false;
+        mPieceIndex = count != 0 ? (index + count + 1) % count : index + 1;
     }
 }
 
 void MogucchiHill::killPieceOverAppear() {
-    s32 index = _94 != 0 ? (_94 + (_98 - mAppearNum)) % _94 : _98 - mAppearNum;
+    s32 index = mPieceNum != 0 ? (mPieceNum + (mPieceIndex - mAppearNum)) % mPieceNum : mPieceIndex - mAppearNum;
 
-    _90[index].crumble();
+    mPieces[index].crumble();
 }
 
 void MogucchiHill::killPieceIfAlive() {
-    if (MR::isDead(&_90[_98])) {
+    if (MR::isDead(&mPieces[mPieceIndex])) {
         return;
     }
 
-    _90[_98].kill();
+    mPieces[mPieceIndex].kill();
 }
 
 f32 MogucchiHill::getDistanceFromReserveMtx() const {
@@ -459,5 +456,5 @@ f32 MogucchiHill::getDistanceFromReserveMtx() const {
 
 void MogucchiHill::reserveCurrentMtx() {
     mReserveMtx.setInline(mHost->getBaseMtx());
-    _CC = true;
+    mHasReserveMtx = true;
 }

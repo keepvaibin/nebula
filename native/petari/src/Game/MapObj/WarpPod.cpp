@@ -1,7 +1,6 @@
 #include "Game/MapObj/WarpPod.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -46,9 +45,9 @@ namespace MR {
 };  // namespace MR
 
 WarpPodMgr::WarpPodMgr(const char* pName) : NameObj(pName) {
-    _10 = new LiveActorGroup("ワープポッド群", 128);
-    _C = nullptr;
-    _14 = 0;
+    mPods = new LiveActorGroup("ワープポッド群", 128);
+    mCameraPod = nullptr;
+    mNextPairIndex = 0;
 
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
 }
@@ -58,8 +57,8 @@ WarpPod* WarpPodMgr::getPairPod(const LiveActor* pParam1) {
         return nullptr;
     }
 
-    for (u32 i = 0; i < _10->getObjNum(); i++) {
-        WarpPod* pWarpPod = static_cast< WarpPod* >(_10->getActor(i));
+    for (u32 i = 0; i < mPods->getObjNum(); i++) {
+        WarpPod* pWarpPod = static_cast< WarpPod* >(mPods->getActor(i));
 
         if (pWarpPod == pParam1) {
             continue;
@@ -79,22 +78,22 @@ WarpPod* WarpPodMgr::getPairPod(const LiveActor* pParam1) {
 
 void WarpPodMgr::startEventCamera(const LiveActor* pWarpPod) {
     static_cast< const WarpPod* >(pWarpPod)->startEventCamera();
-    _C = pWarpPod;
+    mCameraPod = pWarpPod;
 }
 
 void WarpPodMgr::endEventCamera() {
-    if (_C == nullptr) {
+    if (mCameraPod == nullptr) {
         return;
     }
 
-    const_cast< WarpPod* >(static_cast< const WarpPod* >(_C))->endEventCamera();
+    const_cast< WarpPod* >(static_cast< const WarpPod* >(mCameraPod))->endEventCamera();
 
-    WarpPod* pPairPod = getPairPod(_C);
+    WarpPod* pPairPod = getPairPod(mCameraPod);
     pPairPod->mDelay = 60;
     MR::startBck(pPairPod, "Wait");
     MR::startBrk(pPairPod, "Wait");
 
-    _C = nullptr;
+    mCameraPod = nullptr;
 }
 
 void WarpPodMgr::notifyWarpEnd(WarpPod* pWarpPod) {
@@ -107,12 +106,12 @@ void WarpPodMgr::notifyWarpEnd(WarpPod* pWarpPod) {
     MR::startBck(pPairPod, "Wait");
     MR::startBrk(pPairPod, "Wait");
 
-    _C = nullptr;
+    mCameraPod = nullptr;
 }
 
 void WarpPodMgr::draw() const {
-    for (u32 i = 0; i < _10->getObjNum(); i++) {
-        static_cast< WarpPod* >(_10->getActor(i))->drawCylinder(MR::mDrawTimer);
+    for (u32 i = 0; i < mPods->getObjNum(); i++) {
+        static_cast< WarpPod* >(mPods->getActor(i))->drawCylinder(MR::mDrawTimer);
     }
 
     MR::mDrawTimer++;
@@ -186,18 +185,15 @@ void WarpPod::init(const TableIter& rIter) {
     MR::addHitSensorEye(this, "eye", 8, radius, Vec3f(0.0f, 0.0f, 0.0f));
 
     mDelay = 0;
-    _A2 = 0;
-    _A6 = 0;
-    _CD = false;
+    mCameraStep = 0;
+    mIsAppearDemoPending = false;
 
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     MR::validateClipping(this);
     MR::setClippingFarMax(this);
 
     makeActorAppeared();
-
-    _A4 = 0;
 
     if (mVisibilityState != 0) {
         MR::startBck(this, "Active");
@@ -211,7 +207,7 @@ void WarpPod::init(const TableIter& rIter) {
     }
 
     if (mArg3 == 0) {
-        s32 index = MR::getWarpPodManager()->_14++;
+        s32 index = MR::getWarpPodManager()->mNextPairIndex++;
         mPathFlagIndex = index;
 
         if (MR::isOnWarpPodPathFlag(mPathFlagIndex)) {
@@ -233,7 +229,7 @@ void WarpPod::init(const TableIter& rIter) {
         glowEffect();
     }
 
-    _CC = false;
+    mIsPairCameraOn = false;
 
     mPairPod = MR::getWarpPodManager()->getPairPod(this);
 
@@ -298,10 +294,10 @@ void WarpPod::initPair() {
     nebula_sprintf(buf, "wPod出現カメラ %d", mGroupId);
 
     const size_t size = strlen(buf) + 1;
-    _9C = new char[size];
-    memcpy(_9C, buf, size);
+    mPairCameraName = new char[size];
+    memcpy(mPairCameraName, buf, size);
 
-    MR::declareEventCamera(mCamInfo, _9C);
+    MR::declareEventCamera(mCamInfo, mPairCameraName);
 }
 
 void WarpPod::appear() {
@@ -309,7 +305,7 @@ void WarpPod::appear() {
         mPairPod->appear();
         mIsInactive = false;
     } else {
-        _A6 = mCameraTime;
+        mCameraStep = mCameraTime;
 
         MR::invalidateClipping(this);
 
@@ -337,13 +333,13 @@ void WarpPod::appearWithDemo() {
         }
     }
 
-    _CD = true;
+    mIsAppearDemoPending = true;
 
     MR::invalidateClipping(this);
 }
 
 void WarpPod::control() {
-    if (!_CD) {
+    if (!mIsAppearDemoPending) {
         return;
     }
 
@@ -351,10 +347,10 @@ void WarpPod::control() {
         return;
     }
 
-    _CD = false;
-    _A6 = mCameraTime;
+    mIsAppearDemoPending = false;
+    mCameraStep = mCameraTime;
 
-    MR::startEventCameraNoTarget(mCamInfo, _9C);
+    MR::startEventCameraNoTarget(mCamInfo, mPairCameraName);
     MR::startSound(this, "SE_OJ_WARP_POD_PATH_APPEAR");
 
     MR::requestMovementOn(this);
@@ -362,7 +358,7 @@ void WarpPod::control() {
     MR::pauseOffCameraDirector();
 
     mIsInactive = false;
-    _CC = true;
+    mIsPairCameraOn = true;
 
     MR::startBck(this, "Active");
     MR::startBrk(this, "Active");
@@ -371,13 +367,13 @@ void WarpPod::control() {
 }
 
 void WarpPod::movement() {
-    if (_A6 != 0) {
-        _A6--;
+    if (mCameraStep != 0) {
+        mCameraStep--;
 
-        if (_A6 == 0) {
+        if (mCameraStep == 0) {
             MR::validateClipping(this);
 
-            if (_CC) {
+            if (mIsPairCameraOn) {
                 MR::endDemo(this, "出現");
             }
 
@@ -406,13 +402,11 @@ void WarpPod::movement() {
         }
 
         LiveActor::movement();
-
-        _A4++;
     }
 }
 
 void WarpPod::startEventCamera() const {
-    if (_CC || mPairPod->_CC) {
+    if (mIsPairCameraOn || mPairPod->mIsPairCameraOn) {
         return;
     }
 
@@ -420,10 +414,10 @@ void WarpPod::startEventCamera() const {
 }
 
 void WarpPod::endEventCamera() {
-    if (_CC) {
-        MR::endEventCamera(mCamInfo, _9C, true);
-        _CC = false;
-    } else if (mPairPod->_CC) {
+    if (mIsPairCameraOn) {
+        MR::endEventCamera(mCamInfo, mPairCameraName, true);
+        mIsPairCameraOn = false;
+    } else if (mPairPod->mIsPairCameraOn) {
         mPairPod->endEventCamera();
     } else {
         MR::endEventCamera(mCamInfo, mEventCameraName, true);
@@ -446,8 +440,8 @@ void WarpPod::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         if (mDelay < 30) {
             mDelay = 30;
         }
-    } else if (MR::sendArbitraryMsg(ACTMES_WARP, pReceiver, pSender)) {
-        _A2 = 60;
+    } else {
+        MR::sendArbitraryMsg(ACTMES_WARP, pReceiver, pSender);
     }
 }
 
@@ -485,8 +479,8 @@ void WarpPod::initDraw() {
     f32 startAngle = -halfAngle;
     u16 count = 60;
     u16 remaining = count;
-    _C4 = new Vec3f[count];
-    _C8 = count;
+    mPathPoints = new Vec3f[count];
+    mNumPathPoints = count;
 
     for (u32 i = 0; i < count; remaining--, i++) {
         f32 blend = (MR::sin(((count - remaining - 0.5f * count) / count) * MR::pi()) + 1.0f) / 2.0f;
@@ -500,11 +494,10 @@ void WarpPod::initDraw() {
         Vec3f point;
         NebulaMtxMultVecSR(rotation, arcStart, point);
         Vec3f position(arcCenter + point);
-        _C4[i] = position + up * 200.0f;
+        mPathPoints[i] = position + up * 200.0f;
     }
 
-    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
-    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"));
+    mGlowTexture = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
 }
 
 void WarpPod::drawCylinder(u32) const {
@@ -536,14 +529,14 @@ void WarpPod::drawCylinder(u32) const {
     material.setColor(0, glow.r, glow.g, glow.b, glow.a);
     material.setColor(4, 255, 255, 255, 255);
     material.constants[10] = 1.0f;
-    material.setTexture(0, _D4);
+    material.setTexture(0, mGlowTexture);
 
-    s32 val1 = _A6;
-    u32 val2 = _C8;
+    s32 val1 = mCameraStep;
+    u32 val2 = mNumPathPoints;
     s32 val3 = mCameraTime;
 
     if (val1 == 0) {
-        val1 = mPairPod->_A6;
+        val1 = mPairPod->mCameraStep;
         val3 = mPairPod->mCameraTime;
     }
 
@@ -562,7 +555,7 @@ void WarpPod::drawCylinder(u32) const {
             u32 j;
 
             for (j = 1; j < val2; j++) {
-                Vec3f direction = _C4[j] - _C4[i];
+                Vec3f direction = mPathPoints[j] - mPathPoints[i];
                 Vec3f vec11C;
                 MR::vecKillElement(direction, MR::getCamZdir(), &vec11C);
 
@@ -581,10 +574,10 @@ void WarpPod::drawCylinder(u32) const {
                 vec128.setLength(length);
                 vec134.setLength(length);
 
-                vecA8 = _C4[i] + vec128;
-                vec9C = _C4[i] - vec128;
-                vec90 = _C4[i] + vec134;
-                vec84 = _C4[i] - vec134;
+                vecA8 = mPathPoints[i] + vec128;
+                vec9C = mPathPoints[i] - vec128;
+                vec90 = mPathPoints[i] + vec134;
+                vec84 = mPathPoints[i] - vec134;
 
                 break;
             }
@@ -593,7 +586,7 @@ void WarpPod::drawCylinder(u32) const {
                 break;
             }
 
-            vecE4 = _C4[0];
+            vecE4 = mPathPoints[0];
 
             previousTexCoords[0].set(0.0f, 1.0f);
             previousTexCoords[1].set(1.0f, 1.0f);
@@ -610,7 +603,7 @@ void WarpPod::drawCylinder(u32) const {
         currentTexCoords[0].set(0.0f, val);
         currentTexCoords[1].set(1.0f, val);
 
-        Vec3f direction = _C4[i] - vecE4;
+        Vec3f direction = mPathPoints[i] - vecE4;
         Vec3f vec14C;
         MR::vecKillElement(direction, MR::getCamZdir(), &vec14C);
 
@@ -629,10 +622,10 @@ void WarpPod::drawCylinder(u32) const {
         vec158.setLength(length);
         vec164.setLength(length);
 
-        vecD8 = _C4[i] + vec158;
-        vecCC = _C4[i] - vec158;
-        vecC0 = _C4[i] + vec164;
-        vecB4 = _C4[i] - vec164;
+        vecD8 = mPathPoints[i] + vec158;
+        vecCC = mPathPoints[i] - vec158;
+        vecC0 = mPathPoints[i] + vec164;
+        vecB4 = mPathPoints[i] - vec164;
 
         vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 8);
 
@@ -651,33 +644,7 @@ void WarpPod::drawCylinder(u32) const {
         previousTexCoords[1] = currentTexCoords[1];
         vec90 = vecC0;
         vec84 = vecB4;
-        vecE4 = _C4[i];
+        vecE4 = mPathPoints[i];
     }
 }
 
-void WarpPod::draw() const {
-    if (mVisibilityState == 0) {
-        return;
-    }
-
-    if (!mArg7) {
-        return;
-    }
-
-    if (mPairPod->mIsInactive) {
-        return;
-    }
-
-    if (mIsInactive) {
-        return;
-    }
-
-    SiteMaterial material;
-    TDDraw::setupNative(&material, 0, 1, 0);
-    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
-
-    for (u32 i = 0; i < _C8; i++) {
-        TypedDraw site = TDDraw::site(material, 0);
-        TDDraw::drawCylinder(site, _C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);
-    }
-}

@@ -20,9 +20,10 @@ public:
     void updateModelTexMtx();
     f32 getDistance(const Vec3f&) const;
 
-    Vec3f _C;
-    Vec3f _18;
-    f32 _24;
+    // The mirror plane: mMirrorNormal . p + mPlaneD = 0.
+    Vec3f mMirrorPos;
+    Vec3f mMirrorNormal;
+    f32 mPlaneD;
     Pos3f mViewMtx;
     Pos3f mModelTexMtx;
 };

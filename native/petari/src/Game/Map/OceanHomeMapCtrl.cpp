@@ -20,10 +20,7 @@ namespace {
 OceanHomeMapCtrl::OceanHomeMapCtrl() : NameObj("オーシャンホーム地形制御") {
     mOceanHomePlanet = nullptr;
     mOceanRingPlanet = nullptr;
-    _14 = 0;
     mOceanRingPlanetLowInWater = nullptr;
-    _1C = 0;
-    _20 = 0;
 }
 
 void OceanHomeMapCtrl::entryMapRing(PlanetMap* pPlanet) {

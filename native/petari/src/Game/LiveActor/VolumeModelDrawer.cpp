@@ -1,7 +1,6 @@
 #include "Game/LiveActor/VolumeModelDrawer.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"

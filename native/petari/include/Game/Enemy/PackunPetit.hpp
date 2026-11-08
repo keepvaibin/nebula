@@ -36,8 +36,8 @@ public:
     void exeSwoonStart();
     void exeSwoon();
     void exeSwoonToThreat();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
 
     void initStarPointer(const char*);
     void initBlowModel();
@@ -45,11 +45,11 @@ public:
     void selectNrvWait();
     bool tryNonActive();
     bool tryTurn();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
 
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mStarPointerState;
-    Vec3f _94;
+    Vec3f mFront;
     ModelObj* mBlownModel;
     bool mDontTurn;
 };

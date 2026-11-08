@@ -3,7 +3,7 @@
 #include "Game/Camera/CameraAnim.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraContext.hpp"
-#include "Game/Camera/CameraDPD.hpp"
+#include "Game/Camera/CameraPointer.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
@@ -18,7 +18,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/Render/Model.hpp"
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
@@ -266,7 +265,7 @@ namespace MR {
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_EYEPOS_FIX_THERE", MR::getCameraDirector()->mHolder);
             chunk->mGeneralParam->mNum1 = 1;
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -300,7 +299,7 @@ namespace MR {
                 chunk->mGeneralParam->mNum1 = 1;
             }
 
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -315,7 +314,7 @@ namespace MR {
             chunk->setLOfsErpOff(true);
             chunk->mExParam.setWOffset(Vec3f(0.0f, 0.0f, 0.0f));
             chunk->mExParam.mLOffsetV = 100.0f;
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -327,7 +326,7 @@ namespace MR {
             chunk->mGeneralParam->mAnimData = reinterpret_cast< u8* >(pAnimData);
             chunk->mGeneralParam->mDist = 1.0f;
             chunk->getGeneralParam()->mNum2 = CameraAnim::getAnimFrame(reinterpret_cast< u8* >(pAnimData));
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -363,7 +362,7 @@ namespace MR {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, pEventName);
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_BLACK_HOLE", getCameraDirector()->mHolder);
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
             chunk->mEnableErpFrame = true;
             chunk->mExParam.mCamInt = 240;
             chunk->setCollisionOff(true);
@@ -389,7 +388,7 @@ namespace MR {
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_DPD", getCameraDirector()->mHolder);
             chunk->mGeneralParam->mDist = 120.0f;
-            chunk->mGeneralParam->mNum1 = CameraDPD::CameraType_UpdateWithTarget;
+            chunk->mGeneralParam->mNum1 = CameraPointer::CameraType_UpdateWithTarget;
             chunk->mGeneralParam->mAngleA = MR::pi() / 3.0f;
             chunk->mGeneralParam->mAngleB = MR::pi() / 6.0f;
             chunk->mGeneralParam->mWPoint.z = 0.0f;
@@ -397,7 +396,7 @@ namespace MR {
             chunk->mGeneralParam->mWPoint.y = 0.99f;
             chunk->mGeneralParam->mUp.zero();
             chunk->mGeneralParam->mNum2 = 0;
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -435,7 +434,7 @@ namespace MR {
             chunk->mGeneralParam->mAngleA = 1.4f;
             chunk->mGeneralParam->mAngleB = MR::pi();
             chunk->setCollisionOff(true);
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 
@@ -464,7 +463,7 @@ namespace MR {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, pEventName);
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_POINT_FIX", getCameraDirector()->mHolder);
-            chunk->_64 = true;
+            chunk->mIsCodeChunk = true;
         }
     }
 

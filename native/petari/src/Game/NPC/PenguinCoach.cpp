@@ -88,17 +88,17 @@ void PenguinCoach::init(const TableIter& rIter) {
     mTurnJointCtrl = new TurnJointCtrl(this);
     mTurnJointCtrl->init(90.0f, 10.0f, 40.0f);
     mTurnJointCtrl->addFace("Head", 1.0f, TurnJointCtrl::X, TurnJointCtrl::Y, TurnJointCtrl::Z);
-    mTurnJointCtrl->_60 = 0.1f;
-    mTurnJointCtrl->_5C = 800.0f;
+    mTurnJointCtrl->mStareRate = 0.1f;
+    mTurnJointCtrl->mStareDist = 800.0f;
     makeActorAppeared();
 
     mParam.setMoveAction("Wait", "Turn");
     mParam.setTalkAction("Talk", "TalkTurn");
-    mParam._8 = 1.0f;
-    _134 = "Trampled";
-    _13C = "Reaction";
-    _130 = "Reaction";
-    _138 = "Pointing";
+    mParam.mTurnSpeed = 1.0f;
+    mTrampleAction = "Trampled";
+    mReactionAction = "Reaction";
+    mSpinAction = "Reaction";
+    mPointingAction = "Pointing";
 
     if (mMsgCtrl != nullptr) {
         MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &PenguinCoach::branchFunc));
@@ -121,7 +121,7 @@ void PenguinCoach::calcAndSetBaseMtx() {
 
 bool PenguinCoach::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        _E3 = true;
+        mIsSpinAttacked = true;
         return true;
     }
 
@@ -278,22 +278,22 @@ void PenguinCoach::exeReaction() {
         mTurnJointCtrl->endCtrl(4);
     }
 
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_PENGUIN_TRAMPLED");
         MR::startSound(this, "SE_SV_PENGUIN_L_TRAMPLED");
     }
 
     if (isPointingSe()) {
         MR::startSound(this, "SE_SV_PENGUIN_L_POINTED_2P");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_PENGUIN_L_SPIN_HIT");
         MR::startSound(this, "SE_SM_PENGUIN_L_SPIN_HIT");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_PENGUIN_L_STAR_PIECE");
         MR::startSound(this, "SE_SM_PENGUIN_L_SPIN_HIT");
     }

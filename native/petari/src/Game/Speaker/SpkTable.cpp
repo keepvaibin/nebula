@@ -10,9 +10,9 @@ SpkTable::SpkTable() {
 
 void SpkTable::setResource(void* pRes) {
     const SpkFile* file = static_cast< const SpkFile* >(pRes);
-    mResourceCount = file->count;
-    mParameters = reinterpret_cast< SpkParameters* >(static_cast< u8* >(pRes) + file->parametersOffset);
+    mResourceCount = file->mCount;
     mBase = static_cast< const u8* >(pRes);
-    mNameOffsets = reinterpret_cast< const u32* >(mBase + file->namesOffset);
+    mParameters = reinterpret_cast< const SpkParameters* >(mBase + file->mParametersOffset);
+    mNameOffsets = reinterpret_cast< const u32* >(mBase + file->mNamesOffset);
     mInitialized = true;
 }

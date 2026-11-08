@@ -93,7 +93,7 @@ void NokonokoLand::init(const TableIter& rIter) {
     MR::startBrk(this, "NokonokoLand");
     MR::setBrkFrameAndStop(this, mTurtleType);
 
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     MR::setEffectHostSRT(this, "Appear", &mAppearPos, nullptr, nullptr);
     initSound(4, false);
@@ -161,7 +161,7 @@ void NokonokoLand::calcAndSetBaseMtx() {
     quat.slerp(mTargetQuat, ::sPoseLerpRate);
     MR::setBaseTRMtx(this, quat);
     Vec3f scale;
-    scale.mul(mAnimScaleController->_C, mScale);
+    scale.mul(mAnimScaleController->mScale, mScale);
     MR::setBaseScale(this, scale);
 }
 

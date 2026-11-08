@@ -65,11 +65,11 @@ public:
     void createFlowNode(TalkMessageCtrl*, const TableIter&, const char*, ActorCameraInfo**);
     void initNodeRecursive(TalkMessageCtrl*, const TableIter&, ActorCameraInfo*, RecursiveHelper*);
 
-    char* _0;
+    char* mFlowName;
     s32 mCurrentNodeIdx;
     TalkMessageInfo mMessageInfo;
     TalkMessageHistory mHistory;
-    TalkNode* _38;
+    TalkNode* mStartNode;
     TalkNode* mCurrentNode;
     TalkNode* mFlowNode;
     s16 mNodeData;

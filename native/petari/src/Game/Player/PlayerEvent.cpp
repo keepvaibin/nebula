@@ -12,9 +12,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 
-EventSequencer::EventSequencer() : NameObj("イベントシーケンサー"), mSequence() {
+EventSequencer::EventSequencer() : NameObj("イベントシーケンサー"), mNames(cSequenceNum), mSequences(), mNumSequences(0), mSequence() {
     MR::connectToSceneMapObjMovement(this);
-    mHashTable = new HashSortTable(16);
 }
 
 void EventSequencer::init(const TableIter& rIter) {
@@ -24,8 +23,6 @@ void EventSequencer::init(const TableIter& rIter) {
     addEventSequence< EventRaceDown >("レース負け");
     addEventSequence< EventGhostRaceDown >("ゴーストレース負け");
     addEventSequence< EventGameOver >("ゲームオーバー");
-
-    mHashTable->sort();
 }
 
 void EventSequencer::movement() {
@@ -41,8 +38,9 @@ void EventSequencer::movement() {
 }
 
 void EventSequencer::startEvent(const char* pName) {
-    EventSequence* sequence;
-    if (mHashTable->search(pName, reinterpret_cast< HashSortValue* >(&sequence))) {
+    const u32 index = mNames.find(pName);
+    if (index != MR::NameIndex::cNoValue) {
+        EventSequence* sequence = mSequences[index];
         mSequence = sequence;
         mSequenceFrame = 0;
         sequence->clearFlag();

@@ -15,10 +15,8 @@ namespace NrvCrystalSwitch {
 };  // namespace NrvCrystalSwitch
 
 CrystalSwitch::CrystalSwitch(const char* pName) : LiveActor(pName) {
-    _8C = 0;
-    _90 = 300;
     mRotateSpeed = 0.0f;
-    _98 = 0;
+    mIsHit = 0;
 }
 
 void CrystalSwitch::init(const TableIter& rIter) {
@@ -33,9 +31,8 @@ void CrystalSwitch::init(const TableIter& rIter) {
     MR::addHitSensorMapObj(this, "body", 16, 100.0f, sensor_offs);
     initSound(4, false);
     MR::needStageSwitchWriteA(this, rIter);
-    MR::getPlacementArg0NoInit(rIter, &_90);
     initNerve(GET_NERVE(CrystalSwitch, CrystalSwitchNrvOff));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::startBck(this, "Wait");
     MR::startBpk(this, "Off");
     appear();
@@ -43,7 +40,7 @@ void CrystalSwitch::init(const TableIter& rIter) {
 
 void CrystalSwitch::control() {
     calcRotSpeed();
-    _98 = 0;
+    mIsHit = 0;
 }
 
 void CrystalSwitch::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -53,12 +50,12 @@ void CrystalSwitch::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool CrystalSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    _98 = 1;
+    mIsHit = 1;
     return true;
 }
 
 bool CrystalSwitch::trySwitchDown() {
-    if (_98) {
+    if (mIsHit) {
         setNerve(GET_NERVE(CrystalSwitch, CrystalSwitchNrvSwitchDown));
         return true;
     }

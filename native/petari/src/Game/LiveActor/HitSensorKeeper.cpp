@@ -4,35 +4,26 @@
 #include "Game/Util/HashUtil.hpp"
 #include <cstring>
 
-HitSensorKeeper::HitSensorKeeper(int sensorCount) {
-    mSensorCount = sensorCount;
-    mSensorInfosSize = 0;
-    mSensorInfos = nullptr;
-    mTaking = nullptr;
-    mTaken = nullptr;
-    mSensorInfos = new HitSensorInfo*[sensorCount];
-
-    for (s32 i = 0; i < mSensorCount; i++) {
-        mSensorInfos[i] = nullptr;
-    }
+HitSensorKeeper::HitSensorKeeper(s32 capacity)
+    : mSensorInfosSize(0), mCapacity(capacity > 0 ? capacity : 1), mSensorInfos(new HitSensorInfo*[mCapacity]()), mTaking(), mTaken() {
 }
 
-HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f& a6) {
-    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, a6, false);
+HitSensor* HitSensorKeeper::add(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f& rOffset) {
+    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, nullptr, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
 HitSensor* HitSensorKeeper::addPos(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, const Vec3f* pPos,
-                                   const Vec3f& a7) {
-    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), pPos, nullptr, a7, false);
+                                   const Vec3f& rOffset) {
+    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), pPos, nullptr, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
 
 HitSensor* HitSensorKeeper::addMtx(const char* pName, u32 sensorType, u16 sensorGroupSize, f32 radius, LiveActor* pActor, MtxPtr mtx,
-                                   const Vec3f& a7) {
-    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, mtx, a7, false);
+                                   const Vec3f& rOffset) {
+    HitSensorInfo* pInfo = new HitSensorInfo(pName, new HitSensor(sensorType, sensorGroupSize, radius, pActor), nullptr, mtx, rOffset, false);
     registHitSensorInfo(pInfo);
     return pInfo->mSensor;
 }
@@ -124,7 +115,15 @@ HitSensorInfo* HitSensorKeeper::getSensorInfo(const char* pSensorName) const {
 }
 
 void HitSensorKeeper::registHitSensorInfo(HitSensorInfo* pInfo) {
-    mSensorInfos[mSensorInfosSize] = pInfo;
-    mSensorInfosSize++;
+    if (mSensorInfosSize >= mCapacity) {
+        HitSensorInfo** pList = new HitSensorInfo*[mCapacity * 2]();
+        for (s32 i = 0; i < mSensorInfosSize; i++) {
+            pList[i] = mSensorInfos[i];
+        }
+        delete[] mSensorInfos;
+        mSensorInfos = pList;
+        mCapacity *= 2;
+    }
+    mSensorInfos[mSensorInfosSize++] = pInfo;
     pInfo->update();
 }

@@ -3,7 +3,7 @@
 #include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
-DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPadRumbleEntries(), _8() {
+DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPadRumbleEntries() {
     if (pName == nullptr)
         return;
 

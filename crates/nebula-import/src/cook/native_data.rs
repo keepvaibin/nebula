@@ -25,9 +25,9 @@
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
 //!   tables (its command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
-//! - BAS (sound animations): counts, ids, times, pitches, flags (bas).
-//! - BRS/BMT (rhythm library remix and ME table files): words, tables, parameters (rhythm).
-//! - BCT/CSW (Wii Remote speaker table and waves): headers, parameters, samples (speaker).
+//! - BAS (sound animations): native records, "NBAS" (bas).
+//! - BRS/BMT (rhythm library remix and ME table files): words; the ME table as packed named records (rhythm).
+//! - BCT/CSW (Wii Remote speaker table and waves): the table as packed named records; headers, samples (speaker).
 //! - CIT (chord tables, "CITS"): size, counts, offset tables, scale note offsets (cit).
 //!
 //! The sound data (the audio archive, sequences, ME programs) is cooked to its own formats by cook::sound.
@@ -424,24 +424,35 @@ pub fn is_model_file(bytes: &[u8]) -> bool {
     bytes.len() >= 0x20 && &bytes[0..4] == b"J3D2" && MODEL_TYPES.iter().any(|t| &bytes[4..8] == *t)
 }
 
-/// A sound animation (BAS) in host order: the sound count (16-bit), the 32-bit slot after it, and each 0x20-byte sound:
-/// its id, note-on and note-off times, base pitch, flags and last word (32-bit); the volume, pitch, pan and repeat
-/// bytes stay.
+pub const BAS_MAGIC: &[u8; 4] = b"NBAS";
+const BAS_SOUND: usize = 28;
+
+/// A sound animation (BAS) as SoundAnimation reads it (NBAS, little-endian): "NBAS", the sound count (u32), then a
+/// 28-byte record a sound: id, note-on and note-off times, base pitch, flags (u32 each), base volume, pitch delta,
+/// play time, base pan, volume delta, repeat interval (bytes), 2 zero bytes. The disc's 0x20-byte sounds keep these at
+/// the same offsets; its slot after the count (a control object's, 0 on disc) and each sound's bytes 0x1A-0x1F are
+/// not read by the game and are left out.
 pub fn bas(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.starts_with(BAS_MAGIC) {
+        return Ok(bytes.to_vec());
+    }
     if bytes.len() < 8 {
         bail!("a sound animation shorter than its header");
     }
-    let mut out = bytes.to_vec();
-    let count = host16(bytes, &mut out, 0)? as usize;
-    host32(bytes, &mut out, 4)?;
+    let count = be16(bytes, 0)? as usize;
     if 8 + 0x20 * count > bytes.len() {
         bail!("{count} sounds past the sound animation's end");
     }
+    let mut out = Vec::with_capacity(8 + BAS_SOUND * count);
+    out.extend_from_slice(BAS_MAGIC);
+    out.extend_from_slice(&(count as u32).to_le_bytes());
     for i in 0..count {
         let s = 8 + 0x20 * i;
-        for o in [0, 4, 8, 0xC, 0x10, 0x1C] {
-            host32(bytes, &mut out, s + o)?;
+        for o in [0, 4, 8, 0xC, 0x10] {
+            out.extend_from_slice(&be32(bytes, s + o)?.to_le_bytes());
         }
+        out.extend_from_slice(part(bytes, s + 0x14, s + 0x1A)?);
+        out.extend_from_slice(&[0, 0]);
     }
     Ok(out)
 }
@@ -471,55 +482,77 @@ pub fn cit(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// The rhythm library's files (AudioRes/Info JaiMe.arc, JaiRemixSeq.arc) in host order: a remix sequence (BRS) is all
-/// 32-bit words; an ME table (BMT) has the entry count, entry and name table offsets, a word, 8-byte playing parameters
-/// (a 16-bit field at 4) and the name offsets. ME programs (BME) are cook::sound's.
+/// A disc table of named records (an ME table, the speaker's sound table): the count, the record and name table
+/// offsets, then 8-byte records and a name offset per record. Cooked: the count, the record and name table offsets (12
+/// bytes), the records as `record` writes them, the name offsets (4-aligned) and the names, each ending in 0.
+fn named_records(bytes: &[u8], record: impl Fn(&[u8], usize) -> Result<Vec<u8>>) -> Result<Vec<u8>> {
+    let count = be32(bytes, 0)? as usize;
+    let records = be32(bytes, 4)? as usize;
+    let names = be32(bytes, 8)? as usize;
+    let mut body = Vec::new();
+    for i in 0..count {
+        body.extend_from_slice(&record(bytes, records + 8 * i)?);
+    }
+    let names_at = (12 + body.len() + 3) & !3;
+    let mut strings = Vec::new();
+    let mut offsets = Vec::with_capacity(count);
+    for i in 0..count {
+        let at = be32(bytes, names + 4 * i)? as usize;
+        let end = bytes.get(at..).and_then(|s| s.iter().position(|&b| b == 0)).context("a name past the file's end")?;
+        offsets.push((names_at + 4 * count + strings.len()) as u32);
+        strings.extend_from_slice(&bytes[at..at + end + 1]);
+    }
+    let mut out = Vec::with_capacity(names_at + 4 * count + strings.len());
+    for word in [count as u32, 12, names_at as u32] {
+        out.extend_from_slice(&word.to_le_bytes());
+    }
+    out.extend_from_slice(&body);
+    out.resize(names_at, 0);
+    for offset in offsets {
+        out.extend_from_slice(&offset.to_le_bytes());
+    }
+    out.extend_from_slice(&strings);
+    Ok(out)
+}
+
+/// The rhythm library's files (AudioRes/Info JaiMe.arc, JaiRemixSeq.arc): a remix sequence (BRS) is all 32-bit words, in
+/// host order; an ME table (BMT) is named records of 6 bytes: priority, chord volume, pan, dolby, the fade time (u16).
+/// ME programs (BME) are cook::sound's.
 pub fn rhythm(bytes: &[u8], extension: &str) -> Result<Vec<u8>> {
-    let mut out = bytes.to_vec();
     match extension {
         "brs" => {
             if bytes.len() % 4 != 0 {
                 bail!("a remix sequence of {} bytes (not whole words)", bytes.len());
             }
+            let mut out = bytes.to_vec();
             for at in (0..bytes.len()).step_by(4) {
                 host32(bytes, &mut out, at)?;
             }
+            Ok(out)
         }
-        "bmt" => {
-            let count = host32(bytes, &mut out, 0)? as usize;
-            let entries = host32(bytes, &mut out, 4)? as usize;
-            let names = host32(bytes, &mut out, 8)? as usize;
-            host32(bytes, &mut out, 0xC)?;
-            for i in 0..count {
-                host16(bytes, &mut out, entries + 8 * i + 4)?;
-                host32(bytes, &mut out, names + 4 * i)?;
-            }
-        }
+        "bmt" => named_records(bytes, |b, at| {
+            let mut r = part(b, at, at + 4)?.to_vec();
+            r.extend_from_slice(&be16(b, at + 4)?.to_le_bytes());
+            Ok(r)
+        }),
         _ => bail!("not a rhythm library file"),
     }
-    Ok(out)
 }
 
-/// The Wii Remote speaker's files (AudioRes/SpkRes/SpkRes.arc) in host order. BCT (the sound table): count, parameter
-/// and name table offsets, a word, 8-byte parameters (wave id, release time, a spare: 16-bit; two bytes stay) and the
-/// name offsets. CSW (the waves): the size word, the wave count, the offsets, and each wave's size, loop start, loop end
-/// and 16-bit samples up to the next wave.
+/// The Wii Remote speaker's files (AudioRes/SpkRes/SpkRes.arc). BCT (the sound table): named records of 6 bytes: the
+/// wave id and release time (u16), the volume (u8), 0. CSW (the waves), in host order: the size word, the wave count, the
+/// offsets, and each wave's size, loop start, loop end and 16-bit samples up to the next wave.
 pub fn speaker(bytes: &[u8], extension: &str) -> Result<Vec<u8>> {
+    if extension == "bct" {
+        return named_records(bytes, |b, at| {
+            let mut r = be16(b, at)?.to_le_bytes().to_vec();
+            r.extend_from_slice(&be16(b, at + 4)?.to_le_bytes());
+            r.extend_from_slice(&[byte(b, at + 3)?, 0]);
+            Ok(r)
+        });
+    }
     let mut out = bytes.to_vec();
     match extension {
-        "bct" => {
-            let count = host32(bytes, &mut out, 0)? as usize;
-            let parameters = host32(bytes, &mut out, 4)? as usize;
-            let names = host32(bytes, &mut out, 8)? as usize;
-            host32(bytes, &mut out, 0xC)?;
-            for i in 0..count {
-                let p = parameters + 8 * i;
-                host16(bytes, &mut out, p)?;
-                host16(bytes, &mut out, p + 4)?;
-                host16(bytes, &mut out, p + 6)?;
-                host32(bytes, &mut out, names + 4 * i)?;
-            }
-        }
         "csw" => {
             host32(bytes, &mut out, 0)?;
             let count = host32(bytes, &mut out, 4)? as usize;
@@ -661,5 +694,60 @@ mod font_tests {
         let sheets = le32(&n, 0x3C);
         assert_eq!(sheets % 32, 0);
         assert_eq!(n[sheets..sheets + 32], (0..32u8).map(|i| i ^ 0x5A).collect::<Vec<_>>()[..]);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A disc table of two named records (8 bytes each) with the names after the name offsets.
+    fn table(records: [[u8; 8]; 2]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for word in [2u32, 0x10, 0x20, 0] {
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+        for r in records {
+            out.extend_from_slice(&r);
+        }
+        for word in [0x28u32, 0x2B] {
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+        out.extend_from_slice(b"ab\0cde\0");
+        out
+    }
+
+    #[test]
+    fn me_and_speaker_tables_cook_to_packed_records() {
+        let me = rhythm(&table([[1, 2, 3, 4, 0x01, 0x02, 9, 9], [5, 6, 7, 8, 0, 3, 9, 9]]), "bmt").unwrap();
+        assert_eq!(&me[0..12], &[2, 0, 0, 0, 12, 0, 0, 0, 24, 0, 0, 0]);
+        assert_eq!(&me[12..24], &[1, 2, 3, 4, 0x02, 0x01, 5, 6, 7, 8, 3, 0]);
+        assert_eq!(&me[24..32], &[32, 0, 0, 0, 35, 0, 0, 0]);
+        assert_eq!(&me[32..], b"ab\0cde\0");
+        let spk = speaker(&table([[0, 7, 9, 100, 0, 40, 9, 9], [1, 0, 9, 50, 0, 80, 9, 9]]), "bct").unwrap();
+        assert_eq!(&spk[12..24], &[7, 0, 40, 0, 100, 0, 0, 1, 80, 0, 50, 0]);
+        assert_eq!(&spk[32..], b"ab\0cde\0");
+    }
+
+    #[test]
+    fn sound_animations_cook_to_native_records() {
+        let mut disc = vec![0, 2, 0, 0, 0, 0, 0, 0];
+        for k in 0..2u8 {
+            for word in [0x1000u32 + k as u32, 0x3F80_0000, 0x4000_0000, 0x4040_0000, 0x81] {
+                disc.extend_from_slice(&word.to_be_bytes());
+            }
+            disc.extend_from_slice(&[10 + k, 0xFE, 3, 64, 0xFF, 5, 0x77, 0, 0xAA, 0xBB, 0xCC, 0xDD]);
+        }
+        let out = bas(&disc).unwrap();
+        assert_eq!(out.len(), 8 + 2 * BAS_SOUND);
+        assert_eq!(&out[0..8], b"NBAS\x02\0\0\0");
+        let s = &out[8 + BAS_SOUND..];
+        assert_eq!(&s[0..4], &0x1001u32.to_le_bytes());
+        assert_eq!(&s[4..8], &1.0f32.to_le_bytes());
+        assert_eq!(&s[12..16], &3.0f32.to_le_bytes());
+        assert_eq!(&s[16..20], &0x81u32.to_le_bytes());
+        assert_eq!(&s[20..], &[11, 0xFE, 3, 64, 0xFF, 5, 0, 0]);
+        assert_eq!(bas(&out).unwrap(), out);
+        assert!(bas(&disc[..8 + 0x20]).is_err());
     }
 }

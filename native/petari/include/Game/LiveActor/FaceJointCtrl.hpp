@@ -21,8 +21,6 @@ public:
 
     LiveActor* mHostActor;
     f32 mDegreeMax;
-    Vec3f _8;
-    Vec3f _14;
     JointController* mJointController;
     JointCtrlRate* mJointCtrlRate;
 };

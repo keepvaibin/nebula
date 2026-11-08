@@ -4,8 +4,6 @@
 
 struct HaloParam {
     const char* mName;
-    f32 _4;
-    f32 _8;
     f32 mClippingRadius;
 };
 

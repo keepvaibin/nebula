@@ -22,7 +22,7 @@ namespace NrvCollectTico {
 CollectTico::CollectTico(const char* pName) : LiveActor(pName) {
     mStrayTicos = nullptr;
     mTicoNum = 0;
-    _A0 = 0;
+    mIsDemoCast = 0;
 }
 
 void CollectTico::init(const TableIter& rIter) {
@@ -34,12 +34,12 @@ void CollectTico::init(const TableIter& rIter) {
         MR::initChildObj(mStrayTicos[i], rIter, i);
     }
 
-    initEffectKeeper(0, "CollectTico", false);
+    initEffectKeeper(0, "CollectTico");
     initSound(2, false);
     initNerve(GET_NERVE(CollectTico, CollectTicoNrvWait));
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::registerDemoActionFunctor(this, MR::Functor(this, &CollectTico::startAppearPowerStar), "集めチコスター出現");
-        _A0 = 1;
+        mIsDemoCast = 1;
     }
 
     MR::useStageSwitchWriteA(this, rIter);
@@ -68,12 +68,12 @@ void CollectTico::exeCompleteDemo() {
         mPosition.set(*MR::getPlayerPos());
         MR::calcGravity(this);
 
-        _94.scaleAdd(300.0f, -mGravity, mPosition);
-        mPosition.set(_94);
+        mStarPos.scaleAdd(300.0f, -mGravity, mPosition);
+        mPosition.set(mStarPos);
 
         for (s32 i = 0; i < mTicoNum; i++) {
             MR::requestMovementOn(mStrayTicos[i]);
-            mStrayTicos[i]->requestCompleteDemo(_94, mGravity, 360.0f * ((f32)i / mTicoNum));
+            mStrayTicos[i]->requestCompleteDemo(mStarPos, mGravity, 360.0f * ((f32)i / mTicoNum));
         }
     }
 
@@ -104,8 +104,8 @@ void CollectTico::exeFlash() {
     }
 
     if (MR::isStep(this, 60)) {
-        if (!_A0) {
-            MR::requestAppearPowerStar(this, _94);
+        if (!mIsDemoCast) {
+            MR::requestAppearPowerStar(this, mStarPos);
             setNerve(GET_NERVE(CollectTico, CollectTicoNrvAppearPowerStar));
         }
 
@@ -138,7 +138,7 @@ s32 CollectTico::calcNoRescuedCount() const {
 }
 
 void CollectTico::startAppearPowerStar() {
-    MR::requestAppearPowerStar(this, _94);
+    MR::requestAppearPowerStar(this, mStarPos);
     setNerve(GET_NERVE(CollectTico, CollectTicoNrvAppearPowerStar));
 }
 

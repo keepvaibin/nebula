@@ -85,15 +85,15 @@ namespace MR {
     }
 
     Vec3f* getCurrentNodePosition(const RailGraphIter* pGraph) {
-        return &pGraph->getCurrentNode()->_0;
+        return &pGraph->getCurrentNode()->mPos;
     }
 
     Vec3f* getNextNodePosition(const RailGraphIter* pIter) {
-        return &pIter->getNextNode()->_0;
+        return &pIter->getNextNode()->mPos;
     }
 
     void calcWatchEdgeVector(const RailGraphIter* pIter, Vec3f* pEdge) {
-        pEdge->set(pIter->getWatchNode()->_0 - pIter->getCurrentNode()->_0);
+        pEdge->set(pIter->getWatchNode()->mPos - pIter->getCurrentNode()->mPos);
     }
 
     void calcWatchEdgeDirection(const RailGraphIter* pRailGraphIter, Vec3f* pVec) {
@@ -108,7 +108,7 @@ namespace MR {
 
         f32 nearestDistance = maxDistance;
         s32 nearestNode = -1;
-        s32 nodeCount = pGraph->_8;
+        s32 nodeCount = pGraph->mNumNodes;
         RailGraphIter iter = pGraph->getIterator();
         for (s32 i = 0; i < nodeCount; i++) {
             if (pSelector != nullptr) {
@@ -118,7 +118,7 @@ namespace MR {
                 }
             }
 
-            f32 distance = rPosition.distance(pGraph->getNode(i)->_0);
+            f32 distance = rPosition.distance(pGraph->getNode(i)->mPos);
             if (distance < nearestDistance) {
                 nearestDistance = distance;
                 nearestNode = i;

@@ -53,9 +53,9 @@ void KoopaJr::init(const TableIter& rIter) {
     caps.mShadowSize = ::sShadowRadius;
     caps.mEffect = true;
     mParam.setSingleAction("Wait");
-    mParam._0 = 0;
-    mParam._1 = 0;
-    _13C = "Damage";
+    mParam.mTurnWhenNear = 0;
+    mParam.mTurnOnTalk = 0;
+    mReactionAction = "Damage";
     initialize(rIter, caps);
 
     MR::declareStarPiece(this, ::sStarPieceNum);
@@ -104,7 +104,7 @@ void KoopaJr::control() {
 }
 
 void KoopaJr::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _A0);
+    MR::setBaseTRMtx(this, mPoseQuat);
 }
 
 void KoopaJr::startShipBattleTalk() {
@@ -120,7 +120,7 @@ void KoopaJr::startShipBattleTalk() {
 
 void KoopaJr::exeWait() {
     if (MR::tryStartReaction(this)) {
-        if (!_E6) {
+        if (!mIsJetTurtleHit) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_HIT_ENM_F");
         }
 

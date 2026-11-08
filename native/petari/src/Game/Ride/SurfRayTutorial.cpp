@@ -16,7 +16,6 @@ namespace {
     static const f32 sPadAccelStraightMinX = 0.25f;
     static const f32 sPadAccelStraightMinY = 0.45f;
     static const f32 sPadAccelTurnMinX = 0.65f;
-    // static const f32 sPadAccelTurnLimitZ = _;
     static const f32 sPadAccelTurnLimitY = 0.5f;
 };  // namespace
 
@@ -38,7 +37,7 @@ namespace NrvSurfRayTutorial {
 };  // namespace NrvSurfRayTutorial
 
 SurfRayTutorial::SurfRayTutorial(LiveActor* pHost, TalkMessageCtrl* pTalkCtrl, const TableIter& rIter)
-    : NerveExecutor("チュートリアル演出"), mHost(pHost), mIsTutorialPass(), mPadAccel(0.0f, 0.0f, 0.0f), mTalkCtrl(pTalkCtrl), mChangeStep(), _28() {
+    : NerveExecutor("チュートリアル演出"), mHost(pHost), mIsTutorialPass(), mPadAccel(0.0f, 0.0f, 0.0f), mTalkCtrl(pTalkCtrl), mChangeStep(), mGoNextCount() {
     initNerve(GET_NERVE(SurfRayTutorial, SurfRayTutorialNrvTutorialAllStart));
 
     mSurfingGuidance = new SurfingGuidance();
@@ -104,15 +103,15 @@ void SurfRayTutorial::exeTutorialStraightUpkeep() {
         mSurfingGuidance->levelOffHold();
     }
 
-    startTimerSound(getNerveStep(), _28);
+    startTimerSound(getNerveStep(), mGoNextCount);
 
     if (isSuccessStraight()) {
         mChangeStep = 0;
 
         if (MR::isStep(this, ::sStepToSuccess)) {
-            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT", _28);
+            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT", mGoNextCount);
 
-            _28++;
+            mGoNextCount++;
 
             nextTutorial();
             return;
@@ -177,15 +176,15 @@ void SurfRayTutorial::exeTutorialTurnLeftUpkeep() {
         mSurfingGuidance->turnLeftHold();
     }
 
-    startTimerSound(getNerveStep(), _28);
+    startTimerSound(getNerveStep(), mGoNextCount);
 
     if (isSuccessTurnLeft()) {
         mChangeStep = 0;
 
         if (MR::isStep(this, ::sStepToSuccess)) {
-            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT", _28);
+            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT", mGoNextCount);
 
-            _28++;
+            mGoNextCount++;
 
             nextTutorial();
             return;
@@ -250,15 +249,15 @@ void SurfRayTutorial::exeTutorialTurnRightUpkeep() {
         mSurfingGuidance->turnRightHold();
     }
 
-    startTimerSound(getNerveStep(), _28);
+    startTimerSound(getNerveStep(), mGoNextCount);
 
     if (isSuccessTurnRight()) {
         mChangeStep = 0;
 
         if (MR::isStep(this, ::sStepToSuccess)) {
-            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT2", _28);
+            MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT2", mGoNextCount);
 
-            _28++;
+            mGoNextCount++;
 
             nextTutorial();
             return;

@@ -39,7 +39,7 @@ void MeteoContainer::init(const TableIter& rIter) {
     MR::initShadowVolumeSphere(this, 150.0f);
     MR::onCalcShadowOneTime(this, nullptr);
     MR::needStageSwitchWriteDead(this, rIter);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     appear();
 }
 

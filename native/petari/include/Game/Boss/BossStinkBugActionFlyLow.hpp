@@ -25,5 +25,5 @@ public:
     bool isEnableHipDrop() const;
     bool isEnableAttack() const;
 
-    f32 _64;
+    f32 mHeightAngle;
 };

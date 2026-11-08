@@ -26,14 +26,14 @@ public:
     KoopaBattleMapStair* mNearBattleMapStair;
     KoopaFireStairs* mFarFireStairs;
     KoopaFireStairs* mNearFireStairs;
-    KoopaBattleMapStair* _20;
+    KoopaBattleMapStair* mFireStair;
     bool mCanJump;
     Vec3f mJumpPos0;
     Vec3f mJumpPos1;
     Vec3f mJumpPos2;
-    s32 _4C;
-    s32 _50;
-    s32 _54;
+    s32 mStairNum0;
+    s32 mStairNum1;
+    s32 mStairNum2;
     s32 mAvailableStairs;
     s32 mJumpIdx;
     Vec3f mOldPosition;

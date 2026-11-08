@@ -17,6 +17,6 @@ public:
 
     CameraParamChunkHolder* mChunkHolder;
     const char* mName;
-    s32 _8;
+    s32 mZoneId;
     u8 mCodes[0x100];
 };

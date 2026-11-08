@@ -26,14 +26,11 @@ public:
     void exeOn();
     void exeSwitchUp();
 
-    u32 _8C;
     SpringValue* mSpring;
     MapObjConnector* mMapObjConnector;
     CollisionParts* mCollisionParts;
-    Pos3f _9C;
     s32 mTimerMax;      // In frames
     s32 mTimerSFXType;  // 0: A ticking, 1: B ticking
-    u8 _D4;
     bool mWasLightPressed;
     bool mIsLightPressed;
 };

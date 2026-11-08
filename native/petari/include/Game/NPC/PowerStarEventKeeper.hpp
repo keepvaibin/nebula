@@ -3,10 +3,9 @@
 #include <nebula_geometry.hpp>
 
 struct PowerStarInfo {
-    bool _0;
-    bool _1;
-    bool _2;
-    bool _3;
+    bool mIsExist;
+    bool mIsAppearAtStart;
+    bool mIsKillInDemo;
     const char* mDemoName;
 };
 
@@ -16,14 +15,14 @@ public:
 
     void initStarInfoTable();
     s32 findStarID(const char*) const;
-    void declareStar(const char*, const char*, s32, bool);
+    void declareStar(const char* pDemoName, s32 starId, bool killInDemo);
     bool isGreen(const char*, s32) const;
     bool isRed(const char*, s32) const;
     bool isGrand(const char*, s32) const;
     void initStarInfoTableAfterPlacement();
     void requestAppearPowerStar(const char*, s32, const Vec3f*, bool, bool);
     bool isExistPowerStarAtScenario(int) const;
-    bool isCorrectStarIdWithBBS(const char*, const char*, s32) const;
+    bool isActiveStarId(s32 starId) const;
     bool isSuccess(const char*, s32) const;
 
     inline PowerStarInfo* getStarInfo(u32 idx) const {

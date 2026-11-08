@@ -17,20 +17,19 @@ void PowerStarEventKeeper::initStarInfoTable() {
 
     for (s32 starID = 0; starID < mPowerStarNum; starID++) {
         PowerStarInfo* pInfo = getStarInfo(starID + mStartScenario - 1);
-        pInfo->_0 = false;
-        pInfo->_1 = false;
-        pInfo->_2 = false;
-        pInfo->_3 = false;
+        pInfo->mIsExist = false;
+        pInfo->mIsAppearAtStart = false;
+        pInfo->mIsKillInDemo = false;
         pInfo->mDemoName = nullptr;
     }
 
     for (s32 scenarioNo = mStartScenario; scenarioNo <= mPowerStarNum; scenarioNo++) {
         if (isExistPowerStarAtScenario(scenarioNo)) {
-            getStarInfo(scenarioNo - 1)->_0 = true;
+            getStarInfo(scenarioNo - 1)->mIsExist = true;
         }
 
         if (MR::getAppearPowerStarObjName(scenarioNo) == nullptr) {
-            getStarInfo(scenarioNo - 1)->_1 = true;
+            getStarInfo(scenarioNo - 1)->mIsAppearAtStart = true;
         }
     }
 }
@@ -58,18 +57,18 @@ s32 PowerStarEventKeeper::findStarID(const char* pName) const {
     return -1;
 }
 
-void PowerStarEventKeeper::declareStar(const char* pName1, const char* pName2, s32 starID, bool myBool) {
+void PowerStarEventKeeper::declareStar(const char* pDemoName, s32 starID, bool killInDemo) {
     if (starID < 0) {
-        starID = findStarID(pName1);
+        starID = findStarID(pDemoName);
     }
 
-    if (!isCorrectStarIdWithBBS(pName1, pName2, starID)) {
+    if (!isActiveStarId(starID)) {
         return;
     }
 
     PowerStarInfo* pInfo = getStarInfo(starID - 1);
-    pInfo->mDemoName = pName1;
-    pInfo->_2 = myBool;
+    pInfo->mDemoName = pDemoName;
+    pInfo->mIsKillInDemo = killInDemo;
 }
 
 bool PowerStarEventKeeper::isGreen(const char* pName, s32 starID) const {
@@ -77,7 +76,7 @@ bool PowerStarEventKeeper::isGreen(const char* pName, s32 starID) const {
         starID = findStarID(pName);
     }
 
-    if (!isCorrectStarIdWithBBS(pName, "ゾーン不明", starID)) {
+    if (!isActiveStarId(starID)) {
         return false;
     }
 
@@ -89,7 +88,7 @@ bool PowerStarEventKeeper::isRed(const char* pName, s32 starID) const {
         starID = findStarID(pName);
     }
 
-    if (!isCorrectStarIdWithBBS(pName, "ゾーン不明", starID)) {
+    if (!isActiveStarId(starID)) {
         return false;
     }
 
@@ -101,7 +100,7 @@ bool PowerStarEventKeeper::isGrand(const char* pName, s32 starID) const {
         starID = findStarID(pName);
     }
 
-    if (!isCorrectStarIdWithBBS(pName, "ゾーン不明", starID)) {
+    if (!isActiveStarId(starID)) {
         return false;
     }
 
@@ -113,7 +112,7 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
     for (s32 powerStarNo = 0; powerStarNo < mPowerStarNum; powerStarNo++) {
         pInfo = getStarInfo(powerStarNo + mStartScenario - 1);
 
-        if (!pInfo->_0) {
+        if (!pInfo->mIsExist) {
             continue;
         }
 
@@ -121,20 +120,20 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
             PowerStar* pPowerStar = PowerStarFunction::findPowerStar(mStartScenario + powerStarNo);
             pPowerStar->mIsInDemo = true;
 
-            if (pInfo->_2) {
+            if (pInfo->mIsKillInDemo) {
                 pPowerStar->kill();
             }
 
             continue;
         }
 
-        if (pInfo->_1) {
+        if (pInfo->mIsAppearAtStart) {
             PowerStarFunction::findPowerStar(mStartScenario + powerStarNo)->appear();
         }
     }
 }
 
-void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const Vec3f* pPos, bool forceAppear, bool a2) {
+void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const Vec3f* pPos, bool forceAppear, bool withoutDemo) {
     if (starNum < 0) {
         starNum = findStarID(pName);
     }
@@ -147,9 +146,7 @@ void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum
     StageStateKeeper* pStateKeeper = EventFunction::getStageStateKeeper();
     pStateKeeper->mIsPowerStarAppeared = true;
 
-    getStarInfo(starNum - 1)->_3 = true;
-
-    if (a2) {
+    if (withoutDemo) {
         EventFunction::getPowerStarHolder()->appearPowerStarWithoutDemo(starNum);
     } else {
         EventFunction::getPowerStarHolder()->requestAppearPowerStar(starNum, pPos, forceAppear);
@@ -161,12 +158,13 @@ bool PowerStarEventKeeper::isExistPowerStarAtScenario(int scenarioNo) const {
     return accessor.getActivePowerStarId(MR::getCurrentScenarioNo()) & calcStarID(scenarioNo);
 }
 
-bool PowerStarEventKeeper::isCorrectStarIdWithBBS(const char*, const char*, s32 scenarioNo) const {
-    if (scenarioNo <= 0) {
+// A star this galaxy's current scenario has (ids from 1).
+bool PowerStarEventKeeper::isActiveStarId(s32 starId) const {
+    if (starId <= 0) {
         return false;
     }
 
-    return isExistPowerStarAtScenario(scenarioNo);
+    return isExistPowerStarAtScenario(starId);
 }
 
 bool PowerStarEventKeeper::isSuccess(const char* pName, s32 starNum) const {
@@ -174,7 +172,7 @@ bool PowerStarEventKeeper::isSuccess(const char* pName, s32 starNum) const {
         starNum = findStarID(pName);
     }
 
-    if (!isCorrectStarIdWithBBS(pName, "ゾーン不明", starNum)) {
+    if (!isActiveStarId(starNum)) {
         return false;
     }
 

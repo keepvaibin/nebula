@@ -24,13 +24,13 @@ namespace {
 };  // namespace
 
 MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : AreaObj(formType, pName) {
-    _3C.identity();
+    mPlacementMtx.identity();
 }
 
 void MercatorTransformCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
-    _3C.setInline(*MR::getZonePlacementMtx(rIter));
+    mPlacementMtx.setInline(*MR::getZonePlacementMtx(rIter));
 }
 
 f32 MercatorTransformCube::calcLocalHeight(const Vec3f& rPos) const {
@@ -62,8 +62,8 @@ void MercatorTransformCube::convertTransAndRotate(Vec3f* pPos, Pos3f* pRotation,
     }
 
     MR::makeMtxUpFront(pRotation, point, front);
-    _3C.mult(point, point);
-    Mtx34f rotation(_3C);
+    mPlacementMtx.mult(point, point);
+    Mtx34f rotation(mPlacementMtx);
     rotation.mMtx[0][3] = 0.0f;
     rotation.mMtx[1][3] = 0.0f;
     rotation.mMtx[2][3] = 0.0f;

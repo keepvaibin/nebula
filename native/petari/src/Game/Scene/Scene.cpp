@@ -2,7 +2,6 @@
 
 Scene::Scene(const char* pName) : NerveExecutor(pName) {
     mListExecutor = nullptr;
-    _C = 0;
     mSceneObjHolder = nullptr;
 }
 

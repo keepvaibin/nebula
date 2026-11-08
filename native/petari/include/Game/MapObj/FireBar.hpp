@@ -35,7 +35,7 @@ public:
 
     FireBarBall** mFireBalls;
     s32 mFireBallCount;
-    Vec3f _94;
+    Vec3f mFront;
     f32 mFireBarSpeed;
     s32 mStickCount;
     f32 mStickDistance;

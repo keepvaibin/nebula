@@ -78,18 +78,15 @@ void HoneyQueen::init(const TableIter& rIter) {
         MR::validateCollisionParts(mCollisionParts[i]);
     }
 
-    if (MR::tryRegisterDemoCast(this, rIter)) {
+    const bool isDemoCast = MR::tryRegisterDemoCast(this, rIter);
+    if (isDemoCast) {
         MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeOut), "フェードアウト");
         MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeIn), "フェードイン");
         MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::talkEntry), "謁見");
         MR::tryRegisterDemoCast(mWing, rIter);
-
-        _188 = 1;
-    } else {
-        _188 = 0;
     }
 
-    if (_188 == 1) {
+    if (isDemoCast) {
         setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvDemo));
         MR::listenStageSwitchOnA(this, MR::Functor(this, &HoneyQueen::switchFunc));
         MR::needStageSwitchWriteB(this, rIter);
@@ -200,8 +197,8 @@ void HoneyQueen::exeItch() {
     }
 
     Vec3f vec;
-    _B0.getZDir(vec);
-    MR::faceToVector(&_A0, vec, 0.2f);
+    mInitPoseQuat.getZDir(vec);
+    MR::faceToVector(&mPoseQuat, vec, 0.2f);
     MR::tryTalkNearPlayer(mMsgCtrl);
 }
 

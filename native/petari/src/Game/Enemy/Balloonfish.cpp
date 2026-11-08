@@ -53,7 +53,7 @@ void Balloonfish::init(const TableIter& rIter) {
     initBinder(100.0f * scale, 0.0f, 0);
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", 32, 100.0f * scale, Vec3f(0.0f, 60.0f * scale, 0.0f));
-    initEffectKeeper(0, "Balloonfish", false);
+    initEffectKeeper(0, "Balloonfish");
     initSound(2, false);
     initNerve(GET_NERVE(Balloonfish, HostTypeNrvWait));
     f32 zero = 0.0f;
@@ -179,13 +179,13 @@ void Balloonfish::exeDash() {
 
 void Balloonfish::exeStarPointerBind() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::setBckRate(this, 0.0f);
-        mAnimScaleController->startDpdHitVibration();
+        mAnimScaleController->startPointerHitVibration();
         MR::emitEffect(this, "Touch");
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
     mVelocity.zero();
 
     // "weak"
@@ -237,7 +237,7 @@ void Balloonfish::calcAndSetBaseMtx() {
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);
 
-    Vec3f scale(mAnimScaleController->_C * mScale);
+    Vec3f scale(mAnimScaleController->mScale * mScale);
     MR::setBaseScale(this, scale);
 }
 

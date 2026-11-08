@@ -15,5 +15,5 @@ public:
 
     LiveActor* mHost;
     CollisionParts* mParts;
-    Mtx34f _8;
+    Mtx34f mOffsetMtx;
 };

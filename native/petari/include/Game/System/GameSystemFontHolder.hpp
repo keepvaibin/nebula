@@ -19,7 +19,7 @@ public:
     void createFontFromEmbeddedData();
     void createFontFromFile();
 
-    AssetFolder* _4;
+    AssetFolder* mEmbeddedFontFolder;
     nw4r::ut::ResFont* mEmbeddedMessageFont;
     nw4r::ut::ResFont* mMessageFont;
     nw4r::ut::ResFont* mPictureFont;

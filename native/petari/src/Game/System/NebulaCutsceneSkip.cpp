@@ -97,17 +97,17 @@ namespace {
             return nullptr;
         }
         const DemoDirector* pDirector = DemoFunction::getDemoDirector();
-        return pDirector->mIsActive && pDirector->_30 != nullptr ? pDirector : nullptr;
+        return pDirector->mIsActive && pDirector->mDemoName != nullptr ? pDirector : nullptr;
     }
 
     // A time-keep demo's executor: the director's own, or the one its name finds (a demo the game requested).
     const DemoExecutor* getExecutor(const DemoDirector* pDirector) {
-        return pDirector->mExecutor != nullptr ? pDirector->mExecutor : DemoFunction::findDemoExecutor(pDirector->_30);
+        return pDirector->mExecutor != nullptr ? pDirector->mExecutor : DemoFunction::findDemoExecutor(pDirector->mDemoName);
     }
 
     bool isSkippableExecutor(const DemoExecutor* pExecutor) {
         if (pExecutor == sStallExecutor && sStallSteps >= cStallSteps && pExecutor->mTimeKeeper != nullptr &&
-            pExecutor->mTimeKeeper->mCurrentStep + pExecutor->mTimeKeeper->_10 * 0x10000 == sStallStep) {
+            pExecutor->mTimeKeeper->mCurrentStep + pExecutor->mTimeKeeper->mElapsedStep * 0x10000 == sStallStep) {
             return false;  // the last skip left it waiting on the player
         }
         const char* pSheet = pExecutor->mSheetName;
@@ -143,7 +143,7 @@ namespace {
 
     bool isSkippableDemo(const DemoDirector* pDirector) {
         const DemoExecutor* pExecutor = getExecutor(pDirector);
-        return pExecutor != nullptr ? isSkippableExecutor(pExecutor) : isSkippableStarter(pDirector->_2C);
+        return pExecutor != nullptr ? isSkippableExecutor(pExecutor) : isSkippableStarter(pDirector->mDemoStarter);
     }
 
     // What + skips now. Asked only when + is pressed and while a skip runs.
@@ -166,7 +166,7 @@ namespace {
         JUTNativeLog("cutscene skip: %s (%s%s%s%s)\n", pWhat, MR::isActiveMoviePlayer() ? "movie" : "",
                  isScene && GameSceneFunction::isExecScenarioOpeningCamera() ? "opening camera" : "",
                  pExecutor != nullptr && pExecutor->mSheetName != nullptr ? pExecutor->mSheetName : "",
-                 pExecutor == nullptr && pDirector != nullptr && pDirector->_2C != nullptr ? pDirector->_2C->mName : "");
+                 pExecutor == nullptr && pDirector != nullptr && pDirector->mDemoStarter != nullptr ? pDirector->mDemoStarter->mName : "");
     }
 
     // A time-keep demo whose clock has not moved for cStallSteps waits on the player (an action, not a page).
@@ -178,7 +178,7 @@ namespace {
             sStallSteps = 0;
             return false;
         }
-        const s32 step = pExecutor->mTimeKeeper->mCurrentStep + pExecutor->mTimeKeeper->_10 * 0x10000;
+        const s32 step = pExecutor->mTimeKeeper->mCurrentStep + pExecutor->mTimeKeeper->mElapsedStep * 0x10000;
         if (pExecutor != sStallExecutor || step != sStallStep) {
             sStallExecutor = pExecutor;
             sStallStep = step;

@@ -16,8 +16,8 @@ namespace NrvAir {
 };  // namespace NrvAir
 
 Air::Air(const char* pName) : LiveActor(pName) {
-    _8C = 0;
-    _8D = 0;
+    mIsChanged = 0;
+    mIsWaitStartCamera = 0;
     mDistance = 70.0f;
 }
 
@@ -31,7 +31,7 @@ void Air::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mDistance);
     s32 arg_1 = -1;
     MR::getPlacementArg1NoInit(rIter, &arg_1);
-    _8D = arg_1 + 1;
+    mIsWaitStartCamera = arg_1 + 1;
     MR::tryStartAllAnim(this, object_name);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     setFarClipping();
@@ -96,13 +96,13 @@ bool Air::tryChange() {
         return false;
     }
 
-    if (_8C) {
+    if (mIsChanged) {
         return false;
     }
 
     if (MR::isOnSwitchA(this)) {
         MR::tryStartAllAnim(this, "Change");
-        _8C = 1;
+        mIsChanged = 1;
         return true;
     }
 
@@ -122,7 +122,7 @@ void Air::appearFadeOut() {
 }
 
 void Air::exeIn() {
-    bool isCameraNotEnd = _8D && !MR::isStartAnimCameraEnd();
+    bool isCameraNotEnd = mIsWaitStartCamera && !MR::isStartAnimCameraEnd();
 
     if (!isCameraNotEnd) {
         tryChange();
@@ -135,7 +135,7 @@ void Air::exeIn() {
 }
 
 void Air::exeOut() {
-    bool flag = _8D && !MR::isStartAnimCameraEnd();
+    bool flag = mIsWaitStartCamera && !MR::isStartAnimCameraEnd();
 
     if (!flag) {
         tryChange();

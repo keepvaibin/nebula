@@ -37,7 +37,7 @@ public:
     LuigiLetter* mLuigiLetter;
     PeachLetter* mPeachLetter;
     TalkMessageCtrl* mLetterIconTalkCtrl;
-    bool _194;
-    bool _195;
+    bool mHasPeachLetter;
+    bool mHasLuigiLetter;
     bool mIsPlayerLuigi;
 };

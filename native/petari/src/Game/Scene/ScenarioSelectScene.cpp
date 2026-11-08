@@ -43,12 +43,12 @@ namespace {
 };  // namespace
 
 ScenarioSelectScene::ScenarioSelectScene()
-    : Scene("シナリオ選択シーン"), _14(), _15(), _16(), mScenarioLayout(), mCinemaFrame(), _28(), mEffectSystem(), mCameraContext() {
+    : Scene("シナリオ選択シーン"), mIsInitialized(), mIsBackground(), mIsCanceled(), mScenarioLayout(), mCinemaFrame(), mIsResetRequested(), mEffectSystem(), mCameraContext() {
 }
 
 void ScenarioSelectScene::init() {
-    _20 = ::createDrawBuffer();
-    _24 = ::createDrawBuffer();
+    mDrawBufferOpa = ::createDrawBuffer();
+    mDrawBufferXlu = ::createDrawBuffer();
     mEffectSystem = new EffectSystem("エフェクトシステム", false);
     mEffectSystem->initWithoutIter();
     mEffectSystem->entry(MR::getParticleResourceHolder(), 0x20);
@@ -63,29 +63,29 @@ void ScenarioSelectScene::init() {
     mCinemaFrame = new CinemaFrame(false);
     mCinemaFrame->initWithoutIter();
     initNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
-    _14 = 1;
+    mIsInitialized = 1;
 }
 
 void ScenarioSelectScene::start() {
     mEffectSystem->startScene();
-    _15 = 0;
-    _16 = 0;
+    mIsBackground = 0;
+    mIsCanceled = 0;
     setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvInvalidScenarioSelect));
 }
 
 void ScenarioSelectScene::startBackground() {
     start();
-    _15 = 1;
+    mIsBackground = 1;
 }
 
 void ScenarioSelectScene::update() {
-    if (!_14) {
+    if (!mIsInitialized) {
         return;
     }
 
     updateNerve();
 
-    bool res = isExecForeground() && _28 == 0;
+    bool res = isExecForeground() && mIsResetRequested == 0;
 
     if (res) {
         mScenarioLayout->movement();
@@ -95,7 +95,7 @@ void ScenarioSelectScene::update() {
 }
 
 void ScenarioSelectScene::calcAnim() {
-    bool res = isExecForeground() && _28 == 0;
+    bool res = isExecForeground() && mIsResetRequested == 0;
 
     if (res) {
         // The scene builds its perspective once, at boot: follow the picture's aspect as it changes.
@@ -108,25 +108,25 @@ void ScenarioSelectScene::calcAnim() {
 }
 
 void ScenarioSelectScene::calcViewAndEntry() {
-    bool res = isExecForeground() && _28 == 0;
+    bool res = isExecForeground() && mIsResetRequested == 0;
 
     if (res) {
         setupCameraMtx();
-        ModelSys::mDrawBuffer[0] = _20;
-        ModelSys::mDrawBuffer[1] = _24;
+        ModelSys::mDrawBuffer[0] = mDrawBufferOpa;
+        ModelSys::mDrawBuffer[1] = mDrawBufferXlu;
         mScenarioLayout->calcViewAndEntryStarModel();
     }
 }
 
 void ScenarioSelectScene::draw() const {
-    bool res = isExecForeground() && _28 == 0;
+    bool res = isExecForeground() && mIsResetRequested == 0;
 
     if (res) {
         setupCameraMtx();
-        _20->draw();
-        _20->frameInit();
-        _24->draw();
-        _24->frameInit();
+        mDrawBufferOpa->draw();
+        mDrawBufferOpa->frameInit();
+        mDrawBufferXlu->draw();
+        mDrawBufferXlu->frameInit();
         MR::Effect::drawEffect3D(mEffectSystem, mCameraContext->getViewMtx());
         mScenarioLayout->draw();
         MR::Effect::drawEffect2D(mEffectSystem);
@@ -135,11 +135,11 @@ void ScenarioSelectScene::draw() const {
 }
 
 bool ScenarioSelectScene::isActive() const {
-    return _14 && !isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
+    return mIsInitialized && !isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
 }
 
 bool ScenarioSelectScene::isExecForeground() const {
-    return _14 && !isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive)) && _15 == 0;
+    return mIsInitialized && !isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive)) && mIsBackground == 0;
 }
 
 bool ScenarioSelectScene::isScenarioSelecting() const {
@@ -155,8 +155,8 @@ bool ScenarioSelectScene::isScenarioSelecting() const {
 }
 
 void ScenarioSelectScene::validateScenarioSelect() {
-    if (!_28) {
-        if (_15) {
+    if (!mIsResetRequested) {
+        if (mIsBackground) {
             setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitResumeInitializeThread));
             return;
         }
@@ -168,21 +168,21 @@ void ScenarioSelectScene::validateScenarioSelect() {
 }
 
 void ScenarioSelectScene::requestReset(bool waitForInitialize) {
-    if (!_14) {
-        _28 = 0;
+    if (!mIsInitialized) {
+        mIsResetRequested = 0;
         return;
     }
 
-    _28 = 1;
+    mIsResetRequested = 1;
     suspend();
     if (isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive)) ||
         isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitDisappearLayout)) ||
         isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitInitializeEnd))) {
-        _28 = 0;
+        mIsResetRequested = 0;
         setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
     } else if (isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvInvalidScenarioSelect))) {
         if (!waitForInitialize) {
-            _28 = 0;
+            mIsResetRequested = 0;
             setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
         }
     } else {
@@ -191,7 +191,7 @@ void ScenarioSelectScene::requestReset(bool waitForInitialize) {
 }
 
 bool ScenarioSelectScene::isResetEnd() const {
-    return _28 == 0;
+    return mIsResetRequested == 0;
 }
 
 void ScenarioSelectScene::setupCameraMtx() const {
@@ -219,7 +219,7 @@ bool ScenarioSelectScene::trySetCurrentScenarioNo() const {
 }
 
 void ScenarioSelectScene::suspend() {
-    _16 = 0;
+    mIsCanceled = 0;
 
     if (!MR::isDead(mScenarioLayout)) {
         mScenarioLayout->kill();
@@ -229,13 +229,13 @@ void ScenarioSelectScene::suspend() {
         mCinemaFrame->kill();
     }
 
-    _20->frameInit();
-    _24->frameInit();
+    mDrawBufferOpa->frameInit();
+    mDrawBufferXlu->frameInit();
     MR::Effect::forceDeleteAllEmitters(mEffectSystem);
 }
 
 void ScenarioSelectScene::tryStartScreenToFrame() {
-    if (!_15 && mScenarioLayout->isEndAnimStartStep()) {
+    if (!mIsBackground && mScenarioLayout->isEndAnimStartStep()) {
         mCinemaFrame->tryScreenToFrame();
     }
 }
@@ -330,7 +330,7 @@ void ScenarioSelectScene::exeWaitResumeInitializeThreadIfRequestedReset() {
     }
 
     if (::tryResumeInitializeThread()) {
-        _28 = 0;
+        mIsResetRequested = 0;
         setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
     }
 }
@@ -341,7 +341,7 @@ void ScenarioSelectScene::exeWaitResumeInitializeThreadIfCanceledSelect() {
             GameSystemFunction::resetCurrentScenarioNo();
             GameSequenceFunction::requestCancelScenarioSelect();
             suspend();
-            _16 = 1;
+            mIsCanceled = 1;
             MR::Effect::forceDeleteAllEmitters(mEffectSystem);
             setNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvDeactive));
         }

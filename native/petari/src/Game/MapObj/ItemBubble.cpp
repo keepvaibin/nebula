@@ -17,8 +17,8 @@ namespace NrvItemBubble {
     NEW_NERVE(ItemBubbleNrvBreak, ItemBubble, Break);
 };  // namespace NrvItemBubble
 
-ItemBubble::ItemBubble(const char* pName) : LiveActor(pName), _90(), _94() {
-    _8C = 0.0f;
+ItemBubble::ItemBubble(const char* pName) : LiveActor(pName), mCoins(), mStarPieces() {
+    mSwing = 0.0f;
 }
 
 void ItemBubble::init(const TableIter& rIter) {
@@ -31,13 +31,13 @@ void ItemBubble::init(const TableIter& rIter) {
     initModelManagerWithAnm("ItemBubble", nullptr, false);
     MR::connectToSceneMapObj(this);
     mScale.mult(1.2f);
-    NebulaMtxScale(_9C, mScale.x, mScale.y, mScale.z);
-    MR::setMtxTrans(_9C, mPosition.x, mPosition.y, mPosition.z);
-    NebulaMtxCopy(_9C, _CC);
-    _108 = mPosition;
+    NebulaMtxScale(mTargetMtx, mScale.x, mScale.y, mScale.z);
+    MR::setMtxTrans(mTargetMtx, mPosition.x, mPosition.y, mPosition.z);
+    NebulaMtxCopy(mTargetMtx, mItemMtx);
+    mBasePos = mPosition;
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(ItemBubble, ItemBubbleNrvWait));
 
@@ -53,30 +53,30 @@ void ItemBubble::init(const TableIter& rIter) {
         itemCount = 1;
     }
 
-    _90 = new RotPartsModel*[itemCount];
+    mCoins = new RotPartsModel*[itemCount];
 
     if (itemType == 1) {
-        _94 = new StarPiece*[itemCount];
+        mStarPieces = new StarPiece*[itemCount];
     }
 
     for (u32 i = 0; i < itemCount; i++) {
         switch (itemType) {
         case 0:
-            _90[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, 15, false);
-            _90[i]->initWithoutIter();
+            mCoins[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, 15, false);
+            mCoins[i]->initWithoutIter();
 
             switch (itemCount) {
             case 1:
-                _90[i]->initFixedPosition(_CC, Vec3f(0.0f, -67.379997f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -67.379997f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                 continue;
             case 2:
 
                 switch (i) {
                 case 0:
-                    _90[i]->initFixedPosition(_CC, Vec3f(-55.66f, -92.290001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-55.66f, -92.290001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    _90[i]->initFixedPosition(_CC, Vec3f(55.66f, -43.950001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(55.66f, -43.950001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -85,13 +85,13 @@ void ItemBubble::init(const TableIter& rIter) {
 
                 switch (i) {
                 case 0:
-                    _90[i]->initFixedPosition(_CC, Vec3f(0.0f, -19.040001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, -19.040001f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 1:
-                    _90[i]->initFixedPosition(_CC, Vec3f(-55.66f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(-55.66f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 case 2:
-                    _90[i]->initFixedPosition(_CC, Vec3f(67.379997f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                    mCoins[i]->initFixedPosition(mItemMtx, Vec3f(67.379997f, -130.37f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                     continue;
                 }
 
@@ -100,22 +100,22 @@ void ItemBubble::init(const TableIter& rIter) {
 
             break;
         case 1:
-            _94[i] = new StarPiece("アイテムバブルピース");
-            _94[i]->initWithoutIter();
-            _90[i] = new RotPartsModel(this, "スターピース", "StarPiece", nullptr, 13, true);
-            MR::initMaterialColor0(_90[i], "StarPiece1_v", &_94[i]->mColor);
-            MR::prepareMaterials(_90[i]);
-            _90[i]->initWithoutIter();
+            mStarPieces[i] = new StarPiece("アイテムバブルピース");
+            mStarPieces[i]->initWithoutIter();
+            mCoins[i] = new RotPartsModel(this, "スターピース", "StarPiece", nullptr, 13, true);
+            MR::initMaterialColor0(mCoins[i], "StarPiece1_v", &mStarPieces[i]->mColor);
+            MR::prepareMaterials(mCoins[i]);
+            mCoins[i]->initWithoutIter();
 
             switch (itemCount) {
             case 1:
-                _90[i]->initFixedPosition(_CC, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+                mCoins[i]->initFixedPosition(mItemMtx, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
                 continue;
             }
 
             break;
         default:
-            _90[i] = nullptr;
+            mCoins[i] = nullptr;
         }
     }
 
@@ -142,11 +142,11 @@ void ItemBubble::init(const TableIter& rIter) {
         }
 
         for (u32 i = 0; i < itemCount; i++) {
-            if (_90[i] == nullptr) {
+            if (mCoins[i] == nullptr) {
                 continue;
             }
 
-            _90[i]->initFixedPosition(_CC, vec + vec3, vec2);
+            mCoins[i]->initFixedPosition(mItemMtx, vec + vec3, vec2);
             NebulaMtxMultVec(mtx, vec, vec);
         }
     }
@@ -158,7 +158,7 @@ void ItemBubble::init(const TableIter& rIter) {
 
         if (mUseRail) {
             initRailRider(rIter);
-            MR::initAndSetRailClipping(&_FC, this, 100.0f, 500.0f);
+            MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
         }
     }
 
@@ -195,7 +195,7 @@ void ItemBubble::kill() {
         MR::calcGravityVector(this, &grav, nullptr, 0);
 
         for (u32 i = 0; i < mItemCount; i++) {
-            if (_90[i] == nullptr) {
+            if (mCoins[i] == nullptr) {
                 continue;
             }
 
@@ -241,7 +241,7 @@ void ItemBubble::exeWait() {
         // Useless...
     }
 
-    _8C = MR::sin(2.0f * ((static_cast< f32 >(getNerveStep()) / ::cSwingRange) * MR::pi()));
+    mSwing = MR::sin(2.0f * ((static_cast< f32 >(getNerveStep()) / ::cSwingRange) * MR::pi()));
 
     if (mUseRail) {
         if (MR::isRailReachedGoal(this)) {
@@ -257,28 +257,28 @@ void ItemBubble::exeWait() {
         MR::moveCoordAndFollowTrans(this, mRailSpeed);
     }
 
-    NebulaMtxScale(_9C, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScale(mTargetMtx, mScale.x, mScale.y, mScale.z);
     MtxPtr pMtx = MR::tmpMtxRotZDeg(mRotation.z);
-    MR::multMtx(_9C, pMtx, _9C);
+    MR::multMtx(mTargetMtx, pMtx, mTargetMtx);
 
-    mPosition = _108 + Vec3f(0.0f, 1.0f, 0.0f).multInLine2(_8C).multInLine2(30.0f);
+    mPosition = mBasePos + Vec3f(0.0f, 1.0f, 0.0f).multInLine2(mSwing).multInLine2(30.0f);
 
-    MR::setMtxTrans(_9C, mPosition.x, mPosition.y, mPosition.z);
+    MR::setMtxTrans(mTargetMtx, mPosition.x, mPosition.y, mPosition.z);
 
     if (mUseRail) {
-        NebulaMtxCopy(_9C, _CC);
+        NebulaMtxCopy(mTargetMtx, mItemMtx);
     } else {
-        MR::blendMtx(_CC, _9C, 0.1f, _CC);
+        MR::blendMtx(mItemMtx, mTargetMtx, 0.1f, mItemMtx);
     }
 
     for (u32 i = 0; i < mItemCount; i++) {
-        if (_90[i] == nullptr) {
+        if (mCoins[i] == nullptr) {
             continue;
         }
 
-        _90[i]->mRotation.x = 0.0f;
-        _90[i]->mRotation.z = 0.0f;
-        _90[i]->mRotation.y += 8.0f;
+        mCoins[i]->mRotation.x = 0.0f;
+        mCoins[i]->mRotation.z = 0.0f;
+        mCoins[i]->mRotation.y += 8.0f;
     }
 }
 

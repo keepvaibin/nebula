@@ -3,14 +3,15 @@
 #include "Game/Camera/Camera.hpp"
 #include <nebula_geometry.hpp>
 
-class CameraDPD : public Camera {
+// A camera turned by the pointer (CAM_TYPE_DPD in camera files).
+class CameraPointer : public Camera {
 public:
     enum CameraType {
         CameraType_FixedPos = 0,
         CameraType_UpdateWithTarget = 1,
         CameraType_FollowWorldPos = 2,
     };
-    CameraDPD(const char* pName = "DPD操作カメラ");
+    CameraPointer(const char* pName = "DPD操作カメラ");
 
     virtual void reset();
     virtual CameraTargetObj* calc();

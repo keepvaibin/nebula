@@ -11,7 +11,7 @@ public:
     s32 mSubPartTotalStep;
     const char* mMainPartName;
     s32 mMainPartStep;
-    s32 _10;
+    s32 mRestStep;
 };
 
 class DemoSubPartKeeper {

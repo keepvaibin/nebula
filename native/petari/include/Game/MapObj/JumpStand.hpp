@@ -23,6 +23,6 @@ public:
     void endBindAndShootUp(f32, JumpType);
 
     LiveActor* mBindedActor;
-    Pos3f _90;
+    Pos3f mCollisionMtx;
     bool mIsMarioJumpingHigh;
 };

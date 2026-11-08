@@ -8,6 +8,7 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/MapUtil.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class BlackHole;
 class CollisionShadow;
@@ -15,7 +16,6 @@ class DrawAdaptor;
 class FixedPosition;
 class FootPrint;
 class FurMulti;
-class HashSortTable;
 class IceStep;
 class FireMarioBall;
 class Clip;
@@ -337,7 +337,7 @@ public:
     void updateActionTrigger();
     void updateControllerSwing();
     void updateControllerSwingLeft();
-    void lockOnDPD();
+    void lockOnPointer();
     bool isRequestSpinJump2P() const;
 
     // Defined in MarioActorParts
@@ -907,7 +907,7 @@ public:
     u16 _B9C;
     u16 _B9E;
     SmokeEffectEntry** _BA0;
-    HashSortTable* _BA4;
+    MR::NameIndex mMaterialEffects;  // a material effect's name to its index in cMaterialEffectTable
     ModelObj* _BA8;
     Vec3f _BAC;
     Vec3f _BB8;

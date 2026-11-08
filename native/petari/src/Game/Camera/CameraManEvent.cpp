@@ -17,7 +17,7 @@ namespace {
 };  // namespace
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
-    : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mCamera(), mChunk(), _B8(), mRequestReset() {
+    : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mCamera(), mChunk(), mRequestReset() {
     for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
         mItems[i].mFirst.mChunk = nullptr;
         mItems[i].mSecond.mChunk = nullptr;

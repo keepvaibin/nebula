@@ -6,11 +6,6 @@
 #include "Game/Util.hpp"
 
 DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
-    _A4 = 0;
-    _9C = 0;
-    _11C = 0;
-    _A8 = 0;
-    _AC = 0;
 }
 
 void DynamicCollisionObj::init(const TableIter& rIter) {
@@ -32,7 +27,7 @@ void DynamicCollisionObj::updateTriangle() {
     s32 prismidx;
     s32 normalidx = 0;
 
-    for (u16 i = 0; i < _94; i++) {
+    for (u16 i = 0; i < mTriangleNum; i++) {
         Vec3f Vertex1(mPositions[mIndices[i].mIndex[0]]);
         Vec3f Vertex2(mPositions[mIndices[i].mIndex[1]]);
         Vec3f Vertex3(mPositions[mIndices[i].mIndex[2]]);
@@ -49,7 +44,6 @@ void DynamicCollisionObj::updateTriangle() {
         MR::normalizeOrZero(&c);
         Vec3f cross = b.cross(a);
         MR::normalizeOrZero(&cross);
-        _9C[i] = cross;
 
         if (mKCLFile == nullptr) {
             continue;
@@ -149,7 +143,7 @@ void DynamicCollisionObj::updateCollisionHeader() {
 }
 
 void DynamicCollisionObj::createCollision() {
-    s32 v = _94;
+    s32 v = mTriangleNum;
     mKCLFile = new KCLFile();
     mKCLFile->mPos = new Vec3f[v];
     mKCLFile->mNorms = new Vec3f[v * 4];

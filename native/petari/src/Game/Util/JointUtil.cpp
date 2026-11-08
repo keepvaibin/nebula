@@ -2,9 +2,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/Render/ModelData.hpp"
 #include "Game/Render/Material.hpp"
-#include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
 

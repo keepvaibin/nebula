@@ -1056,30 +1056,6 @@ namespace MR {
             pSortArray[indexOfSmallestElement] = temp2;
         }
     };
-
-    void sortSmall(s32 length, u32* pSortArray, s32* pIndexArray) {
-        for (int i = 0; i < length; i++) {
-            pIndexArray[i] = i;
-        }
-
-        for (int index = 0; index < length; index++) {
-            u32 element = pSortArray[index];
-            int indexOfSmallestElement = index;
-            for (int i = index + 1; i < length; i++) {
-                if (element > pSortArray[i]) {
-                    element = pSortArray[i];
-                    indexOfSmallestElement = i;
-                }
-            }
-
-            s32 temp = pIndexArray[index];
-            u32 temp2 = pSortArray[index];
-            pIndexArray[index] = pIndexArray[indexOfSmallestElement];
-            pSortArray[index] = element;
-            pIndexArray[indexOfSmallestElement] = temp;
-            pSortArray[indexOfSmallestElement] = temp2;
-        }
-    };
 };  // namespace MR
 
 f32 VecKillElement(const Vec* pSrc, const Vec* pKill, const Vec* pDst) {

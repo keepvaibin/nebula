@@ -51,6 +51,5 @@
 #include "Game/NPC/TicoReading.hpp"
 #include "Game/NPC/TicoShop.hpp"
 #include "Game/NPC/TicoStarRing.hpp"
-#include "Game/NPC/TimeAttackEventKeeper.hpp"
 #include "Game/NPC/TrickRabbit.hpp"
 #include "Game/NPC/TrickRabbitFreeRun.hpp"

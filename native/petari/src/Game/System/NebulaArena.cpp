@@ -132,14 +132,6 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
         ppLast = &(*ppLast)->mNextSibling;
     }
     *ppLast = pArena;
-
-    if (sSystemHeap == sRootHeap) {
-        sSystemHeap = pArena;
-    }
-    if (sCurrentHeap == sRootHeap) {
-        sCurrentHeap = pArena;
-    }
-
     return pArena;
 }
 

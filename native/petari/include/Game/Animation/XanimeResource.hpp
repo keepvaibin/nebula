@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Game/Util/NameIndex.hpp"
 
-class HashSortTable;
 class ResourceHolder;
 
 class XanimeSwapTable {
@@ -143,6 +143,6 @@ public:
     XanimeGroupInfo _1C;
     XanimeGroupInfo* mSimpleGroupInfos;
     ResourceHolder* mResourceHolder;
-    HashSortTable* mSortTable;
+    MR::NameIndex mGroupIndex;  // a group's name to its index in mGroupInfos
     XanimeSwapTable* mSwapTable;
 };

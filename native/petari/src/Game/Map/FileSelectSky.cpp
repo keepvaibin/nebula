@@ -27,7 +27,7 @@ void FileSelectSky::init(const TableIter& rIter) {
     mScale.z = 0.8f;
     mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::connectToSceneSky(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(FileSelectSky, FileSelectSkyNrvWait));
     makeActorDead();

@@ -142,8 +142,8 @@ namespace GameSystemFunction {
 
     void resetAllControllerRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->_18->registInstance();
-            MR::getPlayerInput(chan)->_18->stop();
+            MR::getPlayerInput(chan)->mRumble->registInstance();
+            MR::getPlayerInput(chan)->mRumble->stop();
         }
     }
 
@@ -157,31 +157,31 @@ namespace GameSystemFunction {
 
     void onPauseBeginAllRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->_18->stop();
-            MR::getPlayerInput(chan)->_1C->registInstance();
-            MR::getPlayerInput(chan)->_1C->stop();
+            MR::getPlayerInput(chan)->mRumble->stop();
+            MR::getPlayerInput(chan)->mMenuRumble->registInstance();
+            MR::getPlayerInput(chan)->mMenuRumble->stop();
         }
     }
 
     void onPauseEndAllRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->_18->registInstance();
-            MR::getPlayerInput(chan)->_1C->stop();
+            MR::getPlayerInput(chan)->mRumble->registInstance();
+            MR::getPlayerInput(chan)->mMenuRumble->stop();
         }
     }
 
     void onHomeButtonMenuBeginAllRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->_18->pause();
-            MR::getPlayerInput(chan)->_1C->registInstance();
-            MR::getPlayerInput(chan)->_1C->stop();
+            MR::getPlayerInput(chan)->mRumble->pause();
+            MR::getPlayerInput(chan)->mMenuRumble->registInstance();
+            MR::getPlayerInput(chan)->mMenuRumble->stop();
         }
     }
 
     void onHomeButtonMenuCloseAllRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->_18->registInstance();
-            MR::getPlayerInput(chan)->_1C->stop();
+            MR::getPlayerInput(chan)->mRumble->registInstance();
+            MR::getPlayerInput(chan)->mMenuRumble->stop();
         }
     }
 
@@ -189,12 +189,12 @@ namespace GameSystemFunction {
         InputRumble* pRumble;
 
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            pRumble = MR::getPlayerInput(chan)->_18;
-            pRumble->_BC = 200;
+            pRumble = MR::getPlayerInput(chan)->mRumble;
+            pRumble->mStopTimer = 200;
             pRumble->stop();
 
-            pRumble = MR::getPlayerInput(chan)->_1C;
-            pRumble->_BC = 200;
+            pRumble = MR::getPlayerInput(chan)->mMenuRumble;
+            pRumble->mStopTimer = 200;
             pRumble->stop();
         }
     }

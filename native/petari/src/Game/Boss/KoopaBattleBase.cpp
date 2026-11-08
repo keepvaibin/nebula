@@ -79,8 +79,7 @@ bool KoopaBattleBase::updateWander(const MR::ActorMoveParam& rMoveParam) {
         }
     }
 
-    MR::moveAndTurnToDirection(mHost, KoopaFunction::getKoopaFrontPtr(mHost), KoopaFunction::getKoopaFront(mHost), rMoveParam._0, rMoveParam._4,
-                               rMoveParam._8, rMoveParam._C);
+    MR::moveAndTurnToDirection(mHost, KoopaFunction::getKoopaFrontPtr(mHost), KoopaFunction::getKoopaFront(mHost), rMoveParam);
 
     Koopa* pKoopa = mHost;
     MR::setBckRate(pKoopa, MR::calcVelocityLength(pKoopa) * ::sWalkAnimRate);
@@ -138,9 +137,3 @@ bool KoopaBattleBase::updateRecover(const Nerve* pNerve) {
 
 KoopaBattleBase::~KoopaBattleBase() {
 }
-
-namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pVec, const MR::ActorMoveParam& rMoveParam) {
-        moveAndTurnToPlayer(pActor, pVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
-    }
-};  // namespace MR

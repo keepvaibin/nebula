@@ -27,7 +27,7 @@ namespace {
     }
 };  // namespace
 
-OctahedronBezierSurface::OctahedronBezierSurface(u32 a1) : mDiagonalRate(0.6f) {
+OctahedronBezierSurface::OctahedronBezierSurface(u32 flags) : mDiagonalRate(0.6f) {
     mVertices[0].set(0.0f, 1000.0f, 0.0f);
     mVertices[1].set(400.0f, 600.0f, 0.0f);
     mVertices[2].set(0.0f, 600.0f, 400.0f);
@@ -36,7 +36,7 @@ OctahedronBezierSurface::OctahedronBezierSurface(u32 a1) : mDiagonalRate(0.6f) {
     mVertices[5].set(0.0f, 200.0f, 0.0f);
 
     for (s32 idx = 0; idx < 8; idx++) {
-        mSurfaces[idx] = new BezierSurface(::sCoefTableDivideNum, a1);
+        mSurfaces[idx] = new BezierSurface(::sCoefTableDivideNum, flags);
     }
 
     mSurfaces[0]->setST(Vec2f(0.25f, 0.5f), Vec2f(0.0f, 0.0f), Vec2f(0.0f, 1.0f));

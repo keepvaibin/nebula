@@ -19,7 +19,7 @@ void DinoPackunStateAwake::appear() {
 
 void DinoPackunStateAwake::kill() {
     mIsDead = true;
-    getHost()->mTail->_18 = 0.0f;
+    getHost()->mTail->mHostVelocityRate = 0.0f;
 }
 
 void DinoPackunStateAwake::exeFind() {
@@ -30,8 +30,8 @@ void DinoPackunStateAwake::exeFind() {
     }
 
     f32 rate = MR::calcNerveEaseOutRate(this, 30);
-    getHost()->mTail->_18 = 0.015f * rate;
-    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 4.0f);
+    getHost()->mTail->mHostVelocityRate = 0.015f * rate;
+    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 4.0f);
     getHost()->updateNormalVelocity();
 
     if (MR::isBckStopped(getHost())) {

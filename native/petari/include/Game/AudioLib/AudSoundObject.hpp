@@ -30,17 +30,6 @@ enum BGM_GROUP {
     MULTI_BGM = 0x01,
 };
 
-class AudSoundObjHashData {
-public:
-    AudSoundObjHashData();
-
-    void init();
-
-    const char* mName;
-    u32 mHash;
-    SoundID mID;
-};
-
 class AudSoundObject : public SoundObject, JKRDisposer {
 public:
     AudSoundObject(Vec3f*, u8, NebulaArena*);
@@ -83,7 +72,4 @@ public:
     u32 mSeVersion;  // TODO: Kuribo and Metbo "_DARK"?
     s32 mMapCode;
     s32 mMapCodeExtra;
-    AudSoundObjHashData* mHashDatas;
-    s32 mNumHandles;
-    s32 mNumSounds;
 };

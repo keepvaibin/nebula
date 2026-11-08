@@ -8,28 +8,67 @@
 #include "Game/Util/LiveActorUtil.hpp"
 
 namespace {
-    static int sActorNumMax = 2560;
+    const s32 sListCapacity = 2560;
+    const u32 sTableSize = 8192;
+
+    u32 hashActor(const LiveActor* pActor) {
+        return static_cast< u32 >(reinterpret_cast< uintptr_t >(pActor) >> 4) * 0x9E3779B1u;
+    }
+
+    void place(ClippingActorInfo** pTable, u32 mask, ClippingActorInfo* pInfo) {
+        u32 slot = hashActor(pInfo->mActor) & mask;
+        while (pTable[slot] != nullptr) {
+            slot = (slot + 1) & mask;
+        }
+        pTable[slot] = pInfo;
+    }
 };  // namespace
 
-ClippingActorHolder::ClippingActorHolder() : NameObj("クリッピングアクター保持"), mActorNum(), _10(), _14(), _18(), _1C(), mViewGroupCtrl(), mPlanets(), mPlanetNum() {
-    _10 = new ClippingActorInfoList(::sActorNumMax);
-    _14 = new ClippingActorInfoList(::sActorNumMax);
-    _18 = new ClippingActorInfoList(::sActorNumMax);
-    _1C = new ClippingActorInfoList(::sActorNumMax);
-    mViewGroupCtrl = new ViewGroupCtrl();
+ClippingActorHolder::ClippingActorHolder()
+    : NameObj("クリッピングアクター保持"), mActorNum(), mTargets(new ClippingActorInfoList(::sListCapacity)),
+      mInvalid(new ClippingActorInfoList(::sListCapacity)), mNonTargets(new ClippingActorInfoList(::sListCapacity)),
+      mGroupTargets(new ClippingActorInfoList(::sListCapacity)), mViewGroupCtrl(new ViewGroupCtrl()), mPlanets(), mPlanetNum(),
+      mTable(new ClippingActorInfo*[::sTableSize]()), mTableMask(::sTableSize - 1) {
 }
 
 void ClippingActorHolder::movement() {
     mViewGroupCtrl->update();
 
-    for (s32 i = 0; i < _10->_4; i++) {
-        _10->mClippingActorList[i]->judgeClipping();
+    for (s32 i = 0; i < mTargets->mCount; i++) {
+        mTargets->mClippingActorList[i]->judgeClipping();
     }
+}
+
+void ClippingActorHolder::moveTo(ClippingActorInfo* pInfo, ClippingActorInfoList* pList) {
+    if (pInfo->mList == pList) {
+        return;
+    }
+    if (pInfo->mList != nullptr) {
+        pInfo->mList->remove(pInfo);
+    }
+    pList->add(pInfo);
+}
+
+void ClippingActorHolder::insert(ClippingActorInfo* pInfo) {
+    if (static_cast< u32 >(mActorNum) * 2 >= mTableMask) {
+        ClippingActorInfo** pOld = mTable;
+        const u32 oldSize = mTableMask + 1;
+        mTableMask = oldSize * 2 - 1;
+        mTable = new ClippingActorInfo*[oldSize * 2]();
+        for (u32 i = 0; i < oldSize; i++) {
+            if (pOld[i] != nullptr) {
+                ::place(mTable, mTableMask, pOld[i]);
+            }
+        }
+        delete[] pOld;
+    }
+    ::place(mTable, mTableMask, pInfo);
 }
 
 void ClippingActorHolder::registerActor(LiveActor* pActor) {
     ClippingActorInfo* pInfo = new ClippingActorInfo(pActor);
-    _18->add(pInfo);
+    insert(pInfo);
+    mNonTargets->add(pInfo);
     mViewGroupCtrl->initMadeDuringPlay(pInfo);
 
     mActorNum++;
@@ -45,20 +84,20 @@ void ClippingActorHolder::initSystemInfo(LiveActor* pActor, const TableIter& rIt
 
 void ClippingActorHolder::initViewGroupTable() {
     mViewGroupCtrl->startInitViewGroupTable();
-    mViewGroupCtrl->initViewGroup(_10);
-    mViewGroupCtrl->initViewGroup(_18);
-    mViewGroupCtrl->initViewGroup(_1C);
-    mViewGroupCtrl->initViewGroup(_14);
+    mViewGroupCtrl->initViewGroup(mTargets);
+    mViewGroupCtrl->initViewGroup(mNonTargets);
+    mViewGroupCtrl->initViewGroup(mGroupTargets);
+    mViewGroupCtrl->initViewGroup(mInvalid);
     mViewGroupCtrl->endInitViewGroupTable();
 
-    ClippingActorInfoList* lists[] = {_10, _14, _18, _1C};
+    ClippingActorInfoList* lists[] = {mTargets, mInvalid, mNonTargets, mGroupTargets};
     s32 total = 0;
     for (s32 l = 0; l < 4; l++) {
-        total += lists[l]->_4;
+        total += lists[l]->mCount;
     }
     mPlanets = new ClippingActorInfo*[total > 0 ? total : 1];
     for (s32 l = 0; l < 4; l++) {
-        for (s32 i = 0; i < lists[l]->_4; i++) {
+        for (s32 i = 0; i < lists[l]->mCount; i++) {
             if (MR::isMovementPlanet(lists[l]->mClippingActorList[i]->mActor)) {
                 mPlanets[mPlanetNum++] = lists[l]->mClippingActorList[i];
             }
@@ -75,11 +114,11 @@ const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo
         if (planet == pInfo) {
             return nullptr;
         }
-        const f32 reach = planet->_8 * 1.25f;
-        const f32 x = pos.x - planet->_4->x;
-        const f32 y = pos.y - planet->_4->y;
-        const f32 z = pos.z - planet->_4->z;
-        if (x * x + y * y + z * z <= reach * reach && (ground == nullptr || planet->_8 < ground->_8)) {
+        const f32 reach = planet->mRadius * 1.25f;
+        const f32 x = pos.x - planet->mCenter->x;
+        const f32 y = pos.y - planet->mCenter->y;
+        const f32 z = pos.z - planet->mCenter->z;
+        if (x * x + y * y + z * z <= reach * reach && (ground == nullptr || planet->mRadius < ground->mRadius)) {
             ground = planet;
         }
     }
@@ -93,31 +132,20 @@ void ClippingActorHolder::entryLodCtrl(LodCtrl* pLodCtrl, const TableIter& rIter
 void ClippingActorHolder::validateClipping(LiveActor* pActor) {
     pActor->mFlag.mIsInvalidClipping = false;
 
-    ClippingActorInfo* pActorInfo = _14->remove(pActor);
-
+    ClippingActorInfo* pActorInfo = find(pActor);
     if (MR::isDead(pActor)) {
-        _18->add(pActorInfo);
+        moveTo(pActorInfo, mNonTargets);
     } else if (pActorInfo->isGroupClipping()) {
-        _1C->add(pActorInfo);
+        moveTo(pActorInfo, mGroupTargets);
     } else {
-        _10->add(pActorInfo);
+        moveTo(pActorInfo, mTargets);
     }
 }
 
 void ClippingActorHolder::invalidateClipping(LiveActor* pActor) {
     pActor->mFlag.mIsInvalidClipping = true;
 
-    ClippingActorInfo* pActorInfo;
-
-    if (MR::isDead(pActor)) {
-        pActorInfo = _18->remove(pActor);
-    } else if (_10->isInList(pActor)) {
-        pActorInfo = _10->remove(pActor);
-    } else {
-        pActorInfo = _1C->remove(pActor);
-    }
-
-    _14->add(pActorInfo);
+    moveTo(find(pActor), mInvalid);
 
     if (MR::isClipped(pActor)) {
         pActor->endClipped();
@@ -125,17 +153,16 @@ void ClippingActorHolder::invalidateClipping(LiveActor* pActor) {
 }
 
 void ClippingActorHolder::addToClippingTarget(LiveActor* pActor) {
-    if (MR::isInvalidClipping(pActor) || _10->isInList(pActor) || _1C->isInList(pActor)) {
+    if (MR::isInvalidClipping(pActor)) {
         return;
     }
 
-    ClippingActorInfo* pActorInfo = _18->remove(pActor);
-
-    if (pActorInfo->isGroupClipping()) {
-        _1C->add(pActorInfo);
-    } else {
-        _10->add(pActorInfo);
+    ClippingActorInfo* pActorInfo = find(pActor);
+    if (pActorInfo->mList != mNonTargets) {
+        return;
     }
+
+    moveTo(pActorInfo, pActorInfo->isGroupClipping() ? mGroupTargets : mTargets);
 }
 
 void ClippingActorHolder::removeFromClippingTarget(LiveActor* pActor) {
@@ -143,34 +170,16 @@ void ClippingActorHolder::removeFromClippingTarget(LiveActor* pActor) {
         return;
     }
 
-    if (_18->isInList(pActor)) {
-        return;
-    }
-
-    ClippingActorInfo* pActorInfo;
-
-    if (_1C->isInList(pActor)) {
-        pActorInfo = _1C->remove(pActor);
-    } else {
-        pActorInfo = _10->remove(pActor);
-    }
-
-    _18->add(pActorInfo);
+    moveTo(find(pActor), mNonTargets);
 }
 
 ClippingActorInfo* ClippingActorHolder::startGroupClipping(LiveActor* pActor, const TableIter& rIter) {
-    ClippingActorInfo* pActorInfo = nullptr;
+    ClippingActorInfo* pActorInfo = find(pActor);
 
-    if (_10->isInList(pActor)) {
-        pActorInfo = _10->remove(pActor);
-
-        _1C->add(pActorInfo);
-    } else if (_18->isInList(pActor)) {
-        pActorInfo = _18->find(pActor, 0);
-    } else if (_14->isInList(pActor)) {
-        pActorInfo = _14->remove(pActor);
-
-        _1C->add(pActorInfo);
+    if (pActorInfo->mList == mTargets) {
+        moveTo(pActorInfo, mGroupTargets);
+    } else if (pActorInfo->mList == mInvalid) {
+        moveTo(pActorInfo, mGroupTargets);
         pActor->endClipped();
     }
 
@@ -188,25 +197,11 @@ void ClippingActorHolder::setFarClipLevel(LiveActor* pActor, s32 level) {
 }
 
 ClippingActorInfo* ClippingActorHolder::find(const LiveActor* pActor) const {
-    ClippingActorInfo* pActorInfo;
-
-    pActorInfo = _10->findOrNone(pActor);
-
-    if (pActorInfo != nullptr) {
-        return pActorInfo;
+    for (u32 slot = ::hashActor(pActor) & mTableMask; mTable[slot] != nullptr; slot = (slot + 1) & mTableMask) {
+        if (mTable[slot]->mActor == pActor) {
+            return mTable[slot];
+        }
     }
 
-    pActorInfo = _18->findOrNone(pActor);
-
-    if (pActorInfo != nullptr) {
-        return pActorInfo;
-    }
-
-    pActorInfo = _1C->findOrNone(pActor);
-
-    if (pActorInfo != nullptr) {
-        return pActorInfo;
-    }
-
-    return _14->find(pActor, 0);
+    return nullptr;
 }

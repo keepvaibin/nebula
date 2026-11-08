@@ -106,7 +106,6 @@
     {"SearchBeamer", Category::Enemies},
     {"SignBoard", Category::Characters},
     {"SkeletalFishBaby", Category::Bosses},
-    {"SkeletalFishBabyRail", Category::Bosses},
     {"SkeletalFishBoss", Category::Bosses},
     {"SkeletalFishBossRail", Category::Bosses},
     {"SnakeFish", Category::Bosses},

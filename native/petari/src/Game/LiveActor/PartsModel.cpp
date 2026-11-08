@@ -7,7 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool a6)
-    : LiveActor(pName), mHost(pActor), mFixedPosition(), mMtx(pMtx), mIsCalcOwnMtx(true), _99(), mIsDead() {
+    : LiveActor(pName), mHost(pActor), mFixedPosition(), mMtx(pMtx), mIsCalcOwnMtx(true), mIsShownWhileHostHidden(), mIsDead() {
     if (drawBufferType < 0) {
         drawBufferType = MR::DrawBufferType_MapObj;
     }
@@ -53,7 +53,7 @@ void PartsModel::makeActorDead() {
 }
 
 void PartsModel::init(const TableIter& rIter) {
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
     initSound(8, false);
     MR::invalidateClipping(this);
     makeActorAppeared();
@@ -62,7 +62,7 @@ void PartsModel::init(const TableIter& rIter) {
 }
 
 void PartsModel::movement() {
-    if (MR::isDead(this) || MR::isDead(mHost) || (MR::isClipped(mHost) && !mHost->mFlag.mIsDrawnClipped) || (!_99 && MR::isHiddenModel(mHost))) {
+    if (MR::isDead(this) || MR::isDead(mHost) || (MR::isClipped(mHost) && !mHost->mFlag.mIsDrawnClipped) || (!mIsShownWhileHostHidden && MR::isHiddenModel(mHost))) {
         if (!mIsDead) {
             mIsDead = true;
 

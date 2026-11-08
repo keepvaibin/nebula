@@ -25,13 +25,11 @@ void IceStep::init(const TableIter& rIter) {
     MR::connectToSceneMapObjStrongLight(this);
 
     initSound(4, false);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     f32 radius = 90.0f * mScale.x;
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, radius, Vec3f(0.0f, radius, 0.0f));
-
-    NebulaMtxIdentity(_8C);
 
     MR::initCollisionParts(this, "IceStep", getSensor("body"), nullptr);
 

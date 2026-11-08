@@ -15,13 +15,13 @@ public:
         Type_Bowl,
     };
 
-    AreaForm() : _4() {
+    AreaForm() : mFollowMtx() {
     }
 
     virtual void init(const TableIter&);
     virtual bool isInVolume(const Vec3f&) const;
 
-    Pos3f* _4;
+    Pos3f* mFollowMtx;
 };
 
 class AreaFormCube : public AreaForm {
@@ -52,12 +52,12 @@ public:
     void updateBoxParam();
     void calcWorldMtx(Pos3f*) const;
 
-    int _8;
+    int mCubeType;
     Vec3f mTranslation;
     Vec3f mRotation;
     Vec3f mScale;
     Box3f mBounding;
-    Pos3f _48;
+    Pos3f mBaseMtx;
 };
 
 class AreaFormSphere : public AreaForm {
@@ -86,7 +86,7 @@ public:
 
     Vec3f mTranslation;
     Vec3f mUp;
-    f32 _20;
+    f32 mRadius;
 };
 
 class AreaFormCylinder : public AreaForm {

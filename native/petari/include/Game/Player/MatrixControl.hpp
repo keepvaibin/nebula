@@ -1,8 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-
-class HashSortTable;
+#include "Game/Util/NameIndex.hpp"
 
 struct MatrixMap {
     const char* mName;
@@ -34,7 +33,7 @@ public:
 
     MatrixMap* _C;
     MatrixSelectList* _10;
-    HashSortTable* _14;
+    MR::NameIndex mIndex;  // a row's name to its index in _C
     s32 _18;
     bool _1C;
     bool _1D;
@@ -49,5 +48,5 @@ public:
     bool getValue(const char*, f32*) const;
 
     MatrixValueTable* _C;
-    HashSortTable* _10;
+    MR::NameIndex mIndex;  // a row's name to its index in _C
 };

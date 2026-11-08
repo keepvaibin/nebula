@@ -47,7 +47,6 @@ public:
     bool mGrounded;
     f32 mScatterPropulsionSpeed;
     Vec3f mScatterNormal;
-    f32 _E4;
     f32 mStrollSpeed;
     f32 mMaxStrollSpeed;
     bool mIsStoppedByP2;

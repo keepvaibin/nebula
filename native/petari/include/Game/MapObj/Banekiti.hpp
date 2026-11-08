@@ -19,8 +19,8 @@ public:
     void initStarPointer();
     void exeWait();
     void exeRepel();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
 
     AnimScaleController* mAnimScaleCtrl;
     WalkerStateBindStarPointer* mBindStarPointer;

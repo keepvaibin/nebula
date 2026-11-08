@@ -27,7 +27,6 @@ namespace {
     static const f32 sNormalAccel = 0.7f;
     static const f32 sPressureAccel = 1.2f;
     static const f32 sBrakeAccelRate = 0.99f;
-    // static const f32 sAppearSnowRange = _;
 };  // namespace
 
 namespace NrvTrickRabbitFreeRun {
@@ -68,7 +67,7 @@ void TrickRabbitSnow::init(const TableIter& rIter) {
 
     mFootPrint = TrickRabbitUtil::createRabbitFootPrint(this);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::onEmitEffectSyncClipping(this, "Light");
     MR::onForceDeleteEffectSyncClipping(this, "Light");
     initSensor();
@@ -109,8 +108,8 @@ void TrickRabbitSnow::initState() {
 
     mStateWaitStart = new RabbitStateWaitStart(this, &mFrontVec, mMsgCtrl);
     mStateWaitStart->setTalkActionName("GiveUpTalk");
-    mStateWaitStart->_1C = false;
-    mStateWaitStart->_1D = false;
+    mStateWaitStart->mIsKillAfterTalk = false;
+    mStateWaitStart->mIsFallByGravity = false;
     mStateWaitStart->init();
 
     mStateRunaway = new WalkerStateRunaway(this, &mFrontVec, nullptr);
@@ -273,7 +272,7 @@ void TrickRabbitSnow::setFinishPosition() {
     MR::invalidateClipping(this);
     MR::requestMovementOn(this);
     MR::forwardNode(mMsgCtrl);
-    mStateWaitStart->_1D = false;
+    mStateWaitStart->mIsFallByGravity = false;
     setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvGiveUp));
 }
 
@@ -295,7 +294,7 @@ void TrickRabbitSnow::exeStartHideSnow() {
         MR::startAction(this, "Run");
     }
 
-    MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam._0, ::sStartAwayParam._4, ::sStartAwayParam._8, ::sStartAwayParam._C);
+    MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam);
 
     if (MR::checkPassBckFrame(this, 3.0f)) {
         startJumpSound();
@@ -401,7 +400,7 @@ void TrickRabbitSnow::exeCaught() {
         mSpotMarkLight->kill();
         mFootPrint->clear();
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-        mStateWaitStart->_1D = true;
+        mStateWaitStart->mIsFallByGravity = true;
         setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvGiveUp));
 
         if (mListener != nullptr) {

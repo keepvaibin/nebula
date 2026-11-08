@@ -83,7 +83,7 @@ void Rosetta::init(const TableIter& rIter) {
     MR::useStageSwitchWriteB(this, rIter);
     mParam.setMoveTalkNoTurnAction("WaitA", "TalkA");
     setDefaults();
-    _12C = 1500.0f;
+    mSwingReactDist = 1500.0f;
 }
 
 bool Rosetta::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -127,13 +127,13 @@ void Rosetta::control() {
     if (mMsgCtrl != nullptr && MR::isTalkStart(mMsgCtrl)) {
         switch (MR::getRandom(0, 3)) {
         case 0:
-            mParam._1C = "TalkA";
+            mParam.mTalkAction = "TalkA";
             break;
         case 1:
-            mParam._1C = "TalkB";
+            mParam.mTalkAction = "TalkB";
             break;
         case 2:
-            mParam._1C = "TalkC";
+            mParam.mTalkAction = "TalkC";
             break;
         }
     }
@@ -141,10 +141,10 @@ void Rosetta::control() {
     if (MR::isIntervalStep(this, ::sWaitActionInterval)) {
         switch (MR::getRandom(0, 2)) {
         case 0:
-            mParam._14 = "WaitA";
+            mParam.mWaitAction = "WaitA";
             break;
         case 1:
-            mParam._14 = "WaitB";
+            mParam.mWaitAction = "WaitB";
             break;
         }
     }
@@ -208,20 +208,20 @@ void Rosetta::exeReaction() {
     if (MR::isFirstStep(this)) {
     }
 
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_ROSETTA_BARRIER");
     }
 
     if (isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_ROSETTA_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_ROSETTA_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_ROSETTA_STAR_PIECE_HIT");
     }
 

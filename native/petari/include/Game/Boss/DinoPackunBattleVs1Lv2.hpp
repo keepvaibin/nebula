@@ -30,5 +30,5 @@ public:
     void exeDamage();
 
     DinoPackunStateDamage* mStateDamage;
-    bool _18;
+    bool mIsStartFromDemo;
 };

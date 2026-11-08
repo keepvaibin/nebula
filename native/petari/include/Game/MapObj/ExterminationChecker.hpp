@@ -28,8 +28,8 @@ public:
     LiveActorGroup* mGroup;
     KeySwitch* mKeySwitch;
     Vec3f mKeySwitchPos;
-    u8 _A0;
-    u8 _A1;
+    u8 mIsPowerStar;
+    u8 mIsKeySwitch;
 };
 
 namespace MR {

@@ -28,7 +28,6 @@ namespace {
     static const s32 sDefaultStepFall = 240;
     static const f32 sFallGravity = 0.03f;
     static const f32 sFallSpeedMax = 1.5f;
-    // static const f32 sDebugRadius = _;
     static const OffsetPair offset_table[] = {{0.0f, -1.0f}, {1.0f, -1.0f}, {1.0f, 0.0f},  {1.0f, 1.0f},
                                               {0.0f, 1.0f},  {-1.0f, 1.0f}, {-1.0f, 0.0f}, {-1.0f, -1.0f}};
 };  // namespace
@@ -42,8 +41,8 @@ namespace NrvKoopaBattleMapStair {
 };  // namespace NrvKoopaBattleMapStair
 
 KoopaBattleMapStair::KoopaBattleMapStair(const char* pName)
-    : LiveActor(pName), mTimeToBreak(::sDefaultTimeToBreak), mFireAttackStep(-1), mArg1(), mArg5(-1), mArg6(), mType(), mIsBig(), mIsTurn(), _A6(),
-      _A8(-1), _AC(0.0f, 0.0f, 0.0f), mWaitFallStep(::sDefaultStepWaitFall), mFallStep(::sDefaultStepFall) {
+    : LiveActor(pName), mTimeToBreak(::sDefaultTimeToBreak), mFireAttackStep(-1), mArg1(), mArg5(-1), mArg6(), mType(), mIsBig(), mIsTurn(), mIsKoopaAttack(),
+      mTargetPos(0.0f, 0.0f, 0.0f), mWaitFallStep(::sDefaultStepWaitFall), mFallStep(::sDefaultStepFall) {
 }
 
 void KoopaBattleMapStair::init(const TableIter& rIter) {
@@ -71,7 +70,7 @@ void KoopaBattleMapStair::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitSwitch));
     MR::needStageSwitchReadA(this, rIter);
@@ -104,7 +103,7 @@ s32 KoopaBattleMapStair::calcRemainTimeToBreak() const {
 }
 
 bool KoopaBattleMapStair::isRequestAttackVs3() const {
-    if (!_A6 && isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire))) {
+    if (!mIsKoopaAttack && isTypeNormal() && isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitKoopaFire))) {
         if (MR::isStep(this, mFireAttackStep) || mFireAttackStep < 0) {
             return true;
         }
@@ -172,7 +171,7 @@ f32 KoopaBattleMapStair::calcAndSetTargetPos(Vec3f* pPos, const Vec3f& rReferenc
         }
     }
 
-    _AC.set(*pPos);
+    mTargetPos.set(*pPos);
 
     return distance;
 }

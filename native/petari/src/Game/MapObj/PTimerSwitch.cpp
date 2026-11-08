@@ -13,8 +13,8 @@ namespace NrvPTimerSwitch {
 PTimerSwitch::PTimerSwitch(const char* pName) : LiveActor(pName) {
     mSwitchCollision = nullptr;
     mConnector = nullptr;
-    _94 = 0;
-    _98 = false;
+    mPressStep = 0;
+    mIsPressed = false;
 }
 
 void PTimerSwitch::reset() {
@@ -22,8 +22,8 @@ void PTimerSwitch::reset() {
     setNerve(GET_NERVE(PTimerSwitch, PTimerSwitchNrvOff));
     MR::validateCollisionParts(mSwitchCollision);
     MR::startBck(this, "Wait");
-    _94 = 0;
-    _98 = false;
+    mPressStep = 0;
+    mIsPressed = false;
 }
 
 void PTimerSwitch::init(const TableIter& rIter) {
@@ -38,7 +38,7 @@ void PTimerSwitch::init(const TableIter& rIter) {
     initSound(4, false);
     MR::needStageSwitchWriteA(this, rIter);
     initNerve(GET_NERVE(PTimerSwitch, PTimerSwitchNrvOff));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::startBck(this, "Wait");
     mConnector = new MapObjConnector(this);
     appear();
@@ -66,13 +66,13 @@ void PTimerSwitch::calcAnim() {
 }
 
 void PTimerSwitch::control() {
-    if (_98) {
-        ++_94;
-    } else if (_94 > 0) {
-        --_94;
+    if (mIsPressed) {
+        ++mPressStep;
+    } else if (mPressStep > 0) {
+        --mPressStep;
     }
 
-    _98 = false;
+    mIsPressed = false;
 }
 
 void PTimerSwitch::calcAndSetBaseMtx() {
@@ -97,12 +97,12 @@ bool PTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
         return false;
     }
 
-    _98 = true;
+    mIsPressed = true;
     return true;
 }
 
 bool PTimerSwitch::trySwitchDown() {
-    if (_94 > 0) {
+    if (mPressStep > 0) {
         setNerve(GET_NERVE(PTimerSwitch, PTimerSwitchNrvSwitchDown));
         return true;
     }

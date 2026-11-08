@@ -26,7 +26,6 @@ public:
     }
 
     SoundArchive* mAudioData;
-    u32 _4;
     s32 mPlayerMode;
-    bool _1D;
+    bool mIsCubeBgmChangeInvalid;
 };

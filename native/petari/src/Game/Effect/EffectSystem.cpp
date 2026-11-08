@@ -18,7 +18,7 @@
 #include "Game/Particle/EmitterManager.hpp"
 
 EffectSystem::EffectSystem(const char* pName, bool createAdaptors)
-    : NameObj(pName), mEmitterManager(), mDrawExec(), mCalcExec(), mGroupHolder(new AutoEffectGroupHolder()), _20(true) {
+    : NameObj(pName), mEmitterManager(), mDrawExec(), mCalcExec(), mGroupHolder(new AutoEffectGroupHolder()) {
     mDrawExec = new ParticleDrawExecutor(this, createAdaptors);
     mCalcExec = new ParticleCalcExecutor(this, createAdaptors);
 }
@@ -27,10 +27,6 @@ void EffectSystem::init(const TableIter& rIter) {
 }
 
 ParticleEmitter* EffectSystem::createEmitter(u16 resourceId, u8 groupId, u8 resourceManagerId) {
-    if (!_20) {
-        return nullptr;
-    }
-
     ParticleEmitter* pEmitter = mEmitterHolder->findAvailableParticleEmitter();
     if (pEmitter == nullptr) {
         return nullptr;
@@ -78,7 +74,7 @@ void EffectSystem::createSingleEmitter(SingleEmitter* pSingleEmitter, MultiEmitt
         pSingleEmitter->unlink();
     }
 
-    ParticleEmitter* pEmitter = createEmitter(pSingleEmitter->_4, pSingleEmitter->mGroupId, 0);
+    ParticleEmitter* pEmitter = createEmitter(pSingleEmitter->mResourceId, pSingleEmitter->mGroupId, 0);
 
     if (pEmitter != nullptr) {
         pSingleEmitter->link(pEmitter);

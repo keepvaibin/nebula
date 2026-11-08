@@ -74,7 +74,7 @@ bool ButtonPaneController::trySelect() {
     mIsPointing = true;
     NebulaMenuFocus::offer(this);
 
-    if (mDecideAnimName != nullptr && isPointing() && MR::testDPDMenuPadDecideTrigger()) {
+    if (mDecideAnimName != nullptr && isPointing() && MR::testPointerMenuPadDecideTrigger()) {
         mIsSelected = true;
 
         setNerve(GET_NERVE(ButtonPaneController, ButtonPaneControllerNrvDecided));

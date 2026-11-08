@@ -11,9 +11,9 @@ public:
     void addSpringVelocity(f32);
     void setSpringBaseValue(f32);
 
-    f32 _0;
-    f32 _4;
-    f32 _8;
+    f32 mBaseValue;
+    f32 mSpring;
+    f32 mDamp;
     SpringValue* mSpringValue;
 };
 
@@ -41,5 +41,5 @@ public:
 
     FloaterSpringForce* mSpringForce;
     Vec3f mVelocity;
-    f32 _48;
+    f32 mRideSinkSpeed;
 };

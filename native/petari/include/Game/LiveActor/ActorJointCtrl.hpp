@@ -30,6 +30,5 @@ public:
     DynamicJointCtrlKeeper* mJointCtrlKeeper;
     FaceJointCtrl* mFaceJointCtrl;
     IKJointCtrlHolder* mJointCtrlHolder;
-    u8 _10;
-    u8 _11;
+    bool mIsIdle;  // outside startUpdate .. endUpdate
 };

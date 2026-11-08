@@ -15,7 +15,7 @@ namespace NrvJumpStand {
 };  // namespace NrvJumpStand
 
 JumpStand::JumpStand(const char* pName) : LiveActor(pName), mBindedActor(), mIsMarioJumpingHigh() {
-    _90.identity();
+    mCollisionMtx.identity();
 }
 
 void JumpStand::init(const TableIter& rIter) {
@@ -29,9 +29,9 @@ void JumpStand::init(const TableIter& rIter) {
     binderOffs.set(0.0f, 100.0f, 0.0f);
     MR::addHitSensorPriorBinder(this, "binder", 4, 200.0f, binderOffs);
     MR::invalidateHitSensor(this, "binder");
-    _90.set(MR::getJointMtx(this, "JumpStandJoint03"));
-    MR::initCollisionParts(this, "JumpStand", getSensor("body"), _90);
-    initEffectKeeper(0, nullptr, false);
+    mCollisionMtx.set(MR::getJointMtx(this, "JumpStandJoint03"));
+    MR::initCollisionParts(this, "JumpStand", getSensor("body"), mCollisionMtx);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::setGroupClipping(this, rIter, 16);
     MR::initShadowFromCSV(this, "Shadow");
@@ -131,7 +131,7 @@ void JumpStand::exeStarPieceBound() {
 void JumpStand::control() {
     Vec3f pos;
     MR::copyJointPos(this, "JumpStandJoint03", &pos);
-    _90.setTrans(pos);
+    mCollisionMtx.setTrans(pos);
 }
 
 bool JumpStand::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

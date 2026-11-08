@@ -374,7 +374,7 @@ namespace Nebula.Setup
             try
             {
                 using (var reader = new BinaryReader(File.OpenRead(Path.Combine(content, "game.pak"))))
-                    return System.Text.Encoding.ASCII.GetString(reader.ReadBytes(8)) == "NBSTORE\0" && reader.ReadUInt32() == 4;
+                    return System.Text.Encoding.ASCII.GetString(reader.ReadBytes(8)) == "NBSTORE\0" && reader.ReadUInt32() == BuildInfo.StoreVersion;
             }
             catch (Exception) { return false; }
         }

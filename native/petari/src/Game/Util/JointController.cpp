@@ -3,7 +3,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/Render/Model.hpp"
 
 JointController::JointController() : mModel(), mJoint() {
 }

@@ -16,13 +16,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    // static const _ sMairoHitEgg_ = _;
-    // static const _ sGroundRumbleStart = _;
-    // static const _ sGroundRumbleEnd = _;
-    // static const _ sSmashGroundTail = _;
-    // static const _ sEggBrokenTime = _;
-    // static const _ sEggBrokenStopSceneTime = _;
-    // static const _ sEggBrokenTailStopTime = _;
     static const s32 sCryBlurStart = 100;
     static const s32 sCryBlurTime = 20;
     static const f32 sCryBlurOffset = 12.0f;
@@ -44,8 +37,6 @@ namespace {
     static const u8 sDeathBlurAlpha = 80;
     static const s32 sDeathBlurFadeIn = 15;
     static const s32 sDeathBlurFadeOut = 40;
-    // static const _ sDownGroundRumbleTimeStart = _;
-    // static const _ sDownGroundRumbleTimeEnd = _;
     static const s32 sAppearPowerStarTime = 60;
 };  // namespace
 
@@ -58,7 +49,7 @@ namespace NrvDinoPackunDemo {
     NEW_NERVE(DinoPackunDemoNrvAppearPowerStar, DinoPackunDemo, AppearPowerStar);
 };  // namespace NrvDinoPackunDemo
 
-DinoPackunDemo::DinoPackunDemo(DinoPackun* pBoss) : DinoPackunAction("ディノパックンデモ", pBoss), _14(), mDemoName() {
+DinoPackunDemo::DinoPackunDemo(DinoPackun* pBoss) : DinoPackunAction("ディノパックンデモ", pBoss), mNextNerve(), mDemoName() {
     MR::createCenterScreenBlur();
 }
 
@@ -92,7 +83,7 @@ void DinoPackunDemo::startTryDemo(const char* pName, const Nerve* pNerve) {
         MR::overlayWithPreviousScreen(2);
         setNerve(pNerve);
     } else {
-        _14 = pNerve;
+        mNextNerve = pNerve;
         mDemoName = pName;
         setNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoNrvTryStartDemo));
     }
@@ -100,10 +91,10 @@ void DinoPackunDemo::startTryDemo(const char* pName, const Nerve* pNerve) {
 
 void DinoPackunDemo::exeTryStartDemo() {
     if (MR::tryStartDemoMarioPuppetable(getHost(), mDemoName)) {
-        setNerve(_14);
+        setNerve(mNextNerve);
         MR::overlayWithPreviousScreen(2);
         mDemoName = nullptr;
-        _14 = nullptr;
+        mNextNerve = nullptr;
     }
 }
 

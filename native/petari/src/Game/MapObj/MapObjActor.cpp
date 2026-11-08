@@ -37,13 +37,13 @@ namespace {
 
 MapObjActor::MapObjActor(const char* pName)
     : LiveActor(pName), mObjectName(), mPlanetLodCtrl(), mBloomModel(), mModelObj(), mMatrixSetter(), mRailMover(), mRotator(), mRailRotator(),
-      mRailPosture(), mRailGuideDrawer(), _B4(), _B5(), _B6(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
+      mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mIsMirrorFromModel(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
       mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)) {
 }
 
 MapObjActor::MapObjActor(const char* pName, const char* pObjName)
     : LiveActor(pName), mObjectName(pObjName), mPlanetLodCtrl(), mBloomModel(), mModelObj(), mMatrixSetter(), mRailMover(), mRotator(),
-      mRailRotator(), mRailPosture(), mRailGuideDrawer(), _B4(), _B6(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
+      mRailRotator(), mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
       mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)) {
 }
 
@@ -60,7 +60,7 @@ void MapObjActor::initAfterPlacement() {
         return;
     }
 
-    if (_B4) {
+    if (mIsProjmapEveryFrame) {
         return;
     }
 
@@ -89,7 +89,7 @@ void MapObjActor::appear() {
         }
     }
 
-    if (_B6) {
+    if (mPlayRiddleSE) {
         MR::startSystemSE("SE_SY_READ_RIDDLE_S");
     }
 }
@@ -131,19 +131,19 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
     bool hasCollision = MR::isExistCollisionResource(this, mObjectName);
     connectToScene(rInfo);
 
-    if (rInfo._8C) {
+    if (rInfo.mInitLightCtrl) {
         MR::initLightCtrl(this);
     }
 
     if (rInfo.mUseProjectMapMtx) {
         mMatrixSetter = MR::initMaterialProjmapEffectMtxSetter(this);
         MR::prepareMaterials(this);
-        _B4 = rInfo._48;
+        mIsProjmapEveryFrame = rInfo.mIsProjmapEveryFrame;
     }
 
     if (rInfo.mUseMirrorReflection) {
         MR::initMirrorReflection(this);
-        _B5 = rInfo._74;
+        mIsMirrorFromModel = rInfo.mIsMirrorFromModel;
         Pos3f mtx(getBaseMtx());
         MR::setMirrorReflectionInfoFromMtxYUp(mtx);
     }
@@ -153,7 +153,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
     }
 
     if (rInfo.mHasEffect) {
-        initEffectKeeper(0, rInfo.mEffectName, false);
+        initEffectKeeper(0, rInfo.mEffectName);
     }
 
     if (rInfo.mSound > 0) {
@@ -166,7 +166,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
     }
 
     if (rInfo.mIsAppearRiddleSE) {
-        _B6 = true;
+        mPlayRiddleSE = true;
     }
 
     if (rInfo.mHasShadows && rInfo.mShadowLength != 0.0f) {
@@ -206,9 +206,9 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
         }
 
         if (rInfo.mHasHitSensorCB) {
-            MR::addHitSensorCallbackMapObj(this, "body", rInfo._1C, radius);
+            MR::addHitSensorCallbackMapObj(this, "body", rInfo.mSensorType, radius);
         } else {
-            MR::addHitSensorMapObj(this, "body", rInfo._1C, radius, position);
+            MR::addHitSensorMapObj(this, "body", rInfo.mSensorType, radius, position);
         }
     }
 
@@ -248,12 +248,12 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
         mRailRotator->init(rIter);
     }
 
-    if (rInfo._C) {
+    if (rInfo.mHasSeesaw1AxisRotator) {
         mRotator = new MapPartsSeesaw1AxisRotator(this, rInfo.mSeesaw1AxisRotatorName, rInfo.mSeesaw1AxisRotatorRadius);
         mRotator->init(rIter);
     }
 
-    if (rInfo._D) {
+    if (rInfo.mHasSeesaw2AxisRotator) {
         mRotator = new MapPartsSeesaw2AxisRotator(this, rInfo.mSeesaw1AxisRotatorName, rInfo.mSeesaw1AxisRotatorRadius);
         mRotator->init(rIter);
     }
@@ -336,7 +336,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
     makeSubModels(rIter, rInfo);
 
     if (rInfo.mInitFur) {
-        MR::initMultiFur(this, rInfo._5C);
+        MR::initMultiFur(this, rInfo.mLightType);
     }
 
     makeActorAppeared();
@@ -359,7 +359,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
         MR::syncStageSwitchAppear(this);
 
         if (rInfo.mIsAppearRiddleSE) {
-            _B6 = true;
+            mPlayRiddleSE = true;
         }
 
         makeActorDead();
@@ -374,7 +374,7 @@ void MapObjActor::initialize(const TableIter& rIter, const MapObjActorInitInfo& 
 
         if (MR::isRegisteredDemoActionAppear(this)) {
             if (rInfo.mIsAppearRiddleSE) {
-                _B6 = true;
+                mPlayRiddleSE = true;
             }
 
             makeActorDead();
@@ -389,7 +389,7 @@ bool MapObjActor::isObjectName(const char* pName) const {
 void MapObjActor::connectToScene(const MapObjActorInitInfo& rInfo) {
     if (rInfo.mConnectToScene) {
         if (MR::isExistCollisionResource(this, mObjectName)) {
-            s32 type = rInfo._5C;
+            s32 type = rInfo.mLightType;
 
             if (type == 1) {
                 MR::connectToSceneCollisionMapObjStrongLight(this);
@@ -398,7 +398,7 @@ void MapObjActor::connectToScene(const MapObjActorInitInfo& rInfo) {
             } else {
                 MR::connectToSceneCollisionMapObj(this);
             }
-        } else if (rInfo._5C == 1) {
+        } else if (rInfo.mLightType == 1) {
             MR::connectToSceneMapObjStrongLight(this);
         } else {
             MR::connectToSceneMapObj(this);
@@ -438,7 +438,7 @@ void MapObjActor::control() {
         mRailMover->movement();
 
         if (mRailMover->isWorking()) {
-            mPosition.set(mRailMover->_28);
+            mPosition.set(mRailMover->mStartPos);
             mRailMover->tryResetPositionRepeat();
         }
     }
@@ -474,7 +474,7 @@ void MapObjActor::control() {
 void MapObjActor::calcAndSetBaseMtx() {
     updateProjmapMtx();
 
-    if (MR::isExistMirrorCamera() && _B5) {
+    if (MR::isExistMirrorCamera() && mIsMirrorFromModel) {
         MR::setMirrorReflectionInfoFromModel(this);
     }
 
@@ -517,7 +517,7 @@ void MapObjActor::calcAndSetBaseMtx() {
         mtx.identity();
 
         if (mRailPosture != nullptr && mRailPosture->isWorking()) {
-            mtx.concat(mRailPosture->_18);
+            mtx.concat(mRailPosture->mPostureMtx);
         }
 
         if (mRotator != nullptr && mRotator->isWorking()) {
@@ -525,7 +525,7 @@ void MapObjActor::calcAndSetBaseMtx() {
         }
 
         if (mRailRotator != nullptr && mRailRotator->isWorking()) {
-            mtx.concat(mRailRotator->_5C);
+            mtx.concat(mRailRotator->mRotateMtx);
         }
 
         mtx.mMtx[0][3] = mPosition.x;
@@ -548,8 +548,8 @@ void MapObjActor::endClipped() {
 bool MapObjActor::tryCreateBreakModel(const MapObjActorInitInfo& rInfo) {
     MR::FormattedName buf;
 
-    if (rInfo._80 != nullptr) {
-        buf.format("%s", rInfo._80);
+    if (rInfo.mBreakModelName != nullptr) {
+        buf.format("%s", rInfo.mBreakModelName);
     } else {
         buf.format("%sBreak", mObjectName);
     }
@@ -638,7 +638,7 @@ void MapObjActor::updateProjmapMtx() {
         return;
     }
 
-    if (!_B4) {
+    if (!mIsProjmapEveryFrame) {
         return;
     }
 

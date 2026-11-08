@@ -52,7 +52,7 @@ void QuestionCoin::init(const TableIter& rIter) {
     initModelManagerWithAnm("QuestionCoin", nullptr, false);
     MR::startBpk(this, "QuestionCoin");
     MR::connectToSceneItemStrongLight(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initHitSensor(1);
     f32 radius = ::sHitRadius * mScale.x;
     HitSensor* sensor = MR::addHitSensor(this, "binder", ATYPE_QUESTION_COIN_BIND, 16, radius, Vec3f(0.0f, ::sOffsetY * mScale.y, 0.0f));

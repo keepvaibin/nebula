@@ -9,7 +9,7 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
-        return const_cast< Pos3f* >(&_8C)->toMtxPtr();
+        return const_cast< Pos3f* >(&mBaseMtx)->toMtxPtr();
     }
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
@@ -19,5 +19,5 @@ public:
     void exeWait();
 
 private:
-    Pos3f _8C;
+    Pos3f mBaseMtx;
 };

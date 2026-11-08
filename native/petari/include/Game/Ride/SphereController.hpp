@@ -15,5 +15,4 @@ public:
     virtual void notifyDeactivate(){};
 
 protected:
-    u32 _4;
 };

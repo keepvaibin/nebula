@@ -82,7 +82,6 @@ namespace NrvKaron {
 
 Karon::Karon(const char* pName) : LiveActor(pName) {
     mTerritoryMover = nullptr;
-    _90 = 0;
     mStopSwAnim = false;
     mScaleController = nullptr;
     mStateStarPointer = nullptr;
@@ -118,7 +117,7 @@ void Karon::init(const TableIter& rIter) {
     initBinder(70.0f, 70.0f, 0);
     MR::onCalcGravity(this);
     initSound(4, false);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     if (needsFixWait) {
         initNerve(GET_NERVE(Karon, HostTypeNrvFixWait));
@@ -167,8 +166,8 @@ void Karon::exeFixWait() {
         }
     }
 
-    mBinder->_1EC._5 = true;
-    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+    mBinder->mIsStopAtFirstHit = true;
+    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
 
     if (MR::isOnSwitchA(this)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvWait));
@@ -180,13 +179,12 @@ void Karon::exeWait() {
         MR::startAction(this, "Wait");
     }
 
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
 
     if (MR::isOnGround(this)) {
-        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
     } else {
-        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnOnAirParam._0, ::hNoMoveNoTurnOnAirParam._4, ::hNoMoveNoTurnOnAirParam._8,
-                                ::hNoMoveNoTurnOnAirParam._C);
+        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnOnAirParam);
     }
 
     s32 step;
@@ -213,7 +211,7 @@ void Karon::exeWalk() {
         MR::startAction(this, "Walk");
     }
 
-    MR::moveAndTurnToTarget(this, mTerritoryMover->mTarget, ::hWalkParam._0, ::hWalkParam._4, ::hWalkParam._8, ::hWalkParam._C);
+    MR::moveAndTurnToTarget(this, mTerritoryMover->mTarget, ::hWalkParam);
 
     if (MR::isGreaterStep(this, 180) || mTerritoryMover->isReachedTarget(this, 40.0f)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvWait));
@@ -230,14 +228,14 @@ void Karon::exeTurn() {
         mTerritoryMover->decideNextTargetPos(this);
     }
 
-    MR::moveAndTurnToTarget(this, mTerritoryMover->mTarget, ::hSearchParam._0, ::hSearchParam._4, ::hSearchParam._8, ::hSearchParam._C);
+    MR::moveAndTurnToTarget(this, mTerritoryMover->mTarget, ::hSearchParam);
 
     if (MR::calcDistanceToPlayer(this) < 700.0f && MR::isFaceToPlayerDegree(this, 80.0f)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvPursue));
     } else {
         Vec3f frontVec;
         MR::calcFrontVec(&frontVec, this);
-        if (MR::isGreaterStep(this, 10) && MR::isFaceToTargetHorizontalDegree(this, mTerritoryMover->mTarget, frontVec, ::hSearchParam._C * 2.0f)) {
+        if (MR::isGreaterStep(this, 10) && MR::isFaceToTargetHorizontalDegree(this, mTerritoryMover->mTarget, frontVec, ::hSearchParam.mTurnDegree * 2.0f)) {
             if (isFallNextMove(false)) {
                 setNerve(GET_NERVE(Karon, HostTypeNrvTurn));
             } else {
@@ -252,7 +250,7 @@ void Karon::exeWalkOnRail() {
         MR::startAction(this, "Walk");
     }
 
-    MR::moveAndTurnAlongRail(this, 600.0f, ::hWalkParam._0, ::hWalkParam._4, ::hWalkParam._8, ::hWalkParam._C, nullptr);
+    MR::moveAndTurnAlongRail(this, 600.0f, ::hWalkParam, nullptr);
     MR::calcDistanceToPlayer(this);
 
     if (MR::calcDistanceToPlayer(this) < 700.0f && MR::isFaceToPlayerDegree(this, 80.0f)) {
@@ -266,7 +264,7 @@ void Karon::exeSearch() {
         MR::startSound(this, "SE_EV_KARON_FIND");
     }
 
-    MR::moveAndTurnToPlayer(this, ::hSearchParam._0, ::hSearchParam._4, ::hSearchParam._8, ::hSearchParam._C);
+    MR::moveAndTurnToPlayer(this, ::hSearchParam);
 
     if (MR::isActionEnd(this)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvPursue));
@@ -280,7 +278,7 @@ void Karon::exePursue() {
         mVelocity += mGravity * -10.0f;
     }
 
-    MR::moveAndTurnToPlayer(this, ::hPursueParam._0, ::hPursueParam._4, ::hPursueParam._8, ::hPursueParam._C);
+    MR::moveAndTurnToPlayer(this, ::hPursueParam);
 
     if (1200.0f < MR::calcDistanceToPlayer(this) || !MR::isFaceToPlayerDegree(this, 80.0f)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvWait));
@@ -303,7 +301,7 @@ void Karon::exeBroken() {
     Vec3f velVec(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&velVec, this)) {
         MR::addVelocityLimit(this, velVec * 1.0f);
-        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
         MR::calcGravity(this);
     } else if (MR::isBinded(this)) {
         const Vec3f* bindedVec = MR::getBindedNormal(this);
@@ -314,7 +312,7 @@ void Karon::exeBroken() {
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
     }
 
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
 
     if (MR::isGreaterStep(this, 300)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvRecover));
@@ -333,7 +331,7 @@ void Karon::exeStepBroken() {
     Vec3f velVec(0, 0, 0);
     if (MR::calcVelocityAreaOrRailMoveOnGround(&velVec, this)) {
         MR::addVelocityLimit(this, velVec * 1.0f);
-        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+        MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
         MR::calcGravity(this);
     } else if (MR::isBinded(this)) {
         const Vec3f* bindedVec = MR::getBindedNormal(this);
@@ -344,7 +342,7 @@ void Karon::exeStepBroken() {
         MR::forceBindOnGround(this, 1.0f, 0.8f);
     }
 
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
 
     if (MR::isGreaterStep(this, 300)) {
         setNerve(GET_NERVE(Karon, HostTypeNrvRecover));
@@ -362,8 +360,8 @@ void Karon::exeRecover() {
         mVelocity.scale(gravity->dot(mVelocity), *gravity);
     }
 
-    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
-    mBinder->_1EC._5 = true;
+    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
+    mBinder->mIsStopAtFirstHit = true;
 
     if (MR::isActionEnd(this)) {
         MR::onCalcGravity(this);
@@ -384,16 +382,14 @@ void Karon::exeHitReaction() {
 
     if (isNerve(GET_NERVE(Karon, HostTypeNrvStarPieceHit))) {
         if (MR::isOnGround(this)) {
-            MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+            MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
         } else {
-            MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnOnAirParam._0, ::hNoMoveNoTurnOnAirParam._4, ::hNoMoveNoTurnOnAirParam._8,
-                                    ::hNoMoveNoTurnOnAirParam._C);
+            MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnOnAirParam);
         }
     } else if (MR::isOnGround(this)) {
-        MR::moveAndTurnToPlayer(this, ::hHitReactionOnGroundParam._0, ::hHitReactionOnGroundParam._4, ::hHitReactionOnGroundParam._8,
-                                ::hHitReactionOnGroundParam._C);
+        MR::moveAndTurnToPlayer(this, ::hHitReactionOnGroundParam);
     } else {
-        MR::moveAndTurnToPlayer(this, ::hHitReactionAirParam._0, ::hHitReactionAirParam._4, ::hHitReactionAirParam._8, ::hHitReactionAirParam._C);
+        MR::moveAndTurnToPlayer(this, ::hHitReactionAirParam);
     }
 
     if (MR::isOnGround(this) && MR::isActionEnd(this)) {
@@ -412,7 +408,7 @@ void Karon::exeDeath() {
         MR::startSound(this, "SE_EV_KARON_DAMAGE");
     }
 
-    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
 
     if (MR::isActionEnd(this)) {
         kill();
@@ -432,7 +428,7 @@ void Karon::exeSinkDown() {
 
     MR::startLevelSound(this, "SE_EV_LV_KARON_SINK");
     MR::startLevelSound(this, "SE_EM_LV_KARON_SINK");
-    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam._0, ::hNoMoveNoTurnParam._4, ::hNoMoveNoTurnParam._8, ::hNoMoveNoTurnParam._C);
+    MR::moveAndTurnToPlayer(this, ::hNoMoveNoTurnParam);
 
     if (MR::isActionEnd(this)) {
         kill();
@@ -441,7 +437,7 @@ void Karon::exeSinkDown() {
 
 void Karon::exeBindStarPointer() {
     const Nerve* nerve = GET_NERVE(Karon, HostTypeNrvWait);
-    mBinder->_1EC._5 = true;
+    mBinder->mIsStopAtFirstHit = true;
     if (MR::updateActorStateAndNextNerve(this, mStateStarPointer, nerve)) {
         return;
     }
@@ -613,7 +609,7 @@ bool Karon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 
 void Karon::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    MR::setBaseScale(this, mScaleController->_C * mScale);
+    MR::setBaseScale(this, mScaleController->mScale * mScale);
 }
 
 Karon::~Karon() {

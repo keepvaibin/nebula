@@ -10,7 +10,7 @@ namespace {
 };  // namespace
 
 FaceJointCtrl::FaceJointCtrl(LiveActor* pActor)
-    : mHostActor(pActor), mDegreeMax(::sDefaultDegreeMax), _8(0.0f, 0.0f, 1.0f), _14(0.0f, 0.0f, 1.0f), mJointController() {
+    : mHostActor(pActor), mDegreeMax(::sDefaultDegreeMax), mJointController() {
     mJointCtrlRate = new JointCtrlRate();
 }
 
@@ -56,9 +56,6 @@ void FaceJointCtrl::setCallBackFunction() {
 }
 
 bool FaceJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
-    pMtx->getXDir(_14);
-    MR::normalize(&_14);
-
     Vec3f position;
     pMtx->getTrans(position);
     Vec3f direction(*MR::getPlayerPos());
@@ -69,7 +66,7 @@ bool FaceJointCtrl::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInf
     }
 
     MR::normalize(&direction);
-    f32 rate = mJointCtrlRate->_0;
+    f32 rate = mJointCtrlRate->mRate;
     MR::turnMtxToXDirDegree(pMtx, direction, mDegreeMax * rate);
     return true;
 }

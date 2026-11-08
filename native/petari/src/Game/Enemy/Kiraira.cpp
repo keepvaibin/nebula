@@ -19,11 +19,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    // static const f32 sDriftSpeedMax = 2.4f;
     static const f32 sTurnRate = 2.8f;
-    // static const f32 sTurnRateFirst = 0.8f;
     static const s32 sStepToStare = 5;
-    // static const f32 sDefaultSpeedOnRail = 100.0f;
     static const f32 sRailGoalOffset = 50.0f;
     static const s32 sIntervalToExplode = 10;
     static const f32 sEyeHitSize = 600.0f;
@@ -48,7 +45,7 @@ namespace NrvKiraira {
 };  // namespace NrvKiraira
 
 Kiraira::Kiraira(const char* pName)
-    : LiveActor(pName), mRailCoordSpeed(5.0f), mRailVec(0.0f, 0.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), _A8(0.0f), mIsRail(false),
+    : LiveActor(pName), mRailCoordSpeed(5.0f), mRailVec(0.0f, 0.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mDriftStep(0.0f), mIsRail(false),
       mIsForceDetonated(false), mEyesOpen(true), mSharedGroup(nullptr), mChain(nullptr) {
 }
 
@@ -60,7 +57,7 @@ void Kiraira::init(const TableIter& rIter) {
     MR::addHitSensorEnemy(this, "body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEye(this, "eye", 16, ::sEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEye(this, "mind_eye", 8, ::sMindEyeHitSize, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(6, false);
     MR::initShadowVolumeSphere(this, 90.0f);
     MR::setShadowDropLength(this, nullptr, 4000.0f);
@@ -332,10 +329,10 @@ void Kiraira::drift() {
             mPosition.set(*mChain->getCutPos());
         }
     } else {
-        mVelocity.scale(1.5f * MR::sinDegree(45.0f + 2.0f * _A8), mGravity);
+        mVelocity.scale(1.5f * MR::sinDegree(45.0f + 2.0f * mDriftStep), mGravity);
     }
 
-    _A8++;
+    mDriftStep++;
 }
 
 void Kiraira::driftOnRail() {

@@ -63,7 +63,7 @@ public:
     }
 
     virtual void init(const TableIter& rIter) {
-        initEffectKeeper(8, "koura", false);
+        initEffectKeeper(8, "koura");
         initSound(8, false);
         MR::invalidateClipping(this);
         makeActorAppeared();

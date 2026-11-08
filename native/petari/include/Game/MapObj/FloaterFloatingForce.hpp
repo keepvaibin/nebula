@@ -23,8 +23,8 @@ public:
         return zero;
     }
 
-    const char* _18;
-    Vec3f _1C;
-    Vec3f _28;
+    const char* mObjName;
+    Vec3f mBasePos;
+    Vec3f mUp;
     f32 mMoveConditionType;
 };

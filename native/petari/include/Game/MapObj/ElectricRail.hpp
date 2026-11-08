@@ -23,11 +23,11 @@ public:
 
     void setup(const Vec3f&, const Vec3f&, const Vec3f&);
 
-    Vec3f _0;
+    Vec3f mPos;
     Vec3f mSide;
     Vec3f mUp;
     Vec3f mFront;
-    Vec3f _30;
+    Vec3f mOffsetDir;
 };
 
 class ElectricRailShadowDrawer : public ShadowVolumeDrawer {
@@ -75,7 +75,7 @@ public:
 
     ElectricRailPoint* mPoints;
     s32 mPointCount;
-    Vec3f* _94;
+    Vec3f* mSensorPositions;
     ElectricRailSeparator* mSeparators;
     s32 mSeparatorCount;
     // The rail as the renderer draws it while it waits.

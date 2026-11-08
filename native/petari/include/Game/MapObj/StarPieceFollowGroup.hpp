@@ -21,12 +21,11 @@ public:
     void exeFollowEnd();
 
     StarPiece** mPieces;
-    Vec3f* _90;
+    Vec3f* mPieceOffsets;
     s32 mNumPiecesTotal;
     s32 mNumPiecesUse;
     f32 mRadius;
     // appears to go unused
-    u32 _A0;
     f32 mAngle;
     s32 mTimeLimit;
     Vec3f mLocalXAxis;

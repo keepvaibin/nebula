@@ -2,8 +2,6 @@
 #include "Game/MapObj/TrampleStar.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -166,7 +164,6 @@ void TrampleStar::init(const TableIter& rIter) {
         new TrampleStarShare(this);
     }
 
-    _A8 = new u8[mNumVtxs];
     mNumDrawVtxs = 0;
     mDrawPos = new Vec3f[mNumSurfaces * 3];
     mDrawNorm = new Vec3f[mNumSurfaces * 3];

@@ -38,11 +38,6 @@ namespace {
     static const f32 sWaistSensorRadius = 120.0f;
     static const f32 sTailSensorRadius = 100.0f;
     static const f32 sSpeed = 20.0f;
-    // static const f32 sOpenRadius = _;
-    // static const f32 sCloseRadius = _;
-    // static const f32 sShadowOffDegree = _;
-    // static const f32 sLength = _;
-    // static const f32 sScaleTest = _;
     static const s32 sStarPieceNum = 10;
     static const f32 sAccel = 0.1f;
 };  // namespace
@@ -61,7 +56,7 @@ SkeletalFishBaby::SkeletalFishBaby(const char* pName)
         mControllers[i] = nullptr;
     }
 
-    _AC.identity();
+    mRailMtxInv.identity();
 }
 
 void SkeletalFishBaby::init(const TableIter& rIter) {
@@ -86,7 +81,7 @@ void SkeletalFishBaby::init(const TableIter& rIter) {
     initSound(6, false);
     MR::initShadowFromCSV(this, "Shadow");
     MR::setGroupClipping(this, rIter, 32);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::syncStageSwitchAppear(this);
@@ -130,7 +125,7 @@ void SkeletalFishBaby::kill() {
 }
 
 void SkeletalFishBaby::control() {
-    mRailControl->_14 = mSpeed;
+    mRailControl->mSpeed = mSpeed;
     mRailControl->update();
     mRailControl->getPos(&mPosition, 0.0f);
     mScaleController->updateNerve();
@@ -202,13 +197,13 @@ void SkeletalFishBaby::exeSwim() {
 
 void SkeletalFishBaby::exeBind() {
     if (MR::isFirstStep(this)) {
-        mScaleController->startDpdHitVibration();
-        MR::startDPDHitSound();
+        mScaleController->startPointerHitVibration();
+        MR::startPointerHitSound();
         mSpeed = 0.0f;
         MR::emitEffect(this, "StarPointerHold");
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 
     if (!isStarPointerPointing()) {
         setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim));
@@ -248,7 +243,7 @@ bool SkeletalFishBaby::calcJoint(Pos3f* pJointPos, const JointControllerInfo& rI
         return false;
     }
 
-    SkeletalFishJointCalc::calcJoint(pJointPos, &_AC, mRailControl, rInfo);
+    SkeletalFishJointCalc::calcJoint(pJointPos, &mRailMtxInv, mRailControl, rInfo);
     return true;
 }
 
@@ -272,7 +267,7 @@ bool SkeletalFishBaby::damage(const Vec3f& rAirBubblePos, bool shakeCameraNormal
 }
 
 void SkeletalFishBaby::calcAndSetBaseMtx() {
-    if (mRailControl->_8 != nullptr) {
+    if (mRailControl->mRail != nullptr) {
         for (u32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
             mControllers[i]->registerCallBack();
         }
@@ -280,9 +275,9 @@ void SkeletalFishBaby::calcAndSetBaseMtx() {
         Pos3f railMtx;
         mRailControl->getMtx(&railMtx, 0.0f);
         MR::setBaseTRMtx(this, railMtx);
-        _AC.set(railMtx);
-        _AC.invert(_AC);
-        Vec3f scale = mScaleController->_C * mScale;
+        mRailMtxInv.set(railMtx);
+        mRailMtxInv.invert(mRailMtxInv);
+        Vec3f scale = mScaleController->mScale * mScale;
         MR::setBaseScale(this, scale);
     }
 }
@@ -291,7 +286,7 @@ void SkeletalFishBaby::initRail(const TableIter& rIter) {
     if (rIter.isValid()) {
         initRailRider(rIter);
         mRailControl->setRailActor(this, nullptr, true);
-        mRailControl->_14 = mSpeed;
+        mRailControl->mSpeed = mSpeed;
         MR::moveCoordToNearestPos(this, mPosition);
     }
 }

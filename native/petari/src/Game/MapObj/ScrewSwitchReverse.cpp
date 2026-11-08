@@ -47,7 +47,7 @@ void ScrewSwitchReverse::init(const TableIter& rIter) {
     MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, 120.0f, offset);
 
     MR::initCollisionParts(this, "ScrewReverseCol", getSensor("binder"), MR::getJointMtx(this, "Screw"));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     s32 shadowLength = ::sDefaultShadowLength;

@@ -44,56 +44,10 @@ namespace NrvSurfRay {
 
 namespace {
     static const f32 sDistancePlayerNear = 1300.0f;
-    // static const f32 sGravity
-    // static const f32 sGroundReboundRate
-    // static const f32 sWallReboundRate
-    // static const f32 sReboundSpeedMin
-    // static const f32 sRunAccel
-    // static const f32 sRunSpeedMax
-    // static const f32 sFlyUpSpeedMaxY
-    // static const f32 sFallSpeedMaxY
-    // static const f32 sRunGroundFrictionRate
-    // static const f32 sRunAirFrictionRate
     static const f32 sSpeedToRumble = 5.0f;
-    // static const f32 sWaterFriction
-    // static const f32 sWaterGravity
-    // static const f32 sWaterPressureRate
-    // static const f32 sWaterWaveNrmAccelRate
-    // static const f32 sWaterUpSideSpeedMax
-    // static const f32 sWaterBottomReboundRate
-    // static const f32 sWaterUpperPosOffset
-    // static const f32 sWaterJudgeFront
-    // static const f32 sWaterJudgeUp
-    // static const f32 sWaterJudgeWidth
-    // static const f32 sUpSideGroundFrictionRate
-    // static const f32 sUpSideAirFrictionRate
-    // static const f32 sUpSideSpeedMin
-    // static const s32 sStepEnableJumpAtAir
-    // static const s32 sStepToFallAtAir
-    // static const f32 sJumpAccelMinY
-    // static const f32 sJumpAccelMaxY
-    // static const f32 sJumpSpeedMaxY
-    // static const f32 sJumpSpeedHigh
-    // static const f32 sRunSpeedMinToRotate
-    // static const f32 sRotateAccelRate
-    // static const f32 sPadAccelAddRateZ
-    // static const f32 sPadAccelClamp
-    // static const f32 sPadAccelInvalidMaxZ
-    // static const f32 sPadAccelInvalidMinX
-    // static const f32 sPadAccelInvalidFrictionRate
-    // static const f32 sRotateSpeedFrictionRate
-    // static const f32 sRotateFrictionRate
-    // static const f32 sRotateSpeedMin
-    // static const f32 sRotateSpeedMax
-    // static const f32 sRotateMaxZ
-    // static const f32 sRotateSpeedRate
     static const f32 sBlendRatioAxisUpAir = 0.02f;
     static const f32 sBlendRatioAxisUpGround = 0.1f;
     static const f32 sBlendRatioAxisFrontWall = 0.1f;
-    // static const f32 sPlayerPosOffsetY
-    // static const f32 sPlayerPosOffsetZ
-    // static const f32 sRiderRotateInterpolateRate
-    // static const f32 sRiderRotateRateScale
     static const f32 sTwistStartDiffMin = 0.2f;
     static const f32 sBtkSpeedMin = 1.0f;
     static const f32 sBtkSpeedMax = 4.0f;
@@ -102,7 +56,6 @@ namespace {
     static const f32 sShadowAlphaSpeed = 10.0f;
     static const f32 sSpeedToEmitEffect = 6.0f;
     static const f32 sSpeedToEmitEffectFast = 20.0f;
-    // static const f32 sMoveSeRotRate
     static const f32 sMoveSe0StartSpeed = 2.5f;
     static const f32 sMoveSe1StartSpeed = 7.5f;
     static const f32 sMoveSe2StartSpeed = 14.0f;
@@ -110,11 +63,6 @@ namespace {
     static const f32 sMoveSe3MaxSpeed = 35.0f;
     static const f32 sWindSeStartSpeed = 32.0f;
     static const f32 sWindSeMaxSpeed = 50.0f;
-    // static const f32 sJumpInSoundMaxSpeed
-    // static const f32 sHitSoundStartVelocity
-    // static const f32 sVelocityUpSideScale
-    // static const f32 sRotateZFrictionRate
-    // static const f32 sMarioAnimeBlendRate
 
     bool calcWaterShadowPos(Vec3f* pShadowPos, const Vec3f& rStartPos, const Vec3f& rShadowDir) {
         pShadowPos->set(rStartPos);
@@ -170,7 +118,7 @@ void SurfRay::init(const TableIter& pMapInfoIter) {
     MR::addHitSensorBinder(this, "bind", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     initBinder(200.0f, 50.0f, 8);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "Ripple", mEffectHostMtx);
     initSound(15, false);
 
@@ -754,7 +702,7 @@ void SurfRay::updateToWater() {
         mWaterNormal.set(mWaterInfo.mSurfaceNormal);
         f32 innerProd = mGravity.dot(mVelocity);
 
-        if (innerProd > 0.0f && mWaterInfo._4 < innerProd) {
+        if (innerProd > 0.0f && mWaterInfo.mDepth < innerProd) {
             Vec3f v2(mGravity);
             mVelocity.sub(mGravity * innerProd * 1.5f);
         } else {

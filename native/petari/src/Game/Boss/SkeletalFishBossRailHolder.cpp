@@ -22,7 +22,7 @@ SkeletalFishBossRail* SkeletalFishBossRailHolder::getByID(s32 id) const {
     for (u32 i = 0; i < mNumRails; i++) {
         SkeletalFishBossRail* rail = getInOrder(i);
 
-        if (id == rail->_8C) {
+        if (id == rail->mRailId) {
             return rail;
         }
     }

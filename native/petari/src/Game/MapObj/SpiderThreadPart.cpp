@@ -19,27 +19,17 @@ namespace {
     static const f32 sPointInterval = 50.0f;
     static const f32 sFricitonLengthMin = 200.0f;
     static const f32 sFricitonLengthMax = 700.0f;
-    // static const _32 sFrictionLengthRateMin =
-    // static const _32 sFrictionLengthRateMax =
-    // static const _32 sFrictionTipMin =
     static const s32 sTouchTimerMax = 5;
     static const s32 sActorToucnTimerMax = 60;
     static const s32 sForceAttachTime = 20;
     static const f32 sWindFrictionRate = 0.93f;
-    // static const f32 sScaleMin =
-    // static const f32 sDrawWidthX =
-    // static const f32 sDrawWidthY =
-    // static const f32 sDrawWidthLongOffsetX =
-    // static const f32 sDrawWidthShortOffsetX =
-    // static const f32 sDrawWidthShortOffsetY =
     static const f32 sTexRateV = 0.002f;
-    // static const f32 sIndirectTexEndU =
     static const f32 sIndirectTexRateV = 0.001f;
     static const f32 sIndirectTexSpeed = -0.002f;
 };  // namespace
 
 SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadMainPoint* pPointB, f32 boundBoxPadding)
-    : mPointA(pPointA), mIsStill(true), mIsCut(false), mIsFree(false), _4(0), mNumHangingPoints(0), mStopTime(0), mTouchTimeout(0),
+    : mPointA(pPointA), mIsStill(true), mIsCut(false), mIsFree(false), mNumHangingPoints(0), mStopTime(0), mTouchTimeout(0),
       mPointerPosPad0(0.0f, 0.0f, 0.0f), mPointerPosPad1(0.0f, 0.0f, 0.0f), mPointB(pPointB), mNumPoints(0), mPoints(nullptr),
       mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mDistBetweenMainPoints(0.0f), mDistBetweenPoints(0.0f),
       mTextureOffset(0.0f) {
@@ -145,9 +135,6 @@ void SpiderThreadPart::update() {
     }
 
     if (mIsStill) {
-        if (_4 > 0) {
-            updatePointPosToLine();
-        }
         mTouchTimeout = 0;
         return;
     }
@@ -494,62 +481,35 @@ void SpiderThreadPart::updateDrawVec() {
 }
 
 namespace {
-    // this is extremely hacky, and I'm not sure I like this. However, this matches.
-    inline Vec3f upperPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
-    }
-    inline Vec3f upperPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
-    }
-
-    inline Vec3f rightLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
-    }
-    inline Vec3f rightLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
-    }
-
-    inline Vec3f leftLowerPoint1(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
-    }
-    inline Vec3f leftLowerPoint2(const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 x, f32 y) {
-        return Vec3f(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
+    // One edge of the thread's cross-section: two corners, each `pos + s * side + f * front`, texture u 0 then 1.
+    void sendEdge(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2, f32 s0, f32 f0,
+                  Rgba8 color0, f32 s1, f32 f1, Rgba8 color1) {
+        const f32 s[2] = {s0, s1};
+        const f32 f[2] = {f0, f1};
+        const Rgba8 color[2] = {color0, color1};
+        for (int i = 0; i < 2; i++) {
+            const f32 u = static_cast< f32 >(i);
+            *rVtx++ = {rPos.x + s[i] * rSide.x + f[i] * rFront.x,
+                       rPos.y + s[i] * rSide.y + f[i] * rFront.y,
+                       rPos.z + s[i] * rSide.z + f[i] * rFront.z,
+                       color[i],
+                       u,
+                       texY1,
+                       u,
+                       texY2};
+        }
     }
 
     void sendPointsUpper(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        {
-            const Vec3f at = upperPoint1(rPos, rSide, rFront, 18.0f, 3.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusX), 0.0f, texY1, 0.0f, texY2};
-        }
-
-        {
-            const Vec3f at = upperPoint2(rPos, rSide, rFront, 18.0f, 3.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorPlusX), 1.0f, texY1, 1.0f, texY2};
-        }
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, -18.0f, 3.0f, sColorMinusX, 18.0f, 3.0f, sColorPlusX);
     }
 
     void sendPointsRightLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        {
-            const Vec3f at = rightLowerPoint1(rPos, rSide, rFront, 18.0f, 18.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorPlusX), 0.0f, texY1, 0.0f, texY2};
-        }
-
-        {
-            const Vec3f at = rightLowerPoint2(rPos, rSide, rFront, 15.0f, 18.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusY), 1.0f, texY1, 1.0f, texY2};
-        }
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, 18.0f, 18.0f, sColorPlusX, -15.0f, -18.0f, sColorMinusY);
     }
 
     void sendPointsLeftLower(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2) {
-        {
-            const Vec3f at = leftLowerPoint1(rPos, rSide, rFront, 15.0f, 18.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusY), 0.0f, texY1, 0.0f, texY2};
-        }
-
-        {
-            const Vec3f at = leftLowerPoint2(rPos, rSide, rFront, 18.0f, 18.0f);
-            *rVtx++ = {at.x, at.y, at.z, Rgba8(sColorMinusX), 1.0f, texY1, 1.0f, texY2};
-        }
+        sendEdge(rVtx, rPos, rSide, rFront, texY1, texY2, 15.0f, -18.0f, sColorMinusY, -18.0f, 18.0f, sColorMinusX);
     }
 };  // namespace
 

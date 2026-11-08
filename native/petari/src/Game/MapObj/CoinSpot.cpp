@@ -12,7 +12,7 @@ namespace NrvCoinSpot {
     NEW_NERVE(CoinSpotNrvIsInTornado, CoinSpot, IsInTornado);
 };  // namespace NrvCoinSpot
 
-CoinSpot::CoinSpot(const char* pName) : LiveActor(pName), _8C(8), mIsInTornado(), _94(4), _98() {
+CoinSpot::CoinSpot(const char* pName) : LiveActor(pName), mCoinCount(8), mIsInTornado(), mSpawnTimer(4), mSpawnedCount() {
 }
 
 void CoinSpot::init(const TableIter& rIter) {
@@ -24,9 +24,9 @@ void CoinSpot::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &arg);
 
     if (arg > 0) {
-        _8C = arg;
+        mCoinCount = arg;
     } else {
-        _8C = 8;
+        mCoinCount = 8;
     }
 
     initSound(4, false);
@@ -46,8 +46,8 @@ void CoinSpot::initSensor() {
 
 void CoinSpot::exeWait() {
     if (MR::isFirstStep(this)) {
-        _94 = 0;
-        _98 = 0;
+        mSpawnTimer = 0;
+        mSpawnedCount = 0;
         mIsInTornado = false;
     }
 
@@ -58,23 +58,23 @@ void CoinSpot::exeWait() {
 
 void CoinSpot::exeIsInTornado() {
     if (MR::isFirstStep(this)) {
-        _94 = 0;
-        _98 = 0;
+        mSpawnTimer = 0;
+        mSpawnedCount = 0;
     }
 
     if (mIsInTornado) {
-        if (--_94 <= 0) {
+        if (--mSpawnTimer <= 0) {
             MR::appearCoinFix(this, mPosition, 1);
-            _94 = 4;
-            _98++;
+            mSpawnTimer = 4;
+            mSpawnedCount++;
         }
 
         mIsInTornado = false;
     } else {
-        _94 = 0;
+        mSpawnTimer = 0;
     }
 
-    if (_98 >= _8C || MR::isGreaterStep(this, 180)) {
+    if (mSpawnedCount >= mCoinCount || MR::isGreaterStep(this, 180)) {
         MR::deleteEffect(this, "光");
         kill();
     }

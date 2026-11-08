@@ -93,7 +93,7 @@ void KoopaBattleStairsVs3::tryAttack() {
         pBattleMapStair = static_cast< KoopaBattleMapStair* >(mStairsGroup->getActor(i));
 
         if (pBattleMapStair->isRequestAttackVs3()) {
-            pBattleMapStair->_A6 = true;
+            pBattleMapStair->mIsKoopaAttack = true;
             KoopaFunction::emitFireStairsToTarget(mKoopa, pBattleMapStair, mNamePos, true);
         }
     }

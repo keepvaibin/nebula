@@ -23,6 +23,6 @@ public:
     void exeWait();
     void exeExplosion();
 
-    Quat4f _8C;
-    Vec3f _9C;
+    Quat4f mRotateQuat;
+    Vec3f mRotateMoment;
 };

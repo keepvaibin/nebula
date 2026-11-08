@@ -34,10 +34,10 @@ namespace NrvScenarioStarter {
 };  // namespace NrvScenarioStarter
 
 ScenarioStarter::ScenarioStarter(const char* pName)
-    : LiveActor(pName), _8C(), _90(0.0f, 1.0f, 0.0f), _9C(0.0f, 0.0f, 0.0f), _B8(), mSpinDriverCamera(), _C0(0.0f, 1.0f, 0.0f), _CC(0.0f, 0.0f, 1.0f),
-      _D8(1.0f, 0.0f, 0.0f), _E4(), _E8(), _EC(), mFlightTime(300), mFlyMotionStartStep(), _F8(), mFallMotionStartStep(), mInitalPlayerRotation(),
-      mWelcomeLayout(), mTitle(), _10C(0.0f, 0.0f, 0.0f), _118(0.0f, 0.0f, 0.0f), _124() {
-    _A8.set(0.0f, 0.0f, 0.0f, 1.0f);
+    : LiveActor(pName), mBindActor(), mHeadDir(0.0f, 1.0f, 0.0f), mJumpVec(0.0f, 0.0f, 0.0f), mShootPath(), mSpinDriverCamera(), mInitUp(0.0f, 1.0f, 0.0f), mInitFront(0.0f, 0.0f, 1.0f),
+      mSpinAngle(), mSpinAngleMax(), mFallAngle(), mFlightTime(300), mFlyMotionStartStep(), mFlyEndStep(), mFallMotionStartStep(), mInitalPlayerRotation(),
+      mWelcomeLayout(), mTitle(), mStartPos(0.0f, 0.0f, 0.0f), mStartRotate(0.0f, 0.0f, 0.0f), mIsSkipped() {
+    mBindQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void ScenarioStarter::init(const TableIter& rIter) {
@@ -58,9 +58,9 @@ void ScenarioStarter::init(const TableIter& rIter) {
     mTitle = new ScenarioTitle();
     mTitle->initWithoutIter();
     mTitle->kill();
-    _10C.set(*MR::getPlayerPos());
-    _118.set(*MR::getPlayerRotate());
-    mPosition.set(_10C);
+    mStartPos.set(*MR::getPlayerPos());
+    mStartRotate.set(*MR::getPlayerRotate());
+    mPosition.set(mStartPos);
     initNerve(GET_NERVE(ScenarioStarter, ScenarioStarterWaitScenarioCameraEnd));
     if (MR::isBeginScenarioStarter()) {
         appear();
@@ -71,7 +71,7 @@ void ScenarioStarter::init(const TableIter& rIter) {
 
 void ScenarioStarter::exeWaitToStart() {
     if (MR::isFirstStep(this)) {
-        _124 = false;
+        mIsSkipped = false;
         MR::forceToBlankCinemaFrame();
     }
 }
@@ -88,16 +88,16 @@ void ScenarioStarter::exeCinemaFrameBlank() {
 void ScenarioStarter::exeRailMove() {
     if (MR::isFirstStep(this)) {
         calcShootMotionTime();
-        MR::startBck(_8C, "SpaceFlyStart");
-        _90 = _C0;
-        turnBindHead(_90, 1.0f);
+        MR::startBck(mBindActor, "SpaceFlyStart");
+        mHeadDir = mInitUp;
+        turnBindHead(mHeadDir, 1.0f);
         mPosition.set(MR::getRailPointPosStart(this));
         MR::endStartPosCamera();
-        mSpinDriverCamera->start(_C0, _CC, mPosition);
+        mSpinDriverCamera->start(mInitUp, mInitFront, mPosition);
         Pos3f rotMtx;
-        _EC = 0.0f;
-        MR::makeMtxUpFront(&rotMtx, _C0, _CC);
-        rotMtx.getQuat(_A8);
+        mFallAngle = 0.0f;
+        MR::makeMtxUpFront(&rotMtx, mInitUp, mInitFront);
+        rotMtx.getQuat(mBindQuat);
     }
 
     if (MR::isStep(this, 10)) {
@@ -106,23 +106,23 @@ void ScenarioStarter::exeRailMove() {
     }
 
     updateBindPosition();
-    if (!MR::isNearZero(_90)) {
-        turnBindHead(_90, 0.4f);
+    if (!MR::isNearZero(mHeadDir)) {
+        turnBindHead(mHeadDir, 0.4f);
     }
 
     updateShootMotion();
-    mSpinDriverCamera->update(_90, mPosition);
-    if (mFlyMotionStartStep <= getNerveStep() && getNerveStep() <= _F8) {
-        _E4 = _E8 * MR::getEaseOutValue(MR::normalize(getNerveStep(), mFlyMotionStartStep, _F8), 0.0f, 1.0f, 1.0f);
+    mSpinDriverCamera->update(mHeadDir, mPosition);
+    if (mFlyMotionStartStep <= getNerveStep() && getNerveStep() <= mFlyEndStep) {
+        mSpinAngle = mSpinAngleMax * MR::getEaseOutValue(MR::normalize(getNerveStep(), mFlyMotionStartStep, mFlyEndStep), 0.0f, 1.0f, 1.0f);
     }
 
-    _EC = MR::pi() * MR::normalize(getNerveStep(), _F8, mFallMotionStartStep);
+    mFallAngle = MR::pi() * MR::normalize(getNerveStep(), mFlyEndStep, mFallMotionStartStep);
     if (trySkipTrigger()) {
         MR::tryFrameToBlankCinemaFrame();
-        _124 = true;
+        mIsSkipped = true;
     }
 
-    if (_124 && MR::isStopCinemaFrame()) {
+    if (mIsSkipped && MR::isStopCinemaFrame()) {
         setNerve(GET_NERVE(ScenarioStarter, ScenarioStarterRailMoveCanceled));
         return;
     }
@@ -142,8 +142,8 @@ void ScenarioStarter::exeRailMove() {
     }
 
     if (MR::isGreaterEqualStep(this, mFlightTime)) {
-        MR::endBindAndSpinDriverJump(this, _9C);
-        _8C = nullptr;
+        MR::endBindAndSpinDriverJump(this, mJumpVec);
+        mBindActor = nullptr;
         mSpinDriverCamera->end();
         setNerve(GET_NERVE(ScenarioStarter, ScenarioStarterShowWelcomeLayout));
     }
@@ -152,7 +152,7 @@ void ScenarioStarter::exeRailMove() {
 void ScenarioStarter::exeRailMoveCanceled() {
     if (MR::isFirstStep(this)) {
         MR::endBindAndPlayerWait(this);
-        _8C = nullptr;
+        mBindActor = nullptr;
         mSpinDriverCamera->cancel();
         mTitle->kill();
         if (isStartBgmOnWelcome()) {
@@ -168,7 +168,7 @@ void ScenarioStarter::exeShowWelcomeLayout() {
     if (MR::isFirstStep(this)) {
         GameSceneFunction::notifyEndScenarioStarter();
         MR::tryFrameToScreenCinemaFrame();
-        MR::startStartPosCamera(!_124);
+        MR::startStartPosCamera(!mIsSkipped);
         mWelcomeLayout->appear();
         if (!MR::isDead(mTitle)) {
             mTitle->end();
@@ -192,23 +192,24 @@ void ScenarioStarter::initShootPath(const TableIter& rIter) {
     initRailRider(rIter);
     mInitalPlayerRotation = 0.0f;
     MR::getPlacementArg5NoInit(rIter, &mInitalPlayerRotation);
-    _B8 = new SpinDriverShootPath();
-    _B8->init(rIter);
-    _B8->calcInitPose(&_C0, &_CC, &_D8, mInitalPlayerRotation);
+    mShootPath = new SpinDriverShootPath();
+    mShootPath->init(rIter);
+    Vec3f side(1.0f, 0.0f, 0.0f);
+    mShootPath->calcInitPose(&mInitUp, &mInitFront, &side, mInitalPlayerRotation);
 }
 
 void ScenarioStarter::updateBindPosition() {
     Vec3f pathPos;
     Vec3f pathDir;
     f32 nerveRate = MR::calcNerveRate(this, mFlightTime);
-    _B8->calcPosition(&pathPos, nerveRate);
-    _B8->calcDirection(&pathDir, nerveRate, 0.01f);
+    mShootPath->calcPosition(&pathPos, nerveRate);
+    mShootPath->calcDirection(&pathDir, nerveRate, 0.01f);
     if (!MR::isNearZero(pathDir)) {
-        _90 = pathDir;
+        mHeadDir = pathDir;
     }
 
-    _9C.set(pathPos);
-    _9C -= mPosition;
+    mJumpVec.set(pathPos);
+    mJumpVec -= mPosition;
     mPosition.set(pathPos);
 }
 
@@ -216,75 +217,74 @@ void ScenarioStarter::updateBindActorMtx() {
     if (isNerve(GET_NERVE(ScenarioStarter, ScenarioStarterRailMove))) {
         Pos3f rotateY;
         rotateY.identity();
-        rotateY.setEulerY(_E4);
+        rotateY.setEulerY(mSpinAngle);
         rotateY.zeroTrans();
 
         Pos3f rotateX;
         rotateX.identity();
-        rotateX.setEulerX(_EC);
+        rotateX.setEulerX(mFallAngle);
 
         Pos3f mtx;
-        mtx.setQT(_A8, mPosition);
+        mtx.setQT(mBindQuat, mPosition);
         mtx.concat(mtx, rotateX);
         mtx.concat(mtx, rotateY);
-        MR::setBaseTRMtx(_8C, mtx);
+        MR::setBaseTRMtx(mBindActor, mtx);
     } else {
         Pos3f mtx;
-        MR::makeMtxTR(mtx, _10C, _118);
-        MR::setBaseTRMtx(_8C, mtx);
+        MR::makeMtxTR(mtx, mStartPos, mStartRotate);
+        MR::setBaseTRMtx(mBindActor, mtx);
     }
 }
 
 void ScenarioStarter::updateShootMotion() {
     if (MR::isStep(this, mFlyMotionStartStep)) {
-        MR::startBckWithInterpole(_8C, "SpaceFlyLoop", 5);
+        MR::startBckWithInterpole(mBindActor, "SpaceFlyLoop", 5);
     }
 
-    if (MR::isLessStep(this, _F8)) {
-        MR::startLevelSound(_8C, "SE_PM_LV_S_SPIN_DRV_FLY");
+    if (MR::isLessStep(this, mFlyEndStep)) {
+        MR::startLevelSound(mBindActor, "SE_PM_LV_S_SPIN_DRV_FLY");
     }
 
-    if (MR::isStep(this, _F8)) {
-        MR::startBckWithInterpole(_8C, "SpaceFlyEnd", 0);
-        MR::startSound(_8C, "SE_PM_S_SPIN_DRV_COOL_DOWN");
-        MR::startSound(_8C, "SE_PV_JUMP_S");
+    if (MR::isStep(this, mFlyEndStep)) {
+        MR::startBckWithInterpole(mBindActor, "SpaceFlyEnd", 0);
+        MR::startSound(mBindActor, "SE_PM_S_SPIN_DRV_COOL_DOWN");
+        MR::startSound(mBindActor, "SE_PV_JUMP_S");
     }
 
     if (MR::isStep(this, mFallMotionStartStep)) {
-        MR::startBckWithInterpole(_8C, "Fall", 20);
+        MR::startBckWithInterpole(mBindActor, "Fall", 20);
     }
 }
 
 void ScenarioStarter::turnBindHead(const Vec3f& rHead, f32 rate) {
-    MR::turnQuatYDirRad(&_A8, _A8, _90, PI);
+    MR::turnQuatYDirRad(&mBindQuat, mBindQuat, mHeadDir, PI);
     Vec3f head;
-    _A8.getYDir(head);
+    mBindQuat.getYDir(head);
     Quat4f rotation;
     rotation.setRotate(head, rHead, rate);
-    _A8.mult(rotation);
-    _A8.normalize();
+    mBindQuat.mult(rotation);
+    mBindQuat.normalize();
 }
 
 void ScenarioStarter::calcShootMotionTime() {
-    s32 startTime = MR::getBckFrameMax(_8C, "SpaceFlyStart");
-    MR::getBckFrameMax(_8C, "SpaceFlyLoop");
-    s32 endTime = MR::getBckFrameMax(_8C, "SpaceFlyEnd");
+    s32 startTime = MR::getBckFrameMax(mBindActor, "SpaceFlyStart");
+    s32 endTime = MR::getBckFrameMax(mBindActor, "SpaceFlyEnd");
 
     if (mFlightTime < 20) {
         mFlyMotionStartStep = -1;
-        _F8 = -1;
+        mFlyEndStep = -1;
         mFallMotionStartStep = 0;
         return;
     }
 
     if (mFlightTime < endTime + 20) {
         mFlyMotionStartStep = -1;
-        _F8 = 0;
+        mFlyEndStep = 0;
         mFallMotionStartStep = -1;
         return;
     }
 
-    _F8 = mFlightTime - (endTime + 20);
+    mFlyEndStep = mFlightTime - (endTime + 20);
     mFallMotionStartStep = mFlightTime - 20;
     s32 flyTime = 0.2f * mFlightTime;
     if (flyTime > 90) {
@@ -292,23 +292,23 @@ void ScenarioStarter::calcShootMotionTime() {
     }
 
     mFlyMotionStartStep = startTime != 0 ? startTime * (flyTime / startTime) : 0;
-    if (_F8 <= mFlyMotionStartStep) {
+    if (mFlyEndStep <= mFlyMotionStartStep) {
         mFlyMotionStartStep = 0;
     }
 
-    f32 duration = 0.05f * (_F8 - mFlyMotionStartStep);
-    _E4 = 0.0f;
-    _E8 = static_cast< s32 >(duration / TWO_PI) * TWO_PI;
+    f32 duration = 0.05f * (mFlyEndStep - mFlyMotionStartStep);
+    mSpinAngle = 0.0f;
+    mSpinAngleMax = static_cast< s32 >(duration / TWO_PI) * TWO_PI;
 }
 
 bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (_8C == nullptr && MR::isMsgAutoRushBegin(msg) && isNerve(GET_NERVE(ScenarioStarter, ScenarioStarterWaitToStart))) {
-        _8C = MR::getSensorHost(pSender);
+    if (mBindActor == nullptr && MR::isMsgAutoRushBegin(msg) && isNerve(GET_NERVE(ScenarioStarter, ScenarioStarterWaitToStart))) {
+        mBindActor = MR::getSensorHost(pSender);
         setNerve(GET_NERVE(ScenarioStarter, ScenarioStarterCinemaFrameBlank));
         return true;
     }
 
-    if (_8C != nullptr && MR::isMsgUpdateBaseMtx(msg)) {
+    if (mBindActor != nullptr && MR::isMsgUpdateBaseMtx(msg)) {
         updateBindActorMtx();
         return true;
     }
@@ -322,7 +322,7 @@ bool ScenarioStarter::trySkipTrigger() const {
         result = false;
     } else {
         result = false;
-        if (MR::isGreaterStep(this, 10) && MR::isLessStep(this, _F8) && MR::testSystemPadTriggerDecide()) {
+        if (MR::isGreaterStep(this, 10) && MR::isLessStep(this, mFlyEndStep) && MR::testSystemPadTriggerDecide()) {
             result = true;
         }
     }

@@ -18,7 +18,7 @@ public:
     bool calcLocalPoint(const Vec3f&, Vec3f*);
     void createReduceMap(u16);
     void digPlayerWalk(const Vec3f&);
-    void digDpd(const Vec3f&);
+    void digPointer(const Vec3f&);
     bool doErase(const Vec3f&, f32, f32);
     f32 doMove(Vec2f, Vec2f, f32, f32);
     void doErase(Vec2f, f32, f32);
@@ -42,9 +42,7 @@ public:
     u8* mBaseDepth;
     f32* mReduceMap;
     u16 mReduceMapSize;
-    Vec2f mLastDpdPoint;
-    u16 _E4;
-    f32 _E8;
+    Vec2f mLastPointerPoint;
     f32 mWalkingResist;
     u16 mResistFrames;
     u16 mCheckCount;

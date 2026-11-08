@@ -16,8 +16,8 @@
 
 SkeletalFishBossBattleDirector::SkeletalFishBossBattleDirector(SkeletalFishBoss* pBoss) : NameObj("スカルシャークボス戦指揮") {
     mFishBoss = pBoss;
-    _90 = 0;
-    _D4 = 0;
+    mColumnNum = 0;
+    mClipActorNum = 0;
     MR::connectToSceneEnemyMovement(this);
 
     for (s32 i = 0; i < ARRAY_SIZE(mGuardModels); i++) {
@@ -35,8 +35,8 @@ void SkeletalFishBossBattleDirector::initiate() {
 
     for (s32 i = 0; i < group->getObjNum(); i++) {
         if (strcmp(group->getActor(i)->getName(), "海底火山巨大石柱") == 0 || strcmp(group->getActor(i)->getName(), "海底火山石柱（小）") == 0) {
-            mColumns.at(_90) = static_cast< SubmarineVolcanoBigColumn* >(group->getActor(i));
-            _90++;
+            mColumns.at(mColumnNum) = static_cast< SubmarineVolcanoBigColumn* >(group->getActor(i));
+            mColumnNum++;
         }
 
         if (strcmp(group->getActor(i)->getName(), "羽虫Ｓ")) {
@@ -45,9 +45,9 @@ void SkeletalFishBossBattleDirector::initiate() {
             }
         }
 
-        _94.at(_D4) = group->getActor(i);
-        MR::invalidateClipping(_94[_D4]);
-        _D4++;
+        mClipActors.at(mClipActorNum) = group->getActor(i);
+        MR::invalidateClipping(mClipActors[mClipActorNum]);
+        mClipActorNum++;
     }
 
     killBirdLouse();
@@ -75,7 +75,7 @@ void SkeletalFishBossBattleDirector::movement() {
 }
 
 void SkeletalFishBossBattleDirector::tryColumnCollision(HitSensor* pSensor) {
-    for (s32 i = 0; i < _90; i++) {
+    for (s32 i = 0; i < mColumnNum; i++) {
         CollisionParts* parts = MR::getCollisionParts(mColumns[i]);
 
         if (parts != nullptr) {
@@ -101,7 +101,7 @@ void SkeletalFishBossBattleDirector::pauseOffCast() {
         }
     }
 
-    for (s32 i = 0; i < _90; i++) {
+    for (s32 i = 0; i < mColumnNum; i++) {
         mColumns[i]->pauseOff();
     }
 }
@@ -121,14 +121,14 @@ void SkeletalFishBossBattleDirector::killGuard() {
 }
 
 void SkeletalFishBossBattleDirector::appearBirdLouse() {
-    for (s32 i = 0; i < _D4; i++) {
-        _94[i]->endClipped();
+    for (s32 i = 0; i < mClipActorNum; i++) {
+        mClipActors[i]->endClipped();
     }
 }
 
 void SkeletalFishBossBattleDirector::killBirdLouse() {
-    for (s32 i = 0; i < _D4; i++) {
-        _94[i]->startClipped();
+    for (s32 i = 0; i < mClipActorNum; i++) {
+        mClipActors[i]->startClipped();
     }
 }
 

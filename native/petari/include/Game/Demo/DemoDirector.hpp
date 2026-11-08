@@ -36,14 +36,14 @@ public:
 
     bool mIsActive;
     DemoExecutor* mExecutor;
-    bool _14;
-    DemoCastGroupHolder* _18;
+    bool mIsWaitingCamera;
+    DemoCastGroupHolder* mCastGroupHolder;
     DemoCastGroupHolder* mCastSubGroupHolder;
-    DemoSimpleCastHolder* _20;
+    DemoSimpleCastHolder* mSimpleCastHolder;
     ResourceHolder* mResourceHolder;
     DemoStartRequestHolder* mStartRequestHolder;
-    NameObj* _2C;
-    const char* _30;
-    s32 _34;
-    bool _38;
+    NameObj* mDemoStarter;
+    const char* mDemoName;
+    s32 mMovementType;
+    bool mUseCinemaFrame;
 };

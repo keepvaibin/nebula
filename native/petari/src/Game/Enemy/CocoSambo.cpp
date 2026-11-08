@@ -63,7 +63,7 @@ namespace NrvCocoSambo {
     NEW_NERVE(CocoSamboNrvRecover, CocoSambo, Recover);
     NEW_NERVE(CocoSamboNrvPressY, CocoSambo, PressY);
     NEW_NERVE(CocoSamboNrvBlow, CocoSambo, Blow);
-    NEW_NERVE_ONEND(CocoSamboNrvDpdPointing, CocoSambo, DpdPointing, DpdPointing);
+    NEW_NERVE_ONEND(CocoSamboNrvPointerAiming, CocoSambo, PointerAiming, PointerAiming);
 };  // namespace NrvCocoSambo
 
 inline bool CocoSambo::isSensorTryToFallHead(HitSensor* pSensor) {
@@ -296,7 +296,7 @@ void CocoSamboHead::exeBlow() {
 
 CocoSambo::CocoSambo(const char* pName)
     : LiveActor(pName), mHead(), mHitEffectScale(gZeroVec), mFrontVec(0.0f, 0.0f, 1.0f), mUpVec(0.0f, 1.0f, 0.0f), mPlayerSearchDistance(1800.0f),
-      mAnimScaleParam(), mAnimScaleController(), mDpdPointingEndNerve(), mPointingActorArray() {
+      mAnimScaleParam(), mAnimScaleController(), mPointerAimingEndNerve(), mPointingActorArray() {
 }
 
 void CocoSambo::init(const TableIter& rIter) {
@@ -306,7 +306,7 @@ void CocoSambo::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSensor();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::setEffectHostSRT(this, "Hit", &mHitEffectScale, nullptr, nullptr);
     initSound(4, false);
     MR::initShadowFromCSV(this, "Shadow");
@@ -350,7 +350,7 @@ void CocoSambo::kill() {
 bool CocoSambo::tryToFallHead(const HitSensor* pReceiver, const HitSensor* pSender) {
     if (!(isNerve(GET_NERVE(CocoSambo, CocoSamboNrvAppear)) || isNerve(GET_NERVE(CocoSambo, CocoSamboNrvWait)) ||
           isNerve(GET_NERVE(CocoSambo, CocoSamboNrvAttack)) || isNerve(GET_NERVE(CocoSambo, CocoSamboNrvAttackInterval)) ||
-          isNerve(GET_NERVE(CocoSambo, CocoSamboNrvDpdPointing)))) {
+          isNerve(GET_NERVE(CocoSambo, CocoSamboNrvPointerAiming)))) {
         return false;
     }
 
@@ -385,7 +385,7 @@ bool CocoSambo::tryStarPieceReflect() {
         return false;
     }
 
-    if (!isNerve(GET_NERVE(CocoSambo, CocoSamboNrvDpdPointing))) {
+    if (!isNerve(GET_NERVE(CocoSambo, CocoSamboNrvPointerAiming))) {
         mAnimScaleController->startHitReaction();
     }
 
@@ -400,7 +400,7 @@ void CocoSambo::calcAndSetBaseMtx() {
     Pos3f mtx;
     MR::makeMtxUpFrontPos(&mtx, mUpVec, mFrontVec, mPosition);
     MR::setBaseTRMtx(this, mtx);
-    MR::setBaseScale(this, mAnimScaleController->_C * mScale);
+    MR::setBaseScale(this, mAnimScaleController->mScale * mScale);
 }
 
 void CocoSambo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -476,10 +476,10 @@ void CocoSambo::dirToPlayer(f32 angle) {
     }
 }
 
-bool CocoSambo::tryDpdPointing(const Nerve* pNerve) {
+bool CocoSambo::tryPointerAiming(const Nerve* pNerve) {
     if (isPointing()) {
-        mDpdPointingEndNerve = pNerve;
-        setNerve(GET_NERVE(CocoSambo, CocoSamboNrvDpdPointing));
+        mPointerAimingEndNerve = pNerve;
+        setNerve(GET_NERVE(CocoSambo, CocoSamboNrvPointerAiming));
         return true;
     }
 
@@ -535,7 +535,7 @@ void CocoSambo::exeAppear() {
     }
 
     dirToPlayer(1.0f);
-    if (!MR::isGreaterStep(this, ::cAppearLandFrame) || !tryDpdPointing(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
+    if (!MR::isGreaterStep(this, ::cAppearLandFrame) || !tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
         MR::setNerveAtBckStopped(this, GET_NERVE(CocoSambo, CocoSamboNrvWait));
     }
 }
@@ -550,7 +550,7 @@ void CocoSambo::exeWait() {
     }
 
     dirToPlayer(1.0f);
-    if (tryDpdPointing(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
+    if (tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
         return;
     }
 
@@ -586,7 +586,7 @@ void CocoSambo::exeAttack() {
         dirToPlayer(1.0f);
     }
 
-    if (!tryDpdPointing(GET_NERVE(CocoSambo, CocoSamboNrvAttack))) {
+    if (!tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvAttack))) {
         if (MR::checkPassBckFrame(this, 115.0f)) {
             MR::emitEffect(mHead, "CocoSamboAttack");
             MR::tryRumblePadStrong(this, PLAYER_1);
@@ -603,7 +603,7 @@ void CocoSambo::exeAttackInterval() {
     }
 
     dirToPlayer(1.0f);
-    if (!tryDpdPointing(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
+    if (!tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvWait))) {
         MR::setNerveAtStep(this, GET_NERVE(CocoSambo, CocoSamboNrvWait), 60);
     }
 }
@@ -702,7 +702,7 @@ void CocoSambo::exeBlow() {
     }
 }
 
-void CocoSambo::exeDpdPointing() {
+void CocoSambo::exePointerAiming() {
     if (MR::isFirstStep(this)) {
         MR::setBckRate(this, 0.0f);
         MR::setBckRate(mHead, 0.0f);
@@ -710,17 +710,17 @@ void CocoSambo::exeDpdPointing() {
         MR::emitEffect(this, "Touch2");
         MR::emitEffect(this, "Touch3");
         MR::emitEffect(mHead, "Touch");
-        mAnimScaleController->startDpdHitVibration();
-        MR::startDPDHitSound();
+        mAnimScaleController->startPointerHitVibration();
+        MR::startPointerHitSound();
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
     if (!isPointing()) {
-        setNerve(mDpdPointingEndNerve);
+        setNerve(mPointerAimingEndNerve);
     }
 }
 
-void CocoSambo::endDpdPointing() {
+void CocoSambo::endPointerAiming() {
     MR::setBckRate(this, 1.0f);
     MR::setBckRate(mHead, 1.0f);
     MR::deleteEffect(this, "Touch1");

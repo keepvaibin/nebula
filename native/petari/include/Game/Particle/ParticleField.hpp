@@ -32,9 +32,7 @@ public:
     void prepare(EmitterWork*, ParticleField*);
     void calc(EmitterWork*, ParticleField*, ParticleCore*);
 
-    Vec3f field_0x10;
-    Vec3f field_0x1c;
-    Vec3f field_0x28;
+    Mtx mRotation;  // one step about the field axis in world space; translation column 0
 };
 
 class FieldRandom : public FieldBase {
@@ -93,9 +91,10 @@ public:
     void prepare(EmitterWork*, ParticleField*);
     void calc(EmitterWork*, ParticleField*, ParticleCore*);
 
-    Vec3f field_0x10;
-    Vec3f field_0x1c;
-    Vec3f field_0x28;
+    // World-space unit frame: toward the ring from the axis, the axis, and around it.
+    Vec3f mRadial;
+    Vec3f mAxis;
+    Vec3f mTangent;
 };
 
 class FieldVortex : public FieldBase {
@@ -106,9 +105,9 @@ public:
     void prepare(EmitterWork*, ParticleField*);
     void calc(EmitterWork*, ParticleField*, ParticleCore*);
 
-    Vec3f field_0x10;
-    f32 field_0x1c;
-    f32 field_0x20;
+    Vec3f mAxis;
+    f32 mRadiusSq;  // inside it the strength blends from mag at the axis to mag-random at the edge
+    f32 mInvRadiusSq;
 };
 
 class FieldAir : public FieldBase {

@@ -174,7 +174,7 @@ void GameSequenceProgress::requestGalaxyMove(const GalaxyMoveArgument& rMoveArg)
     pController->mNextSceneControlInfo.setScene("Game");
     pController->mNextSceneControlInfo.setStage(moveArg.mStageName);
     pController->mNextSceneControlInfo.mScenarioNo = moveArg.mScenarioNo;
-    pController->mNextSceneControlInfo.mSelectedScenarioNo = moveArg._C;
+    pController->mNextSceneControlInfo.mSelectedScenarioNo = moveArg.mSelectedScenarioNo;
     pController->mNextSceneControlInfo.setStartIdInfo(moveArg.mIDInfo);
     pController->requestChangeScene();
 
@@ -369,11 +369,11 @@ void GameSequenceProgress::setMinFrameBeforeStartNextStage(const GalaxyMoveArgum
 }
 
 bool GameSequenceProgress::isLuigiLeftSupply() {
-    return mLuigiLeftSupplier->_0;
+    return mLuigiLeftSupplier->mIsLuigiLeft;
 }
 
 void GameSequenceProgress::offLuigiLeftSupply() {
-    mLuigiLeftSupplier->_0 = false;
+    mLuigiLeftSupplier->mIsLuigiLeft = false;
 }
 
 void GameSequenceProgress::countDownGameEventValueFromNewPowerStar() {

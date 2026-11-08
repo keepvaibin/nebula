@@ -17,18 +17,18 @@ public:
     enum DeleteEffectType { DeleteEffectType_0, DeleteEffectType_1};
 
     DemoStartInfo();
-    DemoStartInfo& operator=(const DemoStartInfo&);
+    DemoStartInfo& operator=(const DemoStartInfo&) = default;
 
-    LiveActor* _0;
-    LayoutActor* _4;
-    NerveExecutor* _8;
-    NameObj* _C;
-    NameObj* _10;
+    LiveActor* mActor;
+    LayoutActor* mLayout;
+    NerveExecutor* mNerveExecutor;
+    NameObj* mNameObj;
+    NameObj* mNerveExecutorHost;
     DemoExecutor* mDemoExecutor;
     const char* mDemoName;
-    const char* _1C;
-    const Nerve* _20;
-    u32 _24;
+    const char* mPartName;
+    const Nerve* mDemoNerve;
+    u32 mMovementType;
     DemoType mDemoType;
     CinemaFrameType mFrameType;
     StarPointerType mPointerType;

@@ -10,10 +10,10 @@ class LiveActor;
 namespace MR {
 
     struct ActorMoveParam {
-        f32 _0;
-        f32 _4;
-        f32 _8;
-        f32 _C;
+        f32 mMoveSpeed;
+        f32 mGravity;
+        f32 mDamp;
+        f32 mTurnDegree;
     };
 
     f32 calcDistance(const HitSensor*, const HitSensor*, Vec3f*);
@@ -147,15 +147,15 @@ namespace MR {
     f32 turnDirectionAndGravityH(Quat4f*, const LiveActor*, const Vec3f&, f32, f32);
     f32 turnDirectionAndGravityH(LiveActor*, const Vec3f&, f32, f32);
     void turnDirectionToGround(const LiveActor*, Vec3f*);
-    void moveAndTurnToDirection(LiveActor*, Vec3f*, const Vec3f&, f32, f32, f32, f32);
-    void moveAndTurnToTarget(LiveActor*, Vec3f*, const Vec3f&, f32, f32, f32, f32);
-    void moveAndTurnToPlayer(LiveActor*, Vec3f*, f32, f32, f32, f32);
-    void flyAndTurnAlongRailSearchingPlayer(LiveActor*, Vec3f*, f32, f32, f32, f32, f32, bool);
-    void escapeFromPlayer(LiveActor*, Vec3f*, f32, f32, f32, f32);
-    void moveAndTurnToDirection(LiveActor*, const Vec3f&, f32, f32, f32, f32);
-    void moveAndTurnToTarget(LiveActor*, const Vec3f&, f32, f32, f32, f32);
-    void moveAndTurnToPlayer(LiveActor*, f32, f32, f32, f32);
-    void moveAndTurnAlongRail(LiveActor*, f32, f32, f32, f32, f32, bool*);
+    void moveAndTurnToDirection(LiveActor*, Vec3f*, const Vec3f&, const ActorMoveParam&);
+    void moveAndTurnToTarget(LiveActor*, Vec3f*, const Vec3f&, const ActorMoveParam&);
+    void moveAndTurnToPlayer(LiveActor*, Vec3f*, const ActorMoveParam&);
+    void flyAndTurnAlongRailSearchingPlayer(LiveActor*, Vec3f*, f32, const ActorMoveParam&, bool);
+    void escapeFromPlayer(LiveActor*, Vec3f*, const ActorMoveParam&);
+    void moveAndTurnToDirection(LiveActor*, const Vec3f&, const ActorMoveParam&);
+    void moveAndTurnToTarget(LiveActor*, const Vec3f&, const ActorMoveParam&);
+    void moveAndTurnToPlayer(LiveActor*, const ActorMoveParam&);
+    void moveAndTurnAlongRail(LiveActor*, f32, const ActorMoveParam&, bool*);
 
     // NOTE: symbols dont exist for these, however the exact logic is used various places
     // If a suitable symbol is found, these can be replaced.

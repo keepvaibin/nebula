@@ -49,9 +49,9 @@ OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
     mNearestDir.y = 0.0f;
     mNearestDir.z = 1.0f;
     mRingDrawer = nullptr;
-    _108.x = 0.0f;
-    _108.y = 0.0f;
-    _108.z = 0.0f;
+    mClippingCenter.x = 0.0f;
+    mClippingCenter.y = 0.0f;
+    mClippingCenter.z = 0.0f;
     mNearestToWatchCam.x = 0.0f;
     mNearestToWatchCam.y = 0.0f;
     mNearestToWatchCam.z = 0.0f;
@@ -146,8 +146,8 @@ bool OceanRing::calcWaterInfo(const Vec3f& a1, const Vec3f& a2, WaterInfo* pInfo
     v11 *= PI;
     v11 *= 0.5f;
 
-    pInfo->_4 = MR::cos(v11) * v9;
-    pInfo->_4 += v10;
+    pInfo->mDepth = MR::cos(v11) * v9;
+    pInfo->mDepth += v10;
 
     pInfo->mCamWaterDepth = -v10;
 
@@ -520,9 +520,9 @@ void OceanRing::calcClippingBox() {
     Vec3f v7(mWidthMax);
     mClippingBox.i.sub(v7);
     mClippingBox.f.add(v7);
-    _108.lerp(mClippingBox.f, mClippingBox.i, 0.5f);
-    f32 dist = _108.distance(mClippingBox.i);
-    MR::setClippingTypeSphere(this, (100.0f + dist), &_108);
+    mClippingCenter.lerp(mClippingBox.f, mClippingBox.i, 0.5f);
+    f32 dist = mClippingCenter.distance(mClippingBox.i);
+    MR::setClippingTypeSphere(this, (100.0f + dist), &mClippingCenter);
     MR::setClippingFarMax(this);
 }
 

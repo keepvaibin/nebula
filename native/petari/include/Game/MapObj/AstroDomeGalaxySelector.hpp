@@ -35,5 +35,5 @@ public:
     GalaxySelectBackButton* mBackButton;
     GalaxySelectInfo* mInfo;
     GalaxyConfirmLayout* mConfirmLayout;
-    bool _9C;
+    bool mIsBackButtonPointed;
 };

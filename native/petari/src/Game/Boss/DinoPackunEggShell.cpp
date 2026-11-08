@@ -9,8 +9,8 @@ namespace NrvDinoPackunEggshell {
 };  // namespace NrvDinoPackunEggshell
 
 DinoPackunEggShell::DinoPackunEggShell(const char* pName, HitSensor* pSensor, MtxPtr mtx) : LiveActor(pName) {
-    _8C = pSensor;
-    _90 = mtx;
+    mSensor = pSensor;
+    mFollowMtx = mtx;
 }
 
 void DinoPackunEggShell::init(const TableIter& rIter) {
@@ -18,7 +18,7 @@ void DinoPackunEggShell::init(const TableIter& rIter) {
     initModelManagerWithAnm("DinoPackunEggShell", nullptr, false);
     MR::connectToSceneEnemyDecoration(this);
     MR::initLightCtrl(this);
-    MR::initCollisionParts(this, "DinoPackunEggShell", _8C, nullptr);
+    MR::initCollisionParts(this, "DinoPackunEggShell", mSensor, nullptr);
     initNerve(GET_NERVE(DinoPackunEggshell, DinoPackunEggShellNrvWait));
     makeActorAppeared();
     MR::startBva(this, "Normal");
@@ -26,12 +26,12 @@ void DinoPackunEggShell::init(const TableIter& rIter) {
 }
 
 void DinoPackunEggShell::control() {
-    MR::extractMtxTrans(_90, &mPosition);
+    MR::extractMtxTrans(mFollowMtx, &mPosition);
 }
 
 void DinoPackunEggShell::calcAndSetBaseMtx() {
     Pos3f mtx;
-    mtx.setInline(_90);
+    mtx.setInline(mFollowMtx);
     mtx.normalizeBasis();
     MR::setBaseTRMtx(this, mtx);
     MR::setBaseScale(this, mScale);

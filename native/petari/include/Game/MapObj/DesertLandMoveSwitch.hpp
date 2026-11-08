@@ -32,9 +32,9 @@ public:
     CollisionParts* mCollisionParts;
     SpringValue* mSpringValue;
     MapObjConnector* mMapObjConnector;
-    bool _98;
-    bool _99;
-    bool _9A;
-    s32 _9C;
-    const char* _A0;
+    bool mIsHipDropped;
+    bool mWasOnPlayer;
+    bool mIsOnPlayer;
+    s32 mTimer;
+    const char* mObjName;
 };

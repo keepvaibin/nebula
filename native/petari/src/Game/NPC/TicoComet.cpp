@@ -40,29 +40,28 @@ namespace {
     };
 
     TicoEatParam::TicoEatParam() : AnimScaleParam() {
-        _20 = 0.12f;
-        _24 = 0.12f;
-        _28 = 0.9f;
+        mHitReactionVelocity = 0.12f;
+        mHitReactionSpring = 0.12f;
+        mHitReactionDamping = 0.9f;
     }
 
     static TicoEatParam sParam;
 };  // namespace
 
 TicoEat::TicoEat(const char* pName) : Tico(pName) {
-    _190 = 0;
-    _194 = 0;
-    _198 = 0;
+    mStarPieceNeed = 0;
+    mStarPieceLeft = 0;
 }
 
 void TicoEat::init(const TableIter& rIter) {
     mScaleController = new AnimScaleController(&::sParam);
     mReactionNerve = GET_NERVE(TicoEat, TicoEatNrvReaction);
-    _178 = MR::getJointMtx(this, "Center");
+    mLightJointMtx = MR::getJointMtx(this, "Center");
     mParam.setMoveAction("Wait", "Wait");
     mParam.setTalkAction("Talk", "Talk");
-    mParam._4 = 3000.0f;
+    mParam.mNearDistance = 3000.0f;
     setDefaults();
-    _12C = 1000.0f;
+    mSwingReactDist = 1000.0f;
 }
 
 void TicoEat::control() {
@@ -75,13 +74,13 @@ void TicoEat::control() {
 
 bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceGift(msg)) {
-        if (_198 == _194) {
+        if (mStarPieceLeft == mStarPieceNeed) {
             MR::startAction(this, "Eat0");
             MR::startBva(this, "Big0");
         }
 
-        f32 val = (0.66f * _194);
-        if (_198 == (s32)val) {
+        f32 val = (0.66f * mStarPieceNeed);
+        if (mStarPieceLeft == (s32)val) {
             f32 frame = MR::getBckFrame(this);
             MR::startAction(this, "Eat1");
             MR::startBva(this, "Big1");
@@ -89,8 +88,8 @@ bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
             mScaleController->startHitReaction();
         }
 
-        val = (0.33f * _194);
-        if (_198 == (s32)val) {
+        val = (0.33f * mStarPieceNeed);
+        if (mStarPieceLeft == (s32)val) {
             f32 frame = MR::getBckFrame(this);
             MR::startAction(this, "Eat2");
             MR::startBva(this, "Big2");
@@ -98,7 +97,7 @@ bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
             mScaleController->startHitReaction();
         }
 
-        _198--;
+        mStarPieceLeft--;
         return true;
     }
 
@@ -106,8 +105,8 @@ bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 }
 
 void TicoEat::initStarPiece(s32 num) {
-    _194 = num;
-    _198 = num;
+    mStarPieceNeed = num;
+    mStarPieceLeft = num;
     MR::declareStarPieceReceiver(this, num);
 }
 
@@ -125,7 +124,7 @@ bool TicoEat::tryEat() {
 }
 
 bool TicoEat::hasEnoughStarPiece() const {
-    return MR::getStarPieceNum() >= _194;
+    return MR::getStarPieceNum() >= mStarPieceNeed;
 }
 
 bool TicoEat::eventFunc(u32 event) {
@@ -145,7 +144,7 @@ bool TicoEat::eventFunc(u32 event) {
 }
 
 void TicoEat::exeReaction() {
-    if (MR::isFirstStep(this) && (_D8 || _DB)) {
+    if (MR::isFirstStep(this) && (mIsTrampledStart || mIsReactionStart)) {
         mScaleController->startHitReaction();
     }
 
@@ -162,7 +161,7 @@ void TicoEat::exeEatPre() {
         MR::startBva(this, "Big0");
     }
 
-    if (MR::turnQuatZDirRad(&_A0, _A0, -MR::getCamZdir(), MR::toRadian(2.0f))) {
+    if (MR::turnQuatZDirRad(&mPoseQuat, mPoseQuat, -MR::getCamZdir(), MR::toRadian(2.0f))) {
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatNow));
     }
 }
@@ -171,7 +170,7 @@ void TicoEat::exeEatNow() {
     if (MR::isFirstStep(this)) {
     }
 
-    if (_198 != 0 && MR::isIntervalStep(this, 100 / _194)) {
+    if (mStarPieceLeft != 0 && MR::isIntervalStep(this, 100 / mStarPieceNeed)) {
         MR::giftStarPieceToTarget(getSensor("Mouth"), 1);
     }
 
@@ -179,15 +178,15 @@ void TicoEat::exeEatNow() {
     MR::startLevelSound(this, "SE_SM_LV_TICOFAT_EATING");
     MR::startLevelSound(this, "SE_SM_LV_TICOFAT_EATING", 0);
 
-    if (_198 == 0) {
+    if (mStarPieceLeft == 0) {
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatPst));
     }
 }
 
 void TicoEat::exeEatPst() {
     if (MR::isGreaterEqualStep(this, 4)) {
-        mParam._1C = "Joy2";
-        mParam._20 = "Joy2";
+        mParam.mTalkAction = "Joy2";
+        mParam.mTalkTurnAction = "Joy2";
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatEnd));
     }
 }
@@ -208,19 +207,19 @@ void TicoComet::init(const TableIter& rIter) {
     caps.mSoundSize = 6;
     caps.mSensorMax = 2;
     caps.mSensorJoint = "Center";
-    caps._6C = "Center";
+    caps.mPointerJoint = "Center";
     caps.mBinder = 0;
     initialize(rIter, caps);
     MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::getNPCItemData(&item, 0);
     equipment(item, true);
-    MR::startAction(_94, "LeftRotate");
-    MR::startAction(_98, "RightRotate");
+    MR::startAction(mGoods0, "LeftRotate");
+    MR::startAction(mGoods1, "RightRotate");
     MR::startBtk(this, "TicoComet");
-    _194 = 20;
-    _198 = 20;
+    mStarPieceNeed = 20;
+    mStarPieceLeft = 20;
     MR::declareStarPieceReceiver(this, 20);
-    MR::setMessageArg(mMsgCtrl, _194);
+    MR::setMessageArg(mMsgCtrl, mStarPieceNeed);
     MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::branchFunc));
     MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::eventFunc));
     MR::setDistanceToTalk(mMsgCtrl, 350.0f);
@@ -233,11 +232,11 @@ void TicoComet::init(const TableIter& rIter) {
     MR::startBrk(this, "Normal");
     MR::setBrkFrameAndStop(this, 0.0f);
     TicoEat::init(rIter);
-    _17C.set(0xC8, 0, 0xFF, 0xFF);
+    mLightColor.set(0xC8, 0, 0xFF, 0xFF);
 }
 
 bool TicoComet::branchFunc(u32 val) {
-    return MR::getStarPieceNum() >= _194;
+    return MR::getStarPieceNum() >= mStarPieceNeed;
 }
 
 bool TicoComet::tryDemo() {
@@ -266,21 +265,21 @@ bool TicoComet::eventFunc(u32 event) {
 }
 
 void TicoComet::startReactionSound() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_TICOCOMET_TRAMPLED");
     }
 
     if (isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_TICOCOMET_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SM_TICOCOMET_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_TICOCOMET_STAR_PIECE_HIT");
     }
 }
@@ -306,8 +305,8 @@ void TicoComet::exeDemoFade() {
     }
 
     if (!MR::isWipeActive()) {
-        mParam._1C = "Talk";
-        mParam._20 = "Talk";
+        mParam.mTalkAction = "Talk";
+        mParam.mTalkTurnAction = "Talk";
         MR::forceOpenWipeWhiteFade();
         MR::forceToNextStateGalaxyCometScheduler();
         MR::startGalaxyMapLayoutForTicoComet();
@@ -315,7 +314,7 @@ void TicoComet::exeDemoFade() {
         MR::startAction(this, "Wait");
         MR::startBckNoInterpole(this, "Wait");
         MR::clearGotCountStarPieceReceiver(this);
-        _198 = _194;
+        mStarPieceLeft = mStarPieceNeed;
         popAndPushNerve(GET_NERVE(TicoComet, TicoCometNrvDemoEnd));
     }
 }

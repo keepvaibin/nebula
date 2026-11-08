@@ -346,28 +346,28 @@ namespace MR {
         if (pCtrl == nullptr) {
             return true;
         }
-        return pCtrl->_18 == 0;
+        return pCtrl->mTalkStateKind == 0;
     }
 
     bool isTalkEntry(const TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        return pCtrl->_18 == 1;
+        return pCtrl->mTalkStateKind == 1;
     }
 
     bool isTalkTalking(const TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        return pCtrl->_18 == 3;
+        return pCtrl->mTalkStateKind == 3;
     }
 
     bool isTalkEnableEnd(const TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        return pCtrl->_18 == 4;
+        return pCtrl->mTalkStateKind == 4;
     }
 
     void clearTalkState(TalkMessageCtrl* pCtrl) {

@@ -31,8 +31,8 @@ public:
     void endStampDeath();
     void exeHitBlow();
     void endHitBlow();
-    void exeDpdPointed();
-    void endDpdPointed();
+    void exePointerAimed();
+    void endPointerAimed();
     void exeNoPowerStart();
     void exeNoPowerLand();
     void exeNoPowerWait();
@@ -40,6 +40,6 @@ public:
 
     SpinHitController* mSpinHitController;
     AnimScaleController* mScaleController;
-    Vec3f _94;
-    Vec3f _A0;
+    Vec3f mFront;
+    Vec3f mJumpPos;
 };

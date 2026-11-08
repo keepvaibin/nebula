@@ -6,7 +6,7 @@ class NameObj;
 typedef NameObj* (*CreatorFuncPtr)(const char*);
 
 struct Model2CreateFunc {
-    const char* _0;
+    const char* mNamePrefix;  // set: matches names that start with it; null: mArchiveName exactly
     const char* mArchiveName;
     CreatorFuncPtr mCreatorFunc;
 };

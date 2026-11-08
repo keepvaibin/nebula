@@ -21,12 +21,12 @@ public:
     bool isCameraNormal() const;
     bool isCameraEvent() const;
 
-    u8* _0;
+    u8* mMessage;
     u16 mCameraSetID;
-    s8 _6;
+    s8 mSoundId;
     u8 mCameraType;
     u8 mTalkType;
     u8 mBalloonType;
-    s8 _A;
-    s8 _B;
+    s8 mAreaId;
+    s8 mAlreadyReadId;
 };

@@ -32,7 +32,7 @@ void PenguinRacerLeader::init(const TableIter& rIter) {
     initSound(8, false);
     initShadow();
     initBind();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::onCalcGravity(this);
 
     initColor(rIter);

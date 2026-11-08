@@ -4,6 +4,7 @@ $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scratch=Join-Path $env:TEMP ('nebula-updater-tests-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $scratch | Out-Null
 $stub=Join-Path $scratch 'BuildInfo.cs'
+$storeVersion=[uint32](Get-Content -LiteralPath (Join-Path $repo 'runtime\include\galaxy\store_version.inc') -Raw).Trim()
 $key=(Get-Content -LiteralPath (Join-Path $repo 'installer\release-public-key.xml') -Raw).Trim().Replace('"','\"')
 @"
 namespace Nebula { internal static class BuildInfo {
@@ -11,6 +12,7 @@ namespace Nebula { internal static class BuildInfo {
  public const string Commit="source-probe";
  public const string Repository="keepvaibin/nebula";
  public const string ReleasePublicKeyXml="$key";
+ public const uint StoreVersion=$storeVersion;
 }}
 "@ | Set-Content -LiteralPath $stub
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Common') -Filter *.cs | ForEach-Object FullName)+@(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Setup') -Filter *.cs | ForEach-Object FullName)+@($stub,(Join-Path $PSScriptRoot 'BetaChannelTests.cs'))

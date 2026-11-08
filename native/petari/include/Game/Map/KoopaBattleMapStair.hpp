@@ -41,9 +41,8 @@ public:
     s32 mType;   // Obj_arg2
     bool mIsBig;
     bool mIsTurn;
-    bool _A6;
-    s32 _A8;
-    Vec3f _AC;
+    bool mIsKoopaAttack;
+    Vec3f mTargetPos;
     s32 mWaitFallStep;  // Obj_arg3
     s32 mFallStep;      // Obj_arg4
 };

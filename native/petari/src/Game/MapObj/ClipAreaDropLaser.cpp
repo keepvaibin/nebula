@@ -34,7 +34,7 @@ void ClipAreaDropLaser::init(const TableIter& rIter) {
     MR::moveCoordAndTransToRailStartPoint(this);
     mSpeed = 20.0f;
     MR::getPlacementArg0NoInit(rIter, &mSpeed);
-    initEffectKeeper(0, "ClipAreaDropLaser", false);
+    initEffectKeeper(0, "ClipAreaDropLaser");
     initSound(4, false);
     initNerve(GET_NERVE(ClipAreaDropLaser, ClipAreaDropLaserNrvMove));
     MR::invalidateClipping(this);

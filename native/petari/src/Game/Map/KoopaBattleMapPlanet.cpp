@@ -26,9 +26,9 @@ namespace NrvKoopaBattleMapPlanet {
 KoopaBattleMapPlanet::~KoopaBattleMapPlanet() {
 }
 
-KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool b1, bool b2, bool b3)
-    : LiveActor(pName), mModelName(pModelName), _C0(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(), _DC(b1),
-      _DD(b2), _DE(b3) {
+KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool b2, bool b3)
+    : LiveActor(pName), mModelName(pModelName), mRotateMoment(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(),
+      mIsFinalPlanet(b2), mIsNoPlate(b3) {
     mBaseMtx.identity();
 }
 
@@ -44,7 +44,7 @@ void KoopaBattleMapPlanet::init(const TableIter& rIter) {
 
     initHitSensor(1);
     MR::initCollisionParts(this, mModelName, MR::addBodyMessageSensorMapObj(this), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     f32 boundingRadius = 0.0f;
     MR::calcModelBoundingRadius(&boundingRadius, this);
@@ -53,13 +53,13 @@ void KoopaBattleMapPlanet::init(const TableIter& rIter) {
 
     initNerve(GET_NERVE(KoopaBattleMapPlanet, KoopaBattleMapPlanetNrvWait));
 
-    if (!_DE) {
+    if (!mIsNoPlate) {
         createPlate();
     }
 
     MR::registerDemoSimpleCastAll(this);
 
-    if (!_DD && !_DE) {
+    if (!mIsFinalPlanet && !mIsNoPlate) {
         MR::registerDemoSimpleCastAll(MR::createBloomModel(this, nullptr));
     }
 
@@ -79,7 +79,7 @@ void KoopaBattleMapPlanet::exeWait() {
 }
 
 void KoopaBattleMapPlanet::exeDemoGrandStarAppear() {
-    if ((!_DD && MR::isStep(this, 90)) || (_DD && MR::isStep(this, 151))) {
+    if ((!mIsFinalPlanet && MR::isStep(this, 90)) || (mIsFinalPlanet && MR::isStep(this, 151))) {
         MR::startBrk(mDamagePlate, "PowerStarAppear");
         MR::emitEffect(mDamagePlate, "GrandStarAppear");
     }
@@ -104,13 +104,13 @@ void KoopaBattleMapPlanet::createPlate() {
         mDamagePlateGroup->registerActor(pDamagePlate);
     }
 
-    if (_DD) {
+    if (mIsFinalPlanet) {
         mDamagePlate = mDamagePlateGroup->getActor(0);
     } else {
         mDamagePlate = mDamagePlateGroup->getActor(1);
     }
 
-    if (_DD) {
+    if (mIsFinalPlanet) {
         return;
     }
 
@@ -152,8 +152,8 @@ void KoopaBattleMapPlanet::createPlate() {
 }
 
 void KoopaBattleMapPlanet::control() {
-    MR::rotateMtxMoment(&mBaseMtx, _C0);
-    _C0 *= ::sRotateFriction;
+    MR::rotateMtxMoment(&mBaseMtx, mRotateMoment);
+    mRotateMoment *= ::sRotateFriction;
 }
 
 void KoopaBattleMapPlanet::calcAndSetBaseMtx() {

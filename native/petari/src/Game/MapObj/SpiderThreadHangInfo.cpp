@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 SpiderThreadHangInfo::SpiderThreadHangInfo()
-    : mBindedActor(nullptr), mPosition(nullptr), mThreadPart(nullptr), mHangIndex(-1), mIsHanging(false), _14(0) {
+    : mBindedActor(nullptr), mPosition(nullptr), mThreadPart(nullptr), mHangIndex(-1), mIsHanging(false), mPriority(0) {
 }
 
 void SpiderThreadHangInfo::startBind(LiveActor* pActor, const Vec3f* pPos, SpiderThreadPart* pThreadPart, s32 hangIndex, const Vec3f& rVel,
@@ -17,7 +17,7 @@ void SpiderThreadHangInfo::startBind(LiveActor* pActor, const Vec3f* pPos, Spide
     mThreadPart = pThreadPart;
     mHangIndex = hangIndex;
     mIsHanging = false;
-    _14 = a2;
+    mPriority = a2;
 
     if (!MR::isNearZero(rVel)) {
         mThreadPart->touchActor(mHangIndex, rVel);

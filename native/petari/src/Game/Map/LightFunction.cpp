@@ -14,8 +14,6 @@
 #include "Game/Util/StringUtil.hpp"
 
 
-namespace {};  // namespace
-
 void LightFunction::initLightRegisterAll() {
     Color8 c(255, 255, 255, 255);
 
@@ -100,15 +98,15 @@ s32 LightFunction::getDefaultStepInterpolate() {
 }
 
 void LightFunction::registerPlayerLightCtrl(const ActorLightCtrl* pCtrl) {
-    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_1C = pCtrl;
+    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mPlayerLightCtrl = pCtrl;
 }
 
 void LightFunction::registerLightAreaHolder(LightAreaHolder* pHolder) {
-    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_C = pHolder;
+    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mAreaHolder = pHolder;
 }
 
 bool LightFunction::tryFindNewAreaLightID(const Vec3f& rPos, ZoneLightID* pId) {
-    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_C->tryFindLightID(rPos, pId);
+    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mAreaHolder->tryFindLightID(rPos, pId);
 }
 
 AreaLightInfo* LightFunction::getAreaLightInfo(const ZoneLightID& rId) {
@@ -190,8 +188,8 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     ::loadLightInfoDiffuse(pInfo->base, 0);
     Vec3f v7(0.0f, 0.0f, -1.0f);
     NebulaLight obj = {};
-    f32 v = pInfo->_18;
-    LightValues::color(&obj, NebulaColor8(pInfo->_14));
+    f32 v = pInfo->mShininess;
+    LightValues::color(&obj, NebulaColor8(pInfo->mSpecularColor));
     LightValues::specularDir(&obj, v7.x, v7.y, v7.z);
     LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
     Frame::setLight(3, obj);

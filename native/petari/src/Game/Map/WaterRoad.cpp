@@ -1,8 +1,6 @@
 #include "Game/Map/WaterRoad.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -43,7 +41,6 @@ namespace {
     static const f32 sFloatToShortShift = 32768.0f;
     static const f32 sDefaultRadius = 500.0f;
     static const f32 sDotUpdateAxis = 0.99f;
-    // static const f32 sPlayerFlowSpeed =
     static const f32 sTexRateU0 = 0.05f;
     static const f32 sTexRateV0 = 0.0001f;
     static const f32 sTexRateU1 = 0.05f;
@@ -56,7 +53,6 @@ namespace {
     static const f32 sTexSpeedV1 = -0.005f;
     static const f32 sTexSpeedV2 = -0.005f;
     static const f32 sIndirectScale = 0.2f;
-    // static const f32 sEnvMapScale =
     static const f32 sClippingRadiusOffset = 100.0f;
     static const f32 sDistanceToLow = 10000.0f;
     static const f32 sTexSpeedU2 = 0.0f;
@@ -407,7 +403,7 @@ SiteMaterial WaterRoadModelInfo::loadMaterialLow() const {
 }
 
 WaterRoad::WaterRoad(const char* pName)
-    : LiveActor(pName), _8C(-1), mModelInfoHigh(), mModelInfoLow(), mRadius(::sDefaultRadius), mAlpha(0xFF), mBaseUp(0.0f, 1.0f, 0.0f), mRider(),
+    : LiveActor(pName), mModelInfoHigh(), mModelInfoLow(), mRadius(::sDefaultRadius), mAlpha(0xFF), mBaseUp(0.0f, 1.0f, 0.0f), mRider(),
       mTexUV0(0.0f, 0.0f), mTexUV1(0.0f, 0.0f), mTexUV2(0.0f, 0.0f), mTexture(), mIndirect(), mEnvMap(), mClippingCenter(0.0f, 0.0f, 0.0f),
       mCamRailNearestPos(0.0f, 0.0f, 0.0f), mSoundObj(), mCameraInfo() {
     mBaseMtx.identity();
@@ -420,7 +416,6 @@ void WaterRoad::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::makeMtxTR(mBaseMtx, this);
     mBaseMtx.getYDir(mBaseUp);
-    MR::getPlacementArg0NoInit(rIter, &_8C);
     MR::getPlacementArg1NoInit(rIter, &mRadius);
     initRailRider(rIter);
 
@@ -440,7 +435,7 @@ void WaterRoad::init(const TableIter& rIter) {
 
     MR::moveCoordToStartPos(this);
 
-    initEffectKeeper(0, "WaterRoad", false);
+    initEffectKeeper(0, "WaterRoad");
     MR::setEffectHostMtx(this, "Top", mBaseMtx);
     MR::setEffectHostMtx(this, "End", mBaseMtx);
 

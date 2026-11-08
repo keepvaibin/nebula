@@ -33,5 +33,4 @@ public:
 
     ModelObj* mWing;
     CollisionParts* mCollisionParts[10];
-    s32 _188;
 };

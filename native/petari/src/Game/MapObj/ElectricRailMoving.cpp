@@ -2,7 +2,6 @@
 #include "Game/MapObj/ElectricRailMoving.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Gravity/GravityInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -23,15 +22,15 @@ namespace NrvElectricRailMoving {
 };  // namespace NrvElectricRailMoving
 
 ElectricRailMovingPoint::ElectricRailMovingPoint(const char* pName) : LiveActor(pName) {
-    _8C = 1;
-    _8D = 1;
+    mHasShadow = 1;
+    mIsElectric = 1;
 }
 
 void ElectricRailMovingPoint::init(const TableIter& rIter) {
     initModelManagerWithAnm("ElectricRailPoint", nullptr, 0);
     MR::connectToSceneMapObjDecoration(this);
 
-    if (_8C) {
+    if (mHasShadow) {
         MR::initShadowVolumeSphere(this, 35.0f);
         MR::onCalcGravity(this);
     }
@@ -42,7 +41,7 @@ void ElectricRailMovingPoint::init(const TableIter& rIter) {
 }
 
 void ElectricRailMovingPoint::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (_8D) {
+    if (mIsElectric) {
         MR::sendMsgEnemyAttackElectric(pReceiver, pSender);
     } else {
         MR::sendMsgPush(pReceiver, pSender);
@@ -50,9 +49,9 @@ void ElectricRailMovingPoint::attackSensor(HitSensor* pSender, HitSensor* pRecei
 }
 
 ElectricRailMoving::ElectricRailMoving(const char* pName)
-    : ElectricRailDrawn(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), _CC(0x80), mSensorOffsets(),
-      _E4(), _E8(), _EC(), _F0(30.0f) {
-    _9C.identity();
+    : ElectricRailDrawn(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), mAlpha(0x80), mSensorOffsets(),
+      mRailPosNum(), mRailPositions(), mCoord(), mRailWidth(30.0f) {
+    mTexMtx.identity();
 }
 
 void ElectricRailMoving::init(const TableIter& rIter) {
@@ -75,14 +74,14 @@ void ElectricRailMoving::init(const TableIter& rIter) {
 
 void ElectricRailMoving::drawWith(MaterialDraw& rMaterial) const {
     if (MR::isValidDraw(this)) {
-        rMaterial.setCoordinate(1, _9C);
-        rMaterial.setRegister(MaterialRegister_1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        rMaterial.setCoordinate(1, mTexMtx);
+        rMaterial.setRegister(MaterialRegister_1, Color8(0xFF, 0xFF, 0xFF, mAlpha));
         TypedDraw site(rMaterial, nullptr, MR::getCameraViewMtx());
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
             mMesh.draw(site);
         } else {
-            drawRail(site, _F0);
+            drawRail(site, mRailWidth);
         }
     }
 }
@@ -156,29 +155,29 @@ void ElectricRailMoving::initRail(const TableIter& rIter) {
         mSegmentLength = MR::getRailTotalLength(this) / (2 * mSegmentNum);
     }
 
-    _E4 = static_cast< s32 >(MR::getRailTotalLength(this) / 100.0f) + 2;
-    _E8 = new Vec3f[_E4];
+    mRailPosNum = static_cast< s32 >(MR::getRailTotalLength(this) / 100.0f) + 2;
+    mRailPositions = new Vec3f[mRailPosNum];
 
-    for (s32 i = 0; i < _E4; i++) {
+    for (s32 i = 0; i < mRailPosNum; i++) {
         f32 totalLength = MR::getRailTotalLength(this);
         f32 len = 100.0f * i >= totalLength ? totalLength : 100.0f * i;
 
-        MR::calcRailPosAtCoord(&_E8[i], this, len);
+        MR::calcRailPosAtCoord(&mRailPositions[i], this, len);
     }
 }
 
 void ElectricRailMoving::initPoints() {
-    _D8 = 2 * mSegmentNum;
+    mPointNum = 2 * mSegmentNum;
 
     if (!MR::isLoopRail(this)) {
-        _D8 += 2;
+        mPointNum += 2;
     }
 
-    _D8 *= mStackHeight;
-    mMovingPoints = new ElectricRailMovingPoint[_D8];
+    mPointNum *= mStackHeight;
+    mMovingPoints = new ElectricRailMovingPoint[mPointNum];
 
     if (!MR::isLoopRail(this)) {
-        u32 v4 = _D8 - 2 * mStackHeight;
+        u32 v4 = mPointNum - 2 * mStackHeight;
         Vec3f startPos, endPos;
         MR::calcRailStartPointPos(&startPos, this);
         MR::calcRailEndPointPos(&endPos, this);
@@ -215,9 +214,9 @@ void ElectricRailMoving::initPoints() {
     s32 v14 = 0;
     s32 v15 = 0;
 
-    while (v14 < _D8) {
+    while (v14 < mPointNum) {
         if ((mStackHeight != 0 ? v14 % (2 * mStackHeight) : v14) >= 2) {
-            mMovingPoints[v15]._8C = 0;
+            mMovingPoints[v15].mHasShadow = 0;
         }
 
         mMovingPoints[v15].initWithoutIter();
@@ -227,7 +226,7 @@ void ElectricRailMoving::initPoints() {
 }
 
 void ElectricRailMoving::initMesh() {
-    mMesh.init(_E4 * 4 * mStackHeight);
+    mMesh.init(mRailPosNum * 4 * mStackHeight);
     drawPlane(30.0f, 30.0f, -30.0f, -30.0f);
     drawPlane(-30.0f, 30.0f, 30.0f, -30.0f);
     mMesh.send();
@@ -240,9 +239,9 @@ void ElectricRailMoving::drawRail(TypedDraw& rDraw, f32 a1) const {
 
 void ElectricRailMoving::drawPlane(f32 a2, f32 a3, f32 a4, f32 a5) {
     for (s32 i = 0; i < mStackHeight; i++) {
-        VertexPT* vtx = mMesh.strip((2 * _E4) & 0xFFFE);
+        VertexPT* vtx = mMesh.strip((2 * mRailPosNum) & 0xFFFE);
 
-        for (s32 j = 0; j < _E4; j++) {
+        for (s32 j = 0; j < mRailPosNum; j++) {
             setVertexAttribute(j, i, a2, a3, a4, a5, vtx);
         }
     }
@@ -250,9 +249,9 @@ void ElectricRailMoving::drawPlane(f32 a2, f32 a3, f32 a4, f32 a5) {
 
 void ElectricRailMoving::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, _E4 * 2);
+        VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mRailPosNum * 2);
 
-        for (s32 j = 0; j < _E4; j++) {
+        for (s32 j = 0; j < mRailPosNum; j++) {
             setVertexAttribute(j, i, a1, a2, a3, a4, vtx);
         }
     }
@@ -267,7 +266,7 @@ void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 
 
     f32 texCoord = 0.25f * railLength / 100.0f;
     Vec3f position;
-    position.set(_E8[a2]);
+    position.set(mRailPositions[a2]);
     Vec3f railDirection;
     Vec3f gravity;
 
@@ -339,7 +338,7 @@ namespace {
         segmentLength = railTotalLength / segmentNum;
         reachedEnd = false;
         pointIndex = 0;
-        railCoord = pActor->_EC;
+        railCoord = pActor->mCoord;
 
         Vec3f stackPosition;
         Vec3f gravity;
@@ -401,18 +400,18 @@ void ElectricRailMoving::updatePointPosAndModel() {
     if (!MR::isLoopRail(this)) {
         if (updated) {
             for (s32 i = 0; i < 2 * mStackHeight; i++) {
-                MR::showModelIfHidden(&mMovingPoints[_D8 - 1 - i]);
+                MR::showModelIfHidden(&mMovingPoints[mPointNum - 1 - i]);
             }
         } else {
             for (s32 i = 0; i < 2 * mStackHeight; i++) {
-                MR::hideModelIfShown(&mMovingPoints[_D8 - 1 - i]);
+                MR::hideModelIfShown(&mMovingPoints[mPointNum - 1 - i]);
             }
         }
     }
 }
 
 bool ElectricRailMoving::isValidCoord(f32 coord) const {
-    f32 repeated = getRepeatedCoord(coord - _EC);
+    f32 repeated = getRepeatedCoord(coord - mCoord);
     f32 interval = MR::getRailTotalLength(this) / mSegmentNum;
     f32 offset = MR::mod(repeated, interval);
     return interval - mSegmentLength < offset;
@@ -428,22 +427,22 @@ void ElectricRailMoving::calcPointPos(Vec3f* pOutPos, f32 c) const {
     f32 v6 = MR::mod(c, 100.0f);
     f32 v7 = 100.0f;
 
-    if ((_E4 - 3) < v5) {
+    if ((mRailPosNum - 3) < v5) {
         v7 = (MR::getRailTotalLength(this) - (100.0f * v5));
     }
 
-    pOutPos->lerp(_E8[v5], _E8[v5 + 1], (v6 / v7));
+    pOutPos->lerp(mRailPositions[v5], mRailPositions[v5 + 1], (v6 / v7));
 }
 
 void ElectricRailMoving::move() {
-    _EC = getRepeatedCoord(_EC + mMovementSpeed);
+    mCoord = getRepeatedCoord(mCoord + mMovementSpeed);
 
     f32 scale = (100.0f * mSegmentNum) / (0.25f * MR::getRailTotalLength(this));
 
-    _9C.identity();
+    mTexMtx.identity();
 
-    _9C.mMtx[0][0] = scale;
-    _9C.mMtx[0][3] = -((0.25f * (scale * _EC)) / 100.0f);
+    mTexMtx.mMtx[0][0] = scale;
+    mTexMtx.mMtx[0][3] = -((0.25f * (scale * mCoord)) / 100.0f);
     f32 railTotalLength2 = MR::getRailTotalLength(this);
     f32 segmentLength = railTotalLength2 / mSegmentNum;
     f32 angle = (-TWO_PI * mSegmentLength) / segmentLength;
@@ -460,7 +459,7 @@ void ElectricRailMoving::move() {
         c = static_cast< s32 >(value);
     }
 
-    _CC = c;
+    mAlpha = c;
 
     updatePointPosAndModel();
 }
@@ -470,13 +469,13 @@ void ElectricRailMoving::exeDisappear() {
         MR::startSound(this, "SE_OJ_ELEC_RAIL_VANISH");
         MR::invalidateHitSensors(this);
 
-        for (s32 i = 0; i < _D8; i++) {
-            mMovingPoints[i]._8D = 0;
+        for (s32 i = 0; i < mPointNum; i++) {
+            mMovingPoints[i].mIsElectric = 0;
         }
     }
 
     move();
-    _F0 = MR::calcNerveEaseInValue(this, 20, 30.0f, 0.0f);
+    mRailWidth = MR::calcNerveEaseInValue(this, 20, 30.0f, 0.0f);
 
     if (MR::isStep(this, 20)) {
         setNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvDisappeared));

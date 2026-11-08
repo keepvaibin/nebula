@@ -10,6 +10,6 @@ public:
     virtual ~MapPartsRailGuidePoint();
     virtual void init(const TableIter&);
 
-    f32 _8C;
-    bool _90;
+    f32 mCoord;
+    bool mIsPointModel;
 };

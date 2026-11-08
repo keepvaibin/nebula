@@ -54,9 +54,9 @@ public:
     void resetPad();
     PlayerInput* getPlayerInput(s32);
 
-    /* 0x00 */ PlayerInput* mPad[2];
-    /* 0x08 */ PlayerInputReader* mReadDataInfoArray;
-    /* 0x0C */ u32 mMode;
+    PlayerInput* mPad[2];
+    PlayerInputReader* mReadDataInfoArray;
+    u32 mMode;
 };
 
 namespace MR {

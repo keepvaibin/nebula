@@ -7,5 +7,5 @@ public:
 
     void syncWithFlags();
 
-    bool _0;
+    bool mIsLuigiLeft;
 };

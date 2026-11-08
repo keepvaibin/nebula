@@ -2,8 +2,7 @@
 //! the form CameraAnim reads.
 //!
 //! Layout, little-endian:
-//! - header (32 bytes): "NCAM", frames, the disc header's words at 0x8, 0xC, 0x10 and 0x14 (the game refuses the file
-//!   when the first is 0, and keeps the next two), the value count, 0;
+//! - header (12 bytes): "NCAM", frames, the value count;
 //! - eight tracks (12 bytes): count, first value, stride. Stride 1: a value per frame, linear between frames; 3: keys
 //!   (frame, value, slope); 4: keys (frame, value, slope in, slope out); a track of one entry is its first value;
 //! - the values.
@@ -13,7 +12,7 @@
 use anyhow::{bail, Context, Result};
 
 pub const MAGIC: &[u8; 4] = b"NCAM";
-const HEADER: usize = 32;
+const HEADER: usize = 12;
 pub const TRACKS: usize = 8;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -26,7 +25,6 @@ pub struct Track {
 #[derive(Debug, Default, PartialEq)]
 pub struct Ncam {
     pub frames: u32,
-    pub words: [u32; 4],
     pub tracks: [Track; TRACKS],
     pub values: Vec<f32>,
 }
@@ -52,6 +50,10 @@ impl Ncam {
             b"CKAN" => true,
             other => bail!("not a camera animation ({:?})", String::from_utf8_lossy(other)),
         };
+        // Every disc clip has 1 here; the game refuses a clip with 0, so one is not cooked.
+        if be32(bytes, 0x8)? == 0 {
+            bail!("a camera animation the game refuses (word 0x8 is 0)");
+        }
         let entry = 0x20;
         let words_per_track = if keys { 3 } else { 2 };
         let mut tracks = [Track::default(); TRACKS];
@@ -79,18 +81,13 @@ impl Ncam {
                 bail!("camera animation track {i} ({track:?}) outside its {} values", values.len());
             }
         }
-        Ok(Ncam {
-            frames: be32(bytes, 0x18)?,
-            words: [be32(bytes, 0x8)?, be32(bytes, 0xC)?, be32(bytes, 0x10)?, be32(bytes, 0x14)?],
-            tracks,
-            values,
-        })
+        Ok(Ncam { frames: be32(bytes, 0x18)?, tracks, values })
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(HEADER + 12 * TRACKS + 4 * self.values.len());
         out.extend_from_slice(MAGIC);
-        for word in [self.frames, self.words[0], self.words[1], self.words[2], self.words[3], self.values.len() as u32, 0] {
+        for word in [self.frames, self.values.len() as u32] {
             out.extend_from_slice(&word.to_le_bytes());
         }
         for track in &self.tracks {
@@ -115,8 +112,8 @@ impl Ncam {
             *track = Track { count: le32(bytes, at)?, first: le32(bytes, at + 4)?, stride: le32(bytes, at + 8)? };
         }
         let values_at = HEADER + 12 * TRACKS;
-        let values = (0..w(6)? as usize).map(|v| le32(bytes, values_at + 4 * v).map(f32::from_bits)).collect::<Result<_>>()?;
-        Ok(Ncam { frames: w(1)?, words: [w(2)?, w(3)?, w(4)?, w(5)?], tracks, values })
+        let values = (0..w(2)? as usize).map(|v| le32(bytes, values_at + 4 * v).map(f32::from_bits)).collect::<Result<_>>()?;
+        Ok(Ncam { frames: w(1)?, tracks, values })
     }
 }
 
@@ -283,7 +280,6 @@ mod tests {
     fn frames_and_keys_cook_to_tracks() {
         let frames = Ncam::from_disc(&disc(false)).unwrap();
         assert_eq!(frames.frames, 3);
-        assert_eq!(frames.words, [1, 2, 3, 4]);
         assert_eq!(frames.tracks[7], Track { count: 3, first: 0, stride: 1 });
         assert_eq!(frames.values, [1.0, 2.0, 4.0]);
         let keys = Ncam::from_disc(&disc(true)).unwrap();
@@ -292,5 +288,13 @@ mod tests {
         assert!(cooked.starts_with(MAGIC));
         assert_eq!(Ncam::from_ncam(&cooked).unwrap(), keys);
         assert_eq!(cook(&cooked).unwrap(), cooked);
+        assert_eq!(cooked.len(), 12 + 12 * TRACKS + 4 * 6);
+    }
+
+    #[test]
+    fn a_refused_clip_is_not_cooked() {
+        let mut bytes = disc(false);
+        bytes[0x8..0xC].copy_from_slice(&0u32.to_be_bytes());
+        assert!(cook(&bytes).is_err());
     }
 }

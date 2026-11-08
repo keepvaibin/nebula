@@ -19,9 +19,5 @@ public:
     void exeWait();
     void exeLockPosition();
 
-    f32 _D4;
-    u8 _D8;
-    u8 _D9;
-    u8 _DA;
-    u8 _DB;
+    f32 mRadius;
 };

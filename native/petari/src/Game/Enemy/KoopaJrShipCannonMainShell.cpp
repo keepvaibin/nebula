@@ -27,7 +27,7 @@ namespace NrvKoopaJrShipCannonMainShell {
 
 KoopaJrShipCannonMainShell::KoopaJrShipCannonMainShell(const char* pName) : CannonShellBase(pName) {
     f32 one = 1.0f;  // This makes Data match
-    _8C.set< f32 >(0.0f, 0.0f, 0.0f, one);
+    mRotateQuat.set< f32 >(0.0f, 0.0f, 0.0f, one);
 }
 
 CannonShellBase::~CannonShellBase() {
@@ -41,7 +41,7 @@ void KoopaJrShipCannonMainShell::init(const TableIter& rIter) {
     MR::startBtk(this, "KoopaJrShipCannonMainShell");
 
     initSound(4, false);
-    initEffectKeeper(0, "KoopaJrShipCannonShell", false);
+    initEffectKeeper(0, "KoopaJrShipCannonShell");
     initHitSensor(1);
 
     MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
@@ -64,7 +64,7 @@ void KoopaJrShipCannonMainShell::kill() {
 }
 
 void KoopaJrShipCannonMainShell::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mRotateQuat);
 }
 
 void KoopaJrShipCannonMainShell::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -111,7 +111,7 @@ void KoopaJrShipCannonMainShell::launch(const Vec3f& rStartPos, const Vec3f& rVe
 
     Pos3f mtx;
     MR::makeMtxFrontUp(&mtx, dir, -mGravity);
-    mtx.getQuat(_8C);
+    mtx.getQuat(mRotateQuat);
     mVelocity.set(rVelocity);
     setNerve(GET_NERVE(KoopaJrShipCannonMainShell, HostTypeFly));
 }

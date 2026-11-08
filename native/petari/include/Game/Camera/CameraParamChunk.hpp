@@ -116,7 +116,7 @@ public:
     u8 mCameraTypeIndex;
     ExParam mExParam;
     CameraGeneralParam* mGeneralParam;
-    bool _64;
+    bool mIsCodeChunk;
 };
 
 class CameraParamChunkGame : public CameraParamChunk {

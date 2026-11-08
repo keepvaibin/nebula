@@ -37,7 +37,7 @@ void FireMarioBall::init(const TableIter& rIter) {
     MR::connectToSceneEnemyDecoration(this);
     initSensor();
     initBinder(::cBinderRadius, 0.0f, 0);
-    initEffectKeeper(4, "MarioFireBall", false);
+    initEffectKeeper(4, "MarioFireBall");
     initSound(4, false);
     MR::initShadowVolumeCylinder(this, 25.0f);
     MR::onShadowVolumeCutDropLength(this, 0);

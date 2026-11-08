@@ -16,13 +16,14 @@ namespace {
 };  // namespace
 
 NameObjExecuteInfo::NameObjExecuteInfo()
-    : mExecutedObj(), _4(), _5(), mMovementType(-1), mCalcAnimType(-1), mDrawType(-1), mDrawBufferType(-1), _A(-1) {
+    : mExecutedObj(), mMovementState(NameObjConnect_None), mDrawState(NameObjConnect_None), mMovementType(-1), mCalcAnimType(-1), mDrawType(-1),
+      mDrawBufferType(-1), mDrawBufferIndex(-1) {
 }
 
 void NameObjExecuteInfo::setConnectInfo(NameObj* pObj, int movementType, int calcAnimType, int drawBufferType, int drawType) {
-    _4 = 2;
+    mMovementState = NameObjConnect_UnwantedBeforeInit;
     mExecutedObj = pObj;
-    _5 = 2;
+    mDrawState = NameObjConnect_UnwantedBeforeInit;
     mMovementType = movementType;
     mCalcAnimType = calcAnimType;
     mDrawBufferType = drawBufferType;
@@ -30,7 +31,7 @@ void NameObjExecuteInfo::setConnectInfo(NameObj* pObj, int movementType, int cal
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     if (drawBufferType != -1) {
-        _A = pListExecutor->registerDrawBuffer(static_cast< LiveActor* >(pObj), drawBufferType);
+        mDrawBufferIndex = pListExecutor->registerDrawBuffer(static_cast< LiveActor* >(pObj), drawBufferType);
     }
 
     if (movementType != -1) {
@@ -47,91 +48,71 @@ void NameObjExecuteInfo::setConnectInfo(NameObj* pObj, int movementType, int cal
 }
 
 void NameObjExecuteInfo::initConnectting() {
-    if (_4 == 1) {
-        _4 = 4;
+    if (mMovementState == NameObjConnect_WantedBeforeInit) {
         connectToScene();
     } else {
-        _4 = 5;
+        mMovementState = NameObjConnect_Disconnected;
     }
 
-    if (_5 == 1) {
-        _5 = 4;
+    if (mDrawState == NameObjConnect_WantedBeforeInit) {
         connectToDraw();
     } else {
-        _5 = 5;
+        mDrawState = NameObjConnect_Disconnected;
     }
 }
 
-void NameObjExecuteInfo::requestConnect(u8* pData) {
-    switch (*pData) {
-    case 2:
-        *pData = 1;
-        break;
-    case 5:
-        *pData = 4;
-        break;
-    case 6:
-    case 7:
-        *pData = 3;
-        break;
-    case 1:
-        return;
+bool NameObjExecuteInfo::requestConnect(s8* pState) {
+    switch (*pState) {
+    case NameObjConnect_UnwantedBeforeInit:
+        *pState = NameObjConnect_WantedBeforeInit;
+        return false;
+    case NameObjConnect_Disconnected:
+        *pState = NameObjConnect_ConnectPending;
+        return true;
+    case NameObjConnect_DisconnectPending:
+        *pState = NameObjConnect_Connected;
+        return false;
+    default:
+        return false;
     }
 }
 
-void NameObjExecuteInfo::requestDisconnect(u8* pData, bool a2) {
-    u8 val;
-
-    switch (*pData) {
-    case 1:
-        *pData = 2;
-        break;
-    case 3:
-        val = 6;
-        if (a2) {
-            val = 7;
-        }
-
-        *pData = val;
-        break;
-    case 5:
-    case 6:
-    case 7:
-        break;
-    case 4:
-        *pData = 5;
-        break;
-    case 2:
-        return;
+bool NameObjExecuteInfo::requestDisconnect(s8* pState) {
+    switch (*pState) {
+    case NameObjConnect_WantedBeforeInit:
+        *pState = NameObjConnect_UnwantedBeforeInit;
+        return false;
+    case NameObjConnect_Connected:
+        *pState = NameObjConnect_DisconnectPending;
+        return true;
+    case NameObjConnect_ConnectPending:
+        *pState = NameObjConnect_Disconnected;
+        return false;
+    default:
+        return false;
     }
 }
 
 void NameObjExecuteInfo::executeRequirementConnectMovement() {
-    if (_4 == 4) {
+    if (mMovementState == NameObjConnect_ConnectPending) {
         connectToScene();
     }
 }
 
 void NameObjExecuteInfo::executeRequirementDisconnectMovement() {
-    if (_4 == 6) {
+    if (mMovementState == NameObjConnect_DisconnectPending) {
         disconnectToScene();
     }
 }
 
 void NameObjExecuteInfo::executeRequirementConnectDraw() {
-    if (_5 == 4) {
+    if (mDrawState == NameObjConnect_ConnectPending) {
         connectToDraw();
     }
 }
 
 void NameObjExecuteInfo::executeRequirementDisconnectDraw() {
-    if (_5 == 6) {
-        disconnectToDraw();
-    }
-}
-
-void NameObjExecuteInfo::executeRequirementDisconnectDrawDelay() {
-    if (_5 == 7) {
+    if (mDrawState == NameObjConnect_DisconnectPending) {
         disconnectToDraw();
     }
 }
@@ -154,11 +135,11 @@ void NameObjExecuteInfo::requestMovementOff(int a1) {
 
 void NameObjExecuteInfo::findLightInfo() const {
     SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor()->findLightInfo(static_cast< LiveActor* >(mExecutedObj),
-                                                                                                    mDrawBufferType, _A);
+                                                                                                    mDrawBufferType, mDrawBufferIndex);
 }
 
 void NameObjExecuteInfo::connectToScene() {
-    _4 = 3;
+    mMovementState = NameObjConnect_Connected;
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     if (mMovementType != -1) {
@@ -171,7 +152,7 @@ void NameObjExecuteInfo::connectToScene() {
 }
 
 void NameObjExecuteInfo::disconnectToScene() {
-    _4 = 5;
+    mMovementState = NameObjConnect_Disconnected;
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     if (mMovementType != -1) {
@@ -184,7 +165,7 @@ void NameObjExecuteInfo::disconnectToScene() {
 }
 
 void NameObjExecuteInfo::connectToDraw() {
-    _5 = 3;
+    mDrawState = NameObjConnect_Connected;
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     if (mDrawType != -1) {
@@ -192,12 +173,12 @@ void NameObjExecuteInfo::connectToDraw() {
     }
 
     if (mDrawBufferType != -1) {
-        pListExecutor->addToDrawBuffer(static_cast< LiveActor* >(mExecutedObj), mDrawBufferType, _A);
+        pListExecutor->addToDrawBuffer(static_cast< LiveActor* >(mExecutedObj), mDrawBufferType, mDrawBufferIndex);
     }
 }
 
 void NameObjExecuteInfo::disconnectToDraw() {
-    _5 = 5;
+    mDrawState = NameObjConnect_Disconnected;
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     if (mDrawType != -1) {
@@ -205,12 +186,11 @@ void NameObjExecuteInfo::disconnectToDraw() {
     }
 
     if (mDrawBufferType != -1) {
-        pListExecutor->removeToDrawBuffer(static_cast< LiveActor* >(mExecutedObj), mDrawBufferType, _A);
+        pListExecutor->removeToDrawBuffer(static_cast< LiveActor* >(mExecutedObj), mDrawBufferType, mDrawBufferIndex);
     }
 }
 
 void NameObjExecuteHolder::registerActor(NameObj* pObj, int movementType, int calcAnimType, int drawBufferType, int drawType) {
-    // No fixed count of objects: 4096 was the console's.
     if (mExecuteArraySize >= mExecuteArrayMaxSize) {
         mExecuteArray = MR::growArray(mExecuteArray, mExecuteArrayMaxSize);
         mExecuteArrayMaxSize *= 2;
@@ -227,119 +207,99 @@ void NameObjExecuteHolder::initConnectting() {
     }
 }
 
-void NameObjExecuteHolder::connectToScene(NameObj* pObj) {
-    NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
+void NameObjExecuteHolder::push(PendingList* pList, s32 index) {
+    if (pList->mCount >= pList->mCapacity) {
+        const s32 grown = pList->mCapacity > 0 ? pList->mCapacity * 2 : 64;
+        s32* pIndices = new s32[grown];
+        for (s32 i = 0; i < pList->mCount; i++) {
+            pIndices[i] = pList->mIndices[i];
+        }
+        delete[] pList->mIndices;
+        pList->mIndices = pIndices;
+        pList->mCapacity = grown;
+    }
+    pList->mIndices[pList->mCount++] = index;
+}
 
-    if (pInfo == nullptr) {
+// Requests made while the list runs wait for the next run.
+void NameObjExecuteHolder::run(PendingList* pList, void (NameObjExecuteInfo::*pExecute)()) {
+    const s32 count = pList->mCount;
+    if (count == 0) {
         return;
     }
 
-    pInfo->requestConnect(reinterpret_cast< u8* >(&pInfo->_4));
+    s32* pIndices = pList->mIndices;
+    for (s32 i = 1; i < count; i++) {
+        const s32 index = pIndices[i];
+        s32 j = i;
+        for (; j > 0 && pIndices[j - 1] > index; j--) {
+            pIndices[j] = pIndices[j - 1];
+        }
+        pIndices[j] = index;
+    }
 
-    _18 = true;
+    for (s32 i = 0; i < count; i++) {
+        (mExecuteArray[pList->mIndices[i]].*pExecute)();
+    }
+
+    const s32 later = pList->mCount - count;
+    for (s32 i = 0; i < later; i++) {
+        pList->mIndices[i] = pList->mIndices[count + i];
+    }
+    pList->mCount = later;
+}
+
+void NameObjExecuteHolder::connectToScene(NameObj* pObj) {
+    NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
+
+    if (pInfo != nullptr && NameObjExecuteInfo::requestConnect(&pInfo->mMovementState)) {
+        push(&mConnectMovement, pObj->mExecutorIdx);
+    }
 }
 
 void NameObjExecuteHolder::connectToDraw(NameObj* pObj) {
     NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
 
-    if (pInfo == nullptr) {
-        return;
+    if (pInfo != nullptr && NameObjExecuteInfo::requestConnect(&pInfo->mDrawState)) {
+        push(&mConnectDraw, pObj->mExecutorIdx);
     }
-
-    pInfo->requestConnect(reinterpret_cast< u8* >(&pInfo->_5));
-
-    _1A = true;
 }
 
 void NameObjExecuteHolder::disconnectToScene(NameObj* pObj) {
     NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
 
-    if (pInfo == nullptr) {
-        return;
+    if (pInfo != nullptr && NameObjExecuteInfo::requestDisconnect(&pInfo->mMovementState)) {
+        push(&mDisconnectMovement, pObj->mExecutorIdx);
     }
-
-    pInfo->requestDisconnect(reinterpret_cast< u8* >(&pInfo->_4), false);
-
-    _19 = true;
 }
 
 void NameObjExecuteHolder::disconnectToDraw(NameObj* pObj) {
     NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
 
-    if (pInfo == nullptr) {
-        return;
+    if (pInfo != nullptr && NameObjExecuteInfo::requestDisconnect(&pInfo->mDrawState)) {
+        push(&mDisconnectDraw, pObj->mExecutorIdx);
     }
-
-    pInfo->requestDisconnect(reinterpret_cast< u8* >(&pInfo->_5), false);
-
-    _1B = true;
 }
 
 bool NameObjExecuteHolder::isConnectToDraw(const NameObj* pObj) const {
-    NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
-    bool ret = pInfo != nullptr && pInfo->_5 == 3;
-
-    return ret;
+    const NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
+    return pInfo != nullptr && pInfo->mDrawState == NameObjConnect_Connected;
 }
 
 void NameObjExecuteHolder::executeRequirementConnectMovement() {
-    if (!_18) {
-        return;
-    }
-
-    for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].executeRequirementConnectMovement();
-    }
-
-    _18 = false;
+    run(&mConnectMovement, &NameObjExecuteInfo::executeRequirementConnectMovement);
 }
 
 void NameObjExecuteHolder::executeRequirementDisconnectMovement() {
-    if (!_19) {
-        return;
-    }
-
-    for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].executeRequirementDisconnectMovement();
-    }
-
-    _19 = false;
+    run(&mDisconnectMovement, &NameObjExecuteInfo::executeRequirementDisconnectMovement);
 }
 
 void NameObjExecuteHolder::executeRequirementConnectDraw() {
-    if (!_1A) {
-        return;
-    }
-
-    for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].executeRequirementConnectDraw();
-    }
-
-    _1A = false;
+    run(&mConnectDraw, &NameObjExecuteInfo::executeRequirementConnectDraw);
 }
 
 void NameObjExecuteHolder::executeRequirementDisconnectDraw() {
-    if (!_1B) {
-        return;
-    }
-
-    for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].executeRequirementDisconnectDraw();
-    }
-
-    _1B = false;
-}
-
-void NameObjExecuteHolder::executeRequirementDisconnectDrawDelay() {
-    if (!_1C) {
-        return;
-    }
-
-    for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].executeRequirementDisconnectDrawDelay();
-    }
-
-    _1C = false;
+    run(&mDisconnectDraw, &NameObjExecuteInfo::executeRequirementDisconnectDraw);
 }
 
 void NameObjExecuteHolder::requestMovementOn(int idx) {
@@ -432,10 +392,6 @@ namespace MR {
         ::getNameObjExecuteHolder()->executeRequirementDisconnectDraw();
     }
 
-    void executeRequirementDisconnectDrawDelay() {
-        ::getNameObjExecuteHolder()->executeRequirementDisconnectDrawDelay();
-    }
-
     void requestMovementOnWithCategory(int category) {
         ::getNameObjExecuteHolder()->requestMovementOn(category);
     }
@@ -450,6 +406,6 @@ namespace MR {
 };  // namespace MR
 
 NameObjExecuteHolder::NameObjExecuteHolder(int size)
-    : NameObj("connectToScene情報保持"), mExecuteArray(), mExecuteArrayMaxSize(size), mExecuteArraySize(), _18(), _19(), _1A(), _1B(), _1C() {
-    mExecuteArray = new NameObjExecuteInfo[mExecuteArrayMaxSize];
+    : NameObj("connectToScene情報保持"), mExecuteArray(new NameObjExecuteInfo[size]), mExecuteArrayMaxSize(size), mExecuteArraySize(),
+      mConnectMovement(), mDisconnectMovement(), mConnectDraw(), mDisconnectDraw() {
 }

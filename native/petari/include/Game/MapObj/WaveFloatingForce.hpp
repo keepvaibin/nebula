@@ -4,7 +4,7 @@
 
 class WaveFloatingForce {
 public:
-    WaveFloatingForce(const LiveActor*, s32, f32, bool);
+    WaveFloatingForce(const LiveActor*, s32, f32);
 
     void update();
     f32 getCurrentValue() const;
@@ -15,5 +15,4 @@ public:
     s32 mStepCount;
     f32 mAmplitude;
     f32 mStep;
-    bool _10;
 };

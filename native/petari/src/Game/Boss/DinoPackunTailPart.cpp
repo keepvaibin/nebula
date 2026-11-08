@@ -15,18 +15,16 @@ namespace NrvDinoPackunTailPart {
 };  // namespace NrvDinoPackunTailPart
 
 DinoPackunTailPart::DinoPackunTailPart(const char* pName, DinoPackun* pParent) : DinoPackunTailNode(pName, pParent) {
-    _D4 = 50.0f;
-    _D8 = 0;
-    _D9 = 1;
+    mRadius = 50.0f;
 }
 
 void DinoPackunTailPart::init(const TableIter& rIter) {
     initNerve(GET_NERVE(DinoPackunTailPart, DinoPackunTailPartNrvWait));
     MR::onCalcGravity(this);
-    initBinder(_D4, 0.0f, 0);
+    initBinder(mRadius, 0.0f, 0);
     MR::connectToSceneEnemyDecorationMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 8, (1.25f + _D4), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, (1.25f + mRadius), Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }

@@ -14,11 +14,8 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    // static const f32 sFlySpeedSlow = _;
     static const f32 sFlySpeedNormal = 15.0f;
     static const f32 sFlySpeedFast = 30.0f;
-    // static const s32 sFallStep = _;
-    // static const f32 sFallSpeed = _;
     static const s32 sFlyStepNormal = 180;
     static const s32 sFlyStepLong = 900;
     static const s32 sCurveLifeTime = 300;
@@ -52,7 +49,7 @@ void KoopaFireShort::init(const TableIter& rIter) {
     MR::offBind(this);
     MR::onCalcGravity(this);
 
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
 

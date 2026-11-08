@@ -75,7 +75,7 @@ void ReturnDemoRailMove::start() {
     MR::startBckPlayer(pBckName);
 
     MR::startBck(mPowerStar, pBckName);
-    mPathDrawer->_B0 = 0.0f;
+    mPathDrawer->mMaxCoord = 0.0f;
     mPathDrawer->appear();
 };
 

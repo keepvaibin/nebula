@@ -87,7 +87,7 @@ void ScenarioSelectStar::notSelect() {
 }
 
 bool ScenarioSelectStar::isAppearEnd() const {
-    return !_30 && !isNerve(GET_NERVE(ScenarioSelectStar, ScenarioSelectStarNrvAppear));
+    return !mIsDead && !isNerve(GET_NERVE(ScenarioSelectStar, ScenarioSelectStarNrvAppear));
 }
 
 void ScenarioSelectStar::setup(s32 scenarioNo, int starCollectedStatus, const Vec3f& rPos, s32 starId) {

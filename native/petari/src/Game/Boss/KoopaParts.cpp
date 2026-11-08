@@ -46,9 +46,8 @@ namespace {
         return pPartsModel;
     };
 
-    KoopaBattleMapPlanet* createKoopaBattleMapPlanet(const char* pName1, const char* pName2, const char* pResetPositionName, bool a1, bool a2,
-                                                     bool a3) {
-        KoopaBattleMapPlanet* pBattleMapPlanet = new KoopaBattleMapPlanet(pName1, pName2, a1, a2, a3);
+    KoopaBattleMapPlanet* createKoopaBattleMapPlanet(const char* pName1, const char* pName2, const char* pResetPositionName, bool a2, bool a3) {
+        KoopaBattleMapPlanet* pBattleMapPlanet = new KoopaBattleMapPlanet(pName1, pName2, a2, a3);
         MR::resetPosition(pBattleMapPlanet, pResetPositionName);
         pBattleMapPlanet->initWithoutIter();
         return pBattleMapPlanet;
@@ -163,14 +162,14 @@ void KoopaParts::createPlanetShadow() {
 void KoopaParts::initVs1() {
     createFireStairs(false);
 
-    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星", "KoopaBattleMapPlanet", "惑星中心", false, false, false);
+    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星", "KoopaBattleMapPlanet", "惑星中心", false, false);
 
     createPlanetShadow();
     createCommonParts();
 }
 
 void KoopaParts::initVs2() {
-    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星", "KoopaBattleMapPlanetVs2", "惑星中心", true, false, false);
+    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星", "KoopaBattleMapPlanetVs2", "惑星中心", false, false);
 
     createCommonParts();
 }
@@ -205,9 +204,9 @@ namespace {
 void KoopaParts::initVs3() {
     createFireStairs(true);
 
-    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ１", "KoopaBattleMapPlanetVs3Lv1", "惑星中心", false, false, true);
-    mPlanetLv2 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ２", "KoopaBattleMapPlanetVs3Lv2", "惑星Ｌｖ２", false, false, true);
-    mPlanetLv3 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ３", "KoopaBattleMapPlanetVs3Lv3", "惑星Ｌｖ３", false, true, false);
+    mPlanetLv1 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ１", "KoopaBattleMapPlanetVs3Lv1", "惑星中心", false, true);
+    mPlanetLv2 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ２", "KoopaBattleMapPlanetVs3Lv2", "惑星Ｌｖ２", false, true);
+    mPlanetLv3 = ::createKoopaBattleMapPlanet("クッパ惑星Ｌｖ３", "KoopaBattleMapPlanetVs3Lv3", "惑星Ｌｖ３", true, false);
 
     MR::startBrk(mPlanetLv1, "Wait");
     MR::startBrk(mPlanetLv2, "Wait");

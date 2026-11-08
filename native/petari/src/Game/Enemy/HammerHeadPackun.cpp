@@ -27,15 +27,15 @@
 HammerHeadPackun::HammerHeadPackun(const char* pName) : LiveActor(pName) {
     mLeafModel = nullptr;
     mImmunityTime = 0;
-    _94.x = 0.0f;
-    _94.y = 1.0f;
-    _94.z = 0.0f;
-    _A0.x = 0.0f;
-    _A0.y = 0.0f;
-    _A0.z = 1.0f;
-    _AC.x = 0.0f;
-    _AC.y = 0.0f;
-    _AC.z = 1.0f;
+    mUp.x = 0.0f;
+    mUp.y = 1.0f;
+    mUp.z = 0.0f;
+    mFront.x = 0.0f;
+    mFront.y = 0.0f;
+    mFront.z = 1.0f;
+    mAttackDir.x = 0.0f;
+    mAttackDir.y = 0.0f;
+    mAttackDir.z = 1.0f;
     mJointRumbler = nullptr;
     mNumbTime = 0;
 }
@@ -62,7 +62,7 @@ void HammerHeadPackun::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSensor();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffect(this, "PointerTouchManual");
     MR::setEffectHostMtx(this, "PointerTouchManual", MR::getJointMtx(this, "MouthUp"));
     initSound(4, false);
@@ -276,7 +276,7 @@ void HammerHeadPackun::exeBlowKill() {
 
 void HammerHeadPackun::exeNumb() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         mEffectKeeper->forceDeleteEmitterAll();
         MR::stopBck(this);
         MR::stopBck(mLeafModel);
@@ -284,7 +284,7 @@ void HammerHeadPackun::exeNumb() {
         mNumbTime = 0;
     }
 
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
     if (!(getNerveStep() % 30)) {
         mJointRumbler->start();
     }
@@ -307,16 +307,16 @@ void HammerHeadPackun::endNumb() {
 void HammerHeadPackun::calcAndSetBaseMtx() {
     Vec3f vec;
     Pos3f mtx;
-    vec.cross(_94, _A0);
+    vec.cross(mUp, mFront);
     mtx[0][0] = vec.x;
     mtx[1][0] = vec.y;
     mtx[2][0] = vec.z;
-    mtx[0][1] = _94.x;
-    mtx[1][1] = _94.y;
-    mtx[2][1] = _94.z;
-    mtx[0][2] = _A0.x;
-    mtx[1][2] = _A0.y;
-    mtx[2][2] = _A0.z;
+    mtx[0][1] = mUp.x;
+    mtx[1][1] = mUp.y;
+    mtx[2][1] = mUp.z;
+    mtx[0][2] = mFront.x;
+    mtx[1][2] = mFront.y;
+    mtx[2][2] = mFront.z;
     mtx[0][3] = mPosition.x;
     mtx[1][3] = mPosition.y;
     mtx[2][3] = mPosition.z;
@@ -421,8 +421,8 @@ bool HammerHeadPackun::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSen
 void HammerHeadPackun::initPosture() {
     Pos3f mtx;
     MR::makeMtxTR(mtx, this);
-    mtx.getYDir(_94);
-    mtx.getZDir(_A0);
+    mtx.getYDir(mUp);
+    mtx.getZDir(mFront);
 }
 
 void HammerHeadPackun::initSensor() {
@@ -437,7 +437,7 @@ void HammerHeadPackun::initSensor() {
 
 void HammerHeadPackun::initShadow() {
     MR::initShadowFromCSV(this, "Shadow");
-    mGravity.set(-_94);
+    mGravity.set(-mUp);
 }
 
 inline s32 tableEntries(const Table* table) {
@@ -488,7 +488,7 @@ bool HammerHeadPackun::isInFieldOfView(const Vec3f& rPos) const {
         deg = -30.0f;
     }
 
-    return rPos.dot(_A0) >= MR::cosDegree(deg);
+    return rPos.dot(mFront) >= MR::cosDegree(deg);
 }
 
 bool HammerHeadPackun::isAttackSensorValid() const {
@@ -515,7 +515,7 @@ bool HammerHeadPackun::isChance() const {
 
 bool HammerHeadPackun::calcPlayerDir(Vec3f* pPos) const {
     pPos->set(*MR::getPlayerPos() - mPosition);
-    pPos->orthogonalize2(_94);
+    pPos->orthogonalize2(mUp);
     if (MR::isNearZero(*pPos)) {
         return false;
     }
@@ -525,15 +525,15 @@ bool HammerHeadPackun::calcPlayerDir(Vec3f* pPos) const {
 }
 
 void HammerHeadPackun::turnTo(const Vec3f& rFrom, f32 rate) {
-    f32 absAngle = _A0.angle(rFrom);
+    f32 absAngle = mFront.angle(rFrom);
     f32 ratio = 1.0f;
     f32 maxAngle = rate * MR::pi() / 180.0f;
     if (absAngle > maxAngle) {
         ratio = maxAngle / absAngle;
     }
     Quat4f quat;
-    quat.setRotate(_A0, rFrom, ratio);
-    quat.transform(_A0);
+    quat.setRotate(mFront, rFrom, ratio);
+    quat.transform(mFront);
     verticalizeFrontVec();
 }
 
@@ -545,15 +545,15 @@ void HammerHeadPackun::turnToAttackVec(s32 rate) {
             step = 1.0f;
         }
 
-        mtx.setRotate(_A0, _AC, (step * step));
-        mtx.transform(_A0);
+        mtx.setRotate(mFront, mAttackDir, (step * step));
+        mtx.transform(mFront);
         verticalizeFrontVec();
     }
 }
 
 void HammerHeadPackun::verticalizeFrontVec() {
-    _A0.orthogonalize2(_94);
-    MR::normalize(&_A0);
+    mFront.orthogonalize2(mUp);
+    MR::normalize(&mFront);
 }
 
 bool HammerHeadPackun::tryShiftNumb() {

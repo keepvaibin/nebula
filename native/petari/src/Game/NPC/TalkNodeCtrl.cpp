@@ -38,26 +38,25 @@ bool TalkMessageHistory::search(u32 msgID) const {
     return false;
 }
 
-TalkNodeCtrl::TalkNodeCtrl() : _0(), mCurrentNodeIdx(-1), mMessageInfo() {
+TalkNodeCtrl::TalkNodeCtrl() : mFlowName(), mCurrentNodeIdx(-1), mMessageInfo() {
     mHistory.mHistory = nullptr;
     mHistory.mCount = 0;
     mHistory.mMax = 0;
-    _38 = nullptr;
+    mStartNode = nullptr;
     mCurrentNode = nullptr;
     mNodeData = -1;
 }
 
-// Inexplicable 0x130 bytes large stack
 void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const TableIter& rIter, const char* pName, ActorCameraInfo** pCameraInf) {
     TalkNode* node = MessageSystem::getSceneMessageData()->findNode(pName);
-    _38 = node;
+    mStartNode = node;
     mCurrentNode = node;
     mFlowNode = node;
-    _0 = new char[strlen(pName) + 1];
-    MR::copyString(_0, pName, strlen(pName) + 1);
+    mFlowName = new char[strlen(pName) + 1];
+    MR::copyString(mFlowName, pName, strlen(pName) + 1);
 
     if (mCurrentNode == nullptr) {
-        char* name = _0;
+        char* name = mFlowName;
         MessageData* msgData = MessageSystem::getSceneMessageData();
         msgData->getMessageDirect(&mMessageInfo, name);
     } else {
@@ -66,7 +65,7 @@ void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const TableIt
 
     if (mMessageInfo.isFlowTalk()) {
         forwardFlowNode();
-        _38 = mCurrentNode;
+        mStartNode = mCurrentNode;
         mFlowNode = mCurrentNode;
     }
 
@@ -84,9 +83,9 @@ void TalkNodeCtrl::createFlowNodeDirect(TalkMessageCtrl* pMsgCtrl, const TableIt
 }
 
 void TalkNodeCtrl::resetFlowNode() {
-    if (mCurrentNode != _38) {
-        mCurrentNode = _38;
-        mFlowNode = _38;
+    if (mCurrentNode != mStartNode) {
+        mCurrentNode = mStartNode;
+        mFlowNode = mStartNode;
         updateMessage();
     }
 }
@@ -218,7 +217,7 @@ void TalkNodeCtrl::updateMessage() {
 
     if (cur != nullptr) {
         if (cur->mNodeType != 1) {
-            mMessageInfo._0 = 0;
+            mMessageInfo.mMessage = 0;
         } else {
             idx = cur->mIndex;
             groupID = cur->mGroupID;
@@ -241,7 +240,7 @@ void TalkNodeCtrl::updateMessage() {
             mMessageInfo.mTalkType = 0;
         }
 
-        s8 msgId = mMessageInfo._B;
+        s8 msgId = mMessageInfo.mAlreadyReadId;
 
         if (msgId != -1) {
             if (MR::isOnMessageAlreadyRead(msgId)) {
@@ -260,19 +259,19 @@ void TalkNodeCtrl::readMessage() {
         mMessageInfo.mTalkType = 0;
     }
 
-    if (mMessageInfo._B != -1) {
-        MR::onMessageAlreadyRead(mMessageInfo._B);
+    if (mMessageInfo.mAlreadyReadId != -1) {
+        MR::onMessageAlreadyRead(mMessageInfo.mAlreadyReadId);
     }
 }
 
 const char16_t* TalkNodeCtrl::getSubMessage() const {
     const TalkMessageInfo info = mMessageInfo;
 
-    if (*((char16_t*)info._0) != 0x1A) {
+    if (*((char16_t*)info.mMessage) != 0x1A) {
         return nullptr;
     }
 
-    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const char16_t*)&info._0[2]);
+    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const char16_t*)&info.mMessage[2]);
 
     if (((char*)messageTag.mMessage)[1] != 8 || messageTag.mMessage[1] != 0) {
         return nullptr;
@@ -282,7 +281,7 @@ const char16_t* TalkNodeCtrl::getSubMessage() const {
     u32 param = messageTag.getParam32(0);
 
     if (MessageSystem::getSceneMessageData()->getMessage(&info2, 0, param)) {
-        return (const char16_t*)info2._0;
+        return (const char16_t*)info2.mMessage;
     }
 
     return nullptr;

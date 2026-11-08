@@ -25,11 +25,11 @@ public:
     }
 
     bool isNotBoundInline() const {
-        return _B2 && !isBound();
+        return mIsInvalidSpinKill && !isBound();
     }
 
     bool isNotBound() {
-        return isNotBoundInline() || !_B2;
+        return isNotBoundInline() || !mIsInvalidSpinKill;
     }
 
     void exeFly();
@@ -39,14 +39,13 @@ public:
     bool inviteMario(HitSensor*);
     void updateSuffererMtx();
 
-    Vec3f _8C;
-    Vec3f _98;
-    LiveActor* _A4;
-    f32 _A8;
+    Vec3f mFront;
+    Vec3f mSide;
+    LiveActor* mHost;
+    f32 mSpeed;
     LiveActor* mHostActor;
-    bool _B0;
-    bool _B1;
-    bool _B2;
-    u8 _B3;
+    bool mIsNoGravity;
+    bool mIsGroundSlide;
+    bool mIsInvalidSpinKill;
     ActorCameraInfo** mCameraInfo;
 };

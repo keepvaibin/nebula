@@ -13,9 +13,8 @@ public:
     const char* mJumpAction;
     f32 mGroundAccel;
     f32 mAirAccel;
-    f32 _14;  // mGroundFriction? - fric if ._18 <= _1C
-    f32 _18;  // mAirFriction? - fric if ._18 > _1C
-    s32 _1C;  // step?
+    f32 mRunFriction;
+    f32 mWallJumpFriction;
     f32 mTurnMaxRateDegree;
     f32 mRunawayDistance;
     f32 mWaitDistance;
@@ -54,13 +53,7 @@ public:
         return mRunawayParam;
     }
 
-    // TODO: what are these values?
-    bool check18() const {
-        return _18 < mRunawayParam->_1C;
-    }
-
     WalkerStateRunawayParam* mRunawayParam;
     Vec3f* mDirection;
-    s32 _18;
     f32 mRunawaySpeed;
 };

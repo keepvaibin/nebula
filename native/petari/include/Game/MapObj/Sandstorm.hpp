@@ -15,7 +15,7 @@ public:
 
 private:
     LiveActor* mHost;
-    Vec3f _94;
+    Vec3f mLocalPos;
 };
 
 class Sandstorm : public LiveActor {
@@ -58,19 +58,19 @@ public:
     void exeStormEnd();
 
 private:
-    ActorCameraInfo* _8C;
+    ActorCameraInfo* mCameraInfo;
     LiveActor* mBindActor;
-    Vec3f _94;
-    Vec3f _A0;
+    Vec3f mFront;
+    Vec3f mClippingCenter;
     s32 mType;
     f32 mSpiralRot;
     f32 mSpiralRadius;
-    f32 _B8;
-    f32 _BC;
-    f32 _C0;
-    f32 _C4;
-    s32 _C8;
-    f32 _CC;
+    f32 mSpiralAngle;
+    f32 mBindRadius;
+    f32 mAdjustStartRadius;
+    f32 mBindOffsetY;
+    s32 mBindStep;
+    f32 mBindStartStep;
     f32 mSensorHeight;
     f32 mSizeUpRate;
     f32 mSensorMin;

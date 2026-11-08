@@ -49,7 +49,6 @@ public:
     void emitHitEffect(HitSensor* pSender, HitSensor* pReceiver);
 
     bool mIsKinopioCameraFocused;
-    u32 _90;
     f32 mPlayerZ;
     bool mIsKinopioAttached;
     bool mIsKinopioTalkEnabled;

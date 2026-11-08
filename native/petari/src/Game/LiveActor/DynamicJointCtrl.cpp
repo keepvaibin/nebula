@@ -18,25 +18,25 @@ namespace {
     }
 };  // namespace
 
-JointCtrlRate::JointCtrlRate() : _0(1.0f), _4(), _8(-1), _C(-1) {
+JointCtrlRate::JointCtrlRate() : mRate(1.0f), mTime(), mStartTime(-1), mEndTime(-1) {
 }
 
 void JointCtrlRate::update() {
-    if (_8 >= 0) {
-        _4--;
-        if (_4 < 0) {
-            _8 = -1;
-            _0 = 1.0f;
+    if (mStartTime >= 0) {
+        mTime--;
+        if (mTime < 0) {
+            mStartTime = -1;
+            mRate = 1.0f;
         } else {
-            _0 = static_cast< f32 >(_8 - _4) / static_cast< f32 >(_8);
+            mRate = static_cast< f32 >(mStartTime - mTime) / static_cast< f32 >(mStartTime);
         }
-    } else if (_C >= 0) {
-        _4--;
-        if (_4 < 0) {
-            _C = -1;
-            _0 = 0.0f;
+    } else if (mEndTime >= 0) {
+        mTime--;
+        if (mTime < 0) {
+            mEndTime = -1;
+            mRate = 0.0f;
         } else {
-            _0 = static_cast< f32 >(_4) / static_cast< f32 >(_C);
+            mRate = static_cast< f32 >(mTime) / static_cast< f32 >(mEndTime);
         }
     }
 }
@@ -46,10 +46,10 @@ void JointCtrlRate::startCtrl(s32 time) {
         time = ::sDefaultCtrlTime;
     }
 
-    _8 = time;
-    _C = -1;
-    _4 = time;
-    _0 = 0.0f;
+    mStartTime = time;
+    mEndTime = -1;
+    mTime = time;
+    mRate = 0.0f;
 }
 
 void JointCtrlRate::endCtrl(s32 time) {
@@ -57,62 +57,62 @@ void JointCtrlRate::endCtrl(s32 time) {
         time = ::sDefaultCtrlTime;
     }
 
-    _C = time;
-    _8 = -1;
-    _4 = time;
-    _0 = 1.0f;
+    mEndTime = time;
+    mStartTime = -1;
+    mTime = time;
+    mRate = 1.0f;
 }
 
 DynamicJointCtrlNode::DynamicJointCtrlNode(const DynamicJointCtrl* pControl, MtxPtr pMtx, f32 length)
-    : _0(length), _4(0.0f, 0.0f, 0.0f), _10(0.0f, 0.0f, 0.0f), _1C(0.0f, 0.0f, 1.0f), _28(pMtx), mJointController(), mChild(),
+    : mLength(length), mPos(0.0f, 0.0f, 0.0f), mVelocity(0.0f, 0.0f, 0.0f), mDir(0.0f, 0.0f, 1.0f), mMtx(pMtx), mJointController(), mChild(),
       mParentControl(pControl) {
     if (pMtx) {
-        _4.set< f32 >(pMtx[0][3], pMtx[1][3], pMtx[2][3]);
-        _1C.set< f32 >(pMtx[0][0], pMtx[1][0], pMtx[2][0]);
+        mPos.set< f32 >(pMtx[0][3], pMtx[1][3], pMtx[2][3]);
+        mDir.set< f32 >(pMtx[0][0], pMtx[1][0], pMtx[2][0]);
     }
 }
 
 void DynamicJointCtrlNode::update(LiveActor* pActor, const DynamicJointCtrlNode* pParent) {
-    _10.scale(mParentControl->mParams->mFriction);
+    mVelocity.scale(mParentControl->mParams->mFriction);
     Vec3f gravity(0.0f, 0.0f, 0.0f);
     MR::calcGravityVector(pActor, &gravity, nullptr, 0);
     gravity.scale(mParentControl->mParams->mGravity);
-    _10.add(gravity);
+    mVelocity.add(gravity);
 
-    Vec3f targetPos(pParent->_1C);
-    targetPos.scale(_0);
-    targetPos.add(pParent->_4);
+    Vec3f targetPos(pParent->mDir);
+    targetPos.scale(mLength);
+    targetPos.add(pParent->mPos);
     Vec3f accel(targetPos);
-    accel.sub(_4);
-    accel.sub(_10);
+    accel.sub(mPos);
+    accel.sub(mVelocity);
     accel.scale(mParentControl->mParams->mAccelRatetoBckPos);
-    _10.add(accel);
+    mVelocity.add(accel);
 
-    Vec3f offset(_4);
-    offset.add(_10);
-    offset.sub(pParent->_4);
+    Vec3f offset(mPos);
+    offset.add(mVelocity);
+    offset.sub(pParent->mPos);
     Vec3f direction(offset);
 
     if (MR::isNearZero(direction)) {
-        direction.set(pParent->_1C);
+        direction.set(pParent->mDir);
     } else {
         MR::normalize(&direction);
     }
 
-    if (offset.length() >= _0) {
+    if (offset.length() >= mLength) {
         Vec3f limitedOffset(direction);
-        limitedOffset.scale(_0);
+        limitedOffset.scale(mLength);
         Vec3f correction(offset);
         correction.sub(limitedOffset);
-        _10.sub(correction);
+        mVelocity.sub(correction);
     }
 
-    _4.add(_10);
+    mPos.add(mVelocity);
 }
 
 void DynamicJointCtrlNode::reset() {
-    _4.set< f32 >(_28[0][3], _28[1][3], _28[2][3]);
-    _10.zero();
+    mPos.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
+    mVelocity.zero();
 }
 
 bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
@@ -123,16 +123,16 @@ bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointContro
         return false;
     }
 
-    _1C.set(axis);
-    MR::normalize(&_1C);
+    mDir.set(axis);
+    MR::normalize(&mDir);
 
-    f32 rate = mParentControl->mControlRate->_0;
+    f32 rate = mParentControl->mControlRate->mRate;
     if (rate == 0.0f) {
         return false;
     }
 
-    Vec3f direction(mChild->_4);
-    direction.sub(_4);
+    Vec3f direction(mChild->mPos);
+    direction.sub(mPos);
 
     if (MR::isNearZero(direction)) {
         return false;
@@ -140,35 +140,35 @@ bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointContro
 
     MR::normalize(&direction);
 
-    f32 blendRate = mParentControl->mControlRate->_0;
+    f32 blendRate = mParentControl->mControlRate->mRate;
     MR::turnMtxToXDirDegree(pMtx, direction, mParentControl->mParams->mBendMaxDegree * blendRate);
     return true;
 }
 
 DynamicJointCtrl::DynamicJointCtrl(LiveActor* pActor, const char* pName, const DynamicJointCtrlParam* pParam)
-    : mActor(pActor), mName(pName), _8(), mCtrlNodes(), mParams(pParam), mControlRate(new JointCtrlRate) {
+    : mActor(pActor), mName(pName), mNodeNum(), mCtrlNodes(), mParams(pParam), mControlRate(new JointCtrlRate) {
 }
 
 void DynamicJointCtrl::init() {
     MR::getJointMtx(mActor, mName);
     Joint* joint = MR::getJoint(mActor, mName);
     if (mParams->mCtrlJointNumMax > 0) {
-        _8 = mParams->mCtrlJointNumMax;
+        mNodeNum = mParams->mCtrlJointNumMax;
     } else {
-        _8 = ::calcJointChildNum(joint) + 2;
+        mNodeNum = ::calcJointChildNum(joint) + 2;
     }
 
-    mCtrlNodes = new DynamicJointCtrlNode*[_8];
+    mCtrlNodes = new DynamicJointCtrlNode*[mNodeNum];
     Vec3f previousPos(0.0f, 0.0f, 0.0f);
     f32 length = 100.0f;
 
-    for (s32 i = 0; i < _8; i++) {
+    for (s32 i = 0; i < mNodeNum; i++) {
         MtxPtr mtx = nullptr;
-        if (i < _8 - 1) {
+        if (i < mNodeNum - 1) {
             mtx = MR::getJointMtx(mActor, joint->getJntNo());
         }
 
-        if (i < _8 - 1) {
+        if (i < mNodeNum - 1) {
             Vec3f pos(mtx[0][3], mtx[1][3], mtx[2][3]);
             if (i > 0) {
                 length = pos.distance(previousPos);
@@ -178,7 +178,7 @@ void DynamicJointCtrl::init() {
         }
 
         mCtrlNodes[i] = new DynamicJointCtrlNode(this, mtx, length);
-        if (i < _8 - 1) {
+        if (i < mNodeNum - 1) {
             const char* name = MR::getJointName(mActor, joint->getJntNo());
             mCtrlNodes[i]->mJointController =
                 MR::createJointDelegator< DynamicJointCtrlNode >(mCtrlNodes[i], mActor, &DynamicJointCtrlNode::updateJointMtxCallBack, nullptr, name);
@@ -186,7 +186,7 @@ void DynamicJointCtrl::init() {
         }
     }
 
-    for (s32 i = 0; i < _8 - 1; i++) {
+    for (s32 i = 0; i < mNodeNum - 1; i++) {
         mCtrlNodes[i]->mChild = mCtrlNodes[i + 1];
     }
 }
@@ -194,7 +194,7 @@ void DynamicJointCtrl::init() {
 void DynamicJointCtrl::update() {
     mCtrlNodes[0]->reset();
 
-    for (s32 i = 1; i < _8; i++) {
+    for (s32 i = 1; i < mNodeNum; i++) {
         mCtrlNodes[i]->update(mActor, mCtrlNodes[i - 1]);
     }
 
@@ -202,32 +202,32 @@ void DynamicJointCtrl::update() {
 }
 
 void DynamicJointCtrl::reset() {
-    for (s32 i = 0; i < _8 - 1; i++) {
+    for (s32 i = 0; i < mNodeNum - 1; i++) {
         mCtrlNodes[i]->reset();
     }
 
-    int endIndex = _8 - 1;
-    int parentIndex = _8 - 2;
+    int endIndex = mNodeNum - 1;
+    int parentIndex = mNodeNum - 2;
     mCtrlNodes[endIndex]->update(mActor, mCtrlNodes[parentIndex]);
 }
 
 void DynamicJointCtrl::setCallBackFunction() {
-    for (s32 i = 0; i < _8 - 1; i++) {
+    for (s32 i = 0; i < mNodeNum - 1; i++) {
         mCtrlNodes[i]->mJointController->registerCallBack();
     }
 }
 
-DynamicJointCtrlKeeper::DynamicJointCtrlKeeper(LiveActor* pActor) : mActor(pActor), _4(), mControls() {
+DynamicJointCtrlKeeper::DynamicJointCtrlKeeper(LiveActor* pActor) : mActor(pActor), mControlNum(), mControls() {
     const ResourceHolder* resourceHolder = MR::getResourceHolder(pActor);
     Table* csv = MR::tryCreateCsvParser(resourceHolder, "%s.bcsv", ::sTextOutFileName);
     if (!csv) {
         return;
     }
 
-    _4 = csv->getNumEntries();
-    mControls = new DynamicJointCtrl*[_4];
+    mControlNum = csv->getNumEntries();
+    mControls = new DynamicJointCtrl*[mControlNum];
 
-    for (s32 i = 0; i < _4; i++) {
+    for (s32 i = 0; i < mControlNum; i++) {
         DynamicJointCtrlParam* param = new DynamicJointCtrlParam;
         *param = ::sDefaultParam;
         const char* name = nullptr;
@@ -243,13 +243,13 @@ DynamicJointCtrlKeeper::DynamicJointCtrlKeeper(LiveActor* pActor) : mActor(pActo
 }
 
 void DynamicJointCtrlKeeper::update() {
-    for (s32 i = 0; i < _4; i++) {
+    for (s32 i = 0; i < mControlNum; i++) {
         mControls[i]->update();
     }
 }
 
 void DynamicJointCtrlKeeper::setCallBackFunction() {
-    for (s32 i = 0; i < _4; i++) {
+    for (s32 i = 0; i < mControlNum; i++) {
         mControls[i]->setCallBackFunction();
     }
 }
@@ -263,13 +263,13 @@ void DynamicJointCtrlKeeper::endCtrl(const char* pName, s32 time) {
 }
 
 void DynamicJointCtrlKeeper::reset() {
-    for (s32 i = 0; i < _4; i++) {
+    for (s32 i = 0; i < mControlNum; i++) {
         mControls[i]->reset();
     }
 }
 
 DynamicJointCtrl* DynamicJointCtrlKeeper::findJointCtrl(const char* pName) {
-    for (s32 i = 0; i < _4; i++) {
+    for (s32 i = 0; i < mControlNum; i++) {
         if (MR::isEqualString(mControls[i]->mName, pName)) {
             return mControls[i];
         }

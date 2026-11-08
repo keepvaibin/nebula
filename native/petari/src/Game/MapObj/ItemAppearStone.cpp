@@ -22,7 +22,7 @@ void ItemAppearStone::init(const TableIter& rIter) {
     MR::getObjectName(&model_name, rIter);
     initModelManagerWithAnm(model_name, 0, false);
     MR::connectToSceneMapObj(this);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(4, false);
     initHitSensor(1);
     HitSensor* sensor = MR::addBodyMessageSensorMapObjMoveCollision(this);

@@ -49,11 +49,11 @@ public:
     BossKameckBattlePattarn* mBattlePattarn;
     KameckBeam* mBeam;
     KameckBeamEventListener* mBeamEventListener;
-    Vec3f _20;
-    s32 _2C;
-    s32 _30;
-    s32 _34;
-    s32 _38;
+    Vec3f mMoveTarget;
+    s32 mMoveRailIndex;
+    s32 mMoveNumMax;
+    s32 mMoveNum;
+    s32 mBeamNumAlone;
     bool mIsFinal;
     bool mIsVs2;
 };

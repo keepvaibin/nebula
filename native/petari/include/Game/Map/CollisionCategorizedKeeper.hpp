@@ -40,7 +40,7 @@ public:
 
     HitInfo* mHitInfoArray;
     s32 mHitInfoRoom;
-    s32 _10;
+    s32 mNumHits;
     s32 mPartsCount;
     MR::Vector< MR::FixedArray< CollisionZone*, 32 > > mZones;
     s32 mCategory;

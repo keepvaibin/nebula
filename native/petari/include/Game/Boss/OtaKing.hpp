@@ -97,7 +97,7 @@ public:
     FireBubble* mFireBubbleArray;
     FixedPosition* mThrowPos;
     s32 mHits;
-    s32 _EC;
+    s32 mThrowNum;
     f32 mTurnSpeed;
     AudAnmSoundObject* mSoundObj;
     Vec3f mSoundObjPos;

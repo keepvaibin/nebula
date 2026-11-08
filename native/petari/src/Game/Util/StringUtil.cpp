@@ -145,8 +145,14 @@ namespace MR {
         MR::makeClearTimeString(pDst, getRaceCurrentTime());
     }
 
+    // num is the buffer size: the copy is cut to fit and always terminated.
     void copyString(char* pDst, const char* pSrc, u32 num) {
-        strncpy(pDst, pSrc, num);
+        if (num == 0) {
+            return;
+        }
+
+        strncpy(pDst, pSrc, num - 1);
+        pDst[num - 1] = '\0';
     }
 
     void copyString(char16_t* pDst, const char16_t* pSrc, u32 num) {

@@ -79,17 +79,13 @@ public:
     bool isFallNextMove() const;
     bool isInSightMario() const;
 
-    AnimScaleController* _8C;
-    WalkerStateBindStarPointer* _90;
-    Quat4f _94;
-    Vec3f _A4;
-    Vec3f _B0;
-    Vec3f _BC;
-    Vec3f _C8;
-    Vec3f _D4;
-    u32 _E0;
-    s32 _E4;
-    u32 _E8;
-    u8 _EC;
-    u8 _ED;
+    AnimScaleController* mScaleCtrl;
+    WalkerStateBindStarPointer* mBindStarPointer;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
+    Vec3f mWalkTarget;
+    Vec3f mInitPos;
+    u32 mDeathItem;
+    s32 mNoPushStep;
+    u8 mHasMoveLimit;
 };

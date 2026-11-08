@@ -51,7 +51,6 @@ public:
 
     virtual void initRacer() {
         mRailCoord = 0.0f;
-        _8 = 0.0f;
         mCurrPosition.zero();
         mPrevPosition.zero();
     }
@@ -68,7 +67,6 @@ public:
     }
 
     f32 mRailCoord;
-    f32 _8;
     Vec3f mCurrPosition;
     Vec3f mPrevPosition;
 };
@@ -129,7 +127,7 @@ public:
     u32 mBestTime;
     u32 mTime;
     PlayerRacer* mPlayerRacer;
-    Pos3f _FC;
+    Pos3f mGoalInvMtx;
 };
 
 namespace RaceManagerFunction {

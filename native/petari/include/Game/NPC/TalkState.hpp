@@ -48,7 +48,7 @@ public:
     bool isLostMessage(const TalkMessageCtrl*) const;
     bool isSelfInterrupt(const TalkMessageCtrl*) const;
 
-    TalkMessageCtrl* _04;
+    TalkMessageCtrl* mMsgCtrl;
     TalkBalloon* mBalloon;
     u32 mMessageID;
 };
@@ -75,11 +75,10 @@ public:
     virtual bool term(const TalkMessageCtrl*);
     virtual u32 getPageCount() const;
 
-    s32 _10;
-    s32 _14;
-    TalkSupportPlayerWatcher* _18;
-    u8 _1C;
-    bool _1D;
+    s32 mSkipHoldStep;
+    s32 mTermStep;
+    TalkSupportPlayerWatcher* mPlayerWatcher;
+    u8 mIsJumpHeld;
     u32 mPageCount;
 };
 
@@ -116,7 +115,7 @@ public:
     void pauseOff();
     TalkState* getState(const TalkMessageCtrl*);
 
-    TalkSupportPlayerWatcher* _00;
+    TalkSupportPlayerWatcher* mPlayerWatcher;
     IconAButton* mAButton;
     TalkStateShort* mTalkShort;
     TalkStateNormal* mTalkNormal;

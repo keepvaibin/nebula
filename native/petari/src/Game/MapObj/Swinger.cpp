@@ -4,12 +4,12 @@
 #include "Game/Util/MathUtil.hpp"
 
 Swinger::Swinger(const Vec3f* a1, MtxPtr a2, f32 a3, f32 a4, f32 a5, const Vec3f* a6)
-    : _0(a1), _4(0), _8(0.0f), mAcceleration(0.0f), _20(0.0f, -1.0f, 0.0f), _2C(a3), _30(a4), _34(a5), _38(a6), _3C(a2[0][0], a2[1][0], a2[2][0]),
-      _48(a2[0][1], a2[1][1], a2[2][1]), _54(a2[0][2], a2[1][2], a2[2][2]) {
-    _8.set(_0->x, (_0->y - _2C), _0->z);
-    _60.identity();
-    _60.setInline(a2);
-    _60.setTrans(*_0);
+    : mPivot(a1), mTipPos(0.0f), mAcceleration(0.0f), mSwingDir(0.0f, -1.0f, 0.0f), mLength(a3), mGravityAccel(a4), mDamping(a5), mGravity(a6), mSide(a2[0][0], a2[1][0], a2[2][0]),
+      mUp(a2[0][1], a2[1][1], a2[2][1]), mFront(a2[0][2], a2[1][2], a2[2][2]) {
+    mTipPos.set(mPivot->x, (mPivot->y - mLength), mPivot->z);
+    mSwingMtx.identity();
+    mSwingMtx.setInline(a2);
+    mSwingMtx.setTrans(*mPivot);
 }
 
 void Swinger::accel(const Vec3f& a1) {
@@ -17,36 +17,31 @@ void Swinger::accel(const Vec3f& a1) {
 }
 
 void Swinger::update() {
-    Vec3f v20;
-    if (_0 != nullptr) {
-        v20.set(*_0);
-    } else {
-        v20.set< f32 >(_4->mMtx[0][3], _4->mMtx[1][3], _4->mMtx[2][3]);
-    }
-    mAcceleration.scale(_34);
+    Vec3f v20(*mPivot);
+    mAcceleration.scale(mDamping);
 
-    if (_38) {
-        Vec3f v19 = *_38;
-        v19.scale(_30);
+    if (mGravity) {
+        Vec3f v19 = *mGravity;
+        v19.scale(mGravityAccel);
         mAcceleration.add(v19);
     } else {
-        mAcceleration.y -= _30;
+        mAcceleration.y -= mGravityAccel;
     }
-    _8.add(mAcceleration);
-    _20.set(_8 - v20);
+    mTipPos.add(mAcceleration);
+    mSwingDir.set(mTipPos - v20);
 
-    if (_20.isZero()) {
-        _20.set(0.0f, -1.0f, 0.0f);
+    if (mSwingDir.isZero()) {
+        mSwingDir.set(0.0f, -1.0f, 0.0f);
     } else {
-        MR::normalize(&_20);
+        MR::normalize(&mSwingDir);
     }
-    _8.set(_20);
-    _8.scale(_2C);
-    _8.add(v20);
+    mTipPos.set(mSwingDir);
+    mTipPos.scale(mLength);
+    mTipPos.add(v20);
 
-    f32 xval = mAcceleration.x - (_20.x * ((_20.z * mAcceleration.z) + ((_20.x * mAcceleration.x) + (_20.y * mAcceleration.y))));
-    f32 yval = mAcceleration.y - (_20.y * ((_20.z * mAcceleration.z) + ((_20.x * mAcceleration.x) + (_20.y * mAcceleration.y))));
-    f32 zval = mAcceleration.z - (_20.z * ((_20.z * mAcceleration.z) + ((_20.x * mAcceleration.x) + (_20.y * mAcceleration.y))));
+    f32 xval = mAcceleration.x - (mSwingDir.x * ((mSwingDir.z * mAcceleration.z) + ((mSwingDir.x * mAcceleration.x) + (mSwingDir.y * mAcceleration.y))));
+    f32 yval = mAcceleration.y - (mSwingDir.y * ((mSwingDir.z * mAcceleration.z) + ((mSwingDir.x * mAcceleration.x) + (mSwingDir.y * mAcceleration.y))));
+    f32 zval = mAcceleration.z - (mSwingDir.z * ((mSwingDir.z * mAcceleration.z) + ((mSwingDir.x * mAcceleration.x) + (mSwingDir.y * mAcceleration.y))));
     mAcceleration.x = xval;
     mAcceleration.y = yval;
     mAcceleration.z = zval;
@@ -55,28 +50,28 @@ void Swinger::update() {
 }
 
 void Swinger::updateSwingMtx(const Vec3f& a1) {
-    _48.set(_20);
-    _48.x *= -1.0f;
-    _48.y *= -1.0f;
-    _48.z *= -1.0f;
-    Vec3f v14(_3C);
-    _3C.cross(_48, _54);
-    if (MR::isNearZero(_3C)) {
-        _3C.set(v14);
+    mUp.set(mSwingDir);
+    mUp.x *= -1.0f;
+    mUp.y *= -1.0f;
+    mUp.z *= -1.0f;
+    Vec3f v14(mSide);
+    mSide.cross(mUp, mFront);
+    if (MR::isNearZero(mSide)) {
+        mSide.set(v14);
     }
-    MR::normalize(&_3C);
-    _54.cross(_3C, _48);
-    MR::normalize(&_54);
+    MR::normalize(&mSide);
+    mFront.cross(mSide, mUp);
+    MR::normalize(&mFront);
 
-    _60.mMtx[0][0] = _3C.x;
-    _60.mMtx[1][0] = _3C.y;
-    _60.mMtx[2][0] = _3C.z;
-    _60.mMtx[0][1] = _48.x;
-    _60.mMtx[1][1] = _48.y;
-    _60.mMtx[2][1] = _48.z;
-    _60.mMtx[0][2] = _54.x;
-    _60.mMtx[1][2] = _54.y;
-    _60.mMtx[2][2] = _54.z;
+    mSwingMtx.mMtx[0][0] = mSide.x;
+    mSwingMtx.mMtx[1][0] = mSide.y;
+    mSwingMtx.mMtx[2][0] = mSide.z;
+    mSwingMtx.mMtx[0][1] = mUp.x;
+    mSwingMtx.mMtx[1][1] = mUp.y;
+    mSwingMtx.mMtx[2][1] = mUp.z;
+    mSwingMtx.mMtx[0][2] = mFront.x;
+    mSwingMtx.mMtx[1][2] = mFront.y;
+    mSwingMtx.mMtx[2][2] = mFront.z;
 
-    _60.setTrans(a1);
+    mSwingMtx.setTrans(a1);
 }

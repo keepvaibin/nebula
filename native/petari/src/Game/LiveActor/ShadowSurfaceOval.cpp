@@ -33,7 +33,7 @@ void ShadowSurfaceOval::setSize(const Vec3f& pSize) {
 void ShadowSurfaceOval::draw() const {
     MtxPtr baseMtx;
     ShadowController* controller = getController();
-    baseMtx = controller->_18;
+    baseMtx = controller->mHostMtx;
 
     if (!controller->isProjected() || !controller->isDraw()) {
         return;

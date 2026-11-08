@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <nw4r/ut/ResFont.h>
 
-GameSystemFontHolder::GameSystemFontHolder() : _4(), mEmbeddedMessageFont(), mMessageFont(), mPictureFont(), mMenuFont(), mNumberFont() {
+GameSystemFontHolder::GameSystemFontHolder() : mEmbeddedFontFolder(), mEmbeddedMessageFont(), mMessageFont(), mPictureFont(), mMenuFont(), mNumberFont() {
 }
 
 nw4r::ut::Font* GameSystemFontHolder::getMessageFont() const {
@@ -23,9 +23,9 @@ void GameSystemFontHolder::createFontFromEmbeddedData() {
 
     const char* embeddedFontPath = "/LayoutData/EmbeddedFont";
 
-    _4 = pArchive->getSubFolder(embeddedFontPath, pHeap);
+    mEmbeddedFontFolder = pArchive->getSubFolder(embeddedFontPath, pHeap);
     mEmbeddedMessageFont = new (pHeap, -4) nw4r::ut::ResFont();
-    mEmbeddedMessageFont->SetResource(_4->getResource("MessageFont26.brfnt"));
+    mEmbeddedMessageFont->SetResource(mEmbeddedFontFolder->getResource("MessageFont26.brfnt"));
 }
 
 namespace {
@@ -59,7 +59,7 @@ void GameSystemFontHolder::createFontFromFile() {
         mEmbeddedMessageFont->RemoveResource();
 
         delete mEmbeddedMessageFont;
-        delete _4;
+        delete mEmbeddedFontFolder;
 
         mEmbeddedMessageFont = nullptr;
     }

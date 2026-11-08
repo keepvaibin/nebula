@@ -56,6 +56,5 @@ public:
     Vec3f mClippingRange;
     s32 mGroupID;
     s32 mChipType;
-    bool _B4;
     bool mIsCalcShadow;
 };

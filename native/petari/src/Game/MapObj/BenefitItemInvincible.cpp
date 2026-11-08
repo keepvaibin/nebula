@@ -19,7 +19,7 @@ namespace {
 
 BenefitItemInvincible::BenefitItemInvincible(const char* pName) : BenefitItemObj(pName, "PowerupInvincible") {
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
-        _D8 = 1;
+        mIsDisabled = 1;
     }
 }
 
@@ -36,15 +36,15 @@ void BenefitItemInvincible::exeCatch() {
 void BenefitItemInvincible::init(const TableIter& rIter) {
     BenefitItemObj::init(rIter);
 
-    if (_D8) {
+    if (mIsDisabled) {
         return;
     }
 
-    if (_DC) {
+    if (mShadowType) {
         MR::setShadowVolumeCylinderRadius(this, nullptr, 60.0f);
     }
 
-    _13A = 0;
+    mSensorInvalidStep = 0;
 
     Vec3f axisY, axisZ;
     MR::getRotatedAxisZ(&axisZ, mRotation);
@@ -55,8 +55,8 @@ void BenefitItemInvincible::init(const TableIter& rIter) {
 }
 
 void BenefitItemInvincible::initModelAndEfx() {
-    initModelManagerWithAnm(_120, nullptr, false);
-    initEffectKeeper(5, "BenefitItemObj", false);
+    initModelManagerWithAnm(mModelName, nullptr, false);
+    initEffectKeeper(5, "BenefitItemObj");
 
     initBinder(60.0f, 60.0f, 0);
     initHitSensor(1);
@@ -66,7 +66,7 @@ void BenefitItemInvincible::initModelAndEfx() {
 }
 
 void BenefitItemInvincible::appearThrowUp() {
-    if (!_DA) {
+    if (!mEscapeType) {
         BenefitItemObj::appearThrowUp();
         return;
     }
@@ -85,10 +85,10 @@ void BenefitItemInvincible::initEscape() {
 
     MR::calcGravity(this);
 
-    _BC = -mGravity * ::cBoundUpSpd;
-    _BC += mFwdAxis * 10.0f;
+    mEscapeVelocity = -mGravity * ::cBoundUpSpd;
+    mEscapeVelocity += mFwdAxis * 10.0f;
 
-    _13A = 60;
+    mSensorInvalidStep = 60;
 }
 void BenefitItemInvincible::doEscape() {
     MR::calcGravity(this);
@@ -99,29 +99,29 @@ void BenefitItemInvincible::doEscape() {
         MR::vecKillElement(mFwdAxis, mGravity, &mFwdAxis);
         MR::normalizeOrZero(&mFwdAxis);
 
-        _BC = mFwdAxis * 10.0f - mGravity * ::cBoundUpSpd;
+        mEscapeVelocity = mFwdAxis * 10.0f - mGravity * ::cBoundUpSpd;
 
         MR::startSound(this, "SE_OJ_POW_INVINCIBLE_BOUND");
 
-        _C8.zero();
+        mFallVelocity.zero();
     } else {
-        _BC.x *= 0.98f;
-        _BC.y *= 0.98f;
-        _BC.z *= 0.98f;
-        _E5 = 1;
+        mEscapeVelocity.x *= 0.98f;
+        mEscapeVelocity.y *= 0.98f;
+        mEscapeVelocity.z *= 0.98f;
+        mIsInAir = 1;
 
-        _C8 += mGravity * 0.5f;
+        mFallVelocity += mGravity * 0.5f;
 
-        if (_C8.length() > 20.0f) {
-            _C8.setLength(20.0f);
+        if (mFallVelocity.length() > 20.0f) {
+            mFallVelocity.setLength(20.0f);
         }
     }
 
-    if (_13A > 0) {
-        _13A--;
+    if (mSensorInvalidStep > 0) {
+        mSensorInvalidStep--;
     }
 
-    if (_13A == 0) {
+    if (mSensorInvalidStep == 0) {
         MR::validateHitSensors(this);
     }
 }

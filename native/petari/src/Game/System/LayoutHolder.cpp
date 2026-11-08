@@ -126,8 +126,8 @@ void LayoutHolder::mount(s32 folder) {
             mount(item.mEntry);
         } else {
             ResFileInfo* pInfo = tableOf(item.mKind).add(item.mName, item.mData, false);
-            pInfo->_8 = item.mData;
-            pInfo->_4 = item.mSize;
+            pInfo->mData = item.mData;
+            pInfo->mSize = item.mSize;
         }
     }
 }

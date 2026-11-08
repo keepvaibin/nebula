@@ -45,7 +45,7 @@ void PhantomTorch::init(const TableIter& rIter) {
         MR::declareStarPiece(this, 1);
     }
 
-    initEffectKeeper(0, mParticle, false);
+    initEffectKeeper(0, mParticle);
     mPullParticle = new SpinPullParticleCallBack();
     initSound(4, false);
     initHitSensor(1);

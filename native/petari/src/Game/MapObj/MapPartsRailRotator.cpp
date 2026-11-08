@@ -14,8 +14,8 @@ namespace NrvMapPartsRailRotator {
 
 MapPartsRailRotator::MapPartsRailRotator(LiveActor* pHost)
     : MapPartsFunction(pHost, "レイル回転"), mRotateAxis(), mRotateType(), mRotateSpeed(), mTargetAngle(), mAngle(), mHostRotateMtx() {
-    _2C.identity();
-    _5C.identity();
+    mBaseRotateMtx.identity();
+    mRotateMtx.identity();
 }
 
 void MapPartsRailRotator::init(const TableIter&) {
@@ -31,8 +31,8 @@ void MapPartsRailRotator::start() {
 }
 
 void MapPartsRailRotator::end() {
-    _2C.identity();
-    _5C.identity();
+    mBaseRotateMtx.identity();
+    mRotateMtx.identity();
     mAngle = 0.0f;
     setNerve(GET_NERVE(MapPartsRailRotator, HostTypeWait));
 }
@@ -82,12 +82,12 @@ void MapPartsRailRotator::rotateBetweenPoints(s32 point, f32 time) {
 
 void MapPartsRailRotator::updateHostRotateMtx() {
     if (mHostRotateMtx != nullptr) {
-        NebulaMtxCopy(mHostRotateMtx, _2C.toMtxPtr());
+        NebulaMtxCopy(mHostRotateMtx, mBaseRotateMtx.toMtxPtr());
     } else if (mHost->getBaseMtx() != nullptr) {
-        _2C.set(mHost->getBaseMtx());
-        _2C.zeroTrans();
+        mBaseRotateMtx.set(mHost->getBaseMtx());
+        mBaseRotateMtx.zeroTrans();
     } else {
-        _2C.setEuler(mHost->mRotation * (PI / 180.0f));
+        mBaseRotateMtx.setEuler(mHost->mRotation * (PI / 180.0f));
     }
 }
 
@@ -129,13 +129,13 @@ bool MapPartsRailRotator::isReachedTargetAngle() const {
 void MapPartsRailRotator::calcRotateAxisDir(AxisType axis, Vec3f* pDir) const {
     switch (axis) {
     case AxisType_X:
-        _2C.getXDir(*pDir);
+        mBaseRotateMtx.getXDir(*pDir);
         break;
     case AxisType_Y:
-        _2C.getYDir(*pDir);
+        mBaseRotateMtx.getYDir(*pDir);
         break;
     case AxisType_Z:
-        _2C.getZDir(*pDir);
+        mBaseRotateMtx.getZDir(*pDir);
         break;
     }
 }
@@ -143,9 +143,9 @@ void MapPartsRailRotator::calcRotateAxisDir(AxisType axis, Vec3f* pDir) const {
 void MapPartsRailRotator::updateRotateMtx(AxisType axis, f32 angle) {
     Vec3f direction;
     calcRotateAxisDir(axis, &direction);
-    _5C.identity();
-    _5C.makeRotate(direction, PI_180 * angle);
-    _5C.concat(_5C, _2C);
+    mRotateMtx.identity();
+    mRotateMtx.makeRotate(direction, PI_180 * angle);
+    mRotateMtx.concat(mRotateMtx, mBaseRotateMtx);
 }
 
 void MapPartsRailRotator::exeRotate() {

@@ -1,5 +1,5 @@
-#include "Game/Camera/CameraDPD.hpp"
-#include "Game/Camera/CamTranslatorDPD.hpp"
+#include "Game/Camera/CameraPointer.hpp"
+#include "Game/Camera/CamTranslatorPointer.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -12,14 +12,14 @@ namespace {
     static const f32 sFovyBlendRate = 0.05f;
 };  // namespace
 
-CameraDPD::CameraDPD(const char* pName)
+CameraPointer::CameraPointer(const char* pName)
     : Camera(pName), mPointerDistance(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
       mFovy(40.0f), mAngleXRange(PI / 2.0f), mAngleYRange(PI / 2.0f), mAngleX(), mSpeedBlendRate(0.05f), mBlendFriction(0.99f), mIsVertical(),
       mAngleYMin() {
     mMtx.identity();
 }
 
-void CameraDPD::reset() {
+void CameraPointer::reset() {
     if (mCameraType == CameraType_FixedPos) {
         CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));
         Vec3f pos = (CameraLocalUtil::getTarget(this)->getPosition() + Vec3f(0.0f, 100.0f, 0.0f));
@@ -69,7 +69,7 @@ void CameraDPD::reset() {
     mRealPointPos.set(0.0f, 0.0f);
 }
 
-CameraTargetObj* CameraDPD::calc() {
+CameraTargetObj* CameraPointer::calc() {
     if (mCameraType == CameraType_UpdateWithTarget) {
         mMtx.identity();
         mMtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
@@ -146,6 +146,6 @@ CameraTargetObj* CameraDPD::calc() {
     return nullptr;
 }
 
-CamTranslatorBase* CameraDPD::createTranslator() {
-    return new CamTranslatorDPD(this);
+CamTranslatorBase* CameraPointer::createTranslator() {
+    return new CamTranslatorPointer(this);
 }

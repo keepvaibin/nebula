@@ -176,7 +176,7 @@ namespace GameSequenceFunction {
     }
 
     bool hasRetryGalaxySequence() {
-        return ::getGameDataTemporaryInGalaxy()->_4;
+        return ::getGameDataTemporaryInGalaxy()->mIsRetry;
     }
 
     bool isNeedToReflectStageResultSequenceStarPiece() {
@@ -239,7 +239,7 @@ namespace GameSequenceFunction {
     }
 
     bool isSuccessSaveDataHandleSequence() {
-        return ::getSaveDataHandleSequence()->_24 == 2;
+        return ::getSaveDataHandleSequence()->mResultState == 2;
     }
 
     void restoreUserFile(UserFile* pUserFile, int userFileIndex) {

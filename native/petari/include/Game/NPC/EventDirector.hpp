@@ -7,7 +7,6 @@ class CometEventKeeper;
 class PowerStarEventKeeper;
 class PowerStarHolder;
 class StageStateKeeper;
-class TimeAttackEventKeeper;
 
 class EventDirector : public NameObj {
 public:
@@ -20,7 +19,6 @@ public:
     StageStateKeeper* mStageStateKeeper;
     PowerStarHolder* mPowerStarHolder;
     CometEventKeeper* mCometEventKeeper;
-    TimeAttackEventKeeper* mTimeAttackEventKeeper;
 };
 
 namespace EventFunction {
@@ -28,7 +26,6 @@ namespace EventFunction {
     StageStateKeeper* getStageStateKeeper();
     PowerStarHolder* getPowerStarHolder();
     CometEventKeeper* getCometEventKeeper();
-    TimeAttackEventKeeper* getTimeAttackEventKeeper();
     bool isStartCometEvent(const char*);
     void startCometEvent();
     void endCometEvent();

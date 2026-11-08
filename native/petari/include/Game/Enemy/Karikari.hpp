@@ -34,7 +34,7 @@ public:
     void exeCling();
     void exeRelease();
     void exeSpinAttacked();
-    void exeDPDAttacked();
+    void exePointerAttacked();
     void exeFrozen();
     void exeFrozenRecover();
     void exeBlowOut();
@@ -44,8 +44,8 @@ public:
     bool tryBlowOut(const Vec3f&, bool);
     bool tryElectricKill();
     bool tryHipDropRelease();
-    bool tryDPDRelease(const Vec2f&);
-    bool tryDPDAttacked();
+    bool tryPointerRelease(const Vec2f&);
+    bool tryPointerAttacked();
 
     void setVelocityFromCursorMove(const Vec2f&);
     void generateItem(s32 numStarPieces);
@@ -57,9 +57,7 @@ public:
     Vec3f mFront;
     FixedPosition* mClingPosition;
     bool mIsReadyToLandTornado;
-    bool _9D;
-    bool _9E;
+    bool mCanAttack;
     bool mIsPushable;
     s32 mFrozenTime;
-    u32 _A4;
 };

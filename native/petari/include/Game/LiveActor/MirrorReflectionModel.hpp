@@ -4,7 +4,8 @@
 
 class MirrorReflectionModel : public LiveActor {
 public:
-    MirrorReflectionModel(const LiveActor*, const char*, const char*, MtxPtr);
+    // The host's model seen in the mirror; it follows pHostMtx, or the host's SRT when null.
+    MirrorReflectionModel(const LiveActor* pHost, const char* pName, const char* pInternalName, MtxPtr pHostMtx);
 
     virtual ~MirrorReflectionModel();
     virtual void init(const TableIter&) override;
@@ -13,7 +14,7 @@ public:
     virtual void calcViewAndEntry() override;
     virtual void calcAndSetBaseMtx() override;
 
-    const LiveActor* _8C;
-    MtxPtr _90;
-    u8 _94;
+    const LiveActor* mHost;
+    MtxPtr mHostMtx;
+    bool mIsHostGone;  // dead, clipped or hidden: this is off the draw lists
 };

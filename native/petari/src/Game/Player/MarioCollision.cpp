@@ -126,7 +126,7 @@ void Mario::createAtField(bool force, f32 radius) {
                 if (mMovementStates._37) {
                     if (!MR::isSameMtx(*triangle->getBaseMtx(), *triangle->getPrevBaseMtx()) && mGroundPolygon->mSensor != triangle->mSensor) {
                         angle = -1.0f;
-                        push(*normal * hit->_60);
+                        push(*normal * hit->mDepth);
                     }
                 }
 
@@ -162,7 +162,7 @@ void Mario::doSwimmingHitCheck(const HitInfo* pHit, u32 type) {
         return;
     }
 
-    mSwim->addVelocity(*normal, pHit->_60);
+    mSwim->addVelocity(*normal, pHit->mDepth);
 
     if (type == 0) {
         _97C->hitWall(*normal, triangle->mSensor);
@@ -536,7 +536,7 @@ void Mario::checkAllWall(const Vec3f& rPosition, f32 radius) {
             side = 1;
         }
 
-        if (walls[side] != nullptr && walls[side]->_60 > hit->_60) {
+        if (walls[side] != nullptr && walls[side]->mDepth > hit->mDepth) {
             continue;
         }
 
@@ -1203,7 +1203,7 @@ void Mario::checkBaseTransPoint() {
             continue;
         }
 
-        if (MR::abs(_16C.dot(*normal)) < hit->_60 || MR::isNearZero(hit->_60, 1.01f)) {
+        if (MR::abs(_16C.dot(*normal)) < hit->mDepth || MR::isNearZero(hit->mDepth, 1.01f)) {
             continue;
         }
 
@@ -1211,7 +1211,7 @@ void Mario::checkBaseTransPoint() {
             continue;
         }
 
-        addTrans(*normal * (hit->_60 - 1.0f), "めりこみ");
+        addTrans(*normal * (hit->mDepth - 1.0f), "めりこみ");
 
         if (!mMovementStates._1 && mMovementStates.jumping && !isRising() && normal->dot(*getGravityVec()) < -0.99f) {
             addVelocity(mFrontVec, 5.0f);
@@ -1290,11 +1290,11 @@ void Mario::checkHeadPoint() {
 
         Vec3f horizontal;
 
-        if (MR::vecKillElement(reaction, *normal, &horizontal) < hit->_60) {
-            reaction = horizontal + *normal * hit->_60;
+        if (MR::vecKillElement(reaction, *normal, &horizontal) < hit->mDepth) {
+            reaction = horizontal + *normal * hit->mDepth;
 
             if (isHeadPushEnableArea()) {
-                addVelocity(*normal, hit->_60);
+                addVelocity(*normal, hit->mDepth);
             }
 
             if (isSwimming()) {
@@ -1453,7 +1453,7 @@ bool Mario::updateBinderInfo() {
                     Vec3f pushDirection;
 
                     if (hit->isCollisionAtEdge()) {
-                        pushDirection = *triangle->getNormal(hit->_88 - 1);
+                        pushDirection = *triangle->getNormal(hit->mHitPart - 1);
                     } else if (!hit->isCollisionAtCorner()) {
                         pushDirection = mPosition - hit->mHitPos;
                     } else {
@@ -1530,7 +1530,7 @@ bool Mario::updateBinderInfo() {
                         }
                     }
 
-                    push(pushDirection * hit->_60 * scale);
+                    push(pushDirection * hit->mDepth * scale);
                     firstGround = false;
 
                     if (getPlayerMode() == PlayerMode_Teresa) {
@@ -1575,7 +1575,7 @@ bool Mario::updateBinderInfo() {
                             direction = mFrontVec;
                         }
 
-                        f32 distance = hit->_60;
+                        f32 distance = hit->mDepth;
 
                         if (distance == 0.0f) {
                             distance = 1.0f;

@@ -10,15 +10,15 @@ class NebulaArena;
 struct MeProgramFile;
 struct MeEntry;
 
+// An ME's playing parameters as the importer cooks them (native_data.rs rhythm).
 struct AudMePlayingParams {
     u8 mPriority;
     u8 mChordVolume;
     u8 mPan;
     u8 mDolby;
     u16 mFadeTime;
-    u8 _6;
-    u8 _7;
 };
+static_assert(sizeof(AudMePlayingParams) == 6, "the cook's ME record");
 
 class AudMePlayingParamsHolder {
 public:

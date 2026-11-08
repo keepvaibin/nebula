@@ -39,11 +39,11 @@ public:
     bool tryPunchHitted(HitSensor*, HitSensor*, bool);
 
     AnimScaleController* mAnimScaleController;
-    FixedPosition* _90;
+    FixedPosition* mStoneHoldPos;
     MoguStone* mStone;
     ModelObj* mHole;
     Vec3f mSight;
-    Vec3f _A8;
-    bool _B4;
+    Vec3f mUp;
+    bool mThrowOnGravity;
     bool mIsCannonFleet;
 };

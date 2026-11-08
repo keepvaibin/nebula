@@ -50,7 +50,7 @@ namespace {
 const f32 Tico::sFloatSeMinVolume = 0.2f;
 
 Tico::Tico(const char* pName)
-    : NPCActor(pName), _15C(), _160(0.0f, 0.0f, 0.0f), _16C(), mDemoGetPower(), _174(), _178(), _17C(255, 255, 255, 255), _180(), mDemoStarter(this) {
+    : NPCActor(pName), mBehavior(), mPrevPos(0.0f, 0.0f, 0.0f), mFloatOffset(), mDemoGetPower(), mTicoTalkCtrl(), mLightJointMtx(), mLightColor(255, 255, 255, 255), mMetaNerve(), mDemoStarter(this) {
 }
 
 void Tico::initBase(s32 color) {
@@ -66,7 +66,7 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
     caps.mSensorJoint = "Body";
     caps.mSensorSize = 60.0f;
     caps.mSensorOffset.zero();
-    caps._6C = "Body";
+    caps.mPointerJoint = "Body";
     caps.mBinder = 0;
 
     if (color == -1) {
@@ -74,35 +74,35 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
     }
 
     setDefaults2();
-    _13C = "Spin";
-    _12C = 1000.0f;
+    mReactionAction = "Spin";
+    mSwingReactDist = 1000.0f;
     const char* wait = "Wait";
     const char* talk = "Talk";
     const char* fly = "Fly";
-    mParam._14 = wait;
-    mParam._18 = wait;
-    mParam._1C = talk;
-    mParam._20 = talk;
-    _11C = fly;
-    _120 = fly;
-    _10C = 8.0f;
-    _110 = 0.2f;
-    mParam._C = 0.5f;
-    mParam._10 = 12.0f;
+    mParam.mWaitAction = wait;
+    mParam.mWaitTurnAction = wait;
+    mParam.mTalkAction = talk;
+    mParam.mTalkTurnAction = talk;
+    mMoveAction = fly;
+    mMoveTalkAction = fly;
+    mRailSpeed = 8.0f;
+    mRailAccel = 0.2f;
+    mParam.mTiltSpeed = 0.5f;
+    mParam.mTiltMaxAngle = 12.0f;
     initialize(rIter, caps);
     if (color != -1) {
         MR::startBrk(this, "ColorChange");
         MR::setBrkFrameAndStop(this, color);
-        _17C = ::hPointLight[color];
+        mLightColor = ::hPointLight[color];
     } else {
-        _17C = ::hPointLight[ARRAY_SIZE(::hPointLight) - 1];
+        mLightColor = ::hPointLight[ARRAY_SIZE(::hPointLight) - 1];
     }
 
-    _180 = GET_NERVE(Tico, TicoNrvMeta);
-    _160.set(mPosition);
+    mMetaNerve = GET_NERVE(Tico, TicoNrvMeta);
+    mPrevPos.set(mPosition);
     MR::startAction(this, "Wait");
     MR::setBckFrameAtRandom(this);
-    _178 = MR::getJointMtx(this, "Body");
+    mLightJointMtx = MR::getJointMtx(this, "Body");
 }
 
 void Tico::initMessage(const TableIter& rIter, const char* pMessageId) {
@@ -111,8 +111,8 @@ void Tico::initMessage(const TableIter& rIter, const char* pMessageId) {
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    _174 = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
-    MR::offRootNodeAutomatic(_174);
+    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
+    MR::offRootNodeAutomatic(mTicoTalkCtrl);
 }
 
 void Tico::initMessage(const char* pMessageId) {
@@ -123,8 +123,8 @@ void Tico::initMessage(const char* pMessageId) {
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    _174 = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
-    MR::offRootNodeAutomatic(_174);
+    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
+    MR::offRootNodeAutomatic(mTicoTalkCtrl);
 }
 
 void Tico::init(const TableIter& rIter) {
@@ -133,7 +133,7 @@ void Tico::init(const TableIter& rIter) {
     s32 behavior = 0;
     s32 clr = color;
     MR::getPlacementArg1NoInit(rIter, &behavior);
-    _15C = behavior;
+    mBehavior = behavior;
 
     if (MR::isObjectName(rIter, "TicoBaby")) {
         clr = -1;
@@ -145,23 +145,23 @@ void Tico::init(const TableIter& rIter) {
     AstroDemoFunction::tryRegisterDemoForTico(this, rIter);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
-        _15C = 0;
+        mBehavior = 0;
         if (MR::isRegisteredDemoActionAppear(this)) {
             makeActorDead();
         }
 
         if (MR::isDemoCast(this, "チコガイドデモ")) {
             if (clr == -1) {
-                _15C = 5;
+                mBehavior = 5;
             } else {
-                _15C = 6;
+                mBehavior = 6;
             }
         } else {
             if (MR::isDemoCast(this, "青チコ変身")) {
-                _15C = 1;
+                mBehavior = 1;
             } else {
                 if (MR::isDemoCast(this, "赤いスター")) {
-                    _15C = 9;
+                    mBehavior = 9;
                     MR::useStageSwitchWriteA(this, rIter);
                     MR::useStageSwitchWriteB(this, rIter);
                     DemoFunction::registerDemoTalkMessageCtrl(this, mMsgCtrl);
@@ -170,7 +170,7 @@ void Tico::init(const TableIter& rIter) {
         }
     }
 
-    switch (_15C) {
+    switch (mBehavior) {
     case 5:
         mDemoGetPower = new TicoDemoGetPower(this, rIter);
         setNerve(GET_NERVE(Tico, TicoNrvSpin0));
@@ -206,26 +206,26 @@ void Tico::init(const TableIter& rIter) {
 }
 
 void Tico::calcAndSetBaseMtx() {
-    MR::calcAndSetFloatBaseMtx(this, _16C);
+    MR::calcAndSetFloatBaseMtx(this, mFloatOffset);
 }
 
 void Tico::control() {
-    if (_178) {
+    if (mLightJointMtx) {
         Vec3f trans;
-        MR::extractMtxTrans(_178, &trans);
-        MR::requestPointLight(this, trans, _17C, 0.998646f, -1);
+        MR::extractMtxTrans(mLightJointMtx, &trans);
+        MR::requestPointLight(this, trans, mLightColor, 0.998646f, -1);
     }
 
-    if (isNerve(_180)) {
+    if (isNerve(mMetaNerve)) {
         NPCActor::control();
     } else {
         if (!MR::isTimeKeepDemoActive()) {
             MR::startLevelSound(this, "SE_SM_LV_TICO_WAIT");
         }
-        Vec3f len = mPosition - _160;
+        Vec3f len = mPosition - mPrevPos;
         MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT", (100.0f * MR::getLinerValueFromMinMax(len.length(), 1.0f, 11.0f, 0.2f, 1.0f)));
-        _160.set(mPosition);
-        _16C = MR::calcFloatOffset(this, _16C, 150.0f);
+        mPrevPos.set(mPosition);
+        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, 150.0f);
         NPCActor::control();
     }
 }
@@ -237,7 +237,7 @@ bool Tico::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
     if (MR::isMsgStarPieceAttack(msg)) {
         MR::limitedStarPieceHitSound();
-        _E5 = true;
+        mIsReaction = true;
 
         return true;
     }
@@ -246,7 +246,7 @@ bool Tico::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 bool Tico::tryReaction() {
-    if (_E5) {
+    if (mIsReaction) {
         pushNerve(GET_NERVE(Tico, TicoNrvDelight));
 
         return true;
@@ -256,7 +256,7 @@ bool Tico::tryReaction() {
 }
 
 void Tico::setNerveMeta() {
-    setNerve(_180);
+    setNerve(mMetaNerve);
 }
 
 void Tico::setNerveWait() {
@@ -264,23 +264,23 @@ void Tico::setNerveWait() {
 }
 
 bool Tico::killFunc(u32) {
-    setNerve(_180);
+    setNerve(mMetaNerve);
 
     return true;
 }
 
 void Tico::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_TICO_TRAMPLED");
     }
 
     if (isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_TICO_POINT");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::limitedStarPieceHitSound();
         MR::startSound(this, "SE_BM_BUTLER_ABSORB");
     }
@@ -292,11 +292,11 @@ void Tico::exeReaction() {
 
 void Tico::exeDelight() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(this, _13C);
-        MR::resetAndForwardNode(_174, MR::getRandom(0, 5));
+        MR::startAction(this, mReactionAction);
+        MR::resetAndForwardNode(mTicoTalkCtrl, MR::getRandom(0, 5));
     }
 
-    MR::tryTalkForce(_174);
+    MR::tryTalkForce(mTicoTalkCtrl);
 
     if (MR::isActionEnd(this)) {
         popNerve();

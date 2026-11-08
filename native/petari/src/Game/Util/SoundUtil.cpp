@@ -298,7 +298,7 @@ namespace MR {
         for (s32 i = 0; i < pRemixNoteGroupData->mTrackCount; i++) {
             RemixNoteTrackData* pRemixNoteTrackData = &pRemixNoteGroupData->mRemixTracks[i];
 
-            pRemixSequencer->addNoteData(pRemixNoteTrackData, &pRemixNoteTrackData->_4[param2]);
+            pRemixSequencer->addNoteData(pRemixNoteTrackData, &pRemixNoteTrackData->mNotes[param2]);
         }
     }
 
@@ -325,15 +325,7 @@ namespace MR {
             return nullptr;
         }
 
-        SoundHandle* pSoundHandle = AudWrap::startStageBgm(id, false);
-
-        if (pSoundHandle != nullptr) {
-            AudSceneMgr* pSceneMgr = AudWrap::getSceneMgr();
-
-            pSceneMgr->_4 = 1;
-        }
-
-        return pSoundHandle;
+        return AudWrap::startStageBgm(id, false);
     }
 
     void stopStageBGM(u32 param1) {
@@ -517,25 +509,25 @@ namespace MR {
     void submitTrigSE() {
         AudSystem* pSystem = AudWrap::getSystem();
 
-        pSystem->_82B = 1;
+        pSystem->mIsTrigSeBlocked = 1;
     }
 
     void permitTrigSE() {
         AudSystem* pSystem = AudWrap::getSystem();
 
-        pSystem->_82B = 0;
+        pSystem->mIsTrigSeBlocked = 0;
     }
 
     void submitLevelSE() {
         AudSystem* pSystem = AudWrap::getSystem();
 
-        pSystem->_82C = 1;
+        pSystem->mIsLevelSeBlocked = 1;
     }
 
     void permitLevelSE() {
         AudSystem* pSystem = AudWrap::getSystem();
 
-        pSystem->_82C = 0;
+        pSystem->mIsLevelSeBlocked = 0;
     }
 
     void submitSE() {
@@ -549,17 +541,17 @@ namespace MR {
     }
 
     bool isPermitSE() {
-        return !AudWrap::getSystem()->_82B && !AudWrap::getSystem()->_82C;
+        return !AudWrap::getSystem()->mIsTrigSeBlocked && !AudWrap::getSystem()->mIsLevelSeBlocked;
     }
 
     void setCubeBgmChangeInvalid() {
         AudSceneMgr* pSceneMgr = AudWrap::getSceneMgr();
 
-        pSceneMgr->_1D = 1;
+        pSceneMgr->mIsCubeBgmChangeInvalid = 1;
     }
 
     bool isCubeBgmChangeInvalid() {
-        return AudWrap::getSceneMgr()->_1D;
+        return AudWrap::getSceneMgr()->mIsCubeBgmChangeInvalid;
     }
 
     void clearBgmQueue() {
@@ -621,7 +613,7 @@ namespace MR {
         startSound(pActor, "SE_PM_SPIN_HIT");
     }
 
-    void startDPDHitSound() {
+    void startPointerHitSound() {
         if (hasME()) {
             startSystemME("ME_DPD_HIT");
         } else {
@@ -631,7 +623,7 @@ namespace MR {
         startCSSound2P("CS_DPD_HIT", nullptr);
     }
 
-    void startDPDFreezeLevelSound(const LiveActor* pActor) {
+    void startPointerFreezeLevelSound(const LiveActor* pActor) {
         startLevelSound(pActor, "SE_EM_LV_DPD_POINT");
     }
 

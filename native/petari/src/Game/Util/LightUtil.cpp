@@ -40,11 +40,11 @@ namespace MR {
     }
 
     void initActorLightInfoLightType(LiveActor* pActor, s32 a2) {
-        pActor->mActorLightCtrl->_4 = a2;
+        pActor->mActorLightCtrl->mLightType = a2;
     }
 
     void initActorLightInfoDrawBuffer(LiveActor* pActor, DrawBuffer* pDrawBuffer) {
-        pActor->mActorLightCtrl->_8 = pDrawBuffer;
+        pActor->mActorLightCtrl->mDrawBuffer = pDrawBuffer;
     }
 
     void requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {

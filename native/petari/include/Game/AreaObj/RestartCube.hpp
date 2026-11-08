@@ -15,7 +15,7 @@ public:
     void changeBgm();
 
     PlacementId* mIdInfo;
-    s32 _40;
-    s32 _44;
-    bool _48;
+    s32 mBgmIndex;
+    s32 mBgmStateIndex;
+    bool mIsBgmChanged;
 };

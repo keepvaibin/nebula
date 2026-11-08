@@ -3,18 +3,18 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-TripodBossStepStartArea::TripodBossStepStartArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(-1) {
+TripodBossStepStartArea::TripodBossStepStartArea(int formType, const char* pName) : AreaObj(formType, pName), mSequenceNo(-1) {
 }
 
 void TripodBossStepStartArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
-    _3C = mObjArg0;
+    mSequenceNo = mObjArg0;
 }
 
 void TripodBossStepStartArea::movement() {
     if (isInVolume(*MR::getPlayerPos())) {
-        MR::requestStartTripodBossStepSequence(_3C);
+        MR::requestStartTripodBossStepSequence(mSequenceNo);
     }
 }
 

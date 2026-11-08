@@ -44,7 +44,7 @@ namespace {
 };  // namespace
 
 TamakoroTutorial::TamakoroTutorial(const char* pName)
-    : LiveActor(pName), mHost(), mTalkCtrl(), mTalkCtrlAutomatic(), mPadAccel(0.0f, 0.0f, 0.0f), _A4(), _A5() {
+    : LiveActor(pName), mHost(), mTalkCtrl(), mTalkCtrlAutomatic(), mPadAccel(0.0f, 0.0f, 0.0f), mIsTrampled(), mCanTalk() {
 }
 
 void TamakoroTutorial::init(const TableIter& rIter) {
@@ -54,7 +54,7 @@ void TamakoroTutorial::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addHitSensorEnemy(this, "body", 16, 100.0f, Vec3f(0.0f, 100.0f, 0.0f));
     MR::addHitSensorCallbackMapObjSimple(this, "push", 16, 200.0f);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
     MR::createSceneObj(SceneObj_PlayerActionGuidance);
@@ -70,13 +70,13 @@ void TamakoroTutorial::init(const TableIter& rIter) {
 
         initNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvFirst));
 
-        _A5 = false;
+        mCanTalk = false;
     } else {
         mTalkCtrl = MR::createTalkCtrl(this, rIter, "SignBoard", Vec3f(0.0f, 0.0f, 0.0f), nullptr);
 
         initNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait));
 
-        _A5 = true;
+        mCanTalk = true;
 
         getSensor("push")->invalidate();
         mHost->startRide();
@@ -267,7 +267,7 @@ void TamakoroTutorial::exeWait() {
         mHost->requestTutorialEnd();
         MR::onGameEventFlagTamakoroTutorialAtFirst();
         setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait));
-    } else if (_A5 && MR::tryTalkNearPlayerAtEnd(mTalkCtrl)) {
+    } else if (mCanTalk && MR::tryTalkNearPlayerAtEnd(mTalkCtrl)) {
         MR::tryForwardNode(mTalkCtrl);
     }
 }
@@ -283,14 +283,14 @@ void TamakoroTutorial::exeTrample() {
         }
     }
 
-    if (MR::isActionEnd(this) && MR::isGreaterStep(this, 60) && !_A4) {
+    if (MR::isActionEnd(this) && MR::isGreaterStep(this, 60) && !mIsTrampled) {
         if (isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvTrampleFront))) {
             setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverFront));
         } else {
             setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverBack));
         }
     } else {
-        _A4 = false;
+        mIsTrampled = false;
     }
 }
 
@@ -316,7 +316,7 @@ void TamakoroTutorial::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorRide(pReceiver)) {
-        _A4 = true;
+        mIsTrampled = true;
     }
 }
 

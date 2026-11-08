@@ -38,8 +38,6 @@ public:
     Vec3f mFixPointBottomDir;
     s32 mPointCount;
     SwingRopePoint** mPoints;
-    s32 _138;
-    u8 _13C[4];
     s32 mAccelPointIdx;
     s32 mAccelTimer;
     Vec3f mAccel;

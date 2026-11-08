@@ -12,7 +12,7 @@ namespace NrvButlerStateStarPieceReaction {
 };  // namespace NrvButlerStateStarPieceReaction
 
 ButlerStateStarPieceReaction::ButlerStateStarPieceReaction(LiveActor* pHost, const TableIter& rIter, const char* pName)
-    : ActorStateBase< LiveActor >("バトラースターピース反応", pHost), mTalkMessage(nullptr), _14(false) {
+    : ActorStateBase< LiveActor >("バトラースターピース反応", pHost), mTalkMessage(nullptr), mIsTalkForce(false) {
     mTalkMessage = MR::createTalkCtrlDirectOnRootNodeAutomatic(pHost, rIter, pName, Vec3f(0.0f, 180.0f, 0.0f), nullptr);
 }
 
@@ -21,7 +21,7 @@ void ButlerStateStarPieceReaction::init() {
 }
 
 void ButlerStateStarPieceReaction::appear() {
-    _14 = true;
+    mIsTalkForce = true;
     mIsDead = false;
 
     setNerve(GET_NERVE(ButlerStateStarPieceReaction, ButlerStateStarPieceReactionNrvWait));
@@ -34,7 +34,7 @@ void ButlerStateStarPieceReaction::exeWait() {
         MR::startSound(mHost, "SE_SM_BUTLER_ABSORB");
     }
 
-    if (_14) {
+    if (mIsTalkForce) {
         MR::tryTalkForce(mTalkMessage);
     }
 

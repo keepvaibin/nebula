@@ -22,7 +22,7 @@ namespace NrvPoltaRock {
 };  // namespace NrvPoltaRock
 
 PoltaRock::PoltaRock(const char* pName)
-    : LiveActor(pName), mOwner(nullptr), _90(0.0f, 0.0f, 0.0f, 1.0f), _A0(0.0f, 0.0f, 1.0f), _AC(0.0f, 0.0f, 0.0f), mType(0) {
+    : LiveActor(pName), mOwner(nullptr), mRollQuat(0.0f, 0.0f, 0.0f, 1.0f), mChaseDir(0.0f, 0.0f, 1.0f), mLocalPos(0.0f, 0.0f, 0.0f), mType(0) {
 }
 
 void PoltaRock::init(const TableIter& rIter) {
@@ -34,7 +34,7 @@ void PoltaRock::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "Body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(120.0f, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::initShadowFromCSV(this, "Shadow");
     initNerve(GET_NERVE(PoltaRock, PoltaRockNrvFloat));
@@ -60,14 +60,14 @@ void PoltaRock::control() {
 }
 
 void PoltaRock::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _90);
+    MR::setBaseTRMtx(this, mRollQuat);
     MR::setBaseScale(this, mScale);
 }
 
 void PoltaRock::start(Polta* pPolta, const Vec3f& rPosition, const Vec3f& rVec2) {
     mOwner = pPolta;
     mPosition.set(rPosition);
-    _AC.set(rVec2);
+    mLocalPos.set(rVec2);
     setNerve(GET_NERVE(PoltaRock, PoltaRockNrvFloat));
     appear();
     MR::offBind(this);
@@ -138,7 +138,7 @@ void PoltaRock::exeFloat() {
         MR::emitEffect(this, "Appear");
     }
     MR::startLevelSound(this, "SE_OJ_LV_POLTA_ROCK_FLOAT");
-    NebulaMtxMultVec(getOwner()->getBaseMtx(), &_AC, v3);
+    NebulaMtxMultVec(getOwner()->getBaseMtx(), &mLocalPos, v3);
     MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
     MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
     MR::attenuateVelocity(this, 0.92f);
@@ -154,7 +154,7 @@ void PoltaRock::exeSign() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Sign");
     }
-    NebulaMtxMultVec(getOwner()->getBaseMtx(), &_AC, v3);
+    NebulaMtxMultVec(getOwner()->getBaseMtx(), &mLocalPos, v3);
     MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
     MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
     MR::attenuateVelocity(this, 0.92f);
@@ -166,18 +166,18 @@ void PoltaRock::exeSign() {
 
 void PoltaRock::exeMove() {
     if (MR::isFirstStep(this)) {
-        _A0.set(*MR::getPlayerCenterPos() - mPosition);
-        MR::normalizeOrZero(&_A0);
+        mChaseDir.set(*MR::getPlayerCenterPos() - mPosition);
+        MR::normalizeOrZero(&mChaseDir);
         MR::startSound(this, "SE_OJ_POLTA_ROCK_FLY");
         MR::zeroVelocity(this);
     }
 
     if (MR::isLessStep(this, 30)) {
-        mVelocity.add(_A0 * (3.0f * MR::calcNerveRate(this, 30)));
+        mVelocity.add(mChaseDir * (3.0f * MR::calcNerveRate(this, 30)));
     }
     MR::addVelocityToGravity(this, -0.02f);
     MR::attenuateVelocity(this, 0.999f);
-    MR::rotateQuatRollBall(&_90, mVelocity, -mGravity, 120.0f);
+    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, 120.0f);
     if (MR::isBinded(this)) {
         MR::sendMsgEnemyAttackToBindedSensor(this, getSensor("Body"));
         MR::tryRumbleDefaultHit(this, 0);

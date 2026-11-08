@@ -22,11 +22,11 @@ public:
     void loadLightPlayer() const;
     void loadLightCoin() const;
 
-    LightAreaHolder* _C;
+    LightAreaHolder* mAreaHolder;
     LightDataHolder* mDataHolder;
     LightZoneDataHolder* mZoneDataHolder;
     AreaLightInfo* mDefaultAreaLight;
-    const ActorLightCtrl* _1C;
+    const ActorLightCtrl* mPlayerLightCtrl;
     LightPointCtrl* mPointCtrl;
     ResourceHolder* mResourceHolder;
 };

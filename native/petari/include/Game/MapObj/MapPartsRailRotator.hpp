@@ -43,7 +43,7 @@ public:
     f32 mRotateSpeed;
     f32 mTargetAngle;
     f32 mAngle;
-    Pos3f _2C;
-    Pos3f _5C;
+    Pos3f mBaseRotateMtx;
+    Pos3f mRotateMtx;
     MtxPtr mHostRotateMtx;
 };

@@ -22,11 +22,11 @@ namespace NrvPlayTimerScene {
     NEW_NERVE(PlayTimerSceneFadeoutAfterTimeUp, PlayTimerScene, FadeoutAfterTimeUp);
 };  // namespace NrvPlayTimerScene
 
-PlayTimerScene::PlayTimerScene() : Scene("PlayTimerScene"), mTimeLimitLayout(), mTimeUpLayout(), mTimeUpWaitFrame(::sTimeUpWaitFrame), _20() {
+PlayTimerScene::PlayTimerScene() : Scene("PlayTimerScene"), mTimeLimitLayout(), mTimeUpLayout(), mTimeUpWaitFrame(::sTimeUpWaitFrame), mFadeCtrl() {
     initNerve(GET_NERVE(PlayTimerScene, PlayTimerSceneNormal));
 
-    _20 = new ValueControl(30);
-    _20->setZero();
+    mFadeCtrl = new ValueControl(30);
+    mFadeCtrl->setZero();
 }
 
 void PlayTimerScene::init() {
@@ -47,7 +47,7 @@ void PlayTimerScene::start() {
 
 void PlayTimerScene::update() {
     updateNerve();
-    _20->update();
+    mFadeCtrl->update();
 
     if (isActive()) {
         {
@@ -89,12 +89,12 @@ void PlayTimerScene::draw() const {
         mTimeUpLayout->draw();
     }
 
-    if (_20->mFrame == 0) {
+    if (mFadeCtrl->mFrame == 0) {
         return;
     }
 
     MR::setupScreen2D();
-    u8 alpha = MR::lerp(0, 255, _20->getValue());
+    u8 alpha = MR::lerp(0, 255, mFadeCtrl->getValue());
     MR::drawScreenColor(Color8(0, 0, 0, alpha));
 }
 
@@ -132,7 +132,7 @@ void PlayTimerScene::startTimeUp() {
 
 void PlayTimerScene::exeNormal() {
     if (MR::isFirstStep(this)) {
-        _20->setZero();
+        mFadeCtrl->setZero();
     }
 }
 
@@ -150,10 +150,10 @@ void PlayTimerScene::exeTimeUp() {
 
 void PlayTimerScene::exeFadeoutAfterTimeUp() {
     if (MR::isFirstStep(this)) {
-        _20->setDirToOneResetFrame();
+        mFadeCtrl->setDirToOneResetFrame();
     }
 
-    if (_20->mFrame == _20->mMaxFrame) {
+    if (mFadeCtrl->mFrame == mFadeCtrl->mMaxFrame) {
         mTimeLimitLayout->kill();
         mTimeUpLayout->kill();
         setNerve(GET_NERVE(PlayTimerScene, PlayTimerSceneNormal));

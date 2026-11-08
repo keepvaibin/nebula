@@ -328,8 +328,8 @@ public:
         return mTick;
     }
 
-    void setVolumeMiniRadius(f32 param_1) {
-        mVolumeMinRad = param_1;
+    void setVolumeMiniRadius(f32 radius) {
+        mVolumeMinRad = radius;
     }
 
     void setMaxFrame(s32 maxFrame) {

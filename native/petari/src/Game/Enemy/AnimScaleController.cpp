@@ -6,7 +6,7 @@
 namespace NrvAnimScaleController {
     NEW_NERVE(AnimScaleControllerNrvAnim, AnimScaleController, Anim);
     NEW_NERVE(AnimScaleControllerNrvStop, AnimScaleController, Stop);
-    NEW_NERVE(AnimScaleControllerNrvDpdVibration, AnimScaleController, DpdVibration);
+    NEW_NERVE(AnimScaleControllerNrvPointerVibration, AnimScaleController, PointerVibration);
     NEW_NERVE(AnimScaleControllerNrvHitReaction, AnimScaleController, HitReaction);
     NEW_NERVE(AnimScaleControllerNrvCrush, AnimScaleController, Crush);
 };  // namespace NrvAnimScaleController
@@ -21,54 +21,54 @@ namespace {
     };
 
     AnimScaleDefaultParam::AnimScaleDefaultParam() {
-        tightParam._0 = 0.5f;
-        tightParam._4 = 0.85f;
-        tightParam._10 = 8.0f;
-        tightParam._14 = 0.8f;
-        tightParam._18 = 0.08f;
-        tightParam._1C = 2.2f;
+        tightParam.mAnimSpring = 0.5f;
+        tightParam.mAnimDamping = 0.85f;
+        tightParam.mPointerTime = 8.0f;
+        tightParam.mPointerBase = 0.8f;
+        tightParam.mPointerAmplitude = 0.08f;
+        tightParam.mPointerFreq = 2.2f;
     };
 
     AnimScaleDefaultParam sStaticAnimParam;
 };  // namespace
 
 AnimScaleParam::AnimScaleParam() {
-    _0 = 0.2f;
-    _4 = 0.91f;
-    _8 = 0.2f;
-    _C = 1.8f;
-    _10 = 12.0f;
-    _14 = 0.55f;
-    _18 = 0.12f;
-    _1C = 2.0f;
-    _20 = 0.06f;
-    _24 = 0.12f;
-    _28 = 0.91f;
-    _2C = 0x14;
-    _30 = 0.25f;
+    mAnimSpring = 0.2f;
+    mAnimDamping = 0.91f;
+    mScaleMin = 0.2f;
+    mScaleMax = 1.8f;
+    mPointerTime = 12.0f;
+    mPointerBase = 0.55f;
+    mPointerAmplitude = 0.12f;
+    mPointerFreq = 2.0f;
+    mHitReactionVelocity = 0.06f;
+    mHitReactionSpring = 0.12f;
+    mHitReactionDamping = 0.91f;
+    mCrushStep = 0x14;
+    mCrushEnd = 0.25f;
 }
 
 AnimScaleController::AnimScaleController(AnimScaleParam* pScaleParam) : NerveExecutor("スケールアニメコントロール\000" /* スケールアニメコントロール\00 */) {
-    _8 = pScaleParam;
-    _C.set(1.0f);
-    _18 = 0.0f;
+    mParam = pScaleParam;
+    mScale.set(1.0f);
+    mScaleVelocity = 0.0f;
 
     if (pScaleParam == nullptr) {
-        _8 = &::sStaticAnimParam;
+        mParam = &::sStaticAnimParam;
     }
     initNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
 }
 
 void AnimScaleController::setParamTight() {
-    _8 = &::sStaticAnimParam.tightParam;
+    mParam = &::sStaticAnimParam.tightParam;
 }
 
 void AnimScaleController::startAnim() {
     setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvAnim));
 }
 
-void AnimScaleController::startDpdHitVibration() {
-    setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvDpdVibration));
+void AnimScaleController::startPointerHitVibration() {
+    setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvPointerVibration));
 }
 
 void AnimScaleController::startHitReaction() {
@@ -76,7 +76,7 @@ void AnimScaleController::startHitReaction() {
 }
 
 void AnimScaleController::startAndAddScaleVelocityY(f32 f1) {
-    _18 += f1;
+    mScaleVelocity += f1;
     setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvAnim));
 }
 
@@ -86,18 +86,16 @@ void AnimScaleController::startCrush() {
 
 void AnimScaleController::stopAndReset() {
     resetScale();
-    // resetScale already sets _18 to 0, so this is completely unnecessary
-    _18 = 0.0f;
     setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
 }
 
 void AnimScaleController::resetScale() {
-    _18 = 0.0f;
-    _C.set(1.0f);
+    mScaleVelocity = 0.0f;
+    mScale.set(1.0f);
 }
 
 void AnimScaleController::exeAnim() {
-    updateScale(_8->_0, _8->_4);
+    updateScale(mParam->mAnimSpring, mParam->mAnimDamping);
     if (tryStop()) {
         return;
     }
@@ -109,35 +107,35 @@ void AnimScaleController::exeStop() {
 void AnimScaleController::exeHitReaction() {
     if (MR::isFirstStep(this)) {
         resetScale();
-        _18 = _8->_20;
+        mScaleVelocity = mParam->mHitReactionVelocity;
     }
 
-    updateScale(_8->_24, _8->_28);
+    updateScale(mParam->mHitReactionSpring, mParam->mHitReactionDamping);
     if (tryStop()) {
         return;
     }
 }
 
-void AnimScaleController::exeDpdVibration() {
+void AnimScaleController::exePointerVibration() {
     f32 nerveStep = getNerveStep();
-    f32 dpdVibrationValue = MR::getReduceVibrationValue(nerveStep, _8->_10, _8->_14, _8->_18, _8->_1C);
+    f32 dpdVibrationValue = MR::getReduceVibrationValue(nerveStep, mParam->mPointerTime, mParam->mPointerBase, mParam->mPointerAmplitude, mParam->mPointerFreq);
 
-    _C.y = dpdVibrationValue;
-    _C.x = MR::sqrt(1.0f / _C.y);
-    _C.z = _C.x;
+    mScale.y = dpdVibrationValue;
+    mScale.x = MR::sqrt(1.0f / mScale.y);
+    mScale.z = mScale.x;
 }
 
 void AnimScaleController::exeCrush() {
-    _18 = 0.0f;
+    mScaleVelocity = 0.0f;
 
-    f32 nerveRate = MR::calcNerveRate(this, _8->_2C);
-    f32 crushValue = MR::getConvergeVibrationValue(nerveRate, 1.0f, _8->_30, 0.3f, 4.0f);
+    f32 nerveRate = MR::calcNerveRate(this, mParam->mCrushStep);
+    f32 crushValue = MR::getConvergeVibrationValue(nerveRate, 1.0f, mParam->mCrushEnd, 0.3f, 4.0f);
 
-    _C.y = crushValue;
-    _C.x = MR::sqrt(1.0f / _C.y);
-    _C.z = _C.x;
+    mScale.y = crushValue;
+    mScale.x = MR::sqrt(1.0f / mScale.y);
+    mScale.z = mScale.x;
 
-    if (MR::isGreaterStep(this, _8->_2C)) {
+    if (MR::isGreaterStep(this, mParam->mCrushStep)) {
         setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
     }
 }
@@ -154,7 +152,7 @@ bool AnimScaleController::isHitReaction(s32 a1) const {
 }
 
 bool AnimScaleController::tryStop() {
-    if (MR::abs(1.0f - _C.y) < 0.001f && MR::abs(_18) < 0.001f) {
+    if (MR::abs(1.0f - mScale.y) < 0.001f && MR::abs(mScaleVelocity) < 0.001f) {
         resetScale();
         setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvStop));
         return true;
@@ -167,26 +165,26 @@ void AnimScaleController::update() {
 }
 
 void AnimScaleController::updateScale(f32 f1, f32 f2) {
-    f32 updateValue = ((1.0f - _C.y) * f1 + _18);
+    f32 updateValue = ((1.0f - mScale.y) * f1 + mScaleVelocity);
     updateValue = updateValue * f2;
-    _18 = updateValue;
-    _C.y += updateValue;
+    mScaleVelocity = updateValue;
+    mScale.y += updateValue;
 
-    f32 updateValue2 = _C.y;
+    f32 updateValue2 = mScale.y;
 
-    f32 clampMin = _8->_8;
-    f32 clampMax = _8->_C;
-    if (_C.y < clampMin) {
+    f32 clampMin = mParam->mScaleMin;
+    f32 clampMax = mParam->mScaleMax;
+    if (mScale.y < clampMin) {
         updateValue2 = clampMin;
-    } else if (_C.y > clampMax) {
+    } else if (mScale.y > clampMax) {
         updateValue2 = clampMax;
     } else {
-        updateValue2 = _C.y;
+        updateValue2 = mScale.y;
     }
 
-    _C.y = updateValue2;
-    _C.x = MR::sqrt(1.0f / _C.y);
-    _C.z = _C.x;
+    mScale.y = updateValue2;
+    mScale.x = MR::sqrt(1.0f / mScale.y);
+    mScale.z = mScale.x;
 }
 
 AnimScaleController::~AnimScaleController() {};

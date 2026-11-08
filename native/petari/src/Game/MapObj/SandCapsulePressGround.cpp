@@ -15,7 +15,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    // static const f32 sMoveUpDepth = _;
     static const s32 sStepForMove = 1200;
     static const s32 sStepForMoveStart = 120;
     static const s32 sStepForMoveEnd = 180;
@@ -36,7 +35,7 @@ namespace NrvSandCapsulePressGround {
 };  // namespace NrvSandCapsulePressGround
 
 SandCapsulePressGround::SandCapsulePressGround(const char* pName) : MapObjActor(pName) {
-    _DC.identity();
+    mEffectMtx.identity();
 }
 
 void SandCapsulePressGround::init(const TableIter& rIter) {
@@ -46,17 +45,17 @@ void SandCapsulePressGround::init(const TableIter& rIter) {
     info.setupNerve(GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvWaitBottom));
     initialize(rIter, info);
     MR::setBodySensorTypePress(this);
-    _DC.set(getBaseMtx());
-    MR::setEffectHostMtx(this, "FallSand", _DC);
+    mEffectMtx.set(getBaseMtx());
+    MR::setEffectHostMtx(this, "FallSand", mEffectMtx);
 
     if (MR::isDemoCast(this, nullptr)) {
         MR::tryRegisterDemoActionNerve(this, GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvDisappearDemo), nullptr);
     }
 
-    _C4.set(mPosition);
+    mLowerPos.set(mPosition);
     Vec3f up;
     MR::calcUpVec(&up, this);
-    _D0.scaleAdd(3600.0f, up, _C4);
+    mUpperPos.scaleAdd(3600.0f, up, mLowerPos);
 }
 
 void SandCapsulePressGround::exeWait() {
@@ -73,7 +72,7 @@ void SandCapsulePressGround::exeMoveStart() {
     if (MR::isFirstStep(this)) {
         MR::onSwitchA(this);
         MR::shakeCameraInfinity(this, 0.15f, 1.5f);
-        MR::makeMtxUpNoSupport(&_DC, -mGravity);
+        MR::makeMtxUpNoSupport(&mEffectMtx, -mGravity);
         MR::emitEffect(this, "FallSand");
     }
 
@@ -103,7 +102,7 @@ void SandCapsulePressGround::exeMove() {
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_DESERT_LAND_MOVE");
-    _DC.setTrans(mPosition);
+    mEffectMtx.setTrans(mPosition);
 
     if (MR::isStep(this, ::sStepForMove)) {
         mVelocity.zero();
@@ -111,10 +110,10 @@ void SandCapsulePressGround::exeMove() {
         MR::startSound(this, "SE_OJ_DESERT_LAND_MOVE_ED");
 
         if (isNerve(GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvMoveUp))) {
-            mPosition.set(_D0);
+            mPosition.set(mUpperPos);
             setNerve(GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvMoveUpEnd));
         } else {
-            mPosition.set(_C4);
+            mPosition.set(mLowerPos);
             setNerve(GET_NERVE(SandCapsulePressGround, SandCapsulePressGroundNrvMoveDownEnd));
         }
     }
@@ -140,7 +139,7 @@ void SandCapsulePressGround::exeDisappearDemo() {
         MR::offSwitchA(this);
 
         Vec3f v8;
-        v8.add(_C4, _D0);
+        v8.add(mLowerPos, mUpperPos);
         v8.x /= 2.0f;
         v8.y /= 2.0f;
         v8.z /= 2.0f;

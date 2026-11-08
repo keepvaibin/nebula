@@ -27,5 +27,4 @@ public:
     DinoPackunStateDamage* mStateDamage;
     DinoPackunTrackFireHolder* mTrackFireHolder;
     DinoPackunStateFire* mStateFire;
-    f32 _20;
 };

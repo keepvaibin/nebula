@@ -91,7 +91,7 @@ static StdSoundInfo* newSoundInfo(SoundArchive* pAudioData) {
 }
 
 AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
-    : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
+    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
@@ -179,10 +179,10 @@ void AudSystem::frameWork() {
         mSpkSystem->framework();
     }
 
-    if (_830 >= 0) {
-        _830--;
-        if (_830 <= 0) {
-            _830 = -1;
+    if (mSeMuteFrames >= 0) {
+        mSeMuteFrames--;
+        if (mSeMuteFrames <= 0) {
+            mSeMuteFrames = -1;
         }
     }
 
@@ -215,19 +215,11 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
-    if (_828) {
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
-    if (_82A) {
-        return false;
-    }
-
-    if (_830 >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
-        return false;
-    }
-
-    if (_82B && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mIsTrigSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
@@ -256,19 +248,11 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         return false;
     }
 
-    if (_828) {
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
-    if (_82A) {
-        return false;
-    }
-
-    if (_830 >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
-        return false;
-    }
-
-    if (_82C && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mIsLevelSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
@@ -372,9 +356,8 @@ void AudSystem::resumeReset() {
         mVolumeController->init();
     }
 
-    _82A = false;
-    _82B = false;
-    _82C = false;
+    mIsTrigSeBlocked = false;
+    mIsLevelSeBlocked = false;
     mHomeButtonMenuState = MenuState_Off;
     mHomeButtonToggleTime = -1;
     mPauseMenuState = MenuState_Off;
@@ -582,15 +565,11 @@ bool AudSystem::isEnableStartSound(SoundID soundID) {
         return false;
     }
 
-    if (_828) {
-        return false;
-    }
-
     if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
 
-    if (_830 >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 

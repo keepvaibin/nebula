@@ -52,7 +52,7 @@ public:
     OceanRingDrawer* mRingDrawer;
     Box3f mBox;
     Box3f mClippingBox;
-    Vec3f _108;
+    Vec3f mClippingCenter;
     Vec3f mNearestToWatchCam;
     AudSoundObject* mSoundObj1;
     Vec3f mNerarestToCam;

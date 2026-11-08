@@ -325,7 +325,7 @@ void MarioActor::updateControllerSwingLeft() {
     }
 }
 
-void MarioActor::lockOnDPD() {
+void MarioActor::lockOnPointer() {
 }
 
 bool MarioActor::isRequestSpinJump2P() const {

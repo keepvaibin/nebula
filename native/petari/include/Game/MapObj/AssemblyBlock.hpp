@@ -22,14 +22,14 @@ public:
     bool tryStartAssemble();
     bool tryStartReturn();
 
-    Pos3f _8C;
-    Pos3f _BC;
-    Pos3f _EC;
+    Pos3f mCurrentMtx;
+    Pos3f mAssembledMtx;
+    Pos3f mReturnMtx;
     s32 mObjArg7;
     f32 mPlayerSearchDistance;
-    Vec3f _124;
+    Vec3f mClipCenter;
     f32 mFloatRotateSpeed;
     s32 mTimer;
     PartsModel* mBloomModel;
-    bool _13C;
+    bool mIsTimerType;
 };

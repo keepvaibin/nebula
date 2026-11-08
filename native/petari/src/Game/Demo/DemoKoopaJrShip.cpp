@@ -47,7 +47,7 @@ void DemoKoopaJrShip::init(const TableIter& rIter) {
     initModelManagerWithAnm("KoopaJrShip", nullptr, false);
     initAnimID(rIter);
     MR::connectToSceneNpc(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(8, false);
     MR::invalidateClipping(this);
     createKoopaJrObj(rIter);

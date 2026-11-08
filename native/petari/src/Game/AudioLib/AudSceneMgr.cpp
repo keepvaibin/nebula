@@ -10,21 +10,19 @@ namespace {
     const u32 cLuigiVoices = 4;
 }  // namespace
 
-AudSceneMgr::AudSceneMgr(SoundArchive* pAudioData) : mAudioData(pAudioData), _4(), mPlayerMode(), _1D() {
+AudSceneMgr::AudSceneMgr(SoundArchive* pAudioData) : mAudioData(pAudioData), mPlayerMode(), mIsCubeBgmChangeInvalid() {
 }
 
 void AudSceneMgr::startScene() {
-    _4 = 0;
-    AudWrap::getSystem()->_82A = false;
-    AudWrap::getSystem()->_82B = false;
-    AudWrap::getSystem()->_82C = false;
+    AudWrap::getSystem()->mIsTrigSeBlocked = false;
+    AudWrap::getSystem()->mIsLevelSeBlocked = false;
     AudWrap::getSystem()->initSceneVolume();
     AudEffector* effector = AudWrap::getSystem()->mAudEffector;
     if (effector != nullptr) {
         effector->initParams();
     }
 
-    _1D = false;
+    mIsCubeBgmChangeInvalid = false;
 }
 
 void AudSceneMgr::setPlayerLuigi(bool isLuigi) {

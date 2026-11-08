@@ -30,7 +30,7 @@ void RingBeamer::init(const TableIter& rIter) {
     MR::addHitSensorPush(this, "Body", 8, 160.0f, Vec3f(0.0f, 80.0f, 0.0f));
     MR::addHitSensorMtxEnemyAttack(this, "Head", 8, 130.0f, MR::getJointMtx(this, "Top"), Vec3f(0.0f, 110.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 120.0f);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(8, false);
     initNerve(GET_NERVE(RingBeamer, RingBeamerNrvWait));
     makeActorAppeared();

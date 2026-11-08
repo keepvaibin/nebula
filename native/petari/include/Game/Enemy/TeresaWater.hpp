@@ -21,14 +21,14 @@ public:
     void exeMove();
     void exeHit();
     void exeStun();
-    void exeDPDSwoon();
-    void endDPDSwoon();
-    bool tryDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
+    bool tryPointerSwoon();
 
-    AnimScaleController* _8C;
-    WalkerStateBindStarPointer* _90;
-    Vec3f _94;
-    Vec3f _A0;
-    Vec3f _AC;
-    Vec3f* _B8;
+    AnimScaleController* mScaleCtrl;
+    WalkerStateBindStarPointer* mBindStarPointer;
+    Vec3f mFront;
+    Vec3f mFarPos;
+    Vec3f mInitPos;
+    Vec3f* mTarget;
 };

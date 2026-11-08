@@ -111,7 +111,6 @@ private:
     Quat4f mBallRotateQuat;
     Quat4f mMarioRotateQuat;
     Vec3f mRingUp;
-    Vec3f _C4;  // unused
     Vec3f mKickVel;
     Vec3f mMarioBindRequestPos;
     Vec3f mMarioUp;

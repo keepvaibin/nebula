@@ -85,12 +85,12 @@ namespace {
         mFindPlayerParam.mJumpStartStep = 56;
         mFindPlayerParam.mTurnMaxRateDegree = 2.0f;
         mFindPlayerParam.mJumpVelocity = 35.0f;
-        mScaleParam._0 = 0.1f;
-        mScaleParam._10 = 30.0f;
-        mScaleParam._14 = 0.6f;
-        mScaleParam._18 = 0.06f;
-        mScaleParam._1C = 3.0f;
-        mScaleParam._24 = 0.1f;
+        mScaleParam.mAnimSpring = 0.1f;
+        mScaleParam.mPointerTime = 30.0f;
+        mScaleParam.mPointerBase = 0.6f;
+        mScaleParam.mPointerAmplitude = 0.06f;
+        mScaleParam.mPointerFreq = 3.0f;
+        mScaleParam.mHitReactionSpring = 0.1f;
     }
 
     static KuriboChiefParam sParam;
@@ -117,11 +117,11 @@ KuriboChief::KuriboChief(const char* pName) : LiveActor(pName) {
     mStateBindStarPointer = nullptr;
     mItemGenerator = nullptr;
     mKeySwitch = nullptr;
-    _AC.x = 0.0f;
-    _AC.y = 0.0f;
-    _AC.z = 0.0f;
-    _AC.w = 1.0f;
-    _BC.set(0.0f, 0.0f, 1.0f);
+    mRotateQuat.x = 0.0f;
+    mRotateQuat.y = 0.0f;
+    mRotateQuat.z = 0.0f;
+    mRotateQuat.w = 1.0f;
+    mFront.set(0.0f, 0.0f, 1.0f);
 }
 
 void KuriboChief::init(const TableIter& rIter) {
@@ -131,7 +131,7 @@ void KuriboChief::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     MR::onCalcGravity(this);
     mItemGenerator = new ItemGenerator();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
     mScaleController = new AnimScaleController(&::sParam.mScaleParam);
     MR::initStarPointerTargetAtJoint(this, "Body", 350.0f, Vec3f(350.0f, 0.0f, 0.0f));
@@ -175,10 +175,10 @@ void KuriboChief::initSensor() {
 }
 
 void KuriboChief::initState() {
-    mStateFindPlayer = new WalkerStateFindPlayer(this, &_BC, &::sParam.mStateParam1, &::sParam.mFindPlayerParam);
-    mStateWander = new WalkerStateWander(this, &_BC, &::sParam.mStateParam1, &::sParam.mWanderParam);
-    mStateChase = new WalkerStateChase(this, &_BC, &::sParam.mStateParam1, &::sParam.mChaseParam);
-    mStateStagger = new WalkerStateStagger(this, &_BC, &::sParam.mStateParam2, &::sParam.mStaggerParam);
+    mStateFindPlayer = new WalkerStateFindPlayer(this, &mFront, &::sParam.mStateParam1, &::sParam.mFindPlayerParam);
+    mStateWander = new WalkerStateWander(this, &mFront, &::sParam.mStateParam1, &::sParam.mWanderParam);
+    mStateChase = new WalkerStateChase(this, &mFront, &::sParam.mStateParam1, &::sParam.mChaseParam);
+    mStateStagger = new WalkerStateStagger(this, &mFront, &::sParam.mStateParam2, &::sParam.mStaggerParam);
     mStateBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);
 }
 
@@ -208,12 +208,12 @@ void KuriboChief::control() {
         mScaleController->updateNerve();
     }
 
-    MR::blendQuatFromGroundAndFront(&_AC, this, _BC, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+    MR::blendQuatFromGroundAndFront(&mRotateQuat, this, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 }
 
 void KuriboChief::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _AC);
-    MR::setBaseScale(this, mScaleController->_C * mScale);
+    MR::setBaseTRMtx(this, mRotateQuat);
+    MR::setBaseScale(this, mScaleController->mScale * mScale);
 }
 
 void KuriboChief::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -405,7 +405,7 @@ void KuriboChief::exeAttackSuccess() {
         MR::startAction(this, "Hit");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &_BC, ::sTurnLimitDegree);
+    MR::turnDirectionToPlayerDegree(this, &mFront, ::sTurnLimitDegree);
     WalkerStateFunction::calcPassiveMovement(this, &::sParam.mStateParam1);
 
     if (MR::isGreaterStep(this, ::sAttackSuccessTime)) {
@@ -426,7 +426,7 @@ void KuriboChief::exeBlowDown() {
     }
 
     WalkerStateFunction::calcPassiveMovement(this, &::sParam.mStateParam1);
-    MR::turnDirectionDegree(this, &_BC, -mVelocity, 30.0f);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
 
     if (MR::isGreaterStep(this, ::sBlowDownLandTime) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvBlowDownLand));

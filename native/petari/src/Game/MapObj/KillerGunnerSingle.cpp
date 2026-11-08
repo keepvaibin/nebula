@@ -32,7 +32,7 @@ void KillerGunnerSingle::init(const TableIter& rIter) {
     MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEnemy(this, "shell", 16, 250.0f, Vec3f(::sShellPos));
     MR::initCollisionParts(this, "KillerGunnerSingle", getSensor("body"), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     initNerve(GET_NERVE(KillerGunnerSingle, HostTypeWait));

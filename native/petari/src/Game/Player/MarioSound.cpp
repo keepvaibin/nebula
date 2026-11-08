@@ -1704,18 +1704,19 @@ u32 Mario::initSoundTable(SoundList* pList) {
 
 void Mario::initSound() {
     u32 count = initSoundTable(soundlist);
-    _96C = new HashSortTable(count);
+    mSounds.reset(count);
     for (u32 i = 0; i < count; i++) {
-        _96C->add(soundlist[i].name, i, false);
+        mSounds.add(soundlist[i].name, i);
     }
 
-    _96C->sort();
     _970 = nullptr;
 }
 
+// The reference also tries the hash sum of "声" and the name (a voice by its short name); no sum matches a listed
+// name, so that second lookup never finds one.
 void Mario::playSoundJ(const char* pSoundName, s32 timing) {
-    u32 index;
-    if (_96C->search(pSoundName, &index)) {
+    const u32 index = mSounds.find(pSoundName);
+    if (index != MR::NameIndex::cNoValue) {
         switch (soundlist[index]._8.kind() & 0x3) {
         case 0:
             MR::startSound(mActor, soundlist[index]._14, timing);
@@ -1743,16 +1744,11 @@ void Mario::playSoundJ(const char* pSoundName, s32 timing) {
             break;
         }
     }
-
-    bool isFound = _96C->search("声", pSoundName, &index);
-    if (isFound) {
-        MR::startSound(mActor, soundlist[index]._14, timing);
-    }
 }
 
 void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
-    u32 index;
-    if (_96C->search(pSoundName, &index)) {
+    const u32 index = mSounds.find(pSoundName);
+    if (index != MR::NameIndex::cNoValue) {
         switch (soundlist[index]._8.kind() & 0x3) {
         case 0:
             MR::stopSound(mActor, soundlist[index]._14, delay);
@@ -1768,11 +1764,6 @@ void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
         case 3:
             break;
         }
-    }
-
-    if (_96C->search("声", pSoundName, &index)) {
-        SoundID soundID(soundlist[index]._14);
-        MR::stopSound(mActor, soundID, delay);
     }
 }
 

@@ -25,6 +25,6 @@ public:
 
     s32 mCurNormal;
     MR::AssignableArray< Vec3f > mNormals;
-    Quat4f _110;
-    Quat4f _120;
+    Quat4f mLastPointQuat;
+    Quat4f mNextPointQuat;
 };

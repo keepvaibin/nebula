@@ -44,9 +44,9 @@ public:
     s32 mBehavior;
     s32 mAppearBehavior;
     s32 mGoodsIndex;
-    Quat4f _16C;
-    MapObjConnector* _17C;
+    Quat4f mConnectQuat;
+    MapObjConnector* mConnector;
     TakeOutStar* mTakeOutStar;
     bool mIsSpawnPowerStarMode;
-    bool _185;
+    bool mIsBgmStarted;
 };

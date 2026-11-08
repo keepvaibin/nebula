@@ -12,7 +12,6 @@ public:
     virtual void movement();
     virtual bool isInVolume(const Vec3f&) const;
 
-    u32 _3C;
-    u32 _40;
+    u32 mDestNo;
     s32 mWaitFrame;
 };

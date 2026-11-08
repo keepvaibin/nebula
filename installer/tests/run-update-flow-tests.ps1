@@ -11,12 +11,14 @@ $private=Join-Path $scratch 'test-key.xml'
 [IO.File]::WriteAllText($private,$rsa.ToXmlString($true))
 $public=$rsa.ToXmlString($false).Replace('"','\"')
 $stub=Join-Path $scratch 'BuildInfo.cs'
+$storeVersion=[uint32](Get-Content -LiteralPath (Join-Path $repo 'runtime\include\galaxy\store_version.inc') -Raw).Trim()
 @"
 namespace Nebula { internal static class BuildInfo {
  public const string Version="2.0.8-beta.1";
  public const string Commit="update-flow-tests";
  public const string Repository="keepvaibin/nebula";
  public const string ReleasePublicKeyXml="$public";
+ public const uint StoreVersion=$storeVersion;
 }}
 "@ | Set-Content -LiteralPath $stub
 $sources=@(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Common') -Filter *.cs | ForEach-Object FullName)+@(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Setup') -Filter *.cs | ForEach-Object FullName)+@($stub,(Join-Path $PSScriptRoot 'UpdateFlowTests.cs'))

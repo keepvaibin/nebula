@@ -78,7 +78,7 @@ void StarPieceDirector::declare(const NameObj* pNameObj, s32 num) {
             mHostInfos.push_back(hostInfo);
         }
 
-        hostInfo->_4 += num;
+        hostInfo->mNumPieces += num;
         MR::incNumStarPieceGettable(num);
     }
 }
@@ -92,18 +92,18 @@ void StarPieceDirector::declareReceiveNum(const NameObj* pNameObj, s32 num) {
             mReceiverInfos.push_back(receiverInfo);
         }
 
-        receiverInfo->_4 += num;
+        receiverInfo->mNumWanted += num;
     }
 }
 
 s32 StarPieceDirector::getDeclareRemnantStarPieceCount(const NameObj* pNameObj) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
-    return hostInfo->_4 - hostInfo->_C;
+    return hostInfo->mNumPieces - hostInfo->mNumGot;
 }
 
 s32 StarPieceDirector::getDeclareRemnantStarPieceCountNotExist(const NameObj* pNameObj) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
-    return hostInfo->_4 - hostInfo->_C - hostInfo->_8;
+    return hostInfo->mNumPieces - hostInfo->mNumGot - hostInfo->mNumAppeared;
 }
 
 bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const Vec3f& rVec1, const Vec3f& rVec2) {
@@ -124,7 +124,7 @@ bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const Vec3f& rVec1, co
     }
 
     hopPiece->setHostInfo(hostInfo);
-    hostInfo->_8++;
+    hostInfo->mNumAppeared++;
     hopPiece->appearHop(rVec1, rVec2);
     return true;
 }
@@ -148,7 +148,7 @@ bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rVec, 
         if (appearPiece != nullptr) {
             appearedStarPiece = true;
             appearPiece->setHostInfo(hostInfo);
-            hostInfo->_8++;
+            hostInfo->mNumAppeared++;
             appearPiece->launch(rVec, f1, f2, a3, a2);
         }
     }
@@ -179,7 +179,7 @@ bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Ve
 
         appearedStarPiece = true;
         appearPiece->setHostInfo(hostInfo);
-        hostInfo->_8++;
+        hostInfo->mNumAppeared++;
         appearPiece->launch(rVec1, rVec2, f1, f2, a3, a2);
     }
 
@@ -218,11 +218,11 @@ void StarPieceDirector::updateSound() {
 
     mQueueNewGetSound = false;
     mSoundIndex++;
-    mSoundIndex %= 16;
+    mSoundIndex %= cGetSoundDelay;
 }
 
 void StarPieceDirector::initCSDelay() {
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < cGetSoundDelay; i++) {
         mGetSoundArray[i] = false;
     }
 }
@@ -244,7 +244,7 @@ bool StarPieceDirector::giftToTarget(HitSensor* pGiftSensor, u32 numGift) {
         return false;
     }
 
-    if (receiverInfo->_4 < receiverInfo->mGotCount + receiverInfo->_8 + numGift) {
+    if (receiverInfo->mNumWanted < receiverInfo->mGotCount + receiverInfo->mNumFlying + numGift) {
         return false;
     }
 
@@ -255,7 +255,7 @@ bool StarPieceDirector::giftToTarget(HitSensor* pGiftSensor, u32 numGift) {
     }
 
     MR::requestMovementOn(giftPiece);
-    receiverInfo->_8 += numGift;
+    receiverInfo->mNumFlying += numGift;
     MR::startCSSound("CS_FEED_SPIECE", "SE_SY_CS_FEED_PIECE", 0);
     giftPiece->giftToTarget(receiverInfo, numGift, pGiftSensor, calcPosCameraShoot(0));
     return true;
@@ -335,7 +335,7 @@ void StarPieceDirector::createStarPieces(unsigned count) {
 }
 
 StarPieceShooter::StarPieceShooter(s32 a1, const char* pName)
-    : LiveActor(pName), _90(), _8C(), _94(999999.0f), _98(), _9C(999999.0f), _A0(a1), _A4(), _A8(0, 0, 0), _B4(0, 0, 0) {
+    : LiveActor(pName), mSearchSensor(), mShootSpeed(), mSearchDist(999999.0f), mLockOnSensor(), mPort(a1), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
 }
 
 void StarPieceShooter::init(const TableIter& rIter) {
@@ -345,8 +345,8 @@ void StarPieceShooter::init(const TableIter& rIter) {
 
     initNerve(GET_NERVE(StarPieceShooter, HostTypeNrvWait));
 
-    initEffectKeeper(0, "StarDust", false);
-    MR::setEffectHostSRT(this, "Charge", &_A8, &_B4, nullptr);
+    initEffectKeeper(0, "StarDust");
+    MR::setEffectHostSRT(this, "Charge", &mEffectPos, &mEffectRot, nullptr);
 
     initHitSensor(1);
     MR::addHitSensorEye(this, "search", 64, 5.0f, Vec3f(0.0f, 0.0f, 0.0f));
@@ -354,24 +354,21 @@ void StarPieceShooter::init(const TableIter& rIter) {
 }
 
 void StarPieceShooter::exeWait() {
-    if (_90 != nullptr) {
-        _98 = _90;
-        _9C = _94;
+    if (mSearchSensor != nullptr) {
+        mLockOnSensor = mSearchSensor;
         setNerve(GET_NERVE(StarPieceShooter, HostTypeNrvLockOn));
     }
 }
 
 void StarPieceShooter::exeLockOn() {
-    if (_90 != nullptr) {
-        _98 = _90;
-        _9C = _94;
+    if (mSearchSensor != nullptr) {
+        mLockOnSensor = mSearchSensor;
         setNerve(GET_NERVE(StarPieceShooter, HostTypeNrvLockOn));
         return;
     }
 
     if (MR::isGreaterStep(this, 0)) {
-        _98 = nullptr;
-        _9C = 999999.0f;
+        mLockOnSensor = nullptr;
         setNerve(GET_NERVE(StarPieceShooter, HostTypeNrvWait));
     }
 }
@@ -384,9 +381,9 @@ void StarPieceShooter::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::sendMsgLockOnStarPieceShoot(pReceiver, pSender)) {
         f32 distBetweenSensors = (pReceiver->mPosition - pSender->mPosition).length();
 
-        if (distBetweenSensors < _94) {
-            _90 = pReceiver;
-            _94 = distBetweenSensors;
+        if (distBetweenSensors < mSearchDist) {
+            mSearchSensor = pReceiver;
+            mSearchDist = distBetweenSensors;
         }
     }
 }
@@ -398,10 +395,10 @@ void StarPieceShooter::control() {
     Vec3f playerUpVec;
     MR::getPlayerUpVec(&playerUpVec);
 
-    _A8.set(playerCenterPos);
-    _A8.sub(playerUpVec * -160.0f);
+    mEffectPos.set(playerCenterPos);
+    mEffectPos.sub(playerUpVec * -160.0f);
 
-    f32 scale = _A4 / 7.0f;
+    f32 scale = mChargeStep / 7.0f;
     scale *= 0.25f;
     scale += 0.125f;
     MR::setEffectBaseScale(this, "Charge", scale);
@@ -415,32 +412,32 @@ bool StarPieceShooter::shoot() {
         return false;
     }
 
-    pSensor = _90;
+    pSensor = mSearchSensor;
 
     if (pSensor == nullptr) {
-        pSensor = _98;
+        pSensor = mLockOnSensor;
     }
 
     Vec3f position = mPosition;
     Vec3f vec;
-    Vec3f posCameraShoot = MR::getStarPieceDirector()->calcPosCameraShoot(_A0);
+    Vec3f posCameraShoot = MR::getStarPieceDirector()->calcPosCameraShoot(mPort);
     Vec3f negCameraPos = -MR::getCamPos();
 
     if (pSensor != nullptr) {
         negCameraPos.add(pSensor->mPosition);
 
         if (MR::getFirstPolyOnLineToMap(&vec, nullptr, MR::getCamPos(), negCameraPos) && vec.squared(MR::getCamPos()) < negCameraPos.squared()) {
-            deadStarPiece->throwToTargetCore(vec, posCameraShoot, mGravity, _8C, true);
+            deadStarPiece->throwToTargetCore(vec, posCameraShoot, mGravity, mShootSpeed, true);
         } else {
-            deadStarPiece->throwToTarget(pSensor, posCameraShoot, mGravity, _8C);
+            deadStarPiece->throwToTarget(pSensor, posCameraShoot, mGravity, mShootSpeed);
         }
     } else {
         negCameraPos.add(position);
 
         if (MR::getFirstPolyOnLineToMap(&vec, nullptr, MR::getCamPos(), negCameraPos) && vec.squared(MR::getCamPos()) < negCameraPos.squared()) {
-            deadStarPiece->throwToTargetCore(vec, posCameraShoot, mGravity, _8C, true);
+            deadStarPiece->throwToTargetCore(vec, posCameraShoot, mGravity, mShootSpeed, true);
         } else {
-            deadStarPiece->throwToTargetCore(position, posCameraShoot, mGravity, _8C, true);
+            deadStarPiece->throwToTargetCore(position, posCameraShoot, mGravity, mShootSpeed, true);
         }
     }
 
@@ -449,17 +446,17 @@ bool StarPieceShooter::shoot() {
 
 bool StarPieceShooter::tryShoot() {
     if (!((
-              MR::isStarPointerInScreen(_A0)) &&
-          MR::isStarPointerValid(_A0) && MR::getStarPieceNum() > 0 && MR::isEnableStarPointerShootStarPiece(_A0) &&
-          (_A0 != 0 || !MR::isStarPointer1PInvalid2PValidMode()))) {
-        _90 = nullptr;
-        _94 = 999999.9f;
-        _A4 = -1;
+              MR::isStarPointerInScreen(mPort)) &&
+          MR::isStarPointerValid(mPort) && MR::getStarPieceNum() > 0 && MR::isEnableStarPointerShootStarPiece(mPort) &&
+          (mPort != 0 || !MR::isStarPointer1PInvalid2PValidMode()))) {
+        mSearchSensor = nullptr;
+        mSearchDist = 999999.9f;
+        mChargeStep = -1;
         MR::deleteEffect(this, "Charge");
 
-        if ((MR::getStarPieceNum() <= 0) && MR::isStarPointerInScreen(_A0) && MR::isStarPointerValid(_A0) && MR::isPressedFire(_A0) &&
-            (MR::isEnableStarPointerShootStarPiece(_A0) || MR::isStarPointerModeStarPieceTarget())) {
-            MR::startCSSound("CS_NO_SPIECE", "SE_SY_CS_NO_PIECE", _A0);
+        if ((MR::getStarPieceNum() <= 0) && MR::isStarPointerInScreen(mPort) && MR::isStarPointerValid(mPort) && MR::isPressedFire(mPort) &&
+            (MR::isEnableStarPointerShootStarPiece(mPort) || MR::isStarPointerModeStarPieceTarget())) {
+            MR::startCSSound("CS_NO_SPIECE", "SE_SY_CS_NO_PIECE", mPort);
         }
 
         return false;
@@ -467,29 +464,29 @@ bool StarPieceShooter::tryShoot() {
 
     calcShootGoalUsingPointingDepth();
 
-    if (_A4 < 0) {
-        if (!MR::isHeldFire(_A0)) {
-            _A4 = 0;
+    if (mChargeStep < 0) {
+        if (!MR::isHeldFire(mPort)) {
+            mChargeStep = 0;
         }
-    } else if (!MR::isHeldFire(_A0)) {
-        if (_A4 > 0) {
+    } else if (!MR::isHeldFire(mPort)) {
+        if (mChargeStep > 0) {
             MR::deleteEffect(this, "Charge");
         }
 
-        _A4 = 0;
+        mChargeStep = 0;
     } else {
-        if (_A4 == 0) {
-            if (MR::isPressedFire(_A0)) {
-                if (StarPointerFunction::canShoot(_A0)) {
+        if (mChargeStep == 0) {
+            if (MR::isPressedFire(mPort)) {
+                if (StarPointerFunction::canShoot(mPort)) {
                     MR::emitEffect(this, "Charge");
-                    MR::startCSSound("CS_STARDUST_CHARGE", nullptr, _A0);
-                    _A4++;
+                    MR::startCSSound("CS_STARDUST_CHARGE", nullptr, mPort);
+                    mChargeStep++;
                 } else {
-                    _A4 = -1;
+                    mChargeStep = -1;
                 }
             }
-        } else if (MR::isHeldFire(_A0)) {
-            _A4++;
+        } else if (MR::isHeldFire(mPort)) {
+            mChargeStep++;
         }
 
         s32 shootStep;
@@ -503,14 +500,14 @@ bool StarPieceShooter::tryShoot() {
 
             shootStep += i * 7;
 
-            if (shootStep == _A4) {
+            if (shootStep == mChargeStep) {
                 shoot();
                 MR::deleteEffect(this, "Charge");
-                MR::tryRumblePadMiddle(this, _A0);
-                MR::startCSSound("CS_STARDUST_SHOOT", "SE_SY_CS_STAR_PIECE_SHOOT", _A0);
+                MR::tryRumblePadMiddle(this, mPort);
+                MR::startCSSound("CS_STARDUST_SHOOT", "SE_SY_CS_STAR_PIECE_SHOOT", mPort);
 
                 if (i == 1) {
-                    _A4 = 1;
+                    mChargeStep = 1;
                 }
 
                 break;
@@ -518,14 +515,14 @@ bool StarPieceShooter::tryShoot() {
         }
     }
 
-    _90 = nullptr;
-    _94 = 999999.9f;
+    mSearchSensor = nullptr;
+    mSearchDist = 999999.9f;
     return true;
 }
 
 void StarPieceShooter::calcShootGoalUsingPointingDepth() {
     Vec3f playerPos(*MR::getPlayerPos());
-    Vec3f starPointerWorldPos(*MR::getStarPointerWorldPosUsingDepth(_A0));
+    Vec3f starPointerWorldPos(*MR::getStarPointerWorldPosUsingDepth(mPort));
 
     mGravity.set(*MR::getPlayerGravity());
 
@@ -541,7 +538,7 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
         dirToPlayer.sub(camPos);
 
         Vec2f pointingPos;
-        MR::getPointerPosOnScreen(&pointingPos, _A0);
+        MR::getPointerPosOnScreen(&pointingPos, mPort);
 
         Vec3f worldPos;
         MR::calcWorldPositionFromScreen(&worldPos, pointingPos, -1.0f);
@@ -559,5 +556,5 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
     }
 
     mPosition.set(starPointerWorldPos);
-    _8C = new_8C;
+    mShootSpeed = new_8C;
 }

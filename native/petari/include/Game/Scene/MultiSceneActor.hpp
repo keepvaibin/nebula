@@ -33,7 +33,7 @@ public:
     Vec3f mTranslation;
     Vec3f mRotation;
     Vec3f mScale;
-    bool _30;
+    bool mIsDead;
     ModelManager* mModelManager;
     EffectSystem* mEffectSystem;
     MultiSceneEffectKeeper* mEffectKeeper;

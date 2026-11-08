@@ -67,7 +67,7 @@ namespace {
         }
 
         pInfo = &::cDummyDisplayModelInfoTable[modelId];
-        DummyDisplayModel* mdl = new DummyDisplayModel(pHost, pInfo, itemIdx < 0 ? pInfo->_10 : itemIdx, modelId, getItemType(rIter));
+        DummyDisplayModel* mdl = new DummyDisplayModel(pHost, pInfo, itemIdx < 0 ? pInfo->mDrawBufferType : itemIdx, modelId, getItemType(rIter));
         mdl->initWithoutIter();
         return mdl;
     }
@@ -77,16 +77,16 @@ DummyDisplayModel::DummyDisplayModel(LiveActor* pHost, const DummyDisplayModelIn
     : PartsModel(pHost, pInfo->mName, pInfo->mName, nullptr, a3, 0) {
     mModelInfo = pInfo;
     mItemType = itemType;
-    _A4 = a5;
-    _A8 = 0;
-    _AC = a3 == 33;
+    mBrkFrame = a5;
+    mLodCtrl = 0;
+    mIsInCrystal = a3 == 33;
     mScale.x = 1.0f;
     mScale.y = 1.0f;
     mScale.z = 1.0f;
 
     switch (itemType) {
     case ITEM_TYPE_COIN: {
-        if (!_AC) {
+        if (!mIsInCrystal) {
             MR::createCoinRotater();
         }
     }
@@ -102,7 +102,7 @@ void DummyDisplayModel::init(const TableIter& rIter) {
 
     if (mModelInfo->mHasColorChange) {
         MR::startBrk(this, "ColorChange");
-        MR::setBrkFrameAndStop(this, _A4);
+        MR::setBrkFrameAndStop(this, mBrkFrame);
     }
 
     if (mItemType != ITEM_TYPE_GRAND_STAR && MR::getLightNumMax(this) > 0) {
@@ -111,7 +111,7 @@ void DummyDisplayModel::init(const TableIter& rIter) {
 
     switch (mItemType) {
     case ITEM_TYPE_STARPIECE: {
-        if (!_AC) {
+        if (!mIsInCrystal) {
             MR::initShadowFromCSV(this, "Shadow");
         }
 
@@ -120,7 +120,7 @@ void DummyDisplayModel::init(const TableIter& rIter) {
 
     case ITEM_TYPE_POWER_STAR:
     case ITEM_TYPE_GRAND_STAR: {
-        if (!_AC) {
+        if (!mIsInCrystal) {
             PowerStar::initShadowPowerStar(this, false);
         }
 
@@ -130,7 +130,7 @@ void DummyDisplayModel::init(const TableIter& rIter) {
     }
 
     case ITEM_TYPE_KINOPIO:
-        _A8 = new LodCtrl(this, rIter);
+        mLodCtrl = new LodCtrl(this, rIter);
         break;
     }
 
@@ -140,14 +140,14 @@ void DummyDisplayModel::init(const TableIter& rIter) {
 void DummyDisplayModel::makeActorAppeared() {
     PartsModel::makeActorAppeared();
 
-    if (_A8 != nullptr) {
-        _A8->appear();
+    if (mLodCtrl != nullptr) {
+        mLodCtrl->appear();
     }
 }
 
 void DummyDisplayModel::makeActorDead() {
-    if (_A8 != nullptr) {
-        _A8->kill();
+    if (mLodCtrl != nullptr) {
+        mLodCtrl->kill();
     }
 
     PartsModel::makeActorDead();
@@ -160,7 +160,7 @@ void DummyDisplayModel::control() {
         PowerStar::requestPointLight(this, mHost, -1);
         break;
     case ITEM_TYPE_KINOPIO:
-        _A8->update();
+        mLodCtrl->update();
         break;
     }
 }
@@ -170,7 +170,7 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
     Pos3f* m = (Pos3f*)getBaseMtx();
 
     Vec3f offset;
-    Vec3f v19 = mModelInfo->_4;
+    Vec3f v19 = mModelInfo->mOffset;
     offset.negate(v19);
     NebulaMtxMultVec((MtxPtr)m, offset, &mPosition);
     m->setTrans(mPosition);
@@ -178,7 +178,7 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
     switch (mItemType) {
     case ITEM_TYPE_COIN:
 
-        if (!_AC) {
+        if (!mIsInCrystal) {
             MR::multMtx(*m, MR::getCoinRotateYMatrix(), *m);
         }
 
@@ -186,7 +186,7 @@ void DummyDisplayModel::calcAndSetBaseMtx() {
     case ITEM_TYPE_POWER_STAR:
     case ITEM_TYPE_GRAND_STAR:
 
-        if (!_AC) {
+        if (!mIsInCrystal) {
             Pos3f rot;
             rot.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
             MR::multMtx(*m, rot, *m);

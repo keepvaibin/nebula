@@ -44,7 +44,7 @@ void ShockWaveGenerator::init(const TableIter& rIter) {
         mCameraInfo = nullptr;
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
 
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);

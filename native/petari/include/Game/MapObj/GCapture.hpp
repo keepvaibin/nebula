@@ -81,27 +81,25 @@ public:
     void exeHold();
     void exeBreak();
 
-    Pos3f _8C;
-    Quat4f _BC;
+    Pos3f mRibbonPointMtx;
+    Quat4f mBindQuat;
     Vec3f mEffectPos;
-    Vec3f _D8;
-    Vec3f _E4;
-    Vec3f _F0;
-    Vec3f _FC;
-    LiveActor* _108;
+    Vec3f mEffectOffset;
+    Vec3f mRotateVelocity;
+    Vec3f mRotateAxis;
+    LiveActor* mBindActor;
     GCaptureTargetable* mTarget;
-    GCaptureTargetable* _110;
+    GCaptureTargetable* mTractTarget;
     GCaptureRibbon* mCaptureRibbon;
     CameraTargetMtx* mTargetMtx;
     SpringValue* mSpringValue;
     f32 mTractPower;
-    f32 _124;
-    f32 _128;
-    s32 _12C;
-    f32 _130;
+    f32 mEffectBlend;
+    f32 mRibbonRate;
+    s32 mTargetKeepTime;
+    f32 mTargetDist;
     s32 mGuidanceTime;
     bool mIsStarPointerPointing;  // useless
-    bool _139;                    // useless
 };
 
 namespace MR {

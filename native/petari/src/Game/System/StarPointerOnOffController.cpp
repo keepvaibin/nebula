@@ -8,8 +8,6 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
-    // static const f32 hDebugPrintX =
-    // static const f32 hDebugPrintY =
 
     // to help clean up the code so it is not a nightmare to read
     inline StarPointerDirector* getStarPointerDirector() {
@@ -21,7 +19,7 @@ namespace {
     }
 };  // namespace
 
-StarPointerOnOffController::StarPointerOnOffController() : NerveExecutor("スターポインタON/OFF制御"), _8(false), mMode(-1) {
+StarPointerOnOffController::StarPointerOnOffController() : NerveExecutor("スターポインタON/OFF制御"), mMode(-1) {
     for (s32 idx = 0; idx < 16; idx++) {
         mRequests[idx] = new RequestInfo();
     }

@@ -1,7 +1,6 @@
 #include "Game/LiveActor/ShadowVolumeBox.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/LiveActor/ShadowDrawer.hpp"
@@ -25,7 +24,7 @@ void ShadowVolumeBox::loadModelDrawMtx(TypedDraw& rDraw) const {
 void ShadowVolumeBox::makeVertexBuffer() const {
     MtxPtr mtx;
     ShadowController* controller = getController();
-    mtx = controller->_18;
+    mtx = controller->mHostMtx;
     Vec3f side(mtx[0][0], mtx[1][0], mtx[2][0]);
     Vec3f up(mtx[0][1], mtx[1][1], mtx[2][1]);
     Vec3f front(mtx[0][2], mtx[1][2], mtx[2][2]);

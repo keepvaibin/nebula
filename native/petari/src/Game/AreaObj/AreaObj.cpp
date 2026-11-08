@@ -9,7 +9,7 @@
 #include <algorithm>
 
 AreaObj::AreaObj(int formType, const char* pName)
-    : NameObj(pName), mFormType(formType), mIsValid(true), _15(true), mIsAwake(true), mObjArg0(-1), mObjArg1(-1), mObjArg2(-1), mObjArg3(-1),
+    : NameObj(pName), mFormType(formType), mIsValid(true), mIsFollowValid(true), mIsAwake(true), mObjArg0(-1), mObjArg1(-1), mObjArg2(-1), mObjArg3(-1),
       mObjArg4(-1), mObjArg5(-1), mObjArg6(-1), mObjArg7(-1), mSwitchCtrl() {
     switch (formType) {
     case AreaForm::Type_Cube1:
@@ -89,19 +89,19 @@ bool AreaObj::isValidSwitchB() const {
 }
 
 void AreaObj::setFollowMtx(const Pos3f* pMtx) {
-    mForm->_4 = const_cast< Pos3f* >(pMtx);
+    mForm->mFollowMtx = const_cast< Pos3f* >(pMtx);
 }
 
 Pos3f* AreaObj::getFollowMtx() const {
-    return mForm->_4;
+    return mForm->mFollowMtx;
 }
 
-AreaObjMgr::AreaObjMgr(s32 count, const char* pName) : NameObj(pName), mArray(), _18(count) {
+AreaObjMgr::AreaObjMgr(s32 count, const char* pName) : NameObj(pName), mArray(), mMaxCount(count) {
 }
 
 void AreaObjMgr::entry(AreaObj* pAreaObj) {
     if (mArray.capacity() == 0) {
-        mArray.init(_18);
+        mArray.init(mMaxCount);
     }
 
     mArray.push_back(pAreaObj);

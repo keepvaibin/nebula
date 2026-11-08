@@ -50,13 +50,13 @@ namespace {
 };  // namespace
 
 PrologueDirector::PrologueDirector(const char* pName)
-    : LiveActor(pName), mPictureBook(nullptr), mLetter(nullptr), mScenery(nullptr), mMarioPosDummyModel(nullptr), mCameraTarget(nullptr), _D0(false) {
-    _A0.identity();
+    : LiveActor(pName), mPictureBook(nullptr), mLetter(nullptr), mScenery(nullptr), mMarioPosDummyModel(nullptr), mCameraTarget(nullptr), mUseSwitchA(false) {
+    mPlayerBaseMtx.identity();
 }
 
 void PrologueDirector::init(const TableIter& rIter) {
     if (MR::useStageSwitchWriteA(this, rIter)) {
-        _D0 = true;
+        mUseSwitchA = true;
     }
 
     MR::connectToSceneMapObjMovement(this);
@@ -74,7 +74,7 @@ void PrologueDirector::init(const TableIter& rIter) {
 }
 
 void PrologueDirector::initAfterPlacement() {
-    if (_D0) {
+    if (mUseSwitchA) {
         MR::onSwitchA(this);
     }
 }
@@ -85,7 +85,7 @@ void PrologueDirector::appear() {
     MR::forceCloseWipeFade();
     MR::forceOffImageEffect();
 
-    if (_D0) {
+    if (mUseSwitchA) {
         MR::offSwitchA(this);
     }
 }
@@ -93,7 +93,7 @@ void PrologueDirector::appear() {
 void PrologueDirector::kill() {
     LiveActor::kill();
 
-    if (_D0) {
+    if (mUseSwitchA) {
         MR::onSwitchA(this);
     }
 }
@@ -103,7 +103,7 @@ void PrologueDirector::exeWait() {
         MR::submitLevelSE();
         setNerve(GET_NERVE_ANON(PrologueDirectorNrvPictureBook));
         pauseOff();
-        _A0.set(MR::getPlayerBaseMtx());
+        mPlayerBaseMtx.set(MR::getPlayerBaseMtx());
     }
 }
 
@@ -232,7 +232,7 @@ void PrologueDirector::exeArrive() {
 
 void PrologueDirector::exeGameStart() {
     if (MR::isFirstStep(this)) {
-        MR::setPlayerBaseMtx(_A0);
+        MR::setPlayerBaseMtx(mPlayerBaseMtx);
         MR::forceCloseWipeFade();
     }
 

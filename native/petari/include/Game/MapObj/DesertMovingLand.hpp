@@ -22,9 +22,9 @@ public:
     void exeMoveSign();
     void exeStop();
 
-    Vec3f _C4;
-    Vec3f _D0;
-    s32 _DC;
-    s32 _E0;
-    Mtx34f _E4;
+    Vec3f mUpperPos;
+    Vec3f mLowerPos;
+    s32 mMoveDownTime;
+    s32 mMoveUpTime;
+    Mtx34f mDemoPlayerMtx;
 };

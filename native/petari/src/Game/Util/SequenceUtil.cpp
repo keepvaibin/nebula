@@ -36,13 +36,13 @@ namespace MR {
 
         if (isGalaxyAnyCometAppearInCurrentStage()) {
             const PlacementId& rInitialInfo = getInitializeStartIdInfo();
-            info._0 = rInitialInfo._0;
+            info.mId = rInitialInfo.mId;
             info.mZoneID = rInitialInfo.mZoneID;
         }
 
         GameSystemSceneController* pSceneController = SingletonHolder< GameSystem >::get()->mSceneController;
         GalaxyMoveArgument argument(5, pSceneController->mCurrSceneControlInfo.mStage, pSceneController->getCurrentScenarioNo(), &info);
-        argument._C = pSceneController->getCurrentSelectedScenarioNo();
+        argument.mSelectedScenarioNo = pSceneController->getCurrentSelectedScenarioNo();
 
         GameSequenceFunction::requestGalaxyMove(argument);
         if (u32 pieces = 0; NebulaHost::codePatch(NEBULA_PATCH_MISS_STAR_PIECES, &pieces)) {

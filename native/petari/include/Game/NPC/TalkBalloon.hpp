@@ -28,8 +28,8 @@ public:
 
     TalkMessageCtrl* mMessageCtrl;
     TalkTextFormer* mTextFormer;
-    bool _28;
-    bool _29;
+    bool mHasBeak;
+    bool mIsBeakMoving;
 };
 
 class TalkBalloonShort : public TalkBalloon {
@@ -46,7 +46,7 @@ public:
     void exeClose();
     void exeOpen();
 
-    u32 _2C;
+    u32 mInterval;
 };
 
 class TalkBalloonEvent : public TalkBalloon {
@@ -67,7 +67,7 @@ public:
     void updateBeak();
     void exeClose();
 
-    u32 _2C;
+    u32 mFormMode;
     IconAButton* mAButton;
 };
 
@@ -117,7 +117,7 @@ public:
     TalkBalloonInfo* mBalloonInfo;
     TalkBalloonSign* mBalloonSign;
     TalkBalloonIcon* mBalloonIcon;
-    s32 _14;
+    s32 mShortIndex;
     IconAButton* mAButton;
 };
 

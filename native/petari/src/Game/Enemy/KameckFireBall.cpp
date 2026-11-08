@@ -54,7 +54,7 @@ void KameckFireBall::init(const TableIter& rIter) {
     MR::setKameckBeamCollisionFilter(this);
     MR::initShadowVolumeSphere(this, ::sFireRadius);
     MR::onCalcShadow(this, nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::invalidateClipping(this);
     makeActorDead();

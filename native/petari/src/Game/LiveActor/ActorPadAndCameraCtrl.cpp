@@ -15,8 +15,8 @@ namespace {
 };  // namespace
 
 ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, const Vec3f* pPosition)
-    : _0(pModelManager), _4(pPosition), _8(pModelManager->getResourceHolder()), _C(), mInfoNum(), mInfo() {
-    Table* parser = MR::tryCreateCsvParser(_8, "%s.bcsv", ::sFileName);
+    : mModelManager(pModelManager), mPosition(pPosition), mResourceHolder(pModelManager->getResourceHolder()), mPlayingBckName(), mInfoNum(), mInfo() {
+    Table* parser = MR::tryCreateCsvParser(mResourceHolder, "%s.bcsv", ::sFileName);
     if (!parser) {
         return;
     }
@@ -44,8 +44,8 @@ ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, 
         MR::getCsvDataStrOrNULL(&info->mPadRumbleNameFar, parser, "PadRumbleNameFar", i);
         MR::getCsvDataStrOrNULL(&info->mCameraShakeNameMiddle, parser, "CameraShakeNameMiddle", i);
         MR::getCsvDataStrOrNULL(&info->mCameraShakeNameFar, parser, "CameraShakeNameFar", i);
-        info->_30 = false;
-        info->_31 = false;
+        info->mIsBckPlaying = false;
+        info->mIsActive = false;
     }
 }
 
@@ -64,23 +64,23 @@ ActorPadAndCameraCtrl* ActorPadAndCameraCtrl::tryCreate(const ModelManager* pMod
 
 void ActorPadAndCameraCtrl::update() {
     ActorPadAndCameraCtrlInfo* info;
-    if (_C != _0->getPlayingBckName()) {
-        _C = _0->getPlayingBckName();
+    if (mPlayingBckName != mModelManager->getPlayingBckName()) {
+        mPlayingBckName = mModelManager->getPlayingBckName();
         updateInfoBck();
     }
 
-    FrameCtrl* frameCtrl = _0->getBckCtrl();
+    FrameCtrl* frameCtrl = mModelManager->getBckCtrl();
     for (s32 i = 0; i < mInfoNum; i++) {
         info = &mInfo[i];
-        if (info->_30) {
+        if (info->mIsBckPlaying) {
             if (frameCtrl->checkPass(info->mStartFrame)) {
-                info->_31 = true;
+                info->mIsActive = true;
             }
 
-            if (info->_31) {
+            if (info->mIsActive) {
                 updatePadAndCamera(info);
                 if (info->mEndFrame < 0.0f || frameCtrl->mRate <= 0.0f || frameCtrl->checkPass(info->mEndFrame)) {
-                    info->_31 = false;
+                    info->mIsActive = false;
                 }
             }
         }
@@ -89,17 +89,17 @@ void ActorPadAndCameraCtrl::update() {
 
 void ActorPadAndCameraCtrl::updateInfoBck() {
     ActorPadAndCameraCtrlInfo* info;
-    if (!_C) {
+    if (!mPlayingBckName) {
         return;
     }
 
     for (s32 i = 0; i < mInfoNum; i++) {
         info = &mInfo[i];
         if (info->mBckName) {
-            if (MR::isEqualStringCase(_C, info->mBckName)) {
-                info->_30 = true;
+            if (MR::isEqualStringCase(mPlayingBckName, info->mBckName)) {
+                info->mIsBckPlaying = true;
             } else {
-                info->_30 = false;
+                info->mIsBckPlaying = false;
             }
         }
     }
@@ -138,7 +138,7 @@ namespace {
 };  // namespace
 
 void ActorPadAndCameraCtrl::updatePadAndCamera(const ActorPadAndCameraCtrlInfo* pInfo) {
-    f32 distance = MR::getPlayerPos()->distance(*_4);
+    f32 distance = MR::getPlayerPos()->distance(*mPosition);
     ::isDistanceExistAndFar(distance, pInfo->mDistanceInvalid);
     if (::isDistanceExistAndFar(distance, pInfo->mDistanceFar)) {
         if (pInfo->mPadRumbleNameFar) {

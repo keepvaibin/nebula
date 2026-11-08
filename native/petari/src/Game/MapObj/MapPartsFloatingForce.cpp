@@ -33,8 +33,8 @@ void SpringStep::setSpringBaseValue(f32 val) {
 }
 
 MapPartsFloatingForce::MapPartsFloatingForce(LiveActor* pActor)
-    : MapPartsFunction(pActor, "浮力"), mSpringStep(), mObjectName(), _20(), mRotateAngle(), mRotateSpeed(), mRotateAccelType(), _30(gZeroVec),
-      mUpDirection(0.0f, 1.0f, 0.0f), _48(), _4C(), _50(0.0f, 0.0f, 0.0f), _5C() {
+    : MapPartsFunction(pActor, "浮力"), mSpringStep(), mObjectName(), mMaxDepth(), mRotateAngle(), mRotateSpeed(), mRotateAccelType(), mBasePos(gZeroVec),
+      mUpDirection(0.0f, 1.0f, 0.0f), mSinkDepth(), mSinkSpeed(), mVelocity(0.0f, 0.0f, 0.0f), mRideSinkSpeed() {
 }
 
 void MapPartsFloatingForce::init(const TableIter& rIter) {
@@ -57,7 +57,7 @@ void MapPartsFloatingForce::setObjectName(const char* pName) {
 void MapPartsFloatingForce::initForNormalMotion(const TableIter& rIter) {
     s32 conditionType = 0;
     MR::getMapPartsArgMoveConditionType(&conditionType, rIter);
-    _20 = conditionType;
+    mMaxDepth = conditionType;
     MR::getMapPartsArgRotateSpeed(&mRotateSpeed, rIter);
     MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
 }
@@ -65,7 +65,7 @@ void MapPartsFloatingForce::initForNormalMotion(const TableIter& rIter) {
 void MapPartsFloatingForce::initForSpringMotion(const TableIter& rIter) {
     s32 conditionType = 0;
     MR::getMapPartsArgMoveConditionType(&conditionType, rIter);
-    _20 = conditionType;
+    mMaxDepth = conditionType;
     f32 rotateSpeed = 0.0f;
     MR::getMapPartsArgRotateSpeed(&rotateSpeed, rIter);
     rotateSpeed *= 0.001f;
@@ -74,12 +74,12 @@ void MapPartsFloatingForce::initForSpringMotion(const TableIter& rIter) {
     rotateAngle *= 0.001f;
     s32 rotateAxis = 0;
     MR::getMapPartsArgRotateAxis(&rotateAxis, rIter);
-    _5C = 0.1f * rotateAxis;
+    mRideSinkSpeed = 0.1f * rotateAxis;
     mSpringStep = new SpringStep(-conditionType, rotateSpeed, rotateAngle);
 }
 
 void MapPartsFloatingForce::start() {
-    _30.set(mHost->mPosition);
+    mBasePos.set(mHost->mPosition);
     Pos3f baseMtx;
     baseMtx.set(mHost->getBaseMtx());
     baseMtx.getYDir(mUpDirection);
@@ -91,21 +91,21 @@ void MapPartsFloatingForce::start() {
 
 void MapPartsFloatingForce::updateVelocity() {
     if (MR::isOnPlayer(MR::getBodySensor(mHost))) {
-        if (_20 <= _48) {
-            _4C = MR::converge< f32 >(_4C, 0.0f, 0.05f);
+        if (mMaxDepth <= mSinkDepth) {
+            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
         } else {
-            _4C = _4C + (0.0001f * mRotateSpeed);
+            mSinkSpeed = mSinkSpeed + (0.0001f * mRotateSpeed);
         }
     } else {
-        if (_48 <= 0.0f) {
-            _4C = MR::converge< f32 >(_4C, 0.0f, 0.05f);
+        if (mSinkDepth <= 0.0f) {
+            mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
         } else {
-            _4C = _4C - (0.0001f * mRotateAngle);
+            mSinkSpeed = mSinkSpeed - (0.0001f * mRotateAngle);
         }
     }
 
-    _4C *= 0.98f;
-    _4C = MR::clamp(_4C, -50.0f, 50.0f);
+    mSinkSpeed *= 0.98f;
+    mSinkSpeed = MR::clamp(mSinkSpeed, -50.0f, 50.0f);
 }
 
 void MapPartsFloatingForce::updateVelocitySpring() {
@@ -119,9 +119,9 @@ void MapPartsFloatingForce::updateVelocitySpring() {
         velocity *= 3.0f;
     }
 
-    _50.set(mUpDirection * velocity);
-    if (MR::isNearZero(_50)) {
-        _50.zero();
+    mVelocity.set(mUpDirection * velocity);
+    if (MR::isNearZero(mVelocity)) {
+        mVelocity.zero();
     }
 
     mSpringStep->mSpringValue->update();
@@ -170,7 +170,7 @@ bool MapPartsFloatingForce::tryReturn() {
 
 void MapPartsFloatingForce::exeWait() {
     if (isFirstStep()) {
-        _48 = 0.0f;
+        mSinkDepth = 0.0f;
     }
 
     if (mRotateAccelType == 1) {
@@ -180,18 +180,18 @@ void MapPartsFloatingForce::exeWait() {
 
 void MapPartsFloatingForce::exeMove() {
     updateVelocity();
-    _50.set(-mUpDirection * _4C);
-    _48 += _4C;
-    _48 = MR::clamp(_48, 0.0f, _20);
+    mVelocity.set(-mUpDirection * mSinkSpeed);
+    mSinkDepth += mSinkSpeed;
+    mSinkDepth = MR::clamp(mSinkDepth, 0.0f, mMaxDepth);
     Vec3f* const pPosition = &mHost->mPosition;
-    pPosition->set(_30 - mUpDirection * _48);
+    pPosition->set(mBasePos - mUpDirection * mSinkDepth);
     if (mObjectName != nullptr) {
-        if (_4C > 0.1f) {
+        if (mSinkSpeed > 0.1f) {
             const char* pSound = FloaterFunction::getSeMoveDown(mObjectName);
             if (pSound != nullptr) {
                 MR::startLevelSound(mHost, pSound);
             }
-        } else if (_4C < -0.1f) {
+        } else if (mSinkSpeed < -0.1f) {
             const char* pSound = FloaterFunction::getSeMoveUp(mObjectName);
             if (pSound != nullptr) {
                 MR::startLevelSound(mHost, pSound);
@@ -202,31 +202,31 @@ void MapPartsFloatingForce::exeMove() {
 
 void MapPartsFloatingForce::exeMoveSpring() {
     if (isFirstStep()) {
-        mSpringStep->setSpringBaseValue(-_20);
-        mSpringStep->addSpringVelocity(-_5C);
+        mSpringStep->setSpringBaseValue(-mMaxDepth);
+        mSpringStep->addSpringVelocity(-mRideSinkSpeed);
     }
 
     updateVelocitySpring();
-    mHost->mVelocity.set(_50);
+    mHost->mVelocity.set(mVelocity);
     tryReturn();
 }
 
 void MapPartsFloatingForce::exeMoveReturn() {
     if (isFirstStep()) {
-        mSpringStep->setSpringBaseValue((mHost->mPosition - _30).length());
+        mSpringStep->setSpringBaseValue((mHost->mPosition - mBasePos).length());
     }
 
     updateVelocitySpring();
-    mHost->mVelocity.set(_50);
-    if (mObjectName != nullptr && 0.1f != _4C) {
+    mHost->mVelocity.set(mVelocity);
+    if (mObjectName != nullptr && 0.1f != mSinkSpeed) {
         const char* pSound = FloaterFunction::getSeMoveUp(mObjectName);
         if (pSound != nullptr) {
             MR::startLevelSound(mHost, pSound);
         }
     }
 
-    if (MR::isNearZero(_30 - mHost->mPosition) && MR::isNearZero(_50)) {
-        mHost->mPosition.set(_30);
+    if (MR::isNearZero(mBasePos - mHost->mPosition) && MR::isNearZero(mVelocity)) {
+        mHost->mPosition.set(mBasePos);
         setNerve(GET_NERVE(MapPartsFloatingForce, HostTypeWait));
     } else {
         tryOn();

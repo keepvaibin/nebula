@@ -42,9 +42,6 @@ public:
     bool mIsEndJump;
     CameraPoseParam* mNextParam;
     CameraPoseParam* mCurrParam;
-    u32 _1C;
-    u32 _20;
-    u32 _24;
     f32 mCameraWatchPosBaseHeight;
     f32 mCameraTargetPosHeight;
     f32 mCameraWatchPosHeight;
@@ -53,7 +50,6 @@ public:
     f32 mCameraPosOffset;
     u32 mJumpState;
     s32 mStateTime;
-    s32 _48;
     bool mIsCatchup;
     s32 mChaseTime;
     s32 mRiseTime;

@@ -7,15 +7,19 @@ class AnimStampController : public NerveExecutor {
 public:
     AnimStampController();
 
-    void init(s32, f32, f32, f32, f32, f32, f32);
+    void init(s32 animStep, f32 baseY, f32 baseXZ, f32 amplitudeY, f32 freqY, f32 amplitudeXZ, f32 freqXZ);
     void startAnim(const Vec3f&);
     void exeAnim();
     void exeAnimEnd();
     bool isAnimEnd() const;
 
-    /* 0x8  */ Vec3f _8;
-    Pos3f _14;
-    s32 _44;
-    Vec3f _50;  // unused
-    Vec3f _5C;  // unused
+    Vec3f mDir;
+    Pos3f mMtx;
+    s32 mAnimStep;
+    f32 mBaseY;
+    f32 mBaseXZ;
+    f32 mAmplitudeY;
+    f32 mFreqY;
+    f32 mAmplitudeXZ;
+    f32 mFreqXZ;
 };

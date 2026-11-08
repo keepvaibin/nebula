@@ -7,7 +7,7 @@
 struct SoundEffectDataEntry {
     const char* objectName;
     const char* soundName;
-    f32 _8;
+    f32 rotatorRadius;
 };
 
 class SimpleMapObj : public MapObjActor {
@@ -68,7 +68,6 @@ public:
     virtual void init(const TableIter&);
     virtual void control();
 
-    Mtx34f _C4;
 };
 
 class SimpleMirrorObj : public MapObjActor {

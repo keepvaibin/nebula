@@ -34,9 +34,9 @@ public:
     const char* mModelName;
     const char* mJointName;
     const char* mAutoEffectName;
-    Pos3f _9C;
-    bool _CC;
-    bool _CD;
+    Pos3f mMtx;
+    bool mIsHostLeft;
+    bool mIsHostTouching;
     bool mHasLightCtrl;
 };
 
@@ -73,19 +73,19 @@ public:
     void exeWait();
 
     LiveActor* mHost;
-    MogucchiHillPiece* _90;
-    s32 _94;
-    s32 _98;
+    MogucchiHillPiece* mPieces;
+    s32 mPieceNum;
+    s32 mPieceIndex;
     Pos3f mReserveMtx;
-    bool _CC;
-    f32 _D0;
-    f32 _D4;
-    u32 _D8;
+    bool mHasReserveMtx;
+    f32 mAppearDistance;
+    f32 mAppearDistanceMax;
+    u32 mModelNum;
     const char** mModelNameTable;
     const char* mJointName;
     const char* mAutoEffectName;
     bool mHasLightCtrl;
-    s32 _EC;
-    s32 _F0;
+    s32 mSizeAnimState;
+    s32 mSizeStep;
     s32 mAppearNum;
 };

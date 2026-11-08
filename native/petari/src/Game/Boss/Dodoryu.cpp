@@ -60,26 +60,15 @@ namespace {
     static const f32 sMapObjSensorRadius = 100.0f;
     static const char* sStarPieceSensorName = "star";
     static const f32 sStarPieceSensorRadius = 400.0f;
-    // static const f32 sScale = _;
-    // static const _ sEarthCheckLength = _;
-    // static const _ sEarthCheckExtra = _;
-    // static const Vec3f sCamRegOffset = _;
     static const s32 sJumpOutStopSceneFrame = 8;
-    // static const s32 sRumbleInterval = _;
     static const char* sSpinOutCamera = "ドドリュウ吹っ飛び";
-    // static const f32 sSpinOutCameraInterpolation = _;
-    // static const f32 sSpinOutCameraBlendRate = _;
     static const f32 sRumblePadNearDist = 500.0f;
     static const f32 sRumblePadFarDist = 1000.0f;
-    // static const char* sPrintStateLabel = _;
     static const f32 sRabbitDistMax = 1500.0f;
     static const f32 sRabbitDistMin = 650.0f;
     static const f32 sRabbitRestDist = 2000.0f;
     static const f32 sRabbitFastSpeed = 8.0f;
     static const f32 sRabbitSlowSpeed = 4.0f;
-    // static const f32 sTalkDistanceLong = _;
-    // static const f32 sTalkDistanceShort = _;
-    // static const Vec3f sRotateVel = _;
     static DodoryuChaseParam sDodoryuChaseDataLv2 = {
         60,
         16.0f,
@@ -119,15 +108,12 @@ namespace {
         5.0f,
         80,
         -1,
-        51,
         false,
         10.0f,
         1.0f,
         3.0f,
         0.92f,
         360,
-        0.01f,
-        7.0f,
         50,
         60,
         10,
@@ -192,15 +178,12 @@ namespace {
         5.0f,
         -1,
         45,
-        -1,
         true,
         18.0f,
         0.5f,
         0.1f,
         0.96f,
         240,
-        0.1f,
-        7.0f,
         50,
         60,
         10,
@@ -244,9 +227,9 @@ namespace {
 };  // namespace
 
 Dodoryu::Dodoryu(const char* pName)
-    : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f), _C8(), _CC(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
-      _128(0.0f, 1.0f, 0.0f), _134(1.0f, 0.0f, 0.0f), mClosedAreaObj(), _144(), _148(new CameraTargetMtx("カメラターゲットダミー")),
-      _14C(new CameraTargetMtx("カメラターゲットダミー")), _150(), _154(), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
+    : LiveActor(pName), mCameraRegisterPos(0.0f, 0.0f, 0.0f), mStateIndex(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
+      mGroundNormal(0.0f, 1.0f, 0.0f), mWallNormal(1.0f, 0.0f, 0.0f), mClosedAreaObj(), mIsSwitchOn(), mDemoCameraTarget(new CameraTargetMtx("カメラターゲットダミー")),
+      mSpinOutCameraTarget(new CameraTargetMtx("カメラターゲットダミー")), mIsRumbling(), mRumbleStep(), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
     mBaseMtx.identity();
 }
 
@@ -268,9 +251,9 @@ void Dodoryu::init(const TableIter& rIter) {
     initRailRider(rIter);
     MR::moveCoordToNearestPos(this, mPosition);
     initSwitch(rIter);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
-    MR::declareCameraRegisterVec(this, 0, &_BC);
+    MR::declareCameraRegisterVec(this, 0, &mCameraRegisterPos);
     MR::declareGlobalEventCameraFixedThere(::sSpinOutCamera, true, 0.0f);
     createMogucchiHill();
     mLeadHill = new DodoryuLeadHill(this);
@@ -280,11 +263,11 @@ void Dodoryu::init(const TableIter& rIter) {
     MR::createDepthOfFieldBlur();
     MR::declareStarPiece(this, 24);
     MR::createCenterScreenBlur();
-    _148->mMatrix.setInline(MR::getZonePlacementMtx(rIter));
+    mDemoCameraTarget->mMatrix.setInline(MR::getZonePlacementMtx(rIter));
     MR::startBckWithInterpole(this, "UnderGroundWalk", 0);
     MR::startBva(this, "Normal");
     MR::startBrk(this, "Normal");
-    mState[_CC]->start();
+    mState[mStateIndex]->start();
 
     if (MR::isValidSwitchB(this)) {
         MR::onSwitchB(this);
@@ -300,7 +283,7 @@ void Dodoryu::initAfterPlacement() {
 void Dodoryu::control() {
     mMoveStateHolder->execute();
     checkHipDrop();
-    mState[_CC]->movement();
+    mState[mStateIndex]->movement();
     updateRumblePad();
     updateCameraTarget();
     mAnimScaleCtrl->updateNerve();
@@ -309,13 +292,13 @@ void Dodoryu::control() {
 void Dodoryu::startClipped() {
     LiveActor::startClipped();
     MR::validateClipping(mRabbit);
-    mState[_CC]->catchStartClipped();
+    mState[mStateIndex]->catchStartClipped();
 }
 
 void Dodoryu::endClipped() {
     LiveActor::endClipped();
     MR::invalidateClipping(mRabbit);
-    mState[_CC]->catchEndClipped();
+    mState[mStateIndex]->catchEndClipped();
 }
 
 void Dodoryu::snapToGround() {
@@ -325,7 +308,7 @@ void Dodoryu::snapToGround() {
     Vec3f v4;
 
     if (MR::getFirstPolyOnLineToMap(&v4, &triangle, mPosition - mGravity.scaleInline(200.0f), mGravity.scaleInline(1200.0f))) {
-        _128 = *triangle.getNormal(0);
+        mGroundNormal = *triangle.getNormal(0);
 
         turnUpVecTo(-mGravity);
         mPosition.set(v4);
@@ -350,7 +333,7 @@ bool Dodoryu::snapToWall() {
     }
 
     MR::normalize(&v1);
-    _134.set(v1);
+    mWallNormal.set(v1);
     v1 *= cylinderRadius;
     Vec3f v2 = cylinderPos + v1;
     mPosition.set(v2);
@@ -363,11 +346,7 @@ void Dodoryu::setMtx(const Pos3f& rMtx) {
     mBaseMtx.setInline(&rMtx);
     mBaseMtx.getTrans(mPosition);
 
-    if (_C8) {
-        _BC = *MR::getPlayerPos();
-    } else {
-        _BC = mPosition - mGravity * 150.0f;
-    }
+    mCameraRegisterPos = mPosition - mGravity * 150.0f;
 }
 
 void Dodoryu::notifyOnSwitchA() {
@@ -376,16 +355,16 @@ void Dodoryu::notifyOnSwitchA() {
     MR::invalidateClipping(mLeadHill);
     MR::invalidateClipping(mBank);
     MR::invalidateClipping(mRabbit);
-    _144 = 1;
-    mHill->setAppearNum(mHill->_94);
+    mIsSwitchOn = 1;
+    mHill->setAppearNum(mHill->mPieceNum);
 }
 
 void Dodoryu::nextState() {
-    mState[_CC]->end();
+    mState[mStateIndex]->end();
 
-    _CC++;
+    mStateIndex++;
 
-    if (_CC >= mState.size()) {
+    if (mStateIndex >= mState.size()) {
         MR::startAfterBossBGM();
         MR::requestAppearPowerStar(this, mPosition);
         mRabbit->setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitReturn));
@@ -399,7 +378,7 @@ void Dodoryu::nextState() {
     } else {
         MR::turnOnDepthOfField(true);
         MR::setDepthOfFieldBlurIntensity(0.75f);
-        mState[_CC]->start();
+        mState[mStateIndex]->start();
     }
 }
 
@@ -463,7 +442,7 @@ bool Dodoryu::checkWallWithVelocity() {
 
     MR::normalize(&deltaPos);
 
-    _134 = deltaPos;
+    mWallNormal = deltaPos;
     mClosedAreaObj = closedAreaObj;
 
     return true;
@@ -474,7 +453,7 @@ void Dodoryu::reactJumpOutCommon() const {
 }
 
 void Dodoryu::startSpinOutCamera() {
-    MR::startGlobalEventCamera(::sSpinOutCamera, CameraTargetArg(_14C), 120);
+    MR::startGlobalEventCamera(::sSpinOutCamera, CameraTargetArg(mSpinOutCameraTarget), 120);
 }
 
 void Dodoryu::endSpinOutCamera() {
@@ -602,11 +581,11 @@ void Dodoryu::killAllHillPieces() {
 }
 
 void Dodoryu::setHillAppearNumHalf() {
-    mHill->setAppearNum(mHill->_94 / 2);
+    mHill->setAppearNum(mHill->mPieceNum / 2);
 }
 
 void Dodoryu::setHillAppearNumMax() {
-    mHill->setAppearNum(mHill->_94 - 10);
+    mHill->setAppearNum(mHill->mPieceNum - 10);
 }
 
 void Dodoryu::startLeadHillBck(const char* pBckName) {
@@ -652,7 +631,7 @@ void Dodoryu::displayRabbitMessage() {
 
 void Dodoryu::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mBaseMtx);
-    Vec3f scale = mAnimScaleCtrl->_C * mScale;
+    Vec3f scale = mAnimScaleCtrl->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -666,7 +645,7 @@ void Dodoryu::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             MR::sendMsgEnemyAttack(pReceiver, pSender);
         }
     } else {
-        mState[_CC]->catchAttackSensor(pSender, pReceiver);
+        mState[mStateIndex]->catchAttackSensor(pSender, pReceiver);
     }
 }
 
@@ -691,7 +670,7 @@ bool Dodoryu::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
         return true;
     }
 
-    return mState[_CC]->catchPlayerAttack(msg, pSender, pReceiver);
+    return mState[mStateIndex]->catchPlayerAttack(msg, pSender, pReceiver);
 }
 
 void Dodoryu::initHitSensor() {
@@ -750,7 +729,7 @@ void Dodoryu::turnUpVecTo(const Vec3f& rVec) {
 
 void Dodoryu::checkHipDrop() {
     if (MR::isPlayerHipDropLand()) {
-        mState[_CC]->catchHipDrop();
+        mState[mStateIndex]->catchHipDrop();
     }
 }
 
@@ -763,15 +742,15 @@ void Dodoryu::initState() {
     mState.push_back(new DodoryuDemoAngry(this, "DodoryuDemoAngry"));
     mState.push_back(new DodoryuStateLv2(this, &::sDodoryuChaseDataLv3, "DodoryuStateLv3"));
     mState.push_back(new DodoryuDemoDown(this, "DodoryuDemoDown"));
-    _CC = 0;
+    mStateIndex = 0;
 }
 
 void Dodoryu::updateRumblePad() {
-    if (!_150) {
+    if (!mIsRumbling) {
         return;
     }
 
-    _154++;
+    mRumbleStep++;
 
     MR::tryRumblePadWeak(this, PLAYER_1);
 }
@@ -787,11 +766,11 @@ void Dodoryu::updateCameraTarget() {
 
     v1 = v4;
     m1.setTrans(v1);
-    _14C->mMatrix.setInline(m1);
+    mSpinOutCameraTarget->mMatrix.setInline(m1);
 }
 
-DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", reinterpret_cast< MtxPtr >(&_90), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
-    _90.identity();
+DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", reinterpret_cast< MtxPtr >(&mBankMtx), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+    mBankMtx.identity();
 }
 
 void DodoryuBank::init(const TableIter& rIter) {
@@ -807,16 +786,16 @@ void DodoryuBank::exeAppear() {
 }
 
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
-    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&_94), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
-      _D0(), _D4(), _D8(), mIsDisplayMessage() {
-    _94.identity();
+    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&mRabbitMtx), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), mRailCoord(), mTalkCtrl(), mTalkSwitchStep(300),
+      mTalkNode(), mTrampleRumbler(), mStarPieceRumbler(), mIsDisplayMessage() {
+    mRabbitMtx.identity();
 
     initWithoutIter();
 
-    _E0.identity();
-    _E0.setTrans(mPosition);
+    mTalkMtx.identity();
+    mTalkMtx.setTrans(mPosition);
 
-    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), _E0);
+    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), mTalkMtx);
     MR::setDistanceToTalk(mTalkCtrl, 1500.0f);
 }
 
@@ -826,8 +805,8 @@ void DodoryuRabbit::init(const TableIter& rIter) {
     MR::addHitSensorAtJointEnemy(this, "body", "Spine", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowFromCSV(this, "Shadow");
 
-    _D4 = new JointRumbler(this, "Spine", 4.0f, 0.2f, 60, true, 0);
-    _D8 = new JointRumbler(this, "Spine", 4.0f, 0.2f, 30, true, 0);
+    mTrampleRumbler = new JointRumbler(this, "Spine", 4.0f, 0.2f, 60, true, 0);
+    mStarPieceRumbler = new JointRumbler(this, "Spine", 4.0f, 0.2f, 30, true, 0);
 
     MR::initLightCtrl(this);
     reset(false);
@@ -840,34 +819,34 @@ void DodoryuRabbit::control() {
                     isNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscapeSlow));
 
     if (isEscape) {
-        _CC--;
+        mTalkSwitchStep--;
 
-        if (_CC <= 0) {
-            _CC = 300;
-            _D0 = (_D0 + 1) % 2;
+        if (mTalkSwitchStep <= 0) {
+            mTalkSwitchStep = 300;
+            mTalkNode = (mTalkNode + 1) % 2;
 
-            MR::resetAndForwardNode(mTalkCtrl, _D0);
+            MR::resetAndForwardNode(mTalkCtrl, mTalkNode);
         }
     }
 
-    if (_D4->isRumbling()) {
-        _D4->update();
+    if (mTrampleRumbler->isRumbling()) {
+        mTrampleRumbler->update();
     }
 
-    if (_D8->isRumbling()) {
-        _D8->update();
+    if (mStarPieceRumbler->isRumbling()) {
+        mStarPieceRumbler->update();
     }
 
     if (isNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitPleasure)) && getNerveStep() > 30) {
         return;
     }
 
-    _E0.setInline(MR::getJointMtx(this, "Spine"));
+    mTalkMtx.setInline(MR::getJointMtx(this, "Spine"));
 
     if (MR::isShadowProjected(this, nullptr)) {
         Vec3f shadowPos;
         MR::getShadowProjectionPos(this, nullptr, &shadowPos);
-        _E0.setTrans(shadowPos);
+        mTalkMtx.setTrans(shadowPos);
     }
 }
 
@@ -937,7 +916,7 @@ void DodoryuRabbit::exeJump() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Jump");
         MR::startBtp(this, "Blink");
-        _94.setInline(mHost->_148->mMatrix);
+        mRabbitMtx.setInline(mHost->mDemoCameraTarget->mMatrix);
     }
 
     MR::setNerveAtBckStopped(this, GET_NERVE_ANON(DodoryuRabbitNrvRabbitWait));
@@ -980,21 +959,21 @@ void DodoryuRabbit::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool DodoryuRabbit::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerTrample(msg)) {
-        if (_D8->isRumbling()) {
-            _D8->reset();
+        if (mStarPieceRumbler->isRumbling()) {
+            mStarPieceRumbler->reset();
         }
 
-        _D4->start();
+        mTrampleRumbler->start();
 
         return true;
     }
 
     if (MR::isMsgStarPieceReflect(msg)) {
-        if (_D4->isRumbling()) {
-            _D4->reset();
+        if (mTrampleRumbler->isRumbling()) {
+            mTrampleRumbler->reset();
         }
 
-        _D8->start();
+        mStarPieceRumbler->start();
 
         return false;
     }
@@ -1003,7 +982,7 @@ bool DodoryuRabbit::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
 }
 
 void DodoryuRabbit::reset(bool param1) {
-    _C4 = MR::getRailCoord(mHost) + 1075.0f;
+    mRailCoord = MR::getRailCoord(mHost) + 1075.0f;
 
     setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscape));
 
@@ -1013,21 +992,21 @@ void DodoryuRabbit::reset(bool param1) {
 }
 
 void DodoryuRabbit::updatePos(f32 f1) {
-    _C4 += f1;
+    mRailCoord += f1;
 
-    if (_C4 >= MR::getRailTotalLength(mHost)) {
-        _C4 -= MR::getRailTotalLength(mHost);
+    if (mRailCoord >= MR::getRailTotalLength(mHost)) {
+        mRailCoord -= MR::getRailTotalLength(mHost);
     }
 
     Vec3f railPos;
-    MR::calcRailPosAtCoord(&railPos, mHost, _C4);
+    MR::calcRailPosAtCoord(&railPos, mHost, mRailCoord);
     mPosition.set(railPos);
 
     MR::calcGravityVector(this, &mGravity, nullptr, false);
 
     Vec3f upVec(-mGravity);
     Vec3f railDir;
-    MR::calcRailDirectionAtCoord(&railDir, mHost, _C4);
+    MR::calcRailDirectionAtCoord(&railDir, mHost, mRailCoord);
 
     Vec3f vec98;
     vec98.cross(upVec, railDir);
@@ -1038,18 +1017,18 @@ void DodoryuRabbit::updatePos(f32 f1) {
         vecA4.set(railPos);
     }
 
-    _94.setXYZDir(vec98, upVec, railDir);
-    _94.setTrans(vecA4);
+    mRabbitMtx.setXYZDir(vec98, upVec, railDir);
+    mRabbitMtx.setTrans(vecA4);
 }
 
 f32 DodoryuRabbit::calcCoordDiff() const {
     f32 coord = MR::getRailCoord(mHost);
 
-    if (_C4 < coord) {
-        return (_C4 + MR::getRailTotalLength(mHost)) - coord;
+    if (mRailCoord < coord) {
+        return (mRailCoord + MR::getRailTotalLength(mHost)) - coord;
     }
 
-    return _C4 - coord;
+    return mRailCoord - coord;
 }
 
 bool DodoryuRabbit::tryTalk() {
@@ -1060,9 +1039,9 @@ bool DodoryuRabbit::tryTalk() {
     return false;
 }
 
-DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("ドドリュウ塚先頭"), mHostBaseMtx(pHost->getBaseMtx()), _90() {
-    for (int i = 0; i < ARRAY_SIZE(_94); i++) {
-        _94[i] = nullptr;
+DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("ドドリュウ塚先頭"), mHostBaseMtx(pHost->getBaseMtx()), mSpinAngle() {
+    for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
+        mJointCtrls[i] = nullptr;
     }
 
     initWithoutIter();
@@ -1073,27 +1052,27 @@ void DodoryuLeadHill::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecorationStrongLight(this);
     MR::initLightCtrl(this);
     initSound(8, false);
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
     mPosition.setTrans(mHostBaseMtx);
     initJoint();
     makeActorDead();
 }
 
 void DodoryuLeadHill::control() {
-    _90 += 0.07f;
+    mSpinAngle += 0.07f;
 }
 
 bool DodoryuLeadHill::calcJoint(Pos3f* pDst, const JointControllerInfo&) {
     Pos3f rotateMtx;
-    rotateMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), _90);
+    rotateMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mSpinAngle);
     pDst->concat(rotateMtx);
 
     return true;
 }
 
 void DodoryuLeadHill::calcAndSetBaseMtx() {
-    for (int i = 0; i < ARRAY_SIZE(_94); i++) {
-        _94[i]->registerCallBack();
+    for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
+        mJointCtrls[i]->registerCallBack();
     }
 
     if (mHostBaseMtx != nullptr) {
@@ -1105,10 +1084,10 @@ void DodoryuLeadHill::calcAndSetBaseMtx() {
 }
 
 void DodoryuLeadHill::initJoint() {
-    for (int i = 0; i < ARRAY_SIZE(_94); i++) {
+    for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
         char buf[256];
         nebula_snprintf(buf, sizeof(buf), "DodoryuLeadHill%d", i + 1);
 
-        _94[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, buf);
+        mJointCtrls[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, buf);
     }
 }
