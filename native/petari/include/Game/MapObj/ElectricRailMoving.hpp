@@ -13,8 +13,8 @@ public:
     virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    u8 mHasShadow;
-    u8 mIsElectric;
+    bool mHasShadow;
+    bool mIsElectric;  // pushes instead once the rail vanishes
 };
 
 class ElectricRailMoving : public ElectricRailDrawn {
@@ -33,17 +33,17 @@ public:
     void initRail(const TableIter&);
     void initPoints();
     void initMesh();
-    void drawRail(TypedDraw& rDraw, f32) const;
-    void drawPlane(f32, f32, f32, f32);
-    void drawPlaneGX(TypedDraw&, f32, f32, f32, f32) const;
-    // A segment's two corners into `pMesh`, or drawn now when it is null.
-    void setVertexAttribute(int, int, f32, f32, f32, f32, VertexPT*& rVtx) const;
+    void drawRail(TypedDraw& rDraw, f32 width) const;
+    void drawPlane(f32 side0, f32 up0, f32 side1, f32 up1);
+    void drawPlaneGX(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const;
+    // Two strip corners of one rail position at rVtx.
+    void setVertexAttribute(int pointIndex, int level, f32 side0, f32 up0, f32 side1, f32 up1, VertexPT*& rVtx) const;
     void updateHitSensorPos();
     bool updatePointPos();
     void updatePointPosAndModel();
-    bool isValidCoord(f32) const;
-    f32 getRepeatedCoord(f32) const;
-    void calcPointPos(Vec3f*, f32) const;
+    bool isValidCoord(f32 coord) const;
+    f32 getRepeatedCoord(f32 coord) const;
+    void calcPointPos(Vec3f* pOutPos, f32 coord) const;
     void move();
     void exeDisappear();
     void exeDisappeared();
@@ -52,7 +52,7 @@ public:
     s32 mSegmentNum;
     f32 mMovementSpeed;
     f32 mSegmentLength;
-    s32 mStackHeight;
+    s32 mStackHeight;  // rails stacked against gravity, at most 8 (cSensorNameTable)
     Pos3f mTexMtx;
     u8 mAlpha;
     Vec3f* mSensorOffsets;
