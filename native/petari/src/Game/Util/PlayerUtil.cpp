@@ -492,77 +492,81 @@ namespace MR {
 
     void endBindAndPlayerWait(LiveActor* pActor) {
         Vec3f velocity(0.0f, 0.0f, 0.0f);
-        RushEndInfo info(pActor, 0, velocity, false, 0);
+        RushEndInfo info(pActor, RushEndInfo::Mode_Wait, velocity, false, 0);
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerJump(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
-        RushEndInfo info = RushEndInfo(pActor, 2, rJumpVec, true, blendFrames);
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_Jump, rJumpVec, true, blendFrames);
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerForceJump(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
-        RushEndInfo info = RushEndInfo(pActor, 2, rJumpVec, true, blendFrames);
-        info._20 |= 0x40000000;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_Jump, rJumpVec, true, blendFrames);
+        info.mForced = true;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerWeakGravityJump(LiveActor* pActor, const Vec3f& rJumpVec) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, 0);
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerForceWeakGravityJump(LiveActor* pActor, const Vec3f& rJumpVec) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
-        info._20 |= 0x40000000;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, 0);
+        info.mForced = true;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const Vec3f& rJumpVec) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
-        info._20 |= 3u << 30;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerWeakGravityLimitJump(LiveActor* pActor, const Vec3f& rJumpVec) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
-        info._20 |= 0x800000;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, 0);
+        info.mLimitJump = true;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndSpinDriverJump(LiveActor* pActor, const Vec3f& rJumpVec) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
-        info._20 |= 3u << 30;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerDamage(LiveActor* pActor, const Vec3f& rDir) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rDir, true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 1;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rDir, true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Hit;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerFlip(LiveActor* pActor, const Vec3f& rDir) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rDir, true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 6;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rDir, true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Flip;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerJumpWithRollLanding(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, blendFrames);
-        info._20 |= 0x400000;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, rJumpVec, true, blendFrames);
+        info.mRollLanding = true;
 
         MarioAccess::endRush(&info);
     }
@@ -605,33 +609,37 @@ namespace MR {
     }
 
     void endBindAndPlayerAcidDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 4;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Acid;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerFreezeDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 3;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Freeze;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerFireDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 2;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Fire;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerElectricDamage(LiveActor* pActor) {
-        RushEndInfo info = RushEndInfo(pActor, 3, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 3u << 30;
-        info.mFlags.mDamageType = 5;
+        RushEndInfo info = RushEndInfo(pActor, RushEndInfo::Mode_PowerJump, Vec3f(0.0f, 0.0f, 0.0f), true, 0);
+        info.mForced = true;
+        info.mInputOff = true;
+        info.mDamage = RushEndInfo::Damage_Electric;
 
         MarioAccess::endRush(&info);
     }
