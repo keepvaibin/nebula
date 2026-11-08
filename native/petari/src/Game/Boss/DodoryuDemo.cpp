@@ -111,10 +111,7 @@ void DodoryuDemoOpening::exeDemoWait() {
 void DodoryuDemoOpening::exeUnderground() {
     if (MR::isFirstStep(this)) {
         mHost->startHill();
-
-        Dodoryu* pHost = mHost;
-        pHost->mIsRumbling = true;
-        pHost->mRumbleStep = 0;
+        mHost->mIsRumbling = true;
     }
 
     MR::startLevelSound(mHost, "SE_BM_LV_DODORYU_MOVE_U_SHALLOW");
@@ -197,10 +194,7 @@ void DodoryuDemoOpening::exeHide() {
 
     if (MR::isBckOneTimeAndStopped(mHost)) {
         MR::startBck(mHost, "EffectWalk");
-
-        Dodoryu* pHost = mHost;
-        pHost->mIsRumbling = true;
-        pHost->mRumbleStep = 0;
+        mHost->mIsRumbling = true;
         mHost->startLeadHillBck("EffectWalk");
     }
 }

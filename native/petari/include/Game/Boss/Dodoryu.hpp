@@ -45,7 +45,7 @@ public:
     void pauseOff();
     void startPlayerCenterCamera();
     void endPlayerCenterCamera();
-    void getPlayerResetMtx(Pos3f*, u32) const;
+    void getPlayerResetMtx(Pos3f* pMtx, u32 index) const;
     bool checkWallWithVelocity();
     void reactJumpOutCommon() const;
     void startSpinOutCamera();
@@ -57,12 +57,12 @@ public:
     void invalidateStarPieceSensor();
     void validateStarPieceSensor();
     bool isHeadNeedle(HitSensor*, HitSensor*) const;
-    void shiftMoveStateRail(f32);
-    void shiftMoveStateChase(f32, f32, f32, f32);
-    void shiftMoveStateEscape(f32, s32, s32, f32, f32);
-    void shiftMoveStateJumpOut(f32, f32);
+    void shiftMoveStateRail(f32 speed);
+    void shiftMoveStateChase(f32 accel, f32 lateralDamping, f32 maxSpeed, f32 turnAngle);
+    void shiftMoveStateEscape(f32 speed, s32 dirStepMin, s32 dirStepMax, f32 dirAngleMax, f32 turnAngle);
+    void shiftMoveStateJumpOut(f32 speed, f32 turnAngle);
     void shiftMoveStateNull();
-    void setMoveRailSpeed(f32);
+    void setMoveRailSpeed(f32 railSpeed);
     void startHill();
     void stopHill();
     void stopHillForce();
@@ -80,7 +80,7 @@ public:
     void initSwitch(const TableIter&);
     void createMogucchiHill();
     void createDodoryuBank();
-    void turnUpVecTo(const Vec3f&);
+    void turnUpVecTo(const Vec3f& rUp);
     void checkHipDrop();
     void initState();
     void updateRumblePad();
@@ -98,11 +98,10 @@ public:
     Vec3f mGroundNormal;
     Vec3f mWallNormal;
     AreaObj* mClosedAreaObj;
-    u8 mIsSwitchOn;
+    bool mIsSwitchOn;
     CameraTargetMtx* mDemoCameraTarget;
     CameraTargetMtx* mSpinOutCameraTarget;
-    u8 mIsRumbling;
-    u32 mRumbleStep;
+    bool mIsRumbling;
     AnimScaleController* mAnimScaleCtrl;
 };
 
@@ -127,8 +126,9 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void reset(bool);
-    void updatePos(f32);
+    // isPlace also moves the rabbit onto its new rail point.
+    void reset(bool isPlace);
+    void updatePos(f32 speed);
     f32 calcCoordDiff() const;
     bool tryTalk();
 

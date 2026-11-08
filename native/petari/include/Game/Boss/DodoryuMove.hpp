@@ -93,10 +93,10 @@ namespace DodoryuSub {
         MoveStateHolder(Dodoryu* pHost);
 
         void execute();
-        void shiftRail(f32);
-        void shiftChase(f32, f32, f32, f32);
-        void shiftEscape(f32, s32, s32, f32, f32);
-        void shiftJumpOut(f32, f32);
+        void shiftRail(f32 speed);
+        void shiftChase(f32 accel, f32 lateralDamping, f32 maxSpeed, f32 turnAngle);
+        void shiftEscape(f32 speed, s32 dirStepMin, s32 dirStepMax, f32 dirAngleMax, f32 turnAngle);
+        void shiftJumpOut(f32 speed, f32 turnAngle);
         void shiftNull();
         void brake();
         void setRailSpeed(f32);

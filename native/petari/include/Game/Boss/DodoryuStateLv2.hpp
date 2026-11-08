@@ -84,7 +84,7 @@ struct DodoryuChaseParam {
 
 class DodoryuStateLv2 : public DodoryuStateBase {
 public:
-    DodoryuStateLv2(Dodoryu* pHost, DodoryuChaseParam* pChaseParam, const char* pName);
+    DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChaseParam, const char* pName);
 
     virtual void init(const TableIter& rIter);
     virtual void control();
@@ -172,6 +172,6 @@ public:
     s32 mFindPosStep;
     s32 mChaseMoreCounter;
     bool mIsChaseMoreBrake;
-    DodoryuChaseParam* mChaseParam;
+    const DodoryuChaseParam* mChaseParam;
     bool mIsPlayerStaggering;
 };

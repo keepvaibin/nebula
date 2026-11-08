@@ -38,56 +38,49 @@ namespace DodoryuSub {
         mCurrentState->execute();
     }
 
-    void MoveStateHolder::shiftRail(f32 param1) {
+    void MoveStateHolder::shiftRail(f32 speed) {
         mNextState = mRailState;
-        mRailState->mSpeed = param1;
+        mRailState->mSpeed = speed;
     }
 
-    void MoveStateHolder::shiftChase(f32 param1, f32 param2, f32 param3, f32 param4) {
+    // Chase and detour share the tuning, so a detour taken mid-chase keeps it.
+    void MoveStateHolder::shiftChase(f32 accel, f32 lateralDamping, f32 maxSpeed, f32 turnAngle) {
         if (mCurrentState != mChaseState && mCurrentState != mDetourState) {
             mNextState = mChaseState;
         }
 
-        MoveStateChase* pChaseState = mChaseState;
+        mChaseState->mAccel = accel;
+        mChaseState->mLateralDamping = lateralDamping;
+        mChaseState->mMaxSpeed = maxSpeed;
+        mChaseState->mTurnAngle = turnAngle;
 
-        pChaseState->mAccel = param1;
-        pChaseState->mLateralDamping = param2;
-        pChaseState->mMaxSpeed = param3;
-        pChaseState->mTurnAngle = param4;
-
-        MoveStateDetour* pDetourState = mDetourState;
-
-        pDetourState->mAccel = param1;
-        pDetourState->mLateralDamping = param2;
-        pDetourState->mMaxSpeed = param3;
-        pDetourState->mTurnAngle = param4;
+        mDetourState->mAccel = accel;
+        mDetourState->mLateralDamping = lateralDamping;
+        mDetourState->mMaxSpeed = maxSpeed;
+        mDetourState->mTurnAngle = turnAngle;
     }
 
-    void MoveStateHolder::shiftEscape(f32 param1, s32 param2, s32 param3, f32 param4, f32 param5) {
+    void MoveStateHolder::shiftEscape(f32 speed, s32 dirStepMin, s32 dirStepMax, f32 dirAngleMax, f32 turnAngle) {
         if (mCurrentState != mEscapeState) {
             mNextState = mEscapeState;
             mEscapeState->mDirStepLeft = 0;
         }
 
-        MoveStateEscape* pEscapeState = mEscapeState;
-
-        pEscapeState->mMaxSpeed = param1;
-        pEscapeState->mSpeed = param1;
-        pEscapeState->mDirStepMin = param2;
-        pEscapeState->mDirStepMax = param3;
-        pEscapeState->mDirAngleMax = param4;
-        pEscapeState->mTurnAngle = param5;
+        mEscapeState->mMaxSpeed = speed;
+        mEscapeState->mSpeed = speed;
+        mEscapeState->mDirStepMin = dirStepMin;
+        mEscapeState->mDirStepMax = dirStepMax;
+        mEscapeState->mDirAngleMax = dirAngleMax;
+        mEscapeState->mTurnAngle = turnAngle;
     }
 
-    void MoveStateHolder::shiftJumpOut(f32 param1, f32 param2) {
+    void MoveStateHolder::shiftJumpOut(f32 speed, f32 turnAngle) {
         if (mCurrentState != mJumpOutState) {
             mNextState = mJumpOutState;
         }
 
-        MoveStateJumpOut* pJumpOutState = mJumpOutState;
-
-        pJumpOutState->mTurnAngle = param2;
-        pJumpOutState->mSpeed = param1;
+        mJumpOutState->mTurnAngle = turnAngle;
+        mJumpOutState->mSpeed = speed;
     }
 
     void MoveStateHolder::shiftNull() {
