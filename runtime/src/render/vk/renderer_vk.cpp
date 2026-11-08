@@ -1078,6 +1078,7 @@ void RendererVk::shutdown() {
         output_scene_active_ = false;
         corner_texture_.reset();
         probe_slots_.clear();
+        held_probe_slots_.clear();
         scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         vertex_ring_.reset();

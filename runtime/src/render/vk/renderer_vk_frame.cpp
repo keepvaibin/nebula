@@ -407,6 +407,9 @@ void RendererVk::end_scene_pass(const char* caller) {
     vkCmdEndRenderPass(commands_);
     scene_pass_open_ = false;
     scene_pass_closed_by_ = caller;
+    if (!held_probe_slots_.empty()) {
+        read_held_probes();
+    }
     gpu_pass(current_pass_);
 }
 
@@ -447,6 +450,10 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
+    if (depth_enable && !held_probe_slots_.empty()) {
+        // Held probes read the depth before the clear replaces it; the pass is closed for the clear's own opening.
+        end_scene_pass();
+    }
     const SceneClearValues clear = make_scene_clear_values(clear_rgba, pixel_format);
     scene_.depth_dirty |= depth_enable && scene_.samples > 1u;
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
@@ -460,7 +467,12 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
     }
     // The whole colour without depth while the pass is closed (the bloom's fresh target over the scene's depth): the pass
     // opens without reading the colour the clear replaces, which a tiled GPU would load from memory.
-    begin_scene_pass_with(0u, nullptr, !scene_pass_open_ && every_channel && whole);
+    // The opening's name in the [vk-gpu] report says what the clear was.
+    const char* kind = !whole ? "clear_scene(part)"
+                       : every_channel ? (depth_enable ? "clear_scene(colour+depth)" : "clear_scene(colour)")
+                       : color_enable || alpha_enable ? (depth_enable ? "clear_scene(channels+depth)" : "clear_scene(channels)")
+                       : "clear_scene(depth)";
+    begin_scene_pass_with(0u, nullptr, !scene_pass_open_ && every_channel && whole, kind);
     const VkCommandBuffer commands = commands_;
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
@@ -2162,8 +2174,47 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
         const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
         std::memcpy(out.pixels->mapped + i * sizeof(ScreenProbePixel), &pixel, sizeof(pixel));
     }
+    out.fence = kProbesInFrame;  // fenced at end_frame
+    const auto count = static_cast<std::uint32_t>(probes.size());
+    if (scene_pass_open_) {
+        out.held = count;
+        held_probe_slots_.push_back(slot);
+        return true;
+    }
+    dispatch_screen_probes(slot, count);
+    return true;
+}
 
+void RendererVk::read_held_probes() {
+    std::vector<std::size_t> held;
+    held.swap(held_probe_slots_);
+    for (const std::size_t slot : held) {
+        ProbeSlot& out = probe_slots_[slot];
+        const std::uint32_t count = std::exchange(out.held, 0u);
+        if (count != 0u) {
+            dispatch_screen_probes(slot, count);
+        }
+    }
+    held.clear();
+    if (held_probe_slots_.empty()) {
+        held_probe_slots_.swap(held);  // keeps the capacity
+    }
+}
+
+void RendererVk::settle_screen_probes() {
+    if (!scene_pass_open_) {
+        read_held_probes();
+        return;
+    }
+    const unsigned aux = scene_pass_aux_;
     end_scene_pass();
+    begin_scene_pass_with(aux);
+}
+
+// The probe dispatch, with the scene target pass closed: the depth sampled at each point into the slot's values.
+void RendererVk::dispatch_screen_probes(std::size_t slot, std::uint32_t count) {
+    ProbeSlot& out = probe_slots_[slot];
+    vk::Context& context = vk::Context::get();
     const VkCommandBuffer commands = commands_;
     resolve_scene_depth(commands);
     const VkImageAspectFlags aspects = depth_aspects(depth_format_);
@@ -2175,8 +2226,8 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
 
     const VkDescriptorSet set = allocate_frame_set(probe_set_layout_);
     const VkDescriptorImageInfo depth{VK_NULL_HANDLE, scene_.depth->view, kDepthSampleLayout};
-    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, probes.size() * sizeof(ScreenProbePixel)};
-    const VkDescriptorBufferInfo values{out.values->buffer, 0, probes.size() * sizeof(float)};
+    const VkDescriptorBufferInfo pixels{out.pixels->buffer, 0, count * sizeof(ScreenProbePixel)};
+    const VkDescriptorBufferInfo values{out.values->buffer, 0, count * sizeof(float)};
     VkWriteDescriptorSet writes[3]{};
     for (std::uint32_t i = 0; i < 3u; ++i) {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -2190,7 +2241,6 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
     writes[2].pBufferInfo = &values;
     vkUpdateDescriptorSets(context.device(), 3, writes, 0, nullptr);
 
-    const std::uint32_t count = static_cast<std::uint32_t>(probes.size());
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_pipeline_);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, probe_layout_, 0, 1, &set, 0, nullptr);
     vkCmdPushConstants(commands, probe_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(count), &count);
@@ -2210,8 +2260,6 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
                          &host, 0, nullptr);
     reset_draw_bindings();
     bind_scene();
-    out.fence = kProbesInFrame;  // fenced at end_frame
-    return true;
 }
 
 const float* RendererVk::screen_probes_finished(std::size_t slot) {
