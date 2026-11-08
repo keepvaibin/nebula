@@ -218,26 +218,10 @@ public:
         mGlobalPScl.set(scaleX, scaleY);
     }
     void getGlobalParticleScale(Vec3f& scale) const {
-        //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
-        //       inlined).
-#if PLATFORM_GCN
-        scale.x = mGlobalPScl.x;
-        scale.y = mGlobalPScl.y;
-        scale.z = 1.0f;
-#else
         scale.set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
-#endif
     }
     void getGlobalParticleScale(Vec3f* scale) const {
-        //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
-        //       inlined).
-#if PLATFORM_GCN
-        scale->x = mGlobalPScl.x;
-        scale->y = mGlobalPScl.y;
-        scale->z = 1.0f;
-#else
         scale->set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
-#endif
     }
     void setGlobalScale(const Vec3f& scale) {
         mGlobalScl.set(scale);

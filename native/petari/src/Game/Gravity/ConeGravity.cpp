@@ -35,11 +35,6 @@ void ConeGravity::updateMtx(const Pos3f& rMtx) {
     Vec3f sideVec;
     mWorldMtx.getXDir(sideVec);
     mWorldRadius = sideVec.length();
-
-    Vec3f axis;  // unused
-    mWorldMtx.getYDir(axis);
-    // The developers could have left this in because there originally was a height member
-    // that they would set to ||axis|| * (1.0f - mTopCutRate)
 }
 
 bool ConeGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPos) const {

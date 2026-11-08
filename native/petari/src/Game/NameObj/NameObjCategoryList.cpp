@@ -2,27 +2,18 @@
 #include <algorithm>
 
 NameObjCategoryList::NameObjCategoryList(u32 count, const CategoryListInitialTable* pTable, NameObjMethod pMethod, bool allocateByCheck,
-                                         const char*) {
-    NameObjMethod method;
-    method = pMethod;
-    mDelegator = new NameObjRealDelegator< NameObjMethod >(method);
-    mAllocateByCheck = allocateByCheck;
-    mBufferAllocated = false;
+                                         const char*)
+    : mMethod(pMethod), mMethodConst(nullptr), mBufferAllocated(false), mAllocateByCheck(allocateByCheck) {
     initTable(count, pTable);
 }
 
 NameObjCategoryList::NameObjCategoryList(u32 count, const CategoryListInitialTable* pTable, NameObjMethodConst pMethod, bool allocateByCheck,
-                                         const char*) {
-    NameObjMethodConst method;
-    method = pMethod;
-    mDelegatorConst = new NameObjRealDelegator< NameObjMethodConst >(method);
-    mAllocateByCheck = allocateByCheck;
-    mBufferAllocated = false;
+                                         const char*)
+    : mMethod(nullptr), mMethodConst(pMethod), mBufferAllocated(false), mAllocateByCheck(allocateByCheck) {
     initTable(count, pTable);
 }
 
 NameObjCategoryList::~NameObjCategoryList() {
-    delete mDelegator;
 }
 
 void NameObjCategoryList::execute(int idx) {
@@ -36,8 +27,16 @@ void NameObjCategoryList::execute(int idx) {
         (*pCategoryInfo->mExecuteBeforeFunction)();
     }
 
-    for (NameObj** pNameObj = pCategoryInfo->mNameObjArr.begin(); pNameObj != pCategoryInfo->mNameObjArr.end(); pNameObj++) {
-        (*mDelegator)(*pNameObj);
+    // end() is read each pass: a call may add to or remove from this category.
+    if (mMethodConst != nullptr) {
+        for (NameObj** pNameObj = pCategoryInfo->mNameObjArr.begin(); pNameObj != pCategoryInfo->mNameObjArr.end(); pNameObj++) {
+            MotionSignal::drawObject((*pNameObj)->mDrawSlot, (*pNameObj)->mMotionEpoch);
+            ((*pNameObj)->*mMethodConst)();
+        }
+    } else {
+        for (NameObj** pNameObj = pCategoryInfo->mNameObjArr.begin(); pNameObj != pCategoryInfo->mNameObjArr.end(); pNameObj++) {
+            ((*pNameObj)->*mMethod)();
+        }
     }
 }
 

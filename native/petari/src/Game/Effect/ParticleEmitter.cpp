@@ -8,7 +8,7 @@ void ParticleEmitter::invalidate() {
     mEmitter = nullptr;
 }
 
-void ParticleEmitter::init(u16 unused) {
+void ParticleEmitter::init() {
     mPaused = false;
     mStopped = false;
     mEmitter->mStatus |= EmitterStatus_Immortal;
