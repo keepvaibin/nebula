@@ -12,7 +12,7 @@ class RosettaDemoAstroDomeExplain : public NerveExecutor {
 public:
     /// @brief Creates a new `RosettaDemoAstroDomeExplain`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
-    /// @param rIter TODO.
+    /// @param rIter Rosalina's placement entry.
     RosettaDemoAstroDomeExplain(Rosetta* pRosetta, const TableIter& rIter);
 
 
@@ -28,7 +28,7 @@ class RosettaDemoAstroDomeFinalBattle : public NerveExecutor {
 public:
     /// @brief Creates a new `RosettaDemoAstroDomeFinalBattle`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
-    /// @param rIter TODO.
+    /// @param rIter Rosalina's placement entry.
     RosettaDemoAstroDomeFinalBattle(Rosetta* pRosetta, const TableIter& rIter);
 
     void startDemo();
@@ -42,7 +42,7 @@ class RosettaDemoAstroDomeTalk : public NerveExecutor {
 public:
     /// @brief Creates a new `RosettaDemoAstroDomeTalk`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
-    /// @param rIter TODO.
+    /// @param rIter Rosalina's placement entry.
     RosettaDemoAstroDomeTalk(Rosetta* pRosetta, const TableIter& rIter);
 
     void startDemo();

@@ -26,7 +26,7 @@ namespace MR {
         MovementType_WipeLayout,
         MovementType_LayoutOnPause,
         MovementType_MovieSubtitles,
-        MovementType_UNK_0x14,
+        MovementType_EffectUpdateCheck,
         MovementType_UNK_0x15,
         MovementType_MirrorCamera,
         MovementType_ImageEffect,
@@ -150,9 +150,11 @@ namespace MR {
         DrawType_ClipAreaDropLaser,
         DrawType_SpiderThread,
         DrawType_SpaceCocoon,
-        DrawType_0x17,
-        DrawType_WarpPodPath,     // TODO: DrawType_NormalMap?
-        DrawType_FlexibleSphere,  // TODO: DrawType_DynamicCollisionObj?
+        DrawType_FootPrint,
+        // Normal-mapped map objects and the warp pod paths.
+        DrawType_NormalMap,
+        // Meshes rebuilt every frame: FlexibleSphere, TrampleStar, DynamicCollisionObj.
+        DrawType_FlexibleSphere,
         DrawType_KirairaChain,
         DrawType_WaterPlant,
         DrawType_VolumeModel,
@@ -195,7 +197,7 @@ namespace MR {
         DrawType_CometScreenFilter,
         DrawType_WipeLayout,
         DrawType_TalkLayout,
-        DrawType_0x44,
+        DrawType_TalkPartsLayout,
         DrawType_CinemaFrame,
         DrawType_GalaxyNamePlate,
         DrawType_EffectDraw3D,
@@ -213,7 +215,7 @@ namespace MR {
     };
 
     enum LightType {
-        LightType_None = -1,  // TODO: better name?
+        LightType_None = -1,
         LightType_Player,
         LightType_Strong,
         LightType_Weak,

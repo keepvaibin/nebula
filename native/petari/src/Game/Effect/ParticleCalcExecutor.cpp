@@ -81,5 +81,5 @@ void ParticleCalcExecutor::initMovementAdaptor() {
                                   MR::CalcAnimType_AnimParticleIgnorePause);
 
     mCheckUpdateAdaptor = new NameObjAdaptor("更新チェック");
-    ::connectToSceneMovementAdaptor(mCheckUpdateAdaptor, MR::Functor(this, &ParticleCalcExecutor::movementCheckUpdate), MR::MovementType_UNK_0x14);
+    ::connectToSceneMovementAdaptor(mCheckUpdateAdaptor, MR::Functor(this, &ParticleCalcExecutor::movementCheckUpdate), MR::MovementType_EffectUpdateCheck);
 }

@@ -23,8 +23,8 @@ namespace NrvRingBeam {
     NEW_NERVE(RingBeamNrvSpread, RingBeam, Spread);
 };  // namespace NrvRingBeam
 
-RingBeamShadowDrawer::RingBeamShadowDrawer(const LiveActor* unk0) : ShadowVolumeDrawer("影描画[リングビーム]") {
-    mHost = unk0;
+RingBeamShadowDrawer::RingBeamShadowDrawer(const LiveActor* pHost) : ShadowVolumeDrawer("影描画[リングビーム]") {
+    mHost = pHost;
     mRadius = 0.0f;
 }
 

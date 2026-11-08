@@ -184,11 +184,11 @@ namespace {
             4,
         },
         {
-            MR::MovementType_UNK_0x14,
+            MR::MovementType_EffectUpdateCheck,
             1,
         },
         {
-            -1,  // TODO "None" MovementType name?
+            MR::MovementType_None,
             0,
         },
     };
@@ -282,7 +282,7 @@ namespace {
             2,
         },
         {
-            -1,  // TODO "None" CalcAnimType name?
+            MR::CalcAnimType_None,
             0,
         },
     };
@@ -534,7 +534,7 @@ namespace {
             MR::CameraType_2D,
         },
         {
-            -1,  // TODO "None" DrawBufferType name?
+            MR::DrawBufferType_None,
             0,
             MR::LightType_None,
             MR::CameraType_3D,
@@ -574,7 +574,7 @@ namespace {
             32,
         },
         {
-            MR::DrawType_0x44,
+            MR::DrawType_TalkPartsLayout,
             32,
         },
         {
@@ -758,11 +758,11 @@ namespace {
             64,
         },
         {
-            MR::DrawType_0x17,
+            MR::DrawType_FootPrint,
             32,
         },
         {
-            MR::DrawType_WarpPodPath,
+            MR::DrawType_NormalMap,
             256,
         },
         {
@@ -874,7 +874,7 @@ namespace {
             256,
         },
         {
-            -1,  // TODO "None" DrawType name?
+            MR::DrawType_None,
             0,
         },
     };

@@ -20,7 +20,7 @@ FootPrint::FootPrint(const char* pName, s32 amount, s32 drawType) : NameObj(pNam
 }
 
 FootPrint::FootPrint(const char* pName, s32 amount) : NameObj(pName) {
-    initMember(amount, MR::DrawType_0x17);
+    initMember(amount, MR::DrawType_FootPrint);
 }
 
 void FootPrint::initMember(s32 amount, s32 drawType) {

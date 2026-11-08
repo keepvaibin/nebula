@@ -425,12 +425,12 @@ namespace MR {
 
     /// @brief Returns the value of pi (3.14159274f)
     inline f32 pi() {
-        return PI;  // TODO: test if actually FloatUtil::PI();
+        return PI;
     }
 
     /// @brief Returns the value of pi * 2 (6.2831855f)
     inline f32 pi2() {
-        return PI * 2.0f;  // TODO: test if actually FloatUtil::PI() * 2.0f;
+        return PI * 2.0f;
     }
 
     inline f32 epsilon() {

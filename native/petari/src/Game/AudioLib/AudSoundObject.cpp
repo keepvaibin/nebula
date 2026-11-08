@@ -8,6 +8,20 @@
 #include "Game/Sound/Sound.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 
+namespace {
+    // Sequence ports the player foot and land sounds and the low-pass filter read.
+    const u32 cPortLpfCutoff = 10;
+    const u32 cPortMapCodeOffset = 11;
+    const u32 cPortMapCodeBank = 12;
+    // Map codes come in banks of seven; each code within a bank is twelve steps apart.
+    const s32 cMapCodeBankSize = 7;
+    const s32 cMapCodeStep = 12;
+    const s32 cLpfOpen = 0x7F;
+    // Special effect cutoffs: waterfalls and gulls under effect 2, fountains and the maze wind under effect 1.
+    const s32 cLpfCutoffSpecialFx2 = 10;
+    const s32 cLpfCutoffSpecialFx1 = 20;
+}  // namespace
+
 AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
     : SoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
 }
@@ -257,8 +271,8 @@ void AudSoundObject::setMapCodeToPort(SoundHandle* pHandle, SoundID soundID) {
     case SE_PM_LAND:
     case SE_PM_HAND:
     case SE_PM_LAND_HEAVY:
-        writePort(pHandle, 12, (mapCode - 1) / 7);
-        writePort(pHandle, 11, ((mapCode - 1) % 7) * 12);
+        writePort(pHandle, ::cPortMapCodeBank, (mapCode - 1) / ::cMapCodeBankSize);
+        writePort(pHandle, ::cPortMapCodeOffset, ((mapCode - 1) % ::cMapCodeBankSize) * ::cMapCodeStep);
         break;
     }
 }
@@ -280,8 +294,8 @@ void AudSoundObject::setCutoffToPort(SoundHandle* pHandle, SoundID soundID) {
     if (info->isUseLpf(soundID)) {
         AudEffector* effector = AudWrap::getSystem()->mAudEffector;
         s32 value = effector->mCutoff;
-        if (value < 0 || value > 0x7F) {
-            value = 0x7F;
+        if (value < 0 || value > ::cLpfOpen) {
+            value = ::cLpfOpen;
         }
 
         switch (soundID) {
@@ -291,28 +305,24 @@ void AudSoundObject::setCutoffToPort(SoundHandle* pHandle, SoundID soundID) {
         case SE_AT_LV_WATERFALL_UPPER_L:
         case SE_OJ_SEAGULL_CHIRP:
             if (effector->mSpecialFx == 2) {
-                // TODO: magic value
-                value = 10;
+                value = ::cLpfCutoffSpecialFx2;
                 pHandle->getSound()->mParams.mMove.moveVolume(0.5f, 0);
             }
             break;
         case SE_OJ_LV_FOUNTAIN:
         case SE_AT_LV_WIND_RABBIT_MAZE:
             if (effector->mSpecialFx == 1) {
-                // TODO: magic value
-                value = 20;
+                value = ::cLpfCutoffSpecialFx1;
                 pHandle->getSound()->mParams.mMove.moveVolume(0.5f, 5);
             } else {
-                value = 0x7F;
+                value = ::cLpfOpen;
                 pHandle->getSound()->mParams.mMove.moveVolume(1.0f, 5);
             }
             break;
         }
-        // TODO: port magic value
-        writePort(pHandle, 10, value);
+        writePort(pHandle, ::cPortLpfCutoff, value);
     } else {
-        writePort(pHandle, 10, 0x7F);
-        return;
+        writePort(pHandle, ::cPortLpfCutoff, ::cLpfOpen);
     }
 }
 

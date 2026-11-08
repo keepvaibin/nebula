@@ -120,12 +120,12 @@ SoundID AudStageBgmWrap::changeStageNameToSoundID(const char* pSceneName, const 
     SoundID soundID = -1;
     SoundID koopaAppearBgm = getKoopaFortressAppearBgm(pStageName);
     if (koopaAppearBgm != -1) {
-        return (u32)koopaAppearBgm;  // TODO: ?
+        return koopaAppearBgm;
     }
 
     SoundID cometEventBgm = getCometEventBgm(pStageName);
     if (cometEventBgm != -1) {
-        return (u32)cometEventBgm;  // TODO: ?
+        return cometEventBgm;
     }
 
     if (MR::isEqualString(pStageName, "AstroGalaxy") && scenarioNo == 1 && !MR::isOnGameEventFlagAstroGalaxyBgmBright()) {

@@ -9,8 +9,11 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const s32 sCameraResetFrame = 30;
-};  // namespace
+    const s32 cCameraResetFrame = 30;
+    const f32 cWatchPointRate = 0.1f / 15.0f;
+    // The camera eases up toward mAngleX by this much of the gap each frame.
+    const f32 cAngleXChaseRate = 0.05f;
+}  // namespace
 
 CameraWonderPlanet::~CameraWonderPlanet() {
 }
@@ -26,7 +29,7 @@ void CameraWonderPlanet::reset() {
     mCameraMan->mMatrix.getYDir(up);
 
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), ::cWatchPointRate);
 
     Vec3f front = watchPosCameraMan - pos;
     MR::normalize(&front);
@@ -45,14 +48,14 @@ void CameraWonderPlanet::reset() {
     mRotateFrame = 0;
 }
 
+// Watches the target in its own frame: never lower than mAngleX, distance kept in [mDistMin, mDistMax].
 CameraTargetObj* CameraWonderPlanet::calc() {
-    // FIXME
     Vec3f currWatchPos = CameraLocalUtil::getWatchPos(this);
     Vec3f pos = CameraLocalUtil::getPos(this);
     Vec3f up = CameraLocalUtil::getUpVec(this);
 
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), ::cWatchPointRate);
 
     Vec3f front = currWatchPos - pos;
     MR::normalize(&front);
@@ -71,7 +74,7 @@ CameraTargetObj* CameraWonderPlanet::calc() {
     MR::crossToPolar(Vec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
     if (angleX < mAngleX) {
-        angleX += (mAngleX - angleX) * 0.05f;
+        angleX += (mAngleX - angleX) * ::cAngleXChaseRate;
         MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
     }
 
@@ -117,7 +120,7 @@ void CameraWonderPlanet::updateCameraReset() {
 }
 
 void CameraWonderPlanet::rotateCamera() {
-    if (++mRotateFrame > ::sCameraResetFrame) {
+    if (++mRotateFrame > ::cCameraResetFrame) {
         mIsRotating = false;
     }
 }
@@ -138,8 +141,6 @@ void CameraWonderPlanet::checkReset() {
     }
     MR::normalize(&front);
 
-    // TODO: this is the first time this specific pattern has come up,
-    // killElement and orthogonalize may need to be looked at again.
     Vec3f targetFront = CameraLocalUtil::getTarget(this)->getGravityVector().getOrthogonal(CameraLocalUtil::getTarget(this)->getFrontVec());
 
     if (MR::isNearZero(targetFront)) {
@@ -171,5 +172,5 @@ void CameraWonderPlanet::checkReset() {
     mIsRotating = true;
     mRotateFrame = 0;
 
-    MR::startCameraInterpolation(::sCameraResetFrame);
+    MR::startCameraInterpolation(::cCameraResetFrame);
 }

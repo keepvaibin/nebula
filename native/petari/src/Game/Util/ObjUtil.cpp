@@ -365,7 +365,7 @@ void MR::connectToSceneCrystal(LiveActor* pActor) {
 }
 
 void MR::connectToSceneNormalMapObj(LiveActor* pActor) {
-    MR::connectToScene(pActor, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, 0x18);  // ??
+    MR::connectToScene(pActor, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_NormalMap);
 }
 
 void MR::requestMovementOn(NameObj* pObj) {
