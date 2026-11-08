@@ -287,9 +287,9 @@ NebulaArena* NebulaArena::becomeCurrentHeap() {
 }
 
 void NebulaArena::dispose() {
+    // Each one's destructor takes it out of the list.
     while (mDisposerList.getFirst() != mDisposerList.getEnd()) {
-        JSUListIterator< JKRDisposer > iterator = mDisposerList.getFirst();
-        iterator->~JKRDisposer();
+        mDisposerList.getFirst()->getObject()->~JKRDisposer();
     }
 }
 

@@ -2,7 +2,7 @@
 
 #include "Game/Sound/SoundGlobal.hpp"
 #include "Game/Sound/SpeakerMixer.hpp"
-#include <JSystem/JSupport/JSUList.hpp>
+#include "Game/System/NebulaList.hpp"
 
 class NebulaArena;
 class SpkSound;
@@ -27,7 +27,7 @@ public:
 
 // One speaker sound as the game plays it: started locked, heard from the next frame, stopped by a fade out or its release. The
 // audio thread's SpeakerVoice mixes it; its state is the game's own until the audio thread has run the game's last change.
-class SpkSound : public JSULink< SpkSound > {
+class SpkSound : public NebulaListLink< SpkSound > {
 public:
     enum State {
         State_NONE = SpeakerVoice::STATE_NONE,
@@ -73,5 +73,5 @@ public:
     void framework();
 
     NebulaArena* mHeap;
-    JSUList< SpkSound > mSoundList[4];
+    NebulaList< SpkSound > mSoundList[4];
 };

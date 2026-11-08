@@ -8,7 +8,7 @@
 #include <cstring>
 #include <new>
 
-StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) : JSULink< StreamSound >(this) {
+StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) {
     mPrepareState = 0;
     soundStrategyMgr = soundStrategyMgr_;
     streamMgr = streamMgr_;

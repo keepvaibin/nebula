@@ -5,7 +5,7 @@
 void EffectCategory::managerCalc_() {
     mParams.calc();
 
-    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+    for (NebulaListLink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
         i->getObject()->categoryCalc_();
     }
 
@@ -13,9 +13,9 @@ void EffectCategory::managerCalc_() {
 }
 
 void EffectCategory::freeDeadSe_() {
-    JSULink< EffectSound >* i = mSeList.getFirst();
+    NebulaListLink< EffectSound >* i = mSeList.getFirst();
     while (i != mSeList.getEnd()) {
-        JSULink< EffectSound >* link_next = i->getNext();
+        NebulaListLink< EffectSound >* link_next = i->getNext();
         if (i->getObject()->isDead()) {
             mSeList.remove(i);
             delete i->getObject();
@@ -31,7 +31,7 @@ bool EffectCategory::acceptsNewSe_(u32 priority) const {
     }
 
     int playingNum = 0;
-    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+    for (NebulaListLink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
         if (priority < i->getObject()->getProperPriority_()) {
             return true;
         }
@@ -45,15 +45,15 @@ bool EffectCategory::acceptsNewSe_(u32 priority) const {
 
 // Stable, ascending by category priority. Linear when the order hasn't changed since the last frame.
 void EffectCategory::sortByPriority_() {
-    JSULink< EffectSound >* pLink = mSeList.getFirst();
+    NebulaListLink< EffectSound >* pLink = mSeList.getFirst();
     if (pLink == mSeList.getEnd()) {
         return;
     }
 
     for (pLink = pLink->getNext(); pLink != mSeList.getEnd();) {
-        JSULink< EffectSound >* const pNext = pLink->getNext();
+        NebulaListLink< EffectSound >* const pNext = pLink->getNext();
         const u32 priority = pLink->getObject()->getPriority_();
-        JSULink< EffectSound >* pPos = pLink->getPrev();
+        NebulaListLink< EffectSound >* pPos = pLink->getPrev();
 
         if (priority < pPos->getObject()->getPriority_()) {
             do {
@@ -68,20 +68,20 @@ void EffectCategory::sortByPriority_() {
 }
 
 void EffectCategory::stop(u32 fadeTime) {
-    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+    for (NebulaListLink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
         i->getObject()->stop(fadeTime);
     }
 }
 
 void EffectCategory::stop() {
-    for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+    for (NebulaListLink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
         i->getObject()->stop();
     }
 }
 
 void EffectCategory::stopSoundID(SoundID id) {
     if (!id.isAnonymous()) {
-        for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
+        for (NebulaListLink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
             if ((u32)i->getObject()->getID() == (u32)id) {
                 i->getObject()->stop();
             }
@@ -92,7 +92,7 @@ void EffectCategory::stopSoundID(SoundID id) {
 void EffectCategory::managerMixOut_(const SoundMove& params, SoundActivity activity) {
     SoundParams mixParams;
     mixParams.combine(params.mParams, mParams.mParams);
-    JSULink< EffectSound >* i = mSeList.getFirst();
+    NebulaListLink< EffectSound >* i = mSeList.getFirst();
 
     // The leading sounds that aren't far away play, up to the active limit (0: no limit); the rest are muted.
     const bool isLimited = getMaxActiveSe() > 0;

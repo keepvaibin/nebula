@@ -12,10 +12,10 @@ SequenceManager::SequenceManager(bool setInstance) : SoundGlobal< SequenceManage
 }
 
 void SequenceManager::freeDeadSeq_() {
-    JSULink< SequenceSound >* i = mSeqList.getFirst();
+    NebulaListLink< SequenceSound >* i = mSeqList.getFirst();
     while (i != nullptr) {
         SequenceSound* seq = i->getObject();
-        JSULink< SequenceSound >* next = i->getNext();
+        NebulaListLink< SequenceSound >* next = i->getNext();
         if (seq->isDead()) {
             mSeqList.remove(i);
             delete seq;
@@ -53,7 +53,7 @@ bool SequenceManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* p
 void SequenceManager::calc() {
     mMove.calc();
 
-    JSULink< SequenceSound >* i;
+    NebulaListLink< SequenceSound >* i;
     for (i = mSeqList.getFirst(); i != mSeqList.getEnd(); i = i->getNext()) {
         i->getObject()->managerCalc_();
     }
@@ -61,14 +61,14 @@ void SequenceManager::calc() {
 }
 
 void SequenceManager::stop() {
-    JSULink< SequenceSound >* i;
+    NebulaListLink< SequenceSound >* i;
     for (i = mSeqList.getFirst(); i != mSeqList.getEnd(); i = i->getNext()) {
         i->getObject()->stop();
     }
 }
 
 void SequenceManager::stop(u32 fadeTime) {
-    JSULink< SequenceSound >* i;
+    NebulaListLink< SequenceSound >* i;
     for (i = mSeqList.getFirst(); i != mSeqList.getEnd(); i = i->getNext()) {
         i->getObject()->stop(fadeTime);
     }
@@ -76,7 +76,7 @@ void SequenceManager::stop(u32 fadeTime) {
 
 void SequenceManager::stopSoundID(SoundID id) {
     if (!id.isAnonymous()) {
-        JSULink< SequenceSound >* i;
+        NebulaListLink< SequenceSound >* i;
         for (i = mSeqList.getFirst(); i != mSeqList.getEnd(); i = i->getNext()) {
             if ((u32)i->getObject()->getID() == (u32)id) {
                 i->getObject()->stop();
@@ -86,7 +86,7 @@ void SequenceManager::stopSoundID(SoundID id) {
 }
 
 void SequenceManager::mixOut() {
-    JSULink< SequenceSound >* i;
+    NebulaListLink< SequenceSound >* i;
     for (i = mSeqList.getFirst(); i != mSeqList.getEnd(); i = i->getNext()) {
         i->getObject()->managerMixOut_(mMove.mParams, mSoundActivity);
     }

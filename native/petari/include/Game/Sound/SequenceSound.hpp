@@ -2,13 +2,13 @@
 
 #include "Game/Sound/PlayerLink.hpp"
 #include "Game/Sound/SeqSource.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
+#include "Game/System/NebulaList.hpp"
 
 class SequenceManager;
 struct SoundChild;
 
 // A sequence (music, or a scene's sequence): a player whose tracks the game numbers 0 to 31 (child id >> 4, its track id & 15).
-class SequenceSound final : public Sound, public JSULink< SequenceSound > {
+class SequenceSound final : public Sound, public NebulaListLink< SequenceSound > {
 public:
     static const int NUM_CHILDREN = 32;
 

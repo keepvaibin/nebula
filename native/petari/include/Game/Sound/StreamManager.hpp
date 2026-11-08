@@ -18,7 +18,7 @@ public:
     void mixOut();
     StreamSound* newStream_();
     bool isActive() const {
-        return mStreamList.getNumLinks() != 0;
+        return mStreamList.getNum() != 0;
     }
 
     SoundAudience* getAudience() {
@@ -31,7 +31,7 @@ public:
     SoundMove* getParams() {
         return &mParams;
     }
-    JSUList< StreamSound >* getStreamList() {
+    NebulaList< StreamSound >* getStreamList() {
         return &mStreamList;
     }
 
@@ -49,14 +49,14 @@ public:
     }
 
     int getNumActiveStreams() const {
-        return mStreamList.getNumLinks();
+        return mStreamList.getNum();
     }
 
 private:
     SoundActivity mActivity;
     SoundMove mParams;
     SoundAudience* mAudience;
-    JSUList< StreamSound > mStreamList;
+    NebulaList< StreamSound > mStreamList;
     StreamSource* streamDataMgr_;
     SoundStrategyMgr< StreamSound >* soundStrategyMgr;
 };

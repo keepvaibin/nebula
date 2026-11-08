@@ -4,7 +4,6 @@
 #include "Game/Sound/SoundInfo.hpp"
 #include "Game/Sound/StreamSource.hpp"
 #include "Game/Sound/SoundTableInfo.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
 
 class StdSoundInfo : public SoundInfo, public SoundTableInfo, public StreamSource {
 public:

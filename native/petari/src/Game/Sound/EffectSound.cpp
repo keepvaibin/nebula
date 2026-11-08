@@ -2,7 +2,7 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SoundAudience.hpp"
 
-EffectSound::EffectSound(EffectManager* seMgr, SoundStrategyMgr< EffectSound >* soundStrategyMgr, u32 priority) : JSULink< EffectSound >(this) {
+EffectSound::EffectSound(EffectManager* seMgr, SoundStrategyMgr< EffectSound >* soundStrategyMgr, u32 priority) {
     mSoundStrategyMgr = soundStrategyMgr;
     mManager = seMgr;
     mProperPriority = priority;

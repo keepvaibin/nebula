@@ -2,7 +2,7 @@
 #include "Game/Sound/SequenceManager.hpp"
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundChild.hpp"
-SequenceSound::SequenceSound(SequenceManager* seqMgr, SoundStrategyMgr< SequenceSound >* soundStrategyMgr) : JSULink< SequenceSound >(this) {
+SequenceSound::SequenceSound(SequenceManager* seqMgr, SoundStrategyMgr< SequenceSound >* soundStrategyMgr) {
     mManager = seqMgr;
     mStrategyMgr = soundStrategyMgr;
     mSoundParams.init();
