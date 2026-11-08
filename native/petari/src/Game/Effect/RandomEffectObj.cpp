@@ -10,11 +10,12 @@ namespace {
     static const s32 sRandWidth = 180;
 };  // namespace
 
-RandomEffectObj::RandomEffectObj(const char* pName) : SimpleEffectObj(pName), mStep(), mSeStep(-1), mLifeTime(::sLifeTime), mRandWidth(::sRandWidth) {
+RandomEffectObj::RandomEffectObj(const char* pName) : SimpleEffectObj(pName), mStep(), mSeStep(-1), mLifeTime(::sLifeTime), mRandWidth(::sRandWidth), mIsFireworks(false) {
 }
 
 void RandomEffectObj::init(const TableIter& rIter) {
     SimpleEffectObj::init(rIter);
+    mIsFireworks = MR::isEqualString(mObjName, "FireworksA");
     MR::getPlacementArg0NoInit(rIter, &mLifeTime);
     MR::getPlacementArg1NoInit(rIter, &mRandWidth);
 
@@ -44,7 +45,7 @@ void RandomEffectObj::control() {
     if (mSeStep >= 0) {
         mSeStep++;
 
-        if (MR::isEqualString(mObjName, "FireworksA")) {
+        if (mIsFireworks) {
             if (mSeStep == 40) {
                 MR::startSound(this, "SE_OJ_FIREWORK_SEA_EXPLODE");
             }
@@ -59,7 +60,7 @@ void RandomEffectObj::control() {
 
     MR::emitEffect(this, mObjName);
 
-    if (MR::isEqualString(mObjName, "FireworksA")) {
+    if (mIsFireworks) {
         MR::startSound(this, "SE_OJ_FIREWORK_SEA_SHOOT");
     }
 

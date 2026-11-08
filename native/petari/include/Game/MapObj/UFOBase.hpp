@@ -32,7 +32,17 @@ public:
     f32 mRotateSpeed;
     s32 mMoveConditionType;
     bool mIsRailDone;
-    const char* mObjName;
+
+private:
+    // The UFOs with their own sounds, resolved from the object name at init.
+    enum Kind {
+        Kind_Other,
+        Kind_NormalB,
+        Kind_BattleStageC,
+        Kind_BattleStageD,
+    };
+
+    Kind mKind;
 };
 
 class UFOSolid : public UFOBase {

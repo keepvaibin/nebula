@@ -14,7 +14,8 @@ namespace NrvPhantomShipBoxFloater {
     NEW_NERVE(HostTypeMoveUnderWater, PhantomShipBoxFloater, MoveUnderWater);
 };  // namespace NrvPhantomShipBoxFloater
 
-PhantomShipBoxFloater::PhantomShipBoxFloater(const char* pName) : LiveActor(pName), mObjectName(), mFloaterOffset(gZeroVec), mRippleSeCounter() {
+PhantomShipBoxFloater::PhantomShipBoxFloater(const char* pName)
+    : LiveActor(pName), mObjectName(), mFloaterOffset(gZeroVec), mRippleSeCounter(), mSinkDepthUnder(0.0f), mSinkDepthOver(0.0f) {
 }
 
 inline bool floaterIsMoving(FloaterFloatingForceTypeSpring* force) {
@@ -25,6 +26,17 @@ void PhantomShipBoxFloater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mFloaterOffset.set(mPosition);
     MR::getObjectName(&mObjectName, rIter);
+    if (MR::isEqualString("PhantomShipBoxFloaterA", mObjectName)) {
+        mSinkDepthUnder = 580.0f;
+        mSinkDepthOver = 575.0f;
+    } else if (MR::isEqualString("PhantomShipBoxFloaterB", mObjectName)) {
+        mSinkDepthUnder = 380.0f;
+        mSinkDepthOver = 375.0f;
+    } else if (MR::isEqualString("PhantomShipBoxFloaterC", mObjectName)) {
+        mSinkDepthUnder = 180.0f;
+        mSinkDepthOver = 175.0f;
+    }
+
     initModelManagerWithAnm(mObjectName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initEffectKeeper(0, nullptr);
@@ -72,20 +84,7 @@ void PhantomShipBoxFloater::exeMove() {
     playRippleSe();
 
     if (MR::isOnPlayer(this)) {
-        const char* objectName = mObjectName;
-        f32 sinkDepth;
-
-        if (MR::isEqualString("PhantomShipBoxFloaterA", objectName)) {
-            sinkDepth = 580.0f;
-        } else if (MR::isEqualString("PhantomShipBoxFloaterB", objectName)) {
-            sinkDepth = 380.0f;
-        } else if (MR::isEqualString("PhantomShipBoxFloaterC", objectName)) {
-            sinkDepth = 180.0f;
-        } else {
-            sinkDepth = 0.0f;
-        }
-
-        if (sinkDepth < getCurrentSinkDepth()) {
+        if (mSinkDepthUnder < getCurrentSinkDepth()) {
             MR::deleteEffect(this, ::cEffectName);
             setNerve(GET_NERVE(PhantomShipBoxFloater, HostTypeMoveUnderWater));
         }
@@ -99,20 +98,7 @@ void PhantomShipBoxFloater::exeMove() {
 
 void PhantomShipBoxFloater::exeMoveUnderWater() {
     if (!MR::isOnPlayer(this)) {
-        const char* objectName = mObjectName;
-        f32 sinkDepth;
-
-        if (MR::isEqualString("PhantomShipBoxFloaterA", objectName)) {
-            sinkDepth = 575.0f;
-        } else if (MR::isEqualString("PhantomShipBoxFloaterB", objectName)) {
-            sinkDepth = 375.0f;
-        } else if (MR::isEqualString("PhantomShipBoxFloaterC", objectName)) {
-            sinkDepth = 175.0f;
-        } else {
-            sinkDepth = 0.0f;
-        }
-
-        if (getCurrentSinkDepth() < sinkDepth) {
+        if (getCurrentSinkDepth() < mSinkDepthOver) {
             setNerve(GET_NERVE(PhantomShipBoxFloater, HostTypeMove));
         }
     }

@@ -73,6 +73,8 @@ public:
     const Nerve* mNerve;
     const char* mActionName;
     const char* mAnimName;
+    // The anim step from which the star's presence sound loops.
+    s32 mAppearSeStep;
 };
 
 class FadeStarter : public NerveExecutor {

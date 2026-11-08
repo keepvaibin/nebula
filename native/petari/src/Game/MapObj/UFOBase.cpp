@@ -40,7 +40,7 @@ UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
     mRotateSpeed = 0.0f;
     mMoveConditionType = 0;
     mIsRailDone = false;
-    mObjName = nullptr;
+    mKind = Kind_Other;
 }
 
 void UFOBase::init(const TableIter& rIter) {
@@ -48,7 +48,13 @@ void UFOBase::init(const TableIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);
     initModelManagerWithAnm(name, nullptr, false);
-    mObjName = name;
+    if (MR::isEqualString("UFONormalB", name)) {
+        mKind = Kind_NormalB;
+    } else if (MR::isEqualString("UFOBattleStageC", name)) {
+        mKind = Kind_BattleStageC;
+    } else if (MR::isEqualString("UFOBattleStageD", name)) {
+        mKind = Kind_BattleStageD;
+    }
     MR::connectToSceneCollisionMapObj(this);
     initHitSensor(1);
     initSensorType();
@@ -101,7 +107,7 @@ void UFOBase::exeMove() {
     if (MR::isFirstStep(this)) {
         if (mRailMover) {
             mRailMover->start();
-            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
+            if (mKind == Kind_BattleStageC) {
                 MR::startSound(this, "SE_OJ_UFO_BTL_C_START");
             }
         }
@@ -139,9 +145,9 @@ void UFOBase::control() {
     }
     mLODCtrl->update();
 
-    if (MR::isEqualString("UFONormalB", mObjName)) {
+    if (mKind == Kind_NormalB) {
         MR::startLevelSound(this, "SE_OJ_LV_UFO_NORM_B_WORK");
-    } else if (MR::isEqualString("UFOBattleStageD", mObjName)) {
+    } else if (mKind == Kind_BattleStageD) {
         MR::startLevelSound(this, "SE_OJ_LV_UFO_BTL_D_ROTATE");
     }
 
@@ -151,7 +157,7 @@ void UFOBase::control() {
         mPosition.y = mRailMover->mStartPos.y;
         mPosition.z = mRailMover->mStartPos.z;
         if (mRailMover->isWorking()) {
-            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
+            if (mKind == Kind_BattleStageC) {
                 MR::startLevelSound(this, "SE_OJ_LV_UFO_BTL_C_MOVE");
             } else {
                 MR::startLevelSound(this, "SE_OJ_LV_UFO_MOVE");
@@ -160,7 +166,7 @@ void UFOBase::control() {
         if (mRailMover->isDone() && !mIsRailDone) {
             MR::tryRumblePadMiddle(this, PLAYER_1);
             MR::shakeCameraNormal();
-            if (MR::isEqualString("UFOBattleStageC", mObjName)) {
+            if (mKind == Kind_BattleStageC) {
                 MR::startSound(this, "SE_OJ_UFO_BTL_C_STOP");
             } else {
                 MR::startSound(this, "SE_OJ_UFO_MOVE_END");

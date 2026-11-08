@@ -64,6 +64,11 @@ public:
     Nerve* mWaitNrv;
     Nerve* mMoveNrv;
     Nerve* mDoneNrv;
+
+private:
+    // The stage-effect moving sound for mStageEffectName; looked up again when mObjectName changes.
+    const char* mStageEffectName;
+    const char* mStageEffectMovingSe;
 };
 
 class MapObjActorUtil {

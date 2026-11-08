@@ -616,7 +616,18 @@ namespace MR {
 };  // namespace MR
 
 TakeOutStar::TakeOutStar(NPCActor* pActor, const char* pActionName, const char* pAnimName, const Nerve* pNerve)
-    : NerveExecutor("パワースター取り出しデモ実行者"), mActor(pActor), mNerve(pNerve), mActionName(pActionName), mAnimName(pAnimName) {
+    : NerveExecutor("パワースター取り出しデモ実行者"), mActor(pActor), mNerve(pNerve), mActionName(pActionName), mAnimName(pAnimName),
+      mAppearSeStep(::sStarAppearSeStep) {
+    if (MR::isEqualString(mAnimName, "TakeOutStarCaretaker")) {
+        mAppearSeStep = ::sStarAppearSeStepCaretaker;
+    } else if (MR::isEqualString(mAnimName, "TakeOutStarTeresaRacer")) {
+        mAppearSeStep = ::sStarAppearSeStepTeresaRacer;
+    } else if (MR::isEqualString(mAnimName, "TakeOutStarPenguinCoach")) {
+        mAppearSeStep = ::sStarAppearSeStepPenguinCoach;
+    } else if (MR::isEqualString(mAnimName, "TakeOutStarTrickRabbit")) {
+        mAppearSeStep = ::sStarAppearSeStepTrickRabbit;
+    }
+
     mStarModel = MR::createPowerStarDemoModel(mActor, "パワースターデモモデル", pActor->getBaseMtx());
     mStarModel->makeActorDead();
 
@@ -656,19 +667,7 @@ void TakeOutStar::exeAnim() {
         MR::startAction(mActor, mActionName);
     }
 
-    s32 step = ::sStarAppearSeStep;
-
-    if (MR::isEqualString(mAnimName, "TakeOutStarCaretaker")) {
-        step = ::sStarAppearSeStepCaretaker;
-    } else if (MR::isEqualString(mAnimName, "TakeOutStarTeresaRacer")) {
-        step = ::sStarAppearSeStepTeresaRacer;
-    } else if (MR::isEqualString(mAnimName, "TakeOutStarPenguinCoach")) {
-        step = ::sStarAppearSeStepPenguinCoach;
-    } else if (MR::isEqualString(mAnimName, "TakeOutStarTrickRabbit")) {
-        step = ::sStarAppearSeStepTrickRabbit;
-    }
-
-    if (MR::isGreaterStep(this, step)) {
+    if (MR::isGreaterStep(this, mAppearSeStep)) {
         if (MR::isInWater(mStarModel, Vec3f(0.0f, 0.0f, 0.0f))) {
             MR::startLevelSound(mStarModel, "SE_OJ_LV_POW_STAR_EXIST_W");
         } else {

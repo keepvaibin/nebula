@@ -41,6 +41,8 @@ public:
     void exeDone();
 
     Vec3f mJointPos;
+    // The level sound looped once done (only the Heavenly Beach rock has one), or null.
+    const char* mDoneLevelSe;
 };
 
 class AnmModelSwitchMove : public AnmModelObj {

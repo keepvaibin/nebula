@@ -4,7 +4,7 @@
 
 class RotateMoveObj : public MapObjActor {
 public:
-    inline RotateMoveObj(const char* pName) : MapObjActor(pName) {
+    inline RotateMoveObj(const char* pName) : MapObjActor(pName), mIsGear(false) {
     }
 
     virtual void init(const TableIter&);
@@ -16,4 +16,8 @@ public:
     void exeStop();
     void exeWait();
     void exeWaitForPlayerOn();
+
+private:
+    // The Ocean Ring gears play their moving effect only while turning.
+    bool mIsGear;
 };
