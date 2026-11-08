@@ -9,15 +9,15 @@ class WalkerStateBindStarPointer;
 
 class SearchBeamer : public LiveActor {
 public:
-    SearchBeamer(const char*);
+    SearchBeamer(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void updateHitSensor(HitSensor* pSensor);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void exeNonActive();
     void exeCloseWaitFar();
@@ -34,17 +34,19 @@ public:
     void exePointerSwoon();
     void endPointerSwoon();
     void exeStopForPlayerOff();
-    bool calcJointPropeller(Pos3f*, const JointControllerInfo&);
-    bool calcJointBeamStart(Pos3f*, const JointControllerInfo&);
-    bool calcJointBeamEnd(Pos3f*, const JointControllerInfo&);
+    bool calcJointPropeller(Pos3f* pPos, const JointControllerInfo& rInfo);
+    bool calcJointBeamStart(Pos3f* pPos, const JointControllerInfo& rInfo);
+    bool calcJointBeamEnd(Pos3f* pPos, const JointControllerInfo& rInfo);
     void updatePropeller();
-    void updateBeamEffect(bool);
+    void updateBeamEffect(bool isHitMap);
     void updateBeamShadow();
     void initBeamPos();
-    void reformDirection(bool);
+    void stopBeam();
+    void reformDirection(bool isFast);
     void bowToPlayer();
-    bool checkBeamDistiny(Vec3f*, Vec3f) const;
+    bool checkBeamDestination(Vec3f* pHitPos, Vec3f dir) const;
     bool isPlayerInTerritory() const;
+    bool isStopNerve() const;
     bool tryNonActive();
     bool tryStopStart();
     bool tryPointerSwoon();
@@ -58,11 +60,11 @@ public:
     f32 mPropellerSpeed;
     JointController* mPropellerJointCtrl;
     Mtx34f mCollisionMtx;
-    JointController* mBeanStartJointCtrl;
+    JointController* mBeamStartJointCtrl;
     JointController* mBeamEndJointCtrl;
     Vec3f mBeamStart;
     Vec3f mBeamEnd;
-    f32 mBeamAimSpeed;
-    f32 mTerritoryRadius;
+    f32 mBeamAimSpeed;     // Obj_arg0
+    f32 mTerritoryRadius;  // Obj_arg1
     f32 mBeamLength;
 };

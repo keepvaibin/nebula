@@ -26,28 +26,32 @@ namespace NrvSearchBeamer {
 };  // namespace NrvSearchBeamer
 
 namespace {
+    const f32 cActiveDistance = 4000.0f;
+    const f32 cNearDistance = 2500.0f;
+    const f32 cFarDistance = 3000.0f;
+    const f32 cTurnDegree = 3.0f;
+    const f32 cStopTurnDegree = 15.0f;
+    const f32 cPitchLimitDegree = 35.0f;
+    const f32 cTerritoryFaceDegree = 45.0f;
+    const f32 cBeamOverTerritory = 300.0f;
+    const f32 cBeamWidth = 15.0f;
+    const f32 cPropellerAccel = 0.30f;
+    const f32 cPropellerMinSpeed = 10.0f;
+    const f32 cPropellerMaxSpeed = 40.0f;
+    const f32 cAimBelowCenter = 20.0f;
+
+    // A little below the player's center.
     inline void calcPlayerAimPos(Vec3f* pPos) {
         Vec3f up;
         MR::getPlayerUpVec(&up);
-        pPos->scaleAdd(-20.0f, up, *MR::getPlayerCenterPos());
+        pPos->scaleAdd(-cAimBelowCenter, up, *MR::getPlayerCenterPos());
     }
 };  // namespace
 
-SearchBeamer::SearchBeamer(const char* pName) : LiveActor(pName) {
-    mScaleController = nullptr;
-    mBindStarPointer = nullptr;
-    mFront.set(0.0f, 0.0f, 1.0f);
-    mUp.set(0.0f, 0.0f, 0.0f);
-    mPropellerAngle = 0;
-    mPropellerSpeed = 0;
-    mPropellerJointCtrl = nullptr;
-    mBeanStartJointCtrl = nullptr;
-    mBeamEndJointCtrl = nullptr;
-    mBeamStart.set(0.0f, 0.0f, 0.0f);
-    mBeamEnd.set(0.0f, 0.0f, 0.0f);
-    mBeamAimSpeed = 8.0f;
-    mTerritoryRadius = 1000.0f;
-    mBeamLength = 0;
+SearchBeamer::SearchBeamer(const char* pName)
+    : LiveActor(pName), mScaleController(nullptr), mBindStarPointer(nullptr), mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 0.0f, 0.0f), mPropellerAngle(0.0f),
+      mPropellerSpeed(0.0f), mPropellerJointCtrl(nullptr), mBeamStartJointCtrl(nullptr), mBeamEndJointCtrl(nullptr), mBeamStart(0.0f, 0.0f, 0.0f),
+      mBeamEnd(0.0f, 0.0f, 0.0f), mBeamAimSpeed(8.0f), mTerritoryRadius(1000.0f), mBeamLength(0.0f) {
     mCollisionMtx.identity();
 }
 
@@ -58,7 +62,7 @@ void SearchBeamer::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensor(2);
     MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, -80.0f, 0.0f));
-    MR::addHitSensorCallbackEnemyAttack(this, "beam", 8, 15.0f);
+    MR::addHitSensorCallbackEnemyAttack(this, "beam", 8, cBeamWidth);
     MR::invalidateHitSensor(this, "beam");
     mCollisionMtx.setInline(getBaseMtx());
     MR::initCollisionParts(this, "Face", getSensor("body"), mCollisionMtx);
@@ -80,13 +84,13 @@ void SearchBeamer::init(const TableIter& rIter) {
     MR::useStageSwitchReadA(this, rIter);
 
     mPropellerJointCtrl = MR::createJointController(this, "Propeller", &SearchBeamer::calcJointPropeller);
-    mPropellerSpeed = 40.0f;
-    mBeanStartJointCtrl = MR::createJointController(this, "BeamStart", &SearchBeamer::calcJointBeamStart);
+    mPropellerSpeed = cPropellerMaxSpeed;
+    mBeamStartJointCtrl = MR::createJointController(this, "BeamStart", &SearchBeamer::calcJointBeamStart);
     mBeamEndJointCtrl = MR::createJointController(this, "BeamEnd", &SearchBeamer::calcJointBeamEnd);
     initBeamPos();
     MR::getPlacementArg0NoInit(rIter, &mBeamAimSpeed);
     MR::getPlacementArg1NoInit(rIter, &mTerritoryRadius);
-    mBeamLength = 300.0f + mTerritoryRadius;
+    mBeamLength = cBeamOverTerritory + mTerritoryRadius;
     MR::calcFrontVec(&mFront, this);
     MR::calcUpVec(&mUp, this);
     mGravity.negate(mUp);
@@ -101,7 +105,7 @@ void SearchBeamer::exeNonActive() {
         MR::offCalcAnim(this);
     }
 
-    if (MR::isNearPlayerAnyTime(this, 4000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cActiveDistance)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitFar));
     }
 }
@@ -116,18 +120,16 @@ void SearchBeamer::exeCloseWaitFar() {
 
     if (MR::isStep(this, 30)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseSearch));
-    } else if (MR::isNearPlayer(this, 2500.0f)) {
+    } else if (MR::isNearPlayer(this, cNearDistance)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitNear));
     } else {
-        if (tryNonActive()) {
-            return;
-        }
+        tryNonActive();
     }
 }
 
 void SearchBeamer::exeCloseSearch() {
     reformDirection(false);
-    MR::rotateVecDegree(&mFront, mUp, 3.0f);
+    MR::rotateVecDegree(&mFront, mUp, cTurnDegree);
 
     if (MR::isStep(this, 50)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitFar));
@@ -141,16 +143,12 @@ void SearchBeamer::exeCloseWaitNear() {
     }
 
     reformDirection(false);
-    MR::turnDirectionToPlayerDegree(this, &mFront, 3.0f);
-    bool isNear = MR::isNearPlayer(this, 3000.0f) == false;
+    MR::turnDirectionToPlayerDegree(this, &mFront, cTurnDegree);
 
-    if (isNear) {
+    if (!MR::isNearPlayer(this, cFarDistance)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitFar));
-
-    } else {
-        if (isPlayerInTerritory()) {
-            setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvOpenMouth));
-        }
+    } else if (isPlayerInTerritory()) {
+        setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvOpenMouth));
     }
 }
 
@@ -189,11 +187,11 @@ void SearchBeamer::exeBeamStart() {
 
     MR::startLevelSound(this, "SE_EM_LV_SEARCHBEAMER_BEAM");
     bowToPlayer();
-    Vec3f v7;
-    checkBeamDistiny(&v7, Vec3f(mFront));
+    Vec3f beamHit;
+    checkBeamDestination(&beamHit, mFront);
     Vec3f corePos;
     MR::copyJointPos(this, "Core", &corePos);
-    MR::vecBlend(corePos, v7, &mBeamEnd, MR::calcNerveRate(this, 15));
+    MR::vecBlend(corePos, beamHit, &mBeamEnd, MR::calcNerveRate(this, 15));
     updateBeamEffect(MR::isGreaterStep(this, 15));
     updateBeamShadow();
 
@@ -202,29 +200,30 @@ void SearchBeamer::exeBeamStart() {
     }
 }
 
+// The beam end chases the player's beam hit at mBeamAimSpeed; the front pitches at most cPitchLimitDegree.
 void SearchBeamer::exeBeamAim() {
     MR::startLevelSound(this, "SE_EM_LV_SEARCHBEAMER_BEAM");
     MR::copyJointPos(this, "Core", &mBeamStart);
 
-    Vec3f v14;
-    ::calcPlayerAimPos(&v14);
+    Vec3f aimPos;
+    calcPlayerAimPos(&aimPos);
 
-    Vec3f v13;
-    v13.sub(v14, mPosition);
-    MR::normalize(&v13);
-    Vec3f v12;
-    checkBeamDistiny(&v12, Vec3f(v13));
-    Vec3f v11;
-    v11.sub(v12, mBeamEnd);
-    MR::normalizeOrZero(&v11);
-    Vec3f v10;
-    v10.scaleAdd(mBeamAimSpeed, v11, mBeamEnd);
-    mFront.sub(v10, mPosition);
+    Vec3f toAim;
+    toAim.sub(aimPos, mPosition);
+    MR::normalize(&toAim);
+    Vec3f aimHit;
+    checkBeamDestination(&aimHit, toAim);
+    Vec3f endToHit;
+    endToHit.sub(aimHit, mBeamEnd);
+    MR::normalizeOrZero(&endToHit);
+    Vec3f nextEnd;
+    nextEnd.scaleAdd(mBeamAimSpeed, endToHit, mBeamEnd);
+    mFront.sub(nextEnd, mPosition);
     MR::normalize(&mFront);
-    Vec3f v9;
-    MR::turnVecToPlane(&v9, mFront, mUp);
-    MR::clampVecAngleDeg(&mFront, v9, 35.0f);
-    updateBeamEffect(checkBeamDistiny(&mBeamEnd, Vec3f(mFront)));
+    Vec3f planeFront;
+    MR::turnVecToPlane(&planeFront, mFront, mUp);
+    MR::clampVecAngleDeg(&mFront, planeFront, cPitchLimitDegree);
+    updateBeamEffect(checkBeamDestination(&mBeamEnd, mFront));
     updateBeamShadow();
 
     if (!isPlayerInTerritory()) {
@@ -261,11 +260,7 @@ void SearchBeamer::exeCloseMouth() {
 void SearchBeamer::exeStopStart() {
     if (MR::isFirstStep(this)) {
         MR::tryStartBck(this, "Close");
-        MR::deleteEffectAll(this);
-        MR::invalidateHitSensor(this, "beam");
-        MR::invalidateShadow(this, "beam");
-        initBeamPos();
-        MR::validateClipping(this);
+        stopBeam();
     }
 
     reformDirection(true);
@@ -297,11 +292,7 @@ void SearchBeamer::exeRecover() {
 
 void SearchBeamer::exePointerSwoon() {
     if (MR::isFirstStep(this)) {
-        MR::deleteEffectAll(this);
-        MR::invalidateHitSensor(this, "beam");
-        MR::invalidateShadow(this, "beam");
-        initBeamPos();
-        MR::validateClipping(this);
+        stopBeam();
     }
 
     MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitNear));
@@ -314,17 +305,14 @@ void SearchBeamer::calcAndSetBaseMtx() {
     Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
     mPropellerJointCtrl->registerCallBack();
-    mBeanStartJointCtrl->registerCallBack();
+    mBeamStartJointCtrl->registerCallBack();
     mBeamEndJointCtrl->registerCallBack();
 }
 
 void SearchBeamer::control() {
     mScaleController->updateNerve();
     updatePropeller();
-
-    if (tryPointerSwoon()) {
-        return;
-    }
+    tryPointerSwoon();
 }
 
 void SearchBeamer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -338,27 +326,12 @@ void SearchBeamer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool SearchBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (!MR::isSensorEnemy(pReceiver)) {
-        return false;
-    }
-
-    bool isStopped = false;
-
-    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopStart)) || isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStop)) ||
-        isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
-        isStopped = true;
-    }
-
-    if (isStopped) {
+    if (!MR::isSensorEnemy(pReceiver) || isStopNerve()) {
         return false;
     }
 
     if (MR::isMsgStarPieceReflect(msg)) {
-        MR::deleteEffectAll(this);
-        MR::invalidateHitSensor(this, "beam");
-        MR::invalidateShadow(this, "beam");
-        initBeamPos();
-        MR::validateClipping(this);
+        stopBeam();
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitNear));
         return true;
     }
@@ -366,30 +339,30 @@ bool SearchBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
+// Standing on it stops it; while it is stopped, each touch restarts the StopForPlayerOff wait.
 bool SearchBeamer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgFloorTouch(msg)) {
-        if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
-            setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff));
-            return true;
-        } else {
-            return tryStopStart();
-        }
+    if (!MR::isMsgFloorTouch(msg)) {
+        return false;
     }
 
-    return false;
+    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
+        setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff));
+        return true;
+    }
+
+    return tryStopStart();
 }
 
+// The beam sensor sits at the point of the beam nearest the player.
 void SearchBeamer::updateHitSensor(HitSensor* pSensor) {
     if (!pSensor->mValidByHost) {
         pSensor->mPosition.set(mBeamStart);
         return;
     }
 
-    Vec3f v7;
-    Vec3f up;
-    MR::getPlayerUpVec(&up);
-    v7.scaleAdd(-20.0f, up, *MR::getPlayerCenterPos());
-    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, v7, mPosition, mBeamEnd);
+    Vec3f aimPos;
+    calcPlayerAimPos(&aimPos);
+    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, aimPos, mPosition, mBeamEnd);
 }
 
 bool SearchBeamer::calcJointPropeller(Pos3f* pPos, const JointControllerInfo& rInfo) {
@@ -407,27 +380,19 @@ bool SearchBeamer::calcJointBeamEnd(Pos3f* pPos, const JointControllerInfo& rInf
     return true;
 }
 
-// TODO -- float issues, missing frsp
 void SearchBeamer::updatePropeller() {
-    bool isStopped = false;
-
-    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopStart)) || isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStop)) ||
-        isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
-        isStopped = true;
-    }
-
-    if (isStopped) {
-        mPropellerSpeed -= 0.30f;
+    if (isStopNerve()) {
+        mPropellerSpeed -= cPropellerAccel;
     } else {
-        mPropellerSpeed += 0.30f;
+        mPropellerSpeed += cPropellerAccel;
     }
 
-    mPropellerSpeed = MR::clamp(mPropellerSpeed, 10.0f, 40.0f);
+    mPropellerSpeed = MR::clamp(mPropellerSpeed, cPropellerMinSpeed, cPropellerMaxSpeed);
     mPropellerAngle += mPropellerSpeed;
 }
 
-void SearchBeamer::updateBeamEffect(bool a1) {
-    if (a1) {
+void SearchBeamer::updateBeamEffect(bool isHitMap) {
+    if (isHitMap) {
         if (MR::isEffectValid(this, "BeamEndAir")) {
             MR::deleteEffect(this, "BeamEndAir");
         }
@@ -444,16 +409,10 @@ void SearchBeamer::updateBeamEffect(bool a1) {
 
 void SearchBeamer::updateBeamShadow() {
     f32 dist = mPosition.distance(mBeamEnd);
-    Vec3f v5;
-    v5.z = dist;
-    v5.x = 15.0f;
-    v5.y = 15.0f;
-    MR::setShadowVolumeBoxSize(this, "beam", v5);
-    Vec3f v4;
-    v4.x = 0.0f;
-    v4.y = 0.0f;
-    v4.z = dist / 2.0f;
-    MR::setShadowDropPositionMtxPtr(this, "beam", MR::getJointMtx(this, "BeamStart"), v4);
+    Vec3f boxSize(cBeamWidth, cBeamWidth, dist);
+    MR::setShadowVolumeBoxSize(this, "beam", boxSize);
+    Vec3f dropOffset(0.0f, 0.0f, dist / 2.0f);
+    MR::setShadowDropPositionMtxPtr(this, "beam", MR::getJointMtx(this, "BeamStart"), dropOffset);
 }
 
 void SearchBeamer::initBeamPos() {
@@ -462,39 +421,50 @@ void SearchBeamer::initBeamPos() {
     MR::hideMaterial(this, "lambert5_v");
 }
 
-void SearchBeamer::reformDirection(bool a1) {
+void SearchBeamer::stopBeam() {
+    MR::deleteEffectAll(this);
+    MR::invalidateHitSensor(this, "beam");
+    MR::invalidateShadow(this, "beam");
+    initBeamPos();
+    MR::validateClipping(this);
+}
+
+// Turns the front back onto the plane across mUp.
+void SearchBeamer::reformDirection(bool isFast) {
     if (mFront.dot(mUp) != 0.0f) {
-        Vec3f v8;
-        v8.killElement2(mFront, mUp);
-        MR::normalize(&v8);
-        f32 deg = a1 ? 15.0f : 3.0f;
-        MR::turnVecToVecDegree(&mFront, mFront, v8, deg, Vec3f(0, 1, 0));
+        Vec3f planeFront;
+        planeFront.killElement2(mFront, mUp);
+        MR::normalize(&planeFront);
+        f32 deg = isFast ? cStopTurnDegree : cTurnDegree;
+        MR::turnVecToVecDegree(&mFront, mFront, planeFront, deg, Vec3f(0, 1, 0));
     }
 }
 
+// Faces the player across mUp, then dips toward them, pitch limited to cPitchLimitDegree.
 void SearchBeamer::bowToPlayer() {
-    Vec3f v12;
-    ::calcPlayerAimPos(&v12);
-    Vec3f v11;
-    v11.sub(v12, mPosition);
-    v11.orthogonalize2(mUp);
-    MR::normalize(&v11);
+    Vec3f aimPos;
+    calcPlayerAimPos(&aimPos);
+    Vec3f toAim;
+    toAim.sub(aimPos, mPosition);
+    toAim.orthogonalize2(mUp);
+    MR::normalize(&toAim);
 
     Vec3f down;
     down.negate(mUp);
-    MR::turnVecToVecDegree(&v11, v11, down, 35.0f, Vec3f(0, 1, 0));
-    MR::turnVecToVecDegree(&mFront, mFront, v11, 3.0f, Vec3f(0, 1, 0));
-    Vec3f v9;
-    MR::turnVecToPlane(&v9, mFront, mUp);
-    MR::clampVecAngleDeg(&mFront, v9, 35.0f);
+    MR::turnVecToVecDegree(&toAim, toAim, down, cPitchLimitDegree, Vec3f(0, 1, 0));
+    MR::turnVecToVecDegree(&mFront, mFront, toAim, cTurnDegree, Vec3f(0, 1, 0));
+    Vec3f planeFront;
+    MR::turnVecToPlane(&planeFront, mFront, mUp);
+    MR::clampVecAngleDeg(&mFront, planeFront, cPitchLimitDegree);
 }
 
-bool SearchBeamer::checkBeamDistiny(Vec3f* pPosition, Vec3f a2) const {
-    Vec3f v12;
-    v12.scale(mBeamLength, a2);
+// The beam's end along rDir: the first map hit (true) or mBeamLength out (false).
+bool SearchBeamer::checkBeamDestination(Vec3f* pHitPos, Vec3f dir) const {
+    Vec3f beam;
+    beam.scale(mBeamLength, dir);
 
-    if (!MR::getFirstPolyOnLineToMap(pPosition, nullptr, mPosition, v12)) {
-        pPosition->add(v12, mPosition);
+    if (!MR::getFirstPolyOnLineToMap(pHitPos, nullptr, mPosition, beam)) {
+        pHitPos->add(beam, mPosition);
         return false;
     }
 
@@ -506,19 +476,16 @@ bool SearchBeamer::isPlayerInTerritory() const {
         return false;
     }
 
-    bool ret = false;
+    return MR::isNearPlayer(this, mBeamLength) && MR::isFaceToPlayerHorizontalDegree(this, mFront, cTerritoryFaceDegree);
+}
 
-    if (MR::isNearPlayer(this, mBeamLength)) {
-        if (MR::isFaceToPlayerHorizontalDegree(this, mFront, 45.0f)) {
-            ret = true;
-        }
-    }
-
-    return ret;
+bool SearchBeamer::isStopNerve() const {
+    return isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopStart)) || isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStop)) ||
+           isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff));
 }
 
 bool SearchBeamer::tryNonActive() {
-    if (MR::isNearPlayerAnyTime(this, 4000.0f)) {
+    if (MR::isNearPlayerAnyTime(this, cActiveDistance)) {
         return false;
     }
 
@@ -527,14 +494,7 @@ bool SearchBeamer::tryNonActive() {
 }
 
 bool SearchBeamer::tryStopStart() {
-    bool isStopped = false;
-
-    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopStart)) || isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStop)) ||
-        isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
-        isStopped = true;
-    }
-
-    if (isStopped) {
+    if (isStopNerve()) {
         return false;
     }
 
@@ -548,18 +508,7 @@ bool SearchBeamer::tryStopStart() {
 }
 
 bool SearchBeamer::tryPointerSwoon() {
-    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvPointerSwoon))) {
-        return false;
-    }
-
-    bool isStopped = false;
-
-    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopStart)) || isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStop)) ||
-        isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvStopForPlayerOff))) {
-        isStopped = true;
-    }
-
-    if (isStopped) {
+    if (isNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvPointerSwoon)) || isStopNerve()) {
         return false;
     }
 
