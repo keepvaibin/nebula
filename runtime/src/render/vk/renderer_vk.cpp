@@ -445,6 +445,10 @@ bool RendererVk::create_layouts() {
             attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             vk::check(vkCreateRenderPass(device, &info, nullptr,
                 &draw_layout_.discard_color_passes[wide ? 1u : 0u][samples_log2]), "colour replacement render pass");
+            attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.depth_clear_passes[wide ? 1u : 0u][samples_log2]), "depth clearing render pass");
         }
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -1111,10 +1115,12 @@ void RendererVk::shutdown() {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
         wide_base_sampled_ = false;
-        for (auto& passes : draw_layout_.discard_color_passes) {
-            for (VkRenderPass& pass : passes) {
-                if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
-                pass = VK_NULL_HANDLE;
+        for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes}) {
+            for (auto& passes : *group) {
+                for (VkRenderPass& pass : passes) {
+                    if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
+                    pass = VK_NULL_HANDLE;
+                }
             }
         }
         for (auto& passes : draw_layout_.aux_passes) {
