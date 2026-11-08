@@ -33,7 +33,7 @@ struct GameEventFlag {
         u16 mNeedStarPieceNum;
     };
 
-    u32 mExactStarPieceNum; // Unused
+    u32 mExactStarPieceNum;  // when set, the exact star bit cost; otherwise mNeedStarPieceNum * 10
 
     union {
         const char* mCondition3;

@@ -113,11 +113,11 @@ void DynamicCollisionObj::updateCollisionHeader() {
     for (u32 component = 0; component < 3; component++) {
         u32 bits_sel = 1u << 31;
         u32 mask_sel = 0xFFFFFFFF;
-        u32 val = masks[component];
+        u32 mask = masks[component];
         u32 i = 0;
 
         for (u32 bit = 0; bit < 32; bit++) {
-            if ((val & bits_sel)) {
+            if ((mask & bits_sel)) {
                 masks[component] = ~mask_sel;
                 if (max_entropy < i) {
                     max_entropy = i;
@@ -144,24 +144,24 @@ void DynamicCollisionObj::updateCollisionHeader() {
 }
 
 void DynamicCollisionObj::createCollision() {
-    s32 v = mTriangleNum;
+    s32 triangleNum = mTriangleNum;
     mKCLFile = new KCLFile();
-    mKCLFile->mPos = new Vec3f[v];
-    mKCLFile->mNorms = new Vec3f[v * 4];
-    mKCLFile->mPrisms = new KC_PrismData[(v + 1) * 1];
+    mKCLFile->mPos = new Vec3f[triangleNum];
+    mKCLFile->mNorms = new Vec3f[triangleNum * 4];
+    mKCLFile->mPrisms = new KC_PrismData[triangleNum + 1];
     // One leaf (list 0) holding every prism, from the last.
     u32* octree = new u32[1];
     octree[0] = 1u << 31;
     mKCLFile->mOctree = octree;
-    u32* list = new u32[v + 2];
+    u32* list = new u32[triangleNum + 2];
     list[0] = 0;  // not read
-    s32 count = v;
-    for (s32 i = 0; i <= v; i++) {
+    s32 count = triangleNum;
+    for (s32 i = 0; i <= triangleNum; i++) {
         list[i + 1] = count--;
     }
     mKCLFile->mLists = list;
 
-    mKCLFile->mTriangleNum = v;
+    mKCLFile->mTriangleNum = triangleNum;
     mKCLFile->mThickness = 40.f;
     mKCLFile->mBlockXShift = -1;
     mKCLFile->mBlockXYShift = -1;

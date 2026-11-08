@@ -25,8 +25,7 @@ public:
     s32 mNumPiecesTotal;
     s32 mNumPiecesUse;
     f32 mRadius;
-    // appears to go unused
-    f32 mAngle;
+    f32 mAngle;  // the ring's turn, 0.025 a step
     s32 mTimeLimit;
     Vec3f mLocalXAxis;
     Vec3f mLocalZAxis;

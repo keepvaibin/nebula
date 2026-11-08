@@ -122,22 +122,11 @@ bool RailRider::isReachedGoal() const {
 }
 
 bool RailRider::isReachedEdge() const {
-    bool ret;
-
     if (mBezierRail->mIsClosed) {
         return false;
-    } else {
-        ret = true;
-
-        if (!MR::isNearZero(mCoord)) {
-            f32 val = mCoord - mBezierRail->getTotalLength();
-            if (!MR::isNearZero(val)) {
-                ret = false;
-            }
-        }
     }
 
-    return ret;
+    return MR::isNearZero(mCoord) || MR::isNearZero(mCoord - mBezierRail->getTotalLength());
 }
 
 void RailRider::setCoord(f32 coord) {

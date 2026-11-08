@@ -157,11 +157,6 @@ void BigFan::exeWait() {
     }
 }
 
-inline bool BigFan::isStartOrWait() {
-    bool flag = false;
-    if (isNerve(GET_NERVE(BigFan, BigFanNrvStart)) || isNerve(GET_NERVE(BigFan, BigFanNrvWait))) {
-        flag = true;
-    }
-
-    return flag;
+bool BigFan::isStartOrWait() {
+    return isNerve(GET_NERVE(BigFan, BigFanNrvStart)) || isNerve(GET_NERVE(BigFan, BigFanNrvWait));
 }

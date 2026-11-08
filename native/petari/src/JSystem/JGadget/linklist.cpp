@@ -11,16 +11,11 @@ namespace JGadget {
     }
 
     void TNodeLinkList::splice(iterator a, TNodeLinkList& list, iterator b) {
-        TLinkListNode*& curr = b.curr;
-        TLinkListNode*& aCurr = a.curr;
-        TLinkListNode* next = curr->mNext;
-        bool flag = true;
-        if (aCurr != curr && aCurr != next)
-            flag = false;
-        if (!flag) {
-            TLinkListNode* nodeB = b.curr;
-            list.Erase(nodeB);
-            Insert(iterator(a.curr), nodeB);
+        // b's node moves from `list` to before a; already there when a is it or its next.
+        TLinkListNode* pNode = b.curr;
+        if (a.curr != pNode && a.curr != pNode->mNext) {
+            list.Erase(pNode);
+            Insert(iterator(a.curr), pNode);
         }
     }
 

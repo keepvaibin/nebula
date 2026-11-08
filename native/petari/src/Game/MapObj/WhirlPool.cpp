@@ -73,45 +73,24 @@ void WhirlPool::initPoints() {
 void WhirlPool::draw() const {
     const SiteMaterial material = loadMaterial();
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
-    f32 u0 = mTexOffsetU0;
-    f32 nextU0 = 1.0f / 6.0f + u0;
-    f32 u1 = mTexOffsetU1;
-    f32 nextU1 = 1.0f / 6.0f + u1;
+    f32 scrollAU = mTexOffsetU0;
+    f32 nextScrollAU = 1.0f / 6.0f + scrollAU;
+    f32 scrollBU = mTexOffsetU1;
+    f32 nextScrollBU = 1.0f / 6.0f + scrollBU;
 
-    drawPlane(site, 0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-    u1 = nextU1;
-    nextU1 += 1.0f / 6.0f;
-
-    drawPlane(site, -0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0, u1, nextU1);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-    u1 = nextU1;
-    nextU1 += 1.0f / 6.0f;
-
-    drawPlane(site, -1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-    u1 = nextU1;
-    nextU1 += 1.0f / 6.0f;
-
-    drawPlane(site, -0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0, u1, nextU1);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-    u1 = nextU1;
-    nextU1 += 1.0f / 6.0f;
-
-    drawPlane(site, 0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0, u1, nextU1);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-    u1 = nextU1;
-    nextU1 += 1.0f / 6.0f;
-
-    drawPlane(site, 1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0, u1, nextU1);
+    for (s32 i = 0; i < 6; i++) {
+        drawPlane(site, cWhirlPoolOutline[i][0], cWhirlPoolOutline[i][1], cWhirlPoolOutline[i + 1][0], cWhirlPoolOutline[i + 1][1], scrollAU,
+                  nextScrollAU, scrollBU, nextScrollBU);
+        scrollAU = nextScrollAU;
+        nextScrollAU += 1.0f / 6.0f;
+        scrollBU = nextScrollBU;
+        nextScrollBU += 1.0f / 6.0f;
+    }
 }
 
-void WhirlPool::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2, f32 u3) const {
+// Scroll A feeds the first swirl sample and the indirect texture, scroll B the second swirl sample.
+void WhirlPool::drawPlane(TypedDraw& rDraw, f32 side0, f32 normal0, f32 side1, f32 normal1, f32 scrollAU0, f32 scrollAU1, f32 scrollBU0,
+                          f32 scrollBU1) const {
     f32 v0 = mTexOffsetV0;
     f32 v1 = mTexOffsetV1;
     f32 v2 = mTexOffsetV2;
@@ -135,9 +114,9 @@ void WhirlPool::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 
         position.add(offset);
         rotation.mult(offset, offset);
 
-        *vtx++ = {position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u0 + pPoint->mTexCoord, v0, u2 + pPoint->mTexCoord, v1, u0 + pPoint->mTexCoord, v2};
+        *vtx++ = {position.x + side.x * side0 + normal.x * normal0, position.y + side.y * side0 + normal.y * normal0, position.z + side.z * side0 + normal.z * normal0, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), scrollAU0 + pPoint->mTexCoord, v0, scrollBU0 + pPoint->mTexCoord, v1, scrollAU0 + pPoint->mTexCoord, v2};
 
-        *vtx++ = {position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u1 + pPoint->mTexCoord, v0, u3 + pPoint->mTexCoord, v1, u1 + pPoint->mTexCoord, v2};
+        *vtx++ = {position.x + side.x * side1 + normal.x * normal1, position.y + side.y * side1 + normal.y * normal1, position.z + side.z * side1 + normal.z * normal1, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), scrollAU1 + pPoint->mTexCoord, v0, scrollBU1 + pPoint->mTexCoord, v1, scrollAU1 + pPoint->mTexCoord, v2};
         v0 += 0.01f;
         v1 += 0.01f;
         v2 += 0.01f;

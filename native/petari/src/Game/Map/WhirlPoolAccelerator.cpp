@@ -111,30 +111,14 @@ void WhirlPoolAccelerator::draw() const {
     f32 u0 = mTexOffsetU0;
     f32 nextU0 = 1.0f / 6.0f + u0;
 
-    drawPlane(site, 0.5f, 0.70710677f, -0.5f, 0.70710677f, u0, nextU0);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-
-    drawPlane(site, -0.5f, 0.70710677f, -1.0f, 0.0f, u0, nextU0);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-
-    drawPlane(site, -1.0f, 0.0f, -0.5f, -0.70710677f, u0, nextU0);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-
-    drawPlane(site, -0.5f, -0.70710677f, 0.5f, -0.70710677f, u0, nextU0);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-
-    drawPlane(site, 0.5f, -0.70710677f, 1.0f, 0.0f, u0, nextU0);
-    u0 = nextU0;
-    nextU0 += 1.0f / 6.0f;
-
-    drawPlane(site, 1.0f, 0.0f, 0.5f, 0.70710677f, u0, nextU0);
+    for (s32 i = 0; i < 6; i++) {
+        drawPlane(site, cWhirlPoolOutline[i][0], cWhirlPoolOutline[i][1], cWhirlPoolOutline[i + 1][0], cWhirlPoolOutline[i + 1][1], u0, nextU0);
+        u0 = nextU0;
+        nextU0 += 1.0f / 6.0f;
+    }
 }
 
-void WhirlPoolAccelerator::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1) const {
+void WhirlPoolAccelerator::drawPlane(TypedDraw& rDraw, f32 side0, f32 normal0, f32 side1, f32 normal1, f32 u0, f32 u1) const {
     f32 v0 = mTexOffsetV0;
 
     Vec3f offset(0.0f, 0.0f, 30.0f);
@@ -156,9 +140,9 @@ void WhirlPoolAccelerator::drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f
         position.add(offset);
         rotation.mult(offset, offset);
 
-        *vtx++ = {position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u0 + pPoint->mTexCoord, v0};
+        *vtx++ = {position.x + side.x * side0 + normal.x * normal0, position.y + side.y * side0 + normal.y * normal0, position.z + side.z * side0 + normal.z * normal0, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), u0 + pPoint->mTexCoord, v0};
 
-        *vtx++ = {position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1, Rgba8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha), u1 + pPoint->mTexCoord, v0};
+        *vtx++ = {position.x + side.x * side1 + normal.x * normal1, position.y + side.y * side1 + normal.y * normal1, position.z + side.z * side1 + normal.z * normal1, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), u1 + pPoint->mTexCoord, v0};
         v0 += 0.02f;
     }
 }

@@ -11,13 +11,13 @@ namespace NrvFloaterFloatingForceTypeNormal {
 };  // namespace NrvFloaterFloatingForceTypeNormal
 
 FloaterFloatingForceTypeNormal::FloaterFloatingForceTypeNormal(LiveActor* pActor, const char* pName)
-    : FloaterFloatingForce(pActor, pName), mRotateAngle(), mRotateSpeed(), mSinkDepth(), mSinkSpeed() {
+    : FloaterFloatingForce(pActor, pName), mRiseAccel(), mSinkAccel(), mSinkDepth(), mSinkSpeed() {
 }
 
 void FloaterFloatingForceTypeNormal::init(const TableIter& rIter) {
     FloaterFloatingForce::init(rIter);
-    MR::getMapPartsArgRotateSpeed(&mRotateSpeed, rIter);
-    MR::getMapPartsArgRotateAngle(&mRotateAngle, rIter);
+    MR::getMapPartsArgRotateSpeed(&mSinkAccel, rIter);
+    MR::getMapPartsArgRotateAngle(&mRiseAccel, rIter);
     MR::useStageSwitchReadA(mHost, rIter);
     MapPartsFunction::initNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeWait));
 }
@@ -32,31 +32,30 @@ void FloaterFloatingForceTypeNormal::updateHostTrans(Vec3f* pDst) const {
 }
 
 void FloaterFloatingForceTypeNormal::updateVelocity(bool isOnPlayer) {
-    f32 f;
-
-    if (isOnPlayer && (MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost)) == false) {
-        if (mMoveConditionType <= mSinkDepth) {
+    if (isOnPlayer && !(MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost))) {
+        if (mMaxSinkDepth <= mSinkDepth) {
             mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
         } else {
-            mSinkSpeed += mRotateSpeed * 0.0001f;
+            mSinkSpeed += mSinkAccel * 0.0001f;
         }
     } else if (mSinkDepth <= 0.0f) {
         mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
     } else {
-        mSinkSpeed -= mRotateAngle * 0.0001f;
+        mSinkSpeed -= mRiseAccel * 0.0001f;
     }
 
     mSinkSpeed *= 0.98f;
     mSinkSpeed = MR::clamp(mSinkSpeed, -50.0f, 50.0f);
 
-    f = mSinkSpeed;
+    f32 sinkStep = mSinkSpeed;
 
+    // The landing jolt: 6 steps down, then up.
     if (FloaterFunction::isExistImpactOnRide(mObjName)) {
         if (isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveFirst))) {
-            f = 10.0f;
+            sinkStep = 10.0f;
 
             if (getStep() > 5) {
-                f *= -1.0f;
+                sinkStep *= -1.0f;
             }
         }
     }
@@ -64,20 +63,15 @@ void FloaterFloatingForceTypeNormal::updateVelocity(bool isOnPlayer) {
     if (FloaterFunction::isExistSpeedUpLanding(mObjName)) {
         bool isValidAndOnSwitchA = MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost);
 
-        if (!isValidAndOnSwitchA) {
-            bool b = isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOnPlayer)) && getStep() < 7;
-
-            if (b) {
-                f += (7 - getStep()) * 0.8f;
-            }
+        if (!isValidAndOnSwitchA && isNerve(GET_NERVE(FloaterFloatingForceTypeNormal, HostTypeMoveOnPlayer)) && getStep() < 7) {
+            sinkStep += (7 - getStep()) * 0.8f;
         }
     }
 
-    mVelocity.set(-mUp * f);
+    mVelocity.set(-mUp * sinkStep);
 
-    f32 maxDepth = mMoveConditionType;
-    mSinkDepth += f;
-    mSinkDepth = MR::clamp(mSinkDepth, 0.0f, maxDepth);
+    mSinkDepth += sinkStep;
+    mSinkDepth = MR::clamp(mSinkDepth, 0.0f, mMaxSinkDepth);
 }
 
 void FloaterFloatingForceTypeNormal::soundMoveSE() {

@@ -151,22 +151,24 @@ namespace MR {
         showMaterial(getModel(pActor), pMaterialName);
     }
 
-    void calcFogStartEnd(Vec3f vec, f32 f1, f32* pFogStart, f32* pFogEnd) {
-        Vec multVec;
-        NebulaMtxMultVec(ModelSys::mViewMtx, vec, &multVec);
+    // Linear fog whose fraction at pos's depth is `strength`: from 100, or later when the end would pass 100000.
+    // Strength 0 starts the fog at pos's depth and ends it at 100000.
+    void calcFogStartEnd(Vec3f pos, f32 strength, f32* pFogStart, f32* pFogEnd) {
+        Vec viewPos;
+        NebulaMtxMultVec(ModelSys::mViewMtx, pos, &viewPos);
 
-        f32 flt = -multVec.z;
-        if (f1 == 0.0f) {
-            *pFogStart = flt;
+        f32 depth = -viewPos.z;
+        if (strength == 0.0f) {
+            *pFogStart = depth;
             *pFogEnd = 100000.0f;
             return;
         }
 
         f32 fogStart = 100.0f;
-        f32 fogEnd = 100.0f + ((flt - 100.0f) / f1);
+        f32 fogEnd = 100.0f + ((depth - 100.0f) / strength);
         if (fogEnd > 100000.0f) {
             fogEnd = 100000.0f;
-            fogStart = flt - (100000.0f - flt) * (f1 / (1.0f - f1));
+            fogStart = depth - (100000.0f - depth) * (strength / (1.0f - strength));
         }
 
         *pFogStart = fogStart;

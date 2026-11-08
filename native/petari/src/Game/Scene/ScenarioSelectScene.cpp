@@ -85,9 +85,7 @@ void ScenarioSelectScene::update() {
 
     updateNerve();
 
-    bool res = isExecForeground() && mIsResetRequested == 0;
-
-    if (res) {
+    if (isRunning()) {
         mScenarioLayout->movement();
         mCinemaFrame->movement();
         MR::Effect::checkEffectSceneUpdate(mEffectSystem);
@@ -95,9 +93,7 @@ void ScenarioSelectScene::update() {
 }
 
 void ScenarioSelectScene::calcAnim() {
-    bool res = isExecForeground() && mIsResetRequested == 0;
-
-    if (res) {
+    if (isRunning()) {
         // The scene builds its perspective once, at boot: follow the picture's aspect as it changes.
         mCameraContext->updateProjectionMtx();
         mScenarioLayout->calcAnim();
@@ -108,9 +104,7 @@ void ScenarioSelectScene::calcAnim() {
 }
 
 void ScenarioSelectScene::calcViewAndEntry() {
-    bool res = isExecForeground() && mIsResetRequested == 0;
-
-    if (res) {
+    if (isRunning()) {
         setupCameraMtx();
         ModelSys::mDrawBuffer[0] = mDrawBufferOpa;
         ModelSys::mDrawBuffer[1] = mDrawBufferXlu;
@@ -119,9 +113,7 @@ void ScenarioSelectScene::calcViewAndEntry() {
 }
 
 void ScenarioSelectScene::draw() const {
-    bool res = isExecForeground() && mIsResetRequested == 0;
-
-    if (res) {
+    if (isRunning()) {
         setupCameraMtx();
         mDrawBufferOpa->draw();
         mDrawBufferOpa->frameInit();
@@ -143,15 +135,7 @@ bool ScenarioSelectScene::isExecForeground() const {
 }
 
 bool ScenarioSelectScene::isScenarioSelecting() const {
-    bool ret = false;
-
-    if (isExecForeground()) {
-        if (!isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitDisappearLayout))) {
-            ret = true;
-        }
-    }
-
-    return ret;
+    return isExecForeground() && !isNerve(GET_NERVE(ScenarioSelectScene, ScenarioSelectSceneNrvWaitDisappearLayout));
 }
 
 void ScenarioSelectScene::validateScenarioSelect() {

@@ -20,6 +20,13 @@ namespace NrvFlipPanel {
 
 namespace {
     static u32 sBloomSyncStep;
+
+    // The frame count is 0 until the bloom animation starts: the step itself is then the frame.
+    void syncBloomFrame(ModelObj* pBloomModel) {
+        u32 frameMax = MR::getBrkFrameMax(pBloomModel);
+        u32 cycles = frameMax != 0 ? sBloomSyncStep / frameMax : 0;
+        MR::setBrkFrame(pBloomModel, sBloomSyncStep - cycles * frameMax);
+    }
 };  // namespace
 
 namespace NrvFlipPanelObserver {
@@ -69,12 +76,7 @@ void FlipPanel::exeFrontLand() {
 
         if (mIsReverse) {
             MapObjActorUtil::appearBloomModel(this);
-            ModelObj* bloomModel = mBloomModel;
-            u32 frameMax = MR::getBrkFrameMax(bloomModel);
-            // The frame count is 0 until the bloom animation starts: the step itself is then the frame.
-            u32 val = frameMax != 0 ? ::sBloomSyncStep / frameMax : 0;
-            frameMax = ::sBloomSyncStep - (val)*frameMax;
-            MR::setBrkFrame(bloomModel, frameMax);
+            syncBloomFrame(mBloomModel);
         } else {
             MapObjActorUtil::killBloomModel(this);
         }
@@ -101,12 +103,7 @@ void FlipPanel::exeBackLand() {
             MapObjActorUtil::killBloomModel(this);
         } else {
             MapObjActorUtil::appearBloomModel(this);
-            ModelObj* bloomModel = mBloomModel;
-            u32 frameMax = MR::getBrkFrameMax(bloomModel);
-            // The frame count is 0 until the bloom animation starts: the step itself is then the frame.
-            u32 val = frameMax != 0 ? ::sBloomSyncStep / frameMax : 0;
-            frameMax = ::sBloomSyncStep - (val)*frameMax;
-            MR::setBrkFrame(bloomModel, frameMax);
+            syncBloomFrame(mBloomModel);
         }
 
         MR::tryRumblePadMiddle(this, PLAYER_1);
@@ -177,12 +174,7 @@ void FlipPanel::endClipped() {
     MapObjActor::endClipped();
 
     if (MR::getBrkCtrl(mBloomModel)) {
-        ModelObj* bloomModel = mBloomModel;
-        u32 frameMax = MR::getBrkFrameMax(bloomModel);
-        // The frame count is 0 until the bloom animation starts: the step itself is then the frame.
-        u32 val = frameMax != 0 ? ::sBloomSyncStep / frameMax : 0;
-        frameMax = ::sBloomSyncStep - (val)*frameMax;
-        MR::setBrkFrame(bloomModel, frameMax);
+        syncBloomFrame(mBloomModel);
     }
 }
 
@@ -301,9 +293,7 @@ void FlipPanelObserver::init(const TableIter& rIter) {
     }
 
     initNerve(GET_NERVE(FlipPanelObserver, FlipPanelObserverNrvWait));
-    bool ret = MR::useStageSwitchReadAppear(this, rIter);
-
-    if (ret) {
+    if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::syncStageSwitchAppear(this);
         makeActorDead();
     } else {

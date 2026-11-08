@@ -209,8 +209,8 @@ f32 SpinDriverPathDrawer::calcDrawCode() const {
         return mCoord;
     }
 
-    f32 val = 1.0f - mEndCut;
-    return mCoord < val ? mCoord : val;
+    f32 drawEnd = 1.0f - mEndCut;
+    return mCoord < drawEnd ? mCoord : drawEnd;
 }
 
 f32 SpinDriverPathDrawer::calcDrawBaseCode() const {
@@ -218,13 +218,8 @@ f32 SpinDriverPathDrawer::calcDrawBaseCode() const {
         return mMaxCoord;
     }
 
-    f32 val = mMaxCoord;
-
-    if (val < (1.0f - mEndCut)) {
-        return val;
-    }
-
-    return 1.0f - mEndCut;
+    f32 drawEnd = 1.0f - mEndCut;
+    return mMaxCoord < drawEnd ? mMaxCoord : drawEnd;
 }
 
 void SpinDriverPathDrawer::setCoord(f32 coord) {
@@ -306,26 +301,21 @@ void SpinDriverPathDrawer::draw() const {
         Vec3f prevSide(mSides[i - 1] * 100.0f), currSide(mSides[i] * 100.0f);
         Vec3f prevUp(mUps[i - 1] * 100.0f), currUp(mUps[i] * 100.0f);
 
-        f32 prevVal = mCoords[i - 1];
-        f32 val = mCoords[i];
+        f32 prevCoord = mCoords[i - 1];
+        f32 currCoord = mCoords[i];
 
-        VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
-
-        sendPoint(vtx, prevPos - prevUp, 0.0f, prevVal);
-        sendPoint(vtx, currPos - currUp, 0.0f, val);
-        sendPoint(vtx, prevPos, 0.5f, prevVal);
-        sendPoint(vtx, currPos, 0.5f, val);
-        sendPoint(vtx, prevPos + prevUp, 1.0f, prevVal);
-        sendPoint(vtx, currPos + currUp, 1.0f, val);
-
-        vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
-
-        sendPoint(vtx, prevPos - prevSide, 0.0f, prevVal);
-        sendPoint(vtx, currPos - currSide, 0.0f, val);
-        sendPoint(vtx, prevPos, 0.5f, prevVal);
-        sendPoint(vtx, currPos, 0.5f, val);
-        sendPoint(vtx, prevPos + prevSide, 1.0f, prevVal);
-        sendPoint(vtx, currPos + currSide, 1.0f, val);
+        // Two crossed ribbons: one across the up axis, one across the side axis.
+        auto sendRibbon = [&](const Vec3f& rPrevHalf, const Vec3f& rCurrHalf) {
+            VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
+            sendPoint(vtx, prevPos - rPrevHalf, 0.0f, prevCoord);
+            sendPoint(vtx, currPos - rCurrHalf, 0.0f, currCoord);
+            sendPoint(vtx, prevPos, 0.5f, prevCoord);
+            sendPoint(vtx, currPos, 0.5f, currCoord);
+            sendPoint(vtx, prevPos + rPrevHalf, 1.0f, prevCoord);
+            sendPoint(vtx, currPos + rCurrHalf, 1.0f, currCoord);
+        };
+        sendRibbon(prevUp, currUp);
+        sendRibbon(prevSide, currSide);
     }
 }
 

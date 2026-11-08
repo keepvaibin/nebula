@@ -293,13 +293,13 @@ bool Sandstorm::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
         }
 
         f32 horizontalDistance = MR::calcDistanceHorizontal(this, pSender->mPosition, up);
-        bool ret = horizontalDistance <= MR::max(mSensorMin, mSizeUpRate * verticalDistance);
+        bool isInside = horizontalDistance <= MR::max(mSensorMin, mSizeUpRate * verticalDistance);
 
-        if (ret) {
+        if (isInside) {
             MR::limitedStarPieceHitSound();
         }
 
-        return ret;
+        return isInside;
     }
 
     return false;
@@ -343,11 +343,12 @@ void Sandstorm::updateHitSensor(HitSensor* pSensor) {
     Vec3f up;
     MR::calcUpVec(&up, this);
 
-    Vec3f vec;
-    vec.scaleAdd(mSensorHeight, up, mPosition);
+    Vec3f top;
+    top.scaleAdd(mSensorHeight, up, mPosition);
 
-    f32 val = MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerCenterPos(), mPosition, vec);
-    pSensor->mRadius = MR::max(mSensorMin, mSizeUpRate * val * mSensorHeight);
+    // The sensor rides the column at the player's height and widens toward the top.
+    f32 heightRate = MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerCenterPos(), mPosition, top);
+    pSensor->mRadius = MR::max(mSensorMin, mSizeUpRate * heightRate * mSensorHeight);
 }
 
 void Sandstorm::initSandstormParam() {

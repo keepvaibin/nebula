@@ -747,8 +747,8 @@ namespace FileSelectItemSub {
 
     void ScaleController::exeToSmall() {
         if (MR::isLessEqualStep(this, 30)) {
-            f32 v = (getNerveStep() / 30.0f);
-            mScale += (v * (1.0f - mScale));
+            f32 rate = (getNerveStep() / 30.0f);
+            mScale += (rate * (1.0f - mScale));
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall), 30);
@@ -756,8 +756,8 @@ namespace FileSelectItemSub {
 
     void ScaleController::exeToBig() {
         if (MR::isLessEqualStep(this, 30)) {
-            f32 v = (getNerveStep() / 30.0f);
-            mScale += v * (1.2f - mScale);
+            f32 rate = (getNerveStep() / 30.0f);
+            mScale += rate * (1.2f - mScale);
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), 30);

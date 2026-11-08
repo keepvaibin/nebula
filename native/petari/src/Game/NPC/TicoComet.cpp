@@ -79,23 +79,18 @@ bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
             MR::startBva(this, "Big0");
         }
 
-        f32 val = (0.66f * mStarPieceNeed);
-        if (mStarPieceLeft == (s32)val) {
-            f32 frame = MR::getBckFrame(this);
-            MR::startAction(this, "Eat1");
-            MR::startBva(this, "Big1");
-            MR::setBckFrame(this, frame);
-            mScaleController->startHitReaction();
-        }
-
-        val = (0.33f * mStarPieceNeed);
-        if (mStarPieceLeft == (s32)val) {
-            f32 frame = MR::getBckFrame(this);
-            MR::startAction(this, "Eat2");
-            MR::startBva(this, "Big2");
-            MR::setBckFrame(this, frame);
-            mScaleController->startHitReaction();
-        }
+        // At two thirds and one third left the Tico grows a size, keeping its eating frame.
+        auto growAt = [&](f32 leftRate, const char* pAction, const char* pBva) {
+            if (mStarPieceLeft == (s32)(leftRate * mStarPieceNeed)) {
+                f32 frame = MR::getBckFrame(this);
+                MR::startAction(this, pAction);
+                MR::startBva(this, pBva);
+                MR::setBckFrame(this, frame);
+                mScaleController->startHitReaction();
+            }
+        };
+        growAt(0.66f, "Eat1", "Big1");
+        growAt(0.33f, "Eat2", "Big2");
 
         mStarPieceLeft--;
         return true;

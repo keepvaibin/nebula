@@ -984,23 +984,24 @@ namespace MR {
     }
 
     bool isAngleBetween(f32 angle, f32 min, f32 max) {
-        f32 a1_n = normalizeAngleAbs(angle);
-        f32 a2_n = normalizeAngleAbs(min);
-        f32 a3_n = normalizeAngleAbs(max);
+        f32 normAngle = normalizeAngleAbs(angle);
+        f32 upper = normalizeAngleAbs(min);
+        f32 lower = normalizeAngleAbs(max);
 
-        if (a3_n > a2_n) {
-            f32 val = a3_n;
-            a3_n = a2_n;
-            a2_n = val;
+        if (lower > upper) {
+            f32 swapped = lower;
+            lower = upper;
+            upper = swapped;
         }
 
-        bool res = a1_n >= a3_n && a1_n <= a2_n;
+        // Between them along the shorter way round.
+        bool isBetween = normAngle >= lower && normAngle <= upper;
 
-        if (a2_n - a3_n > PI) {
-            res = !res;
+        if (upper - lower > PI) {
+            isBetween = !isBetween;
         }
 
-        return res;
+        return isBetween;
     }
 
     f32 blendAngle(f32 angleA, f32 angleB, f32 rate) {
@@ -1457,20 +1458,14 @@ namespace MR {
     }
 
     void getRotatedAxisY(Vec3f* pDst, const Vec3f& rPSrc) {
-        f32 var = rPSrc.x;
-        f32 CosX = Angle::cosDegree(var);
-        var = rPSrc.y;
-        f32 CosY = Angle::cosDegree(var);
-        var = rPSrc.z;
-        f32 CosZ = Angle::cosDegree(var);
-        var = rPSrc.x;
-        f32 SinX = Angle::sinDegree(var);
-        var = rPSrc.y;
-        f32 SinY = Angle::sinDegree(var);
-        var = rPSrc.z;
-        f32 SinZ = Angle::sinDegree(var);
+        f32 cosX = Angle::cosDegree(rPSrc.x);
+        f32 cosY = Angle::cosDegree(rPSrc.y);
+        f32 cosZ = Angle::cosDegree(rPSrc.z);
+        f32 sinX = Angle::sinDegree(rPSrc.x);
+        f32 sinY = Angle::sinDegree(rPSrc.y);
+        f32 sinZ = Angle::sinDegree(rPSrc.z);
 
-        pDst->set((SinX * (CosZ * SinY)) - (SinZ * CosX), (SinX * (SinZ * SinY)) + (CosZ * CosX), CosY * SinX);
+        pDst->set((sinX * (cosZ * sinY)) - (sinZ * cosX), (sinX * (sinZ * sinY)) + (cosZ * cosX), cosY * sinX);
     }
 
     void getRotatedAxisZ(Vec3f* pDst, const Vec3f& rPSrc) {

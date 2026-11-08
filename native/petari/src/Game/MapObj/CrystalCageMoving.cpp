@@ -247,18 +247,12 @@ void CrystalCageMoving::startBreakDemo() {
 }
 
 bool CrystalCageMoving::isNerveTypeEnd() const {
-    bool ret = false;
-
-    if (isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakBig)) ||
-        isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakSmall)) ||
-        isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakAll)) ||
-        isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoMove)) ||
-        isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop)) ||
-        isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoChange))) {
-        ret = true;
-    }
-
-    return ret;
+    return isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakBig)) ||
+           isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakSmall)) ||
+           isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakAll)) ||
+           isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoMove)) ||
+           isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop)) ||
+           isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoChange));
 }
 
 CrystalCageMoving::~CrystalCageMoving() {

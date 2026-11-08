@@ -148,9 +148,9 @@ namespace GameLightSignal {
     // LightPointCtrl blends its light with LightValues::distAttn(15, brightness, LIGHT_FALLOFF_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
     void pointRequest(const LiveActor* pActor, const Vec3f& rPosition, Color8 color, f32 brightness) {
-        const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;
+        const f32 clamped = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;
         const f32 values[7] = {rPosition.x, rPosition.y,  rPosition.z, channel(color.r), channel(color.g), channel(color.b),
-                               15.0f * __builtin_sqrtf(b / (1.0f - b))};
+                               15.0f * __builtin_sqrtf(clamped / (1.0f - clamped))};
         NebulaHost::gameLight(NEBULA_LIGHT_POINT_REQUEST, NebulaHost::objectId(pActor), values);
         Requester* slot = nullptr;
         for (u32 i = 0; i < sRequesterCount && slot == nullptr; i++) {

@@ -248,11 +248,10 @@ Vec3f* SeaGullGroup::updatePosInfo(s32* pPointIndex, bool isReverse) const {
             *pPointIndex = mPointCount - 1;
         }
     } else {
-        s32 val = mPointCount;
         s32 next = *pPointIndex + 1;
         *pPointIndex = next;
 
-        if (next >= val) {
+        if (next >= mPointCount) {
             *pPointIndex = 0;
         }
     }

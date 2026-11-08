@@ -187,15 +187,8 @@ void MapPartsRailMover::reachedEndPlayerOn() {
 }
 
 bool MapPartsRailMover::isReachedEnd() const {
-    bool ret = false;
-
-    if (isNerve(GET_NERVE(MapPartsRailMover, HostTypeMove)) || isNerve(GET_NERVE(MapPartsRailMover, HostTypeMoveStart))) {
-        if (mRailPointPassChecker->isReachedEnd()) {
-            ret = true;
-        }
-    }
-
-    return ret;
+    return (isNerve(GET_NERVE(MapPartsRailMover, HostTypeMove)) || isNerve(GET_NERVE(MapPartsRailMover, HostTypeMoveStart))) &&
+           mRailPointPassChecker->isReachedEnd();
 }
 
 bool MapPartsRailMover::isDone() const {
@@ -228,9 +221,7 @@ void MapPartsRailMover::calcTimeToNextRailPoint(f32* pTime) const {
     f32 distance = 0.0f;
     MR::calcDistanceToNextRailPoint(mHost, &distance);
 
-    bool res = MR::isNearZero(mAcceleration, 0.000099999997f) == false;
-
-    if (!res) {
+    if (MR::isNearZero(mAcceleration, 0.0001f)) {
         *pTime = MR::abs(distance / mSpeed);
         return;
     }

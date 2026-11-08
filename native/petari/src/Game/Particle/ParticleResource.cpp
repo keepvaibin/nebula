@@ -887,34 +887,34 @@ void ParticleResource::calcField(EmitterWork* work, ParticleCore* ptcl) {
 
 void ParticleResource::calcKey(EmitterWork* work) {
     for (int i = mKeyBlockNum - 1; i >= 0; i--) {
-        f32 val = mpKeyBlocks[i]->calc(work->mpEmtr->mTick);
+        f32 keyValue = mpKeyBlocks[i]->calc(work->mpEmtr->mTick);
         switch (mpKeyBlocks[i]->getID()) {
-        case 0:
-            work->mpEmtr->mRate = val;
+        case ParticleKey::Target_Rate:
+            work->mpEmtr->mRate = keyValue;
             break;
-        case 1:
-            work->mpEmtr->mVolumeSize = (s32)(val);
+        case ParticleKey::Target_VolumeSize:
+            work->mpEmtr->mVolumeSize = (s32)(keyValue);
             break;
-        case 3:
-            work->mpEmtr->mVolumeMinRad = val;
+        case ParticleKey::Target_VolumeMinRad:
+            work->mpEmtr->mVolumeMinRad = keyValue;
             break;
-        case 4:
-            work->mpEmtr->mLifeTime = (s32)(val);
+        case ParticleKey::Target_LifeTime:
+            work->mpEmtr->mLifeTime = (s32)(keyValue);
             break;
-        case 6:
-            work->mpEmtr->mAwayFromCenterSpeed = val;
+        case ParticleKey::Target_AwayFromCenterSpeed:
+            work->mpEmtr->mAwayFromCenterSpeed = keyValue;
             break;
-        case 7:
-            work->mpEmtr->mAwayFromAxisSpeed = val;
+        case ParticleKey::Target_AwayFromAxisSpeed:
+            work->mpEmtr->mAwayFromAxisSpeed = keyValue;
             break;
-        case 8:
-            work->mpEmtr->mDirSpeed = val;
+        case ParticleKey::Target_DirSpeed:
+            work->mpEmtr->mDirSpeed = keyValue;
             break;
-        case 9:
-            work->mpEmtr->mSpread = val;
+        case ParticleKey::Target_Spread:
+            work->mpEmtr->mSpread = keyValue;
             break;
-        case 10:
-            work->mpEmtr->mScaleOut = val;
+        case ParticleKey::Target_ScaleOut:
+            work->mpEmtr->mScaleOut = keyValue;
             break;
         }
     }

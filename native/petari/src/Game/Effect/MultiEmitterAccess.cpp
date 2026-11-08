@@ -77,12 +77,13 @@ void MultiEmitter::setGlobalSRTMatrix(const Mtx pMtx, s32 idx) {
 }
 
 void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
-    bool b1 = !MR::isNearZero(mLightAffect);
+    // A light-affected emitter's colour is mixed with the light in its callback, so it is not set here.
+    bool isLightAffected = !MR::isNearZero(mLightAffect);
 
     if (idx == -1) {
         mCallBack->mPrmColor.set(r, g, b, -1);
 
-        if (!b1) {
+        if (!isLightAffected) {
             for (s32 i = 0; i < mEmitters.size(); i++) {
                 SingleEmitter* pEmitter = getValidEmitter(i, false);
                 if (pEmitter != nullptr) {
@@ -101,12 +102,12 @@ void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
 }
 
 void MultiEmitter::setGlobalEnvColor(u8 r, u8 g, u8 b, s32 idx) {
-    bool b1 = !MR::isNearZero(mLightAffect);
+    bool isLightAffected = !MR::isNearZero(mLightAffect);
 
     if (idx == -1) {
         mCallBack->mEnvColor.set(r, g, b, -1);
 
-        if (!b1) {
+        if (!isLightAffected) {
             for (s32 i = 0; i < mEmitters.size(); i++) {
                 SingleEmitter* pEmitter = getValidEmitter(i, false);
                 if (pEmitter != nullptr) {

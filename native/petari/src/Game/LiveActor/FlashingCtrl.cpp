@@ -50,13 +50,8 @@ s32 FlashingCtrl::getCurrentInterval() const {
     if (mOverrideInterval) {
         return 8;
     }
-    s32 curTimer = mTimer;
-    s32 ret = 10;
-
-    if (curTimer < 90) {
-        ret = 5;
-    }
-    return ret;
+    // Faster in the last 90 steps.
+    return mTimer < 90 ? 5 : 10;
 }
 
 bool FlashingCtrl::isNowFlashing() const {

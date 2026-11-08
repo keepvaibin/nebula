@@ -40,19 +40,20 @@ FloaterFloatingForceTypeSpring::FloaterFloatingForceTypeSpring(LiveActor* pHost,
 void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
     FloaterFloatingForce::init(rIter);
 
-    f32 rotateSpeed = 0.0f;
-    MR::getMapPartsArgRotateSpeed(&rotateSpeed, rIter);
-    rotateSpeed *= 0.001f;
+    // The rotate arguments carry the spring constants and the ride kick.
+    f32 spring = 0.0f;
+    MR::getMapPartsArgRotateSpeed(&spring, rIter);
+    spring *= 0.001f;
 
-    f32 rotateAngle = 0.0f;
-    MR::getMapPartsArgRotateAngle(&rotateAngle, rIter);
-    rotateAngle *= 0.001f;
+    f32 damp = 0.0f;
+    MR::getMapPartsArgRotateAngle(&damp, rIter);
+    damp *= 0.001f;
 
-    s32 rotateAxis = 0;
-    MR::getMapPartsArgRotateAxis(&rotateAxis, rIter);
-    mRideSinkSpeed = rotateAxis * 0.1f;
+    s32 rideSinkSpeed = 0;
+    MR::getMapPartsArgRotateAxis(&rideSinkSpeed, rIter);
+    mRideSinkSpeed = rideSinkSpeed * 0.1f;
 
-    mSpringForce = new FloaterSpringForce(-mMoveConditionType, rotateSpeed, rotateAngle);
+    mSpringForce = new FloaterSpringForce(-mMaxSinkDepth, spring, damp);
 
     initNerve(GET_NERVE(FloaterFloatingForceTypeSpring, HostTypeWait));
     MR::useStageSwitchReadA(mHost, rIter);
@@ -142,7 +143,7 @@ void FloaterFloatingForceTypeSpring::exeWait() {
 
 void FloaterFloatingForceTypeSpring::exeMove() {
     if (isFirstStep()) {
-        mSpringForce->setSpringBaseValue(-mMoveConditionType);
+        mSpringForce->setSpringBaseValue(-mMaxSinkDepth);
         mSpringForce->addSpringVelocity(-mRideSinkSpeed);
     }
 

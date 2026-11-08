@@ -453,20 +453,20 @@ bool SeqTrack::noteOn(u32 slot, u32 key, u32 velocity) {
     if (isMute()) {
         return false;
     }
-    bool ret = true;
+    bool isAllStarted = true;
     key += transposeTotal();
     for (u32 i = 0; i < mMgrCount; i++) {
         ChannelMgr& rMgr = mMgrs[i];
         rMgr.noteOff(slot, 0);
         Note* note = channelStart(&rMgr, key, velocity, 0);
         if (note == nullptr) {
-            ret = false;
+            isAllStarted = false;
         }
         if (slot < rMgr.mSlots) {
             rMgr.mNotes[slot] = note;
         }
     }
-    return ret;
+    return isAllStarted;
 }
 
 bool SeqTrack::gateOn(u32 key, u32 velocity, f32 seqTime, u32 flags) {
@@ -511,13 +511,13 @@ bool SeqTrack::gateOn(u32 key, u32 velocity, f32 seqTime, u32 flags) {
 }
 
 bool SeqTrack::noteOff(u32 slot, u16 directRelease) {
-    bool ret = true;
+    bool isAllReleased = true;
     for (u32 i = 0; i < mMgrCount; i++) {
         if (!mMgrs[i].noteOff(slot, directRelease)) {
-            ret = false;
+            isAllReleased = false;
         }
     }
-    return ret;
+    return isAllReleased;
 }
 
 void SeqTrack::noteOffAll(u16 directRelease) {

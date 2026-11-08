@@ -43,18 +43,18 @@ namespace MR {
     bool calcScreenPosition(Vec2f* pScreenPos, const Vec3f& rPos) {
         Vec3f normalizedScreenPos;
         Vec3f screenPos;
-        bool ret = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
+        bool isOnScreen = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
         ::calcNormalizedScreenPosToScreenPos(&screenPos, normalizedScreenPos);
         pScreenPos->x = screenPos.x;
         pScreenPos->y = screenPos.y;
-        return ret;
+        return isOnScreen;
     }
 
     bool calcScreenPosition(Vec3f* pScreenPos, const Vec3f& rPos) {
         Vec3f normalizedScreenPos;
-        bool ret = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
+        bool isOnScreen = calcNormalizedScreenPosition(&normalizedScreenPos, rPos);
         ::calcNormalizedScreenPosToScreenPos(pScreenPos, normalizedScreenPos);
-        return ret;
+        return isOnScreen;
     }
 
     bool calcNormalizedScreenPosition(Vec3f* pScreenPos, const Vec3f& rPos) {
@@ -76,7 +76,8 @@ namespace MR {
             return false;
         }
 
-        return 0.0f < pScreenPos->z == false;
+        // In front of the near plane.
+        return !(0.0f < pScreenPos->z);
     }
 
     bool calcWorldPositionFromScreen(Vec3f* pPos, const Vec2f& rScreenPos, f32 distZ) {
@@ -109,9 +110,9 @@ namespace MR {
     }
 
     bool calcWorldRayDirectionFromScreen(Vec3f* pDir, const Vec2f& rScreenPos) {
-        bool ret = calcWorldPositionFromScreen(pDir, rScreenPos, -1.0f);
+        bool isComputed = calcWorldPositionFromScreen(pDir, rScreenPos, -1.0f);
         pDir->sub(getCamPos());
-        return ret;
+        return isComputed;
     }
 
     f32 calcCameraDistanceZ(const Vec3f& rPos) {
@@ -564,12 +565,7 @@ namespace MR {
     }
 
     bool isPossibleToShiftToFirstPersonCamera() {
-        bool ret = false;
-        if (isFirstPersonCameraOK() && !getCameraDirector()->mIsStartCameraActive) {
-            ret = true;
-        }
-
-        return ret;
+        return isFirstPersonCameraOK() && !getCameraDirector()->mIsStartCameraActive;
     }
 
     bool isCameraPossibleToRoundLeft() {
@@ -581,12 +577,7 @@ namespace MR {
     }
 
     bool isCameraControlNG() {
-        bool ret = true;
-        if (getCameraDirector()->mIsCameraNG == false && isFpViewChangingFailure() == false) {
-            ret = false;
-        }
-
-        return ret;
+        return getCameraDirector()->mIsCameraNG || isFpViewChangingFailure();
     }
 
     void startTalkCamera(const Vec3f& rPosition, const Vec3f& rUp, f32 axisX, f32 axisY, s32 frame) {

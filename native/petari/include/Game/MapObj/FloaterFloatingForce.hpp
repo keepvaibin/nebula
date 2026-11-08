@@ -26,5 +26,5 @@ public:
     const char* mObjName;
     Vec3f mBasePos;
     Vec3f mUp;
-    f32 mMoveConditionType;
+    f32 mMaxSinkDepth;  // the placement's move-condition argument
 };

@@ -118,9 +118,9 @@ void ActorLightCtrl::updateLightBlend() {
             }
 
         } else {
-            f32 v = (f32)mBlendStep / mInterpolate;
+            f32 blend = (f32)mBlendStep / mInterpolate;
             const ActorLightInfo* info = getTargetActorLight(mAreaLightInf);
-            LightFunction::blendActorLightInfo(&mLightInfo, *mBlendFrom, *info, v);
+            LightFunction::blendActorLightInfo(&mLightInfo, *mBlendFrom, *info, blend);
         }
     }
 }

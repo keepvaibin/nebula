@@ -238,10 +238,11 @@ void EffectKeeper::syncEffectBck(MultiEmitter* pEmitter) {
         return;
     }
 
-    bool b1 = mSyncBckChecker->isCreate(pInfo, true);
-    bool b2 = mSyncBckChecker->isCreate(pInfo, false);
+    // Forever emitters run while a registered animation plays; one-time emitters start at its frame.
+    const bool isForeverDue = mSyncBckChecker->isCreate(pInfo, false);
+    const bool isOneTimeDue = isForeverDue && mSyncBckChecker->isCreate(pInfo, true);
 
-    if (b1 || b2) {
+    if (isOneTimeDue || isForeverDue) {
         MultiEmitter* emitter = pEmitter;
         if (MR::isEqualSubString(::getMultiEmitterName(pEmitter), ::cAttributeEffectTag)) {
             MR::FormattedName buf;
@@ -250,11 +251,11 @@ void EffectKeeper::syncEffectBck(MultiEmitter* pEmitter) {
             emitter = getEmitter(buf.c_str());
         }
 
-        if (b1) {
+        if (isOneTimeDue) {
             emitter->createOneTimeEmitter();
         }
 
-        if (b2) {
+        if (isForeverDue) {
             emitter->createForeverEmitter();
         }
     }

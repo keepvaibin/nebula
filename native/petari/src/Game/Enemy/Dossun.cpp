@@ -187,8 +187,8 @@ void Dossun::exeOnGround() {
         MR::emitEffect(this, "Land");
     }
 
-    bool b = MR::isGalaxyQuickCometAppearInCurrentStage();
-    if (MR::isStep(this, b ? static_cast< s32 >(::sOnGroundFrame / ::sQuickRatio) : ::sOnGroundFrame)) {
+    bool isQuickComet = MR::isGalaxyQuickCometAppearInCurrentStage();
+    if (MR::isStep(this, isQuickComet ? static_cast< s32 >(::sOnGroundFrame / ::sQuickRatio) : ::sOnGroundFrame)) {
         setNerve(GET_NERVE(Dossun, DossunNrvRising));
     }
 }

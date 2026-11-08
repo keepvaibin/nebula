@@ -24,10 +24,10 @@ void BlackHole::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "BlackHoleSuction", (MtxPtr)&mSuctionEffectMtx);
     f32 radius = mRadius;
-    f32 val = 500.0f * mModelScale;
+    f32 modelRadius = 500.0f * mModelScale;
 
-    if (radius < val) {
-        radius = val;
+    if (radius < modelRadius) {
+        radius = modelRadius;
     }
 
     f32 clippingRadius = 500.0f + radius;

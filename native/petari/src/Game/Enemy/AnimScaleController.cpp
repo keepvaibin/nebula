@@ -75,8 +75,8 @@ void AnimScaleController::startHitReaction() {
     setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvHitReaction));
 }
 
-void AnimScaleController::startAndAddScaleVelocityY(f32 f1) {
-    mScaleVelocity += f1;
+void AnimScaleController::startAndAddScaleVelocityY(f32 velocity) {
+    mScaleVelocity += velocity;
     setNerve(GET_NERVE(AnimScaleController, AnimScaleControllerNrvAnim));
 }
 
@@ -164,25 +164,26 @@ void AnimScaleController::update() {
     updateNerve();
 }
 
-void AnimScaleController::updateScale(f32 f1, f32 f2) {
-    f32 updateValue = ((1.0f - mScale.y) * f1 + mScaleVelocity);
-    updateValue = updateValue * f2;
-    mScaleVelocity = updateValue;
-    mScale.y += updateValue;
+void AnimScaleController::updateScale(f32 spring, f32 damping) {
+    f32 velocity = ((1.0f - mScale.y) * spring + mScaleVelocity);
+    velocity = velocity * damping;
+    mScaleVelocity = velocity;
+    mScale.y += velocity;
 
-    f32 updateValue2 = mScale.y;
+    f32 clampedY;
 
     f32 clampMin = mParam->mScaleMin;
     f32 clampMax = mParam->mScaleMax;
     if (mScale.y < clampMin) {
-        updateValue2 = clampMin;
+        clampedY = clampMin;
     } else if (mScale.y > clampMax) {
-        updateValue2 = clampMax;
+        clampedY = clampMax;
     } else {
-        updateValue2 = mScale.y;
+        clampedY = mScale.y;
     }
 
-    mScale.y = updateValue2;
+    // Volume kept: x and z take 1 / sqrt(y).
+    mScale.y = clampedY;
     mScale.x = MR::sqrt(1.0f / mScale.y);
     mScale.z = mScale.x;
 }
