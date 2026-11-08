@@ -90,7 +90,7 @@ namespace GameAssets {
         struct Mapped {
             void* mData;
             u32 mSize;
-            NebulaArena* mHeap;
+            NebulaArena* mArena;
         };
 
         Mapped* sMapped;
@@ -115,7 +115,7 @@ namespace GameAssets {
                 Mapped& rMapped = sMapped[sMappedCount++];
                 rMapped.mData = pData;
                 rMapped.mSize = size;
-                rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::current();
+                rMapped.mArena = pHeap != nullptr ? pHeap : NebulaArena::current();
             }
             return pData;
         }
@@ -153,9 +153,9 @@ namespace GameAssets {
         }
     }  // namespace
 
-    void unloadHeap(const NebulaArena* pHeap) {
+    void unloadArena(const NebulaArena* pArena) {
         for (u32 i = 0; i < sMappedCount;) {
-            if (sMapped[i].mHeap == pHeap) {
+            if (sMapped[i].mArena == pArena) {
                 release(sMapped[i]);
                 sMapped[i] = sMapped[--sMappedCount];
             } else {
@@ -163,7 +163,7 @@ namespace GameAssets {
             }
         }
         for (u32 i = 0; i < sHeldCount;) {
-            if (sHeld[i].mArena == pHeap) {
+            if (sHeld[i].mArena == pArena) {
                 sHeld[i] = sHeld[--sHeldCount];
             } else {
                 i++;

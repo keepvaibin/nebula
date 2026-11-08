@@ -88,7 +88,9 @@ public:
     void updateSceneControlInfo();
     Scene* getCurrentSceneForExecute() const;
     const Nerve* getNextNerveOnResetProcessing() const;
-    bool tryDestroyFileCacheHeap(bool);
+    // Drops the scene files' resource holders and returns true, unless (not forced) the next scene is the same scene and
+    // stage: then they stay for it.
+    bool releaseSceneFiles(bool isForce);
     void requestChangeNerve(const Nerve*);
 
     bool isCurrentNerve(const Nerve*) const;
