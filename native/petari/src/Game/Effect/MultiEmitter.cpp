@@ -13,7 +13,7 @@
 
 
 MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pTranslation, pRotation, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -21,7 +21,7 @@ MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const V
 }
 
 MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -29,7 +29,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rOffset)
 }
 
 MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pScale, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -37,7 +37,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pScale, 
 }
 
 MultiEmitter::MultiEmitter(const char* pName)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mFlags() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, Vec3f(0.0f, 0.0f, 0.0f));
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -190,7 +190,7 @@ void MultiEmitter::initSyncBck(XanimePlayer* pPlayer, const char* pName, s32 cap
     mSyncBck->mStartFrame = startFrame;
 }
 
-void MultiEmitter::onDeleteSyncBck(bool deleteOnEnd, f32 endFrame) {
+void MultiEmitter::onDeleteSyncBck(f32 endFrame) {
     if (mSyncBck != nullptr) {
         mSyncBck->mEndFrame = endFrame;
     }
@@ -209,18 +209,16 @@ void MultiEmitter::setContinueBckEnd(bool continueAnimEnd) {
 }
 
 void MultiEmitter::onCreateSyncClipping() {
-    turnFlagOn(EmitterStatus_FirstEmit);
+    mCreateOnUnclipped = true;
 }
 
 void MultiEmitter::onForceDeleteSyncClipping() {
-    turnFlagOn(EmitterStatus_Immortal);
+    mForceDeleteOnClipped = true;
 }
 
 void MultiEmitter::stopEmitterOnClipped() {
-    if (isFlagOn(EmitterStatus_Immortal)) {
+    if (mForceDeleteOnClipped) {
         forceDeleteEmitter();
-    } else if (isFlagOn(EmitterStatus_RateStepEmit)) {
-        deleteEmitter();
     } else if (mSyncBck != nullptr) {
         stopCalcEmitter(-1);
         stopDrawParticle(-1);
@@ -235,7 +233,7 @@ void MultiEmitter::stopEmitterOnClipped() {
 }
 
 void MultiEmitter::playEmitterOffClipped() {
-    if (isFlagOn(EmitterStatus_FirstEmit)) {
+    if (mCreateOnUnclipped) {
         create(MR::getEffectSystem());
     } else if (mSyncBck != nullptr) {
         playCalcEmitter(-1);
@@ -302,7 +300,7 @@ void MultiEmitter::allocateEmitter(const char* pName) {
     }
 }
 
-SingleEmitter* MultiEmitter::getValidEmitter(s32 idx, bool) {
+SingleEmitter* MultiEmitter::getValidEmitter(s32 idx) {
     SingleEmitter* pEmitter = &mEmitters[idx];
     if (pEmitter->isValid()) {
         return pEmitter;

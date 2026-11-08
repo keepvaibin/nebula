@@ -21,7 +21,6 @@ public:
     bool isBckLoop(const char* pName) const;
 
     BckResourceInfo** mBckResources;
-    s32 mCapacity;
     s32 mCount;
     f32 mStartFrame;
     f32 mEndFrame;
