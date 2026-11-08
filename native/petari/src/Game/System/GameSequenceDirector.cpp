@@ -3,15 +3,10 @@
 #include "Game/System/GameDataTemporaryInGalaxy.hpp"
 #include "Game/System/GameSequenceProgress.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include "Game/Util/Functor.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-GameSequenceDirector::GameSequenceDirector()
-    : mGameDataTemporaryInGalaxy(nullptr), mGameSequenceProgress(nullptr), mSaveDataHandleSequence(nullptr) {
+GameSequenceDirector::GameSequenceDirector() {
     mSaveDataHandleSequence = new SaveDataHandleSequence();
-    mSaveDataHandleSequence->registerFunctorOnSaveSuccess(MR::Functor(this, &GameSequenceDirector::executeOnSaveSuccess));
-    mSaveDataHandleSequence->registerFunctorJustBeforeSave(MR::Functor(this, &GameSequenceDirector::executeJustBeforeSave));
-
     mGameSequenceProgress = new GameSequenceProgress();
     mGameDataTemporaryInGalaxy = new GameDataTemporaryInGalaxy();
 }
@@ -37,10 +32,4 @@ bool GameSequenceDirector::isInitializedGameDataHolder() const {
 
 GameDataHolder* GameSequenceDirector::getGameDataHolder() {
     return mSaveDataHandleSequence->getHolder();
-}
-
-void GameSequenceDirector::executeOnSaveSuccess() {
-}
-
-void GameSequenceDirector::executeJustBeforeSave() {
 }

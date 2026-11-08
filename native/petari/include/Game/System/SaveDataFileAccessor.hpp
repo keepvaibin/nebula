@@ -4,10 +4,16 @@
 
 // GameData.bin: a header (checksum of the rest, version, entry count, file size), then one entry per user file (a
 // 12-byte name and the file's offset), then the files. Read and written field by field (SaveBinary.hpp).
+enum SaveDataUserFileKind {
+    SaveDataUserFileKind_Game = 0,     // "mario*", "luigi*"
+    SaveDataUserFileKind_Config = 1,   // every other name
+    SaveDataUserFileKind_SysConf = 2,  // "sysconf*"
+};
+
 struct SaveDataUserFileInfo {
     u8* mData;
     u32 mDataSize;
-    u8 mKind;
+    u8 mKind;  // SaveDataUserFileKind
 };
 
 class SaveDataFileAccessor {

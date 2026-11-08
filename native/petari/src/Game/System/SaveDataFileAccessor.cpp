@@ -8,7 +8,7 @@ SaveDataFileAccessor::SaveDataFileAccessor(u8* pSaveDataFile) : mFile(pSaveDataF
 void SaveDataFileAccessor::makeUserFileInfo(SaveDataUserFileInfo* pUserFileInfo, const char* pName) {
     pUserFileInfo->mData = nullptr;
     pUserFileInfo->mDataSize = 0;
-    pUserFileInfo->mKind = 1;
+    pUserFileInfo->mKind = SaveDataUserFileKind_Config;
 
     const u32 num = getUserFileInfoNum();
 
@@ -28,11 +28,11 @@ void SaveDataFileAccessor::makeUserFileInfo(SaveDataUserFileInfo* pUserFileInfo,
         pUserFileInfo->mData = mFile + getFileOffset(i);
 
         if (strstr(pEntryName, "mario") != nullptr || strstr(pEntryName, "luigi") != nullptr) {
-            pUserFileInfo->mKind = 0;
+            pUserFileInfo->mKind = SaveDataUserFileKind_Game;
         }
 
         if (strstr(pEntryName, "sysconf") != nullptr) {
-            pUserFileInfo->mKind = 2;
+            pUserFileInfo->mKind = SaveDataUserFileKind_SysConf;
         }
     }
 }

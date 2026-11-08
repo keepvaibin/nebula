@@ -161,7 +161,7 @@ bool SaveDataHandler::readOld() {
         const char* const pName = file.getFileName(i);
         SaveDataUserFileInfo info;
         file.makeUserFileInfo(&info, pName);
-        if (info.mData == nullptr || info.mKind == 2) {
+        if (info.mData == nullptr || info.mKind == SaveDataUserFileKind_SysConf) {
             continue;
         }
 
@@ -173,7 +173,7 @@ bool SaveDataHandler::readOld() {
         // In the old order: read, and made again in host order. A damaged file stays as it is, so its slot reads as damaged.
         pUserFile->resetAllData();
         u32 size = 0;
-        if (info.mKind == 0) {
+        if (info.mKind == SaveDataUserFileKind_Game) {
             pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
             gOldSaveOrder = false;
             if (!pUserFile->mIsGameDataCorrupted) {

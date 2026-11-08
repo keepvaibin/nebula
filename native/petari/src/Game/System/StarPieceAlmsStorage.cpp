@@ -6,23 +6,16 @@
 #include "Game/Util/MemoryUtil.hpp"
 
 namespace {
-    const static u32 sMaxValueArray[] = {32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 400, 400, 600, 1200, 1600, 1000, 800, 32767};
-};  // namespace
+    const u32 sMaxValueArray[] = {32767, 32767, 32767, 32767, 32767, 32767, 32767, 32767, 400, 400, 600, 1200, 1600, 1000, 800, 32767};
 
-namespace {
     // The game's sixteen, and past them the slots mods add.
     s32 valueCount() {
         const s32 count = 8 + NebulaMods::hungryLumaSlots();
         return count > 16 ? count : 16;
     }
-}  // namespace
+};  // namespace
 
-StarPieceAlmsStorage::StarPieceAlmsStorage() : mValueArray() {
-    mValueArray = new u16[valueCount()];
-
-    for (s32 idx = 0; idx < valueCount(); idx++) {
-        mValueArray[idx] = 0;
-    }
+StarPieceAlmsStorage::StarPieceAlmsStorage() : mValueArray(new u16[valueCount()]()) {
 }
 
 s32 StarPieceAlmsStorage::getValue(int idx) const {

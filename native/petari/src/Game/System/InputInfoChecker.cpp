@@ -3,7 +3,7 @@
 #include "Game/System/PlayerInputs.hpp"
 
 namespace {
-    static const s32 sCheckInfoInterval = 18000;
+    const s32 sCheckInfoInterval = 18000;
 };  // namespace
 
 InputInfoChecker::InputInfoChecker(PlayerInput* pPad) : mPad(pPad) {

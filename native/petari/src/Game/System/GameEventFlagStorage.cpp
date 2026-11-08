@@ -40,31 +40,28 @@ s32 GameEventFlagStorage::serialize(u8* pData, u32 size) const {
 }
 
 s32 GameEventFlagStorage::deserialize(const u8* pData, u32 size) {
-    bool isOn;
-    s32 deserializationFailed = false;
+    bool isFailed = false;
     JSUMemoryInputStream stream(pData, size);
+    const s32 num = static_cast< s32 >(size) / static_cast< s32 >(sizeof(u16));
 
-    int num = (int)size / (int)sizeof(u16);
-
+    // Each u16: the flag's save hash in the low 15 bits, on in the top bit.
     for (s32 i = 0; i < num; i++) {
         u16 data;
         stream.read(&data, sizeof(data));
 
-        isOn = ((data >> 15) & 0x1) != 0;
-        int index = GameEventFlagTable::getIndexFromHashCode(data & 0x7FFF);
-
+        const s32 index = GameEventFlagTable::getIndexFromHashCode(data & 0x7FFF);
         if (index >= 0) {
-            mFlagBitArray->set(index, isOn);
+            mFlagBitArray->set(index, (data & 0x8000) != 0);
         } else {
-            deserializationFailed = true;
+            isFailed = true;
         }
     }
 
-    return deserializationFailed ? true : false;
+    return isFailed;
 }
 
 void GameEventFlagStorage::initializeData() {
-    for (int i = 0; i < mFlagBitArray->size(); i++) {
+    for (s32 i = 0; i < mFlagBitArray->size(); i++) {
         mFlagBitArray->set(i, false);
     }
 }
