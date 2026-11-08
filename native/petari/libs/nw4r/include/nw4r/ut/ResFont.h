@@ -4,17 +4,14 @@
 
 namespace nw4r {
     namespace ut {
-        struct BinaryFileHeader;
-
         class ResFont : public detail::ResFontBase {
         public:
             ResFont();
             virtual ~ResFont();
 
+            // A font the importer cooked ("NFNT", fontResourceFormat.h); false for anything else.
             bool SetResource(void* pBuffer);
             void RemoveResource();
-
-            static FontInformation* Rebuild(BinaryFileHeader* pHeader);
         };
     };  // namespace ut
 };  // namespace nw4r

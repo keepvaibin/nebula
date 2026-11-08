@@ -1357,7 +1357,7 @@ namespace {
     // The picture font as we extend it.
     struct Font {
         nw4r::ut::ResFont* mFont;
-        nw4r::ut::FontCodeMap* mMap;  // ours, before the font's own
+        u16* mSlot[NEBULA_BUTTON_ICONS];  // each icon code's glyph entry (ResFontBase::GlyphSlot)
         u8* mSheets;                  // the font's sheets (their records as they were), then ours: records mSheetBytes apart
         s32 mSheetBytes;
         s32 mSheetWidth;
@@ -1368,10 +1368,9 @@ namespace {
         s32 mCells;       // cells in a sheet
         s32 mFamilySheets;
         s32 mFirstSheet;  // the first family's first sheet
-        s32 mKeyFirstSheet;  // the keyboard's: its fixed keys' sheets, then those of the keys that follow (keyFollows)
+    s32 mKeyFirstSheet;  // the keyboard's: its fixed keys' sheets, then those of the keys that follow (keyFollows)
         s32 mKeySheets;
         s16 mKeyCell[cKeyCells];  // each key's cell from the keyboard's first sheet
-        nw4r::ut::FontCodeMap* mKeyMap;  // cKeyCodeFirst on: each key's glyph (the menu's keys)
         bool mKeysDrawn;
         bool mKeysFollowing;  // the following keys drawn for mKeyLayout and mKeyPad
         u16 mKeyLayout[NEBULA_KEY_LAYOUT_KEYS];
@@ -1404,23 +1403,25 @@ namespace {
         *pY = (cell / sFont.mRow) * (sFont.mCellHeight + 1) + 1;
     }
 
-    // The picture font gains our sheets, glyph widths and code map, once it is loaded. A font whose sheets are not RGBA8
-    // records with cells of a usual size (a mod's, or one not cooked) keeps its own icons.
+    // The picture font gains our sheets, glyphs and codes, once it is loaded: larger copies of its tables (its own
+    // first), handed to it. A font whose sheets are not RGBA8 records with cells of a usual size (a mod's, or one not
+    // cooked) keeps its own icons.
     s32 install() {
         GameSystem* pSystem = SingletonHolder< GameSystem >::get();
         nw4r::ut::ResFont* pFont = pSystem != nullptr && pSystem->mFontHolder != nullptr ? pSystem->mFontHolder->mPictureFont : nullptr;
-        if (pFont == nullptr || pFont->mFontInfo == nullptr) {
+        if (pFont == nullptr || pFont->GetFile() == nullptr) {
             return FontUnread;
         }
-        nw4r::ut::FontInformation* pInfo = pFont->mFontInfo;
-        nw4r::ut::FontTextureGlyph* pGlyph = pInfo->pGlyph;
-        const NebulaTexture* pSheet = pGlyph != nullptr ? nebula_texture_record(pGlyph->sheetImage) : nullptr;
+        const nw4r::ut::FontFile& rFile = *pFont->GetFile();
+        const nw4r::ut::ResFont::Tables& rOld = pFont->GetTables();
+        const NebulaTexture* pSheet = nebula_texture_record(rOld.pSheets);
         bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
-                      pSheet->width == pGlyph->sheetWidth && pSheet->height == pGlyph->sheetHeight &&
-                      static_cast< u32 >(pGlyph->sheetSize) >= pSheet->size && pGlyph->sheetRow > 0 && pGlyph->sheetLine > 0 &&
-                      pGlyph->cellWidth <= cCellMax && pGlyph->cellHeight <= cCellMax &&
-                      (pGlyph->cellWidth + 1) * pGlyph->sheetRow <= pGlyph->sheetWidth &&
-                      (pGlyph->cellHeight + 1) * pGlyph->sheetLine <= pGlyph->sheetHeight;
+                      pSheet->width == rFile.sheetWidth && pSheet->height == rFile.sheetHeight &&
+                      rFile.sheetSize >= pSheet->size && rFile.sheetRow > 0 && rFile.sheetLine > 0 &&
+                      rFile.cellWidth <= cCellMax && rFile.cellHeight <= cCellMax &&
+                      (rFile.cellWidth + 1) * rFile.sheetRow <= rFile.sheetWidth &&
+                      (rFile.cellHeight + 1) * rFile.sheetLine <= rFile.sheetHeight &&
+                      rOld.glyphNum == static_cast< u32 >(rOld.sheetNum) * rFile.sheetRow * rFile.sheetLine;
         for (s32 i = 0; i < NEBULA_BUTTON_ICONS && usable; i++) {
             usable = pFont->HasGlyph(cCodes[i]);
         }
@@ -1430,15 +1431,15 @@ namespace {
         }
         Font& f = sFont;
         f.mFont = pFont;
-        f.mSheetBytes = static_cast< s32 >(pGlyph->sheetSize);
-        f.mSheetWidth = pGlyph->sheetWidth;
-        f.mSheetHeight = pGlyph->sheetHeight;
-        f.mCellWidth = pGlyph->cellWidth;
-        f.mCellHeight = pGlyph->cellHeight;
-        f.mRow = pGlyph->sheetRow;
-        f.mCells = pGlyph->sheetRow * pGlyph->sheetLine;
+        f.mSheetBytes = static_cast< s32 >(rFile.sheetSize);
+        f.mSheetWidth = rFile.sheetWidth;
+        f.mSheetHeight = rFile.sheetHeight;
+        f.mCellWidth = rFile.cellWidth;
+        f.mCellHeight = rFile.cellHeight;
+        f.mRow = rFile.sheetRow;
+        f.mCells = rFile.sheetRow * rFile.sheetLine;
         f.mFamilySheets = (cAtlasIcons + f.mCells - 1) / f.mCells;
-        f.mFirstSheet = pGlyph->sheetNum;
+        f.mFirstSheet = rOld.sheetNum;
         // The keyboard's cells: the fixed keys' in order, then from a sheet of their own those that follow.
         s32 fixedCells = 0;
         for (s32 slot = 0; slot < cKeyCells; slot++) {
@@ -1457,8 +1458,8 @@ namespace {
         f.mKeyFirstSheet = f.mFirstSheet + cFamilies * f.mFamilySheets;
         f.mKeySheets = fixedSheets + (followingCells + f.mCells - 1) / f.mCells;
         const s32 sheets = f.mKeyFirstSheet + f.mKeySheets;
-        const s32 added = (cFamilies * f.mFamilySheets + f.mKeySheets) * f.mCells;
-        if (sheets * f.mCells > 0xFFFF) {
+        const u32 glyphs = static_cast< u32 >(sheets * f.mCells);
+        if (glyphs >= nw4r::ut::cNoGlyph) {
             return FontUnusable;
         }
         const nw4r::ut::CharWidths widths = pFont->GetCharWidths(cCodes[0]);
@@ -1467,54 +1468,74 @@ namespace {
         for (u16 code = cMapFirst; code <= cMapLast; code++) {
             f.mOriginal[code - cMapFirst] = pFont->FindGlyphIndex(code);
         }
-        // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, our widths,
-        // our code maps.
+        // The pages our codes need that the font lacks: the icons' (cMapFirst on) and the keys' (cKeyCodeFirst on).
+        const u32 keyLast = NebulaIcons::cKeyCodeFirst + cKeyCells - 1;
+        u32 addedPages = 0;
+        for (u32 hi = 0; hi < 256; hi++) {
+            const bool ours = (hi >= (cMapFirst >> 8) && hi <= (cMapLast >> 8)) || (hi >= (NebulaIcons::cKeyCodeFirst >> 8) && hi <= (keyLast >> 8));
+            if (ours && rOld.pPages[hi] == nw4r::ut::cNoGlyph) {
+                addedPages++;
+            }
+        }
+        // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, the glyphs, the pages
+        // and their blocks.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
-        const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 7u) & ~7u;
-        const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
-        const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 7u) & ~7u;
-        const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
+        const u32 glyphBytes = (glyphs * sizeof(nw4r::ut::FontGlyph) + 31u) & ~31u;
+        const u32 pageBytes = 256u * sizeof(u16);
+        const u32 blockNum = rOld.pageBlockNum + addedPages;
+        const u32 bytes = sheetsBytes + glyphBytes + pageBytes + blockNum * pageBytes;
         u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getPermanentHeap()));
-        memcpy(pBlock, pGlyph->sheetImage, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
+        memcpy(pBlock, rOld.pSheets, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
             initRecord(pBlock + sheet * f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
         }
         f.mSheets = pBlock;
 
-        nw4r::ut::FontWidth* pWidth = reinterpret_cast< nw4r::ut::FontWidth* >(pBlock + sheetsBytes);
-        pWidth->indexBegin = static_cast< u16 >(f.mFirstSheet * f.mCells);
-        pWidth->indexEnd = static_cast< u16 >(f.mFirstSheet * f.mCells + added - 1);
-        pWidth->pNext = pInfo->pWidth;
-        for (s32 i = 0; i < added; i++) {
-            pWidth->widthTable[i] = widths;
+        nw4r::ut::FontGlyph* pGlyphs = reinterpret_cast< nw4r::ut::FontGlyph* >(pBlock + sheetsBytes);
+        memcpy(pGlyphs, rOld.pGlyphs, rOld.glyphNum * sizeof(nw4r::ut::FontGlyph));
+        for (u32 index = rOld.glyphNum; index < glyphs; index++) {
+            const s32 cell = static_cast< s32 >(index) % f.mCells;
+            pGlyphs[index].sheet = static_cast< u16 >(static_cast< s32 >(index) / f.mCells);
+            pGlyphs[index].cellX = static_cast< u16 >((cell % f.mRow) * (f.mCellWidth + 1) + 1);
+            pGlyphs[index].cellY = static_cast< u16 >((cell / f.mRow) * (f.mCellHeight + 1) + 1);
+            pGlyphs[index].widths = widths;
+            pGlyphs[index].reserved = 0;
         }
-        // The keys' codes (for the menu's own keys), after ours and before the font's.
-        nw4r::ut::FontCodeMap* pKeyMap = reinterpret_cast< nw4r::ut::FontCodeMap* >(pBlock + sheetsBytes + widthBytes);
-        pKeyMap->ccodeBegin = NebulaIcons::cKeyCodeFirst;
-        pKeyMap->ccodeEnd = static_cast< u16 >(NebulaIcons::cKeyCodeFirst + cKeyCells - 1);
-        pKeyMap->mappingMethod = 1;
-        pKeyMap->reserved = 0;
-        pKeyMap->pNext = pInfo->pMap;
+        u16* pPages = reinterpret_cast< u16* >(pBlock + sheetsBytes + glyphBytes);
+        u16* pPageBlocks = pPages + 256;
+        memcpy(pPages, rOld.pPages, pageBytes);
+        memcpy(pPageBlocks, rOld.pPageBlocks, rOld.pageBlockNum * pageBytes);
+        u32 nextPage = rOld.pageBlockNum;
+        for (u32 hi = 0; hi < 256; hi++) {
+            const bool ours = (hi >= (cMapFirst >> 8) && hi <= (cMapLast >> 8)) || (hi >= (NebulaIcons::cKeyCodeFirst >> 8) && hi <= (keyLast >> 8));
+            if (ours && pPages[hi] == nw4r::ut::cNoGlyph) {
+                pPages[hi] = static_cast< u16 >(nextPage);
+                for (u32 lo = 0; lo < 256; lo++) {
+                    pPageBlocks[nextPage * 256u + lo] = nw4r::ut::cNoGlyph;
+                }
+                nextPage++;
+            }
+        }
+        nw4r::ut::ResFont::Tables tables;
+        tables.pSheets = pBlock;
+        tables.sheetNum = static_cast< u16 >(sheets);
+        tables.pGlyphs = pGlyphs;
+        tables.glyphNum = glyphs;
+        tables.pPages = pPages;
+        tables.pPageBlocks = pPageBlocks;
+        tables.pageBlockNum = blockNum;
+        handOverSheets(static_cast< const u8* >(pBlock), sheets, f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
+        pFont->SetTables(tables);
+        // The keys' codes (the menu's own keys) and the icons' (their own glyphs until a family shows).
         for (s32 slot = 0; slot < cKeyCells; slot++) {
-            pKeyMap->mapInfo[slot] = static_cast< u16 >(f.mKeyFirstSheet * f.mCells + f.mKeyCell[keyHasCell(slot) ? slot : cKeyNamed]);
+            *pFont->GlyphSlot(static_cast< u16 >(NebulaIcons::cKeyCodeFirst + slot)) =
+                static_cast< u16 >(f.mKeyFirstSheet * f.mCells + f.mKeyCell[keyHasCell(slot) ? slot : cKeyNamed]);
         }
-        f.mKeyMap = pKeyMap;
-        nw4r::ut::FontCodeMap* pMap = reinterpret_cast< nw4r::ut::FontCodeMap* >(pBlock + sheetsBytes + widthBytes + keyMapBytes);
-        pMap->ccodeBegin = cMapFirst;
-        pMap->ccodeEnd = cMapLast;
-        pMap->mappingMethod = 1;
-        pMap->reserved = 0;
-        pMap->pNext = pKeyMap;
-        for (u16 code = cMapFirst; code <= cMapLast; code++) {
-            pMap->mapInfo[code - cMapFirst] = f.mOriginal[code - cMapFirst];
+        for (s32 i = 0; i < NEBULA_BUTTON_ICONS; i++) {
+            f.mSlot[i] = pFont->GlyphSlot(cCodes[i]);
+            *f.mSlot[i] = f.mOriginal[cCodes[i] - cMapFirst];
         }
-        f.mMap = pMap;
-        handOverSheets(static_cast< const u8* >(pBlock), sheetsBytes / f.mSheetBytes, f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
-        pGlyph->sheetImage = pBlock;
-        pGlyph->sheetNum = static_cast< u16 >(sheets);
-        pInfo->pWidth = pWidth;
-        pInfo->pMap = pMap;
         return FontReady;
     }
 
@@ -2302,7 +2323,7 @@ namespace NebulaIcons {
             drawFamily(family);
         }
         for (s32 i = 0; i < NEBULA_BUTTON_ICONS; i++) {
-            sFont.mMap->mapInfo[cCodes[i] - cMapFirst] =
+            *sFont.mSlot[i] =
                 keyboard ? keyboardGlyph(i, now.glyphs[i], now.places[i]) : shownGlyph(family, i, now.glyphs[i], now.places[i], now.model);
         }
         // The A bubble's two frames, as the font's A.
