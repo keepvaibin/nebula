@@ -2,46 +2,37 @@
 
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Array.hpp"
 
-AudSoundObjHolder::AudSoundObjHolder(NebulaArena* pHeap, s32 capacity) {
-    mCapacity = capacity;
-    mSize = 0;
-    mArray = new (pHeap, 0) AudSoundObject*[capacity];
+AudSoundObjHolder::AudSoundObjHolder(NebulaArena* pHeap, s32 capacity)
+    : mArray(new (pHeap, 0) AudSoundObject*[capacity]), mCapacity(capacity), mSize(0) {
 }
 
 void AudSoundObjHolder::update() {
-    for (int i = 0; i < mSize; i++) {
+    for (s32 i = 0; i < mSize; i++) {
         mArray[i]->clearMapCode();
     }
 }
 
 void AudSoundObjHolder::add(AudSoundObject* pSound) {
-    if (mSize < mCapacity) {
-        mArray[mSize] = pSound;
-        mSize++;
-    }
-};
-
-void AudSoundObjHolder::remove(AudSoundObject* pSound) {
-    int soundIndex = -1;
-
-    // Find sound object index in mArray
-    for (int i = mSize - 1; i >= 0; i--) {
-        if (mArray[i] == pSound) {
-            soundIndex = i;
-            break;
-        }
+    if (mSize == mCapacity) {
+        mArray = MR::growArray(mArray, mCapacity);
+        mCapacity *= 2;
     }
 
-    // Remove sound object if found
-    if (soundIndex >= 0) {
-        moveOver(soundIndex, mSize - 1);
-        mSize--;
-    }
+    mArray[mSize] = pSound;
+    mSize++;
 }
 
-void AudSoundObjHolder::moveOver(s32 initialIndex, s32 finalIndex) {
-    for (int i = initialIndex; i < finalIndex; i++) {
-        mArray[i] = mArray[i + 1];
+// Keeps the others in order; the last match goes.
+void AudSoundObjHolder::remove(AudSoundObject* pSound) {
+    for (s32 i = mSize - 1; i >= 0; i--) {
+        if (mArray[i] == pSound) {
+            for (s32 j = i; j < mSize - 1; j++) {
+                mArray[j] = mArray[j + 1];
+            }
+            mSize--;
+            return;
+        }
     }
 }

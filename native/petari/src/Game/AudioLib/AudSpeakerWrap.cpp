@@ -5,8 +5,7 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    static SpkSoundHandle sSoundHandle[PLAYER_MAX];
-    static SpkSoundHandle sSoundLevelHandle[PLAYER_MAX];
+    SpkSoundHandle sSoundHandle[PLAYER_MAX];
 };  // namespace
 
 const char* AudSpeakerWrap::getResName() {

@@ -1,71 +1,57 @@
 #include "Game/AudioLib/AudBgmKeeper.hpp"
 #include "Game/AudioLib/AudBgm.hpp"
 
+namespace {
+    // Takes the first free slot: its bit goes on in rActive.
+    template < typename T, u32 N >
+    T* takeFree(T (&rBgms)[N], u8& rActive) {
+        for (u32 i = 0; i < N; i++) {
+            const u8 mask = static_cast< u8 >(1u << i);
+            if ((rActive & mask) == 0) {
+                rActive |= mask;
+                return &rBgms[i];
+            }
+        }
+        return nullptr;
+    }
+
+    template < typename T, u32 N >
+    bool tryRelease(T (&rBgms)[N], u8& rActive, const AudBgm* pBgm) {
+        for (u32 i = 0; i < N; i++) {
+            if (&rBgms[i] == pBgm) {
+                rBgms[i].init();
+                rActive &= static_cast< u8 >(~(1u << i));
+                return true;
+            }
+        }
+        return false;
+    }
+};  // namespace
+
 AudBgmKeeper::AudBgmKeeper() : mSingleBgmActiveFlags(0), mMultiBgmActiveFlags(0) {
 }
 
 AudBgm* AudBgmKeeper::get(BgmType type) {
-    AudBgm* bgm;
     switch (type) {
     case BgmType_Single:
-        bgm = getValidSingleBgm();
-        if (bgm != nullptr) {
-            return bgm;
-        }
-        break;
+        return getValidSingleBgm();
     case BgmType_Multi:
-        bgm = getValidMultiBgm();
-        if (bgm != nullptr) {
-            return bgm;
-        }
-        break;
+        return getValidMultiBgm();
     }
 
     return nullptr;
 }
 
 void AudBgmKeeper::release(AudBgm* pBgm) {
-    u32 bgmMask = 1;
-    for (int idx = 0; idx < 2; idx++) {
-        if (&mSingleBgm[idx] == pBgm) {
-            mSingleBgm[idx].init();
-            mSingleBgmActiveFlags &= ~bgmMask;
-            return;
-        }
-        bgmMask = (bgmMask & 0x7F) << 1;
-    }
-
-    bgmMask = 1;
-    for (int idx = 0; idx < 2; idx++) {
-        if (&mMultiBgm[idx] == pBgm) {
-            mMultiBgm[idx].init();
-            mMultiBgmActiveFlags &= ~bgmMask;
-            return;
-        }
-        bgmMask = (bgmMask & 0x7F) << 1;
+    if (!::tryRelease(mSingleBgm, mSingleBgmActiveFlags, pBgm)) {
+        ::tryRelease(mMultiBgm, mMultiBgmActiveFlags, pBgm);
     }
 }
 
 AudSingleBgm* AudBgmKeeper::getValidSingleBgm() {
-    u32 bgmMask = 1;
-    for (int idx = 0; idx < 2; idx++) {
-        if ((mSingleBgmActiveFlags & bgmMask) == 0) {
-            mSingleBgmActiveFlags |= bgmMask;
-            return &mSingleBgm[idx];
-        }
-        bgmMask = (bgmMask & 0x7F) << 1;
-    }
-    return nullptr;
+    return ::takeFree(mSingleBgm, mSingleBgmActiveFlags);
 }
 
 AudMultiBgm* AudBgmKeeper::getValidMultiBgm() {
-    u32 bgmMask = 1;
-    for (int idx = 0; idx < 2; idx++) {
-        if ((mMultiBgmActiveFlags & bgmMask) == 0) {
-            mMultiBgmActiveFlags |= bgmMask;
-            return &mMultiBgm[idx];
-        }
-        bgmMask = (bgmMask & 0x7F) << 1;
-    }
-    return nullptr;
+    return ::takeFree(mMultiBgm, mMultiBgmActiveFlags);
 }

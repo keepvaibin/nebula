@@ -15,17 +15,9 @@ void AudLimitedSoundInfo::set(SoundID soundID, s32 delay) {
 }
 
 void AudLimitedSoundInfo::update() {
-    if (isFree()) {
-        return;
+    if (!isFree() && --mDelay <= 0) {
+        init();
     }
-
-    mDelay--;
-
-    if (mDelay > 0) {
-        return;
-    }
-
-    init();
 }
 
 bool AudLimitedSoundInfo::isFree() {
