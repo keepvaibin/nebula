@@ -24,6 +24,7 @@ public:
     bool trySwitchDown();
     bool tryConnect();
     void updateTimerSE();
+    bool updateSpring();
     void exeWait();
     void exeSwitchDown();
     void exeOn();
@@ -35,6 +36,9 @@ public:
     bool mIsHipDropped;
     bool mWasOnPlayer;
     bool mIsOnPlayer;
+    // Steps switch A stays on; 0 holds until something turns it off.
     s32 mTimer;
     const char* mObjName;
+    // Added to the step for the countdown sounds.
+    s32 mTimerLead;
 };
