@@ -4,7 +4,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 DemoTimeKeeper::DemoTimeKeeper(const DemoExecutor* pExecutor)
-    : mExecutor(pExecutor), mMainPartInfos(), mSubPartInfos(), mNumPartInfos(), mElapsedStep(-1), mCurrentStep(-1), mPartIndex(-1), mIsPaused() {
+    : mExecutor(pExecutor), mMainPartInfos(), mCurrentPart(), mNumPartInfos(), mElapsedStep(-1), mCurrentStep(-1), mPartIndex(-1), mIsPaused() {
     Table* pMap = nullptr;
     mNumPartInfos = DemoFunction::createSheetParser(mExecutor, "Time", &pMap);
     mMainPartInfos = new DemoTimePartInfo[mNumPartInfos];
@@ -25,7 +25,7 @@ DemoTimePartInfo::DemoTimePartInfo() : mPartName(), mTotalStep(1), mSuspendFlag(
 
 void DemoTimeKeeper::start() {
     mPartIndex = 0;
-    mSubPartInfos = &mMainPartInfos[mPartIndex];
+    mCurrentPart = &mMainPartInfos[mPartIndex];
 }
 
 void DemoTimeKeeper::update() {
@@ -41,11 +41,11 @@ void DemoTimeKeeper::update() {
         mCurrentStep++;
         mElapsedStep++;
 
-        if (mSubPartInfos->mTotalStep <= mCurrentStep && !mSubPartInfos->mSuspendFlag) {
+        if (mCurrentPart->mTotalStep <= mCurrentStep && !mCurrentPart->mSuspendFlag) {
             mPartIndex++;
 
             if (mNumPartInfos > mPartIndex) {
-                mSubPartInfos = &mMainPartInfos[mPartIndex];
+                mCurrentPart = &mMainPartInfos[mPartIndex];
                 mCurrentStep = 0;
             }
         }
@@ -56,7 +56,7 @@ void DemoTimeKeeper::end() {
     mElapsedStep = -1;
     mCurrentStep = -1;
     mPartIndex = -1;
-    mSubPartInfos = nullptr;
+    mCurrentPart = nullptr;
 }
 
 bool DemoTimeKeeper::isDemoEnd() const {
@@ -64,11 +64,11 @@ bool DemoTimeKeeper::isDemoEnd() const {
         return false;
     }
 
-    if (mSubPartInfos->mSuspendFlag && mSubPartInfos->mTotalStep <= mCurrentStep) {
+    if (mCurrentPart->mSuspendFlag && mCurrentPart->mTotalStep <= mCurrentStep) {
         return true;
     }
 
-    if (mSubPartInfos->mTotalStep >= mCurrentStep && mNumPartInfos == mPartIndex) {
+    if (mCurrentPart->mTotalStep >= mCurrentStep && mNumPartInfos == mPartIndex) {
         return true;
     }
 
@@ -80,7 +80,7 @@ void DemoTimeKeeper::setStartPart(const char* pPartName) {
 }
 
 bool DemoTimeKeeper::isExistSuspendFlagCurrentPart() const {
-    return mSubPartInfos->mSuspendFlag;
+    return mCurrentPart->mSuspendFlag;
 }
 
 bool DemoTimeKeeper::isPartLast() const {
@@ -103,9 +103,9 @@ inline s32 DemoTimeKeeper::getPart(const char* pPartName) const {
 
 void DemoTimeKeeper::setCurrentPart(const char* pPartName) {
     mPartIndex = getPart(pPartName);
-    mSubPartInfos = &mMainPartInfos[mPartIndex];
+    mCurrentPart = &mMainPartInfos[mPartIndex];
 }
 
 bool DemoTimeKeeper::isCurrentDemoPartLastStep() const {
-    return mSubPartInfos->mTotalStep - 1 <= mCurrentStep;
+    return mCurrentPart->mTotalStep - 1 <= mCurrentStep;
 }
