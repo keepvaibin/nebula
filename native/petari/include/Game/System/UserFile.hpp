@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/System/NebulaCalendar.hpp"
+#include "Game/System/SaveFileId.hpp"
 
 class ConfigDataHolder;
 class GameDataHolder;
@@ -24,12 +25,12 @@ public:
     void onCompleteEndingCurrentPlayer();
     void updateLastModified();
     void setUserName(const char16_t*);
-    const char* getGameDataName() const;
+    SaveFileId getGameDataFile() const;
     u32 makeGameDataBinary(u8*, u32) const;
-    void loadFromGameDataBinary(const char*, const u8*, u32);
-    const char* getConfigDataName() const;
+    void loadFromGameDataBinary(SaveFileId, const u8*, u32);
+    SaveFileId getConfigDataFile() const;
     u32 makeConfigDataBinary(u8*, u32) const;
-    void loadFromConfigDataBinary(const char*, const u8*, u32);
+    void loadFromConfigDataBinary(SaveFileId, const u8*, u32);
     void resetAllData();
     bool isViewNormalEnding() const;
     bool isViewCompleteEnding() const;

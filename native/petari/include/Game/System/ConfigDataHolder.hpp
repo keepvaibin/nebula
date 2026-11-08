@@ -2,6 +2,7 @@
 
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/BinaryDataChunkHolder.hpp"
+#include "Game/System/SaveFileId.hpp"
 
 class ConfigDataCreateChunk;
 class ConfigDataMii;
@@ -28,14 +29,18 @@ public:
     bool getIconId(u32*) const;
     void resetAllData();
     s32 makeFileBinary(u8*, u32);
-    bool loadFromFileBinary(const char*, const u8*, u32);
+    bool loadFromFileBinary(SaveFileId, const u8*, u32);
+    SaveFileId getFileId() const {
+        return {SaveFileId::Kind_Config, mUser};
+    }
 
 private:
     BinaryDataChunkHolder* mChunkHolder;
     ConfigDataCreateChunk* mCreateChunk;
     ConfigDataMii* mMii;
     ConfigDataMisc* mMisc;
-    char mName[16];
+    // The user this is the config of.
+    s32 mUser;
 };
 
 class ConfigDataCreateChunk : public BinaryDataChunkBase {

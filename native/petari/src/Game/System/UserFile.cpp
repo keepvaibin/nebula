@@ -84,28 +84,28 @@ void UserFile::setUserName(const char16_t* pUserName) {
     MR::copyMemory(mUserName, pUserName, ::cUserNameSize * sizeof(char16_t));
 }
 
-const char* UserFile::getGameDataName() const {
-    return mGameDataHolder->mName;
+SaveFileId UserFile::getGameDataFile() const {
+    return mGameDataHolder->getFileId();
 }
 
 u32 UserFile::makeGameDataBinary(u8* pBuffer, u32 size) const {
     return mGameDataHolder->makeFileBinary(pBuffer, size);
 }
 
-void UserFile::loadFromGameDataBinary(const char* pName, const u8* pBuffer, u32 size) {
-    mIsGameDataCorrupted = !mGameDataHolder->loadFromFileBinary(pName, pBuffer, size);
+void UserFile::loadFromGameDataBinary(SaveFileId file, const u8* pBuffer, u32 size) {
+    mIsGameDataCorrupted = !mGameDataHolder->loadFromFileBinary(file, pBuffer, size);
 }
 
-const char* UserFile::getConfigDataName() const {
-    return mConfigDataHolder->mName;
+SaveFileId UserFile::getConfigDataFile() const {
+    return mConfigDataHolder->getFileId();
 }
 
 u32 UserFile::makeConfigDataBinary(u8* pBuffer, u32 size) const {
     return mConfigDataHolder->makeFileBinary(pBuffer, size);
 }
 
-void UserFile::loadFromConfigDataBinary(const char* pName, const u8* pBuffer, u32 size) {
-    mIsConfigDataCorrupted = !mConfigDataHolder->loadFromFileBinary(pName, pBuffer, size);
+void UserFile::loadFromConfigDataBinary(SaveFileId file, const u8* pBuffer, u32 size) {
+    mIsConfigDataCorrupted = !mConfigDataHolder->loadFromFileBinary(file, pBuffer, size);
 }
 
 void UserFile::resetAllData() {

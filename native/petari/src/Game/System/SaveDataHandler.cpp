@@ -23,8 +23,32 @@ namespace {
     const u32 cRowNameSize = 16;
     const u32 cRowSize = cRowNameSize + 4;
     const u32 cUserFiles = 6;
+    // By SaveFileId::Kind.
     const char* const cKinds[] = {"mario", "luigi", "config"};
-    const u32 cKindNum = 3;
+    const u32 cKindNum = SaveFileId::Kind_Num;
+
+    // A file's name in Nebula.sav and the old saves: its kind, then its user ("luigi3").
+    void makeFileName(char (&rName)[cRowNameSize], SaveFileId file) {
+        nebula_snprintf(rName, sizeof(rName), "%s%1d", cKinds[file.mKind], file.mUser);
+    }
+
+    // The file of a name makeFileName writes; false for any other name.
+    bool parseFileName(const char* pName, SaveFileId* pFile) {
+        for (u32 kind = 0; kind < cKindNum; kind++) {
+            const u32 length = static_cast< u32 >(strlen(cKinds[kind]));
+            if (strncmp(pName, cKinds[kind], length) != 0 || pName[length] == '\0' || pName[length + 1] != '\0') {
+                continue;
+            }
+            const u32 user = static_cast< u32 >(pName[length] - '0');
+            if (user < 1 || user > cUserFiles) {
+                return false;
+            }
+            pFile->mKind = static_cast< SaveFileId::Kind >(kind);
+            pFile->mUser = static_cast< s32 >(user);
+            return true;
+        }
+        return false;
+    }
 
     u32 sCrcTable[256];
 
@@ -73,14 +97,10 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     mBuffer = new (MR::getPermanentHeap(), 0) u8[mBufferRoom];
 
     mFiles = new (MR::getPermanentHeap(), 0) File[cUserFiles * cKindNum];
-    for (u32 user = 0; user < cUserFiles; user++) {
-        for (u32 kind = 0; kind < cKindNum; kind++) {
-            File& rFile = mFiles[user * cKindNum + kind];
-            nebula_snprintf(rFile.mName, sizeof(rFile.mName), "%s%1d", cKinds[kind], user + 1);
-            rFile.mData = nullptr;
-            rFile.mSize = 0;
-            rFile.mRoom = 0;
-        }
+    for (u32 i = 0; i < cUserFiles * cKindNum; i++) {
+        mFiles[i].mData = nullptr;
+        mFiles[i].mSize = 0;
+        mFiles[i].mRoom = 0;
     }
 
     for (u32 user = 0; user < cUserFiles; user++) {
@@ -135,7 +155,10 @@ bool SaveDataHandler::readNative() {
         memcpy(name, pRow, cRowNameSize);
         name[cRowNameSize] = '\0';
         const u32 size = readU32(pRow + cRowNameSize);
-        setFile(name, mBuffer + place, size);
+        SaveFileId file;
+        if (parseFileName(name, &file)) {
+            setFile(file, mBuffer + place, size);
+        }
         place += size;
     }
 
@@ -161,12 +184,13 @@ bool SaveDataHandler::readOld() {
         const char* const pName = file.getFileName(i);
         SaveDataUserFileInfo info;
         file.makeUserFileInfo(&info, pName);
-        if (info.mData == nullptr || info.mKind == SaveDataUserFileKind_SysConf) {
+        SaveFileId id;
+        if (info.mData == nullptr || info.mKind == SaveDataUserFileKind_SysConf || !parseFileName(pName, &id)) {
             continue;
         }
 
         if (!oldOrder) {
-            setFile(pName, info.mData, info.mDataSize);
+            setFile(id, info.mData, info.mDataSize);
             continue;
         }
 
@@ -174,13 +198,13 @@ bool SaveDataHandler::readOld() {
         pUserFile->resetAllData();
         u32 size = 0;
         if (info.mKind == SaveDataUserFileKind_Game) {
-            pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
+            pUserFile->loadFromGameDataBinary(id, info.mData, info.mDataSize);
             gOldSaveOrder = false;
             if (!pUserFile->mIsGameDataCorrupted) {
                 size = pUserFile->makeGameDataBinary(mMake, mMakeRoom);
             }
         } else {
-            pUserFile->loadFromConfigDataBinary(pName, info.mData, info.mDataSize);
+            pUserFile->loadFromConfigDataBinary(id, info.mData, info.mDataSize);
             gOldSaveOrder = false;
             if (!pUserFile->mIsConfigDataCorrupted) {
                 size = pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
@@ -188,9 +212,9 @@ bool SaveDataHandler::readOld() {
         }
 
         if (size != 0) {
-            setFile(pName, mMake, size);
+            setFile(id, mMake, size);
         } else {
-            setFile(pName, info.mData, info.mDataSize);
+            setFile(id, info.mData, info.mDataSize);
         }
         gOldSaveOrder = true;
     }
@@ -201,18 +225,16 @@ bool SaveDataHandler::readOld() {
     return true;
 }
 
-SaveDataHandler::File* SaveDataHandler::findFile(const char* pName) const {
-    for (u32 i = 0; i < cUserFiles * cKindNum; i++) {
-        if (MR::isEqualString(mFiles[i].mName, pName)) {
-            return &mFiles[i];
-        }
+SaveDataHandler::File* SaveDataHandler::findFile(SaveFileId file) const {
+    if (file.mUser < 1 || static_cast< u32 >(file.mUser) > cUserFiles || file.mKind >= cKindNum) {
+        return nullptr;
     }
 
-    return nullptr;
+    return &mFiles[(file.mUser - 1) * cKindNum + file.mKind];
 }
 
-void SaveDataHandler::setFile(const char* pName, const u8* pData, u32 size) {
-    File* const pFile = findFile(pName);
+void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
+    File* const pFile = findFile(file);
     if (pFile == nullptr) {
         return;
     }
@@ -227,38 +249,33 @@ void SaveDataHandler::setFile(const char* pName, const u8* pData, u32 size) {
     pFile->mSize = size;
 }
 
-const u8* SaveDataHandler::getFile(const char* pName, u32* pSize) const {
-    const File* const pFile = findFile(pName);
+const u8* SaveDataHandler::getFile(SaveFileId file, u32* pSize) const {
+    const File* const pFile = findFile(file);
     *pSize = pFile != nullptr ? pFile->mSize : 0;
     return pFile != nullptr ? pFile->mData : nullptr;
 }
 
 void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserFile) {
     for (u32 kind = 0; kind < cKindNum; kind++) {
-        char name[cRowNameSize];
-        nebula_snprintf(name, sizeof(name), "%s%1d", cKinds[kind], index);
-        const u32 size = kind < 2 ? pUserFile->makeGameDataBinary(mMake, mMakeRoom) : pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
-        setFile(name, mMake, size);
+        const u32 size = kind != SaveFileId::Kind_Config ? pUserFile->makeGameDataBinary(mMake, mMakeRoom)
+                                                         : pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
+        setFile({static_cast< SaveFileId::Kind >(kind), index}, mMake, size);
     }
 }
 
 void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
     for (u32 kind = 0; kind < cKindNum; kind++) {
-        char source[cRowNameSize];
-        char destination[cRowNameSize];
-        nebula_snprintf(source, sizeof(source), "%s%1d", cKinds[kind], indexSrc);
-        nebula_snprintf(destination, sizeof(destination), "%s%1d", cKinds[kind], indexDst);
         u32 size;
-        const u8* const pData = getFile(source, &size);
-        setFile(destination, pData, size);
+        const u8* const pData = getFile({static_cast< SaveFileId::Kind >(kind), indexSrc}, &size);
+        setFile({static_cast< SaveFileId::Kind >(kind), indexDst}, pData, size);
     }
 }
 
 void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
     u32 size = pUserFile->makeGameDataBinary(mMake, mMakeRoom);
-    setFile(pUserFile->getGameDataName(), mMake, size);
+    setFile(pUserFile->getGameDataFile(), mMake, size);
     size = pUserFile->makeConfigDataBinary(mMake, mMakeRoom);
-    setFile(pUserFile->getConfigDataName(), mMake, size);
+    setFile(pUserFile->getConfigDataFile(), mMake, size);
 }
 
 void SaveDataHandler::requestSaveSaveData() {
@@ -280,8 +297,10 @@ void SaveDataHandler::requestSaveSaveData() {
     u32 place = cHeaderSize + count * cRowSize;
     for (u32 i = 0; i < count; i++) {
         u8* const pRow = mBuffer + cHeaderSize + i * cRowSize;
+        char name[cRowNameSize];
+        makeFileName(name, {static_cast< SaveFileId::Kind >(i % cKindNum), static_cast< s32 >(i / cKindNum + 1)});
         memset(pRow, 0, cRowNameSize);
-        memcpy(pRow, mFiles[i].mName, strlen(mFiles[i].mName));
+        memcpy(pRow, name, strlen(name));
         writeU32(pRow + cRowNameSize, mFiles[i].mSize);
         memcpy(mBuffer + place, mFiles[i].mData, mFiles[i].mSize);
         place += mFiles[i].mSize;

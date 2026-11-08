@@ -114,11 +114,11 @@ ConfigDataHolder::ConfigDataHolder() : mChunkHolder(), mCreateChunk(), mMii(), m
     mChunkHolder->addChunk(mMii);
     mChunkHolder->addChunk(mMisc);
     resetAllData();
-    nebula_snprintf(mName, sizeof(mName), "config1");
+    mUser = 1;
 }
 
-bool ConfigDataHolder::loadFromFileBinary(const char* pName, const u8* pBuffer, u32 size) {
-    nebula_snprintf(mName, sizeof(mName), "%s", pName);
+bool ConfigDataHolder::loadFromFileBinary(SaveFileId file, const u8* pBuffer, u32 size) {
+    mUser = file.mUser;
 
     return mChunkHolder->loadFromFileBinary(pBuffer, size);
 }
