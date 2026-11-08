@@ -2,7 +2,9 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-static RumblePattern gRumblePatternTable[] = {
+namespace {
+// Each pattern: its name, its length in frames, on/off per frame; mHash is filled by RumbleData::initHashValue.
+RumblePattern sRumblePatternTable[] = {
     {
         "最強【長】",
         100,
@@ -181,24 +183,15 @@ static RumblePattern gRumblePatternTable[] = {
             RUMBLE_ON,
         },
     },
-    {},
 };
+};  // namespace
 
 namespace RumbleData {
-    u32 getTableSize() {
-        return ARRAY_SIZE(gRumblePatternTable) - 1;
-    }
-
-    RumblePattern* getData(u16 index) {
-        return &gRumblePatternTable[index];
-    }
-
     const RumblePattern* getPattern(const char* pName) {
-        u32 hash = MR::getHashCode(pName);
-
-        for (u16 i = 0; i < getTableSize(); i++) {
-            if (getData(i)->mHash == hash) {
-                return &gRumblePatternTable[i];
+        const u32 hash = MR::getHashCode(pName);
+        for (u32 i = 0; i < ARRAY_SIZE(::sRumblePatternTable); i++) {
+            if (::sRumblePatternTable[i].mHash == hash) {
+                return &::sRumblePatternTable[i];
             }
         }
 
@@ -206,13 +199,8 @@ namespace RumbleData {
     }
 
     void initHashValue() {
-        for (u32 i = 0; i < getTableSize(); i++) {
-            RumblePattern* pPattern = getData(i);
-
-            pPattern->mHash = MR::getHashCode(pPattern->mName);
+        for (u32 i = 0; i < ARRAY_SIZE(::sRumblePatternTable); i++) {
+            ::sRumblePatternTable[i].mHash = MR::getHashCode(::sRumblePatternTable[i].mName);
         }
-    }
-
-    void checkHashCollision() {
     }
 };  // namespace RumbleData

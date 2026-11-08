@@ -147,10 +147,6 @@ namespace GameSystemFunction {
         }
     }
 
-    void setInputSleepTime(bool isLongAutoSleep) {
-        MR::setInputSleepTime(isLongAutoSleep);
-    }
-
     bool setPermissionToCheckInput(bool permission) {
         return SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateInputStatus(permission);
     }

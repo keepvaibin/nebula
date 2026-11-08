@@ -49,7 +49,7 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mSysInfoWindowSave = MR::createSysInfoWindowMiniExecuteWithChildren();
     mSysInfoWindowSave->kill();
 
-    mSaveErrorSequence = new SaveErrorSequence(this, mSysInfoWindowConfirm, mSysInfoWindowSave);
+    mSaveErrorSequence = new SaveErrorSequence(this, mSysInfoWindowConfirm);
 
     mSaveIcon = new SaveIcon(mSysInfoWindowSave);
     mSaveIcon->kill();

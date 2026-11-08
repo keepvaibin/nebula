@@ -6,18 +6,13 @@ InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrig
 }
 
 void InputButtons::update() {
-    PlayerInputSample* pSample = mPad->getSample(0);
-
+    const PlayerInputSample* const pSample = mPad->getSample(0);
     if (pSample == nullptr) {
         return;
     }
 
-    if (mHold != 0) {
-        mTrigger = pSample->mTrigger & ~mHold;
-    } else {
-        mTrigger = pSample->mTrigger;
-    }
-
+    // A press counts once the button was up last frame.
+    mTrigger = pSample->mTrigger & ~mHold;
     mHold = pSample->mHold;
     mRelease = pSample->mRelease;
 }

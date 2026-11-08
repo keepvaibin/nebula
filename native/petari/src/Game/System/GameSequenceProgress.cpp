@@ -102,7 +102,6 @@ void GameSequenceProgress::startScene() {
     }
 
     GameSystemFunction::setPermissionToCheckInput(isScenePermittedUpdateInputStatus());
-    GameSystemFunction::setInputSleepTime(isSceneLongInputSleep());
 
     if (MR::isEqualSceneName("Game")) {
         mStorySequenceExecutor->setNerveSceneStart();
@@ -298,14 +297,6 @@ void GameSequenceProgress::exeResetProcessing() {
 
 bool GameSequenceProgress::isScenePermittedUpdateInputStatus() {
     return !MR::isEqualSceneName("Boot");
-}
-
-bool GameSequenceProgress::isSceneLongInputSleep() {
-    if (MR::isEqualSceneName("Game") && MR::isEqualStageName("EpilogueDemoStage")) {
-        return true;
-    }
-
-    return false;
 }
 
 bool GameSequenceProgress::isCometStar(GalaxyMoveArgument moveArg) {

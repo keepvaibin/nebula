@@ -10,9 +10,7 @@ class SysInfoWindow;
 // save the drive refused (said once; the game goes on).
 class SaveErrorSequence : public ActorStateBase< SaveDataHandleSequence > {
 public:
-    SaveErrorSequence(SaveDataHandleSequence*, SysInfoWindow*, SysInfoWindow*);
-
-    virtual void control();
+    SaveErrorSequence(SaveDataHandleSequence*, SysInfoWindow*);
 
     void startSaveFailed();
     void startDamaged();
@@ -26,6 +24,12 @@ public:
     bool isResultFileCorrupted() const;
 
 private:
-    u32 mResult;
+    enum Result {
+        Result_None = 0,
+        Result_NewFile = 1,  // the damaged file is to be made again
+        Result_NoSave = 3,   // play on without saving
+    };
+
+    u32 mResult;  // Result
     SysInfoWindow* mSysInfoWindow;
 };
