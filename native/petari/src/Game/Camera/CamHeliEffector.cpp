@@ -8,7 +8,7 @@ CamHeliEffector::CamHeliEffector() : mStep(), mRate() {
 }
 
 void CamHeliEffector::update(CameraMan* pCamera) {
-    if (!CameraLocalUtil::getTarget(pCamera)->isCameraStateOn(1)) {
+    if (!CameraLocalUtil::getTarget(pCamera)->isCameraStateOn(CameraStatus_HeliJump)) {
         mStep = 0;
         if (mRate == 0.0f) {
             return;
