@@ -258,7 +258,7 @@ namespace MR {
             EmitterCore* pBaseEmitter = pManager->createSimpleEmitterID(rPosition, resourceId, groupId, resourceManagerId, nullptr, nullptr);
             if (pBaseEmitter != nullptr) {
                 pEmitter->mEmitter = pBaseEmitter;
-                pEmitter->init(resourceId);
+                pEmitter->init();
             }
         }
 

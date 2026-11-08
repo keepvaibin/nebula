@@ -9,7 +9,7 @@ public:
     ParticleEmitter();
 
     void invalidate();
-    void init(u16);
+    void init();
     void pauseOn();
     void pauseOff();
     bool isValid() const;

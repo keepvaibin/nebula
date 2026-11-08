@@ -17,10 +17,6 @@ bool WireGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& 
     f32 distance = -1.0f;
     Vec3f pointOfAttraction;
     for (s32 i = 0; i < mPoints.size() - 1; i++) {
-        // unused
-        Vec3f wireBegin(mPoints[i]);
-        Vec3f wireEnd(mPoints[i + 1]);
-
         Vec3f positionProjectedOntoWire;
         MR::calcPerpendicFootToLineInside(&positionProjectedOntoWire, rPos, mPoints[i], mPoints[i + 1]);
 

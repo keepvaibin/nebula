@@ -9,32 +9,6 @@ namespace MR {
     class FunctorBase;
 };  // namespace MR
 
-namespace {
-    template < typename T >
-    class NameObjRealDelegator final {
-    public:
-        NameObjRealDelegator(T pMethod) {
-            mNameObjFunc = pMethod;
-        }
-
-        void operator()(NameObj* pNameObj);
-
-        T mNameObjFunc;
-    };
-
-    template < typename T >
-    void NameObjRealDelegator< T >::operator()(NameObj* pNameObj) {
-        (pNameObj->*mNameObjFunc)();
-    }
-
-    // The draw list is the only one of const methods: each NameObj's draws are named after it.
-    template <>
-    inline void NameObjRealDelegator< NameObjMethodConst >::operator()(NameObj* pNameObj) {
-        MotionSignal::drawObject(pNameObj->mDrawSlot, pNameObj->mMotionEpoch);
-        (pNameObj->*mNameObjFunc)();
-    }
-};  // namespace
-
 struct CategoryListInitialTable {
     u32 mIndex;
     u32 mCount;
@@ -69,10 +43,10 @@ public:
 
     MR::AssignableArray< NameObjCategoryList::CategoryInfo > mCategoryInfo;
 
-    union {
-        NameObjRealDelegator< NameObjMethod >* mDelegator;
-        NameObjRealDelegator< NameObjMethodConst >* mDelegatorConst;
-    };
+    // One of the two is set. The draw list is the only list of const methods: before each draw it names the object the
+    // draws belong to (MotionSignal::drawObject).
+    NameObjMethod mMethod;
+    NameObjMethodConst mMethodConst;
 
     bool mBufferAllocated;
     bool mAllocateByCheck;
