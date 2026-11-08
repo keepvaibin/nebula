@@ -9,55 +9,22 @@ class TalkMessageFuncBase;
 class TalkMessageInfo;
 class TalkNodeCtrl;
 
-enum TalkMessageCtrl_Type {
-    TalkMessageCtrl_Type0,
-    TalkMessageCtrl_Type1,
-    TalkMessageCtrl_Type2,
-    TalkMessageCtrl_Type3,
-    TalkMessageCtrl_Type4,
-    TalkMessageCtrl_Type5,
-    TalkMessageCtrl_Type6,
-    TalkMessageCtrl_Type7,
-    TalkMessageCtrl_Type8,
-    TalkMessageCtrl_Type9,
-    TalkMessageCtrl_TypeA,
-    // After 0xA the branch types are the galaxy result (TypeE), the time-keep demo (TypeB), then a message read before
-    // (TypeC), the order TalkMessageCtrl::rootNodePre branches on. Numbered B, C, E the nodes of those
-    // types asked the wrong question, and a character's line after a galaxy took the wrong branch.
-    TalkMessageCtrl_TypeE,
-    TalkMessageCtrl_TypeB,
-    TalkMessageCtrl_TypeC,
-};
-
-enum BranchNode_Type {
-    BranchNode_Type0,
-    BranchNode_Type1,
-    BranchNode_Type2,
-    BranchNode_Type3,
-    BranchNode_Type4,
-    BranchNode_Type5,
-    BranchNode_Type6,
-    BranchNode_Type7,
-    BranchNode_Type8,
-    BranchNode_Type9,
-    BranchNode_TypeA,
-    BranchNode_TypeB,
-    BranchNode_TypeC,
-    BranchNode_TypeD,
-    BranchNode_TypeE,
-    BranchNode_TypeF,
-    BranchNode_Type10,
-    BranchNode_Type11,
-    BranchNode_Type12,
+// TalkMessageCtrl::mTalkStateKind.
+enum TalkStateKind {
+    TalkState_None,
+    TalkState_Entry,
+    TalkState_EnableStart,
+    TalkState_Talking,
+    TalkState_EnableEnd,
 };
 
 class CustomTagArg {
 public:
     enum TagType { Type_Int = 0, Type_Char = 1, Type_Uninitialized = 2 };
 
-    inline CustomTagArg(int a1, TagType a2) : mIntArg(a1), mArgType(a2) {
+    inline CustomTagArg(int intArg, TagType type) : mIntArg(intArg), mArgType(type) {
     }
-    inline CustomTagArg(const char16_t* a1, TagType a2) : mCharArg(a1), mArgType(a2) {
+    inline CustomTagArg(const char16_t* pCharArg, TagType type) : mCharArg(pCharArg), mArgType(type) {
     }
 
     inline void operator=(const CustomTagArg& rhs) {
@@ -75,7 +42,8 @@ public:
 
 class TalkMessageCtrl : public NameObj {
 public:
-    TalkMessageCtrl(LiveActor*, const Vec3f&, MtxPtr);
+    // pBalloonMtx, when set, places the balloon and the talk range instead of the host.
+    TalkMessageCtrl(LiveActor* pHost, const Vec3f& rBalloonOffset, MtxPtr pBalloonMtx);
 
     virtual ~TalkMessageCtrl();
 
@@ -91,13 +59,15 @@ public:
     bool startTalkForceWithoutDemoPuppetable();
     bool endTalk();
     void updateBalloonPos();
-    bool isNearPlayer(const TalkMessageCtrl*);
-    bool isNearPlayer(f32) const;
-    void rootNodePre(bool);
+    // True when this host is nearer the player than pOther's (or pOther is null).
+    bool isNearPlayer(const TalkMessageCtrl* pOther);
+    // distance <= 0 uses mTalkDistance.
+    bool isNearPlayer(f32 distance) const;
+    void rootNodePre(bool isStopAtEvent);
     void rootNodePst();
     bool isCurrentNodeContinue() const;
     bool rootNodeEve();
-    void rootNodeSel(bool);
+    void rootNodeSel(bool isYes);
     void registerBranchFunc(const TalkMessageFuncBase&);
     void registerEventFunc(const TalkMessageFuncBase&);
     void registerAnimeFunc(const TalkMessageFuncBase&);
@@ -114,7 +84,7 @@ public:
     }
 
     bool inMessageArea() const;
-    void startCamera(s32);
+    void startCamera(s32 frames);
     const char* getBranchID() const;
 
     LiveActor* mHostActor;
