@@ -40,7 +40,7 @@ public:
     void exePointerAimed();
 
     Vec3f mFront;
-    u8 mIsCheckFireGround;
+    bool mIsCheckFireGround;
     Vec3f mInitPos;
     Vec3f mMoveDir;
     bool mIsMoveBack;
