@@ -24,7 +24,7 @@ std::string text_of(JNIEnv* env, jbyteArray value) {
 }  // namespace
 
 // Imports the file at `source` into <data>/mods (both UTF-8). `progress.update(done, total)` returning false cancels.
-// The answer is UTF-8 "ok\nid\nkinds\nmessage", ok being 1 or 0.
+// The answer is UTF-8 "ok\nid\nkinds\ntitle\nmessage", ok being 1, 0, or 2 when the same mod was there already.
 extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importFile(JNIEnv* env, jclass, jbyteArray source,
                                                                                    jbyteArray data, jobject progress) {
     namespace fs = std::filesystem;
@@ -54,10 +54,11 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_ModImport_importF
                 if (!more) cancel.store(true, std::memory_order_relaxed);
             },
             &cancel);
-        answer = std::string(result.ok ? "1" : "0") + "\n" + result.id + "\n" + result.kinds + "\n" + result.message;
+        answer = std::string(result.already ? "2" : result.ok ? "1" : "0") + "\n" + result.id + "\n" + result.kinds + "\n" + result.title + "\n" +
+                 result.message;
     } catch (const std::exception& error) {
         // An exception must not cross into the Java VM.
-        answer = std::string("0\n\n\nTHE IMPORT STOPPED: ") + error.what();
+        answer = std::string("0\n\n\n\nTHE IMPORT STOPPED: ") + error.what();
     }
     jbyteArray out = env->NewByteArray(static_cast<jsize>(answer.size()));
     if (out != nullptr) {

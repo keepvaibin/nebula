@@ -180,10 +180,16 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 if (result.ok) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Night.Lavender)
                 else Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Night.Error)
             },
-            title = { Text(result.title ?: if (result.ok) "${result.name} is ready" else "That file could not be imported") },
+            title = {
+                Text(
+                    result.title ?: if (result.already) "${result.name} is already in your mods"
+                    else if (result.ok) "${result.name} is ready" else "That file could not be imported",
+                )
+            },
             text = {
                 Text(
                     if (result.title != null) result.message
+                    else if (result.already) "Nothing was added. It is under Mods in the game's settings."
                     else if (result.ok) "Turn it on under Mods in the game's settings." +
                         (if (result.message.contains(", BUT ")) "\n\n${result.message}" else "")
                     else result.message,

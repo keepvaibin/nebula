@@ -137,9 +137,28 @@ bool importing() {
     }
     ok &= expect(!fs::exists(root / "mods" / "Cool Mod" / "__MACOSX"), "system clutter skipped");
     const galaxy::mods::ImportResult again = galaxy::mods::import_mod(root / "Cool Mod.zip", root / "mods");
-    ok &= expect(again.ok && again.replaced, "the same mod again: updated in place");
+    ok &= expect(again.ok && again.already && !again.replaced && again.id == "Cool Mod",
+                 "the same mod again: nothing added");
+    fs::copy_file(root / "Cool Mod.zip", root / "Cool Mod (1).zip", ec);
+    const galaxy::mods::ImportResult renamed = galaxy::mods::import_mod(root / "Cool Mod (1).zip", root / "mods");
+    ok &= expect(renamed.ok && renamed.already && renamed.id == "Cool Mod" && !fs::exists(root / "mods" / "Cool Mod (1)"),
+                 "the same mod under another file name: nothing added");
+    fs::create_directories(root / "v2");
+    make(root / "v2" / "Cool Mod.zip", ARCHIVE_FORMAT_ZIP,
+         {{"riivolution/cool.xml", "<wiidisc version=\"1\"><id game=\"RMG\"/></wiidisc>"}, {"Cool/a.arc", "B"}, {"readme.txt", "hi"}});
+    const galaxy::mods::ImportResult update = galaxy::mods::import_mod(root / "v2" / "Cool Mod.zip", root / "mods");
+    ok &= expect(update.ok && update.replaced && !update.already, "a changed file of the same size: updated in place");
     const galaxy::mods::ImportResult pack = galaxy::mods::import_mod(root / "Pack.7z", root / "mods");
     ok &= expect(pack.ok && pack.kinds == "TEXTURES", "a 7z texture pack imported");
+    fs::copy(root / "mods" / "Pack", root / "Pack copy", fs::copy_options::recursive, ec);
+    write(root / "Pack copy" / "Thumbs.db", "clutter");
+    const galaxy::mods::ImportResult copy = galaxy::mods::import_mod(root / "Pack copy", root / "mods");
+    ok &= expect(copy.ok && copy.already && copy.id == "Pack" && !fs::exists(root / "mods" / "Pack copy"),
+                 "the same pack as a folder (clutter aside): nothing added");
+    write(root / "Pack copy" / "RMG" / "extra.png", "png");
+    const galaxy::mods::ImportResult more = galaxy::mods::import_mod(root / "Pack copy", root / "mods");
+    ok &= expect(more.ok && !more.already && more.id == "Pack copy", "a pack with one more file: its own mod");
+    ok &= expect(galaxy::mods::remove_mod(root / "mods", "Pack copy", nullptr), "the second pack removed");
     const galaxy::mods::ImportResult fake = galaxy::mods::import_mod(root / "fake.zip", root / "mods");
     ok &= expect(!fake.ok && !fake.message.empty(), "a file that is no archive is refused with a reason");
     std::vector<std::string> left;
