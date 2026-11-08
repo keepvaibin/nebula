@@ -451,13 +451,16 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
     scene_.depth_dirty |= depth_enable && scene_.samples > 1u;
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
     const bool has_alpha = pixel_format == 1u;
-    if (!scene_pass_open_ && color_enable && (alpha_enable || !has_alpha) && depth_enable && rect.offset.x == 0 &&
-        rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(scene_w) &&
-        rect.extent.height == static_cast<std::uint32_t>(scene_h)) {
+    const bool whole = rect.offset.x == 0 && rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(scene_w) &&
+                       rect.extent.height == static_cast<std::uint32_t>(scene_h);
+    const bool every_channel = color_enable && (alpha_enable || !has_alpha);
+    if (!scene_pass_open_ && every_channel && depth_enable && whole) {
         begin_scene_pass(&clear);
         return;
     }
-    begin_scene_pass();
+    // The whole colour without depth while the pass is closed (the bloom's fresh target over the scene's depth): the pass
+    // opens without reading the colour the clear replaces, which a tiled GPU would load from memory.
+    begin_scene_pass_with(0u, nullptr, !scene_pass_open_ && every_channel && whole);
     const VkCommandBuffer commands = commands_;
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
@@ -1569,7 +1572,10 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
         }
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
         if (bloom_.prepare(commands_, in, p, allocate)) {
-            begin_scene_pass();
+            // The composite writes every channel of each pixel it covers, unblended (from the kept scene and the
+            // levels): over the whole target the pass opens without loading the colour it replaces.
+            begin_scene_pass_with(0u, nullptr,
+                                  in.frame_width == scene_.color->width && in.frame_height == scene_.color->height);
             bloom_.finish(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), allocate);
         }
     }
