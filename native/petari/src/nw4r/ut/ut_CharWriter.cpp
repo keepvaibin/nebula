@@ -7,12 +7,46 @@
 #include "nw4r/ut/Font.h"
 
 namespace {
-    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it; each glyph sheet
-    // LoadTexture binds sends it. Blended by alpha, no depth, no culling.
+    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it, with the glyph sheet
+    // LoadTexture binds. Blended by alpha, no depth, no culling.
     SiteMaterial sMaterial;
 
+    // The run of glyphs not yet sent: one sheet, one material, one matrix. A glyph's quad blends over the ones before
+    // it in the run as it would over a draw before it, so a run draws what a draw a glyph drew.
+    const u32 cRunGlyphs = 256;
+    VertexPCT sRun[cRunGlyphs * 4];
+    u32 sRunGlyphs;
+    f32 sRunMtx[3][4];
+
+    void SendRun() {
+        if (sRunGlyphs == 0) {
+            return;
+        }
+        TypedDraw site = TypedDraw::eyeSpace(sMaterial, sRunMtx);
+        VertexPCT* pOut = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, sRunGlyphs * 4);
+        memcpy(pOut, sRun, sRunGlyphs * 4 * sizeof(VertexPCT));
+        sRunGlyphs = 0;
+    }
+
+    // Where the next glyph's corners go; the run is sent first when it is full or the matrix moved.
+    VertexPCT* RunQuad(const f32 (*pMtx)[4]) {
+        if (sRunGlyphs != 0) {
+            bool same = sRunGlyphs < cRunGlyphs;
+            for (u32 i = 0; same && i < 12; i++) {
+                same = __builtin_bit_cast(u32, (&pMtx[0][0])[i]) == __builtin_bit_cast(u32, (&sRunMtx[0][0])[i]);
+            }
+            if (!same) {
+                SendRun();
+            }
+        }
+        if (sRunGlyphs == 0) {
+            memcpy(sRunMtx, pMtx, sizeof(sRunMtx));
+        }
+        return &sRun[sRunGlyphs++ * 4];
+    }
+
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, bool letters = true) {
-        const nw4r::ut::Color fog = 0;
+        SendRun();
         sMaterial.init(NEBULA_SHADER_FONT_TEXT, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         sMaterial.mState.depth_test = 0;
@@ -48,6 +82,7 @@ namespace nw4r {
             if (loadInfo != mLoadingTexture) {
                 SiteTexture tobj;
 
+                SendRun();
                 NebulaIcons::noteDrawn(glyph.pTexture);
                 SiteTextures::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
                 SiteTextures::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
@@ -61,6 +96,10 @@ namespace nw4r {
         }
 
         void CharWriter::SetupVertexFormat() {
+        }
+
+        void CharWriter::EndRun() {
+            SendRun();
         }
 
         void CharWriter::Setup() {
@@ -174,8 +213,7 @@ namespace nw4r {
 
             LoadTexture(glyph, 0);
 
-            TypedDraw site = TypedDraw::eyeSpace(sMaterial, lyt::detail::GetDrawMtx());
-            VertexPCT* vtx = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, 4);
+            VertexPCT* vtx = RunQuad(lyt::detail::GetDrawMtx());
             {
                 *vtx++ = {posLeft, posTop, posZ, Rgba8(mVertexColor.lu), texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
 

@@ -122,6 +122,8 @@ namespace nw4r {
             void PrintGlyph(f32, f32, f32, const Glyph&);
             void UpdateVertexColor();
             static void SetupVertexFormat();
+            // Sends the glyphs printed so far (PrintGlyph gathers a run of them into one draw); every Print ends with it.
+            static void EndRun();
 
             void SetFont(const Font& font) {
                 mFont = &font;
