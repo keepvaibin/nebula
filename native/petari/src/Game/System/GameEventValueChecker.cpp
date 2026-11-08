@@ -2,8 +2,7 @@
 #include "Game/System/FindingLuigiEventScheduler.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 namespace {
     const GameEventValue cGameEventValueTable[] = {
@@ -56,7 +55,7 @@ u32 GameEventValueChecker::getSignature() const {
 }
 
 s32 GameEventValueChecker::serialize(u8* pData, u32 maxBufferSize) const {
-    JSUMemoryOutputStream stream(pData, maxBufferSize);
+    SaveWriter stream(pData, maxBufferSize);
 
     // Each entry: the name's hash (low 16 bits), then the value.
     for (s32 idx = 0; idx < mNumValues; idx++) {
@@ -64,12 +63,12 @@ s32 GameEventValueChecker::serialize(u8* pData, u32 maxBufferSize) const {
         stream.writeU16(mValues[idx]);
     }
 
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 GameEventValueChecker::deserialize(const u8* pData, u32 maxBufferSize) {
     bool isFailed = false;
-    JSUMemoryInputStream stream(pData, maxBufferSize);
+    SaveReader stream(pData, maxBufferSize);
     const s32 numEntries = static_cast< s32 >(maxBufferSize) / 2;
 
     for (s32 idx = 0; idx < numEntries; idx++) {

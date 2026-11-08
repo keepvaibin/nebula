@@ -2,8 +2,7 @@
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/ConfigDataMii.hpp"
 #include "Game/System/ConfigDataMisc.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 ConfigDataCreateChunk::ConfigDataCreateChunk() : mIsCreated() {
     initializeData();
@@ -18,19 +17,19 @@ u32 ConfigDataCreateChunk::getSignature() const {
 }
 
 s32 ConfigDataCreateChunk::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
+    SaveWriter stream(pBuffer, size);
 
     // Saved as 0xFF when created.
     u8 isCreated = mIsCreated ? 0xFF : 0;
     stream.write(&isCreated, sizeof(isCreated));
 
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 ConfigDataCreateChunk::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream = JSUMemoryInputStream(pBuffer, size);
+    SaveReader stream(pBuffer, size);
 
     u8 isCreated;
     stream.read(&isCreated, sizeof(mIsCreated));

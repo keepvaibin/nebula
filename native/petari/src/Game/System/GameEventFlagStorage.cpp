@@ -3,8 +3,7 @@
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util/BitArray.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 GameEventFlagStorage::GameEventFlagStorage() : mFlagBitArray(nullptr) {
     mFlagBitArray = new MR::BitArray(GameEventFlagTable::getTableSize());
@@ -23,7 +22,7 @@ u32 GameEventFlagStorage::getSignature() const {
 }
 
 s32 GameEventFlagStorage::serialize(u8* pData, u32 size) const {
-    JSUMemoryOutputStream stream(pData, size);
+    SaveWriter stream(pData, size);
 
     for (GameEventFlagIter iter = GameEventFlagTable::getBeginIter(); !iter.isEnd(); iter.goNext()) {
         if ((iter.getFlag()->mSaveFlag & 0x1) != 0) {
@@ -36,12 +35,12 @@ s32 GameEventFlagStorage::serialize(u8* pData, u32 size) const {
         stream.write(&data, sizeof(data));
     }
 
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 GameEventFlagStorage::deserialize(const u8* pData, u32 size) {
     bool isFailed = false;
-    JSUMemoryInputStream stream(pData, size);
+    SaveReader stream(pData, size);
     const s32 num = static_cast< s32 >(size) / static_cast< s32 >(sizeof(u16));
 
     // Each u16: the flag's save hash in the low 15 bits, on in the top bit.
