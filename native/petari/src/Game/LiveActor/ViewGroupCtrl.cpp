@@ -13,12 +13,10 @@ namespace {
     const u32 sAllLodCtrlNumMax = 0x100;
 };  // namespace
 
-ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls(), mLodCtrlCapacity(::sAllLodCtrlNumMax), mPlanetsFromStart(false) {
-    mLodCtrls = new LodCtrl*[::sAllLodCtrlNumMax];
-
-    for (u32 i = 0; i < ::sAllLodCtrlNumMax; i++) {
-        mLodCtrls[i] = nullptr;
-    }
+// Only the first mViewCtrlCount slots are read.
+ViewGroupCtrl::ViewGroupCtrl()
+    : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls(new LodCtrl*[::sAllLodCtrlNumMax]),
+      mLodCtrlCapacity(::sAllLodCtrlNumMax), mPlanetsFromStart(false) {
 }
 
 void ViewGroupCtrl::initActorInfo(ClippingActorInfo* pInfo, s32 groupID) {
@@ -50,14 +48,8 @@ void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const TableIter& rIter) {
     if (MR::getPlacementViewGroupID(rIter, &groupID)) {
         pCtrl->mViewGroupID = groupID;
         if (mViewCtrlCount >= mLodCtrlCapacity) {
-            const s32 grown = mLodCtrlCapacity * 2;
-            LodCtrl** pList = new LodCtrl*[grown]();
-            for (s32 i = 0; i < mViewCtrlCount; i++) {
-                pList[i] = mLodCtrls[i];
-            }
-            delete[] mLodCtrls;
-            mLodCtrls = pList;
-            mLodCtrlCapacity = grown;
+            mLodCtrls = MR::growArray(mLodCtrls, mLodCtrlCapacity);
+            mLodCtrlCapacity *= 2;
         }
         mLodCtrls[mViewCtrlCount] = pCtrl;
         mViewCtrlCount++;

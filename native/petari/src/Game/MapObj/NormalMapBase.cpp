@@ -528,7 +528,8 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
     pTexture->mObj.mImage = pCopy;
 }
 
-// One "name value" setting per line; a line longer than the buffer is cut, not overrun.
+// One setting per line: the number leads the line and the name anywhere on it picks the setting. A line longer than the
+// buffer is cut, not overrun.
 void NormalMapBase::loadData(const char* pData, u32 size) {
     const char* const pEnd = pData + size;
     const char* pCursor = pData;

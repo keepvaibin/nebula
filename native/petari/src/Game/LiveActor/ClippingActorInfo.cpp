@@ -119,14 +119,8 @@ ClippingActorInfoList::ClippingActorInfoList(s32 capacity)
 
 void ClippingActorInfoList::add(ClippingActorInfo* pInfo) {
     if (mCount >= mCapacity) {
-        const s32 grown = mCapacity * 2;
-        ClippingActorInfo** pList = new ClippingActorInfo*[grown]();
-        for (s32 i = 0; i < mCount; i++) {
-            pList[i] = mClippingActorList[i];
-        }
-        delete[] mClippingActorList;
-        mClippingActorList = pList;
-        mCapacity = grown;
+        mClippingActorList = MR::growArray(mClippingActorList, mCapacity);
+        mCapacity *= 2;
     }
 
     pInfo->mList = this;

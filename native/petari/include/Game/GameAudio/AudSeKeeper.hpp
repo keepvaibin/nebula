@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/Array.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
 
 class AudSoundObject;
@@ -21,18 +22,18 @@ public:
     u16 mHash;
 };
 
+// Level sounds at an actor's joints, one box per joint. Each box is allocated alone: its sound object holds a
+// pointer to the box's position.
 class AudSeKeeper : public JKRDisposer {
 public:
-    AudSeKeeper(LiveActor*, int);
+    AudSeKeeper(LiveActor* pActor, int boxNumHint);
 
     ~AudSeKeeper();
     void update();
-    void makeBox(const char*, const char*);
-    bool playLevel(const char*, const char*);
-    int getBoxEqualName(const char*);
+    void makeBox(const char* pJointName, const char* pJointName2);
+    bool playLevel(const char* pJointName, const char* pSoundName);
+    int getBoxEqualName(const char* pJointName);
 
     LiveActor* mActor;
-    AudSeKeeperBox* mBoxes;
-    int mMaxBoxes;
-    int mNumBoxes;
+    MR::Vector< MR::AssignableArray< AudSeKeeperBox* > > mBoxes;
 };

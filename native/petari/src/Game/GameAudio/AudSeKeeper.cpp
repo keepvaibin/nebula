@@ -36,57 +36,51 @@ void AudSeKeeperBox::updateJointPos() {
     mPos.z = MR::getJointTransZ(mJoint);
 }
 
-AudSeKeeper::AudSeKeeper(LiveActor* pActor, int maxBoxes) : JKRDisposer(), mActor(pActor), mMaxBoxes(maxBoxes), mNumBoxes() {
-    mBoxes = new AudSeKeeperBox[mMaxBoxes];
+AudSeKeeper::AudSeKeeper(LiveActor* pActor, int boxNumHint) : JKRDisposer(), mActor(pActor) {
+    mBoxes.init(boxNumHint > 0 ? boxNumHint : 1);
 }
 
 AudSeKeeper::~AudSeKeeper() {
-    delete[] mBoxes;
+    for (int idx = 0; idx < mBoxes.size(); idx++) {
+        delete mBoxes[idx];
+    }
 }
 
 void AudSeKeeper::update() {
-    for (int idx = 0; idx < mNumBoxes; idx++) {
-        mBoxes[idx].update();
+    for (int idx = 0; idx < mBoxes.size(); idx++) {
+        mBoxes[idx]->update();
     }
 }
 
+// A box is named by pJointName2 when given, else by its joint.
 void AudSeKeeper::makeBox(const char* pJointName, const char* pJointName2) {
-    if (mNumBoxes >= mMaxBoxes) {
-        return;
-    }
-
     Joint* joint = MR::getJoint(mActor, pJointName);
+    const u16 hash = MR::getHashCode(pJointName2 != nullptr ? pJointName2 : pJointName);
 
-    u16 hash;
-    if (pJointName2 != nullptr) {
-        hash = MR::getHashCode(pJointName2);
-    } else {
-        hash = MR::getHashCode(pJointName);
-    }
-
-    for (int idx = 0; idx < mNumBoxes; idx++) {
-        if (hash == mBoxes[idx].mHash) {
+    for (int idx = 0; idx < mBoxes.size(); idx++) {
+        if (hash == mBoxes[idx]->mHash) {
             return;
         }
     }
 
-    mBoxes[mNumBoxes].add(joint, hash);
-    mNumBoxes++;
+    AudSeKeeperBox* pBox = new AudSeKeeperBox();
+    pBox->add(joint, hash);
+    mBoxes.push_back(pBox);
 }
 
 bool AudSeKeeper::playLevel(const char* pJointName, const char* pSoundName) {
-    int idx = getBoxEqualName(pJointName);
+    const int idx = getBoxEqualName(pJointName);
     if (idx < 0) {
         return false;
     }
-    MR::startSoundObjectLevel(mBoxes[idx].mSoundObj, pSoundName);
+    MR::startSoundObjectLevel(mBoxes[idx]->mSoundObj, pSoundName);
     return true;
 }
 
 int AudSeKeeper::getBoxEqualName(const char* pJointName) {
-    u16 hash = MR::getHashCode(pJointName);
-    for (int idx = 0; idx < mNumBoxes; idx++) {
-        if (hash == mBoxes[idx].mHash) {
+    const u16 hash = MR::getHashCode(pJointName);
+    for (int idx = 0; idx < mBoxes.size(); idx++) {
+        if (hash == mBoxes[idx]->mHash) {
             return idx;
         }
     }
