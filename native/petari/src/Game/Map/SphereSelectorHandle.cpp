@@ -19,18 +19,18 @@ namespace {
     const f32 cRotateAppearX = 40.0f;
     const f32 cRotateMinX = -15.0f;
     const f32 cRotateMaxX = 80.0f;
-    s32 cBgmAppearState = 2;
-    s32 cBgmAppearFrames = 60;
-    s32 cBgmDisappearState = 1;
-    s32 cBgmDisappearFrames = 90;
-    s32 cBgmRotateState = 4;
-    s32 cBgmRotateFrames = 60;
-    s32 cBgmNotRotateState = 3;
-    s32 cBgmNotRotateFrames = 30;
-    s32 cBgmConfirmState = 6;
-    s32 cBgmConfirmFrames = 60;
-    s32 cBgmNotConfirmState = 5;
-    s32 cBgmNotConfirmFrames = 60;
+    const s32 cBgmAppearState = 2;
+    const s32 cBgmAppearFrames = 60;
+    const s32 cBgmDisappearState = 1;
+    const s32 cBgmDisappearFrames = 90;
+    const s32 cBgmRotateState = 4;
+    const s32 cBgmRotateFrames = 60;
+    const s32 cBgmNotRotateState = 3;
+    const s32 cBgmNotRotateFrames = 30;
+    const s32 cBgmConfirmState = 6;
+    const s32 cBgmConfirmFrames = 60;
+    const s32 cBgmNotConfirmState = 5;
+    const s32 cBgmNotConfirmFrames = 60;
 };  // namespace
 
 namespace NrvSphereSelectorHandle {

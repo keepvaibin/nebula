@@ -295,10 +295,10 @@ void Gesso::exeComeBack() {
             setNerve(GET_NERVE(Gesso, GessoNrvWait));
         } else {
             MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), 1.5f);
-            Vec3f stack_14;
+            Vec3f homeDir;
             Vec3f diff = mInitPos - mPosition;
-            MR::normalize(diff, &stack_14);
-            mVelocity.scale(3.0f, stack_14);
+            MR::normalize(diff, &homeDir);
+            mVelocity.scale(3.0f, homeDir);
             if (MR::isNear(this, mInitPos, 100.0f)) {
                 setNerve(GET_NERVE(Gesso, GessoNrvWait));
             }
@@ -330,10 +330,10 @@ void Gesso::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!isNerve(GET_NERVE(Gesso, GessoNrvPunchDown)) && MR::isSensorEnemy(pSender) && MR::isSensorPlayer(pReceiver) &&
         !isNerve(GET_NERVE(Gesso, GessoNrvPointerSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
         MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, nullptr);
-        Vec3f stack_14;
+        Vec3f recoilDir;
         Vec3f diff = pSender->mPosition - pReceiver->mPosition;
-        MR::normalize(diff, &stack_14);
-        mVelocity.scale(25.0f, stack_14);
+        MR::normalize(diff, &recoilDir);
+        mVelocity.scale(25.0f, recoilDir);
         setNerve(GET_NERVE(Gesso, GessoNrvAttack));
     }
 }
@@ -380,10 +380,10 @@ bool Gesso::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
 bool Gesso::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
-        Vec3f stack_08;
-        stack_08.sub(mPosition, pSender->mHost->mPosition);
-        MR::normalizeOrZero(&stack_08);
-        mPushVelocity.scaleAdd(0.2f, mPushVelocity, stack_08);
+        Vec3f pushDir;
+        pushDir.sub(mPosition, pSender->mHost->mPosition);
+        MR::normalizeOrZero(&pushDir);
+        mPushVelocity.scaleAdd(0.2f, mPushVelocity, pushDir);
         return true;
     }
 
@@ -403,10 +403,10 @@ void Gesso::selectNextNerve() {
 }
 
 void Gesso::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
-    Vec3f stack_14;
+    Vec3f knockDir;
     Vec3f diff = pReceiver->mPosition - pSender->mPosition;
-    MR::normalize(diff, &stack_14);
-    mVelocity.scale(30.0f, stack_14);
+    MR::normalize(diff, &knockDir);
+    mVelocity.scale(30.0f, knockDir);
     MR::turnDirectionToTarget(this, &mFront, pSender->mPosition, -1.0f);
     setNerve(GET_NERVE(Gesso, GessoNrvPunchDown));
 }

@@ -1,8 +1,8 @@
 #include "Game/AreaObj/AreaForm.hpp"
 #include "Game/Util.hpp"
 
-AreaFormCube::AreaFormCube(int a1) {
-    mCubeType = a1;
+AreaFormCube::AreaFormCube(int cubeType) {
+    mCubeType = cubeType;
     mTranslation.x = 0.0f;
     mTranslation.y = 0.0f;
     mTranslation.z = 0.0f;
@@ -95,11 +95,11 @@ void AreaFormCube::updateBoxParam() {
 
     mBaseMtx.setTrans(mTranslation);
 
-    Vec3f v10(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
-    Vec3f v9(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
+    Vec3f boxMin(0.5f * (-mScale.x * getBaseSize()), 0.5f * (-mScale.y * getBaseSize()), 0.5f * (-mScale.z * getBaseSize()));
+    Vec3f boxMax(0.5f * (mScale.x * getBaseSize()), 0.5f * (mScale.y * getBaseSize()), 0.5f * (mScale.z * getBaseSize()));
 
-    mBounding.i.set(v10);
-    mBounding.f.set(v9);
+    mBounding.i.set(boxMin);
+    mBounding.f.set(boxMax);
 
     if (mCubeType == 1) {
         Vec3f temp(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
@@ -230,19 +230,11 @@ bool AreaFormCylinder::isInVolume(const Vec3f& rVec) const {
     Vec3f up;
     calcUpVec(&up);
 
-    Vec3f stack_8 = rVec - pos;
-    f32 v6 = MR::vecKillElement(stack_8, up, &stack_8);
-    f32 v7 = stack_8.length();
+    Vec3f radial = rVec - pos;
+    f32 height = MR::vecKillElement(radial, up, &radial);
+    f32 radialDist = radial.length();
 
-    bool ret;
-
-    if (MR::isInRange(v6, 0.0f, mHeight) && (v7 < mRadius)) {
-        ret = true;
-    } else {
-        ret = false;
-    }
-
-    return ret;
+    return MR::isInRange(height, 0.0f, mHeight) && radialDist < mRadius;
 }
 
 void AreaFormCylinder::calcDir(const Vec3f& rRotation) {

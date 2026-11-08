@@ -216,14 +216,14 @@ bool KeySwitch::tryAvoid() {
     sensorActor = sensor->mHost;
     Vec3f up;
     MR::calcUpVec(&up, sensorActor);
-    Vec3f thing;
-    thing.sub(mPosition, sensorActor->mPosition);
-    Vec3f stack_8 = thing.killElement(up);
+    Vec3f away;
+    away.sub(mPosition, sensorActor->mPosition);
+    Vec3f awayOnPlane = away.killElement(up);
 
-    if (MR::normalizeOrZero(&stack_8)) {
-        MR::calcFrontVec(&stack_8, sensorActor);
+    if (MR::normalizeOrZero(&awayOnPlane)) {
+        MR::calcFrontVec(&awayOnPlane, sensorActor);
     }
 
-    mVelocity.scale(10.0f, stack_8);
+    mVelocity.scale(10.0f, awayOnPlane);
     return true;
 }

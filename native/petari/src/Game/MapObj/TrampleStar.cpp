@@ -11,11 +11,10 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
-    f32 debug1 = 0.003331f;
-    f32 debug2 = -0.003331f;
-    f32 debug3 = 1.0f;
-    f32 debug4 = 0.5f;
-    f32 debug5 = 0.5f;
+    // Shadow-space x and z onto the shadow texture: s = x * scale + 0.5, t = -z * scale + 0.5, q = 1.
+    const f32 cShadowTexScale = 0.003331f;
+    const f32 cShadowTexOffset = 0.5f;
+    const f32 cShadowTexQ = 1.0f;
 };  // namespace
 
 namespace {
@@ -585,18 +584,20 @@ void TrampleStar::drawSelf() const {
     NebulaMtxInverse(mtx2, mtx2);
 
     MR::multMtx(mtx3, mtx, mtx2);
-    Pos3f mtx4;
+    Pos3f texProj;
 
-    for (u32 idx = 0; idx < 12; idx++) {
-        reinterpret_cast< f32* >(&mtx4)[idx] = 0;
+    for (s32 row = 0; row < 3; row++) {
+        for (s32 col = 0; col < 4; col++) {
+            texProj[row][col] = 0.0f;
+        }
     }
 
-    mtx4[0][0] = debug1;
-    mtx4[1][2] = debug2;
-    mtx4[2][3] = debug3;
-    mtx4[0][3] = debug4;
-    mtx4[1][3] = debug5;
-    MR::multMtx(mtx3, mtx3, mtx4);
+    texProj[0][0] = cShadowTexScale;
+    texProj[1][2] = -cShadowTexScale;
+    texProj[2][3] = cShadowTexQ;
+    texProj[0][3] = cShadowTexOffset;
+    texProj[1][3] = cShadowTexOffset;
+    MR::multMtx(mtx3, mtx3, texProj);
 
     // runtime/src/render/materials/trample_star.hlsl: blended by alpha, depth tested early and written, no culling.
     SiteMaterial material;

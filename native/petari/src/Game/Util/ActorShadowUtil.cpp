@@ -179,8 +179,8 @@ namespace MR {
         ActorShadow::getShadowController(pActor, pName)->setDropStartOffset(offset);
     }
 
-    void setShadowProjection(LiveActor* pActor, const char* pName, const Vec3f& rPosition, const Vec3f& rDirection, bool a5) {
-        ActorShadow::getShadowController(pActor, pName)->setProjectionFix(rPosition, rDirection, a5);
+    void setShadowProjection(LiveActor* pActor, const char* pName, const Vec3f& rPosition, const Vec3f& rDirection, bool projected) {
+        ActorShadow::getShadowController(pActor, pName)->setProjectionFix(rPosition, rDirection, projected);
     }
 
     void setShadowSurfaceOvalColor(LiveActor* pActor, const char* pName, const Color8 color) {
@@ -428,28 +428,29 @@ namespace MR {
         }
     }
 
-    bool calcClippingRangeIncludeShadow(Vec3f* pVecOutput, f32* pF32Output, const LiveActor* pActor, f32 a4) {
+    // The sphere around the actor and its projected shadow; false (the actor alone) while the shadow is not projected.
+    bool calcClippingRangeIncludeShadow(Vec3f* pCenter, f32* pRadius, const LiveActor* pActor, f32 radius) {
         Vec3f projectionPos;
 
         if (ActorShadow::getShadowController(pActor, static_cast< const char* >(nullptr))->isProjected()) {
             getShadowProjectionPos(pActor, nullptr, &projectionPos);
-            pVecOutput->set((pActor->mPosition + projectionPos) * 0.5f);
-            *pF32Output = projectionPos.distance(pActor->mPosition) * 0.5f + a4;
+            pCenter->set((pActor->mPosition + projectionPos) * 0.5f);
+            *pRadius = projectionPos.distance(pActor->mPosition) * 0.5f + radius;
             return true;
         } else {
-            pVecOutput->set(pActor->mPosition);
-            *pF32Output = a4;
+            pCenter->set(pActor->mPosition);
+            *pRadius = radius;
             return false;
         }
     }
 
-    void setClippingRangeIncludeShadow(LiveActor* pActor, Vec3f* pCenter, f32 a3) {
-        f32 stack_8 = a3;
+    void setClippingRangeIncludeShadow(LiveActor* pActor, Vec3f* pCenter, f32 radius) {
+        f32 clipRadius = radius;
 
-        if (calcClippingRangeIncludeShadow(pCenter, &stack_8, pActor, a3)) {
-            setClippingTypeSphere(pActor, stack_8, pCenter);
+        if (calcClippingRangeIncludeShadow(pCenter, &clipRadius, pActor, radius)) {
+            setClippingTypeSphere(pActor, clipRadius, pCenter);
         } else {
-            setClippingTypeSphere(pActor, a3);
+            setClippingTypeSphere(pActor, radius);
         }
     }
 

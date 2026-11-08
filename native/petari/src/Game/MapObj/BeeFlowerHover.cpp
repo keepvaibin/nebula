@@ -157,20 +157,20 @@ void BeeFlowerHover::control() {
 }
 
 void BeeFlowerHover::calcAndSetBaseMtx() {
-    Pos3f stack_8;
-    stack_8.identity();
+    Pos3f baseMtx;
+    baseMtx.identity();
 
     if (mRailPosture) {
-        stack_8.concat(mRailPosture->mPostureMtx);
+        baseMtx.concat(mRailPosture->mPostureMtx);
     } else {
-        MR::makeMtxRotate(stack_8.toMtxPtr(), mRotation);
+        MR::makeMtxRotate(baseMtx.toMtxPtr(), mRotation);
     }
 
-    stack_8.concat(mRotateMtx);
-    stack_8.mMtx[0][3] = mPosition.x;
-    stack_8.mMtx[1][3] = mPosition.y;
-    stack_8.mMtx[2][3] = mPosition.z;
-    MR::setBaseTRMtx(this, stack_8);
+    baseMtx.concat(mRotateMtx);
+    baseMtx.mMtx[0][3] = mPosition.x;
+    baseMtx.mMtx[1][3] = mPosition.y;
+    baseMtx.mMtx[2][3] = mPosition.z;
+    MR::setBaseTRMtx(this, baseMtx);
 }
 
 bool BeeFlowerHover::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

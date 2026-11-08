@@ -146,32 +146,31 @@ void NoteFairy::init(const TableIter& rIter) {
     mNoteArray = new Note*[mMelodyNoteNum];
 
     for (s32 i = 0; i < mMelodyNoteNum; i++) {
-        Vec3f stack_24;
+        Vec3f notePos;
 
         if (mIsNoteAtRailPoints) {
-            MR::calcRailPointPos(&stack_24, this, i);
+            MR::calcRailPointPos(&notePos, this, i);
         } else {
-            stack_24.set(MR::getRailPos(this));
+            notePos.set(MR::getRailPos(this));
             MR::moveCoord(this, mNoteCoord);
         }
 
         mNoteArray[i] = new Note("音符", MR::getRailDirection(this), this);
-        mNoteArray[i]->mPosition.set(stack_24);
+        mNoteArray[i]->mPosition.set(notePos);
         mNoteArray[i]->initWithoutIter();
         mNoteArray[i]->mCounter = mTimeLimit;
     }
 
     MR::moveCoordToStartPos(this);
     MR::setRailCoord(this, 0.0f);
-    Vec3f stack_18(MR::getRailDirection(this));
-    stack_18.y = 0.0f;
-    MR::normalizeOrZero(&stack_18);
-    stack_18.x *= -800.0f;
-    stack_18.y *= -800.0f;
-    stack_18.z *= -800.0f;
-    mDemoJumpPos.x = stack_18.x + mPosition.x;
+    Vec3f jumpOffset(MR::getRailDirection(this));
+    jumpOffset.y = 0.0f;
+    MR::normalizeOrZero(&jumpOffset);
+    jumpOffset.x *= -800.0f;
+    jumpOffset.z *= -800.0f;
+    mDemoJumpPos.x = jumpOffset.x + mPosition.x;
     mDemoJumpPos.y = (0.5f * mPosition.y) + (0.5f * MR::getRailPos(this).y);
-    mDemoJumpPos.z = stack_18.z + mPosition.z;
+    mDemoJumpPos.z = jumpOffset.z + mPosition.z;
     MR::needStageSwitchReadAppear(this, rIter);
     MR::useStageSwitchWriteA(this, rIter);
     MR::useStageSwitchReadB(this, rIter);
@@ -245,9 +244,9 @@ void NoteFairy::exeStartAppearDemo() {
 
     if (MR::isStep(this, 30)) {
         Vec3f* pos = MR::getPlayerPos();
-        Vec3f stack_8(mInitPos);
-        stack_8.sub(*pos);
-        MR::setPlayerFrontVec(stack_8, 1);
+        Vec3f toFairy(mInitPos);
+        toFairy.sub(*pos);
+        MR::setPlayerFrontVec(toFairy, 1);
         enterDemoAppear(GET_NERVE(NoteFairy, NoteFairyNrvDemoAppear), true);
     }
 }

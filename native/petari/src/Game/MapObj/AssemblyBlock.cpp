@@ -43,21 +43,21 @@ AssemblyBlock::AssemblyBlock(const char* pName)
 }
 
 void AssemblyBlock::init(const TableIter& rIter) {
-    Vec3f stack_3C;
-    Vec3f stack_30;
-    Vec3f stack_24;
-    Vec3f stack_18;
+    Vec3f defaultReturnPos;
+    Vec3f assembledPos;
+    Vec3f returnPos;
+    Vec3f defaultReturnOffset;
     MR::FormattedName name;
 
     MR::initDefaultPos(this, rIter);
     MR::tryRegisterNamePosLinkObj(this, rIter);
 
     if (!MR::tryFindLinkNamePos(this, ::sReturnPosName, mReturnMtx.toMtxPtr())) {
-        stack_18.x = 0.0f;
-        stack_18.y = 1000.0f;
-        stack_18.z = 1000.0f;
-        stack_3C.add(mPosition, stack_18);
-        mReturnMtx.setTrans(stack_3C);
+        defaultReturnOffset.x = 0.0f;
+        defaultReturnOffset.y = 1000.0f;
+        defaultReturnOffset.z = 1000.0f;
+        defaultReturnPos.add(mPosition, defaultReturnOffset);
+        mReturnMtx.setTrans(defaultReturnPos);
     }
 
     MR::getMapPartsObjectNameIfExistShapeID(name, rIter);
@@ -83,15 +83,15 @@ void AssemblyBlock::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionPartsAutoEqualScaleOne(this, name.c_str(), getSensor(nullptr), nullptr);
 
-    mAssembledMtx.getTrans(stack_30);
-    mReturnMtx.getTrans(stack_24);
-    mClipCenter.add(stack_30, stack_24);
+    mAssembledMtx.getTrans(assembledPos);
+    mReturnMtx.getTrans(returnPos);
+    mClipCenter.add(assembledPos, returnPos);
     mClipCenter.x *= 0.5f;
     mClipCenter.y *= 0.5f;
     mClipCenter.z *= 0.5f;
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, this);
-    MR::setClippingTypeSphere(this, boundingRadius + mClipCenter.distance(stack_24), &mClipCenter);
+    MR::setClippingTypeSphere(this, boundingRadius + mClipCenter.distance(returnPos), &mClipCenter);
     MR::getPlacementArg0NoInit(rIter, &mPlayerSearchDistance);
 
     if (mPlayerSearchDistance <= 0.0f) {

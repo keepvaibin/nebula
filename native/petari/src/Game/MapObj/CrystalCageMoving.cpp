@@ -103,13 +103,13 @@ void CrystalCageMoving::exeDemoTicoMove() {
         MR::startSound(mTicoModel, "SE_SM_TICO_SPIN");
     }
 
-    Vec3f stack_14;
-    stack_14.sub(mStartPos, mPosition);
+    Vec3f toStart;
+    toStart.sub(mStartPos, mPosition);
 
     f32 nerveRate = MR::calcNerveRate(this, 30);
-    Vec3f stack_8;
-    stack_8.scaleAdd(nerveRate, stack_14, mPosition);
-    mDummyModelMtx.setTrans(stack_8);
+    Vec3f ticoPos;
+    ticoPos.scaleAdd(nerveRate, toStart, mPosition);
+    mDummyModelMtx.setTrans(ticoPos);
 
     if (MR::isStep(this, 30)) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop));
@@ -203,11 +203,11 @@ void CrystalCageMoving::updateHitSensor(HitSensor* pSensor) {
         joint_mtx.set(MR::getJointMtx(this, nullptr));
         Vec3f up;
         joint_mtx.getYDir(up);
-        Vec3f stack_14;
-        stack_14.scaleAdd(-450.0f + radius, up, mPosition);
-        Vec3f stack_8;
-        stack_8.scaleAdd(450.0f - radius, up, mPosition);
-        MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), stack_14, stack_8);
+        Vec3f lineBottom;
+        lineBottom.scaleAdd(-450.0f + radius, up, mPosition);
+        Vec3f lineTop;
+        lineTop.scaleAdd(450.0f - radius, up, mPosition);
+        MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), lineBottom, lineTop);
     }
 }
 
@@ -219,9 +219,9 @@ void CrystalCageMoving::connectToScene(const MapObjActorInitInfo& rInfo) {
 
 void CrystalCageMoving::initDummyModel(const TableIter& rIter) {
     mDummyModelMtx.set(MR::getJointMtx(this, 0));
-    Vec3f stack_8;
-    NebulaMtxMultVec(mDummyModelMtx.toMtxPtr(), &::sDummyModelOffset, &stack_8);
-    mDummyModelMtx.setTrans(stack_8);
+    Vec3f dummyPos;
+    NebulaMtxMultVec(mDummyModelMtx.toMtxPtr(), &::sDummyModelOffset, &dummyPos);
+    mDummyModelMtx.setTrans(dummyPos);
     mTicoModel = new ModelObj("動くクリスタルケージ中身", "Tico", mDummyModelMtx.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);
     mTicoModel->initWithoutIter();
     ModelObj* tico = mTicoModel;
