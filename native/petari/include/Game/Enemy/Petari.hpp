@@ -60,7 +60,7 @@ public:
     void avoidPlayer();
     void avoidWall();
     f32 calcBoost(f32 baseSpeed, f32 boostMultiplier, f32 effectiveRange) const;
-    void moveTowardTargetDirection(f32, f32, f32);
+    void moveTowardTargetDirection(f32 speed, f32 damp, f32 turnDegree);
     bool tryEscapeEnd();
     void calcSpinOutVelocity(f32 speed);
     void appearStarPieceGradually();
