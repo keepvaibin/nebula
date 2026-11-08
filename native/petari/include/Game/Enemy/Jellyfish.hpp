@@ -30,7 +30,7 @@ public:
     void exeThreatWithRightTurn();
 
     void threatTurn();
-    bool faceToMario();
+    void faceToMario();
     void knockOut(HitSensor*, HitSensor*);
     bool selectNerveAfterWait();
     bool selectNerveThreat();
