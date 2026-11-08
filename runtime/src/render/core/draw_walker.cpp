@@ -1011,6 +1011,53 @@ void RenderCore::plan_early_targets(ListData& now) {
     }
 }
 
+// A probe answers with the scene depth where the game asked it. Asked while the scene pass is open, it waits for the
+// pass's end, or ends it at the next draw or clear that changes the depth: a store and a load of the whole target on a
+// tiled GPU. When nothing between the frame copy before it and the probe writes or clears the scene's depth, the depth
+// right after that copy is the same, and the scene pass is closed there anyway: the probe is asked there.
+void RenderCore::plan_early_probes(ListData& now) {
+    now.early_probes.clear();
+    const NebulaFrameList& list = *now.list;
+    constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
+    const auto keeps_depth = [&](const NebulaFramePass& pass) {
+        switch (pass.kind) {
+        case NEBULA_PASS_PROBE:
+            return true;
+        case NEBULA_PASS_CLEAR:
+            return pass.layer == NEBULA_LAYER_TARGET || (pass.clear_channels & 4u) == 0u;
+        case NEBULA_PASS_DRAW: {
+            if (pass.layer == NEBULA_LAYER_TARGET) {
+                return true;  // into a target's own depth
+            }
+            const std::uint32_t end = pass.first_item + pass.item_count;
+            for (std::uint32_t i = pass.first_item; i < end; ++i) {
+                if ((registries_.pipeline(list.items[i].pipeline).desc.state & depth_write) == depth_write) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        default:
+            return false;
+        }
+    };
+    for (std::uint32_t p = 0; p < list.pass_count; ++p) {
+        if (list.passes[p].kind != NEBULA_PASS_PROBE) {
+            continue;
+        }
+        for (std::uint32_t q = p; q-- > 0u;) {
+            const NebulaFramePass& pass = list.passes[q];
+            if (pass.kind == NEBULA_PASS_COPY_FRAME || pass.kind == NEBULA_PASS_TAKE_FRAME) {
+                now.early_probes.push_back(core::ListData::EarlyProbe{q, p});
+                break;
+            }
+            if (!keeps_depth(pass)) {
+                break;
+            }
+        }
+    }
+}
+
 void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time) {
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
@@ -1019,6 +1066,7 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     NEBULA_INSPECT_BEGIN(*this, list);
     if (!now.targets_planned) {
         plan_early_targets(now);
+        plan_early_probes(now);
     }
     for (const core::ListData::EarlyTargets& run : now.early_targets) {
         if (run.scene != NEBULA_NONE32) {
@@ -1041,6 +1089,12 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
             continue;
         }
         walk_pass(now, p, target_channels);
+        for (const core::ListData::EarlyProbe& early : now.early_probes) {
+            if (early.after == p && !now.probes_done) {
+                const NebulaFramePass& probe = list.passes[early.probe];
+                record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count);
+            }
+        }
     }
     if (target_open_) {
         walk_target_end(target_channels);
@@ -1134,8 +1188,9 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             renderer_.game_bloom(pass.kind, pass.arg0, pass.arg1);
             break;
         case NEBULA_PASS_PROBE:
-            // On the list's first walk, so the game reads the answers when it always did.
-            if (!now.probes_done) {
+            // On the list's first walk, so the game reads the answers when it always did; some were asked earlier.
+            if (!now.probes_done && std::none_of(now.early_probes.begin(), now.early_probes.end(),
+                                                 [p](const core::ListData::EarlyProbe& early) { return early.probe == p; })) {
                 record_screen_probes(pass.probe_channel, list.probes + pass.first_probe, pass.probe_count);
             }
             break;
