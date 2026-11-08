@@ -61,6 +61,8 @@ public:
         if (!mBuilt) {
             JUTNativeLog("NebulaPrepare: a layout or pane is missing\n");
         }
+        // The pane list with the screen's panes in it.
+        pManager->rebuildPaneInfo();
         kill();
     }
 

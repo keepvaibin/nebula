@@ -1027,6 +1027,8 @@ void NebulaSettingsScreen::init(const TableIter& rIter) {
     if (!mBuilt) {
         JUTNativeLog("NebulaSettingsMenu: a layout or pane is missing\n");
     }
+    // The pane list with the menu's panes in it.
+    pManager->rebuildPaneInfo();
     kill();
 }
 

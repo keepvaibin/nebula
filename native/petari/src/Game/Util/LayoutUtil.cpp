@@ -38,22 +38,6 @@ namespace {
         }
     }
 
-    void showPaneRecursive(nw4r::lyt::Pane* pPane) {
-        pPane->SetVisible(true);
-
-        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
-            showPaneRecursive(pChild);
-        }
-    }
-
-    void hidePaneRecursive(nw4r::lyt::Pane* pPane) {
-        pPane->SetVisible(false);
-
-        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
-            hidePaneRecursive(pChild);
-        }
-    }
-
     void initFrameCtrlReverse(FrameCtrl* pFrameCtrl) {
         pFrameCtrl->setAttribute(pFrameCtrl->EMode_RESET);
         pFrameCtrl->setRate(-pFrameCtrl->mRate);
@@ -274,8 +258,22 @@ void MR::showPane(LayoutActor* pActor, const char* pPaneName) {
     getPane(pActor, pPaneName)->SetVisible(true);
 }
 
+void MR::showPaneRecursive(nw4r::lyt::Pane* pPane) {
+    pPane->SetVisible(true);
+    for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+        showPaneRecursive(pChild);
+    }
+}
+
+void MR::hidePaneRecursive(nw4r::lyt::Pane* pPane) {
+    pPane->SetVisible(false);
+    for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+        hidePaneRecursive(pChild);
+    }
+}
+
 void MR::showPaneRecursive(LayoutActor* pActor, const char* pPaneName) {
-    ::showPaneRecursive(getPane(pActor, pPaneName));
+    showPaneRecursive(getPane(pActor, pPaneName));
 }
 
 void MR::hidePane(LayoutActor* pActor, const char* pPaneName) {
@@ -283,7 +281,7 @@ void MR::hidePane(LayoutActor* pActor, const char* pPaneName) {
 }
 
 void MR::hidePaneRecursive(LayoutActor* pActor, const char* pPaneName) {
-    ::hidePaneRecursive(getPane(pActor, pPaneName));
+    hidePaneRecursive(getPane(pActor, pPaneName));
 }
 
 bool MR::isHiddenPane(const LayoutActor* pActor, const char* pPaneName) {

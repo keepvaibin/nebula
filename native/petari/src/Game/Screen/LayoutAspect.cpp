@@ -370,9 +370,7 @@ namespace LayoutAspect {
             if (pManager->mPaneInfoList[i].mMtxRef == nullptr) {
                 continue;
             }
-            nw4r::lyt::Pane* pPane = pManager->mPaneInfoList[i].mPaneCtrl != nullptr ? pManager->mPaneInfoList[i].mPaneCtrl->mPane
-                                                                                     : pManager->findPaneByName(pManager->mPaneInfoList[i].mName);
-            NebulaMtxCopy(pPane->mGlbMtx, pManager->mPaneInfoList[i].mMtxRef);
+            NebulaMtxCopy(pManager->mPaneInfoList[i].mPane->mGlbMtx, pManager->mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
                 pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
