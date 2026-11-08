@@ -8,7 +8,7 @@
 #include <nebula_math.h>
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool a4, MtxPtr mtx1, MtxPtr mtx2)
-    : PartsModel(pActor, pName, pModelName, mtx2, a4 ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), _9C() {
+    : PartsModel(pActor, pName, pModelName, mtx2, a4 ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), mEffectName() {
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
@@ -22,7 +22,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
 }
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr mtx)
-    : PartsModel(pActor, pName, pModelName, nullptr, MR::DrawBufferType_PlayerParts, true), _9C() {
+    : PartsModel(pActor, pName, pModelName, nullptr, MR::DrawBufferType_PlayerParts, true), mEffectName() {
     MR::initMaterialFog(this, true);
     MR::prepareMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
@@ -31,7 +31,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
 }
 
 void MarioParts::init(const TableIter& rIter) {
-    initEffectKeeper(8, _9C);
+    initEffectKeeper(8, mEffectName);
     initSound(8, false);
     MR::invalidateClipping(this);
     makeActorAppeared();

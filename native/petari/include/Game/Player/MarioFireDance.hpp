@@ -15,10 +15,10 @@ public:
     void impact();
     void impactEffect();
 
-    Vec3f _14;
-    f32 _20;
-    u8 _24;
-    u16 _26;
-    u8 _28;
-    u8 _29;
+    Vec3f mMoveVelocity;  // the hop's horizontal velocity
+    f32 mVerticalSpeed;  // the hop's speed along the gravity (below 0: rising)
+    u8 mWallStart;  // started off a wall: no speed cap
+    u16 mTurnLockTimer;  // after the wall kick: frames before the stick turns him again
+    u8 mHopCount;  // hops so far (the second is higher)
+    u8 mNeedle;  // a needle's dance (doNeedle): its own effects
 };

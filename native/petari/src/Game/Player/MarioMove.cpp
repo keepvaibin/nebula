@@ -124,7 +124,7 @@ void Mario::mainMove() {
     if (!mMovementStates.onGround) {
         if (mDropWaitTimer != 0 && !mMovementStates.slopeSlide && MR::isNearZero(mSlopeMoveVec)) {
             mDropWaitTimer--;
-        } else if (!mActor->_EA4) {
+        } else if (!mActor->mInDemo) {
             tryDrop();
             beforeJumping2D();
             mMoveLockTimer = 0;
@@ -731,7 +731,7 @@ bool Mario::isEnableTurn() {
         return false;
     }
 
-    if (mActor->_480) {
+    if (mActor->mTaking) {
         return false;
     }
 
@@ -747,11 +747,11 @@ bool Mario::isEnableTurn() {
         return false;
     }
 
-    if (mActor->_3C0) {
+    if (mActor->mRemoteDemo) {
         return false;
     }
 
-    if (mActor->_EA4) {
+    if (mActor->mInDemo) {
         return false;
     }
 

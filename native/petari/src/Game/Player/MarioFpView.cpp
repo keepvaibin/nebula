@@ -103,11 +103,11 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (mActor->_EA4) {
+    if (mActor->mInDemo) {
         return true;
     }
 
-    return mActor->_3C0;
+    return mActor->mRemoteDemo;
 }
 
 bool Mario::isDisableFpViewMode() const {

@@ -35,7 +35,7 @@ bool Mario::tryCrush() {
     return true;
 }
 
-MarioCrush::MarioCrush(MarioActor* pActor) : MarioState(pActor, MarioStatus_Crush), _12(), mTimer() {
+MarioCrush::MarioCrush(MarioActor* pActor) : MarioState(pActor, MarioStatus_Crush), mRecovering(), mTimer() {
 }
 
 bool MarioCrush::close() {
@@ -62,7 +62,7 @@ bool MarioCrush::start() {
     }
 
     mTimer = 180;
-    _12 = 0;
+    mRecovering = 0;
 
     return true;
 }
@@ -73,11 +73,11 @@ bool MarioCrush::update() {
     }
 
     if (mTimer == 0) {
-        if (_12 != 0) {
+        if (mRecovering != 0) {
             return false;
         }
 
-        _12 = 1;
+        mRecovering = 1;
 
         if (!getPlayer()->getMovementStates().onGround) {
             mTimer = 10;
@@ -90,7 +90,7 @@ bool MarioCrush::update() {
         }
     }
 
-    if (_12 != 0 && (mActor->isRequestRush() || checkTrgA())) {
+    if (mRecovering != 0 && (mActor->isRequestRush() || checkTrgA())) {
         stopAnimation(nullptr);
 
         if (checkTrgA()) {

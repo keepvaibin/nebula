@@ -8,8 +8,8 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 void MarioActor::drawPreWipe() const {
-    if (!_1C3) {
-        if (!_A61) {
+    if (!mDarkMaskOn) {
+        if (!mPreWipeOn) {
             return;
         }
         f32 width = MR::getScreenWidth();
@@ -19,7 +19,7 @@ void MarioActor::drawPreWipe() const {
         Vec3f origin(0.0f, 0.0f, 0.0f);
         Vec3f size(width, height, 0.0f);
         TypedDraw site = TDDraw::site(material, 2);
-        TDDraw::drawFillBox(site, origin, size, _A6C > 128 ? 224 : (_A6C + (_A6C >> 1)) + (_A6C >> 2));
+        TDDraw::drawFillBox(site, origin, size, mPreWipeTimer > 128 ? 224 : (mPreWipeTimer + (mPreWipeTimer >> 1)) + (mPreWipeTimer >> 2));
     }
     MR::loadViewMtx();
     MR::loadProjectionMtx();

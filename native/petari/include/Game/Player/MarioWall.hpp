@@ -18,12 +18,12 @@ public:
     bool startJump();
     bool startBackJump(u32);
 
-    u32 _14;
-    u32 _18;
-    u8 _1C;
-    u8 _1D;
-    u8 _1E;
-    f32 _20;
-    Vec3f _24;
-    Vec3f _30;
+    u32 mStickTimer;  // frames on the wall
+    u32 mSlideTimer;  // frames of the slide down (0: not sliding)
+    u8 mCancel;  // the wall stick is cancelled (isCancel)
+    u8 mOnBinderFloor;  // the binder hit a floor last frame
+    u8 mIceWall;  // an ice wall was made at the start
+    f32 mSlideSpeed;  // the slide's speed, smoothed
+    Vec3f mWallVec;  // the wall's normal, or the jump's velocity (the cancel test, the effects)
+    Vec3f mTriangleJumpDir;  // the jump's horizontal direction before the wall (initTriangleJump)
 };

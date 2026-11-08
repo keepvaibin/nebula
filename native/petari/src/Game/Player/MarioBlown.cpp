@@ -30,17 +30,17 @@ bool Mario::blown(const Vec3f& rVec) {
     return true;
 }
 
-MarioBlown::MarioBlown(MarioActor* pActor) : MarioState(pActor, MarioStatus_Blown), mTimer(), _14() {
-    _18.zero();
-    _24 = false;
-    _25 = false;
+MarioBlown::MarioBlown(MarioActor* pActor) : MarioState(pActor, MarioStatus_Blown), mTimer(), mStep() {
+    mVelocity.zero();
+    mJumpedOut = false;
+    mAirLanding = false;
 }
 
 bool MarioBlown::start() {
     mTimer = 0;
-    _14 = 0;
-    _24 = false;
-    _25 = false;
+    mStep = 0;
+    mJumpedOut = false;
+    mAirLanding = false;
 
     changeAnimation("壁ヒット", "基本");
     playSound("声壁体当たり");
@@ -52,9 +52,9 @@ bool MarioBlown::start() {
     getPlayer()->mMovementStates.jumping = true;
     getPlayer()->mMovementStates.hipDrop = false;
 
-    _18 += -mActor->_240 * mActor->getConst().getTable()->mJumpHeightBlown;
-    getPlayer()->setJumpVec(_18);
-    addVelocity(_18);
+    mVelocity += -mActor->mGravityVec * mActor->getConst().getTable()->mJumpHeightBlown;
+    getPlayer()->setJumpVec(mVelocity);
+    addVelocity(mVelocity);
     getPlayer()->lockGroundCheck(this, true);
     return true;
 }
@@ -66,18 +66,18 @@ bool MarioBlown::update() {
         return false;
     }
 
-    switch (_14) {
+    switch (mStep) {
     case 0:
     case 2:
-        addVelocity(_18);
-        _18 += mActor->_240 * mActor->getConst().getTable()->mGravityBlown;
+        addVelocity(mVelocity);
+        mVelocity += mActor->mGravityVec * mActor->getConst().getTable()->mGravityBlown;
         if (mTimer > 120) {
             changeAnimation("中ダメージ空中");
         }
 
         if (mTimer > 60) {
             Vec3f killed;
-            if (MR::isNearZero(MR::vecKillElement(mActor->getLastMove(), mActor->_240, &killed))) {
+            if (MR::isNearZero(MR::vecKillElement(mActor->getLastMove(), mActor->mGravityVec, &killed))) {
                 return false;
             }
         }
@@ -88,30 +88,30 @@ bool MarioBlown::update() {
 
             if (getPlayer()->damagePolygonCheck(getPlayer()->getGroundPolygon())) {
                 getPlayer()->mHitStates.blown = true;
-                _24 = true;
+                mJumpedOut = true;
                 return false;
             }
 
-            if (_14 != 2 || mTimer >= 3) {
+            if (mStep != 2 || mTimer >= 3) {
                 playSound("吹っ飛び倒れ");
                 changeAnimation("壁ヒット着地");
                 playEffect("共通壁ヒット着地");
-                MR::vecKillElement(_18, mActor->_240, &_18);
+                MR::vecKillElement(mVelocity, mActor->mGravityVec, &mVelocity);
             }
 
-            _14 = 1;
+            mStep = 1;
             mTimer = 0;
         }
 
         break;
     case 1:
         if (!getPlayer()->getMovementStates().onGround && !MR::isNearZero(getPlayer()->mVerticalSpeed)) {
-            _25 = true;
+            mAirLanding = true;
             return false;
         }
 
-        addVelocity(_18);
-        _18.mult(0.95f);
+        addVelocity(mVelocity);
+        mVelocity.mult(0.95f);
 
         if (!isAnimationRun("壁ヒット着地")) {
             return false;
@@ -120,39 +120,39 @@ bool MarioBlown::update() {
         if (mTimer > 15 && checkTrgA()) {
             getPlayer()->stopJump();
             getPlayer()->tryJump();
-            _24 = true;
+            mJumpedOut = true;
             return false;
         }
 
         break;
     }
 
-    f32 dot = vecKillActor240(_18);
+    f32 dot = vecKillActor240(mVelocity);
 
-    if (_18.length() > 10.0f) {
-        _18.mult(0.5f);
+    if (mVelocity.length() > 10.0f) {
+        mVelocity.mult(0.5f);
     }
 
-    _18 += mActor->_240 * MR::clamp(dot, 0.0f, 40.0f);
-    getPlayer()->setJumpVec(_18);
+    mVelocity += mActor->mGravityVec * MR::clamp(dot, 0.0f, 40.0f);
+    getPlayer()->setJumpVec(mVelocity);
     return true;
 }
 
 bool MarioBlown::close() {
-    if (!_24) {
+    if (!mJumpedOut) {
         getPlayer()->stopJump();
     }
 
     stopAnimation("壁ヒット");
 
-    if (_25) {
+    if (mAirLanding) {
         stopAnimation("壁ヒット着地", "基本");
     }
 
     mActor->setBlendMtxTimer(6);
     getPlayer()->unlockGroundCheck(this);
 
-    if (!_24) {
+    if (!mJumpedOut) {
         getPlayer()->mMovementStates.simpleGroundCheck = false;
     }
 

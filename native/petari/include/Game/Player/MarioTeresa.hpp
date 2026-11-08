@@ -36,19 +36,14 @@ public:
     void addTeresaHorizontalVelocity(const Vec3f&);
     void doTeresaReflection(const Vec3f&, bool);
 
-    Vec3f _14;
-    f32 _20;
-    f32 _24;
-    Vec3f _28;
-    Vec3f _34;
-    u16 _40;
-    u16 _42;
-    u16 _44;
-    u16 _46;
-    u16 _48;
-    f32 _4C;
-    f32 _50;
-    f32 _54;
-    u8 _58;
-    u8 _59;
+    Vec3f mPrevJumpVec;  // the jump vector at the frame's start
+    f32 mHeight;  // the height above the ground (checkHeight)
+    f32 mWaitHeight;  // the float height (mTeresaWaitHeight)
+    Vec3f mWind;  // the wind, smoothed
+    Vec3f mVelocity;  // the Boo's own velocity
+    u16 mReflectTimer;  // frames since a reflection (0: none)
+    u16 mAccelTimer;  // frames left of the accel
+    u16 mWallReflectTimer;  // frames left of a wall reflection
+    u16 mPushTimer;  // frames of the push after a press
+    u8 mDropping;  // falling straight with no stick (updateDropFlag)
 };

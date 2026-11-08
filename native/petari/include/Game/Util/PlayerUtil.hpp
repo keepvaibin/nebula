@@ -163,7 +163,6 @@ namespace MR {
     void hidePlayer();
     void showPlayerJoint(const char*);
     void hidePlayerJoint(const char*);
-    void setPlayerSpot(f32, u32);
     void startPlayerDownWipe();
     void setCameraTargetToPlayer(CameraTargetArg*);
     bool isPlayerDisableFpView();

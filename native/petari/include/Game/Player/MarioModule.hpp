@@ -121,6 +121,5 @@ public:
     virtual bool exec() = 0;
     virtual void draw() const = 0;
 
-    void* _4;
     MarioModuleTask* mNext;
 };

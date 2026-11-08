@@ -22,12 +22,12 @@ bool MarioActor::isEnableSpinPunch() {
     }
 
     if (mMario->getCurrentStatus() == MarioStatus_Flip) {
-        return mMario->mFlip->_14 >= 2;  // FIXME
+        return mMario->mFlip->mStep >= 2;  // FIXME
     }
 
     if (mMario->getCurrentStatus() == MarioStatus_Stun) {
         bool out = false;
-        if (mMario->mStun->_12 || mMario->mStun->_14 < 15) {
+        if (mMario->mStun->mRecovering || mMario->mStun->mRecoverTimer < 15) {
             out = true;
         }
 
@@ -70,7 +70,6 @@ bool MarioActor::trySpinPunch() {
     }
 
     tryReleaseBombTeresa();
-    _950 = false;
 
     return out;
 }
@@ -87,9 +86,9 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
     }
 
     if (isJumping()) {
-        _38C = 5;
+        mStunTimer = 5;
     } else {
-        _38C = 5;
+        mStunTimer = 5;
         if (mMario->mWalkSpeed > 0.1f) {
             mMario->mWalkSpeed = 0.1f;
             mMario->mTargetWalkSpeedIndex = 1;
@@ -124,7 +123,7 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
 
 bool MarioActor::sendPunch(HitSensor* pSensor, bool myBool) {
     if (isDamaging()) {
-        _944 = false;
+        mPunchHitTimer = false;
         return false;
     }
 
@@ -138,9 +137,9 @@ bool MarioActor::sendPunch(HitSensor* pSensor, bool myBool) {
         return out;
     }
 
-    _FCC = true;
+    mAttacking = true;
     bool out = MR::sendMsgPlayerPunch(pSensor, getSensor("body"));
-    _FCC = false;
+    mAttacking = false;
 
     if (myBool && out && !selectCustomEffectSpinHitSound(pSensor->mHost->mName)) {
         MR::startSpinHitSound(this);
@@ -158,17 +157,17 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
         return false;
     }
 
-    for (u32 idx = 0; idx < _974; idx++) {
-        if (_954[idx] == pSensor) {
+    for (u32 idx = 0; idx < mAirPunchHitCount; idx++) {
+        if (mAirPunchHits[idx] == pSensor) {
             return false;
         }
     }
 
-    if (_974 >= 8) {
+    if (mAirPunchHitCount >= 8) {
         return false;
     }
 
-    if (!_3E5 && mPlayerMode != 1) {
+    if (!mPunchSensorOn && mPlayerMode != 1) {
         Vec3f vec(pSensor->mPosition - getSensor("body")->mPosition);
         MR::vecKillElement(vec, getGravityVector(), &vec);
 
@@ -178,9 +177,9 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
     }
 
     if (sendPunch(pSensor, true)) {
-        _954[_974] = pSensor;
+        mAirPunchHits[mAirPunchHitCount] = pSensor;
         mRushSensor = pSensor;
-        _974++;
+        mAirPunchHitCount++;
 
         reactionPunch(pSensor);
 

@@ -56,7 +56,6 @@ public:
     bool checkAndRun(u32 sequenceFrame);
     void playSound(const char* pName);
     void playAnimation(const char* pName);
-    void setSpot(f32, u32);
 
     bool isMissLayoutClosed(u16 sequenceFrame);
     void decLeft(u16 eventFrame, u16 sequenceFrame);

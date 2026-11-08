@@ -18,13 +18,13 @@ public:
 
     void exitJump();
 
-    u32 _14;
-    u8 _18;
-    bool _19;
-    u8 _1A;
-    s8 _1B;
-    u8 _1C;
-    u8 _1D;
-    f32 _20;
-    f32 _24;
+    u32 mStrideTimer;  // frames since the last stride
+    u8 mExitJump;  // left by a jump (exitJump)
+    bool mBackward;  // skating backward (Z turns it)
+    u8 mStandStart;  // started slow: the stand animation plays out, no move
+    s8 mStrideSide;  // the next stride's side (0 right, 1 left)
+    u8 mStrideReady;  // the next stride may start
+    u8 mStrideCount;  // strides so far (the start's counts)
+    f32 mTwist;  // the twist animation's phase (-1 to 1)
+    f32 mTilt;  // the side tilt, smoothed
 };

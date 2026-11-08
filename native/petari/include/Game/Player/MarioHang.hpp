@@ -21,19 +21,17 @@ public:
     void forceDrop();
     void tryClimb(bool);
 
-    u16 _12;
-    u16 _14;
-    u16 _16;
+    u16 mClimbStep;  // the climb's step (0 hanging)
+    u16 mTimer;  // frames in the step
+    u16 mSlipUpTimer;  // frames until the slip up (a jump at the hang's start)
     u16 mHangTimer;
-    u8 _1A;
-    u8 _1B;
-    u8 _1C;
-    u8 _1D;
-    u8 _1E;
-    u8 _1F;
-    Triangle* _20;
-    Triangle* _24;
-    Vec3f _28;
-    Vec3f _34;
+    u8 mSlipUp;  // the slip up is due: the hang ends in it (close)
+    u8 mClimbQueued;  // a climb asked during the hang's start
+    u8 mLetGo;  // he lets go (pushed off, moved, or no room)
+    u8 mDropQueued;  // a drop asked during the hang's start
+    u8 mJustStarted;  // the hang just began (checkHang): a jump makes the slip up
+    Triangle* mWallPolygon;  // the wall's polygon (a copy)
+    Vec3f mLocalNormal;  // the hang normal in the polygon's space
+    Vec3f mWallNormal;  // the hang normal
     HitSensor* mWallSensor;
 };

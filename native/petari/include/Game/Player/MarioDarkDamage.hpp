@@ -12,6 +12,6 @@ public:
     virtual bool update();
     virtual bool notice();
 
-    u16 _12;
-    u16 _14;
+    u16 mTimer;  // frames left of the damage
+    u16 mStep;  // update's step
 };

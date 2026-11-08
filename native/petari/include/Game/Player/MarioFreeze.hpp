@@ -14,8 +14,8 @@ public:
     virtual bool notice();
 
     bool mIsFrozen;
-    f32 _14;
-    u16 _18;
+    f32 mVerticalSpeed;  // the hop along the gravity
+    u16 mThawing;  // the thaw's last timer runs
     u16 mFreezeTimer;
-    u16 _1C;
+    u16 mAfterTimer;  // frames after it: no new damage
 };

@@ -14,7 +14,7 @@ public:
 
     bool checkStart();
 
-    u16 _12;
-    u16 _14;
-    u16 _16;
+    u16 mKind;  // 0 the idle wait, 1 the battle wait (NonSleepCube)
+    u16 mStep;  // the idle wait's step
+    u16 mTimer;  // frames in the wait (1800: the special wait)
 };

@@ -17,7 +17,7 @@ void MarioNullBck::init(const TableIter& rIter) {
 }
 
 void MarioNullBck::appear() {
-    _8C = 0;
+    mLastFrame = 0;
     LiveActor::appear();
 }
 
@@ -34,11 +34,11 @@ bool MarioNullBck::getFramePos(f32 a1, Vec3f* a2, Vec3f* a3) {
         a1 = MR::getBckCtrl(this)->getEnd() - 0.01f;
         ret = true;
     }
-    if ((f32)_8C >= a1) {
+    if ((f32)mLastFrame >= a1) {
         ret = true;
         a1 = MR::getBckCtrl(this)->getEnd();
     }
-    _8C = (s16)(s32)(a1);
+    mLastFrame = (s16)(s32)(a1);
     MR::setBckFrame(this, a1);
     MR::setBckRate(this, 0.0f);
     MR::updateModelManager(this);

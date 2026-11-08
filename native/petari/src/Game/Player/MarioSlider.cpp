@@ -21,26 +21,25 @@ bool Mario::checkSliderMode() const {
 }
 
 MarioSlider::MarioSlider(MarioActor* pActor) : MarioState(pActor, MarioStatus_Slider) {
-    _14.zero();
-    _20.zero();
-    _2C.zero();
-    _40 = 0;
-    _38 = 0.0f;
-    _3C = 0.0f;
+    mVelocity.zero();
+    mSlopeDir.zero();
+    mAirTimer = 0;
+    mBrake = 0.0f;
+    mLean = 0.0f;
 }
 
 void MarioSlider::calcGroundAccel() {
     Vec3f* val = &getPlayer()->mGroundNorm;
     Vec3f v6 = val->cross(*getPlayer()->getGravityVec());
     MR::normalizeOrZero(&v6);
-    _2C.cross(v6, *val);
-    MR::normalizeOrZero(&_2C);
+    mSlopeDir.cross(v6, *val);
+    MR::normalizeOrZero(&mSlopeDir);
 }
 
 bool MarioSlider::postureCtrl(MtxPtr) {
     Mtx rotMtx;
     Vec3f& frontVec = getFrontVec();
-    NebulaMtxRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * _3C / 2.0f));
+    NebulaMtxRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * mLean / 2.0f));
 
     Vec3f newHeadVec;
     NebulaMtxMultVec(rotMtx, &getPlayer()->mGroundNorm, &newHeadVec);
@@ -53,7 +52,7 @@ bool MarioSlider::postureCtrl(MtxPtr) {
 
 void MarioSlider::calcWallHit() {
     if (getPlayer()->mMovementStates.sideWall) {
-        Vec3f stack_50(_14);
+        Vec3f stack_50(mVelocity);
         f32 sideDot = MR::vecKillElement(stack_50, *getPlayer()->mSideWallTriangle->getNormal(0), &stack_50);
 
         if (sideDot < 0.0f) {
@@ -61,12 +60,12 @@ void MarioSlider::calcWallHit() {
                 sideDot = -10.0f;
             }
 
-            _14 = stack_50 - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
+            mVelocity = stack_50 - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
         }
     }
 
     if (getPlayer()->mMovementStates.frontWall) {
-        Vec3f stack_44(_14);
+        Vec3f stack_44(mVelocity);
         f32 frontDot = MR::vecKillElement(stack_44, *getPlayer()->mFrontWallTriangle->getNormal(0), &stack_44);
 
         if (frontDot < 0.0f) {
@@ -75,9 +74,9 @@ void MarioSlider::calcWallHit() {
             }
 
             f32 frontScale = 0.5f * frontDot;
-            _14 = stack_44 - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
+            mVelocity = stack_44 - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
 
-            Vec3f stack_38(_14);
+            Vec3f stack_38(mVelocity);
             MR::normalize(&stack_38);
             getPlayer()->setFrontVecKeepUp(stack_38);
         }
@@ -105,14 +104,13 @@ void Mario::startSlider() {
 }
 
 bool MarioSlider::start() {
-    _14 = getPlayer()->mPrevVelocity;
-    MR::vecKillElement(_14, getPlayer()->mGroundNorm, &_14);
-    _20 = getFrontVec();
+    mVelocity = getPlayer()->mPrevVelocity;
+    MR::vecKillElement(mVelocity, getPlayer()->mGroundNorm, &mVelocity);
     getPlayer()->cancelSquatMode();
     changeAnimation("スライダー尻", "スライダー尻");
-    _40 = 10;
-    _38 = 0.0f;
-    _3C = 0.0f;
+    mAirTimer = 10;
+    mBrake = 0.0f;
+    mLean = 0.0f;
     return true;
 }
 
@@ -121,45 +119,45 @@ bool MarioSlider::update() {
         if (getPlayer()->mMovementStates.onGround != 0) {
             if (isSlipPolygon(getGroundPolygon())) {
                 Mario* player = getPlayer();
-                player->mSlopeMoveVec = _14;
+                player->mSlopeMoveVec = mVelocity;
                 player->mSlipPower = 10.0f;
                 return false;
             }
         }
 
-        _40--;
-        if (_40 == 0) {
+        mAirTimer--;
+        if (mAirTimer == 0) {
             getPlayer()->tryDrop();
             getPlayer()->mJumpVec = mActor->getLastMove();
             return false;
         }
     } else {
-        _40 = 10;
+        mAirTimer = 10;
     }
 
     calcGroundAccel();
 
     if (checkTrgA()) {
-        getPlayer()->mWalkSpeed = (_14.length() / mActor->mConst->getTable()->mJumpFrontSpeed);
+        getPlayer()->mWalkSpeed = (mVelocity.length() / mActor->mConst->getTable()->mJumpFrontSpeed);
         getPlayer()->tryJump();
         return false;
     } else {
         f32 stickY = -getStickY();
         f32 stickX = getStickX();
-        _38 = (stickY * (1.0f - mActor->getConst().getTable()->mSliderBrakeIne)) + (_38 * mActor->mConst->getTable()->mSliderBrakeIne);
+        mBrake = (stickY * (1.0f - mActor->getConst().getTable()->mSliderBrakeIne)) + (mBrake * mActor->mConst->getTable()->mSliderBrakeIne);
         MarioConstTable* tbl = mActor->mConst->getTable();
-        _3C = (stickX * (1.0f - tbl->mSliderWeightIne)) + (_3C * tbl->mSliderWeightIne);
-        f32 v18 = _14.length();
+        mLean = (stickX * (1.0f - tbl->mSliderWeightIne)) + (mLean * tbl->mSliderWeightIne);
+        f32 v18 = mVelocity.length();
         v18 -= mActor->mConst->getTable()->mSliderBrakePow;
 
         if (v18 > 20.0f) {
-            v18 = (v18 * (1.0f - (0.1f * _38)));
+            v18 = (v18 * (1.0f - (0.1f * mBrake)));
         }
 
-        Vec3f v48(_14);
+        Vec3f v48(mVelocity);
 
         if (MR::isNearZero(v48)) {
-            v48 = _2C * mActor->mConst->getTable()->mSliderSlopePow;
+            v48 = mSlopeDir * mActor->mConst->getTable()->mSliderSlopePow;
         }
 
         if (MR::isNearZero(v48)) {
@@ -170,16 +168,16 @@ bool MarioSlider::update() {
             Vec3f v46 = v48.cross(v47);
             MR::vecKillElement(v46, getPlayer()->mGroundNorm, &v46);
             MR::normalize(&v46);
-            _14.setLength(v18);
-            _14 += _2C * mActor->mConst->getTable()->mSliderSlopePow;
+            mVelocity.setLength(v18);
+            mVelocity += mSlopeDir * mActor->mConst->getTable()->mSliderSlopePow;
 
-            _14 += v46 * _3C * mActor->mConst->getTable()->mSliderWeightPow;
-            MR::vecKillElement(_14, getPlayer()->mGroundNorm, &_14);
-            if (_14.length() > mActor->mConst->getTable()->mSliderMaxSpeed) {
-                _14.setLength(mActor->mConst->getTable()->mSliderMaxSpeed);
+            mVelocity += v46 * mLean * mActor->mConst->getTable()->mSliderWeightPow;
+            MR::vecKillElement(mVelocity, getPlayer()->mGroundNorm, &mVelocity);
+            if (mVelocity.length() > mActor->mConst->getTable()->mSliderMaxSpeed) {
+                mVelocity.setLength(mActor->mConst->getTable()->mSliderMaxSpeed);
             }
 
-            addVelocity(_14);
+            addVelocity(mVelocity);
 
             Vec3f v45(-getPlayer()->mGroundNorm * 15.0f);
 
@@ -188,7 +186,7 @@ bool MarioSlider::update() {
 
             Vec3f v44(getPlayer()->mFrontVec);
             Vec3f v43;
-            MR::vecKillElement(_14, *getPlayer()->getGravityVec(), &v43);
+            MR::vecKillElement(mVelocity, *getPlayer()->getGravityVec(), &v43);
 
             if (!MR::isNearZero(v43)) {
                 MR::normalize(&v43);

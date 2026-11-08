@@ -12,65 +12,65 @@ void MarioActor::initHand() {
     MR::hideJoint(mModels[0], "HandR0");
     MR::hideJoint(mModels[0], "HandL0");
 
-    if (_A04 != nullptr) {
+    if (mBoneModel != nullptr) {
         MR::hideJoint(mModels[1], "HandR0");
         MR::hideJoint(mModels[1], "HandL0");
     }
 
-    if (_9E4 != nullptr) {
+    if (mBeeModel != nullptr) {
         MR::hideJoint(mModels[2], "HandR0");
         MR::hideJoint(mModels[2], "HandL0");
     }
 
-    if (_9C0 != nullptr) {
+    if (mIceModel != nullptr) {
         MR::hideJoint(mModels[3], "HandR0");
         MR::hideJoint(mModels[3], "HandL0");
     }
 
-    if (_9C8 != nullptr) {
+    if (mInvincibleModel != nullptr) {
         MR::hideJoint(mModels[4], "HandR0");
         MR::hideJoint(mModels[4], "HandL0");
     }
 
-    _A59 = 0;
-    _A5A = 0;
-    _A40 = nullptr;
-    _A44 = nullptr;
+    mHandPoseL = 0;
+    mHandPoseR = 0;
+    mIceHandL = nullptr;
+    mIceHandR = nullptr;
 
-    if (_9C0 != nullptr) {
-        _A40 = new ModelHolder("IceMarioHandL", true);
-        MR::initMaterialFog(_A40, true);
-        MR::prepareMaterials(_A40);
+    if (mIceModel != nullptr) {
+        mIceHandL = new ModelHolder("IceMarioHandL", true);
+        MR::initMaterialFog(mIceHandL, true);
+        MR::prepareMaterials(mIceHandL);
 
-        _A44 = new ModelHolder("IceMarioHandR", true);
-        MR::initMaterialFog(_A44, true);
-        MR::prepareMaterials(_A44);
+        mIceHandR = new ModelHolder("IceMarioHandR", true);
+        MR::initMaterialFog(mIceHandR, true);
+        MR::prepareMaterials(mIceHandR);
     }
 
-    _A48 = new ModelHolder("MarioHandL", true);
-    MR::initMaterialFog(_A48, true);
-    MR::prepareMaterials(_A48);
+    mHandL = new ModelHolder("MarioHandL", true);
+    MR::initMaterialFog(mHandL, true);
+    MR::prepareMaterials(mHandL);
 
-    _A4C = new ModelHolder("MarioHandR", true);
-    MR::initMaterialFog(_A4C, true);
-    MR::prepareMaterials(_A4C);
+    mHandR = new ModelHolder("MarioHandR", true);
+    MR::initMaterialFog(mHandR, true);
+    MR::prepareMaterials(mHandR);
 
-    _A50 = nullptr;
-    _A54 = nullptr;
+    mInvincibleHandL = nullptr;
+    mInvincibleHandR = nullptr;
 
-    if (_9C8 != nullptr) {
-        _A50 = new ModelHolder("InvincibleMarioHandL", true);
-        MR::initMaterialFog(_A50, true);
-        MR::prepareMaterials(_A50);
+    if (mInvincibleModel != nullptr) {
+        mInvincibleHandL = new ModelHolder("InvincibleMarioHandL", true);
+        MR::initMaterialFog(mInvincibleHandL, true);
+        MR::prepareMaterials(mInvincibleHandL);
 
-        _A54 = new ModelHolder("InvincibleMarioHandR", true);
-        MR::initMaterialFog(_A54, true);
-        MR::prepareMaterials(_A54);
+        mInvincibleHandR = new ModelHolder("InvincibleMarioHandR", true);
+        MR::initMaterialFog(mInvincibleHandR, true);
+        MR::prepareMaterials(mInvincibleHandR);
     }
 
-    for (u32 idx = 0; idx < MR::getJointNum(_A48) - 1; idx++) {
-        copyMaterial(MR::getModel(_A48), MR::getJointIndex(this, "HandL0"), idx);
-        copyMaterial(MR::getModel(_A4C), MR::getJointIndex(this, "HandR0"), idx);
+    for (u32 idx = 0; idx < MR::getJointNum(mHandL) - 1; idx++) {
+        copyMaterial(MR::getModel(mHandL), MR::getJointIndex(this, "HandL0"), idx);
+        copyMaterial(MR::getModel(mHandR), MR::getJointIndex(this, "HandR0"), idx);
     }
 
     updateHandAtMorph();
@@ -93,15 +93,15 @@ void MarioActor::updateHand() {
     if (mMario->isStatusActive(MarioStatus_FpView)) {
         hideHands = true;
     }
-    if (_1C3) {
+    if (mDarkMaskOn) {
         hideHands = true;
     }
 
     if (MR::isHiddenModel(this) || is481or482On() || hideHands) {
-        _A58 = true;
+        mHandsHidden = true;
         return;
     }
-    _A58 = false;
+    mHandsHidden = false;
 
     Vec3f control;
     mMarioAnim->getXanimePlayer()->getMainAnimationTrans(MR::getJointIndex(this, "PartsControl"), &control);
@@ -112,46 +112,46 @@ void MarioActor::updateHand() {
     s32 left = static_cast< u8 >(MR::clamp(leftPose, 0, 7));
     s32 right = static_cast< u8 >(MR::clamp(rightPose, 0, 7));
 
-    ModelHolder* leftHand = _A48;
-    ModelHolder* rightHand = _A4C;
+    ModelHolder* leftHand = mHandL;
+    ModelHolder* rightHand = mHandR;
     if (mPlayerMode == PlayerMode_Ice) {
-        leftHand = _A40;
-        rightHand = _A44;
+        leftHand = mIceHandL;
+        rightHand = mIceHandR;
     } else if (mPlayerMode == PlayerMode_Invincible) {
-        leftHand = _A50;
-        rightHand = _A54;
+        leftHand = mInvincibleHandL;
+        rightHand = mInvincibleHandR;
     }
 
-    if (left != _A59) {
-        if (_A59 != 0xFF) {
-            MR::hideJoint(MR::getJoint(leftHand, _A59 + 1));
+    if (left != mHandPoseL) {
+        if (mHandPoseL != 0xFF) {
+            MR::hideJoint(MR::getJoint(leftHand, mHandPoseL + 1));
         }
         MR::showJoint(MR::getJoint(leftHand, left + 1));
     }
-    if (right != _A5A) {
-        if (_A5A != 0xFF) {
-            MR::hideJoint(MR::getJoint(rightHand, _A5A + 1));
+    if (right != mHandPoseR) {
+        if (mHandPoseR != 0xFF) {
+            MR::hideJoint(MR::getJoint(rightHand, mHandPoseR + 1));
         }
         MR::showJoint(MR::getJoint(rightHand, right + 1));
     }
 
-    _A59 = left;
-    _A5A = right;
+    mHandPoseL = left;
+    mHandPoseR = right;
 }
 
 void MarioActor::changeHandMaterial() {
 }
 
 void MarioActor::updateHandAtMorph() {
-    ModelHolder* holder1 = _A48;
-    ModelHolder* holder2 = _A4C;
+    ModelHolder* holder1 = mHandL;
+    ModelHolder* holder2 = mHandR;
 
     if (mPlayerMode == 3) {
-        holder1 = _A40;
-        holder2 = _A44;
+        holder1 = mIceHandL;
+        holder2 = mIceHandR;
     } else if (mPlayerMode == 1) {
-        holder1 = _A50;
-        holder2 = _A54;
+        holder1 = mInvincibleHandL;
+        holder2 = mInvincibleHandR;
     }
 
     for (u32 idx = 0; idx <= 7; idx++) {
@@ -159,45 +159,45 @@ void MarioActor::updateHandAtMorph() {
         MR::hideJoint(MR::getJoint(holder2, idx + 1));
     }
 
-    _A59 = -1;
-    _A5A = -1;
+    mHandPoseL = -1;
+    mHandPoseR = -1;
 }
 
 void MarioActor::drawHand() const {
-    if (_A58) {
+    if (mHandsHidden) {
         return;
     }
 
     if (mPlayerMode == 1) {
-        reinterpret_cast< PlayerModel* >(MR::getModel(_A50))->directDraw();
-        reinterpret_cast< PlayerModel* >(MR::getModel(_A54))->directDraw();
+        reinterpret_cast< PlayerModel* >(MR::getModel(mInvincibleHandL))->directDraw();
+        reinterpret_cast< PlayerModel* >(MR::getModel(mInvincibleHandR))->directDraw();
 
         return;
     }
 
-    if (MR::isHiddenModel(_A48)) {
+    if (MR::isHiddenModel(mHandL)) {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(_A48));
+    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(mHandL));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 
-    model = reinterpret_cast< PlayerModel* >(MR::getModel(_A4C));
+    model = reinterpret_cast< PlayerModel* >(MR::getModel(mHandR));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 }
 
 void MarioActor::drawIndirectHand() const {
-    if (_A58) {
+    if (mHandsHidden) {
         return;
     }
 
-    if (MR::isHiddenModel(_A40)) {
+    if (MR::isHiddenModel(mIceHandL)) {
         return;
     }
 
-    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(_A40));
+    PlayerModel* model = reinterpret_cast< PlayerModel* >(MR::getModel(mIceHandL));
 
     if (mPlayerMode != 3) {
         return;
@@ -206,7 +206,7 @@ void MarioActor::drawIndirectHand() const {
     model->setDynamicList(&mLightTint);
     model->directDraw();
 
-    model = reinterpret_cast< PlayerModel* >(MR::getModel(_A44));
+    model = reinterpret_cast< PlayerModel* >(MR::getModel(mIceHandR));
     model->setDynamicList(&mLightTint);
     model->directDraw();
 }

@@ -20,23 +20,23 @@
 #include <new>
 
 void MarioActor::initScreenBox() {
-    _B44 = new u8[32];  // the frame read's key
-    _B28 = 0.0f;
-    _B24 = 0.0f;
-    _B30 = 0.0f;
-    _B2C = 0.0f;
-    _B38 = 0.0f;
-    _B34 = 0.0f;
-    _B40 = 0.0f;
-    _B3C = 0.0f;
+    mScreenBoxKey = new u8[32];  // the frame read's key
+    mScreenBoxMin.y = 0.0f;
+    mScreenBoxMin.x = 0.0f;
+    mScreenBoxMax.y = 0.0f;
+    mScreenBoxMax.x = 0.0f;
+    mScreenBoxPos.y = 0.0f;
+    mScreenBoxPos.x = 0.0f;
+    mScreenBoxSize.y = 0.0f;
+    mScreenBoxSize.x = 0.0f;
 }
 
 bool MarioActor::isUseScreenBox() const {
-    if (_A08 == 3) {
+    if (mShadowMode == 3) {
         return true;
     }
 
-    return !(_A08 - 7);
+    return !(mShadowMode - 7);
 }
 
 void MarioActor::calcScreenBoxRange() {
@@ -45,7 +45,7 @@ void MarioActor::calcScreenBoxRange() {
     }
 
     Vec3f position;
-    position = _B18;
+    position = mReflectPos;
     Vec2f center;
     Vec2f x;
     Vec2f y;
@@ -60,10 +60,10 @@ void MarioActor::calcScreenBoxRange() {
     f32 range = radius.length();
     minimum = center - Vec2f(range, range);
     maximum = center + Vec2f(range, range);
-    _B24 = minimum.x < maximum.x ? minimum.x : maximum.x;
-    _B2C = minimum.x > maximum.x ? minimum.x : maximum.x;
-    _B28 = minimum.y < maximum.y ? minimum.y : maximum.y;
-    _B30 = minimum.y > maximum.y ? minimum.y : maximum.y;
+    mScreenBoxMin.x = minimum.x < maximum.x ? minimum.x : maximum.x;
+    mScreenBoxMax.x = minimum.x > maximum.x ? minimum.x : maximum.x;
+    mScreenBoxMin.y = minimum.y < maximum.y ? minimum.y : maximum.y;
+    mScreenBoxMax.y = minimum.y > maximum.y ? minimum.y : maximum.y;
     s16 left = static_cast< s32 >(mScreenBoxMin.x);
     s16 top = static_cast< s32 >(mScreenBoxMin.y);
     s16 width = static_cast< s32 >(mScreenBoxMax.x) - left + 1;
@@ -77,11 +77,11 @@ void MarioActor::calcScreenBoxRange() {
         height = 2;
     }
 
-    _B34 = left;
-    _B38 = top;
-    _B3C = width;
-    _B40 = height;
-    Box2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
+    mScreenBoxPos.x = left;
+    mScreenBoxPos.y = top;
+    mScreenBoxSize.x = width;
+    mScreenBoxSize.y = height;
+    Box2f capture(mScreenBoxPos.x, mScreenBoxPos.y, mScreenBoxPos.x + mScreenBoxSize.x, mScreenBoxPos.y + mScreenBoxSize.y);
     s32 screenHeight = MR::getScreenHeight();
     Box2f screen(0.0f, 0.0f, MR::getScreenWidth(), screenHeight);
     Box2f clipped(capture);
@@ -91,10 +91,10 @@ void MarioActor::calcScreenBoxRange() {
         clipped.f.zero();
     }
 
-    _B34 = clipped.i.x;
-    _B38 = clipped.i.y;
-    _B3C = clipped.getWidth();
-    _B40 = clipped.getHeight();
+    mScreenBoxPos.x = clipped.i.x;
+    mScreenBoxPos.y = clipped.i.y;
+    mScreenBoxSize.x = clipped.getWidth();
+    mScreenBoxSize.y = clipped.getHeight();
 }
 
 void MarioActor::captureScreenBox() const {
@@ -102,12 +102,12 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    if (_B3C < 1.0f || _B40 < 1.0f) {
+    if (mScreenBoxSize.x < 1.0f || mScreenBoxSize.y < 1.0f) {
         return;
     }
 
     // The model's own target, the frame's size: its alpha is what the box composites by.
-    Frame::targetBegin(_B44, 1.0f, 1.0f, 0);
+    Frame::targetBegin(mScreenBoxKey, 1.0f, 1.0f, 0);
     Frame::setPassAlpha(false);
 }
 
@@ -116,22 +116,22 @@ void MarioActor::writeBackScreenBox() const {
         return;
     }
 
-    if (_B3C < 1.0f || _B40 < 1.0f) {
+    if (mScreenBoxSize.x < 1.0f || mScreenBoxSize.y < 1.0f) {
         return;
     }
 
-    Frame::targetEnd(_B44, NEBULA_TARGET_RGBA);
+    Frame::targetEnd(mScreenBoxKey, NEBULA_TARGET_RGBA);
 
     SiteTexture texture;
     Vec2f minimum;
     Vec2f maximum;
     const f32 screenWidth = MR::getScreenWidth();
     const f32 screenHeight = MR::getScreenHeight();
-    const f32 u0 = static_cast< s32 >(_B34) / screenWidth;
-    const f32 v0 = static_cast< s32 >(_B38) / screenHeight;
-    const f32 u1 = (static_cast< s32 >(_B34) + static_cast< s32 >(_B3C)) / screenWidth;
-    const f32 v1 = (static_cast< s32 >(_B38) + static_cast< s32 >(_B40)) / screenHeight;
-    SiteTextures::init(&texture, _B44, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    const f32 u0 = static_cast< s32 >(mScreenBoxPos.x) / screenWidth;
+    const f32 v0 = static_cast< s32 >(mScreenBoxPos.y) / screenHeight;
+    const f32 u1 = (static_cast< s32 >(mScreenBoxPos.x) + static_cast< s32 >(mScreenBoxSize.x)) / screenWidth;
+    const f32 v1 = (static_cast< s32 >(mScreenBoxPos.y) + static_cast< s32 >(mScreenBoxSize.y)) / screenHeight;
+    SiteTextures::init(&texture, mScreenBoxKey, JUTTexture::cAuthoredAcross, JUTTexture::cAuthoredDown, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     minimum = mScreenBoxPos;
     maximum = mScreenBoxPos + mScreenBoxSize;
     SiteMaterial material;
@@ -165,18 +165,18 @@ void MarioActor::calc1stPersonView() {
     u8 compareVal = (s32)(255.0f * val);
 
     if (compareVal == 0) {
-        _1A1 = true;
+        mFpViewHidden = true;
         hideBeeFur();
     } else {
-        _1A1 = false;
+        mFpViewHidden = false;
         updateAlphaList(compareVal);
     }
 }
 
 void MarioActor::hideBeeFur() {
     if (mMario->isPlayerModeBee()) {
-        _9E8->kill();
-        _9EC->offDraw(-1);
+        mBeeWing->kill();
+        mBeeFur->offDraw(-1);
     }
 
     if (getCarrySensor() != nullptr) {
@@ -184,7 +184,7 @@ void MarioActor::hideBeeFur() {
     }
 
     if (mMario->isPlayerModeInvincible()) {
-        _A6E = 0;
+        mBlurState = 0;
         stopEffect("無敵中");
     }
 }
@@ -193,7 +193,7 @@ void MarioActor::calcFogLighting() {
     Color8 fog(240, 16, 80, 0);
 
     if (!mMario->isStatusActive(MarioStatus_Paralyze) && isNeedDamageFog()) {
-        f32 phase = ((_1A8 + 31) & 63) / 63.0f;
+        f32 phase = ((mFogWaveTimer + 31) & 63) / 63.0f;
 
         if (phase > 0.5f) {
             phase = 1.0f - phase;
@@ -201,31 +201,31 @@ void MarioActor::calcFogLighting() {
 
         f32 wave = 2.0f * phase;
         f32 low = getConst().getTable()->mDamageFogLow;
-        _1A4 = (low + wave * (getConst().getTable()->mDamageFogHigh - getConst().getTable()->mDamageFogLow)) / 255.0f;
-    } else if (_1AA) {
-        fog.mRGBA = _1B0.mRGBA;
+        mFogRate = (low + wave * (getConst().getTable()->mDamageFogHigh - getConst().getTable()->mDamageFogLow)) / 255.0f;
+    } else if (mFlashFogTimer) {
+        fog.mRGBA = mFlashFogColor.mRGBA;
 
-        if (_1B5) {
-            fog.g = (s32)(255.0f * MR::sin(FloatUtil::PI() * (_1AA / 20.0f)));
+        if (mFlashFogOn) {
+            fog.g = (s32)(255.0f * MR::sin(FloatUtil::PI() * (mFlashFogTimer / 20.0f)));
         }
 
-        _1A4 = _1AC * MR::sin((_1AA / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * FloatUtil::PI());
+        mFogRate = mFlashFogRate * MR::sin((mFlashFogTimer / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * FloatUtil::PI());
     } else if (mMario->mItemDashTimer) {
         fog.set(255, 255, 0, 0);
-        _1A4 = 0.8f * MR::sin(((mMario->mItemDashTimer / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
+        mFogRate = 0.8f * MR::sin(((mMario->mItemDashTimer / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
     } else {
         resetFog();
     }
 
     Color8 ambient = *MR::getLightAmbientColor(this);
-    updateLightList(ambient, Color8(255, 255, 255, 255), fog, _1A4);
+    updateLightList(ambient, Color8(255, 255, 255, 255), fog, mFogRate);
 }
 
 void MarioActor::resetFog() {
     Color8 color(0, 0, 0, 0);
-    _1A8 = 0;
-    _1A4 = 0.0f;
-    _1AA = 0;
+    mFogWaveTimer = 0;
+    mFogRate = 0.0f;
+    mFlashFogTimer = 0;
 }
 
 void MarioActor::updateAlphaList(u8 alpha) {
@@ -293,8 +293,8 @@ void MarioActor::drawScreenBlend() const {
         MR::drawFullScreenBlur(mMario->mCurrentState->getBlurOffset());
     }
 
-    if (_1C6) {
-        MR::drawFullScreenBlur(_1C8, _1CC, _1D0, _1D1);
+    if (mScreenBlurOn) {
+        MR::drawFullScreenBlur(mScreenBlurGrow, mScreenBlurTrailGrow, mScreenBlurAlpha, mScreenBlurTrailAlpha);
     }
 
     if (mBeeWallWalk) {
@@ -335,7 +335,7 @@ void MarioActor::drawScreenBlend() const {
         MR::loadViewMtx();
     }
 
-    if (_BC4) {
+    if (mDamageFlashTimer) {
         u32 color = 0xFF000080;
 
         if (mMario->mHitStates.swimLifeDrain) {
@@ -352,9 +352,9 @@ void MarioActor::drawScreenBlend() const {
 }
 
 void MarioActor::updateRandomTexture(f32 distance) {
-    _B88 = 1 - _B88;
+    mMaskIndex = 1 - mMaskIndex;
     u8* pixel;
-    u8* image = mMaskTextures[_B88]->mImage;
+    u8* image = mMaskTextures[mMaskIndex]->mImage;
     distance = 1.0f - distance / 1000.0f;
     f32 probability = MR::clamp(distance, 0.0f, 1.0f);
 
@@ -395,7 +395,7 @@ void MarioActor::drawWallShade(const Vec3f& rPosition, const Vec3f& rNormal, f32
     material.mShader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
     material.constants[0] = 0.0f;
     material.setDepth(true, NEBULA_COMPARE_GREATER, false);
-    material.setTexture(0, mMaskTextures[_B88]);
+    material.setTexture(0, mMaskTextures[mMaskIndex]);
     Mtx rotation;
     Vec3f tangent(0.0f, rNormal.z, -rNormal.y);
 
@@ -456,31 +456,31 @@ void MarioActor::drawColdWaterDamage() const {
         frequency = 0.0f;
     }
 
-    drawFrameRipple(_1D8, 5.0f, _37C, frequency, 0.0f);
+    drawFrameRipple(mRippleKey, 5.0f, mFrameCount, frequency, 0.0f);
 }
 
 void MarioActor::setRasterScroll(s32 i1, s32 i2, s32 i3) {
-    _1E8 = i2;
-    _1E4 = 0.9f * _1E4 + 0.1f * i1;
-    _1EC = i3;
-    _1E2 = 1;
+    mRasterScrollPhase = i2;
+    mRasterScrollAmp = 0.9f * mRasterScrollAmp + 0.1f * i1;
+    mRasterScrollWave = i3;
+    mRasterScrollSet = 1;
 }
 
 void MarioActor::updateRasterScroll() {
-    if (_1E2) {
-        _1E2 = 0;
+    if (mRasterScrollSet) {
+        mRasterScrollSet = 0;
         return;
     }
 
-    _1E4 *= 0.9f;
+    mRasterScrollAmp *= 0.9f;
 
-    if (_1E4 < 1.0f) {
-        _1E8 = 0;
-        _1E4 = 0.0f;
+    if (mRasterScrollAmp < 1.0f) {
+        mRasterScrollPhase = 0;
+        mRasterScrollAmp = 0.0f;
     }
 
-    if (_1EC < 1.0f) {
-        _1EC = 0.0f;
+    if (mRasterScrollWave < 1.0f) {
+        mRasterScrollWave = 0.0f;
     }
 }
 
@@ -493,8 +493,8 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         return;
     }
 
-    const f32 phase = (_37C * Angle::cRadian360) / period;
-    drawFrameRipple(_1D8, amplitude, phase, TWO_PI / wavelength, 1.0f);
+    const f32 phase = (mFrameCount * Angle::cRadian360) / period;
+    drawFrameRipple(mRippleKey, amplitude, phase, TWO_PI / wavelength, 1.0f);
 }
 
 void MarioActor::drawMosaic() const {
@@ -506,44 +506,44 @@ void MarioActor::drawLifeUp() const {
 void MarioActor::calcSpinEffect() {
     f32 baseRadius = 30.0f;
     f32 radiusScale = 5.8f;
-    _6D4 = 0.0f;
-    _6D8 = 0.0f;
+    mSpinEffectRadius = 0.0f;
+    mSpinEffectHeight = 0.0f;
 
     if (selectAction("スピン回復エフェクト") != 1) {
         return;
     }
 
-    if (!_945) {
+    if (!mPunchFrame) {
         return;
     }
 
-    if (_944) {
+    if (mPunchHitTimer) {
         return;
     }
 
-    if (!_946) {
+    if (!mSpinIntervalTimer) {
         return;
     }
 
-    s32 frame = _946 - 9;
+    s32 frame = mSpinIntervalTimer - 9;
 
     if (frame <= 0 || frame > 15) {
-        _6D4 = 0.0f;
+        mSpinEffectRadius = 0.0f;
         return;
     }
 
     if (frame < 10) {
-        _6D4 = baseRadius + (frame / 10.0f) * (_945 * radiusScale);
-        _6D8 = 120.0f;
+        mSpinEffectRadius = baseRadius + (frame / 10.0f) * (mPunchFrame * radiusScale);
+        mSpinEffectHeight = 120.0f;
         return;
     }
 
-    _6D4 = baseRadius + _945 * radiusScale;
-    _6D8 = 120.0f;
+    mSpinEffectRadius = baseRadius + mPunchFrame * radiusScale;
+    mSpinEffectHeight = 120.0f;
 }
 
 void MarioActor::drawSpinEffect() const {
-    if (_6D4 == 0.0f) {
+    if (mSpinEffectRadius == 0.0f) {
         return;
     }
 
@@ -554,7 +554,7 @@ void MarioActor::drawSpinEffect() const {
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
     Mtx rotation;
-    Vec3f center = mCenterPos + mMario->mHeadVec * _6D8;
+    Vec3f center = mCenterPos + mMario->mHeadVec * mSpinEffectHeight;
     Vec3f direction(mMario->mFrontVec);
     Vec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
@@ -563,7 +563,7 @@ void MarioActor::drawSpinEffect() const {
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
-        point.setLength(_6D4);
+        point.setLength(mSpinEffectRadius);
         point += mMario->mHeadVec * MR::getRandom() * 10.0f;
 
         if (i) {
@@ -579,9 +579,9 @@ void MarioActor::drawSpinEffect() const {
 
     for (u32 i = 0; i <= 64; i++) {
         Vec3f point(direction);
-        point.setLength(_6D4);
+        point.setLength(mSpinEffectRadius);
         point += mMario->mHeadVec * MR::getRandom() * 10.0f;
-        f32 wave = MR::sin((((_37C + i) & 31) / 32.0f) * FloatUtil::PI());
+        f32 wave = MR::sin((((mFrameCount + i) & 31) / 32.0f) * FloatUtil::PI());
         f32 square = wave * wave;
         u32 alpha = 160.0f * (square * square);
 
@@ -623,18 +623,18 @@ void MarioActor::initDarkMask() {
         RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     }
 
-    _1C3 = true;
-    _1C4 = 0;
+    mDarkMaskOn = true;
+    mDarkMaskTimer = 0;
 }
 
 void MarioActor::updateDarkMask(u16 unused) {
-    if (!_1C3) {
+    if (!mDarkMaskOn) {
         return;
     }
 
-    u8* previous = mMaskTextures[_B88]->mImage;
-    _B88 = 1 - _B88;
-    u8* image = mMaskTextures[_B88]->mImage;
+    u8* previous = mMaskTextures[mMaskIndex]->mImage;
+    mMaskIndex = 1 - mMaskIndex;
+    u8* image = mMaskTextures[mMaskIndex]->mImage;
     u8 x = MR::getRandom(0, 8);
     u8 y = MR::getRandom(0, 8);
     s32 index = 2 * (x + y * 8);
@@ -643,11 +643,11 @@ void MarioActor::updateDarkMask(u16 unused) {
     previous[index] = 0;
     previous[index + 1] = 255;
     RenderTexture::linear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
-    _1C4++;
+    mDarkMaskTimer++;
 }
 
 bool MarioActor::drawDarkMask() const {
-    if (!_1C3) {
+    if (!mDarkMaskOn) {
         return false;
     }
 
@@ -656,7 +656,7 @@ bool MarioActor::drawDarkMask() const {
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
     material.constants[4] = 1.0f;
-    material.setTexture(0, mMaskTextures[_B88]);
+    material.setTexture(0, mMaskTextures[mMaskIndex]);
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     Vec3f spine;
     Vec2f center;
@@ -666,7 +666,7 @@ bool MarioActor::drawDarkMask() const {
     Vec2f minimum;
     Vec2f maximum;
     getRealPos("Spine1", &spine);
-    f32 radius = _1C4;
+    f32 radius = mDarkMaskTimer;
 
     if (radius >= 240.0f) {
         radius = 240.0f;
@@ -695,8 +695,8 @@ bool MarioActor::drawDarkMask() const {
 
 void MarioActor::showBeeFur() {
     if (mMario->isPlayerModeBee()) {
-        _9E8->appear();
-        _9EC->onDraw(-1);
+        mBeeWing->appear();
+        mBeeFur->onDraw(-1);
     }
 
     if (getCarrySensor() != nullptr) {
@@ -705,7 +705,7 @@ void MarioActor::showBeeFur() {
 
     if (mMario->isPlayerModeInvincible()) {
         MR::showJoint(getModel(), "Face0");
-        _A6E = 2;
+        mBlurState = 2;
         playEffect("無敵中");
     }
 }

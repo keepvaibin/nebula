@@ -25,10 +25,10 @@ void MarioActor::forceKill(u32 type) {
 
     NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_MISS, static_cast< s32 >(type));
 
-    _A6E = 0;
+    mBlurState = 0;
 
-    if (!MR::isDead(_994)) {
-        _994->kill();
+    if (!MR::isDead(mSpinTico)) {
+        mSpinTico->kill();
     }
 
     if (mMario->isStatusActive(MarioStatus_FpView)) {
@@ -36,24 +36,24 @@ void MarioActor::forceKill(u32 type) {
         mMario->closeStatus(nullptr);
     }
 
-    if (_934) {
+    if (mInRush) {
         if (mRushSensor != nullptr && mRushSensor->isType(ACTMES_GROUP_SHOW)) {
-            _B91 = true;
-            _B90 = true;
+            mForceKilled = true;
+            mAnimationFrozen = true;
         }
 
-        if (_934) {
+        if (mInRush) {
             if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
                 mRushSensor->receiveMessage(ACTMES_RUSH_FORCE_CANCEL, getSensor("body"));
             }
 
-            if (_934) {
+            if (mInRush) {
                 RushEndInfo endInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }
 
-        _934 = false;
+        mInRush = false;
     }
 
     if (type == 0) {
@@ -80,7 +80,7 @@ void MarioActor::forceKill(u32 type) {
         MR::deactivateDefaultGameLayout();
 
     default:
-        _39D = type;
+        mGameOverKind = type;
         mHealth = 0;
 
         setNerve(GET_NERVE(MarioActor, MarioActorNrvGameOver));
@@ -94,12 +94,12 @@ void MarioActor::exeGameOver() {
     updateRealMtx();
 
     if (getNerveStep() == 32) {
-        _A6E = 0;
+        mBlurState = 0;
     }
 
     mTakeCandidate = nullptr;
 
-    NebulaMtxIdentity(mMarioAnim->_7C);
+    NebulaMtxIdentity(mMarioAnim->mHomingMtx);
 
     damageDropThrowMemoSensor();
 
@@ -114,7 +114,7 @@ void MarioActor::exeGameOver() {
         MR::startPlayerEvent("ゲームオーバー");
         changeGameOverAnimation();
     } else {
-        switch (_39D) {
+        switch (mGameOverKind) {
         case 2:
             MR::startPlayerEvent("ゴーストレース負け");
             break;
@@ -149,7 +149,7 @@ void MarioActor::exeGameOverAbyss() {
     MR::clearBgmQueue();
     MR::startGlobalEventCameraNoTarget("奈落カメラ");
 
-    _F44 = false;
+    mBindOn = false;
 
     if (MR::getPlayerLeft() == 0) {
         MR::startPlayerEvent("ゲームオーバー");
@@ -160,7 +160,7 @@ void MarioActor::exeGameOverAbyss() {
     MR::startStarPointerModeDemoMarioDeath(this);
     mMario->changeAnimationNonStop("奈落ダウン");
 
-    _B90 = true;
+    mAnimationFrozen = true;
 }
 
 void MarioActor::exeGameOverFire() {
@@ -169,7 +169,7 @@ void MarioActor::exeGameOverFire() {
     updateRealMtx();
 
     if (getNerveStep() == 120) {
-        _A6E = 0;
+        mBlurState = 0;
     }
 
     if (!MR::isFirstStep(this)) {
@@ -196,7 +196,7 @@ void MarioActor::exeGameOverSink() {
     updateRealMtx();
 
     if (getNerveStep() == 120) {
-        _A6E = 0;
+        mBlurState = 0;
     }
 
     if (MR::isFirstStep(this)) {
@@ -260,10 +260,10 @@ void MarioActor::exeGameOverNonStop() {
 }
 
 void MarioActor::exeTimeWait() {
-    if (_FB8 != getNerveStep()) {
+    if (mWaitTimer != getNerveStep()) {
         return;
     }
 
-    setNerve(_FB4);
-    _FB4 = nullptr;
+    setNerve(mWaitNextNerve);
+    mWaitNextNerve = nullptr;
 }

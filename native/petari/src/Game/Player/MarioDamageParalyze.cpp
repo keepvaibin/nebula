@@ -42,7 +42,7 @@ bool Mario::doParalyze() {
     return true;
 }
 
-MarioParalyze::MarioParalyze(MarioActor* pActor) : MarioState(pActor, MarioStatus_Paralyze), _12(), mTimer(), _16(), mNotDecLife() {
+MarioParalyze::MarioParalyze(MarioActor* pActor) : MarioState(pActor, MarioStatus_Paralyze), mRecovering(), mTimer(), mAfterTimer(), mNotDecLife() {
 }
 
 bool MarioParalyze::start() {
@@ -60,7 +60,7 @@ bool MarioParalyze::start() {
 
     mNotDecLife = false;
     mTimer = 60;
-    _12 = 0;
+    mRecovering = 0;
 
     return true;
 }
@@ -68,17 +68,17 @@ bool MarioParalyze::start() {
 bool MarioParalyze::update() {
     if (mTimer != 0) {
         mTimer--;
-        if (_12 != 0 && getPlayer()->getMovementStates().onGround) {
+        if (mRecovering != 0 && getPlayer()->getMovementStates().onGround) {
             addVelocity(getFrontVec(), -3.0f);
         }
     }
 
     if (mTimer == 0) {
-        if (_12 != 0) {
+        if (mRecovering != 0) {
             return false;
         }
 
-        _12 = 1;
+        mRecovering = 1;
 
         if (!getPlayer()->getMovementStates().onGround) {
             mTimer = 10;
@@ -119,7 +119,7 @@ bool MarioParalyze::close() {
     stopAnimation("電気ダメージ");
     stopEffect("ビリビリ");
 
-    _16 = 120;
+    mAfterTimer = 120;
 
     if (!getPlayer()->isStatusActive(MarioStatus_Swim) && !getPlayer()->getMovementStates().onGround) {
         getPlayer()->tryFreeJump(getFrontVec() * -10.0f, true);

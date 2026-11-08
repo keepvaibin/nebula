@@ -2,7 +2,7 @@
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioActor.hpp"
 
-MarioState::MarioState(MarioActor* pActor, u32 statusId) : MarioModule(pActor), _8(), mStatusId(statusId), _10() {
+MarioState::MarioState(MarioActor* pActor, u32 statusId) : MarioModule(pActor), mNextState(), mStatusId(statusId), mClosing() {
 }
 
 bool MarioState::proc(u32 msg) {
@@ -10,13 +10,13 @@ bool MarioState::proc(u32 msg) {
     case MarioStateMsg_Start:
         return start();
     case MarioStateMsg_Close:
-        if (_10) {
+        if (mClosing) {
             break;
         }
 
-        _10 = true;
+        mClosing = true;
         close();
-        _10 = false;
+        mClosing = false;
         break;
     case MarioStateMsg_Update:
         return update();
@@ -33,7 +33,7 @@ void Mario::sendStateMsg(u32 msg) {
     MarioState* pNext;
 
     for (MarioState* pState = mCurrentState; pState != nullptr;) {
-        pNext = pState->_8;
+        pNext = pState->mNextState;
 
         if (isStatusActive(pState->mStatusId) == MarioStatus_None) {
             pState = pNext;
@@ -78,7 +78,7 @@ void Mario::changeStatus(MarioState* pState) {
     sendStateMsg(MarioStateMsg_Notice);
 
     if (mCurrentState) {
-        pState->_8 = mCurrentState;
+        pState->mNextState = mCurrentState;
     }
 
     mCurrentState = pState;
@@ -86,7 +86,7 @@ void Mario::changeStatus(MarioState* pState) {
     if (!pState->proc(MarioStateMsg_Start)) {
         closeStatus(pState);
 
-        mCurrentState = pState->_8;
+        mCurrentState = pState->mNextState;
     }
 }
 
@@ -102,10 +102,10 @@ void Mario::closeStatus(MarioState* pState) {
     MarioState* pCurr = mCurrentState;
 
     if (pCurr == pState) {
-        mCurrentState = pState->_8;
+        mCurrentState = pState->mNextState;
     } else {
         while (pCurr != nullptr) {
-            MarioState* pNext = pCurr->_8;
+            MarioState* pNext = pCurr->mNextState;
 
             if (pNext == pState) {
                 break;
@@ -114,10 +114,10 @@ void Mario::closeStatus(MarioState* pState) {
             pCurr = pNext;
         }
 
-        pCurr->_8 = pState->_8;
+        pCurr->mNextState = pState->mNextState;
     }
 
-    pState->_8 = nullptr;
+    pState->mNextState = nullptr;
     pState->proc(MarioStateMsg_Close);
 }
 
@@ -147,7 +147,7 @@ bool Mario::isStatusActive(u32 statusId) const {
             return true;
         }
 
-        pState = pState->_8;
+        pState = pState->mNextState;
     }
 
     return false;

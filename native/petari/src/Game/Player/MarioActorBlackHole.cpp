@@ -48,7 +48,7 @@ void MarioActor::exeGameOverBlackHole2() {
             MR::startBlackHoleCamera("ブラックホール", mBlackHolePosition, mPosition);
         }
 
-        _F44 = false;
+        mBindOn = false;
 
         changeAnimationNonStop("ブラックホール落下");
         playEffect("共通ブラックホール");
@@ -71,7 +71,7 @@ void MarioActor::exeGameOverBlackHole2() {
     }
 
     if (getNerveStep() == mConst->getTable()->mBlackHoleHideTime) {
-        _482 = true;
+        mHidden = true;
 
         MR::hidePlayer();
         MR::emitEffect(this, "ブラックホール消滅");

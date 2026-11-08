@@ -15,7 +15,7 @@ void PlayerModel::viewCalc2() {
 }
 
 void PlayerModel::setDrawView(u32 view) {
-    mDrawPose = mExtraPoses[view + _DC];
+    mDrawPose = mExtraPoses[view + mPoseBuffer];
 }
 
 void PlayerModel::copyAnmMtxBuffer(const PlayerModel* pModel) {
@@ -24,7 +24,7 @@ void PlayerModel::copyAnmMtxBuffer(const PlayerModel* pModel) {
 
 void PlayerModel::viewCalc3(u32 view, const f32 (*pMtx)[4]) {
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
-    ModelPose* pPose = mExtraPoses[view + _DC];
+    ModelPose* pPose = mExtraPoses[view + mPoseBuffer];
     capturePose(pPose, mAnmMtx, mModelData->getJointCount(), nullptr, pMtx != nullptr ? pMtx : mBaseTransformMtx);
     mDrawPose = pPose;
     if ((view & 1) == 0) {
@@ -36,7 +36,7 @@ void PlayerModel::viewCalc3(u32 view, const f32 (*pMtx)[4]) {
 
 void PlayerModel::viewCalcRef(u32 view, Model* pModel) {
     NebulaMtxCopy(ModelSys::mViewMtx, mViewAtCalc);
-    ModelPose* pPose = mExtraPoses[view + _DC];
+    ModelPose* pPose = mExtraPoses[view + mPoseBuffer];
     capturePose(pPose, pModel->getAnmMtxBuffer(), pModel->getModelData()->getJointCount(), nullptr, mBaseTransformMtx);
     pPose->mCalcMode = 2;
     pPose->mNormalFrom = mNormalPose;
@@ -86,10 +86,10 @@ namespace {
         u8 r, g, b, alpha, a;
     };
     const OverrideColor kOverrideColors[16] = {
-        {0, 0, 0, 0, 0},     {0, 0, 0, 255, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
-        {255, 255, 0, 255, 1}, {0, 0, 0, 0, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
-        {0, 0, 0, 252, 1},   {0, 0, 0, 4, 1},    {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 2},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}, {0, 0, 0, 255, 1}, {0, 0, 0, 0, 0}, {0, 0, 0, 64, 1},
+        {0, 0, 0, 0, 0}, {0, 0, 0, 0, 1},   {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},   {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 2}, {0, 0, 0, 0, 0},   {0, 0, 0, 0, 0}, {0, 0, 0, 0, 0},
     };
 }  // namespace
 
@@ -101,16 +101,17 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
 
     s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
-        if ((mFlags.word() & (1u << i)) != 0) {
-            if (i == 6) {
+        const u32 pass = 1u << i;
+        if ((mDrawPasses & pass) != 0) {
+            if (pass == Pass_ScreenCoordinates) {
                 draw.overrideCoordinate(RenderTexture::idOf(MR::getScreenResTIMG()->image()), MR::getScreenWidth(), NebulaFrameClock::cScreenLines);
                 continue;
             }
-            sendFlagState(i, draw);
-            if (i == 2) {
+            sendPassState(pass, draw);
+            if (pass == Pass_AddTexture) {
                 draw.override(1, 0.0f, 0.0f, -1.0f);
             }
-            if (i == 11) {
+            if (pass == Pass_Reflection) {
                 draw.override(5, 0.0f, 0.0f, 32.0f);
             }
             if (kOverrideColors[i].a != 0) {
@@ -119,20 +120,20 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
         }
     }
 
-    if (_1B8 != nullptr) {
-        _1B4 = _1B8;
-        _1B8 = nullptr;
+    if (mNextTint != nullptr) {
+        mTint = mNextTint;
+        mNextTint = nullptr;
     }
-    if (_1B4 != nullptr) {
-        _1B4->send(draw);
+    if (mTint != nullptr) {
+        mTint->send(draw);
     }
 
-    if (_1C8[index] != nullptr) {
-        _1C4[index] = _1C8[index];
-        _1C8[index] = nullptr;
+    if (mNextImages[index] != nullptr) {
+        mImages[index] = mNextImages[index];
+        mNextImages[index] = nullptr;
     }
-    if (_1C4[index] != nullptr) {
-        draw.swapImage(0, RenderTexture::idOf(_1C4[index]));
+    if (mImages[index] != nullptr) {
+        draw.swapImage(0, RenderTexture::idOf(mImages[index]));
     }
     if (override >= 0) {
         const OverrideColor& rColor = kOverrideColors[override];
@@ -140,7 +141,7 @@ void PlayerModel::drawIn(Material* pMaterial, u32 index) {
             const f32* pRegister = draw.getRegister(MaterialRegister_0);
             draw.setFlatColor(pRegister[0], pRegister[1], pRegister[2], pRegister[3]);
         } else {
-            const u8 alpha = override == 1 && (mFlags.word() & (1u << 14)) != 0 ? 64 : rColor.alpha;
+            const u8 alpha = (1u << override) == Pass_ShadowCapture && (mDrawPasses & Pass_ShadowLight) != 0 ? 64 : rColor.alpha;
             draw.setFlatColor(rColor.r / 255.0f, rColor.g / 255.0f, rColor.b / 255.0f, alpha / 255.0f);
         }
     }
@@ -168,15 +169,12 @@ void PlayerModel::simpleDrawShape(Material* pMaterial, MaterialDraw& rDraw) {
     }
 }
 
-void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
+void PlayerModel::sendPassState(u32 pass, MaterialDraw& rDraw) {
     PassState state = PassStates::fromWord(rDraw.getState());
-    switch (flag) {
-    case 0:
-        state.cull = NEBULA_CULL_FRONT;
-        break;
-    // Flags 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by drawIn
-    // as a native material): their fixed state here.
-    case 1:
+    switch (pass) {
+    // The shadow capture, the behind mark and the depth pass replace the material's program with a flat colour
+    // (kOverrideColors, drawn by drawIn as a native material): their fixed state here.
+    case Pass_ShadowCapture:
         PassStates::setDepth(state, false, NEBULA_COMPARE_ALWAYS, false);
         state.cull = NEBULA_CULL_BACK;
         PassStates::setNoBlend(state);
@@ -184,7 +182,7 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
         state.alpha_write = 1;
         break;
     // Texture 0 at alpha 1/4 added (MaterialDraw::override mode 1).
-    case 2:
+    case Pass_AddTexture:
         state.cull = NEBULA_CULL_FRONT;
         PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, true);
         PassStates::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
@@ -192,7 +190,7 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
         state.alpha_write = 0;
         break;
     // Where the model is behind a surface: marked, and the fill darkens it.
-    case 3:
+    case Pass_BehindMark:
         PassStates::setDepth(state, true, NEBULA_COMPARE_GEQUAL, false);
         state.cull = NEBULA_CULL_BACK;
         PassStates::setNoBlend(state);
@@ -201,14 +199,7 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
         state.stencil_func = NEBULA_STENCIL_ALWAYS;
         state.stencil_op = NEBULA_STENCIL_ADD;
         break;
-    case 4:
-        PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
-        state.cull = NEBULA_CULL_FRONT;
-        PassStates::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
-        state.color_write = 1;
-        state.alpha_write = 0;
-        break;
-    case 5:
+    case Pass_DepthOnly:
         PassStates::setDepth(state, true, NEBULA_COMPARE_ALWAYS, true);
         state.cull = NEBULA_CULL_FRONT;
         PassStates::setNoBlend(state);
@@ -217,7 +208,7 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
         break;
     // The reflection model: its program (one stage: texture 0 halved, stage 0's alpha above 0x20, no channels) is
     // MaterialDraw::override mode 5.
-    case 11:
+    case Pass_Reflection:
         PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, true);
         state.cull = NEBULA_CULL_FRONT;
         PassStates::setNoBlend(state);
@@ -225,22 +216,15 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
         state.alpha_write = 1;
         break;
     // The blur ghosts in colour 0 (the ghost's tint sets it).
-    case 12:
+    case Pass_BlurGhost:
         PassStates::setDepth(state, true, NEBULA_COMPARE_LEQUAL, false);
         state.cull = NEBULA_CULL_BACK;
         PassStates::setBlend(state, NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
         state.color_write = 1;
         state.alpha_write = 0;
         break;
-    case 13:
-        PassStates::setDepth(state, true, NEBULA_COMPARE_GEQUAL, false);
-        state.cull = NEBULA_CULL_BACK;
-        PassStates::setBlend(state, NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_ALPHA);
-        state.color_write = 1;
-        state.alpha_write = 0;
-        break;
     // Only where the dark mask did not mark.
-    case 15:
+    case Pass_OutsideDarkMask:
         PassStates::setNoBlend(state);
         state.color_write = 1;
         state.alpha_write = 0;
@@ -254,7 +238,6 @@ void PlayerModel::sendFlagState(u32 flag, MaterialDraw& rDraw) {
 }
 
 void PlayerModel::initExtraPoses(u8 count) {
-    _DD = count;
     mExtraPoses = new ModelPose*[count];
     for (u32 i = 0; i < count; i++) {
         mExtraPoses[i] = new ModelPose;
@@ -263,20 +246,19 @@ void PlayerModel::initExtraPoses(u8 count) {
 }
 
 void PlayerModel::copyExtraPoses(const PlayerModel* pModel) {
-    _DD = pModel->_DD;
     mExtraPoses = pModel->mExtraPoses;
 }
 
 void PlayerModel::swapDrawBuffer(u32 drawBuffer) {
-    if (_DC == drawBuffer) {
-        _DC = 0;
+    if (mPoseBuffer == drawBuffer) {
+        mPoseBuffer = 0;
         return;
     }
-    _DC = drawBuffer;
+    mPoseBuffer = drawBuffer;
 }
 
 void PlayerModel::setDynamicList(const MarioModelTint* pTint) {
-    _1B8 = pTint;
+    mNextTint = pTint;
 }
 
 void MarioModelTint::send(MaterialDraw& rDraw) const {
@@ -315,22 +297,21 @@ void MarioModelTint::send(MaterialDraw& rDraw) const {
 }
 
 PlayerModel::PlayerModel(ModelData* pData, u32 flags, u32 unused) : Model(pData, flags, unused) {
-    _DC = 0;
-    _DD = 0;
-    _1E4 = 0;
-    _1E5 = 0;
-    mFlags.clear();
-    _1B4 = nullptr;
-    _1B8 = nullptr;
+    mPoseBuffer = 0;
+    mBlurPoseFresh = 0;
+    mBlurDrawMissed = 0;
+    mDrawPasses = 0;
+    mTint = nullptr;
+    mNextTint = nullptr;
     mDrawHook = nullptr;
     mExtraPoses = nullptr;
 
     const u32 count = mModelData->getMaterialCount();
-    _1C4 = new const void*[count];
-    _1C8 = new const void*[count];
+    mImages = new const void*[count];
+    mNextImages = new const void*[count];
     for (u32 i = 0; i < count; i++) {
-        _1C4[i] = nullptr;
-        _1C8[i] = nullptr;
+        mImages[i] = nullptr;
+        mNextImages[i] = nullptr;
     }
 }
 

@@ -11,18 +11,18 @@ class EmitterCore;
 
 struct MovingFollowMtx {
     MovingFollowMtx() {
-        _4.identity();
-        _34.identity();
-        _64 = nullptr;
-        _68 = nullptr;
-        _0 = 0;
+        mLocalMtx.identity();
+        mWorldMtx.identity();
+        mBaseMtx = nullptr;
+        mEmitter = nullptr;
+        mFrame = 0;
     }
 
-    u32 _0;
-    Mtx34f _4;
-    Mtx34f _34;
-    MtxPtr _64;
-    EmitterCore* _68;
+    u32 mFrame;  // frames followed (at 2 the emitter goes on alone)
+    Mtx34f mLocalMtx;  // the emitter in the base's space
+    Mtx34f mWorldMtx;  // the emitter in the world
+    MtxPtr mBaseMtx;  // the base it follows
+    EmitterCore* mEmitter;  // the emitter
 };
 
 class MarioEffect : public MarioModule, public MultiEmitterCallBackBase {
@@ -40,13 +40,12 @@ public:
     void playSwingEffect();
     void doCubeEffect();
 
-    s32 _C;
-    s32 _10;
-    s32 _14;
-    u8 _18;
-    Color8 _1C;
-    Color8 _20;
-    Mtx34f _24;
+    s32 mCubeArg0;  // the effect cube's arg 0 (1: the swing effect takes mCubeArg1)
+    s32 mCubeArg1;  // the effect cube's arg 1: the swing effect's kind (0: the floor material's)
+    u8 mCubeColorOn;  // the cube's colors tint the common effects
+    Color8 mCubePrmColor;  // the cube's prm color
+    Color8 mCubeEnvColor;  // the cube's env color
+    Mtx34f mCommonEffectMtx;  // the common effect's base (playCommonEffect)
     MR::GrowTable< MovingFollowMtx, 16 > mFollows;
     s32 mFollowCount;
 };

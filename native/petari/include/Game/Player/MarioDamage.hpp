@@ -19,16 +19,16 @@ public:
     void stopHead(const Vec3f&);
 
     inline void setStrings(const char* pChar1, const char* pChar2) {
-        _28 = pChar1;
-        _2C = pChar2;
+        mAirAnimation = pChar1;
+        mLandAnimation = pChar2;
     }
 
-    u8 _11;
-    bool _12;
-    u16 _14;
-    u16 _16;
-    u16 _18;
-    Vec3f _1C;
-    const char* _28;
-    const char* _2C;
+    u8 mFlipLarge;  // a large flip (flipLarge): no damage effect, not damaging
+    bool mDamaging;  // isDamaging
+    u16 mTimer;  // frames since start
+    u16 mAfterTimer;  // frames after the damage (getDamageAfterTimer): no new damage
+    u16 mStep;  // update's step (0 in the air)
+    Vec3f mVelocity;  // the knockback
+    const char* mAirAnimation;  // the air animation
+    const char* mLandAnimation;  // the landing animation
 };

@@ -13,7 +13,7 @@ public:
     virtual bool update();
     virtual bool notice();
 
-    u16 _12;
-    u16 _14;
-    Vec3f _18;
+    u16 mTimer;  // frames left before the game over (120)
+    u16 mStep;  // update's step
+    Vec3f mMove;  // a move added each frame; nothing sets it
 };

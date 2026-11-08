@@ -30,84 +30,81 @@ CollisionShadow::~CollisionShadow() {
 }
 
 void CollisionShadow::setMode(u32 mode) {
-    if (_C == mode) {
+    if (mMode == mode) {
         return;
     }
 
     switch (mode) {
     case 0:
-        _30C = ::cCheckOffset0;
-        _310 = ::cDrawOffset0;
+        mCheckOffset = ::cCheckOffset0;
+        mDrawOffset = ::cDrawOffset0;
         break;
     case 1:
-        _30C = 50.0f;
-        _310 = -150.0f;
+        mCheckOffset = 50.0f;
+        mDrawOffset = -150.0f;
         break;
     case 2:
-        _30C = 18.0f;
-        _310 = 0.0f;
+        mCheckOffset = 18.0f;
+        mDrawOffset = 0.0f;
         break;
     }
 
-    _C = mode;
+    mMode = mode;
 }
 
 CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("投影シャドウ") {
-    _2F0.zero();
-    _300 = nullptr;
-    _305 = false;
-    _30C = 0.0f;
-    _310 = 0.0f;
-    _314.zero();
-    _320.zero();
-    _32C = nullptr;
-    _33C = 0;
-    _308 = 0;
-    _E = 0;
-    _14 = radius;
-    _18 = 0.0f;
-    _1C = 0.0f;
-    _24.zero();
-    _30.zero();
-    _3C.zero();
-    _48.zero();
-    _10 = radius;
-    _20 = length;
-    _54 = 0;
-    _C = 255;
+    mCenter.zero();
+    mCaptureTex = nullptr;
+    mSnapDirection = false;
+    mCheckOffset = 0.0f;
+    mDrawOffset = 0.0f;
+    mPolygons = nullptr;
+    mFoundCount = 0;
+    mDrawFlags = 0;
+    mMaxRadius = radius;
+    mVolumeHeight = 0.0f;
+    mVolumeWidth = 0.0f;
+    mDirection.zero();
+    mUp.zero();
+    mVolumeUp.zero();
+    mReferencePos.zero();
+    mRadius = radius;
+    mLength = length;
+    mPolygonCount = 0;
+    mMode = 255;
     setMode(0);
     initCaptureTex();
-    _5A = 3;
+    mVertsPerPolygon = 3;
     makePolygonLists(128);
-    _6C = 0;
-    _33C = 0;
-    _6E = 0;
-    _306 = 0;
-    _304 = 0;
-    _307 = 1;
+    mVertexCount = 0;
+    mFoundCount = 0;
+    mEdgePolygonCount = 0;
+    mViewDone = 0;
+    mUpdate = 0;
+    mCaptureOn = 1;
 }
 
 void CollisionShadow::makePolygonLists(u32 num) {
-    if (_32C != nullptr) {
-        delete[] _32C;
-        delete[] _60;
-        delete[] _64;
-        delete[] _68;
-        delete[] _5C;
-        delete[] _70;
-        delete[] _F0;
+    if (mPolygons != nullptr) {
+        delete[] mPolygons;
+        delete[] mVertices;
+        delete[] mTexCoords;
+        delete[] mVertexIndices;
+        delete[] mPolygonIndices;
+        delete[] mEdgePolygons;
+        delete[] mSortOrder;
         delete[] mSortDistances;
     }
 
     NebulaArena* pArena = NebulaArena::findFromRoot(this);
-    _58 = num;
-    _32C = new (pArena, 0) Triangle[num];
-    _60 = new (pArena, 0) Vec3f[num * _5A];
-    _64 = new (pArena, 0) Vec2f[num * _5A];
-    _68 = new (pArena, 0) u32[num * _5A];
-    _5C = new (pArena, 0) u32[num];
-    _70 = new (pArena, 0) u32[num]();
-    _F0 = new (pArena, 0) s32[num]();
+    mListCapacity = num;
+    mPolygons = new (pArena, 0) Triangle[num];
+    mVertices = new (pArena, 0) Vec3f[num * mVertsPerPolygon];
+    mTexCoords = new (pArena, 0) Vec2f[num * mVertsPerPolygon];
+    mVertexIndices = new (pArena, 0) u32[num * mVertsPerPolygon];
+    mPolygonIndices = new (pArena, 0) u32[num];
+    mEdgePolygons = new (pArena, 0) u32[num]();
+    mSortOrder = new (pArena, 0) s32[num]();
     mSortDistances = new (pArena, 0) f32[num];
 }
 
@@ -115,27 +112,26 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
     Vec3f corners[8];
     Vec3f blended;
     Vec3f vertical(rUp);
-    bool success = MR::vecBlendSphere(_24, rDirection, &blended, 0.1f);
-    if (MR::isNearZero(_24) || !success || _305) {
+    bool success = MR::vecBlendSphere(mDirection, rDirection, &blended, 0.1f);
+    if (MR::isNearZero(mDirection) || !success || mSnapDirection) {
         blended = rDirection;
     }
 
-    _305 = false;
+    mSnapDirection = false;
     if (!MR::isNearZero(blended)) {
-        _24 = blended;
+        mDirection = blended;
         MR::vecKillElement(vertical, blended, &vertical);
         MR::normalizeOrZero(&vertical);
         if (!MR::isNearZero(vertical)) {
-            _30 = vertical;
+            mUp = vertical;
         }
     }
 
-    _2F0 = rPosition;
-    if (_C == 3) {
+    mCenter = rPosition;
+    if (mMode == 3) {
         return;
     }
 
-    _E++;
     Vec3f side;
     side.cross(vertical, blended);
     if (MR::isNearZero(side)) {
@@ -146,51 +142,49 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
     for (u32 i = 0; i < 8; i++) {
         corners[i] = rPosition;
         if (i & 1) {
-            corners[i] += vertical * _10;
+            corners[i] += vertical * mRadius;
         } else {
-            corners[i] -= vertical * _10;
+            corners[i] -= vertical * mRadius;
         }
 
         if (i & 2) {
-            corners[i] += side * _10;
+            corners[i] += side * mRadius;
         } else {
-            corners[i] -= side * _10;
+            corners[i] -= side * mRadius;
         }
 
         if (i & 4) {
-            corners[i] -= blended * _30C;
+            corners[i] -= blended * mCheckOffset;
         } else {
-            corners[i] += blended * _20;
+            corners[i] += blended * mLength;
         }
     }
 
     Vec3f minimum;
     Vec3f maximum;
     MR::createBoundingBox(corners, 8, &minimum, &maximum);
-    _314 = minimum;
-    _320 = maximum;
     if (MR::isInitializeStatePlacementSomething()) {
         return;
     }
 
-    u32 count = MR::createAreaPolygonListArray(_32C, _58, corners, 8);
-    while (count >= _58) {
-        makePolygonLists(_58 * 2);
-        count = MR::createAreaPolygonListArray(_32C, _58, corners, 8);
+    u32 count = MR::createAreaPolygonListArray(mPolygons, mListCapacity, corners, 8);
+    while (count >= mListCapacity) {
+        makePolygonLists(mListCapacity * 2);
+        count = MR::createAreaPolygonListArray(mPolygons, mListCapacity, corners, 8);
     }
 
-    _33C = count;
-    _54 = 0;
+    mFoundCount = count;
+    mPolygonCount = 0;
     if (!count) {
-        _10 = _14;
+        mRadius = mMaxRadius;
         return;
     }
 
     u32 polygonCount = 0;
-    _6E = 0;
+    mEdgePolygonCount = 0;
     for (u32 i = 0; i < count; i++) {
-        Vec3f normal(*_32C[i].getNormal(0));
-        f32 facing = normal.dot(_24);
+        Vec3f normal(*mPolygons[i].getNormal(0));
+        f32 facing = normal.dot(mDirection);
         if (facing > 0.0f) {
             continue;
         }
@@ -200,64 +194,64 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
         }
 
         if (MR::isNearZero(facing, 0.15f)) {
-            _70[_6E] = i;
-            _6E++;
+            mEdgePolygons[mEdgePolygonCount] = i;
+            mEdgePolygonCount++;
         } else {
-            const char* code = MR::getFloorCodeString(&_32C[i]);
+            const char* code = MR::getFloorCodeString(&mPolygons[i]);
             if (code == nullptr || (strcmp(code, "PullBack") != 0 && strcmp(code, "Glass") != 0)) {
-                _5C[polygonCount] = i;
+                mPolygonIndices[polygonCount] = i;
                 polygonCount++;
             }
         }
     }
 
-    _54 = polygonCount;
-    f32 tolerance = 2.0f + _310;
-    _6C = 0;
+    mPolygonCount = polygonCount;
+    f32 tolerance = 2.0f + mDrawOffset;
+    mVertexCount = 0;
     s32 index = 0;
-    for (u32 i = 0; i < _54; i++) {
-        for (u32 j = 0; j < _5A; j++) {
-            const Vec3f& point = *_32C[_5C[i]].getPos(j);
+    for (u32 i = 0; i < mPolygonCount; i++) {
+        for (u32 j = 0; j < mVertsPerPolygon; j++) {
+            const Vec3f& point = *mPolygons[mPolygonIndices[i]].getPos(j);
             u32 k;
-            for (k = 0; k < _6C; k++) {
-                if (MR::abs(_60[k].x - point.x) < tolerance && MR::abs(_60[k].y - point.y) < tolerance && MR::abs(_60[k].z - point.z) < tolerance) {
+            for (k = 0; k < mVertexCount; k++) {
+                if (MR::abs(mVertices[k].x - point.x) < tolerance && MR::abs(mVertices[k].y - point.y) < tolerance && MR::abs(mVertices[k].z - point.z) < tolerance) {
                     break;
                 }
             }
 
-            if (k == _6C) {
-                const Vec3f& normal = *_32C[_5C[i]].getNormal(0);
-                _60[_6C] = point + normal * _310;
-                _6C++;
+            if (k == mVertexCount) {
+                const Vec3f& normal = *mPolygons[mPolygonIndices[i]].getNormal(0);
+                mVertices[mVertexCount] = point + normal * mDrawOffset;
+                mVertexCount++;
             }
 
-            _68[index] = k;
+            mVertexIndices[index] = k;
             index++;
         }
     }
 
     const f32 texScale = 1.0f / 300.0f;
 
-    for (u32 i = 0; i < _6C; i++) {
-        Vec3f relative(_60[i] - rPosition);
+    for (u32 i = 0; i < mVertexCount; i++) {
+        Vec3f relative(mVertices[i] - rPosition);
         f32 s = relative.dot(side);
-        f32 t = relative.dot(_30);
+        f32 t = relative.dot(mUp);
 
-        _64[i].x = 0.5f + s * texScale;
-        _64[i].y = 0.5f + t * texScale;
+        mTexCoords[i].x = 0.5f + s * texScale;
+        mTexCoords[i].y = 0.5f + t * texScale;
     }
 
-    if (_33C > 40) {
-        _10 -= 10.0f;
-    } else if (_33C > 10) {
-        _10 -= 1.0f;
-    } else if (_33C > 20) {
-        _10 -= 4.0f;
+    if (mFoundCount > 40) {
+        mRadius -= 10.0f;
+    } else if (mFoundCount > 10) {
+        mRadius -= 1.0f;
+    } else if (mFoundCount > 20) {
+        mRadius -= 4.0f;
     } else {
-        _10 += 1.0f;
+        mRadius += 1.0f;
     }
 
-    MR::clampBoth(&_10, 1.0f, _14);
+    MR::clampBoth(&mRadius, 1.0f, mMaxRadius);
 }
 
 namespace {
@@ -274,12 +268,12 @@ namespace {
 
 // On a wall (a Bee's walk): marked where the shadow's texture shows, behind what is there; the screen blend darkens it.
 void CollisionShadow::draw1() const {
-    if (_308 & 8) {
+    if (mDrawFlags & 8) {
         return;
     }
 
     SiteMaterial material;
-    initShadowMaterial(&material, _300, 0, 1);
+    initShadowMaterial(&material, mCaptureTex, 0, 1);
     material.setDepth(true, NEBULA_COMPARE_GEQUAL, false);
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
@@ -291,19 +285,19 @@ void CollisionShadow::draw1() const {
 }
 
 void CollisionShadow::sendVtx(TypedDraw& rDraw) const {
-    if (!_54) {
+    if (!mPolygonCount) {
         return;
     }
 
-    u32 vertexCount = _54 * _5A;
-    VertexPT* vtx = rDraw.vertices< VertexPT >(_5A == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
+    u32 vertexCount = mPolygonCount * mVertsPerPolygon;
+    VertexPT* vtx = rDraw.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
 
     const Vec2f* pTex;
     u32 index = 0;
-    for (u32 i = 0; i < _54; i++) {
-        for (u32 j = 0; j < _5A; j++) {
+    for (u32 i = 0; i < mPolygonCount; i++) {
+        for (u32 j = 0; j < mVertsPerPolygon; j++) {
             const Vec3f& point = getDrawPos(index);
-            pTex = &_64[_68[index]];
+            pTex = &mTexCoords[mVertexIndices[index]];
             index++;
             *vtx++ = {point.x, point.y, point.z, pTex->x, pTex->y};
         }
@@ -311,12 +305,12 @@ void CollisionShadow::sendVtx(TypedDraw& rDraw) const {
 }
 
 void CollisionShadow::sendZsortedVtx(TypedDraw& rDraw, bool offset) const {
-    u32 vertexCount = _54 * _5A;
-    VertexPT* vtx = rDraw.vertices< VertexPT >(_5A == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
+    u32 vertexCount = mPolygonCount * mVertsPerPolygon;
+    VertexPT* vtx = rDraw.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, vertexCount);
 
-    Vec3f shift(-_24 * 5.0f);
-    for (u32 i = 0; i < _54; i++) {
-        for (u32 j = 0; j < _5A; j++) {
+    Vec3f shift(-mDirection * 5.0f);
+    for (u32 i = 0; i < mPolygonCount; i++) {
+        for (u32 j = 0; j < mVertsPerPolygon; j++) {
             const Vec3f& point = getDrawPos(i, j);
             const Vec2f& tex = getDrawTx(i, j);
             if (offset) {
@@ -331,49 +325,49 @@ void CollisionShadow::sendZsortedVtx(TypedDraw& rDraw, bool offset) const {
 void CollisionShadow::initCaptureTex() {
     {
         MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-        _300 = JUTTexture::createTarget(0.25f, 0.35f);
-        MR::setMarioShadowTex(_300);
+        mCaptureTex = JUTTexture::createTarget(0.25f, 0.35f);
+        MR::setMarioShadowTex(mCaptureTex);
     }
 
-    _300->mWrapS = NEBULA_WRAP_CLAMP;
-    _300->mWrapT = NEBULA_WRAP_CLAMP;
-    _300->mMinType = NEBULA_FILTER_LINEAR;
-    _300->mMagType = NEBULA_FILTER_LINEAR;
-    _300->init();
+    mCaptureTex->mWrapS = NEBULA_WRAP_CLAMP;
+    mCaptureTex->mWrapT = NEBULA_WRAP_CLAMP;
+    mCaptureTex->mMinType = NEBULA_FILTER_LINEAR;
+    mCaptureTex->mMagType = NEBULA_FILTER_LINEAR;
+    mCaptureTex->init();
 }
 
 void CollisionShadow::setViewMtx(const Vec3f& rDirection) {
     Vec3f normal = rDirection;
     MR::normalize(&normal);
-    Vec3f eye = _2F0 - normal * 10000.0f;
+    Vec3f eye = mCenter - normal * 10000.0f;
 
     Pos3f matrix;
     matrix.identity();
-    matrix.setPositionFromLookAt(eye, _30, _2F0);
+    matrix.setPositionFromLookAt(eye, mUp, mCenter);
     NebulaMtxCopy(matrix, ModelSys::mViewMtx);
     ModelSys::mViewRole = NEBULA_CAMERA_SHADOW;
     MR::setMarioShadowVec(rDirection);
 }
 
 void CollisionShadow::setUpdateFlag() {
-    if (!MR::isNearZero(_24)) {
-        _304 = 1;
+    if (!MR::isNearZero(mDirection)) {
+        mUpdate = 1;
     }
 }
 
 void CollisionShadow::calcView(PlayerModel* pModel, u32 view, PlayerModel* pReference) {
-    if (!_304) {
+    if (!mUpdate) {
         return;
     }
 
-    const Vec3f& rDirection = _24;
-    _304 = 0;
-    _306 = 1;
-    if (_C == 3) {
+    const Vec3f& rDirection = mDirection;
+    mUpdate = 0;
+    mViewDone = 1;
+    if (mMode == 3) {
         Mtx matrix;
         NebulaMtxCopy(pReference->getBaseTRMtx(), matrix);
         if (pReference != nullptr) {
-            pModel->viewCalcRefPos(view, pReference, _48, _24);
+            pModel->viewCalcRefPos(view, pReference, mReferencePos, mDirection);
         }
     } else {
         setViewMtx(rDirection);
@@ -384,51 +378,48 @@ void CollisionShadow::calcView(PlayerModel* pModel, u32 view, PlayerModel* pRefe
         }
     }
 
-    if (_C == 2) {
+    if (mMode == 2) {
         doSortPolygons();
     }
 }
 
 void CollisionShadow::drawAndCaptureTex(PlayerModel* pModel, const Vec3f& rPosition) {
-    if (!_306) {
+    if (!mViewDone) {
         return;
     }
 
     // Mario's silhouette, a pass into the shadow texture.
-    const ResTIMG* image = _300->getTexInfo();
+    const ResTIMG* image = mCaptureTex->getTexInfo();
     const void* destination = image->image();
-    Frame::targetBegin(destination, _300->mShareAcross, _300->mShareDown, 0);
+    Frame::targetBegin(destination, mCaptureTex->mShareAcross, mCaptureTex->mShareDown, 0);
     // A pixel of the picture's edge stays clear for the texture's clamp.
     const f32 cEdge = 1.0f / 160.0f;
 
-    if (!(_308 & 2)) {
-        setViewMtx(_24);
+    if (!(mDrawFlags & 2)) {
+        setViewMtx(mDirection);
         // The model draws with its own materials (the flat alpha pass, list 1 with 14); setup's view only.
         SiteMaterial view;
         TDDraw::setupNative(&view, 0, 0, 1);
         Mtx44 projection;
         NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
         Frame::setOrthographic(projection);
-        if (_307) {
+        if (mCaptureOn) {
             Frame::setViewport(-0.2f, -0.2f, 1.4f, 1.4f, 0.0f, 1.0f);
             Frame::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
             pModel->setDrawView(2);
-            pModel->mFlags.clear();
-            pModel->mFlags._11 = true;
-            pModel->mFlags._1E = true;
+            pModel->mDrawPasses = PlayerModel::Pass_ShadowLight | PlayerModel::Pass_ShadowCapture;
             pModel->directDraw();
         }
 
         Frame::setViewport(0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f);
         Frame::setScissor(cEdge, cEdge, 1.0f - 2.0f * cEdge, 1.0f - 2.0f * cEdge);
         pModel->setDrawView(2);
-        pModel->mFlags.clear();
-        pModel->mFlags._1E = true;
+        pModel->mDrawPasses = PlayerModel::Pass_ShadowCapture;
         pModel->directDraw();
-        pModel->mFlags._1E = false;
+        pModel->mDrawPasses &= ~PlayerModel::Pass_ShadowCapture;
     }
 
-    if (!(_308 & 4)) {
+    if (!(mDrawFlags & 4)) {
         // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge (its alpha times the circle's).
         SiteMaterial circle;
         TDDraw::setupNative(&circle, 0, 1, 2);
@@ -452,9 +443,9 @@ void CollisionShadow::drawAndCaptureTex(PlayerModel* pModel, const Vec3f& rPosit
 }
 
 void CollisionShadow::drawVolumeBox(const Vec3f& rPosition, const Vec3f& rDepth) const {
-    Vec3f up(_3C);
+    Vec3f up(mVolumeUp);
     Vec3f side;
-    side.cross(_24, up);
+    side.cross(mDirection, up);
     MR::normalizeOrZero(&side);
     // The box's faces in the stencil, depth tested: what its front faces reach and its back faces do not.
     SiteMaterial material;
@@ -470,17 +461,17 @@ void CollisionShadow::drawVolumeBox(const Vec3f& rPosition, const Vec3f& rDepth)
     material.mState.cull = NEBULA_CULL_BACK;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ADD);
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
-    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
     material.mState.cull = NEBULA_CULL_FRONT;
     material.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_TAKE);
     site.setMaterial(material);
-    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, rPosition, rDepth * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
 }
 
 void CollisionShadow::draw() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-    if (_C == 0) {
+    if (mMode == 0) {
         draw1();
     } else {
         draw3();
@@ -489,15 +480,15 @@ void CollisionShadow::draw() const {
 
 // On the ground: the shadow's polygons inside its box, each pixel darkened once.
 void CollisionShadow::draw3() const {
-    if (_308 & 8) {
+    if (mDrawFlags & 8) {
         return;
     }
 
-    Vec3f position(_2F0 - _24 * _30C);
-    drawVolumeBox(position, _24 * _20);
+    Vec3f position(mCenter - mDirection * mCheckOffset);
+    drawVolumeBox(position, mDirection * mLength);
     // Where the shadow's texture is clear, unmarked; and the faces in front of the volume.
     SiteMaterial material;
-    initShadowMaterial(&material, _300, 1, 0);
+    initShadowMaterial(&material, mCaptureTex, 1, 0);
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
     material.mState.color_write = 0;
     material.mState.alpha_write = 0;
@@ -509,15 +500,15 @@ void CollisionShadow::draw3() const {
     // Rebuilt collision triangles can change order even with the same vertex count.
     site.setFlags(NEBULA_ITEM_DISCRETE_VERTICES);
     sendZsortedVtx(site, true);
-    if (_6E) {
+    if (mEdgePolygonCount) {
         SiteMaterial clear = material;
         clear.mShader = NEBULA_SHADER_FLAT_COLOR;
         clear.setColor(0, 0, 0, 0, 0);
         site.setMaterial(clear);
-        VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLES, _6E * 3);
-        for (u32 i = 0; i < _6E; i++) {
+        VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLES, mEdgePolygonCount * 3);
+        for (u32 i = 0; i < mEdgePolygonCount; i++) {
             for (u32 j = 0; j < 3; j++) {
-                const Vec3f& point = *_32C[_70[i]].getPos(j);
+                const Vec3f& point = *mPolygons[mEdgePolygons[i]].getPos(j);
                 *vtx++ = {point.x, point.y, point.z, -1.0f, -1.0f};
             }
         }
@@ -530,10 +521,10 @@ void CollisionShadow::draw3() const {
     material.setBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     material.setStencil(NEBULA_STENCIL_IF_SET, NEBULA_STENCIL_ZERO);
     site.setMaterial(material);
-    for (u32 i = 0; i < _54; i++) {
-        VertexPT* vtx = site.vertices< VertexPT >(_5A == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, _5A);
+    for (u32 i = 0; i < mPolygonCount; i++) {
+        VertexPT* vtx = site.vertices< VertexPT >(mVertsPerPolygon == 4 ? NEBULA_PRIMITIVE_QUADS : NEBULA_PRIMITIVE_TRIANGLES, mVertsPerPolygon);
 
-        for (u32 j = 0; j < _5A; j++) {
+        for (u32 j = 0; j < mVertsPerPolygon; j++) {
             const Vec3f& point = getDrawPos(i, j);
             const Vec2f& tex = getDrawTx(i, j);
             *vtx++ = {point.x, point.y, point.z, tex.x, tex.y};
@@ -547,37 +538,37 @@ void CollisionShadow::draw3() const {
     wipe.mState.blend_op = NEBULA_BLEND_REPLACE;
     wipe.setStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     site.setMaterial(wipe);
-    Vec3f up(_3C);
+    Vec3f up(mVolumeUp);
     Vec3f side;
-    side.cross(_24, up);
+    side.cross(mDirection, up);
     MR::normalizeOrZero(&side);
-    TDDraw::drawFillBox3D(site, position, _24 * _20 * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
+    TDDraw::drawFillBox3D(site, position, mDirection * mLength * 2.0f, side * mVolumeWidth, up * mVolumeHeight, 0xFFFFFF01);
 }
 
 void CollisionShadow::doSortPolygons() {
     f32* distances = mSortDistances;
     f32 inverseVertexCount = 0.33333334f;
-    for (u32 i = 0; i < _54; i++) {
+    for (u32 i = 0; i < mPolygonCount; i++) {
         Vec3f center(getDrawPos(0));
         center += getDrawPos(1);
         center += getDrawPos(2);
         center.scale(inverseVertexCount);
         Vec3f relative(center);
-        relative.sub(_2F0);
-        distances[i] = relative.dot(_24);
+        relative.sub(mCenter);
+        distances[i] = relative.dot(mDirection);
     }
 
-    MR::sortSmall(_54, distances, _F0);
+    MR::sortSmall(mPolygonCount, distances, mSortOrder);
 }
 
 const Vec3f& CollisionShadow::getDrawPos(u32 index) const {
-    return _60[_68[index]];
+    return mVertices[mVertexIndices[index]];
 }
 
 const Vec3f& CollisionShadow::getDrawPos(u32 polygon, u32 vertex) const {
-    return _60[_68[vertex + _5A * _F0[polygon]]];
+    return mVertices[mVertexIndices[vertex + mVertsPerPolygon * mSortOrder[polygon]]];
 }
 
 const Vec2f& CollisionShadow::getDrawTx(u32 polygon, u32 vertex) const {
-    return _64[_68[vertex + _5A * _F0[polygon]]];
+    return mTexCoords[mVertexIndices[vertex + mVertsPerPolygon * mSortOrder[polygon]]];
 }

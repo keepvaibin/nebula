@@ -13,12 +13,12 @@ public:
     virtual bool update();
 
     f32 vecKillActor240(const Vec3f& rVec) {
-        return MR::vecKillElement(rVec, mActor->_240, &_18);
+        return MR::vecKillElement(rVec, mActor->mGravityVec, &mVelocity);
     }
 
     u16 mTimer;
-    u16 _14;
-    Vec3f _18;
-    bool _24;
-    bool _25;
+    u16 mStep;  // update's step
+    Vec3f mVelocity;  // the blow's velocity
+    bool mJumpedOut;  // left by a jump or a damage floor: the jump stays at close
+    bool mAirLanding;  // left the ground in the landing: its animation stops at close
 };

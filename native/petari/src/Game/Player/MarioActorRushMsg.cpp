@@ -11,9 +11,9 @@ void MarioActor::addRushSensor(HitSensor* pSensor, bool myBool) {
         return;
     }
 
-    _7E4.at(_930) = pSensor;
-    _8E4.at(_930) = myBool;
-    _930++;
+    mRushSensors.at(mRushSensorCount) = pSensor;
+    mRushSensorNear.at(mRushSensorCount) = myBool;
+    mRushSensorCount++;
 }
 
 bool MarioActor::tryStandardRush() {
@@ -46,13 +46,13 @@ bool MarioActor::tryStandardRush() {
 void MarioActor::checkPriorRushTarget() {
     s32 maxVal = 0;
     s32 val = 0;
-    for (s32 idx = 0; idx < _930; idx++) {
-        if (isFixJumpRushSensor(_7E4[idx])) {
+    for (s32 idx = 0; idx < mRushSensorCount; idx++) {
+        if (isFixJumpRushSensor(mRushSensors[idx])) {
             continue;
         }
 
         u32 v = 0;
-        switch (_7E4[idx]->mType) {
+        switch (mRushSensors[idx]->mType) {
         case ATYPE_COCO_NUT_BIND:
             v = 10;
             break;
@@ -67,13 +67,13 @@ void MarioActor::checkPriorRushTarget() {
     }
 
     if (maxVal != 0) {
-        _7E4[0] = _7E4[val];
-        _930 = 1;
+        mRushSensors[0] = mRushSensors[val];
+        mRushSensorCount = 1;
     }
 }
 
 HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
-    if (!_930) {
+    if (!mRushSensorCount) {
         return nullptr;
     }
 
@@ -95,7 +95,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             f32 size2;
             f32 size1 = (targetPos - mPosition).length();
             size2 = (targetPos - mCenterPos).length();
-            f32 size3 = (targetPos - _2AC).length();
+            f32 size3 = (targetPos - mHeadPos).length();
 
             if (size1 > size2) {
                 size1 = size2;
@@ -113,9 +113,9 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
         }
 
         if (!mMario->isHanging() && !mMario->isDamaging()) {
-            for (s32 idx = 0; idx < _930; idx++) {
-                if (selectHipDropRush(_7E4[idx])) {
-                    return _7E4[idx];
+            for (s32 idx = 0; idx < mRushSensorCount; idx++) {
+                if (selectHipDropRush(mRushSensors[idx])) {
+                    return mRushSensors[idx];
                 }
             }
         }
@@ -127,20 +127,20 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
         return nullptr;
     }
 
-    for (s32 idx = 0; idx < _930; idx++) {
-        if (isFixJumpRushSensor(_7E4[idx])) {
+    for (s32 idx = 0; idx < mRushSensorCount; idx++) {
+        if (isFixJumpRushSensor(mRushSensors[idx])) {
             continue;
         }
 
-        if (myBool && !MR::isSensorAutoRush(_7E4[idx])) {
+        if (myBool && !MR::isSensorAutoRush(mRushSensors[idx])) {
             continue;
         }
 
-        Vec3f pos(_7E4[idx]->mPosition);
+        Vec3f pos(mRushSensors[idx]->mPosition);
         f32 size2;
         f32 size1 = (pos - mPosition).length();
         size2 = (pos - mCenterPos).length();
-        f32 size3 = (pos - _2AC).length();
+        f32 size3 = (pos - mHeadPos).length();
 
         if (size1 > size2) {
             size1 = size2;
@@ -150,8 +150,8 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             size1 = size3;
         }
 
-        if ((_8E4[idx] || !myBool || !(_7E4[idx]->mRadius + 20.0f < size1)) && size1 < maxRadius) {
-            out = _7E4[idx];
+        if ((mRushSensorNear[idx] || !myBool || !(mRushSensors[idx]->mRadius + 20.0f < size1)) && size1 < maxRadius) {
+            out = mRushSensors[idx];
             maxRadius = size1;
         }
     }
@@ -160,7 +160,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
 }
 
 HitSensor* MarioActor::getNearestJumpTarget() const {
-    if (_930 == 0) {
+    if (mRushSensorCount == 0) {
         return nullptr;
     }
 
@@ -170,20 +170,20 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
 
     f32 nearestDistance = 100000.0f;
     HitSensor* nearest = nullptr;
-    for (u32 i = 0; i < _930; i++) {
-        if (!isFixJumpRushSensor(_7E4[i])) {
+    for (u32 i = 0; i < mRushSensorCount; i++) {
+        if (!isFixJumpRushSensor(mRushSensors[i])) {
             continue;
         }
 
-        if (mRushSensor == _7E4[i]) {
+        if (mRushSensor == mRushSensors[i]) {
             continue;
         }
 
-        Vec3f position(_7E4[i]->mPosition);
+        Vec3f position(mRushSensors[i]->mPosition);
         f32 centerDistance;
         f32 distance = (position - mPosition).length();
         centerDistance = (position - mCenterPos).length();
-        f32 headDistance = (position - _2AC).length();
+        f32 headDistance = (position - mHeadPos).length();
         if (distance > centerDistance) {
             distance = centerDistance;
         }
@@ -192,8 +192,8 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
             distance = headDistance;
         }
 
-        if ((_8E4[i] || !(_7E4[i]->mRadius < distance)) && distance < nearestDistance) {
-            nearest = _7E4[i];
+        if ((mRushSensorNear[i] || !(mRushSensors[i]->mRadius < distance)) && distance < nearestDistance) {
+            nearest = mRushSensors[i];
             nearestDistance = distance;
         }
     }
@@ -202,29 +202,29 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
 }
 
 HitSensor* MarioActor::getHighPriorityTarget() const {
-    if (_930 == 0) {
+    if (mRushSensorCount == 0) {
         return nullptr;
     }
 
-    for (s32 idx = 0; idx < _930; idx++) {
-        if (_7E4[idx]->isType(ATYPE_POWER_STAR_BIND)) {
-            return _7E4[idx];
+    for (s32 idx = 0; idx < mRushSensorCount; idx++) {
+        if (mRushSensors[idx]->isType(ATYPE_POWER_STAR_BIND)) {
+            return mRushSensors[idx];
         }
 
         if (mHealth == 0) {
             continue;
         }
 
-        if (_7E4[idx]->isType(ATYPE_QUESTION_COIN_BIND)) {
-            return _7E4[idx];
+        if (mRushSensors[idx]->isType(ATYPE_QUESTION_COIN_BIND)) {
+            return mRushSensors[idx];
         }
 
-        if (_7E4[idx]->isType(ATYPE_PRIOR_BINDER)) {
-            return _7E4[idx];
+        if (mRushSensors[idx]->isType(ATYPE_PRIOR_BINDER)) {
+            return mRushSensors[idx];
         }
 
-        if (_7E4[idx]->isType(ATYPE_SCENARIO_STARTER_BIND)) {
-            return _7E4[idx];
+        if (mRushSensors[idx]->isType(ATYPE_SCENARIO_STARTER_BIND)) {
+            return mRushSensors[idx];
         }
     }
 
@@ -232,7 +232,7 @@ HitSensor* MarioActor::getHighPriorityTarget() const {
 }
 
 HitSensor* MarioActor::getRescueTarget() const {
-    if (_930 == 0) {
+    if (mRushSensorCount == 0) {
         return nullptr;
     }
 
@@ -240,13 +240,13 @@ HitSensor* MarioActor::getRescueTarget() const {
         return nullptr;
     }
 
-    for (s32 idx = 0; idx < _930; idx++) {
-        if (_7E4[idx]->isType(ATYPE_G_CAPTURE_BIND)) {
-            return _7E4[idx];
+    for (s32 idx = 0; idx < mRushSensorCount; idx++) {
+        if (mRushSensors[idx]->isType(ATYPE_G_CAPTURE_BIND)) {
+            return mRushSensors[idx];
         }
 
-        if (selectOnDamageRush(_7E4[idx]->mHost->mName)) {
-            return _7E4[idx];
+        if (selectOnDamageRush(mRushSensors[idx]->mHost->mName)) {
+            return mRushSensors[idx];
         }
     }
 
@@ -263,7 +263,7 @@ bool MarioActor::tryStartRush(bool automatic) {
     }
 
     HitSensor* target = getNearestRushTarget(automatic);
-    if (getMovementStates().tornado && mMario->isRising() && target == _928) {
+    if (getMovementStates().tornado && mMario->isRising() && target == mLastRushSensor) {
         return false;
     }
 
@@ -280,11 +280,11 @@ bool MarioActor::tryStartRush(bool automatic) {
                 }
             }
 
-            if (target == _928 && selectRebindTimer(target) && _37C - _92C < 120) {
+            if (target == mLastRushSensor && selectRebindTimer(target) && mFrameCount - mLastRushEndFrame < 120) {
                 return false;
             }
 
-            _7E4[0] = target;
+            mRushSensors[0] = target;
             bool started;
             if (automatic) {
                 started = target->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"));
@@ -340,7 +340,7 @@ bool MarioActor::tryJumpRush() {
             return false;
         }
 
-        _7E4[0] = jumpTarget;
+        mRushSensors[0] = jumpTarget;
 
         bool out = jumpTarget->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"));
 
@@ -366,7 +366,7 @@ void MarioActor::tryRushInRush() {
         target = getNearestJumpTarget();
     }
 
-    _930 = 0;
+    mRushSensorCount = 0;
 
     if (target == mRushSensor) {
         return;
@@ -386,7 +386,7 @@ void MarioActor::tryRushInRush() {
     }
 
     if (!target->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"))) {
-        if (_934) {
+        if (mInRush) {
             const RushEndInfo rushEndInfo = RushEndInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
             endRush(&rushEndInfo);
         }
@@ -400,14 +400,14 @@ void MarioActor::tryRushInRush() {
         playEffect("スーパースピンドライバ終了");
     }
 
-    if (_934) {
+    if (mInRush) {
         mRushSensor = target;
 
         if (mPlayerMode == 4 && selectHideFlyMeter(target)) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();
         }
     } else {
-        _7E4[0] = target;
+        mRushSensors[0] = target;
 
         beginRush();
     }

@@ -20,23 +20,23 @@ bool Mario::doSkate() {
 }
 
 MarioSkate::MarioSkate(MarioActor* pActor) : MarioState(pActor, MarioStatus_Skate) {
-    _14 = 0;
-    _20 = 0.0f;
-    _18 = 0;
-    _19 = 0;
-    _1A = 0;
-    _1B = 0;
-    _1C = 0;
-    _1D = 0;
-    _24 = 0.0f;
+    mStrideTimer = 0;
+    mTwist = 0.0f;
+    mExitJump = 0;
+    mBackward = 0;
+    mStandStart = 0;
+    mStrideSide = 0;
+    mStrideReady = 0;
+    mStrideCount = 0;
+    mTilt = 0.0f;
 }
 
 bool MarioSkate::postureCtrl(MtxPtr pMtx) {
     getPlayer()->postureCtrl(pMtx);
-    f32 rotation = _20;
+    f32 rotation = mTwist;
     rotation *= 3.1415927f;
     NebulaMtxConcat(pMtx, MR::tmpMtxRotYRad(rotation), pMtx);
-    NebulaMtxConcat(pMtx, MR::tmpMtxRotZRad(_24), pMtx);
+    NebulaMtxConcat(pMtx, MR::tmpMtxRotZRad(mTilt), pMtx);
     Mtx direction;
     getPlayer()->createDirectionMtx(direction);
     NebulaMtxConcat(direction, pMtx, pMtx);
@@ -44,34 +44,34 @@ bool MarioSkate::postureCtrl(MtxPtr pMtx) {
 }
 
 void MarioSkate::exitJump() {
-    _18 = 1;
+    mExitJump = 1;
     getPlayer()->tryJump();
     playSound("スケートジャンプ");
 }
 
 bool MarioSkate::start() {
-    _14 = 0;
-    _1B = 0;
-    _1C = 0;
-    _18 = 0;
-    _1D = 1;
-    _19 = 0;
-    _24 = 0.0f;
-    _1A = 0;
+    mStrideTimer = 0;
+    mStrideSide = 0;
+    mStrideReady = 0;
+    mExitJump = 0;
+    mStrideCount = 1;
+    mBackward = 0;
+    mTilt = 0.0f;
+    mStandStart = 0;
 
     if (isAnimationRun("スケートアクセルジャンプ") || isAnimationRun("スケートジャンプ2") || isAnimationRun("スケートジャンプ3")) {
-        _1D = 1;
+        mStrideCount = 1;
         changeAnimation(nullptr, "基本");
         changeAnimationNonStop("スケート着地");
         playEffect("スケート右");
         playEffect("スケート左");
         playSound("スケート着地");
-        _19 = 0;
-        _20 = 0.0f;
+        mBackward = 0;
+        mTwist = 0.0f;
     } else {
-        _20 = 0.0f;
+        mTwist = 0.0f;
         if (getPlayer()->mTargetWalkSpeedIndex < 3) {
-            _1A = 1;
+            mStandStart = 1;
             changeAnimationNonStop("アイスひねり静止");
         } else {
             changeAnimationNonStop("アイスひねり");
@@ -101,7 +101,7 @@ bool MarioSkate::update() {
         return false;
     }
 
-    if (!_1A) {
+    if (!mStandStart) {
         getPlayer()->mainMove();
     } else {
         return !isAnimationTerminate(nullptr);
@@ -113,29 +113,29 @@ bool MarioSkate::update() {
     }
 
     if (checkTrgZ()) {
-        bool reverse = !_19;
-        _14 = 20;
-        _19 = reverse;
-        _1C = 1;
-        _1B = 1 - _1B;
+        bool reverse = !mBackward;
+        mStrideTimer = 20;
+        mBackward = reverse;
+        mStrideReady = 1;
+        mStrideSide = 1 - mStrideSide;
         playSound("声壁押し");
     }
 
     getPlayer()->updateWalkSpeed();
     if (isAnimationRun("スケート着地")) {
         if (isAnimationTerminate(nullptr)) {
-            _1C = 1;
+            mStrideReady = 1;
         }
-    } else if (_1D == 1) {
+    } else if (mStrideCount == 1) {
         f32 stick = getStickP();
         f32 frame = 20.0f + 50.0f * (1.0f - stick);
         if (getAnimator()->getFrame() > frame && getStickP()) {
-            _1C = 1;
+            mStrideReady = 1;
         }
     }
 
     if (mActor->isRequestSpin()) {
-        if (_1D && (!isAnimationRun("アイスひねり移動") || isAnimationTerminate(nullptr))) {
+        if (mStrideCount && (!isAnimationRun("アイスひねり移動") || isAnimationTerminate(nullptr))) {
             stopAnimation(nullptr);
             changeAnimationNonStop("アイスひねり移動");
             playSound("スケートスピン");
@@ -147,7 +147,7 @@ bool MarioSkate::update() {
         }
 
         if (getAnimator()->getFrame() > 20.0f) {
-            _1C = 1;
+            mStrideReady = 1;
         }
     }
 
@@ -160,24 +160,24 @@ bool MarioSkate::update() {
         playSound("スケート滑り");
     }
 
-    if (_19) {
-        _20 += 0.04f;
-        _20 = MR::clamp(_20, -1.0f, 1.0f);
+    if (mBackward) {
+        mTwist += 0.04f;
+        mTwist = MR::clamp(mTwist, -1.0f, 1.0f);
     } else {
-        if (_20 == 1.0f) {
-            _20 = -1.0f;
+        if (mTwist == 1.0f) {
+            mTwist = -1.0f;
         }
 
         bool negative = false;
-        if (_20 <= 0.0f) {
+        if (mTwist <= 0.0f) {
             negative = true;
         }
 
-        _20 += 0.04f;
+        mTwist += 0.04f;
         if (negative) {
-            _20 = -MR::clamp(-_20, 0.0f, 1.0f);
+            mTwist = -MR::clamp(-mTwist, 0.0f, 1.0f);
         } else {
-            _20 = MR::clamp(_20, -1.0f, 1.0f);
+            mTwist = MR::clamp(mTwist, -1.0f, 1.0f);
         }
     }
 
@@ -189,29 +189,29 @@ bool MarioSkate::update() {
         angle = -angle;
     }
 
-    if (mActor->_3E5) {
-        _14 = 15;
+    if (mActor->mPunchSensorOn) {
+        mStrideTimer = 15;
     } else {
-        _14++;
+        mStrideTimer++;
     }
 
     u32 interval = 30;
-    if (_19) {
+    if (mBackward) {
         interval = 60;
     }
 
-    if (_14 >= interval) {
-        if (_1C) {
-            if (!(angle >= 0.1f && _1B == 1) && !(angle <= -0.1f && _1B == 0)) {
-                _1C = 0;
-                _14 = 0;
-                _1B = 1 - _1B;
-                if (_1D < 1) {
-                    _1D++;
+    if (mStrideTimer >= interval) {
+        if (mStrideReady) {
+            if (!(angle >= 0.1f && mStrideSide == 1) && !(angle <= -0.1f && mStrideSide == 0)) {
+                mStrideReady = 0;
+                mStrideTimer = 0;
+                mStrideSide = 1 - mStrideSide;
+                if (mStrideCount < 1) {
+                    mStrideCount++;
                 } else {
-                    switch (_1B) {
+                    switch (mStrideSide) {
                     case 0:
-                        if (_19) {
+                        if (mBackward) {
                             changeAnimationNonStop("氷上後行右");
                         } else {
                             changeAnimationNonStop("氷上力行左");
@@ -222,7 +222,7 @@ bool MarioSkate::update() {
                         playSound("スケート足");
                         break;
                     case 1:
-                        if (_19) {
+                        if (mBackward) {
                             changeAnimationNonStop("氷上後行左");
                         } else {
                             changeAnimationNonStop("氷上力行右");
@@ -235,7 +235,7 @@ bool MarioSkate::update() {
                     }
                 }
             }
-        } else if (_14 > 90) {
+        } else if (mStrideTimer > 90) {
             return false;
         }
     }
@@ -247,25 +247,25 @@ bool MarioSkate::update() {
     }
 
     f32 tilt;
-    if (_19) {
+    if (mBackward) {
         tilt = MR::clamp(angle, -0.3926991f, 0.3926991f);
     } else {
         tilt = MR::clamp(angle, -0.5235988f, 0.5235988f);
     }
 
     f32 targetTilt = tilt * (1.0f - 0.8f * (1.0f - getStickP()));
-    if (MR::abs(targetTilt) > MR::abs(_24)) {
-        _24 = 0.9f * _24 + 0.1f * targetTilt;
+    if (MR::abs(targetTilt) > MR::abs(mTilt)) {
+        mTilt = 0.9f * mTilt + 0.1f * targetTilt;
     } else {
-        _24 = 0.95f * _24 + 0.05f * targetTilt;
+        mTilt = 0.95f * mTilt + 0.05f * targetTilt;
     }
 
     return true;
 }
 
 bool MarioSkate::close() {
-    if (_18) {
-        if (!_1A) {
+    if (mExitJump) {
+        if (!mStandStart) {
             switch (getPlayer()->mJumpKind) {
             case 1:
                 changeAnimationNonStop("スケートジャンプ2");

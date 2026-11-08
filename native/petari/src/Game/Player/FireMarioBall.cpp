@@ -29,7 +29,6 @@ FireMarioBall::~FireMarioBall() {
 }
 
 FireMarioBall::FireMarioBall(const char* pName) : LiveActor(pName) {
-    _8C = 0;
 }
 
 void FireMarioBall::init(const TableIter& rIter) {
@@ -44,7 +43,7 @@ void FireMarioBall::init(const TableIter& rIter) {
     MR::setShadowVolumeEndDropOffset(this, 0, 50.0f);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(FireMarioBall, FireMarioBallNrvThrow));
-    _90 = 0;
+    mBindTimer = 0;
     makeActorDead();
 }
 
@@ -109,17 +108,17 @@ bool FireMarioBall::tryToKill() {
             kill();
             return true;
         }
-        if (_90) {
-            _90 -= 1;
-            if (!_90 && MR::isBindedWall(this)) {
+        if (mBindTimer) {
+            mBindTimer -= 1;
+            if (!mBindTimer && MR::isBindedWall(this)) {
                 kill();
                 return true;
             }
         } else {
-            _90 = 3;
+            mBindTimer = 3;
         }
     } else {
-        _90 = 0;
+        mBindTimer = 0;
     }
     if (!MR::isNearPlayer(this, ::cForceKillDistance)) {
         kill();

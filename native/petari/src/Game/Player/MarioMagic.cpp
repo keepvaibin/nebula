@@ -9,12 +9,12 @@ void Mario::stopPunch() {
 
     MarioActor* actor = mActor;
 
-    if (!actor->_944) {
-        actor->_945 = 0;
-        actor->_974 = 0;
+    if (!actor->mPunchHitTimer) {
+        actor->mPunchFrame = 0;
+        actor->mAirPunchHitCount = 0;
     }
 
-    actor->_944 = 0;
+    actor->mPunchHitTimer = 0;
 }
 
 void Mario::startMagic() {
@@ -37,7 +37,7 @@ void Mario::startMagic() {
 }
 
 MarioMagic::MarioMagic(MarioActor* pActor) : MarioState(pActor, MarioStatus_Magic) {
-    _12 = 0;
+    mTimer = 0;
 }
 
 bool MarioMagic::start() {
@@ -48,14 +48,14 @@ bool MarioMagic::start() {
     playSound("声スピン");
     playSound("スピンジャンプ");
     startPadVib(2);
-    _12 = 0;
+    mTimer = 0;
     return true;
 }
 
 bool MarioMagic::close() {
     stopEffect("スピンライト");
 
-    if (_12 < 0x1A) {
+    if (mTimer < 0x1A) {
         playEffect("スピンライト消去");
     }
 
@@ -70,9 +70,9 @@ bool MarioMagic::update() {
         return false;
     }
 
-    _12++;
+    mTimer++;
 
-    if (_12 == 25) {
+    if (mTimer == 25) {
         stopEffect("スピンライト");
         playEffect("スピンライト消去");
     }

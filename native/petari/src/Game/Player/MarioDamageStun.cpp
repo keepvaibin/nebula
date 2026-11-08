@@ -2,7 +2,7 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioStun.hpp"
 
-MarioStun::MarioStun(MarioActor* pActor) : MarioState(pActor, MarioStatus_Stun), _12(), _14() {
+MarioStun::MarioStun(MarioActor* pActor) : MarioState(pActor, MarioStatus_Stun), mRecovering(), mRecoverTimer() {
 }
 
 bool MarioStun::close() {
@@ -14,26 +14,26 @@ bool MarioStun::start() {
     changeAnimationNonStop("しびれ");
     startPadVib("マリオ[しびれ]");
     playSound("声しびれ");
-    _14 = 0x3c;
-    _12 = 0;
+    mRecoverTimer = 0x3c;
+    mRecovering = 0;
     return true;
 }
 
 bool MarioStun::update() {
-    if (_14 != 0) {
-        _14--;
+    if (mRecoverTimer != 0) {
+        mRecoverTimer--;
     }
 
-    if (_14 == 0) {
-        if (_12 != 0) {
+    if (mRecoverTimer == 0) {
+        if (mRecovering != 0) {
             return false;
         }
 
-        _12 = 1;
+        mRecovering = 1;
         if (!getPlayer()->mMovementStates.onGround) {
-            _14 = 0xa;
+            mRecoverTimer = 0xa;
         } else {
-            _14 = 0x1e;
+            mRecoverTimer = 0x1e;
         }
 
         if (getPlayer()->mMovementStates.onGround) {
@@ -41,7 +41,7 @@ bool MarioStun::update() {
         }
     }
 
-    if (_12 != 0 && (mActor->isRequestRush() || checkTrgA())) {
+    if (mRecovering != 0 && (mActor->isRequestRush() || checkTrgA())) {
         stopAnimation(nullptr);
         if (checkTrgA()) {
             getPlayer()->tryJump();

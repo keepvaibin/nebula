@@ -27,7 +27,3 @@ void EventAbyss::sound(u16 eventFrame, u16 sequenceFrame) {
     MR::setSoundVolumeSetting(2, 20);
     MR::startSubBGM("BGM_MISS", false);
 }
-
-void EventAbyss::updateAfter() {
-    setSpot(_28, _24);
-}

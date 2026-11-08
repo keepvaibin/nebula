@@ -17,13 +17,7 @@ public:
     void show();
     void hide();
 
-    bool _8C;
     bool mIsVisible;
-    bool _8E;
-    bool _8F;
-    s32 _90;
-    s32 _94;
-    s32 _98;
     Vec3f mUp;
     Vec3f mFront;
 };

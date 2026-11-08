@@ -3,11 +3,11 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 
 void MarioActor::bodyClap() {
-    for (u32 i = 0; i < _7DC; i++) {
-        Vec3f stack_14(_6DC[i]->mPosition);
+    for (u32 i = 0; i < mClapCoinCount; i++) {
+        Vec3f stack_14(mClapCoins[i]->mPosition);
         Vec3f stack_8(stack_14 - mCenterPos);
         if (stack_8.length() < 100.0f) {
-            _6DC[i]->receiveMessage(ACTMES_ITEM_GET, getSensor("body"));
+            mClapCoins[i]->receiveMessage(ACTMES_ITEM_GET, getSensor("body"));
         }
     }
 }

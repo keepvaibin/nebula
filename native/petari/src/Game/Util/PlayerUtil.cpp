@@ -722,10 +722,6 @@ namespace MR {
         MR::hideJoint(MarioAccess::getPlayerActor(), pName);
     }
 
-    void setPlayerSpot(f32 param1, u32 param2) {
-        MarioAccess::setSpot(param1, param2);
-    }
-
     void startPlayerDownWipe() {
         MarioAccess::startDownWipe();
     }
@@ -796,7 +792,7 @@ namespace MR {
     }
 
     void unlockPlayerAnimation() {
-        MarioAccess::getPlayerActor()->setB90(false);
+        MarioAccess::getPlayerActor()->setAnimationFrozen(false);
     }
 
     void resetPlayerStatus() {

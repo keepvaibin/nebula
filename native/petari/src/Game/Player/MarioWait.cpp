@@ -7,8 +7,8 @@
 #include "Game/Util/MathUtil.hpp"
 
 void MarioAnimator::controlWaitAnimation() {
-    if (_78) {
-        _78--;
+    if (mWaitHoldTimer) {
+        mWaitHoldTimer--;
         return;
     }
 
@@ -29,9 +29,9 @@ void MarioAnimator::controlWaitAnimation() {
     weights[0] = weights[1] = weights[2] = weights[3] = 0.0f;
     f32 sideBias = 0.0f;
     f32 frontBias = 0.0f;
-    if (_16 == 1) {
+    if (mWaitPhase == 1) {
         sideBias = 0.1f;
-    } else if (_16 == 2) {
+    } else if (mWaitPhase == 2) {
         frontBias = 0.1f;
     }
 
@@ -58,7 +58,7 @@ void MarioAnimator::controlWaitAnimation() {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
 
-        _16 = 1;
+        mWaitPhase = 1;
     } else {
         f32 angle = 1.5707964f - marioAcos(frontMagnitude);
         if (angle >= 0.7853982f) {
@@ -80,10 +80,10 @@ void MarioAnimator::controlWaitAnimation() {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
 
-        _16 = 2;
+        mWaitPhase = 2;
     }
 
-    _78 = 4;
+    mWaitHoldTimer = 4;
 }
 
 void MarioAnimator::stopWaitAnimation() {
@@ -91,8 +91,8 @@ void MarioAnimator::stopWaitAnimation() {
         return;
     }
 
-    if (_78) {
-        _78--;
+    if (mWaitHoldTimer) {
+        mWaitHoldTimer--;
         return;
     }
 
@@ -102,8 +102,8 @@ void MarioAnimator::stopWaitAnimation() {
 }
 
 bool MarioWait::checkStart() {
-    if (mActor->_EA4) {
-        _16 = 0;
+    if (mActor->mInDemo) {
+        mTimer = 0;
         return false;
     }
 
@@ -113,7 +113,7 @@ bool MarioWait::checkStart() {
 
     bool damaged = mActor->is481or482On();
     if (damaged) {
-        _16 = 0;
+        mTimer = 0;
         return false;
     }
 
@@ -172,23 +172,23 @@ bool MarioWait::checkStart() {
     }
 
     if (MR::isNearZero(getPlayer()->mWalkSpeed)) {
-        _16++;
+        mTimer++;
     } else {
         cancel = true;
     }
 
     if (cancel) {
-        _16 = 0;
+        mTimer = 0;
         return false;
     }
 
-    if (_16 == 1800) {
+    if (mTimer == 1800) {
         if (MR::getAreaObj("NonSleepCube", getTrans()) != nullptr) {
-            _12 = 1;
+            mKind = 1;
             return true;
         }
 
-        _12 = 0;
+        mKind = 0;
         return true;
     }
 
@@ -196,7 +196,7 @@ bool MarioWait::checkStart() {
 }
 
 bool MarioWait::start() {
-    switch (_12) {
+    switch (mKind) {
     case 0:
         changeAnimation("特殊ウエイト1A");
         break;
@@ -205,8 +205,8 @@ bool MarioWait::start() {
         break;
     }
 
-    _16 = 0;
-    _14 = 0;
+    mTimer = 0;
+    mStep = 0;
     return true;
 }
 
@@ -243,10 +243,10 @@ bool MarioWait::update() {
         return false;
     }
 
-    _16++;
-    switch (_12) {
+    mTimer++;
+    switch (mKind) {
     case 0:
-        switch (_14) {
+        switch (mStep) {
         case 0:
             if (!mActor->mTakeCount) {
                 u32 duration = 1800;
@@ -254,9 +254,9 @@ bool MarioWait::update() {
                     duration = 210;
                 }
 
-                if (_16 == duration) {
-                    _16 = 0;
-                    _14++;
+                if (mTimer == duration) {
+                    mTimer = 0;
+                    mStep++;
                     changeAnimation("特殊ウエイト1B");
                 }
             }
@@ -279,7 +279,7 @@ bool MarioWait::close() {
     stopSound("声あくび", 0);
     stopSound("声いびき１", 0);
     stopSound("声いびき２", 0);
-    _16 = 0;
+    mTimer = 0;
     return true;
 }
 
@@ -294,16 +294,16 @@ void Mario::checkSpecialWaitAnimation() {
 }
 
 void Mario::resetSleepTimer() {
-    mWait->_16 = 0;
+    mWait->mTimer = 0;
     if (isStatusActive(MarioStatus_Wait)) {
         closeStatus(mWait);
     }
 }
 
 MarioWait::MarioWait(MarioActor* pActor) : MarioState(pActor, MarioStatus_Wait) {
-    _16 = 0;
-    _12 = 0;
-    _14 = 0;
+    mTimer = 0;
+    mKind = 0;
+    mStep = 0;
 }
 
 void MarioState::hitPoly(u8, const Vec3f&, HitSensor*) {

@@ -51,32 +51,32 @@ bool Mario::faint(const Vec3f& rVec) {
     return mMovementStates.fainted;
 }
 
-MarioFaint::MarioFaint(MarioActor* pActor) : MarioState(pActor, MarioStatus_Faint), mTimer(), _14(), _16() {
-    _18.zero();
+MarioFaint::MarioFaint(MarioActor* pActor) : MarioState(pActor, MarioStatus_Faint), mTimer(), mAfterTimer(), mStep() {
+    mVelocity.zero();
     mNoDamage = false;
     mTookDamage = false;
 }
 
 void MarioFaint::setVec(const Vec3f& rVec) {
-    MR::vecKillElement(rVec, mActor->_240, &_18);
-    _18.setLength(mActor->getConst().getTable()->mSlideDistFaint);
+    MR::vecKillElement(rVec, mActor->mGravityVec, &mVelocity);
+    mVelocity.setLength(mActor->getConst().getTable()->mSlideDistFaint);
     mTimer = 0;
-    _16 = 0;
+    mStep = 0;
 
     if (getPlayer()->isStatusActive(MarioStatus_Hang)) {
-        _18.zero();
+        mVelocity.zero();
     }
 }
 
 bool MarioFaint::update() {
     mTimer++;
 
-    switch (_16) {
+    switch (mStep) {
     case 0:
-        addVelocity(_18);
-        _18.scale(mActor->getConst().getTable()->mFaintFriction1);
+        addVelocity(mVelocity);
+        mVelocity.scale(mActor->getConst().getTable()->mFaintFriction1);
         if (mTimer == mActor->getConst().getTable()->mFaintTimer1) {
-            _16++;
+            mStep++;
         }
 
         break;
@@ -85,8 +85,8 @@ bool MarioFaint::update() {
             return false;
         }
 
-        addVelocity(_18);
-        _18.scale(mActor->getConst().getTable()->mFaintFriction2);
+        addVelocity(mVelocity);
+        mVelocity.scale(mActor->getConst().getTable()->mFaintFriction2);
 
         if (checkTrgA()) {
             getPlayer()->tryJump();
@@ -105,15 +105,15 @@ bool MarioFaint::update() {
 
 bool MarioFaint::start() {
     mTimer = 0;
-    _16 = 0;
+    mStep = 0;
     getPlayer()->mMovementStates.hipDrop = false;
     getPlayer()->mMovementStates.jumping = false;
 
-    if (_18.dot(getPlayer()->mFrontVec) > 0.0f) {
-        getPlayer()->setFrontVecKeepUp(_18);
+    if (mVelocity.dot(getPlayer()->mFrontVec) > 0.0f) {
+        getPlayer()->setFrontVecKeepUp(mVelocity);
         changeAnimation("後方小ダメージ");
     } else {
-        getPlayer()->setFrontVecKeepUp(-_18);
+        getPlayer()->setFrontVecKeepUp(-mVelocity);
         changeAnimation("前方小ダメージ");
     }
 
@@ -126,7 +126,7 @@ bool MarioFaint::start() {
     playEffect("ダメージ");
     startPadVib(2);
 
-    addVelocity(_18);
+    addVelocity(mVelocity);
 
     mTookDamage = !mNoDamage;
 
@@ -157,7 +157,7 @@ bool MarioFaint::close() {
     }
 
     if (mTookDamage) {
-        _14 = 120;
+        mAfterTimer = 120;
     }
 
     return true;

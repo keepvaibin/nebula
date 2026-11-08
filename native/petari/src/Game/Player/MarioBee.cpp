@@ -20,10 +20,10 @@ void MarioActor::entryWallWalkMode(const Vec3f& position, const Vec3f& normal) {
         return;
     }
 
-    if (!_9F2) {
+    if (!mBeeStickInhibit) {
         mBeeWallWalk = 5;
         Vec3f gravity(-normal);
-        _240 = gravity;
+        mGravityVec = gravity;
         mPosition = position;
         mMario->setTrans(position, nullptr);
         mMario->stopJump();
@@ -34,9 +34,9 @@ void MarioActor::entryWallWalkMode(const Vec3f& position, const Vec3f& normal) {
         mMario->setHeadVec(-gravity);
         mMario->setFrontVecKeepUp(front, 1u);
         setBlendMtxTimer(2);
-        _38C = 5;
+        mStunTimer = 5;
         mMario->mMovementStates.jumpBuffered = false;
-        _214->_305 = true;
+        mCollisionShadow->mSnapDirection = true;
     }
 }
 

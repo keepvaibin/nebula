@@ -13,6 +13,4 @@ void MarioMove::initAfter() {
     mFrontVec2 = mFrontVec;
     mSideVec2 = mSideVec;
 
-    _50 = 0.0f;
-    _54 = 0.0f;
 }

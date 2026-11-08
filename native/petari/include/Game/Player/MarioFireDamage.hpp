@@ -10,5 +10,5 @@ public:
 
     void decAfterTimer();
 
-    u16 _12;
+    u16 mAfterTimer;  // frames after it: no new damage
 };
