@@ -11,18 +11,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 
-
 StinkBugBase::StinkBugBase(const char* pName)
     : LiveActor(pName), mFront(0.0f, 0.0f, 1.0f), mInitPos(0.0f, 0.0f, 0.0f), mInitFront(0.0f, 0.0f, 1.0f), mTerritoryAngle(180.0f), mRadius(1000.0f), mIsTurnLeft(false) {
 }
 
-void StinkBugBase::setDashVelocity(f32 velocity) {
-    Vec3f result;
-    f32 radius = mRadius;
-    result.scaleAdd(radius, mFront, mInitPos);
-    f32 distance = result.distance(mPosition);
-    distance = MR::min(velocity, distance);
-    mVelocity.scale(distance, mFront);
+// Toward the end of the dash (the radius ahead of home), never past it.
+void StinkBugBase::setDashVelocity(f32 speed) {
+    Vec3f dashEnd;
+    dashEnd.scaleAdd(mRadius, mFront, mInitPos);
+    f32 step = dashEnd.distance(mPosition);
+    step = MR::min(speed, step);
+    mVelocity.scale(step, mFront);
 }
 
 void StinkBugBase::fixInitPos() {
@@ -45,60 +44,53 @@ void StinkBugBase::init(const TableIter& rIter) {
     mInitPos.set(mPosition);
     MR::calcFrontVec(&mFront, this);
     mInitFront.set(mFront);
-    Vec3f upVec;
-    MR::calcUpVec(&upVec, this);
-    mGravity.negate(upVec);
+    Vec3f up;
+    MR::calcUpVec(&up, this);
+    mGravity.negate(up);
 }
 
-bool StinkBugBase::isPlayerInTerritory(f32 arg1, f32 arg2, f32 arg3, f32 arg4) const {
-    if (!MR::isNearPlayer(this, mRadius + arg1)) {
+// The player is within the radius plus `reachMargin`, within the side and up half sizes, and inside the territory cone
+// (apex `backOffset` / sin(angle) behind it on the home front). Angle 0 means anywhere ahead, 180 anywhere at all.
+bool StinkBugBase::isPlayerInTerritory(f32 reachMargin, f32 sideHalfSize, f32 upHalfSize, f32 backOffset) const {
+    if (!MR::isNearPlayer(this, mRadius + reachMargin)) {
         return false;
     }
 
-    const Vec3f& rPos = mPosition;
-    Vec3f v1;
-    v1.sub(*MR::getPlayerPos(), rPos);
+    Vec3f toPlayer;
+    toPlayer.sub(*MR::getPlayerPos(), mPosition);
 
-    Vec3f upVec;
-    MR::calcUpVec(&upVec, this);
-
-    f32 dot = v1.dot(upVec);
-
-    if (MR::abs(dot) > arg3) {
+    Vec3f up;
+    MR::calcUpVec(&up, this);
+    if (MR::abs(toPlayer.dot(up)) > upHalfSize) {
         return false;
     }
 
-    Vec3f sideVec;
-    MR::calcSideVec(&sideVec, this);
-
-    dot = v1.dot(sideVec);
-
-    if (MR::abs(dot) > arg2) {
+    Vec3f side;
+    MR::calcSideVec(&side, this);
+    if (MR::abs(toPlayer.dot(side)) > sideHalfSize) {
         return false;
     }
 
     if (mTerritoryAngle == 0.0f) {
-        return v1.dot(mFront) > 0.0f;
+        return toPlayer.dot(mFront) > 0.0f;
     }
 
     if (mTerritoryAngle == 180.0f) {
         return true;
     }
 
-    f32 f1 = MR::abs(MR::sinDegree(mTerritoryAngle));
+    f32 sinAngle = MR::abs(MR::sinDegree(mTerritoryAngle));
+    Vec3f apex;
+    apex.scaleAdd(-backOffset / sinAngle, mInitFront, mPosition);
 
-    const Vec3f& rPos2 = mPosition;
-    Vec3f scaledAdded;
-    scaledAdded.scaleAdd(-arg4 / f1, mInitFront, rPos2);
+    Vec3f fromApex;
+    fromApex.sub(*MR::getPlayerPos(), apex);
+    Vec3f fromApexFlat = fromApex.killElement(mGravity);
 
-    Vec3f v3;
-    v3.sub(*MR::getPlayerPos(), scaledAdded);
-
-    Vec3f v5 = v3.killElement(mGravity);
-
-    return MR::isNearAngleDegree(v5, mInitFront, mTerritoryAngle);
+    return MR::isNearAngleDegree(fromApexFlat, mInitFront, mTerritoryAngle);
 }
 
+// Sweeps the front side to side within the territory angle; true at each edge.
 bool StinkBugBase::tryTurnSearch(f32 angle) {
     if (mIsTurnLeft) {
         MR::rotateVecDegree(&mFront, mGravity, angle);
@@ -115,14 +107,13 @@ bool StinkBugBase::tryTurnSearch(f32 angle) {
     return false;
 }
 
-bool StinkBugBase::tryTurnDashSign(f32 angle) {
-    Vec3f* playerPos = MR::getPlayerPos();
-    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *playerPos, angle);
+void StinkBugBase::turnDashSign(f32 angle) {
+    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), angle);
     MR::clampVecAngleDeg(&mFront, mInitFront, mTerritoryAngle);
-    return true;
 }
 
-bool StinkBugBase::isHitHorn(HitSensor* pSender, HitSensor* pReceiver, f32 arg3) const {
+// The receiver is ahead and within `margin` plus its radius of the horn's height.
+bool StinkBugBase::isHitHorn(HitSensor* pSender, HitSensor* pReceiver, f32 margin) const {
     Vec3f toReceiver;
     toReceiver.sub(pReceiver->mPosition, pSender->mPosition);
 
@@ -133,10 +124,8 @@ bool StinkBugBase::isHitHorn(HitSensor* pSender, HitSensor* pReceiver, f32 arg3)
     Vec3f up;
     MR::calcUpVec(&up, this);
 
-    Vec3f v2;
-    v2.scale(up.dot(toReceiver), up);
+    Vec3f upPart;
+    upPart.scale(up.dot(toReceiver), up);
 
-    f32 radius = pReceiver->mRadius;
-
-    return v2.length() <= arg3 + radius;
+    return upPart.length() <= margin + pReceiver->mRadius;
 }

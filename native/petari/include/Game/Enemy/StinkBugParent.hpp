@@ -4,14 +4,6 @@
 
 class CollisionParts;
 
-namespace {
-    struct Param {
-        f32 mDashVelocity;
-        f32 mDashDistance;
-        s32 mPanicStep;
-    };
-};  // namespace
-
 class StinkBugParent : public StinkBugBase {
 public:
     StinkBugParent(const char*);
@@ -42,13 +34,13 @@ public:
     void exeDemoChildDown();
     void exeDemoAnger();
     void jumpBackPlayerFromChild() const;
+    bool isPlayerInParentTerritory() const;
     bool isShakeChance() const;
     bool isHitChild() const;
     bool isNrvEnableStarPieceAttack() const;
+    bool isNrvMoving() const;
+    bool isNrvDemo() const;
 
-    inline bool isNrvMoving() const;
-    inline bool isNrvDemo() const;
-
-    CollisionParts* mParent;
+    CollisionParts* mParentOnlyParts;  // The body without the child; valid once the child is gone.
     bool mIsChildAlive;
 };
