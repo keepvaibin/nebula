@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
 
 // One request on the game's save files through the host's save service (nebula_game_api.h save_request): set up by
 // one of the set* calls, started by start(), done when the host has finished it (the game polls isDone). The host
@@ -39,5 +40,5 @@ private:
     void* mBuffer;
     u32 mSize;           // a write's length, a read's capacity
     u32* mReadLength;    // a read: the file's length
-    volatile s32 mStatus;  // NEBULA_SAVE_*
+    NebulaAtomic< s32 > mStatus;  // NEBULA_SAVE_*; the host's save worker stores the result
 };
