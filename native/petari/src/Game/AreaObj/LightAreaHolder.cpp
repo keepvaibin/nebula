@@ -3,7 +3,7 @@
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Map/LightZoneDataHolder.hpp"
 
-LightAreaHolder::LightAreaHolder(s32 maxNum, const char* pName) : AreaObjMgr(maxNum, pName) {
+LightAreaHolder::LightAreaHolder(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
     LightFunction::registerLightAreaHolder(this);
 }
 
