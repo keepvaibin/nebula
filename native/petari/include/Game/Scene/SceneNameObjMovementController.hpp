@@ -1,19 +1,9 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Scene/MovementControlType.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/System/NerveExecutor.hpp"
-
-namespace MR {
-    enum MovementControlType {
-        MovementControlType_0,
-        MovementControlType_1,
-        MovementControlType_2,
-        MovementControlType_3,
-        MovementControlType_4,
-        MovementControlType_5,
-    };
-};  // namespace MR
 
 class StopSceneStateControl : public NerveExecutor {
 public:

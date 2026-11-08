@@ -189,11 +189,11 @@ namespace MR {
     }
 
     void stopSceneForScenarioOpeningCamera() {
-        getSceneNameObjMovementController()->requestStopSceneFor(MovementControlType_4, nullptr);
+        getSceneNameObjMovementController()->requestStopSceneFor(MovementControlType_StopPlayer, nullptr);
     }
 
     void playSceneForScenarioOpeningCamera() {
-        getSceneNameObjMovementController()->requestPlaySceneFor(MovementControlType_4, nullptr);
+        getSceneNameObjMovementController()->requestPlaySceneFor(MovementControlType_StopPlayer, nullptr);
     }
 
     const PlacementId& getCurrentMarioStartIdInfo() {

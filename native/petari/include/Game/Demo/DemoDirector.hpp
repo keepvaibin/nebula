@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Scene/MovementControlType.hpp"
 
 class DemoCastGroupHolder;
 class DemoExecutor;
@@ -18,9 +19,9 @@ public:
 
     virtual void movement();
 
-    void startDemoProgrammable(NameObj*, const char*, bool, s32);
-    void startDemoTimeKeep(NameObj*, const char*, s32, bool, const char*);
-    void startDemoExecutor(NameObj*, const char*, s32, const char*);
+    void startDemoProgrammable(NameObj*, const char*, bool, MR::MovementControlType);
+    void startDemoTimeKeep(NameObj*, const char*, MR::MovementControlType, bool, const char*);
+    void startDemoExecutor(NameObj*, const char*, MR::MovementControlType, const char*);
     const char* getCurrentDemoName() const;
     void endDemo(NameObj*, const char*, bool);
     bool isExistTimeKeepDemo(const char*) const;
@@ -30,7 +31,7 @@ public:
     void registerDemoSimpleCast(LayoutActor*);
     void registerDemoSimpleCast(NameObj*);
     bool tryStartDemoRequested();
-    void startDemo(NameObj*, const char*, bool, s32);
+    void startDemo(NameObj*, const char*, bool, MR::MovementControlType);
     void startDemoRequested();
     void doDemoEndRequest();
 
@@ -44,6 +45,6 @@ public:
     DemoStartRequestHolder* mStartRequestHolder;
     NameObj* mDemoStarter;
     const char* mDemoName;
-    s32 mMovementType;
+    MR::MovementControlType mMovementType;
     bool mUseCinemaFrame;
 };

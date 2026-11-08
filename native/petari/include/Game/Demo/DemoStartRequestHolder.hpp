@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Scene/MovementControlType.hpp"
 #include "Game/Util/Array.hpp"
 
 class DemoExecutor;
@@ -11,10 +12,12 @@ class NerveExecutor;
 
 class DemoStartInfo {
 public:
-    enum DemoType { DemoType_0, DemoType_TimeKeep };
-    enum CinemaFrameType { CinemaFrameType_0 };
-    enum StarPointerType { StarPointerType_0, StarPointerType_1, StarPointerType_2 };
-    enum DeleteEffectType { DeleteEffectType_0, DeleteEffectType_1};
+    enum DemoType { DemoType_Programmable, DemoType_TimeKeep };
+    enum CinemaFrameType { CinemaFrameType_Frame, CinemaFrameType_None };
+    // The pointer mode during the demo (StarPointerMode_Demo, _DemoWithStarPointer, _DemoWithHandPointerFinger).
+    enum StarPointerType { StarPointerType_Demo, StarPointerType_DemoWithStarPointer, StarPointerType_DemoWithHandPointerFinger };
+    // Whether the one-time emitters still playing are deleted when the demo starts.
+    enum DeleteEffectType { DeleteEffectType_Keep, DeleteEffectType_OneTimeEmitter };
 
     DemoStartInfo();
     DemoStartInfo& operator=(const DemoStartInfo&) = default;
@@ -28,7 +31,7 @@ public:
     const char* mDemoName;
     const char* mPartName;
     const Nerve* mDemoNerve;
-    u32 mMovementType;
+    MR::MovementControlType mMovementType;
     DemoType mDemoType;
     CinemaFrameType mFrameType;
     StarPointerType mPointerType;
