@@ -395,7 +395,7 @@ void MarioActor::tryRushInRush() {
 
     if (!target->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"))) {
         if (_934) {
-            const RushEndInfo rushEndInfo = RushEndInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
+            const RushEndInfo rushEndInfo = RushEndInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
             endRush(&rushEndInfo);
         }
 

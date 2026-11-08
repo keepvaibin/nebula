@@ -194,25 +194,19 @@ void MarioActor::beginRush() {
 
 void MarioActor::endRush(const RushEndInfo* pInfo) {
     bool launched = false;
-    if (_924 && (!pInfo->_1C || _924->mHost == pInfo->_1C)) {
+    if (_924 && (!pInfo->mActor || _924->mHost == pInfo->mActor)) {
         _934 = false;
         NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 0);
         _935 = true;
         mMario->stopJump();
-        s32 mode = pInfo->_4;
+        RushEndInfo::Mode mode = pInfo->mMode;
         mMario->mMovementStates._22 = false;
-        if (mMario->isStatusActive(MarioStatus_Swim)) {
-            switch (mode) {
-            case 1:
-            case 2:
-            case 3:
-                mode = 4;
-                break;
-            }
+        if (mMario->isStatusActive(MarioStatus_Swim) && (mode == RushEndInfo::Mode_Jump || mode == RushEndInfo::Mode_PowerJump)) {
+            mode = RushEndInfo::Mode_Release;
         }
 
         switch (mode) {
-        case 2:
+        case RushEndInfo::Mode_Jump:
             launched = true;
             mMario->initJumpParam();
             mMario->mMovementStates._21 = true;
@@ -220,61 +214,63 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
                 mMario->_774 = 60;
             }
 
-            mMario->tryForceFreeJump(pInfo->_8);
+            mMario->tryForceFreeJump(pInfo->mVec);
             mMario->mMovementStates._9 = true;
             mMario->_10._D = true;
-            if ((pInfo->_20 >> 30) & 1) {
+            if (pInfo->mForced) {
                 mMario->mMovementStates._2F = true;
             } else {
                 mMario->mMovementStates._2F = false;
             }
 
-            if (pInfo->_20 >> 31) {
+            if (pInfo->mInputOff) {
                 mMario->mMovementStates._22 = true;
             }
 
             break;
-        case 3:
+        case RushEndInfo::Mode_PowerJump:
             launched = true;
             if (mPlayerMode == PlayerMode_Bee) {
                 mMario->_774 = 60;
             }
 
-            mMario->tryForcePowerJump(pInfo->_8, false);
-            if ((pInfo->_20 >> 30) & 1) {
+            mMario->tryForcePowerJump(pInfo->mVec, false);
+            if (pInfo->mForced) {
                 mMario->mMovementStates._2F = true;
             } else {
                 mMario->mMovementStates._2F = false;
             }
 
-            if ((pInfo->_20 >> 23) & 1) {
+            if (pInfo->mLimitJump) {
                 mMario->mMovementStates._20 = false;
             }
 
-            if (pInfo->_20 >> 31) {
+            if (pInfo->mInputOff) {
                 mMario->mMovementStates._22 = true;
             }
 
-            if ((pInfo->_20 >> 24) & 15) {
-                switch ((pInfo->_20 >> 24) & 15) {
-                case 1:
+            if (pInfo->mDamage != RushEndInfo::Damage_None) {
+                switch (pInfo->mDamage) {
+                case RushEndInfo::Damage_Hit:
                     mMario->mMovementStates._1B = true;
-                    mMario->mDamage->setVec(pInfo->_8);
+                    mMario->mDamage->setVec(pInfo->mVec);
                     break;
-                case 4:
+                case RushEndInfo::Damage_Acid:
                     mMario->_10.jumping = true;
                     break;
-                case 2:
+                case RushEndInfo::Damage_Fire:
                     mMario->_10.jumping = true;
                     break;
-                case 5:
+                case RushEndInfo::Damage_Electric:
                     mMario->_10._14 = true;
                     break;
-                case 6:
-                    mMario->doFlipLarge(pInfo->_8);
+                case RushEndInfo::Damage_Flip:
+                    mMario->doFlipLarge(pInfo->mVec);
                     break;
-                case 3:
+                case RushEndInfo::Damage_Freeze:
                     mMario->doFreeze();
+                    break;
+                case RushEndInfo::Damage_None:
                     break;
                 }
             }
@@ -285,23 +281,17 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
             }
 
             break;
-        case 1:
-            mMario->_10._D = true;
-            mMario->mMovementStates._21 = true;
-            break;
-        case 0:
+        case RushEndInfo::Mode_Wait:
             mMario->stopWalk();
-        case 4:
+            [[fallthrough]];
+        case RushEndInfo::Mode_Release:
             mMario->mMovementStates._B = false;
             mMario->mMovementStates.jumping = false;
             mMario->_3C0 = 0;
             break;
-        case 5:
-            takeSensor(_924);
-            break;
         }
 
-        mMario->_10._8 = pInfo->_20 >> 22;
+        mMario->_10._8 = pInfo->mRollLanding;
         if (!_3D0) {
             Pos3f base;
             Vec3f front;
@@ -342,12 +332,12 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
         }
 
         mMario->_1FC = mMario->mHeadVec;
-        if (!pInfo->_14) {
+        if (!pInfo->mKeepAnimation) {
             mMario->stopAnimation(nullptr);
         }
 
-        if (pInfo->_18) {
-            setBlendMtxTimer(pInfo->_18);
+        if (pInfo->mBlendFrames) {
+            setBlendMtxTimer(pInfo->mBlendFrames);
         }
 
         MR::validateHitSensors(this);
@@ -364,7 +354,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
 
         _EF8 = 0;
         _F04 = 0;
-        if (!((pInfo->_20 >> 24) & 15) && isLandEffectRushSensor(_924) && ((pInfo->_20 >> 30) & 1)) {
+        if (pInfo->mDamage == RushEndInfo::Damage_None && isLandEffectRushSensor(_924) && pInfo->mForced) {
             mMario->mMovementStates._3E = 1;
             mMario->mMovementStates.jumping = true;
             mMario->mMovementStates._1 = false;
@@ -374,7 +364,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
                 mMario->mJumpVec = _938;
             }
         } else if (_924->isType(ATYPE_SCENARIO_STARTER_BIND)) {
-            if (pInfo->_4) {
+            if (pInfo->mMode != RushEndInfo::Mode_Wait) {
                 mMario->mMovementStates._3E = 2;
                 mMario->mMovementStates.jumping = true;
                 mMario->mMovementStates._1 = false;
@@ -407,7 +397,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
         }
 
         mMarioAnim->_15 = 0xFF;
-        if (selectWaterInOutRush(_928) && !mMario->forceStartSwimAndShoot(pInfo->_8)) {
+        if (selectWaterInOutRush(_928) && !mMario->forceStartSwimAndShoot(pInfo->mVec)) {
             mMario->forceExitSwim();
         }
 

@@ -342,7 +342,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     if (_934) {
         if (msg == ACTMES_INHALE_BLACK_HOLE && _924->isType(ATYPE_MARIO_LAUNCHER_BIND)) {
             if (!_924->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || _934) {
-                RushEndInfo info(nullptr, 4, Vec3f(0.0f), false, 0);
+                RushEndInfo info(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f), false, 0);
                 endRush(&info);
             }
         } else {

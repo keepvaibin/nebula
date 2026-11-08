@@ -521,7 +521,7 @@ namespace MarioAccess {
         if (getPlayerActor()->_934) {
             getPlayerActor()->_924->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
             if (getPlayerActor()->_934) {
-                RushEndInfo endInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo endInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }
@@ -695,7 +695,7 @@ namespace MarioAccess {
             }
 
             if (getPlayerActor()->_934) {
-                RushEndInfo endInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo endInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }

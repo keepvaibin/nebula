@@ -48,7 +48,7 @@ void MarioActor::forceKill(u32 type) {
             }
 
             if (_934) {
-                RushEndInfo endInfo(nullptr, 4, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
+                RushEndInfo endInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
             }
         }
