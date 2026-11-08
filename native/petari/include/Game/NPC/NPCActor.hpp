@@ -27,7 +27,6 @@ public:
     bool mModel;
     const char* mObjectName;
     bool mMakeActor;
-    bool mHostIO;
     bool mMessage;
     const char* mMessageId;
     Vec3f mMessageOffset;
