@@ -3,6 +3,7 @@
 #include "Game/Enemy/SamboFunction.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
@@ -79,7 +80,7 @@ bool CocoSambo::isNerveDying() {
     return isNerve(GET_NERVE(CocoSambo, CocoSamboNrvPressY)) || isNerve(GET_NERVE(CocoSambo, CocoSamboNrvBlow));
 }
 
-CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "ココサンボ[頭]", "CocoSamboHead", 0, 18, 0) {
+CocoSamboHead::CocoSamboHead(LiveActor* pHost) : PartsModel(pHost, "ココサンボ[頭]", "CocoSamboHead", nullptr, MR::DrawBufferType_Enemy, false) {
     mFrontVec.set(0.0f, 0.0f, 1.0f);
 }
 

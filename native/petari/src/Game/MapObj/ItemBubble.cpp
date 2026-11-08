@@ -1,6 +1,7 @@
 #include "Game/MapObj/ItemBubble.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -62,7 +63,7 @@ void ItemBubble::init(const TableIter& rIter) {
     for (u32 i = 0; i < itemCount; i++) {
         switch (itemType) {
         case 0:
-            mCoins[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, 15, false);
+            mCoins[i] = new RotPartsModel(this, "ダミーコイン", "Coin", nullptr, MR::DrawBufferType_NoSilhouettedMapObjStrongLight, false);
             mCoins[i]->initWithoutIter();
 
             switch (itemCount) {
@@ -102,7 +103,7 @@ void ItemBubble::init(const TableIter& rIter) {
         case 1:
             mStarPieces[i] = new StarPiece("アイテムバブルピース");
             mStarPieces[i]->initWithoutIter();
-            mCoins[i] = new RotPartsModel(this, "スターピース", "StarPiece", nullptr, 13, true);
+            mCoins[i] = new RotPartsModel(this, "スターピース", "StarPiece", nullptr, MR::DrawBufferType_NoSilhouettedMapObj, true);
             MR::initMaterialColor0(mCoins[i], "StarPiece1_v", &mStarPieces[i]->mColor);
             MR::prepareMaterials(mCoins[i]);
             mCoins[i]->initWithoutIter();

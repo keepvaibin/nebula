@@ -4,10 +4,6 @@
 namespace {
     const CategoryListInitialTable cMovementListInitTable[] = {
         {
-            MR::MovementType_UNK_0x00,
-            1,
-        },
-        {
             MR::MovementType_StopSceneDelayRequest,
             16,
         },
@@ -32,14 +28,6 @@ namespace {
             32,
         },
         {
-            MR::MovementType_UNK_0x07,
-            16,
-        },
-        {
-            MR::MovementType_UNK_0x08,
-            1,
-        },
-        {
             MR::MovementType_AudCameraWatcher,
             1,
         },
@@ -54,10 +42,6 @@ namespace {
         {
             MR::MovementType_DemoDirector,
             1,
-        },
-        {
-            MR::MovementType_UNK_0x0C,
-            32,
         },
         {
             MR::MovementType_AreaObj,
@@ -144,10 +128,6 @@ namespace {
             768,
         },
         {
-            MR::MovementType_UNK_0x15,
-            64,
-        },
-        {
             MR::MovementType_ClippedMapParts,
             2048,
         },
@@ -193,10 +173,6 @@ namespace {
         },
     };
     const CategoryListInitialTable cCalcAnimListInitTable[] = {
-        {
-            MR::CalcAnimType_UNK_0x15,
-            1,
-        },
         {
             MR::CalcAnimType_Layout,
             96,
@@ -266,14 +242,6 @@ namespace {
             512,
         },
         {
-            MR::CalcAnimType_UNK_0x11,
-            128,
-        },
-        {
-            MR::CalcAnimType_UNK_0x12,
-            128,
-        },
-        {
             MR::CalcAnimType_AnimParticle,
             1,
         },
@@ -287,12 +255,6 @@ namespace {
         },
     };
     const DrawBufferInitialTable cDrawBufferListInitTable[] = {
-        {
-            MR::DrawBufferType_0x26,
-            16,
-            MR::LightType_None,
-            MR::CameraType_3D,
-        },
         {
             MR::DrawBufferType_Planet,
             64,
@@ -324,7 +286,7 @@ namespace {
             MR::CameraType_3D,
         },
         {
-            MR::DrawBufferType_UNK_0x17,
+            MR::DrawBufferType_PlayerParts,
             1,
             MR::LightType_Weak,
             MR::CameraType_3D,
@@ -360,12 +322,6 @@ namespace {
             MR::CameraType_3D,
         },
         {
-            MR::DrawBufferType_UNK_0x18,
-            64,
-            MR::LightType_Planet,
-            MR::CameraType_3D,
-        },
-        {
             MR::DrawBufferType_IndirectMapObj,
             64,
             MR::LightType_Planet,
@@ -387,12 +343,6 @@ namespace {
             MR::DrawBufferType_IndirectEnemy,
             64,
             MR::LightType_Strong,
-            MR::CameraType_3D,
-        },
-        {
-            MR::DrawBufferType_0x28,
-            64,
-            MR::LightType_Planet,
             MR::CameraType_3D,
         },
         {
@@ -528,12 +478,6 @@ namespace {
             MR::CameraType_2D,
         },
         {
-            MR::DrawBufferType_0x25,
-            16,
-            MR::LightType_None,
-            MR::CameraType_2D,
-        },
-        {
             MR::DrawBufferType_None,
             0,
             MR::LightType_None,
@@ -590,15 +534,7 @@ namespace {
             2,
         },
         {
-            MR::DrawType_0x30,
-            16,
-        },
-        {
             MR::DrawType_Fur,
-            1,
-        },
-        {
-            MR::DrawType_0x3B,
             1,
         },
         {
@@ -626,7 +562,7 @@ namespace {
             1024,
         },
         {
-            MR::DrawType_0x28,
+            MR::DrawType_PlayerSilhouette,
             4,
         },
         {
@@ -662,7 +598,7 @@ namespace {
             64,
         },
         {
-            MR::DrawType_0x33,
+            MR::DrawType_PlayerSearchLight,
             1,
         },
         {
@@ -682,11 +618,7 @@ namespace {
             4,
         },
         {
-            MR::DrawType_0x23,
-            4,
-        },
-        {
-            MR::DrawType_0x24,
+            MR::DrawType_PlayerIndirect,
             4,
         },
         {
@@ -710,23 +642,11 @@ namespace {
             64,
         },
         {
-            MR::DrawType_0x20,
-            8,
-        },
-        {
             MR::DrawType_SwingRope,
             256,
         },
         {
             MR::DrawType_Creeper,
-            64,
-        },
-        {
-            MR::DrawType_0x1,
-            64,
-        },
-        {
-            MR::DrawType_0x3,
             64,
         },
         {
@@ -752,10 +672,6 @@ namespace {
         {
             MR::DrawType_BigBubbleGoal,
             32,
-        },
-        {
-            MR::DrawType_0x11,
-            64,
         },
         {
             MR::DrawType_FootPrint,
@@ -800,10 +716,6 @@ namespace {
         {
             MR::DrawType_SpaceCocoon,
             64,
-        },
-        {
-            MR::DrawType_0x32,
-            2,
         },
         {
             MR::DrawType_AstroDomeSkyClear,
@@ -868,10 +780,6 @@ namespace {
         {
             MR::DrawType_EffectDrawFor2DModel,
             1,
-        },
-        {
-            MR::DrawType_0x52,
-            256,
         },
         {
             MR::DrawType_None,

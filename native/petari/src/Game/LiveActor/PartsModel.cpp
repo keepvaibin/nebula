@@ -27,7 +27,7 @@ PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelN
     u32 calcAnimType = MR::CalcAnimType_MapObjDecoration;
 
     if (drawBufferType == MR::DrawBufferType_PlayerDecoration || drawBufferType == MR::DrawBufferType_CrystalBox ||
-        drawBufferType == MR::DrawBufferType_UNK_0x17) {
+        drawBufferType == MR::DrawBufferType_PlayerParts) {
         movementType = MR::MovementType_PlayerDecoration;
         calcAnimType = MR::CalcAnimType_PlayerDecoration;
     }

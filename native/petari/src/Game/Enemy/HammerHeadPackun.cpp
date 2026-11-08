@@ -3,6 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -449,7 +450,7 @@ inline bool Placement_inRange(const TableIter& rIter) {
 }
 
 void HammerHeadPackun::initLeaf(const TableIter& rIter) {
-    mLeafModel = new PartsModel(this, "パックンの葉", "PackunLeaf", nullptr, 18, false);
+    mLeafModel = new PartsModel(this, "パックンの葉", "PackunLeaf", nullptr, MR::DrawBufferType_Enemy, false);
     MR::initLightCtrl(mLeafModel);
     s32 arg = -1;
     if (Placement_inRange(rIter)) {

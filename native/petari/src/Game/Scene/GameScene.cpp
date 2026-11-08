@@ -538,25 +538,23 @@ void GameScene::draw3D() const {
     Frame::setPassStencil(NEBULA_STENCIL_ALWAYS, NEBULA_STENCIL_ZERO);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
     Frame::setPassStencil(NEBULA_STENCIL_OFF, NEBULA_STENCIL_KEEP);
-    CategoryList::execute(MR::DrawType_0x28);
+    CategoryList::execute(MR::DrawType_PlayerSilhouette);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
     MR::setLensFlareDrawSyncToken();
     Frame::setPassAlpha(false);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
-    CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);
     MR::sceneOpaqueEnd();
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();
-    CategoryList::drawXlu(MR::DrawBufferType_UNK_0x18);
     CategoryList::execute(MR::DrawType_ShadowSurface);
     CategoryList::execute(MR::DrawType_EffectDraw3D);
     CategoryList::execute(MR::DrawType_EffectDrawForBloomEffect);
     CategoryList::execute(MR::DrawType_CenterScreenBlur);
     CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
     SceneFunction::executeDrawAfterIndirect();
-    CategoryList::execute(MR::DrawType_0x33);
+    CategoryList::execute(MR::DrawType_PlayerSearchLight);
     MR::setStarPointerDrawSyncToken();
     MR::setTalkDirectorDrawSyncToken();
     SceneFunction::executeDrawImageEffect();
@@ -566,8 +564,7 @@ void GameScene::draw3D() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     MR::loadLightPlayer();
-    CategoryList::execute(MR::DrawType_0x24);
-    CategoryList::execute(MR::DrawType_0x3B);
+    CategoryList::execute(MR::DrawType_PlayerIndirect);
     Frame::sceneEnd();
     MR::clearZBuffer();
 }
@@ -584,8 +581,6 @@ void GameScene::draw2D() const {
     CategoryList::execute(MR::DrawType_LayoutOnPause);
     mPauseSeq->draw();
     MR::drawInitFor2DModel();
-    CategoryList::drawOpa(MR::DrawBufferType_0x26);
-    CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
     // Nebula's achievement board over everything while it is open (its pop-up: drawOverlay).
     if (isNerve(GET_NERVE(GameScene, GameSceneNebulaBoard))) {
