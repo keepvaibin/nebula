@@ -9,18 +9,16 @@
 #include "Game/System/NebulaMods.hpp"
 
 namespace {
-    // The item of a sound of this type (the type's top four bits), else null.
+    // The item of a sound of this type (the type's top four bits), else null. getTypeID is the item's mType.
     const SoundItem* item(SoundID soundID, u32 type) {
-        const SoundTable* table = SoundGlobal< SoundTable >::getInstance();
-        const SoundItem* data = table->getData(soundID);
-        return data != nullptr && (table->getTypeID(soundID) & 0xF0) == type ? data : nullptr;
+        const SoundItem* data = SoundGlobal< SoundTable >::getInstance()->getData(soundID);
+        return data != nullptr && (data->mType & 0xF0) == type ? data : nullptr;
     }
 
     // An item of any type (they all have bit 0x40).
     const SoundItem* anyItem(SoundID soundID) {
-        const SoundTable* table = SoundGlobal< SoundTable >::getInstance();
-        const SoundItem* data = table->getData(soundID);
-        return data != nullptr && (table->getTypeID(soundID) & 0x40) != 0 ? data : nullptr;
+        const SoundItem* data = SoundGlobal< SoundTable >::getInstance()->getData(soundID);
+        return data != nullptr && (data->mType & 0x40) != 0 ? data : nullptr;
     }
 }  // namespace
 
@@ -30,16 +28,9 @@ u16 StdSoundInfo::getBgmSeqResourceID(SoundID soundID) const {
 }
 
 int StdSoundInfo::getSoundType(SoundID soundID) const {
-    switch (soundID.getSectionID()) {
-    case 0:
-        return 0;
-    case 1:
-        return 1;
-    case 2:
-        return 2;
-    default:
-        return -1;
-    }
+    // Sections 0, 1, 2 are SE, sequences and streams.
+    const u32 section = soundID.getSectionID();
+    return section <= 2 ? static_cast< int >(section) : -1;
 }
 
 int StdSoundInfo::getCategory(SoundID soundID) const {

@@ -47,18 +47,14 @@ bool AudChordInfo::loadChordInfo(s16 id, bool keepCurrent) {
     }
 
     SoundRing& rRing = SoundEngine::get()->ring();
-    SoundCommand& rCommand = rRing.next();
-    rCommand.mKind = SOUND_CHORD_LOAD;
+    SoundCommand& rCommand = rRing.next(SOUND_CHORD_LOAD, nullptr);
     rCommand.mArg = keepCurrent ? 1 : 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = nullptr;
     rCommand.payload< const void* >() = valid ? pFile : nullptr;
-    rRing.send();
 
+    mSerial = rRing.send();
     mAvailable = available;
     mChordIndex = chord;
     mScaleIndex = scale;
-    mSerial = rRing.sent();
     return valid;
 }
 
@@ -67,17 +63,12 @@ void AudChordInfo::invalidiate() {
     const s32 scale = scaleIndex();
 
     SoundRing& rRing = SoundEngine::get()->ring();
-    SoundCommand& rCommand = rRing.next();
-    rCommand.mKind = SOUND_CHORD_INVALIDATE;
-    rCommand.mArg = 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = nullptr;
-    rRing.send();
+    rRing.next(SOUND_CHORD_INVALIDATE, nullptr);
 
+    mSerial = rRing.send();
     mAvailable = false;
     mChordIndex = chord;
     mScaleIndex = scale;
-    mSerial = rRing.sent();
 }
 
 bool AudChordInfo::isAvailable() const {

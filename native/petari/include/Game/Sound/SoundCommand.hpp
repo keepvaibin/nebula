@@ -40,9 +40,18 @@ public:
 
     void setup(NebulaArena* pHeap);
 
-    // Game thread: a record to fill, then send() makes it the reader's.
+    // Game thread: a record to fill, then send() makes it the reader's and returns sent().
     SoundCommand& next();
-    void send();
+    // The record with its kind and target set, mArg and mValue 0 (the payload is left as it was).
+    SoundCommand& next(u16 kind, void* pTarget) {
+        SoundCommand& rCommand = next();
+        rCommand.mKind = kind;
+        rCommand.mArg = 0;
+        rCommand.mValue = 0;
+        rCommand.mTarget = pTarget;
+        return rCommand;
+    }
+    u64 send();
     // Commands sent.
     u64 sent() const {
         return mWritten;

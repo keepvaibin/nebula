@@ -12,22 +12,16 @@ namespace {
         if (engine == nullptr || !sSetup) {
             return;
         }
-        SoundCommand& rCommand = engine->ring().next();
-        rCommand.mKind = SOUND_SPEAKER_PAD;
+        SoundCommand& rCommand = engine->ring().next(SOUND_SPEAKER_PAD, nullptr);
         rCommand.mArg = static_cast< u16 >(padChannel);
         rCommand.mValue = sConnected[padChannel] ? 1 : 0;
-        rCommand.mTarget = nullptr;
         engine->ring().send();
     }
 }  // namespace
 
 void SpkSpeakerCtrl::setup() {
     SoundRing& rRing = SoundEngine::get()->ring();
-    SoundCommand& rCommand = rRing.next();
-    rCommand.mKind = SOUND_SPEAKER_SETUP;
-    rCommand.mArg = 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = nullptr;
+    rRing.next(SOUND_SPEAKER_SETUP, nullptr);
     rRing.send();
 
     sSetup = true;

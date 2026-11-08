@@ -7,18 +7,11 @@ namespace {
     u32 sOutputMode = ~0u;
 
     SoundCommand& next(u16 kind) {
-        SoundCommand& rCommand = SoundEngine::get()->ring().next();
-        rCommand.mKind = kind;
-        rCommand.mArg = 0;
-        rCommand.mValue = 0;
-        rCommand.mTarget = nullptr;
-        return rCommand;
+        return SoundEngine::get()->ring().next(kind, nullptr);
     }
 
     u64 send() {
-        SoundRing& rRing = SoundEngine::get()->ring();
-        rRing.send();
-        return rRing.sent();
+        return SoundEngine::get()->ring().send();
     }
 }  // namespace
 

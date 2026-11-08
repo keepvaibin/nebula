@@ -31,6 +31,10 @@ public:
     const char* getStreamPath(const SoundItem* pItem) const {
         return pItem->mStreamPath != ~0u ? mNames + pItem->mStreamPath : nullptr;
     }
+
+private:
+    // The id's entry when its section and group are in the table (the entry itself may not be).
+    const SoundItem* findItem(SoundID id) const;
 };
 
 // Each sound's name.
