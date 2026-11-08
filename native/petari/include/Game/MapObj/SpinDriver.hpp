@@ -4,6 +4,7 @@
 class SpinDriverCamera;
 class SpinDriverShootPath;
 
+// Without a rail it launches straight up at mJumpSpeed; with one it flies the rail's parabola in mShootTime steps.
 class SpinDriver : public LiveActor {
 public:
     SpinDriver(const char*);
@@ -41,10 +42,10 @@ public:
     void cancelBind();
     void updateBindPosition();
     void moveBindPosToCenter();
-    void updateBindActorMatrix(f32);
+    void updateBindActorMatrix(f32 rate);
     void calcBindActorMatrix();
     void calcParabolicBindPose();
-    void turnBindHead(const Vec3f&, f32);
+    void turnBindHead(const Vec3f& rUp, f32 rate);
     void calcShootMotionTime();
     void startCamera();
     void updateCamera();
@@ -53,6 +54,14 @@ public:
     bool canStartBind() const;
     bool canBind(HitSensor*) const;
 
+private:
+    bool isSwingOr2PTrigger() const;
+    bool isPullPlayer(const HitSensor*) const;
+    bool tryReleaseBind();
+    void startSpinAttackSound(LiveActor* pPlayer);
+    void startWaitAnim();
+
+public:
     LiveActor* mBindActor;
     SpinDriverShootPath* mShootPath;
     SpinDriverCamera* mSpinDriverCamera;
@@ -75,6 +84,8 @@ public:
     s32 mFlyShortStep;
     s32 mFlyEndStep;
     s32 mFallStep;
+    // The bound player's SpaceFlyEnd length, read at bind.
+    s32 mSpaceFlyEndFrame;
     f32 mInitPoseAngle;
     bool mCanBind;
     s32 mCoolDown;
