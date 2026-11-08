@@ -247,7 +247,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 4u);
+    cfg.upscaler = std::min(cfg.upscaler, 5u);  // 5 SGSR 2, the last of the names above
     cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
