@@ -142,6 +142,14 @@ struct ListData {
     bool probes_done = false;
     std::vector<EyeMotion> eye_motions;        // an eye-space block's joints, in `joint_motion`'s place
 
+    // Target passes drawn before the list's other passes (plan_early_targets): passes [first, end), and the
+    // SCENE_BEGIN they sit after in the list, or none.
+    struct EarlyTargets {
+        std::uint32_t first = 0u, end = 0u, scene = NEBULA_NONE32;
+    };
+    bool targets_planned = false;
+    std::vector<EarlyTargets> early_targets;
+
     // Read once from the list.
     bool scanned = false;
     std::vector<std::uint32_t> block_camera;   // the camera an eye-space block holds still under, or none

@@ -770,22 +770,29 @@ gpu::Address RenderCore::ring_item_before(std::uint32_t index, gpu::Address own)
     return walk_ring_previous_ + other.ring_at;
 }
 
+// The sky's up and the flags a scene's views carry (walk_view), from its SCENE_BEGIN.
+void RenderCore::set_scene_sky(const NebulaFramePass& scene_begin) {
+    const NebulaFrameList& list = *walk_.now->list;
+    const bool wide = enhanced_lighting_ && get_render_config().wide_scene;
+    std::memcpy(sky_up_, list.sky_up, sizeof(sky_up_));
+    view_flags_ = (list.sky_up_known != 0u ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
+    if (scene_begin.scene_camera != NEBULA_NONE32 && walk_.between && list.sky_up_known != 0u) {
+        eye_direction_at(list.sky_up, affine_of(list.cameras[scene_begin.scene_camera].view),
+                         walk_cameras_[scene_begin.scene_camera], sky_up_);
+    }
+}
+
 void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     const NebulaFrameList& list = *walk_.now->list;
     const RenderConfig cfg = get_render_config();
     const bool wide = enhanced_lighting_ && cfg.wide_scene;
-    std::memcpy(sky_up_, list.sky_up, sizeof(sky_up_));
-    view_flags_ = (list.sky_up_known != 0u ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
+    set_scene_sky(pass);
     scene_phase_ = true;
     std::array<float, 12> view_at{};
     const float* view_rows = nullptr;
     if (pass.scene_camera != NEBULA_NONE32) {
         std::memcpy(view_at.data(), walk_cameras_[pass.scene_camera].data(), sizeof(view_at));
         view_rows = view_at.data();
-        if (walk_.between && list.sky_up_known != 0u) {
-            eye_direction_at(list.sky_up, affine_of(list.cameras[pass.scene_camera].view), walk_cameras_[pass.scene_camera],
-                             sky_up_);
-        }
         renderer_.set_scene_view(&view_at);
     } else {
         renderer_.set_scene_view(nullptr);
@@ -908,13 +915,143 @@ void RenderCore::walk_target_end(std::uint32_t channels) {
     ++walk_view_stamp_;
 }
 
+// A target pass breaks the frame's pass where it stands: on a tiled GPU the frame target's colour, depth and stencil are
+// stored and loaded again around it (about 100 MB at 2960x1848). One that reads nothing the list makes before it, whose
+// picture nothing before it reads, and that reads no frame, is drawn first: its picture is the same, the frame unbroken.
+void RenderCore::plan_early_targets(ListData& now) {
+    now.targets_planned = true;
+    now.early_targets.clear();
+    const NebulaFrameList& list = *now.list;
+    bool any = false;
+    for (std::uint32_t p = 0; p < list.pass_count && !any; ++p) {
+        const NebulaFramePass& pass = list.passes[p];
+        any = pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_TARGET && pass.load != 0u &&
+              pass.over_frame_texture == 0u && pass.over_frame_depth == 0u;
+    }
+    if (!any) {
+        return;
+    }
+    // Pictures made by the passes that stay in place, and the pictures their draws read, so far.
+    std::vector<std::uint32_t> written, read, run_read;
+    const auto has = [](const std::vector<std::uint32_t>& keys, std::uint32_t key) {
+        return std::find(keys.begin(), keys.end(), key) != keys.end();
+    };
+    const auto note_reads = [&](const NebulaFramePass& pass, std::vector<std::uint32_t>& into) {
+        const std::uint32_t end = pass.first_item + pass.item_count;
+        for (std::uint32_t i = pass.first_item; i < end; ++i) {
+            const core::TextureTable& table = registries_.table(list.items[i].textures);
+            for (std::uint32_t t = 0; t < table.count; ++t) {
+                const std::uint32_t texture = table.list[t].texture;
+                if (TextureStore::is_target(texture) && !has(into, texture)) {
+                    into.push_back(texture);
+                }
+            }
+        }
+    };
+    std::uint32_t scene = NEBULA_NONE32;
+    for (std::uint32_t p = 0; p < list.pass_count;) {
+        const NebulaFramePass& pass = list.passes[p];
+        if (pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_TARGET && pass.load != 0u) {
+            // The run walk_list draws with the target open: through the next pass outside it, or the next target's start.
+            std::uint32_t end = p + 1u;
+            while (end < list.pass_count && list.passes[end].layer == NEBULA_LAYER_TARGET &&
+                   !(list.passes[end].kind == NEBULA_PASS_DRAW && list.passes[end].load != 0u)) {
+                ++end;
+            }
+            bool early = pass.over_frame_texture == 0u && pass.over_frame_depth == 0u && !has(written, pass.target) &&
+                         !has(read, pass.target);
+            run_read.clear();
+            for (std::uint32_t q = p; q < end; ++q) {
+                if (list.passes[q].kind == NEBULA_PASS_DRAW) {
+                    note_reads(list.passes[q], run_read);
+                } else if (list.passes[q].kind != NEBULA_PASS_CLEAR) {
+                    early = false;
+                }
+            }
+            for (const std::uint32_t key : run_read) {
+                early = early && !has(written, key);
+            }
+            if (early) {
+                now.early_targets.push_back(core::ListData::EarlyTargets{p, end, scene});
+            } else {
+                written.push_back(pass.target);
+                if (pass.over_frame_texture != 0u) {
+                    written.push_back(pass.over_frame_texture);
+                }
+                if (pass.over_frame_depth != 0u) {
+                    written.push_back(pass.over_frame_depth);
+                }
+                for (const std::uint32_t key : run_read) {
+                    if (!has(read, key)) {
+                        read.push_back(key);
+                    }
+                }
+            }
+            p = end;
+            continue;
+        }
+        switch (pass.kind) {
+        case NEBULA_PASS_DRAW:
+            note_reads(pass, read);
+            break;
+        case NEBULA_PASS_COPY_FRAME:
+        case NEBULA_PASS_TAKE_FRAME:
+            written.push_back(pass.target);
+            break;
+        case NEBULA_PASS_SCENE_BEGIN:
+            scene = p;
+            break;
+        case NEBULA_PASS_SCENE_END:
+            scene = NEBULA_NONE32;
+            break;
+        default:
+            break;
+        }
+        ++p;
+    }
+}
+
 void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time) {
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
     target_open_ = false;
     std::uint32_t target_channels = 0u;
     NEBULA_INSPECT_BEGIN(*this, list);
+    if (!now.targets_planned) {
+        plan_early_targets(now);
+    }
+    for (const core::ListData::EarlyTargets& run : now.early_targets) {
+        if (run.scene != NEBULA_NONE32) {
+            set_scene_sky(list.passes[run.scene]);  // as its views had it in place
+        }
+        for (std::uint32_t p = run.first; p < run.end; ++p) {
+            walk_pass(now, p, target_channels);
+        }
+        if (target_open_) {
+            walk_target_end(target_channels);
+        }
+    }
+    std::size_t next_early = 0u;
     for (std::uint32_t p = 0; p < list.pass_count; ++p) {
+        if (next_early < now.early_targets.size() && p == now.early_targets[next_early].first) {
+            if (target_open_) {
+                walk_target_end(target_channels);
+            }
+            p = now.early_targets[next_early++].end - 1u;  // drawn first
+            continue;
+        }
+        walk_pass(now, p, target_channels);
+    }
+    if (target_open_) {
+        walk_target_end(target_channels);
+    }
+    now.probes_done = true;
+    NEBULA_INSPECT_END(*this);
+}
+
+void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target_channels) {
+    const NebulaFrameList& list = *now.list;
+    {
         const NebulaFramePass& pass = list.passes[p];
         if (target_open_ && (pass.layer != NEBULA_LAYER_TARGET || (pass.kind == NEBULA_PASS_DRAW && pass.load != 0u))) {
             walk_target_end(target_channels);
@@ -1009,11 +1146,6 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
             break;
         }
     }
-    if (target_open_) {
-        walk_target_end(target_channels);
-    }
-    now.probes_done = true;
-    NEBULA_INSPECT_END(*this);
 }
 
 void RenderCore::walk_show() {
