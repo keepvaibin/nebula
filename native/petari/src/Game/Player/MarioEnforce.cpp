@@ -51,7 +51,7 @@ void Mario::checkEnforceMoveInner() {
         mDrawStates.enforcedMove = 1;
 
         if (!mActor->mBindOn) {
-            addTrans(mVelocity, nullptr);
+            addTrans(mVelocity);
         } else {
             bool v11 = false;
             Vec3f v14(mPosition);
@@ -62,7 +62,7 @@ void Mario::checkEnforceMoveInner() {
                 }
             }
 
-            addTrans(mVelocity, nullptr);
+            addTrans(mVelocity);
 
             if (v11) {
                 if (calcDistToCeil(false) < 200.0f) {

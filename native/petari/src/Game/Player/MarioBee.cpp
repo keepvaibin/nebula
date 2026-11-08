@@ -25,7 +25,7 @@ void MarioActor::entryWallWalkMode(const Vec3f& position, const Vec3f& normal) {
         Vec3f gravity(-normal);
         mGravityVec = gravity;
         mPosition = position;
-        mMario->setTrans(position, nullptr);
+        mMario->setTrans(position);
         mMario->stopJump();
         mMario->stopAnimation(nullptr);
         mMario->stopWalk();

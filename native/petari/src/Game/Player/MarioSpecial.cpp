@@ -92,16 +92,16 @@ bool Mario::isUseAnotherMovingPolygon() const {
     return false;
 }
 
-bool Mario::isUseFooSpecialGravity(const Vec3f& rA1, Vec3f* pA2) const {
+bool Mario::isUseFooSpecialGravity(const Vec3f& rPos, Vec3f* pGravity) const {
     if (!isStatusActive(MarioStatus_Foo)) {
         return false;
     }
 
     if (MR::isEqualStageName("HeavensDoorGalaxy") && MR::getCurrentScenarioNo() == 2) {
-        Vec3f vec(14760.0f, -10676.2f, 6770.0f);
-        Vec3f res = vec - rA1;
-        pA2->set(res);
-        MR::normalizeOrZero(pA2);
+        Vec3f center(14760.0f, -10676.2f, 6770.0f);
+        Vec3f toCenter = center - rPos;
+        pGravity->set(toCenter);
+        MR::normalizeOrZero(pGravity);
         return true;
     }
 
@@ -136,7 +136,7 @@ void Mario::updateOnimasu() {
                 localPosition = mOnimasuLocalPos;
                 Vec3f position;
                 NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
-                setTrans(position, nullptr);
+                setTrans(position);
                 mVelocity.zero();
             }
         } else if (previousPosition.y > 400.0f && localPosition.y <= 400.0f) {
@@ -170,7 +170,7 @@ void Mario::updateOnimasu() {
                 position = mPosition + displacement;
             }
 
-            setTrans(position, nullptr);
+            setTrans(position);
         }
 
         bool correctX = false;
@@ -293,7 +293,7 @@ void Mario::updateOnimasu() {
                 if (getWallNorm().dot(displacement) < 0.0f) {
                     addVelocity(-displacement);
                 } else {
-                    setTrans(position, nullptr);
+                    setTrans(position);
                 }
             }
         }
@@ -329,7 +329,7 @@ void Mario::updateOnimasu() {
         if (corrected) {
             Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &mOnimasuLocalPos, &position);
-            setTrans(position, nullptr);
+            setTrans(position);
             localPosition = mOnimasuLocalPos;
         }
     }

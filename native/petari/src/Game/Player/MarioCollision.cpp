@@ -337,7 +337,7 @@ f32 Mario::calcDistToCeilHead() {
 void Mario::fixTransBetweenWall(const Vec3f& rFirst, const Vec3f& rSecond) {
     Vec3f center = (rFirst + rSecond) * 0.5f;
     MR::vecKillElement(center - mPosition, *getGravityVec(), &center);
-    setTrans(mPosition + center, nullptr);
+    setTrans(mPosition + center);
 }
 
 f32 Mario::calcDistWidth() {
@@ -1200,7 +1200,7 @@ void Mario::checkBaseTransPoint() {
             continue;
         }
 
-        addTrans(*normal * (hit->mDepth - 1.0f), "めりこみ");
+        addTrans(*normal * (hit->mDepth - 1.0f));
 
         if (!mMovementStates.onGround && mMovementStates.jumping && !isRising() && normal->dot(*getGravityVec()) < -0.99f) {
             addVelocity(mFrontVec, 5.0f);
@@ -1511,7 +1511,7 @@ bool Mario::updateBinderInfo() {
                                 mJumpVec += -getAirGravityVec() * 5.0f + getWallNorm() * 2.0f;
 
                                 if (!isCeiling()) {
-                                    addTrans(getAirGravityVec() * -30.0f, nullptr);
+                                    addTrans(getAirGravityVec() * -30.0f);
                                 }
 
                                 pushDirection.zero();
@@ -1815,7 +1815,7 @@ bool Mario::checkGround() {
                 bool moved = false;
 
                 if (!mMovementStates.frontWall) {
-                    addTrans(mFrontVec * 6.0f, "前方WKFALL");
+                    addTrans(mFrontVec * 6.0f);
                     moved = true;
                 }
 
@@ -1827,24 +1827,24 @@ bool Mario::checkGround() {
                 } else if (!hit[1]) {
                     if ((mMovementStates.sideWall || mMovementStates.frontWall || mMovementStates.backWall) && mSideVec.dot(getWallNorm()) < 0.0f) {
                         if (moved) {
-                            addTrans(-mSideVec * 3.0f - mFrontVec * 6.0f, "+逆-左WKFALL");
+                            addTrans(-mSideVec * 3.0f - mFrontVec * 6.0f);
                         }
 
                         break;
                     } else {
-                        addTrans(mSideVec * 3.0f, "+左WKFALL");
+                        addTrans(mSideVec * 3.0f);
                         moved = true;
                     }
 
                 } else {
                     if ((mMovementStates.sideWall || mMovementStates.frontWall || mMovementStates.backWall) && -mSideVec.dot(getWallNorm()) < 0.0f) {
                         if (moved) {
-                            addTrans(mSideVec * 3.0f - mFrontVec * 6.0f, "+逆-右WKFALL");
+                            addTrans(mSideVec * 3.0f - mFrontVec * 6.0f);
                         }
 
                         break;
                     } else {
-                        addTrans(-mSideVec * 3.0f, "+右WKFALL");
+                        addTrans(-mSideVec * 3.0f);
                         moved = true;
                     }
                 }
@@ -1859,19 +1859,19 @@ bool Mario::checkGround() {
 
                 if (mLandTimer < 24 && mJumpVec.dot(mFrontVec) >= 0.0f && mFloorCode != CollisionFloorCode_Slide) {
                     if (!mMovementStates.frontWall && !mMovementStates.frontWallGlancing) {
-                        addTrans(mFrontVec * 3.0f, "+後ろ1WKFALL");
+                        addTrans(mFrontVec * 3.0f);
                         mDrawStates.atEdge = true;
                     }
 
                 } else {
                     if (!mMovementStates.backWall) {
                         mDrawStates.edgePushBack = true;
-                        addTrans(mFrontVec * -6.0f, "+後ろ2WKFALL");
+                        addTrans(mFrontVec * -6.0f);
                         mDrawStates.atEdge = true;
                     }
 
                     if (mEdgePushTimer > 8) {
-                        addTrans(mSideVec * 5.0f, "+SIDEFALL");
+                        addTrans(mSideVec * 5.0f);
                     }
 
                     return true;
@@ -1879,11 +1879,11 @@ bool Mario::checkGround() {
 
             } else if (mFloorCode == CollisionFloorCode_Slide) {
                 if (!hit[2]) {
-                    addTrans(-mSideVec * 5.0f, "-L-SIDEFALL");
+                    addTrans(-mSideVec * 5.0f);
                 } else if (!hit[1]) {
-                    addTrans(mSideVec * 5.0f, "+R-SIDEFALL");
+                    addTrans(mSideVec * 5.0f);
                 } else {
-                    addTrans(mFrontVec * 5.0f, "+F-SIDEFALL");
+                    addTrans(mFrontVec * 5.0f);
                 }
 
                 mDrawStates.atEdge = true;
@@ -1932,7 +1932,7 @@ bool Mario::checkGround() {
         mMovementStates.forceGroundOnce = false;
         Vec3f direction = mGroundPos - mPosition;
         f32 distance = MR::vecKillElement(direction, *getGravityVec(), &direction);
-        addTrans(*getGravityVec() * distance, "force Trans");
+        addTrans(*getGravityVec() * distance);
         return true;
     }
 
@@ -1954,14 +1954,14 @@ bool Mario::checkGround() {
             if (dot > 0.99f) {
                 if (!mDrawStates.baseTransPoint && !mStepPolygon->isValid()) {
                     if (!isStatusActive(MarioStatus_Talk)) {
-                        addTrans(*getGravityVec() * distance, "force Trs2");
+                        addTrans(*getGravityVec() * distance);
                     }
 
                     return true;
                 }
 
             } else if (dot > 0.0f && !mDrawStates.baseTransPoint && mMovementStates.slopeSlide) {
-                addTrans(-mGroundNorm * distance * dot, "force Trs3");
+                addTrans(-mGroundNorm * distance * dot);
                 return true;
             }
         }
@@ -1989,11 +1989,11 @@ bool Mario::checkGround() {
 
         if (mActor->mLastPushMove.dot(mFrontVec) < 0.0f) {
             if (moveBack) {
-                addTrans(-mFrontVec * 6.0f, "no-g(back)");
+                addTrans(-mFrontVec * 6.0f);
             }
 
         } else if (moveFront) {
-            addTrans(mFrontVec * 6.0f, "no-g");
+            addTrans(mFrontVec * 6.0f);
         }
     }
 
@@ -2029,7 +2029,7 @@ bool Mario::checkGround() {
                 }
 
                 if (distance < maxDistance) {
-                    setTrans(mShadowPos, nullptr);
+                    setTrans(mShadowPos);
                 }
             }
         }

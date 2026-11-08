@@ -277,7 +277,7 @@ void MarioWarp::updateJump() {
         position = position * remaining + mTargetPos * (1.0f - remaining);
     }
 
-    addTrans((position - getTrans()) * followRate, "Module");
+    addTrans((position - getTrans()) * followRate);
     if (mKind == 2) {
         getPlayer()->setFrontVecKeepUp(mEndFront, 0.2f);
     }
@@ -330,7 +330,7 @@ bool MarioWarp::start() {
 
     mActor->mBindOn = 0;
     const Vec3f& position = mActor->mPosition;
-    addTrans(position - getTrans(), "Module");
+    addTrans(position - getTrans());
     update();
     if (mKind == 3 && getPlayerMode() != 1) {
         mActor->mBlurState = 2;
@@ -361,7 +361,7 @@ bool MarioWarp::update() {
 
         mEnterTimer--;
         Vec3f displacement = mStartPos - getTrans();
-        addTrans(displacement * (1.0f - static_cast< f32 >(mEnterTimer) / mEnterLength), "Module");
+        addTrans(displacement * (1.0f - static_cast< f32 >(mEnterTimer) / mEnterLength));
         if (mEnterTimer == 0) {
             calcAxis();
             if (mKind == 1 && getPlayerMode() != 6) {
@@ -385,7 +385,7 @@ bool MarioWarp::update() {
         Vec3f direction = mTargetPos - mStartPos;
         MR::normalize(&direction);
         f32 distance = MR::vecKillElement(offset, direction, &offset);
-        addTrans((mStartPos + direction * distance) - getTrans(), "Module");
+        addTrans((mStartPos + direction * distance) - getTrans());
     }
 
     switch (mKind) {

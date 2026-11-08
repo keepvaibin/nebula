@@ -119,7 +119,7 @@ bool Mario::checkGroundOnSlope() {
         mMovementStates.forceGroundOnce = false;
         Vec3f offset(mGroundPos - mPosition);
         f32 vertical = MR::vecKillElement(offset, *getGravityVec(), &offset);
-        addTrans(*getGravityVec() * vertical, "force Trans");
+        addTrans(*getGravityVec() * vertical);
         return true;
     }
     if (mMovementStates.jumping && isRising()) {

@@ -106,7 +106,7 @@ bool MarioRecovery::calcFirstVector() {
     mArcAngle = 0.0f;
     mActor->mBindOn = false;
     const Vec3f& position = mActor->mPosition;
-    addTrans(position - getTrans(), "Module");
+    addTrans(position - getTrans());
     update();
     mPullBack = 0;
     return true;
@@ -149,7 +149,7 @@ void MarioRecovery::updateJump() {
         velocity.setLength(30.0f);
     }
     velocity += getGravityVec() * vertical;
-    addTrans(velocity, "Module");
+    addTrans(velocity);
 }
 
 bool MarioRecovery::start() {
@@ -219,7 +219,7 @@ bool MarioRecovery::update() {
             mTimer--;
         }
         if (!mTimer || (mTargetPos - getTrans()).length() < 20.0f) {
-            addTrans(mTargetPos - getTrans(), "Module");
+            addTrans(mTargetPos - getTrans());
             return false;
         }
         updateJump();
@@ -264,11 +264,11 @@ bool MarioRecovery::update() {
             Vec3f horizontal;
             f32 distance = MR::vecKillElement(mTargetPos - getTrans(), mPullBackUp, &horizontal);
             if (MR::abs(distance) < 10.0f) {
-                addTrans(mPullBackUp * distance, "Module");
+                addTrans(mPullBackUp * distance);
                 mStep = 0;
                 calcFirstVector();
             } else {
-                addTrans(mPullBackUp * MR::clamp(distance, -10.0f, 10.0f), "Module");
+                addTrans(mPullBackUp * MR::clamp(distance, -10.0f, 10.0f));
             }
             playSound("引き戻し基本");
         }

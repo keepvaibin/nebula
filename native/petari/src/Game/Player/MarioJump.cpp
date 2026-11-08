@@ -598,7 +598,7 @@ bool Mario::taskOnTornadoCentering(u32 a1) {
             ratio = 0.1f;
         }
 
-        addTrans(sensorOffset * ratio, nullptr);
+        addTrans(sensorOffset * ratio);
 
         mTornadoCenteringTimer--;
 

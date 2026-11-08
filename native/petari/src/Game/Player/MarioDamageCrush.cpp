@@ -18,7 +18,7 @@ bool Mario::tryCrush() {
     }
 
     if (mMovementStates.jumping || !mMovementStates.onGround) {
-        setTrans(mShadowPos, nullptr);
+        setTrans(mShadowPos);
     }
 
     if (getCurrentStatus() == MarioStatus_Crush) {

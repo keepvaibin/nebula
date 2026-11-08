@@ -694,7 +694,7 @@ bool Mario::fixWallingDist() {
                     correction.z = relative.z;
                 }
 
-                addTrans(correction, "壁補正");
+                addTrans(correction);
             }
         }
     }
