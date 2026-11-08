@@ -17,10 +17,10 @@ namespace {
     static Color8 sColorMinusY(0xFF, 0xFF, 0xFF, 0xFF);
 
     static const f32 sPointInterval = 50.0f;
-    static const f32 sFricitonLengthMin = 200.0f;
-    static const f32 sFricitonLengthMax = 700.0f;
+    static const f32 sFrictionLengthMin = 200.0f;
+    static const f32 sFrictionLengthMax = 700.0f;
     static const s32 sTouchTimerMax = 5;
-    static const s32 sActorToucnTimerMax = 60;
+    static const s32 sActorTouchTimerMax = 60;
     static const s32 sForceAttachTime = 20;
     static const f32 sWindFrictionRate = 0.93f;
     static const f32 sTexRateV = 0.002f;
@@ -29,8 +29,8 @@ namespace {
 };  // namespace
 
 SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadMainPoint* pPointB, f32 boundBoxPadding)
-    : mPointA(pPointA), mIsStill(true), mIsCut(false), mIsFree(false), mNumHangingPoints(0), mStopTime(0), mTouchTimeout(0),
-      mPointerPosPad0(0.0f, 0.0f, 0.0f), mPointerPosPad1(0.0f, 0.0f, 0.0f), mPointB(pPointB), mNumPoints(0), mPoints(nullptr),
+    : mIsStill(true), mIsCut(false), mIsFree(false), mNumHangingPoints(0), mStopTime(0), mTouchTimeout(0),
+      mPointerPosPad0(0.0f, 0.0f, 0.0f), mPointerPosPad1(0.0f, 0.0f, 0.0f), mPointA(pPointA), mPointB(pPointB), mNumPoints(0), mPoints(nullptr),
       mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mDistBetweenMainPoints(0.0f), mDistBetweenPoints(0.0f),
       mTextureOffset(0.0f) {
     Vec3f forward(mPointB->mPosition);
@@ -51,15 +51,16 @@ SpiderThreadPart::SpiderThreadPart(SpiderThreadMainPoint* pPointA, SpiderThreadM
         s32 index = MR::abs(halfNumPoints - idx);
         f32 indexNormalized = 1.0f - (static_cast< f32 >(index) / static_cast< f32 >(halfNumPoints));
 
-        f32 length = mDistBetweenMainPoints - ::sFricitonLengthMin;
+        f32 length = mDistBetweenMainPoints - ::sFrictionLengthMin;
         if (length < 0.0f) {
             length = 0.0f;
-        } else if (length > ::sFricitonLengthMax - ::sFricitonLengthMin) {
-            length = ::sFricitonLengthMax - ::sFricitonLengthMin;
+        } else if (length > ::sFrictionLengthMax - ::sFrictionLengthMin) {
+            length = ::sFrictionLengthMax - ::sFrictionLengthMin;
         }
 
-        f32 lengthNormalized = length / (::sFricitonLengthMax - ::sFricitonLengthMin);
+        f32 lengthNormalized = length / (::sFrictionLengthMax - ::sFrictionLengthMin);
 
+        // Friction runs from 0.9 at the ends to 1 in the middle; the length term blends 0.9 with 0.9.
         f32 indexSpring =
             ((0.9f * (1.0f - MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f))) + MR::getEaseOutValue(indexNormalized, 0.0f, 1.0f, 1.0f));
         f32 lengthSpring = (0.9f * (1.0f - lengthNormalized) + (0.9f * lengthNormalized));
@@ -202,44 +203,44 @@ void SpiderThreadPart::endHang(s32 cutIndex) {
     front.sub(mPointA->mPosition);
     MR::normalize(&front);
 
+    // Each other point moves toward the eased line from its end to the released point, across the thread only.
     SpiderThreadPoint* point = getPoint(cutIndex);
 
     for (s32 idx = 0; idx < cutIndex; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(cutIndex + 1), 0.0f, 1.0f, 1.0f);
 
-        Vec3f v1;
-        v1.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
-        v1.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
-        v1.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
+        Vec3f linePos;
+        linePos.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
+        linePos.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
+        linePos.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
 
-        Vec3f v2(v1);
-        v2.sub(getPoint(idx)->mPosition);
-        MR::vecKillElement(v2, front, &v1);
-        v1.add(getPoint(idx)->mPosition);
+        Vec3f offset(linePos);
+        offset.sub(getPoint(idx)->mPosition);
+        MR::vecKillElement(offset, front, &linePos);
+        linePos.add(getPoint(idx)->mPosition);
 
-        getPoint(idx)->setPos(v1);
+        getPoint(idx)->setPos(linePos);
     }
 
     for (s32 idx = cutIndex + 1; idx < mNumPoints; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(mNumPoints - idx) / static_cast< f32 >(mNumPoints - cutIndex), 0.0f, 1.0f, 1.0f);
 
-        Vec3f v1;
-        v1.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
-        v1.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
-        v1.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
+        Vec3f linePos;
+        linePos.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
+        linePos.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
+        linePos.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
 
-        Vec3f v2(v1);
-        v2.sub(getPoint(idx)->mPosition);
-        MR::vecKillElement(v2, front, &v1);
-        v1.add(getPoint(idx)->mPosition);
+        Vec3f offset(linePos);
+        offset.sub(getPoint(idx)->mPosition);
+        MR::vecKillElement(offset, front, &linePos);
+        linePos.add(getPoint(idx)->mPosition);
 
-        getPoint(idx)->setPos(v1);
+        getPoint(idx)->setPos(linePos);
     }
 
-    u32 index = cutIndex;
-    mPointA->removeNearPointFromRadial(getPoint(index));
+    mPointA->removeNearPointFromRadial(point);
     if (mPointA->mRadialLine != mPointB->mRadialLine) {
-        mPointB->removeNearPointFromRadial(getPoint(index));
+        mPointB->removeNearPointFromRadial(point);
     }
     mIsStill = false;
     mNumHangingPoints--;
@@ -293,7 +294,7 @@ bool SpiderThreadPart::touchActor(s32 index, const Vec3f& rVel) {
         return false;
     }
 
-    // TODO: this really screams vector arithmetic inline
+    // Only the part of rVel across the thread (up and front) moves it.
     f32 projUp = mUp.dot(rVel);
     f32 projFront = mFront.dot(rVel);
     Vec3f scaleUp(mUp);
@@ -306,7 +307,7 @@ bool SpiderThreadPart::touchActor(s32 index, const Vec3f& rVel) {
     getPoint(index)->mVelocity.add(vel);
     updatePointVelocityTouch(index, vel);
     mIsStill = false;
-    mTouchTimeout = ::sActorToucnTimerMax;
+    mTouchTimeout = ::sActorTouchTimerMax;
 
     return true;
 }
@@ -329,9 +330,7 @@ void SpiderThreadPart::tryTouch(f32 radius, const Vec3f& rVel, s32 padChannel) {
         if (!mBoundBox.intersectsPoint(*pointerPos)) {
             return;
         }
-    }
 
-    if (mIsStill) {
         updatePointPosToLine();
     }
 
@@ -374,28 +373,27 @@ void SpiderThreadPart::updatePointPosHanging(s32 hangIndex) {
     for (s32 idx = 0; idx < hangIndex; idx++) {
         f32 t = static_cast< f32 >(idx + 1) / static_cast< f32 >(hangIndex + 1);
 
-        Vec3f v1;
-        v1.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
-        v1.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
-        v1.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
+        Vec3f linePos;
+        linePos.x = point->mPosition.x * t + (1.0f - t) * mPointA->mPosition.x;
+        linePos.y = point->mPosition.y * t + (1.0f - t) * mPointA->mPosition.y;
+        linePos.z = point->mPosition.z * t + (1.0f - t) * mPointA->mPosition.z;
 
-        getPoint(idx)->setPos(v1);
+        getPoint(idx)->setPos(linePos);
     }
 
     for (s32 idx = hangIndex + 1; idx < mNumPoints; idx++) {
         f32 t = static_cast< f32 >(mNumPoints - idx) / static_cast< f32 >(mNumPoints - hangIndex);
 
-        Vec3f v1;
-        v1.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
-        v1.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
-        v1.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
+        Vec3f linePos;
+        linePos.x = point->mPosition.x * t + (1.0f - t) * mPointB->mPosition.x;
+        linePos.y = point->mPosition.y * t + (1.0f - t) * mPointB->mPosition.y;
+        linePos.z = point->mPosition.z * t + (1.0f - t) * mPointB->mPosition.z;
 
-        getPoint(idx)->setPos(v1);
+        getPoint(idx)->setPos(linePos);
     }
 }
 
 void SpiderThreadPart::updatePointVelocityTouch(s32 hangIndex, const Vec3f& rVel) {
-
     for (s32 idx = 0; idx < hangIndex; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(hangIndex + 1), 0.0f, 1.0f, 1.0f);
 
