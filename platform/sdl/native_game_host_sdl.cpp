@@ -346,7 +346,11 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     static std::uint64_t s_direct_held_land_ms = 0;  // the touch that held A
     bool direct_finger = false;
     bool direct_press = false;
-    if (captured && state.finger_down && project_window_point(state, state.finger_x, state.finger_y, x, y)) {
+    // Until the finger moves past the touch slop it points where it landed: a press, a hold that picks a mod up and a
+    // slider's grab hold still under a fingertip's tremor on any screen.
+    if (captured && state.finger_down &&
+        project_window_point(state, state.finger_moved ? state.finger_x : state.finger_land_x,
+                             state.finger_moved ? state.finger_y : state.finger_land_y, x, y)) {
         if (state.finger_land_ms != s_direct_land_ms) {
             s_direct_land_ms = state.finger_land_ms;
             s_direct_land_frame = frame;

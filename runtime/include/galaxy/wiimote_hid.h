@@ -1,6 +1,7 @@
 #pragma once
 
-// A real Wii Remote (RVL-CNT-01 and RVL-CNT-01-TR, with or without a Nunchuk) paired with Windows. Its input reports,
+// A real Wii Remote (RVL-CNT-01 and RVL-CNT-01-TR, with or without a Nunchuk): paired with Windows or on a DolphinBar
+// (Windows HID), or on a DolphinBar plugged into an Android device (its USB host); wiimote_link.h. Its input reports,
 // EEPROM calibration and Nunchuk calibration go to the host's input thread, which reads them into the player's input
 // (input/wiimote_input.h); the report format, IR camera and motor are set from there. Protocol per WiiBrew's Wiimote pages; this file is an independent implementation.
 

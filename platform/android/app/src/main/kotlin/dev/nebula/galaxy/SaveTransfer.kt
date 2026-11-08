@@ -44,6 +44,25 @@ object SaveTransfer {
         return TransferResult(true, "Saves exported", "$count, ${formatBytes(files.sumOf { it.second.length() })}.")
     }
 
+    /**
+     * The file at [uri] ([size] bytes, -1 not known) holds saves Import saves takes: a .zip with a Nebula.sav or
+     * GameData.bin in the save folder's layout, or one of them alone.
+     */
+    fun holdsSaves(context: Context, uri: Uri, size: Long): Boolean {
+        if (size > MAX_TOTAL_BYTES) return false
+        return runCatching {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { readAtMost(it, MAX_TOTAL_BYTES) } ?: return false
+            if (isZip(bytes)) {
+                unzipSaves(bytes).any { SAVE_NAMES.matches(it.first.substringAfterLast('/')) }
+            } else {
+                singleFileName(bytes) != null
+            }
+        }.getOrDefault(false)
+    }
+
+    private fun isZip(bytes: ByteArray) = bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() &&
+        bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
+
     /** Replaces the saves with those in the file at [uri] (a .zip, Nebula.sav or GameData.bin). */
     fun import(context: Context, uri: Uri, gameId: String): TransferResult {
         if (gameRunning(context)) {
@@ -56,9 +75,7 @@ object SaveTransfer {
             val bytes = input.use { readAtMost(it, MAX_TOTAL_BYTES) }
                 ?: return TransferResult(false, "Not a save", "The file is far larger than any save.")
             val release = gameId.take(4).ifEmpty { "RMGE" }
-            val isZip = bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() &&
-                bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
-            val files: List<Pair<String, ByteArray>> = if (isZip) {
+            val files: List<Pair<String, ByteArray>> = if (isZip(bytes)) {
                 unzipSaves(bytes)
             } else {
                 when (singleFileName(bytes)) {

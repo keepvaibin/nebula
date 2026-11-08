@@ -1,40 +1,39 @@
+// The real Wii Remote's worker (wiimote_hid.h): finds a remote through the platform's link (wiimote_link.h), sets it
+// up as the game wants it and hands its reports to the host's input thread.
 #include "galaxy/wiimote_hid.h"
 
-#include "galaxy/controller_hid.h"
+#include "galaxy/platform_time.h"
+#include "galaxy/run_options.h"
 #include "galaxy/runtime_settings.h"
-
-#include "galaxy/windows_api.h"
-#include <cfgmgr32.h>
-#include <hidsdi.h>
-#include <hidpi.h>
+#include "galaxy/wiimote_link.h"
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <iostream>
 #include <mutex>
-#include <string>
 #include <thread>
 #include <vector>
 
-#pragma comment(lib, "cfgmgr32.lib")
-#pragma comment(lib, "hid.lib")
+#if defined(_WIN32)
+#include "galaxy/windows_api.h"
+#elif defined(__APPLE__) || defined(__linux__) || defined(__ANDROID__)
+#include <pthread.h>
+#endif
 
 namespace galaxy::host {
 
 namespace {
 
 namespace wm = input::wiimote;
+namespace wl = wiimote_link;
 
 struct Shared {
     RealWiimoteHandoff handoff;
-    // Host to remote: what the game asks for; `control` wakes the worker.
+    // Host to remote: what the game asks for; a change wakes the worker (wl::wake).
     std::atomic<std::uint8_t> report{0x30};
     std::atomic<bool> ir{false};
     std::atomic<bool> rumble{false};
-    HANDLE control = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    // A HID device arrived: look for a remote again.
-    HANDLE arrival = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     std::once_flag started;
 };
 
@@ -49,174 +48,46 @@ bool remote_wanted() {
     return mode == RuntimeInputMode::Auto || mode == RuntimeInputMode::RealWiimote;
 }
 
-DWORD CALLBACK on_hid_arrival(HCMNOTIFICATION, PVOID context, CM_NOTIFY_ACTION action, PCM_NOTIFY_EVENT_DATA, DWORD) {
-    if (action == CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL) SetEvent(static_cast<HANDLE>(context));
-    return ERROR_SUCCESS;
-}
-
-// One remote's HID handle: overlapped reads, writes at the device's output report length (hidclass takes no other).
-class Remote {
-public:
-    Remote() : read_event_(CreateEventW(nullptr, TRUE, FALSE, nullptr)), write_event_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
-
-    bool open(const std::wstring& path) {
-        handle_ = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                              OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
-        if (handle_ == INVALID_HANDLE_VALUE) return false;
-        in_length_ = out_length_ = 22;
-        PHIDP_PREPARSED_DATA preparsed = nullptr;
-        if (HidD_GetPreparsedData(handle_, &preparsed)) {
-            HIDP_CAPS caps{};
-            if (HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS) {
-                if (caps.InputReportByteLength != 0u) in_length_ = caps.InputReportByteLength;
-                if (caps.OutputReportByteLength != 0u) out_length_ = caps.OutputReportByteLength;
-            }
-            HidD_FreePreparsedData(preparsed);
-        }
-        in_.assign(in_length_, 0);
-        out_.assign(out_length_, 0);
-        HidD_SetNumInputBuffers(handle_, 64);
-        pending_ = false;
-        control_pipe_ = false;
-        return true;
-    }
-
-    bool is_wii_u_pro() const {
-        std::array<wchar_t, 64> name{};
-        return HidD_GetProductString(handle_, name.data(), static_cast<ULONG>((name.size() - 1u) * sizeof(wchar_t))) &&
-               wm::is_wii_u_pro_name(name.data());
-    }
-
-    void close() {
-        if (handle_ == INVALID_HANDLE_VALUE) return;
-        if (pending_) {
-            CancelIoEx(handle_, &read_ov_);
-            DWORD done = 0;
-            GetOverlappedResult(handle_, &read_ov_, &done, TRUE);
-            pending_ = false;
-        }
-        CloseHandle(handle_);
-        handle_ = INVALID_HANDLE_VALUE;
-    }
-
-    // One output report. A stack that refuses interrupt-pipe writes outright gets every write by the control pipe; a
-    // remote whose link is waking answers 21 or 1167 there for a moment. A write that only times out is not sent
-    // again (it may have reached the remote): it fails, and the caller sets it up again.
-    bool send(std::span<const std::uint8_t> report) {
-        if (handle_ == INVALID_HANDLE_VALUE || report.size() > out_.size()) return false;
-        std::fill(out_.begin(), out_.end(), std::uint8_t{0});
-        std::copy(report.begin(), report.end(), out_.begin());
-        if (!control_pipe_) {
-            OVERLAPPED ov{};
-            ov.hEvent = write_event_;
-            ResetEvent(write_event_);
-            DWORD done = 0;
-            if (WriteFile(handle_, out_.data(), out_length_, &done, &ov)) return true;
-            if (GetLastError() == ERROR_IO_PENDING) {
-                if (WaitForSingleObject(write_event_, 100) == WAIT_OBJECT_0) {
-                    return GetOverlappedResult(handle_, &ov, &done, FALSE) != FALSE;
-                }
-                CancelIoEx(handle_, &ov);
-                return GetOverlappedResult(handle_, &ov, &done, TRUE) != FALSE;
-            }
-            control_pipe_ = true;
-        }
-        for (int attempt = 0; attempt < 3; ++attempt) {
-            if (HidD_SetOutputReport(handle_, out_.data(), out_length_)) return true;
-            const DWORD error = GetLastError();
-            if (error != ERROR_NOT_READY && error != ERROR_DEVICE_NOT_CONNECTED && error != ERROR_BUSY) return false;
-            Sleep(20);
-        }
-        return false;
-    }
-
-    // The next input report, waiting up to `timeout_ms` or until `wake` is set: its length, 0 without one, -1 when
-    // the remote is gone.
-    int receive(DWORD timeout_ms, HANDLE wake) {
-        if (!pending_) {
-            read_ov_ = OVERLAPPED{};
-            read_ov_.hEvent = read_event_;
-            ResetEvent(read_event_);
-            DWORD got = 0;
-            if (ReadFile(handle_, in_.data(), in_length_, &got, &read_ov_)) return static_cast<int>(got);
-            if (GetLastError() != ERROR_IO_PENDING) return -1;
-            pending_ = true;
-        }
-        const HANDLE waits[2] = {read_event_, wake};
-        if (WaitForMultipleObjects(wake != nullptr ? 2 : 1, waits, FALSE, timeout_ms) != WAIT_OBJECT_0) return 0;
-        pending_ = false;
-        DWORD got = 0;
-        if (!GetOverlappedResult(handle_, &read_ov_, &got, FALSE)) return -1;
-        return static_cast<int>(got);
-    }
-
-    [[nodiscard]] std::span<const std::uint8_t> data(int size) const {
-        return {in_.data(), static_cast<std::size_t>(size)};
-    }
-
-private:
-    HANDLE handle_ = INVALID_HANDLE_VALUE;
-    HANDLE read_event_;
-    HANDLE write_event_;
-    OVERLAPPED read_ov_{};
-    bool pending_ = false;
-    bool control_pipe_ = false;
-    DWORD in_length_ = 22;
-    DWORD out_length_ = 22;
-    std::vector<std::uint8_t> in_;
-    std::vector<std::uint8_t> out_;
-};
-
 class Worker {
 public:
     void run() {
-        Shared& s = shared();
-        HCMNOTIFICATION notification = nullptr;
-        CM_NOTIFY_FILTER filter{};
-        filter.cbSize = sizeof(filter);
-        filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
-        HidD_GetHidGuid(&filter.u.DeviceInterface.ClassGuid);
-        if (CM_Register_Notification(&filter, s.arrival, on_hid_arrival, &notification) != CR_SUCCESS) notification = nullptr;
-        // Looked for when the input mode allows a remote: at once, when a HID device arrives, and again after a pause
-        // that grows to a minute while none answers.
+        wl::start();
+        // Looked for when the input mode allows a remote: at once, when a device arrives, and again after a pause that
+        // grows to a minute while none answers.
         bool wanted = false;
+        bool arrived = false;
         std::uint64_t next_scan_ms = 0;
         std::uint64_t backoff_ms = 2'000;
         for (;;) {
             const bool now_wanted = remote_wanted();
             if (now_wanted && !wanted) next_scan_ms = 0;
             wanted = now_wanted;
-            const bool arrived = WaitForSingleObject(s.arrival, 0) == WAIT_OBJECT_0;
-            if (wanted && (arrived || GetTickCount64() >= next_scan_ms)) {
+            arrived = wl::wait_arrival(0) || arrived;
+            if (wanted && (arrived || steady_ms() >= next_scan_ms)) {
+                arrived = false;
                 bool answered = false;
-                const std::uint16_t products[] = {wm::kProductId, wm::kProductIdTr};
-                for (const std::wstring& path : hid_interface_paths(wm::kVendorId, products)) {
-                    if (!remote_.open(path)) continue;
-                    if (remote_.is_wii_u_pro()) {  // a controller (controller_hid.cpp)
-                        remote_.close();
-                        continue;
-                    }
-                    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+                wl::each_remote([&](wl::Link& remote) {
+                    link_ = &remote;
+                    wl::set_serving(true);
                     if (initialise()) {
                         answered = true;
                         serve();
                     }
-                    remote_.close();
-                    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_NORMAL);
+                    wl::set_serving(false);
                     if (published_) publish_disconnected();
-                    if (answered) break;
-                }
+                    link_ = nullptr;
+                    return answered;
+                });
                 if (answered) {
                     backoff_ms = 2'000;
                     next_scan_ms = 0;
-                } else {
-                    next_scan_ms = GetTickCount64() + backoff_ms;
-                    backoff_ms = std::min<std::uint64_t>(backoff_ms * 2u, 60'000);
+                    continue;
                 }
-                if (answered) continue;
+                next_scan_ms = steady_ms() + backoff_ms;
+                backoff_ms = std::min<std::uint64_t>(backoff_ms * 2u, 60'000);
             }
             // The mode is looked at again within a second; an arrival wakes it at once (and is seen above).
-            if (WaitForSingleObject(s.arrival, 1000) == WAIT_OBJECT_0) SetEvent(s.arrival);
+            arrived = wl::wait_arrival(1000) || arrived;
         }
     }
 
@@ -224,7 +95,7 @@ private:
     using Bytes = std::array<std::uint8_t, wm::kOutputBytes>;
 
     bool send(std::size_t used, const Bytes& out) {
-        return used != 0u && remote_.send(std::span<const std::uint8_t>(out.data(), used));
+        return used != 0u && link_->send(std::span<const std::uint8_t>(out.data(), used));
     }
 
     void publish_connected() {
@@ -254,17 +125,17 @@ private:
 
     // Sends `out` and reads until `match` takes a report or `timeout_ms` passes; other reports are taken.
     template <class Match>
-    bool request(std::size_t used, const Bytes& out, DWORD timeout_ms, Match match) {
+    bool request(std::size_t used, const Bytes& out, std::uint32_t timeout_ms, Match match) {
         if (!send(used, out)) return false;
-        const std::uint64_t deadline = GetTickCount64() + timeout_ms;
-        for (std::uint64_t now = GetTickCount64(); now < deadline; now = GetTickCount64()) {
-            const int size = remote_.receive(static_cast<DWORD>(deadline - now), nullptr);
+        const std::uint64_t deadline = steady_ms() + timeout_ms;
+        for (std::uint64_t now = steady_ms(); now < deadline; now = steady_ms()) {
+            const int size = link_->receive(static_cast<std::uint32_t>(deadline - now), false);
             if (size < 0) {
                 gone_ = true;
                 return false;
             }
             if (size == 0) continue;
-            const std::span<const std::uint8_t> report = remote_.data(size);
+            const std::span<const std::uint8_t> report = link_->data(size);
             if (match(report)) return true;
             take(report);
         }
@@ -370,19 +241,19 @@ private:
         publish_connected();
         apply_report();
         apply_ir();
-        status_asked_ms_ = GetTickCount64();
+        status_asked_ms_ = steady_ms();
         return !gone_;
     }
 
     void serve() {
         Shared& s = shared();
         while (!gone_ && remote_wanted()) {
-            const int size = remote_.receive(1000, s.control);
+            const int size = link_->receive(1000, true);
             if (size < 0) return;
-            if (size > 0) take(remote_.data(size));
+            if (size > 0) take(link_->data(size));
             // The battery once a minute (the game warns when it runs low).
-            if (GetTickCount64() - status_asked_ms_ >= 60'000u) {
-                status_asked_ms_ = GetTickCount64();
+            if (steady_ms() - status_asked_ms_ >= 60'000u) {
+                status_asked_ms_ = steady_ms();
                 Bytes out{};
                 (void)send(wm::build_status_request(rumble_, out), out);
             }
@@ -419,7 +290,7 @@ private:
 
     static constexpr std::uint8_t kIrUnknown = 0xff;
 
-    Remote remote_;
+    wl::Link* link_ = nullptr;
     RealWiimoteConnection connection_{};
     wm::Status status_{};
     bool status_pending_ = false;
@@ -433,15 +304,26 @@ private:
     std::uint64_t status_asked_ms_ = 0;
 };
 
+void name_this_thread() {
+#if defined(_WIN32)
+    SetThreadDescription(GetCurrentThread(), L"Nebula Wii Remote");
+#elif defined(__APPLE__)
+    pthread_setname_np("Nebula Wii Remote");
+#elif defined(__linux__) || defined(__ANDROID__)
+    pthread_setname_np(pthread_self(), "Nebula Wiimote");  // 15 characters at most
+#endif
+}
+
 }  // namespace
 
 void ensure_real_wiimote_started() noexcept {
-    // Test sessions never take the player's remote.
-    if (hidden_test_session()) return;
+    // Test sessions (hidden window) never take the player's remote.
+    static const bool hidden = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
+    if (hidden) return;
     std::call_once(shared().started, [] {
         try {
             std::thread([] {
-                SetThreadDescription(GetCurrentThread(), L"Nebula Wii Remote");
+                name_this_thread();
                 Worker worker;
                 worker.run();
             }).detach();
@@ -455,18 +337,15 @@ void real_wiimote_set_active(bool active) noexcept {
 }
 
 void real_wiimote_set_report(std::uint8_t report) noexcept {
-    Shared& s = shared();
-    if (s.report.exchange(report, std::memory_order_acq_rel) != report) SetEvent(s.control);
+    if (shared().report.exchange(report, std::memory_order_acq_rel) != report) wl::wake();
 }
 
 void real_wiimote_set_ir(bool on) noexcept {
-    Shared& s = shared();
-    if (s.ir.exchange(on, std::memory_order_acq_rel) != on) SetEvent(s.control);
+    if (shared().ir.exchange(on, std::memory_order_acq_rel) != on) wl::wake();
 }
 
 void real_wiimote_set_rumble(bool on) noexcept {
-    Shared& s = shared();
-    if (s.rumble.exchange(on, std::memory_order_acq_rel) != on) SetEvent(s.control);
+    if (shared().rumble.exchange(on, std::memory_order_acq_rel) != on) wl::wake();
 }
 
 RealWiimoteEvent real_wiimote_wait(std::uint32_t timeout_ms, std::span<std::uint8_t, 22> report, std::size_t& size,

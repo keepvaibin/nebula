@@ -8,7 +8,15 @@ import java.io.File
 import java.io.IOException
 
 /** What an import came to: the mod's folder name, what it holds, and what the player reads. */
-data class ModImportResult(val ok: Boolean, val name: String, val id: String, val kinds: String, val message: String)
+data class ModImportResult(
+    val ok: Boolean,
+    val name: String,
+    val id: String,
+    val kinds: String,
+    val message: String,
+    /** Several imports' answer: its own title over [message]. */
+    val title: String? = null,
+)
 
 /**
  * A mod or texture pack from a file the player picked (.luma, .zip, .7z, .rar or .tar), into the mods folder the game

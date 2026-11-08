@@ -6,6 +6,14 @@
     native <methods>;
     public void *();
 }
+# The real Wii Remote's USB link (platform/sdl/wiimote_link_android.cpp) calls these by name.
+-keep class dev.nebula.galaxy.WiimoteUsb {
+    native <methods>;
+    static int[] slots();
+    static boolean open(int);
+    static boolean write(int, byte[], int);
+    static void close(int);
+}
 -keep class dev.nebula.galaxy.Importer {
     native <methods>;
 }

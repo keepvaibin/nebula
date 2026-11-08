@@ -127,6 +127,9 @@ std::uint64_t g_finger_down_ms = 0;
 float g_finger_down_x = 0.0f;
 float g_finger_down_y = 0.0f;
 float g_finger_travel = 0.0f;
+// How far a finger moves before it counts as moving, in window pixels: Android's touch slop for this display
+// (GameActivity, ViewConfiguration), as its own views use it; elsewhere any move.
+std::atomic<float> g_touch_slop_px{0.0f};
 
 #if defined(__ANDROID__)
 // stdout and stderr to logcat and to <data>/logs/game.log, line by line (the host and the renderer log there).
@@ -629,12 +632,17 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
         g_input.finger_land_ms = now;
         g_input.finger_land_x = x;
         g_input.finger_land_y = y;
+        g_input.finger_moved = false;
     }
     if (!g_pointer_finger_valid || id != g_pointer_finger) {
         return;
     }
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
     g_finger_travel = std::max(g_finger_travel, std::hypot(x - g_finger_down_x, y - g_finger_down_y) / side);
+    if (!g_input.finger_moved &&
+        std::hypot(x - g_finger_down_x, y - g_finger_down_y) > g_touch_slop_px.load(std::memory_order_relaxed)) {
+        g_input.finger_moved = true;
+    }
     // A swipe on a pointer screen scrolls, once it has gone further than a tap can, the list following the finger.
     if (!down && g_finger_travel > kTapTravel && g_menu_context.load(std::memory_order_relaxed) &&
         !g_direct_touch.load(std::memory_order_relaxed)) {
@@ -1078,6 +1086,11 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePane
     galaxy::sdl::g_panel_fastest_hz.store(hz > 1.0f ? hz : 0.0f, std::memory_order_relaxed);
 }
 
+// The display's touch slop in window pixels (ViewConfiguration.getScaledTouchSlop).
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchSlop(JNIEnv*, jclass, jfloat px) {
+    galaxy::sdl::g_touch_slop_px.store(px > 0.0f ? px : 0.0f, std::memory_order_relaxed);
+}
+
 // The frame-rate setting (max_fps; 0: the display's own) for the activity's display mode.
 extern "C" JNIEXPORT jfloat JNICALL Java_dev_nebula_galaxy_GameActivity_nativeWantedFrameRate(JNIEnv*, jclass) {
     return galaxy::render::get_render_config().max_fps;
@@ -1400,6 +1413,14 @@ void set_input_missing_shown(bool shown) noexcept {
 
 bool input_missing_shown() noexcept {
     return g_input_missing_shown.load(std::memory_order_relaxed);
+}
+
+void real_wiimote_taken(bool taken) noexcept {
+#if defined(__ANDROID__)
+    galaxy::sdl::call_activity(taken ? "realWiimoteTaken" : "realWiimoteLetGo");
+#else
+    (void)taken;
+#endif
 }
 
 #if defined(__ANDROID__)

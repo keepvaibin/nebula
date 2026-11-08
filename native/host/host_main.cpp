@@ -56,8 +56,8 @@
 #include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
-#if defined(_WIN32) && !defined(NEBULA_HOST_SDL)
-// A real Wii Remote over Windows HID (wiimote_hid.h).
+#if (defined(_WIN32) && !defined(NEBULA_HOST_SDL)) || defined(__ANDROID__)
+// A real Wii Remote (wiimote_hid.h): over Windows HID, or on a DolphinBar through Android's USB host.
 #define NEBULA_REAL_WIIMOTE 1
 #include "galaxy/input/wiimote_input.h"
 #include "galaxy/wiimote_hid.h"
@@ -2604,6 +2604,9 @@ void input_thread() {
             gInputConnected.store(1u, std::memory_order_relaxed);
         }
         galaxy::host::real_wiimote_set_active(on);
+#if defined(NEBULA_HOST_SDL)
+        galaxy::host::real_wiimote_taken(on);
+#endif
         gControlsInput.store(!on, std::memory_order_release);
         gInputNunchuk.store(on ? (remote->nunchuk ? 1u : 0u) : 1u, std::memory_order_relaxed);
         gInputBattery.store(on ? remote->battery : 4u, std::memory_order_relaxed);

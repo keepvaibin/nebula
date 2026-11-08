@@ -191,7 +191,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
     runtime/src/switch2_ble_win.cpp
-    runtime/src/wiimote_hid.cpp)
+    runtime/src/wiimote_hid.cpp
+    runtime/src/wiimote_link_win32.cpp)
 target_link_libraries(galaxy_native_host
     PUBLIC
         galaxy_runtime_abi

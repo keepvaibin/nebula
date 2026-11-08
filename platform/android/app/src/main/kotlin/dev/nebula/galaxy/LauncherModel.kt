@@ -82,20 +82,75 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     /** How the last mod import ended, shown until the player closes it. */
     var modResult by mutableStateOf<ModImportResult?>(null)
 
+    // Mods waiting for the one under way (several dropped at once), and how those before them ended.
+    private val modQueue = ArrayDeque<Uri>()
+    private val modResults = ArrayList<Pair<String, ModImportResult>>()
+
     /** A mod or texture pack from a file the player picked, in the background; the game shows it under Mods. */
     fun importMod(uri: Uri) {
-        if (modProgress != null) return
+        if (modProgress != null) {
+            modQueue.addLast(uri)
+            return
+        }
         modProgress = 0f
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
             val result = runCatching {
                 ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
             }.getOrElse { ModImportResult(false, "", "", "", it.message ?: "That file could not be read") }
+            val file = DropKind.nameAndSize(app, uri).first
             main.post {
                 modProgress = null
-                modResult = result
+                modResults += file to result
+                val next = modQueue.removeFirstOrNull()
+                if (next != null) {
+                    importMod(next)
+                } else {
+                    modResult = if (modResults.size == 1) modResults[0].second else together(modResults)
+                    modResults.clear()
+                }
             }
         }.start()
+    }
+
+    // Several imports as one answer: the mods made ready, then each file that was not, with its reason.
+    private fun together(results: List<Pair<String, ModImportResult>>): ModImportResult {
+        val ready = results.filter { it.second.ok }.map { it.second.name }
+        val failed = results.filter { !it.second.ok }.map { "${it.first}: ${it.second.message}" }
+        val title = when {
+            failed.isEmpty() -> "${ready.size} mods are ready"
+            ready.isEmpty() -> "Those files could not be imported"
+            else -> "${ready.size} of ${results.size} mods are ready"
+        }
+        val parts = ArrayList<String>()
+        if (ready.isNotEmpty()) parts += ready.joinToString(", ") + ". Turn them on under Mods in the game's settings."
+        if (failed.isNotEmpty()) parts += failed.joinToString("\n")
+        return ModImportResult(failed.isEmpty(), "", "", "", parts.joinToString("\n\n"), title)
+    }
+
+    /**
+     * Files dragged onto the launcher from another app, each to the importer its picker would use (DropKind): a disc
+     * image to setup (the first; setup takes one), saves to Import saves (the first), Mii files to Import Miis, the
+     * rest to the mod importer one after another.
+     */
+    fun dropped(uris: List<Uri>) {
+        if (uris.isEmpty() || screen == Screen.Import) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val kinds = uris.groupBy { runCatching { DropKind.of(app, it) }.getOrDefault(DropKind.Mod) }
+            withContext(Dispatchers.Main) {
+                kinds[DropKind.Disc]?.firstOrNull()?.let {
+                    choose(it)
+                    return@withContext
+                }
+                if (install == null) {
+                    transferResult = TransferResult(false, "Set up the game first", "Drop your disc image here to start.")
+                    return@withContext
+                }
+                kinds[DropKind.Saves]?.firstOrNull()?.let { importSaves(it) }
+                kinds[DropKind.Miis]?.let { importMiis(it) }
+                kinds[DropKind.Mod]?.forEach { importMod(it) }
+            }
+        }
     }
 
     /** A save export or import under way. */

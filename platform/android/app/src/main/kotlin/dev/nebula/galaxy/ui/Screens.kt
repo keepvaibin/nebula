@@ -2,6 +2,7 @@
 package dev.nebula.galaxy.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.pm.PackageManager
 import android.hardware.input.InputManager
 import android.net.Uri
@@ -15,6 +16,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -70,6 +73,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
@@ -117,7 +124,36 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
     BackHandler(enabled = model.screen in setOf(Screen.Disc, Screen.Settings, Screen.About, Screen.Licenses)) {
         model.back()
     }
-    Box(Modifier.fillMaxSize()) {
+    // Files dragged in from another app (split screen, a desktop mode, a Chromebook): each to its importer.
+    var dropHover by remember { mutableStateOf(false) }
+    val dropTarget = remember(model) {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                dropHover = false
+                val drag = event.toAndroidDragEvent()
+                // The other app's files are lent for this drop, for as long as the launcher lives.
+                (context as? Activity)?.requestDragAndDropPermissions(drag)
+                val clip = drag.clipData ?: return false
+                val uris = (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
+                if (uris.isEmpty()) return false
+                model.dropped(uris)
+                return true
+            }
+
+            override fun onEntered(event: DragAndDropEvent) {
+                dropHover = true
+            }
+
+            override fun onExited(event: DragAndDropEvent) {
+                dropHover = false
+            }
+
+            override fun onEnded(event: DragAndDropEvent) {
+                dropHover = false
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize().dragAndDropTarget(shouldStartDragAndDrop = { model.screen != Screen.Import }, target = dropTarget)) {
         Starfield()
         AnimatedContent(
             targetState = model.screen,
@@ -135,6 +171,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 Screen.Licenses -> LicenseScreen(model)
             }
         }
+        if (dropHover) DropHint(setUp = model.screen != Screen.Welcome && model.screen != Screen.Disc)
     }
     model.modResult?.let { result ->
         AlertDialog(
@@ -143,10 +180,11 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 if (result.ok) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Night.Lavender)
                 else Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Night.Error)
             },
-            title = { Text(if (result.ok) "${result.name} is ready" else "That file could not be imported") },
+            title = { Text(result.title ?: if (result.ok) "${result.name} is ready" else "That file could not be imported") },
             text = {
                 Text(
-                    if (result.ok) "Turn it on under Mods in the game's settings." +
+                    if (result.title != null) result.message
+                    else if (result.ok) "Turn it on under Mods in the game's settings." +
                         (if (result.message.contains(", BUT ")) "\n\n${result.message}" else "")
                     else result.message,
                 )
@@ -177,6 +215,24 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 { TextButton(onClick = { onShareLog(); model.gameExit = null }) { Text("Share the log") } }
             } else null,
         )
+    }
+}
+
+/** Over the launcher while a file is dragged across it: what letting go does. */
+@Composable
+private fun DropHint(setUp: Boolean) {
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
+        GlassCard(Modifier.widthIn(max = 420.dp).padding(24.dp)) {
+            Icon(Icons.Rounded.Download, contentDescription = null, tint = Night.Gold, modifier = Modifier.size(40.dp))
+            Gap(12.dp)
+            Text("Drop to import", style = MaterialTheme.typography.titleLarge)
+            Gap(6.dp)
+            Text(
+                if (setUp) "A disc image, saves, Mii files or mods: each goes where it belongs."
+                else "Your disc image sets the game up.",
+                style = MaterialTheme.typography.bodyMedium, color = Night.TextDim,
+            )
+        }
     }
 }
 

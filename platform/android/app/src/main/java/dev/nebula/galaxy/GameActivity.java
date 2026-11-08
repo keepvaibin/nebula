@@ -4,6 +4,7 @@ package dev.nebula.galaxy;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -21,6 +22,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
@@ -66,11 +68,13 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativeSurfaceReturned();
     static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
     static native void nativePanelRate(float hz);
+    static native void nativeTouchSlop(float px);
     static native float nativeWantedFrameRate();
 
     private TouchControlsView controls;
     private boolean menuOpen;
     private String controlsMode = "auto";
+    private boolean realWiimote;  // a real Wii Remote (WiimoteUsb) is in the player's hand
     private boolean controlsWanted = true;   // the player's choice in the HOME Menu
 
     @Override
@@ -199,7 +203,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        WiimoteUsb.init(this);
         reportPanelRate();
+        nativeTouchSlop(ViewConfiguration.get(this).getScaledTouchSlop());
         getSystemService(DisplayManager.class).registerDisplayListener(displayListener, null);
         applyDisplayRate(savedFrameRate());
 
@@ -353,6 +359,15 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Another density (an external display, a desktop mode): its touch slop.
+        if (!mBrokenLibraries) {
+            nativeTouchSlop(ViewConfiguration.get(this).getScaledTouchSlop());
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         if (!mBrokenLibraries) {
             getSystemService(DisplayManager.class).unregisterDisplayListener(displayListener);
@@ -390,8 +405,23 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     // What the input mode says of the on-screen controls: Phone always, Auto while no controller is in hand, others never.
     private void applyInputMode() {
         final int mode = nativeInputMode();
-        controlsWanted = mode == INPUT_PHONE || (mode == INPUT_AUTO && !controllerConnected());
+        controlsWanted = mode == INPUT_PHONE || (mode == INPUT_AUTO && !controllerConnected() && !realWiimote);
         applyControlsVisibility();
+    }
+
+    // Called by libmain.so: the player took up a real Wii Remote, or let it go (on its input thread).
+    public void realWiimoteTaken() {
+        runOnUiThread(() -> {
+            realWiimote = true;
+            hideControlsForController();
+        });
+    }
+
+    public void realWiimoteLetGo() {
+        runOnUiThread(() -> {
+            realWiimote = false;
+            applyInputMode();
+        });
     }
 
     // Called by libmain.so when the player changes the input mode (on SDL's thread).
