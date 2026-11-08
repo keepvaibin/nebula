@@ -6,12 +6,13 @@ using System.Windows.Forms;
 namespace Nebula
 {
     /// <summary>
-    /// NVIDIA's DLSS license and the download. With licenseOnly the window
-    /// shows the license text and a Close button.
+    /// A vendor upscaler's license and its download (VendorPackage: DlssPackage or XessPackage). With
+    /// licenseOnly the window shows the license text and a Close button.
     /// </summary>
-    internal sealed class DlssInstallDialog : Form
+    internal sealed class VendorInstallDialog : Form
     {
-        private readonly bool licenseOnly;
+        private readonly VendorPackage package;
+        private readonly bool dlss;
         private readonly TextBox license = new TextBox();
         private readonly CheckBox accept = new CheckBox();
         private readonly Label status = new Label();
@@ -20,10 +21,11 @@ namespace Nebula
         private readonly CancellationTokenSource cancel = new CancellationTokenSource();
         private Thread worker;
 
-        public DlssInstallDialog(bool licenseOnly)
+        public VendorInstallDialog(VendorPackage package, bool licenseOnly)
         {
-            this.licenseOnly = licenseOnly;
-            Text = licenseOnly ? NebulaText.Of("NVIDIA RTX SDKs license") : "NVIDIA DLSS";
+            this.package = package;
+            dlss = package == DlssPackage.Package;
+            Text = licenseOnly ? (dlss ? NebulaText.Of("NVIDIA RTX SDKs license") : NebulaText.Of("Intel XeSS license")) : package.Name;
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(640, 540);
@@ -35,9 +37,11 @@ namespace Nebula
             int y = 14;
             if (!licenseOnly)
             {
+                string size = FileUtil.FormatBytes(package.DownloadBytes);
                 Controls.Add(new Label
                 {
-                    Text = NebulaText.Of("Nebula downloads DLSS from NVIDIA's Streamline 2.14.1 release on GitHub ({0}). The game uses it the next time it starts.", FileUtil.FormatBytes(DlssPackage.DownloadBytes)),
+                    Text = dlss ? NebulaText.Of("Nebula downloads DLSS from NVIDIA's Streamline 2.14.1 release on GitHub ({0}). The game uses it the next time it starts.", size)
+                                : NebulaText.Of("Nebula downloads XeSS from Intel's XeSS SDK 3.0.2 release on GitHub ({0}). The game uses it the next time it starts.", size),
                     Location = new Point(16, y), Size = new Size(608, 42)
                 });
                 y += 48;
@@ -55,7 +59,7 @@ namespace Nebula
 
             if (!licenseOnly)
             {
-                accept.Text = NebulaText.Of("I accept the NVIDIA RTX SDKs license (required)");
+                accept.Text = dlss ? NebulaText.Of("I accept the NVIDIA RTX SDKs license (required)") : NebulaText.Of("I accept the Intel XeSS license (required)");
                 accept.Location = new Point(16, y);
                 accept.Size = new Size(608, 24);
                 accept.Enabled = false;
@@ -105,7 +109,7 @@ namespace Nebula
             var thread = new Thread(delegate()
             {
                 string text = null, error = null;
-                try { text = DlssPackage.LicenseText(cancel.Token); }
+                try { text = package.LicenseText(cancel.Token); }
                 catch (OperationCanceledException) { return; }
                 catch (Exception failure) { error = failure.Message; }
                 Post(delegate
@@ -130,7 +134,7 @@ namespace Nebula
             {
                 accept.ForeColor = Color.Firebrick;
                 status.ForeColor = Color.Firebrick;
-                status.Text = NebulaText.Of("Accept the license to install DLSS.");
+                status.Text = dlss ? NebulaText.Of("Accept the license to install DLSS.") : NebulaText.Of("Accept the license to install XeSS.");
                 accept.Focus();
                 return;
             }
@@ -144,7 +148,7 @@ namespace Nebula
                 Exception failure = null;
                 try
                 {
-                    DlssPackage.Install((done, total) => Post(delegate
+                    package.Install((done, total) => Post(delegate
                     {
                         bar.Value = total > 0 ? (int)Math.Min(1000, done * 1000 / total) : 0;
                         status.Text = NebulaText.Of("Downloading… {0} of {1}", FileUtil.FormatBytes(done), FileUtil.FormatBytes(total));
