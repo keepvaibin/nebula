@@ -376,38 +376,6 @@ void Mario::updateTimers() {
     }
 }
 
-/*
-void Mario::setFrontVecKeepUp(const Vec3f &rV)
-{
-    Vec3f stack_38(mFrontVec);
-    if (!MR::isNearZero(rV)) {
-        setFrontVec(rV);
-    }
-
-    Vec3f stack_2C = mHeadVec.cross(mFrontVec);
-
-    if (MR::isNearZero(stack_2C)) {
-        Vec3f stack_20;
-        MR::vecBlendSphere(stack_38, rV, &stack_20, 0.5f);
-        stack_2C.cross(mHeadVec, stack_20);
-        setFrontVec(stack_20);
-        if (MR::isNearZero(stack_2C)) {
-            setFrontVecKeepSide(rV);
-            return;
-        }
-    }
-
-    MR::normalize(&stack_2C);
-    mSideVec = stack_2C;
-    MR::normalize(&mSideVec);
-    setFrontVec(mSideVec.cross(mHeadVec));
-    _22C = mFrontVec;
-    _328 = mFrontVec % _328.length();
-    _344 = mSideVec;
-}
-
-*/
-
 void Mario::updateMorphResetTimer() {
     u16 timer = mMorphResetTimer;
     if (timer == 0) {
@@ -939,7 +907,6 @@ void Mario::fixFrontVecByGravity() {
             mSideVec = mFixSideVec;
             MR::normalize(&mSideVec);
         } else {
-            // Vec3f stack_14 = -_344;
             mSideVec = -mFixSideVec;
             MR::normalize(&mSideVec);
         }
@@ -990,22 +957,22 @@ void Mario::setHeadVec(const Vec3f& rHead) {
 }
 
 void Mario::setFrontVec(const Vec3f& rFront) {
-    Vec3f plusMinus6A0;
-    Vec3f frontWithout6A0;
+    Vec3f awayNormal;  // the 2D plane's normal, turned to the side of the camera's z axis
+    Vec3f mirrored;
     if (mMovementStates.mode2D && !isStatusActive(MarioStatus_Talk)) {
         if (getCamDirZ().dot(m2DPlaneNormal) > 0.0f) {
-            plusMinus6A0 = m2DPlaneNormal;
+            awayNormal = m2DPlaneNormal;
         } else {
-            Vec3f neg6A0 = -m2DPlaneNormal;
-            plusMinus6A0 = neg6A0;
+            Vec3f flipped = -m2DPlaneNormal;
+            awayNormal = flipped;
         }
 
-        if (plusMinus6A0.dot(rFront) > 0.0f) {
-            // maybe this reflects rFront around _6A0?? (very unsure)
-            f32 f1 = MR::vecKillElement(rFront, plusMinus6A0, &frontWithout6A0);
-            frontWithout6A0 -= plusMinus6A0 * f1;
-            MR::normalizeOrZero(&frontWithout6A0);
-            mFrontVec = frontWithout6A0;
+        if (awayNormal.dot(rFront) > 0.0f) {
+            // A front pointing that way is mirrored through the plane.
+            f32 along = MR::vecKillElement(rFront, awayNormal, &mirrored);
+            mirrored -= awayNormal * along;
+            MR::normalizeOrZero(&mirrored);
+            mFrontVec = mirrored;
         } else {
             mFrontVec = rFront;
         }

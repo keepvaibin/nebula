@@ -298,7 +298,7 @@ public:
     bool isSkatableFloor() const;
     bool doSkate();
 
-    u32 initSoundTable(SoundList* list);
+    u32 initSoundTable(const SoundList* list);
     void initSound();
     void playSoundJ(const char*, s32);
     void stopSoundJ(const char*, u32);
@@ -746,9 +746,9 @@ public:
     u16 mAirTimer;  // frames off the ground in a jump or hip drop
     u16 mJumpTimer;  // frames since the jump began (the trample-top open time)
     u16 mDropWaitTimer;  // frames left of the drop wait (DropWaitTime)
-    u16 mSlopeTimer;  // frames on a slope (mMovementStates._23)
+    u16 mSlopeTimer;  // frames of a slope slide (mMovementStates.slopeSlide)
     u16 mSlopeSteerInhibitTimer;  // frames the stick doesn't steer a slope slide
-    u16 mEdgePushTimer;  // frames pushed back from a ledge (DrawStates._18); past 8 the push goes sideways
+    u16 mEdgePushTimer;  // frames pushed back from a ledge (mDrawStates.edgePushBack); past 8 the push goes sideways
     u16 mJump2PDelayTimer;  // frames before a second player's jump request is taken
     u16 mBackJumpTimer;  // frames into a jump, for the back-jump limit (BackJumpLimitFrame)
     u16 mBackAirWalkTimer;  // frames left of a backward air walk

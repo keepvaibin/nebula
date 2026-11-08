@@ -200,25 +200,25 @@ bool MarioStep::update() {
     getPlayer()->mainMove();
     clearVelocity();
 
-    f32 _278 = getPlayer()->mWalkSpeed;
-    if (_278 < 0.1f) {
-        _278 = 0.1f;
+    f32 walkSpeed = getPlayer()->mWalkSpeed;
+    if (walkSpeed < 0.1f) {
+        walkSpeed = 0.1f;
     }
 
-    getPlayer()->mWalkSpeed = _278;
+    getPlayer()->mWalkSpeed = walkSpeed;
     getPlayer()->updateWalkSpeed();
 
-    if (_278 < 0.5f) {
-        _278 = 0.5f;
+    if (walkSpeed < 0.5f) {
+        walkSpeed = 0.5f;
     }
 
-    f32 v7 = mBlendFrames - _278;
-    mBlendFrames -= _278;
+    f32 framesLeft = mBlendFrames - walkSpeed;
+    mBlendFrames -= walkSpeed;
 
-    if (v7 < 0.0f) {
+    if (framesLeft < 0.0f) {
         return false;
     } else {
-        mActor->setBlendMtxTimer((s32)(v7));
+        mActor->setBlendMtxTimer((s32)(framesLeft));
         return true;
     }
 }
