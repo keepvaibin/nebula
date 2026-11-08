@@ -10,9 +10,9 @@ class FixedPosition;
 
 class StringSpider : public LiveActor {
 public:
-    StringSpider(const char*);
+    StringSpider(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void calcAnim();
     virtual void kill();
@@ -20,23 +20,23 @@ public:
     virtual void endClipped();
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     s32 getSearchToAttackTime();
-    void doSwingAction(f32, bool);
+    void doSwingAction(f32 accel, bool isSideSwing);
     void reactPointer();
     void reactStringForce();
-    bool isOverStringLength(Vec3f*, f32*);
+    bool isOverStringLength(Vec3f* pToRoot, f32* pDistance);
     Vec3f calcToRootVector();
-    void calcPosture(f32, bool);
+    void calcPosture(f32 upRate, bool isFacePlayer);
     void tearDownPointerGripped();
     void extendString();
-    void shortenString(f32);
-    bool reactSpinHit(HitSensor*, HitSensor*);
+    void shortenString(f32 length);
+    bool reactSpinHit(HitSensor* pSender, HitSensor* pReceiver);
     void startSwingLevelSound();
 
     void exeWait();
@@ -65,13 +65,13 @@ public:
     f32 mStringLength;
     bool mIsPointerPulled;
     s32 mPointerStep;
-    Vec3f* mSwingFront;
+    Vec3f* mSwingFront;  // set only on a fixed swing line (Obj_arg1 == 2)
     Vec3f* mSwingSide;
 };
 
 class StringSpiderString : public LiveActor {
 public:
-    StringSpiderString(const char*);
+    StringSpiderString(const char* pName);
 
     virtual void calcAndSetBaseMtx();
 
