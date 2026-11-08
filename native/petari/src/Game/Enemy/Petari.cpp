@@ -25,6 +25,20 @@ namespace {
     static const Vec sSpinSensorOffset = {0.0f, 0.0f, 0.0f};
     const char* sBodySensorName = "body";
     const char* sSpinSensorName = "spin";
+
+    // Standing turns in place (no move speed) toward mTargetDir.
+    const MR::ActorMoveParam sStandParam = {0.0f, 1.3f, 0.92f, 3.0f};
+    const MR::ActorMoveParam sSwoonStartParam = {0.0f, 1.3f, 0.985f, 3.0f};
+    const MR::ActorMoveParam sSwoonParam = {0.0f, 1.3f, 0.0f, 3.0f};
+
+    // To the player: hiding closer than sJumpOutDistance on screen, chasing past sApproachStartDistance until
+    // sApproachEndDistance, running from closer than sEscapeStartDistance until sEscapeEndDistance.
+    const f32 sJumpOutDistance = 1500.0f;
+    const f32 sApproachStartDistance = 700.0f;
+    const f32 sApproachEndDistance = 600.0f;
+    const f32 sEscapeStartDistance = 500.0f;
+    const f32 sEscapeEndDistance = 710.0f;
+    const f32 sWallLookDistance = 600.0f;
 };  // namespace
 
 namespace {
@@ -125,11 +139,7 @@ void Petari::exeWait() {
         mVelocity.zero();
     }
 
-    f32 v3 = 0.0f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sStandParam);
 
     if (MR::isStep(this, 60)) {
         if (MR::isHiddenModel(this)) {
@@ -158,13 +168,7 @@ void Petari::exeApproach() {
     }
     calcCenter();
     calcApproachDirection();
-
-    f32 v3 = 0.5f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
-
+    moveTowardTargetDirection(0.5f, 0.92f, 3.0f);
     updateFootPrint();
 
     if (MR::isFirstStep(this)) {
@@ -174,9 +178,7 @@ void Petari::exeApproach() {
     MR::startLevelSound(this, "SE_EM_LV_PETARI_RUN");
 
     if (!reflectStarPointer2P()) {
-        if (tryApproachEnd()) {
-            return;
-        }
+        tryApproachEnd();
     }
 }
 
@@ -197,20 +199,15 @@ void Petari::exeEscape() {
     avoidPlayer();
     avoidWall();
 
-    f32 v3 = 10.0f;
-    if (MR::isFirstStep(this)) {
-        v3 = 180.0f;
-    }
-
+    // The first step turns all the way round.
+    f32 turnDegree = MR::isFirstStep(this) ? 180.0f : 10.0f;
     f32 boost = calcBoost(0.45f, 0.5f, 4.0f);
-    moveTowardTargetDirection(boost, 0.97f, v3);
+    moveTowardTargetDirection(boost, 0.97f, turnDegree);
     updateFootPrint();
     MR::startLevelSound(this, "SE_EM_LV_PETARI_RUN");
 
     if (!reflectStarPointer2P()) {
-        if (tryEscapeEnd()) {
-            return;
-        }
+        tryEscapeEnd();
     }
 }
 
@@ -224,13 +221,7 @@ void Petari::exeSwoonStart() {
         mRequestSmoke = true;
     }
     calcCenter();
-
-    f32 v3 = 0.0f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.985f, 3.0f});
-
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sSwoonStartParam);
     MR::setNerveAtBckStopped(this, GET_NERVE_ANON(PetariNrvSwoon));
 }
 
@@ -240,13 +231,7 @@ void Petari::exeSwoon() {
         MR::startBck(this, "Swoon");
     }
     calcCenter();
-
-    f32 v3 = 0.0f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.0f, 3.0f});
-
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sSwoonParam);
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
     MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvSwoonEnd), 180);
 }
@@ -260,12 +245,7 @@ void Petari::exeSwoonEnd() {
         MR::startSound(this, "SE_EM_PETARI_JUMP");
     }
     calcCenter();
-
-    f32 v3 = 0.0f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.0f, 3.0f});
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sSwoonParam);
 
     if (MR::isBckOneTimeAndStopped(this)) {
         MR::startSound(this, "SE_EM_CHANGE_SMOKE");
@@ -283,12 +263,7 @@ void Petari::exeLand() {
     meander();
     avoidPlayer();
     avoidWall();
-
-    f32 v3 = 10.0f;
-    if (MR::isFirstStep(this)) {
-        v3 = 180.0f;
-    }
-    moveTowardTargetDirection(1.0f, 0.99f, v3);
+    moveTowardTargetDirection(1.0f, 0.99f, MR::isFirstStep(this) ? 180.0f : 10.0f);
 
     MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvEscape), 45);
 }
@@ -320,16 +295,17 @@ void Petari::exeSpinOut() {
 
     MR::turnDirectionDegree(this, &mFront, -mVelocity, 180.0f);
 
-    Vec3f v8;
+    // Slides along the ground (or falls), pressed down at 1.3.
+    Vec3f down;
     if (MR::isOnGround(this)) {
-        v8.set(-*MR::getGroundNormal(this));
+        down.set(-*MR::getGroundNormal(this));
     } else {
-        v8.set(mGravity);
+        down.set(mGravity);
     }
 
     const Vec3f& vel = mVelocity;
-    mVelocity.scaleAdd(-v8.dot(vel), v8, vel);
-    mVelocity.add(v8 * 1.3f);
+    mVelocity.scaleAdd(-down.dot(vel), down, vel);
+    mVelocity.add(down * 1.3f);
 
     calcCenter();
     appearStarPieceGradually();
@@ -351,12 +327,7 @@ void Petari::exeFreeze() {
         mAnimScaleCtrl->startPointerHitVibration();
     }
 
-    f32 v3 = 0.0f;
-    if (!MR::isBindedGround(this)) {
-        v3 = 0.0f;
-    }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {v3, 1.3, 0.92f, 3.0f});
-
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sStandParam);
     MR::startPointerFreezeLevelSound(this);
 
     if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
@@ -392,9 +363,9 @@ void Petari::control() {
         gravityQuat.setRotate(upVec, -mGravity, 0.1f);
         gravityQuat.transform(upVec);
     }
-    Pos3f v11;
-    MR::makeMtxUpFrontPos(&v11, upVec, mFront, mPosition);
-    MR::setBaseTRMtx(this, v11);
+    Pos3f baseMtx;
+    MR::makeMtxUpFrontPos(&baseMtx, upVec, mFront, mPosition);
+    MR::setBaseTRMtx(this, baseMtx);
     mAnimScaleCtrl->updateNerve();
 
     mHeadMtx.set(getBaseMtx());
@@ -483,7 +454,7 @@ void Petari::initStarPiece(const TableIter& rIter) {
 
 bool Petari::tryShiftJumpOut() {
     Vec3f screenPosition;
-    if (MR::calcDistanceToPlayer(mPosition) < 1500.0f && MR::calcScreenPosition(&screenPosition, mPosition)) {
+    if (MR::calcDistanceToPlayer(mPosition) < sJumpOutDistance && MR::calcScreenPosition(&screenPosition, mPosition)) {
         setNerve(GET_NERVE_ANON(PetariNrvJumpOut));
         return true;
     }
@@ -492,7 +463,7 @@ bool Petari::tryShiftJumpOut() {
 }
 
 bool Petari::tryShiftApproach() {
-    if (MR::calcDistanceToPlayer(mPosition) > 700.0f) {
+    if (MR::calcDistanceToPlayer(mPosition) > sApproachStartDistance) {
         setNerve(GET_NERVE_ANON(PetariNrvApproach));
         return true;
     }
@@ -501,7 +472,7 @@ bool Petari::tryShiftApproach() {
 }
 
 bool Petari::tryApproachEnd() {
-    if (MR::calcDistanceToPlayer(mPosition) < 600.0f) {
+    if (MR::calcDistanceToPlayer(mPosition) < sApproachEndDistance) {
         setNerve(GET_NERVE_ANON(PetariNrvWait));
         return true;
     }
@@ -510,7 +481,7 @@ bool Petari::tryApproachEnd() {
 }
 
 bool Petari::tryShiftEscape() {
-    if (MR::calcDistanceToPlayer(mPosition) < 500.0f) {
+    if (MR::calcDistanceToPlayer(mPosition) < sEscapeStartDistance) {
         setNerve(GET_NERVE_ANON(PetariNrvEscape));
         return true;
     }
@@ -519,7 +490,7 @@ bool Petari::tryShiftEscape() {
 }
 
 bool Petari::tryEscapeEnd() {
-    if (MR::calcDistanceToPlayer(mPosition) > 710.0f) {
+    if (MR::calcDistanceToPlayer(mPosition) > sEscapeEndDistance) {
         setNerve(GET_NERVE_ANON(PetariNrvWait));
         return true;
     }
@@ -578,9 +549,7 @@ bool Petari::receivePlayerAttackAtSpin(u32 msg, HitSensor* pSender, HitSensor* p
         return false;
     }
 
-    bool v5 = isNerve(GET_NERVE_ANON(PetariNrvWait)) || isNerve(GET_NERVE_ANON(PetariNrvEscape)) || isNerve(GET_NERVE_ANON(PetariNrvFreeze));
-
-    if (v5) {
+    if (isNerve(GET_NERVE_ANON(PetariNrvWait)) || isNerve(GET_NERVE_ANON(PetariNrvEscape)) || isNerve(GET_NERVE_ANON(PetariNrvFreeze))) {
         setNerve(GET_NERVE_ANON(PetariNrvSwoonStart));
         return true;
     }
@@ -597,11 +566,12 @@ bool Petari::isSolidBody() const {
            isNerve(GET_NERVE_ANON(PetariNrvWait)) || isNerve(GET_NERVE_ANON(PetariNrvFreeze));
 }
 
-void Petari::moveTowardTargetDirection(f32 vel, f32 f2, f32 angle) {
+// Moves only on the ground.
+void Petari::moveTowardTargetDirection(f32 speed, f32 damp, f32 turnDegree) {
     if (!MR::isBindedGround(this)) {
-        vel = 0.0f;
+        speed = 0.0f;
     }
-    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {vel, 1.3f, f2, angle});
+    MR::moveAndTurnToDirection(this, &mFront, mTargetDir, {speed, 1.3f, damp, turnDegree});
 }
 
 void Petari::updateFootPrint() {
@@ -624,9 +594,9 @@ void Petari::calcSpinOutVelocity(f32 speed) {
 }
 
 void Petari::calcApproachDirection() {
-    Vec3f v4(*MR::getPlayerCenterPos());
-    v4 -= mBodyCenter;
-    mTargetDir = v4;
+    Vec3f toPlayer(*MR::getPlayerCenterPos());
+    toPlayer -= mBodyCenter;
+    mTargetDir = toPlayer;
     if (MR::isNearZero(mTargetDir)) {
         mTargetDir = mFront;
     }
@@ -634,10 +604,9 @@ void Petari::calcApproachDirection() {
 }
 
 void Petari::calcEscapeDirection() {
-    Vec3f* playerCenterPos = MR::getPlayerCenterPos();
-    Vec3f v4(mBodyCenter);
-    v4 -= *playerCenterPos;
-    mTargetDir = v4;
+    Vec3f fromPlayer(mBodyCenter);
+    fromPlayer -= *MR::getPlayerCenterPos();
+    mTargetDir = fromPlayer;
     if (MR::isNearZero(mTargetDir)) {
         mTargetDir = mFront;
     }
@@ -678,18 +647,18 @@ void Petari::avoidWall() {
     if (!MR::isNearZero(planarDir)) {
         MR::normalize(&planarDir);
         Triangle rayHitTri;
-        Vec3f v19;
-        if (MR::getFirstPolyOnLineToMapAndMoveLimit(&v19, &rayHitTri, mBodyCenter, planarDir * 600.0f)) {
+        Vec3f hitPos;
+        if (MR::getFirstPolyOnLineToMapAndMoveLimit(&hitPos, &rayHitTri, mBodyCenter, planarDir * sWallLookDistance)) {
             Vec3f wallNormal = *rayHitTri.getNormal(0);
             wallNormal.orthogonalize(mGravity);
             if (!MR::isNearZero(wallNormal)) {
                 MR::normalize(&wallNormal);
-                f32 proximity = 1.0f - (v19.distance(mBodyCenter) / 600.0f);
+                // Bends away from the wall by the square of how near it is.
+                f32 proximity = 1.0f - (hitPos.distance(mBodyCenter) / sWallLookDistance);
                 MR::clamp01(&proximity);
-                f32 v8 = (proximity * proximity);
-                proximity *= proximity;
+                f32 falloff = proximity * proximity;
 
-                mTargetDir -= wallNormal * (wallNormal.dot(mTargetDir)) * 2.0f * v8 * 2.0f;
+                mTargetDir -= wallNormal * (wallNormal.dot(mTargetDir)) * 2.0f * falloff * 2.0f;
             }
         }
     }
@@ -705,9 +674,9 @@ void Petari::meander() {
         mMeanderStep = getNerveStep() + MR::getRandom((s32)60, 120);
     }
 
-    Quat4f v5;
-    v5.setRotate(-mGravity, MR::pi() * mMeanderAngle / 180.0f);
-    v5.transform(mTargetDir);
+    Quat4f turn;
+    turn.setRotate(-mGravity, MR::pi() * mMeanderAngle / 180.0f);
+    turn.transform(mTargetDir);
 }
 
 f32 Petari::calcBoost(f32 baseSpeed, f32 boostMultiplier, f32 effectiveRange) const {
@@ -741,8 +710,6 @@ void Petari::appearStarPieceGradually() {
 
 void Petari::appearStarPieceAll() {
     if (mStarPieceRemaining > 0) {
-        Vec3f mouthPos;
-        calcMouthPos(&mouthPos);
         MR::appearStarPiece(this, mPosition, mStarPieceRemaining, 20.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
