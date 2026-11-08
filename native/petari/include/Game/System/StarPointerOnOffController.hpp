@@ -63,7 +63,7 @@ public:
         return mMode == mode;
     }
 
-    MR::FixedArray< RequestInfo*, 16 > mRequests;
+    MR::InlineArray< RequestInfo*, 16 > mRequests;
     s32 mModeCounter[StarPointerMode_Count];
     bool mRequested[StarPointerMode_Count];
     s32 mMode;

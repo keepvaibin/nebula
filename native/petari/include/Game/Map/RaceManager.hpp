@@ -114,8 +114,8 @@ public:
 
     s32 mCurrentRace;
     RaceManagerLayout* mLayout;
-    MR::FixedArray< AbstractRacer*, 10 > mRacer;
-    MR::FixedArray< AbstractAudience*, 10 > mAudience;
+    MR::InlineArray< AbstractRacer*, 10 > mRacer;
+    MR::InlineArray< AbstractAudience*, 10 > mAudience;
     u32 mRacerNum;
     u32 mAudienceNum;
     u32 mRank;

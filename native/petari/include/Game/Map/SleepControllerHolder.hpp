@@ -18,7 +18,7 @@ public:
     void initSync();
 
 private:
-    MR::Vector< MR::FixedArray< SleepController*, 1024 > > mSleepControl;
+    MR::InlineVector< SleepController*, 1024 > mSleepControl;
 };
 
 namespace SleepControlFunc {

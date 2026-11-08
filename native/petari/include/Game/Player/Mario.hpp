@@ -829,7 +829,7 @@ public:
 
     AreaObj* mArrivedWarpCube;  // the warp cube he came out of: entering it doesn't warp back (doCubeWarp)
     void* mGroundCheckOwner;  // who locked the ground check (lockGroundCheck)
-    MR::Vector< MR::FixedArray< Triangle, 32 > > mTouchedWalls;  // walls touched this frame
+    MR::InlineVector< Triangle, 32 > mTouchedWalls;  // walls touched this frame
     const HitSensor* mOnimasuSensor;  // the nearest Onimasu block's sensor (checkOnimasu)
     Vec3f mOnimasuLocalPos;  // his position in that block's space (updateOnimasu)
     u8 mOnimasuFound;  // a block was found this frame

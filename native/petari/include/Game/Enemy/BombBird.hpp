@@ -47,7 +47,7 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
 
-    MR::FixedArray< BombBirdBomb*, 3 > mBombs;
+    MR::InlineArray< BombBirdBomb*, 3 > mBombs;
     BombBirdBomb* mHeldBomb;
     Vec3f mFront;
     bool mSearchPlayer;

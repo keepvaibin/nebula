@@ -41,7 +41,7 @@ public:
     Vec3f* mValue;
 };
 
-class NPCParameterReader : public NPCParameterBase, public MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > > {
+class NPCParameterReader : public NPCParameterBase, public MR::InlineVector< NPCParameterBase*, 48 > {
 public:
     NPCParameterReader(const char*);
 

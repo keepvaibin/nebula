@@ -5,9 +5,9 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 
-template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::~Vector();
-template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::Vector();
-template void MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::push_back(NPCParameterBase* const&);
+template MR::Vector< MR::InlineArray< NPCParameterBase*, 48 > >::~Vector();
+template MR::Vector< MR::InlineArray< NPCParameterBase*, 48 > >::Vector();
+template void MR::Vector< MR::InlineArray< NPCParameterBase*, 48 > >::push_back(NPCParameterBase* const&);
 
 NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec) : NPCParameterBase(pName), mValue(pVec) {
 }
@@ -21,7 +21,7 @@ void NPCParameterV3f::read(Table* pInfo, s32 entry) {
     pInfo->getValue(entry, key.c_str(), &mValue->z);
 }
 
-NPCParameterReader::NPCParameterReader(const char* pName) : NPCParameterBase(pName), MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >() {
+NPCParameterReader::NPCParameterReader(const char* pName) : NPCParameterBase(pName), MR::Vector< MR::InlineArray< NPCParameterBase*, 48 > >() {
 }
 
 void NPCParameterReader::read(Table* pInfo, s32 entry) {

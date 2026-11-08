@@ -69,9 +69,9 @@ public:
     KoopaJr* mJr;
     ModelObj* mShipBreakModel;
     ModelObj* mPodModel;
-    MR::Vector< MR::FixedArray< Kameck*, 2 > > mKamecks;
-    MR::Vector< MR::FixedArray< Kameck*, 2 > > mKamecksAtTurn;
-    MR::FixedArray< HomingKiller*, 6 > mKillers;
+    MR::InlineVector< Kameck*, 2 > mKamecks;
+    MR::InlineVector< Kameck*, 2 > mKamecksAtTurn;
+    MR::InlineArray< HomingKiller*, 6 > mKillers;
     s32 mHitPoint;
     Vec3f mHitPos;
     Vec3f mHitDir;

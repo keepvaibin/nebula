@@ -271,7 +271,7 @@ void MultiEmitter::setGlobalRotationDegree(const Vec3f& rRotation, s32 idx) {
 }
 
 void MultiEmitter::allocateEmitter(const char* pName) {
-    MR::Vector< MR::FixedArray< u16, 32 > > indices;
+    MR::InlineVector< u16, 32 > indices;
     bool numbered = !MR::hasStringSpace(pName) && !MR::isDigitStringTail(pName, 2);
     if (numbered) {
         u16 index = 0;
