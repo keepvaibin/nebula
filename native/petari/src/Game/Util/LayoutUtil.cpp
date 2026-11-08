@@ -776,7 +776,7 @@ SimpleLayout* MR::createSimpleLayout(const char* pName, const char* pArcName, u3
 SimpleLayout* MR::createSimpleLayoutTalkParts(const char* pName, const char* pArcName, u32 rootPaneAnimLayerNum) {
     SimpleLayout* simpleLayout;
 
-    simpleLayout = new SimpleLayout(pName, pArcName, rootPaneAnimLayerNum, MR::DrawType_0x44);
+    simpleLayout = new SimpleLayout(pName, pArcName, rootPaneAnimLayerNum, MR::DrawType_TalkPartsLayout);
     simpleLayout->initWithoutIter();
 
     return simpleLayout;

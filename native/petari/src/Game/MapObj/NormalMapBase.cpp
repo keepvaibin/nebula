@@ -40,7 +40,7 @@ NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName) {
 
 void NormalMapBase::setup(const char* pName) {
     initModelManagerWithAnm(pName, nullptr, false);
-    MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
+    MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_NormalMap);
     MR::initLightCtrlNoDrawMapObj(this);
     setupLighting();
     setupTexture();

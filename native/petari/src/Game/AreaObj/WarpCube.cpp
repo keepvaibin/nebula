@@ -132,6 +132,6 @@ void WarpCube::init(const TableIter& rIter) {
     mEventName = new char[eventNameSize];
     memcpy(mEventName, eventName, eventNameSize);
 
-    MR::connectToScene(this, MR::MovementType_AreaObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
+    MR::connectToScene(this, MR::MovementType_AreaObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_NormalMap);
     mInvalidateTimer = 0;
 }

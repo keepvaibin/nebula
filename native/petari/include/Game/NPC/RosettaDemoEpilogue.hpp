@@ -9,7 +9,7 @@ class RosettaDemoEpilogue : public NerveExecutor {
 public:
     /// @brief Creates a new `RosettaDemoEpilogue`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
-    /// @param rIter TODO.
+    /// @param rIter Rosalina's placement entry.
     RosettaDemoEpilogue(Rosetta* pRosetta, const TableIter& rIter);
 
     void startDemo();
@@ -19,6 +19,6 @@ private:
     /// @brief The pointer to the actor instance for Rosalina.
     Rosetta* mRosetta;
 
-    /// @brief TODO.
+    /// @brief Set once the fade-out demo part starts; the baby cry stops from then on.
     bool mIsFadeOut;
 };

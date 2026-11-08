@@ -38,7 +38,7 @@ void SceneFunction::executeMovementList() {
     CategoryList::execute(MR::MovementType_SensorHitChecker);
     CategoryList::execute(MR::MovementType_MsgSharedGroup);
     CategoryList::execute(MR::MovementType_UNK_0x07);
-    CategoryList::execute(MR::MovementType_UNK_0x14);
+    CategoryList::execute(MR::MovementType_EffectUpdateCheck);
     CategoryList::execute(MR::MovementType_TalkDirector);
     CategoryList::execute(MR::MovementType_DemoDirector);
     CategoryList::execute(MR::MovementType_UNK_0x0C);
@@ -226,8 +226,8 @@ void SceneFunction::executeDrawListOpa() {
     CategoryList::execute(MR::DrawType_Creeper);
     CategoryList::execute(MR::DrawType_Trapeze);
     CategoryList::execute(MR::DrawType_SpaceCocoon);
-    CategoryList::execute(MR::DrawType_0x17);
-    CategoryList::execute(MR::DrawType_WarpPodPath);
+    CategoryList::execute(MR::DrawType_FootPrint);
+    CategoryList::execute(MR::DrawType_NormalMap);
     CategoryList::execute(MR::DrawType_KirairaChain);
     CategoryList::execute(MR::DrawType_WaterPlant);
     CategoryList::execute(MR::DrawType_BigBubbleGoal);
@@ -331,7 +331,7 @@ void SceneFunction::executeDrawList2DNormal() {
     CategoryList::execute(MR::DrawType_LayoutDecoration);
     CategoryList::execute(MR::DrawType_CinemaFrame);
     CategoryList::execute(MR::DrawType_TalkLayout);
-    CategoryList::execute(MR::DrawType_0x44);
+    CategoryList::execute(MR::DrawType_TalkPartsLayout);
     MR::drawInitFor2DModel();
     CategoryList::drawOpa(MR::DrawBufferType_0x25);
     CategoryList::drawXlu(MR::DrawBufferType_0x25);

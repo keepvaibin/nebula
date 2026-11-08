@@ -101,7 +101,7 @@ WarpPodMgr::WarpPodMgr(const char* pName) : NameObj(pName) {
     mCameraPod = nullptr;
     mNextPairIndex = 0;
 
-    MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
+    MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_NormalMap);
 }
 
 // The other pod of the same placement group.

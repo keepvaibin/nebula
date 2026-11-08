@@ -26,7 +26,7 @@ namespace {
         MR::getSceneObj< NameObjGroup >(SceneObj_NameObjGroup)->pauseOffAll();
         MR::notifyRequestNameObjMovementOnOff();
         MR::requestEffectStopSceneStart();
-        CategoryList::requestMovementOn(MR::MovementType_UNK_0x14);
+        CategoryList::requestMovementOn(MR::MovementType_EffectUpdateCheck);
         CategoryList::requestMovementOn(MR::MovementType_ShadowControllerHolder);
         CategoryList::requestMovementOn(MR::MovementType_LayoutOnPause);
         MR::pauseOffTalkDirector();
