@@ -5,8 +5,9 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-// BRFNT in the native layout the importer writes (crates/nebula-import cook/native_data.rs font_native): host-order
-// numbers; each pointer holds its target's file offset until ResFont::Rebuild adds the file's address.
+// A font as the importer writes it (crates/nebula-import cook/native_data.rs font_native, "NFNT"): host-order
+// numbers, every place an offset from the file's start. A code finds its glyph in two reads (its high byte's page, then
+// that page block's entry for its low byte); a glyph names its sheet, its cell and its widths.
 namespace nw4r {
     namespace ut {
         struct CharWidths {
@@ -15,59 +16,52 @@ namespace nw4r {
             s8 charWidth;
         };
 
-        struct FontTextureGlyph {
+        struct FontGlyph {
+            u16 sheet;
+            u16 cellX;  // the cell's first pixel in the sheet, source pixels
+            u16 cellY;
+            CharWidths widths;
+            u8 reserved;
+        };
+
+        struct FontFile {
+            char signature[4];  // "NFNT"
+            u32 version;        // cFontVersion
+            u32 fileSize;
+            u8 fontType;
+            s8 linefeed;
+            u16 alterGlyph;  // the glyph a code without one draws
+            CharWidths defaultWidth;
+            u8 encoding;
+            u8 height;
+            u8 width;
+            u8 ascent;
+            // The sheets' distance range in their texels (nebula-import cook::distance: intensity sheets are signed
+            // distance fields, the edge at one half); 0 when they are pictures.
+            u8 fieldRange;
             u8 cellWidth;
             u8 cellHeight;
             s8 baselinePos;
             u8 maxCharWidth;
-            u32 sheetSize;
+            u16 sheetFormat;  // the disc's (SheetFormat)
             u16 sheetNum;
-            u16 sheetFormat;
-            u16 sheetRow;
-            u16 sheetLine;
-            u16 sheetWidth;
+            u16 sheetWidth;  // source pixels (a distance sheet's record is larger; coordinates divide by these)
             u16 sheetHeight;
-            // The sheets' distance range in their texels (nebula-import cook::distance: intensity sheets are signed
-            // distance fields, the edge at one half); 0 when they are images.
-            u8 fieldRange;
-            u8 reserved[3];
-            u8* sheetImage;
+            u16 sheetRow;  // cells across and down a sheet
+            u16 sheetLine;
+            u32 sheetSize;  // bytes from one sheet's record to the next
+            u32 glyphNum;
+            u32 pages;       // u16[256]: a code's high byte -> its page block, cNoGlyph none
+            u32 pageBlocks;  // u16[256] each: the low byte -> the glyph, cNoGlyph none
+            u32 glyphs;      // FontGlyph[glyphNum]
+            u32 sheets;      // the records, sheetSize apart
         };
 
-        struct FontWidth {
-            u16 indexBegin;
-            u16 indexEnd;
-            FontWidth* pNext;
-            CharWidths widthTable[];
-        };
-
-        struct FontCodeMap {
-            u16 ccodeBegin;
-            u16 ccodeEnd;
-            u16 mappingMethod;
-            u16 reserved;
-            FontCodeMap* pNext;
-            u16 mapInfo[];
-        };
-
-        struct FontInformation {
-            u8 fontType;
-            s8 linefeed;
-            u16 alterCharIndex;
-            CharWidths defaultWidth;
-            u8 encoding;
-            FontTextureGlyph* pGlyph;
-            FontWidth* pWidth;
-            FontCodeMap* pMap;
-            u8 height;
-            u8 width;
-            u8 ascent;
-            u8 padding_[1];
-        };
-        // The importer's layout (font_native).
-        static_assert(sizeof(FontInformation) == 0x28 && offsetof(FontInformation, pGlyph) == 8);
-        static_assert(sizeof(FontTextureGlyph) == 0x20 && offsetof(FontTextureGlyph, sheetImage) == 0x18);
-        static_assert(offsetof(FontWidth, pNext) == 8 && offsetof(FontWidth, widthTable) == 0x10);
-        static_assert(offsetof(FontCodeMap, pNext) == 8 && offsetof(FontCodeMap, mapInfo) == 0x10);
+        const u32 cFontVersion = 1;
+        const u16 cNoGlyph = 0xFFFF;
+        static_assert(sizeof(CharWidths) == 3 && sizeof(FontGlyph) == 10, "the importer's glyph");
+        static_assert(sizeof(FontFile) == 0x40 && offsetof(FontFile, fieldRange) == 0x17 && offsetof(FontFile, sheetSize) == 0x28 &&
+                          offsetof(FontFile, pages) == 0x30,
+                      "the importer's header");
     };  // namespace ut
 };  // namespace nw4r

@@ -1,141 +1,37 @@
 #include "nw4r/ut/ResFont.h"
 #include "Game/Render/RenderTexture.hpp"
-#include "nw4r/ut/binaryFileFormat.h"
-#include <stdint.h>
 
 namespace nw4r {
     namespace ut {
-        namespace {
-            // A pointer the importer wrote as its target's offset in the file.
-            template < typename T >
-            inline void ResolveOffset(T*& rpPtr, void* pBase) {
-                rpPtr = reinterpret_cast< T* >(static_cast< char* >(pBase) + reinterpret_cast< uintptr_t >(rpPtr));
-            }
-
-        }  // namespace
-
         ResFont::ResFont() {
         }
 
         ResFont::~ResFont() {
         }
 
-        bool ResFont::SetResource(void* brfnt) {
-            FontInformation* pFontInfo = NULL;
-            BinaryFileHeader* fileHeader = reinterpret_cast< BinaryFileHeader* >(brfnt);
-
-            if (!IsManaging(NULL)) {
+        bool ResFont::SetResource(void* pBuffer) {
+            if (!IsManaging(NULL) || pBuffer == NULL) {
                 return false;
             }
-            if (fileHeader->signature == 'RFNU') {
-                BinaryBlockHeader* blockHeader;
-                int nBlocks = 0;
-
-                blockHeader = reinterpret_cast< BinaryBlockHeader* >(reinterpret_cast< u8* >(fileHeader) + fileHeader->headerSize);
-
-                while (nBlocks < fileHeader->dataBlocks) {
-                    if (blockHeader->kind == 'FINF') {
-                        pFontInfo = reinterpret_cast< FontInformation* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
-                        break;
-                    }
-
-                    blockHeader = reinterpret_cast< BinaryBlockHeader* >(reinterpret_cast< u8* >(blockHeader) + blockHeader->size);
-                    nBlocks++;
-                }
-            } else {
-                if (fileHeader->signature == 'RFNT' || fileHeader->signature == 'TNFR') {
-                    NEBULA_PANIC("ResFont: a font not in the native layout (the importer cooks it)");
-                }
-                if (fileHeader->version == 0x104) {
-                    if (!IsValidBinaryFile(fileHeader, 'RFNN', 0x104, 2)) {
-                        return false;
-                    }
-                } else {
-                    if (!IsValidBinaryFile(fileHeader, 'RFNN', 0x102, 2)) {
-                        return false;
-                    }
-                }
-                pFontInfo = Rebuild(fileHeader);
+            FontFile* pFile = static_cast< FontFile* >(pBuffer);
+            if (memcmp(pFile->signature, "RFNT", 4) == 0) {
+                NEBULA_PANIC("ResFont: a font the importer did not cook");
             }
-
-            if (pFontInfo == NULL) {
+            if (memcmp(pFile->signature, "NFNT", 4) != 0 || pFile->version != cFontVersion) {
                 return false;
             }
-
-            // Every glyph lookup divides by the sheet's rows, lines and size: a font without them is not used.
-            const FontTextureGlyph* pGlyph = pFontInfo->pGlyph;
-            if (pGlyph == NULL || pGlyph->sheetRow == 0 || pGlyph->sheetLine == 0 || pGlyph->sheetWidth == 0 ||
-                pGlyph->sheetHeight == 0) {
+            // Every glyph names a cell of a sheet: a font without them is not used.
+            if (pFile->sheetNum == 0 || pFile->sheetRow == 0 || pFile->sheetLine == 0 || pFile->sheetWidth == 0 ||
+                pFile->sheetHeight == 0 || pFile->glyphNum == 0) {
                 return false;
             }
-
-            SetResourceBuffer(brfnt, pFontInfo);
+            SetResourceBuffer(pBuffer, pFile);
             InitReaderFunc(GetEncoding());
-
             return true;
         }
 
         void ResFont::RemoveResource() {
             RemoveResourceBuffer();
         }
-
-        FontInformation* ResFont::Rebuild(BinaryFileHeader* fileHeader) {
-            BinaryBlockHeader* blockHeader;
-            FontInformation* info = nullptr;
-            int nBlocks = 0;
-
-            blockHeader = reinterpret_cast< BinaryBlockHeader* >(reinterpret_cast< u8* >(fileHeader) + fileHeader->headerSize);
-
-            while (nBlocks < fileHeader->dataBlocks) {
-                switch (blockHeader->kind) {
-                case 'FINF': {
-                    info = reinterpret_cast< FontInformation* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
-                    ResolveOffset(info->pGlyph, fileHeader);
-
-                    if (info->pWidth != nullptr) {
-                        ResolveOffset(info->pWidth, fileHeader);
-                    }
-                    if (info->pMap != nullptr) {
-                        ResolveOffset(info->pMap, fileHeader);
-                    }
-                } break;
-
-                case 'TGLP': {
-                    FontTextureGlyph* glyph = reinterpret_cast< FontTextureGlyph* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
-                    ResolveOffset(glyph->sheetImage, fileHeader);
-                    for (u32 sheet = 0; sheet < glyph->sheetNum; sheet++) {
-                    }
-                } break;
-
-                case 'CWDH': {
-                    FontWidth* width = reinterpret_cast< FontWidth* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
-
-                    if (width->pNext != nullptr) {
-                        ResolveOffset(width->pNext, fileHeader);
-                    }
-                } break;
-
-                case 'CMAP': {
-                    FontCodeMap* map = reinterpret_cast< FontCodeMap* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
-
-                    if (map->pNext != nullptr) {
-                        ResolveOffset(map->pNext, fileHeader);
-                    }
-                } break;
-
-                case 'GLGR': {
-                } break;
-                default:
-                    return nullptr;
-                }
-
-                blockHeader = reinterpret_cast< BinaryBlockHeader* >(reinterpret_cast< u8* >(blockHeader) + blockHeader->size);
-                nBlocks++;
-            }
-
-            fileHeader->signature = 'RFNU';
-
-            return info;
-        };
     };  // namespace ut
 };  // namespace nw4r
