@@ -34,7 +34,7 @@ public:
     void exeWaitToShowUp();
     void exeShowUp();
     void exeHideDown();
-    void calcTrans(f32);
+    void calcTrans(f32 rate);
     void processBgmPlayerIn();
     void processBgmPlayerOut();
 
@@ -55,7 +55,7 @@ public:
     f32 mVertExitForce;
     s32 mMusicChangeIdx;
     s32 mMusicState;
-    u8 mIsRabbitWait;
+    bool mIsRabbitWait;
     PartsModel* mPipeStreamModel;
     bool mIsWaterFlowing;
     ActorCameraInfo* mCameraInfo;
