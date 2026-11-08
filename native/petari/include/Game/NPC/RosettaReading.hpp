@@ -10,7 +10,6 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual void appear();
-    virtual void kill();
 
 
     void exePictureBookBefore();

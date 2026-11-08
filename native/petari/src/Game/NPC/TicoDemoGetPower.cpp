@@ -8,15 +8,15 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sTicoAppearFrame = 110;
-    static const s32 sTicoAppearEndFrame = 140;
-    static const s32 sTicoAppearVoiceFrame = 180;
-    static const s32 sFanfareFrame = 10;
-    static const s32 sWaitSeStopFrame = 65;
-    static const s32 sFlashSpinSeFrame = 72;
-    static const s32 sFlashLightSeFrame = 170;
-    static const s32 sFusionSeFrame = 255;
-    static const s32 sMarioJumpFrame = 420;
+    const s32 sTicoAppearFrame = 110;
+    const s32 sTicoAppearEndFrame = 140;
+    const s32 sTicoAppearVoiceFrame = 180;
+    const s32 sFanfareFrame = 10;
+    const s32 sWaitSeStopFrame = 65;
+    const s32 sFlashSpinSeFrame = 72;
+    const s32 sFlashLightSeFrame = 170;
+    const s32 sFusionSeFrame = 255;
+    const s32 sMarioJumpFrame = 420;
 };  // namespace
 
 namespace NrvTicoDemoGetPower {

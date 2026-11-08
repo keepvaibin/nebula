@@ -10,7 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sMeterUpSpeed = 0.05f;
+    const f32 sMeterUpSpeed = 0.05f;
 };  // namespace
 
 BigBubbleGoalArea::BigBubbleGoalArea(int formType, const char* pName)
@@ -28,8 +28,7 @@ void BigBubbleGoalArea::init(const TableIter& rIter) {
 
 void BigBubbleGoalArea::addBubble(BigBubble* pBubble) {
     if (isValidSwitchA() && !isOnSwitchA()) {
-        f32 volume = pBubble->mVolume;
-        mMeterAmount += volume;
+        mMeterAmount += pBubble->mVolume;
 
         if (mMeterAmount >= mMeterCapacity) {
             mMeterAmount = mMeterCapacity;
@@ -79,14 +78,13 @@ void BigBubbleGoalArea::draw() const {
 
 namespace MR {
     bool checkBigBubbleGoal(BigBubble* pBubble) {
-        BigBubbleGoalArea* goalArea = static_cast< BigBubbleGoalArea* >(MR::getAreaObj("BigBubbleGoalArea", pBubble->mPosition));
+        BigBubbleGoalArea* const pGoalArea = static_cast< BigBubbleGoalArea* >(MR::getAreaObj("BigBubbleGoalArea", pBubble->mPosition));
 
-        if (goalArea != nullptr) {
-            goalArea->addBubble(pBubble);
-
-            return true;
+        if (pGoalArea == nullptr) {
+            return false;
         }
 
-        return false;
+        pGoalArea->addBubble(pBubble);
+        return true;
     }
 };  // namespace MR

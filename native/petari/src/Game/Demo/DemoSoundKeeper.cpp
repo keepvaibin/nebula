@@ -11,8 +11,7 @@ DemoSoundInfo::DemoSoundInfo() : mPartName(), mBgm(""), mSystemSe(""), mReturnBg
 
 DemoSoundKeeper::DemoSoundKeeper(DemoExecutor* pExecutor) : DemoSheetKeeperBase(pExecutor) {
     Table* pMap = nullptr;
-    const DemoExecutor* pSheetExecutor = mExecutor;
-    const s32& count = DemoFunction::createSheetParser(pSheetExecutor, getTypeString(), &pMap);
+    const s32 count = DemoFunction::createSheetParser(mExecutor, getTypeString(), &pMap);
     mInfo.init(count);
 
     for (s32 i = 0; i < count; i++) {
@@ -51,11 +50,7 @@ void DemoSoundKeeper::executeType(const DemoSoundInfo* pInfo) {
 }
 
 bool DemoSoundKeeper::isPermitBgmChange() {
-    if (MR::isGalaxyRedCometAppearInCurrentStage() || MR::isGalaxyBlackCometAppearInCurrentStage()) {
-        return false;
-    }
-
-    return true;
+    return !MR::isGalaxyRedCometAppearInCurrentStage() && !MR::isGalaxyBlackCometAppearInCurrentStage();
 }
 
 inline const char* DemoSoundKeeper::getTypeString() const {

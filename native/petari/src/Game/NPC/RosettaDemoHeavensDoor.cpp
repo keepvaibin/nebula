@@ -5,9 +5,9 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sRosettaSwingVoiceFrame = 70;
-    static const s32 sRosettaSwingFrame = 80;
-    static const s32 sRosettaHideFrame = 10;
+    const s32 sRosettaSwingVoiceFrame = 70;
+    const s32 sRosettaSwingFrame = 80;
+    const s32 sRosettaHideFrame = 10;
 };  // namespace
 
 namespace NrvRosettaDemoHeavensDoor1 {
@@ -108,7 +108,7 @@ void RosettaDemoHeavensDoor1::exeDemo() {
     }
 
     if (MR::isDemoPartActive("スピンゲット[デモ3]")) {
-        s32 step = MR::getDemoPartStep("スピンゲット[デモ3]");
+        const s32 step = MR::getDemoPartStep("スピンゲット[デモ3]");
 
         if (step == ::sRosettaSwingVoiceFrame) {
             MR::startSound(mHost, "SE_SV_ROSETTA_SWING");
@@ -126,13 +126,9 @@ void RosettaDemoHeavensDoor1::exeDemo() {
     }
 
     if (MR::isDemoPartActive("スピンゲット[デモ6]")) {
-        s32 step = MR::getDemoPartStep("スピンゲット[デモ6]");
-
-        if (step < ::sRosettaHideFrame) {
+        if (MR::getDemoPartStep("スピンゲット[デモ6]") < ::sRosettaHideFrame) {
             MR::startLevelSound(mHost, "SE_SM_LV_TICO_OP_WAIT");
-        }
-
-        if (step >= ::sRosettaHideFrame) {
+        } else {
             MR::startLevelSound(mHost, "SE_SM_LV_ROSETTA_OP_HIDE");
         }
     }
