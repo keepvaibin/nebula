@@ -50,6 +50,7 @@ public:
     ResourceHolder* createAndAdd(const char*, NebulaArena*);
     LayoutHolder* createAndAddLayoutHolder(const char*, NebulaArena*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char*);
+    LayoutHolder* createAndAddGameLayoutHolder(const char* pArcName);
     void removeIfIsEqualHeap(NebulaArena*);
     static void startCreateResourceHolder(const char*, CreateResourceHolderArgs*);
     static void startCreateLayoutHolder(const char*, CreateResourceHolderArgs*);

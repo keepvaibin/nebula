@@ -115,9 +115,8 @@ private:
     bool build() {
         LayoutManager* pManager = getLayoutManager();
         Pane* pRoot = pManager->mLayout->mpRootPane;
-        if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, pManager->mLayout) ||
-            !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc"), pManager->mLayout) ||
-            !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"), pManager->mLayout)) {
+        if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, "SysInfoWindow.arc", pManager->mLayout) ||
+            !mTextKit.init("InformationWindow.arc", pManager->mLayout) || !mWindowKit.init("SysInfoWindowMini.arc", pManager->mLayout)) {
             return false;
         }
         // The question window's own panes stay hidden; the screen is built beside them.

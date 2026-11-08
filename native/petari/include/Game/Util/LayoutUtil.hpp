@@ -128,6 +128,9 @@ private:
 namespace MR {
     LayoutHolder* createAndAddLayoutHolder(const char*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char*);
+    // The game's own copy of the layout archive pArcName under a mod's (ResourceHolderManager); null with no mod's
+    // copy over it.
+    LayoutHolder* createAndAddGameLayoutHolder(const char* pArcName);
     void createAndAddPaneCtrl(LayoutActor*, const char*, u32);
     void createAndAddGroupCtrl(LayoutActor*, const char*, u32);
     bool isExistPaneCtrl(LayoutActor*, const char*);

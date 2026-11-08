@@ -20,31 +20,67 @@ namespace {
 
         return MR::isStageFileSelect() ? pWatcher->mPermanent : pWatcher->mFileCacheHeap;
     }
-}  // namespace
 
-namespace MR {
-    bool isFileExist(const char* pFilePath, bool considerLanguage) {
+    // `game`: the game's own files under the mods' (GameAssets::findGame).
+    s32 findIn(const char* pPath, bool game) {
+        return game ? GameAssets::findGame(pPath) : GameAssets::find(pPath);
+    }
+
+    bool isIn(const char* pFilePath, bool considerLanguage, bool game);
+
+    void languagePath(MR::FormattedName& rDst, const char* pFilePath, bool game) {
+        MR::addFilePrefix(rDst, pFilePath, MR::getCurrentLanguagePrefix());
+
+        if (!isIn(rDst.c_str(), false, game)) {
+            rDst.format("%s", pFilePath);
+        }
+    }
+
+    bool isIn(const char* pFilePath, bool considerLanguage, bool game) {
         if (!considerLanguage) {
-            return GameAssets::find(pFilePath) >= 0;
+            return findIn(pFilePath, game) >= 0;
         }
 
         MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
-        return GameAssets::find(filePath.c_str()) >= 0;
+        languagePath(filePath, pFilePath, game);
+        return findIn(filePath.c_str(), game) >= 0;
     }
 
-    AssetFolder* getArchive(const char* pFilePath, NebulaArena* pArena) {
-        MR::FormattedName filePath;
-        makeFileNameConsideringLanguage(filePath, pFilePath);
+    bool layoutPath(MR::FormattedName& rDst, const char* pFileName, bool game) {
+        rDst.format("/Region/LayoutData/%s", pFileName);
 
-        AssetFolder* pFolder = GameAssets::findArchive(filePath.c_str(), nullptr);
+        if (isIn(rDst.c_str(), false, game)) {
+            return true;
+        }
+
+        rDst.format("/LayoutData/%s", pFileName);
+
+        if (isIn(rDst.c_str(), true, game)) {
+            return true;
+        }
+
+        rDst.format("%s", pFileName);
+
+        return isIn(rDst.c_str(), false, game);
+    }
+
+    AssetFolder* archiveIn(const char* pFilePath, NebulaArena* pArena, bool game, NebulaArena** ppHeld) {
+        MR::FormattedName filePath;
+        languagePath(filePath, pFilePath, game);
+
+        AssetFolder* pFolder = GameAssets::findArchive(filePath.c_str(), ppHeld, game);
         if (pFolder != nullptr) {
             return pFolder;
         }
 
-        const s32 entry = GameAssets::find(filePath.c_str());
+        const s32 entry = findIn(filePath.c_str(), game);
         if (entry < 0) {
             return nullptr;
+        }
+
+        // With no mod's file over it, the game's own is the one held for everyone.
+        if (game && GameAssets::find(filePath.c_str()) == entry) {
+            return archiveIn(filePath.c_str(), pArena, false, ppHeld);
         }
 
         if (pArena == nullptr) {
@@ -52,8 +88,25 @@ namespace MR {
         }
 
         pFolder = new (pArena, 0) AssetFolder(entry, GameAssets::load(entry, nullptr, 0, pArena, nullptr));
-        GameAssets::holdArchive(filePath.c_str(), pFolder, pArena);
+        GameAssets::holdArchive(filePath.c_str(), pFolder, pArena, game);
+        if (ppHeld != nullptr) {
+            *ppHeld = pArena;
+        }
         return pFolder;
+    }
+}  // namespace
+
+namespace MR {
+    bool isFileExist(const char* pFilePath, bool considerLanguage) {
+        return isIn(pFilePath, considerLanguage, false);
+    }
+
+    AssetFolder* getArchive(const char* pFilePath, NebulaArena* pArena) {
+        return archiveIn(pFilePath, pArena, false, nullptr);
+    }
+
+    AssetFolder* getGameArchive(const char* pFilePath, NebulaArena** ppArena) {
+        return archiveIn(pFilePath, nullptr, true, ppArena);
     }
 
     NebulaArena* getArchiveArena(const char* pFilePath) {
@@ -79,11 +132,7 @@ namespace MR {
     }
 
     void makeFileNameConsideringLanguage(FormattedName& rDst, const char* pFilePath) {
-        addFilePrefix(rDst, pFilePath, getCurrentLanguagePrefix());
-
-        if (!isFileExist(rDst.c_str(), false)) {
-            rDst.format("%s", pFilePath);
-        }
+        languagePath(rDst, pFilePath, false);
     }
 
     bool makeObjectArchiveFileName(FormattedName& rDst, const char* pFileName) {
@@ -111,21 +160,11 @@ namespace MR {
     }
 
     bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName) {
-        rDst.format("/Region/LayoutData/%s", pFileName);
+        return layoutPath(rDst, pFileName, false);
+    }
 
-        if (isFileExist(rDst.c_str(), false)) {
-            return true;
-        }
-
-        rDst.format("/LayoutData/%s", pFileName);
-
-        if (isFileExist(rDst.c_str(), true)) {
-            return true;
-        }
-
-        rDst.format("%s", pFileName);
-
-        return isFileExist(rDst.c_str(), false);
+    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pFileName) {
+        return layoutPath(rDst, pFileName, true);
     }
 
     bool makeLayoutArchiveFileNameFromPrefix(FormattedName& rDst, const char* pFilePrefix, bool fallback) {

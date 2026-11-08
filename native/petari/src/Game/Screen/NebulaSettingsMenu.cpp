@@ -1041,10 +1041,9 @@ bool NebulaSettingsScreen::build() {
     LayoutManager* pManager = getLayoutManager();
     Pane* pRoot = pManager->mLayout->mpRootPane;
     nw4r::lyt::Layout* const pInto = pManager->mLayout;
-    if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, pInto) ||
-        !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc"), pInto) ||
-        !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"), pInto) ||
-        !mButtonKit.init(MR::createAndAddLayoutHolder("BackButton.arc"), pInto)) {
+    if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, "SysInfoWindow.arc", pInto) ||
+        !mTextKit.init("InformationWindow.arc", pInto) || !mWindowKit.init("SysInfoWindowMini.arc", pInto) ||
+        !mButtonKit.init("BackButton.arc", pInto)) {
         return false;
     }
     // The question window's own panes stay hidden; the menu is built beside them.

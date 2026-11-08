@@ -1111,12 +1111,12 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     new (&p->mWindow) NebulaPaneKit();
     new (&p->mButton) NebulaPaneKit();
     Pane* pRoot = pManager->mLayout->mpRootPane;
-    if (pRoot == nullptr || !p->mText.init(pManager->mLayoutHolder, pManager->mLayout) ||
-        !p->mButton.init(MR::createAndAddLayoutHolder("BackButton.arc"), pManager->mLayout)) {
+    if (pRoot == nullptr || !p->mText.init(pManager->mLayoutHolder, "InformationWindow.arc", pManager->mLayout) ||
+        !p->mButton.init("BackButton.arc", pManager->mLayout)) {
         JUTNativeLog("NebulaAchievementBoard: no InformationWindow or BackButton layout\n");
         return;
     }
-    const bool ringed = p->mWindow.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"), pManager->mLayout);
+    const bool ringed = p->mWindow.init("SysInfoWindowMini.arc", pManager->mLayout);
     // The information window's own panes stay hidden; the board is built beside them.
     for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
         pChild->SetVisible(false);

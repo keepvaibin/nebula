@@ -28,6 +28,12 @@ namespace GameAssets {
         return host->asset_find(host->user, pPath, &entry) != 0 ? entry.index : -1;
     }
 
+    s32 findGame(const char* pPath) {
+        const NebulaHostServices* const host = nebula_host();
+        NebulaAssetEntry entry;
+        return host->asset_find_game(host->user, pPath, &entry) != 0 ? entry.index : -1;
+    }
+
     bool open(const char* pPath, File* pFile) {
         const NebulaHostServices* const host = nebula_host();
         NebulaAssetEntry entry;
@@ -121,6 +127,7 @@ namespace GameAssets {
             const char* mPath;
             AssetFolder* mFolder;
             NebulaArena* mArena;
+            bool mGame;  // the game's own copy under a mod's
         };
 
         Held* sHeld;
@@ -164,10 +171,10 @@ namespace GameAssets {
         }
     }
 
-    AssetFolder* findArchive(const char* pPath, NebulaArena** ppArena) {
+    AssetFolder* findArchive(const char* pPath, NebulaArena** ppArena, bool game) {
         const u32 hash = hashPath(pPath);
         for (u32 i = 0; i < sHeldCount; i++) {
-            if (sHeld[i].mHash == hash && isSamePath(sHeld[i].mPath, pPath)) {
+            if (sHeld[i].mHash == hash && sHeld[i].mGame == game && isSamePath(sHeld[i].mPath, pPath)) {
                 if (ppArena != nullptr) {
                     *ppArena = sHeld[i].mArena;
                 }
@@ -177,7 +184,7 @@ namespace GameAssets {
         return nullptr;
     }
 
-    void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena) {
+    void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena, bool game) {
         if (sHeldCount == sHeldMax) {
             sHeldMax = sHeldMax != 0 ? sHeldMax * 2 : 256;
             sHeld = static_cast< Held* >(realloc(sHeld, sizeof(Held) * sHeldMax));
@@ -185,7 +192,7 @@ namespace GameAssets {
         const u32 length = static_cast< u32 >(strlen(pPath));
         char* const pCopy = static_cast< char* >(NebulaArena::alloc(length + 1, 4, pArena));
         memcpy(pCopy, pPath, length + 1);
-        sHeld[sHeldCount++] = {hashPath(pPath), pCopy, pFolder, pArena};
+        sHeld[sHeldCount++] = {hashPath(pPath), pCopy, pFolder, pArena, game};
     }
 
     void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {

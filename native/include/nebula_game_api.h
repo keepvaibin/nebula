@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 140u
+#define NEBULA_GAME_API_VERSION 141u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -710,6 +710,8 @@ typedef struct NebulaHostServices {
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
        none. */
     int (*asset_find)(void* user, const char* path, NebulaAssetEntry* entry);
+    /* As asset_find, the game's own file or folder under any mod's: 0 when the game has none. */
+    int (*asset_find_game)(void* user, const char* path, NebulaAssetEntry* entry);
     /* The entry with file-table index `index`: 0 when there is none. */
     int (*asset_entry)(void* user, int32_t index, NebulaAssetEntry* entry);
     /* The `child`-th entry of the folder `folder`, in the table's order: 0 past the last. */
