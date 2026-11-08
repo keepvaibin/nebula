@@ -31,7 +31,7 @@ namespace {
 
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
-      mSysInfoWindowConfirm(), mSysInfoWindowSave(), mResultState(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
+      mSysInfoWindowConfirm(), mSysInfoWindowSave(), mSucceeded(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mSaveIcon(), mWindowFollows(false) {
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -131,7 +131,7 @@ void SaveDataHandleSequence::startSaveAll() {
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
     restoreUserFile(mCurrentUserFile, userFileIndex, isPlayerMario);
 
-    mResultState = 2;
+    mSucceeded = true;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -179,7 +179,7 @@ void SaveDataHandleSequence::restoreFromReset() {
     }
 
     mSaveIcon->kill();
-    mResultState = 3;
+    mSucceeded = false;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -239,7 +239,7 @@ void SaveDataHandleSequence::exeSaveConfirm() {
         } else {
             setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 
-            mResultState = 3;
+            mSucceeded = false;
         }
     }
 }
@@ -288,7 +288,7 @@ void SaveDataHandleSequence::exeSaveDoneKeyWait() {
         return;
     }
 
-    mResultState = 2;
+    mSucceeded = true;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -318,7 +318,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWaitDisappear() {
         return;
     }
 
-    mResultState = 2;
+    mSucceeded = true;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -343,7 +343,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
             return;
         }
 
-        mResultState = 2;
+        mSucceeded = true;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }
@@ -361,7 +361,7 @@ void SaveDataHandleSequence::exePreLoad() {
                 mSaveErrorSequence->startDamaged();
                 setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
             } else {
-                mResultState = 2;
+                mSucceeded = true;
                 setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
             }
             return;
@@ -376,10 +376,10 @@ void SaveDataHandleSequence::exePreLoad() {
 
     if (result == SaveRequest::Result_Done) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoadDone));
-    } else if (result != SaveRequest::Result_NoFile) {
-        mSaveDamaged = true;
-        tryNextSaveCopy();
     } else {
+        if (result != SaveRequest::Result_NoFile) {
+            mSaveDamaged = true;
+        }
         tryNextSaveCopy();
     }
 }
@@ -396,7 +396,7 @@ void SaveDataHandleSequence::exePreLoadDone() {
     } else {
         mSaveCopyLoading = 0;
         mSaveDamaged = false;
-        mResultState = 2;
+        mSucceeded = true;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }
@@ -414,7 +414,7 @@ void SaveDataHandleSequence::exeNoSaveConfirmRemind() {
     }
 
     if (isSelectedYes) {
-        mResultState = 2;
+        mSucceeded = true;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     } else {
@@ -512,7 +512,7 @@ bool SaveDataHandleSequence::trySaveWithoutWindow(bool* pIsErr, const Nerve* pNe
 
 bool SaveDataHandleSequence::tryConfirm(const char* pSystemMessageId, bool* pIsSelectedYes) {
     if (MR::isFirstStep(this)) {
-        mResultState = 1;
+        mSucceeded = false;
 
         mSysInfoWindowConfirm->appear(pSystemMessageId, SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
         MR::startSystemSE("SE_SY_SAVE_CONFIRM_INFO");
@@ -543,7 +543,7 @@ bool SaveDataHandleSequence::tryNoSave() {
     if (mIsNoSaveMode) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 
-        mResultState = 2;
+        mSucceeded = true;
 
         return true;
     }
