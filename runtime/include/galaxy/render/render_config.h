@@ -82,9 +82,9 @@ struct RenderConfig {
     unsigned aa_mode             = 0;
     // 0 low .. 3 ultra.
     unsigned smaa_quality        = 2;
-    // 0 bilinear; 1 FidelityFX FSR 1 when the game image is smaller than the window; 2 FidelityFX FSR 3 and 3 NVIDIA
-    // DLSS (Streamline), both temporal: the jittered 3D scene is upscaled before the 2D layer and renders at the
-    // window's scale divided by the temporal_quality ratio.
+    // 0 bilinear; 1 FidelityFX FSR 1 when the game image is smaller than the window; 2 FidelityFX FSR 3, 3 NVIDIA
+    // DLSS (Streamline), 4 Intel XeSS and 5 Snapdragon Game Super Resolution 2, all temporal: the jittered 3D scene is
+    // upscaled before the 2D layer and renders at the window's scale divided by the temporal_quality ratio.
     unsigned upscaler            = 0;
     // 2: FSR 3 frame generation (fsr_frame_generation.h), one frame between each two, with FSR 3 or XeSS. 1: DLSS Frame Generation
     // (GRAPHICS > INTERPOLATION): nonzero has its generated frames reach max_fps (0: the

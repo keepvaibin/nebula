@@ -225,6 +225,14 @@ std::string post_process_caps_text(const PostProcessStatus& status) {
            ", FXAA " + (status.fxaa_ok ? "PASS" : "FAIL");
 }
 
+bool sgsr2_available() noexcept {
+#if defined(NEBULA_GPU_VULKAN)
+    return true;
+#else
+    return false;
+#endif
+}
+
 #if defined(NEBULA_GPU_VULKAN)
 // Whether the build holds it (temporal_upscaler_vk.cpp) and, once there is a device, whether it runs there.
 bool fsr3_available() noexcept {

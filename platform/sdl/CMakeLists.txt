@@ -122,6 +122,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/ambient_occlusion_vk.cpp
     ${rt}/render/vk/temporal_upscaler_vk.cpp
+    ${rt}/render/vk/sgsr2_vk.cpp
     ${rt}/render/vk/ffx_vk_forward.cpp
     ${rt}/render/vk/fsr_frame_generation_vk.cpp
     ${rt}/render/vk/scene_camera_vk.cpp

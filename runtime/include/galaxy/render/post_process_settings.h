@@ -120,5 +120,7 @@ void set_post_process_status(const PostProcessStatus& status);
 
 // Whether AMD FidelityFX FSR 3.1 is compiled in (temporal_upscaler.cpp; D3D12 only).
 [[nodiscard]] bool fsr3_available() noexcept;
+// Whether this renderer runs Snapdragon Game Super Resolution 2 (upscaler 5; the Vulkan renderer's sgsr2_vk.cpp).
+[[nodiscard]] bool sgsr2_available() noexcept;
 
 }  // namespace galaxy::render
