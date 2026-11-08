@@ -9,12 +9,14 @@ class LiveActor;
 
 class SpinHitController {
 public:
-    SpinHitController(const NameObj*, s32, bool);
-    SpinHitController(const NameObj*, s32, s32, s32, f32, f32, f32, s32, bool);
+    SpinHitController(const NameObj*, s32 itemNum, bool isCoin);
+    SpinHitController(const NameObj*, s32 flyStepMax, s32 flyStepMin, s32 stopSceneFrames, f32 gravityAccel, f32 horizontalSpeed, f32 verticalSpeed,
+                      s32 itemNum, bool isCoin);
 
-    void setParameter(const NameObj*, s32, s32, s32, f32, f32, f32, s32, bool);
-    void start(LiveActor*, const Vec3f&, const Vec3f&);
-    void startWithoutStopScene(LiveActor*, const Vec3f&, const Vec3f&);
+    void setParameter(const NameObj*, s32 flyStepMax, s32 flyStepMin, s32 stopSceneFrames, f32 gravityAccel, f32 horizontalSpeed, f32 verticalSpeed,
+                      s32 itemNum, bool isCoin);
+    void start(LiveActor*, const Vec3f& rFrom, const Vec3f& rTo);
+    void startWithoutStopScene(LiveActor*, const Vec3f& rFrom, const Vec3f& rTo);
     bool execute(LiveActor*);
     void emitItem(LiveActor*);
 
