@@ -25,15 +25,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // One row sets the 3D resolution: the exact height with upscaling off, the upscaler's mode with it on
     // (render_internal_height: the renderer reads the height only with upscaling off).
     const bool upscaling = !offered || render.upscaler != 0u;
-    if (!upscaling) {
-        const unsigned height = normalized_internal_height(render.internal_height);
-        const std::string value = height ? std::to_string(height) + "P" + (height == 2160 ? " (4K)" : "") : "MATCH DISPLAY";
-        rows.push_back({"INTERNAL RESOLUTION", value,
-            [](RenderConfig& draft, int delta) {
-                const auto found = std::find(kInternalHeights.begin(), kInternalHeights.end(), normalized_internal_height(draft.internal_height));
-                draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
-            }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
-    }
     {
         static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS", "XESS", "SGSR 2"};
         std::string value = kUpscalers[offered ? std::min(render.upscaler, 5u) : 1u];
@@ -55,6 +46,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
                         "SGSR 2, DLSS, FSR 3 AND XESS RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
+    }
+    // Under the upscaler row, in the place its mode row takes: a change of upscaler moves no row above the one changed.
+    if (!upscaling) {
+        const unsigned height = normalized_internal_height(render.internal_height);
+        const std::string value = height ? std::to_string(height) + "P" + (height == 2160 ? " (4K)" : "") : "MATCH DISPLAY";
+        rows.push_back({"INTERNAL RESOLUTION", value,
+            [](RenderConfig& draft, int delta) {
+                const auto found = std::find(kInternalHeights.begin(), kInternalHeights.end(), normalized_internal_height(draft.internal_height));
+                draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
+            }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
     }
     const unsigned render_percent = state.render_percent;
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
