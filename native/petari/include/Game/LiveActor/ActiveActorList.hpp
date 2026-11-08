@@ -1,23 +1,25 @@
 #pragma once
 
-
 class LiveActor;
 
+// The actors a launcher has out at once; the cap is how many shots the fight allows.
 class ActiveActorList {
 public:
-    ActiveActorList(int);
+    explicit ActiveActorList(s32 maxCount);
 
-    bool hasTooMany() const {
-        return (mCurCount >= mMaxCount);
+    bool isFull() const {
+        return mCurCount >= mMaxCount;
     }
 
-    bool isFull() const;
-    void addActor(LiveActor*);
+    // Ignored when full.
+    void addActor(LiveActor* pActor);
+    // Drops dead actors; the last actor takes each dropped slot.
     void removeDeadActor();
     void clear();
     void killAll();
 
+private:
     LiveActor** mActorList;
     s32 mCurCount;
-    int mMaxCount;
+    s32 mMaxCount;
 };

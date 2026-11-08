@@ -265,40 +265,39 @@ namespace {
         {"ClockworkHandle", 0, "SE_OJ_LV_CLOCKWORK_HANDLE", 0, -1, 0},
         {"SunkenShip", 0, 0, "SE_OJ_SUNKEN_SHIP_BREAK", -1, 2}};
 
-    const StageEffectCameraData* getStageEffectCameraParam(const char* pObjectName) {
-        for (u32 i = 0; i < ARRAY_SIZE(sStageEffectCameraDataTable); i++) {
-            const StageEffectCameraData* pTable = sStageEffectCameraDataTable;
-
-            if (MR::isEqualString(pObjectName, pTable[i].mObjectName)) {
-                return &sStageEffectCameraDataTable[i];
+    // The object's row, or null.
+    template < typename T, s32 N >
+    const T* findRow(const T (&rTable)[N], const char* pObjectName) {
+        for (s32 i = 0; i < N; i++) {
+            if (MR::isEqualString(pObjectName, rTable[i].mObjectName)) {
+                return &rTable[i];
             }
         }
 
         return nullptr;
+    }
+
+    const StageEffectCameraData* getStageEffectCameraParam(const char* pObjectName) {
+        return findRow(sStageEffectCameraDataTable, pObjectName);
     }
 
     const StageEffectPadData* getStageEffectPadParam(const char* pObjectName) {
-        for (u32 i = 0; i < ARRAY_SIZE(sStageEffectPadDataTable); i++) {
-            const StageEffectPadData* pTable = sStageEffectPadDataTable;
-
-            if (MR::isEqualString(pObjectName, pTable[i].mObjectName)) {
-                return &sStageEffectPadDataTable[i];
-            }
-        }
-
-        return nullptr;
+        return findRow(sStageEffectPadDataTable, pObjectName);
     }
 
     const StageEffectSoundData* getStageEffectSeParam(const char* pObjectName) {
-        for (u32 i = 0; i < ARRAY_SIZE(sStageEffectSeDataTable); i++) {
-            const StageEffectSoundData* pTable = sStageEffectSeDataTable;
+        return findRow(sStageEffectSeDataTable, pObjectName);
+    }
 
-            if (MR::isEqualString(pObjectName, pTable[i].mObjectName)) {
-                return &sStageEffectSeDataTable[i];
-            }
+    bool isExistAny(const char* pObjectName) {
+        return getStageEffectCameraParam(pObjectName) != nullptr || getStageEffectPadParam(pObjectName) != nullptr ||
+               getStageEffectSeParam(pObjectName) != nullptr;
+    }
+
+    void tryRumble(LiveActor* pActor, const char* pRumblePattern) {
+        if (pRumblePattern != nullptr) {
+            MR::tryRumblePad(pActor, pRumblePattern, 0);
         }
-
-        return nullptr;
     }
 
     void shakeCamera(CameraShakeType type) {
@@ -323,77 +322,48 @@ namespace {
         }
     }
 
-    bool isDistanceValidShake(LiveActor* pActor, const char* pObjectName) {
-        f32 shakeDistance;
-
-        if (getStageEffectCameraParam(pObjectName) != nullptr) {
-            shakeDistance = getStageEffectCameraParam(pObjectName)->mShakeDistance;
-        } else {
-            shakeDistance = 0.0f;
-        }
+    // -1 as the distance: only while the player stands on the object.
+    bool isDistanceValidShake(LiveActor* pActor, const StageEffectCameraData* pCamera) {
+        const f32 shakeDistance = pCamera != nullptr ? pCamera->mShakeDistance : 0.0f;
 
         if (-1.0f == shakeDistance) {
             return MR::isOnPlayer(pActor);
         }
 
-        f32 playerDistance = MR::calcDistanceToPlayer(pActor);
-        bool isValidShake = false;
+        const f32 playerDistance = MR::calcDistanceToPlayer(pActor);
 
-        if (0.0f < playerDistance) {
-            if (getStageEffectCameraParam(pObjectName) != nullptr) {
-                shakeDistance = getStageEffectCameraParam(pObjectName)->mShakeDistance;
-            } else {
-                shakeDistance = 0.0f;
-            }
+        return 0.0f < playerDistance && playerDistance < shakeDistance;
+    }
 
-            if (playerDistance < shakeDistance) {
-                isValidShake = true;
-            }
-        }
-
-        return isValidShake;
+    bool isDistanceValidShake(LiveActor* pActor, const char* pObjectName) {
+        return isDistanceValidShake(pActor, getStageEffectCameraParam(pObjectName));
     }
 };  // namespace
 
 namespace MR {
     const char* StageEffect::getStartSe(const char* pObjectName) {
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            return ::getStageEffectSeParam(pObjectName)->mStartSoundEffect;
-        }
-
-        return nullptr;
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        return pSe != nullptr ? pSe->mStartSoundEffect : nullptr;
     }
 
     const char* StageEffect::getMovingSe(const char* pObjectName) {
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            return ::getStageEffectSeParam(pObjectName)->mMovingSoundEffect;
-        }
-
-        return nullptr;
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        return pSe != nullptr ? pSe->mMovingSoundEffect : nullptr;
     }
 
     const char* StageEffect::getStopSe(const char* pObjectName) {
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            return ::getStageEffectSeParam(pObjectName)->mStopSoundEffect;
-        }
-
-        return nullptr;
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        return pSe != nullptr ? pSe->mStopSoundEffect : nullptr;
     }
 
     s32 StageEffect::getStopSeSteps(const char* pObjectName) {
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            return ::getStageEffectSeParam(pObjectName)->mStopSoundEffectSteps;
-        }
-
-        return -1;
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        return pSe != nullptr ? pSe->mStopSoundEffectSteps : -1;
     }
 
     bool StageEffect::isRiddleSeTypeStop(const char* pObjectName) {
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            return ::getStageEffectSeParam(pObjectName)->mSoundEffectType == 2;
-        }
-
-        return false;
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        return pSe != nullptr && pSe->mSoundEffectType == 2;
     }
 
     bool StageEffect::isExistStageEffectSeData(const char* pObjectName) {
@@ -401,72 +371,35 @@ namespace MR {
     }
 
     bool StageEffect::isExistStageEffectData(const char* pObjectName) {
-        return ::getStageEffectCameraParam(pObjectName) != nullptr || ::getStageEffectPadParam(pObjectName) != nullptr ||
-               ::getStageEffectSeParam(pObjectName) != nullptr;
+        return ::isExistAny(pObjectName);
     }
 
     void StageEffect::shakeStartCamera(LiveActor* pActor, const char* pObjectName) {
-        if (::isDistanceValidShake(pActor, pObjectName)) {
-            CameraShakeType type;
-
-            if (::getStageEffectCameraParam(pObjectName) != nullptr) {
-                type = ::getStageEffectCameraParam(pObjectName)->mStartShakeType;
-            } else {
-                type = CameraShakeType_None;
-            }
-
-            ::shakeCamera(type);
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        if (::isDistanceValidShake(pActor, pCamera)) {
+            ::shakeCamera(pCamera != nullptr ? pCamera->mStartShakeType : CameraShakeType_None);
         }
     }
 
     void StageEffect::shakeStopCamera(LiveActor* pActor, const char* pObjectName) {
-        if (::isDistanceValidShake(pActor, pObjectName)) {
-            CameraShakeType type;
-
-            if (::getStageEffectCameraParam(pObjectName) != nullptr) {
-                type = ::getStageEffectCameraParam(pObjectName)->mStopShakeType;
-            } else {
-                type = CameraShakeType_None;
-            }
-
-            ::shakeCamera(type);
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        if (::isDistanceValidShake(pActor, pCamera)) {
+            ::shakeCamera(pCamera != nullptr ? pCamera->mStopShakeType : CameraShakeType_None);
         }
     }
 
     void StageEffect::shakeCameraMoving(NameObj* pActor, const char* pObjectName) {
-        f32 intensity;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr) {
-            intensity = ::getStageEffectCameraParam(pObjectName)->mMovingShakeIntensity;
-        } else {
-            intensity = 0.0f;
-        }
-
-        if (intensity <= 0.0f) {
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        if (pCamera == nullptr || pCamera->mMovingShakeIntensity <= 0.0f) {
             return;
         }
 
-        f32 speed;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr) {
-            speed = ::getStageEffectCameraParam(pObjectName)->mMovingShakeSpeed;
-        } else {
-            speed = 0.0f;
-        }
-
-        MR::shakeCameraInfinity(pActor, intensity, speed);
+        MR::shakeCameraInfinity(pActor, pCamera->mMovingShakeIntensity, pCamera->mMovingShakeSpeed);
     }
 
     void StageEffect::stopShakingCameraMoving(NameObj* pActor, const char* pObjectName) {
-        f32 intensity;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr) {
-            intensity = ::getStageEffectCameraParam(pObjectName)->mMovingShakeIntensity;
-        } else {
-            intensity = 0.0f;
-        }
-
-        if (intensity <= 0.0f) {
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        if (pCamera == nullptr || pCamera->mMovingShakeIntensity <= 0.0f) {
             return;
         }
 
@@ -475,59 +408,28 @@ namespace MR {
 
     void StageEffect::rumblePadStart(LiveActor* pActor, const char* pObjectName) {
         if (::isDistanceValidShake(pActor, pObjectName)) {
-            const char* pRumblePattern;
-
-            if (::getStageEffectPadParam(pObjectName) != nullptr) {
-                pRumblePattern = ::getStageEffectPadParam(pObjectName)->mStartRumblePattern;
-            } else {
-                pRumblePattern = nullptr;
-            }
-
-            if (pRumblePattern != nullptr) {
-                MR::tryRumblePad(pActor, pRumblePattern, 0);
-            }
+            const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+            ::tryRumble(pActor, pPad != nullptr ? pPad->mStartRumblePattern : nullptr);
         }
     }
 
     void StageEffect::rumblePadStop(LiveActor* pActor, const char* pObjectName) {
         if (::isDistanceValidShake(pActor, pObjectName)) {
-            const char* pRumblePattern;
-
-            if (::getStageEffectPadParam(pObjectName) != nullptr) {
-                pRumblePattern = ::getStageEffectPadParam(pObjectName)->mStopRumblePattern;
-            } else {
-                pRumblePattern = nullptr;
-            }
-
-            if (pRumblePattern != nullptr) {
-                MR::tryRumblePad(pActor, pRumblePattern, 0);
-            }
+            const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+            ::tryRumble(pActor, pPad != nullptr ? pPad->mStopRumblePattern : nullptr);
         }
     }
 
     void StageEffect::rumblePadMoving(LiveActor* pActor, const char* pObjectName) {
-        const char* pRumblePattern;
-
-        if (::getStageEffectPadParam(pObjectName) != nullptr) {
-            pRumblePattern = ::getStageEffectPadParam(pObjectName)->mMovingRumblePattern;
-        } else {
-            pRumblePattern = nullptr;
-        }
-
-        if (pRumblePattern != nullptr) {
-            MR::tryRumblePad(pActor, pRumblePattern, 0);
-        }
+        const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+        ::tryRumble(pActor, pPad != nullptr ? pPad->mMovingRumblePattern : nullptr);
     }
 
     bool StageEffect::tryStageEffectStart(LiveActor* pActor, const char* pObjectName) {
-        bool isExistStageEffectData = false;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr || ::getStageEffectPadParam(pObjectName) != nullptr ||
-            ::getStageEffectSeParam(pObjectName) != nullptr) {
-            isExistStageEffectData = true;
-        }
-
-        if (!isExistStageEffectData) {
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        if (pCamera == nullptr && pPad == nullptr && pSe == nullptr) {
             return false;
         }
 
@@ -535,72 +437,43 @@ namespace MR {
             MR::emitEffect(pActor, "Start");
         }
 
-        const char* pStartSoundEffect;
-
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            pStartSoundEffect = ::getStageEffectSeParam(pObjectName)->mStartSoundEffect;
-        } else {
-            pStartSoundEffect = nullptr;
+        if (pSe != nullptr && pSe->mStartSoundEffect != nullptr) {
+            MR::startSound(pActor, pSe->mStartSoundEffect);
         }
 
-        if (pStartSoundEffect) {
-            MR::startSound(pActor, pStartSoundEffect);
-        }
-
-        bool isPlayRiddleSound;
-
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            isPlayRiddleSound = ::getStageEffectSeParam(pObjectName)->mSoundEffectType == 1;
-        } else {
-            isPlayRiddleSound = false;
-        }
-
-        if (isPlayRiddleSound) {
+        if (pSe != nullptr && pSe->mSoundEffectType == 1) {
             MR::startSystemSE("SE_SY_READ_RIDDLE_S");
         }
 
-        rumblePadStart(pActor, pObjectName);
-        shakeStartCamera(pActor, pObjectName);
+        if (::isDistanceValidShake(pActor, pCamera)) {
+            ::tryRumble(pActor, pPad != nullptr ? pPad->mStartRumblePattern : nullptr);
+            ::shakeCamera(pCamera != nullptr ? pCamera->mStartShakeType : CameraShakeType_None);
+        }
+
         return true;
     }
 
+    // Every frame while the object moves.
     bool StageEffect::tryStageEffectMoving(LiveActor* pActor, const char* pObjectName) {
-        bool isExistStageEffectData = false;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr || ::getStageEffectPadParam(pObjectName) != nullptr ||
-            ::getStageEffectSeParam(pObjectName) != nullptr) {
-            isExistStageEffectData = true;
-        }
-
-        if (!isExistStageEffectData) {
+        const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        if (pPad == nullptr && pSe == nullptr && ::getStageEffectCameraParam(pObjectName) == nullptr) {
             return false;
         }
 
-        const char* pMovingSoundEffect;
-
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            pMovingSoundEffect = ::getStageEffectSeParam(pObjectName)->mMovingSoundEffect;
-        } else {
-            pMovingSoundEffect = nullptr;
+        if (pSe != nullptr && pSe->mMovingSoundEffect != nullptr) {
+            MR::startLevelSound(pActor, pSe->mMovingSoundEffect);
         }
 
-        if (pMovingSoundEffect) {
-            MR::startLevelSound(pActor, pMovingSoundEffect);
-        }
-
-        rumblePadMoving(pActor, pObjectName);
+        ::tryRumble(pActor, pPad != nullptr ? pPad->mMovingRumblePattern : nullptr);
         return true;
     }
 
     bool StageEffect::tryStageEffectStop(LiveActor* pActor, const char* pObjectName) {
-        bool isExistStageEffectData = false;
-
-        if (::getStageEffectCameraParam(pObjectName) != nullptr || ::getStageEffectPadParam(pObjectName) != nullptr ||
-            ::getStageEffectSeParam(pObjectName) != nullptr) {
-            isExistStageEffectData = true;
-        }
-
-        if (!isExistStageEffectData) {
+        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
+        const StageEffectPadData* pPad = ::getStageEffectPadParam(pObjectName);
+        const StageEffectSoundData* pSe = ::getStageEffectSeParam(pObjectName);
+        if (pCamera == nullptr && pPad == nullptr && pSe == nullptr) {
             return false;
         }
 
@@ -608,32 +481,19 @@ namespace MR {
             MR::emitEffect(pActor, "Stop");
         }
 
-        const char* pStopSoundEffect;
-
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            pStopSoundEffect = ::getStageEffectSeParam(pObjectName)->mStopSoundEffect;
-        } else {
-            pStopSoundEffect = nullptr;
+        if (pSe != nullptr && pSe->mStopSoundEffect != nullptr) {
+            MR::startSound(pActor, pSe->mStopSoundEffect);
         }
 
-        if (pStopSoundEffect) {
-            MR::startSound(pActor, pStopSoundEffect);
-        }
-
-        bool isPlayRiddleSound;
-
-        if (::getStageEffectSeParam(pObjectName) != nullptr) {
-            isPlayRiddleSound = ::getStageEffectSeParam(pObjectName)->mSoundEffectType == 2;
-        } else {
-            isPlayRiddleSound = false;
-        }
-
-        if (isPlayRiddleSound) {
+        if (pSe != nullptr && pSe->mSoundEffectType == 2) {
             MR::startSystemSE("SE_SY_READ_RIDDLE_S");
         }
 
-        rumblePadStop(pActor, pObjectName);
-        shakeStopCamera(pActor, pObjectName);
+        if (::isDistanceValidShake(pActor, pCamera)) {
+            ::tryRumble(pActor, pPad != nullptr ? pPad->mStopRumblePattern : nullptr);
+            ::shakeCamera(pCamera != nullptr ? pCamera->mStopShakeType : CameraShakeType_None);
+        }
+
         return true;
     }
 };  // namespace MR

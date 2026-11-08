@@ -2,15 +2,11 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
-/// @brief Class that can contain multiple NameObj instances stored in a group.
+// Objects in join order; the array doubles when it fills.
 class NameObjGroup : public NameObj {
 public:
-    /// @brief Creates a new `NameObjGroup`.
-    /// @param pName A pointer to the null-terminated name of the object.
-    /// @param numMax The maximum allowed number of `NameObj` instances in the group.
-    NameObjGroup(const char* pName, int numMax);
-
-    /// @brief Destroys the `NameObjGroup`.
+    // capacity > 0.
+    NameObjGroup(const char* pName, int capacity);
     virtual ~NameObjGroup();
 
     NameObj* getObj(int index) const {
@@ -21,9 +17,8 @@ public:
         return mObjNum;
     }
 
-    void registerObj(NameObj*);
+    void registerObj(NameObj* pObj);
     void pauseOffAll() const;
-    void initObjArray(int);
 
 private:
     s32 mObjNumMax;

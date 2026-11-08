@@ -2,42 +2,33 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-ActiveActorList::ActiveActorList(int max) : mMaxCount(max), mActorList(), mCurCount() {
-    mActorList = new LiveActor*[max];
+ActiveActorList::ActiveActorList(s32 maxCount) : mActorList(new LiveActor*[maxCount]), mCurCount(0), mMaxCount(maxCount) {
     clear();
 }
 
-bool ActiveActorList::isFull() const {
-    return mCurCount >= mMaxCount;
-}
-
 void ActiveActorList::addActor(LiveActor* pActor) {
-    if (!hasTooMany()) {
+    if (!isFull()) {
         mActorList[mCurCount] = pActor;
         mCurCount++;
     }
 }
 
 void ActiveActorList::removeDeadActor() {
-    s32 cur = 0;
-    s32 idx = 0;
-
-    while (cur < mCurCount) {
-        if (MR::isDead(mActorList[idx])) {
-            mActorList[idx] = mActorList[mCurCount - 1];
-            s32 newCount = mCurCount - 1;
-            mActorList[newCount] = 0;
+    s32 i = 0;
+    while (i < mCurCount) {
+        if (MR::isDead(mActorList[i])) {
             mCurCount--;
+            mActorList[i] = mActorList[mCurCount];
+            mActorList[mCurCount] = nullptr;
         } else {
-            ++cur;
-            ++idx;
+            i++;
         }
     }
 }
 
 void ActiveActorList::clear() {
     for (s32 i = 0; i < mMaxCount; i++) {
-        mActorList[i] = 0;
+        mActorList[i] = nullptr;
     }
 
     mCurCount = 0;
@@ -49,7 +40,7 @@ void ActiveActorList::killAll() {
             mActorList[i]->kill();
         }
 
-        mActorList[i] = 0;
+        mActorList[i] = nullptr;
     }
 
     mCurCount = 0;

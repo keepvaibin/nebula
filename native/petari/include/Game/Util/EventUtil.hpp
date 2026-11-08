@@ -118,8 +118,19 @@ namespace MR {
     bool isGalaxyPurpleCometLaunch();
     bool canAppearNormalComet(const char*);
     bool canAppearCoin100Comet(const char*);
+    // The comet's look (icon, filter, message); Black comets look Purple.
+    enum CometNameId {
+        CometNameId_Red = 0,
+        CometNameId_Ghost = 1,
+        CometNameId_Dark = 2,
+        CometNameId_Quick = 3,
+        CometNameId_Purple = 4,
+    };
+
     int getEncounterGalaxyCometNameId(const char*);
+    // Red for an unknown or null name.
     int getCometNameIdFromString(const char*);
+    // Null outside CometNameId.
     const char* getCometNameFromId(int);
     bool isStarComplete(const char*);
     bool isStarCompleteNormalScenario(const char*);
