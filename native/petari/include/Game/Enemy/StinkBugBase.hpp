@@ -12,10 +12,10 @@ public:
 
     void setDashVelocity(f32);
     bool tryTurnSearch(f32);
-    bool tryTurnDashSign(f32);
+    void turnDashSign(f32);
     void fixInitPos();
-    bool isPlayerInTerritory(f32, f32, f32, f32) const;
-    bool isHitHorn(HitSensor*, HitSensor*, f32) const;
+    bool isPlayerInTerritory(f32 reachMargin, f32 sideHalfSize, f32 upHalfSize, f32 backOffset) const;
+    bool isHitHorn(HitSensor*, HitSensor*, f32 margin) const;
 
     Vec3f mFront;
     Vec3f mInitPos;

@@ -37,6 +37,7 @@ public:
     void exeDashSignEnd();
     bool tryPointerSwoon();
     bool tryForceFall();
+    bool isPlayerInSmallTerritory() const;
     bool isShakeChance() const;
     bool isNrvEnableStarPieceAttack() const;
 
