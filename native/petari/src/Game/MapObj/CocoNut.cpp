@@ -521,7 +521,7 @@ bool CocoNut::isValidPushedFromPlayer(const HitSensor* pMySensor, const HitSenso
         return false;
     }
 
-    return fromPlayer.dot(playerDir) >= MR::cosDegree(45.0f);
+    return !(fromPlayer.dot(playerDir) < MR::cosDegree(45.0f));
 }
 
 // Two nuts meeting: the other leaves along the line between them, this one across it; the speed splits by the angle.

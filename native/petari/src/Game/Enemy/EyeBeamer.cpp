@@ -12,18 +12,17 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-
 #include <nebula_math.h>
 
 namespace NrvEyeBeamer {
@@ -37,9 +36,17 @@ namespace NrvEyeBeamer {
     NEW_NERVE(EyeBeamerNrvPatrol, EyeBeamer, Patrol);
 };  // namespace NrvEyeBeamer
 
+namespace {
+    // The beam model is this long at scale 1.
+    const f32 cBeamModelLength = 2000.0f;
+    const f32 cBeamRadius = 140.0f;
+    const f32 cClipMargin = 300.0f;
+};  // namespace
+
 EyeBeamer::EyeBeamer(const char* pName)
-    : LiveActor(pName), mRailMover(nullptr), mBeamMdl(nullptr), mBeamBloom(nullptr), mBeamVolumeDrawer(nullptr), mInitQuat(0, 0, 0, 1), mPoseQuat(0, 0, 0, 1),
-      mBasePos(0, 0, 0), mGotoStartPos(0, 0, 0), mRailStartPos(0, 0, 0), mClipCenter(0, 0, 0), mBeamLength(2000.0f), mWaterSurfaceHeight(-1.0f), mIsInMercatorCube(false) {
+    : LiveActor(pName), mRailMover(nullptr), mBeamBloom(nullptr), mBeamMdl(nullptr), mBeamVolumeDrawer(nullptr), mInitQuat(0, 0, 0, 1),
+      mPoseQuat(0, 0, 0, 1), mBasePos(0, 0, 0), mGotoStartPos(0, 0, 0), mRailStartPos(0, 0, 0), mClipCenter(0, 0, 0),
+      mBeamLength(cBeamModelLength), mWaterSurfaceHeight(-1.0f), mIsInMercatorCube(false) {
     mWaterSurfaceMtx.identity();
     mBeamMtx.identity();
 }
@@ -49,16 +56,13 @@ void EyeBeamer::init(const TableIter& rIter) {
     mIsInMercatorCube = MR::isInAreaObj("MercatorCube", mPosition);
     initModel();
     MR::makeQuatFromRotate(&mPoseQuat, this);
-    mInitQuat.x = mPoseQuat.x;
-    mInitQuat.y = mPoseQuat.y;
-    mInitQuat.z = mPoseQuat.z;
-    mInitQuat.w = mPoseQuat.w;
+    mInitQuat = mPoseQuat;
     mBasePos.set(mPosition);
     MR::getPlacementArg0NoInit(rIter, &mBeamLength);
     MR::getPlacementArg1NoInit(rIter, &mWaterSurfaceHeight);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "beam", 8, 140.0f + (0.5f * mBeamLength), Vec3f(0.0f, 0.5f * (-mBeamLength), 0.0f));
+    MR::addHitSensorEye(this, "beam", 8, cBeamRadius + (0.5f * mBeamLength), Vec3f(0.0f, 0.5f * (-mBeamLength), 0.0f));
     initSound(4, 0);
     MR::initCollisionParts(this, "EyeBeamer", getSensor("body"), 0);
     initRailMoveFunction(rIter);
@@ -68,33 +72,29 @@ void EyeBeamer::init(const TableIter& rIter) {
     MR::setEffectHostMtx(this, "BeamSurface", mWaterSurfaceMtx);
     initStartNerve(rIter);
 
-    if (MR::useStageSwitchReadA(this, rIter))
+    if (MR::useStageSwitchReadA(this, rIter)) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &EyeBeamer::requestStartPatrol));
+    }
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoTurn), "アイビーマー回転");
         MR::registerDemoActionNerve(this, GET_NERVE(EyeBeamer, EyeBeamerNrvDemoGotoPatrol), "アイビーマー降下");
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoStartWait));
     }
-    MR::setGroupClipping(this, rIter, 0x20);
+    MR::setGroupClipping(this, rIter, 32);
     MR::startBck(this, "EyeBeamer");
     makeActorAppeared();
 }
 
+// Obj_arg2: 0 patrols from the start; anything else waits for switch A or the demo.
 void EyeBeamer::initStartNerve(const TableIter& rIter) {
-    s32 arg = -1;
-    MR::getPlacementArg2WithInit(rIter, &arg);
+    s32 startMode = -1;
+    MR::getPlacementArg2WithInit(rIter, &startMode);
 
-    switch (arg) {
-    case -1:
-        initNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvWait));
-        break;
-    case 0:
+    if (startMode == 0) {
         initNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvPatrol));
-        break;
-    default:
+    } else {
         initNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvWait));
-        break;
     }
 }
 
@@ -113,25 +113,26 @@ void EyeBeamer::initModel() {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_MapObjStrongLight, MR::DrawType_VolumeModel);
 }
 
+// The clipping sphere covers the beam down to the first map polygon it meets.
 void EyeBeamer::initAfterPlacement() {
     updatePoseAndTrans();
-    Vec3f stack_80;
-    MR::calcUpVec(&stack_80, this);
-    stack_80.negate();
-    Vec3f stack_74;
-    stack_74.set(mPosition - (stack_80 * 300.0f));
-    Vec3f stack_68;
-    f32 dist;
-    if (MR::getFirstPolyOnLineToMapExceptActor(&stack_68, 0, stack_74, stack_80 * (300.0f + mBeamLength), this)) {
-        dist = stack_68.distance(mPosition);
-        mClipCenter.set((stack_68 + mPosition) * 0.5);
-        dist = 300.0f + 0.5f * dist;
+    Vec3f down;
+    MR::calcUpVec(&down, this);
+    down.negate();
+    Vec3f rayStart;
+    rayStart.set(mPosition - (down * cClipMargin));
+    Vec3f hitPos;
+    f32 clipRadius;
+    if (MR::getFirstPolyOnLineToMapExceptActor(&hitPos, 0, rayStart, down * (cClipMargin + mBeamLength), this)) {
+        f32 distance = hitPos.distance(mPosition);
+        mClipCenter.set((hitPos + mPosition) * 0.5f);
+        clipRadius = cClipMargin + 0.5f * distance;
     } else {
-        mClipCenter.set(mPosition + ((stack_80 * mBeamLength) * 0.5f));
-        dist = 300.0f + (0.5f * mBeamLength);
+        mClipCenter.set(mPosition + ((down * mBeamLength) * 0.5f));
+        clipRadius = cClipMargin + (0.5f * mBeamLength);
     }
 
-    MR::setClippingTypeSphere(this, dist, &mClipCenter);
+    MR::setClippingTypeSphere(this, clipRadius, &mClipCenter);
 }
 
 void EyeBeamer::initRailMoveFunction(const TableIter& rIter) {
@@ -144,41 +145,42 @@ void EyeBeamer::initRailMoveFunction(const TableIter& rIter) {
     }
 }
 
+// Pose from mPoseQuat at mBasePos; inside a mercator cube the plane position wraps onto the sphere.
 void EyeBeamer::updatePoseAndTrans() {
-    Pos3f stack_38;
-    stack_38.identity();
-    stack_38.setQuat(mPoseQuat);
+    Pos3f baseMtx;
+    baseMtx.identity();
+    baseMtx.setQuat(mPoseQuat);
     if (mIsInMercatorCube) {
-        Pos3f stack_8;
-        stack_8.identity();
-        MR::convertMercatorPlaneToSphereTransAndRotate(&mPosition, &stack_8, mBasePos, true);
-        stack_38.concat(stack_8, stack_38);
+        Pos3f sphereRotate;
+        sphereRotate.identity();
+        MR::convertMercatorPlaneToSphereTransAndRotate(&mPosition, &sphereRotate, mBasePos, true);
+        baseMtx.concat(sphereRotate, baseMtx);
     } else {
         mPosition.set(mBasePos);
     }
-    stack_38.setTrans(mPosition);
-    MR::setBaseTRMtx(this, stack_38);
+    baseMtx.setTrans(mPosition);
+    MR::setBaseTRMtx(this, baseMtx);
     MR::setBaseScale(this, mScale);
 }
 
+// Obj_arg1: the water surface's height above the rail start; it holds still while the beamer moves along its up axis.
 void EyeBeamer::updateWaterSurfaceMtx() {
-    if (mWaterSurfaceHeight < 0.0f)
+    if (mWaterSurfaceHeight < 0.0f) {
         return;
+    }
 
     mWaterSurfaceMtx.setQuat(mPoseQuat);
-    Vec3f stack_38;
-    mWaterSurfaceMtx.getYDir(stack_38);
-    Vec3f stack_2C;
-    Vec3f stack_20(mBasePos - (stack_38 * (mWaterSurfaceHeight + (stack_38).dot(mBasePos - mRailStartPos))));
-    stack_2C.set(stack_20);
+    Vec3f up;
+    mWaterSurfaceMtx.getYDir(up);
+    Vec3f surfacePos(mBasePos - (up * (mWaterSurfaceHeight + up.dot(mBasePos - mRailStartPos))));
 
     if (mIsInMercatorCube) {
-        Pos3f stack_44;
-        stack_44.identity();
-        MR::convertMercatorPlaneToSphereTransAndRotate(&stack_2C, &stack_44, stack_2C, true);
-        mWaterSurfaceMtx.concat(stack_44, mWaterSurfaceMtx);
+        Pos3f sphereRotate;
+        sphereRotate.identity();
+        MR::convertMercatorPlaneToSphereTransAndRotate(&surfacePos, &sphereRotate, surfacePos, true);
+        mWaterSurfaceMtx.concat(sphereRotate, mWaterSurfaceMtx);
     }
-    mWaterSurfaceMtx.setTrans(stack_2C);
+    mWaterSurfaceMtx.setTrans(surfacePos);
 }
 
 void EyeBeamer::control() {
@@ -205,11 +207,8 @@ void EyeBeamer::draw() const {
 
 void EyeBeamer::calcAnim() {
     LiveActor::calcAnim();
-    MtxPtr mtx = MR::getJointMtx(this, "Beam");
-    mBeamMtx.setInline(mtx);
-    f32 one = 1.0f;
-    f32 temp = mBeamLength / 2000.0f;
-    MR::preScaleMtx(mBeamMtx, Vec3f(one, temp, one));
+    mBeamMtx.setInline(MR::getJointMtx(this, "Beam"));
+    MR::preScaleMtx(mBeamMtx, Vec3f(1.0f, mBeamLength / cBeamModelLength, 1.0f));
 }
 
 void EyeBeamer::calcAndSetBaseMtx() {
@@ -244,6 +243,15 @@ bool EyeBeamer::tryPatrol() {
     return false;
 }
 
+// The pose turned by angle about the initial X axis; PI is upside down, beam pointing the other way.
+void EyeBeamer::setPoseTurned(f32 angle) {
+    Vec3f axis;
+    mInitQuat.getXDir(axis);
+    Quat4f turn;
+    turn.setRotate(axis, angle);
+    NebulaQuatMultiply(&turn, &mInitQuat, &mPoseQuat);
+}
+
 void EyeBeamer::exeDemoStartWait() {
 }
 
@@ -254,33 +262,25 @@ void EyeBeamer::exeDemoWait() {
 }
 
 void EyeBeamer::exeDemoTurn() {
-    if (MR::isFirstStep(this))
+    if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_EYE_BEAMER_TURN");
+    }
 
     f32 rate = MR::calcDemoPartStepRate("アイビーマー回転");
-    f32 easeIn = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
-    Quat4f stack_30;
-    Vec3f stack_24;
-    mInitQuat.getXDir(stack_24);
-    stack_30.setRotate(stack_24, PI * easeIn);
-    NebulaQuatMultiply((Quaternion*)&stack_30, (Quaternion*)&mInitQuat, (Quaternion*)&mPoseQuat);
+    setPoseTurned(PI * MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f));
 
     if (MR::isDemoPartLastStep("アイビーマー回転")) {
-        Quat4f stack_14;
-        Vec3f stack_8;
-        mInitQuat.getXDir(stack_8);
-        stack_14.setRotate(stack_8, PI);
-        NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&mInitQuat, (Quaternion*)&mPoseQuat);
+        setPoseTurned(PI);
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoWait));
     }
 }
 
 void EyeBeamer::exeDemoGotoPatrol() {
     f32 rate = MR::calcDemoPartStepRate("アイビーマー降下");
-    f32 easeInOut = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
-    MR::vecBlend(mGotoStartPos, mRailStartPos, &mBasePos, easeInOut);
-    if (MR::isDemoPartLastStep("アイビーマー降下"))
+    MR::vecBlend(mGotoStartPos, mRailStartPos, &mBasePos, MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f));
+    if (MR::isDemoPartLastStep("アイビーマー降下")) {
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoWait));
+    }
 }
 
 void EyeBeamer::exeWait() {
@@ -290,71 +290,52 @@ void EyeBeamer::exeTurn() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_EYE_BEAMER_TURN");
     }
-    f32 easeInOut = MR::calcNerveEaseInOutRate(this, 300);
-    Quat4f stack_14;
-    Vec3f stack_8;
-    mInitQuat.getXDir(stack_8);
-    stack_14.setRotate(stack_8, PI * easeInOut);
-    NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&mInitQuat, (Quaternion*)&mPoseQuat);
 
-    if (tryGotoPatrol())
-        return;
+    setPoseTurned(PI * MR::calcNerveEaseInOutRate(this, 300));
+    tryGotoPatrol();
 }
 
 void EyeBeamer::exeGotoPatrol() {
-    f32 easeInOut = MR::calcNerveEaseInOutRate(this, 500);
-    MR::vecBlend(mGotoStartPos, mRailStartPos, &mBasePos, easeInOut);
-
-    if (tryPatrol())
-        return;
+    MR::vecBlend(mGotoStartPos, mRailStartPos, &mBasePos, MR::calcNerveEaseInOutRate(this, 500));
+    tryPatrol();
 }
 
 void EyeBeamer::exePatrol() {
     if (MR::isFirstStep(this)) {
         MR::validateClipping(this);
-        Vec3f stack_48;
-        Quat4f stack_38;
-        mInitQuat.getXDir(stack_48);
-        stack_38.setRotate(stack_48, PI);
-        NebulaQuatMultiply((Quaternion*)&stack_38, (Quaternion*)&mInitQuat, (Quaternion*)&mPoseQuat);
-        if (mWaterSurfaceHeight > 0)
+        setPoseTurned(PI);
+        if (mWaterSurfaceHeight > 0.0f) {
             MR::emitEffect(this, "BeamSurface");
+        }
     }
-    Vec3f stack_2C;
-    MR::calcUpVec(&stack_2C, this);
-    stack_2C.negate();
-    mClipCenter.set(mPosition + ((stack_2C * mBeamLength) * 0.5));
-    MR::setClippingTypeSphere(this, 300.0f + (0.5f * mBeamLength), &mClipCenter);
+    Vec3f down;
+    MR::calcUpVec(&down, this);
+    down.negate();
+    mClipCenter.set(mPosition + ((down * mBeamLength) * 0.5f));
+    MR::setClippingTypeSphere(this, cClipMargin + (0.5f * mBeamLength), &mClipCenter);
     mRailMover->movement();
     mBasePos.set(mRailMover->mStartPos);
 }
 
-bool EyeBeamer::isInBeamRange(const Vec3f& rVec) const {
-    Vec3f stack_44;
-    MR::calcUpVec(&stack_44, this);
-    stack_44.negate();
-    Vec3f stack_38;
-    mBeamMtx.getTrans(stack_38);
-    f32 dot = stack_44.dot(rVec - stack_38);
+// Within cBeamRadius of the beam's axis, between its root and its length.
+bool EyeBeamer::isInBeamRange(const Vec3f& rPos) const {
+    Vec3f down;
+    MR::calcUpVec(&down, this);
+    down.negate();
+    Vec3f root;
+    mBeamMtx.getTrans(root);
+    f32 along = down.dot(rPos - root);
 
-    if (dot < 0.0f || mBeamLength < dot)
+    if (along < 0.0f || mBeamLength < along) {
         return false;
-    else {
-        Vec3f stack_2C;
-        stack_2C.set(stack_38 + (stack_44 * dot));
-        f32 dist = stack_2C.distance(rVec);
-
-        if (dist < 140.0f)
-            return true;
     }
 
-    return false;
+    Vec3f axisPoint;
+    axisPoint.set(root + (down * along));
+    return axisPoint.distance(rPos) < cBeamRadius;
 }
 
 bool EyeBeamer::isOnBeam() const {
-    if (isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoStartWait)) || isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvWait)) ||
-        isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvPatrol)))
-        return true;
-
-    return false;
+    return isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoStartWait)) || isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvWait)) ||
+           isNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvPatrol));
 }

@@ -7,15 +7,15 @@ class SkeletalFishBoss;
 
 class SkeletalFishGuard : public LiveActor {
 public:
-    SkeletalFishGuard(SkeletalFishBoss*, const char*);
+    SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void exeWait();
     void exeAppear();
@@ -31,28 +31,28 @@ public:
     void appearNaturally();
     void appearForce();
     void killNaturally();
-    void waitAttack(s32);
+    void waitAttack(s32 steps);
     void initSensor();
     void calcTransAndFront();
-    void rotateHorizontal(const Vec3f&, f32);
-    void rotateVertical(const Vec3f&, f32);
+    void rotateHorizontal(const Vec3f& rDir, f32 maxRadian);
+    void rotateVertical(const Vec3f& rDir, f32 maxRadian);
     bool tryShiftApart();
     bool tryShiftStraight();
     bool tryShiftKill();
-    void turn(Vec3f*, const Vec3f&, const Vec3f&, f32);
-    void lookToPlayer(f32, f32);
-    void calcTarget(Vec3f*, Vec3f*, Vec3f*, s32);
+    void turn(Vec3f* pVec, const Vec3f& rFrom, const Vec3f& rTo, f32 maxRadian);
+    void lookToPlayer(f32 yawRadian, f32 pitchRadian);
+    void calcTarget(Vec3f* pRailPos, Vec3f* pPos, Vec3f* pRailDir, s32 stepsAhead);
     bool isInScreen() const;
     bool isPlayerInAttackRange() const;
     bool isLineOfSightClear() const;
-    bool tryShiftNumb(const Nerve*);
+    bool tryShiftNumb(const Nerve* pReturnNerve);
 
     SkeletalFishBoss* mFishBoss;
-    Vec3f mGuardOffset;
-    u32 mAppearWaitStep;
-    Vec3f mApartVelocity;
+    Vec3f mGuardOffset;     // slot by the boss: x side, y up, z along the rail
+    u32 mAppearWaitStep;    // steps in Wait before the appear flight
+    Vec3f mApartVelocity;   // last step's move; the launch velocity of Apart
     f32 mApartFallSpeed;
-    s32 mAttackDelay;
+    s32 mAttackDelay;       // steps before Apart is allowed
     f32 mSpeed;
     const Nerve* mNumbReturnNerve;
     Vec3f mFront;
