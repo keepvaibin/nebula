@@ -8,8 +8,26 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const Vec3f sOutPosition(0.0f, 100.0f, -300.0f);
-    static const Vec3f sEggOutPosition(0.0f, 0.0f, -400.0f);
+    // Where the tail leaves the body, and the egg, in the boss's frame.
+    const Vec3f cOutPosition(0.0f, 100.0f, -300.0f);
+    const Vec3f cEggOutPosition(0.0f, 0.0f, -400.0f);
+    const f32 cTailRootAdjustRate = 0.1f;
+    // Pulled farther than this, the boss turns toward its tail.
+    const f32 cPullTurnDistance = 800.0f;
+    const f32 cPullTurnDegree = 6.0f;
+    const s32 cPullTurnNode = 3;
+    // The tail end this far toward the boss's up (cosine) is over its head.
+    const f32 cTailTopCos = 0.7f;
+    const s32 cEggBreakStep = 30;
+    const s32 cEggBrokenEndStep = 120;
+    const s32 cEggHitStopFrames = 5;
+    const s32 cDamageHitStopFrames = 15;
+    const char* const cDemoName = "ディノパックンダメージ";
+
+    // By DinoPackunStateDamage::PunchedDir.
+    const char* const cPunchedBck[] = {nullptr, "PunchedTailLeft", "PunchedTailRight", "PunchedTailTop"};
+    const char* const cDamageBck[] = {nullptr, "DamageLeft", "DamageRight", "DamageTop"};
+    const char* const cLastDamageBck[] = {nullptr, "LastDamageLeft", "LastDamageRight", "LastDamageTop"};
 };  // namespace
 
 namespace NrvDinoPackunStateDamage {
@@ -21,13 +39,18 @@ namespace NrvDinoPackunStateDamage {
     NEW_NERVE(DinoPackunStateDamageNrvLastDamage, DinoPackunStateDamage, LastDamage);
 };  // namespace NrvDinoPackunStateDamage
 
-DinoPackunStateDamage::DinoPackunStateDamage(DinoPackun* pHost) : ActorStateBase< DinoPackun >("ディノパックンダメージ状態", pHost), mPunchedDir(), mDamageType(1) {
+// Punched by its own tail ball: the player pulls the tail (a demo), lets go, and the ball hits the egg (breaking it) or
+// the head.
+DinoPackunStateDamage::DinoPackunStateDamage(DinoPackun* pHost)
+    : ActorStateBase< DinoPackun >("ディノパックンダメージ状態", pHost), mPunchedDir(PunchedDir_None), mDamageType(DamageType_Normal) {
     initNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched));
+}
+
+DinoPackunStateDamage::~DinoPackunStateDamage() {
 }
 
 void DinoPackunStateDamage::appear() {
     mIsDead = false;
-
     setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched));
 }
 
@@ -38,7 +61,6 @@ bool DinoPackunStateDamage::isDamageMessage(u32 msg) const {
 bool DinoPackunStateDamage::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_DINO_PACKUN_PULLED_TAIL && isNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched))) {
         setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvTryPulledDemo));
-
         return true;
     }
 
@@ -46,19 +68,18 @@ bool DinoPackunStateDamage::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSens
         MR::emitEffectHitBetweenSensors(getHost(), pSender, pReceiver, 0.0f, "Hit");
 
         switch (mDamageType) {
-        case 0:
+        case DamageType_Egg:
             setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvEggBroken));
             break;
-        case 1:
+        case DamageType_Normal:
             setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvDamage));
             break;
-        case 2:
+        case DamageType_Last:
             setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvLastDamage));
             break;
         }
 
         getHost()->offAimTailBall(-1);
-
         return true;
     }
 
@@ -66,15 +87,19 @@ bool DinoPackunStateDamage::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSens
 }
 
 void DinoPackunStateDamage::setDamageEgg() {
-    mDamageType = 0;
+    mDamageType = DamageType_Egg;
 }
 
 void DinoPackunStateDamage::setDamageNormal() {
-    mDamageType = 1;
+    mDamageType = DamageType_Normal;
 }
 
 void DinoPackunStateDamage::setDamageLast() {
-    mDamageType = 2;
+    mDamageType = DamageType_Last;
+}
+
+const Vec3f& DinoPackunStateDamage::getTailOutPosition() const {
+    return mDamageType == DamageType_Egg ? cEggOutPosition : cOutPosition;
 }
 
 void DinoPackunStateDamage::exePunched() {
@@ -87,51 +112,51 @@ void DinoPackunStateDamage::exePunched() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    getHost()->adjustTailRootPosition(!mDamageType ? ::sEggOutPosition : ::sOutPosition, 0.1f);
+    getHost()->adjustTailRootPosition(getTailOutPosition(), cTailRootAdjustRate);
     getHost()->updateNormalVelocity();
 }
 
+// Out of the egg, the boss looks toward where its tail is pulled: over its head, to its right or to its left.
 void DinoPackunStateDamage::exePulled() {
-    Vec3f v21(0.0f, 0.0f, 0.0f);
-    getHost()->mTail->getEndTailPosition(&v21);
+    Vec3f tailEnd(0.0f, 0.0f, 0.0f);
+    getHost()->mTail->getEndTailPosition(&tailEnd);
 
     if (MR::isFirstStep(this)) {
         getHost()->startDemo();
 
-        if (mDamageType) {
-            Vec3f v20;
-            MR::calcSideVec(&v20, getHost());
-            Vec3f v19;
-            MR::calcUpVec(&v19, getHost());
-            Vec3f stack_20;
-            stack_20.set(MR::getSensorPos(getHost()->getSensor("head")));
-            Vec3f stack_14(v21 - stack_20);
-            MR::normalizeOrZero(&stack_14);
+        if (mDamageType != DamageType_Egg) {
+            Vec3f side;
+            MR::calcSideVec(&side, getHost());
+            Vec3f up;
+            MR::calcUpVec(&up, getHost());
+            Vec3f headPos(MR::getSensorPos(getHost()->getSensor("head")));
+            Vec3f toTail(tailEnd - headPos);
+            MR::normalizeOrZero(&toTail);
 
-            if (v19.dot(stack_14) > 0.7f) {
-                MR::startBck(getHost(), "PunchedTailTop");
-                mPunchedDir = 3;
-            } else if (v20.dot(stack_14) < 0.0f) {
-                MR::startBck(getHost(), "PunchedTailRight");
-                mPunchedDir = 2;
+            if (up.dot(toTail) > cTailTopCos) {
+                mPunchedDir = PunchedDir_Top;
+            } else if (side.dot(toTail) < 0.0f) {
+                mPunchedDir = PunchedDir_Right;
             } else {
-                MR::startBck(getHost(), "PunchedTailLeft");
-                mPunchedDir = 1;
+                mPunchedDir = PunchedDir_Left;
             }
+
+            MR::startBck(getHost(), cPunchedBck[mPunchedDir]);
         }
     }
 
-    getHost()->adjustTailRootPosition(!mDamageType ? ::sEggOutPosition : ::sOutPosition, 0.1f);
+    getHost()->adjustTailRootPosition(getTailOutPosition(), cTailRootAdjustRate);
 
-    if (v21.distance(getHost()->mPosition) > 800.0f) {
-        Vec3f v15;
-        getHost()->mTail->getTailNodePosition(&v15, 3);
-        MR::turnDirectionFromTargetDegree(getHost(), &getHost()->mFront, v15, 6.0f);
+    if (tailEnd.distance(getHost()->mPosition) > cPullTurnDistance) {
+        Vec3f node;
+        getHost()->mTail->getTailNodePosition(&node, cPullTurnNode);
+        MR::turnDirectionFromTargetDegree(getHost(), &getHost()->mFront, node, cPullTurnDegree);
     }
 
     getHost()->updateNormalVelocity();
 }
 
+// The egg cracks, holds, then breaks off.
 void DinoPackunStateDamage::exeEggBroken() {
     if (MR::isFirstStep(this)) {
         MR::stopBck(getHost());
@@ -145,13 +170,10 @@ void DinoPackunStateDamage::exeEggBroken() {
         MR::zeroVelocity(getHost());
         MR::startBva(getHost()->getEggShell(), "EggBroken");
         MR::invalidateHitSensor(getHost(), "egg");
+        MR::stopScene(cEggHitStopFrames);
     }
 
-    if (MR::isStep(this, 0)) {
-        MR::stopScene(5);
-    }
-
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, cEggBreakStep)) {
         getHost()->getEggShell()->kill();
         getHost()->getEggBrokenModel()->appear();
         MR::startBck(getHost()->getEggBrokenModel(), "Break");
@@ -164,8 +186,8 @@ void DinoPackunStateDamage::exeEggBroken() {
         MR::tryRumblePadStrong(getHost(), PLAYER_1);
     }
 
-    if (MR::isGreaterStep(this, 120)) {
-        getHost()->endDemo("ディノパックンダメージ");
+    if (MR::isGreaterStep(this, cEggBrokenEndStep)) {
+        getHost()->endDemo(cDemoName);
         getHost()->getEggBrokenModel()->kill();
         kill();
         getHost()->endDamageCamera();
@@ -178,18 +200,7 @@ void DinoPackunStateDamage::exeDamage() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_DAMAGE");
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_DAMAGE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
-
-        switch (mPunchedDir) {
-        case 3:
-            MR::startBck(getHost(), "DamageTop");
-            break;
-        case 2:
-            MR::startBck(getHost(), "DamageRight");
-            break;
-        case 1:
-            MR::startBck(getHost(), "DamageLeft");
-            break;
-        }
+        startBckByPunchedDir(cDamageBck);
     }
 
     updateDamage();
@@ -201,44 +212,36 @@ void DinoPackunStateDamage::exeLastDamage() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_LAST_DAMAGE");
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_LAST_DAMAGE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
-
-        switch (mPunchedDir) {
-        case 3:
-            MR::startBck(getHost(), "LastDamageTop");
-            break;
-        case 2:
-            MR::startBck(getHost(), "LastDamageRight");
-            break;
-        case 1:
-            MR::startBck(getHost(), "LastDamageLeft");
-            break;
-        }
+        startBckByPunchedDir(cLastDamageBck);
     }
 
     updateDamage();
+}
+
+void DinoPackunStateDamage::startBckByPunchedDir(const char* const* pBckNames) {
+    if (mPunchedDir != PunchedDir_None) {
+        MR::startBck(getHost(), pBckNames[mPunchedDir]);
+    }
 }
 
 void DinoPackunStateDamage::updateDamage() {
     if (MR::isFirstStep(this)) {
         MR::tryRumblePadVeryStrong(getHost(), PLAYER_1);
         MR::shakeCameraNormalStrong();
-        MR::stopScene(15);
+        MR::stopScene(cDamageHitStopFrames);
         MR::zeroVelocity(getHost());
         getHost()->mTail->unlockNodePosition(1);
     }
 
     if (MR::isBckStopped(getHost())) {
-        getHost()->endDemo("ディノパックンダメージ");
+        getHost()->endDemo(cDemoName);
         kill();
         getHost()->endDamageCamera();
     }
 }
 
 void DinoPackunStateDamage::exeTryPulledDemo() {
-    if (MR::tryStartDemoMarioPuppetable(getHost(), "ディノパックンダメージ")) {
+    if (MR::tryStartDemoMarioPuppetable(getHost(), cDemoName)) {
         setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPulled));
     }
-}
-
-DinoPackunStateDamage::~DinoPackunStateDamage() {
 }
