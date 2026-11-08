@@ -6,6 +6,8 @@
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/KCollision.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -522,12 +524,36 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
 }
 
 namespace {
-    // Area lists are asked for on the game thread.
-    KC_PrismData* sAreaPrisms[512];
+    // Area lists are asked for on the game thread. The list lives in the permanent arena and grows to the largest request.
+    KC_PrismData** sAreaPrisms = nullptr;
+    u32 sAreaPrismCapacity = 0;
+
+    KC_PrismData** areaPrisms(u32 maxTriangles) {
+        if (maxTriangles > sAreaPrismCapacity) {
+            delete[] sAreaPrisms;
+            sAreaPrisms = new (Arenas::permanent(), 0) KC_PrismData*[maxTriangles];
+            sAreaPrismCapacity = maxTriangles;
+        }
+        return sAreaPrisms;
+    }
+
+    // The points in the parts' frame: inline up to 32, else on the heap for this call.
+    struct LocalPoints {
+        explicit LocalPoints(u32 numPoints) : mPoints(numPoints <= ARRAY_SIZEU(mRoom) ? mRoom : new Vec3f[numPoints]) {}
+
+        ~LocalPoints() {
+            if (mPoints != mRoom) {
+                delete[] mPoints;
+            }
+        }
+
+        Vec3f mRoom[32];
+        Vec3f* mPoints;
+    };
 }  // namespace
 
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rMin, const Vec3f& rMax) {
-    KC_PrismData** const prisms = sAreaPrisms;
+    KC_PrismData** const prisms = ::areaPrisms(maxTriangles);
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
@@ -548,8 +574,9 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
 }
 
 u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, Vec3f* pPoints, u32 numPoints) {
-    KC_PrismData** const prisms = sAreaPrisms;
-    Vec3f localPoints[32];
+    KC_PrismData** const prisms = ::areaPrisms(maxTriangles);
+    LocalPoints local(numPoints);
+    Vec3f* const localPoints = local.mPoints;
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();

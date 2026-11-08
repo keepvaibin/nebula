@@ -161,7 +161,6 @@ namespace MR {
     }
 
     void addToCoinHolder(const NameObj* pNameObj, Coin* pCoin) {
-        getCoinHolder();
         pCoin->setHostInfo(getCoinHolder()->declare(pNameObj, 1));
     }
 };  // namespace MR
