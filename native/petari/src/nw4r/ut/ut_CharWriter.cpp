@@ -45,7 +45,8 @@ namespace {
         return &sRun[sRunGlyphs++ * 4];
     }
 
-    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, bool letters = true) {
+    // `range`: the font's distance range in sheet texels, 0 for sheets that are images.
+    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity, u8 range) {
         SendRun();
         sMaterial.init(NEBULA_SHADER_FONT_TEXT, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -54,7 +55,7 @@ namespace {
         sMaterial.setColor(0, min.r, min.g, min.b, min.a);
         sMaterial.setColor(4, max.r, max.g, max.b, max.a);
         sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
-        sMaterial.constants[9] = letters ? 1.0f : 0.0f;
+        sMaterial.constants[9] = static_cast< f32 >(range);
     }
 };  // namespace
 
@@ -138,18 +139,22 @@ namespace nw4r {
             }
         }
 
+        u8 CharWriter::FieldRange() const {
+            return mFont != nullptr ? mFont->GetFieldRange() : 0;
+        }
+
         void CharWriter::SetupDefault() {
-            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false);
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false, FieldRange());
             SetupVertexFormat();
         }
 
         void CharWriter::SetupForIntensity() {
-            SetupMaterial(0x00000000u, 0xFFFFFFFFu, true);
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, true, FieldRange());
             SetupVertexFormat();
         }
 
         void CharWriter::SetupForColor() {
-            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false, false);
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false, 0);
             SetupVertexFormat();
         }
 
@@ -238,7 +243,7 @@ namespace nw4r {
         }
 
         void CharWriter::SetupWithColorMapping(Color min, Color max) {
-            SetupMaterial(min, max, false);
+            SetupMaterial(min, max, false, FieldRange());
             SetupVertexFormat();
         }
     };  // namespace ut

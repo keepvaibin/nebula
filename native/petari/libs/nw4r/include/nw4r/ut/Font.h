@@ -51,6 +51,8 @@ namespace nw4r {
             virtual int GetMaxCharWidth() const = 0;
             virtual Type GetType() const = 0;
             virtual u8 GetTextureFormat() const = 0;
+            // The sheets' distance range in texels, 0 when they are images (FontTextureGlyph::fieldRange).
+            virtual u8 GetFieldRange() const = 0;
             virtual int GetLineFeed() const = 0;
             virtual const CharWidths GetDefaultCharWidths() const = 0;
             virtual void SetDefaultCharWidths(const CharWidths& rWidths) = 0;

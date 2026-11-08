@@ -109,6 +109,8 @@ const LAYOUT_RGBA8: u8 = 0;
 const LAYOUT_L8: u8 = 1;
 const LAYOUT_LA8: u8 = 2;
 const LAYOUT_BLOCK4: u8 = 3;
+/// The disc format of a record never on the disc (nebula_cooked_texture.h NEBULA_TEXTURE_MADE).
+const MADE: u8 = 0xFF;
 /// Levels below the first were made here (nebula_cooked_texture.h NEBULA_TEXTURE_GENERATED_LEVELS).
 const GENERATED_LEVELS: u8 = 1;
 
@@ -359,6 +361,25 @@ pub fn cook(image: &Image) -> Result<Vec<u8>> {
 /// The record of one sheet of a font in at least layout `wider`: glyphs read it at its own size, so one level.
 pub fn cook_sheet(image: &Image, wider: u8) -> Result<Vec<u8>> {
     cook_with(image, wider, false)
+}
+
+/// The first level of a disc image without a palette, as RGBA texels.
+pub fn texels(image: &Image) -> Result<Vec<[u8; 4]>> {
+    let count = texel_count(image.width, image.height)?;
+    if image.format.indexed() || held_levels(image) == 0 {
+        bail!("a {}x{} {:?} image without its first level, or with a palette", image.width, image.height, image.format);
+    }
+    let mut out = vec![[0u8; 4]; count];
+    decode_level(image, image.data, image.width, image.height, &[], &mut out);
+    Ok(out)
+}
+
+/// The record of a font sheet made into distance fields (cook::distance): one level, L8 with one field, LA8 with two.
+/// It was never a disc image, so no texture pack names it.
+pub fn field_record(width: u32, height: u32, two: bool, texels: Vec<[u8; 4]>) -> Result<Vec<u8>> {
+    texel_count(width, height)?;
+    let layout = if two { LAYOUT_LA8 } else { LAYOUT_L8 };
+    record_of(width, height, MADE, 0, layout, [0, 0], &[], &[texels])
 }
 
 /// How wide a layout's texels are (L8 < LA8 < RGBA8).

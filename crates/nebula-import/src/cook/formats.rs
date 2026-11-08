@@ -6,8 +6,10 @@
 //! - BMD/BDL: the TEX1 block (ResTIMG array, names, data); the model's other blocks are kept.
 //! - JPC (particles): each texture block (0x20 bytes, then a ResTIMG and its data).
 //! - TPL (layouts): the image table, image and palette headers, data.
-//! - BRFNT (fonts): the TGLP block's sheets; the records follow the file's last block.
+//! - BRFNT (fonts): the TGLP block's sheets; the records follow the file's last block. Intensity sheets become
+//!   distance fields (cook::distance) at `distance::SCALE` times their size; colour sheets stay images.
 
+use super::distance;
 use super::texture::{self, Format, Image, PaletteFormat};
 use super::Stats;
 use anyhow::{bail, Context, Result};
@@ -278,6 +280,40 @@ pub fn font(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
                     Ok(Image { format, width, height, levels: 1, data, palette: None })
                 })
                 .collect::<Result<_>>()?;
+            if distance::is_field_format(format) {
+                let cells = distance::Cells {
+                    width: bytes[g] as u32,
+                    height: bytes[g + 1] as u32,
+                    across: be16(bytes, g + 12)? as u32,
+                    down: be16(bytes, g + 14)? as u32,
+                };
+                let two = distance::two_fields(format);
+                let decoded: Vec<Vec<[u8; 4]>> = images.iter().map(texture::texels).collect::<Result<_>>()?;
+                for image in &images {
+                    stats.note(image);
+                }
+                // Sheets are independent: one thread each, at most as many as the machine runs at once.
+                let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).max(1);
+                let mut fields: Vec<Vec<[u8; 4]>> = vec![Vec::new(); decoded.len()];
+                for (chunk_in, chunk_out) in decoded.chunks(threads).zip(fields.chunks_mut(threads)) {
+                    std::thread::scope(|scope| {
+                        for (texels, out) in chunk_in.iter().zip(chunk_out.iter_mut()) {
+                            scope.spawn(move || *out = distance::sheet(texels, width, height, cells, two));
+                        }
+                    });
+                }
+                let mut stride = 0;
+                for field in fields {
+                    let mut record = texture::field_record(width * distance::SCALE, height * distance::SCALE, two, field)?;
+                    record.resize((record.len() + 31) & !31, 0);
+                    stride = record.len();
+                    out.extend_from_slice(&record);
+                }
+                put32(&mut out, g + 4, stride as u32);
+                put32(&mut out, g + 20, first as u32);
+                at += size;
+                continue;
+            }
             let mut wide = 1u8; // L8
             for image in &images {
                 let l = texture::sheet_layout(image)?;

@@ -31,6 +31,8 @@
 //!
 //! The sound data (the audio archive, sequences, ME programs) is cooked to its own formats by cook::sound.
 
+use super::distance;
+use super::texture::Format;
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
 
@@ -236,7 +238,7 @@ pub fn tpl_host(bytes: &[u8]) -> Result<Vec<u8>> {
 /// A font (BRFNT, after cook::formats::font made its sheets records) in the game's native layout: the header and block
 /// kinds as host numbers, each structure with 8-byte pointer slots holding the file offset of what it points to (the
 /// game adds the file's address once, ResFont::Rebuild), numbers in host order, the sheets after the blocks, signature
-/// "RFNN". Old (disc) layouts: FINF {fontType, linefeed, u16 alter, 3-byte widths, encoding, u32 glyph/width/map, height,
+/// "RFNN". The TGLP's padding after its six numbers carries the sheets' distance range (cook::distance). Old (disc) layouts: FINF {fontType, linefeed, u16 alter, 3-byte widths, encoding, u32 glyph/width/map, height,
 /// width, ascent, pad}, TGLP {4 bytes, u32 sheet size, 6 x u16, u32 image}, CWDH {u16 begin, end, u32 next, 3-byte
 /// widths}, CMAP {u16 begin, end, method, reserved, u32 next, u16 map info}.
 pub fn font_native(bytes: &[u8]) -> Result<Vec<u8>> {
@@ -289,7 +291,10 @@ pub fn font_native(bytes: &[u8]) -> Result<Vec<u8>> {
                 for k in 0..6 {
                     put16(&mut out, be16(bytes, s + 8 + 2 * k)?);
                 }
-                out.resize(out.len() + 4, 0);
+                // The sheets' distance range in texels (cook::distance), 0 when they are images; then 3 spare bytes.
+                let field = Format::from_code(be16(bytes, s + 10)? as u32).is_some_and(distance::is_field_format);
+                out.push(if field { distance::RANGE as u8 } else { 0 });
+                out.resize(out.len() + 3, 0);
                 let count = be16(bytes, s + 8)? as usize;
                 sheets = Some((out.len(), be32(bytes, s + 0x14)? as usize, count * sheet_size as usize));
                 out.extend_from_slice(&[0u8; 8]);

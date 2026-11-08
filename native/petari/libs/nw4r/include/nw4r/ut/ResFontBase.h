@@ -21,6 +21,7 @@ namespace nw4r {
                 virtual int GetMaxCharWidth() const;
                 virtual Type GetType() const;
                 virtual u8 GetTextureFormat() const;
+                virtual u8 GetFieldRange() const;
                 virtual int GetLineFeed() const;
                 virtual const CharWidths GetDefaultCharWidths() const;
                 virtual void SetDefaultCharWidths(const CharWidths& widths);
