@@ -12,6 +12,20 @@ class NameObj;
 class Triangle;
 class XanimeResourceTable;
 
+// What MR::changePlayerItemStatus gives the player; the power-up items carry theirs.
+enum PlayerItemStatus {
+    PlayerItemStatus_Normal = 0,
+    PlayerItemStatus_Hopper = 1,
+    PlayerItemStatus_Bee = 2,
+    PlayerItemStatus_Teresa = 3,
+    PlayerItemStatus_Ice = 4,
+    PlayerItemStatus_Fire = 5,
+    PlayerItemStatus_Foo = 6,
+    PlayerItemStatus_Invincible = 7,
+    PlayerItemStatus_Cure = 8,  // back to normal from any element mode
+    PlayerItemStatus_LifeUp = 10,
+};
+
 namespace MR {
     bool isOnGroundPlayer();
     Triangle* getPlayerGroundingPolygon();
@@ -106,7 +120,7 @@ namespace MR {
     bool isPlayerElementModeIce();
     bool isPlayerElementModeNormal();
     bool isPlayerSkating();
-    void changePlayerItemStatus(s32);
+    void changePlayerItemStatus(s32 status);
     void curePlayerElementMode();
     bool isPlayerParalyzing();
     bool isPlayerDamaging();

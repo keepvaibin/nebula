@@ -9,6 +9,7 @@
 #include "Game/Player/PlayerEvent.hpp"
 #include "Game/Player/RushEndInfo.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -172,9 +173,9 @@ namespace MR {
         MarioAccess::setStateWait();
     }
 
-    void startBckPlayer(const char* pName, const char* pParam2) {
-        if (pParam2 != nullptr) {
-            MarioAccess::changeAnimationE(pName, pParam2);
+    void startBckPlayer(const char* pName, const char* pBrkName) {
+        if (pBrkName != nullptr) {
+            MarioAccess::changeAnimationE(pName, pBrkName);
         } else {
             MarioAccess::changeAnimationE(pName, pName);
         }
@@ -184,8 +185,8 @@ namespace MR {
         MarioAccess::changeAnimationE(pName, rCtrlData);
     }
 
-    void startBckPlayer(const char* pName, s32 param2) {
-        MarioAccess::changeAnimationE(pName, param2);
+    void startBckPlayer(const char* pName, s32 interpole) {
+        MarioAccess::changeAnimationE(pName, interpole);
     }
 
     bool isBckStoppedPlayer() {
@@ -220,20 +221,20 @@ namespace MR {
         return MarioAccess::getCurrentBckName();
     }
 
-    void setBckBlendWeight(f32 param1, f32 param2) {
-        const f32 blendWeight[] = {param1, param2};
+    void setBckBlendWeight(f32 weight0, f32 weight1) {
+        const f32 blendWeight[] = {weight0, weight1};
 
         MarioAccess::setAnimationBlendWeight(blendWeight);
     }
 
-    void setBckBlendWeight(f32 param1, f32 param2, f32 param3) {
-        const f32 blendWeight[] = {param1, param2, param3};
+    void setBckBlendWeight(f32 weight0, f32 weight1, f32 weight2) {
+        const f32 blendWeight[] = {weight0, weight1, weight2};
 
         MarioAccess::setAnimationBlendWeight(blendWeight);
     }
 
-    void setBckBlendWeight(f32 param1, f32 param2, f32 param3, f32 param4) {
-        const f32 blendWeight[] = {param1, param2, param3, param4};
+    void setBckBlendWeight(f32 weight0, f32 weight1, f32 weight2, f32 weight3) {
+        const f32 blendWeight[] = {weight0, weight1, weight2, weight3};
 
         MarioAccess::setAnimationBlendWeight(blendWeight);
     }
@@ -246,16 +247,16 @@ namespace MR {
         return MarioAccess::getPlayerActor()->getResourceTable();
     }
 
-    void jumpPlayer(const Vec3f& rParam1) {
-        MarioAccess::freeJump(rParam1, 0);
+    void jumpPlayer(const Vec3f& rJumpVec) {
+        MarioAccess::freeJump(rJumpVec, 0);
     }
 
-    void forceJumpPlayer(const Vec3f& rParam1) {
-        MarioAccess::forceJump(rParam1, 0);
+    void forceJumpPlayer(const Vec3f& rJumpVec) {
+        MarioAccess::forceJump(rJumpVec, 0);
     }
 
-    void forceFlyPlayer(const Vec3f& rParam1, const Vec3f& rParam2, s32 param3) {
-        MarioAccess::forceFly(rParam1, rParam2, param3);
+    void forceFlyPlayer(const Vec3f& rTarget, const Vec3f& rDir, s32 frames) {
+        MarioAccess::forceFly(rTarget, rDir, frames);
     }
 
     void tornadoJumpPlayer() {
@@ -298,11 +299,11 @@ namespace MR {
         return MarioAccess::getShadowHeight();
     }
 
-    void setPlayerPos(const char* pParam1) {
+    void setPlayerPos(const char* pPosName) {
         Pos3f mtx;
         mtx.identity();
 
-        MR::findNamePos(pParam1, mtx.toMtxPtr());
+        MR::findNamePos(pPosName, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
 
         Vec3f trans;
@@ -317,41 +318,41 @@ namespace MR {
         MarioAccess::setStateWait();
     }
 
-    void setPlayerPosAndWait(const char* pParam1) {
-        setPlayerPos(pParam1);
+    void setPlayerPosAndWait(const char* pPosName) {
+        setPlayerPos(pPosName);
         MarioAccess::getPlayerActor()->resetCondition();
         MarioAccess::setStateWait();
     }
 
-    void setPlayerLinkPosAndWait(const NameObj* pParam1, const char* pParam2) {
+    void setPlayerLinkPosAndWait(const NameObj* pLinkObj, const char* pPosName) {
         Pos3f mtx;
         mtx.identity();
 
-        MR::findLinkNamePos(pParam1, pParam2, mtx.toMtxPtr());
+        MR::findLinkNamePos(pLinkObj, pPosName, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
         MarioAccess::getPlayerActor()->resetCondition();
         MarioAccess::setStateWait();
     }
 
-    void setPlayerPosOnGround(const char* pParam1) {
+    void setPlayerPosOnGround(const char* pPosName) {
         Pos3f mtx;
         mtx.identity();
 
-        MR::findNamePosOnGround(pParam1, mtx.toMtxPtr());
+        MR::findNamePosOnGround(pPosName, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
     }
 
-    void setPlayerPosOnGroundAndWait(const char* pParam1) {
+    void setPlayerPosOnGroundAndWait(const char* pPosName) {
         Pos3f mtx;
         mtx.identity();
 
         // A name the stage has no position of, from a mod's cutscene: the player stays where they are.
         Pos3f found;
-        if (!MR::tryFindNamePos(pParam1, found.toMtxPtr())) {
+        if (!MR::tryFindNamePos(pPosName, found.toMtxPtr())) {
             return;
         }
 
-        MR::findNamePosOnGround(pParam1, mtx.toMtxPtr());
+        MR::findNamePosOnGround(pPosName, mtx.toMtxPtr());
         MarioAccess::setBaseMtx(mtx.toMtxPtr());
         MarioAccess::getPlayerActor()->resetCondition();
         MarioAccess::setStateWait();
@@ -449,12 +450,12 @@ namespace MR {
         return MarioAccess::isSkating();
     }
 
-    void changePlayerItemStatus(s32 param1) {
-        MarioAccess::changeItemStatus(param1);
+    void changePlayerItemStatus(s32 status) {
+        MarioAccess::changeItemStatus(status);
     }
 
     void curePlayerElementMode() {
-        changePlayerItemStatus(8);
+        changePlayerItemStatus(PlayerItemStatus_Cure);
     }
 
     bool isPlayerParalyzing() {
@@ -496,112 +497,109 @@ namespace MR {
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerJump(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
-        RushEndInfo info = RushEndInfo(pActor, 2, rParam2, true, param3);
+    void endBindAndPlayerJump(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
+        RushEndInfo info = RushEndInfo(pActor, 2, rJumpVec, true, blendFrames);
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceJump(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
-        RushEndInfo info = RushEndInfo(pActor, 2, rParam2, true, param3);
+    void endBindAndPlayerForceJump(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
+        RushEndInfo info = RushEndInfo(pActor, 2, rJumpVec, true, blendFrames);
         info._20 |= 0x40000000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerWeakGravityJump(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerWeakGravityJump(LiveActor* pActor, const Vec3f& rJumpVec) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceWeakGravityJump(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerForceWeakGravityJump(LiveActor* pActor, const Vec3f& rJumpVec) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
         info._20 |= 0x40000000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const Vec3f& rJumpVec) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
         info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerWeakGravityLimitJump(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerWeakGravityLimitJump(LiveActor* pActor, const Vec3f& rJumpVec) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
         info._20 |= 0x800000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndSpinDriverJump(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndSpinDriverJump(LiveActor* pActor, const Vec3f& rJumpVec) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, 0);
         info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerDamage(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerDamage(LiveActor* pActor, const Vec3f& rDir) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rDir, true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 1;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerFlip(LiveActor* pActor, const Vec3f& rParam2) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
+    void endBindAndPlayerFlip(LiveActor* pActor, const Vec3f& rDir) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rDir, true, 0);
         info._20 |= 3u << 30;
         info.mFlags.mDamageType = 6;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerJumpWithRollLanding(LiveActor* pActor, const Vec3f& rParam2, u32 param3) {
-        RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, param3);
+    void endBindAndPlayerJumpWithRollLanding(LiveActor* pActor, const Vec3f& rJumpVec, u32 blendFrames) {
+        RushEndInfo info = RushEndInfo(pActor, 3, rJumpVec, true, blendFrames);
         info._20 |= 0x400000;
 
         MarioAccess::endRush(&info);
     }
 
-    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 param2) {
-        endBindAndPlayerDamageMsg(pActor, param2, Vec3f(0.0f, 0.0f, 0.0f));
+    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 msg) {
+        endBindAndPlayerDamageMsg(pActor, msg, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
-    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 param2, const Vec3f& rParam3) {
-        switch (param2) {
-        case 0x57:
-        case 0x58:
-        case 0x59:
+    void endBindAndPlayerDamageMsg(LiveActor* pActor, u32 msg, const Vec3f& rDir) {
+        switch (msg) {
+        case ACTMES_ENEMY_ATTACK_FIREBACK:
+        case ACTMES_ENEMY_ATTACK_FIRERUN:
+        case ACTMES_ENEMY_ATTACK_FIRERUN_STRONG:
             endBindAndPlayerFireDamage(pActor);
             break;
-        case 0x5C:
+        case ACTMES_ENEMY_ATTACK_ACID:
             endBindAndPlayerAcidDamage(pActor);
             break;
-        case 0x5D:
+        case ACTMES_ENEMY_ATTACK_FREEZE:
             endBindAndPlayerFreezeDamage(pActor);
             break;
-        case 0x5A:
-        case 0x5B:
+        case ACTMES_ENEMY_ATTACK_ELECTRIC:
+        case ACTMES_ENEMY_ATTACK_HEATBEAM:
             endBindAndPlayerElectricDamage(pActor);
             break;
-        case 0x56:
-            endBindAndPlayerDamage(pActor, rParam3);
+        case ACTMES_ENEMY_ATTACK_FLIP_VERYWEAK:
+        case ACTMES_ENEMY_ATTACK_FLIP_WEAK:
+        case ACTMES_ENEMY_ATTACK_FLIP_WEAK_JUMP:
+        case ACTMES_ENEMY_ATTACK_FLIP_ROT:
+        case ACTMES_ENEMY_ATTACK_FLIP_MAXIMUM:
+            endBindAndPlayerWeakGravityLimitJump(pActor, rDir);
             break;
-        case 0x4C:
-        case 0x4D:
-        case 0x4E:
-        case 0x51:
-        case 0x52:
-            endBindAndPlayerWeakGravityLimitJump(pActor, rParam3);
-            break;
-        case 0x50:
-            endBindAndPlayerFlip(pActor, rParam3);
+        case ACTMES_ENEMY_ATTACK_FLIP:
+            endBindAndPlayerFlip(pActor, rDir);
             break;
         default:
-            endBindAndPlayerDamage(pActor, rParam3);
+            endBindAndPlayerDamage(pActor, rDir);
             break;
         }
     }
@@ -684,16 +682,16 @@ namespace MR {
         return MarioAccess::getPlayerActor()->_468 != 0;
     }
 
-    void startSoundPlayer(const char* pName, s32 param1) {
-        MR::startSound(MarioAccess::getPlayerActor(), pName, param1);
+    void startSoundPlayer(const char* pName, s32 level) {
+        MR::startSound(MarioAccess::getPlayerActor(), pName, level);
     }
 
-    void startLevelSoundPlayer(const char* pName, s32 param1) {
-        MR::startLevelSound(MarioAccess::getPlayerActor(), pName, param1);
+    void startLevelSoundPlayer(const char* pName, s32 level) {
+        MR::startLevelSound(MarioAccess::getPlayerActor(), pName, level);
     }
 
-    void stopSoundPlayer(const char* pName, u32 param1) {
-        MR::stopSound(MarioAccess::getPlayerActor(), pName, param1);
+    void stopSoundPlayer(const char* pName, u32 fadeTime) {
+        MR::stopSound(MarioAccess::getPlayerActor(), pName, fadeTime);
     }
 
     void startSoundPlayerJ(const char* pName) {
@@ -781,8 +779,8 @@ namespace MR {
         MarioAccess::offControl();
     }
 
-    void onPlayerControl(bool param1) {
-        MarioAccess::onControl(param1);
+    void onPlayerControl(bool resetCondition) {
+        MarioAccess::onControl(resetCondition);
     }
 
     bool isOffPlayerControl() {

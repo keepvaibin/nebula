@@ -28,7 +28,7 @@ void BenefitItemInvincible::exeCatch() {
 
     MR::hideModel(this);
 
-    MR::changePlayerItemStatus(7);
+    MR::changePlayerItemStatus(PlayerItemStatus_Invincible);
 
     kill();
 }
