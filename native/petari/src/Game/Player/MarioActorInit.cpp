@@ -26,7 +26,7 @@ void MarioActor::initMember() {
     _1D8 = nullptr;
     _1DC = nullptr;
     _1E0 = 0;
-    _1E1 = 0;
+    mSwingTrigger = 0;
     _1E2 = 0;
     _1E4 = 0.0f;
     _1E8 = 0;
@@ -63,7 +63,7 @@ void MarioActor::initMember() {
     _27C.zero();
     _288.zero();
     _294.zero();
-    _2A0.zero();
+    mCenterPos.zero();
     _2AC.zero();
     _2B8.zero();
     _2C4.zero();
@@ -87,7 +87,7 @@ void MarioActor::initMember() {
     mGravityInfo = nullptr;
     _370 = 0;
     mGravityRatio = 0.0f;
-    _378 = 0;
+    mMovementTimer = 0;
     _37C = 0;
     mHealth = 0;
     mWaterLife = 0;
@@ -126,14 +126,13 @@ void MarioActor::initMember() {
     NebulaMtxIdentity(_3EC.toMtxPtr());
     _420 = 0;
     _424 = 0;
-    for (int i = 0; i < ARRAY_SIZE(_428); i++) {
-        _428[i] = 0;
+    for (int i = 0; i < ARRAY_SIZE(mTakeSensors); i++) {
+        mTakeSensors[i] = 0;
     }
 
-    _468Vec.zero();
-    _468 = 0;
-    _46C = 0;
-    _470 = 0;
+    mTakeCount = 0;
+    mTakeCandidate = 0;
+    mThrowTarget = 0;
     _474 = 0;
     _478 = 0.0f;
     _47C = 0;
@@ -161,7 +160,7 @@ void MarioActor::initMember() {
     _7DE = 0;
     _7E0 = 0;
     _7E2 = 0;
-    _924 = nullptr;
+    mRushSensor = nullptr;
     _928 = 0;
     _92C = 0;
     _930 = 0;
@@ -222,7 +221,7 @@ void MarioActor::initMember() {
     _A0C = 0;
     _A10 = 0;
     _A14 = 0;
-    _A18.zero();
+    mShadowRotate.zero();
     _A24 = 0;
     _A25 = 0;
     mModels = nullptr;
@@ -275,7 +274,7 @@ void MarioActor::initMember() {
     _B72 = 0;
     _B74 = 0;
     mEyeRes = nullptr;
-    _B7C = 0;
+    mBlurTexture = 0;
     _B80 = 0;
     _B84 = 0;
     _B88 = 0;
@@ -319,14 +318,14 @@ void MarioActor::initMember() {
     mSuperKinokoCollected = false;
     mPowerupCollected = false;
     mTransforming = false;
-    _EEB = false;
+    mSwingPermission = false;
     _EEC = false;
-    _EED = false;
+    mActionTrigger = false;
     _EEE = false;
     _EF0 = 0;
     _EF2 = 0;
     _EF4 = 0;
-    _EF6 = 0;
+    mSwingInhibitTimer = 0;
     _EF8 = 0;
     _EFC = 0;
     _F00 = 0;

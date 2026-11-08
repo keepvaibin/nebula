@@ -118,7 +118,7 @@ void MarioActor::initDrawAndModel() {
 
     {
         MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
-        _B7C = JUTTexture::createTarget(0.2f, 0.14f);
+        mBlurTexture = JUTTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {
             mMaskTextures[i] = new JUTTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);
@@ -843,7 +843,7 @@ void MarioActor::drawReflectModel() const {
         MR::hideMaterial(model, "EyeLid_v");
     }
 
-    if ((_468 == 0 ? nullptr : _428[0]) != nullptr) {
+    if ((mTakeCount == 0 ? nullptr : mTakeSensors[0]) != nullptr) {
         if (isUseScreenBox()) {
             static_cast< PlayerModel* >(MR::getModel(_9A0))->setDynamicList(&mAlphaTint);
         }

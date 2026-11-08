@@ -202,14 +202,14 @@ void MarioActor::calcViewWallShadowModel() {
 
     Vec3f direction;
     s32 length = 0;
-    const AreaObj* pArea = MR::getAreaObj("ExtraWallCheckArea", _2A0);
+    const AreaObj* pArea = MR::getAreaObj("ExtraWallCheckArea", mCenterPos);
     if (pArea != nullptr) {
         MR::calcCubeAxisZ(pArea, &direction);
         length = MR::getAreaObjArg(pArea, 0);
         _20C = pArea;
         _210 = 0;
     } else {
-        pArea = MR::getAreaObj("ExtraWallCheckCylinder", _2A0);
+        pArea = MR::getAreaObj("ExtraWallCheckCylinder", mCenterPos);
         if (pArea != nullptr) {
             length = calcCylinderToCenter(pArea, &direction);
             _20C = pArea;
@@ -243,14 +243,14 @@ void MarioActor::calcViewWallShadowModel() {
 
     Triangle triangle;
     Vec3f position;
-    if (!MR::getFirstPolyOnLineToMap(&position, &triangle, _2A0, direction * static_cast< f32 >(length))) {
+    if (!MR::getFirstPolyOnLineToMap(&position, &triangle, mCenterPos, direction * static_cast< f32 >(length))) {
         return;
     }
 
     _1F0 = position;
     _1FC = *triangle.getNormal(0);
     if (!fading) {
-        _208 = 0.9f * _208 + 0.1f * (position - _2A0).length();
+        _208 = 0.9f * _208 + 0.1f * (position - mCenterPos).length();
     }
 
     updateRandomTexture(_208);
@@ -303,7 +303,7 @@ void MarioActor::drawShadow() const {
         return;
     }
 
-    if (_924 != nullptr && selectNoShadow(_924)) {
+    if (mRushSensor != nullptr && selectNoShadow(mRushSensor)) {
         return;
     }
 
@@ -441,7 +441,7 @@ f32 MarioActor::calcCylinderToCenter(const AreaObj* pAreaObj, Vec3f* pVec) {
     Vec3f centerPos;
     MR::calcCylinderCenterPos(&centerPos, pAreaObj);
 
-    MR::vecKillElement(centerPos - _2A0, upVec, pVec);
+    MR::vecKillElement(centerPos - mCenterPos, upVec, pVec);
 
     if (MR::normalizeOrZero(pVec)) {
         if (_208 >= 1000.0f) {

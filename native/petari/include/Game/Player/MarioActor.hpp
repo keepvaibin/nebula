@@ -609,7 +609,7 @@ public:
         };
     };
     bool _1E0;
-    bool _1E1;
+    bool mSwingTrigger; // a spin asked for this frame (isRequestRush or a 2P spin jump)
     u8 _1E2;
     f32 _1E4;
     u16 _1E8;
@@ -639,7 +639,7 @@ public:
     Vec3f _27C;
     Vec3f _288;
     Vec3f _294;
-    Vec3f _2A0;
+    Vec3f mCenterPos; // the Spine1 joint
     Vec3f _2AC;
     Vec3f _2B8;
     Vec3f _2C4;
@@ -663,7 +663,7 @@ public:
     GravityInfo* mGravityInfo;
     bool _370;
     f32 mGravityRatio;
-    u16 _378;
+    u16 mMovementTimer; // movement frames since init
     u32 _37C;
     u32 mHealth;
     u32 mWaterLife;
@@ -704,18 +704,11 @@ public:
     u32 _41C;
     u32 _420;
     HitSensor* _424;
-    HitSensor* _428[4];
-    Vec3f _438[4];
-
-    union {
-        struct {
-            u32 _468;
-            HitSensor* _46C;
-            HitSensor* _470;
-        };
-
-        Vec3f _468Vec;
-    };
+    HitSensor* mTakeSensors[4];   // what he holds, mTakeCount of them
+    Vec3f mTakeRotations[4];      // each one's rotation less his
+    u32 mTakeCount;
+    HitSensor* mTakeCandidate;    // the best sensor to take
+    HitSensor* mThrowTarget;
 
     HitSensor* _474;
     f32 _478;
@@ -748,7 +741,7 @@ public:
     u8 _7E2;
     MR::GrowTable< HitSensor*, 64 > _7E4;  // this frame's rush sensors, _930 of them
     MR::GrowTable< bool, 64 > _8E4;
-    HitSensor* _924;
+    HitSensor* mRushSensor; // the ride's sensor while in a rush
     HitSensor* _928;
     u32 _92C;
     u32 _930;
@@ -806,7 +799,7 @@ public:
     u8 _A0C;
     ModelHolder* _A10;
     PlayerModel* _A14;
-    Vec3f _A18;
+    Vec3f mShadowRotate;
     u8 _A24;
     u8 _A25;
     PlayerModel** mModels;  // the game's six, then each mod power-up's whole-body model (null when it has none)
@@ -878,7 +871,7 @@ public:
     u8 _B72;
     u16 _B74;
     Clip* mEyeRes;
-    JUTTexture* _B7C;
+    JUTTexture* mBlurTexture; // the full-screen blur's target
     union {
         JUTTexture* mMaskTextures[2];
         struct {
@@ -939,14 +932,14 @@ public:
     bool mSuperKinokoCollected;
     bool mPowerupCollected;
     bool mTransforming;
-    bool _EEB;
+    bool mSwingPermission; // false: no spin
     bool _EEC;
-    bool _EED;
+    bool mActionTrigger; // the action button went down this frame
     bool _EEE;
     u16 _EF0;
     u16 _EF2;
     u16 _EF4;
-    u16 _EF6;
+    u16 mSwingInhibitTimer; // frames left with no spin
     u32 _EF8;
     u32 _EFC;
     bool _F00;

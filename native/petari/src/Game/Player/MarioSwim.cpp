@@ -318,7 +318,7 @@ bool MarioSwim::start() {
         getPlayer()->setFrontVecKeepUp(-getFrontVec(), 1.0f);
     }
 
-    if (!mActor->_468) {
+    if (!mActor->mTakeCount) {
         mJetTimer = 0;
     }
 
@@ -456,7 +456,7 @@ bool MarioSwim::start() {
         mKnockbackVel.mult(0.5f);
     }
 
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         if (mJetTimer == 0) {
             if (mActor->getCarrySensor()->isType(ATYPE_JET_TURTLE) || mActor->getCarrySensor()->isType(ATYPE_JET_TURTLE_SLOW)) {
                 u32 r1b = 0;

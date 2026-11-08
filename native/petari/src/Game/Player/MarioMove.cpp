@@ -1068,7 +1068,7 @@ bool Mario::checkLockOnHoming() {
         return false;
     }
 
-    if (!mActor->_470) {
+    if (!mActor->mThrowTarget) {
         return false;
     }
 
@@ -1080,7 +1080,7 @@ bool Mario::checkLockOnHoming() {
 
 void Mario::doLockOnHoming() {
     Vec3f direction;
-    direction.set(mActor->_470->mPosition - mPosition);
+    direction.set(mActor->mThrowTarget->mPosition - mPosition);
     MR::normalize(&direction);
     Vec3f shadowDir;
     calcShadowDir(direction, &shadowDir);

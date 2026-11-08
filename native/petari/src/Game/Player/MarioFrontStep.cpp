@@ -26,7 +26,7 @@ bool Mario::doFrontStep() {
         return false;
     }
 
-    if (mActor->_468 != 0) {
+    if (mActor->mTakeCount != 0) {
         return false;
     }
 
@@ -56,7 +56,7 @@ bool Mario::doFrontStep() {
 
     Triangle triangle = Triangle();
     MarioActor* pMario = mActor;
-    Vec3f* vec = &pMario->_2A0;
+    Vec3f* vec = &pMario->mCenterPos;
     if (!MR::getFirstPolyOnLineToMap(nullptr, &triangle, *vec, mFrontVec * 200.0f)) {
         return false;
     }
@@ -95,7 +95,7 @@ bool MarioFrontStep::update() {
     }
 
     MarioActor* pMario = mActor;
-    Vec3f* vec = &pMario->_2A0;
+    Vec3f* vec = &pMario->mCenterPos;
     if (!MR::isExistMapCollision(*vec, getFrontVec() * 200.0f)) {
         return false;
     }

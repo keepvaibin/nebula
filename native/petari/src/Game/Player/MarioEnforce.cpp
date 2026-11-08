@@ -84,7 +84,7 @@ void Mario::checkEnforceMoveInner() {
 void Mario::recordRelativePosition() {
     const Triangle* sameSensorFloor = nullptr;
     const Vec3f* pPosition;
-    Vec3f strikeCenter(mActor->_2A0);
+    Vec3f strikeCenter(mActor->mCenterPos);
     _8CC[0]->mIdx = -1;
     _8CC[1]->mIdx = -1;
 
@@ -243,7 +243,7 @@ u32 Mario::moveRelativePosition(u32) {
     _184 = movePos - mPosition;
 
     if (isSwimming()) {
-        Vec3f dist(mActor->_2A0);
+        Vec3f dist(mActor->mCenterPos);
         dist -= movePos;
 
         Vec3f normal(*rTri->getNormal(0));

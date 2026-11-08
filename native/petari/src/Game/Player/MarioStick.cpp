@@ -63,7 +63,7 @@ bool MarioStick::setStickSensor(const HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_BEE_FLOWER)) {
         Vec3f v12;
         MR::getRotatedAxisY(&v12, pSensor->mHost->mRotation);
-        Vec3f v11(mActor->_2A0 - pSensor->mPosition);
+        Vec3f v11(mActor->mCenterPos - pSensor->mPosition);
         MR::normalizeOrZero(&v11);
 
         if (v12.dot(v11) < mActor->getConst().getTable()->mBeeStickAngleLimit) {

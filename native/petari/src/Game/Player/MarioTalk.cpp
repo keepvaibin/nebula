@@ -57,7 +57,7 @@ bool MarioTalk::start() {
     bool val = mActor->_B90;
     mActor->_B90 = false;
 
-    if (mActor->_468 == 0) {
+    if (mActor->mTakeCount == 0) {
         stopAnimationUpper(nullptr);
     }
 

@@ -37,14 +37,14 @@ void MarioActor::forceKill(u32 type) {
     }
 
     if (_934) {
-        if (_924 != nullptr && _924->isType(ACTMES_GROUP_SHOW)) {
+        if (mRushSensor != nullptr && mRushSensor->isType(ACTMES_GROUP_SHOW)) {
             _B91 = true;
             _B90 = true;
         }
 
         if (_934) {
-            if (!_924->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
-                _924->receiveMessage(ACTMES_RUSH_FORCE_CANCEL, getSensor("body"));
+            if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
+                mRushSensor->receiveMessage(ACTMES_RUSH_FORCE_CANCEL, getSensor("body"));
             }
 
             if (_934) {
@@ -97,7 +97,7 @@ void MarioActor::exeGameOver() {
         _A6E = 0;
     }
 
-    _46C = nullptr;
+    mTakeCandidate = nullptr;
 
     NebulaMtxIdentity(mMarioAnim->_7C);
 

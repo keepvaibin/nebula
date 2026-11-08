@@ -31,7 +31,7 @@ bool MarioClimb::update() {
 bool MarioClimb::start() {
     changeAnimation("匍匐前進", "匍匐前進");
 
-    if (mActor->_468 != 0) {
+    if (mActor->mTakeCount != 0) {
         changeAnimationUpper("ひろいウエイト");
     }
 

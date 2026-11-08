@@ -248,7 +248,7 @@ bool MarioWait::update() {
     case 0:
         switch (_14) {
         case 0:
-            if (!mActor->_468) {
+            if (!mActor->mTakeCount) {
                 u32 duration = 1800;
                 if (isPlayerModeTeresa()) {
                     duration = 210;

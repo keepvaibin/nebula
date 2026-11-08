@@ -48,7 +48,7 @@ bool Mario::doSideStep() {
     if (checkWallCode("NoAction", false)) {
         return false;
     }
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         return false;
     }
     if (_1C._5) {
@@ -121,7 +121,7 @@ bool MarioSideStep::update() {
     if (MR::isNormalTalking()) {
         return false;
     }
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         return false;
     }
     Mario* player = getPlayer();

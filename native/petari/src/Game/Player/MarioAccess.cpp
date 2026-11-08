@@ -54,7 +54,7 @@ namespace MarioAccess {
         }
 
         if (getPlayerActor()->_934) {
-            return MR::isOnGround(getPlayerActor()->_924->mHost);
+            return MR::isOnGround(getPlayerActor()->mRushSensor->mHost);
         }
 
         return getPlayerActor()->getMovementStates()._1;
@@ -143,7 +143,7 @@ namespace MarioAccess {
         }
 
         if (getPlayerActor()->_934) {
-            return &getPlayerActor()->_924->mHost->mBinder->mGroundInfo.mParentTriangle;
+            return &getPlayerActor()->mRushSensor->mHost->mBinder->mGroundInfo.mParentTriangle;
         }
 
         return getPlayerActor()->getMario()->mGroundPolygon;
@@ -354,8 +354,8 @@ namespace MarioAccess {
     }
 
     HitSensor* getTakingSensor() {
-        if (getPlayerActor()->_428[0] != nullptr) {
-            return getPlayerActor()->_428[0];
+        if (getPlayerActor()->mTakeSensors[0] != nullptr) {
+            return getPlayerActor()->mTakeSensors[0];
         }
 
         if (getPlayerActor()->_424 != nullptr) {
@@ -393,7 +393,7 @@ namespace MarioAccess {
             return;
         }
 
-        if (getPlayerActor()->_468 == 0) {
+        if (getPlayerActor()->mTakeCount == 0) {
             getPlayerActor()->getMario()->stopAnimationUpperForce();
         }
 
@@ -418,7 +418,7 @@ namespace MarioAccess {
             return;
         }
 
-        if (getPlayerActor()->_468 == 0) {
+        if (getPlayerActor()->mTakeCount == 0) {
             getPlayerActor()->getMario()->stopAnimationUpperForce();
         }
 
@@ -436,7 +436,7 @@ namespace MarioAccess {
             return;
         }
 
-        if (getPlayerActor()->_468 == 0) {
+        if (getPlayerActor()->mTakeCount == 0) {
             getPlayerActor()->getMario()->stopAnimationUpperForce();
         }
 
@@ -519,7 +519,7 @@ namespace MarioAccess {
         getPlayerActor()->getMario()->_10._20 = false;
 
         if (getPlayerActor()->_934) {
-            getPlayerActor()->_924->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
+            getPlayerActor()->mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
             if (getPlayerActor()->_934) {
                 RushEndInfo endInfo(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f, 0.0f, 0.0f), false, 0);
                 endRush(&endInfo);
@@ -667,7 +667,7 @@ namespace MarioAccess {
 
             StarPiece* launchPiece = MR::getDeadStarPiece();
 
-            launchPiece->launch(getPlayerActor()->_2A0, 24.0f, 24.0f, false, false);
+            launchPiece->launch(getPlayerActor()->mCenterPos, 24.0f, 24.0f, false, false);
             MR::addStarPiece(-1);
         }
     }
@@ -690,8 +690,8 @@ namespace MarioAccess {
 
     void readyDemo() {
         if (getPlayerActor()->_934) {
-            if (!getPlayerActor()->_924->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"))) {
-                getPlayerActor()->_924->receiveMessage(ACTMES_RUSH_FORCE_CANCEL, getPlayerActor()->getSensor("body"));
+            if (!getPlayerActor()->mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"))) {
+                getPlayerActor()->mRushSensor->receiveMessage(ACTMES_RUSH_FORCE_CANCEL, getPlayerActor()->getSensor("body"));
             }
 
             if (getPlayerActor()->_934) {
@@ -717,9 +717,9 @@ namespace MarioAccess {
         getPlayerActor()->_EA4 = false;
         getPlayerActor()->stopAnimation(nullptr);
 
-        if (getPlayerActor()->_468 != 0) {
+        if (getPlayerActor()->mTakeCount != 0) {
             MarioActor* actor = getPlayerActor();
-            getPlayerActor()->mMarioAnim->updateTakingAnimation(actor->_468 == 0 ? nullptr : actor->_428[0]);
+            getPlayerActor()->mMarioAnim->updateTakingAnimation(actor->mTakeCount == 0 ? nullptr : actor->mTakeSensors[0]);
         }
 
         MR::validateHitSensors(getPlayerActor());
