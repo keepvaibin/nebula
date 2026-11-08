@@ -862,9 +862,10 @@ double hide_time(Path&& at, double seconds, double report_s = 0.015) {
 
 void test_rest_hide() {
     using P = std::array<float, 2>;
-    // A still pointer hides after the default 4 s.
-    const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, 6.0);
-    expect(still >= 3.99 && still <= 4.03, "a still pointer hides after 4 s");
+    // A still pointer hides after the default time.
+    const double S = kDefaultPointerHideSeconds;
+    const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, S + 2.0);
+    expect(still >= S - 0.01 && still <= S + 0.03, "a still pointer hides after the default time");
     // Tremor (+-0.025 units at 9 Hz) plus small jerks (0.08 units for 60 ms,
     // alternating sides, every 0.5 s) never restart the timer.
     const double shaky = hide_time([](double t) {
@@ -872,25 +873,25 @@ void test_rest_hide() {
         const double phase = std::fmod(t + 0.2, 0.5);
         const double jerk = phase < 0.06 ? (std::fmod(t + 0.2, 1.0) < 0.5 ? 0.08 : -0.08) : 0.0;
         return P{static_cast<float>(0.3 + tremor + jerk), static_cast<float>(-0.2 + 0.5 * tremor)};
-    }, 6.0);
-    expect(shaky >= 3.99 && shaky <= 4.05, "tremor and small jerks inside the radius hide at 4 s");
+    }, S + 2.0);
+    expect(shaky >= S - 0.01 && shaky <= S + 0.05, "tremor and small jerks inside the radius hide on time");
     // A single-report spike far outside the radius is filtered out.
     const double spike = hide_time([](double t) {
         return P{t > 1.0 && t < 1.015 ? 0.8f : 0.3f, -0.2f};
-    }, 6.0);
-    expect(spike >= 3.99 && spike <= 4.03, "a one-report spike does not restart the timer");
+    }, S + 2.0);
+    expect(spike >= S - 0.01 && spike <= S + 0.03, "a one-report spike does not restart the timer");
     // A slow deliberate pan (0.15 units/s, 3 degrees per second at sensitivity
-    // 1) never hides while it lasts; it hides 4 s after it stops.
+    // 1) never hides while it lasts; it hides the default time after it stops.
     const double pan = hide_time([](double t) {
         return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
     }, 9.9);
     expect(pan < 0.0, "a slow pan never hides");
     const double after_pan = hide_time([](double t) {
         return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
-    }, 16.0);
+    }, 12.0 + S);
     // The timer runs from the last re-anchor, at most radius/speed (0.8 s)
     // before the pan stopped.
-    expect(after_pan > 13.1 && after_pan < 14.1, "the pointer hides within 4 s after the pan stops");
+    expect(after_pan > 9.1 + S && after_pan < 10.1 + S, "the pointer hides the default time after the pan stops");
 
     // Stick pointer (not latched): tremor keeps it hidden, leaving the radius
     // shows it, recenter shows it.
@@ -938,10 +939,11 @@ void test_mouse_rest_hide() {
     MouseRestHide hide{};
     std::uint64_t t = 1'000'000;
     bool hidden = false;
-    for (int i = 0; i < 440; ++i, t += 10'000) hidden |= hide.update(true, i == 0, t);
-    expect(!hidden, "a still mouse pointer shows for 4.4 s");
+    const int shown_reports = static_cast<int>(kMouseHideSeconds * 100.0f) - 10;
+    for (int i = 0; i < shown_reports; ++i, t += 10'000) hidden |= hide.update(true, i == 0, t);
+    expect(!hidden, "a still mouse pointer shows until 0.1 s before the hide time");
     for (int i = 0; i < 20; ++i, t += 10'000) hidden |= hide.update(true, false, t);
-    expect(hidden, "a still mouse pointer hides by 4.6 s");
+    expect(hidden, "a still mouse pointer hides by 0.1 s after the hide time");
     expect(!hide.update(true, true, t), "a mouse move shows it");
     t += 10'000;
     expect(!hide.update(true, false, t), "the timer starts again after the move");
@@ -995,8 +997,9 @@ double gyro_hide_time(double seconds, double pan_dps, double pan_until_s) {
 }
 
 void test_rest_hide_gyro() {
-    const double held = gyro_hide_time(6.0, 0.0, 0.0);
-    expect(held >= 3.95 && held <= 4.3, "hand-held gyro (tremor + small jerks) hides at about 4 s");
+    const double S = kDefaultPointerHideSeconds;
+    const double held = gyro_hide_time(S + 2.0, 0.0, 0.0);
+    expect(held >= S - 0.05 && held <= S + 0.3, "hand-held gyro (tremor + small jerks) hides at about the default time");
     expect(gyro_hide_time(8.0, 3.0, 8.0) < 0.0, "a slow 3 deg/s pan never hides while it lasts");
 }
 
@@ -1279,10 +1282,10 @@ void test_defaults_and_migration() {
         const LogicalInput lt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
         expect(lt.held(GameInput::Z) && !lt.held(GameInput::Shake), "Xbox: LT crouches");
     }
-    expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 4.0f &&
+    expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == kDefaultPointerHideSeconds &&
                config.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius &&
                config.tune(ControlScheme::Xbox).pointer_hide_seconds == kDefaultPointerHideSeconds,
-           "still pointer hides after 4 s within 0.12 units by default");
+           "still pointer hides after the default time within 0.12 units by default");
     expect(only(xb[GameInput::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
     expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
 

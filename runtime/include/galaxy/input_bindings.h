@@ -275,12 +275,14 @@ struct ControlsConfig {
 [[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
 // runtime_settings.ini `controls_version`; files without it are version 1.
-inline constexpr unsigned kControlsVersion = 6;
+inline constexpr unsigned kControlsVersion = 7;
 // Version 3 still-pointer defaults (pads), replaced in version 4.
 inline constexpr float kVersion3PointerHideSeconds = 4.0f;
 inline constexpr float kVersion3PointerHideRadius = 0.03f;
 // Version 4 still-pointer time and vibration strength, replaced in version 5.
 inline constexpr float kVersion4PointerHideSeconds = 2.0f;
+// The controller pointer's rest-hide time until version 7.
+inline constexpr float kVersion6PointerHideSeconds = 4.0f;
 inline constexpr std::uint8_t kVersion4Rumble = 100;
 // For a file of `version`: every binding list that still equals an older
 // version's default takes the current default, the gyro switch of a version-1
