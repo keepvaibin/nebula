@@ -203,6 +203,7 @@ bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
     }
     scene_ = std::move(made);
     scene_map_ = map;
+    pending_depth_clear_ = 0u;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
     }
@@ -355,6 +356,20 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         }
         end_scene_pass();
     }
+    if (depth_clear_pending()) {
+        if (clear != nullptr && (clear_depth != 0u || !discard_color || aux != 0u)) {
+            pending_depth_clear_ = 0u;  // this opening clears the depth itself
+        } else if (clear == nullptr && aux == 0u && !discard_color) {
+            clear = &pending_depth_values_;  // the colour loads, the depth clears
+            clear_depth = std::exchange(pending_depth_clear_, 0u);
+        } else {
+            // No variant of this pass clears only the depth: one that does opens and ends first.
+            const SceneClearValues values = pending_depth_values_;
+            const unsigned mode = std::exchange(pending_depth_clear_, 0u);
+            begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
+            end_scene_pass("settle_depth_clear");
+        }
+    }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux, clear != nullptr)
@@ -455,6 +470,16 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
+    if (depth_enable && depth_clear_pending()) {
+        const bool whole_depth = rect.offset.x == 0 && rect.offset.y == 0 &&
+                                 rect.extent.width == static_cast<std::uint32_t>(scene_w) &&
+                                 rect.extent.height == static_cast<std::uint32_t>(scene_h);
+        if (whole_depth) {
+            pending_depth_clear_ = 0u;  // replaced
+        } else {
+            settle_depth_clear();
+        }
+    }
     if (depth_enable && !held_probe_slots_.empty()) {
         // Held probes read the depth before the clear replaces it; the pass is closed for the clear's own opening.
         end_scene_pass();
@@ -521,25 +546,8 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
             bind_scene();
         }
     }
-    if (open_cleared_depth) {
-        // Cleared as the pass opened.
-    } else if (depth_clear != VK_NULL_HANDLE) {
-        const VkViewport viewport{0.0f, static_cast<float>(scene_h), static_cast<float>(scene_w),
-                                  -static_cast<float>(scene_h), 0.0f, 1.0f};
-        const float value[4] = {clear.reversed_depth, 0.0f, 0.0f, 0.0f};
-        vkCmdSetViewport(commands, 0, 1, &viewport);
-        vkCmdSetScissor(commands, 0, 1, &rect);
-        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_clear);
-        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
-        vkCmdDraw(commands, 3, 1, 0, 0);
-        reset_draw_bindings();
-        bind_scene();
-    } else if (depth_enable) {
-        // Reversed Z: the far plane is 0.
-        VkClearAttachment attachment{};
-        attachment.aspectMask = depth_aspects(depth_format_);
-        attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
-        vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
+    if (depth_enable && !open_cleared_depth) {
+        clear_depth_in_pass(clear.reversed_depth, rect);
     }
 }
 
@@ -926,6 +934,68 @@ bool RendererVk::begin_motion_scene() {
     return true;
 }
 
+// In the open scene pass (aux 0): the depth clear's draw keeps the stencil; without it, vkCmdClearAttachments clears both.
+void RendererVk::clear_depth_in_pass(float reversed_depth, const VkRect2D& rect) {
+    const VkCommandBuffer commands = commands_;
+    const VkPipeline depth_clear = scene_utility_pipeline(SceneUtility::ClearDepth);
+    if (depth_clear != VK_NULL_HANDLE) {
+        const float scene_w = static_cast<float>(scene_.color->width);
+        const float scene_h = static_cast<float>(scene_.color->height);
+        const VkViewport viewport{0.0f, scene_h, scene_w, -scene_h, 0.0f, 1.0f};
+        const float value[4] = {reversed_depth, 0.0f, 0.0f, 0.0f};
+        vkCmdSetViewport(commands, 0, 1, &viewport);
+        vkCmdSetScissor(commands, 0, 1, &rect);
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_clear);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
+        vkCmdDraw(commands, 3, 1, 0, 0);
+        reset_draw_bindings();
+        bind_scene();
+    } else {
+        // Reversed Z: the far plane is 0.
+        VkClearAttachment attachment{};
+        attachment.aspectMask = depth_aspects(depth_format_);
+        attachment.clearValue.depthStencil = {reversed_depth, 0u};
+        const VkClearRect clear_rect{rect, 0, 1};
+        vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
+    }
+}
+
+bool RendererVk::defer_scene_depth_clear(std::uint32_t clear_rgba) {
+    if (!scene_pass_open_ || held_probe_slots_.empty() || target_pass_active_) {
+        return false;
+    }
+    pending_depth_ = scene_depth_attachment();
+    pending_depth_values_ = make_scene_clear_values(clear_rgba, 0u);
+    pending_depth_clear_ = scene_utility_pipeline(SceneUtility::ClearDepth) != VK_NULL_HANDLE ? 1u : 2u;
+    return true;
+}
+
+// The waiting depth clear now: in the open pass once no held probe needs the depth it replaces; otherwise the pass ends
+// (the held probes read) and the next opening clears it, at once when no pass was open.
+void RendererVk::settle_depth_clear() {
+    if (!depth_clear_pending()) {
+        return;
+    }
+    if (scene_pass_open_ && held_probe_slots_.empty() && scene_pass_aux_ == 0u) {
+        pending_depth_clear_ = 0u;
+        scene_.depth_dirty |= scene_.samples > 1u;
+        clear_depth_in_pass(pending_depth_values_.reversed_depth,
+                            VkRect2D{{0, 0}, {scene_.color->width, scene_.color->height}});
+        return;
+    }
+    const bool open = scene_pass_open_;
+    const unsigned aux = scene_pass_aux_;
+    end_scene_pass("settle_depth_clear");
+    if (open) {
+        begin_scene_pass_with(aux);
+        return;
+    }
+    const SceneClearValues values = pending_depth_values_;
+    const unsigned mode = std::exchange(pending_depth_clear_, 0u);
+    begin_scene_pass_with(0u, &values, false, "settle_depth_clear", mode);
+    end_scene_pass("settle_depth_clear");
+}
+
 bool RendererVk::begin_cleared_motion_scene(std::uint32_t clear_rgba) {
     // scene_temporal_begin's conditions, which the scene's begin tests next.
     if (scene_pass_open_ || target_pass_active_ || output_scene_active_ || !temporal_ || !temporal_mode() ||
@@ -1053,6 +1123,7 @@ void RendererVk::dump_temporal_inputs(const vk::Texture& color, const vk::Textur
 
 bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
+    settle_depth_clear();
     const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || scene_map_.width != temporal_render_w_ ||
         scene_map_.height != temporal_render_h_ || output.width != temporal_output_w_ || output.height != temporal_output_h_ ||
@@ -1362,6 +1433,7 @@ void RendererVk::record_scene_ao() {
     const GpuPassScope pass{*this, GpuPass::SceneAo};
 
     end_scene_pass();
+    settle_depth_clear();
     if (scene_.samples > 1u) {
         resolve_scene_depth(commands_);
     }
@@ -1536,6 +1608,7 @@ void RendererVk::record_wide_end() {
     }
     const GpuPassScope pass{*this, GpuPass::Camera};
     end_scene_pass();
+    settle_depth_clear();
     SceneSet& set = wide_scene_;
     const bool per_sample = scene_.samples > 1u && vk::Context::get().sample_rate_shading();
     gpu::TextureRef wide = scene_.color;
@@ -1933,6 +2006,9 @@ VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
 
 void RendererVk::transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image) {
     if (depth) {
+        if (commands == commands_) {
+            settle_depth_clear();
+        }
         resolve_scene_depth(commands);
         image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
                       VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
@@ -2024,6 +2100,7 @@ void RendererVk::open_frame_for_pass(std::uint64_t color_key, std::uint8_t chann
         (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, textures);
     }
     if (depth_key != 0u) {
+        settle_depth_clear();
         // Materials read their textures in the shader-read layout (TextureBackend).
         resolve_scene_depth(commands);
         image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
@@ -2209,6 +2286,7 @@ bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenPr
         return false;
     }
     out.tested = 0u;
+    settle_depth_clear();  // asked after a waiting clear: they see it
     // Asked inside the scene target pass, compared points are tested there: the pass goes on, where reading the depth
     // would end it (a store and a load of the whole target on a tiled GPU) before the next draw that writes depth.
     if (compared && scene_pass_open_ && test_screen_probes(out, probes)) {

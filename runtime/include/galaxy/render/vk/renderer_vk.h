@@ -210,6 +210,11 @@ public:
     void note_scene_draw(std::uint32_t state) {
         scene_drawn_ = true;
         constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
+        if (pending_depth_clear_ != 0u &&
+            (((state & (1u << 10u)) != 0u && (((state >> 11u) & 7u) != 7u || (state & (1u << 14u)) != 0u)) ||
+             ((state >> 20u) & 3u) != 0u)) {
+            settle_depth_clear();  // a draw that tests or writes depth or stencil sees it cleared
+        }
         if ((state & depth_write) == depth_write) {
             // Held probes read the depth as it was when they were asked: before this draw changes it.
             if (!held_probe_slots_.empty()) settle_screen_probes();
@@ -256,6 +261,11 @@ public:
     // would end at begin_motion_scene for a transfer clear of the motion targets and the motion pass load them all again.
     // False when the scene will not run temporal here (clear_scene clears).
     [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t clear_rgba);
+    // A whole clear of the scene's depth (`clear_rgba`'s) that nothing later in the list reads or writes, asked while
+    // held probes keep the scene pass open: the pass goes on, where the clear would end it to read them first (a store
+    // and a load of the whole target on a tiled GPU). The depth is cleared as the next scene pass opens, or before
+    // anything reads or tests it (settle_depth_clear). False when the clear is clear_scene's.
+    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba);
     void record_motion_debug_view() noexcept {}
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
@@ -600,6 +610,19 @@ private:
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
     bool motion_cleared_ = false;  // begin_cleared_motion_scene opened the motion pass cleared for the next scene
+    // defer_scene_depth_clear's: the depth attachment, its clear, and the depth clear pass it opens with (1 keeps the
+    // stencil, 2 clears it; 0 none waiting).
+    const vk::Texture* pending_depth_ = nullptr;
+    SceneClearValues pending_depth_values_{};
+    unsigned pending_depth_clear_ = 0u;
+    [[nodiscard]] const vk::Texture* scene_depth_attachment() const noexcept {
+        return scene_.samples > 1u ? scene_.ms_depth.get() : scene_.depth.get();
+    }
+    [[nodiscard]] bool depth_clear_pending() const noexcept {
+        return pending_depth_clear_ != 0u && !target_pass_active_ && pending_depth_ == scene_depth_attachment();
+    }
+    void settle_depth_clear();
+    void clear_depth_in_pass(float reversed_depth, const VkRect2D& rect);
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.

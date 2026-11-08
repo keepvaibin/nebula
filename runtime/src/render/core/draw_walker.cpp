@@ -1063,6 +1063,48 @@ void RenderCore::plan_early_probes(ListData& now) {
     }
 }
 
+// A clear of the scene's depth that no later pass of the list reads or writes (the HUD's, before 2D draws that leave
+// depth alone) is only seen by what comes after the list: the renderer may clear it as the next pass opens instead
+// (defer_scene_depth_clear), where held probes would otherwise end the scene pass for it.
+void RenderCore::plan_late_depth_clears(ListData& now) {
+    now.late_depth_clears.clear();
+    const NebulaFrameList& list = *now.list;
+    const auto leaves_depth = [&](const NebulaFramePass& pass) {
+        const std::uint32_t end = pass.first_item + pass.item_count;
+        for (std::uint32_t i = pass.first_item; i < end; ++i) {
+            const std::uint32_t state = registries_.pipeline(list.items[i].pipeline).desc.state;
+            const bool depth = (state & (1u << 10u)) != 0u &&
+                               (((state >> 11u) & 7u) != 7u || (state & (1u << 14u)) != 0u);  // a test, or a write
+            if (depth || ((state >> 20u) & 3u) != 0u) {
+                return false;
+            }
+        }
+        return true;
+    };
+    for (std::uint32_t p = 0; p < list.pass_count; ++p) {
+        const NebulaFramePass& clear = list.passes[p];
+        if (clear.kind != NEBULA_PASS_CLEAR || clear.layer == NEBULA_LAYER_TARGET || (clear.clear_channels & 4u) == 0u) {
+            continue;
+        }
+        bool late = true;
+        for (std::uint32_t q = p + 1u; q < list.pass_count && late; ++q) {
+            const NebulaFramePass& pass = list.passes[q];
+            if (pass.layer == NEBULA_LAYER_TARGET) {
+                late = false;
+            } else if (pass.kind == NEBULA_PASS_CLEAR && (pass.clear_channels & 4u) != 0u) {
+                break;  // the whole depth again
+            } else if (pass.kind == NEBULA_PASS_DRAW) {
+                late = leaves_depth(pass);
+            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW) {
+                late = false;
+            }
+        }
+        if (late) {
+            now.late_depth_clears.push_back(p);
+        }
+    }
+}
+
 void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time) {
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
@@ -1072,6 +1114,7 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     if (!now.targets_planned) {
         plan_early_targets(now);
         plan_early_probes(now);
+        plan_late_depth_clears(now);
     }
     for (const core::ListData::EarlyTargets& run : now.early_targets) {
         if (run.scene != NEBULA_NONE32) {
@@ -1141,10 +1184,17 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                     clear.color[c] = std::round(clear.color[c] * levels) / levels;
                 }
             }
+            bool depth = (pass.clear_channels & 4u) != 0u;
+            if (depth && !target_open_ &&
+                std::find(now.late_depth_clears.begin(), now.late_depth_clears.end(), p) != now.late_depth_clears.end() &&
+                renderer_.defer_scene_depth_clear(pass.clear_rgba)) {
+                depth = false;
+            }
             if ((!starts_hdr || !renderer_.begin_wide_scene(true, &clear)) &&
-                (!starts_scene || starts_hdr || !renderer_.begin_cleared_motion_scene(pass.clear_rgba))) {
+                (!starts_scene || starts_hdr || !renderer_.begin_cleared_motion_scene(pass.clear_rgba)) &&
+                (depth || (pass.clear_channels & 3u) != 0u)) {
                 renderer_.clear_scene(pass.clear_rgba, (pass.clear_channels & 1u) != 0u, (pass.clear_channels & 2u) != 0u,
-                                      (pass.clear_channels & 4u) != 0u, 0u, 0u, kFrameUnits, kFrameUnits, target_open_ ? 1u : 0u);
+                                      depth, 0u, 0u, kFrameUnits, kFrameUnits, target_open_ ? 1u : 0u);
             }
             if (pass.layer == NEBULA_LAYER_TARGET) {
                 target_channels = pass.channels;

@@ -217,6 +217,7 @@ private:
     void walk_list(core::ListData& now, core::ListData* before, const core::WalkTime& time);
     void plan_early_targets(core::ListData& now);
     void plan_early_probes(core::ListData& now);
+    void plan_late_depth_clears(core::ListData& now);
     void walk_pass(core::ListData& now, std::uint32_t index, std::uint32_t& target_channels);
     void set_scene_sky(const NebulaFramePass& scene_begin);
     void walk_draw_pass(const NebulaFramePass& pass);

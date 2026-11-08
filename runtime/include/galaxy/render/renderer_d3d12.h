@@ -316,6 +316,10 @@ public:
         (void)clear_rgba;
         return false;
     }
+    [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t clear_rgba) noexcept {
+        (void)clear_rgba;
+        return false;
+    }
     // The game's effects begin (the scene's ShadowSurface draw type, after its translucent lists) in a scene whose
     // blended draws write the reactive mask: the effects layer opens (cleared: nothing added, everything let through)
     // and its draws record what they blend over the scene target until the water's composite (kRenderStateLayerTarget).
