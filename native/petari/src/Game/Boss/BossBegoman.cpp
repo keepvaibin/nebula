@@ -205,10 +205,10 @@ void BossBegoman::init(const TableIter& rIter) {
 
     mPath = new ParabolicPath();
 
-    // Placement arg7 set: the boss is guarded by spikes instead of babies.
-    s32 arg7 = -1;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
-    mFollowerKind = arg7 == -1 ? FollowerKind_BabyFollower : FollowerKind_SpikeFollower;
+    // Placement arg 7 set: the boss is guarded by spikes instead of babies.
+    s32 spikeFollower = -1;
+    MR::getPlacementArg7NoInit(rIter, &spikeFollower);
+    mFollowerKind = spikeFollower == -1 ? FollowerKind_BabyFollower : FollowerKind_SpikeFollower;
 
     mBabyFollowerNum = ::sBabyFollowerNum;
     mBabyFollowers = new BegomanBaby*[mBabyFollowerNum];

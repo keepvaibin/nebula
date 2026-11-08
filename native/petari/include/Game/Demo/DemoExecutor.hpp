@@ -72,7 +72,7 @@ public:
     void startDemoSystemPart(const char*, MR::MovementControlType);
     bool tryStartProperDemoSystem();
     bool tryStartDemoSystemPart(const char*, MR::MovementControlType);
-    bool tryStartProperDemoSystemPart(const char*);
+    bool tryStartProperDemoSystemPart(const char* pPartName);
     void pause();
     void resume();
     void addTalkAnimCtrl(DemoTalkAnimCtrl*);

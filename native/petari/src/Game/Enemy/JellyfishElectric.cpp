@@ -77,9 +77,9 @@ void JellyfishElectric::init(const TableIter& rIter) {
         MR::moveCoordToNearestPos(this, mPosition);
         MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
         MR::getPlacementArg1NoInit(rIter, &mRailGoalWaitStep);
-        s32 arg2 = 0;
-        MR::getPlacementArg2NoInit(rIter, &arg2);
-        mIsRailTurnBack = arg2 == 1;
+        s32 railTurnBack = 0;
+        MR::getPlacementArg2NoInit(rIter, &railTurnBack);
+        mIsRailTurnBack = railTurnBack == 1;
     }
 
     MR::calcFrontVec(&mFront, this);

@@ -779,13 +779,13 @@ bool KCollisionServer::KCHitSphere(KC_PrismData* pPrism, Fxyz* pCenter, f32 radi
     f32 threshold = mFile->mThickness * param;
     *pFlag = 0;
 
-    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
 
     Fxyz dir;
     f32 distances[4];
-    dir.x = pCenter->x - v0->x;
-    dir.y = pCenter->y - v0->y;
-    dir.z = pCenter->z - v0->z;
+    dir.x = pCenter->x - pCorner->x;
+    dir.y = pCenter->y - pCorner->y;
+    dir.z = pCenter->z - pCorner->z;
 
     Vec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
     distances[1] = dir.x * n0->x + dir.y * n0->y + dir.z * n0->z;
@@ -1000,13 +1000,13 @@ bool KCollisionServer::KCHitSphereWithThickness(KC_PrismData* pPrism, Fxyz* pCen
     f32 threshold = thickness * param;
     *pFlag = 0;
 
-    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
 
     Fxyz dir;
     f32 distances[4];
-    dir.x = pCenter->x - v0->x;
-    dir.y = pCenter->y - v0->y;
-    dir.z = pCenter->z - v0->z;
+    dir.x = pCenter->x - pCorner->x;
+    dir.y = pCenter->y - pCorner->y;
+    dir.z = pCenter->z - pCorner->z;
 
     Vec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
     distances[1] = dir.x * n0->x + dir.y * n0->y + dir.z * n0->z;
@@ -1227,11 +1227,11 @@ bool KCollisionServer::isNearParallelNormal(const KC_PrismData* pPrism) const {
 }
 
 bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, const Vec3f& rDir, f32* pDist, u8* pFlag) const {
-    Vec3f* v0 = &mFile->mPos[pPrism->mPositionIndex];
+    Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
     Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
 
     Vec3f rel;
-    NebulaVecSubtract(rOrigin, v0, rel);
+    NebulaVecSubtract(rOrigin, pCorner, rel);
 
     f32 t = NebulaVecDotProduct(rel, faceNormal);
 

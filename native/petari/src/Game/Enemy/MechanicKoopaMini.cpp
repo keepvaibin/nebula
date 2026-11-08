@@ -495,11 +495,11 @@ bool MechanicKoopaMini::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (MR::isMsgPlayerTrample(msg)) {
-        Vec3f v16(pSender->mPosition);
-        v16 -= pReceiver->mPosition;
-        f32 ReceiverRad = pReceiver->mRadius;
-        f32 SenderRad = pSender->mRadius;
-        if (((SenderRad + ReceiverRad) - ::hTrampleUpRangeSub) < v16.dot(-mGravity)) {
+        Vec3f toSender(pSender->mPosition);
+        toSender -= pReceiver->mPosition;
+        f32 receiverRadius = pReceiver->mRadius;
+        f32 senderRadius = pSender->mRadius;
+        if (((senderRadius + receiverRadius) - ::hTrampleUpRangeSub) < toSender.dot(-mGravity)) {
             return false;
         } else {
             MR::startSound(this, "SE_EM_MKOOPAMINI_TRAMPLE");

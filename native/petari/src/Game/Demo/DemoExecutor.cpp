@@ -166,12 +166,12 @@ bool DemoExecutor::tryStartDemoSystemPart(const char* pPartName, MR::MovementCon
     return true;
 }
 
-bool DemoExecutor::tryStartProperDemoSystemPart(const char* pParam1) {
+bool DemoExecutor::tryStartProperDemoSystemPart(const char* pPartName) {
     if (mPlayerKeeper->mNumPlayerInfos > 0) {
-        return MR::tryStartTimeKeepDemoMarioPuppetable(this, mName, pParam1);
-    } else {
-        return MR::tryStartTimeKeepDemo(this, mName, pParam1);
+        return MR::tryStartTimeKeepDemoMarioPuppetable(this, mName, pPartName);
     }
+
+    return MR::tryStartTimeKeepDemo(this, mName, pPartName);
 }
 
 void DemoExecutor::pause() {
