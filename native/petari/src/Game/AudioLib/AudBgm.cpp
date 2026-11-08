@@ -13,6 +13,29 @@
 #include "Game/Sound/SoundInfo.hpp"
 #include "Game/Sound/StreamSound.hpp"
 
+namespace {
+    // Each track to the table's state for the step: two tracks a byte, the even one in the high nibble, bit 3 muting on its
+    // own and bits 0-2 the fade state. A song with no state for the step fades every track in, but a rhythm song's track 0.
+    void setTrackMuteStates(AudTrackController* pTracks, s32 trackNum, const AudBgmSetting::MuteState* pState, bool isRhythm, s32 time) {
+        if (pState == nullptr) {
+            for (s32 i = 0; i < trackNum; i++) {
+                if (i != 0 || !isRhythm) {
+                    pTracks[i].setMuteState(AudFader::FadeState_FadeIn, time, false);
+                }
+            }
+            return;
+        }
+
+        for (s32 i = 0; i < trackNum; i++) {
+            u8 state = pState->mMuteStates[i / 2];
+            if (i % 2 == 0) {
+                state >>= 4;
+            }
+            pTracks[i].setMuteState(state & 0x7, time, (state & 0x8) > 0);
+        }
+    }
+}  // namespace
+
 AudBgm::AudBgm() : mVolumeController() {
 }
 
@@ -56,9 +79,9 @@ SoundHandle* AudSingleBgm::start(u32 soundID, bool lock) {
 
     resetAuxVolume();
 
-    if (id.getSectionID() == 0x2) {  // STM
+    if (id.getSectionID() == SoundID::SOUND_STREAM) {
         AudWrap::getSystem()->getStreamMgr().startSound(id, &mHandle, nullptr);
-    } else {  // BGM or MBGM
+    } else {
         AudWrap::getSystem()->getSeqMgr().startSound(id, &mHandle, nullptr);
         if (mHandle.isSoundAttached()) {
             startTrackControl();
@@ -86,7 +109,7 @@ void AudSingleBgm::stop(u32 time) {
 
     mHandle->stop(time);
 
-    if (mSoundID.getSectionID() != 0x2) {  // not STM
+    if (mSoundID.getSectionID() != SoundID::SOUND_STREAM) {
         stopTrackControl();
     }
 }
@@ -107,7 +130,7 @@ void AudSingleBgm::playAfterPrepared() {
 
 SoundHandle* AudSingleBgm::getRhythmHandle() {
     if (mHandle.isSoundAttached()) {
-        if (mHandle->getID().getSectionID() == 0x1) {  //  BGM or MBGM
+        if (mHandle->getID().getSectionID() == SoundID::SOUND_SEQ) {
             return &mHandle;
         }
     }
@@ -142,37 +165,12 @@ bool AudSingleBgm::moveVolumeForNoteFairy(f32 volume, u32 time) {
 }
 
 void AudSingleBgm::changeTrackMuteState(s32 track, s32 time) {
-    if (mSoundID.getSectionID() == 0x2) {  // STM
+    if (mSoundID.getSectionID() == SoundID::SOUND_STREAM) {
         return;
     }
 
-    AudSoundInfo* info = AudWrap::getSoundInfo();
-    bool isRhythm = info->isRhythmBgm(mSoundID);
-
-    const AudBgmSetting::MuteState* muteState = AudBgmSetting::getMuteState(mSoundID, track);
-    if (muteState == nullptr) {
-        for (s32 i = 0; i < mNumTracks; i++) {
-            if (i != 0 || !isRhythm) {
-                mTrackController[i].setMuteState(AudFader::FadeState_FadeIn, time, false);
-            }
-        }
-
-        return;
-    }
-
-    for (s32 i = 0; i < mNumTracks; i++) {
-        u8 state = muteState->mMuteStates[i / 2];
-        if (i % 2 == 0) {
-            state >>= 4;
-        }
-
-        bool autoMute = false;
-        if ((state & 0x8) > 0) {
-            autoMute = true;
-        }
-
-        mTrackController[i].setMuteState(state & 0x7, time, autoMute);
-    }
+    const bool isRhythm = AudWrap::getSoundInfo()->isRhythmBgm(mSoundID);
+    ::setTrackMuteStates(mTrackController, mNumTracks, AudBgmSetting::getMuteState(mSoundID, track), isRhythm, time);
 }
 
 void AudSingleBgm::initTrackController() {
@@ -194,7 +192,7 @@ void AudSingleBgm::stopTrackControl() {
 }
 
 void AudSingleBgm::updateTrackControl() {
-    if (mSoundID.getSectionID() == 0x2) {  // STM
+    if (mSoundID.getSectionID() == SoundID::SOUND_STREAM) {
         return;
     }
 
@@ -342,46 +340,23 @@ void AudMultiBgm::changeTrackMuteState(s32 track, s32 time) {
 
     SoundID soundID = mRhythmHandle->getID();
 
-    if (soundID.getSectionID() == 0x2) {  // STM
+    if (soundID.getSectionID() == SoundID::SOUND_STREAM) {
         return;
     }
 
-    AudSoundInfo* info = AudWrap::getSoundInfo();
-    bool isRhythm = info->isRhythmBgm(soundID);
-
+    const bool isRhythm = AudWrap::getSoundInfo()->isRhythmBgm(soundID);
     const AudBgmSetting::MuteState* muteState = AudBgmSetting::getMuteState(soundID, track);
     if (muteState == nullptr) {
-        for (s32 i = 0; i < mNumTracks; i++) {
-            if (i != 0 || !isRhythm) {
-                mTrackController[i].setMuteState(AudFader::FadeState_FadeIn, time, false);
-            }
-        }
-
+        ::setTrackMuteStates(mTrackController, mNumTracks, nullptr, isRhythm, time);
         return;
     }
 
-    switch (soundID) {
-    case BGM_GALAXY_01:
-        if (track == 1) {
-            time *= 3;
-        }
-
-        break;
+    // BGM_GALAXY_01's step 1 fades three times as slowly.
+    if (soundID == BGM_GALAXY_01 && track == 1) {
+        time *= 3;
     }
 
-    for (s32 i = 0; i < mNumTracks; i++) {
-        u8 state = muteState->mMuteStates[i / 2];
-        if (i % 2 == 0) {
-            state >>= 4;
-        }
-
-        bool autoMute = false;
-        if ((state & 0x8) > 0) {
-            autoMute = true;
-        }
-
-        mTrackController[i].setMuteState(state & 0x7, time, autoMute);
-    }
+    ::setTrackMuteStates(mTrackController, mNumTracks, muteState, isRhythm, time);
 
     u8 volA = muteState->mVolumeA;
     if (volA != 0xFF) {
