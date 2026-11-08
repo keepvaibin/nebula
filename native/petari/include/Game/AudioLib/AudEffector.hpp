@@ -2,14 +2,13 @@
 
 #include <nebula_types.h>
 
-class NebulaArena;
 struct EffectLineCommand;
 
 class AudEffector {
 public:
     AudEffector();
 
-    void initFxLine(NebulaArena*);
+    void initFxLine();
     void setFxSend(f32);
     void setCutoff(s32);
     void setSpecialFx(s32);

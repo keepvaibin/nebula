@@ -131,7 +131,7 @@ AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, Ass
     mSeStrategyMgr = new (mSectionHeap->getHeap(), 0) AudSeStrategyMgr();
     mSeMgr.setStrategyMgr(mSeStrategyMgr);
     mAudEffector = new (mSectionHeap->getHeap(), 0) AudEffector();
-    mAudEffector->initFxLine(mSectionHeap->getHeap());
+    mAudEffector->initFxLine();
 
     if (pChordArchive != nullptr) {
         mRhythmMeSystem->mChordInfo.init(pChordArchive);
