@@ -238,7 +238,7 @@ void MiiSelectIcon::createFaceImageObj() {
     nw4r::lyt::TexMap* pTexMap;
 
     mIcon =
-        new MiiFaceIcon(128, 128, MiiFaceRecipe(MiiDataSource_Official, 0, MiiResolution_256, MiiExpFlag_Normal | MiiExpFlag_Blink), "Miiアイコン");
+        new MiiFaceIcon(128, 128, MiiFaceRecipe(Mii::SourceLibrary, 0, 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)), "Miiアイコン");
     mIcon->initWithoutIter();
 
     SiteTexture texObj;

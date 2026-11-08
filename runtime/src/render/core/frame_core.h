@@ -198,7 +198,8 @@ public:
 
     // Game thread, as a list is handed over: what the services queued since the last list.
     [[nodiscard]] RegistryOps take_ops();
-    // Render thread, at that list's first walk. Frees wait for `submitted_fence` to complete (reclaim).
+    // Render thread, at that list's first walk. Its frees are held until the next list's ops arrive (it walks, maybe
+    // more than once, with them named), then wait for `submitted_fence` of that call to complete (reclaim).
     void apply(RegistryOps& ops, std::uint64_t submitted_fence);
     void reclaim(std::uint64_t completed_fence);
     // Tables naming a freed texture go; their descriptor tables join `retired`.
@@ -274,6 +275,8 @@ private:
     std::unordered_map<std::uint32_t, LiveModel> live_models_;
     std::unordered_map<std::uint32_t, LiveMesh> live_meshes_;
     std::vector<Retired> retired_;
+    // The frees the list walking now came with (render thread).
+    std::vector<std::uint32_t> held_freed_models_, held_freed_meshes_;
 
     // Written under lock_ by services.
     RegistryOps incoming_;

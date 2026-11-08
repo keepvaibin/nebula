@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Mii library: the Miis the game's icon picker shows, in a native file (one text line per Mii, MiiFields), filled
-// by importing any console's Mii files (mii_formats.h). A console's RFL_DB.dat is read once, as the library's start,
-// when the library file does not exist yet.
+// by importing any console's Mii files (mii_formats.h). It holds any number of Miis and favourites. A Wii save
+// folder's Mii database is read once, as the library's start, when the library file does not exist yet.
 #pragma once
 
 #include <array>
@@ -20,9 +20,6 @@ namespace galaxy::host {
 
 // One Mii as the Wii stores it (MiiCharData, big-endian): 74 bytes. Only imports read it.
 inline constexpr std::size_t kMiiRecordSize = 0x4A;
-inline constexpr std::size_t kMiiLibrarySlots = 100;
-// The Wii's limit of favourite Miis (its Mii Channel; the game's icon picker holds that many).
-inline constexpr unsigned kMiiFavoriteLimit = 10;
 using MiiRecord = std::array<std::byte, kMiiRecordSize>;
 
 // A Mii's fields as numbers (the game's character info): every part, colour, scale and position, names UTF-16, the
@@ -51,35 +48,36 @@ struct MiiFields {
 // is required.
 using MiiPreparer = std::function<bool(MiiRecord&)>;
 
-// The library's slots; an empty one holds nothing.
-struct MiiLibrary {
-    std::array<std::optional<MiiFields>, kMiiLibrarySlots> slots;
+// The library's Miis in the order they were added. The game names one by its place while it runs; a save names it
+// by its create ID, so the places need not last past a start.
+struct MiiCollection {
+    std::vector<MiiFields> miis;
+
+    bool operator==(const MiiCollection&) const = default;
 };
 
-// The library file's text: a first line naming the format, then one line per Mii, "<slot> <name>=<value> ...", the
-// numbers decimal, the names and create ID hexadecimal. Unknown names are skipped; a line without a slot or create ID
-// is not a Mii. None when the first line is not the format's.
-[[nodiscard]] std::string write_mii_library(const MiiLibrary& library);
-[[nodiscard]] std::optional<MiiLibrary> read_mii_library(std::string_view text);
+// The library file's text: a first line naming the format, then one line per Mii, "<place> <name>=<value> ...", the
+// numbers decimal, the names and create ID hexadecimal. Unknown names are skipped; a line without a place or create ID
+// is not a Mii. Read in the places' order, gaps closed (files of earlier builds kept the Wii's 100 slots). None when
+// the first line is not the format's.
+[[nodiscard]] std::string write_mii_library(const MiiCollection& library);
+[[nodiscard]] std::optional<MiiCollection> read_mii_library(std::string_view text);
 
 // The Miis a file holds, its empty slots left out (any console's: mii_formats.h). `error` says why there are none.
 [[nodiscard]] std::vector<MiiRecord> read_miis(std::span<const std::byte> bytes, std::string* error);
 struct MiiMergeResult {
-    unsigned added = 0;        // into free slots
-    unsigned updated = 0;      // a Mii the library holds (its create ID), changed since
-    unsigned duplicates = 0;   // the library already holds it (the same Mii, whatever its create ID)
-    unsigned invalid = 0;      // the game refused it
-    unsigned no_room = 0;      // every slot taken
-    unsigned unfavorited = 0;  // past the ten favourites the Wii allows: added as an ordinary Mii
-    unsigned converted = 0;    // from a newer console's Mii (its extra parts and colours: the Wii's nearest)
+    unsigned added = 0;       // after the library's Miis
+    unsigned updated = 0;     // a Mii the library holds (its create ID), changed since
+    unsigned duplicates = 0;  // the library already holds it (the same Mii, whatever its create ID)
+    unsigned invalid = 0;     // the game refused it
+    unsigned converted = 0;   // from a newer console's Mii (its extra parts and colours: the Wii's nearest)
 };
 
-// Adds Miis to the library: new ones into its first free slots (a fresh create ID for one without a console's, or one
-// another Mii holds), changed ones over their old selves, the same ones skipped. `placed`: each written Mii and its
-// slot.
-MiiMergeResult merge_miis(MiiLibrary& library, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
+// Adds Miis to the library: new ones after its Miis (a fresh create ID for one without a console's, or one another Mii
+// holds), changed ones over their old selves, the same ones skipped. `placed`: each written Mii and its place.
+MiiMergeResult merge_miis(MiiCollection& library, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
                           std::vector<std::pair<unsigned, MiiFields>>* placed);
-[[nodiscard]] unsigned count_miis(const MiiLibrary& library);
+[[nodiscard]] unsigned count_miis(const MiiCollection& library);
 
 // The library in use: its file, the console database it starts from when the file is missing, the folder whose files
 // are imported at each start, the game's checks.
@@ -107,9 +105,9 @@ struct MiiFolderAdd {
                                              std::span<const std::byte> bytes);
 // The Miis in a library file; none when it is missing or not a library.
 [[nodiscard]] std::optional<unsigned> mii_library_file_count(const std::filesystem::path& file);
-// The Mii in a slot of the library (as the game reads it), none for an empty slot.
-[[nodiscard]] std::optional<MiiFields> mii_library_slot(unsigned slot);
-// The game thread: the Miis written since the last call, by slot.
+// The library's Mii at a place (as the game reads it), none past its Miis.
+[[nodiscard]] std::optional<MiiFields> mii_library_mii(unsigned place);
+// The game thread: the Miis written since the last call, by place.
 [[nodiscard]] std::vector<std::pair<unsigned, MiiFields>> take_mii_installs();
 
 }  // namespace galaxy::host

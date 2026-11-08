@@ -15,6 +15,7 @@ pub mod material;
 pub mod kcl;
 pub mod camera;
 pub mod message;
+pub mod mii_parts;
 pub mod merge;
 pub mod clip;
 #[cfg(feature = "proof-tools")]
@@ -174,7 +175,16 @@ fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) ->
             continue;
         }
         for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
-            let path = if item.path.is_empty() { member.path.clone() } else { format!("{}/{}", member.path, item.path) };
+            // The Mii parts file holds the native parts under their own name.
+            let member_path = if mii_parts::is_source(file) {
+                match member.path.rsplit_once('/') {
+                    Some((folder, _)) => format!("{folder}/{}", mii_parts::NAME),
+                    None => mii_parts::NAME.to_string(),
+                }
+            } else {
+                member.path.clone()
+            };
+            let path = if item.path.is_empty() { member_path } else { format!("{member_path}/{}", item.path) };
             items.push(StoreItem { path, order: member.offset, bytes: item.bytes });
         }
     }
@@ -279,9 +289,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if bytes.starts_with(b"RFNT") {
         let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
         Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
-    } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {
-        let textured = formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?;
-        Some(native_data::rfl_res_host(&textured).with_context(|| format!("{name}: Mii parts (host order)"))?)
+    } else if mii_parts::is_source(name) {
+        Some(mii_parts::cook(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
     } else if extension(name) == "bti" {
         // A texture file whose image is a record already keeps it; every one's header turns host order.
         let textured = if texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {

@@ -103,6 +103,6 @@ private:
 // The store's first bytes hold this.
 inline constexpr char kStoreMagic[8] = {'N', 'B', 'S', 'T', 'O', 'R', 'E', '\0'};
 // The store's contents' form (cook/store.rs VERSION): a store of another version needs importing again.
-inline constexpr std::uint32_t kStoreVersion = 9u;
+inline constexpr std::uint32_t kStoreVersion = 12u;
 
 }  // namespace galaxy::disc

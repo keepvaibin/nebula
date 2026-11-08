@@ -81,8 +81,11 @@ public:
 
     // Render thread.
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
-    // Applies `ops` through this frame's upload list; the ids it freed, targets too, join `freed`.
+    // Applies `ops` through this frame's upload list, after release_held. Its frees are held while the list they came
+    // with walks.
     void apply_ops(Ops& ops, std::vector<std::uint32_t>& freed);
+    // At each list's first walk: the frees the last list came with go, and their ids, targets too, join `freed`.
+    void release_held(std::vector<std::uint32_t>& freed);
     [[nodiscard]] TextureHandle handle(std::uint32_t id);
     // Bumps whenever `handle` of a live id changes.
     [[nodiscard]] std::uint64_t revision() const noexcept { return revision_; }
@@ -197,6 +200,8 @@ private:
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
     std::unordered_set<std::uint32_t> blank_images_;
+    // The frees the list walking now came with.
+    std::vector<std::uint32_t> held_frees_;
     std::vector<std::vector<Retired>> retired_;
     std::vector<std::vector<ChunkRef>> kept_;
     unsigned frame_slot_ = 0u;

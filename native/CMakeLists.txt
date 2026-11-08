@@ -23,8 +23,7 @@ set(petari "${NEBULA_PETARI_DIR}")
 file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c"
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
-    "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
-    "${petari}/src/MiiLib/*.c" "${petari}/src/MiiLib/*.cpp")
+    "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c")
 
 # What a plugin built with the game's headers must match: any change to them may move a field or a virtual function.
 file(GLOB_RECURSE nebula_game_headers "${petari}/include/*" "${petari}/libs/*.h" "${petari}/libs/*.hpp"
@@ -60,7 +59,6 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
     "${petari}/libs/JSystem/include"
-    "${petari}/libs/MiiLib/include"
     "${petari}/libs/nw4r/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

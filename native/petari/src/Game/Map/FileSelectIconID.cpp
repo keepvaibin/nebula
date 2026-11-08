@@ -13,7 +13,7 @@ void FileSelectIconID::set(const FileSelectIconID& rOther) {
     mData = rOther.mData;
 }
 
-void FileSelectIconID::setMiiIndex(u16 miiIndex) {
+void FileSelectIconID::setMiiIndex(u32 miiIndex) {
     mData = miiIndex;
     mIsMii = true;
 }
@@ -22,7 +22,7 @@ bool FileSelectIconID::isMii() const {
     return mIsMii;
 }
 
-u16 FileSelectIconID::getMiiIndex() const {
+u32 FileSelectIconID::getMiiIndex() const {
     return mData;
 }
 

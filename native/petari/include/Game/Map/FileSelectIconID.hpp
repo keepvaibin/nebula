@@ -49,9 +49,9 @@ public:
     /// @param rOther The reference to the `FileSelectIconID` to copy from.
     void set(const FileSelectIconID& rOther);
 
-    /// @brief Updates the position of the Mii data in the Mii database.
+    /// @brief Names the library Mii at `miiIndex`.
     /// @param miiIndex The new position of the Mii data.
-    void setMiiIndex(u16 miiIndex);
+    void setMiiIndex(u32 miiIndex);
 
     /// @brief Determines if the icon represents a Mii character.
     /// @return `true` if the icon represents a Mii character, `false` otherwise.
@@ -59,7 +59,7 @@ public:
 
     /// @brief Returns the position of the Mii data in the Mii database.
     /// @return The position of the Mii data.
-    u16 getMiiIndex() const;
+    u32 getMiiIndex() const;
 
     /// @brief Updates the identifier of the Mario character.
     /// @param fellowID The new identifier of the Mario character.
@@ -78,5 +78,5 @@ private:
     bool mIsMii;
 
     /// @brief The position of the Mii data in the Mii database or the identifier of a Mario character.
-    u16 mData;
+    u32 mData;
 };

@@ -13,11 +13,11 @@ MiiFaceIconHolder::MiiFaceIconHolder(u32 iconNum, const char* pName)
                        MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_MiiFaceIcon);
 }
 
+// Every icon asked for since the last draw, in the frame it was asked for.
 void MiiFaceIconHolder::drawIcons() {
-    for (int i = 0; i < mIconNum; i++) {
+    for (u32 i = 0; i < mIconNum; i++) {
         if (mIcon[i]->mIsRequestMakeIcon) {
             mIcon[i]->drawIcon();
-            break;
         }
     }
 }

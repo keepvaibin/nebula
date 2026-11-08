@@ -180,7 +180,7 @@ void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
     deleteCompleteEffect();
     mIconID->set(rID);
     if (rID.isMii()) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
         killAllModels();
         mFaceParts->makeActorAppeared();
     } else {
@@ -322,7 +322,7 @@ void FileSelectItem::exeChangeMii() {
     }
 
     if (MR::isStep(this, 39)) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
     }
 
     if (MR::isStep(this, 40)) {
@@ -409,7 +409,7 @@ void FileSelectItem::createMii() {
         mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Miiフェイス", 0);
     } else {
         mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Miiフェイス",
-                                                                MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
+                                                                MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
     }
 
     mFaceParts->initFixedPosition(_104, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));

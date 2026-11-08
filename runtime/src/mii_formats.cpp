@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mii files of every console as Wii Mii records (mii_formats.h).
 //
-// Layouts: the Wii's record from the game's own MiiLib (MII_Endian.h bit positions); the 3DS/Wii U record
+// Layouts: the Wii's record as the Wii's Mii library lays it out (its bitfields); the 3DS/Wii U record
 // (Ver3StoreData), the Switch's CharInfo, CoreData and StoreData from MiiPort's structure patterns (Genwald, ISC) and
 // 3dbrew; Mii Studio's and Mii Creator's from MiiJS (Stewared, ISC). The Switch's colour and glasses tables are the
 // Switch's own downgrade to the 3DS's (MiiPort); the 3DS parts the Wii lacks take MiiJS's nearest Wii part (its own
@@ -38,6 +38,7 @@ constexpr u32 kFflMagic = 0x46464F43;     // "FFOC": the Wii U's FFL_ODB.dat
 constexpr u32 kRflMagic = 0x524E4F44;     // "RNOD": the Wii's RFL_DB.dat
 constexpr std::size_t kRflDatabase = 0x1F1E0;
 constexpr std::size_t kRflFirstRecord = 0x04;
+constexpr std::size_t kRflRecords = 100;
 
 u8 byte(std::span<const std::byte> b, std::size_t at) { return static_cast<u8>(b[at]); }
 u16 le16(std::span<const std::byte> b, std::size_t at) { return static_cast<u16>(byte(b, at) | byte(b, at + 1) << 8); }
@@ -45,7 +46,7 @@ u16 be16(std::span<const std::byte> b, std::size_t at) { return static_cast<u16>
 u32 be32(std::span<const std::byte> b, std::size_t at) { return static_cast<u32>(be16(b, at)) << 16 | be16(b, at + 2); }
 
 // The Wii record's fields: bit position from the record's first bit, most significant first in each big-endian
-// 16-bit unit, and width (MiiLib MII_Endian.h).
+// 16-bit unit, and width (the Wii's own bitfields).
 struct WiiField {
     u16 pos;
     u8 len;
@@ -190,8 +191,8 @@ MiiRecord wii_from_modern(ModernMii m) {
     if (m.mouth_type > 23u) m.mouth_type = lookup(kWiiMouthForVer3, m.mouth_type - 24u);
 
     MiiRecord r{};
-    // A placeholder create ID (a fresh one is made on import): its type bits, special or not (MiiLib
-    // MII_CREATE_ID_MASK_NOT_SPECIAL; MiiJS: 100 normal, 010 special).
+    // A placeholder create ID (a fresh one is made on import): its type bits, special or not (the Wii's not-special
+    // bit; MiiJS: 100 normal, 010 special).
     r[0x18] = static_cast<std::byte>(m.special ? 0x40u : 0x80u);
     for (std::size_t i = 0; i < 10u; ++i) {
         r[0x02 + 2 * i] = static_cast<std::byte>(m.name[i] >> 8u);
@@ -678,7 +679,7 @@ MiiFileContents read_bytes(std::span<const std::byte> b, std::string_view extens
     const u32 magic = b.size() >= 4u ? be32(b, 0) : 0u;
     ModernMii m;
     if (b.size() == kRflDatabase && magic == kRflMagic) {
-        wii(kRflFirstRecord, kMiiLibrarySlots, kWiiRecord, "Wii Mii database (RFL_DB.dat)");
+        wii(kRflFirstRecord, kRflRecords, kWiiRecord, "Wii Mii database (RFL_DB.dat)");
     } else if (b.size() == kRemoteBlock && magic == kRemoteMagic) {
         wii(0x08, 10u, kWiiRecord, "Wii Remote Mii data");
     } else if (magic == kCflMagic) {
@@ -742,20 +743,24 @@ constexpr std::size_t kName = 0x02, kHeight = 0x16, kBuild = 0x17, kCreateIdAt =
 
 }  // namespace
 
-std::vector<std::pair<unsigned, MiiRecord>> read_wii_mii_database(std::span<const std::byte> bytes) {
-    std::vector<std::pair<unsigned, MiiRecord>> out;
+std::vector<MiiRecord> read_wii_mii_database(std::span<const std::byte> bytes) {
+    std::vector<MiiRecord> out;
     if (bytes.size() != kRflDatabase || be32(bytes, 0) != kRflMagic) {
         return out;
     }
-    for (unsigned slot = 0; slot < kMiiLibrarySlots; ++slot) {
+    for (std::size_t slot = 0; slot < kRflRecords; ++slot) {
         const auto record = bytes.subspan(kRflFirstRecord + slot * kWiiRecord, kWiiRecord);
         if (has_id(record)) {
             MiiRecord r{};
             std::copy(record.begin(), record.end(), r.begin());
-            out.emplace_back(slot, r);
+            out.push_back(r);
         }
     }
     return out;
+}
+
+std::string_view wii_mii_database_member() noexcept {
+    return "shared2/menu/FaceLib/RFL_DB.dat";
 }
 
 MiiFields decode_wii_mii(const MiiRecord& r) noexcept {

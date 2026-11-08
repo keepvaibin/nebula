@@ -1,60 +1,44 @@
 #pragma once
 
+#include "Game/NPC/MiiFaceRecipe.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include <MiiTypes.h>
 
-class MiiFaceRecipe;
-
-/// @brief The resource creator for the icon of a Mii character.
+/// @brief A Mii's icon: a picture the renderer draws when asked (MiiFaceIconHolder at its draw), which a layout shows
+/// through its image header.
 class MiiFaceIcon : public NameObj {
 public:
-    /// @brief Creates a new `MiiFaceIcon`.
-    /// @param width The width of the texture, in pixels.
-    /// @param height The height of the texture, in pixels.
-    /// @param rRecipe The reference to the resource creator for the head of a Mii character.
-    /// @param pName The pointer to the null-terminated name of the object.
+    /// @param width The picture's width, in pixels.
+    /// @param height The picture's height, in pixels.
+    /// @param rRecipe The Mii.
     MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName);
 
     virtual void init(const TableIter& rIter);
     virtual void movement();
 
-    /// @brief Creates the icon texture.
+    /// @brief Draws the icon, once after each change of Mii.
     void drawIcon();
 
-    /// @brief Opens a request to create the icon texture.
     void requestToMakeIcon();
 
-    /// @brief Updates the position of the Mii data in the database.
-    /// @param index The position of the Mii data in the database.
-    void setIndex(u16 index);
+    /// @brief The library Mii the icon shows.
+    void setIndex(u32 index);
 
-    /// @brief Initializes the texture data buffer.
-    void createImageBuffer();
-
-    /// @brief The position of the Mii data in the database.
-    u16 mIndex;
-
-    /// @brief Determines if the background of the icon texture should be colored with the Mii character's favorite color.
-    bool mIsFavoriteColorBG;
-
-    /// @brief The width of the texture, in pixels.
-    u16 mWidth;
-
-    /// @brief The height of the texture, in pixels.
-    u16 mHeight;
-
-    /// @brief The pointer to the resource creator for the head of a Mii character.
-    MiiFaceRecipe* mRecipe;
-
-    /// @brief The pointer to the texture data buffer.
+    /// @brief The image header a layout's texture takes (ResTIMG); the picture is named by the image after it.
     u8* mImageBuffer;
 
-    /// @brief Determines if the icon texture has been created.
+    /// @brief The icon's background: its Mii's favourite colour, or black.
+    bool mIsFavoriteColorBG;
+
+    /// @brief A request to draw is open.
+    bool mIsRequestMakeIcon;
+
+    /// @brief The icon was drawn since its Mii last changed (when its Mii is not one the game takes, nothing was).
     bool mIsCreated;
 
-    /// @brief The error status for the creation of the icon texture.
-    MiiErrcode mMakeIconResult;
+private:
+    void createImageBuffer();
 
-    /// @brief Determines if a request is open to create the icon texture.
-    bool mIsRequestMakeIcon;
+    MiiFaceRecipe mRecipe;
+    u16 mWidth;
+    u16 mHeight;
 };

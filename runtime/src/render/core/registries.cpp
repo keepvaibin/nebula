@@ -329,6 +329,8 @@ void Registries::lose_device() noexcept {
     const std::lock_guard guard(lock_);
     arenas_.clear();
     retired_.clear();
+    held_freed_models_.clear();
+    held_freed_meshes_.clear();
     slot_pages_.clear();
     slot_page_ = {};
     slot_page_used_ = 0u;
@@ -497,13 +499,16 @@ void Registries::apply(RegistryOps& ops, std::uint64_t submitted_fence) {
     for (const TextureTable& table : ops.tables) {
         tables_.push_back(std::make_unique<TextureTable>(table));
     }
-    for (const std::uint32_t id : ops.freed_models) {
+    // The last list has walked for good: what it freed retires now, at the work submitted so far.
+    for (const std::uint32_t id : held_freed_models_) {
         const GpuModel& model = models_[id];
         retired_.push_back({submitted_fence, model.arena, id, model.first_mesh, model.mesh_count, model.mesh_count != 0u});
     }
-    for (const std::uint32_t id : ops.freed_meshes) {
+    for (const std::uint32_t id : held_freed_meshes_) {
         retired_.push_back({submitted_fence, meshes_[id].arena, 0u, id, 1u, true});
     }
+    held_freed_models_ = std::move(ops.freed_models);
+    held_freed_meshes_ = std::move(ops.freed_meshes);
     ops = RegistryOps{};
 }
 

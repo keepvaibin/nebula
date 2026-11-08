@@ -1,19 +1,18 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActorGroup.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
-#include <MiiLib.h>
+#include "Game/Mii/MiiHead.hpp"
 
-class MiiDatabase;
 class MiiFaceParts;
 class MiiFaceRecipe;
-struct MiiDrawCoreSetting;
 
-typedef void (MiiFaceParts::*DrawPartsFuncPtr)(const MiiDrawCoreSetting*) const;
+typedef void (MiiFaceParts::*DrawPartsFuncPtr)(const Mii::Style&) const;
 
-class MiiFacePartsHolder : public LiveActorGroup, JKRDisposer {
+// The scene's Mii heads: the Mii parts from MiiFaceDatabase.arc, each head built at the draw after it is asked for, and
+// drawn with the game's Mii NPC stages.
+class MiiFacePartsHolder : public LiveActorGroup {
 public:
-    MiiFacePartsHolder(int);
+    MiiFacePartsHolder(int partsNumMax);
 
     virtual ~MiiFacePartsHolder();
     virtual void init(const TableIter& rIter);
@@ -21,17 +20,14 @@ public:
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 
-    void reinitCharModel();
+    void buildWaitingHeads();
     bool isInitEnd() const;
+    // The parts could not be read: no heads.
     bool isError() const;
-    static MiiFaceParts* createPartsFromReceipe(const char*, const MiiFaceRecipe&);
-    static MiiFaceParts* createPartsFromDefault(const char*, u16);
-    void drawEachActor(DrawPartsFuncPtr, const MiiDrawCoreSetting*) const;
-    void drawExtra() const;
-    void setStageOpa() const;
-    void setStageXlu() const;
+    static MiiFaceParts* createPartsFromReceipe(const char* pName, const MiiFaceRecipe& rRecipe);
+    static MiiFaceParts* createPartsFromDefault(const char* pName, u32 index);
+    void drawEachActor(DrawPartsFuncPtr pDrawFunc, const Mii::Style& rStyle) const;
 
-    MiiDatabase* _34;
-    MiiErrcode _38;
-    s32 _3C;
+private:
+    bool mReady;
 };

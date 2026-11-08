@@ -12,7 +12,6 @@
 #include "Game/NPC/HoneyQueen.hpp"
 #include "Game/NPC/KoopaJr.hpp"
 #include "Game/NPC/LuigiNPC.hpp"
-#include "Game/NPC/MiiDatabase.hpp"
 #include "Game/NPC/MiiFaceIcon.hpp"
 #include "Game/NPC/MiiFaceIconHolder.hpp"
 #include "Game/NPC/MiiFaceParts.hpp"
