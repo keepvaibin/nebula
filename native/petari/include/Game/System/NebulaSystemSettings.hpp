@@ -10,9 +10,8 @@ namespace NebulaSystemSettings {
         SoundModeSurround = 2,
     };
 
-    // The language, as the game's language tables index it (SC_LANGUAGE_*).
+    // The host's language: a SystemLanguage (Language.hpp), or a number past them that the game reads as English.
     u8 language();
     SoundMode soundMode();
     bool isWidescreen();
-    // Whether the screen saver may dim the screen after the controllers go idle.
 }  // namespace NebulaSystemSettings
