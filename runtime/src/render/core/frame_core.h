@@ -154,6 +154,8 @@ struct ListData {
         std::uint32_t after = 0u, probe = 0u;
     };
     std::vector<EarlyProbe> early_probes;
+    // Clears of the scene's depth that nothing after them in the list reads or writes (plan_late_depth_clears).
+    std::vector<std::uint32_t> late_depth_clears;
 
     // Read once from the list.
     bool scanned = false;
