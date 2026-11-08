@@ -5,6 +5,7 @@
 -keep class dev.nebula.galaxy.GameActivity {
     native <methods>;
     public void *();
+    public void pickFiles(int);
 }
 # The real Wii Remote's USB link (platform/sdl/wiimote_link_android.cpp) calls these by name.
 -keep class dev.nebula.galaxy.WiimoteUsb {

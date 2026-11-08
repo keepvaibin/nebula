@@ -129,9 +129,10 @@ std::vector<unsigned> available_upscalers() {
 // Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3, then ultra quality 1.3), at least 1x.
 using ui::quality_render_fraction;
 
-// Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
+// FSR 1 (or a temporal upscaler this machine cannot run, which falls back to it) with a quality mode: the render
+// scale follows the output like FSR 3/DLSS. Upscaling off renders at INTERNAL RESOLUTION instead.
 bool spatial_quality_mode(const RenderConfig& render) {
-    return temporal_upscaler(render) == 0u && render.spatial_quality >= 1u;
+    return temporal_upscaler(render) == 0u && render.upscaler != 0u && render.spatial_quality >= 1u;
 }
 
 // The fraction of the output's size the upscaling settings render at; DLSS's mode has a narrowest render width.
@@ -237,7 +238,7 @@ unsigned shown_position(unsigned tab) {
 // The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES",
+        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "TEXTURE DUMPS FOLDER",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
@@ -250,8 +251,8 @@ bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
         "POST-PROCESS", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
-        "MONITOR", "DISPLAY MODE", "RESOLUTION", "REFRESH RATE", "VSYNC", "DISCORD STATUS", "MIIS", "IMPORT MIIS", "YOUR MIIS", "MIIS FOLDER",
-        "GRAPHICS CARD", "DIAGNOSTICS",
+        // MONITOR, DISPLAY MODE and RESOLUTION: the display page has none on a phone (fullscreen_only).
+        "REFRESH RATE", "VSYNC", "DISCORD STATUS", "GRAPHICS CARD", "DIAGNOSTICS",
 #endif
     };
     for (const char* hidden : kHidden) {
@@ -268,14 +269,17 @@ RenderConfig s_settings_draft{};
 RuntimeSettings s_runtime_draft{};
 RuntimeSettings s_runtime_base{};  // the game's settings when s_runtime_draft was taken
 
-// GENERAL's on-screen control rows as the player set them, until Apply hands them to the controls; Back and closing the
-// menu drop them. Unedited, the controls' own.
+// CONTROLS' on-screen control rows (the phone's) as the player set them, until Apply hands them to the controls; Back
+// and closing the menu drop them. Unedited, the controls' own.
 struct TouchDraft {
     bool edited = false;
     galaxy::host::TouchControlsSettings settings{};
     bool reset_places = false;  // BUTTON PLACES' Reset, done at Apply
 };
 TouchDraft s_touch_draft{};
+// BUTTON SIZE's steps, in percent; 0 (Auto): as large as the game makes them for this screen. Kept for the screen as it
+// is now: each size and turn of a screen has its own.
+constexpr unsigned kTouchSizes[] = {0u, 40u, 50u, 60u, 70u, 80u, 90u, 100u, 110u, 120u, 130u, 140u, 150u, 160u, 180u, 200u};
 
 galaxy::host::TouchControlsSettings touch_draft_settings() {
     return s_touch_draft.edited ? s_touch_draft.settings : galaxy::host::touch_controls_settings();
@@ -597,6 +601,10 @@ enum class ControlsRow {
     WiimoteStatus,  // the Wii Remote modes: what the remote has and how it points (shown, not changed)
     PairJoyCon,
     ArrangeTouch,
+    TouchSize,  // the phone's on-screen controls (s_touch_draft)
+    TouchOpacity,
+    TouchVibration,
+    TouchPlaces,
     Reset,
 };
 
@@ -705,9 +713,15 @@ std::vector<ControlsRowInfo> controls_rows() {
     if (s_controls_devices.count != 1u || !galaxy::input::is_phone(s_controls_devices.entries[0].key)) {
         rows.push_back({ControlsRow::Device});
     }
-    // The phone's own controls are arranged, not bound.
+    // The phone's own controls are arranged and sized, not bound.
     if (galaxy::input::is_phone(s_controls_device)) {
         rows.push_back({ControlsRow::ArrangeTouch});
+        if (galaxy::host::touch_controls_present()) {
+            for (const ControlsRow kind : {ControlsRow::TouchSize, ControlsRow::TouchOpacity, ControlsRow::TouchVibration,
+                                           ControlsRow::TouchPlaces}) {
+                rows.push_back({kind});
+            }
+        }
         return rows;
     }
     for (unsigned index = 0; index < galaxy::input::kGameInputCount; ++index) {
@@ -1062,7 +1076,8 @@ void step_native_setting_round(int direction) {
     // A binding (on: wait for an input) and the reset (on: the defaults) are no lists: stepped as the keys step them.
     if (tab == kControlsTab &&
         (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset ||
-         controls_row(row).kind == ControlsRow::PairJoyCon || controls_row(row).kind == ControlsRow::ArrangeTouch)) {
+         controls_row(row).kind == ControlsRow::PairJoyCon || controls_row(row).kind == ControlsRow::ArrangeTouch ||
+         controls_row(row).kind == ControlsRow::TouchPlaces)) {
         adjust_native_setting(direction);
         return;
     }
@@ -1212,6 +1227,36 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::ArrangeTouch:
             if (delta > 0) galaxy::host::arrange_touch_controls();
+            return;
+        case ControlsRow::TouchSize: {
+            galaxy::host::TouchControlsSettings touch = touch_draft_settings();
+            unsigned index = 0u;
+            for (unsigned i = 0u; i < std::size(kTouchSizes); ++i) {
+                if (kTouchSizes[i] == touch.size) index = i;
+            }
+            touch.size = kTouchSizes[step(index, static_cast<unsigned>(std::size(kTouchSizes)))];
+            s_touch_draft.edited = true;
+            s_touch_draft.settings = touch;
+            return;
+        }
+        case ControlsRow::TouchOpacity: {
+            // 20..100 percent in steps of 10.
+            galaxy::host::TouchControlsSettings touch = touch_draft_settings();
+            touch.opacity = 20u + step((std::clamp(touch.opacity, 20u, 100u) - 20u) / 10u, 9u) * 10u;
+            s_touch_draft.edited = true;
+            s_touch_draft.settings = touch;
+            return;
+        }
+        case ControlsRow::TouchVibration: {
+            galaxy::host::TouchControlsSettings touch = touch_draft_settings();
+            touch.vibration = !touch.vibration;
+            s_touch_draft.edited = true;
+            s_touch_draft.settings = touch;
+            return;
+        }
+        case ControlsRow::TouchPlaces:
+            // Pressed again: kept as they are.
+            if (delta > 0) s_touch_draft.reset_places = !s_touch_draft.reset_places;
             return;
         case ControlsRow::WiimoteStatus:
             return;
@@ -1375,7 +1420,8 @@ bool handle_controls_key(std::uintptr_t key, bool was_down, bool from_pad) {
             start_controls_capture(info.target);
             return true;
         }
-        if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon || info.kind == ControlsRow::ArrangeTouch) {
+        if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon || info.kind == ControlsRow::ArrangeTouch ||
+            info.kind == ControlsRow::TouchPlaces) {
             adjust_native_setting(1);
             return true;
         }
@@ -1401,7 +1447,10 @@ std::size_t selected_settings_buttons() {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     if (tab == kControlsTab) {
         const ControlsRow kind = controls_row(row).kind;
-        return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon || kind == ControlsRow::ArrangeTouch ? 1u : 0u;
+        return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon || kind == ControlsRow::ArrangeTouch ||
+                       kind == ControlsRow::TouchPlaces
+                   ? 1u
+                   : 0u;
     }
     if (tab == kAudioTab) {
         return row == kAudioResetRow ? 1u : 0u;
@@ -1498,6 +1547,9 @@ SliderPlace settings_slider(unsigned tab, unsigned row, const std::vector<Settin
         break;
     case ControlsRow::GyroSensitivity: along(tuning.gyro_sensitivity, 0.2f, 0.1f, 5.0f); break;
     case ControlsRow::TouchSensitivity: along(tuning.touch_sensitivity, 0.2f, 0.1f, 5.0f); break;
+    case ControlsRow::TouchOpacity:
+        along(static_cast<float>(std::clamp(touch_draft_settings().opacity, 20u, 100u)), 20.0f, 10.0f, 100.0f);
+        break;
     default: break;
     }
     return place;
@@ -1919,6 +1971,7 @@ public:
 #if defined(__ANDROID__)
         state.fullscreen_only = true;
 #endif
+        state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.output_size = settings_output_size(render);
         state.window_sizes = settings_window_sizes(current, render.aspect_mode);
         state.frame_rates = settings_frame_rate_caps(render);
@@ -1953,6 +2006,7 @@ public:
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
         state.curved_surfaces_offered = curved_surfaces_offered();
+        state.folders_open = host_window::folders_open();
         state.measured_fps = host_window::measured_present_hz.load(std::memory_order_relaxed) *
                              (frame_generation_running() ? static_cast<double>(host_window::upscaler_caps().frames_presented) : 1.0);
         state.frame_rates = settings_frame_rate_caps(render, true);
@@ -2489,11 +2543,12 @@ SettingsRow mods_buttons_row() {
     const auto focus = std::find_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == s_mod_focus; });
     const bool options = focus != s_mods.end() && mod_has_options(*focus, next_start_language_folder());
 #if defined(__ANDROID__)
-    // A phone imports from the launcher, where its file picker is.
+    // A phone picks files (its picker has no folders) and shows no folder of the app's own storage.
     SettingsRow row = button_row(
-        {}, {options ? "OPTIONS" : "-OPTIONS", "RESCAN"},
+        {}, {"IMPORT FILE", options ? "OPTIONS" : "-OPTIONS", "RESCAN"},
         [](RenderConfig&, unsigned shown) {
-            const unsigned button = shown == 0u ? 2u : 4u;
+            static constexpr unsigned kButtons[] = {0u, 2u, 4u};
+            const unsigned button = kButtons[std::min(shown, 2u)];
 #else
     SettingsRow row = button_row(
         {}, {"IMPORT FILE", "IMPORT FOLDER", options ? "OPTIONS" : "-OPTIONS", "OPEN FOLDER", "RESCAN"},
@@ -2724,29 +2779,17 @@ public:
             state.mii_status = s_mii_status;
         }
         state.choosing_miis = s_mii_dialog_open.load(std::memory_order_acquire);
+        state.folders_open = host_window::folders_open();
         state.mii_count = s_mii_count.load(std::memory_order_acquire);
         if (state.mii_count < 0) {
             state.mii_count = static_cast<int>(galaxy::host::mii_library_count());
             s_mii_count.store(state.mii_count, std::memory_order_release);
-        }
-        state.touch_controls = galaxy::host::touch_controls_present();
-        if (state.touch_controls) {
-            const galaxy::host::TouchControlsSettings touch = touch_draft_settings();
-            state.touch_size = touch.size;
-            state.touch_opacity = touch.opacity;
-            state.touch_vibration = touch.vibration;
-            state.touch_reset_places = s_touch_draft.reset_places;
         }
         return state;
     }
     void act(ui::GeneralPageAction action) const override {
         if (action == ui::GeneralPageAction::ImportMiis) start_mii_import_dialog();
         else if (action == ui::GeneralPageAction::OpenMiiFolder) open_mii_folder();
-        else s_touch_draft.reset_places = !s_touch_draft.reset_places;  // pressed again: kept as they are
-    }
-    void set_touch_controls(unsigned size, unsigned opacity, bool vibration) const override {
-        s_touch_draft.edited = true;
-        s_touch_draft.settings = {size, opacity, vibration};
     }
 };
 
@@ -2904,6 +2947,16 @@ std::string native_settings_row_text(
             return "PAIR JOY-CON";
         case ControlsRow::ArrangeTouch:
             return "ON-SCREEN CONTROLS";
+        case ControlsRow::TouchSize: {
+            const unsigned size = touch_draft_settings().size;
+            return size == 0u ? std::string("BUTTON SIZE: AUTO") : "BUTTON SIZE: " + std::to_string(size) + "%";
+        }
+        case ControlsRow::TouchOpacity:
+            return "BUTTON OPACITY: " + std::to_string(std::clamp(touch_draft_settings().opacity, 20u, 100u)) + "%";
+        case ControlsRow::TouchVibration:
+            return std::string("VIBRATION: ") + on_off(touch_draft_settings().vibration);
+        case ControlsRow::TouchPlaces:
+            return std::string("BUTTON PLACES: ") + (s_touch_draft.reset_places ? "KEEP" : "RESET");
         case ControlsRow::Reset:
             return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
         }
@@ -3770,6 +3823,22 @@ NativeSettingsView build_native_settings_view() {
             } else if (info.kind == ControlsRow::ArrangeTouch) {
                 shown.buttons = true;
                 shown.value = "ARRANGE";
+            } else if (info.kind == ControlsRow::TouchPlaces) {
+                shown.buttons = true;
+            }
+            if (row == view.selected) {
+                switch (info.kind) {
+                case ControlsRow::TouchSize:
+                    view.help = "REMEMBERED FOR EACH SIZE AND TURN OF THE SCREEN. AUTO: FOR THIS SCREEN'S SIZE";
+                    break;
+                case ControlsRow::TouchOpacity: view.help = "HOW SOLID THE BUTTONS ARE DRAWN"; break;
+                case ControlsRow::TouchVibration: view.help = "A SHORT BUZZ WHEN A BUTTON IS PRESSED"; break;
+                case ControlsRow::TouchPlaces:
+                    view.help = s_touch_draft.reset_places ? "THE BUTTONS GO BACK TO THEIR FIRST PLACES WHEN APPLIED"
+                                                           : "PUTS THE BUTTONS BACK WHERE THE GAME PLACES THEM ON THIS SCREEN";
+                    break;
+                default: break;
+                }
             }
         }
         if (tab == kAudioTab && row == kAudioResetRow) {

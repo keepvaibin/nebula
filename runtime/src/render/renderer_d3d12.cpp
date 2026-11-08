@@ -1388,7 +1388,7 @@ void RendererD3D12::apply_window_size() {
     FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
     upscale_output_ = wanted;
     const auto config = render;
-    const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, config.internal_height,
+    const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, render_internal_height(config),
         D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION, host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
     wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
@@ -5193,7 +5193,7 @@ bool RendererD3D12::begin_output_scene(bool resolve_msaa_only) {
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
     // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
     // least the design's density on a window wider than 16:9 or narrower than 4:3, never above the window's.
-    const bool full = resolve_msaa_only || temporal || (get_render_config().hud_output_resolution || get_render_config().internal_height != 0u) || sharp_2d_requested();
+    const bool full = resolve_msaa_only || temporal || (get_render_config().hud_output_resolution || render_internal_height(get_render_config()) != 0u) || sharp_2d_requested();
     if (output_scene_active_ || !full) {
         return false;
     }

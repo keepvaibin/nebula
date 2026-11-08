@@ -311,7 +311,7 @@ void RendererVk::apply_window_size() {
     FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
     upscale_output_ = wanted;
     const auto config = get_render_config();
-    const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, config.internal_height,
+    const auto [render_width, render_height] = internal_extent(wanted.width, wanted.height, render_internal_height(config),
         vk::Context::get().properties().limits.maxImageDimension2D,
         host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
     wanted = FrameMap(render_width, render_height);
@@ -1269,7 +1269,7 @@ bool RendererVk::begin_output_scene(bool resolve_msaa_only) {
     }
     const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (RendererD3D12::begin_output_scene).
-    const bool full = temporal || (get_render_config().hud_output_resolution || get_render_config().internal_height != 0u) || sharp_2d_requested();
+    const bool full = temporal || (get_render_config().hud_output_resolution || render_internal_height(get_render_config()) != 0u) || sharp_2d_requested();
     if (!full || output.empty() || output.width < scene_map_.width ||
         (!temporal && output.width == scene_map_.width)) {
         return false;
@@ -1310,7 +1310,8 @@ void RendererVk::end_output_scene() {
 }
 
 void RendererVk::record_scene_aa() {
-    if (!post_.ready() || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
+    // A temporal upscaler antialiases the jittered scene itself (RendererD3D12::record_scene_aa).
+    if (!post_.ready() || scene_temporal_ || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
     const GpuPassScope pass{*this, GpuPass::SceneAa};

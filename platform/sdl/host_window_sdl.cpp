@@ -22,6 +22,7 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/virtual_keys.h"
@@ -45,6 +46,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <thread>
 
@@ -191,22 +194,65 @@ void forward_output_to_logcat() {
     }).detach();
 }
 
-// A method of the activity (GameActivity.java) on its UI thread's terms: it posts the work itself.
-void call_activity(const char* method) {
+// A method of the activity (GameActivity.java) on its UI thread's terms: it posts the work itself. `method` is a
+// string literal; with `has_argument` it takes one int, `(I)V`.
+struct ActivityCall {
+    const char* method = nullptr;
+    bool has_argument = false;
+    int argument = 0;
+};
+std::mutex g_activity_calls_mutex;
+std::deque<ActivityCall> g_activity_calls;  // from other threads, for SDL's (run_requests)
+
+void call_activity_now(const ActivityCall& call) {
     JNIEnv* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
     jobject activity = static_cast<jobject>(SDL_GetAndroidActivity());
     if (env == nullptr || activity == nullptr) {
         return;
     }
     jclass type = env->GetObjectClass(activity);
-    if (jmethodID id = env->GetMethodID(type, method, "()V"); id != nullptr) {
-        env->CallVoidMethod(activity, id);
+    if (jmethodID id = env->GetMethodID(type, call.method, call.has_argument ? "(I)V" : "()V"); id != nullptr) {
+        if (call.has_argument) {
+            env->CallVoidMethod(activity, id, static_cast<jint>(call.argument));
+        } else {
+            env->CallVoidMethod(activity, id);
+        }
     }
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
     }
     env->DeleteLocalRef(type);
     env->DeleteLocalRef(activity);
+}
+
+// The Java VM is SDL's thread's to call (the game's threads run on stacks of their own, which it cannot attach): from
+// any other thread the call waits for SDL's next pump.
+void call_activity(ActivityCall call) {
+    if (std::this_thread::get_id() != g_sdl_thread) {
+        const std::lock_guard<std::mutex> lock(g_activity_calls_mutex);
+        g_activity_calls.push_back(call);
+        return;
+    }
+    call_activity_now(call);
+}
+
+void call_activity(const char* method) {
+    call_activity(ActivityCall{method, false, 0});
+}
+
+void run_activity_calls() {
+    for (;;) {
+        ActivityCall call;
+        {
+            const std::lock_guard<std::mutex> lock(g_activity_calls_mutex);
+            if (g_activity_calls.empty()) {
+                return;
+            }
+            call = g_activity_calls.front();
+            g_activity_calls.pop_front();
+        }
+        call_activity_now(call);
+    }
 }
 
 // The panel's fastest refresh rate at its resolution (GameActivity: Display.getSupportedModes). The settings offer
@@ -908,6 +954,7 @@ void run_requests() {
         (void)galaxy::render::native_settings_pad_key(key);
     }
 #if defined(__ANDROID__)
+    run_activity_calls();
     // The on-screen controls stand aside while a menu takes the screen's touches.
     static bool s_captured = false;
     if (const bool captured = galaxy::render::native_window_input_captured(); captured != s_captured) {
@@ -1447,15 +1494,125 @@ bool window_modal_active() noexcept {
 
 void test_resize_window(unsigned long, unsigned long) noexcept {}
 
-// Android's files come through the app's own screens.
-void pick_files(FilePick, std::function<void(std::vector<std::filesystem::path>)> done) {
-    done({});
+#if defined(__ANDROID__)
+// The document picker (GameActivity.pickFiles): Android hands back copies of the chosen files the game reads by path
+// (nativeFilesPicked). One picker at a time; a second ask while one is open answers nothing.
+namespace {
+std::mutex g_pick_mutex;
+std::function<void(std::vector<std::filesystem::path>)> g_pick_done;
+}  // namespace
+
+void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+    if (kind == FilePick::ModFolders) {
+        done({});
+        return;
+    }
+    bool open = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_pick_mutex);
+        open = static_cast<bool>(g_pick_done);
+        if (!open) g_pick_done = std::move(done);
+    }
+    if (open) {
+        done({});
+        return;
+    }
+    galaxy::sdl::call_activity(galaxy::sdl::ActivityCall{"pickFiles", true, kind == FilePick::Miis ? 0 : 1});
+}
+
+// The picker's answer: the copies' paths as UTF-8 bytes (JNI's own strings are modified UTF-8), none when cancelled.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeFilesPicked(JNIEnv* env, jclass,
+                                                                                       jobjectArray paths) {
+    std::vector<std::filesystem::path> files;
+    const jsize count = paths != nullptr ? env->GetArrayLength(paths) : 0;
+    for (jsize i = 0; i < count; ++i) {
+        auto* bytes = static_cast<jbyteArray>(env->GetObjectArrayElement(paths, i));
+        if (bytes == nullptr) continue;
+        const jsize size = env->GetArrayLength(bytes);
+        std::string text(static_cast<std::size_t>(size), '\0');
+        env->GetByteArrayRegion(bytes, 0, size, reinterpret_cast<jbyte*>(text.data()));
+        env->DeleteLocalRef(bytes);
+        files.emplace_back(std::move(text));
+    }
+    std::function<void(std::vector<std::filesystem::path>)> done;
+    {
+        const std::lock_guard<std::mutex> lock(g_pick_mutex);
+        done = std::move(g_pick_done);
+        g_pick_done = nullptr;
+    }
+    if (done) done(std::move(files));
 }
 
 void open_folder(const std::filesystem::path&) {}
 
+bool folders_open() noexcept {
+    return false;
+}
+#else
+// SDL's own dialogs: the desktop's (a portal or Zenity on Linux, the Cocoa panel on macOS), answered on a thread of
+// SDL's or of the window's.
+namespace {
+struct PickRequest {
+    std::function<void(std::vector<std::filesystem::path>)> done;
+};
+
+void SDLCALL picked(void* userdata, const char* const* files, int) {
+    std::unique_ptr<PickRequest> request(static_cast<PickRequest*>(userdata));
+    std::vector<std::filesystem::path> chosen;
+    for (const char* const* file = files; file != nullptr && *file != nullptr; ++file) {
+        chosen.emplace_back(*file);
+    }
+    request->done(std::move(chosen));
+}
+}  // namespace
+
+void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+    auto* request = new PickRequest{std::move(done)};
+    if (kind == FilePick::ModFolders) {
+        SDL_ShowOpenFolderDialog(picked, request, galaxy::sdl::g_window, nullptr, true);
+        return;
+    }
+    // As Windows' picker lists them (host_window_win32.cpp).
+    static constexpr SDL_DialogFileFilter kMiis[] = {
+        {"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
+         "mii;rcd;rsd;mae;miigx;ncd;nsd;cfcd;cfsd;ffcd;ffsd;charinfo;nfsd;nfcd;mnms;emnms;miic;dat;bin;txt"},
+        {"All files", "*"}};
+    static constexpr SDL_DialogFileFilter kMods[] = {
+        {"Mods and texture packs (luma, zip, 7z, rar, tar)", "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst"},
+        {"All files", "*"}};
+    const SDL_DialogFileFilter* filters = kind == FilePick::Miis ? kMiis : kMods;
+    SDL_ShowOpenFileDialog(picked, request, galaxy::sdl::g_window, filters, 2, nullptr, true);
+}
+
+// The file manager at the folder (made first, as on Windows).
+void open_folder(const std::filesystem::path& folder) {
+    std::error_code error;
+    std::filesystem::create_directories(folder, error);
+    const std::string url = "file://" + galaxy::path_text(std::filesystem::absolute(folder, error));
+    if (!SDL_OpenURL(url.c_str())) {
+        std::fprintf(stderr, "[sdl] open folder failed: %s\n", SDL_GetError());
+    }
+}
+
+bool folders_open() noexcept {
+    return true;
+}
+#endif
+
+// AMD's FSR 3 frame generation where the device runs it: built in, its two queues given, and FSR 3's compute features
+// (before the device, what the build holds).
 UpscalerCaps upscaler_caps() noexcept {
-    return {};
+    UpscalerCaps caps;
+    const vk::Context& context = vk::Context::get();
+    caps.fsr_frame_generation =
+        fsr_frame_generation_compiled() &&
+        (context.device() == VK_NULL_HANDLE ||
+         (context.generation_present_queue() != VK_NULL_HANDLE && context.generation_acquire_queue() != VK_NULL_HANDLE &&
+          context.temporal_upscaling()));
+    if (get_render_config().frame_generation == 2u) {
+        caps.frames_presented = frame_generation_running() && frame_generation_allowed() ? 2u : 1u;
+    }
+    return caps;
 }
 
 unsigned dlss_min_width(unsigned, unsigned, unsigned) noexcept {

@@ -115,7 +115,8 @@ std::vector<Interpolation> interpolation_modes(const FrameRateCaps& caps) {
     if (caps.generated_offered && !interpolation_targets(Interpolation::kFrameGeneration, caps).empty()) {
         modes.push_back(Interpolation::kFrameGeneration);
     }
-    if (caps.fsr_generation_offered) {
+    // Its 120 needs a display that shows 120.
+    if (caps.fsr_generation_offered && (caps.refresh_hz == 0u || caps.refresh_hz >= 119u)) {
         modes.push_back(Interpolation::kFsrGeneration);
     }
     return modes;

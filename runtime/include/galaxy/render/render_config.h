@@ -95,11 +95,11 @@ struct RenderConfig {
     // 0 native AA 1.0, 1 quality 1.5, 2 balanced 1.7, 3 performance 2.0, 4 ultra performance 3.0, 5 ultra quality 1.3
     // (not DLSS, which has no such mode: it runs 5 as quality).
     unsigned temporal_quality    = 1;
-    // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-5 render at the output scale divided by the
-    // temporal_quality ratios.
+    // FSR 1: 0 renders at the output's size; 1-5 render at the output scale divided by the temporal_quality ratios.
     unsigned spatial_quality     = 0;
-    // 0 follows the content area of the output; otherwise the selected vertical pixel count.
-    // Width follows the current content aspect, including a fold or window resize.
+    // Upscaling off (upscaler 0): 0 follows the content area of the output; otherwise the selected vertical pixel
+    // count. Width follows the current content aspect, including a fold or window resize. Ignored with an upscaler on
+    // (render_internal_height).
     unsigned internal_height     = 0;
     // RCAS strength 0-100; 0 skips the pass.
     unsigned sharpness           = 0;
@@ -179,6 +179,11 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
 inline constexpr std::array<unsigned, 9> kInternalHeights{0, 144, 240, 360, 480, 720, 1080, 1440, 2160};
 inline unsigned normalized_internal_height(unsigned height) {
     return std::find(kInternalHeights.begin(), kInternalHeights.end(), height) != kInternalHeights.end() ? height : 0u;
+}
+// The exact height the 3D scene renders at: INTERNAL RESOLUTION with upscaling off. An upscaler's mode sets the
+// scale instead (upscaler_render_fraction), so the two never multiply.
+inline unsigned render_internal_height(const RenderConfig& cfg) {
+    return cfg.upscaler == 0u ? normalized_internal_height(cfg.internal_height) : 0u;
 }
 // A common sizing rule for both encoders. Bounds preserve aspect and fit `max_dimension`, the device's largest 2D
 // texture (D3D12's required 16384, Vulkan's maxImageDimension2D).

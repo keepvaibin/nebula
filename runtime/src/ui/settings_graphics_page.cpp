@@ -20,21 +20,22 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     std::vector<SettingsRow> rows;
     char text[96]{};
     rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
-    {
+    const std::vector<unsigned>& choices = state.upscalers;
+    const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
+    // One row sets the 3D resolution: the exact height with upscaling off, the upscaler's mode with it on
+    // (render_internal_height: the renderer reads the height only with upscaling off).
+    const bool upscaling = !offered || render.upscaler != 0u;
+    if (!upscaling) {
         const unsigned height = normalized_internal_height(render.internal_height);
         const std::string value = height ? std::to_string(height) + "P" + (height == 2160 ? " (4K)" : "") : "MATCH DISPLAY";
         rows.push_back({"INTERNAL RESOLUTION", value,
             [](RenderConfig& draft, int delta) {
                 const auto found = std::find(kInternalHeights.begin(), kInternalHeights.end(), normalized_internal_height(draft.internal_height));
                 draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
-                // An explicit resolution is an exact height; a new selection starts at native quality.
-                draft.spatial_quality = 0;
             }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
     }
     {
         static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS", "XESS", "SGSR 2"};
-        const std::vector<unsigned>& choices = state.upscalers;
-        const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
         std::string value = kUpscalers[offered ? std::min(render.upscaler, 5u) : 1u];
         if (offered && render.upscaler == 3u && !state.dlss_supported) {
             value += state.dlss_installed ? " (AFTER RESTART)" : " (DOWNLOAD)";
@@ -59,7 +60,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
     const bool rt_offered = state.ray_tracing_offered;
     const bool rt_on = rt_offered && render.ray_tracing_enabled;
-    {
+    if (upscaling) {
         // By the config's numbers (render_config.h temporal_quality: 5 ultra quality came last), shown sharpest first.
         static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE", "ULTRA QUALITY"};
         static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE", "ULTRA QUALITY"};
@@ -96,14 +97,17 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                     "CONTRAST-ADAPTIVE SHARPENING OF THE FINAL IMAGE"});
     rows.back().slider_steps = 10u;
     rows.back().slider_at = static_cast<std::uint16_t>(std::min(render.sharpness, 100u) / 10u);
-    {
+    // A temporal upscaler antialiases the scene itself: anti-aliasing and MSAA have no part in its picture (the
+    // renderers skip both under it), so their rows go while it runs.
+    const bool temporal = state.temporal_upscaling;
+    if (!temporal) {
         std::string value = state.anti_aliasing_text;
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
         rows.push_back({"ANTI-ALIASING", value,
                         [&host](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
                         "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
     }
-    if (render.aa_mode == 1u || render.aa_mode == 2u) {
+    if (!temporal && (render.aa_mode == 1u || render.aa_mode == 2u)) {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
         rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
                         [&host](RenderConfig& draft, int delta) {
@@ -111,10 +115,9 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         },
                         "HIGHER FINDS MORE EDGES"});
     }
-    if (!rt_on) {
+    if (!rt_on && !temporal) {
         const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
-        std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
-        if (samples > 1u && render.upscaler >= 2u) value += " (OFF WITH TEMPORAL UPSCALING)";
+        const std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
         rows.push_back({"MSAA", value,
                         [&host](RenderConfig& draft, int delta) {
                             const unsigned index = static_cast<unsigned>(
@@ -156,20 +159,23 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
     const Interpolation mode = interpolation_of(render);
-    {
+    // A display no faster than the game's 60 offers nothing between: no row with one choice.
+    if (interpolation_modes(state.frame_rates).size() > 1u || mode != Interpolation::kOff) {
         std::string value = mode == Interpolation::kOff      ? "OFF"
                             : mode == Interpolation::kNative ? "NATIVE"
                             : mode == Interpolation::kFsrGeneration ? "FSR FRAME GENERATION"
                                                              : "DLSS FRAME GENERATION";
-        if (mode == Interpolation::kFsrGeneration && render.upscaler != 2u && render.upscaler != 4u) {
-            value += " (NEEDS FSR 3 OR XESS)";
+        // AMD's frame generation reads a temporal upscaler's depth and motion: FSR 3's, XeSS's or SGSR 2's.
+        const auto fsr_generation_upscaler = [](unsigned upscaler) { return upscaler == 2u || upscaler == 4u || upscaler == 5u; };
+        if (mode == Interpolation::kFsrGeneration && !fsr_generation_upscaler(render.upscaler)) {
+            value += " (NEEDS FSR 3, XESS OR SGSR 2)";
         }
         if (mode == Interpolation::kFrameGeneration) {
             if (!state.frame_rates.generated_supported) value += " (AFTER RESTART)";
             else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
         }
         rows.push_back({"INTERPOLATION", value,
-                        [&host](RenderConfig& draft, int delta) {
+                        [&host, fsr_generation_upscaler](RenderConfig& draft, int delta) {
                             const auto modes = interpolation_modes(host.query(draft).frame_rates);
                             const Interpolation current = interpolation_of(draft);
                             std::size_t index = 0u;
@@ -185,8 +191,15 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
                                 draft.upscaler = 3u;  // frame generation runs with DLSS
                             }
-                            if (next == Interpolation::kFsrGeneration && draft.upscaler != 2u && draft.upscaler != 4u) {
-                                draft.upscaler = 2u;  // AMD's reads an upscaler's depth and motion
+                            if (next == Interpolation::kFsrGeneration && !fsr_generation_upscaler(draft.upscaler)) {
+                                // FSR 3, AMD's own upscaler, else another this machine runs.
+                                const std::vector<unsigned> offered = host.query(draft).upscalers;
+                                for (const unsigned upscaler : {2u, 5u, 4u}) {
+                                    if (std::find(offered.begin(), offered.end(), upscaler) != offered.end()) {
+                                        draft.upscaler = upscaler;
+                                        break;
+                                    }
+                                }
                             }
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
@@ -325,12 +338,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     rows.push_back({"DUMP TEXTURES", render.texture_dump ? "ON" : "OFF",
                     [&host](RenderConfig& draft, int) { draft.texture_dump = !draft.texture_dump; },
                     "SAVES EVERY TEXTURE THE GAME SHOWS, FOR MAKING A PACK"});
-    rows.push_back(button_row("TEXTURE DUMPS FOLDER", {"OPEN"},
-                              [&host](RenderConfig&, unsigned) { host.open_folder(GraphicsFolder::TextureDumps); },
-                              "WHERE DUMPED TEXTURES GO"));
-    rows.push_back({"MOVIES", {}, nullptr, {}, true});
-    rows.push_back(button_row("MOVIES FOLDER", {"OPEN"}, [&host](RenderConfig&, unsigned) { host.open_folder(GraphicsFolder::Movies); },
-                              "VIDEOS NAMED LIKE THE GAME'S (PROLOGUEA.MP4) PLAY INSTEAD"));
+    if (state.folders_open) {
+        rows.push_back(button_row("TEXTURE DUMPS FOLDER", {"OPEN"},
+                                  [&host](RenderConfig&, unsigned) { host.open_folder(GraphicsFolder::TextureDumps); },
+                                  "WHERE DUMPED TEXTURES GO"));
+    }
+    if (state.folders_open) {
+        rows.push_back({"MOVIES", {}, nullptr, {}, true});
+        rows.push_back(button_row("MOVIES FOLDER", {"OPEN"}, [&host](RenderConfig&, unsigned) { host.open_folder(GraphicsFolder::Movies); },
+                                  "VIDEOS NAMED LIKE THE GAME'S (PROLOGUEA.MP4) PLAY INSTEAD"));
+    }
     return rows;
 }
 

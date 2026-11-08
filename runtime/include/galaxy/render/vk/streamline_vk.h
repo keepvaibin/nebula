@@ -5,6 +5,7 @@
 // installs (streamline_bridge.h). Manual hooking without its create proxies: the instance and device are made here with what
 // it reports it needs, and the swap chain's calls go through its proxies once it has the device.
 
+#include "galaxy/render/render_config.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 
 #include <volk.h>
@@ -76,7 +77,8 @@ void tag_hudless(VkCommandBuffer commands, const TemporalImage* picture) noexcep
 
 #else
 
-inline void open_frame(bool) noexcept {}
+// No Streamline here: frame generation runs while AMD's swap chain does.
+inline void open_frame(bool amd_generation) noexcept { set_frame_generation_running(amd_generation); }
 inline void mark_submit_start() noexcept {}
 inline void mark_submit_end() noexcept {}
 inline void mark_present_start() noexcept {}

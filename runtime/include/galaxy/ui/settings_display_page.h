@@ -17,6 +17,7 @@ struct DisplayPageState {
     std::vector<std::pair<unsigned, unsigned>> window_sizes;
     FrameRateCaps frame_rates;
     bool fullscreen_only = false;
+    bool temporal_upscaling = false;  // a temporal upscaler runs: the HUD draws at the display's resolution
 };
 enum class DisplayChange { Monitor, Mode, Resolution, Aspect };
 class DisplayPageHost {
