@@ -10,15 +10,14 @@ namespace NrvMapPartsRailPosture {
 MapPartsRailPosture::~MapPartsRailPosture() {
 }
 
-MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御") {
-    mMovePosture = 0;
+MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御"), mMovePosture(POSTURE_NONE) {
     mPostureMtx.identity();
 }
 
 void MapPartsRailPosture::init(const TableIter& rIter) {
     MR::getMapPartsArgMovePosture(&mMovePosture, mHost);
 
-    if (mMovePosture == 0) {
+    if (mMovePosture == POSTURE_NONE) {
         initNerve(GET_NERVE(MapPartsRailPosture, HostTypeDoNothing));
     } else {
         initNerve(GET_NERVE(MapPartsRailPosture, HostTypeMove));
@@ -38,53 +37,40 @@ bool MapPartsRailPosture::isWorking() const {
 }
 
 void MapPartsRailPosture::exeMove() {
-    s32 arg0 = -1;
-    MR::getRailArg0NoInit(mHost, &arg0);
-
-    Vec3f shadowVector;
-
-    if (mMovePosture == 3) {
-        MR::calcDropShadowVector(mHost, &shadowVector, nullptr, 0);
+    Vec3f gravity;
+    if (isPostureTypeRailDirRailUseShadowGravity()) {
+        MR::calcDropShadowVector(mHost, &gravity, nullptr, 0);
     } else {
-        MR::calcGravityVector(mHost, &shadowVector, nullptr, 0);
+        MR::calcGravityVector(mHost, &gravity, nullptr, 0);
     }
 
-    Vec3f v11 = MR::getRailDirection(mHost);
+    Vec3f railDir = MR::getRailDirection(mHost);
+    if (MR::isSameDirection(gravity, railDir)) {
+        return;
+    }
 
-    if (!MR::isSameDirection(shadowVector, v11)) {
-        if (!MR::isRailGoingToEnd(mHost)) {
-            v11.negate();
-        }
+    if (!MR::isRailGoingToEnd(mHost)) {
+        railDir.negate();
+    }
 
-        Vec3f v10(1.0f, 0.0f, 0.0f);
-        Vec3f v9(0.0f, 1.0f, 0.0f);
-        Vec3f v8(0.0f, 0.0f, 1.0f);
+    // Every mode stands up against gravity and faces the rail direction squared to it. Mode 2's
+    // front-exactly-along-the-rail path was never reached (the test that guarded it was always true).
+    Vec3f up(-gravity);
+    Vec3f side;
+    side.cross(up, railDir);
+    MR::normalize(&side);
+    Vec3f front;
+    front.cross(side, up);
+    MR::normalize(&front);
 
-        // BUG: as in the original, tests the member function's address (`__ptmf_test`), which is always true.
-        if (mMovePosture == 1 || &MapPartsRailPosture::isPostureTypeRailDirRailUseShadowGravity != nullptr) {
-            v9.set(-shadowVector);
-            v10.cross(v9, v11);
-            MR::normalize(&v10);
-            v8.cross(v10, v9);
-            MR::normalize(&v8);
-        } else if (mMovePosture == 2) {
-            v9.set(-shadowVector);
-            v8.set(v11);
-            v10.cross(v9, v8);
-            MR::normalize(&v10);
-            v9.cross(v8, v10);
-            MR::normalize(&v9);
-        }
+    Vec3f curSide;
+    mPostureMtx.getXDir(curSide);
+    MR::normalize(&curSide);
 
-        Vec3f v7;
-        mPostureMtx.getXDir(v7);
-        MR::normalize(&v7);
-
-        if (MR::isSameDirection(v7, v8)) {
-            MR::makeMtxFrontNoSupport(&mPostureMtx, v8);
-        } else {
-            MR::makeMtxFrontUp(&mPostureMtx, v8, v9);
-        }
+    if (MR::isSameDirection(curSide, front)) {
+        MR::makeMtxFrontNoSupport(&mPostureMtx, front);
+    } else {
+        MR::makeMtxFrontUp(&mPostureMtx, front, up);
     }
 }
 
@@ -92,5 +78,5 @@ void MapPartsRailPosture::exeDoNothing() {
 }
 
 bool MapPartsRailPosture::isPostureTypeRailDirRailUseShadowGravity() const {
-    return mMovePosture == 3;
+    return mMovePosture == POSTURE_RAIL_DIR_SHADOW_GRAVITY;
 }
