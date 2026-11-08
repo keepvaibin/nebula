@@ -7,66 +7,65 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 
-DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pParent) : ActorStateBase< DinoPackun >(pName, pParent) {
-    mSide = 1.0f;
+namespace {
+    // Walks faster than this use the run animation's speed.
+    const f32 cRunSpeedMin = 1.2f;
+    const s32 cStartSteps = 60;
+};  // namespace
+
+DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pHost) : ActorStateBase< DinoPackun >(pName, pHost), mSide(1.0f) {
 }
 
-bool DinoPackunAction::sendBlowAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool a3) {
+DinoPackunAction::~DinoPackunAction() {
+}
+
+// Moving into the receiver blows it away; otherwise it is a plain hit.
+bool DinoPackunAction::sendBlowAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool isFire) {
     Vec3f direction;
     MR::calcSensorDirection(&direction, pSender, pReceiver);
 
     if (mHost->mVelocity.dot(direction) >= 0.0f) {
-        if (a3) {
-            if (MR::sendMsgEnemyAttackFireStrong(pReceiver, pSender)) {
-                return true;
-            }
-        } else if (MR::sendMsgEnemyAttackMaximum(pReceiver, pSender)) {
-            return true;
+        if (isFire) {
+            return MR::sendMsgEnemyAttackFireStrong(pReceiver, pSender);
         }
-    } else if (a3) {
-        if (MR::sendMsgEnemyAttackFire(pReceiver, pSender)) {
-            return true;
-        }
-    } else if (MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
-        return true;
+
+        return MR::sendMsgEnemyAttackMaximum(pReceiver, pSender);
     }
 
-    return false;
+    return sendHitAttackMessage(pSender, pReceiver, isFire);
 }
 
-bool DinoPackunAction::sendHitAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool a3) {
-    if (a3) {
-        if (MR::sendMsgEnemyAttackFire(pReceiver, pSender)) {
-            return true;
-        }
-    } else if (MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
-        return true;
+bool DinoPackunAction::sendHitAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool isFire) {
+    if (isFire) {
+        return MR::sendMsgEnemyAttackFire(pReceiver, pSender);
     }
 
-    return false;
+    return MR::sendMsgEnemyAttackStrong(pReceiver, pSender);
 }
 
-bool DinoPackunAction::updateTurn(s32 turnTime, f32 turnSpeed) {
+// Turns toward mSide (1 right, -1 left) for `turnSteps`.
+bool DinoPackunAction::updateTurn(s32 turnSteps, f32 turnDegree) {
     Vec3f side;
     MR::calcSideVec(&side, mHost);
     Vec3f direction(side * mSide);
-    MR::turnDirectionDegree(mHost, &mHost->mFront, direction, turnSpeed);
+    MR::turnDirectionDegree(mHost, &mHost->mFront, direction, turnDegree);
     mHost->updateNormalVelocity();
-    return MR::isGreaterStep(this, turnTime);
+    return MR::isGreaterStep(this, turnSteps);
 }
 
-bool DinoPackunAction::updateWalk(s32 a1, f32 a2, s32 a3) {
-    MR::addVelocityMoveToDirection(mHost, mHost->mFront, a2);
+// Walks ahead for `walkSteps`, a footprint every half `footPrintPeriod`, then picks the next turn.
+bool DinoPackunAction::updateWalk(s32 walkSteps, f32 speed, s32 footPrintPeriod) {
+    MR::addVelocityMoveToDirection(mHost, mHost->mFront, speed);
 
-    if (a2 > 1.2f) {
+    if (speed > cRunSpeedMin) {
         mHost->updateRunVelocity();
     } else {
         mHost->updateNormalVelocity();
     }
 
-    DinoPackun* parent = mHost;
-    parent->updateFootPrintNerve(getNerveStep(), a3);
-    if (MR::isGreaterStep(this, a1)) {
+    mHost->updateFootPrintNerve(getNerveStep(), footPrintPeriod);
+
+    if (MR::isGreaterStep(this, walkSteps)) {
         selectTurnDirection();
         return true;
     }
@@ -74,31 +73,21 @@ bool DinoPackunAction::updateWalk(s32 a1, f32 a2, s32 a3) {
     return false;
 }
 
-bool DinoPackunAction::updateChase(s32 a1, f32 a2, f32 a3, f32 a4, s32 a5, s32 a6) {
-    if (MR::isFaceToPlayerDegree(mHost, mHost->mFront, a2)) {
-        MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, a3);
+// Runs at the player for `chaseSteps`, turning while the player is within `faceDegree` of ahead, speeding up over
+// `accelSteps`.
+bool DinoPackunAction::updateChase(s32 chaseSteps, f32 faceDegree, f32 turnDegree, f32 speed, s32 accelSteps, s32 footPrintPeriod) {
+    if (MR::isFaceToPlayerDegree(mHost, mHost->mFront, faceDegree)) {
+        MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, turnDegree);
     }
 
-    DinoPackun* parent = mHost;
-    parent->updateFootPrintNerve(getNerveStep(), a6);
-    MR::addVelocityMoveToDirection(mHost, mHost->mFront, (a4 * MR::calcNerveRate(this, a5)));
+    mHost->updateFootPrintNerve(getNerveStep(), footPrintPeriod);
+    MR::addVelocityMoveToDirection(mHost, mHost->mFront, (speed * MR::calcNerveRate(this, accelSteps)));
     mHost->updateRunVelocity();
-    if (MR::isGreaterStep(this, a1)) {
-        return true;
-    }
-
-    return false;
+    return MR::isGreaterStep(this, chaseSteps);
 }
 
 void DinoPackunAction::selectTurnDirection() {
-    if (MR::isHalfProbability()) {
-        mSide = 1.0f;
-    } else {
-        mSide = -1.0f;
-    }
-}
-
-DinoPackunAction::~DinoPackunAction() {
+    mSide = MR::isHalfProbability() ? 1.0f : -1.0f;
 }
 
 bool DinoPackunAction::updateStart() {
@@ -108,46 +97,33 @@ bool DinoPackunAction::updateStart() {
         MR::startBck(mHost, "Wait");
     }
 
-    if (MR::isGreaterStep(this, 60)) {
-        return true;
-    }
-
-    return false;
+    return MR::isGreaterStep(this, cStartSteps);
 }
 
-bool DinoPackunAction::updateFind(s32 a1, f32 a2) {
+// Roars and turns to the player; it lands from the jump at `landStep`.
+bool DinoPackunAction::updateFind(s32 landStep, f32 turnDegree) {
     if (MR::isFirstStep(this)) {
         MR::startBck(mHost, "Find");
         MR::startSound(mHost, "SE_BV_D_PAKKUN_FIND");
         MR::startSound(mHost, "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    if (MR::isStep(this, a1)) {
+    if (MR::isStep(this, landStep)) {
         MR::startSound(mHost, "SE_BM_D_PAKKUN_LAND");
     }
 
-    MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, a2);
+    MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, turnDegree);
     mHost->updateNormalVelocity();
-
-    if (MR::isBckStopped(mHost)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mHost);
 }
 
-bool DinoPackunAction::updateCoolDown(s32 a1) {
+bool DinoPackunAction::updateCoolDown(s32 coolDownSteps) {
     if (MR::isFirstStep(this)) {
         MR::startBck(mHost, "CoolDown");
     }
 
     mHost->updateNormalVelocity();
-
-    if (MR::isGreaterStep(this, a1)) {
-        return true;
-    }
-
-    return false;
+    return MR::isGreaterStep(this, coolDownSteps);
 }
 
 bool DinoPackunAction::updateAttackHit() {
@@ -158,40 +134,5 @@ bool DinoPackunAction::updateAttackHit() {
     }
 
     mHost->updateNormalVelocity();
-
-    if (MR::isActionEnd(mHost)) {
-        return true;
-    }
-
-    return false;
-}
-
-bool DinoPackunAction::receiveOtherMsgTail(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool DinoPackunAction::receiveMsgPlayerAttackTail(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-void DinoPackunAction::attackSensorTail(HitSensor* pSender, HitSensor* pReceiver) {
-}
-
-bool DinoPackunAction::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool DinoPackunAction::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool DinoPackunAction::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool DinoPackunAction::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-void DinoPackunAction::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    return MR::isActionEnd(mHost);
 }
