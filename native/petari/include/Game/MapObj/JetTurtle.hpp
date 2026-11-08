@@ -2,11 +2,14 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-#define JETTURTLETYPE_RED 1
-#define JETTURTLETYPE_GOLD 2
-
 class JetTurtle : public LiveActor {
 public:
+    enum ShellType {
+        SHELL_GREEN,  // slow, never homes
+        SHELL_RED,
+        SHELL_GOLD,
+    };
+
     JetTurtle(const char*);
 
     virtual ~JetTurtle();
@@ -33,7 +36,7 @@ public:
     void exeRestart();
     void exeDrop();
 
-    void init2(const TableIter&, s32);
+    void init2(const TableIter& rIter, bool isGolden);
     void becomeSlowType();
     void becomeFastType();
     void appearAndTryTaken();
@@ -43,11 +46,9 @@ public:
     bool isWait() const;
     bool isRestart() const;
 
-    inline bool isNerveWait();
-
     f32 mThrowSpeedBonus;
-    u16 mShellType;  // (0 = green, 1 = red, 2 = gold)
-    u16 mType;
+    u16 mShellType;  // ShellType
+    u16 mSpeedType;  // index of the speed tables; 0 also adds the player's speed to a throw
     HitSensor* mTakenSensor;
     HitSensor* mHomingTarget;
     Vec3f mThrowDir;
@@ -55,11 +56,10 @@ public:
     Vec3f mInitRotation;
     Vec3f mThrowStartPos;
     Vec3f mLastGravity;
-    u16 mSpinTime;
-    u8 mIsRevive;
-    u8 mIsAppeared;
-    u8 mHasReviveLight;
-    u8 mIsResetRequested;
+    bool mIsRevive;
+    bool mIsAppeared;  // placed visible rather than by a switch
+    bool mHasReviveLight;
+    bool mIsResetRequested;
 };
 
 class GoldenTurtle : public JetTurtle {
