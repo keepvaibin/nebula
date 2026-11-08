@@ -7,9 +7,18 @@
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
 #include "Game/MapObj/SpinDriverShootPath.hpp"
 
+class Nerve;
+
+// SuperSpinDriver::mColor: also the btp frame. Green needs the green driver event and shows an empty model until then.
+enum SuperSpinDriverColor {
+    SuperSpinDriverColor_Yellow,
+    SuperSpinDriverColor_Green,
+    SuperSpinDriverColor_Pink,
+};
+
 class SuperSpinDriver : public LiveActor {
 public:
-    SuperSpinDriver(const char*, s32);
+    SuperSpinDriver(const char*, s32 color);
 
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
@@ -64,8 +73,8 @@ public:
     void cancelBind();
     void endBind();
     void updateBindActorMatrix();
-    void updateBindActorPoseToShoot(f32);
-    void turnBindHead(const Vec3f&, f32);
+    void updateBindActorPoseToShoot(f32 rate);
+    void turnBindHead(const Vec3f& rUp, f32 rate);
     void moveBindPosToCenter();
     void startPathDraw();
     void endPathDraw();
@@ -82,6 +91,14 @@ public:
     bool isSwingOr2PTrigger() const;
     bool isFarPlayer() const;
 
+private:
+    bool isPullPlayer(HitSensor*, HitSensor*) const;
+    bool tryReleaseBind();
+    void requestAppearNerve(const Nerve*);
+    void startAppearCamera();
+    void tryEndAppear(const Nerve* pNextNerve);
+
+public:
     LiveActor* mBindActor;
     SpinDriverShootPath* mShootPath;
     SpinDriverCamera* mSpinDriverCamera;
@@ -110,6 +127,9 @@ public:
     s32 mFlyLoopStep;
     s32 mFlyEndStep;
     s32 mFallStep;
+    // The bound player's SpaceFlyStart / SpaceFlyEnd lengths, read at bind.
+    s32 mSpaceFlyStartFrame;
+    s32 mSpaceFlyEndFrame;
     s32 mDrawPathRangeIdx;
     f32 mPlayerLandRotation;
     u32 mAlreadyDoneFlag;
