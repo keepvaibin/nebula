@@ -11,7 +11,7 @@
 SpinDriverCamera::SpinDriverCamera() : mCamera(), mTargetMtx(), mCameraInfo(), mAppearCameraFrame() {
 }
 
-void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const Vec3f& a2, const Vec3f& a3, const Vec3f& a4) {
+void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos) {
     if (mCameraInfo == nullptr) {
         return;
     }
@@ -25,7 +25,7 @@ void SpinDriverCamera::startAppearCamera(LiveActor* pActor, const Vec3f& a2, con
     MR::startMultiActorCameraTargetOther(pActor, mCameraInfo, "出現イベント用", CameraTargetArg(mTargetMtx));
 
     Pos3f upPos;
-    MR::makeMtxUpFrontPos(&upPos, a2, a3, a4);
+    MR::makeMtxUpFrontPos(&upPos, rUp, rFront, rPos);
     mTargetMtx->setMtx(upPos.toMtxPtr());
 }
 
@@ -45,7 +45,7 @@ s32 SpinDriverCamera::getAppearCameraFrames() const {
     return mAppearCameraFrame;
 }
 
-void SpinDriverCamera::start(const Vec3f& a1, const Vec3f& a2, const Vec3f& a3) {
+void SpinDriverCamera::start(const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos) {
     if (mCamera == nullptr) {
         return;
     }
@@ -53,17 +53,17 @@ void SpinDriverCamera::start(const Vec3f& a1, const Vec3f& a2, const Vec3f& a3) 
     mCamera->start(CameraTargetArg(mTargetMtx), 0);
 
     Pos3f mtx;
-    MR::makeMtxUpFrontPos(&mtx, a1, a2, a3);
+    MR::makeMtxUpFrontPos(&mtx, rUp, rFront, rPos);
     mTargetMtx->setMtx(mtx.toMtxPtr());
 }
 
-void SpinDriverCamera::update(const Vec3f& a1, const Vec3f& a2) {
+void SpinDriverCamera::update(const Vec3f& rDir, const Vec3f& rPos) {
     if (mCamera == nullptr || mCamera->isEnd()) {
         return;
     }
 
     mCamera->update();
-    updateTargetMatrix(a1, a2);
+    updateTargetMatrix(rDir, rPos);
 }
 
 void SpinDriverCamera::cancel() {
@@ -83,8 +83,9 @@ void SpinDriverCamera::end() {
     mCamera->changeTargetPlayer();
 }
 
-void SpinDriverCamera::updateTargetMatrix(const Vec3f& rRot, const Vec3f& rTrans) {
-    if (MR::isNearZero(rRot)) {
+// Turns the target's up onto rDir and moves it to rPos; does nothing while rDir is near zero.
+void SpinDriverCamera::updateTargetMatrix(const Vec3f& rDir, const Vec3f& rPos) {
+    if (MR::isNearZero(rDir)) {
         return;
     }
 
@@ -93,15 +94,15 @@ void SpinDriverCamera::updateTargetMatrix(const Vec3f& rRot, const Vec3f& rTrans
     Vec3f yDir;
     targetMtx.getYDir(yDir);
 
-    Vec3f rotVec;
-    MR::normalize(rRot, &rotVec);
+    Vec3f dir;
+    MR::normalize(rDir, &dir);
 
     Pos3f rotMtx;
     rotMtx.identity();
-    rotMtx.setRotate(yDir, rotVec);
+    rotMtx.setRotate(yDir, dir);
 
     targetMtx.concat(rotMtx, targetMtx);
-    targetMtx.setTrans(rTrans);
+    targetMtx.setTrans(rPos);
 
     mTargetMtx->setMtx(targetMtx);
 }
@@ -121,11 +122,11 @@ void SpinDriverCamera::init(const TableIter& rIter, LiveActor* pActor) {
         return;
     }
 
-    s32 arg3 = 1;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
+    s32 cameraNum = 1;
+    MR::getPlacementArg3NoInit(rIter, &cameraNum);
 
     mCamera = new MultiEventCamera();
-    mCamera->setUp(pActor->mName, new ActorCameraInfo(rIter), arg3);
+    mCamera->setUp(pActor->mName, new ActorCameraInfo(rIter), cameraNum);
     mCamera->setEndCameraTypeAtLanding();
 
     mTargetMtx = new CameraTargetMtx("カメラターゲットダミー");

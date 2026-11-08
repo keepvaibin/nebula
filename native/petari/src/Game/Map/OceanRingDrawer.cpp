@@ -29,28 +29,30 @@ namespace {
     const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
 }  // namespace
 
-OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4, bool a5, f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2)
+OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int startIndex, int numPoints, bool isClosed, f32* pTexCoordU0,
+                                         f32* pTexCoordU1, f32* pTexCoordU2)
     : mPosition(0.0f, 0.0f, 0.0f) {
     mOceanRing = pRing;
-    mStartIndex = a3;
-    mNumPoints = a4;
-    mIsClosed = a5;
+    mStartIndex = startIndex;
+    mNumPoints = numPoints;
+    mIsClosed = isClosed;
     mTexU0 = *pTexCoordU0;
     mTexU1 = *pTexCoordU1;
     mTexU2 = *pTexCoordU2;
     initMesh(pTexCoordU0, pTexCoordU1, pTexCoordU2);
 
-    for (int i = 0; i < a4; i++) {
-        int v12 = a3 + i;
+    // The centre of the part: the mean of its rail points' middle water points (a closed part ends on point 0).
+    for (int i = 0; i < numPoints; i++) {
+        int pointIndex = startIndex + i;
 
-        if (i == a4 - 1 && mIsClosed) {
-            v12 = 0;
+        if (i == numPoints - 1 && mIsClosed) {
+            pointIndex = 0;
         }
 
-        mPosition.add(((mOceanRing->mWaterPoints[(v12 * mOceanRing->mStride - 1) + mOceanRing->mStride / 2])->mOrigPos));
+        mPosition.add(((mOceanRing->mWaterPoints[(pointIndex * mOceanRing->mStride - 1) + mOceanRing->mStride / 2])->mOrigPos));
     }
 
-    mPosition.scale(1.0f / a4);
+    mPosition.scale(1.0f / numPoints);
 }
 
 void OceanRingPartDrawer::initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
@@ -304,30 +306,28 @@ void OceanRingDrawer::drawBloom() const {
     }
 }
 
+// One part per ten segments or so, each sharing its end point with the next; the last takes the rest and, on a loop rail,
+// closes on point 0. The texture U runs on across parts.
 void OceanRingDrawer::initParts() {
     mDrawerCount = (mRing->mSegCount / 10) + 1;
-    s32 count2 = mRing->mSegCount / mDrawerCount;
-    f32 a = 0.0f, b = 0.0f, c = 0.0f;
+    const s32 segmentsPerPart = mRing->mSegCount / mDrawerCount;
+    f32 texU0 = 0.0f, texU1 = 0.0f, texU2 = 0.0f;
     mPartDrawers = new OceanRingPartDrawer*[mDrawerCount];
     for (s32 i = 0; i < mDrawerCount - 1; i++) {
-        mPartDrawers[i] = new OceanRingPartDrawer(mRing, count2 * i, count2 + 1, false, &a, &b, &c);
+        mPartDrawers[i] = new OceanRingPartDrawer(mRing, segmentsPerPart * i, segmentsPerPart + 1, false, &texU0, &texU1, &texU2);
     }
 
-    s32 v;
-    bool flag;
-    s32 w;
-
-    s32 last = mDrawerCount - 1;
-    w = count2 * last;
-    v = mRing->mSegCount - w;
-    flag = false;
+    const s32 last = mDrawerCount - 1;
+    const s32 lastStart = segmentsPerPart * last;
+    s32 lastNumPoints = mRing->mSegCount - lastStart;
+    bool isClosed = false;
 
     if (MR::isLoopRail(mRing)) {
-        flag = true;
-        v += 1;
+        isClosed = true;
+        lastNumPoints += 1;
     }
 
-    mPartDrawers[last] = new OceanRingPartDrawer(mRing, w, v, flag, &a, &b, &c);
+    mPartDrawers[last] = new OceanRingPartDrawer(mRing, lastStart, lastNumPoints, isClosed, &texU0, &texU1, &texU2);
 }
 
 void OceanRingDrawer::initMesh() {
@@ -427,18 +427,19 @@ SiteMaterial OceanRingDrawer::loadMaterial() const {
 
 SiteMaterial OceanRingDrawer::loadMaterialBloom() const {
 
+    // The bloom fades in as the camera looks up (-0.2 to 0.1) and sinks (150 to 300 deep); the lower of the two wins.
     Vec3f zDir = MR::getCamZdir();
-    f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
-    f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
+    const f32 lookUpRate = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
+    f32 rate = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
 
-    if (v6 < v8) {
-        v8 = v6;
+    if (lookUpRate < rate) {
+        rate = lookUpRate;
     }
 
-    f32 v18 = (150.0f + (105.0f * v8));
-    u8 v19 = (s32)(v18);
+    const f32 alphaF = (150.0f + (105.0f * rate));
+    const u8 alpha = (s32)(alphaF);
     // runtime/src/render/materials/ocean_ring_bloom.hlsl: (80, 80, 80) plus the water (texture 0) at the first two
-    // scrolls times (80, 80, 80, v19); blended by alpha where above zero, depth tested and written, no culling.
+    // scrolls times (80, 80, 80, alpha); blended by alpha where above zero, depth tested and written, no culling.
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_RING_BLOOM, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
@@ -450,7 +451,7 @@ SiteMaterial OceanRingDrawer::loadMaterialBloom() const {
     mtx.mMtx[0][2] = mTex1U;
     mtx.mMtx[1][2] = mTex1V;
     material.setMatrix(2, 1, mtx.toMtxPtr());
-    material.setColor(0, 80, 80, 80, v19);
+    material.setColor(0, 80, 80, 80, alpha);
     material.setColor(4, 80, 80, 80, 255);
     material.setTexture(0, mWaterTex);
     return material;
