@@ -145,6 +145,7 @@ add_library(galaxy_native_input STATIC
     runtime/src/generic_hid.cpp
     runtime/src/input/wiimote_input.cpp
     runtime/src/input/wiimote_motion.cpp
+    runtime/src/input/wiimote_motion_pointer.cpp
     runtime/src/native_input.cpp
     runtime/src/playstation_controller.cpp
     runtime/src/simple_pads.cpp
@@ -555,6 +556,8 @@ galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests
 galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
 galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
 galaxy_test(galaxy_wiimote_motion_tests SOURCES ${rt}/input/wiimote_motion_tests.cpp ${rt}/input/wiimote_motion.cpp)
+galaxy_test(galaxy_wiimote_motion_pointer_tests SOURCES ${rt}/input/wiimote_motion_pointer_tests.cpp
+    LIBS galaxy_native_input)
 galaxy_test(galaxy_mouse_projection_tests SOURCES ${rt}/input/mouse_projection_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp

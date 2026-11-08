@@ -14,9 +14,15 @@ enum class RuntimeInputMode : std::uint32_t {
     Auto = 0,
     KeyboardMouse = 1,
     Controller = 2,
-    RealWiimote = 3,
+    RealWiimote = 3,  // a real Wii Remote, pointing at the sensor bar
     Phone = 4,  // the on-screen controls alone (phones and tablets)
+    WiimoteMotion = 5,  // a real Wii Remote, pointing by its MotionPlus (docs/WII_REMOTE.md)
 };
+
+// Either real Wii Remote mode: the remote alone is read.
+[[nodiscard]] constexpr bool is_wii_remote_mode(RuntimeInputMode mode) noexcept {
+    return mode == RuntimeInputMode::RealWiimote || mode == RuntimeInputMode::WiimoteMotion;
+}
 
 // The game's sound modes. Surround is matrix-encoded on two speakers and has its own speakers where the output has them.
 enum class SoundOutput : std::uint8_t { Mono, Stereo, Surround };
@@ -109,7 +115,8 @@ struct RuntimeInputModeState {
                                            bool keyboard_or_mouse) noexcept {
     switch (mode) {
     case RuntimeInputMode::Controller: return !controller;
-    case RuntimeInputMode::RealWiimote: return !wii_remote;
+    case RuntimeInputMode::RealWiimote:
+    case RuntimeInputMode::WiimoteMotion: return !wii_remote;
     case RuntimeInputMode::Auto: return !controller && !wii_remote && !keyboard_or_mouse;
     case RuntimeInputMode::Phone:
     case RuntimeInputMode::KeyboardMouse: break;

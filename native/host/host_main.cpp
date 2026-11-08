@@ -60,6 +60,7 @@
 // A real Wii Remote (wiimote_hid.h): over Windows HID, or on a DolphinBar through Android's USB host.
 #define NEBULA_REAL_WIIMOTE 1
 #include "galaxy/input/wiimote_input.h"
+#include "galaxy/input/wiimote_motion_pointer.h"
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
@@ -2214,7 +2215,8 @@ uint32_t svc_option(void*, uint32_t what) {
 #if defined(NEBULA_HOST_RENDERER)
         switch (galaxy::get_runtime_input_mode_state().mode) {
         case galaxy::RuntimeInputMode::Controller: return NEBULA_INPUT_MODE_CONTROLLER;
-        case galaxy::RuntimeInputMode::RealWiimote: return NEBULA_INPUT_MODE_WII_REMOTE;
+        case galaxy::RuntimeInputMode::RealWiimote:
+        case galaxy::RuntimeInputMode::WiimoteMotion: return NEBULA_INPUT_MODE_WII_REMOTE;
         case galaxy::RuntimeInputMode::Phone:
         case galaxy::RuntimeInputMode::Auto: return NEBULA_INPUT_MODE_AUTO;
         case galaxy::RuntimeInputMode::KeyboardMouse: break;
@@ -2594,6 +2596,7 @@ void input_thread() {
     // A real Wii Remote: `remote` while one is connected (its calibration), `real` while the game plays with it.
     std::optional<galaxy::host::RealWiimoteConnection> remote;
     galaxy::input::wiimote::Reader reader;
+    galaxy::input::wiimote::MotionPointer motion_pointer;
     bool real = false;
     std::optional<galaxy::input::DeviceKey> device_when_real;
     const auto use_remote = [&](bool on) {
@@ -2627,12 +2630,15 @@ void input_thread() {
         const galaxy::host::RealWiimoteEvent event = galaxy::host::real_wiimote_wait(
             real ? static_cast<uint32_t>(std::clamp<long long>(until_tick, 0, 10)) : 3600000u, real_report, real_size,
             real_connection);
-        const bool wii_remote_mode =
-            galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
+        const bool wii_remote_mode = galaxy::is_wii_remote_mode(galaxy::get_runtime_input_mode_state().mode);
         if (event == galaxy::host::RealWiimoteEvent::Connected) {
             remote = real_connection;
             gRemoteConnected.store(true, std::memory_order_relaxed);
-            reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk);
+            reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk,
+                           real_connection.motion_plus
+                               ? std::span<const uint8_t>(real_connection.motion_plus_calibration)
+                               : std::span<const uint8_t>());
+            motion_pointer.reset();
             galaxy::host::real_wiimote_set_report(real_connection.nunchuk ? 0x37 : 0x33);
             if (real) {
                 gInputNunchuk.store(real_connection.nunchuk ? 1u : 0u, std::memory_order_relaxed);
@@ -2657,7 +2663,16 @@ void input_thread() {
             const std::span<const uint8_t> bytes(real_report.data(), real_size);
             if (!real && (wii_remote_mode || galaxy::host::real_wiimote_buttons_held(bytes))) use_remote(true);
             galaxy::input::PlayerInput input{};
-            if (real && reader.read(bytes, input)) gRemoteMotion.add(input);
+            galaxy::input::wiimote::MotionRates rates;
+            if (real && reader.read(bytes, input, &rates)) {
+                // The MotionPlus on (the motion pointer mode): the pointer is its, 2 recenters it.
+                if (remote.has_value() && remote->motion_plus) {
+                    const auto now_us = static_cast<uint64_t>(
+                        std::chrono::duration_cast<std::chrono::microseconds>(Clock::now().time_since_epoch()).count());
+                    motion_pointer.apply(input, rates, now_us);
+                }
+                gRemoteMotion.add(input);
+            }
             continue;
         }
         if (!real || Clock::now() < next) {
@@ -2667,7 +2682,7 @@ void input_thread() {
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
         (void)controls_input();  // for the device last used, and the settings menu
         // Another device used (in Auto): back to the keyboard, mouse and controllers, with this sample.
-        if (galaxy::get_runtime_input_mode_state().mode != galaxy::RuntimeInputMode::RealWiimote &&
+        if (!galaxy::is_wii_remote_mode(galaxy::get_runtime_input_mode_state().mode) &&
             galaxy::host::last_input_device() != device_when_real) {
             use_remote(false);
         }

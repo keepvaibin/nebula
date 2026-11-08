@@ -146,6 +146,14 @@ void set_input_missing_shown(bool shown) noexcept;
 // SDL hosts: the player took up a real Wii Remote, or let it go. A phone's on-screen controls step aside for it, as
 // for a controller.
 void real_wiimote_taken(bool taken) noexcept;
+// A real Wii Remote as the settings show it (wiimote_hid.cpp; never connected where a host has none).
+struct WiiRemoteState {
+    bool connected = false;
+    bool nunchuk = false;
+    bool has_motion_plus = false;
+    bool motion_plus = false;  // on: the motion pointer mode points with it
+};
+[[nodiscard]] WiiRemoteState wii_remote_state() noexcept;
 
 // The live controls (bindings, keyboard and mouse, controllers, the scripted and replayed test input) as player 1's
 // input at retrace `current_vi`. `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come

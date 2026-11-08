@@ -1215,7 +1215,7 @@ galaxy::input::PlayerInput build_live_input(
     if (keyboard_levels.key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
     const bool allow_absolute_pointer =
         host_window_input_enabled && use_keyboard &&
-        input_mode != galaxy::RuntimeInputMode::RealWiimote;
+        !galaxy::is_wii_remote_mode(input_mode);
 
     LiveControlsFrame frame{controls.config};
     frame.pads = live_pads;

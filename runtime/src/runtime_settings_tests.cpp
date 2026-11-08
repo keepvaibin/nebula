@@ -244,6 +244,13 @@ int main() {
             galaxy::RuntimeInputMode::RealWiimote,
         "file input_mode=real_wiimote round-trips back to RealWiimote");
 
+    write_text(settings_path, "input_mode=wiimote_motion\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(
+        galaxy::get_runtime_settings().input_mode == galaxy::RuntimeInputMode::WiimoteMotion &&
+            std::string(galaxy::runtime_input_mode_name(galaxy::RuntimeInputMode::WiimoteMotion)) == "wiimote_motion",
+        "file input_mode=wiimote_motion round-trips back to WiimoteMotion");
+
     galaxy::RuntimeSettings settings{};
     settings.input_mode = galaxy::RuntimeInputMode::Auto;
     galaxy::set_runtime_settings(settings);

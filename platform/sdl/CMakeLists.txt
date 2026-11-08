@@ -218,7 +218,8 @@ if(ANDROID)
         "${CMAKE_CURRENT_SOURCE_DIR}/wiimote_link_android.cpp"
         ${rt}/wiimote_hid.cpp
         ${rt}/wiimote_protocol.cpp
-        ${rt}/input/wiimote_input.cpp)
+        ${rt}/input/wiimote_input.cpp
+        ${rt}/input/wiimote_motion_pointer.cpp)
     add_library(main SHARED ${host_sources})
     target_link_libraries(main PRIVATE android log nativewindow)
 else()
