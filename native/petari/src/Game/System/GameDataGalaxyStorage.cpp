@@ -293,11 +293,6 @@ s32 GameDataAllGalaxyStorage::getExtraStars() const {
     return extra;
 }
 
-u32 GameDataAllGalaxyStorage::getExtraBytes() const {
-    const s32 extra = getExtraStars();
-    return extra > 0 ? getGalaxyNum() * (2 + 2 * ((extra + 7) / 8) + extra * sizeof(u16)) : 0;
-}
-
 s32 GameDataAllGalaxyStorage::findIndex(const char* pGalaxyName) const {
     for (s32 idx = 0; idx < getGalaxyNum(); idx++) {
         if (MR::isEqualString(pGalaxyName, mSomeGalaxyStorages[idx]->mGalaxyName)) {

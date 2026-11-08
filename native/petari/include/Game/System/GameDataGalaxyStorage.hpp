@@ -63,9 +63,8 @@ public:
 
 class GameDataAllGalaxyStorage : public BinaryDataChunkBase {
 public:
-    // Missions past eight in the galaxy with the most, and what they add to the save.
+    // Missions past eight in the galaxy with the most.
     s32 getExtraStars() const;
-    u32 getExtraBytes() const;
     GameDataAllGalaxyStorage();
 
     virtual u32 makeHeaderHashCode() const;

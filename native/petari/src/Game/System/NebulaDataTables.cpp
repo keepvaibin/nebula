@@ -100,10 +100,6 @@ namespace NebulaDataTables {
         sAddedGalaxyCount++;
     }
 
-    s32 addedGalaxyCount() {
-        return sAddedGalaxyCount;
-    }
-
     const void* getGalaxyInfoTable() {
         static const u8* sTable = nullptr;
         if (sTable == nullptr) {
