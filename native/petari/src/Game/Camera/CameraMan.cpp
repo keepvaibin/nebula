@@ -1,12 +1,8 @@
 #include "Game/Camera/CameraMan.hpp"
-#include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
 
-CameraMan::CameraMan(const char* pName) : NameObj(pName) {
-    mDirector = nullptr;
-    mPoseParam = new CameraPoseParam();
-    mIsActivated = false;
-    mRequestLOfsReset = false;
+CameraMan::CameraMan(const char* pName)
+    : NameObj(pName), mDirector(nullptr), mPoseParam(new CameraPoseParam()), mIsActivated(false), mRequestLOfsReset(false) {
     mMatrix.identity();
 }
 
@@ -14,16 +10,16 @@ void CameraMan::owned(CameraDirector* pDirector) {
     mDirector = pDirector;
 }
 
-void CameraMan::released(CameraDirector* pDirector) {
+void CameraMan::released() {
     mDirector = nullptr;
 }
 
-void CameraMan::activate(CameraDirector* pDirector) {
+void CameraMan::activate() {
     mIsActivated = true;
     notifyActivate();
 }
 
-void CameraMan::deactivate(CameraDirector* pDirector) {
+void CameraMan::deactivate() {
     mIsActivated = false;
     notifyDeactivate();
 }

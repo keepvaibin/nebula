@@ -2,12 +2,8 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraSubjective.hpp"
 
-CameraManSubjective::CameraManSubjective(const char* pName) : CameraMan(pName) {
-    mCamera = new CameraSubjective("主観カメラ");
+CameraManSubjective::CameraManSubjective(const char* pName) : CameraMan(pName), mCamera(new CameraSubjective("主観カメラ")) {
     mCamera->mCameraMan = this;
-}
-
-void CameraManSubjective::init(const TableIter& rIter) {
 }
 
 void CameraManSubjective::calc() {
@@ -17,7 +13,4 @@ void CameraManSubjective::calc() {
 
 void CameraManSubjective::notifyActivate() {
     mCamera->reset();
-}
-
-void CameraManSubjective::notifyDeactivate() {
 }

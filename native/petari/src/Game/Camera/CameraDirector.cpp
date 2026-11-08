@@ -124,7 +124,7 @@ CameraTargetObj* CameraDirector::getTarget() {
 
 void CameraDirector::push(CameraMan* pMan) {
     if (mStack->mCount != 0) {
-        getCurrentCameraMan()->deactivate(this);
+        getCurrentCameraMan()->deactivate();
     }
 
     if (mStack->mCount == mStack->mCapacity) {
@@ -135,18 +135,17 @@ void CameraDirector::push(CameraMan* pMan) {
     mStack->mElements[mStack->mCount++] = pMan;
 
     pMan->owned(this);
-    pMan->activate(this);
+    pMan->activate();
 }
 
 CameraMan* CameraDirector::pop() {
     CameraMan* man = mStack->mElements[--mStack->mCount];
 
-    man->deactivate(this);
-    man->released(this);
+    man->deactivate();
+    man->released();
 
     if (mStack->mCount != 0) {
-        CameraMan* newMan = getCurrentCameraMan();
-        newMan->activate(this);
+        getCurrentCameraMan()->activate();
     }
 
     return man;
@@ -553,7 +552,7 @@ void CameraDirector::startSubjectiveCamera(s32 camType) {
         mIsStartSubjectiveCamera = true;
         mSubjectiveFrame = 0;
 
-        mCameraManSubjective->activate(this);
+        mCameraManSubjective->activate();
         mNearZ = MR::getNearZ();
 
         MR::setNearZ(10.0f);
@@ -809,8 +808,8 @@ void CameraDirector::resetCameraMan() {
     CameraLocalUtil::setUpVec(man, mTargetHolder->get()->getUpVec());
     CameraLocalUtil::setWatchUpVec(man, mTargetHolder->get()->getUpVec());
 
-    man->deactivate(this);
-    man->activate(this);
+    man->deactivate();
+    man->activate();
 
     mOnlyCamera->mIsResetting = true;
 }

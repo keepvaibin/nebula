@@ -49,9 +49,9 @@ public:
     }
 
     void owned(CameraDirector*);
-    void released(CameraDirector*);
-    void activate(CameraDirector*);
-    void deactivate(CameraDirector*);
+    void released();
+    void activate();
+    void deactivate();
 
     CameraDirector* mDirector;
     CameraPoseParam* mPoseParam;

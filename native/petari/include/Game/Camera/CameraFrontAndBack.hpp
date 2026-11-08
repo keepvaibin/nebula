@@ -5,9 +5,7 @@
 class CameraFrontAndBack : public Camera {
 public:
     CameraFrontAndBack(const char* pName = "表裏カメラ");
-    virtual ~CameraFrontAndBack();
 
-    virtual void reset();
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 

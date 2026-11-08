@@ -1,15 +1,12 @@
 #include "Game/Camera/CameraBehind.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
-#include "Game/Util/MathUtil.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
+#include "Game/Util/MathUtil.hpp"
 
-CameraBehind::~CameraBehind() {
-}
-
-CameraBehind::CameraBehind(const char* pName) : Camera(pName), mAngleX(MR::toRadian(30.0f)), mAngleY(), mDist(3000.0f) {
+CameraBehind::CameraBehind(const char* pName) : Camera(pName), mAngleX(MR::toRadian(30.0f)), mAngleY(), mDist(3000.0f), mRate() {
     createVPanObj();
 }
 
