@@ -101,7 +101,7 @@ namespace {
     const s32 cRowButtonsMax = 6;    // on one row
     const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
     const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
-    const u64 cPickUpNs = 400000000u;  // a finger holding a mod this long, not moving, picks it up; moving first scrolls
+    const f32 cEdgeScrollRows = 8.0f;  // a list under a dragged mod at its edge scrolls this many rows a second at most
     const s32 cRowChipsMax = 48;     // drawn at once: on the rows in sight
 
     // The quit question's window and text; the game's blue for what is chosen.
@@ -792,6 +792,7 @@ private:
     void readHomePointer(f32 x, f32 y);
     void clickRow(const NebulaSettingsView& rView, s32 row);
     void dragSlider(const NebulaSettingsView& rView, f32 x);
+    void edgeScroll(s32 list, f32 y);
     RowChip& useRowChip(s32 index, s32 row, s32 button, u32 version, const char16_t* pWord);
     void placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 height, bool focused);
     void placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width, f32 height, f32 radius, bool focused, bool off);
@@ -849,8 +850,14 @@ private:
     bool mDragging;  // moved far enough to be dragged
     f32 mDragFromX;
     f32 mDragFromY;
-    u64 mDragStartNs;     // when the mod was held down (NebulaHost::clockNs)
-    s32 mModSwipeList;    // the list a finger scrolls (-1 none) and its scroll when the finger landed
+    u64 mEdgeScrollNs;    // the last edge scroll under a dragged mod (NebulaHost::clockNs; 0 none)
+    // A mod let go into another place: drawn there until the view the host sends has it there (the frame of the drop
+    // still has the order before it).
+    char mSettleLabel[64];
+    s32 mSettleList;  // -1 none
+    s32 mSettlePlace;
+    s32 mSettleFrames;
+    s32 mModSwipeList;    // the list the pointer scrolls (-1 none) and its scroll when it was held down
     f32 mModSwipeFrom;
     bool mModFree[2];     // the list stays where a finger left it, until the keys move the selection
     f32 mModFreeScroll[2];
@@ -983,7 +990,11 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mDragging = false;
     mDragFromX = 0.0f;
     mDragFromY = 0.0f;
-    mDragStartNs = 0u;
+    mEdgeScrollNs = 0u;
+    mSettleLabel[0] = '\0';
+    mSettleList = -1;
+    mSettlePlace = 0;
+    mSettleFrames = 0;
     mModSwipeList = -1;
     mModSwipeFrom = 0.0f;
     mModFree[0] = mModFree[1] = false;
@@ -1897,8 +1908,10 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
     }
 }
 
-// The pointer over the MODS page's lists and buttons. A mod under it is selected; held down with A and moved, it is
-// dragged, and let go over a list it lands there (the line shows where); a click on a button presses it.
+// The pointer over the MODS page's lists and buttons. A mod under it is selected; held down and moved (a finger, the
+// mouse or A), it is dragged at once, and let go over a list it lands there (the line shows where). Held at a list's top
+// or bottom edge, the list scrolls under it. Held down on a list's free space and moved, the list scrolls; a click on a
+// button presses it.
 void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y) {
     const u32 off = mModButtonsRow >= 0 ? mRows[mModButtonsRow - static_cast< s32 >(rView.first_row)].mButtonsOff : 0u;
     for (s32 i = 0; i < mModButtonCount; i++) {
@@ -1926,7 +1939,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
     if (!mDragging) {
         mHoverRow = hovered;
     }
-    // A finger moving along a list before it picks a mod up scrolls that list; let go, it stays there.
+    // The pointer moving on a list's free space scrolls that list; let go, it stays there.
     if (mModSwipeList >= 0) {
         if (MR::isHeldJump(PLAYER_1)) {
             mModFree[mModSwipeList] = true;
@@ -1939,23 +1952,17 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
     if (mDragRow >= 0) {
         const s32 index = mDragRow - static_cast< s32 >(rView.first_row);
         const bool moved = __builtin_fabsf(x - mDragFromX) > cDragStart || __builtin_fabsf(y - mDragFromY) > cDragStart;
-        if (!mDragging && rView.input == NEBULA_SETTINGS_INPUT_TOUCH) {
-            // A finger picks a mod up by holding it still; moving first, it scrolls the list it is in.
-            if (moved && index >= 0 && index < cRowsMax && mItemList[index] >= 0) {
-                mModSwipeList = mItemList[index];
-                mModSwipeFrom = mModScroll[mModSwipeList];
-                mDragRow = -1;
-                return;
-            }
-            if (NebulaHost::clockNs() - mDragStartNs >= cPickUpNs && MR::isHeldJump(PLAYER_1)) {
-                mDragging = true;
-                MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
-            }
-        } else if (!mDragging && moved) {
+        if (!mDragging && moved) {
             mDragging = true;
+            mEdgeScrollNs = 0u;
             MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
         }
         mDropList = mDragging ? overList : -1;
+        if (mDropList >= 0) {
+            edgeScroll(mDropList, y);
+        } else {
+            mEdgeScrollNs = 0u;
+        }
         if (mDropList >= 0) {
             const s32 place = static_cast< s32 >((mModItemsTop - y + mModScroll[mDropList]) / cModHeight + 0.5f);
             mDropPlace = place < 0 ? 0 : place > mModCounts[mDropList] ? mModCounts[mDropList] : place;
@@ -1971,11 +1978,21 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
                     NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mDragRow);
                     NebulaHost::settingsInput(NEBULA_SETTINGS_MOVE_MOD, (mDropList + 1) << 16 | place);
                     MR::startSystemSE("SE_SY_SELECT_PAUSE_ITEM");
+                    const char* pLabel = rView.rows[index].label;
+                    s32 i = 0;
+                    for (; i < 63 && pLabel[i] != '\0'; i++) {
+                        mSettleLabel[i] = pLabel[i];
+                    }
+                    mSettleLabel[i] = '\0';
+                    mSettleList = mDropList;
+                    mSettlePlace = place;
+                    mSettleFrames = 4;
                 }
             }
             mDragRow = -1;
             mDragging = false;
             mDropList = -1;
+            mEdgeScrollNs = 0u;
         }
         return;
     }
@@ -1993,8 +2010,41 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         mDragRow = hovered;
         mDragFromX = x;
         mDragFromY = y;
-        mDragStartNs = NebulaHost::clockNs();
+    } else if (overList >= 0) {
+        // Held down on the list's free space: moved, the list follows.
+        mPointerMode = true;
+        mModSwipeList = overList;
+        mModSwipeFrom = mModScroll[overList];
+        mDragFromY = y;
     }
+}
+
+// A dragged mod at the top or bottom edge of the list under it (a row's height in from it, or past it): the list scrolls
+// toward that edge, faster the further in, by the time since the last frame so at any frame rate alike.
+void NebulaSettingsScreen::edgeScroll(s32 list, f32 y) {
+    const u64 now = NebulaHost::clockNs();
+    const f32 seconds = mEdgeScrollNs != 0u && now > mEdgeScrollNs ? static_cast< f32 >(now - mEdgeScrollNs) * 1.0e-9f : 0.0f;
+    mEdgeScrollNs = now;
+    // > 0 toward the top, < 0 toward the bottom: from the middle of the first or last row in sight (0) to the edge (1).
+    const f32 band = cModHeight * 0.5f;
+    f32 depth = 0.0f;
+    if (y > mModItemsTop - band) {
+        depth = (y - (mModItemsTop - band)) / band;
+    } else if (y < mModItemsBottom + band) {
+        depth = (y - (mModItemsBottom + band)) / band;
+    }
+    depth = clamp(depth, -1.0f, 1.0f);
+    if (depth == 0.0f || seconds <= 0.0f) {
+        return;
+    }
+    const f32 step = depth * cEdgeScrollRows * cModHeight * (seconds < 0.1f ? seconds : 0.1f);
+    if (!mModFree[list]) {
+        mModFree[list] = true;
+        mModFreeScroll[list] = mModScroll[list];
+    }
+    // The top edge shows earlier mods (less scroll), the bottom later ones; the layout keeps it in the list's range.
+    mModFreeScroll[list] -= step;
+    mModScroll[list] = mModFreeScroll[list];
 }
 
 // The pointer over the HOME Menu's answers: moving onto one selects it (the host's selection, as the keys move it), A
@@ -2189,7 +2239,24 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         f32 x = mModLeft[list];
         f32 y = mModItemsTop - mItemPlace[i] * cModHeight - cModHeight * 0.5f + mModScroll[list];
         const bool dragged = mDragging && row == mDragRow;
-        if (dragged) {
+        bool settling = false;
+        if (mSettleFrames > 0) {
+            const char* pLabel = rView.rows[i].label;
+            s32 c = 0;
+            while (c < 63 && pLabel[c] != '\0' && pLabel[c] == mSettleLabel[c]) {
+                c++;
+            }
+            if (pLabel[c] == mSettleLabel[c]) {
+                settling = list != mSettleList || mItemPlace[i] != mSettlePlace;
+                if (!settling) {
+                    mSettleFrames = 0;  // the view has it where it landed
+                }
+            }
+        }
+        if (settling) {
+            x = mModLeft[mSettleList];
+            y = mModItemsTop - mSettlePlace * cModHeight - cModHeight * 0.5f + mModScroll[mSettleList];
+        } else if (dragged) {
             x += mPointerX - mDragFromX;
             y = mPointerY;
         } else if (held && row == static_cast< s32 >(rView.selected)) {
@@ -2209,6 +2276,11 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             highlightX = x + mModWidth * 0.5f;
             highlightY = y;
         }
+    }
+
+    // A few frames on from the drop, the dropped mod is drawn as the view has it whatever it holds.
+    if (mSettleFrames > 0) {
+        mSettleFrames--;
     }
 
     // The selection's highlight; a mod picked up or dragged rides a little higher, ringed in the game's blue.
