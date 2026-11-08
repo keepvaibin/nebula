@@ -1015,7 +1015,7 @@ void Mario::setFrontVecKeepUpAngle(const Vec3f& rFrontVec, f32 angle) {
     }
 }
 
-void Mario::setFrontVecKeepUp(const Vec3f& rFront, u32 _750_set) {
+void Mario::setFrontVecKeepUp(const Vec3f& rFront, u32 easeFrames) {
     Mtx rotMtx;
     Vec3f rotFrontVec;
     Vec3f rotVec2;
@@ -1034,8 +1034,8 @@ void Mario::setFrontVecKeepUp(const Vec3f& rFront, u32 _750_set) {
     }
 
     setFrontVecKeepUp(rFront);
-    if (_750_set != 0) {
-        mCorrectionEaseTimer = _750_set;
+    if (easeFrames != 0) {
+        mCorrectionEaseTimer = easeFrames;
     }
 }
 
@@ -1061,8 +1061,8 @@ void Mario::setFrontVecKeepUp(const Vec3f& rFront) {
     MR::normalize(&side);
     mSideVec = side;
     MR::normalize(&mSideVec);
-    Vec3f front = mSideVec.cross(mHeadVec);
-    setFrontVec(front);
+    Vec3f upright = mSideVec.cross(mHeadVec);
+    setFrontVec(upright);
     mMoveDirOnShadow = mFrontVec;
     f32 moveSpeed = mMoveFrontVec.length();
     mMoveFrontVec = mFrontVec * moveSpeed;
