@@ -23,6 +23,9 @@ public:
     void forceDeleteGroupEmitter(u8);
     void forceDeleteEmitter(EmitterCore*);
     void entryResourceManager(ParticleResources*, u8);
+    // Starts the emitters' seeds over: each emitter's seed comes from the scene, its resource and how many emitters of that
+    // resource the scene made before it, so emitters added or removed elsewhere leave its particles as they were.
+    void startScene(u32 sceneSeed);
     void clearResourceManager(u8);
     void calcYBBCam();
     ParticleResources* getResourceManager(u16 idx) const {
@@ -45,6 +48,9 @@ public:
     JSUList< EmitterCore > mFreeEmtrList;
     ParticleChunk* mpFreeChunks;
     ParticleResources** pResMgrAry;
+    // Emitters made this scene, by resource manager and resource.
+    u32** mpMadeCounts;
+    u32 mSceneSeed;
     EmitterWork* pWd;
     u32 emtrNum;
     u8 gidMax;

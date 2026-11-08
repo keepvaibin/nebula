@@ -25,6 +25,8 @@ public:
     void forceDeleteSingleEmitter(SingleEmitter*) const;
     void createSingleEmitter(SingleEmitter*, MultiEmitterCallBackBase*, MultiEmitterParticleCallBack*);
     void entry(ParticleResourceHolder*, u32 emitterCount);
+    // The emitters' seeds start over from the current stage, as the scene's random does.
+    void startScene();
 
     EmitterManager* mEmitterManager;
     ParticleEmitterHolder* mEmitterHolder;

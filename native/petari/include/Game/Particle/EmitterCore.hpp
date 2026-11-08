@@ -23,13 +23,9 @@ struct EmitterWork {
         Vec3f mVelAxis;
     };
 
-    EmitterWork() : mRndm(0) {
-    }
-
     EmitterCore* mpEmtr;
     ParticleResource* mpRes;
     ParticleResources* mpResMgr;
-    ParticleRandom mRndm;
     VolumeCalcData mVolumeCalcData;
     f32 mVolumeSize;
     f32 mVolumeMinRad;
@@ -81,7 +77,7 @@ class EmitterCore {
 public:
     ~EmitterCore();
     EmitterCore();
-    void init(EmitterManager*, ParticleResource*);
+    void init(EmitterManager*, ParticleResource*, u32 seed);
     // Every slot free again (no live particles): the chunks back to the manager.
     void releaseChunks();
     bool processTillStartFrame();

@@ -49,12 +49,25 @@ EmitterManager::EmitterManager(u32 i_emtrNum, NebulaArena* pHeap, u8 i_gidMax, u
 
     pEmtrUseList = new (pHeap, 0) JSUList< EmitterCore >[gidMax];
     pResMgrAry = new (pHeap, 0) ParticleResources*[ridMax];
+    mpMadeCounts = new (pHeap, 0) u32*[ridMax];
     for (int i = 0; i < ridMax; i++) {
         pResMgrAry[i] = NULL;
+        mpMadeCounts[i] = NULL;
     }
+    mSceneSeed = 0;
 
     pWd = new (pHeap, 0) EmitterWork();
 }
+
+namespace {
+    // splitmix64's output for the given state and step.
+    u32 mixSeed(u64 state, u32 step) {
+        u64 z = state + (u64(step) + 1u) * 0x9E3779B97F4A7C15ull;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+        return u32(z ^ (z >> 31));
+    }
+}  // namespace
 
 EmitterCore* EmitterManager::createSimpleEmitterID(Vec3f const& pos, u16 resID, u8 group_id, u8 res_mgr_id,
                                                          EmitterCallBack* emtrCB, ParticleCallBack* ptclCB) {
@@ -70,7 +83,9 @@ EmitterCore* EmitterManager::createSimpleEmitterID(Vec3f const& pos, u16 resID, 
         mFreeEmtrList.remove(pLink);
         pEmtrUseList[group_id].append(pLink);
         EmitterCore* emtr = pLink->getObject();
-        emtr->init(this, pRes);
+        static_assert(sizeof(resID) == 2 && sizeof(res_mgr_id) == 1, "the resource fields of the seed state overlap");
+        const u64 resource = (u64(mSceneSeed) << 32) | (u64(res_mgr_id) << 16) | resID;
+        emtr->init(this, pRes, mixSeed(resource, mpMadeCounts[res_mgr_id][resID]++));
         emtr->mpEmtrCallBack = emtrCB;
         emtr->mpPtclCallBack = ptclCB;
         emtr->mGroupID = group_id;
@@ -138,6 +153,21 @@ void EmitterManager::forceDeleteEmitter(EmitterCore* emtr) {
 
 void EmitterManager::entryResourceManager(ParticleResources* resMgr, u8 resMgrID) {
     pResMgrAry[resMgrID] = resMgr;
+    mpMadeCounts[resMgrID] = new (mHeap, 0) u32[resMgr->mUserIndexCount];
+    for (u32 i = 0; i < resMgr->mUserIndexCount; i++) {
+        mpMadeCounts[resMgrID][i] = 0;
+    }
+}
+
+void EmitterManager::startScene(u32 sceneSeed) {
+    mSceneSeed = sceneSeed;
+    for (int id = 0; id < ridMax; id++) {
+        if (pResMgrAry[id] != NULL) {
+            for (u32 i = 0; i < pResMgrAry[id]->mUserIndexCount; i++) {
+                mpMadeCounts[id][i] = 0;
+            }
+        }
+    }
 }
 
 #include "JSystem/JSupport/JSUListInline.hpp"

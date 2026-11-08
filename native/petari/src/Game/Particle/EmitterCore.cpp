@@ -64,7 +64,7 @@ ParticleCore* EmitterCore::createChild(ParticleCore* parent) {
     return &node->mParticle;
 }
 
-void EmitterCore::init(EmitterManager* pManager, ParticleResource* pResource) {
+void EmitterCore::init(EmitterManager* pManager, ParticleResource* pResource, u32 seed) {
     MotionSignal::emitterInit(this);
     mpEmtrMgr = pManager;
     mpRes = pResource;
@@ -96,7 +96,7 @@ void EmitterCore::init(EmitterManager* pManager, ParticleResource* pResource) {
     mSpread = mpRes->getDyn()->getInitVelDirSp();
     mRndmDirSpeed = mpRes->getDyn()->getInitVelRndm();
     mAirResist = mpRes->getDyn()->getAirRes();
-    mRndm.set_seed(mpEmtrMgr->pWd->mRndm.get_rndm_u());
+    mRndm.set_seed(seed);
     NebulaMtxIdentity(mGlobalRot);
     mGlobalScl.set(1.0f, 1.0f, 1.0f);
     mGlobalTrs.zero();
