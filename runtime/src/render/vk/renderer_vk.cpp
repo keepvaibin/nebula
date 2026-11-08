@@ -5,6 +5,9 @@
 #include "renderer_vk_internal.h"
 #include "galaxy/run_options.h"
 #include "galaxy/render/vk/streamline_vk.h"
+#if defined(_WIN32)
+#include "galaxy/render/streamline_bridge.h"
+#endif
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -131,6 +134,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             shutdown();
             return false;
         }
+        report_adapter();
         const VkDevice device = vk::Context::get().device();
         {
             VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -223,6 +227,47 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
     return true;
 }
 
+void RendererVk::report_adapter() {
+    const vk::Context& context = vk::Context::get();
+    const VkPhysicalDeviceProperties& properties = context.properties();
+    const bool rtx = properties.vendorID == 0x10DEu && std::strstr(properties.deviceName, "RTX") != nullptr;
+    host_window::rtx_adapter.store(rtx, std::memory_order_relaxed);
+    const char* const preference = ::galaxy::run_options().gpu_preference;
+    record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id(),
+                          preference != nullptr && (preference[0] == 'l' || preference[0] == 'L' || preference[0] == 'm' ||
+                                                    preference[0] == 'M'),
+                          false);
+    RenderFeatureCaps caps{};
+    caps.adapter_vendor_id = properties.vendorID;
+    caps.adapter_device_id = properties.deviceID;
+    caps.adapter_subsys_id = context.subsys_id();
+    caps.adapter_luid_low = static_cast<std::uint32_t>(context.luid());
+    caps.adapter_luid_high = static_cast<std::uint32_t>(context.luid() >> 32u);
+    std::snprintf(caps.adapter_description.data(), caps.adapter_description.size(), "%s", properties.deviceName);
+    caps.msaa = make_render_feature_status(true, msaa_max_samples_ > 1u, true, true,
+                                           msaa_max_samples_ > 1u ? "the scene target is multisampled"
+                                                                  : "the GPU has no multisampled scene target formats");
+    caps.taa = make_render_feature_status(false, false, false, false,
+                                          "motion vectors, jitter, and history resources are not built");
+    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
+#if defined(_WIN32)
+    const bool dlss_ready = streamline::dlss_supported();
+#else
+    const bool dlss_ready = false;
+#endif
+    caps.streamline_bridge_built = dlss_ready;
+    caps.streamline = make_render_feature_status(dlss_ready, dlss_ready, dlss_ready, false,
+                                                 dlss_ready ? "NVIDIA Streamline is running"
+                                                            : "NVIDIA Streamline is not running");
+    caps.reflex = make_render_feature_status(false, false, false, false, "Streamline Reflex integration is not built");
+    caps.dlss_super_resolution = make_render_feature_status(
+        dlss_ready, dlss_ready, dlss_ready, dlss_ready,
+        dlss_ready ? "DLSS super resolution is available" : "DLSS needs Streamline and an NVIDIA RTX GPU");
+    caps.dlss_frame_generation = make_render_feature_status(
+        false, false, false, false, "DLFG requires Streamline, Reflex, motion vectors, and UI tagging");
+    set_render_feature_caps(caps);
+}
+
 bool RendererVk::create_surface_and_device() {
     const bool prefer_integrated = [] {
         const char* value = ::galaxy::run_options().gpu_preference;
@@ -233,8 +278,8 @@ bool RendererVk::create_surface_and_device() {
     const auto make_surface = [window](VkInstance instance) {
         return host_window::create_vulkan_surface(instance, window);
     };
-    if (!vk::Context::get().initialize(prefer_integrated, validation, host_window::vulkan_instance_extensions(),
-                                       make_surface, &surface_)) {
+    if (!vk::Context::get().initialize(get_render_config().gpu.data(), prefer_integrated, validation,
+                                       host_window::vulkan_instance_extensions(), make_surface, &surface_)) {
         return false;
     }
     const vk::Context& context = vk::Context::get();

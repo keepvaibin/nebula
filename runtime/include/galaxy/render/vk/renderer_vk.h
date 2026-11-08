@@ -374,6 +374,9 @@ private:
     [[nodiscard]] bool restore_surface();
     [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
+    // The adapter as the settings and the launcher see it (RenderFeatureCaps, rtx_adapter, adapter.ini), as the D3D12
+    // renderer reports its own. After create_layouts (the scene target's sample counts).
+    void report_adapter();
     bool create_scene_targets(const FrameMap& map, unsigned samples);
     // The MSAA sample count the settings ask for and the device has for the scene target's formats (1: none).
     [[nodiscard]] unsigned wanted_msaa_samples() const;

@@ -93,10 +93,12 @@ class Context {
 public:
     static Context& get() noexcept;
 
-    // `prefer_integrated`: GALAXY_GPU_PREFERENCE=low picks the integrated GPU first. `validation` loads the Khronos
-    // validation layer when present. `create_surface`, when given, makes the window's surface once the instance
-    // exists (returned in `surface`); the device chosen then presents to it.
-    bool initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions,
+    // `chosen_gpu`: the GPU chosen in Nebula Settings (RenderConfig::gpu, gpu_identity), taken first when present.
+    // `prefer_integrated`: GALAXY_GPU_PREFERENCE=low picks the integrated GPU first otherwise. `validation` loads the
+    // Khronos validation layer when present. `create_surface`, when given, makes the window's surface once the
+    // instance exists (returned in `surface`); the device chosen then presents to it.
+    bool initialize(const std::string& chosen_gpu, bool prefer_integrated, bool validation,
+                    std::vector<const char*> instance_extensions,
                     const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
                     VkSurfaceKHR* surface = nullptr);
     void shutdown() noexcept;
@@ -115,6 +117,11 @@ public:
     [[nodiscard]] VmaAllocator_T* allocator() const noexcept { return allocator_; }
     [[nodiscard]] const VkPhysicalDeviceProperties& properties() const noexcept { return properties_; }
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
+    // The device as config.ini's gpu key names it (gpu_identity); its PCI subsystem id (Windows: the DXGI adapter's
+    // with the same LUID; 0 elsewhere) and LUID (0 when the driver gives none).
+    [[nodiscard]] const std::string& gpu_id() const noexcept { return gpu_id_; }
+    [[nodiscard]] std::uint32_t subsys_id() const noexcept { return subsys_id_; }
+    [[nodiscard]] std::uint64_t luid() const noexcept { return luid_; }
     [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
     [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
     [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
@@ -220,6 +227,9 @@ private:
     VmaAllocator_T* allocator_ = nullptr;
     VkPhysicalDeviceProperties properties_{};
     std::string device_name_;
+    std::string gpu_id_;
+    std::uint32_t subsys_id_ = 0;
+    std::uint64_t luid_ = 0;
     std::string failure_;
     DeviceIdentity identity_;
     DeviceQuirks quirks_;

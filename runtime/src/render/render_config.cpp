@@ -631,15 +631,14 @@ std::string next_start_gpu() {
     return gpu.data();
 }
 
-void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept {
     try {
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
             return;
         }
-        const std::u8string utf8 = std::filesystem::path(description).u8string();
-        std::string name(utf8.begin(), utf8.end());
+        std::string name(description);
         name.resize(std::min<std::size_t>(name.size(), 255u));
         for (char& c : name) {
             if (c == '\r' || c == '\n') c = ' ';
