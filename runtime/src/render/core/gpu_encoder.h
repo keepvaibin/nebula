@@ -211,11 +211,13 @@ public:
         commands_ = commands;
         reset();
     }
+    // Nothing is taken as bound any more. The rows and instances asked for stay: a draw pass names them once, and the
+    // renderer's own work inside it (a held screen probe read when the scene pass breaks) resets the bindings.
     void reset() noexcept {
         pipeline_ = VK_NULL_HANDLE;
         set0_ = VK_NULL_HANDLE;
         offsets_valid_ = false;
-        view_ = vertex_rows_ = pixel_rows_ = rows_ = instances_ = 0u;
+        view_ = vertex_rows_ = pixel_rows_ = 0u;
         bound_view_ = bound_vertex_rows_ = bound_pixel_rows_ = bound_rows_ = bound_instances_ = 0u;
         view_buffer_ = vertex_buffer_ = pixel_buffer_ = VK_NULL_HANDLE;
         textures_ = samplers_ = 0u;
