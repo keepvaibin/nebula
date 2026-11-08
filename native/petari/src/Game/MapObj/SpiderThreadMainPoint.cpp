@@ -54,7 +54,7 @@ const Vec3f* SpiderThreadPointNearInfo::getPos() const {
 }
 
 SpiderThreadMainPoint::SpiderThreadMainPoint(const Vec3f& rPos, int nearInfoBufferSize)
-    : SpiderThreadPoint(rPos, ::sFrictionRate), mRadialLine(nullptr), mNearInfoBufferSize(nearInfoBufferSize), mNumNearInfos(0), mNearInfos(nullptr) {
+    : SpiderThreadPoint(rPos, ::sFrictionRate), mRadialLine(nullptr), mNumNearInfos(0), mNearInfos(nullptr) {
     mNearInfos = new SpiderThreadPointNearInfo[nearInfoBufferSize];
 }
 

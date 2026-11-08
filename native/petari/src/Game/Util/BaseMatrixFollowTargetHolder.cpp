@@ -11,11 +11,7 @@ namespace {
     }
 };  // namespace
 
-BaseMatrixFollower::BaseMatrixFollower(NameObj* pObj, const TableIter& rIter) {
-    mFollowerObj = pObj;
-    mLinkInfo = nullptr;
-    mFollowTarget = nullptr;
-    mFollowID = -1;
+BaseMatrixFollower::BaseMatrixFollower(const TableIter& rIter) : mLinkInfo(nullptr), mFollowTarget(nullptr), mFollowID(-1) {
     MR::getPlacementFollowID(rIter, &mFollowID);
     mLinkInfo = new PlacementLink(rIter, false);
 }

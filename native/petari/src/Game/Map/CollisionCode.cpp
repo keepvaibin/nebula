@@ -9,7 +9,6 @@ CollisionCode::CollisionCode() : mFloorTable(), mWallTable(), mSoundTable(), mCa
 }
 
 CodeTable::CodeTable(u32 numMax) : mIndex(numMax) {
-    mCodeNumMax = numMax;
     mCodeNum = 0;
     mCodeTable = new u32[numMax];
     mNameTable = new const char*[numMax];

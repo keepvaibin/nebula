@@ -114,7 +114,7 @@ void RunawayRabbit::init(const TableIter& rIter) {
 
     MR::addBaseMatrixFollowTarget(this, rIter, nullptr, MR::createBaseMatrixFollowValidateDelegator(this, &RunawayRabbit::isValidFollow));
     mStateRunaway = new WalkerStateRunaway(this, &mFrontVec, &::sParam);
-    mStateBlowDamage = new WalkerStateBlowDamage(this, &mFrontVec, nullptr);
+    mStateBlowDamage = new WalkerStateBlowDamage(this, &mFrontVec);
     MR::getPlacementArg0WithInit(rIter, &mGroupId);
     MR::getPlacementArg1WithInit(rIter, &mHideLocation);
     MR::getPlacementArg3WithInit(rIter, &mNearSoundRadius);

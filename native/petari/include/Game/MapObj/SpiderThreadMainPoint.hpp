@@ -44,7 +44,6 @@ public:
     }
 
     SpiderThreadRadialLine* mRadialLine;
-    s32 mNearInfoBufferSize;
     s32 mNumNearInfos;
     SpiderThreadPointNearInfo* mNearInfos;  // array
 };

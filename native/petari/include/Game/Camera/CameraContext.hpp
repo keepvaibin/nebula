@@ -33,7 +33,6 @@ public:
     Pos3f mView;
     Pos3f mViewInv;
     Proj3f mProjection;
-    f32 mAspectRatio;
     f32 mNearZ;
     f32 mFarZ;
     f32 mFovy;

@@ -115,7 +115,7 @@ void TrickRabbitSnow::initState() {
     mStateRunaway = new WalkerStateRunaway(this, &mFrontVec, nullptr);
     mStateRunaway->init();
 
-    mStateBlowDamage = new WalkerStateBlowDamage(this, &mFrontVec, nullptr);
+    mStateBlowDamage = new WalkerStateBlowDamage(this, &mFrontVec);
     mStateBlowDamage->init();
 }
 

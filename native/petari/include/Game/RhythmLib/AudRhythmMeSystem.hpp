@@ -27,8 +27,6 @@ public:
     s32 getBgmIdx() const {
         return mBgmIdx;
     }
-
-    u32 mNumSeqParsers;
     s32 mBgmIdx;
     // The music track whose child's notes the beat reader hears.
     u32 mBeatTrack;
