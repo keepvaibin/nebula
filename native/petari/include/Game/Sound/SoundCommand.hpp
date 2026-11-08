@@ -14,10 +14,7 @@ struct SoundCommand {
     u32 mValue;
     // The player or stream it is for.
     void* mTarget;
-    union {
-        u8 mBytes[cPayloadBytes];
-        void* mAlign;
-    };
+    alignas(void*) u8 mBytes[cPayloadBytes];
 
     template < class T >
     T& payload() {
