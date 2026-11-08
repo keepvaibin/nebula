@@ -44,10 +44,10 @@ void StreamPlayer::prepare(SoundEngine* pEngine, const u8* pData, u32 ownerSound
 }
 
 void StreamPlayer::post(u32 message) {
-    if (mMessageCount == 16) {
+    if (mMessageCount == cMessageNum) {
         return;
     }
-    mMessages[(mMessageHead + mMessageCount) % 16] = message;
+    mMessages[(mMessageHead + mMessageCount) % cMessageNum] = message;
     mMessageCount++;
 }
 
@@ -136,7 +136,7 @@ void StreamPlayer::process() {
     }
     while (mMessageCount != 0) {
         const u32 message = mMessages[mMessageHead];
-        mMessageHead = (mMessageHead + 1) % 16;
+        mMessageHead = (mMessageHead + 1) % cMessageNum;
         mMessageCount--;
         switch (message & 0xff) {
         case MESSAGE_START:
@@ -174,12 +174,12 @@ void StreamPlayer::channelStart() {
         prepared.mOwner = OWNER_STREAM;
         prepared.mOwnerData = this;
         prepared.mPriority = 0x7f7f;
-        for (u32 j = 0; j < 6; j++) {
+        for (u32 j = 0; j < sizeof(prepared.mMixConfig) / sizeof(prepared.mMixConfig[0]); j++) {
             prepared.mMixConfig[j] = mMixConfig[j];
         }
         prepared.mSourceRate = static_cast< f32 >(mHeader.rate);
         prepared.mOsc[0].initStart(&cStreamEnv);
-        prepared.mFormat = 3;  // PCM16
+        prepared.mFormat = Note::FORMAT_PCM16;
         prepared.mLoop = mHeader.loop != 0 ? 0xffffffffu : 0u;
         prepared.mLoopStart = mHeader.loop_start;
         prepared.mLoopEnd = mHeader.loop_end;
