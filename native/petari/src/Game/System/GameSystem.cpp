@@ -120,7 +120,7 @@ void GameSystem::exeInitializeAudio() {
 
 void GameSystem::exeInitializeBootScene() {
     if (MR::isFirstStep(this)) {
-        MR::requestChangeScene("Boot");
+        MR::requestChangeScene(SceneKind_Boot);
     }
 
     updateSceneController();

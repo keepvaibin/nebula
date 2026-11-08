@@ -60,8 +60,8 @@ namespace MR {
         return SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mStage;
     }
 
-    bool isEqualSceneName(const char* pSceneName) {
-        return isEqualStringCase(SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mScene, pSceneName);
+    bool isCurrentScene(SceneKind kind) {
+        return SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mScene == kind;
     }
 
     bool isEqualStageName(const char* pStageName) {

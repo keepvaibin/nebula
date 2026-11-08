@@ -48,14 +48,10 @@ namespace NrvGameSystemSceneController {
     NEW_NERVE(GameSystemSceneControllerDestroyed, GameSystemSceneController, Destroyed);
 };  // namespace NrvGameSystemSceneController
 
-SceneControlInfo::SceneControlInfo() : mScene(""), mStage(""), mStartIdInfo() {
+SceneControlInfo::SceneControlInfo() : mScene(SceneKind_None), mStage(""), mStartIdInfo() {
     mScenarioNo = 1;
     mSelectedScenarioNo = 1;
     mStartIdInfo = new PlacementId(MR::getInitializeStartIdInfo());
-}
-
-void SceneControlInfo::setScene(const char* pSceneName) {
-    mScene = MR::internName(pSceneName);
 }
 
 void SceneControlInfo::setStage(const char* pStageName) {
@@ -71,7 +67,7 @@ GameSystemSceneController::GameSystemSceneController()
       mPlayTimerScene(), mScenarioSelectScene() {
     mObjHolder = new NameObjHolder(0x1300);
     mSpine = new Spine(this, GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNotInitialized));
-    mIntermissionScene = static_cast< IntermissionScene* >(MR::createScene("Intermission"));
+    mIntermissionScene = static_cast< IntermissionScene* >(MR::createScene(SceneKind_Intermission));
     mPlayTimerScene = new PlayTimerScene();
     mScenarioSelectScene = new ScenarioSelectScene();
 }
@@ -192,33 +188,28 @@ void GameSystemSceneController::destroyScene() {
 }
 
 bool GameSystemSceneController::isStopSound() const {
-    if (MR::isEqualSceneName("Title")) {
+    const bool isNextGame = mNextSceneControlInfo.mScene == SceneKind_Game;
+    if (MR::isEqualStageName("AstroDome") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroDome") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame && MR::isEqualString(mNextSceneControlInfo.mStage, "AstroDome")) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
-        MR::isEqualString(mNextSceneControlInfo.mStage, "AstroDome")) {
+    if (MR::isEqualStageName("LibraryRoom") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("LibraryRoom") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame && MR::isEqualString(mNextSceneControlInfo.mStage, "LibraryRoom")) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
-        MR::isEqualString(mNextSceneControlInfo.mStage, "LibraryRoom")) {
+    if (MR::isEqualStageName("HeavensDoorGalaxy") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("HeavensDoorGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
-        return false;
-    }
-
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame &&
         MR::isEqualString(mNextSceneControlInfo.mStage, "HeavensDoorGalaxy")) {
         return false;
     }
@@ -282,7 +273,7 @@ void GameSystemSceneController::drawScene() {
 
 void GameSystemSceneController::drawSceneOverlay() {
     Scene* pScene = getCurrentSceneForExecute();
-    if (pScene != nullptr && MR::isEqualSceneName("Game")) {
+    if (pScene != nullptr && mCurrSceneControlInfo.mScene == SceneKind_Game) {
         static_cast< GameScene* >(pScene)->drawOverlay();
     }
 }
@@ -365,7 +356,7 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
 
 void GameSystemSceneController::exeDestroyScene() {
     if (mSpine->mStep == 0) {
-        mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
+        mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", MR::getSceneKindName(mCurrSceneControlInfo.mScene));
         destroyScene();
 
         const Nerve* pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices);
@@ -385,7 +376,7 @@ void GameSystemSceneController::exeChoosePlayerVoices() {
 
 void GameSystemSceneController::exeInitializeScene() {
     if (mSpine->mStep == 0) {
-        mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", mNextSceneControlInfo.mScene);
+        mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", MR::getSceneKindName(mNextSceneControlInfo.mScene));
         mSceneInitializeDone = false;
         initializeScene();
     }
@@ -466,7 +457,7 @@ bool GameSystemSceneController::isExistRequest() const {
 }
 
 bool GameSystemSceneController::isSameAtNextSceneAndStage() const {
-    return MR::isEqualString(mCurrSceneControlInfo.mScene, mNextSceneControlInfo.mScene) &&
+    return mCurrSceneControlInfo.mScene == mNextSceneControlInfo.mScene &&
            MR::isEqualString(mCurrSceneControlInfo.mStage, mNextSceneControlInfo.mStage) &&
            mCurrSceneControlInfo.mScenarioNo == mNextSceneControlInfo.mScenarioNo;
 }
@@ -478,7 +469,7 @@ void GameSystemSceneController::updateSceneControlInfo() {
     mCurrSceneControlInfo.mSelectedScenarioNo = mNextSceneControlInfo.mSelectedScenarioNo;
     mCurrSceneControlInfo.setStartIdInfo(*mNextSceneControlInfo.mStartIdInfo);
 
-    mNextSceneControlInfo.mScene = "";
+    mNextSceneControlInfo.mScene = SceneKind_None;
     mNextSceneControlInfo.mStage = "";
     mNextSceneControlInfo.mScenarioNo = -1;
     mNextSceneControlInfo.mSelectedScenarioNo = -1;

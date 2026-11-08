@@ -20,7 +20,6 @@ public:
         Step_Demo,             // time-keep demo mName
         Step_Fadein,
         Step_Movie,            // movie mEvent
-        Step_ChangeScene,      // scene mName
         Step_ChangeSceneTitle,
         Step_Save,
         Step_EventFlag,        // game event flag mName goes on

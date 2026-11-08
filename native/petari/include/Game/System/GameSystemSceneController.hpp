@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Scene/SceneFactory.hpp"
 
 class IntermissionScene;
 class PlacementId;
@@ -17,11 +18,10 @@ class SceneControlInfo {
 public:
     SceneControlInfo();
 
-    void setScene(const char*);
     void setStage(const char*);
     void setStartIdInfo(const PlacementId&);
 
-    const char* mScene;  // MR::internName
+    SceneKind mScene;
     const char* mStage;
     s32 mScenarioNo;
     s32 mSelectedScenarioNo;

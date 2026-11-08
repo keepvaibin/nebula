@@ -89,7 +89,7 @@ namespace {
         }
         GameSystemSceneController* pController = pSystem->mSceneController;
         return pController->isExistSceneObjHolder() && pController->isSceneInitializeState(SceneInitializeState_End) &&
-               strcmp(pController->mCurrSceneControlInfo.mScene, "Game") == 0;
+               pController->mCurrSceneControlInfo.mScene == SceneKind_Game;
     }
 
     const DemoDirector* getActiveDemo() {

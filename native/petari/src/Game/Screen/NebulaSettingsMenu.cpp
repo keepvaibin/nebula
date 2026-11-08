@@ -3002,7 +3002,7 @@ namespace NebulaSettingsMenu {
         // Not before a file is chosen (the boot, the title, the file select): asked for there, it closes at once, unless
         // the input mode has nothing to play with: the menu is how another is chosen.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            (MR::isEqualSceneName("Boot") || MR::isEqualSceneName("Title") || MR::isStageFileSelect())) {
+            (MR::isCurrentScene(SceneKind_Boot) || MR::isStageFileSelect())) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }
