@@ -4,6 +4,17 @@
 
 class CubeGravity : public PlanetGravity {
 public:
+    // mActiveFaces bits: a face that is off pulls nothing beyond it.
+    enum {
+        Face_PositiveX = 1 << 0,
+        Face_NegativeX = 1 << 1,
+        Face_PositiveY = 1 << 2,
+        Face_NegativeY = 1 << 3,
+        Face_PositiveZ = 1 << 4,
+        Face_NegativeZ = 1 << 5,
+        Face_All = 0x3F,
+    };
+
     CubeGravity();
 
     virtual void updateMtx(const Pos3f& rMtx);
