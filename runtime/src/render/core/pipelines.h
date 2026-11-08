@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
+#include <unordered_map>
 #include <unordered_set>
 #include <memory>
 #include <mutex>
@@ -78,7 +79,9 @@ private:
     };
     gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
-    void refuse(std::uint64_t id, unsigned variant, unsigned aux);
+    void refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
+    // Whether the driver has refused this entry's program pair often enough that no state of it is asked for again.
+    [[nodiscard]] bool pair_refused(const PipelineEntry& entry);
     gpu::Pipeline* publish(std::atomic<gpu::Pipeline*>& at, gpu::Pipeline* built) noexcept;
     gpu::Pipeline* build(const PipelineEntry& entry, unsigned variant, unsigned aux);  // per backend
     void destroy_all() noexcept;  // per backend
@@ -94,6 +97,9 @@ private:
     std::condition_variable wake_;
     std::deque<Job> jobs_;
     std::unordered_set<std::uint64_t> refused_;  // the driver said no: asked once
+    // Program pairs (vertex and pixel ids mixed) the driver refused, and how often: a compiler that cannot take a pair's
+    // code refuses it in every state, and each try is a whole compile (hundreds of milliseconds on a phone's draw).
+    std::unordered_map<std::uint64_t, unsigned> refused_pairs_;
     std::vector<std::thread> threads_;
     std::vector<gpu::PipelineRef> owned_;
     std::atomic<std::uint32_t> pending_{0u};

@@ -97,6 +97,11 @@ struct PadMotionSource {
     std::uint64_t accel_events = 0u;
     std::uint64_t polled = 0u;
     std::uint64_t reported_us = 0u;
+    // Android: the controller's own sensors through PadSensors.java own the pad (SDL's are not turned on).
+    bool android = false;
+    std::uint64_t android_gyro = 0u;
+    std::uint64_t android_accel = 0u;
+    std::uint64_t reported_gyro = 0u;  // android_gyro at the last report
 };
 std::array<PadMotionSource, kMaxPads> g_motion_source{};
 std::array<bool, kMaxPads> g_touch_down{};
@@ -403,6 +408,9 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
         return;
     }
     PadMotionSource& source = g_motion_source[index];
+    if (source.android) {
+        return;
+    }
     if (event.sensor == SDL_SENSOR_ACCEL) {
         for (int axis_index = 0; axis_index < 3; ++axis_index) {
             g_accel[index][static_cast<std::size_t>(axis_index)] = event.data[axis_index] / SDL_STANDARD_GRAVITY;
@@ -445,7 +453,7 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
 // with g_input_mutex held, after the pump's events.
 void poll_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     PadMotionSource& source = g_motion_source[index];
-    if (source.by_events || !source.has_gyro) {
+    if (source.by_events || !source.has_gyro || source.android) {
         return;
     }
     float gyro[3]{};
@@ -468,6 +476,152 @@ void poll_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     feed_pad_motion(index, gyro, g_accel[index], steady_motion_dt(index, now_us), now_us);
 }
 
+#if defined(__ANDROID__)
+// Controllers' own motion sensors as Android gives them (InputDevice.getSensorManager; PadSensors.java): every sample the
+// controller sends (a Switch Pro Controller's three per report, 200 a second), queued by Java's sensor thread and fed
+// here on SDL's thread in order, each with its own sensor time. SDL's Android driver reads the same sensors at a fixed
+// 50 Hz (SENSOR_DELAY_GAME: the samples between are dropped), on their own axes, and only when they were there as the
+// controller connected; so these take a pad SDL reads through Android's input devices. A pad SDL drives itself
+// (HIDAPI, over USB) keeps SDL's reading of the controller's reports.
+struct AndroidPadDevice {
+    int id = 0;
+    std::uint16_t crc = 0u;  // of Android's descriptor, as SDL keeps it in the GUID
+    std::uint16_t vendor = 0u;
+    std::uint16_t product = 0u;
+    bool gyro = false;
+    bool accel = false;
+    SDL_JoystickID pad_id = 0;  // the SDL gamepad these sensors are, 0 before one is found
+};
+struct AndroidPadSample {
+    int id;
+    int type;  // Sensor.TYPE_ACCELEROMETER 1 (metres a second squared), Sensor.TYPE_GYROSCOPE 4 (radians a second)
+    std::uint64_t time_ns;
+    float v[3];
+};
+constexpr int kAndroidAccelerometer = 1;
+constexpr int kAndroidGyroscope = 4;
+constexpr std::size_t kAndroidSampleLimit = 4096u;
+std::mutex g_android_pad_mutex;                   // after g_input_mutex when both are held
+std::vector<AndroidPadDevice> g_android_pads;     // guarded by g_android_pad_mutex
+std::vector<AndroidPadSample> g_android_samples;  // guarded by g_android_pad_mutex
+std::vector<AndroidPadSample> g_android_drained;  // SDL's thread
+
+// A pad SDL reads through its own HID drivers (driver signature 'h' in its GUID), not Android's input devices.
+bool sdl_hid_driver(SDL_Gamepad* gamepad) {
+    return SDL_GetJoystickGUID(SDL_GetGamepadJoystick(gamepad)).data[14] == 'h';
+}
+
+// Linux's Nintendo driver (hid-nintendo, built into Android's kernels) reports the IMU on the controller's own axes:
+// X toward the triggers, Y to the left, Z up out of the face. SDL's frame (switch_controller.h ImuSample), as its own
+// Switch driver turns the same reports, is X right, Y up, Z toward the player. hid-playstation and hid-sony report
+// SDL's frame already.
+void android_to_sdl_frame(std::uint16_t vendor, const float (&in)[3], float (&out)[3]) {
+    if (vendor == 0x057eu) {
+        out[0] = -in[1];
+        out[1] = in[2];
+        out[2] = -in[0];
+    } else {
+        out[0] = in[0];
+        out[1] = in[1];
+        out[2] = in[2];
+    }
+}
+
+// The pad of an Android device's sensors: the SDL gamepad of the same descriptor, else the first of the same vendor and
+// product that no other device's sensors have. Called with both locks held.
+std::size_t android_pad_index(AndroidPadDevice& device) {
+    if (device.pad_id != 0) {
+        for (std::size_t i = 0; i < kMaxPads; ++i) {
+            if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == device.pad_id) {
+                return i;
+            }
+        }
+        device.pad_id = 0;
+    }
+    const auto claimed = [&device](SDL_JoystickID id) {
+        return std::any_of(g_android_pads.begin(), g_android_pads.end(),
+                           [&](const AndroidPadDevice& other) { return other.id != device.id && other.pad_id == id; });
+    };
+    std::size_t found = kMaxPads;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        SDL_Gamepad* const gamepad = g_gamepads[i];
+        if (gamepad == nullptr || sdl_hid_driver(gamepad) || SDL_GetGamepadVendor(gamepad) != device.vendor ||
+            SDL_GetGamepadProduct(gamepad) != device.product || claimed(SDL_GetGamepadID(gamepad))) {
+            continue;
+        }
+        const SDL_GUID guid = SDL_GetJoystickGUID(SDL_GetGamepadJoystick(gamepad));
+        if (static_cast<std::uint16_t>(guid.data[2] | (guid.data[3] << 8u)) == device.crc) {
+            found = i;
+            break;
+        }
+        if (found == kMaxPads) {
+            found = i;
+        }
+    }
+    if (found == kMaxPads) {
+        return kMaxPads;
+    }
+    device.pad_id = SDL_GetGamepadID(g_gamepads[found]);
+    PadMotionSource& source = g_motion_source[found];
+    if (!source.android) {
+        source.android = true;
+        source.has_gyro = source.has_gyro || device.gyro;
+        source.has_accel = source.has_accel || device.accel;
+        g_motion_ns[found] = 0u;
+        g_accel_valid[found] = false;
+        std::fprintf(stderr, "[input-motion] pad %zu: the controller's own sensors (gyro %d, accelerometer %d), every sample\n",
+                     found, device.gyro ? 1 : 0, device.accel ? 1 : 0);
+    }
+    return found;
+}
+
+// The samples Java's thread queued since the last pump. Called with g_input_mutex held.
+void drain_android_pad_sensors() {
+    std::lock_guard<std::mutex> lock(g_android_pad_mutex);
+    g_android_drained.swap(g_android_samples);
+    for (const AndroidPadSample& sample : g_android_drained) {
+        const auto device = std::find_if(g_android_pads.begin(), g_android_pads.end(),
+                                         [&](const AndroidPadDevice& d) { return d.id == sample.id; });
+        if (device == g_android_pads.end()) {
+            continue;
+        }
+        const std::size_t index = android_pad_index(*device);
+        if (index == kMaxPads) {
+            continue;
+        }
+        PadMotionSource& source = g_motion_source[index];
+        float value[3]{};
+        android_to_sdl_frame(device->vendor, sample.v, value);
+        if (sample.type == kAndroidAccelerometer) {
+            for (std::size_t axis_index = 0; axis_index < 3u; ++axis_index) {
+                g_accel[index][axis_index] = value[axis_index] / SDL_STANDARD_GRAVITY;
+            }
+            g_accel_valid[index] = true;
+            ++source.android_accel;
+            continue;
+        }
+        if (sample.type != kAndroidGyroscope) {
+            continue;
+        }
+        ++source.android_gyro;
+        if (device->accel && !g_accel_valid[index]) {
+            continue;  // gravity comes with the first accelerometer sample
+        }
+        const std::uint64_t now_us = galaxy::steady_us();
+        const std::uint64_t last_ns = g_motion_ns[index];
+        g_motion_ns[index] = sample.time_ns;
+        float dt = 0.0f;
+        if (last_ns != 0u && sample.time_ns > last_ns && sample.time_ns - last_ns <= 100'000'000u) {
+            dt = static_cast<float>(sample.time_ns - last_ns) * 1e-9f;
+        } else if (last_ns != 0u) {
+            dt = steady_motion_dt(index, now_us);
+        }
+        feed_pad_motion(index, value, g_accel[index], dt, now_us);
+    }
+    g_android_drained.clear();
+}
+#endif
+
 // Every 10 s while a pad has sensors: how its motion arrives, so a log shows whether a controller's motion reaches the
 // game.
 void report_pad_motion(std::size_t index) {
@@ -479,7 +633,16 @@ void report_pad_motion(std::size_t index) {
     if (source.reported_us != 0u && now_us - source.reported_us < 10'000'000u) {
         return;
     }
+    const double seconds = source.reported_us != 0u ? static_cast<double>(now_us - source.reported_us) * 1e-6 : 0.0;
     source.reported_us = now_us;
+    if (source.android) {
+        std::fprintf(stderr, "[input-motion] pad %zu by the controller's sensors: gyro %llu (%.0f a second), accelerometer %llu, live %d\n",
+                     index, static_cast<unsigned long long>(source.android_gyro),
+                     seconds > 0.0 ? static_cast<double>(source.android_gyro - source.reported_gyro) / seconds : 0.0,
+                     static_cast<unsigned long long>(source.android_accel), g_input.motion[index].imu_live ? 1 : 0);
+        source.reported_gyro = source.android_gyro;
+        return;
+    }
     std::fprintf(stderr, "[input-motion] pad %zu by %s: gyro events %llu, accelerometer events %llu, polled %llu, live %d\n",
                  index, source.by_events ? "events" : "polling", static_cast<unsigned long long>(source.gyro_events),
                  static_cast<unsigned long long>(source.accel_events), static_cast<unsigned long long>(source.polled),
@@ -592,9 +755,16 @@ void open_gamepad(SDL_JoystickID id) {
                 g_input.motion[index] = {};
                 PadMotionSource& source = g_motion_source[index];
                 source = {};
-                source.has_gyro = SDL_GamepadHasSensor(slot, SDL_SENSOR_GYRO) &&
+#if defined(__ANDROID__)
+                // A pad read through Android's input devices takes its motion from PadSensors.java: SDL turning on the
+                // same sensors would set them to its 50 a second for both.
+                const bool sdl_sensors = sdl_hid_driver(slot);
+#else
+                const bool sdl_sensors = true;
+#endif
+                source.has_gyro = sdl_sensors && SDL_GamepadHasSensor(slot, SDL_SENSOR_GYRO) &&
                                   SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
-                source.has_accel = SDL_GamepadHasSensor(slot, SDL_SENSOR_ACCEL) &&
+                source.has_accel = sdl_sensors && SDL_GamepadHasSensor(slot, SDL_SENSOR_ACCEL) &&
                                    SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
                 std::fprintf(stderr, "[input] gamepad \"%s\" %04x:%04x scheme %u connected; gyro %d (%.0f Hz), accelerometer %d\n",
                              SDL_GetGamepadName(slot), SDL_GetGamepadVendor(slot), SDL_GetGamepadProduct(slot),
@@ -880,6 +1050,9 @@ void pump_events(int timeout_ms) noexcept {
         }
         any = SDL_PollEvent(&event);
     }
+#if defined(__ANDROID__)
+    drain_android_pad_sensors();
+#endif
     sample_gamepads();
     }
     // Pad 0 of the connected ones drives the menu as a controller does on Windows.
@@ -1008,6 +1181,50 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePhon
     if (out.shake_started) {
         motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
     }
+}
+
+// PadSensors.java (Java's sensor thread): a controller's motion sensors as Android lists them, gone, and each sample.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensorDevice(
+    JNIEnv* env, jclass, jint id, jstring name, jstring descriptor, jint vendor, jint product, jboolean gyro, jboolean accel) {
+    std::uint16_t crc = 0u;
+    if (const char* const chars = descriptor != nullptr ? env->GetStringUTFChars(descriptor, nullptr) : nullptr) {
+        crc = SDL_crc16(0u, chars, std::strlen(chars));
+        env->ReleaseStringUTFChars(descriptor, chars);
+    }
+    const char* const label = name != nullptr ? env->GetStringUTFChars(name, nullptr) : nullptr;
+    std::fprintf(stderr, "[input-sensors] \"%s\" %04x:%04x: gyro %d, accelerometer %d%s\n", label != nullptr ? label : "?",
+                 static_cast<unsigned>(vendor) & 0xFFFFu, static_cast<unsigned>(product) & 0xFFFFu, gyro ? 1 : 0, accel ? 1 : 0,
+                 gyro || accel ? "" : " (Android lists no motion sensors for it)");
+    if (label != nullptr) {
+        env->ReleaseStringUTFChars(name, label);
+    }
+    std::lock_guard<std::mutex> lock(g_android_pad_mutex);
+    auto device = std::find_if(g_android_pads.begin(), g_android_pads.end(), [id](const AndroidPadDevice& d) { return d.id == id; });
+    if (device == g_android_pads.end()) {
+        g_android_pads.push_back(AndroidPadDevice{});
+        device = g_android_pads.end() - 1;
+    }
+    device->id = id;
+    device->crc = crc;
+    device->vendor = static_cast<std::uint16_t>(vendor);
+    device->product = static_cast<std::uint16_t>(product);
+    device->gyro = gyro;
+    device->accel = accel;
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensorRemoved(JNIEnv*, jclass, jint id) {
+    std::lock_guard<std::mutex> lock(g_android_pad_mutex);
+    g_android_pads.erase(std::remove_if(g_android_pads.begin(), g_android_pads.end(), [id](const AndroidPadDevice& d) { return d.id == id; }),
+                         g_android_pads.end());
+}
+
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensor(JNIEnv*, jclass, jint id, jint type, jlong time_ns,
+                                                                                        jfloat x, jfloat y, jfloat z) {
+    std::lock_guard<std::mutex> lock(g_android_pad_mutex);
+    if (g_android_samples.size() >= kAndroidSampleLimit) {
+        return;  // SDL's thread is not pumping (the game is out of sight): the newest are dropped
+    }
+    g_android_samples.push_back(AndroidPadSample{id, type, static_cast<std::uint64_t>(time_ns), {x, y, z}});
 }
 
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchControls(
