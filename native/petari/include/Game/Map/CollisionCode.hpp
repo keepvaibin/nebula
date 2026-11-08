@@ -122,7 +122,6 @@ public:
     const char* getString(u32 code);
 
     u32 mCodeNum;
-    u32 mCodeNumMax;
     MR::NameIndex mIndex;  // a code's name to the code
     u32* mCodeTable;
     const char** mNameTable;

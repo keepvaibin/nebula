@@ -16,9 +16,6 @@ void CameraContext::initParams() {
     mViewInv.invert(mViewInv);
 
     mFovy = 45.0f;
-    const f32 height = MR::getScreenHeight();
-    const f32 width = MR::getScreenWidth();
-    mAspectRatio = width / height;
     mNearZ = 100.0f;
     mFarZ = 800000.0f;
 

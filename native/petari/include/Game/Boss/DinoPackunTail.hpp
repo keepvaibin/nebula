@@ -27,7 +27,6 @@ public:
     DinoPackunTailNode* getNode(u32 index) const;
 
     DinoPackunTailNode** mNodes;
-    u32 mMaxNodes;
     u32 mNumNodes;
     f32 mBendRate;
     f32 mDistanceRate;

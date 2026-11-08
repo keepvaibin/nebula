@@ -114,7 +114,6 @@ CameraHolder::CameraHolder(const char* pName) : NameObj(pName) {
     createCameras();
 
     mDefaultCameraIndex = getIndexOf(getNameStrOfDefault());
-    mDefaultCamera = getDefaultCamera();
 }
 
 s32 CameraHolder::getNum() const {

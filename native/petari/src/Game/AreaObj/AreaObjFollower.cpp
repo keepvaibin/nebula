@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-AreaObjFollower::AreaObjFollower(AreaObj* pObj, const TableIter& rIter) : BaseMatrixFollower(pObj, rIter), mObj(pObj) {
+AreaObjFollower::AreaObjFollower(AreaObj* pObj, const TableIter& rIter) : BaseMatrixFollower(rIter), mObj(pObj) {
     mFollowMtx.identity();
     mObj->setFollowMtx(&mFollowMtx);
 }

@@ -3,13 +3,9 @@
 #include "Game/LiveActor/ActorStateBase.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 
-class WalkerStateBlowDamageParam {
-public:
-};
-
 class WalkerStateBlowDamage : public ActorStateBase< LiveActor > {
 public:
-    WalkerStateBlowDamage(LiveActor* pHost, Vec3f* pDirection, WalkerStateBlowDamageParam* pBlowDamageParam);
+    WalkerStateBlowDamage(LiveActor* pHost, Vec3f* pDirection);
 
     virtual void appear();
 
@@ -17,5 +13,4 @@ public:
     void exeBlowLand();
 
     Vec3f* mDirection;
-    WalkerStateBlowDamageParam* mBlowDamageParam;
 };

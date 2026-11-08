@@ -63,7 +63,7 @@ public:
 
 class BaseMatrixFollower {
 public:
-    BaseMatrixFollower(NameObj*, const TableIter&);
+    explicit BaseMatrixFollower(const TableIter&);
 
     virtual void setGravityFollowHost(const NameObj*) {
     }
@@ -76,7 +76,6 @@ public:
     bool isValid() const;
 
     PlacementLink* mLinkInfo;
-    NameObj* mFollowerObj;
     BaseMatrixFollowTarget* mFollowTarget;
     s32 mFollowID;
 };

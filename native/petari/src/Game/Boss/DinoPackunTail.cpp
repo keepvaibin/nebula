@@ -5,7 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 DinoPackunTail::DinoPackunTail(u32 nodeCount)
-    : mNodes(new DinoPackunTailNode*[nodeCount]), mMaxNodes(nodeCount), mNumNodes(0), mBendRate(1.0f), mDistanceRate(1.0f),
+    : mNodes(new DinoPackunTailNode*[nodeCount]), mNumNodes(0), mBendRate(1.0f), mDistanceRate(1.0f),
       mHostVelocityRate(0.0f), mIsActive(true) {}
 
 // Appends pNode after the last node.

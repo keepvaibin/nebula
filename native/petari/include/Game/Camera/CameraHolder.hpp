@@ -26,5 +26,4 @@ public:
 
     s32 mDefaultCameraIndex;
     Camera** mCameras;
-    Camera* mDefaultCamera;
 };

@@ -18,7 +18,7 @@ namespace {
 }  // namespace
 
 AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pHeap, u32 numSeqParsers, bool hasMgr)
-    : SoundGlobal< AudRhythmMeSystem >(true), mNumSeqParsers(numSeqParsers), mBgmIdx(), mBeatTrack(), mMeMgr() {
+    : SoundGlobal< AudRhythmMeSystem >(true), mBgmIdx(), mBeatTrack(), mMeMgr() {
     if (numSeqParsers != 0) {
         setUsingRhythmParser(0);
     }
