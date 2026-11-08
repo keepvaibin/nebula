@@ -6,7 +6,7 @@ class DinoPackunStateDamage;
 
 class DinoPackunBattleEgg : public DinoPackunAction {
 public:
-    DinoPackunBattleEgg(DinoPackun*);
+    DinoPackunBattleEgg(DinoPackun* pHost);
 
     virtual ~DinoPackunBattleEgg();
     virtual void init();

@@ -8,7 +8,7 @@ class DinoPackunTrackFireHolder;
 
 class DinoPackunBattleEggVs2 : public DinoPackunAction {
 public:
-    DinoPackunBattleEggVs2(DinoPackun*);
+    DinoPackunBattleEggVs2(DinoPackun* pHost);
 
     virtual ~DinoPackunBattleEggVs2();
     virtual void init();
@@ -19,7 +19,7 @@ public:
     virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void setTrackFire(DinoPackunTrackFireHolder*);
+    void setTrackFire(DinoPackunTrackFireHolder* pHolder);
     void exeTurn();
     void exeWalk();
     void exeDamage();
