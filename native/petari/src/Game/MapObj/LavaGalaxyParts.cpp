@@ -86,9 +86,6 @@ void LavaGalaxyParts::init(const TableIter& rIter) {
 
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
 
-    f32 arg0 = -1.0f;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-
     pName = objectName;
     bool isNonFloatingOrLavaStep;
     if (MR::isEqualString(pName, "LavaNonFloatingStepA")) {

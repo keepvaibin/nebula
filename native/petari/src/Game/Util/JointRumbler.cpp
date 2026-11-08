@@ -8,7 +8,7 @@
 #include "math_types.hpp"
 
 
-JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 frequency, f32 amplitude, u32 duration, bool a6, s32 startDelay)
+JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 frequency, f32 amplitude, u32 duration, bool useExtraScale, s32 startDelay)
     : mRumbleCalculator(), mJointTransform(), mStartDelay(startDelay), mDelayLeft(), mModelScale(1.0f), mFlags() {
     if (pActor->mModelManager->mXanimePlayer->getCore()->mTransformList == nullptr) {
         MR::initJointTransform(pActor);
@@ -17,8 +17,8 @@ JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 freque
     mJointTransform = MR::getJointTransform(pActor, pJointName);
     mRumbleCalculator = new RumbleCalculatorCosMultLinear(frequency, HALF_PI, amplitude, duration);
 
-    if (a6) {
-        mFlags |= FLAG_1;
+    if (useExtraScale) {
+        mFlags |= FLAG_EXTRA_SCALE;
     }
 }
 
@@ -55,7 +55,7 @@ bool JointRumbler::isRumbling() const {
 }
 
 void JointRumbler::updateModelScale(f32 scale) {
-    if (testFlag(FLAG_1)) {
+    if (testFlag(FLAG_EXTRA_SCALE)) {
         updateScale(&mJointTransform->mExtraScale, scale);
     } else {
         updateScale(&mJointTransform->mScale, scale);

@@ -154,7 +154,7 @@ CameraMan* CameraDirector::pop() {
 
 void CameraDirector::backLastMtx() {
     if (mIsSubjectiveCalced) {
-        MR::setCameraViewMtx(mViewMtx, false, false, Vec3f(0.0f, 0.0f, 0.0f));
+        MR::setCameraViewMtx(mViewMtx);
 
         Vec3f invTrans;
         MR::getCameraInvViewMtx().getTrans(invTrans);
@@ -278,7 +278,7 @@ void CameraDirector::calcSubjective() {
     viewMtx.setTrans(newPos);
     viewMtx.invert(viewMtx);
 
-    MR::setCameraViewMtx(viewMtx, false, false, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::setCameraViewMtx(viewMtx);
 }
 
 bool CameraDirector::isInterpolationOff() {

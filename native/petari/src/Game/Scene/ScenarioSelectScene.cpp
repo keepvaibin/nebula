@@ -56,7 +56,7 @@ void ScenarioSelectScene::init() {
 
     Pos3f view;
     view.setPositionFromLookAt(Vec3f(0.0f, 0.0f, 1000.0f), Vec3f(0.0f, 1.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
-    mCameraContext->setViewMtx(view, false, false, Vec3f(0.0f, 0.0f, 0.0f));
+    mCameraContext->setViewMtx(view);
 
     mScenarioLayout = new ScenarioSelectLayout(mEffectSystem, mCameraContext);
     mScenarioLayout->initWithoutIter();

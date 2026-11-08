@@ -31,7 +31,7 @@ namespace MR {
     f32 getFarZ();
     f32 getFovy();
     f32 getRenderFovy();  // CameraContext::getRenderFovy
-    void setCameraViewMtx(const Pos3f&, bool, bool, const Vec3f&);
+    void setCameraViewMtx(const Pos3f& rMtx);
     void setNearZ(f32);
     void setFovy(f32);
     void setShakeOffset(f32, f32);

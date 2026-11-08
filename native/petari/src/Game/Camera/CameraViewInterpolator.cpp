@@ -39,13 +39,13 @@ void CameraViewInterpolator::updateCameraMtx(MtxPtr pMtx, const Vec3f& rPos, con
         lookAtCenter();
     }
 
-    bool isUpdated = calcCollision(targetMtx);
+    calcCollision(targetMtx);
     mIsCollisionOff = false;
     reduceOscillation();
 
     Pos3f inv;
     inv.invert(mMtx);
-    MR::setCameraViewMtx(inv, mInterpolateTime > 0, isUpdated, mTargetPosition);
+    MR::setCameraViewMtx(inv);
     MR::setFovy(mFovy);
 
     mIsInterpolationOff = false;
