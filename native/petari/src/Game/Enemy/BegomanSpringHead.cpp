@@ -1,5 +1,6 @@
 #include "Game/Enemy/BegomanSpringHead.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -19,7 +20,7 @@ void BegomanHead::calcAndSetBaseMtx() {
     MR::setBaseScale(this, scale);
 }
 
-BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "バネ頭", "BegomanSpringHead", pMtx, 10, false) {
+BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "バネ頭", "BegomanSpringHead", pMtx, MR::DrawBufferType_MapObjStrongLight, false) {
 }
 
 BegomanHead::~BegomanHead() {

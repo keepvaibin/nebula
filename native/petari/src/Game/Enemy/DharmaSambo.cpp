@@ -5,6 +5,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/Spine.hpp"
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -138,7 +139,7 @@ void DharmaSambo::init(const TableIter& rIter) {
 
     for (i = 0; i < ::hBodyPartsNum; i++) {
         MR::hideJoint(this, joint_name[i]);
-        DharmaSamboParts* part = new DharmaSamboParts(this, "だるまサンボパーツ", "DharmaSamboParts", nullptr, 18, 43, -2);
+        DharmaSamboParts* part = new DharmaSamboParts(this, "だるまサンボパーツ", "DharmaSamboParts", nullptr, MR::DrawBufferType_Enemy, MR::MovementType_EnemyDecoration, -2);
         part->initWithoutIter();
         part->mOriginalIndex = i;
         part->setHead(i == ::hBodyPartsNum - 1);

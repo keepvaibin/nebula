@@ -310,7 +310,7 @@ namespace MR {
     }
 
     PartsModel* createBloomModel(LiveActor* pActor, MtxPtr pMtx) {
-        PartsModel* parts = ::createSubModel(pActor, "Bloom", pMtx, 30);
+        PartsModel* parts = ::createSubModel(pActor, "Bloom", pMtx, MR::DrawBufferType_BloomModel);
 
         if (parts != nullptr) {
             MR::registerDemoSimpleCastAll(parts);
@@ -320,11 +320,11 @@ namespace MR {
     }
 
     PartsModel* createWaterModel(LiveActor* pActor, MtxPtr pMtx) {
-        return ::createSubModel(pActor, "Water", pMtx, 8);
+        return ::createSubModel(pActor, "Water", pMtx, MR::DrawBufferType_MapObj);
     }
 
     PartsModel* createIndirectPlanetModel(LiveActor* pActor, MtxPtr pMtx) {
-        return ::createSubModel(pActor, "Indirect", pMtx, 0x1D);
+        return ::createSubModel(pActor, "Indirect", pMtx, MR::DrawBufferType_IndirectPlanet);
     }
 
     MirrorActor* tryCreateMirrorActor(LiveActor* pActor, const char* pModelName) {
@@ -2546,14 +2546,14 @@ namespace MR {
 
     LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const TableIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createFarModel(MR::DrawBufferType_PlanetLow, -1, MR::DrawBufferType_Sky);
+        pLod->createFarModel(MR::DrawBufferType_PlanetLow, -1, MR::CalcAnimType_Planet);
         pLod->setFarClipping(farClip);
         return pLod;
     }
 
     LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const TableIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createFarModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
+        pLod->createFarModel(MR::DrawBufferType_MapObj, -1, MR::CalcAnimType_MapObj);
         pLod->setFarClipping(farClip);
         return pLod;
     }
