@@ -10,7 +10,7 @@
 OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("オーシャンボウル[ブルーム描画]"), mHost(pHost) {
 }
 
-void OceanBowlBloomDrawer::init(const TableIter&) {
+void OceanBowlBloomDrawer::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanBowlBloomDrawer);
 }
 
@@ -22,21 +22,20 @@ void OceanBowlBloomDrawer::draw() const {
     const SiteMaterial material = mHost->loadMaterialBloom();
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
-    OceanBowlPoint* pPoint2;
-    u16 zero = 0;
-    u16 one = 1;
-    for (s32 x = 0; x < 24; x++) {
-        // Texture coordinates 0 and 1 are entries of the bowl's arrays (two floats each), the vertex's index in both.
-        VertexPCT2* vtx = site.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50);
-        for (s32 y = 0; y < 25; y++) {
-            pPoint2 = mHost->getPoint(x, y);
-            OceanBowlPoint* pPoint = mHost->getPoint(x + 1, y);
-            *vtx++ = {pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z, Rgba8(0xFF, 0xFF, 0xFF, mHost->getPoint(x + 1, y)->mAlpha), mHost->mVtxTex0Array[2 * zero], mHost->mVtxTex0Array[2 * zero + 1], mHost->mVtxTex1Array[2 * zero], mHost->mVtxTex1Array[2 * zero + 1]};
+    const f32* pTex0 = mHost->mVtxTex0Array;
+    const f32* pTex1 = mHost->mVtxTex1Array;
+    for (s32 x = 0; x < OceanBowl::cPointNum - 1; x++) {
+        VertexPCT2* vtx = site.vertices< VertexPCT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, OceanBowl::cPointNum * 2);
+        for (s32 y = 0; y < OceanBowl::cPointNum; y++) {
+            const OceanBowlPoint* pNext = mHost->getPoint(x + 1, y);
+            const OceanBowlPoint* pCur = mHost->getPoint(x, y);
+            const s32 tex = OceanBowl::getStripTexCoordIndex(x, y);
 
-            *vtx++ = {pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z, Rgba8(0xFF, 0xFF, 0xFF, mHost->getPoint(x, y)->mAlpha), mHost->mVtxTex0Array[2 * one], mHost->mVtxTex0Array[2 * one + 1], mHost->mVtxTex1Array[2 * one], mHost->mVtxTex1Array[2 * one + 1]};
+            *vtx++ = {pNext->mVertexPosition.x, pNext->mVertexPosition.y, pNext->mVertexPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pNext->mAlpha),
+                      pTex0[tex], pTex0[tex + 1], pTex1[tex], pTex1[tex + 1]};
 
-            zero += 2;
-            one += 2;
+            *vtx++ = {pCur->mVertexPosition.x, pCur->mVertexPosition.y, pCur->mVertexPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pCur->mAlpha),
+                      pTex0[tex + 2], pTex0[tex + 3], pTex1[tex + 2], pTex1[tex + 3]};
         }
     }
 }

@@ -16,9 +16,12 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 
-// These are from the debug symbol map
 namespace {
+    const s32 cPointNum = OceanBowl::cPointNum;
+    const s32 cCenterPoint = cPointNum / 2;
     const f32 sPointInterval = 200.0f;
+    const f32 sPointIntervalHalf = sPointInterval / 2.0f;
+    const f32 sGridHalfExtent = cPointNum * sPointInterval / 2.0f;
     const f32 sPointWaveRateDistMax = 500.0f;
     const f32 sTexRate0 = 0.05f;
     const f32 sTexRate1 = 0.05f;
@@ -33,20 +36,42 @@ namespace {
     const f32 sTexSpeedV2 = -0.001f;
     const f32 sIndirectScale = 0.1f;
     const f32 sClippingDistance = 1000.0f;
-    const f32 sPointIntervalHalf = ::sPointInterval / 2.0f;
+    const f32 sMaskExtent = 4800.0f;  // the shore mask covers the grid's point span
 
-    static NebulaColor8 sOceanBowlStageColor0 = {40, 40, 40, 20};
-    static NebulaColor8 sOceanBowlStageColor1 = {200, 230, 210, 255};
-    static u8 sOceanBowlBloomStageColor0V = 95;
-    static u8 sOceanBowlBloomStageColor1V = 50;
+    const NebulaColor8 sOceanBowlStageColor0 = {40, 40, 40, 20};
+    const NebulaColor8 sOceanBowlStageColor1 = {200, 230, 210, 255};
+    const u8 sOceanBowlBloomStageColor0V = 95;
+    const u8 sOceanBowlBloomStageColor1V = 50;
+
+    // One strip per row pair, two vertices per column: (u of row x + 1, v) then (u of row x, v).
+    void fillStripTexCoords(f32* pArray, f32 rate) {
+        s32 index = 0;
+        f32 uNext = rate;
+        f32 uCur = 0.0f;
+
+        for (s32 x = 0; x < cPointNum - 1; x++) {
+            f32 v = 0.0f;
+            for (s32 y = 0; y < cPointNum; y++) {
+                pArray[index + 0] = uNext;
+                pArray[index + 1] = v;
+                pArray[index + 2] = uCur;
+                pArray[index + 3] = v;
+                v += rate;
+                index += 4;
+            }
+
+            uCur = uNext;
+            uNext += rate;
+        }
+    }
 };  // namespace
 
 OceanBowl::OceanBowl(const char* pName)
     : LiveActor(pName), mSide(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mRadius(), mWaveX(), mWaveZ(), mTexU0(), mTexV0(),
       mTexU1(), mTexV1(), mTexU2(), mTexV2(), mTexStep(5.0f / 120.0f), mVtxTex0Array(), mVtxTex1Array(), mVtxTex2Array(), mVtxTex3Array(), mWaterTex(),
       mWaterIndirectTex(), mMaskTex(), mBloomDrawer(), mIsClipped() {
-    for (s32 x = 0; x < 25; x++) {
-        for (s32 y = 0; y < 25; y++) {
+    for (s32 x = 0; x < cPointNum; x++) {
+        for (s32 y = 0; y < cPointNum; y++) {
             setPoint(x, y, nullptr);
         }
     }
@@ -83,273 +108,209 @@ bool OceanBowl::isInWater(const Vec3f& rPos) const {
     return !(mUp.dot(rPos - mPosition) > 0.0f);
 }
 
+// The bowl is a half cosine: depth mRadius at the center, 0 at the rim.
 bool OceanBowl::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const {
-    const Vec3f* pPosition = &mPosition;
-    f32 B0 = mRadius;
-    Vec3f v(rPos);
-    v.sub(*pPosition);
-    f32 fa = MR::vecKillElement(v, mUp, &v);
-    f32 fc = v.length() / B0;
-    f32 fb = fc;
-    fb *= PI;
-    fb *= 0.5f;
+    Vec3f horizontal(rPos);
+    horizontal.sub(mPosition);
+    f32 height = MR::vecKillElement(horizontal, mUp, &horizontal);
+    f32 angle = horizontal.length() / mRadius;
+    angle *= PI;
+    angle *= 0.5f;
 
-    pInfo->mDepth = MR::cos(fb) * B0;
-    pInfo->mDepth += fa;
+    pInfo->mDepth = MR::cos(angle) * mRadius;
+    pInfo->mDepth += height;
 
-    pInfo->mCamWaterDepth = -fa;
+    pInfo->mCamWaterDepth = -height;
     pInfo->mWaveHeight = OceanBowlPoint::calcHeightStatic(mWaveX, mWaveZ, rPos.x, rPos.z);
 
-    Vec3f v2(rPos), v3;
-    v2.sub(*pPosition);
-    MR::normalizeOrZero(&v2);
-
     pInfo->mSurfaceNormal.set(mUp);
+    pInfo->mSurfacePos.set(mPosition + horizontal);
 
-    MR::vecKillElement(rPos - *pPosition, mUp, &v3);
-    pInfo->mSurfacePos.set(*pPosition + v3);
+    Vec3f toEdge(rPos);
+    toEdge.sub(mPosition);
 
-    Vec3f v5(rPos);
-    const Vec3f& rPosition1 = mPosition;
-    v5.sub(rPosition1);
-
-    if (v5.y > 0.0f) {
-        v5.y = 0.0f;
+    if (toEdge.y > 0.0f) {
+        toEdge.y = 0.0f;
     }
 
-    if (MR::isNearZero(v5)) {
-        pInfo->mEdgeDistance = B0;
-        Vec3f v6(rGravity);
-        v6.scale(B0);
-        const Vec3f& rPosition2 = mPosition;
-        v6.add(rPosition2);
-        pInfo->mEdgePos.set(v6);
+    if (MR::isNearZero(toEdge)) {
+        pInfo->mEdgeDistance = mRadius;
+        Vec3f edgePos(rGravity);
+        edgePos.scale(mRadius);
+        edgePos.add(mPosition);
+        pInfo->mEdgePos.set(edgePos);
     } else {
-        MR::normalize(&v5);
-        v5.scale(B0);
-        const Vec3f& rPosition3 = mPosition;
-        v5.add(rPosition3);
-        pInfo->mEdgeDistance = v5.distance(rPos);
-        pInfo->mEdgePos.set(v5);
+        MR::normalize(&toEdge);
+        toEdge.scale(mRadius);
+        toEdge.add(mPosition);
+        pInfo->mEdgeDistance = toEdge.distance(rPos);
+        pInfo->mEdgePos.set(toEdge);
     }
 
     return true;
 }
 
 void OceanBowl::movement() {
-    const Vec3f* pPosition = &getPoint(12, 12)->mPosition;
+    const Vec3f& rCenter = getPoint(cCenterPoint, cCenterPoint)->mPosition;
     f32 distToPlayer = MR::calcDistanceToPlayer(mPosition);
 
-    if ((MR::isCameraInWater() && WaterAreaFunction::getCameraWaterInfo()->mOceanBowl != this) || distToPlayer > ::sClippingDistance + mRadius) {
+    if ((MR::isCameraInWater() && WaterAreaFunction::getCameraWaterInfo()->mOceanBowl != this) || distToPlayer > sClippingDistance + mRadius) {
         mIsClipped = true;
         return;
     }
 
     mIsClipped = false;
-    Vec3f playerpos(*MR::getPlayerPos());
-    playerpos.sub(*pPosition);
-    f32 dotA = mSide.dot(playerpos);
-    f32 dotB = mFront.dot(playerpos);
+    Vec3f toPlayer(*MR::getPlayerPos());
+    toPlayer.sub(rCenter);
+    f32 sideDist = mSide.dot(toPlayer);
+    f32 frontDist = mFront.dot(toPlayer);
 
-    if (dotA < -::sPointIntervalHalf && dotA > -mRadius) {
+    // The grid scrolls a row at a time to keep the player over its center.
+    if (sideDist < -sPointIntervalHalf && sideDist > -mRadius) {
         moveToLeft();
-    } else if (dotA > ::sPointIntervalHalf && dotA < mRadius) {
+    } else if (sideDist > sPointIntervalHalf && sideDist < mRadius) {
         moveToRight();
-    } else if (dotB < -::sPointIntervalHalf && dotB > -mRadius) {
+    } else if (frontDist < -sPointIntervalHalf && frontDist > -mRadius) {
         moveToUpper();
-    } else if (dotB > ::sPointIntervalHalf && dotB < mRadius) {
+    } else if (frontDist > sPointIntervalHalf && frontDist < mRadius) {
         moveToLower();
     }
 
-    mWaveX += ::sWaveSpeed0;
-    mWaveZ += ::sWaveSpeed1;
+    mWaveX += sWaveSpeed0;
+    mWaveZ += sWaveSpeed1;
 
     updatePoints();
 
-    mTexU0 = MR::repeat(mTexU0 + ::sTexSpeedU0, 0.0f, 1.0f);
-    mTexV0 = MR::repeat(mTexV0 + ::sTexSpeedV0, 0.0f, 1.0f);
-    mTexU1 = MR::repeat(mTexU1 + ::sTexSpeedU1, 0.0f, 1.0f);
-    mTexV1 = MR::repeat(mTexV1 + ::sTexSpeedV1, 0.0f, 1.0f);
-    mTexU2 = MR::repeat(mTexU2 + ::sTexSpeedU2, 0.0f, 1.0f);
-    mTexV2 = MR::repeat(mTexV2 + ::sTexSpeedV2, 0.0f, 1.0f);
+    mTexU0 = MR::repeat(mTexU0 + sTexSpeedU0, 0.0f, 1.0f);
+    mTexV0 = MR::repeat(mTexV0 + sTexSpeedV0, 0.0f, 1.0f);
+    mTexU1 = MR::repeat(mTexU1 + sTexSpeedU1, 0.0f, 1.0f);
+    mTexV1 = MR::repeat(mTexV1 + sTexSpeedV1, 0.0f, 1.0f);
+    mTexU2 = MR::repeat(mTexU2 + sTexSpeedU2, 0.0f, 1.0f);
+    mTexV2 = MR::repeat(mTexV2 + sTexSpeedV2, 0.0f, 1.0f);
 }
 
 void OceanBowl::initPoints() {
-    for (s32 x = 0; x < 25; x++) {
-        for (s32 y = 0; y < 25; y++) {
-            Vec3f vecA(mSide);
-            Vec3f vecB(mFront);
-            vecA.scale(((static_cast< f32 >(y) * ::sPointInterval) - 2500.0f) + ::sPointIntervalHalf);
-            vecB.scale(((static_cast< f32 >(x) * ::sPointInterval) - 2500.0f) + ::sPointIntervalHalf);
-            Vec3f finalpos(mPosition);
-            finalpos.add(vecA);
-            finalpos.add(vecB);
+    for (s32 x = 0; x < cPointNum; x++) {
+        for (s32 y = 0; y < cPointNum; y++) {
+            Vec3f sideOffset(mSide);
+            Vec3f frontOffset(mFront);
+            sideOffset.scale(((static_cast< f32 >(y) * sPointInterval) - sGridHalfExtent) + sPointIntervalHalf);
+            frontOffset.scale(((static_cast< f32 >(x) * sPointInterval) - sGridHalfExtent) + sPointIntervalHalf);
+            Vec3f pos(mPosition);
+            pos.add(sideOffset);
+            pos.add(frontOffset);
 
-            setPoint(x, y, new OceanBowlPoint(finalpos));
+            setPoint(x, y, new OceanBowlPoint(pos));
         }
     }
 
-    mVtxTex0Array = new f32[24 * 25 * 4];
-    mVtxTex1Array = new f32[24 * 25 * 4];
-    mVtxTex2Array = new f32[24 * 25 * 4];
-    mVtxTex3Array = new f32[24 * 25 * 4];
+    const s32 texCoordNum = (cPointNum - 1) * cPointNum * 4;
+    mVtxTex0Array = new f32[texCoordNum];
+    mVtxTex1Array = new f32[texCoordNum];
+    mVtxTex2Array = new f32[texCoordNum];
+    mVtxTex3Array = new f32[texCoordNum];
 
-    s32 index = 0;
-
-    f32 f5 = ::sTexRate0;
-    f32 f6 = 0.0f;
-
-    f32 f7 = ::sTexRate1;
-    f32 f8 = 0.0f;
-
-    f32 f9 = ::sTexRate2;
-    f32 f10 = 0.0f;
-
-    f32 f11 = 0.0f;
-    f32 f12 = mTexStep;
-
-    for (s32 x = 0; x < 24; x++) {
-        f32 r13 = 0.0f;
-        f32 r28 = 0.0f;
-        f32 r29 = 0.0f;
-        f32 r30 = 0.0f;
-        for (s32 y = 0; y < 25; y++) {
-            mVtxTex0Array[index + 0] = f5;
-            mVtxTex0Array[index + 1] = r13;
-            mVtxTex0Array[index + 2] = f6;
-            mVtxTex0Array[index + 3] = r13;
-            r13 += ::sTexRate0;
-
-            mVtxTex1Array[index + 0] = f7;
-            mVtxTex1Array[index + 1] = r28;
-            mVtxTex1Array[index + 2] = f8;
-            mVtxTex1Array[index + 3] = r28;
-            r28 += ::sTexRate1;
-
-            mVtxTex2Array[index + 0] = f9;
-            mVtxTex2Array[index + 1] = r29;
-            mVtxTex2Array[index + 2] = f10;
-            mVtxTex2Array[index + 3] = r29;
-            r29 += ::sTexRate2;
-
-            mVtxTex3Array[index + 0] = f12;
-            mVtxTex3Array[index + 1] = r30;
-            mVtxTex3Array[index + 2] = f11;
-            mVtxTex3Array[index + 3] = r30;
-            r30 += mTexStep;
-
-            index += 4;
-        }
-
-        f6 = f5;
-        f8 = f7;
-        f10 = f9;
-        f11 = f12;
-        f5 += ::sTexRate0;
-        f7 += ::sTexRate1;
-        f9 += ::sTexRate2;
-        f12 += mTexStep;
-    }
+    fillStripTexCoords(mVtxTex0Array, sTexRate0);
+    fillStripTexCoords(mVtxTex1Array, sTexRate1);
+    fillStripTexCoords(mVtxTex2Array, sTexRate2);
+    fillStripTexCoords(mVtxTex3Array, mTexStep);
 }
 
 void OceanBowl::updatePoints() {
-    for (s32 x = 0; x < 25; x++) {
-        for (s32 y = 0; y < 25; y++) {
+    for (s32 x = 0; x < cPointNum; x++) {
+        for (s32 y = 0; y < cPointNum; y++) {
             getPoint(x, y)->updatePos(mWaveX, mWaveZ);
         }
     }
 }
 
+// The row that scrolled out comes back on the other side, its wave faded by its distance inside the rim.
+void OceanBowl::resetWrappedPoint(OceanBowlPoint* pPoint, const Vec3f& rPos) {
+    pPoint->reset(rPos, MR::clamp((mRadius - getPosition()->distance(rPos)) / sPointWaveRateDistMax, 0.0f, 1.0f));
+}
+
 void OceanBowl::moveToLeft() {
-    OceanBowlPoint* mLastPoint;
+    for (s32 x = 0; x < cPointNum; x++) {
+        OceanBowlPoint* pWrapped = getPoint(x, cPointNum - 1);
 
-    for (s32 x = 0; x < 25; x++) {
-        mLastPoint = getPoint(x, 24);
-
-        for (s32 y = 24; y > 0; y--) {
+        for (s32 y = cPointNum - 1; y > 0; y--) {
             setPoint(x, y, getPoint(x, y - 1));
         }
 
-        setPoint(x, 0, mLastPoint);
+        setPoint(x, 0, pWrapped);
 
-        Vec3f resetvec(mSide);
-        resetvec.scale(-200.0f);
-        resetvec.add(getPoint(x, 1)->mPosition);
-        mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
+        Vec3f pos(mSide);
+        pos.scale(-sPointInterval);
+        pos.add(getPoint(x, 1)->mPosition);
+        resetWrappedPoint(pWrapped, pos);
     }
 
-    mTexV0 -= ::sTexRate0;
-    mTexV1 -= ::sTexRate1;
-    mTexV2 -= ::sTexRate2;
+    mTexV0 -= sTexRate0;
+    mTexV1 -= sTexRate1;
+    mTexV2 -= sTexRate2;
 }
 
 void OceanBowl::moveToRight() {
-    OceanBowlPoint* mLastPoint;
+    for (s32 x = 0; x < cPointNum; x++) {
+        OceanBowlPoint* pWrapped = getPoint(x, 0);
 
-    for (s32 x = 0; x < 25; x++) {
-        mLastPoint = getPoint(x, 0);
-
-        for (s32 y = 0; y < 24; y++) {
+        for (s32 y = 0; y < cPointNum - 1; y++) {
             setPoint(x, y, getPoint(x, y + 1));
         }
 
-        setPoint(x, 24, mLastPoint);
+        setPoint(x, cPointNum - 1, pWrapped);
 
-        Vec3f resetvec(mSide);
-        resetvec.scale(::sPointInterval);
-        resetvec.add(getPoint(x, 23)->mPosition);
-        mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
+        Vec3f pos(mSide);
+        pos.scale(sPointInterval);
+        pos.add(getPoint(x, cPointNum - 2)->mPosition);
+        resetWrappedPoint(pWrapped, pos);
     }
 
-    mTexV0 += ::sTexRate0;
-    mTexV1 += ::sTexRate1;
-    mTexV2 += ::sTexRate2;
+    mTexV0 += sTexRate0;
+    mTexV1 += sTexRate1;
+    mTexV2 += sTexRate2;
 }
 
 void OceanBowl::moveToUpper() {
-    OceanBowlPoint* mLastPoint;
+    for (s32 y = 0; y < cPointNum; y++) {
+        OceanBowlPoint* pWrapped = getPoint(cPointNum - 1, y);
 
-    for (s32 y = 0; y < 25; y++) {
-        mLastPoint = getPoint(24, y);
-
-        for (s32 x = 24; x > 0; x--) {
+        for (s32 x = cPointNum - 1; x > 0; x--) {
             setPoint(x, y, getPoint(x - 1, y));
         }
 
-        setPoint(0, y, mLastPoint);
+        setPoint(0, y, pWrapped);
 
-        Vec3f resetvec(mFront);
-        resetvec.scale(-::sPointInterval);
-        resetvec.add(getPoint(1, y)->mPosition);
-        mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
+        Vec3f pos(mFront);
+        pos.scale(-sPointInterval);
+        pos.add(getPoint(1, y)->mPosition);
+        resetWrappedPoint(pWrapped, pos);
     }
 
-    mTexU0 -= ::sTexRate0;
-    mTexU1 -= ::sTexRate1;
-    mTexU2 -= ::sTexRate2;
+    mTexU0 -= sTexRate0;
+    mTexU1 -= sTexRate1;
+    mTexU2 -= sTexRate2;
 }
 
 void OceanBowl::moveToLower() {
-    OceanBowlPoint* mLastPoint;
+    for (s32 y = 0; y < cPointNum; y++) {
+        OceanBowlPoint* pWrapped = getPoint(0, y);
 
-    for (s32 y = 0; y < 25; y++) {
-        mLastPoint = getPoint(0, y);
-
-        for (s32 x = 0; x < 24; x++) {
+        for (s32 x = 0; x < cPointNum - 1; x++) {
             setPoint(x, y, getPoint(x + 1, y));
         }
 
-        setPoint(24, y, mLastPoint);
+        setPoint(cPointNum - 1, y, pWrapped);
 
-        Vec3f resetvec(mFront);
-        resetvec.scale(::sPointInterval);
-        resetvec.add(getPoint(23, y)->mPosition);
-        mLastPoint->reset(resetvec, MR::clamp((mRadius - getPosition()->distance(resetvec)) / ::sPointWaveRateDistMax, 0.0f, 1.0f));
+        Vec3f pos(mFront);
+        pos.scale(sPointInterval);
+        pos.add(getPoint(cPointNum - 2, y)->mPosition);
+        resetWrappedPoint(pWrapped, pos);
     }
 
-    mTexU0 += ::sTexRate0;
-    mTexU1 += ::sTexRate1;
-    mTexU2 += ::sTexRate2;
+    mTexU0 += sTexRate0;
+    mTexU1 += sTexRate1;
+    mTexU2 += sTexRate2;
 }
 
 void OceanBowl::draw() const {
@@ -360,25 +321,21 @@ void OceanBowl::draw() const {
     const SiteMaterial material = loadMaterial();
     TypedDraw site(material, nullptr, MR::getCameraViewMtx());
 
-    u16 even = 0;
-    u16 odd = 1;
-    for (s32 x = 0; x < 24; x++) {
-        VertexPCT4* vtx = site.vertices< VertexPCT4 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50);
+    for (s32 x = 0; x < cPointNum - 1; x++) {
+        VertexPCT4* vtx = site.vertices< VertexPCT4 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, cPointNum * 2);
 
-        for (s32 y = 0; y < 25; y++) {
-            OceanBowlPoint* pPoint = getPoint(x + 1, y);
-            OceanBowlPoint* pPoint2 = getPoint(x, y);
+        for (s32 y = 0; y < cPointNum; y++) {
+            const OceanBowlPoint* pNext = getPoint(x + 1, y);
+            const OceanBowlPoint* pCur = getPoint(x, y);
+            const s32 tex = getStripTexCoordIndex(x, y);
 
-            *vtx++ = {pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z, Rgba8(255, 255, 255, getPoint(x + 1, y)->mAlpha),
-                      mVtxTex0Array[2 * even], mVtxTex0Array[2 * even + 1], mVtxTex1Array[2 * even], mVtxTex1Array[2 * even + 1],
-                      mVtxTex2Array[2 * even], mVtxTex2Array[2 * even + 1], mVtxTex3Array[2 * even], mVtxTex3Array[2 * even + 1]};
+            *vtx++ = {pNext->mVertexPosition.x, pNext->mVertexPosition.y, pNext->mVertexPosition.z, Rgba8(255, 255, 255, pNext->mAlpha),
+                      mVtxTex0Array[tex], mVtxTex0Array[tex + 1], mVtxTex1Array[tex], mVtxTex1Array[tex + 1],
+                      mVtxTex2Array[tex], mVtxTex2Array[tex + 1], mVtxTex3Array[tex], mVtxTex3Array[tex + 1]};
 
-            *vtx++ = {pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z, Rgba8(255, 255, 255, getPoint(x, y)->mAlpha),
-                      mVtxTex0Array[2 * odd], mVtxTex0Array[2 * odd + 1], mVtxTex1Array[2 * odd], mVtxTex1Array[2 * odd + 1],
-                      mVtxTex2Array[2 * odd], mVtxTex2Array[2 * odd + 1], mVtxTex3Array[2 * odd], mVtxTex3Array[2 * odd + 1]};
-
-            even += 2;
-            odd += 2;
+            *vtx++ = {pCur->mVertexPosition.x, pCur->mVertexPosition.y, pCur->mVertexPosition.z, Rgba8(255, 255, 255, pCur->mAlpha),
+                      mVtxTex0Array[tex + 2], mVtxTex0Array[tex + 3], mVtxTex1Array[tex + 2], mVtxTex1Array[tex + 3],
+                      mVtxTex2Array[tex + 2], mVtxTex2Array[tex + 3], mVtxTex3Array[tex + 2], mVtxTex3Array[tex + 3]};
         }
     }
 }
@@ -387,26 +344,26 @@ SiteMaterial OceanBowl::loadMaterial() const {
     // runtime/src/render/materials/ocean_bowl.hlsl: the water (texture 0) and, above water, the screen behind (texture
     // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
     // its alpha (added under water), depth tested, not written.
-    
+
     const bool inWater = MR::isCameraInWater();
     JUTTexture screenTexture(MR::getScreenResTIMG());
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_BOWL,
                        inWater ? SiteMaterial::BLEND_ADD_ALPHA : SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
                        false, NEBULA_CULL_NONE);
-    material.setColor(0, ::sOceanBowlStageColor0.r, ::sOceanBowlStageColor0.g, ::sOceanBowlStageColor0.b,
-                           ::sOceanBowlStageColor0.a);
-    material.setColor(4, ::sOceanBowlStageColor1.r, ::sOceanBowlStageColor1.g, ::sOceanBowlStageColor1.b,
-                           ::sOceanBowlStageColor1.a);
+    material.setColor(0, sOceanBowlStageColor0.r, sOceanBowlStageColor0.g, sOceanBowlStageColor0.b,
+                           sOceanBowlStageColor0.a);
+    material.setColor(4, sOceanBowlStageColor1.r, sOceanBowlStageColor1.g, sOceanBowlStageColor1.b,
+                           sOceanBowlStageColor1.a);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;
     material.constants[10] = mTexU1;
     material.constants[11] = mTexV1;
     material.constants[12] = mTexU2;
     material.constants[13] = mTexV2;
-    // The shore mask follows the player: its offset from the bowl's first point, over the mask's 4800 units.
-    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + 2400.0f) / 4800.0f;
-    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + 2400.0f) / 4800.0f;
+    // The shore mask follows the player: its offset from the bowl's first point, over the mask's extent.
+    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + sMaskExtent / 2.0f) / sMaskExtent;
+    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + sMaskExtent / 2.0f) / sMaskExtent;
     Pos3f screen;
     MR::calcTexProjectionMtx(&screen);
     for (u32 row = 0; row < 3; row++) {
@@ -414,8 +371,8 @@ SiteMaterial OceanBowl::loadMaterial() const {
             material.constants[16 + row * 4 + column] = screen.mMtx[row][column];
         }
     }
-    material.constants[28] = ::sIndirectScale / screenTexture.getWidth();
-    material.constants[29] = ::sIndirectScale / screenTexture.getHeight();
+    material.constants[28] = sIndirectScale / screenTexture.getWidth();
+    material.constants[29] = sIndirectScale / screenTexture.getHeight();
     material.constants[30] = inWater ? 0.0f : 1.0f;
     material.setTexture(0, mWaterTex);
     material.setTexture(1, &screenTexture);
@@ -428,13 +385,13 @@ SiteMaterial OceanBowl::loadMaterialBloom() const {
     // runtime/src/render/materials/ocean_bowl_bloom.hlsl: the water texture at its two scrolls times the grey c0 over
     // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
     // tested and written before texturing, no culling.
-    
+
     SiteMaterial material;
     material.init(NEBULA_SHADER_OCEAN_BOWL_BLOOM, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
-    material.setColor(0, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V, ::sOceanBowlBloomStageColor0V,
+    material.setColor(0, sOceanBowlBloomStageColor0V, sOceanBowlBloomStageColor0V, sOceanBowlBloomStageColor0V,
                            255);
-    material.setColor(4, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V, ::sOceanBowlBloomStageColor1V,
+    material.setColor(4, sOceanBowlBloomStageColor1V, sOceanBowlBloomStageColor1V, sOceanBowlBloomStageColor1V,
                            255);
     material.constants[8] = mTexU0;
     material.constants[9] = mTexV0;

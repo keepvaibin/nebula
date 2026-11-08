@@ -6,9 +6,9 @@ class OceanBowl;
 
 class OceanBowlBloomDrawer : public NameObj {
 public:
-    OceanBowlBloomDrawer(OceanBowl*);
+    OceanBowlBloomDrawer(OceanBowl* pHost);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void draw() const;
 
     OceanBowl* mHost;

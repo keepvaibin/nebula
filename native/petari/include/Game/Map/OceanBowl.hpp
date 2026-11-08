@@ -10,7 +10,9 @@ class WaterInfo;
 
 class OceanBowl : public LiveActor {
 public:
-    OceanBowl(const char*);
+    static const s32 cPointNum = 25;  // grid points per side
+
+    OceanBowl(const char* pName);
 
     virtual void init(const TableIter& rIter);
     virtual void movement();
@@ -24,25 +26,28 @@ public:
     void moveToRight();
     void moveToUpper();
     void moveToLower();
+    void resetWrappedPoint(OceanBowlPoint* pPoint, const Vec3f& rPos);
     SiteMaterial loadMaterial() const;
     SiteMaterial loadMaterialBloom() const;
-    // void drawDebug();
 
-    // getPoint__9OceanBowlCFii from the debug maps, always inlined
     OceanBowlPoint* getPoint(int x, int y) const {
         return mPoints[x][y];
     }
 
-    // setPoint__9OceanBowlFiiP14OceanBowlPoint from the debug maps, always inlined
     void setPoint(int x, int y, OceanBowlPoint* pPoint) {
         mPoints[x][y] = pPoint;
+    }
+
+    // Strip x, column y in the mVtxTex arrays: u, v of point (x + 1, y), then u, v of point (x, y).
+    static s32 getStripTexCoordIndex(s32 x, s32 y) {
+        return (x * cPointNum + y) * 4;
     }
 
     Vec3f mSide;
     Vec3f mUp;
     Vec3f mFront;
     f32 mRadius;
-    OceanBowlPoint* mPoints[25][25];
+    OceanBowlPoint* mPoints[cPointNum][cPointNum];  // [front][side]
     f32 mWaveX;
     f32 mWaveZ;
     f32 mTexU0;
@@ -51,8 +56,7 @@ public:
     f32 mTexV1;
     f32 mTexU2;
     f32 mTexV2;
-    f32 mTexStep;
-    // Texture coordinate arrays.
+    f32 mTexStep;  // texture 3 (shore mask) step per point
     f32* mVtxTex0Array;
     f32* mVtxTex1Array;
     f32* mVtxTex2Array;
@@ -61,5 +65,5 @@ public:
     JUTTexture* mWaterIndirectTex;
     JUTTexture* mMaskTex;
     OceanBowlBloomDrawer* mBloomDrawer;
-    bool mIsClipped;
+    bool mIsClipped;  // the camera is in other water or the player is far
 };
