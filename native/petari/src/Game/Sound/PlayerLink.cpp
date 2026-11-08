@@ -1,6 +1,7 @@
 #include "Game/Sound/PlayerLink.hpp"
 #include "Game/Sound/SoundMemory.hpp"
 #include <cstring>
+#include <new>
 
 namespace {
     u32 align64(u32 bytes) {
