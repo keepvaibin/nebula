@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraWonderPlanet.hpp"
-#include "Game/Camera/CamTranslatorWonderPlanet.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraMan.hpp"
@@ -107,8 +107,9 @@ CameraTargetObj* CameraWonderPlanet::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraWonderPlanet::createTranslator() {
-    return new CamTranslatorWonderPlanet(this);
+void CameraWonderPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.x, general->mAxis.y, general->mAngleA);
 }
 
 void CameraWonderPlanet::updateCameraReset() {

@@ -8,7 +8,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(const Vec3f& rBasePos, const Vec3f& rUp, const Vec3f& rWPoint) {
         mBasePos.set(rBasePos);

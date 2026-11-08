@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraInnerCylinder.hpp"
-#include "Game/Camera/CamTranslatorInnerCylinder.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -82,6 +82,7 @@ CameraTargetObj* CameraInnerCylinder::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraInnerCylinder::createTranslator() {
-    return new CamTranslatorInnerCylinder(this);
+void CameraInnerCylinder::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, CameraLocalUtil::getNormalizedOr(general->mAxis, Vec3f(0.0f, 0.0f, 1.0f)), Vec2f(general->mAngleA, general->mAngleB), general->mDist, general->mUp.x);
 }

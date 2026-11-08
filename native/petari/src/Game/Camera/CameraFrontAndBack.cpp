@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraFrontAndBack.hpp"
-#include "Game/Camera/CamTranslatorFrontAndBack.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -59,8 +59,9 @@ CameraTargetObj* CameraFrontAndBack::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraFrontAndBack::createTranslator() {
-    return new CamTranslatorFrontAndBack(this);
+void CameraFrontAndBack::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, CameraLocalUtil::getNormalizedOr(general->mAxis, Vec3f(1.0f, 0.0f, 0.0f)), MR::pi() * general->mAngleA / 180.0f, MR::pi() * general->mAngleB / 180.0f, general->mDist);
 }
 
 void CameraFrontAndBack::calcBaseQuat(Quat4f* pQuat, const Vec3f& rAxis) {

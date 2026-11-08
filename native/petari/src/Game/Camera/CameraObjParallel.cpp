@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraObjParallel.hpp"
-#include "Game/Camera/CamTranslatorObjParallel.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 
@@ -45,6 +45,7 @@ CameraTargetObj* CameraObjParallel::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraObjParallel::createTranslator() {
-    return new CamTranslatorObjParallel(this);
+void CameraObjParallel::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mDist, general->mAngleA, general->mAngleB);
 }

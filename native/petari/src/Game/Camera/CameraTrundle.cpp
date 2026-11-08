@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraTrundle.hpp"
-#include "Game/Camera/CamTranslatorTrundle.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -57,6 +57,12 @@ CameraTargetObj* CameraTrundle::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraTrundle::createTranslator() {
-    return new CamTranslatorTrundle(this);
+void CameraTrundle::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    Vec3f axis = general->mAxis;
+    if (MR::isNearZero(axis)) {
+        return;
+    }
+    MR::normalize(&axis);
+    setParam(general->mWPoint, axis, general->mDist, general->mAngleA, general->mAngleB, general->mUp.x);
 }

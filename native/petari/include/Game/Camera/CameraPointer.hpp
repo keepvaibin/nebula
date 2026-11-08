@@ -15,7 +15,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(s32 cameraType, f32 dist, f32 angleXRange, f32 angleYRange, f32 angleX, f32 speedBlendRate, f32 blendFriction, bool isVertical,
                   f32 angleYMin) {

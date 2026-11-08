@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraCharmedFix.hpp"
-#include "Game/Camera/CamTranslatorCharmedFix.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -55,6 +55,7 @@ CameraTargetObj* CameraCharmedFix::calc() {
     return target;
 }
 
-CamTranslatorBase* CameraCharmedFix::createTranslator() {
-    return new CamTranslatorCharmedFix(this);
+void CameraCharmedFix::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis, CameraLocalUtil::getNormalizedOr(general->mUp, Vec3f(0.0f, 1.0f, 0.0f)), general->mWPoint);
 }

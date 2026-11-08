@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraTalk.hpp"
-#include "Game/Camera/CamTranslatorTalk.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -97,6 +97,7 @@ void CameraTalk::setParam(const Vec3f& pos, const Vec3f& up, f32 height, f32 dis
     mDist = dist;
 }
 
-CamTranslatorBase* CameraTalk::createTranslator() {
-    return new CamTranslatorTalk(this);
+void CameraTalk::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, general->mUp, general->mAxis.x, general->mAxis.y);
 }

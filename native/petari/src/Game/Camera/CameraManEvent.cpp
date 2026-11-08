@@ -1,6 +1,6 @@
 #include "Game/Camera/CameraManEvent.hpp"
-#include "Game/Camera/CamTranslatorAnim.hpp"
 #include "Game/Camera/Camera.hpp"
+#include "Game/Camera/CameraAnim.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraHolder.hpp"
@@ -144,14 +144,10 @@ bool CameraManEvent::isCorrectingErpPositionOff() const {
 }
 
 u32 CameraManEvent::getAnimCameraFrame(s32 zoneID, const char* pName) const {
-    mHolder->getIndexOf("CAM_TYPE_ANIM");
-    CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
-
-    return reinterpret_cast< CamTranslatorAnim* >(mHolder->getTranslator(chunk->mCameraTypeIndex))->getAnimFrame(chunk);
+    return CameraAnim::getAnimFrame(findChunk(zoneID, pName)->mGeneralParam->mAnimData);
 }
 
 void CameraManEvent::pauseOnAnimCamera(s32 zoneID, const char* pName) {
-    mHolder->getIndexOf("CAM_TYPE_ANIM");
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
     if (chunk == mChunk && mCamera != nullptr) {
@@ -160,7 +156,6 @@ void CameraManEvent::pauseOnAnimCamera(s32 zoneID, const char* pName) {
 }
 
 void CameraManEvent::pauseOffAnimCamera(s32 zoneID, const char* pName) {
-    mHolder->getIndexOf("CAM_TYPE_ANIM");
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
     if (chunk == mChunk && mCamera != nullptr) {
@@ -209,8 +204,7 @@ void CameraManEvent::checkReset(ChunkFIFOItem* pItem) {
 
 void CameraManEvent::changeCamera() {
     mCamera = mHolder->getCameraInner(mChunk->mCameraTypeIndex);
-    CamTranslatorBase* translator = mHolder->getTranslator(mChunk->mCameraTypeIndex);
-    translator->setParam(mChunk);
+    mCamera->setParamFromChunk(mChunk);
     setExtraParam();
     setVPanParam();
 }
@@ -454,7 +448,6 @@ CameraManEvent::~CameraManEvent() {
 }
 
 bool CameraManEvent::isAnimCameraEnd(s32 zoneID, const char* pName) const {
-    mHolder->getIndexOf("CAM_TYPE_ANIM");
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
     if (isInFIFO(chunk)) {

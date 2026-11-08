@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraBlackHole.hpp"
-#include "Game/Camera/CamTranslatorBlackHole.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
@@ -44,6 +44,7 @@ CameraTargetObj* CameraBlackHole::calc() {
     return nullptr;
 }
 
-CamTranslatorBase* CameraBlackHole::createTranslator() {
-    return new CamTranslatorBlackHole(this);
+void CameraBlackHole::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, general->mAxis);
 }

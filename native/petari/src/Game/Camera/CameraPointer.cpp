@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraPointer.hpp"
-#include "Game/Camera/CamTranslatorPointer.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -146,6 +146,7 @@ CameraTargetObj* CameraPointer::calc() {
     return nullptr;
 }
 
-CamTranslatorBase* CameraPointer::createTranslator() {
-    return new CamTranslatorPointer(this);
+void CameraPointer::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mNum1, general->mDist, general->mAngleA, general->mAngleB, general->mWPoint.z, general->mWPoint.x, general->mWPoint.y, general->mNum2 == CameraType_UpdateWithTarget, general->mUp.x);
 }

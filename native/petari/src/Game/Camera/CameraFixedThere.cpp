@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraFixedThere.hpp"
-#include "Game/Camera/CamTranslatorFixedThere.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/Camera.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
@@ -41,8 +41,9 @@ CameraTargetObj* CameraFixedThere::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraFixedThere::createTranslator() {
-    return new CamTranslatorFixedThere(this);
+void CameraFixedThere::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mNum1, general->mNum2 == 1);
 }
 
 void CameraFixedThere::copyStatusFromPrevCamera() {

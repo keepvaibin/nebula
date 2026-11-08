@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraWaterPlanet.hpp"
-#include "Game/Camera/CamTranslatorWaterPlanet.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -109,6 +109,7 @@ CameraTargetObj* CameraWaterPlanet::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraWaterPlanet::createTranslator() {
-    return new CamTranslatorWaterPlanet(this);
+void CameraWaterPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.x, general->mAxis.y, general->mAngleA);
 }

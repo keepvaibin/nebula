@@ -89,7 +89,3 @@ CameraTargetObj* CameraSubjective::calc() {
 
     return CameraLocalUtil::getTarget(this);
 }
-
-CamTranslatorBase* CameraSubjective::createTranslator() {
-    return new CamTranslatorDummy(this);
-}

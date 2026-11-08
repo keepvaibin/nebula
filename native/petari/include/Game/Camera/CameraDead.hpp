@@ -16,7 +16,7 @@ public:
     virtual bool isInterpolationOff() const {
         return true;
     }
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(f32 dist, s32 deadTime, s32 cameraType) {
         mDist = dist;

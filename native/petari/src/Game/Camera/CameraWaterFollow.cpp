@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraWaterFollow.hpp"
-#include "Game/Camera/CamTranslatorWaterFollow.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraMan.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -94,6 +94,7 @@ CameraTargetObj* CameraWaterFollow::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraWaterFollow::createTranslator() {
-    return new CamTranslatorWaterFollow(this);
+void CameraWaterFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mAxis.y, general->mAxis.x, general->mDist);
 }

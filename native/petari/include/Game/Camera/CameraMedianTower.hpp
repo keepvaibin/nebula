@@ -8,7 +8,7 @@ public:
 
     virtual void reset();
     virtual CameraTargetObj* calc();
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void calcFovyPos(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     void limitAngularVelocity(Vec3f*, Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);

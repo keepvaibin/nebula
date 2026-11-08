@@ -1,5 +1,6 @@
 #include "Game/Camera/CameraFix.hpp"
-#include "Game/Camera/CamTranslatorFix.hpp"
+#include "Game/Camera/CameraCalc.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -52,6 +53,9 @@ void CameraFix::setParam(const Vec3f& rWPoint, const Vec3f& rAxis, const Vec3f& 
     mUp.set(rUp);
 }
 
-CamTranslatorBase* CameraFix::createTranslator() {
-    return new CamTranslatorFix(this);
+void CameraFix::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    Vec3f offset;
+    MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &offset, general->mDist, general->mAxis.x, general->mAxis.y);
+    setParam(general->mWPoint, -offset, general->mUp);
 }

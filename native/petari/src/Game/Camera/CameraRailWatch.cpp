@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraRailWatch.hpp"
-#include "Game/Camera/CamTranslatorRailWatch.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraDirector.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraRailHolder.hpp"
@@ -89,6 +89,6 @@ void CameraRailWatch::setParam(s32 zoneID, s32 railID, s32 direction, f32 offset
     mAngleX = angleX;
 }
 
-CamTranslatorBase* CameraRailWatch::createTranslator() {
-    return new CamTranslatorRailWatch(this);
+void CameraRailWatch::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(pChunk->getZoneID(), pChunk->mGeneralParam->mNum1, pChunk->mGeneralParam->mNum2, pChunk->mGeneralParam->mAxis.x, pChunk->mGeneralParam->mDist, pChunk->mGeneralParam->mAngleA);
 }

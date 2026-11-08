@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraInwardTower.hpp"
-#include "Game/Camera/CamTranslatorInwardTower.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -41,8 +41,9 @@ CameraTargetObj* CameraInwardTower::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraInwardTower::createTranslator() {
-    return new CamTranslatorInwardTower(this);
+void CameraInwardTower::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mWPoint, CameraLocalUtil::getNormalizedOr(general->mAxis, Vec3f(0.0f, 1.0f, 0.0f)), Vec2f(general->mAngleB, general->mAngleA), general->mDist);
 }
 
 void CameraInwardTower::calcIdealPose() {

@@ -303,10 +303,8 @@ void CameraManGame::replaceCurrentChunkAndCamera(CameraParamChunk* pChunk) {
 }
 
 void CameraManGame::applyParameter() {
-    CamTranslatorBase* translator = mHolder->getTranslator(mChunk->mCameraTypeIndex);
-    translator->setParam(mChunk);
-    Camera* camera = translator->getCamera();
-
+    Camera* camera = mHolder->getCameraInner(mChunk->mCameraTypeIndex);
+    camera->setParamFromChunk(mChunk);
     camera->setZoneMtx(mChunk->getZoneID());
 
     CameraLocalUtil::setGlobalOffset(mCamera, mChunk->mExParam.mWOffset);

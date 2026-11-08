@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraAnim.hpp"
-#include "Game/Camera/CamTranslatorAnim.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -132,8 +132,8 @@ u32 CameraAnim::getAnimFrame(u8* pFile) {
     return reinterpret_cast< const CamAnmHeader* >(pFile)->mNrFrames;
 }
 
-CamTranslatorBase* CameraAnim::createTranslator() {
-    return new CamTranslatorAnim(this);
+void CameraAnim::setParamFromChunk(const CameraParamChunk* pChunk) {
+    setParam(pChunk->mGeneralParam->mAnimData, pChunk->mGeneralParam->mDist);
 }
 
 bool CameraAnim::loadBin(u8* pFile) {

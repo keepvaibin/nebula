@@ -1,5 +1,5 @@
 #include "Game/Camera/CameraMedianPlanet.hpp"
-#include "Game/Camera/CamTranslatorMedianPlanet.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
@@ -47,8 +47,9 @@ CameraTargetObj* CameraMedianPlanet::calc() {
     return CameraLocalUtil::getTarget(this);
 }
 
-CamTranslatorBase* CameraMedianPlanet::createTranslator() {
-    return new CamTranslatorMedianPlanet(this);
+void CameraMedianPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
+    CameraGeneralParam* general = pChunk->mGeneralParam;
+    setParam(general->mString.getCharPtr(), general->mAxis.x, general->mAxis.y, general->mAngleA, general->mAxis.z, general->mAngleB, general->mDist, general->mWPoint.x);
 }
 
 void CameraMedianPlanet::getPrevFront(Vec3f* pPrevFront) {

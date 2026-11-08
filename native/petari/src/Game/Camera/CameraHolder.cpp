@@ -121,10 +121,6 @@ s32 CameraHolder::getNum() const {
     return ARRAY_SIZE(::sCameraTable);
 }
 
-CamTranslatorBase* CameraHolder::getTranslator(s32 index) {
-    return mTranslators[index];
-}
-
 s32 CameraHolder::getIndexOf(const char* pName) const {
     for (s32 i = 0; i < getNum(); i++) {
         if (strcmp(pName, getNameStrOf(i)) == 0) {
@@ -171,11 +167,9 @@ s32 CameraHolder::getIndexOf(Camera* pCamera) const {
 
 void CameraHolder::createCameras() {
     mCameras = new Camera*[getNum()];
-    mTranslators = new CamTranslatorBase*[getNum()];
 
     for (s32 i = 0; i < getNum(); i++) {
         mCameras[i] = ::sCameraTable[i].mCreateFunc();
-        mTranslators[i] = mCameras[i]->createTranslator();
     }
 }
 

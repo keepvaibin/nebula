@@ -7,7 +7,7 @@ public:
     CameraTripodBoss(const char* pName = "三脚ボスカメラ");
     virtual ~CameraTripodBoss();
 
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void arrangeRound();
 

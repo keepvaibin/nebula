@@ -11,7 +11,7 @@ public:
     virtual bool isEnableToReset() const {
         return true;
     }
-    virtual CamTranslatorBase* createTranslator();
+    virtual void setParamFromChunk(const CameraParamChunk*);
 
     void setParam(f32 distMin, f32 distMax, f32 blendRateMin) {
         mDistMin = distMin;
