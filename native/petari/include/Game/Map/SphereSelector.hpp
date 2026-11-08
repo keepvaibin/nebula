@@ -9,7 +9,8 @@
 class LiveActorGroup;
 class SphereSelectorHandle;
 
-enum HandlePointingPriority { Unknown_0, Unknown_1, Unknown_2 };
+// Depth: the target nearest the camera wins. Last: wins only when nothing else is pointed. First: beats every other kind.
+enum HandlePointingPriority { HandlePointingPriority_Depth, HandlePointingPriority_Last, HandlePointingPriority_First };
 
 class SphereSelector : public LiveActor {
 public:

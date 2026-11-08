@@ -131,7 +131,7 @@ void AstroDomeComet::tryPointing() {
 
     for (s32 i = 0; i < ::cPointingActorNum; i++) {
         if (MR::isStarPointerPointing1PWithoutCheckZ(mPointingActors[i], nullptr, true, false)) {
-            SphereSelectorFunction::registerPointingTarget(mMiniGalaxy, Unknown_0);
+            SphereSelectorFunction::registerPointingTarget(mMiniGalaxy, HandlePointingPriority_Depth);
             break;
         }
     }
