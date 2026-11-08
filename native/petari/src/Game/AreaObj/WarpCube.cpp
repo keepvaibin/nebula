@@ -13,21 +13,19 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 WarpCube* WarpCubeMgr::getPairCube(const AreaObj* pObj) {
-    if (static_cast< const WarpCube* >(pObj)->mMapIdInfo == nullptr) {
+    const PlacementId* pId = static_cast< const WarpCube* >(pObj)->mMapIdInfo;
+    if (pId == nullptr) {
         return nullptr;
     }
 
-    for (WarpCube** pCube = reinterpret_cast< WarpCube** >(mArray.begin()); pCube != reinterpret_cast< WarpCube** >(mArray.end()); pCube++) {
-        if (*pCube == pObj) {
+    for (AreaObj* pArea : mArray) {
+        WarpCube* pCube = static_cast< WarpCube* >(pArea);
+        if (pCube == pObj || pCube->mMapIdInfo == nullptr) {
             continue;
         }
 
-        if ((*pCube)->mMapIdInfo == nullptr) {
-            continue;
-        }
-
-        if (*(*pCube)->mMapIdInfo == *static_cast< const WarpCube* >(pObj)->mMapIdInfo) {
-            return *pCube;
+        if (*pCube->mMapIdInfo == *pId) {
+            return pCube;
         }
     }
 
