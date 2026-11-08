@@ -5,6 +5,4 @@
 class BlueChip : public ChipBase {
 public:
     BlueChip(const char*);
-
-    virtual ~BlueChip() {};
 };

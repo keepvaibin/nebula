@@ -6,7 +6,6 @@ class RailBlock : public LiveActor {
 public:
     RailBlock(const char* pName);
 
-    virtual ~RailBlock() {}
     virtual void init(const TableIter& rIter);
 
     void startMove();

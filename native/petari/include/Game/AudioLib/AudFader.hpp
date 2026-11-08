@@ -12,8 +12,6 @@ public:
 
     AudFader();
 
-    ~AudFader() {};
-
     void set(f32 desiredVolume, s32 fadeTime);
     void update();
 

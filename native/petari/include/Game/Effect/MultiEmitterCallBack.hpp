@@ -13,7 +13,6 @@ class MultiEmitterCallBackBase : public EmitterCallBack {
 public:
     MultiEmitterCallBackBase() {};
 
-    virtual ~MultiEmitterCallBackBase() {};
     virtual void init(EmitterCore*) {};
 };
 

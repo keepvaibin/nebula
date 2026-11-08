@@ -11,8 +11,6 @@ public:
 
     AudBgmKeeper();
 
-    ~AudBgmKeeper() {};
-
     AudBgm* get(BgmType);
     void release(AudBgm*);
     AudSingleBgm* getValidSingleBgm();

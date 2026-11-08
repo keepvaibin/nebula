@@ -10,7 +10,6 @@ class RingBeam : public LiveActor {
 public:
     RingBeam(const char* pName, LiveActor* pHost, bool isFollowGravity, bool hasShadow);
 
-    virtual ~RingBeam() {};
     virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();

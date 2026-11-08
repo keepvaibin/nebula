@@ -12,8 +12,6 @@ class CameraTargetObj : public NameObj {
 public:
     CameraTargetObj(const char*);
 
-    virtual ~CameraTargetObj() {};
-
     virtual void init(const TableIter&) {};
 
     virtual void movement() = 0;

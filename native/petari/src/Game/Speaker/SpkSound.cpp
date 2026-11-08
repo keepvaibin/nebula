@@ -27,7 +27,7 @@ void SpkSoundHandle::releaseSound() {
 }
 
 SpkSound::SpkSound()
-    : JSULink(this), mSoundHandle(nullptr), mWaveID(-1), mPadChannel(PLAYER_1), mReleaseTime(0), mState(State_0), mStateSerial(0),
+    : JSULink(this), mSoundHandle(nullptr), mWaveID(-1), mPadChannel(PLAYER_1), mReleaseTime(0), mState(State_NONE), mStateSerial(0),
       mVoice(nullptr), mMemory(nullptr) {
 }
 
