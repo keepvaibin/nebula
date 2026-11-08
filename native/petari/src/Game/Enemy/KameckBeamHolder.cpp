@@ -5,26 +5,22 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 
 namespace {
-    static const s32 sMaxKameckBeam = 16;
-    static const s32 sMaxKameckFireBall = 16;
-    static const s32 sMaxKameckBeamTurtle = 16;
+    const s32 sMaxKameckBeam = 16;
+    const s32 sMaxKameckFireBall = 16;
+    const s32 sMaxKameckBeamTurtle = 16;
 };  // namespace
 
 KameckBeamHolder::KameckBeamHolder() : DeriveActorGroup< KameckBeam >("カメックビーム管理", ::sMaxKameckBeam) {
-    KameckBeam* pBeam;
-
     for (s32 i = 0; i < ::sMaxKameckBeam; i++) {
-        pBeam = new KameckBeam("カメックビーム");
+        KameckBeam* const pBeam = new KameckBeam("カメックビーム");
         pBeam->initWithoutIter();
         registerActor(pBeam);
     }
 }
 
 KameckFireBallHolder::KameckFireBallHolder() : DeriveActorGroup< KameckFireBall >("カメック火の玉管理", ::sMaxKameckFireBall) {
-    KameckFireBall* pFireBall;
-
     for (s32 i = 0; i < ::sMaxKameckFireBall; i++) {
-        pFireBall = new KameckFireBall("カメックビーム用炎");
+        KameckFireBall* const pFireBall = new KameckFireBall("カメックビーム用炎");
         pFireBall->initWithoutIter();
         pFireBall->makeActorDead();
         registerActor(pFireBall);
@@ -32,10 +28,8 @@ KameckFireBallHolder::KameckFireBallHolder() : DeriveActorGroup< KameckFireBall 
 }
 
 KameckBeamTurtleHolder::KameckBeamTurtleHolder() : DeriveActorGroup< KameckTurtle >("カメックビーム用カメ管理", ::sMaxKameckBeamTurtle) {
-    KameckTurtle* pTurtle;
-
     for (s32 i = 0; i < ::sMaxKameckBeamTurtle; i++) {
-        pTurtle = new KameckTurtle("カメックビーム用カメ");
+        KameckTurtle* const pTurtle = new KameckTurtle("カメックビーム用カメ");
         pTurtle->initWithoutIter();
         pTurtle->makeActorDead();
         registerActor(pTurtle);

@@ -15,6 +15,13 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
+namespace {
+    // The kinds' bounds are markers, not kinds.
+    bool isTypeBetween(const HitSensor* pSensor, u32 start, u32 end) {
+        return pSensor->mType > start && pSensor->mType < end;
+    }
+};  // namespace
+
 namespace MR {
     HitSensor* addHitSensor(LiveActor* pActor, const char* pName, u32 type, u16 groupSize, f32 radius, const Vec3f& rOffset) {
         return pActor->mSensorKeeper->add(pName, type, groupSize, radius, pActor, rOffset);
@@ -268,19 +275,11 @@ namespace MR {
     }
 
     HitSensor* getTaking(const LiveActor* pActor) {
-        if (pActor->mSensorKeeper != nullptr) {
-            return pActor->mSensorKeeper->mTaking;
-        }
-
-        return nullptr;
+        return pActor->mSensorKeeper != nullptr ? pActor->mSensorKeeper->mTaking : nullptr;
     }
 
     HitSensor* getTaken(const LiveActor* pActor) {
-        if (pActor->mSensorKeeper != nullptr) {
-            return pActor->mSensorKeeper->mTaken;
-        }
-
-        return nullptr;
+        return pActor->mSensorKeeper != nullptr ? pActor->mSensorKeeper->mTaken : nullptr;
     }
 
     void setSensorPos(HitSensor* pSensor, const Vec3f& rPos) {
@@ -356,11 +355,7 @@ namespace MR {
     }
 
     bool isSensorRide(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_RIDE_START && pSensor->mType < ATYPE_RIDE_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_RIDE_START, ATYPE_RIDE_END);
     }
 
     bool isSensorPlayerOrRide(const HitSensor* pSensor) {
@@ -368,11 +363,7 @@ namespace MR {
     }
 
     bool isSensorEnemy(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_ENEMY_START && pSensor->mType < ATYPE_ENEMY_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_ENEMY_START, ATYPE_ENEMY_END);
     }
 
     bool isSensorEnemyAttack(const HitSensor* pSensor) {
@@ -380,43 +371,23 @@ namespace MR {
     }
 
     bool isSensorNpc(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_NPC_START && pSensor->mType < ATYPE_NPC_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_NPC_START, ATYPE_NPC_END);
     }
 
     bool isSensorMapObj(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_MAPOBJ_START && pSensor->mType < ATYPE_MAPOBJ_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_MAPOBJ_START, ATYPE_MAPOBJ_END);
     }
 
     bool isSensorAutoRush(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_AUTO_RUSH_OBJ_START && pSensor->mType < ATYPE_AUTO_RUSH_OBJ_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_AUTO_RUSH_OBJ_START, ATYPE_AUTO_RUSH_OBJ_END);
     }
 
     bool isSensorRush(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_RUSH_OBJ_START && pSensor->mType < ATYPE_RUSH_OBJ_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_RUSH_OBJ_START, ATYPE_RUSH_OBJ_END);
     }
 
     bool isSensorPressObj(const HitSensor* pSensor) {
-        if (pSensor->mType > ATYPE_PRESS_OBJ_START && pSensor->mType < ATYPE_PRESS_OBJ_END) {
-            return true;
-        }
-
-        return false;
+        return ::isTypeBetween(pSensor, ATYPE_PRESS_OBJ_START, ATYPE_PRESS_OBJ_END);
     }
 
     bool isSensorEye(const HitSensor* pSensor) {
@@ -428,11 +399,7 @@ namespace MR {
     }
 
     bool isSensorItem(const HitSensor* pSensor) {
-        if (pSensor->isType(ATYPE_COIN) || pSensor->isType(ATYPE_COIN_RED) || pSensor->isType(ATYPE_KINOKO_ONEUP)) {
-            return true;
-        }
-
-        return false;
+        return pSensor->isType(ATYPE_COIN) || pSensor->isType(ATYPE_COIN_RED) || pSensor->isType(ATYPE_KINOKO_ONEUP);
     }
 
     bool tryGetItem(HitSensor* pSender, HitSensor* pReceiver) {
@@ -696,20 +663,16 @@ namespace MR {
     }
 
     void sendMsgToAllLiveActor(u32 msg, LiveActor* pActor) {
-        AllLiveActorGroup* pGroup = getAllLiveActorGroup();
+        AllLiveActorGroup* const pGroup = getAllLiveActorGroup();
+        HitSensor* const pMessageSensor = getMessageSensor();
 
+        // A message may register actors: the count is read each time.
         for (int i = 0; i < pGroup->getObjNum(); i++) {
-            LiveActor* pGroupActor = pGroup->getActor(i);
+            LiveActor* const pGroupActor = pGroup->getActor(i);
 
-            if (isDead(pGroupActor)) {
-                continue;
+            if (!isDead(pGroupActor) && pGroupActor != pActor) {
+                pGroupActor->receiveMessage(msg, pMessageSensor, pMessageSensor);
             }
-
-            if (pGroupActor == pActor) {
-                continue;
-            }
-
-            pGroupActor->receiveMessage(msg, getMessageSensor(), getMessageSensor());
         }
     }
 
@@ -736,14 +699,7 @@ namespace MR {
     }
 
     bool isInSpinStormRange(u32 msg, HitSensor* pSender, HitSensor* pReceiver, f32 range) {
-        if (msg != ACTMES_SPIN_STORM_RANGE) {
-            return false;
-        }
-
-        // NOTE: Double negative?
-        bool isFar = !isNear(pSender, pReceiver, range);
-
-        return !isFar;
+        return msg == ACTMES_SPIN_STORM_RANGE && isNear(pSender, pReceiver, range);
     }
 
     bool receiveItemShowMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

@@ -12,8 +12,8 @@ void OnimasuJump::calcJumpVelocity() {
     f32 jumpStrength = 0.5f * (getGravityScalar() * getTimeToNextPoint());
 
     Vec3f dirToRailPointPos(railPointPos - mPosition);
-    
-    if(MR::isNearZero(dirToRailPointPos)) {
+
+    if (MR::isNearZero(dirToRailPointPos)) {
         dirToRailPointPos.zero();
     } else {
         MR::normalize(&dirToRailPointPos);

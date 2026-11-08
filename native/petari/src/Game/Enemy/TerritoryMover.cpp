@@ -3,8 +3,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 
-TerritoryMover::TerritoryMover(f32 radius) {
-    mRadius = radius;
+TerritoryMover::TerritoryMover(f32 radius) : mRadius(radius) {
 }
 
 void TerritoryMover::decideNextTargetPos(const LiveActor* pActor) {
