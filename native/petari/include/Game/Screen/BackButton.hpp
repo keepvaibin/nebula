@@ -6,7 +6,7 @@ class ButtonPaneController;
 
 class BackButton : public LayoutActor {
 public:
-    BackButton(const char* pName, bool param2);
+    BackButton(const char* pName, bool connectToDecoration);
 
     virtual ~BackButton();
     virtual void init(const TableIter& rIter);
@@ -18,8 +18,11 @@ public:
     bool isAppearing() const;
     bool isDisappearing() const;
     bool isPointing() const;
+    // Chosen since it last appeared.
+    bool isSelected() const {
+        return mIsSelected;
+    }
 
     ButtonPaneController* mPaneCtrl;
-    bool _24;
-    bool _25;
+    bool mIsSelected;
 };

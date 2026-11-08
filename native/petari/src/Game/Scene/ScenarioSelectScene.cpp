@@ -200,7 +200,7 @@ void ScenarioSelectScene::setupCameraMtx() const {
 }
 
 bool ScenarioSelectScene::trySetCurrentScenarioNo() const {
-    if (mScenarioLayout->_28) {
+    if (mScenarioLayout->isDecided()) {
         if (!MR::isScenarioDecided()) {
             s32 scenarioNo = mScenarioLayout->getSelectedScenarioNo();
             s32 placedNo = scenarioNo;

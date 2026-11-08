@@ -38,7 +38,6 @@ void CometEventKeeper::init() {
     if (mCometName != nullptr) {
         mScreenFilter = new GalaxyCometScreenFilter();
         mScreenFilter->initWithoutIter();
-        mScreenFilter->_20 = true;
         mScreenFilter->setCometType(mCometName);
     }
 }
@@ -65,7 +64,6 @@ void CometEventKeeper::endCometEvent() {
     }
 
     mExecutorTimeLimit->kill();
-    mScreenFilter->_20 = false;
 }
 
 u32 CometEventKeeper::getTimeLimitFromTable(const GalaxyTimeLimitInfo* pTable, int size) {

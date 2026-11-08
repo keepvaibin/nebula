@@ -27,6 +27,9 @@ public:
     bool isAppearStarEnd() const;
     bool isEndAnimStartStep() const;
     bool isCanceled() const;
+    bool isDecided() const {
+        return mIsDecided;
+    }
     void updateSelectedScenario();
     void updateScenarioText();
     void fadeInText();
@@ -58,8 +61,7 @@ public:
     void exeDisappearCometWarning();
 
     s32 mSelectedScenarioNo;
-    s32 _24;
-    bool _28;
+    bool mIsDecided; // a scenario was chosen: the stars stop following the pointer
     Mtx34f mEffectHostMtx;
     ScenarioSelectStar** mStar;
     MultiSceneActor* mScenarioSky;

@@ -14,6 +14,8 @@ public:
 
     void createSpinLayout();
     void createTamakoroLayout();
+    // The ball tutorial's picture this frame, in `state` (0 raise, 1 hold, 2 raise OK, 3 rotate).
+    void forceTamakoro(s32 state);
     void exeWaitFocusIn();
     void exeFadein();
     void startWaitAnimTamakoro();
@@ -31,10 +33,8 @@ public:
     LayoutActor* mCurrentLayout;
     s32 mGuidanceState;
     s32 mGuidancePrevState;
-    bool _34;
-    bool _35;
-    bool _36;
-    bool _37;
+    bool mShow;           // a guidance volume or the tutorial wants a picture this frame
+    bool mTamakoroForced; // the ball tutorial asked for its picture this frame
 };
 
 namespace MR {

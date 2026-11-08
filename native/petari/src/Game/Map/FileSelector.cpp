@@ -526,7 +526,7 @@ void FileSelector::disappearAllLayout() {
         mFileInfo->disappear();
     }
 
-    if (!mBackButton->isHidden() && mBackButton->_24 == 0) {
+    if (!mBackButton->isHidden() && !mBackButton->isSelected()) {
         mBackButton->disappear();
     }
 
@@ -735,7 +735,7 @@ bool FileSelector::checkSelectedBackButton() {
         return false;
     }
 
-    if (mBackButton->_24) {
+    if (mBackButton->isSelected()) {
         return true;
     }
 

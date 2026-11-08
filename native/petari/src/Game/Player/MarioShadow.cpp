@@ -236,8 +236,7 @@ void CollisionShadow::create(const Vec3f& rPosition, const Vec3f& rDirection, co
         }
     }
 
-    // TODO is this legit?
-    register f32 texScale = 0.0033333334f;
+    const f32 texScale = 1.0f / 300.0f;
 
     for (u32 i = 0; i < _6C; i++) {
         Vec3f relative(_60[i] - rPosition);
