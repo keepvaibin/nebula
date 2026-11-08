@@ -1,8 +1,7 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameDataPlayerStatus.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 GameDataPlayerStatus::GameDataPlayerStatus() {
     initializeData();
@@ -17,18 +16,18 @@ u32 GameDataPlayerStatus::getSignature() const {
 }
 
 s32 GameDataPlayerStatus::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream(pBuffer, size);
+    SaveWriter stream(pBuffer, size);
     stream.write(&mStoryProgress, sizeof(mStoryProgress));
     stream.write(&mStockedStarPiece, sizeof(mStockedStarPiece));
     // Read back as mPlayerLeftSupply; the lives start again on every load.
     stream.write(&mPlayerLeft, sizeof(mPlayerLeft));
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 GameDataPlayerStatus::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream(pBuffer, size);
+    SaveReader stream(pBuffer, size);
 
     stream.read(&mStoryProgress, sizeof(mStoryProgress));
     stream.read(&mStockedStarPiece, sizeof(mStockedStarPiece));

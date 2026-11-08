@@ -1,9 +1,6 @@
 #include "Game/System/BinaryDataContentAccessor.hpp"
 #include "Game/System/SaveBinary.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include <JSystem/JSupport/JSUInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
 
 BinaryDataContentHeaderSerializer::BinaryDataContentHeaderSerializer(u8* pData, u32 dataSize)
     : mStream(pData, dataSize), mAttributeNum(0), mDataSize(0) {
@@ -24,12 +21,12 @@ void BinaryDataContentHeaderSerializer::addAttribute(const char* pName, u32 attr
 
 void BinaryDataContentHeaderSerializer::flush() {
     s32 restorePos = mStream.getPosition();
-    mStream.seek(0, SEEK_FROM_START);
+    mStream.seekTo(0);
     u16 attributeNum = mAttributeNum;
     mStream.write(&attributeNum, sizeof(u16));
     u16 dataSize = mDataSize;
     mStream.write(&dataSize, sizeof(u16));
-    mStream.seek(restorePos, SEEK_FROM_START);
+    mStream.seekTo(restorePos);
 }
 
 u32 BinaryDataContentHeaderSerializer::getHeaderSize() const {
@@ -56,7 +53,7 @@ s32 BinaryDataContentAccessor::getAttributeNum() const {
 }
 
 void* BinaryDataContentAccessor::getPointer(const char* pAttributeName, u8* pData) const {
-    JSUMemoryInputStream inStream = JSUMemoryInputStream(mData, getHeaderSize());
+    SaveReader inStream(mData, getHeaderSize());
     inStream.skip(4);
 
     for (s32 idx = 0; idx < getAttributeNum(); idx++) {

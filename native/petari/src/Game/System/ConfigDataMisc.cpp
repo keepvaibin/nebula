@@ -1,7 +1,6 @@
 #include "Game/System/ConfigDataMisc.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
 #include "Game/System/NebulaCalendar.hpp"
+#include "Game/System/SaveBytes.hpp"
 
 namespace {
     // The saved flag byte.
@@ -61,7 +60,7 @@ u32 ConfigDataMisc::getSignature() const {
 }
 
 s32 ConfigDataMisc::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
+    SaveWriter stream(pBuffer, size);
 
     const u8 flag = mFlag;
     stream.write(&flag, sizeof(flag));
@@ -69,13 +68,13 @@ s32 ConfigDataMisc::serialize(u8* pBuffer, u32 size) const {
     const s64 lastModified = mLastModified;
     stream.write(&lastModified, sizeof(lastModified));
 
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream = JSUMemoryInputStream(pBuffer, size);
+    SaveReader stream(pBuffer, size);
 
     u8 flag;
     stream.read(&flag, sizeof(flag));

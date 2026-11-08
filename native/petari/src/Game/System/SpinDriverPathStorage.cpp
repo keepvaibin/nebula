@@ -5,8 +5,7 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/SaveBytes.hpp"
 
 // Saved layout. A scenario block: u16 size, then per zone a zone byte followed by its entries, then an end byte.
 // An entry: a header byte (id and flags), then one draw range byte when Interrupted is set (0 means whole).
@@ -268,13 +267,13 @@ u32 SpinDriverPathStorage::getSignature() const {
 }
 
 s32 SpinDriverPathStorage::serialize(u8* pData, u32 maxBufferSize) const {
-    JSUMemoryOutputStream stream(pData, maxBufferSize);
+    SaveWriter stream(pData, maxBufferSize);
     stream.writeU8(mGalaxyStorage.size());
     for (s32 idx = 0; idx < mGalaxyStorage.size(); idx++) {
-        s32 writeSize = mGalaxyStorage[idx]->serialize((u8*)stream.mBuffer + stream.mPosition, maxBufferSize - stream.mPosition);
-        stream.seek(writeSize, SEEK_FROM_POSITION);
+        s32 writeSize = mGalaxyStorage[idx]->serialize(stream.getCursor(), maxBufferSize - stream.getPosition());
+        stream.skip(writeSize);
     }
-    return stream.mPosition;
+    return stream.getPosition();
 }
 
 s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
@@ -284,17 +283,17 @@ s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
         return -1;
     }
 
-    JSUMemoryInputStream stream(pData, maxBufferSize);
+    SaveReader stream(pData, maxBufferSize);
     const u8 numEntries = stream.readU8();
 
     for (s32 idx = 0; idx < numEntries; idx++) {
         // A block's header and its whole size in what is left of the chunk.
-        const u32 remaining = maxBufferSize - stream.mPosition;
+        const u32 remaining = maxBufferSize - stream.getPosition();
         if (remaining < cGalaxyHeaderSize) {
             return -1;
         }
 
-        const u8* pBlock = static_cast< const u8* >(stream.mBuffer) + stream.mPosition;
+        const u8* pBlock = stream.getCursor();
         const u32 blockSize = MR::loadSaveU16(pBlock + 2);
         if (blockSize < cGalaxyHeaderSize || blockSize > remaining) {
             return -1;
@@ -306,7 +305,7 @@ s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
         } else {
             isMissingGalaxy = true;
         }
-        stream.seek(blockSize, SEEK_FROM_POSITION);
+        stream.skip(blockSize);
     }
 
     return isMissingGalaxy ? 1 : 0;
