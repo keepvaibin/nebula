@@ -48,7 +48,7 @@ CubeGravity::CubeGravity() : PlanetGravity() {
     lenX = 1.0;
     lenY = 1.0;
     lenZ = 1.0;
-    mActiveFaces = 63;
+    mActiveFaces = Face_All;
 
     mCube.identity();
     mPosition.identity();
@@ -72,7 +72,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
         zDirDistance = relativePosition.dot(dirZ) / lenZ;
 
     if (xDirDistance < -lenX) {
-        if ((mActiveFaces & 2) != 2) {
+        if ((mActiveFaces & Face_NegativeX) == 0) {
             return -1;
         }
         area = Region_NegativeX;
@@ -80,7 +80,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
         if (xDirDistance <= lenX) {
             area = Region_BetweenX;
         } else {
-            if ((mActiveFaces & 1) != 1) {
+            if ((mActiveFaces & Face_PositiveX) == 0) {
                 return -1;
             }
             area = Region_PositiveX;
@@ -88,7 +88,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
     }
 
     if (yDirDistance < -lenY) {
-        if ((mActiveFaces & 8) != 8) {
+        if ((mActiveFaces & Face_NegativeY) == 0) {
             return -1;
         }
         area += Region_NegativeY;
@@ -96,7 +96,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
         if (yDirDistance <= lenY) {
             area += Region_BetweenY;
         } else {
-            if ((mActiveFaces & 4) != 4) {
+            if ((mActiveFaces & Face_PositiveY) == 0) {
                 return -1;
             }
             area += Region_PositiveY;
@@ -104,7 +104,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
     }
 
     if (zDirDistance < -lenZ) {
-        if ((mActiveFaces & 32) != 32) {
+        if ((mActiveFaces & Face_NegativeZ) == 0) {
             return -1;
         }
         area += Region_NegativeZ;
@@ -112,7 +112,7 @@ int CubeGravity::calcGravityArea(const Vec3f& rPosition) const {
         if (zDirDistance <= lenZ) {
             area += Region_BetweenZ;
         } else {
-            if ((mActiveFaces & 16) != 16) {
+            if ((mActiveFaces & Face_PositiveZ) == 0) {
                 return -1;
             }
             area += Region_PositiveZ;

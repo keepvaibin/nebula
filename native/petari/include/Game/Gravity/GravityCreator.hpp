@@ -19,7 +19,8 @@ public:
     virtual PlanetGravity* createInstance() = 0;
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
     }
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
+    // The placement's Obj_arg0 to Obj_arg2.
+    virtual void settingFromPlacementArgs(s32 objArg0, s32 objArg1, s32 objArg2) {
     }
     virtual void settingFromPlacementOtherParam(const TableIter& rIter) {
     }
@@ -35,7 +36,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 xFaces, s32 yFaces, s32 zFaces);
 
     CubeGravity* mGravityInstance;
 };
@@ -48,7 +49,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 bothSides, s32 edgeGravity, s32 validDegree);
 
     DiskGravity* mGravityInstance;
 };
@@ -61,7 +62,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 bothSides, s32 edgeType, s32 diskRadius);
 
     DiskTorusGravity* mGravityInstance;
 };
@@ -74,7 +75,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 enableBottom, s32 topCutPermille, s32);
 
     ConeGravity* mGravityInstance;
 };
@@ -99,7 +100,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 baseDistance, s32 distanceAxis, s32);
 
     ParallelGravity* mGravityInstance;
 };
@@ -112,7 +113,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 baseDistance, s32, s32);
 
     ParallelGravity* mGravityInstance;
 };
@@ -137,7 +138,7 @@ public:
     virtual PlanetGravity* getGravity();
     virtual PlanetGravity* createInstance();
     virtual void settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale);
-    virtual void settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2);
+    virtual void settingFromPlacementArgs(s32 validEdges, s32 validSideDegree, s32);
 
     SegmentGravity* mGravityInstance;
 };
