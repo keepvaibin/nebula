@@ -41,7 +41,7 @@ void BeeFlowerHover::init(const TableIter& rIter) {
         mRailMover->start();
 
         mRailPosture = new MapPartsRailPosture(this);
-        mRailPosture->mMovePosture = 2;
+        mRailPosture->mMovePosture = MapPartsRailPosture::POSTURE_RAIL_DIR_FRONT;
         mRailPosture->initWithoutIter();
         mRailPosture->start();
     }
