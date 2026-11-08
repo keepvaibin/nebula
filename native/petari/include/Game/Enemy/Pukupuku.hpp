@@ -21,16 +21,17 @@ public:
     void exeLandingMoveLand();
     void exeLandingJumpFromWater();
     void exeLandingJumpFromLand();
-    void updatePoseByJumpPath(f32);
+    void tryEndJumpOnLand();
+    void updatePoseByJumpPath(f32 rate);
     void setNerveAfterJumpAccordingToNextPoint();
-    void setupJumping(f32, f32);
+    void setupJumping(f32 height, f32 averageSpeed);
     void updateJumping();
-    void emitWaterColumIfNeed(bool, bool);
+    void emitWaterColumnIfNeed(bool isFromWater, bool isForce);
     void emitGroundHitEffect();
 
     ParabolicPath* mPath;
     ValueControl* mValueCtrl;
-    u8 mIsWaterColumnEmitted;
+    bool mIsWaterColumnEmitted;
 };
 
 class Pukupuku : public LiveActor {
@@ -51,6 +52,7 @@ public:
     void calcGroundHitMtx(Pos3f* pMtx) const;
     bool isReadyToJumpFromLand() const;
     bool isDamaged() const;
+    bool isInWater() const;
     void exeWait();
     void exeMoveWater();
     void exeMoveWaterAfterJump();
@@ -62,7 +64,9 @@ public:
     void updateMoveWaterAfterJump();
     bool tryBindStarPointer();
     void exeMoveWaterCommon();
+    void startLanding(const Nerve* pLandingNerve);
     f32 getBlownOffSpeedRate() const;
+    void startBlownOff(HitSensor* pAttacker, HitSensor* pVictim);
 
     inline void startAnim(const char* pBck, const char* pBtp) {
         MR::startBck(this, pBck);
@@ -91,5 +95,5 @@ public:
     Nerve* mNerveAfterBind;
     f32 mBckFrameBeforeBind;
     f32 mBtpFrameBeforeBind;
-    u8 mIsTrampled;
+    bool mIsTrampled;
 };
