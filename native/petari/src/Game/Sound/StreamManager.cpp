@@ -46,10 +46,10 @@ bool StreamManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* pos
 }
 
 void StreamManager::freeDeadStream_() {
-    JSULink< StreamSound >* i = mStreamList.getFirst();
+    NebulaListLink< StreamSound >* i = mStreamList.getFirst();
     while (i != nullptr) {
         StreamSound* stream = i->getObject();
-        JSULink< StreamSound >* next = i->getNext();
+        NebulaListLink< StreamSound >* next = i->getNext();
         if (stream->isDead()) {
             mStreamList.remove(i);
             delete stream;
@@ -59,7 +59,7 @@ void StreamManager::freeDeadStream_() {
 }
 
 void StreamManager::calc() {
-    JSULink< StreamSound >* i;
+    NebulaListLink< StreamSound >* i;
     mParams.calc();
     for (i = mStreamList.getFirst(); i != nullptr; i = i->getNext()) {
         i->getObject()->managerCalc_();
@@ -68,21 +68,21 @@ void StreamManager::calc() {
 }
 
 void StreamManager::stop() {
-    JSULink< StreamSound >* i;
+    NebulaListLink< StreamSound >* i;
     for (i = mStreamList.getFirst(); i != nullptr; i = i->getNext()) {
         i->getObject()->stop();
     }
 }
 
 void StreamManager::stop(u32 fadeTime) {
-    JSULink< StreamSound >* i;
+    NebulaListLink< StreamSound >* i;
     for (i = mStreamList.getFirst(); i != nullptr; i = i->getNext()) {
         i->getObject()->stop(fadeTime);
     }
 }
 
 void StreamManager::stopSoundID(SoundID id) {
-    JSULink< StreamSound >* i;
+    NebulaListLink< StreamSound >* i;
     for (i = mStreamList.getFirst(); i != nullptr; i = i->getNext()) {
         if ((u32)i->getObject()->getID() == (u32)id) {
             i->getObject()->stop();
@@ -91,7 +91,7 @@ void StreamManager::stopSoundID(SoundID id) {
 }
 
 void StreamManager::mixOut() {
-    JSULink< StreamSound >* i;
+    NebulaListLink< StreamSound >* i;
     for (i = mStreamList.getFirst(); i != nullptr; i = i->getNext()) {
         i->getObject()->managerMixOut_(mParams.mParams, mActivity);
     }

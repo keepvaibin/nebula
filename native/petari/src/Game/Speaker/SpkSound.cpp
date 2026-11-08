@@ -27,7 +27,7 @@ void SpkSoundHandle::releaseSound() {
 }
 
 SpkSound::SpkSound()
-    : JSULink(this), mSoundHandle(nullptr), mWaveID(-1), mPadChannel(PLAYER_1), mReleaseTime(0), mState(State_NONE), mStateSerial(0),
+    : mSoundHandle(nullptr), mWaveID(-1), mPadChannel(PLAYER_1), mReleaseTime(0), mState(State_NONE), mStateSerial(0),
       mVoice(nullptr), mMemory(nullptr) {
 }
 
@@ -173,8 +173,8 @@ bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHan
 }
 
 void SpkSoundHolder::freeDeadSound(s32 padChannel) {
-    for (JSULink< SpkSound >* sound = mSoundList[padChannel].getFirst(); sound != mSoundList[padChannel].getEnd();) {
-        JSULink< SpkSound >* next = sound->getNext();
+    for (NebulaListLink< SpkSound >* sound = mSoundList[padChannel].getFirst(); sound != mSoundList[padChannel].getEnd();) {
+        NebulaListLink< SpkSound >* next = sound->getNext();
         if (sound->getObject()->getState() == SpkSound::State_DEAD) {
             mSoundList[padChannel].remove(sound);
             delete sound->getObject();
@@ -186,7 +186,7 @@ void SpkSoundHolder::freeDeadSound(s32 padChannel) {
 // Each frame: last frame's sounds are heard from now, and the ended ones go.
 void SpkSoundHolder::framework() {
     for (int i = 0; i < 4; i++) {
-        for (JSULink< SpkSound >* sound = mSoundList[i].getFirst(); sound != mSoundList[i].getEnd(); sound = sound->getNext()) {
+        for (NebulaListLink< SpkSound >* sound = mSoundList[i].getFirst(); sound != mSoundList[i].getEnd(); sound = sound->getNext()) {
             if (sound->getObject()->getState() == SpkSound::State_LOCK) {
                 sound->getObject()->unlock();
             }

@@ -2,13 +2,13 @@
 
 #include "Game/Sound/Sound.hpp"
 #include "Game/Sound/StreamPlayer.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
+#include "Game/System/NebulaList.hpp"
 
 class StreamManager;
 
 // A streamed sound (music, voices, cutscenes): a StreamPlayer the audio thread runs, made with the sound and given back when it
 // goes. Children name its channels.
-class StreamSound final : public Sound, public JSULink< StreamSound > {
+class StreamSound final : public Sound, public NebulaListLink< StreamSound > {
 public:
     StreamSound(StreamManager* streamMgr, SoundStrategyMgr< StreamSound >* soundStrategyMgr);
     virtual ~StreamSound();

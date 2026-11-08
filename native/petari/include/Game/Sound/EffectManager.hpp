@@ -57,18 +57,18 @@ public:
     void setMaxInactiveSe(int num) {
         mMaxInactiveSe = num;
     }
-    const JSUList< EffectSound >* getSeList() const {
+    const NebulaList< EffectSound >* getSeList() const {
         return &mSeList;
     }
     int getNumSe() const {
-        return mSeList.getNumLinks();
+        return mSeList.getNum();
     }
     void appendSe_(EffectSound* se) {
         mSeList.append(se);
     }
 
     SoundMove mParams;
-    JSUList< EffectSound > mSeList;
+    NebulaList< EffectSound > mSeList;
     int mMaxInactiveSe;
     int mMaxActiveSe;
 };

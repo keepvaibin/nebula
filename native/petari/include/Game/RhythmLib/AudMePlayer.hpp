@@ -3,7 +3,7 @@
 #include "Game/Sound/MeLink.hpp"
 #include "Game/Sound/SoundGlobal.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JSupport/JSUList.hpp>
+#include "Game/System/NebulaList.hpp"
 
 class AudMeHandle;
 class NebulaArena;
@@ -39,7 +39,7 @@ public:
 };
 
 // One Me phrase as the game plays it: its fades and the values it sends its player each frame.
-class AudMe : public JSULink< AudMe > {
+class AudMe : public NebulaListLink< AudMe > {
 public:
     static const s32 TIMED_PARAMS = 6;
 
@@ -135,7 +135,7 @@ public:
 
     NebulaArena* mHeap;
     const MeProgramFile* mMeSeq;
-    JSUList< AudMe > mMeList;
+    NebulaList< AudMe > mMeList;
     f32 mMeVolume;
     AudMePlayingParamsHolder mParams;
 };

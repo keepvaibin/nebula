@@ -5,7 +5,7 @@
 // is no size to give and nothing to run out of but the machine's memory. A pointer's arena is found by its address.
 
 #include "JSystem/JKernel/JKRDisposer.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
+#include "Game/System/NebulaList.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include <stddef.h>
@@ -66,7 +66,7 @@ public:
     static NebulaArena* sRootHeap;
     static NebulaArena* sSystemHeap;
 
-    JSUList< JKRDisposer > mDisposerList;
+    NebulaList< JKRDisposer > mDisposerList;
 
 private:
     enum { cClasses = 160 };

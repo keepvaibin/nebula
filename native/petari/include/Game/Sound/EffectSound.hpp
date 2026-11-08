@@ -2,12 +2,12 @@
 
 #include "Game/Sound/PlayerLink.hpp"
 #include "Game/Sound/SeqSource.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
+#include "Game/System/NebulaList.hpp"
 
 class EffectManager;
 
 // A sound effect: one sequence entry from the effect collection, on its own player.
-class EffectSound final : public JSULink< EffectSound >, public Sound {
+class EffectSound final : public NebulaListLink< EffectSound >, public Sound {
 public:
     virtual s32 getNumChild() const;
     virtual SoundChild* getChild(int);

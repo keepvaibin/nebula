@@ -14,7 +14,7 @@ void AudMeHandle::releaseMe() {
 }
 
 AudMe::AudMe()
-    : JSULink< AudMe >(this), mHandle(), mLink(), mPos(), mMeId(-1), mStopTime(-1), mTimer(), mStartRequested(false), mTrackBound(),
+    : mHandle(), mLink(), mPos(), mMeId(-1), mStopTime(-1), mTimer(), mStartRequested(false), mTrackBound(),
       mPlace(), mMgrVolume(1.0f), mVolume(1.0f), mOuterPan(0.5f), mOuterDolby(0.0f), mPriority(), mFadeTime() {
     initTimed();
 }
@@ -271,8 +271,8 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
 
 // A phrase that never started, or has ended, goes. A requested phrase starts in its first update.
 void AudMeMgr::freeDeadMe() {
-    for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd();) {
-        JSULink< AudMe >* next = it->getNext();
+    for (NebulaListLink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd();) {
+        NebulaListLink< AudMe >* next = it->getNext();
         if (!it->getObject()->isPlaying()) {
             mMeList.remove(it);
             delete it->getObject();
@@ -283,7 +283,7 @@ void AudMeMgr::freeDeadMe() {
 }
 
 void AudMeMgr::updateEachMe() {
-    for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
+    for (NebulaListLink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         if (!AudWrap::getSystem()->getChordInfo()->isAvailable()) {
             it->getObject()->stop(0);
         }
@@ -293,13 +293,13 @@ void AudMeMgr::updateEachMe() {
 }
 
 void AudMeMgr::stopAll(s32 time) {
-    for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
+    for (NebulaListLink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         it->getObject()->stop(time);
     }
 }
 
 void AudMeMgr::setPauseFlagAll(bool pause) {
-    for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
+    for (NebulaListLink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         it->getObject()->setPauseFlag(pause);
     }
 }
@@ -322,7 +322,7 @@ const u8* AudMeMgr::programData() const {
 }
 
 bool AudMeMgr::isRequestedMe(u32 place) {
-    for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
+    for (NebulaListLink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         if (it->getObject()->isRequested(place)) {
             return true;
         }
