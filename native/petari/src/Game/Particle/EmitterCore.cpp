@@ -11,7 +11,7 @@
 EmitterCallBack::~EmitterCallBack() {
 }
 
-EmitterCore::EmitterCore() : mLink(this), mpChunks(NULL), mpLastChunk(NULL), mRndm(0) {
+EmitterCore::EmitterCore() : mpPrevEmtr(NULL), mpNextEmtr(NULL), mpChunks(NULL), mpLastChunk(NULL), mRndm(0) {
     mDrawSlot = 0;
     mMotionEpoch = 0;
 }
