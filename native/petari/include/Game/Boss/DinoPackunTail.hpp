@@ -6,14 +6,14 @@ class DinoPackunTailNode;
 
 class DinoPackunTail {
 public:
-    DinoPackunTail(u32);
+    DinoPackunTail(u32 nodeCount);
 
-    void addTailNode(DinoPackunTailNode*);
+    void addTailNode(DinoPackunTailNode* pNode);
     void activate();
     void deactivate();
     void onMovement();
-    void lockNodePosition(u32);
-    void unlockNodePosition(u32);
+    void lockNodePosition(u32 idx);
+    void unlockNodePosition(u32 idx);
     void lockEndNodePosition();
     void unlockEndNodePosition();
     void registerPreCalcJointCallBack();
@@ -22,12 +22,9 @@ public:
     void addAccelKeepBend();
     void addAccelKeepDistance();
     void addAccelToBck();
-    void getTailNodePosition(Vec3f*, s32) const;
-    void getEndTailPosition(Vec3f*) const;
-    DinoPackunTailNode* getNode(u32) const;
-    DinoPackunTailNode*& getNodeRef(const u32& rIndex) const {
-        return mNodes[rIndex];
-    }
+    void getTailNodePosition(Vec3f* pPos, s32 index) const;
+    void getEndTailPosition(Vec3f* pPos) const;
+    DinoPackunTailNode* getNode(u32 index) const;
 
     DinoPackunTailNode** mNodes;
     u32 mMaxNodes;
@@ -35,5 +32,5 @@ public:
     f32 mBendRate;
     f32 mDistanceRate;
     f32 mHostVelocityRate;
-    u8 mIsActive;
+    bool mIsActive;
 };

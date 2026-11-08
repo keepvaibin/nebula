@@ -24,7 +24,7 @@ void DinoPackunTailPart::init(const TableIter& rIter) {
     initBinder(mRadius, 0.0f, 0);
     MR::connectToSceneEnemyDecorationMovement(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "body", 8, (1.25f + mRadius), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 1.25f + mRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }
@@ -33,20 +33,20 @@ void DinoPackunTailPart::control() {
 }
 
 JointController* DinoPackunTailPart::createJointControllerOwn(LiveActor* pActor, const char* pJointName) {
-    // we only do this because we already know it's a tail node type since it inherits
     return MR::createJointDelegator((DinoPackunTailNode*)this, pActor, &DinoPackunTailNode::turnJointLocalXDir, &DinoPackunTailNode::calcJointScale,
                                     pJointName);
 }
 
 void DinoPackunTailPart::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     mParent->attackSensorTail(pSender, pReceiver);
-    bool push = MR::sendMsgPush(pReceiver, pSender);
-    if (MR::isSensorPlayer(pReceiver) && push) {
-        Vec3f v16;
-        MR::calcSensorDirectionNormalize(&v16, pReceiver, pSender);
+    bool isPushed = MR::sendMsgPush(pReceiver, pSender);
+    if (MR::isSensorPlayer(pReceiver) && isPushed) {
+        // Gives way to the player, up to 3 a step.
+        Vec3f away;
+        MR::calcSensorDirectionNormalize(&away, pReceiver, pSender);
 
-        if (mVelocity.dot(v16) < 3.0f) {
-            mVelocity.add(v16 * 1.0f);
+        if (mVelocity.dot(away) < 3.0f) {
+            mVelocity.add(away);
         }
     }
 }
@@ -59,7 +59,9 @@ bool DinoPackunTailPart::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hit
     if (MR::isMsgPlayerHipDrop(msg)) {
         MR::sendMsgAwayJump(pSender, pReceiver);
         return true;
-    } else if (MR::isMsgPlayerTrample(msg)) {
+    }
+
+    if (MR::isMsgPlayerTrample(msg)) {
         return true;
     }
 
