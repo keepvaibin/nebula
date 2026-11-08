@@ -6,7 +6,7 @@ class DinoPackunStateDamage;
 
 class DinoPackunBattleVs1Lv2 : public DinoPackunAction {
 public:
-    DinoPackunBattleVs1Lv2(DinoPackun*);
+    DinoPackunBattleVs1Lv2(DinoPackun* pHost);
 
     virtual ~DinoPackunBattleVs1Lv2();
     virtual void appear();
@@ -19,6 +19,7 @@ public:
     void setStartFromDemo();
     void setStartContinueBattle();
     bool tryFind();
+    bool isRunNerve() const;
 
     void exeStart();
     void exeTurn();
