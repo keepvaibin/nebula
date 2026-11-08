@@ -29,7 +29,6 @@ namespace {
 };  // namespace
 namespace nw4r {
     namespace lyt {
-        NW4R_UT_RUNTIME_TYPEINFO_DEFINITION(TextBox, Pane);
 
         TextBox::TextBox(const UiPaneData* pRes, const ResBlockSet& resBlockSet) : Pane(pRes, resBlockSet) {
             const UiTextBoxData* const pBlock = resBlockSet.At< UiTextBoxData >(pRes->mPayload);

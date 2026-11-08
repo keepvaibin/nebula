@@ -118,7 +118,6 @@ namespace nw4r {
 
         };  // namespace
 
-        NW4R_UT_RTTI_DEF_DERIVED(Window, Pane);
 
         Window::Window(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
             const UiWindowData* const pWnd = rBlockSet.At< UiWindowData >(pRes->mPayload);

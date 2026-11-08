@@ -24,8 +24,6 @@
 #include <nw4r/lyt/picture.h>
 #include <nw4r/lyt/textBox.h>
 
-template nw4r::lyt::TextBox* nw4r::ut::DynamicCast< nw4r::lyt::TextBox*, nw4r::lyt::Pane >(nw4r::lyt::Pane*);
-
 
 
 
@@ -69,7 +67,7 @@ namespace {
             initialized = getTextDrawRectRecursive(pRect, &*it, initialized);
         }
 
-        const nw4r::lyt::TextBox* pTextBox = nw4r::ut::DynamicCast< const nw4r::lyt::TextBox* >(pPane);
+        const nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
 
         if (pTextBox != nullptr) {
             nw4r::ut::Rect rect = pTextBox->GetTextDrawRect(nw4r::lyt::DrawInfo());
@@ -111,7 +109,7 @@ namespace {
             }
         }
 
-        const nw4r::lyt::TextBox* pTextBox = nw4r::ut::DynamicCast< const nw4r::lyt::TextBox* >(pPane);
+        const nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
 
         if (pTextBox != nullptr) {
             u32 count = MR::countMessageLine(pTextBox->mTextBuf);
@@ -174,7 +172,7 @@ void MR::setPaneAlphaFloat(const LayoutActor* pActor, const char* pPaneName, f32
 }
 
 void MR::executeTextBoxRecursive(LayoutActor* pActor, const char* pPaneName, const TextBoxRecursiveOperation& rOperation) {
-    nw4r::lyt::TextBox* pTextBox = nw4r::ut::DynamicCast< nw4r::lyt::TextBox* >(getPane(pActor, pPaneName));
+    nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(getPane(pActor, pPaneName));
 
     if (pTextBox != nullptr) {
         rOperation.execute(pTextBox);
@@ -398,13 +396,13 @@ nw4r::lyt::TexMap* MR::createLytTexMap(ResTIMG* pImage) {
 }
 
 nw4r::lyt::TexMap* MR::getLytTexMap(LayoutActor* pActor, const char* pPaneName, u8 textureIndex) {
-    nw4r::lyt::Picture* pPicture = nw4r::ut::DynamicCast< nw4r::lyt::Picture* >(getPane(pActor, pPaneName));
+    nw4r::lyt::Picture* pPicture = nw4r::lyt::PaneCast< nw4r::lyt::Picture >(getPane(pActor, pPaneName));
 
     return const_cast< nw4r::lyt::TexMap* >(&pPicture->GetMaterial()->GetTexture(textureIndex));
 }
 
 void MR::replacePaneTexture(LayoutActor* pActor, const char* pPaneName, const nw4r::lyt::TexMap* pTexture, u8 textureIndex) {
-    nw4r::lyt::Picture* pPicture = nw4r::ut::DynamicCast< nw4r::lyt::Picture* >(getPane(pActor, pPaneName));
+    nw4r::lyt::Picture* pPicture = nw4r::lyt::PaneCast< nw4r::lyt::Picture >(getPane(pActor, pPaneName));
     pPicture->GetMaterial()->SetTexture(textureIndex, *pTexture);
 }
 

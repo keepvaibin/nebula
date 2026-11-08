@@ -8,7 +8,7 @@ namespace nw4r {
 
         class Bounding : public Pane {
         public:
-            NW4R_UT_RTTI_DECL(Bounding);
+            static constexpr UiPaneKind cKind = UiPaneKind_Bounding;
             Bounding(const UiPaneData*, const ResBlockSet&);
 
             virtual ~Bounding();

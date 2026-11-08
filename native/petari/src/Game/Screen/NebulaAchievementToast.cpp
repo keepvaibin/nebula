@@ -74,10 +74,7 @@ namespace {
     }
 
     nw4r::lyt::TextBox* asTextBox(nw4r::lyt::Pane* pPane) {
-        if (pPane == nullptr || !pPane->GetRuntimeTypeInfo()->IsDerivedFrom(&nw4r::lyt::TextBox::typeInfo)) {
-            return nullptr;
-        }
-        return static_cast< nw4r::lyt::TextBox* >(pPane);
+        return nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
     }
 
     // A text pane's boxes (its shadow and its text) at the top-left of their pane; the text's drawn size.
@@ -175,7 +172,7 @@ void NebulaAchievementToast::init(const TableIter& rIter) {
 
     // Over the HUD's corner the window reads as solid: its colour's alpha, 200 of 255 in the game's information
     // window, 235 here (its content and frame).
-    if (nw4r::lyt::Window* pWindow = nw4r::ut::DynamicCast< nw4r::lyt::Window* >(mWindow)) {
+    if (nw4r::lyt::Window* pWindow = nw4r::lyt::PaneCast< nw4r::lyt::Window >(mWindow)) {
         nw4r::lyt::Material* pMaterials[1 + 4] = {pWindow->GetContentMaterial()};
         u32 materialNum = 1;
         for (u32 i = 0; i < pWindow->mFrameNum && materialNum < 5; i++) {

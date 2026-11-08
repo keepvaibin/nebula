@@ -5,7 +5,6 @@
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
 #include "nw4r/ut/LinkList.h"
-#include "nw4r/ut/RuntimeTypeInfo.h"
 #include <cstddef>
 
 namespace nw4r {
@@ -36,7 +35,7 @@ namespace nw4r {
 
         class Pane : public detail::PaneBase {
         public:
-            NW4R_UT_RUNTIME_TYPEINFO;
+            static constexpr UiPaneKind cKind = UiPaneKind_Pane;
 
             Pane();
             Pane(const UiPaneData*, const ResBlockSet&);
@@ -129,11 +128,22 @@ namespace nw4r {
             u8 mGlbAlpha;
             u8 mBasePosition;
             u8 mFlag;
+            UiPaneKind mKind;  // what the pane is (PaneCast); from its record, or the class that made it in code
             char mName[17];
             char mUserData[9];
             u8 mbUserAllocated;
             mutable u32 mDrawSlot = 0;
             u8 mPadding;
         };
+        // The pane as a T (Picture, TextBox, Window, Bounding) when it is one, else null; null stays null.
+        template < class T >
+        inline T* PaneCast(Pane* pPane) {
+            return pPane != nullptr && pPane->mKind == T::cKind ? static_cast< T* >(pPane) : nullptr;
+        }
+
+        template < class T >
+        inline const T* PaneCast(const Pane* pPane) {
+            return pPane != nullptr && pPane->mKind == T::cKind ? static_cast< const T* >(pPane) : nullptr;
+        }
     };  // namespace lyt
 };  // namespace nw4r

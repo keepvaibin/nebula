@@ -15,7 +15,7 @@ namespace {
     using namespace nw4r;
     using namespace nw4r::lyt;
     void SetTagProcessorImpl(Pane* pPane, ut::TagProcessorBase< char16_t >* pTagProcessor) {
-        if (TextBox* pTextBox = ut::DynamicCast< TextBox* >(pPane)) {
+        if (TextBox* pTextBox = PaneCast< TextBox >(pPane)) {
             pTextBox->SetTagProcessor(pTagProcessor);
         }
 

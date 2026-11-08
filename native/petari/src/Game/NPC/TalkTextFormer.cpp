@@ -12,14 +12,7 @@
 
 namespace {
     nw4r::lyt::TextBox* getTextBoxPane(LayoutActor* pActor, const char* pPaneName) {
-        nw4r::lyt::Pane* pPane = MR::getPane(pActor, pPaneName);
-        const nw4r::ut::detail::RuntimeTypeInfo* pTypeInfo = &nw4r::lyt::TextBox::typeInfo;
-        nw4r::lyt::TextBox* pTextBox;
-        if (pPane != nullptr && pPane->GetRuntimeTypeInfo()->IsDerivedFrom(pTypeInfo)) {
-            pTextBox = static_cast< nw4r::lyt::TextBox* >(pPane);
-        } else {
-            pTextBox = nullptr;
-        }
+        nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(MR::getPane(pActor, pPaneName));
 
         return pTextBox;
     }
@@ -88,13 +81,7 @@ namespace MR {
 
     bool isEndStepTagProcessorRecursive(const LayoutActor* pActor, const char* pPaneName, bool isEnd) {
         nw4r::lyt::Pane* pTargetPane = getPane(pActor, pPaneName);
-        const nw4r::ut::detail::RuntimeTypeInfo* pTypeInfo = &nw4r::lyt::TextBox::typeInfo;
-        nw4r::lyt::TextBox* pTextBox;
-        if (pTargetPane != nullptr && pTargetPane->GetRuntimeTypeInfo()->IsDerivedFrom(pTypeInfo)) {
-            pTextBox = static_cast< nw4r::lyt::TextBox* >(pTargetPane);
-        } else {
-            pTextBox = nullptr;
-        }
+        nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pTargetPane);
         if (pTextBox != nullptr) {
             CustomTagProcessor* pProcessor = static_cast< CustomTagProcessor* >(pTextBox->mpTagProcessor);
             isEnd &= pProcessor->mAlphaCtrl.isEnd();

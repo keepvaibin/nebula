@@ -3,7 +3,6 @@
 
 namespace nw4r {
     namespace lyt {
-        NW4R_UT_RTTI_DEF_DERIVED(Bounding, Pane);
         Bounding::Bounding(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
         }
 

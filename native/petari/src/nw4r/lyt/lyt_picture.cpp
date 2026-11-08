@@ -4,9 +4,8 @@
 
 namespace nw4r {
     namespace lyt {
-        NW4R_UT_RTTI_DEF_DERIVED(Picture, Pane);
-
         Picture::Picture(u8 texNum) {
+            mKind = cKind;
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
             if (mpMaterial) {
@@ -15,6 +14,7 @@ namespace nw4r {
         }
 
         Picture::Picture(const TexMap& texMap) {
+            mKind = cKind;
             const int texNum = 1;
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
