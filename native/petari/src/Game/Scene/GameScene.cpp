@@ -107,7 +107,6 @@ namespace NrvGameScene {
     NEW_NERVE(GameSceneCometRetryAfterMiss, GameScene, CometRetryAfterMiss);
     NEW_NERVE(GameSceneSaveAfterGameOver, GameScene, SaveAfterGameOver);
     NEW_NERVE(GameScenePlayMovie, GameScene, PlayMovie);
-    NEW_NERVE(GameSceneTimeUp, GameScene, TimeUp);
     NEW_NERVE(GameSceneGalaxyMap, GameScene, GalaxyMap);
     NEW_NERVE(GameSceneStaffRoll, GameScene, StaffRoll);
     NEW_NERVE(GameSceneNebulaBoard, GameScene, NebulaBoard);
@@ -253,9 +252,7 @@ void GameScene::start() {
     reportPresence();
     NebulaAchievements::evaluate();
 
-    if (MR::isGlobalTimerEnd()) {
-        MR::forceCloseWipeCircle();
-    } else if (!MR::hasRetryGalaxySequence()) {
+    if (!MR::hasRetryGalaxySequence()) {
         startStagePlayFirst();
     } else {
         startStagePlayRetry();
@@ -281,12 +278,6 @@ void GameScene::update() {
     // alike (the settings menu and the HOME Menu hold the whole scene, the pop-up with it).
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
-    }
-
-    bool isTimeUp = MR::isGlobalTimerEnd() && !isNerve(GET_NERVE(GameScene, GameSceneTimeUp)) && MR::isGreaterEqualStep(this, 2);
-
-    if (isTimeUp) {
-        setNerve(GET_NERVE(GameScene, GameSceneTimeUp));
     }
 }
 
@@ -338,10 +329,7 @@ void GameScene::calcAnim() {
         SceneFunction::executeCalcAnimList();
     }
 
-    if (!isNerve(GET_NERVE(GameScene, GameSceneTimeUp))) {
-        CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
-    }
-
+    CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
     SceneFunction::executeCalcViewAndEntryList();
 }
 
@@ -419,7 +407,7 @@ void GameScene::exeCometRetryAfterMiss() {
     CometRetryButton* pCometRetryButton = ::getCometRetryButton();
 
     if (MR::isFirstStep(this)) {
-        ::getCometRetryButton()->appear();
+        pCometRetryButton->appear();
         MR::forceOpenWipeCircle();
     }
 
@@ -715,12 +703,6 @@ void GameScene::exeStaffRoll() {
     CategoryList::execute(MR::MovementType_Layout);
     CategoryList::execute(MR::DrawType_LayoutDecoration);
     CategoryList::execute(MR::MovementType_WipeLayout);
-}
-
-void GameScene::exeTimeUp() {
-    if (MR::isFirstStep(this)) {
-        MR::startGlobalTimerTimeUp();
-    }
 }
 
 void GameScene::exeGameOver() {

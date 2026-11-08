@@ -40,7 +40,6 @@ public:
     void exeCometRetryAfterMiss();
     void exeSaveAfterGameOver();
     void exePlayMovie();
-    void exeTimeUp();
     void exeGalaxyMap();
     void exeStaffRoll();
     void exeNebulaBoard();

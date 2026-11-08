@@ -1,34 +1,25 @@
 #include "Game/Scene/StopSceneController.hpp"
-#include "Game/NameObj/NameObjGroup.hpp"
-#include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-StopSceneDelayRequest::StopSceneDelayRequest() : NameObj("シーン硬直遅延発行"), mFrame(), mDelay() {
-    MR::connectToScene(this, MR::MovementType_StopSceneDelayRequest, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
+StopSceneController::StopSceneController() : NameObj("StopSceneController"), mDelayRequests(), mFrame() {
 }
 
-StopSceneController::StopSceneController() : NameObj("StopSceneController"), mDelayRequestArray(), mFrame() {
-    mDelayRequestArray = new NameObjGroup("シーン硬直遅延発行者の管理", 16);
-
-    for (s32 i = 0; i < 16; i++) {
-        StopSceneDelayRequest* delayRequest = new StopSceneDelayRequest();
-        delayRequest->initWithoutIter();
-        mDelayRequestArray->registerObj(delayRequest);
-    }
-}
-
-void StopSceneDelayRequest::movement() {
-    if (mDelay == 0) {
+void StopSceneController::movementDelayRequests() {
+    if ((mMovementFlag & MovementFlag_Off) != 0) {
         return;
     }
 
-    mDelay--;
+    for (DelayRequest& rRequest : mDelayRequests) {
+        if (rRequest.mDelay == 0) {
+            continue;
+        }
 
-    if (mDelay != 0) {
-        return;
+        rRequest.mDelay--;
+
+        if (rRequest.mDelay == 0) {
+            MR::stopScene(rRequest.mFrame);
+        }
     }
-
-    MR::stopScene(mFrame);
 }
 
 void StopSceneController::requestStopScene(s32 frame) {
@@ -42,17 +33,13 @@ void StopSceneController::requestStopScene(s32 frame) {
 }
 
 void StopSceneController::requestStopSceneDelay(s32 frame, s32 delay) {
-    NameObjGroup* pGroup = mDelayRequestArray;
-    s32 count = pGroup->getObjNum();
-    for (s32 i = 0; i < count; i++) {
-        StopSceneDelayRequest* delayRequest = static_cast< StopSceneDelayRequest* >(pGroup->getObj(i));
-
-        if (delayRequest->mDelay != 0) {
+    for (DelayRequest& rRequest : mDelayRequests) {
+        if (rRequest.mDelay != 0) {
             continue;
         }
 
-        delayRequest->mFrame = frame;
-        delayRequest->mDelay = delay;
+        rRequest.mFrame = frame;
+        rRequest.mDelay = delay;
         return;
     }
 }

@@ -104,7 +104,6 @@ namespace MR {
     void resetSystemAndGameStatus() {
         GameDataFunction::resetAllGameData();
         GameSystemFunction::resetAllControllerRumble();
-        resetGlobalTimer();
     }
 
     void stopAllSound(u32 param1) {

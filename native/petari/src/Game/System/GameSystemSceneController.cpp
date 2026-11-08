@@ -4,7 +4,6 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
-#include "Game/Scene/PlayTimerScene.hpp"
 #include "Game/Scene/ScenarioSelectScene.hpp"
 #include "Game/Scene/SceneFactory.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -63,11 +62,10 @@ void SceneControlInfo::setStartIdInfo(const PlacementId& rInfo) {
 
 GameSystemSceneController::GameSystemSceneController()
     : mSpine(), mNextNerve(), mIsResetProcessing(), mScenarioParser(), mObjHolder(), mScene(), mSceneInitializeState(), mIntermissionScene(),
-      mPlayTimerScene(), mScenarioSelectScene() {
+      mScenarioSelectScene() {
     mObjHolder = new NameObjHolder(0x1300);
     mSpine = new Spine(this, GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNotInitialized));
     mIntermissionScene = static_cast< IntermissionScene* >(MR::createScene(SceneKind_Intermission));
-    mPlayTimerScene = new PlayTimerScene();
     mScenarioSelectScene = new ScenarioSelectScene();
 }
 
@@ -75,7 +73,6 @@ void GameSystemSceneController::initAfterSystemArchiveLoaded() {
     mScenarioParser = new ScenarioDataParser("シナリオデータ解析");
     mScenarioParser->initWithoutIter();
 
-    mPlayTimerScene->init();
     mScenarioSelectScene->init();
 }
 
@@ -238,7 +235,6 @@ void GameSystemSceneController::updateScene() {
 
     if (pScene != nullptr) {
         pScene->update();
-        mPlayTimerScene->update();
         mScenarioSelectScene->update();
     }
 }
@@ -254,7 +250,6 @@ void GameSystemSceneController::calcAnimScene() {
 
     if (pScene != nullptr) {
         pScene->calcAnim();
-        mPlayTimerScene->calcAnim();
         mScenarioSelectScene->calcAnim();
     }
 }
@@ -264,7 +259,6 @@ void GameSystemSceneController::drawScene() {
 
     if (pScene != nullptr) {
         pScene->draw();
-        mPlayTimerScene->draw();
         mScenarioSelectScene->draw();
     }
 }
@@ -421,8 +415,6 @@ void GameSystemSceneController::exeReadyToStartScene() {
 
 void GameSystemSceneController::prepareReset() {
     mIsResetProcessing = true;
-
-    mPlayTimerScene->stop();
 
     bool isInitializingScene = isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene)) ||
                                isNextNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));

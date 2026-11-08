@@ -101,7 +101,6 @@ void GameSequenceProgress::startScene() {
 
     if (MR::isCurrentScene(SceneKind_Game)) {
         mStorySequenceExecutor->setNerveSceneStart();
-        MR::startGlobalTimer();
 
         if (MR::isStageFileSelect()) {
             MR::forceOpenWipeFade();

@@ -8,7 +8,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/NameObj/ModelChangableObjFactory.hpp"
 #include "Game/NameObj/NameObjFactory.hpp"
 #include "Game/Util/PlacementUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
 namespace {
@@ -48,11 +47,10 @@ PlacementInfoOrdered::PlacementInfoOrdered(int count) : mIndexArray(), mIndexCou
     mIndexArray = new Index[count];
     mSetArray = new SameIdSet[count];
     mOrderedSetArray = new SameIdSet*[count];
-    MR::zeroMemory(mOrderedSetArray, count * sizeof(SameIdSet*));
 }
 
 void PlacementInfoOrdered::sort() {
-    s32 count = getUsedArrayNum();
+    const s32 count = mSetNum;
     for (s32 i = 0; i < count; i++) {
         // Player archive loaders first, then every other set: the order of a restart, when all of a stage's files are already loaded.
         SameIdSet* pSet = mOrderedSetArray[i];
@@ -91,7 +89,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
         MR::startInitLiveActorSystemInfo();
         mPlacementStarted = true;
     }
-    const s32 count = getUsedArrayNum();
+    const s32 count = mSetNum;
     while (mPlacementSet < count) {
         SameIdSet* set = mOrderedSetArray[mPlacementSet];
         const CreationFuncPtr creator = ::getCreator(*set);
@@ -136,22 +134,10 @@ void PlacementInfoOrdered::insert(const Identifier& rIdentifier, const TableIter
     pSet->mList.append(createIndex(rIter));
 }
 
-s32 PlacementInfoOrdered::getUsedArrayNum() const {
-    s32 count = 0;
-    s32 i = 0;
-    while (i < mCount && mOrderedSetArray[i] != nullptr) {
-        i++;
-        count++;
-    }
-
-    return count;
-}
-
 PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::find(const Identifier& rIdentifier) const {
-    s32 count = getUsedArrayNum();
-    for (s32 i = 0; i < count; i++) {
+    for (s32 i = 0; i < mSetNum; i++) {
         SameIdSet* pSet = mOrderedSetArray[i];
-        if (pSet != nullptr && *pSet == rIdentifier) {
+        if (*pSet == rIdentifier) {
             return pSet;
         }
     }
@@ -160,9 +146,9 @@ PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::find(const Identifier& rI
 }
 
 PlacementInfoOrdered::SameIdSet* PlacementInfoOrdered::createSameIdSet(const Identifier& rIdentifier) {
-    s32 index = getUsedArrayNum();
-    SameIdSet* pSet = &mSetArray[index];
-    mOrderedSetArray[index] = pSet;
+    SameIdSet* pSet = &mSetArray[mSetNum];
+    mOrderedSetArray[mSetNum] = pSet;
+    mSetNum++;
     *static_cast< Identifier* >(pSet) = rIdentifier;
     return pSet;
 }

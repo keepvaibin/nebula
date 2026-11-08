@@ -60,11 +60,6 @@ public:
     void initPlacement();
     bool initPlacementStep(uint64_t deadline);
     void insert(const Identifier&, const TableIter&);
-    SameIdSet* getSameIdSet(int index) const {
-        return mOrderedSetArray[index];
-    }
-
-    s32 getUsedArrayNum() const;
     SameIdSet* find(const Identifier&) const;
     SameIdSet* createSameIdSet(const Identifier&);
     Index* createIndex(const TableIter&);
@@ -75,8 +70,9 @@ public:
     Index* mIndexArray;
     u32 mIndexCount;
     SameIdSet* mSetArray;
-    SameIdSet** mOrderedSetArray;
+    SameIdSet** mOrderedSetArray;  // the first mSetNum are set
     int mCount;
+    s32 mSetNum = 0;
     s32 mPlacementSet = 0;
     NebulaListLink< Index >* mPlacementLink = nullptr;
     bool mPlacementStarted = false;
