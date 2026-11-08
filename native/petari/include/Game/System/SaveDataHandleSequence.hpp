@@ -73,7 +73,8 @@ public:
     SaveErrorSequence* mSaveErrorSequence;
     SysInfoWindow* mSysInfoWindowConfirm;
     SysInfoWindow* mSysInfoWindowSave;
-    s32 mResultState;
+    // The last sequence ended done: saved, loaded, nothing to load, or the player went on without saving.
+    bool mSucceeded;
     bool mIsConfirmRemind;
     bool mIsSaveAndQuitMsg;
     bool mIsCorrupted;

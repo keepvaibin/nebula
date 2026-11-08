@@ -239,7 +239,7 @@ namespace GameSequenceFunction {
     }
 
     bool isSuccessSaveDataHandleSequence() {
-        return ::getSaveDataHandleSequence()->mResultState == 2;
+        return ::getSaveDataHandleSequence()->mSucceeded;
     }
 
     void restoreUserFile(UserFile* pUserFile, int userFileIndex) {
