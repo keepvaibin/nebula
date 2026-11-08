@@ -11,7 +11,7 @@
 
 namespace {
     NebulaArena* getHoldingArena() {
-        NebulaArena* const pCurrent = NebulaArena::getCurrentHeap();
+        NebulaArena* const pCurrent = NebulaArena::current();
         if (Arenas::scene() == nullptr || pCurrent != Arenas::scene()) {
             return pCurrent;
         }

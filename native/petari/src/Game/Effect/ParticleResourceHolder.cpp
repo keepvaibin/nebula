@@ -1,7 +1,7 @@
 #include "Game/Effect/ParticleResourceHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/Table.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/Particle/ParticleResources.hpp"
@@ -10,7 +10,7 @@
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
     AssetFolder* pArchive = MR::getArchive(pArchiveName);
-    mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
+    mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), NebulaArena::current());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
     countAutoEffectNum();

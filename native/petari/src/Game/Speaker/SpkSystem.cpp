@@ -4,7 +4,7 @@
 
 SpkSystem::SpkSystem(NebulaArena* pHeap) : SoundGlobal(true), mData() {
     if (pHeap == nullptr) {
-        pHeap = NebulaArena::getCurrentHeap();
+        pHeap = NebulaArena::current();
     }
 
     mHeap = pHeap;

@@ -205,7 +205,7 @@ namespace {
             }
         }
         const u32 bytes = overrideRoom * sizeof(Override) + textRoom * sizeof(char16_t) + length + longest + 1;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 8, NebulaArena::getRootHeap()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 8, NebulaArena::root()));
         sOverrides = reinterpret_cast< Override* >(pBlock);
         sText = reinterpret_cast< char16_t* >(pBlock + overrideRoom * sizeof(Override));
         sFile = reinterpret_cast< u8* >(sText + textRoom);
@@ -426,7 +426,7 @@ namespace NebulaText {
             // Both pages, the page tag between them and the terminator; then a break after every unit.
             sTalkRoom = (measure("LumaGreeting") + 3 + measure("LumaBoard") + 1) * 2;
             const u32 bytes = sTalkRoom * (3 * sizeof(s32) + 2 * sizeof(char16_t));
-            u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 4, NebulaArena::getRootHeap()));
+            u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 4, NebulaArena::root()));
             sTalkBreaks = reinterpret_cast< s32* >(pBlock);
             sTalkChosen = sTalkBreaks + sTalkRoom;
             sTalkTrial = sTalkChosen + sTalkRoom;

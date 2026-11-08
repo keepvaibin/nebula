@@ -1,4 +1,5 @@
 #include "Game/Boss/OtaKing.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Boss/OtaKingLongFoot.hpp"
 #include "Game/Boss/OtaKingMagma.hpp"
@@ -133,7 +134,7 @@ void OtaKing::init(const TableIter& rIter) {
     initEffectKeeper(0, "OtaKing");
     MR::setClippingTypeSphere(this, 3000.0f);
     initSound(8, false);
-    mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, MR::getCurrentHeap());
+    mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, NebulaArena::current());
     mAnimCamera = MR::createActorCameraInfo(rIter);
     MR::initAnimCamera(this, mAnimCamera, "Appear");
     MR::initAnimCamera(this, mAnimCamera, "Down");

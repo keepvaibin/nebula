@@ -12,7 +12,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/ModelData.hpp"
@@ -324,7 +324,7 @@ void CollisionShadow::sendZsortedVtx(TypedDraw& rDraw, bool offset) const {
 
 void CollisionShadow::initCaptureTex() {
     {
-        MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
+        NebulaArena::CurrentScope restorer(Arenas::scene());
         mCaptureTex = JUTTexture::createTarget(0.25f, 0.35f);
         MR::setMarioShadowTex(mCaptureTex);
     }

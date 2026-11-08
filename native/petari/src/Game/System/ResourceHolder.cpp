@@ -1,7 +1,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Sound/SoundAnimator.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Material.hpp"
@@ -24,7 +24,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
       mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
-    mHeap = MR::getCurrentHeap();
+    mHeap = NebulaArena::current();
     initializeArc(*mArchive);
 
     if (mModelResTable->mCount != 0 && isExistMaterialAnm()) {
@@ -68,7 +68,7 @@ void ResourceHolder::bindMaterialAnimations(ModelData* pModelData) {
 }
 
 void ResourceHolder::newBckCtrl() {
-    MR::CurrentHeapRestorer heap(mHeap);
+    NebulaArena::CurrentScope heap(mHeap);
     // Its table has the archive's name.
     mBckCtrl = new BckCtrl(this, mArchive->getName());
 }

@@ -115,7 +115,7 @@ namespace GameAssets {
                 Mapped& rMapped = sMapped[sMappedCount++];
                 rMapped.mData = pData;
                 rMapped.mSize = size;
-                rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::getCurrentHeap();
+                rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::current();
             }
             return pData;
         }

@@ -18,7 +18,6 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -114,7 +113,7 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 
 void GameSystemSceneController::initializeScene() {
     NebulaLoadTrace::Scope loadingTrace("initializeScene");
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
+    NebulaArena::CurrentScope restorer(NebulaArena::current());
     mSceneInitializeState = SceneInitializeState_Init;
     mSceneInitializeHeld = false;
 
@@ -123,7 +122,7 @@ void GameSystemSceneController::initializeScene() {
     }
 
     Arenas::createScene();
-    MR::becomeCurrentHeap(Arenas::scene());
+    Arenas::scene()->makeCurrent();
     updateSceneControlInfo();
     MR::setRandomSeedFromStageName();
 
@@ -153,8 +152,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
     if (!mSceneInitializeHeld) {
         return false;
     }
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
-    MR::becomeCurrentHeap(Arenas::scene());
+    NebulaArena::CurrentScope restorer(Arenas::scene());
     bool complete = false;
     NebulaLoadTrace::measure("initAfterScenarioChosen", [&] { complete = mScene->initAfterScenarioChosen(); });
     if (!complete) return false;
@@ -165,7 +163,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
 }
 
 void GameSystemSceneController::destroyScene() {
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
+    NebulaArena::CurrentScope restorer(NebulaArena::current());
     bool stopSound = isStopSound();
 
     delete mScene;
@@ -178,7 +176,7 @@ void GameSystemSceneController::destroyScene() {
     }
 
     GameSystemFunction::resetAllControllerRumble();
-    MR::removeResourceHolders(MR::getSceneHeap());
+    MR::removeResourceHolders(Arenas::scene());
 
     if (tryDestroyFileCacheHeap(false)) {
         Arenas::resetGame();

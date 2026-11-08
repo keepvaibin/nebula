@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 class AudSoundObject;
 class Joint;
@@ -24,7 +24,7 @@ public:
 
 // Level sounds at an actor's joints, one box per joint. Each box is allocated alone: its sound object holds a
 // pointer to the box's position.
-class AudSeKeeper : public JKRDisposer {
+class AudSeKeeper : public ArenaOwned {
 public:
     AudSeKeeper(LiveActor* pActor, int boxNumHint);
 

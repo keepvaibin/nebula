@@ -1,5 +1,6 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/NormalMapBase.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -108,7 +109,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (MR::getSceneHeap(), 0) u16[::cGradTexWidth * ::cGradTexHeight];
+    mImagePtr = new (Arenas::scene(), 0) u16[::cGradTexWidth * ::cGradTexHeight];
     createGradTexture();
 }
 

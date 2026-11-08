@@ -17,8 +17,8 @@ namespace {
 
 namespace Arenas {
     void create() {
-        sPermanent = NebulaArena::create(NebulaArena::getRootHeap());
-        sGame = NebulaArena::create(NebulaArena::getRootHeap());
+        sPermanent = NebulaArena::create(NebulaArena::root());
+        sGame = NebulaArena::create(NebulaArena::root());
     }
 
     NebulaArena* permanent() {
@@ -53,6 +53,6 @@ namespace Arenas {
         destroyArena(&sScene);
         destroyArena(&sSceneFiles);
         destroyArena(&sGame);
-        sGame = NebulaArena::create(NebulaArena::getRootHeap());
+        sGame = NebulaArena::create(NebulaArena::root());
     }
 }  // namespace Arenas
