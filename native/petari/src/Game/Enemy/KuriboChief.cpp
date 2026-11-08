@@ -39,11 +39,7 @@ namespace {
     static const f32 sFrontVecBlendRate = 0.5f;
     static const f32 sTurnLimitDegree = 5.0f;
     static const s32 sAttackSuccessTime = 60;
-    // sStarPieceAttackScaleAccel
     static const s32 sBlowDownLandTime = 5;
-    // sPunchHorizontalAccel
-    // sPunchUpperAccel
-    // sPunchSceneStopTime
     static const s32 sBoundSoundStep = 27;
     static const s32 sSwoonSoundWait = 56;
     static const s32 sSpinSoundStartStep = 10;

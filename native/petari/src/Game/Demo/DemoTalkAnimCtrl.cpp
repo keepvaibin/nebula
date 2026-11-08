@@ -15,10 +15,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 
-namespace {
-    // sBckCtrlData
-};  // namespace
-
 DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char* a4)
     : NerveExecutor(a3), mActor(pActor), mExecutorName(a3), mStartPartName(a4), mPartName(nullptr), mAnimName(""), mCameraName(""), mCameraInfo(nullptr), mAnimFrame(0),
       mIsActive(true), mIsScene(false), mIsTalkPart(false), mInterpole(0), mCameraStartStep(0), mCameraEndStep(0), mHavePlayerBck(false), mHaveCamera(false), mHaveBck(false), mHaveBtk(false), mHaveBpk(false),

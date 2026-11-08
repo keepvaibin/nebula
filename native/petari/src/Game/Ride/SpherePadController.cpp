@@ -25,7 +25,7 @@ f32 SpherePadController::calcJumpPower() const {
 void SpherePadController::update(const Vec3f&) {
 }
 
-void SpherePadController::clacXY(f32* pX, f32* pY) {
+void SpherePadController::calcXY(f32* pX, f32* pY) {
     *pX = MR::getMoveStickX(PLAYER_1);
     *pY = MR::getMoveStickY(PLAYER_1);
 }
@@ -33,7 +33,7 @@ void SpherePadController::clacXY(f32* pX, f32* pY) {
 f32 SpherePadController::calcDirSphereMove(Vec3f* pMoveDir, const Vec3f& rBaseVec, u32 isFrontVec) {
     f32 x = 0.0f;
     f32 y = 0.0f;
-    clacXY(&x, &y);
+    calcXY(&x, &y);
 
     f32 mag = x * x + y * y;
     mag = FloatUtil::sqrt(mag);

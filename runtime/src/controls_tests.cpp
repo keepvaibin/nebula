@@ -1101,10 +1101,10 @@ void test_rumble_gate() {
     expect(!rb::motor_should_run(clock_back), "a publication from the future is not trusted");
 }
 
-// SphereAccelSensorController::clacXY for the Wii Remote: X from (a.x, |a.y|),
+// SphereAccelSensorController::calcXY for the Wii Remote: X from (a.x, |a.y|),
 // Y the signed angle of (-a.y, a.z) from (cos 10, sin 10); 5-degree dead zone,
 // full at 25 degrees.
-std::array<float, 2> star_ball_clac_xy(const tilt::Vec3& a) {
+std::array<float, 2> star_ball_calc_xy(const tilt::Vec3& a) {
     constexpr float kDeg = 3.14159265f / 180.0f;
     const float dead = 5.0f * kDeg, full = 25.0f * kDeg, lean = 10.0f * kDeg;
     float x = 0.0f, y = 0.0f;
@@ -1137,13 +1137,13 @@ float ray_turn(const tilt::Vec3& a) {
 void test_tilt() {
     using namespace tilt;
     const auto close_to = [](float a, float b, float eps) { return std::fabs(a - b) <= eps; };
-    // Star Ball: the controller's neutral hold is clacXY's zero.
-    const auto neutral = star_ball_clac_xy(remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f}));
+    // Star Ball: the controller's neutral hold is calcXY's zero.
+    const auto neutral = star_ball_calc_xy(remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f}));
     expect(close_to(neutral[0], 0.0f, 1e-4f) && close_to(neutral[1], 0.0f, 1e-4f), "star ball: the neutral hold rolls nowhere");
     // Tilt right / forward 15 degrees: half of the range, positive.
-    const auto right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(15.0f, 0.0f)));
-    const auto forward = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(0.0f, 15.0f)));
-    const auto left_back = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(-15.0f, -15.0f)));
+    const auto right = star_ball_calc_xy(remote_gravity(Section::StarBall, up_from_angles(15.0f, 0.0f)));
+    const auto forward = star_ball_calc_xy(remote_gravity(Section::StarBall, up_from_angles(0.0f, 15.0f)));
+    const auto left_back = star_ball_calc_xy(remote_gravity(Section::StarBall, up_from_angles(-15.0f, -15.0f)));
     expect(close_to(right[0], 0.5f, 0.02f) && close_to(right[1], 0.0f, 0.02f), "star ball: 15 degrees right is X +0.5");
     expect(close_to(forward[1], 0.5f, 0.02f) && close_to(forward[0], 0.0f, 0.02f), "star ball: 15 degrees forward is Y +0.5");
     expect(left_back[0] < -0.4f && left_back[1] < -0.4f, "star ball: left and back are negative");
@@ -1153,13 +1153,13 @@ void test_tilt() {
     // A neutral captured in the player's own hold (30 degrees toward the
     // face) is zero; 15 degrees more forward is +0.5.
     const Vec3 hold = up_from_angles(0.0f, -30.0f);
-    const auto from_hold = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(hold, hold)));
-    const auto more = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(up_from_angles(0.0f, -15.0f), hold)));
+    const auto from_hold = star_ball_calc_xy(remote_gravity(Section::StarBall, relative_up(hold, hold)));
+    const auto more = star_ball_calc_xy(remote_gravity(Section::StarBall, relative_up(up_from_angles(0.0f, -15.0f), hold)));
     expect(close_to(from_hold[0], 0.0f, 1e-3f) && close_to(from_hold[1], 0.0f, 1e-3f), "star ball: the captured hold is neutral");
     expect(close_to(more[1], 0.5f, 0.03f), "star ball: tilt is measured from the captured hold");
     // Stick: full deflection is the full range.
-    const auto stick_right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 1.0f, 0.0f)));
-    const auto stick_down = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 0.0f, -1.0f)));
+    const auto stick_right = star_ball_calc_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 1.0f, 0.0f)));
+    const auto stick_down = star_ball_calc_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 0.0f, -1.0f)));
     expect(close_to(stick_right[0], 1.0f, 0.02f) && close_to(stick_right[1], 0.0f, 0.02f),
            "star ball: stick right is full right");
     expect(close_to(stick_down[1], -1.0f, 0.02f) && close_to(stick_down[0], 0.0f, 0.02f),
@@ -1180,22 +1180,22 @@ void test_tilt() {
     expect(!t.update(Section::None, nullptr, 0.0f, 0.0f, false).active, "no section: no tilt");
     const Vec3 start = up_from_angles(5.0f, -20.0f);
     auto out = t.update(Section::StarBall, &start, 0.0f, 0.0f, false);
-    auto xy = star_ball_clac_xy(out.game);
+    auto xy = star_ball_calc_xy(out.game);
     expect(out.active && !out.from_stick && close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f),
            "section start captures the hold as neutral");
     const Vec3 tilted = up_from_angles(5.0f, -5.0f);
-    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, false).game);
+    xy = star_ball_calc_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, false).game);
     expect(xy[1] > 0.4f, "tilting forward from the hold rolls forward");
-    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, true).game);
+    xy = star_ball_calc_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, true).game);
     expect(close_to(xy[1], 0.0f, 1e-3f), "recenter takes the current hold as neutral");
     out = t.update(Section::StarBall, &tilted, -1.0f, 0.0f, false);
-    xy = star_ball_clac_xy(out.game);
+    xy = star_ball_calc_xy(out.game);
     expect(!out.from_stick && close_to(xy[0], 0.0f, 1e-3f), "a Pro Controller's stick does not tilt");
     out = t.update(Section::StarBall, nullptr, -1.0f, 0.0f, false);
-    xy = star_ball_clac_xy(out.game);
+    xy = star_ball_calc_xy(out.game);
     expect(out.from_stick && xy[0] < -0.9f, "without motion (Xbox, keyboard) the stick steers");
     out = t.update(Section::StarBall, nullptr, 0.1f, 0.05f, false);
-    xy = star_ball_clac_xy(out.game);
+    xy = star_ball_calc_xy(out.game);
     expect(close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f), "a stick at rest is level");
     expect(!t.update(Section::None, &tilted, 0.0f, 0.0f, false).active && !t.neutral_valid, "leaving resets the neutral");
 }

@@ -13,12 +13,9 @@ namespace {
     const f32 sBallToCenterFreq = 0.98f;
     const f32 sBallToCenterEndFreq = 0.7f;
     const s32 sForceSetCenterTime = 180;
-    // sLaunchVelocity
     const s32 sLaunchFixTime = 10;
     const s32 sSetUpTime = 45;
     const f32 sLaunchValidHeight = 160.0f;
-    // sVelocityScale
-    // sTestBindSphereRadius
 
     static Vec3f sTestBindSpherePos(0, 0, 0);
     static Vec3f sTestBindSphereVelocity(0, 0, 0);

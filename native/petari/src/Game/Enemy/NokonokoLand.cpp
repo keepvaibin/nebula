@@ -31,7 +31,6 @@ namespace {
     const f32 sSensorRadiusShell = 50.0f;
     const f32 sShadowRadius = 60.0f;
     const f32 sWalkSpeed = 1.6f;
-    // sTurnTime
     const f32 sPoseLerpRate = 0.3f;
     const s32 sAppearTime = 60;
     const f32 sAppearValidDistance = 350.0f;

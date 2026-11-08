@@ -14,13 +14,11 @@ namespace {
     const f32 hGroundDamp = 0.8f;
     const f32 hAirDampH = 0.96f;
     const f32 hAirDampV = 0.93f;
-    // hOnGroundTime
     const f32 hPushedAcc = 2.0f;
     const f32 hSearchDistance = 1000.0f;
     const f32 hFlyDistance = 2000.0f;
     const f32 hFlyPursueVel = 0.2f;
     const f32 hFlyPursueLastSubVel = 0.01f;
-    // hFlyRateV
     const f32 hFlyHeight = 100.0f;
     const s32 hFlyStartTime = 20;
     const s32 hFlyPursueTime = 200;
@@ -42,13 +40,7 @@ namespace {
     const f32 hHitToPlayerJumpVelV = 10.0f;
     const f32 hHitToPlayerJumpVelH = -10.0f;
     const f32 hHitScaleYSpeed = 0.1f;
-    // hStampFallVel
     const s32 hStampDeathTime = 20;
-    // hHitBlowGravity
-    // hTimeHitPunch
-    // hPunchHitVelV
-    // hPunchHitVelH
-    // hCoinGenPunchTime
     const s32 hBlowStopSceneTime = 3;
     const f32 hSearchTurnLimitDegree = 5.7f;
     const f32 hFlyTurnLimitDegree = 5.7f;
@@ -56,7 +48,6 @@ namespace {
     const f32 hOverturnRotateRate = 0.15f;
     const f32 hRecoverRotateRate = 0.2f;
     const f32 hBlowRotateAngle = -1.0f;
-    // hStampDeathOffset
 };  // namespace
 
 namespace NrvKoteBug {

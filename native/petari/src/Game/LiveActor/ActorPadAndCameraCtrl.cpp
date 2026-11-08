@@ -9,8 +9,6 @@
 
 namespace {
     const char* sFileName = "PadAndCameraCtrl";
-    // sDefaultDistanceNear
-    // sDefaultDistanceFar
     const f32 sDefaultDistanceInvalid = 3000.0f;
 };  // namespace
 

@@ -7,7 +7,6 @@
 #include <algorithm>
 
 namespace {
-    // hPrintFixReactionLength
     const f32 hOverlapAddValue = 1.2f;
 };  // namespace
 

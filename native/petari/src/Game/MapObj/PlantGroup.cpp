@@ -9,9 +9,6 @@ namespace {
     const s32 hIsShakableStep = 20;
     const f32 sSize = 160.0f;
     const f32 sCollisionRadius = 50.0f;
-    // sWindRadius
-    // sMaxAnimRate
-    // sMinAnimRate
     const f32 sCheckLineLength = 1000.0f;
     const f32 sCoinVel = 30.0f;
     const f32 sPointerTouchRadius = 100.0f;
