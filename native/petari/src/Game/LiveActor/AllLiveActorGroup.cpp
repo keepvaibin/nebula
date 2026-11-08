@@ -9,21 +9,10 @@ void AllLiveActorGroup::startInitActorSystemInfo() {
     mActorNum = getObjNum();
 }
 
+// The actors registered since the last call.
 void AllLiveActorGroup::initActorSystemInfo(const TableIter& rIter) {
-    if (getObjNum() <= 0) {
-        return;
-    }
-
-    s32 actorNum = mActorNum;
-
-    if (actorNum == getObjNum()) {
-        return;
-    }
-
-    for (; actorNum < getObjNum(); actorNum++) {
-        LiveActor* pActor = getActor(mActorNum);
-        MR::getClippingDirector()->initActorSystemInfo(pActor, rIter);
-        mActorNum++;
+    for (; mActorNum < getObjNum(); mActorNum++) {
+        MR::getClippingDirector()->initActorSystemInfo(getActor(mActorNum), rIter);
     }
 }
 

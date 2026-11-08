@@ -7,15 +7,13 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-SensorGroup::SensorGroup(int maxSensors, const char* pName) {
-    mMaxSensors = maxSensors;
-    mSensorCount = 0;
-    mSensors = nullptr;
-    mSensors = new HitSensor*[maxSensors];
-
-    for (s32 i = 0; i < mMaxSensors; i++) {
-        mSensors[i] = nullptr;
+namespace {
+    bool isSensorActive(const HitSensor* pSensor) {
+        return pSensor->isValid() && !MR::isClipped(pSensor->mHost);
     }
+};  // namespace
+
+SensorGroup::SensorGroup(int maxSensors) : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()) {
 }
 
 void SensorGroup::add(HitSensor* pSensor) {
@@ -29,12 +27,12 @@ void SensorGroup::add(HitSensor* pSensor) {
     pSensor->mSensorGroup = this;
 }
 
+// Unordered: the last sensor takes the removed one's place.
 void SensorGroup::remove(HitSensor* pSensor) {
     for (s32 i = 0; i < mSensorCount; i++) {
         if (mSensors[i] == pSensor) {
-            u32 count = mSensorCount - 1;
-            mSensors[i] = mSensors[count];
             mSensorCount--;
+            mSensors[i] = mSensors[mSensorCount];
             break;
         }
     }
@@ -61,12 +59,10 @@ void SensorHitChecker::initGroup(HitSensor* pSensor) {
                pSensor->isType(ATYPE_MAP_OBJ_SIMPLE) || pSensor->isType(ATYPE_PLAYER_AUTO_JUMP) || MR::isSensorRush(pSensor) ||
                MR::isSensorAutoRush(pSensor)) {
         pSensor->mSensorGroup = mSimpleGroup;
+    } else if (MR::isSensorMapObj(pSensor)) {
+        pSensor->mSensorGroup = mMapObjGroup;
     } else {
-        if (MR::isSensorMapObj(pSensor)) {
-            pSensor->mSensorGroup = mMapObjGroup;
-        } else {
-            pSensor->mSensorGroup = mCharacterGroup;
-        }
+        pSensor->mSensorGroup = mCharacterGroup;
     }
 }
 
@@ -94,63 +90,59 @@ void SensorHitChecker::movement() {
 }
 
 void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2) const {
-    HitSensor* curGroup1Sensor;
-    HitSensor* curGroup2Sensor;
-    s32 group1SensorCount = pGroup1->mSensorCount;
-    for (s32 i = 0; i < group1SensorCount; i++) {
-        curGroup1Sensor = pGroup1->mSensors[i];
-        bool group1Sensorvalidated = curGroup1Sensor->mValidByHost && curGroup1Sensor->mValidBySystem;
+    const s32 group1Count = pGroup1->mSensorCount;
+    for (s32 i = 0; i < group1Count; i++) {
+        HitSensor* const pSensor1 = pGroup1->mSensors[i];
+        if (!::isSensorActive(pSensor1)) {
+            continue;
+        }
 
-        if (group1Sensorvalidated && !MR::isClipped(curGroup1Sensor->mHost)) {
-            s32 group2SensorCount = pGroup2->mSensorCount;
-            for (s32 x = 0; x < group2SensorCount; x++) {
-                curGroup2Sensor = pGroup2->mSensors[x];
-                bool group2Validated = curGroup2Sensor->mValidByHost && curGroup2Sensor->mValidBySystem;
-
-                if (group2Validated && !MR::isClipped(curGroup2Sensor->mHost)) {
-                    checkAttack(curGroup1Sensor, curGroup2Sensor);
-                }
+        const s32 group2Count = pGroup2->mSensorCount;
+        for (s32 j = 0; j < group2Count; j++) {
+            HitSensor* const pSensor2 = pGroup2->mSensors[j];
+            if (::isSensorActive(pSensor2)) {
+                checkAttack(pSensor1, pSensor2);
             }
         }
     }
 }
 
+// Pairs each sensor with itself too; checkAttack skips sensors of one host.
 void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
-    HitSensor* pFirstSensor;
-    HitSensor* pSecondSensor;
-    s32 sensorGroupCount = pSensorGroup->mSensorCount;
-    for (s32 i = 0; i < sensorGroupCount; i++) {
-        pFirstSensor = pSensorGroup->mSensors[i];
-        bool isFirstSensorValid = pFirstSensor->mValidByHost && pFirstSensor->mValidBySystem;
+    const s32 count = pSensorGroup->mSensorCount;
+    for (s32 i = 0; i < count; i++) {
+        HitSensor* const pSensor1 = pSensorGroup->mSensors[i];
+        if (!::isSensorActive(pSensor1)) {
+            continue;
+        }
 
-        if (isFirstSensorValid && !MR::isClipped(pFirstSensor->mHost)) {
-            for (s32 x = i; x < sensorGroupCount; x++) {
-                pSecondSensor = pSensorGroup->mSensors[x];
-                bool isSecondSensorValid = pSecondSensor->mValidByHost && pSecondSensor->mValidBySystem;
-
-                if (isSecondSensorValid && !MR::isClipped(pSecondSensor->mHost)) {
-                    checkAttack(pFirstSensor, pSecondSensor);
-                }
+        for (s32 j = i; j < count; j++) {
+            HitSensor* const pSensor2 = pSensorGroup->mSensors[j];
+            if (::isSensorActive(pSensor2)) {
+                checkAttack(pSensor1, pSensor2);
             }
         }
     }
 }
 
 void SensorHitChecker::checkAttack(HitSensor* pSensor1, HitSensor* pSensor2) const {
-    if (pSensor1->mHost != pSensor2->mHost) {
-        f32 xPos = pSensor1->mPosition.x - pSensor2->mPosition.x;
-        f32 yPos = pSensor1->mPosition.y - pSensor2->mPosition.y;
-        f32 zPos = pSensor1->mPosition.z - pSensor2->mPosition.z;
-        f32 totalSize = pSensor1->getRadius() + pSensor2->getRadius();
+    if (pSensor1->mHost == pSensor2->mHost) {
+        return;
+    }
 
-        if (!((((xPos * xPos) + (yPos * yPos)) + (zPos * zPos)) >= (totalSize * totalSize))) {
-            if (!pSensor2->isType(ATYPE_EYE)) {
-                pSensor1->addHitSensor(pSensor2);
-            }
+    f32 xPos = pSensor1->mPosition.x - pSensor2->mPosition.x;
+    f32 yPos = pSensor1->mPosition.y - pSensor2->mPosition.y;
+    f32 zPos = pSensor1->mPosition.z - pSensor2->mPosition.z;
+    f32 totalSize = pSensor1->getRadius() + pSensor2->getRadius();
 
-            if (!pSensor1->isType(ATYPE_EYE)) {
-                pSensor2->addHitSensor(pSensor1);
-            }
+    // Written as not-outside so a NaN distance counts as a hit.
+    if (!((((xPos * xPos) + (yPos * yPos)) + (zPos * zPos)) >= (totalSize * totalSize))) {
+        if (!pSensor2->isType(ATYPE_EYE)) {
+            pSensor1->addHitSensor(pSensor2);
+        }
+
+        if (!pSensor1->isType(ATYPE_EYE)) {
+            pSensor2->addHitSensor(pSensor1);
         }
     }
 }
@@ -164,18 +156,8 @@ namespace MR {
 SensorHitChecker::~SensorHitChecker() {
 }
 
-SensorHitChecker::SensorHitChecker(const char* pName) : NameObj(pName) {
-    mPlayerGroup = nullptr;
-    mRideGroup = nullptr;
-    mEyeGroup = nullptr;
-    mSimpleGroup = nullptr;
-    mMapObjGroup = nullptr;
-    mCharacterGroup = nullptr;
-
-    mPlayerGroup = new SensorGroup(0x10, "Player");
-    mRideGroup = new SensorGroup(0x80, "Ride");
-    mEyeGroup = new SensorGroup(0x200, "Eye");
-    mSimpleGroup = new SensorGroup(0x800, "Simple");
-    mMapObjGroup = new SensorGroup(0x400, "MapObj");
-    mCharacterGroup = new SensorGroup(0x400, "Character");
+// The sizes are first capacities; the groups grow.
+SensorHitChecker::SensorHitChecker(const char* pName)
+    : NameObj(pName), mPlayerGroup(new SensorGroup(0x10)), mRideGroup(new SensorGroup(0x80)), mEyeGroup(new SensorGroup(0x200)),
+      mSimpleGroup(new SensorGroup(0x800)), mMapObjGroup(new SensorGroup(0x400)), mCharacterGroup(new SensorGroup(0x400)) {
 }

@@ -1,52 +1,54 @@
 #include "Game/LiveActor/ActorStateKeeper.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/System/NebulaArena.hpp"
 
-ActorStateKeeper::ActorStateKeeper(int capacity) : mStatesCapacity(capacity), mLength(), mStates(), mCurrentState() {
-    mStates = new State[capacity];
+namespace {
+    const s32 sFirstCapacity = 8;
+};  // namespace
 
-    for (s32 i = 0; i < mStatesCapacity; i++) {
-        State& e = mStates[i];
-        e.mInterface = nullptr;
-        e.mNerve = nullptr;
-        e.mName = nullptr;
-    }
+ActorStateKeeper::ActorStateKeeper() : mCapacity(0), mLength(0), mStates(nullptr), mCurrentState(nullptr) {
 }
 
-void ActorStateKeeper::addState(ActorStateBaseInterface* pInterface, const Nerve* pNerve, const char* pName) {
-    State& e = mStates[mLength];
-    e.mInterface = pInterface;
-    e.mNerve = pNerve;
-    e.mName = pName;
-    mLength += 1;
+void ActorStateKeeper::addState(ActorStateBaseInterface* pInterface, const Nerve* pNerve) {
+    if (mLength == mCapacity) {
+        const s32 capacity = mCapacity != 0 ? mCapacity * 2 : ::sFirstCapacity;
+        State* const pStates = new (NebulaArena::findFromRoot(this), 0) State[capacity];
+        for (s32 i = 0; i < mLength; i++) {
+            pStates[i] = mStates[i];
+        }
+        delete[] mStates;
+        mStates = pStates;
+        mCapacity = capacity;
+    }
+
+    State& rState = mStates[mLength];
+    rState.mInterface = pInterface;
+    rState.mNerve = pNerve;
+    mLength++;
 }
 
 bool ActorStateKeeper::updateCurrentState() {
-    return (!mCurrentState) ? false : (mCurrentState->mInterface)->update();
+    return mCurrentState != nullptr && mCurrentState->mInterface->update();
 }
 
 void ActorStateKeeper::startState(const Nerve* pNerve) {
     mCurrentState = findStateInfo(pNerve);
 
-    if (mCurrentState) {
-        ActorStateBaseInterface* interface = mCurrentState->mInterface;
-        interface->appear();
+    if (mCurrentState != nullptr) {
+        mCurrentState->mInterface->appear();
     }
 }
 
 void ActorStateKeeper::endState(const Nerve* pNerve) {
     mCurrentState = findStateInfo(pNerve);
 
-    if (mCurrentState) {
-        ActorStateBaseInterface* interface = mCurrentState->mInterface;
-
-        if (!interface->mIsDead) {
-            interface->kill();
-        }
+    if (mCurrentState != nullptr && !mCurrentState->mInterface->mIsDead) {
+        mCurrentState->mInterface->kill();
     }
 }
 
 ActorStateKeeper::State* ActorStateKeeper::findStateInfo(const Nerve* pNerve) {
-    for (int i = 0; i < mLength; i++) {
+    for (s32 i = 0; i < mLength; i++) {
         if (mStates[i].mNerve == pNerve) {
             return &mStates[i];
         }

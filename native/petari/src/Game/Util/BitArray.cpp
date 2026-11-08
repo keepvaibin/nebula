@@ -1,29 +1,20 @@
 #include "Game/Util/BitArray.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 
 namespace MR {
-    BitArray::BitArray(int bitNum) : mArray(nullptr), mArraySize(bitNum) {
-        int byteNum = (bitNum + 7 & ~7) / 8;
-
-        mArray = new u8[byteNum];
-
-        MR::zeroMemory(mArray, byteNum);
+    BitArray::BitArray(int bitNum) : mArray(new u8[(bitNum + 7) / 8]()), mArraySize(bitNum) {
     }
 
     bool BitArray::isOn(int bitIdx) const {
-        u8 byte = mArray[bitIdx / 8];
-
-        return (byte & (1 << (bitIdx & 0x7))) != 0;
+        return (mArray[bitIdx / 8] & (1 << (bitIdx & 7))) != 0;
     }
 
     void BitArray::set(int bitIdx, bool isOn) {
-        int byteIdx = bitIdx / 8;
-        u8* pArray = mArray;
+        const u8 mask = static_cast< u8 >(1 << (bitIdx & 7));
 
         if (isOn) {
-            pArray[byteIdx] |= (1 << (bitIdx & 0x7));
+            mArray[bitIdx / 8] |= mask;
         } else {
-            pArray[byteIdx] &= ~(1 << (bitIdx & 0x7));
+            mArray[bitIdx / 8] &= static_cast< u8 >(~mask);
         }
     }
 };  // namespace MR

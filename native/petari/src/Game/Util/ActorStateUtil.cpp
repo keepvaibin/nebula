@@ -7,13 +7,13 @@
 #include "Game/Util/NerveUtil.hpp"
 
 namespace MR {
-    void initActorStateKeeper(NerveExecutor* pExecutor, s32 capacity) {
-        pExecutor->mSpine->initStateKeeper(capacity);
+    void initActorStateKeeper(NerveExecutor* pExecutor) {
+        pExecutor->mSpine->initStateKeeper();
     }
 
-    void initActorState(NerveExecutor* pExecutor, ActorStateBaseInterface* pActorState, const Nerve* pNerve, const char* pStateName) {
+    void initActorState(NerveExecutor* pExecutor, ActorStateBaseInterface* pActorState, const Nerve* pNerve) {
         pActorState->init();
-        pExecutor->mSpine->mStateKeeper->addState(pActorState, pNerve, pStateName);
+        pExecutor->mSpine->mStateKeeper->addState(pActorState, pNerve);
     }
 
     bool updateActorState(LiveActor* pActor, ActorStateBaseInterface* pActorState) {

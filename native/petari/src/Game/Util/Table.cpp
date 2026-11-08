@@ -3,9 +3,7 @@
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
 
-Table::Table() {
-    mData = nullptr;
-    mName = "Undifined";
+Table::Table() : mData(nullptr), mName("Undifined") {
 }
 
 Table::~Table() {
