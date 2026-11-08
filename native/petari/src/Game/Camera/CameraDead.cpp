@@ -27,20 +27,18 @@ void CameraDead::reset() {
 
 CameraTargetObj* CameraDead::calc() {
     if (mDeadFrame <= mDeadTime) {
+        // The fourth power of the dead time passed: the watch point and the zoom ease in.
+        f32 t = static_cast< f32 >(mDeadFrame) / mDeadTime;
+        t *= t;
+        t *= t;
+
         Vec3f watchPoint;
         CameraLocalUtil::makeWatchPointImm(&watchPoint, this, CameraLocalUtil::getTarget(this));
 
         if (mCameraType != CameraType_FixedPos) {
-            f32 t = static_cast< f32 >(mDeadFrame) / mDeadTime;
-            t *= t;
-            t *= t;
-
             watchPoint = CameraLocalUtil::getWatchPos(this) + (watchPoint - CameraLocalUtil::getWatchPos(this)) * t;
         }
         CameraLocalUtil::setWatchPos(this, watchPoint);
-    }
-
-    if (mDeadFrame <= mDeadTime) {
 
         f32 angle = MR::atan2(CameraLocalUtil::getTarget(this)->getRadius() / mDist,
                               (CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition()).length());
@@ -51,11 +49,7 @@ CameraTargetObj* CameraDead::calc() {
 
         angle *= 180.0f / MR::pi();
 
-        if (mDeadTime != 0 && mDeadFrame <= mDeadTime) {
-            f32 t = static_cast< f32 >(mDeadFrame) / mDeadTime;
-            t *= t;
-            t *= t;
-
+        if (mDeadTime != 0) {
             mFovy += t * (angle - mFovy);
         } else {
             mFovy = angle;

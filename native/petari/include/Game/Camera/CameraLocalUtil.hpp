@@ -56,6 +56,8 @@ namespace CameraLocalUtil {
     void setUpperOffset(Camera*, f32);
     void setRoll(Camera*, f32);
     void recalcUpVec(Vec3f*, const Vec3f&);
+    // rVec normalized, or rDefault when rVec is near zero.
+    Vec3f getNormalizedOr(const Vec3f& rVec, const Vec3f& rDefault);
     void makeWatchOffset(Vec3f*, Camera*, CameraTargetObj*, f32);
     void makeWatchPoint(Vec3f*, Camera*, CameraTargetObj*, f32);
     void makeWatchOffsetImm(Vec3f*, Camera*, CameraTargetObj*);
@@ -68,6 +70,13 @@ namespace CameraLocalUtil {
     bool testCameraPadTriggerRoundRight();
     void slerpCamera(Quat4f*, const Quat4f&, const Quat4f&, f32, bool);
     bool makeTowerCameraMtx(Pos3f*, const Pos3f&, const Vec3f&, const Vec3f&, const Vec3f&);
+    // *pDst: the target's watch point moved onto its ground. After the first frame (*pIsFirstFrame, then cleared) its height along
+    // the target's up moves 5% a frame from *pLastWatchPoint's; *pLastWatchPoint keeps the result.
+    void makeGroundWatchPoint(Vec3f* pDst, Camera* pCamera, Vec3f* pLastWatchPoint, bool* pIsFirstFrame);
+    // Moves *pAngle by step toward target; false once it is there.
+    bool approachRoundAngle(f32* pAngle, f32 target, f32 step);
+    // The angle one round left or right of *pAngle on a grid of roundDiv steps a turn; past half the grid *pAngle is wrapped a turn.
+    f32 calcRoundTarget(f32* pAngle, bool isRight, f32 roundDiv);
     // pAxis is normalized (Y when zero). *pPos is rWatchPos plus dist along the watch point's offset from the axis through rWPoint,
     // pitched by angleX about the side of world up. False, and *pPos untouched, when the watch point is on the axis.
     bool calcTowerIdealPos(Vec3f* pPos, Vec3f* pAxis, const Vec3f& rWPoint, const Vec3f& rWatchPos, f32 angleX, f32 dist);

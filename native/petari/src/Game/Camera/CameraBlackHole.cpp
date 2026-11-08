@@ -4,7 +4,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
 
-
 CameraBlackHole::CameraBlackHole(const char* pName) : Camera(pName), mFovy(1.0f), mRoll(), mWPoint(0.0f, 0.0f, 0.0f), mBasePos(0.0f, 0.0f, 0.0f) {
 }
 
@@ -12,8 +11,7 @@ void CameraBlackHole::reset() {
     mFovy = CameraLocalUtil::getFovy(mCameraMan);
     mRoll = CameraLocalUtil::getRoll(mCameraMan);
     Vec3f camWatchDir = mBasePos - mWPoint;
-    CameraMan* camMan = mCameraMan;
-    Vec3f watchDir = CameraLocalUtil::getPos(camMan) - CameraLocalUtil::getWatchPos(camMan);
+    Vec3f watchDir = CameraLocalUtil::getPos(mCameraMan) - CameraLocalUtil::getWatchPos(mCameraMan);
     if (MR::isNearZero(camWatchDir) || MR::isNearZero(watchDir)) {
         CameraLocalUtil::setWatchPos(this, mWPoint);
         CameraLocalUtil::setPos(this, CameraLocalUtil::getPos(mCameraMan));

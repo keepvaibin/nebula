@@ -6,11 +6,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include <nebula_geometry.hpp>
 
-void dummy() {
-    // to emit Vec3f init
-    Vec3f a(0, 0, 0);
-}
-
 namespace NrvAnimStampController {
     NEW_NERVE(HostNrvAnim, AnimStampController, Anim);
     NEW_NERVE(HostNrvAnimEnd, AnimStampController, AnimEnd);

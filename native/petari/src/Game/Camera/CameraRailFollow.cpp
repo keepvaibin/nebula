@@ -8,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 CameraRailFollow::CameraRailFollow(const char* pName)
-    : Camera(pName), mRailRider(), mRailCoord(), mRailSpeed(), mTargetMargin(), mRailSpeedMax(30.0f), mRailAccel(0.35f) {
+    : Camera(pName), mRailRider(), mRailCoord(), mRailSpeed(), mTargetMargin(), mRailSpeedMax(30.0f), mRailAccel(0.35f), mMarginScale() {
 }
 
 void CameraRailFollow::reset() {
@@ -95,9 +95,8 @@ CameraTargetObj* CameraRailFollow::calc() {
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
-    Pos3f mtx = mZoneMatrix;
     Vec3f up(0.0f, 1.0f, 0.0f);
-    mtx.mult33(up);
+    mZoneMatrix.mult33(up);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 
     return CameraLocalUtil::getTarget(this);

@@ -3,19 +3,26 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
+namespace {
+    // A camera rail is a placed rail whose arg 0 (its camera rail id, *pArg) is set and not negative.
+    bool getCameraRail(TableIter* pIter, s32* pArg, s32 railId, s32 zoneId) {
+        const Table* info;
+        if (!MR::getCameraRailInfoFromRailDataIndex(pIter, &info, railId, zoneId)) {
+            return false;
+        }
+
+        return MR::getPlacementRailArg0NoInit(*pIter, pArg) && *pArg >= 0;
+    }
+};  // namespace
+
 CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails() {
     mRails = new ZoneRail[MR::getZoneNum()];
 
     for (s32 zoneId = 0; zoneId < MR::getZoneNum(); zoneId++) {
         for (s32 railId = 0; railId < MR::getPlacedRailNum(zoneId); railId++) {
             TableIter iter;
-            const Table* info;
-            if (!MR::getCameraRailInfoFromRailDataIndex(&iter, &info, railId, zoneId)) {
-                continue;
-            }
-
             s32 arg;
-            if (MR::getPlacementRailArg0NoInit(iter, &arg) && arg >= 0) {
+            if (::getCameraRail(&iter, &arg, railId, zoneId)) {
                 mRails[zoneId].mNumRails++;
             }
         }
@@ -28,13 +35,8 @@ CameraRailHolder::CameraRailHolder(const char* pName) : NameObj(pName), mRails()
         s32 railNum = 0;
         for (s32 railId = 0; railId < MR::getPlacedRailNum(zoneId); railId++) {
             TableIter iter;
-            const Table* info;
-            if (!MR::getCameraRailInfoFromRailDataIndex(&iter, &info, railId, zoneId)) {
-                continue;
-            }
-
             s32 arg;
-            if (MR::getPlacementRailArg0NoInit(iter, &arg) && arg >= 0) {
+            if (::getCameraRail(&iter, &arg, railId, zoneId)) {
                 mRails[zoneId].mRails[railNum].mRailId = arg;
                 s32 linkId;
                 iter.getValue("l_id", &linkId);

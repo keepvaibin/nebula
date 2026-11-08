@@ -12,13 +12,11 @@ void CameraSpiral::reset() {
     mTimer = 0;
 }
 
-
 CameraTargetObj* CameraSpiral::calc() {
     Vec3f watchPoint;
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
-    const s32 timer = mTimer;
-    f32 easeTime = timer < mStartTime ? 0.0f : timer - mStartTime;
+    f32 easeTime = mTimer < mStartTime ? 0.0f : mTimer - mStartTime;
 
     f32 rate = 0.0f;
     switch (mEaseType) {
@@ -48,14 +46,12 @@ CameraTargetObj* CameraSpiral::calc() {
 
     Pos3f mtx;
     mtx.identity();
-    const Vec3f& rSide = CameraLocalUtil::getTarget(this)->getSideVec();
-    Pos3f* const pMtx = &mtx;
-    pMtx->setXDir(rSide);
-    pMtx->setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
-    pMtx->setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
+    mtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
+    mtx.setYDir(CameraLocalUtil::getTarget(this)->getUpVec());
+    mtx.setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
 
-    pMtx->mult33(offset);
-    pMtx->mult33(spiralDir);
+    mtx.mult33(offset);
+    mtx.mult33(spiralDir);
 
     Vec3f pos;
     pos.add(watchPoint, offset);
@@ -72,7 +68,8 @@ CameraTargetObj* CameraSpiral::calc() {
     CameraLocalUtil::setUpVec(this, up);
     CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
 
-    if ((mTimer += 1) > mEndTime) {
+    mTimer++;
+    if (mTimer > mEndTime) {
         mTimer = mEndTime;
     }
 

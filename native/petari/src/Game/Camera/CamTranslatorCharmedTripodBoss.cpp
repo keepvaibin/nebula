@@ -1,19 +1,12 @@
 #include "Game/Camera/CamTranslatorCharmedTripodBoss.hpp"
+#include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 void CamTranslatorCharmedTripodBoss::setParam(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
 
-    Vec3f up = general->mUp;
-
-    if (MR::isNearZero(up)) {
-        up.set< f32 >(0.0f, 1.0f, 0.0f);
-    } else {
-        MR::normalize(&up);
-    }
-
-    mCamera->setParam(general->mNum1, up, general->mWPoint, Vec2f(general->mAxis.x, general->mAxis.y));
+    mCamera->setParam(general->mNum1, CameraLocalUtil::getNormalizedOr(general->mUp, Vec3f(0.0f, 1.0f, 0.0f)), general->mWPoint, Vec2f(general->mAxis.x, general->mAxis.y));
 }
 
 Camera* CamTranslatorCharmedTripodBoss::getCamera() const {

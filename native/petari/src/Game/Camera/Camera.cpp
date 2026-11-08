@@ -16,7 +16,6 @@ void Camera::setZoneMtx(s32 zoneID) {
     if (zoneID <= 0) {
         mZoneMatrix.identity();
     } else {
-        mZoneMatrix.identity();
         mZoneMatrix.set(*MR::getZonePlacementMtx(zoneID));
     }
 

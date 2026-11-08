@@ -14,18 +14,11 @@ public:
     }
     CameraTargetArg(const LiveActor*);
 
-    CameraTargetArg(CameraTargetMtx* pTargetMtx) {
-        mTargetObj = nullptr;
-        mTargetMtx = pTargetMtx;
-        mLiveActor = nullptr;
-        mMarioActor = nullptr;
+    CameraTargetArg(CameraTargetMtx* pTargetMtx) : mTargetObj(nullptr), mTargetMtx(pTargetMtx), mLiveActor(nullptr), mMarioActor(nullptr) {
     }
 
-    inline CameraTargetArg(CameraTargetObj* pTargetObj, CameraTargetMtx* pMtx, const LiveActor* pActor, MarioActor* pMario) {
-        mTargetObj = pTargetObj;
-        mTargetMtx = pMtx;
-        mLiveActor = pActor;
-        mMarioActor = pMario;
+    CameraTargetArg(CameraTargetObj* pTargetObj, CameraTargetMtx* pMtx, const LiveActor* pActor, MarioActor* pMario)
+        : mTargetObj(pTargetObj), mTargetMtx(pMtx), mLiveActor(pActor), mMarioActor(pMario) {
     }
 
     void setTarget() const;

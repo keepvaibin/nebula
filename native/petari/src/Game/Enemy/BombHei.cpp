@@ -329,10 +329,6 @@ void BombHei::exePursue() {
         mVelocity.set(mGravity * -::hPrePursueJumpVel);
     }
 
-    // NOTE: this is a dummy line to emit the structure, this value is not real
-    if (MR::calcDistanceToPlayer(this) < 0.0f) {
-    }
-
     if (isNerve(GET_NERVE(BombHei, HostTypeNrvPursueFast))) {
         MR::tryStartBck(this, "CountDown");
         MR::moveAndTurnToPlayer(this, &mFront, {::hPursueFastFarParam.mSpeedH, ::hPursueFastFarParam.mGravAccel, ::hPursueFastFarParam.mFriction, ::hPursueFastFarParam.mTurnRate});
