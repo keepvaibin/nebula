@@ -26,44 +26,99 @@
 
 #include <nebula_math.h>
 
-TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rArg2, MtxPtr pArg3)
-    : NameObj("会話制御"), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), mBalloonPos(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
-      mAlreadyDoneFlag(), mIsOnReadNodeAuto(true), mAlreadyDoneFlags(), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
-      mMtx(pArg3), mIsOnRootNodeAuto(), mTalkStateKind(), mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
-    mTagArg.mArgType = CustomTagArg::Type_Uninitialized;
-    mTagArg.mIntArg = 0;
+namespace {
+    // A branch node's condition (TalkNode::mIndex). The flow data numbers them in this order: the galaxy result comes
+    // before the time-keep demo and the read-message test.
+    enum BranchKind {
+        // The player chooses; mNextIdx is the select's id (sSelectBranchID).
+        BranchKind_Select,
+        BranchKind_Func,
+        BranchKind_NearPlayer,
+        BranchKind_SwitchA,
+        BranchKind_SwitchB,
+        BranchKind_PlayerNormal,
+        BranchKind_PlayerBee,
+        BranchKind_PlayerTeresa,
+        BranchKind_PowerStarAppeared,
+        BranchKind_AlreadyDone,
+        BranchKind_PlayerLuigi,
+        BranchKind_GalaxyResult,
+        BranchKind_TimeKeepDemo,
+        BranchKind_MessageRead,
+    };
+
+    // An event node's kind (TalkNode::mGroupID).
+    enum EventKind {
+        EventKind_Func,
+        EventKind_FuncStop,
+        EventKind_None,
+        EventKind_Skip,
+        EventKind_Anime,
+        EventKind_SwitchA,
+        EventKind_SwitchB,
+        EventKind_Kill,
+    };
+
+    // Indexed by a select branch's mNextIdx.
+    const char* const sSelectBranchID[] = {
+        "PenguinRace",       "SwimmingSchool",    "PenguinRace",       "BombTimeAttackLv1",         "PhantomTeresaRacer",
+        "BombTimeAttackLv2", "TrialSurfingCoach", "TrialSurfingHowTo", "DeathPromenadeTeresaRacer", "RosettaFinalBattle",
+        "CometTico",         "TransformTico",     "ChallengeSurfingCoach", "TicoShopExchange",      "TicoShopWhich",
+        "KinopioPurple",     "CometTicoTell",     "TrialTamakoroHowTo", "KnockOnTheDoor",
+    };
+
+    // Selects that are not a yes/no question.
+    const u32 sSelectTicoShopWhich = 14;
+    const u32 sSelectCometTicoTell = 16;
+
+    const f32 sDefaultTalkDistance = 240.0f;
+    const f32 sComposeTalkDistanceScale = 2.0f;
+
+    // Events that go on to the next node by themselves.
+    bool isNodeEventContinue(const TalkNode* pEvent) {
+        return pEvent->mGroupID <= EventKind_Anime && (1 << pEvent->mGroupID & (1 << EventKind_Func | 1 << EventKind_None | 1 << EventKind_Anime));
+    }
+
+    TalkNode* getSelectBranch(const TalkNodeCtrl* pNodeCtrl) {
+        TalkNode* pNode = pNodeCtrl->getNextNodeBranch();
+
+        if (pNode == nullptr || pNode->mIndex != BranchKind_Select) {
+            return nullptr;
+        }
+
+        return pNode;
+    }
+};  // namespace
+
+TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rBalloonOffset, MtxPtr pBalloonMtx)
+    : NameObj("会話制御"), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), mTalkStateKind(TalkState_None), mBalloonPos(0.0f, 0.0f, 0.0f), mMtx(pBalloonMtx),
+      mMsgBalloonFollowOffs(rBalloonOffset), mTalkDistance(::sDefaultTalkDistance), mAlreadyDoneFlag(), mAlreadyDoneFlags(), mIsOnRootNodeAuto(),
+      mIsOnReadNodeAuto(true), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
+      mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
     MR::createSceneObj(SceneObj_TalkDirector);
     TalkFunction::registerTalkSystem(this);
     mZoneID = MR::getCurrentPlacementZoneId();
 }
 
 bool TalkMessageCtrl::inMessageArea() const {
-    s8 messageInfoEnumByte = mNodeCtrl->mMessageInfo.mAreaId;
-    s32 messageInfoEnum = mNodeCtrl->mMessageInfo.mAreaId;
-    s32 zoneID = mZoneID;
+    s32 areaId = mNodeCtrl->mMessageInfo.mAreaId;
 
-    if (messageInfoEnumByte < 0) {
+    if (areaId < 0) {
         return false;
     }
 
-    Vec3f* playerPos = MR::getPlayerCenterPos();
-    MessageArea* areaObj = (MessageArea*)MR::getAreaObj("MessageArea", *playerPos);
-    if (areaObj != nullptr && messageInfoEnum == areaObj->mObjArg0 && zoneID == areaObj->mZoneID) {
-        return true;
-    }
-
-    return false;
+    MessageArea* pArea = static_cast< MessageArea* >(MR::getAreaObj("MessageArea", *MR::getPlayerCenterPos()));
+    return pArea != nullptr && areaId == pArea->mObjArg0 && mZoneID == pArea->mZoneID;
 }
 
-void TalkMessageCtrl::startCamera(s32 a1) {
-    TalkMessageInfo* inf = &mNodeCtrl->mMessageInfo;
-    if (inf->isCameraNormal()) {
-        MR::startNPCTalkCamera(this, mHostActor->getBaseMtx(), 1.0f, a1);
-    } else if (inf->isCameraEvent()) {
-        if (inf->mCameraSetID) {
-            mCameraInfo->mCameraSetID = inf->mCameraSetID;
-            MR::startMultiActorCameraNoTarget(mHostActor, mCameraInfo, "会話", a1);
-        }
+void TalkMessageCtrl::startCamera(s32 frames) {
+    TalkMessageInfo* pInfo = &mNodeCtrl->mMessageInfo;
+
+    if (pInfo->isCameraNormal()) {
+        MR::startNPCTalkCamera(this, mHostActor->getBaseMtx(), 1.0f, frames);
+    } else if (pInfo->isCameraEvent() && pInfo->mCameraSetID) {
+        mCameraInfo->mCameraSetID = pInfo->mCameraSetID;
+        MR::startMultiActorCameraNoTarget(mHostActor, mCameraInfo, "会話", frames);
     }
 }
 
@@ -75,18 +130,11 @@ void TalkMessageCtrl::createMessage(const TableIter& rIter, const char* pName) {
     mNodeCtrl->createFlowNode(this, rIter, pName, &mCameraInfo);
 
     if (mNodeCtrl->mCurrentNode != nullptr) {
-        mAlreadyDoneFlags = MR::setupAlreadyDoneFlag((const char*)mNodeCtrl->mFlowName, rIter, &mAlreadyDoneFlag);
+        mAlreadyDoneFlags = MR::setupAlreadyDoneFlag(mNodeCtrl->mFlowName, rIter, &mAlreadyDoneFlag);
     } else {
         mAlreadyDoneFlag = 1;
     }
 }
-
-namespace {
-    // Events of kinds 0, 2 and 4 go on to the next node.
-    bool isNodeEventContinue(const TalkNode* pEvent) {
-        return pEvent->mGroupID <= 4 && (1 << pEvent->mGroupID & 0x15);
-    }
-};  // namespace
 
 void TalkMessageCtrl::createMessageDirect(const TableIter& rIter, const char* pName) {
     mNodeCtrl = new TalkNodeCtrl();
@@ -95,163 +143,153 @@ void TalkMessageCtrl::createMessageDirect(const TableIter& rIter, const char* pN
 }
 
 bool TalkMessageCtrl::rootNodeEve() {
-    TalkNodeCtrl* nodeCtrl = mNodeCtrl;
-    TalkNode* nodeEvent = nodeCtrl->getCurrentNodeEvent();
-    if (nodeEvent == nullptr) {
+    TalkNodeCtrl* pNodeCtrl = mNodeCtrl;
+    TalkNode* pEvent = pNodeCtrl->getCurrentNodeEvent();
+
+    if (pEvent == nullptr) {
         return true;
     }
 
-    u8 groupID = nodeEvent->mGroupID;
-    if (groupID <= 1) {
+    // A function that returns false holds the flow on this event.
+    switch (pEvent->mGroupID) {
+    case EventKind_Func:
+    case EventKind_FuncStop:
         if (mEventFunc == nullptr) {
             return true;
         }
 
-        if (mEventFunc->operator()(nodeEvent->mArg) == false) {
+        if (!(*mEventFunc)(pEvent->mArg)) {
             return false;
         }
-    } else if (groupID == 4) {
+
+        break;
+
+    case EventKind_Anime:
         if (mAnimeFunc == nullptr) {
             return true;
         }
 
-        if (mAnimeFunc->operator()(nodeEvent->mArg) == false) {
+        if (!(*mAnimeFunc)(pEvent->mArg)) {
             return false;
         }
-    } else if (groupID == 3) {
+
+        break;
+
+    case EventKind_Skip:
         rootNodePst();
         return true;
-    } else if (groupID == 5) {
+
+    case EventKind_SwitchA:
         MR::onSwitchA(mHostActor);
-    } else if (groupID == 6) {
+        break;
+
+    case EventKind_SwitchB:
         MR::onSwitchB(mHostActor);
-    } else if (groupID == 7) {
-        if (mKillFunc->operator()(nodeEvent->mArg) == false) {
+        break;
+
+    case EventKind_Kill:
+        if (!(*mKillFunc)(pEvent->mArg)) {
             return false;
         }
+
+        break;
     }
 
-    bool cond = nodeCtrl->isExistNextNode();
+    // Another event right after this one runs next frame.
+    bool isExistNext = pNodeCtrl->isExistNextNode();
     rootNodePst();
 
-    if (cond && nodeCtrl->getCurrentNodeEvent()) {
-        return false;
-    }
-
-    return true;
+    return !(isExistNext && pNodeCtrl->getCurrentNodeEvent());
 }
 
-void TalkMessageCtrl::rootNodePre(bool arg) {
-    TalkNodeCtrl* control = mNodeCtrl;
-    control->resetTempFlowNode();
+void TalkMessageCtrl::rootNodePre(bool isStopAtEvent) {
+    TalkNodeCtrl* pNodeCtrl = mNodeCtrl;
+    pNodeCtrl->resetTempFlowNode();
+
     while (true) {
-        TalkNode* branch = control->getCurrentNodeBranch();
+        TalkNode* pBranch = pNodeCtrl->getCurrentNodeBranch();
 
-        if (branch == nullptr) {
-            if (arg) {
+        if (pBranch == nullptr) {
+            if (isStopAtEvent || !isCurrentNodeContinue()) {
                 return;
             }
 
-            if (!isCurrentNodeContinue()) {
-                return;
-            }
-
-            control->forwardFlowNode();
+            pNodeCtrl->forwardFlowNode();
             continue;
         }
 
-        bool cond = false;
+        bool isTrue = false;
 
-        switch (branch->mIndex) {
-        case TalkMessageCtrl_Type0:
+        switch (pBranch->mIndex) {
+        case BranchKind_Select:
             return;
-        case TalkMessageCtrl_Type1:
-            if (mBranchFunc == nullptr) {
-                cond = true;
-            } else {
-                cond = mBranchFunc->operator()(branch->mNextIdx);
-            }
-
+        case BranchKind_Func:
+            isTrue = mBranchFunc == nullptr || (*mBranchFunc)(pBranch->mNextIdx);
             break;
-        case TalkMessageCtrl_Type2:
-            cond = MR::isNearPlayerAnyTime(mHostActor, mTalkDistance);
+        case BranchKind_NearPlayer:
+            isTrue = MR::isNearPlayerAnyTime(mHostActor, mTalkDistance);
             break;
-        case TalkMessageCtrl_Type3:
-            cond = MR::isOnSwitchA(mHostActor);
+        case BranchKind_SwitchA:
+            isTrue = MR::isOnSwitchA(mHostActor);
             break;
-        case TalkMessageCtrl_Type4:
-            cond = MR::isOnSwitchB(mHostActor);
+        case BranchKind_SwitchB:
+            isTrue = MR::isOnSwitchB(mHostActor);
             break;
-        case TalkMessageCtrl_Type5:
-            cond = MR::isPlayerElementModeNormal();
+        case BranchKind_PlayerNormal:
+            isTrue = MR::isPlayerElementModeNormal();
             break;
-        case TalkMessageCtrl_Type6:
-            cond = MR::isPlayerElementModeBee();
+        case BranchKind_PlayerBee:
+            isTrue = MR::isPlayerElementModeBee();
             break;
-        case TalkMessageCtrl_Type7:
-            cond = MR::isPlayerElementModeTeresa();
+        case BranchKind_PlayerTeresa:
+            isTrue = MR::isPlayerElementModeTeresa();
             break;
-        case TalkMessageCtrl_Type8:
-            cond = MR::isStageStatePowerStarAppeared();
+        case BranchKind_PowerStarAppeared:
+            isTrue = MR::isStageStatePowerStarAppeared();
             break;
-        case TalkMessageCtrl_Type9:
-            cond = mAlreadyDoneFlag != 0;
+        case BranchKind_AlreadyDone:
+            isTrue = mAlreadyDoneFlag != 0;
             break;
-        case TalkMessageCtrl_TypeA:
-            cond = MR::isPlayerLuigi();
+        case BranchKind_PlayerLuigi:
+            isTrue = MR::isPlayerLuigi();
             break;
-        case TalkMessageCtrl_TypeB:
-            cond = MR::isTimeKeepDemoActive();
+        case BranchKind_TimeKeepDemo:
+            isTrue = MR::isTimeKeepDemoActive();
             break;
-        case TalkMessageCtrl_TypeC:
-            cond = MR::isOnMessageAlreadyRead(branch->mNextIdx);
+        case BranchKind_MessageRead:
+            isTrue = MR::isOnMessageAlreadyRead(pBranch->mNextIdx);
             break;
-        case TalkMessageCtrl_TypeE:
-            cond = TalkFunction::getBranchAstroGalaxyResult(branch->mNextIdx);
+        case BranchKind_GalaxyResult:
+            isTrue = TalkFunction::getBranchAstroGalaxyResult(pBranch->mNextIdx);
             break;
         }
 
-        if (cond) {
-            control->forwardCurrentBranchNode(true);
-            continue;
-        }
-
-        control->forwardCurrentBranchNode(false);
+        pNodeCtrl->forwardCurrentBranchNode(isTrue);
     }
 }
 
 void TalkMessageCtrl::rootNodePst() {
-    TalkNodeCtrl* ctrl = mNodeCtrl;
-    if (!ctrl->isExistNextNode()) {
-        ctrl->resetFlowNode();
+    TalkNodeCtrl* pNodeCtrl = mNodeCtrl;
+
+    if (!pNodeCtrl->isExistNextNode()) {
+        pNodeCtrl->resetFlowNode();
     } else {
-        ctrl->forwardFlowNode();
+        pNodeCtrl->forwardFlowNode();
     }
 
-    ctrl->recordTempFlowNode();
+    pNodeCtrl->recordTempFlowNode();
 }
 
 bool TalkMessageCtrl::isCurrentNodeContinue() const {
-    TalkNode* nodeEvent = mNodeCtrl->getCurrentNodeEvent();
-
-    if (nodeEvent == nullptr) {
-        return false;
-    }
-
-    return isNodeEventContinue(nodeEvent);
+    TalkNode* pEvent = mNodeCtrl->getCurrentNodeEvent();
+    return pEvent != nullptr && ::isNodeEventContinue(pEvent);
 }
 
-void TalkMessageCtrl::rootNodeSel(bool a1) {
-    TalkNodeCtrl* ctrl = mNodeCtrl;
-    ctrl->forwardFlowNode();
-
-    if (a1) {
-        ctrl->forwardCurrentBranchNode(true);
-    } else {
-        ctrl->forwardCurrentBranchNode(false);
-    }
-
-    ctrl->recordTempFlowNode();
+void TalkMessageCtrl::rootNodeSel(bool isYes) {
+    TalkNodeCtrl* pNodeCtrl = mNodeCtrl;
+    pNodeCtrl->forwardFlowNode();
+    pNodeCtrl->forwardCurrentBranchNode(isYes);
+    pNodeCtrl->recordTempFlowNode();
 }
 
 void TalkMessageCtrl::registerBranchFunc(const TalkMessageFuncBase& rFunc) {
@@ -281,29 +319,18 @@ void TalkMessageCtrl::readMessage() {
 }
 
 bool TalkMessageCtrl::isSelectYesNo() const {
-    TalkNode* node = mNodeCtrl->getNextNodeBranch();
-
-    if (node == nullptr || node->mIndex != 0) {
-        return false;
-    }
-
-    switch (node->mNextIdx) {
-    case 16:
-        return false;
-    case 14:
-        return false;
-    }
-
-    return true;
+    TalkNode* pNode = ::getSelectBranch(mNodeCtrl);
+    return pNode != nullptr && pNode->mNextIdx != ::sSelectCometTicoTell && pNode->mNextIdx != ::sSelectTicoShopWhich;
 }
 
 u32 TalkMessageCtrl::getMessageID() const {
-    TalkNodeCtrl* ctrl = mNodeCtrl;
-    if (ctrl->getCurrentNodeMessage() != nullptr) {
-        return ctrl->getCurrentNodeMessage()->mIndex;
-    } else {
-        return ctrl->mCurrentNodeIdx;
+    TalkNode* pMessage = mNodeCtrl->getCurrentNodeMessage();
+
+    if (pMessage != nullptr) {
+        return pMessage->mIndex;
     }
+
+    return mNodeCtrl->mCurrentNodeIdx;
 }
 
 bool TalkMessageCtrl::requestTalk() {
@@ -338,91 +365,23 @@ bool TalkMessageCtrl::endTalk() {
     return TalkFunction::endTalkSystem(this);
 }
 
-bool TalkMessageCtrl::isNearPlayer(const TalkMessageCtrl* pCtrl) {
-    Vec3f* hostPos;
-    Vec3f* ctrlHostPos;
-
-    if (pCtrl == nullptr) {
+bool TalkMessageCtrl::isNearPlayer(const TalkMessageCtrl* pOther) {
+    if (pOther == nullptr) {
         return true;
     }
 
-    Vec3f* playerPos = MR::getPlayerPos();
-    hostPos = &mHostActor->mPosition;
-    ctrlHostPos = &pCtrl->mHostActor->mPosition;
-
-    return hostPos->squared(*playerPos) < ctrlHostPos->squared(*playerPos);
+    const Vec3f& rPlayerPos = *MR::getPlayerPos();
+    return mHostActor->mPosition.squared(rPlayerPos) < pOther->mHostActor->mPosition.squared(rPlayerPos);
 }
 
 const char* TalkMessageCtrl::getBranchID() const {
-    TalkNode* node = mNodeCtrl->getNextNodeBranch();
+    TalkNode* pNode = ::getSelectBranch(mNodeCtrl);
 
-    if (node == nullptr || node->mIndex != 0) {
+    if (pNode == nullptr || pNode->mNextIdx >= ARRAY_SIZEU(::sSelectBranchID)) {
         return nullptr;
     }
 
-    const char* result = nullptr;
-
-    switch (node->mNextIdx) {
-    case BranchNode_Type0:
-        result = "PenguinRace";
-        break;
-    case BranchNode_Type1:
-        result = "SwimmingSchool";
-        break;
-    case BranchNode_Type2:
-        result = "PenguinRace";
-        break;
-    case BranchNode_Type3:
-        result = "BombTimeAttackLv1";
-        break;
-    case BranchNode_Type4:
-        result = "PhantomTeresaRacer";
-        break;
-    case BranchNode_Type5:
-        result = "BombTimeAttackLv2";
-        break;
-    case BranchNode_Type6:
-        result = "TrialSurfingCoach";
-        break;
-    case BranchNode_Type7:
-        result = "TrialSurfingHowTo";
-        break;
-    case BranchNode_Type8:
-        result = "DeathPromenadeTeresaRacer";
-        break;
-    case BranchNode_Type9:
-        result = "RosettaFinalBattle";
-        break;
-    case BranchNode_TypeA:
-        result = "CometTico";
-        break;
-    case BranchNode_TypeB:
-        result = "TransformTico";
-        break;
-    case BranchNode_TypeC:
-        result = "ChallengeSurfingCoach";
-        break;
-    case BranchNode_TypeD:
-        result = "TicoShopExchange";
-        break;
-    case BranchNode_TypeE:
-        result = "TicoShopWhich";
-        break;
-    case BranchNode_TypeF:
-        result = "KinopioPurple";
-        break;
-    case BranchNode_Type10:
-        result = "CometTicoTell";
-        break;
-    case BranchNode_Type11:
-        result = "TrialTamakoroHowTo";
-        break;
-    case BranchNode_Type12:
-        result = "KnockOnTheDoor";
-        break;
-    }
-
-    return result;
+    return ::sSelectBranchID[pNode->mNextIdx];
 }
 
 bool TalkFunction::isShortTalk(const TalkMessageCtrl* pCtrl) {
@@ -442,23 +401,23 @@ bool TalkFunction::isEventNode(const TalkMessageCtrl* pCtrl) {
 }
 
 void TalkFunction::onTalkStateNone(TalkMessageCtrl* pCtrl) {
-    pCtrl->mTalkStateKind = 0;
+    pCtrl->mTalkStateKind = TalkState_None;
 }
 
 void TalkFunction::onTalkStateEntry(TalkMessageCtrl* pCtrl) {
-    pCtrl->mTalkStateKind = 1;
+    pCtrl->mTalkStateKind = TalkState_Entry;
 }
 
 void TalkFunction::onTalkStateEnableStart(TalkMessageCtrl* pCtrl) {
-    pCtrl->mTalkStateKind = 2;
+    pCtrl->mTalkStateKind = TalkState_EnableStart;
 }
 
 void TalkFunction::onTalkStateTalking(TalkMessageCtrl* pCtrl) {
-    pCtrl->mTalkStateKind = 3;
+    pCtrl->mTalkStateKind = TalkState_Talking;
 }
 
 void TalkFunction::onTalkStateEnableEnd(TalkMessageCtrl* pCtrl) {
-    pCtrl->mTalkStateKind = 4;
+    pCtrl->mTalkStateKind = TalkState_EnableEnd;
 }
 
 TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
@@ -466,11 +425,11 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
 }
 
 const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return (const char16_t*)pCtrl->mNodeCtrl->mMessageInfo.mMessage;
+    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->mMessageInfo.mMessage);
 }
 
 const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
-    return (const char16_t*)pCtrl->mNodeCtrl->getSubMessage();
+    return reinterpret_cast< const char16_t* >(pCtrl->mNodeCtrl->getSubMessage());
 }
 
 bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
@@ -478,45 +437,46 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
         return false;
     }
 
+    // A negative talk distance talks from anywhere.
     if (mTalkDistance < 0.0f) {
         return true;
     }
 
     if (distance <= 0.0f) {
         distance = mTalkDistance;
+
         if (mNodeCtrl->mMessageInfo.isComposeTalk()) {
-            f32 scale = 2.0f;
-            distance = distance * scale;
+            distance = distance * ::sComposeTalkDistanceScale;
         }
     }
 
-    Vec3f v2(mHostActor->mPosition);
+    Vec3f talkPos(mHostActor->mPosition);
+
     if (mMtx != nullptr) {
-        v2.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
+        talkPos.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
     }
 
-    Vec3f v3;
-    f32 f2 = MR::vecKillElement(v2 - *MR::getPlayerCenterPos(), mHostActor->mGravity, &v3);
+    // Within distance along gravity and across it.
+    Vec3f offsetH;
+    f32 height = MR::vecKillElement(talkPos - *MR::getPlayerCenterPos(), mHostActor->mGravity, &offsetH);
 
-    if (!(MR::abs(f2) > distance) && v3.squared() < distance * distance) {
-        TalkMessageInfo* info = &mNodeCtrl->mMessageInfo;
-        if (mIsStartOnlyFront || info->isBalloonSign()) {
-            Pos3f pos;
-            pos.set(mHostActor->getBaseMtx());
+    if (!(MR::abs(height) > distance) && offsetH.squared() < distance * distance) {
+        if (!mIsStartOnlyFront && !mNodeCtrl->mMessageInfo.isBalloonSign()) {
+            return true;
+        }
 
-            Vec3f v3;
-            pos.getZDir(v3);
+        // Front-only talks and signs need the player in front of the host.
+        Pos3f hostMtx;
+        hostMtx.set(mHostActor->getBaseMtx());
 
-            Vec3f v4;
-            pos.getTrans(v4);
-            v4 = *MR::getPlayerPos() - v4;
+        Vec3f front;
+        hostMtx.getZDir(front);
 
-            f32 f3 = MR::vecKillElement(v4, v3, &v4);
+        Vec3f toPlayer;
+        hostMtx.getTrans(toPlayer);
+        toPlayer = *MR::getPlayerPos() - toPlayer;
 
-            if (f3 > 0.0f) {
-                return true;
-            }
-        } else {
+        if (MR::vecKillElement(toPlayer, front, &toPlayer) > 0.0f) {
             return true;
         }
     }
@@ -525,20 +485,20 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
 }
 
 void TalkMessageCtrl::updateBalloonPos() {
-    Mtx34f pos;
-    pos.set(mHostActor->getBaseMtx());
+    Mtx34f hostMtx;
+    hostMtx.set(mHostActor->getBaseMtx());
 
     if (mMtx != nullptr) {
-        pos.set(mMtx);
+        hostMtx.set(mMtx);
     }
 
-    Pos3f tPos = MR::getCameraInvViewMtx();
-    Vec3f v3;
-    Vec3f nullVec(0.0f, 0.0f, 0.0f);
-    MR::setMtxTrans(tPos, nullVec.x, nullVec.y, nullVec.z);
-    MR::addTransMtxLocal(tPos, mMsgBalloonFollowOffs);
+    // The follow offset is in camera space.
+    Pos3f cameraMtx = MR::getCameraInvViewMtx();
+    MR::setMtxTrans(cameraMtx, 0.0f, 0.0f, 0.0f);
+    MR::addTransMtxLocal(cameraMtx, mMsgBalloonFollowOffs);
 
-    v3.set< f32 >(pos[0][3], pos[1][3], pos[2][3]);
-    v3.add(Vec3f(tPos[0][3], tPos[1][3], tPos[2][3]));
-    MR::calcScreenPosition(&mBalloonPos, v3);
+    Vec3f balloonPos;
+    balloonPos.set< f32 >(hostMtx[0][3], hostMtx[1][3], hostMtx[2][3]);
+    balloonPos.add(Vec3f(cameraMtx[0][3], cameraMtx[1][3], cameraMtx[2][3]));
+    MR::calcScreenPosition(&mBalloonPos, balloonPos);
 }
