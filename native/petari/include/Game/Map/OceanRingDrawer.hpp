@@ -10,11 +10,13 @@ class OceanRing;
 
 class OceanRingPartDrawer {
 public:
-    OceanRingPartDrawer(const OceanRing*, int, int, bool, f32*, f32*, f32*);
+    // pTexCoordU*: the running U of the ring's textures; the part starts there and advances them past its end.
+    OceanRingPartDrawer(const OceanRing* pRing, int startIndex, int numPoints, bool isClosed, f32* pTexCoordU0, f32* pTexCoordU1,
+                        f32* pTexCoordU2);
 
-    void initMesh(f32*, f32*, f32*);
+    void initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2);
     void draw(TypedDraw& rDraw) const;
-    void drawGD(f32*, f32*, f32*);
+    void drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2);
     void drawDynamic(TypedDraw& rDraw) const;
     void drawDynamicBloom(TypedDraw& rDraw) const;
 

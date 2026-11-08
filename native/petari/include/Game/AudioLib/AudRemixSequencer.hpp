@@ -12,7 +12,7 @@ public:
 
     void initData();
     void setData(const RemixNoteTrackData*, const RemixNoteData*);
-    bool update(f32);
+    bool update(f32 ticks);
     SoundID getFreeSeID();
 
     f32 mDelay;
@@ -27,7 +27,7 @@ public:
 
     void initNoteOnBuff();
     void update();
-    void setTempo(f32);
+    void setTempo(f32 tempo);
     AudRmxSeqNoteOnTimer* newNoteOnTimer();
     void addNoteData(const RemixNoteTrackData*, const RemixNoteData*);
 

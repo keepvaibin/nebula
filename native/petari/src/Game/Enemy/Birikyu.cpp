@@ -211,13 +211,13 @@ void Birikyu::exeMoveCircle() {
     MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
     if (!tryStopPointing()) {
         mCircleAngle = MR::repeat(mCircleAngle + (mSpeed / 400.0f), 0.0f, TWO_PI);
-        Pos3f matrix;
-        matrix.identity();
-        matrix.makeRotate(mCircleAxis, mCircleAngle);
-        Vec3f temp = mCircleFront * 400.0f;
-        matrix.mult(temp, temp);
-        Vec3f matrix2 = (mCircleCenter + temp);
-        mPosition.set(matrix2);
+        Pos3f rotation;
+        rotation.identity();
+        rotation.makeRotate(mCircleAxis, mCircleAngle);
+        Vec3f offset = mCircleFront * 400.0f;
+        rotation.mult(offset, offset);
+        Vec3f circlePos = (mCircleCenter + offset);
+        mPosition.set(circlePos);
     }
 }
 

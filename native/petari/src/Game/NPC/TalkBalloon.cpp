@@ -414,8 +414,7 @@ TalkBalloonHolder::TalkBalloonHolder() : mShortIndex() {
     mBalloonShortArray = new TalkBalloonShort*[4];
 
     for (u32 i = 0; i < 4; i++) {
-        TalkBalloonShort* temp = new TalkBalloonShort("会話吹き出し[簡易会話]");
-        mBalloonShortArray[i] = temp;
+        mBalloonShortArray[i] = new TalkBalloonShort("会話吹き出し[簡易会話]");
         mBalloonShortArray[i]->initWithoutIter();
         mBalloonShortArray[i]->kill();
     }

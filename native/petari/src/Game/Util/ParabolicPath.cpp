@@ -81,15 +81,16 @@ f32 ParabolicPath::getLength(f32 startParam, f32 endParam, s32 numSegments) cons
     f32 parameterLengthSegment = (endParam - startParam) / numSegments;
     f32 length = 0.0f;
 
-    f32 f6 = (mDistance * parameterLengthSegment) * (mDistance * parameterLengthSegment);
-    f32 f2 = startParam * (mQuadCoef * startParam + mLinearCoef);
+    // Chords: each segment runs mDistance * step across and the parabola's height change up.
+    f32 runSq = (mDistance * parameterLengthSegment) * (mDistance * parameterLengthSegment);
+    f32 prevHeight = startParam * (mQuadCoef * startParam + mLinearCoef);
 
     for (int i = 0; i < numSegments; i++) {
         f32 endSegmentParam = startParam + parameterLengthSegment * (i + 1);
-        f32 f4 = endSegmentParam * (mQuadCoef * endSegmentParam + mLinearCoef);
+        f32 height = endSegmentParam * (mQuadCoef * endSegmentParam + mLinearCoef);
 
-        length += NebulaSqrt((f4 - f2) * (f4 - f2) + f6);
-        f2 = f4;
+        length += NebulaSqrt((height - prevHeight) * (height - prevHeight) + runSq);
+        prevHeight = height;
     }
 
     return length;

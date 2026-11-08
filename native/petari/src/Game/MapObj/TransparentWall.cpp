@@ -11,45 +11,45 @@ TransparentWall::TransparentWall(const char* pName) : InvisiblePolygonObj(pName)
 }
 
 void TransparentWall::control() {
-    if (!mIsPassable) {
+    if (!mIsSolid) {
         for (u32 i = 0; i < 10; i++) {
-            if (mPassFlags & (1 << i) && MR::isPlayerElementMode(i)) {
-                mIsPassable = true;
+            if (mSolidForms & (1 << i) && MR::isPlayerElementMode(i)) {
+                mIsSolid = true;
                 break;
             }
         }
 
-        if ((mPassFlags & 1024) && MR::isPlayerSkating()) {
-            mIsPassable = true;
+        if ((mSolidForms & 1024) && MR::isPlayerSkating()) {
+            mIsSolid = true;
         }
 
-        if ((mPassFlags & 2048) && !MR::isPlayerTeresaDisappear()) {
-            mIsPassable = true;
+        if ((mSolidForms & 2048) && !MR::isPlayerTeresaDisappear()) {
+            mIsSolid = true;
         }
 
-        if (mIsPassable) {
+        if (mIsSolid) {
             MR::validateCollisionParts(this);
         }
     } else {
-        bool r29 = true;
+        bool isNoFormLeft = true;
         for (u32 i = 0; i < 10; i++) {
-            if (mPassFlags & (1 << i) && MR::isPlayerElementMode(i)) {
-                r29 = false;
+            if (mSolidForms & (1 << i) && MR::isPlayerElementMode(i)) {
+                isNoFormLeft = false;
                 break;
             }
         }
 
-        if ((mPassFlags & 1024) && MR::isPlayerSkating()) {
-            r29 = false;
+        if ((mSolidForms & 1024) && MR::isPlayerSkating()) {
+            isNoFormLeft = false;
         }
 
-        if ((mPassFlags & 2048)) {
-            r29 = MR::isPlayerTeresaDisappear();
+        if ((mSolidForms & 2048)) {
+            isNoFormLeft = MR::isPlayerTeresaDisappear();
         }
 
-        if (r29) {
+        if (isNoFormLeft) {
             MR::invalidateCollisionParts(this);
-            mIsPassable = false;
+            mIsSolid = false;
         }
     }
 }
@@ -57,11 +57,11 @@ void TransparentWall::control() {
 TransparentWall::~TransparentWall() {
 }
 
-void TransparentWall::init(const TableIter& rrIter) {
-    InvisiblePolygonObj::init(rrIter);
-    MR::getPlacementArg4WithInit(rrIter, &mPassFlags);
+void TransparentWall::init(const TableIter& rIter) {
+    InvisiblePolygonObj::init(rIter);
+    MR::getPlacementArg4WithInit(rIter, &mSolidForms);
     makeActorAppeared();
-    mIsPassable = false;
+    mIsSolid = false;
     MR::invalidateCollisionParts(this);
     HitSensor* sensor = getSensor("body");
     sensor->setType(ATYPE_ICEJUMP_WALL);

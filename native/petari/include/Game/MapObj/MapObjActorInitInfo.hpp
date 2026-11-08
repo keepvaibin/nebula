@@ -24,7 +24,7 @@ public:
     void setupGroupClipping(s32);
     void setupClippingRadius(f32);
     void setupFarClipping(f32);
-    void setupProjmapMtx(bool);
+    void setupProjmapMtx(bool isEveryFrame);
     void setupRailMover();
     void setupRotator();
     void setupRailRotator();
@@ -33,7 +33,7 @@ public:
     void setupBaseMtxFollowTarget();
     void setupAffectedScale();
     void setupSeAppear();
-    void setupMirrorReflection(bool);
+    void setupMirrorReflection(bool isFromModel);
     void setupPrepareChangeDummyTexture(const char*);
     void setupNoUseLodCtrl();
 

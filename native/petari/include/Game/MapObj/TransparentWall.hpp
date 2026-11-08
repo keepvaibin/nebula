@@ -2,14 +2,16 @@
 
 #include "Game/MapObj/InvisiblePolygonObj.hpp"
 
+// A wall that is solid only while the player is in one of the forms its arg 4 names.
 class TransparentWall : public InvisiblePolygonObj {
 public:
-    TransparentWall(const char*);
+    TransparentWall(const char* pName);
 
     virtual ~TransparentWall();
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
 
-    s32 mPassFlags;
-    bool mIsPassable;
+    // Bits 0-9: element modes; bit 10: skating; bit 11: any form but the vanished Boo.
+    s32 mSolidForms;
+    bool mIsSolid;
 };

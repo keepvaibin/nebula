@@ -73,7 +73,7 @@ ViewProjmapEffectMtxSetter::ViewProjmapEffectMtxSetter(Model* pModel) : Material
             Material* material = pModelData->getMaterialAt(i);
             for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
                 CoordMatrix* matrix = material->getCoordMatrix(j);
-                if (matrix && (matrix->getInfo().mInfo & 0x3FU) == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
+                if (matrix && matrix->getMode() == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
                     visit(i, j);
                 }
             }
@@ -109,7 +109,7 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(Model* pModel, const ResourceHold
         Material* material = modelData->getMaterialAt(i);
         for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
             CoordMatrix* texMtx = material->getCoordMatrix(j);
-            if (texMtx && (texMtx->getInfo().mInfo & 0x3FU) == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
+            if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
                 mNumUpdatingMtx++;
             }
         }
@@ -121,7 +121,7 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(Model* pModel, const ResourceHold
         Material* material = modelData->getMaterialAt(i);
         for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
             CoordMatrix* texMtx = material->getCoordMatrix(j);
-            if (texMtx && (texMtx->getInfo().mInfo & 0x3FU) == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
+            if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
                 mUpdatingMtxInfo[matrixCount].mTexMtx = pModel->ownMaterial(i)->getCoordMatrix(j);
                 mUpdatingMtxInfo[matrixCount].mInitEffectMtx.set(pResourceHolder->getInitEffectMtx(i, j));
                 matrixCount++;
@@ -177,7 +177,7 @@ void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexNo(Model* pModel, u32 te
 void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexCoord(Material* pMaterial) {
     for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
         CoordMatrix* texMtx = pMaterial->getCoordMatrix(i);
-        if (texMtx && (texMtx->getInfo().mInfo & 0x3FU) == CoordMatrixMode_Projmap && MR::isUseTexMtx(pMaterial, i)) {
+        if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(pMaterial, i)) {
             addUpdatingTexMtx(texMtx);
         }
     }

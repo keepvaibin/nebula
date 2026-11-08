@@ -210,27 +210,28 @@ namespace MR {
         Vec3f axisX, axisY;
         MR::makeAxisCrossPlane(&axisX, &axisY, rDir);
 
-        Pos3f tmp1;
-        tmp1.identity();
-        Pos3f tmp2;
-        tmp2.identity();
+        // basis * scale * basis^T: rScale applied along (axisX, rDir, axisY).
+        Pos3f basis;
+        basis.identity();
+        Pos3f basisT;
+        basisT.identity();
 
-        tmp1.setXYZDir(axisX, rDir, axisY);
+        basis.setXYZDir(axisX, rDir, axisY);
 
-        tmp2.mMtx[0][0] = axisX.x;
-        tmp2.mMtx[0][1] = axisX.y;
-        tmp2.mMtx[0][2] = axisX.z;
-        tmp2.mMtx[1][0] = rDir.x;
-        tmp2.mMtx[1][1] = rDir.y;
-        tmp2.mMtx[1][2] = rDir.z;
-        tmp2.mMtx[2][0] = axisY.x;
-        tmp2.mMtx[2][1] = axisY.y;
-        tmp2.mMtx[2][2] = axisY.z;
+        basisT.mMtx[0][0] = axisX.x;
+        basisT.mMtx[0][1] = axisX.y;
+        basisT.mMtx[0][2] = axisX.z;
+        basisT.mMtx[1][0] = rDir.x;
+        basisT.mMtx[1][1] = rDir.y;
+        basisT.mMtx[1][2] = rDir.z;
+        basisT.mMtx[2][0] = axisY.x;
+        basisT.mMtx[2][1] = axisY.y;
+        basisT.mMtx[2][2] = axisY.z;
 
         pDst->zeroTrans();
         pDst->setScale(rScale.x, rScale.y, rScale.z);
-        pDst->concat(*pDst, tmp2);
-        pDst->concat(tmp1, *pDst);
+        pDst->concat(*pDst, basisT);
+        pDst->concat(basis, *pDst);
     }
 
     void makeMtxTRS(MtxPtr pMtx, f32 tx, f32 ty, f32 tz, f32 rx, f32 ry, f32 rz, f32 sx, f32 sy, f32 sz) {

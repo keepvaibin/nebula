@@ -86,8 +86,8 @@ public:
     bool initTalkCtrlDirect(const TableIter&, const char*, const Vec3f&, MtxPtr);
     bool calcJointScale(Pos3f*, const JointControllerInfo&);
     bool turnToPlayer();
-    bool turnToPlayer(f32);
-    bool turnToPlayer(f32, f32, f32);
+    bool turnToPlayer(f32 turnSpeedDeg);
+    bool turnToPlayer(f32 turnSpeedDeg, f32 tiltSpeedDeg, f32 maxTiltDeg);
     bool turnToDefault(f32);
     void setToDefault();
     void pushNerve(const Nerve*);

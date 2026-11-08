@@ -537,7 +537,7 @@ namespace {
     }
 };  // namespace
 
-bool NPCActor::turnToPlayer(f32 f1) {
+bool NPCActor::turnToPlayer(f32 turnSpeedDeg) {
     Vec3f zDir;
     Vec3f toPlayer;
     ::calcVecToPlayer(&toPlayer, this);
@@ -547,12 +547,12 @@ bool NPCActor::turnToPlayer(f32 f1) {
         return true;
     }
 
-    return MR::faceToVector(&mPoseQuat, toPlayer, f1);
+    return MR::faceToVector(&mPoseQuat, toPlayer, turnSpeedDeg);
 }
 
-bool NPCActor::turnToPlayer(f32 f1, f32 f2, f32 f3) {
-    bool turned = turnToPlayer(f1);
-    if (f3 == 0.0f) {
+bool NPCActor::turnToPlayer(f32 turnSpeedDeg, f32 tiltSpeedDeg, f32 maxTiltDeg) {
+    bool turned = turnToPlayer(turnSpeedDeg);
+    if (maxTiltDeg == 0.0f) {
         return turned;
     }
 
@@ -565,14 +565,15 @@ bool NPCActor::turnToPlayer(f32 f1, f32 f2, f32 f3) {
         return false;
     }
 
-    Vec3f vec1;
-    Vec3f vec2;
-    MR::makeAxisFrontUp(&vec1, &vec2, toPlayer, yDir);
-    MR::clampVecAngleDeg(&vec2, yDir, f3);
-    return MR::turnQuatYDirRad(&mPoseQuat, mPoseQuat, vec2, f2 * 0.017453292f) & turned;
+    // Tilt the up axis toward the player, at most maxTiltDeg from the initial up.
+    Vec3f front;
+    Vec3f tiltedUp;
+    MR::makeAxisFrontUp(&front, &tiltedUp, toPlayer, yDir);
+    MR::clampVecAngleDeg(&tiltedUp, yDir, maxTiltDeg);
+    return MR::turnQuatYDirRad(&mPoseQuat, mPoseQuat, tiltedUp, tiltSpeedDeg * 0.017453292f) & turned;
 }
 
-bool NPCActor::turnToDefault(f32 f1) {
+bool NPCActor::turnToDefault(f32 turnSpeedDeg) {
     Vec3f zDir;
     Vec3f zDir2;
     Vec3f yDir;
@@ -587,10 +588,10 @@ bool NPCActor::turnToDefault(f32 f1) {
     f32 dot = zDir.dot(zDir2);
     dot = MR::clamp(dot, -1.0f, 1.0f);
 
-    f32 flt = MR::abs((f1 * 0.017453292f) / MR::acos(dot));
-    flt = MR::clamp(flt, 0.0f, 1.0f);
+    f32 rate = MR::abs((turnSpeedDeg * 0.017453292f) / MR::acos(dot));
+    rate = MR::clamp(rate, 0.0f, 1.0f);
 
-    MR::blendQuatUpFront(&mPoseQuat, yDir, zDir, flt, flt);
+    MR::blendQuatUpFront(&mPoseQuat, yDir, zDir, rate, rate);
     return MR::isSameDirection(zDir2, zDir);
 }
 

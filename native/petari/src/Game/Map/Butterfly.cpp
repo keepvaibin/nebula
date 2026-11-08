@@ -156,13 +156,6 @@ void Butterfly::updatePosture() {
     Vec3f forward;
     mQuat.getZDir(forward);
 
-    // Unused
-    {
-        Vec3f tmp = -gravity;
-        Quat4f quat;
-        quat.setRotate(up, tmp, 1.0f);
-    }
-
     Vec3f vel = mVelocity;
     if (vel.length() < ::sUpdatePostureMinVel) {
         mQuat.normalize();
@@ -181,9 +174,9 @@ void Butterfly::updatePosture() {
     if (!MR::isNearZero(targetForward)) {
         Vec3f newForward;
         MR::turnVecToVecCos(&newForward, forward, targetForward, ::sTurnLimit, up);
-        Quat4f tmp;
-        tmp.setRotate(forward, newForward, 1.0f);
-        mQuat.mult(tmp);
+        Quat4f turn;
+        turn.setRotate(forward, newForward, 1.0f);
+        mQuat.mult(turn);
     }
     mQuat.normalize();
 }

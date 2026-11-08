@@ -187,7 +187,7 @@ namespace MR {
         for (u32 idx = 0; idx < NEBULA_MATERIAL_SLOTS; idx++) {
             CoordMatrix* texMtx = pMaterial->getCoordMatrix(idx);
 
-            if (texMtx != nullptr && (texMtx->getInfo().mInfo & 0x3F) != 0 && isUseTexMtx(pMaterial, idx)) {
+            if (texMtx != nullptr && texMtx->getMode() != CoordMatrixMode_None && isUseTexMtx(pMaterial, idx)) {
                 return false;
             }
         }

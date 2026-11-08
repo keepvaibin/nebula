@@ -29,19 +29,15 @@ void SkeletalFishGuardHolder::movement() {
 }
 
 void SkeletalFishGuardHolder::forceAppearAll() {
-    SkeletalFishGuard* guard;  //
-    SkeletalFishBossInfo::LevelStatus* lvl;
-    s32 guardWaitLvlId;                            // r28
-    s32 appearableGuard = countAppearableGuard();  // r27
-    s32 i;                                         // r26
+    s32 appearableGuard = countAppearableGuard();
 
-    for (i = 0; i < mNumGuards; i++) {
+    for (s32 i = 0; i < mNumGuards; i++) {
         if (MR::isDead(mGuards[i])) {
-            guardWaitLvlId = mFishBoss->getLevelStatus()->mStatusArray[i].mGuardWaitLevelID;
-            lvl = mFishBoss->getLevelStatus();
-            guard = mGuards[i];
-            guard->mGuardOffset.set(lvl->mStatusArray[i].mGuardPosLevel);
-            guard->mAppearWaitStep = guardWaitLvlId;
+            const s32 appearWaitStep = mFishBoss->getLevelStatus()->mStatusArray[i].mGuardWaitLevelID;
+            SkeletalFishBossInfo::LevelStatus* pLevel = mFishBoss->getLevelStatus();
+            SkeletalFishGuard* pGuard = mGuards[i];
+            pGuard->mGuardOffset.set(pLevel->mStatusArray[i].mGuardPosLevel);
+            pGuard->mAppearWaitStep = appearWaitStep;
             mGuards[i]->appearForce();
 
             if (--appearableGuard <= 0) {

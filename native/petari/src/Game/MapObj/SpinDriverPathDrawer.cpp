@@ -95,8 +95,8 @@ void SpinDriverPathDrawer::init(const TableIter& rIter) {
     makeActorDead();
 }
 
-s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
-    s32 totalSteps = mShootPath->getTotalLength() / f1;
+s32 SpinDriverPathDrawer::calcPositionCount(f32 sampleStep, f32 minSideOffset) const {
+    s32 totalSteps = mShootPath->getTotalLength() / sampleStep;
 
     Vec3f pos0;
     mShootPath->calcPosition(&pos0, 0.0f);
@@ -115,7 +115,7 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
         Vec3f pos;
         pos.killElement(posI - pos0, dir0);
 
-        if (pos.length() > f2) {
+        if (pos.length() > minSideOffset) {
             pos0 = posI;
             mShootPath->calcDirection(&dir0, posStep, 0.01f);
 
@@ -126,14 +126,14 @@ s32 SpinDriverPathDrawer::calcPositionCount(f32 f1, f32 f2) const {
     return count;
 }
 
-void SpinDriverPathDrawer::initPositionList(f32 f1, f32 f2) {
-    mPositionCount = calcPositionCount(f1, f2);
+void SpinDriverPathDrawer::initPositionList(f32 sampleStep, f32 minSideOffset) {
+    mPositionCount = calcPositionCount(sampleStep, minSideOffset);
     mPositions = new Vec3f[mPositionCount];
     mSides = new Vec3f[mPositionCount];
     mUps = new Vec3f[mPositionCount];
     mCoords = new f32[mPositionCount];
 
-    s32 totalSteps = mShootPath->getTotalLength() / f1;
+    s32 totalSteps = mShootPath->getTotalLength() / sampleStep;
 
     Vec3f pos0;
     mShootPath->calcPosition(&pos0, 0.0f);
@@ -160,7 +160,7 @@ void SpinDriverPathDrawer::initPositionList(f32 f1, f32 f2) {
         Vec3f pos;
         pos.killElement(posI - pos0, dir0);
 
-        if (pos.length() > f2) {
+        if (pos.length() > minSideOffset) {
             pos0 = posI;
 
             mShootPath->calcDirection(&dir0, posStep, 0.01f);

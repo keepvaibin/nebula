@@ -710,9 +710,9 @@ void Kanina::exeWalk() {
         mWalkCount++;
         MR::startBck(this, "Walk");
 
-        Vec3f temp;
-        ::calcWalkDirection(&temp, this);
-        mFront.set(temp);
+        Vec3f walkDir;
+        ::calcWalkDirection(&walkDir, this);
+        mFront.set(walkDir);
 
         MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 

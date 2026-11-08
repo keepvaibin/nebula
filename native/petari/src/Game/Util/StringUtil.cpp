@@ -338,37 +338,37 @@ namespace MR {
     }
 
     void scan16(const char* pSrc, const char* pSubStr, u16* pDst) {
-        int temp;
+        int value;
 
         if (strstr(pSrc, pSubStr) == nullptr) {
             return;
         }
 
         const char* p = pSrc;
-        if (!scanInt(p, &temp)) {
+        if (!scanInt(p, &value)) {
             return;
         }
 
-        *pDst = temp;
+        *pDst = value;
     }
 
     void scan8(const char* pSrc, const char* pSubStr, u8* pDst) {
-        int temp;
+        int value;
 
         if (strstr(pSrc, pSubStr) == nullptr) {
             return;
         }
 
         const char* p = pSrc;
-        if (!scanInt(p, &temp)) {
+        if (!scanInt(p, &value)) {
             return;
         }
 
-        *pDst = temp;
+        *pDst = value;
     }
 
     void scans16x4(const char* pSrc, const char* pSubStr, s16* pDst) {
-        int temp[4];
+        int values[4];
 
         if (strstr(pSrc, pSubStr) == nullptr) {
             return;
@@ -378,15 +378,15 @@ namespace MR {
         if (!scanOpen(p)) {
             return;
         }
-        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
+        for (s32 i = 0; i < 4 && scanInt(p, &values[i]); i++) {
             if (*p != ',') {
                 break;
             }
             p++;
         }
 
-        for (int i = 0; i < ARRAY_SIZE(temp); i++) {
-            pDst[i] = temp[i];
+        for (int i = 0; i < ARRAY_SIZE(values); i++) {
+            pDst[i] = values[i];
         }
     }
 

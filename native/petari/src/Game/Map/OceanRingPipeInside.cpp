@@ -87,41 +87,32 @@ SiteMaterial OceanRingPipeInside::loadMaterial() const {
 }
 
 void OceanRingPipeInside::sendGD() {
-    s32 vv;
-    s32 v;
-    f32 f30;
-    f32 f29;
-    f32 f28;
-    f32 f27;
-    f32 f26;
-    f32 f25;
-    f29 = ::sTexRateU0;
-    f30 = ::sTexRateU1;
-    f26 = 0.0f;
-    f25 = 0.0f;
-    f28 = ::sTexRateV0;
-    f27 = ::sTexRateV1;
+    // One strip per side band, along the segments; U steps per segment, V per side. Sums run step by step (the order
+    // fixes their rounding).
+    f32 nearV0 = 0.0f;
+    f32 nearV1 = 0.0f;
+    f32 farV0 = ::sTexRateV0;
+    f32 farV1 = ::sTexRateV1;
 
     for (s32 i = 0; i < mRingPipe->mNumSides - 1; i++) {
-        f32 f24 = 0.0f;
-        f32 f23 = 0.0f;
-        vv = mRingPipe->mNumSegments;
-        VertexPT2* vtx = mMesh.strip((u16)(vv << 1));
+        f32 u0 = 0.0f;
+        f32 u1 = 0.0f;
+        VertexPT2* vtx = mMesh.strip((u16)(mRingPipe->mNumSegments << 1));
         for (s32 j = 0; j < mRingPipe->mNumSegments; j++) {
-            v = j * mRingPipe->mNumSides;
-            const Vec3f& rNear = mRingPipe->mPositions[i + v];
-            const Vec3f& rFar = mRingPipe->mPositions[i + (v + 1)];
-            *vtx++ = {rNear.x, rNear.y, rNear.z, f24, f26, f23, f25};
-            *vtx++ = {rFar.x, rFar.y, rFar.z, f24, f28, f23, f27};
+            const s32 segStart = j * mRingPipe->mNumSides;
+            const Vec3f& rNear = mRingPipe->mPositions[i + segStart];
+            const Vec3f& rFar = mRingPipe->mPositions[i + (segStart + 1)];
+            *vtx++ = {rNear.x, rNear.y, rNear.z, u0, nearV0, u1, nearV1};
+            *vtx++ = {rFar.x, rFar.y, rFar.z, u0, farV0, u1, farV1};
 
-            f24 += f29;
-            f23 += f30;
+            u0 += ::sTexRateU0;
+            u1 += ::sTexRateU1;
         }
 
-        f26 = f28;
-        f25 = f27;
-        f28 += ::sTexRateV0;
-        f27 += ::sTexRateV1;
+        nearV0 = farV0;
+        nearV1 = farV1;
+        farV0 += ::sTexRateV0;
+        farV1 += ::sTexRateV1;
     }
 }
 

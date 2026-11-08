@@ -24,8 +24,10 @@ public:
     bool clipAndInitPos();
     bool calcWalkMove(s32);
     bool calcSinkMove(s32);
-    void calcAndSetVelocity(f32, f32, f32);
-    void calcAndSetUpVecTarget(f32, f32, f32);
+    // Speeds along the side, up and front vectors.
+    void calcAndSetVelocity(f32 side, f32 up, f32 front);
+    // A zero vector targets +Y.
+    void calcAndSetUpVecTarget(f32 x, f32 y, f32 z);
     bool isMarioUp() const;
     bool isMarioLeft() const;
     bool tryChangeHighSpeedMode();
