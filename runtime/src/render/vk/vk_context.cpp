@@ -608,9 +608,10 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
                  describe(quirks_).c_str());
     std::fprintf(stderr,
                  "[vulkan] features: depth-clamp=%d depth-clip=%d bc=%d "
-                 "anisotropy=%d display-timing=%d\n",
+                 "anisotropy=%d display-timing=%d queues=%u temporal-upscaling=%d frame-generation-queues=%d\n",
                  depth_clamp_, depth_clip_enable_, bc_textures_,
-                 sampler_anisotropy_, display_timing_);
+                 sampler_anisotropy_, display_timing_, queue_info.queueCount, temporal_upscaling_ ? 1 : 0,
+                 generation_present_queue_ != VK_NULL_HANDLE ? 1 : 0);
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).
     {
