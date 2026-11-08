@@ -5501,7 +5501,8 @@ bool RendererD3D12::draw_frame_pass(
     return publish_frame_pass(params, dest.texture, textures);
 }
 
-bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
+bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared) {
+    (void)compared;
     if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
     ScreenProbeSlot& out = probe_slots_[slot];
     if (out.fence != 0u || probes.empty()) {

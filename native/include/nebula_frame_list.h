@@ -169,10 +169,17 @@ typedef enum NebulaPassKind {
     NEBULA_PASS_BLOOM_HOLD,  /* the game's bloom, named by host (game_bloom.h), `arg0`, `arg1` its values */
     NEBULA_PASS_BLOOM_NORMAL,
     NEBULA_PASS_BLOOM_SIMPLE,
-    NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel` */
+    NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel`; `arg0` NEBULA_PROBE_* */
     NEBULA_PASS_SHOW,        /* the frame drawn so far is the picture this frame shows */
     NEBULA_PASS_SCENE_BEGIN, /* the 3D scene starts: `scene_camera`, `scene_view` */
 } NebulaPassKind;
+
+/* A probe pass's `arg0`. */
+enum {
+    NEBULA_PROBE_DEPTH = 0,    /* each point's value is the depth there */
+    NEBULA_PROBE_COMPARED = 1, /* the game only asks value >= user_z (seen): the host may answer 1 seen and 0 hidden, which a
+                                  depth test of the point at user_z gives where the scene is still being drawn */
+};
 
 /* Pass layers: which output variant a draw pass's items take. */
 enum {

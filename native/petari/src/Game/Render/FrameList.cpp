@@ -924,7 +924,7 @@ namespace Frame {
         return sProbeAskers;
     }
 
-    void probeScreen(u32 channel, u32 asker, const NebulaScreenProbe* pProbes, u32 count) {
+    void probeScreen(u32 channel, u32 asker, const NebulaScreenProbe* pProbes, u32 count, bool compared) {
         if (count == 0) {
             return;
         }
@@ -942,6 +942,7 @@ namespace Frame {
         rMark = NebulaScreenProbe{-1.0f, -1.0f, static_cast< f32 >(asker), 0.0f, 0.0f, 0.0f};
         NebulaFramePass& rPass = addPass(NEBULA_PASS_PROBE);
         rPass.probe_channel = channel;
+        rPass.arg0 = compared ? NEBULA_PROBE_COMPARED : NEBULA_PROBE_DEPTH;
         rPass.first_probe = first;
         rPass.probe_count = count + 1;
     }

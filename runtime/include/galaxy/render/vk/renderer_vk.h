@@ -269,8 +269,9 @@ public:
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
     // Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the stream is now;
-    // screen_probes_finished names the values, one float a point, once that frame's fence has passed.
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes);
+    // screen_probes_finished names the values, one float a point, once that frame's fence has passed. `compared` probes
+    // asked inside the scene target pass are answered there, by a depth test of each point (1 seen, 0 hidden).
+    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
     // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
@@ -627,6 +628,11 @@ private:
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
     std::array<std::array<VkPipeline, 9>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
+    // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 2, and scene variant): the
+    // depth clear's shader at the point's depth, tested GREATER_OR_EQUAL against the reversed depth on the first sample,
+    // writing nothing, counted by an occlusion query.
+    std::array<std::array<VkPipeline, 9>, 3> probe_test_pipelines_{};
+    [[nodiscard]] VkPipeline probe_test_pipeline();
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
@@ -670,13 +676,20 @@ private:
         std::uint64_t capacity = 0;          // points both hold
         std::uint64_t fence = 0;             // 0: idle
         std::uint32_t held = 0;              // points asked while the scene pass was open, read when it ends
+        // Compared points tested in the scene target pass: a query each, the answers once the fence has passed.
+        VkQueryPool queries = VK_NULL_HANDLE;
+        std::uint32_t query_capacity = 0;
+        std::uint32_t tested = 0;            // points, 0 when the values buffer answers
+        std::vector<float> answers;          // 1 seen, 0 hidden; the points no draw tests are set as they are asked
+        std::vector<std::uint8_t> drawn;     // the points whose query decides
     };
     std::vector<ProbeSlot> probe_slots_;
-    // Probes asked while the scene target pass is open wait for its end, which comes anyway (a tiled GPU stores and loads
+    // Depth probes (compared ones are tested in the pass) asked while the scene target pass is open wait for its end, which comes anyway (a tiled GPU stores and loads
     // the whole target for each break): read then, or before the next draw or clear that writes depth, whichever is
     // first, they see the depth they were asked about.
     std::vector<std::size_t> held_probe_slots_;
     void dispatch_screen_probes(std::size_t slot, std::uint32_t count);
+    [[nodiscard]] bool test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes);
     void read_held_probes();
     // Ends the scene pass for the held probes and opens it again as it was.
     void settle_screen_probes();

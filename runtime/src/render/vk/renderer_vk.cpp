@@ -1011,6 +1011,76 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     return pipeline;
 }
 
+VkPipeline RendererVk::probe_test_pipeline() {
+    const unsigned aux = scene_pass_aux_;
+    if (target_pass_active_ || aux > 2u) {
+        return VK_NULL_HANDLE;
+    }
+    VkPipeline& pipeline = probe_test_pipelines_[aux][scene_variant()];
+    if (pipeline != VK_NULL_HANDLE) {
+        return pipeline;
+    }
+    const VkDevice device = vk::Context::get().device();
+    // The scene pass this aux target opens: the motion and reactive passes are single-sample with a second target.
+    const VkRenderPass pass = aux != 0u ? draw_layout_.aux_pass_for(scene_variant(), aux) : draw_layout_.pass_for(scene_variant(), false);
+    const auto samples = aux != 0u ? VK_SAMPLE_COUNT_1_BIT : static_cast<VkSampleCountFlagBits>(1u << scene_samples_log2());
+    const VkShaderModule vs = utility_module(vk::UtilitySpirv::BlitVs);
+    const VkShaderModule ps = utility_module(vk::UtilitySpirv::ClearDepthPs);
+    VkPipelineShaderStageCreateInfo stages[2]{};
+    stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs, "main", nullptr};
+    stages[1] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_FRAGMENT_BIT, ps, "main", nullptr};
+    VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+    VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    VkPipelineViewportStateCreateInfo viewport{VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
+    viewport.viewportCount = 1;
+    viewport.scissorCount = 1;
+    VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    raster.polygonMode = VK_POLYGON_MODE_FILL;
+    raster.cullMode = VK_CULL_MODE_NONE;
+    raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    raster.lineWidth = 1.0f;
+    // The first sample, as the probe dispatch reads a multisampled depth (its resolve keeps sample 0).
+    const VkSampleMask first_sample = 1u;
+    VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    multisample.rasterizationSamples = samples;
+    multisample.pSampleMask = &first_sample;
+    // Reversed depth: the point is seen where it is as near as the scene there or nearer.
+    VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    depth.depthTestEnable = VK_TRUE;
+    depth.depthWriteEnable = VK_FALSE;
+    depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    VkPipelineColorBlendAttachmentState targets[2]{};  // write masks 0
+    VkPipelineColorBlendStateCreateInfo blend_info{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
+    blend_info.attachmentCount = aux != 0u ? 2u : 1u;
+    blend_info.pAttachments = targets;
+    const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+    dynamic.dynamicStateCount = 2;
+    dynamic.pDynamicStates = dynamic_states;
+    VkGraphicsPipelineCreateInfo info{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+    info.stageCount = 2;
+    info.pStages = stages;
+    info.pVertexInputState = &vertex_input;
+    info.pInputAssemblyState = &input_assembly;
+    info.pViewportState = &viewport;
+    info.pRasterizationState = &raster;
+    info.pMultisampleState = &multisample;
+    info.pDepthStencilState = &depth;
+    info.pColorBlendState = &blend_info;
+    info.pDynamicState = &dynamic;
+    info.layout = utility_layout_;
+    info.renderPass = pass;
+    const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);
+    vkDestroyShaderModule(device, vs, nullptr);
+    vkDestroyShaderModule(device, ps, nullptr);
+    if (result != VK_SUCCESS) {
+        pipeline = VK_NULL_HANDLE;
+        std::fprintf(stderr, "[RendererVk] probe test pipeline: %d; probes read after the pass\n", static_cast<int>(result));
+    }
+    return pipeline;
+}
+
 RendererVk::Kept RendererVk::take_apart_lost_device() {
     keep_window_ = true;
     try {
@@ -1062,6 +1132,12 @@ void RendererVk::shutdown() {
                 pipeline = VK_NULL_HANDLE;
             }
         }
+        for (auto& variants : probe_test_pipelines_) {
+            for (VkPipeline& pipeline : variants) {
+                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+                pipeline = VK_NULL_HANDLE;
+            }
+        }
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
         post_.shutdown();
@@ -1086,6 +1162,9 @@ void RendererVk::shutdown() {
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
         corner_texture_.reset();
+        for (ProbeSlot& slot : probe_slots_) {
+            if (slot.queries != VK_NULL_HANDLE) vkDestroyQueryPool(device, slot.queries, nullptr);
+        }
         probe_slots_.clear();
         held_probe_slots_.clear();
         scene_capture_ = Readback{};

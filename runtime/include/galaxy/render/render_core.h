@@ -464,7 +464,8 @@ private:
     std::deque<ScreenProbeFlight> probe_flights_;
     std::vector<std::size_t> free_probe_slots_;
     std::size_t next_probe_slot_ = 0;
-    void record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count);
+    // `compared`: NEBULA_PROBE_COMPARED, the game only compares each value with its user_z.
+    void record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count, bool compared);
     struct ScreenProbeAnswers {
         std::uint32_t count = 0;
         std::vector<ScreenProbe> probes;

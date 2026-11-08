@@ -2183,11 +2183,18 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& t
 
 // One dispatch (ScreenProbeCs): each point's pixel (screen_probe_pixel) into the slot's pixels, the scene depth sampled
 // there into its values, which the CPU reads once the frame's fence has passed.
-bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes) {
+bool RendererVk::record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared) {
     if (slot >= probe_slots_.size()) probe_slots_.resize(slot + 1u);
     ProbeSlot& out = probe_slots_[slot];
     if (out.fence != 0u || probes.empty()) {
         return false;
+    }
+    out.tested = 0u;
+    // Asked inside the scene target pass, compared points are tested there: the pass goes on, where reading the depth
+    // would end it (a store and a load of the whole target on a tiled GPU) before the next draw that writes depth.
+    if (compared && scene_pass_open_ && test_screen_probes(out, probes)) {
+        out.fence = kProbesInFrame;  // fenced at end_frame
+        return true;
     }
     vk::Context& context = vk::Context::get();
     if (out.capacity < probes.size()) {
@@ -2238,6 +2245,69 @@ void RendererVk::settle_screen_probes() {
     const unsigned aux = scene_pass_aux_;
     end_scene_pass();
     begin_scene_pass_with(aux);
+}
+
+// Each compared point (seen: the scene's depth there at or behind user_z) as a one-pixel draw of the depth clear's shader at
+// the point's reversed depth, 1 - user_z, depth-tested and writing nothing, in an occlusion query. A point the test cannot
+// place is answered as the depth read would: one in front of the near plane is seen, one behind the far plane or not on
+// the target hidden. The queries are reset in the frame's upload commands, which run before its draws.
+bool RendererVk::test_screen_probes(ProbeSlot& out, std::span<const ScreenProbe> probes) {
+    const VkPipeline pipeline = probe_test_pipeline();
+    if (pipeline == VK_NULL_HANDLE) {
+        return false;
+    }
+    const auto count = static_cast<std::uint32_t>(probes.size());
+    const VkDevice device = vk::Context::get().device();
+    if (out.query_capacity < count) {
+        if (out.queries != VK_NULL_HANDLE) {
+            vkDestroyQueryPool(device, out.queries, nullptr);  // idle: its frame has passed
+            out.queries = VK_NULL_HANDLE;
+            out.query_capacity = 0u;
+        }
+        VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        info.queryType = VK_QUERY_TYPE_OCCLUSION;
+        info.queryCount = std::max(count, 32u);
+        if (vkCreateQueryPool(device, &info, nullptr, &out.queries) != VK_SUCCESS) {
+            out.queries = VK_NULL_HANDLE;
+            return false;
+        }
+        out.query_capacity = info.queryCount;
+    }
+    vkCmdResetQueryPool(frames_[frame_slot_].uploads, out.queries, 0u, count);
+    out.answers.assign(count, 0.0f);
+    out.drawn.assign(count, 0u);
+    const VkCommandBuffer commands = commands_;
+    const float scene_w = static_cast<float>(scene_.color->width);
+    const float scene_h = static_cast<float>(scene_.color->height);
+    const VkViewport viewport{0.0f, scene_h, scene_w, -scene_h, 0.0f, 1.0f};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const ScreenProbePixel pixel = screen_probe_pixel(probes[i], scene_map_);
+        const float user_z = probes[i].user_z;
+        if (pixel.x == ~0u) {
+            continue;  // 0, as the dispatch reads it
+        }
+        if (user_z <= 0.0f) {
+            out.answers[i] = 1.0f;  // any depth is at or behind it
+            continue;
+        }
+        if (!(user_z <= 1.0f)) {
+            continue;  // behind every depth, or not a number: hidden
+        }
+        const VkRect2D rect{{static_cast<std::int32_t>(pixel.x), static_cast<std::int32_t>(pixel.y)}, {1u, 1u}};
+        const float value[4] = {1.0f - user_z, 0.0f, 0.0f, 0.0f};
+        vkCmdSetScissor(commands, 0, 1, &rect);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
+        vkCmdBeginQuery(commands, out.queries, i, 0u);
+        vkCmdDraw(commands, 3, 1, 0, 0);
+        vkCmdEndQuery(commands, out.queries, i);
+        out.drawn[i] = 1u;
+    }
+    out.tested = count;
+    reset_draw_bindings();
+    bind_scene();
+    return true;
 }
 
 // The probe dispatch, with the scene target pass closed: the depth sampled at each point into the slot's values.
@@ -2295,6 +2365,20 @@ const float* RendererVk::screen_probes_finished(std::size_t slot) {
     ProbeSlot& out = probe_slots_[slot];
     if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
         return nullptr;
+    }
+    if (out.tested != 0u) {
+        // A query reset and never begun stays unavailable: each drawn point is read alone.
+        const VkDevice device = vk::Context::get().device();
+        for (std::uint32_t i = 0; i < out.tested; ++i) {
+            std::uint64_t samples = 0u;
+            if (out.drawn[i] != 0u &&
+                vkGetQueryPoolResults(device, out.queries, i, 1u, sizeof(samples), &samples, sizeof(samples),
+                                      VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+                out.answers[i] = samples != 0u ? 1.0f : 0.0f;
+            }
+        }
+        out.fence = 0u;
+        return out.answers.data();
     }
     vk::Context::get().invalidate(*out.values);
     out.fence = 0u;
