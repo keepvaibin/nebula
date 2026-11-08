@@ -11,13 +11,13 @@ public:
     SpinDriverShootPath();
 
     void init(const TableIter&);
-    void initUsingParabolic(const TableIter&, const Vec3f&);
-    void setStartPosition(const Vec3f&);
-    void calcPosition(Vec3f*, f32) const;
-    void calcDirection(Vec3f*, f32, f32) const;
-    void calcInitPose(Vec3f*, Vec3f*, Vec3f*, f32) const;
+    void initUsingParabolic(const TableIter&, const Vec3f& rStartPos);
+    void setStartPosition(const Vec3f& rStartPos);
+    void calcPosition(Vec3f* pOutPosition, f32 rate) const;
+    void calcDirection(Vec3f* pOutDirection, f32 rate, f32 step) const;
+    void calcInitPose(Vec3f* pUp, Vec3f* pFront, Vec3f* pSide, f32 rollDegree) const;
     f32 getTotalLength() const;
-    void calcClippingInfo(Vec3f*, f32*, f32, f32);
+    void calcClippingInfo(Vec3f* pCenter, f32* pRadius, f32 sampleInterval, f32 margin);
 
     RailRider* mRailRider;
     ParabolicPath* mPath;
