@@ -20,6 +20,7 @@
 #include "Game/Screen/MiiSelect.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/Screen/TitleSequenceProduct.hpp"
+#include "Game/System/ConfigDataMii.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -47,27 +48,27 @@
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
 
-#define USER_FILE_NUM 6
-
 namespace {
-    static const f32 sSlopeDegree = 20.0f;
-    static const f32 sItemPosRadius = 5000.0f;
-    static const f32 sSelectEffectOffset = 1000.0f;
-    const char* cLuigiNameMessageID = "System_FileSelect_Icon001";
-    const char* cMarioNameMessageID = "System_FileSelect_Icon000";
-    const s32 sBgmFarState = 5;
-    const u32 sBgmFarStateChangeFrames = 60;
-    const s32 sBgmNearState = 6;
-    const u32 sBgmNearStateChangeFrames = 60;
-    static const f32 sItemThetaOffset[USER_FILE_NUM] ={10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    static const s32 sIndexOrder[USER_FILE_NUM] = {1, 2, 4, 6, 5, 3};
+    // The save's user files (SaveDataHandler's cUserFiles).
+    const s32 cUserFileNum = 6;
+    const f32 cSlopeDegree = 20.0f;
+    const f32 cItemPosRadius = 5000.0f;
+    const f32 cSelectEffectOffset = 1000.0f;
+    const char* const cLuigiNameMessageID = "System_FileSelect_Icon001";
+    const char* const cMarioNameMessageID = "System_FileSelect_Icon000";
+    const s32 cBgmFarState = 5;
+    const u32 cBgmFarStateChangeFrames = 60;
+    const s32 cBgmNearState = 6;
+    const u32 cBgmNearStateChangeFrames = 60;
+    const f32 cItemThetaOffset[cUserFileNum] = {10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    const s32 cIndexOrder[cUserFileNum] = {1, 2, 4, 6, 5, 3};
 };  // namespace
 
 namespace {
     inline int getItemArrayIndex(s32 id) {
-        const s32* pIndexOrder = sIndexOrder;
+        const s32* pIndexOrder = cIndexOrder;
 
-        for (int i = 0; i < ARRAY_SIZE(::sIndexOrder); i++) {
+        for (int i = 0; i < ARRAY_SIZE(::cIndexOrder); i++) {
             if (id == pIndexOrder[i]) {
                 return i;
             }
@@ -254,7 +255,7 @@ void FileSelector::control() {
     for (int i = 0; i < mItems->getObjNum(); i++) {
         LiveActor* pActor = mItems->getActor(i);
         pEffectPosition = &mSelectEffect[i].mPosition;
-        pEffectPosition->set(pActor->mPosition + Vec3f(0.0f, ::sSelectEffectOffset, 0.0f));
+        pEffectPosition->set(pActor->mPosition + Vec3f(0.0f, ::cSelectEffectOffset, 0.0f));
     }
 
     updateBgm();
@@ -282,8 +283,8 @@ bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
 }
 
 void FileSelector::initUserFileArray() {
-    mUserFile = new UserFile[USER_FILE_NUM]();
-    mIsCompleteFile = new bool[USER_FILE_NUM];
+    mUserFile = new UserFile[::cUserFileNum]();
+    mIsCompleteFile = new bool[::cUserFileNum];
 
     initUserFile();
 }
@@ -312,20 +313,20 @@ void FileSelector::createFileItems() {
 }
 
 bool FileSelector::createFileItemStep() {
-    if (mInitItem >= USER_FILE_NUM) return true;
+    if (mInitItem >= ::cUserFileNum) return true;
     if (mInitItem == 0u) {
-        mItems = new DeriveActorGroup<FileSelectItem>("File select items", USER_FILE_NUM);
-        mItemPositions = new Vec3f[USER_FILE_NUM]();
+        mItems = new DeriveActorGroup<FileSelectItem>("File select items", ::cUserFileNum);
+        mItemPositions = new Vec3f[::cUserFileNum]();
         calcBasePos(0.0f);
         MR::createSceneObj(SceneObj_MiiFacePartsHolder);
         mInitDelegator = new FileSelectItemDelegator<FileSelector>(this, &FileSelector::notifyItem);
     }
-    FileSelectItem* item = ::createFileItem(::sIndexOrder[mInitItem]);
+    FileSelectItem* item = ::createFileItem(::cIndexOrder[mInitItem]);
     item->initWithoutIter();
     item->setSelectDelegator(mInitDelegator);
     item->mPosition.set(mItemPositions[mInitItem]);
     mItems->registerActor(item);
-    return ++mInitItem == USER_FILE_NUM;
+    return ++mInitItem == ::cUserFileNum;
 }
 
 void FileSelector::createOperationButton() {
@@ -497,9 +498,9 @@ void FileSelector::createManual() {
 }
 
 void FileSelector::createSelectEffect() {
-    mSelectEffect = new FileSelectEffect[USER_FILE_NUM]();
+    mSelectEffect = new FileSelectEffect[::cUserFileNum]();
 
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         mSelectEffect[i].initWithoutIter();
         mSelectEffect[i].mPosition.set(mItemPositions[i]);
         mSelectEffect[i].mScale.set(0.4f);
@@ -586,7 +587,7 @@ void FileSelector::validateSelectAll() {
 }
 
 void FileSelector::initUserFile() {
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         GameSequenceFunction::restoreUserFile(&mUserFile[i], i + 1);
     }
 
@@ -594,7 +595,7 @@ void FileSelector::initUserFile() {
 }
 
 void FileSelector::restoreUserFile() {
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         GameSequenceFunction::restoreUserFile(&mUserFile[i], i + 1, mUserFile[i].mIsPlayerMario);
     }
 
@@ -604,7 +605,7 @@ void FileSelector::restoreUserFile() {
 void FileSelector::checkAllComplete() {
     bool isPlayerMario;
 
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         isPlayerMario = mUserFile[i].mIsPlayerMario;
         mIsCompleteFile[i] = false;
 
@@ -809,26 +810,26 @@ namespace {
 };  // namespace
 
 void FileSelector::calcBasePos(f32 offset) {
-    f32 thetaStep = 2.0f * PI / USER_FILE_NUM;
+    f32 thetaStep = 2.0f * PI / ::cUserFileNum;
     Pos3f translationMtx;
     Pos3f& translation = translationMtx;
     translation.makeTrans(0.0f, offset, 0.0f);
 
     RotateMtx rotation;
-    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::sSlopeDegree * PI / 180.0f);
+    rotation.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), ::cSlopeDegree * PI / 180.0f);
 
     Pos3f transform;
     transform.concat(translation, rotation);
 
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         if (mSelectedItem != nullptr && mSelectedItem == mItems->getActor(i)) {
             continue;
         }
 
-        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::sItemThetaOffset[i] * MR::pi() / 180.0f;
+        f32 theta = static_cast< f32 >(-(i + 4)) * thetaStep - ::cItemThetaOffset[i] * MR::pi() / 180.0f;
         f32 cosTheta = MR::cos(theta);
         f32 sinTheta = MR::sin(theta);
-        mItemPositions[i].set(::sItemPosRadius * cosTheta, 0.0f, ::sItemPosRadius * sinTheta);
+        mItemPositions[i].set(::cItemPosRadius * cosTheta, 0.0f, ::cItemPosRadius * sinTheta);
         transform.mult(mItemPositions[i], mItemPositions[i]);
     }
 }
@@ -864,7 +865,7 @@ namespace {
 };  // namespace
 
 void FileSelector::initAllItems() {
-    for (int i = 0; i < USER_FILE_NUM; i++) {
+    for (int i = 0; i < ::cUserFileNum; i++) {
         ::initFileItem(this, static_cast< FileSelectItem* >(mItems->getActor(i)));
     }
 }
@@ -881,8 +882,8 @@ FileSelectIconID::EFellowID FileSelector::getUserFileFellowID(s32 id) const {
     if (mUserFile[id - 1].getIconId(&iconId)) {
         FileSelectIconID::EFellowID fellowId = FileSelectIconID::Mario;
 
-        if (iconId <= 5) {
-            fellowId = static_cast< FileSelectIconID::EFellowID >(iconId - 1);
+        if (iconId <= ConfigDataMii::IconId_Peach) {
+            fellowId = static_cast< FileSelectIconID::EFellowID >(iconId - ConfigDataMii::IconId_Mario);
         }
 
         return fellowId;
@@ -1012,11 +1013,11 @@ void FileSelector::updateBgm() {
     u32 stateChangeFrames = 0;
 
     if (mCameraController->isToOrAtFarPoint()) {
-        state = ::sBgmFarState;
-        stateChangeFrames = ::sBgmFarStateChangeFrames;
+        state = ::cBgmFarState;
+        stateChangeFrames = ::cBgmFarStateChangeFrames;
     } else if (mCameraController->isToOrAtNearPoint()) {
-        state = ::sBgmNearState;
-        stateChangeFrames = ::sBgmNearStateChangeFrames;
+        state = ::cBgmNearState;
+        stateChangeFrames = ::cBgmNearStateChangeFrames;
     }
 
     if (mBgmState == state) {

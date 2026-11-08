@@ -1,39 +1,31 @@
 #include "Game/AudioLib/AudBgmVolumeController.hpp"
 #include "Game/AudioLib/AudParams.hpp"
 
-#define FADER_VOLZERO 0
-#define FADER_VOLDOWN 1
-#define FADER_INTERRUPTED 2
-#define FADER_AUX 3
-#define FADER_NOTEFAIRY 4
+namespace {
+    // Frames a held fader stays down after its last request.
+    const s32 cHoldTime = 2;
+
+    s32 getRecoverTime(s32 fader) {
+        if (fader == AudBgmVolumeController::Fader_VolDown) {
+            return AudParams::faderVolDownRecoverTime;
+        }
+
+        return AudParams::faderInterruptedRecoverTime;
+    }
+}  // namespace
 
 AudBgmVolumeController::AudBgmVolumeController() {
-    for (s32 i = 0; i < NUM_FADERS; i++) {
+    for (s32 i = 0; i < Fader_Num; i++) {
         mTimers[i] = -1;
     }
-    mFaderCtrl[FADER_VOLZERO].mVolume = AudParams::faderVolZeroVolume;
-    mFaderCtrl[FADER_VOLZERO].mTime = AudParams::faderVolZeroTime;
-    mFaderCtrl[FADER_VOLZERO].mRecoverTime = AudParams::faderVolZeroRecoverTime;
-    mFaderCtrl[FADER_VOLDOWN].mVolume = AudParams::faderVolDownVolume;
-    mFaderCtrl[FADER_VOLDOWN].mTime = AudParams::faderVolDownTime;
-    mFaderCtrl[FADER_VOLDOWN].mRecoverTime = AudParams::faderVolDownRecoverTime;
-    mFaderCtrl[FADER_INTERRUPTED].mVolume = AudParams::faderInterruptedVolume;
-    mFaderCtrl[FADER_INTERRUPTED].mTime = AudParams::faderInterruptedTime;
-    mFaderCtrl[FADER_INTERRUPTED].mRecoverTime = AudParams::faderInterruptedRecoverTime;
-    mFaderCtrl[FADER_AUX].mVolume = 0.0f;
-    mFaderCtrl[FADER_AUX].mTime = 5;
-    mFaderCtrl[FADER_AUX].mRecoverTime = 5;
-    mFaderCtrl[FADER_NOTEFAIRY].mVolume = 0.0f;
-    mFaderCtrl[FADER_NOTEFAIRY].mTime = 5;
-    mFaderCtrl[FADER_NOTEFAIRY].mRecoverTime = 5;
 }
 
 void AudBgmVolumeController::update() {
-    for (s32 i = 0; i < NUM_FADERS; i++) {
+    for (s32 i = 0; i < Fader_Num; i++) {
         if (mTimers[i] > 0) {
             mTimers[i]--;
             if (mTimers[i] <= 0) {
-                mFaders[i].set(1.0f, mFaderCtrl[i].mRecoverTime);
+                mFaders[i].set(1.0f, ::getRecoverTime(i));
                 mTimers[i] = -1;
             }
         }
@@ -43,36 +35,37 @@ void AudBgmVolumeController::update() {
 
 f32 AudBgmVolumeController::getVolume() const {
     f32 volume = 1.0f;
-    for (s32 i = 0; i < NUM_FADERS; i++) {
+    for (s32 i = 0; i < Fader_Num; i++) {
         volume *= mFaders[i].mCurrentVolume;
     }
     return volume;
 }
 
+void AudBgmVolumeController::holdFade(Fader fader, f32 volume, s32 time) {
+    if (mTimers[fader] < 0) {
+        mFaders[fader].set(volume, time);
+    }
+    mTimers[fader] = ::cHoldTime;
+}
+
 void AudBgmVolumeController::volDown(bool immediate) {
     if (immediate) {
-        mFaders[FADER_VOLDOWN].set(1.0f, 1);
-        mTimers[FADER_VOLDOWN] = -1;
+        mFaders[Fader_VolDown].set(1.0f, 1);
+        mTimers[Fader_VolDown] = -1;
         return;
     }
 
-    if (mTimers[FADER_VOLDOWN] < 0) {
-        mFaders[FADER_VOLDOWN].set(mFaderCtrl[FADER_VOLDOWN].mVolume, mFaderCtrl[FADER_VOLDOWN].mTime);
-    }
-    mTimers[FADER_VOLDOWN] = 2;
+    holdFade(Fader_VolDown, AudParams::faderVolDownVolume, AudParams::faderVolDownTime);
 }
 
 void AudBgmVolumeController::interruptedByOther() {
-    if (mTimers[FADER_INTERRUPTED] < 0) {
-        mFaders[FADER_INTERRUPTED].set(mFaderCtrl[FADER_INTERRUPTED].mVolume, mFaderCtrl[FADER_INTERRUPTED].mTime);
-    }
-    mTimers[FADER_INTERRUPTED] = 2;
+    holdFade(Fader_Interrupted, AudParams::faderInterruptedVolume, AudParams::faderInterruptedTime);
 }
 
 void AudBgmVolumeController::moveAuxVolume(f32 volume, s32 time) {
-    mFaders[FADER_AUX].set(volume, time);
+    mFaders[Fader_Aux].set(volume, time);
 }
 
 void AudBgmVolumeController::moveNoteFairyVolume(f32 volume, s32 time) {
-    mFaders[FADER_NOTEFAIRY].set(volume, time);
+    mFaders[Fader_NoteFairy].set(volume, time);
 }

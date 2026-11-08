@@ -1,4 +1,3 @@
-#define JGEOMETRY_VEC3_ZERO_NOINLINE
 #include "Game/Particle/ParticleField.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"

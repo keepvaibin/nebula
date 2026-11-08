@@ -1,4 +1,3 @@
-#define JGADGET_LINKLIST_NOINLINE
 #include "JSystem/JGadget/linklist.hpp"
 #include "JSystem/JGadget/predicate.hpp"
 

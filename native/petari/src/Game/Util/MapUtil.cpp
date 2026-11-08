@@ -254,7 +254,7 @@ namespace MR {
     }
 
     u32 getNearPolyOnLineSort(const Vec3f& rOrigin, const Vec3f& rStart, const Vec3f& rDirection, const HitSensor* pSensor) {
-        CollisionCategorizedKeeper* pKeeper = getCollisionDirector()->getCategoryKeeper(0);
+        CollisionCategorizedKeeper* pKeeper = getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map);
         const u32 count = pKeeper->checkStrikeLine(rStart, rDirection, 0, nullptr, nullptr);
         sSortCount = 0;
         if (count > sSortRoom) {
@@ -314,24 +314,24 @@ namespace MR {
     }
 
     bool isExistMapCollision(const Vec3f& rParam1, const Vec3f& rParam2) {
-        return getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
     }
 
     bool isExistMoveLimitCollision(const Vec3f& rParam1, const Vec3f& rParam2) {
-        return getCollisionDirector()->getCategoryKeeper(3)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->checkStrikeLine(rParam1, rParam2, 1, nullptr, nullptr) != 0;
     }
 
     bool isExistMapCollisionExceptActor(const Vec3f& rStart, const Vec3f& rDirection, const LiveActor* pActor) {
         CollisionPartsFilterActor filter(pActor);
-        return getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(rStart, rDirection, 1, &filter, nullptr) != 0;
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rStart, rDirection, 1, &filter, nullptr) != 0;
     }
 
     bool checkStrikePointToMap(const Vec3f& rParam1, HitInfo* pParam2) {
-        return getCollisionDirector()->getCategoryKeeper(0)->checkStrikePoint(rParam1, pParam2) != 0;
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikePoint(rParam1, pParam2) != 0;
     }
 
     bool checkStrikeBallToMap(const Vec3f& rParam1, f32 param2) {
-        return getCollisionDirector()->getCategoryKeeper(0)->checkStrikeBall(rParam1, param2, false, nullptr, nullptr) != 0;
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBall(rParam1, param2, false, nullptr, nullptr) != 0;
     }
 
     bool calcMapGround(const Vec3f& rPos, Vec3f* pGround, f32 length) {
@@ -375,7 +375,7 @@ namespace MR {
         forward *= forwardDistance;
         Vec3f start;
         start = forward + rPos - rGravity * upperDistance;
-        bool hit = getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(start, rGravity * (upperDistance + lowerDistance), 1, nullptr,
+        bool hit = getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(start, rGravity * (upperDistance + lowerDistance), 1, nullptr,
                                                                                  pTriangleFilter) != 0;
         return !hit;
     }
@@ -405,11 +405,11 @@ namespace MR {
     }
 
     u32 createAreaPolygonList(Triangle* pTriangle, u32 param2, const Vec3f& rParam3, const Vec3f& rParam4) {
-        return getCollisionDirector()->getCategoryKeeper(0)->createAreaPolygonList(pTriangle, param2, rParam3, rParam4);
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonList(pTriangle, param2, rParam3, rParam4);
     }
 
     u32 createAreaPolygonListArray(Triangle* pTriangle, u32 param2, Vec3f* pParam3, u32 param4) {
-        return getCollisionDirector()->getCategoryKeeper(0)->createAreaPolygonListArray(pTriangle, param2, pParam3, param4);
+        return getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->createAreaPolygonListArray(pTriangle, param2, pParam3, param4);
     }
 
     bool trySetMoveLimitCollision(LiveActor* pActor) {
@@ -417,16 +417,16 @@ namespace MR {
         Vec3f direction(pActor->mGravity);
         start -= direction * 150.0f;
         direction *= 1000.0f;
-        if (getCollisionDirector()->getCategoryKeeper(3)->checkStrikeLine(start, direction, 0, nullptr, nullptr)) {
-            pActor->mBinder->setExCollisionParts(getCollisionDirector()->getCategoryKeeper(3)->getStrikeInfo(0)->mParentTriangle.mParts);
+        if (getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->checkStrikeLine(start, direction, 0, nullptr, nullptr)) {
+            pActor->mBinder->setExCollisionParts(getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->getStrikeInfo(0)->mParentTriangle.mParts);
             return true;
         }
 
-        if (getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(start, direction, 0, nullptr, nullptr)) {
-            const HitInfo* pHit = getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(0);
+        if (getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(start, direction, 0, nullptr, nullptr)) {
+            const HitInfo* pHit = getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->getStrikeInfo(0);
             CollisionParts* pSameParts = nullptr;
             CollisionParts* pParts = pHit->mParentTriangle.mParts;
-            getCollisionDirector()->getCategoryKeeper(3)->searchSameHostParts(&pSameParts, pParts);
+            getCollisionDirector()->getCategoryKeeper(CollisionCategory_MoveLimit)->searchSameHostParts(&pSameParts, pParts);
             pActor->mBinder->setExCollisionParts(pSameParts);
             return true;
         }
@@ -800,37 +800,37 @@ namespace MR {
 
 namespace Collision {
     s32 checkStrikePointToMap(const Vec3f& rPoint, HitInfo* pHit) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->checkStrikePoint(rPoint, pHit);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikePoint(rPoint, pHit);
     }
 
     s32 checkStrikeBallToMap(const Vec3f& rCenter, f32 radius, const CollisionPartsFilterBase* pPartsFilter,
                              const TriangleFilterBase* pTriangleFilter) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->checkStrikeBall(rCenter, radius, false, pPartsFilter, pTriangleFilter);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBall(rCenter, radius, false, pPartsFilter, pTriangleFilter);
     }
 
     s32 checkStrikeBallToMapWithMovingReaction(const Vec3f& rCenter, f32 radius, const CollisionPartsFilterBase* pPartsFilter,
                                                const TriangleFilterBase* pTriangleFilter) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->checkStrikeBall(rCenter, radius, true, pPartsFilter, pTriangleFilter);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBall(rCenter, radius, true, pPartsFilter, pTriangleFilter);
     }
 
     s32 checkStrikeBallToMapWithThickness(const Vec3f& rCenter, f32 radius, f32 thickness, const CollisionPartsFilterBase* pPartsFilter,
                                           const TriangleFilterBase* pTriangleFilter) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->checkStrikeBallWithThickness(rCenter, radius, thickness, pPartsFilter,
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeBallWithThickness(rCenter, radius, thickness, pPartsFilter,
                                                                                               pTriangleFilter);
     }
 
     s32 checkStrikeLineToMap(const Vec3f& rStart, const Vec3f& rDirection, s32 count, const CollisionPartsFilterBase* pPartsFilter,
                              const TriangleFilterBase* pTriangleFilter) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(rStart, rDirection, count, pPartsFilter, pTriangleFilter);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->checkStrikeLine(rStart, rDirection, count, pPartsFilter, pTriangleFilter);
     }
 
     s32 checkStrikeLineToSunshade(const Vec3f& rStart, const Vec3f& rDirection, s32 count, const CollisionPartsFilterBase* pPartsFilter,
                                   const TriangleFilterBase* pTriangleFilter) {
-        return MR::getCollisionDirector()->getCategoryKeeper(1)->checkStrikeLine(rStart, rDirection, count, pPartsFilter, pTriangleFilter);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Sunshade)->checkStrikeLine(rStart, rDirection, count, pPartsFilter, pTriangleFilter);
     }
 
     const HitInfo* getStrikeInfoMap(u32 index) {
-        return MR::getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(index);
+        return MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->getStrikeInfo(index);
     }
 
     u32 getStrikeInfoNumMap() {

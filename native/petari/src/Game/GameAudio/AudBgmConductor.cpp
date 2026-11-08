@@ -63,15 +63,15 @@ void AudBgmConductor::movement() {
     switch (id) {
     case STM_GALAXY_03:
     case STM_GALAXY_04: {
-        if ((mStateBits & StateBit_1) != 0) {
-            if ((mStateBits & StateBit_Delay) != 0) {
+        if ((mStateBits & StateBit_CameraInWater) != 0) {
+            if ((mStateBits & StateBit_SwimJet) != 0) {
                 state = 6;
                 time = 20;
             } else {
                 state = 5;
             }
         } else {
-            if ((mStateBits & StateBit_Delay) != 0) {
+            if ((mStateBits & StateBit_SwimJet) != 0) {
                 state = 4;
                 time = 20;
             } else {

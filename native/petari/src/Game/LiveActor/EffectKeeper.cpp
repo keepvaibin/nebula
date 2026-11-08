@@ -344,9 +344,9 @@ void EffectKeeper::checkExistenceAttributeEffect() {
     }
 }
 
-void EffectKeeper::registMultiEmitter(MultiEmitter* pEmitter, const char* pParam2, const char* pParam3) {
-    // A later emitter of a name already held stays in _C (it is updated and drawn) but isn't found by name.
-    mNames.add(pParam3 != nullptr ? pParam3 : pParam2, mEmitters.size());
+void EffectKeeper::registMultiEmitter(MultiEmitter* pEmitter, const char* pName, const char* pUniqueName) {
+    // A later emitter of a name already held stays in mEmitters (it is updated and drawn) but isn't found by name.
+    mNames.add(pUniqueName != nullptr ? pUniqueName : pName, mEmitters.size());
     mEmitters.push_back(pEmitter);
 }
 

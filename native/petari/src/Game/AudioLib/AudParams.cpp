@@ -41,13 +41,10 @@ namespace AudParams {
     const CategoryArrangementItem arrangeSE_DM = {32, 48};
     const CategoryArrangementItem arrangeSE_RS = {64, 80};
     const CategoryArrangementItem arrangeHOMESE = {8, 16};
-    const f32 faderVolZeroVolume = 0.0f;
     const f32 faderVolDownVolume = 0.3333f;
     const f32 faderInterruptedVolume = 0.0f;
-    const s32 faderVolZeroTime = 5;
     const s32 faderVolDownTime = 3;
     const s32 faderInterruptedTime = 5;
-    const s32 faderVolZeroRecoverTime = 5;
     const s32 faderVolDownRecoverTime = 20;
     const s32 faderInterruptedRecoverTime = 60;
     const f32 micFarDistance = 7000.0f;

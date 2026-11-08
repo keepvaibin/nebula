@@ -7,9 +7,10 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-    static const f32 sInfinityIntensity = 1.0f;
-    static const f32 sInfinitySpeed = 15.0f;
-};  // namespace
+    const f32 cInfinityIntensity = 1.0f;
+    const f32 cInfinitySpeed = 15.0f;
+    const u32 cInfinityInitialNum = 4;
+}  // namespace
 
 CameraShaker::CameraShaker(const char* pName) : NameObj(pName) {
     createSinglyVerticalTask();
@@ -38,7 +39,7 @@ void CameraShaker::shakeInfinity(NameObj* pNameObj, f32 intesity, f32 speed) {
 
     if (i == (u32)mInfinity.size()) {
         NebulaArena* pArena = NebulaArena::findFromRoot(this);
-        CameraShakePatternVerticalSin* sin = new (pArena, 0) CameraShakePatternVerticalSin(::sInfinityIntensity, ::sInfinitySpeed);
+        CameraShakePatternVerticalSin* sin = new (pArena, 0) CameraShakePatternVerticalSin(::cInfinityIntensity, ::cInfinitySpeed);
         InfinityShake shake = {new (pArena, 0) CameraShakeTask(sin), nullptr};
         mInfinity.push_back(shake);
     }
@@ -60,7 +61,7 @@ void CameraShaker::stopShakingInfinity(NameObj* pNameObj) {
 void CameraShaker::createSinglyVerticalTask() {
     static const f32 cSinglyIntensity[] = {0.08f, 0.2f, 0.5f, 1.0f, 3.0f, 6.0f, 9.0f};
 
-    for (u32 i = 0; i < NR_VERTICAL_TASKS; i++) {
+    for (u32 i = 0; i < cVerticalTaskNum; i++) {
         CameraShakePatternSingly* singly = new CameraShakePatternSingly(cSinglyIntensity[i]);
         CameraShakeTask* task = new CameraShakeTask(singly);
 
@@ -71,7 +72,7 @@ void CameraShaker::createSinglyVerticalTask() {
 void CameraShaker::createSinglyHorizontalTask() {
     static const f32 cSinglyIntensity[] = {0.3f, 1.0f, 3.0f};
 
-    for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
+    for (u32 i = 0; i < cHorizontalTaskNum; i++) {
         CameraShakePatternSingly* singly = new CameraShakePatternSingly(cSinglyIntensity[i]);
 
         singly->setDirection(Vec2f(1.0f, 0.0f));
@@ -83,22 +84,22 @@ void CameraShaker::createSinglyHorizontalTask() {
 }
 
 void CameraShaker::createInfinityTask() {
-    mInfinity.init(4);
-    for (u32 i = 0; i < 4; i++) {
-        CameraShakePatternVerticalSin* sin = new CameraShakePatternVerticalSin(::sInfinityIntensity, ::sInfinitySpeed);
+    mInfinity.init(::cInfinityInitialNum);
+    for (u32 i = 0; i < ::cInfinityInitialNum; i++) {
+        CameraShakePatternVerticalSin* sin = new CameraShakePatternVerticalSin(::cInfinityIntensity, ::cInfinitySpeed);
         InfinityShake shake = {new CameraShakeTask(sin), nullptr};
         mInfinity.push_back(shake);
     }
 }
 
 void CameraShaker::updateSinglyVerticalTask() {
-    for (u32 i = 0; i < NR_VERTICAL_TASKS; i++) {
+    for (u32 i = 0; i < cVerticalTaskNum; i++) {
         mVerticalTasks[i]->movement();
     }
 }
 
 void CameraShaker::updateSinglyHorizontalTask() {
-    for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
+    for (u32 i = 0; i < cHorizontalTaskNum; i++) {
         mHorizontalTasks[i]->movement();
     }
 }
@@ -120,7 +121,7 @@ void CameraShaker::setOffset() {
 }
 
 void CameraShaker::addSinglyVerticalTaskOffset(Vec2f* pOffset) {
-    for (u32 i = 0; i < NR_VERTICAL_TASKS; i++) {
+    for (u32 i = 0; i < cVerticalTaskNum; i++) {
         if (!mVerticalTasks[i]->isEnd()) {
             Vec2f offset;
             mVerticalTasks[i]->getOffset(&offset);
@@ -132,7 +133,7 @@ void CameraShaker::addSinglyVerticalTaskOffset(Vec2f* pOffset) {
 }
 
 void CameraShaker::addSinglyHorizontalTaskOffset(Vec2f* pOffset) {
-    for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
+    for (u32 i = 0; i < cHorizontalTaskNum; i++) {
         if (!mHorizontalTasks[i]->isEnd()) {
             Vec2f offset;
             mHorizontalTasks[i]->getOffset(&offset);

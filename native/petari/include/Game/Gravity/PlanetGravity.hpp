@@ -4,16 +4,20 @@
 
 class NameObj;
 
-// Gravity vector calculation flags
-#define GRAVITY_TYPE_NORMAL 1
-#define GRAVITY_TYPE_SHADOW 2
-#define GRAVITY_TYPE_MAGNET 4
-#define GRAVITY_TYPE_MARIO_LAUNCHER 8
+// PlanetGravity::mGravityType bits; a gravity query names the types it takes.
+enum GravityType {
+    GravityType_Normal = 1,
+    GravityType_Shadow = 2,
+    GravityType_Magnet = 4,
+    GravityType_MarioLauncher = 8,
+};
 
-// Gravity power types
-#define GRAVITY_POWER_LIGHT 0
-#define GRAVITY_POWER_NORMAL 1
-#define GRAVITY_POWER_HEAVY 2
+// PlanetGravity::mGravityPower.
+enum GravityPower {
+    GravityPower_Light = 0,
+    GravityPower_Normal = 1,
+    GravityPower_Heavy = 2,
+};
 
 class PlanetGravity {
 public:

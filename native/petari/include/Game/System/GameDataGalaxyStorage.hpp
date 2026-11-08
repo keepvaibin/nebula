@@ -61,15 +61,7 @@ public:
     u32 mScenarioNum;
 };
 
-// NOTE/TODO: This dummy is here to ensure vtable alignment in GameDataAllGalaxyStorage.
-// This double-inheritance with BinaryDataChunkBase behavior is repeated for a few
-// different classes. What actually is the class that takes this role?
-class Dummy1 {
-public:
-    Dummy1() {};
-};
-
-class GameDataAllGalaxyStorage : public Dummy1, public BinaryDataChunkBase {
+class GameDataAllGalaxyStorage : public BinaryDataChunkBase {
 public:
     // Missions past eight in the galaxy with the most, and what they add to the save.
     s32 getExtraStars() const;

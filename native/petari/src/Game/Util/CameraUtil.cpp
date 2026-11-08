@@ -404,17 +404,18 @@ namespace MR {
         endGlobalEventCamera(::sLauncherCameraName, -1, true);
     }
 
-    void setLauncherCameraAngle(f32 angleY, f32 angleX, f32 elevation, f32 f4) {  // TODO: f4
+    // A negative upX leaves the camera's up direction off.
+    void setLauncherCameraAngle(f32 angleY, f32 angleX, f32 elevation, f32 upX) {
         CameraParamChunkEvent* chunk = getCameraDirector()->getEventParameter(0, ::sLauncherCameraName);
         if (chunk != nullptr) {
             chunk->mGeneralParam->mAngleA = angleX;
             chunk->mGeneralParam->mAngleB = angleY;
             chunk->mGeneralParam->mWPoint.z = elevation;
-            if (f4 < 0.0f) {
+            if (upX < 0.0f) {
                 chunk->mGeneralParam->mNum2 = 0;
             } else {
                 chunk->mGeneralParam->mNum2 = 1;
-                chunk->mGeneralParam->mUp.x = f4;
+                chunk->mGeneralParam->mUp.x = upX;
             }
         }
     }

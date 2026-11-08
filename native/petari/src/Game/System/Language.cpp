@@ -2,8 +2,6 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include "Game/Util/StringUtil.hpp"
-#include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
@@ -13,69 +11,63 @@ namespace {
         return NebulaRegion::isJapan() ? 0 : NebulaRegion::isPal() ? 2 : 1;
     }
 
+    const s32 cSystemLanguageNum = 10;
+
     // Each release's game language for the host's language setting (NebulaSystemSettings::language: Japanese,
     // English, German, French, Spanish, Italian, Dutch, then three that fall back to English).
-    const u8 cLanguageByRegion[][10] = {
+    const u8 cLanguageByRegion[][cSystemLanguageNum] = {
         {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_EUFRENCH,
-            LANGUAGE_EUSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_EUENGLISH,
-            LANGUAGE_EUENGLISH,
-            LANGUAGE_EUENGLISH,
+            LanguageId_JpJapanese,
+            LanguageId_UsEnglish,
+            LanguageId_EuGerman,
+            LanguageId_EuFrench,
+            LanguageId_EuSpanish,
+            LanguageId_EuItalian,
+            LanguageId_EuDutch,
+            LanguageId_EuEnglish,
+            LanguageId_EuEnglish,
+            LanguageId_EuEnglish,
         },
         {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_USFRENCH,
-            LANGUAGE_USSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_USENGLISH,
+            LanguageId_JpJapanese,
+            LanguageId_UsEnglish,
+            LanguageId_EuGerman,
+            LanguageId_UsFrench,
+            LanguageId_UsSpanish,
+            LanguageId_EuItalian,
+            LanguageId_EuDutch,
+            LanguageId_UsEnglish,
+            LanguageId_UsEnglish,
+            LanguageId_UsEnglish,
         },
         {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_EUENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_EUFRENCH,
-            LANGUAGE_EUSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_EUENGLISH,
-            LANGUAGE_EUENGLISH,
-            LANGUAGE_EUENGLISH,
+            LanguageId_JpJapanese,
+            LanguageId_EuEnglish,
+            LanguageId_EuGerman,
+            LanguageId_EuFrench,
+            LanguageId_EuSpanish,
+            LanguageId_EuItalian,
+            LanguageId_EuDutch,
+            LanguageId_EuEnglish,
+            LanguageId_EuEnglish,
+            LanguageId_EuEnglish,
         },
     };
+
     const Language cLanguages[] = {
-        {LANGUAGE_JPJAPANESE, "JpJapanese"},       {LANGUAGE_USENGLISH, "UsEnglish"},
-        {LANGUAGE_USSPANISH, "UsSpanish"},         {LANGUAGE_USFRENCH, "UsFrench"},
-        {LANGUAGE_EUENGLISH, "EuEnglish"},         {LANGUAGE_EUSPANISH, "EuSpanish"},
-        {LANGUAGE_EUFRENCH, "EuFrench"},           {LANGUAGE_EUGERMAN, "EuGerman"},
-        {LANGUAGE_EUITALIAN, "EuItalian"},         {LANGUAGE_EUDUTCH, "EuDutch"},
+        {LanguageId_JpJapanese, "JpJapanese"}, {LanguageId_UsEnglish, "UsEnglish"}, {LanguageId_UsSpanish, "UsSpanish"},
+        {LanguageId_UsFrench, "UsFrench"},     {LanguageId_EuEnglish, "EuEnglish"}, {LanguageId_EuSpanish, "EuSpanish"},
+        {LanguageId_EuFrench, "EuFrench"},     {LanguageId_EuGerman, "EuGerman"},   {LanguageId_EuItalian, "EuItalian"},
+        {LanguageId_EuDutch, "EuDutch"},
     };
-};  // namespace
+}  // namespace
 
 namespace MR {
     u32 getDecidedLanguageFromIPL() {
-        s32 language = NebulaSystemSettings::language();
-        s32 i;
+        const s32 language = NebulaSystemSettings::language();
+        const s32 i = language < 0 ? 0 : language < ::cSystemLanguageNum ? language : ::cSystemLanguageNum - 1;
 
-        if (language < 0) {
-            i = 0;
-        } else {
-            s32 size = ARRAY_SIZE(::cLanguageByRegion[regionRow()]);
-
-            i = language < size ? language : size - 1;
-        }
-
-        return ::cLanguageByRegion[regionRow()][i];
+        return ::cLanguageByRegion[::regionRow()][i];
     }
 
     u32 getLanguage() {
@@ -83,9 +75,9 @@ namespace MR {
     }
 
     const char* getCurrentLanguagePrefix() {
-        u32 id = getLanguage();
+        const u32 id = getLanguage();
 
-        for (int i = 0; i < getLanguageNum(); i++) {
+        for (u32 i = 0; i < getLanguageNum(); i++) {
             if (id == ::cLanguages[i].mId) {
                 return ::cLanguages[i].mName;
             }
@@ -94,26 +86,22 @@ namespace MR {
         return "English";
     }
 
+    // Every id the game sets is in cLanguages, so its region is the prefix's first two letters.
     const char* getCurrentRegionPrefix() {
-        char prefix[3];
-        MR::extractString(prefix, getCurrentLanguagePrefix(), 2, sizeof(prefix));
-
-        if (MR::isEqualString(prefix, "Jp")) {
+        switch (getLanguage() >> cLanguageRegionShift) {
+        case LanguageRegion_Jp:
             return "Jp";
-        }
-
-        if (MR::isEqualString(prefix, "Us")) {
+        case LanguageRegion_Us:
             return "Us";
-        }
-
-        if (MR::isEqualString(prefix, "Eu")) {
+        case LanguageRegion_Eu:
             return "Eu";
+        default:
+            return nullptr;
         }
-        return nullptr;
     }
 
     u32 getLanguageNum() {
-        return ARRAY_SIZE(::cLanguages);
+        return sizeof(::cLanguages) / sizeof(::cLanguages[0]);
     }
 
     const char* getLanguagePrefixByIndex(u32 index) {

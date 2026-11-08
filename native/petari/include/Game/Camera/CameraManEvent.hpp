@@ -9,8 +9,6 @@ class CameraParamChunk;
 class CameraParamChunkEvent;
 class CameraParamChunkHolder;
 
-#define NR_FIFO_ITEMS 2
-
 class CameraManEvent : public CameraMan {
 public:
     enum EPriority {
@@ -78,7 +76,8 @@ public:
     CameraHolder* mHolder;
     CameraParamChunkHolder* mChunkHolder;
     Camera* mCamera;
-    ChunkFIFOItemPair mItems[NR_FIFO_ITEMS];
+    static const u32 cFifoItemNum = 2;
+    ChunkFIFOItemPair mItems[cFifoItemNum];
     CameraParamChunkEvent* mChunk;
     bool mRequestReset;
 };

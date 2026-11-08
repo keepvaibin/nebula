@@ -8,15 +8,16 @@
 class SoundAudience;
 struct SoundParams;
 
+// A category's sound limits: how many play at once, and how many more may wait silent (0 active: no limit).
 struct CategoryArrangementItem {
-    struct {
-        u8 mMaxActiveSe;
-        u8 mMaxInactiveSe;
-    };
+    u8 mMaxActiveSe;
+    u8 mMaxInactiveSe;
 };
 
+const int cEffectCategoryNum = 16;
+
 struct CategoryArrangement {
-    CategoryArrangementItem mItems[16];
+    CategoryArrangementItem mItems[cEffectCategoryNum];
 };
 
 class EffectManager;
@@ -106,11 +107,9 @@ public:
         return getNumActiveSe() > 0;
     }
 
-    static const int NUM_CATEGORIES = 16;
-
     SoundAudience* mAudience;
     SeqSource* mSeqDataMgr;
     SoundStrategyMgr< EffectSound >* mStrategyMgr;
-    EffectCategory mCategoryMgrs[NUM_CATEGORIES];
+    EffectCategory mCategoryMgrs[cEffectCategoryNum];
     SoundMove mParams;
 };

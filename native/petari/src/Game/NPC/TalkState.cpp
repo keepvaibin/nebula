@@ -240,8 +240,7 @@ void TalkStateNormal::updateButton() {
     Vec3f centerPlayer(*MR::getPlayerCenterPos());
     MR::getPlayerUpVec(&up);
 
-    f64 absolute = fabs(camZ.dot(up));  // TODO: look at fabs again
-    f32 f1 = absolute;
+    f32 f1 = fabs(camZ.dot(up));
     f32 f2 = camY.dot(up);
     f1 = f1 * f1;
 

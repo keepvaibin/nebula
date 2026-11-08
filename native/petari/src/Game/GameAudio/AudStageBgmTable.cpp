@@ -5,8 +5,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Sound/Sound.hpp"
 
-// TODO: bgm state enum
-
 namespace {
     struct StageBgm {
         const char* mStageName;

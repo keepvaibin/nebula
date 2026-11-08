@@ -15,10 +15,10 @@ public:
     void stopPinchEventBgmSoon();
     void movementPinchEventBgm();
 
-    // TODO: clarify StateBit_1
+    // Set each frame by AudCameraWatcher (camera under water) and MarioSwim (a swim dash); cleared by movement.
     enum StateBits {
-        StateBit_1 = 0b010,
-        StateBit_Delay = 0b100,
+        StateBit_CameraInWater = 0b010,
+        StateBit_SwimJet = 0b100,
     };
 
     u32 mStateBits;

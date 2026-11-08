@@ -17,7 +17,6 @@ namespace AudBgmSetting {
     // First 8 bytes are 16 nibbles of the mute state per track
     // byte 9 is a rate / 254
     // byte 10 is a rate / 254
-    // TODO: would this be better suited as a struct?
     static const MuteState cMuteState[][8] = {
         {
             {{0x11, 0x20, 0x00, 0x00, 0x11, 0x11, 0x11, 0x11}, 0xFE, 0x00},

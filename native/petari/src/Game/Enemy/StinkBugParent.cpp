@@ -77,7 +77,7 @@ void StinkBugParent::init(const TableIter& rIter) {
     MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 160.0f, Vec3f(0.0f, -50.0f, 80.0f));
     // With the child on its back first; its own collision takes over when the child is gone.
     MR::initCollisionParts(this, "SwitchChildJ", getSensor("body"), nullptr);
-    mParentOnlyParts = MR::createCollisionPartsFromLiveActor(this, "Switch", getSensor("body"), getBaseMtx(), MR::CollisionScaleType_Unk2);
+    mParentOnlyParts = MR::createCollisionPartsFromLiveActor(this, "Switch", getSensor("body"), getBaseMtx(), MR::CollisionScaleType_Default);
     initBinder(300.0f, 300.0f, 0);
     MR::setBinderExceptActor(this, this);
     MR::setBinderIgnoreMovingCollision(this);

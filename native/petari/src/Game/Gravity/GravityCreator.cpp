@@ -149,26 +149,16 @@ void DiskTorusGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& r
 }
 
 void DiskTorusGravityCreator::settingFromPlacementArgs(s32 arg0, s32 arg1, s32 arg2) {
-    // Obj_arg0 = enable both sides?
     mGravityInstance->setBothSide(arg0 != 0);
 
-    // Obj_arg1 = edge type
-    switch (arg1) {
-    case 0:
-        mGravityInstance->setEdgeType(0);
-        break;
-    case 1:
-        mGravityInstance->setEdgeType(1);
-        break;
-    case 2:
-        mGravityInstance->setEdgeType(2);
-        break;
-    default:
-        mGravityInstance->setEdgeType(3);
-        break;
+    // Unknown edge types pull from both edges.
+    if (arg1 == DiskTorusGravity::EdgeType_DisableBoth || arg1 == DiskTorusGravity::EdgeType_DisableOuter ||
+        arg1 == DiskTorusGravity::EdgeType_DisableInner) {
+        mGravityInstance->setEdgeType(arg1);
+    } else {
+        mGravityInstance->setEdgeType(DiskTorusGravity::EdgeType_EnableBoth);
     }
 
-    // Obj_arg2 = disk radius
     mGravityInstance->setDiskRadius(arg2);
 }
 

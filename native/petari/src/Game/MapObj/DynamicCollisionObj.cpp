@@ -1,5 +1,6 @@
 #include "Game/MapObj/DynamicCollisionObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Map/KCollision.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -170,7 +171,7 @@ void DynamicCollisionObj::createCollision() {
     mParts = new CollisionParts();
     Pos3f posmtx;
     NebulaMtxTrans(posmtx, mPosition.x, mPosition.y, mPosition.z);
-    mParts->init(posmtx, getSensor("body"), mKCLFile, nullptr, 0, true);
+    mParts->init(posmtx, getSensor("body"), mKCLFile, nullptr, CollisionCategory_Map, true);
     MR::validateCollisionParts(mParts);
     mParts->mServer->calcFarthestVertexDistance();
     mParts->updateBoundingSphereRange(Vec3f(mScale));

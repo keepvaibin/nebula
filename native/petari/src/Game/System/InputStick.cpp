@@ -3,15 +3,32 @@
 #include "Game/System/PlayerInputs.hpp"
 #include <nebula_geometry.hpp>
 
-#define STICK_FLAG_NONE 0x0
-#define STICK_FLAG_UP 0x1
-#define STICK_FLAG_DOWN 0x2
-#define STICK_FLAG_RIGHT 0x4
-#define STICK_FLAG_LEFT 0x8
-
 namespace {
-    static const f32 sIsOnValue = 0.2f;
-};  // namespace
+    // A direction is on past this deflection.
+    const f32 cIsOnValue = 0.2f;
+
+    u32 calcDirections(const Vec2f& rStick) {
+        u32 directions = 0;
+
+        if (rStick.x > ::cIsOnValue) {
+            directions |= InputStick::Direction_Right;
+        }
+
+        if (rStick.x < -::cIsOnValue) {
+            directions |= InputStick::Direction_Left;
+        }
+
+        if (rStick.y > ::cIsOnValue) {
+            directions |= InputStick::Direction_Up;
+        }
+
+        if (rStick.y < -::cIsOnValue) {
+            directions |= InputStick::Direction_Down;
+        }
+
+        return directions;
+    }
+}  // namespace
 
 InputStick::InputStick(const PlayerInput* pPad)
     : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease(), mIsTriggerUp(), mIsTriggerDown(), mIsHoldUp(), mIsHoldDown() {
@@ -24,70 +41,28 @@ void InputStick::update() {
         return;
     }
 
-    Vec2f stickPrev(mStick);
+    const Vec2f stickPrev(mStick);
     mStick.set(pSample->mStick.x, pSample->mStick.y);
     mSpeed = mStick.distance(stickPrev);
-    u32 flagPrev = STICK_FLAG_NONE;
 
-    if (stickPrev.x > ::sIsOnValue) {
-        flagPrev |= STICK_FLAG_RIGHT;
-    }
+    const u32 directionsPrev = ::calcDirections(stickPrev);
+    const u32 directions = ::calcDirections(mStick);
+    mHold = directions;
+    mTrigger = directions & ~directionsPrev;
+    mRelease = directionsPrev & ~directions;
 
-    if (stickPrev.x < -::sIsOnValue) {
-        flagPrev |= STICK_FLAG_LEFT;
-    }
-
-    if (stickPrev.y > ::sIsOnValue) {
-        flagPrev |= STICK_FLAG_UP;
-    }
-
-    if (stickPrev.y < -::sIsOnValue) {
-        flagPrev |= STICK_FLAG_DOWN;
-    }
-
-    u32 flag = STICK_FLAG_NONE;
-
-    if (mStick.x > ::sIsOnValue) {
-        flag |= STICK_FLAG_RIGHT;
-    }
-
-    if (mStick.x < -::sIsOnValue) {
-        flag |= STICK_FLAG_LEFT;
-    }
-
-    if (mStick.y > ::sIsOnValue) {
-        flag |= STICK_FLAG_UP;
-    }
-
-    if (mStick.y < -::sIsOnValue) {
-        flag |= STICK_FLAG_DOWN;
-    }
-
-    mHold = flag;
-    mTrigger = flag & ~flagPrev;
-    mRelease = flagPrev & ~flag;
-
+    // Any vertical deflection counts here (no dead zone).
     if (mStick.y == 0.0f) {
         mIsTriggerUp = false;
         mIsTriggerDown = false;
         mIsHoldUp = false;
         mIsHoldDown = false;
     } else if (mStick.y > 0.0f) {
-        if (mIsHoldUp) {
-            mIsTriggerUp = false;
-        } else {
-            mIsTriggerUp = true;
-        }
-
+        mIsTriggerUp = !mIsHoldUp;
         mIsHoldUp = true;
         mIsHoldDown = false;
     } else {
-        if (mIsHoldDown) {
-            mIsTriggerDown = false;
-        } else {
-            mIsTriggerDown = true;
-        }
-
+        mIsTriggerDown = !mIsHoldDown;
         mIsHoldDown = true;
         mIsHoldUp = false;
     }

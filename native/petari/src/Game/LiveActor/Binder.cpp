@@ -88,7 +88,7 @@ const Vec3f Binder::bind(const Vec3f& rVelocity) {
     Vec3f result;
 
     if (mIsExCollisionValid && mExCollisionParts) {
-        MR::getCollisionDirector()->getCategoryKeeper(0)->addToGlobal(mExCollisionParts);
+        MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->addToGlobal(mExCollisionParts);
     }
 
     if (mOffsetVec) {
@@ -157,7 +157,7 @@ const Vec3f Binder::bind(const Vec3f& rVelocity) {
     }
 
     if (mIsExCollisionValid && mExCollisionParts) {
-        MR::getCollisionDirector()->getCategoryKeeper(0)->removeFromGlobal(mExCollisionParts);
+        MR::getCollisionDirector()->getCategoryKeeper(CollisionCategory_Map)->removeFromGlobal(mExCollisionParts);
     }
 
     return result;

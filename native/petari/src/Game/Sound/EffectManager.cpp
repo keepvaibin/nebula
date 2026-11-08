@@ -30,40 +30,40 @@ bool EffectCategory::acceptsNewSe_(u32 priority) const {
         return true;
     }
 
-    int stopCount = 0;
+    int playingNum = 0;
     for (JSULink< EffectSound >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
         if (priority < i->getObject()->getProperPriority_()) {
             return true;
         }
         if (!i->getObject()->isStopping()) {
-            stopCount++;
+            playingNum++;
         }
     }
 
-    if (stopCount < maxSe) {
-        return true;
-    } else {
-        return false;
-    }
+    return playingNum < maxSe;
 }
 
+// Stable, ascending by category priority. Linear when the order hasn't changed since the last frame.
 void EffectCategory::sortByPriority_() {
-    for (u32 i = mSeList.getNumLinks(); i != 0; i--) {
-        JSULink< EffectSound >* link = mSeList.getFirst();
-        u32 lowestPriority = link->getObject()->getPriority_();
-        JSULink< EffectSound >* current = link->getNext();
+    JSULink< EffectSound >* pLink = mSeList.getFirst();
+    if (pLink == mSeList.getEnd()) {
+        return;
+    }
 
-        for (int j = 1; j < i; j++) {
-            u32 itemPriority = current->getObject()->getPriority_();
-            if (itemPriority < lowestPriority) {
-                lowestPriority = itemPriority;
-                link = current;
-            }
-            current = current->getNext();
+    for (pLink = pLink->getNext(); pLink != mSeList.getEnd();) {
+        JSULink< EffectSound >* const pNext = pLink->getNext();
+        const u32 priority = pLink->getObject()->getPriority_();
+        JSULink< EffectSound >* pPos = pLink->getPrev();
+
+        if (priority < pPos->getObject()->getPriority_()) {
+            do {
+                pPos = pPos->getPrev();
+            } while (pPos != nullptr && priority < pPos->getObject()->getPriority_());
+
+            mSeList.insert(pPos == nullptr ? mSeList.getFirst() : pPos->getNext(), pLink);
         }
 
-        mSeList.remove(link);
-        mSeList.append(link);
+        pLink = pNext;
     }
 }
 
@@ -93,25 +93,17 @@ void EffectCategory::managerMixOut_(const SoundMove& params, SoundActivity activ
     SoundParams mixParams;
     mixParams.combine(params.mParams, mParams.mParams);
     JSULink< EffectSound >* i = mSeList.getFirst();
-    int maxActiveSe = getMaxActiveSe();
 
-    if (maxActiveSe > 0) {
-        while (i != mSeList.getEnd() && maxActiveSe > 0 && !i->getObject()->isFarAway()) {
-            i->getObject()->categoryMixOut_(true, mixParams, activity);
-            i = i->getNext();
-            maxActiveSe--;
-        }
-        for (; i != mSeList.getEnd(); i = i->getNext()) {
-            i->getObject()->categoryMixOut_(false, mixParams, activity);
-        }
-    } else {
-        while (i != mSeList.getEnd() && !i->getObject()->isFarAway()) {
-            i->getObject()->categoryMixOut_(true, mixParams, activity);
-            i = i->getNext();
-        }
-        for (; i != mSeList.getEnd(); i = i->getNext()) {
-            i->getObject()->categoryMixOut_(false, mixParams, activity);
-        }
+    // The leading sounds that aren't far away play, up to the active limit (0: no limit); the rest are muted.
+    const bool isLimited = getMaxActiveSe() > 0;
+    int activeLeft = getMaxActiveSe();
+    while (i != mSeList.getEnd() && (!isLimited || activeLeft > 0) && !i->getObject()->isFarAway()) {
+        i->getObject()->categoryMixOut_(true, mixParams, activity);
+        i = i->getNext();
+        activeLeft--;
+    }
+    for (; i != mSeList.getEnd(); i = i->getNext()) {
+        i->getObject()->categoryMixOut_(false, mixParams, activity);
     }
 }
 
@@ -124,32 +116,32 @@ EffectManager::EffectManager(bool setInstance) : SoundGlobal< EffectManager >(se
 }
 
 void EffectManager::setCategoryArrangement(const CategoryArrangement& arrangement) {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].setMaxActiveSe(arrangement.mItems[i].mMaxActiveSe);
         mCategoryMgrs[i].setMaxInactiveSe(arrangement.mItems[i].mMaxInactiveSe);
     }
 }
 
 void EffectManager::stop() {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].stop();
     }
 }
 
 void EffectManager::stop(u32 fadeTime) {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].stop(fadeTime);
     }
 }
 
 void EffectManager::stopSoundID(SoundID id) {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].stopSoundID(id);
     }
 }
 
 void EffectManager::initParams() {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].getParams()->init();
     }
 }
@@ -187,23 +179,23 @@ EffectSound* EffectManager::newSe_(int category, u32 priority) {
 
 void EffectManager::calc() {
     mParams.calc();
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].managerCalc_();
     }
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].freeDeadSe_();
     }
 }
 
 void EffectManager::mixOut() {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         mCategoryMgrs[i].managerMixOut_(mParams, mSoundActivity);
     }
 }
 
 int EffectManager::getNumActiveSe() const {
     int num = 0;
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
+    for (int i = 0; i < cEffectCategoryNum; i++) {
         num += mCategoryMgrs[i].getNumSe();
     }
     return num;

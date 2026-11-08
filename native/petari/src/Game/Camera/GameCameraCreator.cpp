@@ -47,10 +47,7 @@ void GameCameraCreator::termCameraCodeCollection() {
 
 void GameCameraCreator::scanStartPos() {
     for (s32 idx = 0; idx < MR::getStartPosNum(); idx++) {
-        // TODO: ctor
-        PlacementId info;
-        info.mId = -1;
-        info.mZoneID = -1;
+        PlacementId info(-1, -1);
 
         MR::getStartCameraIdInfoFromStartDataIndex(&info, idx);
 

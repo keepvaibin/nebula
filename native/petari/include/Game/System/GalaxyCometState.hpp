@@ -2,46 +2,31 @@
 
 #include "Game/System/NerveExecutor.hpp"
 
-/// @brief The state of a Prankster Comet.
+// Whether a dome's Prankster Comet is in orbit or hidden.
 class GalaxyCometState : NerveExecutor {
 public:
-    /// @brief Creates a new `GalaxyCometState`.
+    // The saved state index.
+    enum State {
+        State_Hide = 0,
+        State_Land = 1,
+    };
+
     GalaxyCometState();
 
-    /// @brief Updates the working nerve action.
     void update();
-
-    /// @brief Determines if the Prankster Comet is in orbit.
-    /// @return `true` if the Prankster Comet is in orbit, `false` otherwise.
     bool isLand() const;
-
-    /// @brief Determines if the Prankster Comet is hidden.
-    /// @return `true` if the Prankster Comet is hidden, `false` otherwise.
     bool isHide() const;
-
-    /// @brief Transitions from the working nerve action into the next nerve action.
+    // Land to Hide, anything else to Land.
     void forceToNext();
-
-    /// @brief Returns the index of the working nerve action.
-    /// @return The index of the working nerve action.
-    s32 getStateIndex() const;
-
-    /// @brief Returns the number of "past seconds."
-    /// @return The number of "past seconds."
+    State getStateIndex() const;
+    // No time-based state: always 0.
     s32 getPastSecond() const;
+    // Unknown states are ignored; pastSecond is unused.
+    void setStateAndPastSecond(s32 state, u16 pastSecond);
 
-    /// @brief Transitions from the working nerve action into the given nerve action.
-    /// @param state The index of the target nerve action.
-    /// @param pastSecond The number of "past seconds."
-    void setStateAndPastSecond(int state, u16 pastSecond);
-
-    /// @brief Updates the working nerve action when the Prankster Comet is hidden.
     void exeHide();
-
-    /// @brief Updates the working nerve action when the Prankster Comet is in orbit.
     void exeLand();
 
 private:
-    /// @brief Determines if the working nerve action should be updated.
     bool mIsUpdateNerve;
 };

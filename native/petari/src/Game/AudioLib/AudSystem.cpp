@@ -593,7 +593,7 @@ void AudSystem::resumeFromErrorWindow() {
 
 s32 AudSystem::getNumOfPlaying(SoundID soundID) {
     s32 count = 0;
-    for (s32 category = 0; category < EffectManager::NUM_CATEGORIES; category++) {
+    for (s32 category = 0; category < cEffectCategoryNum; category++) {
         for (JSULink< EffectSound >* it = getSeMgr().getCategory(category)->getSeList()->getFirst(); it != getSeMgr().getCategory(0)->getSeList()->getEnd();
              it = it->getNext()) {
             if (it->getObject()->mSoundID == soundID) {
@@ -607,7 +607,7 @@ s32 AudSystem::getNumOfPlaying(SoundID soundID) {
 
 u32 AudSystem::getPlayCountMin(SoundID soundID) {
     u32 min = -1;
-    for (s32 category = 0; category < EffectManager::NUM_CATEGORIES; category++) {
+    for (s32 category = 0; category < cEffectCategoryNum; category++) {
         for (JSULink< EffectSound >* it = getSeMgr().getCategory(category)->getSeList()->getFirst(); it != getSeMgr().getCategory(0)->getSeList()->getEnd();
              it = it->getNext()) {
             if (it->getObject()->mSoundID == soundID) {
@@ -735,7 +735,7 @@ void AudSystem::seFanfareProcess() {
 
 bool AudSystem::isFanfareSePlaying() {
     AudSoundInfo* info = AudSoundInfo::getInstance();
-    for (s32 category = 0; category < EffectManager::NUM_CATEGORIES; category++) {
+    for (s32 category = 0; category < cEffectCategoryNum; category++) {
         for (JSULink< EffectSound >* it = getSeMgr().getCategory(category)->getSeList()->getFirst(); it != getSeMgr().getCategory(0)->getSeList()->getEnd();
              it = it->getNext()) {
             if (info->isFanfareSe(it->getObject()->mSoundID)) {
@@ -788,7 +788,7 @@ void AudSystem::updateLimitedSound() {
 
 bool AudSystem::isAlreadyPlayingSoundNear(SoundID soundID, const Vec3f* pPos, f32 range) {
     Vec3f pos;
-    for (s32 category = 0; category < EffectManager::NUM_CATEGORIES; category++) {
+    for (s32 category = 0; category < cEffectCategoryNum; category++) {
         for (JSULink< EffectSound >* it = getSeMgr().getCategory(category)->getSeList()->getFirst(); it != getSeMgr().getCategory(0)->getSeList()->getEnd();
              it = it->getNext()) {
             if (it->getObject()->mSoundID != soundID) {
@@ -820,7 +820,7 @@ bool AudSystem::isAlreadyPlayingSoundNear(SoundID soundID, const Vec3f* pPos, f3
 }
 
 void AudSystem::setVolumeZeroForce(s32 menuType) {
-    for (s32 category = 0; category < EffectManager::NUM_CATEGORIES; category++) {
+    for (s32 category = 0; category < cEffectCategoryNum; category++) {
         if (category == 0xD) {  // HOMESE
             continue;
         }

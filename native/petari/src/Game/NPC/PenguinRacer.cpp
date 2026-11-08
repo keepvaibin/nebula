@@ -30,12 +30,6 @@ namespace {
     static const f32 sSensorRadius = 80.0f;
     static const f32 sNearClipping = 200.0f;
     static const f32 sSwimSoundPlayDistance = 500.0f;
-
-    // TODO: this is an exact copy of MR::isInWater, except it needs to be inlined.
-    inline bool isInWater(const Vec3f& rPos) {
-        WaterInfo waterInfo;
-        return MR::getWaterAreaObj(&waterInfo, rPos);
-    }
 };  // namespace
 
 namespace NrvPenguinRacer {
@@ -207,7 +201,7 @@ void PenguinRacer::exeWait() {
 
 void PenguinRacer::exeRaceWait() {
     if (MR::isFirstStep(this)) {
-        if (::isInWater(mPosition)) {
+        if (MR::isInWater(mPosition)) {
             MR::startAction(this, "RacerSwimWaitSurface");
         } else {
             MR::startAction(this, "RacerWait");
@@ -329,7 +323,7 @@ void PenguinRacer::exeRaceGoal() {
 
 void PenguinRacer::exeRaceTurn() {
     if (MR::isFirstStep(this)) {
-        if (::isInWater(mPosition)) {
+        if (MR::isInWater(mPosition)) {
             MR::startAction(this, "RacerSwimWaitSurface");
         } else {
             MR::startAction(this, "RacerWait");
@@ -469,7 +463,7 @@ void PenguinRacer::prepRacer(const RaceManager* pRaceManager) {
 
     MR::decidePose(this, -mGravity, MR::getRailDirection(this), mPosition, 1.0f, 1.0f, 1.0f);
 
-    if (::isInWater(mPosition)) {
+    if (MR::isInWater(mPosition)) {
         MR::startAction(this, "RacerSwimSurfaceSoon");
     } else {
         Vec3f pos;
@@ -529,7 +523,7 @@ void PenguinRacer::resetRacer(const RaceManager* pRaceManager) {
     mVelocity.zero();
     MR::calcGravity(this);
 
-    if (::isInWater(mPosition)) {
+    if (MR::isInWater(mPosition)) {
         MR::startAction(this, "RacerSwimWaitSoon");
     } else {
         MR::startAction(this, "RacerWaitSoon");

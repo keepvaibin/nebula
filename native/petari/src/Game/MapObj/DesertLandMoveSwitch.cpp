@@ -141,7 +141,7 @@ void DesertLandMoveSwitch::initModelAndCollision(const TableIter& rIter) {
     HitSensor* pBodySensor = MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     HitSensor* pMoveSensor = MR::addHitSensorMapObj(this, "move", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, pObjName, pBodySensor, nullptr);
-    mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", pMoveSensor, MR::CollisionScaleType_Unk2);
+    mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", pMoveSensor, MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mCollisionParts);
 }
 

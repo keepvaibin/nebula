@@ -10,7 +10,6 @@ class SoundAudience {
 public:
     virtual ~SoundAudience();
 
-    // TODO: Should all be pure virtual.
     virtual SoundAudible* newAudible(const Vec3f&, SoundID, const Vec3f*, u32) = 0;
     virtual int getMaxChannels() = 0;
     virtual void deleteAudible(SoundAudible*) = 0;

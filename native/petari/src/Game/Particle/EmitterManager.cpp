@@ -1,4 +1,3 @@
-#define JSU_LIST_DEFER_INLINE
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -169,5 +168,3 @@ void EmitterManager::startScene(u32 sceneSeed) {
         }
     }
 }
-
-#include "JSystem/JSupport/JSUListInline.hpp"

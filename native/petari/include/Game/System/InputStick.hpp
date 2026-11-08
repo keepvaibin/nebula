@@ -6,6 +6,14 @@ class PlayerInput;
 
 class InputStick {
 public:
+    // mHold, mTrigger and mRelease bits.
+    enum Direction {
+        Direction_Up = 0x1,
+        Direction_Down = 0x2,
+        Direction_Right = 0x4,
+        Direction_Left = 0x8,
+    };
+
     InputStick(const PlayerInput*);
 
     void update();

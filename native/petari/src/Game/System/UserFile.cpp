@@ -5,16 +5,19 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Mii/Mii.hpp"
 
-#define USER_NAME_SIZE (Mii::NameLength + 1)
+namespace {
+    // A Mii name and its terminator.
+    const u32 cUserNameSize = Mii::NameLength + 1;
+}  // namespace
 
 UserFile::UserFile()
     : mGameDataHolder(nullptr), mConfigDataHolder(nullptr), mIsPlayerMario(true), mIsGameDataCorrupted(false), mIsConfigDataCorrupted(false),
       mUserName(nullptr) {
     mGameDataHolder = new GameDataHolder(this);
     mConfigDataHolder = new ConfigDataHolder();
-    mUserName = new char16_t[USER_NAME_SIZE];
+    mUserName = new char16_t[::cUserNameSize];
 
-    MR::zeroMemory(mUserName, USER_NAME_SIZE * sizeof(char16_t));
+    MR::zeroMemory(mUserName, ::cUserNameSize * sizeof(char16_t));
 }
 
 bool UserFile::isCreated() const {
@@ -78,7 +81,7 @@ void UserFile::updateLastModified() {
 }
 
 void UserFile::setUserName(const char16_t* pUserName) {
-    MR::copyMemory(mUserName, pUserName, USER_NAME_SIZE * sizeof(char16_t));
+    MR::copyMemory(mUserName, pUserName, ::cUserNameSize * sizeof(char16_t));
 }
 
 const char* UserFile::getGameDataName() const {

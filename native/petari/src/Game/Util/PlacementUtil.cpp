@@ -165,7 +165,7 @@ bool MR::getPlacementRotate(const TableIter& rIter, Vec3f* pOut) {
         makeMtxRotate(rotateMtx.toMtxPtr(), *pOut);
         rotateMtx.concat(*getZonePlacementMtx(rIter), rotateMtx);
 
-        // TODO: getEuler but for std?
+        // Euler angles from the matrix, with the two gimbal-locked cases first.
         if (-0.001f <= rotateMtx.mMtx[2][0] - 1.0f) {
             pOut->x = std::atan2(-rotateMtx.mMtx[0][1], rotateMtx.mMtx[1][1]);
             pOut->y = -1.5707964f;

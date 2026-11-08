@@ -71,7 +71,7 @@ void TreasureBoxCracked::init(const TableIter& rIter) {
     MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 200.0f, Vec3f(0.0f, 50.0f, 0.0f));
     mTopMtx.set(MR::getJointMtx(this, "Top"));
     MR::initCollisionParts(this, "Top", getSensor("body"), mTopMtx.toMtxPtr());
-    mBoxCollider = MR::createCollisionPartsFromLiveActor(this, "Box", getSensor("body"), MR::CollisionScaleType_Unk2);
+    mBoxCollider = MR::createCollisionPartsFromLiveActor(this, "Box", getSensor("body"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mBoxCollider);
     initEffectKeeper(0, nullptr);
     initSound(4, false);

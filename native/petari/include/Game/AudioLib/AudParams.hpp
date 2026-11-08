@@ -32,13 +32,10 @@ namespace AudParams {
     extern const CategoryArrangementItem arrangeSE_DM;
     extern const CategoryArrangementItem arrangeSE_RS;
     extern const CategoryArrangementItem arrangeHOMESE;
-    extern const f32 faderVolZeroVolume;
     extern const f32 faderVolDownVolume;
     extern const f32 faderInterruptedVolume;
-    extern const s32 faderVolZeroTime;
     extern const s32 faderVolDownTime;
     extern const s32 faderInterruptedTime;
-    extern const s32 faderVolZeroRecoverTime;
     extern const s32 faderVolDownRecoverTime;
     extern const s32 faderInterruptedRecoverTime;
     extern const f32 micFarDistance;

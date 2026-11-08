@@ -76,8 +76,8 @@ void BeamGoRoundPlanet::init(const TableIter& rIter) {
     info.setupFarClipping(-1.0f);
     info.setupNerve(GET_NERVE(BeamGoRoundPlanet, BeamGoRoundPlanetNrvWait));
     initialize(rIter, info);
-    mMove1Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move1"), MR::CollisionScaleType_Unk2);
-    mMove2Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move2"), MR::CollisionScaleType_Unk2);
+    mMove1Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move1"), MR::CollisionScaleType_Default);
+    mMove2Collision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("body"), MR::getJointMtx(this, "move2"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mMove2Collision);
     MR::validateCollisionParts(mMove1Collision);
     initBeam();

@@ -54,5 +54,4 @@ public:
     Vec3f mPosition;
     Vec3f mGravity;
     bool mIsCollided;
-    Vec3f mLErpOffset;  // TODO: is this name correct?
 };

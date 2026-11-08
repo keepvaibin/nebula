@@ -2,15 +2,7 @@
 
 #include "Game/System/BinaryDataChunkHolder.hpp"
 
-// NOTE/TODO: This dummy is here to ensure vtable alignment in GameDataAllGalaxyStorage.
-// This double-inheritance with BinaryDataChunkBase behavior is repeated for a few
-// different classes. What actually is the class that takes this role?
-class Dummy2 {
-public:
-    Dummy2() {};
-};
-
-class StarPieceAlmsStorage : public Dummy2, public BinaryDataChunkBase {
+class StarPieceAlmsStorage : public BinaryDataChunkBase {
 public:
     StarPieceAlmsStorage();
 

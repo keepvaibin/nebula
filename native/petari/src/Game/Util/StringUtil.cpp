@@ -11,15 +11,15 @@
 #include <cstdio>
 #include <nebula_format.h>
 
-#define CENTISEC_PER_SEC 100
-#define SEC_PER_MIN 60
-#define MIN_PER_HOUR 60
-#define FRAME_PER_SEC 60
-#define FRAME_PER_MIN (FRAME_PER_SEC * SEC_PER_MIN)
-#define FRAME_PER_HOUR (FRAME_PER_SEC * SEC_PER_MIN * MIN_PER_HOUR)
-
-extern "C" {
-};
+namespace {
+    // Clear times count game frames.
+    const s32 cCentisecPerSec = 100;
+    const s32 cSecPerMin = 60;
+    const s32 cMinPerHour = 60;
+    const s32 cFramePerSec = 60;
+    const s32 cFramePerMin = cFramePerSec * cSecPerMin;
+    const s32 cFramePerHour = cFramePerMin * cMinPerHour;
+}  // namespace
 
 namespace {
     // A decimal number at p after any spaces; false if there is none.
@@ -92,16 +92,16 @@ namespace MR {
         s32 second;
         s32 centisecond;
 
-        if (frame >= FRAME_PER_HOUR) {
+        if (frame >= ::cFramePerHour) {
             minute = 59;
             second = 59;
             centisecond = 99;
         } else {
-            s32 signedFrame = frame;
+            const s32 signedFrame = frame;
 
-            minute = signedFrame / FRAME_PER_MIN;
-            second = (signedFrame / FRAME_PER_SEC) % SEC_PER_MIN;
-            centisecond = ((signedFrame % FRAME_PER_SEC) * CENTISEC_PER_SEC) / FRAME_PER_SEC;
+            minute = signedFrame / ::cFramePerMin;
+            second = (signedFrame / ::cFramePerSec) % ::cSecPerMin;
+            centisecond = ((signedFrame % ::cFramePerSec) * ::cCentisecPerSec) / ::cFramePerSec;
         }
 
         const char16_t* pMessage = MR::getGameMessageDirect("System_Time000");
@@ -113,12 +113,12 @@ namespace MR {
         s32 minute;
         s32 second;
 
-        if (frame >= FRAME_PER_HOUR) {
+        if (frame >= static_cast< u32 >(::cFramePerHour)) {
             minute = 59;
             second = 59;
         } else {
-            minute = frame / FRAME_PER_MIN;
-            second = (frame % FRAME_PER_MIN) / FRAME_PER_SEC;
+            minute = frame / static_cast< u32 >(::cFramePerMin);
+            second = (frame % static_cast< u32 >(::cFramePerMin)) / static_cast< u32 >(::cFramePerSec);
         }
 
         const char16_t* pMessage = MR::getGameMessageDirect("System_Time001");

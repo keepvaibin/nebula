@@ -246,7 +246,7 @@ public:
         }
 
         for (int i = 0; i < mMaxChannels; i++) {
-            SoundDopplerChannel* channel = audible->mChannels[i];  // TODO: inherited?
+            SoundDopplerChannel* channel = audible->mChannels[i];
             if (channel == nullptr) {
                 continue;
             }

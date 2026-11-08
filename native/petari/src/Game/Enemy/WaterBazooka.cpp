@@ -82,7 +82,7 @@ void WaterBazooka::init(const TableIter& rIter) {
     MR::addMessageSensorEnemy(this, "cannon");
 
     MR::initCollisionParts(this, "Cannon1", getSensor("cannon"), MR::getJointMtx(this, "Cannon1"));
-    mCannonCollisionParts = MR::createCollisionPartsFromLiveActor(this, "AllRoot", getSensor("body"), MR::CollisionScaleType_Unk2);
+    mCannonCollisionParts = MR::createCollisionPartsFromLiveActor(this, "AllRoot", getSensor("body"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mCannonCollisionParts);
 
     initEffectKeeper(1, nullptr);

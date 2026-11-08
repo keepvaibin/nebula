@@ -1,9 +1,6 @@
 #include "Game/System/GalaxyCometState.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 
-#define STATE_HIDE 0
-#define STATE_LAND 1
-
 namespace {
     NEW_NERVE(GalaxyCometStateHide, GalaxyCometState, Hide);
     NEW_NERVE(GalaxyCometStateLand, GalaxyCometState, Land);
@@ -30,32 +27,26 @@ bool GalaxyCometState::isHide() const {
 }
 
 void GalaxyCometState::forceToNext() {
-    Nerve* pNerve =
-        isLand() ? static_cast< Nerve* >(GET_NERVE_ANON(GalaxyCometStateHide)) : static_cast< Nerve* >(GET_NERVE_ANON(GalaxyCometStateLand));
-
-    setNerve(pNerve);
+    if (isLand()) {
+        setNerve(GET_NERVE_ANON(GalaxyCometStateHide));
+    } else {
+        setNerve(GET_NERVE_ANON(GalaxyCometStateLand));
+    }
 }
 
-s32 GalaxyCometState::getStateIndex() const {
-    s32 stateIndex = isHide() ? STATE_HIDE : isLand();
-
-    return stateIndex;
+GalaxyCometState::State GalaxyCometState::getStateIndex() const {
+    return isLand() ? State_Land : State_Hide;
 }
 
 s32 GalaxyCometState::getPastSecond() const {
     return 0;
 }
 
-void GalaxyCometState::setStateAndPastSecond(int state, u16 pastSecond) {
-    switch (state) {
-    case STATE_HIDE:
+void GalaxyCometState::setStateAndPastSecond(s32 state, u16 pastSecond) {
+    if (state == State_Hide) {
         setNerve(GET_NERVE_ANON(GalaxyCometStateHide));
-        break;
-    case STATE_LAND:
+    } else if (state == State_Land) {
         setNerve(GET_NERVE_ANON(GalaxyCometStateLand));
-        break;
-    default:
-        break;
     }
 }
 

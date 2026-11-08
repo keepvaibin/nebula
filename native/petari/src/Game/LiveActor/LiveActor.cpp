@@ -418,34 +418,33 @@ void LiveActor::initShadowControllerList(u32 shadowNum) {
     mShadowControllerList = new ShadowControllerList(this, shadowNum);
 }
 
-void LiveActor::initActorCollisionParts(const char* pParam1, HitSensor* pParam2, ResourceHolder* pParam3, MtxPtr pParam4, bool param5, bool param6) {
-    pParam1 = NebulaMods::modelFor(mName, pParam1);
+void LiveActor::initActorCollisionParts(const char* pName, HitSensor* pSensor, ResourceHolder* pResHolder, MtxPtr pMtx, bool isAutoEqualScale,
+                                        bool isNotUsingScale) {
+    pName = NebulaMods::modelFor(mName, pName);
     MR::CollisionScaleType scaleType;
 
-    if (param6) {
+    if (isNotUsingScale) {
         scaleType = MR::CollisionScaleType_NotUsingScale;
+    } else if (isAutoEqualScale) {
+        scaleType = MR::CollisionScaleType_AutoEqualScale;
     } else {
-        scaleType = MR::CollisionScaleType_Unk2;
-
-        if (param5) {
-            scaleType = MR::CollisionScaleType_AutoEqualScale;
-        }
+        scaleType = MR::CollisionScaleType_Default;
     }
 
-    if (pParam3 != nullptr) {
+    if (pResHolder != nullptr) {
         Pos3f mtx;
 
-        if (pParam4 != nullptr) {
-            mtx.set(pParam4);
+        if (pMtx != nullptr) {
+            mtx.set(pMtx);
         } else {
             MR::makeMtxTRS(mtx.toMtxPtr(), this);
         }
 
-        mCollisionParts = MR::createCollisionPartsFromResourceHolder(pParam3, pParam1, pParam2, mtx, scaleType);
-    } else if (pParam4 == nullptr) {
-        mCollisionParts = MR::createCollisionPartsFromLiveActor(this, pParam1, pParam2, scaleType);
+        mCollisionParts = MR::createCollisionPartsFromResourceHolder(pResHolder, pName, pSensor, mtx, scaleType);
+    } else if (pMtx == nullptr) {
+        mCollisionParts = MR::createCollisionPartsFromLiveActor(this, pName, pSensor, scaleType);
     } else {
-        mCollisionParts = MR::createCollisionPartsFromLiveActor(this, pParam1, pParam2, pParam4, scaleType);
+        mCollisionParts = MR::createCollisionPartsFromLiveActor(this, pName, pSensor, pMtx, scaleType);
     }
 
     MR::invalidateCollisionParts(this);

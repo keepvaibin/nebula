@@ -545,7 +545,7 @@ void BombHei::exeExplode() {
         }
         mCarrySensor = nullptr;
         endCountdown();
-        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);  // TODO
+        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
         MR::invalidateClipping(this);
     }
 

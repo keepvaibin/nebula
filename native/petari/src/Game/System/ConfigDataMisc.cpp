@@ -3,40 +3,45 @@
 #include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
 #include "Game/System/NebulaCalendar.hpp"
 
-#define FLAG_LAST_LOADED_MARIO 0x1
-#define FLAG_COMPLETE_ENDING_MARIO 0x2
-#define FLAG_COMPLETE_ENDING_LUIGI 0x4
+namespace {
+    // The saved flag byte.
+    enum Flag {
+        Flag_LastLoadedMario = 0x1,
+        Flag_CompleteEndingMario = 0x2,
+        Flag_CompleteEndingLuigi = 0x4,
+    };
+}  // namespace
 
-ConfigDataMisc::ConfigDataMisc() : mFlag(FLAG_LAST_LOADED_MARIO), mLastModified() {
+ConfigDataMisc::ConfigDataMisc() {
     initializeData();
 }
 
 bool ConfigDataMisc::isLastLoadedMario() const {
-    return !((mFlag & FLAG_LAST_LOADED_MARIO) - 1);
+    return (mFlag & ::Flag_LastLoadedMario) != 0;
 }
 
 void ConfigDataMisc::setLastLoadedMario(bool lastLoadedMario) {
     if (lastLoadedMario) {
-        mFlag |= FLAG_LAST_LOADED_MARIO;
+        mFlag |= ::Flag_LastLoadedMario;
     } else {
-        mFlag &= ~FLAG_LAST_LOADED_MARIO;
+        mFlag &= ~::Flag_LastLoadedMario;
     }
 }
 
 void ConfigDataMisc::onCompleteEndingMario() {
-    mFlag |= FLAG_COMPLETE_ENDING_MARIO;
+    mFlag |= ::Flag_CompleteEndingMario;
 }
 
 void ConfigDataMisc::onCompleteEndingLuigi() {
-    mFlag |= FLAG_COMPLETE_ENDING_LUIGI;
+    mFlag |= ::Flag_CompleteEndingLuigi;
 }
 
 bool ConfigDataMisc::isOnCompleteEndingMario() {
-    return (mFlag & FLAG_COMPLETE_ENDING_MARIO) != 0;
+    return (mFlag & ::Flag_CompleteEndingMario) != 0;
 }
 
 bool ConfigDataMisc::isOnCompleteEndingLuigi() {
-    return (mFlag & FLAG_COMPLETE_ENDING_LUIGI) != 0;
+    return (mFlag & ::Flag_CompleteEndingLuigi) != 0;
 }
 
 NebulaCalendar::SaveTime ConfigDataMisc::getLastModified() const {
@@ -58,10 +63,10 @@ u32 ConfigDataMisc::getSignature() const {
 s32 ConfigDataMisc::serialize(u8* pBuffer, u32 size) const {
     JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
 
-    u8 flag = mFlag;
+    const u8 flag = mFlag;
     stream.write(&flag, sizeof(flag));
 
-    s64 lastModified = mLastModified;
+    const s64 lastModified = mLastModified;
     stream.write(&lastModified, sizeof(lastModified));
 
     return stream.mPosition;
@@ -76,6 +81,7 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
     stream.read(&flag, sizeof(flag));
     mFlag = flag;
 
+    // Saves from before the timestamp end after the flag byte.
     if (stream.getAvailable() == 0) {
         mLastModified = 0;
     } else {
@@ -88,6 +94,6 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
 }
 
 void ConfigDataMisc::initializeData() {
-    mFlag = FLAG_LAST_LOADED_MARIO;
+    mFlag = ::Flag_LastLoadedMario;
     mLastModified = 0;
 }

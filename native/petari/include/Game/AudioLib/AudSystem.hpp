@@ -129,7 +129,7 @@ public:
     StdSoundInfo* mSoundInfo;
     SoundArchive* mSectionHeap;
     AudAudience< 4 > mAudience;
-    AudDopplerAudible< 4 >* mAudible;  // TODO: should this be merged into AudAudience<>??
+    AudDopplerAudible< 4 >* mAudible;
     AudSoundObject* mSystemSeObject;
     AudSoundObject* mAtmosphereSeObject;
     AudMeObject* mSystemMeObject;

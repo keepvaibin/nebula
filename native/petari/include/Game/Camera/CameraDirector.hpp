@@ -40,17 +40,14 @@ struct CameraEvent {
     s32 mFrame;
 };
 
-#define CAMERA_MAN_CAPACITY 8
-
 class CameraDirector : public NameObj {
 public:
+    // Grows by doubling (CameraDirector::push).
     class CameraManStack {
     public:
-        inline CameraManStack() {
-            mElements = new CameraMan*[CAMERA_MAN_CAPACITY];
-            mCapacity = CAMERA_MAN_CAPACITY;
-            mCount = 0;
-            mElements = new CameraMan*[CAMERA_MAN_CAPACITY];
+        static const u32 cInitialCapacity = 8;
+
+        CameraManStack() : mElements(new CameraMan*[cInitialCapacity]), mCapacity(cInitialCapacity), mCount(0) {
         }
 
         CameraMan** mElements;

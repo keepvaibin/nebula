@@ -2,14 +2,20 @@
 
 #include "Game/AudioLib/AudFader.hpp"
 
-#define NUM_FADERS 5
-
+// A BGM's volume: the product of its faders.
 class AudBgmVolumeController {
 public:
-    /// @brief Creates a new `AudBgmVolumeController`.
-    AudBgmVolumeController();
+    enum Fader {
+        // Held down while requested every frame; recover once the requests stop.
+        Fader_VolDown,
+        Fader_Interrupted,
+        // Moved by the caller only.
+        Fader_Aux,
+        Fader_NoteFairy,
+        Fader_Num,
+    };
 
-    ~AudBgmVolumeController() {};
+    AudBgmVolumeController();
 
     void update();
     f32 getVolume() const;
@@ -18,13 +24,11 @@ public:
     void moveAuxVolume(f32, s32);
     void moveNoteFairyVolume(f32, s32);
 
-    struct FaderCtrl {
-        f32 mVolume;
-        s32 mTime;
-        s32 mRecoverTime;
-    };
+private:
+    void holdFade(Fader fader, f32 volume, s32 time);
 
-    s32 mTimers[NUM_FADERS];
-    FaderCtrl mFaderCtrl[NUM_FADERS];
-    AudFader mFaders[NUM_FADERS];
+public:
+    // Frames until a held fader recovers, or -1 when it is not held.
+    s32 mTimers[Fader_Num];
+    AudFader mFaders[Fader_Num];
 };

@@ -1,10 +1,6 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
 
-#define DISK_TORUS_DISABLE_BOTH_EDGE_GRAVITY 0
-#define DISK_TORUS_DISABLE_OUTER_EDGE_GRAVITY 1
-#define DISK_TORUS_DISABLE_INNER_EDGE_GRAVITY 2
-
 DiskTorusGravity::DiskTorusGravity()
     : PlanetGravity(), mLocalPosition(0.0f, 50.0f, 0.0f), mTranslation(0.0f, 50.0f, 0.0f), mLocalDirection(0, 1, 0), mRotation(0, 1, 0) {
     mRadius = 2000.0f;
@@ -76,7 +72,7 @@ bool DiskTorusGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Ve
     f32 distance = 0.0f;
 
     if (distanceToCentralAxis < innerRadius) {
-        if (mEdgeType == DISK_TORUS_DISABLE_BOTH_EDGE_GRAVITY || mEdgeType == DISK_TORUS_DISABLE_INNER_EDGE_GRAVITY) {
+        if (mEdgeType == EdgeType_DisableBoth || mEdgeType == EdgeType_DisableInner) {
             return false;
         }
 
@@ -86,7 +82,7 @@ bool DiskTorusGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Ve
         gravity = nearestInnerEdgePoint - rPos;
         MR::separateScalarAndDirection(&distance, &gravity, gravity);
     } else if (distanceToCentralAxis > worldRadius) {
-        if (mEdgeType == DISK_TORUS_DISABLE_BOTH_EDGE_GRAVITY || mEdgeType == DISK_TORUS_DISABLE_OUTER_EDGE_GRAVITY) {
+        if (mEdgeType == EdgeType_DisableBoth || mEdgeType == EdgeType_DisableOuter) {
             return false;
         }
 

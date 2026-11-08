@@ -22,6 +22,8 @@ public:
     void loadFile(s32);
     void arrangeChunk(CameraParamChunk*);
 
+    static const u32 cInitialCapacity = 0x400;
+
     CameraHolder* mCameraHolder;
     u32 mChunkCapacity;
     u32 mNrChunks;

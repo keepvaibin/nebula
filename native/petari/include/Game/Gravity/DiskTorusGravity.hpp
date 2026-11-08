@@ -4,6 +4,14 @@
 
 class DiskTorusGravity : public PlanetGravity {
 public:
+    // Which rim edges pull (placement arg 1).
+    enum EdgeType {
+        EdgeType_DisableBoth = 0,
+        EdgeType_DisableOuter = 1,
+        EdgeType_DisableInner = 2,
+        EdgeType_EnableBoth = 3,
+    };
+
     DiskTorusGravity();
 
     virtual void updateMtx(const Pos3f& rMtx);
