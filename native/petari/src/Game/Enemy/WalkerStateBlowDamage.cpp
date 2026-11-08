@@ -5,10 +5,10 @@
 #include "Game/Util/NerveUtil.hpp"
 
 namespace {
-    static const f32 sAirFric = 0.99f;
-    static const f32 sAirGravityAccel = 1.0f;
-    static const f32 sDamageTurnLimit = 15.0f;
-    static const s32 sDamageLandTime = 30;
+    const f32 sAirFric = 0.99f;
+    const f32 sAirGravityAccel = 1.0f;
+    const f32 sDamageTurnLimit = 15.0f;
+    const s32 sDamageLandTime = 30;
 };  // namespace
 
 namespace NrvWalkerStateBlowDamage {
@@ -34,12 +34,10 @@ void WalkerStateBlowDamage::exeBlow() {
     MR::addVelocityToGravity(getHost(), ::sAirGravityAccel);
     MR::turnDirectionDegree(getHost(), mDirection, -getHost()->mVelocity, ::sDamageTurnLimit);
 
-    if (MR::isGreaterStep(this, 5)) {
-        if (MR::isBindedGround(getHost())) {
-            MR::startAction(getHost(), "DamageLand");
-            MR::zeroVelocity(getHost());
-            setNerve(GET_NERVE(WalkerStateBlowDamage, WalkerStateBlowDamageNrvBlowLand));
-        }
+    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(getHost())) {
+        MR::startAction(getHost(), "DamageLand");
+        MR::zeroVelocity(getHost());
+        setNerve(GET_NERVE(WalkerStateBlowDamage, WalkerStateBlowDamageNrvBlowLand));
     }
 }
 

@@ -3,14 +3,12 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 
 namespace {
-    static const s32 sMaxTakoHeiInk = 16;
+    const s32 sMaxTakoHeiInk = 16;
 };  // namespace
 
 TakoHeiInkHolder::TakoHeiInkHolder() : DeriveActorGroup< TakoHeiInk >("タコヘイ墨管理", ::sMaxTakoHeiInk) {
-    TakoHeiInk* pInk;
-
-    for (int i = 0; i < ::sMaxTakoHeiInk; i++) {
-        pInk = new TakoHeiInk("タコヘイ墨");
+    for (s32 i = 0; i < ::sMaxTakoHeiInk; i++) {
+        TakoHeiInk* const pInk = new TakoHeiInk("タコヘイ墨");
         pInk->initWithoutIter();
         registerActor(pInk);
     }

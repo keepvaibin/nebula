@@ -38,9 +38,10 @@ const HitInfo* Binder::getPlane(int index) const {
     return &mPlane[index];
 }
 
+// Without a plane list: the ground, wall and roof planes (capacity 3 or more).
 u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
+    u32 count = 0;
     if (mPlaneCapacity == 0) {
-        u32 count = 0;
         if (isBindedGround()) {
             pPlanes[count++] = &mGroundInfo;
         }
@@ -52,17 +53,14 @@ u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
         if (isBindedRoof()) {
             pPlanes[count++] = &mRoofInfo;
         }
-
-        MR::sort(pPlanes, pPlanes + count, compSensor);
-        return count;
+    } else {
+        for (; count < mPlaneNum && count < capacity; count++) {
+            pPlanes[count] = &mPlane[count];
+        }
     }
 
-    for (u32 i = 0; i < mPlaneNum; i++) {
-        pPlanes[i] = &mPlane[i];
-    }
-
-    MR::sort(pPlanes, pPlanes + mPlaneNum, compSensor);
-    return mPlaneNum;
+    MR::sort(pPlanes, pPlanes + count, compSensor);
+    return count;
 }
 
 bool Binder::compSensor(const HitInfo* pPlane1, const HitInfo* pPlane2) {

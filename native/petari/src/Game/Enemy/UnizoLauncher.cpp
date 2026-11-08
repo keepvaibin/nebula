@@ -44,7 +44,7 @@ void UnizoLauncher::init(const TableIter& rIter) {
 void UnizoLauncher::exeLaunch() {
     if (MR::isFirstStep(this)) {
         for (s32 i = 0; i < mUnizoNum; i++) {
-            Unizo* pUnizo = mUnizos[i];
+            Unizo* const pUnizo = mUnizos[i];
             if (MR::isDead(pUnizo)) {
                 MR::copyTransRotateScale(this, pUnizo);
                 pUnizo->mPosition.z += i;
@@ -58,9 +58,6 @@ void UnizoLauncher::exeLaunch() {
 }
 
 void UnizoLauncher::exeWait() {
-    if (MR::isFirstStep(this)) {
-    }
-
     if (MR::isGreaterStep(this, ::sUnizoInter)) {
         setNerve(GET_NERVE(UnizoLauncher, UnizoLauncherNrvLaunch));
     }

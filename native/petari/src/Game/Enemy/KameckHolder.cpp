@@ -8,14 +8,12 @@ KameckHolder::KameckHolder(s32 numMax) : DeriveActorGroup< Kameck >("カメッ�
 
 void KameckHolder::startDemoAppear() {
     for (s32 i = 0; i < getObjNum(); i++) {
-        Kameck* pActor = getMember(i);
+        Kameck* const pActor = getMember(i);
 
-        if (!MR::isDead(pActor)) {
-            continue;
+        if (MR::isDead(pActor)) {
+            pActor->startDemoAppear();
+            MR::requestMovementOn(pActor);
         }
-
-        pActor->startDemoAppear();
-        MR::requestMovementOn(pActor);
     }
 }
 
@@ -27,12 +25,10 @@ void KameckHolder::endDemoAppear() {
 
 void KameckHolder::deadForceAll() {
     for (s32 i = 0; i < getObjNum(); i++) {
-        Kameck* pActor = getMember(i);
+        Kameck* const pActor = getMember(i);
 
-        if (MR::isDead(pActor)) {
-            continue;
+        if (!MR::isDead(pActor)) {
+            pActor->makeActorDeadForce();
         }
-
-        pActor->makeActorDeadForce();
     }
 }

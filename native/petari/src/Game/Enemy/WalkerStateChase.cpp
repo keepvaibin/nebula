@@ -16,7 +16,8 @@ namespace NrvWalkerStateChase {
     NEW_NERVE(WalkerStateChaseNrvEnd, WalkerStateChase, End);
 };  // namespace NrvWalkerStateChase
 
-WalkerStateChaseParam::WalkerStateChaseParam() : mChaseTime(130), mForceChaseEndTime(300), mTurnMaxRateDegree(2.0f), mChaseEndWaitTime(30) {
+// The speed is each walker's own: Kuribo, KuriboChief and KuriboMini set it.
+WalkerStateChaseParam::WalkerStateChaseParam() : mChaseSpeed(0.0f), mChaseTime(130), mForceChaseEndTime(300), mTurnMaxRateDegree(2.0f), mChaseEndWaitTime(30) {
 }
 
 WalkerStateChase::WalkerStateChase(LiveActor* pHost, Vec3f* pDirection, WalkerStateParam* pStateParam, WalkerStateChaseParam* pChaseParam)
@@ -38,7 +39,7 @@ void WalkerStateChase::exeStart() {
         MR::startAction(getHost(), "Run");
     }
 
-    bool isInSight = WalkerStateFunction::isInSightPlayer(getHost(), *mDirection, mStateParam);
+    const bool isInSight = WalkerStateFunction::isInSightPlayer(getHost(), *mDirection, mStateParam);
     if (isInSight) {
         MR::turnDirectionToTargetUseGroundNormalDegree(getHost(), mDirection, *MR::getPlayerPos(), mChaseParam->mTurnMaxRateDegree);
     }

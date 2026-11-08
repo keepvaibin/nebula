@@ -7,13 +7,10 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-namespace MR {
-    bool useStageSwitchReadA(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchA(rIter)) {
+namespace {
+    // Gives the actor its switch control when the placement names the switch; reading and writing need the same.
+    bool useStageSwitch(LiveActor* pActor, const TableIter& rIter, bool (*pIsExist)(const TableIter&)) {
+        if (!MR::isValidInfo(rIter) || !pIsExist(rIter)) {
             return false;
         }
 
@@ -22,92 +19,36 @@ namespace MR {
         }
 
         return true;
+    }
+};  // namespace
+
+namespace MR {
+    bool useStageSwitchReadA(LiveActor* pActor, const TableIter& rIter) {
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchA);
     }
 
     bool useStageSwitchReadB(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchB(rIter)) {
-            return false;
-        }
-
-        if (pActor->mStageSwitchCtrl == nullptr) {
-            pActor->initStageSwitch(rIter);
-        }
-
-        return true;
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchB);
     }
 
     bool useStageSwitchReadAppear(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchAppear(rIter)) {
-            return false;
-        }
-
-        if (pActor->mStageSwitchCtrl == nullptr) {
-            pActor->initStageSwitch(rIter);
-        }
-
-        return true;
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchAppear);
     }
 
     void useStageSwitchSleep(LiveActor* pActor, const TableIter& rIter) {
         SleepControlFunc::addSleepControl(pActor, rIter);
     }
 
-    // Same as useStageSwitchReadA
     bool useStageSwitchWriteA(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchA(rIter)) {
-            return false;
-        }
-
-        if (pActor->mStageSwitchCtrl == nullptr) {
-            pActor->initStageSwitch(rIter);
-        }
-
-        return true;
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchA);
     }
 
-    // Same as useStageSwitchReadB
     bool useStageSwitchWriteB(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchB(rIter)) {
-            return false;
-        }
-
-        if (pActor->mStageSwitchCtrl == nullptr) {
-            pActor->initStageSwitch(rIter);
-        }
-
-        return true;
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchB);
     }
 
     bool useStageSwitchWriteDead(LiveActor* pActor, const TableIter& rIter) {
-        if (!isValidInfo(rIter)) {
-            return false;
-        }
-
-        if (!isExistStageSwitchDead(rIter)) {
-            return false;
-        }
-
-        if (pActor->mStageSwitchCtrl == nullptr) {
-            pActor->initStageSwitch(rIter);
-        }
-
-        return true;
+        return ::useStageSwitch(pActor, rIter, isExistStageSwitchDead);
     }
 
     bool needStageSwitchReadA(LiveActor* pActor, const TableIter& rIter) {
