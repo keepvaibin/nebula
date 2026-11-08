@@ -7,16 +7,18 @@ namespace NrvMagicBell {
     NEW_NERVE(MagicBellNrvRing, MagicBell, Ring);
 };  // namespace NrvMagicBell
 
-MagicBell::MagicBell(const char* pName) : LiveActor(pName) {
-    mBellSwinger = nullptr;
-    mSurface1Mtx = nullptr;
-    mSurface2Mtx = nullptr;
-    mBellRodSwinger = nullptr;
-    mSurface1Mtx = nullptr;
-    mHitMarkPosition.x = 0.0f;
-    mHitMarkPosition.y = 0.0f;
-    mHitMarkPosition.z = 0.0f;
-}
+namespace {
+    // A ringing bell takes a new hit after this many steps.
+    const s32 sRehitStep = 10;
+    // The pointer must move faster than 8 screen units a frame to ring.
+    const f32 sPointerFlickSpeedSq = 64.0f;
+    // The bell and its clapper touch when their swing directions part this far.
+    const f32 sClapperTouchCos = 0.95f;
+};  // namespace
+
+MagicBell::MagicBell(const char* pName)
+    : LiveActor(pName), mBellSwinger(nullptr), mSurface2Mtx(nullptr), mBellRodSwinger(nullptr), mSurface1Mtx(nullptr),
+      mHitMarkPosition(0.0f, 0.0f, 0.0f) {}
 
 void MagicBell::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
@@ -43,21 +45,19 @@ void MagicBell::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-void MagicBell::exeWait() {
-    if (MR::isFirstStep(this)) {
-    }
+// The bell and clapper joints take their swing, the actor scale and the actor position.
+void MagicBell::updateJointMtx() {
+    NebulaMtxCopy(mBellSwinger->mSwingMtx.toMtxPtr(), mSurface2Mtx);
+    NebulaMtxCopy(mBellRodSwinger->mSwingMtx.toMtxPtr(), mSurface1Mtx);
+    NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
+    MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
+    MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
+}
 
+void MagicBell::exeWait() {
     if (!tryRing()) {
-        NebulaMtxCopy(mBellSwinger->mSwingMtx.toMtxPtr(), mSurface2Mtx);
-        NebulaMtxCopy(mBellRodSwinger->mSwingMtx.toMtxPtr(), mSurface1Mtx);
-        Vec3f v3(0.0f, 0.0f, 0.0f);
-        MR::setMtxTrans(mSurface2Mtx, v3.x, v3.y, v3.z);
-        Vec3f v2(0.0f, 0.0f, 0.0f);
-        MR::setMtxTrans(mSurface1Mtx, v2.x, v2.y, v2.z);
-        NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
-        NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
-        MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
-        MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
+        updateJointMtx();
     }
 }
 
@@ -74,53 +74,40 @@ void MagicBell::exeRing() {
     mBellSwinger->update();
     mBellRodSwinger->update();
 
-    if (mBellSwinger->mSwingDir.dot(mBellRodSwinger->mSwingDir) < 0.95f) {
-        Vec3f v17(mBellSwinger->mSwingDir);
-        v17.sub(mBellRodSwinger->mSwingDir);
-        f32 v3 = mBellRodSwinger->mSwingDir.dot(v17);
-        v17.x -= v3 * mBellRodSwinger->mSwingDir.x;
-        v17.y -= v3 * mBellRodSwinger->mSwingDir.y;
-        v17.z -= v3 * mBellRodSwinger->mSwingDir.z;
-        MR::normalizeOrZero(&v17);
-        f32 v4 = mBellSwinger->mAcceleration.dot(v17);
-        f32 v5 = mBellRodSwinger->mAcceleration.dot(v17);
+    const Vec3f& rRodDir = mBellRodSwinger->mSwingDir;
+    if (mBellSwinger->mSwingDir.dot(rRodDir) < sClapperTouchCos) {
+        // Contact normal: the bell's direction away from the clapper's, square to the clapper.
+        Vec3f normal(mBellSwinger->mSwingDir);
+        normal.sub(rRodDir);
+        f32 along = rRodDir.dot(normal);
+        normal.x -= along * rRodDir.x;
+        normal.y -= along * rRodDir.y;
+        normal.z -= along * rRodDir.z;
+        MR::normalizeOrZero(&normal);
+        f32 bellSpeed = mBellSwinger->mAcceleration.dot(normal);
+        f32 rodSpeed = mBellRodSwinger->mAcceleration.dot(normal);
+        f32 rodBackSpeed = rodSpeed >= 0.0f ? 0.0f : rodSpeed;
 
-        f32 v6 = v5 >= 0.0f ? 0.0f : v5;
-
-        if (v4 - v6 > 0.0f) {
-            f32 v7 = v5 >= 0.0f ? 0.0f : v5;
-
-            v17.scale(v4 - v7);
-            v17.sub(mBellRodSwinger->mAcceleration);
-            mBellRodSwinger->accel(v17);
+        // The bell pushes the clapper only while closing on it.
+        if (bellSpeed - rodBackSpeed > 0.0f) {
+            normal.scale(bellSpeed - rodBackSpeed);
+            normal.sub(mBellRodSwinger->mAcceleration);
+            mBellRodSwinger->accel(normal);
             mHitMarkPosition.set(mBellRodSwinger->mTipPos);
         }
     }
-    NebulaMtxCopy(mBellSwinger->mSwingMtx.toMtxPtr(), mSurface2Mtx);
-    NebulaMtxCopy(mBellRodSwinger->mSwingMtx.toMtxPtr(), mSurface1Mtx);
-    Vec3f v16(0.0f, 0.0f, 0.0f);
-    MR::setMtxTrans(mSurface2Mtx, v16.x, v16.y, v16.z);
-    Vec3f v15(0.0f, 0.0f, 0.0f);
-    MR::setMtxTrans(mSurface1Mtx, v15.x, v15.y, v15.z);
-    NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
-    NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
-    MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
-    MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
 
-    if (MR::isGreaterStep(this, 10) && tryRing()) {
+    updateJointMtx();
+
+    if (MR::isGreaterStep(this, sRehitStep) && tryRing()) {
         return;
     }
 
-    if (!(mBellSwinger->mSwingDir.y < -0.99f)) {
-        return;
+    // Rings until it hangs straight down and nearly still.
+    if (mBellSwinger->mSwingDir.y < -0.99f && mBellSwinger->mAcceleration.squared() < 0.1f * 0.1f) {
+        MR::deleteEffect(this, "Ring");
+        setNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
     }
-
-    if (!(mBellSwinger->mAcceleration.squared() < 0.1f * 0.1f)) {
-        return;
-    }
-
-    MR::deleteEffect(this, "Ring");
-    setNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
 }
 
 void MagicBell::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -134,14 +121,16 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
         return false;
     }
 
-    if (isNerve(GET_NERVE(MagicBell, MagicBellNrvWait)) || (isNerve(GET_NERVE(MagicBell, MagicBellNrvRing)) && MR::isGreaterStep(this, 10))) {
-        Vec3f v15(mPosition);
-        v15.sub(*MR::getPlayerPos());
-        v15.y += 100.0f;
-        MR::normalizeOrZero(&v15);
-        Vec3f v14(v15 * -200.0f);
-        v14.add(mPosition);
-        startRing(v15, v14);
+    if (isNerve(GET_NERVE(MagicBell, MagicBellNrvWait)) ||
+        (isNerve(GET_NERVE(MagicBell, MagicBellNrvRing)) && MR::isGreaterStep(this, sRehitStep))) {
+        // Struck from the player's side, a little from below.
+        Vec3f hitDir(mPosition);
+        hitDir.sub(*MR::getPlayerPos());
+        hitDir.y += 100.0f;
+        MR::normalizeOrZero(&hitDir);
+        Vec3f hitPos(hitDir * -200.0f);
+        hitPos.add(mPosition);
+        startRing(hitDir, hitPos);
         return true;
     }
 
@@ -149,40 +138,44 @@ bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 }
 
 bool MagicBell::tryRing() {
-    if (!MR::isExecScenarioStarter() && MR::isStarPointerPointing(this, 0, 0, "弱")) {
-        Vec2f* v4(MR::getStarPointerScreenVelocity(0));
-        if (((v4->x * v4->x) + (v4->y * v4->y)) > 64.0f) {
-            Vec3f v12;
-            MR::getStarPointerWorldVelocityDirection(&v12, 0);
-            if (MR::isNearZero(v12)) {
-                v12.set(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
-                if (MR::isNearZero(v12)) {
-                    v12.set(1.0f, 0.0f, 0.0f);
-                } else {
-                    MR::normalize(&v12);
-                }
-            }
-            Vec3f v11;
-            MR::calcStarPointerWorldPointingPos(&v11, mPosition, 0);
-            startRing(v12, v11);
-            return true;
+    if (MR::isExecScenarioStarter() || !MR::isStarPointerPointing(this, 0, 0, "弱")) {
+        return false;
+    }
+
+    const Vec2f* pScreenVel = MR::getStarPointerScreenVelocity(0);
+    if (!(((pScreenVel->x * pScreenVel->x) + (pScreenVel->y * pScreenVel->y)) > sPointerFlickSpeedSq)) {
+        return false;
+    }
+
+    Vec3f hitDir;
+    MR::getStarPointerWorldVelocityDirection(&hitDir, 0);
+    if (MR::isNearZero(hitDir)) {
+        hitDir.set(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
+        if (MR::isNearZero(hitDir)) {
+            hitDir.set(1.0f, 0.0f, 0.0f);
+        } else {
+            MR::normalize(&hitDir);
         }
     }
-    return false;
+
+    Vec3f hitPos;
+    MR::calcStarPointerWorldPointingPos(&hitPos, mPosition, 0);
+    startRing(hitDir, hitPos);
+    return true;
 }
 
-void MagicBell::startRing(const Vec3f& a1, const Vec3f& a2) {
-    f32 v10 = mBellSwinger->mAcceleration.length();
+// Stops the current swing and swings along rHitDir, 5 faster than before.
+void MagicBell::startRing(const Vec3f& rHitDir, const Vec3f& rHitPos) {
+    f32 speed = mBellSwinger->mAcceleration.length();
     mBellSwinger->accel(mBellSwinger->mAcceleration * -1.0f);
-    mBellSwinger->accel(a1 * (5.0f + v10));
-    mHitMarkPosition.set(a2);
+    mBellSwinger->accel(rHitDir * (5.0f + speed));
+    mHitMarkPosition.set(rHitPos);
     MR::emitEffect(this, "StarWandHitMark");
     MR::emitEffect(this, "Ring");
     setNerve(GET_NERVE(MagicBell, MagicBellNrvRing));
 }
 
-MagicBell::~MagicBell() {
-}
+MagicBell::~MagicBell() {}
 
 MtxPtr MagicBell::getBaseMtx() const {
     return mSurface2Mtx;

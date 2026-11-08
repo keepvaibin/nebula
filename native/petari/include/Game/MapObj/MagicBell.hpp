@@ -16,7 +16,8 @@ public:
     void exeWait();
     void exeRing();
     bool tryRing();
-    void startRing(const Vec3f&, const Vec3f&);
+    void startRing(const Vec3f& rHitDir, const Vec3f& rHitPos);
+    void updateJointMtx();
 
     Swinger* mBellSwinger;
     MtxPtr mSurface2Mtx;
