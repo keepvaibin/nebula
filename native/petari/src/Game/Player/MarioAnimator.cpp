@@ -1073,7 +1073,6 @@ bool MarioAnimator::isMirrorAnimation() {
         return mMirror;
     }
 
-    // Check if walling (player mMovementStates._37 bit check)
     if (getPlayer()->mMovementStates.mode2D) {
         if (isAnimationRun("ブレーキ") || isAnimationRun("ターンブレーキ") || isAnimationRun("ターンジャンプ")) {
             if (!mMirrorChecked) {

@@ -1063,16 +1063,15 @@ bool MarioSwim::update() {
         if (obj != nullptr) {
             Pos3f* followMtx = obj->getFollowMtx();
             if (followMtx != nullptr) {
-                Vec3f stack_F8;
-                MR::extractMtxTrans(followMtx->toMtxPtr(), &stack_F8);
+                Vec3f areaPos;
+                MR::extractMtxTrans(followMtx->toMtxPtr(), &areaPos);
 
-                if (stack_F8 != mAreaFollowMtxPos) {
-                    // Vec3f diff = stack_F8 - _154;
-                    if ((stack_F8 - mAreaFollowMtxPos).length() < 10.0f) {
-                        addVelocity(stack_F8 - mAreaFollowMtxPos);
+                if (areaPos != mAreaFollowMtxPos) {
+                    if ((areaPos - mAreaFollowMtxPos).length() < 10.0f) {
+                        addVelocity(areaPos - mAreaFollowMtxPos);
                     }
 
-                    mAreaFollowMtxPos = stack_F8;
+                    mAreaFollowMtxPos = areaPos;
                 }
             }
         }

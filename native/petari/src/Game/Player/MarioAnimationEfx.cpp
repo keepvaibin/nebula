@@ -8,28 +8,27 @@ struct MarioAnimationCallback {
     void (MarioAnimator::*mEntry)();
     void (MarioAnimator::*mUpdate)();
     void (MarioAnimator::*mClose)();
-    u32 _2C;
 };
 
 MarioAnimationCallback marioCallbackTable[] = {
-    {"空中ひねり", 0, &MarioAnimator::spinEntry, &MarioAnimator::spinUpdate, &MarioAnimator::spinClose, 0},
-    {"地上ひねり", 0, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"アイスひねり", 1, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"アイスひねり静止", 1, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"ファイアスピン", 2, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"ファイアスピン空中", 2, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"ハチスピン", 3, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"ハチスピン空中", 3, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose, 0},
-    {"ステージインA", 0, nullptr, &MarioAnimator::stageInCheck, nullptr, 0},
-    {"投げ", 0, &MarioAnimator::throwEntry, &MarioAnimator::throwCheck, &MarioAnimator::throwClose, 0},
-    {"ファイア投げ", 1, &MarioAnimator::throwEntry, nullptr, &MarioAnimator::throwClose, 0},
-    {"サマーソルト", 0, nullptr, &MarioAnimator::squatSpinCheck, nullptr, 0},
-    {"ウォークイン", 0, nullptr, nullptr, &MarioAnimator::walkinClose, 0},
-    {"見る", 0, nullptr, nullptr, &MarioAnimator::walkinClose, 0},
-    {"ResultWait", 0, nullptr, nullptr, &MarioAnimator::walkinClose, 0},
-    {"ResultWaitGrandStar", 0, nullptr, nullptr, &MarioAnimator::walkinClose, 0},
-    {"WatchUpMore", 0, nullptr, nullptr, &MarioAnimator::walkinClose, 0},
-    {"", 0, nullptr, nullptr, nullptr, 0},
+    {"空中ひねり", 0, &MarioAnimator::spinEntry, &MarioAnimator::spinUpdate, &MarioAnimator::spinClose},
+    {"地上ひねり", 0, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"アイスひねり", 1, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"アイスひねり静止", 1, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"ファイアスピン", 2, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"ファイアスピン空中", 2, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"ハチスピン", 3, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"ハチスピン空中", 3, &MarioAnimator::spinEntry, nullptr, &MarioAnimator::spinClose},
+    {"ステージインA", 0, nullptr, &MarioAnimator::stageInCheck, nullptr},
+    {"投げ", 0, &MarioAnimator::throwEntry, &MarioAnimator::throwCheck, &MarioAnimator::throwClose},
+    {"ファイア投げ", 1, &MarioAnimator::throwEntry, nullptr, &MarioAnimator::throwClose},
+    {"サマーソルト", 0, nullptr, &MarioAnimator::squatSpinCheck, nullptr},
+    {"ウォークイン", 0, nullptr, nullptr, &MarioAnimator::walkinClose},
+    {"見る", 0, nullptr, nullptr, &MarioAnimator::walkinClose},
+    {"ResultWait", 0, nullptr, nullptr, &MarioAnimator::walkinClose},
+    {"ResultWaitGrandStar", 0, nullptr, nullptr, &MarioAnimator::walkinClose},
+    {"WatchUpMore", 0, nullptr, nullptr, &MarioAnimator::walkinClose},
+    {"", 0, nullptr, nullptr, nullptr},
 };
 
 void MarioAnimator::initCallbackTable() {

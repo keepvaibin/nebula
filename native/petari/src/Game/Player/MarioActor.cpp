@@ -240,10 +240,6 @@ void MarioActor::init(const TableIter& rInfo) {
     init2(position, rotation, initialAnimation);
 }
 
-struct DUMMY {
-    u8 _0[0x30];
-};
-
 void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     mInitializing = 1;
     gIsLuigi = false;
@@ -1661,7 +1657,6 @@ MtxPtr MarioActor::getGlobalJointMtx(const char* pName) {
 }
 
 void MarioActor::calcAnimInMovement() {
-    // FIXME: missing class at _4A4
     if (mHealth != 0 && (mMario->isDamaging() || mMario->getDamageAfterTimer())) {
         mFlashFogTimer = 0;
         mFogWaveTimer++;
