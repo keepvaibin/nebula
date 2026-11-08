@@ -108,6 +108,8 @@ namespace Frame {
     u32 sitePipeline(u32 shader, u32 state, const NebulaLayoutInput* pInputs, u32 inputCount, u32 stride, bool wide);
     // The particle material over instanced particles (NEBULA_ITEM_INSTANCES).
     u32 particlePipeline(u32 state);
+    // The font material over CharWriter's instanced glyphs.
+    u32 glyphPipeline(u32 state);
 
     bool pixelLit();
     void notDrawn(const ModelData* pData, u32 material, u32 replace, u32 pass);

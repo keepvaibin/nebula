@@ -137,8 +137,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         walk_cameras_[c] = between && now.motion_ready ? camera_at(now.camera_motion[c], time.t) : affine_of(list.cameras[c].view);
     }
 
-    // Rows: each block's eye rows, its world rows where a program reads them, the light sets, then the particles of
-    // instanced draws as the list holds them.
+    // Rows: each block's eye rows, its world rows where a program reads them, the light sets, then the instance rows
+    // of instanced draws as the list holds them.
     std::uint32_t total = 0u;
     walk_block_rows_.resize(list.block_count);
     walk_block_world_.resize(list.block_count);
@@ -152,9 +152,9 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     }
     const std::uint32_t lights_first = total;
     total += list.light_set_count * kLightRows;
-    const std::uint32_t particles_first = total;
-    total += list.particle_count * kParticleRows;
-    walk_rows_.resize(std::size_t{particles_first} * 4u + 4u);
+    const std::uint32_t instances_first = total;
+    total += list.instance_row_count;
+    walk_rows_.resize(std::size_t{instances_first} * 4u + 4u);
     auto* rows = reinterpret_cast<float (*)[4]>(walk_rows_.data());
     UploadRing& matrix_ring = renderer_.matrix_ring();
     const UploadRing::Allocation rows_at = matrix_ring.allocate(std::size_t{total} * 16u + 16u, 16u);
@@ -230,10 +230,9 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         }
     }
 
-    std::memcpy(rows_at.cpu, rows, std::size_t{particles_first} * 16u);
-    if (list.particle_count != 0u) {
-        std::memcpy(rows_at.cpu + std::size_t{particles_first} * 16u, list.particles,
-                    std::size_t{list.particle_count} * sizeof(NebulaParticleInstance));
+    std::memcpy(rows_at.cpu, rows, std::size_t{instances_first} * 16u);
+    if (list.instance_row_count != 0u) {
+        std::memcpy(rows_at.cpu + std::size_t{instances_first} * 16u, list.instance_rows, std::size_t{list.instance_row_count} * 16u);
     }
     walk_.rows_address = matrix_ring.gpu_base();
     walk_.rows_base = base;
@@ -260,8 +259,8 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     }
     now.rows_walk = walk_.serial;
 
-    // The instance table: one entry per item, in draw order. An instanced particle draw's light base is its first
-    // particle's row.
+    // The instance table: one entry per item, in draw order. An instanced draw's light base is its first instance's
+    // row.
     const UploadRing::Allocation instances = matrix_ring.allocate(std::size_t{list.item_count} * 16u + 16u, 16u);
     walk_.instances = instances.gpu;
     {
@@ -269,13 +268,13 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         for (std::uint32_t i = 0; i < list.item_count; ++i) {
             const NebulaFrameItem& item = list.items[i];
             const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
-            const bool particles = (item.flags & NEBULA_ITEM_INSTANCES) != 0u;
-            const bool rigid = ring || particles || (item.flags & NEBULA_ITEM_ONE_MATRIX) != 0u ||
+            const bool instanced = (item.flags & NEBULA_ITEM_INSTANCES) != 0u;
+            const bool rigid = ring || instanced || (item.flags & NEBULA_ITEM_ONE_MATRIX) != 0u ||
                                registries_.mesh(item.mesh).single_matrix != NEBULA_MODEL_NONE;
             const std::uint32_t add = rigid ? item.matrix * kRowsPerMatrix : 0u;
             out[0] = base + walk_block_rows_[item.block] + add;
             out[1] = walk_previous_[item.block] + add;
-            out[2] = particles                         ? base + particles_first + item.ring_at * kParticleRows
+            out[2] = instanced                         ? base + instances_first + item.ring_at
                      : item.light_set != NEBULA_NONE32 ? base + lights_first + item.light_set * kLightRows
                                                        : 0u;
             out[3] = base + walk_block_world_[item.block] + add;
@@ -621,8 +620,8 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
     for (std::uint32_t i = pass.first_item; i < end;) {
         const NebulaFrameItem& item = list.items[i];
         const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
-        const bool particles = (item.flags & NEBULA_ITEM_INSTANCES) != 0u;
-        const core::GpuMesh* mesh = ring || particles ? nullptr : &registries_.mesh(item.mesh);
+        const bool instanced = (item.flags & NEBULA_ITEM_INSTANCES) != 0u;
+        const core::GpuMesh* mesh = ring || instanced ? nullptr : &registries_.mesh(item.mesh);
         const core::PipelineEntry& entry = registries_.pipeline(item.pipeline);
         const std::uint32_t state = entry.desc.state;
 
@@ -698,8 +697,8 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         encoder.set_viewport(view.viewport);
         NEBULA_INSPECT_DRAW_BEGIN(*this, i, instances, pass, encoder, view.scissor);
 
-        if (particles) {
-            // The vertex stage reads its particles from the rows: every stream the layout names reads zero.
+        if (instanced) {
+            // The vertex stage reads its instances from the rows: every stream the layout names reads zero.
             const gpu::StreamView zero{renderer_.zero_stream(16u), 16u, 0u};
             encoder.set_stream(gpu::kStreamPosition, zero);
             if (aux == 1u) {

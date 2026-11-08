@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 139u
+#define NEBULA_GAME_API_VERSION 140u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -217,6 +217,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_FRAME_RIPPLE = 40, /* MarioActor's heat and cold ripples: the frame, each row moved by a wave */
     NEBULA_SHADER_FRAME_DEPTH = 41, /* the frame's depth as the game reads it, averaged over the pass's pixel */
     NEBULA_SHADER_PARTICLE_INSTANCES = 42, /* the particle material's vertex stage for NEBULA_ITEM_INSTANCES draws */
+    NEBULA_SHADER_GLYPH_INSTANCES = 43, /* the font material's vertex stage for CharWriter's instanced glyphs */
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 

@@ -177,11 +177,12 @@ namespace ParticleDraw {
             flush();
             sBatchPrimitive = NEBULA_PRIMITIVE_QUADS;
         }
-        if (sRunCount != 0 && sRunVertices != vertices) {
+        // A run is consecutive rows: one that something else's rows followed is drawn first.
+        if (sRunCount != 0 && (sRunVertices != vertices || FrameRing::instanceRowCount() != sRunFirst + sRunCount * (sizeof(NebulaParticleInstance) / 16))) {
             flush();
         }
         if (sRunCount == 0) {
-            sRunFirst = FrameRing::particleCount();
+            sRunFirst = FrameRing::instanceRowCount();
             sRunVertices = vertices;
         }
         NebulaParticleInstance& rOut = FrameRing::particle();

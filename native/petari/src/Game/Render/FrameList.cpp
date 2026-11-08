@@ -192,6 +192,9 @@ namespace {
         }
     };
 
+    // A row of NEBULA_ITEM_INSTANCES draws' instances.
+    typedef f32 InstanceRow[4];
+
     struct Page {
         Page* mNext;
         u32 mRoom;
@@ -214,7 +217,7 @@ namespace {
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
-        Grown< NebulaParticleInstance > mParticles;
+        Grown< InstanceRow > mInstanceRows;
         u8* mRingVertices;
         u32 mRingBytes;
         u32 mRingRoom;
@@ -282,7 +285,7 @@ namespace {
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
-        pStore->mParticles.mCount = 0;
+        pStore->mInstanceRows.mCount = 0;
         pStore->mRingBytes = 0;
         pStore->mPage = pStore->mFirstPage;
         if (pStore->mPage != nullptr) {
@@ -422,8 +425,8 @@ namespace Frame {
         rList.ring_vertices = pStore->mRingVertices;
         rList.ring_indices = pStore->mRingIndices.mData;
         rList.probes = pStore->mProbes.mData;
-        rList.particles = pStore->mParticles.mData;
-        rList.particle_count = pStore->mParticles.mCount;
+        rList.instance_rows = pStore->mInstanceRows.mData;
+        rList.instance_row_count = pStore->mInstanceRows.mCount;
         rList.pass_count = pStore->mPasses.mCount;
         rList.item_count = pStore->mItems.mCount;
         rList.view_count = pStore->mViews.mCount;
@@ -713,23 +716,32 @@ namespace Frame {
         }
     }
 
-    u32 particlePipeline(u32 state) {
-        const u64 key = static_cast< u64 >(NEBULA_SHADER_PARTICLE_INSTANCES) << 1 << 16;
+    // An instanced draw's pipeline: `vertexShader` builds the corners from the instance rows, `pixelShader` colours them.
+    u32 instancePipeline(u32 vertexShader, u32 pixelShader, u32 instanceBytes, u32 state) {
+        const u64 key = static_cast< u64 >(vertexShader) << 1 << 16;
         SitePipeline& rEntry = siteEntry(key, state);
         if (rEntry.mPipeline != 0) {
             return rEntry.mPipeline;
         }
         NebulaPipelineDesc desc;
         memset(&desc, 0, sizeof(desc));
-        desc.vertex = NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE_INSTANCES) << 1;
-        desc.pixel = NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE) << 1;
+        desc.vertex = NEBULA_PROGRAM_SITE | static_cast< u64 >(vertexShader) << 1;
+        desc.pixel = NEBULA_PROGRAM_SITE | static_cast< u64 >(pixelShader) << 1;
         desc.state = state;
         // No vertex streams: the stride only keeps the layout from naming a matrix stream.
-        desc.position_stride = sizeof(NebulaParticleInstance);
+        desc.position_stride = instanceBytes;
         rEntry.mKey = key;
         rEntry.mState = state;
         rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
         return rEntry.mPipeline;
+    }
+
+    u32 particlePipeline(u32 state) {
+        return instancePipeline(NEBULA_SHADER_PARTICLE_INSTANCES, NEBULA_SHADER_PARTICLE, sizeof(NebulaParticleInstance), state);
+    }
+
+    u32 glyphPipeline(u32 state) {
+        return instancePipeline(NEBULA_SHADER_GLYPH_INSTANCES, NEBULA_SHADER_FONT_TEXT, sizeof(NebulaGlyphInstance), state);
     }
 
     u32 sitePipeline(u32 shader, u32 state, const NebulaModelMesh* pMesh) {
@@ -1072,11 +1084,26 @@ namespace FrameRing {
         return rRing.mData + *pFirst;
     }
 
-    NebulaParticleInstance& particle() {
-        return store()->mParticles.add();
+    void* instanceRows(u32 count, u32* pFirst) {
+        Grown< InstanceRow >& rRows = store()->mInstanceRows;
+        if (rRows.mCount + count > rRows.mRoom) {
+            u32 room = rRows.mRoom != 0 ? rRows.mRoom : 1024;
+            while (rRows.mCount + count > room) {
+                room *= 2;
+            }
+            rRows.reserve(room);
+        }
+        *pFirst = rRows.mCount;
+        rRows.mCount += count;
+        return rRows.mData + *pFirst;
     }
 
-    u32 particleCount() {
-        return store()->mParticles.mCount;
+    u32 instanceRowCount() {
+        return store()->mInstanceRows.mCount;
+    }
+
+    NebulaParticleInstance& particle() {
+        u32 first;
+        return *static_cast< NebulaParticleInstance* >(instanceRows(sizeof(NebulaParticleInstance) / sizeof(InstanceRow), &first));
     }
 }  // namespace FrameRing

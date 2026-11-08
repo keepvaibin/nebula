@@ -193,8 +193,10 @@ struct Access {
                 }
             }
         } else if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
-            std::fprintf(f, "\tparticles=%u,%u,%u,%016" PRIx64, item.ring_at, item.ring_count, item.count,
-                         hash_bytes(list.particles + item.ring_at, std::size_t{item.ring_count} * sizeof(NebulaParticleInstance)));
+            // As instances: the first is the instance, not the row (particles read as before the rows were shared).
+            const std::uint32_t rows = item.mesh != 0u ? item.mesh : 1u;
+            std::fprintf(f, "\t%s=%u,%u,%u,%016" PRIx64, rows == core::kParticleRows ? "particles" : "glyphs", item.ring_at / rows,
+                         item.ring_count, item.count, hash_bytes(list.instance_rows + item.ring_at, std::size_t{item.ring_count} * rows * 16u));
         } else {
             const core::GpuMesh& mesh = core.registries_.mesh(item.mesh);
             std::fprintf(f, "\tmesh=%u,%u,%u,%u", mesh.vertex_count, mesh.index_count, mesh.refined_vertex_count, mesh.refined_index_count);

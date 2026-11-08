@@ -315,11 +315,21 @@ u32 TypedDraw::block() {
     return mBlock;
 }
 
-void TypedDraw::drawParticles(u32 first, u32 count, u32 vertices) {
+void TypedDraw::drawParticles(u32 firstRow, u32 count, u32 vertices) {
+    drawInstances(Frame::particlePipeline(Frame::finishState(mState.word())), firstRow, count,
+                  sizeof(NebulaParticleInstance) / 16, vertices);
+}
+
+void TypedDraw::drawGlyphs(u32 firstRow, u32 count) {
+    // A quad's two triangles.
+    drawInstances(Frame::glyphPipeline(Frame::finishState(mState.word())), firstRow, count, sizeof(NebulaGlyphInstance) / 16, 6);
+}
+
+void TypedDraw::drawInstances(u32 pipeline, u32 firstRow, u32 count, u32 rows, u32 vertices) {
     finish();
     NebulaFrameItem& rItem = Frame::addItem();
-    rItem.mesh = 0;
-    rItem.pipeline = Frame::particlePipeline(Frame::finishState(mState.word()));
+    rItem.mesh = rows;
+    rItem.pipeline = pipeline;
     rItem.constants = mConstants;
     rItem.textures = mTable;
     rItem.block = block();
@@ -330,7 +340,7 @@ void TypedDraw::drawParticles(u32 first, u32 count, u32 vertices) {
     rItem.view = Frame::currentView();
     rItem.light_set = NEBULA_NONE32;
     rItem.matrix = 0;
-    rItem.ring_at = first;
+    rItem.ring_at = firstRow;
     rItem.ring_count = count;
     rItem.first = 0;
     rItem.count = vertices;
