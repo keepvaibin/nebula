@@ -21,6 +21,7 @@ public:
 
     const char* mName;
     AutoEffectInfo** mEffects;
+    s32 mCapacity;
     s32 mCount;
 };
 

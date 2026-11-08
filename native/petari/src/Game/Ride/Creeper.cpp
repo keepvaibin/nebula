@@ -42,6 +42,7 @@ namespace {
     static const f32 sPointFrictionHang = 0.7f;
     static const f32 sHangStartRotateSpeed = 15.0f;
     static const f32 sHangUpAccel = 5.0f;
+    static const f32 sHangUpAccel2P = 10.0f;
     static const f32 sHangUpSpeedMin = 5.0f;
     static const f32 sHangUpSpeedMax = 15.0f;
     static const f32 sHangDownGravity = 0.4f;
@@ -254,7 +255,9 @@ void Creeper::initPoints() {
 
     MR::moveCoordToEndPos(this);
 
-    mPoints[mNumPoints - 1] = new CreeperPoint(MR::getRailPos(this), MR::getRailDirection(this), prevPoint);
+    CreeperPoint* point = new CreeperPoint(MR::getRailPos(this), MR::getRailDirection(this), prevPoint);
+    s32 index = mNumPoints - 1;
+    mPoints[index] = point;
 
     bendSum.add(MR::getRailDirection(this));
     mBendDirection.set(bendSum);
@@ -312,6 +315,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
     if (MR::isMsgUpdateBaseMtx(msg)) {
         Pos3f mtx;
+        mtx.identity();
         MR::makeMtxUpFrontPos(&mtx, mUp, mFront, mPosition);
         MR::setBaseTRMtx(mRider, mtx);
         return true;
@@ -356,7 +360,13 @@ void Creeper::bendPoints() {
 
 bool Creeper::tryHangUp() {
     if (MR::isSpin(PLAYER_1)) {
-        mHangSpeed = ::sHangUpAccel;
+        // BUG: doubly-reversed logic: should be checking PLAYER_2 and accel are swapped
+        if (MR::isSpin(PLAYER_1)) {
+            mHangSpeed = ::sHangUpAccel;
+        } else {
+            mHangSpeed = ::sHangUpAccel2P;
+        }
+
         MR::reverseRailDirection(this);
         MR::tryRumblePadMiddle(this, PLAYER_1);
         setNerve(GET_NERVE(Creeper, CreeperNrvHangUp));
@@ -387,7 +397,8 @@ bool Creeper::tryJump() {
         MR::setPlayerFrontTargetVec(launchFront, 1);
     }
 
-    Vec3f launch = launchFront * mJumpSpeedFront - mGravity * mJumpSpeedUp;
+    Vec3f launch;
+    launch = launchFront * mJumpSpeedFront - mGravity * mJumpSpeedUp;
 
     MR::startBckPlayer("GrowPlantJump");
     MR::endMultiActorCamera(this, mCameraInfo, "掴まり", true);
@@ -499,7 +510,8 @@ SiteMaterial Creeper::loadMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
     SiteMaterial material;
-    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true, NEBULA_CULL_BACK);
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_BACK);
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
     material.setTexture(0, mTexture);

@@ -98,8 +98,8 @@ private:
     u32 mMsgLine;
     Vec2f mTitleLogoPos;
     Vec2f mEndLogoPos;
-    s32 _48;
-    s32 _4C;
+    s32 mLineStep;
+    s32 mBgmFrame;
 };
 
 namespace MR {

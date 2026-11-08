@@ -11,7 +11,7 @@ namespace NrvYesNoLayout {
     NEW_NERVE(YesNoLayoutNrvSelecting, YesNoLayout, Selecting);
 };  // namespace NrvYesNoLayout
 
-YesNoLayout::YesNoLayout() : SimpleLayout("Yes/Noレイアウト", "SelectButton", 1, MR::DrawType_TalkPartsLayout), mController(nullptr), _24(false) {
+YesNoLayout::YesNoLayout() : SimpleLayout("Yes/Noレイアウト", "SelectButton", 1, MR::DrawType_TalkPartsLayout), mController(nullptr), mHasInformationMessage(false) {
 }
 
 void YesNoLayout::init(const TableIter& rIter) {
@@ -29,7 +29,7 @@ void YesNoLayout::appear() {
     LayoutActor::appear();
     mController->appear();
 
-    _24 = false;
+    mHasInformationMessage = false;
 
     MR::startStarPointerModeChooseYesNo(this);
     setNerve(GET_NERVE(YesNoLayout, YesNoLayoutNrvSelecting));
@@ -41,7 +41,7 @@ void YesNoLayout::kill() {
 }
 
 void YesNoLayout::setInformationMessage(const char* pMessage) {
-    _24 = true;
+    mHasInformationMessage = true;
 
     MR::appearInformationMessage(pMessage, false);
 }
@@ -56,7 +56,7 @@ void YesNoLayout::control() {
 }
 
 void YesNoLayout::exeSelecting() {
-    if (_24 && mController->isDisappearStart()) {
+    if (mHasInformationMessage && mController->isDisappearStart()) {
         MR::disappearInformationMessage();
     }
 

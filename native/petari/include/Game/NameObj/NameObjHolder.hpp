@@ -23,5 +23,5 @@ public:
 
 private:
     MR::Vector< MR::AssignableArray< NameObj* > > mObjArray1;
-    MR::InlineVector< NameObj*, 16 > mObjArray2;
+    MR::Vector< MR::FixedArray< NameObj*, 16 > > mObjArray2;
 };

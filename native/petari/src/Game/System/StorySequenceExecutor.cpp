@@ -385,6 +385,9 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         }
 
         break;
+    case Story::Step_ChangeScene:
+        MR::requestChangeScene(pDemoInfo->mName);
+        break;
     case Story::Step_ChangeSceneTitle:
         MR::requestChangeSceneTitle();
         forceStop();
@@ -637,8 +640,8 @@ void StorySequenceExecutor::decideNextEventForClearGalaxy(GalaxyMoveArgument* pM
                 }
 
                 if (mDemoSequences.size() > 0) {
-                    MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > arr =
-                        MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >();
+                    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > arr =
+                        MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >();
 
                     getOptionalDemoForClearGalaxy(&arr, pMoveArgument);
                     prepareDemoSequence(arr);
@@ -646,8 +649,8 @@ void StorySequenceExecutor::decideNextEventForClearGalaxy(GalaxyMoveArgument* pM
                 }
             }
 
-            MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > arr =
-                MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >();
+            MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > arr =
+                MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >();
 
             getOptionalDemoForClearGalaxy(&arr, pMoveArgument);
 
@@ -801,7 +804,7 @@ const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::isExec
 }
 
 void StorySequenceExecutor::getOptionalDemoForClearGalaxy(
-    MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >* pDemos, const GalaxyMoveArgument* pMoveArgument) const {
+    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >* pDemos, const GalaxyMoveArgument* pMoveArgument) const {
     const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo = isExecuteDemoLuigiMissing(pMoveArgument);
 
     if (pDemoInfo != nullptr) {
@@ -842,7 +845,7 @@ void StorySequenceExecutor::prepareDemoSequence(const StorySequenceExecutorType:
 }
 
 void StorySequenceExecutor::prepareDemoSequence(
-    const MR::InlineVector< const StorySequenceExecutorType::DemoSequenceInfo*, 8 >& rDemos) {
+    const MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >& rDemos) {
     for (const StorySequenceExecutorType::DemoSequenceInfo* const* ppDemoInfo = rDemos.begin(); ppDemoInfo < rDemos.end(); ppDemoInfo++) {
         prepareDemoSequence(*ppDemoInfo);
     }
@@ -963,7 +966,7 @@ void StorySequenceExecutor::setBeforeStageScenario(const GalaxyMoveArgument& rMo
     const char* pStageName = nullptr;
     s32 scenarioNo = -1;
 
-    if (MR::isCurrentScene(SceneKind_Game)) {
+    if (MR::isEqualSceneName("Game")) {
         if (rMoveArgument.mMoveType == GalaxyMoveArgument::Type_AfterStageClear) {
             pStageName = GameSequenceFunction::getClearedStageName();
             scenarioNo = GameSequenceFunction::getClearedPowerStarId();

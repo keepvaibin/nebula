@@ -93,7 +93,8 @@ void Plant::init(const TableIter& pMapInfoIter) {
     MR::createSceneObj(SceneObj_PlantStalkDrawInit);
     MR::createSceneObj(SceneObj_PlantLeafDrawInit);
 
-    MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Plant);
+
+    MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_None, MR::DrawType_Plant);
 
     MR::getPlacementArg0NoInit(pMapInfoIter, &mJumpSpeed);
     MR::getPlacementArg1NoInit(pMapInfoIter, &mJumpSpeedOffsetY);
@@ -196,7 +197,9 @@ void Plant::exeGrowUp() {
         MR::startSound(this, "SE_OJ_PLANT_GROW_START");
     }
 
-    updateGrowUp();
+    if (updateGrowUp()) {
+        return;
+    }
 }
 
 void Plant::exeHangWaitGrowUp() {
@@ -356,6 +359,8 @@ void Plant::exeHangDown() {
 }
 
 void Plant::initLeaf() {
+    f32 leafRatio, leafScale, leafPos;
+
     mNumLeaves = (s32)((MR::getRailTotalLength(this) - ::sLeafPosOffsetStart - ::sLeafPosOffsetEnd) / (::sLeafIntervalMax - ::sLeafIntervalMin)) + 2;
     mLeaves = new PlantLeaf*[mNumLeaves];
 
@@ -363,10 +368,12 @@ void Plant::initLeaf() {
     mtx.identity();
 
     Vec3f baseRotate(0.0f, 0.0f, 1.0f);
-    f32 leafPos = MR::getRailTotalLength(this) - ::sLeafPosOffsetStart;
+    leafPos = MR::getRailTotalLength(this) - ::sLeafPosOffsetStart;
+
+    MR::getRailTotalLength(this);
 
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        f32 leafRatio = static_cast< f32 >(leaf) / static_cast< f32 >(mNumLeaves);
+        leafRatio = static_cast< f32 >(leaf) / static_cast< f32 >(mNumLeaves);
         Vec3f railDirection;
         MR::calcRailDirectionAtCoord(&railDirection, this, leafPos);
 
@@ -382,7 +389,7 @@ void Plant::initLeaf() {
             MR::normalize(&growDirection);
         }
 
-        f32 leafScale = MR::getEaseOutValue(leafRatio, ::sLeafScaleMin, ::sLeafScaleMax, 1.0f);
+        leafScale = MR::getEaseOutValue(leafRatio, ::sLeafScaleMin, ::sLeafScaleMax, 1.0f);
 
         mLeaves[leaf] = new PlantLeaf(leafPos, mPosition, growDirection, leafScale);
         mLeaves[leaf]->initWithoutIter();
@@ -393,8 +400,11 @@ void Plant::initLeaf() {
     }
 }
 
-// The stalk, leaves and parts models animate themselves; the plant has no model of its own.
 void Plant::calcAnim() {
+    if (!MR::isValidCalcViewAndEntry(this) || isNerve(GET_NERVE(Plant, PlantNrvWaitFar)) || isNerve(GET_NERVE(Plant, PlantNrvSeedWait))) {
+        return;
+    }
+
 }
 
 void Plant::startClipped() {
@@ -484,11 +494,12 @@ bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             if (mRideVelocity >= ::sHangUpSpeedStartMin) {
                 mRideVelocity = MR::clamp(mRideVelocity, ::sHangUpSpeedMin, ::sHangUpSpeedMax);
                 MR::setRailDirectionToEnd(this);
+                setNerve(GET_NERVE(Plant, PlantNrvHangStart));
             } else {
                 mRideVelocity = 0.0f;
                 MR::setRailDirectionToStart(this);
+                setNerve(GET_NERVE(Plant, PlantNrvHangStart));
             }
-            setNerve(GET_NERVE(Plant, PlantNrvHangStart));
         }
 
         MR::tryRumblePadMiddle(this, PLAYER_1);
@@ -533,7 +544,8 @@ bool Plant::updateGrowUp() {
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
         Vec3f axisY;
         Vec3f pos;
-        mStalk->calcPosAndAxisY(&pos, &axisY, mLeaves[leaf]->mLeafCoord * growthPercent);
+        f32 leafCoord = mLeaves[leaf]->mLeafCoord;
+        mStalk->calcPosAndAxisY(&pos, &axisY, leafCoord * mStalk->mGrowthPercent);
         mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, 10.0f);
     }
 
@@ -601,8 +613,8 @@ void Plant::updateBindLeaf() {
 
     railDir.add(mPosition);
 
-    const f32 growthPercent = mStalk->mGrowthPercent;
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
+        f32 growthPercent = mStalk->mGrowthPercent;
         mLeaves[leaf]->updateSpring(railDir, springPower, growthPercent);
     }
 }
@@ -617,7 +629,10 @@ void Plant::startGrowUp() {
 
 bool Plant::tryHangUp() {
     if (!MR::isSpin(PLAYER_1)) {
-        mGrabbedTop = false;
+        if (mGrabbedTop) {
+            mGrabbedTop = false;
+        }
+
         return false;
     }
 
@@ -677,7 +692,14 @@ bool Plant::tryAccelHangUp() {
         mAccelTimer = ::sHangAccelInvalidTime;
         mRideVelocity += ::sHangUpAccel;
         MR::tryRumblePadMiddle(this, PLAYER_1);
-        mRideVelocity = mRideVelocity >= ::sHangUpPlayerSpeedMin ? mRideVelocity : ::sHangUpPlayerSpeedMin;
+        f32 speed;
+        if (mRideVelocity >= ::sHangUpPlayerSpeedMin) {
+            speed = mRideVelocity;
+        } else {
+            speed = ::sHangUpPlayerSpeedMin;
+        }
+
+        mRideVelocity = speed;
         return true;
     }
 

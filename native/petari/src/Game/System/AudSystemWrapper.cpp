@@ -12,16 +12,17 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/AssetFolder.hpp"
 
-AudSystemWrapper::AudSystemWrapper(NebulaArena* pArena) {
+AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) {
     mIsResetDone = false;
-    mArena = pArena;
+    mSolidHeap = pSolidHeap;
     mAudSystem = nullptr;
-    mSeqArchive = nullptr;
-    mChordArchive = nullptr;
-    mMeArchive = nullptr;
-    mRemixArchive = nullptr;
+    mHeap = pHeap;
+    mJaiSeqRes = nullptr;
+    mJaiChordRes = nullptr;
+    mJaiMeRes = nullptr;
+    mJaiRemixSeqRes = nullptr;
     mSpkRes = nullptr;
-    mSpeakerArena = NebulaArena::create(pArena);
+    mSpkHeap = NebulaArena::create(pSolidHeap);
 }
 
 void AudSystemWrapper::createAudioSystem() {
@@ -31,7 +32,7 @@ void AudSystemWrapper::createAudioSystem() {
         return;
     }
 
-    mAudSystem = AudNewAudSystem(mArena, mSeqArchive, mChordArchive, mMeArchive, mRemixArchive);
+    mAudSystem = AudNewAudSystem(mSolidHeap, mJaiSeqRes, mJaiChordRes, mJaiMeRes, mJaiRemixSeqRes);
 
     mAudSystem->setSpeakerResource(mSpkRes);
     createSoundNameConverter();
@@ -104,9 +105,9 @@ void AudSystemWrapper::resumeReset() {
 }
 
 void AudSystemWrapper::receiveResourceForInitialize() {
-    mSeqArchive = MR::getArchive(cSeqArchivePath, mArena);
-    mChordArchive = MR::getArchive(cChordArchivePath, mArena);
-    mMeArchive = MR::getArchive(cMeArchivePath, mArena);
-    mSpkRes = MR::getArchive(AudSpeakerWrap::getResName(), mSpeakerArena);
-    mRemixArchive = MR::getArchive(cRemixArchivePath, mArena);
+    mJaiSeqRes = MR::getArchive(sJaiSeqArc, mSolidHeap);
+    mJaiChordRes = MR::getArchive(sJaiChordArc, mSolidHeap);
+    mJaiMeRes = MR::getArchive(sJaiMeArc, mSolidHeap);
+    mSpkRes = MR::getArchive(AudSpeakerWrap::getResName(), mSpkHeap);
+    mJaiRemixSeqRes = MR::getArchive(sJaiRemixArc, mSolidHeap);
 }

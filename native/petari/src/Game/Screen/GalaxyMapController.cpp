@@ -14,7 +14,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
@@ -64,7 +64,7 @@ namespace {
 };  // namespace
 
 GalaxyMapController::GalaxyMapController()
-    : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), _38(), mMode(),
+    : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), mCaptureTexture(), mMode(),
       mWipeFrame(::sMapFadeinoutFrame) {
 }
 
@@ -93,9 +93,9 @@ void GalaxyMapController::init(const TableIter& rIter) {
     mWipe->initWithoutIter();
 
     {
-        NebulaArena::CurrentScope heapRestorer(Arenas::scene());
+        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-        _38 = JUTTexture::createTarget(0.5f, 0.5f);
+        mCaptureTexture = JUTTexture::createTarget(0.5f, 0.5f);
     }
 
     capture();
@@ -621,10 +621,10 @@ void GalaxyMapController::capture() {
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
     NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-    Frame::targetBegin(_38->mImage, _38->mShareAcross, _38->mShareDown, 0);
+    Frame::targetBegin(mCaptureTexture->mImage, mCaptureTexture->mShareAcross, mCaptureTexture->mShareDown, 0);
     Frame::setOrthographic(projectionMtx);
     drawForCapture();
-    Frame::targetEnd(_38->mImage, NEBULA_TARGET_RGB);
+    Frame::targetEnd(mCaptureTexture->mImage, NEBULA_TARGET_RGB);
 }
 
 namespace MR {
@@ -668,6 +668,6 @@ namespace MR {
     }
 
     const ResTIMG* getGalaxyMapResTIMG() {
-        return ::getGalaxyMapController()->_38->mTIMG;
+        return ::getGalaxyMapController()->mCaptureTexture->mTIMG;
     }
 };  // namespace MR

@@ -9,6 +9,7 @@
 #include "Game/Ride/Pole.hpp"
 #include "Game/Ride/SlingShooter.hpp"
 #include "Game/Ride/SpaceCocoon.hpp"
+#include "Game/Ride/SphereController.hpp"
 #include "Game/Ride/SurfRay.hpp"
 #include "Game/Ride/SurfRayTutorial.hpp"
 #include "Game/Ride/SwingRope.hpp"

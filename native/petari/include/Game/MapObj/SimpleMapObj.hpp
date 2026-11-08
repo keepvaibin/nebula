@@ -68,7 +68,7 @@ public:
 
 class SimpleMirrorObj : public MapObjActor {
 public:
-    SimpleMirrorObj(const char* pName, const char* pObjName = nullptr, MtxPtr = nullptr);
+    SimpleMirrorObj(const char* pName, const char* a2 = nullptr, MtxPtr = nullptr);
 
     virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();

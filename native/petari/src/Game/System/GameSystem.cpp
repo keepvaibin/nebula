@@ -17,10 +17,11 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -49,8 +50,8 @@ namespace NrvGameSystem {
 extern "C" void nebula_game_main(void) {
     NebulaArena::create(nullptr);
     Ui::LytInit();
-    Arenas::create();
-    Arenas::permanent()->makeCurrent();
+    SingletonHolder< HeapMemoryWatcher >::init();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< GameSystem >::init();
     SingletonHolder< GameSystem >::get()->init();
 
@@ -100,7 +101,7 @@ bool GameSystem::isDoneLoadSystemArchive() const {
 void GameSystem::startToLoadSystemArchive() {
     mIsExecuteLoadSystemArchive = true;
 
-    Arenas::permanent()->makeCurrent();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder->mObjHolder);
     setNerve(GET_NERVE(GameSystem, GameSystemLoadSystemArchive));
 }
@@ -119,7 +120,7 @@ void GameSystem::exeInitializeAudio() {
 
 void GameSystem::exeInitializeBootScene() {
     if (MR::isFirstStep(this)) {
-        MR::requestChangeScene(SceneKind_Boot);
+        MR::requestChangeScene("Boot");
     }
 
     updateSceneController();
@@ -127,7 +128,7 @@ void GameSystem::exeInitializeBootScene() {
 
 void GameSystem::exeLoadSystemArchive() {
     initAfterSystemArchiveLoaded();
-    Arenas::permanent()->makeCurrent();
+    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     updateSceneController();
     setNerve(GET_NERVE(GameSystem, GameSystemNormal));

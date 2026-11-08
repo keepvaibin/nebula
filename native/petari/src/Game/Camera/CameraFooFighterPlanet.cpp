@@ -62,19 +62,19 @@ CameraTargetObj* CameraFooFighterPlanet::calc() {
     }
     MR::normalize(&front);
 
-    Vec3f planeFront = CameraLocalUtil::getTarget(this)->getSideVec().cross(-CameraLocalUtil::getTarget(this)->getGravityVector());
-    if (MR::isNearZero(planeFront)) {
+    Vec3f front2 = CameraLocalUtil::getTarget(this)->getSideVec().cross(-CameraLocalUtil::getTarget(this)->getGravityVector());
+    if (MR::isNearZero(front2)) {
         return CameraLocalUtil::getTarget(this);
     }
-    MR::normalize(&planeFront);
+    MR::normalize(&front2);
 
-    Pos3f targetFrame;
-    targetFrame.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
-    targetFrame.setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
-    targetFrame.setZDir(planeFront);
-    targetFrame.setTrans(watchPoint);
+    Pos3f mtx1;
+    mtx1.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
+    mtx1.setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
+    mtx1.setZDir(front2);
+    mtx1.setTrans(watchPoint);
 
-    Pos3f inv = targetFrame;
+    Pos3f inv = mtx1;
     inv.invert(inv);
     inv.mult(pos, pos);
 
@@ -84,7 +84,7 @@ CameraTargetObj* CameraFooFighterPlanet::calc() {
         angleX += (mPitchMax - angleX) * 0.05f;
     }
     MR::polarToCross(Vec3f(0.0f, 0.0f, 0.0f), &pos, length, angleX, angleY);
-    targetFrame.mult(pos, pos);
+    mtx1.mult(pos, pos);
 
     Vec3f newFront = watchPoint - pos;
     if (MR::isNearZero(newFront)) {

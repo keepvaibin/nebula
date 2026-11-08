@@ -9,7 +9,7 @@
 #include <nebula_geometry.hpp>
 #include <algorithm>
 
-MultiSceneEffectKeeper::MultiSceneEffectKeeper(ModelManager* pModelManager, int extraEmitterNum, const char* pResName)
+MultiSceneEffectKeeper::MultiSceneEffectKeeper(const char*, ModelManager* pModelManager, int extraEmitterNum, const char* pResName)
     : mEmitter(), mResName(pResName) {
     if (mResName == nullptr) {
         mResName = pModelManager->getModelResourceHolder()->getModelName();

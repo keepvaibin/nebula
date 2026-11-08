@@ -10,7 +10,7 @@
 #include "Game/Sound/SoundAnimator.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-AudAnmSoundObject::AudAnmSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena) : AudSoundObject(pPos, numHandles, pArena), SoundAnimator(this) {
+AudAnmSoundObject::AudAnmSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), SoundAnimator(this) {
 }
 
 void AudAnmSoundObject::update(f32 time) {

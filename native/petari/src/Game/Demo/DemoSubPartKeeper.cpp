@@ -20,13 +20,15 @@ DemoSubPartInfo::DemoSubPartInfo() : mSubPartName(nullptr), mSubPartTotalStep(1)
 }
 
 void DemoSubPartKeeper::update() {
-    for (int i = 0; i < mNumSubPartInfos; i++) {
-        DemoSubPartInfo* subpart = &mSubPartInfos[i];
-        if (subpart->mRestStep > 0) {
-            subpart->mRestStep -= 1;
-        }
-        if (MR::isDemoPartStep(subpart->mMainPartName, subpart->mMainPartStep)) {
-            subpart->mRestStep = subpart->mSubPartTotalStep;
+    if (mNumSubPartInfos > 0) {
+        for (int i = 0; i < mNumSubPartInfos; i++) {
+            DemoSubPartInfo* subpart = &mSubPartInfos[i];
+            if (subpart->mRestStep > 0) {
+                subpart->mRestStep -= 1;
+            }
+            if (MR::isDemoPartStep(subpart->mMainPartName, subpart->mMainPartStep)) {
+                subpart->mRestStep = subpart->mSubPartTotalStep;
+            }
         }
     }
 }

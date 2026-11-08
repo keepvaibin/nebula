@@ -55,6 +55,7 @@ void AreaObj::init(const TableIter& rIter) {
     }
 
     MR::getAreaObjManager(getManagerName())->entry(this);
+    MR::getAreaObjManager(getManagerName());
     SleepControlFunc::addSleepControl(this, rIter);
 }
 
@@ -94,12 +95,12 @@ Pos3f* AreaObj::getFollowMtx() const {
     return mForm->mFollowMtx;
 }
 
-AreaObjMgr::AreaObjMgr(s32 firstCapacity, const char* pName) : NameObj(pName), mArray(), mFirstCapacity(firstCapacity) {
+AreaObjMgr::AreaObjMgr(s32 count, const char* pName) : NameObj(pName), mArray(), mMaxCount(count) {
 }
 
 void AreaObjMgr::entry(AreaObj* pAreaObj) {
     if (mArray.capacity() == 0) {
-        mArray.init(mFirstCapacity);
+        mArray.init(mMaxCount);
     }
 
     mArray.push_back(pAreaObj);

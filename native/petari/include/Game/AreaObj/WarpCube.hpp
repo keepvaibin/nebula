@@ -22,7 +22,7 @@ public:
 
 class WarpCubeMgr : public AreaObjMgr {
 public:
-    WarpCubeMgr(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName), mWarpCube() {
+    WarpCubeMgr(s32 formType, const char* pName) : AreaObjMgr(formType, pName), mWarpCube() {
     }
 
     virtual ~WarpCubeMgr() {

@@ -24,7 +24,7 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -114,7 +114,7 @@ void MarioActor::initDrawAndModel() {
     createRainbowMesh();
 
     {
-        NebulaArena::CurrentScope restorer(Arenas::scene());
+        MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
         mBlurTexture = JUTTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {
@@ -682,7 +682,7 @@ void MarioActor::updateFace() {
 
 void MarioActor::initBlur() {
     for (u32 i = 0; i < 2; i++) {
-        for (u32 j = 0; j < cBlurPoseNum; j++) {
+        for (u32 j = 0; j < 8; j++) {
             Model::initPose(&mBlurPoses[i][j]);
         }
     }
@@ -907,8 +907,8 @@ void MarioActor::drawModelBlur() const {
     Mtx inv;
     NebulaMtxInverse(const_cast< Mtx34f& >(mPrevViewMtx).toMtxPtr(), inv);
     MR::multMtx(inv, inv, MR::getCameraViewMtx());
-    for (u32 i = 1; i < cBlurPoseNum; i++) {
-        const u32 idx = static_cast< u32 >(i + mBlurPoseIndex) % cBlurPoseNum;
+    for (u32 i = 1; i < 8; i++) {
+        const u32 idx = static_cast< u32 >(i + mBlurPoseIndex) & 7;
         ModelPose& rPose = const_cast< MarioActor* >(this)->mBlurPoses[mBlurPoseSet][idx];
         if (!mBaseMtxStale) {
             Model::copyPose(&rPose, mBlurPoses[1 - mBlurPoseSet][idx]);
@@ -917,7 +917,7 @@ void MarioActor::drawModelBlur() const {
         model->setDrawPose(&rPose);
 
 
-        model->setDynamicList(&mGhostTints[(i - 1) * cBlurPoseNum + idx]);
+        model->setDynamicList(&mGhostTints[idx + ((i - 1) << 3)]);
         model->directDraw();
     }
 

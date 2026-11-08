@@ -193,7 +193,7 @@ void Kanina::appearItemPunch() {
 
 void Kanina::appearItemTrample() {
     if (mType == KaninaType_Red) {
-        // As many coins as a punch gives star pieces.
+        // most likely a copy-paste error from appearItemPunch
         MR::appearCoinPop(this, mPosition, ::sStarPieceNum);
     } else if (mType == KaninaType_Blue) {
         MR::appearKinokoOneUpPop(mKinokoOneUp, getBaseMtx(), ::sKinokoOneUpShootSpeed);

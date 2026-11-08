@@ -1,7 +1,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Sound/SoundAnimator.hpp"
-#include "Game/System/NebulaArena.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Material.hpp"
@@ -24,7 +24,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
       mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
-    mArena = NebulaArena::current();
+    mHeap = MR::getCurrentHeap();
     initializeArc(*mArchive);
 
     if (mModelResTable->mCount != 0 && isExistMaterialAnm()) {
@@ -68,7 +68,7 @@ void ResourceHolder::bindMaterialAnimations(ModelData* pModelData) {
 }
 
 void ResourceHolder::newBckCtrl() {
-    NebulaArena::CurrentScope scope(mArena);
+    MR::CurrentHeapRestorer heap(mHeap);
     // Its table has the archive's name.
     mBckCtrl = new BckCtrl(this, mArchive->getName());
 }
@@ -88,7 +88,7 @@ void ResourceHolder::initializeArc(AssetFolder& rArchive) {
 
     for (u32 table = 0; table < cTableCount; table++) {
         if (sizes[table] != 0) {
-            ResTable* const pTable = new (mArena, 0) ResTable();
+            ResTable* const pTable = new (mHeap, 0) ResTable();
             pTable->newFileInfoTable(sizes[table]);
             this->*cTables[table] = pTable;
         }

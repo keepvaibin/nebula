@@ -10,7 +10,7 @@ SaveRequest::SaveRequest() {
 
 void SaveRequest::init() {
     mType = Type_None;
-    mName = "";
+    mName[0] = '\0';
     mBuffer = nullptr;
     mSize = 0;
     mReadLength = nullptr;
@@ -18,11 +18,11 @@ void SaveRequest::init() {
 }
 
 bool SaveRequest::isDone() const {
-    return mStatus != NEBULA_SAVE_PENDING;
+    return __atomic_load_n(&mStatus, __ATOMIC_ACQUIRE) != NEBULA_SAVE_PENDING;
 }
 
 SaveRequest::Result SaveRequest::getResult() const {
-    switch (static_cast< s32 >(mStatus)) {
+    switch (__atomic_load_n(&mStatus, __ATOMIC_ACQUIRE)) {
     case NEBULA_SAVE_DONE:
         return Result_Done;
     case NEBULA_SAVE_PENDING:
@@ -41,9 +41,7 @@ void SaveRequest::start() {
     if (mType == Type_None) {
         return;
     }
-    // NebulaAtomic< s32 > is standard-layout with its value as the only member: the host stores into that value.
-    static_assert(sizeof(NebulaAtomic< s32 >) == sizeof(int32_t), "the host's status is the atomic's value");
-    const NebulaSaveRequest request = {cOps[mType], mName, mBuffer, mSize, mReadLength, reinterpret_cast< int32_t* >(&mStatus)};
+    const NebulaSaveRequest request = {cOps[mType], mName, mBuffer, mSize, mReadLength, &mStatus};
     const NebulaHostServices* const host = nebula_host();
     host->save_request(host->user, &request);
 }
@@ -53,7 +51,7 @@ const char* SaveRequest::setWriteSeq(const char* pName, const void* pBuf, u32 si
     mType = Type_Write;
     mBuffer = const_cast< void* >(pBuf);
     mSize = size;
-    mName = pName;
+    nebula_snprintf(mName, sizeof(mName), "%s", pName);
     return mName;
 }
 
@@ -63,13 +61,13 @@ const char* SaveRequest::setReadSeq(const char* pName, void* pBuf, u32 capacity,
     mBuffer = pBuf;
     mSize = capacity;
     mReadLength = pLength;
-    mName = pName;
+    nebula_snprintf(mName, sizeof(mName), "%s", pName);
     return mName;
 }
 
 SaveRequest* SaveRequest::setDelete(const char* pName) {
     init();
     mType = Type_Delete;
-    mName = pName;
+    nebula_snprintf(mName, sizeof(mName), "%s", pName);
     return this;
 }

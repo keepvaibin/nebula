@@ -3,10 +3,10 @@
 class AudSoundObject;
 class NebulaArena;
 
-/// @brief The sound objects whose map code is cleared each frame. The list grows in the arena it was made in.
+/// @brief The sound objects whose map code is cleared each frame. The list grows in the heap it was made in.
 class AudSoundObjHolder {
 public:
-    AudSoundObjHolder(NebulaArena* pArena, s32 capacity);
+    AudSoundObjHolder(NebulaArena* pHeap, s32 capacity);
 
     void update();
     void add(AudSoundObject* pSound);

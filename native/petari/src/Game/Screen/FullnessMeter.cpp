@@ -12,13 +12,13 @@ namespace NrvFullnessMeter {
     NEW_NERVE(FullnessMeterNrvEnd, FullnessMeter, End);
 };  // namespace NrvFullnessMeter
 
-FullnessMeter::FullnessMeter(LiveActor* pHost, s32 a2, s32 a3) : LayoutActor("満腹計", true), _20(a3), _24(a2), mHost(pHost) {
+FullnessMeter::FullnessMeter(LiveActor* pHost, s32 a2, s32 a3) : LayoutActor("満腹計", true), mNumber(a3), mNumberMax(a2), mHost(pHost) {
     MR::connectToSceneTalkLayout(this);
     initLayoutManager("StarPieceTargetMeter", 1);
     MR::createAndAddPaneCtrl(this, "TargetMeter", 1);
     MR::createAndAddPaneCtrl(this, "PicFrameShine", 1);
     mTargetCounter = MR::createSimpleLayoutTalkParts("満腹カウンター", "StarPieceTargetCounter", 1);
-    MR::setTextBoxNumberRecursive(mTargetCounter, "NumberMax", _24);
+    MR::setTextBoxNumberRecursive(mTargetCounter, "NumberMax", mNumberMax);
     setNumber(a3);
     initNerve(GET_NERVE(FullnessMeter, FullnessMeterNrvAppear));
 }
@@ -33,9 +33,9 @@ void FullnessMeter::control() {
 }
 
 void FullnessMeter::setNumber(s32 num) {
-    _20 = num;
+    mNumber = num;
 
-    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - (static_cast< f32 >(_20) / _24))));
+    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - (static_cast< f32 >(mNumber) / mNumberMax))));
 
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", frame, 0);
@@ -45,7 +45,7 @@ void FullnessMeter::setNumber(s32 num) {
         MR::startAnim(mTargetCounter, "Flash", 0);
     }
 
-    MR::setTextBoxNumberRecursive(mTargetCounter, "Number", _20);
+    MR::setTextBoxNumberRecursive(mTargetCounter, "Number", mNumber);
 }
 
 void FullnessMeter::requestAppear() {

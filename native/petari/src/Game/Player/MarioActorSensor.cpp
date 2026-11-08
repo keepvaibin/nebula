@@ -36,7 +36,7 @@ void MarioActor::setupSensors() {
         mPullSensors[idx] = nullptr;
     }
 
-    for (s32 idx = 0; idx < mTakeSensors.size(); idx++) {
+    for (s32 idx = 0; idx < ARRAY_SIZE(mTakeSensors); idx++) {
         mTakeSensors[idx] = nullptr;
     }
 

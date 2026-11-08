@@ -8,7 +8,7 @@ InputPointer::InputPointer(const PlayerInput* pPad)
 }
 
 void InputPointer::update() {
-    const PlayerInputSample* const pSample = mPad->getSample();
+    const PlayerInputSample* const pSample = mPad->getSample(0);
     if (pSample == nullptr) {
         mIsPointInScreen = false;
         mDistDisplay = 0.0f;

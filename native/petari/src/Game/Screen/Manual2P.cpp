@@ -45,12 +45,12 @@ void Manual2P::init(const TableIter& rIter) {
     MR::createAndAddPaneCtrl(this, "LeftButton", 2);
 
     mLeftPaneCtrl = new ButtonPaneController(this, "LeftButton", "PicLButton", 0, true);
-    mLeftPaneCtrl->_22 = 0;
+    mLeftPaneCtrl->mDisappearsAfterDecide = 0;
 
     MR::createAndAddPaneCtrl(this, "RightButton", 2);
 
     mRightPaneCtrl = new ButtonPaneController(this, "RightButton", "PicRButton", 0, true);
-    mRightPaneCtrl->_22 = 0;
+    mRightPaneCtrl->mDisappearsAfterDecide = 0;
 
     mBackButton = new BackButton("マニュアルの戻るボタン", true);
     mBackButton->initWithoutIter();
@@ -111,7 +111,7 @@ void Manual2P::exeWait() {
         }
 
         if (MR::isMoveStickPressedLeft(PLAYER_1) || MR::isPressedLeft(PLAYER_1)) {
-            mLeftPaneCtrl->_24 = false;
+            mLeftPaneCtrl->mIsActive = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
             setNerve(GET_NERVE_ANON(Manual2PNrvScrollLeft));
@@ -129,7 +129,7 @@ void Manual2P::exeWait() {
         }
 
         if (MR::isMoveStickPressedRight(PLAYER_1) || MR::isPressedRight(PLAYER_1)) {
-            mRightPaneCtrl->_24 = false;
+            mRightPaneCtrl->mIsActive = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
             setNerve(GET_NERVE_ANON(Manual2PNrvScrollRight));
@@ -162,7 +162,7 @@ void Manual2P::exeScrollRightAfter() {
     }
 
     if (MR::isAnimStopped(this, 0)) {
-        mRightPaneCtrl->_24 = true;
+        mRightPaneCtrl->mIsActive = true;
         mRightPaneCtrl->forceToWait();
         setNerve(GET_NERVE_ANON(Manual2PNrvWait));
     }
@@ -192,7 +192,7 @@ void Manual2P::exeScrollLeftAfter() {
     }
 
     if (MR::getAnimCtrl(this, 0)->getFrame() - MR::getAnimCtrl(this, 0)->getRate() <= 0.0f) {
-        mLeftPaneCtrl->_24 = true;
+        mLeftPaneCtrl->mIsActive = true;
         mLeftPaneCtrl->forceToWait();
         setNerve(GET_NERVE_ANON(Manual2PNrvWait));
     }

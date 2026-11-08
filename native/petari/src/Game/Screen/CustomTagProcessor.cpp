@@ -473,7 +473,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, 
 
 CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
-    writer.SetFont(*MR::getPictureFont());
+    writer.SetFont(*MR::getPictureFontNW4R());
     // The text writer reads one character past the length it is given (its loop's next read precedes the bound
     // check); a terminator keeps that read inside the buffer.
     const char16_t pictureText[2] = {static_cast< char16_t >(tag.getTag() + u'0'), 0};
@@ -680,7 +680,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect
 
 CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
-    writer.SetFont(*MR::getNumberFont());
+    writer.SetFont(*MR::getNumberFontNW4R());
     const char16_t* string = tag.getParamPtr(0);
     s32 length = static_cast< s32 >(tag.getParamLength()) / 2;
     f32 width = writer.CalcStringWidth(string, length) + writer.GetCharSpace();

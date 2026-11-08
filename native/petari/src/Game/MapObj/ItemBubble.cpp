@@ -128,18 +128,18 @@ void ItemBubble::init(const TableIter& rIter) {
     }
 
     if ((itemType == 0 && itemCount > 3) || (itemType == 1 && itemCount > 1)) {
-        Vec3f ringOffset;
-        Vec3f ringPos(0.0f, 60.0f, 0.0f);
-        Vec3f zeroVelocity;
-        zeroVelocity.zero();
+        Vec3f vec3;
+        Vec3f vec(0.0f, 60.0f, 0.0f);
+        Vec3f vec2;
+        vec2.zero();
 
-        Rot3f ringStep;
-        NebulaMtxRotRad(ringStep, (char)90, TWO_PI / static_cast< f32 >(itemCount));
+        Rot3f mtx;
+        NebulaMtxRotRad(mtx, (char)90, TWO_PI / static_cast< f32 >(itemCount));
 
         if (itemType == 0) {
-            ringOffset.set< f32 >(0.0f, -60.0f, 0.0f);
+            vec3.set< f32 >(0.0f, -60.0f, 0.0f);
         } else {
-            ringOffset.zero();
+            vec3.zero();
         }
 
         for (u32 i = 0; i < itemCount; i++) {
@@ -147,8 +147,8 @@ void ItemBubble::init(const TableIter& rIter) {
                 continue;
             }
 
-            mCoins[i]->initFixedPosition(mItemMtx, ringPos + ringOffset, zeroVelocity);
-            NebulaMtxMultVec(ringStep, ringPos, ringPos);
+            mCoins[i]->initFixedPosition(mItemMtx, vec + vec3, vec2);
+            NebulaMtxMultVec(mtx, vec, vec);
         }
     }
 

@@ -80,26 +80,26 @@ bool PlantLeaf::updateSpring(f32 growthPercent) {
 
     mSpringSpeed *= ::sSpringFrictionRate;
 
-    const bool stopped = MR::abs(mSpringCoord) < ::sSpringCoordToStop && MR::abs(mSpringSpeed) < ::sSpringSpeedToStop;
-    if (stopped) {
+    if (MR::abs(mSpringCoord) < ::sSpringCoordToStop && MR::abs(mSpringSpeed) < ::sSpringSpeedToStop) {
         mSpringCoord = 0.0f;
         mSpringSpeed = 0.0f;
         MR::makeAxisFrontUp(&mSide, &mUp, mFront, mUp);
         mBaseMtx.setXYZDir(mSide, mUp, mFront);
+        mBaseMtx.scale(mLeafSize * growthPercent);
+        mBaseMtx.setTrans(mPosition);
+        return true;
     } else {
-        // The leaf's front bends up by the spring.
-        Vec3f bentFront = mFront;
-        Vec3f side;
+        Vec3f side = mFront;
+        Vec3f front;
         Vec3f up;
-        bentFront.y += mSpringCoord;
-        MR::normalize(&bentFront);
-        MR::makeAxisFrontUp(&side, &up, bentFront, mUp);
-        mBaseMtx.setXYZDir(side, up, bentFront);
+        side.y += mSpringCoord;
+        MR::normalize(&side);
+        MR::makeAxisFrontUp(&front, &up, side, mUp);
+        mBaseMtx.setXYZDir(front, up, side);
+        mBaseMtx.scale(mLeafSize * growthPercent);
+        mBaseMtx.setTrans(mPosition);
+        return false;
     }
-
-    mBaseMtx.scale(mLeafSize * growthPercent);
-    mBaseMtx.setTrans(mPosition);
-    return stopped;
 }
 
 void PlantLeafDrawInit::init(const TableIter& rIter) {

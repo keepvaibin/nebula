@@ -11,6 +11,7 @@ class CameraHolder;
 class CameraMan;
 class CameraManGame;
 class CameraManEvent;
+class CameraManPause;
 class CameraManSubjective;
 class CameraParamChunkEvent;
 class CameraParamChunkHolder;
@@ -152,6 +153,7 @@ public:
     CameraRotChecker* mRotChecker;
     CameraManGame* mCameraManGame;
     CameraManEvent* mCameraManEvent;
+    CameraManPause* mCameraManPause;
     CameraManSubjective* mCameraManSubjective;
     MR::GrowTable< CameraEvent, 2 > mEvents;
     u32 mEventNum;

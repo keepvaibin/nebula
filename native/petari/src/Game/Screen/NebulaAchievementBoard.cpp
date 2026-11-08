@@ -1,5 +1,5 @@
 #include "Game/Screen/NebulaAchievementBoard.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -1113,7 +1113,7 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     Pane* pRoot = pManager->mLayout->mpRootPane;
     if (pRoot == nullptr || !p->mText.init(pManager->mLayoutHolder, "InformationWindow", pManager->mLayout) ||
         !p->mButton.init("BackButton", pManager->mLayout)) {
-        nebula_log("NebulaAchievementBoard: no InformationWindow or BackButton layout\n");
+        JUTNativeLog("NebulaAchievementBoard: no InformationWindow or BackButton layout\n");
         return;
     }
     const bool ringed = p->mWindow.init("SysInfoWindowMini", pManager->mLayout);
@@ -1386,7 +1386,7 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
 
     mParts = p;
-    nebula_log("NebulaAchievementBoard: %d cards, %s windows\n", p->mCardNum, ringed ? "ringed" : "plain");
+    JUTNativeLog("NebulaAchievementBoard: %d cards, %s windows\n", p->mCardNum, ringed ? "ringed" : "plain");
 }
 
 void NebulaAchievementBoard::open() {

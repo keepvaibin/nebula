@@ -43,7 +43,7 @@ void Mario::stopWalk() {
     mSpinInertiaBlend = 0.0f;
 
     stopEffect("共通スリップ坂");
-    stopAnimation("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake);
+    stopAnimation("歩行制動ブレーキ", 1);
     stopAnimation("ブレーキ");
 }
 
@@ -122,14 +122,14 @@ void Mario::decideSquatWalkAnimation() {
         return;
     }
 
-    if (isAnimationRun("壁押し", MarioIndexedAnime_WallPush)) {
+    if (isAnimationRun("壁押し", 0)) {
         stopAnimation(nullptr);
     }
 
     if (!mPrevMovementStates.squat || !isAnimationRun("しゃがみ基本")) {
-        stopAnimation("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake);
+        stopAnimation("歩行制動ブレーキ", 1);
         changeAnimation(nullptr, "しゃがみ基本");
-        stopAnimation("飛び込み準備", MarioIndexedAnime_DiveReady);
+        stopAnimation("飛び込み準備", 4);
         getAnimator()->setWalkWeight(&walkWeights1[0]);
         mMovementStates.squatWalk = false;
         if (!mMovementStates.jumping && !isAnimationRun("サマーソルト")) {
@@ -270,7 +270,7 @@ void Mario::decideWalkAnimation() {
         if (getPlayer()->mTargetWalkSpeedIndex == 0 && mSwim->mDeepWater) {
             bool prepare = !isPlayerModeBee();
             if (prepare) {
-                changeAnimation("飛び込み準備", MarioIndexedAnime_DiveReady);
+                changeAnimation("飛び込み準備", 4);
                 return;
             }
         }
@@ -313,7 +313,7 @@ void Mario::decideWalkAnimation() {
         }
     }
 
-    stopAnimation("飛び込み準備", MarioIndexedAnime_DiveReady);
+    stopAnimation("飛び込み準備", 4);
 
     f32 animFrame = getAnimator()->getFrame();
     if (mTargetWalkSpeedIndex != 0) {
@@ -463,7 +463,7 @@ void Mario::decideWalkAnimation() {
         s32 clingNum = MR::getKarikariClingNum();
         if (clingNum >= 1) {
             changeAnimationUpper("カリカリ限界");
-            stopAnimation("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake);
+            stopAnimation("歩行制動ブレーキ", 1);
         }
 
         if (clingNum < 1 && isAnimationRun("カリカリ限界")) {
@@ -473,7 +473,7 @@ void Mario::decideWalkAnimation() {
 }
 
 void Mario::doBrakingAnimation() {
-    changeAnimation("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake);
+    changeAnimation("歩行制動ブレーキ", 1);
     getAnimator()->getXanimePlayer()->mFrameCtrl->mAttribute = 1;
     if (gIsLuigi) {
         getAnimator()->getXanimePlayer()->changeSpeed(0.5f);
@@ -514,14 +514,14 @@ void Mario::checkWallPush() {
         }
     }
 
-    if (!isAnimationRun("壁押し", MarioIndexedAnime_WallPush) && sideStep) {
+    if (!isAnimationRun("壁押し", 0) && sideStep) {
         doSideStep();
     }
 }
 
 void Mario::updateBrakeAnimation() {
     if (mBrakeTimer != 0) {
-        if (!isAnimationRun("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake)) {
+        if (!isAnimationRun("歩行制動ブレーキ", 1)) {
             mBrakeTimer = 0;
         } else {
             mBrakeTimer--;
@@ -534,7 +534,7 @@ void Mario::updateBrakeAnimation() {
                 stopWalk();
             }
         }
-    } else if (isAnimationRun("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake) && (isAnimationTerminate(nullptr) || mTargetWalkSpeedIndex != 0)) {
+    } else if (isAnimationRun("歩行制動ブレーキ", 1) && (isAnimationTerminate(nullptr) || mTargetWalkSpeedIndex != 0)) {
         stopAnimation(nullptr);
     }
 
@@ -542,7 +542,7 @@ void Mario::updateBrakeAnimation() {
         return;
     }
 
-    if (!isAnimationRun("歩行制動ブレーキ", MarioIndexedAnime_WalkBrake) && !isAnimationRun("ブレーキ")) {
+    if (!isAnimationRun("歩行制動ブレーキ", 1) && !isAnimationRun("ブレーキ")) {
         return;
     }
 

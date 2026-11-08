@@ -12,7 +12,7 @@ public:
 
     void init(AssetFolder* pArchive);
     bool loadChordInfo(s16 id, bool keepCurrent);
-    void invalidate();
+    void invalidiate();
     bool isAvailable() const;
 
 private:

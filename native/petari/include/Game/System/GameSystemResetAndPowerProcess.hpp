@@ -4,8 +4,6 @@
 
 class ValueControl;
 
-// Back to the title, a restart or leaving the game: the picture fades out and the sound stops, then the game goes on from
-// the title (fading in) or the host restarts or closes it.
 class GameSystemResetAndPowerProcess : public LayoutActor {
 public:
     enum ResetOperation {
@@ -23,18 +21,16 @@ public:
     bool isActive() const;
     void setResetOperationApplicationReset();
     void setResetOperationQuit();
-    // Ignored while one runs.
     void requestReset(bool isImmediate);
     void requestQuitGame(bool isImmediate);
+    void beginFadeOut(bool isImmediate);
     void exeIdle();
-    void exeFadeOut();
+    void exePrepareReset();
+    void exeReset();
     void exeWaitPrepareFadein();
     void exeFadein();
-
-private:
-    void beginFadeOut(bool isImmediate);
-    void reset();
     void exitApplication();
+    bool tryPermitReset();
 
     ValueControl* mFadeinoutControl;
     s32 mResetOperation;

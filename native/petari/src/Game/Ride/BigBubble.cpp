@@ -108,7 +108,7 @@ void BigBubble::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mBaseMtx.setTrans(mPosition);
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_None);
-    initSensor();
+    BigBubble::initSensor();
     initNerve(GET_NERVE(BigBubble, BigBubbleNrvWait));
     initBinder(getBaseRadius(), 0, 16);
     initEffectKeeper(0, "BigBubble");
@@ -249,8 +249,6 @@ void BigBubble::generate(const Vec3f& rPos, const Vec3f& rUp, f32 volume, bool i
     mWarningColor.a = 0;
 }
 
-// The generator's action type: 0 the captured player steers it with the pointer, 1 it drifts; neither shrinks.
-// Others keep the defaults.
 void BigBubble::setActionType(s32 actionType) {
     switch (actionType) {
     case 0:
@@ -294,8 +292,8 @@ f32 BigBubble::getBaseRadius() const {
     }
 }
 
-void BigBubble::setHost(LiveActor* pHost) {
-    mHost = pHost;
+void BigBubble::setHost(LiveActor* mActor) {
+    mHost = mActor;
 }
 
 void BigBubble::setScale(f32 scale) {
@@ -463,7 +461,8 @@ bool BigBubble::requestAssimilate(HitSensor* pSender, HitSensor* pReceiver) {
         dir.set(mGravity);
     }
 
-    Vec3f pos = mPosition + dir * getSize();
+    Vec3f pos;
+    pos.set(mPosition + dir * getSize());
     Pos3f mtx;
     MR::makeMtxUpNoSupportPos(&mtx, dir, pos);
     MR::emitEffectHit(this, mtx, "Merge");
@@ -489,7 +488,10 @@ bool BigBubble::requestAssimilate(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool BigBubble::requestCancelBind() {
-    mRider = nullptr;
+    if (mRider != nullptr) {
+        mRider = nullptr;
+    }
+
     mWarningColor.a = 0;
     MR::emitEffect(this, "Break");
     MR::startSound(this, "SE_OJ_BIG_BUBBLE_BREAK");
@@ -662,7 +664,9 @@ void BigBubble::exeWait() {
         updateNormalVelocity();
     }
 
-    tryAutoBreak();
+    if (tryAutoBreak()) {
+        return;
+    }
 }
 
 void BigBubble::exeCapture() {
@@ -701,7 +705,9 @@ void BigBubble::exeCapture() {
     }
 
     if (!tryEscape() && !tryBreak()) {
-        tryGoal();
+        if (tryGoal()) {
+            return;
+        }
     }
 }
 
@@ -720,17 +726,19 @@ void BigBubble::exeMerged() {
     Vec3f mergePos, mergeDir;
     mMergeBubble->calcMergePosition(&mergePos, &mergeDir, this);
 
-    // The smaller of the two sizes.
     f32 mergeSize = getSize();
-    const f32 otherSize = mMergeBubble->getBaseRadius() * mMergeBubble->mScale.x;
-    if (otherSize < mergeSize) {
-        mergeSize = otherSize;
+    BigBubble* pMergeBubble = mMergeBubble;
+    f32 mergeRadius = pMergeBubble->getBaseRadius();
+    if (mergeRadius * pMergeBubble->mScale.x < mergeSize) {
+        BigBubble* pMergeBubble = mMergeBubble;
+        f32 mergeRadius = pMergeBubble->getBaseRadius();
+        mergeSize = mergeRadius * pMergeBubble->mScale.x;
     }
 
-    f32 deformAccel = mergeSize * MR::calcNerveRate(this, ::sTurchDeformTime) * ::sTurchDeformAccel;
+    f32 deformAccel = mergeSize * MR::calcNerveRate(this, ::sTurchDeformTime) * (::sTurchDeformAccel);
     addDeformVelocityOuter(mergeDir * deformAccel, false);
     mMergeBubble->addDeformVelocityOuter(mergeDir * -deformAccel * ::sMergeDeformAccel, false);
-    addDeformVelocityInternalPressure();
+    addDeformVelocityInternalOressure();
     addDeformVelocityRebound();
     updateDeformVelocity();
 
@@ -767,7 +775,9 @@ void BigBubble::exeBreak() {
 
     mInterpolateRate = MR::calcNerveRate(this, ::sBreakTime);
     updateNormalVelocity();
-    tryBreakEnd();
+    if (tryBreakEnd()) {
+        return;
+    }
 }
 
 void BigBubble::exeEscape() {
@@ -788,7 +798,10 @@ void BigBubble::exeEscape() {
     mRiderQuat.getYDir(up);
     rot.setRotate(up, mGravity, ::sMaxSpinSpeed);
     mRiderQuat.mult(rot);
-    tryEscapeEnd();
+
+    if (tryEscapeEnd()) {
+        return;
+    }
 }
 
 void BigBubble::exeGoal() {
@@ -797,7 +810,9 @@ void BigBubble::exeGoal() {
     }
 
     updateNormalVelocity();
-    tryBreakEnd();
+    if (tryBreakEnd()) {
+        return;
+    }
 }
 
 void BigBubble::endCapture() {
@@ -854,7 +869,7 @@ void BigBubble::addDeformVelocityOuter(const Vec3f& rDir, bool reverse) {
     }
 }
 
-void BigBubble::addDeformVelocityInternalPressure() {
+void BigBubble::addDeformVelocityInternalOressure() {
     f32 size = getSize();
     // BUG: pressure should be from opposing faces.
     f32 pressure = (mDeformCoeff[Side_Top] + mDeformCoeff[Side_Left]) * (mDeformCoeff[Side_Back] + mDeformCoeff[Side_Front]) *
@@ -923,7 +938,8 @@ bool BigBubble::addAccelPointing(s32 padChannel) {
         return false;
     }
 
-    mPointAccel = 1.0f - (pointerDist - ::sPointAccelDistanceMin) / (::sPointAccelDistanceMax - ::sPointAccelDistanceMin);
+    f32 maxDist = ::sPointAccelDistanceMax;
+    mPointAccel = 1.0f - (pointerDist - ::sPointAccelDistanceMin) / (maxDist - ::sPointAccelDistanceMin);
     mPointAccel = mPointAccel * (::sPointAccelMax - ::sPointAccelMin) + ::sPointAccelMin;
     MR::startSystemLevelSE("SE_SY_LV_BIG_BUBBLE_WIND", mPointAccel * 100.0f);
 
@@ -957,7 +973,7 @@ void BigBubble::updatePose() {
     Vec3f deformVel;
     MR::clampLength(&deformVel, -mVelocity, ::sMaxDeformSpeed);
     addDeformVelocityOuter(deformVel * (1.0f / ::sMaxDeformSpeed), false);
-    addDeformVelocityInternalPressure();
+    addDeformVelocityInternalOressure();
     addDeformVelocityRebound();
     updateDeformVelocity();
 }
@@ -965,6 +981,7 @@ void BigBubble::updatePose() {
 void BigBubble::updateBindActorMatrix() {
     if (mInterpolateRate < 1.0f) {
         mRiderPos.set(mRiderBasePos * (1.0f - mInterpolateRate) + mPosition * mInterpolateRate);
+
     } else {
         mRiderPos.set(mPosition);
     }
@@ -988,8 +1005,8 @@ void BigBubble::updateNormalVelocity() {
 
 void BigBubble::resetDeformVelocity() {
     for (s32 idx = 0; idx < 6; idx++) {
-        mDeformCoeff[idx] = 0.0f;
-        mDeformSpeed[idx] = 0.0f;
+        mDeformCoeff[idx] = 0;
+        mDeformSpeed[idx] = 0;
     }
 }
 
@@ -998,8 +1015,8 @@ void BigBubble::updateDeformVelocity() {
         mDeformCoeff[idx] += mDeformSpeed[idx];
         mDeformSpeed[idx] *= ::sMeshScaleFreq;
         if (mDeformCoeff[idx] < 0.0f) {
-            mDeformCoeff[idx] = 0.0f;
-            mDeformSpeed[idx] = 0.0f;
+            mDeformCoeff[idx] = 0;
+            mDeformSpeed[idx] = 0;
         }
     }
 }
@@ -1119,13 +1136,32 @@ s32 BigBubble::getNearAxisIndex(const Vec3f& rPos) const {
 
     switch (index) {
     case 0:
-        return axis.x >= 0.0f ? Side_Right : Side_Left;
+        if (axis.x >= 0.0f) {
+            return Side_Right;
+        } else {
+            return Side_Left;
+        }
+
+        break;
     case 1:
-        return axis.y >= 0.0f ? Side_Top : Side_Bottom;
+        if (axis.y >= 0.0f) {
+            return Side_Top;
+        } else {
+            return Side_Bottom;
+        }
+
+        break;
     case 2:
-        return axis.z >= 0.0f ? Side_Front : Side_Back;
+        if (axis.z >= 0.0f) {
+            return Side_Front;
+        } else {
+            return Side_Back;
+        }
+
+        break;
     default:
         return -1;
+        break;
     }
 }
 
@@ -1139,7 +1175,11 @@ s32 BigBubble::getMergeIndex(const Vec3f& rPos) const {
 }
 
 bool BigBubble::isPushable() const {
-    return isNerve(GET_NERVE(BigBubble, BigBubbleNrvWait)) || isNerve(GET_NERVE(BigBubble, BigBubbleNrvCapture));
+    if (isNerve(GET_NERVE(BigBubble, BigBubbleNrvWait)) || isNerve(GET_NERVE(BigBubble, BigBubbleNrvCapture))) {
+        return true;
+    }
+
+    return false;
 }
 
 bool BigBubble::isBindMario() const {
@@ -1147,7 +1187,7 @@ bool BigBubble::isBindMario() const {
 }
 
 bool BigBubble::isDraw() const {
-    return !mIsHidden && !mIsBroken && !MR::isDead(this);
+    return (!mIsHidden && !mIsBroken && !MR::isDead(this));
 }
 
 bool BigBubble::isMerged() const {
@@ -1155,5 +1195,9 @@ bool BigBubble::isMerged() const {
 }
 
 bool BigBubble::isEnemyAttackBreakable() const {
-    return isPushable();
+    if (isNerve(GET_NERVE(BigBubble, BigBubbleNrvWait)) || isNerve(GET_NERVE(BigBubble, BigBubbleNrvCapture))) {
+        return true;
+    }
+
+    return false;
 }

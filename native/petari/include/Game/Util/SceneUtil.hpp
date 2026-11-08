@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Game/Scene/SceneFactory.hpp"
 #include <nebula_geometry.hpp>
 
 
@@ -17,7 +16,7 @@ namespace MR {
     void setCurrentScenarioNo(s32, s32);
     bool isScenarioDecided();
     const char* getCurrentStageName();
-    bool isCurrentScene(SceneKind);
+    bool isEqualSceneName(const char*);
     bool isEqualStageName(const char*);
     bool isStageBeginPrologueEvent();
     bool isStageBeginFadeWipe();

@@ -11,16 +11,16 @@ namespace {
     const u32 cHeaderBytes = 64;
     static_assert(sizeof(Header) <= cHeaderBytes, "a block's header fits before it");
 
-    NebulaArena* sArena = nullptr;
+    NebulaArena* sHeap = nullptr;
     Header* sRetired = nullptr;
 }  // namespace
 
-void SoundMemory::setArena(NebulaArena* pArena) {
-    sArena = pArena;
+void SoundMemory::setHeap(NebulaArena* pHeap) {
+    sHeap = pHeap;
 }
 
 void* SoundMemory::alloc(u32 bytes) {
-    u8* memory = static_cast< u8* >(NebulaArena::alloc(cHeaderBytes + bytes, 64, sArena));
+    u8* memory = static_cast< u8* >(NebulaArena::alloc(cHeaderBytes + bytes, 64, sHeap));
     if (memory == nullptr) {
         NEBULA_PANIC("no memory for the sound system (%u bytes)", bytes);
     }
@@ -41,7 +41,7 @@ void SoundMemory::collect() {
         Header* header = *link;
         if (*header->mReleased) {
             *link = header->mNext;
-            NebulaArena::free(header, sArena);
+            NebulaArena::free(header, sHeap);
         } else {
             link = &header->mNext;
         }

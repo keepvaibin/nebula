@@ -15,17 +15,17 @@ CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, cons
       mChunks(new CameraParamChunk*[cInitialCapacity]), mIsSorted() {
 }
 
-CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pArena) {
+CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pHeap) {
     if (isNewAttribute(rID)) {
         char firstChar = rID.mName[0];
         CameraParamChunk* chunk;
 
         if (firstChar == 'e') {
-            chunk = new (pArena, 0) CameraParamChunkEvent(mCameraHolder, rID);
+            chunk = new (pHeap, 0) CameraParamChunkEvent(mCameraHolder, rID);
         } else if (firstChar == 'g' || firstChar == 'c' || firstChar == 's') {
-            chunk = new (pArena, 0) CameraParamChunkGame(mCameraHolder, rID);
+            chunk = new (pHeap, 0) CameraParamChunkGame(mCameraHolder, rID);
         } else {
-            chunk = new (pArena, 0) CameraParamChunk(mCameraHolder, rID);
+            chunk = new (pHeap, 0) CameraParamChunk(mCameraHolder, rID);
         }
 
         if (mNrChunks == mChunkCapacity) {

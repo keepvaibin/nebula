@@ -16,7 +16,7 @@ bool InputTilt::getAcceleration(Vec3f* pOut) const {
 }
 
 void InputTilt::update() {
-    const PlayerInputSample* const pSample = mPad->getSample();
+    const PlayerInputSample* const pSample = mPad->getSample(0);
     if (pSample == nullptr || (mHand != INPUT_HAND_MAIN && !MR::hasMoveStick(pSample))) {
         return;
     }

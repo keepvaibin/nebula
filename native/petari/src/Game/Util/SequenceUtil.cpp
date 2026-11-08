@@ -15,8 +15,8 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace MR {
-    void requestChangeScene(SceneKind kind) {
-        GameSequenceFunction::requestChangeScene(kind);
+    void requestChangeScene(const char* pName) {
+        GameSequenceFunction::requestChangeScene(pName);
     }
 
     void requestChangeSceneTitle() {

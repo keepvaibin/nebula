@@ -1,6 +1,4 @@
 #include "Game/MapObj/StarPieceDirector.hpp"
-#include "Game/System/Arenas.hpp"
-#include "Game/System/NebulaArena.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
@@ -322,7 +320,7 @@ StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameO
 }
 
 void StarPieceDirector::createStarPieces(unsigned count) {
-    NebulaArena::CurrentScope scope(Arenas::scene());
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (unsigned i = 0; i < count; i++) {
         StarPiece* pStarPiece = new StarPiece("スターピースディレクターピース");
         pStarPiece->initWithoutIter();
@@ -528,6 +526,7 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
     dir.sub(playerPos);
 
     f32 dirsquared = dir.squared();
+    f32 new_8C = 400.0f;
 
     if (16000000.0f < dirsquared) {
         Vec3f camPos(MR::getCamPos());
@@ -545,6 +544,7 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
         starPointerWorldPos.set(camPos);
 
         starPointerWorldPos.add(worldPos * (3000.0f + dirToPlayer.length()));
+        new_8C = 400.0f;
     } else if (9000000.0f < dirsquared) {
         dir.setLength(3000.0f);
         starPointerWorldPos.set(playerPos);
@@ -552,5 +552,5 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
     }
 
     mPosition.set(starPointerWorldPos);
-    mShootSpeed = 400.0f;
+    mShootSpeed = new_8C;
 }

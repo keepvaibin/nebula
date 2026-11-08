@@ -19,12 +19,14 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SeqSource.hpp"
 #include "Game/Sound/SoundStarter.hpp"
+#include "Game/Sound/StreamSource.hpp"
 #include "Game/Sound/PlayerLink.hpp"
 #include "Game/Sound/SoundParams.hpp"
 #include "Game/Sound/SoundArchive.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/Sound/SoundManager.hpp"
 #include "Game/Sound/SoundSystem.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -32,92 +34,103 @@
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
 
-const char cSoundDataPath[] = "/AudioRes/SMR";
-const char cSeqArchivePath[] = "/AudioRes/Seqs/JaiSeq";
-const char cChordArchivePath[] = "/AudioRes/Info/JaiChord";
-const char cMeArchivePath[] = "/AudioRes/Info/JaiMe";
-const char cRemixArchivePath[] = "/AudioRes/Info/JaiRemixSeq";
+const char sAudioResFile[] = "/AudioRes/SMR";
+const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq";
+const char sJaiChordArc[] = "/AudioRes/Info/JaiChord";
+const char sJaiMeArc[] = "/AudioRes/Info/JaiMe";
+const char sJaiRemixArc[] = "/AudioRes/Info/JaiRemixSeq";
+const char sJaiAudioArc[] = "AudioRes/SMR.baa";
+const char sJaiSeqResArc[] = "/AudioRes/JaiSeq";
 
 AudSystem* AudSystem::msBasic;
 
 // The beat readers: the game side and the audio thread's must have the same count.
 static const u32 cRhythmParsers = 3;
 
-AudSystem* AudNewAudSystem_(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
-    AudSystem* system = new AudSystem(pSoundArchive, pChordArchive, pMeArchive, pRemixArchive);
+AudSystem* AudNewAudSystem_(SoundArchive* pHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
+    AudSystem* system = new AudSystem(pHeap, pChordArchive, pMeArchive, pRemixArchive);
     system->mAudience.mMaxChannels = maxChannels;
     return system;
 }
 
 // The engine, then the archive's banks (the engine's before its clock runs), then the clock.
-AudSystem* AudNewAudSystem(NebulaArena* pArena, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
+AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
                            AssetFolder* pRemixArchive) {
-    NebulaArena* previous = NebulaArena::current();
-    NebulaArena* soundArena = NebulaArena::create(pArena);
-    SoundSystem::create(soundArena, AudParams::outputGain);
-    SoundArchive* audioData = new (soundArena, 0) SoundArchive(soundArena);
-    soundArena->makeCurrent();
+    NebulaArena* currHeap = NebulaArena::getCurrentHeap();
+    NebulaArena* soundHeap = NebulaArena::create(pHeap);
+    SoundSystem::create(soundHeap, AudParams::outputGain);
+    SoundArchive* audioData = new (soundHeap, 0) SoundArchive(soundHeap);
+    soundHeap->becomeCurrentHeap();
 
-    audioData->load(cSoundDataPath);
+    audioData->load(sAudioResFile);
     audioData->setAllWaves(AudSceneMgr::cPlayerVoiceBank);
-    SoundEngine::get()->rhythm().setup(SoundEngine::get(), cRhythmParsers, soundArena);
+    SoundEngine::get()->rhythm().setup(SoundEngine::get(), cRhythmParsers, soundHeap);
     SoundSystem::start();
 
-    if (pSeqArchive == nullptr && GameAssets::find(cSeqArchivePath) >= 0) {
-        pSeqArchive = AssetFolder::mount(cSeqArchivePath, previous);
+    if (pSeqArchive == nullptr && GameAssets::find(sJaiSeqArc) >= 0) {
+        pSeqArchive = AssetFolder::mount(sJaiSeqArc, currHeap);
     }
     audioData->setSeqArchive(pSeqArchive);
 
     if (pChordArchive == nullptr) {
-        pChordArchive = AssetFolder::mount(cChordArchivePath, soundArena);
+        pChordArchive = AssetFolder::mount(sJaiChordArc, soundHeap);
     }
 
     if (pMeArchive == nullptr) {
-        pMeArchive = AssetFolder::mount(cMeArchivePath, soundArena);
+        pMeArchive = AssetFolder::mount(sJaiMeArc, soundHeap);
     }
 
     AudSystem* system = AudNewAudSystem_(audioData, pChordArchive, pMeArchive, pRemixArchive, 1);
-    previous->makeCurrent();
+    currHeap->becomeCurrentHeap();
 
     return system;
 }
 
-AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
-    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
+static StdSoundInfo* newSoundInfo(SoundArchive* pAudioData) {
+    return new (pAudioData->getHeap(), 0) AudSoundInfo();
+}
+
+AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
+    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
-    mLimitedSoundInfo = new (mSoundArchive->getArena(), 0) AudLimitedSoundInfo[2];
+    mLimitedSoundInfo = new (mSectionHeap->getHeap(), 0) AudLimitedSoundInfo[2];
     clearAllLimitedSound();
 
-    SeqSource* effects = pSoundArchive->getEffectSource();
+    SeqSource* effects = pSectionHeap->getEffectSource();
     if (effects != nullptr) {
         getSeMgr().setSeqDataMgr(effects);
     }
-    getSeqMgr().setSeqDataMgr(pSoundArchive);
+    getSeqMgr().setSeqDataMgr(pSectionHeap);
 
     setAudience(&mAudience);
 
-    // Every sound's start reads the table.
-    if (mSoundArchive->getSoundTable() == nullptr) {
-        NEBULA_PANIC("the sound archive has no sound table");
+
+    mSoundInfo = nullptr;
+    SoundTable* soundTable = mSectionHeap->getSoundTable();
+    if (soundTable != nullptr) {
+        mSoundInfo = newSoundInfo(mSectionHeap);
     }
-    new (mSoundArchive->getArena(), 0) AudSoundInfo();
+
+    if (mSoundInfo != nullptr) {
+        mStreamMgr.setStreamDataMgr(mSoundInfo);
+    }
 
     initCategoryArrangement();
     initVolumeSetting();
 
-    mSoundObjHolder = new (mSoundArchive->getArena(), 0) AudSoundObjHolder(mSoundArchive->getArena(), AudParams::numInspectableSoundObj);
-    mSystemSeObject = new (mSoundArchive->getArena(), 0) AudSoundObject(nullptr, 10, mSoundArchive->getArena());
-    mAtmosphereSeObject = new (mSoundArchive->getArena(), 0) AudSoundObject(nullptr, 8, mSoundArchive->getArena());
-    mSceneMgr = new (mSoundArchive->getArena(), 0) AudSceneMgr(mSoundArchive);
-    mRhythmMeSystem = new (mSoundArchive->getArena(), 0) AudRhythmMeSystem(mSoundArchive->getArena(), cRhythmParsers, true);
-    mRemixMgr = new (mSoundArchive->getArena(), 0) AudRemixMgr(mSoundArchive->getArena());
+    mSoundObjHolder = new (mSectionHeap->getHeap(), 0) AudSoundObjHolder(mSectionHeap->getHeap(), AudParams::numInspectableSoundObj);
+    mSystemSeObject = new (mSectionHeap->getHeap(), 0) AudSoundObject(nullptr, 10, mSectionHeap->getHeap());
+    mAtmosphereSeObject = new (mSectionHeap->getHeap(), 0) AudSoundObject(nullptr, 8, mSectionHeap->getHeap());
+    mSceneMgr = new (mSectionHeap->getHeap(), 0) AudSceneMgr(mSectionHeap);
+    mRhythmMeSystem = new (mSectionHeap->getHeap(), 0) AudRhythmMeSystem(mSectionHeap->getHeap(), cRhythmParsers, true);
+    mRemixMgr = new (mSectionHeap->getHeap(), 0) AudRemixMgr(mSectionHeap->getHeap());
     mRemixMgr->init();
-    mSeStrategyMgr = new (mSoundArchive->getArena(), 0) AudSeStrategyMgr();
+    mSeStrategyMgr = new (mSectionHeap->getHeap(), 0) AudSeStrategyMgr();
     mSeMgr.setStrategyMgr(mSeStrategyMgr);
-    mAudEffector = new (mSoundArchive->getArena(), 0) AudEffector();
+    mAudEffector = new (mSectionHeap->getHeap(), 0) AudEffector();
     mAudEffector->initFxLine();
 
     if (pChordArchive != nullptr) {
@@ -132,9 +145,9 @@ AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, As
         mRemixMgr->setRemixSeqResource(pRemixArchive->getResource(static_cast< u16 >(0)));
     }
 
-    mSystemMeObject = new (mSoundArchive->getArena(), 0) AudMeObject(nullptr, 8, mSoundArchive->getArena());
-    mSpkSystem = new (mSoundArchive->getArena(), 0) SpkSystem(mSoundArchive->getArena());
-    mVolumeController = new (mSoundArchive->getArena(), 0) AudSystemVolumeController(this);
+    mSystemMeObject = new (mSectionHeap->getHeap(), 0) AudMeObject(nullptr, 8, mSectionHeap->getHeap());
+    mSpkSystem = new (mSectionHeap->getHeap(), 0) SpkSystem(mSectionHeap->getHeap());
+    mVolumeController = new (mSectionHeap->getHeap(), 0) AudSystemVolumeController(this);
 }
 
 AudChordInfo* AudSystem::getChordInfo() {
@@ -194,7 +207,7 @@ void AudSystem::calc() {
 }
 
 bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
-    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
+    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
 
@@ -202,11 +215,11 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
-    if (mIsTrigSeBlocked && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
+    if (mIsTrigSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
@@ -214,7 +227,7 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         return false;
     }
 
-    if (soundID.getGroupID() != AudGroup_HomeSe && mHomeButtonMenuState != MenuState_Off) {  // only the HOME menu's own while it is up
+    if (soundID.getGroupID() != 0xD && mHomeButtonMenuState != 0) {  // disable non-home-menu sounds if menu is not cleared
         return false;
     }
 
@@ -227,7 +240,7 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
 }
 
 bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
-    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
+    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
 
@@ -235,11 +248,11 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
-    if (mIsLevelSeBlocked && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
+    if (mIsLevelSeBlocked && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
@@ -247,7 +260,7 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         return false;
     }
 
-    if (soundID.getGroupID() != AudGroup_HomeSe && mHomeButtonMenuState != MenuState_Off) {  // only the HOME menu's own while it is up
+    if (soundID.getGroupID() != 0xD && mHomeButtonMenuState != 0) {  // disable non-home-menu sounds if menu is not cleared
         return false;
     }
 
@@ -271,7 +284,7 @@ void AudSystem::switchToLuigi(SoundID soundID, SoundHandle* pHandle) {
         return;
     }
 
-    if (soundID.getGroupID() != AudGroup_VoiceSe) {
+    if (soundID.getGroupID() != 0x1) {  // SE_PV
         return;
     }
 
@@ -552,11 +565,11 @@ bool AudSystem::isEnableStartSound(SoundID soundID) {
         return false;
     }
 
-    if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
+    if (mIsResetReady && soundID.getGroupID() != 0xD) {  // HOMESE
         return false;
     }
 
-    if (mSeMuteFrames >= 0 && soundID.getGroupID() != AudGroup_HomeSe && soundID.getGroupID() != AudGroup_SystemSe) {
+    if (mSeMuteFrames >= 0 && soundID.getGroupID() != 0xD && soundID.getGroupID() != 0x0) {  // HOMESE, SE_SY
         return false;
     }
 
@@ -663,13 +676,13 @@ void AudSystem::initCategoryArrangement() {
     mSeMgr.setCategoryArrangement(arrangement);
 }
 
-void AudSystem::setMeResource(AssetFolder* pArchive, u16 tableIndex, u16 seqIndex) {
+void AudSystem::setMeResource(AssetFolder* pArchive, u16 a1, u16 a2) {
     if (pArchive == nullptr) {
         return;
     }
 
-    void* meTable = pArchive->getResource(tableIndex);
-    const void* meSeq = pArchive->getResource(seqIndex);
+    void* meTable = pArchive->getResource(a1);
+    const void* meSeq = pArchive->getResource(a2);
     mRhythmMeSystem->mMeMgr->setMeTable(meTable);
     mRhythmMeSystem->mMeMgr->setMeSeq(meSeq);
 }
@@ -808,11 +821,11 @@ bool AudSystem::isAlreadyPlayingSoundNear(SoundID soundID, const Vec3f* pPos, f3
 
 void AudSystem::setVolumeZeroForce(s32 menuType) {
     for (s32 category = 0; category < cEffectCategoryNum; category++) {
-        if (category == AudGroup_HomeSe) {
+        if (category == 0xD) {  // HOMESE
             continue;
         }
 
-        if (menuType == MenuType_Pause && category == AudGroup_SystemSe) {
+        if (menuType == MenuType_Pause && category == 0x0) {  // pause and SE_SY
             continue;
         }
 

@@ -1,8 +1,7 @@
 #include "Game/MapObj/AirBubbleHolder.hpp"
 #include "Game/MapObj/AirBubble.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/System/Arenas.hpp"
-#include "Game/System/NebulaArena.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 
 namespace {
     const s32 sCreateAirBubbleNum = 32;
@@ -40,7 +39,7 @@ void AirBubbleHolder::init(const TableIter& rIter) {
 }
 
 void AirBubbleHolder::createAirBubbles() {
-    NebulaArena::CurrentScope scope(Arenas::scene());
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
     for (s32 i = 0; i < ::sCreateAirBubbleNum; i++) {
         AirBubble* pAirBubble = new AirBubble("空気アワ(共用)");
         pAirBubble->initWithoutIter();

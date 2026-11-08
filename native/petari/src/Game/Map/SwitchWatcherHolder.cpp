@@ -11,6 +11,8 @@ SwitchWatcherHolder::SwitchWatcherHolder() : NameObj("SwitchWatcherHolder"), mSw
 }
 
 void SwitchWatcherHolder::movement() {
+    // not quite sure what is going on here
+    // but it seems to just call movement on all watchers
     for (auto& item : mSwitchWatcher) {
         item->movement();
     }

@@ -15,6 +15,8 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
+    static Vec sStartPointVelocity = {0.0f, 0.0f, 0.0f};
+
     static const f32 sPointGravity = 0.2f;
     static const f32 sPointFrictionRate = 0.995f;
     static const f32 sSensorMoveDistance = 50.0f;
@@ -42,6 +44,7 @@ void JumpBranch::init(const TableIter& rIter) {
     mCenter.set(mPosition);
 
     Pos3f posMtx;
+    posMtx.identity();
     MR::makeMtxTR(posMtx, this);
 
     posMtx.getXDir(mSide);
@@ -87,11 +90,11 @@ void JumpBranch::exeWaitInvalid() {
     }
 }
 
-void JumpBranch::exeBind() {
+inline void JumpBranch::exeBind() {
     if (updateBind()) {
         setNerve(GET_NERVE(JumpBranch, JumpBranchNrvWaitInvalid));
     }
-}
+};
 
 void JumpBranch::updateHitSensor(HitSensor* pSensor) {
     Vec3f planarDiff(MR::getPlayerPos()->x - mPosition.x, 0.0f, MR::getPlayerPos()->z - mPosition.z);
@@ -131,7 +134,11 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         Vec3f playerFront;
         MR::getPlayerFrontVec(&playerFront);
 
-        mSwingReverse = playerFront.dot(mFront) < 0.0f;
+        if (playerFront.dot(mFront) < 0) {
+            mSwingReverse = true;
+        } else {
+            mSwingReverse = false;
+        }
 
         Vec3f diff = pSender->mPosition - pReceiver->mPosition;
 
@@ -165,6 +172,10 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         if (playerFront.dot(*MR::getPlayerVelocity()) < 0.0f) {
             grabFront.scale(-1.0f);
         }
+
+        ::sStartPointVelocity.x = grabFront.x;
+        ::sStartPointVelocity.y = grabFront.y;
+        ::sStartPointVelocity.z = grabFront.z;
 
         swingVelocity.set(grabFront);
         swingVelocity.scale(speed);

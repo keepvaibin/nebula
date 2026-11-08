@@ -22,8 +22,8 @@ namespace {
 };  // namespace
 
 MiiSelectIcon::MiiSelectIcon(int movementType, int calcAnimType, int drawType, const char* pName)
-    : LayoutActor(pName, true), _20(), _24(), _28(), mIcon(), mMiiTexMap(), mFellowTexMap(), mIconID(new FileSelectIconID()), mIsMiiDummy(),
-      _3D(true) {
+    : LayoutActor(pName, true), mActiveButton(), mFellowButton(), mMiiButton(), mIcon(), mMiiTexMap(), mFellowTexMap(), mIconID(new FileSelectIconID()), mIsMiiDummy(),
+      mIsEnabled(true) {
     initLayoutManager("MiiIcon", 1);
     MR::createAndAddPaneCtrl(this, "MarioIcon", 3);
     MR::createAndAddPaneCtrl(this, "MiiIcon", 3);
@@ -61,7 +61,7 @@ void MiiSelectIcon::appear(const FileSelectIconID& rIconID) {
         MR::startPaneAnim(this, "MarioIcon", "Character", 1);
         MR::setPaneAnimFrameAndStop(this, "MarioIcon", ::sCharacterTexFrame[rIconID.getFellowID()], 1);
 
-        _20 = _24;
+        mActiveButton = mFellowButton;
 
         MR::hidePane(this, "MiiIcon");
         MR::showPane(this, "MarioIcon");
@@ -76,7 +76,7 @@ void MiiSelectIcon::appear(const FileSelectIconID& rIconID) {
         MR::replacePaneTexture(this, "PicMii", pTexMap, 0);
         MR::replacePaneTexture(this, "PicMiiShine", pTexMap, 0);
 
-        _20 = _28;
+        mActiveButton = mMiiButton;
 
         MR::hidePane(this, "MarioIcon");
         MR::showPane(this, "MiiIcon");
@@ -101,7 +101,7 @@ void MiiSelectIcon::appearMiiDummy() {
     MR::setAnimFrameAndStop(this, 5.0f, 0);
     MR::startPaneAnim(this, "MarioIcon", "Character", 1);
     MR::setPaneAnimFrameAndStop(this, "MarioIcon", 5.0f, 1);
-    _20 = _24;
+    mActiveButton = mFellowButton;
     MR::hidePane(this, "MiiIcon");
     MR::showPane(this, "MarioIcon");
     setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
@@ -114,12 +114,12 @@ void MiiSelectIcon::appearMiiDummy() {
 
 void MiiSelectIcon::validate() {
     if (isNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected)) || isNerve(GET_NERVE_ANON(MiiSelectIconNrvInvalid))) {
-        _24->forceToWait();
-        _28->forceToWait();
+        mFellowButton->forceToWait();
+        mMiiButton->forceToWait();
         setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
     }
 
-    _3D = true;
+    mIsEnabled = true;
 }
 
 void MiiSelectIcon::invalidate() {
@@ -127,7 +127,7 @@ void MiiSelectIcon::invalidate() {
         setNerve(GET_NERVE_ANON(MiiSelectIconNrvInvalid));
     }
 
-    _3D = false;
+    mIsEnabled = false;
 }
 
 void MiiSelectIcon::prohibit() {
@@ -164,7 +164,7 @@ Ui::TexMap* MiiSelectIcon::getTexMap() {
 }
 
 bool MiiSelectIcon::isPointing() const {
-    return _20->isPointing();
+    return mActiveButton->isPointing();
 }
 
 void MiiSelectIcon::exeCreate() {
@@ -180,18 +180,18 @@ void MiiSelectIcon::exeCreate() {
 void MiiSelectIcon::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::showLayout(this);
-        _20->appear();
+        mActiveButton->appear();
     }
 
-    if (_3D) {
-        _20->trySelect();
+    if (mIsEnabled) {
+        mActiveButton->trySelect();
     }
 
-    if (_20->isPointingTrigger()) {
+    if (mActiveButton->isPointingTrigger()) {
         MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
     }
 
-    if (_20->mIsSelected) {
+    if (mActiveButton->mIsSelected) {
         setNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected));
     }
 }
@@ -200,11 +200,11 @@ void MiiSelectIcon::exeSelected() {
 }
 
 void MiiSelectIcon::exeDisappear() {
-    if (_20->isHidden()) {
-        if (_20 == _24) {
-            _28->forceToHide();
+    if (mActiveButton->isHidden()) {
+        if (mActiveButton == mFellowButton) {
+            mMiiButton->forceToHide();
         } else {
-            _24->forceToHide();
+            mFellowButton->forceToHide();
         }
 
         kill();
@@ -219,19 +219,19 @@ void MiiSelectIcon::appear() {
 }
 
 void MiiSelectIcon::control() {
-    _24->update();
-    _28->update();
+    mFellowButton->update();
+    mMiiButton->update();
 }
 
 void MiiSelectIcon::createButton() {
-    _24 = new ButtonPaneController(this, "MarioIcon", "PicMario", 0, true);
-    _24->_22 = false;
+    mFellowButton = new ButtonPaneController(this, "MarioIcon", "PicMario", 0, true);
+    mFellowButton->mDisappearsAfterDecide = false;
 
-    _28 = new ButtonPaneController(this, "MiiIcon", "PicMii", 0, true);
-    _28->_22 = false;
+    mMiiButton = new ButtonPaneController(this, "MiiIcon", "PicMii", 0, true);
+    mMiiButton->mDisappearsAfterDecide = false;
     // MiiSelect turns its pages with the D-pad and stick (NebulaMenuFocus leaves its icons to the pointer).
-    _24->mIsNebulaFocusable = false;
-    _28->mIsNebulaFocusable = false;
+    mFellowButton->mIsNebulaFocusable = false;
+    mMiiButton->mIsNebulaFocusable = false;
 }
 
 void MiiSelectIcon::createFaceImageObj() {

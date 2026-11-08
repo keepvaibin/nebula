@@ -4,98 +4,287 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 
-// rApply on every valid emitter (idx -1) or on the one at idx when it is valid.
-template < typename F >
-void MultiEmitter::forEachValid(s32 idx, const F& rApply) {
+void MultiEmitter::setGlobalRotation(const Vec3s& rRotation, s32 idx) {
     if (idx == -1) {
         for (s32 i = 0; i < mEmitters.size(); i++) {
-            SingleEmitter* pEmitter = getValidEmitter(i);
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
             if (pEmitter != nullptr) {
-                rApply(pEmitter->mEmitter);
+                pEmitter->mEmitter->setGlobalRotation(rRotation);
             }
         }
+
         return;
     }
 
-    SingleEmitter* pEmitter = getValidEmitter(idx);
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
     if (pEmitter != nullptr) {
-        rApply(pEmitter->mEmitter);
+        pEmitter->mEmitter->setGlobalRotation(rRotation);
     }
-}
-
-void MultiEmitter::setGlobalRotation(const Vec3s& rRotation, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->setGlobalRotation(rRotation); });
 }
 
 void MultiEmitter::setGlobalTranslation(const Vec3f& rTranslation, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->mEmitter->mGlobalTrs.set(rTranslation); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->mGlobalTrs.set(rTranslation);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->mGlobalTrs.set(rTranslation);
+    }
 }
 
 void MultiEmitter::setGlobalScale(const Vec3f& rScale, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->setGlobalScale(rScale); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->setGlobalScale(rScale);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->setGlobalScale(rScale);
+    }
 }
 
 void MultiEmitter::setGlobalSRTMatrix(const Mtx pMtx, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->setGlobalSRTMatrix(pMtx); });
-}
-
-// A light-affected emitter's colour is mixed with the light in its callback, so for all of them only the callback's is set.
-void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
     if (idx == -1) {
-        mCallBack->mPrmColor.set(r, g, b, -1);
-        if (!MR::isNearZero(mLightAffect)) {
-            return;
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->setGlobalSRTMatrix(pMtx);
+            }
         }
+
+        return;
     }
 
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->setGlobalPrmColor(r, g, b); });
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->setGlobalSRTMatrix(pMtx);
+    }
+}
+
+void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
+    // A light-affected emitter's colour is mixed with the light in its callback, so it is not set here.
+    bool isLightAffected = !MR::isNearZero(mLightAffect);
+
+    if (idx == -1) {
+        mCallBack->mPrmColor.set(r, g, b, -1);
+
+        if (!isLightAffected) {
+            for (s32 i = 0; i < mEmitters.size(); i++) {
+                SingleEmitter* pEmitter = getValidEmitter(i, false);
+                if (pEmitter != nullptr) {
+                    pEmitter->mEmitter->setGlobalPrmColor(r, g, b);
+                }
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->setGlobalPrmColor(r, g, b);
+    }
 }
 
 void MultiEmitter::setGlobalEnvColor(u8 r, u8 g, u8 b, s32 idx) {
+    bool isLightAffected = !MR::isNearZero(mLightAffect);
+
     if (idx == -1) {
         mCallBack->mEnvColor.set(r, g, b, -1);
-        if (!MR::isNearZero(mLightAffect)) {
-            return;
+
+        if (!isLightAffected) {
+            for (s32 i = 0; i < mEmitters.size(); i++) {
+                SingleEmitter* pEmitter = getValidEmitter(i, false);
+                if (pEmitter != nullptr) {
+                    pEmitter->mEmitter->setGlobalEnvColor(r, g, b);
+                }
+            }
         }
+
+        return;
     }
 
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->setGlobalEnvColor(r, g, b); });
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->setGlobalEnvColor(r, g, b);
+    }
 }
 
 void MultiEmitter::setLocalScale(const Vec3f& rScale, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->mEmitter->mLocalScl.set(rScale); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->mLocalScl.set(rScale);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->mLocalScl.set(rScale);
+    }
 }
 
 void MultiEmitter::setDirectionalSpeed(f32 speed, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->mEmitter->setDirectionalSpeed(speed); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->setDirectionalSpeed(speed);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->setDirectionalSpeed(speed);
+    }
 }
 
 void MultiEmitter::setRate(f32 rate, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->mEmitter->setRate(rate); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->setRate(rate);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->setRate(rate);
+    }
 }
 
 void MultiEmitter::stopCalcEmitter(s32 idx) {
-    forEachValid(idx, [](ParticleEmitter* pEmitter) { pEmitter->mEmitter->stopCalcEmitter(); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->stopCalcEmitter();
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->stopCalcEmitter();
+    }
 }
 
 void MultiEmitter::playCalcEmitter(s32 idx) {
-    forEachValid(idx, [](ParticleEmitter* pEmitter) { pEmitter->mEmitter->playCalcEmitter(); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->playCalcEmitter();
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->playCalcEmitter();
+    }
 }
 
 void MultiEmitter::stopDrawParticle(s32 idx) {
-    forEachValid(idx, [](ParticleEmitter* pEmitter) { pEmitter->mEmitter->stopDrawParticle(); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->stopDrawParticle();
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->stopDrawParticle();
+    }
 }
 
 void MultiEmitter::playDrawParticle(s32 idx) {
-    forEachValid(idx, [](ParticleEmitter* pEmitter) { pEmitter->mEmitter->playDrawParticle(); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->playDrawParticle();
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->playDrawParticle();
+    }
 }
 
 void MultiEmitter::setParticleCallBackPtr(ParticleCallBack* pCallBack, s32 idx) {
-    forEachValid(idx, [&](ParticleEmitter* pEmitter) { pEmitter->mEmitter->setParticleCallBackPtr(pCallBack); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->mEmitter->setParticleCallBackPtr(pCallBack);
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->mEmitter->setParticleCallBackPtr(pCallBack);
+    }
 }
 
 void MultiEmitter::pauseOff(s32 idx) {
-    forEachValid(idx, [](ParticleEmitter* pEmitter) { pEmitter->pauseOff(); });
+    if (idx == -1) {
+        for (s32 i = 0; i < mEmitters.size(); i++) {
+            SingleEmitter* pEmitter = getValidEmitter(i, false);
+            if (pEmitter != nullptr) {
+                pEmitter->mEmitter->pauseOff();
+            }
+        }
+
+        return;
+    }
+
+    SingleEmitter* pEmitter = getValidEmitter(idx, false);
+    if (pEmitter != nullptr) {
+        pEmitter->mEmitter->pauseOff();
+    }
 }
 
 void ParticleEmitter::setGlobalRotation(const Vec3s& rRotation) {

@@ -117,11 +117,9 @@ private:
     void overwriteOsc(Note* pNote);
     void setOscAdsr(s16 attack, s16 decay, s16 sustainTime, s16 sustainLevel, u16 release);
     void updateChannelParams();
-    // numNotes is the phrase's count byte, so a list of cNoteListRoom always holds it.
-    static const s32 cNoteListRoom = 0x100;
-    void setBaseNoteFromChord(const u8* pChordData, u8 numNotes, bool random);
-    void setBaseNoteFromScale(const u8* pScaleData, u8 numNotes, bool random);
-    void setBaseNoteFromChromatic(const u8* pChromData, u8 numNotes, bool random);
+    void setBaseNoteFromChord(const u8* pChordData, s32 numNotes, bool random);
+    void setBaseNoteFromScale(const u8* pScaleData, s32 numNotes, bool random);
+    void setBaseNoteFromChromatic(const u8* pChromData, s32 numNotes, bool random);
     void adjustNote(s32 direction, s32 type);
     void modifyNote(s32 direction, s32 type, s32 steps);
     u32 getRandom(u32 range);

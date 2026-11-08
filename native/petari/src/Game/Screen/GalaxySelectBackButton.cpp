@@ -18,7 +18,7 @@ void GalaxySelectBackButton::init(const TableIter&) {
     MR::connectToSceneLayout(this);
 
     mPaneCtrl = new ButtonPaneController(this, "Back", "BoxButton", 0, true);
-    mPaneCtrl->_23 = true;
+    mPaneCtrl->mIsPointingExternal = true;
 
     initNerve(GET_NERVE(GalaxySelectBackButton, GalaxySelectBackButtonNrvAppear));
 }

@@ -102,7 +102,7 @@ public:
     void calcDir(const Vec3f&);
 
     Vec3f mTranslation;
-    Vec3f mUp;  // the axis, from the placement rotation
+    Vec3f mRotation;
     f32 mRadius;
     f32 mHeight;
 };

@@ -29,7 +29,7 @@ public:
 
     const DemoExecutor* mExecutor;
     DemoTimePartInfo* mMainPartInfos;
-    DemoTimePartInfo* mCurrentPart;  // in mMainPartInfos; nullptr when no demo runs
+    DemoTimePartInfo* mSubPartInfos;
     s32 mNumPartInfos;
     s32 mElapsedStep;
     s32 mCurrentStep;

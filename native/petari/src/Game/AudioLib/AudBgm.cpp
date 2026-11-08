@@ -10,6 +10,7 @@
 #include "Game/RhythmLib/AudRhythmMeSystem.hpp"
 #include "Game/Sound/Sound.hpp"
 #include "Game/Sound/SoundChild.hpp"
+#include "Game/Sound/SoundInfo.hpp"
 #include "Game/Sound/StreamSound.hpp"
 
 namespace {

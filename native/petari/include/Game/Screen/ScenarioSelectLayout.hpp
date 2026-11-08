@@ -74,8 +74,8 @@ public:
     BackButton* mBackButton;
     Vec2f mMarioPaneFollowPos;
     const char* mMarioPaneName;
-    s32 _A4;
-    s32 _A8;
+    s32 mTextFadeState;
+    s32 mTextScenarioNo;
     // A galaxy with more stars than the screen's seven: all of them, in order, and the page shown.
     s32* mListScenario = nullptr;
     s32* mListState = nullptr;

@@ -1,5 +1,5 @@
 #include "Game/Screen/NebulaPrepare.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
@@ -59,7 +59,7 @@ public:
         memcpy(pManager->mLayoutName, cLayoutName, sizeof(cLayoutName));
         mBuilt = build();
         if (!mBuilt) {
-            nebula_log("NebulaPrepare: a layout or pane is missing\n");
+            JUTNativeLog("NebulaPrepare: a layout or pane is missing\n");
         }
         kill();
     }

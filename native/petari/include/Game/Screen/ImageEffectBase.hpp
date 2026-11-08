@@ -30,10 +30,10 @@ public:
     }
 
     f32 get_10() const {
-        return _10;
+        return mFadeLevel;
     }
 
     bool _C;
     bool _D;
-    f32 _10;
+    f32 mFadeLevel;
 };

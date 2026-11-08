@@ -104,12 +104,12 @@ void AstroDomeDemoStarter::movePlayer() {
 
     mShootPath->calcPosition(&position, demoPartStepRate);
 
-    Pos3f playerMtx;
-    MR::makeMtxUpFrontPos(&playerMtx, direction, Vec3f(0.0f, -1.0f, 0.0f), position);
+    Pos3f mtx2;
+    MR::makeMtxUpFrontPos(&mtx2, direction, Vec3f(0.0f, -1.0f, 0.0f), position);
 
-    playerMtx.concat(mtx);
+    mtx2.concat(mtx);
 
-    MR::setPlayerBaseMtx(playerMtx);
+    MR::setPlayerBaseMtx(mtx2);
 
     if (MR::isJudgedToNearClip(position, ::cJumpOutNearClipDistance)) {
         MR::hidePlayer();

@@ -17,70 +17,70 @@ void SubMeterLayout::init(const TableIter& rIter) {
     MR::setPaneAnimFrameAndStop(this, "Count", 0.0f, 0);
     appear();
     MR::hideLayout(this);
-    _20 = 0;
-    _26 = 0;
+    mPhase = 0;
+    mFullLifeFrame = 0;
 }
 
 void SubMeterLayout::setLifeRatio(f32 ratio) {
     f32 mult = 128.0f * ratio;
-    _22 = (s32)(mult);
-    MR::setPaneAnimFrameAndStop(this, "Count", 0x80 - _22, 0);
+    mLifeFrame = (s32)(mult);
+    MR::setPaneAnimFrameAndStop(this, "Count", 0x80 - mLifeFrame, 0);
 }
 
 void SubMeterLayout::requestDeactivate() {
     MR::hideLayout(this);
-    _20 = 0;
+    mPhase = 0;
 }
 
 void SubMeterLayout::requestAppear() {
     MR::showLayout(this);
     MR::startAnim(this, "Appear", 0);
-    _20 = 1;
+    mPhase = 1;
     control();
 }
 
 void SubMeterLayout::requestFrameIn() {
     MR::showLayout(this);
     MR::startAnim(this, "Appear", 0);
-    _20 = 1;
+    mPhase = 1;
     control();
 }
 
 void SubMeterLayout::requestFrameOut() {
     MR::startAnim(this, "End", 0);
-    _20 = 4;
+    mPhase = 4;
 }
 
 void SubMeterLayout::control() {
-    switch (_20) {
+    switch (mPhase) {
     case 0:
         break;
     case 1:
         if (MR::isAnimStopped(this, 0)) {
             MR::startAnim(this, "Wait", 0);
-            _26 = 0;
-            _20 += 1;
+            mFullLifeFrame = 0;
+            mPhase += 1;
         }
         break;
     case 2:
-        if (_22 < 0x40) {
+        if (mLifeFrame < 0x40) {
             MR::startAnim(this, "Danger", 0);
-            _20 = 3;
+            mPhase = 3;
         }
         break;
     case 3:
-        if (_22 > 0x40) {
+        if (mLifeFrame > 0x40) {
             MR::startAnim(this, "Wait", 0);
             MR::setAnimRate(this, 1.0f, 0);
-            _20 = 2;
+            mPhase = 2;
         } else {
-            MR::setAnimRate(this, ((0x40 - _22) * 1.0f / 32.0f) + 1.0f, 0);
+            MR::setAnimRate(this, ((0x40 - mLifeFrame) * 1.0f / 32.0f) + 1.0f, 0);
         }
         break;
     case 4:
         if (MR::isAnimStopped(this, 0)) {
             MR::hideLayout(this);
-            _20 = 0;
+            mPhase = 0;
         }
         break;
     }
@@ -96,15 +96,15 @@ void SubMeterLayout::control() {
     }
 
     if (flag) {
-        if (((_20 + 0xFE) & 0xFF) <= 1u && _22 == 0x80) {
-            if (++_26 == 60) {
+        if (((mPhase + 0xFE) & 0xFF) <= 1u && mLifeFrame == 0x80) {
+            if (++mFullLifeFrame == 60) {
                 MR::startAnim(this, "End", 0);
-                _20 = 5;
+                mPhase = 5;
             }
         }
-    } else if (_20 == 5) {
-        _20 = 1;
-        _26 = 0;
+    } else if (mPhase == 5) {
+        mPhase = 1;
+        mFullLifeFrame = 0;
         MR::startAnim(this, "Appear", 0);
     }
 

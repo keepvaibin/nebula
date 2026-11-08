@@ -511,11 +511,11 @@ namespace GameEventFlagTable {
                 return true;
             }
         } else if (pFlag1->mType == GameEventFlag::Type_Galaxy) {
-            MR::InlineVector< const char*, 3 > galaxyDependedFlags;
-            getGalaxyDependedFlags(&galaxyDependedFlags, pFlagName1);
+            const char* galaxyDependedFlags[3];
+            s32 length = getGalaxyDependedFlags(galaxyDependedFlags, ARRAY_SIZE(galaxyDependedFlags), pFlagName1);
 
-            for (const char* const* pFlag = galaxyDependedFlags.begin(); pFlag != galaxyDependedFlags.end(); pFlag++) {
-                if (MR::isEqualString(*pFlag, pFlagName2)) {
+            for (s32 i = 0; i < length; i++) {
+                if (MR::isEqualString(galaxyDependedFlags[i], pFlagName2)) {
                     return true;
                 }
             }
@@ -611,24 +611,26 @@ namespace GameEventFlagTable {
         return calcSpecialPowerStarNum("SpecialStarGreen");
     }
 
-    void getGalaxyDependedFlags(MR::InlineVector< const char*, 3 >* pFlags, const char* pName) {
+    s32 getGalaxyDependedFlags(const char** pFlags, int a1, const char* pName) {
         Table info;
         info.attach(NebulaDataTables::getGalaxyInfoTable());
 
         TableIter iter = info.findElement("name", pName, 0);
 
-        // OpenCondition0, 1, ... up to the first column the table lacks.
-        for (s32 idx = 0;; idx++) {
-            const MR::FormattedName key("OpenCondition%d", idx);
-            if (info.searchItemInfo(key.c_str()) < 0) {
+        s32 numFlags = 0;
+        for (s32 idx = 0; idx < 3; idx++) {
+            char key[32];
+            nebula_snprintf(key, 32, "OpenCondition%1d", idx);
+            if (info.searchItemInfo(key) < 0) {
                 break;
             }
 
             const char* openCondition = "";
-            iter.getValue(key.c_str(), &openCondition);
+            iter.getValue(key, &openCondition);
             if (!MR::isEqualString(openCondition, "")) {
-                pFlags->push_back(openCondition);
+                pFlags[numFlags++] = openCondition;
             }
         }
+        return numFlags;
     }
 };  // namespace GameEventFlagTable

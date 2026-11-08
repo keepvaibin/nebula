@@ -65,8 +65,8 @@ private:
     s32 mNotReadedChapterNo;
     s32 mNotReadedPageNo;
     s32 mNotReadedTextIndex;
-    Ui::TexMap** _44;
-    Ui::TexMap** _48;
+    Ui::TexMap** mTexMaps;
+    Ui::TexMap** mChapterTexMaps;
     Ui::TexMap* mTitleTexMap;
     Ui::TexMap* mCoverFrontTexMap;
     Ui::TexMap* mCoverBackTexMap;

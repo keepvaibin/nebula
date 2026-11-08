@@ -20,7 +20,7 @@ public:
     void joinSwitchEventListener(const StageSwitchCtrl*, u32, SwitchEventListener*);
     void addSwitchWatcher(SwitchWatcher*);
 
-    MR::InlineVector< SwitchWatcher*, 256 > mSwitchWatcher;
+    MR::Vector< MR::FixedArray< SwitchWatcher*, 256 > > mSwitchWatcher;
 };
 
 namespace MR {

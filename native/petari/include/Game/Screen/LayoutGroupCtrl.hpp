@@ -22,5 +22,4 @@ public:
     LayoutManager* mManager;
     Ui::Group* mGroup;
     MR::AssignableArray< LayoutAnmPlayer* > mAnmPlayerArray;
-    bool _10;
 };

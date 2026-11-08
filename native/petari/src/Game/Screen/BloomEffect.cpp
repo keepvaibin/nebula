@@ -28,7 +28,7 @@ namespace {
     }
 };  // namespace
 
-BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), _14(255), _18(1.0f / ::sL1RoundPoints), _1C(1.0f / ::sL2RoundPoints), _20(128) {
+BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), mBloomIntensity(255), mIntensity1(1.0f / ::sL1RoundPoints), mIntensity2(1.0f / ::sL2RoundPoints), mThreshold(128) {
     MR::connectToSceneNormalBloom(this);
     MR::createImageEffectSystemHolder();
 }
@@ -56,10 +56,10 @@ void BloomEffect::postDraw() const {
 
     // Drawn by the renderer at the frame's own size: the threshold, both blurs' tap weights, the intensity and the
     // rings' horizontal radius per unit.
-    const u8 intensity = _14 * get_10();
-    const u32 tap1 = static_cast< u8 >(static_cast< s32 >(_18 * 255.0f));
-    const u32 tap2 = static_cast< u8 >(static_cast< s32 >(_1C * 255.0f));
-    Frame::bloom(NEBULA_PASS_BLOOM_NORMAL, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
+    const u8 intensity = mBloomIntensity * get_10();
+    const u32 tap1 = static_cast< u8 >(static_cast< s32 >(mIntensity1 * 255.0f));
+    const u32 tap2 = static_cast< u8 >(static_cast< s32 >(mIntensity2 * 255.0f));
+    Frame::bloom(NEBULA_PASS_BLOOM_NORMAL, mThreshold | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
     initDraw();
 }

@@ -513,33 +513,31 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
 
 namespace {
     bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
-        MR::FormattedName name;
-        name.vformat(pArchive, pFormat);
+        char buf[0x100];
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
-        return pHolder->mFileInfoTable->isExistRes(name.c_str());
+        return pHolder->mFileInfoTable->isExistRes(buf);
     }
 };  // namespace
 
 bool MR::isExistFileInArc(const ResourceHolder* pHolder, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
-    const bool exists = ::isExistFileInArcLocal(pHolder, pFormat, list);
-    va_end(list);
 
-    return exists;
+    return ::isExistFileInArcLocal(pHolder, pFormat, list);
 }
 
 namespace {
     Table* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
-        MR::FormattedName name;
-        name.vformat(pArchive, pFormat);
+        char buf[0x100];
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
-        if (!pHolder->mFileInfoTable->isExistRes(name.c_str())) {
+        if (!pHolder->mFileInfoTable->isExistRes(buf)) {
             return nullptr;
         }
 
         Table* pInfo = new Table();
-        pInfo->attach(pHolder->mFileInfoTable->getRes(name.c_str()));
+        pInfo->attach(pHolder->mFileInfoTable->getRes(buf));
 
         return pInfo;
     }
@@ -548,10 +546,8 @@ namespace {
 Table* MR::createCsvParser(const ResourceHolder* pHolder, const char* pFormat, ...) {
     va_list list;
     va_start(list, pFormat);
-    Table* const pInfo = ::tryCreateCsvParserLocal(pHolder, pFormat, list);
-    va_end(list);
 
-    return pInfo;
+    return ::tryCreateCsvParserLocal(pHolder, pFormat, list);
 }
 
 Table* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {

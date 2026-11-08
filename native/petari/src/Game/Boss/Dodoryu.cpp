@@ -33,7 +33,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 
 namespace {
@@ -442,7 +441,10 @@ void Dodoryu::endPlayerCenterCamera() {
 }
 
 void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 index) const {
-    MR::tryFindNamePos(MR::FormattedName("マリオ再セット%d", index + 1).c_str(), (MtxPtr)pMtx);
+    char name[256];
+    nebula_snprintf(name, sizeof(name), "マリオ再セット%d", index + 1);
+
+    MR::tryFindNamePos(name, (MtxPtr)pMtx);
 }
 
 bool Dodoryu::checkWallWithVelocity() {
@@ -1107,7 +1109,9 @@ void DodoryuLeadHill::calcAndSetBaseMtx() {
 
 void DodoryuLeadHill::initJoint() {
     for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
-        mJointCtrls[i] =
-            MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, MR::FormattedName("DodoryuLeadHill%d", i + 1).c_str());
+        char name[256];
+        nebula_snprintf(name, sizeof(name), "DodoryuLeadHill%d", i + 1);
+
+        mJointCtrls[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, name);
     }
 }

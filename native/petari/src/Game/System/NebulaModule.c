@@ -4,6 +4,7 @@
 #include "nebula_module.h"
 
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 void nebula_game_main(void); /* Game/System/GameSystem.cpp: the game's main */
@@ -49,29 +50,38 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_fatal("the game's main returned");
 }
 
-/* Each line goes to the host in one call, which writes it whole from any thread; nothing is shared between calls (dropped
-   before the host attaches). Every caller ends its text with a newline; a last piece without one is a line of its own. */
-void nebula_vlog(const char* format, va_list args) {
-    const NebulaHostServices* host = nebula_host();
-    if (host == NULL || host->log == NULL) {
-        return;
-    }
+/* The host's log takes whole lines (dropped before the host attaches): a report without its newline waits for the rest
+   of its line. */
+static char sLogLine[1024];
+static size_t sLogLength;
+static atomic_flag sLogLock = ATOMIC_FLAG_INIT;
 
+static void log_emit(void) {
+    const NebulaHostServices* host = nebula_host();
+    sLogLine[sLogLength] = '\0';
+    if (host != NULL && host->log != NULL) {
+        host->log(host->user, sLogLine);
+    }
+    sLogLength = 0;
+}
+
+void nebula_vlog(const char* format, va_list args) {
     char text[1024];
     const int n = nebula_vsnprintf(text, sizeof(text), format, args);
     const size_t length = n < 0 ? 0 : ((size_t)n < sizeof(text) ? (size_t)n : sizeof(text) - 1);
-    size_t start = 0;
+    while (atomic_flag_test_and_set_explicit(&sLogLock, memory_order_acquire)) {
+    }
     for (size_t i = 0; i < length; i++) {
         if (text[i] == '\n') {
-            text[i] = '\0';
-            host->log(host->user, text + start);
-            start = i + 1;
+            log_emit();
+            continue;
         }
+        if (sLogLength == sizeof(sLogLine) - 1) {
+            log_emit();
+        }
+        sLogLine[sLogLength++] = text[i];
     }
-    if (start < length) {
-        text[length] = '\0';
-        host->log(host->user, text + start);
-    }
+    atomic_flag_clear_explicit(&sLogLock, memory_order_release);
 }
 
 void nebula_log(const char* format, ...) {

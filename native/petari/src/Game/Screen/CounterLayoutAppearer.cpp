@@ -11,7 +11,7 @@ namespace NrvCounterLayoutAppearer {
 };  // namespace NrvCounterLayoutAppearer
 
 CounterLayoutAppearer::CounterLayoutAppearer(LayoutActor* pActor, const Vec2f& rAppearOffset)
-    : NerveExecutor("カウンタ出現制御"), mLayout(pActor), mAppearOffset(rAppearOffset), mFollowPos(0.0f, 0.0f), _1C(0.0f, 0.0f) {
+    : NerveExecutor("カウンタ出現制御"), mLayout(pActor), mAppearOffset(rAppearOffset), mFollowPos(0.0f, 0.0f), mExtraOffset(0.0f, 0.0f) {
     MR::setFollowPos(&mFollowPos, pActor, nullptr);
     MR::setFollowTypeAdd(mLayout, nullptr);
     initNerve(GET_NERVE(CounterLayoutAppearer, CounterLayoutAppearerNrvHide));
@@ -24,8 +24,8 @@ void CounterLayoutAppearer::update() {
 }
 
 void CounterLayoutAppearer::appear(const Vec2f& rOffset) {
-    _1C.x = rOffset.x;
-    _1C.y = rOffset.y;
+    mExtraOffset.x = rOffset.x;
+    mExtraOffset.y = rOffset.y;
 
     MR::startAnim(mLayout, "Appear", 0);
     updateLayoutOffset(0.0f);
@@ -53,7 +53,7 @@ void CounterLayoutAppearer::updateLayoutOffset(f32 offset) {
     Vec2f zero(0.0f, 0.0f);
     mFollowPos.x = mAppearOffset.x + offset * (zero.x - mAppearOffset.x);
     mFollowPos.y = mAppearOffset.y + offset * (zero.y - mAppearOffset.y);
-    mFollowPos.add(_1C);
+    mFollowPos.add(mExtraOffset);
 }
 
 void CounterLayoutAppearer::exeHide() {

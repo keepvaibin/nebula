@@ -69,10 +69,10 @@ void PauseMenu::init(const TableIter& rIter) {
     MR::connectToSceneLayoutOnPause(this);
 
     _20 = new ButtonPaneController(this, "NBackUp", "BoxButton1", 0, true);
-    _20->_22 = false;
+    _20->mDisappearsAfterDecide = false;
 
     _24 = new ButtonPaneController(this, "NBackDown", "BoxButton2", 0, true);
-    _24->_22 = false;
+    _24->mDisappearsAfterDecide = false;
 
     MR::setTextBoxGameMessageRecursive(this, "NBackDown", ::isInvalidBackAstroDome() ? "PauseMenu_ButtonEndGame" : "PauseMenu_ButtonBackAstroDome");
 
@@ -99,7 +99,7 @@ void PauseMenu::init(const TableIter& rIter) {
         mLuigiLetter->initWithoutIter();
 
         _38 = new ButtonPaneController(this, "LetterButton", "BoxButton3", 0, true);
-        _38->_22 = false;
+        _38->mDisappearsAfterDecide = false;
     } else {
         MR::hidePaneRecursive(this, "LetterButton");
     }

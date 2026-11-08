@@ -129,7 +129,9 @@ void WormEatenPlanet::initWormEatenHill() {
     mWormEatenHill = new PartsModel*[::sNumWormEatenHill];
 
     for (s32 i = 0; i < ::sNumWormEatenHill; i++) {
-        MtxPtr jointMtx = MR::getJointMtx(this, MR::FormattedName("ConnectParts%c", i + 'A').c_str());
+        char jointName[256];
+        nebula_snprintf(jointName, sizeof(jointName), "ConnectParts%c", i + 'A');
+        MtxPtr jointMtx = MR::getJointMtx(this, jointName);
 
         mWormEatenHill[i] = new PartsModel(this, "食い破り塚", "WormEatenHill", jointMtx, -1, false);
         mWormEatenHill[i]->initWithoutIter();

@@ -15,9 +15,7 @@ public:
     void requestFrameIn();
     void requestFrameOut();
 
-    u8 _20;
-    u8 _21;
-    u16 _22;
-    u16 _24;
-    u16 _26;
+    u8 mPhase;
+    u16 mLifeFrame;
+    u16 mFullLifeFrame;
 };

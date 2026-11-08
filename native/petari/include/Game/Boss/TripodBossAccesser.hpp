@@ -44,7 +44,7 @@ namespace MR {
     bool isRideMarioTripodBoss();
     bool tryDamageDemoTripodBoss();
     void requestEndDamageDemoTripodBoss();
-    const void* getTripodBossGravityHost();
+    uintptr_t getTripodBossGravityHostID();
     void setTripodBossJointAttachBaseMatrix(const Pos3f&, s32);
     void requestStartTripodBossStepSequence(s32);
     void addTripodBossStepPoint(TripodBossStepPoint*);

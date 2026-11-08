@@ -36,13 +36,13 @@ public:
     void createFaceImageObj();
 
 private:
-    ButtonPaneController* _20;
-    ButtonPaneController* _24;
-    ButtonPaneController* _28;
+    ButtonPaneController* mActiveButton;
+    ButtonPaneController* mFellowButton;
+    ButtonPaneController* mMiiButton;
     MiiFaceIcon* mIcon;
     Ui::TexMap* mMiiTexMap;
     Ui::TexMap* mFellowTexMap;
     FileSelectIconID* mIconID;
     bool mIsMiiDummy;
-    bool _3D;
+    bool mIsEnabled;
 };

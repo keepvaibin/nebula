@@ -95,6 +95,10 @@ public:
         mCameraWall = enable;
     }
 
+    virtual bool isDebugMode() const {
+        return false;
+    }
+
     virtual Pos3f* getMapBaseMtx() const {
         return nullptr;
     }

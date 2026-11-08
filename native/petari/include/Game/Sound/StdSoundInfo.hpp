@@ -1,35 +1,27 @@
 #pragma once
 
 #include "Game/Sound/Sound.hpp"
-#include "Game/Sound/SoundGlobal.hpp"
+#include "Game/Sound/SoundInfo.hpp"
+#include "Game/Sound/StreamSource.hpp"
+#include "Game/Sound/SoundTableInfo.hpp"
 
-// Each sound's values in the archive's sound table. One lives while the sound system does (the archive always has a table).
-class StdSoundInfo : public SoundGlobal< StdSoundInfo > {
+class StdSoundInfo : public SoundInfo, public SoundTableInfo, public StreamSource {
 public:
-    // An item's type: the top four bits of its mType.
-    enum DataType {
-        DATA_SE = 0x50,
-        DATA_BGM = 0x60,
-        DATA_STREAM = 0x70,
-    };
+    StdSoundInfo(bool b) : SoundInfo(b), SoundTableInfo(b), StreamSource() {};
 
-    StdSoundInfo() : SoundGlobal< StdSoundInfo >(true) {
+    virtual int getSoundType(SoundID) const;
+    virtual int getCategory(SoundID) const;
+    virtual u32 getPriority(SoundID) const;
+    virtual void getSeInfo(SoundID, EffectSound*) const;
+    virtual void getSeqInfo(SoundID, SequenceSound*) const;
+    virtual void getStreamInfo(SoundID, StreamSound*) const;
+    virtual ~StdSoundInfo() {
     }
 
-    // 0 for a sound with no item.
-    u32 getPriority(SoundID) const;
-    // 0xffff for a sound that is not an effect.
-    u16 getAudibleSw(SoundID) const;
-    // 0xffff for a sound that is not music.
-    u16 getBgmSeqResourceID(SoundID) const;
-    // The store entry of a stream (or of a mod's track), -1 for none.
-    s32 getStreamFileEntry(SoundID) const;
+    virtual u16 getAudibleSw(SoundID) const;
+    virtual u16 getBgmSeqResourceID(SoundID) const;
+    virtual s32 getStreamFileEntry(SoundID);
 
-    // An effect's or a sequence's volume, as it starts.
-    void applySound(SoundID, Sound*) const;
-    // A stream's volume and its channels' pans, as it starts.
-    void applyStream(SoundID, StreamSound*) const;
-
-private:
-    const char* getStreamFilePath(SoundID) const;
+    void getSoundInfo_(SoundID, Sound*) const;
+    const char* getStreamFilePath(SoundID);
 };

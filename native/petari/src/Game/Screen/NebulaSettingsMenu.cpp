@@ -1,7 +1,7 @@
 #include "Game/Util/TextString.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/GameSystemFunction.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
@@ -1025,7 +1025,7 @@ void NebulaSettingsScreen::init(const TableIter& rIter) {
     memcpy(pManager->mLayoutName, cLayoutName, sizeof(cLayoutName));
     mBuilt = build();
     if (!mBuilt) {
-        nebula_log("NebulaSettingsMenu: a layout or pane is missing\n");
+        JUTNativeLog("NebulaSettingsMenu: a layout or pane is missing\n");
     }
     kill();
 }
@@ -3002,7 +3002,7 @@ namespace NebulaSettingsMenu {
         // Not before a file is chosen (the boot, the title, the file select): asked for there, it closes at once, unless
         // the input mode has nothing to play with: the menu is how another is chosen.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            (MR::isCurrentScene(SceneKind_Boot) || MR::isStageFileSelect())) {
+            (MR::isEqualSceneName("Boot") || MR::isEqualSceneName("Title") || MR::isStageFileSelect())) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }

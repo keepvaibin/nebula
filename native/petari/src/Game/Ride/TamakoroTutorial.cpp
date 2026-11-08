@@ -20,6 +20,7 @@
 
 namespace NrvTamakoroTutorial {
     NEW_NERVE(HostTypeNrvFirst, TamakoroTutorial, First);
+    NEW_NERVE(HostTypeNrvDenyTalk, TamakoroTutorial, DenyTalk);
     NEW_NERVE(HostTypeNrvFirstForceTalk, TamakoroTutorial, FirstForceTalk);
     NEW_NERVE(HostTypeNrvWaitRideTalk, TamakoroTutorial, WaitRideTalk);
     NEW_NERVE(HostTypeNrvWaitRide, TamakoroTutorial, WaitRide);
@@ -137,6 +138,13 @@ void TamakoroTutorial::exeFirst() {
     }
 }
 
+void TamakoroTutorial::exeDenyTalk() {
+    if (MR::tryTalkForceAtEnd(mTalkCtrlAutomatic)) {
+        MR::resetNode(mTalkCtrlAutomatic);
+        setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvFirst));
+    }
+}
+
 void TamakoroTutorial::exeFirstForceTalk() {
     if (MR::isFirstStep(this)) {
         MR::resetNode(mTalkCtrl);
@@ -168,7 +176,13 @@ void TamakoroTutorial::exeWaitRide() {
 }
 
 void TamakoroTutorial::exeWaitRaiseTalk() {
-    MR::getPlayerActionGuidance()->forceTamakoro(0);
+    PlayerActionGuidance* pPlayerActionGuidance = MR::getPlayerActionGuidance();
+
+    pPlayerActionGuidance->forceTamakoro(0);
+
+    if (MR::isFirstStep(this)) {
+    }
+
     MR::tryTalkForceWithoutDemo(mTalkCtrl);
 
     if (MR::isGreaterStep(this, 90)) {
@@ -180,14 +194,17 @@ void TamakoroTutorial::exeWaitRaiseTalk() {
 }
 
 void TamakoroTutorial::exeWaitRaiseStable() {
-    MR::getPlayerActionGuidance()->forceTamakoro(1);
+    PlayerActionGuidance* pPlayerActionGuidance = MR::getPlayerActionGuidance();
+
+    pPlayerActionGuidance->forceTamakoro(1);
+
     MR::tryTalkForceWithoutDemoAtEnd(mTalkCtrl);
 
     if (!MR::isNearAngleDegree(::hRaiseAcc, mPadAccel, ::hRaiseCheckDegree)) {
         setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWaitRaiseTalk));
         MR::startSystemSE("SE_SY_SURF_TUTORIAL_NG");
     } else {
-        startTimerSound(getNerveStep());
+        startTimerSound(getNerveStep(), 1);
 
         if (MR::isGreaterStep(this, 60)) {
             MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT");
@@ -197,7 +214,9 @@ void TamakoroTutorial::exeWaitRaiseStable() {
 }
 
 void TamakoroTutorial::exeRaiseOk() {
-    MR::getPlayerActionGuidance()->forceTamakoro(2);
+    PlayerActionGuidance* pPlayerActionGuidance = MR::getPlayerActionGuidance();
+
+    pPlayerActionGuidance->forceTamakoro(2);
 
     if (MR::isGreaterStep(this, 60)) {
         setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRaiseOkTalk));
@@ -205,7 +224,9 @@ void TamakoroTutorial::exeRaiseOk() {
 }
 
 void TamakoroTutorial::exeRaiseOkTalk() {
-    MR::getPlayerActionGuidance()->forceTamakoro(2);
+    PlayerActionGuidance* pPlayerActionGuidance = MR::getPlayerActionGuidance();
+
+    pPlayerActionGuidance->forceTamakoro(2);
 
     if (MR::isFirstStep(this)) {
         MR::forwardNode(mTalkCtrl);
@@ -217,7 +238,9 @@ void TamakoroTutorial::exeRaiseOkTalk() {
 }
 
 void TamakoroTutorial::exeFinalTalk() {
-    MR::getPlayerActionGuidance()->forceTamakoro(3);
+    PlayerActionGuidance* pPlayerActionGuidance = MR::getPlayerActionGuidance();
+
+    pPlayerActionGuidance->forceTamakoro(3);
 
     if (MR::isFirstStep(this)) {
         MR::forwardNode(mTalkCtrl);
@@ -302,8 +325,10 @@ bool TamakoroTutorial::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 
         if (isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWait)) || isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverFront)) ||
             isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverBack))) {
-            const Vec3f toSender = pSender->mPosition - pReceiver->mPosition;
+            Vec3f toSender = pSender->mPosition;
+            toSender -= pReceiver->mPosition;
             Vec3f front;
+
             MR::calcFrontVec(&front, this);
 
             if (0.0f < front.dot(toSender)) {
@@ -330,16 +355,22 @@ bool TamakoroTutorial::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 void TamakoroTutorial::updateHitSensor(HitSensor* pSensor) {
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    const Vec3f hostToPlayer = *MR::getPlayerCenterPos() - mHost->mPosition;
-    pSensor->mPosition = mHost->mPosition + upVec * upVec.dot(hostToPlayer);
+    Vec3f vHostToPlayer(*MR::getPlayerCenterPos());
+    vHostToPlayer -= mHost->mPosition;
+
+    f32 dot = upVec.dot(vHostToPlayer);
+
+    pSensor->mPosition.set(mHost->mPosition);
+
+    pSensor->mPosition.add(upVec * dot);
 }
 
-void TamakoroTutorial::startTimerSound(s32 step) {
+void TamakoroTutorial::startTimerSound(s32 step, s32 level) {
     if (step == 20) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", 1);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", level);
     }
 
     if (step == 40) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", 1);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", level);
     }
 }

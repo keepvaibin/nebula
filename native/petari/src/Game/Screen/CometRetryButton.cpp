@@ -30,8 +30,8 @@ void CometRetryButton::init(const TableIter& rIter) {
 
     mButtonYesPaneCtrl = new ButtonPaneController(this, "NBackUp", "BoxButton1", 0, true);
     mButtonNoPaneCtrl = new ButtonPaneController(this, "NBackDown", "BoxButton2", 0, true);
-    mButtonYesPaneCtrl->_22 = false;
-    mButtonNoPaneCtrl->_22 = false;
+    mButtonYesPaneCtrl->mDisappearsAfterDecide = false;
+    mButtonNoPaneCtrl->mDisappearsAfterDecide = false;
 
     const char* pAppear = "ButtonAppear";
     const char* pWait = "ButtonWait";

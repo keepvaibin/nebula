@@ -416,7 +416,7 @@ namespace MR {
             }
         }
         InternedName* const pNew = static_cast< InternedName* >(
-            NebulaArena::alloc(static_cast< u32 >(offsetof(InternedName, mText)) + length + 1, 4, NebulaArena::root()));
+            NebulaArena::alloc(static_cast< u32 >(offsetof(InternedName, mText)) + length + 1, 4, NebulaArena::getRootHeap()));
         pNew->mNext = sInterned;
         pNew->mHash = hash;
         memcpy(pNew->mText, pName, length + 1);
@@ -463,43 +463,6 @@ namespace MR {
     }
 
     FormattedName::~FormattedName() {
-        if (mText != mInline) {
-            delete[] mText;
-        }
-    }
-
-    char16_t* Text16::room(u32 units) {
-        if (units > mRoom) {
-            if (mText != mInline) {
-                delete[] mText;
-            }
-            mText = new char16_t[units];
-            mRoom = units;
-        }
-        mText[0] = u'\0';
-        return mText;
-    }
-
-    char16_t* Text16::grow(u32 used, u32 units) {
-        if (units > mRoom) {
-            u32 room = mRoom * 2;
-            if (room < units) {
-                room = units;
-            }
-            char16_t* const pNew = new char16_t[room];
-            for (u32 i = 0; i < used && i < mRoom; i++) {
-                pNew[i] = mText[i];
-            }
-            if (mText != mInline) {
-                delete[] mText;
-            }
-            mText = pNew;
-            mRoom = room;
-        }
-        return mText;
-    }
-
-    Text16::~Text16() {
         if (mText != mInline) {
             delete[] mText;
         }

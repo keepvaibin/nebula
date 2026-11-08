@@ -20,7 +20,7 @@ public:
     void syncStatus();
 
 private:
-    const char* _20;
-    LayoutActor* _24;
-    const char* _28;
+    const char* mGalaxyName;
+    LayoutActor* mHost;
+    const char* mPaneName;
 };

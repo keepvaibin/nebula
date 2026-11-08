@@ -11,7 +11,7 @@ ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, 
     mFirst.mNext = nullptr;
 }
 
-void ParticleEmitterHolder::update(bool ignorePause) {
+void ParticleEmitterHolder::update(bool param1) {
     for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
     for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         EmitterCore* pBaseEmitter = pEmitter->mEmitter;
@@ -19,19 +19,20 @@ void ParticleEmitterHolder::update(bool ignorePause) {
             continue;
         }
 
-        // Group 1 is the 3D pause-ignoring group.
-        if (ignorePause != (pBaseEmitter->getGroupID() == 1)) {
+        if (param1 != (pBaseEmitter->getGroupID() == 1)) {
             continue;
         }
 
-        if (pBaseEmitter->isEnableDeleteEmitter()) {
+        const bool shouldDelete = pBaseEmitter->checkStatus(0x8) && pBaseEmitter->getParticleNumber() == 0;
+
+        if (shouldDelete) {
             mEffectSystem->forceDeleteEmitter(pEmitter);
-        } else if (!pEmitter->mUpdated) {
+        } else if (!pEmitter->mStopped) {
             if (MR::Effect::getLinkSingleEmitter(pBaseEmitter) != nullptr) {
                 pBaseEmitter->getEmitterCallBackPtr()->init(pBaseEmitter);
             }
 
-            pEmitter->mUpdated = true;
+            pEmitter->mStopped = true;
         }
     }
 }
@@ -85,7 +86,7 @@ ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
         pLast = pChunk;
     }
 
-    // Full: as many again, in the arena this lies in. Effects keep pointers to the records, so the old ones stay.
+    // Full: as many again, in the heap this lies in. Effects keep pointers to the records, so the old ones stay.
     Chunk* pChunk = new (NebulaArena::findFromRoot(this), 0) Chunk();
     pChunk->mEmitters.mArr = new (NebulaArena::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
     pChunk->mEmitters.mMaxSize = mFirst.mEmitters.size();

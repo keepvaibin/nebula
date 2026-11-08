@@ -59,11 +59,11 @@ void GalaxyMapIcon::onPointing() {
 }
 
 void GalaxyMapIcon::activatePointing() {
-    mButtonPaneController->_24 = true;
+    mButtonPaneController->mIsActive = true;
 }
 
 void GalaxyMapIcon::deactivatePointing() {
-    mButtonPaneController->_24 = false;
+    mButtonPaneController->mIsActive = false;
 }
 
 void GalaxyMapIcon::control() {
@@ -126,7 +126,7 @@ void GalaxyMapIcon::init(const TableIter& rIter) {
     mButtonPaneController = new ButtonPaneController(this, "GalaxyIcon", "GalaxyIcon", 0, true);
     mButtonPaneController->invalidateAppearance();
     mButtonPaneController->invalidateDecide();
-    mButtonPaneController->_23 = true;
+    mButtonPaneController->mIsPointingExternal = true;
 }
 
 bool GalaxyMapIcon::isPointing() const {

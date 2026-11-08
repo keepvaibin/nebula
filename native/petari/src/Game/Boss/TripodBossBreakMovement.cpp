@@ -115,7 +115,7 @@ void TripodBossBreakMovement::exeBreak() {
     mMtx.setTrans(mPos);
 
     Vec3f gravity;
-    MR::calcGravityVector(this, mPos, &gravity, nullptr, MR::getTripodBossGravityHost());
+    MR::calcGravityVector(this, mPos, &gravity, nullptr, MR::getTripodBossGravityHostID());
 
     mBreakVelocity += gravity * ::sGravityAccel;
     mBreakVelocity *= mDamping;

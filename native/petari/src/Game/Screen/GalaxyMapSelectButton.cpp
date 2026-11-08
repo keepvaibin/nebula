@@ -23,7 +23,7 @@ void GalaxyMapSelectButton::init(const TableIter& rIter) {
     MR::createAndAddPaneCtrl(this, "MapList", 1);
 
     mPaneCtrl = new ButtonPaneController(this, "MapList", "BoxLButton", 0, true);
-    mPaneCtrl->_22 = false;
+    mPaneCtrl->mDisappearsAfterDecide = false;
 
     initNerve(GET_NERVE_ANON(GalaxyMapSelectButtonHide));
     kill();

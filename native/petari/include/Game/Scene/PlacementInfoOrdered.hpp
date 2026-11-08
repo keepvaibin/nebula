@@ -3,7 +3,7 @@
 
 class NameObj;
 
-#include "Game/System/NebulaList.hpp"
+#include "Game/Util/BothDirList.hpp"
 #include "Game/Util/Table.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -27,9 +27,11 @@ public:
         s32 mShapeId;
     };
 
-    class Index : public NebulaListLink< Index > {
+    class Index : public MR::BothDirLink< Index > {
     public:
         Index();
+
+        ~Index();
 
         const TableIter& getInfoIter() const {
             return mInfoIter;
@@ -42,16 +44,18 @@ public:
     public:
         SameIdSet();
 
+        ~SameIdSet();
+
         bool operator<(const SameIdSet& rOther) const {
             if (mPriority == rOther.mPriority) {
-                return rOther.mList.getNum() < mList.getNum();
+                return rOther.mList.mCount < mList.mCount;
             }
 
             return mPriority < rOther.mPriority;
         }
 
         s32 mPriority;
-        NebulaList< Index > mList;
+        MR::BothDirList< Index > mList;
     };
 
     PlacementInfoOrdered(int);
@@ -60,6 +64,11 @@ public:
     void initPlacement();
     bool initPlacementStep(uint64_t deadline);
     void insert(const Identifier&, const TableIter&);
+    SameIdSet* getSameIdSet(int index) const {
+        return mOrderedSetArray[index];
+    }
+
+    s32 getUsedArrayNum() const;
     SameIdSet* find(const Identifier&) const;
     SameIdSet* createSameIdSet(const Identifier&);
     Index* createIndex(const TableIter&);
@@ -70,11 +79,10 @@ public:
     Index* mIndexArray;
     u32 mIndexCount;
     SameIdSet* mSetArray;
-    SameIdSet** mOrderedSetArray;  // the first mSetNum are set
+    SameIdSet** mOrderedSetArray;
     int mCount;
-    s32 mSetNum = 0;
     s32 mPlacementSet = 0;
-    NebulaListLink< Index >* mPlacementLink = nullptr;
+    MR::BothDirPtrLink* mPlacementLink = nullptr;
     bool mPlacementStarted = false;
     NameObj* mInitializing = nullptr;
 };

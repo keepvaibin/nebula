@@ -4,7 +4,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/System/NebulaArena.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
@@ -19,7 +19,7 @@ void SoundEmitterCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mSoundName = ::cSoundNameTable[mObjArg0];
-    mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, NebulaArena::current());
+    mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, MR::getCurrentHeap());
 
     MR::connectToSceneAreaObj(this);
     MR::registerDemoSimpleCastAll(this);

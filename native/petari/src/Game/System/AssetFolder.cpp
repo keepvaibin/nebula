@@ -37,14 +37,14 @@ namespace {
     }
 }  // namespace
 
-AssetFolder* AssetFolder::mount(const char* pPath, NebulaArena* pArena) {
+AssetFolder* AssetFolder::mount(const char* pPath, NebulaArena* pHeap) {
     const s32 entry = GameAssets::find(pPath);
     if (entry < 0) {
         nebula_fatal("%s is missing: the game content was not cooked by this version", pPath);
     }
 
-    void* const pBytes = GameAssets::load(entry, nullptr, 0, pArena, nullptr);
-    return new (pArena, 0) AssetFolder(entry, pBytes);
+    void* const pBytes = GameAssets::load(entry, nullptr, 0, pHeap, nullptr);
+    return new (pHeap, 0) AssetFolder(entry, pBytes);
 }
 
 AssetFolder::AssetFolder(s32 entry, void* pBytes) : mEntry(entry), mBytes(static_cast< u8* >(pBytes)), mPosition(0) {
@@ -178,12 +178,12 @@ const char* AssetFolder::getName() const {
     return entryOf(mEntry, &self) ? self.name : "";
 }
 
-AssetFolder* AssetFolder::getSubFolder(const char* pPath, NebulaArena* pArena) const {
+AssetFolder* AssetFolder::getSubFolder(const char* pPath, NebulaArena* pHeap) const {
     const s32 folder = findFolder(pPath);
     NebulaAssetEntry entry;
     if (folder < 0 || !entryOf(folder, &entry)) {
         nebula_fatal("%s is missing: the game content was not cooked by this version", pPath);
     }
 
-    return new (pArena, 0) AssetFolder(folder, dataOf(entry));
+    return new (pHeap, 0) AssetFolder(folder, dataOf(entry));
 }

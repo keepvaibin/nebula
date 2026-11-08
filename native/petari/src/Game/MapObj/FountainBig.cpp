@@ -112,12 +112,12 @@ void FountainBig::exeSpoutEnd() {
 }
 
 void FountainBig::updateHitSensor(HitSensor* pSensor) {
-    f32 radius = pSensor->mRadius;
-    Vec3f up, bottom, top;
-    MR::calcUpVec(&up, this);
-    bottom.scaleAdd(radius, up, mPosition);
-    top.scaleAdd(600.0f - radius, up, bottom);
-    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), bottom, top);
+    f32 pSensorY = pSensor->mRadius;
+    Vec3f vec1, vec2, vec3;
+    MR::calcUpVec(&vec1, this);
+    vec2.scaleAdd(pSensorY, vec1, mPosition);
+    vec3.scaleAdd(600.0f - pSensorY, vec1, vec2);
+    MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), vec2, vec3);
 }
 
 void FountainBig::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

@@ -12,8 +12,8 @@
 #include <cstring>
 
 void MarioActor::memorizeSensorThrow(HitSensor* pSensor) {
-    mTakeSensors.at(mTakeCount) = pSensor;
-    mTakeRotations.at(mTakeCount) = pSensor->mHost->mRotation - mRotation;
+    mTakeSensors[mTakeCount] = pSensor;
+    mTakeRotations[mTakeCount] = pSensor->mHost->mRotation - mRotation;
 
     mTakenSensor = nullptr;
     mTakeCount++;

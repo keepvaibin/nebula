@@ -94,7 +94,7 @@ bool MarioSideStep::start() {
     if (!isAnimationRun("壁押し")) {
         playSound("声壁押し");
     }
-    changeAnimation("壁押し", MarioIndexedAnime_WallPush);
+    changeAnimation("壁押し", 0u);
     mActor->setBlendMtxTimer(10);
     return true;
 }
@@ -141,7 +141,7 @@ bool MarioSideStep::update() {
             if (!isAnimationRun("壁押し")) {
                 playSound("声壁押し");
             }
-            changeAnimation("壁押し", MarioIndexedAnime_WallPush);
+            changeAnimation("壁押し", 0u);
         } else if (forward > 0.0f) {
             if (forward > 0.707f) {
                 getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());

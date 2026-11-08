@@ -111,7 +111,7 @@ namespace MR {
         Frame::setOrthographic(projection);
     }
 
-    void setupDrawForLayout() {
+    void setupDrawForNW4RLayout(f32 scale, bool) {
         f32 height = MR::getScreenHeight();
         f32 width = NebulaFrameClock::cLayoutWidth;
         // The layout canvas widens with the picture; under 16:9 the layouts keep their width and gain height.
@@ -121,6 +121,8 @@ namespace MR {
         }
         f32 halfWidth = width / 2.0f;
         height *= 0.5f;
+        halfWidth *= scale;
+        height *= scale;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
         Frame::setOrthographic(projMtx);

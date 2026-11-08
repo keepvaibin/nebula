@@ -35,7 +35,7 @@ public:
 
     CountUpPaneRumbler* mCountUpPaneRumbler;
     Vec2f mFollowPosW;
-    Vec2f _2C;
+    Vec2f mMeterMoveStartPos;
     s32 mCount;
     f32 mAlpha;
     f32 mShowHideRate;

@@ -2,8 +2,7 @@
 
 namespace AudParams {
 
-    // By AudSystemVolumeController::VolumeSet, then effect category.
-    const f32 scCtgVolume[][cEffectCategoryNum] = {
+    const f32 scCtgVolume[][16] = {
         {1.2f, 1.2f, 1.2f, 1.3f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.2f, 1.0f, 1.5f, 1.0f, 1.0f},
         {1.2f, 1.2f, 1.2f, 0.3f, 0.3f, 0.3f, 0.3f, 1.2f, 0.3f, 0.3f, 0.3f, 0.3f, 0.3f, 1.5f, 1.0f, 1.0f},
         {1.2f, 0.8f, 0.6f, 0.0f, 0.0f, 0.0f, 0.0f, 1.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.5f, 1.0f, 1.0f},
@@ -14,6 +13,15 @@ namespace AudParams {
         {1.2f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.5f, 1.0f, 1.0f},
     };
 
+    const int numFreeSe = 512;
+    const int numFreeSeq = 3;
+    const int numFreeStream = 3;
+    const int numFreeSoundChild = 160;
+    const int workAreaSize = 0x1000;
+    const int numFreeTracks = 200;
+    const int numFreeTrackChannels = 1;
+    const int streamBlockSize = 0x2760;
+    const int numStreamChannels = 4;
     const f32 outputGain = 0.9f;
     const s32 numInspectableSoundObj = 8;
     const f32 masterVolBgm = 1.2f;

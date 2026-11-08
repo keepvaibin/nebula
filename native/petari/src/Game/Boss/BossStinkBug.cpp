@@ -399,7 +399,7 @@ bool BossStinkBug::isSensorBody(const HitSensor* pSensor) const {
     return pSensor == getSensor("BodyHipDrop");
 }
 
-bool BossStinkBug::throwBomb(f32 speed, f32 spread) {
+bool BossStinkBug::throwBomb(f32 f1, f32 f2) {
     BossStinkBugBomb* throwBomb = mBombHolder->getDeadMember();
 
     if (throwBomb == nullptr) {
@@ -413,8 +413,8 @@ bool BossStinkBug::throwBomb(f32 speed, f32 spread) {
 
     jointMtx.getTrans(trans);
     jointMtx.getYDir(yDir);
-    yDir *= -speed;
-    MR::addRandomVector(&yDir, yDir, spread);
+    yDir *= -f1;
+    MR::addRandomVector(&yDir, yDir, f2);
 
     throwBomb->start(trans, yDir);
 

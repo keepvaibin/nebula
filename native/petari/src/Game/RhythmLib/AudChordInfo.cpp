@@ -1,7 +1,7 @@
 #include "Game/RhythmLib/AudChordInfo.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include "Game/Util/ByteView.hpp"
+#include <cstring>
 
 AudChordInfo::AudChordInfo()
     : SoundGlobal< AudChordInfo >(true), mArchive(nullptr), mAvailable(false), mChordIndex(0), mScaleIndex(0), mSerial(0) {
@@ -29,8 +29,10 @@ bool AudChordInfo::loadChordInfo(s16 id, bool keepCurrent) {
     s32 scale = scaleIndex();
     bool available = false;
     if (valid) {
-        const u16 chords = readBytes< u16 >(pFile + 12);
-        const u16 scales = readBytes< u16 >(pFile + 14);
+        u16 chords;
+        u16 scales;
+        std::memcpy(&chords, pFile + 12, sizeof(chords));
+        std::memcpy(&scales, pFile + 14, sizeof(scales));
         const s32 wantChord = keepCurrent ? chord : 0;
         const s32 wantScale = keepCurrent ? scale : 0;
         const bool hasChord = wantChord < chords;
@@ -56,7 +58,7 @@ bool AudChordInfo::loadChordInfo(s16 id, bool keepCurrent) {
     return valid;
 }
 
-void AudChordInfo::invalidate() {
+void AudChordInfo::invalidiate() {
     const s32 chord = chordIndex();
     const s32 scale = scaleIndex();
 

@@ -77,7 +77,7 @@ public:
     IconAButton* mIconAButton;
     const char* mTextParentPaneName;
     const char* mWindowParentPaneName;
-    bool _38;
+    bool mExecutesIconAButton;
     bool mIsBackAnswersNo;
 
     // Nebula: the screen dim (the layout's BG pane) is drawn by the window itself. Where the game opens another system

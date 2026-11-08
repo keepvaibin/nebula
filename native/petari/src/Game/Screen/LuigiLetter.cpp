@@ -16,7 +16,7 @@ namespace NrvLuigiLetter {
 };  // namespace NrvLuigiLetter
 
 LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
-    : LayoutActor("ルイージの手紙", true), mTexture(nullptr), mAButtonIcon(nullptr), _28(pParam2), _2C(param1) {
+    : LayoutActor("ルイージの手紙", true), mTexture(nullptr), mAButtonIcon(nullptr), mGalaxyName(pParam2), mIsForTalk(param1) {
 }
 
 void LuigiLetter::init(const TableIter& rIter) {
@@ -25,8 +25,8 @@ void LuigiLetter::init(const TableIter& rIter) {
 
     initLayoutManager("LuigiLetter", 1);
     initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
-    archiveName.format("LuigiPicture%s", _28);
-    textureName.format("LuigiPicture%s.bti", _28);
+    archiveName.format("LuigiPicture%s", mGalaxyName);
+    textureName.format("LuigiPicture%s.bti", mGalaxyName);
 
     mTexture = MR::createLytTexMap(archiveName.c_str(), textureName.c_str());
 
@@ -36,7 +36,7 @@ void LuigiLetter::init(const TableIter& rIter) {
     mAButtonIcon->initWithoutIter();
     mAButtonIcon->setFollowActorPane(this, "AButtonPosition");
 
-    if (_2C) {
+    if (mIsForTalk) {
         MR::connectToSceneTalkLayoutNoMovement(this);
         MR::connectToSceneTalkLayoutNoMovement(mAButtonIcon);
     } else {

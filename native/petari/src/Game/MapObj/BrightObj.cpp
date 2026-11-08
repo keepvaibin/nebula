@@ -130,12 +130,12 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
 
     MR::normalize(&drawDir);
 
-    Vec3f side;
-    side.cross(camDir, drawDir);
-    camDir.cross(drawDir, side);
+    Vec3f vec110;
+    vec110.cross(camDir, drawDir);
+    camDir.cross(drawDir, vec110);
 
     Pos3f mtx;
-    mtx.setTR(side, camDir, drawDir, drawPos);
+    mtx.setTR(vec110, camDir, drawDir, drawPos);
 
     // The first point is the centre: its screen position comes back as the flare's centre whether or not it shows.
     Vec2f center;
@@ -148,24 +148,24 @@ void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
-        Vec3f innerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        innerProbe.scale(mDrawRadius * 0.4f);
+        Vec3f vec11C(MR::cos(angle), MR::sin(angle), 0.0f);
+        vec11C.scale(mDrawRadius * 0.4f);
 
-        mtx.mult(innerProbe, innerProbe);
+        mtx.mult(vec11C, vec11C);
 
-        checkVisible(&pProbes[1 + idx], innerProbe, rView, rProj);
-        pProbes[1 + idx].user_z = ::calcDepth(innerProbe + drawDir * (mDrawRadius * 0.9165f), rView, rProj);
+        checkVisible(&pProbes[1 + idx], vec11C, rView, rProj);
+        pProbes[1 + idx].user_z = ::calcDepth(vec11C + drawDir * (mDrawRadius * 0.9165f), rView, rProj);
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = (idx + 0.5f) * MR::pi() / 4.0f;
-        Vec3f outerProbe(MR::cos(angle), MR::sin(angle), 0.0f);
-        outerProbe.scale(mDrawRadius * 0.7f);
+        Vec3f vec128(MR::cos(angle), MR::sin(angle), 0.0f);
+        vec128.scale(mDrawRadius * 0.7f);
 
-        mtx.mult(outerProbe, outerProbe);
+        mtx.mult(vec128, vec128);
 
-        checkVisible(&pProbes[9 + idx], outerProbe, rView, rProj);
-        pProbes[9 + idx].user_z = ::calcDepth(outerProbe + drawDir * (mDrawRadius * 0.7141f), rView, rProj);
+        checkVisible(&pProbes[9 + idx], vec128, rView, rProj);
+        pProbes[9 + idx].user_z = ::calcDepth(vec128 + drawDir * (mDrawRadius * 0.7141f), rView, rProj);
     }
 }
 

@@ -76,7 +76,7 @@ s32 CubeCameraArea::getCategoryArg() const {
     return mObjArg3;
 }
 
-CubeCameraMgr::CubeCameraMgr(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
+CubeCameraMgr::CubeCameraMgr(s32 maxNum, const char* pName) : AreaObjMgr(maxNum, pName) {
     CubeCameraArea::sCubeCategory = 1;
 }
 

@@ -15,6 +15,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 #include <cstring>
@@ -128,6 +129,7 @@ namespace {
 LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), mParentAnimValid(true), mIndDummyTexMap(), mGroupCtrlCount(),
       mGroupCtrlList(), mLayoutName() {
+    mAnchorCount = -1;
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
     // it in the if block: a dangling pointer once the block ends).
     MR::FormattedName fileNameWithoutExtension;
@@ -205,7 +207,7 @@ void LayoutManager::draw() const {
         return;
     }
 
-    MR::setupDrawForLayout();
+    MR::setupDrawForNW4RLayout(1.0f, true);
     mLayout->Draw(mDrawInfo);
 }
 

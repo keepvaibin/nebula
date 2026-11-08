@@ -91,7 +91,8 @@ public:
     HitSensor* mTargetSensor;
     bool mDisableChase;
     bool mIsLinearShot;       // if set, ignore gravity and disable chase
-    bool mUseFullSightAngle;  // if set, ignore gravity but use full sight angle to start chase (placement arg 3)
+    bool mUseFullSightAngle;  // if set, ignore gravity but use full sight angle to start chase
+                                          // In game, this seems to only be used in Drip Drop for the Torpedos
     PartsModel* mPropeller;
     ModelObj* mTorpedoLight;
 };

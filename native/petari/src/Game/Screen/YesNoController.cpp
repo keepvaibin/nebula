@@ -23,10 +23,10 @@ namespace NrvYesNoController {
 YesNoController::YesNoController(LayoutActor* pHost)
     : NerveExecutor("はい／いいえ選択制御"), mHost(pHost), _C(), mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
     mButtonYesPaneCtrl = new ButtonPaneController(mHost, "Right", "BoxRight", 0, true);
-    mButtonYesPaneCtrl->_22 = false;
+    mButtonYesPaneCtrl->mDisappearsAfterDecide = false;
 
     mButtonNoPaneCtrl = new ButtonPaneController(mHost, "Left", "BoxLeft", 0, true);
-    mButtonNoPaneCtrl->_22 = false;
+    mButtonNoPaneCtrl->mDisappearsAfterDecide = false;
 
     initNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelecting));
 }

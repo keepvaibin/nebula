@@ -10,7 +10,7 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/System/NebulaArena.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -98,8 +98,8 @@ void OceanRing::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &mUpdateSegsAhead);
     mBloomDrawer = new OceanRingBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
-    mWatchSoundObj = new AudSoundObject(&mNearestToWatchCam, 4, NebulaArena::current());
-    mCamSoundObj = new AudSoundObject(&mNearestToCam, 4, NebulaArena::current());
+    mWatchSoundObj = new AudSoundObject(&mNearestToWatchCam, 4, MR::getCurrentHeap());
+    mCamSoundObj = new AudSoundObject(&mNearestToCam, 4, MR::getCurrentHeap());
     MR::registerDemoSimpleCastAll(this);
     makeActorAppeared();
 }

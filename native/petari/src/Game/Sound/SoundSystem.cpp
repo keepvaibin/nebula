@@ -15,9 +15,9 @@ namespace {
     }
 }  // namespace
 
-void SoundSystem::create(NebulaArena* pArena, f32 outputLevel) {
-    SoundMemory::setArena(pArena);
-    SoundEngine::create(pArena);
+void SoundSystem::create(NebulaArena* pHeap, f32 outputLevel) {
+    SoundMemory::setHeap(pHeap);
+    SoundEngine::create(pHeap);
     next(SOUND_OUTPUT_LEVEL).payload< f32 >() = outputLevel;
     send();
 }

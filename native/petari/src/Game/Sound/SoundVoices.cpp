@@ -126,10 +126,10 @@ namespace {
     // `skip`: samples to start into the wave (1: from its loop start). A wave that was PCM16 on the disc is music unless a sound
     // names the voice.
     void setVoiceWave(NebulaVoice* pVoice, const Note& rNote, u32 skip) {
-        const u8 kind = rNote.mFormat & Note::FORMAT_MASK;
+        const u8 kind = rNote.mFormat & 7;
         pVoice->wave = rNote.mWave;
-        pVoice->format = kind < Note::FORMAT_SAMPLED_NUM ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
-        pVoice->category = kind == Note::FORMAT_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+        pVoice->format = kind < 4 ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+        pVoice->category = kind == 3 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
         pVoice->restart = 0;
         if (pVoice->format == NEBULA_AUDIO_SILENT) {
             return;

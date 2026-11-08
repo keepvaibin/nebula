@@ -1,7 +1,7 @@
 #include "Game/Screen/CaptureScreenDirector.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -14,8 +14,8 @@ namespace {
                                       {"WipeMap", 5, true, 1},     {"SystemWipe", 20, false, 1}, {"Unused", 16, false, 0}};
 };  // namespace
 
-CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
-    NebulaArena::CurrentScope heapRestorer(Arenas::permanent());
+CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), mRequestedTiming(nullptr), mTimingType("Indirect"), mTexture(nullptr), mIsCaptureRequested(false) {
+    MR::CurrentHeapRestorer heapRestorer(MR::getPermanentHeap());
 
     mTexture = JUTTexture::createTarget(1.0f, 1.0f);
 }
@@ -23,10 +23,10 @@ CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"
 void CaptureScreenDirector::captureIfAllow(const char* pName) {
     const TimingInfo* pInfo = findFromName(pName);
 
-    if (getUsingTiming() == pInfo && (getUsingTiming()->_C == 0 || _18)) {
+    if (getUsingTiming() == pInfo && (getUsingTiming()->mRequestOnly == 0 || mIsCaptureRequested)) {
         capture();
 
-        _18 = false;
+        mIsCaptureRequested = false;
     }
 }
 
@@ -38,8 +38,8 @@ void CaptureScreenDirector::requestCaptureTiming(const char* pName) {
     const TimingInfo* pInfo = findFromName(pName);
 
     if (getCurrentTiming() == nullptr || getCurrentTiming()->mTiming < pInfo->mTiming) {
-        _C = pName;
-        _18 = true;
+        mRequestedTiming = pName;
+        mIsCaptureRequested = true;
     }
 }
 
@@ -48,7 +48,7 @@ void CaptureScreenDirector::invalidateCaptureTiming(const char* pName) {
 
     if (pInfo != nullptr) {
         if (strcmp(pInfo->mName, pName) == 0) {
-            _C = nullptr;
+            mRequestedTiming = nullptr;
         }
     }
 }
@@ -58,16 +58,16 @@ const ResTIMG* CaptureScreenDirector::getResTIMG() const {
 }
 
 const TimingInfo* CaptureScreenDirector::getUsingTiming() const {
-    if (_C != nullptr) {
-        return findFromName(_C);
+    if (mRequestedTiming != nullptr) {
+        return findFromName(mRequestedTiming);
     }
 
     return findFromName(mTimingType);
 }
 
 const TimingInfo* CaptureScreenDirector::getCurrentTiming() const {
-    if (_C != nullptr) {
-        return findFromName(_C);
+    if (mRequestedTiming != nullptr) {
+        return findFromName(mRequestedTiming);
     }
 
     return nullptr;

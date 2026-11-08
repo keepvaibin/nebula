@@ -10,7 +10,7 @@ AudSystemVolumeController::AudSystemVolumeController(AudSystem* pSystem)
 void AudSystemVolumeController::init() {
     mNumVolumeSets = 0;
     mCurrVolumeSet = 0;
-    for (s32 idx = 0; idx < mVolumeSets.size(); idx++) {
+    for (u32 idx = 0; idx < 8; idx++) {
         mVolumeSets[idx] = 0;
     }
     pushVolumeSet();
@@ -43,7 +43,7 @@ void AudSystemVolumeController::updateSeVolumeSetLevel() {
 }
 
 void AudSystemVolumeController::setSeVolumeSetInner(s32 volumeSet, u32 maxSteps) {
-    for (int idx = 0; idx < cEffectCategoryNum; idx++) {
+    for (int idx = 0; idx < 16; idx++) {
         mSystem->mSeMgr.mCategoryMgrs[idx].mParams.moveVolume(AudParams::scCtgVolume[volumeSet][idx], maxSteps);
     }
 }

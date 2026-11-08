@@ -36,6 +36,7 @@ void KoopaJr::init(const TableIter& rIter) {
     initModelManagerWithAnm("KoopaJr", nullptr, false);
 
     NPCActorCaps caps("KoopaJr");
+    caps.mHostIO = true;
     caps.mConnectTo = true;
     caps.mPosition = true;
     caps.mLodCtrl = true;

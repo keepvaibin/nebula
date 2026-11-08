@@ -707,11 +707,11 @@ bool Mario::isEnableTurn() {
         return false;
     }
 
-    if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
         return false;
     }
 
-    if (isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
+    if (isAnimationRun("坂すべり下向きあおむけ", 3)) {
         return false;
     }
 
