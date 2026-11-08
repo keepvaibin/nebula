@@ -221,7 +221,6 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
     pSensor->mPosition.set(position);
 }
 
-// meh
 void FireBar::initFireBarBall(const TableIter& rIter) {
     mFireBalls = new FireBarBall*[mFireBallCount];
     s32 totalNum = mStickCount != 0 ? mFireBallCount / mStickCount : 0;

@@ -33,9 +33,6 @@ PoltaArm* PoltaStatePunch::getAttackActor() {
     }
 }
 
-// Unused remnant also found in PoltaStateAttackGround?
-const char* unusedDamagePunch = "Damage";
-
 void PoltaStatePunch::exeStart() {
     if (MR::isFirstStep(this)) {
         PoltaFunction::requestStartControllArm(getHost());

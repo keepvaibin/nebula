@@ -520,9 +520,9 @@ void TakoHei::exeWait() {
 
     updateNormalVelocity();
 
-    if (tryPointBind() || tryFindTurn() || tryWalk() || tryNonActive()) {
-        // needed to get unused comparison to generate
-        return;
+    // The first transition that takes wins.
+    if (!tryPointBind() && !tryFindTurn() && !tryWalk()) {
+        tryNonActive();
     }
 }
 

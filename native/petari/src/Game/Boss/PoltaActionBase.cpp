@@ -94,13 +94,6 @@ bool PoltaActionBase::updateBreakBody() {
     return false;
 }
 
-// Remnants from an unused attack
-const char* sinkUnused = "Sink";
-const char* popSignUnsued = "PopSign";
-const char* poltaShoutUnused = "SE_BV_POLTA_SHOUT";
-const char* screamUnused = "Scream";
-const char* repairUnusued = "Repair";
-
 bool PoltaActionBase::updateDamageCore() {
     if (MR::isFirstStep(this)) {
         PoltaFunction::startAction(getHost(), "DamageCore", 1);

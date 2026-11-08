@@ -503,7 +503,6 @@ void GameScene::drawMirror() const {
     }
 }
 
-// inline
 bool GameScene::isPlayMovie() const {
     return MR::isActiveMoviePlayer() || MR::isMoviePlayingOnSequence() || isNerve(GET_NERVE(GameScene, GameScenePlayMovie));
 }

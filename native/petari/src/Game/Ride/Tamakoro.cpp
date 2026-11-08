@@ -901,7 +901,6 @@ f32 Tamakoro::updateRideRail() {
 }
 
 void Tamakoro::updateVelocityNormal(f32 friction) {
-    Vec3f vel(mVelocity);  // unused! woo!
     MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     MR::addVelocityToGravity(this, ::sGravityAccel);
     MR::attenuateVelocity(this, MR::isBindedGround(this) ? friction : 0.995f);
@@ -911,14 +910,13 @@ void Tamakoro::updateMoment() {
     if (isGroundMomentBall()) {
         Vec3f moment;
         const Vec3f* up;
-        // Vec3f tmpVec;
-        // Read through up past the else block, so it lives for the whole branch.
-        Vec3f tmpVec;
+        // Read through up after the branch, so it lives for the whole block.
+        Vec3f gravityUp;
         if (MR::isBindedGround(this)) {
             up = MR::getGroundNormal(this);
         } else {
-            tmpVec = -mGravity;
-            up = &tmpVec;
+            gravityUp = -mGravity;
+            up = &gravityUp;
         }
 
         MR::calcMomentRollBall(&moment, mVelocity, *up, mBaseRadius);

@@ -337,7 +337,6 @@ void CameraViewInterpolator::checkNearlyEnd(MtxPtr pMtx) {
     mtxDiff.invert(mtxDiff);
     mtxDiff.concat(newMtx, mtxDiff);
 
-    // FIXME
     Vec3f rotAxis;
     if (mtxDiff.getRotate(rotAxis) > 1.0f) {
         mIsInterpolatingNearlyEnd = false;

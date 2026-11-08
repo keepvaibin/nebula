@@ -78,7 +78,7 @@ namespace MR {
     bool isActiveLauncherFlightCamera();
 
     void startSubjectiveCamera(s32);
-    void endSubjectiveCamera(s32);
+    void endSubjectiveCamera(s32 endType);
 
     void declareEventCameraProgrammable(const char*);
     void setProgrammableCameraParam(const char*, const Vec3f&, const Vec3f&, const Vec3f&, bool);

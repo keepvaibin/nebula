@@ -21,9 +21,6 @@ PoltaStateAttackGround::PoltaStateAttackGround(Polta* pPolta) : ActorStateBase< 
     mAttackToWaitLength = MR::getBckFrameMax(getHost(), "AttackFrontToWait");
 };
 
-// Unused remnant also found in PoltaStatePunch?
-const char* unusedDamage = "Damage";
-
 void PoltaStateAttackGround::appear() {
     mIsDead = false;
     mIsAffectBody = true;

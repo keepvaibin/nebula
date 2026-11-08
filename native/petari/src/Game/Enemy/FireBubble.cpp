@@ -315,9 +315,8 @@ void FireBubble::exeChase() {
         MR::startSound(this, "SE_EM_FIRE_BUBBLE_JUMP");
     }
 
-    if (!tryChaseEnd() && !tryReflect()) {
-        // return needed to generate comparison with unused result
-        return;
+    if (!tryChaseEnd()) {
+        tryReflect();
     }
 }
 

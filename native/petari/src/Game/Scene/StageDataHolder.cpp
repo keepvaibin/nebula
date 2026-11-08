@@ -18,8 +18,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 template TableIter Table::findElement< s32 >(const char*, s32, int) const;
 template TableIter Table::findElement< const char* >(const char*, const char*, int) const;
 
-// for some reason these two strings only emit here
-// shrug
 namespace {
     const char* const cLayerDirName[33] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE", "LayerAF"};
 
