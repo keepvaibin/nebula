@@ -11,16 +11,11 @@ void CannonShellHolder::registerCannonShell(CannonShellBase* pShell) {
 }
 
 CannonShellBase* CannonShellHolder::getValidShell() const {
-    CannonShellBase* const* found = std::find_if(mShells.begin(), mShells.end(), [&](const auto& item) { return MR::isDead(item); });
+    CannonShellBase* const* found = std::find_if(mShells.begin(), mShells.end(), [](const CannonShellBase* pShell) { return MR::isDead(pShell); });
 
-    if (found != mShells.end()) {
-        return *found;
-    }
-
-    return nullptr;
+    return found != mShells.end() ? *found : nullptr;
 }
 
-// Thanks shibbo
 void CannonShellHolder::killActiveShells() const {
     for (CannonShellBase* const* it = mShells.begin(); it != mShells.end(); it++) {
         if (!MR::isDead(*it)) {
