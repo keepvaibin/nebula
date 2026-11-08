@@ -35,8 +35,8 @@ TombSpiderActionBattle::TombSpiderActionBattle(TombSpider* pParent, const char* 
 
 void TombSpiderActionBattle::init() {
     initNerve(GET_NERVE(TombSpiderActionBattle, TombSpiderActionBattleNrvWait));
-    MR::initActorStateKeeper(this, 16);
-    MR::initActorState(this, new TombSpiderStateSwoon(mParent), GET_NERVE(TombSpiderActionBattle, TombSpiderActionBattleNrvSwoon), "Swoon");
+    MR::initActorStateKeeper(this);
+    MR::initActorState(this, new TombSpiderStateSwoon(mParent), GET_NERVE(TombSpiderActionBattle, TombSpiderActionBattleNrvSwoon));
     TombSpiderActionBase::init();
 }
 

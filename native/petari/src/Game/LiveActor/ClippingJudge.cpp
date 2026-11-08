@@ -2,41 +2,30 @@
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
 
-ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustum() {
-    for (s32 i = 0; i < 8; i++) {
-        mClipDistances[i] = -1.0f;
-    }
+namespace {
+    // Level 0's entry is unused: it ends at the camera's far Z.
+    const f32 sFarClipDistance[ClippingJudge::cFarClipLevelNum] = {
+        0.0f, 60000.0f, 50000.0f, 40000.0f, 30000.0f, 20000.0f, 10000.0f, 5000.0f,
+    };
+};  // namespace
 
-    mClipDistances[0] = 0.0f;
-    mClipDistances[1] = 60000.0f;
-    mClipDistances[2] = 50000.0f;
-    mClipDistances[3] = 40000.0f;
-    mClipDistances[4] = 30000.0f;
-    mClipDistances[5] = 20000.0f;
-    mClipDistances[6] = 10000.0f;
-    mClipDistances[7] = 5000.0f;
-}
-
-void ClippingJudge::init(const TableIter& rIter) {
+ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustums() {
 }
 
 void ClippingJudge::movement() {
-    calcViewingVolume(&mFrustum, MR::getFarZ());
-
-    for (u32 i = 1; i < 8; i++) {
-        calcViewingVolume(&mClipFrustums[i], mClipDistances[i]);
-    }
+    calcViewingVolumes(MR::getFarZ());
 }
 
 bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius) const {
-    return !mFrustum.mayIntersectBall3(rPos, radius);
+    return !mFrustums[0].mayIntersectBall3(rPos, radius);
 }
 
-bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 index) const {
-    return (!index) ? !mFrustum.mayIntersectBall3(rPos, radius) : !mClipFrustums[index].mayIntersectBall3(rPos, radius);
+bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 farClipLevel) const {
+    return !mFrustums[farClipLevel].mayIntersectBall3(rPos, radius);
 }
 
-void ClippingJudge::calcViewingVolume(Hex3f* pVolume, f32 farClip) {
+// Every level shares the four side planes and the near plane; only the far plane differs.
+void ClippingJudge::calcViewingVolumes(f32 farZ) {
     f32 nearClip = 500.0f;
     if (MR::isSubjectiveCameraOnForObjClipping()) {
         nearClip = 100.0f;
@@ -62,18 +51,29 @@ void ClippingJudge::calcViewingVolume(Hex3f* pVolume, f32 farClip) {
     cameraMtx.mult(bottomLeft, bottomLeft);
     cameraMtx.mult(bottomRight, bottomRight);
 
-    pVolume->mPlanes[3].set(position, topLeft, topRight);
-    pVolume->mPlanes[1].set(position, topRight, bottomRight);
-    pVolume->mPlanes[2].set(position, bottomRight, bottomLeft);
-    pVolume->mPlanes[0].set(position, bottomLeft, topLeft);
+    Hex3f& rCamera = mFrustums[0];
+    rCamera.mPlanes[3].set(position, topLeft, topRight);
+    rCamera.mPlanes[1].set(position, topRight, bottomRight);
+    rCamera.mPlanes[2].set(position, bottomRight, bottomLeft);
+    rCamera.mPlanes[0].set(position, bottomLeft, topLeft);
+
+    Vec3f planePosition;
+    planePosition.scaleAdd(nearClip, front, position);
+    rCamera.mPlanes[4].set(front, planePosition);
 
     Vec3f back;
     back.negate(front);
-    Vec3f planePosition;
-    planePosition.scaleAdd(farClip, front, position);
-    pVolume->mPlanes[5].set(back, planePosition);
-    planePosition.scaleAdd(nearClip, front, position);
-    pVolume->mPlanes[4].set(front, planePosition);
+    for (s32 level = 0; level < cFarClipLevelNum; level++) {
+        Hex3f& rVolume = mFrustums[level];
+        if (level != 0) {
+            for (s32 plane = 0; plane < 5; plane++) {
+                rVolume.mPlanes[plane] = rCamera.mPlanes[plane];
+            }
+        }
+
+        planePosition.scaleAdd(level == 0 ? farZ : ::sFarClipDistance[level], front, position);
+        rVolume.mPlanes[5].set(back, planePosition);
+    }
 }
 
 namespace MR {

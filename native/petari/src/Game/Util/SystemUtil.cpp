@@ -78,9 +78,7 @@ namespace MR {
     }
 
     void setRandomSeedFromStageName() {
-        u32 seed = getHashCode(getCurrentStageName());
-
-        getGameSystemObjHolder()->mRandom.mSeed = seed;
+        getGameSystemObjHolder()->mRandom.mSeed = getHashCode(getCurrentStageName());
     }
 
     void holdSceneInitialize() {

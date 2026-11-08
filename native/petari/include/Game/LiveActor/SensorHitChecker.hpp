@@ -30,7 +30,7 @@ public:
 
 class SensorGroup {
 public:
-    SensorGroup(int, const char*);
+    explicit SensorGroup(int maxSensors);
 
     void add(HitSensor*);
     void remove(HitSensor*);

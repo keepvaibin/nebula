@@ -10,9 +10,9 @@ class NerveExecutor;
 // pNextNerve.
 namespace MR {
     // Before any initActorState.
-    void initActorStateKeeper(NerveExecutor* pExecutor, s32 capacity);
+    void initActorStateKeeper(NerveExecutor* pExecutor);
     // Inits the state and makes it the one run while pNerve is set.
-    void initActorState(NerveExecutor* pExecutor, ActorStateBaseInterface* pActorState, const Nerve* pNerve, const char* pStateName);
+    void initActorState(NerveExecutor* pExecutor, ActorStateBaseInterface* pActorState, const Nerve* pNerve);
 
     bool updateActorState(LiveActor* pActor, ActorStateBaseInterface* pActorState);
     bool updateActorStateAndNextNerve(LiveActor* pActor, ActorStateBaseInterface* pActorState, const Nerve* pNextNerve);

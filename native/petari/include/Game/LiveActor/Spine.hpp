@@ -12,7 +12,7 @@ public:
     void setNerve(const Nerve*);
     const Nerve* getCurrentNerve() const;
     void changeNerve();
-    void initStateKeeper(int);
+    void initStateKeeper();
 
     bool isCurrentNerve(const Nerve* pNerve) const {
         return getCurrentNerve() == pNerve;

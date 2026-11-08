@@ -64,11 +64,7 @@ void MirrorActor::calcViewAndEntry() {
 }
 
 bool MirrorActor::isHostInTheOtherSideOfMirror() const {
-    if (MR::isExistMirrorCamera()) {
-        return MR::getDistanceToMirror(getHostCenterPos()) < 0.0f;
-    }
-
-    return false;
+    return MR::isExistMirrorCamera() && MR::getDistanceToMirror(getHostCenterPos()) < 0.0f;
 }
 
 Vec3f MirrorActor::getHostCenterPos() const {

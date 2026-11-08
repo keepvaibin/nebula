@@ -28,15 +28,15 @@ KoopaBattleVs3Lv2::KoopaBattleVs3Lv2(Koopa* pKoopa) : KoopaBattleBase("クッパ
 void KoopaBattleVs3Lv2::init() {
     KoopaBattleBase::init();
     initNerve(GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackFire));
-    MR::initActorStateKeeper(this, 16);
+    MR::initActorStateKeeper(this);
 
     mStateAttackRoll = new KoopaStateAttackRoll(mHost);
 
-    MR::initActorState(this, mStateAttackRoll, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackRoll), "AttackRoll");
-    MR::initActorState(this, new KoopaStateAttackFireShort(mHost), GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackFire), "AttackFire");
-    MR::initActorState(this, mStateDamageEscape, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvDamageReverse), "Damage");
-    MR::initActorState(this, new KoopaStateJumpAway(mHost), GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvJumpAway), "JumpAway");
-    MR::initActorState(this, mStateGuard, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvGuard), "Guard");
+    MR::initActorState(this, mStateAttackRoll, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackRoll));
+    MR::initActorState(this, new KoopaStateAttackFireShort(mHost), GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackFire));
+    MR::initActorState(this, mStateDamageEscape, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvDamageReverse));
+    MR::initActorState(this, new KoopaStateJumpAway(mHost), GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvJumpAway));
+    MR::initActorState(this, mStateGuard, GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvGuard));
 }
 
 void KoopaBattleVs3Lv2::appear() {
