@@ -1814,7 +1814,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
                 options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 && !adapter_is_unified_memory();
             host_window::ray_tracing_offered.store(offered, std::memory_order_relaxed);
-            record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
+            std::array<char, 128> description{};
+            copy_adapter_description(adapter_desc, description);
+            record_render_adapter(description.data(), adapter_desc.VendorId, adapter_desc.DeviceId,
                                   adapter_desc.SubSysId, adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER,
                                   offered);
         }

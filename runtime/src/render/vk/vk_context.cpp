@@ -11,6 +11,9 @@
 #endif
 
 #if defined(_WIN32)
+#include "galaxy/windows_api.h"
+#include <dxgi.h>
+#include <wrl/client.h>
 #include <xess/xess_vk.h>
 #endif
 
@@ -19,6 +22,9 @@
 #include <vk_mem_alloc.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <utility>
+#include <vector>
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
@@ -91,6 +97,65 @@ bool has_instance_extension(const char* name) {
     });
 }
 
+#if defined(_WIN32)
+// The PCI subsystem id of the DXGI adapter with this LUID: Vulkan does not report it, and gpu_identity names it. 0
+// when none matches.
+std::uint32_t dxgi_subsystem(std::uint64_t luid) {
+    if (luid == 0u) {
+        return 0u;
+    }
+    const HMODULE module = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using Create = HRESULT(WINAPI*)(REFIID, void**);
+    const auto create = module != nullptr ? reinterpret_cast<Create>(GetProcAddress(module, "CreateDXGIFactory1")) : nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory1> factory;
+    if (create == nullptr || FAILED(create(IID_PPV_ARGS(&factory)))) {
+        return 0u;
+    }
+    for (UINT index = 0u;; ++index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if (factory->EnumAdapters1(index, &adapter) == DXGI_ERROR_NOT_FOUND) {
+            return 0u;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        std::uint64_t adapter_luid = 0u;
+        if (SUCCEEDED(adapter->GetDesc1(&description))) {
+            static_assert(sizeof(description.AdapterLuid) == sizeof(adapter_luid));
+            std::memcpy(&adapter_luid, &description.AdapterLuid, sizeof(adapter_luid));
+            if (adapter_luid == luid) {
+                return description.SubSysId;
+            }
+        }
+    }
+}
+#endif
+
+// A device as Nebula Settings names it.
+struct Adapter {
+    std::string identity;  // gpu_identity
+    std::uint32_t subsys = 0u;
+    std::uint64_t luid = 0u;  // 0: the driver gives none
+};
+
+Adapter adapter_of(VkPhysicalDevice device) {
+    VkPhysicalDeviceProperties core{};
+    vkGetPhysicalDeviceProperties(device, &core);
+    Adapter adapter;
+    if (core.apiVersion >= VK_API_VERSION_1_1) {
+        VkPhysicalDeviceIDProperties id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
+        VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &id};
+        vkGetPhysicalDeviceProperties2(device, &properties);
+        if (id.deviceLUIDValid == VK_TRUE) {
+            static_assert(VK_LUID_SIZE == sizeof(adapter.luid));
+            std::memcpy(&adapter.luid, id.deviceLUID, sizeof(adapter.luid));
+        }
+    }
+#if defined(_WIN32)
+    adapter.subsys = dxgi_subsystem(adapter.luid);
+#endif
+    adapter.identity = render::gpu_identity(core.vendorID, core.deviceID, adapter.subsys);
+    return adapter;
+}
+
 bool has_device_extension(VkPhysicalDevice device, const char* name) {
     std::uint32_t count = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &count, nullptr);
@@ -152,7 +217,8 @@ Context& Context::get() noexcept {
     return context;
 }
 
-bool Context::initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions,
+bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, bool validation,
+                         std::vector<const char*> instance_extensions,
                          const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface) {
     if (device_ != VK_NULL_HANDLE) {
         return true;
@@ -269,20 +335,29 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         }
     }
 
-    // The first device of the preferred kind with a graphics queue (that presents to the surface) and the swapchain
-    // extension.
+    // The GPU chosen in Nebula Settings, else the first device of the preferred kind; each needs a graphics queue
+    // (that presents to the surface) and the swapchain extension.
     std::uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance_, &count, devices.data());
     const VkPhysicalDeviceType wanted =
         prefer_integrated ? VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU : VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-    std::stable_sort(devices.begin(), devices.end(), [wanted](VkPhysicalDevice a, VkPhysicalDevice b) {
-        VkPhysicalDeviceProperties pa{}, pb{};
-        vkGetPhysicalDeviceProperties(a, &pa);
-        vkGetPhysicalDeviceProperties(b, &pb);
-        return (pa.deviceType == wanted) > (pb.deviceType == wanted);
-    });
+    {
+        std::vector<std::pair<unsigned, VkPhysicalDevice>> ranked;
+        ranked.reserve(devices.size());
+        for (const VkPhysicalDevice device : devices) {
+            VkPhysicalDeviceProperties properties{};
+            vkGetPhysicalDeviceProperties(device, &properties);
+            const bool chosen = !chosen_gpu.empty() && adapter_of(device).identity == chosen_gpu;
+            ranked.emplace_back((chosen ? 2u : 0u) + (properties.deviceType == wanted ? 1u : 0u), device);
+        }
+        std::stable_sort(ranked.begin(), ranked.end(),
+                         [](const auto& a, const auto& b) { return a.first > b.first; });
+        for (std::size_t i = 0; i < ranked.size(); ++i) {
+            devices[i] = ranked[i].second;
+        }
+    }
     bool vulkan_1_0_only = false;
     for (const VkPhysicalDevice candidate : devices) {
         if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
@@ -321,6 +396,16 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
+    {
+        Adapter adapter = adapter_of(physical_);
+        gpu_id_ = std::move(adapter.identity);
+        subsys_id_ = adapter.subsys;
+        luid_ = adapter.luid;
+    }
+    if (!chosen_gpu.empty()) {
+        std::printf("[gpu] chosen %s %s\n", chosen_gpu.c_str(),
+                    gpu_id_ == chosen_gpu ? "in use" : "not present or unusable; choosing automatically");
+    }
     identity_ = identify(physical_, has_device_extension(physical_, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME));
     quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};

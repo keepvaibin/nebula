@@ -331,9 +331,9 @@ std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys
 std::string next_start_gpu();
 
 // Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher, which offers DLSS only
-// on an NVIDIA RTX adapter: description, PCI vendor and device id, its gpu_identity(), the GPU preference the runtime
-// started with (low: integrated first) and whether it runs Nebula's ray tracing.
-void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+// on an NVIDIA RTX adapter: description (UTF-8), PCI vendor and device id, its gpu_identity(), the GPU preference the
+// runtime started with (low: integrated first) and whether it runs Nebula's ray tracing.
+void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept;
 // When config.ini changed on disk since this process last read or wrote it (Nebula Settings saved it while the game
 // runs), reads it over the live settings, as the in-game menu would apply them, and returns true.
