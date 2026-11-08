@@ -61,13 +61,13 @@ namespace FileSelectItemSub {
     NEW_NERVE(BlinkControllerNrvBlink, BlinkController, Blink);
 };  // namespace FileSelectItemSub
 
-FileSelectItem::FileSelectItem(s32 a1, bool a2, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
-    mIsNewFile = a2;
+FileSelectItem::FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
+    mIsNewFile = isNewFile;
     mPlanetMapObj = nullptr;
     mIconID = new FileSelectIconID(rID);
     mFaceParts = nullptr;
     mNumber = nullptr;
-    mFileNo = a1;
+    mFileNo = fileNo;
     mIsPointed = 0;
     mIsInvalidateSelect = false;
     mIsMiiBroken = 0;
@@ -158,7 +158,7 @@ void FileSelectItem::format() {
     mIsNewFile = 1;
 }
 
-void FileSelectItem::change(const FileSelectIconID& rID, bool a2) {
+void FileSelectItem::change(const FileSelectIconID& rID, bool isComplete) {
     mIconID->set(rID);
 
     if (rID.isMii()) {
@@ -168,11 +168,11 @@ void FileSelectItem::change(const FileSelectIconID& rID, bool a2) {
     }
 
     deleteCompleteEffect();
-    mIsComplete = a2;
+    mIsComplete = isComplete;
     mIsNewFile = 0;
 }
 
-void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
+void FileSelectItem::forceChange(const FileSelectIconID& rID, bool isComplete) {
     deleteCompleteEffect();
     mIconID->set(rID);
     if (rID.isMii()) {
@@ -183,7 +183,7 @@ void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
         appearFellowModel();
     }
 
-    mIsComplete = a2;
+    mIsComplete = isComplete;
     emitCompleteEffect();
     setNerve(GET_NERVE_ANON(FileSelectItemNrvExistWait));
     mIsNewFile = 0;
@@ -776,12 +776,13 @@ namespace FileSelectItemSub {
             mBlinkStep = 0;
         }
 
-        f32 v2 = MR::abs(mItem->mRotateSpeed);
+        // 1.5-3 s of spinning puts the icon to sleep.
+        f32 spinSpeed = MR::abs(mItem->mRotateSpeed);
 
-        if (v2 > 10.0f) {
+        if (spinSpeed > 10.0f) {
             mBlinkStep += 2;
         } else {
-            if (v2 > 6.0f) {
+            if (spinSpeed > 6.0f) {
                 mBlinkStep++;
             } else {
                 mBlinkStep = 0;

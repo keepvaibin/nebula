@@ -2,18 +2,17 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
-PlacementId::PlacementId(s32 a1, const TableIter& rIter) {
-    mZoneID = -1;
-    initialize(a1, rIter);
+PlacementId::PlacementId(s32 id, const TableIter& rIter) {
+    initialize(id, rIter);
 }
 
-PlacementId::PlacementId(s32 a1, s32 zoneId) {
-    mId = a1;
+PlacementId::PlacementId(s32 id, s32 zoneId) {
+    mId = id;
     mZoneID = zoneId;
 }
 
-void PlacementId::initialize(s32 a1, const TableIter& rIter) {
-    mId = a1;
+void PlacementId::initialize(s32 id, const TableIter& rIter) {
+    mId = id;
     mZoneID = MR::getPlacedZoneId(rIter);
 }
 

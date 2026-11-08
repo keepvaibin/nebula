@@ -6,10 +6,10 @@ class SpringValue;
 
 class FloaterSpringForce {
 public:
-    FloaterSpringForce(f32, f32, f32);
+    FloaterSpringForce(f32 baseValue, f32 spring, f32 damp);
 
     void addSpringVelocity(f32);
-    void setSpringBaseValue(f32);
+    void setSpringBaseValue(f32 baseValue);
 
     f32 mBaseValue;
     f32 mSpring;

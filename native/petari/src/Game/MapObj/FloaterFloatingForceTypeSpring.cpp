@@ -16,19 +16,19 @@ namespace NrvFloaterFloatingForceTypeSpring {
 FloaterFloatingForceTypeSpring::~FloaterFloatingForceTypeSpring() {
 }
 
-FloaterSpringForce::FloaterSpringForce(f32 param1, f32 param2, f32 param3) : mSpringValue() {
-    mBaseValue = param1;
-    mSpring = param2;
-    mDamp = param3;
-    mSpringValue = new SpringValue(param1, 0.0f, param2, param3, 0.0f);
+FloaterSpringForce::FloaterSpringForce(f32 baseValue, f32 spring, f32 damp) : mSpringValue() {
+    mBaseValue = baseValue;
+    mSpring = spring;
+    mDamp = damp;
+    mSpringValue = new SpringValue(baseValue, 0.0f, spring, damp, 0.0f);
 }
 
 void FloaterSpringForce::addSpringVelocity(f32 vel) {
     mSpringValue->mVelocity += vel;
 }
 
-void FloaterSpringForce::setSpringBaseValue(f32 param1) {
-    mBaseValue = param1;
+void FloaterSpringForce::setSpringBaseValue(f32 baseValue) {
+    mBaseValue = baseValue;
 
     mSpringValue->setParam(mBaseValue, 0.0f, mSpring, mDamp, 0.0f);
 }

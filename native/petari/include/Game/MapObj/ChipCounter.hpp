@@ -12,9 +12,9 @@ public:
     virtual void control();
 
     void setCount(s32);
-    void requestShow(s32, s32);
-    void requestHide(s32);
-    void requestComplete(s32);
+    void requestShow(s32 groupId, s32 count);
+    void requestHide(s32 groupId);
+    void requestComplete(s32 groupId);
     void requestActive();
     void requestDeactive();
     bool tryEndFrameIn();

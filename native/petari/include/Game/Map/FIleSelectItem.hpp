@@ -19,7 +19,7 @@ namespace FileSelectItemSub {
 
 class FileSelectItem : public LiveActor {
 public:
-    FileSelectItem(s32, bool, const FileSelectIconID&, const char*);
+    FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconID&, const char* pName);
 
     virtual ~FileSelectItem();
     virtual void init(const TableIter&);
@@ -31,8 +31,8 @@ public:
     bool isNew() const;
     bool isExist() const;
     void format();
-    void change(const FileSelectIconID&, bool);
-    void forceChange(const FileSelectIconID&, bool);
+    void change(const FileSelectIconID&, bool isComplete);
+    void forceChange(const FileSelectIconID&, bool isComplete);
     void invalidateSelect();
     void validateSelect();
     void appearIndex();

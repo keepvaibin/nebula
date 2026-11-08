@@ -130,13 +130,13 @@ public:
     /// @returns The sensor that contains the name given. Returns the result of HitSensorKeeper::getSensor or NULL if there is no HitSensorKeeper
     /// created.
     HitSensor* getSensor(const char* pSensorName) const;
-    void initModelManagerWithAnm(const char* pModelArcName, const char* pAnimArcName, bool);
+    void initModelManagerWithAnm(const char* pModelArcName, const char* pAnimArcName, bool deferMaterials);
     void initNerve(const Nerve*);
     void initHitSensor(int);
     void initBinder(f32, f32, u32);
     void initRailRider(const TableIter& rIter);
-    void initEffectKeeper(int, const char*);
-    void initSound(int, bool);
+    void initEffectKeeper(int extraEmitterNum, const char* pResourceName);
+    void initSound(int numHandles, bool is2D);
     void initShadowControllerList(u32);
     void initActorCollisionParts(const char*, HitSensor*, ResourceHolder*, MtxPtr, bool, bool);
     void initStageSwitch(const TableIter& rIter);
