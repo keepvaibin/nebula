@@ -23,6 +23,7 @@ public:
     void setDamageFire();
     void setDamageNone();
     bool tryRebound();
+    const char* getDragEffectName() const;
 
     void exeWait();
     void exeShoot();
@@ -34,7 +35,7 @@ public:
     Pos3f mDragEffectMtx;
     HitSensor* mWeakSensor;
     Vec3f mReboundVelocity;
-    u8 mIsBlackDrag;
-    u8 mIsOnFire;
+    bool mIsBlackDrag;
+    bool mIsOnFire;
     s32 mDragSoundStep;
 };

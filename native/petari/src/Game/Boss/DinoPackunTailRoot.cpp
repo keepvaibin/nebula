@@ -20,18 +20,14 @@ JointController* DinoPackunTailRoot::createJointControllerOwn(LiveActor* pActor,
     return MR::createJointDelegator(this, pActor, &DinoPackunTailRoot::calcJointDirection, (func) nullptr, pJointName);
 }
 
+// The root follows its animated joint.
 bool DinoPackunTailRoot::calcJointDirection(Pos3f* pOut, const JointControllerInfo& rInfo) {
-    Pos3f stack_20 = pOut;
-    MR::orthogonalize(&stack_20);
-    Vec3f stack_14;
-    stack_20.getZDir(stack_14);
-    mJointFront.set(stack_14);
-    Vec3f v12;
-    pOut->getTrans(v12);
-    mPosition.set(v12);
+    Pos3f jointMtx = pOut;
+    MR::orthogonalize(&jointMtx);
+    jointMtx.getZDir(mJointFront);
+    pOut->getTrans(mPosition);
     return turnJointLocalXDir(pOut, rInfo);
 }
 
-void DinoPackunTailRoot::addNodeVelocity(const Vec3f& rVel) {
-    return;
-}
+// The root is not pushed by the tail.
+void DinoPackunTailRoot::addNodeVelocity(const Vec3f& rVel) {}

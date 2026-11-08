@@ -41,7 +41,7 @@ void DinoPackunVs2::init() {
     mBattleLv1->setTrackFire(mTrackFireHolder);
     mBattleLv1->setFireBall(mFireHolder);
     mBattleLv1->init();
-    mParent->mBall->mIsBlackDrag = 1;
+    mParent->mBall->mIsBlackDrag = true;
     MR::declareStarPiece(mParent, 24);
 }
 

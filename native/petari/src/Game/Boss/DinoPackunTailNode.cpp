@@ -10,14 +10,13 @@ typedef JointControlDelegator< DinoPackunTailNode > Delegator;
 typedef bool (DinoPackunTailNode::*func)(Pos3f*, const JointControllerInfo&);
 
 DinoPackunTailNode::DinoPackunTailNode(const char* pName, DinoPackun* pParent)
-    : LiveActor(pName), mParent(pParent), mNodeDirection(0, 0, 0), mJointPos(0, 0, 0), mJointFront(0.0f, 0.0f, 0.0f), mPrevNode(), mNextNode(), mJointMtx(), mPreCalcJointCtrl(), mJointCtrl(),
-      mLinkLength(90.0f), mKeepBendPower(10.0f), mIsLocked() {
-}
+    : LiveActor(pName), mParent(pParent), mNodeDirection(0.0f, 0.0f, 0.0f), mJointPos(0.0f, 0.0f, 0.0f), mJointFront(0.0f, 0.0f, 0.0f),
+      mPrevNode(nullptr), mNextNode(nullptr), mJointMtx(nullptr), mPreCalcJointCtrl(nullptr), mJointCtrl(nullptr), mLinkLength(90.0f),
+      mKeepBendPower(10.0f), mIsLocked(false) {}
 
 void DinoPackunTailNode::createJointController(LiveActor* pHost, const char* pJointName) {
     mJointCtrl = static_cast< Delegator* >(createJointControllerOwn(pHost, pJointName));
-    JointController* cnt = MR::createJointDelegator(this, pHost, &DinoPackunTailNode::preCalcJoint, (func) nullptr, pJointName);
-    mPreCalcJointCtrl = static_cast< Delegator* >(cnt);
+    mPreCalcJointCtrl = static_cast< Delegator* >(MR::createJointDelegator(this, pHost, &DinoPackunTailNode::preCalcJoint, (func) nullptr, pJointName));
     mJointMtx = MR::getJointMtx(pHost, pJointName);
     resetJoint();
 }
@@ -47,33 +46,29 @@ bool DinoPackunTailNode::turnJointLocalXDir(Pos3f* pMtx, const JointControllerIn
         return false;
     }
 
-    Pos3f v25(pMtx);
-    MR::orthogonalize(&v25);
-    v25.getXDir(mNodeDirection);
-    v25.getZDir(mJointFront);
+    // Turns the joint's X axis onto the link toward the next node (from the previous one at the tip).
+    Pos3f jointMtx(pMtx);
+    MR::orthogonalize(&jointMtx);
+    jointMtx.getXDir(mNodeDirection);
+    jointMtx.getZDir(mJointFront);
     MR::normalize(&mNodeDirection);
-    Quat4f v24;
-    v25.getQuat(v24);
+    Quat4f jointQuat;
+    jointMtx.getQuat(jointQuat);
 
-    Vec3f v23;
-
-    if (mNextNode) {
-        Vec3f v22;
-        v22.set(mNextNode->mPosition);
-        v23.set(v22 - mPosition);
+    Vec3f linkDir;
+    if (mNextNode != nullptr) {
+        linkDir.set(mNextNode->mPosition - mPosition);
     } else {
-        Vec3f v21;
-        v21.set(mPrevNode->mPosition);
-        v23.set(mPosition - v21);
+        linkDir.set(mPosition - mPrevNode->mPosition);
     }
 
-    if (MR::isNearZero(v23)) {
+    if (MR::isNearZero(linkDir)) {
         return false;
     }
 
-    MR::normalize(&v23);
-    MR::turnQuatXDirRad(&v24, v24, v23, M_PI);
-    pMtx->setQuat(v24);
+    MR::normalize(&linkDir);
+    MR::turnQuatXDirRad(&jointQuat, jointQuat, linkDir, M_PI);
+    pMtx->setQuat(jointQuat);
     pMtx->setTrans(mPosition);
     return true;
 }
@@ -83,10 +78,9 @@ bool DinoPackunTailNode::calcJointScale(Pos3f* pMtx, const JointControllerInfo& 
         return false;
     }
 
-    Vec3f v12;
-    v12.set(mNextNode->mPosition);
-    f32 v6 = v12.distance(mPosition);
-    f32 stretch = MR::clamp(v6 / mLinkLength, 0.2f, 5.0f);
+    // Stretches along the link and thins to keep the volume.
+    f32 distance = mNextNode->mPosition.distance(mPosition);
+    f32 stretch = MR::clamp(distance / mLinkLength, 0.2f, 5.0f);
     f32 shrink = MR::sqrt(1.0f / stretch);
     MR::preScaleMtx(*pMtx, stretch, shrink, shrink);
     return true;
@@ -103,14 +97,14 @@ void DinoPackunTailNode::registerJointCallBack() {
 void DinoPackunTailNode::lockPosition() {
     if (!mIsLocked) {
         requestLockPosition();
-        mIsLocked = 1;
+        mIsLocked = true;
     }
 }
 
 void DinoPackunTailNode::unLockPosition() {
     if (mIsLocked) {
         requestUnLockPosition();
-        mIsLocked = 0;
+        mIsLocked = false;
     }
 }
 
@@ -128,8 +122,6 @@ void DinoPackunTailNode::addNodeVelocity(const Vec3f& rVel) {
     mVelocity.add(rVel);
 }
 
-void DinoPackunTailNode::requestLockPosition() {
-}
+void DinoPackunTailNode::requestLockPosition() {}
 
-void DinoPackunTailNode::requestUnLockPosition() {
-}
+void DinoPackunTailNode::requestUnLockPosition() {}

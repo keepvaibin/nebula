@@ -43,5 +43,5 @@ public:
     JointControlDelegator< DinoPackunTailNode >* mJointCtrl;
     f32 mLinkLength;
     f32 mKeepBendPower;
-    u8 mIsLocked;
+    bool mIsLocked;
 };
