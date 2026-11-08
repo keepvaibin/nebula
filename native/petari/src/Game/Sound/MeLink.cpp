@@ -3,18 +3,11 @@
 #include "Game/Sound/SoundMemory.hpp"
 
 SoundCommand& MeLink::next(u16 kind) {
-    SoundCommand& rCommand = SoundEngine::get()->ring().next();
-    rCommand.mKind = kind;
-    rCommand.mArg = 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = mPlayer;
-    return rCommand;
+    return SoundEngine::get()->ring().next(kind, mPlayer);
 }
 
 u64 MeLink::send() {
-    SoundRing& rRing = SoundEngine::get()->ring();
-    rRing.send();
-    return rRing.sent();
+    return SoundEngine::get()->ring().send();
 }
 
 // Running from the start.

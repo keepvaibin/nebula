@@ -32,18 +32,11 @@ StreamSound::~StreamSound() {
 }
 
 SoundCommand& StreamSound::next(u16 kind) {
-    SoundCommand& rCommand = SoundEngine::get()->ring().next();
-    rCommand.mKind = kind;
-    rCommand.mArg = 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = mStream;
-    return rCommand;
+    return SoundEngine::get()->ring().next(kind, mStream);
 }
 
 u64 StreamSound::send() {
-    SoundRing& rRing = SoundEngine::get()->ring();
-    rRing.send();
-    return rRing.sent();
+    return SoundEngine::get()->ring().send();
 }
 
 void StreamSound::sendChannel(u32 channel, const SoundParams& rValues, f32 pitch) {

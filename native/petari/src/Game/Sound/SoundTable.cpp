@@ -22,39 +22,31 @@ const SoundSection* SoundTree::section(SoundID id, u32 in) const {
     return &mSections[index];
 }
 
-u8 SoundTable::getTypeID(SoundID id) const {
+const SoundItem* SoundTable::findItem(SoundID id) const {
     if (id.isAnonymous()) {
-        return 0xff;
+        return nullptr;
     }
     const SoundSection* pSection = section(id, cInTable);
     const u32 groupID = id.getGroupID();
     if (pSection == nullptr || groupID >= pSection->mGroupCount) {
-        return 0xff;
+        return nullptr;
     }
     const SoundGroup& rGroup = mGroups[pSection->mGroupFirst + groupID];
     const u32 waveID = id.getWaveID();
     if ((rGroup.mIn & cInTable) == 0 || waveID >= rGroup.mItemCount) {
-        return 0xff;
+        return nullptr;
     }
-    return mItems[rGroup.mItemFirst + waveID].mType;
+    return &mItems[rGroup.mItemFirst + waveID];
+}
+
+u8 SoundTable::getTypeID(SoundID id) const {
+    const SoundItem* const pItem = findItem(id);
+    return pItem != nullptr ? pItem->mType : 0xff;
 }
 
 const SoundItem* SoundTable::getData(SoundID id) const {
-    if (id.isAnonymous()) {
-        return nullptr;
-    }
-    const SoundSection* pSection = section(id, cInTable);
-    const u32 groupID = id.getGroupID();
-    if (pSection == nullptr || groupID >= pSection->mGroupCount) {
-        return nullptr;
-    }
-    const SoundGroup& rGroup = mGroups[pSection->mGroupFirst + groupID];
-    const u32 waveID = id.getWaveID();
-    if ((rGroup.mIn & cInTable) == 0 || waveID >= rGroup.mItemCount) {
-        return nullptr;
-    }
-    const SoundItem& rItem = mItems[rGroup.mItemFirst + waveID];
-    return (rItem.mIn & cInTable) != 0 ? &rItem : nullptr;
+    const SoundItem* const pItem = findItem(id);
+    return pItem != nullptr && (pItem->mIn & cInTable) != 0 ? pItem : nullptr;
 }
 
 int SoundNameTable::getNumGroups_inSection(u8 sectionID) const {

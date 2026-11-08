@@ -1,29 +1,25 @@
 #include "Game/Sound/SoundControls.hpp"
 
-void SoundMove::moveVolume(f32 newValue, u32 maxSteps) {
-    if (maxSteps == 0) {
-        mParams.mVolume = newValue;
-        mTransition.mVolume.mRemainingSteps = 0;
-    } else {
-        mTransition.mVolume.set(newValue, mParams.mVolume, maxSteps);
+namespace {
+    // Over maxSteps calc() calls; at once when maxSteps is 0.
+    void moveTo(f32* pValue, SoundTransition::Ramp* pRamp, f32 newValue, u32 maxSteps) {
+        if (maxSteps == 0) {
+            *pValue = newValue;
+            pRamp->mRemainingSteps = 0;
+        } else {
+            pRamp->set(newValue, *pValue, maxSteps);
+        }
     }
+};  // namespace
+
+void SoundMove::moveVolume(f32 newValue, u32 maxSteps) {
+    ::moveTo(&mParams.mVolume, &mTransition.mVolume, newValue, maxSteps);
 }
 
 void SoundMove::movePitch(f32 newValue, u32 maxSteps) {
-    if (maxSteps == 0) {
-        mParams.mPitch = newValue;
-        mTransition.mPitch.mRemainingSteps = 0;
-    } else {
-        mTransition.mPitch.set(newValue, mParams.mPitch, maxSteps);
-    }
+    ::moveTo(&mParams.mPitch, &mTransition.mPitch, newValue, maxSteps);
 }
 
 void SoundMove::moveFxMix(f32 newValue, u32 maxSteps) {
-    if (maxSteps == 0) {
-        mParams.mFxMix = newValue;
-        mTransition.mFxMix.mRemainingSteps = 0;
-    } else {
-        mTransition.mFxMix.set(newValue, mParams.mFxMix, maxSteps);
-    }
+    ::moveTo(&mParams.mFxMix, &mTransition.mFxMix, newValue, maxSteps);
 }
-

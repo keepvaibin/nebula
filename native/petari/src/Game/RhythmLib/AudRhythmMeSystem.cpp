@@ -7,11 +7,8 @@
 
 namespace {
     SoundCommand& next(u16 kind, s32 parserNo) {
-        SoundCommand& rCommand = SoundEngine::get()->ring().next();
-        rCommand.mKind = kind;
-        rCommand.mArg = 0;
+        SoundCommand& rCommand = SoundEngine::get()->ring().next(kind, nullptr);
         rCommand.mValue = static_cast< u32 >(parserNo);
-        rCommand.mTarget = nullptr;
         return rCommand;
     }
 

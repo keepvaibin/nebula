@@ -7,21 +7,19 @@ SoundStarter::SoundStarter(bool setInstance) : SoundGlobal< SoundStarter >(setIn
 SoundStarter::~SoundStarter() {
 }
 
+// A level sound lives one frame at a time: the same sound on the handle is kept for one more.
 bool SoundStarter::startLevelSound(SoundID id, SoundHandle* handlePtr, const Vec3f* posPtr) {
-    SoundHandle* handlePtr2 = handlePtr;
-    if (handlePtr2->isSoundAttached()) {
-        if ((*handlePtr2)->getID() == id) {
-            (*handlePtr2)->updateLifeTime(1);
-            if (posPtr != nullptr) {
-                (*handlePtr2)->setPos(*posPtr);
-            }
-            return true;
+    if (handlePtr->isSoundAttached() && (*handlePtr)->getID() == id) {
+        (*handlePtr)->updateLifeTime(1);
+        if (posPtr != nullptr) {
+            (*handlePtr)->setPos(*posPtr);
         }
+        return true;
     }
 
-    bool rt = startSound(id, handlePtr, posPtr);
-    if (rt && handlePtr2->isSoundAttached()) {
-        (*handlePtr2)->setLifeTime(1, false);
+    const bool isStarted = startSound(id, handlePtr, posPtr);
+    if (isStarted && handlePtr->isSoundAttached()) {
+        (*handlePtr)->setLifeTime(1, false);
     }
-    return rt;
+    return isStarted;
 }

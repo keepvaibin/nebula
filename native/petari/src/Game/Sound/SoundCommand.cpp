@@ -31,10 +31,11 @@ SoundCommand& SoundRing::next() {
     return mTail->mCommands[mTailIndex];
 }
 
-void SoundRing::send() {
+u64 SoundRing::send() {
     mTailIndex++;
     mPending++;
     mWritten = mPending;
+    return mPending;
 }
 
 // A chunk the reader has gone past: it read a command after the chunk's last, so it holds the next chunk.

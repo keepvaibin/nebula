@@ -29,14 +29,13 @@ struct SoundTransition {
         }
 
         f32 apply(f32 value) {
+            // The last step lands on the target exactly.
             if (mRemainingSteps > 1) {
                 mRemainingSteps--;
                 value += mStep;
-            } else {
-                if (mRemainingSteps == 1) {
-                    mRemainingSteps = 0;
-                    value = mTargetValue;
-                }
+            } else if (mRemainingSteps == 1) {
+                mRemainingSteps = 0;
+                value = mTargetValue;
             }
             return value;
         }

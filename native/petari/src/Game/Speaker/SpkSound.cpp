@@ -9,18 +9,11 @@
 
 namespace {
     SoundCommand& next(u16 kind, SpeakerVoice* pVoice) {
-        SoundCommand& rCommand = SoundEngine::get()->ring().next();
-        rCommand.mKind = kind;
-        rCommand.mArg = 0;
-        rCommand.mValue = 0;
-        rCommand.mTarget = pVoice;
-        return rCommand;
+        return SoundEngine::get()->ring().next(kind, pVoice);
     }
 
     u64 send() {
-        SoundRing& rRing = SoundEngine::get()->ring();
-        rRing.send();
-        return rRing.sent();
+        return SoundEngine::get()->ring().send();
     }
 }  // namespace
 

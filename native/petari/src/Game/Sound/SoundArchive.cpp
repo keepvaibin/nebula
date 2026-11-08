@@ -107,12 +107,7 @@ void SoundArchive::setWaveGroup(u32 waveBank, u32 group, bool live) {
         command.mBytes = file.mLength;
     }
     SoundRing& rRing = SoundEngine::get()->ring();
-    SoundCommand& rCommand = rRing.next();
-    rCommand.mKind = SOUND_WAVE_GROUP;
-    rCommand.mArg = 0;
-    rCommand.mValue = 0;
-    rCommand.mTarget = nullptr;
-    rCommand.payload< WaveGroupCommand >() = command;
+    rRing.next(SOUND_WAVE_GROUP, nullptr).payload< WaveGroupCommand >() = command;
     rRing.send();
 }
 
