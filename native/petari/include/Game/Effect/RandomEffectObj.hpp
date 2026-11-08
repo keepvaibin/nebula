@@ -20,4 +20,6 @@ private:
     s32 mSeStep;
     s32 mLifeTime;
     s32 mRandWidth;
+    // FireworksA plays a shot and an explosion sound.
+    bool mIsFireworks;
 };

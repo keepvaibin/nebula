@@ -26,6 +26,7 @@ PhantomTorch::PhantomTorch(const char* pName) : LiveActor(pName) {
     mItem = -1;
     mPullParticle = nullptr;
     mIsDecorative = false;
+    mBurnSe = nullptr;
 }
 
 void PhantomTorch::init(const TableIter& rIter) {
@@ -36,6 +37,7 @@ void PhantomTorch::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &arg);
     mIsDecorative = arg != -1;
     MR::getObjectName(&mParticle, rIter);
+    mBurnSe = MR::isEqualString(mParticle, "PhantomBonfire") ? "SE_OJ_LV_BONFIRE_BURN" : "SE_OJ_LV_PHANTOM_TOACH_BURN";
 
     if (mItem == -1) {
         MR::declareCoin(this, 1);
@@ -165,20 +167,14 @@ void PhantomTorch::soundOrder() {
 }
 
 void PhantomTorch::exeWait() {
-    if (MR::isEqualString(mParticle, "PhantomBonfire")) {
-        MR::startLevelSound(this, "SE_OJ_LV_BONFIRE_BURN");
-    } else {
-        MR::startLevelSound(this, "SE_OJ_LV_PHANTOM_TOACH_BURN");
-    }
+    MR::startLevelSound(this, mBurnSe);
 }
 
 void PhantomTorch::exeAttack() {
     if (MR::isStep(this, 30)) {
         setNerve(GET_NERVE(PhantomTorch, HostTypeWait));
-    } else if (MR::isEqualString(mParticle, "PhantomBonfire")) {
-        MR::startLevelSound(this, "SE_OJ_LV_BONFIRE_BURN");
     } else {
-        MR::startLevelSound(this, "SE_OJ_LV_PHANTOM_TOACH_BURN");
+        MR::startLevelSound(this, mBurnSe);
     }
 }
 

@@ -15,9 +15,9 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    const char* cFollowJointName = "Move";
-    const char* cAnimFileName = "Move";
-    const char* cEndLoopEffectName = "EndLoop";
+    const char* const cFollowJointName = "Move";
+    const char* const cAnimFileName = "Move";
+    const char* const cEndLoopEffectName = "EndLoop";
 };  // namespace
 
 namespace NrvAnmModelObj {
@@ -26,7 +26,7 @@ namespace NrvAnmModelObj {
     NEW_NERVE(HostTypeDone, AnmModelObj, Done);
 };  // namespace NrvAnmModelObj
 
-AnmModelObj::AnmModelObj(const char* pName) : MapObjActor(pName), mJointPos(0.0f, 0.0f, 0.0f) {
+AnmModelObj::AnmModelObj(const char* pName) : MapObjActor(pName), mJointPos(0.0f, 0.0f, 0.0f), mDoneLevelSe(nullptr) {
 }
 
 void AnmModelObj::init(const TableIter& rIter) {
@@ -46,6 +46,10 @@ void AnmModelObj::init(const TableIter& rIter) {
     f32 boundRadius;
     MR::calcModelBoundingRadius(&boundRadius, this);
     MR::setClippingTypeSphere(this, boundRadius, &mJointPos);
+
+    if (MR::isEqualString(mObjectName, "HeavenlyBeachUnderRock")) {
+        mDoneLevelSe = MR::StageEffect::getMovingSe(mObjectName);
+    }
 }
 
 bool AnmModelObj::isDone() const {
@@ -123,12 +127,8 @@ void AnmModelObj::exeDone() {
         MR::emitEffect(this, ::cEndLoopEffectName);
     }
 
-    if (MR::isEqualString(mObjectName, "HeavenlyBeachUnderRock")) {
-        const char* movingSE = MR::StageEffect::getMovingSe(mObjectName);
-
-        if (movingSE != nullptr) {
-            MR::startLevelSound(this, movingSE);
-        }
+    if (mDoneLevelSe != nullptr) {
+        MR::startLevelSound(this, mDoneLevelSe);
     }
 }
 

@@ -38,13 +38,15 @@ namespace {
 MapObjActor::MapObjActor(const char* pName)
     : LiveActor(pName), mObjectName(), mPlanetLodCtrl(), mBloomModel(), mModelObj(), mMatrixSetter(), mRailMover(), mRotator(), mRailRotator(),
       mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mIsMirrorFromModel(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
-      mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)) {
+      mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)), mStageEffectName(nullptr),
+      mStageEffectMovingSe(nullptr) {
 }
 
 MapObjActor::MapObjActor(const char* pName, const char* pObjName)
     : LiveActor(pName), mObjectName(pObjName), mPlanetLodCtrl(), mBloomModel(), mModelObj(), mMatrixSetter(), mRailMover(), mRotator(),
       mRailRotator(), mRailPosture(), mRailGuideDrawer(), mIsProjmapEveryFrame(), mPlayRiddleSE(), mWaitNrv(GET_NERVE(MapObjActor, HostTypeWait)),
-      mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)) {
+      mMoveNrv(GET_NERVE(MapObjActor, HostTypeMove)), mDoneNrv(GET_NERVE(MapObjActor, HostTypeDone)), mStageEffectName(nullptr),
+      mStageEffectMovingSe(nullptr) {
 }
 
 void MapObjActor::init(const TableIter& rIter) {
@@ -459,10 +461,15 @@ void MapObjActor::control() {
         mRailRotator->movement();
     }
 
-    if (mRailMover == nullptr && mRotator == nullptr && mRailRotator == nullptr && !MR::isEqualString(mObjectName, "OceanRingRuinsMove")) {
-        const char* movingSound = MR::StageEffect::getMovingSe(mObjectName);
-        if (movingSound != nullptr) {
-            MR::startLevelSound(this, movingSound);
+    if (mRailMover == nullptr && mRotator == nullptr && mRailRotator == nullptr) {
+        if (mStageEffectName != mObjectName) {
+            mStageEffectName = mObjectName;
+            mStageEffectMovingSe =
+                MR::isEqualString(mObjectName, "OceanRingRuinsMove") ? nullptr : MR::StageEffect::getMovingSe(mObjectName);
+        }
+
+        if (mStageEffectMovingSe != nullptr) {
+            MR::startLevelSound(this, mStageEffectMovingSe);
         }
     }
 

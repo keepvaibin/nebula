@@ -27,4 +27,6 @@ public:
     s32 mItem;
     SpinPullParticleCallBack* mPullParticle;
     bool mIsDecorative;
+    // The burning loop for this torch kind (bonfire or torch).
+    const char* mBurnSe;
 };

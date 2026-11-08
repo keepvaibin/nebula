@@ -23,4 +23,7 @@ public:
     const char* mObjectName;
     Vec3f mFloaterOffset;
     s32 mRippleSeCounter;
+    // The box goes under past mSinkDepthUnder while ridden and comes back above mSinkDepthOver (by box size).
+    f32 mSinkDepthUnder;
+    f32 mSinkDepthOver;
 };
