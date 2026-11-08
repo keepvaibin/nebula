@@ -197,10 +197,14 @@ public:
     // What the walker draws through. Aux targets beside the scene target: 0 none, 1 motion, 2 reactive.
     [[nodiscard]] gpu::Encoder& encoder() noexcept { return encoder_; }
     void set_draw_aux(unsigned aux);
-    void note_scene_draw(std::uint32_t state) noexcept {
+    void note_scene_draw(std::uint32_t state) {
         scene_drawn_ = true;
         constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
-        if (scene_.samples > 1u && (state & depth_write) == depth_write) scene_.depth_dirty = true;
+        if ((state & depth_write) == depth_write) {
+            // Held probes read the depth as it was when they were asked: before this draw changes it.
+            if (!held_probe_slots_.empty()) settle_screen_probes();
+            if (scene_.samples > 1u) scene_.depth_dirty = true;
+        }
     }
     // A buffer of `bytes` zeros, for streams a mesh lacks.
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
@@ -654,8 +658,17 @@ private:
         std::shared_ptr<vk::Buffer> values;  // readback, a storage buffer
         std::uint64_t capacity = 0;          // points both hold
         std::uint64_t fence = 0;             // 0: idle
+        std::uint32_t held = 0;              // points asked while the scene pass was open, read when it ends
     };
     std::vector<ProbeSlot> probe_slots_;
+    // Probes asked while the scene target pass is open wait for its end, which comes anyway (a tiled GPU stores and loads
+    // the whole target for each break): read then, or before the next draw or clear that writes depth, whichever is
+    // first, they see the depth they were asked about.
+    std::vector<std::size_t> held_probe_slots_;
+    void dispatch_screen_probes(std::size_t slot, std::uint32_t count);
+    void read_held_probes();
+    // Ends the scene pass for the held probes and opens it again as it was.
+    void settle_screen_probes();
     // ProbeSlot::fence of probes recorded in the open frame.
     static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
