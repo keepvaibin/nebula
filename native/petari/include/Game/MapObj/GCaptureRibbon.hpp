@@ -4,6 +4,7 @@
 
 class JUTTexture;
 
+// The G-capture line: a textured ribbon from the capture point to its target.
 class GCaptureRibbon : public LiveActor {
 public:
     GCaptureRibbon(const char*);
@@ -13,14 +14,13 @@ public:
     virtual void draw() const;
 
     void reset();
-    void lengthen(const Vec3f&, const Vec3f&);
-    void shorten(const Vec3f&, const Vec3f&);
-    void updateAxis();
+    void setLine(const Vec3f&, const Vec3f&);
     f32 calcLineWidth() const;
 
     JUTTexture* mTexture;
-    Vec3f mPoints[0x40];
-    Vec3f mSides[0x40];
-    Vec3f mUps[0x40];
-    s32 mPointNum;
+    Vec3f mStart;
+    Vec3f mEnd;
+    Vec3f mSide;
+    Vec3f mUp;
+    bool mIsLineSet;
 };

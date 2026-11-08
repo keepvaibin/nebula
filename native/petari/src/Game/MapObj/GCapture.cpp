@@ -414,7 +414,7 @@ void GCapture::exeRecapture() {
     mTractTarget->getTargetPosition(&targetPos);
 
     if (MR::isFirstStep(this)) {
-        mCaptureRibbon->lengthen(targetPos, targetPos);
+        mCaptureRibbon->setLine(targetPos, targetPos);
         mRibbonRate = 1.0f;
         mRibbonPointMtx.identity();
         mRibbonPointMtx.setTrans(targetPos);
@@ -476,14 +476,14 @@ void GCapture::exeTraction() {
 
     if (scalar > 180.0f * mRibbonRate) {
         v20.set(mPosition + dir * mRibbonRate * 180.0f);
-        mCaptureRibbon->shorten(targetPos, v20);
+        mCaptureRibbon->setLine(targetPos, v20);
         if (MR::isNearZero(dir)) {
             mRibbonPointMtx.setTrans(v20);
         } else {
             MR::makeMtxUpNoSupportPos(&mRibbonPointMtx, dir, v20);
         }
     } else {
-        mCaptureRibbon->shorten(targetPos, targetPos);
+        mCaptureRibbon->setLine(targetPos, targetPos);
         mRibbonPointMtx.identity();
         mRibbonPointMtx.setTrans(targetPos);
     }
@@ -643,7 +643,7 @@ void GCapture::updateRibbon(const Vec3f& rVec, s32 step) {
     v13 -= v12 * mRibbonRate * 180.0f;
     f32 rate = MR::calcNerveRate(this, step);
     Vec3f v11(rVec + v13 * (rate * rate));
-    mCaptureRibbon->lengthen(rVec, v11);
+    mCaptureRibbon->setLine(rVec, v11);
     updateRibbonPointEffectMatrix(v11);
 }
 
