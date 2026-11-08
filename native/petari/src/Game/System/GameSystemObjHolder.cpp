@@ -90,7 +90,7 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
 }
 
 void GameSystemObjHolder::initAudio() {
-    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getPermanentHeap(), MR::getPermanentHeap());
+    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getPermanentHeap());
 }
 
 void GameSystemObjHolder::initPicture() {

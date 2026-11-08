@@ -7,7 +7,7 @@ class AssetFolder;
 
 class AudSystemWrapper {
 public:
-    AudSystemWrapper(NebulaArena*, NebulaArena*);
+    explicit AudSystemWrapper(NebulaArena*);
 
     void createAudioSystem();
     void createSoundNameConverter();
@@ -25,11 +25,10 @@ public:
 
     AudSystem* mAudSystem;
     NebulaArena* mSolidHeap;
-    NebulaArena* mHeap;
-    AssetFolder* mJaiSeqRes;
-    AssetFolder* mJaiChordRes;
-    AssetFolder* mJaiMeRes;
-    AssetFolder* mJaiRemixSeqRes;
+    AssetFolder* mSeqArchive;
+    AssetFolder* mChordArchive;
+    AssetFolder* mMeArchive;
+    AssetFolder* mRemixArchive;
     NebulaArena* mSpkHeap;
     AssetFolder* mSpkRes;
     bool mIsResetDone;

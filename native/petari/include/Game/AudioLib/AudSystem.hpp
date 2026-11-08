@@ -27,13 +27,12 @@ class AssetFolder;
 class NebulaArena;
 class SpkSystem;
 
-extern const char sAudioResFile[];
-extern const char sJaiSeqArc[];
-extern const char sJaiChordArc[];
-extern const char sJaiMeArc[];
-extern const char sJaiRemixArc[];
-extern const char sJaiAudioArc[];
-extern const char sJaiSeqResArc[];
+// The sound data and the sequence, chord, ME and remix archives in the store.
+extern const char cSoundDataPath[];
+extern const char cSeqArchivePath[];
+extern const char cChordArchivePath[];
+extern const char cMeArchivePath[];
+extern const char cRemixArchivePath[];
 
 class AudSystem : public SoundManager {
 public:
