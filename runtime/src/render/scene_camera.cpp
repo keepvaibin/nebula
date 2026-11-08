@@ -3,6 +3,7 @@
 #include "galaxy/render/scene_camera_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
+#include "barriers_d3d12.h"
 
 #include <algorithm>
 #include <bit>
@@ -25,16 +26,8 @@ D3D12_SHADER_BYTECODE code(const void* bytes, std::size_t size) {
     return {bytes, size};
 }
 
-void transition(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES before,
-                D3D12_RESOURCE_STATES after) {
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = resource;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = before;
-    barrier.Transition.StateAfter = after;
-    list->ResourceBarrier(1, &barrier);
-}
+// Read by the meter (compute) and the composite (pixels).
+constexpr gpu::Use kRead = gpu::Use::ShaderRead;
 
 }  // namespace
 
@@ -223,24 +216,26 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(5));
     device_->CreateShaderResourceView(in.depth, &depth_view, cpu(6));
 
-    constexpr D3D12_RESOURCE_STATES kRead =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    transition(list, in.wide, D3D12_RESOURCE_STATE_RENDER_TARGET, kRead);
+    // The meter's inputs and its exposure change in one call.
+    BarriersD3D12 to_meter{list};
+    to_meter.texture(in.wide, gpu::Use::ColorWrite, kRead);
     if (samples) {
-        transition(list, in.wide_ms, D3D12_RESOURCE_STATE_RENDER_TARGET, kRead);
+        to_meter.texture(in.wide_ms, gpu::Use::ColorWrite, kRead);
     }
-
-    transition(list, exposure_.Get(), kRead, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    to_meter.texture(exposure_.Get(), kRead, gpu::Use::ComputeWrite);
+    to_meter.texture(in.depth, gpu::Use::DepthWrite, kRead);
+    to_meter.issue();
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetPipelineState(meter_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(constants) / 4u, &constants, 0);
     { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
     list->SetComputeRootDescriptorTable(1, gpu(0));
     list->SetComputeRootDescriptorTable(2, gpu(3));
-    transition(list, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE, kRead);
     list->Dispatch(1, 1, 1);
-    transition(list, in.depth, kRead, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    transition(list, exposure_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, kRead);
+    BarriersD3D12 to_draw{list};
+    to_draw.texture(in.depth, kRead, gpu::Use::DepthWrite);
+    to_draw.texture(exposure_.Get(), gpu::Use::ComputeWrite, kRead);
+    to_draw.issue();
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetPipelineState(pipeline);
@@ -255,10 +250,12 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3, 1, 0, 0);
 
-    transition(list, in.wide, kRead, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    BarriersD3D12 back{list};
+    back.texture(in.wide, kRead, gpu::Use::ColorWrite);
     if (samples) {
-        transition(list, in.wide_ms, kRead, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        back.texture(in.wide_ms, kRead, gpu::Use::ColorWrite);
     }
+    back.issue();
     return true;
 }
 
@@ -291,9 +288,9 @@ bool SceneCamera::widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, c
     D3D12_GPU_DESCRIPTOR_HANDLE storage_table = table.gpu;
     storage_table.ptr += stride * 2u;
 
-    constexpr D3D12_RESOURCE_STATES kRead =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    transition(list, in.picture, D3D12_RESOURCE_STATE_RENDER_TARGET, kRead);
+    BarriersD3D12 picture{list};
+    picture.texture(in.picture, gpu::Use::ColorWrite, kRead);
+    picture.issue();
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetPipelineState(pipeline);
     { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
@@ -306,7 +303,7 @@ bool SceneCamera::widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, c
     list->OMSetRenderTargets(1, &in.rtv, FALSE, nullptr);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3, 1, 0, 0);
-    transition(list, in.picture, kRead, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    picture.undo();
     return true;
 }
 

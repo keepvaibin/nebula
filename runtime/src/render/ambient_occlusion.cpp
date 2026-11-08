@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // AmbientOcclusion: GTAO from the scene target depth, multiplied into the scene colour (ambient_occlusion.h).
 #include "galaxy/render/ambient_occlusion.h"
+#include "barriers_d3d12.h"
 #include "galaxy/render/ambient_occlusion_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
@@ -180,29 +181,25 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd,
-                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr,
+                                                legacy_state(gpu::Use::ComputeRead), nullptr,
                                                 IID_PPV_ARGS(&target.resource)))) {
         return false;
     }
     target.resource->SetName(L"ambient occlusion");
     target.width = width;
     target.height = height;
-    target.state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    target.use = gpu::Use::ComputeRead;
     return true;
 }
 
-void AmbientOcclusion::transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state) {
-    if (target.state == state) {
+void AmbientOcclusion::transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use) {
+    if (target.use == use) {
         return;
     }
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = target.resource.Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = target.state;
-    barrier.Transition.StateAfter = state;
-    list->ResourceBarrier(1, &barrier);
-    target.state = state;
+    BarriersD3D12 uses{list};
+    uses.texture(target.resource.Get(), target.use, use);
+    uses.issue();
+    target.use = use;
 }
 
 bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in,
@@ -281,30 +278,30 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     list->SetComputeRootShaderResourceView(4, tiles.gpu);
     const UINT groups_x = (width + 7u) / 8u;
     const UINT groups_y = (height + 7u) / 8u;
-    transition(list, distance_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    transition(list, distance_, gpu::Use::ComputeWrite);
     list->SetPipelineState(distance_pass_.Get());
     { ID3D12DescriptorHeap* heap = ring.heap_for(table.gpu); list->SetDescriptorHeaps(1, &heap); }
     list->SetComputeRootDescriptorTable(1, gpu(0));
     list->SetComputeRootDescriptorTable(2, gpu(9));
     list->Dispatch(groups_x, groups_y, 1);
-    transition(list, distance_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    transition(list, raw_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    transition(list, distance_, gpu::Use::ComputeRead);
+    transition(list, raw_, gpu::Use::ComputeWrite);
     list->SetPipelineState(in.ssao ? ssao_.Get() : occlusion_.Get());
     list->SetComputeRootDescriptorTable(2, gpu(10));
     list->Dispatch(groups_x, groups_y, 1);
-    transition(list, raw_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    transition(list, denoised_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    transition(list, raw_, gpu::Use::ComputeRead);
+    transition(list, denoised_, gpu::Use::ComputeWrite);
     list->SetPipelineState(denoise_.Get());
     list->SetComputeRootDescriptorTable(1, gpu(3));
     list->SetComputeRootDescriptorTable(2, gpu(11));
     list->Dispatch(groups_x, groups_y, 1);
-    transition(list, denoised_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    transition(list, scale_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    transition(list, denoised_, gpu::Use::ComputeRead);
+    transition(list, scale_, gpu::Use::ComputeWrite);
     list->SetPipelineState(upsample_.Get());
     list->SetComputeRootDescriptorTable(1, gpu(0));
     list->SetComputeRootDescriptorTable(2, gpu(12));
     list->Dispatch((in.width + 7u) / 8u, (in.height + 7u) / 8u, 1);
-    transition(list, scale_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, scale_, gpu::Use::PixelRead);
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);

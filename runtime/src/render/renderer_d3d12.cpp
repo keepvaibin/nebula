@@ -12,6 +12,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/galaxy_select.h"
+#include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/xess_library.h"
@@ -781,22 +782,12 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         return;
     }
     if (color) {
-        D3D12_RESOURCE_BARRIER barriers[2]{};
-        for (auto& barrier : barriers) {
-            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        }
-        barriers[0].Transition.pResource = msaa.color.Get();
-        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-        barriers[1].Transition.pResource = scene_color_.Get();
-        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST;
-        list->ResourceBarrier(2u, barriers);
+        BarriersD3D12 uses{list};
+        uses.texture(msaa.color.Get(), gpu::Use::ColorWrite, gpu::Use::ResolveSource);
+        uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::ResolveDest);
+        uses.issue();
         list->ResolveSubresource(scene_color_.Get(), 0u, msaa.color.Get(), 0u, scene_color_->GetDesc().Format);
-        for (auto& barrier : barriers) {
-            std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-        }
-        list->ResourceBarrier(2u, barriers);
+        uses.undo();
     }
     if (depth) {
         if (!depth_resolve_pso_) {
@@ -822,13 +813,9 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         if (!msaa.depth_srv) {
             write_msaa_depth_view(msaa);
         }
-        D3D12_RESOURCE_BARRIER barrier{};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.pResource = msaa.depth.Get();
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        list->ResourceBarrier(1u, &barrier);
+        BarriersD3D12 uses{list};
+        uses.texture(msaa.depth.Get(), gpu::Use::DepthWrite, gpu::Use::PixelRead);
+        uses.issue();
         D3D12_CPU_DESCRIPTOR_HANDLE resolve_dsv = msaa.dsv_heap->GetCPUDescriptorHandleForHeapStart();
         resolve_dsv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
         const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(frame_.width),
@@ -844,8 +831,7 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         { ID3D12DescriptorHeap* draw_heaps[] = {srv_ring_.heap_for(msaa.depth_srv->gpu), sampler_heap_.Get()}; list->SetDescriptorHeaps(2, draw_heaps); }
     list->SetGraphicsRootDescriptorTable(0, msaa.depth_srv->gpu);
         list->DrawInstanced(3, 1, 0, 0);
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-        list->ResourceBarrier(1u, &barrier);
+        uses.undo();
     }
 }
 
@@ -1225,21 +1211,14 @@ bool RendererD3D12::take_scene(std::uint64_t key, gpu::TextureRef fresh, Texture
 void RendererD3D12::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
                                         TextureStore& textures) {
     resolve_scene(depth_key != 0u);
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    UINT count = 0u;
-    for (const auto& [resource, before, wanted] :
-         {std::tuple{scene_color_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, color_key != 0u},
-          std::tuple{scene_depth_.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, depth_key != 0u}}) {
-        if (wanted) {
-            D3D12_RESOURCE_BARRIER& b = barriers[count++];
-            b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            b.Transition.pResource = resource;
-            b.Transition.StateBefore = before;
-            b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-            b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        }
+    BarriersD3D12 uses{command_list_.Get()};
+    if (color_key != 0u) {
+        uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
     }
-    command_list_->ResourceBarrier(count, barriers);
+    if (depth_key != 0u) {
+        uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::PixelRead);
+    }
+    uses.issue();
     const FrameExtent size = frame_pass_extent(frame_);
     if (color_key != 0u) {
         (void)publish_picture(color_key, size.width, size.height, scene_color_, channels, textures);
@@ -1252,28 +1231,20 @@ void RendererD3D12::open_frame_for_pass(std::uint64_t color_key, std::uint8_t ch
 }
 
 void RendererD3D12::close_frame_for_pass(TextureStore& textures) {
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    UINT count = 0u;
-    for (const auto& [resource, after, key] :
-         {std::tuple{scene_color_.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, frame_pass_color_key_},
-          std::tuple{scene_depth_.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE, frame_pass_depth_key_}}) {
+    BarriersD3D12 uses{command_list_.Get()};
+    for (const auto& [resource, use, key] :
+         {std::tuple{scene_color_.Get(), gpu::Use::ColorWrite, frame_pass_color_key_},
+          std::tuple{scene_depth_.Get(), gpu::Use::DepthWrite, frame_pass_depth_key_}}) {
         if (key == 0u) {
             continue;
         }
-        D3D12_RESOURCE_BARRIER& b = barriers[count++];
-        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        b.Transition.pResource = resource;
-        b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        b.Transition.StateAfter = after;
-        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        uses.texture(resource, gpu::Use::PixelRead, use);
         if (const auto it = pictures_.find(key); it != pictures_.end()) {
             textures.retire_view(it->second.view, std::move(it->second.viewed));
             pictures_.erase(it);
         }
     }
-    if (count != 0u) {
-        command_list_->ResourceBarrier(count, barriers);
-    }
+    uses.issue();
     frame_pass_color_key_ = 0u;
     frame_pass_depth_key_ = 0u;
     invalidate_draw_bindings();
@@ -1290,8 +1261,7 @@ gpu::TextureRef RendererD3D12::take_frame_picture(gpu::TextureRef fresh) {
 gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     const GpuPassScope pass{*this, GpuPass::DisplayCopy};
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    UINT barrier_count = 0;
+    BarriersD3D12 uses{command_list_.Get()};
     std::erase_if(old_scene_targets_, [this](const OldSceneTarget& old) { return frame_index_ >= old.free_from; });
     if (fresh) {
         const D3D12_RESOURCE_DESC got = fresh->GetDesc();
@@ -1303,12 +1273,7 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     }
     if (fresh) {
         // Released pictures are kept as shader resources.
-        D3D12_RESOURCE_BARRIER& b = barriers[barrier_count++];
-        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        b.Transition.pResource = fresh.Get();
-        b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        uses.texture(fresh.Get(), gpu::Use::PixelRead, gpu::Use::ColorWrite);
     } else {
         D3D12_HEAP_PROPERTIES heap{};
         heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -1320,13 +1285,8 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
                   "Create scene target colour");
     }
     // The picture becomes an display picture: a shader resource, as presentation reads pictures.
-    D3D12_RESOURCE_BARRIER& picture_barrier = barriers[barrier_count++];
-    picture_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    picture_barrier.Transition.pResource = scene_color_.Get();
-    picture_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    picture_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    picture_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(barrier_count, barriers);
+    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
+    uses.issue();
 
     gpu::TextureRef picture = std::move(scene_color_);
     scene_color_ = std::move(fresh);
@@ -3513,13 +3473,9 @@ void RendererD3D12::record_motion_debug_view() {
         d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&motion_debug_pipeline_)),
                   "CreateMotionDebugPSO");
     }
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = motion_target_.Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    command_list_->ResourceBarrier(1, &barrier);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(motion_target_.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
+    uses.issue();
     const DescriptorRing::Table table = srv_ring_.allocate(1u);
     D3D12_SHADER_RESOURCE_VIEW_DESC view{};
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -3541,8 +3497,7 @@ void RendererD3D12::record_motion_debug_view() {
     command_list_->RSSetScissorRects(1, &sci);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list_->DrawInstanced(3, 1, 0, 0);
-    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &barrier);
+    uses.undo();
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
     bind_scene();
@@ -3796,13 +3751,9 @@ void RendererD3D12::dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* 
         if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&buffer)))) {
             return;
         }
-        D3D12_RESOURCE_BARRIER barrier{};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = image;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        command_list_->ResourceBarrier(1u, &barrier);
+        BarriersD3D12 uses{command_list_.Get()};
+        uses.texture(image, gpu::Use::ColorWrite, gpu::Use::CopySource);
+        uses.issue();
         D3D12_TEXTURE_COPY_LOCATION to{};
         to.pResource = buffer.Get();
         to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -3811,8 +3762,7 @@ void RendererD3D12::dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* 
         from.pResource = image;
         from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-        command_list_->ResourceBarrier(1u, &barrier);
+        uses.undo();
         pending.push_back({name, index, static_cast<unsigned>(desc.Width), desc.Height, footprint.Footprint.RowPitch, std::move(buffer)});
     };
     copy(color, "color");
@@ -3847,13 +3797,9 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
                                                    IID_PPV_ARGS(&inspect_motion_readback_)),
                   "Create inspector motion readback");
         inspect_motion_pitch_ = footprint.Footprint.RowPitch;
-        D3D12_RESOURCE_BARRIER barrier{};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = motion_target_.Get();
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        command_list_->ResourceBarrier(1u, &barrier);
+        BarriersD3D12 uses{command_list_.Get()};
+        uses.texture(motion_target_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
+        uses.issue();
         D3D12_TEXTURE_COPY_LOCATION to{};
         to.pResource = inspect_motion_readback_.Get();
         to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -3862,8 +3808,7 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         from.pResource = motion_target_.Get();
         from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-        command_list_->ResourceBarrier(1u, &barrier);
+        uses.undo();
     }
 #endif
     TemporalUpscaleInputs in{};
@@ -4197,13 +4142,9 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
         slot.height = height;
     } else {
         // Sampled since its last pass: drawn into again.
-        D3D12_RESOURCE_BARRIER barrier{};
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource = slot.set.color.Get();
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        command_list_->ResourceBarrier(1, &barrier);
+        BarriersD3D12 uses{command_list_.Get()};
+        uses.texture(slot.set.color.Get(), gpu::Use::PixelRead, gpu::Use::ColorWrite);
+        uses.issue();
     }
     slot.used = frame_index_;
     target_key_ = key;
@@ -4222,13 +4163,9 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureStore& texture
         close_frame_for_pass(textures);
     }
     // The picture is sampled until the key's next pass.
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = target_scene_.color.Get();
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &barrier);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(target_scene_.color.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
+    uses.issue();
     TargetSlot& slot = target_slots_[target_key_];
     std::swap(slot.set, target_scene_);
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
@@ -4306,22 +4243,12 @@ void RendererD3D12::take_fg_hudless_scene() {
             return;
         }
     }
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
-        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    }
-    barriers[0].Transition.pResource = scene_color_.Get();
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[1].Transition.pResource = fg_hudless_scene_target_.color.Get();
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-    command_list_->ResourceBarrier(2u, barriers);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
+    uses.texture(fg_hudless_scene_target_.color.Get(), gpu::Use::ColorWrite, gpu::Use::CopyDest);
+    uses.issue();
     command_list_->CopyResource(fg_hudless_scene_target_.color.Get(), scene_color_.Get());
-    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
-        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    }
-    command_list_->ResourceBarrier(2u, barriers);
+    uses.undo();
     fg_hudless_scene_ = true;
 }
 
@@ -4351,20 +4278,15 @@ void RendererD3D12::copy_fg_hudless_display(const DisplayTexture& dest) {
     fg_hudless_display_.width = dest.width;
     fg_hudless_display_.height = dest.height;
     fg_hudless_display_.rtv = allocate_conversion_rtv(fg_hudless_display_.texture.Get());
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource = fg_hudless_display_.texture.Get();
-    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &b);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(fg_hudless_display_.texture.Get(), gpu::Use::PixelRead, gpu::Use::ColorWrite);
+    uses.issue();
     const FramePassGeometry sampling =
         frame_pass_geometry(dest.width, dest.height, frame_);
     swap_scene_with(fg_hudless_scene_target_);
     record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     swap_scene_with(fg_hudless_scene_target_);
-    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &b);
+    uses.undo();
     fg_hudless_taken_ = true;
     fg_hudless_slot_ = dest.slot;
 }
@@ -4660,14 +4582,9 @@ void RendererD3D12::record_scene_ao() {
         return;
     }
     resolve_scene(true, false);
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = scene_depth_.Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barrier.Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    command_list_->ResourceBarrier(1, &barrier);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
+    uses.issue();
     const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
     AmbientOcclusion::Inputs in{};
     in.depth = scene_depth_.Get();
@@ -4681,8 +4598,7 @@ void RendererD3D12::record_scene_ao() {
     in.objects = &scene_ao_objects_;
     in.ring = &matrix_ring_;
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
-    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &barrier);
+    uses.undo();
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;
     }
@@ -4980,13 +4896,9 @@ void RendererD3D12::record_conversion_blit(
     ID3D12Resource* src = scene_color_.Get();
 
     // scene target -> shader resource.
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource   = src;
-    b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    b.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &b);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(src, gpu::Use::ColorWrite, gpu::Use::PixelRead);
+    uses.issue();
 
     const D3D12_GPU_DESCRIPTOR_HANDLE src_srv = conv_scene_color_srv_;
 
@@ -5024,8 +4936,7 @@ void RendererD3D12::record_conversion_blit(
 
     // scene target back to its steady state.
     ++frame_passes_drawn_;
-    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &b);
+    uses.undo();
 
     // Restore the game drawing state (root signature changed; scene target RTV/DSV and full
     // viewport/scissor re-bound; per-draw viewport/scissor follow).
@@ -5079,13 +4990,9 @@ bool RendererD3D12::draw_frame_pass(
             // be cleared, discarded or copied before any other use. The code
             // below expects the shader-resource state.
             command_list_->DiscardResource(dest.texture.Get(), nullptr);
-            D3D12_RESOURCE_BARRIER to_srv{};
-            to_srv.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            to_srv.Transition.pResource = dest.texture.Get();
-            to_srv.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            to_srv.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-            to_srv.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-            command_list_->ResourceBarrier(1, &to_srv);
+            BarriersD3D12 uses{command_list_.Get()};
+            uses.texture(dest.texture.Get(), gpu::Use::ColorWrite, gpu::Use::PixelRead);
+            uses.issue();
         }
         if (FAILED(create_hr)) {
             dump_device_removal(device_.Get());
@@ -5114,13 +5021,9 @@ bool RendererD3D12::draw_frame_pass(
     // destination-local validity cannot prove its current contents.
     dest.rtv = allocate_conversion_rtv(dest.texture.Get());
 
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource   = dest.texture.Get();
-    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    b.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &b);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(dest.texture.Get(), gpu::Use::PixelRead, gpu::Use::ColorWrite);
+    uses.issue();
 
     const FramePassGeometry sampling =
         frame_pass_geometry(w, h, frame_);
@@ -5128,8 +5031,7 @@ bool RendererD3D12::draw_frame_pass(
 
     record_conversion_blit(dest.texture.Get(), w, h, dest.rtv, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
 
-    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &b);
+    uses.undo();
 
     // The key's picture is the latest copy: format-keyed destinations alternate at one address.
     return publish_frame_pass(params, dest.texture, textures);
@@ -5175,13 +5077,9 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
 
     ID3D12GraphicsCommandList* const list = command_list_.Get();
     resolve_scene(true, false);  // depth alone
-    D3D12_RESOURCE_BARRIER depth{};
-    depth.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    depth.Transition.pResource = scene_depth_.Get();
-    depth.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    depth.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    depth.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    list->ResourceBarrier(1, &depth);
+    BarriersD3D12 depth{list};
+    depth.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ComputeRead);
+    depth.issue();
 
     const std::uint32_t count = static_cast<std::uint32_t>(probes.size());
     list->SetComputeRootSignature(probe_root_signature_.Get());
@@ -5193,18 +5091,15 @@ bool RendererD3D12::record_screen_probes(std::size_t slot, std::span<const Scree
     list->SetComputeRootUnorderedAccessView(3, out.values->GetGPUVirtualAddress());
     list->Dispatch((count + kScreenProbeGroup - 1u) / kScreenProbeGroup, 1, 1);
 
-    D3D12_RESOURCE_BARRIER after[2]{};
-    after[0] = depth;
-    std::swap(after[0].Transition.StateBefore, after[0].Transition.StateAfter);
-    after[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    after[1].Transition.pResource = out.values.Get();
-    after[1].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    after[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    after[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    list->ResourceBarrier(2, after);
+    // The depth goes back with the values' change to the copy, in one call.
+    BarriersD3D12 after{list};
+    after.texture(scene_depth_.Get(), gpu::Use::ComputeRead, gpu::Use::DepthWrite);
+    after.buffer(out.values.Get(), gpu::Use::ComputeWrite, gpu::Use::CopySource);
+    after.issue();
     list->CopyBufferRegion(out.readback.Get(), 0, out.values.Get(), 0, bytes);
-    std::swap(after[1].Transition.StateBefore, after[1].Transition.StateAfter);
-    list->ResourceBarrier(1, &after[1]);
+    BarriersD3D12 values{list};
+    values.buffer(out.values.Get(), gpu::Use::CopySource, gpu::Use::ComputeWrite);
+    values.issue();
 
     // The drawing state as the scene's draws expect it.
     list->SetGraphicsRootSignature(root_signature_.Get());
@@ -5390,13 +5285,9 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
         }
     }
 
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource   = scene_color_.Get();
-    b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    b.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &b);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
+    uses.issue();
 
     D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
     src.pResource = scene_color_.Get();
@@ -5410,8 +5301,7 @@ bool RendererD3D12::debug_copy_scene_to_readback() {
     dst.PlacedFootprint.Footprint.RowPitch = row_pitch;
     command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
 
-    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &b);
+    uses.undo();
     readback_pending_ = true;
     readback_fence_value_ = 0u;
     readback_capture_path_ = next_scene_capture_path_;
@@ -5532,14 +5422,10 @@ bool RendererD3D12::present(
     D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
     back_rtv.ptr += static_cast<SIZE_T>(buf_idx) * rtv_stride;
 
-    // Transition backbuffer -> RENDER_TARGET.
-    D3D12_RESOURCE_BARRIER bar{};
-    bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    bar.Transition.pResource   = backbuffers_[buf_idx].Get();
-    bar.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &bar);
+    // The back buffer is drawn, then presented.
+    BarriersD3D12 back{command_list_.Get()};
+    back.texture(backbuffers_[buf_idx].Get(), gpu::Use::Present, gpu::Use::ColorWrite);
+    back.issue();
 
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
     bound_rt_aux_ = 0u;
@@ -5670,18 +5556,9 @@ bool RendererD3D12::present(
                 "Create backbuffer readback");
         }
 
-        D3D12_RESOURCE_BARRIER capture_barrier{};
-        capture_barrier.Type =
-            D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        capture_barrier.Transition.pResource =
-            backbuffers_[buf_idx].Get();
-        capture_barrier.Transition.StateBefore =
-            D3D12_RESOURCE_STATE_RENDER_TARGET;
-        capture_barrier.Transition.StateAfter =
-            D3D12_RESOURCE_STATE_COPY_SOURCE;
-        capture_barrier.Transition.Subresource =
-            D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        command_list_->ResourceBarrier(1, &capture_barrier);
+        BarriersD3D12 capture{command_list_.Get()};
+        capture.texture(backbuffers_[buf_idx].Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
+        capture.issue();
 
         D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
         src.pResource = backbuffers_[buf_idx].Get();
@@ -5696,10 +5573,7 @@ bool RendererD3D12::present(
         command_list_->CopyTextureRegion(
             &dst, 0, 0, 0, &src, nullptr);
 
-        std::swap(
-            capture_barrier.Transition.StateBefore,
-            capture_barrier.Transition.StateAfter);
-        command_list_->ResourceBarrier(1, &capture_barrier);
+        capture.undo();
         backbuffer_readback_pending_ = true;
         backbuffer_readback_fence_value_ = 0u;
         backbuffer_readback_width_ = w;
@@ -5708,9 +5582,7 @@ bool RendererD3D12::present(
         backbuffer_readback_capture_path_ = next_backbuffer_capture_path_;
     }
 
-    // Backbuffer -> PRESENT.
-    std::swap(bar.Transition.StateBefore, bar.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &bar);
+    back.undo();
     return capture_backbuffer;
 }
 
@@ -5750,13 +5622,9 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
             &buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
             IID_PPV_ARGS(&selected_display_readback_buf_)), "Create selected display picture readback");
     }
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = source.texture.Get();
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(1, &barrier);
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(source.texture.Get(), gpu::Use::PixelRead, gpu::Use::CopySource);
+    uses.issue();
     D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
     src.pResource = source.texture.Get();
     src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -5771,8 +5639,7 @@ bool RendererD3D12::debug_copy_selected_display_to_readback(const DisplayTexture
     // The picture's rows (a handed-over scene target is taller).
     const D3D12_BOX picture{0u, 0u, 0u, source.width, source.height, 1u};
     command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, &picture);
-    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    command_list_->ResourceBarrier(1, &barrier);
+    uses.undo();
     selected_display_readback_source_ = source.texture;
     selected_display_readback_width_ = source.width;
     selected_display_readback_height_ = source.height;

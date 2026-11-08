@@ -3,6 +3,7 @@
 // The D3D12 presentation chain: scene SMAA/FXAA, FSR 1 EASU or box-filter scaling, and RCAS.
 
 #include "galaxy/windows_api.h"
+#include "galaxy/render/gpu_use.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -90,7 +91,7 @@ private:
         unsigned height = 0;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
-        D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        gpu::Use use = gpu::Use::PixelRead;
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -109,8 +110,7 @@ private:
     bool ensure_target(Target& target, unsigned width, unsigned height,
                        DXGI_FORMAT format, unsigned rtv_slot,
                        std::uint64_t frame_index, unsigned frames_in_flight);
-    void transition(ID3D12GraphicsCommandList* list, Target& target,
-                    D3D12_RESOURCE_STATES state);
+    void transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use);
     // Records the lookup-texture copies; the staging buffers go to `staging`.
     bool record_lookup_upload(ID3D12GraphicsCommandList* list,
                               std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& staging);

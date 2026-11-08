@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GameBloom: the game's bloom at the internal resolution (game_bloom.h).
 #include "galaxy/render/game_bloom.h"
+#include "barriers_d3d12.h"
 #include "galaxy/run_options.h"
 
 #include "galaxy/render/game_bloom_shape.h"
@@ -25,9 +26,8 @@ using Constants = GameBloom::Constants;
 static_assert(sizeof(Constants) == 64u);
 
 constexpr DXGI_FORMAT kWorkFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-// The state the chain's textures are read in (its compute passes and the composite).
-constexpr D3D12_RESOURCE_STATES kRead =
-    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+// The use the chain's textures are read in (its compute passes and the composite).
+constexpr gpu::Use kRead = gpu::Use::ShaderRead;
 
 D3D12_SHADER_BYTECODE code(const void* bytes, std::size_t size) {
     return {bytes, size};
@@ -165,8 +165,8 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
     rd.Format = format;
     rd.SampleDesc.Count = 1;
     rd.Flags = unordered ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE;
-    const D3D12_RESOURCE_STATES state = unordered ? kRead : D3D12_RESOURCE_STATE_COPY_DEST;
-    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd, state, nullptr,
+    const gpu::Use use = unordered ? kRead : gpu::Use::CopyDest;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd, legacy_state(use), nullptr,
                                                 IID_PPV_ARGS(&target.resource)))) {
         return false;
     }
@@ -174,22 +174,18 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
     target.width = width;
     target.height = height;
     target.format = format;
-    target.state = state;
+    target.use = use;
     return true;
 }
 
-void GameBloom::transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state) {
-    if (target.state == state) {
+void GameBloom::transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use) {
+    if (target.use == use) {
         return;
     }
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = target.resource.Get();
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = target.state;
-    barrier.Transition.StateAfter = state;
-    list->ResourceBarrier(1, &barrier);
-    target.state = state;
+    BarriersD3D12 uses{list};
+    uses.texture(target.resource.Get(), target.use, use);
+    uses.issue();
+    target.use = use;
 }
 
 // The frame's pixels of the scene target, in its own format, into `target` (the normal bloom's kept scene, the simple bloom's
@@ -200,14 +196,11 @@ bool GameBloom::copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Ta
     if (!ensure_target(target, format, in.frame_width, in.frame_height, false, frame_index, frames_in_flight, name)) {
         return false;
     }
-    D3D12_RESOURCE_BARRIER barrier{};
-    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = in.scene_target;
-    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    list->ResourceBarrier(1, &barrier);
-    transition(list, target, D3D12_RESOURCE_STATE_COPY_DEST);
+    // The scene and the copy change in one call each way.
+    BarriersD3D12 to_copy{list};
+    to_copy.texture(in.scene_target, gpu::Use::ColorWrite, gpu::Use::CopySource);
+    to_copy.texture(target.resource.Get(), target.use, gpu::Use::CopyDest);
+    to_copy.issue();
     D3D12_TEXTURE_COPY_LOCATION to{};
     to.pResource = target.resource.Get();
     to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
@@ -215,9 +208,11 @@ bool GameBloom::copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Ta
     from.pResource = in.scene_target;
     const D3D12_BOX frame{0u, 0u, 0u, in.frame_width, in.frame_height, 1u};
     list->CopyTextureRegion(&to, 0u, 0u, 0u, &from, &frame);
-    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
-    list->ResourceBarrier(1, &barrier);
-    transition(list, target, kRead);
+    BarriersD3D12 back{list};
+    back.texture(in.scene_target, gpu::Use::CopySource, gpu::Use::ColorWrite);
+    back.texture(target.resource.Get(), gpu::Use::CopyDest, kRead);
+    back.issue();
+    target.use = kRead;
     return true;
 }
 
@@ -236,7 +231,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12Graphics
         const D3D12_RESOURCE_DESC desc = keep_.resource->GetDesc();
         if (keep_.width == in.frame_width && keep_.height == in.frame_height &&
             (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
-            transition(list, keep_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            transition(list, keep_, gpu::Use::PixelRead);
             image = std::move(keep_.resource);
         } else {
             retired_.push_back({std::move(keep_.resource), frame_index + frames_in_flight});
@@ -251,7 +246,7 @@ void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, con
     keep_.width = in.frame_width;
     keep_.height = in.frame_height;
     keep_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
-    keep_.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    keep_.use = gpu::Use::PixelRead;
     kept_ = true;
 }
 
@@ -324,14 +319,10 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     list->SetComputeRootSignature(root_signature_.Get());
 
     // The selection's source: the glowing models drawn over black (normal), the scene (simple).
-    D3D12_RESOURCE_BARRIER scene_barrier{};
-    scene_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    scene_barrier.Transition.pResource = in.scene_target;
-    scene_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    scene_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    scene_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    BarriersD3D12 scene_use{list};
     if (normal) {
-        list->ResourceBarrier(1, &scene_barrier);
+        scene_use.texture(in.scene_target, gpu::Use::ColorWrite, gpu::Use::ComputeRead);
+        scene_use.issue();
     }
     {
         Constants c{};
@@ -340,17 +331,14 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.size[2] = s.f;
         c.uv[0] = static_cast<float>(in.frame_width);
         c.uv[1] = static_cast<float>(in.frame_height);
-        transition(list, work_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, work_, gpu::Use::ComputeWrite);
         dispatch(down_.Get(), c,
                  table({normal ? in.scene_target : source_.resource.Get(), nullptr, nullptr}, {scene_format, {}, {}},
                        {work_.resource.Get(), nullptr, nullptr}),
                  s.w1, s.h1);
         transition(list, work_, kRead);
     }
-    if (normal) {
-        std::swap(scene_barrier.Transition.StateBefore, scene_barrier.Transition.StateAfter);
-        list->ResourceBarrier(1, &scene_barrier);
-    }
+    scene_use.undo();
     // The game's 4 x 4 pixel footprint (across, then down with the selection).
     const bool across = s.box > 1.0f;
     if (across) {
@@ -360,7 +348,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.size[3] = 0u;
         c.params[0] = s.box;
         c.params[1] = -1.0f;
-        transition(list, box_tmp_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, box_tmp_, gpu::Use::ComputeWrite);
         dispatch(box_.Get(), c,
                  table({work_.resource.Get(), nullptr, nullptr}, {kWorkFormat, {}, {}},
                        {box_tmp_.resource.Get(), nullptr, nullptr}),
@@ -375,7 +363,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.params[0] = s.box;
         c.params[1] = static_cast<float>(std::min(p.threshold, 255u));
         c.params[2] = static_cast<float>(normal ? 0u : std::min(p.channel, 3u));
-        transition(list, mask_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, mask_, gpu::Use::ComputeWrite);
         dispatch(box_.Get(), c,
                  table({(across ? box_tmp_ : work_).resource.Get(), nullptr, nullptr}, {kWorkFormat, {}, {}},
                        {mask_.resource.Get(), nullptr, nullptr}),
@@ -390,7 +378,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.size[1] = s.h1;
         c.size[2] = blurs1;
         for (unsigned i = 0; i < 3u; ++i) c.sigma[i] = sigma1x[i];
-        for (unsigned i = 0; i < blurs1; ++i) transition(list, blur_h_[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        for (unsigned i = 0; i < blurs1; ++i) transition(list, blur_h_[i], gpu::Use::ComputeWrite);
         dispatch(blur_.Get(), c,
                  table({mask_.resource.Get(), nullptr, nullptr}, {kWorkFormat, {}, {}},
                        {blur_h_[0].resource.Get(), blurs1 > 1u ? blur_h_[1].resource.Get() : nullptr, nullptr}),
@@ -401,7 +389,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.params[0] =
             (normal ? bloom::kLevel1Taps : bloom::kSimpleTaps) * static_cast<float>(std::min(p.tap1, 255u)) / 255.0f;
         c.params[1] = normal ? 1.0f : 0.0f;
-        transition(list, level1_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, level1_, gpu::Use::ComputeWrite);
         dispatch(blur_.Get(), c,
                  table({blur_h_[0].resource.Get(), blurs1 > 1u ? blur_h_[1].resource.Get() : nullptr, nullptr},
                        {kWorkFormat, kWorkFormat, {}}, {level1_.resource.Get(), nullptr, nullptr}),
@@ -416,7 +404,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.size[2] = s.n;
         c.uv[0] = static_cast<float>(s.w1);
         c.uv[1] = static_cast<float>(s.h1);
-        transition(list, level2_in_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, level2_in_, gpu::Use::ComputeWrite);
         dispatch(down_.Get(), c,
                  table({level1_.resource.Get(), nullptr, nullptr}, {kWorkFormat, {}, {}},
                        {level2_in_.resource.Get(), nullptr, nullptr}),
@@ -427,7 +415,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.size[1] = s.h2;
         c.size[2] = 3u;
         for (unsigned i = 0; i < 3u; ++i) c.sigma[i] = sigma2x[i];
-        for (Target& t : blur2_h_) transition(list, t, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        for (Target& t : blur2_h_) transition(list, t, gpu::Use::ComputeWrite);
         dispatch(blur_.Get(), c,
                  table({level2_in_.resource.Get(), nullptr, nullptr}, {kWorkFormat, {}, {}},
                        {blur2_h_[0].resource.Get(), blur2_h_[1].resource.Get(), blur2_h_[2].resource.Get()}),
@@ -437,7 +425,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         for (unsigned i = 0; i < 3u; ++i) c.sigma[i] = sigma2y[i];
         c.params[0] = bloom::kLevel2Taps * static_cast<float>(std::min(p.tap2, 255u)) / 255.0f;
         c.params[1] = 1.0f;
-        transition(list, level2_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        transition(list, level2_, gpu::Use::ComputeWrite);
         dispatch(blur_.Get(), c,
                  table({blur2_h_[0].resource.Get(), blur2_h_[1].resource.Get(), blur2_h_[2].resource.Get()},
                        {kWorkFormat, kWorkFormat, kWorkFormat}, {level2_.resource.Get(), nullptr, nullptr}),
