@@ -9,8 +9,9 @@ public:
     inline PlacementId() {
     }
 
-    PlacementId(s32, s32);
-    PlacementId(s32, const TableIter&);
+    PlacementId(s32 id, s32 zoneId);
+    // The zone is the one rIter was placed in.
+    PlacementId(s32 id, const TableIter& rIter);
 
     void initialize(s32, const TableIter&);
 

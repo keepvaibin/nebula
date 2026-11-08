@@ -358,14 +358,14 @@ void LiveActor::prepareDrawClipped() {
     }
 }
 
-void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAnimName, bool a3) {
+void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAnimName, bool deferMaterials) {
     mModelManager = new ModelManager();
     // A class of the mod's: its files in place of those the object it is made as asks for.
     pModelName = NebulaMods::modelFor(mName, pModelName);
     if (pAnimName != nullptr) {
         pAnimName = NebulaMods::modelFor(mName, pAnimName);
     }
-    mModelManager->init(pModelName, pAnimName, a3);
+    mModelManager->init(pModelName, pAnimName, deferMaterials);
 
     MR::getModel(this)->setBaseScale(mScale);
     LiveActor::calcAndSetBaseMtx();
@@ -397,8 +397,8 @@ void LiveActor::initRailRider(const TableIter& rIter) {
     mRailRider = new RailRider(rIter);
 }
 
-void LiveActor::initEffectKeeper(int a1, const char* a2) {
-    mEffectKeeper = new EffectKeeper(getName(), MR::getModelResourceHolder(this), a1, a2);
+void LiveActor::initEffectKeeper(int extraEmitterNum, const char* pResourceName) {
+    mEffectKeeper = new EffectKeeper(getName(), MR::getModelResourceHolder(this), extraEmitterNum, pResourceName);
     mEffectKeeper->init(this);
 
     if (mBinder != nullptr) {
@@ -406,11 +406,11 @@ void LiveActor::initEffectKeeper(int a1, const char* a2) {
     }
 }
 
-void LiveActor::initSound(int param1, bool is2D) {
+void LiveActor::initSound(int numHandles, bool is2D) {
     if (!is2D) {
-        mSoundObject = new AudAnmSoundObject(&mPosition, param1, MR::getCurrentHeap());
+        mSoundObject = new AudAnmSoundObject(&mPosition, numHandles, MR::getCurrentHeap());
     } else {
-        mSoundObject = new AudAnmSoundObject(nullptr, param1, MR::getCurrentHeap());
+        mSoundObject = new AudAnmSoundObject(nullptr, numHandles, MR::getCurrentHeap());
     }
 }
 

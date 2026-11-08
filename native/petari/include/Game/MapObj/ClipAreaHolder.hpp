@@ -14,14 +14,14 @@ public:
 
     virtual void init(const TableIter& rIter);
 
-    bool isInArea(const Vec3f&, f32) const;
+    bool isInArea(const Vec3f& rPos, f32 radius) const;
 
     bool mIsActive;
 };
 
 class ClipAreaCollisionFilter : public CollisionPartsFilterBase {
 public:
-    ClipAreaCollisionFilter(const Vec3f*, f32);
+    ClipAreaCollisionFilter(const Vec3f* pClipCenter, f32 clipRadius);
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
@@ -33,9 +33,9 @@ namespace MR {
     void createClipAreaHolder();
     bool isExistClipAreaHolder();
     void addClipArea(ClipArea*);
-    bool isInClipArea(const Vec3f&, f32);
+    bool isInClipArea(const Vec3f& rPos, f32 radius);
     bool isActiveClipArea();
     void activateClipArea();
     void deactivateClipArea();
-    void setBinderExceptSensorType(LiveActor*, const Vec3f&, f32);
+    void setBinderExceptSensorType(LiveActor*, const Vec3f* pClipCenter, f32 clipRadius);
 };  // namespace MR
