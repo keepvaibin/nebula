@@ -2,7 +2,6 @@
 #include "Game/Boss/BossAccessor.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleStairsBase.hpp"
-#include "Game/Boss/KoopaBattleStairsVs1.hpp"
 #include "Game/Boss/KoopaParts.hpp"
 #include "Game/Boss/KoopaPowerUpSwitch.hpp"
 #include "Game/Boss/KoopaSequencerVs1.hpp"
@@ -64,8 +63,7 @@ void KoopaFunction::createKoopaRollBall(Koopa* pKoopa) {
 }
 
 s32 KoopaFunction::registerBattleMapStair(KoopaBattleMapStair* pMapStair) {
-    KoopaBattleStairsVs1* pBattleStairsBase = static_cast< KoopaBattleStairsVs1* >(BossAccess::getBossAccessorKoopa()->mSequencer->mBattleStairs);
-    return pBattleStairsBase->registerStair(pMapStair);
+    return BossAccess::getBossAccessorKoopa()->mSequencer->mBattleStairs->registerStair(pMapStair);
 }
 
 void KoopaFunction::setKoopaPos(Koopa* pKoopa, const char* pDemoName) {
