@@ -18,20 +18,20 @@ public:
     /// @brief Creates a new `TripodBossMovableArea`.
     TripodBossMovableArea();
 
-    virtual bool collideSphere(HitResult*, const Vec3f&, f32, const Vec3f&) const;
-    virtual void calcNearLandingPosition(Vec3f*, const Vec3f&) const;
-    virtual void calcLandingNormal(Vec3f*, const Vec3f&) const;
-    virtual void calcLandingFront(Vec3f*, const Vec3f&) const;
+    virtual bool collideSphere(HitResult* pResult, const Vec3f& rStart, f32 radius, const Vec3f& rMove) const;
+    virtual void calcNearLandingPosition(Vec3f* pPos, const Vec3f& rPos) const;
+    virtual void calcLandingNormal(Vec3f* pNorm, const Vec3f& rPos) const;
+    virtual void calcLandingFront(Vec3f* pFront, const Vec3f& rPos) const;
 
-    void setCenter(const Vec3f&);
-    void setBaseAxis(const Vec3f&);
-    void setFrontVector(const Vec3f&);
-    void setRadius(f32);
+    void setCenter(const Vec3f& rCenter);
+    void setBaseAxis(const Vec3f& rAxis);
+    void setFrontVector(const Vec3f& rFront);
+    void setRadius(f32 radius);
 
     Vec3f mCenter;
-    Vec3f mBaseAxis;
+    Vec3f mBaseAxis;  // up through the area
     Vec3f mFront;
     f32 mRadius;
-    f32 mRangeMin;
+    f32 mRangeMin;  // cosine range from mBaseAxis that landing positions keep to
     f32 mRangeMax;
 };
