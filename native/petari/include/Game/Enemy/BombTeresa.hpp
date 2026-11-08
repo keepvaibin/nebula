@@ -47,7 +47,7 @@ public:
     void exeShock();
     void exeDisperse();
     void exeReadyRestart();
-    bool tryCheseEnd();
+    bool tryChaseEnd();
     bool tryDirectTackle();
     bool tryAbortDrift();
     bool tryDriftRelease();
@@ -71,7 +71,7 @@ public:
     bool isEnableHitExplosion() const;
     bool isEnableStarPieceAttack() const;
     bool isEnableShockWave() const;
-    void addTeresaSpinPullVelocity(f32);
+    void addTeresaSpinPullVelocity(f32 height);
 
     inline bool isOutOfRange(f32 dist) {
         return !MR::isNearPlayer(this, dist);
