@@ -166,11 +166,11 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);
     } else if (std::strcmp(key, "temporal_quality") == 0) {
         static constexpr const char* kNames[] = {
-            "native", "quality", "balanced", "performance", "ultra_performance"};
+            "native", "quality", "balanced", "performance", "ultra_performance", "ultra_quality"};
         cfg.temporal_quality = parse_choice(val, kNames, cfg.temporal_quality);
     } else if (std::strcmp(key, "spatial_quality") == 0) {
         static constexpr const char* kNames[] = {
-            "manual", "quality", "balanced", "performance", "ultra_performance"};
+            "manual", "quality", "balanced", "performance", "ultra_performance", "ultra_quality"};
         cfg.spatial_quality = parse_choice(val, kNames, cfg.spatial_quality);
     } else if (std::strcmp(key, "sharpness") == 0) {
         cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
@@ -249,8 +249,8 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
     cfg.upscaler = std::min(cfg.upscaler, 5u);  // 5 SGSR 2, the last of the names above
     cfg.frame_generation = std::min(cfg.frame_generation, 5u);
-    cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
-    cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
+    cfg.temporal_quality = std::min(cfg.temporal_quality, 5u);  // 5 ultra quality, the last of the names above
+    cfg.spatial_quality = std::min(cfg.spatial_quality, 5u);
     cfg.internal_height = normalized_internal_height(cfg.internal_height);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is int while DXGI's is UINT: keep sizes representable in both.

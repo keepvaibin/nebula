@@ -15,7 +15,8 @@ namespace galaxy::render::streamline_common {
 inline sl::DLSSMode dlss_mode(unsigned quality) {
     switch (quality) {
     case 0: return sl::DLSSMode::eDLAA;
-    case 1: return sl::DLSSMode::eMaxQuality;
+    case 1:
+    case 5: return sl::DLSSMode::eMaxQuality;  // 5 ultra quality, a mode DLSS does not have
     case 2: return sl::DLSSMode::eBalanced;
     case 3: return sl::DLSSMode::eMaxPerformance;
     default: return sl::DLSSMode::eUltraPerformance;

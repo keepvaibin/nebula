@@ -4002,7 +4002,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const unsigned oh = output_map.height;
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
-    const unsigned quality = std::min(cfg.temporal_quality, 4u);
+    const unsigned quality = std::min(cfg.temporal_quality, 5u);
     // A failed creation is not retried until its sizes or mode change.
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
         oh == temporal_output_h_ && kind == temporal_kind_ && (kind < 3u || quality == temporal_quality_)) {

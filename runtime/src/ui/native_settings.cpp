@@ -126,12 +126,12 @@ std::vector<unsigned> available_upscalers() {
     return choices;
 }
 
-// Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
+// Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3, then ultra quality 1.3), at least 1x.
 using ui::quality_render_fraction;
 
 // Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
 bool spatial_quality_mode(const RenderConfig& render) {
-    return temporal_upscaler(render) == 0u && std::min(render.spatial_quality, 4u) >= 1u;
+    return temporal_upscaler(render) == 0u && render.spatial_quality >= 1u;
 }
 
 // The fraction of the output's size the upscaling settings render at; DLSS's mode has a narrowest render width.
@@ -140,7 +140,8 @@ float upscaler_render_fraction(const RenderConfig& render, unsigned output_width
     if (temporal == 0u) {
         return spatial_quality_mode(render) ? quality_render_fraction(render.spatial_quality) : 1.0f;
     }
-    const unsigned quality = std::min(render.temporal_quality, 4u);
+    // DLSS has no ultra quality mode (5): it runs quality.
+    const unsigned quality = temporal == 3u && render.temporal_quality == 5u ? 1u : std::min(render.temporal_quality, 5u);
     float fraction = quality_render_fraction(quality);
     if (temporal == 3u && output_width != 0u) {
         const unsigned narrowest = host_window::dlss_min_width(quality, output_width, output_height);

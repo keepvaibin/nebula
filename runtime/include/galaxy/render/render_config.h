@@ -92,10 +92,11 @@ struct RenderConfig {
     // Generation plugins, loaded when the game starts with it on; while it runs the game presents its own 60 frames.
     // Without it the target falls back to Nebula's interpolation.
     unsigned frame_generation    = 0;
-    // 0 native AA 1.0, 1 quality 1.5, 2 balanced 1.7, 3 performance 2.0, 4 ultra performance 3.0.
+    // 0 native AA 1.0, 1 quality 1.5, 2 balanced 1.7, 3 performance 2.0, 4 ultra performance 3.0, 5 ultra quality 1.3
+    // (not DLSS, which has no such mode: it runs 5 as quality).
     unsigned temporal_quality    = 1;
-    // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-4 render at the output scale divided by 1.5, 1.7, 2
-    // or 3 (the temporal_quality ratios).
+    // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-5 render at the output scale divided by the
+    // temporal_quality ratios.
     unsigned spatial_quality     = 0;
     // 0 follows the content area of the output; otherwise the selected vertical pixel count.
     // Width follows the current content aspect, including a fold or window resize.

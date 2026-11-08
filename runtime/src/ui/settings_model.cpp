@@ -18,8 +18,10 @@ SettingsRow button_row(std::string label, std::vector<std::string> buttons, std:
     return row;
 }
 float quality_render_fraction(unsigned quality) {
-    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
-    return 1.0f / kRatio[std::min(quality, 4u)];
+    // Native, quality, balanced, performance, ultra performance, then ultra quality (5, added after the others so
+    // saved settings keep their meaning).
+    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f, 1.3f};
+    return 1.0f / kRatio[std::min(quality, 5u)];
 }
 
 const char* game_language_name(GameLanguage language) {

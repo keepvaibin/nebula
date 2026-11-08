@@ -478,7 +478,7 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
     // A mode evaluates only render widths inside its range (ultra performance accepts one size), and
     // the render scales are whole scene target scales: the requested mode, else the next higher-quality one
     // whose range holds the render width (NGX fails every evaluate outside it).
-    unsigned mode = std::min(quality, 4u);
+    unsigned mode = quality == 5u ? 1u : std::min(quality, 4u);  // no ultra quality mode: quality
     if (g_api.dlss_get_optimal_settings != nullptr) {
         for (unsigned candidate = mode + 1u; candidate-- > 0u;) {
             sl::DLSSOptions options{};
