@@ -8,18 +8,19 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
-#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-
 #include <nebula_math.h>
 
+// The water is a grid along the rail: one cross-section of cPointsAcross points every sPointIntervalLine,
+// cPointSpacing apart at width rate 1 (sDefaultWidth either side of the center point).
 namespace {
     const f32 sPointIntervalLine = 200.0f;
     const f32 sDefaultWidth = 1200.0f;
@@ -27,47 +28,50 @@ namespace {
     const f32 sUpdateDistanceMax = 5000.0f;
     const f32 sWaveSpeed0 = -0.04f;
     const f32 sWaveSpeed1 = -0.06f;
+
+    const s32 cPointsAcross = 15;
+    const s32 cCenterPoint = 7;
+    const f32 cPointSpacing = 171.42857f;  // sDefaultWidth / cCenterPoint
+    // Segments kept updating behind the player; mUpdateSegsAhead are ahead.
+    const s32 cUpdateSegsBehind = 8;
+    const s32 cFadeSegs = 3;
+    const f32 cNormalSampleOffset = 10.0f;
 };  // namespace
 
 OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
     mWaterPointNum = 0;
     mSegCount = 0;
-    mStride = 15;
+    mStride = cPointsAcross;
     mWaterPoints = nullptr;
     mWidthMax = 0.0f;
-    mObjArg1 = 30;
+    mUpdateSegsAhead = 30;
     mWaveTheta0 = 0.0f;
     mWaveTheta1 = 0.0f;
     mWaveHeight1 = 80.0f;
     mWaveHeight2 = 100.0f;
-    mIsClipped = 0;
-    mNearPosToPlayer = 0.0f;
-    mNearestPos.x = 0.0f;
-    mNearestPos.y = 0.0f;
-    mNearestPos.z = 0.0f;
-    mNearestDir.x = 0.0f;
-    mNearestDir.y = 0.0f;
-    mNearestDir.z = 1.0f;
+    mIsClipped = false;
+    mPlayerCoord = 0.0f;
+    mNearestPos.zero();
+    mNearestDir.set(0.0f, 0.0f, 1.0f);
     mRingDrawer = nullptr;
-    mClippingCenter.x = 0.0f;
-    mClippingCenter.y = 0.0f;
-    mClippingCenter.z = 0.0f;
-    mNearestToWatchCam.x = 0.0f;
-    mNearestToWatchCam.y = 0.0f;
-    mNearestToWatchCam.z = 0.0f;
-    mSoundObj1 = nullptr;
-    mNerarestToCam.x = 0.0f;
-    mNerarestToCam.y = 0.0f;
-    mNerarestToCam.z = 0.0f;
-    mSoundObj2 = nullptr;
+    mClippingCenter.zero();
+    mNearestToWatchCam.zero();
+    mWatchSoundObj = nullptr;
+    mNearestToCam.zero();
+    mCamSoundObj = nullptr;
     mOceanRingPipe = nullptr;
     mBloomDrawer = nullptr;
-    mBox.i.zero();
-    mBox.f.zero();
+    mUpdateBox.i.zero();
+    mUpdateBox.f.zero();
     mClippingBox.i.zero();
     mClippingBox.f.zero();
 }
 
+OceanRing::~OceanRing() {
+}
+
+// Obj_arg0: 0 is a pipe of water (with its own model); 2 low waves, else medium waves, no pipe.
+// Obj_arg1: segments updated ahead of the player.
 void OceanRing::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRing);
     MR::initDefaultPos(this, rIter);
@@ -76,14 +80,14 @@ void OceanRing::init(const TableIter& rIter) {
     mRingDrawer = new OceanRingDrawer(this);
     calcClippingBox();
     WaterAreaFunction::entryOceanRing(this);
-    s32 arg0 = 0;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    s32 shape = 0;
+    MR::getPlacementArg0NoInit(rIter, &shape);
 
-    if (arg0 == 0) {
-        mOceanRingPipe = new OceanRingPipe(this, mWidthMax, ::sDefaultWidth);
+    if (shape == 0) {
+        mOceanRingPipe = new OceanRingPipe(this, mWidthMax, sDefaultWidth);
         mOceanRingPipe->init(rIter);
     } else {
-        if (arg0 == 2) {
+        if (shape == 2) {
             mWaveHeight1 = 20.0f;
             mWaveHeight2 = 30.0f;
         } else {
@@ -94,11 +98,11 @@ void OceanRing::init(const TableIter& rIter) {
         MR::loadTexFromArc("OceanRing", "WaterPipeInside.bti");
     }
 
-    MR::getPlacementArg1NoInit(rIter, &mObjArg1);
+    MR::getPlacementArg1NoInit(rIter, &mUpdateSegsAhead);
     mBloomDrawer = new OceanRingBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
-    mSoundObj1 = new AudSoundObject(&mNearestToWatchCam, 4, MR::getCurrentHeap());
-    mSoundObj2 = new AudSoundObject(&mNerarestToCam, 4, MR::getCurrentHeap());
+    mWatchSoundObj = new AudSoundObject(&mNearestToWatchCam, 4, MR::getCurrentHeap());
+    mCamSoundObj = new AudSoundObject(&mNearestToCam, 4, MR::getCurrentHeap());
     MR::registerDemoSimpleCastAll(this);
     makeActorAppeared();
 }
@@ -109,206 +113,202 @@ void OceanRing::initAfterPlacement() {
     }
 }
 
-bool OceanRing::isInWater(const Vec3f& rVec) const {
-    if (!mClippingBox.intersectsPoint(rVec)) {
+// Inside the tube: within the width of the nearest rail point and on the far side of it along gravity.
+bool OceanRing::isInWater(const Vec3f& rPos) const {
+    if (!mClippingBox.intersectsPoint(rPos)) {
         return false;
     }
 
     Vec3f nearPos;
-    f32 pos = calcNearestPos(rVec, &nearPos, nullptr, nullptr);
-    f32 w = (mWidthMax * calcCurrentWidthRate(pos));
+    f32 coord = calcNearestPos(rPos, &nearPos, nullptr, nullptr);
+    f32 width = (mWidthMax * calcCurrentWidthRate(coord));
 
-    if (nearPos.distance(rVec) > w) {
+    if (nearPos.distance(rPos) > width) {
         return false;
     }
 
-    Vec3f stack_14(rVec);
-    stack_14.sub(nearPos);
-    Vec3f gravVec;
-    MR::calcGravityVector(this, rVec, &gravVec, nullptr, 0);
-    return !(stack_14.dot(gravVec) < 0.0f);
+    Vec3f fromNear(rPos);
+    fromNear.sub(nearPos);
+    Vec3f gravity;
+    MR::calcGravityVector(this, rPos, &gravity, nullptr, 0);
+    return !(fromNear.dot(gravity) < 0.0f);
 }
 
-bool OceanRing::calcWaterInfo(const Vec3f& a1, const Vec3f& a2, WaterInfo* pInfo) const {
-    Vec3f v24, v23;
-    f32 nearestPos = calcNearestPos(a1, &v24, &v23, nullptr);
-    f32 v9 = (mWidthMax * calcCurrentWidthRate(nearestPos));
+// The cross-section is a half circle of the current width: depth is cos of the side offset's share of it.
+bool OceanRing::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const {
+    Vec3f nearPos, nearDir;
+    f32 coord = calcNearestPos(rPos, &nearPos, &nearDir, nullptr);
+    f32 width = (mWidthMax * calcCurrentWidthRate(coord));
     Vec3f streamVec;
-    calcStreamVec(a1, nearestPos, &streamVec);
+    calcStreamVec(rPos, coord, &streamVec);
     pInfo->mStreamVec.set(streamVec);
-    pInfo->mWaveHeight = calcWaveHeight(a1, nearestPos, &pInfo->mSurfaceNormal);
+    pInfo->mWaveHeight = calcWaveHeight(rPos, coord, &pInfo->mSurfaceNormal);
 
-    Vec3f v21(a1);
-    v21.sub(v24);
-    f32 v10 = MR::vecKillElement(v21, -a2, &v21);
-    f32 v12 = v21.length() / v9;
-    f32 v11 = v12;
-    v11 *= PI;
-    v11 *= 0.5f;
+    Vec3f side(rPos);
+    side.sub(nearPos);
+    f32 height = MR::vecKillElement(side, -rGravity, &side);
+    f32 angle = side.length() / width;
+    angle *= PI;
+    angle *= 0.5f;
 
-    pInfo->mDepth = MR::cos(v11) * v9;
-    pInfo->mDepth += v10;
+    pInfo->mDepth = MR::cos(angle) * width;
+    pInfo->mDepth += height;
 
-    pInfo->mCamWaterDepth = -v10;
+    pInfo->mCamWaterDepth = -height;
 
-    Vec3f v20(a2);
-    MR::calcGravityVector(this, a1, &v20, nullptr, 0);
-    pInfo->mSurfaceNormal.set(-v20);
+    Vec3f gravity(rGravity);
+    MR::calcGravityVector(this, rPos, &gravity, nullptr, 0);
+    pInfo->mSurfaceNormal.set(-gravity);
 
-    pInfo->mSurfacePos.set(a1 + a2 * v10);
+    pInfo->mSurfacePos.set(rPos + rGravity * height);
 
-    Vec3f v19(a1);
-    v19.sub(v24);
+    Vec3f toEdge(rPos);
+    toEdge.sub(nearPos);
 
-    if (MR::isNearZero(v19)) {
-        pInfo->mEdgeDistance = v9;
-        Vec3f v18(a2);
-        v18.scale(v9);
-        v18.add(v24);
-        pInfo->mEdgePos.set(v18);
+    if (MR::isNearZero(toEdge)) {
+        pInfo->mEdgeDistance = width;
+        Vec3f edgePos(rGravity);
+        edgePos.scale(width);
+        edgePos.add(nearPos);
+        pInfo->mEdgePos.set(edgePos);
     } else {
-        MR::normalize(&v19);
-        v19.scale(v9);
-        v19.add(v24);
-        pInfo->mEdgeDistance = v19.distance(a1);
-        pInfo->mEdgePos.set(v19);
+        MR::normalize(&toEdge);
+        toEdge.scale(width);
+        toEdge.add(nearPos);
+        pInfo->mEdgeDistance = toEdge.distance(rPos);
+        pInfo->mEdgePos.set(toEdge);
     }
 
     return true;
 }
 
-f32 OceanRing::calcNearestPos(const Vec3f& a1, Vec3f* a2, Vec3f* a3, Vec3f* a4) const {
-    WaterPoint* point = getPoint(7);
-    f32 dist = point->mOrigPos.distance(a1);
+// The rail coord nearest rPos (by the nearest center point and the foot on the segment toward the nearer
+// neighbour). pNearPos gets the foot, pDir the rail direction there, pCrossPos the foot on the cross-section.
+f32 OceanRing::calcNearestPos(const Vec3f& rPos, Vec3f* pNearPos, Vec3f* pDir, Vec3f* pCrossPos) const {
+    WaterPoint* pNearest = getPoint(cCenterPoint, 0);
+    f32 nearestDist = pNearest->mOrigPos.distance(rPos);
 
-    s32 index = 0;
-    for (s32 i = 1; i < mSegCount; i++) {
-        WaterPoint* p = getPoint(i * 15 + 7);
-        f32 d = p->mOrigPos.distance(a1);
-        if (d < dist) {
-            dist = d;
-            point = p;
-            index = i;
+    s32 nearestSeg = 0;
+    for (s32 seg = 1; seg < mSegCount; seg++) {
+        WaterPoint* pPoint = getPoint(cCenterPoint, seg);
+        f32 dist = pPoint->mOrigPos.distance(rPos);
+        if (dist < nearestDist) {
+            nearestDist = dist;
+            pNearest = pPoint;
+            nearestSeg = seg;
         }
     }
 
-    f32 v18 = 0.0f;
-    if (index > 0 && index < mSegCount - 1) {
-        WaterPoint* v20 = getPoint(15 * (index - 1) + 7);
-        WaterPoint* v21 = getPoint(15 * (index + 1) + 7);
-        f32 v22 = v20->mOrigPos.distance(a1);
+    f32 coord = 0.0f;
+    if (nearestSeg > 0 && nearestSeg < mSegCount - 1) {
+        WaterPoint* pPrev = getPoint(cCenterPoint, nearestSeg - 1);
+        WaterPoint* pNext = getPoint(cCenterPoint, nearestSeg + 1);
+        f32 prevDist = pPrev->mOrigPos.distance(rPos);
 
-        if (v22 < v21->mOrigPos.distance(a1)) {
-            v18 = (::sPointIntervalLine * (index - MR::calcPerpendicFootToLine(a2, a1, point->mOrigPos, v20->mOrigPos)));
+        if (prevDist < pNext->mOrigPos.distance(rPos)) {
+            coord = (sPointIntervalLine * (nearestSeg - MR::calcPerpendicFootToLine(pNearPos, rPos, pNearest->mOrigPos, pPrev->mOrigPos)));
         } else {
-            v18 = (::sPointIntervalLine * (index + MR::calcPerpendicFootToLine(a2, a1, point->mOrigPos, v21->mOrigPos)));
+            coord = (sPointIntervalLine * (nearestSeg + MR::calcPerpendicFootToLine(pNearPos, rPos, pNearest->mOrigPos, pNext->mOrigPos)));
         }
     } else {
-        a2->set(point->mOrigPos);
+        pNearPos->set(pNearest->mOrigPos);
     }
 
-    if (a4) {
-        Vec3f v32, v31;
-        MR::calcRailPosAndDirectionAtCoord(&v31, &v32, this, v18);
-        Vec3f v30(0.0f, -1.0f, 0.0f);
-        MR::calcGravityVector(this, v31, &v30, 0, 0);
-        Vec3f v29 = MR::getRailDirection(this).cross(-v30);
-        f32 v24 = (mWidthMax * calcCurrentWidthRate(v18));
-        Vec3f v28(v29);
-        v28.scale(-v24);
-        v28.add(*a2);
-        Vec3f v27(v29);
-        v27.scale(v24);
-        v27.add(*a2);
-        MR::calcPerpendicFootToLineInside(a4, a1, v28, v27);
+    if (pCrossPos) {
+        Vec3f railDir, railPos;
+        MR::calcRailPosAndDirectionAtCoord(&railPos, &railDir, this, coord);
+        Vec3f gravity(0.0f, -1.0f, 0.0f);
+        MR::calcGravityVector(this, railPos, &gravity, 0, 0);
+        Vec3f side = MR::getRailDirection(this).cross(-gravity);
+        f32 width = (mWidthMax * calcCurrentWidthRate(coord));
+        Vec3f leftEdge(side);
+        leftEdge.scale(-width);
+        leftEdge.add(*pNearPos);
+        Vec3f rightEdge(side);
+        rightEdge.scale(width);
+        rightEdge.add(*pNearPos);
+        MR::calcPerpendicFootToLineInside(pCrossPos, rPos, leftEdge, rightEdge);
     }
 
-    if (a3) {
-        MR::calcRailDirectionAtCoord(a3, this, v18);
+    if (pDir) {
+        MR::calcRailDirectionAtCoord(pDir, this, coord);
     }
 
-    return v18;
+    return coord;
 }
 
-f32 OceanRing::calcWaveHeight(const Vec3f& a1, f32 a2, Vec3f* a3) const {
-    MR::setRailCoord((OceanRing*)this, a2);
-    Vec3f v43(a1);
-    v43.sub(MR::getRailPos(this));
-    Vec3f v42(0.0f, -1.0f, 0.0f);
-    MR::calcGravityVector(this, a1, &v42, nullptr, 0);
-    Vec3f v37 = MR::getRailDirection(this).cross(-v42);
+// The wave height under rPos at rail coord coord; the normal from four samples cNormalSampleOffset to each side.
+f32 OceanRing::calcWaveHeight(const Vec3f& rPos, f32 coord, Vec3f* pNormal) const {
+    MR::setRailCoord(const_cast< OceanRing* >(this), coord);
+    Vec3f fromRail(rPos);
+    fromRail.sub(MR::getRailPos(this));
+    Vec3f gravity(0.0f, -1.0f, 0.0f);
+    MR::calcGravityVector(this, rPos, &gravity, nullptr, 0);
+    Vec3f side = MR::getRailDirection(this).cross(-gravity);
 
-    f32 dot = v43.dot(v37);
-    f32 v12 = (::sDefaultWidth + dot);
-    s32 v44 = (7.0f + (dot / 171.42857f));
-    f32 v46 = (a2 / ::sPointIntervalLine);
-    s32 v13 = MR::clamp(v44, 0, mStride - 1);
+    f32 sideOffset = fromRail.dot(side);
+    f32 across = (sDefaultWidth + sideOffset);
+    s32 nearPoint = (cCenterPoint + (sideOffset / cPointSpacing));
+    f32 segRate = (coord / sPointIntervalLine);
+    s32 point = MR::clamp(nearPoint, 0, mStride - 1);
+    s32 seg = MR::clamp((s32)segRate, 0, mSegCount - 1);
 
-    s32 v15 = MR::clamp((s32)v46, 0, mSegCount - 1);
+    const WaterPoint* pPoint = getPoint(point, seg);
+    f32 height = pPoint->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, across, coord);
+    Vec3f left(side);
+    left.scale(-cNormalSampleOffset);
+    Vec3f right(side);
+    right.scale(cNormalSampleOffset);
+    Vec3f front(MR::getRailDirection(this));
+    front.scale(cNormalSampleOffset);
+    Vec3f back(MR::getRailDirection(this));
+    back.scale(-cNormalSampleOffset);
+    left.y += pPoint->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, (across - cNormalSampleOffset), coord);
+    right.y += pPoint->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, (cNormalSampleOffset + across), coord);
+    front.y += pPoint->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, across, (cNormalSampleOffset + coord));
+    back.y += pPoint->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, across, coord - cNormalSampleOffset);
+    Vec3f leftToRight(right);
+    leftToRight.sub(left);
+    Vec3f frontToBack(back);
+    frontToBack.sub(front);
+    pNormal->cross(frontToBack, leftToRight);
 
-    WaterPoint* point = getPoint(v13, v15);
-    f32 v17 = point->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, v12, a2);
-    Vec3f v36(v37);
-    v36.scale(-10.0f);
-    Vec3f v35(v37);
-    v35.scale(10.0f);
-    Vec3f v34(MR::getRailDirection(this));
-    v34.scale(10.0f);
-    Vec3f v33(MR::getRailDirection(this));
-    v33.scale(-10.0f);
-    point = getPoint(v13, v15);
-    f32 v21 = point->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, (v12 - 10.0f), a2);
-    v36.y += v21;
-    point = getPoint(v13, v15);
-    f32 v23 = point->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, (10.0f + v12), a2);
-    v35.y += v23;
-    point = getPoint(v13, v15);
-    f32 v25 = point->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, v12, (10.0f + a2));
-    v34.y += v25;
-    point = getPoint(v13, v15);
-    f32 v27 = point->calcHeight(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, v12, a2 - 10.0f);
-    v33.y += v27;
-    Vec3f v32(v35);
-    v32.sub(v36);
-    Vec3f v31(v33);
-    v31.sub(v34);
-    a3->cross(v31, v32);
-
-    if (MR::isNearZero(*a3)) {
-        a3->set(-v42);
+    if (MR::isNearZero(*pNormal)) {
+        pNormal->set(-gravity);
     } else {
-        MR::normalize(a3);
+        MR::normalize(pNormal);
     }
 
-    return v17;
+    return height;
 }
 
-void OceanRing::calcStreamVec(const Vec3f& a1, f32 a2, Vec3f* pStreamVec) const {
+// The stream flows along the rail at the player's nearest point, 10 at flow rate 1, within the width.
+void OceanRing::calcStreamVec(const Vec3f& rPos, f32 coord, Vec3f* pStreamVec) const {
     pStreamVec->zero();
-    f32 v8 = (mWidthMax * calcCurrentWidthRate(a2));
-    f32 v9 = (10.0f * calcCurrentFlowSpeedRate(a2));
-    Vec3f near(mNearestPos);
-    near.sub(a1);
-    if (near.length() < v8) {
+    f32 width = (mWidthMax * calcCurrentWidthRate(coord));
+    f32 speed = (10.0f * calcCurrentFlowSpeedRate(coord));
+    Vec3f toNearest(mNearestPos);
+    toNearest.sub(rPos);
+    if (toNearest.length() < width) {
         pStreamVec->set(mNearestDir);
-        pStreamVec->scale(v9);
+        pStreamVec->scale(speed);
     }
 }
 
 void OceanRing::movement() {
-    mWaveTheta0 += ::sWaveSpeed0;
-    mWaveTheta1 += ::sWaveSpeed1;
+    mWaveTheta0 += sWaveSpeed0;
+    mWaveTheta1 += sWaveSpeed1;
     updatePoints();
     mRingDrawer->update();
 
     Vec3f nearPos;
     calcNearestPos(MR::getCameraWatchPos(), &nearPos, nullptr, &mNearestToWatchCam);
-    MR::startSoundObjectLevel(mSoundObj1, "SE_AT_LV_OCEAN_RING");
-    mSoundObj1->process();
+    MR::startSoundObjectLevel(mWatchSoundObj, "SE_AT_LV_OCEAN_RING");
+    mWatchSoundObj->process();
 
-    calcNearestPos(MR::getCamPos(), &nearPos, nullptr, &mNerarestToCam);
-    MR::startSoundObjectLevel(mSoundObj2, "SE_AT_LV_OCEAN_RING_SUB");
-    mSoundObj2->process();
+    calcNearestPos(MR::getCamPos(), &nearPos, nullptr, &mNearestToCam);
+    MR::startSoundObjectLevel(mCamSoundObj, "SE_AT_LV_OCEAN_RING_SUB");
+    mCamSoundObj->process();
 }
 
 void OceanRing::startClipped() {
@@ -327,202 +327,194 @@ void OceanRing::endClipped() {
     }
 }
 
+// One cross-section per segment along the rail; the outer sEdgePointNum points each side ease their waves out.
+// Rail point arg 1 is the width (12 is rate 1), arg 0 the flow speed (100 is rate 1).
 void OceanRing::initPoints() {
-    s32 len = MR::getRailTotalLength(this) / ::sPointIntervalLine;
-    len++;
-    mSegCount = len;
-    mWaterPointNum = 15 * len;
+    s32 segCount = MR::getRailTotalLength(this) / sPointIntervalLine;
+    segCount++;
+    mSegCount = segCount;
+    mWaterPointNum = cPointsAcross * segCount;
     f32 totalLength = MR::getRailTotalLength(this);
-    f32 v6 = (totalLength / mSegCount);
-    mWidthMax = ::sDefaultWidth;
+    f32 segLength = (totalLength / mSegCount);
+    mWidthMax = sDefaultWidth;
     mWaterPoints = new WaterPoint*[mWaterPointNum];
-    s32 v7 = 0;
+    s32 index = 0;
 
-    for (s32 i = 0; i < mSegCount; i++) {
-        Vec3f v23(0.0f, 1.0f, 0.0f);
-        MR::calcGravityVector(this, MR::getRailPos(this), &v23, nullptr, 0);
-        v23.scale(-1.0f);
-        Vec3f v22 = MR::getRailDirection(this).cross(v23);
-        MR::normalize(&v22);
+    for (s32 seg = 0; seg < mSegCount; seg++) {
+        Vec3f up(0.0f, 1.0f, 0.0f);
+        MR::calcGravityVector(this, MR::getRailPos(this), &up, nullptr, 0);
+        up.scale(-1.0f);
+        Vec3f side = MR::getRailDirection(this).cross(up);
+        MR::normalize(&side);
 
         f32 railCoord = MR::getRailCoord(this);
-        f32 currentWidthRate = calcCurrentWidthRate(railCoord);
+        f32 widthRate = calcCurrentWidthRate(railCoord);
         railCoord = MR::getRailCoord(this);
-        f32 currentFlowSpeed = calcCurrentFlowSpeedRate(railCoord);
-        s32 v15 = v7;
+        f32 flowSpeedRate = calcCurrentFlowSpeedRate(railCoord);
 
-        for (s32 j = -7; j <= 7; j++) {
-            Vec3f v21(v22);
-            v21.scale((currentWidthRate * (171.42857f * j)));
-            v21.add(MR::getRailPos(this));
+        for (s32 j = -cCenterPoint; j <= cCenterPoint; j++) {
+            Vec3f pos(side);
+            pos.scale((widthRate * (cPointSpacing * j)));
+            pos.add(MR::getRailPos(this));
             f32 ease = 1.0f;
-            s32 v19 = MR::abs(j);
-            if ((7 - v19) < ::sEdgePointNum) {
-                f32 x = ::sEdgePointNum;
-                f32 y = (7 - v19) / x;
-                ease = MR::getEaseOutValue(y, 0.0f, 1.0f, 1.0f);
+            s32 fromEdge = cCenterPoint - MR::abs(j);
+            if (fromEdge < sEdgePointNum) {
+                f32 edgeRate = fromEdge / sEdgePointNum;
+                ease = MR::getEaseOutValue(edgeRate, 0.0f, 1.0f, 1.0f);
             }
 
-            mWaterPoints[v15] = new WaterPoint(v21, v23, ((j + 7) * 171.42857f), (i * v6), ease, currentFlowSpeed);
-            v7++;
-            v15++;
+            mWaterPoints[index] = new WaterPoint(pos, up, ((j + cCenterPoint) * cPointSpacing), (seg * segLength), ease, flowSpeedRate);
+            index++;
         }
 
-        MR::moveCoord(this, v6);
+        MR::moveCoord(this, segLength);
     }
 }
 
+// Updates the segments from cUpdateSegsBehind behind the player to mUpdateSegsAhead ahead (ahead is the way
+// the camera looks along the rail), fading the waves in over cFadeSegs at each open end; nothing beyond
+// sUpdateDistanceMax. A loop rail wraps the window around.
 void OceanRing::updatePoints() {
-    if (!mBox.intersectsPoint(*MR::getPlayerPos())) {
+    if (!mUpdateBox.intersectsPoint(*MR::getPlayerPos())) {
         mIsClipped = true;
         return;
     }
 
-    mNearPosToPlayer = calcNearestPos(*MR::getPlayerPos(), &mNearestPos, &mNearestDir, nullptr);
-    if (mNearestPos.distance(*MR::getPlayerPos()) > ::sUpdateDistanceMax) {
+    mPlayerCoord = calcNearestPos(*MR::getPlayerPos(), &mNearestPos, &mNearestDir, nullptr);
+    if (mNearestPos.distance(*MR::getPlayerPos()) > sUpdateDistanceMax) {
         mIsClipped = true;
         return;
     }
 
     mIsClipped = false;
-    if (mSegCount < mObjArg1 + 8) {
+    if (mSegCount < mUpdateSegsAhead + cUpdateSegsBehind) {
         updatePointsInLine(0, mSegCount - 1, 0, 0);
         return;
     }
 
-    bool flag = true;
-    if (MR::getCamZdir().dot(mNearestDir) < 0.0f) {
-        flag = false;
-    }
+    bool isCamForward = !(MR::getCamZdir().dot(mNearestDir) < 0.0f);
 
-    s32 v16 = (mNearPosToPlayer / ::sPointIntervalLine);
-    s32 v13, v8, v9;
-    if (flag) {
-        v8 = v16 - 8;
-        v9 = v16 + mObjArg1;
+    s32 playerSeg = (mPlayerCoord / sPointIntervalLine);
+    s32 first, last;
+    if (isCamForward) {
+        first = playerSeg - cUpdateSegsBehind;
+        last = playerSeg + mUpdateSegsAhead;
     } else {
-        v9 = v16 + 8;
-        v8 = v16 - mObjArg1;
+        last = playerSeg + cUpdateSegsBehind;
+        first = playerSeg - mUpdateSegsAhead;
     }
 
     if (!MR::isLoopRail(this)) {
-        v13 = MR::clamp(v8, 0, mSegCount - 1);
-        updatePointsInLine(v13, MR::clamp(v9, 0, mSegCount - 1), 3, 3);
+        updatePointsInLine(MR::clamp(first, 0, mSegCount - 1), MR::clamp(last, 0, mSegCount - 1), cFadeSegs, cFadeSegs);
         return;
     }
 
-    if (v8 >= 0 && v9 < mSegCount) {
-        updatePointsInLine(v8, v9, 3, 3);
+    if (first >= 0 && last < mSegCount) {
+        updatePointsInLine(first, last, cFadeSegs, cFadeSegs);
         return;
     }
 
-    if (v8 < 0) {
-        v13 = mSegCount - 1;
-        updatePointsInLine(0, v9, 0, 3);
-        updatePointsInLine(v13 != 0 ? (v13 + v8) % v13 : v8, mSegCount - 1, 3, 0);
+    const s32 lastSeg = mSegCount - 1;
+    if (first < 0) {
+        updatePointsInLine(0, last, 0, cFadeSegs);
+        updatePointsInLine(lastSeg != 0 ? (lastSeg + first) % lastSeg : first, lastSeg, cFadeSegs, 0);
         return;
     }
 
-    v13 = mSegCount - 1;
-    if (v9 > v13) {
-        updatePointsInLine(v8, v13, 3, 0);
-        updatePointsInLine(0, v13 != 0 ? (v13 + v9) % v13 : v9, 0, 3);
+    if (last > lastSeg) {
+        updatePointsInLine(first, lastSeg, cFadeSegs, 0);
+        updatePointsInLine(0, lastSeg != 0 ? (lastSeg + last) % lastSeg : last, 0, cFadeSegs);
     }
 }
 
-void OceanRing::updatePointsInLine(s32 a1, s32 a2, s32 a3, s32 a4) {
-    s32 v11;
-    s32 v12;
-    s32 v10;
-    s32 i;
+// Segments [first, end); the wave rate ramps 0 to 1 over the first fadeInSegs and 1 to 0 over the last fadeOutSegs.
+void OceanRing::updatePointsInLine(s32 first, s32 end, s32 fadeInSegs, s32 fadeOutSegs) {
+    const s32 fadeInEnd = first + fadeInSegs;
+    const s32 fadeOutStart = end - fadeOutSegs;
 
-    v10 = a1;
-    v11 = a1 + a3;
-    v12 = a2 - a4;
-
-    while (v10 < a2) {
-        f32 v13 = 1.0f;
-        if (v10 < v11) {
-            v13 = (f32)(v10 - a1) / (f32)a3;
+    for (s32 seg = first; seg < end; seg++) {
+        f32 rate = 1.0f;
+        if (seg < fadeInEnd) {
+            rate = (f32)(seg - first) / (f32)fadeInSegs;
         }
 
-        if (v10 >= v12) {
-            v13 = ((f32)(a2 - 1 - v10) / (f32)a4);
+        if (seg >= fadeOutStart) {
+            rate = ((f32)(end - 1 - seg) / (f32)fadeOutSegs);
         }
 
-        for (i = 0; i < mStride; i++) {
-            getPoint(i, v10)->updatePos(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, v13);
+        for (s32 point = 0; point < mStride; point++) {
+            getPoint(point, seg)->updatePos(mWaveTheta0, mWaveTheta1, mWaveHeight1, mWaveHeight2, rate);
         }
-
-        v10++;
     }
 }
 
-f32 OceanRing::calcCurrentWidthRate(f32 a1) const {
-    f32 v8 = 0.0f;
-    f32 v7 = 0.0f;
-    MR::setRailCoord((OceanRing*)this, a1);
-    MR::calcDistanceToCurrentAndNextRailPoint(this, &v8, &v7);
-    f32 rate = 1.0f;
-    f32 v4 = (v8 + v7);
+// Rail point arg 1 between the two rail points around coord, by distance; 12 is rate 1.
+f32 OceanRing::calcCurrentWidthRate(f32 coord) const {
+    f32 toCurrent = 0.0f;
+    f32 toNext = 0.0f;
+    MR::setRailCoord(const_cast< OceanRing* >(this), coord);
+    MR::calcDistanceToCurrentAndNextRailPoint(this, &toCurrent, &toNext);
+    f32 total = (toCurrent + toNext);
 
-    if (v4 < 1.0f) {
-        return rate;
+    if (total < 1.0f) {
+        return 1.0f;
     }
 
-    f32 v6 = 12.0f;
-    f32 v5 = 12.0f;
-    MR::getCurrentRailPointArg1NoInit(this, &v6);
-    MR::getNextRailPointArg1NoInit(this, &v5);
-    return ((((v6 * v7) + (v5 * v8)) / v4) / 12.0f);
+    f32 currentWidth = 12.0f;
+    f32 nextWidth = 12.0f;
+    MR::getCurrentRailPointArg1NoInit(this, &currentWidth);
+    MR::getNextRailPointArg1NoInit(this, &nextWidth);
+    return ((((currentWidth * toNext) + (nextWidth * toCurrent)) / total) / 12.0f);
 }
 
-f32 OceanRing::calcCurrentFlowSpeedRate(f32 a1) const {
-    f32 v9 = 0.0f;
-    f32 v8 = 0.0f;
-    MR::setRailCoord((OceanRing*)this, a1);
-    MR::calcDistanceToCurrentAndNextRailPoint(this, &v9, &v8);
-    f32 rate = 1.0f;
-    f32 v4 = (v9 + v8);
+// Rail point arg 0 between the two rail points around coord, by distance; 100 is rate 1.
+f32 OceanRing::calcCurrentFlowSpeedRate(f32 coord) const {
+    f32 toCurrent = 0.0f;
+    f32 toNext = 0.0f;
+    MR::setRailCoord(const_cast< OceanRing* >(this), coord);
+    MR::calcDistanceToCurrentAndNextRailPoint(this, &toCurrent, &toNext);
+    f32 total = (toCurrent + toNext);
 
-    if (v4 < 1.0f) {
-        return rate;
+    if (total < 1.0f) {
+        return 1.0f;
     }
 
-    f32 v7 = 100.0f;
-    f32 v6 = 100.0f;
-    MR::getCurrentRailPointArg0NoInit(this, &v7);
-    MR::getNextRailPointArg0NoInit(this, &v6);
-    return ((((v7 * v8) + (v6 * v9)) / v4) / 100.0f);
+    f32 currentSpeed = 100.0f;
+    f32 nextSpeed = 100.0f;
+    MR::getCurrentRailPointArg0NoInit(this, &currentSpeed);
+    MR::getNextRailPointArg0NoInit(this, &nextSpeed);
+    return ((((currentSpeed * toNext) + (nextSpeed * toCurrent)) / total) / 100.0f);
 }
 
+// mClippingBox: the rail's box grown by the widest point and mWidthMax; mUpdateBox grows it by
+// sUpdateDistanceMax more (before the mWidthMax step).
 void OceanRing::calcClippingBox() {
-    f32 v1 = ::sDefaultWidth;
+    f32 widest = sDefaultWidth;
     for (s32 i = 0; i < MR::getRailPointNum(this); i++) {
-        f32 v6 = 0.0f;
-        MR::getRailPointArg1NoInit(this, i, &v6);
-        f32 v4 = (100.0f * v6);
+        f32 widthArg = 0.0f;
+        MR::getRailPointArg1NoInit(this, i, &widthArg);
+        f32 width = (100.0f * widthArg);
 
-        if (v4 >= v1) {
-            v1 = v4;
+        if (width >= widest) {
+            widest = width;
         }
     }
 
     MR::calcBoundingBox(this, &mClippingBox, 200.0f);
-    Vec3f v9(v1);
-    mClippingBox.i.sub(v9);
-    mClippingBox.f.add(v9);
-    mBox.i.set(mClippingBox.i);
-    mBox.f.set(mClippingBox.f);
-    Vec3f v8(::sUpdateDistanceMax);
-    mBox.i.sub(v8);
-    mBox.f.add(v8);
-    Vec3f v7(mWidthMax);
-    mClippingBox.i.sub(v7);
-    mClippingBox.f.add(v7);
+    Vec3f widestGrow(widest);
+    mClippingBox.i.sub(widestGrow);
+    mClippingBox.f.add(widestGrow);
+    mUpdateBox.i.set(mClippingBox.i);
+    mUpdateBox.f.set(mClippingBox.f);
+    Vec3f updateGrow(sUpdateDistanceMax);
+    mUpdateBox.i.sub(updateGrow);
+    mUpdateBox.f.add(updateGrow);
+    Vec3f widthGrow(mWidthMax);
+    mClippingBox.i.sub(widthGrow);
+    mClippingBox.f.add(widthGrow);
     mClippingCenter.lerp(mClippingBox.f, mClippingBox.i, 0.5f);
-    f32 dist = mClippingCenter.distance(mClippingBox.i);
-    MR::setClippingTypeSphere(this, (100.0f + dist), &mClippingCenter);
+    f32 radius = mClippingCenter.distance(mClippingBox.i);
+    MR::setClippingTypeSphere(this, (100.0f + radius), &mClippingCenter);
     MR::setClippingFarMax(this);
 }
 
@@ -532,13 +524,10 @@ void OceanRing::draw() const {
     }
 }
 
-OceanRing::~OceanRing() {
+WaterPoint* OceanRing::getPoint(int index) const {
+    return mWaterPoints[index];
 }
 
-WaterPoint* OceanRing::getPoint(int a1) const {
-    return mWaterPoints[a1];
-}
-
-WaterPoint* OceanRing::getPoint(int a1, int a2) const {
-    return mWaterPoints[a1 + a2 * mStride];
+WaterPoint* OceanRing::getPoint(int point, int seg) const {
+    return mWaterPoints[point + seg * mStride];
 }

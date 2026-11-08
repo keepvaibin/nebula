@@ -11,52 +11,52 @@ class OceanRingBloomDrawer;
 
 class OceanRing : public LiveActor {
 public:
-    OceanRing(const char*);
+    OceanRing(const char* pName);
 
     virtual ~OceanRing();
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void movement();
     virtual void draw() const;
     virtual void startClipped();
     virtual void endClipped();
 
-    bool isInWater(const Vec3f&) const;
-    bool calcWaterInfo(const Vec3f&, const Vec3f&, WaterInfo*) const;
-    f32 calcNearestPos(const Vec3f&, Vec3f*, Vec3f*, Vec3f*) const;
-    f32 calcWaveHeight(const Vec3f&, f32, Vec3f*) const;
-    void calcStreamVec(const Vec3f&, f32, Vec3f*) const;
+    bool isInWater(const Vec3f& rPos) const;
+    bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;
+    f32 calcNearestPos(const Vec3f& rPos, Vec3f* pNearPos, Vec3f* pDir, Vec3f* pCrossPos) const;
+    f32 calcWaveHeight(const Vec3f& rPos, f32 coord, Vec3f* pNormal) const;
+    void calcStreamVec(const Vec3f& rPos, f32 coord, Vec3f* pStreamVec) const;
     void initPoints();
     void updatePoints();
-    void updatePointsInLine(s32, s32, s32, s32);
-    f32 calcCurrentWidthRate(f32) const;
-    f32 calcCurrentFlowSpeedRate(f32) const;
+    void updatePointsInLine(s32 first, s32 end, s32 fadeInSegs, s32 fadeOutSegs);
+    f32 calcCurrentWidthRate(f32 coord) const;
+    f32 calcCurrentFlowSpeedRate(f32 coord) const;
     void calcClippingBox();
-    WaterPoint* getPoint(int) const;
-    WaterPoint* getPoint(int, int) const;
+    WaterPoint* getPoint(int index) const;
+    WaterPoint* getPoint(int point, int seg) const;
 
     s32 mWaterPointNum;
     s32 mSegCount;
-    s32 mStride;
+    s32 mStride;  // points per cross-section
     WaterPoint** mWaterPoints;
     f32 mWidthMax;
-    s32 mObjArg1;
+    s32 mUpdateSegsAhead;  // Obj_arg1
     f32 mWaveTheta0;
     f32 mWaveTheta1;
     f32 mWaveHeight1;
     f32 mWaveHeight2;
-    bool mIsClipped;
-    f32 mNearPosToPlayer;
-    Vec3f mNearestPos;
+    bool mIsClipped;  // the player is too far for the waves to update
+    f32 mPlayerCoord;
+    Vec3f mNearestPos;  // nearest the player
     Vec3f mNearestDir;
     OceanRingDrawer* mRingDrawer;
-    Box3f mBox;
+    Box3f mUpdateBox;
     Box3f mClippingBox;
     Vec3f mClippingCenter;
     Vec3f mNearestToWatchCam;
-    AudSoundObject* mSoundObj1;
-    Vec3f mNerarestToCam;
-    AudSoundObject* mSoundObj2;
+    AudSoundObject* mWatchSoundObj;
+    Vec3f mNearestToCam;
+    AudSoundObject* mCamSoundObj;
     OceanRingPipe* mOceanRingPipe;
     OceanRingBloomDrawer* mBloomDrawer;
 };
