@@ -11,8 +11,10 @@
 void EmitterManager::addEmitters(u32 num) {
     EmitterCore* p_emtr_link = new (mHeap, 0) EmitterCore[num];
 
-    for (u32 i = 0; i < num; i++)
-        mFreeEmtrList.prepend(&p_emtr_link[i].mLink);
+    for (u32 i = 0; i < num; i++) {
+        p_emtr_link[i].mpNextEmtr = mpFreeEmtrs;
+        mpFreeEmtrs = &p_emtr_link[i];
+    }
 }
 
 // Out of free ones: as many again, for as long as the scene lasts.
@@ -40,13 +42,18 @@ void EmitterManager::giveChunks(ParticleChunk* pFirst, ParticleChunk* pLast) {
 EmitterManager::EmitterManager(u32 i_emtrNum, NebulaArena* pHeap, u8 i_gidMax, u8 i_ridMax) {
     emtrNum = i_emtrNum;
     mpFreeChunks = NULL;
+    mpFreeEmtrs = NULL;
     gidMax = i_gidMax;
     ridMax = i_ridMax;
     mHeap = pHeap;
 
     addEmitters(i_emtrNum);
 
-    pEmtrUseList = new (pHeap, 0) JSUList< EmitterCore >[gidMax];
+    pEmtrUseList = new (pHeap, 0) EmitterList[gidMax];
+    for (int i = 0; i < gidMax; i++) {
+        pEmtrUseList[i].mpFirst = NULL;
+        pEmtrUseList[i].mpLast = NULL;
+    }
     pResMgrAry = new (pHeap, 0) ParticleResources*[ridMax];
     mpMadeCounts = new (pHeap, 0) u32*[ridMax];
     for (int i = 0; i < ridMax; i++) {
@@ -74,14 +81,21 @@ EmitterCore* EmitterManager::createSimpleEmitterID(Vec3f const& pos, u16 resID, 
 
     if (pRes == NULL) {
     } else {
-        if (mFreeEmtrList.getNumLinks() == 0) {
+        if (mpFreeEmtrs == NULL) {
             growEmitters();
         }
 
-        JSULink< EmitterCore >* pLink = mFreeEmtrList.getFirst();
-        mFreeEmtrList.remove(pLink);
-        pEmtrUseList[group_id].append(pLink);
-        EmitterCore* emtr = pLink->getObject();
+        EmitterCore* emtr = mpFreeEmtrs;
+        mpFreeEmtrs = emtr->mpNextEmtr;
+        EmitterList& list = pEmtrUseList[group_id];
+        emtr->mpPrevEmtr = list.mpLast;
+        emtr->mpNextEmtr = NULL;
+        if (list.mpLast != NULL) {
+            list.mpLast->mpNextEmtr = emtr;
+        } else {
+            list.mpFirst = emtr;
+        }
+        list.mpLast = emtr;
         static_assert(sizeof(resID) == 2 && sizeof(res_mgr_id) == 1, "the resource fields of the seed state overlap");
         const u64 resource = (u64(mSceneSeed) << 32) | (u64(res_mgr_id) << 16) | resID;
         emtr->init(this, pRes, mixSeed(resource, mpMadeCounts[res_mgr_id][resID]++));
@@ -97,11 +111,9 @@ EmitterCore* EmitterManager::createSimpleEmitterID(Vec3f const& pos, u16 resID, 
 }
 
 void EmitterManager::calc(u8 group_id) {
-    JSULink< EmitterCore >* pNext = NULL;
-    for (JSULink< EmitterCore >* pLink = pEmtrUseList[group_id].getFirst(); pLink != pEmtrUseList[group_id].getEnd(); pLink = pNext) {
-        pNext = pLink->getNext();
-
-        EmitterCore* emtr = pLink->getObject();
+    EmitterCore* pNext = NULL;
+    for (EmitterCore* emtr = pEmtrUseList[group_id].mpFirst; emtr != NULL; emtr = pNext) {
+        pNext = emtr->mpNextEmtr;
 
         if (emtr->mpRes->calc(pWd, emtr) && !emtr->checkStatus(0x200))
             forceDeleteEmitter(emtr);
@@ -133,8 +145,7 @@ void EmitterManager::draw(ParticleCamera const* drawInfo, u8 group_id) {
     calcYBBCam();
     ParticleDraw::camera(pWd->mPosCamMtx);
 
-    for (JSULink< EmitterCore >* pLink = pEmtrUseList[group_id].getFirst(); pLink != pEmtrUseList[group_id].getEnd(); pLink = pLink->getNext()) {
-        EmitterCore* emtr = pLink->getObject();
+    for (EmitterCore* emtr = pEmtrUseList[group_id].mpFirst; emtr != NULL; emtr = emtr->mpNextEmtr) {
         if (!emtr->checkStatus(0x04)) {
             pWd->mpResMgr = pResMgrAry[emtr->mResMgrID];
             emtr->mpRes->draw(pWd, emtr);
@@ -146,8 +157,20 @@ void EmitterManager::forceDeleteEmitter(EmitterCore* emtr) {
     emtr->deleteAllParticle();
     emtr->releaseChunks();
     emtr->setStatus(0x300);
-    pEmtrUseList[emtr->getGroupID()].remove(&emtr->mLink);
-    mFreeEmtrList.prepend(&emtr->mLink);
+    EmitterList& list = pEmtrUseList[emtr->getGroupID()];
+    if (emtr->mpPrevEmtr != NULL) {
+        emtr->mpPrevEmtr->mpNextEmtr = emtr->mpNextEmtr;
+    } else {
+        list.mpFirst = emtr->mpNextEmtr;
+    }
+    if (emtr->mpNextEmtr != NULL) {
+        emtr->mpNextEmtr->mpPrevEmtr = emtr->mpPrevEmtr;
+    } else {
+        list.mpLast = emtr->mpPrevEmtr;
+    }
+    emtr->mpPrevEmtr = NULL;
+    emtr->mpNextEmtr = mpFreeEmtrs;
+    mpFreeEmtrs = emtr;
 }
 
 void EmitterManager::entryResourceManager(ParticleResources* resMgr, u8 resMgrID) {

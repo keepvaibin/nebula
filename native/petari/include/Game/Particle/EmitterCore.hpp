@@ -7,7 +7,6 @@
 #include "Game/Particle/ParticleMath.hpp"
 #include "Game/Particle/ParticleRandom.hpp"
 #include "Game/Particle/ParticleResource.hpp"
-#include "JSystem/JSupport/JSUList.hpp"
 #include <stdint.h>
 
 class ParticleResources;
@@ -337,7 +336,9 @@ public:
     s16 mLifeTime;
     u16 mVolumeSize;
     u8 mRateStep;
-    JSULink< EmitterCore > mLink;
+    // Its neighbours in its group's list (EmitterManager); the next free one while it is free.
+    EmitterCore* mpPrevEmtr;
+    EmitterCore* mpNextEmtr;
     Mtx mGlobalRot;
     Vec3f mGlobalScl;
     Vec3f mGlobalTrs;
