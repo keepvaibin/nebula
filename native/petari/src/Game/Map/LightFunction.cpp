@@ -10,7 +10,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 

@@ -15,9 +15,6 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <cmath>
-#include <cstdio>
-#include <cstring>
 
 FurMulti* FurBank::check(ModelData* pModelData, u32 layer) {
     for (u32 i = 0; i < mCount; i++) {

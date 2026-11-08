@@ -1,7 +1,6 @@
 #include "Game/Sound/SeqTrack.hpp"
 #include "Game/Sound/SoundBank.hpp"
 #include "Game/Sound/SoundEngine.hpp"
-#include <cstring>
 #include <new>
 #include <nebula_geometry.hpp>
 

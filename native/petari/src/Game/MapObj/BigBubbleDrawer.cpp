@@ -6,7 +6,6 @@
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
-#include <cstring>
 
 
 namespace {

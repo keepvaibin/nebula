@@ -23,7 +23,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/EmitterManager.hpp"
-#include <cstdio>
 #include <cstring>
 
 namespace {

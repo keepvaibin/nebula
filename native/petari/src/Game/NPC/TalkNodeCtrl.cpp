@@ -11,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <cstdio>
 
 void TalkMessageHistory::entry(u32 msgID) {
     if (mCount == mMax) {

@@ -8,7 +8,6 @@
 #include "Game/MapObj/MapPartsRailRotator.hpp"
 #include "Game/MapObj/MapPartsRotator.hpp"
 #include "Game/Util.hpp"
-#include <algorithm>
 
 namespace NrvGeneralMapParts {
     NEW_NERVE(HostTypeWait, GeneralMapParts, Wait);

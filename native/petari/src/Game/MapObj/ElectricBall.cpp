@@ -4,7 +4,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
-#include <algorithm>
 
 namespace {
     const f32 sMoveRadiusDefault = 750.0f;

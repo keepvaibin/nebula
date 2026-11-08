@@ -2,7 +2,6 @@
 #include "Game/Boss/SkeletalFishBoss.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

@@ -5,7 +5,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <algorithm>
 
 namespace NrvMapPartsRailGuideDrawer {
     NEW_NERVE(HostTypeHideAll, MapPartsRailGuideDrawer, HideAll);

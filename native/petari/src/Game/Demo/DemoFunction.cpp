@@ -13,7 +13,6 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace DemoFunction {
     DemoDirector* getDemoDirector() {
@@ -266,25 +265,28 @@ namespace DemoFunction {
         return DemoExecutorFunction::isPauseTimeKeepDemo(DemoFunction::findDemoExecutor(pDemoName));
     }
 
-    bool tryCreateDemoTalkAnimCtrlForActor(LiveActor* pActor, const char* pFileBaseName, const char* a3) {
+    bool tryCreateDemoTalkAnimCtrlForActor(LiveActor* pActor, const char* pFileBaseName, const char* pStartPartName) {
         DemoExecutor* executor = findDemoExecutor(pActor);
-        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForActor(executor, pActor, pFileBaseName, a3);
+        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForActor(executor, pActor, pFileBaseName, pStartPartName);
     }
 
-    bool tryCreateDemoTalkAnimCtrlForActorDirect(LiveActor* pActor, const char* pDemoName, const char* pFileBaseName, const char* a4) {
+    bool tryCreateDemoTalkAnimCtrlForActorDirect(LiveActor* pActor, const char* pDemoName, const char* pFileBaseName, const char* pStartPartName) {
         DemoExecutor* executor = findDemoExecutor(pDemoName);
-        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForActor(executor, pActor, pFileBaseName, a4);
+        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForActor(executor, pActor, pFileBaseName, pStartPartName);
     }
 
-    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor* pActor, const TableIter& rIter, const char* pFileBaseName, const char* a4, s32 a5, s32 a6) {
+    bool tryCreateDemoTalkAnimCtrlForScene(LiveActor* pActor, const TableIter& rIter, const char* pFileBaseName, const char* pStartPartName,
+                                           s32 cameraStartStep, s32 cameraEndStep) {
         DemoExecutor* executor = findDemoExecutor(pActor);
-        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, a4, a5, a6);
+        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, pStartPartName, cameraStartStep,
+                                                                      cameraEndStep);
     }
 
     bool tryCreateDemoTalkAnimCtrlForSceneDirect(LiveActor* pActor, const char* pDemoName, const TableIter& rIter, const char* pFileBaseName,
-                                                 const char* a5, s32 a6, s32 a7) {
+                                                 const char* pStartPartName, s32 cameraStartStep, s32 cameraEndStep) {
         DemoExecutor* executor = findDemoExecutor(pDemoName);
-        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, a5, a6, a7);
+        return DemoExecutorFunction::tryCreateDemoTalkAnimCtrlForScene(executor, pActor, rIter, pFileBaseName, pStartPartName, cameraStartStep,
+                                                                      cameraEndStep);
     }
 
     void registerDemoTalkMessageCtrl(LiveActor* pActor, TalkMessageCtrl* pTalkCtrl) {

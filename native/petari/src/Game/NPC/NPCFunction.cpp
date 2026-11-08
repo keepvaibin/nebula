@@ -5,7 +5,6 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/Table.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 void NPCFunction::createNPCData() {

@@ -3,7 +3,6 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {

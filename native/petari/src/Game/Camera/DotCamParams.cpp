@@ -1,8 +1,6 @@
 #include "Game/Camera/DotCamParams.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Table.hpp"
-#include <cstdio>
-#include <cstring>
 
 template bool TableIter::getValue< s32 >(const char*, s32*) const;
 

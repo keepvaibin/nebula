@@ -5,7 +5,6 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace {
     u32 getLuigiEventState() {

@@ -6,7 +6,6 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <algorithm>
 
 AreaObj::AreaObj(int formType, const char* pName)
     : NameObj(pName), mFormType(formType), mIsValid(true), mIsFollowValid(true), mIsAwake(true), mObjArg0(-1), mObjArg1(-1), mObjArg2(-1), mObjArg3(-1),

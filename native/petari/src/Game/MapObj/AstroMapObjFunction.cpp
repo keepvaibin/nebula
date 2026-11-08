@@ -9,7 +9,6 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 
 namespace {
     inline s32 findModelName(const Table* pInfo, const char* pModelName) {

@@ -21,7 +21,6 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

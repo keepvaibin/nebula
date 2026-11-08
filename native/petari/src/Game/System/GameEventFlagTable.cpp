@@ -7,7 +7,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include <cstdio>
 
 namespace {
     GameEventFlag* sAddedFlags = nullptr;

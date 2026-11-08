@@ -1,6 +1,5 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 bool MR::getObjectName(const char** pName, const TableIter& rIter) {

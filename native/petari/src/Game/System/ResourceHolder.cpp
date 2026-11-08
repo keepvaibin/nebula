@@ -5,8 +5,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Material.hpp"
-#include <cstdio>
-#include <cstring>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include "Game/Util/MotionSignal.hpp"

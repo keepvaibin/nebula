@@ -10,7 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <cstring>
 
 namespace {
     const f32 sTexRateU0 = 0.08f;

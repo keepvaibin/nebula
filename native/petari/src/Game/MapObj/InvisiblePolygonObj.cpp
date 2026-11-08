@@ -5,7 +5,6 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 InvisiblePolygonObj::InvisiblePolygonObj(const char* pName) : LiveActor(pName) {

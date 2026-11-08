@@ -11,7 +11,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include <cstdio>
 
 WarpCube::~WarpCube() {
 }

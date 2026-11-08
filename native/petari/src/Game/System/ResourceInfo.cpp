@@ -1,6 +1,5 @@
 #include "Game/System/ResourceInfo.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 #include <cstring>
 #include <cstddef>
 

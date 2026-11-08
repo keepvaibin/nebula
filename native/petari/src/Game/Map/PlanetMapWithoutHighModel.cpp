@@ -1,7 +1,6 @@
 #include "Game/Map/PlanetMapWithoutHighModel.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 PlanetMapWithoutHighModel::PlanetMapWithoutHighModel(const char* pName) : MapObjActor(pName) {

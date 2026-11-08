@@ -4,7 +4,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include <cstring>
 
 DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry* pMatPacket)
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {

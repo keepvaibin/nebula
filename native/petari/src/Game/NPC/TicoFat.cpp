@@ -37,7 +37,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <cstdio>
 
 namespace NrvTicoFat {
     NEW_NERVE(TicoFatNrvReaction, TicoFat, Reaction);

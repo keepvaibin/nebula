@@ -6,7 +6,6 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/Material.hpp"
-#include <algorithm>
 
 MaterialUpdater::MaterialUpdater(Model* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
     mMaterialCtrl.init(mModel->getModelData()->getMaterialCount() * 4);

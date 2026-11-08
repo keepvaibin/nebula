@@ -5,7 +5,6 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/MapObj/GreenCaterpillarBig.hpp"
 #include "Game/Util.hpp"
-#include <cstdio>
 
 namespace {
     static const s32 sNumWormEatenHill = 5;

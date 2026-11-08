@@ -25,7 +25,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
 

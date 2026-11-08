@@ -16,7 +16,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaHost.hpp"
 
