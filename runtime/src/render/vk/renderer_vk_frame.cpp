@@ -348,7 +348,7 @@ void RendererVk::begin_scene_pass(const SceneClearValues* clear, const char* cal
 }
 
 void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* clear, bool discard_color, const char* caller,
-                                       bool clear_depth_only) {
+                                       unsigned clear_depth) {
     if (scene_pass_open_) {
         if (scene_pass_aux_ == aux) {
             return;
@@ -363,8 +363,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     if (discard_color && aux == 0u && !target_pass_active_) {
         begin.renderPass = draw_layout_.discard_color_passes[scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
-    if (clear_depth_only && clear != nullptr && aux == 0u && !target_pass_active_) {
-        begin.renderPass = draw_layout_.depth_clear_passes[scene_.wide ? 1u : 0u][scene_samples_log2()];
+    if (clear_depth != 0u && clear != nullptr && aux == 0u && !target_pass_active_) {
+        begin.renderPass = draw_layout_.depth_clear_passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
     begin.framebuffer = aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
     scene_pass_aux_ = aux;
@@ -479,10 +479,10 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba,
                        : "clear_scene(depth)";
     const VkPipeline depth_clear = depth_enable ? scene_utility_pipeline(SceneUtility::ClearDepth) : VK_NULL_HANDLE;
     // The whole depth while the pass is closed: the pass opens with the depth cleared instead of loading what the clear
-    // replaces. The stencil is loaded, as the depth-clearing draw keeps it.
-    const bool open_cleared_depth = !scene_pass_open_ && whole && depth_clear != VK_NULL_HANDLE && !target_pass_active_;
+    // replaces, and the stencil as the clear below leaves it (the draw keeps it, vkCmdClearAttachments clears it).
+    const bool open_cleared_depth = !scene_pass_open_ && whole && depth_enable && !target_pass_active_;
     begin_scene_pass_with(0u, open_cleared_depth ? &clear : nullptr, !scene_pass_open_ && every_channel && whole, kind,
-                          open_cleared_depth);
+                          open_cleared_depth ? (depth_clear != VK_NULL_HANDLE ? 1u : 2u) : 0u);
     const VkCommandBuffer commands = commands_;
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
