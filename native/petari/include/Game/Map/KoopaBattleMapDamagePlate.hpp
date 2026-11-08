@@ -7,7 +7,6 @@ class KoopaBattleMapDamagePlate : public LiveActor {
 public:
     KoopaBattleMapDamagePlate(const char*);
 
-    virtual ~KoopaBattleMapDamagePlate();
     virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);

@@ -9,7 +9,6 @@ class FollowCollisionArea : public NameObj {
 public:
     FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset);
 
-    virtual ~FollowCollisionArea();
     virtual void movement();
 
     bool hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal);

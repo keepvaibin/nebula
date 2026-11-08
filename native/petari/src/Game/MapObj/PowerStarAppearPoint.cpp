@@ -7,9 +7,6 @@
 PowerStarAppearPoint::PowerStarAppearPoint(const char* pName) : LiveActor(pName), mCameraInfo() {
 }
 
-PowerStarAppearPoint::~PowerStarAppearPoint() {
-}
-
 void PowerStarAppearPoint::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::joinToGroupArray(this, rIter, "パワースター出現ポイントグループ", 16);

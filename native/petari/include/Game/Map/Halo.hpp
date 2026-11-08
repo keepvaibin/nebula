@@ -11,7 +11,6 @@ class Halo : public MapObjActor {
 public:
     Halo(const char*);
 
-    virtual ~Halo();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void connectToScene(const MapObjActorInitInfo&);
@@ -29,7 +28,6 @@ class PowerStarHalo : public Halo {
 public:
     PowerStarHalo(const char*);
 
-    virtual ~PowerStarHalo();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual f32 getDistance() const;

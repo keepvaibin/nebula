@@ -141,6 +141,3 @@ void KoopaBattleVs3Lv1::exeGuard() {
 void KoopaBattleVs3Lv1::exeRecover() {
     updateRecover(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvAttackShockWave));
 }
-
-KoopaBattleVs3Lv1::~KoopaBattleVs3Lv1() {
-}

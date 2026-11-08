@@ -7,9 +7,6 @@ namespace NrvMapPartsRailPosture {
     NEW_NERVE(HostTypeMove, MapPartsRailPosture, Move);
 };  // namespace NrvMapPartsRailPosture
 
-MapPartsRailPosture::~MapPartsRailPosture() {
-}
-
 MapPartsRailPosture::MapPartsRailPosture(LiveActor* pHost) : MapPartsFunction(pHost, "姿勢制御"), mMovePosture(POSTURE_NONE) {
     mPostureMtx.identity();
 }

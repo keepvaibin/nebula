@@ -11,7 +11,6 @@ class RainCloud : public LiveActor {
 public:
     RainCloud(const char* pName);
 
-    virtual ~RainCloud();
     virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();

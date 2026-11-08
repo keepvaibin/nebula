@@ -129,9 +129,6 @@ void TypicalDoorOpen::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
 DarknessRoomDoor::DarknessRoomDoor(const char* pName) : TypicalDoor(pName), mIsNormalDraw() {
 }
 
-TypicalDoor::~TypicalDoor() {
-}
-
 void DarknessRoomDoor::init(const TableIter& rIter) {
     s32 normalDraw = -1;
     MR::getPlacementArg0NoInit(rIter, &normalDraw);

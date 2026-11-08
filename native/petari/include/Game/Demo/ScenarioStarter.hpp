@@ -11,7 +11,6 @@ class ScenarioStarter : public LiveActor {
 public:
     ScenarioStarter(const char*);
 
-    virtual ~ScenarioStarter();
     virtual void init(const TableIter& rIter);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

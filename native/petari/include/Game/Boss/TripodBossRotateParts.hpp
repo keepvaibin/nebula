@@ -8,7 +8,6 @@ class TripodBossRotateParts : public TripodBossFixParts {
 public:
     TripodBossRotateParts(const char* pName);
 
-    virtual ~TripodBossRotateParts();
     virtual void init(const TableIter&);
     virtual void makeActorDead();
     virtual void calcTripodLocalMatrix(Pos3f*);

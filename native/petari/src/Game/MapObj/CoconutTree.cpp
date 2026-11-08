@@ -5,9 +5,6 @@
 CoconutTree::CoconutTree(const char* pName) : LiveActor(pName) {
 }
 
-CoconutTree::~CoconutTree() {
-}
-
 void CoconutTree::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("CoconutTree", nullptr, false);

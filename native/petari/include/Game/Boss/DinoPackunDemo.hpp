@@ -6,7 +6,6 @@ class DinoPackunDemo : public DinoPackunAction {
 public:
     DinoPackunDemo(DinoPackun*);
 
-    virtual ~DinoPackunDemo();
     virtual void init();
     virtual void control();
 

@@ -21,7 +21,6 @@ class FloaterFloatingForceTypeSpring : public FloaterFloatingForce {
 public:
     FloaterFloatingForceTypeSpring(LiveActor*, const char*);
 
-    virtual ~FloaterFloatingForceTypeSpring();
     virtual void init(const TableIter&);
     virtual void start();
     virtual void updateHostVelocity(Vec3f*) const;

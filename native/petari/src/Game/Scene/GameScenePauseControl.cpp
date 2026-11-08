@@ -57,6 +57,3 @@ bool GameScenePauseControl::tryStartPauseMenu() {
 
     return false;
 }
-
-GameScenePauseControl::~GameScenePauseControl() {
-}

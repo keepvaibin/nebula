@@ -10,7 +10,6 @@ class SnowFloorTile : public LiveActor {
 public:
     SnowFloorTile(const char*);
 
-    virtual ~SnowFloorTile();
     virtual void init(const TableIter&) override;
     virtual void draw() const override;
     virtual void control() override;

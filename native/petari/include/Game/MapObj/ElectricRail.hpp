@@ -9,7 +9,6 @@ class ElectricRailPoint : public LiveActor {
 public:
     ElectricRailPoint(const char* name = "電撃レール点");
 
-    virtual ~ElectricRailPoint();
     virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 

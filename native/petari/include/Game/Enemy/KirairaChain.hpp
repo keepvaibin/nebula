@@ -10,7 +10,6 @@ class SwingRopePoint;
 class KirairaChain : public LiveActor {
 public:
     KirairaChain(const LiveActor*);
-    virtual ~KirairaChain();
 
     virtual void init(const TableIter& rIter);
     virtual void draw() const;

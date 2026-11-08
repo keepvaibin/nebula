@@ -15,9 +15,6 @@ namespace {
     const f32 cAngleXChaseRate = 0.05f;
 }  // namespace
 
-CameraWonderPlanet::~CameraWonderPlanet() {
-}
-
 CameraWonderPlanet::CameraWonderPlanet(const char* pName)
     : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mAngleX(MR::pi() / 4.0f), mIsRotating(), mRotateFrame() {
 }

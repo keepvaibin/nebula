@@ -8,7 +8,6 @@ class SoundEmitterSphere : public AreaObj {
 public:
     SoundEmitterSphere(int formType, const char* pName);
 
-    virtual ~SoundEmitterSphere();
     virtual void init(const TableIter& rIter);
     virtual void movement();
 

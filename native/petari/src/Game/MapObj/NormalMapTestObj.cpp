@@ -6,8 +6,6 @@
 
 NormalMapTestObj::NormalMapTestObj(const char* pName) : NormalMapBase(pName) {
 }
-NormalMapTestObj::~NormalMapTestObj() {
-}
 
 void NormalMapTestObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);

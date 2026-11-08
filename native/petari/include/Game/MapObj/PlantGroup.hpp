@@ -8,7 +8,6 @@ class PlantGroup : public LiveActor {
 public:
     PlantGroup(const char*);
 
-    virtual ~PlantGroup();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();
@@ -39,7 +38,6 @@ public:
     PlantMember(const char* pName, const char* pModelName, bool useLight, MtxPtr pMtx) : CutBushModelObj(pName, pModelName, useLight, pMtx) {
     }
 
-    virtual ~PlantMember();
     virtual void init(const TableIter&);
 
     bool tryEmitHint();

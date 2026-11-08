@@ -50,6 +50,3 @@ void AstroMapBoard::initAfterPlacement() {
 
 void AstroMapBoard::exeWait() {
 }
-
-AstroMapBoard::~AstroMapBoard() {
-}

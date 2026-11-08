@@ -919,9 +919,3 @@ bool DharmaSamboParts::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
 
     return false;
 }
-
-DharmaSambo::~DharmaSambo() {
-}
-
-DharmaSamboParts::~DharmaSamboParts() {
-}

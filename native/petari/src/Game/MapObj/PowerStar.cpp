@@ -820,6 +820,3 @@ void PowerStar::exeStageClearDemo() {
         MR::startAnimCameraTargetSelf(mPowerStarModelObj, mCameraInfo, ::cStageClearAnimNameKoopaVs3, 1, 1.0f);
     }
 }
-
-PowerStar::~PowerStar() {
-}

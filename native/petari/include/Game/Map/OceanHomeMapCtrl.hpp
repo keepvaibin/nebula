@@ -9,7 +9,6 @@ class OceanHomeMapCtrl : public NameObj {
 public:
     OceanHomeMapCtrl();
 
-    virtual ~OceanHomeMapCtrl();
     virtual void init(const TableIter&);
     virtual void movement();
 

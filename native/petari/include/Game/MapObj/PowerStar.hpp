@@ -20,7 +20,6 @@ public:
 
     PowerStar(const char* pName);
 
-    virtual ~PowerStar();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();

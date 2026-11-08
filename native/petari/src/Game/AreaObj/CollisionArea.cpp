@@ -434,12 +434,6 @@ void AreaPolygon::validate() {
     MR::validateCollisionParts(mParts);
 }
 
-AreaPolygon::~AreaPolygon() {
-}
-
-CollisionArea::~CollisionArea() {
-}
-
 AreaPolygon::AreaPolygon() : DynamicCollisionObj("エリアポリゴン") {
     mForm = nullptr;
     mFollowMtx = nullptr;

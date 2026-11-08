@@ -29,9 +29,6 @@ bool SnowplowSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-SnowplowSwitch::~SnowplowSwitch() {
-}
-
 void SnowplowSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);

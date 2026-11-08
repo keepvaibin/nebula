@@ -10,7 +10,6 @@ class OceanRingPipeOutside : public LiveActor {
 public:
     OceanRingPipeOutside(const OceanRingPipe*);
 
-    virtual ~OceanRingPipeOutside();
     virtual void init(const TableIter&);
     virtual void movement();
     virtual void draw() const;

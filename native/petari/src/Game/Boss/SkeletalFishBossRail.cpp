@@ -62,6 +62,3 @@ void SkeletalFishBossRail::linkFillUpNamePosID() {
         mNamePosIDs[i] = SkeletalFishBossFunc::getNearestGuardPosID(railPos);
     }
 }
-
-SkeletalFishBossRail::~SkeletalFishBossRail() {
-}

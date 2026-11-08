@@ -45,9 +45,6 @@ void CameraTargetMtx::invalidateLastMove() {
     mInvalidLastMove = true;
 }
 
-CameraTargetMtx::~CameraTargetMtx() {
-}
-
 void CameraTargetMtx::movement() {
     mMatrix.getYDir(mUp);
     mMatrix.getZDir(mFront);

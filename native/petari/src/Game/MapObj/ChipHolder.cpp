@@ -106,9 +106,6 @@ void MR::deactivateChipLayout() {
     }
 }
 
-ChipHolder::~ChipHolder() {
-}
-
 void ChipHolder::init(const TableIter& rIter) {
     switch (mChipType) {
     case ChipBase::Type_Blue:

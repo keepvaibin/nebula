@@ -49,6 +49,3 @@ void ItemAppearStone::exeWait() {
         kill();
     }
 }
-
-ItemAppearStone::~ItemAppearStone() {
-}

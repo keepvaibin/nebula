@@ -10,7 +10,6 @@ class SkeletalFishGuardHolder : public NameObj {
 public:
     SkeletalFishGuardHolder(SkeletalFishBoss*, s32, const char*);
 
-    virtual ~SkeletalFishGuardHolder();
     virtual void movement();
 
     void forceAppearAll();

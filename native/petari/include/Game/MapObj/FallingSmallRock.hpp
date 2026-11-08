@@ -6,7 +6,6 @@ class FallingSmallRock : public LiveActor {
 public:
     FallingSmallRock(const char*);
 
-    virtual ~FallingSmallRock();
     virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();

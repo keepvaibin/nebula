@@ -8,7 +8,6 @@ class BgmProhibitArea : public AreaObj {
 public:
     BgmProhibitArea(int, const char*);
 
-    virtual ~BgmProhibitArea();
     virtual void init(const TableIter&);
     virtual void movement();
 

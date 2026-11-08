@@ -248,6 +248,3 @@ void KoopaStateChaseRoll::exeEndLand() {
         kill();
     }
 }
-
-KoopaStateChaseRoll::~KoopaStateChaseRoll() {
-}

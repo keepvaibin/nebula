@@ -7,7 +7,6 @@ public:
     DashRing(const char* pName) : LiveActor(pName) {
     }
 
-    virtual ~DashRing();
     virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();

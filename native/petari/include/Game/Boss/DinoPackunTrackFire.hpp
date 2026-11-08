@@ -8,7 +8,6 @@ class DinoPackunTrackFire : public LiveActor {
 public:
     DinoPackunTrackFire(const char*);
 
-    virtual ~DinoPackunTrackFire();
     virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mMtx;
@@ -28,5 +27,4 @@ class DinoPackunTrackFireHolder : public DeriveActorGroup< DinoPackunTrackFire >
 public:
     DinoPackunTrackFireHolder(s32);
 
-    virtual ~DinoPackunTrackFireHolder();
 };

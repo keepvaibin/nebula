@@ -27,9 +27,6 @@ bool SpiderMapBlock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSenso
     return true;
 }
 
-SpiderMapBlock::~SpiderMapBlock() {
-}
-
 void SpiderMapBlock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     mPosZ = mPosition.z;

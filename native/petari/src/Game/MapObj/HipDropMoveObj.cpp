@@ -16,9 +16,6 @@ namespace NrvHipDropMoveObj {
     NEW_NERVE(HostTypeDone, HipDropMoveObj, Done);
 };  // namespace NrvHipDropMoveObj
 
-HipDropDemoMoveObj::~HipDropDemoMoveObj() {
-}
-
 HipDropMoveObj::HipDropMoveObj(const char* pName) : LiveActor(pName), mModelName() {
 }
 
@@ -135,9 +132,6 @@ void HipDropMoveObj::exeDone() {
 
 HipDropDemoMoveObj::HipDropDemoMoveObj(const char* pName) : HipDropMoveObj(pName) {
     mMtx.identity();
-}
-
-HipDropMoveObj::~HipDropMoveObj() {
 }
 
 void HipDropDemoMoveObj::moveStart() {

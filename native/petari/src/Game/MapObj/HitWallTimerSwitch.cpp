@@ -177,6 +177,3 @@ void HitWallTimerSwitch::exeSwitchUp() {
         return;
     }
 }
-
-HitWallTimerSwitch::~HitWallTimerSwitch() {
-}

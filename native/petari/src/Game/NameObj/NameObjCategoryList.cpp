@@ -13,9 +13,6 @@ NameObjCategoryList::NameObjCategoryList(u32 count, const CategoryListInitialTab
     initTable(count, pTable);
 }
 
-NameObjCategoryList::~NameObjCategoryList() {
-}
-
 void NameObjCategoryList::execute(int idx) {
     CategoryInfo* pCategoryInfo = &mCategoryInfo[idx];
 

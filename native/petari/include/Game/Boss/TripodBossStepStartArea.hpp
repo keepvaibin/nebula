@@ -6,7 +6,6 @@ class TripodBossStepStartArea : public AreaObj {
 public:
     TripodBossStepStartArea(int, const char*);
 
-    virtual ~TripodBossStepStartArea();
     virtual void init(const TableIter&);
     virtual void movement();
     virtual const char* getManagerName() const;

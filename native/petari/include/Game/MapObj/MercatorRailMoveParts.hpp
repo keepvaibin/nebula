@@ -11,7 +11,6 @@ class MercatorRailMoveParts : public LiveActor {
 public:
     MercatorRailMoveParts(const char*);
 
-    virtual ~MercatorRailMoveParts();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();

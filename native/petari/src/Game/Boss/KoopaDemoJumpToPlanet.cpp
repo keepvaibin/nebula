@@ -105,6 +105,3 @@ void KoopaDemoJumpToPlanet::exeWaitPlayer() {
         kill();
     }
 }
-
-KoopaDemoJumpToPlanet::~KoopaDemoJumpToPlanet() {
-}

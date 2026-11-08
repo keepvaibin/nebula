@@ -515,8 +515,6 @@ void DinoPackun::endDamageCamera() {
     }
 }
 
-DinoPackun::~DinoPackun() {}
-
 namespace MR {
     NameObj* createDinoPackunVs1(const char* pName) {
         DinoPackun* p = new DinoPackun(pName);

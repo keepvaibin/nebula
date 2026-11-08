@@ -12,7 +12,6 @@ class OtaRock : public LiveActor {
 public:
     OtaRock(const char* pName);
 
-    virtual ~OtaRock();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();

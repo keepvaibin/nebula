@@ -326,12 +326,3 @@ void MarblePlanetElectronShadow::calcAndSetBaseMtx() {
     MR::makeMtxUpNoSupportPos(&baseMtx, up, *mGroundPos);
     MR::setBaseTRMtx(this, baseMtx);
 }
-
-MarblePlanet::~MarblePlanet() {
-}
-
-MarblePlanetElectron::~MarblePlanetElectron() {
-}
-
-MarblePlanetElectronShadow::~MarblePlanetElectronShadow() {
-}

@@ -159,6 +159,3 @@ bool KoopaBattleBase::updateRecover(const Nerve* pNerve) {
 
     return false;
 }
-
-KoopaBattleBase::~KoopaBattleBase() {
-}

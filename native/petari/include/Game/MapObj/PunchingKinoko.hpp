@@ -9,7 +9,6 @@ class PunchingKinoko : public LiveActor {
 public:
     PunchingKinoko(const char* pName);
 
-    virtual ~PunchingKinoko();
     virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void kill();

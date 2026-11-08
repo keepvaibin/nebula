@@ -1,8 +1,6 @@
 #include "Game/Enemy/MogucchiRefuseTerritory.hpp"
 #include "Game/Util.hpp"
 
-MogucchiRefuseTerritory::~MogucchiRefuseTerritory() {
-}
 MogucchiRefuseTerritory::MogucchiRefuseTerritory(const char* pName) : LiveActor(pName) {
 }
 

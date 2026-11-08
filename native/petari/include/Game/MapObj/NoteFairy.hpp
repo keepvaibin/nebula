@@ -9,7 +9,6 @@ class NoteFairy : public LiveActor {
 public:
     NoteFairy(const char*);
 
-    virtual ~NoteFairy();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

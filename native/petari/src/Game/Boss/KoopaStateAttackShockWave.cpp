@@ -170,6 +170,3 @@ void KoopaStateAttackShockWave::exeLand() {
         kill();
     }
 }
-
-KoopaStateAttackShockWave::~KoopaStateAttackShockWave() {
-}

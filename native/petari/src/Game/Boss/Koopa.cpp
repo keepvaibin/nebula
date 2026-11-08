@@ -47,9 +47,6 @@ bool Koopa::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     return mSequencer->receiveOtherMsg(msg, pSender, pReceiver);
 }
 
-Koopa::~Koopa() {
-}
-
 void Koopa::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("Koopa", nullptr, false);

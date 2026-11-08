@@ -8,9 +8,6 @@ DotCamReaderInBin::DotCamReaderInBin(const void* pData) : mVersion(), mMapInfo()
     init(pData);
 }
 
-DotCamReaderInBin::~DotCamReaderInBin() {
-}
-
 bool DotCamReaderInBin::hasMoreChunk() const {
     return mMapIter.isValid() && mMapIter != mMapInfo.end();
 }

@@ -7,8 +7,6 @@ class BigBubbleCameraArea : public CubeCameraArea {
 public:
     BigBubbleCameraArea(int, const char*);
 
-    virtual ~BigBubbleCameraArea();
-
     virtual bool isInVolume(const Vec3f&) const;
 
     virtual const char* getManagerName() const {
@@ -19,8 +17,6 @@ public:
 class BigBubbleSwitchArea : public SwitchArea {
 public:
     BigBubbleSwitchArea(int, const char*);
-
-    virtual ~BigBubbleSwitchArea();
 
     virtual bool isInVolume(const Vec3f&) const;
 

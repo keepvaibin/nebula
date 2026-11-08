@@ -8,7 +8,6 @@ class KoopaStateAttackFireShort : public ActorStateBase< Koopa > {
 public:
     KoopaStateAttackFireShort(Koopa* pKoopa);
 
-    virtual ~KoopaStateAttackFireShort();
     virtual void init();
     virtual void appear();
 

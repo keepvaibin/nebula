@@ -74,9 +74,6 @@ namespace NrvTripodBossLeg {
     NEW_NERVE(TripodBossLegNrvBreak, TripodBossLeg, Break);
 };  // namespace NrvTripodBossLeg
 
-TripodBossLeg::~TripodBossLeg() {
-}
-
 TripodBossLeg::TripodBossLeg(const char* pName)
     : LiveActor(pName), mBoss(), mMoveArea(), mPrevStepPoint(), mStepPoint(), mJoint(new IKJoint()), mAnkleStartQuat(0, 0, 0, 1), mAnkleLandingQuat(0, 0, 0, 1), mRootLocalPos(0, 0, 0),
       mForceEndPoint(0, 0, 0), mEndVelocity(0, 0, 0), mEndTarget(0, 0, 0), mPoseMode(1), mLandingHeight(), mIsAttackHit(), mIsPressPlayer(), mDemoEffectTiming() {

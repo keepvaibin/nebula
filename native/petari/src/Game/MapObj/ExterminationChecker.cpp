@@ -149,6 +149,3 @@ namespace MR {
         return checker;
     }
 };  // namespace MR
-
-ExterminationChecker::~ExterminationChecker() {
-}

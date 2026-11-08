@@ -11,7 +11,6 @@ class FirePressureRadiate : public LiveActor {
 public:
     FirePressureRadiate(const char*);
 
-    virtual ~FirePressureRadiate();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();

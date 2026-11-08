@@ -24,7 +24,6 @@ public:
 
     DinoPackunStateDamage(DinoPackun* pHost);
 
-    virtual ~DinoPackunStateDamage();
     virtual void appear();
 
     bool isDamageMessage(u32 msg) const;

@@ -653,9 +653,6 @@ void CollisionZone::eraseParts(CollisionParts* pParts) {
     }
 }
 
-CollisionCategorizedKeeper::~CollisionCategorizedKeeper() {
-}
-
 Vec3f CollisionParts::getTrans() {
     Vec3f translation;
     mBaseMatrix.getTrans(translation);

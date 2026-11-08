@@ -111,9 +111,6 @@ bool ChipGroup::isComplete() const {
 BlueChipGroup::BlueChipGroup(const char* pName) : ChipGroup(pName, ChipBase::Type_Blue) {
 }
 
-ChipGroup::~ChipGroup() {
-}
-
 YellowChipGroup::YellowChipGroup(const char* pName) : ChipGroup(pName, ChipBase::Type_Yellow) {
 }
 
@@ -223,10 +220,4 @@ void ChipGroup::receiveAppearRequest() {
     } else if (mChipType == 1) {
         MR::startSystemSE("SE_OJ_YELLOWCHIP_APPEAR");
     }
-}
-
-BlueChipGroup::~BlueChipGroup() {
-}
-
-YellowChipGroup::~YellowChipGroup() {
 }

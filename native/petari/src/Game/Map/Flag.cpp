@@ -50,9 +50,6 @@ namespace {
     const NebulaColor8 sStickColors[] = {{0x00, 0xC8, 0x00, 0x00}, {0x00, 0xDC, 0x00, 0x00}, {0x00, 0xB4, 0x00, 0x00}, {0x00, 0xC8, 0x00, 0x00}};
 };  // namespace
 
-Flag::~Flag() {
-}
-
 Flag::Flag(const char* pName)
     : LiveActor(pName), mObjName(), mDisableLighting(), mNumPointsV(10), mNumPointsU(10), mPointIntervalU(::sDefaultPointIntervalU),
       mPointIntervalV(::sDefaultPointIntervalV), mFixPoints(), mUp(0.0f, 1.0f, 0.0f), mClipCenter(0.0f, 0.0f, 0.0f), mBasePos(), mBaseMtx(),

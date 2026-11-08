@@ -12,7 +12,6 @@ class TripodBossLeg : public LiveActor {
 public:
     TripodBossLeg(const char* pName);
 
-    virtual ~TripodBossLeg();
     virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void makeActorDead();

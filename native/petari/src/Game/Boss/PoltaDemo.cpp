@@ -171,6 +171,3 @@ void PoltaDemo::exeDownDemo() {
         kill();
     }
 }
-
-PoltaDemo::~PoltaDemo() {
-}

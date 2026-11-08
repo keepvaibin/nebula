@@ -6,7 +6,6 @@ class DinoPackunEggShell : public LiveActor {
 public:
     DinoPackunEggShell(const char*, HitSensor*, MtxPtr);
 
-    virtual ~DinoPackunEggShell();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();

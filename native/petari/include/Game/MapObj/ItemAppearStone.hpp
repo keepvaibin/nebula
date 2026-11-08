@@ -6,7 +6,6 @@ class ItemAppearStone : public LiveActor {
 public:
     ItemAppearStone(const char*);
 
-    virtual ~ItemAppearStone();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void calcAndSetBaseMtx();

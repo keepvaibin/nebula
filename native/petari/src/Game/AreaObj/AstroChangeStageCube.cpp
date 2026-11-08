@@ -68,9 +68,6 @@ bool AstroChangeStageCube::isInVolume(const Vec3f& rPos) const {
     return AreaObj::isInVolume(rPos);
 }
 
-AstroChangeStageCube::~AstroChangeStageCube() {
-}
-
 void AstroChangeStageCube::movement() {
     if (isValid()) {
         Vec3f* playerPos = MR::getPlayerPos();

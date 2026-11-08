@@ -6,5 +6,4 @@ class YellowChip : public ChipBase {
 public:
     YellowChip(const char*);
 
-    virtual ~YellowChip();
 };

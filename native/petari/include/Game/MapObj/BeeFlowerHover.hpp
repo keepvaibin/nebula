@@ -11,7 +11,6 @@ class BeeFlowerHover : public LiveActor {
 public:
     BeeFlowerHover(const char*);
 
-    virtual ~BeeFlowerHover();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();

@@ -16,7 +16,6 @@ public:
         bool mIsGotten;
     };
 
-    virtual ~ChipGroup();
     virtual void init(const TableIter&);
     virtual void movement();
 
@@ -49,12 +48,10 @@ class BlueChipGroup : public ChipGroup {
 public:
     BlueChipGroup(const char*);
 
-    virtual ~BlueChipGroup();
 };
 
 class YellowChipGroup : public ChipGroup {
 public:
     YellowChipGroup(const char*);
 
-    virtual ~YellowChipGroup();
 };

@@ -896,6 +896,3 @@ bool Poihana::isBackAttack(HitSensor* pMySensor) const {
     offset.sub(pMySensor->mPosition, mPosition);
     return offset.dot(frontVec) > 0.0f;
 }
-
-Poihana::~Poihana() {
-}

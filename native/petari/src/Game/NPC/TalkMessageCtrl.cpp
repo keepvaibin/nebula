@@ -122,9 +122,6 @@ void TalkMessageCtrl::startCamera(s32 frames) {
     }
 }
 
-TalkMessageCtrl::~TalkMessageCtrl() {
-}
-
 void TalkMessageCtrl::createMessage(const TableIter& rIter, const char* pName) {
     mNodeCtrl = new TalkNodeCtrl();
     mNodeCtrl->createFlowNode(this, rIter, pName, &mCameraInfo);

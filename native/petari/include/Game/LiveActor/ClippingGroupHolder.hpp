@@ -10,8 +10,6 @@ class ClippingInfoGroup : public NameObj {
 public:
     ClippingInfoGroup(const char* pGroupName, s32 capacity);
 
-    virtual ~ClippingInfoGroup();
-
     void setGroupNo(const TableIter&);
     void registerInfo(ClippingActorInfo*);
     // Every live member with clipping on is out of range.
@@ -31,7 +29,6 @@ class ClippingGroupHolder : public NameObj {
 public:
     ClippingGroupHolder();
 
-    virtual ~ClippingGroupHolder();
     virtual void movement();
 
     void createAndAdd(ClippingActorInfo*, const TableIter&, s32 capacity);

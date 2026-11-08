@@ -11,7 +11,6 @@ class DinoPackunVs1 : public DinoPackunSequencer {
 public:
     DinoPackunVs1(DinoPackun*);
 
-    virtual ~DinoPackunVs1();
     virtual void start();
     virtual void init();
     virtual bool isUseEggShell() const {

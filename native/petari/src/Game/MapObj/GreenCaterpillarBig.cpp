@@ -238,9 +238,3 @@ void GreenCaterpillarBig::leaveApple() {
     MR::startSound(this, "SE_OJ_GRN_CATERP_DAMAGE");
     MR::startSound(this, "SE_OJ_GRN_CATERP_OUT");
 }
-
-GreenCaterpillarBigBody::~GreenCaterpillarBigBody() {
-}
-
-GreenCaterpillarBig::~GreenCaterpillarBig() {
-}

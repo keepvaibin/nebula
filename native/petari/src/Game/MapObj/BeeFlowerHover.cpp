@@ -190,6 +190,3 @@ bool BeeFlowerHover::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 
     return false;
 }
-
-BeeFlowerHover::~BeeFlowerHover() {
-}

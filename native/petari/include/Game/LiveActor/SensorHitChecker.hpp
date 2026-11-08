@@ -9,8 +9,6 @@ class SensorHitChecker : public NameObj {
 public:
     SensorHitChecker(const char*);
 
-    virtual ~SensorHitChecker();
-
     virtual void init(const TableIter&) override;
     virtual void movement() override;
 

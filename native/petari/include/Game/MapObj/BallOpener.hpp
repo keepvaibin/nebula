@@ -8,7 +8,6 @@ class BallOpener : public LiveActor {
 public:
     BallOpener(const char* pName);
 
-    virtual ~BallOpener();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();

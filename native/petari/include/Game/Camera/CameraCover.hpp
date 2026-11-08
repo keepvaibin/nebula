@@ -8,7 +8,6 @@ class CameraCover : public NameObj {
 public:
     CameraCover(const char*);
 
-    virtual ~CameraCover();
     virtual void movement();
     virtual void draw() const;
 

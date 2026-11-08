@@ -18,9 +18,6 @@ namespace NrvPhantomTorch {
     NEW_NERVE(HostTypeExtinguish, PhantomTorch, Extinguish);
 };  // namespace NrvPhantomTorch
 
-PhantomTorch::~PhantomTorch() {
-}
-
 PhantomTorch::PhantomTorch(const char* pName) : LiveActor(pName) {
     mParticle = nullptr;
     mItem = -1;

@@ -208,6 +208,3 @@ void KoopaStateAttackSpin::exeEven() {
         }
     }
 }
-
-KoopaStateAttackSpin::~KoopaStateAttackSpin() {
-}

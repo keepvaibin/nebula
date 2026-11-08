@@ -949,6 +949,3 @@ void TicoFat::exeAfter() {
         kill();
     }
 }
-
-TicoFat::~TicoFat() {
-}

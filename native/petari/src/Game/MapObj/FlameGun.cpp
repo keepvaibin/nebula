@@ -184,6 +184,3 @@ void FlameGun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         MR::sendMsgPush(pReceiver, pSender);
     }
 }
-
-FlameGun::~FlameGun() {
-}

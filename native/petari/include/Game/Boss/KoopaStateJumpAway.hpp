@@ -8,7 +8,6 @@ class KoopaStateJumpAway : public ActorStateBase< Koopa > {
 public:
     KoopaStateJumpAway(Koopa* pKoopa);
 
-    virtual ~KoopaStateJumpAway();
     virtual void init();
     virtual void appear();
 

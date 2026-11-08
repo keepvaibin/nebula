@@ -8,7 +8,6 @@ class PoltaDemo : public PoltaActionBase {
 public:
     PoltaDemo(Polta* pPolta);
 
-    virtual ~PoltaDemo();
     virtual void init();
 
     void startDemoSetting();

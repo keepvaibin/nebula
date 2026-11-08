@@ -7,7 +7,6 @@ class BallRail : public LiveActor {
 public:
     BallRail(const char*);
 
-    virtual ~BallRail();
     virtual void init(const TableIter&);
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);

@@ -24,6 +24,3 @@ f32 EffectObjGravityDust::getClippingRadius() const {
 Vec3f EffectObjGravityDust::getClippingCenterOffset() const {
     return Vec3f(0.0f, 500.0f * mScale.y, 0.0f);
 }
-
-EffectObjGravityDust::~EffectObjGravityDust() {
-}

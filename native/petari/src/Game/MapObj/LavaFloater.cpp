@@ -31,9 +31,6 @@ LavaFloater::LavaFloater(const char* pName)
     : LiveActor(pName), mFloatingForce(), mMtxSetter(), mLodCtrlPlanet(), mObjectName(), mGroundPos(gZeroVec), mGroundOffset() {
 }
 
-LavaFloater::~LavaFloater() {
-}
-
 void LavaFloater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getObjectName(&mObjectName, rIter);
@@ -161,4 +158,3 @@ void LavaFloater::exeSink() {
         setNerve(GET_NERVE(LavaFloater, HostTypeFloat));
     }
 }
-

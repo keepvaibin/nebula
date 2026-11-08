@@ -75,7 +75,6 @@ enum {
 
 class EmitterCore {
 public:
-    ~EmitterCore();
     EmitterCore();
     void init(EmitterManager*, ParticleResource*, u32 seed);
     // Every slot free again (no live particles): the chunks back to the manager.
@@ -377,4 +376,3 @@ public:
 enum {
     ParticleStatus_Invisible = 0x08,
 };
-

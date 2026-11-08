@@ -220,9 +220,6 @@ StageSwitchCtrl* MR::createStageSwitchCtrl(NameObj*, const TableIter& rIter) {
     return new StageSwitchCtrl(rIter);
 }
 
-StageSwitchContainer::~StageSwitchContainer() {
-}
-
 StageSwitchContainer::StageSwitchContainer() : NameObj("ステージスイッチ"), mSwitches(), mGlobalSwitches() {
     mGlobalSwitches = new ZoneSwitch();
 }
@@ -233,4 +230,3 @@ StageSwitchCtrl::StageSwitchCtrl(const TableIter& rIter) : mSwitchA(), mSwitchB(
     mSwitchAppear = StageSwitchFunction::createSwitchIdInfo("SW_APPEAR", rIter, false);
     mSwitchDead = StageSwitchFunction::createSwitchIdInfo("SW_DEAD", rIter, false);
 }
-

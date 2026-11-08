@@ -275,6 +275,3 @@ void SimpleBreakableObj::exeDemo() {
         startBreak();
     }
 }
-
-SimpleBreakableObj::~SimpleBreakableObj() {
-}

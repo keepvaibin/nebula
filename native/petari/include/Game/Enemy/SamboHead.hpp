@@ -10,7 +10,6 @@ class SamboHead : public LiveActor {
 public:
     SamboHead(const char*);
 
-    virtual ~SamboHead();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();

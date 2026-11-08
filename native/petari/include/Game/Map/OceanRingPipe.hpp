@@ -10,7 +10,6 @@ class OceanRingPipe : public LiveActor {
 public:
     OceanRingPipe(const OceanRing*, f32, f32);
 
-    virtual ~OceanRingPipe();
     virtual void init(const TableIter&);
     virtual void movement();
 

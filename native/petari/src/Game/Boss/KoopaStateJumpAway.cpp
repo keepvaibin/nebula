@@ -91,6 +91,3 @@ void KoopaStateJumpAway::exeLand() {
         kill();
     }
 }
-
-KoopaStateJumpAway::~KoopaStateJumpAway() {
-}

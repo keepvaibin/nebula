@@ -64,6 +64,3 @@ void MercatorRotateParts::init(const TableIter& rIter) {
 
     MR::initMapPartsClipping(this, rIter, nullptr, false);
 }
-
-MercatorRotateParts::~MercatorRotateParts() {
-}

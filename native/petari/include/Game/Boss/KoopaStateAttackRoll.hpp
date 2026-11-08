@@ -10,7 +10,6 @@ class KoopaStateAttackRoll : public ActorStateBase< Koopa > {
 public:
     KoopaStateAttackRoll(Koopa* pKoopa);
 
-    virtual ~KoopaStateAttackRoll();
     virtual void init();
     virtual void appear();
     virtual void kill();

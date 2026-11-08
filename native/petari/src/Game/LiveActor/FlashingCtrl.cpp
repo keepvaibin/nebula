@@ -71,6 +71,3 @@ void FlashingCtrl::updateFlashing() {
         }
     }
 }
-
-FlashingCtrl::~FlashingCtrl() {
-}

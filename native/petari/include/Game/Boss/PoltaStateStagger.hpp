@@ -9,7 +9,6 @@ class PoltaStateStagger : public ActorStateBase< Polta > {
 public:
     PoltaStateStagger(Polta*);
 
-    virtual ~PoltaStateStagger();
     virtual void appear();
 
     void exeWait();
@@ -17,7 +16,6 @@ public:
     bool isEnableSensor() const;
     void setActionName(const char*);
 
-    u8 padding[0xC];
     const char* mActionName;
     bool mIsClockwise;
 };

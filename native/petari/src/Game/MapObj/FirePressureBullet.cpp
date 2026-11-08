@@ -96,6 +96,3 @@ bool FirePressureBullet::isCrash() const {
 
     return MR::isBinded(this);
 }
-
-FirePressureBullet::~FirePressureBullet() {
-}

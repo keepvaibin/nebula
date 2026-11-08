@@ -139,6 +139,3 @@ void CameraFixedThere::updateNormalUpVec(const Vec3f& rFront) {
     rot.mult33(up, up);
     CameraLocalUtil::setUpVec(this, up);
 }
-
-CameraFixedThere::~CameraFixedThere() {
-}

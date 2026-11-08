@@ -99,6 +99,3 @@ inline void KillerGunnerSingle::exeAttack() {
         setNerve(GET_NERVE(KillerGunnerSingle, HostTypeWait));
     }
 }
-
-KillerGunnerSingle::~KillerGunnerSingle() {
-}

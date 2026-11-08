@@ -21,8 +21,6 @@ public:
 
     Flag(const char*);
 
-    virtual ~Flag();
-
     virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;

@@ -76,6 +76,3 @@ void LavaJamboSunPlanet::exeMove() {
         setNerve(GET_NERVE(LavaJamboSunPlanet, HostTypeWait));
     }
 }
-
-LavaJamboSunPlanet::~LavaJamboSunPlanet() {
-}

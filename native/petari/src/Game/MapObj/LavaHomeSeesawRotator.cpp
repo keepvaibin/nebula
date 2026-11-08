@@ -325,6 +325,3 @@ void LavaHomeSeesawRotator::soundMoveSE() {
         MR::startLevelSound(mHost, mMoveSound);
     }
 }
-
-LavaHomeSeesawRotator::~LavaHomeSeesawRotator() {
-}

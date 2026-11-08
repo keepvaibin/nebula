@@ -9,7 +9,6 @@ class JellyfishElectric : public LiveActor {
 public:
     JellyfishElectric(const char*);
 
-    virtual ~JellyfishElectric();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

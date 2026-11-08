@@ -175,8 +175,6 @@ void MagicBell::startRing(const Vec3f& rHitDir, const Vec3f& rHitPos) {
     setNerve(GET_NERVE(MagicBell, MagicBellNrvRing));
 }
 
-MagicBell::~MagicBell() {}
-
 MtxPtr MagicBell::getBaseMtx() const {
     return mSurface2Mtx;
 }

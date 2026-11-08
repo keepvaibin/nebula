@@ -102,9 +102,3 @@ void DinoPackunTrackFire::exeGround() {
         kill();
     }
 }
-
-DinoPackunTrackFire::~DinoPackunTrackFire() {
-}
-
-DinoPackunTrackFireHolder::~DinoPackunTrackFireHolder() {
-}

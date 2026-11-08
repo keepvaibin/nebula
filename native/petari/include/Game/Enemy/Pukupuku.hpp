@@ -16,8 +16,6 @@ class PukupukuStateLanding : public ActorStateBase< Pukupuku > {
 public:
     PukupukuStateLanding(Pukupuku* pParent);
 
-    virtual ~PukupukuStateLanding();
-
     void exeLandingMoveLand();
     void exeLandingJumpFromWater();
     void exeLandingJumpFromLand();
@@ -38,7 +36,6 @@ class Pukupuku : public LiveActor {
 public:
     Pukupuku(const char* pName);
 
-    virtual ~Pukupuku();
     virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();

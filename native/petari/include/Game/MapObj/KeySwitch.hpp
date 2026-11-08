@@ -7,7 +7,6 @@ class KeySwitch : public LiveActor {
 public:
     KeySwitch(const char*);
 
-    virtual ~KeySwitch();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();

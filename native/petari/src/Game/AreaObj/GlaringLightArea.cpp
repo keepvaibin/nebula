@@ -26,12 +26,6 @@ void GlaringLightArea::init(const TableIter& rIter) {
     }
 }
 
-GlaringLightArea::~GlaringLightArea() {
-}
-
-GlaringLightAreaMgr::~GlaringLightAreaMgr() {
-}
-
 void GlaringLightArea::movement() {
     if (isOnSwitchA()) {
         if (!isValid()) {

@@ -346,6 +346,3 @@ void ScenarioStarter::exeWaitScenarioCameraEnd() {
         setNerve(GET_NERVE(ScenarioStarter, ScenarioStarterWaitToStart));
     }
 }
-
-ScenarioStarter::~ScenarioStarter() {
-}

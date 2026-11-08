@@ -72,6 +72,3 @@ void KoopaStateAttackFireLong::exeEmit() {
         }
     }
 }
-
-KoopaStateAttackFireLong::~KoopaStateAttackFireLong() {
-}

@@ -8,7 +8,6 @@ class DinoPackunStateAwake : public ActorStateBase< DinoPackun > {
 public:
     DinoPackunStateAwake(DinoPackun*);
 
-    virtual ~DinoPackunStateAwake();
     virtual void appear();
     virtual void kill();
 

@@ -25,9 +25,6 @@ void ClipFieldMapParts::connectToScene() {
     MR::connectToClippedMapParts(this);
 }
 
-ClipFieldMapParts::~ClipFieldMapParts() {
-}
-
 void ClipFieldMapParts::init(const TableIter& rIter) {
     GeneralMapParts::init(rIter);
     MR::needStageSwitchReadA(this, rIter);

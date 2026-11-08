@@ -21,6 +21,3 @@ bool SceneDataInitializer::startActorPlacementStep(uint64_t deadline) {
 void SceneDataInitializer::initAfterScenarioSelected() {
     mDataHolder->initAfterScenarioSelected();
 }
-
-SceneDataInitializer::~SceneDataInitializer() {
-}

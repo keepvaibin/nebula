@@ -794,6 +794,3 @@ namespace MR {
         return pKuribo;
     }
 };  // namespace MR
-
-Kuribo::~Kuribo() {
-}

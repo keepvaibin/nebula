@@ -9,7 +9,6 @@
 class ClipAreaDropLaser : public LiveActor {
 public:
     ClipAreaDropLaser(const char* pName);
-    virtual ~ClipAreaDropLaser();
     virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void draw() const;

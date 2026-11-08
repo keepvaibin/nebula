@@ -6,7 +6,6 @@ class ReverseGravityRoomPlanet : public MapObjActor {
 public:
     ReverseGravityRoomPlanet(const char*);
 
-    virtual ~ReverseGravityRoomPlanet();
     virtual void init(const TableIter&);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
 

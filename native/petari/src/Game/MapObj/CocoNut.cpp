@@ -38,9 +38,6 @@ CocoNut::CocoNut(const char* pName)
     mSpinHitMtx.identity();
 }
 
-CocoNut::~CocoNut() {
-}
-
 void CocoNut::init(const TableIter& rIter) {
     initMapToolInfo(rIter);
     initModel();

@@ -40,6 +40,3 @@ void DinoPackunEggShell::calcAndSetBaseMtx() {
 void DinoPackunEggShell::exeWait() {
     return;
 }
-
-DinoPackunEggShell::~DinoPackunEggShell() {
-}

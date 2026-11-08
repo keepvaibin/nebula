@@ -11,8 +11,6 @@ class MapPartsRailGuideHolder : public NameObj {
 public:
     MapPartsRailGuideHolder();
 
-    virtual ~MapPartsRailGuideHolder();
-
     MapPartsRailGuideDrawer* createRailGuide(LiveActor* pHost, const char* pModelName, const TableIter& rIter);
     MapPartsRailGuideDrawer* find(s32 railId);
 

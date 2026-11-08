@@ -9,7 +9,6 @@ class PoltaStateAttackGround : public ActorStateBase< Polta > {
 public:
     PoltaStateAttackGround(Polta*);
 
-    virtual ~PoltaStateAttackGround();
     virtual void appear();
 
     void exeStart();

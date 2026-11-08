@@ -373,6 +373,3 @@ void BreakableCage::exeBreak() {
         kill();
     }
 }
-
-BreakableCage::~BreakableCage() {
-}

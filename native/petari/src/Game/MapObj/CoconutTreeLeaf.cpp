@@ -203,12 +203,6 @@ void CoconutTreeLeafGroup::control() {
     }
 }
 
-CoconutTreeLeaf::~CoconutTreeLeaf() {
-}
-
-CoconutTreeLeafGroup::~CoconutTreeLeafGroup() {
-}
-
 MtxPtr CoconutTreeLeaf::getBaseMtx() const {
     return mJointMtx;
 }

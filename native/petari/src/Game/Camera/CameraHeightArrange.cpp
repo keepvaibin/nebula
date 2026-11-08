@@ -9,9 +9,6 @@ namespace {
     static const f32 sLocalOffsetRateScale = 0.05f;
 };  // namespace
 
-CameraHeightArrange::~CameraHeightArrange() {
-}
-
 CameraHeightArrange::CameraHeightArrange(Camera* pCamera)
     : NameObj("CameraHeightArrange"), mCamera(pCamera), mIsJumping(), mIsStartJump(), mIsEndJump(), mNextParam(new CameraPoseParam()),
       mCurrParam(new CameraPoseParam()), mCameraWatchPosBaseHeight(), mCameraTargetPosHeight(), mCameraWatchPosHeight(), mCameraPosHeight(),

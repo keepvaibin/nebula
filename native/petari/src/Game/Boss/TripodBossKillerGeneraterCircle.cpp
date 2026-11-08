@@ -38,9 +38,6 @@ namespace {
     }
 };  // namespace
 
-TripodBossKillerGeneraterCircle::~TripodBossKillerGeneraterCircle() {
-}
-
 TripodBossKillerGeneraterCircle::TripodBossKillerGeneraterCircle(const char* pName)
     : NameObj(pName), mGenerater(), mPosition(0.0f, 0.0f, 0.0f), mAngleTable(), mAngleNum(), mHeight(), mRadius(), mCirclePitch(), mCannonPitch() {
 }

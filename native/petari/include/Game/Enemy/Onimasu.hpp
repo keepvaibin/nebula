@@ -8,8 +8,6 @@ class Onimasu : public LiveActor {
 public:
     Onimasu(const char* pName);
 
-    virtual ~Onimasu();
-
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void calcAndSetBaseMtx();

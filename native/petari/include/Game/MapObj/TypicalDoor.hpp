@@ -8,7 +8,6 @@ class TypicalDoor : public MapObjActor {
 public:
     TypicalDoor(const char*);
 
-    virtual ~TypicalDoor();
     virtual void init(const TableIter&) override;
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
 

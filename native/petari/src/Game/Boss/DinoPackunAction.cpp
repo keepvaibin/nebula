@@ -16,9 +16,6 @@ namespace {
 DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pHost) : ActorStateBase< DinoPackun >(pName, pHost), mSide(1.0f) {
 }
 
-DinoPackunAction::~DinoPackunAction() {
-}
-
 // Moving into the receiver blows it away; otherwise it is a plain hit.
 bool DinoPackunAction::sendBlowAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool isFire) {
     Vec3f direction;

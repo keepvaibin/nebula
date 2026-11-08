@@ -24,9 +24,6 @@ namespace NrvKoopaDemoPowerUp {
     NEW_NERVE(KoopaDemoPowerUpNrvDemo, KoopaDemoPowerUp, Demo);
 };  // namespace NrvKoopaDemoPowerUp
 
-KoopaDemoPowerUp::~KoopaDemoPowerUp() {
-}
-
 KoopaDemoPowerUp::KoopaDemoPowerUp(Koopa* pKoopa) : ActorStateBase< Koopa >("Demo[パワーアップ]", pKoopa) {
 }
 

@@ -7,7 +7,6 @@
 class DesertMovingLand : public MapObjActor {
 public:
     DesertMovingLand(const char* pName);
-    virtual ~DesertMovingLand();
     virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void connectToScene(const MapObjActorInitInfo& rIter);

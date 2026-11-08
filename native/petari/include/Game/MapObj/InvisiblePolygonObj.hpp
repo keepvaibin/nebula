@@ -7,7 +7,6 @@ class InvisiblePolygonObj : public LiveActor {
 public:
     InvisiblePolygonObj(const char*);
 
-    virtual ~InvisiblePolygonObj();
     virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
         return (MtxPtr)&mBaseMtx;

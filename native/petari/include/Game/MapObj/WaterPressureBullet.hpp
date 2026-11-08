@@ -9,7 +9,6 @@ class WaterPressureBullet : public LiveActor {
 public:
     WaterPressureBullet(const char*);
 
-    virtual ~WaterPressureBullet();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

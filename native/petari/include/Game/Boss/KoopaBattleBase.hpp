@@ -16,7 +16,6 @@ class KoopaBattleBase : public ActorStateBase< Koopa > {
 public:
     KoopaBattleBase(const char* pName, Koopa* pKoopa);
 
-    virtual ~KoopaBattleBase();
     virtual void init();
     virtual void kill();
 

@@ -84,9 +84,6 @@ namespace NrvElectricRail {
     NEW_NERVE(ElectricRailNrvDisappeared, ElectricRail, Disappeared);
 };  // namespace NrvElectricRail
 
-ElectricRailPoint::~ElectricRailPoint() {
-}
-
 ElectricRailPoint::ElectricRailPoint(const char* pName) : LiveActor(pName), mHasShadow(true), mIsActive(true) {
 }
 

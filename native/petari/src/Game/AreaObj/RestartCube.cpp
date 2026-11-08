@@ -33,9 +33,6 @@ void RestartCube::updatePlayerRestartIdInfo() {
     }
 }
 
-RestartCube::~RestartCube() {
-}
-
 void RestartCube::changeBgm() {
     if (MR::isPowerStarGetDemoActive()) {
         mIsBgmChanged = true;

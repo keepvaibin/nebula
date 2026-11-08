@@ -12,9 +12,6 @@ namespace {
     const f32 sRoundAddition = 0.08f;
 };  // namespace
 
-CameraTripodBossJoint::~CameraTripodBossJoint() {
-}
-
 CameraTripodBossJoint::CameraTripodBossJoint(const char* pName)
     : Camera(pName), mAngleX(), mAngleY(), mDist(3000.0f), mIsRounding(), mRoundTarget(), mRoundAngle() {
 }

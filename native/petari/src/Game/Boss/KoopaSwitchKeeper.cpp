@@ -17,6 +17,3 @@ void KoopaSwitchKeeper::init(const TableIter& rIter) {
 void KoopaSwitchKeeper::initAfterPlacement() {
     KoopaFunction::registerKoopaSwitchKeeper(this);
 }
-
-KoopaSwitchKeeper::~KoopaSwitchKeeper() {
-}

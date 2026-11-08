@@ -13,7 +13,6 @@ class KoopaSequencerVs3 : public KoopaSequencer {
 public:
     KoopaSequencerVs3();
 
-    virtual ~KoopaSequencerVs3();
     virtual void init(Koopa* pKoopa, const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

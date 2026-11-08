@@ -187,5 +187,3 @@ void AnimScaleController::updateScale(f32 spring, f32 damping) {
     mScale.x = MR::sqrt(1.0f / mScale.y);
     mScale.z = mScale.x;
 }
-
-AnimScaleController::~AnimScaleController() {};

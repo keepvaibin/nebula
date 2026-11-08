@@ -6,7 +6,6 @@ class FirePressure : public PressureBase {
 public:
     FirePressure(const char* pName);
 
-    virtual ~FirePressure();
     virtual void init(const TableIter& rIter);
     virtual void initBullet(const TableIter& rIter);
     virtual bool shotBullet(f32 speed);

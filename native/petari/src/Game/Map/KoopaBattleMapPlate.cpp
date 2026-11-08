@@ -14,9 +14,6 @@ void KoopaBattleMapPlate::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mBaseMtx);
 }
 
-KoopaBattleMapPlate::~KoopaBattleMapPlate() {
-}
-
 void KoopaBattleMapPlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::calcGravity(this);

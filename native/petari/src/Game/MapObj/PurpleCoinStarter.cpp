@@ -22,6 +22,3 @@ void PurpleCoinStarter::setHost(PurpleCoinHolder* pHost) {
 void PurpleCoinStarter::start() {
     mHost->start();
 }
-
-PurpleCoinStarter::~PurpleCoinStarter() {
-}

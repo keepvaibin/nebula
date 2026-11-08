@@ -137,8 +137,5 @@ void BenefitItemInvincible::stopEfx(const char* pEffect) {
     }
 }
 
-BenefitItemInvincible::~BenefitItemInvincible() {
-}
-
 void BenefitItemInvincible::runBck(const char*) {
 }

@@ -21,8 +21,6 @@ public:
 
     TrampleStar(const char*);
 
-    virtual ~TrampleStar();
-
     virtual void init(const TableIter& rIter);
     virtual void draw() const;
     virtual void calcAnim();

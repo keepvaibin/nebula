@@ -18,12 +18,6 @@ namespace NrvWaterLeakPipe {
     NEW_NERVE(WaterLeakPipeNrvFreeze, WaterLeakPipe, Freeze);
 };  // namespace NrvWaterLeakPipe
 
-IceStepNoSlip::~IceStepNoSlip() {
-}
-
-WaterLeakPipe::~WaterLeakPipe() {
-}
-
 IceStepNoSlip::IceStepNoSlip(MtxPtr mtx) : ModelObj("アイス床", "IceStepNoSlip", mtx, MR::DrawBufferType_IndirectMapObjStrongLight, -2, -2, false) {
 }
 

@@ -45,8 +45,6 @@ public:
     // pBalloonMtx, when set, places the balloon and the talk range instead of the host.
     TalkMessageCtrl(LiveActor* pHost, const Vec3f& rBalloonOffset, MtxPtr pBalloonMtx);
 
-    virtual ~TalkMessageCtrl();
-
     void createMessage(const TableIter&, const char*);
     void createMessageDirect(const TableIter&, const char*);
     u32 getMessageID() const;

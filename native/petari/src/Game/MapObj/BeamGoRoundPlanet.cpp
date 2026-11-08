@@ -103,9 +103,3 @@ void BeamGoRoundPlanet::initBeam() {
         mBeams[i]->initWithoutIter();
     }
 }
-
-BeamGoRoundBeam::~BeamGoRoundBeam() {
-}
-
-BeamGoRoundPlanet::~BeamGoRoundPlanet() {
-}

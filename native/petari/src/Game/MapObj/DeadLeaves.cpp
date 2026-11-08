@@ -58,6 +58,3 @@ bool DeadLeaves::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
 
     return false;
 }
-
-DeadLeaves::~DeadLeaves() {
-}

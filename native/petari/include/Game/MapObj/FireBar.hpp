@@ -6,7 +6,6 @@ class FireBarBall : public ModelObj {
 public:
     FireBarBall(LiveActor*);
 
-    virtual ~FireBarBall();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void startClipped();
@@ -22,7 +21,6 @@ class FireBar : public LiveActor {
 public:
     FireBar(const char*);
 
-    virtual ~FireBar();
     virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void makeActorDead();

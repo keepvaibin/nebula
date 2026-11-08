@@ -230,6 +230,3 @@ void HipDropTimerSwitch::exeSwitchUp() {
         setNerve(GET_NERVE(HipDropSwitch, HipDropTimerSwitchNrvOff));
     }
 }
-
-HipDropTimerSwitch::~HipDropTimerSwitch() {
-}

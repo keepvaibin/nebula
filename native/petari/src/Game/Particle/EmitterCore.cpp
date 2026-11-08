@@ -16,9 +16,6 @@ EmitterCore::EmitterCore() : mLink(this), mpChunks(NULL), mpLastChunk(NULL), mRn
     mMotionEpoch = 0;
 }
 
-EmitterCore::~EmitterCore() {
-}
-
 // Out of free slots: one more chunk, its slots in order.
 static void addChunk(EmitterCore* pEmitter) {
     ParticleChunk* pChunk = pEmitter->mpEmtrMgr->takeChunk();
@@ -167,4 +164,3 @@ void EmitterCore::calcEmitterGlobalPosition(Vec3f* dst) const {
     mtx[2][3] = mGlobalTrs.z;
     NebulaMtxMultVec(mtx, mLocalTrs, *dst);
 }
-

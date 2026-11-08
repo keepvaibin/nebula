@@ -6,6 +6,5 @@ class SpinGuidanceArea : public AreaObj {
 public:
     SpinGuidanceArea(int, const char*);
 
-    virtual ~SpinGuidanceArea();
     virtual void init(const TableIter&);
 };

@@ -8,7 +8,6 @@ class KoopaDemoPowerUp : public ActorStateBase< Koopa > {
 public:
     KoopaDemoPowerUp(Koopa* pKoopa);
 
-    virtual ~KoopaDemoPowerUp();
     virtual void init();
     virtual void appear();
     virtual void kill();

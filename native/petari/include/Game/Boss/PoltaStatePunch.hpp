@@ -10,7 +10,6 @@ class PoltaStatePunch : public ActorStateBase< Polta > {
 public:
     PoltaStatePunch(Polta*);
 
-    virtual ~PoltaStatePunch();
     virtual void appear();
 
     void exeStart();
@@ -22,7 +21,6 @@ public:
 
     PoltaArm* getAttackActor();
 
-    u8 padding[0xC];
     bool mIsLeftArmActor;
     bool mIsActionAffectBody;
 };

@@ -6,7 +6,6 @@ class MapPartsRailPointPassChecker : public MapPartsFunction {
 public:
     MapPartsRailPointPassChecker(LiveActor*);
 
-    virtual ~MapPartsRailPointPassChecker();
     virtual void movement();
     virtual bool isWorking() const;
     virtual void start();

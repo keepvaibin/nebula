@@ -19,7 +19,6 @@ public:
 
     Poihana(const char* pName);
 
-    virtual ~Poihana();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void control();

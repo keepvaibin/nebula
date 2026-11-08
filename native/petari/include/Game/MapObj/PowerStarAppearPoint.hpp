@@ -8,7 +8,6 @@ class PowerStarAppearPoint : public LiveActor {
 public:
     PowerStarAppearPoint(const char* pName);
 
-    virtual ~PowerStarAppearPoint();
     virtual void init(const TableIter& rIter);
 
     ActorCameraInfo* mCameraInfo;

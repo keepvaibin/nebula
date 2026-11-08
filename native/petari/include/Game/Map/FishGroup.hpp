@@ -8,8 +8,6 @@ class Fish : public LiveActor {
 public:
     Fish(const char*, FishGroup*, int, bool);
 
-    virtual ~Fish();
-
     virtual void init(const TableIter& rIter);
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -36,8 +34,6 @@ public:
 class FishGroup : public LiveActor {
 public:
     FishGroup(const char*);
-
-    virtual ~FishGroup();
 
     virtual void init(const TableIter& rIter);
     virtual void startClipped();

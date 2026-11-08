@@ -783,6 +783,3 @@ bool BasaBasa::isDown() const {
 bool BasaBasa::isNrvEnableStun() const {
     return !isDown() && !isNerve(GET_NERVE(BasaBasa, BasaBasaNrvWait)) && !isNerve(GET_NERVE(BasaBasa, BasaBasaNrvAttachCelling));
 }
-
-BasaBasa::~BasaBasa() {
-}

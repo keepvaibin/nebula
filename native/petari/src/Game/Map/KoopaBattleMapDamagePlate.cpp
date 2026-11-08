@@ -116,8 +116,5 @@ bool KoopaBattleMapDamagePlate::receiveOtherMsg(u32 msg, HitSensor* pSender, Hit
     return true;
 }
 
-KoopaBattleMapDamagePlate::~KoopaBattleMapDamagePlate() {
-}
-
 void KoopaBattleMapDamagePlate::exeWait() {
 }

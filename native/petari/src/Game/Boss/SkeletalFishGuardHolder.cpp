@@ -163,9 +163,6 @@ void SkeletalFishGuardHolder::appearGuard(s32 numGuards, s32 startGuard) {
     }
 }
 
-SkeletalFishGuardHolder::~SkeletalFishGuardHolder() {
-}
-
 void SkeletalFishGuardHolder::createAndInitGuard() {
     mGuards = new SkeletalFishGuard*[mNumGuards];
 

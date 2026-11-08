@@ -8,7 +8,6 @@ class KoopaDemoJumpToPlanet : public ActorStateBase< Koopa > {
 public:
     KoopaDemoJumpToPlanet(Koopa* pKoopa);
 
-    virtual ~KoopaDemoJumpToPlanet();
     virtual void init();
     virtual void kill();
 

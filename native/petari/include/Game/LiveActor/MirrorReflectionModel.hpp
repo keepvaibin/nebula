@@ -7,7 +7,6 @@ public:
     // The host's model seen in the mirror; it follows pHostMtx, or the host's SRT when null.
     MirrorReflectionModel(const LiveActor* pHost, const char* pName, const char* pInternalName, MtxPtr pHostMtx);
 
-    virtual ~MirrorReflectionModel();
     virtual void init(const TableIter&) override;
     virtual void movement() override;
     virtual void calcAnim() override;

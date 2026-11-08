@@ -6,7 +6,6 @@ class SkeletalFishBossRail : public LiveActor {
 public:
     SkeletalFishBossRail(const char*);
 
-    virtual ~SkeletalFishBossRail();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
 

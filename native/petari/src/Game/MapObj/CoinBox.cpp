@@ -11,9 +11,6 @@ namespace NrvCoinBox {
 CoinBox::CoinBox(const char* pName) : LiveActor(pName) {
 }
 
-CoinBox::~CoinBox() {
-}
-
 void CoinBox::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);

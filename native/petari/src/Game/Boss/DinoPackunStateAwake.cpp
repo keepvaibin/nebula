@@ -38,6 +38,3 @@ void DinoPackunStateAwake::exeFind() {
         kill();
     }
 }
-
-DinoPackunStateAwake::~DinoPackunStateAwake() {
-}

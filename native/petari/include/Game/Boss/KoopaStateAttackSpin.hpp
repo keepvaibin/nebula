@@ -13,7 +13,6 @@ class KoopaStateAttackSpin : public ActorStateBase< Koopa > {
 public:
     KoopaStateAttackSpin(Koopa* pKoopa);
 
-    virtual ~KoopaStateAttackSpin();
     virtual void init();
     virtual void appear();
     virtual void kill();

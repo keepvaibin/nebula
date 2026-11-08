@@ -17,9 +17,6 @@ namespace NrvLavaStrangeRock {
     NEW_NERVE(LavaStrangeRockNrvWait, LavaStrangeRock, Wait);
 };  // namespace NrvLavaStrangeRock
 
-LavaStrangeRock::~LavaStrangeRock() {
-}
-
 LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_None), mHitType(), mLodCtrlPlanet() {
 }
 

@@ -9,9 +9,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 
-LavaGalaxyParts::~LavaGalaxyParts() {
-}
-
 LavaGalaxyParts::LavaGalaxyParts(const char* pName) : LiveActor(pName), mLodCtrl(), mMtxSetter() {
 }
 

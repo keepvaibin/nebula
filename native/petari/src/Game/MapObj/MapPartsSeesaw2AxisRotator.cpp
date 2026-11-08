@@ -139,6 +139,3 @@ void MapPartsSeesaw2AxisRotator::exeStay() {
         setNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeMove));
     }
 }
-
-MapPartsSeesaw2AxisRotator::~MapPartsSeesaw2AxisRotator() {
-}

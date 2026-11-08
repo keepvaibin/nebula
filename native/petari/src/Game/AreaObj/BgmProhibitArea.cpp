@@ -5,9 +5,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-BgmProhibitArea::~BgmProhibitArea() {
-}
-
 struct BgmMuteSet {
     const char* mGalaxyName;
     u32 mMuteState;

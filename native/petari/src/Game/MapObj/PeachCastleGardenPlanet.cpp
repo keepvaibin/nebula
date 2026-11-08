@@ -13,9 +13,6 @@ namespace NrvPeachCastleGardenPlanet {
 PeachCastleGardenPlanet::PeachCastleGardenPlanet(const char* pName) : MapObjActor(pName) {
 }
 
-PeachCastleGardenPlanet::~PeachCastleGardenPlanet() {
-}
-
 void PeachCastleGardenPlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;

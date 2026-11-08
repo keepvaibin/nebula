@@ -49,8 +49,6 @@ class BaseMatrixFollowTargetHolder : public NameObj {
 public:
     BaseMatrixFollowTargetHolder(const char*, s32, s32);
 
-    virtual ~BaseMatrixFollowTargetHolder();
-
     virtual void initAfterPlacement();
     virtual void movement();
 

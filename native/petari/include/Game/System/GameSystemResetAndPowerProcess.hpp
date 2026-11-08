@@ -14,8 +14,6 @@ public:
 
     GameSystemResetAndPowerProcess();
 
-    virtual ~GameSystemResetAndPowerProcess();
-
     virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void control();

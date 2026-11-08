@@ -1,15 +1,6 @@
 #include "Game/AreaObj/CameraRepulsiveArea.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 
-CameraRepulsiveArea::~CameraRepulsiveArea() {
-}
-
-CameraRepulsiveSphere::~CameraRepulsiveSphere() {
-}
-
-CameraRepulsiveCylinder::~CameraRepulsiveCylinder() {
-}
-
 Vec3f CameraRepulsiveSphere::getRepulsion(const Vec3f& rRep) {
     return Vec3f(0.0f, 0.0f, 0.0f);
 }

@@ -84,6 +84,3 @@ bool PowerStarFunction::isEndPowerStarAppearDemo(int starNum) {
 PowerStar* PowerStarFunction::findPowerStar(int starNum) {
     return EventFunction::getPowerStarHolder()->findPowerStarRequestInfo(starNum)->mStar;
 }
-
-PowerStarHolder::~PowerStarHolder() {
-}

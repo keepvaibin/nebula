@@ -8,9 +8,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <nebula_geometry.hpp>
 
-MirrorActor::~MirrorActor() {
-}
-
 MirrorActor::MirrorActor(LiveActor* pActor, const char* pName, const char* pArcName) : LiveActor(pName), mHost(pActor), mIsDisconnected() {
     initModelManagerWithAnm(pArcName, nullptr, false);
 }

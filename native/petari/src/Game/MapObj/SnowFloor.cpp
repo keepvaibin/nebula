@@ -39,9 +39,6 @@ namespace {
     const u16 sCellSize = 1024 / sTextureSize;
 }  // namespace
 
-SnowFloor::~SnowFloor() {
-}
-
 SnowFloor::SnowFloor(const char* pName) : LiveActor(pName) {
 }
 

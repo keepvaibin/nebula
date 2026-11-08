@@ -7,7 +7,6 @@ class TransparentWall : public InvisiblePolygonObj {
 public:
     TransparentWall(const char* pName);
 
-    virtual ~TransparentWall();
     virtual void init(const TableIter& rIter);
     virtual void control();
 

@@ -26,8 +26,6 @@ class AnimScaleController : public NerveExecutor {
 public:
     AnimScaleController(AnimScaleParam*);
 
-    virtual ~AnimScaleController();
-
     void update();
     void updateScale(f32 spring, f32 damping);
     void startCrush();

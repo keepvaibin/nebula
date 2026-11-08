@@ -7,7 +7,6 @@ class CocoNut : public LiveActor {
 public:
     CocoNut(const char* pName);
 
-    virtual ~CocoNut();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void startClipped();

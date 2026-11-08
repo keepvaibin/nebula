@@ -245,6 +245,3 @@ void DinoPackunDemo::exeAppearPowerStar() {
         }
     }
 }
-
-DinoPackunDemo::~DinoPackunDemo() {
-}

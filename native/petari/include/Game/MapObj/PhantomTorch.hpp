@@ -8,7 +8,6 @@ class PhantomTorch : public LiveActor {
 public:
     PhantomTorch(const char*);
 
-    virtual ~PhantomTorch();
     virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();

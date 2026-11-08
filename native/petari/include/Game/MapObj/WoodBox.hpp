@@ -9,7 +9,6 @@ class WoodBox : public LiveActor {
 public:
     WoodBox(const char*);
 
-    virtual ~WoodBox();
     virtual void init(const TableIter&);
     virtual void calcViewAndEntry();
     virtual void kill();

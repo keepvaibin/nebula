@@ -38,8 +38,6 @@ public:
 
     StageSwitchContainer();
 
-    virtual ~StageSwitchContainer();
-
     void createAndAddZone(const SwitchIdInfo& rInfo);
     ZoneSwitch* getZoneSwitch(const SwitchIdInfo& rInfo);
     ZoneSwitch* findZoneSwitchFromTable(const SwitchIdInfo& rInfo);

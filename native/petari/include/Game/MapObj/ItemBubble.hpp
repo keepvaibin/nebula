@@ -29,7 +29,6 @@ class ItemBubble : public LiveActor {
 public:
     ItemBubble(const char*);
 
-    virtual ~ItemBubble();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void appear();

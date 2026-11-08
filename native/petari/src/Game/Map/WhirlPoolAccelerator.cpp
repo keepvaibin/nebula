@@ -161,9 +161,6 @@ SiteMaterial WhirlPoolAccelerator::loadMaterial() const {
     return material;
 }
 
-WhirlPoolAccelerator::~WhirlPoolAccelerator() {
-}
-
 namespace {
     const f32 sAlphaPointNum = 2.0f;
 };  // namespace

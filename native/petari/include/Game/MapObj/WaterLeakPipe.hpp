@@ -6,7 +6,6 @@ class IceStepNoSlip : public ModelObj {
 public:
     IceStepNoSlip(MtxPtr);
 
-    virtual ~IceStepNoSlip();
     virtual void init(const TableIter&);
     virtual void appear();
 
@@ -18,7 +17,6 @@ class WaterLeakPipe : public LiveActor {
 public:
     WaterLeakPipe(const char*);
 
-    virtual ~WaterLeakPipe();
     virtual void init(const TableIter&);
     virtual void calcAnim() {};
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);

@@ -9,7 +9,6 @@ class KoopaStateAttackShockWave : public ActorStateBase< Koopa > {
 public:
     KoopaStateAttackShockWave(Koopa* pKoopa);
 
-    virtual ~KoopaStateAttackShockWave();
     virtual void init();
     virtual void appear();
     virtual void kill();

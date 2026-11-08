@@ -12,11 +12,6 @@ namespace NrvStarPieceShooter {
     NEW_NERVE(HostTypeNrvLockOn, StarPieceShooter, LockOn);
 };  // namespace NrvStarPieceShooter
 
-StarPieceDirector::~StarPieceDirector() {
-}
-StarPieceShooter::~StarPieceShooter() {
-}
-
 StarPieceDirector* MR::getStarPieceDirector() {
     return MR::getSceneObj< StarPieceDirector >(SceneObj_StarPieceDirector);
 }

@@ -13,9 +13,6 @@ namespace NrvFloaterFloatingForceTypeSpring {
     NEW_NERVE(HostTypeMoveReturn, FloaterFloatingForceTypeSpring, MoveReturn);
 };  // namespace NrvFloaterFloatingForceTypeSpring
 
-FloaterFloatingForceTypeSpring::~FloaterFloatingForceTypeSpring() {
-}
-
 FloaterSpringForce::FloaterSpringForce(f32 baseValue, f32 spring, f32 damp) : mSpringValue() {
     mBaseValue = baseValue;
     mSpring = spring;

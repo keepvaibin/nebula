@@ -9,7 +9,6 @@ class LavaGalaxyParts : public LiveActor {
 public:
     LavaGalaxyParts(const char*);
 
-    virtual ~LavaGalaxyParts();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();

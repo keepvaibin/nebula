@@ -10,8 +10,6 @@ class DinoPackunAction : public ActorStateBase< DinoPackun > {
 public:
     DinoPackunAction(const char* pName, DinoPackun* pHost);
 
-    virtual ~DinoPackunAction();
-
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 

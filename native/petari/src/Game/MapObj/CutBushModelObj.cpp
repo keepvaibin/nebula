@@ -37,6 +37,3 @@ void CutBushModelObj::calcAndSetBaseMtx() {
         LiveActor::calcAndSetBaseMtx();
     }
 }
-
-CutBushModelObj::~CutBushModelObj() {
-}

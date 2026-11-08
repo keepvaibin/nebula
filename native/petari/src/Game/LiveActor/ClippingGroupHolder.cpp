@@ -120,12 +120,6 @@ ClippingInfoGroup* ClippingGroupHolder::findGroup(const TableIter& rIter) {
     return nullptr;
 }
 
-ClippingInfoGroup::~ClippingInfoGroup() {
-}
-
-ClippingGroupHolder::~ClippingGroupHolder() {
-}
-
 ClippingGroupHolder::ClippingGroupHolder()
     : NameObj("クリッピングアクター保持"), mNumGroups(0), mInfoGroups(new ClippingInfoGroup*[::sGroupCapacity]()), mMaxGroups(::sGroupCapacity) {
 }

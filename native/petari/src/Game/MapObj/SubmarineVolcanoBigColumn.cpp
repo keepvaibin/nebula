@@ -109,6 +109,3 @@ void SubmarineVolcanoBigColumn::initBreakModel(const char* pModelName) {
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();
 }
-
-SubmarineVolcanoBigColumn::~SubmarineVolcanoBigColumn() {
-}

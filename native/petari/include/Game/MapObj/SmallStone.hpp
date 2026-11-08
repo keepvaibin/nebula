@@ -37,8 +37,6 @@ class SmallStoneMember : public ModelObj {
 public:
     SmallStoneMember(const char* pModelName);
 
-    virtual ~SmallStoneMember();
-
     const Vec3f& getRotation() const {
         return mRotation;
     }

@@ -15,9 +15,6 @@ namespace NrvPalmIsland {
     NEW_NERVE(PalmIslandNrvFloat, PalmIsland, Float);
 };  // namespace NrvPalmIsland
 
-PalmIsland::~PalmIsland() {
-}
-
 PalmIsland::PalmIsland(const char* pName) : LiveActor(pName) {
     mFloatStartStep = 0;
     mRipplePos.x = 0.0f;

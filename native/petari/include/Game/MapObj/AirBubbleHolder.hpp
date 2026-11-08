@@ -8,7 +8,6 @@ class AirBubble;
 class AirBubbleHolder : public DeriveActorGroup< AirBubble > {
 public:
     AirBubbleHolder(const char* pName);
-    virtual ~AirBubbleHolder();
 
     virtual void init(const TableIter&);
 

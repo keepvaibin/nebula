@@ -8,7 +8,6 @@ class CoconutTreeLeaf : public LiveActor {
 public:
     CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection);
 
-    virtual ~CoconutTreeLeaf();
     virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const;
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
@@ -33,7 +32,6 @@ class CoconutTreeLeafGroup : public LiveActor {
 public:
     CoconutTreeLeafGroup(const char* pName);
 
-    virtual ~CoconutTreeLeafGroup();
     virtual void init(const TableIter& rIter);
     virtual void startClipped();
     virtual void endClipped();

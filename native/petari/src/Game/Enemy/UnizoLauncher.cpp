@@ -62,6 +62,3 @@ void UnizoLauncher::exeWait() {
         setNerve(GET_NERVE(UnizoLauncher, UnizoLauncherNrvLaunch));
     }
 }
-
-UnizoLauncher::~UnizoLauncher() {
-}

@@ -20,7 +20,6 @@ class BombBird : public LiveActor {
 public:
     BombBird(const char*);
 
-    virtual ~BombBird() override;
     virtual void init(const TableIter&) override;
     virtual void makeActorDead() override;
     virtual void startClipped() override;

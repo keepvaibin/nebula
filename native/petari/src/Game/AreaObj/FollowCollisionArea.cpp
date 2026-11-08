@@ -5,9 +5,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-FollowCollisionArea::~FollowCollisionArea() {
-}
-
 FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("追従コリジョンエリア") {
     mSize = rSize;
     mFollowMtx = pMatrix;

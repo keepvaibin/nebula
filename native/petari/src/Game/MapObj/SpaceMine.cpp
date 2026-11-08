@@ -158,6 +158,3 @@ void SpaceMine::exeAppear() {
         }
     }
 }
-
-SpaceMine::~SpaceMine() {
-}

@@ -297,9 +297,6 @@ void SmallStoneMember::movementByHost(SmallStone* pHost) {
     }
 }
 
-SmallStoneMember::~SmallStoneMember() {
-}
-
 void SmallStone::init(const TableIter& rIter) {
     MR::connectToSceneMapObjMovement(this);
     MR::initDefaultPos(this, rIter);

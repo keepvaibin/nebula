@@ -3,9 +3,6 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-FloaterFloatingForce::~FloaterFloatingForce() {
-}
-
 FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "浮力"), mObjName(pName), mBasePos(gZeroVec) {
     mUp = Vec3f(0.0f, 1.0f, 0.0f);
     mMaxSinkDepth = 0.0f;

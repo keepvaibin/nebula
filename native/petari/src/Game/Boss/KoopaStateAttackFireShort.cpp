@@ -117,6 +117,3 @@ void KoopaStateAttackFireShort::exeEmit() {
         kill();
     }
 }
-
-KoopaStateAttackFireShort::~KoopaStateAttackFireShort() {
-}

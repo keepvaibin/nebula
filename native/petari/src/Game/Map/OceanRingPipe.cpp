@@ -11,9 +11,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-OceanRingPipe::~OceanRingPipe() {
-}
-
 OceanRingPipe::OceanRingPipe(const OceanRing* pRing, f32 a, f32 b)
     : LiveActor("オーシャンリングの側面"), mOceanRing(pRing), mIsCameraInside(), mNumPoints(), mNumSegments(), mNumSides(8), mPositions(), mNormals(), mWidth(a), mWidthArg(b), mPipeInside(),
       mPipeOutside() {

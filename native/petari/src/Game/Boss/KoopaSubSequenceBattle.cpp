@@ -61,6 +61,3 @@ void KoopaSubSequenceBattle::exeBattleLv3() {
         kill();
     }
 }
-
-KoopaSubSequenceBattle::~KoopaSubSequenceBattle() {
-}

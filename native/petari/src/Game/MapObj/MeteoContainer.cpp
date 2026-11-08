@@ -94,6 +94,3 @@ void MeteoContainer::exeDestroy() {
         kill();
     }
 }
-
-MeteoContainer::~MeteoContainer() {
-}

@@ -455,6 +455,3 @@ void SphereSelectorFunction::calcOffsetPos(Vec3f* pDst, const Vec3f& rVec2, cons
     MR::makeMtxUpFrontPos(&mtx, rVec5, vec, rVec2);
     mtx.mult(rVec3, *pDst);
 }
-
-SphereSelector::~SphereSelector() {
-}

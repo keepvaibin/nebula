@@ -19,9 +19,6 @@ namespace MR {
     }
 };  // namespace MR
 
-SunshadeMapParts::~SunshadeMapParts() {
-}
-
 void SunshadeMapParts::init(const TableIter& rIter) {
     GeneralMapParts::init(rIter);
     MR::createSunshadeMapHolder();

@@ -6,9 +6,6 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
-FirePressure::~FirePressure() {
-}
-
 FirePressure::FirePressure(const char* pName) : PressureBase(pName), mIsDisableCollision(false) {
 }
 

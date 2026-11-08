@@ -568,6 +568,3 @@ void NormalMapBase::loadData(const char* pData, u32 size) {
         MR::scans16x4(line, "mTevColor1", reinterpret_cast< s16* >(&mStageColor1));
     }
 }
-
-NormalMapBase::~NormalMapBase() {
-}

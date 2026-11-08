@@ -8,7 +8,6 @@ class EffectObjGravityDust : public SimpleEffectObj {
 public:
     EffectObjGravityDust(const char*);
 
-    virtual ~EffectObjGravityDust();
     virtual void init(const TableIter& rIter);
     virtual void endClipped();
     virtual f32 getClippingRadius() const;

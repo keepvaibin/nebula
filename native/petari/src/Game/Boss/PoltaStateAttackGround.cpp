@@ -80,6 +80,3 @@ bool PoltaStateAttackGround::isEnableAttack(const HitSensor* pSensor) const {
         return isNerve(GET_NERVE(PoltaStateAttackGround, PoltaStateAttackGroundNrvAttack));
     }
 }
-
-PoltaStateAttackGround::~PoltaStateAttackGround() {
-}

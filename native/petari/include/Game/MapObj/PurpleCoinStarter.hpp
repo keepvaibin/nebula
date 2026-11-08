@@ -9,7 +9,6 @@ class PurpleCoinStarter : public NameObj {
 public:
     PurpleCoinStarter(const char* pName);
 
-    virtual ~PurpleCoinStarter();
     virtual void init(const TableIter& rIter);
 
     void setHost(PurpleCoinHolder* pHost);

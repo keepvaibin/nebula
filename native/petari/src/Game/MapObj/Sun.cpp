@@ -7,9 +7,6 @@
 Sun::Sun(const char* pName) : LiveActor(pName) {
 }
 
-Sun::~Sun() {
-}
-
 void Sun::init(const TableIter& rIter) {
     initModelManagerWithAnm("Sun", nullptr, false);
     MR::connectToSceneSun(this);

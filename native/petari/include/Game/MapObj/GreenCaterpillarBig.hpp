@@ -6,7 +6,6 @@ class GreenCaterpillarBigBody : public ModelObj {
 public:
     GreenCaterpillarBigBody(LiveActor*, MtxPtr);
 
-    virtual ~GreenCaterpillarBigBody();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void calcAndSetBaseMtx();
@@ -23,7 +22,6 @@ class GreenCaterpillarBig : public LiveActor {
 public:
     GreenCaterpillarBig(const char*);
 
-    virtual ~GreenCaterpillarBig();
     virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();

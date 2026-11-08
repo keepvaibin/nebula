@@ -18,9 +18,6 @@ void TripodBossStepStartArea::movement() {
     }
 }
 
-TripodBossStepStartArea::~TripodBossStepStartArea() {
-}
-
 const char* TripodBossStepStartArea::getManagerName() const {
     return "TripodBossStepStart";
 }

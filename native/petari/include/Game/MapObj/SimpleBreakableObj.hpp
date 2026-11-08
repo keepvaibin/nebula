@@ -20,7 +20,6 @@ class SimpleBreakableObj : public SimpleBreakableObjBase {
 public:
     SimpleBreakableObj(const char*);
 
-    virtual ~SimpleBreakableObj();
     virtual void init(const TableIter&) override;
     virtual void control() override;
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;

@@ -289,6 +289,3 @@ void KoopaStateAttackHipDrop::exeLand() {
 
 void KoopaStateAttackHipDrop::exeDamage() {
 }
-
-KoopaStateAttackHipDrop::~KoopaStateAttackHipDrop() {
-}

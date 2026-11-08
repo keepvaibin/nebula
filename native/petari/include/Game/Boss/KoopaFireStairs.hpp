@@ -9,7 +9,6 @@ class KoopaFireStairs : public LiveActor {
 public:
     KoopaFireStairs(const char* pName, bool isKoopaJr);
 
-    virtual ~KoopaFireStairs();
     virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void makeActorDead();

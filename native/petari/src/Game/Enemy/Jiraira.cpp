@@ -200,6 +200,3 @@ bool Jiraira::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
 
     return false;
 }
-
-Jiraira::~Jiraira() {
-}

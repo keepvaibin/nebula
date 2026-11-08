@@ -22,6 +22,3 @@ void KoopaRockBreak::control() {
         kill();
     }
 }
-
-KoopaRockBreak::~KoopaRockBreak() {
-}

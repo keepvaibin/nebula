@@ -310,6 +310,3 @@ void GrandStarReturnDemoStarter::exeWaitDemoEnd() {
         kill();
     }
 }
-
-GrandStarReturnDemoStarter::~GrandStarReturnDemoStarter() {
-}

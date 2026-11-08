@@ -35,9 +35,6 @@ void InvisiblePolygonObj::initBaseMtx() {
     }
 }
 
-InvisiblePolygonObj::~InvisiblePolygonObj() {
-}
-
 void InvisiblePolygonObj::initCollision(const TableIter& rIter) {
     initBaseMtx();
 

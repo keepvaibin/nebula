@@ -539,9 +539,3 @@ void PlantMember::animControl(PlantGroup* pGroup) {
         }
     }
 }
-
-PlantGroup::~PlantGroup() {
-}
-
-PlantMember::~PlantMember() {
-}

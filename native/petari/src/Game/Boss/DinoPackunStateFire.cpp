@@ -116,6 +116,3 @@ bool DinoPackunStateFire::isEnableCool() const {
 
 void DinoPackunStateFire::exeFire() {
 }
-
-DinoPackunStateFire::~DinoPackunStateFire() {
-}

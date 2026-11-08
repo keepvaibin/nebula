@@ -3,9 +3,6 @@
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
 
-ClipFieldSwitch::~ClipFieldSwitch() {
-}
-
 ClipFieldSwitch::ClipFieldSwitch(const char* pName) : LiveActor(pName) {
 }
 

@@ -16,7 +16,6 @@ class ExterminationChecker : public LiveActor {
 public:
     ExterminationChecker(const char*);
 
-    virtual ~ExterminationChecker();
     virtual void init(const TableIter&);
     virtual void control();
 

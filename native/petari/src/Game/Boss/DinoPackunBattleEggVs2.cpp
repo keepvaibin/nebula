@@ -43,9 +43,6 @@ DinoPackunBattleEggVs2::DinoPackunBattleEggVs2(DinoPackun* pHost)
     : DinoPackunAction("2回戦卵バトル", pHost), mStateDamage(nullptr), mTrackFireHolder(nullptr), mStateFire(nullptr) {
 }
 
-DinoPackunBattleEggVs2::~DinoPackunBattleEggVs2() {
-}
-
 void DinoPackunBattleEggVs2::setTrackFire(DinoPackunTrackFireHolder* pHolder) {
     mTrackFireHolder = pHolder;
 }

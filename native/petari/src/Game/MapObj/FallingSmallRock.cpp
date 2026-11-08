@@ -58,6 +58,3 @@ void FallingSmallRock::exeWait() {
         setNerve(GET_NERVE(FallingSmallRock, HostTypeMove));
     }
 }
-
-FallingSmallRock::~FallingSmallRock() {
-}

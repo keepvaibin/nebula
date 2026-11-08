@@ -23,9 +23,6 @@ namespace NrvPoltaArm {
     NEW_NERVE(PoltaArmNrvWaitRepairEnd, PoltaArm, WaitRepairEnd);
 };  // namespace NrvPoltaArm
 
-PoltaArm::~PoltaArm() {
-}
-
 PoltaArm::PoltaArm(const char* pName, const char* pModelName, MtxPtr pMtx)
     : ModelObj(pName, pModelName, pMtx, MR::DrawBufferType_Enemy, -2, -2, false), mFormationModel(), mBreakModel(), mHitPoint(2), mHitPointMax(2), mBrokenCounter(),
       mIsLeftArm(true) {

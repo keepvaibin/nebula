@@ -67,9 +67,6 @@ OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
     mClippingBox.f.zero();
 }
 
-OceanRing::~OceanRing() {
-}
-
 // Obj_arg0: 0 is a pipe of water (with its own model); 2 low waves, else medium waves, no pipe.
 // Obj_arg1: segments updated ahead of the player.
 void OceanRing::init(const TableIter& rIter) {

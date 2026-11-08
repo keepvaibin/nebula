@@ -127,6 +127,3 @@ void MercatorRailMoveParts::init(const TableIter& rIter) {
     MR::initMapPartsClipping(this, rIter, nullptr, true);
     updatePose();
 }
-
-MercatorRailMoveParts::~MercatorRailMoveParts() {
-}
