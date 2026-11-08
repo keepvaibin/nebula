@@ -36,8 +36,8 @@ enum CoordMatrixMode {
     CoordMatrixMode_EnvmapBasic,
     CoordMatrixMode_ProjmapBasic,
     CoordMatrixMode_ViewProjmapBasic,
-    CoordMatrixMode_Unknown4,
-    CoordMatrixMode_Unknown5,
+    CoordMatrixMode_ViewProjmapBasic2,  // made as ViewProjmapBasic
+    CoordMatrixMode_ProjmapBasic2,      // made as ProjmapBasic
     CoordMatrixMode_EnvmapOld,
     CoordMatrixMode_Envmap,
     CoordMatrixMode_Projmap,
@@ -56,14 +56,24 @@ class CoordMatrix {
 public:
     CoordMatrix();
     void calc();
+    // mInfo.mInfo: the mode in bits 0-5, the Maya SRT order in bit 7.
+    u32 getMode() const {
+        return mInfo.mInfo & 0x3F;
+    }
+
+    bool isMaya() const {
+        return ((mInfo.mInfo >> 7) & 1) != 0;
+    }
+
     // Every other mode with a matrix has eye space as its input.
     bool readsEye() const {
-        return (mInfo.mInfo & 0x3F) != 0 && !followsView();
+        return getMode() != CoordMatrixMode_None && !followsView();
     }
 
     bool followsView() const {
-        const u32 mode = mInfo.mInfo & 0x3F;
-        return mode == 2 || mode == 5 || mode == 8 || mode == 10 || mode == 11;
+        const u32 mode = getMode();
+        return mode == CoordMatrixMode_ProjmapBasic || mode == CoordMatrixMode_ProjmapBasic2 || mode == CoordMatrixMode_Projmap ||
+               mode == CoordMatrixMode_EnvmapOldEffectMtx || mode == CoordMatrixMode_EnvmapEffectMtx;
     }
 
     CoordMatrixInfo& getInfo() {

@@ -85,9 +85,9 @@ void MapObjActorInitInfo::setupFarClipping(f32 distance = -1.0f) {
     mFarClipping = distance;
 }
 
-void MapObjActorInitInfo::setupProjmapMtx(bool b1) {
+void MapObjActorInitInfo::setupProjmapMtx(bool isEveryFrame) {
     mUseProjectMapMtx = true;
-    mIsProjmapEveryFrame = b1;
+    mIsProjmapEveryFrame = isEveryFrame;
 }
 
 void MapObjActorInitInfo::setupRailMover() {
@@ -124,8 +124,8 @@ void MapObjActorInitInfo::setupSeAppear() {
     mIsAppearRiddleSE = true;
 }
 
-void MapObjActorInitInfo::setupMirrorReflection(bool b1) {
-    mIsMirrorFromModel = b1;
+void MapObjActorInitInfo::setupMirrorReflection(bool isFromModel) {
+    mIsMirrorFromModel = isFromModel;
     mUseMirrorReflection = true;
 }
 

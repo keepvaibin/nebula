@@ -53,18 +53,19 @@ void ClipAreaDropLaser::draw() const {
     material.mState.line_width = 20.0f / 6.0f;
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
 
-    for (int r29 = 1; r29 < mNumPointsToDraw; r29++) {
-        int u1 = mDrawCount - (r29 - 1);
-        int u2 = mDrawCount - r29;
+    // Back from the newest point through the 64-point ring.
+    for (int i = 1; i < mNumPointsToDraw; i++) {
+        int from = mDrawCount - (i - 1);
+        int to = mDrawCount - i;
 
-        if (u1 < 0)
-            u1 += 0x40;
-        if (u2 < 0)
-            u2 += 0x40;
+        if (from < 0)
+            from += 0x40;
+        if (to < 0)
+            to += 0x40;
 
-        if (u1 != mPointIndexToSkipDraw) {
+        if (from != mPointIndexToSkipDraw) {
             TypedDraw site = TDDraw::site(material, 0);
-            TDDraw::drawLine(site, mPoints[u1], mPoints[u2], 0x40F080);
+            TDDraw::drawLine(site, mPoints[from], mPoints[to], 0x40F080);
         }
     }
 }

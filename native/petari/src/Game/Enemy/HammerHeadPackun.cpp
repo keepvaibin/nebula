@@ -333,10 +333,10 @@ void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         !strcmp(MR::getSensorHost(pReceiver)->mName, "パンチングキノコ")) {
         f32 recvRadius = pReceiver->mRadius;
         f32 sendRadius = pSender->mRadius;
-        f32 temp = recvRadius / (sendRadius + recvRadius);
-        Vec3f hitMtx = pSender->mPosition * temp + (pReceiver->mPosition) * (1.0f - temp);
+        f32 senderWeight = recvRadius / (sendRadius + recvRadius);
+        Vec3f hitPos = pSender->mPosition * senderWeight + (pReceiver->mPosition) * (1.0f - senderWeight);
         MR::tryRumblePadMiddle(this, PLAYER_1);
-        MR::emitEffectHit(this, hitMtx, nullptr);
+        MR::emitEffectHit(this, hitPos, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
         MR::sendMsgPush(pReceiver, pSender);
@@ -374,10 +374,10 @@ bool HammerHeadPackun::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
     if (!checkBlowAttack() && (MR::isMsgJetTurtleAttack(msg) || MR::isMsgFireBallAttack(msg))) {
         f32 sendRadius = pReceiver->mRadius;
         f32 recvRadius = pSender->mRadius;
-        f32 temp = recvRadius / (recvRadius + sendRadius);
-        Vec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
+        f32 receiverWeight = recvRadius / (recvRadius + sendRadius);
+        Vec3f hitPos = pReceiver->mPosition * receiverWeight + (pSender->mPosition) * (1.0f - receiverWeight);
         MR::tryRumblePadMiddle(this, PLAYER_1);
-        MR::emitEffectHit(this, hitMtx, nullptr);
+        MR::emitEffectHit(this, hitPos, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
         return true;
@@ -408,10 +408,10 @@ bool HammerHeadPackun::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSen
     if (MR::isMsgToEnemyAttackBlow(msg) && !checkBlowAttack()) {
         f32 sendRadius = pReceiver->mRadius;
         f32 recvRadius = pSender->mRadius;
-        f32 temp = recvRadius / (recvRadius + sendRadius);
-        Vec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
+        f32 receiverWeight = recvRadius / (recvRadius + sendRadius);
+        Vec3f hitPos = pReceiver->mPosition * receiverWeight + (pSender->mPosition) * (1.0f - receiverWeight);
         MR::tryRumblePadMiddle(this, PLAYER_1);
-        MR::emitEffectHit(this, hitMtx, nullptr);
+        MR::emitEffectHit(this, hitPos, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
         return true;

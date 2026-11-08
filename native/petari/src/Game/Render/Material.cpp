@@ -37,101 +37,70 @@ void CoordMatrix::calc() {
     Mtx44 mtx1;
     Mtx44 mtx2;
 
-    const Mtx qMtx = {
+    // [-1, 1] to texture space [0, 1], V flipped. The current forms carry the 0.5 offset through the third input
+    // (scaled by it), the old forms as a translation.
+    const Mtx cToUV = {
         {0.5f, 0.0f, 0.5f, 0.0f}, {0.0f, -0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
-    const Mtx qMtx2 = {
+    const Mtx cToUVOld = {
         {0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f},
     };
 
-    u32 r29 = mInfo.mInfo & 0x3f;
-    u32 r30 = (mInfo.mInfo >> 7) & 1;
-    switch (r29) {
-    case 8:
-    case 11:
-        if (r30 == 0) {
-            textureMtx(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMaya(mInfo.mSRT, mtx2);
+    // The animated SRT: Maya's order or the classic one about mCenter, in the current or the old form.
+    const auto makeSrt = [this](bool isOld, MtxPtr pDst) {
+        if (isOld) {
+            if (isMaya()) {
+                textureMtxMayaOld(mInfo.mSRT, pDst);
+            } else {
+                textureMtxOld(mInfo.mSRT, mInfo.mCenter, pDst);
+            }
+        } else if (isMaya()) {
+            textureMtxMaya(mInfo.mSRT, pDst);
+        } else {
+            textureMtx(mInfo.mSRT, mInfo.mCenter, pDst);
         }
-        NebulaMtxConcat(mtx2, qMtx, mtx2);
+    };
+
+    switch (getMode()) {
+    case CoordMatrixMode_Projmap:
+    case CoordMatrixMode_EnvmapEffectMtx:
+        makeSrt(false, mtx2);
+        NebulaMtxConcat(mtx2, cToUV, mtx2);
         projConcat(mtx2, mInfo.mEffectMtx, mtx1);
         NebulaMtxCopy(mtx1, mMtx);
         break;
-    case 9:
-        if (r30 == 0) {
-            textureMtx(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMaya(mInfo.mSRT, mtx2);
-        }
-        NebulaMtxConcat(mtx2, qMtx, mtx2);
+    case CoordMatrixMode_ViewProjmap:
+        makeSrt(false, mtx2);
+        NebulaMtxConcat(mtx2, cToUV, mtx2);
         projConcat(mtx2, mInfo.mEffectMtx, mMtx);
         break;
-    case 7:
-        if (r30 == 0) {
-            textureMtx(mInfo.mSRT, mInfo.mCenter, mtx1);
-        } else if (r30 == 1) {
-            textureMtxMaya(mInfo.mSRT, mtx1);
-        }
-        NebulaMtxConcat(mtx1, qMtx, mMtx);
+    case CoordMatrixMode_Envmap:
+        makeSrt(false, mtx1);
+        NebulaMtxConcat(mtx1, cToUV, mMtx);
         break;
-    case 10:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mtx2);
-        }
-        NebulaMtxConcat(mtx2, qMtx2, mtx2);
+    case CoordMatrixMode_EnvmapOldEffectMtx:
+        makeSrt(true, mtx2);
+        NebulaMtxConcat(mtx2, cToUVOld, mtx2);
         projConcat(mtx2, mInfo.mEffectMtx, mtx1);
         NebulaMtxCopy(mtx1, mMtx);
         break;
-    case 6:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mtx1);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mtx1);
-        }
-        NebulaMtxConcat(mtx1, qMtx2, mMtx);
+    case CoordMatrixMode_EnvmapOld:
+        makeSrt(true, mtx1);
+        NebulaMtxConcat(mtx1, cToUVOld, mMtx);
         break;
-    case 1:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mMtx);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mMtx);
-        }
-        break;
-    case 2:
-    case 5:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mtx2);
-        }
+    case CoordMatrixMode_ProjmapBasic:
+    case CoordMatrixMode_ProjmapBasic2:
+        makeSrt(true, mtx2);
         projConcat(mtx2, mInfo.mEffectMtx, mtx1);
         NebulaMtxCopy(mtx1, mMtx);
         break;
-    case 3:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mtx2);
-        }
-        projConcat(mtx2, mInfo.mEffectMtx, mMtx);
-        break;
-    case 4:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mtx2);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mtx2);
-        }
+    case CoordMatrixMode_ViewProjmapBasic:
+    case CoordMatrixMode_ViewProjmapBasic2:
+        makeSrt(true, mtx2);
         projConcat(mtx2, mInfo.mEffectMtx, mMtx);
         break;
     default:
-        if (r30 == 0) {
-            textureMtxOld(mInfo.mSRT, mInfo.mCenter, mMtx);
-        } else if (r30 == 1) {
-            textureMtxMayaOld(mInfo.mSRT, mMtx);
-        }
+        makeSrt(true, mMtx);
         break;
     }
 }

@@ -102,10 +102,10 @@ void AreaFormCube::updateBoxParam() {
     mBounding.f.set(boxMax);
 
     if (mCubeType == 1) {
-        Vec3f temp(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
+        Vec3f halfHeight(0.0f, 0.5f * (mScale.y * getBaseSize()), 0.0f);
 
-        mBounding.i += temp;
-        mBounding.f += temp;
+        mBounding.i += halfHeight;
+        mBounding.f += halfHeight;
     }
 }
 
@@ -278,13 +278,13 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     MR::getPlacementRotate(rIter, &rotate);
     calcDir(rotate);
 
-    f32 temp;
-    rIter.getValue< f32 >("scale_x", &temp);
+    f32 scale;
+    rIter.getValue< f32 >("scale_x", &scale);
 
-    mRadius = temp;
+    mRadius = scale;
     mRadius *= 500.0f;
 
-    rIter.getValue< f32 >("scale_y", &temp);
-    mHeight = temp;
+    rIter.getValue< f32 >("scale_y", &scale);
+    mHeight = scale;
     mHeight *= 500.0f;
 }

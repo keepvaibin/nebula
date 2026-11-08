@@ -97,33 +97,28 @@ SiteMaterial OceanRingPipeOutside::loadMaterial() const {
 }
 
 void OceanRingPipeOutside::sendGD() {
-    s32 vv;
-    s32 v;
-    f32 f29;
-    f32 f28;
-    f29 = 1.0f;
-    f28 = 0.0f;
+    // One strip per side band, along the segments; U steps per segment, V per side. Sums run step by step (the order
+    // fixes their rounding).
+    const auto vertex = [this](u16 at, f32 s, f32 t) {
+        const Vec3f& rPlace = mRingPipe->mPositions[at];
+        const Vec3f& rNormal = mRingPipe->mNormals[at];
+        return VertexPNT{rPlace.x, rPlace.y, rPlace.z, rNormal.x, rNormal.y, rNormal.z, s, t};
+    };
+    f32 farV = 1.0f;
+    f32 nearV = 0.0f;
 
     for (s32 i = 0; i < mRingPipe->mNumSides - 1; i++) {
-        f32 f27 = 0.0f;
-        vv = mRingPipe->mNumSegments;
-        VertexPNT* vtx = mMesh.strip((u16)(vv << 1));
+        f32 u = 0.0f;
+        VertexPNT* vtx = mMesh.strip((u16)(mRingPipe->mNumSegments << 1));
         for (s32 j = 0; j < mRingPipe->mNumSegments; j++) {
-            v = j * mRingPipe->mNumSides;
-            u16 cl2 = i + v + 1;
-            u16 cl = i + v;
-            const auto vertex = [this](u16 at, f32 s, f32 t) {
-                const Vec3f& rPlace = mRingPipe->mPositions[at];
-                const Vec3f& rNormal = mRingPipe->mNormals[at];
-                return VertexPNT{rPlace.x, rPlace.y, rPlace.z, rNormal.x, rNormal.y, rNormal.z, s, t};
-            };
-            *vtx++ = vertex(cl2, f27, f29);
-            *vtx++ = vertex(cl, f27, f28);
+            const s32 segStart = j * mRingPipe->mNumSides;
+            *vtx++ = vertex(i + segStart + 1, u, farV);
+            *vtx++ = vertex(i + segStart, u, nearV);
 
-            f27 += ::sTexRateU;
+            u += ::sTexRateU;
         }
-        f28 = f29;
-        f29 += ::sTexRateV;
+        nearV = farV;
+        farV += ::sTexRateV;
     }
 }
 

@@ -36,10 +36,11 @@ void CubeCameraArea::init(const TableIter& rIter) {
         mCategoryMask = 0;
     }
 
-    u32 temp = 1 << (mCategoryMask & 0xF);
+    // Bits 4 and up are a category mask; when they are zero, the low nibble names one category.
+    u32 singleCategoryBit = 1 << (mCategoryMask & 0xF);
     mCategoryMask = mCategoryMask >> 4;
     if (mCategoryMask == 0) {
-        mCategoryMask |= temp;
+        mCategoryMask |= singleCategoryBit;
     }
 
     MR::connectToSceneAreaObj(this);

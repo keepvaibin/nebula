@@ -27,6 +27,63 @@ namespace {
     // Material colours 0 and 4.
     const NebulaColor8 cBaseColor = {0x28, 0x28, 0x28, 0x14};
     const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
+
+    // Texture steps: U per segment along the rail, V per point across it. Textures 0 and 1 share the step.
+    const f32 cTexStep01 = 0.05f;
+    const f32 cTexStep2 = 0.1f;
+
+    struct OceanRingUV {
+        f32 u0, u1, u2;
+        f32 v01, v2;
+    };
+
+    // Points on the ring's whole strip: one per segment, plus point 0 again on a loop rail.
+    s32 getRingStripPoints(const OceanRing* pRing) {
+        return (MR::isLoopRail(pRing) ? 1 : 0) + pRing->mSegCount;
+    }
+
+    // Per segment of the part: beginStrip(vertex count), then emitPair(near point, its UV, far point, its UV) for each point
+    // across the ring. Coordinates are summed step by step; the order fixes their rounding.
+    template < typename BeginStrip, typename EmitPair >
+    void walkPartSegments(const OceanRingPartDrawer& rPart, BeginStrip beginStrip, EmitPair emitPair) {
+        const OceanRing* pRing = rPart.mOceanRing;
+        OceanRingUV nearUV = {rPart.mTexU0, rPart.mTexU1, rPart.mTexU2, 0.0f, 0.0f};
+        OceanRingUV farUV = nearUV;
+
+        for (s32 i = 0; i < rPart.mNumPoints - 1; i++) {
+            const s32 index = rPart.mStartIndex + i;
+            s32 nextIndex = index + 1;
+            if (i == rPart.mNumPoints - 2 && rPart.mIsClosed) {
+                nextIndex = 0;
+            }
+
+            farUV.u0 += cTexStep01;
+            farUV.u1 += cTexStep01;
+            farUV.u2 += cTexStep2;
+            nearUV.v01 = 0.0f;
+            nearUV.v2 = 0.0f;
+            farUV.v01 = 0.0f;
+            farUV.v2 = 0.0f;
+            beginStrip(pRing->mStride * 2);
+
+            for (s32 j = 0; j < pRing->mStride; j++) {
+                emitPair(pRing->getPoint(j, index), nearUV, pRing->getPoint(j, nextIndex), farUV);
+                nearUV.v01 += cTexStep01;
+                nearUV.v2 += cTexStep2;
+                farUV.v01 += cTexStep01;
+                farUV.v2 += cTexStep2;
+            }
+
+            nearUV.u0 = farUV.u0;
+            nearUV.u1 = farUV.u1;
+            nearUV.u2 = farUV.u2;
+        }
+    }
+
+    VertexPCT3 makeVertexPCT3(const WaterPoint* pPoint, const OceanRingUV& rUV) {
+        return {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha),
+                rUV.u0, rUV.v01, rUV.u1, rUV.v01, rUV.u2, rUV.v2};
+    }
 }  // namespace
 
 OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int startIndex, int numPoints, bool isClosed, f32* pTexCoordU0,
@@ -70,182 +127,40 @@ void OceanRingPartDrawer::draw(TypedDraw& rDraw) const {
 }
 
 void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
-    f32 f30 = 0.05f;
-    f32 f29;
-    f32 f28;
-    f32 f27;
-    f32 f26;
-    f32 f25;
-    f32 f24;
-    f32 f23;
-    f32 f22;
-    f32 f21 = 1.0f;
+    VertexPCT3* vtx = nullptr;
+    walkPartSegments(
+        *this, [&](s32 count) { vtx = mMesh.strip(count); },
+        [&](const WaterPoint* pNear, const OceanRingUV& rNearUV, const WaterPoint* pFar, const OceanRingUV& rFarUV) {
+            *vtx++ = makeVertexPCT3(pNear, rNearUV);
+            *vtx++ = makeVertexPCT3(pFar, rFarUV);
+        });
 
-    f28 = f30 * f21;
-    f29 = 0.1f * f21;
-    f27 = mTexU0;
-    f25 = mTexU1;
-    f23 = mTexU2;
-    f26 = mTexU0;
-    f24 = mTexU1;
-    f22 = mTexU2;
+    // The next part's U starts where this one ends.
     for (s32 i = 0; i < mNumPoints - 1; i++) {
-        s32 index = mStartIndex + i;
-        s32 indexPlusOne = index + 1;
-        if (i == mNumPoints - 2 && mIsClosed) {
-            indexPlusOne = 0;
-        }
-
-        mOceanRing->getPoint(0, index);
-        mOceanRing->getPoint(0, indexPlusOne);
-
-        f26 += f28;
-        f24 += f28;
-        f22 += f29;
-        f32 f20 = 0.0f;
-        f32 f19 = 0.0f;
-        f32 f18 = 0.0f;
-        f32 f17 = 0.0f;
-        f32 f16 = 0.0f;
-        f32 f15 = 0.0f;
-        VertexPCT3* vtx = mMesh.strip((u16)mOceanRing->mStride << 1);
-
-        for (s32 j = 0; j < mOceanRing->mStride; j++) {
-            WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f27, f17, f25, f16, f23, f15};
-
-            pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f26, f20, f24, f19, f22, f18};
-
-            f17 += f28;
-            f16 += f28;
-            f15 += f29;
-            f20 += f28;
-            f19 += f28;
-            f18 += f29;
-        }
-
-        f27 = f26;
-        f25 = f24;
-        f23 = f22;
-        if (i != mNumPoints - 1) {
-            *pTexCoordU0 += 0.05f * f21;
-            *pTexCoordU1 += 0.05f * f21;
-            *pTexCoordU2 += 0.1f * f21;
-        }
+        *pTexCoordU0 += cTexStep01;
+        *pTexCoordU1 += cTexStep01;
+        *pTexCoordU2 += cTexStep2;
     }
 }
 
 void OceanRingPartDrawer::drawDynamic(TypedDraw& rDraw) const {
-    f32 f30 = 0.05f;
-    f32 f29;
-    f32 f28;
-    f32 f27;
-    f32 f26;
-    f32 f25;
-    f32 f24;
-    f32 f23;
-    f32 f22;
-    f32 f21 = 1.0f;
-
-    f28 = f30 * f21;
-    f29 = 0.1f * f21;
-    f27 = mTexU0;
-    f25 = mTexU1;
-    f23 = mTexU2;
-    f26 = mTexU0;
-    f24 = mTexU1;
-    f22 = mTexU2;
-    for (s32 i = 0; i < mNumPoints - 1; i++) {
-        s32 index = mStartIndex + i;
-        s32 indexPlusOne = index + 1;
-        if (i == mNumPoints - 2 && mIsClosed) {
-            indexPlusOne = 0;
-        }
-
-        mOceanRing->getPoint(0, index);
-        mOceanRing->getPoint(0, indexPlusOne);
-
-        f26 += f28;
-        f24 += f28;
-        f22 += f29;
-        f32 f20 = 0.0f;
-        f32 f19 = 0.0f;
-        f32 f18 = 0.0f;
-        f32 f17 = 0.0f;
-        f32 f16 = 0.0f;
-        f32 f15 = 0.0f;
-
-        VertexPCT3* vtx = rDraw.vertices< VertexPCT3 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2);
-        for (s32 j = 0; j < mOceanRing->mStride; j++) {
-            WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f27, f17, f25, f16, f23, f15};
-
-            pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), f26, f20, f24, f19, f22, f18};
-
-            f17 += f28;
-            f16 += f28;
-            f15 += f29;
-            f20 += f28;
-            f19 += f28;
-            f18 += f29;
-        }
-
-        f27 = f26;
-        f25 = f24;
-        f23 = f22;
-    }
+    VertexPCT3* vtx = nullptr;
+    walkPartSegments(
+        *this, [&](s32 count) { vtx = rDraw.vertices< VertexPCT3 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, count); },
+        [&](const WaterPoint* pNear, const OceanRingUV& rNearUV, const WaterPoint* pFar, const OceanRingUV& rFarUV) {
+            *vtx++ = makeVertexPCT3(pNear, rNearUV);
+            *vtx++ = makeVertexPCT3(pFar, rFarUV);
+        });
 }
 
 void OceanRingPartDrawer::drawDynamicBloom(TypedDraw& rDraw) const {
-    f32 f30 = 0.05f;
-    f32 f28;
-    f32 f27;
-    f32 f26;
-    f32 f25;
-    f32 f24;
-    f32 f21 = 1.0f;
-
-    f28 = f30 * f21;
-    f27 = mTexU0;
-    f25 = mTexU1;
-    f26 = mTexU0;
-    f24 = mTexU1;
-    for (s32 i = 0; i < mNumPoints - 1; i++) {
-        s32 index = mStartIndex + i;
-        s32 indexPlusOne = index + 1;
-        if (i == mNumPoints - 2 && mIsClosed) {
-            indexPlusOne = 0;
-        }
-
-        mOceanRing->getPoint(0, index);
-        mOceanRing->getPoint(0, indexPlusOne);
-
-        f26 += f28;
-        f24 += f28;
-        f32 f20 = 0.0f;
-        f32 f19 = 0.0f;
-        f32 f17 = 0.0f;
-        f32 f16 = 0.0f;
-
-        VertexPT2* vtx = rDraw.vertices< VertexPT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2);
-        for (s32 j = 0; j < mOceanRing->mStride; j++) {
-            WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            WaterPoint* pPoint2 = mOceanRing->getPoint(j, indexPlusOne);
-            *vtx++ = {pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z, f27, f17, f25, f16};
-
-            *vtx++ = {pPoint2->mPosition.x, pPoint2->mPosition.y, pPoint2->mPosition.z, f26, f20, f24, f19};
-
-            f17 += f28;
-            f16 += f28;
-            f20 += f28;
-            f19 += f28;
-        }
-
-        f27 = f26;
-        f25 = f24;
-    }
+    VertexPT2* vtx = nullptr;
+    walkPartSegments(
+        *this, [&](s32 count) { vtx = rDraw.vertices< VertexPT2 >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, count); },
+        [&](const WaterPoint* pNear, const OceanRingUV& rNearUV, const WaterPoint* pFar, const OceanRingUV& rFarUV) {
+            *vtx++ = {pNear->mPosition.x, pNear->mPosition.y, pNear->mPosition.z, rNearUV.u0, rNearUV.v01, rNearUV.u1, rNearUV.v01};
+            *vtx++ = {pFar->mPosition.x, pFar->mPosition.y, pFar->mPosition.z, rFarUV.u0, rFarUV.v01, rFarUV.u1, rFarUV.v01};
+        });
 }
 
 OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
@@ -331,61 +246,31 @@ void OceanRingDrawer::initParts() {
 }
 
 void OceanRingDrawer::initMesh() {
-    s32 flag = 0;
-
-    if (MR::isLoopRail(mRing)) {
-        flag = 1;
-    }
-
-    mMesh.init( 2 * (flag + mRing->mSegCount));
+    mMesh.init(2 * getRingStripPoints(mRing));
     drawGD();
     mMesh.send();
 }
 
+// The whole ring as one flat strip between its two edge lines (last and first point across) at rest; V matches the
+// part strips' at those points.
 void OceanRingDrawer::drawGD() {
-    s32 flag = 0;
+    const s32 numPoints = getRingStripPoints(mRing);
+    const s32 lastAcross = mRing->mStride - 1;
+    const f32 edgeV01 = cTexStep01 * lastAcross;
+    const f32 edgeV2 = cTexStep2 * lastAcross;
+    f32 u01 = 0.0f;
+    f32 u2 = 0.0f;
 
-    if (MR::isLoopRail(mRing)) {
-        flag = 1;
-    }
+    VertexPCT3* vtx = mMesh.strip(numPoints * 2);
+    for (s32 i = 0; i < numPoints; i++) {
+        const s32 seg = i == mRing->mSegCount ? 0 : i;
+        const WaterPoint* pLast = mRing->getPoint(lastAcross, seg);
+        const WaterPoint* pFirst = mRing->getPoint(0, seg);
+        *vtx++ = {pLast->mOrigPos.x, pLast->mOrigPos.y, pLast->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pLast->mAlpha), u01, edgeV01, u01, edgeV01, u2, edgeV2};
+        *vtx++ = {pFirst->mOrigPos.x, pFirst->mOrigPos.y, pFirst->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pFirst->mAlpha), u01, 0.0f, u01, 0.0f, u2, 0.0f};
 
-    f32 scalex;
-    f32 U0 = 0.0f;
-    f32 U1 = 0.0f;
-    f32 U2 = 0.0f;
-    f32 V01 = 0.0f;
-    f32 V11 = 0.0f;
-    f32 V21 = 0.0f;
-    s32 m = mRing->mStride;
-    m -= 1;
-    f32 V00 = 0.05f * m;
-    f32 V10 = 0.05f * m;
-    f32 V20 = 0.1f * m;
-
-    VertexPCT3* vtx = mMesh.strip((flag + mRing->mSegCount) * 2);
-
-    scalex = 1.0f;
-    f32 V0 = V00 * scalex;
-    f32 V1 = V10 * scalex;
-    f32 V2 = V20 * scalex;
-
-    WaterPoint* pPoint;
-    WaterPoint* pPoint2;
-    for (u32 i = 0; i < flag + mRing->mSegCount; i++) {
-        s32 index = i;
-        if (index == mRing->mSegCount) {
-            index = 0;
-        }
-
-        s32 ddd = index * mRing->mStride;
-        pPoint = mRing->mWaterPoints[mRing->mStride + ddd - 1];
-        pPoint2 = mRing->mWaterPoints[ddd];
-        *vtx++ = {pPoint->mOrigPos.x, pPoint->mOrigPos.y, pPoint->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint->mAlpha), U0, V0, U1, V1, U2, V2};
-        *vtx++ = {pPoint2->mOrigPos.x, pPoint2->mOrigPos.y, pPoint2->mOrigPos.z, Rgba8(0xFF, 0xFF, 0xFF, pPoint2->mAlpha), U0, V01, U1, V11, U2, V21};
-
-        U0 += (0.05f * scalex);
-        U1 += (0.05f * scalex);
-        U2 += (0.1f * scalex);
+        u01 += cTexStep01;
+        u2 += cTexStep2;
     }
 }
 

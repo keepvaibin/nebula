@@ -510,24 +510,24 @@ bool Gesso::calcSinkMove(s32 step) {
     return angle >= 180.0f;
 }
 
-void Gesso::calcAndSetVelocity(f32 f1, f32 f2, f32 f3) {
+void Gesso::calcAndSetVelocity(f32 side, f32 up, f32 front) {
     Vec3f* vel = &mVelocity;
     Vec3f sideVec;
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     MR::calcSideVec(&sideVec, this);
-    mVelocity.scale(f2, upVec);
-    vel->scaleAdd(f1, sideVec, *vel);
-    vel->scaleAdd(f3, mFront, *vel);
+    mVelocity.scale(up, upVec);
+    vel->scaleAdd(side, sideVec, *vel);
+    vel->scaleAdd(front, mFront, *vel);
 }
 
-void Gesso::calcAndSetUpVecTarget(f32 f1, f32 f2, f32 f3) {
-    if (f1 == 0.0f && f2 == 0.0f && f3 == 0.0f) {
+void Gesso::calcAndSetUpVecTarget(f32 x, f32 y, f32 z) {
+    if (x == 0.0f && y == 0.0f && z == 0.0f) {
         mUpTarget.set(0.0f, 1.0f, 0.0f);
         return;
     }
 
-    mUpTarget.set(f1, f2, f3);
+    mUpTarget.set(x, y, z);
     MR::normalize(&mUpTarget);
     return;
 }

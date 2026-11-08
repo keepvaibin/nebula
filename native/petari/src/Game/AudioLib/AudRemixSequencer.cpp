@@ -38,13 +38,13 @@ void AudRmxSeqNoteOnTimer::setData(const RemixNoteTrackData* trackData, const Re
     mRemaining = mDelay + data->mLength;
 }
 
-bool AudRmxSeqNoteOnTimer::update(f32 f1) {
+bool AudRmxSeqNoteOnTimer::update(f32 ticks) {
     if (mRemaining <= 0.0f) {
         initData();
         return false;
     }
 
-    mRemaining -= f1;
+    mRemaining -= ticks;
 
     if (mDelay <= 0.0f) {
         if (mTrack != nullptr && mNote != nullptr) {
@@ -55,8 +55,8 @@ bool AudRmxSeqNoteOnTimer::update(f32 f1) {
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xb, mNote->mNoteNo);
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xf, mNote->mVelocity);
 
-            f32 x200 = pSeq->mTempo;
-            u16 length = (s32)((mNote->mLength * 120.0f) / x200);
+            f32 tempo = pSeq->mTempo;
+            u16 length = (s32)((mNote->mLength * 120.0f) / tempo);
             if (length < 1) {
                 length = 1;
             } else if (length > 1440) {
@@ -68,7 +68,7 @@ bool AudRmxSeqNoteOnTimer::update(f32 f1) {
         }
         return true;
     } else {
-        mDelay -= f1;
+        mDelay -= ticks;
         return false;
     }
 }
@@ -110,11 +110,10 @@ void AudRemixSequencer::update() {
     }
 }
 
-void AudRemixSequencer::setTempo(f32 f1) {
-    mTempo = f1;
-    f32 f2 = f1 + 0.0;
-    f32 f3 = 48.0f;
-    mTicksPerFrame = f3 * f2 / 3600.0f;
+// tempo in beats a minute; 48 ticks a beat, 3600 frames a minute.
+void AudRemixSequencer::setTempo(f32 tempo) {
+    mTempo = tempo;
+    mTicksPerFrame = 48.0f * tempo / 3600.0f;
 }
 
 AudRmxSeqNoteOnTimer* AudRemixSequencer::newNoteOnTimer() {

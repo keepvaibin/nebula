@@ -19,10 +19,9 @@ public:
 
     void setSpeed(f32 speed);
     void setLife(s32 life);
-    void setColor(f32 color);
     void setRadius(f32 radius);
-    void initPos(const LiveActor* actor);
-    void startBrk(const char*);
+    void initPos(const LiveActor* pActor);
+    void startBrk(const char* pAnimName);
     void exeSpread();
 
     LiveActor* mHost;
@@ -35,7 +34,7 @@ public:
     ModelObj* mShadowModel;
     Vec3f mFront;
     Vec3f mBeamGravity;
-    Vec3f mCenter;
+    Vec3f mEdgePos;  // the ring's leading edge point; the radius is its distance from the host's axis
     Vec3f mSoundPos;
 };
 

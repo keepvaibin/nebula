@@ -666,10 +666,10 @@ namespace MR {
     }
 
     void normalize(Vec2f* pVec) {
-        Vec3f temp(pVec->x, pVec->y, 0.0f);
-        normalize(&temp);
-        pVec->x = temp.x;
-        pVec->y = temp.y;
+        Vec3f vec3(pVec->x, pVec->y, 0.0f);
+        normalize(&vec3);
+        pVec->x = vec3.x;
+        pVec->y = vec3.y;
     }
 
     void normalize(Vec3f* pVec) {
@@ -1048,12 +1048,12 @@ namespace MR {
                 }
             }
 
-            s32 temp = pIndexArray[index];
-            f32 temp2 = pSortArray[index];
+            s32 swappedIndex = pIndexArray[index];
+            f32 swappedValue = pSortArray[index];
             pIndexArray[index] = pIndexArray[indexOfSmallestElement];
             pSortArray[index] = element;
-            pIndexArray[indexOfSmallestElement] = temp;
-            pSortArray[indexOfSmallestElement] = temp2;
+            pIndexArray[indexOfSmallestElement] = swappedIndex;
+            pSortArray[indexOfSmallestElement] = swappedValue;
         }
     };
 };  // namespace MR

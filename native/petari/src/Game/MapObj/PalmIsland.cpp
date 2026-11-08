@@ -57,16 +57,12 @@ void PalmIsland::exeFloat() {
     }
 
     f32 value = MR::sinDegree(90.0f + 1.44f * getNerveStep()) * 1.5f;
-    bool temp = false;
+    bool isRising = value > 0.0f;
 
-    if (value > 0.0f) {
-        temp = true;
-    }
-
-    if (temp != mIsRising) {
+    if (isRising != mIsRising) {
         MR::startSound(this, "SE_OJ_PALM_ISLAND_WAVE");
     }
 
-    mIsRising = temp;
+    mIsRising = isRising;
     mVelocity.scale(value, *getGravity());
 }

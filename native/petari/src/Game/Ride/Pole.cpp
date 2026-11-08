@@ -585,16 +585,16 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         climbProj.sub(mBasePos);
         mClimbCoord = climbProj.dot(mUp);
         f32 poleTop = mHeight;
-        f32 temp;
+        f32 clamped;
         if (mClimbCoord < 120.0f) {
-            temp = 120.0f;
+            clamped = 120.0f;
         } else if (mClimbCoord > poleTop) {
-            temp = poleTop;
+            clamped = poleTop;
         } else {
-            temp = mClimbCoord;
+            clamped = mClimbCoord;
         }
 
-        mClimbCoord = temp;
+        mClimbCoord = clamped;
         mClimbSpeed = 0.0f;
         updateBindTrans();
 

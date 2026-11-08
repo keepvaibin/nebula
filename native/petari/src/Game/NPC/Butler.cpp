@@ -232,14 +232,10 @@ void Butler::control() {
     }
 
     if (mIsStarPieceLecture) {
-        bool temp = mIsPointed;
-        if (MR::isStarPointerPointing1P(this, "弱", false, false)) {
-            mIsPointed = true;
-        } else {
-            mIsPointed = false;
-        }
+        bool wasPointed = mIsPointed;
+        mIsPointed = MR::isStarPointerPointing1P(this, "弱", false, false);
 
-        if (!temp && mIsPointed == 1) {
+        if (!wasPointed && mIsPointed) {
             MR::startSystemSE("SE_SY_TICOFAT_POINT");
         }
     }
