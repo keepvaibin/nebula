@@ -40,7 +40,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include <nw4r/ut/ResFont.h>
+#include <Game/Ui/ResFont.hpp>
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Screen/NebulaQuitButton.hpp"

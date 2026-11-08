@@ -138,7 +138,7 @@ typedef struct NebulaParticleInstance {
     uint32_t reserved;
 } NebulaParticleInstance;
 
-/* A glyph a NEBULA_ITEM_INSTANCES draw places (glyph_instances.hlsl, nw4r CharWriter's runs): three rows of four. Its
+/* A glyph a NEBULA_ITEM_INSTANCES draw places (glyph_instances.hlsl, Ui::CharWriter's runs): three rows of four. Its
    quad in the draw matrix's plane z = 0, corners top left, top right, bottom right, bottom left. */
 typedef struct NebulaGlyphInstance {
     float left, top, right, bottom;

@@ -4,11 +4,9 @@
 class IconComet;
 class LayoutActor;
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class GalaxyInfoLayoutSetter {
 public:
@@ -35,7 +33,7 @@ public:
     void hideCometWindow();
 
     LayoutActor* mHost;
-    nw4r::lyt::TexMap** mReplaceTexture;
-    nw4r::lyt::TexMap* mUnknownTexture;
+    Ui::TexMap** mReplaceTexture;
+    Ui::TexMap* mUnknownTexture;
     IconComet* mIconComet;
 };

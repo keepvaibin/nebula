@@ -13,11 +13,9 @@ class GalaxyMapTicoIcon;
 class GalaxyMapTitle;
 class IconAButton;
 
-namespace nw4r {
-    namespace lyt {
-        class DrawInfo;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class DrawInfo;
+}  // namespace Ui
 
 class GalaxyMap : public LayoutActor {
 public:
@@ -32,8 +30,8 @@ public:
     virtual void kill();
 
     void movementForCapture();
-    void calcAnimForCapture(const nw4r::lyt::DrawInfo&);
-    void drawForCapture(const nw4r::lyt::DrawInfo&);
+    void calcAnimForCapture(const Ui::DrawInfo&);
+    void drawForCapture(const Ui::DrawInfo&);
     void setModeNormal();
     void setModeNewGalaxyDiscover();
     void setModeNewTicoGalaxyDiscover();

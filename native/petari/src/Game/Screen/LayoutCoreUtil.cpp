@@ -13,19 +13,19 @@ static const char16_t sDefaultMsg[] = u"XXXXXXXX";
 
 namespace LayoutCoreUtil {
 
-    const char* getPaneUserData(const nw4r::lyt::Pane* pPane, char* pUserData) {
+    const char* getPaneUserData(const Ui::Pane* pPane, char* pUserData) {
         MR::copyMemory(pUserData, pPane->mUserData, 8);
         pUserData[8] = '\0';
         return pUserData;
     }
 
-    u16 setTextBoxMessage(nw4r::lyt::TextBox* pTextBox, const char16_t* pMsg) {
+    u16 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg) {
         char16_t buffer[512];
         ReplaceTagProcessor::Replace(buffer, pMsg);
         return pTextBox->SetString(buffer, 0, MR::getStringLengthWithMessageTag(buffer));
     }
 
-    void initTextBoxPane(nw4r::lyt::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {
+    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {
         CustomTagProcessor* processor = new CustomTagProcessor(pTextBox);
 
         if (strncmp(pTextBox->mName, "Sha", 3) == 0) {
@@ -63,7 +63,7 @@ namespace LayoutCoreUtil {
         }
     }
 
-    void reallocateTextBoxMessage(nw4r::lyt::TextBox* pTextBox, u32 allocSize) {
+    void reallocateTextBoxMessage(Ui::TextBox* pTextBox, u32 allocSize) {
         pTextBox->AllocStringBuffer(allocSize + 1);
     }
 };  // namespace LayoutCoreUtil
@@ -94,7 +94,7 @@ namespace MR {
         pScreenPos->y = MR::getScreenHeight() * 0.5f + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
     }
 
-    void convertPaneLocalPosToScreenPos(Vec2f* pScreenPos, const nw4r::lyt::Pane* pPane, const Vec2f& rLocalPos) {
+    void convertPaneLocalPosToScreenPos(Vec2f* pScreenPos, const Ui::Pane* pPane, const Vec2f& rLocalPos) {
         Vec3f pos(rLocalPos);
         Vec3f layoutPos;
         NebulaMtxMultVec(pPane->mGlbMtx, pos, layoutPos);

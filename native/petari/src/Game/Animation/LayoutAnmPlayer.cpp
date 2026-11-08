@@ -1,6 +1,6 @@
 #include "Game/Animation/LayoutAnmPlayer.hpp"
 #include "Game/Screen/LayoutManager.hpp"
-#include <nw4r/lyt/animation.h>
+#include <Game/Ui/Animation.hpp>
 
 LayoutAnmPlayer::LayoutAnmPlayer(const LayoutManager* pManager) : mManager(pManager), mAnimName(), mAnimTransform(), mFrameCtrl() {
 }
@@ -18,7 +18,7 @@ void LayoutAnmPlayer::reflectFrame() {
 }
 
 void LayoutAnmPlayer::start(const char* pAnimName) {
-    nw4r::lyt::AnimTransform* pAnimTransform = mManager->getAnimTransform(pAnimName);
+    Ui::AnimTransform* pAnimTransform = mManager->getAnimTransform(pAnimName);
 
     if (pAnimTransform != mAnimTransform) {
         mAnimTransform = pAnimTransform;

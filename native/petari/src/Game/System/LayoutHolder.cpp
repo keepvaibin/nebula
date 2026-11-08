@@ -6,7 +6,7 @@
 
 #include "Game/Util/StringUtil.hpp"
 
-LayoutHolder::LayoutHolder(AssetFolder& rArchive) : nw4r::lyt::ResourceAccessor(), mArchive(&rArchive) {
+LayoutHolder::LayoutHolder(AssetFolder& rArchive) : Ui::ResourceAccessor(), mArchive(&rArchive) {
     initializeArc();
 }
 
@@ -43,7 +43,7 @@ void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResou
     return pResource;
 }
 
-nw4r::ut::Font* LayoutHolder::GetFont(const char* pName) {
+Ui::Font* LayoutHolder::GetFont(const char* pName) {
     if (!MR::strcasecmp(pName, "MessageFont26.brfnt")) {
         return MR::getFontOnCurrentLanguage();
     }

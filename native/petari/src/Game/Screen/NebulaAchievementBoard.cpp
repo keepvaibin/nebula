@@ -21,13 +21,13 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <cstring>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/material.h>
-#include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/picture.h>
-#include <nw4r/lyt/textBox.h>
-#include <nw4r/lyt/window.h>
-#include <nw4r/ut/Font.h>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Material.hpp>
+#include <Game/Ui/Pane.hpp>
+#include <Game/Ui/Picture.hpp>
+#include <Game/Ui/TextBox.hpp>
+#include <Game/Ui/Window.hpp>
+#include <Game/Ui/Font.hpp>
 #include <NebulaGpu.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
@@ -284,7 +284,7 @@ struct NebulaBoardParts {
     NebulaPaneKit mText;    // InformationWindow: the game's message font
     NebulaPaneKit mWindow;  // SysInfoWindowMini: the window with a ring
     NebulaPaneKit mButton;  // BackButton: the game's button
-    nw4r::lyt::TexMap** mTextures;
+    Ui::TexMap** mTextures;
     Pane* mBoard;
     Window* mPanel;
     TextBox* mTitleGlyph;
@@ -382,15 +382,15 @@ namespace {
         const s32 texture = pIcon != nullptr && pIcon->mGlyph == 0 ? NebulaAchievements::findIconTexture(pIcon) : -1;
         if (pPicture != nullptr && texture >= 0 && pParts->mTextures[texture] != nullptr) {
             pPicture->GetMaterial()->SetTexture(0, *pParts->mTextures[texture]);
-            nw4r::math::VEC2(*pCoords)[4] = pPicture->mTexCoordAry.mData;
+            Vec2f(*pCoords)[4] = pPicture->mTexCoordAry.mData;
             if (pCoords != nullptr && pPicture->mTexCoordAry.mNum > 0) {
-                pCoords[0][0] = nw4r::math::VEC2(pIcon->mU0, pIcon->mV0);
-                pCoords[0][1] = nw4r::math::VEC2(pIcon->mU1, pIcon->mV0);
-                pCoords[0][2] = nw4r::math::VEC2(pIcon->mU0, pIcon->mV1);
-                pCoords[0][3] = nw4r::math::VEC2(pIcon->mU1, pIcon->mV1);
+                pCoords[0][0] = Vec2f(pIcon->mU0, pIcon->mV0);
+                pCoords[0][1] = Vec2f(pIcon->mU1, pIcon->mV0);
+                pCoords[0][2] = Vec2f(pIcon->mU0, pIcon->mV1);
+                pCoords[0][3] = Vec2f(pIcon->mU1, pIcon->mV1);
             }
             const f32 fill = pIcon->mFill > 0.0f ? pIcon->mFill : 1.0f;
-            pPicture->mSize = nw4r::lyt::Size(size * fill * pIcon->mWidth / pIcon->mHeight, size * fill);
+            pPicture->mSize = Ui::Size(size * fill * pIcon->mWidth / pIcon->mHeight, size * fill);
             for (u32 i = 0; i < 4; i++) {
                 pPicture->SetVtxColor(i, color(tint));
             }
@@ -413,10 +413,10 @@ namespace {
     // An icon centred on (x, y): a picture by its middle, a glyph by where its picture sits.
     void placeIcon(TextBox* pGlyph, Picture* pPicture, f32 x, f32 y, f32 size) {
         if (pGlyph != nullptr) {
-            pGlyph->mTranslate = nw4r::math::VEC3(x, glyphCentre(y, size), 0.0f);
+            pGlyph->mTranslate = Vec3f(x, glyphCentre(y, size), 0.0f);
         }
         if (pPicture != nullptr) {
-            pPicture->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
+            pPicture->mTranslate = Vec3f(x, y, 0.0f);
         }
     }
 
@@ -495,8 +495,8 @@ namespace {
             measure(rCard.mName, 4000.0f, &width, &height);
             measure(rCard.mNameShadow, 4000.0f, &width, &height);
             const f32 squeeze = width > nameRoom && width > 0.0f ? nameRoom / width : 1.0f;
-            rCard.mName->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-            rCard.mNameShadow->mScale = nw4r::math::VEC2(squeeze, 1.0f);
+            rCard.mName->mScale = Vec2f(squeeze, 1.0f);
+            rCard.mNameShadow->mScale = Vec2f(squeeze, 1.0f);
             // The sentence below it: two lines at most, smaller if a language needs a third.
             rCard.mHintSize = cHintSize;
             setTextSize(rCard.mHint, rCard.mHintSize);
@@ -532,10 +532,10 @@ namespace {
                 measure(rTile.mValue, 4000.0f, &width, &height);
                 measure(rTile.mValueShadow, 4000.0f, &width, &height);
                 const f32 valueScale = width > room && width > 0.0f ? room / width : 1.0f;
-                rTile.mValue->mScale = nw4r::math::VEC2(valueScale, 1.0f);
-                rTile.mValueShadow->mScale = nw4r::math::VEC2(valueScale, 1.0f);
+                rTile.mValue->mScale = Vec2f(valueScale, 1.0f);
+                rTile.mValueShadow->mScale = Vec2f(valueScale, 1.0f);
                 measure(rTile.mLabel, 4000.0f, &width, &height);
-                rTile.mLabel->mScale = nw4r::math::VEC2(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
+                rTile.mLabel->mScale = Vec2f(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
             }
         } else {
             const s32 rows = (p->mShownNum + p->mColumns - 1) / p->mColumns;
@@ -556,10 +556,10 @@ namespace {
         const f32 tabWidth = (right - left - cTabGap * (TabNum - 1)) / TabNum;
         for (s32 i = 0; i < TabNum; i++) {
             Chip& rChip = p->mTabs[i];
-            rChip.mText->mScale = nw4r::math::VEC2(1.0f, 1.0f);
+            rChip.mText->mScale = Vec2f(1.0f, 1.0f);
             measure(rChip.mText, 4000.0f, &width, &height);
             const f32 room = tabWidth - cTabPadding * 2.0f;
-            rChip.mText->mScale = nw4r::math::VEC2(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
+            rChip.mText->mScale = Vec2f(width > room && width > 0.0f ? room / width : 1.0f, 1.0f);
             rChip.mWidth = tabWidth;
             rChip.mHeight = cTabHeight;
             rChip.mX = left + tabWidth * 0.5f + i * (tabWidth + cTabGap);
@@ -631,8 +631,8 @@ namespace {
     void placeChip(Chip& rChip, f32 x, f32 y, bool active, bool focused, f32 pulse) {
         rChip.mFocusLevel += ((focused ? 1.0f : 0.0f) - rChip.mFocusLevel) * 0.35f;
         const f32 grow = 1.0f + 0.06f * rChip.mFocusLevel;
-        rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
-        rChip.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+        rChip.mRoot->mTranslate = Vec3f(x, y, 0.0f);
+        rChip.mRoot->mScale = Vec2f(grow, grow);
         shapeChip(rChip, rChip.mWidth, rChip.mHeight);
         rChip.mArt->mAlpha = toAlpha(active ? 1.0f : 0.62f);
         rChip.mLayers[LayerShine]->mAlpha = toAlpha(rChip.mFocusLevel * pulse);
@@ -641,9 +641,9 @@ namespace {
     // One frame of placement: the open and tab animations, the scroll, the highlight.
     void place(NebulaBoardParts* p, f32 open, s32 frame) {
         const f32 pulse = 0.7f + 0.3f * __builtin_sinf(frame * 0.12f);
-        p->mBoard->mScale = nw4r::math::VEC2(p->mScaleX, 1.0f);
+        p->mBoard->mScale = Vec2f(p->mScaleX, 1.0f);
         p->mBoard->mAlpha = toAlpha(open);
-        p->mBoard->mTranslate = nw4r::math::VEC3(0.0f, (1.0f - easeOut(open)) * -16.0f, 0.0f);
+        p->mBoard->mTranslate = Vec3f(0.0f, (1.0f - easeOut(open)) * -16.0f, 0.0f);
 
         // The panel and the header: the crown and title on the header's middle, the count, bar and percentage too.
         const f32 panelTop = p->mHeight * 0.5f - cMargin;
@@ -656,24 +656,24 @@ namespace {
         // The crown stands on the title's baseline.
         const f32 baseline = headerY - cCapHeight * 0.5f * cTitleSize;
         const f32 crownMiddle = baseline + cCrownHeight * 0.5f * cTitleGlyph;
-        p->mTitleGlyph->mTranslate = nw4r::math::VEC3(left + cTitleGlyph * 0.5f + 2.0f, crownMiddle + cCrownLift * cTitleGlyph, 0.0f);
+        p->mTitleGlyph->mTranslate = Vec3f(left + cTitleGlyph * 0.5f + 2.0f, crownMiddle + cCrownLift * cTitleGlyph, 0.0f);
         measure(p->mTitle, 4000.0f, &width, &height);
         measure(p->mTitleShadow, 4000.0f, &width, &height);
         const f32 titleX = left + cTitleGlyph + 12.0f;
-        p->mTitle->mTranslate = nw4r::math::VEC3(titleX, textCentre(headerY, cTitleSize), 0.0f);
-        p->mTitleShadow->mTranslate = nw4r::math::VEC3(titleX + 1.5f, textCentre(headerY, cTitleSize) - 1.5f, 0.0f);
+        p->mTitle->mTranslate = Vec3f(titleX, textCentre(headerY, cTitleSize), 0.0f);
+        p->mTitleShadow->mTranslate = Vec3f(titleX + 1.5f, textCentre(headerY, cTitleSize) - 1.5f, 0.0f);
         f32 percentWidth;
         measure(p->mPercent, 4000.0f, &percentWidth, &height);
         measure(p->mSummary, 4000.0f, &width, &height);
         const f32 barWidth = clamp((right - left) * 0.22f, 90.0f, 220.0f);
-        p->mPercent->mTranslate = nw4r::math::VEC3(right, textCentre(headerY, cSummarySize), 0.0f);
+        p->mPercent->mTranslate = Vec3f(right, textCentre(headerY, cSummarySize), 0.0f);
         const f32 barRight = right - percentWidth - 12.0f;
         shape(p->mSummaryTrack, barRight - barWidth * 0.5f, headerY, barWidth, 10.0f, 5.0f);
         const f32 done = p->mCardNum > 0 ? static_cast< f32 >(p->mUnlockedNum) / p->mCardNum : 0.0f;
         const f32 fillWidth = barWidth * done * easeOut(open);
         shape(p->mSummaryBar, barRight - barWidth + fillWidth * 0.5f, headerY, fillWidth < 10.0f ? 10.0f : fillWidth, 10.0f, 5.0f);
         p->mSummaryBar->SetVisible(p->mUnlockedNum > 0);
-        p->mSummary->mTranslate = nw4r::math::VEC3(barRight - barWidth - 12.0f, textCentre(headerY, cSummarySize), 0.0f);
+        p->mSummary->mTranslate = Vec3f(barRight - barWidth - 12.0f, textCentre(headerY, cSummarySize), 0.0f);
 
         // The tabs and, under them, the filters: the chosen one bright, the others dimmed; the highlight grows and
         // shines as the game's buttons do.
@@ -687,15 +687,15 @@ namespace {
                                  (!p->mPointerMode || p->mPointerIn);
             rChip.mRoot->SetVisible(tab || filters);
             placeChip(rChip, rChip.mX, tab ? p->mTabY : p->mFilterY, chosen, focused, pulse);
-            rChip.mText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(0.0f, tab ? cTabSize : cFilterSize), 0.0f);
+            rChip.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, tab ? cTabSize : cFilterSize), 0.0f);
             rChip.mText->mAlpha = toAlpha(chosen ? 1.0f : 0.8f);
         }
-        p->mTabCount->mTranslate = nw4r::math::VEC3(right, textCentre(p->mFilterY, cFilterSize + 1.0f), 0.0f);
+        p->mTabCount->mTranslate = Vec3f(right, textCentre(p->mFilterY, cFilterSize + 1.0f), 0.0f);
         p->mTabCount->SetVisible(filters);
 
         // The list: a tab's change slides it in; the scissor cuts what reaches past the edges.
         const f32 switched = easeOut(static_cast< f32 >(p->mSwitchFrame) / cSwitchFrames);
-        p->mList->mTranslate = nw4r::math::VEC3((1.0f - switched) * 26.0f * p->mSwitchDirection, 0.0f, 0.0f);
+        p->mList->mTranslate = Vec3f((1.0f - switched) * 26.0f * p->mSwitchDirection, 0.0f, 0.0f);
         p->mList->mAlpha = toAlpha(static_cast< f32 >(p->mSwitchFrame) / cSwitchFrames * 1.4f);
         const f32 cw = p->mCardWidth;
         const f32 ch = p->mCardHeight;
@@ -724,8 +724,8 @@ namespace {
             const bool focused = p->mZone == ZoneList && p->mCardFocus == rCard.mOrder && (!p->mPointerMode || p->mPointerIn);
             rCard.mFocusLevel += ((focused ? 1.0f : 0.0f) - rCard.mFocusLevel) * 0.3f;
             const f32 grow = 1.0f + 0.02f * rCard.mFocusLevel;
-            rCard.mRoot->mTranslate = nw4r::math::VEC3(x, y + (1.0f - cascade) * -10.0f, 0.0f);
-            rCard.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+            rCard.mRoot->mTranslate = Vec3f(x, y + (1.0f - cascade) * -10.0f, 0.0f);
+            rCard.mRoot->mScale = Vec2f(grow, grow);
 
             shape(rCard.mFocus, 0.0f, 0.0f, cw + 7.0f, ch + 7.0f, 15.5f);
             rCard.mFocus->mAlpha = toAlpha(rCard.mFocusLevel * pulse);
@@ -741,10 +741,10 @@ namespace {
             const f32 nameTop = cardTextTop(rCard, &block);
             const f32 textX = -cw * 0.5f + cCardPad + cBadge + 14.0f;
             const f32 textRight = cw * 0.5f - cCardPad;
-            rCard.mName->mTranslate = nw4r::math::VEC3(textX, nameTop, 0.0f);
-            rCard.mNameShadow->mTranslate = nw4r::math::VEC3(textX + 1.0f, nameTop - 1.0f, 0.0f);
+            rCard.mName->mTranslate = Vec3f(textX, nameTop, 0.0f);
+            rCard.mNameShadow->mTranslate = Vec3f(textX + 1.0f, nameTop - 1.0f, 0.0f);
             const f32 hintTop = nameTop - cNameSize - 6.0f;
-            rCard.mHint->mTranslate = nw4r::math::VEC3(textX, hintTop, 0.0f);
+            rCard.mHint->mTranslate = Vec3f(textX, hintTop, 0.0f);
             rCard.mHint->SetVisible(rCard.mHintText[0] != 0);
             rCard.mMeta->SetVisible(rCard.mUnlocked || bar);
             rCard.mTrack->SetVisible(bar);
@@ -753,7 +753,7 @@ namespace {
                 // The day, its letters level with the name's.
                 const f32 nameMiddle = nameTop - (cCapTop + cCapHeight * 0.5f) * cNameSize;
                 setAnchor(rCard.mMeta, 5);
-                rCard.mMeta->mTranslate = nw4r::math::VEC3(textRight, textCentre(nameMiddle, cMetaSize), 0.0f);
+                rCard.mMeta->mTranslate = Vec3f(textRight, textCentre(nameMiddle, cMetaSize), 0.0f);
             } else if (bar) {
                 // The count right of its bar, both under the text.
                 f32 baseline = nameTop - cBaseline * cNameSize;
@@ -763,7 +763,7 @@ namespace {
                 }
                 const f32 barY = baseline - 11.0f - cBarHeight * 0.5f;
                 setAnchor(rCard.mMeta, 5);
-                rCard.mMeta->mTranslate = nw4r::math::VEC3(textRight, textCentre(barY, cMetaSize), 0.0f);
+                rCard.mMeta->mTranslate = Vec3f(textRight, textCentre(barY, cMetaSize), 0.0f);
                 const f32 barWidth = textRight - rCard.mMetaWidth - 10.0f - textX;
                 shape(rCard.mTrack, textX + barWidth * 0.5f, barY, barWidth, cBarHeight, cBarHeight * 0.5f);
                 const f32 part = barWidth * rCard.mCurrent / rCard.mGoal;
@@ -778,7 +778,7 @@ namespace {
         for (s32 section = 0; section < 2; section++) {
             TextBox* pTitle = p->mSections[section];
             const f32 titleY = y - 6.0f;
-            pTitle->mTranslate = nw4r::math::VEC3(p->mListLeft + 2.0f, titleY, 0.0f);
+            pTitle->mTranslate = Vec3f(p->mListLeft + 2.0f, titleY, 0.0f);
             const f32 titleAlpha = listAlpha(p, titleY, titleY - cSectionSize);
             pTitle->SetVisible(stats && titleAlpha > 0.0f);
             pTitle->mAlpha = toAlpha(titleAlpha);
@@ -798,7 +798,7 @@ namespace {
                     continue;
                 }
                 rTile.mRoot->mAlpha = toAlpha(alpha);
-                rTile.mRoot->mTranslate = nw4r::math::VEC3(tx, ty + (1.0f - cascade) * -10.0f, 0.0f);
+                rTile.mRoot->mTranslate = Vec3f(tx, ty + (1.0f - cascade) * -10.0f, 0.0f);
                 shape(rTile.mBody, 0.0f, 0.0f, tw, cTileHeight, 12.0f);
                 placeIcon(rTile.mGlyph, rTile.mPicture, -tw * 0.5f + cCardPad + 19.0f, 0.0f, 36.0f);
                 // The number over its label, the pair centred on the tile by their letters.
@@ -807,15 +807,15 @@ namespace {
                 const f32 labelTop = -(cValueSize + 3.0f);
                 const f32 blockBottom = labelTop - cBaseline * cLabelSize;
                 const f32 valueTop = -(blockTop + blockBottom) * 0.5f;
-                rTile.mValue->mTranslate = nw4r::math::VEC3(textX, valueTop, 0.0f);
-                rTile.mValueShadow->mTranslate = nw4r::math::VEC3(textX + 1.0f, valueTop - 1.5f, 0.0f);
-                rTile.mLabel->mTranslate = nw4r::math::VEC3(textX, valueTop + labelTop, 0.0f);
+                rTile.mValue->mTranslate = Vec3f(textX, valueTop, 0.0f);
+                rTile.mValueShadow->mTranslate = Vec3f(textX + 1.0f, valueTop - 1.5f, 0.0f);
+                rTile.mLabel->mTranslate = Vec3f(textX, valueTop + labelTop, 0.0f);
             }
             y -= ((last - first + p->mTileColumns - 1) / p->mTileColumns) * (cTileHeight + cGap) + cGap;
         }
 
         p->mEmpty->mTranslate =
-            nw4r::math::VEC3((p->mListLeft + p->mListRight) * 0.5f, textCentre((p->mListTop + p->mListBottom) * 0.5f, cNameSize), 0.0f);
+            Vec3f((p->mListLeft + p->mListRight) * 0.5f, textCentre((p->mListTop + p->mListBottom) * 0.5f, cNameSize), 0.0f);
         p->mEmpty->SetVisible(!stats && p->mShownNum == 0);
 
         // The scroll bar, when there is more than fits.
@@ -839,16 +839,16 @@ namespace {
         const f32 arrowX = -rBack.mWidth * 0.5f + cBackHeight * 0.56f;
         rBack.mArrow->mTranslate.x = toFaceUnits(rBack, arrowX);
         const f32 glyphX = arrowX + backArrowSize(cBackHeight) * 0.5f + 6.0f + cBackGlyph * 0.5f;
-        rBack.mGlyph->mTranslate = nw4r::math::VEC3(glyphX, glyphCentre(0.0f, cBackGlyph), 0.0f);
-        rBack.mText->mTranslate = nw4r::math::VEC3(glyphX + cBackGlyph * 0.5f + 5.0f, textCentre(0.0f, cFooterSize + 1.0f), 0.0f);
+        rBack.mGlyph->mTranslate = Vec3f(glyphX, glyphCentre(0.0f, cBackGlyph), 0.0f);
+        rBack.mText->mTranslate = Vec3f(glyphX + cBackGlyph * 0.5f + 5.0f, textCentre(0.0f, cFooterSize + 1.0f), 0.0f);
         f32 x = p->mWidth * 0.5f - cMargin - 6.0f;
         for (s32 i = HintNum - 1; i >= 0; i--) {
             TextBox* pLabel = p->mHintLabels[i];
-            pLabel->mTranslate = nw4r::math::VEC3(x, textCentre(p->mFooterY, cFooterSize), 0.0f);
+            pLabel->mTranslate = Vec3f(x, textCentre(p->mFooterY, cFooterSize), 0.0f);
             x -= pLabel->mSize.width + 7.0f;
             TextBox* pGlyphs = p->mHintGlyphs[i];
             const f32 glyphWidth = pGlyphs->mSize.width;
-            pGlyphs->mTranslate = nw4r::math::VEC3(x - glyphWidth * 0.5f, glyphCentre(p->mFooterY, cFooterGlyph), 0.0f);
+            pGlyphs->mTranslate = Vec3f(x - glyphWidth * 0.5f, glyphCentre(p->mFooterY, cFooterGlyph), 0.0f);
             x -= glyphWidth + 24.0f;
         }
     }
@@ -1118,13 +1118,13 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
     const bool ringed = p->mWindow.init("SysInfoWindowMini", pManager->mLayout);
     // The information window's own panes stay hidden; the board is built beside them.
-    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+    for (Ui::Pane* pChild : pRoot->GetChildList()) {
         pChild->SetVisible(false);
     }
 
     // The icons' textures, from the game's files.
     const s32 textureNum = NebulaAchievements::getIconTextureNum();
-    p->mTextures = new nw4r::lyt::TexMap*[textureNum];
+    p->mTextures = new Ui::TexMap*[textureNum];
     for (s32 i = 0; i < textureNum; i++) {
         p->mTextures[i] = nullptr;
         const NebulaAchievementIcon* pIcon = NebulaAchievements::getIconTexture(i);
@@ -1132,7 +1132,7 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             LayoutHolder* pHolder = MR::createAndAddLayoutHolder(pIcon->mArchive);
             void* pTpl = pHolder != nullptr ? pHolder->GetResource('timg', pIcon->mTexture, nullptr) : nullptr;
             if (pTpl != nullptr) {
-                p->mTextures[i] = new nw4r::lyt::TexMap();
+                p->mTextures[i] = new Ui::TexMap();
                 p->mTextures[i]->ReplaceImage(pTpl, 0);
             }
         } else if (MR::isExistResourceInArc(pIcon->mArchive, pIcon->mTexture)) {

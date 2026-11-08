@@ -22,7 +22,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <nw4r/lyt/drawInfo.h>
+#include <Game/Ui/DrawInfo.hpp>
 
 namespace {
     static const s32 sDisplayKeepFrame = 30;
@@ -169,7 +169,7 @@ void GalaxyMapController::drawForCapture() {
     mMap->setModeCapture();
     mMap->movementForCapture();
 
-    nw4r::lyt::DrawInfo drawInfo = nw4r::lyt::DrawInfo();
+    Ui::DrawInfo drawInfo = Ui::DrawInfo();
 
     MR::copyLayoutDrawInfoWithAspect(&drawInfo, mMap, true);
     mMapBackground->calcAnim();

@@ -9,7 +9,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
-#include <nw4r/lyt/layout.h>
+#include <Game/Ui/Layout.hpp>
 #include "Game/System/NebulaHost.hpp"
 
 using namespace NebulaUi;
@@ -120,7 +120,7 @@ private:
             return false;
         }
         // The question window's own panes stay hidden; the screen is built beside them.
-        for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+        for (Ui::Pane* pChild : pRoot->GetChildList()) {
             pChild->SetVisible(false);
         }
         mRoot = makeGroup(pRoot, "RpRoot");
@@ -160,19 +160,19 @@ private:
         measure(mTitle, 4000.0f, &width, &titleHeight);
         const f32 height =
             cPad + cTitleSize * cCapHeight + cBarGap + cBarHeight + cPercentGap + cPercentSize * cCapHeight + cPad;
-        mShadow->mSize = nw4r::lyt::Size(cWidth, height);
-        mPanel->mSize = nw4r::lyt::Size(cWidth, height);
-        mShadow->mTranslate = nw4r::math::VEC3(6.0f, -6.0f, 0.0f);
+        mShadow->mSize = Ui::Size(cWidth, height);
+        mPanel->mSize = Ui::Size(cWidth, height);
+        mShadow->mTranslate = Vec3f(6.0f, -6.0f, 0.0f);
         // Top to bottom by the letters: the title's capitals, the bar, the percentage.
         f32 y = height * 0.5f - cPad;
-        mTitle->mTranslate = nw4r::math::VEC3(0.0f, textCentre(y - cTitleSize * cCapHeight * 0.5f, cTitleSize), 0.0f);
+        mTitle->mTranslate = Vec3f(0.0f, textCentre(y - cTitleSize * cCapHeight * 0.5f, cTitleSize), 0.0f);
         y -= cTitleSize * cCapHeight + cBarGap;
         mBarY = y - cBarHeight * 0.5f;
         mBarWidth = cWidth - cBarInset * 2.0f;
         mBarLeft = -mBarWidth * 0.5f;
         shape(mTrack, 0.0f, mBarY, mBarWidth, cBarHeight, cBarHeight * 0.5f);
         y -= cBarHeight + cPercentGap;
-        mPercent->mTranslate = nw4r::math::VEC3(0.0f, textCentre(y - cPercentSize * cCapHeight * 0.5f, cPercentSize), 0.0f);
+        mPercent->mTranslate = Vec3f(0.0f, textCentre(y - cPercentSize * cCapHeight * 0.5f, cPercentSize), 0.0f);
         mPercentShown = -1;
     }
 
@@ -190,9 +190,9 @@ private:
             alpha *= 1.0f - eased;
             scale *= 1.0f - (1.0f - cOutroScale) * eased;
         }
-        mRoot->mScale = nw4r::math::VEC2(scaleX, 1.0f);
+        mRoot->mScale = Vec2f(scaleX, 1.0f);
         mRoot->mAlpha = toAlpha(alpha);
-        mWindow->mScale = nw4r::math::VEC2(scale, scale);
+        mWindow->mScale = Vec2f(scale, scale);
         const f32 fill = mBarWidth * mShown;
         const f32 shown = fill > cBarHeight ? fill : cBarHeight;
         shape(mFill, mBarLeft + shown * 0.5f, mBarY, shown, cBarHeight, cBarHeight * 0.5f);

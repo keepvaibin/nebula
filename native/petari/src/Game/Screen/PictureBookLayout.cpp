@@ -183,7 +183,7 @@ void PictureBookLayout::initTexture() {
         textureNum += ::getTextureNum(c);
     }
 
-    _44 = new nw4r::lyt::TexMap*[textureNum];
+    _44 = new Ui::TexMap*[textureNum];
 
     s32 textureIndex = 0;
 
@@ -260,14 +260,14 @@ void PictureBookLayout::updateTexture() {
     }
 
     if (pageNo == 0) {
-        nw4r::lyt::TexMap* pTexMap = mTitleTexMap;
+        Ui::TexMap* pTexMap = mTitleTexMap;
 
         MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
         s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
-        nw4r::lyt::TexMap* pTexMap = _48[ind - 1];
+        Ui::TexMap* pTexMap = _48[ind - 1];
 
         MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);
@@ -280,14 +280,14 @@ void PictureBookLayout::updateTexture() {
     }
 
     if (pageNo == 0) {
-        nw4r::lyt::TexMap* pTexMap = mTitleTexMap;
+        Ui::TexMap* pTexMap = mTitleTexMap;
 
         MR::replacePaneTexture(this, "PicRightPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnLeftPage", pTexMap, 0);
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
         s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
-        nw4r::lyt::TexMap* pTexMap = _48[ind - 1];
+        Ui::TexMap* pTexMap = _48[ind - 1];
 
         MR::replacePaneTexture(this, "PicRightPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnLeftPage", pTexMap, 0);
@@ -444,7 +444,7 @@ s32 PictureBookLayout::getCurrentMaxTextIndex() const {
 }
 
 void PictureBookLayout::exeOpen() {
-    nw4r::lyt::TexMap* pTexMap;
+    Ui::TexMap* pTexMap;
 
     if (MR::isFirstStep(this)) {
         updateTexMapChapterBase();
@@ -819,7 +819,7 @@ void PictureBookLayout::exeFadeOut() {
 }
 
 void PictureBookLayout::exeClose() {
-    nw4r::lyt::TexMap* pTexMap;
+    Ui::TexMap* pTexMap;
 
     if (MR::isFirstStep(this)) {
         MR::hidePaneRecursive(this, "Text");

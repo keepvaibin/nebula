@@ -7,11 +7,9 @@ namespace Mii {
     struct Id;
 }  // namespace Mii
 
-namespace nw4r {
-    namespace ut {
-        class ResFont;
-    };  // namespace ut
-};  // namespace nw4r
+namespace Ui {
+    class ResFont;
+}  // namespace Ui
 
 class BackButton;
 class BrosButton;

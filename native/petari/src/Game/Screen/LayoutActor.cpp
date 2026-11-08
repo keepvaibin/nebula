@@ -81,7 +81,7 @@ namespace {
         f32 y = rTrans.y;
         f32 x = rTrans.x;
         Vec2f trans(x, y);
-        nw4r::lyt::Pane* pRootPane = MR::getRootPane(pActor);
+        Ui::Pane* pRootPane = MR::getRootPane(pActor);
         Vec3f translation(trans.x, trans.y, 0.0f);
         pRootPane->mTranslate.x = translation.x;
         pRootPane->mTranslate.y = translation.y;

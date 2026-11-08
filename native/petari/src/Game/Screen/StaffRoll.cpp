@@ -170,7 +170,7 @@ void StaffRollPicture::initReplaceTexture() {
     MR::FormattedName replaceTextureName;
     const char* pReplaceTexturePrefix;
 
-    mReplaceTexture = new nw4r::lyt::TexMap*[PICTURE_TEXTURE_NUM];
+    mReplaceTexture = new Ui::TexMap*[PICTURE_TEXTURE_NUM];
 
     if (MR::isStarCompleteAllGalaxy()) {
         pReplaceTexturePrefix = ::cReplaceTexturePrefixComp;

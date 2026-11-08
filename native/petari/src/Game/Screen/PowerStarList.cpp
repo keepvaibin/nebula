@@ -18,8 +18,8 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <nw4r/lyt/drawInfo.h>
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/DrawInfo.hpp>
+#include <Game/Ui/Pane.hpp>
 
 
 #define ITEMS_PER_PAGE 15
@@ -663,8 +663,8 @@ void PowerStarList::setSeparatorPaneSize() {
             continue;
         }
 
-        nw4r::lyt::Pane* pPane = MR::getPane(this, pPaneName);
-        nw4r::lyt::Size size = pPane->mSize;
+        Ui::Pane* pPane = MR::getPane(this, pPaneName);
+        Ui::Size size = pPane->mSize;
         size.height = mSeparatorArray[idx]._0;
         pPane->mSize = size;
     }

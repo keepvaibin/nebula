@@ -3,11 +3,9 @@
 #include "Game/Map/FileSelectIconID.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 namespace MR {
     class BitArray;
@@ -41,7 +39,7 @@ public:
     bool isSelected();
     bool isDummySelected();
     void getSelectedID(FileSelectIconID*);
-    nw4r::lyt::TexMap* getSelectedMiiTexMap();
+    Ui::TexMap* getSelectedMiiTexMap();
     void admitIcon();
     void prohibitIcon(const FileSelectIconID&);
     void invalidateSpecialMii(FileSelectIconID::EFellowID);
@@ -68,7 +66,7 @@ public:
     void validateAllIcon();
     void refresh();
     void getIconID(FileSelectIconID*, s32) const;
-    void onSelect(s32, nw4r::lyt::TexMap*);
+    void onSelect(s32, Ui::TexMap*);
     void onSelectDummy();
     s32 getIconNum();
 
@@ -93,7 +91,7 @@ private:
     u32 mMiiIndexRoom;
     s32 _1EC;
     s32 _1F0;
-    nw4r::lyt::TexMap* _1F4;
+    Ui::TexMap* _1F4;
     MiiSelectSub::Page* _1F8;
     MiiSelectSub::Page* _1FC;
     u8 _200;

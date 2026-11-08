@@ -19,14 +19,14 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 #include <cstring>
-#include <nw4r/lyt/group.h>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/material.h>
-#include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/picture.h>
-#include <nw4r/lyt/texMap.h>
-#include <nw4r/lyt/textBox.h>
-#include <nw4r/ut/Rect.h>
+#include <Game/Ui/Group.hpp>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Material.hpp>
+#include <Game/Ui/Pane.hpp>
+#include <Game/Ui/Picture.hpp>
+#include <Game/Ui/TexMap.hpp>
+#include <Game/Ui/TextBox.hpp>
+#include <Game/Ui/Rect.hpp>
 #include <nebula_math.h>
 #include <nebula_format.h>
 
@@ -67,10 +67,10 @@ namespace {
 
 namespace {
     namespace Local {
-        inline void collectLanguagePanes(nw4r::lyt::Pane* pPane, BitFlagBase& rLanguagePanes, BitFlagBase& rCurrentLanguagePanes) {
-            nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
+        inline void collectLanguagePanes(Ui::Pane* pPane, BitFlagBase& rLanguagePanes, BitFlagBase& rCurrentLanguagePanes) {
+            Ui::PaneList& rPaneList = pPane->mChildList;
             s32 index = -1;
-            for (nw4r::lyt::Pane* pChild : rPaneList) {
+            for (Ui::Pane* pChild : rPaneList) {
                 index++;
                 const char* pName = pChild->mName;
                 u32 length = strlen(pName);
@@ -92,14 +92,14 @@ namespace {
             }
         }
 
-        inline void removeLanguagePanes(nw4r::lyt::Pane* pPane, const BitFlagBase& rLanguagePanes, const BitFlagBase& rCurrentLanguagePanes) {
+        inline void removeLanguagePanes(Ui::Pane* pPane, const BitFlagBase& rLanguagePanes, const BitFlagBase& rCurrentLanguagePanes) {
             const char* pName;
-            nw4r::lyt::PaneList& rChildren = pPane->mChildList;
+            Ui::PaneList& rChildren = pPane->mChildList;
             u32 length;
             s32 childIndex = 0;
             if (rCurrentLanguagePanes.isAnythingTrue()) {
-                for (nw4r::lyt::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
-                    pNext = nw4r::lyt::PaneList::Next(pChild);
+                for (Ui::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
+                    pNext = Ui::PaneList::Next(pChild);
                     if (rCurrentLanguagePanes.isTrue(childIndex)) {
                         pName = pChild->mName;
                         length = strlen(pName) - 4;
@@ -113,8 +113,8 @@ namespace {
                     childIndex++;
                 }
             } else {
-                for (nw4r::lyt::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
-                    pNext = nw4r::lyt::PaneList::Next(pChild);
+                for (Ui::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
+                    pNext = Ui::PaneList::Next(pChild);
                     if (rLanguagePanes.isTrue(childIndex)) {
                         pPane->RemoveChild(pChild);
                     }
@@ -171,7 +171,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
 }
 
 void LayoutManager::movement() {
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     for (u32 i = 0; i < rOrder.mNum; i++) {
         const LayoutPaneState* pState = findState(rOrder.mPanes[i]);
         if (pState != nullptr && pState->mPaneCtrl != nullptr) {
@@ -188,12 +188,12 @@ void LayoutManager::movement() {
 
 void LayoutManager::calcAnim() {
     if (MR::isScreen16Per9()) {
-        nw4r::math::VEC2 scale;
+        Vec2f scale;
         scale.x = 0.75f;
         scale.y = 1.0f;
         mDrawInfo.SetLocationAdjustScale(scale);
     } else {
-        nw4r::math::VEC2 scale;
+        Vec2f scale;
         scale.x = 1.0f;
         scale.y = 1.0f;
         mDrawInfo.SetLocationAdjustScale(scale);
@@ -212,7 +212,7 @@ void LayoutManager::draw() const {
 }
 
 void LayoutManager::addPaneCtrl(LayoutPaneCtrl* pPaneCtrl) {
-    nw4r::lyt::Pane* const pPane = findPaneOrRoot(pPaneCtrl->mPane->mName);
+    Ui::Pane* const pPane = findPaneOrRoot(pPaneCtrl->mPane->mName);
     LayoutPaneState& rState = stateOf(pPane);
 
     if (rState.mPaneCtrl == nullptr) {
@@ -246,19 +246,19 @@ LayoutPaneCtrl* LayoutManager::getPaneCtrl(const char* pName) const {
     return pState != nullptr ? pState->mPaneCtrl : nullptr;
 }
 
-nw4r::lyt::Pane* LayoutManager::findPaneOrRoot(const char* pName) const {
-    nw4r::lyt::Pane* const pPane = findPaneByName(pName);
+Ui::Pane* LayoutManager::findPaneOrRoot(const char* pName) const {
+    Ui::Pane* const pPane = findPaneByName(pName);
     return pPane != nullptr ? pPane : mLayout->mpRootPane;
 }
 
-const LayoutPaneState* LayoutManager::findState(const nw4r::lyt::Pane* pPane) const {
+const LayoutPaneState* LayoutManager::findState(const Ui::Pane* pPane) const {
     if (pPane == nullptr || pPane->GetLayout() != mLayout || pPane->GetId() >= mPaneStateNum) {
         return nullptr;
     }
     return &mPaneStates[pPane->GetId()];
 }
 
-LayoutPaneState& LayoutManager::stateOf(const nw4r::lyt::Pane* pPane) {
+LayoutPaneState& LayoutManager::stateOf(const Ui::Pane* pPane) {
     // Every caller passes a pane of this layout (a name lookup's answer or the root).
     const u32 id = pPane->GetId();
     if (id >= mPaneStateNum) {
@@ -294,7 +294,7 @@ void LayoutManager::addGroupCtrl(LayoutGroupCtrl* pGroupCtrl) {
     }
 }
 
-bool LayoutManager::isPointing(const nw4r::lyt::Pane* pPane, const Vec2f& rPos) const {
+bool LayoutManager::isPointing(const Ui::Pane* pPane, const Vec2f& rPos) const {
     Mtx inverse;
     NebulaMtxInverse(pPane->mGlbMtx, inverse);
     s32 horizontalPosition = static_cast< u8 >(pPane->mBasePosition % 3);
@@ -356,8 +356,8 @@ LayoutGroupCtrl* LayoutManager::createAndAddGroupCtrl(const char* pName, u32 ani
 
 s32 LayoutManager::getIndexOfGroupCtrl(const char* pName) const {
     u32 index = 0;
-    nw4r::lyt::GroupList& rGroupList = mLayout->mpGroupContainer->mGroupList;
-    for (nw4r::lyt::Group* pGroup : rGroupList) {
+    Ui::GroupList& rGroupList = mLayout->mpGroupContainer->mGroupList;
+    for (Ui::Group* pGroup : rGroupList) {
         if (strcmp(pGroup->mName, pName) == 0) {
             return index;
         }
@@ -385,7 +385,7 @@ bool LayoutManager::isPointing(const char* pName, const Vec2f& rPos) const {
     return isPointing(findPaneByName(pName), rPos);
 }
 
-nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
+Ui::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
     MR::FormattedName fileName("%s.brlan", pName);
     u32 hash = MR::getHashCodeLower(fileName.c_str());
     for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
@@ -397,10 +397,10 @@ nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) con
     return nullptr;
 }
 
-void LayoutManager::bindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, nw4r::lyt::AnimTransform* pAnimTransform) {
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+void LayoutManager::bindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, Ui::AnimTransform* pAnimTransform) {
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     const u32 first = mLayout->GetOrderIndex(pPaneCtrl->mStatePane);
-    if (first == nw4r::lyt::Pane::cNoListIndex) {
+    if (first == Ui::Pane::cNoListIndex) {
         return;
     }
     for (u32 i = first; i < rOrder.mEnd[first];) {
@@ -415,10 +415,10 @@ void LayoutManager::bindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, nw4r::lyt::AnimT
     }
 }
 
-void LayoutManager::unbindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, nw4r::lyt::AnimTransform* pAnimTransform) {
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+void LayoutManager::unbindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, Ui::AnimTransform* pAnimTransform) {
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     const u32 first = mLayout->GetOrderIndex(pPaneCtrl->mStatePane);
-    if (first == nw4r::lyt::Pane::cNoListIndex) {
+    if (first == Ui::Pane::cNoListIndex) {
         return;
     }
     for (u32 i = first; i < rOrder.mEnd[first];) {
@@ -432,7 +432,7 @@ void LayoutManager::unbindPaneCtrlAnim(LayoutPaneCtrl* pPaneCtrl, nw4r::lyt::Ani
     }
 }
 
-void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void LayoutManager::calcAnimWithoutLocationAdjust(const Ui::DrawInfo& rDrawInfo) {
     animatePanes();
     if (mIsScreenHidden) {
         return;
@@ -444,7 +444,7 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
     copyPaneMtxRefs();
 }
 
-void LayoutManager::copyPaneMtxRef(const nw4r::lyt::Pane* pPane, MtxPtr pMtxRef) {
+void LayoutManager::copyPaneMtxRef(const Ui::Pane* pPane, MtxPtr pMtxRef) {
     NebulaMtxCopy(pPane->mGlbMtx, pMtxRef);
     if (MR::isScreen16Per9()) {
         pMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
@@ -452,7 +452,7 @@ void LayoutManager::copyPaneMtxRef(const nw4r::lyt::Pane* pPane, MtxPtr pMtxRef)
 }
 
 void LayoutManager::copyPaneMtxRefs() {
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     for (u32 i = 0; i < rOrder.mNum; i++) {
         const LayoutPaneState* pState = findState(rOrder.mPanes[i]);
         if (pState != nullptr && pState->mMtxRef != nullptr) {
@@ -461,8 +461,8 @@ void LayoutManager::copyPaneMtxRefs() {
     }
 }
 
-nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {
-    for (nw4r::lyt::Group* pGroup : mLayout->mpGroupContainer->mGroupList) {
+Ui::Group* LayoutManager::getGroup(const char* pName) const {
+    for (Ui::Group* pGroup : mLayout->mpGroupContainer->mGroupList) {
         if (strcmp(pGroup->mName, pName) == 0) {
             return pGroup;
         }
@@ -477,11 +477,11 @@ void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
     MR::FormattedName layoutResName("%s.brlyt", pLayoutName);
     void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName.c_str(), nullptr);
 
-    mLayout = new nw4r::lyt::Layout();
+    mLayout = new Ui::Layout();
     mLayout->Build(pLayoutRes, mLayoutHolder);
 
     if (mLayoutHolder->mAnimRes.mCount != 0) {
-        mAnimTransList = new nw4r::lyt::AnimTransform*[mLayoutHolder->mAnimRes.mCount];
+        mAnimTransList = new Ui::AnimTransform*[mLayoutHolder->mAnimRes.mCount];
 
         for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
             void* pAnimRes = mLayoutHolder->mAnimRes.getRes(i);
@@ -493,7 +493,7 @@ void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
 }
 
 void LayoutManager::initDrawInfo() {
-    nw4r::math::MTX34 mtx;
+    Mtx34f mtx;
     NebulaMtxIdentity(mtx);
 
     mDrawInfo.mViewMtx = mtx;
@@ -511,8 +511,8 @@ void LayoutManager::initGroupCtrlList() {
     }
 }
 
-void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
-    nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
+void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
+    Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(pPane);
 
     char userData[9];
     LayoutCoreUtil::getPaneUserData(pPane, userData);
@@ -532,16 +532,16 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
         }
     }
 
-    nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
-    for (nw4r::lyt::Pane* pChild : rPaneList) {
+    Ui::PaneList& rPaneList = pPane->mChildList;
+    for (Ui::Pane* pChild : rPaneList) {
         initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength);
     }
 }
 
 void LayoutManager::animatePanes() {
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     for (u32 i = 0; i < rOrder.mNum; i++) {
-        nw4r::lyt::Pane* const pPane = rOrder.mPanes[i];
+        Ui::Pane* const pPane = rOrder.mPanes[i];
         if (const LayoutPaneState* pState = findState(pPane)) {
             if (pState->mPaneCtrl != nullptr) {
                 pState->mPaneCtrl->calcAnim();
@@ -554,12 +554,12 @@ void LayoutManager::animatePanes() {
     }
 }
 
-nw4r::lyt::Pane* LayoutManager::getPane(const char* pName) const {
+Ui::Pane* LayoutManager::getPane(const char* pName) const {
     return pName == nullptr ? mLayout->mpRootPane : mLayout->FindPane(pName);
 }
 
-nw4r::lyt::Pane* LayoutManager::findPaneByName(const char* pName) const {
-    nw4r::lyt::Pane* const pPane = mLayout->FindPane(pName);
+Ui::Pane* LayoutManager::findPaneByName(const char* pName) const {
+    Ui::Pane* const pPane = mLayout->FindPane(pName);
     return pPane != nullptr && strcmp(pPane->mName, pName) == 0 ? pPane : nullptr;
 }
 
@@ -570,7 +570,7 @@ void LayoutManager::replaceIndDummyTexture() {
 
     JUTTexture screenTex(MR::getScreenResTIMG());
 
-    mIndDummyTexMap = new nw4r::lyt::TexMap(screenTex.getTexObj());
+    mIndDummyTexMap = new Ui::TexMap(screenTex.getTexObj());
 
     void* pIndDummyResStart = mLayoutHolder->getResOther("IndDummy.tpl");
     void* pIndDummyResEnd = reinterpret_cast< void* >(-1);
@@ -583,16 +583,16 @@ void LayoutManager::replaceIndDummyTexture() {
         }
     }
 
-    const nw4r::lyt::Layout::Order& rOrder = mLayout->GetOrder();
+    const Ui::Layout::Order& rOrder = mLayout->GetOrder();
     for (u32 paneIdx = 0; paneIdx < rOrder.mNum; paneIdx++) {
-        nw4r::lyt::Pane* pCurrPane = rOrder.mPanes[paneIdx];
-        nw4r::lyt::Picture* pPicPane = nw4r::lyt::PaneCast< nw4r::lyt::Picture >(pCurrPane);
+        Ui::Pane* pCurrPane = rOrder.mPanes[paneIdx];
+        Ui::Picture* pPicPane = Ui::PaneCast< Ui::Picture >(pCurrPane);
 
         if (pPicPane == nullptr) {
             continue;
         }
 
-        nw4r::lyt::Material* pMaterial = pPicPane->GetMaterial();
+        Ui::Material* pMaterial = pPicPane->GetMaterial();
 
         for (u8 texMapIdx = 0; texMapIdx < pMaterial->GetTextureNum(); texMapIdx++) {
             void* pImage = pMaterial->GetTexture(texMapIdx).mImage;
@@ -610,15 +610,15 @@ void LayoutManager::replaceIndDummyTexture() {
     }
 }
 
-void LayoutManager::removeUnnecessaryPanes(nw4r::lyt::Pane* pPane) {
+void LayoutManager::removeUnnecessaryPanes(Ui::Pane* pPane) {
     Local::BitFlag< 128 > languagePanes;
     Local::BitFlag< 128 > currentLanguagePanes;
     Local::collectLanguagePanes(pPane, languagePanes, currentLanguagePanes);
     if (languagePanes.isAnythingTrue()) {
         Local::removeLanguagePanes(pPane, languagePanes, currentLanguagePanes);
     } else {
-        nw4r::lyt::PaneList& rChildren = pPane->mChildList;
-        for (nw4r::lyt::Pane* pChild : rChildren) {
+        Ui::PaneList& rChildren = pPane->mChildList;
+        for (Ui::Pane* pChild : rChildren) {
             removeUnnecessaryPanes(pChild);
         }
     }

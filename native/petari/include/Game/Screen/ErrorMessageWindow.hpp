@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class ErrorMessageWindow : public LayoutActor {
 public:
@@ -23,7 +21,7 @@ public:
     virtual void appear();
 
     bool isAnimEnd() const;
-    void appearWithMessage(const char*, MessageType, const nw4r::lyt::TexMap*);
+    void appearWithMessage(const char*, MessageType, const Ui::TexMap*);
     void disappear();
     void exeHide();
     void exeAppear();
@@ -34,5 +32,5 @@ public:
 private:
     MessageType mMessageType;
     const char* mMessageId;
-    const nw4r::lyt::TexMap* mTexture;
+    const Ui::TexMap* mTexture;
 };

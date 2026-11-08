@@ -3,11 +3,9 @@
 #include "Game/Screen/ErrorMessageWindow.hpp"
 #include "Game/System/NerveExecutor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class BatteryLayout;
 
@@ -31,12 +29,12 @@ public:
     void exeErrorWindowOut();
     void updateInputStatus();
     const Message* getProperMessageId() const;
-    const nw4r::lyt::TexMap* getProperErrorTexMap() const;
+    const Ui::TexMap* getProperErrorTexMap() const;
 
 private:
     ErrorMessageWindow* mWindow;
     const Message* mMessage;
-    const nw4r::lyt::TexMap* mUnplaggedTexMap;
+    const Ui::TexMap* mUnplaggedTexMap;
     BatteryLayout* mBatteryLayout;
     s32 mInputStatus;
     s32 mInputBattery;

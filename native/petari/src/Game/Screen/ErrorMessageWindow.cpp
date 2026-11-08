@@ -31,7 +31,7 @@ bool ErrorMessageWindow::isAnimEnd() const {
     return isNerve(GET_NERVE_ANON(ErrorMessageWindowDisplay)) || isNerve(GET_NERVE_ANON(ErrorMessageWindowHide));
 }
 
-void ErrorMessageWindow::appearWithMessage(const char* pMessageId, MessageType messageType, const nw4r::lyt::TexMap* pTexture) {
+void ErrorMessageWindow::appearWithMessage(const char* pMessageId, MessageType messageType, const Ui::TexMap* pTexture) {
     mMessageType = messageType;
     mMessageId = pMessageId;
     mTexture = pTexture;

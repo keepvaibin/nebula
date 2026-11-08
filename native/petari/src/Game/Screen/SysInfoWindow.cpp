@@ -9,8 +9,8 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/textBox.h>
+#include <Game/Ui/Pane.hpp>
+#include <Game/Ui/TextBox.hpp>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -235,7 +235,7 @@ namespace {
     // Lines centred in a box centred in its pane, as the game's own questions are.
     class TextBoxRecursiveCenter : public TextBoxRecursiveOperation {
     public:
-        virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
+        virtual void execute(Ui::TextBox* pTextBox) const {
             pTextBox->SetTextPositionH(1);
             pTextBox->SetTextPositionV(1);
             pTextBox->mBits.textAlignment = 2;
@@ -282,7 +282,7 @@ void SysInfoWindow::decideNo() {
 // window shaped as its drop shadow is (shapeFade).
 f32 SysInfoWindow::getOwnDim() const {
     f32 level = mDimPane->IsVisible() ? mDimPane->mAlpha / 255.0f : 0.0f;
-    for (const nw4r::lyt::Pane* pPane = mDimPane->GetParent(); pPane != nullptr && level > 0.0f; pPane = pPane->GetParent()) {
+    for (const Ui::Pane* pPane = mDimPane->GetParent(); pPane != nullptr && level > 0.0f; pPane = pPane->GetParent()) {
         if (!pPane->IsVisible()) {
             level = 0.0f;
         } else if (pPane->IsInfluencedAlpha()) {

@@ -3,11 +3,9 @@
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include <NebulaGpuTypes.h>
 
-namespace nw4r {
-    namespace lyt {
-        class TextBox;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TextBox;
+}  // namespace Ui
 
 class CustomTagAlphaCtrl {
 public:
@@ -31,11 +29,11 @@ public:
 
 class CustomTagProcessor : public MessageTagSkipTagProcessor {
 public:
-    CustomTagProcessor(nw4r::lyt::TextBox*);
+    CustomTagProcessor(Ui::TextBox*);
 
     virtual ~CustomTagProcessor();
     virtual Operation Process(u16, ContextType*) override;
-    virtual Operation CalcRect(nw4r::ut::Rect*, u16, ContextType*) override;
+    virtual Operation CalcRect(Ui::Rect*, u16, ContextType*) override;
 
     void setArgNumber(s32, s32);
     void setArgString(const char16_t*, s32);
@@ -43,27 +41,27 @@ public:
     void reset(const char16_t*);
     MessageEditorMessageTag getReplaceTag(const char16_t*, s32, s32, s32) const;
     bool isIgnoreTag(u16, ContextType*) const;
-    bool writeString(nw4r::ut::Rect*, const char16_t*, ContextType*);
-    Operation exeDisplayGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeSoundGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exePictureGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeFontSizeGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeSystemGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeLocalizeGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeNumberGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeStringGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeSystemGroupColor(nw4r::ut::Rect*, int, ContextType*);
-    Operation exeSystemGroupRuby(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeDisplayGroupWait(nw4r::ut::Rect*, u16, ContextType*);
-    Operation exeDisplayGroupOffset(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeDisplayGroupCenter(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeFontGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exePatchimuGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
+    bool writeString(Ui::Rect*, const char16_t*, ContextType*);
+    Operation exeDisplayGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeSoundGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exePictureGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeFontSizeGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeSystemGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeLocalizeGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeNumberGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeStringGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeSystemGroupColor(Ui::Rect*, int, ContextType*);
+    Operation exeSystemGroupRuby(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeDisplayGroupWait(Ui::Rect*, u16, ContextType*);
+    Operation exeDisplayGroupOffset(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeDisplayGroupCenter(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exeFontGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
+    Operation exePatchimuGroup(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
 
     struct Impl {
         struct GroupFunctionInfo {
             u8 mGroup;
-            Operation (CustomTagProcessor::*mFunction)(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
+            Operation (CustomTagProcessor::*mFunction)(Ui::Rect*, const MessageEditorMessageTag&, ContextType*);
         };
 
         static GroupFunctionInfo* findGroupFunctionInfo(int);
@@ -75,7 +73,7 @@ public:
     bool mIsInfo;
     bool mNoCharSpace;
     CustomTagAlphaCtrl mAlphaCtrl;
-    nw4r::lyt::TextBox* mTextBox;
+    Ui::TextBox* mTextBox;
     u8 mPlayedSounds;
     u8 mSoundIndex;
     u8 mColorIndex;

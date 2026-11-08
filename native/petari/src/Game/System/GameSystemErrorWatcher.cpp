@@ -214,7 +214,7 @@ const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageI
     }
 }
 
-const nw4r::lyt::TexMap* GameSystemErrorWatcher::getProperErrorTexMap() const {
+const Ui::TexMap* GameSystemErrorWatcher::getProperErrorTexMap() const {
     switch (mInputStatus) {
     case INPUT_STATUS_NO_MOVE_STICK:
         return mUnplaggedTexMap;

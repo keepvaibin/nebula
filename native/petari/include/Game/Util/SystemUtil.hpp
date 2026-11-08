@@ -10,19 +10,17 @@ namespace MR {
     class FunctorBase;
 };  // namespace MR
 
-namespace nw4r {
-    namespace ut {
-        class Font;
-    };
-};  // namespace nw4r
+namespace Ui {
+    class Font;
+}  // namespace Ui
 
 namespace MR {
     GameSystemObjHolder* getGameSystemObjHolder();
-    nw4r::ut::Font* getFontOnCurrentLanguage();
-    nw4r::ut::Font* getPictureFontNW4R();
-    nw4r::ut::Font* getMenuFontNW4R();
-    nw4r::ut::Font* getNumberFontNW4R();
-    nw4r::ut::Font* getCinemaFontNW4R();
+    Ui::Font* getFontOnCurrentLanguage();
+    Ui::Font* getPictureFontNW4R();
+    Ui::Font* getMenuFontNW4R();
+    Ui::Font* getNumberFontNW4R();
+    Ui::Font* getCinemaFontNW4R();
     ParticleResourceHolder* getParticleResourceHolder();
     void callMethodAllSceneNameObj(void (NameObj::*)());
     void suspendAllSceneNameObj();

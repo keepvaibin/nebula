@@ -17,8 +17,8 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <nw4r/lyt/layout.h>
-#include <nw4r/ut/ResFont.h>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/ResFont.hpp>
 
 namespace MR {
     GameSystemObjHolder* getGameSystemObjHolder() {
@@ -37,23 +37,23 @@ namespace {
 };  // namespace
 
 namespace MR {
-    nw4r::ut::Font* getFontOnCurrentLanguage() {
+    Ui::Font* getFontOnCurrentLanguage() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->getMessageFont();
     }
 
-    nw4r::ut::Font* getPictureFontNW4R() {
+    Ui::Font* getPictureFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mPictureFont;
     }
 
-    nw4r::ut::Font* getMenuFontNW4R() {
+    Ui::Font* getMenuFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mMenuFont;
     }
 
-    nw4r::ut::Font* getNumberFontNW4R() {
+    Ui::Font* getNumberFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mNumberFont;
     }
 
-    nw4r::ut::Font* getCinemaFontNW4R() {
+    Ui::Font* getCinemaFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mCinemaFont;
     }
 

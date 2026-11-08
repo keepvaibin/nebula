@@ -1,11 +1,9 @@
 #pragma once
 
 
-namespace nw4r {
-    namespace lyt {
-        class TextBox;
-    };
-};  // namespace nw4r
+namespace Ui {
+    class TextBox;
+}  // namespace Ui
 
 // Nebula's own text (its questions, buttons and achievements) in the played language. In order:
 //  1. the language folder's MessageData/NebulaText.txt, from a mod, a Riivolution patch or a translation;
@@ -24,5 +22,5 @@ namespace NebulaText {
     bool isTalk(const char16_t* pMessage);
     // TalkTextFormer, as a talk's page shows in pBox: a talk of getTalk's has its lines broken where they would run
     // past the box, as the box measures them (font, size, spacing, the player's name). Other text is left alone.
-    void fitTalk(const char16_t* pMessage, nw4r::lyt::TextBox* pBox);
+    void fitTalk(const char16_t* pMessage, Ui::TextBox* pBox);
 };  // namespace NebulaText

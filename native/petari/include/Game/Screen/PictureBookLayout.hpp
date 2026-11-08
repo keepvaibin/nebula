@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class ButtonPaneController;
 class IconAButton;
@@ -67,11 +65,11 @@ private:
     s32 mNotReadedChapterNo;
     s32 mNotReadedPageNo;
     s32 mNotReadedTextIndex;
-    nw4r::lyt::TexMap** _44;
-    nw4r::lyt::TexMap** _48;
-    nw4r::lyt::TexMap* mTitleTexMap;
-    nw4r::lyt::TexMap* mCoverFrontTexMap;
-    nw4r::lyt::TexMap* mCoverBackTexMap;
+    Ui::TexMap** _44;
+    Ui::TexMap** _48;
+    Ui::TexMap* mTitleTexMap;
+    Ui::TexMap* mCoverFrontTexMap;
+    Ui::TexMap* mCoverBackTexMap;
     s32 mNextItemDir;
     bool mIsNextItemFast;
     IconAButton* mIconAButton;

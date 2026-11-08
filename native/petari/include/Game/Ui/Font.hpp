@@ -1,0 +1,75 @@
+#pragma once
+
+#include "Game/Ui/CharStrmReader.hpp"
+#include "Game/Ui/FontResourceFormat.hpp"
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+
+namespace Ui {
+    typedef u16 CharCode;
+
+    enum FontEncoding {
+        FONT_ENCODING_UTF8,
+        FONT_ENCODING_UTF16,
+        FONT_ENCODING_SJIS,
+        FONT_ENCODING_CP1252,
+
+        FONT_ENCODING_MAX
+    };
+
+    // A sheet's format as a font file names it.
+    enum SheetFormat { SHEET_I4 = 0, SHEET_I8, SHEET_IA4, SHEET_IA8, SHEET_RGB565, SHEET_RGB5A3, SHEET_RGBA8 };
+
+    struct Glyph {
+        void* pTexture;
+        CharWidths widths;
+        u8 height;
+        u8 texFormat;
+        u16 texWidth;
+        u16 texHeight;
+        u16 cellX;
+        u16 cellY;
+    };
+
+    class Font {
+    public:
+        enum Type { TYPE_NULL, TYPE_ROM, TYPE_RESOURCE, TYPE_PAIR };
+
+        Font() : mReadFunc(&CharStrmReader::ReadNextCharCP1252) {
+        }
+
+        virtual ~Font() {
+        }
+        virtual int GetWidth() const = 0;
+        virtual int GetHeight() const = 0;
+        virtual int GetAscent() const = 0;
+        virtual int GetDescent() const = 0;
+        virtual int GetBaselinePos() const = 0;
+        virtual int GetCellHeight() const = 0;
+        virtual int GetCellWidth() const = 0;
+        virtual int GetMaxCharWidth() const = 0;
+        virtual Type GetType() const = 0;
+        virtual u8 GetTextureFormat() const = 0;
+        // The sheets' distance range in texels, 0 when they are images (FontTextureGlyph::fieldRange).
+        virtual u8 GetFieldRange() const = 0;
+        virtual int GetLineFeed() const = 0;
+        virtual const CharWidths GetDefaultCharWidths() const = 0;
+        virtual void SetDefaultCharWidths(const CharWidths& rWidths) = 0;
+        virtual bool SetAlternateChar(u16 ch) = 0;
+        virtual void SetLineFeed(int lf) = 0;
+        virtual int GetCharWidth(u16 ch) const = 0;
+        virtual const CharWidths GetCharWidths(u16 ch) const = 0;
+        virtual void GetGlyph(Glyph* pGlyph, u16 ch) const = 0;
+        virtual bool HasGlyph(CharCode c) const = 0;
+        virtual FontEncoding GetEncoding() const = 0;
+
+        void InitReaderFunc(FontEncoding);
+
+        const CharStrmReader GetCharStrmReader() const {
+            CharStrmReader reader(mReadFunc);
+            return reader;
+        }
+
+        CharStrmReader::ReadNextCharFunc mReadFunc;
+    };
+}  // namespace Ui

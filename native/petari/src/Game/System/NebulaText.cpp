@@ -8,8 +8,8 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
-#include <nw4r/lyt/textBox.h>
-#include <nw4r/ut/Rect.h>
+#include <Game/Ui/TextBox.hpp>
+#include <Game/Ui/Rect.hpp>
 
 namespace {
 #include "NebulaTextTable.inc"
@@ -405,14 +405,14 @@ namespace NebulaText {
 
     // The width of pText[0, count) as pBox draws it: its font, size and spacing, and its tags, set as the game sets a
     // message (LayoutCoreUtil::setTextBoxMessage: the player's name written out, the length counted tag by tag).
-    f32 measureLine(nw4r::lyt::TextBox* pBox, const char16_t* pText, s32 count) {
+    f32 measureLine(Ui::TextBox* pBox, const char16_t* pText, s32 count) {
         const s32 length = count < sTalkRoom - 1 ? count : sTalkRoom - 1;
         memcpy(sTalkLine, pText, length * sizeof(char16_t));
         sTalkLine[length] = 0;
         LayoutCoreUtil::setTextBoxMessage(pBox, sTalkLine);
-        const nw4r::lyt::Size size = pBox->mSize;
+        const Ui::Size size = pBox->mSize;
         pBox->mSize.width = 4000.0f;
-        const nw4r::ut::Rect rect = pBox->GetTextDrawRect();
+        const Ui::Rect rect = pBox->GetTextDrawRect();
         pBox->mSize = size;
         return rect.right - rect.left;
     }
@@ -472,7 +472,7 @@ namespace NebulaText {
     }
 
     // The breaks a greedy setter takes at `limit`: each line runs to the last break it fits before. Their number.
-    s32 setGreedy(nw4r::lyt::TextBox* pBox, const char16_t* pText, s32 length, const s32* pBreaks, s32 breakNum, f32 limit, s32* pChosen) {
+    s32 setGreedy(Ui::TextBox* pBox, const char16_t* pText, s32 length, const s32* pBreaks, s32 breakNum, f32 limit, s32* pChosen) {
         s32 chosen = 0;
         s32 lineStart = 0;
         s32 last = -1;  // the last break the current line fits before
@@ -494,7 +494,7 @@ namespace NebulaText {
         return sTalk != nullptr && pMessage >= sTalk && pMessage < sTalk + sTalkRoom;
     }
 
-    void fitTalk(const char16_t* pMessage, nw4r::lyt::TextBox* pBox) {
+    void fitTalk(const char16_t* pMessage, Ui::TextBox* pBox) {
         if (pBox == nullptr || sTalkFitted || !isTalk(pMessage)) {
             return;
         }

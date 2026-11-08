@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class IconAButton;
 
@@ -24,7 +22,7 @@ public:
     void exeEnd();
 
 private:
-    nw4r::lyt::TexMap* mTexture;
+    Ui::TexMap* mTexture;
     IconAButton* mAButtonIcon;
     const char* _28;
     bool _2C;

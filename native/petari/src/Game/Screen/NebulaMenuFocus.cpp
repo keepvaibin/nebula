@@ -6,7 +6,7 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/Pane.hpp>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -64,7 +64,7 @@ namespace {
             return true;
         }
         const ButtonPaneController* pButton = rEntry.mButton;
-        const nw4r::lyt::Pane* pPane = pButton->mHost->getLayoutManager()->findPaneByName(pButton->mBoundingPaneName);
+        const Ui::Pane* pPane = pButton->mHost->getLayoutManager()->findPaneByName(pButton->mBoundingPaneName);
         if (pPane == nullptr) {
             return false;
         }
@@ -86,9 +86,9 @@ namespace {
             y = pPane->GetDrawSize().height / 2.0f;
             break;
         }
-        const nw4r::math::MTX34& rMtx = pPane->mGlbMtx;
-        pCentre->x = rMtx._00 * x + rMtx._01 * y + rMtx._03;
-        pCentre->y = rMtx._10 * x + rMtx._11 * y + rMtx._13;
+        const Mtx34f& rMtx = pPane->mGlbMtx;
+        pCentre->x = rMtx.mMtx[0][0] * x + rMtx.mMtx[0][1] * y + rMtx.mMtx[0][3];
+        pCentre->y = rMtx.mMtx[1][0] * x + rMtx.mMtx[1][1] * y + rMtx.mMtx[1][3];
         return true;
     }
 

@@ -1,17 +1,17 @@
 #pragma once
 
 #include "Game/System/ResourceInfo.hpp"
-#include <nw4r/lyt/resourceAccessor.h>
+#include <Game/Ui/ResourceAccessor.hpp>
 
 class AssetFolder;
 
-class LayoutHolder : public nw4r::lyt::ResourceAccessor {
+class LayoutHolder : public Ui::ResourceAccessor {
 public:
     LayoutHolder(AssetFolder&);
 
     virtual ~LayoutHolder();
     virtual void* GetResource(u32, const char*, u32*);
-    virtual nw4r::ut::Font* GetFont(const char*);
+    virtual Ui::Font* GetFont(const char*);
     virtual void* getResOther(const char* pName) const {
         return mResOther.getRes(pName);
     }

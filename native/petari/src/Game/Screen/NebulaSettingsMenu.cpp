@@ -24,7 +24,7 @@
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
-#include <nw4r/lyt/layout.h>
+#include <Game/Ui/Layout.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
@@ -217,7 +217,7 @@ namespace {
     struct JoyConHalf {
         Picture* mPicture;
         TextBox* mLetter;
-        nw4r::lyt::TexMap* mMap;  // its picture's texture as set
+        Ui::TexMap* mMap;  // its picture's texture as set
         s32 mPresses;  // its button presses as last seen (-1: not yet)
         f32 mPop;      // a press's pop, 1 at the press and down to 0
     };
@@ -286,7 +286,7 @@ namespace {
         f32 mBadgeWidths[2];
         f32 mInkX[2];  // each label's ink from its middle (NebulaUi::inkOffset)
         f32 mInkY[2];
-        nw4r::math::VEC2 mLabelScales[2];
+        Vec2f mLabelScales[2];
         bool mGlyph;  // mWord is the D-pad
         bool mKeyIcon;  // mWord is the keyboard's keys (NebulaIcons::keyCode)
         f32 mSize;    // the size of the text it stands with
@@ -623,7 +623,7 @@ namespace {
             rCap.mGlyph = true;
             rCap.mKeyIcon = true;
             rCap.mWidth = glyphFontSize(rCap.mWord, glyphSize).width * glyphs;
-            rCap.mWord->mSize = nw4r::lyt::Size(rCap.mWidth + glyphSize, glyphSize * 2.0f);
+            rCap.mWord->mSize = Ui::Size(rCap.mWidth + glyphSize, glyphSize * 2.0f);
         } else if (key >= 0 && !pad) {
             char16_t text[64] = {0};
             getKeyName(text, 64, key, controls);
@@ -652,12 +652,12 @@ namespace {
                 // wide) drawn square and smaller, as on the controller.
                 f32 inkWidth = 0.0f;
                 f32 inkHeight = 0.0f;
-                rCap.mLabelScales[i] = nw4r::math::VEC2(1.0f, 1.0f);
+                rCap.mLabelScales[i] = Vec2f(1.0f, 1.0f);
                 if (!inkOffset(rCap.mLabels[i], &rCap.mInkX[i], &rCap.mInkY[i], &inkWidth, &inkHeight)) {
                     rCap.mInkX[i] = 0.0f;
                     rCap.mInkY[i] = 0.0f;
                 } else if (face && rLook.mLabel[0] == 0x25A1 && inkWidth > 0.0f) {
-                    rCap.mLabelScales[i] = nw4r::math::VEC2(0.78f * inkHeight / inkWidth, 0.78f);
+                    rCap.mLabelScales[i] = Vec2f(0.78f * inkHeight / inkWidth, 0.78f);
                 }
                 const PadButton* pFace = face ? &rLook : nullptr;
                 // A face button round, a shoulder a pill as long as its name.
@@ -674,7 +674,7 @@ namespace {
     // Its left end at `left`, its middle at `y`.
     void placeKeyCap(KeyCap& rCap, f32 left, f32 y) {
         if (rCap.mBadgeCount == 0) {
-            rCap.mWord->mTranslate = nw4r::math::VEC3(left + rCap.mWidth * 0.5f,
+            rCap.mWord->mTranslate = Vec3f(left + rCap.mWidth * 0.5f,
                                                       rCap.mKeyIcon ? y - cKeyGlyphDrop * rCap.mSize * 1.3f
                                                       : rCap.mGlyph ? glyphCentre(y, rCap.mSize * 1.3f)
                                                                     : textCentre(y, rCap.mSize),
@@ -687,9 +687,9 @@ namespace {
             const f32 width = rCap.mBadgeWidths[i];
             shape(rCap.mBadges[i], x + width * 0.5f, y, width, diameter, diameter * 0.5f);
             // Scaled about its box's middle: its ink's offset and the capitals' lift scale with it.
-            const nw4r::math::VEC2& rScale = rCap.mLabelScales[i];
+            const Vec2f& rScale = rCap.mLabelScales[i];
             rCap.mLabels[i]->mScale = rScale;
-            rCap.mLabels[i]->mTranslate = nw4r::math::VEC3(x + width * 0.5f - rCap.mInkX[i] * rScale.x,
+            rCap.mLabels[i]->mTranslate = Vec3f(x + width * 0.5f - rCap.mInkX[i] * rScale.x,
                                                            y - (cCapLift * rCap.mSize * 0.85f + rCap.mInkY[i]) * rScale.y, 0.0f);
             x += width + cBadgeGap;
         }
@@ -1040,14 +1040,14 @@ bool NebulaSettingsScreen::makeButton(Pane* pParent, Button* pButton, const char
 bool NebulaSettingsScreen::build() {
     LayoutManager* pManager = getLayoutManager();
     Pane* pRoot = pManager->mLayout->mpRootPane;
-    nw4r::lyt::Layout* const pInto = pManager->mLayout;
+    Ui::Layout* const pInto = pManager->mLayout;
     if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, "SysInfoWindow", pInto) ||
         !mTextKit.init("InformationWindow", pInto) || !mWindowKit.init("SysInfoWindowMini", pInto) ||
         !mButtonKit.init("BackButton", pInto)) {
         return false;
     }
     // The question window's own panes stay hidden; the menu is built beside them.
-    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+    for (Ui::Pane* pChild : pRoot->GetChildList()) {
         pChild->SetVisible(false);
     }
     mRoot = makeGroup(pRoot, "NsRoot");
@@ -1277,7 +1277,7 @@ void NebulaSettingsScreen::arrange() {
     mTitle->SetVisible(titled);
     mWidth /= mZoom;
     mHeight /= mZoom;
-    mRoot->mScale = nw4r::math::VEC2(mScaleX * mZoom, mZoom);
+    mRoot->mScale = Vec2f(mScaleX * mZoom, mZoom);
     mPanelWidth = mWidth - cMargin * 2.0f;
     mPanelWidth = mPanelWidth > cMaxWidth ? cMaxWidth : mPanelWidth;
     mPanelHeight = mHeight - cMargin * 2.0f;
@@ -1295,16 +1295,16 @@ void NebulaSettingsScreen::arrange() {
     mListBottom = mListTop - cRowHeight * static_cast< s32 >(listRoom / cRowHeight);
     mValueRight = mRight - 16.0f;
 
-    mDim->mSize = nw4r::lyt::Size(mWidth * 1.5f, mHeight * 1.5f);
-    mPanel->mSize = nw4r::lyt::Size(mPanelWidth, mPanelHeight);
-    mShadow->mSize = nw4r::lyt::Size(mPanelWidth, mPanelHeight);
-    mShadow->mTranslate = nw4r::math::VEC3(6.0f, -6.0f, 0.0f);
-    mQuestionDim->mSize = nw4r::lyt::Size(mPanelWidth, mPanelHeight);
+    mDim->mSize = Ui::Size(mWidth * 1.5f, mHeight * 1.5f);
+    mPanel->mSize = Ui::Size(mPanelWidth, mPanelHeight);
+    mShadow->mSize = Ui::Size(mPanelWidth, mPanelHeight);
+    mShadow->mTranslate = Vec3f(6.0f, -6.0f, 0.0f);
+    mQuestionDim->mSize = Ui::Size(mPanelWidth, mPanelHeight);
     if (!mHome) {
-        mQuestionPanel->mSize = nw4r::lyt::Size(cQuestionWidth, cQuestionHeight);
-        mQuestionShadow->mSize = nw4r::lyt::Size(cQuestionWidth, cQuestionHeight);
+        mQuestionPanel->mSize = Ui::Size(cQuestionWidth, cQuestionHeight);
+        mQuestionShadow->mSize = Ui::Size(cQuestionWidth, cQuestionHeight);
     }
-    mQuestionShadow->mTranslate = nw4r::math::VEC3(6.0f, -6.0f, 0.0f);
+    mQuestionShadow->mTranslate = Vec3f(6.0f, -6.0f, 0.0f);
 }
 
 void NebulaSettingsScreen::fillButton(Button& rButton, const char* pWordId) {
@@ -1695,8 +1695,8 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
         const f32 panelWidth = asking == 0 ? cHomeWidth : cQuestionWidth;
         const f32 panelHeight = asking == 0 ? cPad * 2.0f + cTitleSize + 18.0f + cButtonHeight * cHomeRowNum + cHomeGap * (cHomeRowNum - 1)
                                             : cQuestionHeight;
-        mQuestionPanel->mSize = nw4r::lyt::Size(panelWidth, panelHeight);
-        mQuestionShadow->mSize = nw4r::lyt::Size(panelWidth, panelHeight);
+        mQuestionPanel->mSize = Ui::Size(panelWidth, panelHeight);
+        mQuestionShadow->mSize = Ui::Size(panelWidth, panelHeight);
         mQuestion->SetVisible(true);
     }
     mHomeView = homeView;
@@ -2145,8 +2145,8 @@ void NebulaSettingsScreen::placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 h
     rChip.mHeight = height;
     shapeChip(rChip, width, height);
     const f32 grow = 1.0f + 0.05f * rChip.mFocusLevel;
-    rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
-    rChip.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+    rChip.mRoot->mTranslate = Vec3f(x, y, 0.0f);
+    rChip.mRoot->mScale = Vec2f(grow, grow);
     rChip.mLayers[LayerShine]->SetVisible(rChip.mFocusLevel > 0.02f);
     rChip.mLayers[LayerShine]->mAlpha = toAlpha(rChip.mFocusLevel * 0.7f);
 }
@@ -2160,8 +2160,8 @@ void NebulaSettingsScreen::placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width
     rChip.mWidth = width;
     rChip.mHeight = height;
     const f32 grow = 1.0f + 0.05f * rChip.mFocusLevel;
-    rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y + cEdgeDrop * 0.5f, 0.0f);
-    rChip.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+    rChip.mRoot->mTranslate = Vec3f(x, y + cEdgeDrop * 0.5f, 0.0f);
+    rChip.mRoot->mScale = Vec2f(grow, grow);
     shape(rPooled.mEdge, 0.0f, -cEdgeDrop, width, height, radius);
     shape(rPooled.mFace, 0.0f, 0.0f, width, height, radius);
     rPooled.mEdge->SetVisible(!off);
@@ -2181,8 +2181,8 @@ void NebulaSettingsScreen::placeButton(Button& rButton, f32 x, f32 y, f32 width)
     const f32 squeeze = word > wordRoom && word > 0.0f ? clamp(wordRoom / word, cMinSqueeze, 1.0f) : 1.0f;
     const f32 total = key + gap + word * squeeze;
     placeKeyCap(rButton.mKey, -total * 0.5f, 0.0f);
-    rChip.mText->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-    rChip.mText->mTranslate = nw4r::math::VEC3(total * 0.5f - word * squeeze * 0.5f, textCentre(0.0f, cButtonSize), 0.0f);
+    rChip.mText->mScale = Vec2f(squeeze, 1.0f);
+    rChip.mText->mTranslate = Vec3f(total * 0.5f - word * squeeze * 0.5f, textCentre(0.0f, cButtonSize), 0.0f);
 }
 
 void NebulaSettingsScreen::showMods(bool shown) {
@@ -2299,11 +2299,11 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         } else if (held && row == static_cast< s32 >(rView.selected)) {
             y += 2.0f;  // picked up
         }
-        rRow.mRoot->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
+        rRow.mRoot->mTranslate = Vec3f(x, y, 0.0f);
         rRow.mRoot->SetVisible(dragged || (y < mModItemsTop + cModHeight && y > mModItemsBottom - cModHeight));
         const f32 room = mModWidth - 28.0f;
-        rRow.mLabel->mScale = nw4r::math::VEC2(rRow.mLabelWidth > room && rRow.mLabelWidth > 0.0f ? clamp(room / rRow.mLabelWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
-        rRow.mLabel->mTranslate = nw4r::math::VEC3(14.0f, textCentre(0.0f, cTextSize), 0.0f);
+        rRow.mLabel->mScale = Vec2f(rRow.mLabelWidth > room && rRow.mLabelWidth > 0.0f ? clamp(room / rRow.mLabelWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        rRow.mLabel->mTranslate = Vec3f(14.0f, textCentre(0.0f, cTextSize), 0.0f);
         rRow.mValue->SetVisible(false);
         rRow.mFrame->SetVisible(false);
         rRow.mRule->SetVisible(false);
@@ -2336,7 +2336,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     // The lists' frames and titles, and what an empty one says.
     for (s32 l = 0; l < 2; l++) {
         shape(mModPanels[l], mModLeft[l] + mModWidth * 0.5f, (frameTop + frameBottom) * 0.5f, mModWidth, frameTop - frameBottom, 12.0f);
-        mModTitles[l]->mTranslate = nw4r::math::VEC3(mModLeft[l] + 4.0f, textCentre(titleY, cHeadingSize), 0.0f);
+        mModTitles[l]->mTranslate = Vec3f(mModLeft[l] + 4.0f, textCentre(titleY, cHeadingSize), 0.0f);
         const bool none = l == 1 && mModCounts[0] == 0 && mModCounts[1] == 0;
         mModEmpty[l]->SetVisible(none);
         if (none) {
@@ -2347,7 +2347,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             setText(mModEmpty[l], text);
             measure(mModEmpty[l], mModWidth - 24.0f, &width, &height);
             mModEmpty[l]->mTranslate =
-                nw4r::math::VEC3(mModLeft[l] + mModWidth * 0.5f, textCentre((frameTop + frameBottom) * 0.5f, cFooterSize), 0.0f);
+                Vec3f(mModLeft[l] + mModWidth * 0.5f, textCentre((frameTop + frameBottom) * 0.5f, cFooterSize), 0.0f);
         }
     }
 
@@ -2385,8 +2385,8 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         setTextColor(rChip.mText, off ? cDisabled : cButtonText, off ? cDisabled : cButtonText);
         const f32 word = rChip.mText->mSize.width;
         const f32 room = width - 20.0f;
-        rChip.mText->mScale = nw4r::math::VEC2(word > room && word > 0.0f ? clamp(room / word, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
-        rChip.mText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(0.0f, cButtonSize), 0.0f);
+        rChip.mText->mScale = Vec2f(word > room && word > 0.0f ? clamp(room / word, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        rChip.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, cButtonSize), 0.0f);
     }
 
     // No row's own buttons and no scroll bar here.
@@ -2449,7 +2449,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             const f32 dx = rPooled.mInkX;
             const f32 dy = cCapLift * cArrowSize + rPooled.mInkY;
             const f32 turn = a == 0 ? 1.0f : -1.0f;
-            rPooled.mChip.mText->mTranslate = nw4r::math::VEC3(turn * dy, -turn * dx, 0.0f);
+            rPooled.mChip.mText->mTranslate = Vec3f(turn * dy, -turn * dx, 0.0f);
         }
         if (rRow.mSliderRight > rRow.mSliderLeft && next < cRowChipsMax) {
             RowChip& rPooled = useRowChip(next++, i, ChipKnob, 0, u"");
@@ -2473,7 +2473,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             const bool off = (rRow.mButtonsOff & 1u << b) != 0;
             placeRowBox(rPooled, x, y, width, cRowButtonHeight, cRowButtonRadius, focused && !off, off);
             setTextColor(rChip.mText, off ? cDisabled : cButtonText, off ? cDisabled : cButtonText);
-            rChip.mText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(0.0f, cRowButtonSize), 0.0f);
+            rChip.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, cRowButtonSize), 0.0f);
             x -= width * 0.5f + cRowButtonGap;
         }
     }
@@ -2512,11 +2512,11 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
         const bool heading = (rData.flags & NEBULA_SETTINGS_ROW_HEADING) != 0;
         const s32 row = static_cast< s32 >(rView.first_row) + i;
         const f32 y = mListTop - row * cRowHeight - cRowHeight * 0.5f + mScroll;
-        rRow.mRoot->mTranslate = nw4r::math::VEC3(0.0f, y, 0.0f);
+        rRow.mRoot->mTranslate = Vec3f(0.0f, y, 0.0f);
         rRow.mRoot->SetVisible(y < mListTop + cRowHeight && y > mListBottom - cRowHeight);
         const f32 labelX = mLeft + (rRow.mIndented ? 30.0f : heading ? 2.0f : 16.0f);
-        rRow.mLabel->mScale = nw4r::math::VEC2(1.0f, 1.0f);
-        rRow.mLabel->mTranslate = nw4r::math::VEC3(labelX, textCentre(heading ? -2.0f : 0.0f, heading ? cHeadingSize : cTextSize), 0.0f);
+        rRow.mLabel->mScale = Vec2f(1.0f, 1.0f);
+        rRow.mLabel->mTranslate = Vec3f(labelX, textCentre(heading ? -2.0f : 0.0f, heading ? cHeadingSize : cTextSize), 0.0f);
         rRow.mArrows = false;
         rRow.mSliderLeft = 0.0f;
         rRow.mSliderRight = 0.0f;
@@ -2547,9 +2547,9 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             rRow.mArrowX[1] = end - cArrowWidth * 0.5f;
             const f32 room = box - 12.0f;
             const f32 squeeze = rRow.mValueWidth > room && rRow.mValueWidth > 0.0f ? clamp(room / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = nw4r::math::VEC2(squeeze, 1.0f);
+            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
             rRow.mValue->mTranslate =
-                nw4r::math::VEC3(end - cArrowWidth - cRowButtonGap - box * 0.5f, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
+                Vec3f(end - cArrowWidth - cRowButtonGap - box * 0.5f, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
         } else if (hasSlider(rData)) {
             rRow.mSliderLeft = start + cKnobSize * 0.5f;
@@ -2564,18 +2564,18 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             rRow.mSliderTrack->SetVisible(true);
             rRow.mSliderFill->SetVisible(true);
             const f32 squeeze = rRow.mValueWidth > cSliderValue && rRow.mValueWidth > 0.0f ? clamp(cSliderValue / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-            rRow.mValue->mTranslate = nw4r::math::VEC3(mValueRight, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
+            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
+            rRow.mValue->mTranslate = Vec3f(mValueRight, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
         } else {
             // A value too long for the room its label leaves is narrowed to fit.
             const f32 room = mValueRight - labelX - rRow.mLabelWidth - 24.0f;
             const f32 squeeze = rRow.mValueWidth > room && rRow.mValueWidth > 0.0f ? clamp(room / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-            rRow.mValue->mTranslate = nw4r::math::VEC3(mValueRight, textCentre(0.0f, cTextSize), 0.0f);
+            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
+            rRow.mValue->mTranslate = Vec3f(mValueRight, textCentre(0.0f, cTextSize), 0.0f);
         }
         const f32 label = rRow.mLabelWidth;
-        rRow.mLabel->mScale = nw4r::math::VEC2(label > labelRoom && label > 0.0f ? clamp(labelRoom / label, 0.5f, 1.0f) : 1.0f, 1.0f);
+        rRow.mLabel->mScale = Vec2f(label > labelRoom && label > 0.0f ? clamp(labelRoom / label, 0.5f, 1.0f) : 1.0f, 1.0f);
     }
 
     placeRowButtons(rView);
@@ -2599,7 +2599,7 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
 void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
     mDim->mAlpha = toAlpha(clamp(mOpen * 1.5f, 0.0f, 1.0f));
     const f32 dropHeight = mHome ? mQuestionPanel->mSize.height : mPanelHeight;
-    mMenu->mTranslate = nw4r::math::VEC3(0.0f, (1.0f - easeOut(mOpen)) * (mHeight * 0.5f + dropHeight * 0.5f + 16.0f), 0.0f);
+    mMenu->mTranslate = Vec3f(0.0f, (1.0f - easeOut(mOpen)) * (mHeight * 0.5f + dropHeight * 0.5f + 16.0f), 0.0f);
     if (mHome) {
         placeHome();
         return;
@@ -2607,7 +2607,7 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
     // The on-screen controls are arranged over the picture: their window alone, the page hidden.
     const bool arranging = rView.status == NEBULA_SETTINGS_STATUS_ARRANGE;
     mPage->SetVisible(!arranging);
-    mTitle->mTranslate = nw4r::math::VEC3(mLeft + 2.0f, textCentre(mTitleY, cTitleSize), 0.0f);
+    mTitle->mTranslate = Vec3f(mLeft + 2.0f, textCentre(mTitleY, cTitleSize), 0.0f);
 
     // The pages' buttons share the window's width; a word too long for its button is narrowed to fit.
     const s32 pages = static_cast< s32 >(rView.page_count);
@@ -2621,14 +2621,14 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         rTab.mHeight = cTabHeight;
         shapeChip(rTab, tabWidth, cTabHeight);
         const f32 grow = 1.0f + 0.05f * rTab.mFocusLevel;
-        rTab.mRoot->mTranslate = nw4r::math::VEC3(rTab.mX, mTabY, 0.0f);
-        rTab.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+        rTab.mRoot->mTranslate = Vec3f(rTab.mX, mTabY, 0.0f);
+        rTab.mRoot->mScale = Vec2f(grow, grow);
         rTab.mLayers[LayerShine]->SetVisible(rTab.mFocusLevel > 0.02f);
         rTab.mLayers[LayerShine]->mAlpha = toAlpha(rTab.mFocusLevel * 0.7f);
         const f32 room = tabWidth - 22.0f;
         const f32 word = mTabWordWidths[i];
-        rTab.mText->mScale = nw4r::math::VEC2(word > room && word > 0.0f ? room / word : 1.0f, 1.0f);
-        rTab.mText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(0.0f, cTabSize), 0.0f);
+        rTab.mText->mScale = Vec2f(word > room && word > 0.0f ? room / word : 1.0f, 1.0f);
+        rTab.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, cTabSize), 0.0f);
         setTextColor(rTab.mText, active ? cAccent : cButtonText, active ? cAccent : cButtonText);
     }
 
@@ -2661,8 +2661,8 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         fitStatus(textRoom);
     }
     const f32 statusScale = mStatusWidth > textRoom && mStatusWidth > 0.0f ? clamp(textRoom / mStatusWidth, cMinSqueeze, 1.0f) : 1.0f;
-    mStatus->mScale = nw4r::math::VEC2(statusScale, 1.0f);
-    mStatus->mTranslate = nw4r::math::VEC3(mLeft + 2.0f, textCentre(mStatusY, cFooterSize), 0.0f);
+    mStatus->mScale = Vec2f(statusScale, 1.0f);
+    mStatus->mTranslate = Vec3f(mLeft + 2.0f, textCentre(mStatusY, cFooterSize), 0.0f);
     // The hints' keys keep their size; their words and the room between them narrow when a language runs long.
     f32 keysWidth = 0.0f;
     f32 wordsWidth = 0.0f;
@@ -2675,10 +2675,10 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
     x = mLeft + 2.0f;
     for (s32 i = 0; i < cHintsMax; i++) {
         Hint& rHint = mHints[i];
-        rHint.mWord->mScale = nw4r::math::VEC2(hintScale, 1.0f);
+        rHint.mWord->mScale = Vec2f(hintScale, 1.0f);
         placeKeyCap(rHint.mKey, x, mHintsY);
         x += rHint.mKey.mWidth + cKeyGap * hintScale;
-        rHint.mWord->mTranslate = nw4r::math::VEC3(x, textCentre(mHintsY, cFooterSize), 0.0f);
+        rHint.mWord->mTranslate = Vec3f(x, textCentre(mHintsY, cFooterSize), 0.0f);
         x += (rHint.mWordWidth + cHintGap) * hintScale;
     }
 
@@ -2697,16 +2697,16 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         const f32 height = joycon    ? cQuestionMargin * 2.0f + gap * 2.0f + picture + mQuestionInk + cButtonHeight
                            : license ? mPanelHeight - cLicenseInset * 2.0f
                                      : cQuestionHeight;
-        mQuestionPanel->mSize = nw4r::lyt::Size(panelWidth, height);
-        mQuestionShadow->mSize = nw4r::lyt::Size(panelWidth, height);
+        mQuestionPanel->mSize = Ui::Size(panelWidth, height);
+        mQuestionShadow->mSize = Ui::Size(panelWidth, height);
         const f32 answersY = -height * 0.5f + cQuestionMargin + cButtonHeight * 0.5f;
         const f32 top = height * 0.5f - cQuestionMargin;
         const f32 textY = joycon ? top - picture - gap - mQuestionInk * 0.5f
                                  : (height * 0.5f + answersY + cButtonHeight * 0.5f) * 0.5f + (bar ? cSliderHeight * 1.5f : 0.0f);
         if (license) {
-            mQuestionText->mTranslate = nw4r::math::VEC3(-panelWidth * 0.5f + cQuestionMargin, top - mQuestionInk * 0.5f, 0.0f);
+            mQuestionText->mTranslate = Vec3f(-panelWidth * 0.5f + cQuestionMargin, top - mQuestionInk * 0.5f, 0.0f);
         } else {
-            mQuestionText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(textY, cTextSize + 1.0f), 0.0f);
+            mQuestionText->mTranslate = Vec3f(0.0f, textCentre(textY, cTextSize + 1.0f), 0.0f);
         }
         if (joycon) {
             placeJoyCon(top);
@@ -2765,7 +2765,7 @@ void NebulaSettingsScreen::placeJoyCon(f32 top) {
         rHalf.mPresses = presses;
         rHalf.mPop = clamp(rHalf.mPop - 1.0f / 7.0f, 0.0f, 1.0f);
         // Nothing of the half until its pictures are painted (the Controls page paints them ahead).
-        nw4r::lyt::TexMap* pMap = NebulaIcons::joyConPicture(half, look);
+        Ui::TexMap* pMap = NebulaIcons::joyConPicture(half, look);
         rHalf.mLetter->SetVisible(pMap != nullptr);
         if (pMap == nullptr) {
             if (rHalf.mPicture != nullptr) {
@@ -2790,12 +2790,12 @@ void NebulaSettingsScreen::placeJoyCon(f32 top) {
         const f32 pop = rHalf.mPop * rHalf.mPop;
         const f32 lift = pop * 0.3f * k;
         const f32 x = (left ? -cJoyConCentre : cJoyConCentre) * k;
-        rHalf.mPicture->mSize = nw4r::lyt::Size(box[0] * k, box[1] * k);
-        rHalf.mPicture->mScale = nw4r::math::VEC2(1.0f + pop * 0.02f, 1.0f + pop * 0.02f);
-        rHalf.mPicture->mTranslate = nw4r::math::VEC3(snap(x, pixelsX), snap(bodyY, pixelsY) + lift, 0.0f);
+        rHalf.mPicture->mSize = Ui::Size(box[0] * k, box[1] * k);
+        rHalf.mPicture->mScale = Vec2f(1.0f + pop * 0.02f, 1.0f + pop * 0.02f);
+        rHalf.mPicture->mTranslate = Vec3f(snap(x, pixelsX), snap(bodyY, pixelsY) + lift, 0.0f);
         // The letters bob down toward their shoulders (never into the window's margin).
         const f32 bob = both && !paired && !held ? wave * 0.7f * k : 0.0f;
-        rHalf.mLetter->mTranslate = nw4r::math::VEC3(x + (left ? -cJoyConLetter : cJoyConLetter) * k,
+        rHalf.mLetter->mTranslate = Vec3f(x + (left ? -cJoyConLetter : cJoyConLetter) * k,
                                                      textCentre(letterY - bob + lift, cTextSize), 0.0f);
         const u32 letter = !connected ? cDisabled : held || paired ? NebulaIcons::cJoyConColours[half] : cText;
         setTextColor(rHalf.mLetter, letter, letter);
@@ -2819,7 +2819,7 @@ void NebulaSettingsScreen::placeHome() {
     const f32 top = mQuestionPanel->mSize.height * 0.5f;
     if ((mHomeView >> 8 & 0xFF) == 0) {
         const f32 titleY = top - cPad - cTitleSize * 0.5f;
-        mQuestionText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(titleY, cTitleSize), 0.0f);
+        mQuestionText->mTranslate = Vec3f(0.0f, textCentre(titleY, cTitleSize), 0.0f);
         const f32 firstY = titleY - cTitleSize * 0.5f - 18.0f - cButtonHeight * 0.5f;
         for (s32 i = 0; i < mChoiceCount; i++) {
             placeButton(mChoices[i], 0.0f, firstY - i * (cButtonHeight + cHomeGap), cHomeButtonWidth);
@@ -2828,7 +2828,7 @@ void NebulaSettingsScreen::placeHome() {
     }
     const f32 answersY = -top + 22.0f + cButtonHeight * 0.5f;
     const f32 textY = (top + answersY + cButtonHeight * 0.5f) * 0.5f;
-    mQuestionText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(textY, cTextSize + 1.0f), 0.0f);
+    mQuestionText->mTranslate = Vec3f(0.0f, textCentre(textY, cTextSize + 1.0f), 0.0f);
     const f32 width = (cQuestionWidth - 44.0f - cButtonGap * (mChoiceCount - 1)) / mChoiceCount;
     for (s32 i = 0; i < mChoiceCount; i++) {
         placeButton(mChoices[i], -cQuestionWidth * 0.5f + 22.0f + width * 0.5f + i * (width + cButtonGap), answersY, width);

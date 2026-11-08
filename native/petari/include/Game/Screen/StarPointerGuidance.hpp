@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class Pane;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class Pane;
+}  // namespace Ui
 
 class StarPointerGuidance : public LayoutActor {
 public:
@@ -61,7 +59,7 @@ public:
     u32 mTextLineNum2P;
     bool mIsTimeOutEnabled;
     // The three frames, bound in init: deactive hides them every frame the pointer is off.
-    nw4r::lyt::Pane* mGuidePane = nullptr;
-    nw4r::lyt::Pane* mFrame1PPane = nullptr;
-    nw4r::lyt::Pane* mFrame2PPane = nullptr;
+    Ui::Pane* mGuidePane = nullptr;
+    Ui::Pane* mFrame1PPane = nullptr;
+    Ui::Pane* mFrame2PPane = nullptr;
 };

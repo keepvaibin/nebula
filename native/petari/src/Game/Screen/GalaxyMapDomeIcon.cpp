@@ -80,7 +80,7 @@ void GalaxyMapDomeIcon::calcAnim() {
     mNamePlate->calcAnim();
 }
 
-void GalaxyMapDomeIcon::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void GalaxyMapDomeIcon::calcAnimForCapture(const Ui::DrawInfo& rDrawInfo) {
     MR::setLayoutScalePosAtPaneScaleTrans(this, mHost, mPaneName);
     MR::calcAnimLayoutWithDrawInfo(this, rDrawInfo);
 }

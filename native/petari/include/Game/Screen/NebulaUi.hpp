@@ -1,10 +1,10 @@
 #pragma once
 
-#include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/picture.h>
-#include <nw4r/lyt/textBox.h>
-#include <nw4r/lyt/window.h>
-#include <nw4r/ut/Font.h>
+#include <Game/Ui/Pane.hpp>
+#include <Game/Ui/Picture.hpp>
+#include <Game/Ui/TextBox.hpp>
+#include <Game/Ui/Window.hpp>
+#include <Game/Ui/Font.hpp>
 #include <NebulaGpu.h>
 
 class NebulaPaneKit;
@@ -13,10 +13,10 @@ class NebulaPaneKit;
 // by its letters (not its box), the game's windows reshaped and repainted, its buttons stretched to their labels. In
 // screen units: the layout's units made square (readScreen).
 namespace NebulaUi {
-    typedef nw4r::lyt::Pane Pane;
-    typedef nw4r::lyt::Picture Picture;
-    typedef nw4r::lyt::TextBox TextBox;
-    typedef nw4r::lyt::Window Window;
+    typedef Ui::Pane Pane;
+    typedef Ui::Picture Picture;
+    typedef Ui::TextBox TextBox;
+    typedef Ui::Window Window;
 
     // The game's message font (MessageFont26) is 24.3 wide for 33 high.
     const f32 cFontAspect = 24.3f / 33.0f;
@@ -73,7 +73,7 @@ namespace NebulaUi {
         f32 mFocusLevel;
     };
 
-    nw4r::ut::Color color(u32 rgba);
+    Color8 color(u32 rgba);
     void setTextColor(TextBox* pText, u32 top, u32 bottom);
     NebulaColor16 tevColor(u32 rgba, bool alpha);
     // A window's fill and ring: its content and frame mix colour 0 (the ring) to colour 1 (the fill) by their texture.
@@ -98,7 +98,7 @@ namespace NebulaUi {
     // `pSource` set broken into lines at its spaces so that none runs wider than `limit`.
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight);
     // A box's font size for picture-font glyphs `size` high.
-    nw4r::lyt::Size glyphFontSize(const TextBox* pText, f32 size);
+    Ui::Size glyphFontSize(const TextBox* pText, f32 size);
     // The game's picture font: a glyph sized like text, centred on its place.
     void setGlyph(TextBox* pText, s32 code, f32 size);
     // Where the ink of `pText`'s text (its font, at its size) is: its middle from the middle of the text's width (x) and
@@ -107,12 +107,12 @@ namespace NebulaUi {
     bool inkOffset(const TextBox* pText, f32* pX, f32* pY, f32* pWidth = nullptr, f32* pHeight = nullptr);
     // A glyph picture's coverage at (x, y) of its sheet, 0-15 (-1 for a sheet format it cannot read), and `code`'s ink
     // box in its cell's pixels (false when there is none to read).
-    s32 glyphCoverage(const nw4r::ut::Glyph& rGlyph, s32 x, s32 y);
-    bool glyphInkBox(const nw4r::ut::Font* pFont, u16 code, s32* pLeft, s32* pTop, s32* pRight, s32* pBottom);
+    s32 glyphCoverage(const Ui::Glyph& rGlyph, s32 x, s32 y);
+    bool glyphInkBox(const Ui::Font* pFont, u16 code, s32* pLeft, s32* pTop, s32* pRight, s32* pBottom);
     // `pString`'s letters side by side as the font's writer sets them (`space` between them, in the font's pixels),
     // their ink boxes joined: in the font's pixels from the first cell's top left, and the cursor after the last
     // letter. False without ink, or (`strict`) when a letter's ink cannot be read.
-    bool stringInkBox(const nw4r::ut::Font* pFont, const char16_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
+    bool stringInkBox(const Ui::Font* pFont, const char16_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
                       f32* pRight, f32* pBottom, f32* pEnd);
     f32 clamp(f32 v, f32 lo, f32 hi);
     f32 easeOut(f32 t);
@@ -122,7 +122,7 @@ namespace NebulaUi {
     Window* makeWindow(const Kits& rKits, Pane* pParent, const char* pName);
     TextBox* makeText(const Kits& rKits, Pane* pParent, const char* pName, u32 length);
     Pane* makeGroup(Pane* pParent, const char* pName);
-    Picture* makePicture(Pane* pParent, const char* pName, nw4r::lyt::TexMap* pTexture);
+    Picture* makePicture(Pane* pParent, const char* pName, Ui::TexMap* pTexture);
     // A button in the game's art with a label of `textSize` in `textColor`; `arrow`: Back's arrow on its face.
     bool makeChip(const Kits& rKits, Pane* pParent, Chip* pChip, const char* pName, bool arrow, f32 textSize, u32 textColor);
     // The button's art for `width` x `height` (its rim's outer edge), centred on the chip's place.
@@ -141,5 +141,5 @@ namespace NebulaUi {
     void readScreen(f32* pScaleX, f32* pWidth, f32* pHeight);
     // `pPane` drawn cut to the box `left`..`right`, `top`..`bottom` (in its parent's units),
     // so that a list scrolled past its window never covers what is around it. After its layout's own draw.
-    void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 left, f32 right, f32 top, f32 bottom);
+    void drawClipped(Pane* pPane, const Ui::DrawInfo& rDrawInfo, f32 left, f32 right, f32 top, f32 bottom);
 };  // namespace NebulaUi

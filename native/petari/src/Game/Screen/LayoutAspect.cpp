@@ -5,13 +5,13 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Pane.hpp>
 
 namespace {
-    using namespace nw4r::lyt;
+    using namespace Ui;
 
-    // How a pane follows a canvas wider or taller than the authored 608x456 (nw4r/lyt/anchor.h).
+    // How a pane follows a canvas wider or taller than the authored 608x456 (Game/Ui/Anchor.hpp).
     enum {
         FitLeft = AnchorLeft,
         FitRight = AnchorRight,

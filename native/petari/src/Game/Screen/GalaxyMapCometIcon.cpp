@@ -16,7 +16,7 @@ void GalaxyMapCometIcon::calcAnim() {
     LayoutActor::calcAnim();
 }
 
-void GalaxyMapCometIcon::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void GalaxyMapCometIcon::calcAnimForCapture(const Ui::DrawInfo& rDrawInfo) {
     MR::setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(this, _24, _28);
     MR::calcAnimLayoutWithDrawInfo(this, rDrawInfo);
 }

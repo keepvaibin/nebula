@@ -2,7 +2,7 @@
 #include "Game/Animation/LayoutAnmPlayer.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/Pane.hpp>
 
 LayoutPaneCtrl::LayoutPaneCtrl(LayoutManager* pHost, const char* pPaneName, u32 animLayerNum)
     : mHost(pHost), mPane(), mStatePane(), mAnmPlayerArray(animLayerNum), mFollowType(), mFollowPos() {
@@ -62,15 +62,15 @@ void LayoutPaneCtrl::setFollowPos(const Vec2f* pFollowPos) {
     }
 }
 
-void LayoutPaneCtrl::Follow(const nw4r::lyt::Pane& rPane, nw4r::math::MTX34& rWorld) const {
-    nw4r::math::MTX34& global = rWorld;
+void LayoutPaneCtrl::Follow(const Ui::Pane& rPane, Mtx34f& rWorld) const {
+    Mtx34f& global = rWorld;
 
     switch (mFollowType) {
     case 0: {
         Vec2f position;
         MR::convertScreenPosToLayoutPos(&position, *mFollowPos);
-        global._03 = position.x;
-        global._13 = position.y;
+        global.mMtx[0][3] = position.x;
+        global.mMtx[1][3] = position.y;
         break;
     }
     case 1: {
@@ -78,30 +78,30 @@ void LayoutPaneCtrl::Follow(const nw4r::lyt::Pane& rPane, nw4r::math::MTX34& rWo
         MR::convertLayoutPosToScreenPos(&screenOrigin, Vec2f(0.0f, 0.0f));
         Vec2f offset(screenOrigin + *mFollowPos);
         MR::convertScreenPosToLayoutPos(&offset, offset);
-        global._03 += offset.x;
+        global.mMtx[0][3] += offset.x;
         // A distance, in the layout's own units on any canvas: only places stretch with a taller one.
-        global._13 -= mFollowPos->y;
+        global.mMtx[1][3] -= mFollowPos->y;
         break;
     }
     case 2: {
-        nw4r::math::MTX34 local = rPane.mMtx;
-        nw4r::math::MTX34 inverse;
+        Mtx34f local = rPane.mMtx;
+        Mtx34f inverse;
         NebulaMtxInverse(local, inverse);
-        nw4r::math::MTX34Mult(&global, &global, &inverse);
+        global.concat(inverse);
 
-        nw4r::math::MTX34 replacement;
-        nw4r::math::MTX34Copy(&replacement, &local);
-        replacement._03 = mFollowPos->x;
-        replacement._13 = mFollowPos->y;
+        Mtx34f replacement;
+        replacement.set(local);
+        replacement.mMtx[0][3] = mFollowPos->x;
+        replacement.mMtx[1][3] = mFollowPos->y;
         MtxPtr pGlobal = global;
         NebulaMtxConcat(pGlobal, replacement, pGlobal);
         break;
     }
     case 3: {
-        nw4r::math::VEC3 offset(mFollowPos->x, mFollowPos->y, 0.0f);
-        nw4r::math::VEC3TransformNormal(&offset, &rPane.mMtx, &offset);
-        global._03 += offset.x;
-        global._13 += offset.y;
+        Vec3f offset(mFollowPos->x, mFollowPos->y, 0.0f);
+        NebulaMtxMultVecSR(rPane.mMtx, &offset, &offset);
+        global.mMtx[0][3] += offset.x;
+        global.mMtx[1][3] += offset.y;
         break;
     }
     }
