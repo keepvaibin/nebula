@@ -1891,7 +1891,7 @@ std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProb
     return count;
 }
 
-void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count) {
+void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count, bool compared) {
     if (count == 0u) return;
     ScreenProbeFlight flight;
     flight.channel = channel;
@@ -1899,7 +1899,7 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
     flight.slot = free_probe_slots_.empty() ? next_probe_slot_++ : free_probe_slots_.back();
     if (!free_probe_slots_.empty()) free_probe_slots_.pop_back();
     flight.probes.assign(probes, probes + count);
-    if (renderer_.record_screen_probes(flight.slot, flight.probes)) {
+    if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
         probe_flights_.push_back(std::move(flight));
     } else {
         free_probe_slots_.push_back(flight.slot);

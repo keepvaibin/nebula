@@ -434,7 +434,8 @@ public:
 
     // Render-owner only. Each point's depth (0 near, 1 far) into slot `slot`'s readback, in the open frame where the
     // stream is now; screen_probes_finished names the values, one float a point, once that frame's fence has passed.
-    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes);
+    // `compared` probes are answered with their depth too: the read breaks no render pass here.
+    [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);  // throws when the device is gone
     bool debug_copy_scene_to_readback();
     void debug_log_readback();

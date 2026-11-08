@@ -1097,7 +1097,8 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         for (const core::ListData::EarlyProbe& early : now.early_probes) {
             if (early.after == p && !now.probes_done) {
                 const NebulaFramePass& probe = list.passes[early.probe];
-                record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count);
+                record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
+                                     probe.arg0 == NEBULA_PROBE_COMPARED);
             }
         }
     }
@@ -1196,7 +1197,8 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             // On the list's first walk, so the game reads the answers when it always did; some were asked earlier.
             if (!now.probes_done && std::none_of(now.early_probes.begin(), now.early_probes.end(),
                                                  [p](const core::ListData::EarlyProbe& early) { return early.probe == p; })) {
-                record_screen_probes(pass.probe_channel, list.probes + pass.first_probe, pass.probe_count);
+                record_screen_probes(pass.probe_channel, list.probes + pass.first_probe, pass.probe_count,
+                                     pass.arg0 == NEBULA_PROBE_COMPARED);
             }
             break;
         case NEBULA_PASS_SHOW:

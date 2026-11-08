@@ -223,7 +223,8 @@ void LensFlareDirector::setDrawSyncToken() {
     for (u32 i = 0; i < mBrightObjCount; i++) {
         mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
     }
-    Frame::probeScreen(BrightObjBase::cReadbackChannel, mAsker, probes, count);
+    // BrightObjBase::setResult only asks whether each point's depth is at or behind the point.
+    Frame::probeScreen(BrightObjBase::cReadbackChannel, mAsker, probes, count, true);
 }
 
 s32 LensFlareDirector::checkArea() {
