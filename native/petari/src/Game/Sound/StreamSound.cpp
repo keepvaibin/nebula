@@ -6,6 +6,8 @@
 #include "Game/Sound/StreamSource.hpp"
 #include "Game/System/GameAssets.hpp"
 #include <cstring>
+#include <new>
+
 StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) : JSULink< StreamSound >(this) {
     mPrepareState = 0;
     soundStrategyMgr = soundStrategyMgr_;
