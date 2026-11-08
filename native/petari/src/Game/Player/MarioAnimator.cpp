@@ -438,10 +438,10 @@ afterBrake:
         upperPlayer->updateBeforeMovement();
         upperPlayer->updateAfterMovement();
 
-        u8 idx = mXanimePlayerUpper->_54;
-        XanimeFrameCtrl& track = mXanimePlayerUpper->_24[idx];
+        u8 idx = mXanimePlayerUpper->mFrameCtrlIndex;
+        XanimeFrameCtrl& track = mXanimePlayerUpper->mFrameCtrls[idx];
         if (track.mState & 1) {
-            XanimeFrameCtrl* ctrl = mXanimePlayerUpper->_20;
+            XanimeFrameCtrl* ctrl = mXanimePlayerUpper->mFrameCtrl;
             if (ctrl->mAttribute != 1) {
                 if (!mUpperDefaultSet) {
                     stopUpper(nullptr);
@@ -521,11 +521,11 @@ void MarioAnimator::setHand() {
     XanimeCore* core = mXanimePlayer->mCore;
     u32 armR = MR::getJointIndex(mActor, "ArmR1");
     XjointTransform* armRJoint = core->getJointTransform(armR);
-    armRJoint->_14 = scale;
+    armRJoint->mExtraScale = scale;
     core = mXanimePlayer->mCore;
     u32 armL = MR::getJointIndex(mActor, "ArmL1");
     XjointTransform* armLJoint = core->getJointTransform(armL);
-    armLJoint->_14 = scale;
+    armLJoint->mExtraScale = scale;
 }
 
 extern const char* jname_chest;
@@ -590,7 +590,7 @@ void MarioAnimator::setTilt() {
     XanimeCore* core = mXanimePlayer->mCore;
     u32 chestIdx = MR::getJointIndex(mActor, jname_chest);
     XjointTransform* jt = core->getJointTransform(chestIdx);
-    jt->_64 = _28.toMtxPtr();
+    jt->mBaseMtx = _28.toMtxPtr();
 }
 
 void MarioAnimator::resetTilt() {
@@ -672,7 +672,7 @@ void MarioAnimator::setHoming() {
         XanimeCore* core = mXanimePlayer->getCore();
         u32 headIdx = MR::getJointIndex(mActor, "Head");
         XjointTransform* jt = core->getJointTransform(headIdx);
-        jt->_64 = _7C.toMtxPtr();
+        jt->mBaseMtx = _7C.toMtxPtr();
     } else {
         Mtx identMtx;
         NebulaMtxIdentity(identMtx);
@@ -699,11 +699,11 @@ void MarioAnimator::setHoming() {
 
     XanimeCore* core = mXanimePlayer->getCore();
     u32 leftIdx = MR::getJointIndex(mActor, "ShoulderL");
-    core->getJointTransform(leftIdx)->_2C.x = leftShoulderRot;
+    core->getJointTransform(leftIdx)->mTranslateOffset.x = leftShoulderRot;
 
     core = mXanimePlayer->getCore();
     u32 rightIdx = MR::getJointIndex(mActor, "ShoulderR");
-    core->getJointTransform(rightIdx)->_2C.x = rightShoulderRot;
+    core->getJointTransform(rightIdx)->mTranslateOffset.x = rightShoulderRot;
 }
 
 void MarioAnimator::setHipSlidingTilt(f32 stickX, f32 stickY) {
@@ -804,7 +804,7 @@ void MarioAnimator::calc() {
     Mario* player = getPlayer();
     Vec3f playerPos(player->_13C);
     XjointTransform* joint0 = mXanimePlayer->mCore->getJointTransform(0);
-    joint0->_38 = playerPos;
+    joint0->mWorldTranslate = playerPos;
     if (_6C) {
         // Both players animation calculation
         mXanimePlayer->calcAnm(0);
@@ -820,10 +820,10 @@ void MarioAnimator::calc() {
         mXanimePlayer->calcAnm(0);
     }
 
-    mXanimePlayer->mCore->_6 = 1;
+    mXanimePlayer->mCore->mCalcMode = XanimeCore::CalcMode_BlendSpecial;
     MR::calcModel(mActor);
 
-    mXanimePlayer->mCore->_6 = 2;
+    mXanimePlayer->mCore->mCalcMode = XanimeCore::CalcMode_ScaleBlendSpecial;
     MR::calcModel(mActor);
     mXanimePlayer->clearAnm(0);
 
@@ -941,11 +941,11 @@ void MarioAnimator::updateJointRumble() {
     MarioActor* actor = mActor;
     XanimeCore* core = mXanimePlayer->mCore;
     XjointTransform* larmJt = core->getJointTransform(MR::getJointIndex(actor, "ArmL1"));
-    larmJt->_2C.y = sineVal * power;
+    larmJt->mTranslateOffset.y = sineVal * power;
 
     core = mXanimePlayer->mCore;
     XjointTransform* rarmJt = core->getJointTransform(MR::getJointIndex(mActor, "ArmR2"));
-    rarmJt->_2C.y = sineVal * power;
+    rarmJt->mTranslateOffset.y = sineVal * power;
 
     f32 hipRot = 0.7f * ((f32)_74 / 60.0f);
 
@@ -972,7 +972,7 @@ void MarioAnimator::updateJointRumble() {
 
     core = mXanimePlayer->mCore;
     XjointTransform* hipJt = core->getJointTransform(MR::getJointIndex(mActor, "Spine2"));
-    hipJt->_64 = _AC.toMtxPtr();
+    hipJt->mBaseMtx = _AC.toMtxPtr();
 }
 
 void MarioAnimator::addRumblePower(f32 power, u32 time) {
@@ -987,63 +987,63 @@ void MarioAnimator::setUpperRotateY(f32 angle) {
     NebulaMtxRotRad(_AC.toMtxPtr(), 'X', angle);
     XanimeCore* core = mXanimePlayer->mCore;
     XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "Spine2"));
-    jt->_64 = _AC.toMtxPtr();
+    jt->mBaseMtx = _AC.toMtxPtr();
 }
 
 void MarioAnimator::clearAllJointTransform() {
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "ShoulderL"));
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "ShoulderR"));
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "Head"));
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "Spine2"));
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "ArmL1"));
-        jt->_2C.y = 0.0f;
+        jt->mTranslateOffset.y = 0.0f;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         XjointTransform* jt = core->getJointTransform(MR::getJointIndex(mActor, "ArmR2"));
-        jt->_2C.y = 0.0f;
+        jt->mTranslateOffset.y = 0.0f;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         u32 chestIdx = MR::getJointIndex(mActor, jname_chest);
         XjointTransform* jt = core->getJointTransform(chestIdx);
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     {
         XanimeCore* core = mXanimePlayer->mCore;
         u32 hipIdx = MR::getJointIndex(mActor, "Hip");
         XjointTransform* jt = core->getJointTransform(hipIdx);
-        jt->_64 = nullptr;
+        jt->mBaseMtx = nullptr;
     }
 
     Vec3f zeroVec(0.0f, 0.0f, 0.0f);
     XjointTransform* jt = mXanimePlayer->mCore->getJointTransform(0);
-    jt->_38 = zeroVec;
+    jt->mWorldTranslate = zeroVec;
 
     _74 = 0;
     _70 = 0.0f;
@@ -1115,7 +1115,7 @@ void MarioAnimator::switchMirrorMode() {
         mirrorScale.x = scale;
         mirrorScale.y = scale;
         mirrorScale.z = -scale;
-        jt->_14 = mirrorScale;
+        jt->mExtraScale = mirrorScale;
 
         Mtx invBase;
         MtxPtr base = mActor->getBaseMtx();
@@ -1125,7 +1125,7 @@ void MarioAnimator::switchMirrorMode() {
         base = mActor->getBaseMtx();
         MR::multMtx(_DC, _DC, base);
 
-        jt->_6C = _DC;
+        jt->mMirrorMtx = _DC;
     } else {
         u32* modelFlags = (u32*)&model->mFlags;
         *modelFlags &= ~1;
@@ -1134,8 +1134,8 @@ void MarioAnimator::switchMirrorMode() {
         normalScale.x = scale;
         normalScale.y = scale;
         normalScale.z = scale;
-        jt->_14 = normalScale;
-        jt->_6C = 0;
+        jt->mExtraScale = normalScale;
+        jt->mMirrorMtx = nullptr;
     }
 }
 
@@ -1280,12 +1280,4 @@ HitSensor* MarioActor::getLookTargetSensor() const {
     }
 
     return _46C;
-}
-
-f32 XanimePlayer::tellAnimationFrame() const {
-    if (isTerminate()) {
-        return _20->getEnd();
-    }
-
-    return _20->getFrame();
 }

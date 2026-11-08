@@ -374,7 +374,7 @@ namespace MarioAccess {
     }
 
     f32 getAnimationFrameMax() {
-        return getPlayerActor()->mMarioAnim->getXanimePlayer()->_20->mEnd;
+        return getPlayerActor()->mMarioAnim->getXanimePlayer()->mFrameCtrl->mEnd;
     }
 
     void changeAnimationJ(const char* pAnimName) {
@@ -450,8 +450,8 @@ namespace MarioAccess {
     }
 
     void keepCurrentAnimation() {
-        if (getPlayerActor()->mMarioAnim->getXanimePlayer()->_20->getAttribute() == 0) {
-            getPlayerActor()->mMarioAnim->getXanimePlayer()->_20->setAttribute(1);
+        if (getPlayerActor()->mMarioAnim->getXanimePlayer()->mFrameCtrl->getAttribute() == 0) {
+            getPlayerActor()->mMarioAnim->getXanimePlayer()->mFrameCtrl->setAttribute(1);
         }
     }
 

@@ -513,8 +513,8 @@ void GhostPlayer::initAnimation() {
 
 void GhostPlayer::setAnimation(const char* pName) {
     mXanimePlayer->changeAnimation(pName);
-    if (mXanimePlayer->_20->mAttribute == 0) {
-        mXanimePlayer->_20->mAttribute = 1;
+    if (mXanimePlayer->mFrameCtrl->mAttribute == 0) {
+        mXanimePlayer->mFrameCtrl->mAttribute = 1;
     }
 }
 
@@ -683,7 +683,7 @@ u32 GhostPlayer::receiveGhostFrame() {
         }
 
         if (!isSpecialAnim) {
-            mXanimePlayer->_20->mAttribute = 1;
+            mXanimePlayer->mFrameCtrl->mAttribute = 1;
         }
     }
 
@@ -733,7 +733,7 @@ u32 GhostPlayer::receiveGhostFrame() {
         }
 
         if (!isSpecialAnim) {
-            mXanimePlayer->_20->mAttribute = 1;
+            mXanimePlayer->mFrameCtrl->mAttribute = 1;
         }
     }
 

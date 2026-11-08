@@ -2300,15 +2300,15 @@ void MarioActor::calcAndSetBaseMtx() {
         NebulaMtxInverse(mtx2, inverse);
         NebulaMtxConcat(inverse, receivedMtx, _E3C.mMtx);
         XjointTransform* pJoint = mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(0);
-        pJoint->_64 = _E3C.mMtx;
+        pJoint->mBaseMtx = _E3C.mMtx;
     } else {
         Mtx correction;
         Vec3f offset;
         mMario->createCorrectionMtx(correction, &offset);
-        mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(1)->_2C = offset;
+        mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(1)->mTranslateOffset = offset;
         NebulaMtxCopy(correction, _E3C.mMtx);
         XjointTransform* pJoint = mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(0);
-        pJoint->_64 = _E3C.mMtx;
+        pJoint->mBaseMtx = _E3C.mMtx;
     }
 
     if (_390 != 0) {

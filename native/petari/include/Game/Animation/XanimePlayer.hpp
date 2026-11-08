@@ -65,28 +65,27 @@ public:
     void duplicateSimpleGroup();
     void changeCurrentAnimation(const XanimeGroupInfo*);
     XanimeFrameCtrl* getFrameCtrl() {
-        return _20;
+        return mFrameCtrl;
     }
 
     inline XanimeCore* getCore() {
         return mCore;
     }
     inline f32 getRate() {
-        return _20->getRate();
+        return mFrameCtrl->getRate();
     }
-
     Model* mModel;
     ModelData* mModelData;
     // XanimeCore's blend from the frozen pose (0) to the new animation (1).
     f32 mInterpoleRatio;
     // XanimeCore::mPoseBlendRatio: blend from last frame's pose (0) to this frame's (1); 1 once an animation ran (walk lowers it).
-    f32 _0C;
+    f32 mPoseBlendRatio;
     f32 mWeights[4];
-    // The frame control in use: _24[mNextFrameCtrlIndex] once swapFrameCtrl ran.
-    XanimeFrameCtrl* _20;
-    XanimeFrameCtrl _24[2];
-    // Index into _24 of the running animation's control.
-    u8 _54;
+    // The frame control in use: mFrameCtrls[mNextFrameCtrlIndex] once swapFrameCtrl ran.
+    XanimeFrameCtrl* mFrameCtrl;
+    XanimeFrameCtrl mFrameCtrls[2];
+    // Index into mFrameCtrls of the running animation's control.
+    u8 mFrameCtrlIndex;
     u8 mNextFrameCtrlIndex;
     const char* mCurrentBckName;
     const XanimeGroupInfo* mDefaultAnimation;
@@ -100,7 +99,7 @@ public:
     bool mIsStarted;
     bool mHasDefaultAnimation;
     // A one-shot or hold animation that ended returns to the default one (the rush states clear it).
-    bool _7E;
+    bool mReturnToDefault;
     bool mIsPrepared;
     // The frame before this movement's update, read until calcAnm.
     f32 mPrevFrame;

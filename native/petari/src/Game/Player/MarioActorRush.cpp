@@ -27,7 +27,7 @@ void MarioActor::settingRush() {
     _934 = 1;
     resetCondition();
     XanimePlayer* p = mMario->getAnimator()->mXanimePlayer;
-    p->_7E = false;
+    p->mReturnToDefault = false;
 }
 
 bool MarioActor::isFixJumpRushSensor(const HitSensor* pSensor) const {
@@ -75,7 +75,7 @@ void MarioActor::resetCondition() {
     }
 
     XanimePlayer* p = mMario->getAnimator()->mXanimePlayer;
-    p->_7E = true;
+    p->mReturnToDefault = true;
     mMario->forceStopTornado();
     updateTornado();
 
@@ -353,7 +353,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
         MR::validateHitSensors(this);
         getSensor("dummy")->invalidate();
         XanimePlayer* player = mMario->getAnimator()->mXanimePlayer;
-        player->_7E = true;
+        player->mReturnToDefault = true;
         if (_F1C < 15) {
             _F1C = 15;
         }

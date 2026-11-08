@@ -9,7 +9,7 @@ SyncBckEffectChecker::SyncBckEffectChecker(XanimePlayer* pPlayer) : mPlayer(pPla
 void SyncBckEffectChecker::updateBefore() {
     bool isPlaying;
 
-    if (!mPlayer->_24[mPlayer->_54].checkState(1)) {
+    if (!mPlayer->isTerminate()) {
         isPlaying = 0.0f != mPlayer->getFrameCtrl()->getRate() || mPrevFrame != mPlayer->getFrameCtrl()->getFrame();
     } else {
         isPlaying = false;
