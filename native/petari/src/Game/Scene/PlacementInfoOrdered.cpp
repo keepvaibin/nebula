@@ -78,7 +78,7 @@ void PlacementInfoOrdered::sort() {
     }
 
     for (s32 i = 0; i < count; i++) {
-        NebulaLoadTrace::sorted(mOrderedSetArray[i]->mName, mOrderedSetArray[i]->mPriority, mOrderedSetArray[i]->mList.mCount);
+        NebulaLoadTrace::sorted(mOrderedSetArray[i]->mName, mOrderedSetArray[i]->mPriority, mOrderedSetArray[i]->mList.getNum());
     }
 }
 
@@ -95,13 +95,13 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
     while (mPlacementSet < count) {
         SameIdSet* set = mOrderedSetArray[mPlacementSet];
         const CreationFuncPtr creator = ::getCreator(*set);
-        if (mPlacementLink == nullptr) mPlacementLink = set->mList.mHead;
+        if (mPlacementLink == nullptr) mPlacementLink = set->mList.getFirst();
         if (creator == nullptr || mPlacementLink == nullptr) {
             ++mPlacementSet;
             mPlacementLink = nullptr;
             continue;
         }
-        const TableIter& iter = static_cast<Index*>(mPlacementLink->mValue)->getInfoIter();
+        const TableIter& iter = mPlacementLink->getObject()->getInfoIter();
         if (!NebulaMods::isMissingFiles(set->mName)) {
             NebulaLoadTrace::Scope trace(set->mName);
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
@@ -116,7 +116,7 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             if (!ready) return false;
             mInitializing = nullptr;
         }
-        mPlacementLink = mPlacementLink->mNextLink;
+        mPlacementLink = mPlacementLink->getNext();
         if (mPlacementLink == nullptr) ++mPlacementSet;
         if (nebula_host()->clock_ns(nebula_host()->user) >= deadline) {
             if (mPlacementSet >= count) NebulaLoadTrace::placementDone();
@@ -174,16 +174,10 @@ PlacementInfoOrdered::Index* PlacementInfoOrdered::createIndex(const TableIter& 
     return pIndex;
 }
 
-PlacementInfoOrdered::Index::Index() : MR::BothDirLink< Index >(this), mInfoIter() {
-}
-
-PlacementInfoOrdered::Index::~Index() {
+PlacementInfoOrdered::Index::Index() : mInfoIter() {
 }
 
 PlacementInfoOrdered::SameIdSet::SameIdSet() : Identifier(), mList() {
-}
-
-PlacementInfoOrdered::SameIdSet::~SameIdSet() {
 }
 
 void PlacementInfoOrdered::attach(const Table* pInfo, PlacementInfoOrdered* pAfterScenario) {
