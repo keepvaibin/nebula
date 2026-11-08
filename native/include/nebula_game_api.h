@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 142u
+#define NEBULA_GAME_API_VERSION 143u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -799,10 +799,6 @@ typedef struct NebulaHostServices {
     /* The HOME Menu (NEBULA_HBM_*). */
     int (*hbm)(void* user, uint32_t what, uint32_t value);
 
-    /* One movie frame's video (`size` bytes, one JPEG whose entropy data is not byte-stuffed, so only the size bounds
-       it) into its Y, U and V planes (`width` x `height` for Y, half each way for U and V, rows of 8-bit texels from the
-       top) in game memory, which must hold the result before the renderer reads them; 0 on success. */
-    int32_t (*movie_video_decode)(void* user, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v);
 
 
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
@@ -830,12 +826,12 @@ typedef struct NebulaHostServices {
     void (*game_light)(void* user, uint32_t kind, uint64_t id, const float* values);
     /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
     void (*game_stage)(void* user, const char* name);
-    /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
-       (the frame within the movie, its frame rate and the texture ids of its Y, U and V planes, `width` x
-       `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement
-       video's frame of the same time in place of the planes. */
-    void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u,
-                        uint32_t v, uint32_t width, uint32_t height);
+    /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens (with its cooked file, NMOV, as
+       mapped, once the game has it), each frame it draws (the frame within the movie, its frame rate, the file, the
+       picture's `width` x `height`), NEBULA_MOVIE_NONE when it closes. The host decodes the frame (or a replacement
+       video's frame of the same time) into the planes NEBULA_TEXTURE_MOVIE_Y, _U and _V the movie quad samples. */
+    void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, const void* data, uint64_t size,
+                        uint32_t width, uint32_t height);
     /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
        else 0. Fixed for the session. */
     int (*code_patch)(void* user, uint32_t id, uint32_t* value);
@@ -925,6 +921,11 @@ enum {
     NEBULA_MOVIE_NONE = -1,
     NEBULA_MOVIE_OPENING = -2,
 };
+
+/* The movie quad's planes (movie_frame), ids no image has: images number from 1 up, render targets have the top bit. */
+#define NEBULA_TEXTURE_MOVIE_Y 0x7FFFFF00u
+#define NEBULA_TEXTURE_MOVIE_U 0x7FFFFF01u
+#define NEBULA_TEXTURE_MOVIE_V 0x7FFFFF02u
 
 /* Native equivalents of mods' code patches: the host's mods
    layer recognises each by its exact bytes for this disc and the game asks code_patch for it. */

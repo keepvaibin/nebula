@@ -47,7 +47,6 @@
 #include "galaxy/game_paths.h"
 #include "galaxy/native_input.h"
 #include "galaxy/loss_report.h"
-#include "galaxy/movie_video.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/render/host_window_win32.h"
 #endif
@@ -358,9 +357,6 @@ std::atomic<uint32_t> gFileReads{0};
 std::atomic<uint32_t> gSaveOps{0};
 std::atomic<uint32_t> gSoundBlocks{0};
 std::atomic<uint32_t> gSoundSubframes{0};
-std::atomic<uint32_t> gMovieFrames{0};
-std::atomic<uint64_t> gMovieDecodeNs{0};   // the movie decoder's time (svc_movie_video_decode)
-std::atomic<uint32_t> gMovieSkipped{0};    // movie frames not decoded: a replacement video showed instead
 std::atomic<uint32_t> gSceneBegins{0};
 
 void* find_symbol(void* module, const char* name) {
@@ -1618,12 +1614,12 @@ void svc_sharp_2d(void*, uint32_t on) {
 #endif
 }
 
-void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u, uint32_t v,
+void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, const void* data, uint64_t size,
                      uint32_t width, uint32_t height) {
 #if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
+    galaxy::render::attach_movie_frame(name, frame, frame_rate, data, size, width, height);
 #else
-    (void)name, (void)frame, (void)frame_rate, (void)y, (void)u, (void)v, (void)width, (void)height;
+    (void)name, (void)frame, (void)frame_rate, (void)data, (void)size, (void)width, (void)height;
 #endif
 }
 
@@ -3006,37 +3002,6 @@ void svc_app_restart(void*) {
     finish_and_exit(true);
 }
 
-#if defined(NEBULA_HOST_RENDERER)
-// A movie frame's video is one baseline JPEG; the decoder writes its planes as rows of texels for the renderer.
-int32_t svc_movie_video_decode(void*, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v) {
-    gMovieFrames.fetch_add(1, std::memory_order_relaxed);
-    if (galaxy::render::movie_replacement_showing()) {
-        // A replacement video's frames show in place of these planes: their decode would be unseen work.
-        gMovieSkipped.fetch_add(1, std::memory_order_relaxed);
-        return 0;
-    }
-    const auto decode_start = std::chrono::steady_clock::now();
-    struct DecodeTime {
-        std::chrono::steady_clock::time_point start;
-        ~DecodeTime() {
-            gMovieDecodeNs.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                         std::chrono::steady_clock::now() - start).count()),
-                                     std::memory_order_relaxed);
-        }
-    } decode_time{decode_start};
-    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
-        return -1;
-    }
-    const size_t luma = size_t(width) * height;
-    const size_t chroma = size_t((width + 1u) / 2u) * ((height + 1u) / 2u);
-    return galaxy::movie::decode_video({static_cast<const uint8_t*>(frame), size}, static_cast<uint16_t>(width), static_cast<uint16_t>(height),
-                                       {static_cast<uint8_t*>(y), luma}, {static_cast<uint8_t*>(u), chroma}, {static_cast<uint8_t*>(v), chroma});
-}
-#else
-int32_t svc_movie_video_decode(void*, const void*, uint32_t, uint32_t, uint32_t, void*, void*, void*) {
-    return 0;
-}
-#endif
 
 }  // namespace
 
@@ -3652,7 +3617,6 @@ int main(int argc, char** argv) {
     services.movie_audio_control = svc_movie_audio_control;
     services.sound_clock = svc_audio_control;
     services.hbm = svc_hbm;
-    services.movie_video_decode = svc_movie_video_decode;
     services.game_context = svc_game_context;
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
@@ -3836,15 +3800,8 @@ int main(int argc, char** argv) {
                 log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
             }
             const size_t length = std::strlen(text);
-            static uint64_t last_decode_ns = 0;
-            const uint64_t decode_ns = gMovieDecodeNs.load(std::memory_order_relaxed);
-            std::snprintf(text + length, sizeof(text) - length,
-                          ", renderer frames %llu, movie frames %u (decoded in %.1f ms/s, %u replaced)",
-                          (unsigned long long)gSubmissions.load(std::memory_order_relaxed),
-                          gMovieFrames.load(std::memory_order_relaxed),
-                          static_cast<double>(decode_ns - last_decode_ns) / 1.0e6,
-                          gMovieSkipped.load(std::memory_order_relaxed));
-            last_decode_ns = decode_ns;
+            std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu",
+                          (unsigned long long)gSubmissions.load(std::memory_order_relaxed));
 #endif
 #if defined(_WIN32)
             if (trace_thread_cpu) {

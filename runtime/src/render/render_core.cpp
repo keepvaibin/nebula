@@ -1621,7 +1621,7 @@ bool RenderCore::restart_device() {
         std::unique_lock<std::shared_mutex> rebuilding = device_gate_.begin_rebuild();
         const FrameMap frame = renderer_.frame_map();
         pipelines_.shutdown();
-        movie_replacements_.shutdown();
+        movie_playback_.shutdown();
         texture_store_.shutdown();
         registries_.lose_device();
         display_pictures_.shutdown();
@@ -2141,7 +2141,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             folders.push_back(std::move(movies));
         }
         for (std::filesystem::path& folder : movie_mod_folders()) folders.push_back(std::move(folder));
-        movie_replacements_.configure(std::move(folders), [this](std::uint64_t size) {
+        movie_playback_.configure(std::move(folders), [this](std::uint64_t size) {
             return texture_store_.backend().create_upload_chunk(size);
         });
     }
@@ -2177,18 +2177,29 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     registries_.reclaim(renderer_.completed_fence_value());
     // Finished replacements upload here and take the place of their originals.
     texture_store_.apply_texture_packs();
-    // The movie frame this walk draws: a replacement's planes in place of the game's.
+    // The movie frame this walk draws, as the movie quad's planes.
     if (render_movie_frame_.frame != MovieFrameMark::kNone || texture_store_.movie_override_active()) {
         if (++movie_stats_tick_ % 240u == 0u) {
-            const MovieReplacements::Stats stats = movie_replacements_.stats();
+            const MoviePlayback::Stats stats = movie_playback_.stats();
             if (stats.decoded != 0u) {
                 std::fprintf(stderr, "[movie] decoded=%llu shown=%llu late=%llu seeks=%llu convert-ms=%.2f/frame\n",
                              static_cast<unsigned long long>(stats.decoded), static_cast<unsigned long long>(stats.shown),
                              static_cast<unsigned long long>(stats.late), static_cast<unsigned long long>(stats.seeks),
                              stats.convert_ms / static_cast<double>(stats.decoded));
             }
+            if (stats.cooked_decoded != 0u) {
+                std::fprintf(stderr,
+                             "[movie] cooked decoded=%llu shown=%llu waits=%llu seeks=%llu failed=%llu decode-ms=%.3f/frame "
+                             "wait-ms=%.3f\n",
+                             static_cast<unsigned long long>(stats.cooked_decoded),
+                             static_cast<unsigned long long>(stats.cooked_shown),
+                             static_cast<unsigned long long>(stats.cooked_waits),
+                             static_cast<unsigned long long>(stats.cooked_seeks),
+                             static_cast<unsigned long long>(stats.cooked_failed),
+                             stats.cooked_decode_ms / static_cast<double>(stats.cooked_decoded), stats.cooked_wait_ms);
+            }
         }
-        texture_store_.set_movie_override(render_movie_frame_, movie_replacements_.frame(render_movie_frame_));
+        texture_store_.set_movie_override(render_movie_frame_, movie_playback_.frame(render_movie_frame_));
     }
     // Pipelines not yet asked for, for the settings in use.
     {

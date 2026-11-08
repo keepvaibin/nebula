@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HD movie replacements (movie_replacement.h): Media Foundation's source reader on Windows decodes the file, on the
-// GPU's video decoder where it has one for the format (through a D3D11 device), else in software; the planes are
-// JPEG's YCbCr of that picture.
+// The game's movies (movie_playback.h). The cooked movie decodes with galaxy/movie_video.h on its own thread. An HD
+// replacement decodes with Media Foundation's source reader on Windows, on the GPU's video decoder where it has one for
+// the format (through a D3D11 device), else in software; its planes are JPEG's YCbCr of that picture.
 
-#include "galaxy/render/movie_replacement.h"
+#include "galaxy/render/movie_playback.h"
+#include "galaxy/movie_video.h"
 #include "galaxy/path_text.h"
 
 #include "galaxy/crash_report.h"
@@ -36,7 +37,6 @@ namespace {
 constexpr std::size_t kAhead = 8;
 constexpr std::size_t kPoolLimit = 16;    // upload buffers a movie may hold (ahead, shown, in flight)
 constexpr const char* kExtensions[] = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv"};
-std::atomic<bool> s_showing{false};
 
 std::string ascii_lower(std::string text) {
     for (char& c : text) {
@@ -274,7 +274,7 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
 namespace {
 
 // The GPU's video decoder for every movie: Media Foundation uses it only through a D3D device manager. Made once, ahead
-// of the first movie (MovieReplacements::configure), so a movie's first frames are not held up by it; null where the
+// of the first movie (MoviePlayback::configure), so a movie's first frames are not held up by it; null where the
 // GPU has no D3D11 video device (the movies decode in software).
 Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> video_device_manager() {
     static std::once_flag once;
@@ -302,7 +302,7 @@ Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> video_device_manager() {
 #endif
 
 // Decodes one replacement file on its own thread, up to kAhead frames ahead of the game.
-class MovieReplacements::Decoder {
+class MoviePlayback::Decoder {
 public:
     // `rate`: the THP's frame rate, or 0 while it is not known (the game opens the movie before it reads the
     // header; set_rate gives it with the first frame).
@@ -320,7 +320,7 @@ public:
     }
 
     // Render thread: the newest decoded frame at or before `frame`; false when there is none (yet).
-    bool take(std::int32_t frame, std::int32_t shown, MovieReplacementFrame& out) {
+    bool take(std::int32_t frame, std::int32_t shown, MovieFrame& out) {
         std::lock_guard<std::mutex> lock(mutex_);
         wanted_ = frame;
         if (!(rate_ > 0.0)) return false;
@@ -388,7 +388,7 @@ private:
     // Frames decoded before the rate was known get their numbers (mutex_ held).
     void number_ready() {
         if (!(rate_ > 0.0)) return;
-        for (MovieReplacementFrame& ready : ready_) {
+        for (MovieFrame& ready : ready_) {
             if (ready.frame < 0) ready.frame = frame_at(ready.time);
         }
     }
@@ -637,7 +637,7 @@ private:
             if (locked2d) planar->Unlock2D(); else media->Unlock();
             const double ms =
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-            MovieReplacementFrame decoded{};
+            MovieFrame decoded{};
             decoded.frame = frame;
             decoded.time = timestamp;
             decoded.width = width;
@@ -676,7 +676,7 @@ private:
     std::vector<std::shared_ptr<TextureBackend::UploadChunk>> pool_;  // decoder thread only
     mutable std::mutex mutex_;
     std::condition_variable wake_;
-    std::deque<MovieReplacementFrame> ready_;
+    std::deque<MovieFrame> ready_;
     std::int32_t wanted_ = 0;
     std::int32_t seek_to_ = -1;
     bool stop_ = false;
@@ -688,14 +688,287 @@ private:
     std::thread thread_;
 };
 
-MovieReplacements::MovieReplacements() = default;
+CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size) {
+    // The header (0x40 bytes: "NMOV", frames, rate, largest, first size, width, height, tracks) and each frame's
+    // (0x10: next size, video size, audio size, 0), host order.
+    constexpr std::uint64_t kHeader = 0x40;
+    constexpr std::uint64_t kFrameHeader = 0x10;
+    CookedMovieIndex index;
+    if (data == nullptr || size < kHeader || std::memcmp(data, "NMOV", 4) != 0) {
+        return index;
+    }
+    const auto word = [data](std::uint64_t at) {
+        std::uint32_t value = 0;
+        std::memcpy(&value, data + at, sizeof(value));
+        return value;
+    };
+    const std::uint32_t frames = word(4);
+    const std::uint32_t width = word(20);
+    const std::uint32_t height = word(24);
+    if (frames == 0u || width == 0u || height == 0u || width > 4096u || height > 4096u) {
+        return index;
+    }
+    index.video_at.reserve(frames);
+    index.video_size.reserve(frames);
+    std::uint64_t at = kHeader;
+    std::uint32_t frame_size = word(16);
+    for (std::uint32_t f = 0; f < frames; ++f) {
+        if (at > size || size - at < kFrameHeader) {
+            return {};
+        }
+        const std::uint32_t video = word(at + 4);
+        if (video > size - at - kFrameHeader) {
+            return {};
+        }
+        index.video_at.push_back(at + kFrameHeader);
+        index.video_size.push_back(video);
+        const std::uint32_t next = word(at);
+        at += frame_size;
+        frame_size = next;
+    }
+    index.width = width;
+    index.height = height;
+    return index;
+}
 
-MovieReplacements::~MovieReplacements() {
+namespace {
+
+// Cooked frames decoded past the one the render thread took last: the next one and one more. A frame takes about half a
+// millisecond, so this covers a slow decode or a frame the game passes over.
+constexpr std::size_t kCookedAhead = 2;
+// A frame up to this many past the decoder's place is waited for; farther, or behind, the decoder starts again there.
+constexpr std::int32_t kCookedReach = 4;
+// The longest the render thread waits for one frame before the last one shows again.
+constexpr std::chrono::milliseconds kCookedWaitLimit{250};
+
+}  // namespace
+
+// The game's cooked movie on its own thread, in order from where the render thread takes it, wrapping at the end (a
+// looping movie goes on; one that ends costs a frame or two). Every frame stands alone, so a jump is only a new place to
+// start.
+class MoviePlayback::CookedDecoder {
+public:
+    CookedDecoder(std::string name, CookedMovieIndex index, const std::uint8_t* data,
+                  std::function<TextureBackend::UploadChunk(std::uint64_t)> stager)
+        : name_(std::move(name)), index_(std::move(index)), data_(data), stager_(std::move(stager)) {
+        thread_ = std::thread([this] { run(); });
+    }
+    ~CookedDecoder() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        wake_.notify_all();
+        ready_signal_.notify_all();
+        if (thread_.joinable()) thread_.join();
+    }
+
+    // `frame` (0 or more) within the movie's frames.
+    [[nodiscard]] std::int32_t wrap(std::int32_t frame) const noexcept {
+        return frame % static_cast<std::int32_t>(index_.video_at.size());
+    }
+
+    // Render thread: frame `frame` (wrapped), waiting while the decoder is behind; false when it did not decode or did
+    // not come within kCookedWaitLimit.
+    bool take(std::int32_t frame, MovieFrame& out) {
+        const auto started = std::chrono::steady_clock::now();
+        std::unique_lock<std::mutex> lock(mutex_);
+        bool waited = false;
+        for (;;) {
+            // Frames before this one are passed over.
+            while (!ready_.empty() && ready_.front().frame != frame &&
+                   distance(ready_.front().frame, frame) <= kCookedReach) {
+                ready_.pop_front();
+                wake_.notify_all();
+            }
+            if (!ready_.empty() && ready_.front().frame == frame) {
+                break;
+            }
+            if (stop_ || broken_) {
+                return false;
+            }
+            // Queued frames after this one, or this one far from the decoder's place: start again at it.
+            if (!ready_.empty() || distance(place(), frame) > kCookedReach) {
+                ready_.clear();
+                next_ = frame;
+                ++generation_;
+                ++seeks_;
+                wake_.notify_all();
+            }
+            waited = true;
+            if (ready_signal_.wait_until(lock, started + kCookedWaitLimit) == std::cv_status::timeout) {
+                ++timeouts_;
+                return false;
+            }
+        }
+        Entry entry = std::move(ready_.front());
+        ready_.pop_front();
+        wake_.notify_all();
+        if (waited) {
+            ++waits_;
+            wait_ms_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+        }
+        if (!entry.picture.staging) {
+            return false;  // its data did not decode
+        }
+        out = std::move(entry.picture);
+        ++shown_;
+        return true;
+    }
+
+    void add_stats(Stats& stats) const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        stats.cooked_decoded += decoded_;
+        stats.cooked_shown += shown_;
+        stats.cooked_waits += waits_ + timeouts_;
+        stats.cooked_seeks += seeks_;
+        stats.cooked_failed += failed_ + timeouts_;
+        stats.cooked_decode_ms += decode_ms_;
+        stats.cooked_wait_ms += wait_ms_;
+    }
+
+private:
+    struct Entry {
+        std::int32_t frame = -1;
+        MovieFrame picture;  // no staging: the frame's data did not decode
+    };
+
+    // Frames from `from` forward to `to`, wrapping.
+    [[nodiscard]] std::int32_t distance(std::int32_t from, std::int32_t to) const noexcept {
+        const auto count = static_cast<std::int32_t>(index_.video_at.size());
+        return (to - from + count) % count;
+    }
+    // The first frame the decoder will hand over next (mutex_ held, ready_ empty).
+    [[nodiscard]] std::int32_t place() const noexcept {
+        return decoding_ >= 0 && decoding_generation_ == generation_ ? decoding_ : next_;
+    }
+
+    std::shared_ptr<TextureBackend::UploadChunk> buffer(std::uint64_t size) {
+        // A pooled buffer only this pool still holds (the texture store drops its hold when the GPU has copied it).
+        for (const auto& chunk : pool_) {
+            if (chunk.use_count() == 1 && chunk->size >= size) return chunk;
+        }
+        if (pool_.size() >= kPoolLimit) {
+            const auto idle = std::find_if(pool_.begin(), pool_.end(), [](const auto& c) { return c.use_count() == 1; });
+            if (idle == pool_.end()) return nullptr;
+            pool_.erase(idle);
+        }
+        auto chunk = std::make_shared<TextureBackend::UploadChunk>(stager_(size));
+        if (chunk->cpu_base == nullptr) return nullptr;
+        pool_.push_back(chunk);
+        return chunk;
+    }
+
+    void run() {
+        // A crash while this movie decodes names it.
+        const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::Movie, std::filesystem::path(name_));
+        const auto count = static_cast<std::int32_t>(index_.video_at.size());
+        const std::uint32_t width = index_.width;
+        const std::uint32_t height = index_.height;
+        std::array<std::uint64_t, 3> offsets{};
+        std::array<std::uint32_t, 3> pitches{};
+        const std::uint64_t bytes = movie_plane_layout(width, height, offsets, pitches);
+        const std::uint32_t chroma_rows = (height + 1u) / 2u;
+        for (;;) {
+            std::int32_t frame = 0;
+            std::uint64_t generation = 0;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                wake_.wait(lock, [&] { return stop_ || ready_.size() < kCookedAhead; });
+                if (stop_) return;
+                frame = next_;
+                next_ = (next_ + 1) % count;
+                generation = generation_;
+                decoding_ = frame;
+                decoding_generation_ = generation;
+            }
+            std::shared_ptr<TextureBackend::UploadChunk> chunk;
+            try {
+                while (!(chunk = buffer(bytes))) {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    if (stop_) return;
+                    wake_.wait_for(lock, std::chrono::milliseconds(4));
+                }
+            } catch (const std::exception& error) {
+                std::cerr << "[movie] " << name_ << ": upload buffer: " << error.what() << "\n";
+                std::lock_guard<std::mutex> lock(mutex_);
+                broken_ = true;
+                ready_signal_.notify_all();
+                return;
+            }
+            const auto start = std::chrono::steady_clock::now();
+            std::uint8_t* const base = chunk->cpu_base;
+            const std::int32_t result = galaxy::movie::decode_video(
+                {data_ + index_.video_at[static_cast<std::size_t>(frame)], index_.video_size[static_cast<std::size_t>(frame)]},
+                static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height),
+                {base + offsets[0], static_cast<std::size_t>(pitches[0]) * height},
+                {base + offsets[1], static_cast<std::size_t>(pitches[1]) * chroma_rows},
+                {base + offsets[2], static_cast<std::size_t>(pitches[2]) * chroma_rows}, galaxy::movie::VideoKernel::Automatic,
+                pitches);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+            Entry entry{};
+            entry.frame = frame;
+            if (result == 0) {
+                entry.picture.frame = frame;
+                entry.picture.width = width;
+                entry.picture.height = height;
+                entry.picture.staging = std::move(chunk);
+                entry.picture.offsets = offsets;
+                entry.picture.pitches = pitches;
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                decoding_ = -1;
+                if (generation != generation_) continue;  // a jump came meanwhile: this frame is from before it
+                if (result == 0) {
+                    ++decoded_;
+                    decode_ms_ += ms;
+                } else {
+                    if (failed_ == 0u) {
+                        std::cerr << "[movie] " << name_ << " frame " << frame << ": the decoder refused it (" << result << ")\n";
+                    }
+                    ++failed_;
+                }
+                ready_.push_back(std::move(entry));
+            }
+            ready_signal_.notify_all();
+        }
+    }
+
+    std::string name_;
+    CookedMovieIndex index_;
+    const std::uint8_t* data_;
+    std::function<TextureBackend::UploadChunk(std::uint64_t)> stager_;
+    std::vector<std::shared_ptr<TextureBackend::UploadChunk>> pool_;  // decoder thread only
+    mutable std::mutex mutex_;
+    std::condition_variable wake_;          // the decoder: room in ready_, a jump, or stop
+    std::condition_variable ready_signal_;  // the render thread: a frame came
+    std::deque<Entry> ready_;               // consecutive frames from the next one the render thread takes
+    std::int32_t next_ = 0;                 // the frame the decoder takes next
+    std::int32_t decoding_ = -1;            // the frame being decoded, of decoding_generation_
+    std::uint64_t decoding_generation_ = 0;
+    std::uint64_t generation_ = 0;          // counts jumps; a frame decoded before the last is dropped
+    bool stop_ = false;
+    bool broken_ = false;  // the decoder thread has ended
+    std::uint64_t decoded_ = 0;
+    std::uint64_t shown_ = 0;
+    std::uint64_t waits_ = 0;
+    std::uint64_t timeouts_ = 0;
+    std::uint64_t seeks_ = 0;
+    std::uint64_t failed_ = 0;
+    double decode_ms_ = 0.0;
+    double wait_ms_ = 0.0;
+    std::thread thread_;
+};
+
+MoviePlayback::MoviePlayback() = default;
+
+MoviePlayback::~MoviePlayback() {
     shutdown();
 }
 
-void MovieReplacements::configure(std::vector<std::filesystem::path> folders,
-                                  std::function<TextureBackend::UploadChunk(std::uint64_t)> stager) {
+void MoviePlayback::configure(std::vector<std::filesystem::path> folders,
+                              std::function<TextureBackend::UploadChunk(std::uint64_t)> stager) {
     if (folders != folders_) {
         close();
         folders_ = std::move(folders);
@@ -707,23 +980,23 @@ void MovieReplacements::configure(std::vector<std::filesystem::path> folders,
     stager_ = std::move(stager);
 }
 
-void MovieReplacements::shutdown() noexcept {
+void MoviePlayback::shutdown() noexcept {
     close();
 }
 
-bool MovieReplacements::showing() noexcept {
-    return s_showing.load(std::memory_order_relaxed);
-}
-
-void MovieReplacements::close() noexcept {
-    s_showing.store(false, std::memory_order_relaxed);
+void MoviePlayback::close() noexcept {
+    if (decoder_) decoder_->add_stats(retired_);
+    if (cooked_) cooked_->add_stats(retired_);
     decoder_.reset();
+    cooked_.reset();
+    cooked_data_ = nullptr;
     shown_ = {};
+    cooked_shown_ = {};
     current_name_.clear();
     current_missing_ = false;
 }
 
-std::filesystem::path MovieReplacements::find(const char* disc_path) const {
+std::filesystem::path MoviePlayback::find(const char* disc_path) const {
 #if defined(_WIN32)
     if (disc_path == nullptr) return {};
     const std::string path(disc_path);
@@ -749,9 +1022,9 @@ std::filesystem::path MovieReplacements::find(const char* disc_path) const {
     return {};
 }
 
-const MovieReplacementFrame* MovieReplacements::frame(const MovieFrameMark& mark) {
+const MovieFrame* MoviePlayback::frame(const MovieFrameMark& mark) {
     if (mark.frame == MovieFrameMark::kNone) {
-        if (!current_name_.empty()) close();
+        if (!current_name_.empty() || cooked_) close();
         return nullptr;
     }
     const std::string name(mark.name.data(), strnlen(mark.name.data(), mark.name.size()));
@@ -766,34 +1039,56 @@ const MovieReplacementFrame* MovieReplacements::frame(const MovieFrameMark& mark
             std::cerr << "[movie] " << name << " -> " << galaxy::path_text(file) << "\n";
         }
     }
-    if (current_missing_ || decoder_ == nullptr || mark.frame < 0) {
+    if (mark.data != nullptr && mark.data != cooked_data_ && stager_) {
+        if (cooked_) cooked_->add_stats(retired_);
+        cooked_.reset();
+        cooked_shown_ = {};
+        cooked_data_ = mark.data;
+        CookedMovieIndex index = index_cooked_movie(mark.data, mark.size);
+        if (index.video_at.empty()) {
+            std::cerr << "[movie] " << name << ": not a cooked movie\n";
+        } else {
+            cooked_ = std::make_unique<CookedDecoder>(name, std::move(index), mark.data, stager_);
+        }
+    }
+    if (mark.frame < 0) {
         return nullptr;
     }
-    if (decoder_->failed()) {
-        s_showing.store(false, std::memory_order_relaxed);
+    // A replacement's frame once it has one.
+    if (!current_missing_ && decoder_ != nullptr && !decoder_->failed()) {
+        decoder_->set_rate(mark.frame_rate);
+        MovieFrame next{};
+        if (decoder_->take(mark.frame, shown_.frame, next)) {
+            shown_ = std::move(next);
+        }
+        if (shown_.frame >= 0 && shown_.staging) {
+            if (shown_.frame + decoder_->frame_step() <= mark.frame) {
+                ++late_;  // the game's frame is not decoded yet: an older one shows
+            }
+            ++shown_count_;
+            return &shown_;
+        }
+    }
+    if (cooked_ == nullptr) {
         return nullptr;
     }
-    decoder_->set_rate(mark.frame_rate);
-    MovieReplacementFrame next{};
-    if (decoder_->take(mark.frame, shown_.frame, next)) {
-        shown_ = std::move(next);
+    const std::int32_t frame = cooked_->wrap(mark.frame);
+    if (!cooked_shown_.staging || cooked_shown_.frame != frame) {
+        MovieFrame next{};
+        if (cooked_->take(frame, next)) {
+            cooked_shown_ = std::move(next);
+        }
     }
-    if (shown_.frame + decoder_->frame_step() <= mark.frame) {
-        ++late_;  // the game's frame is not decoded yet: an older one shows (or the THP's, before the first)
-    }
-    if (shown_.frame < 0 || !shown_.staging) return nullptr;
-    // Within a few frames of the game's: the THP's decode may stop (it resumes if the decoder falls behind).
-    s_showing.store(shown_.frame + 8 >= mark.frame, std::memory_order_relaxed);
-    ++shown_count_;
-    return &shown_;
+    return cooked_shown_.staging ? &cooked_shown_ : nullptr;
 }
 
-MovieReplacements::Stats MovieReplacements::stats() const {
-    Stats stats{};
-    stats.opened = opened_;
-    stats.shown = shown_count_;
-    stats.late = late_;
+MoviePlayback::Stats MoviePlayback::stats() const {
+    Stats stats = retired_;
+    stats.opened += opened_;
+    stats.shown += shown_count_;
+    stats.late += late_;
     if (decoder_) decoder_->add_stats(stats);
+    if (cooked_) cooked_->add_stats(stats);
     return stats;
 }
 

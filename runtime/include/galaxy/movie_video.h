@@ -13,11 +13,12 @@ namespace galaxy::movie {
 // fmadd on AArch64; an error on a CPU without it), Automatic takes Fma3 when the CPU has it. Both give identical planes.
 enum class VideoKernel : std::uint8_t { Automatic, ExactSse2, Fma3 };
 
-// Decodes one frame into Y, U and V planes, each rows of 8-bit texels from the top (width, then half width, across);
-// 0 on success, else a decoder error code.
+// Decodes one frame into Y, U and V planes, each rows of 8-bit texels from the top (width, then half width, across),
+// `pitches` bytes apart (0: packed); 0 on success, else a decoder error code.
 // Adapted from Aurora's THPDec.cpp (MIT; movie_video.cpp carries the notice).
 std::int32_t decode_video(std::span<const std::uint8_t> input,
     std::uint16_t width, std::uint16_t height,
     std::span<std::uint8_t> y, std::span<std::uint8_t> u,
-    std::span<std::uint8_t> v, VideoKernel kernel = VideoKernel::Automatic);
+    std::span<std::uint8_t> v, VideoKernel kernel = VideoKernel::Automatic,
+    std::array<std::uint32_t, 3> pitches = {});
 }

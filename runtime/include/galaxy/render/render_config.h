@@ -357,7 +357,7 @@ void set_texture_pack_game_id(std::string id);
 // The categories (galaxy::textures::category_bit) off in each of them.
 [[nodiscard]] std::vector<std::uint32_t> texture_pack_mod_categories_off();
 [[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
-// HD movie replacements (movie_replacement.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
+// HD movie replacements (movie_playback.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
 // the enabled mods' movies/ folders in load order (the host sets them at start).
 [[nodiscard]] std::filesystem::path movie_directory();
 // config.ini (GALAXY_RENDER_CONFIG_PATH replaces it); empty when unknown.

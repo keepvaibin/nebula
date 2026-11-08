@@ -51,7 +51,7 @@ The base types are the same fundamental types on every host (`types.h`): `s32` i
 - **Controls**: the game reads typed input samples (`input_read`, `NebulaInputSample`).
 - **HOME Menu**: the game's entry points open Nebula's panel over the frame.
 - **Power**: the game asks the host to close or start again (`app_exit`, `app_restart`).
-- **Movies**: the importer turns movies into frames the host decodes (`movie_video_decode`), with PCM16 sound.
+- **Movies**: the importer turns movies into JPEG frames (NMOV) the renderer decodes on a worker thread (`movie_playback`), with PCM16 sound.
 - **Display shape**: the host latches the output's shape once the frame is presented (`display_extent`), and the game draws for it: 4:3 to 32:9.
 - **Crash reports**: a fatal exception or the game's fatal call writes a minidump from a thread kept for it, and logs the module offset.
 - **Threads**: the game runs on one thread. The host's audio clock calls in on its own; the game reaches it only through the sound engine's one-way command ring (`Game/Sound/SoundRing`), and neither side takes a lock.

@@ -7,7 +7,7 @@
 //                      Riivolution's disc paths without a '/' do,
 //   textures/          a texture pack (the community's tex1_ names); tex1_ files anywhere in a
 //                      mod with nothing else make it a pack,
-//   movies/            HD videos for the game's movies (movie_replacement.h).
+//   movies/            HD videos for the game's movies (movie_playback.h).
 // A mod whose text covers some of the disc's languages but not the one played shows its own text in that language
 // (the same language of another region first, else English) unless its TEXT choice keeps the game's.
 // The mods are one list, as layers: where two change the same file or texture, the one higher in the list wins (order 1

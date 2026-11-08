@@ -35,11 +35,10 @@ void set_frame_end_presents(bool enabled) noexcept {
     backend().set_frame_end_presents(enabled);
 }
 
-void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
-                        std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
-    backend().attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
+void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
+                        std::uint32_t width, std::uint32_t height) {
+    backend().attach_movie_frame(name, frame, frame_rate, data, size, width, height);
 }
-bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 
 core::Registries& registries() noexcept {
     return backend().registries();

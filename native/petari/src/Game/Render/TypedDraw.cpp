@@ -85,6 +85,14 @@ void SiteMaterial::setTexture(u32 slot, const SiteTexture& rTexture) {
     }
 }
 
+void SiteMaterial::setTextureId(u32 slot, u32 id, const SiteTexture& rSampling) {
+    SiteTextures::toFrame(rSampling, &mTextures[slot]);
+    mTextures[slot].texture = id;
+    if (mTextureCount <= slot) {
+        mTextureCount = slot + 1;
+    }
+}
+
 void SiteMaterial::setColor(u32 at, u8 r, u8 g, u8 b, u8 a) {
     constants[at] = r / 255.0f;
     constants[at + 1] = g / 255.0f;

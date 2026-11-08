@@ -389,6 +389,8 @@ struct SiteMaterial {
     void setMatrix(u32 first, u32 index, const f32 (*pMtx)[4]);
     void setTexture(u32 slot, const GameTexture* pTexture);
     void setTexture(u32 slot, const SiteTexture& rTexture);
+    // A texture the host makes (`id`), sampled as `rSampling` says (its image is not used).
+    void setTextureId(u32 slot, u32 id, const SiteTexture& rSampling);
     // Constants from float `at`: a colour as 0-1 values.
     void setColor(u32 at, u8 r, u8 g, u8 b, u8 a);
     void setDepth(bool test, u8 func, bool write) {
