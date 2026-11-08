@@ -111,6 +111,6 @@ bool MR::hasMoveStick(const PlayerInputSample* pSample) {
     return pSample != nullptr && pSample->mHasMoveStick;
 }
 
-PlayerInputSample* PlayerInput::getSample(u32 index) const {
-    return mReadInfo->getSample(index);
+PlayerInputSample* PlayerInput::getSample() const {
+    return mReadInfo->getSample();
 }
