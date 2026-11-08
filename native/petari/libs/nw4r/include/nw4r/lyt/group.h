@@ -2,19 +2,18 @@
 
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/pane.h"
-#include "nw4r/ut/LinkList.h"
 #include <cstddef>
 
 namespace nw4r {
     namespace lyt {
         namespace detail {
             struct PaneLink {
-                ut::LinkListNode mLink;
+                UiLink< PaneLink > mLink;
                 Pane* mTarget;
             };
         };  // namespace detail
 
-        typedef ut::LinkList< detail::PaneLink, offsetof(detail::PaneLink, mLink) > PaneLinkList;
+        typedef UiList< detail::PaneLink > PaneLinkList;
 
         class Group {
         public:
@@ -38,14 +37,14 @@ namespace nw4r {
                 return mbUserAllocated;
             }
 
-            ut::LinkListNode mLink;
+            UiLink< Group > mLink;
             PaneLinkList mPaneLinkList;
             char mName[17];
             u8 mbUserAllocated;
             u8 mPadding[2];
         };
 
-        typedef ut::LinkList< Group, offsetof(Group, mLink) > GroupList;
+        typedef UiList< Group > GroupList;
 
         class GroupContainer {
         public:

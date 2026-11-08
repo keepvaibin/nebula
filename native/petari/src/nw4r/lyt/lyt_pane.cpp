@@ -21,14 +21,6 @@ namespace nw4r {
 
 namespace nw4r {
     namespace lyt {
-        namespace detail {
-            PaneBase::PaneBase() {
-            }
-
-            PaneBase::~PaneBase() {
-            }
-        }  // namespace detail
-
         // A pane made in code (Nebula's own panes, Picture(const TexMap&)): at the origin, unscaled, visible.
         Pane::Pane() {
             Init();
@@ -69,12 +61,12 @@ namespace nw4r {
         }
 
         Pane::~Pane() {
-            for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter();) {
-                PaneList::Iterator currIt = it++;
-                mChildList.Erase(currIt);
-                if (!currIt->IsUserAllocated()) {
-                    currIt->~Pane();
-                    Layout::FreeMemory(&*currIt);
+            for (Pane *pChild = mChildList.First(), *pNext; pChild != nullptr; pChild = pNext) {
+                pNext = PaneList::Next(pChild);
+                mChildList.Erase(pChild);
+                if (!pChild->IsUserAllocated()) {
+                    pChild->~Pane();
+                    Layout::FreeMemory(pChild);
                 }
             }
 
@@ -104,11 +96,7 @@ namespace nw4r {
         }
 
         void Pane::AppendChild(Pane* pChild) {
-            InsertChild(mChildList.GetEndIter(), pChild);
-        }
-
-        void Pane::InsertChild(PaneList::Iterator next, Pane* pChild) {
-            mChildList.Insert(next, pChild);
+            mChildList.PushBack(pChild);
             pChild->mpParent = this;
         }
 
@@ -163,8 +151,8 @@ namespace nw4r {
             }
 
             if (recursive) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    if (Pane* pPane = it->FindPaneByName(pName, true)) {
+                for (Pane* pChild : mChildList) {
+                    if (Pane* pPane = pChild->FindPaneByName(pName, true)) {
                         return pPane;
                     }
                 }
@@ -179,8 +167,8 @@ namespace nw4r {
             }
 
             if (recursive) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    if (Material* pMat = it->FindMaterialByName(pName, true)) {
+                for (Pane* pChild : mChildList) {
+                    if (Material* pMat = pChild->FindMaterialByName(pName, true)) {
                         return pMat;
                     }
                 }
@@ -250,8 +238,8 @@ namespace nw4r {
         }
 
         void Pane::CalculateMtxChild(const DrawInfo& rInfo) {
-            for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                it->CalculateMtx(rInfo);
+            for (Pane* pChild : mChildList) {
+                pChild->CalculateMtx(rInfo);
             }
         }
 
@@ -262,8 +250,8 @@ namespace nw4r {
 
             MotionSignal::drawObject(mDrawSlot, 0);
             DrawSelf(rInfo);
-            for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                it->Draw(rInfo);
+            for (Pane* pChild : mChildList) {
+                pChild->Draw(rInfo);
             }
         }
 
@@ -274,17 +262,17 @@ namespace nw4r {
             AnimateSelf(option);
 
             if (IsVisible() || !(option & 1)) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    it->Animate(option);
+                for (Pane* pChild : mChildList) {
+                    pChild->Animate(option);
                 }
             }
         }
 
         void Pane::AnimateSelf(u32 option) {
-            for (AnimationList::Iterator it = mAnimList.GetBeginIter(); it != mAnimList.GetEndIter(); ++it) {
-                if (it->IsEnable()) {
-                    AnimTransform* animTrans = it->GetAnimTransform();
-                    animTrans->Animate(it->GetIndex(), this);
+            for (AnimationLink* pLink : mAnimList) {
+                if (pLink->IsEnable()) {
+                    AnimTransform* animTrans = pLink->GetAnimTransform();
+                    animTrans->Animate(pLink->GetIndex(), this);
                 }
             }
 
@@ -303,8 +291,8 @@ namespace nw4r {
             UnbindAnimationSelf(pAnimTrans);
 
             if (recursive) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    it->UnbindAnimation(pAnimTrans, recursive);
+                for (Pane* pChild : mChildList) {
+                    pChild->UnbindAnimation(pAnimTrans, recursive);
                 }
             }
         }
@@ -341,8 +329,8 @@ namespace nw4r {
             }
 
             if (recursive) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    it->SetAnimationEnable(pAnimTrans, enable, recursive);
+                for (Pane* pChild : mChildList) {
+                    pChild->SetAnimationEnable(pAnimTrans, enable, recursive);
                 }
             }
         }

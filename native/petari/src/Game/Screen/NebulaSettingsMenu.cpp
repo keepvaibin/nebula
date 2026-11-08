@@ -1045,8 +1045,8 @@ bool NebulaSettingsScreen::build() {
         return false;
     }
     // The question window's own panes stay hidden; the menu is built beside them.
-    for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-        it->SetVisible(false);
+    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+        pChild->SetVisible(false);
     }
     mRoot = makeGroup(pRoot, "NsRoot");
     mDim = mModalKit.make("BG", "NsDim");

@@ -180,8 +180,8 @@ namespace {
         }
         pPane->mGlbMtx._03 += x;
         pPane->mGlbMtx._13 += y;
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            translateBranch(&*it, x, y, depth + 1);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            translateBranch(pChild, x, y, depth + 1);
         }
     }
 
@@ -267,23 +267,23 @@ namespace {
         if (rExtent.mVerticalDelta == 0.0f) {
             return;
         }
-        for (nw4r::lyt::PaneList::Iterator owner = pRoot->GetChildList().GetBeginIter(); owner != pRoot->GetChildList().GetEndIter(); ++owner) {
-            if (!isNamed(&*owner, "CinemaFrame")) {
+        for (nw4r::lyt::Pane* pOwner : pRoot->GetChildList()) {
+            if (!isNamed(pOwner, "CinemaFrame")) {
                 continue;
             }
-            for (nw4r::lyt::PaneList::Iterator bar = owner->GetChildList().GetBeginIter(); bar != owner->GetChildList().GetEndIter(); ++bar) {
-                const bool upper = isNamed(&*bar, "FrameU");
-                if (!upper && !isNamed(&*bar, "FrameD")) {
+            for (nw4r::lyt::Pane* pBar : pOwner->GetChildList()) {
+                const bool upper = isNamed(pBar, "FrameU");
+                if (!upper && !isNamed(pBar, "FrameD")) {
                     continue;
                 }
-                const f32 height = bar->mSize.height;
+                const f32 height = pBar->mSize.height;
                 if (!(height > 0.0f)) {
                     continue;
                 }
                 f32 closing = (height - 60.0f) / 190.0f;
                 closing = closing < 0.0f ? 0.0f : closing > 1.0f ? 1.0f : closing;
-                bar->mSize.height = height + closing * rExtent.mVerticalDelta;
-                translateBranch(&*bar, 0.0f, upper ? rExtent.mVerticalDelta : -rExtent.mVerticalDelta, 0);
+                pBar->mSize.height = height + closing * rExtent.mVerticalDelta;
+                translateBranch(pBar, 0.0f, upper ? rExtent.mVerticalDelta : -rExtent.mVerticalDelta, 0);
             }
         }
     }
@@ -301,25 +301,24 @@ namespace LayoutAspect {
         // The owning layout and exact names identify each backing: generic Base and PicBG panes elsewhere stay.
         const Extent extent = getExtent();
         bool title = false;
-        for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-            title |= isNamed(&*it, "SMGTitleLogo");
+        for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+            title |= isNamed(pChild, "SMGTitleLogo");
         }
-        for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-            nw4r::lyt::Pane* pPane = &*it;
+        for (nw4r::lyt::Pane* pPane : pRoot->GetChildList()) {
             if (title && isNamed(pPane, "PicFlash")) {
                 pPane->mSize.width = extent.mWidth;
                 pPane->mSize.height = extent.mHeight;
             } else if (isNamed(pPane, "CinemaFrame")) {
-                for (nw4r::lyt::PaneList::Iterator bar = pPane->GetChildList().GetBeginIter(); bar != pPane->GetChildList().GetEndIter(); ++bar) {
-                    if (isNamed(&*bar, "FrameU") || isNamed(&*bar, "FrameD")) {
-                        bar->mSize.width = extent.mWidth;
+                for (nw4r::lyt::Pane* pBar : pPane->GetChildList()) {
+                    if (isNamed(pBar, "FrameU") || isNamed(pBar, "FrameD")) {
+                        pBar->mSize.width = extent.mWidth;
                     }
                 }
             } else if (isNamed(pPane, "PrologueDemo")) {
-                for (nw4r::lyt::PaneList::Iterator backing = pPane->GetChildList().GetBeginIter(); backing != pPane->GetChildList().GetEndIter(); ++backing) {
-                    if (isNamed(&*backing, "Base") || isNamed(&*backing, "Fade")) {
-                        backing->mSize.width = extent.mWidth;
-                        backing->mSize.height = extent.mHeight;
+                for (nw4r::lyt::Pane* pBacking : pPane->GetChildList()) {
+                    if (isNamed(pBacking, "Base") || isNamed(pBacking, "Fade")) {
+                        pBacking->mSize.width = extent.mWidth;
+                        pBacking->mSize.height = extent.mHeight;
                     }
                 }
             }

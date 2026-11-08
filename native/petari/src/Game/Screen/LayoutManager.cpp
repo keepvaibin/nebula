@@ -69,9 +69,9 @@ namespace {
         inline void collectLanguagePanes(nw4r::lyt::Pane* pPane, BitFlagBase& rLanguagePanes, BitFlagBase& rCurrentLanguagePanes) {
             nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
             s32 index = -1;
-            for (nw4r::lyt::PaneList::Iterator it = rPaneList.GetBeginIter(); it != rPaneList.GetEndIter(); ++it) {
+            for (nw4r::lyt::Pane* pChild : rPaneList) {
                 index++;
-                const char* pName = (*it).mName;
+                const char* pName = pChild->mName;
                 u32 length = strlen(pName);
                 if (length < 4) {
                     continue;
@@ -96,29 +96,26 @@ namespace {
             nw4r::lyt::PaneList& rChildren = pPane->mChildList;
             u32 length;
             s32 childIndex = 0;
-            nw4r::lyt::PaneList::Iterator it = rChildren.GetBeginIter();
             if (rCurrentLanguagePanes.isAnythingTrue()) {
-                while (it != rChildren.GetEndIter()) {
-                    nw4r::lyt::PaneList::Iterator child = it;
-                    it++;
+                for (nw4r::lyt::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
+                    pNext = nw4r::lyt::PaneList::Next(pChild);
                     if (rCurrentLanguagePanes.isTrue(childIndex)) {
-                        pName = (*child).mName;
+                        pName = pChild->mName;
                         length = strlen(pName) - 4;
                         char name[17];
                         nebula_snprintf(name, sizeof(name), "%.*s", static_cast< int >(length), pName);
-                        (*child).SetName(name);
+                        pChild->SetName(name);
                     } else {
-                        pPane->RemoveChild(&*child);
+                        pPane->RemoveChild(pChild);
                     }
 
                     childIndex++;
                 }
             } else {
-                while (it != rChildren.GetEndIter()) {
-                    nw4r::lyt::PaneList::Iterator child = it;
-                    it++;
+                for (nw4r::lyt::Pane *pChild = rChildren.First(), *pNext; pChild != nullptr; pChild = pNext) {
+                    pNext = nw4r::lyt::PaneList::Next(pChild);
                     if (rLanguagePanes.isTrue(childIndex)) {
-                        pPane->RemoveChild(&*child);
+                        pPane->RemoveChild(pChild);
                     }
 
                     childIndex++;
@@ -353,8 +350,8 @@ LayoutGroupCtrl* LayoutManager::createAndAddGroupCtrl(const char* pName, u32 ani
 s32 LayoutManager::getIndexOfGroupCtrl(const char* pName) const {
     u32 index = 0;
     nw4r::lyt::GroupList& rGroupList = mLayout->mpGroupContainer->mGroupList;
-    for (nw4r::lyt::GroupList::Iterator it = rGroupList.GetBeginIter(); it != rGroupList.GetEndIter(); it++) {
-        if (strcmp(it->mName, pName) == 0) {
+    for (nw4r::lyt::Group* pGroup : rGroupList) {
+        if (strcmp(pGroup->mName, pName) == 0) {
             return index;
         }
 
@@ -486,16 +483,13 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
 }
 
 nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {
-    nw4r::lyt::Group* pGroup = nullptr;
-    nw4r::lyt::GroupList& rGroupList = mLayout->mpGroupContainer->mGroupList;
-    for (nw4r::lyt::GroupList::Iterator it = rGroupList.GetBeginIter(); it != rGroupList.GetEndIter(); it++) {
-        if (strcmp(it->mName, pName) == 0) {
-            pGroup = &*it;
-            break;
+    for (nw4r::lyt::Group* pGroup : mLayout->mpGroupContainer->mGroupList) {
+        if (strcmp(pGroup->mName, pName) == 0) {
+            return pGroup;
         }
     }
 
-    return pGroup;
+    return nullptr;
 }
 
 void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
@@ -553,8 +547,8 @@ void LayoutManager::initPaneInfoRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
 
     const u32 startIndex = rIndex++;
 
-    for (nw4r::lyt::PaneList::Iterator it = rPaneList.GetBeginIter(); it != rPaneList.GetEndIter(); ++it) {
-        initPaneInfoRecursive(rIndex, &*it);
+    for (nw4r::lyt::Pane* pChild : rPaneList) {
+        initPaneInfoRecursive(rIndex, pChild);
     }
 
     mPaneInfoList[startIndex].mChildCount = rIndex - startIndex;
@@ -564,15 +558,15 @@ u32 LayoutManager::countPanes(nw4r::lyt::Pane* pPane) {
     u32 count = 1;
 
     nw4r::lyt::PaneList& rPaneList = pPane->GetChildList();
-    for (nw4r::lyt::PaneList::Iterator it = rPaneList.GetBeginIter(); it != rPaneList.GetEndIter(); ++it) {
-        count += countPanes(&*it);
+    for (nw4r::lyt::Pane* pChild : rPaneList) {
+        count += countPanes(pChild);
     }
 
     return count;
 }
 
 void LayoutManager::initGroupCtrlList() {
-    mGroupCtrlCount = mLayout->mpGroupContainer->mGroupList.GetSize();
+    mGroupCtrlCount = mLayout->mpGroupContainer->mGroupList.Size();
     mGroupCtrlList = new LayoutGroupCtrl*[mGroupCtrlCount];
 
     for (u32 i = 0; i < mGroupCtrlCount; i++) {
@@ -602,8 +596,8 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
     }
 
     nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
-    for (nw4r::lyt::PaneList::Iterator it = rPaneList.GetBeginIter(); it != rPaneList.GetEndIter(); ++it) {
-        initTextBoxRecursive(&*it, pUserDataPane, pLayoutName, textBoxBufferLength);
+    for (nw4r::lyt::Pane* pChild : rPaneList) {
+        initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength);
     }
 }
 
@@ -613,8 +607,8 @@ void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
     if (rIndex >= mPaneCount) {
         pPane->AnimateSelf(1);
         rIndex++;
-        for (nw4r::lyt::PaneList::Iterator it = pPane->mChildList.GetBeginIter(); it != pPane->mChildList.GetEndIter(); ++it) {
-            animateRecursive(rIndex, &*it);
+        for (nw4r::lyt::Pane* pChild : pPane->mChildList) {
+            animateRecursive(rIndex, pChild);
         }
         return;
     }
@@ -629,8 +623,8 @@ void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
     pPane->AnimateSelf(1);
     rIndex++;
 
-    for (nw4r::lyt::PaneList::Iterator it = pPane->mChildList.GetBeginIter(); it != pPane->mChildList.GetEndIter(); ++it) {
-        animateRecursive(rIndex, &*it);
+    for (nw4r::lyt::Pane* pChild : pPane->mChildList) {
+        animateRecursive(rIndex, pChild);
     }
 }
 
@@ -699,8 +693,8 @@ void LayoutManager::removeUnnecessaryPanes(nw4r::lyt::Pane* pPane) {
         Local::removeLanguagePanes(pPane, languagePanes, currentLanguagePanes);
     } else {
         nw4r::lyt::PaneList& rChildren = pPane->mChildList;
-        for (nw4r::lyt::PaneList::Iterator it = rChildren.GetBeginIter(); it != rChildren.GetEndIter(); ++it) {
-            removeUnnecessaryPanes(&*it);
+        for (nw4r::lyt::Pane* pChild : rChildren) {
+            removeUnnecessaryPanes(pChild);
         }
     }
 }

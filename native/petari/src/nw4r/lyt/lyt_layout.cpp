@@ -19,8 +19,8 @@ namespace {
             pTextBox->SetTagProcessor(pTagProcessor);
         }
 
-        for (PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            SetTagProcessorImpl(&(*it), pTagProcessor);
+        for (Pane* pChild : pPane->GetChildList()) {
+            SetTagProcessorImpl(pChild, pTagProcessor);
         }
     }
 }  // namespace
@@ -41,11 +41,11 @@ namespace nw4r {
                 FreeMemory(mpRootPane);
             }
 
-            for (AnimTransformList::Iterator it = mAnimTransList.GetBeginIter(); it != mAnimTransList.GetEndIter();) {
-                AnimTransformList::Iterator currIt = it++;
-                mAnimTransList.Erase(currIt);
-                currIt->~AnimTransform();
-                FreeMemory(&*currIt);
+            for (AnimTransform *pAnimTrans = mAnimTransList.First(), *pNext; pAnimTrans != nullptr; pAnimTrans = pNext) {
+                pNext = AnimTransformList::Next(pAnimTrans);
+                mAnimTransList.Erase(pAnimTrans);
+                pAnimTrans->~AnimTransform();
+                FreeMemory(pAnimTrans);
             }
         }
 

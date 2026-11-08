@@ -731,10 +731,10 @@ namespace nw4r {
         }
 
         void Material::Animate() {
-            for (AnimationList::Iterator it = mAnimList.GetBeginIter(); it != mAnimList.GetEndIter(); ++it) {
-                if (it->IsEnable()) {
-                    AnimTransform* animTrans = it->GetAnimTransform();
-                    animTrans->Animate(it->GetIndex(), this);
+            for (AnimationLink* pLink : mAnimList) {
+                if (pLink->IsEnable()) {
+                    AnimTransform* animTrans = pLink->GetAnimTransform();
+                    animTrans->Animate(pLink->GetIndex(), this);
                 }
             }
         }

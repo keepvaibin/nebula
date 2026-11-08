@@ -113,12 +113,10 @@ FrameCtrl* LayoutPaneCtrl::getFrameCtrl(u32 layer) const {
 }
 
 void LayoutPaneCtrl::recalcChildGlobalMtx(nw4r::lyt::Pane* pPane) {
-    nw4r::lyt::PaneList& rChildren = pPane->GetChildList();
-    for (nw4r::lyt::PaneList::Iterator iter = rChildren.GetBeginIter(); iter != rChildren.GetEndIter(); iter++) {
-        nw4r::lyt::Pane& rChild = *iter;
+    for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
         nw4r::math::MTX34 global;
-        nw4r::math::MTX34Mult(&global, &rChild.GetParent()->mGlbMtx, &rChild.mMtx);
-        rChild.mGlbMtx = global;
-        recalcChildGlobalMtx(&rChild);
+        nw4r::math::MTX34Mult(&global, &pChild->GetParent()->mGlbMtx, &pChild->mMtx);
+        pChild->mGlbMtx = global;
+        recalcChildGlobalMtx(pChild);
     }
 }

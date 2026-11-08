@@ -94,8 +94,8 @@ void NebulaQuitButton::layOut() {
 
     MR::setTextBoxMessageRecursive(this, "StartButtonTxt", getLabel());
     nw4r::lyt::TextBox* pLabel = nullptr;
-    for (nw4r::lyt::PaneList::Iterator it = pTextParent->GetChildList().GetBeginIter(); it != pTextParent->GetChildList().GetEndIter(); ++it) {
-        nw4r::lyt::TextBox* pText = asTextBox(&*it);
+    for (nw4r::lyt::Pane* pChild : pTextParent->GetChildList()) {
+        nw4r::lyt::TextBox* pText = asTextBox(pChild);
         if (pText != nullptr && strncmp(pText->mName, "Txt", 3) == 0) {
             pLabel = pText;
         }
@@ -125,17 +125,17 @@ void NebulaQuitButton::layOut() {
     if (pBound != nullptr) {
         pBound->mSize.width += middle - middle0;
     }
-    for (nw4r::lyt::PaneList::Iterator it = pTextParent->GetChildList().GetBeginIter(); it != pTextParent->GetChildList().GetEndIter(); ++it) {
-        if (it->mSize.width < labelWidth) {
-            it->mSize.width = labelWidth;
+    for (nw4r::lyt::Pane* pChild : pTextParent->GetChildList()) {
+        if (pChild->mSize.width < labelWidth) {
+            pChild->mSize.width = labelWidth;
         }
     }
 
     // The button pane (SButton, which the animations scale) holds the pill by its left edge: the pill's pieces move
     // right by half its width.
     const f32 halfWidth = pictureScale * (middle * 0.5f + cap);
-    for (nw4r::lyt::PaneList::Iterator it = pButton->GetChildList().GetBeginIter(); it != pButton->GetChildList().GetEndIter(); ++it) {
-        it->mTranslate.x += halfWidth;
+    for (nw4r::lyt::Pane* pChild : pButton->GetChildList()) {
+        pChild->mTranslate.x += halfWidth;
     }
 
     // Start's pane mirrored through the canvas centre (it follows the left and top edges as Start the right and

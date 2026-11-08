@@ -2,7 +2,6 @@
 
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/material.h"
-#include "nw4r/ut/LinkList.h"
 
 namespace nw4r {
     namespace lyt {
@@ -31,7 +30,7 @@ namespace nw4r {
                 return mpRes;
             }
 
-            ut::LinkListNode mLink;
+            UiLink< AnimTransform > mLink;
             const UiAnimationHeader* mpRes;
             f32 mFrame;
         };

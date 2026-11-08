@@ -24,8 +24,8 @@ namespace {
         if (pTextBox != nullptr || pPane == nullptr) {
             return pTextBox;
         }
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            pTextBox = findTextBox(pActor, it->mName);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            pTextBox = findTextBox(pActor, pChild->mName);
             if (pTextBox != nullptr) {
                 return pTextBox;
             }
@@ -59,8 +59,8 @@ namespace MR {
         }
 
         nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            initTagProcessorRecursive(pActor, it->mName, mode);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            initTagProcessorRecursive(pActor, pChild->mName, mode);
         }
     }
 
@@ -74,8 +74,8 @@ namespace MR {
         }
 
         nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            nextStepTagProcessorRecursive(pActor, it->mName);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            nextStepTagProcessorRecursive(pActor, pChild->mName);
         }
     }
 
@@ -88,8 +88,8 @@ namespace MR {
         }
 
         nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            isEnd &= isEndStepTagProcessorRecursive(pActor, it->mName, true);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            isEnd &= isEndStepTagProcessorRecursive(pActor, pChild->mName, true);
         }
 
         return isEnd;
