@@ -41,15 +41,15 @@ void FirePressureBullet::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-void FirePressureBullet::shotFireBullet(LiveActor* pActor, const Pos3f& rPos, const f32& a3, bool a4, bool a5) {
-    mFirePressure = pActor;
-    mSpeed = a3;
-    mIsHoming = a4;
-    mCanCrash = a5;
+void FirePressureBullet::shotFireBullet(LiveActor* pFirePressure, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash) {
+    mFirePressure = pFirePressure;
+    mSpeed = rSpeed;
+    mIsHoming = isHoming;
+    mCanCrash = canCrash;
 
-    rPos.getZDir(mFront);
+    rMtx.getZDir(mFront);
     mVelocity.scale(mSpeed, mFront);
-    rPos.getTrans(mPosition);
+    rMtx.getTrans(mPosition);
     mRotation.zero();
     MR::validateHitSensors(this);
     MR::invalidateClipping(this);

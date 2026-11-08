@@ -115,12 +115,12 @@ void Kameck::initPlacementParam(const TableIter& rIter) {
         return;
     }
 
-    s32 arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
+    s32 fireBallLevel;
+    MR::getPlacementArg0WithInit(rIter, &fireBallLevel);
 
-    if (arg0 >= 3) {
+    if (fireBallLevel >= 3) {
         mBeamType = KameckBeam::BeamType_FireBall3;
-    } else if (arg0 >= 2) {
+    } else if (fireBallLevel >= 2) {
         mBeamType = KameckBeam::BeamType_FireBall2;
     } else {
         mBeamType = KameckBeam::BeamType_FireBall1;

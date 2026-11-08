@@ -30,12 +30,12 @@ void ActorJointCtrl::endFaceCtrl(s32 val) {
     mFaceJointCtrl->endCtrl(val);
 }
 
-void ActorJointCtrl::setIKEndPosition(const char* pName, const Vec3f& a2, f32 a3) {
-    mJointCtrlHolder->setEndPosition(pName, a2, a3);
+void ActorJointCtrl::setIKEndPosition(const char* pName, const Vec3f& rPos, f32 rate) {
+    mJointCtrlHolder->setEndPosition(pName, rPos, rate);
 }
 
-void ActorJointCtrl::setIKEndDirection(const char* pName, const Vec3f& a2, f32 a3) {
-    mJointCtrlHolder->setEndDirection(pName, a2, a3);
+void ActorJointCtrl::setIKEndDirection(const char* pName, const Vec3f& rDirection, f32 rate) {
+    mJointCtrlHolder->setEndDirection(pName, rDirection, rate);
 }
 
 void ActorJointCtrl::endIKCtrlAll() {

@@ -28,12 +28,12 @@ void ClippingJudge::movement() {
     }
 }
 
-bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rVec, f32 a2) const {
-    return !mFrustum.mayIntersectBall3(rVec, a2);
+bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius) const {
+    return !mFrustum.mayIntersectBall3(rPos, radius);
 }
 
-bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rVec, f32 a2, s32 index) const {
-    return (!index) ? !mFrustum.mayIntersectBall3(rVec, a2) : !mClipFrustums[index].mayIntersectBall3(rVec, a2);
+bool ClippingJudge::isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 index) const {
+    return (!index) ? !mFrustum.mayIntersectBall3(rPos, radius) : !mClipFrustums[index].mayIntersectBall3(rPos, radius);
 }
 
 void ClippingJudge::calcViewingVolume(Hex3f* pVolume, f32 farClip) {

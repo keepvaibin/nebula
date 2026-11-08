@@ -133,7 +133,7 @@ public:
     void initModelManagerWithAnm(const char* pModelArcName, const char* pAnimArcName, bool deferMaterials);
     void initNerve(const Nerve*);
     void initHitSensor(int);
-    void initBinder(f32, f32, u32);
+    void initBinder(f32 radius, f32 offsetY, u32 planeNum);
     void initRailRider(const TableIter& rIter);
     void initEffectKeeper(int extraEmitterNum, const char* pResourceName);
     void initSound(int numHandles, bool is2D);

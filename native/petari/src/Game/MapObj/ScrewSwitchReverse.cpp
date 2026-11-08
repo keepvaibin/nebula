@@ -51,15 +51,15 @@ void ScrewSwitchReverse::init(const TableIter& rIter) {
     initSound(4, false);
 
     s32 shadowLength = ::sDefaultShadowLength;
-    f32 arg7 = shadowLength;
-    MR::getPlacementArg7NoInit(rIter, &arg7);
+    f32 dropLength = shadowLength;
+    MR::getPlacementArg7NoInit(rIter, &dropLength);
 
-    if (arg7 > 0.0f) {
+    if (dropLength > 0.0f) {
         Vec3f pos(mPosition);
         pos.add(Vec3f(0.0f, 10.0f, 0.0f));
         MR::initShadowVolumeCylinder(this, 100.0f);
         MR::setShadowDropPosition(this, nullptr, pos);
-        MR::setShadowDropLength(this, nullptr, arg7);
+        MR::setShadowDropLength(this, nullptr, dropLength);
 
         MR::calcGravity(this);
     }
