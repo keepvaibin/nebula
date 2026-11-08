@@ -2310,6 +2310,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
         std::string message;
         unsigned imported = 0;
         unsigned failed = 0;
+        unsigned added = 0;
         for (std::size_t i = 0; i < sources.size(); ++i) {
             const auto progress = [&](const galaxy::mods::ImportProgress& p) {
                 char text[32]{};
@@ -2332,12 +2333,14 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             std::cerr << "[mods] import " << galaxy::path_text(sources[i]) << ": " << result.message << " (" << result.files
                       << " files, " << (result.bytes >> 20u) << " MB)\n";
             (result.ok ? imported : failed) += 1u;
+            added += result.ok && !result.already ? 1u : 0u;
             message = message.empty() ? result.message : message + "; " + result.message;
         }
         {
             const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
             s_mod_import_value = failed == 0u ? "DONE" : imported == 0u ? "FAILED" : "SOME FAILED";
-            s_mod_import_message = message + ". MODS APPLY WHEN NEBULA RESTARTS";
+            // The restart note only when a mod was added or updated: one already there changes nothing.
+            s_mod_import_message = added != 0u ? message + ". MODS APPLY WHEN NEBULA RESTARTS" : message;
         }
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);

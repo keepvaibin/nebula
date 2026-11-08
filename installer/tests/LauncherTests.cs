@@ -412,8 +412,8 @@ namespace Nebula.Launcher
                             var upscaler = (ComboBox)Private(form, "upscaler");
                             var commit = form.GetType().GetMethod("Commit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
                             gpuBox.SelectedIndex = 2;
-                            Check((string)upscaler.SelectedItem == GraphicsSettings.UpscalerName(1),
-                                  "the integrated GPU chosen while the game runs: the list shows its fallback, FSR 1");
+                            Check((string)upscaler.SelectedItem == GraphicsSettings.UpscalerName(2),
+                                  "the integrated GPU chosen while the game runs: the list shows its fallback, FSR 3");
                             commit.Invoke(form, null);
                             var saved = GraphicsSettings.Load();
                             Check(saved.Gpu == Integrated.Id && saved.Upscaler == 3 && saved.FrameGeneration == 1 && saved.FrameRate == 120,

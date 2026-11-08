@@ -194,7 +194,7 @@ namespace Nebula.Setup
                 };
                 choose.Controls.Add(dlssLicense);
                 var dlssLink = new LinkLabel { Text = NebulaText.Of("Read license"), Location = new Point(644, y + 3), Size = new Size(100, 22) };
-                dlssLink.LinkClicked += delegate { using (var dialog = new DlssInstallDialog(true)) dialog.ShowDialog(this); };
+                dlssLink.LinkClicked += delegate { using (var dialog = new VendorInstallDialog(DlssPackage.Package, true)) dialog.ShowDialog(this); };
                 choose.Controls.Add(dlssLink);
                 y += 32;
             }
