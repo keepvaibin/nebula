@@ -360,7 +360,7 @@ void AstroDomeBlueStar::exeTryStartBind() {
     Vec3f resultPoint;
     resultPoint.lerp(mCaptureActor->mPosition, *MR::getPlayerCenterPos(), MR::calcNerveRate(this, ::cTryStartBindFrame));
     mCaptureActor->setPosAll(resultPoint);
-    mCaptureRibbon->lengthen(mPosition, resultPoint);
+    mCaptureRibbon->setLine(mPosition, resultPoint);
 
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_PULL", MR::calcDistanceToPlayer(this));
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
@@ -394,7 +394,7 @@ void AstroDomeBlueStar::exeBindTraction() {
 
     Vec3f trans2;
     mCaptureActor->mHostMtx.getTrans(trans2);
-    mCaptureRibbon->shorten(mPosition, trans2);
+    mCaptureRibbon->setLine(mPosition, trans2);
 
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_PULL", MR::calcDistanceToPlayer(this));
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
