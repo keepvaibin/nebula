@@ -21,6 +21,16 @@
 
 #include <nebula_math.h>
 
+namespace {
+    // The press animation starts after this many steps, and the switch turns on when it ends.
+    const s32 cSwitchDownSteps = 6;
+    // Stepping on gives the top this push down.
+    const f32 cStepOnVelocity = -10.0f;
+    const s32 cTimerTickSteps = 60;
+    // SandClockGalaxy's down switch ticks as if 180 steps further on.
+    const s32 cSandClockTimerLead = 180;
+};  // namespace
+
 namespace NrvDesertLandMoveSwitch {
     NEW_NERVE(HostTypeWait, DesertLandMoveSwitch, Wait);
     NEW_NERVE(HostTypeSwitchDown, DesertLandMoveSwitch, SwitchDown);
@@ -28,39 +38,42 @@ namespace NrvDesertLandMoveSwitch {
     NEW_NERVE(HostTypeReturn, DesertLandMoveSwitch, Return);
 };  // namespace NrvDesertLandMoveSwitch
 
-DesertLandMoveSwitch::DesertLandMoveSwitch(const char* pName) : LiveActor(pName) {
-    mCollisionParts = 0;
-    mSpringValue = new SpringValue();
-    mMapObjConnector = new MapObjConnector(this);
-    mIsHipDropped = 0;
-    mWasOnPlayer = 0;
-    mIsOnPlayer = 0;
-    mTimer = 0;
-    mObjName = 0;
+// A sand-land hip-drop switch whose top ("Move") springs when stepped on; it turns switch A on, for arg 0 steps when
+// arg 0 is set (with a countdown), else until something turns A off. Arg 1 set starts it on.
+DesertLandMoveSwitch::DesertLandMoveSwitch(const char* pName)
+    : LiveActor(pName), mCollisionParts(nullptr), mSpringValue(new SpringValue()), mMapObjConnector(new MapObjConnector(this)), mIsHipDropped(false),
+      mWasOnPlayer(false), mIsOnPlayer(false), mTimer(0), mObjName(nullptr), mTimerLead(0) {
     mSpringValue->setParam(0.0f, 0.0f, 0.35f, 0.75f, 0.0f);
 }
 
 void DesertLandMoveSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mTimer);
-    s32 stack_C = -1;
-    MR::getPlacementArg1NoInit(rIter, &stack_C);
+    s32 startOn = -1;
+    MR::getPlacementArg1NoInit(rIter, &startOn);
     initModelAndCollision(rIter);
     MR::connectToSceneMapObj(this);
-    if (stack_C == -1) {
+
+    if (startOn == -1) {
         initNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeWait));
     } else {
         MR::startBck(this, "On");
         MR::setAllAnimFrameAtEnd(this, "On");
         initNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeOn));
     }
-    f32 stack_8 = -1.0f;
-    MR::calcModelBoundingRadius(&stack_8, this);
-    MR::setClippingTypeSphere(this, stack_8);
-    MR::setGroupClipping(this, rIter, 0x10);
-    initSound(4, 0);
+
+    f32 radius = -1.0f;
+    MR::calcModelBoundingRadius(&radius, this);
+    MR::setClippingTypeSphere(this, radius);
+    MR::setGroupClipping(this, rIter, 16);
+    initSound(4, false);
     MR::needStageSwitchWriteA(this, rIter);
     MR::tryRegisterDemoCast(this, rIter);
+
+    if (MR::isEqualString(mObjName, "DesertLandDownSwitch") && MR::isEqualStageName("SandClockGalaxy")) {
+        mTimerLead = cSandClockTimerLead;
+    }
+
     makeActorAppeared();
 }
 
@@ -68,27 +81,31 @@ void DesertLandMoveSwitch::initAfterPlacement() {
     mMapObjConnector->attachToUnder();
 }
 
+// The top's collision follows the Move joint, raised along up by the spring.
 void DesertLandMoveSwitch::calcAnim() {
     LiveActor::calcAnim();
-    MtxPtr mtx = MR::getJointMtx(this, "Move");
-    Pos3f mtx2;
-    mtx2.setInline(mtx);
-    f32 val = mSpringValue->mSpringValue;
-    if (!MR::isNearZero(val)) {
+    MtxPtr pMoveJoint = MR::getJointMtx(this, "Move");
+    Pos3f moveMtx;
+    moveMtx.setInline(pMoveJoint);
+    f32 springValue = mSpringValue->mSpringValue;
+
+    if (!MR::isNearZero(springValue)) {
         Vec3f pos, up;
-        mtx2.getTrans(pos);
+        moveMtx.getTrans(pos);
         MR::calcUpVec(&up, this);
-        pos += up * val;
-        mtx2.setTrans(pos);
-        NebulaMtxCopy(mtx2, mtx);
+        pos += up * springValue;
+        moveMtx.setTrans(pos);
+        NebulaMtxCopy(moveMtx, pMoveJoint);
     }
-    mCollisionParts->setMtx(mtx2);
+
+    mCollisionParts->setMtx(moveMtx);
 }
 
+// The flags hold for the frame they were received in.
 void DesertLandMoveSwitch::control() {
-    mIsHipDropped = 0;
+    mIsHipDropped = false;
     mWasOnPlayer = mIsOnPlayer;
-    mIsOnPlayer = 0;
+    mIsOnPlayer = false;
 }
 
 void DesertLandMoveSwitch::calcAndSetBaseMtx() {
@@ -98,17 +115,20 @@ void DesertLandMoveSwitch::calcAndSetBaseMtx() {
 
 bool DesertLandMoveSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerHipDropFloor(msg) && !mIsHipDropped) {
-        mIsHipDropped = 1;
+        mIsHipDropped = true;
         return true;
     }
+
     return false;
 }
 
+// Taken the frame the player steps on.
 bool DesertLandMoveSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (msg == 0xB4) {
-        mIsOnPlayer = 1;
-        return mWasOnPlayer == 0;
+    if (msg == ACTMES_FLOOR_TOUCH) {
+        mIsOnPlayer = true;
+        return !mWasOnPlayer;
     }
+
     return false;
 }
 
@@ -116,135 +136,144 @@ void DesertLandMoveSwitch::initModelAndCollision(const TableIter& rIter) {
     const char* pObjName = "";
     MR::getObjectName(&pObjName, rIter);
     mObjName = pObjName;
-    initModelManagerWithAnm(pObjName, 0, 0);
+    initModelManagerWithAnm(pObjName, nullptr, false);
     initHitSensor(2);
-    HitSensor* sensorBody = MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    HitSensor* sensorMove = MR::addHitSensorMapObj(this, "move", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initCollisionParts(this, pObjName, sensorBody, 0);
-    mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", sensorMove, MR::CollisionScaleType_Unk2);
+    HitSensor* pBodySensor = MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    HitSensor* pMoveSensor = MR::addHitSensorMapObj(this, "move", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initCollisionParts(this, pObjName, pBodySensor, nullptr);
+    mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", pMoveSensor, MR::CollisionScaleType_Unk2);
     MR::validateCollisionParts(mCollisionParts);
 }
 
 bool DesertLandMoveSwitch::tryOn() {
-    if (MR::isGreaterStep(this, 6) && MR::isBckStopped(this)) {
+    if (MR::isGreaterStep(this, cSwitchDownSteps) && MR::isBckStopped(this)) {
         MR::startSound(this, "SE_OJ_HIPDROP_SWITCH_ON");
         MR::shakeCameraNormal();
         setNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeOn));
         return true;
     }
+
     return false;
 }
 
 bool DesertLandMoveSwitch::trySwitchDown() {
-    if (!mIsHipDropped)
+    if (!mIsHipDropped) {
         return false;
+    }
 
     setNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeSwitchDown));
     return true;
 }
 
 bool DesertLandMoveSwitch::tryConnect() {
-    if (mMapObjConnector->mParts != 0)
+    if (mMapObjConnector->mParts != nullptr) {
         return true;
+    }
 
     return mMapObjConnector->attachToUnder();
 }
 
+// Ticks on whole seconds before the end (tickStep counts from the first whole second), faster in the last ten seconds
+// and the last two, and rings at the end; quiet while the player is dead or a star is being collected.
 void DesertLandMoveSwitch::updateTimerSE() {
-    if (!MR::isPlayerDead() && !MR::isPowerStarGetDemoActive()) {
-        s32 l = mTimer % 60;
-        s32 step = getNerveStep();
-        s32 lf = step - l;
-        if (l != 0) {
-            lf += 60;
-        }
-        s32 step2 = getNerveStep();
-        if (MR::isEqualString(mObjName, "DesertLandDownSwitch") && MR::isEqualStageName("SandClockGalaxy")) {
-            lf += 180;
-            step2 += 180;
-        }
-        if (lf >= 60) {
-            s32 s = mTimer;
-            if (lf <= s) {
-                if (step2 == s) {
-                    MR::startSystemSE("SE_SY_TIMER_A_0");
-                } else {
-                    if (!(lf % 60)) {
-                        if (lf < s - 600)
-                            MR::startSystemSE("SE_SY_TIMER_A_2");
-                        else if (lf < s - 120)
-                            MR::startSystemSE("SE_SY_TIMER_A_1");
-                        else if (lf < s)
-                            MR::startSystemSE("SE_SY_TIMER_A_QUASI_0");
-                    }
-                }
-            }
+    if (MR::isPlayerDead() || MR::isPowerStarGetDemoActive()) {
+        return;
+    }
+
+    s32 secondPhase = mTimer % cTimerTickSteps;
+    s32 tickStep = getNerveStep() - secondPhase;
+
+    if (secondPhase != 0) {
+        tickStep += cTimerTickSteps;
+    }
+
+    s32 step = getNerveStep();
+    tickStep += mTimerLead;
+    step += mTimerLead;
+
+    if (tickStep < cTimerTickSteps || tickStep > mTimer) {
+        return;
+    }
+
+    if (step == mTimer) {
+        MR::startSystemSE("SE_SY_TIMER_A_0");
+    } else if (tickStep % cTimerTickSteps == 0) {
+        if (tickStep < mTimer - 600) {
+            MR::startSystemSE("SE_SY_TIMER_A_2");
+        } else if (tickStep < mTimer - 120) {
+            MR::startSystemSE("SE_SY_TIMER_A_1");
+        } else if (tickStep < mTimer) {
+            MR::startSystemSE("SE_SY_TIMER_A_QUASI_0");
         }
     }
+}
+
+// Returns true when a hip drop starts the press (the spring then stops).
+bool DesertLandMoveSwitch::updateSpring() {
+    if (!mWasOnPlayer && mIsOnPlayer) {
+        mSpringValue->mVelocity += cStepOnVelocity;
+    }
+
+    mSpringValue->update();
+
+    if (trySwitchDown()) {
+        mSpringValue->reset();
+        return true;
+    }
+
+    return false;
 }
 
 void DesertLandMoveSwitch::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Wait");
-        mIsHipDropped = 0;
+        mIsHipDropped = false;
         mSpringValue->reset();
     }
 
     tryConnect();
-    if (!mWasOnPlayer && mIsOnPlayer) {
-        mSpringValue->mVelocity += -10.0f;
-    }
-
-    mSpringValue->update();
-    if (trySwitchDown()) {
-        mSpringValue->reset();
-    }
+    updateSpring();
 }
 
 void DesertLandMoveSwitch::exeSwitchDown() {
-    if (MR::isFirstStep(this))
+    if (MR::isFirstStep(this)) {
         MR::invalidateClipping(this);
+    }
 
-    if (MR::isStep(this, 6))
+    if (MR::isStep(this, cSwitchDownSteps)) {
         MR::startBck(this, "On");
+    }
 
-    if (tryOn())
-        return;
+    tryOn();
 }
 
 void DesertLandMoveSwitch::exeOn() {
-    if (MR::isFirstStep(this))
+    if (MR::isFirstStep(this)) {
         MR::onSwitchA(this);
+    }
+
     tryConnect();
+
     if (mTimer > 0) {
         updateTimerSE();
-        if (MR::isStep(this, mTimer))
+
+        if (MR::isStep(this, mTimer)) {
             setNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeReturn));
-    } else if (!MR::isOnSwitchA(this))
+        }
+    } else if (!MR::isOnSwitchA(this)) {
         setNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeReturn));
+    }
 }
 
 void DesertLandMoveSwitch::exeReturn() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Return");
         MR::offSwitchA(this);
-        mIsHipDropped = 0;
+        mIsHipDropped = false;
         mSpringValue->reset();
     }
 
-    if (!mWasOnPlayer && mIsOnPlayer)
-        mSpringValue->mVelocity += -10.0f;
-
-    mSpringValue->update();
-
-    if (trySwitchDown())
-        mSpringValue->reset();
-    else if (MR::isBckStopped(this)) {
+    if (!updateSpring() && MR::isBckStopped(this)) {
         setNerve(GET_NERVE(DesertLandMoveSwitch, HostTypeWait));
     }
-}
-
-void SpringValue::reset() {
-    mSpringValue = mRestValue;
-    mVelocity = 0.0f;
 }
