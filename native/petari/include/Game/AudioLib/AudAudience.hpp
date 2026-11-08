@@ -5,7 +5,7 @@
 #include "Game/Sound/Sound.hpp"
 #include "Game/Sound/SoundParams.hpp"
 #include "Game/Sound/SoundAudibleParam.hpp"
-#include "Game/Sound/SoundTableInfo.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundAudience3D.hpp"
@@ -253,10 +253,7 @@ public:
             Audience::calcDeltaPriority_(channel->mRelPos.mDist, false, 1);
         }
 
-        SoundTableInfo* info = SoundTableInfo::getInstance();
-        if (info != nullptr) {
-            audible->mAudibleParam = SoundAudibleParam(info->getAudibleSw(soundID), -1);
-        }
+        audible->mAudibleParam = SoundAudibleParam(StdSoundInfo::getInstance()->getAudibleSw(soundID), -1);
 
         return audible;
     }

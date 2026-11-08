@@ -19,14 +19,12 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SeqSource.hpp"
 #include "Game/Sound/SoundStarter.hpp"
-#include "Game/Sound/StreamSource.hpp"
 #include "Game/Sound/PlayerLink.hpp"
 #include "Game/Sound/SoundParams.hpp"
 #include "Game/Sound/SoundArchive.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include "Game/Sound/SoundManager.hpp"
 #include "Game/Sound/SoundSystem.hpp"
-#include "Game/Sound/StdSoundInfo.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -84,12 +82,8 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFo
     return system;
 }
 
-static StdSoundInfo* newSoundInfo(SoundArchive* pAudioData) {
-    return new (pAudioData->getHeap(), 0) AudSoundInfo();
-}
-
 AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
-    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
+    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
@@ -105,16 +99,11 @@ AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, Ass
 
     setAudience(&mAudience);
 
-
-    mSoundInfo = nullptr;
-    SoundTable* soundTable = mSectionHeap->getSoundTable();
-    if (soundTable != nullptr) {
-        mSoundInfo = newSoundInfo(mSectionHeap);
+    // Every sound's start reads the table.
+    if (mSectionHeap->getSoundTable() == nullptr) {
+        NEBULA_PANIC("the sound archive has no sound table");
     }
-
-    if (mSoundInfo != nullptr) {
-        mStreamMgr.setStreamDataMgr(mSoundInfo);
-    }
+    new (mSectionHeap->getHeap(), 0) AudSoundInfo();
 
     initCategoryArrangement();
     initVolumeSetting();

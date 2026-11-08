@@ -11,10 +11,6 @@ void AudSeStrategy::calc(EffectSound* pSe) {
     SoundID soundID = pSe->mSoundID;
 
     AudSoundInfo* info = AudWrap::getSoundInfo();
-    if (info == nullptr) {
-        return;
-    }
-
     if (info->isUseFxMix(soundID)) {
         pSe->getAuxiliary().moveFxMix(AudWrap::getSystem()->mAudEffector->mFxSend, 0);
     }

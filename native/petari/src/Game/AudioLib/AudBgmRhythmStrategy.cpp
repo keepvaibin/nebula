@@ -8,10 +8,6 @@
 
 bool AudBgmRhythmStrategy::set(AudBgm* pBgm, s32 bgmIndex) {
     AudSoundInfo* info = AudWrap::getSoundInfo();
-    if (info == nullptr) {
-        return false;
-    }
-
     SoundHandle* handle = pBgm->getRhythmHandle();
     if (handle == nullptr) {
         return false;
@@ -47,10 +43,6 @@ bool AudBgmRhythmStrategy::setDominant() {
     }
 
     AudSoundInfo* info = AudWrap::getSoundInfo();
-    if (info == nullptr) {
-        return false;
-    }
-
     SoundHandle* handle = mBgm->getRhythmHandle();
     if (handle == nullptr) {
         return false;

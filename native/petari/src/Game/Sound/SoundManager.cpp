@@ -1,22 +1,12 @@
 #include "Game/Sound/SoundManager.hpp"
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/Sound.hpp"
-#include "Game/Sound/SoundInfo.hpp"
 
 SoundManager::SoundManager() : SoundStarter(true), mSeMgr(true), mSeqMgr(true), mStreamMgr(true) {
 }
 
 bool SoundManager::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* pPos) {
-    SoundInfo* info = SoundGlobal< SoundInfo >::sInstance;
-
-    int sectionID;
-    if (info != nullptr) {
-        sectionID = info->getSoundType(soundID);
-    } else {
-        sectionID = soundID.getSectionID();
-    }
-
-    switch (sectionID) {
+    switch (soundID.getSectionID()) {
     case SoundID::SOUND_SE:
         return mSeMgr.startSound(soundID, pHandle, pPos);
     case SoundID::SOUND_SEQ:
