@@ -621,7 +621,7 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
     }
     // A mode evaluates only render widths inside its range: the requested one, else the next higher-quality one that holds
     // this width.
-    const unsigned mode = std::min(quality, 4u);
+    const unsigned mode = quality == 5u ? 1u : std::min(quality, 4u);  // no ultra quality mode: quality
     for (unsigned candidate = mode + 1u; candidate-- > 0u;) {
         sl::DLSSOptions options{};
         options.mode = streamline_common::dlss_mode(candidate);

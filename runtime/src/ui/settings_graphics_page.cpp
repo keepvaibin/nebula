@@ -60,24 +60,32 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     const bool rt_offered = state.ray_tracing_offered;
     const bool rt_on = rt_offered && render.ray_tracing_enabled;
     {
-        static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        // By the config's numbers (render_config.h temporal_quality: 5 ultra quality came last), shown sharpest first.
+        static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE", "ULTRA QUALITY"};
+        static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE", "ULTRA QUALITY"};
+        static constexpr unsigned kOrder[] = {0u, 5u, 1u, 2u, 3u, 4u};
+        static constexpr unsigned kDlssOrder[] = {0u, 1u, 2u, 3u, 4u};  // DLSS has no ultra quality mode
         const bool temporal = render.upscaler >= 2u;
-        const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
         const unsigned upscaler = std::min(render.upscaler, 5u);
+        unsigned quality = temporal ? std::min(render.temporal_quality, 5u) : std::min(render.spatial_quality, 5u);
+        if (upscaler == 3u && quality == 5u) quality = 1u;  // as DLSS runs it
         std::snprintf(text, sizeof(text), "%s (%u%%)",
-                      upscaler == 3u ? kDlss[quality] : upscaler >= 2u ? kTemporal[quality] : kSpatial[quality],
+                      upscaler == 3u && quality == 0u ? "DLAA" : temporal ? kTemporal[quality] : kSpatial[quality],
                       render_percent);
         rows.push_back({upscaler == 5u ? "SGSR 2 MODE" : upscaler == 4u ? "XESS MODE" : upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
                         [&host](RenderConfig& draft, int delta) {
-                            if (draft.upscaler >= 2u) {
-                                draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
-                            } else {
-                                draft.spatial_quality = settings_step(std::min(draft.spatial_quality, 4u), 5u, delta);
+                            const bool dlss = draft.upscaler == 3u;
+                            const unsigned* order = dlss ? kDlssOrder : kOrder;
+                            const unsigned count = dlss ? 5u : 6u;
+                            unsigned& value = draft.upscaler >= 2u ? draft.temporal_quality : draft.spatial_quality;
+                            const unsigned current = dlss && value == 5u ? 1u : std::min(value, 5u);
+                            unsigned at = 0u;
+                            for (unsigned i = 0; i < count; ++i) {
+                                if (order[i] == current) at = i;
                             }
+                            value = order[settings_step(at, count, delta)];
                         },
-                        "THE RENDER RESOLUTION BELOW THE INTERNAL ONE. QUALITY RENDERS THE MOST PIXELS"});
+                        "HIGHER RENDERS MORE PIXELS AND LOOKS SHARPER. LOWER RUNS FASTER"});
     }
     std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
     rows.push_back({"SHARPENING", text,
