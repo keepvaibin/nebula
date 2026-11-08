@@ -83,13 +83,7 @@ void DinoPackunVs2::exeCryDemo() {
 void DinoPackunVs2::exeBattleLv1() {
     if (MR::isFirstStep(this)) {
         mParent->appearStarPiece(8);
-        mBattleLv1->mHasFireTail = 0;
-        mBattleLv1->mHasFireMouth = 0;
-        mBattleLv1->mIsCrazyOnAwake = 0;
-        mBattleLv1->mIsAngry = 0;
-        mBattleLv1->mIsShortWalk = 0;
-        mBattleLv1->setMiddleBattle();
-        mBattleLv1->mIsFireOnAwake = 0;
+        mBattleLv1->setBattleLevel(1);
         mCurrentAction = mBattleLv1;
     }
 
@@ -110,13 +104,7 @@ void DinoPackunVs2::exeAngryDemo() {
 void DinoPackunVs2::exeBattleLv2() {
     if (MR::isFirstStep(this)) {
         mParent->appearStarPiece(8);
-        mBattleLv1->mHasFireTail = 1;
-        mBattleLv1->mHasFireMouth = 0;
-        mBattleLv1->mIsCrazyOnAwake = 0;
-        mBattleLv1->mIsAngry = 1;
-        mBattleLv1->mIsShortWalk = 1;
-        mBattleLv1->setMiddleBattle();
-        mBattleLv1->mIsFireOnAwake = 1;
+        mBattleLv1->setBattleLevel(2);
         mCurrentAction = mBattleLv1;
     }
 
@@ -126,13 +114,7 @@ void DinoPackunVs2::exeBattleLv2() {
 void DinoPackunVs2::exeBattleLv3() {
     if (MR::isFirstStep(this)) {
         mParent->appearStarPiece(8);
-        mBattleLv1->mHasFireTail = 1;
-        mBattleLv1->mHasFireMouth = 1;
-        mBattleLv1->mIsCrazyOnAwake = 1;
-        mBattleLv1->mIsAngry = 1;
-        mBattleLv1->mIsShortWalk = 1;
-        mBattleLv1->setLastBattle();
-        mBattleLv1->mIsFireOnAwake = 0;
+        mBattleLv1->setBattleLevel(3);
         mCurrentAction = mBattleLv1;
     }
 
