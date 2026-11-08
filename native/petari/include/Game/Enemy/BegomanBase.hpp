@@ -21,6 +21,13 @@ struct BegomanSound {
 
 class BegomanBase : public LiveActor {
 public:
+    enum Kind {
+        Kind_Boss,
+        Kind_Spike,
+        Kind_Spring,
+        Kind_Baby,
+    };
+
     BegomanBase(const char* pName);
 
     virtual void initAfterPlacement();
@@ -28,7 +35,6 @@ public:
     virtual void kill();
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    // 0 is the boss.
     virtual u32 getKind() const = 0;
     // Returns true when the contact has lasted long enough to knock the begoman away.
     virtual bool onTouchElectric(const Vec3f& rRailPos, const Vec3f& rRailDir);

@@ -19,7 +19,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     virtual u32 getKind() const {
-        return 3;
+        return Kind_Baby;
     }
 
     virtual bool onTouchElectric(const Vec3f&, const Vec3f&);

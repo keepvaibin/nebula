@@ -1,4 +1,3 @@
-
 #include <nebula_game_api.h>
 #include "Game/Enemy/BegomanSpring.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
@@ -52,63 +51,68 @@ namespace NrvBegomanSpring {
 };  // namespace NrvBegomanSpring
 
 namespace {
-    const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam hSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
-    const MR::ActorMoveParam hPursueParam = {0.4f, 3.0f, 0.97f, 3.0f};
-    const MR::ActorMoveParam hTurnParam = {0.4f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam hStopParam = {0.0f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam hHitReactionParam = {0.0f, 3.0f, 0.95f, 1.0f};
-    const MR::ActorMoveParam hTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
-    // hTurnStartDegree
-    // hTurnEndDegree
-    // hIsFaceToPlayerDegree
-    // sDiscoverRange
-    // sPursueRange
-    // sReboundRailRatio
-    const f32 sReboundEnemyAddVel = 8.0f;
-    const f32 sPreventSwingbyDamp = 0.7f;
-    const f32 sPreventSlopOverDamp = 0.2f;
-    const f32 sCommonAddRotate = 0.5f;
-    const f32 sReboundPlayerAddVel = 2.0f;
-    const f32 sCameraLimitLength = 2500;
-    const f32 sCoinTransY = 80.0f;
-    // sCheckBodySize
-    const f32 sWaitRotate = 0.15f;
-    const f32 sSignAttackRotate = 0.5f;
-    // sPursueLimitTime
-    // sAnimFrame
-    // sDashFrame
-    // sDashVelocity
-    const f32 sPursueRotate = 0.5f;
-    // sTurnTime
-    const f32 sTurnRotate = 0.4f;
-    // sBrakeTime
-    const f32 sBrakeRotate = 0.2f;
-    const f32 sProvokeRotate = 0.3f;
-    const s32 sShakeTime = 180;
-    const f32 sShakeRotate = 0.17f;
-    const s32 sTrampleTime = 180;
-    const f32 sTrampleRotate = 0.25f;
-    const f32 sHitReactionRotate = 0.25f;
-    const s32 sStopSceneTime = 2;
-    const s32 sBlowFrame = 20;
-    const f32 sBlowVel = 40.0f;
-    const f32 sBlowVerticalVel = 10.0f;
-    const s32 sDeathStopSceneTime = 5;
-    const s32 sElectricDeathTime = 20;
-    const f32 sBabyLaunchVelH = 10.0f;
-    const f32 sBabyLaunchVelV = 50.0f;
-    const f32 sHopInitRotate = 0.5f;
-    const f32 sHopRotateBrakeTime = 44.0f;
-    const s32 hHopStarPieceReflectTime = 40;
-    const f32 sIsInWaterVel = 10.0f;
-    const s32 sIsInWaterTime = 60;
-    const f32 hKeepDistFar = 800.0f;
-    const f32 hKeepDistNear = 600.0f;
-};  // namespace
+    const MR::ActorMoveParam cWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam cSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
+    const MR::ActorMoveParam cPursueParam = {0.4f, 3.0f, 0.97f, 3.0f};
+    const MR::ActorMoveParam cTurnParam = {0.4f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam cStopParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam cHitReactionParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam cTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
+
+    const f32 cBinderRadius = 100.0f;
+    const f32 cBodyRadius = 70.0f;
+    const f32 cBodyHeight = 140.0f;
+    // Trample sensor radius, times the placement's Y scale.
+    const f32 cTrampleSensorRadius = 130.0f;
+    const f32 cReboundEnemyAddVel = 8.0f;
+    const f32 cPreventSwingbyDamp = 0.7f;
+    const f32 cPreventSlopeOverDamp = 0.2f;
+    const f32 cReboundPlayerAddVel = 2.0f;
+    // The trample camera ends once the player is this far from where it started.
+    const f32 cCameraLimitLength = 2500.0f;
+    const f32 cCoinTransY = 80.0f;
+    const s32 cCoinGenerateNum = 1;
+    // Spin speed: each state's rate, plus cCommonAddRotate.
+    const f32 cCommonAddRotate = 0.5f;
+    const f32 cNoCalcWaitRotate = 0.5f;
+    const f32 cWaitRotate = 0.15f;
+    const f32 cSignAttackRotate = 0.5f;
+    const f32 cPursueRotate = 0.5f;
+    const f32 cTurnRotate = 0.4f;
+    const f32 cBrakeRotate = 0.2f;
+    const f32 cProvokeRotate = 0.3f;
+    const f32 cShakeRotate = 0.17f;
+    const f32 cTrampleRotate = 0.25f;
+    const f32 cHitReactionRotate = 0.25f;
+    // Step back, return, tired and keep distance.
+    const f32 cSlowRotate = 0.2f;
+    const s32 cShakeTime = 180;
+    const s32 cTrampleTime = 180;
+    const s32 cStopSceneTime = 2;
+    const s32 cBlowFrame = 20;
+    const f32 cBlowVel = 40.0f;
+    const f32 cBlowVerticalVel = 10.0f;
+    const f32 cExplosionBlowVel = 35.0f;
+    const f32 cExplosionBlowVerticalVel = 15.0f;
+    const s32 cDeathStopSceneTime = 5;
+    const s32 cElectricDeathTime = 20;
+    const f32 cBabyLaunchVelH = 10.0f;
+    const f32 cBabyLaunchVelV = 50.0f;
+    // A hidden one hops out once the player's center is this close.
+    const f32 cHideAppearDistance = 1000.0f;
+    const f32 cHopInitRotate = 0.5f;
+    const f32 cHopRotateBrakeTime = 44.0f;
+    // Star pieces bounce off while hidden and for this many steps of the hop.
+    const s32 cHopStarPieceReflectTime = 40;
+    const f32 cInWaterVel = 10.0f;
+    const s32 cInWaterTime = 60;
+    const f32 cKeepDistFar = 800.0f;
+    const f32 cKeepDistNear = 600.0f;
+}  // namespace
 
 BegomanSpring::BegomanSpring(const char* pName)
-    : BegomanBase(pName), mEventCamera(), mHead(), mCameraStartPos(0, 0, 0), mIsCameraActive(), mCameraInfo(), mType(), mBaby(), mHidePos(0, 0, 0) {
+    : BegomanBase(pName), mEventCamera(nullptr), mHead(nullptr), mCameraStartPos(0.0f, 0.0f, 0.0f), mIsCameraActive(false), mCameraInfo(nullptr),
+      mIsHideType(false), mBaby(nullptr), mHidePos(0.0f, 0.0f, 0.0f) {
     mHeadMatrix.identity();
     mWaterColumnMatrix.identity();
 }
@@ -116,33 +120,29 @@ BegomanSpring::BegomanSpring(const char* pName)
 void BegomanSpring::init(const TableIter& rIter) {
     initCore(rIter, "BegomanSpring", false);
     mHidePos.set(mPosition);
-    const char* pObjectName = "\0";
+    const char* pObjectName = "";
     initUseSwitchB(rIter, MR::Functor(this, &BegomanSpring::kill));
     if (MR::isValidInfo(rIter)) {
         MR::getObjectName(&pObjectName, rIter);
         initEventCameras(rIter);
     }
 
-    if (MR::isEqualString(pObjectName, "BegomanSpringHide")) {
+    // The hide type waits buried at its placement and carries a baby it launches when shaken.
+    mIsHideType = MR::isEqualString(pObjectName, "BegomanSpringHide");
+    if (mIsHideType) {
         setName("隠れバネベーゴマン");
-        mType = 1;
         mBaby = new BegomanBaby("隠れバネベーゴマンベビー");
         mBaby->mPosition.set(mPosition);
         mBaby->initWithoutIter();
         mBaby->makeActorDead();
-    } else {
-        mType = 0;
     }
 
-    MR::declareCoin(this, 1);
-    initBinder(100.0f, 100.0f, 0);
-    switch (mType) {
-    case 0:
-        initNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait));
-        break;
-    case 1:
+    MR::declareCoin(this, ::cCoinGenerateNum);
+    initBinder(::cBinderRadius, ::cBinderRadius, 0);
+    if (mIsHideType) {
         initNerve(GET_NERVE(BegomanSpring, HostTypeNrvHide));
-        break;
+    } else {
+        initNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait));
     }
 
     initEffectAndStarPointerBind();
@@ -150,11 +150,11 @@ void BegomanSpring::init(const TableIter& rIter) {
     mHead = new BegomanSpringHead(this, mHeadMatrix);
     mHead->mHostScale = &mAnimScale;
     mHead->initWithoutIter();
-    initSensor(1, 70.0f, 140.0f, "Center");
-    MR::addHitSensorMtx(this, "trample", ATYPE_PLAYER_AUTO_JUMP, 8, 130.0f * mScale.y, MR::getJointMtx(mHead, "SpringJoint5"),
+    initSensor(1, ::cBodyRadius, ::cBodyHeight, "Center");
+    MR::addHitSensorMtx(this, "trample", ATYPE_PLAYER_AUTO_JUMP, 8, ::cTrampleSensorRadius * mScale.y, MR::getJointMtx(mHead, "SpringJoint5"),
                         Vec3f(0.0f, 0.0f, 0.0f));
     initSound(8, false);
-    initShadow(70.0f, "Locator1");
+    initShadow(::cBodyRadius, "Locator1");
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoCast(mHead, rIter);
     }
@@ -216,22 +216,20 @@ void BegomanSpring::control() {
 
     updateCamera();
     getSensor("check")->invalidate();
-    if (mType == 1) {
-        f32 radius = getSensor("body")->mRadius;
-        if (MR::isJudgedToClipFrustum(mPosition, radius)) {
-            f32 hideRadius = getSensor("body")->mRadius;
-            if (MR::isJudgedToClipFrustum(mHidePos, hideRadius)) {
-                mPosition.set(mHidePos);
-                setNerve(GET_NERVE(BegomanSpring, HostTypeNrvHide));
-                return;
-            }
+
+    // A hide type out of view, with its hiding place also out of view, goes back into hiding.
+    if (mIsHideType) {
+        const f32 radius = getSensor("body")->mRadius;
+        if (MR::isJudgedToClipFrustum(mPosition, radius) && MR::isJudgedToClipFrustum(mHidePos, radius)) {
+            mPosition.set(mHidePos);
+            setNerve(GET_NERVE(BegomanSpring, HostTypeNrvHide));
+            return;
         }
     }
 
-    if (!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvInWater)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvNoCalcWait))) {
-        if (isInWaterAndSetWaterNerve(GET_NERVE(BegomanSpring, HostTypeNrvInWater), &mWaterColumnMatrix)) {
-            return;
-        }
+    if (!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvInWater)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvNoCalcWait)) &&
+        isInWaterAndSetWaterNerve(GET_NERVE(BegomanSpring, HostTypeNrvInWater), &mWaterColumnMatrix)) {
+        return;
     }
 
     if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
@@ -240,29 +238,31 @@ void BegomanSpring::control() {
         return;
     }
 
-    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f))) {
-        kill();
-        return;
-    }
-
-    if (MR::isPressedRoofAndGround(this)) {
+    if (MR::isInDeath(this, Vec3f(0.0f, 0.0f, 0.0f)) || MR::isPressedRoofAndGround(this)) {
         kill();
         return;
     }
 
     if (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow))) {
-        preventSwingby(::sPreventSwingbyDamp);
-        preventSlopeBlow(::sPreventSlopOverDamp);
+        preventSwingby(::cPreventSwingbyDamp);
+        preventSlopeBlow(::cPreventSlopeOverDamp);
     }
 
-    if ((!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvNoCalcWait)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait)) &&
-         !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvSignAttack)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvPursue)) &&
-         !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvTurn)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBrake)) &&
-         !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvReturn)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvProvoke)) &&
-         !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvKeepDistance))) ||
-        !tryAndSetStarPointerBind(GET_NERVE(BegomanSpring, HostTypeNrvBindStarPointer))) {
+    if (!isNrvStarPointerBindable() || !tryAndSetStarPointerBind(GET_NERVE(BegomanSpring, HostTypeNrvBindStarPointer))) {
         BegomanBase::control();
     }
+}
+
+bool BegomanSpring::isNrvStarPointerBindable() const {
+    return isNerve(GET_NERVE(BegomanSpring, HostTypeNrvNoCalcWait)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait)) ||
+           isNerve(GET_NERVE(BegomanSpring, HostTypeNrvSignAttack)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvPursue)) ||
+           isNerve(GET_NERVE(BegomanSpring, HostTypeNrvTurn)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBrake)) ||
+           isNerve(GET_NERVE(BegomanSpring, HostTypeNrvReturn)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvProvoke)) ||
+           isNerve(GET_NERVE(BegomanSpring, HostTypeNrvKeepDistance));
+}
+
+bool BegomanSpring::isNrvBroken() const {
+    return isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvElectricDeath));
 }
 
 bool BegomanSpring::onTouchElectric(const Vec3f& rPos, const Vec3f& rDirection) {
@@ -298,7 +298,7 @@ const Nerve* BegomanSpring::getNerveWait() {
 }
 
 void BegomanSpring::exeNoCalcWait() {
-    exeNoCalcWaitCore(0.5f, GET_NERVE(BegomanSpring, HostTypeNrvWait));
+    exeNoCalcWaitCore(::cNoCalcWaitRotate, GET_NERVE(BegomanSpring, HostTypeNrvWait));
 }
 
 void BegomanSpring::endNoCalcWait() {
@@ -306,9 +306,9 @@ void BegomanSpring::endNoCalcWait() {
 }
 
 void BegomanSpring::exeWait() {
-    updateRotateY(::sWaitRotate, ::sCommonAddRotate);
+    updateRotateY(::cWaitRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_SLOW");
-    exeWaitCore(::hWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvSignAttack), GET_NERVE(BegomanSpring, HostTypeNrvKeepDistance),
+    exeWaitCore(::cWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvSignAttack), GET_NERVE(BegomanSpring, HostTypeNrvKeepDistance),
                 GET_NERVE(BegomanSpring, HostTypeNrvNoCalcWait));
 }
 
@@ -322,9 +322,9 @@ void BegomanSpring::exeSignAttack() {
         MR::startSound(this, "SE_EM_BEGOMAN_PRE_PURSUE");
     }
 
-    updateRotateY(::sSignAttackRotate, ::sCommonAddRotate);
+    updateRotateY(::cSignAttackRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
-    exeSignAttackCore(::hSignAttackParam, GET_NERVE(BegomanSpring, HostTypeNrvPursue));
+    exeSignAttackCore(::cSignAttackParam, GET_NERVE(BegomanSpring, HostTypeNrvPursue));
 }
 
 void BegomanSpring::exePursue() {
@@ -333,9 +333,9 @@ void BegomanSpring::exePursue() {
         MR::startSound(this, "SE_EM_BEGOMAN_PURSUE_START");
     }
 
-    updateRotateY(::sPursueRotate, ::sCommonAddRotate);
+    updateRotateY(::cPursueRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_PURSUE");
-    exePursueCore(::hPursueParam, GET_NERVE(BegomanSpring, HostTypeNrvBrake), GET_NERVE(BegomanSpring, HostTypeNrvTurn), *getSoundNormal(), 1.0f);
+    exePursueCore(::cPursueParam, GET_NERVE(BegomanSpring, HostTypeNrvBrake), GET_NERVE(BegomanSpring, HostTypeNrvTurn), *getSoundNormal(), 1.0f);
 }
 
 void BegomanSpring::endPursue() {
@@ -347,14 +347,14 @@ void BegomanSpring::exeTurn() {
         mHead->tryHopEnd();
     }
 
-    updateRotateY(::sTurnRotate, ::sCommonAddRotate);
+    updateRotateY(::cTurnRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_TURN");
-    exeTurnCore(::hTurnParam, GET_NERVE(BegomanSpring, HostTypeNrvBrake), GET_NERVE(BegomanSpring, HostTypeNrvPursue), false);
+    exeTurnCore(::cTurnParam, GET_NERVE(BegomanSpring, HostTypeNrvBrake), GET_NERVE(BegomanSpring, HostTypeNrvPursue), false);
 }
 
 void BegomanSpring::exeBrake() {
-    updateRotateY(::sBrakeRotate, ::sCommonAddRotate);
+    updateRotateY(::cBrakeRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
     exeBrakeCore(GET_NERVE(BegomanSpring, HostTypeNrvTurn));
@@ -365,19 +365,32 @@ void BegomanSpring::exeStepBack() {
         MR::startBck(this, "electricshock");
     }
 
-    updateRotateY(0.2f, ::sCommonAddRotate);
-    exeStepBackCore(::hWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvWait));
+    updateRotateY(::cSlowRotate, ::cCommonAddRotate);
+    exeStepBackCore(::cWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvWait));
 }
 
 void BegomanSpring::exeReturn() {
-    updateRotateY(0.2f, ::sCommonAddRotate);
+    updateRotateY(::cSlowRotate, ::cCommonAddRotate);
     exeReturnCore(GET_NERVE(BegomanSpring, HostTypeNrvWait));
 }
 
 void BegomanSpring::exeProvoke() {
-    updateRotateY(::sProvokeRotate, ::sCommonAddRotate);
+    updateRotateY(::cProvokeRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
-    exeProvokeCore(::hWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvSignAttack));
+    exeProvokeCore(::cWaitParam, GET_NERVE(BegomanSpring, HostTypeNrvSignAttack));
+}
+
+// Keeps only the vertical part of the velocity while the spring head bounces.
+void BegomanSpring::keepVelocityAlongGravity() {
+    mVelocity.scale(mGravity.dot(mVelocity), mGravity);
+}
+
+// The head's hop-end animation starts so that it finishes on the last step.
+void BegomanSpring::tryHopEndBefore(s32 endStep) {
+    if (MR::isStep(this, endStep - mHead->getHopEndBckFrameMax())) {
+        MR::startBck(this, "HopEnd");
+        mHead->tryHopEnd();
+    }
 }
 
 void BegomanSpring::exeShake() {
@@ -387,31 +400,24 @@ void BegomanSpring::exeShake() {
             mHead->tryHopStart();
         }
 
-        if (mType == 1 && MR::isDead(mBaby)) {
+        if (mIsHideType && MR::isDead(mBaby)) {
             mBaby->mPosition.set(mPosition);
             Vec3f side(mFaceVec);
             side.cross(mGravity, side);
-            Vec3f& rVelocity = mBaby->mVelocity;
-            rVelocity.set(-mGravity * ::sBabyLaunchVelV - side * ::sBabyLaunchVelH);
+            mBaby->mVelocity.set(-mGravity * ::cBabyLaunchVelV - side * ::cBabyLaunchVelH);
             mBaby->appear();
             MR::startSound(this, "SE_EM_BEGOMAN_LAUNCH_BABY");
         }
     }
 
-    updateRotateY(::sShakeRotate, ::sCommonAddRotate);
+    updateRotateY(::cShakeRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SHAKE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hWaitParam);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::cWaitParam);
     reboundWallAndGround(&mFaceVec, false);
+    keepVelocityAlongGravity();
+    tryHopEndBefore(::cShakeTime);
 
-    const Vec3f& rGravity = mGravity;
-    mVelocity.scale(rGravity.dot(mVelocity), rGravity);
-
-    if (MR::isStep(this, ::sShakeTime - mHead->getHopEndBckFrameMax())) {
-        MR::startBck(this, "HopEnd");
-        mHead->tryHopEnd();
-    }
-
-    if (MR::isGreaterStep(this, ::sShakeTime)) {
+    if (MR::isGreaterStep(this, ::cShakeTime)) {
         setNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait));
     }
 }
@@ -423,19 +429,13 @@ void BegomanSpring::exeTrample() {
         MR::startSound(this, "SE_EM_BEGOMAN_TRAMPLE");
     }
 
-    updateRotateY(::sTrampleRotate, ::sCommonAddRotate);
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
+    updateRotateY(::cTrampleRotate, ::cCommonAddRotate);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::cStopParam);
     reboundWallAndGround(&mFaceVec, false);
+    keepVelocityAlongGravity();
+    tryHopEndBefore(::cTrampleTime);
 
-    const Vec3f& rGravity = mGravity;
-    mVelocity.scale(rGravity.dot(mVelocity), rGravity);
-
-    if (MR::isStep(this, ::sTrampleTime - mHead->getHopEndBckFrameMax())) {
-        MR::startBck(this, "HopEnd");
-        mHead->tryHopEnd();
-    }
-
-    if (MR::isGreaterStep(this, ::sTrampleTime)) {
+    if (MR::isGreaterStep(this, ::cTrampleTime)) {
         setNerve(GET_NERVE(BegomanSpring, HostTypeNrvSignAttack));
     }
 }
@@ -445,37 +445,31 @@ void BegomanSpring::exeHitReaction() {
         mHead->tryHopEnd();
     }
 
-    updateRotateY(::sHitReactionRotate, ::sCommonAddRotate);
-    exeHitReactionCore(::hHitReactionParam, GET_NERVE(BegomanSpring, HostTypeNrvProvoke));
+    updateRotateY(::cHitReactionRotate, ::cCommonAddRotate);
+    exeHitReactionCore(::cHitReactionParam, GET_NERVE(BegomanSpring, HostTypeNrvProvoke));
 }
 
 void BegomanSpring::exeTired() {
-    if (MR::isFirstStep(this)) {
-    }
-
-    updateRotateY(0.2f, ::sCommonAddRotate);
+    updateRotateY(::cSlowRotate, ::cCommonAddRotate);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_TURN");
-    exeTiredCore(::hTiredParam, GET_NERVE(BegomanSpring, HostTypeNrvWait));
+    exeTiredCore(::cTiredParam, GET_NERVE(BegomanSpring, HostTypeNrvWait));
 }
 
 void BegomanSpring::exeBlow() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_EM_BEGOMAN_ROT_STOP");
         MR::startBck(this, "Damage");
-        MR::stopScene(::sStopSceneTime);
+        MR::stopScene(::cStopSceneTime);
         mHead->tryHopStart();
     }
 
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_ROT_MIDDLE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::cHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
-    if (MR::isStep(this, ::sBlowFrame - mHead->getHopEndBckFrameMax())) {
-        MR::startBck(this, "HopEnd");
-        mHead->tryHopEnd();
-    }
+    tryHopEndBefore(::cBlowFrame);
 
-    if (MR::isGreaterStep(this, ::sBlowFrame) && MR::isOnGround(this)) {
+    if (MR::isGreaterStep(this, ::cBlowFrame) && MR::isOnGround(this)) {
         MR::startBck(this, "Turn");
         setNerve(GET_NERVE(BegomanSpring, HostTypeNrvShake));
     }
@@ -490,8 +484,8 @@ void BegomanSpring::exeElectricDeath() {
         MR::invalidateClipping(this);
     }
 
-    if (MR::isGreaterStep(this, ::sElectricDeathTime)) {
-        MR::stopScene(::sDeathStopSceneTime);
+    if (MR::isGreaterStep(this, ::cElectricDeathTime)) {
+        MR::stopScene(::cDeathStopSceneTime);
         MR::shakeCameraWeak();
         kill();
         generateItem();
@@ -511,10 +505,7 @@ void BegomanSpring::exeHide() {
 
     updateRotateY(0.0f, 1.0f);
     mVelocity.zero();
-    Vec3f toPlayer(*MR::getPlayerPos());
-    toPlayer.sub(mPosition);
-    toPlayer.squared();
-    if (MR::getPlayerCenterPos()->squared(mPosition) < 1000.0f * 1000.0f) {
+    if (MR::getPlayerCenterPos()->squared(mPosition) < ::cHideAppearDistance * ::cHideAppearDistance) {
         MR::onBind(this);
         MR::onCalcGravity(this);
         MR::onCalcShadow(this, nullptr);
@@ -530,10 +521,10 @@ void BegomanSpring::exeHop() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Appear");
         MR::startSound(this, "SE_EM_BEGOMAN_FLYOUT");
-        updateRotateY(::sHopInitRotate, ::sCommonAddRotate);
+        updateRotateY(::cHopInitRotate, ::cCommonAddRotate);
     }
 
-    updateRotateY(0.0f, 1.0f / ::sHopRotateBrakeTime);
+    updateRotateY(0.0f, 1.0f / ::cHopRotateBrakeTime);
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(BegomanSpring, HostTypeNrvWait));
     }
@@ -542,11 +533,11 @@ void BegomanSpring::exeHop() {
 void BegomanSpring::exeInWater() {
     if (MR::isFirstStep(this)) {
         mVelocity.add(mGravity);
-        mVelocity.setLength(::sIsInWaterVel);
+        mVelocity.setLength(::cInWaterVel);
         MR::startSound(this, "SE_EM_FALL_INTO_WATER_S");
     }
 
-    if (MR::isGreaterStep(this, ::sIsInWaterTime)) {
+    if (MR::isGreaterStep(this, ::cInWaterTime)) {
         makeActorDead();
         MR::emitEffect(this, "DeathWater");
         MR::startSound(this, "SE_EM_BEGOMAN_DEAD_IN_WATER");
@@ -554,9 +545,9 @@ void BegomanSpring::exeInWater() {
 }
 
 void BegomanSpring::exeKeepDistance() {
-    updateRotateY(0.2f, ::sCommonAddRotate);
+    updateRotateY(::cSlowRotate, ::cCommonAddRotate);
     exeKeepDistanceCore(GET_NERVE(BegomanSpring, HostTypeNrvWait), GET_NERVE(BegomanSpring, HostTypeNrvSignAttack),
-                        GET_NERVE(BegomanSpring, HostTypeNrvBrake), ::hKeepDistFar, ::hKeepDistNear);
+                        GET_NERVE(BegomanSpring, HostTypeNrvBrake), ::cKeepDistFar, ::cKeepDistNear);
 }
 
 void BegomanSpring::exeBindStarPointer() {
@@ -568,17 +559,17 @@ void BegomanSpring::endBindStarPointer() {
 }
 
 void BegomanSpring::generateItem() {
-    MR::appearCoinPop(this, mPosition - mGravity * ::sCoinTransY, 1);
+    MR::appearCoinPop(this, mPosition - mGravity * ::cCoinTransY, ::cCoinGenerateNum);
 }
 
 void BegomanSpring::startCamera() {
-    if (mEventCamera) {
+    if (mEventCamera != nullptr) {
         mEventCamera->start(0);
     }
 }
 
 void BegomanSpring::updateCamera() {
-    if (!mIsCameraActive || !mEventCamera || mEventCamera->isEnd()) {
+    if (!mIsCameraActive || mEventCamera == nullptr || mEventCamera->isEnd()) {
         return;
     }
 
@@ -587,7 +578,7 @@ void BegomanSpring::updateCamera() {
         mEventCamera->nextForce();
     }
 
-    if (::sCameraLimitLength * ::sCameraLimitLength < mCameraStartPos.squared(*MR::getPlayerCenterPos()) || MR::isOnGroundPlayer() ||
+    if (::cCameraLimitLength * ::cCameraLimitLength < mCameraStartPos.squared(*MR::getPlayerCenterPos()) || MR::isOnGroundPlayer() ||
         MR::isPlayerInRush()) {
         endCamera();
         mIsCameraActive = false;
@@ -595,7 +586,7 @@ void BegomanSpring::updateCamera() {
 }
 
 void BegomanSpring::endCamera() {
-    if (mEventCamera) {
+    if (mEventCamera != nullptr) {
         mEventCamera->endForceSoon();
     }
 }
@@ -615,29 +606,24 @@ void BegomanSpring::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    bool msgResult = MR::sendMsgEnemyAttackFlipRot(pReceiver, pSender);
-
-    if (!msgResult) {
-        msgResult = MR::sendMsgPush(pReceiver, pSender);
+    if (!MR::sendMsgEnemyAttackFlipRot(pReceiver, pSender) && !MR::sendMsgPush(pReceiver, pSender)) {
+        return;
     }
 
-    if (msgResult) {
-        Vec3f dirFromSenderToReceiver(pSender->mPosition);
+    Vec3f away(pSender->mPosition);
+    away -= pReceiver->mPosition;
+    MR::normalizeOrZero(&away);
 
-        dirFromSenderToReceiver -= pReceiver->mPosition;
-        MR::normalizeOrZero(&dirFromSenderToReceiver);
+    if (!MR::isNearZero(away)) {
+        const bool isReflected = reboundPlaneWithEffect(away, 0.0f, 0.0f, "Spark");
+        mVelocity += away * ::cReboundPlayerAddVel;
 
-        if (!MR::isNearZero(dirFromSenderToReceiver)) {
-            bool reflected = reboundPlaneWithEffect(dirFromSenderToReceiver, 0.0f, 0.0f, "Spark");
-            mVelocity += dirFromSenderToReceiver * ::sReboundPlayerAddVel;
-
-            if (reflected) {
-                MR::startSound(this, "SE_EM_BEGOMAN_COLLI");
-            }
+        if (isReflected) {
+            MR::startSound(this, "SE_EM_BEGOMAN_COLLI");
         }
-
-        setNerve(GET_NERVE(BegomanSpring, HostTypeNrvHitReaction));
     }
+
+    setNerve(GET_NERVE(BegomanSpring, HostTypeNrvHitReaction));
 }
 
 bool BegomanSpring::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
@@ -661,37 +647,36 @@ bool BegomanSpring::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (MR::isMsgExplosionAttack(msg) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow))) {
-        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, 35.0f, 15.0f);
+        calcBlowReaction(pSender->mPosition, pReceiver->mPosition, ::cExplosionBlowVel, ::cExplosionBlowVerticalVel);
         setNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow));
         return true;
     }
 
-    if (MR::isSensorEnemy(pSender)) {
-        Vec3f direction(pReceiver->mPosition - pSender->mPosition);
-        MR::normalizeOrZero(&direction);
-        if (MR::isNearZero(direction)) {
-            return false;
-        }
-
-        bool reflected = reboundPlaneWithEffect(direction, 0.0f, 0.0f, "Spark");
-        f32 receiverRadius = pReceiver->mRadius;
-        f32 senderRadius = pSender->mRadius;
-        f32 ratio = senderRadius / receiverRadius;
-        MR::addVelocityLimit(this, direction * ::sReboundEnemyAddVel * ratio);
-        if (reflected) {
-            MR::startSound(this, "SE_EM_BEGOMAN_COLLI_BEGOMAN");
-        }
-
-        if (!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvTrample)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvShake)) &&
-            !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvProvoke)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow))) {
-            MR::startBck(this, "Turn");
-            setNerve(GET_NERVE(BegomanSpring, HostTypeNrvTurn));
-        }
-
-        return true;
+    if (!MR::isSensorEnemy(pSender)) {
+        return false;
     }
 
-    return false;
+    Vec3f away(pReceiver->mPosition - pSender->mPosition);
+    MR::normalizeOrZero(&away);
+    if (MR::isNearZero(away)) {
+        return false;
+    }
+
+    // The push scales with the other's size.
+    const bool isReflected = reboundPlaneWithEffect(away, 0.0f, 0.0f, "Spark");
+    const f32 ratio = pSender->mRadius / pReceiver->mRadius;
+    MR::addVelocityLimit(this, away * ::cReboundEnemyAddVel * ratio);
+    if (isReflected) {
+        MR::startSound(this, "SE_EM_BEGOMAN_COLLI_BEGOMAN");
+    }
+
+    if (!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvTrample)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvShake)) &&
+        !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvProvoke)) && !isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow))) {
+        MR::startBck(this, "Turn");
+        setNerve(GET_NERVE(BegomanSpring, HostTypeNrvTurn));
+    }
+
+    return true;
 }
 
 bool BegomanSpring::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -700,15 +685,16 @@ bool BegomanSpring::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     }
 
     if (MR::isMsgStarPieceReflect(msg) && (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvHide)) ||
-                                           (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvHop)) && MR::isLessStep(this, ::hHopStarPieceReflectTime)))) {
+                                           (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvHop)) && MR::isLessStep(this, ::cHopStarPieceReflectTime)))) {
         return true;
     }
 
     if (MR::isMsgPlayerTrample(msg)) {
-        if (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvElectricDeath))) {
+        if (isNrvBroken()) {
             return false;
         }
 
+        // The first trample on the body sets it shaking; while it shakes the spring launches the player.
         if (!isNerve(GET_NERVE(BegomanSpring, HostTypeNrvShake))) {
             if (pReceiver->isType(ATYPE_BEGOMAN)) {
                 setNerve(GET_NERVE(BegomanSpring, HostTypeNrvShake));
@@ -737,31 +723,30 @@ bool BegomanSpring::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
         return true;
     }
 
-    if (isNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow)) || isNerve(GET_NERVE(BegomanSpring, HostTypeNrvElectricDeath))) {
+    if (isNrvBroken()) {
         return false;
     }
 
-    if (pReceiver == getSensor("body") && (MR::isMsgPlayerHitAll(msg) || MR::isMsgStarPieceAttack(msg))) {
-        Vec3f direction(pReceiver->mPosition);
-        direction.sub(pSender->mPosition);
-        Vec3f hitPos(-direction);
-        f32 radius = getSensor("body")->mRadius;
-        hitPos.setLength(radius);
-        hitPos.add(getSensor("body")->mPosition);
-        MR::emitEffectHit(this, hitPos, "Hit");
-        MR::startSound(this, "SE_EM_BEGOMAN_KNOCK_SUCCESS");
-        finishNoCalcWait();
-        setNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow));
-        MR::vecKillElement(direction, mGravity, &direction);
-        MR::normalize(&direction);
-        mFaceVec.set(direction);
-        direction *= ::sBlowVel;
-        direction.sub(mGravity * ::sBlowVerticalVel);
-        mVelocity = direction;
-        return true;
+    if (pReceiver != getSensor("body") || (!MR::isMsgPlayerHitAll(msg) && !MR::isMsgStarPieceAttack(msg))) {
+        return false;
     }
 
-    return false;
+    Vec3f direction(pReceiver->mPosition);
+    direction.sub(pSender->mPosition);
+    Vec3f hitPos(-direction);
+    hitPos.setLength(pReceiver->mRadius);
+    hitPos.add(pReceiver->mPosition);
+    MR::emitEffectHit(this, hitPos, "Hit");
+    MR::startSound(this, "SE_EM_BEGOMAN_KNOCK_SUCCESS");
+    finishNoCalcWait();
+    setNerve(GET_NERVE(BegomanSpring, HostTypeNrvBlow));
+    MR::vecKillElement(direction, mGravity, &direction);
+    MR::normalize(&direction);
+    mFaceVec.set(direction);
+    direction *= ::cBlowVel;
+    direction.sub(mGravity * ::cBlowVerticalVel);
+    mVelocity = direction;
+    return true;
 }
 
 bool BegomanSpring::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

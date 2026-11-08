@@ -4,7 +4,7 @@ class BegomanHead;
 class ModelObj;
 class BegomanSpike : public BegomanBase {
 public:
-    BegomanSpike(const char*);
+    BegomanSpike(const char* pName);
 
     virtual void init(const TableIter&);
     virtual void appear();
@@ -16,13 +16,16 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
     virtual u32 getKind() const {
-        return 1;
+        return Kind_Spike;
     }
     virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
     virtual bool setNerveReturn();
     virtual void setNerveLaunch();
     virtual const Nerve* getNerveWait();
     void onSwitchB();
+    bool isNrvBlown() const;
+    bool isNrvBroken() const;
+    bool isNrvStarPointerBindable() const;
     void tearDownPursue();
     void generateItem();
     void exeNoCalcWait();
