@@ -7,8 +7,6 @@ class PlacementId;
 
 class ArrowSwitchMulti : public LiveActor {
 public:
-    /// @brief Creates a new `ArrowSwitchTarget`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ArrowSwitchMulti(const char* pName);
 
     virtual void init(const TableIter&);
@@ -32,8 +30,6 @@ public:
 
 class ArrowSwitchTarget : public NameObj {
 public:
-    /// @brief Creates a new `ArrowSwitchTarget`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ArrowSwitchTarget(const char* pName);
 
     virtual void init(const TableIter&);

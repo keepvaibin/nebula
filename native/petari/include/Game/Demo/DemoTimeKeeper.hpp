@@ -5,7 +5,6 @@ class DemoExecutor;
 
 class DemoTimePartInfo {
 public:
-    /// @brief Creates a new `DemoTimePartInfo`.
     DemoTimePartInfo();
 
     const char* mPartName;

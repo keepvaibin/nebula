@@ -6,8 +6,6 @@ class ActorCameraInfo;
 
 class RunawayTico : public Tico {
 public:
-    /// @brief Creates a new `RunawayTico`.
-    /// @param pName A pointer to the null-terminated name of the object.
     RunawayTico(const char* pName);
 
     virtual void init(const TableIter& rIter);

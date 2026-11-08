@@ -9,8 +9,6 @@ class TakeOutStar;
 
 class Caretaker : public NPCActor {
 public:
-    /// @brief Creates a new `Caretaker`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Caretaker(const char* pName);
 
     virtual void init(const TableIter& rIter);

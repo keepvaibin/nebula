@@ -5,8 +5,6 @@
 
 class TripodBossBaseJointPosition : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossBaseJointPosition`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossBaseJointPosition(const char* pName);
 
     virtual void init(const TableIter&);

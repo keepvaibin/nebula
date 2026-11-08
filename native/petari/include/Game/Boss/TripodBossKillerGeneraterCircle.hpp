@@ -7,8 +7,6 @@ class TripodBossKillerGenerater;
 
 class TripodBossKillerGeneraterCircle : public NameObj {
 public:
-    /// @brief Creates a new `TripodBossKillerGeneraterCircle`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossKillerGeneraterCircle(const char* pName);
 
     virtual ~TripodBossKillerGeneraterCircle();

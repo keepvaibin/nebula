@@ -16,8 +16,6 @@ public:
         Type_Count,
     };
 
-    /// @brief Creates a new `LuigiNPC`.
-    /// @param pName A pointer to the null-terminated name of the object.
     LuigiNPC(const char* pName);
 
     virtual void init(const TableIter&);

@@ -18,7 +18,6 @@ typedef void (ResourceHolderManager::*FuncPtrC)(const char*, CreateResourceHolde
 
 class CreateResourceHolderArgs {
 public:
-    /// @brief Creates a new `CreateResourceHolderArgs`.
     CreateResourceHolderArgs();
 
     ResourceHolder* mResourceHolder;
@@ -28,7 +27,6 @@ public:
 
 class ResourceHolderManagerName2Resource {
 public:
-    /// @brief Creates a new `ResourceHolderManagerName2Resource`.
     ResourceHolderManagerName2Resource();
 
     /// @brief Copies the contents from `other` to `this`.
@@ -44,7 +42,6 @@ public:
 
 class ResourceHolderManager {
 public:
-    /// @brief Creates a new `ResourceHolderManager`.
     ResourceHolderManager();
 
     ResourceHolder* createAndAdd(const char*, NebulaArena*);

@@ -15,8 +15,6 @@ class TalkMessageCtrl;
 
 class TrickRabbit : public LiveActor {
 public:
-    /// @brief Creates a new `TrickRabbit`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TrickRabbit(const char* pName);
 
     virtual void init(const TableIter& rIter);

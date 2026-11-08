@@ -4,8 +4,6 @@
 
 class FileSelectCameraController : public LiveActor {
 public:
-    /// @brief Creates a new `FileSelectCameraController`.
-    /// @param pName A pointer to the null-terminated name of the object.
     FileSelectCameraController(const char* pName);
 
     virtual void init(const TableIter& rIter);

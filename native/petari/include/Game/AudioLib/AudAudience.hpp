@@ -89,7 +89,6 @@ public:
 
 class AudAudience_withSetting : public SoundAudience {
 public:
-    /// @brief Creates a new `AudAudience_withSetting`.
     AudAudience_withSetting();
 
     void updateSetting();
@@ -215,7 +214,6 @@ public:
 
 class AudAudience_withSetting_doppler : public AudAudience_withSetting {
 public:
-    /// @brief Creates a new `AudAudience_withSetting_doppler`.
     AudAudience_withSetting_doppler() : AudAudience_withSetting() {};
 };
 

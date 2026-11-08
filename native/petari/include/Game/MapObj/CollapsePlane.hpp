@@ -10,8 +10,6 @@ class WalkerStateBindStarPointer;
 
 class CollapsePlane : public MapObjActor {
 public:
-    /// @brief Creates a new `CollapsePlane`.
-    /// @param pName A pointer to the null-terminated name of the object.
     CollapsePlane(const char* pName);
 
     virtual void init(const TableIter& rIter);

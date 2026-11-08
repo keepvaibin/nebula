@@ -7,10 +7,8 @@ class AudMe;
 
 class AudMeHandle {
 public:
-    /// @brief Creates a new `AudMeHandle`.
     AudMeHandle() : mMe() {};
 
-    /// @brief Destroys the `AudMeHandle`.
     ~AudMeHandle() {
         releaseMe();
     }

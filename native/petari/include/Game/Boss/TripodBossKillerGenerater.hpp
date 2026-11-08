@@ -6,8 +6,6 @@ class HomingKiller;
 
 class TripodBossKillerGenerater : public TripodBossFixPartsBase {
 public:
-    /// @brief Creates a new `TripodBossKillerGenerater`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossKillerGenerater(const char* pName = "三脚ボスキラー発生源");
 
     virtual void init(const TableIter&);

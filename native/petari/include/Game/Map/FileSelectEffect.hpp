@@ -4,8 +4,6 @@
 
 class FileSelectEffect : public LiveActor {
 public:
-    /// @brief Creates a new `FileSelectEffect`.
-    /// @param pName A pointer to the null-terminated name of the object.
     FileSelectEffect(const char* pName = "選択時エフェクト");
 
     virtual void init(const TableIter&);

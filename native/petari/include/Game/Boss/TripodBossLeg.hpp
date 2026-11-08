@@ -10,8 +10,6 @@ class TripodBossStepPoint;
 
 class TripodBossLeg : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossLeg`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossLeg(const char* pName);
 
     virtual ~TripodBossLeg();

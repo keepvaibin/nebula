@@ -9,8 +9,6 @@ class TicoDemoGetPower;
 /// @brief Luma
 class Tico : public NPCActor {
 public:
-    /// @brief Creates a new `Tico`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Tico(const char* pName);
 
     virtual void init(const TableIter& rIter);

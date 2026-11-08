@@ -24,10 +24,8 @@ public:
         Peach,
     };
 
-    /// @brief Creates a new `FileSelectIconID`.
     FileSelectIconID();
 
-    /// @brief Creates a new `FileSelectIconID`.
     /// @param rOther The reference to the `FileSelectIconID` to copy from.
     FileSelectIconID(const FileSelectIconID& rOther);
 

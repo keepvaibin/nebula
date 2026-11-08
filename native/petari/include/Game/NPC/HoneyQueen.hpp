@@ -7,8 +7,6 @@ class ModelObj;
 
 class HoneyQueen : public NPCActor {
 public:
-    /// @brief Creates a new `HoneyQueen`.
-    /// @param pName A pointer to the null-terminated name of the object.
     HoneyQueen(const char* pName);
 
     virtual void init(const TableIter&);

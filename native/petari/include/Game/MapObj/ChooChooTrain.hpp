@@ -7,8 +7,6 @@ class ModelObj;
 
 class ChooChooTrain : public LiveActor {
 public:
-    /// @brief Creates a new `ChooChooTrain`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ChooChooTrain(const char* pName);
 
     virtual void init(const TableIter& rIter);

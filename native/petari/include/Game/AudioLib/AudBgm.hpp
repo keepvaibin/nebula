@@ -9,7 +9,6 @@ class AudBgmVolumeController;
 
 class AudBgm {
 public:
-    /// @brief Creates a new `AudBgm`.
     AudBgm();
 
     virtual void init() = 0;
@@ -48,7 +47,6 @@ public:
 
 class AudSingleBgm : public AudBgm {
 public:
-    /// @brief Creates a new `AudSingleBgm`.
     AudSingleBgm();
 
     virtual void init();
@@ -117,7 +115,6 @@ public:
 
 class AudMultiBgm : public AudBgm {
 public:
-    /// @brief Creates a new `AudMultiBgm`.
     AudMultiBgm();
 
     virtual void init();

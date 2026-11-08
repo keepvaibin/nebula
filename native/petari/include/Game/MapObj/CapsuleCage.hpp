@@ -6,8 +6,6 @@ class ActorCameraInfo;
 
 class CapsuleCage : public MapObjActor {
 public:
-    /// @brief Creates a new `CapsuleCage`.
-    /// @param pName A pointer to the null-terminated name of the object.
     CapsuleCage(const char* pName);
 
     virtual void init(const TableIter&);

@@ -8,7 +8,6 @@ class LiveActor;
 
 class DemoCameraInfo {
 public:
-    /// @brief Creates a new `DemoCameraInfo`.
     DemoCameraInfo();
 
     const char* mPartName;

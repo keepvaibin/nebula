@@ -25,7 +25,6 @@ class StarPointerTarget;
 /// @brief The basis of a drawable actor that can contain states (see: Nerve)
 class LiveActor : public NameObj {
 public:
-    /// @brief Creates a new `LiveActor`.
     /// @param pName A pointer to the null-terminated name of the actor.
     LiveActor(const char* pName);
 

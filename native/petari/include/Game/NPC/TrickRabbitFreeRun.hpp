@@ -12,8 +12,6 @@ class WalkerStateRunaway;
 
 class TrickRabbitFreeRun : public LiveActor {
 public:
-    /// @brief Creates a new `TrickRabbitFreeRun`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TrickRabbitFreeRun(const char* pName);
 
     virtual void init(const TableIter& rIter);

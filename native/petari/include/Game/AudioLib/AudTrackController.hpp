@@ -6,7 +6,6 @@ class SoundHandle;
 
 class AudTrackController {
 public:
-    /// @brief Creates a new `AudTrackController`.
     AudTrackController();
 
     ~AudTrackController() {};

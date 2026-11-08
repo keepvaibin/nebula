@@ -8,7 +8,6 @@ class ValueControl;
 
 class PlayTimerScene : public Scene {
 public:
-    /// @brief Creates a new `PlayTimerScene`.
     PlayTimerScene();
 
     virtual void init();

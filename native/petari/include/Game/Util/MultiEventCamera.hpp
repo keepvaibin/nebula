@@ -11,7 +11,6 @@ public:
         CameraType_AtLanding,
     };
 
-    /// @brief Creates a new `MultiEventCamera`.
     MultiEventCamera();
 
     bool isEnd() const;

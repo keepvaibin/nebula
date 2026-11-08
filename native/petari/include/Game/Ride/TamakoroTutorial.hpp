@@ -8,8 +8,6 @@ class Tamakoro;
 
 class TamakoroTutorial : public LiveActor {
 public:
-    /// @brief Creates a new `TamakoroTutorial`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TamakoroTutorial(const char* pName);
 
     virtual void init(const TableIter&);

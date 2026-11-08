@@ -7,7 +7,6 @@ class KabokuriFire;
 
 class KabokuriFireHolder : public DeriveActorGroup< KabokuriFire > {
 public:
-    /// @brief Creates a new `KabokuriFireHolder`.
     KabokuriFireHolder();
 };
 

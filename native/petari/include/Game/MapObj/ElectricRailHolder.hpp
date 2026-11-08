@@ -25,8 +25,6 @@ struct RailItem {
 
 class ElectricRailHolder : public LiveActor {
 public:
-    /// @brief Creates a new `ElectricRailHolder`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ElectricRailHolder(const char* pName);
 
     virtual void init(const TableIter& rIter);

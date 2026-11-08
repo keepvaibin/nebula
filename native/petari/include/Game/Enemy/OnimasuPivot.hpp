@@ -5,8 +5,6 @@
 
 class OnimasuPivot : public Onimasu {
 public:
-    /// @brief Creates a new `OnimasuPivot`.
-    /// @param pName A pointer to the null-terminated name of the object.
     OnimasuPivot(const char* pName);
 
     virtual void initFromRailPoint();

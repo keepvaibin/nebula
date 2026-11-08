@@ -6,8 +6,6 @@ class ActorCameraInfo;
 
 class AnmModelObj : public MapObjActor {
 public:
-    /// @brief Creates a new `AnmModelObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelObj(const char* pName);
 
     virtual void init(const TableIter&);
@@ -47,8 +45,6 @@ public:
 
 class AnmModelSwitchMove : public AnmModelObj {
 public:
-    /// @brief Creates a new `AnmModelSwitchMove`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelSwitchMove(const char* pName);
 
     virtual void init(const TableIter&);
@@ -57,8 +53,6 @@ public:
 
 class AnmModelSwitchMoveEndKill : public AnmModelSwitchMove {
 public:
-    /// @brief Creates a new `AnmModelSwitchMoveEndKill`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelSwitchMoveEndKill(const char* pName) : AnmModelSwitchMove(pName) {
     }
 
@@ -67,8 +61,6 @@ public:
 
 class AnmModelGroundOnMove : public AnmModelObj {
 public:
-    /// @brief Creates a new `AnmModelGroundOnMove`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelGroundOnMove(const char* pName);
 
     virtual void init(const TableIter&);
@@ -81,8 +73,6 @@ public:
 
 class AnmModelBindMove : public AnmModelObj {
 public:
-    /// @brief Creates a new `AnmModelBindMove`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelBindMove(const char* pName);
 
     virtual void init(const TableIter&);
@@ -99,8 +89,6 @@ public:
 
 class AnmModelSwitchMoveEventCamera : public AnmModelSwitchMove {
 public:
-    /// @brief Creates a new `AnmModelSwitchMoveEventCamera`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AnmModelSwitchMoveEventCamera(const char* pName);
 
     virtual void init(const TableIter&);

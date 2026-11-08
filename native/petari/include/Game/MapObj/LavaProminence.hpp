@@ -7,8 +7,6 @@ class PartsModel;
 
 class LavaProminence : public LiveActor {
 public:
-    /// @brief Creates a new `LavaProminence`.
-    /// @param pName A pointer to the null-terminated name of the object.
     LavaProminence(const char* pName);
 
     virtual void init(const TableIter& rIter);

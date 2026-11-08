@@ -10,7 +10,6 @@ class StageStateKeeper;
 
 class EventDirector : public NameObj {
 public:
-    /// @brief Creates a new `EventDirector`.
     EventDirector();
 
     virtual void init(const TableIter& rIter);

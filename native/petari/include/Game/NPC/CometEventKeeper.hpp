@@ -9,7 +9,6 @@ struct GalaxyTimeLimitInfo;
 
 class CometEventKeeper {
 public:
-    /// @brief Creates a new `CometEventKeeper`.
     CometEventKeeper();
 
     void init();

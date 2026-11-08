@@ -90,7 +90,6 @@ enum CollisionCameraCode {
 
 class CollisionCode {
 public:
-    /// @brief Creates a new `CollisionCode`.
     CollisionCode();
 
     const char* getFloorCodeString(const Triangle& rTriangle);

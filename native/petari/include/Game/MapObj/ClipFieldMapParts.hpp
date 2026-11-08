@@ -4,8 +4,6 @@
 
 class ClipFieldMapParts : public GeneralMapParts {
 public:
-    /// @brief Creates a new `ClipFieldMapParts`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ClipFieldMapParts(const char* pName);
 
     virtual ~ClipFieldMapParts();

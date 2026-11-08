@@ -10,7 +10,6 @@ class MultiEventCamera;
 
 class SpinDriverCamera {
 public:
-    /// @brief Creates a new `SpinDriverCamera`.
     SpinDriverCamera();
 
     void startAppearCamera(LiveActor*, const Vec3f&, const Vec3f&, const Vec3f&);

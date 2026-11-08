@@ -7,8 +7,6 @@ class TriangleFilterFunc;
 
 class SandUpDownEffectObj : public LiveActor {
 public:
-    /// @brief Creates a new `SandUpDownEffectObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
     SandUpDownEffectObj(const char* pName);
 
     virtual void init(const TableIter& rIter);

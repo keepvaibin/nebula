@@ -2,7 +2,6 @@
 
 class LiveActorFlag {
 public:
-    /// @brief Creates a new `LiveActorFlag`.
     LiveActorFlag();
 
     bool mIsDead;

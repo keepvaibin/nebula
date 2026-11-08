@@ -18,8 +18,6 @@ enum RaceID {
 
 class RaceManagerLayout : public LayoutActor {
 public:
-    /// @brief Creates a new `RaceManagerLayout`.
-    /// @param pName A pointer to the null-terminated name of the object.
     RaceManagerLayout(const char* pName);
 
     /// @brief Intializes the `RaceManagerLayout` while being placed into a scene.
@@ -44,7 +42,6 @@ public:
 
 class AbstractRacer {
 public:
-    /// @brief Creates a new `AbstractRacer`.
     AbstractRacer() {
         initRacer();
     }
@@ -73,7 +70,6 @@ public:
 
 class AbstractAudience {
 public:
-    /// @brief Creates a new `AbstractAudience`.
     AbstractAudience() {
     }
 
@@ -83,7 +79,6 @@ public:
 
 class RaceManager : public LiveActor {
 public:
-    /// @brief Creates a new `RaceManager`.
     RaceManager();
 
     /// @brief Intializes the `RaceManager` while being placed into a scene.

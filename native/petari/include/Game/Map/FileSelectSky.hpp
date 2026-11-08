@@ -7,11 +7,8 @@ class ProjmapEffectMtxSetter;
 
 class FileSelectSky : public LiveActor {
 public:
-    /// @brief Creates a new `FileSelectSky`.
-    /// @param pName A pointer to the null-terminated name of the object.
     FileSelectSky(const char* pName);
 
-    /// @brief Destroys the `FileSelectSky`.
     virtual ~FileSelectSky();
 
     virtual void init(const TableIter& rIter);

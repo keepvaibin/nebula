@@ -10,19 +10,16 @@ class KameckTurtle;
 
 class KameckBeamHolder : public DeriveActorGroup< KameckBeam > {
 public:
-    /// @brief Creates a new `KameckBeamHolder`.
     KameckBeamHolder();
 };
 
 class KameckFireBallHolder : public DeriveActorGroup< KameckFireBall > {
 public:
-    /// @brief Creates a new `KameckFireBallHolder`.
     KameckFireBallHolder();
 };
 
 class KameckBeamTurtleHolder : public DeriveActorGroup< KameckTurtle > {
 public:
-    /// @brief Creates a new `KameckBeamTurtleHolder`.
     KameckBeamTurtleHolder();
 };
 

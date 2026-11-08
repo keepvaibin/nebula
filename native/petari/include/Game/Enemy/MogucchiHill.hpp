@@ -8,8 +8,6 @@ class MogucchiHill;
 
 class MogucchiHillPiece : public LiveActor {
 public:
-    /// @brief Creates a new `MogucchiHillPiece`.
-    /// @param pName A pointer to the null-terminated name of the object.
     MogucchiHillPiece(const char* pName = "モグッチ塚ピース");
 
     virtual void init(const TableIter& rIter);

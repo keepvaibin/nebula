@@ -7,8 +7,6 @@ class TakeOutStar;
 
 class Kinopio : public NPCActor {
 public:
-    /// @brief Creates a new `Kinopio`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Kinopio(const char* pName);
 
     virtual void init(const TableIter& rIter);

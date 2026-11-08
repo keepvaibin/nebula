@@ -13,8 +13,6 @@ public:
         Type_3,
     };
 
-    /// @brief Creates a new `LavaStrangeRock`.
-    /// @param pName A pointer to the null-terminated name of the object.
     LavaStrangeRock(const char* pName);
 
     virtual ~LavaStrangeRock();

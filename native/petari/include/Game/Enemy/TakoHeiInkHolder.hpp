@@ -7,7 +7,6 @@ class TakoHeiInk;
 
 class TakoHeiInkHolder : public DeriveActorGroup< TakoHeiInk > {
 public:
-    /// @brief Creates a new `TakoHeiInkHolder`.
     TakoHeiInkHolder();
 };
 

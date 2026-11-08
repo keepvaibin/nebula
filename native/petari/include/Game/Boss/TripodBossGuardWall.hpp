@@ -7,8 +7,6 @@ class CameraTargetMtx;
 
 class TripodBossGuardWall : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossGuardWall`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossGuardWall(const char* pName);
 
     virtual void init(const TableIter&);

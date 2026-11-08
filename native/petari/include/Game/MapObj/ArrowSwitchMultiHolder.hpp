@@ -8,7 +8,6 @@ class PlacementId;
 
 class ArrowSwitchMultiHolder : public DeriveActorGroup< ArrowSwitchMulti > {
 public:
-    /// @brief Creates a new `ArrowSwitchMultiHolder`.
     ArrowSwitchMultiHolder();
 
     ArrowSwitchMulti* findSwitch(const PlacementId*);

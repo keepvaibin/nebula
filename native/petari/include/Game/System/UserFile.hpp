@@ -7,7 +7,6 @@ class GameDataHolder;
 
 class UserFile {
 public:
-    /// @brief Creates a new `UserFile`.
     UserFile();
 
     bool isCreated() const;

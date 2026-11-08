@@ -26,8 +26,6 @@ public:
         Type_TwisterSanSlim,
     };
 
-    /// @brief Creates a new `Sandstorm`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Sandstorm(const char* pName);
 
     virtual void init(const TableIter& rIter);

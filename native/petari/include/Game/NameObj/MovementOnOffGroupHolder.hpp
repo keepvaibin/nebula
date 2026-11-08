@@ -7,8 +7,6 @@ class NameObjGroup;
 
 class MovementOnOffGroupHolder : public NameObj {
 public:
-    /// @brief Creates a new `MovementOnOffGroupHolder`.
-    /// @param pName A pointer to the null-terminated name of the object.
     MovementOnOffGroupHolder(const char* pName);
 
     NameObjGroup* joinToGroup(const char*, NameObj*, u32);

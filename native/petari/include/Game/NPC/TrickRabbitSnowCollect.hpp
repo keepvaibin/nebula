@@ -10,8 +10,6 @@ class TalkMessageCtrl;
 
 class TrickRabbitSnowCollect : public LiveActor {
 public:
-    /// @brief Creates a new `TrickRabbitSnowCollect`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TrickRabbitSnowCollect(const char* pName);
 
     virtual void init(const TableIter& rIter);
@@ -57,7 +55,6 @@ private:
 
 class TrickRabbitCollectListener : public TrickRabbitSnowListener {
 public:
-    /// @brief Creates a new `TrickRabbitCollectListener`.
     TrickRabbitCollectListener(TrickRabbitSnowCollect* pHost) : TrickRabbitSnowListener(), mHost(pHost) {
     }
 

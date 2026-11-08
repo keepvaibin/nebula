@@ -7,7 +7,6 @@ class TableIter;
 
 class GameDataTemporaryInGalaxy {
 public:
-    /// @brief Creates a new `GameDataTemporaryInGalaxy`.
     GameDataTemporaryInGalaxy();
 
     void resetPlayerRestartIdInfo();

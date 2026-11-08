@@ -4,8 +4,6 @@
 
 class SpaceInner : public LiveActor {
 public:
-    /// @brief Creates a new `SpaceInner`.
-    /// @param pName A pointer to the null-terminated name of the object.
     SpaceInner(const char* pName);
 
     virtual void init(const TableIter&);

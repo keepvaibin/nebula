@@ -9,7 +9,6 @@ public:
         BgmType_Multi = 1,
     };
 
-    /// @brief Creates a new `AudBgmKeeper`.
     AudBgmKeeper();
 
     ~AudBgmKeeper() {};

@@ -12,7 +12,6 @@ public:
         BgmType_Sub = 1,
     };
 
-    /// @brief Creates a new `AudBgmMgr`.
     AudBgmMgr();
 
     ~AudBgmMgr() {};

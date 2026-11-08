@@ -10,8 +10,6 @@ class JUTTexture;
 
 class WarpPodMgr : public NameObj {
 public:
-    /// @brief Creates a new `WarpPodMgr`.
-    /// @param pName A pointer to the null-terminated name of the object.
     WarpPodMgr(const char* pName);
 
     virtual void draw() const;
@@ -28,8 +26,6 @@ public:
 
 class WarpPod : public LiveActor {
 public:
-    /// @brief Creates a new `WarpPod`.
-    /// @param pName A pointer to the null-terminated name of the object.
     WarpPod(const char* pName) : LiveActor(pName), mPlacementId(nullptr) {
     }
 

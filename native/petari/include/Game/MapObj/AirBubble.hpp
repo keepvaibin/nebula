@@ -4,8 +4,6 @@
 
 class AirBubble : public LiveActor {
 public:
-    /// @brief Creates a new `AirBubble`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AirBubble(const char* pName);
 
     virtual void init(const TableIter&);

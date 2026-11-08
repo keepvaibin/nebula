@@ -7,8 +7,6 @@ class TripodBossBreakMovement;
 
 class TripodBossFixPartsBase : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossFixPartsBase`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossFixPartsBase(const char* pName);
 
     virtual void init(const TableIter&);

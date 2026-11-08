@@ -16,8 +16,6 @@ public:
         BeamType_FireBall3,
     };
 
-    /// @brief Creates a new `KameckBeam`.
-    /// @param pName A pointer to the null-terminated name of the object.
     KameckBeam(const char* pName);
 
     virtual void init(const TableIter& rIter);
@@ -59,7 +57,6 @@ public:
 
 class KameckBeamEventListener {
 public:
-    /// @brief Creates a new `KameckBeamEventListener`.
     KameckBeamEventListener();
 
     virtual void hitBeam(s32){};

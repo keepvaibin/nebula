@@ -6,8 +6,6 @@
 
 class TripodBossAccesser : public NameObj {
 public:
-    /// @brief Creates a new `TripodBossAccesser`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossAccesser(const char* pName);
 
     TripodBoss* getTriPodBoss() const;

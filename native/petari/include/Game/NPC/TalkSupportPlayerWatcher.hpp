@@ -3,7 +3,6 @@
 
 class TalkSupportPlayerWatcher {
 public:
-    /// @brief Creates a new `TalkSupportPlayerWatcher`.
     TalkSupportPlayerWatcher();
 
     void update();

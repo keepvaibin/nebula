@@ -6,8 +6,6 @@ class KoopaJr;
 
 class DemoKoopaJrShip : public LiveActor {
 public:
-    /// @brief Creates a new `DemoKoopaJrShip`.
-    /// @param pName A pointer to the null-terminated name of the object.
     DemoKoopaJrShip(const char* pName);
 
     virtual void init(const TableIter& rIter);

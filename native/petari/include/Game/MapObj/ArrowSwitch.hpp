@@ -18,8 +18,6 @@ public:
         Direction_Left = 3,
     };
 
-    /// @brief Creates a new `ArrowSwitch`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ArrowSwitch(const char* pName);
 
     virtual void init(const TableIter&);

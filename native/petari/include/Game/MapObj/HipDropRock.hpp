@@ -7,8 +7,6 @@ class ModelObj;
 
 class HipDropRock : public LiveActor {
 public:
-    /// @brief Creates a new `HipDropRock`.
-    /// @param pName A pointer to the null-terminated name of the object.
     HipDropRock(const char* pName);
 
     virtual void init(const TableIter& rIter);

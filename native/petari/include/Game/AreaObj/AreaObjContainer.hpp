@@ -17,8 +17,6 @@ struct Name2CreateManagerFunc {
 
 class AreaObjContainer : public NameObj {
 public:
-    /// @brief Creates a new `AreaObjContainer`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AreaObjContainer(const char* pName);
 
     /// @brief Intializes the `AreaObjContainer` while being placed into a scene.

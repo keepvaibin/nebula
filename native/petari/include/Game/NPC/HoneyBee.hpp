@@ -17,8 +17,6 @@ public:
         InitAction_FlyLectureB,
     };
 
-    /// @brief Creates a new `HoneyBee`.
-    /// @param pName A pointer to the null-terminated name of the object.
     HoneyBee(const char* pName);
 
     virtual void init(const TableIter&);

@@ -10,8 +10,6 @@ class SkeletalFishRailControl;
 
 class SkeletalFishBaby : public LiveActor {
 public:
-    /// @brief Creates a new `SkeletalFishBaby`.
-    /// @param pName A pointer to the null-terminated name of the object.
     SkeletalFishBaby(const char*);
 
     virtual void init(const TableIter&);

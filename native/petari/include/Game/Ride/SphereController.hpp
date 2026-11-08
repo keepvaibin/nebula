@@ -4,7 +4,6 @@
 
 class SphereController {
 public:
-    /// @brief Creates a new `SphereController`.
     SphereController();
 
     virtual f32 calcMoveVector(Vec3f*, const Vec3f&);

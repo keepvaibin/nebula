@@ -9,7 +9,6 @@ class SwitchWatcher;
 
 class SwitchWatcherHolder : public NameObj {
 public:
-    /// @brief Creates a new `SwitchWatcherHolder`.
     SwitchWatcherHolder();
 
     virtual void movement();

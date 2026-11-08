@@ -5,8 +5,6 @@
 
 class ClipFieldFillDraw : public NameObj {
 public:
-    /// @brief Creates a new `ClipFieldFillDraw`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ClipFieldFillDraw(const char* pName);
 
     virtual void init(const TableIter& rIter);

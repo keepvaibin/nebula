@@ -8,8 +8,6 @@ class Spine;
 
 class TripodBossCoin : public NameObj {
 public:
-    /// @brief Creates a new `TripodBossCoin`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossCoin(const char* pName);
 
     virtual void init(const TableIter&);

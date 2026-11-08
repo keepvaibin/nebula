@@ -5,8 +5,6 @@
 
 class OnimasuJump : public Onimasu {
 public:
-    /// @brief Creates a new `OnimasuJump`.
-    /// @param pName A pointer to the null-terminated name of the object.
     OnimasuJump(const char* pName);
 
     virtual void initFromRailPoint();

@@ -42,7 +42,6 @@ public:
         s32 mMode;
     };
 
-    /// @brief Creates a new `StarPointerOnOffController`.
     StarPointerOnOffController();
 
     void update();

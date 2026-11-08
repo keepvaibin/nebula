@@ -12,7 +12,6 @@ public:
         ResetOperation_Quit,
     };
 
-    /// @brief Creates a new `GameSystemResetAndPowerProcess`.
     GameSystemResetAndPowerProcess();
 
     virtual ~GameSystemResetAndPowerProcess();

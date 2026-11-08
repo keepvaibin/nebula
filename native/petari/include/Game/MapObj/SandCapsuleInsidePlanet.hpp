@@ -4,8 +4,6 @@
 
 class SandCapsuleInsidePlanet : public MapObjActor {
 public:
-    /// @brief Creates a new `SandCapsuleInsidePlanet`.
-    /// @param pName A pointer to the null-terminated name of the object.
     SandCapsuleInsidePlanet(const char* pName);
 
     virtual void init(const TableIter&);

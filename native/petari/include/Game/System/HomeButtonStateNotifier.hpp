@@ -4,7 +4,6 @@ class MoviePlayerSimple;
 
 class HomeButtonStateNotifier {
 public:
-    /// @brief Creates a new `HomeButtonStateNotifier`.
     HomeButtonStateNotifier();
 
     void update(bool);

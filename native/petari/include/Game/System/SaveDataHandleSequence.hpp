@@ -16,7 +16,6 @@ namespace MR {
 
 class SaveDataHandleSequence : public NerveExecutor {
 public:
-    /// @brief Creates a new `SaveDataHandleSequence`.
     SaveDataHandleSequence();
 
     void initAfterResourceLoaded();

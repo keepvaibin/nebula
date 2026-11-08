@@ -4,8 +4,6 @@
 
 class TicoStarRing : public Tico {
 public:
-    /// @brief Creates a new `TicoStarRing`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TicoStarRing(const char* pName);
 
     virtual void init(const TableIter&);

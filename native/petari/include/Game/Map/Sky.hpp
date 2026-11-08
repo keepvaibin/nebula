@@ -8,8 +8,6 @@ class SpaceInner;
 
 class Sky : public LiveActor {
 public:
-    /// @brief Creates a new `Sky`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Sky(const char* pName);
 
     virtual void init(const TableIter&);

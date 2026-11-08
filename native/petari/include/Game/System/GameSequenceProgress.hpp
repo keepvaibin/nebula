@@ -12,7 +12,6 @@ class StorySequenceExecutor;
 
 class GameSequenceProgress : public NerveExecutor {
 public:
-    /// @brief Creates a new `GameSequenceProgress`.
     GameSequenceProgress();
 
     void initAfterResourceLoaded();

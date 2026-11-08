@@ -8,7 +8,6 @@ class PurpleCoinStarter;
 
 class PurpleCoinHolder : public DeriveActorGroup< Coin > {
 public:
-    /// @brief Creates a new `PurpleCoinHolder`.
     PurpleCoinHolder();
 
     virtual void initAfterPlacement();

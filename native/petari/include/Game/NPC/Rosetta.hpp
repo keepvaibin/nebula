@@ -8,7 +8,6 @@ class TurnJointCtrl;
 
 class Rosetta : public NPCActor {
 public:
-    /// @brief Creates a new `Rosetta`.
     /// @param pName The pointer to the null-terminated name of the object.
     Rosetta(const char* pName);
 

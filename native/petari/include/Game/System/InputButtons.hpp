@@ -6,7 +6,6 @@ class PlayerInput;
 /// @brief The wrapper around the state of a player's buttons.
 class InputButtons {
 public:
-    /// @brief Creates a new `InputButtons`.
     /// @param pPad The owning player's input.
     InputButtons(const PlayerInput* pPad);
 

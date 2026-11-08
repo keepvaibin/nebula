@@ -4,7 +4,6 @@
 
 class AudLimitedSoundInfo {
 public:
-    /// @brief Creates a new `AudLimitedSoundInfo`.
     AudLimitedSoundInfo();
 
     void init();
