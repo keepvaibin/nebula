@@ -35,11 +35,11 @@ public:
 };
 
 template < class T >
-static TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc(T* a1, bool (T::*a2)(u32)) {
-    return TalkMessageFuncM< T*, bool (T::*)(u32) >(a1, a2);
+static TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc(T* pCaller, bool (T::*pFunc)(u32)) {
+    return TalkMessageFuncM< T*, bool (T::*)(u32) >(pCaller, pFunc);
 }
 
 template < class T >
-static inline TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc_Inline(T* a1, bool (T::*a2)(u32)) {
-    return TalkMessageFuncM< T*, bool (T::*)(u32) >(a1, a2);
+static inline TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc_Inline(T* pCaller, bool (T::*pFunc)(u32)) {
+    return TalkMessageFuncM< T*, bool (T::*)(u32) >(pCaller, pFunc);
 }

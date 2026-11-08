@@ -512,7 +512,7 @@ namespace GameEventFlagTable {
             }
         } else if (pFlag1->mType == GameEventFlag::Type_Galaxy) {
             const char* galaxyDependedFlags[3];
-            s32 length = getGalaxyDependedFlags(galaxyDependedFlags, ARRAY_SIZE(galaxyDependedFlags), pFlagName1);
+            s32 length = getGalaxyDependedFlags(galaxyDependedFlags, pFlagName1);
 
             for (s32 i = 0; i < length; i++) {
                 if (MR::isEqualString(galaxyDependedFlags[i], pFlagName2)) {
@@ -611,7 +611,7 @@ namespace GameEventFlagTable {
         return calcSpecialPowerStarNum("SpecialStarGreen");
     }
 
-    s32 getGalaxyDependedFlags(const char** pFlags, int a1, const char* pName) {
+    s32 getGalaxyDependedFlags(const char* (&pFlags)[3], const char* pName) {
         Table info;
         info.attach(NebulaDataTables::getGalaxyInfoTable());
 
