@@ -21,8 +21,9 @@ public:
     void exeTaken();
     void exeThrow();
     void exeFall();
-    bool isTaken();
-    void emit(bool, const Vec3f&, const Vec3f&, f32);
+    bool isTaken() const;
+    void emit(bool isOnGravity, const Vec3f& rFrom, const Vec3f& rTo, f32 speed);
+    void breakAndKill();
 
     Quat4f mPoseQuat;
     Quat4f mRotateQuat;
@@ -42,7 +43,7 @@ public:
     virtual void startBreakSound();
     virtual void startThrowLevelSound();
 
-    void emitIce(const Vec3f&, const Vec3f&, f32, const Vec3f&);
+    void emitIce(const Vec3f& rFrom, const Vec3f& rTo, f32 speed, const Vec3f& rGravity);
 
     ParabolicPath* mPath;
 };
