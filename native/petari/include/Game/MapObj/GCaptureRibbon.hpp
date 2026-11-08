@@ -19,9 +19,8 @@ public:
     f32 calcLineWidth() const;
 
     JUTTexture* mTexture;
-    Vec3f _90[0x40];
-    Vec3f _390[0x40];
-    Vec3f _690[0x40];
-    s32 _990;
-    s32 _994;
+    Vec3f mPoints[0x40];
+    Vec3f mSides[0x40];
+    Vec3f mUps[0x40];
+    s32 mPointNum;
 };

@@ -52,10 +52,9 @@ public:
     KameckTurtle* mKameckTurtle;
     KameckFireBall* mKameckFireBalls[3];
     MtxPtr mFollowMtx;
-    Vec3f _A4;
+    Vec3f mShootDir;
     Vec3f mWandLocalPosition;
     s32 mBeamKind;
-    u8 _C0[4];
 };
 
 class KameckBeamEventListener {
@@ -72,8 +71,8 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
-    const Vec3f* _4;
-    f32 _8;
+    const Vec3f* mClipCenter;
+    f32 mClipRadius;
 };
 
 namespace MR {

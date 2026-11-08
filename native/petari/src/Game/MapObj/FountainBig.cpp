@@ -28,7 +28,7 @@ void FountainBig::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorCallbackEye(this, "body", 4, 60.0f);
     MR::invalidateHitSensors(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     Vec3f vec;
     MR::calcUpVec(&vec, this);

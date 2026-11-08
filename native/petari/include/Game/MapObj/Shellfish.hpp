@@ -23,8 +23,8 @@ public:
     void exeCloseSignal();
     void exeClose();
     void exeShock();
-    void exeDPDOpen();
-    void endDPDOpen();
+    void exePointerOpen();
+    void endPointerOpen();
     void initItem(const TableIter&);
     void initCoin(const TableIter&);
     void initYellowChip(const TableIter&);
@@ -40,5 +40,4 @@ public:
     s32 mItemType;
     bool mIsItemBound;
     CollisionParts* mLowCollision;
-    bool _A4;
 };

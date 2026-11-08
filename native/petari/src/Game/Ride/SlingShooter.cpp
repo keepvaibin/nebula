@@ -79,7 +79,7 @@ void SlingShooter::init(const TableIter& rIter) {
     initBinder(50.0f, 50.0f, 8);
     MR::offBind(this);
 
-    initEffectKeeper(2, nullptr, false);
+    initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     MR::addEffect(this, "InvalidHitMark");
     initSound(8, false);

@@ -25,7 +25,7 @@ namespace {
 
     bool isClip(const u8* pFile) {
         const CamAnmHeader* pHeader = reinterpret_cast< const CamAnmHeader* >(pFile);
-        return pHeader->mMagic[0] == 'N' && pHeader->mMagic[1] == 'C' && pHeader->mMagic[2] == 'A' && pHeader->mMagic[3] == 'M' && pHeader->_8 != 0;
+        return pHeader->mMagic[0] == 'N' && pHeader->mMagic[1] == 'C' && pHeader->mMagic[2] == 'A' && pHeader->mMagic[3] == 'M';
     }
 }  // namespace
 
@@ -63,7 +63,7 @@ void CameraAnim::getWatchPos(Vec3f* pWatchPos, f32 key) const {
 }
 
 CameraAnim::CameraAnim(const char* pName)
-    : Camera(pName), _4C(), _50(1), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mFileData(), mIsPaused() {
+    : Camera(pName), mNrFrames(), mSpeed(1.0f), mCurrentFrame(), mClip(), mFileData(), mIsPaused() {
 }
 
 void CameraAnim::reset() {
@@ -142,8 +142,6 @@ bool CameraAnim::loadBin(u8* pFile) {
     }
 
     mClip = reinterpret_cast< const CamAnmHeader* >(pFile);
-    _4C = mClip->_C;
-    _50 = mClip->_10;
     mNrFrames = mClip->mNrFrames;
     return true;
 }

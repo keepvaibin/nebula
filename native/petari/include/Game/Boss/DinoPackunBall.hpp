@@ -31,12 +31,10 @@ public:
     void exeRebound();
     void exeLock();
 
-    Pos3f _D4;
-    Quat4f _104;
+    Pos3f mDragEffectMtx;
     HitSensor* mWeakSensor;
-    Vec3f _118;
-    u8 _124;
-    u8 _125;
-    u8 _126;
-    s32 _128;
+    Vec3f mReboundVelocity;
+    u8 mIsBlackDrag;
+    u8 mIsOnFire;
+    s32 mDragSoundStep;
 };

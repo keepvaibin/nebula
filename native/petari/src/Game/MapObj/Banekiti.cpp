@@ -8,7 +8,7 @@
 namespace NrvBanekiti {
     NEW_NERVE(BanekitiNrvWait, Banekiti, Wait);
     NEW_NERVE(BanekitiNrvRepel, Banekiti, Repel);
-    NEW_NERVE_ONEND(BanekitiNrvDPDSwoon, Banekiti, DPDSwoon, DPDSwoon);
+    NEW_NERVE_ONEND(BanekitiNrvPointerSwoon, Banekiti, PointerSwoon, PointerSwoon);
 };  // namespace NrvBanekiti
 
 Banekiti::Banekiti(const char* pName) : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mRailMover() {
@@ -29,7 +29,7 @@ void Banekiti::init(const TableIter& rIter) {
     MR::addHitSensorMapObjSimple(this, "body", 4, 80.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorMapObjSimple(this, "right", 4, 80.0f, Vec3f(-100.0f, 0.0f, 0.0f));
     MR::addHitSensorMapObjSimple(this, "left", 4, 80.0f, Vec3f(100.0f, 0.0f, 0.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(4, false);
     initRailRider(rIter);
     mRailMover = new MapPartsRailMover(this);
@@ -63,7 +63,7 @@ void Banekiti::exeRepel() {
     }
 }
 
-void Banekiti::exeDPDSwoon() {
+void Banekiti::exePointerSwoon() {
     if (MR::isFirstStep(this)) {
         mRailMover->mIsActive = false;
     }
@@ -71,14 +71,14 @@ void Banekiti::exeDPDSwoon() {
     MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(Banekiti, BanekitiNrvWait));
 }
 
-void Banekiti::endDPDSwoon() {
+void Banekiti::endPointerSwoon() {
     mRailMover->mIsActive = true;
     mBindStarPointer->kill();
 }
 
 void Banekiti::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    MR::setBaseScale(this, mAnimScaleCtrl->_C * mScale);
+    MR::setBaseScale(this, mAnimScaleCtrl->mScale * mScale);
 }
 
 void Banekiti::control() {
@@ -86,11 +86,11 @@ void Banekiti::control() {
     mRailMover->movement();
 
     if (mRailMover->isWorking()) {
-        mPosition.set(mRailMover->_28);
+        mPosition.set(mRailMover->mStartPos);
     }
 
-    if (!isNerve(GET_NERVE(Banekiti, BanekitiNrvDPDSwoon)) && mBindStarPointer->tryStartPointBind()) {
-        setNerve(GET_NERVE(Banekiti, BanekitiNrvDPDSwoon));
+    if (!isNerve(GET_NERVE(Banekiti, BanekitiNrvPointerSwoon)) && mBindStarPointer->tryStartPointBind()) {
+        setNerve(GET_NERVE(Banekiti, BanekitiNrvPointerSwoon));
     }
 }
 

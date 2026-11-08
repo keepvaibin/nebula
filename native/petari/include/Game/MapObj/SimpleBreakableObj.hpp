@@ -47,7 +47,6 @@ public:
 
     ActorCameraInfo* mCameraInfo;
     s32 mBreakOffsetFrame;
-    s32 _CC;
     s32 mSwitchDeadDelay;
     u16 mBreakFlags;
     s32 mItemType;
@@ -55,7 +54,6 @@ public:
     BenefitItemObj* mKinokoOneUp;
     bool mPlayRiddleSound;
     bool mBreakEnded;
-    bool _E6;
 };
 
 class SimpleBreakableIndirectObj : public SimpleBreakableObj {

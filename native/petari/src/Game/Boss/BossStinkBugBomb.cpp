@@ -15,7 +15,7 @@ namespace NrvBossStinkBugBomb {
     NEW_NERVE(BossStinkBugBombNrvExplosion, BossStinkBugBomb, Explosion);
 };  // namespace NrvBossStinkBugBomb
 
-BossStinkBugBomb::BossStinkBugBomb(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f, 1.0f), _9C(0.0f, 0.0f, 0.0f) {
+BossStinkBugBomb::BossStinkBugBomb(const char* pName) : LiveActor(pName) {
 }
 
 void BossStinkBugBomb::init(const TableIter& rIter) {
@@ -29,7 +29,7 @@ void BossStinkBugBomb::init(const TableIter& rIter) {
     MR::invalidateHitSensor(this, "bomb");
 
     initBinder(60.0f, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(5, false);
     MR::initShadowVolumeSphere(this, 60.0f);
 
@@ -38,13 +38,9 @@ void BossStinkBugBomb::init(const TableIter& rIter) {
     makeActorDead();
 }
 
-void BossStinkBugBomb::control() {
-    _9C *= 0.96f;
-    MR::rotateQuatMoment(&_8C, _9C);
-}
-
+// The bomb never turns: its moment is zero from the start (BossStinkBugBomb.s:27/122/130).
 void BossStinkBugBomb::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, Quat4f(0.0f, 0.0f, 0.0f, 1.0f));
     MR::setBaseScale(this, mScale);
 }
 

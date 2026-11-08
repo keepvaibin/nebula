@@ -4,15 +4,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/Render/Material.hpp"
 #include <cstring>
 
 DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry* pMatPacket)
-    : mMaterial(pMaterial), mMatPacket(pMatPacket), _8(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
+    : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
 }
 
 void DrawBufferShapeDrawer::init(s32 a1) {
-    mMaxPackets = a1 * _8;
+    mMaxPackets = a1 * mNumShapes;
     mPackets = new PacketInfo*[mMaxPackets];
 
     for (s32 idx = 0; idx < mMaxPackets; idx++) {
@@ -27,15 +26,15 @@ void DrawBufferShapeDrawer::init(s32 a1) {
 void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
     Material* material = mMaterial;
     MaterialEntry* matPacket = mMatPacket;
-    s32 __8 = _8;
+    s32 __8 = mNumShapes;
 
     mMaterial = pOther->mMaterial;
     mMatPacket = pOther->mMatPacket;
-    _8 = pOther->_8;
+    mNumShapes = pOther->mNumShapes;
 
     pOther->mMaterial = material;
     pOther->mMatPacket = matPacket;
-    pOther->_8 = __8;
+    pOther->mNumShapes = __8;
 }
 
 void DrawBufferShapeDrawer::draw() const {
@@ -120,7 +119,7 @@ s32 DrawBufferShapeDrawer::findLightSortIndex(const ActorLightCtrl* pLightCtrl, 
         return mNumPackets;
     }
 
-    if (pLightCtrl->_1C != 0) {
+    if (pLightCtrl->mBlendFrom != 0) {
         *pSetLightLoader = true;
         return mNumPackets;
     }
@@ -145,12 +144,12 @@ s32 DrawBufferShapeDrawer::findLightSortIndex(const ActorLightCtrl* pLightCtrl, 
 }
 
 DrawBuffer::DrawBuffer(Model* pModel)
-    : mModelData(pModel->mModelData), mModel(pModel), _8(0), mNumActors(0), mNumMaterials(0), mMaterialNos(nullptr), mNumShapeDrawers(0),
+    : mModelData(pModel->mModelData), mModel(pModel), mMaxActors(0), mNumActors(0), mNumMaterials(0), mMaterialNos(nullptr), mNumShapeDrawers(0),
       mNumOpaShapeDrawers(0), mShapeDrawers(nullptr) {
 }
 
 void DrawBuffer::init(int a1) {
-    _8 = a1;
+    mMaxActors = a1;
     initTable();
 }
 
@@ -245,7 +244,7 @@ void DrawBuffer::initTable() {
         if (index >= 0) {
             s32 matNo = mMaterialNos[index];
             mMaterialNos[idx] = matNo;
-            mShapeDrawers[matNo]->_8++;
+            mShapeDrawers[matNo]->mNumShapes++;
             continue;
         }
 
@@ -275,7 +274,7 @@ void DrawBuffer::initTable() {
     }
 
     for (s32 idx = 0; idx < mNumShapeDrawers; idx++) {
-        mShapeDrawers[idx]->init(_8);
+        mShapeDrawers[idx]->init(mMaxActors);
     }
 }
 

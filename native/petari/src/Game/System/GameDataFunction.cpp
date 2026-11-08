@@ -299,17 +299,15 @@ namespace GameDataFunction {
     }
 
     void resetGameDataGoToGalaxyFirst() {
-        ::getGameDataTemporaryInGalaxy()->resetRaceBestTime();
         ::getGameDataTemporaryInGalaxy()->resetPlayerRestartIdInfo();
-        ::getGameDataTemporaryInGalaxy()->_4 = false;
+        ::getGameDataTemporaryInGalaxy()->mIsRetry = false;
         ::getGameDataTemporaryInGalaxy()->clearAlreadyDoneFlag();
         ::getGameDataTemporaryInGalaxy()->resetStageResultStarPieceParam();
         ::getGameDataTemporaryInGalaxy()->resetStageResultCoinParam();
     }
 
     void resetGameDataGoToGalaxyRetry() {
-        ::getGameDataTemporaryInGalaxy()->resetRaceBestTime();
-        ::getGameDataTemporaryInGalaxy()->_4 = true;
+        ::getGameDataTemporaryInGalaxy()->mIsRetry = true;
     }
 
     void onCompleteEndingCurrentPlayer() {

@@ -79,7 +79,6 @@ void XanimeResourceTable::init() {
     mBckTables = nullptr;
 
     mResourceHolder = nullptr;
-    mSortTable = nullptr;
     mSwapTable = nullptr;
 }
 
@@ -328,34 +327,13 @@ u32 XanimeResourceTable::getIndex(XanimeDirectory* pDir, const char* pTarget) co
     }
 }
 
+// A ghost's recorded frames name their group by hash alone.
 u32 XanimeResourceTable::getIndexFromHash(u32 hash) const {
-    if (mSortTable != nullptr) {
-        u32 index;
-        if (mSortTable->search(hash, &index)) {
-            return index;
-        }
-    }
-
-    return -1;
+    return mGroupIndex.findHash(hash);
 }
 
 u32 XanimeResourceTable::getGroupIndex(const char* pTarget) const {
-    u32 hash = MR::getHashCode(pTarget);
-
-    switch (_0) {
-    case 0:
-        return -1;
-    case 1:
-        u32 position;
-        if (mSortTable->search(hash, &position)) {
-            return position;
-        }
-
-    case 2:
-        break;
-    }
-
-    return -1;
+    return _0 == 1 ? mGroupIndex.find(pTarget) : MR::NameIndex::cNoValue;
 }
 
 XanimeGroupInfo* XanimeResourceTable::getGroupInfoFromHash(u32 hash) const {
@@ -396,12 +374,10 @@ u32 XanimeResourceTable::getSimpleIndex(const char* pTarget) const {
 }
 
 void XanimeResourceTable::createSortTable() {
-    mSortTable = new HashSortTable(mAmountOfGroupInfos);
-    for (int i = 0; i < mAmountOfGroupInfos; i++) {
-        mSortTable->add(mGroupInfos[i].mHash, i);
+    mGroupIndex.reset(mAmountOfGroupInfos);
+    for (u32 i = 0; i < mAmountOfGroupInfos; i++) {
+        mGroupIndex.add(mGroupInfos[i].mParent.mAnimationName, mGroupInfos[i].mHash, i);
     }
-
-    mSortTable->sort();
 }
 
 void* XanimeResourceTable::findResMotion(const char* pTarget) const {

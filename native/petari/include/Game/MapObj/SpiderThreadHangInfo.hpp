@@ -21,5 +21,5 @@ public:
     SpiderThreadPart* mThreadPart;
     s32 mHangIndex;
     bool mIsHanging;
-    s32 _14;
+    s32 mPriority;
 };

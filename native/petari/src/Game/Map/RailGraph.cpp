@@ -7,10 +7,10 @@
 RailGraph::RailGraph() {
     mNodes = 0;
     mNodeCount = 0;
-    _8 = 0;
+    mNumNodes = 0;
     mEdges = 0;
     mEdgeCount = 0;
-    _14 = 0;
+    mNumEdges = 0;
 
     mNodes = new RailGraphNode[0x100];
     mNodeCount = 0x100;
@@ -20,21 +20,20 @@ RailGraph::RailGraph() {
 
 s32 RailGraph::addNode(const Vec3f& rVec) {
     RailGraphNode node;
-    node._0.x = rVec.x;
-    node._0.y = rVec.y;
-    node._0.z = rVec.z;
-    s32 cnt = _8;
-    _8 = cnt + 1;
+    node.mPos.x = rVec.x;
+    node.mPos.y = rVec.y;
+    node.mPos.z = rVec.z;
+    s32 cnt = mNumNodes;
+    mNumNodes = cnt + 1;
     if (cnt == mNodeCount) {
         mNodes = MR::growArray(mNodes, mNodeCount);
         mNodeCount *= 2;
     }
 
     RailGraphNode* nodes = &mNodes[cnt];
-    nodes->_0 = node._0;
-    nodes->_C = node._C;
-    nodes->_10 = node._10;
-    return _8 - 1;
+    nodes->mPos = node.mPos;
+    nodes->mFirstEdge = node.mFirstEdge;
+    return mNumNodes - 1;
 }
 
 void RailGraph::connectNodeTwoWay(s32 a1, s32 a2, const RailGraphEdge* pEdge) {
@@ -45,17 +44,17 @@ void RailGraph::connectNodeTwoWay(s32 a1, s32 a2, const RailGraphEdge* pEdge) {
     }
 
     edge.clearConnectInfo();
-    edge._4 = a1;
-    edge._8 = a2;
-    edge.mDistance = mNodes[a1]._0.distance(mNodes[a2]._0);
-    s32 cnt = _14;
-    _14 = cnt + 1;
+    edge.mNodeA = a1;
+    edge.mNodeB = a2;
+    edge.mDistance = mNodes[a1].mPos.distance(mNodes[a2].mPos);
+    s32 cnt = mNumEdges;
+    mNumEdges = cnt + 1;
     if (cnt == mEdgeCount) {
         mEdges = MR::growArray(mEdges, mEdgeCount);
         mEdgeCount *= 2;
     }
     mEdges[cnt] = edge;
-    s32 edgeIdx = _14 - 1;
+    s32 edgeIdx = mNumEdges - 1;
     connectEdgeToNode(a1, edgeIdx);
     connectEdgeToNode(a2, edgeIdx);
 }
@@ -71,7 +70,7 @@ RailGraphEdge* RailGraph::getEdge(s32 idx) const {
 bool RailGraph::isValidEdge(s32 edgeIdx) const {
     bool ret = false;
 
-    if (edgeIdx >= 0 && edgeIdx < _14) {
+    if (edgeIdx >= 0 && edgeIdx < mNumEdges) {
         ret = true;
     }
 
@@ -80,10 +79,10 @@ bool RailGraph::isValidEdge(s32 edgeIdx) const {
 
 void RailGraph::connectEdgeToNode(s32 a1, s32 a2) {
     RailGraphNode* node = &mNodes[a1];
-    s32 val = node->_C;
+    s32 val = node->mFirstEdge;
 
     if (val == -1) {
-        node->_C = a2;
+        node->mFirstEdge = a2;
     } else {
         s32 next_edge = mEdges[val].getNextEdge(a1);
 
@@ -94,8 +93,6 @@ void RailGraph::connectEdgeToNode(s32 a1, s32 a2) {
 
         mEdges[val].setNextEdge(a2, a1);
     }
-
-    mNodes[a1]._10++;
 }
 
 RailGraphIter RailGraph::getIterator() const {

@@ -17,58 +17,58 @@ namespace {
 };  // namespace
 
 AudRmxSeqNoteOnTimer::AudRmxSeqNoteOnTimer() {
-    _8 = nullptr;
-    _0 = 0.0f;
-    _4 = 0.0f;
-    _C = nullptr;
+    mNote = nullptr;
+    mDelay = 0.0f;
+    mRemaining = 0.0f;
+    mTrack = nullptr;
     initData();
 }
 
 void AudRmxSeqNoteOnTimer::initData() {
-    _8 = nullptr;
-    _4 = 0.0f;
-    _0 = 0.0f;
-    _C = nullptr;
+    mNote = nullptr;
+    mRemaining = 0.0f;
+    mDelay = 0.0f;
+    mTrack = nullptr;
 }
 
 void AudRmxSeqNoteOnTimer::setData(const RemixNoteTrackData* trackData, const RemixNoteData* data) {
-    _C = trackData;
-    _8 = data;
-    _0 = data->_C;
-    _4 = _0 + data->_8;
+    mTrack = trackData;
+    mNote = data;
+    mDelay = data->mStartTick;
+    mRemaining = mDelay + data->mLength;
 }
 
 bool AudRmxSeqNoteOnTimer::update(f32 f1) {
-    if (_4 <= 0.0f) {
+    if (mRemaining <= 0.0f) {
         initData();
         return false;
     }
 
-    _4 -= f1;
+    mRemaining -= f1;
 
-    if (_0 <= 0.0f) {
-        if (_C != nullptr && _8 != nullptr) {
+    if (mDelay <= 0.0f) {
+        if (mTrack != nullptr && mNote != nullptr) {
             AudRemixSequencer* pSeq = AudWrap::getRemixSequencer();
             SoundID id = getFreeSeID();
             SoundHandle* pHandle = AudWrap::getRemixSeqObject()->startSound(id);
-            AudWrap::getSystemSeObject()->writePort(pHandle, 0xc, _C->_0);
-            AudWrap::getSystemSeObject()->writePort(pHandle, 0xb, _8->_0);
-            AudWrap::getSystemSeObject()->writePort(pHandle, 0xf, _8->_4);
+            AudWrap::getSystemSeObject()->writePort(pHandle, 0xc, mTrack->mTrackNo);
+            AudWrap::getSystemSeObject()->writePort(pHandle, 0xb, mNote->mNoteNo);
+            AudWrap::getSystemSeObject()->writePort(pHandle, 0xf, mNote->mVelocity);
 
-            f32 x200 = pSeq->_200;
-            u16 length = (s32)((_8->_8 * 120.0f) / x200);
+            f32 x200 = pSeq->mTempo;
+            u16 length = (s32)((mNote->mLength * 120.0f) / x200);
             if (length < 1) {
                 length = 1;
             } else if (length > 1440) {
                 length = 1440;
             }
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xe, length);
-            _C = nullptr;
-            _8 = nullptr;
+            mTrack = nullptr;
+            mNote = nullptr;
         }
         return true;
     } else {
-        _0 -= f1;
+        mDelay -= f1;
         return false;
     }
 }
@@ -88,50 +88,49 @@ SoundID AudRmxSeqNoteOnTimer::getFreeSeID() {
     return id;
 }
 
-AudRemixSequencer::AudRemixSequencer() {
-    _200 = 120.0f;
-    _204 = 0.0f;
+AudRemixSequencer::AudRemixSequencer() : mTimers(32) {
+    mTempo = 120.0f;
+    mTicksPerFrame = 0.0f;
     initNoteOnBuff();
     setTempo(120.0f);
 }
 
 void AudRemixSequencer::initNoteOnBuff() {
-    for (int i = 0; i < ARRAY_SIZE(_0); i++) {
-        _0[i].initData();
+    for (int i = 0; i < mTimers.size(); i++) {
+        mTimers[i].initData();
     }
 }
 
 void AudRemixSequencer::update() {
-    for (int i = 0; i < ARRAY_SIZE(_0); i++) {
-        bool isUpdate = (_0[i]._4 > 0.0f);
+    for (int i = 0; i < mTimers.size(); i++) {
+        bool isUpdate = (mTimers[i].mRemaining > 0.0f);
         if (isUpdate) {
-            _0[i].update(_204);
+            mTimers[i].update(mTicksPerFrame);
         }
     }
 }
 
 void AudRemixSequencer::setTempo(f32 f1) {
-    _200 = f1;
+    mTempo = f1;
     f32 f2 = f1 + 0.0;
     f32 f3 = 48.0f;
-    _204 = f3 * f2 / 3600.0f;
+    mTicksPerFrame = f3 * f2 / 3600.0f;
 }
 
 AudRmxSeqNoteOnTimer* AudRemixSequencer::newNoteOnTimer() {
-    for (int i = 0; i < ARRAY_SIZE(_0); i++) {
-        bool isUsed = (_0[i]._4 > 0.0f);
+    for (int i = 0; i < mTimers.size(); i++) {
+        bool isUsed = (mTimers[i].mRemaining > 0.0f);
         if (!isUsed) {
-            return &_0[i];
+            return &mTimers[i];
         }
     }
-    return nullptr;
+    const int full = mTimers.size();
+    mTimers.grow();
+    return &mTimers[full];
 }
 
 void AudRemixSequencer::addNoteData(const RemixNoteTrackData* trackData, const RemixNoteData* data) {
-    if (data->_0 >= 0) {
-        AudRmxSeqNoteOnTimer* pTimer = newNoteOnTimer();
-        if (pTimer) {
-            pTimer->setData(trackData, data);
-        }
+    if (data->mNoteNo >= 0) {
+        newNoteOnTimer()->setData(trackData, data);
     }
 }

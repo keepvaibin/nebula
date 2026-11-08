@@ -29,9 +29,9 @@ namespace NrvButterfly {
 
 namespace {
     static const f32 sRadius = 30.0f;
-    static const f32 sDpdPointRadius = 200.0f;
-    static const f32 sDpdPointRadiusFast = 100.0f;
-    static const f32 sDpdSpeedFast = 3.0f;
+    static const f32 sPointerRadius = 200.0f;
+    static const f32 sPointerRadiusFast = 100.0f;
+    static const f32 sPointerSpeedFast = 3.0f;
     static const f32 sAppearStarPeaceScreenRadius = 10.0f;
     static const f32 sWaitAnimRate = 1.0f;
     static const f32 sHomeRadius = 200.0f;
@@ -90,7 +90,7 @@ void Butterfly::init(const TableIter& rIter) {
         mStarPieceAppeared = true;
     }
 
-    MR::initStarPointerTarget(this, ::sDpdPointRadiusFast);
+    MR::initStarPointerTarget(this, ::sPointerRadiusFast);
     MR::setClippingTypeSphere(this, ::sRadius);
     MR::setClippingFar50m(this);
     initNerve(GET_NERVE(Butterfly, HostTypeWait));
@@ -120,10 +120,10 @@ void Butterfly::control() {
         return;
     }
 
-    if (MR::getStarPointerScreenSpeed(port) < ::sDpdSpeedFast) {
-        MR::setStarPointerTargetRadius3d(this, ::sDpdPointRadius);
+    if (MR::getStarPointerScreenSpeed(port) < ::sPointerSpeedFast) {
+        MR::setStarPointerTargetRadius3d(this, ::sPointerRadius);
     } else {
-        MR::setStarPointerTargetRadius3d(this, ::sDpdPointRadiusFast);
+        MR::setStarPointerTargetRadius3d(this, ::sPointerRadiusFast);
     }
     tryAppearStarPeace(port);
 }

@@ -4,8 +4,8 @@
 #include <nebula_geometry.hpp>
 
 struct SkeletalFishRailInfo {
-    LiveActor* _0;
-    f32 _4;
+    LiveActor* mRail;
+    f32 mCoord;
 };
 
 class SkeletalFishRailControl {
@@ -18,11 +18,10 @@ public:
     void getPos(Vec3f*, f32);
     void getMtx(Pos3f*, f32);
 
-    u32 _0;
-    LiveActor* _4;
-    LiveActor* _8;
-    f32 _C;
-    f32 _10;
-    f32 _14;
-    bool _18;
+    u32 mState;
+    LiveActor* mJoinRail;
+    LiveActor* mRail;
+    f32 mRailCoord;
+    f32 mJoinCoord;
+    f32 mSpeed;
 };

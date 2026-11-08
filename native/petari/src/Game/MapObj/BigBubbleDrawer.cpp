@@ -1,7 +1,6 @@
 #include "Game/MapObj/BigBubbleDrawer.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
@@ -20,7 +19,6 @@ namespace {
 BigBubbleDrawer::BigBubbleDrawer() {
     mBubbleTexture = nullptr;
     mRainbowTexture = nullptr;
-    _8 = 0.0f;
     mBubbleTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Bubble.bti"));
     mRainbowTexture = new JUTTexture(MR::loadTexFromArc("BigBubble", "Rainbow.bti"));
 }

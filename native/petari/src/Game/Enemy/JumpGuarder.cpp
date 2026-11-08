@@ -23,7 +23,6 @@ namespace {
     static const s32 sHopStep = 300;
     static const s32 sOpenInt = 74;
     static const s32 sAttack = 360;
-    // static const ??? sSensorRes = ???;
     static const s32 sBabyNum = 4;
     static const f32 sAppearHeight = 500.0f;
     static const f32 sAppearDistance = 2000.0f;
@@ -55,8 +54,8 @@ namespace NrvJumpGuarder {
 };  // namespace NrvJumpGuarder
 
 JumpEmitter::JumpEmitter(const char* pName)
-    : LiveActor(pName), mBodyJointMtx(), mHeadModel(), _C4(0.0f, 0.0f, 0.0f), mIsEventCamera(), mCameraInfo(), mMultEventCamera() {
-    _90.identity();
+    : LiveActor(pName), mBodyJointMtx(), mHeadModel(), mCameraCenter(0.0f, 0.0f, 0.0f), mIsEventCamera(), mCameraInfo(), mMultEventCamera() {
+    mHeadMtx.identity();
 }
 
 void JumpEmitter::kill() {
@@ -81,7 +80,7 @@ void JumpEmitter::startEventCamera() {
 
     mMultEventCamera->start(0);
     mIsEventCamera = true;
-    _C4.set(mPosition);
+    mCameraCenter.set(mPosition);
 }
 
 void JumpEmitter::updateEventCamera() {
@@ -95,7 +94,7 @@ void JumpEmitter::updateEventCamera() {
         mMultEventCamera->nextForce();
     }
 
-    if (::sCameraLimitLength < _C4.squared(*MR::getPlayerCenterPos()) || MR::isOnGroundPlayer() || MR::isPlayerInRush()) {
+    if (::sCameraLimitLength < mCameraCenter.squared(*MR::getPlayerCenterPos()) || MR::isOnGroundPlayer() || MR::isPlayerInRush()) {
         endEventCamera();
     }
 }
@@ -207,11 +206,11 @@ void JumpGuarder::control() {
 
     MR::makeMtxTRS(mtx.mMtx, Vec3f(0.0f, 44.0f, 0.0f), head->mRotation, head->mScale);
 
-    _90.set(mBodyJointMtx);
+    mHeadMtx.set(mBodyJointMtx);
 
     Mtx34f mtx2;
-    mtx2.concat(_90, mtx);
-    _90.set(mtx2);
+    mtx2.concat(mHeadMtx, mtx);
+    mHeadMtx.set(mtx2);
 
     mBumpCooldown = MR::max(mBumpCooldown - 1, 0);
 
@@ -461,7 +460,7 @@ JumpGuarder::JumpGuarder(const char* pName)
 void JumpGuarder::init(const TableIter& rIter) {
     initModelManagerWithAnm("JumpGuarder", nullptr, false);
     // "Jump guarder head"
-    mHeadModel = MR::createPartsModelNoSilhouettedMapObj(this, "ジャンプガーダー頭", "JumpGuarderHead", _90);
+    mHeadModel = MR::createPartsModelNoSilhouettedMapObj(this, "ジャンプガーダー頭", "JumpGuarderHead", mHeadMtx);
     MR::initLightCtrl(mHeadModel);
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneEnemy(this);
@@ -476,7 +475,7 @@ void JumpGuarder::init(const TableIter& rIter) {
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(8, false);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(JumpGuarder, JumpGuarderNrvHide));

@@ -2,6 +2,8 @@
 
 #include "Game/AreaObj/AreaObj.hpp"
 
+struct BgmMuteSet;
+
 class BgmProhibitArea : public AreaObj {
 public:
     BgmProhibitArea(int, const char*);
@@ -14,7 +16,8 @@ public:
         return "BgmProhibitArea";
     }
 
-    bool _3C;
-    bool _3D;
-    Vec3f _40;
+    const BgmMuteSet* mMuteSet;  // this galaxy's stage BGM states; null: the area does nothing
+    bool mIsMuteSet;
+    bool mIsUnmuteSet;
+    Vec3f mPrevPlayerPos;
 };

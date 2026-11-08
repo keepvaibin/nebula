@@ -21,5 +21,4 @@ public:
     void exeDamage();
 
     DinoPackunStateDamage* mStateDamage;
-    f32 _18;
 };

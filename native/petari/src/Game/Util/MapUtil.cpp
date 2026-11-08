@@ -14,15 +14,20 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-static HitInfo mSortBuffer[32];
-static u32 mSortCount;
+namespace {
+    // getNearPolyOnLineSort's hits, nearest first, in the system heap; it grows to the most hits one line has had.
+    HitInfo* sSortBuffer = nullptr;
+    f32* sSortDistance = nullptr;
+    u32 sSortRoom = 0;
+    u32 sSortCount = 0;
+}  // namespace
 
 namespace {
     u32 getStrikeInfoNumCategory(s32 category);
     bool getFirstPolyOnLineCategoryExceptActor(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const LiveActor*, s32);
 
     u32 getStrikeInfoNumCategory(s32 category) {
-        return MR::getCollisionDirector()->getCategoryKeeper(category)->_10;
+        return MR::getCollisionDirector()->getCategoryKeeper(category)->mNumHits;
     }
 
     const HitInfo* getStrikeInfoCategory(s32 category, u32 index) {
@@ -45,9 +50,9 @@ namespace {
                 continue;
             }
 
-            if (minDistance > pHit->_60) {
+            if (minDistance > pHit->mDepth) {
                 nearest = i;
-                minDistance = pHit->_60;
+                minDistance = pHit->mDepth;
             }
         }
 
@@ -249,60 +254,46 @@ namespace MR {
     }
 
     u32 getNearPolyOnLineSort(const Vec3f& rOrigin, const Vec3f& rStart, const Vec3f& rDirection, const HitSensor* pSensor) {
-        u32 count = getCollisionDirector()->getCategoryKeeper(0)->checkStrikeLine(rStart, rDirection, 0, nullptr, nullptr);
-        if (count == 0) {
-            return 0;
+        CollisionCategorizedKeeper* pKeeper = getCollisionDirector()->getCategoryKeeper(0);
+        const u32 count = pKeeper->checkStrikeLine(rStart, rDirection, 0, nullptr, nullptr);
+        sSortCount = 0;
+        if (count > sSortRoom) {
+            delete[] sSortBuffer;
+            delete[] sSortDistance;
+            sSortRoom = count * 2;
+            sSortBuffer = new (NebulaArena::getSystemHeap(), 0) HitInfo[sSortRoom];
+            sSortDistance = new (NebulaArena::getSystemHeap(), 0) f32[sSortRoom];
         }
 
-        const HitInfo* hitRoom[64];
-        const HitInfo** const hits = count <= ARRAY_SIZEU(hitRoom) ? hitRoom : new const HitInfo*[count];
-        u32 excluded = 0;
+        // Insertion by distance: equal distances keep the order the keeper found them in.
         for (u32 i = 0; i < count; i++) {
-            hits[i] = getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(i);
-            if (pSensor && hits[i]->mParentTriangle.getSensor() == pSensor) {
-                hits[i] = nullptr;
-                excluded++;
-            }
-        }
-
-        mSortCount = count - excluded;
-        if (mSortCount >= 32) {
-            mSortCount = 32;
-        }
-
-        for (u32 i = 0; i < mSortCount; i++) {
-            f32 minDistance = 1000000.0f;
-            u32 nearest = 0;
-            for (u32 j = 0; j < count; j++) {
-                if (hits[j]) {
-                    const HitInfo* pHit = getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(j);
-                    Vec3f offset(rOrigin);
-                    offset.sub(pHit->mHitPos);
-                    f32 distance = offset.length();
-                    if (minDistance > distance) {
-                        nearest = j;
-                        minDistance = distance;
-                    }
-                }
+            const HitInfo* pHit = pKeeper->getStrikeInfo(i);
+            if (pSensor != nullptr && pHit->mParentTriangle.getSensor() == pSensor) {
+                continue;
             }
 
-            mSortBuffer[i] = *getCollisionDirector()->getCategoryKeeper(0)->getStrikeInfo(nearest);
-            hits[nearest] = nullptr;
+            Vec3f offset(rOrigin);
+            offset.sub(pHit->mHitPos);
+            const f32 distance = offset.length();
+            u32 at = sSortCount;
+            for (; at > 0 && sSortDistance[at - 1] > distance; at--) {
+                sSortBuffer[at] = sSortBuffer[at - 1];
+                sSortDistance[at] = sSortDistance[at - 1];
+            }
+            sSortBuffer[at] = *pHit;
+            sSortDistance[at] = distance;
+            sSortCount++;
         }
 
-        if (hits != hitRoom) {
-            delete[] hits;
-        }
-
-        return mSortCount;
+        return sSortCount;
     }
 
     bool getSortedPoly(Vec3f* pDst, Triangle* pTriangle, u32 sortIndex) {
-        if (mSortCount <= sortIndex) {
+        if (sSortCount <= sortIndex) {
             return false;
         }
 
-        const HitInfo& rHit = mSortBuffer[sortIndex];
+        const HitInfo& rHit = sSortBuffer[sortIndex];
         if (pTriangle != nullptr) {
             *pTriangle = rHit.mParentTriangle;
         }
@@ -315,11 +306,11 @@ namespace MR {
     }
 
     const Triangle* getSortedPoly(u32 sortIndex) {
-        if (mSortCount <= sortIndex) {
+        if (sSortCount <= sortIndex) {
             return nullptr;
         }
 
-        return &mSortBuffer[sortIndex].mParentTriangle;
+        return &sSortBuffer[sortIndex].mParentTriangle;
     }
 
     bool isExistMapCollision(const Vec3f& rParam1, const Vec3f& rParam2) {

@@ -37,7 +37,7 @@ private:
     f32 mRailCoordSpeed;
     Vec3f mRailVec;
     Vec3f mFront;
-    f32 _A8;
+    f32 mDriftStep;
     bool mIsRail;
     bool mIsForceDetonated;
     bool mEyesOpen;

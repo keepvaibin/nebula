@@ -11,7 +11,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-PoltaActionBase::PoltaActionBase(const char* pName, Polta* pPolta) : ActorStateBase< Polta >(pName, pPolta), _10() {
+PoltaActionBase::PoltaActionBase(const char* pName, Polta* pPolta) : ActorStateBase< Polta >(pName, pPolta) {
     MR::createCenterScreenBlur();
 }
 
@@ -46,7 +46,7 @@ bool PoltaActionBase::updateDamageBody(bool isFirst) {
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormalStrong();
         MR::stopScene(3);
-        getHost()->_EC = 0.0f;
+        getHost()->mRotateSpeed = 0.0f;
         if (isFirst) {
             getHost()->appearBreakModelFirst(getHost()->mPosition);
         } else {
@@ -79,7 +79,7 @@ bool PoltaActionBase::updateBreakBody() {
         MR::zeroVelocity(getHost());
         MR::shakeCameraNormalStrong();
         MR::stopScene(3);
-        getHost()->_EC = 0.0f;
+        getHost()->mRotateSpeed = 0.0f;
         getHost()->appearBreakModelLast(getHost()->mPosition);
     }
     this->updateScreamSensor();
@@ -107,7 +107,7 @@ bool PoltaActionBase::updateDamageCore() {
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormalStrong();
         MR::stopScene(3);
-        getHost()->_EC = 0.0f;
+        getHost()->mRotateSpeed = 0.0f;
         MR::zeroVelocity(getHost());
         PoltaFunction::disperseBombTeresa(getHost());
     }

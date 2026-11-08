@@ -1180,41 +1180,38 @@ namespace MR {
         normalize(pA2);
     }
 
-    void moveAndTurnToDirection(LiveActor* pActor, Vec3f* pA2, const Vec3f& rA3, f32 a4, f32 a5, f32 a6, f32 a7) {
-        turnVecToVecCosOnPlane(pA2, rA3, pActor->mGravity, cosDegree(a7));
-        turnDirectionToGround(pActor, pA2);
-        Vec3f stack_8;
-        calcVelocityMoveToDirection(&stack_8, pActor, *pA2, a4);
-        pActor->mVelocity.add(stack_8);
-        pActor->mVelocity.scale(a6);
+    void moveAndTurnToDirection(LiveActor* pActor, Vec3f* pFront, const Vec3f& rDir, const ActorMoveParam& rParam) {
+        turnVecToVecCosOnPlane(pFront, rDir, pActor->mGravity, cosDegree(rParam.mTurnDegree));
+        turnDirectionToGround(pActor, pFront);
+        Vec3f move;
+        calcVelocityMoveToDirection(&move, pActor, *pFront, rParam.mMoveSpeed);
+        pActor->mVelocity.add(move);
+        pActor->mVelocity.scale(rParam.mDamp);
         reboundVelocityFromCollision(pActor, 0.0f, 0.0f, 1.0f);
-        addVelocityToGravityOrGround(pActor, a5);
+        addVelocityToGravityOrGround(pActor, rParam.mGravity);
     }
 
-    void moveAndTurnToTarget(LiveActor* pActor, Vec3f* pA2, const Vec3f& rA3, f32 a4, f32 a5, f32 a6, f32 a7) {
-        Vec3f stack_8 = rA3 - pActor->mPosition;
-        moveAndTurnToDirection(pActor, pA2, stack_8, a4, a5, a6, a7);
+    void moveAndTurnToTarget(LiveActor* pActor, Vec3f* pFront, const Vec3f& rTarget, const ActorMoveParam& rParam) {
+        moveAndTurnToDirection(pActor, pFront, rTarget - pActor->mPosition, rParam);
     }
 
-    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pA2, f32 a3, f32 a4, f32 a5, f32 a6) {
-        Vec3f stack_8 = *getPlayerPos() - pActor->mPosition;
-        moveAndTurnToDirection(pActor, pA2, stack_8, a3, a4, a5, a6);
+    void moveAndTurnToPlayer(LiveActor* pActor, Vec3f* pFront, const ActorMoveParam& rParam) {
+        moveAndTurnToDirection(pActor, pFront, *getPlayerPos() - pActor->mPosition, rParam);
     }
 
-    void flyAndTurnAlongRailSearchingPlayer(LiveActor* pActor, Vec3f* pA2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, bool a8) {
+    void flyAndTurnAlongRailSearchingPlayer(LiveActor* pActor, Vec3f* pFront, f32 railSpeed, const ActorMoveParam& rParam, bool a8) {
         setRailDirectionCloseToNearestPos(pActor, *getPlayerCenterPos());
-        Vec3f stack_20;
-        calcMovingDirectionAlongRail(pActor, &stack_20, pActor->mPosition, a3, a8, nullptr);
-        turnVecToVecDegree(pA2, *pA2, stack_20, a7, Vec3f(0, 1, 0));
-        pActor->mVelocity.add(*pA2 * a4);
-        pActor->mVelocity.scale(a6);
+        Vec3f railDir;
+        calcMovingDirectionAlongRail(pActor, &railDir, pActor->mPosition, railSpeed, a8, nullptr);
+        turnVecToVecDegree(pFront, *pFront, railDir, rParam.mTurnDegree, Vec3f(0, 1, 0));
+        pActor->mVelocity.add(*pFront * rParam.mMoveSpeed);
+        pActor->mVelocity.scale(rParam.mDamp);
         reboundVelocityFromCollision(pActor, 0.0f, 0.0f, 1.0f);
-        addVelocityToGravityOrGround(pActor, a5);
+        addVelocityToGravityOrGround(pActor, rParam.mGravity);
     }
 
-    void escapeFromPlayer(LiveActor* pActor, Vec3f* pA2, f32 a3, f32 a4, f32 a5, f32 a6) {
-        Vec3f stack_8 = pActor->mPosition - *MR::getPlayerPos();
-        moveAndTurnToDirection(pActor, pA2, stack_8, a3, a4, a5, a6);
+    void escapeFromPlayer(LiveActor* pActor, Vec3f* pFront, const ActorMoveParam& rParam) {
+        moveAndTurnToDirection(pActor, pFront, pActor->mPosition - *MR::getPlayerPos(), rParam);
     }
 
 };  // namespace MR
@@ -1249,34 +1246,33 @@ namespace {
 };  // namespace
 
 namespace MR {
-    void moveAndTurnToDirection(LiveActor* pActor, const Vec3f& rA2, f32 a3, f32 a4, f32 a5, f32 a6) {
-        Vec3f stack_8;
-        calcFrontVec(&stack_8, pActor);
-        moveAndTurnToDirection(pActor, &stack_8, rA2, a3, a4, a5, a6);
-        ::calcRotate(pActor, stack_8, a6);
+    void moveAndTurnToDirection(LiveActor* pActor, const Vec3f& rDir, const ActorMoveParam& rParam) {
+        Vec3f front;
+        calcFrontVec(&front, pActor);
+        moveAndTurnToDirection(pActor, &front, rDir, rParam);
+        ::calcRotate(pActor, front, rParam.mTurnDegree);
     }
 
-    void moveAndTurnToTarget(LiveActor* pActor, const Vec3f& rA2, f32 a3, f32 a4, f32 a5, f32 a6) {
-        Vec3f stack_14;
-        calcFrontVec(&stack_14, pActor);
-        normalizeOrZero(&stack_14);
-        Vec3f stack_8 = rA2 - pActor->mPosition;
-        moveAndTurnToDirection(pActor, &stack_14, stack_8, a3, a4, a5, a6);
-        ::calcRotate(pActor, stack_14, a6);
+    void moveAndTurnToTarget(LiveActor* pActor, const Vec3f& rTarget, const ActorMoveParam& rParam) {
+        Vec3f front;
+        calcFrontVec(&front, pActor);
+        normalizeOrZero(&front);
+        moveAndTurnToDirection(pActor, &front, rTarget - pActor->mPosition, rParam);
+        ::calcRotate(pActor, front, rParam.mTurnDegree);
     }
 
-    void moveAndTurnToPlayer(LiveActor* pActor, f32 a2, f32 a3, f32 a4, f32 a5) {
-        moveAndTurnToTarget(pActor, *getPlayerPos(), a2, a3, a4, a5);
+    void moveAndTurnToPlayer(LiveActor* pActor, const ActorMoveParam& rParam) {
+        moveAndTurnToTarget(pActor, *getPlayerPos(), rParam);
     }
 
-    void moveAndTurnAlongRail(LiveActor* pActor, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, bool* pA7) {
-        Quat4f stack_20;
-        Vec3f stack_14;
-        makeQuatRotateDegree(&stack_20, pActor->mRotation);
-        stack_20.getZDir(stack_14);
-        Vec3f stack_8(0, 0, 0);
-        calcMovingDirectionAlongRailH(pActor, &stack_8, pActor->mPosition, a2, pA7);
-        moveAndTurnToDirection(pActor, &stack_14, stack_8, a3, a4, a5, a6);
-        ::calcRotate(pActor, stack_14, a6);
+    void moveAndTurnAlongRail(LiveActor* pActor, f32 railSpeed, const ActorMoveParam& rParam, bool* pA7) {
+        Quat4f rotation;
+        Vec3f front;
+        makeQuatRotateDegree(&rotation, pActor->mRotation);
+        rotation.getZDir(front);
+        Vec3f railDir(0, 0, 0);
+        calcMovingDirectionAlongRailH(pActor, &railDir, pActor->mPosition, railSpeed, pA7);
+        moveAndTurnToDirection(pActor, &front, railDir, rParam);
+        ::calcRotate(pActor, front, rParam.mTurnDegree);
     }
 };  // namespace MR

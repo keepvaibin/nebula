@@ -10,11 +10,11 @@ AreaObjFollower::AreaObjFollower(AreaObj* pObj, const TableIter& rIter) : BaseMa
 
 void AreaObjFollower::update() {
     if (MR::isDead(static_cast< LiveActor* >(getFollowTargetActor())) || !isValid()) {
-        mObj->_15 = false;
+        mObj->mIsFollowValid = false;
     } else {
         calcFollowMatrix(&mFollowMtx);
 
-        mObj->_15 = true;
+        mObj->mIsFollowValid = true;
     }
 }
 

@@ -50,12 +50,12 @@ public:
     void exeJumpH();
 
     s32 mBehavior;
-    bool _160;
-    u16 _162;
-    u16 _164;
-    f32 _168;
-    f32 _16C;
-    f32 _170;
-    Vec3f _174;
-    f32 _180;
+    bool mIsFalling;
+    u16 mIsLanded;
+    u16 mWaitStep;
+    f32 mJumpHeight;
+    f32 mJumpSpeed;
+    f32 mMoveSpeed;
+    Vec3f mMoveDir;
+    f32 mJumpScale;
 };

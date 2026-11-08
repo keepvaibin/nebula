@@ -18,7 +18,7 @@ public:
     Vec3f mPosition;
     Vec3f mAxisY;
     Vec3f mAxisZ;
-    f32 _24;
-    f32 _28;
-    f32 _2C;
+    f32 mQuadCoef;
+    f32 mLinearCoef;
+    f32 mDistance;
 };

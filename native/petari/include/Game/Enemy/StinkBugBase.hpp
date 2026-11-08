@@ -17,10 +17,10 @@ public:
     bool isPlayerInTerritory(f32, f32, f32, f32) const;
     bool isHitHorn(HitSensor*, HitSensor*, f32) const;
 
-    Vec3f _8C;
-    Vec3f _98;
-    Vec3f _A4;
-    f32 _B0;
+    Vec3f mFront;
+    Vec3f mInitPos;
+    Vec3f mInitFront;
+    f32 mTerritoryAngle;
     f32 mRadius;
-    bool _B8;
+    bool mIsTurnLeft;
 };

@@ -26,8 +26,8 @@ public:
     void exeOn();
     void exeSwitchUp();
 
-    CollisionParts* _8C;
+    CollisionParts* mMoveCollision;
     MapObjConnector* mConnector;
     s32 mTimer;
-    u8 _98;
+    u8 mIsHit;
 };

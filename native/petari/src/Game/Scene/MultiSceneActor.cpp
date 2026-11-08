@@ -12,7 +12,7 @@
 #include "Game/Render/Model.hpp"
 
 MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool param3)
-    : NameObj(pName), mTranslation(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), _30(true), mModelManager(nullptr),
+    : NameObj(pName), mTranslation(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mIsDead(true), mModelManager(nullptr),
       mEffectSystem(nullptr), mEffectKeeper(nullptr), mSpine(nullptr) {
     mModelManager = new ModelManager();
     mModelManager->init(pModelName, nullptr, param3);
@@ -22,7 +22,7 @@ void MultiSceneActor::init(const TableIter& rIter) {
 }
 
 void MultiSceneActor::movement() {
-    if (_30) {
+    if (mIsDead) {
         return;
     }
 
@@ -32,7 +32,7 @@ void MultiSceneActor::movement() {
         mSpine->update();
     }
 
-    if (_30) {
+    if (mIsDead) {
         return;
     }
 
@@ -40,7 +40,7 @@ void MultiSceneActor::movement() {
 }
 
 void MultiSceneActor::calcAnim() {
-    if (_30) {
+    if (mIsDead) {
         return;
     }
 
@@ -74,7 +74,7 @@ void MultiSceneActor::calcAnim() {
 }
 
 void MultiSceneActor::calcViewAndEntry() {
-    if (_30) {
+    if (mIsDead) {
         return;
     }
 
@@ -83,7 +83,7 @@ void MultiSceneActor::calcViewAndEntry() {
 }
 
 void MultiSceneActor::appear() {
-    _30 = false;
+    mIsDead = false;
 
     calcAnim();
 }
@@ -93,7 +93,7 @@ void MultiSceneActor::kill() {
         mEffectKeeper->clear();
     }
 
-    _30 = true;
+    mIsDead = true;
 }
 
 ModelManager* MultiSceneActor::getModelManager() const {

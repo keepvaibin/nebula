@@ -107,14 +107,12 @@ public:
     BigBubble* mMergeBubble;
     BigBubble* mMergeBubbles[6];
     Pos3f mEffectMtx;
-    Pos3f _E8;
     Pos3f mBaseMtx;
     Quat4f mBubbleQuat;
     Quat4f mRiderQuat;
     Vec3f mRiderBasePos;
     Vec3f mRiderPos;
     Vec3f mSpawnPosition;
-    Vec3f _18C;
     Vec3f mPointerPos;
     Vec3f mPushDirection;
     Vec3f mMoment;
@@ -125,17 +123,14 @@ public:
     f32 mPointAccel;
     s32 mPushInvalidTime;  // some timer
     s32 mReduceVolumeTimer;
-    s32 _208;  // some timer
     s32 mMergeIndex;
     s32 mShapeType;
-    s32 _214;
     f32 mAppearRadius;
     f32 mVolume;
     f32 mDrawZ;
     f32 mBinderRadius;
     Color8 mWarningColor;
     bool mIsObstruct;
-    bool _22D;
     bool mIsHidden;
     bool mIsExitLimitter;
     bool mIsBroken;

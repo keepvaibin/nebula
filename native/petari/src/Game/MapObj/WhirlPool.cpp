@@ -1,11 +1,9 @@
 #include "Game/MapObj/WhirlPool.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WhirlPoolAccelerator.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 NebulaColor8 sWhirlPoolStageColor1 = {0x28, 0x28, 0x28, 0x14};

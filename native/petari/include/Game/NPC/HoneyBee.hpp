@@ -34,9 +34,9 @@ public:
     void exeFlyLectureA();
     void exeFlyLectureB();
 
-    s32 _15C;
-    Mtx34f _160;
-    Vec3f _190;
+    s32 mRailPointNo;
+    Mtx34f mTalkMtx;
+    Vec3f mClippingCenter;
     s32 mArg0;
-    f32 _1A0;
+    f32 mFloatOffset;
 };

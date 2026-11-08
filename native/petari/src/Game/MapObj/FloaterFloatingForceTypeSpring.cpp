@@ -17,9 +17,9 @@ FloaterFloatingForceTypeSpring::~FloaterFloatingForceTypeSpring() {
 }
 
 FloaterSpringForce::FloaterSpringForce(f32 param1, f32 param2, f32 param3) : mSpringValue() {
-    _0 = param1;
-    _4 = param2;
-    _8 = param3;
+    mBaseValue = param1;
+    mSpring = param2;
+    mDamp = param3;
     mSpringValue = new SpringValue(param1, 0.0f, param2, param3, 0.0f);
 }
 
@@ -28,13 +28,13 @@ void FloaterSpringForce::addSpringVelocity(f32 vel) {
 }
 
 void FloaterSpringForce::setSpringBaseValue(f32 param1) {
-    _0 = param1;
+    mBaseValue = param1;
 
-    mSpringValue->setParam(_0, 0.0f, _4, _8, 0.0f);
+    mSpringValue->setParam(mBaseValue, 0.0f, mSpring, mDamp, 0.0f);
 }
 
 FloaterFloatingForceTypeSpring::FloaterFloatingForceTypeSpring(LiveActor* pHost, const char* pName)
-    : FloaterFloatingForce(pHost, pName), mSpringForce(), mVelocity(gZeroVec), _48() {
+    : FloaterFloatingForce(pHost, pName), mSpringForce(), mVelocity(gZeroVec), mRideSinkSpeed() {
 }
 
 void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
@@ -50,7 +50,7 @@ void FloaterFloatingForceTypeSpring::init(const TableIter& rIter) {
 
     s32 rotateAxis = 0;
     MR::getMapPartsArgRotateAxis(&rotateAxis, rIter);
-    _48 = rotateAxis * 0.1f;
+    mRideSinkSpeed = rotateAxis * 0.1f;
 
     mSpringForce = new FloaterSpringForce(-mMoveConditionType, rotateSpeed, rotateAngle);
 
@@ -71,7 +71,7 @@ void FloaterFloatingForceTypeSpring::updateVelocity() {
         sinkSpeed *= 3.0f;
     }
 
-    mVelocity.set(_28 * sinkSpeed);
+    mVelocity.set(mUp * sinkSpeed);
 
     if (MR::isNearZero(sinkSpeed)) {
         mVelocity.zero();
@@ -85,18 +85,18 @@ void FloaterFloatingForceTypeSpring::updateHostVelocity(Vec3f* pDst) const {
 }
 
 void FloaterFloatingForceTypeSpring::soundMoveSE() {
-    if (_18 == nullptr) {
+    if (mObjName == nullptr) {
         return;
     }
 
     if (getCurrentSinkSpeed() > ::sSpeedMin) {
-        const char* seMoveDown = FloaterFunction::getSeMoveDown(_18);
+        const char* seMoveDown = FloaterFunction::getSeMoveDown(mObjName);
 
         if (seMoveDown != nullptr) {
             MR::startLevelSound(mHost, seMoveDown);
         }
     } else if (getCurrentSinkSpeed() < -::sSpeedMin) {
-        const char* seMoveUp = FloaterFunction::getSeMoveUp(_18);
+        const char* seMoveUp = FloaterFunction::getSeMoveUp(mObjName);
 
         if (seMoveUp != nullptr) {
             MR::startLevelSound(mHost, seMoveUp);
@@ -143,7 +143,7 @@ void FloaterFloatingForceTypeSpring::exeWait() {
 void FloaterFloatingForceTypeSpring::exeMove() {
     if (isFirstStep()) {
         mSpringForce->setSpringBaseValue(-mMoveConditionType);
-        mSpringForce->addSpringVelocity(-_48);
+        mSpringForce->addSpringVelocity(-mRideSinkSpeed);
     }
 
     updateVelocity();
@@ -153,22 +153,22 @@ void FloaterFloatingForceTypeSpring::exeMove() {
 
 void FloaterFloatingForceTypeSpring::exeMoveReturn() {
     if (isFirstStep()) {
-        mSpringForce->setSpringBaseValue((mHost->mPosition - _1C).length());
+        mSpringForce->setSpringBaseValue((mHost->mPosition - mBasePos).length());
     }
 
     updateVelocity();
 
-    if (_18 != nullptr && getCurrentSinkSpeed() != ::sSpeedMin) {
-        const char* seMoveUp = FloaterFunction::getSeMoveUp(_18);
+    if (mObjName != nullptr && getCurrentSinkSpeed() != ::sSpeedMin) {
+        const char* seMoveUp = FloaterFunction::getSeMoveUp(mObjName);
 
         if (seMoveUp != nullptr) {
             MR::startLevelSound(mHost, seMoveUp);
         }
     }
 
-    if (MR::isNearZero(_1C - mHost->mPosition)) {
+    if (MR::isNearZero(mBasePos - mHost->mPosition)) {
         if (MR::isNearZero(getCurrentSinkSpeed(), 0.1f)) {
-            mHost->mPosition.set(_1C);
+            mHost->mPosition.set(mBasePos);
             setNerve(GET_NERVE(FloaterFloatingForceTypeSpring, HostTypeWait));
             return;
         }

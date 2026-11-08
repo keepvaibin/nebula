@@ -51,7 +51,6 @@ public:
         return mFixPoints[idxV].mPoints[idxU];
     }
 
-    u32 _8C;  // Note: unused?
     const char* mObjName;
     bool mDisableLighting;
     s32 mNumPointsV;

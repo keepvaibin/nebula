@@ -6,9 +6,6 @@
 
 namespace {
     static const f32 sPlayerSpeedMin = 4.0f;
-    // static const s32 sStepToTalkStart = _;
-    // static const s32 sStepToTalkEnd = _;
-    // static const s32 sStepToTalkRestart = _;
 };  // namespace
 
 TalkSupportPlayerWatcher::TalkSupportPlayerWatcher() : mEnableTalkCounter(), mDisableTalkCounter() {

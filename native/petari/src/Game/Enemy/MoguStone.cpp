@@ -26,11 +26,11 @@ namespace NrvMoguStone {
 
 // Initializer list doesn't match
 MoguStone::MoguStone(const char* pName, const char* pModelName) : ModelObj(pName, pModelName, nullptr, -2, -2, -2, false) {
-    _90.set(0, 0, 0, 1);
-    _A0.set(0, 0, 0, 1);
-    _B0.set(0.0f, 0.0f, 1.0f);
-    _BC = 0.0f;
-    _C0 = true;
+    mPoseQuat.set(0, 0, 0, 1);
+    mRotateQuat.set(0, 0, 0, 1);
+    mThrowDir.set(0.0f, 0.0f, 1.0f);
+    mThrowSpeed = 0.0f;
+    mIsThrowHorizontal = true;
 }
 
 void MoguStone::init(const TableIter& rIter) {
@@ -51,7 +51,7 @@ void MoguStone::appear() {
 }
 
 void MoguStone::emit(bool arg1, const Vec3f& pArg2, const Vec3f& pArg3, f32 arg4) {
-    _BC = arg4;
+    mThrowSpeed = arg4;
 
     mPosition.set(pArg2);
 
@@ -65,37 +65,37 @@ void MoguStone::emit(bool arg1, const Vec3f& pArg2, const Vec3f& pArg3, f32 arg4
     if (arg1) {
         MR::onCalcGravity(this);
 
-        MR::vecKillElement(v1, mGravity, &_B0);
-        _C0 = true;
+        MR::vecKillElement(v1, mGravity, &mThrowDir);
+        mIsThrowHorizontal = true;
     } else {
         MR::offCalcGravity(this);
-        _B0.set(v1);
-        _C0 = false;
+        mThrowDir.set(v1);
+        mIsThrowHorizontal = false;
     }
 
-    MR::normalizeOrZero(&_B0);
+    MR::normalizeOrZero(&mThrowDir);
     setNerve(GET_NERVE(MoguStone, MoguStoneNrvThrow));
 }
 
 void MoguStone::doBehavior() {
     if (MR::isFirstStep(this)) {
-        _A0.set(0, 0, 0, 1);
+        mRotateQuat.set(0, 0, 0, 1);
     }
 
-    if (_C0) {
-        MR::vecKillElement(_B0, mGravity, &_B0);
-        MR::normalizeOrZero(&_B0);
+    if (mIsThrowHorizontal) {
+        MR::vecKillElement(mThrowDir, mGravity, &mThrowDir);
+        MR::normalizeOrZero(&mThrowDir);
     }
 
-    f32 scale = _BC;
-    Vec3f v1(_B0);
+    f32 scale = mThrowSpeed;
+    Vec3f v1(mThrowDir);
     v1.x *= scale;
     v1.y *= scale;
     v1.z *= scale;
     mVelocity.set(v1);
 
     Vec3f up(-mGravity);
-    MR::makeQuatUpFront(&_90, up, _B0);
+    MR::makeQuatUpFront(&mPoseQuat, up, mThrowDir);
 
     if (MR::isGreaterStep(this, 100)) {
         MR::emitEffect(this, "Break");
@@ -115,8 +115,8 @@ void MoguStone::startThrowLevelSound() {
 void MoguStone::exeThrow() {
     startThrowLevelSound();
     doBehavior();
-    NebulaQuatMultiply(&_A0, &_90, &_90);
-    _90.normalize();
+    NebulaQuatMultiply(&mRotateQuat, &mPoseQuat, &mPoseQuat);
+    mPoseQuat.normalize();
 
     if (MR::isBinded(this)) {
         MR::emitEffect(this, "Break");
@@ -131,8 +131,8 @@ void MoguStone::exeThrow() {
 }
 
 void MoguStone::exeFall() {
-    NebulaQuatMultiply(&_A0, &_90, &_90);
-    _90.normalize();
+    NebulaQuatMultiply(&mRotateQuat, &mPoseQuat, &mPoseQuat);
+    mPoseQuat.normalize();
     MR::applyVelocityDampAndGravity(this, 2.0f, 0.8f, 0.98f, 0.98f, 1.0f);
 
     if (MR::isBinded(this) || MR::isGreaterStep(this, 60)) {
@@ -182,7 +182,7 @@ void MoguStone::calcAndSetBaseMtx() {
     mtx[1][3] = 0.0f;
     mtx[2][3] = 0.0f;
 
-    mtx.setQT(_90, mPosition);
+    mtx.setQT(mPoseQuat, mPosition);
 
     MR::setBaseTRMtx(this, mtx);
 }
@@ -208,20 +208,20 @@ void ThrowingIce::init(const TableIter& rIter) {
 
 void ThrowingIce::emitIce(const Vec3f& arg1, const Vec3f& arg2, f32 arg3, const Vec3f& arg4) {
     mPath->initFromUpVectorAddHeight(arg1, arg2, -arg4, ::hAddHeight);
-    _BC = arg3;
+    mThrowSpeed = arg3;
 
     Vec3f v2(arg2);
     v2 -= arg1;
-    MR::vecKillElement(v2, mGravity, &_B0);
-    MR::normalizeOrZero(&_B0);
+    MR::vecKillElement(v2, mGravity, &mThrowDir);
+    MR::normalizeOrZero(&mThrowDir);
     setNerve(GET_NERVE(MoguStone, MoguStoneNrvThrow));
     MR::emitEffect(this, "Smoke");
 }
 
 void ThrowingIce::doBehavior() {
     if (MR::isFirstStep(this)) {
-        Vec3f v1 = _B0.cross(mGravity);
-        _A0.setRotate(v1, 0.25f);
+        Vec3f v1 = mThrowDir.cross(mGravity);
+        mRotateQuat.setRotate(v1, 0.25f);
     }
 
     f32 rate = MR::calcNerveRate(this, 101);

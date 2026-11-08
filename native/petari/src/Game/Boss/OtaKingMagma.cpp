@@ -21,8 +21,8 @@ namespace {
 };  // namespace
 
 OtaKingMagma::OtaKingMagma(LiveActor* pHost, s32 drawBufferType)
-    : PartsModel(pHost, "オタキングマグマ", "OtaKingMagma", nullptr, drawBufferType, true), mBloomModel(), _A0(), _A4() {
-    _A0 = MR::initMaterialProjmapEffectMtxSetter(this);
+    : PartsModel(pHost, "オタキングマグマ", "OtaKingMagma", nullptr, drawBufferType, true), mBloomModel(), mProjmapSetter(), mBloomProjmapSetter() {
+    mProjmapSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::prepareMaterials(this);
 }
 
@@ -36,7 +36,7 @@ void OtaKingMagma::init(const TableIter& rIter) {
     mSoundObject->setTrans(&mHost->mPosition);
 
     mBloomModel = new PartsModel(mHost, "オタキングマグマブルーム", "OtaKingMagmaBloom", nullptr, MR::DrawBufferType_BloomModel, true);
-    _A4 = MR::initMaterialProjmapEffectMtxSetter(mBloomModel);
+    mBloomProjmapSetter = MR::initMaterialProjmapEffectMtxSetter(mBloomModel);
     MR::prepareMaterials(mBloomModel);
     mBloomModel->mPosition.set(mPosition);
     Vec3f& rBloomPosition = mBloomModel->mPosition;
@@ -45,8 +45,8 @@ void OtaKingMagma::init(const TableIter& rIter) {
     mBloomModel->mScale.set(mScale);
     mBloomModel->initWithoutIter();
     MR::startBtk(mBloomModel, "OtaKingMagmaBloom");
-    _A0->updateMtxUseBaseMtx();
-    _A4->updateMtxUseBaseMtx();
+    mProjmapSetter->updateMtxUseBaseMtx();
+    mBloomProjmapSetter->updateMtxUseBaseMtx();
     MR::registerDemoSimpleCastAll(this);
 }
 

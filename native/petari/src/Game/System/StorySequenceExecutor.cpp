@@ -497,7 +497,7 @@ namespace {
     NEW_NERVE(StorySequenceExecutorStaffRollSequence, StorySequenceExecutor, StaffRollSequence);
 };  // namespace
 
-StorySequenceExecutor::StorySequenceExecutor() : NerveExecutor("StorySequenceExecutor"), mNextNerve(), mDemoObj(), mSaveObj(), _48(), _6C(), _B0() {
+StorySequenceExecutor::StorySequenceExecutor() : NerveExecutor("StorySequenceExecutor"), mNextNerve(), mDemoObj(), mSaveObj(), mDemoSequences(), mDynamicDemoInfos(), mIsSaveStarted() {
     mDemoObj = new NameObj("StorySequenceExecutor");
     mSaveObj = new NameObj("Save");
     mStageName = "";
@@ -512,15 +512,15 @@ void StorySequenceExecutor::update() {
 
 namespace {
     inline bool isDemoSequenceEnd(const StorySequenceExecutorType::DemoSequenceInfo* pInfo) {
-        return pInfo->_0 == 12 || pInfo->_0 == 13;
+        return pInfo->mType == 12 || pInfo->mType == 13;
     }
 };  // namespace
 
 bool StorySequenceExecutor::isNeedMoviePlayerExecutingEventEnum() const {
-    for (s32 i = 0; i < _48.size(); i++) {
-        const StorySequenceExecutorType::DemoSequenceInfo* pInfo = _48[i];
+    for (s32 i = 0; i < mDemoSequences.size(); i++) {
+        const StorySequenceExecutorType::DemoSequenceInfo* pInfo = mDemoSequences[i];
         while (!isDemoSequenceEnd(pInfo)) {
-            if (pInfo->_0 == 2) {
+            if (pInfo->mType == 2) {
                 return true;
             }
 
@@ -532,14 +532,14 @@ bool StorySequenceExecutor::isNeedMoviePlayerExecutingEventEnum() const {
 }
 
 bool StorySequenceExecutor::hasNextDemo() const {
-    for (s32 i = 0; i < _48.size(); i++) {
-        const StorySequenceExecutorType::DemoSequenceInfo* pInfo = _48[i];
+    for (s32 i = 0; i < mDemoSequences.size(); i++) {
+        const StorySequenceExecutorType::DemoSequenceInfo* pInfo = mDemoSequences[i];
         if (i == 0) {
             pInfo++;
         }
 
         while (!isDemoSequenceEnd(pInfo)) {
-            if (pInfo->_0 == 0) {
+            if (pInfo->mType == 0) {
                 return true;
             }
 
@@ -555,7 +555,7 @@ s32 StorySequenceExecutor::getExecutingEventEnum() const {
         return 0;
     }
 
-    return getCurrentDemoInfo()->_2;
+    return getCurrentDemoInfo()->mEvent;
 }
 
 bool StorySequenceExecutor::isEqualStageScenarioBefore(const char* pStageName, int scenarioNo) const {
@@ -573,10 +573,10 @@ void StorySequenceExecutor::moveGalaxy(GalaxyMoveArgument* pMoveArgument, bool p
         pMoveArgument->mScenarioNo = calcAproposScenarioNoOnAstroDome();
     }
 
-    _6C.clear();
-    _48.clear();
+    mDynamicDemoInfos.clear();
+    mDemoSequences.clear();
 
-    _B0 = false;
+    mIsSaveStarted = false;
 
     switch (pMoveArgument->mMoveType) {
     case 0:
@@ -625,9 +625,9 @@ void StorySequenceExecutor::setNerveSceneStart() {
 }
 
 void StorySequenceExecutor::forceStop() {
-    _48.clear();
+    mDemoSequences.clear();
 
-    _B0 = false;
+    mIsSaveStarted = false;
     mNextNerve = nullptr;
 
     setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
@@ -644,41 +644,41 @@ void StorySequenceExecutor::exePlayDemoSequence() {
 
     // A scene change emptied the list while this ran: nothing is left to play.
     if (pDemoInfo == nullptr) {
-        _B0 = false;
+        mIsSaveStarted = false;
         setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
         return;
     }
 
-    switch (pDemoInfo->_0) {
+    switch (pDemoInfo->mType) {
     case 0:
         // A save whose progress this scene does not show has no such demo: the story goes on without it.
-        if (DemoFunction::findDemoExecutor(pDemoInfo->_4) == nullptr) {
-            _48[0]++;
+        if (DemoFunction::findDemoExecutor(pDemoInfo->mName) == nullptr) {
+            mDemoSequences[0]++;
 
             setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
-        } else if (tryStartDemo(pDemoInfo->_4)) {
+        } else if (tryStartDemo(pDemoInfo->mName)) {
             setNerve(GET_NERVE_ANON(StorySequenceExecutorWaitTimeKeepDemoEnd));
         }
 
         break;
     case 1:
         if (tryStartFadein()) {
-            _48[0]++;
+            mDemoSequences[0]++;
 
             setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
         }
 
         break;
     case 2:
-        if (tryStartMovieAndWaitEnd(pDemoInfo->_2)) {
-            _48[0]++;
+        if (tryStartMovieAndWaitEnd(pDemoInfo->mEvent)) {
+            mDemoSequences[0]++;
 
             setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
         }
 
         break;
     case 3:
-        MR::requestChangeScene(pDemoInfo->_4);
+        MR::requestChangeScene(pDemoInfo->mName);
         break;
     case 4:
         MR::requestChangeSceneTitle();
@@ -691,19 +691,19 @@ void StorySequenceExecutor::exePlayDemoSequence() {
 
         break;
     case 6:
-        GameDataFunction::onGameEventFlag(pDemoInfo->_4);
-        _48[0]++;
+        GameDataFunction::onGameEventFlag(pDemoInfo->mName);
+        mDemoSequences[0]++;
         exePlayDemoSequence();
         break;
     case 7:
-        GameDataFunction::followStoryEventByName(pDemoInfo->_4);
-        _48[0]++;
+        GameDataFunction::followStoryEventByName(pDemoInfo->mName);
+        mDemoSequences[0]++;
         exePlayDemoSequence();
         break;
     case 8:
         MR::forceOpenWipeFade();
         MR::startPrologue();
-        _48[0]++;
+        mDemoSequences[0]++;
         exePlayDemoSequence();
         break;
     case 9:
@@ -711,30 +711,30 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         setNerve(GET_NERVE_ANON(StorySequenceExecutorStaffRollSequence));
         break;
     case 10:
-        if (pDemoInfo->_2 == 14) {
+        if (pDemoInfo->mEvent == 14) {
             MR::startStarPointerModeEnding(this);
         }
 
-        _48[0]++;
+        mDemoSequences[0]++;
         exePlayDemoSequence();
         break;
     case 11:
-        if (pDemoInfo->_2 == 15) {
+        if (pDemoInfo->mEvent == 15) {
             GameSystemFunction::setPermissionToCheckInput(false);
-        } else if (pDemoInfo->_2 == 16) {
+        } else if (pDemoInfo->mEvent == 16) {
             GameSystemFunction::setPermissionToCheckInput(true);
         }
 
-        _48[0]++;
+        mDemoSequences[0]++;
         exePlayDemoSequence();
         break;
     case 12:
         if (tryNextDemoInfo() != false) {
             exePlayDemoSequence();
         } else {
-            _48.clear();
+            mDemoSequences.clear();
 
-            _B0 = false;
+            mIsSaveStarted = false;
 
             setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
         }
@@ -746,7 +746,7 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         } else {
             const Nerve* pNerve;
 
-            if (_B0) {
+            if (mIsSaveStarted) {
                 pNerve = GET_NERVE_ANON(StorySequenceExecutorFadeinAfterSequence);
             } else {
                 pNerve = GET_NERVE_ANON(StorySequenceExecutorStartSaveAfterSequence);
@@ -767,11 +767,11 @@ void StorySequenceExecutor::exeWaitTimeKeepDemoEnd() {
         return;
     }
 
-    if (MR::isEqualString(getCurrentDemoInfo()->_4, "エピローグデモ")) {
+    if (MR::isEqualString(getCurrentDemoInfo()->mName, "エピローグデモ")) {
         MR::offPlayerControl();
     }
 
-    _48[0]++;
+    mDemoSequences[0]++;
 
     setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
 }
@@ -783,7 +783,7 @@ void StorySequenceExecutor::exeWaitSaveEnd() {
 
     MR::endDemo(mSaveObj, "セーブ");
 
-    _48[0]++;
+    mDemoSequences[0]++;
 
     setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
 }
@@ -807,8 +807,8 @@ void StorySequenceExecutor::exeFadeinAfterSequence() {
         }
     }
 
-    _48.clear();
-    _B0 = false;
+    mDemoSequences.clear();
+    mIsSaveStarted = false;
 
     MR::endStartPosCamera();
     setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
@@ -824,9 +824,9 @@ void StorySequenceExecutor::exeStaffRollSequence() {
 
         const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo = getCurrentDemoInfo();
 
-        if (pDemoInfo->_2 == 12) {
+        if (pDemoInfo->mEvent == 12) {
             pStaffRoll->appear();
-        } else if (pDemoInfo->_2 == 13) {
+        } else if (pDemoInfo->mEvent == 13) {
             pStaffRoll->startInfo();
         }
     }
@@ -837,7 +837,7 @@ void StorySequenceExecutor::exeStaffRollSequence() {
 
     MR::closeWipeFade();
 
-    _48[0]++;
+    mDemoSequences[0]++;
 
     setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
 }
@@ -933,7 +933,7 @@ void StorySequenceExecutor::decideNextEventForClearGalaxy(GalaxyMoveArgument* pM
                     setNextStageToAstroGalaxy(pMoveArgument);
                 }
 
-                if (_48.size() > 0) {
+                if (mDemoSequences.size() > 0) {
                     MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > arr =
                         MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >();
 
@@ -1131,7 +1131,7 @@ void StorySequenceExecutor::prepareDemoSequence(const StorySequenceExecutorType:
         return;
     }
 
-    _48.push_back(pDemoInfo);
+    mDemoSequences.push_back(pDemoInfo);
 
     mNextNerve = GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence);
 
@@ -1148,7 +1148,7 @@ void StorySequenceExecutor::prepareDemoSequence(
 void StorySequenceExecutor::prepareDemoSequenceButlerFortressDiscover(const GalaxyMoveArgument* pMoveArgument,
                                                                       const DemoFortressDiscoverCheckList& rCheckList) {
     const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo =
-        addDynamicDemoSequenceInfo(0, rCheckList._8 ? ::EVENT_BUTLER_REPORT_KOOPA_FORTRESS : ::EVENT_BUTLER_REPORT_FORTRESS, "バトラー報告");
+        addDynamicDemoSequenceInfo(0, rCheckList.mIsKoopaFortress ? ::EVENT_BUTLER_REPORT_KOOPA_FORTRESS : ::EVENT_BUTLER_REPORT_FORTRESS, "バトラー報告");
 
     addDynamicDemoSequenceInfo(7, 0, rCheckList.mStoryEventName);
 
@@ -1170,7 +1170,7 @@ bool StorySequenceExecutor::tryStartSave() {
     if (MR::tryStartDemoWithoutCinemaFrameValidHandPointerFinger(mSaveObj, "セーブ")) {
         GameSequenceFunction::startGameDataSaveSequence(false, false);
 
-        _B0 = true;
+        mIsSaveStarted = true;
 
         return true;
     }
@@ -1237,29 +1237,29 @@ bool StorySequenceExecutor::tryStartMovieAndWaitEnd(u32 param1) {
 }
 
 const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::getCurrentDemoInfo() const {
-    if (_48.size() == 0) {
+    if (mDemoSequences.size() == 0) {
         return nullptr;
     }
 
-    return *_48.begin();
+    return *mDemoSequences.begin();
 }
 
 bool StorySequenceExecutor::tryNextDemoInfo() {
-    if (_48.size() <= 1) {
+    if (mDemoSequences.size() <= 1) {
         return false;
     }
 
-    _48.erase(_48.begin());
+    mDemoSequences.erase(mDemoSequences.begin());
 
     return true;
 }
 
 const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::addDynamicDemoSequenceInfo(u16 type, u16 event, const char* pName) {
-    StorySequenceExecutorType::DemoSequenceInfo& rInfo = _6C[_6C.mCount++];
-    rInfo._0 = type;
-    rInfo._2 = event;
-    rInfo._4 = pName;
-    return &_6C[_6C.size() - 1];
+    StorySequenceExecutorType::DemoSequenceInfo& rInfo = mDynamicDemoInfos[mDynamicDemoInfos.mCount++];
+    rInfo.mType = type;
+    rInfo.mEvent = event;
+    rInfo.mName = pName;
+    return &mDynamicDemoInfos[mDynamicDemoInfos.size() - 1];
 }
 
 void StorySequenceExecutor::setBeforeStageScenario(const GalaxyMoveArgument& rMoveArgument, bool param2) {

@@ -28,9 +28,9 @@ public:
 
     JointControlDelegator< FlipPanel >* mDelegator;
     MsgSharedGroup* mFlipPanelGroup;
-    bool _CC;
-    u8 _CD;
-    s32 _D0;
+    bool mIsPlayerOn;
+    u8 mIsFlipped;
+    s32 mJumpCheckCount;
     bool mIsReverse;
 };
 
@@ -46,9 +46,9 @@ public:
     void exeComplete();
     void exeDemoWait();
 
-    MsgSharedGroup* _8C;
-    s32 _90;
+    MsgSharedGroup* mGroup;
+    s32 mFlippedNum;
     s32 mDemoDelay;
     s32 mPowerStarId;
-    u8 _9C;
+    u8 mIsHeavensDoor;
 };

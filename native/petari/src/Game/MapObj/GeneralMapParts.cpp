@@ -135,7 +135,7 @@ void GeneralMapParts::control() {
         }
 
         if (isRailMoving) {
-            mPosition.set(mRailMover->_28);
+            mPosition.set(mRailMover->mStartPos);
         }
     }
 }
@@ -163,11 +163,11 @@ void GeneralMapParts::calcAndSetBaseMtx() {
         mtx.identity();
 
         if (isRailPostureWorking) {
-            mtx.concat(mRailPosture->_18);
+            mtx.concat(mRailPosture->mPostureMtx);
         }
 
         if (isRailRotating) {
-            mtx.concat(mRailRotator->_5C);
+            mtx.concat(mRailRotator->mRotateMtx);
         }
 
         if (isRotating) {

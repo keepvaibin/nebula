@@ -40,13 +40,13 @@ public:
     void exeSwoonSpin();
     void exeSwoonWait();
     void exeRecover();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
     void moveOrFall(const MR::ActorMoveParam&, const Vec3f*);
     void startSwoon(bool);
     bool tryNonActive();
     bool trySearch();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
     bool isNrvNormal() const;
 
     inline bool isNrvDown() const;
@@ -55,8 +55,8 @@ public:
     SpinHitController* mSpinHitController;
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mStarPointerBind;
-    Vec3f _98;
-    Vec3f _A4;
-    Vec3f _B0;
+    Vec3f mWalkCenter;
+    Vec3f mFront;
+    Vec3f mWalkDir;
     bool mIsClipped;
 };

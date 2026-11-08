@@ -7,7 +7,6 @@ public:
     BossStinkBugBomb(const char*);
 
     virtual void init(const TableIter& rIter);
-    virtual void control();
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
@@ -17,6 +16,4 @@ public:
     void exeWait();
     void exeExplosion();
 
-    Quat4f _8C;
-    Vec3f _9C;
 };

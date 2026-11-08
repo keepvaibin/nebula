@@ -19,7 +19,30 @@ namespace {
 
         return NameObjFactory::getCreator(rIdentifier.mName);
     }
+
+    PlacementInfoOrdered::Identifier readIdentifier(const TableIter& rIter) {
+        const char* pName = "";
+        MR::getObjectName(&pName, rIter);
+        s32 shapeId = -1;
+        MR::getPlacementShapeIdWithInit(rIter, &shapeId);
+        return PlacementInfoOrdered::Identifier(pName, shapeId);
+    }
+
+    bool isAfterScenario(const PlacementInfoOrdered::Identifier& rIdentifier) {
+        return rIdentifier.mShapeId == -1 && PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(rIdentifier.mName);
+    }
 };  // namespace
+
+s32 PlacementInfoOrdered::countAfterScenario(const Table* pInfo) {
+    s32 count = 0;
+    for (s32 i = 0; i < pInfo->getNumEntries(); i++) {
+        if (::isAfterScenario(::readIdentifier(TableIter(pInfo, i)))) {
+            count++;
+        }
+    }
+
+    return count;
+}
 
 PlacementInfoOrdered::PlacementInfoOrdered(int count) : mIndexArray(), mIndexCount(), mSetArray(), mOrderedSetArray(), mCount(count) {
     mIndexArray = new Index[count];
@@ -167,12 +190,8 @@ void PlacementInfoOrdered::attach(const Table* pInfo, PlacementInfoOrdered* pAft
     s32 count = pInfo->getNumEntries();
     for (s32 i = 0; i < count; i++) {
         TableIter iter(pInfo, i);
-        const char* pName = "";
-        MR::getObjectName(&pName, iter);
-        s32 shapeId = -1;
-        MR::getPlacementShapeIdWithInit(iter, &shapeId);
-        Identifier identifier(pName, shapeId);
-        if (pAfterScenario != nullptr && shapeId == -1 && PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(pName)) {
+        const Identifier identifier = ::readIdentifier(iter);
+        if (pAfterScenario != nullptr && ::isAfterScenario(identifier)) {
             pAfterScenario->insert(identifier, iter);
         } else {
             insert(identifier, iter);

@@ -22,20 +22,17 @@ public:
     bool isModelLongSide();
     bool isNeedsForBound();
 
-    f32 _8C;
-    f32 _90;
-    u32 _94;
-    u32 _98;
-    u32 _9C;
+    f32 mRiseSpeed;
+    f32 mRiseAccel;
     f32 mHeight;
-    f32 _A4;
+    f32 mWaterCheckOffset;
     s32 mBoundStep;
-    Vec3f _AC;
+    Vec3f mFloatPos;
     Vec3f mInitialRotation;
     f32 mBoundSize;
-    bool _C8;
+    bool mIsOnPlayer;
     bool mNeedsBound;
-    bool _CA;
-    Pos3f _CC;
+    bool mHasSurfaced;
+    Pos3f mFloatMtx;
     s32 mFloatTimer;
 };

@@ -1,7 +1,6 @@
 #include "Game/MapObj/AstroDomeOrbit.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/MapObj/MiniatureGalaxyHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -10,7 +9,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 namespace {

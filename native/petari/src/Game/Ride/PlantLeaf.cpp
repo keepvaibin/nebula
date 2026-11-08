@@ -6,7 +6,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Material.hpp"
-#include "Game/Render/ModelData.hpp"
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
 

@@ -9,21 +9,12 @@
 
 namespace {
     static const f32 sFallHeight = 2000.0f;
-    // static const f32 sAppearWidth =
-    // static const f32 sShootingStarSize =
-    // static const f32 sShootingStarSizeScale =
-    // static const f32 sShootingStarTailSize =
-    // static const f32 sGotRotateSlow =
-    // static const f32 sGotRotateFast =
     static const f32 sFallRotateYAngle = 10.0f;
     static const f32 sFallVelScale = 25.0f;
     static const s32 sShootingLimitTime = 360;
     static const s32 sPreShootingTime = 20;
     static const s32 sWaitForNextShootTime = 240;
-    // static const s32 sClearTime =
-    // static const s32 sRandomPieceValue =
     static const f32 sLaunchYVel = 40.0f;
-    // static const s32 sGetKind =
 };  // namespace
 
 namespace NrvShootingStar {
@@ -61,7 +52,7 @@ void ShootingStar::init(const TableIter& rIter) {
     initBinder(100.0f, 0.0f, 0);
     MR::setBindTriangleFilter(this, MR::createTriangleFilterFunc(MR::isWallCodeNoAction));
     initNerve(GET_NERVE(ShootingStar, HostTypeNrvPreShooting));
-    initEffectKeeper(0, "ShootingStar", false);
+    initEffectKeeper(0, "ShootingStar");
     initSound(4, false);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "message", 1, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));

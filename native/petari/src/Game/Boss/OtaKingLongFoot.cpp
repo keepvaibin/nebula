@@ -63,7 +63,7 @@ void OtaKingLongFoot::control() {
 
 void OtaKingLongFoot::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 

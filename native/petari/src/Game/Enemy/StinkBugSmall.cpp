@@ -32,21 +32,21 @@ namespace NrvStinkBugSmall {
     NEW_NERVE(StinkBugSmallNrvShake, StinkBugSmall, Shake);
     NEW_NERVE(StinkBugSmallNrvPanic, StinkBugSmall, Panic);
     NEW_NERVE(StinkBugSmallNrvRecover, StinkBugSmall, Recover);
-    NEW_NERVE_ONEND(StinkBugSmallNrvDPDSwoon, StinkBugSmall, DPDSwoon, DPDSwoon);
+    NEW_NERVE_ONEND(StinkBugSmallNrvPointerSwoon, StinkBugSmall, PointerSwoon, PointerSwoon);
     NEW_NERVE(StinkBugSmallNrvForceFall, StinkBugSmall, ForceFall);
 };  // namespace NrvStinkBugSmall
 
-StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(), mBindStarPointer(), _C4() {
+StinkBugSmall::StinkBugSmall(const char* pName) : StinkBugBase(pName), mScaleController(), mBindStarPointer(), mIsBodyAttack() {
 }
 
 void StinkBugSmall::init(const TableIter& rIter) {
     StinkBugBase::init(rIter);
-    MR::getPlacementArg0NoInit(rIter, &_B0);
+    MR::getPlacementArg0NoInit(rIter, &mTerritoryAngle);
     MR::getPlacementArg1NoInit(rIter, &mRadius);
-    MR::getPlacementArg7NoInit(rIter, &_C4);
+    MR::getPlacementArg7NoInit(rIter, &mIsBodyAttack);
     initHitSensor(3);
     Vec3f v9;
-    if (_C4) {
+    if (mIsBodyAttack) {
         v9.y = 10.0f * mScale.x;
         v9.x = 0.0f;
         v9.z = 0.0f;
@@ -60,7 +60,7 @@ void StinkBugSmall::init(const TableIter& rIter) {
     v8.x = 0.0f;
     v8.z = 0.0f;
     MR::addHitSensorAtJointEnemyAttack(this, "head", "Face", 8, 100.0f * mScale.x, v8);
-    if (!_C4) {
+    if (!mIsBodyAttack) {
         MR::initCollisionParts(this, "Switch", getSensor("body"), nullptr);
     }
 
@@ -86,14 +86,14 @@ void StinkBugSmall::init(const TableIter& rIter) {
 }
 
 void StinkBugSmall::exeWait() {
-    if (MR::isFirstStep(this) && _B0 == 0.0f) {
+    if (MR::isFirstStep(this) && mTerritoryAngle == 0.0f) {
         MR::tryStartBck(this, "Search");
     }
 
     fixInitPos();
     if (isPlayerInTerritory(400.0f, 600.0f, 200.0f, 200.0f)) {
         setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDashSign));
-    } else if (_B0 != 0.0f) {
+    } else if (mTerritoryAngle != 0.0f) {
         if (MR::isGreaterStep(this, 1)) {
             setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvSearch));
         }
@@ -140,7 +140,7 @@ void StinkBugSmall::exeDash() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_S_DASH");
-    if (!MR::isNear(this, _98, mRadius) || MR::isBindedWall(this)) {
+    if (!MR::isNear(this, mInitPos, mRadius) || MR::isBindedWall(this)) {
         mVelocity.zero();
         setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDashEnd));
         MR::startSound(this, "SE_EM_STINKBUG_S_DASH_END");
@@ -168,13 +168,13 @@ void StinkBugSmall::exeBack() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_STINKBUG_S_BACK");
-    if (MR::isNear(this, _98, 10.0f)) {
+    if (MR::isNear(this, mInitPos, 10.0f)) {
         setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvWait));
         return;
     }
 
     Vec3f tvf;
-    tvf.sub(_98, mPosition);
+    tvf.sub(mInitPos, mPosition);
     MR::normalize(&tvf);
     MR::turnVecToPlane(&tvf, tvf, mGravity);
     mVelocity.scale(5.0f, tvf);
@@ -184,7 +184,7 @@ void StinkBugSmall::exeHipDropDown() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Death");
         MR::startBrk(this, "Death");
-        if (!_C4) {
+        if (!mIsBodyAttack) {
             MR::invalidateCollisionParts(this);
         }
 
@@ -268,7 +268,7 @@ void StinkBugSmall::exeRecover() {
     }
 }
 
-void StinkBugSmall::exeDPDSwoon() {
+void StinkBugSmall::exePointerSwoon() {
     if (MR::isFirstStep(this)) {
         MR::deleteEffectAll(this);
     }
@@ -280,7 +280,7 @@ void StinkBugSmall::exeDPDSwoon() {
     MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(StinkBugSmall, StinkBugSmallNrvBack));
 }
 
-void StinkBugSmall::endDPDSwoon() {
+void StinkBugSmall::endPointerSwoon() {
     mBindStarPointer->kill();
 }
 
@@ -318,8 +318,8 @@ void StinkBugSmall::initAfterPlacement() {
     MR::calcUpVec(&up, this);
     up.scale(-200.0f);
     HitSensor* pSensor = getSensor("body");
-    MR::getFirstPolyOnLineToMapExceptSensor(&_98, nullptr, v7, up, pSensor);
-    MR::resetPosition(this, _98);
+    MR::getFirstPolyOnLineToMapExceptSensor(&mInitPos, nullptr, v7, up, pSensor);
+    MR::resetPosition(this, mInitPos);
 }
 
 void StinkBugSmall::control() {
@@ -329,7 +329,7 @@ void StinkBugSmall::control() {
     }
 
     mScaleController->updateNerve();
-    if (!tryDPDSwoon() && !tryForceFall()) {
+    if (!tryPointerSwoon() && !tryForceFall()) {
         if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvForceFall))) {
             return;
         }
@@ -352,17 +352,17 @@ void StinkBugSmall::control() {
         mVelocity.killElement(rVelocity, rGravity);
         mVelocity.scaleAdd(2.0f, mGravity, mVelocity);
         Vec3f a;
-        a = _8C;
-        MR::turnVecToPlane(&_8C, a, mGravity);
+        a = mFront;
+        MR::turnVecToPlane(&mFront, a, mGravity);
     }
 }
 
 void StinkBugSmall::calcAndSetBaseMtx() {
     Pos3f mtx;
-    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, _8C);
+    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::blendMtx(getBaseMtx(), mtx, 0.3f, mtx);
     MR::setBaseTRMtx(this, mtx);
-    Vec3f scale = mScaleController->_C * mScale;
+    Vec3f scale = mScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -371,12 +371,12 @@ void StinkBugSmall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (_C4 && pSender == getSensor("body")) {
+    if (mIsBodyAttack && pSender == getSensor("body")) {
         MR::sendMsgPush(pReceiver, pSender);
         return;
     }
 
-    if (!isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvAttack)) && !isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon)) &&
+    if (!isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvAttack)) && !isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon)) &&
         MR::isSensorPlayer(pReceiver) && MR::isSensorEnemyAttack(pSender)) {
         if (MR::isPlayerDamaging()) {
             MR::sendMsgPush(pReceiver, pSender);
@@ -411,7 +411,7 @@ bool StinkBugSmall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
         return true;
     }
 
-    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon))) {
+    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon))) {
         return false;
     }
 
@@ -446,7 +446,7 @@ bool StinkBugSmall::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRec
         return true;
     }
 
-    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon))) {
+    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon))) {
         return false;
     }
 
@@ -473,12 +473,12 @@ bool StinkBugSmall::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRec
     return false;
 }
 
-bool StinkBugSmall::tryDPDSwoon() {
+bool StinkBugSmall::tryPointerSwoon() {
     if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvHipDropDown))) {
         return false;
     }
 
-    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon))) {
+    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon))) {
         return false;
     }
 
@@ -486,7 +486,7 @@ bool StinkBugSmall::tryDPDSwoon() {
         return false;
     }
 
-    setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon));
+    setNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon));
     return true;
 }
 
@@ -495,7 +495,7 @@ bool StinkBugSmall::tryForceFall() {
         return false;
     }
 
-    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDPDSwoon))) {
+    if (isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvPointerSwoon))) {
         return false;
     }
 

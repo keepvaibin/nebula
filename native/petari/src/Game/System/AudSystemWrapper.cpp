@@ -13,18 +13,15 @@
 #include "Game/System/AssetFolder.hpp"
 
 AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) {
-    volatile AudSystemWrapper* self = this;
-
-    self->mIsResetDone = false;
-    self->mSolidHeap = pSolidHeap;
-    self->mAudSystem = nullptr;
-    self->mHeap = pHeap;
-    self->mJaiSeqRes = nullptr;
-    self->mJaiChordRes = nullptr;
-    self->mJaiMeRes = nullptr;
-    self->mJaiRemixSeqRes = nullptr;
-    self->mSpkRes = nullptr;
-    self->_28 = false;
+    mIsResetDone = false;
+    mSolidHeap = pSolidHeap;
+    mAudSystem = nullptr;
+    mHeap = pHeap;
+    mJaiSeqRes = nullptr;
+    mJaiChordRes = nullptr;
+    mJaiMeRes = nullptr;
+    mJaiRemixSeqRes = nullptr;
+    mSpkRes = nullptr;
     mSpkHeap = NebulaArena::create(pSolidHeap);
 }
 

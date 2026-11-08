@@ -41,7 +41,7 @@ void KoopaBattleMapDamagePlate::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensor(this, "Attack", ATYPE_KOOPA_DAMAGE_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f));
     MR::initCollisionParts(this, "KoopaPlateDamage", getSensor("Attack"), mBaseMtx);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
     MR::setEffectBaseScale(this, "Hit", 3.0f);

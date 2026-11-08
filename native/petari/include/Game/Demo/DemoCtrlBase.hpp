@@ -20,5 +20,5 @@ public:
     ActorCameraInfo* mCameraInfo;
     const char* mDemoName;
     s32 mCurrentFrame;
-    bool _10;
+    bool mWasInvalidClipping;
 };

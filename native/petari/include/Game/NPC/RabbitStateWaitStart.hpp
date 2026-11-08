@@ -36,6 +36,6 @@ public:
     const char* mTalkActionName;
     Vec3f* mHostFrontVec;
     TalkMessageCtrl* mTalkCtrl;
-    bool _1C;
-    bool _1D;
+    bool mIsKillAfterTalk;
+    bool mIsFallByGravity;
 };

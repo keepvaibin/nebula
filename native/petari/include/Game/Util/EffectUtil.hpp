@@ -38,7 +38,7 @@ namespace MR {
     void onEmitEffectSyncClipping(LiveActor*, const char*);
     void onForceDeleteEffectSyncClipping(LiveActor*, const char*);
     void setEffectName(LiveActor*, const char*, const char*);
-    void setEffectHostSRT(LiveActor*, const char*, const Vec3f*, const Vec3f*, const Vec3f*);
+    void setEffectHostSRT(LiveActor*, const char*, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale);
     void setEffectHostMtx(LiveActor*, const char*, MtxPtr);
     void setEffectBaseScale(LiveActor*, const char*, f32);
     void setEffectLocalScale(LiveActor*, const char*, const Vec3f&);

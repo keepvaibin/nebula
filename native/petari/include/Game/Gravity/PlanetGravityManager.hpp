@@ -51,5 +51,4 @@ private:
     PlanetGravity** mGravities;  //<Array of registered PlanetGravity instances
     s32 mMaxGravities;
     s32 mNumGravities;               //<Number of registered PlanetGravity instances
-    u32 _210;
 };

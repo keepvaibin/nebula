@@ -29,7 +29,7 @@ public:
     void exeBreak();
     void updateResetToInitPosCheck();
 
-    Vec3f _C4;
-    s32 _D0;
-    bool _D4;
+    Vec3f mRailClippingCenter;
+    s32 mHiddenStep;
+    bool mHasBeenSeen;
 };

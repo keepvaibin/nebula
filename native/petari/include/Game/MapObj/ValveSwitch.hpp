@@ -23,8 +23,8 @@ public:
     void exeEnd();
     void updateBindActorMtx();
 
-    LiveActor* _8C;
-    Pos3f _90;
+    LiveActor* mBindActor;
+    Pos3f mValveMtx;
     MapObjConnector* mObjConnector;
-    bool _C4;
+    bool mIsReverse;
 };

@@ -27,7 +27,6 @@ public:
     s32 mKind;
     s32 mTimer;
     s32 mItemCount;
-    u8 _98;
     bool mCalcShadow;
     bool mNoCalcAnim;
 };

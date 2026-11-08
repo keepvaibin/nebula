@@ -20,28 +20,28 @@ namespace {
 };  // namespace
 
 DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char* a4)
-    : NerveExecutor(a3), mActor(pActor), _C(a3), _10(a4), _14(nullptr), _18(""), _1C(""), mCameraInfo(nullptr), _24(0), _28(0), _2C(0), _30(0),
-      _34(true), _35(false), _36(false), _38(0), _3C(0), _40(0), _44(0), _48(false), mHaveCamera(false), _4A(false), mHaveBtk(false), mHaveBpk(false),
+    : NerveExecutor(a3), mActor(pActor), mExecutorName(a3), mStartPartName(a4), mPartName(nullptr), mAnimName(""), mCameraName(""), mCameraInfo(nullptr), mAnimFrame(0),
+      mIsActive(true), mIsScene(false), mIsTalkPart(false), mInterpole(0), mCameraStartStep(0), mCameraEndStep(0), mHavePlayerBck(false), mHaveCamera(false), mHaveBck(false), mHaveBtk(false), mHaveBpk(false),
       mHaveBtp(false), mHaveBrk(false), mHaveBva(false) {
 }
 
 void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const TableIter& rIter) {
     MR::FormattedName buf("%s.canm", a2);
     initForActor(a1);
-    _35 = true;
-    _34 = _10 == nullptr;
+    mIsScene = true;
+    mIsActive = mStartPartName == nullptr;
     mHaveCamera = MR::getResourceHolder(mActor)->mFileInfoTable->isExistRes(buf.c_str());
-    _48 = MR::isExistBck(MR::getPlayerDemoActor(), a1);
+    mHavePlayerBck = MR::isExistBck(MR::getPlayerDemoActor(), a1);
     if (mHaveCamera) {
-        _1C = a2;
+        mCameraName = a2;
         mCameraInfo = MR::createActorCameraInfo(rIter);
-        MR::initAnimCamera(mActor, mCameraInfo, _1C);
+        MR::initAnimCamera(mActor, mCameraInfo, mCameraName);
     }
 }
 
 void DemoTalkAnimCtrl::updateCamera() {
-    MR::FormattedName buf("%s%s", mActor->mName, _1C);
-    if (DemoFunction::isPauseTimeKeepDemo(_C)) {
+    MR::FormattedName buf("%s%s", mActor->mName, mCameraName);
+    if (DemoFunction::isPauseTimeKeepDemo(mExecutorName)) {
         MR::pauseOnAnimCamera(mCameraInfo, buf.c_str());
     } else {
         MR::pauseOffAnimCamera(mCameraInfo, buf.c_str());
@@ -65,15 +65,15 @@ namespace {
 };  // namespace
 
 void DemoTalkAnimCtrl::createBckCtrlData(BckCtrlData* pBck, s32 totalSteps) const {
-    s16 temp_r0 = MR::max(_24 - 1, 0);
+    s16 temp_r0 = MR::max(mAnimFrame - 1, 0);
     pBck->mLoopMode = 2;
     pBck->mStartFrame = temp_r0;
     pBck->mRepeatFrame = temp_r0 + 1;
-    pBck->mInterpole = _38;
+    pBck->mInterpole = mInterpole;
     pBck->mEndFrame = temp_r0 + totalSteps + 1;
 
-    if (_36) {
-        s32 step = ::calcDemoPartStep(_C, _14);
+    if (mIsTalkPart) {
+        s32 step = ::calcDemoPartStep(mExecutorName, mPartName);
         if (step > 0) {
             pBck->mRepeatFrame = temp_r0 + step;
         }
@@ -81,52 +81,46 @@ void DemoTalkAnimCtrl::createBckCtrlData(BckCtrlData* pBck, s32 totalSteps) cons
 }
 
 void DemoTalkAnimCtrl::initForActor(const char* a1) {
-    _35 = false;
-    _34 = true;
+    mIsScene = false;
+    mIsActive = true;
     mHaveCamera = false;
-    _48 = false;
-    _18 = a1;
-    _14 = nullptr;
-    _24 = 0;
-    _28 = 0;
-    _2C = 0;
-    _30 = 0;
-    _36 = false;
+    mHavePlayerBck = false;
+    mAnimName = a1;
+    mPartName = nullptr;
+    mAnimFrame = 0;
+    mIsTalkPart = false;
     mCameraInfo = nullptr;
-    _1C = "";
-    _4A = MR::isExistBck(mActor, a1);
-    mHaveBtk = MR::isExistBtk(mActor, _18);
-    mHaveBpk = MR::isExistBpk(mActor, _18);
-    mHaveBtp = MR::isExistBtp(mActor, _18);
-    mHaveBrk = MR::isExistBrk(mActor, _18);
-    mHaveBva = MR::isExistBva(mActor, _18);
+    mCameraName = "";
+    mHaveBck = MR::isExistBck(mActor, a1);
+    mHaveBtk = MR::isExistBtk(mActor, mAnimName);
+    mHaveBpk = MR::isExistBpk(mActor, mAnimName);
+    mHaveBtp = MR::isExistBtp(mActor, mAnimName);
+    mHaveBrk = MR::isExistBrk(mActor, mAnimName);
+    mHaveBva = MR::isExistBva(mActor, mAnimName);
 }
 
 void DemoTalkAnimCtrl::startDemo() {
-    _14 = nullptr;
-    _24 = 0;
-    _28 = 0;
-    _2C = 0;
-    _30 = 0;
-    _36 = false;
-    if (mHaveCamera && _34) {
+    mPartName = nullptr;
+    mAnimFrame = 0;
+    mIsTalkPart = false;
+    if (mHaveCamera && mIsActive) {
         startCamera();
     }
 }
 
 bool DemoTalkAnimCtrl::updateDemo() {
-    if (!_34) {
+    if (!mIsActive) {
         return false;
     }
 
-    const char* name = MR::getCurrentDemoPartNameMain(_C);
-    if (_14 == nullptr) {
+    const char* name = MR::getCurrentDemoPartNameMain(mExecutorName);
+    if (mPartName == nullptr) {
         startAnim();
-        _14 = "";
+        mPartName = "";
     }
 
     bool ok = MR::isDemoPartFirstStep(name);
-    if (MR::isEqualStringCase(_14, "")) {
+    if (MR::isEqualStringCase(mPartName, "")) {
         ok = MR::isDemoPartStep(name, 1);
     }
 
@@ -134,19 +128,17 @@ bool DemoTalkAnimCtrl::updateDemo() {
         s32 totalsteps = MR::getDemoPartTotalStep(name);
         BckCtrlData bck;
         bck.mLoopMode = 0xFF;
-        _36 = MR::isDemoPartTalk(name);
-        _14 = name;
+        mIsTalkPart = MR::isDemoPartTalk(name);
+        mPartName = name;
         createBckCtrlData(&bck, totalsteps);
         updateAnim(bck);
-        if (_48) {
-            MR::startBckPlayer(_18, bck);
+        if (mHavePlayerBck) {
+            MR::startBckPlayer(mAnimName, bck);
         }
-        _28 = 0;
-        _2C = 0;
-        _24 += totalsteps;
+        mAnimFrame += totalsteps;
     }
 
-    if (_35 && _36) {
+    if (mIsScene && mIsTalkPart) {
         updatePause();
     }
     if (mHaveCamera) {
@@ -158,39 +150,34 @@ bool DemoTalkAnimCtrl::updateDemo() {
             endCamera();
         }
         return false;
-    } else {
-        if (!DemoFunction::isPauseTimeKeepDemo(_C)) {
-            _30 += 1;
-            _28 += 1;
-        }
-        _2C += 1;
-        return true;
     }
+
+    return true;
 }
 
 void DemoTalkAnimCtrl::startAnim() {
-    if (_4A) {
-        MR::startBckNoInterpole(mActor, _18);
+    if (mHaveBck) {
+        MR::startBckNoInterpole(mActor, mAnimName);
     }
     if (mHaveBtk) {
-        MR::startBtk(mActor, _18);
+        MR::startBtk(mActor, mAnimName);
     }
     if (mHaveBpk) {
-        MR::startBpk(mActor, _18);
+        MR::startBpk(mActor, mAnimName);
     }
     if (mHaveBtp) {
-        MR::startBtp(mActor, _18);
+        MR::startBtp(mActor, mAnimName);
     }
     if (mHaveBrk) {
-        MR::startBrk(mActor, _18);
+        MR::startBrk(mActor, mAnimName);
     }
     if (mHaveBva) {
-        MR::startBva(mActor, _18);
+        MR::startBva(mActor, mAnimName);
     }
 }
 
 void DemoTalkAnimCtrl::startCamera() {
-    MR::startAnimCameraTargetSelf(mActor, mCameraInfo, _1C, _40, 1.0f);
+    MR::startAnimCameraTargetSelf(mActor, mCameraInfo, mCameraName, mCameraStartStep, 1.0f);
 }
 
 void DemoTalkAnimCtrl::updateAnim(const BckCtrlData& rBck) {
@@ -215,31 +202,31 @@ void DemoTalkAnimCtrl::updateAnim(const BckCtrlData& rBck) {
         }
     }
 
-    if (_4A) {
-        MR::startBck(mActor, _18);
+    if (mHaveBck) {
+        MR::startBck(mActor, mAnimName);
         MR::reflectBckCtrlData(mActor, rBck);
     }
 }
 
 void DemoTalkAnimCtrl::updatePause() {
-    const char* name = MR::getCurrentDemoPartNameMain(_C);
-    if (DemoFunction::isPauseTimeKeepDemo(_C)) {
+    const char* name = MR::getCurrentDemoPartNameMain(mExecutorName);
+    if (DemoFunction::isPauseTimeKeepDemo(mExecutorName)) {
         if (!MR::isSystemTalking()) {
-            DemoFunction::resumeTimeKeepDemo(_C);
+            DemoFunction::resumeTimeKeepDemo(mExecutorName);
         }
     } else {
         if (MR::isDemoPartStep(name, MR::getDemoPartTotalStep(name) - 2)) {
-            DemoFunction::pauseTimeKeepDemo(_C);
+            DemoFunction::pauseTimeKeepDemo(mExecutorName);
         }
     }
 }
 
 void DemoTalkAnimCtrl::endCamera() {
-    MR::endAnimCamera(mActor, mCameraInfo, _1C, _44, true);
+    MR::endAnimCamera(mActor, mCameraInfo, mCameraName, mCameraEndStep, true);
 }
 
 void DemoTalkAnimCtrl::setupStartDemoPart(const char* pPartName) {
-    if (_10 != nullptr) {
-        _34 = MR::isEqualStringCase(pPartName, _10);
+    if (mStartPartName != nullptr) {
+        mIsActive = MR::isEqualStringCase(pPartName, mStartPartName);
     }
 }

@@ -36,8 +36,6 @@ public:
     bool isEnableHipDrop() const;
     bool isEnableAttack() const;
 
-    f32 _64;
-    s32 _68;
-    bool _6C;
-    s32 _70;
+    s32 mRollWaitStep;
+    s32 mRollNum;
 };

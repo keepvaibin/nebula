@@ -11,7 +11,7 @@ namespace {
 };  // namespace
 
 MapObjConnector::MapObjConnector(LiveActor* pActor) : mHost(pActor), mParts() {
-    _8.identity();
+    mOffsetMtx.identity();
 }
 
 bool MapObjConnector::attachToUnder() {
@@ -43,7 +43,7 @@ bool MapObjConnector::attach(const Vec3f& rVec) {
 
     Pos3f invBaseMtx;
     invBaseMtx.set(triangle.mParts->mInvBaseMatrix);
-    _8.concat(invBaseMtx, baseMtx);
+    mOffsetMtx.concat(invBaseMtx, baseMtx);
 
     return true;
 }
@@ -60,7 +60,7 @@ void MapObjConnector::connect(LiveActor* pActor) {
     Pos3f baseMtx;
     baseMtx.identity();
     baseMtx.set(mParts->mBaseMatrix);
-    baseMtx.concat(baseMtx, _8);
+    baseMtx.concat(baseMtx, mOffsetMtx);
     baseMtx.getTrans(pActor->mPosition);
 
     MR::setBaseTRMtx(pActor, baseMtx);

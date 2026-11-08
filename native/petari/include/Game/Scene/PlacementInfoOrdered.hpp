@@ -7,8 +7,6 @@ class NameObj;
 #include "Game/Util/Table.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-class NameObj;
-
 typedef NameObj* (*CreationFuncPtr)(const char*);
 
 class PlacementInfoOrdered {
@@ -75,6 +73,8 @@ public:
     SameIdSet* createSameIdSet(const Identifier&);
     Index* createIndex(const TableIter&);
     void attach(const Table*, PlacementInfoOrdered*);
+    // The entries attach() sends to its after-scenario list.
+    static s32 countAfterScenario(const Table*);
 
     Index* mIndexArray;
     u32 mIndexCount;

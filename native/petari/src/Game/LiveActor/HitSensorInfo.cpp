@@ -4,45 +4,38 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-HitSensorInfo::HitSensorInfo(const char* pName, HitSensor* pSensor, const Vec3f* pPosition, MtxPtr pMtx, const Vec3f& rOffset,
-                             bool useHostCallback) {
-    mName = pName;
-    mHashCode = MR::getHashCode(pName);
-    mSensor = pSensor;
+namespace {
+    void addRotated(Vec3f* pPos, MtxPtr pMtx, const Vec3f& rOffset) {
+        pPos->x += pMtx[0][0] * rOffset.x + pMtx[0][1] * rOffset.y + pMtx[0][2] * rOffset.z;
+        pPos->y += pMtx[1][0] * rOffset.x + pMtx[1][1] * rOffset.y + pMtx[1][2] * rOffset.z;
+        pPos->z += pMtx[2][0] * rOffset.x + pMtx[2][1] * rOffset.y + pMtx[2][2] * rOffset.z;
+    }
+};  // namespace
 
-    _C = rOffset;
-
-    _18 = pPosition;
-    _1C = pMtx;
-    _20 = useHostCallback;
+HitSensorInfo::HitSensorInfo(const char* pName, HitSensor* pSensor, const Vec3f* pFollowPos, MtxPtr pFollowMtx, const Vec3f& rOffset,
+                             bool isHostCallback)
+    : mName(pName), mHashCode(MR::getHashCode(pName)), mSensor(pSensor), mOffset(rOffset), mFollowPos(pFollowPos), mFollowMtx(pFollowMtx),
+      mIsHostCallback(isHostCallback) {
 }
 
 void HitSensorInfo::update() {
-    if (_20) {
+    if (mIsHostCallback) {
         mSensor->mHost->updateHitSensor(mSensor);
         return;
     }
 
     Vec3f position;
-    if (_1C) {
-        position.set< f32 >(_1C[0][3], _1C[1][3], _1C[2][3]);
-        position.x += _1C[0][0] * _C.x + _1C[0][1] * _C.y + _1C[0][2] * _C.z;
-        position.y += _1C[1][0] * _C.x + _1C[1][1] * _C.y + _1C[1][2] * _C.z;
-        position.z += _1C[2][0] * _C.x + _1C[2][1] * _C.y + _1C[2][2] * _C.z;
+    if (mFollowMtx) {
+        position.set< f32 >(mFollowMtx[0][3], mFollowMtx[1][3], mFollowMtx[2][3]);
+        ::addRotated(&position, mFollowMtx, mOffset);
     } else {
-        if (_18) {
-            position.set< f32 >(_18->x, _18->y, _18->z);
-        } else {
-            position.set(mSensor->mHost->mPosition);
-        }
+        position.set(mFollowPos != nullptr ? *mFollowPos : mSensor->mHost->mPosition);
 
         MtxPtr baseMtx = mSensor->mHost->getBaseMtx();
         if (baseMtx) {
-            position.x += baseMtx[0][0] * _C.x + baseMtx[0][1] * _C.y + baseMtx[0][2] * _C.z;
-            position.y += baseMtx[1][0] * _C.x + baseMtx[1][1] * _C.y + baseMtx[1][2] * _C.z;
-            position.z += baseMtx[2][0] * _C.x + baseMtx[2][1] * _C.y + baseMtx[2][2] * _C.z;
+            ::addRotated(&position, baseMtx, mOffset);
         } else {
-            position.add(_C);
+            position.add(mOffset);
         }
     }
 

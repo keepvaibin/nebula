@@ -77,32 +77,28 @@ public:
 
     TripodBoss* mBoss;
     TripodBossMovableArea* mMoveArea;
-    TripodBossStepPoint* _94;
-    TripodBossStepPoint* _98;
+    TripodBossStepPoint* mPrevStepPoint;
+    TripodBossStepPoint* mStepPoint;
     IKJoint* mJoint;
-    Pos3f _A0;
+    Pos3f mRootLocalMtx;
     Pos3f mRootLocalYMtx;
     Pos3f mRootLocalYZMtx;
     Pos3f mAnkleLocalXMtx;
     Pos3f mAnkleLocalXZMtx;
     Pos3f mEndJointMtx;
-    Pos3f _1C0;
-    Quat4f _1F0;
-    Quat4f _200;
-    Vec3f _210;
-    Vec3f _21C;
+    Pos3f mAnkleShadowMtx;
+    Quat4f mAnkleStartQuat;
+    Quat4f mAnkleLandingQuat;
+    Vec3f mRootLocalPos;
     Vec3f mForceEndPoint;
-    Vec3f _234;
-    Vec3f _240;
-    s32 _24C;
-    f32 _250;
-    bool _254;
+    Vec3f mEndVelocity;
+    Vec3f mEndTarget;
+    s32 mPoseMode;
+    f32 mLandingHeight;
+    bool mIsAttackHit;
     bool mIsPressPlayer;
-    bool _256;
-    bool _257;
     s32 mDemoEffectTiming;
-    AudAnmSoundObject* _25C;
-    AudAnmSoundObject* _260;
+    AudAnmSoundObject* mSoundObj;
 };
 
 namespace MR {

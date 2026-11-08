@@ -20,9 +20,9 @@ class PartsModel;
 
 namespace MR {
     struct ActorSightParam {
-        f32 _0;
-        f32 _4;
-        f32 _8;
+        f32 mDistance;
+        f32 mHorizontalDegree;
+        f32 mVerticalDegree;
     };
 
     struct ActorMoveParam;

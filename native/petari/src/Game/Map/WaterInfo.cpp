@@ -14,7 +14,7 @@ bool WaterInfo::isInWater() const {
 
 void WaterInfo::clear() {
     mCamWaterDepth = 0.0f;
-    _4 = 0.0f;
+    mDepth = 0.0f;
     mSurfacePos.zero();
     mSurfaceNormal.x = 0.0f;
     mSurfaceNormal.y = 1.0f;

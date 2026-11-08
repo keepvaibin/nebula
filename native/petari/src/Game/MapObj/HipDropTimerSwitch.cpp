@@ -33,12 +33,11 @@ namespace NrvHipDropSwitch {
 };  // namespace NrvHipDropSwitch
 
 HipDropTimerSwitch::HipDropTimerSwitch(const char* pName)
-    : LiveActor(pName), _8C(0), mMapObjConnector(nullptr), mCollisionParts(nullptr), mTimerMax(300), mTimerSFXType(0), mWasLightPressed(false),
+    : LiveActor(pName), mMapObjConnector(nullptr), mCollisionParts(nullptr), mTimerMax(300), mTimerSFXType(0), mWasLightPressed(false),
       mIsLightPressed(false) {
     mSpring = new SpringValue;
     mMapObjConnector = new MapObjConnector(this);
     mSpring->setParam(0.0f, 0.0f, 0.2f, 0.9f, 0.0f);
-    _9C.identity();
 }
 
 void HipDropTimerSwitch::init(const TableIter& rIter) {
@@ -64,7 +63,7 @@ void HipDropTimerSwitch::init(const TableIter& rIter) {
         mTimerSFXType = 0;
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     if (MR::useStageSwitchReadAppear(this, rIter)) {
         MR::syncStageSwitchAppear(this);
         makeActorDead();

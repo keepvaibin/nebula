@@ -13,8 +13,8 @@ public:
     virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    u8 _8C;
-    u8 _8D;
+    u8 mHasShadow;
+    u8 mIsElectric;
 };
 
 class ElectricRailMoving : public ElectricRailDrawn {
@@ -53,18 +53,15 @@ public:
     f32 mMovementSpeed;
     f32 mSegmentLength;
     s32 mStackHeight;
-    Pos3f _9C;
-    u8 _CC;
-    u8 _CD;
-    u8 _CE;
-    u8 _CF;
+    Pos3f mTexMtx;
+    u8 mAlpha;
     Vec3f* mSensorOffsets;
     ElectricRailMovingPoint* mMovingPoints;
-    s32 _D8;
+    s32 mPointNum;
     // The rail as the renderer draws it while it waits.
     SiteMesh< VertexPT > mMesh;
-    s32 _E4;
-    Vec3f* _E8;
-    f32 _EC;
-    f32 _F0;
+    s32 mRailPosNum;
+    Vec3f* mRailPositions;
+    f32 mCoord;
+    f32 mRailWidth;
 };

@@ -10,13 +10,13 @@ namespace {
 };  // namespace
 
 HitResult::HitResult() {
-    _0.set< int >(0, 0, 0);
-    _C.x = 0.0f;
-    _C.y = 0.0f;
-    _C.z = 0.0f;
-    _18.x = 0.0f;
-    _18.y = 1.0f;
-    _18.z = 0.0f;
+    mHitPos.set< int >(0, 0, 0);
+    mPushedPos.x = 0.0f;
+    mPushedPos.y = 0.0f;
+    mPushedPos.z = 0.0f;
+    mNormal.x = 0.0f;
+    mNormal.y = 1.0f;
+    mNormal.z = 0.0f;
 }
 
 TripodBossMovableArea::TripodBossMovableArea() {
@@ -30,8 +30,8 @@ TripodBossMovableArea::TripodBossMovableArea() {
     mFront.y = 0.0f;
     mFront.z = 1.0f;
     mRadius = 3000.0f;
-    _2C = -1.0f;
-    _30 = 1.0f;
+    mRangeMin = -1.0f;
+    mRangeMax = 1.0f;
 }
 
 void TripodBossMovableArea::setCenter(const Vec3f& rCenter) {
@@ -53,7 +53,7 @@ void TripodBossMovableArea::setRadius(f32 radius) {
 }
 
 bool TripodBossMovableArea::collideSphere(HitResult* pResult, const Vec3f& a2, f32 a3, const Vec3f& a4) const {
-    pResult->_C = a2 + a4;
+    pResult->mPushedPos = a2 + a4;
     f32 v10 = mRadius + a3;
     Vec3f v29(a2);
     v29 -= mCenter;
@@ -83,8 +83,8 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const Vec3f& a2, f
         v15 = 0.0f;
     }
 
-    pResult->_0 = a2 + (direction * v15);
-    Vec3f v27(pResult->_0);
+    pResult->mHitPos = a2 + (direction * v15);
+    Vec3f v27(pResult->mHitPos);
     v27 -= mCenter;
     f32 v17;
     MR::separateScalarAndDirection(&v17, &v27, v27);
@@ -93,15 +93,15 @@ bool TripodBossMovableArea::collideSphere(HitResult* pResult, const Vec3f& a2, f
             v27.set< int >(0, 1, 0);
         }
 
-        pResult->_0 = mCenter + (v27 * v10);
+        pResult->mHitPos = mCenter + (v27 * v10);
     }
 
-    pResult->_18 = v27;
-    Vec3f v26(pResult->_C);
-    v26 -= pResult->_0;
-    f32 v16 = v26.dot(pResult->_18);
-    v26 -= pResult->_18 * v16;
-    pResult->_C = pResult->_0 + v26;
+    pResult->mNormal = v27;
+    Vec3f v26(pResult->mPushedPos);
+    v26 -= pResult->mHitPos;
+    f32 v16 = v26.dot(pResult->mNormal);
+    v26 -= pResult->mNormal * v16;
+    pResult->mPushedPos = pResult->mHitPos + v26;
     return true;
 }
 
@@ -116,14 +116,14 @@ void TripodBossMovableArea::calcNearLandingPosition(Vec3f* pPos, const Vec3f& a2
     }
 
     x = mBaseAxis.dot(v16);
-    if (MR::isInRange(x, _2C, _30)) {
+    if (MR::isInRange(x, mRangeMin, mRangeMax)) {
         pPos->set(mCenter + (v16 * mRadius));
     } else {
-        if (x < _2C) {
-            x = _2C;
+        if (x < mRangeMin) {
+            x = mRangeMin;
         } else {
-            if (x > _30) {
-                x = _30;
+            if (x > mRangeMax) {
+                x = mRangeMax;
             }
         }
 

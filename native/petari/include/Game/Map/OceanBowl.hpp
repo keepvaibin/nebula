@@ -51,7 +51,7 @@ public:
     f32 mTexV1;
     f32 mTexU2;
     f32 mTexV2;
-    f32 _A98;
+    f32 mTexStep;
     // Texture coordinate arrays.
     f32* mVtxTex0Array;
     f32* mVtxTex1Array;

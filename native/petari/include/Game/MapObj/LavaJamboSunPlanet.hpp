@@ -19,6 +19,6 @@ public:
 
     PartsModel* mBloomModel;
     LodCtrl* mLodCtrl;
-    f32 _94;
-    Vec3f _98;
+    f32 mMoveSpeed;
+    Vec3f mClipCenter;
 };

@@ -1,13 +1,13 @@
 #include "Game/System/LuigiLeftSupplier.hpp"
 #include "Game/System/GameDataFunction.hpp"
 
-LuigiLeftSupplier::LuigiLeftSupplier() : _0(false) {
+LuigiLeftSupplier::LuigiLeftSupplier() : mIsLuigiLeft(false) {
 }
 
 void LuigiLeftSupplier::syncWithFlags() {
     if (!GameDataFunction::isDataMario()) {
-        _0 = true;
+        mIsLuigiLeft = true;
     } else {
-        _0 = false;
+        mIsLuigiLeft = false;
     }
 }

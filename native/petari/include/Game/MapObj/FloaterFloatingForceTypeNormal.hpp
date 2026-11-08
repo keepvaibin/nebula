@@ -22,8 +22,7 @@ public:
 
     f32 mRotateAngle;
     f32 mRotateSpeed;
-    f32 _40;
-    f32 _44;
+    f32 mSinkDepth;
+    f32 mSinkSpeed;
     Vec3f mVelocity;
-    f32 _54;
 };

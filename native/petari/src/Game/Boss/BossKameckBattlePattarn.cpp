@@ -1,30 +1,29 @@
 #include "Game/Boss/BossKameckBattlePattarn.hpp"
 
-BossKameckBattlePattarn::BossKameckBattlePattarn(s32* a1, bool a2) : _0(), _4(), _8(), _C(), _10(a2) {
+BossKameckBattlePattarn::BossKameckBattlePattarn(s32* a1, bool a2) : mPattern(), mPatternNum(), mIndex(), mCanSummon(a2) {
     initPattarn(a1);
 }
 
 void BossKameckBattlePattarn::initPattarn(s32* a1) {
-    _0 = a1;
+    mPattern = a1;
 
     u32 v2 = 0;
 
-    for (s32 i = 0; _0[i] != -1; i++) {
+    for (s32 i = 0; mPattern[i] != -1; i++) {
         v2++;
     }
 
-    _4 = v2;
-    _8 = v2;
-    _C = 0;
+    mPatternNum = v2;
+    mIndex = 0;
 }
 
 s32 BossKameckBattlePattarn::goNextPattarn() {
-    s32 next = _0[_C];
+    s32 next = mPattern[mIndex];
 
-    _C++;
+    mIndex++;
 
-    if (_4 <= _C) {
-        _C = 0;
+    if (mPatternNum <= mIndex) {
+        mIndex = 0;
     }
 
     return next;

@@ -21,9 +21,8 @@ public:
     Vec3f mRotation;
     const f32* mAngleTable;
     s32 mAngleNum;
-    f32 _30;
-    f32 _34;
-    f32 _38;
-    f32 _3C;
-    u32 _40;
+    f32 mHeight;
+    f32 mRadius;
+    f32 mCirclePitch;
+    f32 mCannonPitch;
 };

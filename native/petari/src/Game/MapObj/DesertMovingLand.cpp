@@ -24,10 +24,10 @@ namespace NrvDesertMovingLand {
     NEW_NERVE(HostTypeStop, DesertMovingLand, Stop);
 };  // namespace NrvDesertMovingLand
 
-DesertMovingLand::DesertMovingLand(const char* pName) : MapObjActor(pName), _C4(gZeroVec), _D0(gZeroVec) {
-    _DC = 720;
-    _E0 = 720;
-    _E4.identity();
+DesertMovingLand::DesertMovingLand(const char* pName) : MapObjActor(pName), mUpperPos(gZeroVec), mLowerPos(gZeroVec) {
+    mMoveDownTime = 720;
+    mMoveUpTime = 720;
+    mDemoPlayerMtx.identity();
 }
 
 void DesertMovingLand::init(const TableIter& rIter) {
@@ -55,17 +55,17 @@ void DesertMovingLand::init(const TableIter& rIter) {
 
     f32 arg = 2000.0f;
     MR::getPlacementArg0NoInit(rIter, &arg);
-    MR::getPlacementArg1NoInit(rIter, &_DC);
-    MR::getPlacementArg2NoInit(rIter, &_E0);
+    MR::getPlacementArg1NoInit(rIter, &mMoveDownTime);
+    MR::getPlacementArg2NoInit(rIter, &mMoveUpTime);
     Vec3f stack_3C;
     MR::calcUpVec(&stack_3C, this);
 
     if (MR::isValidSwitchA(this)) {
-        _C4.set(mPosition);
-        _D0.set(_C4 - stack_3C * arg);
+        mUpperPos.set(mPosition);
+        mLowerPos.set(mUpperPos - stack_3C * arg);
     } else {
-        _D0.set(mPosition);
-        _C4.set(_D0 + stack_3C * arg);
+        mLowerPos.set(mPosition);
+        mUpperPos.set(mLowerPos + stack_3C * arg);
     }
     MR::setBodySensorTypePress(this);
 }
@@ -88,14 +88,14 @@ void DesertMovingLand::startDemo() {
     Mtx34f stack_8;
     stack_8.set(jointMtx);
     stack_8.invert(stack_8);
-    _E4.concat(stack_8, stack_38);
+    mDemoPlayerMtx.concat(stack_8, stack_38);
 }
 
 void DesertMovingLand::updateDemoPlayerPos() {
     MtxPtr jointMtx = MR::getJointMtx(this, mObjectName);
     Pos3f stack_8;
     stack_8.set(jointMtx);
-    stack_8.concat(stack_8, _E4);
+    stack_8.concat(stack_8, mDemoPlayerMtx);
     stack_8.getTrans(MR::getPlayerDemoActor()->mPosition);
     MR::setPlayerBaseMtx(stack_8);
 }
@@ -112,8 +112,8 @@ void DesertMovingLand::exeWait() {
 
 void DesertMovingLand::exeMoveDown() {
     if (MR::isFirstStep(this)) {
-        Vec3f stack_8(_D0 - _C4);
-        stack_8.setLength(stack_8.length() / _DC);
+        Vec3f stack_8(mLowerPos - mUpperPos);
+        stack_8.setLength(stack_8.length() / mMoveDownTime);
         mVelocity.set(stack_8);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
     }
@@ -126,10 +126,10 @@ void DesertMovingLand::exeMoveDown() {
         MR::stopShakingCamera(this);
     }
 
-    if (MR::isStep(this, _DC)) {
+    if (MR::isStep(this, mMoveDownTime)) {
         MR::offSwitchB(this);
         mVelocity.zero();
-        mPosition.set(_D0);
+        mPosition.set(mLowerPos);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ED");
         setNerve(GET_NERVE(DesertMovingLand, HostTypeWaitBottom));
     }
@@ -137,8 +137,8 @@ void DesertMovingLand::exeMoveDown() {
 
 void DesertMovingLand::exeMoveUp() {
     if (MR::isFirstStep(this)) {
-        Vec3f stack_8(_C4 - _D0);
-        stack_8.setLength(stack_8.length() / _E0);
+        Vec3f stack_8(mUpperPos - mLowerPos);
+        stack_8.setLength(stack_8.length() / mMoveUpTime);
         mVelocity.set(stack_8);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
     }
@@ -152,12 +152,12 @@ void DesertMovingLand::exeMoveUp() {
         MR::stopShakingCamera(this);
     }
 
-    if (MR::isStep(this, _E0)) {
+    if (MR::isStep(this, mMoveUpTime)) {
         if (MR::isValidSwitchA(this))
             MR::offSwitchA(this);
 
         mVelocity.zero();
-        mPosition.set(_C4);
+        mPosition.set(mUpperPos);
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ED");
         setNerve(GET_NERVE(DesertMovingLand, HostTypeWaitTop));
     }

@@ -27,5 +27,4 @@ public:
     s32 mTimers[NUM_FADERS];
     FaderCtrl mFaderCtrl[NUM_FADERS];
     AudFader mFaders[NUM_FADERS];
-    bool mIsMuted;
 };

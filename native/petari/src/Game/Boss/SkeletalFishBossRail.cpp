@@ -5,16 +5,15 @@
 #include "Game/Util/RailUtil.hpp"
 
 SkeletalFishBossRail::SkeletalFishBossRail(const char* pName) : LiveActor(pName) {
-    _8C = -1;
+    mRailId = -1;
     mFillUpFlags = nullptr;
     mNamePosIDs = nullptr;
-    _98 = 0.0f;
 }
 
 void SkeletalFishBossRail::init(const TableIter& rIter) {
     MR::createSkeletalFishBossRailHolder();
     initRailRider(rIter);
-    MR::getPlacementArg0WithInit(rIter, &_8C);
+    MR::getPlacementArg0WithInit(rIter, &mRailId);
     MR::getSkeletalFishBossRailHolder()->add(this);
     createFillUpFlag();
     createFillUpNamePosID();

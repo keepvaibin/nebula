@@ -27,9 +27,9 @@
 #include <nebula_math.h>
 
 TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rArg2, MtxPtr pArg3)
-    : NameObj("会話制御"), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
-      _3C(), mIsOnReadNodeAuto(true), mAlreadyDoneFlags(), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
-      mMtx(pArg3), mIsOnRootNodeAuto(), _18(), mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
+    : NameObj("会話制御"), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), mBalloonPos(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
+      mAlreadyDoneFlag(), mIsOnReadNodeAuto(true), mAlreadyDoneFlags(), mIsStartOnlyFront(), mCameraInfo(), mBranchFunc(), mEventFunc(), mAnimeFunc(), mKillFunc(),
+      mMtx(pArg3), mIsOnRootNodeAuto(), mTalkStateKind(), mTagArg(nullptr, CustomTagArg::Type_Uninitialized) {
     mTagArg.mArgType = CustomTagArg::Type_Uninitialized;
     mTagArg.mIntArg = 0;
     MR::createSceneObj(SceneObj_TalkDirector);
@@ -38,8 +38,8 @@ TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const Vec3f& rArg2, MtxPtr pA
 }
 
 bool TalkMessageCtrl::inMessageArea() const {
-    s8 messageInfoEnumByte = mNodeCtrl->mMessageInfo._A;
-    s32 messageInfoEnum = mNodeCtrl->mMessageInfo._A;
+    s8 messageInfoEnumByte = mNodeCtrl->mMessageInfo.mAreaId;
+    s32 messageInfoEnum = mNodeCtrl->mMessageInfo.mAreaId;
     s32 zoneID = mZoneID;
 
     if (messageInfoEnumByte < 0) {
@@ -75,9 +75,9 @@ void TalkMessageCtrl::createMessage(const TableIter& rIter, const char* pName) {
     mNodeCtrl->createFlowNode(this, rIter, pName, &mCameraInfo);
 
     if (mNodeCtrl->mCurrentNode != nullptr) {
-        mAlreadyDoneFlags = MR::setupAlreadyDoneFlag((const char*)mNodeCtrl->_0, rIter, &_3C);
+        mAlreadyDoneFlags = MR::setupAlreadyDoneFlag((const char*)mNodeCtrl->mFlowName, rIter, &mAlreadyDoneFlag);
     } else {
-        _3C = 1;
+        mAlreadyDoneFlag = 1;
     }
 }
 
@@ -91,7 +91,7 @@ namespace {
 void TalkMessageCtrl::createMessageDirect(const TableIter& rIter, const char* pName) {
     mNodeCtrl = new TalkNodeCtrl();
     mNodeCtrl->createFlowNodeDirect(this, rIter, pName, &mCameraInfo);
-    _3C = 1;
+    mAlreadyDoneFlag = 1;
 }
 
 bool TalkMessageCtrl::rootNodeEve() {
@@ -195,7 +195,7 @@ void TalkMessageCtrl::rootNodePre(bool arg) {
             cond = MR::isStageStatePowerStarAppeared();
             break;
         case TalkMessageCtrl_Type9:
-            cond = _3C != 0;
+            cond = mAlreadyDoneFlag != 0;
             break;
         case TalkMessageCtrl_TypeA:
             cond = MR::isPlayerLuigi();
@@ -275,7 +275,7 @@ void TalkMessageCtrl::readMessage() {
         mNodeCtrl->readMessage();
     }
 
-    if (!_3C) {
+    if (!mAlreadyDoneFlag) {
         MR::updateAlreadyDoneFlag(mAlreadyDoneFlags, 1);
     }
 }
@@ -442,23 +442,23 @@ bool TalkFunction::isEventNode(const TalkMessageCtrl* pCtrl) {
 }
 
 void TalkFunction::onTalkStateNone(TalkMessageCtrl* pCtrl) {
-    pCtrl->_18 = 0;
+    pCtrl->mTalkStateKind = 0;
 }
 
 void TalkFunction::onTalkStateEntry(TalkMessageCtrl* pCtrl) {
-    pCtrl->_18 = 1;
+    pCtrl->mTalkStateKind = 1;
 }
 
 void TalkFunction::onTalkStateEnableStart(TalkMessageCtrl* pCtrl) {
-    pCtrl->_18 = 2;
+    pCtrl->mTalkStateKind = 2;
 }
 
 void TalkFunction::onTalkStateTalking(TalkMessageCtrl* pCtrl) {
-    pCtrl->_18 = 3;
+    pCtrl->mTalkStateKind = 3;
 }
 
 void TalkFunction::onTalkStateEnableEnd(TalkMessageCtrl* pCtrl) {
-    pCtrl->_18 = 4;
+    pCtrl->mTalkStateKind = 4;
 }
 
 TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
@@ -466,7 +466,7 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
 }
 
 const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return (const char16_t*)pCtrl->mNodeCtrl->mMessageInfo._0;
+    return (const char16_t*)pCtrl->mNodeCtrl->mMessageInfo.mMessage;
 }
 
 const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
@@ -504,10 +504,10 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
             Pos3f pos;
             pos.set(mHostActor->getBaseMtx());
 
-            Vec3f v3;  // 0x2C
+            Vec3f v3;
             pos.getZDir(v3);
 
-            Vec3f v4;  // 0x20
+            Vec3f v4;
             pos.getTrans(v4);
             v4 = *MR::getPlayerPos() - v4;
 
@@ -540,5 +540,5 @@ void TalkMessageCtrl::updateBalloonPos() {
 
     v3.set< f32 >(pos[0][3], pos[1][3], pos[2][3]);
     v3.add(Vec3f(tPos[0][3], tPos[1][3], tPos[2][3]));
-    MR::calcScreenPosition(&_1C, v3);
+    MR::calcScreenPosition(&mBalloonPos, v3);
 }

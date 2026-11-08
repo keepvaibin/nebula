@@ -23,10 +23,10 @@ public:
     void exeHardTouch();
     void exeRecover();
 
-    Mtx34f _8C;
-    f32 _BC;
+    Mtx34f mRotateMtx;
+    f32 mRotateSpeed;
     LodCtrl* mLodCtrlPlanet;
     MapPartsRailMover* mRailMover;
     MapPartsRailPosture* mRailPosture;
-    Vec3f _CC;
+    Vec3f mClipCenter;
 };

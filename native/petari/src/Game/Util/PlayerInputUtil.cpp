@@ -211,7 +211,7 @@ namespace MR {
         return isPressedFire(PLAYER_1) != false;
     }
 
-    bool testDPDMenuPadDecideTrigger() {
+    bool testPointerMenuPadDecideTrigger() {
         return isPressedJump(PLAYER_1);
     }
 

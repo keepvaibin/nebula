@@ -17,10 +17,10 @@ public:
 
     void operator=(const RailGraphEdge& rEdge) {
         mDistance = rEdge.mDistance;
-        _4 = rEdge._4;
-        _8 = rEdge._8;
-        _C = rEdge._C;
-        _10 = rEdge._10;
+        mNodeA = rEdge.mNodeA;
+        mNodeB = rEdge.mNodeB;
+        mNextEdgeA = rEdge.mNextEdgeA;
+        mNextEdgeB = rEdge.mNextEdgeB;
         mPointArg0 = rEdge.mPointArg0;
         mPointArg1 = rEdge.mPointArg1;
         mPointArg2 = rEdge.mPointArg2;
@@ -32,10 +32,10 @@ public:
     }
 
     f32 mDistance;
-    s32 _4;
-    s32 _8;
-    s32 _C;
-    s32 _10;
+    s32 mNodeA;
+    s32 mNodeB;
+    s32 mNextEdgeA;
+    s32 mNextEdgeB;
     s32 mPointArg0;
     s32 mPointArg1;
     s32 mPointArg2;

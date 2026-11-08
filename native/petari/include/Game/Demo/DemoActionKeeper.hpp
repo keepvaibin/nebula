@@ -27,12 +27,11 @@ public:
     s32 mActionType;
     const char* mPosName;
     const char* mAnimName;
-    s32 _18;
+    s32 mCastCapacity;
     s32 mCastCount;
     LiveActor** mCastList;
     MR::FunctorBase** mFunctors;
     const Nerve** mNerves;
-    u8 _2C;
 };
 
 class DemoActionKeeper {

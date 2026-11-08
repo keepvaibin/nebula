@@ -5,7 +5,6 @@
 
 class WalkerStateBlowDamageParam {
 public:
-    int _0;
 };
 
 class WalkerStateBlowDamage : public ActorStateBase< LiveActor > {

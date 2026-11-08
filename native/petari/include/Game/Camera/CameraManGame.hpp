@@ -72,7 +72,6 @@ public:
     Camera* mCamera;
     CameraParamChunk* mChunk;
     bool mRequestReset;
-    u32 _5C;
     CamKarikariEffector* mKarikari;
     CamHeliEffector* mHeli;
     u32 mTypeState;

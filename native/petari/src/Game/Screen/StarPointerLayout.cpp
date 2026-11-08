@@ -668,7 +668,7 @@ void StarPointerLayout::control() {
 
 void StarPointerLayout::setPosition() {
     StarPointerController* controller = StarPointerFunction::getStarPointerDirector()->getStarPointerController(mPadChannel);
-    // This frame's position (StarPointerController::updateDpdInfo has run). The 3D targeting keeps the previous frame's, which its depth peek belongs to.
+    // This frame's position (StarPointerController::updatePointerInfo has run). The 3D targeting keeps the previous frame's, which its depth peek belongs to.
     Vec2f pos = controller->mInfo.mPos;
     setTrans(pos);
     mNumber->setTrans(pos);

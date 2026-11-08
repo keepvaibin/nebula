@@ -17,7 +17,7 @@ SoundEmitterSphere::~SoundEmitterSphere() {
 }
 
 SoundEmitterSphere::SoundEmitterSphere(int formType, const char* pName)
-    : AreaObj(formType, pName), mSoundObj(), _40(0.0f, 0.0f, 0.0f), mSoundName(), mSoundIndex() {
+    : AreaObj(formType, pName), mSoundObj(), mSoundPos(0.0f, 0.0f, 0.0f), mSoundName(), mSoundIndex() {
 }
 
 void SoundEmitterSphere::init(const TableIter& rIter) {
@@ -25,7 +25,7 @@ void SoundEmitterSphere::init(const TableIter& rIter) {
 
     mSoundName = ::cSoundNameTable[mObjArg0];
     mSoundIndex = mObjArg0;
-    mSoundObj = new AudAnmSoundObject(&_40, 4, MR::getCurrentHeap());
+    mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, MR::getCurrentHeap());
 
     MR::connectToSceneAreaObj(this);
     MR::registerDemoSimpleCastAll(this);
@@ -37,23 +37,23 @@ void SoundEmitterSphere::movement() {
     case 2:
     case 4:
     case 5:
-        _40.set(MR::getCameraWatchPos());
+        mSoundPos.set(MR::getCameraWatchPos());
         break;
     case 0:
     case 3:
     default:
-        _40.set(AudMicWrap::getMicPos());
+        mSoundPos.set(AudMicWrap::getMicPos());
         break;
     }
 
-    if (!isInVolume(_40)) {
+    if (!isInVolume(mSoundPos)) {
         Vec3f center;
         MR::calcSpherePos(&center, this);
         f32 radius = MR::getSphereRadius(this);
-        f32 rate = radius / (_40 - center).length();
-        _40.x = center.x + rate * (_40.x - center.x);
-        _40.y = center.y + rate * (_40.y - center.y);
-        _40.z = center.z + rate * (_40.z - center.z);
+        f32 rate = radius / (mSoundPos - center).length();
+        mSoundPos.x = center.x + rate * (mSoundPos.x - center.x);
+        mSoundPos.y = center.y + rate * (mSoundPos.y - center.y);
+        mSoundPos.z = center.z + rate * (mSoundPos.z - center.z);
     }
 
     mSoundObj->process();

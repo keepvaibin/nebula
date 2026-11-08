@@ -20,8 +20,8 @@ public:
     void exeIn();
     void exeOut();
 
-    u8 _8C;
-    bool _8D;
+    u8 mIsChanged;
+    bool mIsWaitStartCamera;
     f32 mDistance;
 };
 

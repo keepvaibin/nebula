@@ -45,12 +45,12 @@ public:
     void exeMove();
     void exeStamp();
 
-    Pos3f _8C;
-    Vec3f _BC;
-    Quat4f _C8;
-    Quat4f _D8;
-    Quat4f _E8;
-    Vec3f _F8;
+    Pos3f mMoveEffectMtx;
+    Vec3f mRotateAxis;
+    Quat4f mStartQuat;
+    Quat4f mTargetQuat;
+    Quat4f mPoseQuat;
+    Vec3f mClipCenter;
 };
 
 namespace OnimasuFunction {

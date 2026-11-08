@@ -10,6 +10,6 @@ public:
     virtual void init(const TableIter&);
     virtual void control();
 
-    s32 _BC;
-    bool _C0;
+    s32 mPassFlags;
+    bool mIsPassable;
 };

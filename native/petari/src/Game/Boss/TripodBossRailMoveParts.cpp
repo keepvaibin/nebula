@@ -27,7 +27,7 @@ void TripodBossRailMoveParts::activateTripodBoss() {
 }
 
 void TripodBossRailMoveParts::calcTripodLocalMatrix(Pos3f* pMtx) {
-    _BC = mRailMover->_28;
+    mLocalPos = mRailMover->mStartPos;
 
     TripodBossFixPartsBase::calcTripodLocalMatrix(pMtx);
 }

@@ -13,13 +13,13 @@ SkeletalFishGuardHolder::SkeletalFishGuardHolder(SkeletalFishBoss* pBoss, s32 nu
     mBossRail = nullptr;
     mNumGuards = numGuards;
     mGuards = nullptr;
-    _1C = 0.0f;
-    _20 = 1;
+    mAppearRailCoord = 0.0f;
+    mIsValid = 1;
     createAndInitGuard();
 }
 
 void SkeletalFishGuardHolder::movement() {
-    if (_20) {
+    if (mIsValid) {
         checkRailChangedAndReset();
         s32 appearableGuard = countAppearableGuard();
         if (appearableGuard > 0) {
@@ -40,8 +40,8 @@ void SkeletalFishGuardHolder::forceAppearAll() {
             guardWaitLvlId = mFishBoss->getLevelStatus()->mStatusArray[i].mGuardWaitLevelID;
             lvl = mFishBoss->getLevelStatus();
             guard = mGuards[i];
-            guard->_94.set(lvl->mStatusArray[i].mGuardPosLevel);
-            guard->_A0 = guardWaitLvlId;
+            guard->mGuardOffset.set(lvl->mStatusArray[i].mGuardPosLevel);
+            guard->mAppearWaitStep = guardWaitLvlId;
             mGuards[i]->appearForce();
 
             if (--appearableGuard <= 0) {
@@ -74,25 +74,25 @@ void SkeletalFishGuardHolder::notifyAttack(SkeletalFishGuard* pGuard) {
 }
 
 void SkeletalFishGuardHolder::invalidate() {
-    _20 = 0;
+    mIsValid = 0;
 }
 
 void SkeletalFishGuardHolder::validate() {
-    if (!_20) {
-        _20 = 1;
-        _1C = MR::getRailCoord(mFishBoss->getCurrentBossRail());
+    if (!mIsValid) {
+        mIsValid = 1;
+        mAppearRailCoord = MR::getRailCoord(mFishBoss->getCurrentBossRail());
     }
 }
 
 void SkeletalFishGuardHolder::checkRailChangedAndReset() {
     if (mBossRail != mFishBoss->getCurrentBossRail()) {
-        _1C = MR::getRailCoord(mFishBoss->getCurrentBossRail());
+        mAppearRailCoord = MR::getRailCoord(mFishBoss->getCurrentBossRail());
         mBossRail = (SkeletalFishBossRail*)mFishBoss->getCurrentBossRail();
     }
 }
 
 s32 SkeletalFishGuardHolder::countAppearableGuard() const {
-    SkeletalFishBossInfo::LevelStatus* lvl = mFishBoss->mBossInfo->getLevelStatus(mFishBoss->_110);
+    SkeletalFishBossInfo::LevelStatus* lvl = mFishBoss->mBossInfo->getLevelStatus(mFishBoss->mLevel);
     s32 guardCount = lvl->mGuardAppearNumLevel - countGuardAlive();
 
     if (guardCount < 0) {
@@ -117,10 +117,10 @@ s32 SkeletalFishGuardHolder::countGuardAlive() const {
 void SkeletalFishGuardHolder::checkDistanceAndAppear(s32 numGuards) {
     f32 v7, v9;
 
-    f32 guardOffsLvl = mFishBoss->mBossInfo->getLevelStatus(mFishBoss->_110)->mGuardOffsLevel;
+    f32 guardOffsLvl = mFishBoss->mBossInfo->getLevelStatus(mFishBoss->mLevel)->mGuardOffsLevel;
     f32 coord = MR::getRailCoord(mBossRail);
 
-    if (coord < _1C) {
+    if (coord < mAppearRailCoord) {
         coord = coord + MR::getRailTotalLength(mBossRail);
     }
 
@@ -129,7 +129,7 @@ void SkeletalFishGuardHolder::checkDistanceAndAppear(s32 numGuards) {
             v7 = (MR::getRailPointCoord(mBossRail, i) - guardOffsLvl);
             v9 = MR::repeat(v7, 0.0f, MR::getRailTotalLength(mBossRail));
 
-            if (v9 < _1C) {
+            if (v9 < mAppearRailCoord) {
                 v9 = (v9 + (MR::getRailTotalLength(mBossRail)));
             }
 
@@ -140,7 +140,7 @@ void SkeletalFishGuardHolder::checkDistanceAndAppear(s32 numGuards) {
         }
     }
 
-    _1C = MR::getRailCoord(mBossRail);
+    mAppearRailCoord = MR::getRailCoord(mBossRail);
 }
 
 void SkeletalFishGuardHolder::appearGuard(s32 numGuards, s32 startGuard) {
@@ -157,8 +157,8 @@ void SkeletalFishGuardHolder::appearGuard(s32 numGuards, s32 startGuard) {
                 waitID = mFishBoss->getLevelStatus()->mStatusArray[i].mGuardWaitLevelID;
                 level = mFishBoss->getLevelStatus();
                 guard = mGuards[i];
-                guard->_94.set(level->mStatusArray[i].mGuardPosLevel);
-                guard->_A0 = waitID;
+                guard->mGuardOffset.set(level->mStatusArray[i].mGuardPosLevel);
+                guard->mAppearWaitStep = waitID;
                 mGuards[i]->appearNaturally();
 
                 if (--numGuards <= 0) {

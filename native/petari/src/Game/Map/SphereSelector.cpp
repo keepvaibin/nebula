@@ -7,7 +7,7 @@
 
 namespace {
     inline bool isWaitingForClick(const SphereSelector* pSelector) {
-        return pSelector->_A4 < 0;
+        return pSelector->mClickStep < 0;
     }
 
     SphereSelector* getSphereSelector() {
@@ -26,8 +26,8 @@ namespace NrvSphereSelector {
 };  // namespace NrvSphereSelector
 
 SphereSelector::SphereSelector()
-    : LiveActor("スフィアセレクター"), mSphereGroup(), mHandle(), mSelectedTarget(), _98(), mPointingTarget(), _A4(), _A8(0.0f, 0.0f),
-      mIsPointingInvalid(), _B1() {
+    : LiveActor("スフィアセレクター"), mSphereGroup(), mHandle(), mSelectedTarget(), mNearestTarget(), mPointingTarget(), mClickStep(), mClickPos(0.0f, 0.0f),
+      mIsPointingInvalid(), mIsSePlayed() {
 }
 
 void SphereSelector::init(const TableIter& rIter) {
@@ -41,7 +41,7 @@ void SphereSelector::init(const TableIter& rIter) {
 void SphereSelector::appear() {
     LiveActor::appear();
     mSelectedTarget = nullptr;
-    _98 = nullptr;
+    mNearestTarget = nullptr;
     mPointingTarget = nullptr;
     mIsPointingInvalid = false;
     MR::deactivateDefaultGameLayout();
@@ -85,9 +85,9 @@ void SphereSelector::registerPointingTarget(LiveActor* pActor, HandlePointingPri
         break;
     }
 
-    if (_98 == nullptr || _9C > distance) {
-        _98 = pActor;
-        _9C = distance;
+    if (mNearestTarget == nullptr || mNearestDist > distance) {
+        mNearestTarget = pActor;
+        mNearestDist = distance;
     }
 }
 
@@ -110,7 +110,7 @@ void SphereSelector::sendMsgToAllActor(u32 msg) {
 }
 
 bool SphereSelector::isMoveClickedPos() const {
-    return 80.0f < FloatUtil::sqrt(_A8.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
+    return 80.0f < FloatUtil::sqrt(mClickPos.squareDist(MR::getStarPointerScreenPositionOrEdge(0)));
 }
 
 void SphereSelector::playSelectedME() {
@@ -153,8 +153,8 @@ void SphereSelector::playCanceledME() {
 void SphereSelector::exeSelectWait() {
     if (MR::isFirstStep(this)) {
         mPointingTarget = nullptr;
-        _98 = nullptr;
-        _A4 = -1;
+        mNearestTarget = nullptr;
+        mClickStep = -1;
         MR::startStarPointerModeSphereSelectorOnReaction(this);
     }
 
@@ -167,47 +167,47 @@ void SphereSelector::exeSelectWait() {
             }
         }
     } else {
-        _A4++;
+        mClickStep++;
 
-        if (isMoveClickedPos() || _A4 > 30) {
+        if (isMoveClickedPos() || mClickStep > 30) {
             sendSelectedMsgAndSetTarget(mHandle);
-            _A4 = -1;
+            mClickStep = -1;
         } else if (!isButtonAPressed()) {
             sendSelectedMsgAndSetTarget(mPointingTarget);
-            _A4 = -1;
+            mClickStep = -1;
         }
     }
 
-    if (_A4 < 0) {
-        if (_98 != nullptr && _98 != mPointingTarget && _98 != mHandle) {
+    if (mClickStep < 0) {
+        if (mNearestTarget != nullptr && mNearestTarget != mPointingTarget && mNearestTarget != mHandle) {
             MR::tryRumblePadWeak(this, 0);
         }
 
-        mPointingTarget = _98;
-        _98 = nullptr;
+        mPointingTarget = mNearestTarget;
+        mNearestTarget = nullptr;
     }
 }
 
 void SphereSelector::exeSelectCancel() {
     if (MR::isFirstStep(this)) {
-        if (!_B1) {
+        if (!mIsSePlayed) {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
             playCanceledME();
         }
 
-        _B1 = false;
+        mIsSePlayed = false;
     }
 }
 
 void SphereSelector::exeConfirmStart() {
     if (MR::isFirstStep(this)) {
         sendMsgToAllActor(ACTMES_SPHERE_SELECTOR_CONFIRM_START);
-        if (!_B1) {
+        if (!mIsSePlayed) {
             MR::startSystemSE("SE_SY_GALAXY_SELECTED");
             playSelectedME();
         }
 
-        _B1 = false;
+        mIsSePlayed = false;
         MR::endStarPointerMode(this);
     }
 
@@ -219,11 +219,11 @@ void SphereSelector::exeConfirmCancel() {
         sendMsgToAllActor(ACTMES_SPHERE_SELECTOR_CONFIRM_CANCEL);
         mSelectedTarget = nullptr;
         mPointingTarget = nullptr;
-        if (!_B1) {
+        if (!mIsSePlayed) {
             playCanceledME();
         }
 
-        _B1 = false;
+        mIsSePlayed = false;
     }
 
     MR::setNerveAtStep(this, GET_NERVE(SphereSelector, SphereSelectorNrvSelectWait), SphereSelectorFunction::getConfirmStartCancelFrame());
@@ -283,7 +283,7 @@ void SphereSelectorFunction::selectStart() {
 
 void SphereSelectorFunction::selectCancel(bool b) {
     if (b) {
-        ::getSphereSelector()->_B1 = true;
+        ::getSphereSelector()->mIsSePlayed = true;
     }
 
     ::getSphereSelector()->setNerve(GET_NERVE(SphereSelector, SphereSelectorNrvSelectCancel));
@@ -299,7 +299,7 @@ void SphereSelectorFunction::confirmStart() {
 
 void SphereSelectorFunction::confirmCancel(bool b) {
     if (b) {
-        ::getSphereSelector()->_B1 = true;
+        ::getSphereSelector()->mIsSePlayed = true;
     }
 
     ::getSphereSelector()->setNerve(GET_NERVE(SphereSelector, SphereSelectorNrvConfirmCancel));

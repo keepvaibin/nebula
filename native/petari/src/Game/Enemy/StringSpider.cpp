@@ -73,9 +73,9 @@ namespace {
     // hWallHitDeathTime
     // hTrampleDeathTime
     // hPointerTouchVel
-    // hDpdGrippedMulVel
-    // hDpdGrippedAddVelMax
-    // hDpdGrippedLimitAddLength
+    // hPointerGrippedMulVel
+    // hPointerGrippedAddVelMax
+    // hPointerGrippedLimitAddLength
     // hSpinRangeAddForce
     // hStarPieceAttackAddVel
     // hDownAnimStartSubLength
@@ -107,16 +107,16 @@ namespace NrvStringSpider {
     NEW_NERVE(HostTypeNrvWallHitDeath, StringSpider, WallHitDeath);
     NEW_NERVE(HostTypeNrvTrampleDeath, StringSpider, WallHitDeath);
     NEW_NERVE(HostTypeNrvBlow, StringSpider, Blow);
-    NEW_NERVE_ONEND(HostTypeNrvDpdGripped, StringSpider, DpdGripped, DpdGripped);
+    NEW_NERVE_ONEND(HostTypeNrvPointerGripped, StringSpider, PointerGripped, PointerGripped);
 };  // namespace NrvStringSpider
 
 StringSpider::StringSpider(const char* pName)
     : LiveActor(pName), mSpinHitController(nullptr), mScaleController(nullptr), mStampController(nullptr), mString(nullptr), mFixedPos(nullptr),
-      _A0(0, 0, 0, 1), _B8(false), _B0(300.0f), _B4(300.0f), _BC(0), _C0(nullptr), _C4(nullptr) {
+      mPoseQuat(0, 0, 0, 1), mIsPointerPulled(false), mStringLengthMax(300.0f), mStringLength(300.0f), mPointerStep(0), mSwingFront(nullptr), mSwingSide(nullptr) {
 }
 
 s32 StringSpider::getSearchToAttackTime() {
-    if (_C0 == nullptr) {
+    if (mSwingFront == nullptr) {
         return 300;
     }
 
@@ -131,15 +131,15 @@ void StringSpider::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &arg);
         if (arg != -1) {
             f32 fArg = arg;
-            _B4 = fArg * 0.333f;
-            _B0 = fArg;
+            mStringLength = fArg * 0.333f;
+            mStringLengthMax = fArg;
         }
 
         arg = -1;
         MR::getPlacementArg1NoInit(rIter, &arg);
         if (arg == 2) {
-            _C0 = new Vec3f();
-            _C4 = new Vec3f();
+            mSwingFront = new Vec3f();
+            mSwingSide = new Vec3f();
         }
 
         if (MR::useStageSwitchWriteDead(this, rIter)) {
@@ -149,11 +149,11 @@ void StringSpider::init(const TableIter& rIter) {
     }
 
     initModelManagerWithAnm("StringSpider", nullptr, false);
-    MR::makeQuatFromRotate(&_A0, this);
+    MR::makeQuatFromRotate(&mPoseQuat, this);
 
-    if (_C0 != nullptr) {
-        _A0.getZDir(*_C0);
-        _A0.getXDir(*_C4);
+    if (mSwingFront != nullptr) {
+        mPoseQuat.getZDir(*mSwingFront);
+        mPoseQuat.getXDir(*mSwingSide);
     }
 
     MR::connectToSceneEnemy(this);
@@ -162,7 +162,7 @@ void StringSpider::init(const TableIter& rIter) {
     initBinder(80.0f * mScale.y, 0.0f, 0);
     initHitSensor(1);
     MR::addHitSensorEnemy(this, "body", 32, yScale * 80.0f, Vec3f(0.0f, -13.0f, 13.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(StringSpider, HostTypeNrvWait));
@@ -242,15 +242,15 @@ void StringSpider::doSwingAction(f32 a1, bool a2) {
     }
 
     if (a2) {
-        if (_C0 != nullptr) {
+        if (mSwingFront != nullptr) {
             return;
         }
-        _A0.getXDir(v1);
+        mPoseQuat.getXDir(v1);
     } else {
-        if (_C0 == nullptr) {
-            _A0.getZDir(v1);
+        if (mSwingFront == nullptr) {
+            mPoseQuat.getZDir(v1);
         } else {
-            v1.set(*_C0);
+            v1.set(*mSwingFront);
         }
 
         if (MR::isFirstStep(this)) {
@@ -278,20 +278,20 @@ void StringSpider::doSwingAction(f32 a1, bool a2) {
     mVelocity += v3 * a1;
 }
 
-void StringSpider::reactDPD() {
+void StringSpider::reactPointer() {
     if (isNerve(GET_NERVE(StringSpider, HostTypeNrvTrampleFall)) || isNerve(GET_NERVE(StringSpider, HostTypeNrvWallHitDeath)) ||
         isNerve(GET_NERVE(StringSpider, HostTypeNrvTrampleDeath))) {
-        _B8 = false;
-        _BC = 0;
+        mIsPointerPulled = false;
+        mPointerStep = 0;
         return;
     }
 
-    if (_BC > 0) {
-        _BC--;
+    if (mPointerStep > 0) {
+        mPointerStep--;
     }
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
-        if (!_B8 && _BC == 0) {
+        if (!mIsPointerPulled && mPointerStep == 0) {
             Vec2f screenVel = *MR::getStarPointerScreenVelocity(1);
             if (screenVel.length() < 20.0f) {
                 return;
@@ -301,19 +301,19 @@ void StringSpider::reactDPD() {
             MR::getStarPointerWorldVelocityDirection(&a1, 1);
             a1.setLength(15.0f);
             mVelocity.add(a1);
-            _B8 = true;
+            mIsPointerPulled = true;
             Vec3f a2(mPosition);
             f32 radius = getSensor("body")->mRadius;
             a1.setLength(radius);
             a2.add(a1);
             MR::emitEffectHit(this, a2, nullptr);
-            _BC = 30;
+            mPointerStep = 30;
             MR::start2PAttackAssistSound();
             setNerve(GET_NERVE(StringSpider, HostTypeNrvSpinned));
         }
-        _B8 = true;
+        mIsPointerPulled = true;
     } else {
-        _B8 = false;
+        mIsPointerPulled = false;
     }
 }
 
@@ -321,15 +321,15 @@ void StringSpider::reactStringForce() {
     f32 v1;
     Vec3f v2;
     if (isOverStringLength(&v2, &v1)) {
-        if ((1000.0f + _B4) < v1) {
+        if ((1000.0f + mStringLength) < v1) {
             kill();
         } else {
             MR::normalizeOrZero(&v2);
-            if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvDpdGripped))) {
+            if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvPointerGripped))) {
                 MR::calcReflectionVector(&mVelocity, v2, 0.25f, 1.0f);
             }
 
-            f32 v4 = v1 - _B4;
+            f32 v4 = v1 - mStringLength;
             mVelocity += v2 * v4 * 0.1f;
         }
     }
@@ -346,7 +346,7 @@ bool StringSpider::isOverStringLength(Vec3f* a1, f32* a2) {
         *a2 = rootLen;
     }
 
-    return _B4 < rootLen;
+    return mStringLength < rootLen;
 }
 
 void StringSpider::control() {
@@ -357,9 +357,9 @@ void StringSpider::control() {
 
     mScaleController->updateNerve();
     mStampController->updateNerve();
-    reactDPD();
+    reactPointer();
 
-    if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvDpdGripped))) {
+    if (!isNerve(GET_NERVE(StringSpider, HostTypeNrvPointerGripped))) {
         if (MR::isBindedWallOfMap(this)) {
             Vec3f v9(*MR::getWallNormal(this));
             Vec3f v8(*MR::getWallHitPos(this));
@@ -391,10 +391,10 @@ void StringSpider::calcPosture(f32 a1, bool a2) {
     Vec3f v1;
     Vec3f rootVec = calcToRootVector();
     Vec3f v3, v9;
-    _A0.getYDir(v1);
+    mPoseQuat.getYDir(v1);
     MR::normalizeOrZero(&rootVec);
     if (!MR::isNearZero(rootVec)) {
-        _A0.getZDir(v3);
+        mPoseQuat.getZDir(v3);
 
         if (a2) {
             MR::calcVecToPlayerH(&v9, this, &v1);
@@ -406,7 +406,7 @@ void StringSpider::calcPosture(f32 a1, bool a2) {
             }
         }
 
-        MR::blendQuatUpFront(&_A0, rootVec, v3, a1, 0.03f);
+        MR::blendQuatUpFront(&mPoseQuat, rootVec, v3, a1, 0.03f);
     }
 }
 
@@ -468,11 +468,11 @@ void StringSpider::exeDown() {
     extendString();
     f32 v1;
     bool isOver = isOverStringLength(nullptr, &v1);
-    if ((_B0 - 230.0f) < v1) {
+    if ((mStringLengthMax - 230.0f) < v1) {
         MR::tryStartBck(this, "PreDownEnd");
     }
 
-    if (_B4 == _B0 && isOver) {
+    if (mStringLength == mStringLengthMax && isOver) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvDownEnd));
     }
 }
@@ -489,7 +489,7 @@ void StringSpider::exeUp() {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvDownStart));
     } else {
         shortenString(5.0f);
-        if (_B4 == (0.333f * _B0)) {
+        if (mStringLength == (0.333f * mStringLengthMax)) {
             setNerve(GET_NERVE(StringSpider, HostTypeNrvWait));
         }
     }
@@ -566,7 +566,7 @@ void StringSpider::exeSpinned() {
 
     f32 nerveRate = MR::calcNerveRate(this, 480);
     f32 nerveRateMinus = 1.0f - nerveRate;
-    if (_C4 == nullptr) {
+    if (mSwingSide == nullptr) {
         Vec3f rootVec = calcToRootVector();
         Vec3f v15;
         v15.cross(mGravity, rootVec);
@@ -585,7 +585,7 @@ void StringSpider::exeSpinned() {
 
     Quat4f v14;
     v14.setRotate(Vec3f(0, 1, 0), (-0.6f * nerveRateMinus));
-    NebulaQuatMultiply(_A0, v14, _A0);
+    NebulaQuatMultiply(mPoseQuat, v14, mPoseQuat);
     calcPosture(0.25f, false);
 
     if (MR::isGreaterStep(this, 480)) {
@@ -629,7 +629,7 @@ void StringSpider::exeBlow() {
     mSpinHitController->execute(this);
 }
 
-void StringSpider::exeDpdGripped() {
+void StringSpider::exePointerGripped() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Spin");
         if (!MR::tryStartStarPointerCommandStream(this, &mPosition, *MR::getStarPointerLastPointedPort(this), false)) {
@@ -652,7 +652,7 @@ void StringSpider::exeDpdGripped() {
         f32 v9;
         isOverStringLength(nullptr, &v9);
 
-        if ((100.0f + _B4) < v9) {
+        if ((100.0f + mStringLength) < v9) {
             MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
             setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
@@ -661,35 +661,35 @@ void StringSpider::exeDpdGripped() {
     }
 }
 
-void StringSpider::endDpdGripped() {
-    tearDownDpdGripped();
+void StringSpider::endPointerGripped() {
+    tearDownPointerGripped();
 }
 
-void StringSpider::tearDownDpdGripped() {
+void StringSpider::tearDownPointerGripped() {
     if (MR::isStarPointerCommandStream(this, *MR::getStarPointerLastPointedPort(this))) {
         MR::tryEndStarPointerCommandStream(this, *MR::getStarPointerLastPointedPort(this));
     }
 }
 
 void StringSpider::extendString() {
-    _B4 += 100.0f;
-    _B4 = MR::clamp(_B4, 0.333f * _B0, _B0);
+    mStringLength += 100.0f;
+    mStringLength = MR::clamp(mStringLength, 0.333f * mStringLengthMax, mStringLengthMax);
 }
 
 void StringSpider::shortenString(f32 a1) {
-    _B4 -= a1;
-    _B4 = MR::clamp(_B4, 0.333f * _B0, _B0);
+    mStringLength -= a1;
+    mStringLength = MR::clamp(mStringLength, 0.333f * mStringLengthMax, mStringLengthMax);
 }
 
 void StringSpider::calcAndSetBaseMtx() {
     Pos3f v14;
-    v14.makeQuat(_A0);
-    Pos3f v13(mStampController->_14);
+    v14.makeQuat(mPoseQuat);
+    Pos3f v13(mStampController->mMtx);
     v14.concat(v13, v14);
     v14.setTrans(mPosition);
     MR::setBaseTRMtx(this, v14);
-    MR::setBaseScale(this, mScaleController->_C * mScale);
-    MR::copyJointPos(this, "Root", &mString->_9C);
+    MR::setBaseScale(this, mScaleController->mScale * mScale);
+    MR::copyJointPos(this, "Root", &mString->mRootPos);
     mString->calcAndSetBaseMtx();
 }
 
@@ -767,9 +767,9 @@ bool StringSpider::reactSpinHit(HitSensor* pSender, HitSensor* pReceiver) {
         v8.scale(0.0f);
         v10.sub(v8);
 
-        if (_C4 != nullptr) {
-            MR::vecKillElement(v10, *_C4, &v10);
-            MR::vecKillElement(v9, *_C4, &v9);
+        if (mSwingSide != nullptr) {
+            MR::vecKillElement(v10, *mSwingSide, &v10);
+            MR::vecKillElement(v9, *mSwingSide, &v9);
         }
 
         mVelocity.set(v10);
@@ -795,8 +795,8 @@ bool StringSpider::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
         v11.sub(pSender->mPosition);
         v11.setLength(pSender->mHost->mVelocity.length());
 
-        if (_C4 != nullptr) {
-            MR::vecKillElement(v11, *_C4, &v11);
+        if (mSwingSide != nullptr) {
+            MR::vecKillElement(v11, *mSwingSide, &v11);
         }
 
         mVelocity.add(v11);
@@ -828,8 +828,8 @@ bool StringSpider::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         f32 len = v14.length();
         v14.setLength(0.5f * ((rad1 + rad2) - len));
 
-        if (_C4 != nullptr) {
-            MR::vecKillElement(v14, *_C4, &v14);
+        if (mSwingSide != nullptr) {
+            MR::vecKillElement(v14, *mSwingSide, &v14);
         }
 
         mVelocity.add(v14);
@@ -876,9 +876,9 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     }
 
     if (MR::isMsgInvincibleAttack(msg)) {
-        if (_C4 != nullptr) {
+        if (mSwingSide != nullptr) {
             Vec3f v15(pSender->mPosition - pReceiver->mPosition);
-            MR::vecKillElement(v15, *_C4, &v15);
+            MR::vecKillElement(v15, *mSwingSide, &v15);
             mSpinHitController->start(this, pReceiver->mPosition + v15, pReceiver->mPosition);
         } else {
             mSpinHitController->start(this, pSender->mPosition, pReceiver->mPosition);
@@ -890,9 +890,9 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
 
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isNerve(GET_NERVE(StringSpider, HostTypeNrvSpinned))) {
-            if (_C4 != nullptr) {
+            if (mSwingSide != nullptr) {
                 Vec3f v14(pSender->mPosition - pReceiver->mPosition);
-                MR::vecKillElement(v14, *_C4, &v14);
+                MR::vecKillElement(v14, *mSwingSide, &v14);
                 mSpinHitController->start(this, pReceiver->mPosition + v14, pReceiver->mPosition);
             } else {
                 mSpinHitController->start(this, pSender->mPosition, pReceiver->mPosition);
@@ -924,7 +924,7 @@ void StringSpider::startSwingLevelSound() {
     MR::startLevelSound(this, "SE_EM_LV_STRSPIDER_SWING2", liner2);
 }
 
-StringSpiderString::StringSpiderString(const char* pName) : LiveActor(pName), _8C(0, 0, 0, 1), _9C(0, 0, 0) {
+StringSpiderString::StringSpiderString(const char* pName) : LiveActor(pName), mRotateQuat(0, 0, 0, 1), mRootPos(0, 0, 0) {
     initModelManagerWithAnm("StringSpiderString", nullptr, false);
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_Enemy, MR::DrawType_None);
     MR::invalidateClipping(this);
@@ -933,18 +933,18 @@ StringSpiderString::StringSpiderString(const char* pName) : LiveActor(pName), _8
 void StringSpiderString::calcAndSetBaseMtx() {
     Vec3f v10(mScale);
     Vec3f v9(mPosition);
-    v9.sub(_9C);
+    v9.sub(mRootPos);
     MR::separateScalarAndDirection(&v10.y, &v9, v9);
     v10.y *= 0.063f;
 
     if (MR::isOppositeDirection(Vec3f(0, 1, 0), v9)) {
-        _8C.setRotate(Vec3f(1, 0, 0), MR::pi());
+        mRotateQuat.setRotate(Vec3f(1, 0, 0), MR::pi());
     } else {
-        _8C.setRotate(Vec3f(0, 1, 0), v9);
+        mRotateQuat.setRotate(Vec3f(0, 1, 0), v9);
     }
 
     Pos3f v12;
-    v12.makeQuat(_8C);
+    v12.makeQuat(mRotateQuat);
     v12.setTrans(mPosition);
     MR::setBaseTRMtx(this, v12);
     MR::setBaseScale(this, v10);

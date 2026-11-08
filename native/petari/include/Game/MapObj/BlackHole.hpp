@@ -29,11 +29,10 @@ public:
     void exeDisappear();
 
     ModelObj* mBlackHoleModel;
-    Vec3f _90;
-    f32 _9C;
-    f32 _A0;
-    Box3f* _A4;
-    Pos3f _A8;
-    Pos3f _D8;
+    f32 mModelScale;
+    f32 mRadius;
+    Box3f* mCubeBox;
+    Pos3f mCubeMtx;
+    Pos3f mSuctionEffectMtx;
     ActorCameraInfo* mCameraInfo;
 };

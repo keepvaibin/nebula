@@ -13,8 +13,8 @@ public:
     void exeWait();
     void exeIsInTornado();
 
-    s32 _8C;
+    s32 mCoinCount;
     bool mIsInTornado;
-    s32 _94;
-    s32 _98;
+    s32 mSpawnTimer;
+    s32 mSpawnedCount;
 };

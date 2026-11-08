@@ -18,8 +18,8 @@ struct ActorPadAndCameraCtrlInfo {
     f32 mDistanceNear;
     f32 mDistanceFar;
     f32 mDistanceInvalid;
-    bool _30;
-    bool _31;
+    bool mIsBckPlaying;
+    bool mIsActive;
 };
 
 class ActorPadAndCameraCtrl {
@@ -32,10 +32,10 @@ public:
     void updateInfoBck();
     void updatePadAndCamera(const ActorPadAndCameraCtrlInfo*);
 
-    const ModelManager* _0;
-    const Vec3f* _4;
-    const ResourceHolder* _8;
-    const char* _C;
+    const ModelManager* mModelManager;
+    const Vec3f* mPosition;
+    const ResourceHolder* mResourceHolder;
+    const char* mPlayingBckName;
     s32 mInfoNum;
     ActorPadAndCameraCtrlInfo* mInfo;
 };

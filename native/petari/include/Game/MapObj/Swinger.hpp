@@ -12,17 +12,16 @@ public:
     void accel(const Vec3f&);
     void updateSwingMtx(const Vec3f&);
 
-    const Vec3f* _0;
-    Pos3f* _4;
-    Vec3f _8;
+    const Vec3f* mPivot;
+    Vec3f mTipPos;
     Vec3f mAcceleration;
-    Vec3f _20;
-    f32 _2C;
-    f32 _30;
-    f32 _34;
-    const Vec3f* _38;
-    Vec3f _3C;
-    Vec3f _48;
-    Vec3f _54;
-    Pos3f _60;
+    Vec3f mSwingDir;
+    f32 mLength;
+    f32 mGravityAccel;
+    f32 mDamping;
+    const Vec3f* mGravity;
+    Vec3f mSide;
+    Vec3f mUp;
+    Vec3f mFront;
+    Pos3f mSwingMtx;
 };

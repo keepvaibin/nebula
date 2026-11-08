@@ -16,7 +16,7 @@ namespace {
     // static const _32 hDrawDebugRadius =
 };  // namespace
 
-DpdInfo::DpdInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {
+PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {
 }
 
 StarPointerController::StarPointerController()
@@ -37,7 +37,7 @@ void StarPointerController::initAndSetPort(s32 padChannel) {
 void StarPointerController::movement(const f32* pProjectionParams, const f32* pViewportParams) {
     storeDataFromCallback(pProjectionParams, pViewportParams);
     storePastPointingData();
-    updateDpdInfo();
+    updatePointerInfo();
 }
 
 void StarPointerController::storeDataFromCallback(const f32* pProjectionParams, const f32* pViewportParams) {
@@ -80,7 +80,7 @@ void StarPointerController::calcPastPointingPosOnScreen(Vec2f* pPos, s32 idx) co
     pPos->y *= static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
 }
 
-void StarPointerController::updateDpdInfo() {
+void StarPointerController::updatePointerInfo() {
     if (!MR::isPointerInScreen(mPadChannel)) {
         Vec2f vec;
         vec.x = mInfo.mPos.x;

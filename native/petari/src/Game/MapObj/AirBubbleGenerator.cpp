@@ -22,7 +22,7 @@ namespace NrvAirBubbleGenerator {
 AirBubbleGenerator::~AirBubbleGenerator() {
 }
 
-AirBubbleGenerator::AirBubbleGenerator(const char* pName) : LiveActor(pName), _8C(), mWaitTime(180), mBubbleLifeTime(-1) {
+AirBubbleGenerator::AirBubbleGenerator(const char* pName) : LiveActor(pName), mWaitTime(180), mBubbleLifeTime(-1) {
 }
 
 void AirBubbleGenerator::init(const TableIter& rIter) {
@@ -30,7 +30,7 @@ void AirBubbleGenerator::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AirBubbleGenerator", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObj(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initNerve(GET_NERVE(AirBubbleGenerator, AirBubbleGeneratorNrvWait));
     initHitSensor(1);
     MR::addBodyMessageSensorReceiver(this);

@@ -1,12 +1,10 @@
 #include "Game/Map/WhirlPoolAccelerator.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include "Game/Render/TypedDraw.hpp"
 #include <nebula_game_api.h>
 
 NebulaColor8 sWhirlPoolAcceleratorStageColor1 = {0x00, 0x34, 0x52, 0xFF};
@@ -18,7 +16,7 @@ namespace {
 
 WhirlPoolPoint::WhirlPoolPoint(const Vec3f& rPosition, const Vec3f& rDirection, const Vec3f& rNormal, f32 radius, f32 texCoord, u8 alpha)
     : mPosition(rPosition), mSide(1.0f, 0.0f, 0.0f), mNormal(rNormal), mDirection(0.0f, 0.0f, 1.0f), mRadius(radius), mTexCoord(texCoord),
-      mAlpha(alpha), _39() {
+      mAlpha(alpha) {
     mDirection.set(rDirection);
     mDirection.mult(-1.0f);
     mSide.cross(mNormal, mDirection);

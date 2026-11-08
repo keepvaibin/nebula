@@ -43,8 +43,8 @@ public:
     void exeDrown();
     void exeHide();
     void exeAppear();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
 
     bool tryToStartBind(HitSensor* pSender);
     void updateBindActorMtx();
@@ -56,7 +56,7 @@ public:
     void calcMyGravity();
     bool tryNonActive();
     bool tryDrown();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
     bool tryShock();
     bool tryHipDropShock();
     bool isNerveTypeWalkOrWait() const;
@@ -77,7 +77,5 @@ public:
     s32 mBehavior;
     bool mCanDrown;
     ModelObj* mWaterColumn;
-    Vec3f _D8;
     bool mIsActive;
-    u8 _E5;
 };

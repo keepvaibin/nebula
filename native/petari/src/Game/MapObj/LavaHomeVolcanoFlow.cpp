@@ -18,7 +18,7 @@ LavaHomeVolcanoFlow::LavaHomeVolcanoFlow(const char* pName) : LiveActor(pName) {
 void LavaHomeVolcanoFlow::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("LavaHomeVolcanoFlow", nullptr, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     initNerve(GET_NERVE(LavaHomeVolcanoFlow, HostTypeWait));

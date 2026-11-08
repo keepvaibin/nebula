@@ -14,6 +14,6 @@ public:
     virtual void movement();
 
     AudAnmSoundObject* mSoundObj;
-    Vec3f _40;
+    Vec3f mSoundPos;
     const char* mSoundName;
 };

@@ -20,7 +20,6 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
     void moveOnRail();
-    void setGravityAndMakeMtx();
     void updateEffectClipping(bool);
 
     void exeWaitSwitch();
@@ -44,11 +43,10 @@ public:
     Vec3f mRailEndPos;
     Pos3f mEffectStartMtx;
     Pos3f mEffectEndMtx;
-    Vec3f _12C;
+    Vec3f mClipCenter;
     PartsModel* mBloomModel;
     Pos3f mBloomModelMtx;
-    Quat4f _16C;
+    Quat4f mRotateQuat;
     Vec3f mRailDir;
     bool mEmitDropEffect;
-    Pos3f _18C;
 };

@@ -18,13 +18,13 @@ public:
     bool execute(LiveActor*);
     void emitItem(LiveActor*);
 
-    s32 _0;
-    s32 _4;
-    s32 _8;
-    f32 _C;
-    f32 _10;
-    f32 _14;
-    bool _18;
-    bool _19;
-    u32 _1C;
+    s32 mFlyStepMax;
+    s32 mFlyStepMin;
+    s32 mStopSceneFrames;
+    f32 mGravityAccel;
+    f32 mHorizontalSpeed;
+    f32 mVerticalSpeed;
+    bool mIsStopScene;
+    bool mIsCoin;
+    u32 mItemNum;
 };

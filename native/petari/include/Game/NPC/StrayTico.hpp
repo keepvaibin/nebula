@@ -41,11 +41,10 @@ public:
     PartsModel* mItemBubbleModel;
     Quat4f mRotateQuat;
     Vec3f mFrontVec;
-    Vec3f _B0;
-    Vec3f _BC;
-    Vec3f _C8;
-    Vec3f _D4;
-    Vec3f _E0;
-    f32 _EC;
-    f32 _F0;
+    Vec3f mWarpPos;
+    Vec3f mDemoCenter;
+    Vec3f mDemoUp;
+    Vec3f mDemoFront;
+    Vec3f mDemoStartPos;
+    f32 mDemoAngle;
 };

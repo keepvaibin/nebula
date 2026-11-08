@@ -49,7 +49,7 @@ void TombSpider::init(const TableIter& rIter) {
     initModelManagerWithAnm("TombSpider", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
 
     mParts = new TombSpiderParts(this);
     mParts->init();

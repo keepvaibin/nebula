@@ -13,10 +13,14 @@
 #include "Game/System/NebulaInput.hpp"
 #include <nebula_game_api.h>
 
-#define INPUT_STATUS_OK 0
-#define INPUT_STATUS_DISCONNECT 1
-#define INPUT_STATUS_NO_BATTERY 2
-#define INPUT_STATUS_NO_MOVE_STICK 3
+namespace {
+    enum InputStatus {
+        INPUT_STATUS_OK,
+        INPUT_STATUS_DISCONNECT,
+        INPUT_STATUS_NO_BATTERY,
+        INPUT_STATUS_NO_MOVE_STICK,
+    };
+};  // namespace
 
 namespace {
     const GameSystemErrorWatcher::Message cMessageUnplagged = {

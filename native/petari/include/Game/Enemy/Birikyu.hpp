@@ -30,15 +30,15 @@ public:
     void exeAttackWait();
     void exeStopPointing();
 
-    const char* _8C;
-    Vec3f _90;
-    Vec3f _9C;
-    bool _A8;
-    bool _A9;
-    Vec3f _AC;
-    Vec3f _B8;
-    f32 _C4;
-    f32 _C8;
+    const char* mObjName;
+    Vec3f mClipCenter;
+    Vec3f mCircleCenter;
+    bool mHasShadow;
+    bool mHasRail;
+    Vec3f mCircleAxis;
+    Vec3f mCircleFront;
+    f32 mCircleAngle;
+    f32 mSpeed;
 };
 
 class BirikyuWithFace : public Birikyu {
@@ -50,5 +50,5 @@ public:
     virtual f32 getHitRadius() const;
     virtual const char* getCenterJointName() const;
 
-    bool _CC;
+    bool mIsFaceReversed;
 };

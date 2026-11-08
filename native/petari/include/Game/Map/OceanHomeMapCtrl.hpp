@@ -17,10 +17,7 @@ public:
 
     PlanetMap* mOceanHomePlanet;           // Referencing an removed object?
     PlanetMap* mOceanRingPlanet;           // OceanRingPlanet
-    u32 _14;                               // Unused variable
     ModelObj* mOceanRingPlanetLowInWater;  // OceanRingPlanetLowInWater
-    u32 _1C;                               // Unused variable
-    u32 _20;                               // Unused variable
 };
 
 namespace OceanHomeMapFunction {

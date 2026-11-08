@@ -145,7 +145,7 @@ void CameraParamChunkHolder::loadFile(s32 zoneID) {
 
             CameraParamChunk* chunk = findChunk(zoneID, id);
 
-            if (chunk != nullptr && chunk->_64) {
+            if (chunk != nullptr && chunk->mIsCodeChunk) {
                 reader.nextToChunk();
             } else {
                 if (chunk != nullptr) {

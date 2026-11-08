@@ -27,11 +27,11 @@ Coin::Coin(const char* pName) : LiveActor(pName) {
     mClippingRange.x = 0.0f;
     mClippingRange.y = 0.0f;
     mClippingRange.z = 0.0f;
-    _B0 = 600;
+    mLife = 600;
     mCannotTime = 0;
     mIsInWater = false;
-    _B9 = false;
-    _BA = false;
+    mIsCalcShadowAlways = false;
+    mIsPoseFromRotation = false;
     mIsPurpleCoin = false;
     mIsNeedBubble = false;
 }
@@ -45,14 +45,14 @@ void Coin::init(const TableIter& rIter) {
     initBinder(55.0f, 70.0f, 0);
     MR::setBinderExceptSensorType(this, &mPosition, 10.0f);
     MR::setClippingFar100m(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(1, false);
 
     if (MR::isValidInfo(rIter)) {
         setShadowAndPoseModeFromPlacementIter(rIter);
     }
 
-    if (_BA) {
+    if (mIsPoseFromRotation) {
         Vec3f axis;
         MR::calcActorAxisY(&axis, this);
         mGravity.set(-axis);
@@ -125,17 +125,17 @@ void Coin::initShadow(const TableIter& rIter) {
 void Coin::setShadowAndPoseModeFromPlacementIter(const TableIter& rIter) {
     bool arg_3 = false;
     MR::getPlacementArg3WithInit(rIter, &arg_3);
-    _B9 = arg_3;
+    mIsCalcShadowAlways = arg_3;
     bool arg_4 = false;
     MR::getPlacementArg4WithInit(rIter, &arg_4);
-    _BA = arg_4;
+    mIsPoseFromRotation = arg_4;
     mIsNeedBubble = Coin::isNeedBubble(rIter);
 }
 
 void Coin::makeActorAppeared() {
     MR::offCalcGravity(this);
 
-    if (!_BA) {
+    if (!mIsPoseFromRotation) {
         MR::calcGravityOrZero(this);
     }
 
@@ -156,7 +156,7 @@ void Coin::makeActorAppeared() {
         MR::validateShadow(this, nullptr);
 
         if (!mIsPurpleCoin) {
-            mHostInfo->_8++;
+            mHostInfo->mAppeared++;
         }
 
         mIsInWater = MR::isInWater(mPosition);
@@ -177,7 +177,7 @@ void Coin::calcAndSetBaseMtx() {
 
     Pos3f pos;
 
-    if (_BA) {
+    if (mIsPoseFromRotation) {
         MR::makeMtxTR(pos.toMtxPtr(), this);
     } else {
         MR::makeMtxUpNoSupportPos(&pos, another_vec, mPosition);
@@ -226,13 +226,13 @@ bool Coin::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void Coin::exeNonActive() {
-    if (MR::isFirstStep(this) || _B9) {
+    if (MR::isFirstStep(this) || mIsCalcShadowAlways) {
         MR::setClippingRangeIncludeShadow(this, &mClippingRange, 150.0f);
     }
 }
 
 void Coin::exeFix() {
-    if (MR::isFirstStep(this) || _B9) {
+    if (MR::isFirstStep(this) || mIsCalcShadowAlways) {
         MR::setClippingRangeIncludeShadow(this, &mClippingRange, 150.0f);
     }
 }
@@ -242,7 +242,7 @@ void Coin::exeFixHide() {
 
 void Coin::exeFixTimer() {
     if (MR::isFirstStep(this)) {
-        mFlashCtrl->start(_B0);
+        mFlashCtrl->start(mLife);
         MR::invalidateClipping(this);
         MR::offBind(this);
     }
@@ -258,7 +258,7 @@ void Coin::exeFixTimer() {
 
 void Coin::exeMove() {
     if (MR::isFirstStep(this)) {
-        mFlashCtrl->start(_B0);
+        mFlashCtrl->start(mLife);
         MR::onCalcShadow(this, nullptr);
         MR::onCalcShadowDropPrivateGravity(this, nullptr);
     }
@@ -544,15 +544,14 @@ void Coin::noticeGetCoin() {
     } else {
         MR::incCoin(1);
         MR::startSystemSE("SE_SY_COIN");
-        mHostInfo->_C++;
     }
 }
 
 void Coin::setLife(s32 life) {
     if (life < 0) {
-        _B0 = 0x258;
+        mLife = 0x258;
     } else {
-        _B0 = life;
+        mLife = life;
     }
 }
 
@@ -561,7 +560,7 @@ void Coin::setHostInfo(CoinHostInfo* pInfo) {
 }
 
 void Coin::setCalcShadowMode() {
-    if (_B9) {
+    if (mIsCalcShadowAlways) {
         MR::onCalcShadow(this, nullptr);
         MR::onCalcShadowDropPrivateGravity(this, nullptr);
     } else {

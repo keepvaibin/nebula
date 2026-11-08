@@ -22,7 +22,7 @@ namespace NrvStarPieceFollowGroup {
 };  // namespace NrvStarPieceFollowGroup
 
 StarPieceFollowGroup::StarPieceFollowGroup(const char* pName)
-    : LiveActor(pName), mPieces(nullptr), _90(nullptr), mNumPiecesTotal(6), mNumPiecesUse(0), mRadius(350.0f), mAngle(0.0f), mTimeLimit(1200) {
+    : LiveActor(pName), mPieces(nullptr), mPieceOffsets(nullptr), mNumPiecesTotal(6), mNumPiecesUse(0), mRadius(350.0f), mAngle(0.0f), mTimeLimit(1200) {
 }
 
 void StarPieceFollowGroup::init(const TableIter& rIter) {
@@ -39,7 +39,7 @@ void StarPieceFollowGroup::init(const TableIter& rIter) {
     initNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
 
     mPieces = new StarPiece*[mNumPiecesTotal];
-    _90 = new Vec3f[mNumPiecesTotal];
+    mPieceOffsets = new Vec3f[mNumPiecesTotal];
     for (int i = 0; i < mNumPiecesTotal; i++) {
         mPieces[i] = new StarPiece("フォロースターピース");
         mPieces[i]->initWithoutIter();
@@ -162,7 +162,7 @@ void StarPieceFollowGroup::followPieces() {
         vec.add(mLocalXAxis * cos * mRadius);
         vec.add(mLocalZAxis * sin * mRadius);
 
-        _90[i].set(vec);
+        mPieceOffsets[i].set(vec);
 
         vec2.add(vec * cos2);
         currentPiece->mVelocity.set(vec2);
@@ -223,7 +223,7 @@ void StarPieceFollowGroup::exeFollowEnd() {
 
         if (doSomeExtraTVecStuff) {
             const f32 SCALE = 0.05f;
-            currentPiece->mVelocity += (_90[i] * SCALE);
+            currentPiece->mVelocity += (mPieceOffsets[i] * SCALE);
         }
 
         Vec3f vec2(*MR::getPlayerVelocity());

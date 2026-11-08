@@ -32,7 +32,7 @@ namespace {
 
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
-      mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), mWorkUserFile(),
+      mSysInfoWindowConfirm(), mSysInfoWindowSave(), mResultState(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
       ,
       mWindowFollows(false)
@@ -143,7 +143,7 @@ void SaveDataHandleSequence::startSaveAll() {
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
     restoreUserFile(mCurrentUserFile, userFileIndex, isPlayerMario);
 
-    _24 = 2;
+    mResultState = 2;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -191,7 +191,7 @@ void SaveDataHandleSequence::restoreFromReset() {
     }
 
     mSaveIcon->kill();
-    _24 = 3;
+    mResultState = 3;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -221,11 +221,11 @@ void SaveDataHandleSequence::backupCurrentUserFile() {
 void SaveDataHandleSequence::exeNoOperation() {
     mIsConfirmRemind = false;
     mIsSaveAndQuitMsg = false;
-    _2B = false;
+    mIsNoSaveMode = false;
 }
 
 void SaveDataHandleSequence::exeSaveConfirm() {
-    if (_2B) {
+    if (mIsNoSaveMode) {
         mWorkUserFile->setCreated();
         mWorkUserFile->updateLastModified();
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSave));
@@ -236,7 +236,7 @@ void SaveDataHandleSequence::exeSaveConfirm() {
         if (!tryConfirm(pSystemMessageId, &isSelectedYes)) {
             // Yes opens Saving...; No, the reminder when there is one.
             if (MR::isFirstStep(this)) {
-                mSysInfoWindowConfirm->setDimHandOver((_2A ? SysInfoWindow::DimHandOver_None : SysInfoWindow::DimHandOver_Yes) |
+                mSysInfoWindowConfirm->setDimHandOver((mIsCorrupted ? SysInfoWindow::DimHandOver_None : SysInfoWindow::DimHandOver_Yes) |
                                                       (mIsConfirmRemind ? SysInfoWindow::DimHandOver_No : SysInfoWindow::DimHandOver_None));
             }
             return;
@@ -251,7 +251,7 @@ void SaveDataHandleSequence::exeSaveConfirm() {
         } else {
             setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 
-            _24 = 3;
+            mResultState = 3;
         }
     }
 }
@@ -269,7 +269,7 @@ void SaveDataHandleSequence::exeSave() {
         return;
     }
 
-    if (_2A) {
+    if (mIsCorrupted) {
         bool isErr = true;
 
         executeSaveFinish(&isErr, GET_NERVE_ANON(SaveDataHandleSequenceSaveConfirm));
@@ -308,7 +308,7 @@ void SaveDataHandleSequence::exeSaveDoneKeyWait() {
         return;
     }
 
-    _24 = 2;
+    mResultState = 2;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -325,7 +325,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWait() {
         return;
     }
 
-    if (_2A) {
+    if (mIsCorrupted) {
         bool isErr = true;
 
         executeSaveFinish(&isErr, GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
@@ -349,7 +349,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWaitDisappear() {
         (*mOnSaveSuccessFunc)();
     }
 
-    _24 = 2;
+    mResultState = 2;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
@@ -366,7 +366,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
         return;
     }
 
-    if (_2A) {
+    if (mIsCorrupted) {
         bool isErr = true;
 
         executeSaveFinish(&isErr, GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
@@ -385,7 +385,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
             (*mOnSaveSuccessFunc)();
         }
 
-        _24 = 2;
+        mResultState = 2;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }
@@ -403,7 +403,7 @@ void SaveDataHandleSequence::exePreLoad() {
                 mSaveErrorSequence->startDamaged();
                 setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
             } else {
-                _24 = 2;
+                mResultState = 2;
                 setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
             }
             return;
@@ -438,7 +438,7 @@ void SaveDataHandleSequence::exePreLoadDone() {
     } else {
         mSaveCopyLoading = 0;
         mSaveDamaged = false;
-        _24 = 2;
+        mResultState = 2;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     }
@@ -456,7 +456,7 @@ void SaveDataHandleSequence::exeNoSaveConfirmRemind() {
     }
 
     if (isSelectedYes) {
-        _24 = 2;
+        mResultState = 2;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
     } else {
@@ -558,7 +558,7 @@ bool SaveDataHandleSequence::trySaveWithoutWindow(bool* pIsErr, const Nerve* pNe
 
 bool SaveDataHandleSequence::tryConfirm(const char* pSystemMessageId, bool* pIsSelectedYes) {
     if (MR::isFirstStep(this)) {
-        _24 = 1;
+        mResultState = 1;
 
         mSysInfoWindowConfirm->appear(pSystemMessageId, SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
         MR::startSystemSE("SE_SY_SAVE_CONFIRM_INFO");
@@ -586,10 +586,10 @@ bool SaveDataHandleSequence::tryProcessDoneKeyWait(const char* pSystemMessageId)
 }
 
 bool SaveDataHandleSequence::tryNoSave() {
-    if (_2B) {
+    if (mIsNoSaveMode) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 
-        _24 = 2;
+        mResultState = 2;
 
         return true;
     }
@@ -609,7 +609,7 @@ bool SaveDataHandleSequence::isEnablePointer() const {
 bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerveForError) {
     SaveRequest::Result result = mSaveDataHandler->getLastResult();
 
-    if (_2A) {
+    if (mIsCorrupted) {
         result = SaveRequest::Result_Corrupted;
     }
 
@@ -617,7 +617,7 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
         MR::startSystemSE("SE_SY_SAVE_SUCCESS");
 
         *pIsErr = false;
-        _2A = false;
+        mIsCorrupted = false;
 
         return true;
     }
@@ -650,6 +650,6 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
 void SaveDataHandleSequence::syncNoSaveFlagsFromErrorSequence() {
     bool isResultFileCorrupted = mSaveErrorSequence->isResultFileCorrupted();
 
-    _2A = isResultFileCorrupted;
-    _2B = isResultFileCorrupted;
+    mIsCorrupted = isResultFileCorrupted;
+    mIsNoSaveMode = isResultFileCorrupted;
 }

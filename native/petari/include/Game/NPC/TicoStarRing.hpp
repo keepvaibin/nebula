@@ -16,6 +16,6 @@ public:
     void exeWait();
 
     const char* mGalaxyName;
-    LiveActor* _194;
+    LiveActor* mAppearActor;
     LiveActor* mTicoGalaxy;
 };

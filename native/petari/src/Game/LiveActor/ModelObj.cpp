@@ -23,7 +23,7 @@ ModelObj::ModelObj(const char* pName, const char* pModelName, MtxPtr pMtx, int d
     initModelManagerWithAnm(pModelName, nullptr, a7);
     MR::connectToScene(this, movementType, calcAnimType, drawBufferType, MR::DrawType_None);
     initSound(8, false);
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
 
     if (mMtx != nullptr) {
         mPosition.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);
@@ -78,5 +78,5 @@ ModelObjNpc::ModelObjNpc(const char* pName, const char* pModelName, MtxPtr pMtx)
     MR::connectToSceneNpc(this);
     MR::initShadowFromCSV(this, "Shadow");
     initSound(8, false);
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
 }

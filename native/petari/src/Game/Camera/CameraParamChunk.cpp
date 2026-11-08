@@ -11,9 +11,6 @@ namespace {
 
     static CameraParamChunk::ExParam sUndoExParam = CameraParamChunk::ExParam();
     static CameraGeneralParam sUndoParam = CameraGeneralParam();
-    // static const ___ sUndoCamera =
-    // static const ___ sClipChunk =
-    // static const ___ sLastUndoPtr =
 };  // namespace
 
 CameraGeneralParam& CameraGeneralParam::operator=(const CameraGeneralParam& rOther) {
@@ -34,7 +31,7 @@ CameraParamChunk::CameraParamChunk(CameraHolder* pHolder, const CameraParamChunk
     mParamChunkID = new CameraParamChunkID(rChunk);
     mCameraTypeIndex = pHolder->getIndexOfDefault();
     mGeneralParam = new CameraGeneralParam();
-    _64 = false;
+    mIsCodeChunk = false;
     mExParam.init();
 }
 

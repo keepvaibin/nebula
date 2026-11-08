@@ -22,7 +22,7 @@ ShadowVolumeOvalPole::ShadowVolumeOvalPole() : ShadowVolumeModel("影描画[ボ�
 
 void ShadowVolumeOvalPole::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
-    MtxPtr dropMtx = controller->_18;
+    MtxPtr dropMtx = controller->mHostMtx;
     Pos3f scaledMtx;
     Pos3f inverseMtx;
     Pos3f mtx;

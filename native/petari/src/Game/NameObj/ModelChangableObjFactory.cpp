@@ -80,15 +80,11 @@ namespace {
     const Model2CreateFunc* getModel2CreateFunc(const char* pName) {
         for (u32 i = 0; i < ARRAY_SIZE(cModelChangableObjCreatorTable); i++) {
             const Model2CreateFunc* pModel2CreateFunc = &cModelChangableObjCreatorTable[i];
-            bool v7;
+            const bool isMatch = pModel2CreateFunc->mNamePrefix != nullptr
+                                     ? strncmp(pName, pModel2CreateFunc->mNamePrefix, strlen(pModel2CreateFunc->mNamePrefix)) == 0
+                                     : strcmp(pName, pModel2CreateFunc->mArchiveName) == 0;
 
-            if (pModel2CreateFunc->_0 != nullptr) {
-                v7 = strncmp(pName, pModel2CreateFunc->_0, strlen(pModel2CreateFunc->_0)) == 0;
-            } else {
-                v7 = strcmp(pName, pModel2CreateFunc->mArchiveName) == 0;
-            }
-
-            if (v7) {
+            if (isMatch) {
                 return pModel2CreateFunc;
             }
         }

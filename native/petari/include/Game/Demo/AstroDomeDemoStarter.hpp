@@ -13,7 +13,7 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)_94.mMtx;
+        return (MtxPtr)mBaseMtx.mMtx;
     };
     virtual void calcAndSetBaseMtx();
 
@@ -25,10 +25,10 @@ public:
     void exeJumpOut();
     void exeWhiteOut();
 
-    SpinDriverShootPath* _8C;
-    SpinDriverPathDrawer* _90;
-    Pos3f _94;
-    Pos3f _C4;
+    SpinDriverShootPath* mShootPath;
+    SpinDriverPathDrawer* mPathDrawer;
+    Pos3f mBaseMtx;
+    Pos3f mPlayerDemoMtx;
 
-    ActorCameraInfo* _F4;
+    ActorCameraInfo* mCameraInfo;
 };

@@ -61,7 +61,7 @@ namespace NrvKabokuri {
 
 Kabokuri::Kabokuri(const char* pName)
     : LiveActor(pName), mKuribo(), mBreakModel(), mAnimeScale(), mStateBindStartPointer(), mRotationQuat(0.0f, 0.0f, 0.0f, 1.0f),
-      mFrontVec(0.0f, 0.0f, 1.0f), _B8(-1), mIsValidDropFire() {
+      mFrontVec(0.0f, 0.0f, 1.0f), mIsValidDropFire() {
     KabokuriFireHolderFunc::createHolder();
 }
 
@@ -87,7 +87,7 @@ void Kabokuri::init(const TableIter& rIter) {
     }
 
     initBinder(::sBinderRadius * mScale.y, ::sBinderRadius * mScale.y, 0);
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(2, false);
     initSensor();
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
@@ -145,7 +145,7 @@ void Kabokuri::control() {
 
 void Kabokuri::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mRotationQuat);
-    MR::setBaseScale(this, mAnimeScale->_C * mScale);
+    MR::setBaseScale(this, mAnimeScale->mScale * mScale);
 }
 
 void Kabokuri::updatePose() {

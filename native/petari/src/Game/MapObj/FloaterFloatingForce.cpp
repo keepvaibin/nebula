@@ -6,8 +6,8 @@
 FloaterFloatingForce::~FloaterFloatingForce() {
 }
 
-FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "浮力"), _18(pName), _1C(gZeroVec) {
-    _28 = Vec3f(0.0f, 1.0f, 0.0f);
+FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "浮力"), mObjName(pName), mBasePos(gZeroVec) {
+    mUp = Vec3f(0.0f, 1.0f, 0.0f);
     mMoveConditionType = 0.0f;
 }
 
@@ -18,10 +18,10 @@ void FloaterFloatingForce::init(const TableIter& rIter) {
 }
 
 void FloaterFloatingForce::start() {
-    _1C.set(mHost->mPosition);
+    mBasePos.set(mHost->mPosition);
 
     Pos3f mtx;
     mtx.set(mHost->getBaseMtx());
-    mtx.getYDir(_28);
-    MR::normalize(&_28);
+    mtx.getYDir(mUp);
+    MR::normalize(&mUp);
 }

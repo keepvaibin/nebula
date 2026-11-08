@@ -44,7 +44,7 @@ void BossStinkBugFlyDemo::exeDemo() {
         MR::overlayWithPreviousScreen(2);
         MR::stopStageBGM(30);
         getHost()->offBindLeg();
-        getHost()->_98->endIKCtrlAll();
+        getHost()->mJointCtrl->endIKCtrlAll();
         MR::startBckPlayer("BattleWait", "BattleWaitNoInter");
         mDemoPositionController->startDemo("FlyDemo");
         getHost()->reuestMovementOnParts();

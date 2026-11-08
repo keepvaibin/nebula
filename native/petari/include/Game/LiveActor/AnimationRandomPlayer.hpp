@@ -14,9 +14,9 @@ public:
     void exePlay();
 
     const LiveActor* mActor;
-    const char* _C;
-    const char* _10;
-    s32 _14;
-    s32 _18;
-    f32 _1C;
+    const char* mPlayAnim;
+    const char* mWaitAnim;
+    s32 mWaitSteps;
+    s32 mMeanWait;
+    f32 mWaitSpread;
 };

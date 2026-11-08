@@ -20,7 +20,6 @@ namespace {
     static const f32 hForceBindOffset = 65.0f;
     static const f32 hForceBindMul = 0.5f;
     static const f32 sShadowSize = 160.0f;
-    // static const _32 hSpinningTime = ;
     static const f32 hGravityVel = 3.0f;
     static const f32 hVelHMin = 10.0f;
     static const f32 hReflectRate = 0.5f;
@@ -28,18 +27,12 @@ namespace {
     static const f32 hStopCheckVel = 0.1f;
     static const f32 hGroundCosine = 0.4f;
     static const s32 hWaitTime = 30;
-    // static const _32 hKickableFrontDotCheck =
     static const f32 hPlayerIsSideDotCheck = 0.25f;
     static const f32 hSpinningAngle = 2.0f;
     static const f32 hDampVelHWait = 0.6f;
     static const f32 hDampVelVWait = 0.6f;
     static const f32 hTurnYDirRatio = 0.125f;
-    // static const _32 hHitVelocity =
-    // static const _32 hSpinningKind =
-    // static const _32 hScVelCheck =
     static const f32 hPointedRotDamp = 0.8f;
-    // static const _32 hWalkAngle =
-    // static const _32 hWalkVelocity =
     static const f32 hSlidingVelocitySub = 0.08f;
     static const f32 hSlidingVelMax = 17.0f;
     static const f32 hSlidingRotateSub = 0.01f;
@@ -98,7 +91,7 @@ void SpinningBox::init(const TableIter& rIter) {
 
     initBinder(140.0f, 80.0f, 0);
     MR::setBinderExceptActor(this, this);
-    initEffectKeeper(0, "SpinningBox", false);
+    initEffectKeeper(0, "SpinningBox");
     initSound(6, false);
 
     MR::onCalcGravity(this);
@@ -320,13 +313,13 @@ void SpinningBox::endSpinning() {
 void SpinningBox::exePointed() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::emitEffect(this, "Touch");
         MR::invalidateClipping(this);
     }
 
     mRotateSpeed *= ::hPointedRotDamp;
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 
     if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(SpinningBox, HostTypeNrvWait));

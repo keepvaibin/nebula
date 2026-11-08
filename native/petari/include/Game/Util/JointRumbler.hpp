@@ -30,9 +30,8 @@ public:
 
     RumbleCalculatorCosMultLinear* mRumbleCalculator;
     XjointTransform* mJointTransform;
-    s32 _8;
-    s32 _C;
+    s32 mStartDelay;
+    s32 mDelayLeft;
     f32 mModelScale;
     u16 mFlags;
-    bool _16[2];
 };

@@ -15,14 +15,14 @@ namespace {
 SoundEmitterCube::~SoundEmitterCube() {
 }
 
-SoundEmitterCube::SoundEmitterCube(int formType, const char* pName) : AreaObj(formType, pName), mSoundObj(), _40(0.0f, 0.0f, 0.0f), mSoundName() {
+SoundEmitterCube::SoundEmitterCube(int formType, const char* pName) : AreaObj(formType, pName), mSoundObj(), mSoundPos(0.0f, 0.0f, 0.0f), mSoundName() {
 }
 
 void SoundEmitterCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
     mSoundName = ::cSoundNameTable[mObjArg0];
-    mSoundObj = new AudAnmSoundObject(&_40, 4, MR::getCurrentHeap());
+    mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, MR::getCurrentHeap());
 
     MR::connectToSceneAreaObj(this);
     MR::registerDemoSimpleCastAll(this);
@@ -32,60 +32,60 @@ void SoundEmitterCube::movement() {
     switch (mObjArg0) {
     case 0:
     case 3:
-        _40.set(MR::getCameraWatchPos());
+        mSoundPos.set(MR::getCameraWatchPos());
         break;
     default:
-        _40.set(AudMicWrap::getMicPos());
+        mSoundPos.set(AudMicWrap::getMicPos());
         break;
     }
 
     DirBox3f worldBox;
     MR::calcCubeWorldBox(&worldBox, this);
     Box3f bounds;
-    bounds.i.set(worldBox._24);
-    bounds.f.set(worldBox._24);
+    bounds.i.set(worldBox.mCorner);
+    bounds.f.set(worldBox.mCorner);
     Vec3f cornerZ;
     Vec3f cornerY;
     Vec3f cornerX;
-    cornerX.scaleAdd(worldBox._30.x, worldBox._0, worldBox._24);
-    cornerY.scaleAdd(worldBox._30.y, worldBox._C, worldBox._24);
-    cornerZ.scaleAdd(worldBox._30.z, worldBox._18, worldBox._24);
+    cornerX.scaleAdd(worldBox.mSize.x, worldBox.mAxisX, worldBox.mCorner);
+    cornerY.scaleAdd(worldBox.mSize.y, worldBox.mAxisY, worldBox.mCorner);
+    cornerZ.scaleAdd(worldBox.mSize.z, worldBox.mAxisZ, worldBox.mCorner);
     bounds.extend(cornerX);
     bounds.extend(cornerY);
     bounds.extend(cornerZ);
 
-    cornerX.scaleAdd(worldBox._30.y, worldBox._C, cornerX);
-    cornerY.scaleAdd(worldBox._30.z, worldBox._18, cornerY);
-    cornerZ.scaleAdd(worldBox._30.x, worldBox._0, cornerZ);
+    cornerX.scaleAdd(worldBox.mSize.y, worldBox.mAxisY, cornerX);
+    cornerY.scaleAdd(worldBox.mSize.z, worldBox.mAxisZ, cornerY);
+    cornerZ.scaleAdd(worldBox.mSize.x, worldBox.mAxisX, cornerZ);
     bounds.extend(cornerX);
     bounds.extend(cornerY);
     bounds.extend(cornerZ);
 
-    cornerX.scaleAdd(worldBox._30.z, worldBox._18, cornerX);
+    cornerX.scaleAdd(worldBox.mSize.z, worldBox.mAxisZ, cornerX);
     bounds.extend(cornerX);
 
-    if (_40.x < bounds.i.x) {
-        _40.x = bounds.i.x;
+    if (mSoundPos.x < bounds.i.x) {
+        mSoundPos.x = bounds.i.x;
     }
 
-    if (_40.x > bounds.f.x) {
-        _40.x = bounds.f.x;
+    if (mSoundPos.x > bounds.f.x) {
+        mSoundPos.x = bounds.f.x;
     }
 
-    if (_40.y < bounds.i.y) {
-        _40.y = bounds.i.y;
+    if (mSoundPos.y < bounds.i.y) {
+        mSoundPos.y = bounds.i.y;
     }
 
-    if (_40.y > bounds.f.y) {
-        _40.y = bounds.f.y;
+    if (mSoundPos.y > bounds.f.y) {
+        mSoundPos.y = bounds.f.y;
     }
 
-    if (_40.z < bounds.i.z) {
-        _40.z = bounds.i.z;
+    if (mSoundPos.z < bounds.i.z) {
+        mSoundPos.z = bounds.i.z;
     }
 
-    if (_40.z > bounds.f.z) {
-        _40.z = bounds.f.z;
+    if (mSoundPos.z > bounds.f.z) {
+        mSoundPos.z = bounds.f.z;
     }
 
     mSoundObj->process();

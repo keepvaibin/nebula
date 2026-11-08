@@ -22,7 +22,6 @@
 
 namespace {
     static const f32 sPointableRange = 3400.0f;
-    // static const f32 sCaptureRange =
 
     static const BlueStarCupsulePlanetParam sParams[] = {{"BlueStarCupsulePlanet", 500.0f}, {"UFOBlueStarCupsule", 200.0f}};
 
@@ -53,7 +52,7 @@ void BlueStarCupsulePlanet::init(const TableIter& rIter) {
     MR::getObjectName(&mName, rIter);
     initModelManagerWithAnm(mName, nullptr, false);
     MR::connectToScene(this, MR::MovementType_Planet, MR::CalcAnimType_Planet, MR::DrawBufferType_Planet, MR::DrawType_None);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvWait));
     initHitSensor(1);
@@ -127,7 +126,7 @@ void BlueStarCupsulePlanet::updatePose() {
             if (MR::isEqualString(mName, "UFOBlueStarCupsule")) {
                 MR::startLevelSound(this, "SE_OJ_LV_UFO_BLUE_STAR_MOVE");
             }
-            mPosition.set(mRailMover->_28);
+            mPosition.set(mRailMover->mStartPos);
         }
     }
 

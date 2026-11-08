@@ -22,9 +22,6 @@ public:
     const Vec3f* mPointPos;
     const Vec3f* mNeutralPos;
     const Vec3f* mUp;
-    u32 _98;
-    u32 _9C;
-    u32 _A0;
     f32 mThreadZ;
     Vec2f mPad0Velocity;
     Vec2f mPad1Velocity;

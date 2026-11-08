@@ -25,6 +25,6 @@ public:
     void exeLastDamage();
     void updateDamage();
 
-    u32 _10;
-    u32 _14;
+    u32 mPunchedDir;
+    u32 mDamageType;
 };

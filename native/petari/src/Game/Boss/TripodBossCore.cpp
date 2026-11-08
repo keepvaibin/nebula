@@ -18,7 +18,6 @@ namespace {
     static const f32 sHitSensorRadius = 300.0f;
     static const s32 sBreakStopStep = 2;
     static const s32 sBreakStopFrame = 16;
-    // static const f32 sBreakStopDistance = _;
 };  // namespace
 
 namespace NrvTripodBossCore {
@@ -55,7 +54,7 @@ void TripodBossCore::init(const TableIter& rIter) {
     MR::addTripodBossPartsMovement(mBloomModel);
 
     initNerve(GET_NERVE(TripodBossCore, TripodBossCoreNrvNonActive));
-    initEffectKeeper(0, "TripodBossCore", false);
+    initEffectKeeper(0, "TripodBossCore");
     MR::setEffectHostMtx(this, "BlackSmoke", getBaseMtx());
     MR::useStageSwitchWriteDead(this, rIter);
     MR::invalidateCollisionParts(this);

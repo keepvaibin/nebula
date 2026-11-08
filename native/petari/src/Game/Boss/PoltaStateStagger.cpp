@@ -16,7 +16,7 @@ namespace NrvPoltaStateStagger {
 
 PoltaStateStagger::PoltaStateStagger(Polta* pPolta) : ActorStateBase< Polta >("[state]ポルタ弱り状態", pPolta) {
     mActionName = "Stagger";
-    _20 = true;
+    mIsClockwise = true;
     initNerve(GET_NERVE(PoltaStateStagger, PoltaStateStaggerNrvWait));
 }
 
@@ -37,20 +37,20 @@ void PoltaStateStagger::exeWait() {
     Vec3f v2;
 
     f32 v17;
-    MR::separateScalarAndDirection(&v17, &v2, getHost()->_E0 - getHost()->mPosition);
+    MR::separateScalarAndDirection(&v17, &v2, getHost()->mStartPos - getHost()->mPosition);
 
     if (v17 >= 1800.0f) {
         MR::addVelocity(getHost(), v2 * (v17 - 1800.0f));
-        _20 = MR::isClockwiseToPlayer(getHost(), v2);
+        mIsClockwise = MR::isClockwiseToPlayer(getHost(), v2);
     }
 
     if (MR::isNearPlayerHorizontal(getHost(), 1500.0f)) {
         MR::addVelocityAwayFromTarget(getHost(), *MR::getPlayerPos(), 0.7f);
     }
 
-    MR::addVelocityClockwiseToPlayer(getHost(), _20 ? 0.8f : -0.8f);
+    MR::addVelocityClockwiseToPlayer(getHost(), mIsClockwise ? 0.8f : -0.8f);
     MR::attenuateVelocity(getHost(), 0.9f);
-    MR::addVelocityKeepHeight(getHost(), getHost()->_E0, 0.5f, 50.0f);
+    MR::addVelocityKeepHeight(getHost(), getHost()->mStartPos, 0.5f, 50.0f);
     getHost()->rotateToPlayer();
     if (MR::isIntervalStep(this, 210) && PoltaFunction::appearBombTeresaFromRoot(getHost(), 20.0f, 15.0f, 1)) {
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_BOMB_TERESA");

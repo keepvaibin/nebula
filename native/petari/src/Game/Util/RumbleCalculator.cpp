@@ -2,50 +2,50 @@
 #include <nebula_geometry.hpp>
 
 RumbleCalculator::RumbleCalculator(f32 frequency, f32 phaseOffset, f32 amplitude, u32 duration) {
-    _4 = duration;
-    _8 = duration;
-    _C.x = 0.0f;
-    _C.y = 0.0f;
-    _C.z = 0.0f;
-    _18 = frequency;
-    _1C = phaseOffset;
-    _20 = amplitude;
+    mFrame = duration;
+    mDuration = duration;
+    mValue.x = 0.0f;
+    mValue.y = 0.0f;
+    mValue.z = 0.0f;
+    mFrequency = frequency;
+    mPhaseOffset = phaseOffset;
+    mAmplitude = amplitude;
 }
 
 void RumbleCalculator::start(u32 duration) {
     if (duration) {
-        _8 = duration;
+        mDuration = duration;
     }
 
-    _4 = 0;
-    _C.x = 0.0f;
-    _C.y = 0.0f;
-    _C.z = 0.0f;
+    mFrame = 0;
+    mValue.x = 0.0f;
+    mValue.y = 0.0f;
+    mValue.z = 0.0f;
 }
 
 void RumbleCalculator::calc() {
     if (!isRumbling()) {
-        _C.zero();
+        mValue.zero();
     } else {
-        f32 progress = static_cast< f32 >(_4) / static_cast< f32 >(_8);
+        f32 progress = static_cast< f32 >(mFrame) / static_cast< f32 >(mDuration);
         f32 attenuation = 1.0f + -progress;
 
         Vec3f phases;
         f32 phase = progress;
         phase *= TWO_PI;
-        phases.x = _18 * phase;
-        phases.y = phases.x + _1C;
-        phases.z = phases.y + _1C;
+        phases.x = mFrequency * phase;
+        phases.y = phases.x + mPhaseOffset;
+        phases.z = phases.y + mPhaseOffset;
 
-        calcValues(&_C, phases);
-        _C.scale(attenuation * _20);
-        _4++;
+        calcValues(&mValue, phases);
+        mValue.scale(attenuation * mAmplitude);
+        mFrame++;
     }
 }
 
 void RumbleCalculator::reset() {
-    _4 = _8;
-    _C.zero();
+    mFrame = mDuration;
+    mValue.zero();
 }
 
 RumbleCalculatorCosMultLinear::RumbleCalculatorCosMultLinear(f32 frequency, f32 phaseOffset, f32 amplitude, u32 duration)

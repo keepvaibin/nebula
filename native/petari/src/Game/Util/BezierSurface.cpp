@@ -594,14 +594,14 @@ namespace {
     };
 };  // namespace
 
-BezierSurface::BezierSurface(s32 divideLevel, u32 a1)
-    : mTrianglePatchVertices(), mTrianglePatchNormals(), mDivideLevel(divideLevel), _C0(divideLevel), _C4(a1) {
+BezierSurface::BezierSurface(s32 divideLevel, u32 flags)
+    : mTrianglePatchVertices(), mTrianglePatchNormals(), mDivideLevel(divideLevel), mIsLit(flags != 0) {
     s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumPoints;
 
-    if ((a1 & 4) != 0) {
+    if ((flags & FLAG_CACHE) != 0) {
         mTrianglePatchVertices = new Vec3f[numPoints];
 
-        if ((a1 & 1) != 0) {
+        if ((flags & FLAG_NORMAL) != 0) {
             mTrianglePatchNormals = new Vec3f[numPoints];
         }
     }
@@ -649,20 +649,10 @@ void BezierSurface::calcBuffer() {
 }
 
 void BezierSurface::draw(TypedDraw& rDraw) const {
-    // what?
-
-    if (_C4 != 0) {
-        if (_C4 != 0) {
-            drawTrianglePatchPosNormST(rDraw);
-        } else {
-            drawTrianglePatchPosNorm(rDraw);
-        }
+    if (mIsLit) {
+        drawTrianglePatchPosNormST(rDraw);
     } else {
-        if (_C4 != 0) {
-            drawTrianglePatchPosST(rDraw);
-        } else {
-            drawTrianglePatchPos(rDraw);
-        }
+        drawTrianglePatchPos(rDraw);
     }
 }
 
@@ -731,60 +721,6 @@ void BezierSurface::drawTrianglePatchPos(TypedDraw& rDraw) const {
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
         *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z};
-    }
-}
-
-void BezierSurface::drawTrianglePatchPosNorm(TypedDraw& rDraw) const {
-    Vec3f vertexBuffer[36];
-    Vec3f normalBuffer[36];
-
-    const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
-    s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
-
-    Vec3f* vertices = mTrianglePatchVertices;
-
-    if (vertices == nullptr) {
-        calcTrianglePatchVertix(vertexBuffer);
-        vertices = vertexBuffer;
-    }
-
-    Vec3f* normal = mTrianglePatchNormals;
-
-    if (normal == nullptr) {
-        calcTrianglePatchNormal(normalBuffer);
-        normal = normalBuffer;
-    }
-
-    VertexPN* vtx = rDraw.vertices< VertexPN >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
-
-    for (s32 idx = 0; idx < numPoints; idx++) {
-        u16 vertexIndex = vertexOrder[idx];
-        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, normal[vertexIndex].x, normal[vertexIndex].y, normal[vertexIndex].z};
-    }
-}
-
-void BezierSurface::drawTrianglePatchPosST(TypedDraw& rDraw) const {
-    Vec3f vertexBuffer[36];
-
-    const u16* vertexOrder = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleStripOrder;
-    s32 numPoints = ::sTrianglePatchTableGroup[mDivideLevel].mNumTriangleStripPoints;
-    const Vec* triangleST = ::sTrianglePatchTableGroup[mDivideLevel].mTriangleST;
-
-    Vec3f* vertices = mTrianglePatchVertices;
-
-    if (vertices == nullptr) {
-        calcTrianglePatchVertix(vertexBuffer);
-        vertices = vertexBuffer;
-    }
-
-    const Vec* vec;
-    VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
-
-    for (s32 idx = 0; idx < numPoints; idx++) {
-        u16 vertexIndex = vertexOrder[idx];
-        vec = &triangleST[vertexIndex];
-        Vec2f texCoord(mSTPoints[0] * vec->x + mSTPoints[1] * vec->y + mSTPoints[2] * vec->z);
-        *vtx++ = {vertices[vertexIndex].x, vertices[vertexIndex].y, vertices[vertexIndex].z, texCoord.x, texCoord.y};
     }
 }
 

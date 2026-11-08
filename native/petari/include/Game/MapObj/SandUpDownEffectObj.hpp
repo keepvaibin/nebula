@@ -26,9 +26,9 @@ public:
     void exeBuryEnd();
 
 private:
-    f32 _8C;
-    f32 _90;
-    Vec3f _94;
-    Pos3f _A0;
-    TriangleFilterFunc* _D0;
+    f32 mLineOffset;
+    f32 mLineLength;
+    Vec3f mClippingCenter;
+    Pos3f mEffectMtx;
+    TriangleFilterFunc* mTriFilter;
 };

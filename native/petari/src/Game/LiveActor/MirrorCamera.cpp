@@ -6,7 +6,7 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
-MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), _C(0.0f, 0.0f, 0.0f), _18(0.0f, 1.0f, 0.0f), _24() {
+MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), mMirrorPos(0.0f, 0.0f, 0.0f), mMirrorNormal(0.0f, 1.0f, 0.0f), mPlaneD() {
     mViewMtx.identity();
     mModelTexMtx.identity();
 }
@@ -16,9 +16,9 @@ void MirrorCamera::init(const TableIter& rIter) {
 }
 
 void MirrorCamera::setMirrorMapInfo(const Vec3f& rNormal, const Vec3f& rPosition) {
-    _18.set(rNormal);
-    _C.set(rPosition);
-    _24 = -NebulaVecDotProduct(_18, _C);
+    mMirrorNormal.set(rNormal);
+    mMirrorPos.set(rPosition);
+    mPlaneD = -NebulaVecDotProduct(mMirrorNormal, mMirrorPos);
 }
 
 void MirrorCamera::setMirrorMapInfo(ModelData* pModelData) {
@@ -41,10 +41,10 @@ void MirrorCamera::updateViewMtx() {
     cameraInv.getYDir(y);
     cameraInv.getZDir(z);
     cameraInv.getTrans(trans);
-    y -= _18 * (_18.dot(y) * 2.0f);
-    z -= _18 * (_18.dot(z) * 2.0f);
+    y -= mMirrorNormal * (mMirrorNormal.dot(y) * 2.0f);
+    z -= mMirrorNormal * (mMirrorNormal.dot(z) * 2.0f);
     Vec3f x = y.cross(z);
-    trans -= _18 * ((_18.dot(trans) + _24) * 2.0f);
+    trans -= mMirrorNormal * ((mMirrorNormal.dot(trans) + mPlaneD) * 2.0f);
     mViewMtx.setTR(x, y, z, trans);
     mViewMtx.invert(mViewMtx);
 }
@@ -63,10 +63,7 @@ void MirrorCamera::updateModelTexMtx() {
 }
 
 f32 MirrorCamera::getDistance(const Vec3f& rPosition) const {
-    Plane3f plane;
-    plane.mNormal.set(_18);
-    plane.mDot = plane.mNormal.dot(_C);
-    return plane.mNormal.dot(rPosition) - plane.mDot;
+    return mMirrorNormal.dot(rPosition) - mMirrorNormal.dot(mMirrorPos);
 }
 
 namespace MR {

@@ -9,11 +9,6 @@
 #include <cstdarg>
 
 IntermissionScene::IntermissionScene() : Scene("IntermissionScene") {
-    _54 = 0;
-}
-
-void IntermissionScene::update() {
-    _54++;
 }
 
 void IntermissionScene::draw() const {
@@ -27,5 +22,4 @@ void IntermissionScene::setCurrentSceneControllerState(const char* pState, ...) 
     mState.vformat(pState, list);
     va_end(list);
     JUTNativeLog("scene: %s\n", mState.c_str());
-    _54 = 0;
 }

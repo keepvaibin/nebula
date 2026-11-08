@@ -21,9 +21,9 @@ public:
     void endEventCamera();
     void notifyWarpEnd(WarpPod*);
 
-    const LiveActor* _C;
-    LiveActorGroup* _10;
-    s32 _14;
+    const LiveActor* mCameraPod;
+    LiveActorGroup* mPods;
+    s32 mNextPairIndex;
 };
 
 class WarpPod : public LiveActor {
@@ -35,7 +35,6 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual void movement();
-    virtual void draw() const;
     virtual void appear();
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -52,11 +51,9 @@ public:
     s32 mGroupId;
     ActorCameraInfo* mCamInfo;
     char* mEventCameraName;
-    char* _9C;
+    char* mPairCameraName;
     u16 mDelay;
-    u16 _A2;
-    u16 _A4;
-    u16 _A6;
+    u16 mCameraStep;
     s32 mVisibilityState;
     s32 mArg2;
     s32 mArg3;
@@ -64,15 +61,14 @@ public:
     s32 mGrandstarReq;
     s32 mCameraTime;
     s32 mGlowColorIndex;
-    Vec3f* _C4;
-    u16 _C8;
+    Vec3f* mPathPoints;
+    u16 mNumPathPoints;
     bool mArg7;
     bool mIsInactive;
-    u8 _CC;
-    bool _CD;
+    u8 mIsPairCameraOn;
+    bool mIsAppearDemoPending;
     WarpPod* mPairPod;
-    JUTTexture* _D4;
-    JUTTexture* _D8;
+    JUTTexture* mGlowTexture;
 };
 
 namespace MR {

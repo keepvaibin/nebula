@@ -42,22 +42,22 @@ public:
     void exeBreak();
 
     const Vec3f& getRotPartsPosition(int index) const {
-        return _90[index]->mPosition;
+        return mCoins[index]->mPosition;
     }
 
     StarPiece* getStarPiece(int index) const {
-        return _94[index];
+        return mStarPieces[index];
     }
 
-    f32 _8C;
-    RotPartsModel** _90;
-    StarPiece** _94;
+    f32 mSwing;
+    RotPartsModel** mCoins;
+    StarPiece** mStarPieces;
     u16 mItemCount;
     u16 mItemType;
-    Pos3f _9C;
-    Pos3f _CC;
-    Vec3f _FC;
-    Vec3f _108;
+    Pos3f mTargetMtx;
+    Pos3f mItemMtx;
+    Vec3f mClipCenter;
+    Vec3f mBasePos;
     f32 mRailSpeed;
     bool mUseRail;
 };

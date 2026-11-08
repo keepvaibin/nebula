@@ -13,7 +13,7 @@ public:
 
     bool tryGenItem();
     void exeWait();
-    void exeSwingDpd();
+    void exeSwingPointer();
     void exeSwingPlayer();
 
     s32 mItemType;

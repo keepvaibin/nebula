@@ -15,7 +15,7 @@ OceanRingPipe::~OceanRingPipe() {
 }
 
 OceanRingPipe::OceanRingPipe(const OceanRing* pRing, f32 a, f32 b)
-    : LiveActor("オーシャンリングの側面"), mOceanRing(pRing), _90(), _94(), _98(), _9C(8), _A0(), _A4(), _A8(a), _AC(b), mPipeInside(),
+    : LiveActor("オーシャンリングの側面"), mOceanRing(pRing), mIsCameraInside(), mNumPoints(), mNumSegments(), mNumSides(8), mPositions(), mNormals(), mWidth(a), mWidthArg(b), mPipeInside(),
       mPipeOutside() {
 }
 
@@ -34,17 +34,17 @@ void OceanRingPipe::init(const TableIter& rIter) {
         f32 f29 = 200.0f;
         f32 f28 = 500.0f;
         Vec3f vec(1.0f, 0.0f, 0.0f);
-        for (s32 i = 0; i < _98; i += 7) {
+        for (s32 i = 0; i < mNumSegments; i += 7) {
             Vec3f grav(0.0f, -1.0f, 0.0f);
-            MR::calcGravityVector(this, _A0[calcPointIndex(i, 0)], &grav, nullptr, 0);
+            MR::calcGravityVector(this, mPositions[calcPointIndex(i, 0)], &grav, nullptr, 0);
             if (grav.y > -0.9f) {
                 continue;
             }
 
             if (i & 1) {
-                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &_A0[calcPointIndex(i, 0)], vec, f28, f30, f29, 2, 3, -1.0f));
+                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, 0)], vec, f28, f30, f29, 2, 3, -1.0f));
             } else {
-                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &_A0[calcPointIndex(i, _9C - 1)], vec, f28, f30, f29, 2, 3, -1.0f));
+                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, mNumSides - 1)], vec, f28, f30, f29, 2, 3, -1.0f));
             }
         }
     }
@@ -59,26 +59,26 @@ void OceanRingPipe::movement() {
 
     mPipeOutside->movement();
     if (WaterAreaFunction::getCameraWaterInfo()->mOceanRing == mOceanRing) {
-        _90 = true;
+        mIsCameraInside = true;
         mPipeInside->movement();
     } else {
-        _90 = false;
+        mIsCameraInside = false;
     }
 }
 
 void OceanRingPipe::initPoints() {
-    _98 = static_cast< s32 >(MR::getRailTotalLength(this) / 300.0f) + 1;
-    _94 = _98 * _9C;
+    mNumSegments = static_cast< s32 >(MR::getRailTotalLength(this) / 300.0f) + 1;
+    mNumPoints = mNumSegments * mNumSides;
 
-    f32 length = MR::getRailTotalLength(this) / (_98 - 1);
+    f32 length = MR::getRailTotalLength(this) / (mNumSegments - 1);
     f32 angle = getAngle();
 
-    _A0 = new Vec3f[_94];
-    _A4 = new Vec3s[_94];
+    mPositions = new Vec3f[mNumPoints];
+    mNormals = new Vec3f[mNumPoints];
 
     s32 idx = 0;
 
-    for (s32 i = 0; i < _98; i++) {
+    for (s32 i = 0; i < mNumSegments; i++) {
         Vec3f grav;
         MR::calcGravityVector(this, MR::getRailPos(this), &grav, nullptr, 0);
 
@@ -95,8 +95,8 @@ void OceanRingPipe::initPoints() {
         MR::calcDistanceToCurrentAndNextRailPoint(this, &currDist, &nextDist);
         f32 sumDist = currDist + nextDist;
 
-        f32 flt = _AC / 100.0f;
-        f32 flt2 = _AC / 100.0f;
+        f32 flt = mWidthArg / 100.0f;
+        f32 flt2 = mWidthArg / 100.0f;
         MR::getCurrentRailPointArg1NoInit(this, &flt);
         MR::getNextRailPointArg1NoInit(this, &flt2);
 
@@ -104,7 +104,7 @@ void OceanRingPipe::initPoints() {
         Vec3f v1(side);
 
         if (sumDist > 0.0f) {
-            f3 = ((flt * nextDist + flt2 * currDist) / sumDist) / (_AC / 100.0f);
+            f3 = ((flt * nextDist + flt2 * currDist) / sumDist) / (mWidthArg / 100.0f);
             f32 fff = flt - flt2;
 
             if (MR::abs(fff) > 0.0001f) {
@@ -126,13 +126,13 @@ void OceanRingPipe::initPoints() {
             }
         }
 
-        for (s32 j = 0; j < _9C; j++) {
+        for (s32 j = 0; j < mNumSides; j++) {
             Vec3f v4(side);
-            v4.scale(_A8 * f3);
+            v4.scale(mWidth * f3);
             v4.add(MR::getRailPos(this));
 
-            _A0[idx].set< f32 >(v4.x, v4.y, v4.z);
-            _A4[idx].set((s32)(v1.x * 32768.0f), (s32)(v1.y * 32768.0f), (s32)(v1.z * 32768.0f));  // TODO: sFloatToShortShift
+            mPositions[idx].set< f32 >(v4.x, v4.y, v4.z);
+            mNormals[idx].set< f32 >(v1.x * 2.0f, v1.y * 2.0f, v1.z * 2.0f);
             idx++;
 
             mtx.mult(side, side);

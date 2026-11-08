@@ -1,8 +1,6 @@
 #include "Game/Ride/Trapeze.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
@@ -40,7 +38,6 @@ namespace {
     static const f32 sHangCoordSpeed = 0.5f;
     static const f32 sSensorOffsetY = -70.0f;
     static const s32 sAnimInterpoleFrame = 12;
-    // static const f32 sSpeedWaitToEndAnim =
     static const f32 sSpeedToSwingWait = 10.0f;
     static const f32 sAxisToSwingWait = 0.99f;
     static const f32 sJumpSpeedRate = 1.0f;

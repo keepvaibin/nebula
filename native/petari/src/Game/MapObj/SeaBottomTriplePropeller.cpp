@@ -35,7 +35,7 @@ void SeaBottomTriplePropeller::init(const TableIter& rIter) {
     MR::validateCollisionParts(mPropellerCollision[1]);
     MR::validateCollisionParts(mPropellerCollision[2]);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     mAudSeKeeper = new AudSeKeeper(this, 3);

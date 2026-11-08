@@ -10,7 +10,8 @@ class ActorLightCtrl {
 public:
     ActorLightCtrl(const LiveActor*);
 
-    void init(int, bool);
+    // lightType below 0: the actor's light info table chooses.
+    void init(int lightType, bool);
     void update(bool);
     void loadLight() const;
     void reset();
@@ -23,13 +24,13 @@ public:
     const ActorLightInfo* getTargetActorLight(const AreaLightInfo*) const;
 
     const LiveActor* mActor;
-    s32 _4;
-    DrawBuffer* _8;
-    u8 _C;
+    s32 mLightType;  // 0 player, 1 strong, 2 weak, 3 planet
+    DrawBuffer* mDrawBuffer;
+    bool mHasFixedType;  // given at init: no light info table, not sorted by light in its draw buffer
     AreaLightInfo* mAreaLightInf;
     ZoneLightID mLightID;
-    const ActorLightInfo* _1C;
+    const ActorLightInfo* mBlendFrom;  // while blending into a new area's light
     ActorLightInfo mLightInfo;
     s32 mInterpolate;
-    s32 _54;
+    s32 mBlendStep;
 };

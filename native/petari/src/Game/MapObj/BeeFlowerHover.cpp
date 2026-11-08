@@ -20,8 +20,8 @@ namespace NrvBeeFlowerHover {
 };  // namespace NrvBeeFlowerHover
 
 BeeFlowerHover::BeeFlowerHover(const char* pName)
-    : LiveActor(pName), mLodCtrlPlanet(), _BC(::sDefaultRotateSpeed), mRailMover(), mRailPosture(), _CC(0.0f, 0.0f, 0.0f) {
-    _8C.identity();
+    : LiveActor(pName), mLodCtrlPlanet(), mRotateSpeed(::sDefaultRotateSpeed), mRailMover(), mRailPosture(), mClipCenter(0.0f, 0.0f, 0.0f) {
+    mRotateMtx.identity();
 }
 
 void BeeFlowerHover::init(const TableIter& rIter) {
@@ -31,7 +31,7 @@ void BeeFlowerHover::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionPartsAutoEqualScale(this, "BeeFlowerHover", getSensor(nullptr), 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     if (MR::isConnectedWithRail(rIter)) {
@@ -60,7 +60,7 @@ void BeeFlowerHover::init(const TableIter& rIter) {
     }
 
     if (mRailMover != nullptr) {
-        MR::initAndSetRailClipping(&_CC, this, 100.0f, 500.0f);
+        MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
     } else {
         MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     }
@@ -71,8 +71,8 @@ void BeeFlowerHover::init(const TableIter& rIter) {
         MR::calcGravity(this);
     }
 
-    MR::getPlacementArg0NoInit(rIter, &_BC);
-    _BC /= 100.0f;
+    MR::getPlacementArg0NoInit(rIter, &mRotateSpeed);
+    mRotateSpeed /= 100.0f;
     mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f);
     mLodCtrlPlanet->validate();
     initNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvWait));
@@ -146,13 +146,13 @@ void BeeFlowerHover::control() {
     }
 
     Pos3f mtx;
-    mtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(_BC));
-    _8C.concat(mtx);
+    mtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotateSpeed));
+    mRotateMtx.concat(mtx);
 
     if (mRailMover != nullptr) {
         mRailMover->movement();
         mRailPosture->movement();
-        mPosition.set(mRailMover->_28);
+        mPosition.set(mRailMover->mStartPos);
     }
 }
 
@@ -161,12 +161,12 @@ void BeeFlowerHover::calcAndSetBaseMtx() {
     stack_8.identity();
 
     if (mRailPosture) {
-        stack_8.concat(mRailPosture->_18);
+        stack_8.concat(mRailPosture->mPostureMtx);
     } else {
         MR::makeMtxRotate(stack_8.toMtxPtr(), mRotation);
     }
 
-    stack_8.concat(_8C);
+    stack_8.concat(mRotateMtx);
     stack_8.mMtx[0][3] = mPosition.x;
     stack_8.mMtx[1][3] = mPosition.y;
     stack_8.mMtx[2][3] = mPosition.z;

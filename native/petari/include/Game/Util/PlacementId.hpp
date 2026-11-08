@@ -15,21 +15,21 @@ public:
     void initialize(s32, const TableIter&);
 
     void operator=(const PlacementId& rhs) {
-        _0 = rhs._0;
+        mId = rhs.mId;
         mZoneID = rhs.mZoneID;
     }
 
     inline bool operator==(const PlacementId& rOther) const {
         bool ret = false;
 
-        if (_0 == rOther._0 && mZoneID == rOther.mZoneID) {
+        if (mId == rOther.mId && mZoneID == rOther.mZoneID) {
             ret = true;
         }
 
         return ret;
     }
 
-    s32 _0;
+    s32 mId;
     s32 mZoneID;
 };
 

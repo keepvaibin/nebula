@@ -43,9 +43,9 @@ namespace NrvKoopaJrShipCannonShell {
     NEW_NERVE(HostTypeFreeze, KoopaJrShipCannonShell, Freeze);
 };  // namespace NrvKoopaJrShipCannonShell
 
-KoopaJrShipCannonShell::KoopaJrShipCannonShell(const char* pName) : CannonShellBase(pName), _9C(gZeroVec), _A8(gZeroVec), _B4(), _B8(true) {
+KoopaJrShipCannonShell::KoopaJrShipCannonShell(const char* pName) : CannonShellBase(pName), mFreezePos(gZeroVec), mFreezeVelocity(gZeroVec), mFreezeStep() {
     f32 one = 1.0f;  // This makes Data match
-    _8C.set< f32 >(0.0f, 0.0f, 0.0f, one);
+    mPoseQuat.set< f32 >(0.0f, 0.0f, 0.0f, one);
     mPosition.x = gZeroVec.x;
     mPosition.y = gZeroVec.y;
     mPosition.z = gZeroVec.z;
@@ -66,7 +66,7 @@ void KoopaJrShipCannonShell::init(const TableIter& rIter) {
     MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
 
     initBinder(::sBinderRadius * getBaseScale(), 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFly));
 
     MR::connectToSceneEnemy(this);
@@ -85,7 +85,7 @@ void KoopaJrShipCannonShell::kill() {
 }
 
 void KoopaJrShipCannonShell::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mPoseQuat);
 }
 
 void KoopaJrShipCannonShell::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -178,22 +178,19 @@ void KoopaJrShipCannonShell::launch(const Vec3f& rStartPos, const Vec3f& rVeloci
 
     Pos3f mtx;
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, vec);
-    mtx.getQuat(_8C);
+    mtx.getQuat(mPoseQuat);
     mVelocity.set(rVelocity);
     MR::startSound(this, "SE_BM_KOOPAJR_SHIP_SHOOT_NORMAL");
     setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFly));
 }
 
 bool KoopaJrShipCannonShell::tryFreeze() {
-    if (!_B8)
-        return false;
-
     if (!MR::isStarPointerPointing2POnPressButton(this, "弱", true, false))
         return false;
 
-    _9C.set(mPosition);
-    _A8.set(mVelocity);
-    _B4 = 0;
+    mFreezePos.set(mPosition);
+    mFreezeVelocity.set(mVelocity);
+    mFreezeStep = 0;
     setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFreeze));
     return true;
 }
@@ -261,20 +258,20 @@ void KoopaJrShipCannonShell::exeDown() {
 void KoopaJrShipCannonShell::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
-        if (!_B4) {
-            MR::startDPDHitSound();
+        if (!mFreezeStep) {
+            MR::startPointerHitSound();
         }
     }
 
-    _B4++;
-    MR::startDPDFreezeLevelSound(this);
+    mFreezeStep++;
+    MR::startPointerFreezeLevelSound(this);
     Vec3f vec14;
-    f32 scale = ::sFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(_B4 * ::sFreezeRumbleSpeed)) *
+    f32 scale = ::sFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(mFreezeStep * ::sFreezeRumbleSpeed)) *
                 static_cast< f32 >(::sFreezeFrame - getNerveStep()) / ::sFreezeFrame;
 
     vec14.set(MR::getCamXdir());
     vec14.scale(scale);
-    editPosition()->add(_9C, vec14);
+    editPosition()->add(mFreezePos, vec14);
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFreeze));
@@ -282,8 +279,8 @@ void KoopaJrShipCannonShell::exeFreeze() {
     }
 
     if (MR::isStep(this, ::sFreezeFrame)) {
-        mPosition.set(_9C);
-        mVelocity.set(_A8);
+        mPosition.set(mFreezePos);
+        mVelocity.set(mFreezeVelocity);
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFly));
     }
 }

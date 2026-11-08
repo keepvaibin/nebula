@@ -19,7 +19,7 @@
 
 DemoExecutor::DemoExecutor(const char* pName)
     : DemoCastGroup(pName), mSheetName(), mTimeKeeper(), mSubPartKeeper(), mPlayerKeeper(), mCameraKeeper(), mActionKeeper(), mWipeKeeper(),
-      mSoundKeeper(), mSheetKeeper(), _40(), _44(), _48(), _4C(-1), _50(), mActor(), mTalkAnimCtrl(), mTalkMessageCtrl() {
+      mSoundKeeper(), mSheetKeeper(), mStageSwitchCtrl(), mDemoStarter(), mDemoName(), mEndType(-1), mActor(), mTalkAnimCtrl(), mTalkMessageCtrl() {
 }
 
 void DemoExecutor::init(const TableIter& rIter) {
@@ -35,10 +35,10 @@ void DemoExecutor::init(const TableIter& rIter) {
     mSheetKeeper.push_back(mWipeKeeper);
     mSoundKeeper = new DemoSoundKeeper(this);
     mSheetKeeper.push_back(mSoundKeeper);
-    _40 = MR::createStageSwitchCtrl(this, rIter);
+    mStageSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 
-    if (_40->isValidSwitchAppear()) {
-        MR::listenNameObjStageSwitchOnAppear(this, _40, MR::Functor(this, &DemoExecutor::startProperDemoSystem));
+    if (mStageSwitchCtrl->isValidSwitchAppear()) {
+        MR::listenNameObjStageSwitchOnAppear(this, mStageSwitchCtrl, MR::Functor(this, &DemoExecutor::startProperDemoSystem));
     }
 
     DemoFunction::registerDemoExecutor(this);
@@ -77,9 +77,9 @@ void DemoExecutor::movement() {
 }
 
 void DemoExecutor::start(NameObj* pParam1, const char* pParam2, s32 param3) {
-    _44 = pParam1;
-    _48 = pParam2;
-    _4C = param3;
+    mDemoStarter = pParam1;
+    mDemoName = pParam2;
+    mEndType = param3;
 
     mTimeKeeper->start();
     mCameraKeeper->start();
@@ -229,22 +229,22 @@ void DemoExecutor::end() {
         item->end();
     }
 
-    switch (_4C) {
+    switch (mEndType) {
     case 1:
-        MR::endDemo(_44, _48);
+        MR::endDemo(mDemoStarter, mDemoName);
         break;
     case 2:
-        MR::endDemo(_44, _48);
+        MR::endDemo(mDemoStarter, mDemoName);
         break;
     }
 
-    if (_40->isValidSwitchDead()) {
-        _40->onSwitchDead();
+    if (mStageSwitchCtrl->isValidSwitchDead()) {
+        mStageSwitchCtrl->onSwitchDead();
     }
 
-    _44 = nullptr;
-    _48 = nullptr;
-    _4C = -1;
+    mDemoStarter = nullptr;
+    mDemoName = nullptr;
+    mEndType = -1;
 
     for (auto& item : mActor) {
         MR::validateClipping(item);

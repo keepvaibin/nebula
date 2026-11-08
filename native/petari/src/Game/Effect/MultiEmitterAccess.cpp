@@ -77,7 +77,7 @@ void MultiEmitter::setGlobalSRTMatrix(const Mtx pMtx, s32 idx) {
 }
 
 void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
-    bool b1 = !MR::isNearZero(_2C);
+    bool b1 = !MR::isNearZero(mLightAffect);
 
     if (idx == -1) {
         mCallBack->mPrmColor.set(r, g, b, -1);
@@ -101,7 +101,7 @@ void MultiEmitter::setGlobalPrmColor(u8 r, u8 g, u8 b, s32 idx) {
 }
 
 void MultiEmitter::setGlobalEnvColor(u8 r, u8 g, u8 b, s32 idx) {
-    bool b1 = !MR::isNearZero(_2C);
+    bool b1 = !MR::isNearZero(mLightAffect);
 
     if (idx == -1) {
         mCallBack->mEnvColor.set(r, g, b, -1);

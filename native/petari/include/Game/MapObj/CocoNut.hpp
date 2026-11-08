@@ -26,7 +26,7 @@ public:
     void updateRotate(f32);
     void updateGravity();
     bool isInGroundGracePeriod() const {
-        return _138 < 10;
+        return mOffGroundStep < 10;
     }
     void processMove();
     bool isOnGround() const;
@@ -71,25 +71,25 @@ public:
     void exeReplaceReady();
 
     inline f32 getSize() {
-        return _D0;
+        return mRadius;
     }
 
 private:
-    f32 _8C;
-    f32 _90;
-    Vec3f _94;
-    Pos3f _A0;
-    f32 _D0;
-    bool _D4;
-    Pos3f _D8;
-    Pos3f _108;
-    s32 _138;
-    bool _13C;
+    f32 mMoveSpeed;
+    f32 mFallSpeed;
+    Vec3f mFront;
+    Pos3f mRollMtx;
+    f32 mRadius;
+    bool mIsBindOff;
+    Pos3f mSmokeMtx;
+    Pos3f mSpinHitMtx;
+    s32 mOffGroundStep;
+    bool mIsKicked;
     Vec3f mSpawnPosition;
-    bool _14C;
-    Vec3f _150;
+    bool mIsOnMoveArea;
+    Vec3f mAreaVelocity;
     bool mSphericalShadow;  // also affects some other properties besides shadow
     bool mRespawnWhenOutOfView;
-    bool _15E;  // something about clipping
+    bool mIsGroupClipping;  // something about clipping
     bool mContinueRolling;
 };

@@ -24,15 +24,15 @@ public:
     void exeWait();
     void exeBreak();
 
-    CollisionParts* mCollisionParts;  // _84
-    LodCtrl* mLODCtrl;                // _90
-    ModelObj* mModel;                 // _94
-    MapPartsRailMover* mRailMover;    // _98
-    Vec3f _9C;
-    f32 _A8;
-    s32 _AC;
-    bool _B0;
-    const char* _B4;
+    CollisionParts* mCollisionParts;
+    LodCtrl* mLODCtrl;
+    ModelObj* mModel;
+    MapPartsRailMover* mRailMover;
+    Vec3f mFront;
+    f32 mRotateSpeed;
+    s32 mMoveConditionType;
+    bool mIsRailDone;
+    const char* mObjName;
 };
 
 class UFOSolid : public UFOBase {

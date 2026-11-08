@@ -26,8 +26,8 @@ public:
     void exeWait();
     void exeMove();
 
-    Vec3f _C4;
-    u8 _D0;
+    Vec3f mRailClippingCenter;
+    u8 mWasRailMoving;
 };
 
 class RailMoveObjPress : public RailMoveObj {

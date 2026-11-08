@@ -48,7 +48,7 @@ namespace NrvKoopaBattleMain {
 };  // namespace NrvKoopaBattleMain
 
 KoopaBattleMain::KoopaBattleMain(const char* pName, Koopa* pKoopa)
-    : KoopaBattleBase(pName, pKoopa), mStateAttackHipDrop(), mStateAttackShockWave(), mStateAttackRoll(), mStateAttackSpin(), _2C(true) {
+    : KoopaBattleBase(pName, pKoopa), mStateAttackHipDrop(), mStateAttackShockWave(), mStateAttackRoll(), mStateAttackSpin(), mIsMainAttackStarted(true) {
 }
 
 void KoopaBattleMain::init() {
@@ -79,7 +79,7 @@ void KoopaBattleMain::init() {
 
 void KoopaBattleMain::appear() {
     mIsDead = false;
-    _2C = true;
+    mIsMainAttackStarted = true;
 
     if (KoopaFunction::isKoopaVs1(mHost)) {
         if (KoopaFunction::isKoopaLv1(mHost)) {
@@ -116,8 +116,8 @@ void KoopaBattleMain::exeChasePlayer() {
     if (KoopaFunction::isKoopaVs1(mHost)) {
         if (MR::isNearPlayer(mHost, ::sChasePlayerDistanceNearAttack) ||
             ((MR::isGreaterStep(this, ::sChasePlayerStepToAttackHipDrop) &&
-              MR::isInSightFanPlayer(mHost, KoopaFunction::getKoopaFront(mHost), ::sAttackHipDropSight._0, ::sAttackHipDropSight._4,
-                                     ::sAttackHipDropSight._8)))) {
+              MR::isInSightFanPlayer(mHost, KoopaFunction::getKoopaFront(mHost), ::sAttackHipDropSight.mDistance, ::sAttackHipDropSight.mHorizontalDegree,
+                                     ::sAttackHipDropSight.mVerticalDegree)))) {
             setNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvAttackHipDrop));
             return;
         }
@@ -172,10 +172,10 @@ void KoopaBattleMain::exeJumpAway() {
         return;
     }
 
-    _2C = false;
+    mIsMainAttackStarted = false;
 
     if (KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaLv3(mHost)) {
-        mStateAttackRoll->_1D = true;
+        mStateAttackRoll->mIsStartNow = true;
     }
 
     startMainAttack();
@@ -250,7 +250,7 @@ void KoopaBattleMain::exeAttackRoll() {
         return;
     }
 
-    if (mStateAttackRoll->_1C) {
+    if (mStateAttackRoll->mIsHitPlayer) {
         tryJumpAway();
     } else {
         setNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvAttackHipDrop));
@@ -379,8 +379,8 @@ bool KoopaBattleMain::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 void KoopaBattleMain::startMainAttack() {
-    if (_2C == false) {
-        _2C = true;
+    if (mIsMainAttackStarted == false) {
+        mIsMainAttackStarted = true;
 
         if (KoopaFunction::isKoopaVs2(mHost)) {
             setNerve(GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvAttackSpin));

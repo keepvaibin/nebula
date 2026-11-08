@@ -105,7 +105,7 @@ public:
     bool isEnableToBeDamaged() const;
 
     SkeletalFishBossInfo::LevelStatus* getLevelStatus() const {
-        return mBossInfo->getLevelStatus(_110);
+        return mBossInfo->getLevelStatus(mLevel);
     }
 
     JointController* mControllers[0xD];
@@ -114,26 +114,24 @@ public:
     SkeletalFishBossHead* mBossHead;
     SkeletalFishBossScarFlash* mScarFlash;
     ModelObj* mBreakModel;
-    const HitSensor* _D4;
-    Pos3f _D8;
     SkeletalFishRailControl* mRailControl;
     SkeletalFishBossBattleDirector* mBossDirector;
-    s32 _110;
-    s32 _114;
-    u32 _118;
+    s32 mLevel;
+    s32 mHitsLeft;
+    u32 mDamageBrkIndex;
     CameraTargetMtx* mCameraTargetMtx;
-    Pos3f _120;
-    Pos3f _150;
-    Vec3f _180;
+    Pos3f mRailMtxInv;
+    Pos3f mPlacementMtx;
+    Vec3f mPlanetCenter;
     SceneFunc mSceneFunc;
     const char* mCurScene;
     const Nerve* mSceneNerve;
-    s32 _1A0;
-    s32 _1A4;
+    s32 mLevelNum;
+    s32 mGuardNum;
     SkeletalFishBossInfo* mBossInfo;
     SkeletalFishGuardHolder* mGuardHolder;
-    s32 _1B0;
-    s32 _1B4;
+    s32 mBgmType;
+    s32 mBgmHoldStep;
 };
 
 class SkeletalFishBossScarFlash : public PartsModel {
@@ -163,11 +161,12 @@ public:
     void updateCollisionMtx();
     void createSubModel();
 
-    Mtx34f _9C;
-    CollisionParts* _CC;
-    Mtx34f _D0;
-    CollisionParts* _100;
+    Mtx34f mHeadCollisionMtx;
+    CollisionParts* mHeadCollision;
+    Mtx34f mJawCollisionMtx;
+    CollisionParts* mJawCollision;
     ModelObj* mLightModels[2];
     ModelObj* mBloomModels[2];
-    u8 _114;
+    // The game's constructor leaves it unset and read the console heap's leftover bytes: the eye light cones showed until the last hit.
+    bool mIsEyeLightOn;
 };

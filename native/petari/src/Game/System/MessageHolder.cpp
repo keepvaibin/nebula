@@ -14,7 +14,7 @@
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {
-        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(pWords));
+        pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(pWords));
         return true;
     }
 
@@ -28,7 +28,7 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
             return false;
         }
         getMessage(pMessageInfo, 0, templateIndex);
-        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(pText));
+        pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(pText));
         return true;
     }
     s32 messageIndex = findMessageIndex(pMessage);
@@ -44,13 +44,13 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
 
 bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u32, u32 index) const {
     const MessageRecord& rRecord = mMessages[index];
-    pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(mText + rRecord.mText));
+    pMessageInfo->mMessage = reinterpret_cast< u8* >(const_cast< char16_t* >(mText + rRecord.mText));
     pMessageInfo->mCameraSetID = rRecord.mCameraSetID;
-    pMessageInfo->_6 = rRecord._6;
+    pMessageInfo->mSoundId = rRecord.mSoundId;
     pMessageInfo->mCameraType = rRecord.mCameraType;
     pMessageInfo->mTalkType = rRecord.mTalkType;
-    pMessageInfo->_A = rRecord._A;
-    pMessageInfo->_B = rRecord._B;
+    pMessageInfo->mAreaId = rRecord.mAreaId;
+    pMessageInfo->mAlreadyReadId = rRecord.mAlreadyReadId;
     pMessageInfo->mBalloonType = rRecord.mBalloonType;
 
     return true;
@@ -129,16 +129,9 @@ MessageData::MessageData(const char* pArchiveName)
     mBranches = reinterpret_cast< const u32* >(msgData + mFile->mBranchOffset);
 }
 
-inline TableIter end(const Table* pInfo) {
-    return TableIter(pInfo, pInfo->getNumEntries());
-}
-
 s32 MessageData::findMessageIndex(const char* pMessage) const {
     TableIter iter = mIDTable->findElementBinary("MessageId", pMessage);
-
-    // This *should* be mIDTable->end(), but I have had trouble
-    // getting the compiler to inline that (see comment in Table.hpp)
-    if (iter == end(mIDTable)) {
+    if (iter == mIDTable->end()) {
         return -1;
     }
 

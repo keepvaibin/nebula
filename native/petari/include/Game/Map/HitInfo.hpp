@@ -49,9 +49,8 @@ public:
     bool isCollisionAtCorner() const;
 
     Triangle mParentTriangle;
-    f32 _60;
+    f32 mDepth;
     Vec3f mHitPos;
-    Vec3f _70;
-    Vec3f _7C;
-    u8 _88;
+    Vec3f mNormalMove;
+    u8 mHitPart;
 };

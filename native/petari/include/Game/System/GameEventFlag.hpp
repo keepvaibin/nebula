@@ -33,7 +33,7 @@ struct GameEventFlag {
         u16 mNeedStarPieceNum;
     };
 
-    u32 _8; // Unused
+    u32 mExactStarPieceNum; // Unused
 
     union {
         const char* mCondition3;

@@ -26,18 +26,14 @@ enum CamAnmTrackId {
 struct CamAnmHeader {
     char mMagic[4];  // "NCAM"
     u32 mNrFrames;
-    s32 _8;  // 0: the file is refused
-    s32 _C;
-    s32 _10;
-    s32 _14;
     u32 mNrValues;
-    u32 mPad;
     CamAnmTrack mTracks[CamAnmTrack_Num];
 
     const f32* values() const {
         return reinterpret_cast< const f32* >(this + 1);
     }
 };
+static_assert(sizeof(CamAnmHeader) == 12 + 12 * CamAnmTrack_Num, "the cook's NCAM header and tracks");
 
 class CameraAnim : public Camera {
 public:
@@ -65,8 +61,6 @@ public:
     void getPos(Vec3f*, f32) const;
     void getWatchPos(Vec3f*, f32) const;
 
-    s32 _4C;
-    s32 _50;
     u32 mNrFrames;
     f32 mSpeed;
     f32 mCurrentFrame;

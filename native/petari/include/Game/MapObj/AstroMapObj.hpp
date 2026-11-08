@@ -33,12 +33,12 @@ public:
     void setStateDoorOpenOrClose();
     void startDemo();
 
-    const Table* _C4;
-    GalaxyNamePlate* _C8;
-    const char* _CC;  // Uhh...
-    CollisionParts* _D0;
-    CollisionParts* _D4;
-    s32 _D8;
+    const Table* mNamePlateTable;
+    GalaxyNamePlate* mNamePlate;
+    const char* mObjName;  // Uhh...
+    CollisionParts* mCloseCollision;
+    CollisionParts* mOpenCollision;
+    s32 mDomeId;
 };
 
 class AstroSimpleObj : public SimpleMapObjFarMax {
@@ -49,6 +49,6 @@ public:
     virtual void init(const TableIter&);
     virtual void control();
 
-    const Table* _C4;
-    GalaxyNamePlate* _C8;
+    const Table* mNamePlateTable;
+    GalaxyNamePlate* mNamePlate;
 };

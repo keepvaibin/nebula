@@ -14,5 +14,4 @@ public:
 
     s32 mNumPadRumbleEntries;
     PadRumbleInfo* mPadRumbleEntries;
-    s32 _8;
 };

@@ -69,7 +69,7 @@ void BegomanLauncher::init(const TableIter& rIter) {
     initModelManagerWithAnm("BegomanLauncher", nullptr, false);
     MR::connectToSceneEnemy(this);
     initNerve(GET_NERVE(BegomanLauncher, HostTypeNrvWait));
-    initEffectKeeper(0, "BegomanLauncher", false);
+    initEffectKeeper(0, "BegomanLauncher");
     initSound(8, false);
     MR::initShadowVolumeSphere(this, 100.0f);
     if (MR::useStageSwitchReadAppear(this, rIter)) {

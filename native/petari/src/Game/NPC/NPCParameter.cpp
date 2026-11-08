@@ -9,34 +9,16 @@ template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::~Vector();
 template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::Vector();
 template void MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::push_back(NPCParameterBase* const&);
 
-NPCParameterEdit::NPCParameterEdit(const char* pName, const char** pPpChar, bool a3) : NPCParameterBase(pName), _8(pPpChar), _C(a3) {
-}
-
-void NPCParameterEdit::read(Table* pInfo, s32 a2) {
-    pInfo->getValue(a2, mName, _8);
-}
-
-NPCParameterBool::NPCParameterBool(const char* pName, bool* pBool) : NPCParameterBase(pName), _8(pBool) {
-}
-
-void NPCParameterBool::read(Table* pInfo, s32 a2) {
-    pInfo->getValue(a2, mName, _8);
-}
-
-NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec, f32 f1, f32 f2) : NPCParameterBase(pName), _8(pVec), _C(f1), _10(f2) {
+NPCParameterV3f::NPCParameterV3f(const char* pName, Vec3f* pVec) : NPCParameterBase(pName), mValue(pVec) {
 }
 
 void NPCParameterV3f::read(Table* pInfo, s32 a2) {
     MR::FormattedName key("%sX", mName);
-    pInfo->getValue(a2, key.c_str(), &_8->x);
+    pInfo->getValue(a2, key.c_str(), &mValue->x);
     key.format("%sY", mName);
-    pInfo->getValue(a2, key.c_str(), &_8->y);
+    pInfo->getValue(a2, key.c_str(), &mValue->y);
     key.format("%sZ", mName);
-    pInfo->getValue(a2, key.c_str(), &_8->z);
-}
-
-NPCParameterJoint::NPCParameterJoint(const char* pName, const char* pChar, const char** ppChar)
-    : NPCParameterBase(pName), _8(ppChar), _C(pChar), _10(-1) {
+    pInfo->getValue(a2, key.c_str(), &mValue->z);
 }
 
 NPCParameterReader::NPCParameterReader(const char* pName) : NPCParameterBase(pName), MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >() {
@@ -55,7 +37,7 @@ void NPCParameterReader::read(Table* pInfo, s32 a2) {
 NPCCapsParameterReader::NPCCapsParameterReader(const char* pName) : NPCParameterReader(pName), mActorCaps("") {
     mActorCaps.setDefault();
     mActorCaps.mObjectName = pName;
-    mActorCaps._10 = pName;
+    mActorCaps.mMessageId = pName;
     init();
 }
 
@@ -67,68 +49,42 @@ void NPCItemParameterReader::copy(const NPCActorItem* pItem) {
     mItem.mGoodsJoint1 = pItem->mGoodsJoint1;
 }
 
-template <>
-NPCParameterRange< s32 >::NPCParameterRange(const char* pName, s32* pLong, s32 a3, s32 a4) : NPCParameterBase(pName), _8(pLong), _C(a3), _10(a4) {
-}
-
-template <>
-void NPCParameterRange< s32 >::read(Table* pInfo, s32 a2) {
-    pInfo->getValue(a2, mName, _8);
-}
-
-template <>
-NPCParameterRange< f32 >::NPCParameterRange(const char* pName, f32* pLong, f32 a3, f32 a4) : NPCParameterBase(pName), _8(pLong), _C(a3), _10(a4) {
-}
-
-template <>
-void NPCParameterRange< f32 >::read(Table* pInfo, s32 a2) {
-    pInfo->getValue(a2, mName, _8);
-}
-
-void NPCParameterJoint::read(Table* pInfo, s32 a2) {
-    pInfo->getValue(a2, mName, _8);
-
-    if (strcmp(*_8, "") == 0) {
-        *_8 = "";
-    }
-}
-
 void NPCCapsParameterReader::init() {
-    push_back(new NPCParameterBool("mModel", &mActorCaps.mModel));
-    push_back(new NPCParameterBool("mMakeActor", &mActorCaps.mMakeActor));
-    push_back(new NPCParameterBool("mHostIO", &mActorCaps.mHostIO));
-    push_back(new NPCParameterBool("mMessage", &mActorCaps.mMessage));
-    push_back(new NPCParameterV3f("mMessageOffset", &mActorCaps.mMessageOffset, 0.0f, 1000.0f));
-    push_back(new NPCParameterBool("mInterpole", &mActorCaps.mInterpole));
-    push_back(new NPCParameterBool("mConnectTo", &mActorCaps.mConnectTo));
-    push_back(new NPCParameterBool("mLightCtrl", &mActorCaps.mLightCtrl));
-    push_back(new NPCParameterBool("mEffect", &mActorCaps.mEffect));
-    push_back(new NPCParameterBool("mSound", &mActorCaps.mSound));
-    push_back(new NPCParameterRange< s32 >("mSoundSize", &mActorCaps.mSoundSize, 0, 16));
-    push_back(new NPCParameterBool("mAttribute", &mActorCaps.mAttribute));
-    push_back(new NPCParameterBool("mPosition", &mActorCaps.mPosition));
-    push_back(new NPCParameterBool("mLodCtrl", &mActorCaps.mLodCtrl));
-    push_back(new NPCParameterBool("mNerve", &mActorCaps.mNerve));
-    push_back(new NPCParameterBool("mBinder", &mActorCaps.mBinder));
-    push_back(new NPCParameterRange< f32 >("mBinderSize", &mActorCaps.mBinderSize, 0.0f, 1000.0f));
-    push_back(new NPCParameterBool("mSensor", &mActorCaps.mSensor));
-    push_back(new NPCParameterJoint("mSensorJoint", mActorCaps.mObjectName, &mActorCaps.mSensorJoint));
-    push_back(new NPCParameterRange< f32 >("mSensorSize", &mActorCaps.mSensorSize, 0.0f, 1000.0f));
-    push_back(new NPCParameterRange< s32 >("mSensorMax", &mActorCaps.mSensorMax, 0, 16));
-    push_back(new NPCParameterBool("mShadow", &mActorCaps.mShadow));
-    push_back(new NPCParameterRange< f32 >("mShadowSize", &mActorCaps.mShadowSize, 0.0f, 1000.0f));
-    push_back(new NPCParameterBool("mRailRider", &mActorCaps.mRailRider));
-    push_back(new NPCParameterBool("mSwitchDead", &mActorCaps.mSwitchDead));
-    push_back(new NPCParameterBool("mSwitchAppear", &mActorCaps.mSwitchAppear));
-    push_back(new NPCParameterBool("mPointer", &mActorCaps.mPointer));
-    push_back(new NPCParameterRange< f32 >("mPointerSize", &mActorCaps.mPointerSize, 0.0f, 1000.0f));
+    push_back(new NPCParameterValue< bool >("mModel", &mActorCaps.mModel));
+    push_back(new NPCParameterValue< bool >("mMakeActor", &mActorCaps.mMakeActor));
+    push_back(new NPCParameterValue< bool >("mHostIO", &mActorCaps.mHostIO));
+    push_back(new NPCParameterValue< bool >("mMessage", &mActorCaps.mMessage));
+    push_back(new NPCParameterV3f("mMessageOffset", &mActorCaps.mMessageOffset));
+    push_back(new NPCParameterValue< bool >("mInterpole", &mActorCaps.mInterpole));
+    push_back(new NPCParameterValue< bool >("mConnectTo", &mActorCaps.mConnectTo));
+    push_back(new NPCParameterValue< bool >("mLightCtrl", &mActorCaps.mLightCtrl));
+    push_back(new NPCParameterValue< bool >("mEffect", &mActorCaps.mEffect));
+    push_back(new NPCParameterValue< bool >("mSound", &mActorCaps.mSound));
+    push_back(new NPCParameterValue< s32 >("mSoundSize", &mActorCaps.mSoundSize));
+    push_back(new NPCParameterValue< bool >("mAttribute", &mActorCaps.mAttribute));
+    push_back(new NPCParameterValue< bool >("mPosition", &mActorCaps.mPosition));
+    push_back(new NPCParameterValue< bool >("mLodCtrl", &mActorCaps.mLodCtrl));
+    push_back(new NPCParameterValue< bool >("mNerve", &mActorCaps.mNerve));
+    push_back(new NPCParameterValue< bool >("mBinder", &mActorCaps.mBinder));
+    push_back(new NPCParameterValue< f32 >("mBinderSize", &mActorCaps.mBinderSize));
+    push_back(new NPCParameterValue< bool >("mSensor", &mActorCaps.mSensor));
+    push_back(new NPCParameterValue< const char* >("mSensorJoint", &mActorCaps.mSensorJoint));
+    push_back(new NPCParameterValue< f32 >("mSensorSize", &mActorCaps.mSensorSize));
+    push_back(new NPCParameterValue< s32 >("mSensorMax", &mActorCaps.mSensorMax));
+    push_back(new NPCParameterValue< bool >("mShadow", &mActorCaps.mShadow));
+    push_back(new NPCParameterValue< f32 >("mShadowSize", &mActorCaps.mShadowSize));
+    push_back(new NPCParameterValue< bool >("mRailRider", &mActorCaps.mRailRider));
+    push_back(new NPCParameterValue< bool >("mSwitchDead", &mActorCaps.mSwitchDead));
+    push_back(new NPCParameterValue< bool >("mSwitchAppear", &mActorCaps.mSwitchAppear));
+    push_back(new NPCParameterValue< bool >("mPointer", &mActorCaps.mPointer));
+    push_back(new NPCParameterValue< f32 >("mPointerSize", &mActorCaps.mPointerSize));
 }
 
 NPCItemParameterReader::NPCItemParameterReader(const char* pName) : NPCParameterReader(pName), mItem("") {
-    push_back(new NPCParameterEdit("mGoods0", &mItem.mGoods0, true));
-    push_back(new NPCParameterEdit("mGoods1", &mItem.mGoods1, true));
-    push_back(new NPCParameterJoint("mGoodsJoint0", pName, &mItem.mGoodsJoint0));
-    push_back(new NPCParameterJoint("mGoodsJoint1", pName, &mItem.mGoodsJoint1));
+    push_back(new NPCParameterValue< const char* >("mGoods0", &mItem.mGoods0));
+    push_back(new NPCParameterValue< const char* >("mGoods1", &mItem.mGoods1));
+    push_back(new NPCParameterValue< const char* >("mGoodsJoint0", &mItem.mGoodsJoint0));
+    push_back(new NPCParameterValue< const char* >("mGoodsJoint1", &mItem.mGoodsJoint1));
 }
 
 void NPCParameterBase::read(Table*, s32) {

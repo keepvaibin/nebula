@@ -37,7 +37,7 @@ public:
     virtual void calcVolumeMatrix(Pos3f*, const Pos3f&, const Vec3f&) const;
 
     f32 mRadius;
-    s32 _C;
+    s32 mOriginType;
 };
 
 class ClipAreaShapeCone : public ClipAreaShape {
@@ -46,7 +46,7 @@ public:
 
     virtual bool isInArea(const Vec3f&) const;
 
-    f32 _8;
-    f32 _C;
-    s32 _10;
+    f32 mRadius;
+    f32 mHeight;
+    s32 mOriginType;
 };

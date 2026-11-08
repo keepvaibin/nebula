@@ -9,15 +9,7 @@
 #include <JSystem/JGadget/hashcode.hpp>
 
 AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0), mHashDatas(nullptr), mNumSounds(0) {
-    mNumHandles = numHandles;
-    if (mNumHandles > 0) {
-        mHashDatas = new AudSoundObjHashData[numHandles];
-
-        for (s32 idx = 0; idx < mNumHandles; idx++) {
-            mHashDatas[idx].init();
-        }
-    }
+    : SoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
 }
 
 AudSoundObject::~AudSoundObject() {
@@ -87,7 +79,7 @@ SoundHandle* AudSoundObject::startSound(SoundID soundID) {
         return nullptr;
     }
 
-    if (AudWrap::getSystem()->_82B && soundID.getGroupID() != SE_HOME_BUTTON_MENU && soundID.getGroupID() != SE_SYSTEM) {
+    if (AudWrap::getSystem()->mIsTrigSeBlocked && soundID.getGroupID() != SE_HOME_BUTTON_MENU && soundID.getGroupID() != SE_SYSTEM) {
         return nullptr;
     }
 
@@ -111,7 +103,7 @@ SoundHandle* AudSoundObject::startLevelSound(SoundID soundID) {
         return nullptr;
     }
 
-    if (AudWrap::getSystem()->_82C && soundID.getGroupID() != SE_HOME_BUTTON_MENU && soundID.getGroupID() != SE_SYSTEM) {
+    if (AudWrap::getSystem()->mIsLevelSeBlocked && soundID.getGroupID() != SE_HOME_BUTTON_MENU && soundID.getGroupID() != SE_SYSTEM) {
         return nullptr;
     }
 
@@ -214,44 +206,7 @@ void AudSoundObject::clearMapCode() {
 }
 
 SoundID AudSoundObject::convertNameToLevelSEID(const char* pName) {
-    u32 hash = 0;
-    bool found = false;
-
-    for (s32 idx = 0; idx < mNumSounds; idx++) {
-        if (mHashDatas[idx].mName == pName) {
-            hash = mHashDatas[idx].mHash;
-            found = true;
-        }
-    }
-
-    if (!found) {
-        hash = JGadget::getHashCode(pName);
-
-        for (s32 idx = 0; idx < mNumSounds; idx++) {
-            mHashDatas[idx].mID = (u32)mHashDatas[idx].mID + 1;
-        }
-
-        if (mNumSounds < mNumHandles) {
-            AudSoundObjHashData* data = &mHashDatas[mNumSounds];
-            data->mName = pName;
-            data->mHash = hash;
-            data->mID = 0;
-            mNumSounds++;
-        } else {
-            s32 i = 0;
-            for (s32 idx = 0; idx < mNumSounds; idx++) {
-                if (mHashDatas[i].mID < mHashDatas[idx].mID) {
-                    i = idx;
-                }
-            }
-            AudSoundObjHashData* data = &mHashDatas[i];
-            data->mName = pName;
-            data->mHash = hash;
-            data->mID = 0;
-        }
-    }
-
-    return AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(pName, hash);
+    return AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(pName);
 }
 
 void AudSoundObject::limitVoiceOne(SoundID soundID) {
@@ -414,14 +369,4 @@ SoundID AudSoundObject::convertSoundIdFromSeVersion(SoundID soundID) const {
     }
 
     return soundID;
-}
-
-AudSoundObjHashData::AudSoundObjHashData() {
-    init();
-}
-
-void AudSoundObjHashData::init() {
-    mName = nullptr;
-    mHash = 0;
-    mID = 0;
 }

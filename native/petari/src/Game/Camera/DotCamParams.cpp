@@ -6,14 +6,11 @@
 
 template bool TableIter::getValue< s32 >(const char*, s32*) const;
 
-DotCamReaderInBin::DotCamReaderInBin(const void* pData) : mVersion(), _8(), mMapInfo() {
+DotCamReaderInBin::DotCamReaderInBin(const void* pData) : mVersion(), mMapInfo() {
     init(pData);
 }
 
 DotCamReaderInBin::~DotCamReaderInBin() {
-    if (_8 != nullptr) {
-        delete[] _8;
-    }
 }
 
 bool DotCamReaderInBin::hasMoreChunk() const {

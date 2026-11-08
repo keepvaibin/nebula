@@ -5,27 +5,18 @@
 #include "Game/Particle/ParticleCore.hpp"
 
 SpinPullParticleCallBack::SpinPullParticleCallBack() : MultiEmitterParticleCallBack() {
-    _4 = 1.0f;
 }
 
 void SpinPullParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
-    Vec3f baseParticlePosition;
-    baseParticlePosition.set(pParticle->mPosition);
-    Vec3f pullvel;
-    MR::calcPlayerSpinPullVelocity(&pullvel, baseParticlePosition);
-    Vec3f baseParticleOffsetPosition;
-    baseParticleOffsetPosition.set(pParticle->mOffsetPosition);
+    Vec3f pullVelocity;
+    MR::calcPlayerSpinPullVelocity(&pullVelocity, pParticle->mPosition);
 
     f32 time = pParticle->mTime;
-    pParticle->mOffsetPosition.set(baseParticleOffsetPosition + (((pullvel * _4) * time) * (time)));
+    pParticle->mOffsetPosition.set(pParticle->mOffsetPosition + ((pullVelocity * time) * time));
 }
 
 void MerameraParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* pParticle) {
-    Vec3f baseParticlePosition;
-    baseParticlePosition.set(pParticle->mPosition);
-    Vec3f pullvel;
-    MR::calcPlayerSpinPullVelocity(&pullvel, baseParticlePosition);
-    Vec3f baseParticleOffsetPosition;
-    baseParticleOffsetPosition.set(pParticle->mOffsetPosition);
-    pParticle->mOffsetPosition.set(baseParticleOffsetPosition + (pullvel * _4));
+    Vec3f pullVelocity;
+    MR::calcPlayerSpinPullVelocity(&pullVelocity, pParticle->mPosition);
+    pParticle->mOffsetPosition.set(pParticle->mOffsetPosition + pullVelocity);
 }

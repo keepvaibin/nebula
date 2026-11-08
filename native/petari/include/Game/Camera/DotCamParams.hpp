@@ -37,8 +37,6 @@ public:
     void init(const void*);
 
     u32 mVersion;
-    u8* _8;
     Table mMapInfo;
     TableIter mMapIter;
-    u8 _1C[0x10];
 };

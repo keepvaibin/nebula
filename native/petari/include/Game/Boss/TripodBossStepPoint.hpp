@@ -20,6 +20,6 @@ public:
     Vec3f mStepFront;
     s32 mLeg;
     s32 mSequencePriority;
-    s32 mArg3;
+    s32 mSequenceIndex;  // -1: in no sequence
     s32 mWaitTime;
 };

@@ -18,7 +18,7 @@ namespace NrvMapPartsAppearController {
 MapPartsAppearController::MapPartsAppearController(LiveActor* pActor) : MapPartsFunction(pActor, "出現制御") {
     mSignMotionType = 0;
     mPostureHolder = nullptr;
-    _20 = 0;
+    mIsAppeared = 0;
 }
 
 void MapPartsAppearController::init(const TableIter& rIter) {
@@ -73,19 +73,19 @@ bool MapPartsAppearController::receiveMsg(u32 msg) {
 }
 
 void MapPartsAppearController::startAppear() {
-    if (MR::isValidSwitchAppear(mHost) && !_20) {
+    if (MR::isValidSwitchAppear(mHost) && !mIsAppeared) {
         if (isNerve(GET_NERVE(MapPartsAppearController, HostTypeDisappear))) {
             setNerve(GET_NERVE(MapPartsAppearController, HostTypeWait));
         }
 
         appearHost();
-        _20 = 1;
+        mIsAppeared = 1;
     }
 }
 
 void MapPartsAppearController::startKill() {
     if (MR::isValidSwitchAppear(mHost)) {
-        _20 = 0;
+        mIsAppeared = 0;
         if (!MR::isDead(mHost)) {
             if (isNerve(GET_NERVE(MapPartsAppearController, HostTypeWait))) {
                 if (MR::hasMapPartsVanishSignMotion(mSignMotionType)) {

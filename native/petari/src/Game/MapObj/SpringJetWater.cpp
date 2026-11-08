@@ -32,7 +32,7 @@ void SpringJetWater::init(const TableIter& rIter) {
     mtx.getYDir(mUp);
     MR::normalize(&mUp);
     MR::getObjectName(&mObjName, rIter);
-    initEffectKeeper(0, mObjName, false);
+    initEffectKeeper(0, mObjName);
     initSound(4, false);
     initHitSensor(1);
 

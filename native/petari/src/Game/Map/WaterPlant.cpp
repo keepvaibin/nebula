@@ -1,9 +1,8 @@
+#include <nebula_game_api.h>
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Map/WaterPlant.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
@@ -11,10 +10,7 @@
 #include "Game/Render/Clip.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <nebula_game_api.h>
 #include <cstring>
-
-extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
@@ -50,12 +46,9 @@ namespace {
     static const f32 sSwingWidthMax = 20.0f;
     static const f32 sSwingWidthDown = 0.5f;
     static const f32 sSpinWaveDistanceMax = 1500.0f;
-    // static const s32 sSpinWaveTimeRate
     static const s32 sSpinWaveSwingTimeMax = 90;
     static const s32 sSpinWaveValidTime = 20;
     static const f32 sSpwinWaveSwingRate = 400.0f;
-    // static const f32 sSwinWaveWidth
-    // static const s32 sInterval
     static const f32 sDefaultHalfWidth = 20.0f;
     static const f32 sHeightRate0 = 0.5f;
     static const f32 sHeightRate1 = 0.8f;

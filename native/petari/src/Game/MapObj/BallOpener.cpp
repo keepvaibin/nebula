@@ -31,7 +31,7 @@ BallOpener::~BallOpener() {
 }
 
 BallOpener::BallOpener(const char* pName)
-    : LiveActor(pName), mBoundSensor(), _A0(0, 0, 0), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
+    : LiveActor(pName), mBoundSensor(), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);
 }
 
@@ -41,7 +41,7 @@ void BallOpener::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
     MR::addHitSensor(this, "body", ATYPE_JUMP_HOLE, 8, ::sHoleRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     initSound(4, false);
     MR::initCollisionParts(this, "BallOpener", getSensor(nullptr), nullptr);
     mCone->setPosition(mPosition);

@@ -2,8 +2,6 @@
 #include "Game/Ride/PlantStalk.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/PlantPoint.hpp"
 #include "Game/MapObj/PlantRailInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"

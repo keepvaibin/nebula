@@ -15,7 +15,7 @@ namespace NrvElectricPressureBullet {
     NEW_NERVE(ElectricPressureBulletNrvFly, ElectricPressureBullet, Fly);
 };  // namespace NrvElectricPressureBullet
 
-ElectricPressureBullet::ElectricPressureBullet(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f), _98(), _9C(0.0f) {
+ElectricPressureBullet::ElectricPressureBullet(const char* pName) : LiveActor(pName), mFront(0.0f, 0.0f, 0.0f), mSpeed(0.0f) {
 }
 
 void ElectricPressureBullet::init(const TableIter& rIter) {
@@ -24,7 +24,7 @@ void ElectricPressureBullet::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorEnemyAttack(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(100.0f, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(1, false);
     MR::initStarPointerTarget(this, 100.0f, Vec3f(0, 0, 0));
     MR::initShadowVolumeCylinder(this, 75.0f);
@@ -39,10 +39,9 @@ void ElectricPressureBullet::kill() {
 }
 
 void ElectricPressureBullet::shotElectricBullet(LiveActor* actor, const Pos3f& pos, const f32& value) {
-    _98 = actor;
-    _9C = value;
-    pos.getZDir(_8C);
-    mVelocity.scale(_9C, _8C);
+    mSpeed = value;
+    pos.getZDir(mFront);
+    mVelocity.scale(mSpeed, mFront);
     pos.getTrans(mPosition);
     mRotation.zero();
     makeActorAppeared();
@@ -68,8 +67,8 @@ void ElectricPressureBullet::exeFly() {
                 Vec3f v3;
                 v3.sub(*MR::getPlayerCenterPos(), mPosition);
                 MR::normalize(&v3);
-                MR::turnVecToVecDegree(&_8C, _8C, v3, 4.0f, Vec3f(0, 1, 0));
-                mVelocity.scale(_9C, _8C);
+                MR::turnVecToVecDegree(&mFront, mFront, v3, 4.0f, Vec3f(0, 1, 0));
+                mVelocity.scale(mSpeed, mFront);
             }
         }
     }

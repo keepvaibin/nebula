@@ -93,7 +93,7 @@ void MiniatureGalaxy::init(const TableIter& rIter) {
 
     initModelManagerWithAnm(isUseKoopaFaceModel() ? "MiniKoopaGalaxy" : mObjectName, nullptr, false);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::connectToSceneNoShadowedMapObj(this);
 
     MR::initStarPointerTarget(this, ::cPointingRadius, Vec3f(0.0f, 0.0f, 0.0f));

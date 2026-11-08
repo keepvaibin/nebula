@@ -49,13 +49,13 @@ void ButlerMap::init(const TableIter& rIter) {
     caps.mBinder = false;
     NPCActor::initialize(rIter, caps);
     setDefaults2();
-    _13C = "Spin";
+    mReactionAction = "Spin";
     const char* wait = "Wait";
     const char* talk = "Talk";
-    mParam._14 = wait;
-    mParam._18 = wait;
-    mParam._1C = talk;
-    mParam._20 = talk;
+    mParam.mWaitAction = wait;
+    mParam.mWaitTurnAction = wait;
+    mParam.mTalkAction = talk;
+    mParam.mTalkTurnAction = talk;
     MR::createSceneObj(SceneObj_GalaxyMapController);
     MR::tryRegisterDemoCast(this, rIter);
     MR::tryRegisterDemoCast(this, "バトラー報告", rIter);
@@ -115,13 +115,13 @@ void ButlerMap::resetStatus() {
 }
 
 void ButlerMap::control() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_BUTLER_TRAMPLED");
     }
 
     if (NPCActor::isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_BUTLER_POINT");
     }
 

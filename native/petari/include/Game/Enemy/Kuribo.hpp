@@ -85,10 +85,10 @@ public:
     WalkerStateBindStarPointer* mBindStarPointer;
     WalkerStateStagger* mStateStagger;
     WalkerStateChase* mStateChase;
-    Quat4f _A8;
-    Vec3f _B8;
-    bool _C4;
-    u8 _C5;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
+    bool mIsNoGravitySupport;
+    u8 mHasItem;
 };
 
 namespace MR {

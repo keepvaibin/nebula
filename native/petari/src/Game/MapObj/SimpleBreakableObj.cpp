@@ -21,8 +21,8 @@ namespace NrvSimpleBreakableObj {
 };  // namespace NrvSimpleBreakableObj
 
 SimpleBreakableObj::SimpleBreakableObj(const char* pName)
-    : SimpleBreakableObjBase(pName), mCameraInfo(), mBreakOffsetFrame(::sDefaultBreakOffsetFrame), _CC(-1), mSwitchDeadDelay(-1), mBreakFlags(1),
-      mItemType(-1), mItemNum(-1), mKinokoOneUp(), mPlayRiddleSound(), mBreakEnded(), _E6() {
+    : SimpleBreakableObjBase(pName), mCameraInfo(), mBreakOffsetFrame(::sDefaultBreakOffsetFrame), mSwitchDeadDelay(-1), mBreakFlags(1),
+      mItemType(-1), mItemNum(-1), mKinokoOneUp(), mPlayRiddleSound(), mBreakEnded() {
 }
 
 void SimpleBreakableObj::init(const TableIter& rIter) {

@@ -12,19 +12,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-namespace {
-    // static const s32 sStepWaveAttack = _;
-    // static const f32 sModelRadius = _;
-    // static const f32 sShadowRadius = _;
-};  // namespace
-
 namespace NrvKoopaShockWave {
     NEW_NERVE(KoopaShockWaveNrvWaveAttack, KoopaShockWave, WaveAttack);
 };  // namespace NrvKoopaShockWave
 
 KoopaShockWave::KoopaShockWave(Koopa* pKoopa)
     : LiveActor("球状衝撃波"), mKoopa(pKoopa), mAngle(), mUp(0.0f, 1.0f, 0.0f), mFront(0.0f, 0.0f, 1.0f), mPartsModel(), mShadow() {
-    _94.identity();
+    mKoopaMtx.identity();
     mBaseMtx.identity();
     mMtx.identity();
 }
@@ -112,7 +106,7 @@ void KoopaShockWave::exeWaveAttack() {
 
         vec2.add(KoopaFunction::getPlanetCenterPos(mKoopa));
 
-        MR::makeMtxUpFrontPos(&_94, -mKoopa->mGravity, mKoopa->mFront, vec2);
+        MR::makeMtxUpFrontPos(&mKoopaMtx, -mKoopa->mGravity, mKoopa->mFront, vec2);
 
         MR::startSound(mKoopa, "SE_BM_KOOPA_SWAVE_SHOOT");
 
@@ -152,11 +146,11 @@ void KoopaShockWave::exeWaveAttack() {
 
 void KoopaShockWave::updateHitSensor(HitSensor* pSensor) {
     Vec3f playerPos = *MR::getPlayerPos();
-    MR::calcLocalVec(&playerPos, _94);
+    MR::calcLocalVec(&playerPos, mKoopaMtx);
 
     f32 degree = MR::toDegree(MR::atan2(-playerPos.z, playerPos.x)) + 180.0f;
 
-    Pos3f matrix = _94;
+    Pos3f matrix = mKoopaMtx;
     matrix.setTrans(KoopaFunction::getPlanetCenterPos(mKoopa));
 
     Vec3f rotateVec;

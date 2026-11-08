@@ -7,11 +7,11 @@
 
 MapObjActorInitInfo::MapObjActorInitInfo()
     : mSetDefaultPosition(), mConnectToScene(), mInitBinder(), mHasEffect(), mHasSensors(), mHasShadows(), mCalcGravity(), mUseProjectMapMtx(),
-      mInitFur(), mHasRailMover(), mHasRotator(), mHasRailRotator(), _C(), _D(), mUseRailPosture(), mUseBaseMtxFollowTarget(), mIsAffectedByScale(),
-      mUseMirrorReflection(), mModelName(), _1C(), mSensorRadius(), mSensorPosition(gZeroVec), mHasHitSensorCB(), mBinderRadius(),
-      mBinderCenterY(), mEffectName(), mSound(), mSoundPos(), _48(), mNerve(), mGroupClipping(), mClippingRadius(), mFarClipping(), _5C(-1),
-      mColorChangeArg(-1), mTextureChangeArg(-1), mIsAppearRiddleSE(), mSeesaw1AxisRotatorName(), mSeesaw1AxisRotatorRadius(), _74(), mShadowName(),
-      mShadowLength(-1.0f), _80(), mDummyChangeTexture(), _8C(), mNoUseLOD() {
+      mInitFur(), mHasRailMover(), mHasRotator(), mHasRailRotator(), mHasSeesaw1AxisRotator(), mHasSeesaw2AxisRotator(), mUseRailPosture(), mUseBaseMtxFollowTarget(), mIsAffectedByScale(),
+      mUseMirrorReflection(), mModelName(), mSensorType(), mSensorRadius(), mSensorPosition(gZeroVec), mHasHitSensorCB(), mBinderRadius(),
+      mBinderCenterY(), mEffectName(), mSound(), mSoundPos(), mIsProjmapEveryFrame(), mNerve(), mGroupClipping(), mClippingRadius(), mFarClipping(), mLightType(-1),
+      mColorChangeArg(-1), mTextureChangeArg(-1), mIsAppearRiddleSE(), mSeesaw1AxisRotatorName(), mSeesaw1AxisRotatorRadius(), mIsMirrorFromModel(), mShadowName(),
+      mShadowLength(-1.0f), mBreakModelName(), mDummyChangeTexture(), mInitLightCtrl(), mNoUseLOD() {
 }
 
 void MapObjActorInitInfo::setupDefaultPos() {
@@ -59,7 +59,7 @@ void MapObjActorInitInfo::setupHitSensorCallBack() {
 }
 
 void MapObjActorInitInfo::setupHitSensorParam(u16 a1, f32 radius, const Vec3f& rPosition) {
-    _1C = a1;
+    mSensorType = a1;
     mSensorRadius = radius;
     mSensorPosition.set(rPosition);
 }
@@ -87,7 +87,7 @@ void MapObjActorInitInfo::setupFarClipping(f32 distance = -1.0f) {
 
 void MapObjActorInitInfo::setupProjmapMtx(bool b1) {
     mUseProjectMapMtx = true;
-    _48 = b1;
+    mIsProjmapEveryFrame = b1;
 }
 
 void MapObjActorInitInfo::setupRailMover() {
@@ -103,7 +103,7 @@ void MapObjActorInitInfo::setupRailRotator() {
 }
 
 void MapObjActorInitInfo::setupSeesaw1AxisRotator(const char* pName, f32 radius) {
-    _C = true;
+    mHasSeesaw1AxisRotator = true;
     mSeesaw1AxisRotatorName = pName;
     mSeesaw1AxisRotatorRadius = radius;
 }
@@ -125,7 +125,7 @@ void MapObjActorInitInfo::setupSeAppear() {
 }
 
 void MapObjActorInitInfo::setupMirrorReflection(bool b1) {
-    _74 = b1;
+    mIsMirrorFromModel = b1;
     mUseMirrorReflection = true;
 }
 
@@ -180,12 +180,12 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
     }
 
     if (MR::isEqualString("SandUpDownTowerBreakableWallA", pName) || MR::isEqualString("SandUpDownTowerBreakableWallB", pName)) {
-        pInitInfo->_80 = "SandUpDownTowerBreakableWallBreak";
+        pInitInfo->mBreakModelName = "SandUpDownTowerBreakableWallBreak";
     }
 
     if (MR::isEqualString("KoopaStatue", pName)) {
-        pInitInfo->_8C = true;
-        pInitInfo->_5C = 2;
+        pInitInfo->mInitLightCtrl = true;
+        pInitInfo->mLightType = 2;
     }
 
     if (MR::isEqualString("DangerSignBoard", pName)) {
@@ -219,7 +219,7 @@ void MapObjActorUtil::setupInitInfoSeesaw(MapObjActorInitInfo* pInitInfo, const 
     if (arg == 0) {
         pInitInfo->setupSeesaw1AxisRotator(pName, radius);
     } else {
-        pInitInfo->_D = true;
+        pInitInfo->mHasSeesaw2AxisRotator = true;
         pInitInfo->mSeesaw1AxisRotatorName = pName;
         pInitInfo->mSeesaw1AxisRotatorRadius = radius;
     }

@@ -42,7 +42,7 @@ namespace {
 };  // namespace
 
 Mogucchi::Mogucchi(const char* pName)
-    : LiveActor(pName), mHill(), mHole(), mGrounded(), mScatterPropulsionSpeed(), mScatterNormal(0.0f, 0.0f, 1.0f), _E4(), mStrollSpeed(),
+    : LiveActor(pName), mHill(), mHole(), mGrounded(), mScatterPropulsionSpeed(), mScatterNormal(0.0f, 0.0f, 1.0f), mStrollSpeed(),
       mMaxStrollSpeed(5.0f), mIsStoppedByP2() {
     mNewHolePos.identity();
 }
@@ -56,7 +56,7 @@ void Mogucchi::init(const TableIter& rIter) {
     initModelManagerWithAnm("Mogucchi", nullptr, false);
     MR::connectToSceneEnemy(this);
     initSensor();
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffect(this, "PointerTouchManual");
     MR::setEffectHostMtx(this, "PointerTouchManual", MR::getJointMtx(this, "Nose"));
     initSound(4, false);
@@ -127,7 +127,6 @@ void Mogucchi::exeStroll() {
         MR::startBtp(this, "EyeOpen");
         MR::startBck(mHole, "Walk");
         mHill->start();
-        _E4 = 0.0f;
         mStrollSpeed = mMaxStrollSpeed;
         mIsStoppedByP2 = false;
     }
@@ -279,12 +278,12 @@ void Mogucchi::createMogucchiHill() {
     mHill = new MogucchiHill(this, railLength, "モグッチ塚");
     mHill->initWithoutIter();
     if (railLength > 5) {
-        mHill->setAppearNum(mHill->_94 - 5);
+        mHill->setAppearNum(mHill->mPieceNum - 5);
     }
 
     MogucchiHill* hill = mHill;
-    hill->_D0 = 80.0f;
-    hill->_D4 = 100.0f;
+    hill->mAppearDistance = 80.0f;
+    hill->mAppearDistanceMax = 100.0f;
 }
 
 void Mogucchi::updateStrollSpeed() {
@@ -303,12 +302,12 @@ void Mogucchi::reflectStarPointer2P() {
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         if (!mIsStoppedByP2) {
             mIsStoppedByP2 = true;
-            MR::startDPDHitSound();
+            MR::startPointerHitSound();
             MR::emitEffectWithScale(this, "PointerTouchManual", 1.4f, -1);
         }
 
         mStrollSpeed = 0.0f;
-        MR::startDPDFreezeLevelSound(this);
+        MR::startPointerFreezeLevelSound(this);
         return;
     }
 

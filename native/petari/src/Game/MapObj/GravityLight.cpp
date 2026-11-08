@@ -28,7 +28,7 @@ namespace NrvGravityLight {
 };  // namespace NrvGravityLight
 
 GravityLight::GravityLight(const char* pName)
-    : LiveActor(pName), mLightCylinder(), mMapPartsRailMover(), mMapPartsRotator(), mRadius(2500.0f), mCenter(0.0f, 0.0f, 0.0f), _D8() {
+    : LiveActor(pName), mLightCylinder(), mMapPartsRailMover(), mMapPartsRotator(), mRadius(2500.0f), mCenter(0.0f, 0.0f, 0.0f) {
     mBaseMtx.identity();
 }
 
@@ -107,7 +107,7 @@ void GravityLight::control() {
         mMapPartsRailMover->movement();
 
         Vec3f& rPosition = mPosition;
-        rPosition.set(mMapPartsRailMover->_28);
+        rPosition.set(mMapPartsRailMover->mStartPos);
 
         MR::makeMtxTR(mBaseMtx, rPosition, mRotation);
     }

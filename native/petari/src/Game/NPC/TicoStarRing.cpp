@@ -11,7 +11,7 @@ namespace NrvTicoStarRing {
     NEW_NERVE(TicoStarRingNrvWait, TicoStarRing, Wait);
 };  // namespace NrvTicoStarRing
 
-TicoStarRing::TicoStarRing(const char* pName) : Tico(pName), mGalaxyName(), _194(), mTicoGalaxy() {
+TicoStarRing::TicoStarRing(const char* pName) : Tico(pName), mGalaxyName(), mAppearActor(), mTicoGalaxy() {
 }
 
 void TicoStarRing::init(const TableIter& rIter) {
@@ -57,8 +57,8 @@ void TicoStarRing::init(const TableIter& rIter) {
 void TicoStarRing::kill() {
     NPCActor::kill();
 
-    if (_194 != nullptr) {
-        _194->appear();
+    if (mAppearActor != nullptr) {
+        mAppearActor->appear();
     }
 
     if (mTicoGalaxy != nullptr) {
@@ -70,7 +70,7 @@ void TicoStarRing::kill() {
 
 void TicoStarRing::initialize(LiveActor* pTicoGalaxy, LiveActor* a2, const char* pGalaxyName) {
     mTicoGalaxy = pTicoGalaxy;
-    _194 = a2;
+    mAppearActor = a2;
     mGalaxyName = pGalaxyName;
     setBaseMtx(pTicoGalaxy->getBaseMtx());
     mPosition.set(a2 != nullptr ? a2->mPosition : pTicoGalaxy->mPosition);

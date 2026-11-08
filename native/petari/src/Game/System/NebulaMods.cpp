@@ -51,7 +51,6 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
@@ -249,7 +248,7 @@ namespace {
             initSound(4, false);
             // Its effects are the AutoEffectList rows of its own name.
             if (mClass->archive != nullptr) {
-                initEffectKeeper(0, mClass->name, false);
+                initEffectKeeper(0, mClass->name);
             }
             if (mClass->start != nullptr) {
                 mClass->start(asHandle(this), mClass->user);

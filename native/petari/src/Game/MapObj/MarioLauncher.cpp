@@ -33,27 +33,20 @@ namespace {
     static const f32 sGravityScale = 0.8f;
     static const f32 sGravityRatio = 0.95f;
     static const f32 sShellRadius = 80.0f;
-    // static const f32 sShellBinder =
     static const f32 sShellOffset = 180.0f;
     static const f32 sGravityRoll = 0.01f;
     static const f32 sLandingSpeedRatio = 0.4f;
     static const s32 sLoopStart = 65;
     static const s32 sDieStart = 300;
     static const s32 sDispLaunch = 90;
-    static const f32 sDPDCameraYRot = 0.3f;
-    static const f32 sDPDCameraXRot = 0.3f;
-    static const f32 sDPDCameraElevation = 0.62f;
+    static const f32 sPointerCameraYRot = 0.3f;
+    static const f32 sPointerCameraXRot = 0.3f;
+    static const f32 sPointerCameraElevation = 0.62f;
     static const s32 sKillFrame = 360;
     static const s32 sStartActiveFrame = 10;
     static const s32 sInterpolateTest1 = 15;
-    // static const f32 sLaunchCameraX = 0.0f;
-    // static const f32 sLaunchCameraY =
-    // static const f32 sLaunchCameraZ =
-    // static const f32 sLaunchTargetY =
-    // static const f32 sLaunchTargetZ =
     static const f32 sSensorRadius = 80.0f;
     static const f32 sSensorOffsetY = 20.0f;
-    // static const ___ sRequestGuidance =
     static const s32 sPrepFrame = 26;
     static const s32 sRejectFrame = 20;
     static const s32 sWaitFrame = 30;
@@ -65,7 +58,6 @@ namespace {
     static const f32 sRejectJumpZ = 10.0f;
     static const s32 sInvalidCollideFrame = 0;
     static const s32 sFrontVecFrame = 1;
-    // static const f32 sLaunchTargetX =
     static const f32 sReboundScale0 = 0.0f;
     static const f32 sReboundScale1 = 0.0f;
     static const f32 sReboundScale2 = 0.0f;
@@ -112,7 +104,7 @@ void MarioLauncher::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "MarioLauncher", getSensor("Bind"), nullptr);
     MR::validateCollisionParts(this);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     MR::initActorCameraProgrammable(this);
@@ -461,9 +453,9 @@ bool MarioLauncher::doAim() {
     mPlayerMtx.set(mCameraTargetMtx.mMatrix);
 
     if (mLauncherType == LauncherType_Up) {
-        MR::setLauncherCameraAngle(::sDPDCameraYRot, ::sDPDCameraXRot, MR::pi() / 2.0f, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot, MR::pi() / 2.0f, -1.0f);
     } else {
-        MR::setLauncherCameraAngle(::sDPDCameraYRot, ::sDPDCameraXRot + 0.5f, ::sDPDCameraElevation, -1.0f);
+        MR::setLauncherCameraAngle(::sPointerCameraYRot, ::sPointerCameraXRot + 0.5f, ::sPointerCameraElevation, -1.0f);
     }
 
     if (MR::isValidSwitchB(this)) {

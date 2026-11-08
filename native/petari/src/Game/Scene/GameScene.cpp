@@ -42,7 +42,6 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Map/LightFunction.hpp"
-#include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/SleepControllerHolder.hpp"
 #include "Game/MapObj/StarPieceDirector.hpp"
 #include "Game/NPC/EventDirector.hpp"
@@ -68,9 +67,7 @@
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/LightUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #if defined(NEBULA_DEV)
 #include "Game/Boss/Koopa.hpp"
@@ -90,7 +87,6 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
@@ -127,7 +123,7 @@ namespace {
 }  // namespace
 
 GameScene::GameScene()
-    : Scene("GameScene"), _14(0), mScenarioCamera(nullptr), mPauseCtrl(nullptr), mPauseSeq(nullptr), mStageClearSeq(nullptr), mDraw3D(true), _29(1) {
+    : Scene("GameScene"), mScenarioCamera(nullptr), mPauseCtrl(nullptr), mPauseSeq(nullptr), mStageClearSeq(nullptr), mDraw3D(true) {
 }
 
 GameScene::~GameScene() {
@@ -150,7 +146,6 @@ void GameScene::init() {
     MR::createSceneObj(SceneObj_AudCameraWatcher);
     MR::createSceneObj(SceneObj_AudEffectDirector);
     MR::createSceneObj(SceneObj_AudBgmConductor);
-    MR::createSceneObj(SceneObj_ResourceShare);
     MR::createSceneObj(SceneObj_EventSequencer);
     MR::createSceneObj(SceneObj_ScenePlayingResult);
     MR::createSceneObj(SceneObj_FurDrawManager);
@@ -644,10 +639,10 @@ void GameScene::startStagePlayFirst() {
 void GameScene::startStagePlayRetry() {
     MR::openWipeCircle();
 
-    if (MR::isEqualStageName("SurfingLv1Galaxy") && MR::getPlayerRestartIdInfo()->_0 == 1) {
+    if (MR::isEqualStageName("SurfingLv1Galaxy") && MR::getPlayerRestartIdInfo()->mId == 1) {
         MR::stopSubBGM(0);
         MR::stopStageBGM(0);
-    } else if (MR::isEqualStageName("SurfingLv2Galaxy") && MR::getPlayerRestartIdInfo()->_0 == 1) {
+    } else if (MR::isEqualStageName("SurfingLv2Galaxy") && MR::getPlayerRestartIdInfo()->mId == 1) {
         MR::stopSubBGM(0);
         MR::stopStageBGM(0);
     } else {

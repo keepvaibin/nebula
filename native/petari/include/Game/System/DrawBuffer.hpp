@@ -38,7 +38,7 @@ public:
 
     Material* mMaterial;
     MaterialEntry* mMatPacket;
-    s32 _8;
+    s32 mNumShapes;
     s32 mMaxPackets;
     s32 mNumPackets;
     PacketInfo** mPackets;
@@ -67,9 +67,8 @@ public:
 
     ModelData* mModelData;
     Model* mModel;
-    u32 _8;
+    u32 mMaxActors;
     s32 mNumActors;
-    u32 _10;
     s32 mNumMaterials;
     s32* mMaterialNos;
     s32 mNumShapeDrawers;

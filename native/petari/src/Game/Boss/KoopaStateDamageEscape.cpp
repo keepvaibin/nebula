@@ -25,8 +25,6 @@ namespace {
     static MR::ActorMoveParam sDamageTailRunFinalParam = {13.0f, 3.0f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunEndParam = {0.0f, 1.0f, 0.98f, 0.0f};
     static const f32 sEscapeStartJumpSpeed = 80.0f;
-    // static const s32 sEscapeStartStepToValid = _;
-    // static const s32 sEscapeStopSceneStep = _;
     static const s32 sEscapeStepVs1Lv1 = 900;
     static const s32 sEscapeStep = 600;
     static const f32 sEscapeRunWallJumpSpeed = 15.0f;
@@ -37,19 +35,10 @@ namespace {
     static const f32 sDamageTailWallJumpSpeed = 15.0f;
     static const s32 sDamageTailRunEndRecoverStep = 105;
     static const f32 sDamageTailTurnDegree = 0.1f;
-    // static const s32 sDamageTailStopSceneStep = _;
-    // static const s32 sDamageTailStepToInvalid = _;
-    // static const s32 sDownStep = _;
-    // static const s32 sDownStepVs3Angry = _;
     static const s32 sDownStopSceneStep = 5;
-    // static const f32 sDownFrontSpeed = _;
     static const f32 sDownFlyUpSpeed = 40.0f;
     static const f32 sDownFlyUpSpeedLv3 = 60.0f;
     static const f32 sDownGravity = 2.0f;
-    // static const f32 sJumpFrontSpeed = _;
-    // static const f32 sJumpFlyUpSpeed = _;
-    // static const f32 sJumpGravity = _;
-    // static const s32 sLandStepVs3Lv3 = _;
 };  // namespace
 
 namespace NrvKoopaStateDamageEscape {
@@ -71,7 +60,7 @@ namespace NrvKoopaStateDamageEscape {
 };  // namespace NrvKoopaStateDamageEscape
 
 KoopaStateDamageEscape::KoopaStateDamageEscape(Koopa* pKoopa)
-    : ActorStateBase< Koopa >("State[逃走]", pKoopa), mEscapeTime(-1), mMaxEscapeTime(-1), _18(-1), mIsTurnClockwise(), mIsLastHit(),
+    : ActorStateBase< Koopa >("State[逃走]", pKoopa), mEscapeTime(-1), mMaxEscapeTime(-1), mIsTurnClockwise(), mIsLastHit(),
       mEscapeRunParam(&::sEscapeRunParamLv1), mDamageTailRunParam(&::sDamageTailRunParam), mMaxRunFrames(::sDamageTailStep),
       mRotateVelocity(::sDamageTailRunStartSpeed), mJumpAwayVelocity(::sDownFlyUpSpeed) {
 }

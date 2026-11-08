@@ -15,5 +15,5 @@ public:
     void exeWait();
 
     TalkMessageCtrl* mTalkMessage;
-    bool _14;
+    bool mIsTalkForce;
 };

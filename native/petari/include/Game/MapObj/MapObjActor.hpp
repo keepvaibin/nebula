@@ -58,9 +58,9 @@ public:
     MapPartsRailRotator* mRailRotator;
     MapPartsRailPosture* mRailPosture;
     MapPartsRailGuideDrawer* mRailGuideDrawer;
-    u8 _B4;
-    u8 _B5;
-    u8 _B6;
+    u8 mIsProjmapEveryFrame;
+    u8 mIsMirrorFromModel;
+    u8 mPlayRiddleSE;
     Nerve* mWaitNrv;
     Nerve* mMoveNrv;
     Nerve* mDoneNrv;

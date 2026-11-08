@@ -9,5 +9,5 @@ public:
     virtual ~AstroOverlookObj();
     virtual void control();
 
-    u8 _8C;
+    u8 mIsLayoutHidden;
 };

@@ -76,7 +76,6 @@
 "Pukupuku",
 "RockCreator",
 "RosettaReading",
-"SkeletalFishBabyRail",
 "SkeletalFishBossRail",
 "SmallStone",
 "Snakehead",

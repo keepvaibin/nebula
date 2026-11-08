@@ -49,7 +49,6 @@ public:
     bool mIsStill;
     bool mIsCut;
     bool mIsFree;
-    s16 _4;
     s32 mNumHangingPoints;
     s32 mStopTime;
     s32 mTouchTimeout;

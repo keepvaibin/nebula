@@ -1,7 +1,6 @@
 #include "Game/MapObj/ElectricRail.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
@@ -69,12 +68,12 @@ void ElectricRailPoint::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-ElectricRailSeparator::ElectricRailSeparator() : _0(gZeroVec), mSide(gZeroVec), mUp(gZeroVec), mFront(gZeroVec), _30(gZeroVec) {
+ElectricRailSeparator::ElectricRailSeparator() : mPos(gZeroVec), mSide(gZeroVec), mUp(gZeroVec), mFront(gZeroVec), mOffsetDir(gZeroVec) {
 }
 
 void ElectricRailSeparator::setup(const Vec3f& rVec1, const Vec3f& rVec2, const Vec3f& rVec3) {
-    _30.set(rVec3);
-    _0.set(rVec1);
+    mOffsetDir.set(rVec3);
+    mPos.set(rVec1);
     mFront.set(rVec2);
 
     mFront.negate();
@@ -118,9 +117,9 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 
         vec3C.scale(20.0f, separator->mSide);
 
-        vec48.scale(300.0f, separator->_30);
+        vec48.scale(300.0f, separator->mOffsetDir);
 
-        vec24.sub(separator->_0, vec3C);
+        vec24.sub(separator->mPos, vec3C);
 
         vec30.add(vec24, vec48);
 
@@ -133,9 +132,9 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 
         vec3C.scale(20.0f, separator->mSide);
 
-        vec48.scale(300.0f, separator->_30);
+        vec48.scale(300.0f, separator->mOffsetDir);
 
-        vec24.add(separator->_0, vec3C);
+        vec24.add(separator->mPos, vec3C);
 
         vec30.add(vec24, vec48);
 
@@ -145,9 +144,9 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 
     vec3C.scale(20.0f, pSeparator->mSide);
 
-    vec48.scale(300.0f, pSeparator->_30);
+    vec48.scale(300.0f, pSeparator->mOffsetDir);
 
-    vec24.sub(pSeparator->_0, vec3C);
+    vec24.sub(pSeparator->mPos, vec3C);
 
     vec30.add(vec24, vec48);
 
@@ -161,9 +160,9 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 
         vec3C.scale(20.0f, separator->mSide);
 
-        vec24.add(separator->_0, vec3C);
+        vec24.add(separator->mPos, vec3C);
 
-        vec30.sub(separator->_0, vec3C);
+        vec30.sub(separator->mPos, vec3C);
 
         *vtx++ = {vec24.x, vec24.y, vec24.z};
         *vtx++ = {vec30.x, vec30.y, vec30.z};
@@ -176,12 +175,12 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 
         vec3C.scale(20.0f, separator->mSide);
 
-        vec48.scale(300.0f, separator->_30);
+        vec48.scale(300.0f, separator->mOffsetDir);
 
-        vec24.add(separator->_0, vec3C);
+        vec24.add(separator->mPos, vec3C);
         vec24.add(vec24, vec48);
 
-        vec30.sub(separator->_0, vec3C);
+        vec30.sub(separator->mPos, vec3C);
         vec30.add(vec30, vec48);
 
         *vtx++ = {vec24.x, vec24.y, vec24.z};
@@ -190,7 +189,7 @@ void ElectricRailShadowDrawer::writeShadowVolumeShape(ElectricRailSeparator* pSe
 }
 
 ElectricRail::ElectricRail(const char* name)
-    : ElectricRailDrawn(name), mPoints(), mPointCount(), _94(), mSeparators(), mSeparatorCount(), mRailHeight(1),
+    : ElectricRailDrawn(name), mPoints(), mPointCount(), mSensorPositions(), mSeparators(), mSeparatorCount(), mRailHeight(1),
       mEaseIn(30.0f), mShadowDrawer(), mIsCalcGravity() {
 }
 
@@ -224,7 +223,7 @@ void ElectricRail::init(const TableIter& rIter) {
     initShadow(rIter);
     initSound(4, 1);
 
-    mSoundObject->setTrans(_94);
+    mSoundObject->setTrans(mSensorPositions);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         for (s32 i = 0; i < mPointCount; i++) {
@@ -322,10 +321,10 @@ void ElectricRail::initMapToolInfo(const TableIter& rIter) {
 void ElectricRail::initSensor() {
     initHitSensor(mRailHeight);
 
-    _94 = new Vec3f[mRailHeight];
+    mSensorPositions = new Vec3f[mRailHeight];
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        MR::addHitSensorPosMapObj(this, ::cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &_94[i], Vec3f(0.0f, 0.0f, 0.0f));
+        MR::addHitSensorPosMapObj(this, ::cSensorNameTable[i], 8, ElectricRailFunction::getHitSensorRadius(), &mSensorPositions[i], Vec3f(0.0f, 0.0f, 0.0f));
     }
 
     updateHitSensorPos();
@@ -452,7 +451,7 @@ void ElectricRail::drawPlane(f32 a1, f32 a2, f32 a3, f32 a4) {
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
-            Vec3f v21(s->_0);
+            Vec3f v21(s->mPos);
 
             f32 v15 = 0.5f * j;
 
@@ -478,7 +477,7 @@ void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 a1, f32 a2, f32 a3, f32 a4)
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
-            Vec3f v21(s->_0);
+            Vec3f v21(s->mPos);
             f32 v15 = 0.5f * j;
 
             pUp = &s->mUp;
@@ -542,18 +541,18 @@ void ElectricRail::initShadow(const TableIter& rIter) {
 }
 
 void ElectricRail::updateHitSensorPos() {
-    MR::calcNearestRailPos(_94, this, *MR::getPlayerCenterPos());
+    MR::calcNearestRailPos(mSensorPositions, this, *MR::getPlayerCenterPos());
 
     if (mRailHeight <= 1) {
         return;
     }
 
     Vec3f gravity;
-    calcGravity(&gravity, *_94);
+    calcGravity(&gravity, *mSensorPositions);
     gravity.scale(-100.0);
 
     for (s32 i = 1; i < mRailHeight; i++) {
-        _94[i].add(_94[i - 1], gravity);
+        mSensorPositions[i].add(mSensorPositions[i - 1], gravity);
     }
 }
 

@@ -5,7 +5,7 @@
 
 #include <cstring>
 
-CubeCameraArea::CubeCameraArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(), mZoneID() {
+CubeCameraArea::CubeCameraArea(int formType, const char* pName) : AreaObj(formType, pName), mCategoryMask(), mZoneID() {
 }
 
 s32 CubeCameraArea::sCubeCategory = 0;
@@ -31,15 +31,15 @@ void CubeCameraArea::init(const TableIter& rIter) {
         mZoneID = 0;
     }
 
-    _3C = getCategoryArg();
-    if (_3C < 0) {
-        _3C = 0;
+    mCategoryMask = getCategoryArg();
+    if (mCategoryMask < 0) {
+        mCategoryMask = 0;
     }
 
-    u32 temp = 1 << (_3C & 0xF);
-    _3C = _3C >> 4;
-    if (_3C == 0) {
-        _3C |= temp;
+    u32 temp = 1 << (mCategoryMask & 0xF);
+    mCategoryMask = mCategoryMask >> 4;
+    if (mCategoryMask == 0) {
+        mCategoryMask |= temp;
     }
 
     MR::connectToSceneAreaObj(this);
@@ -64,7 +64,7 @@ u16 CubeCameraArea::getCameraID() const {
 }
 
 bool CubeCameraArea::isInVolume(const Vec3f& rVec) const {
-    return (_3C & sCubeCategory) != 0 && AreaObj::isInVolume(rVec);
+    return (mCategoryMask & sCubeCategory) != 0 && AreaObj::isInVolume(rVec);
 }
 
 void CubeCameraArea::setCurrentCategory(s32 category) {

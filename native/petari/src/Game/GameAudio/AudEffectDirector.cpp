@@ -10,7 +10,7 @@ struct AudEffectData {
     f32 mFxSend;
     s32 mCutoff;
     f32 mVolume;
-    u32 _C;
+    u32 mFadeFrames;
 };
 
 namespace {
@@ -19,7 +19,7 @@ namespace {
     };
 };  // namespace
 
-AudEffectDirector::AudEffectDirector() : NameObj("オーディオエフェクトディレクター"), _C(0), _10(0), _14(0) {
+AudEffectDirector::AudEffectDirector() : NameObj("オーディオエフェクトディレクター"), mEffectType(0), mAppliedType(0), mPriority(0) {
 }
 
 void AudEffectDirector::init(const TableIter& rIter) {
@@ -27,13 +27,13 @@ void AudEffectDirector::init(const TableIter& rIter) {
 }
 
 void AudEffectDirector::movement() {
-    if (_10 != _C) {
-        setAudioEffectParam(_C);
-        _10 = _C;
+    if (mAppliedType != mEffectType) {
+        setAudioEffectParam(mEffectType);
+        mAppliedType = mEffectType;
     }
 
-    playEffectSound(_C);
-    _14 = 0;
+    playEffectSound(mEffectType);
+    mPriority = 0;
 }
 
 void AudEffectDirector::setEffectType(s32 a1, s32 a2) {
@@ -45,9 +45,9 @@ void AudEffectDirector::setEffectType(s32 a1, s32 a2) {
         a2 = 127;
     }
 
-    if (a2 >= _14) {
-        _C = a1;
-        _14 = a2;
+    if (a2 >= mPriority) {
+        mEffectType = a1;
+        mPriority = a2;
     }
 }
 
@@ -58,7 +58,7 @@ void AudEffectDirector::setAudioEffectParam(s32 a1) {
     pAudEffector->setCutoff(::cAudEffectDataList[a1].mCutoff);
 
     if (!MR::isStageStateScenarioOpeningCamera()) {
-        MR::moveVolumeStageBGM(::cAudEffectDataList[a1].mVolume, ::cAudEffectDataList[a1]._C);
+        MR::moveVolumeStageBGM(::cAudEffectDataList[a1].mVolume, ::cAudEffectDataList[a1].mFadeFrames);
     }
 
     switch (a1) {

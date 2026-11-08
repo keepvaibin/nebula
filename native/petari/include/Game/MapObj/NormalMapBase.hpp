@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Color.hpp"
 
-class BtkPlayer;
 class Material;
 class Model;
 class Mesh;
@@ -20,15 +19,12 @@ public:
     virtual void drawSetting(MtxPtr) const;
     virtual void drawMaterialSetting(Material*) const;
     virtual void setStageForObject() const;
-    virtual void setStageForObject_Material() const;
 
     void setup(const char*);
     void initNormalMap();
     void setupLighting();
     void setupTexture();
 
-    void updateBtkMtx();
-    void loadTexMtxBtk(Material*) const;
     void updateLightMtx(MtxPtr) const;
     bool isNormalMapMaterial(const char*) const;
     void standardDraw(Model*) const;
@@ -43,26 +39,16 @@ public:
     void loadDiffuseGradTex(u32 slot) const;
     void loadNormalTex(const JUTTexture*, u32 slot) const;
 
-    u32 _8C;
-    JUTTexture* _90;
     JUTTexture* mNormalTex;
     JUTTexture* mTextures[16];
-    u32 _D8;
     void* mImagePtr;
-    u32 _E0;
     s32 mGradTexMode;
-    u32 _E8;
-    s32 _EC;
-    u32 _F0;
-    Mtx _F4;
+    Mtx mDrawMtx;
     u8 mBackLightMode;
-    u8 _125;
-    u8 _126;
-    u8 _127;
     Color10 mStageColor0;
     Color10 mStageColor1;
-    u16 _138;
-    u16 _13A;
+    u16 mDrawFlags;
+    u16 mTexFlags;
     u8 mLightAMode;
     u8 mLightBMode;
     u16 mHardLightColorMask;
@@ -75,16 +61,4 @@ public:
     u16 mUseModelStageColor;
     u8 mLightingHighLevel;
     u8 mLightingLowLevel;
-    BtkPlayer* mBtkPlayer;
-    u8 _150;
-    u8 _151;
-    u16 mBtkMtxCount;
-    u16 mBtkMtxIndices[24];
-    Mtx _184[0x10];
-    u8 _484[0x34];
-    JUTTexture* _4B8;
-    int mHeight;
-    int mWidth;
-    u8 _4C4;
-    u8 _4C5;
 };

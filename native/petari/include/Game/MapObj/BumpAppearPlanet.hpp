@@ -18,6 +18,6 @@ public:
     void startBumpOut();
     void startBumpIn();
 
-    CollisionParts* _C4;
-    CollisionParts* _C8;
+    CollisionParts* mCollisionB;
+    CollisionParts* mCollisionC;
 };

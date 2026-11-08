@@ -1,52 +1,53 @@
 #include "Game/Particle/ParticleMath.hpp"
 #include <nebula_geometry.hpp>
 
-void ParticleMath::dirMtx(Vec3f const& param_0, f32 (*param_1)[4]) {
-    Vec3f local_78 = Vec3f(param_0.y, -param_0.x, 0.0f);
-    f32 len = local_78.length();
+// The rotation taking +z onto rDir: about the axis z x rDir, cosine rDir.z, sine |z x rDir|.
+void ParticleMath::dirMtx(const Vec3f& rDir, Mtx dst) {
+    Vec3f axis = Vec3f(rDir.y, -rDir.x, 0.0f);
+    f32 sine = axis.length();
 
-    if (len <= FloatUtil::epsilon()) {
-        local_78.zero();
+    if (sine <= FloatUtil::epsilon()) {
+        axis.zero();
     } else {
-        local_78.scale(1.0f / len);
+        axis.scale(1.0f / sine);
     }
 
-    f32 xsquared = local_78.x * local_78.x;
-    f32 ysquared = local_78.y * local_78.y;
-    f32 xlen = local_78.x * len;
-    f32 ylen = local_78.y * len;
-    f32 fVar5 = (1.0f - param_0.z) * (local_78.x * local_78.y);
-    param_1[0][0] = xsquared + param_0.z * (1.0f - xsquared);
-    param_1[0][1] = fVar5;
-    param_1[0][2] = -ylen;
-    param_1[0][3] = 0.0f;
-    param_1[1][0] = fVar5;
-    param_1[1][1] = ysquared + param_0.z * (1.0f - ysquared);
-    param_1[1][2] = xlen;
-    param_1[1][3] = 0.0f;
-    param_1[2][0] = ylen;
-    param_1[2][1] = -xlen;
-    param_1[2][2] = param_0.z;
-    param_1[2][3] = 0.0f;
+    f32 xx = axis.x * axis.x;
+    f32 yy = axis.y * axis.y;
+    f32 xSine = axis.x * sine;
+    f32 ySine = axis.y * sine;
+    f32 xy = (1.0f - rDir.z) * (axis.x * axis.y);
+    dst[0][0] = xx + rDir.z * (1.0f - xx);
+    dst[0][1] = xy;
+    dst[0][2] = -ySine;
+    dst[0][3] = 0.0f;
+    dst[1][0] = xy;
+    dst[1][1] = yy + rDir.z * (1.0f - yy);
+    dst[1][2] = xSine;
+    dst[1][3] = 0.0f;
+    dst[2][0] = ySine;
+    dst[2][1] = -xSine;
+    dst[2][2] = rDir.z;
+    dst[2][3] = 0.0f;
 }
 
-void ParticleMath::yzRotateMtx(s16 angleY, s16 angleZ, f32 (*param_2)[4]) {
+void ParticleMath::yzRotateMtx(s16 angleY, s16 angleZ, Mtx dst) {
     f32 cosy = Angle::cosShort(angleY);
     f32 cosz = Angle::cosShort(angleZ);
     f32 siny = Angle::sinShort(angleY);
     f32 sinz = Angle::sinShort(angleZ);
-    param_2[0][0] = (cosy * cosz);
-    param_2[0][1] = -sinz;
-    param_2[0][2] = (siny * cosz);
-    param_2[1][0] = (cosy * sinz);
-    param_2[1][1] = cosz;
-    param_2[1][2] = (siny * sinz);
-    param_2[2][0] = -siny;
-    param_2[2][2] = cosy;
-    param_2[2][3] = 0.0f;
-    param_2[2][1] = 0.0f;
-    param_2[1][3] = 0.0f;
-    param_2[0][3] = 0.0f;
+    dst[0][0] = (cosy * cosz);
+    dst[0][1] = -sinz;
+    dst[0][2] = (siny * cosz);
+    dst[1][0] = (cosy * sinz);
+    dst[1][1] = cosz;
+    dst[1][2] = (siny * sinz);
+    dst[2][0] = -siny;
+    dst[2][2] = cosy;
+    dst[2][3] = 0.0f;
+    dst[2][1] = 0.0f;
+    dst[1][3] = 0.0f;
+    dst[0][3] = 0.0f;
 }
 
 void ParticleMath::xyzRotateMtx(s16 x, s16 y, s16 z, Mtx mtx) {
@@ -74,70 +75,72 @@ void ParticleMath::xyzRotateMtx(s16 x, s16 y, s16 z, Mtx mtx) {
     mtx[0][3] = 0.0f;
 }
 
-void ParticleMath::splitR(f32 const (*param_0)[4], f32 (*param_1)[4]) {
-    Vec3f dummy_0;
-    Vec3f dummy_1;
-    ParticleMath::splitSRT(param_0, param_1, &dummy_0, &dummy_1);
+void ParticleMath::splitR(const Mtx src, Mtx rotation) {
+    Vec3f scale;
+    Vec3f translation;
+    ParticleMath::splitSRT(src, rotation, &scale, &translation);
 }
 
-/* NEW IN SMG1 */
-void ParticleMath::splitRT(f32 const (*param_0)[4], f32 (*param_1)[4], Vec3f* param_2) {
-    Vec3f dummy;
-    ParticleMath::splitSRT(param_0, param_1, &dummy, param_2);
+void ParticleMath::splitRT(const Mtx src, Mtx rotation, Vec3f* pTranslation) {
+    Vec3f scale;
+    ParticleMath::splitSRT(src, rotation, &scale, pTranslation);
 }
 
-void ParticleMath::splitSRT(f32 const (*param_0)[4], f32 (*param_1)[4], Vec3f* param_2, Vec3f* param_3) {
-    Vec3f aTStack_54 = Vec3f(param_0[0][0], param_0[1][0], param_0[2][0]);
-    param_2->x = aTStack_54.length();
-    aTStack_54.set< f32 >(param_0[0][1], param_0[1][1], param_0[2][1]);
-    param_2->y = aTStack_54.length();
-    aTStack_54.set< f32 >(param_0[0][2], param_0[1][2], param_0[2][2]);
-    param_2->z = aTStack_54.length();
-    NebulaMtxIdentity(param_1);
-    if (param_2->x != 0.0f) {
-        f32 fVar5 = 1.0f / param_2->x;
-        param_1[0][0] = param_0[0][0] * fVar5;
-        param_1[1][0] = param_0[1][0] * fVar5;
-        param_1[2][0] = param_0[2][0] * fVar5;
+// Scale is each column's length; rotation is the columns divided by it (identity where a scale is zero).
+void ParticleMath::splitSRT(const Mtx src, Mtx rotation, Vec3f* pScale, Vec3f* pTranslation) {
+    Vec3f column = Vec3f(src[0][0], src[1][0], src[2][0]);
+    pScale->x = column.length();
+    column.set< f32 >(src[0][1], src[1][1], src[2][1]);
+    pScale->y = column.length();
+    column.set< f32 >(src[0][2], src[1][2], src[2][2]);
+    pScale->z = column.length();
+    NebulaMtxIdentity(rotation);
+    if (pScale->x != 0.0f) {
+        f32 inverse = 1.0f / pScale->x;
+        rotation[0][0] = src[0][0] * inverse;
+        rotation[1][0] = src[1][0] * inverse;
+        rotation[2][0] = src[2][0] * inverse;
     }
 
-    if (param_2->y != 0.0f) {
-        f32 fVar5 = 1.0f / param_2->y;
-        param_1[0][1] = param_0[0][1] * fVar5;
-        param_1[1][1] = param_0[1][1] * fVar5;
-        param_1[2][1] = param_0[2][1] * fVar5;
+    if (pScale->y != 0.0f) {
+        f32 inverse = 1.0f / pScale->y;
+        rotation[0][1] = src[0][1] * inverse;
+        rotation[1][1] = src[1][1] * inverse;
+        rotation[2][1] = src[2][1] * inverse;
     }
 
-    if (param_2->z != 0.0f) {
-        f32 fVar5 = 1.0f / param_2->z;
-        param_1[0][2] = param_0[0][2] * fVar5;
-        param_1[1][2] = param_0[1][2] * fVar5;
-        param_1[2][2] = param_0[2][2] * fVar5;
+    if (pScale->z != 0.0f) {
+        f32 inverse = 1.0f / pScale->z;
+        rotation[0][2] = src[0][2] * inverse;
+        rotation[1][2] = src[1][2] * inverse;
+        rotation[2][2] = src[2][2] * inverse;
     }
 
-    param_3->set< f32 >(param_0[0][3], param_0[1][3], param_0[2][3]);
+    pTranslation->set< f32 >(src[0][3], src[1][3], src[2][3]);
 }
 
-f32 ParticleMath::keyValue(f32 param_0, u32 param_1, f32 const* param_2) {
-    if (param_0 < param_2[0]) {
-        return param_2[1];
+// pKeys: count keys of four floats (time, value, in tangent, out tangent), in time order. Before the first key its value,
+// from the last key on its value, else the Hermite curve between the two keys around time.
+f32 ParticleMath::keyValue(f32 time, u32 count, const f32* pKeys) {
+    if (time < pKeys[0]) {
+        return pKeys[1];
     }
 
-    int ind = param_1 - 1;
-    if (param_2[ind * 4] <= param_0) {
-        return (param_2 + ind * 4)[1];
+    int last = count - 1;
+    if (pKeys[last * 4] <= time) {
+        return (pKeys + last * 4)[1];
     }
 
-    int x = param_1;
-    while (x > 1) {
-        u32 uVar3 = x / 2;
-        if (param_0 >= param_2[uVar3 * 4]) {
-            param_2 += uVar3 * 4;
-            x -= uVar3;
+    int remaining = count;
+    while (remaining > 1) {
+        u32 half = remaining / 2;
+        if (time >= pKeys[half * 4]) {
+            pKeys += half * 4;
+            remaining -= half;
         } else {
-            x = uVar3;
+            remaining = half;
         }
     }
 
-    return hermiteInterpolation(param_0, param_2[0], param_2[1], param_2[3], param_2[4], param_2[5], param_2[6]);
+    return hermiteInterpolation(time, pKeys[0], pKeys[1], pKeys[3], pKeys[4], pKeys[5], pKeys[6]);
 }

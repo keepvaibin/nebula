@@ -21,14 +21,11 @@ public:
     void exeWait();
     void exeHit();
 
-    u16 _8C;
-    u16 _8E;  // Unused?
-    u16 _90;
-    u16 _92;
-    u16 _94;
-    bool _96;
-    bool _97;
-    bool _98;
+    u16 mFloorTouchTimer;
+    u16 mHitCoolDown;
+    u16 mShadowStep;
+    u16 mHitPoint;
+    bool mIsPlayerNear;
     bool mHasShadow;  // Obj_arg1
     s32 mCoinCount;   // Obj_arg0
 };

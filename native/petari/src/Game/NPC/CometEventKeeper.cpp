@@ -51,10 +51,6 @@ bool CometEventKeeper::isStartEvent(const char* pParam1) const {
     return MR::isEqualString(mCometName, pParam1);
 }
 
-bool CometEventKeeper::isStartTimeLimitEvent() const {
-    return mExecutorTimeLimit != nullptr;
-}
-
 void CometEventKeeper::startCometEventIfExist() {
     if (mExecutorTimeLimit == nullptr) {
         return;

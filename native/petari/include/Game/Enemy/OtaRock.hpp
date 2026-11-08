@@ -53,7 +53,7 @@ private:
     FixedPosition* mFixedPosition;
     s32 mThrowCocoNutCounter;
     u32 mWaitFrame;
-    Pos3f _A4;
-    Vec3f _D4;
+    Pos3f mBaseMtx;
+    Vec3f mFront;
     AnimScaleController* mAnimScaleController;
 };

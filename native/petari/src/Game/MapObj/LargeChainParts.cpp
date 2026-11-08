@@ -34,7 +34,7 @@ void LargeChainParts::initChainParts(Vec3f* pPos, Vec3f* pRot, Vec3f* pScale, bo
         MR::initCollisionParts(this, "LargeChain", getSensor("body"), nullptr);
     }
 
-    initEffectKeeper(0, "LargeChain", false);
+    initEffectKeeper(0, "LargeChain");
     initSound(2, false);
 
     makeActorAppeared();

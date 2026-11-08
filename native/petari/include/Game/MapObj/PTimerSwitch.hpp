@@ -26,6 +26,6 @@ public:
 
     CollisionParts* mSwitchCollision;
     MapObjConnector* mConnector;
-    s32 _94;
-    bool _98;
+    s32 mPressStep;
+    bool mIsPressed;
 };

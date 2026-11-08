@@ -1,7 +1,7 @@
+#include <nebula_game_api.h>
 #include "Game/MapObj/SpiderThread.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/SpiderThreadHangInfo.hpp"
@@ -20,10 +20,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <nebula_game_api.h>
 #include <cstring>
-
-extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
@@ -270,7 +267,7 @@ bool SpiderThread::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
     if (msg == ACTMES_SLING_SHOOT_ACTOR_HANG_START) {
         SpiderThreadHangInfo* hangInfo = findHangInfo(pSender->mHost);
         if (mShootHangInfo != nullptr) {
-            if (mShootHangInfo->_14 < hangInfo->_14) {
+            if (mShootHangInfo->mPriority < hangInfo->mPriority) {
                 mShootHangInfo->endHang(true);
             } else {
                 return false;

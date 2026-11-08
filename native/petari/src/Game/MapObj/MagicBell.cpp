@@ -26,7 +26,7 @@ void MagicBell::init(const TableIter& rIter) {
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, -80.0f, 0.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
     MR::addEffect(this, "StarWandHitMark");
     MR::setEffectHostSRT(this, "StarWandHitMark", &mHitMarkPosition, nullptr, nullptr);
     initSound(4, false);
@@ -48,8 +48,8 @@ void MagicBell::exeWait() {
     }
 
     if (!tryRing()) {
-        NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
-        NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+        NebulaMtxCopy(mBellSwinger->mSwingMtx.toMtxPtr(), mSurface2Mtx);
+        NebulaMtxCopy(mBellRodSwinger->mSwingMtx.toMtxPtr(), mSurface1Mtx);
         Vec3f v3(0.0f, 0.0f, 0.0f);
         MR::setMtxTrans(mSurface2Mtx, v3.x, v3.y, v3.z);
         Vec3f v2(0.0f, 0.0f, 0.0f);
@@ -74,13 +74,13 @@ void MagicBell::exeRing() {
     mBellSwinger->update();
     mBellRodSwinger->update();
 
-    if (mBellSwinger->_20.dot(mBellRodSwinger->_20) < 0.95f) {
-        Vec3f v17(mBellSwinger->_20);
-        v17.sub(mBellRodSwinger->_20);
-        f32 v3 = mBellRodSwinger->_20.dot(v17);
-        v17.x -= v3 * mBellRodSwinger->_20.x;
-        v17.y -= v3 * mBellRodSwinger->_20.y;
-        v17.z -= v3 * mBellRodSwinger->_20.z;
+    if (mBellSwinger->mSwingDir.dot(mBellRodSwinger->mSwingDir) < 0.95f) {
+        Vec3f v17(mBellSwinger->mSwingDir);
+        v17.sub(mBellRodSwinger->mSwingDir);
+        f32 v3 = mBellRodSwinger->mSwingDir.dot(v17);
+        v17.x -= v3 * mBellRodSwinger->mSwingDir.x;
+        v17.y -= v3 * mBellRodSwinger->mSwingDir.y;
+        v17.z -= v3 * mBellRodSwinger->mSwingDir.z;
         MR::normalizeOrZero(&v17);
         f32 v4 = mBellSwinger->mAcceleration.dot(v17);
         f32 v5 = mBellRodSwinger->mAcceleration.dot(v17);
@@ -93,11 +93,11 @@ void MagicBell::exeRing() {
             v17.scale(v4 - v7);
             v17.sub(mBellRodSwinger->mAcceleration);
             mBellRodSwinger->accel(v17);
-            mHitMarkPosition.set(mBellRodSwinger->_8);
+            mHitMarkPosition.set(mBellRodSwinger->mTipPos);
         }
     }
-    NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
-    NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+    NebulaMtxCopy(mBellSwinger->mSwingMtx.toMtxPtr(), mSurface2Mtx);
+    NebulaMtxCopy(mBellRodSwinger->mSwingMtx.toMtxPtr(), mSurface1Mtx);
     Vec3f v16(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mSurface2Mtx, v16.x, v16.y, v16.z);
     Vec3f v15(0.0f, 0.0f, 0.0f);
@@ -111,7 +111,7 @@ void MagicBell::exeRing() {
         return;
     }
 
-    if (!(mBellSwinger->_20.y < -0.99f)) {
+    if (!(mBellSwinger->mSwingDir.y < -0.99f)) {
         return;
     }
 

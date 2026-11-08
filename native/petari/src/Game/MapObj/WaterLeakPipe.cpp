@@ -57,7 +57,7 @@ void IceStepNoSlip::exeBreak() {
 }
 
 WaterLeakPipe::WaterLeakPipe(const char* pName)
-    : LiveActor(pName), mIceStep(), mPipeHeight(::sDefaultHeight), mTopMtx(), mBottomMtx(), _9C(0.0f, 0.0f, 0.0f) {
+    : LiveActor(pName), mIceStep(), mPipeHeight(::sDefaultHeight), mTopMtx(), mBottomMtx(), mClippingCenter(0.0f, 0.0f, 0.0f) {
 }
 
 void WaterLeakPipe::init(const TableIter& rIter) {
@@ -71,11 +71,11 @@ void WaterLeakPipe::init(const TableIter& rIter) {
     MR::connectToSceneMapObjNoCalcAnim(this);
     initHitSensor(1);
     MR::addHitSensorAtJointMapObj(this, "ice", "Top", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::calcUpVec(&upVec, this);
-    _9C.scaleAdd(0.5f * mPipeHeight, upVec, mPosition);
-    MR::setClippingTypeSphere(this, (0.5f * mPipeHeight), &_9C);
+    mClippingCenter.scaleAdd(0.5f * mPipeHeight, upVec, mPosition);
+    MR::setClippingTypeSphere(this, (0.5f * mPipeHeight), &mClippingCenter);
     mIceStep = new IceStepNoSlip(mTopMtx);
     mIceStep->initWithoutIter();
     mIceStep->makeActorDead();

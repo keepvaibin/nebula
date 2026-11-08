@@ -18,7 +18,7 @@ CountUpPaneRumbler::CountUpPaneRumbler(LayoutActor* pHost, const char* pPaneName
 void CountUpPaneRumbler::update() {
     mRumbleCalculator->calc();
 
-    f32 y = mRumbleCalculator->_C.y;
+    f32 y = mRumbleCalculator->mValue.y;
     mPosition.x = 0.0f;
     mPosition.y = y;
 }
@@ -32,7 +32,7 @@ void CountUpPaneRumbler::reset() {
 }
 
 bool CountUpPaneRumbler::isRumbling() const {
-    return mRumbleCalculator->_4 < mRumbleCalculator->_8;
+    return mRumbleCalculator->mFrame < mRumbleCalculator->mDuration;
 }
 
 void CountUpPaneRumbler::connectPane(LayoutActor* pHost, const char* pPaneName) {

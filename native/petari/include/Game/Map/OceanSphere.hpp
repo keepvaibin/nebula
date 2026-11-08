@@ -94,9 +94,6 @@ public:
     NebulaColor8 mStageColor1Front;
     NebulaColor8 mStageColor1Back;
     bool mUseMesh;
-    u8 _109;
-    u8 _10A;
-    u8 _10B;
     // The sphere's face and back as the renderer draws them.
     SiteMesh< VertexPNT2 > mMeshFace;
     SiteMesh< VertexPN > mMeshBack;

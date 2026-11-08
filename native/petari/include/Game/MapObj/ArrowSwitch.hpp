@@ -45,6 +45,5 @@ public:
     s32 mSwitchType;
     bool mLockAfterRotate;
     bool mIsRotPlus;
-    bool _9E;
     bool mIsPunch;
 };

@@ -21,6 +21,6 @@ public:
 
     Coin* mCoin;
     Spine* mSpine;
-    Pos3f _14;
+    Pos3f mPlacementMtx;
     s32 mJointID;
 };

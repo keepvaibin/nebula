@@ -33,7 +33,7 @@ void IronCannonLauncherPoint::init(const TableIter& rIter) {
     initBullet();
     MR::getPlacementArg0NoInit(rIter, &mShotInterval);
     MR::getPlacementArg1NoInit(rIter, &mBulletSpeed);
-    initEffectKeeper(0, "IronCannonLauncherPoint", false);
+    initEffectKeeper(0, "IronCannonLauncherPoint");
 
     bool isAppear = false;
 

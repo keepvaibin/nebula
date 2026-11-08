@@ -16,18 +16,18 @@ DemoSubPartKeeper::DemoSubPartKeeper(const DemoExecutor* pExecutor) : mExecutor(
     }
 }
 
-DemoSubPartInfo::DemoSubPartInfo() : mSubPartName(nullptr), mSubPartTotalStep(1), mMainPartName(nullptr), mMainPartStep(1), _10(-1) {
+DemoSubPartInfo::DemoSubPartInfo() : mSubPartName(nullptr), mSubPartTotalStep(1), mMainPartName(nullptr), mMainPartStep(1), mRestStep(-1) {
 }
 
 void DemoSubPartKeeper::update() {
     if (mNumSubPartInfos > 0) {
         for (int i = 0; i < mNumSubPartInfos; i++) {
             DemoSubPartInfo* subpart = &mSubPartInfos[i];
-            if (subpart->_10 > 0) {
-                subpart->_10 -= 1;
+            if (subpart->mRestStep > 0) {
+                subpart->mRestStep -= 1;
             }
             if (MR::isDemoPartStep(subpart->mMainPartName, subpart->mMainPartStep)) {
-                subpart->_10 = subpart->mSubPartTotalStep;
+                subpart->mRestStep = subpart->mSubPartTotalStep;
             }
         }
     }
@@ -35,7 +35,7 @@ void DemoSubPartKeeper::update() {
 
 void DemoSubPartKeeper::end() {
     for (int i = 0; i < mNumSubPartInfos; i++) {
-        mSubPartInfos[i]._10 = -1;
+        mSubPartInfos[i].mRestStep = -1;
     }
 }
 
@@ -44,13 +44,13 @@ bool DemoSubPartKeeper::isDemoPartActive(const char* pSubPartName) const {
     if (subpart == nullptr) {
         return false;
     } else {
-        return subpart->_10 > 0;
+        return subpart->mRestStep > 0;
     }
 }
 
 s32 DemoSubPartKeeper::getDemoPartStep(const char* pSubPartName) const {
     DemoSubPartInfo* subpart = findSubPart(pSubPartName);
-    return subpart->mSubPartTotalStep - subpart->_10;
+    return subpart->mSubPartTotalStep - subpart->mRestStep;
 }
 
 s32 DemoSubPartKeeper::getDemoPartTotalStep(const char* pSubPartName) const {

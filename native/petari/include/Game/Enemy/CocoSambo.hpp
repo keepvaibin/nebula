@@ -47,7 +47,7 @@ public:
     void initMapToolInfo(const TableIter& rIter);
     void initSensor();
     bool isPointing();
-    bool tryDpdPointing(const Nerve*);
+    bool tryPointerAiming(const Nerve*);
     bool tryToFallHead(const HitSensor*, const HitSensor*);
     bool tryToPress();
     bool tryStarPieceReflect();
@@ -66,8 +66,8 @@ public:
     void exeRecover();
     void exePressY();
     void exeBlow();
-    void exeDpdPointing();
-    void endDpdPointing();
+    void exePointerAiming();
+    void endPointerAiming();
 
     inline bool isNerveDying();
     inline void startBckThisAndHead(const char*);
@@ -81,6 +81,6 @@ public:
     f32 mPlayerSearchDistance;
     AnimScaleParam* mAnimScaleParam;
     AnimScaleController* mAnimScaleController;
-    const Nerve* mDpdPointingEndNerve;
+    const Nerve* mPointerAimingEndNerve;
     LiveActor** mPointingActorArray;
 };

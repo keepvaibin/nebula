@@ -9,7 +9,7 @@
 
 BenefitItemLifeUp::BenefitItemLifeUp(const char* pName) : BenefitItemObj(pName, "KinokoLifeUp") {
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
-        _D8 = 1;
+        mIsDisabled = 1;
     }
 }
 
@@ -24,8 +24,8 @@ void BenefitItemLifeUp::exeCatch() {
 }
 
 void BenefitItemLifeUp::initModelAndEfx() {
-    initModelManagerWithAnm(_120, nullptr, false);
-    initEffectKeeper(5, "BenefitItemObj", false);
+    initModelManagerWithAnm(mModelName, nullptr, false);
+    initEffectKeeper(5, "BenefitItemObj");
 
     initBinder(50.0f, 50.0f, 0);
     initHitSensor(1);

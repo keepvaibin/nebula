@@ -52,11 +52,11 @@ public:
     s32 mMoveConditionType;
     s32 mMoveStopType;
     s32 mSignMotionType;
-    Vec3f _28;
-    f32 _34;
+    Vec3f mStartPos;
+    f32 mInitCoord;
     s32 mStopTime;
     f32 mSpeed;
     s32 mAccelTime;
     f32 mAcceleration;
-    f32 _48;
+    f32 mSignCoord;
 };

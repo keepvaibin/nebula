@@ -16,5 +16,5 @@ public:
     static s32 getMoveStartSignalTime();
     void initModelAndCollision(const TableIter&);
 
-    Vec3f _8C;
+    Vec3f mClipCenter;
 };

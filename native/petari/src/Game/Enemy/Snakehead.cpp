@@ -22,14 +22,14 @@
 
 namespace {
     struct SnakeheadData {
-        const s32* _0;
-        const s32* _4;
-        const f32* _8;
-        const char* _C;
-        const char* _10;
-        const char* _14;
-        const char* _18;
-        const char* _1C;
+        s32 mWaitStep;
+        s32 mRestStep;
+        f32 mGoHomeSpeed;
+        const char* mWaylayBck;
+        const char* mWaitBck;
+        const char* mForwardBck;
+        const char* mForwardEffect;
+        const char* mBackBck;
     };
 
     static const f32 sDefaultForwardSpeed = 15.0f;
@@ -45,15 +45,13 @@ namespace {
     static const s32 sStepForWaitSmallRace = 60;
     static const s32 sStepForRestSmallRace = 120;
     static const f32 sStartCoord = 300.0f;
-    // static const f32 sStepForShockStay = 0.0f;
-    // static const f32 sCoordToGoalForSlowMove = 0.0f;
 
     static const SnakeheadData sSnakeheadDataTable[] = {
-        {&::sStepForWaitBig, &::sStepForRestBig, &::sGoHomeSpeedNormal, "StraightAppear", "StraightWait", "StraightForward", "StraightForwardSmoke",
+        {::sStepForWaitBig, ::sStepForRestBig, ::sGoHomeSpeedNormal, "StraightAppear", "StraightWait", "StraightForward", "StraightForwardSmoke",
          "StraightBack"},
-        {&::sStepForWaitSmall, &::sStepForRestSmall, &::sGoHomeSpeedNormal, "StraightAppear", "Wait", "StraightForward", nullptr, "StraightBack"},
-        {&::sStepForWaitBigRace, &::sStepForRestBigRace, &::sGoHomeSpeedRace, nullptr, "Wait", "Forward", "ForwardSmoke", "Back"},
-        {&::sStepForWaitSmallRace, &::sStepForRestSmallRace, &::sGoHomeSpeedRace, nullptr, "Wait", "Forward", nullptr, "Back"}};
+        {::sStepForWaitSmall, ::sStepForRestSmall, ::sGoHomeSpeedNormal, "StraightAppear", "Wait", "StraightForward", nullptr, "StraightBack"},
+        {::sStepForWaitBigRace, ::sStepForRestBigRace, ::sGoHomeSpeedRace, nullptr, "Wait", "Forward", "ForwardSmoke", "Back"},
+        {::sStepForWaitSmallRace, ::sStepForRestSmallRace, ::sGoHomeSpeedRace, nullptr, "Wait", "Forward", nullptr, "Back"}};
 
     const SnakeheadData* getParam(s32 index) {
         return &::sSnakeheadDataTable[index];
@@ -67,12 +65,12 @@ namespace NrvSnakehead {
     NEW_NERVE(SnakeheadNrvRest, Snakehead, Rest);
     NEW_NERVE(SnakeheadNrvMoveBack, Snakehead, MoveBack);
     NEW_NERVE(SnakeheadNrvTurtleDown, Snakehead, TurtleDown);
-    NEW_NERVE_ONEND(SnakeheadNrvDPDSwoon, Snakehead, DPDSwoon, DPDSwoon);
+    NEW_NERVE_ONEND(SnakeheadNrvPointerSwoon, Snakehead, PointerSwoon, PointerSwoon);
 };  // namespace NrvSnakehead
 
 Snakehead::Snakehead(const char* pName)
-    : LiveActor(pName), mController(), mStarPointer(), _C4(0.0f, 0.0f, 0.0f), mForwardSpeed(::sDefaultForwardSpeed),
-      mBackwardSpeed(::sDefaultBackSpeed), mActivationRadius(1000.0f), mRailCenter(0.0f, 0.0f, 0.0f), _E8(), mItem() {
+    : LiveActor(pName), mController(), mStarPointer(), mSmokePos(0.0f, 0.0f, 0.0f), mForwardSpeed(::sDefaultForwardSpeed),
+      mBackwardSpeed(::sDefaultBackSpeed), mActivationRadius(1000.0f), mRailCenter(0.0f, 0.0f, 0.0f), mType(), mItem() {
     mBodyMtx.identity();
 }
 
@@ -90,7 +88,7 @@ void Snakehead::init(const TableIter& rIter) {
     s32 arg3 = 0;
     MR::getPlacementArg3NoInit(rIter, &arg3);
 
-    _E8 = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + arg3 * 2);
+    mType = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + arg3 * 2);
 
     MR::connectToSceneEnemy(this);
 
@@ -105,12 +103,12 @@ void Snakehead::init(const TableIter& rIter) {
         MR::addHitSensorAtJointEnemy(this, "body", "Body03", 8, 600.0f, Vec3f(0.0f, 0.0f, 0.0f));
     }
 
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
-    const char* smokeName = ::getParam(_E8)->_18;
+    const char* smokeName = ::getParam(mType)->mForwardEffect;
     if (smokeName != nullptr) {
-        _C4 = mPosition;
-        MR::setEffectHostSRT(this, smokeName, &_C4, nullptr, nullptr);
+        mSmokePos = mPosition;
+        MR::setEffectHostSRT(this, smokeName, &mSmokePos, nullptr, nullptr);
     }
 
     initSound(4, false);
@@ -174,7 +172,7 @@ void Snakehead::initAfterPlacement() {
 
     Vec3f v7;
     v7.scaleAdd(-50.0f, mGravity, headPos);
-    MR::getFirstPolyOnLineToMapExceptSensor(&_C4, nullptr, v7, mGravity * 1000.0f, getSensor("body"));
+    MR::getFirstPolyOnLineToMapExceptSensor(&mSmokePos, nullptr, v7, mGravity * 1000.0f, getSensor("body"));
 
     mBodyMtx.set(MR::getJointMtx(this, "Body04"));
 }
@@ -206,7 +204,7 @@ void Snakehead::kill() {
 void Snakehead::control() {
     mController->updateNerve();
 
-    tryDPDSwoon();
+    tryPointerSwoon();
 
     Vec3f jointPos;
     MR::copyJointPos(this, "Body04", &jointPos);
@@ -234,7 +232,7 @@ void Snakehead::calcAndSetBaseMtx() {
     MR::makeMtxFrontUpPos(&frontUp, endPntDir, -mGravity, mPosition);
     MR::setBaseTRMtx(this, frontUp);
 
-    Vec3f scale = mController->_C * mScale;
+    Vec3f scale = mController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -267,7 +265,7 @@ void Snakehead::exeWait() {
         choiceAndStartBck("Wait");
     }
 
-    if (MR::isGreaterEqualStep(this, *::getParam(_E8)->_0) && (isMove() || isNearPlayerFromRail())) {
+    if (MR::isGreaterEqualStep(this, ::getParam(mType)->mWaitStep) && (isMove() || isNearPlayerFromRail())) {
         setNerve(GET_NERVE(Snakehead, SnakeheadNrvMoveForward));
     }
 }
@@ -293,7 +291,7 @@ void Snakehead::exeMoveForward() {
 }
 
 void Snakehead::exeRest() {
-    if (MR::isStep(this, *::getParam(_E8)->_4)) {
+    if (MR::isStep(this, ::getParam(mType)->mRestStep)) {
         setNerve(GET_NERVE(Snakehead, SnakeheadNrvMoveBack));
     }
 }
@@ -326,7 +324,7 @@ void Snakehead::exeTurtleDown() {
         MR::startSound(this, "SE_EV_SNAKEHEAD_DAMAGE");
     }
 
-    f32 coord = *::getParam(_E8)->_8;
+    f32 coord = ::getParam(mType)->mGoHomeSpeed;
     if (MR::isRailReachedNearGoal(this, ::sStartCoord + coord)) {
         MR::setRailCoord(this, ::sStartCoord);
         MR::moveTransToCurrentRailPos(this);
@@ -353,7 +351,7 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (pSender != getSensor("body")) {
-        if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvDPDSwoon)) || !MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
+        if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon)) || !MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
             MR::sendMsgPush(pReceiver, pSender);
         }
 
@@ -375,7 +373,7 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (!isNerve(GET_NERVE(Snakehead, SnakeheadNrvDPDSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
+    if (!isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon)) && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
         return;
     }
 
@@ -415,13 +413,13 @@ bool Snakehead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
 void Snakehead::choiceAndStartBck(const char* pBck) {
     const char* v1 = nullptr;
     if (MR::isEqualString(pBck, "Forward")) {
-        v1 = ::getParam(_E8)->_14;
+        v1 = ::getParam(mType)->mForwardBck;
     } else if (MR::isEqualString(pBck, "Back")) {
-        v1 = ::getParam(_E8)->_1C;
+        v1 = ::getParam(mType)->mBackBck;
     } else if (MR::isEqualString(pBck, "Waylay")) {
-        v1 = ::getParam(_E8)->_C;
+        v1 = ::getParam(mType)->mWaylayBck;
     } else if (MR::isEqualString(pBck, "Wait")) {
-        v1 = ::getParam(_E8)->_10;
+        v1 = ::getParam(mType)->mWaitBck;
     }
 
     if (v1 != nullptr) {
@@ -440,8 +438,8 @@ void Snakehead::choiceAndStartBck(const char* pBck) {
     }
 }
 
-bool Snakehead::tryDPDSwoon() {
-    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvDPDSwoon))) {
+bool Snakehead::tryPointerSwoon() {
+    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon))) {
         return false;
     }
 
@@ -457,7 +455,7 @@ bool Snakehead::tryDPDSwoon() {
         return false;
     }
 
-    setNerve(GET_NERVE(Snakehead, SnakeheadNrvDPDSwoon));
+    setNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon));
 
     return true;
 }
@@ -469,10 +467,10 @@ bool Snakehead::isNearPlayerFromRail() const {
     return nearestPos.distance(*MR::getPlayerPos()) <= mActivationRadius;
 }
 
-void Snakehead::endDPDSwoon() {
+void Snakehead::endPointerSwoon() {
     mStarPointer->kill();
 }
 
-void Snakehead::exeDPDSwoon() {
+void Snakehead::exePointerSwoon() {
     MR::updateActorStateAndNextNerve(this, mStarPointer, GET_NERVE(Snakehead, SnakeheadNrvMoveBack));
 }

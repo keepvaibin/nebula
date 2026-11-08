@@ -3,7 +3,6 @@
 #include "Game/System/NebulaArena.hpp"
 
 class NebulaArena;
-class NebulaArena;
 
 namespace MR {
     class CurrentHeapRestorer {
@@ -13,7 +12,7 @@ namespace MR {
         ~CurrentHeapRestorer();
 
     private:
-        NebulaArena* _0;
+        NebulaArena* mPrevHeap;
     };
 
     NebulaArena* getCurrentHeap();

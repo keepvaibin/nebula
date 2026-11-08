@@ -30,7 +30,6 @@ public:
     FixedPosition* mFixedPosition;
     MtxPtr mMtx;
     bool mIsCalcOwnMtx;
-    bool _99;
+    bool mIsShownWhileHostHidden;
     bool mIsDead;
-    bool _9B;
 };

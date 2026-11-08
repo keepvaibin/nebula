@@ -45,23 +45,21 @@ public:
 
     inline bool isNerveWait();
 
-    f32 _8C;
+    f32 mThrowSpeedBonus;
     u16 mShellType;  // (0 = green, 1 = red, 2 = gold)
-    u16 _92;
-    HitSensor* _94;
-    HitSensor* _98;
-    Vec3f _9C;
-    Vec3f _A8;
-    Vec3f _B4;
-    Vec3f _C0;
-    Vec3f _CC;
-    u16 _D8;
-    u16 _DA;
-    u32 _DC;
-    u8 _E0;
-    u8 _E1;
-    u8 _E2;
-    u8 _E3;
+    u16 mType;
+    HitSensor* mTakenSensor;
+    HitSensor* mHomingTarget;
+    Vec3f mThrowDir;
+    Vec3f mInitPos;
+    Vec3f mInitRotation;
+    Vec3f mThrowStartPos;
+    Vec3f mLastGravity;
+    u16 mSpinTime;
+    u8 mIsRevive;
+    u8 mIsAppeared;
+    u8 mHasReviveLight;
+    u8 mIsResetRequested;
 };
 
 class GoldenTurtle : public JetTurtle {

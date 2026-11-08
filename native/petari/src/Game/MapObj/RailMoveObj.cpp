@@ -31,8 +31,8 @@ namespace NrvRailMoveObj {
 };  // namespace NrvRailMoveObj
 
 RailMoveObj::RailMoveObj(const char* pName) : MapObjActor(pName) {
-    _C4.setZeroVec();
-    _D0 = 0;
+    mRailClippingCenter.setZeroVec();
+    mWasRailMoving = 0;
 }
 
 void RailMoveObj::init(const TableIter& rIter) {
@@ -57,7 +57,7 @@ void RailMoveObj::init(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         f32 radius = 0.0f;
         MR::calcModelBoundingRadius(&radius, this);
-        MR::initAndSetRailClipping(&_C4, this, 100.0f, radius);
+        MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, radius);
     } else {
         setNerve(GET_NERVE(RailMoveObj, HostTypeDone));
     }
@@ -176,11 +176,11 @@ void RailMoveObj::exeMove() {
         startMapPartsFunctions();
     }
 
-    if (!_D0 && MapObjActorUtil::isRailMoverWorking(this)) {
+    if (!mWasRailMoving && MapObjActorUtil::isRailMoverWorking(this)) {
         startMoveInner();
     }
 
-    _D0 = MapObjActorUtil::isRailMoverWorking(this);
+    mWasRailMoving = MapObjActorUtil::isRailMoverWorking(this);
     move();
 
     if (mRailMover->isReachedEnd()) {

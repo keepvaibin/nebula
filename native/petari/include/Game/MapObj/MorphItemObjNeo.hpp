@@ -39,12 +39,12 @@ public:
     u16 mAppearFrames;
     bool mIsUseSwitch;
     bool mIsFloating;  // Obj_arg2
-    bool _92;
+    bool mIsDemoPending;
     u8 mCameraMode;     // Obj_arg5
     s8 mRotateMode;     // Obj_arg6
-    bool _95;           // Obj_arg0
+    bool mIsSwitchAppearOnce;           // Obj_arg0
     u8 mContainerType;  // Obj_arg3
-    u8 _97;
+    u8 mBoundCount;
     s8 mIsBind;      // Obj_arg1
     u8 mShadowType;  // Obj_arg4
     Vec3f mZRotation;
@@ -155,10 +155,8 @@ public:
         return 50.0f;
     }
 
-    virtual Vec3f* getClippingCenterOffset() const {
-        static Vec3f sOffset;
-        sOffset.set(0.0f, 200.0f, 0.0f);
-        return &sOffset;
+    virtual Vec3f getClippingCenterOffset() const {
+        return Vec3f(0.0f, 200.0f, 0.0f);
     }
 
     virtual bool isSyncClipping() const {
@@ -177,10 +175,8 @@ public:
     virtual f32 getFarClipDistance() const {
         return 50.0f;
     };
-    virtual Vec3f* getClippingCenterOffset() const {
-        static Vec3f sOffset;
-        sOffset.set(0.0f, 200.0f, 0.0f);
-        return &sOffset;
+    virtual Vec3f getClippingCenterOffset() const {
+        return Vec3f(0.0f, 200.0f, 0.0f);
     };
     virtual bool isSyncClipping() const {
         return true;
@@ -200,10 +196,8 @@ public:
         return 50.0f;
     }
 
-    virtual Vec3f* getClippingCenterOffset() const {
-        static Vec3f sOffset;
-        sOffset.set(0.0f, 580.0f, 0.0f);
-        return &sOffset;
+    virtual Vec3f getClippingCenterOffset() const {
+        return Vec3f(0.0f, 580.0f, 0.0f);
     }
 
     virtual bool isSyncClipping() const {

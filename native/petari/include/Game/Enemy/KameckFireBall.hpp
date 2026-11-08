@@ -28,5 +28,4 @@ public:
 
     Quat4f mRotateQuat;
     KameckBeamEventListener* mEventListener;
-    u8 _A0[4];
 };

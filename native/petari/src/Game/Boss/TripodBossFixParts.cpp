@@ -45,7 +45,7 @@ namespace {
 };  // namespace
 
 TripodBossFixParts::TripodBossFixParts(const char* pName)
-    : TripodBossFixPartsBase(pName), _E4(-1), _E8(180), mHasCollision(), _ED(true), _EE(), mIsPlayingWarning() {
+    : TripodBossFixPartsBase(pName), mBreakType(-1), mBreakKillStep(180), mHasCollision(), mHasBreakMovement(true), mIsMarioOn(), mIsPlayingWarning() {
 }
 
 void TripodBossFixParts::init(const TableIter& rIter) {
@@ -58,7 +58,7 @@ void TripodBossFixParts::init(const TableIter& rIter) {
 
     if (setting != nullptr) {
         val = (setting->mType & 0x1);
-        _ED = !(setting->mType & 0x2);
+        mHasBreakMovement = !(setting->mType & 0x2);
     }
 
     MR::FormattedName mapPartsID;
@@ -79,11 +79,11 @@ void TripodBossFixParts::init(const TableIter& rIter) {
         initClippingSphere();
     }
 
-    MR::getPlacementArg1NoInit(rIter, &_E4);
-    MR::getPlacementArg2NoInit(rIter, &_E8);
+    MR::getPlacementArg1NoInit(rIter, &mBreakType);
+    MR::getPlacementArg2NoInit(rIter, &mBreakKillStep);
 
-    if (_ED) {
-        initBreakMovement(_E4);
+    if (mHasBreakMovement) {
+        initBreakMovement(mBreakType);
     }
 
     mHasCollision = MR::isExistKcl(this, mapPartsID.c_str());
@@ -93,7 +93,7 @@ void TripodBossFixParts::init(const TableIter& rIter) {
         MR::initCollisionParts(this, mapPartsID.c_str(), getSensor("body"), nullptr);
     }
 
-    initEffectKeeper(0, "TripodBoss", false);
+    initEffectKeeper(0, "TripodBoss");
     initSound(5, false);
     initNerve(GET_NERVE(TripodBossFixParts, TripodBossFixPartsNrvNonActive));
 
@@ -115,7 +115,7 @@ void TripodBossFixParts::initSensor(const TableIter& rIter) {
 }
 
 void TripodBossFixParts::kill() {
-    switch (_E4) {
+    switch (mBreakType) {
     case 0:
         MR::emitEffect(this, "ExplosionS");
         MR::startSound(this, "SE_BM_TRIPOD_KILL_S");
@@ -150,8 +150,7 @@ void TripodBossFixParts::activateTripodBoss() {
             MR::validateCollisionParts(this);
         }
 
-        _E0 = 1;
-        _E1 = 0;
+        mIsActive = 1;
 
         if (MR::isExistAnim(this, "StartDemo")) {
             setNerve(GET_NERVE(TripodBossFixParts, TripodBossFixPartsNrvStartDemo));
@@ -179,15 +178,15 @@ void TripodBossFixParts::exeStartDemo() {
 void TripodBossFixParts::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::tryStartAllAnim(this, "Wait");
-        _EE = false;
+        mIsMarioOn = false;
     }
 
     exeWaitOwn();
     updateTripodMatrix();
 
-    if (MR::isRideMarioTripodBoss() && MR::isOnGroundPlayer() && !_EE) {
+    if (MR::isRideMarioTripodBoss() && MR::isOnGroundPlayer() && !mIsMarioOn) {
         MR::tryStartAllAnim(this, "Warning");
-        _EE = true;
+        mIsMarioOn = true;
 
         if (MR::isExistAnim(this, "Warning") && !mIsPlayingWarning) {
             MR::startSound(this, "SE_BM_TRIPOD_MARKER");
@@ -195,7 +194,7 @@ void TripodBossFixParts::exeWait() {
         }
     }
 
-    if (MR::isLeaveMarioNowTripodBoss() && _EE) {
+    if (MR::isLeaveMarioNowTripodBoss() && mIsMarioOn) {
         MR::tryStartAllAnim(this, "Wait");
 
         if (mIsPlayingWarning) {
@@ -203,11 +202,11 @@ void TripodBossFixParts::exeWait() {
         }
 
         mIsPlayingWarning = false;
-        _EE = false;
+        mIsMarioOn = false;
     }
 
     if (MR::isEndBreakDownDemoTripodBoss()) {
-        if (_ED) {
+        if (mHasBreakMovement) {
             setNerve(GET_NERVE(TripodBossFixParts, TripodBossFixPartsNrvBreak));
         } else {
             kill();
@@ -226,7 +225,7 @@ void TripodBossFixParts::exeBreak() {
 
     updateBreakMovementMatrix();
 
-    if (MR::isGreaterStep(this, _E8)) {
+    if (MR::isGreaterStep(this, mBreakKillStep)) {
         kill();
     }
 }

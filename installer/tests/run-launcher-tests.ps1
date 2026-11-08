@@ -10,12 +10,14 @@ $data = Join-Path $scratch 'data'
 New-Item -ItemType Directory -Force $app, $data, (Join-Path $scratch 'root\content') | Out-Null
 Set-Content -LiteralPath (Join-Path $scratch 'root\content\game.pak') -Value 'stub'
 $stub = Join-Path $scratch 'BuildInfo.cs'
+$storeVersion = [uint32](Get-Content -LiteralPath (Join-Path $repo 'runtime\include\galaxy\store_version.inc') -Raw).Trim()
 @"
 namespace Nebula { internal static class BuildInfo {
  public const string Version="0.0.0-test";
  public const string Commit="test";
  public const string Repository="keepvaibin/nebula";
  public const string ReleasePublicKeyXml="";
+ public const uint StoreVersion=$storeVersion;
 }}
 "@ | Set-Content -LiteralPath $stub
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'

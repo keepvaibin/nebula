@@ -29,7 +29,7 @@ void PunchBox::init(const TableIter& rIter) {
 
     initSound(2, false);
     initNerve(GET_NERVE(PunchBox, PunchBoxNrvWait));
-    initEffectKeeper(3, nullptr, false);
+    initEffectKeeper(3, nullptr);
 
     f32 radius = mScale.x * 90.0f;
     initHitSensor(1);
@@ -47,10 +47,10 @@ void PunchBox::init(const TableIter& rIter) {
     }
 
     mCoinCount = arg0;
-    _94 = 1;
-    _90 = 0;
-    _92 = MR::getRandom(0, 31);
-    _8C = 0;
+    mHitPoint = 1;
+    mHitCoolDown = 0;
+    mShadowStep = MR::getRandom(0, 31);
+    mFloorTouchTimer = 0;
 
     setNerve(GET_NERVE(PunchBox, PunchBoxNrvWait));
 
@@ -61,8 +61,6 @@ void PunchBox::init(const TableIter& rIter) {
     if (arg1 != 0) {
         mHasShadow = true;
     }
-
-    _98 = false;
 
     MR::declareCoin(this, mCoinCount);
     MR::declareStarPiece(this, 1);
@@ -111,30 +109,22 @@ void PunchBox::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f distance(pReceiver->mPosition - pSender->mPosition);
 
     if (distance.length() < 410.0f) {
-        _96 = true;
-    }
-
-    if (distance.length() < 110.0f) {
-        _97 = true;
+        mIsPlayerNear = true;
     }
 }
 
 void PunchBox::control() {
-    if (_90 == 0) {
-        _92++;
+    if (mHitCoolDown == 0) {
+        mShadowStep++;
     }
 
-    if (_8C != 0) {
-        _8C--;
-    }
-
-    if (_98 != 0) {
-        _98 = 0;
+    if (mFloorTouchTimer != 0) {
+        mFloorTouchTimer--;
     }
 }
 
 void PunchBox::calcAndSetBaseMtx() {
-    if (mHasShadow && (_92 & 0x7F) == 0x7F) {
+    if (mHasShadow && (mShadowStep & 0x7F) == 0x7F) {
         MR::onCalcShadowOneTime(this, nullptr);
     }
 
@@ -142,16 +132,15 @@ void PunchBox::calcAndSetBaseMtx() {
 }
 
 void PunchBox::exeWait() {
-    if (_90 != 0 && --_90 == 0) {
-        _94 = 1;
+    if (mHitCoolDown != 0 && --mHitCoolDown == 0) {
+        mHitPoint = 1;
     }
 
-    if (_94 == 0) {
+    if (mHitPoint == 0) {
         setNerve(GET_NERVE(PunchBox, PunchBoxNrvHit));
     }
 
-    _96 = false;
-    _97 = false;
+    mIsPlayerNear = false;
 }
 
 void PunchBox::exeHit() {
@@ -185,15 +174,15 @@ void PunchBox::kill() {
 }
 
 void PunchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
-    if (_94 != 0) {
-        _94--;
+    if (mHitPoint != 0) {
+        mHitPoint--;
     }
 
-    if (_94 == 0) {
+    if (mHitPoint == 0) {
         MR::invalidateCollisionParts(this);
     }
 
-    _90 = 30;
+    mHitCoolDown = 30;
 
     if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
         MR::emitEffect(this, "BreakWater");
@@ -210,7 +199,7 @@ bool PunchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     }
 
     if (MR::isMsgPlayerUpperPunch(msg)) {
-        if (_94 != 0) {
+        if (mHitPoint != 0) {
             doHit(pSender, pReceiver);
             pSender->receiveMessage(ACTMES_REFLECT_V, pReceiver);
         }
@@ -219,7 +208,7 @@ bool PunchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     }
 
     if (MR::isMsgPlayerHipDrop(msg) || MR::isMsgPlayerHipDropFloor(msg)) {
-        if (_8C != 0) {
+        if (mFloorTouchTimer != 0) {
             doHit(pSender, pReceiver);
             return true;
         }
@@ -229,7 +218,7 @@ bool PunchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
         doHit(pSender, pReceiver);
         return true;
     } else if (MR::isMsgPlayerHitAll(msg) && !MR::isOnPlayer(getSensor("body"))) {
-        if (_94 != 0) {
+        if (mHitPoint != 0) {
             doHit(pSender, pReceiver);
         }
 
@@ -240,7 +229,7 @@ bool PunchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 bool PunchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (_94 != 0) {
+    if (mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
     }
@@ -250,7 +239,7 @@ bool PunchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 bool PunchBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_IS_PUNCH_ENABLE) {
-        if (_96 && _94 != 0) {
+        if (mIsPlayerNear && mHitPoint != 0) {
             return true;
         }
 
@@ -258,32 +247,31 @@ bool PunchBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver
     }
 
     if (msg == ACTMES_IS_BROKEN) {
-        if (_96 && _94 != 0) {
+        if (mIsPlayerNear && mHitPoint != 0) {
             return false;
         }
 
         return true;
     }
 
-    if (msg == ACTMES_IS_RUSH_ENABLE && _96 && _94 != 0) {
-        _98 = true;
+    if (msg == ACTMES_IS_RUSH_ENABLE && mIsPlayerNear && mHitPoint != 0) {
         return true;
     }
 
     if (msg == ACTMES_FLOOR_TOUCH) {
-        _8C = 2;
+        mFloorTouchTimer = 2;
     }
 
-    if (msg == ACTMES_IS_OPD_SITE_IN && _94 != 0) {
+    if (msg == ACTMES_IS_OPD_SITE_IN && mHitPoint != 0) {
         return true;
     }
 
-    if ((msg == ACTMES_OPD_SHOOT || msg == ACTMES_BALL_DASH_WALL || msg == ACTMES_BALL_DASH_GROUND) && !MR::isSensorEye(pReceiver) && _94 != 0) {
+    if ((msg == ACTMES_OPD_SHOOT || msg == ACTMES_BALL_DASH_WALL || msg == ACTMES_BALL_DASH_GROUND) && !MR::isSensorEye(pReceiver) && mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
     }
 
-    if (_94 != 0 && (msg == ACTMES_TURNIP_ATTACK || msg == ACTMES_PAKKUN_BALL_ATTACK)) {
+    if (mHitPoint != 0 && (msg == ACTMES_TURNIP_ATTACK || msg == ACTMES_PAKKUN_BALL_ATTACK)) {
         doHit(pSender, pReceiver);
         return true;
     }

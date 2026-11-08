@@ -62,33 +62,30 @@ namespace FileSelectItemSub {
 };  // namespace FileSelectItemSub
 
 FileSelectItem::FileSelectItem(s32 a1, bool a2, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
-    _8C = a2;
+    mIsNewFile = a2;
     mPlanetMapObj = nullptr;
     mIconID = new FileSelectIconID(rID);
     mFaceParts = nullptr;
-    _A0 = nullptr;
-    _134.set(0.0f);
-    _140 = a1;
-    _144 = 0;
+    mNumber = nullptr;
+    mFileNo = a1;
+    mIsPointed = 0;
     mIsInvalidateSelect = false;
-    _146 = 0;
-    _147 = 0;
+    mIsMiiBroken = 0;
+    mIsComplete = 0;
     mScaleCtrl = new FileSelectItemSub::ScaleController();
     mBlinkCtrl = new FileSelectItemSub::BlinkController(this);
     mDelegator = nullptr;
-    _154 = 1;
-    _155 = 0;
-    _156 = 0;
-    _158.x = 0.0f;
-    _158.y = 0.0f;
-    _160 = 0.0f;
+    mIsPointerOut = 1;
+    mIsDragging = 0;
+    mPrevPointerPos.x = 0.0f;
+    mPrevPointerPos.y = 0.0f;
+    mRotateSpeed = 0.0f;
     mIsInvalidRotate = true;
-    _165 = 0;
-    _168 = 0;
-    _16C = 0;
-    _A4.identity();
-    _D4.identity();
-    _104.identity();
+    mTurnTime = 0;
+    mTurnStep = 0;
+    mPlanetMtx.identity();
+    mFellowMtx.identity();
+    mFaceMtx.identity();
 
     mModels = new FileSelectModel*[5];
 
@@ -114,7 +111,7 @@ void FileSelectItem::init(const TableIter& rIter) {
 void FileSelectItem::appear() {
     LiveActor::appear();
 
-    if (_8C) {
+    if (mIsNewFile) {
         killAllModels();
         mPlanetMapObj->makeActorAppeared();
         setNerve(GET_NERVE_ANON(FileSelectItemNrvNewWait));
@@ -132,7 +129,7 @@ void FileSelectItem::appear() {
 
 void FileSelectItem::makeActorAppeared() {
     LiveActor::makeActorAppeared();
-    _144 = 0;
+    mIsPointed = 0;
     mIsInvalidateSelect = false;
 }
 
@@ -158,7 +155,7 @@ bool FileSelectItem::isExist() const {
 void FileSelectItem::format() {
     setNerve(GET_NERVE_ANON(FileSelectItemNrvFormat));
     deleteCompleteEffect();
-    _8C = 1;
+    mIsNewFile = 1;
 }
 
 void FileSelectItem::change(const FileSelectIconID& rID, bool a2) {
@@ -171,9 +168,8 @@ void FileSelectItem::change(const FileSelectIconID& rID, bool a2) {
     }
 
     deleteCompleteEffect();
-    _147 = a2;
-    _165 = 0;
-    _8C = 0;
+    mIsComplete = a2;
+    mIsNewFile = 0;
 }
 
 void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
@@ -187,14 +183,14 @@ void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
         appearFellowModel();
     }
 
-    _147 = a2;
+    mIsComplete = a2;
     emitCompleteEffect();
     setNerve(GET_NERVE_ANON(FileSelectItemNrvExistWait));
-    _8C = 0;
+    mIsNewFile = 0;
 }
 
 void FileSelectItem::invalidateSelect() {
-    if (_144) {
+    if (mIsPointed) {
         offPointing();
     }
 
@@ -206,11 +202,11 @@ void FileSelectItem::validateSelect() {
 }
 
 void FileSelectItem::appearIndex() {
-    _A0->appear();
+    mNumber->appear();
 }
 
 void FileSelectItem::disappearIndex() {
-    _A0->disappear();
+    mNumber->disappear();
 }
 
 void FileSelectItem::copyIconID(FileSelectIconID* pId) {
@@ -229,8 +225,8 @@ void FileSelectItem::onPointing() {
             playPointedME();
         }
 
-        _A0->onSelectIn();
-        _144 = 1;
+        mNumber->onSelectIn();
+        mIsPointed = 1;
         mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToBig));
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
@@ -238,8 +234,8 @@ void FileSelectItem::onPointing() {
 
 void FileSelectItem::offPointing() {
     if (!mIsInvalidateSelect) {
-        _A0->onSelectOut();
-        _144 = 0;
+        mNumber->onSelectOut();
+        mIsPointed = 0;
         mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToSmall));
     }
 }
@@ -249,8 +245,8 @@ void FileSelectItem::validateRotate() {
 }
 
 void FileSelectItem::turnToFront(s32 angle) {
-    _168 = angle;
-    _16C = 0;
+    mTurnTime = angle;
+    mTurnStep = 0;
 }
 
 void FileSelectItem::exeFormat() {
@@ -272,7 +268,7 @@ void FileSelectItem::exeFormat() {
 
     if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
-        _160 = 0.0f;
+        mRotateSpeed = 0.0f;
     }
 
     if (MR::isStep(this, 60)) {
@@ -292,12 +288,7 @@ void FileSelectItem::exeChangeFellow() {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_MARIO");
         appearFellowModel();
         emitCompleteEffect();
-
-        if (_165) {
-            emitCopy();
-        } else {
-            emitOpen();
-        }
+        emitOpen();
 
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
@@ -305,7 +296,7 @@ void FileSelectItem::exeChangeFellow() {
 
     if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
-        _160 = 0.0f;
+        mRotateSpeed = 0.0f;
     }
 
     if (MR::isStep(this, 150)) {
@@ -330,12 +321,7 @@ void FileSelectItem::exeChangeMii() {
         killAllModels();
         mFaceParts->makeActorAppeared();
         emitCompleteEffect();
-
-        if (_165) {
-            emitCopy();
-        } else {
-            emitOpen();
-        }
+        emitOpen();
 
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
@@ -343,7 +329,7 @@ void FileSelectItem::exeChangeMii() {
 
     if (MR::isGreaterEqualStep(this, 40)) {
         mRotation.y = 0.0f;
-        _160 = 0.0f;
+        mRotateSpeed = 0.0f;
     }
 
     if (MR::isStep(this, 150)) {
@@ -367,11 +353,11 @@ void FileSelectItem::control() {
 
     Vec3f trans;
     mtx.getTrans(trans);
-    _A4.set(mtx);
-    _A4.setTrans(trans + yDir * 30.0f * 30.0f);
+    mPlanetMtx.set(mtx);
+    mPlanetMtx.setTrans(trans + yDir * 30.0f * 30.0f);
 
-    _D4.set(mtx);
-    _104.set(mtx);
+    mFellowMtx.set(mtx);
+    mFaceMtx.set(mtx);
 
     mScaleCtrl->updateNerve();
 
@@ -389,40 +375,40 @@ void FileSelectItem::control() {
     Vec3f screenPos;
     newPos.add(mPosition, ::sDataInfoOffset);
     MR::calcScreenPosition(&screenPos, newPos);
-    _A0->setTrans(screenPos);
+    mNumber->setTrans(screenPos);
 }
 
 void FileSelectItem::createNew() {
-    mPlanetMapObj = MR::createPartsModelMapObj(this, "ニューフェイス", "FileSelectDataPlanet", _A4);
+    mPlanetMapObj = MR::createPartsModelMapObj(this, "ニューフェイス", "FileSelectDataPlanet", mPlanetMtx);
     mPlanetMapObj->mScale.set(30.0f);
     mPlanetMapObj->makeActorDead();
 }
 
 void FileSelectItem::createFellows() {
     for (u32 i = 0; i < 5; i++) {
-        mModels[i] = new FileSelectModel(::sFellowModel[i], _D4, "キャラフェイス");
+        mModels[i] = new FileSelectModel(::sFellowModel[i], mFellowMtx, "キャラフェイス");
     }
 }
 
 void FileSelectItem::createMii() {
-    if (_8C || !mIconID->isMii()) {
+    if (mIsNewFile || !mIconID->isMii()) {
         mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Miiフェイス", 0);
     } else {
         mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Miiフェイス",
                                                                 MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
     }
 
-    mFaceParts->initFixedPosition(_104, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mFaceParts->initFixedPosition(mFaceMtx, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     mFaceParts->mScale.set(27.0f);
-    mFaceParts->initEffectKeeper(0, "FileSelectDataMii", false);
+    mFaceParts->initEffectKeeper(0, "FileSelectDataMii");
     MR::invalidateClipping(mFaceParts);
     mFaceParts->makeActorDead();
 }
 
 void FileSelectItem::createNumber() {
-    _A0 = new FileSelectNumber("ファイル番号");
-    _A0->initWithoutIter();
-    _A0->setNumber(_140);
+    mNumber = new FileSelectNumber("ファイル番号");
+    mNumber->initWithoutIter();
+    mNumber->setNumber(mFileNo);
 }
 
 void FileSelectItem::updatePointing() {
@@ -438,7 +424,7 @@ void FileSelectItem::updatePointing() {
         }
     }
 
-    if (!mIsInvalidateSelect && _144 && MR::testDPDMenuPadDecideTrigger()) {
+    if (!mIsInvalidateSelect && mIsPointed && MR::testPointerMenuPadDecideTrigger()) {
         if (mDelegator != nullptr) {
             mDelegator->notify(this, 1);
             mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToSmall));
@@ -544,12 +530,12 @@ void FileSelectItem::updateRotate() {
         return;
     }
 
-    const s32 duration = _168;
+    const s32 duration = mTurnTime;
     if (duration > 0) {
-        _160 = 0.0f;
+        mRotateSpeed = 0.0f;
 
-        _16C++;
-        const s32 step = _16C;
+        mTurnStep++;
+        const s32 step = mTurnStep;
         f32 rate = static_cast< f32 >(step) / duration;
         rate *= rate;
         if (rate > 1.0f) {
@@ -561,8 +547,8 @@ void FileSelectItem::updateRotate() {
         }
 
         if (step >= duration) {
-            _16C = 0;
-            _168 = 0;
+            mTurnStep = 0;
+            mTurnTime = 0;
         }
 
         f32 angle = MR::repeat(mRotation.y, -180.0f, 360.0f);
@@ -575,17 +561,16 @@ void FileSelectItem::updateRotate() {
         Vec3f center = mPosition + Vec3f(0.0f, 900.0f, 0.0f);
         Vec2f screenPos(*MR::getStarPointerScreenPosition(0));
 
-        if (_154) {
-            _158 = screenPos;
-            _156 = _155;
-            _154 = 0;
+        if (mIsPointerOut) {
+            mPrevPointerPos = screenPos;
+            mIsPointerOut = 0;
         }
 
         Vec3f cameraPosition = MR::getCamPos();
         Vec3f cameraToCenter = center - cameraPosition;
 
         f32 pointerDistance = (900.0f + cameraToCenter.length());
-        if (FloatUtil::sqrt(screenPos.squareDist(_158)) < 2.0f) {
+        if (FloatUtil::sqrt(screenPos.squareDist(mPrevPointerPos)) < 2.0f) {
             Vec3f pointerPosition;
             MR::calcWorldPositionFromScreen(&pointerPosition, screenPos, pointerDistance);
             Vec3f pointerDirection = pointerPosition - cameraPosition;
@@ -593,44 +578,43 @@ void FileSelectItem::updateRotate() {
             Vec3f crossDirection = cameraToCenter.cross(pointerDirection);
 
             if (crossDirection.length() < 900.0f) {
-                _155 = 1;
+                mIsDragging = 1;
             }
         } else {
             Vec3f currentPoint;
             MR::calcWorldPositionFromScreen(&currentPoint, screenPos, pointerDistance);
             Vec3f previousPoint;
-            MR::calcWorldPositionFromScreen(&previousPoint, _158, pointerDistance);
+            MR::calcWorldPositionFromScreen(&previousPoint, mPrevPointerPos, pointerDistance);
             bool collides = ::checkCollisionOfPointAndTriangle(center, cameraPosition, currentPoint, previousPoint);
 
             if (collides) {
-                _155 = 1;
+                mIsDragging = 1;
             }
         }
 
-        if (_155) {
-            Vec2f delta = screenPos - _158;
-            _160 += 0.03f * delta.x / mScale.x;
-            _160 = MR::clamp(_160, -25.0f, 25.0f);
+        if (mIsDragging) {
+            Vec2f delta = screenPos - mPrevPointerPos;
+            mRotateSpeed += 0.03f * delta.x / mScale.x;
+            mRotateSpeed = MR::clamp(mRotateSpeed, -25.0f, 25.0f);
         }
 
-        _156 = _155;
-        _158 = screenPos;
+        mPrevPointerPos = screenPos;
     } else {
-        _154 = 1;
+        mIsPointerOut = 1;
     }
 
-    _160 *= 0.98f;
+    mRotateSpeed *= 0.98f;
 
-    if (_160 >= 0.0f && _160 < 0.5f) {
-        _160 = 0.5f;
+    if (mRotateSpeed >= 0.0f && mRotateSpeed < 0.5f) {
+        mRotateSpeed = 0.5f;
     }
 
-    if (_160 < 0.0f && _160 > -0.5f) {
-        _160 = -0.5f;
+    if (mRotateSpeed < 0.0f && mRotateSpeed > -0.5f) {
+        mRotateSpeed = -0.5f;
     }
 
-    mRotation.y = MR::repeat(mRotation.y + _160, 0.0f, 360.0f);
-    _155 = 0;
+    mRotation.y = MR::repeat(mRotation.y + mRotateSpeed, 0.0f, 360.0f);
+    mIsDragging = 0;
 }
 
 void FileSelectItem::playPointedME() {
@@ -730,24 +714,8 @@ void FileSelectItem::emitVanish() {
     }
 }
 
-void FileSelectItem::emitCopy() {
-    if (!MR::isDead(mPlanetMapObj)) {
-        MR::emitEffect(mPlanetMapObj, "Copy");
-    }
-
-    for (s32 i = 0; i < 5; i++) {
-        if (!MR::isDead(mModels[i])) {
-            mModels[i]->emitCopy();
-        }
-    }
-
-    if (!MR::isDead(mFaceParts)) {
-        MR::emitEffect(mFaceParts, "Copy");
-    }
-}
-
 void FileSelectItem::emitCompleteEffect() {
-    if (!_147) {
+    if (!mIsComplete) {
         return;
     }
 
@@ -773,14 +741,14 @@ void FileSelectItem::deleteCompleteEffect() {
 namespace FileSelectItemSub {
 
     ScaleController::ScaleController() : NerveExecutor("ファイルセレクタアイコンサイズ管理") {
-        _8 = 1.0f;
+        mScale = 1.0f;
         initNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall));
     }
 
     void ScaleController::exeToSmall() {
         if (MR::isLessEqualStep(this, 30)) {
             f32 v = (getNerveStep() / 30.0f);
-            _8 += (v * (1.0f - _8));
+            mScale += (v * (1.0f - mScale));
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall), 30);
@@ -789,7 +757,7 @@ namespace FileSelectItemSub {
     void ScaleController::exeToBig() {
         if (MR::isLessEqualStep(this, 30)) {
             f32 v = (getNerveStep() / 30.0f);
-            _8 += v * (1.2f - _8);
+            mScale += v * (1.2f - mScale);
         }
 
         MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), 30);
@@ -797,33 +765,33 @@ namespace FileSelectItemSub {
 
     BlinkController::BlinkController(FileSelectItem* pItem) : NerveExecutor("ファイルセレクタアイコン瞬き管理") {
         mItem = pItem;
-        _C = 0;
-        _10 = 0;
+        mWaitStep = 0;
+        mBlinkStep = 0;
         initNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
     }
 
     void BlinkController::exeOpen() {
         if (MR::isFirstStep(this)) {
-            _C = MR::getRandom(180, 300);
-            _10 = 0;
+            mWaitStep = MR::getRandom(180, 300);
+            mBlinkStep = 0;
         }
 
-        f32 v2 = MR::abs(mItem->_160);
+        f32 v2 = MR::abs(mItem->mRotateSpeed);
 
         if (v2 > 10.0f) {
-            _10 += 2;
+            mBlinkStep += 2;
         } else {
             if (v2 > 6.0f) {
-                _10++;
+                mBlinkStep++;
             } else {
-                _10 = 0;
+                mBlinkStep = 0;
             }
         }
 
-        if (_10 > 180) {
+        if (mBlinkStep > 180) {
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvSleep));
         } else {
-            if (MR::isGreaterEqualStep(this, _C)) {
+            if (MR::isGreaterEqualStep(this, mWaitStep)) {
                 setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvShut));
             }
         }
@@ -843,16 +811,16 @@ namespace FileSelectItemSub {
     void BlinkController::exeSleep() {
         if (MR::isFirstStep(this)) {
             sleep();
-            _10 = 0;
+            mBlinkStep = 0;
         }
 
-        _10++;
+        mBlinkStep++;
 
-        if (MR::abs(mItem->_160) > 2.0f) {
-            _10 = 0;
+        if (MR::abs(mItem->mRotateSpeed) > 2.0f) {
+            mBlinkStep = 0;
         }
 
-        if (_10 > 60) {
+        if (mBlinkStep > 60) {
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvBlink));
         }
     }
@@ -887,7 +855,7 @@ namespace FileSelectItemSub {
     }
 
     void BlinkController::shut() {
-        if (!mItem->_8C) {
+        if (!mItem->mIsNewFile) {
             if (mItem->mIconID->isMii()) {
                 mItem->mFaceParts->changeExpressionBlink();
             } else {
@@ -897,7 +865,7 @@ namespace FileSelectItemSub {
     }
 
     void BlinkController::open() {
-        if (!mItem->_8C) {
+        if (!mItem->mIsNewFile) {
             if (mItem->mIconID->isMii()) {
                 mItem->mFaceParts->changeExpressionNormal();
             } else {
@@ -907,7 +875,7 @@ namespace FileSelectItemSub {
     }
 
     void BlinkController::sleep() {
-        if (!mItem->_8C) {
+        if (!mItem->mIsNewFile) {
             if (mItem->mIconID->isMii()) {
                 mItem->mFaceParts->changeExpressionBlink();
             } else {
@@ -917,11 +885,11 @@ namespace FileSelectItemSub {
     }
 
     void ScaleController::exeBig() {
-        _8 = 1.2f;
+        mScale = 1.2f;
     }
 
     void ScaleController::exeSmall() {
-        _8 = 1.0f;
+        mScale = 1.0f;
     }
 };  // namespace FileSelectItemSub
 

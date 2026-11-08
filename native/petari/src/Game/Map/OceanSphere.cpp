@@ -1,8 +1,6 @@
 #include "Game/Map/OceanSphere.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/OceanSpherePoint.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
@@ -225,7 +223,7 @@ bool OceanSphere::calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterI
     const f32 alongGravity = MR::vecKillElement(offset, -rGravity, &offset);
     const f32 height = radius * MR::cos(offset.length() / radius * MR::pi() / 2.0f);
     pInfo->mCamWaterDepth = height - alongGravity;
-    pInfo->_4 = height + alongGravity;
+    pInfo->mDepth = height + alongGravity;
 
     Vec3f normal = rPos - rPosition;
     MR::normalizeOrZero(&normal);

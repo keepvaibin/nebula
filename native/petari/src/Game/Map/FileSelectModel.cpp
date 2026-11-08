@@ -15,10 +15,10 @@ namespace {
     NEW_NERVE(FileSelectModelNrvBlink, FileSelectModel, Blink);
 };  // namespace
 
-FileSelectModel::FileSelectModel(const char* pModelName, MtxPtr pHostMtx, const char* pName) : LiveActor(pName), _8C(pHostMtx) {
+FileSelectModel::FileSelectModel(const char* pModelName, MtxPtr pHostMtx, const char* pName) : LiveActor(pName), mHostMtx(pHostMtx) {
     initModelManagerWithAnm(pModelName, nullptr, false);
     MR::connectToSceneNpc(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::initLightCtrl(this);
     mScale.set(::sScale, ::sScale, ::sScale);
     initNerve(GET_NERVE_ANON(FileSelectModelNrvOpen));
@@ -62,10 +62,6 @@ void FileSelectModel::emitVanish() {
     MR::emitEffect(this, "Vanish");
 }
 
-void FileSelectModel::emitCopy() {
-    MR::emitEffect(this, "Copy");
-}
-
 void FileSelectModel::emitCompleteEffect() {
     MR::emitEffect(this, "Complete");
 }
@@ -107,6 +103,6 @@ void FileSelectModel::exeBlink() {
 }
 
 void FileSelectModel::calcAndSetBaseMtx() {
-    mPosition.setTrans(_8C);
-    MR::setBaseTRMtx(this, _8C);
+    mPosition.setTrans(mHostMtx);
+    MR::setBaseTRMtx(this, mHostMtx);
 }

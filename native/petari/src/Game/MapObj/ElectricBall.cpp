@@ -103,7 +103,7 @@ void ElectricBall::control() {
             mRailMover->movement();
 
             if (mRailMover->isWorking()) {
-                mPosition.set(mRailMover->_28);
+                mPosition.set(mRailMover->mStartPos);
             }
         }
 

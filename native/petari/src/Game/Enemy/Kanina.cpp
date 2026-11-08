@@ -89,8 +89,6 @@ namespace {
     static const f32 sGroundFrec = 0.93f;
     static const f32 sAirFrec = 0.99f;
     static const f32 sPushAccel = 1.5f;
-    // static const f32 sHitHorizontalPower;
-    // static const f32 sHitVerticalPower;
     static const f32 sDownGravityAccel = 1.0f;
 };  // namespace
 
@@ -131,15 +129,15 @@ namespace {
 };  // namespace
 
 Kanina::Kanina(const char* pName)
-    : LiveActor(pName), mJointRumbler(), mKinokoOneUp(), mAnimationRandomPlayer(), _98(gZeroVec), _B4(15), _B8(10), _BC(1.0f), _C0(0.0f, 0.0f, 1.0f),
-      mType(KaninaType_Blue), _D0(0.0f, 0.0f, 1.0f), _DC() {
-    _A4.set(0.0f, 0.0f, 0.0f, 1.0f);
+    : LiveActor(pName), mJointRumbler(), mKinokoOneUp(), mAnimationRandomPlayer(), mInitPos(gZeroVec), mRunAwayStep(15), mRunAwayBreakStep(10), mRunAwaySide(1.0f), mHitWallDir(0.0f, 0.0f, 1.0f),
+      mType(KaninaType_Blue), mFront(0.0f, 0.0f, 1.0f), mWalkCount() {
+    mPoseQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void Kanina::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    MR::makeQuatAndFrontFromRotate(&_A4, &_D0, this);
-    _98.set(mPosition);
+    MR::makeQuatAndFrontFromRotate(&mPoseQuat, &mFront, this);
+    mInitPos.set(mPosition);
 
     const char* objectName = nullptr;
 
@@ -153,7 +151,7 @@ void Kanina::init(const TableIter& rIter) {
     MR::addHitSensorMtxEnemy(this, "body", 8, ::sSensorRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorMtxEnemyAttack(this, "attack", 8, ::sSensorRadiusAttack, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(::sBinderRadius, ::sBinderOffsetY, 8);
-    initEffectKeeper(1, "Kanina", false);
+    initEffectKeeper(1, "Kanina");
     MR::addEffectHitNormal(this, nullptr);
     MR::onCalcGravity(this);
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
@@ -378,7 +376,7 @@ void Kanina::doDamageFireBall(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f vec;
     MR::vecKillElement(mVelocity, -mGravity, &vec);
     MR::normalizeOrZero(&vec);
-    _D0.set(-vec);
+    mFront.set(-vec);
     setNerve(GET_NERVE(Kanina, HostTypeDamageFireBall));
 }
 
@@ -398,7 +396,7 @@ void Kanina::startRun() {
     Vec3f vecFromPlayerH;
     MR::calcVecFromPlayerH(&vecFromPlayerH, this);
 
-    f32 BC = _BC;
+    f32 BC = mRunAwaySide;
     f32 angle = -1.0f * BC * getFloatDependentType(::sRunAwayDirectionAngleRed, ::sRunAwayDirectionAngle);
 
     Pos3f rotate;
@@ -427,10 +425,10 @@ void Kanina::startRun() {
 
     Quat4f quat;
     MR::makeQuatSideUp(&quat, multVec2 * BC, upVec);
-    quat.getZDir(_D0);
+    quat.getZDir(mFront);
 
-    _B4 = ::getRunAwayTimeRandom();
-    _BC *= -1.0f;
+    mRunAwayStep = ::getRunAwayTimeRandom();
+    mRunAwaySide *= -1.0f;
 }
 
 void Kanina::startRunAwayLevelSound() {
@@ -466,9 +464,9 @@ void Kanina::calcAndSetBaseMtx() {
     baseMtx.getQuat(quat);
 
     if (isNerve(GET_NERVE(Kanina, HostTypeDamageFireBall))) {
-        quat.set(_A4);
+        quat.set(mPoseQuat);
     } else {
-        quat.slerp(_A4, ::sPoseLerpRate);
+        quat.slerp(mPoseQuat, ::sPoseLerpRate);
     }
 
     MR::setBaseTRMtx(this, quat);
@@ -476,7 +474,7 @@ void Kanina::calcAndSetBaseMtx() {
 
 void Kanina::control() {
     mJointRumbler->update();
-    MR::blendQuatFromGroundAndFront(&_A4, this, _D0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+    MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
     updateMovement();
 
     if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
@@ -624,8 +622,8 @@ bool Kanina::tryHitWall() {
         return false;
     }
 
-    _C0.set(mVelocity);
-    MR::normalizeOrZero(&_C0);
+    mHitWallDir.set(mVelocity);
+    MR::normalizeOrZero(&mHitWallDir);
     setNerve(GET_NERVE(Kanina, HostTypeHitWall));
     return true;
 }
@@ -678,7 +676,7 @@ void Kanina::exeWait() {
             return;
         }
 
-        if (mType == KaninaType_Blue && _DC >= ::sWalkCount) {
+        if (mType == KaninaType_Blue && mWalkCount >= ::sWalkCount) {
             setNerve(GET_NERVE(Kanina, HostTypeDig));
             return;
         }
@@ -708,17 +706,17 @@ namespace {
 
 void Kanina::exeWalk() {
     if (MR::isFirstStep(this)) {
-        _DC++;
+        mWalkCount++;
         MR::startBck(this, "Walk");
 
         Vec3f temp;
         ::calcWalkDirection(&temp, this);
-        _D0.set(temp);
+        mFront.set(temp);
 
-        MR::blendQuatFromGroundAndFront(&_A4, this, _D0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+        MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 
         Vec3f quatX;
-        _A4.getXDir(quatX);
+        mPoseQuat.getXDir(quatX);
         mVelocity.set(quatX * (::sWalkSpeed * MR::getSignHalfProbability()));
     }
 
@@ -743,7 +741,7 @@ void Kanina::exeRunAway() {
             } else {
                 setNerve(GET_NERVE(Kanina, HostTypeWait));
             }
-        } else if (MR::isStep(this, _B4)) {
+        } else if (MR::isStep(this, mRunAwayStep)) {
             MR::zeroVelocity(this);
             setNerve(GET_NERVE(Kanina, HostTypeRunAwayBreak));
         }
@@ -756,12 +754,12 @@ void Kanina::exeRunAwayReboundDirection() {
         MR::setBckRate(this, ::sAnimRateRunAway);
         Vec3f up;
         MR::calcUpVec(&up, this);
-        Vec3f vec(_C0);
+        Vec3f vec(mHitWallDir);
         MR::vecKillElement(vec, up, &vec);
         MR::normalizeOrZero(&vec);
         mVelocity.set(vec * getFloatDependentType(::sWalkSpeedRunAwayRed, ::sWalkSpeedRunAway));
-        _B4 = ::getRunAwayBreakTimeRandom();
-        _BC *= -1.0f;
+        mRunAwayStep = ::getRunAwayBreakTimeRandom();
+        mRunAwaySide *= -1.0f;
     }
 
     startRunAwayLevelSound();
@@ -772,7 +770,7 @@ void Kanina::exeRunAwayReboundDirection() {
             return;
         }
 
-        if (MR::isStep(this, _B4)) {
+        if (MR::isStep(this, mRunAwayStep)) {
             setNerve(GET_NERVE(Kanina, HostTypeRunAwayBreak));
         }
     }
@@ -781,10 +779,10 @@ void Kanina::exeRunAwayReboundDirection() {
 void Kanina::exeRunAwayBreak() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Wait");
-        _B8 = ::getRunAwayBreakTimeRandom();
+        mRunAwayBreakStep = ::getRunAwayBreakTimeRandom();
     }
 
-    if (!tryTurn() && !tryPointing() && MR::isStep(this, _B8)) {
+    if (!tryTurn() && !tryPointing() && MR::isStep(this, mRunAwayBreakStep)) {
         if (isBindedGroundWaterBottom()) {
             setNerve(GET_NERVE(Kanina, HostTypeDig));
             return;
@@ -796,7 +794,7 @@ void Kanina::exeRunAwayBreak() {
 
 void Kanina::exeAttack() {
     if (MR::isFirstStep(this)) {
-        MR::calcVecToPlayerH(&_D0, this, nullptr);
+        MR::calcVecToPlayerH(&mFront, this, nullptr);
         MR::startBck(this, "Attack");
         MR::startSound(this, "SE_EM_KANINA_ATTACK_FRONT");
     }
@@ -822,11 +820,11 @@ void Kanina::exeHitWall() {
         mJointRumbler->start();
         Vec3f up;
         MR::calcUpVec(&up, this);
-        mVelocity.set(_C0 * ::sWallHitReboundAcc + up * ::sWallHitReboundAccY);
-        Vec3f vec(_C0);
+        mVelocity.set(mHitWallDir * ::sWallHitReboundAcc + up * ::sWallHitReboundAccY);
+        Vec3f vec(mHitWallDir);
         MR::vecKillElement(vec, up, &vec);
         MR::normalizeOrZero(&vec);
-        MR::makeQuatSideUp(&_A4, vec, up);
+        MR::makeQuatSideUp(&mPoseQuat, vec, up);
     }
 
     startRunAwayLevelSound();
@@ -852,7 +850,7 @@ void Kanina::exeGuard() {
         MR::startBck(this, "Guard");
         MR::startSound(this, "SE_EM_KANINA_GUARD");
         MR::tryRumbleDefaultHit(this, 0);
-        MR::calcVecToPlayerH(&_D0, this, nullptr);
+        MR::calcVecToPlayerH(&mFront, this, nullptr);
     }
 
     if (MR::isStep(this, ::sGuardTime)) {
@@ -907,7 +905,7 @@ void Kanina::exeDamageFireBall() {
 
 void Kanina::exeDig() {
     if (MR::isFirstStep(this)) {
-        _DC = 0;
+        mWalkCount = 0;
         MR::startBck(this, "Dig");
     }
 
@@ -922,7 +920,7 @@ void Kanina::exeWaitUnderGround() {
     if (MR::isFirstStep(this)) {
         MR::zeroVelocity(this);
         MR::invalidateShadow(this, nullptr);
-        mPosition.set(_98);
+        mPosition.set(mInitPos);
     }
 
     if (MR::isGreaterStep(this, ::sWaitUnderGroundTime) && ::sKeepUnderGroundDistance < MR::calcDistanceToPlayer(this)) {
@@ -935,7 +933,7 @@ void Kanina::exeFindPlayer() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Search");
         MR::startSound(this, "SE_EV_KANINA_FIND");
-        MR::calcVecToPlayerH(&_D0, this, nullptr);
+        MR::calcVecToPlayerH(&mFront, this, nullptr);
     }
 
     if (MR::isBckStopped(this)) {
@@ -948,7 +946,7 @@ void Kanina::exeTurn() {
         MR::startBck(this, "Turn");
     }
 
-    if (MR::turnDirectionToTargetUseGroundNormalDegree(this, &_D0, *MR::getPlayerPos(), ::sTurnSpeed)) {
+    if (MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), ::sTurnSpeed)) {
         setNerve(GET_NERVE(Kanina, HostTypeTurnEnd));
     }
 }
@@ -966,11 +964,11 @@ void Kanina::exeTurnEnd() {
 void Kanina::exePointing() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Guard");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
-        MR::startDPDFreezeLevelSound(this);
+        MR::startPointerFreezeLevelSound(this);
         MR::tryEmitEffect(this, "Touch");
     }
 

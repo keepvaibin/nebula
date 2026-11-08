@@ -35,7 +35,7 @@ void TripodBossGuardWallPart::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "TripodBossGuardWall",
                            MR::addHitSensor(this, "collision", ATYPE_TRIPODBOSS_GUARD_WALL, 0, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f)), nullptr);
     initSound(4, false);
-    initEffectKeeper(0, "TripodBoss", false);
+    initEffectKeeper(0, "TripodBoss");
     MR::invalidateClipping(this);
     MR::startBck(this, "2ndDemo");
     MR::setBckFrameAndStop(this, 0.0f);

@@ -31,7 +31,7 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
 }
 
 void MarioParts::init(const TableIter& rIter) {
-    initEffectKeeper(8, _9C, false);
+    initEffectKeeper(8, _9C);
     initSound(8, false);
     MR::invalidateClipping(this);
     makeActorAppeared();

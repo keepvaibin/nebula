@@ -17,5 +17,4 @@ public:
     void exeWait();
     void exeDamage();
 
-    PartsModel* _C4;
 };

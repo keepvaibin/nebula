@@ -13,7 +13,7 @@ public:
     bool isTargetArea(const LightArea*) const;
     bool isOutOfArea() const;
 
-    s32 _0;
+    s32 mZoneId;
     s32 mLightID;
 };
 

@@ -30,7 +30,7 @@ public:
 
     ParabolicPath* mPath;
     ValueControl* mValueCtrl;
-    u8 _18;
+    u8 mIsWaterColumnEmitted;
 };
 
 class Pukupuku : public LiveActor {
@@ -82,17 +82,14 @@ public:
     }
 
     PukupukuStateLanding* mStateLanding;
-    Vec3f _90;
-    Vec3f _9C;
-    Quat4f _A8;
+    Vec3f mClipCenter;
+    Vec3f mBinderOffset;
+    Quat4f mPoseQuat;
     AnimScaleController* mScaleCtrl;
     WalkerStateBindStarPointer* mStarPointer;
-    const char* _C0;
-    Nerve* _C4;
-    f32 _C8;
-    f32 _CC;
-    u8 _D0;
-    u8 _D1;
-    u8 _D2;
-    u8 _D3;
+    const char* mBckBeforeBind;
+    Nerve* mNerveAfterBind;
+    f32 mBckFrameBeforeBind;
+    f32 mBtpFrameBeforeBind;
+    u8 mIsTrampled;
 };

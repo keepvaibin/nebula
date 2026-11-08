@@ -15,5 +15,5 @@ public:
     void exePlaySound();
     void exeStandBy();
 
-    s32 _8C;
+    s32 mSoundType;
 };

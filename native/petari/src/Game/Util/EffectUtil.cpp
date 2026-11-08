@@ -157,8 +157,8 @@ namespace MR {
         ::getEffectKeeper(pActor)->changeEffectName(pOldName, pNewName);
     }
 
-    void setEffectHostSRT(LiveActor* pActor, const char* pEffectName, const Vec3f* pScale, const Vec3f* pRotate, const Vec3f* pTranslate) {
-        getEffect(pActor, pEffectName)->setHostSRT(pScale, pRotate, pTranslate);
+    void setEffectHostSRT(LiveActor* pActor, const char* pEffectName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale) {
+        getEffect(pActor, pEffectName)->setHostSRT(pTranslation, pRotation, pScale);
     }
 
     void setEffectHostMtx(LiveActor* pActor, const char* pEffectName, MtxPtr pMtx) {

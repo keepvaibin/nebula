@@ -17,9 +17,9 @@ namespace NrvPunchingKinoko {
 };  // namespace NrvPunchingKinoko
 
 PunchingKinoko::PunchingKinoko(const char* pName)
-    : LiveActor(pName), mGroundChecker(nullptr), mScaleController(nullptr), mDelegator(nullptr), _98(-1), _9C(0, 0, 0), _A8(0, 1, 0) {
+    : LiveActor(pName), mGroundChecker(nullptr), mScaleController(nullptr), mDelegator(nullptr), mCameraVecId(-1), mCameraTarget(0, 0, 0), mShadowNormal(0, 1, 0) {
     mStarPointerHitCoolDown = 0;
-    _B8 = true;
+    mIsPointerHeld = true;
     mInvincibleHitCoolDown = -1;
 }
 
@@ -28,7 +28,7 @@ void PunchingKinoko::init(const TableIter& rIter) {
     initModelManagerWithAnm("PunchingKinoko", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObj(this);
     MR::calcGravity(this);
-    _9C.set(mPosition);
+    mCameraTarget.set(mPosition);
 
     mGroundChecker = new GroundChecker("頭コリジョン", 70.0f, 0.0f);
     MR::calcPositionUpOffset(&mGroundChecker->mPosition, this, 130.0f);
@@ -42,7 +42,7 @@ void PunchingKinoko::init(const TableIter& rIter) {
 
     initShadow();
     initSensor();
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     initCamera(rIter);
     initJointControl();
@@ -73,9 +73,9 @@ void PunchingKinoko::initShadow() {
 }
 
 void PunchingKinoko::initCamera(const TableIter& rIter) {
-    MR::getPlacementArg7WithInit(rIter, &_98);
-    if (_98 != -1) {
-        MR::declareCameraRegisterVec(this, _98, &_9C);
+    MR::getPlacementArg7WithInit(rIter, &mCameraVecId);
+    if (mCameraVecId != -1) {
+        MR::declareCameraRegisterVec(this, mCameraVecId, &mCameraTarget);
     }
 }
 
@@ -94,7 +94,7 @@ bool PunchingKinoko::ballMtxCallBack(Pos3f* pMtx, const JointControllerInfo& joi
     Pos3f stack_14;
     stack_14.identity();
 
-    MR::scaleMtxToDir(&stack_14, _A8, mScaleController->_C);
+    MR::scaleMtxToDir(&stack_14, mShadowNormal, mScaleController->mScale);
     pMtx->concat(stack_14, *pMtx);
     pMtx->setTrans(mGroundChecker->mPosition);
 
@@ -270,17 +270,18 @@ bool PunchingKinoko::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    Vec3f stack_14;
-    MR::calcSensorHorizonNormalize(&stack_14, mGravity, pSender, pReceiver);
-    f32 fVar1 = stack_14.dot(mGroundChecker->mVelocity);
-    if (fVar1 < 0.0f) {
-        fVar1 = 3.0f;
+    // Pushed away along the floor until it moves away at 3.
+    Vec3f away;
+    MR::calcSensorHorizonNormalize(&away, mGravity, pSender, pReceiver);
+    f32 push = away.dot(mGroundChecker->mVelocity);
+    if (push < 0.0f) {
+        push = 3.0f;
     } else {
-        fVar1 = 3.0f - fVar1;
+        push = 3.0f - push;
     }
 
-    if (fVar1 > 0.0f) {
-        mGroundChecker->mVelocity.add(stack_14 * fVar1);
+    if (push > 0.0f) {
+        mGroundChecker->mVelocity.add(away * push);
         return true;
     }
 
@@ -352,7 +353,7 @@ void PunchingKinoko::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Normal");
         MR::validateClipping(this);
-        _B8 = true;
+        mIsPointerHeld = true;
     }
 
     Vec3f stack_38;
@@ -361,7 +362,7 @@ void PunchingKinoko::exeWait() {
     MR::attenuateVelocity(mGroundChecker, 0.94f);
 
     if (MR::isStarPointerPointing2POnPressButton(this, nullptr, false, false)) {
-        if (mStarPointerHitCoolDown == 0 && !_B8 && MR::getStarPointerScreenSpeed(1) > 5.0f) {
+        if (mStarPointerHitCoolDown == 0 && !mIsPointerHeld && MR::getStarPointerScreenSpeed(1) > 5.0f) {
             Vec3f stack_2C(0.0f, 0.0f, 0.0f);
             if (MR::calcStarPointerWorldVelocityDirectionOnPlane(&stack_2C, mGroundChecker->mPosition, mGravity, 1)) {
                 mGroundChecker->mVelocity.add(stack_2C * 35.0f);
@@ -373,11 +374,11 @@ void PunchingKinoko::exeWait() {
                 return;
             }
         }
-        _B8 = true;
+        mIsPointerHeld = true;
     } else {
-        _B8 = false;
+        mIsPointerHeld = false;
     }
-    MR::vecBlend(_9C, mPosition, &_9C, 0.05f);
+    MR::vecBlend(mCameraTarget, mPosition, &mCameraTarget, 0.05f);
 }
 
 void PunchingKinoko::exeSwing() {
@@ -395,7 +396,7 @@ void PunchingKinoko::exeSwing() {
         MR::startSound(this, "SE_OJ_PNC_KINOKO_BOUND");
     }
 
-    MR::vecBlend(_9C, mPosition, &_9C, 0.05f);
+    MR::vecBlend(mCameraTarget, mPosition, &mCameraTarget, 0.05f);
 
     if (var3 < 40.0f && stack_14.length() < 50.0f) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
@@ -420,7 +421,7 @@ void PunchingKinoko::exePunched() {
     MR::attenuateVelocity(mGroundChecker, 0.99f);
     HitSensor* sensor = getSensor("Head");
     MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, sensor);
-    _9C.set(mGroundChecker->mPosition);
+    mCameraTarget.set(mGroundChecker->mPosition);
 
     if (MR::isGreaterStep(this, 5)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunchedBrake));
@@ -431,7 +432,7 @@ void PunchingKinoko::exePunchedBrake() {
     addVelocityKeepHeight();
     MR::attenuateVelocity(mGroundChecker, 0.9f);
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
-    _9C.set(mGroundChecker->mPosition);
+    mCameraTarget.set(mGroundChecker->mPosition);
     if (!MR::isGreaterStep(this, 40)) {
         HitSensor* sensor = getSensor("Head");
         if (!MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, sensor)) {
@@ -458,11 +459,11 @@ void PunchingKinoko::exeCrushed() {
         MR::startBrk(this, "Press");
 
         if (MR::isShadowProjected(this, "頭")) {
-            MR::getShadowProjectionNormal(this, "頭", &_A8);
+            MR::getShadowProjectionNormal(this, "頭", &mShadowNormal);
             MR::getShadowProjectionPos(this, "頭", &mGroundChecker->mPosition);
-            mGroundChecker->mPosition.add(_A8 * 20.0f);
+            mGroundChecker->mPosition.add(mShadowNormal * 20.0f);
         } else {
-            _A8.set(mGravity);
+            mShadowNormal.set(mGravity);
         }
 
         MR::offBind(mGroundChecker);

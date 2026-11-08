@@ -9,56 +9,56 @@
 InputRumble** InputRumble::sInstanceForCallback;
 
 void RumbleChannel::clear() {
-    _0 = nullptr;
-    _8 = 0;
-    _C = 0;
+    mPattern = nullptr;
+    mSerial = 0;
+    mStep = 0;
     mStrength = 0;
-    _4 = false;
-    _10 = nullptr;
+    mIsLoop = false;
+    mOwner = nullptr;
 }
 
 void RumbleChannel::update() {
-    if (_0 == nullptr) {
+    if (mPattern == nullptr) {
         return;
     }
 
-    if (_C >= _0->mFrame) {
-        if (!_4) {
+    if (mStep >= mPattern->mFrame) {
+        if (!mIsLoop) {
             clear();
             return;
         }
 
-        _C = 0;
+        mStep = 0;
     }
 
     // How much of the frames around this one the pattern fills: its pulses are one soft buzz.
     const s32 cReach = 2;
     s32 on = 0;
-    for (s32 frame = _C - cReach; frame <= _C + cReach; frame++) {
+    for (s32 frame = mStep - cReach; frame <= mStep + cReach; frame++) {
         s32 place = frame;
-        if (place < 0 || place >= _0->mFrame) {
-            if (!_4) {
+        if (place < 0 || place >= mPattern->mFrame) {
+            if (!mIsLoop) {
                 continue;
             }
-            place = (place + _0->mFrame) % _0->mFrame;
+            place = (place + mPattern->mFrame) % mPattern->mFrame;
         }
 
-        on += _0->mPattern[place];
+        on += mPattern->mPattern[place];
     }
 
-    mStrength = static_cast< u8 >(_0->mPattern[_C] != 0 ? 255 * (on + 1) / (2 * cReach + 2) : 255 * on / (2 * cReach + 2));
-    _C++;
+    mStrength = static_cast< u8 >(mPattern->mPattern[mStep] != 0 ? 255 * (on + 1) / (2 * cReach + 2) : 255 * on / (2 * cReach + 2));
+    mStep++;
 }
 
 void RumbleChannel::setPattern(const void* pParam1, const RumblePattern& rParam2, u32 param3, bool param4) {
-    _8 = param3;
-    _C = 0;
-    _0 = &rParam2;
-    _10 = pParam1;
-    _4 = param4;
+    mSerial = param3;
+    mStep = 0;
+    mPattern = &rParam2;
+    mOwner = pParam1;
+    mIsLoop = param4;
 }
 
-InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), _C(1), _BC() {
+InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
     if (sInstanceForCallback == nullptr) {
         sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()];
 
@@ -116,7 +116,7 @@ void InputRumble::update() {
     if (NebulaCutsceneSkip::isSkipping()) {
         bool isActive = mStrength != 0;
         for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-            isActive |= mChannel[i]._0 != nullptr;
+            isActive |= mChannel[i].mPattern != nullptr;
         }
         if (isActive) {
             stop();
@@ -124,8 +124,8 @@ void InputRumble::update() {
         return;
     }
 
-    if (_BC > 0) {
-        _BC--;
+    if (mStopTimer > 0) {
+        mStopTimer--;
 
         stop();
     } else {
@@ -174,16 +174,16 @@ bool InputRumble::setRumblePatternIfNotExist(const void* pParam1, const RumblePa
     }
 
     if (v2 != -1) {
-        _C = (_C + 1) & 0x7FFFFFFF;
+        mSerial = (mSerial + 1) & 0x7FFFFFFF;
 
-        mChannel[v2].setPattern(pParam1, rParam2, _C, param3);
+        mChannel[v2].setPattern(pParam1, rParam2, mSerial, param3);
 
         return true;
     }
 
-    _C = (_C + 1) & 0x7FFFFFFF;
+    mSerial = (mSerial + 1) & 0x7FFFFFFF;
 
-    mChannel[v3].setPattern(pParam1, rParam2, _C, param3);
+    mChannel[v3].setPattern(pParam1, rParam2, mSerial, param3);
 
     return true;
 }
@@ -194,7 +194,7 @@ bool InputRumble::findRubmlePattern(const void* pOwner, s32* pExisting, s32* pEm
     u8 emptyIndex = 0xFF;
 
     for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
-        const RumblePattern* pPattern = mChannel[i]._0;
+        const RumblePattern* pPattern = mChannel[i].mPattern;
 
         if (pPattern == nullptr) {
             if (emptyIndex == 0xFF) {
@@ -206,8 +206,8 @@ bool InputRumble::findRubmlePattern(const void* pOwner, s32* pExisting, s32* pEm
                 return true;
             }
 
-            if (oldest > mChannel[i]._8) {
-                oldest = mChannel[i]._8;
+            if (oldest > mChannel[i].mSerial) {
+                oldest = mChannel[i].mSerial;
                 oldestIndex = i;
             }
         }

@@ -28,5 +28,5 @@ private:
     TimeLimitLayout* mTimeLimitLayout;
     TimeUpLayout* mTimeUpLayout;
     u32 mTimeUpWaitFrame;
-    ValueControl* _20;
+    ValueControl* mFadeCtrl;
 };

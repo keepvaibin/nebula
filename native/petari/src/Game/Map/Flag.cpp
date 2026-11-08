@@ -1,8 +1,7 @@
+#include <nebula_game_api.h>
 #include "Game/Map/Flag.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -17,10 +16,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <nebula_game_api.h>
 #include <cstring>
-
-extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     static const f32 sDefaultPointIntervalU = 40.0f;

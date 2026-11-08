@@ -20,10 +20,8 @@ public:
     u8 mFillBlendOp;
     u8 mFillSrcFactor;
     u8 mFillDstFactor;
-    Color8 _1C;
-    Color8 _20;
-    bool _24;
-    bool _25;
+    Color8 mFillColor;
+    bool mFillInsideVolume;
 };
 
 namespace MR {

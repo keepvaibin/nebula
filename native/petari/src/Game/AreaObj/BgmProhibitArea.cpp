@@ -8,23 +8,19 @@
 BgmProhibitArea::~BgmProhibitArea() {
 }
 
-namespace {
-    struct BgmMuteSet {
-        const char* mGalaxyName;
-        u32 _4;
-        u32 _8;
-    };
-
-    static BgmMuteSet sBgmMuteSet[] = {{"OceanPhantomCaveGalaxy", 7, 1}, {"SoundMapCodeTest", 7, 1}};
-};  // namespace
+struct BgmMuteSet {
+    const char* mGalaxyName;
+    u32 mMuteState;
+    u32 mUnmuteState;
+};
 
 namespace {
-    BgmMuteSet* findDataElement(const char* pName) {
+    const BgmMuteSet sBgmMuteSet[] = {{"OceanPhantomCaveGalaxy", 7, 1}, {"SoundMapCodeTest", 7, 1}};
+
+    const BgmMuteSet* findMuteSet(const char* pName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sBgmMuteSet); i++) {
-            BgmMuteSet* set = &::sBgmMuteSet[i];
-
-            if (MR::isEqualString(pName, set->mGalaxyName)) {
-                return set;
+            if (MR::isEqualString(pName, ::sBgmMuteSet[i].mGalaxyName)) {
+                return &::sBgmMuteSet[i];
             }
         }
 
@@ -32,12 +28,14 @@ namespace {
     }
 };  // namespace
 
-BgmProhibitArea::BgmProhibitArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(), _3D(), _40(0.0f, 0.0f, 0.0f) {
+BgmProhibitArea::BgmProhibitArea(int formType, const char* pName)
+    : AreaObj(formType, pName), mMuteSet(), mIsMuteSet(), mIsUnmuteSet(), mPrevPlayerPos(0.0f, 0.0f, 0.0f) {
 }
 
 void BgmProhibitArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::connectToSceneAreaObj(this);
+    mMuteSet = ::findMuteSet(MR::getCurrentStageName());
 }
 
 void BgmProhibitArea::movement() {
@@ -46,39 +44,30 @@ void BgmProhibitArea::movement() {
     }
 
     Vec3f playerPos = *MR::getPlayerPos();
-    f32 distToPlayer = playerPos.distance(_40);
+    f32 distToPlayer = playerPos.distance(mPrevPlayerPos);
 
     if (isInVolume(*MR::getPlayerPos())) {
-        _3D = false;
+        mIsUnmuteSet = false;
 
-        if (!_3C && MR::isPlayingStageBgm()) {
-            BgmMuteSet* set = ::findDataElement(MR::getCurrentStageName());
-            s32 v10 = set ? set->_4 : -1;
-
-            if (v10 >= 0) {
-                if (distToPlayer >= 10000.0f) {
-                    MR::setStageBGMState(v10, 0);
-                } else {
-                    MR::setStageBGMState(v10, 120);
-                }
+        if (!mIsMuteSet && MR::isPlayingStageBgm()) {
+            if (mMuteSet != nullptr) {
+                // A jump of 100 m in one step (a warp) mutes at once.
+                MR::setStageBGMState(mMuteSet->mMuteState, distToPlayer >= 10000.0f ? 0 : 120);
             }
 
-            _3C = true;
+            mIsMuteSet = true;
         }
     } else {
-        _3C = false;
+        mIsMuteSet = false;
 
-        if (!_3D && MR::isPlayingStageBgm()) {
-            BgmMuteSet* set = ::findDataElement(MR::getCurrentStageName());
-            s32 v14 = set ? set->_8 : -1;
-
-            if (v14 >= 0) {
-                MR::setStageBGMState(v14, 120);
+        if (!mIsUnmuteSet && MR::isPlayingStageBgm()) {
+            if (mMuteSet != nullptr) {
+                MR::setStageBGMState(mMuteSet->mUnmuteState, 120);
             }
 
-            _3D = true;
+            mIsUnmuteSet = true;
         }
     }
 
-    _40 = playerPos;
+    mPrevPlayerPos = playerPos;
 }

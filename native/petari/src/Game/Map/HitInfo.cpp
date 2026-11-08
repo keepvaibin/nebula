@@ -61,7 +61,7 @@ s32 Triangle::getHostPlacementZoneID() const {
 }
 
 bool Triangle::isHostMoved() const {
-    return mParts->_D4 == 0;
+    return mParts->mStillCount == 0;
 }
 
 bool Triangle::isValid() const {
@@ -194,18 +194,18 @@ Pos3f* Triangle::getPrevBaseMtx() const {
     return &mParts->mPrevBaseMatrix;
 }
 
-HitInfo::HitInfo() : mParentTriangle(), _60(0.0f), mHitPos(0, 0, 0), _70(0, 0, 0), _7C(0, 0, 0) {
-    _88 = 0;
+HitInfo::HitInfo() : mParentTriangle(), mDepth(0.0f), mHitPos(0, 0, 0), mNormalMove(0, 0, 0) {
+    mHitPart = 0;
 }
 
 bool HitInfo::isCollisionAtFace() const {
-    return _88 == 1;
+    return mHitPart == 1;
 }
 
 bool HitInfo::isCollisionAtEdge() const {
-    return _88 == 2 || _88 == 3 || _88 == 4;
+    return mHitPart == 2 || mHitPart == 3 || mHitPart == 4;
 }
 
 bool HitInfo::isCollisionAtCorner() const {
-    return _88 == 5 || _88 == 6 || _88 == 7;
+    return mHitPart == 5 || mHitPart == 6 || mHitPart == 7;
 }

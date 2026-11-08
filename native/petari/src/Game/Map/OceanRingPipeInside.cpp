@@ -1,7 +1,7 @@
+#include <nebula_game_api.h>
 #include "Game/Map/OceanRingPipeInside.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -10,10 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <nebula_game_api.h>
 #include <cstring>
-
-extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     const f32 sTexRateU0 = 0.08f;
@@ -50,13 +47,13 @@ void OceanRingPipeInside::movement() {
 }
 
 void OceanRingPipeInside::initMesh() {
-    mMesh.init(2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
+    mMesh.init(2 * mRingPipe->mNumSegments * (mRingPipe->mNumSides - 1));
     sendGD();
     mMesh.send();
 }
 
 void OceanRingPipeInside::draw() const {
-    if (!MR::isValidDraw(mRingPipe) || !mRingPipe->_90) {
+    if (!MR::isValidDraw(mRingPipe) || !mRingPipe->mIsCameraInside) {
         return;
     }
 
@@ -106,15 +103,15 @@ void OceanRingPipeInside::sendGD() {
     f28 = ::sTexRateV0;
     f27 = ::sTexRateV1;
 
-    for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
+    for (s32 i = 0; i < mRingPipe->mNumSides - 1; i++) {
         f32 f24 = 0.0f;
         f32 f23 = 0.0f;
-        vv = mRingPipe->_98;
+        vv = mRingPipe->mNumSegments;
         VertexPT2* vtx = mMesh.strip((u16)(vv << 1));
-        for (s32 j = 0; j < mRingPipe->_98; j++) {
-            v = j * mRingPipe->_9C;
-            const Vec3f& rNear = mRingPipe->_A0[i + v];
-            const Vec3f& rFar = mRingPipe->_A0[i + (v + 1)];
+        for (s32 j = 0; j < mRingPipe->mNumSegments; j++) {
+            v = j * mRingPipe->mNumSides;
+            const Vec3f& rNear = mRingPipe->mPositions[i + v];
+            const Vec3f& rFar = mRingPipe->mPositions[i + (v + 1)];
             *vtx++ = {rNear.x, rNear.y, rNear.z, f24, f26, f23, f25};
             *vtx++ = {rFar.x, rFar.y, rFar.z, f24, f28, f23, f27};
 

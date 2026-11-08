@@ -15,7 +15,7 @@ namespace NrvSimpleEffectObj {
 };  // namespace NrvSimpleEffectObj
 
 namespace {
-    const s_effectDataTable sEffectDataTable[] = {
+    const SimpleEffectData sEffectData[] = {
         {"IceLayerBreak", "SE_OJ_ICE_LAYER_BREAK", nullptr, 0, "最強", 7},
         {"LavaVolcanoEruption", nullptr, nullptr, 0, "最強", 0},
         {"LavaHomeVolcanoFallingRock", nullptr, "SE_AT_LV_FALLING_ROCK", -1, nullptr, 0},
@@ -30,12 +30,10 @@ namespace {
         {"UFOKinokoLandingBlackSmoke", nullptr, "SE_OJ_LV_UFO_KINOKO_SMOKE", -1, nullptr, 0},
     };
 
-    const s_effectDataTable* findDataElement(const char* pString) {
-        for (u32 i = 0, j = 0; i < ARRAY_SIZE(sEffectDataTable); i++, j++) {
-            const s_effectDataTable* table = &sEffectDataTable[j];
-
-            if (MR::isEqualString(pString, table->_0)) {
-                return table;
+    const SimpleEffectData* findData(const char* pName) {
+        for (u32 i = 0; i < ARRAY_SIZE(sEffectData); i++) {
+            if (MR::isEqualString(pName, sEffectData[i].mName)) {
+                return &sEffectData[i];
             }
         }
 
@@ -44,14 +42,16 @@ namespace {
 };  // namespace
 
 SimpleEffectObj::SimpleEffectObj(const char* pName) : LiveActor(pName) {
-    _8C = nullptr;
+    mObjName = nullptr;
+    mData = nullptr;
 }
 
 void SimpleEffectObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
-    MR::getObjectName(&_8C, rIter);
-    initEffectKeeper(0, _8C, false);
+    MR::getObjectName(&mObjName, rIter);
+    mData = ::findData(mObjName);
+    initEffectKeeper(0, mObjName);
     initSound(4, false);
     initNerve(GET_NERVE(SimpleEffectObj, HostTypeWait));
 
@@ -67,14 +67,13 @@ void SimpleEffectObj::init(const TableIter& rIter) {
         MR::registerDemoSimpleCastAll(this);
     }
 
-    _90.set(mPosition + *getClippingCenterOffset());
-    MR::setClippingTypeSphere(this, getClippingRadius(), &_90);
+    mClippingCenter.set(mPosition + getClippingCenterOffset());
+    MR::setClippingTypeSphere(this, getClippingRadius(), &mClippingCenter);
     MR::setGroupClipping(this, rIter, 0x40);
     // An always-on effect (a torch's flame, a lamp's glow) has no logic to wake: it shows wherever the camera sees it.
     // The Comet Observatory's torches were dark until the player came within 50 m. Those that shake the screen when
     // they start keep the level's distance.
-    const s_effectDataTable* pData = ::findDataElement(_8C);
-    if (pData == nullptr || pData->_C == -1) {
+    if (mData == nullptr || mData->mShake == SimpleEffectData::cNoShake) {
         MR::setClippingFarMax(this);
     } else {
         MR::setClippingFar(this, getFarClipDistance());
@@ -99,12 +98,12 @@ void SimpleEffectObj::endClipped() {
     LiveActor::endClipped();
 
     if (isSyncClipping() && isNerve(GET_NERVE(SimpleEffectObj, HostTypeMove))) {
-        MR::emitEffect(this, _8C);
+        MR::emitEffect(this, mObjName);
     }
 }
 
 void SimpleEffectObj::setStateWait() {
-    MR::deleteEffect(this, _8C);
+    MR::deleteEffect(this, mObjName);
     setNerve(GET_NERVE(SimpleEffectObj, HostTypeWait));
 }
 
@@ -116,74 +115,36 @@ void SimpleEffectObj::exeWait() {
 }
 
 void SimpleEffectObj::exeMove() {
-    const s_effectDataTable* v1;
     if (MR::isFirstStep(this)) {
-        MR::emitEffect(this, _8C);
-        v1 = ::findDataElement(_8C);
-        s32 v4;
-        if (v1 != nullptr) {
-            v4 = v1->_C;
-        } else {
-            v4 = -1;
-        }
-
-        if (v4 != -1 && v4 != -1) {
-            if (v4 == 0) {
+        MR::emitEffect(this, mObjName);
+        if (mData != nullptr) {
+            switch (mData->mShake) {
+            case 0:
                 MR::shakeCameraStrong();
-            } else if (v4 == 1) {
+                break;
+            case 1:
                 MR::shakeCameraNormal();
-            } else if (v4 == 2) {
+                break;
+            case 2:
                 MR::shakeCameraWeak();
+                break;
+            }
+
+            if (mData->mStartSound != nullptr) {
+                MR::startSound(this, mData->mStartSound);
             }
         }
-
-        v1 = ::findDataElement(_8C);
-        const char* Sound;
-        if (v1 != nullptr) {
-            Sound = v1->_4;
-        } else {
-            Sound = nullptr;
-        }
-
-        if (Sound != nullptr) {
-            MR::startSound(this, Sound);
-        }
-    }
-    v1 = ::findDataElement(_8C);
-    const char* levelSound;
-    if (v1 != nullptr) {
-        levelSound = v1->_8;
-    } else {
-        levelSound = nullptr;
     }
 
-    if (levelSound != nullptr) {
-        MR::startLevelSound(this, levelSound);
-    }
-
-    v1 = ::findDataElement(_8C);
-    s32 v13;
-    if (v1 != nullptr) {
-        v13 = v1->_14;
-    } else {
-        v13 = -1;
-    }
-
-    if (v13 < 0) {
+    if (mData == nullptr) {
         return;
     }
 
-    if (MR::isStep(this, v13)) {
-        v1 = ::findDataElement(_8C);
-        const char* v15;
-        if (v1 != nullptr) {
-            v15 = v1->_10;
-        } else {
-            v15 = nullptr;
-        }
+    if (mData->mLevelSound != nullptr) {
+        MR::startLevelSound(this, mData->mLevelSound);
+    }
 
-        if (v15 != nullptr) {
-            MR::tryRumblePad(this, v15, PLAYER_1);
-        }
+    if (mData->mRumble != nullptr && mData->mRumbleStep >= 0 && MR::isStep(this, mData->mRumbleStep)) {
+        MR::tryRumblePad(this, mData->mRumble, PLAYER_1);
     }
 }

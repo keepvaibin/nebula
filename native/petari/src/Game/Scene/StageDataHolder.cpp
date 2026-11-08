@@ -35,15 +35,21 @@ namespace {
         return commonLayers | scenarioLayers;
     }
 
-    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, const MR::AssignableArray< Table >& rArray) {
+    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, int* pAfterScenarioCount, const MR::AssignableArray< Table >& rArray) {
         *pPriorityCount = 0;
         *pNormalCount = 0;
+        if (pAfterScenarioCount != nullptr) {
+            *pAfterScenarioCount = 0;
+        }
 
         for (const Table* pInfo = rArray.begin(); pInfo != rArray.end(); pInfo++) {
             if (::isPrioPlacementObjInfo(pInfo->getName())) {
                 *pPriorityCount += pInfo->getNumEntries();
             } else {
                 *pNormalCount += pInfo->getNumEntries();
+                if (pAfterScenarioCount != nullptr) {
+                    *pAfterScenarioCount += PlacementInfoOrdered::countAfterScenario(pInfo);
+                }
             }
         }
     }
@@ -61,8 +67,8 @@ namespace {
 };  // namespace
 
 StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCommon)
-    : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), _A8(pStageName), mZoneID(zoneID),
-      _E0(loadCommon), _FC(), _100(), _104(), _108(), _10C() {
+    : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), mStageName(pStageName), mZoneID(zoneID),
+      mLoadCommon(loadCommon), mCommonPriorityOrder(), mCommonNormalOrder(), mScenarioPriorityOrder(), mScenarioNormalOrder(), mAfterScenarioOrder() {
     mPlacementMtx.identity();
 }
 
@@ -71,12 +77,12 @@ void StageDataHolder::init(const TableIter& rIter) {
         initTableData();
     }
 
-    if (_E0) {
-        u32 commonLayer = ScenarioDataFunction::getCurrentCommonLayers(_A8);
-        initLayerJmpInfo(&_EC, "/jmp/Placement", "/jmp/MapParts", commonLayer);
+    if (mLoadCommon) {
+        u32 commonLayer = ScenarioDataFunction::getCurrentCommonLayers(mStageName);
+        initLayerJmpInfo(&mCommonPlacements, "/jmp/Placement", "/jmp/MapParts", commonLayer);
     }
 
-    createLocalStageDataHolder(_EC, true);
+    createLocalStageDataHolder(mCommonPlacements, true);
 
     if (!mZoneID) {
         initPlacementInfoOrderedCommon();
@@ -85,14 +91,14 @@ void StageDataHolder::init(const TableIter& rIter) {
 
 void StageDataHolder::initAfterScenarioSelected() {
     s32 curScenarioNo = MR::getCurrentScenarioNo();
-    u32 curLayers = ScenarioDataFunction::getCurrentScenarioLayers(_A8, curScenarioNo);
+    u32 curLayers = ScenarioDataFunction::getCurrentScenarioLayers(mStageName, curScenarioNo);
 
-    if (!_E0) {
-        curLayers |= ScenarioDataFunction::getCurrentCommonLayers(_A8);
+    if (!mLoadCommon) {
+        curLayers |= ScenarioDataFunction::getCurrentCommonLayers(mStageName);
     }
 
-    initLayerJmpInfo(&_F4, "/jmp/Placement", "/jmp/MapParts", curLayers);
-    createLocalStageDataHolder(_F4, false);
+    initLayerJmpInfo(&mScenarioPlacements, "/jmp/Placement", "/jmp/MapParts", curLayers);
+    createLocalStageDataHolder(mScenarioPlacements, false);
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
         mStageDataArray[i]->initAfterScenarioSelected();
@@ -127,7 +133,7 @@ bool StageDataHolder::initPlacementStep(uint64_t deadline) {
             MR::setInitializeStatePlacementPlayer();
             initPlacementMario();
         } else {
-            PlacementInfoOrdered* lists[] = {_FC, _104, _100, _108, _10C};
+            PlacementInfoOrdered* lists[] = {mCommonPriorityOrder, mScenarioPriorityOrder, mCommonNormalOrder, mScenarioNormalOrder, mAfterScenarioOrder};
             if (mPlacementStage <= 2u) MR::setInitializeStatePlacementHighPriority();
             else MR::setInitializeStatePlacement();
             if (!lists[mPlacementStage - 1u]->initPlacementStep(deadline)) return false;
@@ -284,7 +290,7 @@ const StageDataHolder* StageDataHolder::findPlacedStageDataHolder(const TableIte
 
     // The holder whose stage archive holds the row's table.
     const TableData* pData = rIter.mInfo->mData;
-    const MR::AssignableArray< Table >* const arrays[] = {&mPlacementObjs, &mStartObjs, &mGeneralPosObjs, &mChildObjs, &mListObjs, &mPathObjs, &_EC, &_F4};
+    const MR::AssignableArray< Table >* const arrays[] = {&mPlacementObjs, &mStartObjs, &mGeneralPosObjs, &mChildObjs, &mListObjs, &mPathObjs, &mCommonPlacements, &mScenarioPlacements};
     for (const MR::AssignableArray< Table >* pArray : arrays) {
         for (const Table* pInfo = pArray->begin(); pInfo != pArray->end(); pInfo++) {
             if (pInfo->mData == pData) {
@@ -373,7 +379,7 @@ void StageDataHolder::initPlacementMario() {
 
 TableIter StageDataHolder::makeMarioTableIter(const PlacementId& rInfo) const {
     const StageDataHolder* hldr = getStageDataHolderFromZoneId(rInfo.mZoneID);
-    s32 id = rInfo._0;
+    s32 id = rInfo.mId;
     const Table* i = hldr->mStartObjs.begin();
 
     while (i != hldr->mStartObjs.end()) {
@@ -414,7 +420,7 @@ void StageDataHolder::initJmpInfo(MR::AssignableArray< Table >* pInfo, const cha
 
 void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, const char* pName) {
     s32 count = 0;
-    u32 mask = ::getAllLayers(_A8, MR::getCurrentScenarioNo());
+    u32 mask = ::getAllLayers(mStageName, MR::getCurrentScenarioNo());
     MR::FormattedName buf;
 
     for (u32 i = 0; i < 33; i++) {
@@ -439,7 +445,7 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, c
 }
 
 void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< Table >* pInfo, const char* pPlacementDir, const char* pMapPartsDir) {
-    u32 mask = ::getAllLayers(_A8, MR::getCurrentScenarioNo());
+    u32 mask = ::getAllLayers(mStageName, MR::getCurrentScenarioNo());
     initLayerJmpInfo(pInfo, pPlacementDir, pMapPartsDir, mask);
 }
 
@@ -494,51 +500,52 @@ void StageDataHolder::initTableData() {
 }
 
 void StageDataHolder::initPlacementInfoOrderedCommon() {
-    int priorityCount, normalCount;
-    ::calcPlacementInfoNum(&priorityCount, &normalCount, _EC);
+    int priorityCount, normalCount, afterScenarioCount;
+    ::calcPlacementInfoNum(&priorityCount, &normalCount, &afterScenarioCount, mCommonPlacements);
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
-        int localPriorityCount, localNormalCount;
-        ::calcPlacementInfoNum(&localPriorityCount, &localNormalCount, mStageDataArray[i]->_EC);
+        int localPriorityCount, localNormalCount, localAfterScenarioCount;
+        ::calcPlacementInfoNum(&localPriorityCount, &localNormalCount, &localAfterScenarioCount, mStageDataArray[i]->mCommonPlacements);
         priorityCount += localPriorityCount;
         normalCount += localNormalCount;
+        afterScenarioCount += localAfterScenarioCount;
     }
 
-    _FC = new PlacementInfoOrdered(priorityCount);
-    _100 = new PlacementInfoOrdered(normalCount);
-    _10C = new PlacementInfoOrdered(0x20);
-    ::attachJmpInfoToPlacementInfoOrdered(_FC, _100, _10C, _EC);
+    mCommonPriorityOrder = new PlacementInfoOrdered(priorityCount);
+    mCommonNormalOrder = new PlacementInfoOrdered(normalCount - afterScenarioCount);
+    mAfterScenarioOrder = new PlacementInfoOrdered(afterScenarioCount);
+    ::attachJmpInfoToPlacementInfoOrdered(mCommonPriorityOrder, mCommonNormalOrder, mAfterScenarioOrder, mCommonPlacements);
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
-        ::attachJmpInfoToPlacementInfoOrdered(_FC, _100, _10C, mStageDataArray[i]->_EC);
+        ::attachJmpInfoToPlacementInfoOrdered(mCommonPriorityOrder, mCommonNormalOrder, mAfterScenarioOrder, mStageDataArray[i]->mCommonPlacements);
     }
 
-    _FC->sort();
-    _100->sort();
+    mCommonPriorityOrder->sort();
+    mCommonNormalOrder->sort();
 }
 
 void StageDataHolder::initPlacementInfoOrderedScenario() {
     int priorityCount, normalCount;
-    ::calcPlacementInfoNum(&priorityCount, &normalCount, _F4);
+    ::calcPlacementInfoNum(&priorityCount, &normalCount, nullptr, mScenarioPlacements);
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
         int localPriorityCount, localNormalCount;
-        ::calcPlacementInfoNum(&localPriorityCount, &localNormalCount, mStageDataArray[i]->_F4);
+        ::calcPlacementInfoNum(&localPriorityCount, &localNormalCount, nullptr, mStageDataArray[i]->mScenarioPlacements);
         priorityCount += localPriorityCount;
         normalCount += localNormalCount;
     }
 
-    _104 = new PlacementInfoOrdered(priorityCount);
-    _108 = new PlacementInfoOrdered(normalCount);
-    ::attachJmpInfoToPlacementInfoOrdered(_104, _108, nullptr, _F4);
+    mScenarioPriorityOrder = new PlacementInfoOrdered(priorityCount);
+    mScenarioNormalOrder = new PlacementInfoOrdered(normalCount);
+    ::attachJmpInfoToPlacementInfoOrdered(mScenarioPriorityOrder, mScenarioNormalOrder, nullptr, mScenarioPlacements);
 
     for (s32 i = 0; i < mStageDataHolderCount; i++) {
-        ::attachJmpInfoToPlacementInfoOrdered(_104, _108, nullptr, mStageDataArray[i]->_F4);
+        ::attachJmpInfoToPlacementInfoOrdered(mScenarioPriorityOrder, mScenarioNormalOrder, nullptr, mStageDataArray[i]->mScenarioPlacements);
     }
 
-    _104->sort();
-    _108->sort();
-    _10C->sort();
+    mScenarioPriorityOrder->sort();
+    mScenarioNormalOrder->sort();
+    mAfterScenarioOrder->sort();
 }
 
 const Table* StageDataHolder::findJmpInfoFromArray(const MR::AssignableArray< Table >* pInfoArr, const char* pName) const {

@@ -28,7 +28,7 @@ void WatchTowerRotateStep::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, "WatchTowerRotateStep", getSensor(nullptr), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, ::sClippingRadiusOffset);
 

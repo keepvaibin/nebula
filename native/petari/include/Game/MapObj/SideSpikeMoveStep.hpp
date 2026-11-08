@@ -15,10 +15,10 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void exeWait();
-    void exeDPDStop();
-    void endDPDStop();
-    void exeDPDStopSync();
-    void endDPDStopSync();
+    void exePointerStop();
+    void endPointerStop();
+    void exePointerStopSync();
+    void endPointerStopSync();
 
 private:
     AnimScaleController* mScaleController;

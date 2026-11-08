@@ -26,7 +26,7 @@ void TakoHeiInk::init(const TableIter& rIter) {
 
     MR::addHitSensorEnemy(this, "Body", 8, ::sModelSize, Vec3f(0.0f, 0.0f, 0.0f));
     initBinder(::sModelSize, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(1, false);
     MR::initShadowVolumeSphere(this, ::sModelSize);
     initNerve(GET_NERVE(TakoHeiInk, TakoHeiInkNrvWait));

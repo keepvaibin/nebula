@@ -56,10 +56,10 @@ private:
     GroundChecker* mGroundChecker;
     AnimScaleController* mScaleController;
     JointControlDelegator< PunchingKinoko >* mDelegator;
-    s32 _98;
-    Vec3f _9C;
-    Vec3f _A8;
+    s32 mCameraVecId;
+    Vec3f mCameraTarget;
+    Vec3f mShadowNormal;
     s32 mStarPointerHitCoolDown;
-    bool _B8;
+    bool mIsPointerHeld;
     s32 mInvincibleHitCoolDown;
 };

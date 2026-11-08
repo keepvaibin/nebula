@@ -134,11 +134,11 @@ void ParticleCalcClrIdxNormal(EmitterWork* work) {
     work->mClrKeyFrame = keyFrame;
 }
 
-void ParticleCalcClrIdxNormal(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcClrIdxNormal(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
     s16 keyFrame;
-    if (param_1->mAge < shape->getClrAnmMaxFrm()) {
-        keyFrame = param_1->mAge;
+    if (ptcl->mAge < shape->getClrAnmMaxFrm()) {
+        keyFrame = ptcl->mAge;
     } else {
         keyFrame = shape->getClrAnmMaxFrm();
     }
@@ -151,10 +151,10 @@ void ParticleCalcClrIdxRepeat(EmitterWork* work) {
     work->mClrKeyFrame = work->mpEmtr->mTick % (shape->getClrAnmMaxFrm() + 1);
 }
 
-void ParticleCalcClrIdxRepeat(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcClrIdxRepeat(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    s32 age = param_1->mAge;
-    s32 tick = age + shape->getClrLoopOfst(param_1->mAnmRandom);
+    s32 age = ptcl->mAge;
+    s32 tick = age + shape->getClrLoopOfst(ptcl->mAnmRandom);
     work->mClrKeyFrame = tick % (shape->getClrAnmMaxFrm() + 1);
 }
 
@@ -162,15 +162,16 @@ void ParticleCalcClrIdxReverse(EmitterWork* work) {
     ParticleShape* const shape = work->mpRes->getBsp();
     int maxFrm = shape->getClrAnmMaxFrm();
     u32 tick = work->mpEmtr->mTick;
-    u32 uVar1 = maxFrm != 0 ? tick / maxFrm : 0;
+    // Odd passes run backward.
+    u32 pass = maxFrm != 0 ? tick / maxFrm : 0;
     tick = maxFrm != 0 ? tick % maxFrm : tick;
-    uVar1 &= 1;
-    work->mClrKeyFrame = tick + (uVar1) * (maxFrm - tick * 2);
+    pass &= 1;
+    work->mClrKeyFrame = tick + (pass) * (maxFrm - tick * 2);
 }
 
-void ParticleCalcClrIdxReverse(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcClrIdxReverse(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    s32 tick = param_1->mAge + shape->getClrLoopOfst(param_1->mAnmRandom);
+    s32 tick = ptcl->mAge + shape->getClrLoopOfst(ptcl->mAnmRandom);
     s32 maxFrm = shape->getClrAnmMaxFrm();
     s32 rem = maxFrm != 0 ? tick % maxFrm : tick;
     s32 div = maxFrm != 0 ? tick / maxFrm : tick < 0 ? -1 : 0;
@@ -181,10 +182,10 @@ void ParticleCalcClrIdxMerge(EmitterWork* work) {
     work->mClrKeyFrame = 0;
 }
 
-void ParticleCalcClrIdxMerge(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcClrIdxMerge(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
     s32 maxFrm = shape->getClrAnmMaxFrm() + 1;
-    s32 tick = (s32)(param_1->mTime * maxFrm) + shape->getClrLoopOfst(param_1->mAnmRandom);
+    s32 tick = (s32)(ptcl->mTime * maxFrm) + shape->getClrLoopOfst(ptcl->mAnmRandom);
     work->mClrKeyFrame = tick % maxFrm;
 }
 
@@ -192,9 +193,9 @@ void ParticleCalcClrIdxRandom(EmitterWork* work) {
     work->mClrKeyFrame = 0;
 }
 
-void ParticleCalcClrIdxRandom(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcClrIdxRandom(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    s32 tick = shape->getClrLoopOfst(param_1->mAnmRandom);
+    s32 tick = shape->getClrLoopOfst(ptcl->mAnmRandom);
     s32 maxFrm = shape->getClrAnmMaxFrm() + 1;
     work->mClrKeyFrame = tick % maxFrm;
 }
@@ -221,70 +222,51 @@ void ParticleCalcColorCopy(EmitterWork* work, ParticleCore* ptcl) {
     ptcl->mEnvClr = emtr->mEnvClr;
 }
 
-void ParticleGenTexCrdMtxIdt(EmitterWork* param_0) {
+void ParticleGenTexCrdMtxIdt(EmitterWork*) {
     ParticleDraw::clearCoord();
 }
 
-void ParticleGenTexCrdMtxAnm(EmitterWork* param_0) {
+void ParticleGenTexCrdMtxAnm(EmitterWork*) {
 }
 
-void ParticleGenTexCrdMtxPrj(EmitterWork* param_0) {
+void ParticleGenTexCrdMtxPrj(EmitterWork*) {
 }
+
+namespace {
+    // The shape's texture-coordinate animation at `frame`: scale and rotation about the tile centre, then translation.
+    void setTexCoordAnimation(const ParticleShape* pShape, f32 frame) {
+        f32 centerS = 0.5f * (1.0f + pShape->getTilingS());
+        f32 centerT = 0.5f * (1.0f + pShape->getTilingT());
+        f32 transS = (frame * pShape->getIncTransX()) + pShape->getInitTransX();
+        f32 transT = (frame * pShape->getIncTransY()) + pShape->getInitTransY();
+        f32 scaleS = (frame * pShape->getIncScaleX()) + pShape->getInitScaleX();
+        f32 scaleT = (frame * pShape->getIncScaleY()) + pShape->getInitScaleY();
+        s32 angle = (frame * pShape->getIncRot()) + pShape->getInitRot();
+        f32 sine = Angle::sinShort(angle);
+        f32 cosine = Angle::cosShort(angle);
+        Mtx mtx;
+        mtx[0][0] = scaleS * cosine;
+        mtx[0][1] = -scaleS * sine;
+        mtx[0][2] = 0.0f;
+        mtx[0][3] = (centerS + (scaleS * ((sine * (centerT + transT)) - (cosine * (centerS + transS)))));
+        mtx[1][0] = scaleT * sine;
+        mtx[1][1] = scaleT * cosine;
+        mtx[1][2] = 0.0f;
+        mtx[1][3] = (centerT + (-scaleT * ((sine * (centerS + transS)) + (cosine * (centerT + transT)))));
+        mtx[2][0] = 0.0f;
+        mtx[2][1] = 0.0f;
+        mtx[2][2] = 1.0f;
+        mtx[2][3] = 0.0f;
+        ParticleDraw::setCoordRows(mtx);
+    }
+}  // namespace
 
 void ParticleGenCalcTexCrdMtxAnm(EmitterWork* work) {
-    ParticleShape* const shape = work->mpRes->getBsp();
-    f32 dVar16 = work->mpEmtr->mTick;
-    f32 dVar15 = 0.5f * (1.0f + shape->getTilingS());
-    f32 dVar14 = 0.5f * (1.0f + shape->getTilingT());
-    f32 dVar11 = (dVar16 * shape->getIncTransX()) + shape->getInitTransX();
-    f32 dVar10 = (dVar16 * shape->getIncTransY()) + shape->getInitTransY();
-    f32 dVar13 = (dVar16 * shape->getIncScaleX()) + shape->getInitScaleX();
-    f32 dVar12 = (dVar16 * shape->getIncScaleY()) + shape->getInitScaleY();
-    s32 local_c0 = (dVar16 * shape->getIncRot()) + shape->getInitRot();
-    f32 dVar8 = Angle::sinShort(local_c0);
-    f32 dVar9 = Angle::cosShort(local_c0);
-    Mtx local_108;
-    local_108[0][0] = dVar13 * dVar9;
-    local_108[0][1] = -dVar13 * dVar8;
-    local_108[0][2] = 0.0f;
-    local_108[0][3] = (dVar15 + (dVar13 * ((dVar8 * (dVar14 + dVar10)) - (dVar9 * (dVar15 + dVar11)))));
-    local_108[1][0] = dVar12 * dVar8;
-    local_108[1][1] = dVar12 * dVar9;
-    local_108[1][2] = 0.0f;
-    local_108[1][3] = (dVar14 + (-dVar12 * ((dVar8 * (dVar15 + dVar11)) + (dVar9 * (dVar14 + dVar10)))));
-    local_108[2][0] = 0.0f;
-    local_108[2][1] = 0.0f;
-    local_108[2][2] = 1.0f;
-    local_108[2][3] = 0.0f;
-    ParticleDraw::setCoordRows(local_108);
+    setTexCoordAnimation(work->mpRes->getBsp(), work->mpEmtr->mTick);
 }
 
-void ParticleLoadCalcTexCrdMtxAnm(EmitterWork* work, ParticleCore* param_1) {
-    ParticleShape* const shape = work->mpRes->getBsp();
-    f32 dVar16 = param_1->mAge;
-    f32 dVar15 = 0.5f * (1.0f + shape->getTilingS());
-    f32 dVar14 = 0.5f * (1.0f + shape->getTilingT());
-    f32 dVar11 = (dVar16 * shape->getIncTransX()) + shape->getInitTransX();
-    f32 dVar10 = (dVar16 * shape->getIncTransY()) + shape->getInitTransY();
-    f32 dVar13 = (dVar16 * shape->getIncScaleX()) + shape->getInitScaleX();
-    f32 dVar12 = (dVar16 * shape->getIncScaleY()) + shape->getInitScaleY();
-    s32 local_c0 = (dVar16 * shape->getIncRot()) + shape->getInitRot();
-    f32 dVar8 = Angle::sinShort(local_c0);
-    f32 dVar9 = Angle::cosShort(local_c0);
-    Mtx local_108;
-    local_108[0][0] = dVar13 * dVar9;
-    local_108[0][1] = -dVar13 * dVar8;
-    local_108[0][2] = 0.0f;
-    local_108[0][3] = (dVar15 + (dVar13 * ((dVar8 * (dVar14 + dVar10)) - (dVar9 * (dVar15 + dVar11)))));
-    local_108[1][0] = dVar12 * dVar8;
-    local_108[1][1] = dVar12 * dVar9;
-    local_108[1][2] = 0.0f;
-    local_108[1][3] = (dVar14 + (-dVar12 * ((dVar8 * (dVar15 + dVar11)) + (dVar9 * (dVar14 + dVar10)))));
-    local_108[2][0] = 0.0f;
-    local_108[2][1] = 0.0f;
-    local_108[2][2] = 1.0f;
-    local_108[2][3] = 0.0f;
-    ParticleDraw::setCoordRows(local_108);
+void ParticleLoadCalcTexCrdMtxAnm(EmitterWork* work, ParticleCore* ptcl) {
+    setTexCoordAnimation(work->mpRes->getBsp(), ptcl->mAge);
 }
 
 void ParticleLoadTex(EmitterWork* work) {
@@ -305,10 +287,10 @@ void ParticleCalcTexIdxNormal(EmitterWork* work) {
     work->mpEmtr->mTexAnmIdx = shape->getTexIdx(tick);
 }
 
-void ParticleCalcTexIdxNormal(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcTexIdxNormal(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    u8 tick = shape->getTexAnmKeyNum() - 1 < param_1->mAge ? shape->getTexAnmKeyNum() - 1 : param_1->mAge;
-    param_1->mTexAnmIdx = shape->getTexIdx(tick);
+    u8 tick = shape->getTexAnmKeyNum() - 1 < ptcl->mAge ? shape->getTexAnmKeyNum() - 1 : ptcl->mAge;
+    ptcl->mTexAnmIdx = shape->getTexIdx(tick);
 }
 
 void ParticleCalcTexIdxRepeat(EmitterWork* work) {
@@ -316,11 +298,11 @@ void ParticleCalcTexIdxRepeat(EmitterWork* work) {
     work->mpEmtr->mTexAnmIdx = shape->getTexIdx(shape->getTexAnmKeyNum() != 0 ? work->mpEmtr->mTick % shape->getTexAnmKeyNum() : work->mpEmtr->mTick);
 }
 
-void ParticleCalcTexIdxRepeat(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcTexIdxRepeat(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    const int frame = (int)shape->getTexLoopOfst(param_1->mAnmRandom) + param_1->mAge;
+    const int frame = (int)shape->getTexLoopOfst(ptcl->mAnmRandom) + ptcl->mAge;
     u8 texIdx = shape->getTexAnmKeyNum() != 0 ? frame % shape->getTexAnmKeyNum() : frame;
-    param_1->mTexAnmIdx = shape->getTexIdx(texIdx);
+    ptcl->mTexAnmIdx = shape->getTexIdx(texIdx);
 }
 
 void ParticleCalcTexIdxReverse(EmitterWork* work) {
@@ -332,37 +314,37 @@ void ParticleCalcTexIdxReverse(EmitterWork* work) {
     work->mpEmtr->mTexAnmIdx = shape->getTexIdx(rem + (div & 1) * (keyNum - rem * 2));
 }
 
-void ParticleCalcTexIdxReverse(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcTexIdxReverse(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    s32 tick = shape->getTexLoopOfst(param_1->mAnmRandom) + param_1->mAge;
+    s32 tick = shape->getTexLoopOfst(ptcl->mAnmRandom) + ptcl->mAge;
     int keyNum = (int)shape->getTexAnmKeyNum() - 1;
     int div = keyNum != 0 ? tick / keyNum : tick < 0 ? -1 : 0;
     int rem = keyNum != 0 ? tick % keyNum : tick;
     u8 texIdx = rem + (div & 1) * (keyNum - rem * 2);
-    param_1->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
+    ptcl->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
 }
 
 void ParticleCalcTexIdxMerge(EmitterWork* work) {
     work->mpEmtr->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx();
 }
 
-void ParticleCalcTexIdxMerge(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcTexIdxMerge(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
     s32 maxFrm = shape->getTexAnmKeyNum();
-    s32 tick = (s32)(maxFrm * param_1->mTime) + shape->getTexLoopOfst(param_1->mAnmRandom);
+    s32 tick = (s32)(maxFrm * ptcl->mTime) + shape->getTexLoopOfst(ptcl->mAnmRandom);
     u8 texIdx = maxFrm != 0 ? tick % maxFrm : tick;
-    param_1->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
+    ptcl->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
 }
 
 void ParticleCalcTexIdxRandom(EmitterWork* work) {
     work->mpEmtr->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx();
 }
 
-void ParticleCalcTexIdxRandom(EmitterWork* work, ParticleCore* param_1) {
+void ParticleCalcTexIdxRandom(EmitterWork* work, ParticleCore* ptcl) {
     ParticleShape* const shape = work->mpRes->getBsp();
-    const int frame = shape->getTexLoopOfst(param_1->mAnmRandom);
+    const int frame = shape->getTexLoopOfst(ptcl->mAnmRandom);
     u8 texIdx = shape->getTexAnmKeyNum() != 0 ? frame % shape->getTexAnmKeyNum() : frame;
-    param_1->mTexAnmIdx = shape->getTexIdx(texIdx);
+    ptcl->mTexAnmIdx = shape->getTexIdx(texIdx);
 }
 
 void ParticleLoadPosMtxCam(EmitterWork* work) {

@@ -58,7 +58,7 @@ void JumpBranch::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
 
     MR::initShadowVolumeBox(this, Vec3f(120.0f, 10.0f, 10.0f));

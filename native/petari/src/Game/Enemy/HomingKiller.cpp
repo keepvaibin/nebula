@@ -152,7 +152,7 @@ void HomingKiller::init(const TableIter& rIter) {
         MR::calcGravity(this);
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     if (mType == Type_HomingKiller) {
         MR::setEffectHostMtx(this, "SandColumn", mEffectMtx);
@@ -810,7 +810,7 @@ void HomingKiller::exeFreeze() {
         mVelocity.zero();
         MR::emitEffect(this, "Touch");
         if (mFreezeTime == 0) {
-            MR::startDPDHitSound();
+            MR::startPointerHitSound();
         }
 
         if (mType != Type_MagnumKiller) {
@@ -824,7 +824,7 @@ void HomingKiller::exeFreeze() {
     }
 
     mFreezeTime++;
-    MR::startDPDFreezeLevelSound(this);
+    MR::startPointerFreezeLevelSound(this);
 
     f32 rumbleOffset = (MR::cosDegree(MR::repeatDegree(mFreezeTime * ::cFreezeRumbleSpeed)) * ::cFreezeRumbleWidth) *
                        (::cFreezeFrame - getNerveStep()) / ::cFreezeFrame;

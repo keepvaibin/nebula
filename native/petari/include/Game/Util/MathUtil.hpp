@@ -324,7 +324,6 @@ namespace MR {
     NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t);
 
     void sortSmall(s32 length, f32* pSortArray, s32* pIndexArray);
-    void sortSmall(s32 length, u32* pSortArray, s32* pIndexArray);
 
     f32 vecKillElement(const Vec3f& rSrc, const Vec3f& rKillDir, Vec3f* pDst);
     void vecScaleAdd(const Vec3f* pScale, const Vec3f* pAdd, f32 scale);

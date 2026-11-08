@@ -36,10 +36,10 @@ public:
     bool isMovingDown();  // fabricated
 
     bool mIsValidInfo;
-    Vec3f _90;
-    Vec3f _9C;
-    Vec3f _A8;
-    Vec3f _B4;
+    Vec3f mAppearPos;
+    Vec3f mAppearFront;
+    Vec3f mAppearVelocity;
+    Vec3f mFront;
     s32 mActFrame;
     s32 mChaseCounter;
 };

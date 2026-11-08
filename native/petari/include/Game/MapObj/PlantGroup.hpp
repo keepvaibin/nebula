@@ -54,9 +54,6 @@ public:
     bool tryPush(const Vec3f&, f32, s32);
     void animControl(PlantGroup*);
 
-    f32 _90;
-    f32 _94;
     s32 mTouchType;
-    bool _9C;
     bool mHasItem;
 };

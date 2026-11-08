@@ -6,7 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    // static const s32 sFollowFrame =
     static const f32 sRoundThreshold = 0.3f;
     static const f32 sAttenuation = 20.0f;
     static const f32 sResetRotSpeed = 0.2f;

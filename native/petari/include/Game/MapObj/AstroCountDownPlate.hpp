@@ -19,7 +19,7 @@ public:
     void startDemoStartCountDown();
     void startDemoLastBattle();
 
-    CoordMatrix _8C;
-    CoordMatrix _120;
-    bool _1B4;
+    CoordMatrix mOnesTexMtx;
+    CoordMatrix mTensTexMtx;
+    bool mIsLightOn;
 };

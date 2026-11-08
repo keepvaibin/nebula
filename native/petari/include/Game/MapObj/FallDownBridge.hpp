@@ -14,10 +14,10 @@ public:
     void exeWait();
     void exeQuake();
 
-    Vec3f _8C;
-    f32 _98;
-    f32 _9C;
-    f32 _A0;
-    f32 _A4;
-    bool _A8;
+    Vec3f mClipCenter;
+    f32 mAngle;
+    f32 mAngleSpeed;
+    f32 mMinAngle;
+    f32 mMaxAngle;
+    bool mIsFallen;
 };

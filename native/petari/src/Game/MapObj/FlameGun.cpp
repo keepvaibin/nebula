@@ -13,9 +13,6 @@ namespace NrvFlameGun {
 };  // namespace NrvFlameGun
 
 FlameGun::FlameGun(const char* pName) : LiveActor(pName) {
-    _8C.x = 0.0f;
-    _8C.y = -1.0f;
-    _8C.z = 0.0f;
     mState = -1;
 }
 
@@ -46,7 +43,7 @@ void FlameGun::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     initSound(4, false);
     initBinder(77.0f * mScale.y, 77.0f * mScale.y, 0);
-    initEffectKeeper(3, nullptr, false);
+    initEffectKeeper(3, nullptr);
     initSensor();
     MR::initShadowVolumeSphere(this, 77.0f);
     appear();

@@ -10,16 +10,16 @@ class DemoFortressDiscoverCheckList {
 public:
     const char* mStageName;
     const char* mStoryEventName;
-    bool _8;
+    bool mIsKoopaFortress;
 };
 
 class StorySequenceExecutorType {
 public:
     class DemoSequenceInfo {
     public:
-        u16 _0;
-        u16 _2;
-        const char* _4;
+        u16 mType;
+        u16 mEvent;
+        const char* mName;
     };
 };
 
@@ -77,7 +77,7 @@ public:
     NameObj* mSaveObj;
     const char* mStageName;  // MR::internName
     s32 mScenarioNo;
-    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > _48;
-    MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > _6C;
-    bool _B0;
+    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > mDemoSequences;
+    MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > mDynamicDemoInfos;
+    bool mIsSaveStarted;
 };

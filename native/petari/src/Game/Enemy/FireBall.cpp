@@ -52,7 +52,7 @@ void FireBall::init(const TableIter& rIter) {
 
     initBinder(::cBinderRadius, 0.0f, 0);
 
-    initEffectKeeper(4, "FireBall", false);
+    initEffectKeeper(4, "FireBall");
 
     MR::initStarPointerTarget(this, ::cStarWandRadius3d, Vec3f(0.0f, 0.0f, 0.0f));
 

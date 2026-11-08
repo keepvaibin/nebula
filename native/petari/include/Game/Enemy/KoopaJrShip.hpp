@@ -64,30 +64,26 @@ public:
 
     inline bool isStateBreak() const;
 
-    s32 get_D0() const {
-        return _D0;
-    }
-
     CannonShellHolder* mShellHolder;
     CannonShellHolder* mMainShellHolder;
     KoopaJr* mJr;
     ModelObj* mShipBreakModel;
     ModelObj* mPodModel;
     MR::Vector< MR::FixedArray< Kameck*, 2 > > mKamecks;
-    MR::Vector< MR::FixedArray< Kameck*, 2 > > _AC;
+    MR::Vector< MR::FixedArray< Kameck*, 2 > > mKamecksAtTurn;
     MR::FixedArray< HomingKiller*, 6 > mKillers;
-    s32 _D0;
-    Vec3f _D4;
-    Vec3f _E0;
-    f32 _EC;
+    s32 mHitPoint;
+    Vec3f mHitPos;
+    Vec3f mHitDir;
+    f32 mPropAngle;
     f32 mPropRotateSpeed;
     Pos3f mScrew00Mtx;
     Pos3f mScrew01Mtx;
     Rot3f mPropellerMtx;
-    f32 _184;
-    s32 _188;
+    f32 mCoordSpeed;
+    s32 mSpeedEaseStep;
     Mtx34f mShipMtx;
     Mtx34f mPodMtx;
-    Vec3f _1EC;
-    Vec3f _1F8;
+    Vec3f mJrLocalPos;
+    Vec3f mInitPos;
 };

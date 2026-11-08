@@ -1,10 +1,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/NormalMapBase.hpp"
 #include "Game/Render/RenderTexture.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Animation/BtkPlayer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/System/ResourceHolder.hpp"
@@ -13,7 +10,6 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/ModelData.hpp"
@@ -38,38 +34,22 @@ namespace {
 }  // namespace
 
 NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName) {
-    mBtkPlayer = nullptr;
-    _150 = 0;
-    for (u32 i = 0; i < ARRAY_SIZE(_184); i++) {
-        NebulaMtxIdentity(_184[i]);
-    }
-
-    _13A = 0;
+    mTexFlags = 0;
     mGradTexMode = 0;
-    _E8 = 0;
-    _EC = 0;
     mBackLightMode = 0;
-    _4C5 = 0;
 }
 
 void NormalMapBase::setup(const char* pName) {
-    _4C5 = 1;
-    _4C4 = 1;
     initModelManagerWithAnm(pName, nullptr, false);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
     MR::initLightCtrlNoDrawMapObj(this);
     setupLighting();
     setupTexture();
     MR::invalidateClipping(this);
-    mHeight = 128;
-    mWidth = 128;
-    _4B8 = new JUTTexture(mHeight, mWidth, NEBULA_TEXTURE_LINEAR_LA8);
     appear();
 }
 
 void NormalMapBase::initNormalMap() {
-    _4C5 = 1;
-    _4C4 = 0;
     setupLighting();
     setupTexture();
 }
@@ -83,7 +63,7 @@ void NormalMapBase::setupLighting() {
     mStageColor1.g = 0;
     mStageColor1.b = 0;
     mStageColor1.a = 0;
-    _138 = 0;
+    mDrawFlags = 0;
     mLightAMode = 0;
     mLightBMode = 1;
     mHardLightColorMask = 0;
@@ -99,12 +79,11 @@ void NormalMapBase::setupLighting() {
     MR::FormattedName fileName("%s.nrm.txt", MR::getModelResName(this));
     if (MR::getResourceHolder(this)->mFileInfoTable->isExistRes(fileName.c_str())) {
         const char* pData = static_cast< const char* >(MR::getResourceHolder(this)->mFileInfoTable->getRes(fileName.c_str()));
-        loadData(pData, MR::getResourceHolder(this)->mFileInfoTable->findFileInfo(fileName.c_str())->_4);
+        loadData(pData, MR::getResourceHolder(this)->mFileInfoTable->findFileInfo(fileName.c_str())->mSize);
     }
 }
 
 void NormalMapBase::setupTexture() {
-    _90 = nullptr;
     mNormalTex = nullptr;
     const u32 textureCount = MR::getModelData(this)->getTextureCount();
     for (u32 i = 0; i < textureCount; i++) {
@@ -122,8 +101,7 @@ void NormalMapBase::setupTexture() {
             mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;
         } else {
-            _90 = new JUTTexture(pImage);
-            mTextures[i] = _90;
+            mTextures[i] = new JUTTexture(pImage);
         }
 
         if (strstr(pName, "Zormal")) {
@@ -140,31 +118,7 @@ void NormalMapBase::control() {
 
 void NormalMapBase::calcAnim() {
     LiveActor::calcAnim();
-    updateBtkMtx();
     MR::getModel(this)->viewCalc();
-}
-
-void NormalMapBase::updateBtkMtx() {
-    if (mBtkPlayer && _150) {
-        mBtkPlayer->reflectFrame();
-        mBtkPlayer->update();
-        Clip* pAnm = static_cast< Clip* >(mBtkPlayer->mAnmRes);
-        if (pAnm) {
-            for (u32 i = 0; i < mBtkMtxCount; i++) {
-                TextureTransform transform;
-                pAnm->getTextureTransform(mBtkMtxIndices[i], &transform);
-                textureMtxMayaOld(transform, _184[i]);
-            }
-        }
-    }
-}
-
-void NormalMapBase::loadTexMtxBtk(Material* pMaterial) const {
-    if (mBtkPlayer != nullptr) {
-        if (_150) {
-            sNormalMap.setMatrix(9, 0, _184[pMaterial->mIndex]);
-        }
-    }
 }
 
 void NormalMapBase::draw() const {
@@ -178,7 +132,7 @@ void NormalMapBase::draw() const {
         NebulaMtxIdentity(mtx);
         MR::makeMtxTRS(mtx, this);
         MR::multMtx(mtx, mtx, rCameraViewMtx);
-        NebulaMtxCopy((const MtxPtr)mtx, (MtxPtr)_F4);
+        NebulaMtxCopy((const MtxPtr)mtx, (MtxPtr)mDrawMtx);
 
         MR::makeMtxTR(lightMtx, this);
         MR::normalize(&lightMtx);
@@ -263,7 +217,7 @@ bool NormalMapBase::isNormalMapMaterial(const char* pName) const {
 }
 
 void NormalMapBase::standardDraw(Model* pModel) const {
-    if ((_138 & 0x10) == 0) {
+    if ((mDrawFlags & 0x10) == 0) {
         for (u32 i = 0; i < pModel->mModelData->getMaterialCount(); i++) {
             Material* pMaterial = pModel->mModelData->getMaterialAt(i);
             const char* pMaterialName = MR::getMaterialName(pModel->mModelData, pMaterial->mIndex);
@@ -289,7 +243,6 @@ void NormalMapBase::shapeAnalyzeDraw(Model* pModel) const {
                 }
 
                 if (pMaterial->getMesh() == pShape) {
-                    setStageForObject_Material();
                     Pos3f localMtx;
                     Pos3f viewMtx;
                     const TransformInfo& rTransform = pJoint->getTransformInfo();
@@ -298,16 +251,16 @@ void NormalMapBase::shapeAnalyzeDraw(Model* pModel) const {
                     f32 rotationX = rTransform.mRotation.x * Angle::cRadianToDegree;
                     MR::makeMtxTRS(localMtx, rTransform.mTranslate.x, rTransform.mTranslate.y, rTransform.mTranslate.z, rotationX, rotationY,
                                    rotationZ, rTransform.mScale.x, rTransform.mScale.y, rTransform.mScale.z);
-                    NebulaMtxConcat(_F4, localMtx, viewMtx);
+                    NebulaMtxConcat(mDrawMtx, localMtx, viewMtx);
                     if (pJoint->getMtxType() == 1) {
                         billboardMtx(viewMtx);
                         Pos3f inverse;
-                        NebulaMtxInverse(_F4, inverse);
+                        NebulaMtxInverse(mDrawMtx, inverse);
                         NebulaMtxConcat(inverse, viewMtx, localMtx);
                     } else if (pJoint->getMtxType() == 2) {
                         billboardYMtx(viewMtx);
                         Pos3f inverse;
-                        NebulaMtxInverse(_F4, inverse);
+                        NebulaMtxInverse(mDrawMtx, inverse);
                         NebulaMtxConcat(inverse, viewMtx, localMtx);
                     }
 
@@ -342,7 +295,7 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
     SiteTexture obj;
     SiteTextures::init(&obj, mImagePtr, width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
-    if (_13A & 1) {
+    if (mTexFlags & 1) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
     } else {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, false, 0);
@@ -354,11 +307,11 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
 void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
     SiteTexture obj;
     SiteTextures::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
-    if ((_13A & 2) != 0 && (_13A & 0x4) != 0) {
+    if ((mTexFlags & 2) != 0 && (mTexFlags & 0x4) != 0) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
-    } else if ((_13A & 0x2) != 0) {
+    } else if ((mTexFlags & 0x2) != 0) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_LINEAR, 0.0, 0.0, 0.0, 0, 0);
-    } else if ((_13A & 0x4) != 0) {
+    } else if ((mTexFlags & 0x4) != 0) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_NEAREST, 0.0, 0.0, 0.0, 0, 0);
     } else {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0, 0.0, 0.0, 0, 0);
@@ -374,7 +327,6 @@ void NormalMapBase::loadTexture1(Material* pMaterial) const {
 
 void NormalMapBase::drawMaterialSetting(Material* pMaterial) const {
     loadTexture1(pMaterial);
-    loadTexMtxBtk(pMaterial);
     sNormalMap.setMatrix(9, 2, pMaterial->getCoordMatrix(0)->getMtx());
     Color8 ambient;
     Color8 material;
@@ -448,15 +400,8 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     loadDiffuseGradTex(1);
 }
 
-// Coordinate 0 through the BTK's matrix (texture matrix 0) when it plays, else the vertex's.
-void NormalMapBase::setStageForObject_Material() const {
-    sNormalMap.constants[32] = mBtkPlayer && _150 ? 1.0f : 0.0f;
-}
-
 // The stages' selections (normal_map.hlsl): light A and B's colours, the raster, light B's alpha, the back-light mode.
 void NormalMapBase::setStageForObject() const {
-    setStageForObject_Material();
-
     // Light A: one, none where the colour mask leaves light 0 out, the gradient for modes 0 and 1. Light B: one, none
     // where the mask leaves light 1 out, stage 0's alpha for mode 1.
     f32 lightA = (mHardLightColorMask & 0x1) == 0 ? 0.0f : 1.0f;
@@ -507,7 +452,7 @@ namespace {
 }  // namespace
 
 // The light gradient as LA8 rows (NEBULA_TEXTURE_LINEAR_LA8): intensity by column (the ambient-to-material ramp),
-// alpha by row (the same ramp down the rows, none when _138 & 1), laid out as the picture the game has always shown.
+// alpha by row (the same ramp down the rows, none when mDrawFlags & 1), laid out as the picture the game has always shown.
 // The game wrote both ramps as two-channel texels in rows and ran its tile conversion on them, which leaves the
 // first 2 KB as each 4-row band's first eight intensities (two to a texel: alpha, then intensity) and the rest as the
 // rows' bytes read as 4x4 tiles: texel (x, y) here is what those tiles showed there.
@@ -517,7 +462,7 @@ void NormalMapBase::createGradTexture() {
         sGradIntensity[x] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
     for (u32 y = 0; y < height; y++) {
-        if (_138 & 1) {
+        if (mDrawFlags & 1) {
             sGradAlpha[y] = 0;
             continue;
         }
@@ -584,38 +529,25 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
     pTexture->mObj.mImage = pCopy;
 }
 
+// One "name value" setting per line; a line longer than the buffer is cut, not overrun.
 void NormalMapBase::loadData(const char* pData, u32 size) {
-    char line[256];
+    const char* const pEnd = pData + size;
     const char* pCursor = pData;
-    u32 offset = 0;
-    while (true) {
-        if (offset >= size) {
-            break;
+    while (pCursor < pEnd) {
+        const char* pLineEnd = pCursor;
+        while (pLineEnd < pEnd && *pLineEnd != '\n' && *pLineEnd != '\r') {
+            pLineEnd++;
         }
 
-        u32 length = 0;
-        do {
-            if (*pCursor == '\n' || *pCursor == '\r') {
-                break;
-            }
-
-            offset++;
-            line[length] = *pCursor;
-            length++;
-            pCursor++;
-        } while (offset < size);
+        char line[256];
+        const u32 found = static_cast< u32 >(pLineEnd - pCursor);
+        const u32 length = found < sizeof(line) - 1 ? found : static_cast< u32 >(sizeof(line) - 1);
+        memcpy(line, pCursor, length);
         line[length] = '\0';
-        while (true) {
-            if (offset >= size) {
-                break;
-            }
 
-            if (*pCursor != '\n' && *pCursor != '\r') {
-                break;
-            }
-
+        pCursor = pLineEnd;
+        while (pCursor < pEnd && (*pCursor == '\n' || *pCursor == '\r')) {
             pCursor++;
-            offset++;
         }
 
         MR::scan8(line, "mLightingHighLevel", &mLightingHighLevel);

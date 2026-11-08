@@ -36,7 +36,7 @@ void CoinGroup::init(const TableIter& rIter) {
 
         mCoinArray[i]->setShadowAndPoseModeFromPlacementIter(rIter);
 
-        if (mCoinArray[i]->_BA) {
+        if (mCoinArray[i]->mIsPoseFromRotation) {
             MR::initDefaultPos(mCoinArray[i], rIter);
         }
 

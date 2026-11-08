@@ -36,7 +36,7 @@ public:
     void exeConfirm();
 
     bool isDecideTrigger() {
-        return MR::testDPDMenuPadDecideTrigger() && !MR::isDemoActive();
+        return MR::testPointerMenuPadDecideTrigger() && !MR::isDemoActive();
     }
 
     bool isButtonAPressed() {
@@ -52,13 +52,13 @@ public:
     LiveActorGroup* mSphereGroup;
     SphereSelectorHandle* mHandle;
     LiveActor* mSelectedTarget;
-    LiveActor* _98;
-    u32 _9C;
+    LiveActor* mNearestTarget;
+    u32 mNearestDist;
     LiveActor* mPointingTarget;
-    s32 _A4;
-    Vec2f _A8;
+    s32 mClickStep;
+    Vec2f mClickPos;
     bool mIsPointingInvalid;
-    bool _B1;  // Something for playing sounds the first time you click on a galaxy or cancel the selection
+    bool mIsSePlayed;  // Something for playing sounds the first time you click on a galaxy or cancel the selection
 };
 
 class SphereSelectorFunction {

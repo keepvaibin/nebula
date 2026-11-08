@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
@@ -13,14 +14,14 @@ class TripodBossStepSequence;
 
 class TripodBossBone {
 public:
-    TripodBossBone() : _30() {
-        _0.identity();
+    TripodBossBone() : mAttachMtx() {
+        mLocalMtx.identity();
     }
 
     void setAttachBaseMatrix(const Pos3f&);
 
-    Mtx34f _0;
-    const Pos3f* _30;
+    Mtx34f mLocalMtx;
+    const Pos3f* mAttachMtx;
 };
 
 /// @brief Megaleg
@@ -95,6 +96,7 @@ public:
     void requestStartStepSequence(s32);
     TripodBossStepSequence* getCurrentStepSequence();
     TripodBossStepSequence* getNextStepSequence();
+    TripodBossStepSequence* findStepSequence(s32) const;
     void calcLegUpVector(Vec3f*, const Vec3f&);
     void calcDemoMovement();
     void calcBodyMovement();
@@ -133,43 +135,43 @@ public:
     }
 
     inline bool isStateSomething() {
-        return (_634 == 0) || (_634 == 1);
+        return (mRideMarioState == 0) || (mRideMarioState == 1);
     }
 
     Pos3f mBodyMtx;
-    Pos3f _BC;
-    Pos3f _EC;
-    ModelObj* mLowModel;
+    Pos3f mDummyModelMtx;
+    Pos3f mDemoStartMtx;
     TripodBossBone mBossBones[22];
     TripodBossLeg* mLegs[3];
     TripodBossStepPoint* mStepPoints[3];
     TripodBossMovableArea* mMovableArea;
-    TripodBossStepSequence* mStepSequence;
+    // By the index step points carry (obj_arg3), up to the highest placed; each made when first needed.
+    MR::AssignableArray< TripodBossStepSequence* > mStepSequences;
+    s32 mStepSequenceNum;
     DummyDisplayModel* mDummyModel;
-    Vec3f _5BC;
-    Vec3f _5C8;
-    Vec3f _5D4;
-    Vec3f _5E0;
-    Vec3f _5EC;
-    f32 _5F8;
-    f32 _5FC;
-    f32 _600;
-    f32 _604;
-    f32 _608;
-    f32 _60C;
-    f32 _610;
-    f32 _614;
-    f32 _618;
-    f32 _61C;
-    f32 _620;
+    Vec3f mDummyModelOffset;
+    Vec3f mWeightPos;
+    Vec3f mBodyPos;
+    Vec3f mBodyVelocity;
+    Vec3f mClipCenter;
+    f32 mClipRadius;
+    f32 mWeightHeightOffset;
+    f32 mDemoBlendRate;
+    f32 mBodyHeight;
+    f32 mLegRootLength;
+    f32 mLegMiddleLength;
+    f32 mLegReach;
+    f32 mLegLift;
+    f32 mLegHeightRate;
+    f32 mMovableAreaRadius;
+    f32 mDummyModelSpinSpeed;
     s32 mCurrentStepSeq;
     s32 mNextStepSeq;
-    s32 _62C;
-    s32 _630;
-    s32 _634;
-    u8 _638;
-    s32 _63C;
-    u8 _640;
+    s32 mRideMarioTimer;
+    s32 mRideMarioState;
+    u8 mIsPartsHidden;
+    s32 mBgmState;
+    u8 mIsBgmChangePending;
     ActorCameraInfo* mEventCamera;
 };
 

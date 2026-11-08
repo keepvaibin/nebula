@@ -2,32 +2,20 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/RhythmLib/AudMePlayer.hpp"
 #include "Game/RhythmLib/AudRhythmMeSystem.hpp"
-#include <JSystem/JGadget/hashcode.hpp>
-#include <cstring>
 
-AudMeNameConverter::AudMeNameConverter() : mNumEntries(), mEntries() {
+AudMeNameConverter::AudMeNameConverter() {
     init();
 }
 
+// -1 (cNoValue) for a name the table lacks.
 u32 AudMeNameConverter::getMeID(const char* pName) const {
-    u32 hash = JGadget::getHashCode(pName);
-    for (s32 i = 0; i < mNumEntries; i++) {
-        const AudMeNameData& data = mEntries[i];
-        if (hash == data.mHash && strcmp(pName, data.mName) == 0) {
-            return data.mID;
-        }
-    }
-    return -1;
+    return mIndex.find(pName);
 }
 
 void AudMeNameConverter::init() {
-    AudMeMgr* meMgr = AudWrap::getRhythmMeSystem()->mMeMgr;
-    mNumEntries = meMgr->mParams.mNumEntries;
-    mEntries = new AudMeNameData[mNumEntries];
-
-    for (s32 i = 0; i < mNumEntries; i++) {
-        mEntries[i].mName = meMgr->mParams.getName(i);
-        mEntries[i].mID = i;
-        mEntries[i].mHash = JGadget::getHashCode(mEntries[i].mName);
+    const AudMePlayingParamsHolder& rParams = AudWrap::getRhythmMeSystem()->mMeMgr->mParams;
+    mIndex.reset(rParams.mNumEntries);
+    for (u32 i = 0; i < rParams.mNumEntries; i++) {
+        mIndex.add(rParams.getName(i), i);
     }
 }

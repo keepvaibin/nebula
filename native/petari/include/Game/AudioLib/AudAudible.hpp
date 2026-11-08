@@ -18,10 +18,10 @@ public:
         mAbsPos.init(&mPos, rPos, pPos);
 
         for (int i = 0; i < SIZE; i++) {
-            if ((mask & 1 << i) == 0) {  // TODO: init call?
-                _3C[i].mParams.init();
-                _3C[i].mPitch = 1.0f;
-                mChannels[i] = &_3C[i];
+            if ((mask & 1 << i) == 0) {
+                mChannelData[i].mParams.init();
+                mChannelData[i].mPitch = 1.0f;
+                mChannels[i] = &mChannelData[i];
             } else {
                 mChannels[i] = nullptr;
             }
@@ -72,7 +72,7 @@ public:
     SoundAudibleParam mAudibleParam;
     U mAbsPos;
     T* mChannels[SIZE];
-    T _3C[SIZE];
+    T mChannelData[SIZE];
     f32 mVolume;
     f32 mPan;
     f32 mDolby;

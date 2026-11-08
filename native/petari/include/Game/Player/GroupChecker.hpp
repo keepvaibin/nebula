@@ -1,19 +1,18 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/NameIndex.hpp"
 
-class HashSortTable;
-
+// The names of the objects in an attribute group (an object belongs when its name is held).
 class GroupChecker : public NameObj {
 public:
     GroupChecker(const char*, u32);
 
     virtual ~GroupChecker();
-    virtual void initAfterPlacement();
 
     void add(const NameObj*);
 
-    HashSortTable* mHashTable;
+    MR::NameIndex mNames;
 };
 
 class GroupCheckManager : public NameObj {

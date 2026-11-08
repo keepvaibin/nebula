@@ -7,11 +7,11 @@
 #include "Game/Util/SoundUtil.hpp"
 
 KoopaBattleMapPlate::KoopaBattleMapPlate(const char* pName) : LiveActor(pName) {
-    _8C.identity();
+    mBaseMtx.identity();
 }
 
 void KoopaBattleMapPlate::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mBaseMtx);
 }
 
 KoopaBattleMapPlate::~KoopaBattleMapPlate() {
@@ -20,13 +20,13 @@ KoopaBattleMapPlate::~KoopaBattleMapPlate() {
 void KoopaBattleMapPlate::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::calcGravity(this);
-    MR::makeMtxUpNoSupportPos(&_8C, -mGravity, mPosition);
+    MR::makeMtxUpNoSupportPos(&mBaseMtx, -mGravity, mPosition);
     initModelManagerWithAnm("KoopaPlate", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
     MR::addHitSensor(this, "Attack", ATYPE_KOOPA_PLATE, 8, 250.0f, Vec3f(0.0f, -150.0f, 0.0f));
-    MR::initCollisionParts(this, "KoopaPlate", getSensor("Attack"), _8C);
-    initEffectKeeper(1, nullptr, false);
+    MR::initCollisionParts(this, "KoopaPlate", getSensor("Attack"), mBaseMtx);
+    initEffectKeeper(1, nullptr);
     MR::addEffectHitNormal(this, "Hit");
     MR::setEffectBaseScale(this, "Hit", 3.0f);
     initSound(4, false);

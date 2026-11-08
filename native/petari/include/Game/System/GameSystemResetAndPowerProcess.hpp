@@ -37,5 +37,4 @@ public:
 
     ValueControl* mFadeinoutControl;
     s32 mResetOperation;
-    bool _5C;
 };

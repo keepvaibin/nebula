@@ -30,6 +30,6 @@ public:
 
     LiveActor* mOwner;
     ModelObj* mBreakModel;
-    Quat4f _94;
-    Vec3f _A4;
+    Quat4f mPoseQuat;
+    Vec3f mGroundPos;
 };

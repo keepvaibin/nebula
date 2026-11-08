@@ -41,12 +41,12 @@ void SnowMan::init(const TableIter& rrIter) {
     MR::validateCollisionParts(mHeadCollisionParts);
     MR::validateCollisionParts(mBodyCollisionParts);
     mAnimScaleParam = new AnimScaleParam();
-    mAnimScaleParam->_8 = 0.95f;
-    mAnimScaleParam->_C = 1.05f;
-    mAnimScaleParam->_24 = 0.60f;
-    mAnimScaleParam->_28 = 0.8f;
+    mAnimScaleParam->mScaleMin = 0.95f;
+    mAnimScaleParam->mScaleMax = 1.05f;
+    mAnimScaleParam->mHitReactionSpring = 0.60f;
+    mAnimScaleParam->mHitReactionDamping = 0.8f;
     mAnimScaleCtrl = new AnimScaleController(mAnimScaleParam);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::useStageSwitchWriteA(this, rrIter);
     MR::useStageSwitchWriteB(this, rrIter);
@@ -56,11 +56,11 @@ void SnowMan::init(const TableIter& rrIter) {
 }
 
 void SnowMan::control() {
-    if (mHeadCollisionParts->_CC) {
+    if (mHeadCollisionParts->mIsValid) {
         mHeadCollisionParts->setMtx();
     }
 
-    if (mBodyCollisionParts->_CC) {
+    if (mBodyCollisionParts->mIsValid) {
         mBodyCollisionParts->setMtx();
     }
     mAnimScaleCtrl->updateNerve();
@@ -114,7 +114,7 @@ void SnowMan::damageBody() {
 
 void SnowMan::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
-    Vec3f scale = mAnimScaleCtrl->_C * mScale;
+    Vec3f scale = mAnimScaleCtrl->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 

@@ -6,7 +6,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 
 AstroOverlookObj::AstroOverlookObj(const char* pName) : LiveActor(pName) {
-    _8C = 0;
+    mIsLayoutHidden = 0;
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);
     makeActorAppeared();
@@ -15,11 +15,11 @@ AstroOverlookObj::AstroOverlookObj(const char* pName) : LiveActor(pName) {
 void AstroOverlookObj::control() {
     if (MR::getCurrentAstroOverlookAreaObj()) {
         MR::deactivateDefaultGameLayout();
-        _8C = 1;
+        mIsLayoutHidden = 1;
     } else {
-        if (_8C == 1) {
+        if (mIsLayoutHidden == 1) {
             MR::activateDefaultGameLayout();
-            _8C = 0;
+            mIsLayoutHidden = 0;
         }
     }
 }

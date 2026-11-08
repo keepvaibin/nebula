@@ -13,8 +13,8 @@
 namespace {
     struct LineCheckParam {
         const char* mObjName;
-        f32 _4;
-        f32 _8;
+        f32 mLineOffset;
+        f32 mLineLength;
     };
 
     static const LineCheckParam sLineCheckParamTable[] = {
@@ -50,8 +50,8 @@ namespace NrvSandUpDownEffectObj {
     NEW_NERVE(SandUpDownEffectObjNrvBuryEnd, SandUpDownEffectObj, BuryEnd);
 };  // namespace NrvSandUpDownEffectObj
 
-SandUpDownEffectObj::SandUpDownEffectObj(const char* pName) : LiveActor(pName), _8C(), _90(), _94(0.0f, 0.0f, 0.0f), _D0() {
-    _A0.identity();
+SandUpDownEffectObj::SandUpDownEffectObj(const char* pName) : LiveActor(pName), mLineOffset(), mLineLength(), mClippingCenter(0.0f, 0.0f, 0.0f), mTriFilter() {
+    mEffectMtx.identity();
 }
 
 void SandUpDownEffectObj::init(const TableIter& rIter) {
@@ -60,12 +60,12 @@ void SandUpDownEffectObj::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::getObjectName(&objName, rIter);
-    initEffectKeeper(0, objName, false);
-    MR::makeMtxTR(_A0.toMtxPtr(), this);
-    MR::setEffectHostMtx(this, "BurySmoke", _A0.toMtxPtr());
+    initEffectKeeper(0, objName);
+    MR::makeMtxTR(mEffectMtx.toMtxPtr(), this);
+    MR::setEffectHostMtx(this, "BurySmoke", mEffectMtx.toMtxPtr());
 
     Vec3f yDir;
-    _A0.getYDir(yDir);
+    mEffectMtx.getYDir(yDir);
     mGravity.negate(yDir);
 
     MR::useStageSwitchReadA(this, rIter);
@@ -77,12 +77,12 @@ void SandUpDownEffectObj::init(const TableIter& rIter) {
 
     MR::listenStageSwitchOnB(this, MR::Functor(this, &SandUpDownEffectObj::startMoveUp));
 
-    _8C = ::findLineCheckParamData(objName)->_4;
-    _90 = ::findLineCheckParamData(objName)->_8;
-    _D0 = MR::createTriangleFilterFunc(&::isNotGroundCodeNoStampSand);
-    _94.scaleAdd(_8C - _90 * 0.5f, yDir, mPosition);
+    mLineOffset = ::findLineCheckParamData(objName)->mLineOffset;
+    mLineLength = ::findLineCheckParamData(objName)->mLineLength;
+    mTriFilter = MR::createTriangleFilterFunc(&::isNotGroundCodeNoStampSand);
+    mClippingCenter.scaleAdd(mLineOffset - mLineLength * 0.5f, yDir, mPosition);
 
-    MR::setClippingTypeSphere(this, _90 * 0.5f + 100.0f, &_94);
+    MR::setClippingTypeSphere(this, mLineLength * 0.5f + 100.0f, &mClippingCenter);
     initNerve(GET_NERVE(SandUpDownEffectObj, SandUpDownEffectObjNrvWait));
     makeActorAppeared();
 }
@@ -164,13 +164,13 @@ bool SandUpDownEffectObj::checkSandHit() {
     Vec3f vec2;
     Vec3f hitPos;
 
-    vec1.scaleAdd(-_8C, mGravity, mPosition);
-    vec2.scale(_90, mGravity);
+    vec1.scaleAdd(-mLineOffset, mGravity, mPosition);
+    vec2.scale(mLineLength, mGravity);
 
-    bool isHit = MR::getFirstPolyOnLineToMap(&hitPos, nullptr, vec1, vec2, nullptr, _D0);
+    bool isHit = MR::getFirstPolyOnLineToMap(&hitPos, nullptr, vec1, vec2, nullptr, mTriFilter);
 
     if (isHit) {
-        _A0.setTrans(hitPos);
+        mEffectMtx.setTrans(hitPos);
     }
 
     return isHit;

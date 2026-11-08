@@ -8,7 +8,7 @@
 #include <nebula_geometry.hpp>
 
 DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pParent) : ActorStateBase< DinoPackun >(pName, pParent) {
-    _10 = 1.0f;
+    mSide = 1.0f;
 }
 
 bool DinoPackunAction::sendBlowAttackMessage(HitSensor* pSender, HitSensor* pReceiver, bool a3) {
@@ -49,14 +49,14 @@ bool DinoPackunAction::sendHitAttackMessage(HitSensor* pSender, HitSensor* pRece
 bool DinoPackunAction::updateTurn(s32 turnTime, f32 turnSpeed) {
     Vec3f side;
     MR::calcSideVec(&side, mHost);
-    Vec3f direction(side * _10);
-    MR::turnDirectionDegree(mHost, &mHost->_E8, direction, turnSpeed);
+    Vec3f direction(side * mSide);
+    MR::turnDirectionDegree(mHost, &mHost->mFront, direction, turnSpeed);
     mHost->updateNormalVelocity();
     return MR::isGreaterStep(this, turnTime);
 }
 
 bool DinoPackunAction::updateWalk(s32 a1, f32 a2, s32 a3) {
-    MR::addVelocityMoveToDirection(mHost, mHost->_E8, a2);
+    MR::addVelocityMoveToDirection(mHost, mHost->mFront, a2);
 
     if (a2 > 1.2f) {
         mHost->updateRunVelocity();
@@ -75,13 +75,13 @@ bool DinoPackunAction::updateWalk(s32 a1, f32 a2, s32 a3) {
 }
 
 bool DinoPackunAction::updateChase(s32 a1, f32 a2, f32 a3, f32 a4, s32 a5, s32 a6) {
-    if (MR::isFaceToPlayerDegree(mHost, mHost->_E8, a2)) {
-        MR::turnDirectionToPlayerDegree(mHost, &mHost->_E8, a3);
+    if (MR::isFaceToPlayerDegree(mHost, mHost->mFront, a2)) {
+        MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, a3);
     }
 
     DinoPackun* parent = mHost;
     parent->updateFootPrintNerve(getNerveStep(), a6);
-    MR::addVelocityMoveToDirection(mHost, mHost->_E8, (a4 * MR::calcNerveRate(this, a5)));
+    MR::addVelocityMoveToDirection(mHost, mHost->mFront, (a4 * MR::calcNerveRate(this, a5)));
     mHost->updateRunVelocity();
     if (MR::isGreaterStep(this, a1)) {
         return true;
@@ -92,9 +92,9 @@ bool DinoPackunAction::updateChase(s32 a1, f32 a2, f32 a3, f32 a4, s32 a5, s32 a
 
 void DinoPackunAction::selectTurnDirection() {
     if (MR::isHalfProbability()) {
-        _10 = 1.0f;
+        mSide = 1.0f;
     } else {
-        _10 = -1.0f;
+        mSide = -1.0f;
     }
 }
 
@@ -126,7 +126,7 @@ bool DinoPackunAction::updateFind(s32 a1, f32 a2) {
         MR::startSound(mHost, "SE_BM_D_PAKKUN_LAND");
     }
 
-    MR::turnDirectionToPlayerDegree(mHost, &mHost->_E8, a2);
+    MR::turnDirectionToPlayerDegree(mHost, &mHost->mFront, a2);
     mHost->updateNormalVelocity();
 
     if (MR::isBckStopped(mHost)) {

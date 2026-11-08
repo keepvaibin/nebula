@@ -37,7 +37,7 @@ namespace {
 };  // namespace
 
 KinopioAstro::KinopioAstro(const char* pName)
-    : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), _194(), _195(), mIsPlayerLuigi() {
+    : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), mHasPeachLetter(), mHasLuigiLetter(), mIsPlayerLuigi() {
 }
 
 bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {
@@ -54,7 +54,7 @@ bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {
 }
 
 bool KinopioAstro::isDispLetterIcon() const {
-    return _195 || _194;
+    return mHasLuigiLetter || mHasPeachLetter;
 }
 
 void KinopioAstro::createLetterIcon(const TableIter& rIter) {
@@ -69,7 +69,7 @@ bool KinopioAstro::branchFunc(u32) {
 bool KinopioAstro::eventFunc(u32 letterEvent) {
     if (letterEvent == LetterEvent_LuigiLetter) {
         if (dispLetter(mLuigiLetter)) {
-            _195 = false;
+            mHasLuigiLetter = false;
             MR::onGameEventFlagGetLuigiLetter();
             return true;
         }
@@ -77,7 +77,7 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
         return false;
     } else if (letterEvent == LetterEvent_PeachLetterNormal) {
         if (dispLetter(mPeachLetter)) {
-            _194 = false;
+            mHasPeachLetter = false;
             MR::offAllPlayerLeftSupply();
             return true;
         }
@@ -147,7 +147,7 @@ void KinopioAstro::init(const TableIter& rIter) {
         if (MR::isAnyPlayerLeftSupply()) {
             mPeachLetter = new PeachLetter("ピーチ姫からの手紙");
             mPeachLetter->initWithoutIter();
-            _194 = true;
+            mHasPeachLetter = true;
             if (MR::isLuigiLeftSupply()) {
                 mIsPlayerLuigi = true;
             }
@@ -165,26 +165,26 @@ void KinopioAstro::init(const TableIter& rIter) {
         if (MR::isLuigiLetterArrivalAtMessenger()) {
             mLuigiLetter = MR::createLuigiLetterForTalk();
             mLuigiLetter->initWithoutIter();
-            _195 = true;
+            mHasLuigiLetter = true;
         }
 
         if (mGoodsIndex != 3) {
             NPCActorItem npcItems("Kinopio");
             MR::getNPCItemData(&npcItems, 3);
-            _94 = MR::createNPCGoods(this, npcItems.mGoods0, npcItems.mGoodsJoint0);
-            _98 = MR::createNPCGoods(this, npcItems.mGoods1, npcItems.mGoodsJoint1);
+            mGoods0 = MR::createNPCGoods(this, npcItems.mGoods0, npcItems.mGoodsJoint0);
+            mGoods1 = MR::createNPCGoods(this, npcItems.mGoods1, npcItems.mGoodsJoint1);
         }
 
-        if (_94 != nullptr) {
-            MR::registerDemoSimpleCastAll(_94);
+        if (mGoods0 != nullptr) {
+            MR::registerDemoSimpleCastAll(mGoods0);
         }
 
-        if (_98 != nullptr) {
-            MR::registerDemoSimpleCastAll(_98);
+        if (mGoods1 != nullptr) {
+            MR::registerDemoSimpleCastAll(mGoods1);
         }
     }
 
-    if (_194 || _195) {
+    if (mHasPeachLetter || mHasLuigiLetter) {
         createLetterIcon(rIter);
     }
 

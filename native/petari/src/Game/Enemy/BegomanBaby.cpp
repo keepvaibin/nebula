@@ -268,7 +268,7 @@ void BegomanBaby::exeTrample() {
     }
 
     updateRotateY(0.25f, 0.5f);
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam._0, ::hStopParam._4, ::hStopParam._8, ::hStopParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hStopParam);
     reboundWallAndGround(&mFaceVec, false);
     if (MR::isGreaterStep(this, 180)) {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvSignAttack));
@@ -300,8 +300,7 @@ void BegomanBaby::exeBlow() {
     updateRotateY(0.3f, 0.5f);
     MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_SPARK");
     MR::startLevelSound(this, "SE_EM_LV_BABYBEGO_ROT_MIDDLE");
-    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam._0, ::hHitReactionParam._4, ::hHitReactionParam._8,
-                               ::hHitReactionParam._C);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hHitReactionParam);
     reboundWallAndGround(&mFaceVec, false);
 
     if (MR::isGreaterStep(this, 20)) {

@@ -8,9 +8,8 @@ public:
     void initPattarn(s32*);
     s32 goNextPattarn();
 
-    s32* _0;
-    s32 _4;
-    u32 _8;
-    s32 _C;
-    bool _10;
+    s32* mPattern;
+    s32 mPatternNum;
+    s32 mIndex;
+    bool mCanSummon;
 };

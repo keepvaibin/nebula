@@ -16,7 +16,7 @@ public:
     void activate();
     void deactivate();
 
-    bool _C;
+    bool mFillInsideVolume;
     JUTTexture* mMask;      // the screen mask at half size
     JUTTexture* mDepthKey;  // the frame's depth, in the mask's pass
     JUTTexture* mEdge;

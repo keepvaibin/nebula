@@ -26,7 +26,7 @@ NameObj* BaseMatrixFollower::getFollowTargetActor() const {
 
 void BaseMatrixFollower::calcFollowMatrix(Pos3f* pOut) const {
     pOut->set(mFollowTarget->getHostBaseMtx());
-    pOut->concat(*pOut, mFollowTarget->_0);
+    pOut->concat(*pOut, mFollowTarget->mInvHostMtx);
 }
 
 bool BaseMatrixFollower::isEnableFollow() const {
@@ -45,29 +45,29 @@ bool BaseMatrixFollower::isValid() const {
 
 BaseMatrixFollowTarget::BaseMatrixFollowTarget(const PlacementLink* pInfo) {
     mLinkInfo = pInfo;
-    _30 = nullptr;
+    mHostBaseMtx = nullptr;
     mActor = nullptr;
     mValidater = nullptr;
-    _0.identity();
+    mInvHostMtx.identity();
 }
 
 void BaseMatrixFollowTarget::set(LiveActor* pActor, const Pos3f& rMtx, const Pos3f* pBaseMtx, BaseMatrixFollowValidater* pValidator) {
     mValidater = pValidator;
     mActor = pActor;
-    _0.set(rMtx.mMtx);
-    _0.invert(_0);
+    mInvHostMtx.set(rMtx.mMtx);
+    mInvHostMtx.invert(mInvHostMtx);
 
     if (pBaseMtx) {
-        _30 = pBaseMtx;
+        mHostBaseMtx = pBaseMtx;
     }
 }
 
 const MtxPtr BaseMatrixFollowTarget::getHostBaseMtx() const {
-    if (!_30) {
+    if (!mHostBaseMtx) {
         return mActor->getBaseMtx();
     }
 
-    return const_cast< MtxPtr >(_30->mMtx);
+    return const_cast< MtxPtr >(mHostBaseMtx->mMtx);
 }
 
 bool BaseMatrixFollowTarget::isValid(s32 followId) const {

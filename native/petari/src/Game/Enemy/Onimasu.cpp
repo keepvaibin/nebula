@@ -22,7 +22,6 @@ namespace {
     static const s32 sWaitTime = 90;
     static const s32 sTimeToNextPoint = 30;
     static const f32 sGravityScalar = 1.6f;
-    // static const f32 sQuickRatio = ;
     static const s32 sWaitTimeQuick = 45;
     static const s32 sTimeToNextPointQuick = 15;
     static const f32 sGravityScalarQuick = 6.4f;
@@ -42,11 +41,11 @@ namespace NrvOnimasu {
 Onimasu::~Onimasu() {
 }
 
-Onimasu::Onimasu(const char* pName) : LiveActor(pName), _BC(1.0f, 0.0f, 0.0f), _F8(gZeroVec) {
-    _8C.identity();
-    _C8.set(0.0f, 0.0f, 0.0f, 1.0f);
-    _D8.set(0.0f, 0.0f, 0.0f, 1.0f);
-    _E8.set(0.0f, 0.0f, 0.0f, 1.0f);
+Onimasu::Onimasu(const char* pName) : LiveActor(pName), mRotateAxis(1.0f, 0.0f, 0.0f), mClipCenter(gZeroVec) {
+    mMoveEffectMtx.identity();
+    mStartQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
+    mTargetQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
+    mPoseQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void Onimasu::init(const TableIter& rIter) {
@@ -58,9 +57,9 @@ void Onimasu::init(const TableIter& rIter) {
     MR::connectToSceneCollisionEnemyNoShadowedMapObjStrongLight(this);
 
     MR::initLightCtrl(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
-    MR::setEffectHostMtx(this, "Move", _8C);
+    MR::setEffectHostMtx(this, "Move", mMoveEffectMtx);
 
     initSound(4, false);
 
@@ -68,7 +67,7 @@ void Onimasu::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "Onimasu", MR::addHitSensor(this, "body", ATYPE_MAP_OBJ_PRESS, 8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f)),
                            nullptr);
 
-    MR::initAndSetRailClipping(&_F8, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
 
     MR::setGroupClipping(this, rIter, 16);
 
@@ -98,13 +97,13 @@ void Onimasu::initAfterPlacement() {
     MR::setBaseTRMtx(this, mtx);
 
     if (MR::isEqualStageName("FactoryGalaxy")) {
-        mtx.getXDir(_BC);
-        MR::normalize(&_BC);
+        mtx.getXDir(mRotateAxis);
+        MR::normalize(&mRotateAxis);
     }
 
-    mtx.getQuat(_C8);
-    _D8.set(_C8);
-    _E8.set(_D8);
+    mtx.getQuat(mStartQuat);
+    mTargetQuat.set(mStartQuat);
+    mPoseQuat.set(mTargetQuat);
 
     if (MR::isEqualStageName("FactoryGalaxy")) {
         f32 turnDirection = 0.0f;
@@ -125,9 +124,9 @@ void Onimasu::calcTargetPose() {
             mtx.identity();
             const f32 pi = MR::pi();
             mtx.makeRotate(getLastPointNormal(), pi * turnDirection);
-            mtx.mult(_BC, _BC);
+            mtx.mult(mRotateAxis, mRotateAxis);
 
-            MR::normalize(&_BC);
+            MR::normalize(&mRotateAxis);
         } else {
             Vec3f lastPointPos;
             MR::calcRailPointPos(&lastPointPos, this, getLastPointNo());
@@ -140,36 +139,36 @@ void Onimasu::calcTargetPose() {
 
             Vec3f down;
             calcGravityDir(&down);
-            _BC.cross(railDir, down);
-            MR::normalize(&_BC);
+            mRotateAxis.cross(railDir, down);
+            MR::normalize(&mRotateAxis);
         }
     } else {
         Quat4f normalRotation;
         normalRotation.set(0.0f, 0.0f, 0.0f, 1.0f);
         normalRotation.setRotate(getLastPointNormal(), getNextPointNormal());
         rotationChange.set(normalRotation);
-        normalRotation.getRotate(_BC);
-        MR::normalize(&_BC);
+        normalRotation.getRotate(mRotateAxis);
+        MR::normalize(&mRotateAxis);
     }
 
-    _C8.set(_D8);
+    mStartQuat.set(mTargetQuat);
 
     Quat4f quarterTurn;
     quarterTurn.set(0.0f, 0.0f, 0.0f, 1.0f);
-    quarterTurn.setRotate(_BC, MR::pi() / 2.0f);
+    quarterTurn.setRotate(mRotateAxis, MR::pi() / 2.0f);
     rotationChange.mult(quarterTurn);
-    _D8.mult(rotationChange);
+    mTargetQuat.mult(rotationChange);
 
     Vec3f startFront;
-    _C8.getZDir(startFront);
+    mStartQuat.getZDir(startFront);
 
     Vec3f targetFront;
-    _D8.getZDir(targetFront);
+    mTargetQuat.getZDir(targetFront);
 
     if (MR::isSameDirection(startFront, targetFront)) {
         Quat4f adjustment;
-        adjustment.setRotate(_BC, MR::pi() * 0.001f);
-        _C8.mult(adjustment);
+        adjustment.setRotate(mRotateAxis, MR::pi() * 0.001f);
+        mStartQuat.mult(adjustment);
     }
 }
 
@@ -179,15 +178,15 @@ void Onimasu::updatePose() {
         nerveRate = 1.0f;
     }
 
-    _E8.set(_C8);
-    _E8.slerp(_D8, nerveRate);
-    _E8.normalize();
+    mPoseQuat.set(mStartQuat);
+    mPoseQuat.slerp(mTargetQuat, nerveRate);
+    mPoseQuat.normalize();
 }
 
 void Onimasu::calcAndSetBaseMtx() {
     Pos3f baseMtx;
     baseMtx.identity();
-    baseMtx.setQT(_E8, mPosition);
+    baseMtx.setQT(mPoseQuat, mPosition);
 
     MR::setBaseTRMtx(this, baseMtx);
 }
@@ -263,10 +262,10 @@ void Onimasu::emitEffectLand() {
 
     railPointPos.add((-getNextPointNormal() * ::sSensorRadius) * 0.5f);
 
-    if (MR::isSameDirection(_BC, getNextPointNormal())) {
-        MR::makeMtxUpNoSupportPos(&_8C, getNextPointNormal(), railPointPos);
+    if (MR::isSameDirection(mRotateAxis, getNextPointNormal())) {
+        MR::makeMtxUpNoSupportPos(&mMoveEffectMtx, getNextPointNormal(), railPointPos);
     } else {
-        MR::makeMtxUpSidePos(&_8C, getNextPointNormal(), _BC, railPointPos);
+        MR::makeMtxUpSidePos(&mMoveEffectMtx, getNextPointNormal(), mRotateAxis, railPointPos);
     }
 
     MR::emitEffect(this, "Move");

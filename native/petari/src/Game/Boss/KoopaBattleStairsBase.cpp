@@ -42,7 +42,7 @@ s32 KoopaBattleStairsBase::calcFireAttackStep(KoopaBattleMapStair* pBattleMapSta
     Vec3f targetPos = Vec3f(0.0f, 0.0f, 0.0f);
     f32 dist = pBattleMapStair->calcAndSetTargetPos(&targetPos, rVec);
 
-    pBattleMapStair->_A8 = static_cast< s32 >(dist / myFloat) - static_cast< s32 >(::sFireRadius / myFloat);
+    const s32 fireTravelStep = static_cast< s32 >(dist / myFloat) - static_cast< s32 >(::sFireRadius / myFloat);
 
-    return pBattleMapStair->mTimeToBreak - pBattleMapStair->_A8 - myInt;
+    return pBattleMapStair->mTimeToBreak - fireTravelStep - myInt;
 }

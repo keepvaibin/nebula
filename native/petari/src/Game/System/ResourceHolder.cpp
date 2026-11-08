@@ -1,5 +1,6 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Sound/SoundAnimator.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -10,7 +11,6 @@
 #include <nebula_math.h>
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/Material.hpp"
 #include <nebula_game_api.h>
 
 // tableOf's order: a kind's table, then the file table.
@@ -124,9 +124,9 @@ void ResourceHolder::mount(const AssetFolder& rArchive, s32 folder) {
             mount(rArchive, item.mEntry);
         } else {
             ResFileInfo* info = createAndRegisterObject(item);
-            info->_8 = item.mData;
-            info->_4 = item.mSize;
-            mTotalResourceSize += info->_4;
+            info->mData = item.mData;
+            info->mSize = item.mSize;
+            mTotalResourceSize += info->mSize;
         }
     }
 }
@@ -154,7 +154,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const AssetFolder::Item& rI
     case NEBULA_ASSET_KIND_REGISTER_COLOR:
         return mBrkResTable->add(pName, Clip::load(pData), true);
     case NEBULA_ASSET_KIND_SOUND_ANIMATION:
-        return mBasResTable->add(pName, pData, true);
+        return mBasResTable->add(pName, SoundAnimation::load(pData, pName), true);
     case NEBULA_ASSET_KIND_MATERIALS:
         return mBmtResTable->add(pName, ModelData::loadMaterials(pData), true);
     case NEBULA_ASSET_KIND_VISIBILITY:

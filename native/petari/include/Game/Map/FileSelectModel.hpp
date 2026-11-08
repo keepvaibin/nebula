@@ -16,7 +16,6 @@ public:
     bool isOpen() const;
     void emitOpen();
     void emitVanish();
-    void emitCopy();
     void emitCompleteEffect();
     void deleteCompleteEffect();
 
@@ -25,5 +24,5 @@ public:
     void exeClose();
     void exeBlink();
 
-    MtxPtr _8C;
+    MtxPtr mHostMtx;
 };

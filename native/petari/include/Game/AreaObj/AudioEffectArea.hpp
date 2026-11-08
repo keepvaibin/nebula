@@ -13,6 +13,6 @@ public:
         return "AudioEffectArea";
     }
 
-    s32 _3C;
-    s32 _40;
+    s32 mEffectType;
+    s32 mEffectParam;
 };

@@ -1,6 +1,5 @@
 #include "Game/Map/CollisionCode.hpp"
 #include "Game/Map/HitInfo.hpp"
-#include "Game/Util/HashUtil.hpp"
 
 CollisionCode::CollisionCode() : mFloorTable(), mWallTable(), mSoundTable(), mCameraTable() {
     createFloorTable();
@@ -9,16 +8,15 @@ CollisionCode::CollisionCode() : mFloorTable(), mWallTable(), mSoundTable(), mCa
     createCameraTable();
 }
 
-CodeTable::CodeTable(u32 numMax) {
+CodeTable::CodeTable(u32 numMax) : mIndex(numMax) {
     mCodeNumMax = numMax;
     mCodeNum = 0;
-    mHashTable = new u32[numMax];
     mCodeTable = new u32[numMax];
     mNameTable = new const char*[numMax];
 }
 
 void CodeTable::add(const char* pName, u32 code) {
-    mHashTable[mCodeNum] = MR::getHashCode(pName);
+    mIndex.add(pName, code);
     mCodeTable[mCodeNum] = code;
     mNameTable[mCodeNum] = pName;
     mCodeNum++;
@@ -159,17 +157,8 @@ u32 CollisionCode::getCode(const TableIter& rIter, CodeTable* pCodeTable, const 
         const char* pCode = nullptr;
 
         if (rIter.getValue< const char* >(pName, &pCode)) {
-            u32 code = 0;
-            u32 hash = MR::getHashCode(pCode);
-
-            for (s32 i = 0; i < pCodeTable->mCodeNum; i++) {
-                if (hash == pCodeTable->mHashTable[i]) {
-                    code = pCodeTable->mCodeTable[i];
-                    break;
-                }
-            }
-
-            return code;
+            const u32 code = pCodeTable->mIndex.find(pCode);
+            return code == MR::NameIndex::cNoValue ? 0 : code;
         }
     }
 

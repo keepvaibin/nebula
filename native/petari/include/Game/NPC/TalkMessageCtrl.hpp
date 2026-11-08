@@ -120,12 +120,12 @@ public:
     LiveActor* mHostActor;
     TalkNodeCtrl* mNodeCtrl;
     s32 mZoneID;
-    u32 _18;
-    Vec3f _1C;
+    u32 mTalkStateKind;
+    Vec3f mBalloonPos;
     MtxPtr mMtx;
     Vec3f mMsgBalloonFollowOffs;
     f32 mTalkDistance;
-    u32 _3C;
+    u32 mAlreadyDoneFlag;
     u32 mAlreadyDoneFlags;
     bool mIsOnRootNodeAuto;
     bool mIsOnReadNodeAuto;

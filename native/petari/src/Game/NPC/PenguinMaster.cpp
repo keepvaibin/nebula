@@ -29,16 +29,16 @@ void PenguinMaster::init(const TableIter& rIter) {
     MR::addHitSensorPush(this, "head", 8, 150.0f, Vec3f(0.0f, 260.0f, 100.0f));
     initialize(rIter, caps);
     const char* talk = "Talk";
-    mParam._14 = "Wait";
-    mParam._1C = talk;
-    mParam._18 = nullptr;
-    mParam._20 = nullptr;
-    mParam._0 = false;
-    mParam._1 = false;
-    _134 = "Trampled";
-    _13C = "Reaction";
-    _130 = "Reaction";
-    _138 = "Pointing";
+    mParam.mWaitAction = "Wait";
+    mParam.mTalkAction = talk;
+    mParam.mWaitTurnAction = nullptr;
+    mParam.mTalkTurnAction = nullptr;
+    mParam.mTurnWhenNear = false;
+    mParam.mTurnOnTalk = false;
+    mTrampleAction = "Trampled";
+    mReactionAction = "Reaction";
+    mSpinAction = "Reaction";
+    mPointingAction = "Pointing";
 
     if (mMsgCtrl != nullptr) {
         MR::setDistanceToTalk(mMsgCtrl, 350.0f);
@@ -47,7 +47,7 @@ void PenguinMaster::init(const TableIter& rIter) {
 
 bool PenguinMaster::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        _E3 = true;
+        mIsSpinAttacked = true;
 
         return true;
     }
@@ -61,21 +61,21 @@ void PenguinMaster::exeWait() {
 }
 
 void PenguinMaster::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SV_PENGUIN_OLD_TRAMPLED");
         MR::startSound(this, "SE_SM_PENGUIN_TRAMPLED");
     }
 
     if (isPointingSe()) {
         MR::startSound(this, "SE_SV_PENGUIN_OLD_POINTED_2P");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_PENGUIN_OLD_SPIN_HIT");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_PENGUIN_OLD_STAR_PIECE");
     }
 

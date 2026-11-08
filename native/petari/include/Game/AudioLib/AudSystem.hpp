@@ -103,8 +103,9 @@ public:
     bool isAlreadyPlayingSoundNear(SoundID, const Vec3f*, f32);
     void setVolumeZeroForce(s32);
 
-    void set830(u32 var) {
-        _830 = var;
+    // Sounds other than the system groups stay silent for this many frames.
+    void setSeMuteFrames(s32 frames) {
+        mSeMuteFrames = frames;
     }
 
     AudEffector* getAudEffector() const {
@@ -121,12 +122,10 @@ public:
     bool mIsReset;
     bool mStopThreads;
     SoundReset mReseter;
-    bool _828;
     bool mIsPaused;
-    bool _82A;
-    bool _82B;  // blocks startSound
-    bool _82C;  // blocks startLevelSound
-    s32 _830;
+    bool mIsTrigSeBlocked;  // blocks startSound
+    bool mIsLevelSeBlocked;  // blocks startLevelSound
+    s32 mSeMuteFrames;
     StdSoundInfo* mSoundInfo;
     SoundArchive* mSectionHeap;
     AudAudience< 4 > mAudience;

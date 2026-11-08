@@ -40,7 +40,7 @@ MsgSharedGroup::MsgSharedGroup(const char* pName, s32 numMax, const TableIter& r
 
     if (pIdInfo != nullptr) {
         PlacementId newInfo = MR::createPlacementIdFromGroupId(rIter);
-        pIdInfo->_0 = newInfo._0;
+        pIdInfo->mId = newInfo.mId;
         pIdInfo->mZoneID = newInfo.mZoneID;
     }
 

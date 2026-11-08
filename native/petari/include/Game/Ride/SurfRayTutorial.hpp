@@ -44,5 +44,5 @@ public:
     TalkMessageCtrl* mTalkCtrl;
     SurfingGuidance* mSurfingGuidance;
     s32 mChangeStep;
-    s32 _28;
+    s32 mGoNextCount;
 };

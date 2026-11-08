@@ -11,7 +11,7 @@ NamePosHolder::NamePosHolder() : NameObj("位置テーブル保持"), mPosNum(),
     for (s32 i = 0; i < mPosNum; i++) {
         NamePosInfo* curInf = &mInfos[i];
         curInf->mLinkInfo = nullptr;
-        curInf->_20 = nullptr;
+        curInf->mRegisteredObj = nullptr;
         MR::getGeneralPosData(&curInf->mName, &curInf->mPosition, &curInf->mRotation, &curInf->mLinkInfo, i);
     }
 }
@@ -25,7 +25,7 @@ bool NamePosHolder::tryRegisterLinkObj(const NameObj* pObj, const TableIter& rIt
     for (s32 i = 0; i < mPosNum; i++) {
         NamePosInfo* currInfo = &mInfos[i];
         if (*currInfo->mLinkInfo == info) {
-            currInfo->_20 = pObj;
+            currInfo->mRegisteredObj = pObj;
             return true;
         }
     }
@@ -41,7 +41,7 @@ bool NamePosHolder::find(const NameObj* pObj, const char* pName, Vec3f* pPos, Ve
             continue;
         }
 
-        if (pObj != nullptr && pInfo->mLinkInfo->isValid() && (pObj != pInfo->_20)) {
+        if (pObj != nullptr && pInfo->mLinkInfo->isValid() && (pObj != pInfo->mRegisteredObj)) {
             continue;
         }
 

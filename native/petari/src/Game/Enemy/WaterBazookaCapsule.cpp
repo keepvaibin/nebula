@@ -23,7 +23,7 @@ void WaterBazookaCapsule::init(const TableIter& rIter) {
     MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initCollisionParts(this, "WaterBazookaCapsule", getSensor(nullptr), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     MR::addToAttributeGroupSearchTurtle(this);
 

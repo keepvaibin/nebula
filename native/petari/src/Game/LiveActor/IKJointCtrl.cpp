@@ -3,24 +3,18 @@
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
 
-#include <algorithm>
-
 namespace {
     const char* sTextOutFileName = "IKJointCtrl";
 };  // namespace
 
 IKJointCtrl::IKJointCtrl(LiveActor* pActor)
-    : mName(), mActor(pActor), mJoint(), mRootCtrl(), mMiddleCtrl(), mEndCtrl(), _78(0.0f, 1.0f, 0.0f), mEndLocalDir(0.0f, 1.0f, 0.0f),
-      _90(0.0f, 1.0f, 0.0f), mNearLimitRate(), mFarLimitRate(1.0f), mEndDirMaxDegree(45.0f), _A8(), _AC(), _B0(NEBULA_NONE32), _B2(NEBULA_NONE32), _B4(NEBULA_NONE32),
-      _B6() {
-    _4.identity();
-    _34.identity();
+    : mName(), mActor(pActor), mJoint(), mRootCtrl(), mMiddleCtrl(), mEndCtrl(), mEndDir(0.0f, 1.0f, 0.0f), mEndLocalDir(0.0f, 1.0f, 0.0f),
+      mEndDirMaxDegree(45.0f), mEndPosRate(), mEndDirRate(), mRootJointNo(NEBULA_NONE32), mMiddleJointNo(NEBULA_NONE32), mEndJointNo(NEBULA_NONE32),
+      mIsCallBackEnabled() {
 }
 
 void IKJointCtrl::init(const IKJointCtrlParam& rParam) {
     mName = rParam.mName;
-    mNearLimitRate = rParam.mNearLimitRate;
-    mFarLimitRate = rParam.mFarLimitRate;
     mEndLocalDir = rParam.mEndLocalDir;
     MR::normalize(&mEndLocalDir);
     mEndDirMaxDegree = rParam.mEndDirMaxDegree;
@@ -29,125 +23,126 @@ void IKJointCtrl::init(const IKJointCtrlParam& rParam) {
     Joint* middleJoint = MR::getParentJoint(mActor, endJoint);
     Joint* rootJoint = MR::getParentJoint(mActor, middleJoint);
     mJoint = new IKJoint;
-    _B0 = rootJoint->getJntNo();
-    _B2 = middleJoint->getJntNo();
-    _B4 = endJoint->getJntNo();
-    mRootCtrl = MR::createJointController< IKJointCtrl >(this, mActor, _B0, &IKJointCtrl::updateRootJointCallBack, nullptr);
-    mMiddleCtrl = MR::createJointController< IKJointCtrl >(this, mActor, _B2, &IKJointCtrl::updateMiddleJointCallBack, nullptr);
-    mEndCtrl = MR::createJointController< IKJointCtrl >(this, mActor, _B4, &IKJointCtrl::updateEndJointCallBack, nullptr);
+    mRootJointNo = rootJoint->getJntNo();
+    mMiddleJointNo = middleJoint->getJntNo();
+    mEndJointNo = endJoint->getJntNo();
+    mRootCtrl = MR::createJointController< IKJointCtrl >(this, mActor, mRootJointNo, &IKJointCtrl::updateRootJointCallBack, nullptr);
+    mMiddleCtrl = MR::createJointController< IKJointCtrl >(this, mActor, mMiddleJointNo, &IKJointCtrl::updateMiddleJointCallBack, nullptr);
+    mEndCtrl = MR::createJointController< IKJointCtrl >(this, mActor, mEndJointNo, &IKJointCtrl::updateEndJointCallBack, nullptr);
 }
 
-void IKJointCtrl::setEndPosition(const Vec3f& rPos, f32 a2) {
-    Vec3f joint_pos;
-    MR::copyJointPos(mActor, _B4, &joint_pos);
-    MR::vecBlend(joint_pos, rPos, &joint_pos, a2);
-    mJoint->update(MR::getJointMtx(mActor, _B0), MR::getJointMtx(mActor, _B2), MR::getJointMtx(mActor, _B4), joint_pos);
-    _A8 = a2;
+void IKJointCtrl::setEndPosition(const Vec3f& rPos, f32 rate) {
+    Vec3f jointPos;
+    MR::copyJointPos(mActor, mEndJointNo, &jointPos);
+    MR::vecBlend(jointPos, rPos, &jointPos, rate);
+    mJoint->update(MR::getJointMtx(mActor, mRootJointNo), MR::getJointMtx(mActor, mMiddleJointNo), MR::getJointMtx(mActor, mEndJointNo), jointPos);
+    mEndPosRate = rate;
 }
 
-void IKJointCtrl::setEndDirection(const Vec3f& rDirection, f32 a2) {
-    s32 val = MR::vecBlendSphere(_78, rDirection, &_78, a2);
-
-    if (!val) {
-        MR::turnRandomVector(&_78, _78, 0.01f);
+void IKJointCtrl::setEndDirection(const Vec3f& rDirection, f32 rate) {
+    if (!MR::vecBlendSphere(mEndDir, rDirection, &mEndDir, rate)) {
+        MR::turnRandomVector(&mEndDir, mEndDir, 0.01f);
     }
 
-    _AC = a2;
+    mEndDirRate = rate;
 }
 
 void IKJointCtrl::endCtrl() {
-    _A8 = 0.0f;
-    _AC = 0.0f;
+    mEndPosRate = 0.0f;
+    mEndDirRate = 0.0f;
 }
 
 void IKJointCtrl::setCallBackFunction() {
-    if (_B6) {
-        if (_A8 > 0.0f) {
-            mRootCtrl->registerCallBack();
-            mMiddleCtrl->registerCallBack();
-        }
+    if (!mIsCallBackEnabled) {
+        return;
     }
 
-    if (_B6) {
-        if (_AC > 0.0f) {
-            mEndCtrl->registerCallBack();
-        }
+    if (mEndPosRate > 0.0f) {
+        mRootCtrl->registerCallBack();
+        mMiddleCtrl->registerCallBack();
+    }
+
+    if (mEndDirRate > 0.0f) {
+        mEndCtrl->registerCallBack();
     }
 }
 
 bool IKJointCtrl::updateRootJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
-    pPos->concat(mJoint->_30, _4);
+    *pPos = mJoint->mRootMtx;
     return true;
 }
 
 bool IKJointCtrl::updateMiddleJointCallBack(Pos3f* pPos, const JointControllerInfo& rInfo) {
-    pPos->concat(mJoint->_60, _34);
+    *pPos = mJoint->mMiddleMtx;
     return true;
 }
 
 bool IKJointCtrl::updateEndJointCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
-    f32 angle = mEndDirMaxDegree * _AC;
-    MR::turnMtxToLocalDirDegree(pMtx, mEndLocalDir, _78, angle);
-    pMtx->mult33(mEndLocalDir, _90);
+    MR::turnMtxToLocalDirDegree(pMtx, mEndLocalDir, mEndDir, mEndDirMaxDegree * mEndDirRate);
     return true;
 }
 
-IKJointCtrlHolder::IKJointCtrlHolder(LiveActor* pActor, u32 count) : mControls(), mNumControls(), _8(), mActor(pActor), _10(true) {
-    mControls = new IKJointCtrl*[count];
-    mNumControls = count;
+IKJointCtrlHolder::IKJointCtrlHolder(LiveActor* pActor, s32 capacity)
+    : mControls(new IKJointCtrl*[capacity]()), mCapacity(capacity), mNumControls(), mActor(pActor), mIsIdle(true) {
 }
 
 void IKJointCtrlHolder::addCtrl(const IKJointCtrlParam& rParam) {
-    if (mNumControls > _8) {
-        IKJointCtrl* ctrl = new IKJointCtrl(mActor);
-        ctrl->init(rParam);
-        u32 cnt = _8;
-        _8 = cnt + 1;
-        mControls[cnt] = ctrl;
+    if (mNumControls >= mCapacity) {
+        IKJointCtrl** pList = new IKJointCtrl*[mCapacity * 2]();
+        for (s32 i = 0; i < mNumControls; i++) {
+            pList[i] = mControls[i];
+        }
+        delete[] mControls;
+        mControls = pList;
+        mCapacity *= 2;
     }
+
+    IKJointCtrl* ctrl = new IKJointCtrl(mActor);
+    ctrl->init(rParam);
+    mControls[mNumControls++] = ctrl;
 }
 
 void IKJointCtrlHolder::startUpdate() {
-    _10 = false;
-    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
-        (*it)->disableCallBack();
+    mIsIdle = false;
+    for (s32 i = 0; i < mNumControls; i++) {
+        mControls[i]->disableCallBack();
     }
 }
 
-void IKJointCtrlHolder::setEndPosition(const char* pName, const Vec3f& rPos, f32 a3) {
-    findIKJointCtrl(pName)->setEndPosition(rPos, a3);
+void IKJointCtrlHolder::setEndPosition(const char* pName, const Vec3f& rPos, f32 rate) {
+    findIKJointCtrl(pName)->setEndPosition(rPos, rate);
 }
 
-void IKJointCtrlHolder::setEndDirection(const char* pName, const Vec3f& rDirection, f32 a3) {
-    findIKJointCtrl(pName)->setEndDirection(rDirection, a3);
+void IKJointCtrlHolder::setEndDirection(const char* pName, const Vec3f& rDirection, f32 rate) {
+    findIKJointCtrl(pName)->setEndDirection(rDirection, rate);
 }
 
 void IKJointCtrlHolder::endUpdate() {
-    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
-        (*it)->enableCallBack();
+    for (s32 i = 0; i < mNumControls; i++) {
+        mControls[i]->enableCallBack();
     }
-    _10 = true;
+    mIsIdle = true;
 }
 
 void IKJointCtrlHolder::endCtrlAll() {
-    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
-        (*it)->endCtrl();
+    for (s32 i = 0; i < mNumControls; i++) {
+        mControls[i]->endCtrl();
     }
 }
 
 void IKJointCtrlHolder::setCallBackFunction() {
-    if (_10) {
-        for (auto it = mControls, end = mControls + _8; it != end; ++it) {
-            (*it)->setCallBackFunction();
-        }
+    if (!mIsIdle) {
+        return;
+    }
+
+    for (s32 i = 0; i < mNumControls; i++) {
+        mControls[i]->setCallBackFunction();
     }
 }
 
 IKJointCtrl* IKJointCtrlHolder::findIKJointCtrl(const char* pName) {
-    for (u32 i = 0; i < _8; i++) {
-        const char* ctrlName = mControls[i]->mName;
-
-        if (MR::isEqualString(pName, ctrlName)) {
+    for (s32 i = 0; i < mNumControls; i++) {
+        if (MR::isEqualString(pName, mControls[i]->mName)) {
             return mControls[i];
         }
     }

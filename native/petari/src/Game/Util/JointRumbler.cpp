@@ -8,18 +8,14 @@
 #include "math_types.hpp"
 
 
-JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 a3, f32 a4, u32 a5, bool a6, s32 a7)
-    : mRumbleCalculator(), mJointTransform(), _8(a7), _C(), mModelScale(1.0f), mFlags() {
-    for (int i = 0; i < ARRAY_SIZE(_16); i++) {
-        _16[i] = false;
-    }
-
+JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 frequency, f32 amplitude, u32 duration, bool a6, s32 startDelay)
+    : mRumbleCalculator(), mJointTransform(), mStartDelay(startDelay), mDelayLeft(), mModelScale(1.0f), mFlags() {
     if (pActor->mModelManager->mXanimePlayer->getCore()->mTransformList == nullptr) {
         MR::initJointTransform(pActor);
     }
 
     mJointTransform = MR::getJointTransform(pActor, pJointName);
-    mRumbleCalculator = new RumbleCalculatorCosMultLinear(a3, HALF_PI, a4, a5);
+    mRumbleCalculator = new RumbleCalculatorCosMultLinear(frequency, HALF_PI, amplitude, duration);
 
     if (a6) {
         mFlags |= FLAG_1;
@@ -29,12 +25,12 @@ JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 a3, f3
 void JointRumbler::update() {
     f32 scale;
 
-    if (_C == 0) {
+    if (mDelayLeft == 0) {
         mRumbleCalculator->calc();
-        scale = mRumbleCalculator->_C.y;
+        scale = mRumbleCalculator->mValue.y;
     } else {
-        if (_C > 0) {
-            _C--;
+        if (mDelayLeft > 0) {
+            mDelayLeft--;
         }
 
         scale = 0.0f;
@@ -45,17 +41,17 @@ void JointRumbler::update() {
 
 void JointRumbler::start() {
     mRumbleCalculator->start(0);
-    _C = _8;
+    mDelayLeft = mStartDelay;
 }
 
 void JointRumbler::reset() {
     mRumbleCalculator->reset();
-    _C = -1;
+    mDelayLeft = -1;
     updateModelScale(1.0f);
 }
 
 bool JointRumbler::isRumbling() const {
-    return mRumbleCalculator->_4 < mRumbleCalculator->_8;
+    return mRumbleCalculator->mFrame < mRumbleCalculator->mDuration;
 }
 
 void JointRumbler::updateModelScale(f32 scale) {

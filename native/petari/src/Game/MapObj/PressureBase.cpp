@@ -51,7 +51,7 @@ void PressureMessenger::exeSync() {
 
 PressureBase::PressureBase(const char* pName)
     : LiveActor(pName), mJointController(), mFront(0.0f, 0.0f, 1.0f), mRelaxAngle(), mBaseAngle(), mWaitTime(::sDefaultShotInterval),
-      mBallSpeed(::sDefaultFirstSpeed), mShotType(), mIsShortShot(), mMessenger(), mGroup(), _BC() {
+      mBallSpeed(::sDefaultFirstSpeed), mShotType(), mIsShortShot(), mMessenger(), mGroup() {
 }
 
 void PressureBase::init(const TableIter& rIter) {
@@ -64,7 +64,7 @@ void PressureBase::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, 30.0f, 0.0f));
     MR::addHitSensorAtJointMapObjSimple(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(6, false);
     MR::initShadowVolumeSphere(this, 75.0f);
     MR::invalidateShadow(this, nullptr);

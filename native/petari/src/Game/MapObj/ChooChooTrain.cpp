@@ -4,14 +4,11 @@
 #include "Game/Util.hpp"
 
 namespace {
-    // static const f32 hNextCoord = _;
-    // static const f32 hConnectPosFront = _;
-    // static const f32 hTurnToConnectAngle = _;
     static const s32 hWhistleStepMin = 180;
     static const s32 hWhistleStepMax = 600;
 };  // namespace
 
-ChooChooTrain::ChooChooTrain(const char* pName) : LiveActor(pName), mModelArray(), _98(0.0f, 0.0f, 0.0f), mRailSpeed(5.0f), mWhistleTimer() {
+ChooChooTrain::ChooChooTrain(const char* pName) : LiveActor(pName), mModelArray(), mClipCenter(0.0f, 0.0f, 0.0f), mRailSpeed(5.0f), mWhistleTimer() {
 }
 
 void ChooChooTrain::startClipped() {
@@ -40,7 +37,7 @@ void ChooChooTrain::init(const TableIter& rIter) {
     initRailRider(rIter);
     initModelManagerWithAnm("ChooChooTrain", 0, false);
     MR::connectToSceneCollisionMapObj(this);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(4, false);
     mWhistleTimer = MR::getRandom(::hWhistleStepMin, ::hWhistleStepMax);
     MR::onCalcGravity(this);
@@ -93,7 +90,7 @@ void ChooChooTrain::init(const TableIter& rIter) {
 
     MR::reverseRailDirection(this);
     MR::setRailCoord(this, railCoord);
-    MR::initAndSetRailClipping(&_98, this, 100.0f, 500.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
     MR::startBck(this, "Run");
 }
 

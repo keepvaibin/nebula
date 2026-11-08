@@ -25,8 +25,8 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
-    const Vec3f* _04;
-    f32 _08;
+    const Vec3f* mClipCenter;
+    f32 mClipRadius;
 };
 
 namespace MR {

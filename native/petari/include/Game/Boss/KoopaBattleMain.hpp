@@ -46,5 +46,5 @@ public:
     KoopaStateAttackShockWave* mStateAttackShockWave;
     KoopaStateAttackRoll* mStateAttackRoll;
     KoopaStateAttackSpin* mStateAttackSpin;
-    bool _2C;
+    bool mIsMainAttackStarted;
 };

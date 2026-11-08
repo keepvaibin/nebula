@@ -6,10 +6,9 @@ class BallRailPoint {
 public:
     BallRailPoint();
 
-    Vec3f _0;
-    Vec3f _C;
-    Vec3f _18;
-    Vec3f _24;
+    Vec3f mPos;
+    Vec3f mSide;
+    Vec3f mDir;
 };
 
 class BallRail : public LiveActor {
@@ -28,10 +27,10 @@ public:
     inline void exeNoBind();
 
     BallRailPoint* mRailPoints;
-    HitSensor* _90;
-    Vec3f _94;
+    HitSensor* mBindSensor;
+    Vec3f mBindStartPos;
     s32 mNumPoints;
     f32 mAcceleration;
     f32 mDeceleration;
-    f32 _AC;
+    f32 mBindSensorRadius;
 };

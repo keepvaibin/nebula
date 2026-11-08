@@ -21,8 +21,6 @@ public:
     void exeSwitchUp();
     void calcRotSpeed();
 
-    u32 _8C;
-    s32 _90;
     f32 mRotateSpeed;
-    u8 _98;
+    u8 mIsHit;
 };

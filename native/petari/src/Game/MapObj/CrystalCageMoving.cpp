@@ -25,11 +25,11 @@ namespace NrvCrystalCageMoving {
 CrystalCageMoving::CrystalCageMoving(const char* pName) : MapObjActor(pName) {
     mTicoModel = nullptr;
     mCameraInfo = nullptr;
-    _FC.x = 0.0f;
-    _FC.y = 0.0f;
-    _FC.z = 0.0f;
-    _108 = 0;
-    _C8.identity();
+    mStartPos.x = 0.0f;
+    mStartPos.y = 0.0f;
+    mStartPos.z = 0.0f;
+    mIsCoreShown = 0;
+    mDummyModelMtx.identity();
 }
 
 void CrystalCageMoving::init(const TableIter& rIter) {
@@ -49,7 +49,7 @@ void CrystalCageMoving::init(const TableIter& rIter) {
     vec.z = 0.0f;
     info.setupHitSensorParam(4, 350.0f, vec);
     initialize(rIter, info);
-    _FC.set(mPosition);
+    mStartPos.set(mPosition);
     initDummyModel(rIter);
     MR::initActorCamera(this, rIter, &mCameraInfo);
     MR::startBck(this, "Wait");
@@ -67,7 +67,7 @@ void CrystalCageMoving::exeBreakBig() {
         MR::startBck(this, "CoreWait");
         MR::startActorCameraNoTarget(this, mCameraInfo);
         MR::setSensorRadius(this, "body", 30.0f);
-        _108 = 1;
+        mIsCoreShown = 1;
         MR::emitEffect(this, "BreakOutside");
         MR::startSound(this, "SE_OJ_CRY_CAGE_MV_BREAK_EDG");
     }
@@ -104,12 +104,12 @@ void CrystalCageMoving::exeDemoTicoMove() {
     }
 
     Vec3f stack_14;
-    stack_14.sub(_FC, mPosition);
+    stack_14.sub(mStartPos, mPosition);
 
     f32 nerveRate = MR::calcNerveRate(this, 30);
     Vec3f stack_8;
     stack_8.scaleAdd(nerveRate, stack_14, mPosition);
-    _C8.setTrans(stack_8);
+    mDummyModelMtx.setTrans(stack_8);
 
     if (MR::isStep(this, 30)) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop));
@@ -118,8 +118,8 @@ void CrystalCageMoving::exeDemoTicoMove() {
 
 void CrystalCageMoving::exeDemoTicoStop() {
     if (MR::isFirstStep(this)) {
-        _C8.set(getBaseMtx());
-        _C8.setTrans(_FC);
+        mDummyModelMtx.set(getBaseMtx());
+        mDummyModelMtx.setTrans(mStartPos);
         MR::setBckRate(mTicoModel, 1.5f);
     }
 
@@ -155,10 +155,10 @@ void CrystalCageMoving::kill() {
 void CrystalCageMoving::control() {
     if (!isNerveTypeEnd()) {
         MapObjActor::control();
-        _C8.set(MR::getJointMtx(this, 0));
+        mDummyModelMtx.set(MR::getJointMtx(this, 0));
         Vec3f trans;
-        NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &trans);
-        _C8.setTrans(trans);
+        NebulaMtxMultVec(mDummyModelMtx.toMtxPtr(), &::sDummyModelOffset, &trans);
+        mDummyModelMtx.setTrans(trans);
     }
 }
 
@@ -180,7 +180,7 @@ void CrystalCageMoving::crashMario(HitSensor* pSender, HitSensor* pReceiver) {
     MR::tryRumblePadVeryStrong(this, PLAYER_1);
     MR::shakeCameraVeryStrong();
 
-    if (_108) {
+    if (mIsCoreShown) {
         setNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvBreakSmall));
     } else {
         f32 sensorDist = pReceiver->mPosition.distance(pSender->mPosition);
@@ -195,7 +195,7 @@ void CrystalCageMoving::crashMario(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 void CrystalCageMoving::updateHitSensor(HitSensor* pSensor) {
-    if (!_108) {
+    if (!mIsCoreShown) {
         pSensor->mPosition.set(mPosition);
     } else {
         f32 radius = pSensor->mRadius;
@@ -218,11 +218,11 @@ void CrystalCageMoving::connectToScene(const MapObjActorInitInfo& rInfo) {
 }
 
 void CrystalCageMoving::initDummyModel(const TableIter& rIter) {
-    _C8.set(MR::getJointMtx(this, 0));
+    mDummyModelMtx.set(MR::getJointMtx(this, 0));
     Vec3f stack_8;
-    NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &stack_8);
-    _C8.setTrans(stack_8);
-    mTicoModel = new ModelObj("動くクリスタルケージ中身", "Tico", _C8.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);
+    NebulaMtxMultVec(mDummyModelMtx.toMtxPtr(), &::sDummyModelOffset, &stack_8);
+    mDummyModelMtx.setTrans(stack_8);
+    mTicoModel = new ModelObj("動くクリスタルケージ中身", "Tico", mDummyModelMtx.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);
     mTicoModel->initWithoutIter();
     ModelObj* tico = mTicoModel;
     tico->mScale.x = 3.0f;

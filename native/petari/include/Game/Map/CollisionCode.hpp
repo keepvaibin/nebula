@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/NameIndex.hpp"
 
 class CodeTable;
 class TableIter;
@@ -123,7 +124,7 @@ public:
 
     u32 mCodeNum;
     u32 mCodeNumMax;
-    u32* mHashTable;
+    MR::NameIndex mIndex;  // a code's name to the code
     u32* mCodeTable;
     const char** mNameTable;
 };

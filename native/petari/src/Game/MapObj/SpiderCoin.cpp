@@ -47,7 +47,7 @@ void SpiderCoin::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorCallbackMapObj(this, "body", 8, 50.0f);
 
-    initEffectKeeper(8, nullptr, false);
+    initEffectKeeper(8, nullptr);
     initNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvWait));
     MR::initStarPointerTarget(this, 150.0f, Vec3f(0.0f, 80.0f, 0.0f));
 

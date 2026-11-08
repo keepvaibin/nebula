@@ -1,6 +1,6 @@
 #include "Game/Ride/SphereController.hpp"
 
-SphereController::SphereController() : _4(0) {
+SphereController::SphereController() {
 }
 
 f32 SphereController::calcMoveVector(Vec3f* pDst, const Vec3f& rSrc) {

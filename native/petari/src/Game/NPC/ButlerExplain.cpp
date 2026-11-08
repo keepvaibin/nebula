@@ -28,7 +28,7 @@ void ButlerExplain::init(const TableIter& rIter) {
 }
 
 void ButlerExplain::control() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_BUTLER_TRAMPLED");
     }

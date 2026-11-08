@@ -28,8 +28,8 @@ public:
     void exeStopped();
 
 private:
-    MR::MovementControlType _8;
-    const NameObj* _C;
+    MR::MovementControlType mMovementType;
+    const NameObj* mRequester;
 };
 
 class SceneNameObjMovementController : public NameObj {
@@ -45,7 +45,7 @@ public:
     void notifyRequestNameObjMovementOnOff(bool);
 
 private:
-    bool _C;
+    bool mIsSyncRequested;
     StopSceneStateControl* mStopSceneStateControl;
 };
 

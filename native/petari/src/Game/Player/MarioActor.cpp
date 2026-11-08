@@ -309,12 +309,12 @@ void MarioActor::init2(const Vec3f& rA, const Vec3f& rB, s32 initialAnimation) {
     _2C4.x = 0.0f;
     _2C4.y = 70.0f;
     _2C4.z = 0.0f;
-    mBinder->_1EC._0 = false;
+    mBinder->mIsMoveWithCollision = false;
     MR::setBinderOffsetVec(this, &_2C4, false);
 
     mBinder->setTriangleFilter(MR::createTriangleFilterDelegator(this, &MarioActor::binderFilter));
 
-    mBinder->_1EC._3 = true;
+    mBinder->mIsSkipFirstCheck = true;
     initEffect();
     MR::invalidateClipping(this);
 
@@ -765,7 +765,7 @@ void MarioActor::movement() {
 
                 if (MR::getFirstPolyOnLineToMap(&stack_E0, pTmp, stack_EC, getGravityVec() * 200.f)) {
                     Vec3f stack_D4;
-                    if (MR::vecKillElement(stack_E0 - (mPosition), getGravityVec(), &stack_D4) < -5.0f && pTmp->mParts && !pTmp->mParts->_D4 &&
+                    if (MR::vecKillElement(stack_E0 - (mPosition), getGravityVec(), &stack_D4) < -5.0f && pTmp->mParts && !pTmp->mParts->mStillCount &&
                         getMovementStates()._3E != 1) {
                         mPosition = stack_E0;
                         mMario->mPosition = mPosition;
@@ -791,7 +791,7 @@ void MarioActor::movement() {
                 if ((mMario->mShadowPos - mPosition).dot(getGravityVec()) < 0.0f) {
                     bool eject = true;
                     CollisionParts* parts = mMario->_45C->mParts;
-                    if (parts && !mMario->_45C->mParts->_D4) {
+                    if (parts && !mMario->_45C->mParts->mStillCount) {
                         Vec3f stack_C8, stack_BC, stack_B0;
                         NebulaMtxMultVec(parts->mInvBaseMatrix.toMtxPtr(), &mMario->mShadowPos, &stack_C8);
                         NebulaMtxMultVec(parts->mPrevBaseMatrix.toMtxPtr(), &stack_C8, &stack_BC);
@@ -935,9 +935,9 @@ void MarioActor::control2() {
 
         _978 = mVelocity;
         if (getDrawStates()._B) {
-            mBinder->_1EC._1 = false;
+            mBinder->mIsMovingReaction = false;
         } else {
-            mBinder->_1EC._1 = true;
+            mBinder->mIsMovingReaction = true;
         }
 
         if (mMario->isDamaging()) {
@@ -1017,7 +1017,7 @@ void MarioActor::updateBehavior() {
                 updateSwingTimer();
                 updateSwingAction();
                 updateThrowVector();
-                lockOnDPD();
+                lockOnPointer();
                 if (!checkClapCatchStart()) {
                     _7DC = 0;
                     mMario->Mario::update();

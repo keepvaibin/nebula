@@ -63,5 +63,4 @@ public:
     bool mIsShortShot;
     PressureMessenger* mMessenger;
     MsgSharedGroup* mGroup;
-    bool _BC;
 };

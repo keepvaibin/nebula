@@ -102,11 +102,9 @@ public:
     s32 calcJumpStartTime() const;
     s32 calcJumpTime() const;
     f32 calcJumpHeight() const;
-    void initTimer();
-    void updateTime();
 
-    Quat4f _8C;
-    Vec3f _9C;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
     RabbitStateWaitStart* mRabbitStateWaitStart;
     RabbitStateCaught* mRabbitStateCaught;
     MultiEventCamera* mMultiEventCamera;
@@ -116,14 +114,11 @@ public:
     RailGraphIter* mRailGraphIter;
     ParabolicPath* mParabolicPath;
     SpotMarkLight* mSpotMarkLight;
-    s32 _CC;
-    f32 _D0;
-    s32 _D4;
-    s32 _D8;
-    s32 _DC;
-    bool _E0;
-    bool _E1;
-    s32 _E4;
-    bool _E8;
-    bool _E9;
+    s32 mJumpStartStep;
+    f32 mMoveSpeed;
+    s32 mRouteLevelStep;
+    s32 mRouteLevel;
+    s32 mRouteLevelTarget;
+    bool mIsRouteLevelControl;
+    bool mIsGhost;
 };

@@ -28,10 +28,10 @@ void SimpleMapObj::init(const TableIter& rIter) {
 
 void SimpleEnvironmentObj::connectToScene(const MapObjActorInitInfo& rInfo) {
     if (rInfo.mConnectToScene) {
-        if (rInfo._5C == 1) {
+        if (rInfo.mLightType == 1) {
             MR::connectToSceneEnvironmentStrongLight(this);
             return;
-        } else if (rInfo._5C != 1) {
+        } else if (rInfo.mLightType != 1) {
             MR::connectToSceneEnvironment(this);
             return;
         }
@@ -45,10 +45,10 @@ void SimpleMapObjFarMax::init(const TableIter& rIter) {
 
 void SimpleMapObjNoSilhouetted::connectToScene(const MapObjActorInitInfo& rInfo) {
     if (rInfo.mConnectToScene) {
-        if (rInfo._5C == 1) {
+        if (rInfo.mLightType == 1) {
             MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
             return;
-        } else if (rInfo._5C != 1) {
+        } else if (rInfo.mLightType != 1) {
             MR::connectToSceneNoSilhouettedMapObj(this);
             return;
         }
@@ -107,7 +107,6 @@ namespace {
 };  // namespace
 
 SimpleSeesawObj::SimpleSeesawObj(const char* pName) : MapObjActor(pName) {
-    _C4.identity();
 }
 
 void SimpleSeesawObj::init(const TableIter& rIter) {
@@ -117,7 +116,7 @@ void SimpleSeesawObj::init(const TableIter& rIter) {
     const SoundEffectDataEntry* entry = ::getSeParam(mObjectName);
     const char* sound_name = entry != nullptr ? entry->soundName : nullptr;
     entry = ::getSeParam(mObjectName);
-    MapObjActorUtil::setupInitInfoSeesaw(&info, rIter, sound_name, entry != nullptr ? entry->_8 : 0.0f);
+    MapObjActorUtil::setupInitInfoSeesaw(&info, rIter, sound_name, entry != nullptr ? entry->rotatorRadius : 0.0f);
     initialize(rIter, info);
 }
 

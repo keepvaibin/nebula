@@ -87,23 +87,22 @@ public:
     void updateCameraTarget();
 
     Pos3f mBaseMtx;
-    Vec3f _BC;
-    u8 _C8;
-    u32 _CC;
+    Vec3f mCameraRegisterPos;
+    u32 mStateIndex;
     MR::Vector< MR::FixedArray< DodoryuStateBase*, 16 > > mState;
     DodoryuSub::MoveStateHolder* mMoveStateHolder;
     DodoryuHill* mHill;
     DodoryuLeadHill* mLeadHill;
     DodoryuBank* mBank;
     DodoryuRabbit* mRabbit;
-    Vec3f _128;
-    Vec3f _134;
+    Vec3f mGroundNormal;
+    Vec3f mWallNormal;
     AreaObj* mClosedAreaObj;
-    u8 _144;
-    CameraTargetMtx* _148;
-    CameraTargetMtx* _14C;
-    u8 _150;
-    u32 _154;
+    u8 mIsSwitchOn;
+    CameraTargetMtx* mDemoCameraTarget;
+    CameraTargetMtx* mSpinOutCameraTarget;
+    u8 mIsRumbling;
+    u32 mRumbleStep;
     AnimScaleController* mAnimScaleCtrl;
 };
 
@@ -116,7 +115,7 @@ public:
 
     void exeAppear();
 
-    Mtx34f _90;
+    Mtx34f mBankMtx;
 };
 
 class DodoryuRabbit : public ModelObj {
@@ -143,15 +142,15 @@ public:
     void exePleasure();
 
     Dodoryu* mHost;
-    Pos3f _94;
-    f32 _C4;
+    Pos3f mRabbitMtx;
+    f32 mRailCoord;
     TalkMessageCtrl* mTalkCtrl;
-    s32 _CC;
-    s32 _D0;
-    JointRumbler* _D4;
-    JointRumbler* _D8;
+    s32 mTalkSwitchStep;
+    s32 mTalkNode;
+    JointRumbler* mTrampleRumbler;
+    JointRumbler* mStarPieceRumbler;
     bool mIsDisplayMessage;
-    Pos3f _E0;
+    Pos3f mTalkMtx;
 };
 
 class DodoryuLeadHill : public LiveActor {
@@ -166,6 +165,6 @@ public:
     bool calcJoint(Pos3f*, const JointControllerInfo&);
 
     MtxPtr mHostBaseMtx;
-    f32 _90;
-    JointController* _94[17];
+    f32 mSpinAngle;
+    JointController* mJointCtrls[17];
 };

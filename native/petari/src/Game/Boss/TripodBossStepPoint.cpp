@@ -4,7 +4,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 TripodBossStepPoint::TripodBossStepPoint(const char* pName)
-    : LiveActor(pName), mStepPosition(0, 0, 0), mStepNormal(0, 1, 0), mStepFront(0, 0, 1), mLeg(), mSequencePriority(), mArg3(-1), mWaitTime(120) {
+    : LiveActor(pName), mStepPosition(0, 0, 0), mStepNormal(0, 1, 0), mStepFront(0, 0, 1), mLeg(), mSequencePriority(), mSequenceIndex(-1), mWaitTime(120) {
 }
 
 void TripodBossStepPoint::init(const TableIter& rIter) {
@@ -19,14 +19,14 @@ void TripodBossStepPoint::init(const TableIter& rIter) {
         MR::getPlacementArg0NoInit(rIter, &mSequencePriority);
         MR::getPlacementArg1NoInit(rIter, &mLeg);
         MR::getPlacementArg2NoInit(rIter, &mWaitTime);
-        MR::getPlacementArg3NoInit(rIter, &mArg3);
+        MR::getPlacementArg3NoInit(rIter, &mSequenceIndex);
     }
 
     makeActorDead();
 }
 
 void TripodBossStepPoint::initAfterPlacement() {
-    if (mArg3 != -1) {
+    if (mSequenceIndex != -1) {
         MR::addTripodBossStepPoint(this);
     }
 }

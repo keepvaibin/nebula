@@ -34,9 +34,9 @@ public:
 
     const char* mName;
     s32 mCameraNum;
-    s32 _8;
-    s32 _C;
-    s32 _10;
+    s32 mCameraIndex;
+    s32 mFrame;
+    s32 mFrameNum;
     s32 mCameraType;
     const ActorCameraInfo* mCameraInfo;
     CameraTargetArg mTarget;

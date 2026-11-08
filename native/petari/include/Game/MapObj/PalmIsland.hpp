@@ -13,7 +13,7 @@ public:
     void exeFloat();
     void exeWait();
 
-    s32 _8C;
-    Vec3f _90;
-    s32 _9C;
+    s32 mFloatStartStep;
+    Vec3f mRipplePos;
+    s32 mIsRising;
 };

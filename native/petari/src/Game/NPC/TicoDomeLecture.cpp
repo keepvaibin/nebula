@@ -19,18 +19,18 @@ namespace {
     const static Vec cMoveEndRotate = {30.0f, 130.0f, 0.0f};
 };  // namespace
 
-TicoDomeLecture::TicoDomeLecture(const char* pName) : LiveActor(pName), _8C(gZeroVec), _98(gZeroVec) {
+TicoDomeLecture::TicoDomeLecture(const char* pName) : LiveActor(pName), mInitPos(gZeroVec), mInitRotation(gZeroVec) {
 }
 
 void TicoDomeLecture::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    _8C.set(mPosition);
-    _98.set(mRotation);
+    mInitPos.set(mPosition);
+    mInitRotation.set(mRotation);
     initModelManagerWithAnm("Tico", nullptr, false);
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     MR::startBrkAndSetFrameAndStop(this, "ColorChange", 1.0f);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::initShadowFromCSV(this, "Shadow");
     MR::tryRegisterDemoCast(this, rIter);
@@ -41,8 +41,8 @@ void TicoDomeLecture::init(const TableIter& rIter) {
 }
 
 void TicoDomeLecture::appear() {
-    mPosition.set(_8C);
-    mRotation.set(_98);
+    mPosition.set(mInitPos);
+    mRotation.set(mInitRotation);
     MR::offSwitchDead(this);
     LiveActor::appear();
     setNerve(GET_NERVE(TicoDomeLecture, TicoDomeLectureNrvWait));
@@ -66,8 +66,8 @@ void TicoDomeLecture::exeMove() {
     MR::startLevelSound(this, "SE_SM_LV_TICO_FLY_DEMO");
     if (MR::isDemoPartActive(demoName)) {
         f32 easeOut = MR::calcNerveEaseOutRate(this, MR::getDemoPartTotalStep(demoName) - 1);
-        mPosition.lerp(_8C, ::cMoveEndPos, easeOut);
-        mRotation.lerp(_98, ::cMoveEndRotate, easeOut);
+        mPosition.lerp(mInitPos, ::cMoveEndPos, easeOut);
+        mRotation.lerp(mInitRotation, ::cMoveEndRotate, easeOut);
         if (MR::isDemoPartLastStep(demoName)) {
             setNerve(GET_NERVE(TicoDomeLecture, TicoDomeLectureNrvMetamorphosis));
         }

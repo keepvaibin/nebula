@@ -33,6 +33,6 @@ public:
     void exeWait();
 
     BeamGoRoundBeam** mBeams;
-    CollisionParts* _C8;
-    CollisionParts* _CC;
+    CollisionParts* mMove1Collision;
+    CollisionParts* mMove2Collision;
 };

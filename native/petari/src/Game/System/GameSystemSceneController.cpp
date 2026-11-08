@@ -404,7 +404,7 @@ void GameSystemSceneController::exeInvalidateSystemWipe() {
 
     if (!GameSystemFunction::isCreatedSystemWipe()) {
         isValidChangeNerve = true;
-    } else if (mScenarioSelectScene->isExecForeground() || mScenarioSelectScene->_16) {
+    } else if (mScenarioSelectScene->isExecForeground() || mScenarioSelectScene->mIsCanceled) {
         isValidChangeNerve = true;
     } else if (!MR::isSystemWipeActive()) {
         isValidChangeNerve = true;

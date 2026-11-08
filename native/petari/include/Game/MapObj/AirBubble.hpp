@@ -23,13 +23,11 @@ public:
     void exeKillWait();
     bool canSpinGet() const;
 
-    Vec3f _8C;
-    u8 _98[0xC];
-    Vec3f _A4;
-    f32 _B0;
-    u8 _B4[0xC];
+    Vec3f mBasePos;
+    Vec3f mDriftDir;
+    f32 mBobOffset;
     f32 mRailMoveSpeed;
     s32 mLife;
     bool mIsFollowRail;
-    bool _C9;
+    bool mIsItemMoving;
 };

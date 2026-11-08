@@ -33,7 +33,6 @@ public:
     ParticleDrawExecutor* mDrawExec;
     ParticleCalcExecutor* mCalcExec;
     AutoEffectGroupHolder* mGroupHolder;
-    bool _20;
 };
 
 namespace MR {

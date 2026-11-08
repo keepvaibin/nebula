@@ -9,13 +9,11 @@
 
 namespace {
     static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
-    // static const s32 sStepEmit = _;
     static const s32 sStepToEmitFire = 1;
     static const s32 sStepToNextAttack = 45;
     static const s32 sStepToNextAttackVs2 = 30;
     static const s32 sStepToNextAttackVs3 = 30;
     static const s32 sStepToNextAttackVs3Angry = 15;
-    // static const s32 sFireAttackStep = _;
     static const f32 sTurnSpeed = 2.0f;
 };  // namespace
 

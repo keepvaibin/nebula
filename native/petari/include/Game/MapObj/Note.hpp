@@ -31,13 +31,11 @@ public:
     void exeFlyUp();
 
     NoteFairy* mParentFairy;  ///< The parent NoteFairy that this note was spawned from.
-    Vec3f _90;
     Vec3f mRailDirection;
     int mCounter;  ///< The amount of steps it takes for the note to disappear.
-    f32 _AC;
+    f32 mBrkFrame;
     bool mIsCountdown;
     FlashingCtrl* mFlashCtrl;  // A pointer to the FlashingCtrl instance that handles the "fading away" effects.
-    u32 _B8;
 };
 
 class NoteGroup : public LiveActorGroup {

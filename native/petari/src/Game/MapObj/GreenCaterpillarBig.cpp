@@ -75,9 +75,9 @@ GreenCaterpillarBig::GreenCaterpillarBig(const char* pName) : LiveActor(pName) {
     mBodyArray = nullptr;
     mBodyArrayLength = 0;
     mCurBodyParts = 0;
-    _98 = 0;
-    _9C = 0;
-    _9D = 0;
+    mRailPointNo = 0;
+    mIsEnteringHole = 0;
+    mIsLeavingApple = 0;
     mPlanetLOD = nullptr;
 }
 
@@ -87,7 +87,7 @@ void GreenCaterpillarBig::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(6, false);
     initRailRider(rIter);
     initBodyParts(rIter);
@@ -122,18 +122,18 @@ void GreenCaterpillarBig::exeWriggle() {
     if (MR::isRailReachedGoal(this)) {
         setNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvEndAdjust));
     } else {
-        _9C = 0;
-        _9D = 0;
+        mIsEnteringHole = 0;
+        mIsLeavingApple = 0;
 
-        bool isNotEqual = MR::getCurrentRailPointNo(this) != _98;
+        bool isNotEqual = MR::getCurrentRailPointNo(this) != mRailPointNo;
 
         if (isNotEqual) {
-            _98 = MR::getCurrentRailPointNo(this);
+            mRailPointNo = MR::getCurrentRailPointNo(this);
             f32 point_arg = -1.0f;
-            MR::getRailPointArg0NoInit(this, _98, &point_arg);
+            MR::getRailPointArg0NoInit(this, mRailPointNo, &point_arg);
 
             if (point_arg == 0.0f) {
-                _9C = 1;
+                mIsEnteringHole = 1;
                 MR::tryRumblePadStrong(this, PLAYER_1);
                 MR::shakeCameraNormal();
                 MR::startSound(this, "SE_OJ_GRN_CATERP_IN");
@@ -232,7 +232,7 @@ void GreenCaterpillarBig::fixBodyPartsOnRail() {
 }
 
 void GreenCaterpillarBig::leaveApple() {
-    _9D = 1;
+    mIsLeavingApple = 1;
     MR::tryRumblePadStrong(this, PLAYER_1);
     MR::shakeCameraNormal();
     MR::startSound(this, "SE_OJ_GRN_CATERP_DAMAGE");

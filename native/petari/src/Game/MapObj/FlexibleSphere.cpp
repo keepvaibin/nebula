@@ -2,8 +2,6 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/FlexibleSphere.hpp"
-#include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -49,7 +47,7 @@ void FlexibleSphere::init(const TableIter& rIter) {
     MR::addHitSensorMapObj(this, "body", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensors(this);
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     initSound(4, false);
 
@@ -77,20 +75,17 @@ void FlexibleSphere::init(const TableIter& rIter) {
     mMinScale = 0.1f;
     mScaleRate = 0.002f;
     mVanishOnShrinkEnd = false;
-    _90 = true;
 
     if (MR::isValidInfo(rIter)) {
         s32 arg0 = -1;
         s32 arg1 = -1;
         s32 arg2 = -1;
         s32 arg3 = -1;
-        s32 arg4 = -1;
 
         MR::getPlacementArg0NoInit(rIter, &arg0);
         MR::getPlacementArg1NoInit(rIter, &arg1);
         MR::getPlacementArg2NoInit(rIter, &arg2);
         MR::getPlacementArg3NoInit(rIter, &arg3);
-        MR::getPlacementArg4NoInit(rIter, &arg4);
 
         if (arg0 != -1) {
             mMaxScale = arg0 / 10000.0f;
@@ -106,10 +101,6 @@ void FlexibleSphere::init(const TableIter& rIter) {
 
         if (arg3 == 1) {
             mVanishOnShrinkEnd = true;
-        }
-
-        if (arg4 == 1) {
-            _90 = false;
         }
     }
 

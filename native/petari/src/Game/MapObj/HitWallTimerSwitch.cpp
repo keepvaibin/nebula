@@ -14,10 +14,10 @@ namespace NrvHitWallTimerSwitch {
 };  // namespace NrvHitWallTimerSwitch
 
 HitWallTimerSwitch::HitWallTimerSwitch(const char* pName) : LiveActor(pName) {
-    _8C = nullptr;
+    mMoveCollision = nullptr;
     mConnector = nullptr;
     mTimer = 300;
-    _98 = 0;
+    mIsHit = 0;
 }
 
 void HitWallTimerSwitch::init(const TableIter& rIter) {
@@ -28,7 +28,7 @@ void HitWallTimerSwitch::init(const TableIter& rIter) {
     MR::addHitSensorMapObj(this, "body", 0x10, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensor(this, "hit", ATYPE_SWITCH_BIND, 0x10, 50.f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "HitWallTimerSwitch", getSensor("body"), nullptr);
-    _8C = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
+    mMoveCollision = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
     mConnector = new MapObjConnector(this);
     initSound(4, false);
     MR::needStageSwitchWriteA(this, rIter);
@@ -46,7 +46,7 @@ void HitWallTimerSwitch::calcAnim() {
     LiveActor::calcAnim();
     Pos3f mtx;
     mtx.setInline(MR::getJointMtx(this, "Move"));
-    _8C->setMtx(mtx);
+    mMoveCollision->setMtx(mtx);
 }
 
 void HitWallTimerSwitch::calcAndSetBaseMtx() {
@@ -55,12 +55,12 @@ void HitWallTimerSwitch::calcAndSetBaseMtx() {
 }
 
 void HitWallTimerSwitch::control() {
-    _98 = 0;
+    mIsHit = 0;
 }
 
 bool HitWallTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (isNerve(GET_NERVE(HitWallTimerSwitch, HitWallTimerSwitchNrvOff)) && pReceiver->isType(ATYPE_SWITCH_BIND)) {
-        _98 = 1;
+        mIsHit = 1;
         return true;
     }
 
@@ -82,7 +82,7 @@ bool HitWallTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 }
 
 bool HitWallTimerSwitch::trySwitchDown() {
-    if (_98) {
+    if (mIsHit) {
         setNerve(GET_NERVE(HitWallTimerSwitch, HitWallTimerSwitchNrvSwitchDown));
         return true;
     }
@@ -134,7 +134,7 @@ void HitWallTimerSwitch::exeOff() {
         MR::startBck(this, "Wait");
         MR::validateClipping(this);
         MR::offSwitchA(this);
-        MR::validateCollisionParts(_8C);
+        MR::validateCollisionParts(mMoveCollision);
     }
 
     if (trySwitchDown()) {
@@ -159,7 +159,7 @@ void HitWallTimerSwitch::exeOn() {
         MR::shakeCameraNormal();
         MR::onSwitchA(this);
         MR::startSound(this, "SE_OJ_SWITCH_1");
-        MR::invalidateCollisionParts(_8C);
+        MR::invalidateCollisionParts(mMoveCollision);
     }
 
     if (trySwitchUp()) {

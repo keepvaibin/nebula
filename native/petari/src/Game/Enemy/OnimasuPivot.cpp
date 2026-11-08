@@ -2,8 +2,8 @@
 #include "Game/Util.hpp"
 
 OnimasuPivot::OnimasuPivot(const char* pName) : Onimasu(pName), mCurNormal(), mNormals() {
-    _110.set(0.0f, 0.0f, 0.0f, 1.0f);
-    _120.set(0.0f, 0.0f, 0.0f, 1.0f);
+    mLastPointQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
+    mNextPointQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void OnimasuPivot::initFromRailPoint() {
@@ -18,12 +18,12 @@ void OnimasuPivot::startMoveInner() {
     if (MR::isSameDirection(toLastPoint, toNextPoint)) {
         Pos3f mtx;
         mtx.identity();
-        mtx.setRotate(_BC, PI * 0.001f);
+        mtx.setRotate(mRotateAxis, PI * 0.001f);
         mtx.mult(toLastPoint, toLastPoint);
     }
 
-    MR::makeQuatFromVec(&_110, toLastPoint, _BC);
-    MR::makeQuatFromVec(&_120, toNextPoint, _BC);
+    MR::makeQuatFromVec(&mLastPointQuat, toLastPoint, mRotateAxis);
+    MR::makeQuatFromVec(&mNextPointQuat, toNextPoint, mRotateAxis);
 }
 
 const Vec3f OnimasuPivot::getLastPointPos() const {
@@ -55,8 +55,8 @@ void OnimasuPivot::updatePoseInner() {
     }
 
     Quat4f quat;
-    quat.set(_110);
-    quat.slerp(_120, slerpFactor);
+    quat.set(mLastPointQuat);
+    quat.slerp(mNextPointQuat, slerpFactor);
 
     Vec3f fromPivotPoint(gZeroVec);
 

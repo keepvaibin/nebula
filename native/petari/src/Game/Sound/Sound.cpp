@@ -49,8 +49,8 @@ s32 SoundStatus::unlockIfLocked() {
     return 0;
 }
 
-void SoundControls::mixOutAll(const SoundParams& inParams, SoundParams* outParams, f32 param_2) {
-    outParams->mVolume = mMove.mParams.mVolume * (inParams.mVolume * mProperty.mVolume) * param_2;
+void SoundControls::mixOutAll(const SoundParams& inParams, SoundParams* outParams, f32 fade) {
+    outParams->mVolume = mMove.mParams.mVolume * (inParams.mVolume * mProperty.mVolume) * fade;
     outParams->mFxMix = mMove.mParams.mFxMix + (inParams.mFxMix + mProperty.mFxMix);
     outParams->mPitch = mMove.mParams.mPitch * (inParams.mPitch * mProperty.mPitch);
     outParams->mPan = (inParams.mPan + mMove.mParams.mPan) - 0.5f;

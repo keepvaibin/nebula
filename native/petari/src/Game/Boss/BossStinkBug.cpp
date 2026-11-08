@@ -31,13 +31,13 @@
 namespace {
     const char* sSensorNameList[] = {"Body", "BodyHipDrop"};
 
-    struct collisionInfo {
-        const char* _0;
-        const char* _4;
-        const char* _8;
+    struct CollisionInfo {
+        const char* mCollisionName;
+        const char* mJointName;
+        const char* mSensorName;
     };
 
-    const collisionInfo sCollisionInfo[] = {{"Body", "Body", "Body"}, {"BodyGround", "Body", "Body"}, {"BodyHipDrop", "Body", "BodyHipDrop"}};
+    const CollisionInfo sCollisionInfo[] = {{"Body", "Body", "Body"}, {"BodyGround", "Body", "Body"}, {"BodyHipDrop", "Body", "BodyHipDrop"}};
 
     const char* sLegJointNameList[] = {"RightFootA3", "LeftFootA3", "RightFootB3", "LeftFootB3", "RightFootC3", "LeftFootC3"};
 
@@ -45,15 +45,15 @@ namespace {
 };  // namespace
 
 BossStinkBug::BossStinkBug(const char* pName)
-    : LiveActor(pName), _8C(), _94(), _98(), _CC(), mActionSequencer(), _D4(), mBombLauncher(), _DC(0.0f, 0.0f, 0.0f, 1.0f), _EC(0.0f, 0.0f, 1.0f),
-      _F8(0.0f, 0.0f, 0.0f), _104(-1), _108(0.15f), _10C(1.0f), _110(), _111() {
-    _9C.identity();
-    _90 = new GroundChecker*[6];
+    : LiveActor(pName), mBodyCollisions(), mBombHolder(), mJointCtrl(), mCameraInfo(), mActionSequencer(), mWingModel(), mBombLauncher(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0.0f, 0.0f, 1.0f),
+      mCameraRegisterPos(0.0f, 0.0f, 0.0f), mCameraRegisterId(-1), mLegFriction(0.15f), mLegIKRate(1.0f), mIsPoseUpdated(), mIsLegBound() {
+    mFollowMtx.identity();
+    mLegGroundCheckers = new GroundChecker*[6];
 
     for (int i = 0; i < 6; i++) {
-        _90[i] = new GroundChecker("地面チェック", 30.0f, 0.0f);
-        _90[i]->makeActorDead();
-        MR::setBinderExceptActor(_90[i], this);
+        mLegGroundCheckers[i] = new GroundChecker("地面チェック", 30.0f, 0.0f);
+        mLegGroundCheckers[i]->makeActorDead();
+        MR::setBinderExceptActor(mLegGroundCheckers[i], this);
     }
 }
 
@@ -79,7 +79,7 @@ void BossStinkBug::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("BossStinkBug", nullptr, false);
     MR::connectToSceneCollisionEnemy(this);
-    MR::makeQuatAndFrontFromRotate(&_DC, &_EC, this);
+    MR::makeQuatAndFrontFromRotate(&mPoseQuat, &mFront, this);
 
     mRotation.zero();
     initSensor();
@@ -87,18 +87,18 @@ void BossStinkBug::init(const TableIter& rIter) {
     initRailRider(rIter);
     initBinder(300.0f, 300.0f, false);
     MR::setBinderExceptActor(this, this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
     initCamera(rIter);
     MR::initShadowFromCSV(this, "Shadow");
     MR::excludeCalcShadowToActorAll(this, this);
-    _98 = new ActorJointCtrl(this);
-    MR::addBaseMatrixFollowTarget(this, rIter, &_9C, new BossStinkBugFollowValidater(this));
+    mJointCtrl = new ActorJointCtrl(this);
+    MR::addBaseMatrixFollowTarget(this, rIter, &mFollowMtx, new BossStinkBugFollowValidater(this));
     MR::invalidateClipping(this);
     mActionSequencer = new BossStinkBugActionSequencer(this, rIter);
-    _94 = new BossStinkBugBombHolder(this);
-    _D4 = MR::createPartsModelMapObj(this, "羽モデル", "BossStinkBugWing", nullptr);
-    _D4->initFixedPosition("Switch");
+    mBombHolder = new BossStinkBugBombHolder(this);
+    mWingModel = MR::createPartsModelMapObj(this, "羽モデル", "BossStinkBugWing", nullptr);
+    mWingModel->initFixedPosition("Switch");
     mBombLauncher = MR::createPartsModelMapObj(this, "ボム発射口", "BossStinkBugBombLauncher", nullptr);
     mBombLauncher->initFixedPosition("Body");
     MR::declarePowerStar(this);
@@ -122,14 +122,14 @@ void BossStinkBug::start() {
 }
 
 void BossStinkBug::initCamera(const TableIter& rIter) {
-    MR::getPlacementArg7WithInit(rIter, &_104);
+    MR::getPlacementArg7WithInit(rIter, &mCameraRegisterId);
 
-    if (_104 != -1) {
-        MR::declareCameraRegisterVec(this, _104, &_F8);
-        MR::declareCameraRegisterMtx(this, _104, _9C.toMtxPtr());
+    if (mCameraRegisterId != -1) {
+        MR::declareCameraRegisterVec(this, mCameraRegisterId, &mCameraRegisterPos);
+        MR::declareCameraRegisterMtx(this, mCameraRegisterId, mFollowMtx.toMtxPtr());
     }
 
-    MR::initMultiActorCamera(this, rIter, &_CC, "Fall");
+    MR::initMultiActorCamera(this, rIter, &mCameraInfo, "Fall");
 }
 
 void BossStinkBug::initSensor() {
@@ -147,25 +147,25 @@ void BossStinkBug::initSensor() {
 }
 
 void BossStinkBug::initCollision() {
-    _8C = new CollisionParts*[3];
+    mBodyCollisions = new CollisionParts*[3];
 
     for (int i = 0; i < 3; i++) {
-        _8C[i] = MR::createCollisionPartsFromLiveActor(this, ::sCollisionInfo[i]._0, getSensor(::sCollisionInfo[i]._8),
-                                                       MR::getJointMtx(this, ::sCollisionInfo[i]._4), MR::CollisionScaleType_AutoEqualScale);
+        mBodyCollisions[i] = MR::createCollisionPartsFromLiveActor(this, ::sCollisionInfo[i].mCollisionName, getSensor(::sCollisionInfo[i].mSensorName),
+                                                       MR::getJointMtx(this, ::sCollisionInfo[i].mJointName), MR::CollisionScaleType_AutoEqualScale);
     }
 }
 
 void BossStinkBug::disposeBomb() {
-    _94->killAll();
+    mBombHolder->killAll();
 }
 
 void BossStinkBug::reuestMovementOnParts() {
-    MR::requestMovementOn(_D4);
+    MR::requestMovementOn(mWingModel);
     MR::requestMovementOn(mBombLauncher);
 }
 
 LiveActor* BossStinkBug::getWingModel() {
-    return _D4;
+    return mWingModel;
 }
 
 LiveActor* BossStinkBug::getBombLauncher() {
@@ -175,9 +175,9 @@ LiveActor* BossStinkBug::getBombLauncher() {
 void BossStinkBug::control() {
     updateAction();
     updatePose();
-    _110 = false;
+    mIsPoseUpdated = false;
 
-    if (_111) {
+    if (mIsLegBound) {
         updateJointControl();
     }
 
@@ -185,12 +185,12 @@ void BossStinkBug::control() {
 }
 
 void BossStinkBug::calcAndSetBaseMtx() {
-    _98->setCallBackFunction();
+    mJointCtrl->setCallBackFunction();
     Pos3f pos;
-    pos.setQuat(_DC);
+    pos.setQuat(mPoseQuat);
     pos.setTrans(mPosition);
 
-    _9C.setInline(pos);
+    mFollowMtx.setInline(pos);
 
     MR::rotateMtxLocalXDegree(pos.toMtxPtr(), mRotation.x);
     MR::rotateMtxLocalYDegree(pos.toMtxPtr(), mRotation.y);
@@ -203,7 +203,7 @@ void BossStinkBug::calcAndSetBaseMtx() {
 void BossStinkBug::calcUpVec(Vec3f* pOut) const {
     Pos3f pos;
     pos.identity();
-    pos.setQuat(_DC);
+    pos.setQuat(mPoseQuat);
 
     MR::rotateMtxLocalXDegree(pos.toMtxPtr(), mRotation.x);
     MR::rotateMtxLocalYDegree(pos.toMtxPtr(), mRotation.y);
@@ -216,7 +216,7 @@ void BossStinkBug::calcAnim() {
     LiveActor::calcAnim();
 
     for (int i = 0; i < 3; i++) {
-        _8C[i]->setMtx();
+        mBodyCollisions[i]->setMtx();
     }
 }
 
@@ -227,31 +227,31 @@ void BossStinkBug::updateAction() {
 }
 
 void BossStinkBug::updatePose() {
-    if (!_110) {
-        _EC.orthogonalize(mGravity);
+    if (!mIsPoseUpdated) {
+        mFront.orthogonalize(mGravity);
 
-        if (MR::isNearZero(_EC)) {
-            _DC.getZDir(_EC);
+        if (MR::isNearZero(mFront)) {
+            mPoseQuat.getZDir(mFront);
         } else {
-            MR::normalize(&_EC);
+            MR::normalize(&mFront);
         }
 
-        MR::blendQuatUpFront(&_DC, -mGravity, _EC, 0.2f, 0.2f);
-        _110 = true;
+        MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.2f, 0.2f);
+        mIsPoseUpdated = true;
     }
 }
 
 void BossStinkBug::setPose(MtxPtr pMtx) {
     Pos3f pos(pMtx);
-    pos.getQuat(_DC);
+    pos.getQuat(mPoseQuat);
     pos.getTrans(mPosition);
-    _DC.getZDir(_EC);
-    MR::normalize(&_EC);
-    _110 = true;
+    mPoseQuat.getZDir(mFront);
+    MR::normalize(&mFront);
+    mIsPoseUpdated = true;
 }
 
 void BossStinkBug::updateCamera() {
-    _F8 = mPosition;
+    mCameraRegisterPos = mPosition;
 }
 
 bool BossStinkBug::isValidFollowId(s32 id) const {
@@ -263,56 +263,56 @@ bool BossStinkBug::isValidFollowId(s32 id) const {
 }
 
 void BossStinkBug::validateCollisionGround() {
-    MR::invalidateCollisionParts(_8C[0]);
-    MR::validateCollisionParts(_8C[1]);
-    MR::validateCollisionParts(_8C[2]);
+    MR::invalidateCollisionParts(mBodyCollisions[0]);
+    MR::validateCollisionParts(mBodyCollisions[1]);
+    MR::validateCollisionParts(mBodyCollisions[2]);
 }
 
 void BossStinkBug::validateCollisionFly() {
-    MR::validateCollisionParts(_8C[0]);
-    MR::invalidateCollisionParts(_8C[1]);
-    MR::validateCollisionParts(_8C[2]);
+    MR::validateCollisionParts(mBodyCollisions[0]);
+    MR::invalidateCollisionParts(mBodyCollisions[1]);
+    MR::validateCollisionParts(mBodyCollisions[2]);
 }
 
 void BossStinkBug::validateCollisionHitOnly() {
-    MR::invalidateCollisionParts(_8C[0]);
-    MR::invalidateCollisionParts(_8C[1]);
-    MR::validateCollisionParts(_8C[2]);
+    MR::invalidateCollisionParts(mBodyCollisions[0]);
+    MR::invalidateCollisionParts(mBodyCollisions[1]);
+    MR::validateCollisionParts(mBodyCollisions[2]);
 }
 
 void BossStinkBug::invalidateCollision() {
     for (int i = 0; i < 3; i++) {
-        MR::invalidateCollisionParts(_8C[i]);
+        MR::invalidateCollisionParts(mBodyCollisions[i]);
     }
 }
 
 void BossStinkBug::onBindLeg() {
-    if (!_111) {
+    if (!mIsLegBound) {
         for (int i = 0; i < 6; i++) {
-            MR::copyJointPos(this, ::sLegJointNameList[i], &_90[i]->mPosition);
-            _90[i]->appear();
-            MR::resetPosition(_90[i], _90[i]->mPosition);
+            MR::copyJointPos(this, ::sLegJointNameList[i], &mLegGroundCheckers[i]->mPosition);
+            mLegGroundCheckers[i]->appear();
+            MR::resetPosition(mLegGroundCheckers[i], mLegGroundCheckers[i]->mPosition);
         }
 
-        _111 = true;
+        mIsLegBound = true;
     }
 }
 
 void BossStinkBug::offBindLeg() {
-    if (_111) {
-        _98->endIKCtrlAll();
+    if (mIsLegBound) {
+        mJointCtrl->endIKCtrlAll();
 
         for (int i = 0; i < 6; i++) {
-            _90[i]->kill();
+            mLegGroundCheckers[i]->kill();
         }
 
-        _111 = false;
+        mIsLegBound = false;
     }
 }
 
 bool BossStinkBug::isLegInWater() const {
     for (int i = 0; i < 6; i++) {
-        if (MR::isBindedGroundWater(_90[i])) {
+        if (MR::isBindedGroundWater(mLegGroundCheckers[i])) {
             return true;
         }
     }
@@ -321,37 +321,37 @@ bool BossStinkBug::isLegInWater() const {
 }
 
 void BossStinkBug::updateJointControl() {
-    ActorJointCtrl* jointCtrl = _98;
+    ActorJointCtrl* jointCtrl = mJointCtrl;
     jointCtrl->startUpdate();
 
     for (int i = 0; i < 6; i++) {
         Vec3f legJointPos;
         MR::copyJointPos(this, ::sLegJointNameList[i], &legJointPos);
-        Vec3f groundCheckPos = _90[i]->mPosition;
+        Vec3f groundCheckPos = mLegGroundCheckers[i]->mPosition;
         Vec3f dirGroundCheckToLegJoint = legJointPos - groundCheckPos;
 
-        if (MR::isBinded(_90[i])) {
-            _90[i]->bringFriction(_108, 0.2f);
+        if (MR::isBinded(mLegGroundCheckers[i])) {
+            mLegGroundCheckers[i]->bringFriction(mLegFriction, 0.2f);
         } else {
-            _90[i]->bringFriction(1.0f, 0.08f);
+            mLegGroundCheckers[i]->bringFriction(1.0f, 0.08f);
         }
 
-        dirGroundCheckToLegJoint.scale(_90[i]->_8C);
-        _90[i]->mVelocity.set(dirGroundCheckToLegJoint);
-        _90[i]->movement();
-        jointCtrl->setIKEndPosition(::sLegJointNameList[i], _90[i]->mPosition, _10C);
+        dirGroundCheckToLegJoint.scale(mLegGroundCheckers[i]->mFriction);
+        mLegGroundCheckers[i]->mVelocity.set(dirGroundCheckToLegJoint);
+        mLegGroundCheckers[i]->movement();
+        jointCtrl->setIKEndPosition(::sLegJointNameList[i], mLegGroundCheckers[i]->mPosition, mLegIKRate);
 
-        if (MR::isBinded(_90[i])) {
-            Vec3f fix = *MR::getBindedFixReactionVector(_90[i]);
+        if (MR::isBinded(mLegGroundCheckers[i])) {
+            Vec3f fix = *MR::getBindedFixReactionVector(mLegGroundCheckers[i]);
 
             if (!MR::isNearZero(fix)) {
                 MR::normalize(&fix);
-                jointCtrl->setIKEndDirection(::sLegJointNameList[i], fix, 0.1f * _10C);
+                jointCtrl->setIKEndDirection(::sLegJointNameList[i], fix, 0.1f * mLegIKRate);
             }
         } else {
             Vec3f yDir;
             MR::extractMtxYDir(MR::getJointMtx(this, ::sLegJointNameList[i]), &yDir);
-            jointCtrl->setIKEndDirection(::sLegJointNameList[i], yDir, 0.05f * _10C);
+            jointCtrl->setIKEndDirection(::sLegJointNameList[i], yDir, 0.05f * mLegIKRate);
         }
     }
 
@@ -388,11 +388,11 @@ bool BossStinkBug::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRece
 }
 
 void BossStinkBug::startEventCamera(const char* pName) {
-    MR::startMultiActorCameraTargetSelf(this, _CC, pName);
+    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, pName);
 }
 
 void BossStinkBug::endEventCamera(const char* pName) {
-    MR::endMultiActorCamera(this, _CC, pName, false);
+    MR::endMultiActorCamera(this, mCameraInfo, pName, false);
 }
 
 bool BossStinkBug::isSensorBody(const HitSensor* pSensor) const {
@@ -400,7 +400,7 @@ bool BossStinkBug::isSensorBody(const HitSensor* pSensor) const {
 }
 
 bool BossStinkBug::throwBomb(f32 f1, f32 f2) {
-    BossStinkBugBomb* throwBomb = _94->getDeadMember();
+    BossStinkBugBomb* throwBomb = mBombHolder->getDeadMember();
 
     if (throwBomb == nullptr) {
         return false;

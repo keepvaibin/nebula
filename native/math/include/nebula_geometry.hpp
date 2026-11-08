@@ -1539,11 +1539,11 @@ struct Box3f {
 };
 
 struct DirBox3f {
-    Vec3f _0;
-    Vec3f _C;
-    Vec3f _18;
-    Vec3f _24;
-    Vec3f _30;
+    Vec3f mAxisX;
+    Vec3f mAxisY;
+    Vec3f mAxisZ;
+    Vec3f mCorner;
+    Vec3f mSize;
 };
 
 struct Plane3f {

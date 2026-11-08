@@ -46,7 +46,6 @@ public:
     u32 calcNearestVtxIndex(const Vec3f&);
     void drawSelf() const;
 
-    u32 _8C;  // NOTE: unused
     u16* mCheckFlags;
     u16 mNumFlags;
     u16 mNumSurfaces;
@@ -54,10 +53,8 @@ public:
     Vec3f* mVtxs;
     f32* mDeformCoeff;
     f32* mDeformSpeed;
-    u8* _A8;  // NOTE: allocated but unused?
     Surface* mSurfaces;
     Surface* mLodSurfaces;
-    u32 _B4;  // NOTE: unused
     JUTTexture* mTexture;
     Vec2f* mTexST;
     s16* mVtxOverlap;

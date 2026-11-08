@@ -231,7 +231,7 @@ void ScenarioSelectLayout::kill() {
     for (s32 i = 0; i < 7; i++) {
         ScenarioSelectStar* pStar = mStar[i];
 
-        if (pStar->_30) {
+        if (pStar->mIsDead) {
             continue;
         }
 
@@ -325,7 +325,7 @@ void ScenarioSelectLayout::updateSelectedScenario() {
         for (s32 i = 0; i < 7; i++) {
             star = mStar[i];
 
-            if (!star->_30 && MR::isStarPointerPointingTarget(this, ::cStarPaneName[i], 0, true, "弱")) {
+            if (!star->mIsDead && MR::isStarPointerPointingTarget(this, ::cStarPaneName[i], 0, true, "弱")) {
                 mSelectedScenarioNo = star->mScenarioNo;
                 _24 = 0;
                 return;
@@ -408,14 +408,14 @@ void ScenarioSelectLayout::fadeOutText() {
 }
 
 bool ScenarioSelectLayout::trySelect() {
-    if (MR::testDPDMenuPadDecideTrigger()) {
+    if (MR::testPointerMenuPadDecideTrigger()) {
         if (mSelectedScenarioNo > 0) {
             return true;
         }
 
         if (!MR::isStarPointerInScreen(PLAYER_1)) {
             for (s32 i = 0; i < 7; i++) {
-                if (mStar[i]->_30) {
+                if (mStar[i]->mIsDead) {
                     continue;
                 }
 
@@ -435,7 +435,7 @@ bool ScenarioSelectLayout::trySelect() {
 
 ScenarioSelectStar* ScenarioSelectLayout::getSelectedStar() const {
     for (s32 i = 0; i < 7; i++) {
-        if (mStar[i]->_30) {
+        if (mStar[i]->mIsDead) {
             continue;
         }
 
@@ -560,7 +560,7 @@ void ScenarioSelectLayout::appearAllStar(s32 normalScenarioCompleteNum, s32 extr
 
 void ScenarioSelectLayout::appearPage(s32 page) {
     for (s32 i = 0; i < 7; i++) {
-        if (!mStar[i]->_30) {
+        if (!mStar[i]->mIsDead) {
             mStar[i]->kill();
         }
     }
@@ -606,7 +606,7 @@ void ScenarioSelectLayout::tryChangePage() {
     }
     const s32 pages = (mListNum + 5) / 6;
     // A pointer: pressing with it at either side of the screen, on no star.
-    const f32 pointerX = MR::isStarPointerInScreen(0) && MR::testDPDMenuPadDecideTrigger() && mSelectedScenarioNo <= 0 ? MR::getStarPointerScreenPosition(0)->x : MR::getScreenWidth() * 0.5f;
+    const f32 pointerX = MR::isStarPointerInScreen(0) && MR::testPointerMenuPadDecideTrigger() && mSelectedScenarioNo <= 0 ? MR::getStarPointerScreenPosition(0)->x : MR::getScreenWidth() * 0.5f;
     const bool left = MR::isHeldLeft(0) || MR::isMoveStickPressedLeft(0) || pointerX < MR::getScreenWidth() * 0.15f;
     const bool right = MR::isHeldRight(0) || MR::isMoveStickPressedRight(0) || pointerX > MR::getScreenWidth() * 0.85f;
     if (!left && !right) {
@@ -636,7 +636,7 @@ void ScenarioSelectLayout::appearStar(s32 starId, s32 scenarioNo, int a3) {
 
 bool ScenarioSelectLayout::isAppearStarEndAll() const {
     for (s32 i = 0; i < 7; i++) {
-        if (mStar[i]->_30) {
+        if (mStar[i]->mIsDead) {
             continue;
         }
 
@@ -781,7 +781,7 @@ void ScenarioSelectLayout::exeWaitScenarioSelect() {
 void ScenarioSelectLayout::exeDecide() {
     if (MR::isFirstStep(this)) {
         for (s32 i = 0; i < 7; i++) {
-            if (mStar[i]->_30) {
+            if (mStar[i]->mIsDead) {
                 continue;
             }
 
@@ -826,7 +826,7 @@ void ScenarioSelectLayout::exeDisappear() {
         for (s32 i = 0; i < 7; i++) {
             ScenarioSelectStar* star = mStar[i];
 
-            if (!star->_30) {
+            if (!star->mIsDead) {
                 star->kill();
             }
         }

@@ -24,11 +24,11 @@ public:
     bool isTaken();
     void emit(bool, const Vec3f&, const Vec3f&, f32);
 
-    Quat4f _90;
-    Quat4f _A0;
-    Vec3f _B0;
-    f32 _BC;
-    bool _C0;
+    Quat4f mPoseQuat;
+    Quat4f mRotateQuat;
+    Vec3f mThrowDir;
+    f32 mThrowSpeed;
+    bool mIsThrowHorizontal;
 };
 
 class ThrowingIce : public MoguStone {

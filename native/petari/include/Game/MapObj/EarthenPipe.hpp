@@ -38,36 +38,26 @@ public:
     void processBgmPlayerIn();
     void processBgmPlayerOut();
 
-    Vec3f _8C;
-    Vec3f _98;
-    f32 _A4;
+    Vec3f mBasePos;
+    Vec3f mUp;
+    f32 mPipeLength;
     bool mIsIgnoreGravity;
-    bool _A9;
-    bool _AA;
-    bool _AB;
     s32 mPipeMode;
-    EarthenPipe* _B0;
+    EarthenPipe* mTargetPipe;
     MtxPtr mTopJointMtx;
     MtxPtr mBottomJointMtx;
-    Pos3f _BC;
+    Pos3f mLavaEffectMtx;
     LiveActor* mHostActor;
-    Pos3f _F0;
-    Mtx34f _120;
-    Pos3f _150;
-    f32 _180;
+    Pos3f mPlayerMtx;
+    Mtx34f mPlayerInStartMtx;
+    Pos3f mPlayerInEndMtx;
     f32 mHorizExitForce;
     f32 mVertExitForce;
     s32 mMusicChangeIdx;
     s32 mMusicState;
-    u8 _194;
-    u8 _195;
-    u8 _196;
-    u8 _197;
+    u8 mIsRabbitWait;
     PartsModel* mPipeStreamModel;
-    bool _19C;
-    bool _19D;
-    bool _19E;
-    bool _19F;
+    bool mIsWaterFlowing;
     ActorCameraInfo* mCameraInfo;
 };
 
@@ -76,8 +66,8 @@ public:
     EarthenPipeMediator();
 
     struct Entry {
-        EarthenPipe* _0;
-        EarthenPipe* _4;
+        EarthenPipe* mFirst;
+        EarthenPipe* mSecond;
         s32 mPipeID;
     };
 

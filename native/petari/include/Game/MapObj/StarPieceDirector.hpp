@@ -69,7 +69,8 @@ public:
     StarPieceShooter* mStarPieceShooters[2];
 
     // only fist 16 entries ever get used
-    bool mGetSoundArray[0x20];
+    static constexpr s32 cGetSoundDelay = 16;  // updates from a get to its sound
+    bool mGetSoundArray[cGetSoundDelay];       // a ring: the gets queued in the last cGetSoundDelay updates
 
     s32 mSoundIndex;
     bool mQueueNewGetSound;
@@ -93,13 +94,12 @@ public:
 
     void calcShootGoalUsingPointingDepth();
 
-    f32 _8C;
-    HitSensor* _90;
-    f32 _94;
-    HitSensor* _98;
-    f32 _9C;
-    s32 _A0;
-    s32 _A4;
-    Vec3f _A8;
-    Vec3f _B4;
+    f32 mShootSpeed;
+    HitSensor* mSearchSensor;
+    f32 mSearchDist;
+    HitSensor* mLockOnSensor;
+    s32 mPort;
+    s32 mChargeStep;
+    Vec3f mEffectPos;
+    Vec3f mEffectRot;
 };

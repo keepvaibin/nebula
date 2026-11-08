@@ -28,7 +28,7 @@ namespace NrvLavaFloater {
 };  // namespace NrvLavaFloater
 
 LavaFloater::LavaFloater(const char* pName)
-    : LiveActor(pName), mFloatingForce(), mMtxSetter(), mLodCtrlPlanet(), mObjectName(), _9C(gZeroVec), _A8() {
+    : LiveActor(pName), mFloatingForce(), mMtxSetter(), mLodCtrlPlanet(), mObjectName(), mGroundPos(gZeroVec), mGroundOffset() {
 }
 
 LavaFloater::~LavaFloater() {
@@ -50,8 +50,8 @@ void LavaFloater::init(const TableIter& rIter) {
         initModelManagerWithAnm(mObjectName, nullptr, false);
     }
 
-    initEffectKeeper(0, 0, false);
-    MR::setEffectHostSRT(this, ::cEffectName, &_9C, &mRotation, nullptr);
+    initEffectKeeper(0, 0);
+    MR::setEffectHostSRT(this, ::cEffectName, &mGroundPos, &mRotation, nullptr);
     initSound(4, false);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjectName, MR::addBodyMessageSensorMapObj(this), nullptr);
@@ -75,19 +75,19 @@ void LavaFloater::initAfterPlacement() {
     Vec3f v6(mGravity);
     v6 *= 1000.0f;
 
-    if (!MR::getFirstPolyOnLineToMap(&_9C, nullptr, mPosition, v6)) {
-        MR::calcMapGroundUpper(&_9C, this);
+    if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, v6)) {
+        MR::calcMapGroundUpper(&mGroundPos, this);
     }
 
-    _A8 = mPosition.distance(_9C);
+    mGroundOffset = mPosition.distance(mGroundPos);
 
-    if ((mPosition - _9C).dot(mGravity) < 0.0f) {
-        _A8 *= -1.0f;
+    if ((mPosition - mGroundPos).dot(mGravity) < 0.0f) {
+        mGroundOffset *= -1.0f;
     }
 
     if (mMtxSetter != nullptr) {
-        Vec3f uselessVec(0.0f, _A8, 0.0f);
-        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, _A8, 0.0f));
+        Vec3f uselessVec(0.0f, mGroundOffset, 0.0f);
+        mMtxSetter->updateMtxUseBaseMtxWithLocalOffset(Vec3f(0.0f, mGroundOffset, 0.0f));
     }
 
     MR::offCalcGravity(this);
@@ -138,8 +138,8 @@ f32 LavaFloater::getCurrentSinkDepth() const {
     depthMtx.set(getBaseMtx());
     depthMtx.getTrans(v1);
     depthMtx.getYDir(v2);
-    f32 sign = MR::sign(v2.dot(_9C - v1));
-    return sign * _9C.distance(v1);
+    f32 sign = MR::sign(v2.dot(mGroundPos - v1));
+    return sign * mGroundPos.distance(v1);
 }
 
 void LavaFloater::exeFloat() {
@@ -147,7 +147,7 @@ void LavaFloater::exeFloat() {
         MR::deleteEffect(this, ::cEffectName);
     }
 
-    if (_A8 < getCurrentSinkDepth()) {
+    if (mGroundOffset < getCurrentSinkDepth()) {
         setNerve(GET_NERVE(LavaFloater, HostTypeSink));
     }
 }
@@ -157,7 +157,7 @@ void LavaFloater::exeSink() {
         MR::emitEffect(this, ::cEffectName);
     }
 
-    if (MR::isNearZero(getCurrentSinkDepth() - _A8, 1.0f)) {
+    if (MR::isNearZero(getCurrentSinkDepth() - mGroundOffset, 1.0f)) {
         setNerve(GET_NERVE(LavaFloater, HostTypeFloat));
     }
 }

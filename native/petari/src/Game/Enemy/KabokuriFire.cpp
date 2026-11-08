@@ -18,13 +18,13 @@ namespace {
 };  // namespace
 
 KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {
-    _8C.identity();
+    mBaseMtx.identity();
 }
 
 void KabokuriFire::init(const TableIter& rIter) {
     MR::connectToSceneEnemyMovement(this);
     initNerve(GET_NERVE(KabokuriFire, KabokuriFireNrvWait));
-    initEffectKeeper(0, "KabokuriFire", false);
+    initEffectKeeper(0, "KabokuriFire");
     initSound(2, false);
     initHitSensor(1);
 
@@ -40,8 +40,8 @@ void KabokuriFire::start(const Vec3f& rPosition, bool gravitySet) {
         MR::calcGravity(this);
     }
 
-    MR::makeMtxUpNoSupport(&_8C, -mGravity);
-    _8C.setTrans(mPosition);
+    MR::makeMtxUpNoSupport(&mBaseMtx, -mGravity);
+    mBaseMtx.setTrans(mPosition);
     setNerve(GET_NERVE(KabokuriFire, KabokuriFireNrvWait));
     appear();
 }

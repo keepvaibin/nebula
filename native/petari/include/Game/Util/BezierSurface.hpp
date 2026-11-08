@@ -6,7 +6,14 @@ class TypedDraw;
 
 class BezierSurface {
 public:
-    BezierSurface(s32, u32);
+    enum {
+        FLAG_NORMAL = 1 << 0,
+        FLAG_TEX = 1 << 1,
+        FLAG_CACHE = 1 << 2,  // calcBuffer keeps the patch (and its normals with FLAG_NORMAL); else each draw computes it
+    };
+
+    // Any flag: drawn with positions, normals and texture coordinates; none: positions only.
+    BezierSurface(s32 divideLevel, u32 flags);
 
     void setST(const Vec2f&, const Vec2f&, const Vec2f&);
     void setDivideLevel(s32);
@@ -15,8 +22,6 @@ public:
     void calcTrianglePatchVertix(Vec3f*) const;
     void calcTrianglePatchNormal(Vec3f*) const;
     void drawTrianglePatchPos(TypedDraw& rDraw) const;
-    void drawTrianglePatchPosNorm(TypedDraw& rDraw) const;
-    void drawTrianglePatchPosST(TypedDraw& rDraw) const;
     void drawTrianglePatchPosNormST(TypedDraw& rDraw) const;
 
     Vec3f mCtrlPts[13];
@@ -24,8 +29,7 @@ public:
     Vec3f* mTrianglePatchNormals;   // array
     Vec2f mSTPoints[3];
     s32 mDivideLevel;
-    s32 _C0;
-    u32 _C4;
+    bool mIsLit;
 };
 
 typedef f32 TrianglePatchCoefs[13];

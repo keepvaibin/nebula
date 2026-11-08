@@ -40,22 +40,14 @@
 #include <nebula_format.h>
 
 namespace {
-    // static const s32 sDefaultBlendFrame =
     static const s32 sSubjectivePosInterpolateFrame = 0;
     static const s32 sSubjectiveRotInterpolateFrame = 10;
     static const s32 sSubjectiveInterpolateFrame = 20;
-    // static const s32 sAnimCamBlendFrame =
-    // static const f32 sAnimCamRate =
     static f32 sDefaultFovy = 45.0f;
     static const char* sTalkCameraName = "共通会話カメラ";
     static const char* sStartAnimCameraName = "スタートアニメカメラ";
     static const char* sSubjectiveCameraName = "主観カメラ";
-    // static const s32 sTestAnimCameraName =
-    // static const s32 sConvertSize =
-    // static const s32 sConvertQuality =
     static s32 sUpdateCounter;
-    // static const s32 sAnimCameraName =
-    // static const s32 sAnimCameraZoneID =
 };  // namespace
 
 CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
@@ -78,7 +70,6 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     mCameraManEvent = new CameraManEvent(mHolder, mChunkHolder, "イベントカメラマン");
     mCameraManPause = new CameraManPause("ポーズカメラマン");
     mCameraManSubjective = new CameraManSubjective("主観カメラマン");
-    _58 = false;
     mEventNum = 0;
     mIsStartCameraActive = true;
     mStartTime = 0;
@@ -91,7 +82,6 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     mSubjectiveFrame = 0;
     mNearZ = -100.0f;
     mIsSubjectiveCalced = false;
-    _1F1 = true;
     mIsCameraNG = false;
 
     MR::connectToSceneCamera(this);
@@ -648,7 +638,7 @@ void CameraDirector::createTalkCamera() {
     CameraParamChunkEvent* chunk = getEventParameter(0, ::sTalkCameraName);
     if (chunk != nullptr) {
         chunk->setCameraType("CAM_TYPE_TALK", mHolder);
-        chunk->_64 = true;
+        chunk->mIsCodeChunk = true;
     }
 }
 
@@ -847,7 +837,7 @@ void CameraDirector::createSubjectiveCamera() {
     CameraParamChunkEvent* chunk = getEventParameter(0, ::sSubjectiveCameraName);
     if (chunk != nullptr) {
         chunk->setCameraType("CAM_TYPE_SUBJECTIVE", mHolder);
-        chunk->_64 = true;
+        chunk->mIsCodeChunk = true;
     }
 }
 

@@ -46,7 +46,7 @@ public:
 
     MarblePlanet* mParentPlanet;
     MarblePlanetElectronShadow* mElectronShadow;
-    Vec3f _94;
+    Vec3f mFront;
 };
 
 class MarblePlanetElectronShadow : public LiveActor {
@@ -58,5 +58,5 @@ public:
     virtual void calcAndSetBaseMtx();
 
     MarblePlanetElectron* mParentElectron;
-    const Vec3f* _90;
+    const Vec3f* mGroundPos;
 };

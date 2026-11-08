@@ -8,8 +8,8 @@ ResFileInfo::ResFileInfo() {
     mName = 0;
     mHashCode = 0;
     mResource = 0;
-    _8 = 0;
-    _4 = 0;
+    mData = 0;
+    mSize = 0;
 }
 
 ResTable::ResTable() : mFileInfoTable(0), mCount(0) {

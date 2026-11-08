@@ -13,13 +13,12 @@ public:
     void exeWait();
     void exeRailMove();
 
-    HitSensor* _8C;
-    Vec3f _90;
-    f32 _9C;
-    f32 _A0;
-    Vec3f _A4;
-    f32 _B0;
-    f32 _B4;
-    f32 _B8;
-    s32 _BC;
+    HitSensor* mBinderSensor;
+    Vec3f mOffset;
+    f32 mEndSpeed;
+    Vec3f mOffsetVelocity;
+    f32 mCoordCubic;
+    f32 mCoordQuadratic;
+    f32 mCoordLinear;
+    s32 mMoveStep;
 };

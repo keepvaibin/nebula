@@ -36,9 +36,7 @@ inline f32 diffAngleAbs(const Vec2f& rV1, const Vec2f& rV2) {
     return angle;
 }
 
-SphereAccelSensorController::SphereAccelSensorController()
-    : _58(), _5C(), _74(), _78(), _7C(0.15f), _80(1.0f), _84(1.7f), _88(2.5f), _8C(), _90(), _94(1.0f), _98(), _9C(), _A0(), _A4(-1.0f), _A8(),
-      _AC(1.0f), _B0(), _B4(), mPad() {
+SphereAccelSensorController::SphereAccelSensorController() : mPad() {
 }
 
 void SphereAccelSensorController::getPadAcceleration(Vec3f* pAccel) const {

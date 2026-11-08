@@ -97,18 +97,15 @@ public:
 
     PartsModel* mDisplayModel;
     KeySwitch* mKeySwitch;
-    Quat4f _94;
+    Quat4f mPoseQuat;
     Vec3f mWallNormal;
     Vec3f mWallHitPos;
-    Vec3f _BC;
-    Vec3f _C8;
-    Vec3f _D4;
-    Vec3f _E0;
-    f32 _EC;
-    f32 _F0;
-    f32 _F4;
+    Vec3f mInitPos;
+    Vec3f mAnimScale;
+    Vec3f mWalkTarget;
+    f32 mWalkRange;
+    f32 mTransparency;
     s32 mAppearanceType;
-    u8 _FC;
-    u8 _FD;
-    u8 _FE;
+    u8 mHasCoin;
+    u8 mIsChief;
 };

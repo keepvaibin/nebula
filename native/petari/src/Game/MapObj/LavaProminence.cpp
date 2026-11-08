@@ -42,17 +42,16 @@ namespace NrvLavaProminence {
 
 LavaProminence::LavaProminence(const char* pName)
     : LiveActor(pName), mWaitTime(::sDefaultTimeWait), mMoveSpeed(::sDefaultMoveSpeed), mMoveRailCoord(), mMoveRailEndOffset(),
-      mRailStartDir(0, 0, 0), mRailEndDir(0, 0, 0), mRailStartPos(0.0f), mRailEndPos(0.0f), _12C(0, 0, 0), mBloomModel(),
-      _16C(0.0f, 0.0f, 0.0f, 1.0f), mRailDir(0, 0, 1), mEmitDropEffect(true) {
+      mRailStartDir(0, 0, 0), mRailEndDir(0, 0, 0), mRailStartPos(0.0f), mRailEndPos(0.0f), mClipCenter(0, 0, 0), mBloomModel(),
+      mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mRailDir(0, 0, 1), mEmitDropEffect(true) {
     mEffectStartMtx.identity();
     mEffectEndMtx.identity();
     mBloomModelMtx.identity();
-    _18C.identity();
 }
 
 void LavaProminence::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    _16C.setEuler(mRotation);
+    mRotateQuat.setEuler(mRotation);
     MR::getPlacementArg0NoInit(rIter, &mWaitTime);
     MR::getPlacementArg1NoInit(rIter, &mMoveSpeed);
     MR::getPlacementArg3NoInit(rIter, &mMoveRailEndOffset);
@@ -79,7 +78,7 @@ void LavaProminence::init(const TableIter& rIter) {
     MR::calcRailDirectionAtCoord(&mRailEndDir, this, MR::getRailTotalLength(this));
     initSound(6, false);
     MR::setGroupClipping(this, rIter, 16);
-    MR::initAndSetRailClipping(&_12C, this, 300.0f, 300.0f);
+    MR::initAndSetRailClipping(&mClipCenter, this, 300.0f, 300.0f);
 
     if (MR::isValidSwitchA(this)) {
         initNerve(GET_NERVE(LavaProminence, HostTypeNrvWaitSwitch));
@@ -87,7 +86,7 @@ void LavaProminence::init(const TableIter& rIter) {
         initNerve(GET_NERVE(LavaProminence, HostTypeNrvWait));
     }
 
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostMtx(this, "Sign", mEffectStartMtx);
     MR::setEffectHostMtx(this, "Start", mEffectStartMtx);
     MR::setEffectHostMtx(this, "End", mEffectEndMtx);
@@ -153,25 +152,6 @@ void LavaProminence::moveOnRail() {
     MR::moveTransToCurrentRailPos(this);
     updateEffectClipping(isNrvMove());
     MR::calcGravity(this);
-    setGravityAndMakeMtx();
-}
-
-void LavaProminence::setGravityAndMakeMtx() {
-    MR::makeMtxUpNoSupportPos(&_18C, -mGravity, mPosition);
-
-    // TODO: Rot3f::setScale inline?
-    f32 z = mScale.z;
-    f32 y = mScale.y;
-    f32 x = mScale.x;
-    _18C[0][1] = 0.0f;
-    _18C[0][0] = x;
-    _18C[0][2] = 0.0f;
-    _18C[1][0] = 0.0f;
-    _18C[1][1] = y;
-    _18C[1][2] = 0.0f;
-    _18C[2][0] = 0.0f;
-    _18C[2][1] = 0.0f;
-    _18C[2][2] = z;
 }
 
 void LavaProminence::updateEffectClipping(bool a1) {
@@ -248,7 +228,6 @@ void LavaProminence::exeMoveStartExtra() {
     MR::startLevelSound(this, "SE_OJ_LV_PROMINENCE_MOVE");
     mPosition.add(mRailStartDir * mMoveSpeed);
     MR::calcGravity(this);
-    setGravityAndMakeMtx();
     s32 endStartStep = 300.0f / mMoveSpeed;
 
     if (MR::isGreaterStep(this, endStartStep - 1)) {
@@ -330,12 +309,12 @@ void LavaProminence::calcAndSetBaseMtx() {
     MR::normalizeOrZero(&vec);
 
     if (!MR::isNearZero(vec)) {
-        _16C.getZDir(front);
+        mRotateQuat.getZDir(front);
         quat.setRotate(front, vec);
-        _16C.mult(quat);
+        mRotateQuat.mult(quat);
     }
 
-    mtx.makeQuat(_16C);
+    mtx.makeQuat(mRotateQuat);
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);
     mBloomModelMtx.set(mtx);

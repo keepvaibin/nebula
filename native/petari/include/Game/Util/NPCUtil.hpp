@@ -84,8 +84,8 @@ public:
     void exeTerm();
 
     NPCActor* mActor;
-    const Nerve* _C;
-    s32 _10;
+    const Nerve* mSavedNerve;
+    s32 mFadeTime;
 };
 
 class DemoStarter : public NerveExecutor {

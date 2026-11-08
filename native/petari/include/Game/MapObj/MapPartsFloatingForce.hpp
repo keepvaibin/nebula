@@ -40,14 +40,14 @@ public:
 
     SpringStep* mSpringStep;
     const char* mObjectName;
-    f32 _20;
+    f32 mMaxDepth;
     f32 mRotateAngle;
     f32 mRotateSpeed;
     s32 mRotateAccelType;
-    Vec3f _30;
+    Vec3f mBasePos;
     Vec3f mUpDirection;
-    f32 _48;
-    f32 _4C;
-    Vec3f _50;
-    f32 _5C;
+    f32 mSinkDepth;
+    f32 mSinkSpeed;
+    Vec3f mVelocity;
+    f32 mRideSinkSpeed;
 };

@@ -29,14 +29,8 @@ public:
 
     KCLFile* mKCLFile;
     CollisionParts* mParts;
-    u16 _94;
+    u16 mTriangleNum;
     u16 mPositionNum;
     Vec3f* mPositions;
-    Vec3f* _9C;
     TriangleIndexing* mIndices;
-    u32 _A4;
-    u32 _A8;
-    u32 _AC;
-    u8 _B0[0x6C];
-    u32 _11C;
 };

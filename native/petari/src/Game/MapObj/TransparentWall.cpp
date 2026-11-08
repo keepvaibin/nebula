@@ -11,45 +11,45 @@ TransparentWall::TransparentWall(const char* pName) : InvisiblePolygonObj(pName)
 }
 
 void TransparentWall::control() {
-    if (!_C0) {
+    if (!mIsPassable) {
         for (u32 i = 0; i < 10; i++) {
-            if (_BC & (1 << i) && MR::isPlayerElementMode(i)) {
-                _C0 = true;
+            if (mPassFlags & (1 << i) && MR::isPlayerElementMode(i)) {
+                mIsPassable = true;
                 break;
             }
         }
 
-        if ((_BC & 1024) && MR::isPlayerSkating()) {
-            _C0 = true;
+        if ((mPassFlags & 1024) && MR::isPlayerSkating()) {
+            mIsPassable = true;
         }
 
-        if ((_BC & 2048) && !MR::isPlayerTeresaDisappear()) {
-            _C0 = true;
+        if ((mPassFlags & 2048) && !MR::isPlayerTeresaDisappear()) {
+            mIsPassable = true;
         }
 
-        if (_C0) {
+        if (mIsPassable) {
             MR::validateCollisionParts(this);
         }
     } else {
         bool r29 = true;
         for (u32 i = 0; i < 10; i++) {
-            if (_BC & (1 << i) && MR::isPlayerElementMode(i)) {
+            if (mPassFlags & (1 << i) && MR::isPlayerElementMode(i)) {
                 r29 = false;
                 break;
             }
         }
 
-        if ((_BC & 1024) && MR::isPlayerSkating()) {
+        if ((mPassFlags & 1024) && MR::isPlayerSkating()) {
             r29 = false;
         }
 
-        if ((_BC & 2048)) {
+        if ((mPassFlags & 2048)) {
             r29 = MR::isPlayerTeresaDisappear();
         }
 
         if (r29) {
             MR::invalidateCollisionParts(this);
-            _C0 = false;
+            mIsPassable = false;
         }
     }
 }
@@ -59,9 +59,9 @@ TransparentWall::~TransparentWall() {
 
 void TransparentWall::init(const TableIter& rrIter) {
     InvisiblePolygonObj::init(rrIter);
-    MR::getPlacementArg4WithInit(rrIter, &_BC);
+    MR::getPlacementArg4WithInit(rrIter, &mPassFlags);
     makeActorAppeared();
-    _C0 = false;
+    mIsPassable = false;
     MR::invalidateCollisionParts(this);
     HitSensor* sensor = getSensor("body");
     sensor->setType(ATYPE_ICEJUMP_WALL);

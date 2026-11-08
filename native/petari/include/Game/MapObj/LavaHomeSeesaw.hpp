@@ -17,6 +17,6 @@ public:
 
     LavaHomeSeesawRotator* mSeesawRotator;
     ProjmapEffectMtxSetter* mMtxSetter;
-    Vec3f _94;
+    Vec3f mGroundPos;
     f32 mYOffset;
 };

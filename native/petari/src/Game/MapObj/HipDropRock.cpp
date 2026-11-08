@@ -34,7 +34,7 @@ void HipDropRock::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, "HipDropRock", getSensor(nullptr), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     MR::useStageSwitchWriteDead(this, rIter);
     MR::useStageSwitchWriteB(this, rIter);

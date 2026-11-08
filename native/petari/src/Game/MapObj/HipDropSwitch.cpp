@@ -27,11 +27,10 @@ namespace NrvHipDropSwitch {
     NEW_NERVE(HipDropSwitchNrvOn, HipDropSwitch, On);
 };  // namespace NrvHipDropSwitch
 
-HipDropSwitch::HipDropSwitch(const char* pName) : LiveActor(pName), _8C(), mConnector(), mSpringModel(), _CC(), _CD(), _CE() {
+HipDropSwitch::HipDropSwitch(const char* pName) : LiveActor(pName), mConnector(), mSpringModel(), mIsHipDropped(), mWasOnPlayer(), mIsOnPlayer() {
     mSpringValue = new SpringValue();
     mConnector = new MapObjConnector(this);
     mSpringValue->setParam(0.0f, 0.0f, 0.2f, 0.90f, 0.0f);
-    _9C.identity();
 }
 
 inline void HipDropSwitch::initStarPointerTarget() {
@@ -69,9 +68,9 @@ void HipDropSwitch::initAfterPlacement() {
 }
 
 void HipDropSwitch::control() {
-    _CC = false;
-    _CD = _CE;
-    _CE = false;
+    mIsHipDropped = false;
+    mWasOnPlayer = mIsOnPlayer;
+    mIsOnPlayer = false;
 }
 
 void HipDropSwitch::calcAnim() {
@@ -100,10 +99,10 @@ void HipDropSwitch::calcAndSetBaseMtx() {
 
 bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceAttack(msg)) {
-        _CE = true;
+        mIsOnPlayer = true;
         return true;
-    } else if (MR::isMsgPlayerHipDropFloor(msg) && mSpringModel->mHitSensor == pReceiver && !_CC) {
-        _CC = true;
+    } else if (MR::isMsgPlayerHipDropFloor(msg) && mSpringModel->mHitSensor == pReceiver && !mIsHipDropped) {
+        mIsHipDropped = true;
         return true;
     }
 
@@ -112,15 +111,15 @@ bool HipDropSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
 
 bool HipDropSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgFloorTouch(msg) && mSpringModel->mHitSensor == pReceiver) {
-        _CE = true;
-        return _CD == false;
+        mIsOnPlayer = true;
+        return mWasOnPlayer == false;
     }
 
     return false;
 }
 
 bool HipDropSwitch::trySwitchDown() {
-    if (_CC) {
+    if (mIsHipDropped) {
         setNerve(GET_NERVE(HipDropSwitch, HipDropSwitchNrvSwitchDown));
         return true;
     }
@@ -139,7 +138,7 @@ bool HipDropSwitch::tryOn() {
 
 void HipDropSwitch::exeOff() {
     if (MR::isFirstStep(this)) {
-        _CC = false;
+        mIsHipDropped = false;
         MR::validateClipping(this);
         MR::offSwitchA(this);
         MR::startBck(this, "Wait");
@@ -148,10 +147,10 @@ void HipDropSwitch::exeOff() {
     }
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
-        _CE = true;
+        mIsOnPlayer = true;
     }
 
-    if (!_CD && _CE) {
+    if (!mWasOnPlayer && mIsOnPlayer) {
         mSpringValue->mVelocity += -10.0f;
         MR::startSound(this, "SE_OJ_PNC_KINOKO_BOUND");
     }

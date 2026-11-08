@@ -36,7 +36,7 @@ namespace {
 MorphItemObjNeo::MorphItemObjNeo(const char* pName, s32 type) : LiveActor(pName), mMorphType(type), mActorCameraInfo() {
     mAppearMode = 0;
     mAppearFrames = 0;
-    _92 = false;
+    mIsDemoPending = false;
 }
 
 void MorphItemObjNeo::init(const TableIter& rIter) {
@@ -44,7 +44,7 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
 
     mSpawnPosition = mPosition;
     mAngle = 0.0f;
-    _97 = 0;
+    mBoundCount = 0;
 
     initModelManagerWithAnm(::cxNameList[mMorphType], nullptr, false);
 
@@ -82,11 +82,11 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
 
     NebulaMtxCopy(getBaseMtx(), mBaseMtx);
 
-    _95 = false;
+    mIsSwitchAppearOnce = false;
 
     switch (arg0) {
     case 1:
-        _95 = true;
+        mIsSwitchAppearOnce = true;
 
         break;
     }
@@ -197,7 +197,7 @@ void MorphItemObjNeo::init(const TableIter& rIter) {
         }
     }
 
-    initEffectKeeper(4, "MorphItemObj", false);
+    initEffectKeeper(4, "MorphItemObj");
     initSound(4, false);
 
     mCameraMode = 0;
@@ -257,18 +257,18 @@ void MorphItemObjNeo::appear() {
     LiveActor::appear();
 
     if (mCameraMode != 0) {
-        _92 = true;
+        mIsDemoPending = true;
     }
 
     mAppearMode = 0;
 
-    if (_95 == true) {
+    if (mIsSwitchAppearOnce == true) {
         mAppearMode = ::sUnknown;
     }
 
     bool b1 = false;
 
-    if (mCameraMode != 0 || _95) {
+    if (mCameraMode != 0 || mIsSwitchAppearOnce) {
         b1 = true;
 
         setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvSwitchAppear));
@@ -279,7 +279,7 @@ void MorphItemObjNeo::appear() {
         setNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2));
     }
 
-    _95 = false;
+    mIsSwitchAppearOnce = false;
     mIsUseSwitch = false;
 
     if (mIsBind != 0) {
@@ -326,8 +326,8 @@ void MorphItemObjNeo::control() {
         return;
     }
 
-    if (_92 && MR::tryStartDemoWithoutCinemaFrame(this, "出現")) {
-        _92 = false;
+    if (mIsDemoPending && MR::tryStartDemoWithoutCinemaFrame(this, "出現")) {
+        mIsDemoPending = false;
 
         Pos3f* pMtx = &mCameraTargetMtx->mMatrix;
         pMtx->set(getBaseMtx());
@@ -576,7 +576,7 @@ void MorphItemObjNeo::kill() {
     mPosition = mSpawnPosition;
     mVelocity.zero();
 
-    _97 = 0;
+    mBoundCount = 0;
 
     mScale.set(1.0f);
 
@@ -665,7 +665,7 @@ void MorphItemObjNeo::exeWait() {
         return;
     }
 
-    if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2)) && mIsFloating && _97 <= 3) {
+    if (isNerve(GET_NERVE(MorphItemObjNeo, MorphItemObjNeoNrvWait2)) && mIsFloating && mBoundCount <= 3) {
         if (MR::isBindedGround(this) && mVelocity.dot(mGravity) > 0.0f) {
             if (mVelocity.length() < 2.0f) {
                 mVelocity.zero();
@@ -673,13 +673,13 @@ void MorphItemObjNeo::exeWait() {
                 return;
             }
 
-            if (_97 < 3) {
+            if (mBoundCount < 3) {
                 mVelocity = mVelocity * -0.5f;
             } else {
                 mVelocity.zero();
             }
 
-            _97++;
+            mBoundCount++;
 
             return;
         }

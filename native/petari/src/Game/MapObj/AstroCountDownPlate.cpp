@@ -26,7 +26,7 @@ namespace {
     static const s32 sStepForCountToZero = 50;
 };  // namespace
 
-AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), _1B4() {
+AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), mIsLightOn() {
 }
 
 void AstroCountDownPlate::init(const TableIter& rIter) {
@@ -35,7 +35,7 @@ void AstroCountDownPlate::init(const TableIter& rIter) {
     initTextureAtNumLeftStar();
     MR::prepareMaterials(this);
     MR::connectToSceneMapObj(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     MR::invalidateClipping(this);
 
@@ -58,10 +58,10 @@ void AstroCountDownPlate::exeWait() {
     if (MR::isFirstStep(this) && isNerve(GET_NERVE(AstroCountDownPlate, AstroCountDownPlateNrvAlive)) && !MR::isEffectValid(this, "Light")) {
         MR::emitEffect(this, "Light");
 
-        _1B4 = true;
+        mIsLightOn = true;
     }
 
-    if (_1B4) {
+    if (mIsLightOn) {
         MR::startLevelSound(this, "SE_OJ_LV_CDN_PLATE_LIGHT");
     }
 }
@@ -73,10 +73,10 @@ void AstroCountDownPlate::exeRevival() {
         MR::tryStartAllAnim(this, "Revival");
         MR::emitEffect(this, "Light");
 
-        _1B4 = true;
+        mIsLightOn = true;
     }
 
-    if (_1B4) {
+    if (mIsLightOn) {
         MR::startLevelSound(this, "SE_OJ_LV_CDN_PLATE_LIGHT");
     }
 
@@ -94,9 +94,9 @@ void AstroCountDownPlate::exeCountToZero() {
 
     f32 v2 = MR::calcNerveRate(this, ::sStepForCountToZero);
     f32 v3 = MR::getConvergeVibrationValue(v2, 0.1f, 0.0f, 0.3f, 4.0f);
-    _8C.getInfo().mSRT.mTranslationY = v3;
+    mOnesTexMtx.getInfo().mSRT.mTranslationY = v3;
 
-    if (_1B4) {
+    if (mIsLightOn) {
         MR::startLevelSound(this, "SE_OJ_LV_CDN_PLATE_LIGHT");
     }
 
@@ -106,16 +106,16 @@ void AstroCountDownPlate::exeCountToZero() {
 }
 
 void AstroCountDownPlate::initTextureAtNumLeftStar() {
-    MR::initMaterialTexMtx(this, ::cMaterialName01)->setTexMtx(0, &_8C);
-    MR::initMaterialTexMtx(this, ::cMaterialName10)->setTexMtx(0, &_120);
+    MR::initMaterialTexMtx(this, ::cMaterialName01)->setTexMtx(0, &mOnesTexMtx);
+    MR::initMaterialTexMtx(this, ::cMaterialName10)->setTexMtx(0, &mTensTexMtx);
     setNumLeftStar();
 }
 
 void AstroCountDownPlate::setNumLeftStar() {
     s32 starLeft = MR::getPowerStarLeftToDisplayCountDownPlate();
     f32 mod = starLeft % 10;
-    _120.getInfo().mSRT.mTranslationY = 0.1f * (starLeft / 10);
-    _8C.getInfo().mSRT.mTranslationY = 0.1f * mod;
+    mTensTexMtx.getInfo().mSRT.mTranslationY = 0.1f * (starLeft / 10);
+    mOnesTexMtx.getInfo().mSRT.mTranslationY = 0.1f * mod;
 }
 
 void AstroCountDownPlate::selectNrvWait() {

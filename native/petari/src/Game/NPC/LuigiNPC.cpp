@@ -213,25 +213,25 @@ bool LuigiNPC::trySetNerveAfraid() {
 
 void LuigiNPC::setWaitAction() {
     const char* turn = "Turn";
-    mParam._14 = "Wait";
-    mParam._18 = turn;
-    mParam._1C = "Talk";
-    mParam._20 = turn;
+    mParam.mWaitAction = "Wait";
+    mParam.mWaitTurnAction = turn;
+    mParam.mTalkAction = "Talk";
+    mParam.mTalkTurnAction = turn;
     setDefaults();
-    _12C = 1500.0f;
-    _128 = true;
+    mSwingReactDist = 1500.0f;
+    mUseReactionActions = true;
 }
 
 void LuigiNPC::setAfraidAction() {
-    _128 = false;
+    mUseReactionActions = false;
     const char* afraidWait;
     const char* afraid = "Afraid";
     afraidWait = "AfraidWait";
     const char* afraidTalk = "AfraidTalk";
-    mParam._14 = afraidWait;
-    mParam._18 = afraid;
-    mParam._1C = afraidTalk;
-    mParam._20 = afraid;
+    mParam.mWaitAction = afraidWait;
+    mParam.mWaitTurnAction = afraid;
+    mParam.mTalkAction = afraidTalk;
+    mParam.mTalkTurnAction = afraid;
 }
 
 bool LuigiNPC::trySetNerveArrested() {
@@ -263,21 +263,21 @@ void LuigiNPC::exeWait() {
 }
 
 void LuigiNPC::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SV_LUIGI_TRAMPLED");
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
     }
 
     if (NPCActor::isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_LUIGI_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_LUIGI_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_LUIGI_STAR_PIECE_HIT");
     }
 

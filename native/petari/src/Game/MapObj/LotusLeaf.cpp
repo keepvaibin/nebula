@@ -44,7 +44,7 @@ void LotusLeaf::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "LotusLeaf", MR::addBodyMessageSensorMapObj(this), nullptr);
     initSound(4, false);
     initNerve(GET_NERVE(LotusLeaf, HostTypeWait));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostSRT(this, "LotusLeafRipple", &mInitPos, nullptr, nullptr);
     MR::initShadowVolumeCylinder(this, ::sShadowRadius);
 

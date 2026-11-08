@@ -30,6 +30,6 @@ public:
     void startBckThisAndBloomModel(const char*);
 
     PartsModel* mBloomModel;
-    ProjmapEffectMtxSetter* _A0;
-    ProjmapEffectMtxSetter* _A4;
+    ProjmapEffectMtxSetter* mProjmapSetter;
+    ProjmapEffectMtxSetter* mBloomProjmapSetter;
 };

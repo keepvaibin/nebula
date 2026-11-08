@@ -109,14 +109,8 @@ void DiskGravity::updateMtx(const Pos3f& rMtx) {
 void DiskGravity::updateLocalParam() {
     Rot3f rot;
 
-    // Both of these variables are present because the codegen indicates they should be.
-    // In the final game, however, they have no behavioral effect and are not given any memory.
-    bool artifact = false;
-    bool& rArtifact = artifact;
-
     mValidCos = MR::cosDegree(0.5f * mValidDegree);
     if (MR::isNearZero(mLocalNormal)) {
-        rArtifact = true;
         mOppositeSideVecOrtho.zero();
         return;
     }
@@ -129,8 +123,5 @@ void DiskGravity::updateLocalParam() {
 
     rot.identity();
     rot.setRotate(mLocalNormal, 0.5f * mValidDegree * (PI / 180));
-    rArtifact = false;
-    if (!artifact) {
-        rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
-    }
+    rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
 }

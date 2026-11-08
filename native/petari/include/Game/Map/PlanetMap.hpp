@@ -27,7 +27,7 @@ public:
     bool tryDeleteMyEffect();
 
     const char* mModelName;
-    Vec3f _90;
+    Vec3f mClippingCenter;
     LodCtrl* mLODCtrl;
     ModelObj* mBloomModel;
     PartsModel* mWaterModel;
@@ -54,5 +54,4 @@ struct PlanetMapClippingInfo {
     const char* mName;
     f32 mRadius;
     Vec mOffset;
-    s32 _14;
 };

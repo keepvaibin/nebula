@@ -31,7 +31,7 @@ public:
         return mZoneID;
     }
 
-    s32 _3C;
+    s32 mCategoryMask;
     u32 mZoneID;
 };
 

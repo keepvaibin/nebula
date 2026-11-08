@@ -101,6 +101,5 @@ public:
 
     Pos3f mBaseMtx;
     Quat4f mRotQuat;
-    Vec3f _CC;
     Vec3f mReboundDir;
 };

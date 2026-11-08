@@ -58,43 +58,36 @@ public:
     void killAllModels();
     void emitOpen();
     void emitVanish();
-    void emitCopy();
     void emitCompleteEffect();
     void deleteCompleteEffect();
 
     void exeExistWait();
     void exeNewWait();
 
-    bool _8C;
+    bool mIsNewFile;
     PartsModel* mPlanetMapObj;
     FileSelectIconID* mIconID;
     FileSelectModel** mModels;
     MiiFaceParts* mFaceParts;
-    FileSelectNumber* _A0;
-    Pos3f _A4;
-    Mtx34f _D4;
-    Mtx34f _104;
-    Vec3f _134;
-    s32 _140;
-    u8 _144;
+    FileSelectNumber* mNumber;
+    Pos3f mPlanetMtx;
+    Mtx34f mFellowMtx;
+    Mtx34f mFaceMtx;
+    s32 mFileNo;
+    u8 mIsPointed;
     bool mIsInvalidateSelect;
-    u8 _146;
-    u8 _147;
+    u8 mIsMiiBroken;
+    u8 mIsComplete;
     FileSelectItemSub::ScaleController* mScaleCtrl;
     FileSelectItemSub::BlinkController* mBlinkCtrl;
     FileSelectItemDelegatorBase* mDelegator;
-    u8 _154;
-    u8 _155;
-    u8 _156;
-    u8 _157;
-    Vec2f _158;
-    f32 _160;
+    u8 mIsPointerOut;
+    u8 mIsDragging;
+    Vec2f mPrevPointerPos;
+    f32 mRotateSpeed;
     bool mIsInvalidRotate;
-    u8 _165;
-    u8 _166;
-    u8 _167;
-    s32 _168;
-    s32 _16C;
+    s32 mTurnTime;
+    s32 mTurnStep;
 };
 
 namespace FileSelectItemSub {
@@ -108,10 +101,10 @@ namespace FileSelectItemSub {
         void exeBig();
 
         f32 getScale() const {
-            return _8;
+            return mScale;
         }
 
-        f32 _8;
+        f32 mScale;
     };
 
     class BlinkController : public NerveExecutor {
@@ -127,7 +120,7 @@ namespace FileSelectItemSub {
         void sleep();
 
         FileSelectItem* mItem;
-        s32 _C;
-        s32 _10;
+        s32 mWaitStep;
+        s32 mBlinkStep;
     };
 };  // namespace FileSelectItemSub

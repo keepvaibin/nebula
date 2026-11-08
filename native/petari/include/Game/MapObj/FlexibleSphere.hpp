@@ -17,7 +17,6 @@ public:
     u16 mShakeTimer;
     bool mGrowDirection;  // true = grow, false = shrink
     bool mVanishOnShrinkEnd;
-    bool _90;  // this goes "unused" functionally, despite being "disabled" by arg4
     bool mEnabled;
     f32 mMaxScale;
     f32 mMinScale;

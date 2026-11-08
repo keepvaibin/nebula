@@ -81,6 +81,5 @@ public:
     f32 mMeanderAngle;
     s32 mStarPieceTotal;
     s32 mStarPieceRemaining;
-    u8 _D0;  // unused
     Mtx34f mHeadMtx;
 };

@@ -1,8 +1,5 @@
 #pragma once
 
-
-class NebulaArena;
-class NebulaArena;
 class NebulaArena;
 
 class HeapMemoryWatcher {

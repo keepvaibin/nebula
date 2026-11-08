@@ -30,11 +30,10 @@ public:
     void exeDown();
     void exeFreeze();
 
-    Quat4f _8C;
-    Vec3f _9C;
-    Vec3f _A8;
-    s32 _B4;  // Freeze timing?
-    bool _B8;
+    Quat4f mPoseQuat;
+    Vec3f mFreezePos;
+    Vec3f mFreezeVelocity;
+    s32 mFreezeStep;  // Freeze timing?
 };
 
 namespace CannonShellUtil {

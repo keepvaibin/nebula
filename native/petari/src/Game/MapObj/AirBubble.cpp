@@ -29,7 +29,7 @@ namespace NrvAirBubble {
     NEW_NERVE(AirBubbleNrvKillWait, AirBubble, KillWait);
 };  // namespace NrvAirBubble
 
-AirBubble::AirBubble(const char* pName) : LiveActor(pName), _A4(0.0f, 0.0f, 1.0f), _B0(), mLife(::cDefaultLife) {
+AirBubble::AirBubble(const char* pName) : LiveActor(pName), mDriftDir(0.0f, 0.0f, 1.0f), mBobOffset(), mLife(::cDefaultLife) {
 }
 
 void AirBubble::init(const TableIter& rIter) {
@@ -39,14 +39,14 @@ void AirBubble::init(const TableIter& rIter) {
     MR::connectToSceneItem(this);
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     initNerve(GET_NERVE(AirBubble, AirBubbleNrvWait));
     mIsFollowRail = false;
     makeActorAppeared();
     MR::setClippingFar100m(this);
     MR::startBck(this, "Move");
-    _C9 = false;
+    mIsItemMoving = false;
 }
 
 void AirBubble::initAfterPlacement() {
@@ -54,7 +54,7 @@ void AirBubble::initAfterPlacement() {
         MR::moveCoordAndTransToNearestRailPos(this);
     }
 
-    _8C = mPosition;
+    mBasePos = mPosition;
 }
 
 void AirBubble::appear() {
@@ -73,7 +73,7 @@ void AirBubble::control() {
 }
 
 void AirBubble::appearMove(const Vec3f& rTrans, s32 life) {
-    _8C.set(rTrans);
+    mBasePos.set(rTrans);
     mPosition.set(rTrans);
     appear();
     MR::showModel(this);
@@ -87,7 +87,7 @@ void AirBubble::exeWait() {
     if (MR::isFirstStep(this)) {
     }
 
-    _B0 = MR::sin(MR::calcNerveRate(this, 120) * MR::pi() * 2.0f);
+    mBobOffset = MR::sin(MR::calcNerveRate(this, 120) * MR::pi() * 2.0f);
 
     if (mIsFollowRail) {
         if (MR::isRailReachedGoal(this)) {
@@ -103,11 +103,11 @@ void AirBubble::exeWait() {
         MR::moveCoordAndFollowTrans(this, mRailMoveSpeed);
     }
 
-    if (_C9) {
+    if (mIsItemMoving) {
         return;
     }
 
-    mPosition = _8C + Vec3f(0.0f, 1.0f, 0.0f) * _B0 * 1.0f;
+    mPosition = mBasePos + Vec3f(0.0f, 1.0f, 0.0f) * mBobOffset * 1.0f;
 }
 
 void AirBubble::exeMove() {
@@ -118,15 +118,15 @@ void AirBubble::exeMove() {
         mVelocity.set((-mGravity).multInLine2(::cMoveStartAccel));
     }
 
-    MR::rotateVecDegree(&_A4, mGravity, ::cCorioriRotSpeed);
-    _A4.killElement(_A4, mGravity);
+    MR::rotateVecDegree(&mDriftDir, mGravity, ::cCorioriRotSpeed);
+    mDriftDir.killElement(mDriftDir, mGravity);
 
-    if (MR::isNearZero(_A4)) {
-        MR::getRandomVector(&_A4, 1.0f);
+    if (MR::isNearZero(mDriftDir)) {
+        MR::getRandomVector(&mDriftDir, 1.0f);
     }
 
-    MR::normalizeOrZero(&_A4);
-    mVelocity += _A4 * 0.1f;
+    MR::normalizeOrZero(&mDriftDir);
+    mVelocity += mDriftDir * 0.1f;
     mVelocity -= mGravity * 0.3f;
     mVelocity.mult(0.85f);
 
@@ -182,14 +182,14 @@ bool AirBubble::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     }
 
     if (MR::isMsgItemStartMove(msg)) {
-        _C9 = true;
+        mIsItemMoving = true;
 
         return true;
     }
 
     if (MR::isMsgItemEndMove(msg)) {
-        _C9 = false;
-        _8C = mPosition;
+        mIsItemMoving = false;
+        mBasePos = mPosition;
 
         return true;
     }

@@ -30,9 +30,9 @@ void TripodBossRotateParts::activateTripodBoss() {
 void TripodBossRotateParts::calcTripodLocalMatrix(Pos3f* pMtx) {
     if (mRotator->isWorking()) {
         pMtx->set(mRotator->getRotateMtx());
-        pMtx->setTrans(_BC);
+        pMtx->setTrans(mLocalPos);
     } else {
-        MR::makeMtxTR(*pMtx, _BC, mRotation);
+        MR::makeMtxTR(*pMtx, mLocalPos, mRotation);
     }
 }
 

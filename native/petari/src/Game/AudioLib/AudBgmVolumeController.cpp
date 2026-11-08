@@ -7,7 +7,7 @@
 #define FADER_AUX 3
 #define FADER_NOTEFAIRY 4
 
-AudBgmVolumeController::AudBgmVolumeController() : mIsMuted() {
+AudBgmVolumeController::AudBgmVolumeController() {
     for (s32 i = 0; i < NUM_FADERS; i++) {
         mTimers[i] = -1;
     }
@@ -42,10 +42,6 @@ void AudBgmVolumeController::update() {
 }
 
 f32 AudBgmVolumeController::getVolume() const {
-    if (mIsMuted) {
-        return 0.0f;
-    }
-
     f32 volume = 1.0f;
     for (s32 i = 0; i < NUM_FADERS; i++) {
         volume *= mFaders[i].mCurrentVolume;

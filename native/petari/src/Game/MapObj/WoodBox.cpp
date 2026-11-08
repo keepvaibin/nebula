@@ -31,7 +31,7 @@ void WoodBox::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initSound(6, false);
     initNerve(GET_NERVE(WoodBox, WoodBoxNrvWait));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
 
     f32 radius = 120.0f * mScale.x;
     initHitSensor(1);
@@ -108,7 +108,7 @@ void WoodBox::init(const TableIter& rIter) {
 
     if (arg4 != 0) {
         mOneUp = MR::createKinokoOneUp();
-        mOneUp->_DD = 1;
+        mOneUp->mIsThrownHigh = 1;
     } else {
         mOneUp = nullptr;
     }

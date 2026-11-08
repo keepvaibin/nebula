@@ -12,11 +12,8 @@
 #include "Game/Util/TalkUtil.hpp"
 
 namespace {
-    // static const f32 sGravityAccel = _;
-    // static const f32 sBodyRadius = _;
     static const s32 sMarioPoseBlendTime = 5;
     static const s32 sCaughtLandStartTime = 20;
-    // static const s32 sCaughtEventTime = _;
     static const f32 sCaughtJumpPower = 20.0f;
     static const f32 sCaughtGravityAccel = 1.0f;
     static const f32 sCaughtAirFreq = 0.99f;

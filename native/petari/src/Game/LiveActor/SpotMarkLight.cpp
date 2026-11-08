@@ -3,31 +3,28 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-SpotMarkLight::SpotMarkLight(LiveActor* pActor, f32 a3, f32 a4, MtxPtr mtx) : PartsModel(pActor, "マーク光柱", "SpotMarkLight", mtx, -1, false) {
-    _9B = false;
-
-    if (!mtx) {
-        initFixedPosition(pActor->getBaseMtx(), Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+SpotMarkLight::SpotMarkLight(LiveActor* pHost, f32 radius, f32 height, MtxPtr pMtx)
+    : PartsModel(pHost, "マーク光柱", "SpotMarkLight", pMtx, -1, false), mIsDisappeared(false) {
+    if (!pMtx) {
+        initFixedPosition(pHost->getBaseMtx(), Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     }
 
-    mScale.z = a3 / 50.0f;
-    mScale.x = a3 / 50.0f;
-    mScale.y = a4 / 1000.0f;
+    mScale.z = radius / 50.0f;
+    mScale.x = radius / 50.0f;
+    mScale.y = height / 1000.0f;
     MR::startBrk(this, "Appear");
     MR::registerDemoSimpleCastAll(this);
 }
 
 void SpotMarkLight::control() {
     if (MR::isNearPlayerAnyTime(this, 1000.0f)) {
-        if (!_9B) {
-            if (MR::isBrkStopped(this)) {
-                MR::startBrk(this, "Disappear");
-                _9B = true;
-            }
+        if (!mIsDisappeared && MR::isBrkStopped(this)) {
+            MR::startBrk(this, "Disappear");
+            mIsDisappeared = true;
         }
-    } else if (_9B && MR::isBrkStopped(this)) {
+    } else if (mIsDisappeared && MR::isBrkStopped(this)) {
         MR::startBrk(this, "Appear");
-        _9B = false;
+        mIsDisappeared = false;
     }
 }
 

@@ -87,7 +87,7 @@ bool BossStinkBugActionGround::receiveOtherMsg(u32 msg, HitSensor* pSender, HitS
     } else if (MR::isMsgWallTouch(msg) || MR::isMsgCeilTouch(msg)) {
         if (isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvRun)) ||
             isNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvShakeOffRun))) {
-            if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->_EC, 45.0f)) {
+            if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, 45.0f)) {
                 Vec3f railPosFrontCoord;
                 MR::calcRailPosFrontCoord(&railPosFrontCoord, getHost(), 2000.0f);
 
@@ -116,7 +116,7 @@ void BossStinkBugActionGround::exeWalk() {
     f32 findDistance = MR::calcDistanceToPlayer(getHost());
 
     if (::sFindMinDistance <= findDistance && findDistance <= ::sFindMaxDistance &&
-        MR::isFaceToPlayerDegreeHV(getHost(), getHost()->_EC, ::sFindDegreeH, ::sFindDegreeV)) {
+        MR::isFaceToPlayerDegreeHV(getHost(), getHost()->mFront, ::sFindDegreeH, ::sFindDegreeV)) {
         setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvFind));
     } else if (BossStinkBugFunction::isExistPlayerBack(getHost(), ::sTurnStartDistance)) {
         setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvTurn));
@@ -165,7 +165,7 @@ void BossStinkBugActionGround::exeAttackSuccess() {
 
 void BossStinkBugActionGround::exeCoolDown() {
     if (updateGroundCoolDown()) {
-        if (MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->_EC, 90.0f)) {
+        if (MR::isFaceToPlayerHorizontalDegree(getHost(), getHost()->mFront, 90.0f)) {
             setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvWalk));
         } else {
             setNerve(GET_NERVE(BossStinkBugGroundBattle, BossStinkBugActionGroundNrvTurn));

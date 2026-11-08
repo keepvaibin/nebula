@@ -30,6 +30,6 @@ public:
     SkeletalFishBossRail* mBossRail;
     s32 mNumGuards;
     SkeletalFishGuard** mGuards;
-    f32 _1C;
-    u8 _20;
+    f32 mAppearRailCoord;
+    u8 mIsValid;
 };

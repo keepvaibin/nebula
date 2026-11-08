@@ -12,7 +12,6 @@
 
 namespace {
     static const f32 sGroundFric = 1.0f;
-    // static const f32 sAirFric = _;
     static const f32 sMomentFric = 0.96f;
     static const f32 sGravityAccel = 1.2f;
     static const f32 sReboundRate = 0.4f;
@@ -21,10 +20,6 @@ namespace {
     static const s32 sExplosionMaxTime = 10;
     static const s32 sExplosionTime = 20;
     static const f32 sExplosionRadius = 280.0f;
-    // static const f32 sBombBoundNoteOffVel = _;
-    // static const f32 sBombBoundVolMinVel = _;
-    // static const f32 sBombBoundVolMaxVel = _;
-    // static const f32 hShiftingSandVel = _;
 };  // namespace
 
 namespace NrvBombBirdBomb {
@@ -33,7 +28,7 @@ namespace NrvBombBirdBomb {
     NEW_NERVE(HostTypeNrvExplosion, BombBirdBomb, Explosion);
 };  // namespace NrvBombBirdBomb
 
-BombBirdBomb::BombBirdBomb(const char* pName) : LiveActor(pName), _8C(0.0f, 0.0f, 0.0f, 1.0f), _9C(0.0f, 0.0f, 0.0f) {
+BombBirdBomb::BombBirdBomb(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 0.0f, 0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f) {
 }
 
 void BombBirdBomb::init(const TableIter& rIter) {
@@ -45,7 +40,7 @@ void BombBirdBomb::init(const TableIter& rIter) {
     MR::addHitSensorEnemyAttack(this, "bomb", 8, ::sExplosionRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "bomb");
     initBinder(getSensor("body")->mRadius, 0.0f, 0);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(3, false);
     f32 radius = getSensor("body")->mRadius;
     MR::initShadowVolumeSphere(this, radius);
@@ -60,12 +55,12 @@ void BombBirdBomb::kill() {
 }
 
 void BombBirdBomb::control() {
-    _9C.mult(::sMomentFric);
-    MR::rotateQuatMoment(&_8C, _9C);
+    mRotateMoment.mult(::sMomentFric);
+    MR::rotateQuatMoment(&mRotateQuat, mRotateMoment);
 }
 
 void BombBirdBomb::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mRotateQuat);
     MR::setBaseScale(this, mScale);
 }
 

@@ -18,9 +18,7 @@ public:
     void exeHit();
     void doHit(HitSensor* pSender, HitSensor* pReceiver);
 
-    u16 _8c;
-    u16 _8e;
-    u16 _90;
-    u8 _92;
-    u8 _93[5];
+    u16 mFloorTouchTimer;
+    u16 mHitCoolDown;
+    u16 mHitPoint;
 };

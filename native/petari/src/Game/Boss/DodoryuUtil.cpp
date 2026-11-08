@@ -75,10 +75,10 @@ namespace DodoryuUtil {
 
         f32 speed = pDodoryu->mVelocity.length();
         Vec3f velocity(pDodoryu->mVelocity);
-        velocity.orthogonalize(pDodoryu->_134);
+        velocity.orthogonalize(pDodoryu->mWallNormal);
 
         if (MR::isNearZero(velocity)) {
-            velocity.cross(up, pDodoryu->_134);
+            velocity.cross(up, pDodoryu->mWallNormal);
         }
 
         velocity.setLength(speed);

@@ -49,16 +49,16 @@ TalkPeekZ::TalkPeekZ() : mAsker(Frame::newProbeAsker()) {
 }
 
 void TalkPeekZ::setDrawSyncToken() {
-    Frame::getProjectionv(&_20);
-    Frame::getViewportv(&_3C);
+    Frame::getProjectionv(mProjection);
+    Frame::getViewportv(mViewport);
 
     // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
     NebulaScreenProbe probe;
-    _8 = 0.0f;
+    mDepth = 0.0f;
     if (Frame::screenProbeResults(cReadbackChannel, mAsker, &probe, 1) == 1 && probe.x >= 0.0f) {
-        _8 = probe.value;
-        TDDraw::invProject(&_14, Vec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
-                           &_3C, true);
+        mDepth = probe.value;
+        TDDraw::invProject(&mWorldPos, Vec3f(probe.user_x, probe.user_y, mDepth), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), mProjection,
+                           mViewport, true);
     }
 
     probe.x = -1.0f;
@@ -76,7 +76,7 @@ void TalkPeekZ::setDrawSyncToken() {
 }
 
 TalkDirector::TalkDirector(const char* pName)
-    : LayoutActor(pName, true), mMsgCtrl(), _3C(), _40(), _44(), mTalkState(), _4C(), _4D(), _4E(), mIsInvalidClipping(), mDemoType(), _58(), _59() {
+    : LayoutActor(pName, true), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(), mTalkState(), mIsTalkStart(), mIsTalkEnd(), mIsInvalidTalk(), mIsInvalidClipping(), mDemoType(), mIsSkipTerm(), mIsPlayerTalk() {
 }
 
 TalkDirector::~TalkDirector() {
@@ -98,9 +98,9 @@ void TalkDirector::movement() {
 }
 
 bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
-    _4D = false;
+    mIsTalkEnd = false;
     bool var31 = false;
-    _4C = false;
+    mIsTalkStart = false;
     if (isInvalidTalk()) {
         return false;
     }
@@ -119,8 +119,8 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
         return false;
     }
 
-    if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)) && !TalkFunction::isShortTalk(mTalkState->_04)) {
-        if (mTalkState->_04 == pCtrl) {
+    if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)) && !TalkFunction::isShortTalk(mTalkState->mMsgCtrl)) {
+        if (mTalkState->mMsgCtrl == pCtrl) {
             var31 = true;
         } else {
             return false;
@@ -133,12 +133,12 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
 
     if (force) {
         if (TalkFunction::isShortTalk(pCtrl)) {
-            if (pCtrl->isNearPlayer(_40)) {
-                _40 = pCtrl;
+            if (pCtrl->isNearPlayer(mRequestCtrl)) {
+                mRequestCtrl = pCtrl;
             }
         } else {
-            _40 = pCtrl;
-            _3C = pCtrl;
+            mRequestCtrl = pCtrl;
+            mBalloonCtrl = pCtrl;
             mMsgCtrl = pCtrl;
         }
     } else {
@@ -149,8 +149,8 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
             return false;
         }
 
-        if (pCtrl->isNearPlayer(_40)) {
-            _40 = pCtrl;
+        if (pCtrl->isNearPlayer(mRequestCtrl)) {
+            mRequestCtrl = pCtrl;
         }
     }
 
@@ -159,7 +159,7 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
     }
 
     if (!isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait))) {
-        return mTalkState->_04 == pCtrl;
+        return mTalkState->mMsgCtrl == pCtrl;
     }
 
     mTalkState = initState(pCtrl);
@@ -228,43 +228,43 @@ void TalkDirector::updateMessage() {
     }
 
     if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait)) || isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvPrep))) {
-        mMsgCtrl = _3C;
-        _3C = _40;
-        _40 = nullptr;
+        mMsgCtrl = mBalloonCtrl;
+        mBalloonCtrl = mRequestCtrl;
+        mRequestCtrl = nullptr;
     } else {
-        mMsgCtrl = _40;
-        _3C = mMsgCtrl;
-        _40 = nullptr;
+        mMsgCtrl = mRequestCtrl;
+        mBalloonCtrl = mMsgCtrl;
+        mRequestCtrl = nullptr;
     }
 
     if (mMsgCtrl != nullptr) {
-        _44 = mMsgCtrl;
+        mLastTalkCtrl = mMsgCtrl;
     }
 
-    if (_3C != nullptr) {
-        _3C->updateBalloonPos();
+    if (mBalloonCtrl != nullptr) {
+        mBalloonCtrl->updateBalloonPos();
 
         TalkPeekZ* peek = mPeekZ;
-        Vec2f v1(_3C->_1C.x, _3C->_1C.y);
+        Vec2f v1(mBalloonCtrl->mBalloonPos.x, mBalloonCtrl->mBalloonPos.y);
         peek->mScreenPos.set(v1.x, v1.y);
     }
 
     if (MR::isPowerStarGetDemoActive()) {
         mMsgCtrl = nullptr;
-        _4E = true;
+        mIsInvalidTalk = true;
     }
 }
 
 void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool arg4) {
-    _58 = arg2;
-    _4C = true;
-    _59 = arg4;
+    mIsSkipTerm = arg2;
+    mIsTalkStart = true;
+    mIsPlayerTalk = arg4;
 
     mIsInvalidClipping = MR::isInvalidClipping(pCtrl->mHostActor);
     mDemoType = getDemoType(pCtrl, arg3);
 
     if (mDemoType == 0) {
-        _59 = false;
+        mIsPlayerTalk = false;
     }
 
     MR::invalidateClipping(pCtrl->mHostActor);
@@ -282,14 +282,14 @@ void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool a
         break;
     }
 
-    if (_59) {
+    if (mIsPlayerTalk) {
         MR::startPlayerTalk(pCtrl->mHostActor);
     }
 }
 
 void TalkDirector::termTalk() {
-    TalkMessageCtrl* control = mTalkState->_04;
-    _4D = true;
+    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
+    mIsTalkEnd = true;
 
     if (mMessageInfo.isCameraNormal()) {
         MR::endNPCTalkCamera(false, -1);
@@ -301,7 +301,7 @@ void TalkDirector::termTalk() {
         MR::validateClipping(control->mHostActor);
     }
 
-    if (_59) {
+    if (mIsPlayerTalk) {
         MR::endPlayerTalk();
     }
 
@@ -315,7 +315,7 @@ void TalkDirector::termTalk() {
     }
 
     mDemoType = 0;
-    _59 = false;
+    mIsPlayerTalk = false;
     mIsInvalidClipping = false;
 }
 
@@ -337,7 +337,7 @@ TalkState* TalkDirector::initState(TalkMessageCtrl* pCtrl) {
 }
 
 bool TalkDirector::isInvalidTalk() const {
-    if (_4E) {
+    if (mIsInvalidTalk) {
         return true;
     }
 
@@ -452,7 +452,7 @@ void TalkDirector::balloonOff() {
 bool TalkDirector::isSystemTalking() const {
     if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)) || isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvSlct)) ||
         isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext))) {
-        return !TalkFunction::isShortTalk(mTalkState->_04);
+        return !TalkFunction::isShortTalk(mTalkState->mMsgCtrl);
     }
 
     return false;
@@ -464,7 +464,7 @@ bool TalkDirector::isNormalTalking() const {
 
 LiveActor* TalkDirector::getTalkingActor() const {
     if (isSystemTalking()) {
-        return mTalkState->_04->mHostActor;
+        return mTalkState->mMsgCtrl->mHostActor;
     }
 
     return nullptr;
@@ -475,11 +475,11 @@ void TalkDirector::exePrep() {
     }
 
     if (mTalkState->prep(mMsgCtrl)) {
-        TalkFunction::onTalkStateEnableStart(mTalkState->_04);
+        TalkFunction::onTalkStateEnableStart(mTalkState->mMsgCtrl);
         return;
     }
 
-    TalkFunction::onTalkStateNone(mTalkState->_04);
+    TalkFunction::onTalkStateNone(mTalkState->mMsgCtrl);
     mTalkState = nullptr;
     setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait));
 }
@@ -488,7 +488,7 @@ void TalkDirector::exeWait() {
 }
 
 void TalkDirector::exeTalk() {
-    TalkMessageCtrl* control = mTalkState->_04;
+    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
     TalkFunction::onTalkStateTalking(control);
 
     bool cond = false;
@@ -511,9 +511,9 @@ void TalkDirector::exeTalk() {
     }
 
     mTalkState->clos();
-    _50 = false;
+    mIsNext = false;
 
-    if (control->mIsOnRootNodeAuto && !mTalkState->isSelfInterrupt(_44)) {
+    if (control->mIsOnRootNodeAuto && !mTalkState->isSelfInterrupt(mLastTalkCtrl)) {
         control->rootNodePst();
     }
 
@@ -522,7 +522,7 @@ void TalkDirector::exeTalk() {
 }
 
 void TalkDirector::exeSlct() {
-    TalkMessageCtrl* control = mTalkState->_04;
+    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
 
     if (MR::isFirstStep(this)) {
         appearYesNoSelector(control);
@@ -534,7 +534,7 @@ void TalkDirector::exeSlct() {
     if (MR::isYesNoSelected()) {
         MR::resetYesNoSelectorSE();
         mTalkState->clos();
-        _50 = true;
+        mIsNext = true;
 
         if (control->mIsOnRootNodeAuto) {
             control->rootNodeSel(MR::isYesNoSelectedYes());
@@ -547,14 +547,14 @@ void TalkDirector::exeSlct() {
 }
 
 void TalkDirector::exeNext() {
-    TalkMessageCtrl* control = mTalkState->_04;
+    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
 
     bool cond = control->isCurrentNodeContinue();
 
     if (control->rootNodeEve()) {
-        _50 |= cond;
+        mIsNext |= cond;
 
-        if (_50) {
+        if (mIsNext) {
             if (TalkFunction::isShortTalk(control)) {
                 termTalk();
             }
@@ -572,13 +572,13 @@ void TalkDirector::exeNext() {
 }
 
 void TalkDirector::exeTerm() {
-    if (!_58) {
+    if (!mIsSkipTerm) {
         if (!mTalkState->term(mMsgCtrl)) {
             return;
         }
     }
 
-    TalkFunction::onTalkStateNone(mTalkState->_04);
+    TalkFunction::onTalkStateNone(mTalkState->mMsgCtrl);
     mTalkState = nullptr;
 
     setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait));
@@ -600,13 +600,13 @@ bool TalkFunction::endTalkSystem(TalkMessageCtrl* pCtrl) {
 bool TalkFunction::isTalkSystemStart(const TalkMessageCtrl* pCtrl) {
     TalkDirector* pDirector = ::getTalkDirector();
 
-    return pDirector->mMsgCtrl == pCtrl && pDirector->_4C;
+    return pDirector->mMsgCtrl == pCtrl && pDirector->mIsTalkStart;
 }
 
 bool TalkFunction::isTalkSystemEnd(const TalkMessageCtrl* pCtrl) {
     TalkDirector* pDirector = ::getTalkDirector();
 
-    return pDirector->mMsgCtrl == pCtrl && pDirector->_4D;
+    return pDirector->mMsgCtrl == pCtrl && pDirector->mIsTalkEnd;
 }
 
 bool TalkFunction::getBranchAstroGalaxyResult(u16 arg) {
@@ -626,7 +626,7 @@ void MR::balloonOffTalkDirector() {
 }
 
 void MR::invalidateTalkDirector() {
-    ::getTalkDirector()->_4E = true;
+    ::getTalkDirector()->mIsInvalidTalk = true;
 }
 
 void MR::setTalkDirectorDrawSyncToken() {

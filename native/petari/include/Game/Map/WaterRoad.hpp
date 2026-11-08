@@ -34,7 +34,6 @@ public:
     bool updateRide();
     void updateDemo(f32);
 
-    s32 _8C;  // arg0, unused?
     WaterRoadModelInfo* mModelInfoHigh;
     WaterRoadModelInfo* mModelInfoLow;
     f32 mRadius;

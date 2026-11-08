@@ -49,29 +49,29 @@ void TicoShop::init(const TableIter& rIter) {
     caps.mSoundSize = 6;
     caps.mSensorMax = 2;
     caps.mSensorJoint = "Center";
-    caps._6C = "Center";
+    caps.mPointerJoint = "Center";
     initialize(rIter, caps);
     MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, ::sMouthSize, Vec3f(0.0f, 0.0f, 0.0f));
     MR::getNPCItemData(&item, 0);
     equipment(item, false);
 
-    if (_94 != nullptr) {
-        MR::startAction(_94, "Shake");
+    if (mGoods0 != nullptr) {
+        MR::startAction(mGoods0, "Shake");
     }
 
-    if (_98 != nullptr) {
-        MR::startAction(_98, "Shake");
+    if (mGoods1 != nullptr) {
+        MR::startAction(mGoods1, "Shake");
     }
 
     s32 starPieceNeed = ::sStarPieceNeed;
     MR::getPlacementArg0NoInit(rIter, &starPieceNeed);
     initStarPiece(starPieceNeed);
     initMessage("Common_TicoShop000");
-    MR::setMessageArg(mMsgCtrl, _194);
+    MR::setMessageArg(mMsgCtrl, mStarPieceNeed);
     MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::branchFunc));
     MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoShop::eventFunc));
     MR::setDistanceToTalk(mMsgCtrl, 350.0f);
-    _180 = GET_NERVE(TicoShop, TicoShopNrvDemo);
+    mMetaNerve = GET_NERVE(TicoShop, TicoShopNrvDemo);
     mOneUp = MR::createKinokoOneUp();
     mLifeUp = MR::createKinokoSuper();
     MR::setShadowDropLength(mOneUp, nullptr, ::sShadowLength);
@@ -81,7 +81,7 @@ void TicoShop::init(const TableIter& rIter) {
     MR::setBrkFrameAndStop(this, 0.0f);
     MR::setClippingFar200m(this);
     TicoEat::init(rIter);
-    _17C.set(0, 0xE6, 0xFF, 0xFF);
+    mLightColor.set(0, 0xE6, 0xFF, 0xFF);
 }
 
 bool TicoShop::branchFunc(u32) {
@@ -105,21 +105,21 @@ bool TicoShop::eventFunc(u32 var) {
 }
 
 void TicoShop::startReactionSound() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_TICOSHOP_TRAMPLED");
     }
 
     if (isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_TICOSHOP_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SM_TICOSHOP_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SV_TICOSHOP_STAR_PIECE_HIT");
     }
 }

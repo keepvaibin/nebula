@@ -11,7 +11,7 @@ public:
     virtual ~DinoPackunTrackFire();
     virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&_8C;
+        return (MtxPtr)&mMtx;
     };
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -21,7 +21,7 @@ public:
     void exeWait();
     void exeGround();
 
-    Pos3f _8C;
+    Pos3f mMtx;
 };
 
 class DinoPackunTrackFireHolder : public DeriveActorGroup< DinoPackunTrackFire > {

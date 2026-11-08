@@ -118,20 +118,20 @@ public:
     AnimScaleController* mAnimScaleController;
     WalkerStateBindStarPointer* mWalkerStateBindStarPointer;
     ParabolicPath* mParabolicPath;
-    Pos3f _98;
+    Pos3f mEffectMtx;
     Pos3f mExtinguishMtx;
-    Pos3f _F8;
-    Quat4f _128;
-    Vec3f _138;
-    Vec3f _144;
+    Pos3f mFallEffectMtx;
+    Quat4f mPoseQuat;
+    Vec3f mFront;
+    Vec3f mFireUp;
     Vec3f mHomePosition;
-    Vec3f _15C;
+    Vec3f mDashDir;
     Vec3f mPlayerPosition;
-    Vec3f _174;
-    Vec3f _180;
-    Vec3f _18C;
-    Vec3f _198;
-    f32 _1A4;
+    Vec3f mWalkTarget;
+    Vec3f mDivePos;
+    Vec3f mDiveDir;
+    Vec3f mDiveUp;
+    f32 mTargetDistance;
     f32 mChaseDistance;
     s32 mAppearStatus;  // Obj_arg0
     s32 mElementType;
@@ -139,6 +139,5 @@ public:
     s32 mBodyEffectType;
     s32 mRunawayTimer;
     bool mCanDive;
-    bool _1C1;
     bool mIsValidRestart;  // Obj_arg2
 };

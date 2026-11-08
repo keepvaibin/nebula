@@ -8,12 +8,12 @@ PlacementId::PlacementId(s32 a1, const TableIter& rIter) {
 }
 
 PlacementId::PlacementId(s32 a1, s32 zoneId) {
-    _0 = a1;
+    mId = a1;
     mZoneID = zoneId;
 }
 
 void PlacementId::initialize(s32 a1, const TableIter& rIter) {
-    _0 = a1;
+    mId = a1;
     mZoneID = MR::getPlacedZoneId(rIter);
 }
 

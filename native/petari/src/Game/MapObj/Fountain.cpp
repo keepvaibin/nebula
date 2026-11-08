@@ -35,7 +35,7 @@ void Fountain::init(const TableIter& rIter) {
     mtx.getYDir(mUp);
     MR::normalize(&mUp);
     MR::getObjectName(&mFountainName, rIter);
-    initEffectKeeper(0, mFountainName, false);
+    initEffectKeeper(0, mFountainName);
     initSound(4, false);
     initHitSensor(1);
     initHitSensors("body");

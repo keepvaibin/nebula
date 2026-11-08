@@ -16,9 +16,9 @@ class XanimePlayer;
 
 class MultiEmitter {
 public:
-    MultiEmitter(const char*, const Vec3f*, const Vec3f*, const Vec3f*, const Vec3f&);
-    MultiEmitter(const char*, MtxPtr, const Vec3f&);
-    MultiEmitter(const char*, MtxPtr, const Vec3f*, const Vec3f&);
+    MultiEmitter(const char*, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset);
+    MultiEmitter(const char*, MtxPtr, const Vec3f& rOffset);
+    MultiEmitter(const char*, MtxPtr, const Vec3f* pScale, const Vec3f& rOffset);
     MultiEmitter(const char*);
 
     void createEmitter();
@@ -33,7 +33,7 @@ public:
     bool isValid() const;
     bool isExistOneTimeEmitter() const;
 
-    void setHostSRT(const Vec3f*, const Vec3f*, const Vec3f*);
+    void setHostSRT(const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale);
     void setHostMtx(MtxPtr);
     void setOffset(const Vec3f&);
     void setBaseScale(f32);
@@ -110,10 +110,9 @@ public:
     MR::Vector< MR::FixedArray< MultiEmitter*, 4 > > mChildren;
     MultiEmitterCallBack* mCallBack;
     MultiEmitterParticleCallBack* mParticleCallBack;
-    SyncBckEffectInfo* _24;
-    const AutoEffectInfo* _28;
-    f32 _2C;
-    f32 _30;
+    SyncBckEffectInfo* mSyncBck;
+    const AutoEffectInfo* mAutoInfo;  // the effect's table row; none for effects made by code
+    f32 mLightAffect;                 // near 0: the emitters keep their own colours
     u16 mHash;
     u8 mFlags;
 };

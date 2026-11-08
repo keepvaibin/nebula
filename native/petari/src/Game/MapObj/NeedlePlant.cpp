@@ -12,7 +12,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
-    // static const f32 sBreakSensorSize = _;
     static const f32 sAttackSensorSize = 70.0f;
 };  // namespace
 
@@ -35,7 +34,7 @@ void NeedlePlant::init(const TableIter& rIter) {
     info.setupShadow(nullptr);
     info.setupNerve(GET_NERVE(NeedlePlant, NeedlePlantNrvWait));
     initialize(rIter, info);
-    initEffectKeeper(1, "NeedlePlant", false);
+    initEffectKeeper(1, "NeedlePlant");
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, 0);
     MR::initStarPointerTarget(this, mScale.x * 150.0f, Vec3f(0.0f, mScale.x * 150.0f, 0.0f));

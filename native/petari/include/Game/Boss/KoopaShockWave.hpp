@@ -24,7 +24,7 @@ public:
 private:
     Koopa* mKoopa;
     f32 mAngle;
-    Pos3f _94;
+    Pos3f mKoopaMtx;
     Vec3f mUp;
     Vec3f mFront;
     Pos3f mBaseMtx;

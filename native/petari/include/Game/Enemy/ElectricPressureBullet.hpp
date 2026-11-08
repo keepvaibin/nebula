@@ -16,7 +16,6 @@ public:
     void shotElectricBullet(LiveActor*, const Pos3f&, const f32&);
     void exeFly();
 
-    Vec3f _8C;
-    LiveActor* _98;
-    f32 _9C;
+    Vec3f mFront;
+    f32 mSpeed;
 };

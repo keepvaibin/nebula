@@ -404,7 +404,7 @@ namespace GameEventFlagTable {
         flag.mType = GameEventFlag::Type_StarPiece;
         flag.mSaveFlag = 1;
         flag.mStarPieceIndex = static_cast< u8 >(slot);
-        flag._8 = static_cast< u32 >(starBits);
+        flag.mExactStarPieceNum = static_cast< u32 >(starBits);
         flag.mGalaxyName = pGalaxyName;
         addFlag(flag);
         return true;

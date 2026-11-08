@@ -9,49 +9,49 @@ FollowCollisionArea::~FollowCollisionArea() {
 }
 
 FollowCollisionArea::FollowCollisionArea(const Vec3f& rSize, MtxPtr pMatrix, f32 offset) : NameObj("追従コリジョンエリア") {
-    _38 = rSize;
-    _34 = pMatrix;
-    _44 = offset;
+    mSize = rSize;
+    mFollowMtx = pMatrix;
+    mOffset = offset;
     MR::connectToSceneAreaObj(this);
-    _C = 0;
-    _10 = 0.0f;
-    _20 = -1;
-    _24 = 0;
-    _2C = 0;
-    _28 = false;
-    _30 = new AreaPolygon();
-    _30->setMtx(_34, _38, _44);
-    _30->initWithoutIter();
-    _30->validate();
+    mOutsideAxisCount = 0;
+    mInsideDepth = 0.0f;
+    mPushType = -1;
+    mTeresaType = 0;
+    mHitRadius = 0;
+    mIsTeresaPass = false;
+    mPolygon = new AreaPolygon();
+    mPolygon->setMtx(mFollowMtx, mSize, mOffset);
+    mPolygon->initWithoutIter();
+    mPolygon->validate();
 }
 
 void FollowCollisionArea::movement() {
-    if (_24 == -1 && MR::isPlayerTeresaDisappear()) {
-        _28 = true;
-        _30->invalidate();
+    if (mTeresaType == -1 && MR::isPlayerTeresaDisappear()) {
+        mIsTeresaPass = true;
+        mPolygon->invalidate();
     } else {
         Vec3f playerPos(*MR::getPlayerCenterPos());
-        f32 radius = static_cast< f32 >(_2C);
-        if (_2C == 0) {
+        f32 radius = static_cast< f32 >(mHitRadius);
+        if (mHitRadius == 0) {
             radius = MR::getPlayerHitRadius();
         }
 
-        if (_28) {
+        if (mIsTeresaPass) {
             radius += 5.0f;
         }
 
         Vec3f hitPos;
         Vec3f hitNormal;
         if (!hitCheck(playerPos, radius, &hitPos, &hitNormal)) {
-            if (_28) {
-                _28 = false;
-                _30->validate();
+            if (mIsTeresaPass) {
+                mIsTeresaPass = false;
+                mPolygon->validate();
             }
-        } else if (!_28 && _20 == -1) {
+        } else if (!mIsTeresaPass && mPushType == -1) {
             Vec3f push;
-            if (_C == 0) {
+            if (mOutsideAxisCount == 0) {
                 push = hitNormal;
-                push.setLength(radius + _10);
+                push.setLength(radius + mInsideDepth);
             } else {
                 push = playerPos - hitPos;
                 push.setLength(radius);
@@ -69,8 +69,8 @@ void FollowCollisionArea::movement() {
 bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f* pNormal) {
     s32 surface = -1;
     Pos3f matrix;
-    NebulaMtxCopy(_34, matrix);
-    MR::extractMtxTrans(_34, &_14);
+    NebulaMtxCopy(mFollowMtx, matrix);
+    MR::extractMtxTrans(mFollowMtx, &mCenter);
     Vec3f localPoint;
     Vec3f axisX;
     Vec3f axisY;
@@ -78,7 +78,7 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
     matrix.getXDir(axisX);
     matrix.getYDir(axisY);
     matrix.getZDir(axisZ);
-    _14.add(axisY * _44);
+    mCenter.add(axisY * mOffset);
 
     f32 sizeX = axisX.length();
     MR::normalizeOrZero(&axisX);
@@ -86,12 +86,12 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
     MR::normalizeOrZero(&axisY);
     f32 sizeZ = axisZ.length();
     MR::normalizeOrZero(&axisZ);
-    sizeX *= 0.5f * _38.x;
-    sizeY *= 0.5f * _38.y;
-    sizeZ *= 0.5f * _38.z;
+    sizeX *= 0.5f * mSize.x;
+    sizeY *= 0.5f * mSize.y;
+    sizeZ *= 0.5f * mSize.z;
     Vec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
     Vec3f relative(rPos);
-    relative.sub(_14);
+    relative.sub(mCenter);
     f32 x = relative.dot(axisX);
     f32 y = relative.dot(axisY);
     f32 z = relative.dot(axisZ);
@@ -121,7 +121,7 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
         count++;
     }
 
-    _C = count;
+    mOutsideAxisCount = count;
     Vec3f corner;
     Vec3f depth;
     if (count == 3) {
@@ -159,13 +159,13 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
         depth.y = sizeY - absolute.y;
         depth.z = sizeZ - absolute.z;
         if (depth.x < depth.y && depth.x < depth.z) {
-            _10 = depth.x;
+            mInsideDepth = depth.x;
             outside[0] = true;
         } else if (depth.y < depth.x && depth.y < depth.z) {
-            _10 = depth.y;
+            mInsideDepth = depth.y;
             outside[1] = true;
         } else {
-            _10 = depth.z;
+            mInsideDepth = depth.z;
             outside[2] = true;
         }
 
@@ -232,9 +232,9 @@ bool FollowCollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint,
         }
     }
 
-    pPoint->set(axisX * localPoint.x + axisY * localPoint.y + axisZ * localPoint.z + _14);
+    pPoint->set(axisX * localPoint.x + axisY * localPoint.y + axisZ * localPoint.z + mCenter);
     MR::normalizeOrZero(pNormal);
-    _30->setSurfaceAndSync(surface);
+    mPolygon->setSurfaceAndSync(surface);
 
     return true;
 }

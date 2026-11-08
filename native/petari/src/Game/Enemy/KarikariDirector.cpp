@@ -86,7 +86,7 @@ void KarikariDirector::movement() {
         clearScratchInfo();
     } else if (mReleaseKarikari != nullptr) {
         unregistCling(mReleaseKarikari);
-        mReleaseKarikari->tryDPDRelease(mReleaseVel);
+        mReleaseKarikari->tryPointerRelease(mReleaseVel);
         clearScratchInfo();
     } else {
         mNoReleaseTime--;

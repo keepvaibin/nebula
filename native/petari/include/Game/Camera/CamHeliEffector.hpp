@@ -9,6 +9,6 @@ public:
 
     void update(CameraMan*);
 
-    s32 _0;
-    f32 _4;
+    s32 mStep;
+    f32 mRate;
 };

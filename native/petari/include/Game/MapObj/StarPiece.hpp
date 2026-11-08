@@ -15,26 +15,26 @@ namespace MR {
 
 struct StarPieceReceiverInfo {
 public:
-    inline StarPieceReceiverInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), _4(a2), _8(a3), mGotCount(a4) {
+    inline StarPieceReceiverInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), mNumWanted(a2), mNumFlying(a3), mGotCount(a4) {
     }
     NameObj* mObj;
-    u32 _4;
-    u32 _8;
+    u32 mNumWanted;
+    u32 mNumFlying;
     u32 mGotCount;
 };
 
 struct StarPieceHostInfo {
 public:
-    inline StarPieceHostInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), _4(a2), _8(a3), _C(a4) {
+    inline StarPieceHostInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), mNumPieces(a2), mNumAppeared(a3), mNumGot(a4) {
     }
     bool isAppearable() {
-        return _C < _4 && _8 < _4 - _C;
+        return mNumGot < mNumPieces && mNumAppeared < mNumPieces - mNumGot;
     }
 
     NameObj* mObj;
-    s32 _4;
-    s32 _8;
-    s32 _C;
+    s32 mNumPieces;
+    s32 mNumAppeared;
+    s32 mNumGot;
 };
 
 class StarPiece : public LiveActor {
@@ -101,18 +101,16 @@ public:
     bool touchPlayer();
     void setHostInfo(StarPieceHostInfo*);
 
-    Vec3f _8C;
+    Vec3f mFront;
 
-    f32 _98;
-    f32 _9C;
-    f32 _A0;
-    f32 _A4;
-    Vec3f _A8;
-    Vec3f _B4;
+    f32 mTurnRate;
+    f32 mChaseRate;
+    Vec3f mThrowStart;
+    Vec3f mThrowEnd;
 
     TriangleFilterDelegator< StarPiece >* mDelegator;
     HitSensor* mTargetSensor;
-    s32 _C8;
+    s32 mGettableEffectStep;
     s32 mGettableDelayCounter;
     s32 mFallKillTimer;
 
@@ -121,20 +119,19 @@ public:
     groupType mGroupType;
     StarPieceHostInfo* mHostInfo;
     StarPieceReceiverInfo* mReceiverInfo;
-    /* 0XE4 */ s32 mNumGift;
+    s32 mNumGift;
 
     struct {
         bool isGoToPlayer : 1;
-        // is turned off when part of a StarPieceGroup and switchA is off
-        bool _1 : 1;
-        // flags related to enabling/disabling shadows
-        bool _2 : 1;
-        bool _3 : 1;
+        // Off while a StarPieceGroup's or StarPieceMother's switch A is off.
+        bool isGettable : 1;
+        // Placement arg4 0: shadow on and the ground under the piece is checked for sand; 1: no shadow.
+        bool isCheckGround : 1;
+        bool isNoShadow : 1;
 
         bool isGroup : 1;
         bool InWater : 1;
-        // used in IsEffectLight
-        bool _6 : 1;
+        bool isForceEffectLight : 1;
         bool isLaunched : 1;
-    } /* 0XE8 */ mFlags;
+    } mFlags;
 };

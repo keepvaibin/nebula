@@ -3,7 +3,6 @@
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
@@ -23,7 +22,7 @@ namespace {
     s16 sColorA = 64;
     s16 sColorStepA = 8;
     s16 sLayerHeight = 6;
-    f32 cDpdDigAmount = 30.0f;
+    f32 cPointerDigAmount = 30.0f;
     f32 cPlayerDigAmount = 600.0f;
     f32 cFireballDigAmount = 200.0f;
     f32 cSwingDigAmount = 20.0f;
@@ -35,7 +34,7 @@ namespace {
 SnowFloorTile::~SnowFloorTile() {
 }
 
-SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName), _F8(), _FC() {
+SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName) {
 }
 
 void SnowFloorTile::init(const TableIter& rIter) {
@@ -69,7 +68,7 @@ void SnowFloorTile::init(const TableIter& rIter) {
     mTexture = mTextures[0];
     mTextureIndex = 0;
     mImage = mTexture->mImage;
-    mLastDpdPoint.zero();
+    mLastPointerPoint.zero();
     mLastPlayerPoint.zero();
 
     MR::connectToSceneNormalMapObj(this);
@@ -174,16 +173,16 @@ void SnowFloorTile::digPlayerWalk(const Vec3f& rPoint) {
     mLastPlayerPoint = point;
 }
 
-void SnowFloorTile::digDpd(const Vec3f& rPoint) {
+void SnowFloorTile::digPointer(const Vec3f& rPoint) {
     Vec2f point(rPoint.x, rPoint.y);
-    s32 volume = doMove(mLastDpdPoint, point, 50.0f / static_cast< f32 >(mCellSize), ::cDpdDigAmount) / 200.0f;
+    s32 volume = doMove(mLastPointerPoint, point, 50.0f / static_cast< f32 >(mCellSize), ::cPointerDigAmount) / 200.0f;
 
     if (volume > 100) {
         volume = 100;
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_SNOW_DIG", volume);
-    mLastDpdPoint = point;
+    mLastPointerPoint = point;
 }
 
 void SnowFloorTile::control() {
@@ -214,7 +213,7 @@ void SnowFloorTile::control() {
         position = *MR::getStarPointerWorldPosUsingDepth(0);
 
         if (calcLocalPoint(position, &localPoint, 20.0f) || MR::isInRange(localPoint.z, -100.0f, 100.0f)) {
-            digDpd(localPoint);
+            digPointer(localPoint);
             changed = true;
         }
     }

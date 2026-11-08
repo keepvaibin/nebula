@@ -39,7 +39,7 @@ void DodoryuStateWait::exeWait() {
 
     MR::startLevelSound(mHost, "SE_BM_LV_DODORYU_MOVE_U_SHALLOW");
 
-    if (mHost->_144 && !MR::isPlayerInBind()) {
+    if (mHost->mIsSwitchOn && !MR::isPlayerInBind()) {
         mNextStateCounter++;
     } else {
         mNextStateCounter = 0;

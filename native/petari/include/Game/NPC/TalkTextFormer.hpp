@@ -18,7 +18,7 @@ public:
 
     LayoutActor* mHostActor;
     const char16_t* mMsg;
-    s32 _8;
+    s32 mFormMode;
     const char* mPaneName;
 };
 

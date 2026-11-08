@@ -10,12 +10,12 @@ public:
     void update();
     void setPattern(const void*, const RumblePattern&, u32, bool);
 
-    const RumblePattern* _0;
-    bool _4;
-    u32 _8;
-    s16 _C;
+    const RumblePattern* mPattern;
+    bool mIsLoop;
+    u32 mSerial;
+    s16 mStep;
     u8 mStrength;
-    const void* _10;
+    const void* mOwner;
 };
 
 class InputRumble {
@@ -36,9 +36,9 @@ public:
 
     PlayerInput* mPad;
     u8 mStrength;
-    u32 _C;
+    u32 mSerial;
     RumbleChannel mChannel[8];
-    s32 _BC;
+    s32 mStopTimer;
 
 private:
     static InputRumble** sInstanceForCallback;

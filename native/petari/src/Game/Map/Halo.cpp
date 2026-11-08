@@ -18,7 +18,7 @@ namespace NrvPowerStarHalo {
 };  // namespace NrvPowerStarHalo
 
 namespace {
-    static const HaloParam sParams[] = {{"ZoneHalo", 70.0f, 20.0f, 4.0f}, {"PowerStarHalo", 80.0f, 20.0f, 30.0f}};
+    static const HaloParam sParams[] = {{"ZoneHalo", 4.0f}, {"PowerStarHalo", 30.0f}};
 
     static const HaloParam* getParam(const char* pName) {
         for (u32 i = 0; i < ARRAY_SIZE(sParams); i++) {

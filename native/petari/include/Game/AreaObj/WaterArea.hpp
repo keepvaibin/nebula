@@ -8,7 +8,6 @@ public:
 
     virtual void init(const TableIter&);
 
-    s32 _3C;
 };
 
 class WaterAreaMgr : public AreaObjMgr {

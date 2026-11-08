@@ -11,13 +11,13 @@
 #include <nebula_geometry.hpp>
 
 TripodBossFixPartsBase::TripodBossFixPartsBase(const char* pName)
-    : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f), mBreakMovement(), mJointID(-1), _D0(0.0f, 0.0f, 0.0f), mClippingRadius(), _E0(), _E1() {
-    _8C.identity();
+    : LiveActor(pName), mLocalPos(0.0f, 0.0f, 0.0f), mBreakMovement(), mJointID(-1), mClipCenter(0.0f, 0.0f, 0.0f), mClippingRadius(), mIsActive() {
+    mMtx.identity();
 }
 
 void TripodBossFixPartsBase::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    _BC = mPosition;
+    mLocalPos = mPosition;
     MR::getPlacementArg0NoInit(rIter, &mJointID);
     MR::addTripodBossParts(this);
     MR::invalidateClipping(this);
@@ -33,12 +33,12 @@ void TripodBossFixPartsBase::initClippingSphere() {
     Box3f boundingBox;
     MR::calcModelBoundingBox(&boundingBox, this);
 
-    _D0 = (boundingBox.i + boundingBox.f) * 0.5f;
-    mClippingRadius = _D0.distance(boundingBox.i);
+    mClipCenter = (boundingBox.i + boundingBox.f) * 0.5f;
+    mClippingRadius = mClipCenter.distance(boundingBox.i);
 }
 
 void TripodBossFixPartsBase::setClippingSphere(const Vec3f& a1, f32 radius) {
-    _D0 = a1;
+    mClipCenter = a1;
     mClippingRadius = radius;
 }
 
@@ -51,7 +51,7 @@ void TripodBossFixPartsBase::makeActorDead() {
 }
 
 void TripodBossFixPartsBase::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _8C);
+    MR::setBaseTRMtx(this, mMtx);
 }
 
 bool TripodBossFixPartsBase::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -65,7 +65,7 @@ bool TripodBossFixPartsBase::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
 }
 
 void TripodBossFixPartsBase::calcTripodLocalMatrix(Pos3f* pMtx) {
-    MR::makeMtxTR(*pMtx, _BC, mRotation);
+    MR::makeMtxTR(*pMtx, mLocalPos, mRotation);
 }
 
 void TripodBossFixPartsBase::activateTripodBoss() {
@@ -81,21 +81,21 @@ void TripodBossFixPartsBase::startBreakMovement() {
 void TripodBossFixPartsBase::updateBreakMovementMatrix() {
     mBreakMovement->movement();
 
-    _8C = mBreakMovement->_8C;
-    _8C.getTrans(mPosition);
+    mMtx = mBreakMovement->mMtx;
+    mMtx.getTrans(mPosition);
 }
 
 void TripodBossFixPartsBase::updateTripodMatrix() {
-    calcTripodLocalMatrix(&_8C);
-    MR::concatTripodBossAttachJointMatrix(&_8C, mJointID);
-    _8C.getTrans(mPosition);
+    calcTripodLocalMatrix(&mMtx);
+    MR::concatTripodBossAttachJointMatrix(&mMtx, mJointID);
+    mMtx.getTrans(mPosition);
 
-    if (!_E0) {
+    if (!mIsActive) {
         return;
     }
 
     Vec3f mul;
-    _8C.mult(_D0, mul);
+    mMtx.mult(mClipCenter, mul);
 
     if (MR::isJudgedToClipFrustum(mul, mClippingRadius)) {
         MR::hideModelAndOnCalcAnim(this);

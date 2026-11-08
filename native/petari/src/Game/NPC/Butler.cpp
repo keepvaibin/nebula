@@ -49,17 +49,17 @@ namespace NrvButler {
 
 Butler::Butler(const char* pName) : NPCActor(pName) {
     mTalkMessage = nullptr;
-    _160 = false;
-    _164 = 0;
-    _168 = 0;
+    mIsStarPieceLecture = false;
+    mStarPieceHitCount = 0;
+    mReplaceStep = 0;
     mButlerState = nullptr;
-    _170 = false;
-    _171 = false;
+    mIsAstroDome = false;
+    mIsPointed = false;
 }
 
 void Butler::init(const TableIter& rIter) {
     const char* dome;
-    MR::getPlacementArg0NoInit(rIter, &_170);
+    MR::getPlacementArg0NoInit(rIter, &mIsAstroDome);
     NPCActorCaps caps = "Butler";
     caps.setDefault();
     caps.mSensorJoint = "Body";
@@ -71,7 +71,7 @@ void Butler::init(const TableIter& rIter) {
     caps.mBinder = 0;
     NPCActor::initialize(rIter, caps);
     setDefaults();
-    _13C = "Spin";
+    mReactionAction = "Spin";
     mParam.setMoveAction("Wait", "Wait");
     mParam.setTalkAction("Talk", "Talk");
     MR::useStageSwitchWriteA(this, rIter);
@@ -87,7 +87,7 @@ void Butler::init(const TableIter& rIter) {
     mButlerState->init();
     initTalkCtrlArray(rIter);
 
-    if (_170) {
+    if (mIsAstroDome) {
         initForAstroDome(rIter);
     } else {
         initForAstroGalaxy(rIter);
@@ -175,9 +175,9 @@ void Butler::startDemoDomeLecture2() {
 }
 
 void Butler::startDemoStarPiece1() {
-    _160 = true;
-    _164 = false;
-    _168 = false;
+    mIsStarPieceLecture = true;
+    mStarPieceHitCount = false;
+    mReplaceStep = false;
     MR::setSensorRadius(this, "Body", 100.0f);
     MR::onSwitchB(this);
     MR::invalidateClipping(this);
@@ -192,7 +192,7 @@ void Butler::startDemoStarPiece2() {
     static_cast< StarPieceGroup* >(MR::getPairedGroupMember(this))->forceKillStarPieceAll(false);
     MR::getPairedGroupMember(this)->kill();
 
-    _160 = false;
+    mIsStarPieceLecture = false;
 
     MR::invalidateClipping(this);
     LiveActor::appear();
@@ -217,7 +217,7 @@ bool Butler::messageBranchFunc(u32 msg) {
     const char* triLeg;
     switch (msg) {
     case 0:
-        return _160;
+        return mIsStarPieceLecture;
     case 1:
         stupidBool = false;
         triLeg = "TriLegLv1Galaxy";
@@ -232,7 +232,7 @@ bool Butler::messageBranchFunc(u32 msg) {
 }
 
 void Butler::control() {
-    if (_160) {
+    if (mIsStarPieceLecture) {
         if (!MR::isDemoActive()) {
             MR::requestStarPieceLectureGuidance();
             MR::requestCounterLayoutAppearanceForTicoEat(false);
@@ -241,25 +241,25 @@ void Butler::control() {
         tryReplaceStarPieceIfExecLecture();
     }
 
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_BUTLER_TRAMPLED");
     }
 
     if (NPCActor::isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         MR::startSound(this, "SE_SV_BUTLER_POINT");
     }
 
-    if (_160) {
-        bool temp = _171;
+    if (mIsStarPieceLecture) {
+        bool temp = mIsPointed;
         if (MR::isStarPointerPointing1P(this, "弱", false, false)) {
-            _171 = true;
+            mIsPointed = true;
         } else {
-            _171 = false;
+            mIsPointed = false;
         }
 
-        if (!temp && _171 == 1) {
+        if (!temp && mIsPointed == 1) {
             MR::startSystemSE("SE_SY_TICOFAT_POINT");
         }
     }
@@ -268,14 +268,14 @@ void Butler::control() {
 }
 
 bool Butler::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (_160 || MR::isOnGameEventFlagEndButlerStarPieceLecture()) {
+    if (mIsStarPieceLecture || MR::isOnGameEventFlagEndButlerStarPieceLecture()) {
         if (MR::isMsgLockOnStarPieceShoot(msg)) {
             return true;
         } else if (MR::isMsgStarPieceReflect(msg)) {
             return false;
         } else if (MR::isMsgStarPieceAttack(msg)) {
-            if (_160) {
-                _164++;
+            if (mIsStarPieceLecture) {
+                mStarPieceHitCount++;
                 if (tryStartStarPieceReaction()) {
                     MR::startSystemSE("SE_SY_STAR_PIECE_STOCK_MAX");
                 }
@@ -403,9 +403,9 @@ void Butler::tryReplaceStarPieceIfExecLecture() {
         return;
     }
 
-    _168++;
+    mReplaceStep++;
 
-    if (_168 != 120) {
+    if (mReplaceStep != 120) {
         return;
     }
 
@@ -413,24 +413,24 @@ void Butler::tryReplaceStarPieceIfExecLecture() {
 
     MR::startSystemSE("SE_SY_LECT_STAR_PIECE_APR");
 
-    _168 = 0;
+    mReplaceStep = 0;
 }
 
 bool Butler::tryStartStarPieceReaction() {
     bool isNerveOn = isNerve(mWaitNerve) || isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
 
-    if (isNerveOn && _164 <= 5) {
+    if (isNerveOn && mStarPieceHitCount <= 5) {
         setNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
-        return (_164 >= 5);
+        return (mStarPieceHitCount >= 5);
     } else {
         isNerveOn = isNerve(mWaitNerve) || isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction));
 
-        if (!isNerveOn && _164 == 5) {
+        if (!isNerveOn && mStarPieceHitCount == 5) {
             MR::requestStartTimeKeepDemoMarioPuppetable(this, "スターピース解説後半", nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
             return true;
         }
 
-        if (_164 > 5 && !isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction)) && !isNerve(GET_NERVE(Butler, ButlerNrvWaitStartDemo))) {
+        if (mStarPieceHitCount > 5 && !isNerve(GET_NERVE(Butler, ButlerNrvStarPieceReaction)) && !isNerve(GET_NERVE(Butler, ButlerNrvWaitStartDemo))) {
             MR::requestStartTimeKeepDemoMarioPuppetable(this, "スターピース解説後半", nullptr, GET_NERVE(Butler, ButlerNrvWaitStartDemo), nullptr);
             return true;
         } else {
@@ -442,12 +442,12 @@ bool Butler::tryStartStarPieceReaction() {
 }
 
 void Butler::exeStarPieceReaction() {
-    bool reaction = _160 && _164 >= 5;
+    bool reaction = mIsStarPieceLecture && mStarPieceHitCount >= 5;
 
     if (MR::isFirstStep(this)) {
         mButlerState->appear();
         if (reaction) {
-            mButlerState->_14 = false;
+            mButlerState->mIsTalkForce = false;
         }
     }
 

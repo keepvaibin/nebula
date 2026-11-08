@@ -73,7 +73,7 @@ void TreasureBoxCracked::init(const TableIter& rIter) {
     MR::initCollisionParts(this, "Top", getSensor("body"), mTopMtx.toMtxPtr());
     mBoxCollider = MR::createCollisionPartsFromLiveActor(this, "Box", getSensor("body"), MR::CollisionScaleType_Unk2);
     MR::validateCollisionParts(mBoxCollider);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
 
     if (mBoxType == 2) {

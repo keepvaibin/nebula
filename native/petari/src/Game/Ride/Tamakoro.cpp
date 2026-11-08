@@ -58,14 +58,12 @@ namespace {
     static const f32 sCollisionStrongPower = 60.0f;
     static const f32 sCollisionMiddlePower = 25.0f;
     static const f32 sCollisionWeakPower = 5.0f;
-    // static const f32 sStampReactionH =
     static const f32 sStampReactionV = 30.0f;
     static const f32 sStampReactionInvalidSpeed = 15.0f;
     static const f32 sExplosionReactionH = 20.0f;
     static const f32 sExplosionReactionV = 40.0f;
     static const f32 sRaidRailFastSpeed = 30.0f;
     static const f32 sRollBckRate = 1.5f;
-    // static const f32 sRollMaxBckRate = ;
     static const s32 sDashRailTime = 40;
     static const f32 sDashRailFric = 0.99f;
     static const f32 sDashBallRollSpeed = 60.0f;
@@ -74,9 +72,7 @@ namespace {
     static const s32 sForceBindEndTime = 90;
     static const f32 sMarioUpAdjustRate = 0.1f;
     static const f32 sMarioFrontAdjustRate = 0.25f;
-    // static const f32 sStandDirMaxAccelDegree = ;
     static const f32 sStandDirInterRate = 0.02f;
-    // static const ___ sMarioAccelDir = ; // ????
     static const f32 sMarioUpperYAccel = 5.0f;
     static const f32 sMarioUpperYFric = 0.9f;
     static const f32 sRingMaxDegree = 45.0f;
@@ -124,7 +120,7 @@ void Tamakoro::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Ride, MR::CalcAnimType_Ride, MR::DrawBufferType_IndirectMapObjStrongLight, MR::DrawType_None);
     MR::makeQuatFromRotate(&mBallRotateQuat, this);
     MR::initShadowVolumeSphere(this, mBaseRadius);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSensor();
     initSound(4, false);
     initJointControl();

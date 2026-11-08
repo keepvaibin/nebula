@@ -84,8 +84,8 @@ namespace GameLightSignal {
             if (director->mDefaultAreaLight != nullptr) {
                 actorLightValues(NEBULA_LIGHT_AREA, director->mDefaultAreaLight->mPlanetLight);
             }
-            if (director->_1C != nullptr && director->_1C->mAreaLightInf != nullptr) {
-                actorLightValues(NEBULA_LIGHT_PLAYER, *director->_1C->getActorLight());
+            if (director->mPlayerLightCtrl != nullptr && director->mPlayerLightCtrl->mAreaLightInf != nullptr) {
+                actorLightValues(NEBULA_LIGHT_PLAYER, *director->mPlayerLightCtrl->getActorLight());
             }
         }
         if (sStarCore != nullptr && !MR::isDead(sStarCore)) {

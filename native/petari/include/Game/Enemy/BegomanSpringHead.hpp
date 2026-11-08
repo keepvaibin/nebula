@@ -5,13 +5,13 @@
 class BegomanHead : public PartsModel {
 public:
     BegomanHead(LiveActor* pHost, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool useHostLight)
-        : PartsModel(pHost, pName, pModelName, pMtx, drawBufferType, useHostLight), _9C() {
+        : PartsModel(pHost, pName, pModelName, pMtx, drawBufferType, useHostLight), mHostScale() {
     }
 
     virtual ~BegomanHead();
     virtual void calcAndSetBaseMtx();
 
-    Vec3f* _9C;
+    Vec3f* mHostScale;
 };
 
 class BegomanSpringHead : public BegomanHead {

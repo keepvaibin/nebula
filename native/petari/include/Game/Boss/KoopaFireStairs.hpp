@@ -21,8 +21,8 @@ public:
 
     bool mIsKoopaJr;
     const KoopaBattleMapStair* mStair;
-    Vec3f _94;
-    Vec3f _A0;
-    Vec3f _AC;
+    Vec3f mFront;
+    Vec3f mStartPos;
+    Vec3f mFlyUpDir;
     ModelObj* mBreakModel;
 };

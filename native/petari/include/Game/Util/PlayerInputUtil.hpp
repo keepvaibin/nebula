@@ -93,7 +93,7 @@ namespace MR {
 
     bool testSystemTriggerB();
 
-    bool testDPDMenuPadDecideTrigger();
+    bool testPointerMenuPadDecideTrigger();
 
     bool testFpViewStartTrigger();
 

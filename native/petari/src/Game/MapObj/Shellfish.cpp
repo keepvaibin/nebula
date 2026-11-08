@@ -34,11 +34,11 @@ namespace NrvShellfish {
     NEW_NERVE(ShellfishNrvCloseSignal, Shellfish, CloseSignal);
     NEW_NERVE(ShellfishNrvClose, Shellfish, Close);
     NEW_NERVE(ShellfishNrvShock, Shellfish, Shock);
-    NEW_NERVE_ONEND(ShellfishNrvDPDOpen, Shellfish, DPDOpen, DPDOpen);
+    NEW_NERVE_ONEND(ShellfishNrvPointerOpen, Shellfish, PointerOpen, PointerOpen);
 };  // namespace NrvShellfish
 
 Shellfish::Shellfish(const char* pName)
-    : LiveActor(pName), mScaleController(), mStarPointerState(), mItem(), mItemType(), mIsItemBound(), mLowCollision(), _A4() {
+    : LiveActor(pName), mScaleController(), mStarPointerState(), mItem(), mItemType(), mIsItemBound(), mLowCollision() {
 }
 
 void Shellfish::init(const TableIter& rIter) {
@@ -63,7 +63,7 @@ void Shellfish::init(const TableIter& rIter) {
     shadowPosition.scaleAdd(5.0f, up, shadowPosition);
     MR::setShadowDropPosition(this, nullptr, shadowPosition);
     MR::offCalcShadow(this, nullptr);
-    initEffectKeeper(2, nullptr, false);
+    initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
     MR::initStarPointerTarget(this, 260.0f, Vec3f(0.0f, 130.0f, -50.0f));
@@ -83,7 +83,7 @@ void Shellfish::initAfterPlacement() {
 void Shellfish::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
     Vec3f scale;
-    scale.mul(mScaleController->_C, mScale);
+    scale.mul(mScaleController->mScale, mScale);
     MR::setBaseScale(this, scale);
 }
 
@@ -92,7 +92,7 @@ void Shellfish::control() {
 
     if ((isNerve(GET_NERVE(Shellfish, ShellfishNrvOpenWait)) || isNerve(GET_NERVE(Shellfish, ShellfishNrvCloseSignal))) &&
         mStarPointerState->tryStartPointBind()) {
-        setNerve(GET_NERVE(Shellfish, ShellfishNrvDPDOpen));
+        setNerve(GET_NERVE(Shellfish, ShellfishNrvPointerOpen));
     }
 }
 
@@ -184,11 +184,11 @@ void Shellfish::exeShock() {
     }
 }
 
-void Shellfish::exeDPDOpen() {
+void Shellfish::exePointerOpen() {
     MR::updateActorStateAndNextNerve(this, mStarPointerState, GET_NERVE(Shellfish, ShellfishNrvOpenWait));
 }
 
-void Shellfish::endDPDOpen() {
+void Shellfish::endPointerOpen() {
     mStarPointerState->kill();
 }
 

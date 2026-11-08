@@ -20,7 +20,7 @@ namespace NrvLavaStrangeRock {
 LavaStrangeRock::~LavaStrangeRock() {
 }
 
-LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_3), _90(), mLodCtrlPlanet() {
+LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_3), mHitType(), mLodCtrlPlanet() {
 }
 
 void LavaStrangeRock::init(const TableIter& rIter) {
@@ -30,11 +30,11 @@ void LavaStrangeRock::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &arg0);
 
     if (arg0 + 1 <= 1U) {
-        _90 = 0;
+        mHitType = 0;
     } else if (arg0 == 1) {
-        _90 = 1;
+        mHitType = 1;
     } else if (arg0 == 2) {
-        _90 = 2;
+        mHitType = 2;
     }
 
     const char* objName = nullptr;
@@ -88,13 +88,13 @@ void LavaStrangeRock::initModelAndClipping(const TableIter& rIter) {
 void LavaStrangeRock::initEffect() {
     switch (mRockType) {
     case Type_0:
-        initEffectKeeper(1, "LavaStrangeRock", false);
+        initEffectKeeper(1, "LavaStrangeRock");
         break;
     case Type_1:
-        initEffectKeeper(1, "LavaStrangeRockL", false);
+        initEffectKeeper(1, "LavaStrangeRockL");
         break;
     case Type_2:
-        initEffectKeeper(1, "LavaStrangeRockTable", false);
+        initEffectKeeper(1, "LavaStrangeRockTable");
         break;
     }
 }
@@ -130,7 +130,7 @@ void LavaStrangeRock::exeWait() {
         break;
     }
 
-    if (_90 == 1) {
+    if (mHitType == 1) {
         if (!MR::isPlayerInRush()) {
             return;
         }
@@ -151,7 +151,7 @@ void LavaStrangeRock::exeWait() {
         }
 
         kill();
-    } else if (_90 == 2) {
+    } else if (mHitType == 2) {
         Vec3f hitCheckDir;
 
         if (MR::checkHitSegmentSphere(*MR::getPlayerCenterPos(), mPosition, mPosition + hitOffset, radius, &hitCheckDir)) {

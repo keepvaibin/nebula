@@ -20,8 +20,8 @@ public:
     void exeOnGround();
     void exeRising();
 
-    Vec3f _8C;
-    Vec3f _98;
+    Vec3f mUpperPos;
+    Vec3f mLowerPos;
     s32 mFallingTime;
     s32 mHoldTime;
     f32 mMovementDist;

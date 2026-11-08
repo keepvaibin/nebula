@@ -94,17 +94,11 @@ void SegmentGravity::setEdgeValid(u32 index, bool val) {
 void SegmentGravity::updateLocalParam() {
     Rot3f rot;
 
-    // Both of these variables are present because the codegen indicates they should be.
-    // In the final game, however, they have no behavioral effect and are not given any storage.
-    bool artifact = true;
-    bool& rArtifact = artifact;
-
     mValidSideCos = MR::cosDegree(0.5f * mValidSideDegree);
 
     Vec3f localAxis = mGravityPoints[1] - mGravityPoints[0];
     MR::normalizeOrZero(&localAxis);
     if (MR::isNearZero(localAxis)) {
-        rArtifact = false;
         mOppositeSideVecOrtho.zero();
         return;
     }
@@ -118,10 +112,5 @@ void SegmentGravity::updateLocalParam() {
 
     rot.identity();
     rot.setRotate(localAxis, 0.5f * mValidSideDegree * (PI / 180));
-
-    // Necessary to force the compiler to load the arguments to `mult` in the correct order
-    rArtifact = false;
-    if (!artifact) {
-        rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
-    }
+    rot.mult(mOppositeSideVecOrtho, mOppositeSideVecOrtho);
 }

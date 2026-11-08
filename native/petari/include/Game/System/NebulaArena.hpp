@@ -12,7 +12,8 @@
 
 class NebulaArena : public JKRDisposer {
 public:
-    // A new arena under `pParent`, which destroys it when it goes.
+    // A new arena under `pParent`, which destroys it when it goes. Only the root (null parent) changes the
+    // system and current arenas.
     static NebulaArena* create(NebulaArena* pParent);
     static void destroy(NebulaArena* pArena);
 

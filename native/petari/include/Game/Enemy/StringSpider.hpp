@@ -28,12 +28,12 @@ public:
 
     s32 getSearchToAttackTime();
     void doSwingAction(f32, bool);
-    void reactDPD();
+    void reactPointer();
     void reactStringForce();
     bool isOverStringLength(Vec3f*, f32*);
     Vec3f calcToRootVector();
     void calcPosture(f32, bool);
-    void tearDownDpdGripped();
+    void tearDownPointerGripped();
     void extendString();
     void shortenString(f32);
     bool reactSpinHit(HitSensor*, HitSensor*);
@@ -52,21 +52,21 @@ public:
     void exeTrampleFall();
     void exeWallHitDeath();
     void exeBlow();
-    void exeDpdGripped();
-    void endDpdGripped();
+    void exePointerGripped();
+    void endPointerGripped();
 
     SpinHitController* mSpinHitController;
     AnimScaleController* mScaleController;
     AnimStampController* mStampController;
     StringSpiderString* mString;
     FixedPosition* mFixedPos;
-    Quat4f _A0;
-    f32 _B0;
-    f32 _B4;
-    bool _B8;
-    s32 _BC;
-    Vec3f* _C0;
-    Vec3f* _C4;
+    Quat4f mPoseQuat;
+    f32 mStringLengthMax;
+    f32 mStringLength;
+    bool mIsPointerPulled;
+    s32 mPointerStep;
+    Vec3f* mSwingFront;
+    Vec3f* mSwingSide;
 };
 
 class StringSpiderString : public LiveActor {
@@ -75,6 +75,6 @@ public:
 
     virtual void calcAndSetBaseMtx();
 
-    Quat4f _8C;
-    Vec3f _9C;
+    Quat4f mRotateQuat;
+    Vec3f mRootPos;
 };

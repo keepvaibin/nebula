@@ -16,5 +16,5 @@ public:
     void exeVanish();
     void startInsideCageDemo();
 
-    bool _C4;
+    bool mIsInsideCageDemo;
 };

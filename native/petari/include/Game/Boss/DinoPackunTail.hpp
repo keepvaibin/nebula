@@ -32,9 +32,8 @@ public:
     DinoPackunTailNode** mNodes;
     u32 mMaxNodes;
     u32 mNumNodes;
-    f32 _C;
-    f32 _10;
-    f32 _14;
-    f32 _18;
-    u8 _1C;
+    f32 mBendRate;
+    f32 mDistanceRate;
+    f32 mHostVelocityRate;
+    u8 mIsActive;
 };

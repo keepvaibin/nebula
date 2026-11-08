@@ -142,6 +142,8 @@ namespace Nebula.Launcher
             {
                 if (!File.Exists(Path.Combine(Content, "game.pak")))
                     return "Nebula could not find the game content (game.pak). Choose it in Nebula settings.";
+                if (!GameDisc.IsCurrentVersion(Path.Combine(Content, "game.pak")))
+                    return NebulaText.Of("The game content is from another version of Nebula. Run Nebula Setup to read your game again.");
                 if (RuntimeLeaseHeld() && !EndRunningGame())
                     return NebulaText.Of("Nebula is already running.");
                 LaunchOptions.ValidatePair(App);

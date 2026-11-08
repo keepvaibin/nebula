@@ -21,6 +21,5 @@ public:
     void exeRotate();
     void exeRadiateOnly();
 
-    Vec3f _8C;
     s32 mState;
 };

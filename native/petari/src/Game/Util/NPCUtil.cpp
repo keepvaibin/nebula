@@ -129,9 +129,9 @@ namespace MR {
     void decidePose(NPCActor* pActor, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPos, f32 upBlend, f32 frontBlend, f32 posBlend) {
         blendVec(&pActor->mPosition, pActor->mPosition, rPos, posBlend);
         if (upBlend == 1.0f && frontBlend == 1.0f) {
-            makeQuatUpFront(&pActor->_A0, rUp, rFront);
+            makeQuatUpFront(&pActor->mPoseQuat, rUp, rFront);
         } else {
-            blendQuatUpFront(&pActor->_A0, rUp, rFront, upBlend, frontBlend);
+            blendQuatUpFront(&pActor->mPoseQuat, rUp, rFront, upBlend, frontBlend);
         }
     }
 
@@ -240,7 +240,7 @@ namespace MR {
 
     void initDefaultPosAndQuat(NPCActor* pActor, const TableIter& rIter) {
         initDefaultPos(pActor, rIter);
-        makeQuatRotateDegree(&pActor->_A0, pActor->mRotation);
+        makeQuatRotateDegree(&pActor->mPoseQuat, pActor->mRotation);
         pActor->setInitPose();
     }
 
@@ -324,12 +324,12 @@ namespace MR {
 
     void startMoveAction(NPCActor* pActor) {
         if (isExistRail(pActor)) {
-            adjustmentRailCoordSpeed(pActor, pActor->_10C, pActor->_110);
+            adjustmentRailCoordSpeed(pActor, pActor->mRailSpeed, pActor->mRailAccel);
             moveRailRider(pActor);
-            if (pActor->_124) {
-                followRailPoseOnGround(pActor, pActor->_114);
+            if (pActor->mIsRailOnGround) {
+                followRailPoseOnGround(pActor, pActor->mRailPoseRate);
             } else {
-                followRailPose(pActor, pActor->_114, pActor->_114);
+                followRailPose(pActor, pActor->mRailPoseRate, pActor->mRailPoseRate);
             }
 
             if (isRailReachedGoal(pActor)) {
@@ -341,10 +341,10 @@ namespace MR {
     bool tryStartTalkAction(NPCActor* pActor) {
         const char* pAction;
         if (isTalkTalking(pActor->mMsgCtrl)) {
-            if (pActor->mParam._1 && !pActor->turnToPlayer(pActor->mParam._8, pActor->mParam._C, pActor->mParam._10)) {
-                pAction = pActor->mParam._20;
+            if (pActor->mParam.mTurnOnTalk && !pActor->turnToPlayer(pActor->mParam.mTurnSpeed, pActor->mParam.mTiltSpeed, pActor->mParam.mTiltMaxAngle)) {
+                pAction = pActor->mParam.mTalkTurnAction;
             } else {
-                pAction = pActor->mParam._1C;
+                pAction = pActor->mParam.mTalkAction;
             }
         } else {
             return tryStartTurnAction(pActor);
@@ -366,29 +366,29 @@ namespace MR {
         bool movingTalk = false;
         const char* pAction;
         if (isTalkTalking(pTalk) && !isShortTalk(pTalk)) {
-            if (pActor->mParam._1 && !pActor->turnToPlayer(pActor->mParam._8, pActor->mParam._C, pActor->mParam._10)) {
-                pAction = pActor->mParam._20;
+            if (pActor->mParam.mTurnOnTalk && !pActor->turnToPlayer(pActor->mParam.mTurnSpeed, pActor->mParam.mTiltSpeed, pActor->mParam.mTiltMaxAngle)) {
+                pAction = pActor->mParam.mTalkTurnAction;
             } else {
-                pAction = pActor->mParam._1C;
+                pAction = pActor->mParam.mTalkAction;
             }
         } else {
-            if (isNearZero(pActor->_10C) && isNearZero(getRailCoordSpeed(pActor))) {
+            if (isNearZero(pActor->mRailSpeed) && isNearZero(getRailCoordSpeed(pActor))) {
                 return tryStartTalkAction(pActor);
             }
 
             startMoveAction(pActor);
             if (isTalkTalking(pTalk)) {
-                pAction = pActor->_120;
+                pAction = pActor->mMoveTalkAction;
                 movingTalk = true;
             } else {
-                pAction = pActor->_11C;
+                pAction = pActor->mMoveAction;
             }
         }
 
         if (!isNullOrEmptyString(pAction)) {
             bool started = tryStartAction(pActor, pAction);
             if (movingTalk) {
-                setBckRate(pActor, pActor->_118);
+                setBckRate(pActor, pActor->mMoveTalkBckRate);
             } else {
                 setBckRate(pActor, 1.0f);
             }
@@ -401,25 +401,25 @@ namespace MR {
 
     bool tryStartTurnAction(NPCActor* pActor) {
         const char* pAction;
-        if (isNearPlayer(pActor, pActor->mParam._4)) {
-            if (pActor->mParam._0) {
-                if (pActor->turnToPlayer(pActor->mParam._8, pActor->mParam._C, pActor->mParam._10)) {
-                    pAction = pActor->mParam._14;
+        if (isNearPlayer(pActor, pActor->mParam.mNearDistance)) {
+            if (pActor->mParam.mTurnWhenNear) {
+                if (pActor->turnToPlayer(pActor->mParam.mTurnSpeed, pActor->mParam.mTiltSpeed, pActor->mParam.mTiltMaxAngle)) {
+                    pAction = pActor->mParam.mWaitAction;
                 } else {
-                    pAction = pActor->mParam._18;
+                    pAction = pActor->mParam.mWaitTurnAction;
                 }
             } else {
-                pAction = pActor->mParam._14;
+                pAction = pActor->mParam.mWaitAction;
             }
         } else {
-            if (pActor->mParam._0 || pActor->mParam._1) {
-                if (pActor->turnToDefault(pActor->mParam._8)) {
-                    pAction = pActor->mParam._14;
+            if (pActor->mParam.mTurnWhenNear || pActor->mParam.mTurnOnTalk) {
+                if (pActor->turnToDefault(pActor->mParam.mTurnSpeed)) {
+                    pAction = pActor->mParam.mWaitAction;
                 } else {
-                    pAction = pActor->mParam._18;
+                    pAction = pActor->mParam.mWaitTurnAction;
                 }
             } else {
-                pAction = pActor->mParam._14;
+                pAction = pActor->mParam.mWaitAction;
             }
         }
 
@@ -436,11 +436,11 @@ namespace MR {
         }
 
         startMoveAction(pActor);
-        if (isNullOrEmptyString(pActor->_11C)) {
+        if (isNullOrEmptyString(pActor->mMoveAction)) {
             return false;
         }
 
-        return tryStartAction(pActor, pActor->_11C);
+        return tryStartAction(pActor, pActor->mMoveAction);
     }
 };  // namespace MR
 
@@ -448,20 +448,20 @@ namespace MR {
     bool tryStartReaction(NPCActor* pActor) {
         const char* pAction = nullptr;
         bool started = false;
-        if (pActor->_128) {
+        if (pActor->mUseReactionActions) {
             bool trampled = pActor->isTrampledStart();
             if (trampled) {
-                pAction = pActor->_134;
+                pAction = pActor->mTrampleAction;
             } else {
                 bool reaction = pActor->isReactionStart();
                 if (reaction) {
-                    pAction = pActor->_13C;
+                    pAction = pActor->mReactionAction;
                 } else {
                     bool spin = pActor->isSpinAttackedStart();
                     if (spin) {
-                        pAction = pActor->_130;
-                    } else if (pActor->_E4) {
-                        pAction = pActor->_138;
+                        pAction = pActor->mSpinAction;
+                    } else if (pActor->mIsPointed) {
+                        pAction = pActor->mPointingAction;
                     }
                 }
             }
@@ -476,9 +476,9 @@ namespace MR {
                 bool spin = pActor->isSpinAttackedStart();
                 if (spin) {
                     started = tryStartAction(pActor, pAction);
-                } else if (pActor->_E4) {
-                    if (!(pActor->_134 && isActionStart(pActor, pActor->_134)) && !(pActor->_13C && isActionStart(pActor, pActor->_13C)) &&
-                        !(pActor->_130 && isActionStart(pActor, pActor->_130))) {
+                } else if (pActor->mIsPointed) {
+                    if (!(pActor->mTrampleAction && isActionStart(pActor, pActor->mTrampleAction)) && !(pActor->mReactionAction && isActionStart(pActor, pActor->mReactionAction)) &&
+                        !(pActor->mSpinAction && isActionStart(pActor, pActor->mSpinAction))) {
                         bool pointing = pActor->isPointingStart();
                         if (pointing) {
                             started = tryStartAction(pActor, pAction);
@@ -565,19 +565,19 @@ namespace MR {
         switch (getRandom(0, 3)) {
         case 0:
             if (pAction0) {
-                pActor->mParam._1C = pAction0;
+                pActor->mParam.mTalkAction = pAction0;
             }
 
             break;
         case 1:
             if (pAction1) {
-                pActor->mParam._1C = pAction1;
+                pActor->mParam.mTalkAction = pAction1;
             }
 
             break;
         case 2:
             if (pAction2) {
-                pActor->mParam._1C = pAction2;
+                pActor->mParam.mTalkAction = pAction2;
             }
 
             break;
@@ -607,7 +607,7 @@ namespace MR {
     void calcAndSetFloatBaseMtx(NPCActor* pActor, f32 offset) {
         Vec3f up;
         Vec3f pos(pActor->mPosition);
-        pActor->_A0.getYDir(up);
+        pActor->mPoseQuat.getYDir(up);
         up.scale(offset);
         pActor->mPosition.add(up);
         pActor->NPCActor::calcAndSetBaseMtx();
@@ -699,7 +699,7 @@ void TakeOutStar::exeDemo() {
 void TakeOutStar::exeTerm() {
 }
 
-FadeStarter::FadeStarter(NPCActor* pActor, s32 a2) : NerveExecutor("フェード開始制御"), mActor(pActor), _C(), _10(a2) {
+FadeStarter::FadeStarter(NPCActor* pActor, s32 a2) : NerveExecutor("フェード開始制御"), mActor(pActor), mSavedNerve(), mFadeTime(a2) {
     initNerve(GET_NERVE(FadeStarter, FadeStarterNrvFade));
 }
 
@@ -716,11 +716,11 @@ bool FadeStarter::update() {
 void FadeStarter::exeFade() {
     if (MR::isFirstStep(this)) {
         if (!mActor->isEmptyNerve()) {
-            _C = mActor->popNerve();
+            mSavedNerve = mActor->popNerve();
         }
 
         mActor->tryPushNullNerve();
-        MR::closeWipeFade(_10);
+        MR::closeWipeFade(mFadeTime);
     }
 
     if (MR::isWipeActive()) {
@@ -729,12 +729,12 @@ void FadeStarter::exeFade() {
 
     mActor->popNerve();
 
-    if (_C != nullptr) {
-        mActor->pushNerve(_C);
-        _C = nullptr;
+    if (mSavedNerve != nullptr) {
+        mActor->pushNerve(mSavedNerve);
+        mSavedNerve = nullptr;
     }
 
-    MR::openWipeFade(_10);
+    MR::openWipeFade(mFadeTime);
     setNerve(GET_NERVE(FadeStarter, FadeStarterNrvTerm));
 }
 

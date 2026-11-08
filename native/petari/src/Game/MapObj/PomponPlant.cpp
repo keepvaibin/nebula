@@ -10,7 +10,7 @@ namespace {
 
 namespace NrvPomponPlant {
     NEW_NERVE(HostTypeWait, PomponPlant, Wait);
-    NEW_NERVE(HostTypeSwingDpd, PomponPlant, SwingDpd);
+    NEW_NERVE(HostTypeSwingPointer, PomponPlant, SwingPointer);
     NEW_NERVE(HostTypeSwingPlayer, PomponPlant, SwingPlayer);
 };  // namespace NrvPomponPlant
 
@@ -26,7 +26,7 @@ void PomponPlant::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, ::sSensorRadius, Vec3f(::sSensorOffset));
     MR::initStarPointerTarget(this, ::sSensorRadius, Vec3f(::sSensorOffset));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     MR::getPlacementArg0NoInit(rIter, &mItemType);
     MR::getPlacementArg1NoInit(rIter, &mItemCount);
@@ -76,11 +76,11 @@ bool PomponPlant::tryGenItem() {
 
 void PomponPlant::exeWait() {
     if (MR::tryStarPointerCheckWithoutRumble(this, false)) {
-        setNerve(GET_NERVE(PomponPlant, HostTypeSwingDpd));
+        setNerve(GET_NERVE(PomponPlant, HostTypeSwingPointer));
     }
 }
 
-void PomponPlant::exeSwingDpd() {
+void PomponPlant::exeSwingPointer() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_POMPON_PLANT_DPD_HIT");
         MR::startBck(this, "DpdHit");

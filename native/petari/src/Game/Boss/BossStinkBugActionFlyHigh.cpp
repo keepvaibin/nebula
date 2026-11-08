@@ -34,11 +34,11 @@ namespace NrvBossStinkBugActionFlyHigh {
 };  // namespace NrvBossStinkBugActionFlyHigh
 
 BossStinkBugActionFlyHigh::BossStinkBugActionFlyHigh(BossStinkBug* pStinkBug)
-    : BossStinkBugActionBase("ボスカメムシ高空戦", pStinkBug), _68(0), _6C(false), _70(0) {
-    _38 = 20.0f;
-    _3C = 1000.0f;
-    _44 = -400.0f;
-    _68 = calcKeepRollTime(60);
+    : BossStinkBugActionBase("ボスカメムシ高空戦", pStinkBug), mRollWaitStep(0), mRollNum(0) {
+    mFlySpeed = 20.0f;
+    mHeightOffset = 1000.0f;
+    mLocalHeightOffset = -400.0f;
+    mRollWaitStep = calcKeepRollTime(60);
     initNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvFly));
 }
 
@@ -98,8 +98,8 @@ bool BossStinkBugActionFlyHigh::receiveOtherMsg(u32 msg, HitSensor* pSender, Hit
             return true;
         }
     } else if (isEnableAttack() && (MR::isMsgWallTouch(msg) || MR::isMsgCeilTouch(msg))) {
-        if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->_EC, 45.0f)) {
-            if (MR::sendMsgEnemyAttackStrongToDir(pSender, pReceiver, getHost()->_EC * 50.0f)) {
+        if (MR::isFaceToTargetDegree(getHost(), MR::getSensorPos(pSender), getHost()->mFront, 45.0f)) {
+            if (MR::sendMsgEnemyAttackStrongToDir(pSender, pReceiver, getHost()->mFront * 50.0f)) {
                 if (isNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvGroundRun))) {
                     getHost()->validateCollisionHitOnly();
                     setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvToFly));
@@ -130,14 +130,14 @@ void BossStinkBugActionFlyHigh::exeFlyDash() {
 void BossStinkBugActionFlyHigh::exeFly() {
     throwBomb(40);
     updateFly();
-    if (_70 >= 2) {
+    if (mRollNum >= 2) {
         if (BossStinkBugFunction::isExistPlayerBack(getHost(), 1500.0f)) {
             setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvTurnSign));
-            _70 = 0;
+            mRollNum = 0;
         }
-    } else if (MR::isGreaterStep(this, _68)) {
+    } else if (MR::isGreaterStep(this, mRollWaitStep)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvRollSign));
-        _70++;
+        mRollNum++;
     }
 }
 
@@ -185,7 +185,7 @@ void BossStinkBugActionFlyHigh::exeRoll() {
 
 void BossStinkBugActionFlyHigh::exeRollWait() {
     throwBomb(40);
-    if (updateFlyRollWait(_68)) {
+    if (updateFlyRollWait(mRollWaitStep)) {
         setNerve(GET_NERVE(BossStinkBugActionFlyHigh, BossStinkBugActionFlyHighNrvRollEnd));
     }
 }

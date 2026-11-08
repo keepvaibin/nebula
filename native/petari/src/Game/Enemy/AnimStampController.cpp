@@ -16,39 +16,39 @@ namespace NrvAnimStampController {
     NEW_NERVE(HostNrvAnimEnd, AnimStampController, AnimEnd);
 };  // namespace NrvAnimStampController
 
-AnimStampController::AnimStampController() : NerveExecutor("つぶれアニメコントローラ"), _8(0, 0, 1) {
+AnimStampController::AnimStampController() : NerveExecutor("つぶれアニメコントローラ"), mDir(0, 0, 1) {
     init(8, 0.2f, 1.5f, 0.125f, 4.0f, 0.12, 4.0f);
 }
 
-void AnimStampController::init(s32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7) {
-    _44 = a1;
-    _14[3][1] = a2;
-    _14[3][2] = a3;
-    _14[3][3] = a4;
-    _14[4][0] = a5;
-    _14[4][1] = a6;
-    _14[4][2] = a7;
-    _14.identity();
+void AnimStampController::init(s32 animStep, f32 baseY, f32 baseXZ, f32 amplitudeY, f32 freqY, f32 amplitudeXZ, f32 freqXZ) {
+    mAnimStep = animStep;
+    mBaseY = baseY;
+    mBaseXZ = baseXZ;
+    mAmplitudeY = amplitudeY;
+    mFreqY = freqY;
+    mAmplitudeXZ = amplitudeXZ;
+    mFreqXZ = freqXZ;
+    mMtx.identity();
     initNerve(GET_NERVE(AnimStampController, HostNrvAnimEnd));
 }
 
 void AnimStampController::startAnim(const Vec3f& rVec) {
-    _8.set(rVec);
+    mDir.set(rVec);
     setNerve(GET_NERVE(AnimStampController, HostNrvAnim));
-    _14.identity();
+    mMtx.identity();
 }
 
 void AnimStampController::exeAnim() {
-    Vec3f vib = Vec3f(_14[3][2], _14[3][1], _14[3][2]);
-    if (MR::isLessStep(this, _44)) {
-        vib.x = MR::getReduceVibrationValue(getNerveStep(), _44, _14[3][2], _14[4][1], _14[4][2]);
-        vib.y = MR::getReduceVibrationValue(getNerveStep(), _44, _14[3][1], _14[3][3], _14[4][0]);
-        vib.z = MR::getReduceVibrationValue(getNerveStep(), _44, _14[3][2], _14[4][1], _14[4][2]);
+    Vec3f vib = Vec3f(mBaseXZ, mBaseY, mBaseXZ);
+    if (MR::isLessStep(this, mAnimStep)) {
+        vib.x = MR::getReduceVibrationValue(getNerveStep(), mAnimStep, mBaseXZ, mAmplitudeXZ, mFreqXZ);
+        vib.y = MR::getReduceVibrationValue(getNerveStep(), mAnimStep, mBaseY, mAmplitudeY, mFreqY);
+        vib.z = MR::getReduceVibrationValue(getNerveStep(), mAnimStep, mBaseXZ, mAmplitudeXZ, mFreqXZ);
     } else {
         setNerve(GET_NERVE(AnimStampController, HostNrvAnimEnd));
     }
 
-    MR::scaleMtxToDir(&_14, _8, vib);
+    MR::scaleMtxToDir(&mMtx, mDir, vib);
 }
 
 void AnimStampController::exeAnimEnd() {

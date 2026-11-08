@@ -28,7 +28,7 @@ namespace {
     void setTalkAnimCtrlInterpole(LiveActor* pActor, s32 interpole) {
         DemoExecutor* executor = DemoFunction::findDemoExecutorActive(pActor);
         for (s32 i = 0; i < executor->mTalkAnimCtrl.size(); i++) {
-            executor->mTalkAnimCtrl[i]->_38 = interpole;
+            executor->mTalkAnimCtrl[i]->mInterpole = interpole;
         }
     }
 };  // namespace
@@ -40,16 +40,15 @@ DemoActionInfo::DemoActionInfo() {
     mActionType = 0;
     mPosName = nullptr;
     mAnimName = nullptr;
-    _18 = 128;
+    mCastCapacity = 128;
     mCastCount = 0;
     mCastList = nullptr;
     mFunctors = nullptr;
     mNerves = nullptr;
-    _2C = 0;
-    mCastList = new LiveActor*[_18];
-    mFunctors = new MR::FunctorBase*[_18];
-    mNerves = new const Nerve*[_18];
-    for (s32 i = 0; i < _18; i++) {
+    mCastList = new LiveActor*[mCastCapacity];
+    mFunctors = new MR::FunctorBase*[mCastCapacity];
+    mNerves = new const Nerve*[mCastCapacity];
+    for (s32 i = 0; i < mCastCapacity; i++) {
         mCastList[i] = nullptr;
         mFunctors[i] = nullptr;
         mNerves[i] = nullptr;
@@ -57,15 +56,15 @@ DemoActionInfo::DemoActionInfo() {
 }
 
 void DemoActionInfo::registerCast(LiveActor* pActor) {
-    if (mCastCount == _18) {
-        mCastList = MR::growArray(mCastList, _18);
-        mFunctors = MR::growArray(mFunctors, _18);
-        mNerves = MR::growArray(mNerves, _18);
-        for (s32 i = _18; i < _18 * 2; i++) {
+    if (mCastCount == mCastCapacity) {
+        mCastList = MR::growArray(mCastList, mCastCapacity);
+        mFunctors = MR::growArray(mFunctors, mCastCapacity);
+        mNerves = MR::growArray(mNerves, mCastCapacity);
+        for (s32 i = mCastCapacity; i < mCastCapacity * 2; i++) {
             mFunctors[i] = nullptr;
             mNerves[i] = nullptr;
         }
-        _18 *= 2;
+        mCastCapacity *= 2;
     }
 
     mCastList[mCastCount] = pActor;

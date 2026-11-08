@@ -48,7 +48,7 @@ OceanWaveFloater::OceanWaveFloater(const char* pName) : MapObjActor(pName), mSpr
 void OceanWaveFloater::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
 
-    mForce = new WaveFloatingForce(this, ::getParam(mObjectName)->mStepCount, ::getParam(mObjectName)->mAmplitude, true);
+    mForce = new WaveFloatingForce(this, ::getParam(mObjectName)->mStepCount, ::getParam(mObjectName)->mAmplitude);
 
     MapObjActorInitInfo info = MapObjActorInitInfo();
     info.setupDefaultPos();

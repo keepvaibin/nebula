@@ -52,9 +52,9 @@ public:
 
     PartsModel* mLeafModel;
     s32 mImmunityTime;
-    Vec3f _94;
-    Vec3f _A0;
-    Vec3f _AC;
+    Vec3f mUp;
+    Vec3f mFront;
+    Vec3f mAttackDir;
     JointRumbler* mJointRumbler;
     s32 mNumbTime;
 };

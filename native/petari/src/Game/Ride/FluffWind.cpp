@@ -33,7 +33,7 @@ void FluffWindEffect::initEffectInfo(const Vec3f& rFront, const Vec3f& rUp, cons
     MR::connectToSceneMapObjMovement(this);
     MR::makeMtxFrontUpPos(&mMtx, rUp, rPos, rFront);
     mEffectName = pEffectName;
-    initEffectKeeper(0, pEffectName, false);
+    initEffectKeeper(0, pEffectName);
     MR::setEffectHostMtx(this, mEffectName, mMtx);
     initNerve(GET_NERVE(FluffWindEffect, FluffWindEffectNrvBrowWind));
     if (radius > 0.0f) {
@@ -75,7 +75,7 @@ FluffWind::FluffWind(const char* pName) : LiveActor(pName), mNumEffects(), mEffe
 
 void FluffWind::init(const TableIter& rIter) {
     initRailRider(rIter);
-    initEffectKeeper(0, "FluffWind", false);
+    initEffectKeeper(0, "FluffWind");
     MR::invalidateClipping(this);
     MR::createSceneObj(SceneObj_FluffWindHolder);
     ::getFluffWindHolder()->registerActor(this);

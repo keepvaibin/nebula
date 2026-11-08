@@ -22,7 +22,6 @@
 
 namespace {
     static const f32 sSensorOffsetY = 50.0f;
-    // static const f32 sPlayerSpeedToRideMin =
     static const f32 sPlayerDistanceToValid = 300.0f;
     static const f32 sPlayerSpeedToCatchMin = 6.0f;
     static const f32 sPlayerSpeedToCatchMax = 10.0f;

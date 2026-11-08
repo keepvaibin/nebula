@@ -74,7 +74,7 @@ void Rabbit::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorMtxNpc(this, "body", 8, 60.0f, MR::getJointMtx(this, "Spine"), Vec3f(0.0f, 0.0f, 0.0f));
     MR::initStarPointerTargetAtJoint(this, "Spine", 60.0f, Vec3f(0.0f, 60.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
@@ -127,12 +127,12 @@ void Rabbit::init(const TableIter& rIter) {
         }
     }
 
-    _168 = 0.0f;
-    _16C = 0.0f;
-    _180 = 1.0f;
-    _162 = 1;
-    _160 = false;
-    _164 = 0;
+    mJumpHeight = 0.0f;
+    mJumpSpeed = 0.0f;
+    mJumpScale = 1.0f;
+    mIsLanded = 1;
+    mIsFalling = false;
+    mWaitStep = 0;
 
     switch (mBehavior) {
     case Behavior_Demo1:
@@ -164,22 +164,22 @@ void Rabbit::init(const TableIter& rIter) {
     const char* const pointing = "Pointing";
     const char* const press = "Press";
     const char* const spin = "Spin";
-    mParam._14 = wait;
-    mParam._18 = turn;
+    mParam.mWaitAction = wait;
+    mParam.mWaitTurnAction = turn;
     const char* talk = "Talk";
-    mParam._1C = talk;
-    mParam._20 = turn;
+    mParam.mTalkAction = talk;
+    mParam.mTalkTurnAction = turn;
     setDefaults(reaction, pointing, press, spin);
-    _12C = 450.0f;
+    mSwingReactDist = 450.0f;
 
     if (mBehavior == Behavior_LongJump) {
-        mParam._0 = false;
-        mParam._1 = false;
+        mParam.mTurnWhenNear = false;
+        mParam.mTurnOnTalk = false;
     }
 }
 
 void Rabbit::control() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_RABBIT_TRAMPLED");
     }
@@ -204,10 +204,10 @@ void Rabbit::exeAppear() {
     v8.set(0.0f, ::cAppearHeight, 0.0f);
     path.initFromUpVector(v8, Vec3f(0.0f, 0.0f, 0.0f), -mGravity, ::cAppearHop);
     path.calcPosition(&v9, getNerveStep() / MR::getBckFrameMax(this));
-    _168 = -v9.y;
+    mJumpHeight = -v9.y;
 
     if (MR::isBckStopped(this)) {
-        _168 = 0.0f;
+        mJumpHeight = 0.0f;
         setNerve(GET_NERVE(Rabbit, RabbitNrvAppearLand));
     }
 }
@@ -223,7 +223,7 @@ void Rabbit::exeAppearLand() {
 }
 
 void Rabbit::exeWait() {
-    if (MR::isBckOneTimeAndStopped(this) && _162) {
+    if (MR::isBckOneTimeAndStopped(this) && mIsLanded) {
         MR::startBck(this, "Wait2");
     }
 
@@ -235,7 +235,7 @@ void Rabbit::exeWait() {
                 MR::startBck(this, "Turn");
             }
 
-            MR::blendQuatUpFront(&_A0, -mGravity, playerPos, 0.5f, 0.5f);
+            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, 0.5f, 0.5f);
         }
 
         if (MR::isBckOneTimeAndStopped(this)) {
@@ -245,8 +245,8 @@ void Rabbit::exeWait() {
 
     if (MR::isNearPlayer(this, ::cDistEscape)) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvPreJump));
-    } else if (_164) {
-        _164--;
+    } else if (mWaitStep) {
+        mWaitStep--;
     } else if (!MR::isNearPlayer(this, ::cDistNear)) {
         const f32 nearestCoord = MR::calcNearestRailCoord(this, *MR::getPlayerPos());
         if (nearestCoord < MR::getRailCoord(this) && MR::getRailCoord(this) > 3.0f * ::cProgressSpeed) {
@@ -264,7 +264,7 @@ void Rabbit::exeGoal() {
         Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
-            MR::blendQuatUpFront(&_A0, -mGravity, playerPos, 0.5f, 0.5f);
+            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, 0.5f, 0.5f);
         }
     }
 
@@ -291,7 +291,7 @@ void Rabbit::exeFinish() {
 
 void Rabbit::calcAndSetBaseMtx() {
     Vec3f pos(mPosition);
-    mPosition += mGravity * _168;
+    mPosition += mGravity * mJumpHeight;
     NPCActor::calcAndSetBaseMtx();
     mPosition = pos;
 }
@@ -303,48 +303,48 @@ void Rabbit::calcRailPos(Vec3f* pPos) {
         *pPos = pos;
     }
 
-    _180 = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / 80.0f)));
+    mJumpScale = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / 80.0f)));
 }
 
 bool Rabbit::isNeedTurn(const Vec3f& rA1) {
     Vec3f v2;
-    _A0.getZDir(v2);
+    mPoseQuat.getZDir(v2);
     return MR::diffAngleAbs(rA1, v2) > 0.78539819f;
 }
 
 void Rabbit::updateJump() {
     if (!isNerve(GET_NERVE(Rabbit, RabbitNrvAppear))) {
-        if (_162) {
-            _168 = 0.0f;
+        if (mIsLanded) {
+            mJumpHeight = 0.0f;
             return;
         }
 
-        if (_168 >= 0.0f) {
+        if (mJumpHeight >= 0.0f) {
             if (isNerve(GET_NERVE(Rabbit, RabbitNrvMove)) || isNerve(GET_NERVE(Rabbit, RabbitNrvNear))) {
-                _16C = -::cJumpSpeed * _180;
+                mJumpSpeed = -::cJumpSpeed * mJumpScale;
             } else {
-                _16C = 0.0f;
+                mJumpSpeed = 0.0f;
             }
 
-            _168 = 0.0f;
+            mJumpHeight = 0.0f;
 
-            if (_160) {
-                _162 = 1;
-                _160 = false;
+            if (mIsFalling) {
+                mIsLanded = 1;
+                mIsFalling = false;
                 return;
             }
         } else {
-            _16C += ::cGravity;
+            mJumpSpeed += ::cGravity;
 
-            if (_16C >= 0.0f) {
-                _160 = true;
+            if (mJumpSpeed >= 0.0f) {
+                mIsFalling = true;
             }
         }
 
-        _168 += _16C;
+        mJumpHeight += mJumpSpeed;
 
-        if (_168 >= 0.0f) {
-            _168 = 0.0f;
+        if (mJumpHeight >= 0.0f) {
+            mJumpHeight = 0.0f;
         }
     }
 }
@@ -356,7 +356,7 @@ void Rabbit::exeForwardLand() {
 
     if (MR::isBckStopped(this)) {
         if (!MR::isNearPlayer(this, ::cDistWait)) {
-            _164 = 120;
+            mWaitStep = 120;
             setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
         } else {
             setNerve(GET_NERVE(Rabbit, RabbitNrvPreJump));
@@ -372,7 +372,7 @@ void Rabbit::exePreJump() {
     }
 
     Vec3f railDir(MR::getRailDirection(this));
-    MR::blendQuatUpFront(&_A0, -mGravity, railDir, 0.5f, 0.5f);
+    MR::blendQuatUpFront(&mPoseQuat, -mGravity, railDir, 0.5f, 0.5f);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvMove));
@@ -384,8 +384,8 @@ void Rabbit::exeMove() {
         MR::setRailDirectionToEnd(this);
         MR::startBck(this, "Jump");
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
-        _162 = 0;
-        _170 = ::cProgressSpeed;
+        mIsLanded = 0;
+        mMoveSpeed = ::cProgressSpeed;
         f32 distance = MR::getPlayerPos()->distance(mPosition);
         f32 hopStrengh = 1.0f;
 
@@ -403,21 +403,21 @@ void Rabbit::exeMove() {
             hopStrengh = 1.1f;
         }
 
-        _170 *= hopStrengh;
+        mMoveSpeed *= hopStrengh;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, 20.0f * _170);
+        MR::moveCoord(this, 20.0f * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
-        _174 = railPos - mPosition;
-        MR::normalizeOrZero(&_174);
+        mMoveDir = railPos - mPosition;
+        MR::normalizeOrZero(&mMoveDir);
     }
 
-    mPosition += _174 * _170;
-    _170 *= ::cRegistNormal;
+    mPosition += mMoveDir * mMoveSpeed;
+    mMoveSpeed *= ::cRegistNormal;
 
     if (MR::isRailReachedGoal(this) && (mPosition - MR::getRailPos(this)).length() < 10.0f) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvGoal));
-    } else if (_162) {
+    } else if (mIsLanded) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvForwardLand));
     }
 }
@@ -451,20 +451,20 @@ void Rabbit::exePreJumpBack() {
 void Rabbit::exeNear() {
     if (MR::isFirstStep(this)) {
         MR::setRailDirectionToStart(this);
-        _162 = 0;
+        mIsLanded = 0;
         MR::startBck(this, "Jump");
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
-        _170 = ::cProgressSpeed;
+        mMoveSpeed = ::cProgressSpeed;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, 20.0f * _170);
+        MR::moveCoord(this, 20.0f * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
-        _174 = railPos - mPosition;
-        MR::normalizeOrZero(&_174);
+        mMoveDir = railPos - mPosition;
+        MR::normalizeOrZero(&mMoveDir);
     }
 
-    mPosition += _174 * _170;
-    _170 *= ::cRegistNormal;
+    mPosition += mMoveDir * mMoveSpeed;
+    mMoveSpeed *= ::cRegistNormal;
 
     if (MR::isNearPlayer(this, ::cDistWait)) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
@@ -472,32 +472,32 @@ void Rabbit::exeNear() {
         setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
     } else {
         MR::calcNearestRailCoord(this, *MR::getPlayerPos());
-        if (_162) {
+        if (mIsLanded) {
             setNerve(GET_NERVE(Rabbit, RabbitNrvBackwardLand));
         }
     }
 }
 
 void Rabbit::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED");
         MR::startSound(this, "SE_SV_RABBIT_TRAMPLED");
     }
 
     if (isPointingSe()) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    if (_E4) {
+    if (mIsPointed) {
         MR::startLevelSound(this, "SE_SM_LV_RABBIT_POINT");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SV_RABBIT_SPIN");
         MR::startSound(this, "SE_SM_RABBIT_SPIN");
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::limitedStarPieceHitSound();
         MR::startSound(this, "SE_SM_RABBIT_STAR_PIECE_HIT");
         MR::startSound(this, "SE_SV_RABBIT_STAR_PIECE_HIT");

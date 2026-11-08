@@ -39,16 +39,16 @@ DinoPackunBattleVs2Lv1::DinoPackunBattleVs2Lv1(DinoPackun* pPackun) : DinoPackun
     mTrackFireHolder = nullptr;
     mFireHolder = nullptr;
     mStateFire = nullptr;
-    _28.x = 0.0f;
-    _28.y = 0.0f;
-    _28.z = 0.0f;
-    _34 = 0;
-    _38 = 0;
-    _39 = 0;
-    _3A = 0;
-    _3B = 0;
-    _3C = 0;
-    _3D = 0;
+    mLastFireTailPos.x = 0.0f;
+    mLastFireTailPos.y = 0.0f;
+    mLastFireTailPos.z = 0.0f;
+    mWalkTurnSide = 0;
+    mHasFireTail = 0;
+    mHasFireMouth = 0;
+    mIsShortWalk = 0;
+    mIsAngry = 0;
+    mIsFireOnAwake = 0;
+    mIsCrazyOnAwake = 0;
 }
 
 void DinoPackunBattleVs2Lv1::setTrackFire(DinoPackunTrackFireHolder* pHolder) {
@@ -84,11 +84,11 @@ void DinoPackunBattleVs2Lv1::appear() {
     }
 
     mIsDead = false;
-    if (_3C) {
+    if (mIsFireOnAwake) {
         mStateFire->requestFireDirect();
     }
 
-    if (_3D) {
+    if (mIsCrazyOnAwake) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
     } else {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
@@ -107,7 +107,7 @@ void DinoPackunBattleVs2Lv1::attackSensor(HitSensor* pSender, HitSensor* pReceiv
 
         if (v6) {
             if (sendBlowAttackMessage(pSender, pReceiver, mStateFire->isFire())) {
-                if (_3D) {
+                if (mIsCrazyOnAwake) {
                     return;
                 }
 
@@ -120,7 +120,7 @@ void DinoPackunBattleVs2Lv1::attackSensor(HitSensor* pSender, HitSensor* pReceiv
                   isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
 
         if (v8 && sendHitAttackMessage(pSender, pReceiver, mStateFire->isFire())) {
-            if (!_3D) {
+            if (!mIsCrazyOnAwake) {
                 setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAttackHit));
             }
         } else {
@@ -166,7 +166,7 @@ bool DinoPackunBattleVs2Lv1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
 }
 
 bool DinoPackunBattleVs2Lv1::tryAwake() {
-    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1050.0f, 60.0f)) {
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, 1050.0f, 60.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
         return true;
     }
@@ -176,27 +176,27 @@ bool DinoPackunBattleVs2Lv1::tryAwake() {
 
 void DinoPackunBattleVs2Lv1::exeWalk() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(getHost(), _3B ? "AngryWalk" : "Walk");
-        _34 = _34 == 0;
+        MR::startAction(getHost(), mIsAngry ? "AngryWalk" : "Walk");
+        mWalkTurnSide = mWalkTurnSide == 0;
     }
 
     f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
-    getHost()->mTail->_C = val;
+    getHost()->mTail->mBendRate = val;
 
     if (!tryAwake()) {
-        s32 v3 = _3B ? 75 : 100;
-        s32 v4 = _3B ? 15 : 20;
-        f32 v5 = _3B ? 1.1f : 1.2f;
+        s32 v3 = mIsAngry ? 75 : 100;
+        s32 v4 = mIsAngry ? 15 : 20;
+        f32 v5 = mIsAngry ? 1.1f : 1.2f;
 
-        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (v5 * ((getNerveStep() / v3) % 2 == _34 ? -1.0f : 1.0f)));
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (v5 * ((getNerveStep() / v3) % 2 == mWalkTurnSide ? -1.0f : 1.0f)));
         updateOnOffFireTail(v3, v4, 20);
 
-        s32 v8 = _3A ? 500 : 610;
+        s32 v8 = mIsShortWalk ? 500 : 610;
         if (updateWalk(v8, 1.0f, 50)) {
-            if (!_34) {
-                _10 = 1.0f;
+            if (!mWalkTurnSide) {
+                mSide = 1.0f;
             } else {
-                _10 = -1.0f;
+                mSide = -1.0f;
             }
 
             setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvTurn));
@@ -205,12 +205,12 @@ void DinoPackunBattleVs2Lv1::exeWalk() {
 }
 
 void DinoPackunBattleVs2Lv1::endWalk() {
-    getHost()->mTail->_C = 1.0f;
+    getHost()->mTail->mBendRate = 1.0f;
 }
 
 void DinoPackunBattleVs2Lv1::exeTurn() {
     if (MR::isFirstStep(this)) {
-        if (_10 > 0.0f) {
+        if (mSide > 0.0f) {
             MR::startAction(getHost(), "TurnRight");
         } else {
             MR::startAction(getHost(), "TurnLeft");
@@ -224,7 +224,7 @@ void DinoPackunBattleVs2Lv1::exeTurn() {
 
     if (updateTurn(60, 3.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
-    } else if (MR::isInSightFanPlayer(getHost(), getHost()->_E8, 1050.0f, 40.0f, 80.0f)) {
+    } else if (MR::isInSightFanPlayer(getHost(), getHost()->mFront, 1050.0f, 40.0f, 80.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
     }
 }
@@ -237,9 +237,9 @@ void DinoPackunBattleVs2Lv1::exeFindCrazy() {
         mStateFire->requestFire();
     }
 
-    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 3.0f);
+    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 3.0f);
     MR::calcNerveRate(this, 45);
-    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, 0.0f);
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, 0.0f);
     getHost()->updateNormalVelocity();
     if (MR::isActionEnd(getHost())) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvCrazy));
@@ -248,7 +248,7 @@ void DinoPackunBattleVs2Lv1::exeFindCrazy() {
 
 void DinoPackunBattleVs2Lv1::exeCrazy() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(getHost(), _39 ? "FireChase" : "Chase");
+        MR::startAction(getHost(), mHasFireMouth ? "FireChase" : "Chase");
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_CHASE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
         mStateFire->requestFire();
@@ -259,10 +259,10 @@ void DinoPackunBattleVs2Lv1::exeCrazy() {
     }
 
     f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
-    getHost()->mTail->_C = val;
+    getHost()->mTail->mBendRate = val;
 
-    if (MR::isLessStep(this, 60) || MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 45.0f)) {
-        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 1.2f);
+    if (MR::isLessStep(this, 60) || MR::isInSightConePlayer(getHost(), getHost()->mFront, 2000.0f, 45.0f)) {
+        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 1.2f);
     } else {
         s32 step = getNerveStep();
         s32 div = (step / 60);
@@ -274,29 +274,29 @@ void DinoPackunBattleVs2Lv1::exeCrazy() {
             v4 = 1.0f;
         }
 
-        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (1.4f * v4));
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (1.4f * v4));
     }
 
     getHost()->updateFootPrintNerve(getNerveStep(), 46);
     updateOnOffFireTail(60, 10, 15);
     f32 rate = MR::calcNerveRate(this, 30);
-    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, (1.9f * rate));
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.9f * rate));
     getHost()->updateRunVelocity();
 
     if (MR::isGreaterStep(this, 240)) {
-        if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1600.0f, 45.0f)) {
+        if (MR::isInSightConePlayer(getHost(), getHost()->mFront, 1600.0f, 45.0f)) {
             setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
         }
     }
 }
 
 void DinoPackunBattleVs2Lv1::endCrazy() {
-    getHost()->mTail->_C = 1.0f;
+    getHost()->mTail->mBendRate = 1.0f;
 }
 
 void DinoPackunBattleVs2Lv1::exeChase() {
     if (MR::isFirstStep(this)) {
-        const char* action = (_39) ? "FireChase" : "Chase";
+        const char* action = (mHasFireMouth) ? "FireChase" : "Chase";
         MR::startAction(getHost(), action);
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_CHASE");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
@@ -308,9 +308,9 @@ void DinoPackunBattleVs2Lv1::exeChase() {
     }
 
     f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
-    getHost()->mTail->_C = val;
-    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 60.0f)) {
-        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 1.0f);
+    getHost()->mTail->mBendRate = val;
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, 2000.0f, 60.0f)) {
+        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 1.0f);
     } else {
         s32 step = getNerveStep();
         s32 div = (step / 60);
@@ -322,24 +322,24 @@ void DinoPackunBattleVs2Lv1::exeChase() {
             v4 = 1.0f;
         }
 
-        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (2.0f * v4));
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (2.0f * v4));
     }
 
     getHost()->updateFootPrintNerve(getNerveStep(), 46);
     emitFireTail();
     f32 rate = MR::calcNerveRate(this, 45);
-    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, (1.8f * rate));
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.8f * rate));
     getHost()->updateRunVelocity();
 
     if (MR::isGreaterStep(this, 120)) {
-        if (!MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 60.0f)) {
+        if (!MR::isInSightConePlayer(getHost(), getHost()->mFront, 2000.0f, 60.0f)) {
             setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
         }
     }
 }
 
 void DinoPackunBattleVs2Lv1::endChase() {
-    getHost()->mTail->_C = 1.0f;
+    getHost()->mTail->mBendRate = 1.0f;
 }
 
 void DinoPackunBattleVs2Lv1::exeAttackHit() {
@@ -373,7 +373,7 @@ void DinoPackunBattleVs2Lv1::updateOnOffFireTail(s32 a1, s32 a2, s32 a3) {
 }
 
 bool DinoPackunBattleVs2Lv1::emitFireMouth() {
-    if (!_39) {
+    if (!mHasFireMouth) {
         return false;
     }
 
@@ -397,7 +397,7 @@ bool DinoPackunBattleVs2Lv1::emitFireMouth() {
 }
 
 bool DinoPackunBattleVs2Lv1::emitFireTail() {
-    if (!_38) {
+    if (!mHasFireTail) {
         return false;
     }
 
@@ -405,8 +405,8 @@ bool DinoPackunBattleVs2Lv1::emitFireTail() {
 
     if (fire != nullptr) {
         Vec3f v7(getHost()->mBall->mPosition);
-        if (_28.distance(v7) >= 120.0f) {
-            _28 = v7;
+        if (mLastFireTailPos.distance(v7) >= 120.0f) {
+            mLastFireTailPos = v7;
             fire->appearAndSetPos(v7);
             return true;
         }

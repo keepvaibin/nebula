@@ -13,7 +13,6 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    // static const f32 sFlyUpHeight = _;
     static const f32 sFlyUpDirDegreeMax = 45.0f;
     static const f32 sRotateSpeed = 15.0f;
 };  // namespace
@@ -27,7 +26,7 @@ KoopaFireStairs::~KoopaFireStairs() {
 }
 
 KoopaFireStairs::KoopaFireStairs(const char* pName, bool a2)
-    : LiveActor(pName), mIsKoopaJr(a2), mStair(), _94(0.0f, 0.0f, 1.0f), _A0(0.0f, 0.0f, 0.0f), _AC(0.0f, 1.0f, 0.0f), mBreakModel() {
+    : LiveActor(pName), mIsKoopaJr(a2), mStair(), mFront(0.0f, 0.0f, 1.0f), mStartPos(0.0f, 0.0f, 0.0f), mFlyUpDir(0.0f, 1.0f, 0.0f), mBreakModel() {
 }
 
 void KoopaFireStairs::init(const TableIter& rIter) {
@@ -38,7 +37,7 @@ void KoopaFireStairs::init(const TableIter& rIter) {
 
     initHitSensor(1);
     MR::addHitSensorEnemyAttack(this, "Fire", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(1, nullptr, false);
+    initEffectKeeper(1, nullptr);
 
     MR::addEffectHitNormal(this, "Hit");
     MR::setEffectBaseScale(this, "Hit", 2.0f);
@@ -78,36 +77,36 @@ void KoopaFireStairs::makeActorDead() {
 void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const Vec3f* pAxis) {
     mStair = pStair;
 
-    _A0.set(mPosition);
+    mStartPos.set(mPosition);
 
     MR::calcGravity(this);
 
     if (pAxis != nullptr) {
-        Vec3f vec1 = mStair->mPosition - _A0;
-        Vec3f vec2 = mStair->_AC - _A0;
+        Vec3f vec1 = mStair->mPosition - mStartPos;
+        Vec3f vec2 = mStair->mTargetPos - mStartPos;
         Vec3f vec;
         vec.cross(vec1, vec2);
 
         if (vec.dot(pStair->mGravity) > 0.0f) {
-            MR::rotateVecDegree(&_AC, *pAxis, MR::getRandom(0.0f, ::sFlyUpDirDegreeMax));
+            MR::rotateVecDegree(&mFlyUpDir, *pAxis, MR::getRandom(0.0f, ::sFlyUpDirDegreeMax));
         } else {
-            MR::rotateVecDegree(&_AC, *pAxis, MR::getRandom(-::sFlyUpDirDegreeMax, 0.0f));
+            MR::rotateVecDegree(&mFlyUpDir, *pAxis, MR::getRandom(-::sFlyUpDirDegreeMax, 0.0f));
         }
     }
 
     if (mIsKoopaJr) {
         mVelocity.zero();
 
-        _94.set(mStair->_AC - _A0);
-        MR::normalize(&_94);
+        mFront.set(mStair->mTargetPos - mStartPos);
+        MR::normalize(&mFront);
     } else {
         s32 breakTime = mStair->calcRemainTimeToBreak();
-        Vec3f v10 = mStair->_AC - mPosition;
+        Vec3f v10 = mStair->mTargetPos - mPosition;
         f32 length = v10.length();
 
         mVelocity.set(v10);
         MR::normalize(&mVelocity);
-        _94.set(mVelocity);
+        mFront.set(mVelocity);
         mVelocity.scale(length / (breakTime - 1));
     }
 }
@@ -134,18 +133,18 @@ void KoopaFireStairs::exeFly() {
             Vec3f v14(mPosition);
             f32 rate = mStair->calcTimeRate();
 
-            mPosition = _A0 * (1.0f - rate) + mStair->_AC * rate;
+            mPosition = mStartPos * (1.0f - rate) + mStair->mTargetPos * rate;
 
             f32 v5 = (180.0f * mStair->calcTimeRate());
             f32 v6 = MR::sinDegree(v5);
 
-            mPosition.add(_AC * v6 * 1500.0f);
+            mPosition.add(mFlyUpDir * v6 * 1500.0f);
 
             Vec3f v13 = mPosition - v14;
 
             if (!MR::isNearZero(v13)) {
                 MR::normalize(&v13);
-                _94.set(v13);
+                mFront.set(v13);
             }
 
             MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_METEOR");
@@ -170,7 +169,7 @@ void KoopaFireStairs::exeBreak() {
 void KoopaFireStairs::calcAndSetBaseMtx() {
     Pos3f v5;
     v5.identity();
-    MR::makeMtxFrontUpPos(&v5, _94, -mGravity, mPosition);
+    MR::makeMtxFrontUpPos(&v5, mFront, -mGravity, mPosition);
     MR::rotateMtxLocalXDegree(v5, mRotation.x);
     MR::setBaseTRMtx(this, v5);
 }

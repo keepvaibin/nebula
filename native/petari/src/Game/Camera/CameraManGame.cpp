@@ -32,7 +32,7 @@ namespace {
 };  // namespace
 
 CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
-    : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mRequestReset(), _5C(), mKarikari(new CamKarikariEffector()),
+    : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mRequestReset(), mKarikari(new CamKarikariEffector()),
       mHeli(new CamHeliEffector()), mTypeState(), mIsStartPosActive(), mInterpolateOffCounter(), mZoomedIn() {
     mCamera = mHolder->getDefaultCamera();
     mChunk = nullptr;
@@ -487,7 +487,7 @@ void CameraManGame::createStartAnimCamera() {
         chunk->setCameraType("CAM_TYPE_ANIM", director->mHolder);
 
         chunk->mGeneralParam->mAnimData = reinterpret_cast< u8* >(data);
-        chunk->_64 = true;
+        chunk->mIsCodeChunk = true;
     }
 }
 
@@ -509,7 +509,7 @@ void CameraManGame::createZoomCamera() {
     chunk->mExParam.mCamInt = 0;
     chunk->mGeneralParam->mNum1 = 1;
     chunk->mGeneralParam->mNum2 = 1;
-    chunk->_64 = 1;
+    chunk->mIsCodeChunk = 1;
 }
 
 void CameraManGame::checkStateShift() {

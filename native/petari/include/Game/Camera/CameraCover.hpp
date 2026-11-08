@@ -2,8 +2,8 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Screen/CaptureScreenDirector.hpp"
-#include <nebula_geometry.hpp>
 
+// Holds a captured frame over the screen while the camera jumps.
 class CameraCover : public NameObj {
 public:
     CameraCover(const char*);
@@ -12,19 +12,10 @@ public:
     virtual void movement();
     virtual void draw() const;
 
-    void cover(u32);
-    bool isCameraHopping() const;
-    void copyCamera();
+    void cover(u32 frames);
 
-    inline s32 getThing() {
-        return _3C;
-    }
-
-    Mtx34f _C;
-    s32 _3C;
-    u8 _40;
-    bool _41;
-    u8 _42[2];
-    u32 _44;
     CaptureScreenActor* mActor;
+    s32 mCoverFramesLeft;
+    bool mIsCoverRequested;
+    u32 mCoverFrames;
 };

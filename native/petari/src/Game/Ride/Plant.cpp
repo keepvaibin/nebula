@@ -40,7 +40,6 @@ namespace {
     static const f32 sHangStartRotateSpeed = 15.0f;
     static const f32 sGrowUpPlayerSpeed = 10.0f;
     static const f32 sHangUpAccel = 1.0f;
-    // static const f32 sHangUpAccel2P =
     static const f32 sHangUpSpeedStartMin = -2.0f;
     static const f32 sHangDownGravity = 0.3f;
     static const f32 sHangUpSpeedMin = 15.0f;
@@ -61,7 +60,6 @@ namespace {
     static const f32 sLeafRotateMin = 90.0f;
     static const f32 sLeafRotateMax = 270.0f;
     static const f32 sLeafAxisDotMax = 0.7f;
-    // static const f32 sPlayerPosOffset =
 
     static const s32 sHangAccelInvalidTime = 0;
     static const f32 sDefaultJumpSpeedOffsetY = 0.0f;

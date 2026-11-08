@@ -15,7 +15,7 @@ namespace {
     const s32 cWipeFrame = 110;
 };  // namespace
 
-AstroChangeStageCube::AstroChangeStageCube(int formType, const char* pName) : AreaObj(formType, pName), _3C(1), mWaitFrame() {
+AstroChangeStageCube::AstroChangeStageCube(int formType, const char* pName) : AreaObj(formType, pName), mDestNo(1), mWaitFrame() {
 }
 
 void AstroChangeStageCube::init(const TableIter& rIter) {
@@ -24,16 +24,16 @@ void AstroChangeStageCube::init(const TableIter& rIter) {
 
     switch (mObjArg0) {
     case 0:
-        _3C = MR::getCurrentScenarioNo();
+        mDestNo = MR::getCurrentScenarioNo();
         break;
     case 1:
     case 2:
     case 3:
     case 4:
-        _3C = mObjArg1;
+        mDestNo = mObjArg1;
         break;
     case 5:
-        _3C = mObjArg1;
+        mDestNo = mObjArg1;
         break;
     }
 }
@@ -108,23 +108,23 @@ void AstroChangeStageCube::movement() {
         switch (mObjArg0) {
         case 0:
         case 4:
-            MR::requestGoToAstroGalaxy(_3C);
+            MR::requestGoToAstroGalaxy(mDestNo);
             break;
         case 2:
-            MR::requestChangeStageInGameMoving("AstroGalaxy", 1, PlacementId(_3C, 0));
+            MR::requestChangeStageInGameMoving("AstroGalaxy", 1, PlacementId(mDestNo, 0));
             break;
         case 1:
             if (MR::isOnGameEventFlagRosettaTalkAboutTicoInTower()) {
                 MR::requestStartScenarioSelect("HeavensDoorGalaxy");
             } else {
-                MR::requestChangeStageInGameMoving("HeavensDoorGalaxy", ::cHeavensDoorScenarioNo, PlacementId(_3C, 0));
+                MR::requestChangeStageInGameMoving("HeavensDoorGalaxy", ::cHeavensDoorScenarioNo, PlacementId(mDestNo, 0));
             }
             break;
         case 3:
-            MR::requestChangeStageInGameMoving("LibraryRoom", 1, PlacementId(_3C, 0));
+            MR::requestChangeStageInGameMoving("LibraryRoom", 1, PlacementId(mDestNo, 0));
             break;
         case 5:
-            MR::requestGoToAstroDomeFromAstroGalaxy(mObjArg2, _3C);
+            MR::requestGoToAstroDomeFromAstroGalaxy(mObjArg2, mDestNo);
             break;
         }
     }

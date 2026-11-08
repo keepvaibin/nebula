@@ -25,18 +25,18 @@ namespace NrvPenguinStudent {
 PenguinStudent::PenguinStudent(const char* pName) : NPCActor(pName) {
     mRemovableTurtle = nullptr;
     mActor = nullptr;
-    _15C = -1;
+    mObjArg0 = -1;
 }
 
 void PenguinStudent::init(const TableIter& rIter) {
     MR::initDefaultPosAndQuat(this, rIter);
-    MR::getPlacementArg0NoInit(rIter, &_15C);
+    MR::getPlacementArg0NoInit(rIter, &mObjArg0);
     initModelManagerWithAnm("Penguin", nullptr, false);
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     initHitSensor(1);
     MR::addHitSensorPush(this, "push", 8, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::initShadowVolumeSphere(this, 50.0f);
     NPCActor::initTalkCtrl(rIter, "PenguinStudent", Vec3f(0.0f, 150.0f, 0.0f), nullptr);
@@ -54,17 +54,17 @@ void PenguinStudent::init(const TableIter& rIter) {
     MR::joinToGroupArray(this, rIter, nullptr, 32);
     MR::setGroupClipping(this, rIter, 8);
     MR::invalidateClipping(this);
-    if (_15C == -1) {
+    if (mObjArg0 == -1) {
         mRemovableTurtle = new RemovableTurtle(this, true);
         setNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvSlow));
     } else {
         s32 arg1 = 10;
         MR::getPlacementArg1NoInit(rIter, &arg1);
-        _168 = 100.0f * arg1;
+        mRailOffset = 100.0f * arg1;
     }
 
-    _128 = false;
-    _110 = 0.3f;
+    mUseReactionActions = false;
+    mRailAccel = 0.3f;
     MR::useStageSwitchReadA(this, rIter);
     s32 arg7 = 0;
     MR::getPlacementArg7NoInit(rIter, &arg7);
@@ -99,7 +99,7 @@ bool PenguinStudent::branchFunc(u32 msg) {
 }
 
 bool PenguinStudent::tryReleaseTurtle() {
-    if (_15C == -1 && isNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvLead)) && mRemovableTurtle->isPullRange() && mRemovableTurtle->tryRemove()) {
+    if (mObjArg0 == -1 && isNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvLead)) && mRemovableTurtle->isPullRange() && mRemovableTurtle->tryRemove()) {
         setNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvSlow));
         return true;
     }
@@ -112,9 +112,9 @@ void PenguinStudent::exeSwim() {
         MR::setBckFrameAtRandom(this);
     }
     f32 speed = ((200.0f * MR::getRailCoordSpeed(mActor)) / 7.0f);
-    MR::setRailCoord(this, MR::getRailCoord(mActor) - _168);
+    MR::setRailCoord(this, MR::getRailCoord(mActor) - mRailOffset);
     MR::moveCoordAndFollowTrans(this);
-    MR::followRailPose(this, _114, 1.0f);
+    MR::followRailPose(this, mRailPoseRate, 1.0f);
     Vec3f v19, v20, v21;
     MR::calcUpVec(&v20, this);
     MR::calcFrontVec(&v19, this);
@@ -127,9 +127,9 @@ void PenguinStudent::exeSwim() {
 
 void PenguinStudent::exeLead() {
     if (MR::isFirstStep(this)) {
-        _11C = "SwimTurtle";
-        _120 = "SwimTurtle";
-        _10C = 7.0f;
+        mMoveAction = "SwimTurtle";
+        mMoveTalkAction = "SwimTurtle";
+        mRailSpeed = 7.0f;
     }
     MR::startLevelSound(this, "SE_SM_LV_PENGUIN_SWIM_JET");
     MR::tryStartMoveTalkAction(this);
@@ -140,9 +140,9 @@ void PenguinStudent::exeLead() {
 
 void PenguinStudent::exeSlow() {
     if (MR::isFirstStep(this)) {
-        _11C = "Swim";
-        _120 = "Swim";
-        _10C = 5.0f;
+        mMoveAction = "Swim";
+        mMoveTalkAction = "Swim";
+        mRailSpeed = 5.0f;
     }
 
     MR::tryStartMoveTalkAction(this);

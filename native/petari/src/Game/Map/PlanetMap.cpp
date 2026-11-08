@@ -17,7 +17,7 @@
 namespace {
     const char* cFollowJointName = "Move";
 
-    static PlanetMapClippingInfo sClippingInfo[] = {{"PhantomShipA", 3000.0f, {800.0f, 1300.0f, 0.0f}, 0}};
+    static PlanetMapClippingInfo sClippingInfo[] = {{"PhantomShipA", 3000.0f, {800.0f, 1300.0f, 0.0f}}};
     PlanetMapClippingInfo* findClippingInfo(const char* pName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sClippingInfo); i++) {
             PlanetMapClippingInfo* pInfo = &::sClippingInfo[i];
@@ -31,7 +31,7 @@ namespace {
 };  // namespace
 
 PlanetMap::PlanetMap(const char* pName, const char* pModelName)
-    : LiveActor(pName), mModelName(pModelName), _90(0.0f, 0.0f, 0.0f), mLODCtrl(), mBloomModel(), mWaterModel(), mIndirectModel() {
+    : LiveActor(pName), mModelName(pModelName), mClippingCenter(0.0f, 0.0f, 0.0f), mLODCtrl(), mBloomModel(), mWaterModel(), mIndirectModel() {
 }
 
 void PlanetMap::init(const TableIter& rIter) {
@@ -42,7 +42,7 @@ void PlanetMap::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModel(mModelName, rIter);
     MR::connectToScenePlanet(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
 
@@ -103,8 +103,8 @@ void PlanetMap::initClipping(const TableIter& rIter) {
 
     if (pInfo != nullptr) {
         radius = pInfo->mRadius;
-        _90.set(mPosition + Vec3f(pInfo->mOffset));
-        MR::setClippingTypeSphere(this, pInfo->mRadius, &_90);
+        mClippingCenter.set(mPosition + Vec3f(pInfo->mOffset));
+        MR::setClippingTypeSphere(this, pInfo->mRadius, &mClippingCenter);
     } else {
         if (radius <= 0.0f) {
             MR::calcModelBoundingRadius(&radius, this);

@@ -7,22 +7,21 @@ class NebulaArena;
 
 // In the remix sequence resource (host order, as the importer cooks it).
 struct RemixNoteData {
-    s32 _0;
-    s32 _4;
-    s32 _8;
-    s32 _C;
+    s32 mNoteNo;
+    s32 mVelocity;
+    s32 mLength;
+    s32 mStartTick;
 };
 
 struct RemixNoteTrackData {
-    s32 _0;
-    RemixNoteData* _4;
+    s32 mTrackNo;
+    RemixNoteData* mNotes;
 };
 
 struct RemixNoteGroupData {
-    /* 0x0  */ s32 mIndex;
-    /* 0x4  */ s32 mTrackCount;
-    /* 0x8  */ s32 mNoteCount;
-    u32* _C;
+    s32 mIndex;
+    s32 mTrackCount;
+    s32 mNoteCount;
     RemixNoteTrackData* mRemixTracks;
 };
 
@@ -34,9 +33,9 @@ public:
     void setRemixSeqResource(void* ptr);
     RemixNoteGroupData* getRemixNoteGroupDataFromMelodyNo(s32 melodyNo) const;
 
-    /* 0x0  */ NebulaArena* mHeap;
-    /* 0x4  */ RemixNoteGroupData* mGroups;
-    /* 0x8  */ s32 mGroupCount;
-    /* 0xC  */ AudSoundObject* mSoundObj;
+    NebulaArena* mHeap;
+    RemixNoteGroupData* mGroups;
+    s32 mGroupCount;
+    AudSoundObject* mSoundObj;
     AudRemixSequencer* mRemixSeq;
 };

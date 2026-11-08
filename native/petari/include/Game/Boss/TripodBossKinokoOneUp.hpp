@@ -14,7 +14,7 @@ public:
     virtual void init(const TableIter&);
 
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&_BC;
+        return (MtxPtr)&mMtx;
     }
 
     virtual void control();
@@ -22,8 +22,8 @@ public:
     void exeActive();
     void exeEnd();
 
-    Pos3f _8C;
-    Pos3f _BC;
+    Pos3f mLocalMtx;
+    Pos3f mMtx;
     BenefitItemOneUp* mOneUp;
     s32 mJointID;
 };

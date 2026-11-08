@@ -5,7 +5,7 @@
 
 class StarPointerController;
 class StarPointerLayout;
-class DpdInfo;
+class PointerInfo;
 
 class StarPointerPeekZ {
 public:
@@ -16,7 +16,7 @@ public:
 
     static const u32 cReadbackChannel = 1;
 
-    DpdInfo** mInfos;
+    PointerInfo** mInfos;
     f32 mProjectionParameters[7];
     f32 mViewportParameters[6];
     u32 mAsker;  // the asker its probes carry

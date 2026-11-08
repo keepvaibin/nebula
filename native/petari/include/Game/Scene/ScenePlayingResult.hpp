@@ -35,5 +35,4 @@ public:
     /// @brief The number of Purple Coins.
     s32 mPurpleCoinNum;
 
-    u32 _14;
 };

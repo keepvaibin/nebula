@@ -23,7 +23,7 @@ namespace NrvChipCounter {
     NEW_NERVE(ChipCounterNrvCompleteOut, ChipCounter, CompleteOut);
 };  // namespace NrvChipCounter
 
-ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), _30(1.0f) {
+ChipCounter::ChipCounter(const char* pName, s32 type) : LayoutActor(pName, true), mCollectCounter(), mCount(), mType(type), mGroupId(-1), mShowRate(1.0f) {
 }
 
 void ChipCounter::init(const TableIter& rIter) {
@@ -48,7 +48,7 @@ void ChipCounter::init(const TableIter& rIter) {
     }
 
     MR::startAnim(this, "ShowHide", 1);
-    MR::setAnimFrameAndStop(this, _30 * 20.0f, 1);
+    MR::setAnimFrameAndStop(this, mShowRate * 20.0f, 1);
 
     mCollectCounter = new CollectCounter("集め数字");
     mCollectCounter->initWithoutIter();
@@ -58,20 +58,20 @@ void ChipCounter::init(const TableIter& rIter) {
 
 void ChipCounter::control() {
     if (MR::isActiveTalkBalloonShort()) {
-        _30 -= 0.05f;
+        mShowRate -= 0.05f;
 
-        if (_30 < 0.0f) {
-            _30 = 0.0f;
+        if (mShowRate < 0.0f) {
+            mShowRate = 0.0f;
         }
     } else {
-        _30 += 0.05f;
+        mShowRate += 0.05f;
 
-        if (_30 > 1.0f) {
-            _30 = 1.0f;
+        if (mShowRate > 1.0f) {
+            mShowRate = 1.0f;
         }
     }
 
-    MR::setAnimFrameAndStop(this, _30 * 20.0f, 1);
+    MR::setAnimFrameAndStop(this, mShowRate * 20.0f, 1);
 }
 
 void ChipCounter::setCount(s32 count) {

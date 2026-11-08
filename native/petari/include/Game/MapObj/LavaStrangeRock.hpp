@@ -26,6 +26,6 @@ public:
     void exeWait();
 
     s32 mRockType;
-    s32 _90;
+    s32 mHitType;
     LodCtrl* mLodCtrlPlanet;
 };

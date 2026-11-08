@@ -19,7 +19,7 @@ public:
     }
 
     f32 mCamWaterDepth;
-    f32 _4;
+    f32 mDepth;
     Vec3f mSurfacePos;
     Vec3f mSurfaceNormal;
     f32 mWaveHeight;

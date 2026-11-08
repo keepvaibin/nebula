@@ -41,18 +41,14 @@ public:
     void exeWaitResumeInitializeThreadIfRequestedReset();
     void exeWaitResumeInitializeThreadIfCanceledSelect();
 
-    u8 _14;
-    u8 _15;
-    u8 _16;
-    u8 _17;
+    u8 mIsInitialized;
+    u8 mIsBackground;
+    u8 mIsCanceled;
     ScenarioSelectLayout* mScenarioLayout;
     CinemaFrame* mCinemaFrame;
-    ItemBuffer* _20;
-    ItemBuffer* _24;
-    u8 _28;
-    u8 _29;
-    u8 _2A;
-    u8 _2B;
+    ItemBuffer* mDrawBufferOpa;
+    ItemBuffer* mDrawBufferXlu;
+    u8 mIsResetRequested;
     EffectSystem* mEffectSystem;
     CameraContext* mCameraContext;
 };

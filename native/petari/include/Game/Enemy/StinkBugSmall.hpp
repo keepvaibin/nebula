@@ -30,12 +30,12 @@ public:
     void exeShakeStart();
     void exePanic();
     void exeRecover();
-    void exeDPDSwoon();
-    void endDPDSwoon();
+    void exePointerSwoon();
+    void endPointerSwoon();
     void exeForceFall();
     void exeShake();
     void exeDashSignEnd();
-    bool tryDPDSwoon();
+    bool tryPointerSwoon();
     bool tryForceFall();
     bool isShakeChance() const;
     bool isNrvEnableStarPieceAttack() const;
@@ -44,5 +44,5 @@ public:
     WalkerStateBindStarPointer* mBindStarPointer;
 
 private:
-    bool _C4;
+    bool mIsBodyAttack;
 };

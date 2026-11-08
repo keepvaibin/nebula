@@ -23,10 +23,10 @@ public:
     void exeWait();
     void exeBreak();
 
-    s32 _E4;
-    s32 _E8;
+    s32 mBreakType;
+    s32 mBreakKillStep;
     bool mHasCollision;
-    bool _ED;
-    bool _EE;
+    bool mHasBreakMovement;
+    bool mIsMarioOn;
     bool mIsPlayingWarning;
 };

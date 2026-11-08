@@ -174,7 +174,7 @@ void GameSystemResetAndPowerProcess::control() {
 }
 
 GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()
-    : LayoutActor("リセット・電源", false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart), _5C(true) {
+    : LayoutActor("リセット・電源", false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart) {
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
 }

@@ -27,7 +27,7 @@ void PhantomShipBoxFloater::init(const TableIter& rIter) {
     MR::getObjectName(&mObjectName, rIter);
     initModelManagerWithAnm(mObjectName, nullptr, false);
     MR::connectToSceneMapObj(this);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::setEffectHostSRT(this, ::cEffectName, &mFloaterOffset, nullptr, nullptr);
     initSound(4, false);
     mRippleSeCounter = MR::getRandom(20, 90);

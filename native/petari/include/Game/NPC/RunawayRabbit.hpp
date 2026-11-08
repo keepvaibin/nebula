@@ -74,7 +74,6 @@ public:
     Vec3f mFrontVec;
     Quat4f mPlayerPoseQuat;
     Vec3f mPlayerBindPos;
-    u8 _DC[4];
     s32 mGroupId;
     s32 mRunawayLevel;
     s32 mHideLocation;

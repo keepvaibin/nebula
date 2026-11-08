@@ -20,9 +20,9 @@ namespace {
 };  // namespace
 
 PlacementLink::PlacementLink(const TableIter& rIter, bool linked) {
-    _0 = -1;
-    _4 = -1;
-    _8 = -1;
+    mLinkId = -1;
+    mZoneId = -1;
+    mInfoType = -1;
 
     if (linked) {
         setLinkedInfo(rIter);
@@ -33,8 +33,8 @@ PlacementLink::PlacementLink(const TableIter& rIter, bool linked) {
 
 bool PlacementLink::isValid() const {
     bool ret = false;
-    if (_0 >= 0 && _4 >= 0) {
-        if (_8 >= 0) {
+    if (mLinkId >= 0 && mZoneId >= 0) {
+        if (mInfoType >= 0) {
             ret = true;
         }
     }
@@ -43,9 +43,9 @@ bool PlacementLink::isValid() const {
 }
 
 void PlacementLink::invalidate() {
-    _0 = -1;
-    _4 = -1;
-    _8 = -1;
+    mLinkId = -1;
+    mZoneId = -1;
+    mInfoType = -1;
 }
 
 void PlacementLink::setLinkedInfo(const TableIter& rIter) {
@@ -54,10 +54,10 @@ void PlacementLink::setLinkedInfo(const TableIter& rIter) {
     if (rIter.isValid()) {
         s32 id = -1;
         if (rIter.getValue< s32 >("l_id", &id)) {
-            _0 = id;
-            _4 = MR::getPlacedZoneId(rIter);
+            mLinkId = id;
+            mZoneId = MR::getPlacedZoneId(rIter);
 
-            _8 = ::getInfoType(rIter.mInfo);
+            mInfoType = ::getInfoType(rIter.mInfo);
         }
     }
 }
@@ -66,7 +66,7 @@ void PlacementLink::setLinkInfo(const TableIter& rIter) {
     invalidate();
 
     if (rIter.isValid()) {
-        _4 = MR::getPlacedZoneId(rIter);
+        mZoneId = MR::getPlacedZoneId(rIter);
 
         s32 linkId = -1;
         s32 infoType = -1;
@@ -84,9 +84,9 @@ void PlacementLink::setLinkInfo(const TableIter& rIter) {
         }
 
         if (found) {
-            _0 = linkId;
-            _8 = infoType;
-            _4 = MR::getPlacedZoneId(rIter);
+            mLinkId = linkId;
+            mInfoType = infoType;
+            mZoneId = MR::getPlacedZoneId(rIter);
         }
     }
 }

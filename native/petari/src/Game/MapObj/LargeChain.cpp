@@ -17,7 +17,7 @@ namespace NrvLargeChain {
     NEW_NERVE(LargeChainNrvBreak, LargeChain, Break);
 };  // namespace NrvLargeChain
 
-LargeChain::LargeChain(const char* pName) : LiveActor(pName), _8C(), _90(), mChainArray(), mChainCount(1) {
+LargeChain::LargeChain(const char* pName) : LiveActor(pName), mBottomFixParts(), mTopFixParts(), mChainArray(), mChainCount(1) {
 }
 
 void LargeChain::init(const TableIter& rIter) {
@@ -47,8 +47,8 @@ void LargeChain::makeActorAppeared() {
         mChainArray[i].makeActorAppeared();
     }
 
-    _8C->makeActorAppeared();
-    _90->makeActorAppeared();
+    mBottomFixParts->makeActorAppeared();
+    mTopFixParts->makeActorAppeared();
     LiveActor::makeActorAppeared();
 }
 
@@ -57,8 +57,8 @@ void LargeChain::makeActorDead() {
         mChainArray[i].makeActorDead();
     }
 
-    _8C->makeActorDead();
-    _90->makeActorDead();
+    mBottomFixParts->makeActorDead();
+    mTopFixParts->makeActorDead();
     LiveActor::makeActorDead();
 }
 
@@ -78,9 +78,9 @@ void LargeChain::exeBreak() {
     s32 step = getNerveStep() / ::sBreakInterval;
 
     if (step == 0) {
-        _8C->breakChainParts();
+        mBottomFixParts->breakChainParts();
     } else if (step == mChainCount - 1) {
-        _90->breakChainParts();
+        mTopFixParts->breakChainParts();
     }
 
     mChainArray[step].breakChainParts();
@@ -97,8 +97,8 @@ namespace {
 };  // namespace
 
 void LargeChain::createChainParts() {
-    _8C = new LargeChainParts("固定鎖 下");
-    _90 = new LargeChainParts("固定鎖 上");
+    mBottomFixParts = new LargeChainParts("固定鎖 下");
+    mTopFixParts = new LargeChainParts("固定鎖 上");
     mChainArray = ::createChainArray(mChainCount);
 
     for (u32 i = 0; i < mChainCount; i++) {
@@ -110,13 +110,13 @@ void LargeChain::createChainParts() {
         mChainArray[i].initChainParts(&pos, &mRotation, &mScale, false);
 
         if (i == 0) {
-            _8C->initChainParts(&pos, &mRotation, &mScale, true);
+            mBottomFixParts->initChainParts(&pos, &mRotation, &mScale, true);
         } else if (i == mChainCount - 1) {
             Vec3f rot(mRotation);
             rot.y += 90.0f;
             rot.x += 180.0f;
             pos.y += 200.0f;
-            _90->initChainParts(&pos, &rot, &mScale, true);
+            mTopFixParts->initChainParts(&pos, &rot, &mScale, true);
         }
     }
 }

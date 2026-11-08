@@ -25,13 +25,11 @@
 namespace {
     static const f32 sFrontVecBlendRate = 0.2f;
     static const f32 sUpVecBlendRate = 0.04f;
-    // static const f32 sMaxBendAccel = _;
-    // static const f32 sMaxBendPose = _;
 };  // namespace
 
 BossKameck::BossKameck(const char* pName, const char* pModelName)
-    : LiveActor(pName), mModelName(pModelName), _90(0.0f, 1.0f), _A0(0, 0, 1), mSequencer(), mKameckHolder(), mJointCtrl(), mActorList(),
-      mBeamEventListener(), mMoveRail(), mMoveRailNum(), _C8(0, 0, 0), mObjArg7(-1) {
+    : LiveActor(pName), mModelName(pModelName), mPoseQuat(0.0f, 1.0f), mFront(0, 0, 1), mSequencer(), mKameckHolder(), mJointCtrl(), mActorList(),
+      mBeamEventListener(), mMoveRail(), mMoveRailNum(), mLastVelocity(0, 0, 0), mObjArg7(-1) {
     mBeamEventListener = new BossKameckBeamEventListener(this);
     mActorList = new ActiveActorList(8);
 }
@@ -41,14 +39,14 @@ void BossKameck::init(const TableIter& rIter) {
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
-    MR::makeQuatAndFrontFromRotate(&_90, &_A0, this);
+    MR::makeQuatAndFrontFromRotate(&mPoseQuat, &mFront, this);
     MR::calcGravity(this);
     MR::invalidateClipping(this);
     MR::initShadowFromCSV(this, "Shadow");
     initHitSensor(2);
     MR::addHitSensorEnemy(this, "body", 8, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorEnemyAttack(this, "attack", 8, 240.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::createKameckBeamHolder();
     MR::createKameckFireBallHolder();
     MR::createKameckBeamTurtleHolder();
@@ -75,7 +73,7 @@ void BossKameck::init(const TableIter& rIter) {
 
 BossKameckMoveRail* BossKameck::getMoveRail(s32 no) {
     for (s32 i = 0; i < mMoveRailNum; i++) {
-        if (mMoveRail[i]->_8C == no) {
+        if (mMoveRail[i]->mRailNo == no) {
             return mMoveRail[i];
         }
     }
@@ -141,12 +139,12 @@ void BossKameck::control() {
     }
 
     mActorList->removeDeadActor();
-    _C8.set(mVelocity);
+    mLastVelocity.set(mVelocity);
     mJointCtrl->update();
 }
 
 void BossKameck::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _90);
+    MR::setBaseTRMtx(this, mPoseQuat);
     MR::setBaseScale(this, mScale);
     mJointCtrl->setCallBackFunction();
 }
@@ -166,7 +164,7 @@ bool BossKameck::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
 }
 
 void BossKameck::endDemo() {
-    _C8.zero();
+    mLastVelocity.zero();
     MR::zeroVelocity(this);
     MR::calcGravity(this);
     mJointCtrl->startDynamicCtrl("Suso1", -1);
@@ -176,9 +174,9 @@ void BossKameck::endDemo() {
 void BossKameck::setPose(MtxPtr pPoseMtx) {
     Pos3f mtx;
     mtx.set(pPoseMtx);
-    mtx.getQuat(_90);
+    mtx.getQuat(mPoseQuat);
     mtx.getTrans(mPosition);
-    _90.getZDir(_A0);
+    mPoseQuat.getZDir(mFront);
 }
 
 void BossKameck::killAllBeam() {
@@ -189,7 +187,7 @@ void BossKameck::updatePose() {
     Vec3f v19;
     Vec3f v18;
     v19.set(-mGravity);
-    v18.killElement(mVelocity - _C8, mGravity);
+    v18.killElement(mVelocity - mLastVelocity, mGravity);
     f32 mag = v18.length();
 
     if (!MR::isNearZero(mag)) {
@@ -204,7 +202,7 @@ void BossKameck::updatePose() {
         }
     }
 
-    MR::blendQuatUpFront(&_90, v19, _A0, ::sUpVecBlendRate, ::sFrontVecBlendRate);
+    MR::blendQuatUpFront(&mPoseQuat, v19, mFront, ::sUpVecBlendRate, ::sFrontVecBlendRate);
 }
 
 void BossKameck::initKameckHolder(const TableIter& rIter) {
@@ -277,7 +275,7 @@ void BossKameck::appearStarPieceToUp(s32 num) {
 }
 
 void BossKameck::startDemo() {
-    _C8.zero();
+    mLastVelocity.zero();
     MR::zeroVelocity(this);
     MR::calcGravity(this);
     mJointCtrl->endDynamicCtrl("Suso1", 0);

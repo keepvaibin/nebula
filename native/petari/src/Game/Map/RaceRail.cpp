@@ -15,13 +15,12 @@
 
 namespace {
     static const f32 sRaceJudgeLength = 10000.0f;
-    // static const f32 sWaterSurface = ;
 };  // namespace
 
 RaceRail::RaceRail(const char* pName) : NameObj(pName) {
 }
 
-PlayerRacer::PlayerRacer(const char* pName) : LiveActor(pName), _B0(), _B4(), mCameraInfo() {
+PlayerRacer::PlayerRacer(const char* pName) : LiveActor(pName), mCameraInfo() {
 }
 
 void PlayerRacer::appear() {

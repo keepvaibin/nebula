@@ -12,8 +12,8 @@ public:
     FootPrintInfo();
 
     Vec3f mPos;
-    Vec3f _C;
-    Vec3f _18;
+    Vec3f mUp;
+    Vec3f mNormal;
 
     /// @brief Frames left before becoming invalid. Also controls the footprint's alpha.
     s32 mTimeLeft;
@@ -21,7 +21,7 @@ public:
     /// @brief Invalid prints will no longer be updated nor drawn.
     bool mIsValid;
 
-    bool _29;
+    bool mIsFlipX;
 };
 
 class FootPrint : public NameObj {
@@ -41,7 +41,7 @@ public:
     void invalidate(u32);
     bool isValid(u32) const;
 
-    JUTTexture* _C;
+    JUTTexture* mTexture;
 
     /// @brief Array of footprints.
     FootPrintInfo* mPrints;
@@ -57,12 +57,12 @@ public:
     /// @brief The index used when adding a new footprint. Will wrap around and overwrite the oldest footprints.
     s32 mRotatingPrintIndex;
 
-    f32 _2C;
-    f32 _30;
-    f32 _34;
+    f32 mSideOffset;
+    f32 mHeight;
+    f32 mWidth;
 
     /// @brief The minimum distance for a new print to be registered.
     f32 mMinPrintDistance;
 
-    bool _3C;
+    bool mIsFading;
 };

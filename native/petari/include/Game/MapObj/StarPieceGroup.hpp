@@ -31,13 +31,13 @@ public:
 
     StarPiece** mPieces;
     f32* mRailCoords;
-    bool _94;
-    bool _95;
+    bool mHasAppeared;
+    bool mIsAppearEffect;
     s32 mNumPieces;
     f32 mCircleRadius;
     bool mIsRail;
     bool mPlaceAtPathPoints;
-    s32 _A4;
+    s32 mLifeStep;
     f32 mRailSpeed;
-    Vec3f _AC;
+    Vec3f mRailClippingCenter;
 };

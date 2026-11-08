@@ -26,12 +26,11 @@ public:
     void updateTripodMatrix();
     void initBreakMovement(s32);
 
-    Pos3f _8C;
-    Vec3f _BC;
+    Pos3f mMtx;
+    Vec3f mLocalPos;
     TripodBossBreakMovement* mBreakMovement;
     s32 mJointID;
-    Vec3f _D0;
+    Vec3f mClipCenter;
     f32 mClippingRadius;
-    bool _E0;
-    bool _E1;
+    bool mIsActive;
 };

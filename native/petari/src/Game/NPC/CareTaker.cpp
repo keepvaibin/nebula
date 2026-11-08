@@ -10,12 +10,8 @@
 namespace {
     static const s32 sTidyTimeLimit = 1800;
     static const s32 sBgmStartStep = 166;
-    // static const f32 sTalkRotateDegree = _;
-    // static const f32 sTalkCameraScale = _;
-    // static const s32 sDirtBtkFrame = _;
     static const s32 sPreRaceWait = 100;
     static const s32 sPstRaceWait = 50;
-    // static const s32 sNormalBtkFrame = _;
 };  // namespace
 
 namespace NrvCaretaker {
@@ -67,13 +63,13 @@ void Caretaker::init(const TableIter& rIter) {
 
     mParam.setMoveAction("BWaitStand", "BWaitStand");
     setTalkAction("BWaitRun", "BRunTalk");
-    mParam._0 = 0;
-    mParam._1 = 1;
-    mParam._8 = 3.0f;
-    _10C = 2.0f;
-    _110 = 0.1f;
-    _114 = 0.05f;
-    _124 = 1;
+    mParam.mTurnWhenNear = 0;
+    mParam.mTurnOnTalk = 1;
+    mParam.mTurnSpeed = 3.0f;
+    mRailSpeed = 2.0f;
+    mRailAccel = 0.1f;
+    mRailPoseRate = 0.05f;
+    mIsRailOnGround = 1;
 
     setAnim(mObjArg4);
 
@@ -102,7 +98,7 @@ void Caretaker::init(const TableIter& rIter) {
 
         if (MR::isExistRail(this)) {
             MR::moveCoordAndFollowTrans(this);
-            _C0.set(mPosition);
+            mInitPos.set(mPosition);
         }
 
         setNerve(GET_NERVE(Caretaker, CaretakerNrvWait));
@@ -123,7 +119,7 @@ void Caretaker::init(const TableIter& rIter) {
         mBombTimerLayout->setTimeLimit(mTidyTimeLimit * 60);
         mBombTimerLayout->kill();
 
-        _168 = MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
+        MR::joinToGroupArray(this, rIter, "ゴミ管理", 32);
 
         if (mMsgCtrl != nullptr) {
             MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &Caretaker::branchFuncStar));
@@ -159,7 +155,7 @@ void Caretaker::control() {
 
 bool Caretaker::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
-        _E3 = 1;
+        mIsSpinAttacked = 1;
 
         return true;
     }
@@ -295,22 +291,22 @@ void Caretaker::exeTakeOutStar() {
 }
 
 void Caretaker::exeReaction() {
-    if (_D8) {
+    if (mIsTrampledStart) {
         MR::startSound(this, "SE_SM_NPC_TRAMPLED_METAL");
         MR::startSound(this, "SE_SV_CARE_TAKER_TRAMPLE");
     }
 
-    if (_D9) {
+    if (mIsSpinAttackedStart) {
         MR::startSound(this, "SE_SM_CARETAKER_SPIN_HIT");
         MR::startSound(this, "SE_SV_CARE_TAKER_SPIN_HIT");
     }
 
     if (isPointingSe()) {
         MR::startSound(this, "SE_SV_CARE_TAKER_POINTED2P");
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
     }
 
-    if (_DB) {
+    if (mIsReactionStart) {
         MR::startSound(this, "SE_SM_CARETAKER_SPIN_HIT");
         MR::startSound(this, "SE_SV_CARE_TAKER_STAR_PIECE");
     }
@@ -336,7 +332,7 @@ void Caretaker::exeWait() {
 }
 
 void Caretaker::exePreTalk() {
-    turnToPlayer(mParam._8);
+    turnToPlayer(mParam.mTurnSpeed);
 
     if (!MR::tryTalkNearPlayerAtEnd(mMsgCtrl)) {
         return;

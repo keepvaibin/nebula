@@ -138,7 +138,7 @@ void RunawayRabbit::init(const TableIter& rIter) {
     initShadow();
     initFootPrint();
     initSound(6, false);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::hideModel(this);
     MR::invalidateHitSensors(this);
     initNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvNoActive));

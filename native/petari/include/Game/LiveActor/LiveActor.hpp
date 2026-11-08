@@ -136,7 +136,7 @@ public:
     void initHitSensor(int);
     void initBinder(f32, f32, u32);
     void initRailRider(const TableIter& rIter);
-    void initEffectKeeper(int, const char*, bool);
+    void initEffectKeeper(int, const char*);
     void initSound(int, bool);
     void initShadowControllerList(u32);
     void initActorCollisionParts(const char*, HitSensor*, ResourceHolder*, MtxPtr, bool, bool);

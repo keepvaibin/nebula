@@ -3,7 +3,6 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 #include <NebulaGpu.h>
-#include <nebula_math.h>
 
 class LiveActor;
 

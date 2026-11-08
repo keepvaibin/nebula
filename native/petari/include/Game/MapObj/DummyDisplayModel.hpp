@@ -12,8 +12,8 @@ class LodCtrl;
 
 struct DummyDisplayModelInfo {
     const char* mName;
-    Vec _4;
-    u32 _10;
+    Vec mOffset;
+    u32 mDrawBufferType;
     const char* mAnim;
     bool mHasColorChange;
 };
@@ -30,9 +30,9 @@ public:
 
     const DummyDisplayModelInfo* mModelInfo;
     s32 mItemType;
-    s32 _A4;
-    LodCtrl* _A8;
-    bool _AC;
+    s32 mBrkFrame;
+    LodCtrl* mLodCtrl;
+    bool mIsInCrystal;
 };
 
 namespace MR {

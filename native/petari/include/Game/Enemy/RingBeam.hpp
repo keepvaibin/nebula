@@ -25,18 +25,18 @@ public:
     void startBrk(const char*);
     void exeSpread();
 
-    LiveActor* _8c;
+    LiveActor* mHost;
     ModelObj* mBloomModel;
     f32 mSpeed;
     s32 mLife;
-    bool _9c;
-    bool _9d;
-    RingBeamShadowDrawer* _a0;
-    ModelObj* _a4;
-    Vec3f _a8;
-    Vec3f _b4;
-    Vec3f _c0;
-    Vec3f _cc;
+    bool mIsFollowGravity;
+    bool mHasShadow;
+    RingBeamShadowDrawer* mShadowDrawer;
+    ModelObj* mShadowModel;
+    Vec3f mFront;
+    Vec3f mBeamGravity;
+    Vec3f mCenter;
+    Vec3f mSoundPos;
 };
 
 class RingBeamShadowDrawer : public ShadowVolumeDrawer {
@@ -48,6 +48,6 @@ public:
     virtual void drawShape(TypedDraw& rDraw) const;
     virtual bool isDraw() const;
 
-    const LiveActor* _1c;
-    f32 _20;
+    const LiveActor* mHost;
+    f32 mRadius;
 };

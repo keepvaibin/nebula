@@ -73,11 +73,11 @@ namespace DemoFunction {
     }
 
     void registerDemoExecutor(DemoExecutor* pExecutor) {
-        getDemoDirector()->_18->registerObj(pExecutor);
+        getDemoDirector()->mCastGroupHolder->registerObj(pExecutor);
     }
 
     DemoExecutor* findDemoExecutor(const char* pDemoName) {
-        DemoCastGroup* group = getDemoDirector()->_18->findCastGroup(pDemoName);
+        DemoCastGroup* group = getDemoDirector()->mCastGroupHolder->findCastGroup(pDemoName);
         if (group == nullptr) {
             return nullptr;
         }
@@ -86,8 +86,8 @@ namespace DemoFunction {
 
     DemoExecutor* findDemoExecutor(const LiveActor* pActor) {
         DemoExecutor* executor;
-        for (s32 i = 0; i < getDemoDirector()->_18->getObjNum(); i++) {
-            executor = static_cast< DemoExecutor* >(getDemoDirector()->_18->getCastGroup(i));
+        for (s32 i = 0; i < getDemoDirector()->mCastGroupHolder->getObjNum(); i++) {
+            executor = static_cast< DemoExecutor* >(getDemoDirector()->mCastGroupHolder->getCastGroup(i));
             if (DemoExecutorFunction::isRegisteredDemoCast(executor, pActor)) {
                 return executor;
             }
@@ -97,8 +97,8 @@ namespace DemoFunction {
 
     DemoExecutor* findDemoExecutorActive(const LiveActor* pActor) {
         DemoExecutor* executor;
-        for (s32 i = 0; i < getDemoDirector()->_18->getObjNum(); i++) {
-            executor = static_cast< DemoExecutor* >(getDemoDirector()->_18->getCastGroup(i));
+        for (s32 i = 0; i < getDemoDirector()->mCastGroupHolder->getObjNum(); i++) {
+            executor = static_cast< DemoExecutor* >(getDemoDirector()->mCastGroupHolder->getCastGroup(i));
             if (DemoExecutorFunction::isRegisteredDemoCast(executor, pActor) && MR::isDemoActive(executor->mName)) {
                 return executor;
             }

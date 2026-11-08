@@ -1,7 +1,7 @@
-#include <stdint.h>
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include <stdint.h>
 
 class StageDataHolder;
 

@@ -8,7 +8,6 @@
 
 namespace {
     static const f32 sFrictionRate = 0.9f;
-    // static const _32 sSpeedMin =
     static const f32 sWindFrictionRate = 0.9f;
     static const f32 sBasePosAccelRate = 0.3f;
     static const f32 sBasePosDiffMin = 1.0f;

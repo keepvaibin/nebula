@@ -20,6 +20,5 @@ public:
     void initSceneObjHolder();
 
     SceneNameObjListExecutor* mListExecutor;
-    u32 _C;
     SceneObjHolder* mSceneObjHolder;
 };

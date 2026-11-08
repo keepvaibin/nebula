@@ -39,7 +39,7 @@ namespace {
     }
 
     void setupMultiEmitter(MultiEmitter* pEmitter, const AutoEffectInfo* pInfo) {
-        pEmitter->_28 = pInfo;
+        pEmitter->mAutoInfo = pInfo;
         pEmitter->setDrawOrder(pInfo->mDrawOrder);
         pEmitter->setOffset(pInfo->mOffset);
 
@@ -62,7 +62,7 @@ namespace {
         }
 
         if (!MR::isNearZero(pInfo->mLightAffectValue)) {
-            pEmitter->_2C = pInfo->mLightAffectValue;
+            pEmitter->mLightAffect = pInfo->mLightAffectValue;
         }
     }
 };  // namespace
@@ -103,11 +103,11 @@ namespace MR {
         }
 
         bool isEffect2D(const MultiEmitter* pEmitter) {
-            if (pEmitter->_28 == nullptr) {
+            if (pEmitter->mAutoInfo == nullptr) {
                 return false;
             }
 
-            return pEmitter->_28->mDrawOrder == 6 || pEmitter->_28->mDrawOrder == 7;
+            return pEmitter->mAutoInfo->mDrawOrder == 6 || pEmitter->mAutoInfo->mDrawOrder == 7;
         }
 
         void initEffectSyncBck(EffectKeeper* pKeeper, const ModelManager* pModelManager, const char* pEffectName, const char* pAnimName,
@@ -161,7 +161,7 @@ namespace MR {
                         const FormattedName name("%.*s", static_cast< int >(i - start), pAnimNames + start);
                         const char* pAnimName = nullptr;
                         findBckNameStringInResource(&pAnimName, pModelManager->getResourceHolder(), name.c_str());
-                        if (pEmitter->_24 == nullptr) {
+                        if (pEmitter->mSyncBck == nullptr) {
                             initEffectSyncBck(pKeeper, pModelManager, pInfo->getName(), pAnimName, ::countAnimNames(pAnimNames), 0.0f, -1.0f, false);
                         } else {
                             addEffectSyncBck(pEmitter, pModelManager, pAnimName);
@@ -181,7 +181,7 @@ namespace MR {
         }
 
         void requestMovementOn(EffectKeeper* pKeeper) {
-            for (s32 i = 0; i < pKeeper->_C.size(); i++) {
+            for (s32 i = 0; i < pKeeper->mEmitters.size(); i++) {
                 MultiEmitter* pEmitter = pKeeper->getEmitter(i);
                 if (pEmitter != nullptr && pEmitter->isValid()) {
                     pEmitter->pauseOff(-1);
@@ -201,10 +201,10 @@ namespace MR {
         void addAutoEffect(EffectKeeper* pKeeper, const LiveActor* pActor, const AutoEffectInfo* pInfo) {
             if (pInfo->mJointName != nullptr) {
                 const char* pEffectName = pInfo->mEffectName;
-                pKeeper->registerEffect(pEffectName, getJointMtx(pActor, pInfo->mJointName), pInfo->mUniqueName, nullptr);
+                pKeeper->registerEffect(pEffectName, getJointMtx(pActor, pInfo->mJointName), pInfo->mUniqueName);
             } else if (pActor->getBaseMtx() != nullptr) {
                 const char* pEffectName = pInfo->mEffectName;
-                pKeeper->registerEffect(pEffectName, pActor->getBaseMtx(), &pActor->mScale, pInfo->mUniqueName, nullptr);
+                pKeeper->registerEffect(pEffectName, pActor->getBaseMtx(), &pActor->mScale, pInfo->mUniqueName);
             } else {
                 pKeeper->registerEffect(pInfo->mEffectName, &pActor->mPosition, &pActor->mRotation, &pActor->mScale, pInfo->mUniqueName);
             }

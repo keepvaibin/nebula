@@ -34,8 +34,8 @@ namespace NrvOtaRock {
 
 OtaRock::OtaRock(const char* pName)
     : LiveActor(pName), mNoThrowCocoNut(false), mCocoNutArray(nullptr), mFireBallArray(nullptr), mFixedPosition(nullptr),
-      mThrowCocoNutCounter(0), mWaitFrame(0), _A4(), _D4(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
-    _A4.identity();
+      mThrowCocoNutCounter(0), mWaitFrame(0), mBaseMtx(), mFront(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
+    mBaseMtx.identity();
 }
 
 void OtaRock::init(const TableIter& rIter) {
@@ -48,7 +48,7 @@ void OtaRock::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initSensor();
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(8, false);
     MR::addToAttributeGroupSearchTurtle(this);
     mAnimScaleController = new AnimScaleController(nullptr);
@@ -79,8 +79,8 @@ void OtaRock::control() {
 }
 
 void OtaRock::calcAndSetBaseMtx() {
-    MR::setBaseTRMtx(this, _A4);
-    Vec3f scale = mAnimScaleController->_C * mScale;
+    MR::setBaseTRMtx(this, mBaseMtx);
+    Vec3f scale = mAnimScaleController->mScale * mScale;
     MR::setBaseScale(this, scale);
 }
 
@@ -122,7 +122,7 @@ void OtaRock::initModel() {
         mCocoNutArray = new CocoNutBall[4];
         for (int i = 0; i < 4; i++) {
             mCocoNutArray[i].initWithoutIter();
-            mCocoNutArray[i]._8C = this;
+            mCocoNutArray[i].mHost = this;
         }
     }
 
@@ -136,7 +136,7 @@ void OtaRock::initModel() {
 
     Pos3f mtxTR;
     MR::makeMtxTR(mtxTR.toMtxPtr(), this);
-    mtxTR.getZDir(_D4);
+    mtxTR.getZDir(mFront);
 }
 
 void OtaRock::initSensor() {
@@ -148,12 +148,12 @@ void OtaRock::updateBaseMtx() {
     Vec3f up = -mGravity;
     Vec3f front;
     if (MR::isStageStateScenarioOpeningCamera()) {
-        front.set(_D4);
+        front.set(mFront);
     } else {
         front.sub(*MR::getPlayerPos(), mPosition);
         MR::normalize(&front);
     }
-    MR::makeMtxUpFrontPos(&_A4, up, front, mPosition);
+    MR::makeMtxUpFrontPos(&mBaseMtx, up, front, mPosition);
 }
 
 CocoNutBall* OtaRock::getDisappearedCocoNut() {

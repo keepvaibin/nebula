@@ -44,7 +44,7 @@ public:
     SpinHitController* mSpinCtrl;
     AnimScaleController* mScaleController;
     WalkerStateBindStarPointer* mBindStarPointer;
-    Vec3f _98;
-    Vec3f _A4;
-    bool _B0;
+    Vec3f mFront;
+    Vec3f mInitPos;
+    bool mIsPursueAlways;
 };

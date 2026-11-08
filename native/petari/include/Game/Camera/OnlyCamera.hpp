@@ -20,11 +20,6 @@ public:
     bool mCalcIdeal;
     Vec3f mPos;
     f32 mSpeed;
-    s32 _24;
-    u32 _28;
-    bool _2C;
-    bool _2D;
-    Vec3f _30;
     bool mIsZeroFrameMoveOff;
     bool mIsResetting;
 };

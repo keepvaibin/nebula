@@ -8,7 +8,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <nebula_math.h>
 
 class ActorLightCtrl;
 class BckCtrlData;

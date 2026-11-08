@@ -2,12 +2,12 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-WaveFloatingForce::WaveFloatingForce(const LiveActor* pActor, s32 stepCount, f32 amplitude, bool) : mActor(pActor), mStepCount(stepCount), mAmplitude(amplitude), mStep(), _10() {
+WaveFloatingForce::WaveFloatingForce(const LiveActor* pActor, s32 stepCount, f32 amplitude) : mActor(pActor), mStepCount(stepCount), mAmplitude(amplitude), mStep() {
     mStep = 2 * MR::pi() * MR::getRandom();
 }
 
 void WaveFloatingForce::update() {
-    if (!_10 && MR::isOnPlayer(mActor)) {
+    if (MR::isOnPlayer(mActor)) {
         updateOnPlayer();
     } else {
         updateNormal();

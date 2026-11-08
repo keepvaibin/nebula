@@ -22,9 +22,8 @@ public:
     void exeEatPst();
     void exeEatEnd();
 
-    u32 _190;
-    s32 _194;
-    s32 _198;
+    s32 mStarPieceNeed;
+    s32 mStarPieceLeft;
 };
 
 class TicoComet : public TicoEat {

@@ -33,7 +33,7 @@ void KeySwitch::init(const TableIter& rIter) {
     box.z = 0.0f;
     MR::addHitSensorMapObjSimple(this, "body", 8, 105.0f, box);
     initBinder(105.0f, 105.0f, 0);
-    initEffectKeeper(0, 0, false);
+    initEffectKeeper(0, 0);
     initSound(4, false);
     MR::initShadowVolumeCylinder(this, 90.0f);
 

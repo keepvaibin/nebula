@@ -23,7 +23,7 @@ void TicoReading::init(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &animFrame);
     MR::startBrk(this, "ColorChange");
     MR::setBrkFrameAndStop(this, animFrame);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
     MR::tryRegisterDemoCast(this, rIter);
     initNerve(GET_NERVE(TicoReading, TicoReadingNrvWait));

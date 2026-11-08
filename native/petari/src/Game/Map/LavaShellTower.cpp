@@ -10,8 +10,6 @@
 namespace {
     static const f32 sCamShakeIntensity = 0.1f;
     static const f32 sCamShakeSpeed = 2.2f;
-    // static const f32 sCamStartOffsetY = _;
-    // static const f32 sCamEndOffsetY = _;
 };  // namespace
 
 namespace NrvLavaShellTower {

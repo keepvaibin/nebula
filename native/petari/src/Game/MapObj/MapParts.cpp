@@ -11,7 +11,7 @@ namespace {
 };  // namespace
 
 MapParts::MapParts(const char* pName) : LiveActor(pName) {
-    _8C.setZeroVec();
+    mClipCenter.setZeroVec();
 }
 
 void MapParts::init(const TableIter& rIter) {
@@ -22,7 +22,7 @@ void MapParts::init(const TableIter& rIter) {
     MR::initDefaultPosNoRepeat(this, rIter);
     initModelAndCollision(rIter);
     connectToScene();
-    MR::initMapPartsClipping(this, rIter, &_8C, false);
+    MR::initMapPartsClipping(this, rIter, &mClipCenter, false);
     MR::joinToGroupArray(this, rIter, "MapParts", 0x40);
     initSound(4, false);
 }

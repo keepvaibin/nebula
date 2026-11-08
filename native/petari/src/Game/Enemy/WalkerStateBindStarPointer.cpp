@@ -49,7 +49,7 @@ bool WalkerStateBindStarPointer::tryStartPointBind() const {
 
 void WalkerStateBindStarPointer::exeBind() {
     if (MR::isFirstStep(this)) {
-        MR::startDPDHitSound();
+        MR::startPointerHitSound();
         mUpdateCounter = 0;
         MR::emitEffect(getHost(), mHasEffect ? "PointerTouch" : "Touch");
         if (MR::isExistBck(getHost(), nullptr)) {
@@ -57,11 +57,11 @@ void WalkerStateBindStarPointer::exeBind() {
         }
 
         if (mScaleController != nullptr) {
-            mScaleController->startDpdHitVibration();
+            mScaleController->startPointerHitVibration();
         }
     }
 
-    MR::startDPDFreezeLevelSound(getHost());
+    MR::startPointerFreezeLevelSound(getHost());
     MR::zeroVelocity(getHost());
     if (MR::isStarPointerPointing2POnPressButton(getHost(), "弱", true, false)) {
         mUpdateCounter = 0;

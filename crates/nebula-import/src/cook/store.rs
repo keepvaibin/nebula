@@ -17,7 +17,9 @@ use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 
 pub const MAGIC: &[u8; 8] = b"NBSTORE\0";
-pub const VERSION: u32 = 14;
+/// The store's contents' form, from the one file the game, Setup, the launcher and Android read: a store of another
+/// version is imported again.
+pub const VERSION: u32 = include!("../../../../runtime/include/galaxy/store_version.inc");
 /// The files start past this.
 pub const HEADER: u64 = 64;
 

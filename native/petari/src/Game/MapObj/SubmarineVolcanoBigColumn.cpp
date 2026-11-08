@@ -34,7 +34,7 @@ void SubmarineVolcanoBigColumn::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
-    initEffectKeeper(0, nullptr, false);
+    initEffectKeeper(0, nullptr);
     initSound(2, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
