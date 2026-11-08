@@ -105,7 +105,7 @@ s32 ConfigDataHolder::makeFileBinary(u8* pBuffer, u32 size) {
 }
 
 ConfigDataHolder::ConfigDataHolder() : mChunkHolder(), mCreateChunk(), mMii(), mMisc() {
-    mChunkHolder = new BinaryDataChunkHolder(64, 3);
+    mChunkHolder = new BinaryDataChunkHolder();
     mCreateChunk = new ConfigDataCreateChunk();
     mMii = new ConfigDataMii();
     mMisc = new ConfigDataMisc();

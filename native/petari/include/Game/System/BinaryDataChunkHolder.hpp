@@ -22,18 +22,17 @@ namespace BinaryDataChunk {
 
 class BinaryDataChunkHolder {
 public:
-    BinaryDataChunkHolder(u32 dataSize, int maxChunks);
+    BinaryDataChunkHolder();
 
     void addChunk(BinaryDataChunkBase* pChunk);
-    u32 makeFileBinary(u8*, u32);
+    // The file, each chunk made in place; capacity is room for all of it.
+    u32 makeFileBinary(u8*, u32 capacity);
     bool loadFromFileBinary(const u8* pData, u32 dataSize);
     static u32 makeChunkData(u8* pData, u32 dataSize, const BinaryDataChunkBase*);
     BinaryDataChunkBase* findFromSignature(u32 signature) const;
     static u32 calcBinarySize(const u8* pData, u32 dataSize);
 
     BinaryDataChunkBase** mChunks;
-    s32 mMaxChunks;
+    s32 mChunkRoom;
     s32 mNumChunks;
-    void* mData;
-    u32 mBufferSize;
 };

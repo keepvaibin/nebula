@@ -16,6 +16,5 @@ namespace NebulaDataTables {
         u8 mDome;
     };
     void addGalaxy(const AddedGalaxy& rGalaxy);
-    s32 addedGalaxyCount();
     const void* getStoryProgressTable();
 };  // namespace NebulaDataTables

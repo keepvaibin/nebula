@@ -1,36 +1,32 @@
 #include "Game/System/BinaryDataChunkHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 
-BinaryDataChunkHolder::BinaryDataChunkHolder(u32 bufferSize, int maxChunks)
-    : mChunks(nullptr), mMaxChunks(0), mNumChunks(0), mData(nullptr), mBufferSize(bufferSize) {
-    mData = new u8[mBufferSize];
-    MR::zeroMemory(mData, mBufferSize);
-    mChunks = new BinaryDataChunkBase*[maxChunks];
-    mMaxChunks = maxChunks;
+namespace {
+    const s32 cFirstChunkRoom = 8;
+}  // namespace
+
+BinaryDataChunkHolder::BinaryDataChunkHolder()
+    : mChunks(new BinaryDataChunkBase*[cFirstChunkRoom]), mChunkRoom(cFirstChunkRoom), mNumChunks(0) {
 }
 
 void BinaryDataChunkHolder::addChunk(BinaryDataChunkBase* pChunk) {
-    s32 numChunks = mNumChunks;
-    mNumChunks++;
-    mChunks[numChunks] = pChunk;
+    if (mNumChunks == mChunkRoom) {
+        mChunks = MR::growArray(mChunks, mChunkRoom);
+        mChunkRoom *= 2;
+    }
+    mChunks[mNumChunks++] = pChunk;
 }
 
 u32 BinaryDataChunkHolder::makeFileBinary(u8* pData, u32 capacity) {
-    s32 offset = 0;
-
-    MR::zeroMemory(pData, 4);
+    // A byte a chunk passes over reads as zero.
+    MR::zeroMemory(pData, capacity);
     pData[0] = 1;
     pData[1] = mNumChunks;
 
-    offset += 4;
+    u32 offset = 4;
     for (s32 idx = 0; idx < mNumChunks; idx++) {
-        MR::zeroMemory(mData, mBufferSize);
-
-        u8* chunkData = static_cast< u8* >(mData);
-        const u32 chunkSize = makeChunkData(chunkData, mBufferSize, mChunks[idx]);
-
-        MR::copyMemory(&pData[offset], chunkData, chunkSize);
-        offset += chunkSize;
+        offset += makeChunkData(pData + offset, capacity - offset, mChunks[idx]);
     }
 
     return offset;
