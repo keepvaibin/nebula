@@ -225,10 +225,13 @@ target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
 
-# The launcher's mod import on Android (libnebula_mods.so): the game's own importer, in the launcher's process.
+# The launcher's mod and Mii import on Android (libnebula_mods.so): the game's own importers, in the launcher's process.
 if(ANDROID)
     add_library(nebula_mods SHARED
         "${CMAKE_CURRENT_SOURCE_DIR}/mod_import_jni.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/mii_import_jni.cpp"
+        ${rt}/mii_import.cpp
+        ${rt}/mii_formats.cpp
         ${rt}/mod_import.cpp
         ${rt}/mods.cpp
         ${rt}/mod_xml.cpp

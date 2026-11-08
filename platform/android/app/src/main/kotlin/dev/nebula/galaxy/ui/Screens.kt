@@ -46,6 +46,9 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TouchApp
@@ -59,6 +62,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -96,6 +100,20 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
         if (uri != null) model.importMod(uri)
     }
     val chooseMod = { pickMod.launch(arrayOf("*/*")) }
+    val exportTo = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri: Uri? ->
+        if (uri != null) model.exportSaves(uri)
+    }
+    val importFrom = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) model.importSaves(uri)
+    }
+    val miisFrom = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        model.importMiis(uris)
+    }
+    val saves = SaveActions(
+        export = { exportTo.launch("Nebula saves ${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date())}.zip") },
+        import = { importFrom.launch(arrayOf("*/*")) },
+        miis = { miisFrom.launch(arrayOf("*/*")) },
+    )
     BackHandler(enabled = model.screen in setOf(Screen.Disc, Screen.Settings, Screen.About, Screen.Licenses)) {
         model.back()
     }
@@ -108,11 +126,11 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
         ) { screen ->
             when (screen) {
-                Screen.Welcome -> WelcomeScreen(onChoose = choose)
+                Screen.Welcome -> WelcomeScreen(outdated = model.outdated, onChoose = choose)
                 Screen.Disc -> DiscScreen(model, onChoose = choose)
                 Screen.Import -> ImportScreen(model, onPlay = { model.importDone(context) })
                 Screen.Home -> HomeScreen(model, onPlay = { model.launchGame(context) })
-                Screen.Settings -> SettingsScreen(model, onChoose = choose, onChooseMod = chooseMod, onShareLog = onShareLog)
+                Screen.Settings -> SettingsScreen(model, onChoose = choose, onChooseMod = chooseMod, saves = saves, onShareLog = onShareLog)
                 Screen.About -> AboutScreen(model)
                 Screen.Licenses -> LicenseScreen(model)
             }
@@ -134,6 +152,18 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 )
             },
             confirmButton = { TextButton(onClick = { model.modResult = null }) { Text("OK") } },
+        )
+    }
+    model.transferResult?.let { result ->
+        AlertDialog(
+            onDismissRequest = { model.transferResult = null },
+            icon = {
+                if (result.ok) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Night.Lavender)
+                else Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = Night.Error)
+            },
+            title = { Text(result.title) },
+            text = { Text(result.message) },
+            confirmButton = { TextButton(onClick = { model.transferResult = null }) { Text("OK") } },
         )
     }
     model.gameExit?.let { exit ->
@@ -162,14 +192,18 @@ private fun Page(modifier: Modifier = Modifier, content: @Composable () -> Unit)
 }
 
 @Composable
-private fun WelcomeScreen(onChoose: () -> Unit) {
+private fun WelcomeScreen(outdated: Boolean, onChoose: () -> Unit) {
     Page {
         Gap(24.dp)
         Mark(132.dp)
         Gap(8.dp)
         Text("Nebula", style = MaterialTheme.typography.displayMedium)
         Gap(8.dp)
-        Lead("Super Mario Galaxy, running natively on this device.")
+        Lead(
+            if (outdated) "This update reads the game in a new form: set it up again from your disc image. " +
+                "Your saves, Miis and settings stay."
+            else "Super Mario Galaxy, running natively on this device.",
+        )
         Gap(32.dp)
         GlassCard(Modifier.fillMaxWidth()) {
             Step(1, "Choose your disc image", "The copy you made of your own Wii disc: ISO, RVZ, WIA, WBFS, CISO or GCZ.")
@@ -442,9 +476,20 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
     if (pad && !device.isVirtual) device.name else null
 }.distinct()
 
+/** The file pickers: saves exported to a new .zip or imported from a file, Miis from any number of files. */
+private class SaveActions(val export: () -> Unit, val import: () -> Unit, val miis: () -> Unit)
+
 @Composable
-private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onChooseMod: () -> Unit, onShareLog: () -> Unit) {
+private fun SettingsScreen(
+    model: LauncherModel,
+    onChoose: () -> Unit,
+    onChooseMod: () -> Unit,
+    saves: SaveActions,
+    onShareLog: () -> Unit,
+) {
     var confirmRemove by remember { mutableStateOf(false) }
+    var confirmImport by remember { mutableStateOf(false) }
+    LaunchedEffect(model.saveBytes) { model.refreshMiis() }
     val controls = model.controls
     Column(Modifier.fillMaxSize()) {
         TopBar("Settings") { model.back() }
@@ -466,6 +511,33 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onChooseM
                             "${formatBytes(install.bytes)} · your saves (${formatBytes(model.saveBytes)}) are kept",
                         ) { confirmRemove = true }
                     }
+                }
+
+                SectionTitle("Saves")
+                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                    NavigationRow(
+                        Icons.Rounded.Upload,
+                        "Export saves",
+                        if (model.saveBusy) "Working..." else "Every save file and your Miis as one .zip, to keep or move to another device",
+                    ) { if (!model.saveBusy) saves.export() }
+                    NavigationRow(
+                        Icons.Rounded.Download,
+                        "Import saves",
+                        "A .zip from Export, a Nebula.sav, or a GameData.bin from a Wii, Dolphin or the Switch release",
+                    ) { if (!model.saveBusy) confirmImport = true }
+                }
+
+                SectionTitle("Miis")
+                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                    NavigationRow(
+                        Icons.Rounded.Face,
+                        "Import Miis",
+                        when {
+                            model.miiBusy -> "Working..."
+                            else -> "From a Wii, DS, 3DS, Wii U or Switch, Mii Studio or Mii Creator, for the Mii icons" +
+                                (model.miiCount?.let { " · $it of 100 now" } ?: "")
+                        },
+                    ) { if (!model.miiBusy) saves.miis() }
                 }
 
                 SectionTitle("Mods")
@@ -496,6 +568,16 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onChooseM
                 }
             }
         }
+    }
+    if (confirmImport) {
+        AlertDialog(
+            onDismissRequest = { confirmImport = false },
+            icon = { Icon(Icons.Rounded.Download, contentDescription = null) },
+            title = { Text("Replace your saves?") },
+            text = { Text("The saves in the file take the place of the same saves here. The saves you have now are backed up first.") },
+            confirmButton = { TextButton(onClick = { confirmImport = false; saves.import() }) { Text("Choose a file") } },
+            dismissButton = { TextButton(onClick = { confirmImport = false }) { Text("Cancel") } },
+        )
     }
     if (confirmRemove) {
         AlertDialog(

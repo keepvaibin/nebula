@@ -71,6 +71,13 @@ unsafe fn rust_string(env: *mut JNIEnv, text: jstring) -> Option<String> {
     Some(value)
 }
 
+/// The store version this importer writes and the game reads (cook/store.rs VERSION): a game.pak of another needs
+/// setting up again.
+#[no_mangle]
+pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_storeVersion(_: *mut JNIEnv, _: jclass) -> jint {
+    crate::cook::store::VERSION as jint
+}
+
 /// `{"supported":…,"gameId":…,"title":…,"format":…,"message":…}`; on a failure, supported false and the reason.
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_identify(env: *mut JNIEnv, _: jclass, fd: jint) -> jstring {

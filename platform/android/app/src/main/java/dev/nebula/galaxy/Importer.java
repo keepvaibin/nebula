@@ -14,6 +14,9 @@ final class Importer {
 
     private Importer() {}
 
+    /** The store version this importer writes and the game reads; a game.pak of another needs setting up again. */
+    static native int storeVersion();
+
     /** {"supported", "gameId", "title", "format", "message"} for the image open on {@code fd}. */
     static native String identify(int fd);
 

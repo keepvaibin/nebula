@@ -14,8 +14,11 @@
     public boolean update(long, long);
 }
 
-# Called from libnebula_mods.so by name (platform/sdl/mod_import_jni.cpp).
+# Called from libnebula_mods.so by name (platform/sdl/mod_import_jni.cpp, mii_import_jni.cpp).
 -keep class dev.nebula.galaxy.ModImport {
+    native <methods>;
+}
+-keep class dev.nebula.galaxy.MiiImport {
     native <methods>;
 }
 -keep interface dev.nebula.galaxy.ModImport$Progress { *; }

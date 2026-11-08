@@ -505,6 +505,34 @@ MiiMergeResult import_mii_folder(std::string* message) {
     return import_mii_files(files, message);
 }
 
+MiiFolderAdd add_to_mii_folder(const std::filesystem::path& folder, const std::filesystem::path& name,
+                               std::span<const std::byte> bytes) {
+    MiiFolderAdd added;
+    const std::filesystem::path file = name.filename();
+    const MiiFileContents contents = read_mii_file(bytes, lower_extension(file));
+    added.miis = static_cast<unsigned>(contents.miis.size());
+    added.converted = contents.converted;
+    added.error = contents.error;
+    if (added.miis != 0u && !file.empty()) {
+        added.kept = keep_in_library(folder, file, bytes);
+    }
+    return added;
+}
+
+std::optional<unsigned> mii_library_file_count(const std::filesystem::path& file) {
+    std::error_code error;
+    if (file.empty() || !std::filesystem::is_regular_file(file, error)) {
+        return std::nullopt;
+    }
+    const std::vector<std::byte> bytes = read_file(file);
+    const std::optional<MiiLibrary> read =
+        read_mii_library(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+    if (!read) {
+        return std::nullopt;
+    }
+    return count_miis(*read);
+}
+
 unsigned mii_library_count() {
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);

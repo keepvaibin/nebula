@@ -53,6 +53,10 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     var install by mutableStateOf(Install.read(app))
         private set
+
+    /** The game set up by an earlier Nebula needs setting up again (Install.outdated). */
+    var outdated by mutableStateOf(Install.outdated(app))
+        private set
     var screen by mutableStateOf(if (install != null) Screen.Home else Screen.Welcome)
     var disc by mutableStateOf<DiscPick?>(null)
         private set
@@ -94,6 +98,62 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }.start()
     }
 
+    /** A save export or import under way. */
+    var saveBusy by mutableStateOf(false)
+        private set
+
+    /** How the last save or Mii move ended, shown until the player closes it. */
+    var transferResult by mutableStateOf<TransferResult?>(null)
+
+    /** A Mii import under way. */
+    var miiBusy by mutableStateOf(false)
+        private set
+
+    /** The Miis the game's icon picker shows (null before the game has made its Mii file). */
+    var miiCount by mutableStateOf<Int?>(null)
+        private set
+
+    fun refreshMiis() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val count = runCatching { MiiImport.count(app) }.getOrNull()
+            withContext(Dispatchers.Main) { miiCount = count }
+        }
+    }
+
+    /** The Miis in the files at [uris], for the game to add at its next start. */
+    fun importMiis(uris: List<Uri>) {
+        if (miiBusy || uris.isEmpty()) return
+        miiBusy = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { MiiImport.import(app, uris) }
+                .getOrElse { TransferResult(false, "The Miis could not be imported", it.message ?: "Unknown error.") }
+            withContext(Dispatchers.Main) {
+                miiBusy = false
+                transferResult = result
+            }
+        }
+    }
+
+    /** Every save as one .zip at [uri] (the place the player chose). */
+    fun exportSaves(uri: Uri) = transferSaves { SaveTransfer.export(app, uri) }
+
+    /** The saves in the file at [uri] in place of the game's (the saves in place are backed up first). */
+    fun importSaves(uri: Uri) = transferSaves { SaveTransfer.import(app, uri, install?.gameId.orEmpty()) }
+
+    private fun transferSaves(work: () -> TransferResult) {
+        if (saveBusy) return
+        saveBusy = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching(work).getOrElse { TransferResult(false, "The saves could not be moved", it.message ?: "Unknown error.") }
+            val saves = Storage.saveBytes(app)
+            withContext(Dispatchers.Main) {
+                saveBusy = false
+                saveBytes = saves
+                transferResult = result
+            }
+        }
+    }
+
     fun updateRecordNextRun(value: Boolean) {
         recordNextRun = value
         GameFiles.controls(app).edit().putBoolean(GameFiles.RECORD_NEXT_RUN, value).commit()
@@ -118,6 +178,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     /** The launcher came to the front: the game may have just ended. */
     fun resumed() {
         install = Install.read(app)
+        outdated = Install.outdated(app)
         freeBytes = Storage.freeBytes(app)
         recordNextRun = GameFiles.controls(app).getBoolean(GameFiles.RECORD_NEXT_RUN, false)
         viewModelScope.launch(Dispatchers.IO) {
@@ -153,12 +214,19 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // The game in place is replaced, so its room counts; an outdated one's too (it is removed before the import).
     val enoughSpace: Boolean
-        get() = freeBytes + (install?.bytes ?: 0L) >= Storage.GAME_BYTES + Storage.MARGIN_BYTES
+        get() = freeBytes + (install?.bytes ?: if (outdated) GameFiles.pak(app).length() else 0L) >=
+            Storage.GAME_BYTES + Storage.MARGIN_BYTES
 
     fun startImport() {
         val pick = disc ?: return
         val identity = pick.identity ?: return
+        // A store the game no longer reads only takes room the new one needs.
+        if (outdated) {
+            Storage.removeGame(app)
+            outdated = false
+        }
         Imports.start(app, pick.uri, identity, pick.name)
         screen = Screen.Import
     }
@@ -166,6 +234,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun importDone(play: Context?) {
         Imports.acknowledge()
         install = Install.read(app)
+        outdated = Install.outdated(app)
         disc = null
         screen = if (install != null) Screen.Home else Screen.Welcome
         if (play != null && install != null) launchGame(play)
