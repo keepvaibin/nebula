@@ -3,6 +3,12 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include <nebula_geometry.hpp>
 
+namespace nw4r {
+    namespace lyt {
+        class Pane;
+    };  // namespace lyt
+};  // namespace nw4r
+
 class LiveActor;
 class StarPointerCommandStream;
 class StarPointerDirector;
@@ -141,6 +147,11 @@ public:
     bool mIsAppear;
     s32 mAppearTime;
     u32 _74;
+    // The panes shown, hidden and tested every frame, bound in initWithPort.
+    nw4r::lyt::Pane* mStarPointerPane = nullptr;
+    nw4r::lyt::Pane* mHandPointerPane = nullptr;
+    nw4r::lyt::Pane* mHandArrowPane = nullptr;
+    nw4r::lyt::Pane* mPicNozzlePane = nullptr;
 };
 
 class StarPointerNumber : public LayoutActor {

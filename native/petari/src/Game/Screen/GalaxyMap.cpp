@@ -482,6 +482,44 @@ void GalaxyMap::initPaneCtrlPointing() {
     ::initIconArray(mCometIcon, new GalaxyMapCometIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     initPointingTarget(galaxyInfo.getNumEntries());
 
+    // A mod's galaxy names a pane its map layout may not have. Each that says where it goes gets it made, all before
+    // the controls below, and the pane list is built again once with them in it.
+    bool added = false;
+    for (s32 i = 0; i < galaxyInfo.getNumEntries(); i++) {
+        const char* pPaneName = nullptr;
+        if (!galaxyInfo.getValue(i, "MapPaneName", &pPaneName) || MR::isEqualString(pPaneName, "") ||
+            MR::isEqualString(pPaneName, "dummy")) {
+            continue;
+        }
+        // The tree itself: a pane made for an earlier galaxy of this loop is not listed yet.
+        if (getLayoutManager()->mLayout->mpRootPane->FindPaneByName(pPaneName, true) != nullptr) {
+            continue;
+        }
+        const char* pGalaxyName = nullptr;
+        galaxyInfo.getValue(i, "name", &pGalaxyName);
+        f32 x = 0.0f;
+        f32 y = 0.0f;
+        s32 dome = 0;
+        if (!NebulaMods::mapSpot(pGalaxyName, &x, &y, &dome)) {
+            continue;
+        }
+        char parentName[16];
+        nebula_snprintf(parentName, sizeof(parentName), dome > 0 ? "Galaxy%d" : "Tico", dome);
+        nw4r::lyt::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
+        if (pParent == nullptr) {
+            continue;
+        }
+        nw4r::lyt::Pane* pPane = new nw4r::lyt::Pane();
+        pPane->SetName(pPaneName);
+        pPane->SetSRTElement(0, x);
+        pPane->SetSRTElement(1, y);
+        pParent->AppendChild(pPane);
+        added = true;
+    }
+    if (added) {
+        getLayoutManager()->rebuildPaneInfo();
+    }
+
     for (s32 i = 0; i < galaxyInfo.getNumEntries(); i++) {
         const char* pPaneName = nullptr;
 
@@ -493,29 +531,12 @@ void GalaxyMap::initPaneCtrlPointing() {
             continue;
         }
 
+        if (getLayoutManager()->findPaneByName(pPaneName) == nullptr) {
+            continue;
+        }
+
         const char* pGalaxyName = nullptr;
         galaxyInfo.getValue(i, "name", &pGalaxyName);
-
-        // A mod's galaxy names a pane its map layout may not have. One that says where it goes gets it made.
-        if (getLayoutManager()->findPaneByName(pPaneName) == nullptr) {
-            f32 x = 0.0f;
-            f32 y = 0.0f;
-            s32 dome = 0;
-            if (!NebulaMods::mapSpot(pGalaxyName, &x, &y, &dome)) {
-                continue;
-            }
-            char parentName[16];
-            nebula_snprintf(parentName, sizeof(parentName), dome > 0 ? "Galaxy%d" : "Tico", dome);
-            nw4r::lyt::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
-            if (pParent == nullptr) {
-                continue;
-            }
-            nw4r::lyt::Pane* pPane = new nw4r::lyt::Pane();
-            pPane->SetName(pPaneName);
-            pPane->SetSRTElement(0, x);
-            pPane->SetSRTElement(1, y);
-            pParent->AppendChild(pPane);
-        }
 
         GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
         MR::createAndAddPaneCtrl(this, pPaneName, 1);

@@ -122,6 +122,9 @@ namespace nw4r {
             char mUserData[9];
             u8 mbUserAllocated;
             mutable u32 mDrawSlot = 0;
+            // Its entry in its LayoutManager's pane list (LayoutManager::buildPaneInfo); cNoListIndex until listed.
+            static constexpr u32 cNoListIndex = 0xFFFFFFFFu;
+            u32 mListIndex = cNoListIndex;
             u8 mPadding;
         };
         // The pane as a T (Picture, TextBox, Window, Bounding) when it is one, else null; null stays null.

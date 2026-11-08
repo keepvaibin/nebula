@@ -15,6 +15,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 #include <cstring>
@@ -30,6 +31,19 @@
 #include <nebula_format.h>
 
 namespace {
+    // FNV-1a over a pane name's first 16 characters: all a pane name holds, and what nw4r compares.
+    u32 hashPaneName(const char* pName) {
+        u32 hash = 0x811C9DC5u;
+        for (u32 i = 0; i < 16 && pName[i] != '\0'; i++) {
+            hash = (hash ^ static_cast< u8 >(pName[i])) * 0x01000193u;
+        }
+        return hash;
+    }
+
+    bool hasPaneState(const LayoutPaneInfo& rInfo) {
+        return rInfo.mPaneCtrl != nullptr || rInfo.mGroupCtrlLink != nullptr || rInfo.mMtxRef != nullptr;
+    }
+
     namespace Local {
         class BitFlagBase {
         public:
@@ -253,15 +267,8 @@ LayoutPaneCtrl* LayoutManager::getPaneCtrl(const char* pName) const {
 }
 
 s32 LayoutManager::getIndexOfPane(const char* pName) const {
-    u32 paneCount = mPaneCount;
-
-    for (u32 i = 0; i < paneCount; i++) {
-        if (strcmp(mPaneInfoList[i].mName, pName) == 0) {
-            return i;
-        }
-    }
-
-    return 0;
+    const u32 index = findListIndex(pName);
+    return index != nw4r::lyt::Pane::cNoListIndex && strcmp(mPaneInfoList[index].mName, pName) == 0 ? static_cast< s32 >(index) : 0;
 }
 
 bool LayoutManager::isExistPaneCtrl(const char* pName) const {
@@ -457,8 +464,7 @@ void LayoutManager::unbindPaneCtrlAnimSub(u32& rIndex, nw4r::lyt::AnimTransform*
 }
 
 void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDrawInfo) {
-    u32 index = 0;
-    animateRecursive(index, mLayout->mpRootPane);
+    animateRecursive(mLayout->mpRootPane);
     if (mIsScreenHidden) {
         return;
     }
@@ -471,9 +477,9 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
         }
 
         if (mPaneInfoList[i].mMtxRef != nullptr) {
-            nw4r::lyt::Pane* pPane =
-                mPaneInfoList[i].mPaneCtrl != nullptr ? mPaneInfoList[i].mPaneCtrl->mPane : findPaneByName(mPaneInfoList[i].mName);
-            NebulaMtxCopy(pPane->mGlbMtx, mPaneInfoList[i].mMtxRef);
+            // The entry's own pane: createPaneMtxRef put the copy on the first entry of its name, the one a name
+            // search finds, and a control sits on the entry of its own pane.
+            NebulaMtxCopy(mPaneInfoList[i].mPane->mGlbMtx, mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
                 mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
@@ -524,33 +530,77 @@ void LayoutManager::initDrawInfo() {
 }
 
 void LayoutManager::initPaneInfo() {
-    mPaneCount = countPanes(mLayout->mpRootPane);
-    mPaneInfoList = new LayoutPaneInfo[mPaneCount];
-
-    u32 rIndex = 0;
-    initPaneInfoRecursive(rIndex, mLayout->mpRootPane);
+    buildPaneInfo(nullptr, 0);
 }
 
 void LayoutManager::rebuildPaneInfo() {
-    delete[] mPaneInfoList;
-    initPaneInfo();
+    LayoutPaneInfo* const pOld = mPaneInfoList;
+    const u32 oldCount = mPaneCount;
+    delete[] mNameSlots;
+    buildPaneInfo(pOld, oldCount);
+    u32 held = 0;
+    for (u32 i = 0; i < oldCount; i++) {
+        held += hasPaneState(pOld[i]) ? 1 : 0;
+    }
+    u32 kept = 0;
+    for (u32 i = 0; i < mPaneCount; i++) {
+        kept += hasPaneState(mPaneInfoList[i]) ? 1 : 0;
+    }
+    if (kept != held) {
+        JUTNativeLog("LayoutManager %s: %u panes with controls or matrix copies left the tree\n", mLayoutName, held - kept);
+    }
+    delete[] pOld;
 }
 
-void LayoutManager::initPaneInfoRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
-    nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
+// The list in tree order (pOld: the list before a rebuild, whose entries move with their panes), then the name slots.
+void LayoutManager::buildPaneInfo(const LayoutPaneInfo* pOld, u32 oldCount) {
+    mPaneCount = countPanes(mLayout->mpRootPane);
+    mPaneInfoList = new LayoutPaneInfo[mPaneCount];
+    u32 rIndex = 0;
+    initPaneInfoRecursive(rIndex, mLayout->mpRootPane, pOld, oldCount);
 
-    mPaneInfoList[rIndex].mName = pPane->mName;
-    mPaneInfoList[rIndex].mPaneCtrl = nullptr;
-    mPaneInfoList[rIndex].mGroupCtrlLink = nullptr;
-    mPaneInfoList[rIndex].mMtxRef = nullptr;
-    mPaneInfoList[rIndex].mPane = pPane;
+    u32 slots = 2;
+    while (slots < mPaneCount * 2) {
+        slots *= 2;
+    }
+    mNameSlots = new u32[slots];
+    mNameSlotMask = slots - 1;
+    for (u32 i = 0; i < slots; i++) {
+        mNameSlots[i] = 0;
+    }
+    for (u32 i = 0; i < mPaneCount; i++) {
+        const char* const pName = mPaneInfoList[i].mName;
+        u32 slot = hashPaneName(pName) & mNameSlotMask;
+        while (mNameSlots[slot] != 0 && strncmp(mPaneInfoList[mNameSlots[slot] - 1].mName, pName, 16) != 0) {
+            slot = (slot + 1) & mNameSlotMask;
+        }
+        if (mNameSlots[slot] == 0) {
+            mNameSlots[slot] = i + 1;
+        }
+    }
+}
+
+void LayoutManager::initPaneInfoRecursive(u32& rIndex, nw4r::lyt::Pane* pPane, const LayoutPaneInfo* pOld, u32 oldCount) {
+    LayoutPaneInfo& rInfo = mPaneInfoList[rIndex];
+    const u32 oldIndex = pPane->mListIndex;
+    if (oldIndex < oldCount && pOld[oldIndex].mPane == pPane) {
+        rInfo = pOld[oldIndex];
+        if (rInfo.mPaneCtrl != nullptr) {
+            rInfo.mPaneCtrl->mPaneIndex = static_cast< s32 >(rIndex);
+        }
+    } else {
+        rInfo.mPaneCtrl = nullptr;
+        rInfo.mGroupCtrlLink = nullptr;
+        rInfo.mMtxRef = nullptr;
+    }
+    rInfo.mName = pPane->mName;
+    rInfo.mPane = pPane;
+    pPane->mListIndex = rIndex;
 
     const u32 startIndex = rIndex++;
-
-    for (nw4r::lyt::Pane* pChild : rPaneList) {
-        initPaneInfoRecursive(rIndex, pChild);
+    for (nw4r::lyt::Pane* pChild : pPane->mChildList) {
+        initPaneInfoRecursive(rIndex, pChild, pOld, oldCount);
     }
-
     mPaneInfoList[startIndex].mChildCount = rIndex - startIndex;
 }
 
@@ -601,42 +651,45 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
     }
 }
 
-void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
-    // Panes added after the layout was read (Nebula's screens: NebulaPaneKit) come after its own, outside the pane
-    // list, and have no controllers.
-    if (rIndex >= mPaneCount) {
-        pPane->AnimateSelf(1);
-        rIndex++;
-        for (nw4r::lyt::Pane* pChild : pPane->mChildList) {
-            animateRecursive(rIndex, pChild);
+void LayoutManager::animateRecursive(nw4r::lyt::Pane* pPane) {
+    // A pane's controls through its own entry (a pane made in code that no rebuild has listed yet has none).
+    const u32 index = pPane->mListIndex;
+    if (index < mPaneCount && mPaneInfoList[index].mPane == pPane) {
+        if (mPaneInfoList[index].mPaneCtrl != nullptr) {
+            mPaneInfoList[index].mPaneCtrl->calcAnim();
         }
-        return;
-    }
-    if (mPaneInfoList[rIndex].mPaneCtrl != nullptr) {
-        mPaneInfoList[rIndex].mPaneCtrl->calcAnim();
-    }
-
-    for (LayoutGroupCtrlLink* pLink = mPaneInfoList[rIndex].mGroupCtrlLink; pLink != nullptr; pLink = pLink->mNext) {
-        pLink->mGroupCtrl->calcAnim();
+        for (LayoutGroupCtrlLink* pLink = mPaneInfoList[index].mGroupCtrlLink; pLink != nullptr; pLink = pLink->mNext) {
+            pLink->mGroupCtrl->calcAnim();
+        }
     }
 
     pPane->AnimateSelf(1);
-    rIndex++;
-
     for (nw4r::lyt::Pane* pChild : pPane->mChildList) {
-        animateRecursive(rIndex, pChild);
+        animateRecursive(pChild);
     }
 }
 
-nw4r::lyt::Pane* LayoutManager::findPaneByName(const char* pName) const {
-    u32 paneCount = mPaneCount;
-    for (u32 i = 0; i < paneCount; i++) {
-        if (strcmp(mPaneInfoList[i].mName, pName) == 0) {
-            return mPaneInfoList[i].mPane;
+u32 LayoutManager::findListIndex(const char* pName) const {
+    for (u32 slot = hashPaneName(pName) & mNameSlotMask; mNameSlots[slot] != 0; slot = (slot + 1) & mNameSlotMask) {
+        const u32 index = mNameSlots[slot] - 1;
+        if (strncmp(mPaneInfoList[index].mName, pName, 16) == 0) {
+            return index;
         }
     }
+    return nw4r::lyt::Pane::cNoListIndex;
+}
 
-    return nullptr;
+nw4r::lyt::Pane* LayoutManager::getPane(const char* pName) const {
+    if (pName == nullptr) {
+        return mLayout->mpRootPane;
+    }
+    const u32 index = findListIndex(pName);
+    return index != nw4r::lyt::Pane::cNoListIndex ? mPaneInfoList[index].mPane : nullptr;
+}
+
+nw4r::lyt::Pane* LayoutManager::findPaneByName(const char* pName) const {
+    const u32 index = findListIndex(pName);
+    return index != nw4r::lyt::Pane::cNoListIndex && strcmp(mPaneInfoList[index].mName, pName) == 0 ? mPaneInfoList[index].mPane : nullptr;
 }
 
 void LayoutManager::replaceIndDummyTexture() {

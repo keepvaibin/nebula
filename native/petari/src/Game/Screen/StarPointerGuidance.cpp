@@ -39,15 +39,18 @@ void StarPointerGuidance::init(const TableIter& rIter) {
     MR::createAndAddPaneCtrl(this, "NPointerGuide", 1);
     MR::createAndAddPaneCtrl(this, "PointerFrame1", 1);
     MR::createAndAddPaneCtrl(this, "PointerFrame2", 1);
+    mGuidePane = MR::getPane(this, "NPointerGuide");
+    mFrame1PPane = MR::getPane(this, "PointerFrame1");
+    mFrame2PPane = MR::getPane(this, "PointerFrame2");
 
     mSpineFrame1P = new Spine(this, GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));
     mSpineGuidance = new Spine(this, GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));
     mSpineFrame2P = new Spine(this, GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));
 
     appear();
-    MR::hidePaneRecursive(this, "NPointerGuide");
-    MR::hidePaneRecursive(this, "PointerFrame1");
-    MR::hidePaneRecursive(this, "PointerFrame2");
+    MR::hidePaneRecursive(mGuidePane);
+    MR::hidePaneRecursive(mFrame1PPane);
+    MR::hidePaneRecursive(mFrame2PPane);
 
     mTextLineNum1P = MR::getTextLineNumMaxRecursive(this, "PointerFrame1");
     mTextLineNum2P = MR::getTextLineNumMaxRecursive(this, "PointerFrame2");
@@ -347,9 +350,9 @@ bool StarPointerGuidance::isExistFrame2P() {
 void StarPointerGuidance::deactive() {
     mIsActive = false;
 
-    MR::hidePaneRecursive(this, "PointerFrame1");
-    MR::hidePaneRecursive(this, "NPointerGuide");
-    MR::hidePaneRecursive(this, "PointerFrame2");
+    MR::hidePaneRecursive(mFrame1PPane);
+    MR::hidePaneRecursive(mGuidePane);
+    MR::hidePaneRecursive(mFrame2PPane);
     mSpineFrame1P->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));
     mSpineGuidance->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));
     mSpineFrame2P->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait));

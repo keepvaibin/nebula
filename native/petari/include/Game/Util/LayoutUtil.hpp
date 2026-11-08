@@ -158,6 +158,9 @@ namespace MR {
     void showPaneRecursive(LayoutActor*, const char*);
     void hidePane(LayoutActor*, const char*);
     void hidePaneRecursive(LayoutActor*, const char*);
+    // The same for a pane a screen bound at set-up: the pane and everything under it.
+    void showPaneRecursive(nw4r::lyt::Pane*);
+    void hidePaneRecursive(nw4r::lyt::Pane*);
     bool isHiddenPane(const LayoutActor*, const char*);
     void showScreen(LayoutActor*);
     void hideScreen(LayoutActor*);
