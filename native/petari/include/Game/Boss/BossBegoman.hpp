@@ -16,7 +16,7 @@ public:
         FollowerKind_BothFollower,
     };
 
-    BossBegoman(const char*);
+    BossBegoman(const char* pName);
 
     virtual void init(const TableIter& rIter);
     virtual void calcAnim();
@@ -24,19 +24,22 @@ public:
     virtual void kill();
     virtual void control();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual u32 getKind() const {
         return 0;
-    };
-    virtual bool onTouchElectric(const Vec3f&, const Vec3f&);
+    }
+    virtual bool onTouchElectric(const Vec3f& rRailPos, const Vec3f& rRailDir);
     virtual bool setNerveReturn();
     virtual const Nerve* getNerveWait();
-    virtual void addVelocityOnPushedFromElectricRail(const Vec3f&, const Vec3f&);
+    virtual void addVelocityOnPushedFromElectricRail(const Vec3f& rRailPos, const Vec3f& rRailDir);
     virtual bool requestAttack();
 
+    bool isNerveOnWeak() const;
+    bool isNerveElectricOrJump() const;
+    // Blow, the electric hit and its return, and the jump home: attacks and messages are ignored.
+    bool isNerveIgnoreAttack() const;
     void setStepBackNerve();
 
     void exePreDemoWait();
@@ -69,12 +72,12 @@ public:
     void exeKeepDistance();
 
     void edgeRecoverCore();
+    void recoverEdge();
 
     void tryLaunchFollower();
-    void killAllFollower(FollowerKind);
+    void killAllFollower(FollowerKind kind);
 
     bool isDeadAllFollower();
-    bool isDeadAllFollowerCore(BegomanBase**, s32);
 
     bool receiveMsgTrample(HitSensor* pSender, HitSensor* pReceiver);
 
