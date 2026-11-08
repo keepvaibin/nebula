@@ -3,6 +3,7 @@
 #include "Game/Effect/SimpleEffectObj.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
@@ -11,6 +12,12 @@ class CameraTargetMtx;
 
 class MorphItemObjNeo : public LiveActor {
 public:
+    enum Container {
+        Container_None = 0,
+        Container_Bubble = 1,
+        Container_CrystalBox = 2,
+    };
+
     MorphItemObjNeo(const char*, s32);
 
     virtual void init(const TableIter&);
@@ -35,20 +42,19 @@ public:
     void exeFly();
     void exeDemo();
 
-    u16 mAppearMode;
-    u16 mAppearFrames;
+    u16 mSpiralTime;    // frames of the switch-appear spiral left
+    u16 mAppearFrames;  // frames of the current appear camera left
     bool mIsUseSwitch;
-    bool mIsFloating;  // Obj_arg2
+    bool mIsFloating;  // Obj_arg2 != 1
     bool mIsDemoPending;
-    u8 mCameraMode;     // Obj_arg5
-    s8 mRotateMode;     // Obj_arg6
-    bool mIsSwitchAppearOnce;           // Obj_arg0
-    u8 mContainerType;  // Obj_arg3
+    u8 mCameraMode;  // appear cameras still to run (Obj_arg5: 1 or 2)
+    s8 mRotateMode;  // Obj_arg6
+    bool mIsSwitchAppearOnce;  // Obj_arg0 == 1
+    u8 mContainerType;         // Container, from Obj_arg3
     u8 mBoundCount;
-    s8 mIsBind;      // Obj_arg1
-    u8 mShadowType;  // Obj_arg4
+    s8 mIsBind;  // Obj_arg1
     Vec3f mZRotation;
-    s32 mMorphType;
+    s32 mMorphType;  // PlayerItemStatus
     f32 mAngle;
     Vec3f mSpawnPosition;
     ActorCameraInfo* mActorCameraInfo;
@@ -60,41 +66,39 @@ public:
 
 class MorphItemNeoHopper : public MorphItemObjNeo {
 public:
-    MorphItemNeoHopper(const char* pName) : MorphItemObjNeo(pName, 1) {
+    MorphItemNeoHopper(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Hopper) {
     }
 };
 
 class MorphItemNeoIce : public MorphItemObjNeo {
 public:
-    MorphItemNeoIce(const char* pName) : MorphItemObjNeo(pName, 4) {
+    MorphItemNeoIce(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Ice) {
     }
 };
 
 class MorphItemNeoFire : public MorphItemObjNeo {
 public:
-    MorphItemNeoFire(const char* pName) : MorphItemObjNeo(pName, 5) {
+    MorphItemNeoFire(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Fire) {
     }
 };
 
 class MorphItemNeoFoo : public MorphItemObjNeo {
 public:
-    MorphItemNeoFoo(const char* pName) : MorphItemObjNeo(pName, 6) {
+    MorphItemNeoFoo(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Foo) {
     }
 };
 
 class MorphItemNeoBee : public MorphItemObjNeo {
 public:
-    MorphItemNeoBee(const char* pName) : MorphItemObjNeo(pName, 2) {
+    MorphItemNeoBee(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Bee) {
     }
 };
 
 class MorphItemNeoTeresa : public MorphItemObjNeo {
 public:
-    MorphItemNeoTeresa(const char* pName) : MorphItemObjNeo(pName, 3) {
+    MorphItemNeoTeresa(const char* pName) : MorphItemObjNeo(pName, PlayerItemStatus_Teresa) {
     }
 };
-
-// Why is this here?
 
 class EffectObjR100F50SyncClipping : public SimpleEffectObj {
 public:

@@ -16,7 +16,7 @@ BenefitItemLifeUp::BenefitItemLifeUp(const char* pName) : BenefitItemObj(pName, 
 void BenefitItemLifeUp::exeCatch() {
     MR::hideModel(this);
 
-    MR::changePlayerItemStatus(0xA);
+    MR::changePlayerItemStatus(PlayerItemStatus_LifeUp);
 
     runEfx("Get");
 
