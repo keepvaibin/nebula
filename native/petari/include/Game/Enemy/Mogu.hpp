@@ -20,23 +20,25 @@ public:
     virtual void attackSensor(HitSensor*, HitSensor*);
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
 
-    void exeWait();
     void exeHide();
     void exeHideWait();
     void exeAppear();
-    bool isPlayerExistUp();
+    bool isPlayerExistUp() const;
+    bool isPlayerTooNear(f32 distanceToPlayer) const;
+    bool tryStartSwoon(bool isHipDropFelt);
     void exeSearch();
     void exeThrow();
     void endThrow();
-    void tearDownThrow();
     void exeSwoonStart();
     void exeSwoon();
     void exeHipDropReaction();
     void exeSwoonEnd();
     void exeStampDeath();
     void exeHitBlow();
-    bool isNearPlayerHipDrop();
-    bool tryPunchHitted(HitSensor*, HitSensor*, bool);
+    bool isNearPlayerHipDrop() const;
+    bool isHiddenOrDown() const;
+    bool isSwoon() const;
+    void startHitBlow(HitSensor* pAttacker, HitSensor* pVictim);
 
     AnimScaleController* mAnimScaleController;
     FixedPosition* mStoneHoldPos;
