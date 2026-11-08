@@ -301,13 +301,12 @@ enum {
 /* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
    The host keeps the menu (its keys and controllers' buttons) and the game draws it: NEBULA_HBM_VIEW returns -1 while
    it is closed, else the selected answer in bits 0-7 and in bits 8-15 the choice it asks about (0 none: the list,
-   whose rows are close, reset and leave; 1 leave or 2 reset: "are you sure?", whose answers are no and yes); its
-   value is 1 when the game draws what it returns (the host then draws no menu of its own). */
+   whose rows are close, reset and leave; 1 leave or 2 reset: "are you sure?", whose answers are no and yes). */
 enum {
     NEBULA_HBM_OPEN = 1, /* value: 1 on a 16:9 screen */
     NEBULA_HBM_POLL,
     NEBULA_HBM_CLOSE,    /* closed at once (a reset or power event) */
-    NEBULA_HBM_VIEW,     /* value: 1 drawing it */
+    NEBULA_HBM_VIEW,
     NEBULA_HBM_POINT,    /* value: the answer under the pointer, selected */
     NEBULA_HBM_CHOOSE,   /* value: the answer clicked */
 };

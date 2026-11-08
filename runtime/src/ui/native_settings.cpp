@@ -60,7 +60,6 @@ namespace host_window {
 
 std::atomic<double> measured_present_hz{0.0};
 std::atomic<std::int32_t> pointer_wheel{0};
-std::string native_settings_content_root;
 // The session's GPU is an NVIDIA RTX (RendererD3D12::initialize): DLSS can be offered.
 std::atomic<bool> rtx_adapter{false};
 
@@ -160,16 +159,6 @@ std::recursive_mutex s_native_settings_mutex;
 
 std::atomic<bool> s_native_settings_visible{false};
 galaxy::ui::HomeMenuModel s_home_menu;
-constexpr unsigned kHomeMenuRows = galaxy::ui::HomeMenuModel::rows;
-constexpr unsigned kHomeMenuAnswers = galaxy::ui::HomeMenuModel::answers;
-#if defined(__ANDROID__)
-constexpr const char* kHomeMenuQuitText = "QUIT";
-#else
-constexpr const char* kHomeMenuQuitText = "QUIT TO DESKTOP";
-#endif
-constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "RESET", kHomeMenuQuitText};
-constexpr const char* kHomeMenuAnswerText[kHomeMenuAnswers] = {"NO", "YES"};
-
 bool handle_home_menu_key(std::uintptr_t key, bool was_down) {
     using galaxy::ui::HomeAction;
     HomeAction action = HomeAction::Ignore;
@@ -199,7 +188,8 @@ std::atomic<unsigned> s_native_settings_row{0};
 // starts it at its first.
 std::atomic<unsigned> s_native_settings_button{0};
 std::atomic<unsigned> s_native_settings_button_row{~0u};
-// The native game draws the menu (it read native_settings_view): the overlay draws nothing of its own.
+// The game's menu has asked for its view (native_settings_view). Before that an open request is held: the menu opens
+// at that first call, and its keys wait.
 std::atomic<bool> s_settings_drawn_by_game{false};
 // Leaving with changes not applied asks first: apply them, discard them, or stay. Under s_native_settings_mutex.
 bool s_settings_leave_asking = false;
@@ -338,7 +328,6 @@ std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
 std::string s_controls_message;
 std::uint64_t s_controls_message_until_ms = 0u;
-unsigned s_settings_first_row = 0u;
 // The window thread's left/right-resolved code for the key being handled.
 std::uint32_t s_handled_key_normalized = 0u;
 
@@ -1324,7 +1313,6 @@ void settle_native_settings_row() {
 void cycle_native_settings_tab(int delta) {
     end_controls_capture();
     s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
-    s_settings_first_row = 0u;
     int place = static_cast<int>(shown_position(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount));
     place = (place + delta) % static_cast<int>(kShownTabCount);
     if (place < 0) {
@@ -1607,6 +1595,15 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
     if (s_home_menu.visible.load(std::memory_order_acquire)) {
         return handle_home_menu_key(key, was_down);
     }
+    // Opened before the game's menu is built (the boot's first seconds): held until the game first asks for its view.
+    // F1 and Escape close it; every other key waits.
+    if (s_native_settings_visible.load(std::memory_order_relaxed) &&
+        !s_settings_drawn_by_game.load(std::memory_order_acquire)) {
+        if (!was_down && (key == VK_F1 || key == VK_ESCAPE)) {
+            set_native_settings_visible(false);
+        }
+        return true;
+    }
     // A controller's A changes the selected setting, as Right does, and presses the selected button.
     const bool accept = key == galaxy::input::settings_pad::kKeyAccept;
     if (accept) {
@@ -1765,192 +1762,6 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
     default:
         return false;
     }
-}
-
-// The two accented capitals the language names need, as ui_glyph codes.
-constexpr char kGlyphCCedilla = '\x01';
-constexpr char kGlyphNTilde = '\x02';
-
-std::array<std::uint8_t, 7> ui_glyph(char ch) {
-    if (ch >= 'a' && ch <= 'z') {
-        ch = static_cast<char>(ch - 'a' + 'A');
-    }
-    switch (ch) {
-    case 'A': return {0x0Eu, 0x11u, 0x11u, 0x1Fu, 0x11u, 0x11u, 0x11u};
-    case 'B': return {0x1Eu, 0x11u, 0x11u, 0x1Eu, 0x11u, 0x11u, 0x1Eu};
-    case 'C': return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x10u, 0x11u, 0x0Eu};
-    case 'D': return {0x1Eu, 0x11u, 0x11u, 0x11u, 0x11u, 0x11u, 0x1Eu};
-    case 'E': return {0x1Fu, 0x10u, 0x10u, 0x1Eu, 0x10u, 0x10u, 0x1Fu};
-    case 'F': return {0x1Fu, 0x10u, 0x10u, 0x1Eu, 0x10u, 0x10u, 0x10u};
-    case 'G': return {0x0Eu, 0x11u, 0x10u, 0x17u, 0x11u, 0x11u, 0x0Fu};
-    case 'H': return {0x11u, 0x11u, 0x11u, 0x1Fu, 0x11u, 0x11u, 0x11u};
-    case 'I': return {0x0Eu, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x0Eu};
-    case 'J': return {0x07u, 0x02u, 0x02u, 0x02u, 0x12u, 0x12u, 0x0Cu};
-    case 'K': return {0x11u, 0x12u, 0x14u, 0x18u, 0x14u, 0x12u, 0x11u};
-    case 'L': return {0x10u, 0x10u, 0x10u, 0x10u, 0x10u, 0x10u, 0x1Fu};
-    case 'M': return {0x11u, 0x1Bu, 0x15u, 0x15u, 0x11u, 0x11u, 0x11u};
-    case 'N': return {0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u, 0x11u};
-    case 'O': return {0x0Eu, 0x11u, 0x11u, 0x11u, 0x11u, 0x11u, 0x0Eu};
-    case 'P': return {0x1Eu, 0x11u, 0x11u, 0x1Eu, 0x10u, 0x10u, 0x10u};
-    case 'Q': return {0x0Eu, 0x11u, 0x11u, 0x11u, 0x15u, 0x12u, 0x0Du};
-    case 'R': return {0x1Eu, 0x11u, 0x11u, 0x1Eu, 0x14u, 0x12u, 0x11u};
-    case 'S': return {0x0Fu, 0x10u, 0x10u, 0x0Eu, 0x01u, 0x01u, 0x1Eu};
-    case 'T': return {0x1Fu, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u};
-    case 'U': return {0x11u, 0x11u, 0x11u, 0x11u, 0x11u, 0x11u, 0x0Eu};
-    case 'V': return {0x11u, 0x11u, 0x11u, 0x11u, 0x11u, 0x0Au, 0x04u};
-    case 'W': return {0x11u, 0x11u, 0x11u, 0x15u, 0x15u, 0x15u, 0x0Au};
-    case 'X': return {0x11u, 0x11u, 0x0Au, 0x04u, 0x0Au, 0x11u, 0x11u};
-    case 'Y': return {0x11u, 0x11u, 0x0Au, 0x04u, 0x04u, 0x04u, 0x04u};
-    case 'Z': return {0x1Fu, 0x01u, 0x02u, 0x04u, 0x08u, 0x10u, 0x1Fu};
-    case '0': return {0x0Eu, 0x11u, 0x13u, 0x15u, 0x19u, 0x11u, 0x0Eu};
-    case '1': return {0x04u, 0x0Cu, 0x04u, 0x04u, 0x04u, 0x04u, 0x0Eu};
-    case '2': return {0x0Eu, 0x11u, 0x01u, 0x02u, 0x04u, 0x08u, 0x1Fu};
-    case '3': return {0x1Eu, 0x01u, 0x01u, 0x0Eu, 0x01u, 0x01u, 0x1Eu};
-    case '4': return {0x02u, 0x06u, 0x0Au, 0x12u, 0x1Fu, 0x02u, 0x02u};
-    case '5': return {0x1Fu, 0x10u, 0x10u, 0x1Eu, 0x01u, 0x01u, 0x1Eu};
-    case '6': return {0x06u, 0x08u, 0x10u, 0x1Eu, 0x11u, 0x11u, 0x0Eu};
-    case '7': return {0x1Fu, 0x01u, 0x02u, 0x04u, 0x08u, 0x08u, 0x08u};
-    case '8': return {0x0Eu, 0x11u, 0x11u, 0x0Eu, 0x11u, 0x11u, 0x0Eu};
-    case '9': return {0x0Eu, 0x11u, 0x11u, 0x0Fu, 0x01u, 0x02u, 0x0Cu};
-    case ':': return {0x00u, 0x04u, 0x04u, 0x00u, 0x04u, 0x04u, 0x00u};
-    case '.': return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x0Cu, 0x0Cu};
-    case '-': return {0x00u, 0x00u, 0x00u, 0x1Eu, 0x00u, 0x00u, 0x00u};
-    case '+': return {0x00u, 0x04u, 0x04u, 0x1Fu, 0x04u, 0x04u, 0x00u};
-    case '/': return {0x01u, 0x01u, 0x02u, 0x04u, 0x08u, 0x10u, 0x10u};
-    case ',': return {0x00u, 0x00u, 0x00u, 0x00u, 0x0Cu, 0x04u, 0x08u};
-    case '=': return {0x00u, 0x00u, 0x1Fu, 0x00u, 0x1Fu, 0x00u, 0x00u};
-    case '%': return {0x19u, 0x19u, 0x02u, 0x04u, 0x08u, 0x13u, 0x13u};
-    case '?': return {0x0Eu, 0x11u, 0x01u, 0x02u, 0x04u, 0x00u, 0x04u};
-    case '<': return {0x02u, 0x04u, 0x08u, 0x10u, 0x08u, 0x04u, 0x02u};
-    case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
-    case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
-    case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
-    // Mod names and messages use these too.
-    case '\'': return {0x0Cu, 0x04u, 0x08u, 0x00u, 0x00u, 0x00u, 0x00u};
-    case '"': return {0x0Au, 0x0Au, 0x0Au, 0x00u, 0x00u, 0x00u, 0x00u};
-    case '!': return {0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x00u, 0x04u};
-    case '#': return {0x0Au, 0x0Au, 0x1Fu, 0x0Au, 0x1Fu, 0x0Au, 0x0Au};
-    case '&': return {0x0Cu, 0x12u, 0x14u, 0x08u, 0x15u, 0x12u, 0x0Du};
-    case '_': return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x1Fu};
-    case '[': return {0x0Eu, 0x08u, 0x08u, 0x08u, 0x08u, 0x08u, 0x0Eu};
-    case ']': return {0x0Eu, 0x02u, 0x02u, 0x02u, 0x02u, 0x02u, 0x0Eu};
-    case '*': return {0x00u, 0x04u, 0x15u, 0x0Eu, 0x15u, 0x04u, 0x00u};
-    case ';': return {0x00u, 0x0Cu, 0x0Cu, 0x00u, 0x0Cu, 0x04u, 0x08u};
-    case '@': return {0x0Eu, 0x11u, 0x17u, 0x15u, 0x17u, 0x10u, 0x0Eu};
-    case '~': return {0x00u, 0x00u, 0x08u, 0x15u, 0x02u, 0x00u, 0x00u};
-    case '|': return {0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u};
-    case '\\': return {0x10u, 0x10u, 0x08u, 0x04u, 0x02u, 0x01u, 0x01u};
-    case '$': return {0x04u, 0x0Fu, 0x14u, 0x0Eu, 0x05u, 0x1Eu, 0x04u};
-    case '{': return {0x02u, 0x04u, 0x04u, 0x08u, 0x04u, 0x04u, 0x02u};
-    case '}': return {0x08u, 0x04u, 0x04u, 0x02u, 0x04u, 0x04u, 0x08u};
-    case '^': return {0x04u, 0x0Au, 0x11u, 0x00u, 0x00u, 0x00u, 0x00u};
-    case '`': return {0x08u, 0x04u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
-    case kGlyphCCedilla: return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x11u, 0x0Eu, 0x04u};
-    // A full N; ui_text draws the tilde above the cell.
-    case kGlyphNTilde: return {0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u, 0x11u};
-    default: return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
-    }
-}
-
-// A drawn quad, not ClearRenderTargetView with a rect list: rect-limited clears fault inside the NVIDIA driver
-// (nvwgf2umx.dll, STATUS_STACK_BUFFER_OVERRUN, driver 32.0.15.9597), a fail-fast that bypasses the process's SEH
-// and terminate handlers. Full-target clears are unaffected.
-void ui_rect(
-    UiCanvas& renderer,
-    int x,
-    int y,
-    int w,
-    int h,
-    const std::array<float, 4>& color) {
-    renderer.draw_ui_solid_quad(x, y, w, h, color);
-}
-
-void ui_text(
-    UiCanvas& renderer,
-    int x,
-    int y,
-    int scale,
-    const std::string& text,
-    const std::array<float, 4>& color) {
-    int cursor_x = x;
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        char ch = text[i];
-        if (ch == ' ') {
-            cursor_x += 4 * scale;
-            continue;
-        }
-        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
-        if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
-            const auto next = static_cast<unsigned char>(text[++i]);
-            ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
-               : next == 0x91u || next == 0xB1u ? kGlyphNTilde : '\0';
-        } else if (static_cast<unsigned char>(ch) >= 0xC0u) {
-            while (i + 1u < text.size() && (static_cast<unsigned char>(text[i + 1u]) & 0xC0u) == 0x80u) ++i;
-            ch = '\0';
-        }
-        const auto bitmap_of = [](const std::array<std::uint8_t, 7>& rows) {
-            std::uint64_t bitmap = 0u;
-            for (unsigned row = 0; row < 7u; ++row) {
-                for (unsigned col = 0; col < 5u; ++col) {
-                    if ((rows[row] & (1u << (4u - col))) != 0u) {
-                        bitmap |= UINT64_C(1) << (row * 5u + col);
-                    }
-                }
-            }
-            return bitmap;
-        };
-        if (ch == kGlyphNTilde) {
-            // A two-row tilde above the cell, one row clear of the N: squeezed into the cell it reads as a plain N.
-            static const std::uint64_t tilde = bitmap_of({0x0Du, 0x16u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u});
-            renderer.draw_ui_glyph(cursor_x, y - 3 * scale, scale, tilde, color);
-        }
-        renderer.draw_ui_glyph(cursor_x, y, scale, bitmap_of(ui_glyph(ch)), color);
-        cursor_x += 6 * scale;
-    }
-}
-
-// The width ui_text draws `text` at (a two-byte letter is one cell).
-int ui_text_width(std::string_view text, int scale) {
-    int width = 0;
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        // A letter of several UTF-8 bytes is one cell.
-        while (i + 1u < text.size() && (static_cast<unsigned char>(text[i + 1u]) & 0xC0u) == 0x80u) {
-            ++i;
-        }
-        width += (text[i] == ' ' ? 4 : 6) * scale;
-    }
-    return width;
-}
-
-// `text` shortened with "..." to `max_width`, whole letters at a time: menu text never runs into its neighbour or out
-// of the panel, at any window size.
-std::string ui_fit_text(std::string text, int scale, int max_width) {
-    if (ui_text_width(text, scale) <= max_width) return text;
-    const int dots = ui_text_width("...", scale);
-    while (!text.empty() && (ui_text_width(text, scale) + dots > max_width || text.back() == ' ')) {
-        while (!text.empty() && (static_cast<unsigned char>(text.back()) & 0xC0u) == 0x80u) text.pop_back();
-        if (!text.empty()) text.pop_back();
-    }
-    return text.empty() ? std::string() : text + "...";
-}
-
-// The footer hints name Xbox buttons; a PlayStation controller in use gets its own.
-std::string pad_hints(std::string text) {
-    const auto device = galaxy::host::last_input_device();
-    if (!device || device->scheme != galaxy::input::ControlScheme::PlayStation) {
-        return text;
-    }
-    static constexpr std::array<std::array<const char*, 2>, 6> kNames{{
-        {"VIEW+MENU OR MINUS+PLUS", "SHARE+OPTIONS"}, {"LB/RB", "L1/R1"}, {"/A ", "/CROSS "},
-        {"/B ", "/CIRCLE "}, {"/X ", "/SQUARE "}, {"/Y ", "/TRIANGLE "}}};
-    for (const auto& name : kNames) {
-        const std::size_t from_size = std::strlen(name[0]);
-        const std::size_t to_size = std::strlen(name[1]);
-        for (std::size_t at = text.find(name[0]); at != std::string::npos; at = text.find(name[0], at + to_size)) {
-            text.replace(at, from_size, name[1]);
-        }
-    }
-    return text;
 }
 
 using ui::percent_text;
@@ -3431,7 +3242,7 @@ void native_settings_test_frame(std::uint32_t frame) {
     }
 }
 
-void draw_native_settings_overlay(UiCanvas& renderer) {
+void native_settings_present() {
     poll_dlss_download();
     {
         static unsigned long presents = 0u;
@@ -3465,260 +3276,6 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             ++next_size;
         }
     }
-    // The native game draws the menu itself (native_settings_view).
-    if (!s_native_settings_visible.load(std::memory_order_relaxed) ||
-        s_settings_drawn_by_game.load(std::memory_order_acquire)) {
-        return;
-    }
-
-    const unsigned tab =
-        s_native_settings_tab.load(std::memory_order_relaxed) %
-        kNativeSettingsTabCount;
-    const NativeSettingsLayout layout =
-        compute_native_settings_layout(host_window::backbuffer_width, host_window::backbuffer_height, tab);
-    if (!layout.supported) {
-        return;
-    }
-    const int scale = layout.text_scale;
-    const int panel_w = layout.panel_width;
-    const int panel_h = layout.panel_height;
-    const int panel_x = layout.panel_x;
-    const int panel_y = layout.panel_y;
-    const std::array<float, 4> panel{0.02f, 0.025f, 0.035f, 1.0f};
-    const std::array<float, 4> rail{0.0f, 0.42f, 0.62f, 1.0f};
-    const std::array<float, 4> text{0.88f, 0.94f, 0.96f, 1.0f};
-    const std::array<float, 4> muted{0.42f, 0.48f, 0.50f, 1.0f};
-    const std::array<float, 4> accent{0.15f, 0.72f, 0.85f, 1.0f};
-    const std::array<float, 4> error{0.95f, 0.28f, 0.24f, 1.0f};
-    const std::array<float, 4> selected{0.10f, 0.18f, 0.22f, 1.0f};
-
-    ui_rect(renderer, panel_x, panel_y, panel_w, panel_h, panel);
-    ui_rect(renderer, panel_x, panel_y, 6, panel_h, rail);
-
-    // Corners from the game's own file-select window frame (game_asset_extract.h): one rounded top-left corner,
-    // mirrored through the UVs for the other three. Nothing is drawn when the texture could not be loaded.
-    renderer.ensure_native_settings_corner_texture_loaded();
-    {
-        constexpr int kCornerPx = 20;
-        const std::array<float, 4> corner_tint{1.0f, 1.0f, 1.0f, 0.9f};
-        // top-left
-        renderer.draw_ui_textured_quad(
-            panel_x, panel_y, kCornerPx, kCornerPx,
-            0.0f, 0.0f, 1.0f, 1.0f, corner_tint);
-        // top-right (mirror U)
-        renderer.draw_ui_textured_quad(
-            panel_x + panel_w - kCornerPx, panel_y, kCornerPx, kCornerPx,
-            1.0f, 0.0f, 0.0f, 1.0f, corner_tint);
-        // bottom-left (mirror V)
-        renderer.draw_ui_textured_quad(
-            panel_x, panel_y + panel_h - kCornerPx, kCornerPx, kCornerPx,
-            0.0f, 1.0f, 1.0f, 0.0f, corner_tint);
-        // bottom-right (mirror both)
-        renderer.draw_ui_textured_quad(
-            panel_x + panel_w - kCornerPx, panel_y + panel_h - kCornerPx,
-            kCornerPx, kCornerPx,
-            1.0f, 1.0f, 0.0f, 0.0f, corner_tint);
-    }
-
-    ui_text(
-        renderer,
-        panel_x + 28,
-        panel_y + (scale == 1 ? 10 : 24),
-        scale,
-        "SETTINGS",
-        text);
-
-    const char* const* tabs = kNativeSettingsTabNames;
-    static_assert(std::size(kNativeSettingsTabNames) == kNativeSettingsTabCount);
-    int tab_x = panel_x + 28;
-    // The labels share the panel width; the longest is eight 6-unit glyphs plus a gap, so the label scale shrinks on
-    // narrow panels.
-    const int tab_step = (panel_w - 56) / static_cast<int>(kNativeSettingsTabCount);
-    const int tab_scale = std::clamp(tab_step / 54, 1, scale);
-    for (unsigned i = 0; i < kNativeSettingsTabCount; ++i) {
-        ui_text(
-            renderer,
-            tab_x,
-            panel_y + (scale == 1 ? 30 : 70),
-            tab_scale,
-            tabs[i],
-            i == tab ? accent : muted);
-        tab_x += tab_step;
-    }
-
-    const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
-    const NativeSettingsView view = build_native_settings_view();
-    const unsigned row_count = static_cast<unsigned>(view.rows.size());
-    const unsigned selected_row = view.selected;
-    // Pages longer than the panel scroll to keep the selection visible.
-    const unsigned visible_rows = std::min(row_count, kNativeSettingsVisibleRows);
-    s_settings_first_row = native_settings_first_row(s_settings_first_row, selected_row, row_count);
-    if (row_count > visible_rows) {
-        const int track_x = panel_x + panel_w - 18;
-        const int track_y = layout.rows_y - 6;
-        const int track_h = static_cast<int>(visible_rows - 1u) * layout.row_step + scale * 7 + 12;
-        ui_rect(renderer, track_x, track_y, 4, track_h, selected);
-        const int thumb_h = std::max(8, track_h * static_cast<int>(visible_rows) / static_cast<int>(row_count));
-        const int thumb_y = track_y + (track_h - thumb_h) * static_cast<int>(s_settings_first_row) /
-                                          static_cast<int>(row_count - visible_rows);
-        ui_rect(renderer, track_x, thumb_y, 4, thumb_h, accent);
-    }
-    // Rows: the label on the left, the value on the right between arrows where it can change;
-    // section headings in the accent colour. A value takes up to three fifths of the row, the label the rest.
-    const int row_left = panel_x + 70;
-    const int row_right = panel_x + panel_w - 48;
-    const int row_gap = 12 * scale;
-    for (unsigned row = s_settings_first_row; row < s_settings_first_row + visible_rows; ++row) {
-        const int y =
-            layout.rows_y + static_cast<int>(row - s_settings_first_row) * layout.row_step;
-        std::string label = view.rows[row].label;
-        const std::string& value = view.rows[row].value;
-        const bool heading = view.rows[row].heading;
-        const bool changes = view.rows[row].changes;
-        if (heading) {
-            label = ui_fit_text(std::move(label), scale, row_right - (panel_x + 36));
-            const int rule_x = panel_x + 44 + ui_text_width(label, scale);
-            ui_text(renderer, panel_x + 36, y, scale, label, accent);
-            if (row_right - rule_x > 0) ui_rect(renderer, rule_x, y + scale * 3, row_right - rule_x, std::max(1, scale / 2), muted);
-            continue;
-        }
-        if (row == selected_row) {
-            const int selection_height = std::max(14, scale * 7 + 4);
-            ui_rect(
-                renderer,
-                panel_x + 24,
-                y - 6,
-                panel_w - 48,
-                selection_height,
-                selected);
-            ui_text(renderer, panel_x + 36, y, scale, ">", accent);
-        }
-        int value_x = row_right;
-        if (!value.empty()) {
-            const bool arrows = changes && row == selected_row;
-            const int arrow_width = arrows ? ui_text_width("<  >", scale) : 0;
-            const std::string fitted = ui_fit_text(value, scale, (row_right - row_left) * 3 / 5 - arrow_width);
-            const std::string shown = arrows ? "< " + fitted + " >" : fitted;
-            value_x = row_right - ui_text_width(shown, scale);
-            ui_text(renderer, value_x, y, scale, shown, row == selected_row ? accent : (changes ? text : muted));
-            value_x -= row_gap;
-        }
-        ui_text(renderer, row_left, y, scale, ui_fit_text(std::move(label), scale, value_x - row_left), changes ? text : muted);
-    }
-
-    const int footer_y = layout.footer_y;
-    const int footer_scale = std::min(2, scale);
-    const int footer_step = footer_scale == 1 ? 18 : 28;
-    std::string status;
-    std::array<float, 4> status_color = accent;
-    const bool controls_page = tab == kControlsTab;
-    char line[96]{};
-    switch (view.status) {
-    case NativeSettingsStatus::CaptureKey:
-        status = "PRESS A KEY OR MOUSE BUTTON  ESC CANCEL";
-        break;
-    case NativeSettingsStatus::CapturePad:
-        status = "PRESS A BUTTON, STICK OR TRIGGER  ESC CANCEL";
-        break;
-    case NativeSettingsStatus::Message:
-        status = view.status_text;
-        status_color = error;
-        break;
-    case NativeSettingsStatus::DlssAsk:
-    case NativeSettingsStatus::DlssInstalling:
-    case NativeSettingsStatus::DlssRestart:
-    case NativeSettingsStatus::DlssFailed:
-    case NativeSettingsStatus::XessAsk:
-    case NativeSettingsStatus::XessInstalling:
-    case NativeSettingsStatus::XessRestart:
-    case NativeSettingsStatus::XessFailed:
-    case NativeSettingsStatus::License: {
-        bool dlss_error = false;
-        status = dlss_footer(galaxy::steady_ms(), dlss_error);
-        status_color = dlss_error ? error : accent;
-        break;
-    }
-    case NativeSettingsStatus::KeepDisplay:
-        std::snprintf(line, sizeof(line), "KEEP DISPLAY? ENTER/Y KEEP  ESC/B UNDO  %d", view.status_number);
-        status = pad_hints(line);
-        break;
-    case NativeSettingsStatus::SaveFailed:
-        status = "SAVE FAILED - RETRY ON NEXT CLOSE";
-        status_color = error;
-        break;
-    case NativeSettingsStatus::Pending:
-        std::snprintf(line, sizeof(line),
-                      controls_page ? "%d CHANGE%s  SPACE/Y APPLY  ESC/B DISCARD"
-                                    : "%d CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
-                      view.status_number, view.status_number == 1 ? "" : "S");
-        status = pad_hints(line);
-        break;
-    case NativeSettingsStatus::Leave:
-        std::snprintf(line, sizeof(line), "%d CHANGE%s NOT APPLIED  ENTER/Y APPLY  BACKSPACE/X DISCARD  ESC/B STAY",
-                      view.status_number, view.status_number == 1 ? "" : "S");
-        status = pad_hints(line);
-        break;
-    case NativeSettingsStatus::Applied:
-        status = "APPLIED";
-        break;
-    case NativeSettingsStatus::Preparing:
-        std::snprintf(line, sizeof(line), "PREPARING GRAPHICS: %d%%", view.status_number);
-        status = line;
-        break;
-    case NativeSettingsStatus::LanguageRestart:
-        status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
-        break;
-    case NativeSettingsStatus::ModsRestart:
-        status = "MOD CHANGES APPLY WHEN NEBULA RESTARTS";
-        break;
-    case NativeSettingsStatus::GpuRestart:
-        status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
-        break;
-    case NativeSettingsStatus::ModsCodeAsk:
-        status = pad_hints("THIS MOD RUNS ITS OWN CODE AND CAN DO ANYTHING ON THIS DEVICE. ALLOW IT?  ENTER/Y YES  ESC/B NO");
-        break;
-    case NativeSettingsStatus::ModsRestartAsk:
-    case NativeSettingsStatus::RtRestartAsk:
-    case NativeSettingsStatus::DiagnosticsAsk:
-        status = pad_hints("RESTART NOW?  ENTER/Y RESTART  ESC/B LATER");
-        break;
-    case NativeSettingsStatus::Help:
-        status = view.help;
-        status_color = muted;
-        break;
-    case NativeSettingsStatus::JoyCon:
-        std::snprintf(line, sizeof(line), "%s  ESC/B BACK",
-                      (view.status_number & kJoyConPairedBit) != 0 ? "JOY-CON PAIRED"
-                      : (view.status_number & (kJoyConLeftBit | kJoyConRightBit)) == (kJoyConLeftBit | kJoyConRightBit)
-                          ? "HOLD L ON THE LEFT JOY-CON AND R ON THE RIGHT ONE"
-                          : "CONNECT A LEFT AND A RIGHT JOY-CON");
-        status = pad_hints(line);
-        break;
-    case NativeSettingsStatus::Arrange:
-        status = pad_hints("DRAG THE BUTTONS WHERE YOU WANT THEM  ENTER/Y SAVE  BACKSPACE/X RESET  ESC/B CANCEL");
-        break;
-    default:
-        break;
-    }
-    if (!status.empty()) {
-        ui_text(renderer, panel_x + 28, footer_y, footer_scale, ui_fit_text(std::move(status), footer_scale, panel_w - 56),
-                status_color);
-    }
-    ui_text(
-        renderer,
-        panel_x + 28,
-        footer_y + footer_step,
-        footer_scale,
-        pad_hints("F1, VIEW+MENU OR MINUS+PLUS TOGGLE  TAB/LB/RB PAGE"),
-        muted);
-    ui_text(
-        renderer,
-        panel_x + 28,
-        footer_y + footer_step * 2,
-        footer_scale,
-        pad_hints(controls_page ? "ENTER/A ADD INPUT  BACKSPACE/X CLEAR  ESC/B CLOSE"
-                                : "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE"),
-        muted);
 }
 
 // The menu as it stands: its pages, the open page's rows (label, value, a heading or not, whether it changes), the
@@ -3922,68 +3479,7 @@ NativeSettingsView build_native_settings_view() {
     return view;
 }
 
-// The HOME Menu panel, centred over the frame, until the game draws the menu itself. The mouse picks an answer by
-// hovering and chooses with a click.
-void draw_home_menu(UiCanvas& renderer) {
-    static bool s_left_was_down = true;
-    if (!s_home_menu.visible.load(std::memory_order_acquire) ||
-        s_home_menu.drawn_by_game.load(std::memory_order_relaxed)) {
-        s_left_was_down = true;
-        return;
-    }
-    const int asking = s_home_menu.asking.load(std::memory_order_relaxed);
-    const unsigned count = asking != 0 ? kHomeMenuAnswers : kHomeMenuRows;
-    const char* const* rows = asking != 0 ? kHomeMenuAnswerText : kHomeMenuRowText;
-    const int bb_w = static_cast<int>(host_window::backbuffer_width);
-    const int bb_h = static_cast<int>(host_window::backbuffer_height);
-    const int scale = bb_h >= 1440 ? 4 : (bb_h >= 720 ? 3 : 2);
-    const int row_h = 15 * scale;
-    const int w = std::min(bb_w - 8 * scale, 140 * scale);
-    const int h = 26 * scale + row_h * static_cast<int>(count) + 14 * scale;
-    const int x = (bb_w - w) / 2;
-    const int y = (bb_h - h) / 2;
-    const int rows_y = y + 24 * scale;
-    const std::array<float, 4> panel{0.02f, 0.025f, 0.035f, 1.0f};
-    const std::array<float, 4> rail{0.0f, 0.42f, 0.62f, 1.0f};
-    const std::array<float, 4> text{0.88f, 0.94f, 0.96f, 1.0f};
-    const std::array<float, 4> muted{0.42f, 0.48f, 0.50f, 1.0f};
-    const std::array<float, 4> highlight{0.10f, 0.18f, 0.22f, 1.0f};
-
-    const HostPointerState pointer = poll_host_pointer_state();
-    if (pointer.absolute_valid && pointer.inside_client && pointer.client_width > 0 && pointer.client_height > 0) {
-        const int px = pointer.client_x * bb_w / pointer.client_width;
-        const int py = pointer.client_y * bb_h / pointer.client_height;
-        if (px >= x && px < x + w && py >= rows_y && py < rows_y + row_h * static_cast<int>(count)) {
-            const unsigned hovered = static_cast<unsigned>((py - rows_y) / row_h);
-            if (pointer.left_button && !s_left_was_down) {
-                home_menu_choose(hovered);
-            } else {
-                home_menu_point(hovered);
-            }
-        }
-    }
-    s_left_was_down = pointer.left_button;
-
-    ui_rect(renderer, x, y, w, h, panel);
-    ui_rect(renderer, x, y, 6, h, rail);
-    ui_text(renderer, x + 14 * scale, y + 8 * scale, scale,
-            asking == 0 ? "HOME MENU" : (asking == 1 ? "QUIT?" : "RESET?"), text);
-    const unsigned selected = s_home_menu.row.load(std::memory_order_relaxed) % count;
-    for (unsigned row = 0; row < count; ++row) {
-        const int ry = rows_y + static_cast<int>(row) * row_h;
-        if (row == selected) {
-            ui_rect(renderer, x + 6, ry, w - 6, row_h, highlight);
-        }
-        ui_text(renderer, x + 14 * scale, ry + 4 * scale, scale, rows[row], row == selected ? text : muted);
-    }
-}
-
-
 }  // namespace host_window
-
-void set_native_settings_content_root(const std::string& utf8_path) {
-    host_window::native_settings_content_root = utf8_path;
-}
 
 HostClientExtent aspect_latch_extent() noexcept {
     const unsigned mode = std::min(get_render_config().aspect_mode, kAspectModeCount - 1u);
@@ -4027,73 +3523,6 @@ bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
         s_home_menu.visible.load(std::memory_order_relaxed) ||
         host_window::window_modal_active();
-}
-
-NativeSettingsLayout compute_native_settings_layout(
-    unsigned backbuffer_width,
-    unsigned backbuffer_height,
-    unsigned tab) noexcept {
-    NativeSettingsLayout layout{};
-    if (backbuffer_width < 427u || backbuffer_height < 240u) {
-        return layout;
-    }
-
-    const int width = static_cast<int>(backbuffer_width);
-    const int height = static_cast<int>(backbuffer_height);
-    const bool compact =
-        backbuffer_width < 854u || backbuffer_height < 480u;
-    const int margin = compact
-        ? 8
-        : std::clamp(
-              static_cast<int>(
-                  std::min(backbuffer_width, backbuffer_height) / 24u),
-              16,
-              48);
-    layout.supported = true;
-    layout.panel_x = margin;
-    layout.panel_y = margin;
-    layout.panel_width = std::min(1040, width - margin * 2);
-    layout.text_scale = compact
-        ? 1
-        : (backbuffer_width >= 2560u && backbuffer_height >= 1440u
-               ? 4
-               : (backbuffer_width >= 1280u ? 3 : 2));
-    layout.rows_y = compact
-        ? layout.panel_y + 46
-        : layout.panel_y + 110 + (layout.text_scale - 2) * 8;
-    layout.row_step = compact
-        ? 14
-        : std::max(32, layout.text_scale * 9 + 8);
-    // Tall enough for the longest page (ten rows) above the footer.
-    const int footer_block = compact ? 62 : 82;
-    constexpr int kLongestPageRows = 10;
-    const int needed_height = (layout.rows_y - layout.panel_y) +
-        (kLongestPageRows - 1) * layout.row_step + layout.text_scale * 7 + 8 +
-        footer_block;
-    const int desired_height = compact
-        ? 224
-        : std::max(layout.text_scale >= 4 ? 480 : 420, needed_height);
-    layout.panel_height = std::min(desired_height, height - margin * 2);
-    layout.footer_y = layout.panel_y + layout.panel_height - footer_block;
-    // A short window tightens the rows rather than dropping the menu.
-    const int rows_room = layout.footer_y - 8 - layout.text_scale * 7 - layout.rows_y;
-    if ((kLongestPageRows - 1) * layout.row_step > rows_room) {
-        layout.row_step = std::max(layout.text_scale * 7 + 2,
-                                   rows_room / (kLongestPageRows - 1));
-    }
-
-    const unsigned row_count =
-        std::min(native_settings_row_count(tab), kNativeSettingsVisibleRows);
-    const int final_row_bottom = row_count == 0u
-        ? layout.rows_y
-        : layout.rows_y +
-              static_cast<int>(row_count - 1u) * layout.row_step +
-              layout.text_scale * 7;
-    if (layout.panel_width <= 0 || layout.panel_height <= 0 ||
-        final_row_bottom + 8 > layout.footer_y) {
-        return NativeSettingsLayout{};
-    }
-    return layout;
 }
 
 bool native_settings_handle_window_key(
@@ -4268,7 +3697,7 @@ void home_menu_open() noexcept { s_home_menu.open(); }
 int home_menu_poll() noexcept { return s_home_menu.poll(); }
 void home_menu_close() noexcept { s_home_menu.hide(); }
 bool home_menu_visible() noexcept { return s_home_menu.visible.load(std::memory_order_acquire); }
-int home_menu_view(bool drawing) noexcept { return s_home_menu.view(drawing); }
+int home_menu_view() noexcept { return s_home_menu.view(); }
 void home_menu_point(unsigned answer) noexcept { s_home_menu.point(answer); }
 void home_menu_choose(unsigned answer) noexcept { s_home_menu.click(answer); }
 std::int32_t take_pointer_wheel() noexcept {

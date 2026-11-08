@@ -10,7 +10,6 @@
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/window_owner.h"
 
 #include <atomic>

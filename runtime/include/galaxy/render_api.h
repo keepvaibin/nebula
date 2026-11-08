@@ -69,10 +69,6 @@ std::string startup_failure();
 // the host's fast start shows one frame a display period. On by default.
 void set_frame_end_presents(bool enabled) noexcept;
 
-// The game dump's content root (GamePaths::content_root), from which the settings overlay reads the game's UI art
-// (game_asset_extract.h). Call once, before the overlay is first shown; without it the overlay draws solid colors.
-void set_native_settings_content_root(const std::string& utf8_path);
-
 // Walks the frame list attached (attach_frame_list) and optionally presents: the newest picture, or black when
 // `black`. Nothing attached: at most a present.
 void render_frame(bool present_swap_chain = true, bool black = false);
@@ -180,18 +176,6 @@ struct NativeSettingsOverlaySnapshot {
     unsigned pending_changes = 0;
     bool confirming_display = false;
 };
-struct NativeSettingsLayout {
-    bool supported = false;
-    int panel_x = 0;
-    int panel_y = 0;
-    int panel_width = 0;
-    int panel_height = 0;
-    int text_scale = 0;
-    int rows_y = 0;
-    int row_step = 0;
-    int footer_y = 0;
-};
-
 struct DisplayPresentStats {
     std::uint64_t presented = 0;
     // Game-timed presents of a new DisplayTexture::picture_number, each counted once at most.
@@ -220,20 +204,15 @@ void request_sharp_2d(bool on) noexcept;
 // The native game's HOME Menu with its choices, taking the keyboard and controllers while open: return
 // to the game, reset, or leave it, the last two after "are you sure?". The game opens it
 // (HBMInit) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
-// draws it from home_menu_view (NEBULA_HBM_VIEW, `drawing`) and sends the pointer's answers; until it draws it, the
-// host draws its own panel.
+// draws it from home_menu_view (NEBULA_HBM_VIEW) and sends the pointer's answers.
 void home_menu_open() noexcept;
 [[nodiscard]] int home_menu_poll() noexcept;
 void home_menu_close() noexcept;
 [[nodiscard]] bool home_menu_visible() noexcept;
-[[nodiscard]] int home_menu_view(bool drawing) noexcept;
+[[nodiscard]] int home_menu_view() noexcept;
 void home_menu_point(unsigned answer) noexcept;
 void home_menu_choose(unsigned answer) noexcept;
 [[nodiscard]] bool native_window_input_captured() noexcept;
-[[nodiscard]] NativeSettingsLayout compute_native_settings_layout(
-    unsigned backbuffer_width,
-    unsigned backbuffer_height,
-    unsigned tab) noexcept;
 // `was_down` is Win32 LPARAM bit 30. Repeated F1 messages are consumed without
 // toggling so keyboard autorepeat cannot flap the overlay.
 [[nodiscard]] bool native_settings_handle_window_key(

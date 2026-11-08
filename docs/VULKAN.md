@@ -77,7 +77,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 
 ## State
 
-- The renderer core is API-neutral; the window, input and settings UI are shared (host_window_win32.cpp, UiCanvas).
+- The renderer core is API-neutral; the window, input and settings state are shared (host_window_win32.cpp, native_settings.cpp).
 - Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
   each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
   frame conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.

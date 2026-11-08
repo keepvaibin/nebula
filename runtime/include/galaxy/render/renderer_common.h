@@ -121,19 +121,6 @@ struct ScreenProbePixel {
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
 // Depth clear as a draw (Vulkan drivers whose vkCmdClearAttachments races with draws): writes clear_value.x.
 [[nodiscard]] std::string_view clear_depth_pixel_shader_source() noexcept;
-[[nodiscard]] std::string_view ui_textured_quad_vertex_shader_source() noexcept;
-[[nodiscard]] std::string_view ui_textured_quad_pixel_shader_source() noexcept;
-[[nodiscard]] std::string_view ui_solid_quad_vertex_shader_source() noexcept;
-[[nodiscard]] std::string_view ui_solid_quad_pixel_shader_source() noexcept;
-// The solid quad's constants; glyph mode draws a 5x7 bitmap as instanced cells.
-struct UiSolidQuadConstants {
-    std::int32_t rect[4];
-    float color[4];
-    std::uint32_t screen[2];
-    std::uint32_t glyph_mask[2];
-    std::uint32_t glyph_mode;
-};
-static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
                                                                              float step_x, float step_y) noexcept;
 

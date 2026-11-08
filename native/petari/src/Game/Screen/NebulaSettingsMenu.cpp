@@ -2994,7 +2994,7 @@ namespace NebulaSettingsMenu {
     }
 
     void update() {
-        // Unbuilt (a layout missing), the host's own overlay draws the menu and the game runs on.
+        // Unbuilt: the game's own layouts lack a pane (a damaged store; init logged it). The game runs on.
         if (sScreen == nullptr || !sScreen->isBuilt()) {
             return;
         }

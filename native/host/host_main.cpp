@@ -2824,7 +2824,7 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
         galaxy::render::home_menu_close();
         return 0;
     case NEBULA_HBM_VIEW:
-        return galaxy::render::home_menu_view(value != 0u);
+        return galaxy::render::home_menu_view();
     case NEBULA_HBM_POINT:
         galaxy::render::home_menu_point(value);
         return 0;
@@ -3667,7 +3667,6 @@ int main(int argc, char** argv) {
     } catch (const std::exception& failure) {
         die("the settings did not load: %s", failure.what());
     }
-    galaxy::render::set_native_settings_content_root(utf8_of(galaxy::host::locate_game(pak).content_root));
     // Discord: never from a hidden test run, which must leave the player's status alone.
     if (const char* hidden = ::galaxy::run_options().hide_window; hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });

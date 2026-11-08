@@ -46,17 +46,17 @@ int main() {
         resume.choose(0);
         check(resume.choice == 0 && !resume.visible, "return row closes immediately");
         resume.open();
-        check(resume.poll() == -1 && resume.view(false) == 0, "open resets selection and result");
+        check(resume.poll() == -1 && resume.view() == 0, "open resets selection and result");
         resume.point(2);
-        check(resume.view(false) == 2, "pointer selects list row");
+        check(resume.view() == 2, "pointer selects list row");
         resume.click(2);
-        check(resume.view(true) == 256 && resume.drawn_by_game, "question view and game drawing");
+        check(resume.view() == 256, "question view");
         resume.point(2);
-        check(resume.view(false) == 256, "invalid answer ignored");
+        check(resume.view() == 256, "invalid answer ignored");
         resume.point(1);
-        check(resume.view(false) == 257, "question answer view");
+        check(resume.view() == 257, "question answer view");
         resume.click(1);
-        check(resume.poll() == 1 && resume.view(false) == -1, "pointer confirms quit");
+        check(resume.poll() == 1 && resume.view() == -1, "pointer confirms quit");
         std::cout << "HOME model: passed\n";
         return 0;
     } catch (const std::exception& error) {
