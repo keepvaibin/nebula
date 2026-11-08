@@ -303,13 +303,13 @@ CreatorFuncPtr PlanetMapCreatorFunction::getPlanetMapCreator(const char* pName) 
 }
 
 bool PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(const char* pArchive) {
-    bool isExistTableData = MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive) != nullptr;
+    const PlanetMapData* pData = MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive);
 
-    if (!isExistTableData) {
+    if (pData == nullptr) {
         return false;
     }
 
-    return ::isDataForceLow(MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive));
+    return ::isDataForceLow(pData);
 }
 
 bool PlanetMapCreatorFunction::isRegisteredObj(const char* pArchive) {
