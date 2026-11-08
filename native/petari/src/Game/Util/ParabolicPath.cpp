@@ -9,42 +9,45 @@ ParabolicPath::ParabolicPath() : mPosition(0, 0, 0), mAxisY(0, 1, 0), mAxisZ(0, 
     mDistance = 0.0f;
 }
 
-void ParabolicPath::initFromMaxHeight(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rUp) {
-    f32 scalar;
-    Vec3f direction;
+// Up is from the end toward rPeak; the peak's height is rPeak's along it.
+void ParabolicPath::initFromMaxHeight(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rPeak) {
+    f32 length;
+    Vec3f up;
 
-    MR::separateScalarAndDirection(&scalar, &direction, rUp - rEnd);
+    MR::separateScalarAndDirection(&length, &up, rPeak - rEnd);
 
-    initFromUpVector(rStart, rEnd, direction, direction.dot(rUp - rStart));
+    initFromUpVector(rStart, rEnd, up, up.dot(rPeak - rStart));
 }
 
-void ParabolicPath::initFromUpVector(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rUp, f32 f1) {
+// maxHeight is above rStart, along rUp.
+void ParabolicPath::initFromUpVector(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rUp, f32 maxHeight) {
     mAxisY.set(rUp);
 
-    f32 dot = mAxisY.dot(rEnd - rStart);
-    mAxisZ = rEnd - rStart - (mAxisY * dot);
+    f32 rise = mAxisY.dot(rEnd - rStart);
+    mAxisZ = rEnd - rStart - (mAxisY * rise);
 
     MR::separateScalarAndDirection(&mDistance, &mAxisZ, mAxisZ);
-    MR::calcParabolicFunctionParam(&mQuadCoef, &mLinearCoef, f1, dot);
+    MR::calcParabolicFunctionParam(&mQuadCoef, &mLinearCoef, maxHeight, rise);
 
     mPosition.set(rStart);
 }
 
-void ParabolicPath::initFromUpVectorAddHeight(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rUp, f32 a4) {
-    f32 dot = rUp.dot(rEnd - rStart);
+// The peak is height above the higher end.
+void ParabolicPath::initFromUpVectorAddHeight(const Vec3f& rStart, const Vec3f& rEnd, const Vec3f& rUp, f32 height) {
+    f32 rise = rUp.dot(rEnd - rStart);
 
-    if (dot < 0.0f) {
-        dot = 0.0f;
+    if (rise < 0.0f) {
+        rise = 0.0f;
     }
 
-    initFromUpVector(rStart, rEnd, rUp, a4 + dot);
+    initFromUpVector(rStart, rEnd, rUp, height + rise);
 }
 
-void ParabolicPath::calcPosition(Vec3f* pOutPosition, f32 a2) const {
-    f32 thing = mDistance * a2;
-    f32 v5 = (a2 * (mLinearCoef + (mQuadCoef * a2)));
+void ParabolicPath::calcPosition(Vec3f* pOutPosition, f32 param) const {
+    f32 forward = mDistance * param;
+    f32 up = (param * (mLinearCoef + (mQuadCoef * param)));
 
-    pOutPosition->set(mPosition + mAxisY * v5 + mAxisZ * (thing));
+    pOutPosition->set(mPosition + mAxisY * up + mAxisZ * (forward));
 }
 
 void ParabolicPath::calcDirection(Vec3f* pOutDirection, f32 param, f32 step) const {
@@ -92,8 +95,8 @@ f32 ParabolicPath::getLength(f32 startParam, f32 endParam, s32 numSegments) cons
     return length;
 };
 
-f32 ParabolicPath::getTotalLength(s32 a1) const {
-    return getLength(0.0f, 1.0f, a1);
+f32 ParabolicPath::getTotalLength(s32 numSegments) const {
+    return getLength(0.0f, 1.0f, numSegments);
 }
 
 f32 ParabolicPath::calcPathSpeedFromAverageSpeed(f32 speed) const {

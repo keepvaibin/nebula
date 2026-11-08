@@ -33,7 +33,7 @@ public:
     virtual void draw() const;
 
     void setTexture(ResTIMG*);
-    bool addPrint(const Vec3f&, const Vec3f&, const Vec3f&, bool);
+    bool addPrint(const Vec3f& rPos, const Vec3f& rUp, const Vec3f& rNormal, bool isFlipX);
     void clear();
     void initMember(s32, s32);
     void clearForce();

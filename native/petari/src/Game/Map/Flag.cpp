@@ -403,8 +403,6 @@ void Flag::draw() const {
     }
 
     if (mStickLength > 0.0f) {
-        Vec3f pos(mPosition.x, mPosition.y, mPosition.z);
-
         const Vec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
@@ -412,17 +410,16 @@ void Flag::draw() const {
 
         f32 length = mStickLength + mPointIntervalV * (mNumPointsV - 1);
         for (s32 idx = 0; idx < 4; idx++) {
-            Vec3f v1(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
-            Vec3f v2(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
-            v1.scale(::sStickWidth);
-            v2.scale(::sStickWidth);
+            // The offset goes on twice: the stick is twice sStickWidth out.
+            Vec3f offset(stickCoords[idx].x, 0.0f, stickCoords[idx].y);
+            offset.scale(::sStickWidth);
             Vec3f posA = mUp * length;
-            posA.add(v1);
-            posA.add(v2);
+            posA.add(offset);
+            posA.add(offset);
             posA.add(mPosition);
             Vec3f posB = mPosition;
-            posB.add(v1);
-            posB.add(v2);
+            posB.add(offset);
+            posB.add(offset);
 
             *vtx++ = {posA.x, posA.y, posA.z, Rgba8(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a), mTexST[0], mTexST[1]};
             *vtx++ = {posB.x, posB.y, posB.z, Rgba8(::sStickColors[idx].r, ::sStickColors[idx].g, ::sStickColors[idx].b, ::sStickColors[idx].a), mTexST[0], mTexST[1]};

@@ -11,11 +11,11 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Render/Model.hpp"
 
-MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool param3)
+MultiSceneActor::MultiSceneActor(const char* pName, const char* pModelName, bool deferMaterials)
     : NameObj(pName), mTranslation(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mIsDead(true), mModelManager(nullptr),
       mEffectSystem(nullptr), mEffectKeeper(nullptr), mSpine(nullptr) {
     mModelManager = new ModelManager();
-    mModelManager->init(pModelName, nullptr, param3);
+    mModelManager->init(pModelName, nullptr, deferMaterials);
 }
 
 void MultiSceneActor::init(const TableIter& rIter) {
@@ -108,10 +108,10 @@ MultiSceneEffectKeeper* MultiSceneActor::getEffectKeeper() const {
     return mEffectKeeper;
 }
 
-void MultiSceneActor::initEffect(EffectSystem* pEffectSystem, int param2, const char* pName) {
+void MultiSceneActor::initEffect(EffectSystem* pEffectSystem, int extraEmitterNum, const char* pResName) {
     mEffectSystem = pEffectSystem;
 
-    mEffectKeeper = new MultiSceneEffectKeeper(mName, mModelManager, param2, pName);
+    mEffectKeeper = new MultiSceneEffectKeeper(mName, mModelManager, extraEmitterNum, pResName);
     mEffectKeeper->init(this, pEffectSystem);
 }
 
@@ -210,8 +210,8 @@ namespace MultiScene {
         return MR::getLinerValue(calcNerveRate(pActor, stepMax), valueStart, valueEnd, 1.0f);
     }
 
-    void emitEffect(const MultiSceneActor* pActor, const char* pParam2) {
-        pActor->getEffectKeeper()->create(pParam2, pActor->getEffectSystem());
+    void emitEffect(const MultiSceneActor* pActor, const char* pEffectName) {
+        pActor->getEffectKeeper()->create(pEffectName, pActor->getEffectSystem());
     }
 
     void deleteEffectAll(const MultiSceneActor* pActor) {
@@ -222,8 +222,8 @@ namespace MultiScene {
         pActor->getEffectKeeper()->forceDeleteAll(pActor->getEffectSystem());
     }
 
-    MtxPtr getJointMtx(const MultiSceneActor* pActor, const char* pParam2) {
-        return MR::getJointMtx(pActor->getModelManager()->getModel(), (const char*)pParam2);
+    MtxPtr getJointMtx(const MultiSceneActor* pActor, const char* pJointName) {
+        return MR::getJointMtx(pActor->getModelManager()->getModel(), pJointName);
     }
 };  // namespace MultiScene
 

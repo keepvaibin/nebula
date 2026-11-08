@@ -11,7 +11,7 @@ class Spine;
 
 class MultiSceneActor : public NameObj {
 public:
-    MultiSceneActor(const char*, const char*, bool);
+    MultiSceneActor(const char* pName, const char* pModelName, bool deferMaterials);
 
     virtual void init(const TableIter&);
     virtual void movement();
@@ -24,7 +24,7 @@ public:
     ModelManager* getModelManager() const;
     EffectSystem* getEffectSystem() const;
     MultiSceneEffectKeeper* getEffectKeeper() const;
-    void initEffect(EffectSystem*, int, const char*);
+    void initEffect(EffectSystem*, int extraEmitterNum, const char* pResName);
     void setNerve(const Nerve*);
     bool isNerve(const Nerve*) const;
     void initNerve(const Nerve*);
@@ -59,8 +59,8 @@ namespace MultiScene {
     f32 calcNerveRate(const MultiSceneActor*, s32, s32);
     f32 calcNerveEaseOutRate(const MultiSceneActor*, s32);
     f32 calcNerveValue(const MultiSceneActor*, s32, f32, f32);
-    void emitEffect(const MultiSceneActor*, const char*);
+    void emitEffect(const MultiSceneActor*, const char* pEffectName);
     void deleteEffectAll(const MultiSceneActor*);
     void forceDeleteEffectAll(const MultiSceneActor*);
-    MtxPtr getJointMtx(const MultiSceneActor*, const char*);
+    MtxPtr getJointMtx(const MultiSceneActor*, const char* pJointName);
 };  // namespace MultiScene

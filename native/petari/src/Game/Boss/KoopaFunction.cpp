@@ -441,16 +441,16 @@ void KoopaFunction::startKoopaTargetCamera(Koopa* pKoopa, const char* pName) {
     MR::startMultiActorCameraTargetSelf(pKoopa, pKoopa->mParts->mActorCameraInfo, pName);
 }
 
-void KoopaFunction::startKoopaAnimCamera(Koopa* pKoopa, const char* pName, s32 a1) {
-    MR::startAnimCameraTargetSelf(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, a1, 1.0f);
+void KoopaFunction::startKoopaAnimCamera(Koopa* pKoopa, const char* pName, s32 frame) {
+    MR::startAnimCameraTargetSelf(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, frame, 1.0f);
 }
 
-void KoopaFunction::endKoopaCamera(Koopa* pKoopa, const char* pName, bool a1, s32 a2) {
-    MR::endMultiActorCamera(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, a1, a2);
+void KoopaFunction::endKoopaCamera(Koopa* pKoopa, const char* pName, bool resetView, s32 frame) {
+    MR::endMultiActorCamera(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, resetView, frame);
 }
 
-void KoopaFunction::endKoopaAnimCamera(Koopa* pKoopa, const char* pName, s32 a1) {
-    MR::endAnimCamera(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, a1, true);
+void KoopaFunction::endKoopaAnimCamera(Koopa* pKoopa, const char* pName, s32 frame) {
+    MR::endAnimCamera(pKoopa, pKoopa->mParts->mActorCameraInfo, pName, frame, true);
 }
 
 void KoopaFunction::startKoopaPlateDamageAnimPowerStarAppear(Koopa* pKoopa) {
@@ -461,8 +461,8 @@ void KoopaFunction::startKoopaPlateDamageAnimPowerStarAppear(Koopa* pKoopa) {
     }
 }
 
-void KoopaFunction::changeBgmStateNormal(u32 a1) {
-    MR::setStageBGMState(1, a1);
+void KoopaFunction::changeBgmStateNormal(u32 time) {
+    MR::setStageBGMState(1, time);
 }
 
 void KoopaFunction::changeBgmStateEscape() {

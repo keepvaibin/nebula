@@ -200,11 +200,11 @@ void Rabbit::exeAppear() {
     }
 
     ParabolicPath path = ParabolicPath();
-    Vec3f v9, v8;
-    v8.set(0.0f, ::cAppearHeight, 0.0f);
-    path.initFromUpVector(v8, Vec3f(0.0f, 0.0f, 0.0f), -mGravity, ::cAppearHop);
-    path.calcPosition(&v9, getNerveStep() / MR::getBckFrameMax(this));
-    mJumpHeight = -v9.y;
+    Vec3f hopPos, hopStart;
+    hopStart.set(0.0f, ::cAppearHeight, 0.0f);
+    path.initFromUpVector(hopStart, Vec3f(0.0f, 0.0f, 0.0f), -mGravity, ::cAppearHop);
+    path.calcPosition(&hopPos, getNerveStep() / MR::getBckFrameMax(this));
+    mJumpHeight = -hopPos.y;
 
     if (MR::isBckStopped(this)) {
         mJumpHeight = 0.0f;
@@ -306,10 +306,11 @@ void Rabbit::calcRailPos(Vec3f* pPos) {
     mJumpScale = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / 80.0f)));
 }
 
-bool Rabbit::isNeedTurn(const Vec3f& rA1) {
-    Vec3f v2;
-    mPoseQuat.getZDir(v2);
-    return MR::diffAngleAbs(rA1, v2) > 0.78539819f;
+// More than 45 degrees off the facing.
+bool Rabbit::isNeedTurn(const Vec3f& rDir) {
+    Vec3f front;
+    mPoseQuat.getZDir(front);
+    return MR::diffAngleAbs(rDir, front) > 0.78539819f;
 }
 
 void Rabbit::updateJump() {

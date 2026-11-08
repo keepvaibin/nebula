@@ -163,9 +163,9 @@ namespace {
         if (rInfo.mIsFollowCamera) {
             ::loadCameraLight(rInfo, light);
         } else {
-            Vec3f v14(rInfo.mPos);
-            MR::getCameraViewMtx().mult(v14, v14);
-            ::loadLightDiffuse(NebulaColor8(rInfo.mColor), v14, light);
+            Vec3f viewPos(rInfo.mPos);
+            MR::getCameraViewMtx().mult(viewPos, viewPos);
+            ::loadLightDiffuse(NebulaColor8(rInfo.mColor), viewPos, light);
         }
     }
 };  // namespace
@@ -185,22 +185,21 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     Frame::setLightFollowsCamera(pInfo->base.mIsFollowCamera ? 1 : 0);
     ::loadLightInfoDiffuse(pInfo->base, 0);
-    Vec3f v7(0.0f, 0.0f, -1.0f);
     NebulaLight obj = {};
-    f32 v = pInfo->mShininess;
+    f32 shininess = pInfo->mShininess;
     LightValues::color(&obj, NebulaColor8(pInfo->mSpecularColor));
-    LightValues::specularDir(&obj, v7.x, v7.y, v7.z);
-    LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
+    LightValues::specularDir(&obj, 0.0f, 0.0f, -1.0f);
+    LightValues::attn(&obj, 0.0f, 0.0f, 1.0f, (shininess / 2.0f), 0.0f, (1.0f - (shininess / 2.0f)));
     Frame::setLight(3, obj);
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
     Frame::setLightFollowsCamera(0);
     GameLightSignal::pointLight(pInfo);
-    Vec3f v7(pInfo->mPos);
-    MR::getCameraViewMtx().mult(v7, v7);
+    Vec3f viewPos(pInfo->mPos);
+    MR::getCameraViewMtx().mult(viewPos, viewPos);
     NebulaLight obj = {};
-    LightValues::pos(&obj, v7.x, v7.y, v7.z);
+    LightValues::pos(&obj, viewPos.x, viewPos.y, viewPos.z);
     LightValues::distAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
     LightValues::noSpot(&obj);
     LightValues::color(&obj, pInfo->mColor);

@@ -72,10 +72,10 @@ void LavaFloater::init(const TableIter& rIter) {
 }
 
 void LavaFloater::initAfterPlacement() {
-    Vec3f v6(mGravity);
-    v6 *= 1000.0f;
+    Vec3f down(mGravity);
+    down *= 1000.0f;
 
-    if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, v6)) {
+    if (!MR::getFirstPolyOnLineToMap(&mGroundPos, nullptr, mPosition, down)) {
         MR::calcMapGroundUpper(&mGroundPos, this);
     }
 
@@ -134,12 +134,12 @@ void LavaFloater::endClipped() {
 
 f32 LavaFloater::getCurrentSinkDepth() const {
     Pos3f depthMtx;
-    Vec3f v1, v2;
+    Vec3f basePos, up;
     depthMtx.set(getBaseMtx());
-    depthMtx.getTrans(v1);
-    depthMtx.getYDir(v2);
-    f32 sign = MR::sign(v2.dot(mGroundPos - v1));
-    return sign * mGroundPos.distance(v1);
+    depthMtx.getTrans(basePos);
+    depthMtx.getYDir(up);
+    f32 sign = MR::sign(up.dot(mGroundPos - basePos));
+    return sign * mGroundPos.distance(basePos);
 }
 
 void LavaFloater::exeFloat() {
