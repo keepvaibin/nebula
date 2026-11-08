@@ -8,7 +8,6 @@ class PressureMessenger : public LiveActor {
 public:
     PressureMessenger(MsgSharedGroup*, const char*);
 
-    virtual ~PressureMessenger(){};
     virtual void init(const TableIter&);
 
     void exeSync();
@@ -21,14 +20,12 @@ class PressureBase : public LiveActor {
 public:
     enum ShotType {
         ShotType_OnGravity = 0,
-        ShotType_1 = 1,
+        ShotType_Straight = 1,  // no gravity, no follow, no aim
         ShotType_Follow = 2,
         ShotType_AimTurn = 3,
     };
 
     PressureBase(const char*);
-
-    virtual ~PressureBase(){};
 
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();

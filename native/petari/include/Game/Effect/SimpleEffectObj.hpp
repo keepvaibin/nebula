@@ -8,7 +8,6 @@ class SimpleEffectObj : public LiveActor {
 public:
     SimpleEffectObj(const char*);
 
-    virtual ~SimpleEffectObj() {};
     virtual void init(const TableIter&);
     virtual void startClipped();
     virtual void endClipped();

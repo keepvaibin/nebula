@@ -7,13 +7,14 @@ class AudSystem;
 class AudSystemVolumeController {
 public:
     enum VolumeSet {
-        VolumeSet_0 = 0,
-        VolumeSet_1 = 1,
-        VolumeSet_2 = 2,
-        VolumeSet_3 = 3,
+        VolumeSet_Normal = 0,
+        VolumeSet_StageClear = 1,
+        VolumeSet_Miss = 2,  // the player's down and game-over events
+        VolumeSet_Talk = 3,
         VolumeSet_ScreenSaver = 4,
         VolumeSet_HomeButtonMenu = 5,
         VolumeSet_PauseMenu = 6,
+        VolumeSet_MissEnd = 7,  // system sounds only
     };
 
     AudSystemVolumeController(AudSystem*);

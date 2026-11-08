@@ -376,7 +376,7 @@ void AudSystem::initSceneVolume() {
         mVolumeController->init();
     }
 
-    setSeVolumeSet(AudSystemVolumeController::VolumeSet_0, 0);
+    setSeVolumeSet(AudSystemVolumeController::VolumeSet_Normal, 0);
     mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 0);
     mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 0);
     mPauseMenuState = MenuState_Off;
@@ -646,7 +646,7 @@ void AudSystem::recoverSeVolumeSet(u32 maxSteps) {
 }
 
 void AudSystem::initVolumeSetting() {
-    setSeVolumeSet(AudSystemVolumeController::VolumeSet_0, 0);
+    setSeVolumeSet(AudSystemVolumeController::VolumeSet_Normal, 0);
     mSeMgr.getParams()->moveVolume(AudParams::masterVolSe, 0);
     mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 0);
     mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 0);

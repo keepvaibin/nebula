@@ -8,8 +8,6 @@ class AudTrackController {
 public:
     AudTrackController();
 
-    ~AudTrackController() {};
-
     void start(SoundHandle*);
     void stop();
     void mute();

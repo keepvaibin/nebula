@@ -6,8 +6,6 @@ class MapParts : public LiveActor {
 public:
     MapParts(const char*);
 
-    virtual ~MapParts() {};
-
     virtual void init(const TableIter&);
     virtual void appear();
     virtual s32 getSensorNumMax() const;

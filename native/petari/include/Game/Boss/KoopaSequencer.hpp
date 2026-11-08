@@ -13,7 +13,6 @@ class KoopaSequencer : public NerveExecutor {
 public:
     KoopaSequencer(const char* pName, s32 vs);
 
-    virtual ~KoopaSequencer() {};
     virtual void init(Koopa* pKoopa, const TableIter& rIter);
     virtual void update();
     virtual void calcAndSetBaseMtx();

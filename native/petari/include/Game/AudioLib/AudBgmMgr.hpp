@@ -14,7 +14,6 @@ public:
 
     AudBgmMgr();
 
-    ~AudBgmMgr() {};
     void movement();
     SoundHandle* start(s32, u32, bool);
     void setNextBGM(s32, u32);

@@ -12,8 +12,7 @@ public:
         LetterEvent_LuigiLetter,
         LetterEvent_PeachLetterNormal,
         LetterEvent_PeachLetter1Ups,
-        LetterEvent_3,
-        LetterEvent_SendLetter,
+        LetterEvent_SendLetter = 4,
         LetterEvent_OnMsgLedPattern,
         LetterEvent_OffMsgLedPattern,
     };

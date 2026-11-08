@@ -30,7 +30,7 @@ public:
 class SpkSound : public JSULink< SpkSound > {
 public:
     enum State {
-        State_0 = SpeakerVoice::STATE_NONE,
+        State_NONE = SpeakerVoice::STATE_NONE,
         State_LOCK = SpeakerVoice::STATE_LOCK,
         State_UNLOCK = SpeakerVoice::STATE_UNLOCK,
         State_STOP = SpeakerVoice::STATE_STOP,

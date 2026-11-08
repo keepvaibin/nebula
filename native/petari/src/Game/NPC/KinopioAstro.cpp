@@ -101,8 +101,6 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
         }
 
         return true;
-    } else if (letterEvent == LetterEvent_3) {
-        return true;
     }
 
     return true;

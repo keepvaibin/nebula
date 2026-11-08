@@ -1,5 +1,6 @@
 #include "Game/NPC/TalkBalloon.hpp"
 #include <nebula_game_api.h>
+#include "Game/AudioLib/AudSystemVolumeController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
@@ -337,7 +338,7 @@ void TalkBalloonEvent::exeOpen() {
         MR::showScreen(this);
         TalkBalloon::open(mMessageCtrl);
         MR::startSystemSE("SE_SM_TALKBLN_OPEN");
-        MR::setSoundVolumeSetting(3, 30);
+        MR::setSoundVolumeSetting(AudSystemVolumeController::VolumeSet_Talk, 30);
 
         if (!MR::isPlayingStageBgmName("STM_KINOPIO_TANKEN_B")) {
             MR::moveVolumeStageBGM(0.5f, 30);

@@ -8,7 +8,6 @@ class AstroMapObj : public MapObjActor {
 public:
     AstroMapObj(const char* pName);
 
-    virtual ~AstroMapObj() {};
     virtual void init(const TableIter& rIter);
     virtual void control();
 
@@ -49,7 +48,6 @@ class AstroSimpleObj : public SimpleMapObjFarMax {
 public:
     AstroSimpleObj(const char* pName);
 
-    virtual ~AstroSimpleObj() {};
     virtual void init(const TableIter& rIter);
     virtual void control();
 
