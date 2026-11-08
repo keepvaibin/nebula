@@ -16,22 +16,21 @@ namespace {
     char16_t sText[256];
 };  // namespace
 
-SaveErrorSequence::SaveErrorSequence(SaveDataHandleSequence* pHost, SysInfoWindow* pConfirm, SysInfoWindow* pSave)
-    : ActorStateBase("SaveError", pHost), mResult(0), mSysInfoWindow(pConfirm) {
-    (void)pSave;
+SaveErrorSequence::SaveErrorSequence(SaveDataHandleSequence* pHost, SysInfoWindow* pConfirm)
+    : ActorStateBase("SaveError", pHost), mResult(Result_None), mSysInfoWindow(pConfirm) {
     initNerve(GET_NERVE_ANON(SaveErrorSequenceIdle));
     kill();
 }
 
 void SaveErrorSequence::startSaveFailed() {
     appear();
-    mResult = 0;
+    mResult = Result_None;
     setNerve(GET_NERVE_ANON(SaveErrorSequenceError));
 }
 
 void SaveErrorSequence::startDamaged() {
     appear();
-    mResult = 0;
+    mResult = Result_None;
     setNerve(GET_NERVE_ANON(SaveErrorSequenceDamagedConfirm));
 }
 
@@ -45,7 +44,7 @@ bool SaveErrorSequence::tryUnrecoverable(SaveRequest::Result result) {
 }
 
 void SaveErrorSequence::restoreFromReset() {
-    mResult = 0;
+    mResult = Result_None;
 
     setNerve(GET_NERVE_ANON(SaveErrorSequenceIdle));
     kill();
@@ -78,7 +77,7 @@ void SaveErrorSequence::exeDamagedConfirm() {
     }
 
     if (mSysInfoWindow->isSelectedYes()) {
-        mResult = 1;
+        mResult = Result_NewFile;
         kill();
     } else {
         setNerve(GET_NERVE_ANON(SaveErrorSequenceNoSaveConfirm));
@@ -96,7 +95,7 @@ void SaveErrorSequence::exeNoSaveConfirm() {
     }
 
     if (mSysInfoWindow->isSelectedYes()) {
-        mResult = 3;
+        mResult = Result_NoSave;
         kill();
     } else {
         setNerve(GET_NERVE_ANON(SaveErrorSequenceDamagedConfirm));
@@ -109,8 +108,5 @@ bool SaveErrorSequence::isEnablePointer() const {
 }
 
 bool SaveErrorSequence::isResultFileCorrupted() const {
-    return mResult == 3;
-}
-
-void SaveErrorSequence::control() {
+    return mResult == Result_NoSave;
 }

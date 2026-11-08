@@ -60,14 +60,8 @@ void RumbleChannel::setPattern(const void* pOwner, const RumblePattern& rPattern
 
 InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
     if (sInstanceForCallback == nullptr) {
-        sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()];
-
-        for (u32 i = 0; i < MR::getPlayerMaxCount(); i++) {
-            sInstanceForCallback[i] = nullptr;
-        }
-
+        sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()]();
         RumbleData::initHashValue();
-        RumbleData::checkHashCollision();
     }
 
     for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {

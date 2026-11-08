@@ -17,14 +17,10 @@
 template const bool Table::getValue< s32 >(int, const char*, s32*) const;
 
 namespace {
-    inline const char* getGalaxyName(const ScenarioData* pData) {
-        return pData->mGalaxyName;
-    }
-
     struct GalaxyNameSortLt {
-        bool operator()(ScenarioData* pLhs, ScenarioData* pRhs) {
-            return static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(getGalaxyName(pLhs))) <
-                   static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(getGalaxyName(pRhs)));
+        bool operator()(const ScenarioData* pLhs, const ScenarioData* pRhs) const {
+            return static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(pLhs->mGalaxyName)) <
+                   static_cast< u32 >(GalaxyNameSortTable::getGalaxySortIndex(pRhs->mGalaxyName));
         }
     };
 
@@ -101,12 +97,10 @@ s32 ScenarioData::getPowerStarNum() const {
 
 bool ScenarioData::getValueString(const char* pKey, s32 scenarioNo, const char** ppOut) const {
     TableIter iter = getScenarioDataIter(scenarioNo);
-    bool isExist = iter.getValue(pKey, ppOut);
-
-    if (isExist) {
-        if (MR::isEqualString(*ppOut, "")) {
-            *ppOut = nullptr;
-        }
+    const bool isExist = iter.getValue(pKey, ppOut);
+    // An empty string reads as no value.
+    if (isExist && MR::isEqualString(*ppOut, "")) {
+        *ppOut = nullptr;
     }
 
     return isExist;
@@ -120,8 +114,7 @@ const char* ScenarioData::getZoneName(s32 zoneId) const {
 }
 
 TableIter ScenarioData::getScenarioDataIter(s32 scenarioNo) const {
-    TableIter iter = mScenarioData->findElement< s32 >("ScenarioNo", scenarioNo, 0);
-    return iter;
+    return mScenarioData->findElement< s32 >("ScenarioNo", scenarioNo, 0);
 }
 
 bool ScenarioData::getValueU32(const char* pKey, s32 scenarioNo, u32* pOut) const {

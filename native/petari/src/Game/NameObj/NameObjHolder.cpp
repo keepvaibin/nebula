@@ -1,20 +1,18 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
-#include "Game/Util/HashUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <algorithm>
 #include <cstring>
 
 namespace {
     struct equal_fullname {
-        equal_fullname(const char* pName) : mHash(MR::getHashCode(pName)), mName(pName) {
+        equal_fullname(const char* pName) : mName(pName) {
         }
 
         bool operator()(const NameObj* pObj) const {
             return strcmp(pObj->getName(), mName) == 0;
         }
 
-        u32 mHash;
         const char* mName;
     };
 };  // namespace

@@ -65,11 +65,11 @@ s32 AssetFolder::findPath(const char* pPath) const {
         const size_t length = pSlash != nullptr ? static_cast< size_t >(pSlash - pPath) : strlen(pPath);
         if (length != 0 && !(length == 1 && pPath[0] == '.')) {
             NebulaAssetEntry entry;
-            u32 i = 0;
-            while (child(folder, i, &entry) && !isSameName(entry.name, pPath, length)) {
-                i++;
+            bool isFound = false;
+            for (u32 i = 0; !isFound && child(folder, i, &entry); i++) {
+                isFound = isSameName(entry.name, pPath, length);
             }
-            if (!child(folder, i, &entry)) {
+            if (!isFound) {
                 return -1;
             }
             folder = entry.index;

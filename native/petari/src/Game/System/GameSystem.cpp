@@ -71,7 +71,8 @@ GameSystem::GameSystem()
 }
 
 void GameSystem::init() {
-    nebula_host()->mods_start(nebula_host()->user);
+    const NebulaHostServices* const pHost = nebula_host();
+    pHost->mods_start(pHost->user);
     Frame::registerPipelineList();
     mObjHolder = new GameSystemObjHolder();
     mFontHolder = new GameSystemFontHolder();

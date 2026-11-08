@@ -64,7 +64,6 @@ namespace MR {
     void resetPlayerInput();
     void setPlayerInputsModeHome();
     void setPlayerInputsModeGame();
-    void setInputSleepTime(bool);
     // How strongly the controller rumbles, 0 to 255.
     void setInputRumble(s32, u8);
 };  // namespace MR

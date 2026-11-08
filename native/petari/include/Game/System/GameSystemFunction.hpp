@@ -23,7 +23,6 @@ namespace GameSystemFunction {
     bool isDoneResetAudioSystem();
     void resumeResetAudioSystem();
     void resetAllControllerRumble();
-    void setInputSleepTime(bool);
     bool setPermissionToCheckInput(bool);
     void onPauseBeginAllRumble();
     void onPauseEndAllRumble();

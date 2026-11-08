@@ -137,13 +137,11 @@ void PlayerInputs::updateProjectPadData() {
 
 // In play, a third or fourth controller is let go.
 void PlayerInputs::updateInGame() {
+    const NebulaHostServices* const host = nebula_host();
     for (s32 chan = PLAYER_3; chan < PLAYER_MAX; chan++) {
-        if (mReadDataInfoArray[chan].getSample(0) == nullptr) {
-            continue;
+        if (mReadDataInfoArray[chan].getSample(0) != nullptr) {
+            host->input_control(host->user, static_cast< u32 >(chan), NEBULA_INPUT_RELEASE, 0);
         }
-
-        const NebulaHostServices* host = nebula_host();
-        host->input_control(host->user, static_cast< u32 >(chan), NEBULA_INPUT_RELEASE, 0);
     }
 }
 
@@ -173,13 +171,8 @@ void PlayerInputs::resetPad() {
 }
 
 PlayerInput* PlayerInputs::getPlayerInput(s32 channel) {
-    u32 channelMax = ARRAY_SIZE(mPad);
-
-    if (channel < channelMax) {
-        return mPad[channel];
-    }
-
-    return nullptr;
+    // A negative channel is out of range too.
+    return static_cast< u32 >(channel) < ARRAY_SIZE(mPad) ? mPad[channel] : nullptr;
 }
 
 namespace {
@@ -194,30 +187,15 @@ namespace MR {
     }
 
     void resetPlayerInput() {
-        PlayerInputs* pInputs;
-
-        pInputs = ::getPlayerInputs();
-        pInputs->resetPad();
+        ::getPlayerInputs()->resetPad();
     }
 
     void setPlayerInputsModeHome() {
-        PlayerInputs* pInputs;
-
-        pInputs = ::getPlayerInputs();
-        pInputs->mMode = INPUT_MODE_HOME;
+        ::getPlayerInputs()->mMode = INPUT_MODE_HOME;
     }
 
     void setPlayerInputsModeGame() {
-        PlayerInputs* pInputs;
-
-        pInputs = ::getPlayerInputs();
-        pInputs->mMode = INPUT_MODE_GAME;
-    }
-
-
-    void setInputSleepTime(bool isLongAutoSleep) {
-        // Controllers sleep as the host decides.
-        (void)isLongAutoSleep;
+        ::getPlayerInputs()->mMode = INPUT_MODE_GAME;
     }
 
     void setInputRumble(s32 channel, u8 strength) {

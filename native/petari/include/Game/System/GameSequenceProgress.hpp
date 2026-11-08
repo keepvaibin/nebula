@@ -33,7 +33,6 @@ public:
 
     inline static bool isCometStar(GalaxyMoveArgument);
     static bool isScenePermittedUpdateInputStatus();
-    static bool isSceneLongInputSleep();
     void updateGameDataBeforeChangeScene();
     void resetGameDataAfterChangeScene(const GalaxyMoveArgument&);
     void updateGameDataGalaxyVisitedFlag();
