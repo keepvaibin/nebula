@@ -50,7 +50,7 @@ namespace {
     NEW_NERVE(DodoryuStateLv2NrvChaseMoreEnd, DodoryuStateLv2, ChaseMoreEnd);
 };  // namespace
 
-DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, DodoryuChaseParam* pChaseParam, const char* pName)
+DodoryuStateLv2::DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChaseParam, const char* pName)
     : DodoryuStateBase(pHost, pName), mAttackDir(0.0f, 0.0f, 0.0f), mReadyAppearStep(),
       mChaseAppearStep(), mChaseAppearEndCounter(), mEscapeStepMaxLeft(), mEscapeStepMinLeft(), mFindPosStep(), mChaseMoreCounter(),
       mIsChaseMoreBrake(true), mChaseParam(pChaseParam), mIsPlayerStaggering() {
@@ -739,10 +739,8 @@ bool DodoryuStateLv2::isAttackableNerve() const {
 }
 
 bool DodoryuStateLv2::tryShiftToChaseAppear() {
-    DodoryuChaseParam* pChaseParam = mChaseParam;
-
-    if (MR::calcDistanceToPlayer(mHost) < pChaseParam->mChaseAppearDistance) {
-        startAnim(pChaseParam->mAnimSetReadyAppear);
+    if (MR::calcDistanceToPlayer(mHost) < mChaseParam->mChaseAppearDistance) {
+        startAnim(mChaseParam->mAnimSetReadyAppear);
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvReadyAppear));
 
         return true;

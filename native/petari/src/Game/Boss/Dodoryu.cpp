@@ -37,177 +37,214 @@
 #include <cstdio>
 
 namespace {
-    static const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
-    static const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
-    static const Vec sLegOffset = {40.0f, 0.0f, 0.0f};
-    static const Vec sArmOffset = {0.0f, 0.0f, 0.0f};
-    static const Vec sTailOffset = {50.0f, 0.0f, 0.0f};
-    static const Vec sStarPieceSensorOffset = {-150.0f, 0.0f, 0.0f};
-    static const char* sHeadSensorName = "head";
-    static const char* sHeadJointName = "Head";
-    static const f32 sHeadRadius = 210.0f;
-    static const char* sBodySensorName = "body";
-    static const f32 sBodyRadius = 250.0f;
-    static const char* sLegLSensorName = "leg_left";
-    static const char* sLegRSensorName = "leg_right";
-    static const f32 sLegRadius = 110.0f;
-    static const char* sArmLSensorName = "arm_left";
-    static const char* sArmRSensorName = "arm_right";
-    static const f32 sArmRadius = 50.0f;
-    static const char* sTailSensorName = "tail";
-    static const f32 sTailRadius = 120.0f;
-    static const char* sMapObjSensorName = "eye";
-    static const f32 sMapObjSensorRadius = 100.0f;
-    static const char* sStarPieceSensorName = "star";
-    static const f32 sStarPieceSensorRadius = 400.0f;
-    static const s32 sJumpOutStopSceneFrame = 8;
-    static const char* sSpinOutCamera = "ドドリュウ吹っ飛び";
-    static const f32 sRumblePadNearDist = 500.0f;
-    static const f32 sRumblePadFarDist = 1000.0f;
-    static const f32 sRabbitDistMax = 1500.0f;
-    static const f32 sRabbitDistMin = 650.0f;
-    static const f32 sRabbitRestDist = 2000.0f;
-    static const f32 sRabbitFastSpeed = 8.0f;
-    static const f32 sRabbitSlowSpeed = 4.0f;
-    static DodoryuChaseParam sDodoryuChaseDataLv2 = {
-        60,
-        16.0f,
-        0.1f,
-        1.5f,
-        0.0f,
-        600.0f,
-        30,
-        9.0f,
-        0.1f,
-        1.0f,
-        0.0f,
-        45,
-        55,
-        800.0f,
-        180.0f,
-        5.0f,
-        0.2f,
-        2.0f,
-        0.0f,
-        120,
-        150,
-        5,
-        250,
-        1500.0f,
-        50,
-        70,
-        8.0f,
-        50.0f,
-        1.5f,
-        60,
-        120,
-        60,
-        90,
-        1200.0f,
-        1500.0f,
-        5.0f,
-        80,
-        -1,
-        false,
-        10.0f,
-        1.0f,
-        3.0f,
-        0.92f,
-        360,
-        50,
-        60,
-        10,
-        20,
-        {"Burrow", nullptr, "Normal", "Normal", nullptr},
-        {"UnderGroundWalk", nullptr, "Normal", "Normal", nullptr},
-        {"UnderGroundWalk", nullptr, nullptr, "Normal", nullptr},
-        {"EffectWalkAppear", nullptr, "Normal", nullptr, "EffectWalkAppear"},
-        {"EffectWalk", nullptr, nullptr, nullptr, "EffectWalk"},
-        {"EffectWalkHide", nullptr, nullptr, nullptr, "EffectWalkHide"},
-        {"Appear", nullptr, nullptr, "Careless", "Appear"},
-        {"Walk", nullptr, nullptr, "Normal", "Walk"},
-        {"Hide", nullptr, nullptr, nullptr, "Hide"},
-        {"SwoonWalkStart", nullptr, nullptr, "Cry", nullptr},
-        {"SwoonWalk", nullptr, nullptr, nullptr, nullptr},
-        {"SwoonWalkEnd", nullptr, nullptr, nullptr, nullptr},
-        {"Dive", nullptr, nullptr, "Normal", nullptr},
-        {"AngryPunchDamage", nullptr, nullptr, nullptr, nullptr},
-        {"AttackHit", nullptr, nullptr, nullptr, "AttackHit"},
-        {"Hide", nullptr, nullptr, nullptr, "Hide"},
-        {"Jump", nullptr, nullptr, "Careless", "Jump"},
-        {},
-        {},
-        {},
+    const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
+    const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
+    const Vec sLegOffset = {40.0f, 0.0f, 0.0f};
+    const Vec sArmOffset = {0.0f, 0.0f, 0.0f};
+    const Vec sTailOffset = {50.0f, 0.0f, 0.0f};
+    const Vec sStarPieceSensorOffset = {-150.0f, 0.0f, 0.0f};
+    const char* const sHeadSensorName = "head";
+    const char* const sHeadJointName = "Head";
+    const f32 sHeadRadius = 210.0f;
+    const char* const sBodySensorName = "body";
+    const f32 sBodyRadius = 250.0f;
+    const char* const sLegLSensorName = "leg_left";
+    const char* const sLegRSensorName = "leg_right";
+    const f32 sLegRadius = 110.0f;
+    const char* const sArmLSensorName = "arm_left";
+    const char* const sArmRSensorName = "arm_right";
+    const f32 sArmRadius = 50.0f;
+    const char* const sTailSensorName = "tail";
+    const f32 sTailRadius = 120.0f;
+    const char* const sMapObjSensorName = "eye";
+    const f32 sMapObjSensorRadius = 100.0f;
+    const char* const sStarPieceSensorName = "star";
+    const f32 sStarPieceSensorRadius = 400.0f;
+    const s32 sSensorCount = 9;
+    const u16 sEnemySensorGroupSize = 8;
+    const u16 sMapObjSensorGroupSize = 16;
+    // Along the head joint's x axis: a reflect from further out hit the needle.
+    const f32 sHeadNeedleReach = 105.0f;
+    const s32 sJumpOutStopSceneFrame = 8;
+    const char* const sSpinOutCamera = "ドドリュウ吹っ飛び";
+    const s32 sSpinOutCameraSteps = 120;
+    const f32 sRumblePadNearDist = 500.0f;
+    const f32 sRumblePadFarDist = 1000.0f;
+    const f32 sCameraRegisterHeight = 150.0f;
+    const f32 sCameraHipWeight = 0.7f;
+    const f32 sCameraPlayerWeight = 0.3f;
+    const f32 sGroundProbeRise = 200.0f;
+    const f32 sGroundProbeLength = 1200.0f;
+    const f32 sStateStartBlur = 0.75f;
+    const s32 sStarPieceCount = 24;
+    const s32 sSoundCount = 8;
+    const s32 sHillStartPieces = 5;
+    // Pieces left off the hill at its fullest.
+    const s32 sHillMaxSpare = 10;
+    const f32 sRabbitDistMax = 1500.0f;
+    const f32 sRabbitDistMin = 650.0f;
+    const f32 sRabbitRestDist = 2000.0f;
+    const f32 sRabbitFastSpeed = 8.0f;
+    const f32 sRabbitSlowSpeed = 4.0f;
+    // Rail distance the rabbit starts ahead of Dodoryu.
+    const f32 sRabbitLead = 1075.0f;
+    const f32 sRabbitHopSoundFrame = 3.0f;
+    const s32 sRabbitTalkSwitchSteps = 300;
+    const s32 sRabbitTalkNodeCount = 2;
+    const s32 sRabbitPleasureTalkNode = 2;
+    const f32 sRabbitTalkDistance = 1500.0f;
+    const f32 sRabbitPleasureTalkDistance = 350.0f;
+    // Pleasure stops following the spine joint after this step.
+    const s32 sRabbitPleasureTalkFollowSteps = 30;
+    const f32 sRabbitBodyRadius = 50.0f;
+    const f32 sRabbitRumbleRadius = 4.0f;
+    const f32 sRabbitRumbleSpeed = 0.2f;
+    const s32 sRabbitTrampleRumbleSteps = 60;
+    const s32 sRabbitStarPieceRumbleSteps = 30;
+    const f32 sLeadHillSpinSpeed = 0.07f;
+
+    const DodoryuChaseParam sDodoryuChaseDataLv2 = {
+        .mReadyChaseStep = 60,
+        .mUndergroundMaxSpeed = 16.0f,
+        .mUndergroundAccel = 0.1f,
+        .mUndergroundTurnAngle = 1.5f,
+        .mUndergroundLateralDamping = 0.0f,
+        .mChaseAppearDistance = 600.0f,
+        .mAppearSignStep = 30,
+        .mExposingHeadMaxSpeed = 9.0f,
+        .mExposingHeadAccel = 0.1f,
+        .mExposingHeadTurnAngle = 1.0f,
+        .mExposingHeadLateralDamping = 0.0f,
+        .mReadyAppearStepMin = 45,
+        .mReadyAppearStepMax = 55,
+        .mChaseHideDistance = 800.0f,
+        .mAppearSignFaceAngle = 180.0f,
+        .mExposingBustMaxSpeed = 5.0f,
+        .mExposingBustAccel = 0.2f,
+        .mExposingBustTurnAngle = 2.0f,
+        .mExposingBustLateralDamping = 0.0f,
+        .mChaseAppearStepMin = 120,
+        .mChaseAppearStepMax = 150,
+        .mChaseAppearEndStep = 5,
+        .mEscapeStepMax = 250,
+        .mEscapeEndDistance = 1500.0f,
+        .mEscapeDirStepMin = 50,
+        .mEscapeDirStepMax = 70,
+        .mEscapeSpeed = 8.0f,
+        .mEscapeDirAngleMax = 50.0f,
+        .mEscapeTurnAngle = 1.5f,
+        .mEscapeStepMin = 60,
+        .mLaughStep = 120,
+        .mFindPosStepMin = 60,
+        .mFindPosStepMax = 90,
+        .mRandomMoveDistanceMin = 1200.0f,
+        .mRandomMoveDistanceMax = 1500.0f,
+        .mJumpOutSpeed = 5.0f,
+        .mKnockDownStopStep = 80,
+        .mKnockDownStep = -1,
+        .mHasChaseMore = false,
+        .mInAngerMaxSpeed = 10.0f,
+        .mInAngerAccel = 1.0f,
+        .mInAngerTurnAngle = 3.0f,
+        .mInAngerLateralDamping = 0.92f,
+        .mChaseMoreStep = 360,
+        .mChaseMoreAccelCounterMin = 50,
+        .mChaseMoreAccelCounterMax = 60,
+        .mChaseMoreBrakeCounterMin = 10,
+        .mChaseMoreBrakeCounterMax = 20,
+        // {bck, btk, brk, bva, lead hill bck}
+        .mAnimSetStart = {"Burrow", nullptr, "Normal", "Normal", nullptr},
+        .mAnimSetReadyChase = {"UnderGroundWalk", nullptr, "Normal", "Normal", nullptr},
+        .mAnimSetUndergroundWalk = {"UnderGroundWalk", nullptr, nullptr, "Normal", nullptr},
+        .mAnimSetReadyAppear = {"EffectWalkAppear", nullptr, "Normal", nullptr, "EffectWalkAppear"},
+        .mAnimSetReadyAppearWalk = {"EffectWalk", nullptr, nullptr, nullptr, "EffectWalk"},
+        .mAnimSetChaseHide = {"EffectWalkHide", nullptr, nullptr, nullptr, "EffectWalkHide"},
+        .mAnimSetChaseAppearStart = {"Appear", nullptr, nullptr, "Careless", "Appear"},
+        .mAnimSetChaseAppear = {"Walk", nullptr, nullptr, "Normal", "Walk"},
+        .mAnimSetChaseAppearEnd = {"Hide", nullptr, nullptr, nullptr, "Hide"},
+        .mAnimSetJumpOut = {"SwoonWalkStart", nullptr, nullptr, "Cry", nullptr},
+        .mAnimSetEscape = {"SwoonWalk", nullptr, nullptr, nullptr, nullptr},
+        .mAnimSetRecover = {"SwoonWalkEnd", nullptr, nullptr, nullptr, nullptr},
+        .mAnimSetDive = {"Dive", nullptr, nullptr, "Normal", nullptr},
+        .mAnimSetKnockDown = {"AngryPunchDamage", nullptr, nullptr, nullptr, nullptr},
+        .mAnimSetLaugh = {"AttackHit", nullptr, nullptr, nullptr, "AttackHit"},
+        .mAnimSetLaughEnd = {"Hide", nullptr, nullptr, nullptr, "Hide"},
+        .mAnimSetHideJump = {"Jump", nullptr, nullptr, "Careless", "Jump"},
+        .mAnimSetChaseMoreStart = {},
+        .mAnimSetChaseMore = {},
+        .mAnimSetChaseMoreEnd = {},
     };
-    static DodoryuChaseParam sDodoryuChaseDataLv3 = {
-        60,
-        20.0f,
-        0.2f,
-        1.0f,
-        0.0f,
-        500.0f,
-        30,
-        9.0f,
-        0.1f,
-        1.0f,
-        0.0f,
-        55,
-        65,
-        750.0f,
-        180.0f,
-        6.0f,
-        0.2f,
-        2.0f,
-        0.99f,
-        60,
-        75,
-        5,
-        140,
-        1500.0f,
-        40,
-        60,
-        9.0f,
-        70.0f,
-        2.0f,
-        60,
-        120,
-        60,
-        90,
-        1500.0f,
-        1600.0f,
-        5.0f,
-        -1,
-        45,
-        true,
-        18.0f,
-        0.5f,
-        0.1f,
-        0.96f,
-        240,
-        50,
-        60,
-        10,
-        20,
-        {"Burrow", nullptr, "Angry", "Angry", nullptr},
-        {"UnderGroundWalk", nullptr, "Angry", "Angry", nullptr},
-        {"UnderGroundWalk", nullptr, "Angry", "Angry", nullptr},
-        {"AngryEffectWalkAppear", nullptr, nullptr, nullptr, "EffectWalkAppear"},
-        {"AngryEffectWalk", nullptr, nullptr, nullptr, "EffectWalk"},
-        {"AngryEffectWalkHide", nullptr, nullptr, nullptr, "EffectWalkHide"},
-        {"AngryAppear", nullptr, nullptr, nullptr, "Appear"},
-        {"AngryWalk", nullptr, nullptr, nullptr, "Walk"},
-        {"AngryHide", nullptr, nullptr, nullptr, "Hide"},
-        {"SwoonWalkStart", nullptr, "CoolDown", "Cry", nullptr},
-        {"SwoonWalk", nullptr, "Normal", nullptr, nullptr},
-        {"SwoonWalkEnd", nullptr, nullptr, nullptr, nullptr},
-        {"AngryDive", nullptr, "AngryStart", "Angry", nullptr},
-        {"AngryPunchDamage", nullptr, nullptr, nullptr, nullptr},
-        {"AngryAttackHit", nullptr, nullptr, nullptr, "AttackHit"},
-        {"AngryHide", nullptr, nullptr, nullptr, "Hide"},
-        {"AngryJump", nullptr, nullptr, "Cry", "Jump"},
-        {"AngryChaseStart", nullptr, nullptr, "Cry", "AngryChaseStart"},
-        {"AngryChase", nullptr, nullptr, "Angry", "AngryChase"},
-        {"AngryChaseEnd", nullptr, nullptr, nullptr, "AngryChaseEnd"},
+
+    const DodoryuChaseParam sDodoryuChaseDataLv3 = {
+        .mReadyChaseStep = 60,
+        .mUndergroundMaxSpeed = 20.0f,
+        .mUndergroundAccel = 0.2f,
+        .mUndergroundTurnAngle = 1.0f,
+        .mUndergroundLateralDamping = 0.0f,
+        .mChaseAppearDistance = 500.0f,
+        .mAppearSignStep = 30,
+        .mExposingHeadMaxSpeed = 9.0f,
+        .mExposingHeadAccel = 0.1f,
+        .mExposingHeadTurnAngle = 1.0f,
+        .mExposingHeadLateralDamping = 0.0f,
+        .mReadyAppearStepMin = 55,
+        .mReadyAppearStepMax = 65,
+        .mChaseHideDistance = 750.0f,
+        .mAppearSignFaceAngle = 180.0f,
+        .mExposingBustMaxSpeed = 6.0f,
+        .mExposingBustAccel = 0.2f,
+        .mExposingBustTurnAngle = 2.0f,
+        .mExposingBustLateralDamping = 0.99f,
+        .mChaseAppearStepMin = 60,
+        .mChaseAppearStepMax = 75,
+        .mChaseAppearEndStep = 5,
+        .mEscapeStepMax = 140,
+        .mEscapeEndDistance = 1500.0f,
+        .mEscapeDirStepMin = 40,
+        .mEscapeDirStepMax = 60,
+        .mEscapeSpeed = 9.0f,
+        .mEscapeDirAngleMax = 70.0f,
+        .mEscapeTurnAngle = 2.0f,
+        .mEscapeStepMin = 60,
+        .mLaughStep = 120,
+        .mFindPosStepMin = 60,
+        .mFindPosStepMax = 90,
+        .mRandomMoveDistanceMin = 1500.0f,
+        .mRandomMoveDistanceMax = 1600.0f,
+        .mJumpOutSpeed = 5.0f,
+        .mKnockDownStopStep = -1,
+        .mKnockDownStep = 45,
+        .mHasChaseMore = true,
+        .mInAngerMaxSpeed = 18.0f,
+        .mInAngerAccel = 0.5f,
+        .mInAngerTurnAngle = 0.1f,
+        .mInAngerLateralDamping = 0.96f,
+        .mChaseMoreStep = 240,
+        .mChaseMoreAccelCounterMin = 50,
+        .mChaseMoreAccelCounterMax = 60,
+        .mChaseMoreBrakeCounterMin = 10,
+        .mChaseMoreBrakeCounterMax = 20,
+        // {bck, btk, brk, bva, lead hill bck}
+        .mAnimSetStart = {"Burrow", nullptr, "Angry", "Angry", nullptr},
+        .mAnimSetReadyChase = {"UnderGroundWalk", nullptr, "Angry", "Angry", nullptr},
+        .mAnimSetUndergroundWalk = {"UnderGroundWalk", nullptr, "Angry", "Angry", nullptr},
+        .mAnimSetReadyAppear = {"AngryEffectWalkAppear", nullptr, nullptr, nullptr, "EffectWalkAppear"},
+        .mAnimSetReadyAppearWalk = {"AngryEffectWalk", nullptr, nullptr, nullptr, "EffectWalk"},
+        .mAnimSetChaseHide = {"AngryEffectWalkHide", nullptr, nullptr, nullptr, "EffectWalkHide"},
+        .mAnimSetChaseAppearStart = {"AngryAppear", nullptr, nullptr, nullptr, "Appear"},
+        .mAnimSetChaseAppear = {"AngryWalk", nullptr, nullptr, nullptr, "Walk"},
+        .mAnimSetChaseAppearEnd = {"AngryHide", nullptr, nullptr, nullptr, "Hide"},
+        .mAnimSetJumpOut = {"SwoonWalkStart", nullptr, "CoolDown", "Cry", nullptr},
+        .mAnimSetEscape = {"SwoonWalk", nullptr, "Normal", nullptr, nullptr},
+        .mAnimSetRecover = {"SwoonWalkEnd", nullptr, nullptr, nullptr, nullptr},
+        .mAnimSetDive = {"AngryDive", nullptr, "AngryStart", "Angry", nullptr},
+        .mAnimSetKnockDown = {"AngryPunchDamage", nullptr, nullptr, nullptr, nullptr},
+        .mAnimSetLaugh = {"AngryAttackHit", nullptr, nullptr, nullptr, "AttackHit"},
+        .mAnimSetLaughEnd = {"AngryHide", nullptr, nullptr, nullptr, "Hide"},
+        .mAnimSetHideJump = {"AngryJump", nullptr, nullptr, "Cry", "Jump"},
+        .mAnimSetChaseMoreStart = {"AngryChaseStart", nullptr, nullptr, "Cry", "AngryChaseStart"},
+        .mAnimSetChaseMore = {"AngryChase", nullptr, nullptr, "Angry", "AngryChase"},
+        .mAnimSetChaseMoreEnd = {"AngryChaseEnd", nullptr, nullptr, nullptr, "AngryChaseEnd"},
     };
 };  // namespace
 
@@ -228,8 +265,8 @@ namespace {
 
 Dodoryu::Dodoryu(const char* pName)
     : LiveActor(pName), mCameraRegisterPos(0.0f, 0.0f, 0.0f), mStateIndex(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
-      mGroundNormal(0.0f, 1.0f, 0.0f), mWallNormal(1.0f, 0.0f, 0.0f), mClosedAreaObj(), mIsSwitchOn(), mDemoCameraTarget(new CameraTargetMtx("カメラターゲットダミー")),
-      mSpinOutCameraTarget(new CameraTargetMtx("カメラターゲットダミー")), mIsRumbling(), mRumbleStep(), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
+      mGroundNormal(0.0f, 1.0f, 0.0f), mWallNormal(1.0f, 0.0f, 0.0f), mClosedAreaObj(), mIsSwitchOn(false), mDemoCameraTarget(new CameraTargetMtx("カメラターゲットダミー")),
+      mSpinOutCameraTarget(new CameraTargetMtx("カメラターゲットダミー")), mIsRumbling(false), mAnimScaleCtrl(new AnimScaleController(nullptr)) {
     mBaseMtx.identity();
 }
 
@@ -247,7 +284,7 @@ void Dodoryu::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     MR::initFur(this);
     initHitSensor();
-    initSound(8, false);
+    initSound(::sSoundCount, false);
     initRailRider(rIter);
     MR::moveCoordToNearestPos(this, mPosition);
     initSwitch(rIter);
@@ -261,7 +298,7 @@ void Dodoryu::init(const TableIter& rIter) {
     mRabbit = new DodoryuRabbit(this, rIter);
     MR::declarePowerStar(this);
     MR::createDepthOfFieldBlur();
-    MR::declareStarPiece(this, 24);
+    MR::declareStarPiece(this, ::sStarPieceCount);
     MR::createCenterScreenBlur();
     mDemoCameraTarget->mMatrix.setInline(MR::getZonePlacementMtx(rIter));
     MR::startBckWithInterpole(this, "UnderGroundWalk", 0);
@@ -302,17 +339,17 @@ void Dodoryu::endClipped() {
 }
 
 void Dodoryu::snapToGround() {
-    MR::calcGravityVector(this, &mGravity, nullptr, false);
+    MR::calcGravityVector(this, &mGravity, nullptr, 0);
 
     Triangle triangle;
-    Vec3f v4;
+    Vec3f groundPos;
 
-    if (MR::getFirstPolyOnLineToMap(&v4, &triangle, mPosition - mGravity.scaleInline(200.0f), mGravity.scaleInline(1200.0f))) {
+    if (MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mPosition - mGravity.scaleInline(::sGroundProbeRise), mGravity.scaleInline(::sGroundProbeLength))) {
         mGroundNormal = *triangle.getNormal(0);
 
         turnUpVecTo(-mGravity);
-        mPosition.set(v4);
-        mBaseMtx.setTrans(v4);
+        mPosition.set(groundPos);
+        mBaseMtx.setTrans(groundPos);
     }
 }
 
@@ -325,19 +362,19 @@ bool Dodoryu::snapToWall() {
 
     f32 cylinderRadius = MR::getCylinderRadius(mClosedAreaObj);
 
-    Vec3f v1 = mPosition - cylinderPos;
-    v1.orthogonalize(cylinderUpVec);
+    Vec3f toWall = mPosition - cylinderPos;
+    toWall.orthogonalize(cylinderUpVec);
 
-    if (MR::isNearZero(v1)) {
+    if (MR::isNearZero(toWall)) {
         return false;
     }
 
-    MR::normalize(&v1);
-    mWallNormal.set(v1);
-    v1 *= cylinderRadius;
-    Vec3f v2 = cylinderPos + v1;
-    mPosition.set(v2);
-    mBaseMtx.setTrans(v2);
+    MR::normalize(&toWall);
+    mWallNormal.set(toWall);
+    toWall *= cylinderRadius;
+    Vec3f wallPos = cylinderPos + toWall;
+    mPosition.set(wallPos);
+    mBaseMtx.setTrans(wallPos);
 
     return true;
 }
@@ -346,7 +383,7 @@ void Dodoryu::setMtx(const Pos3f& rMtx) {
     mBaseMtx.setInline(&rMtx);
     mBaseMtx.getTrans(mPosition);
 
-    mCameraRegisterPos = mPosition - mGravity * 150.0f;
+    mCameraRegisterPos = mPosition - mGravity * ::sCameraRegisterHeight;
 }
 
 void Dodoryu::notifyOnSwitchA() {
@@ -355,7 +392,7 @@ void Dodoryu::notifyOnSwitchA() {
     MR::invalidateClipping(mLeadHill);
     MR::invalidateClipping(mBank);
     MR::invalidateClipping(mRabbit);
-    mIsSwitchOn = 1;
+    mIsSwitchOn = true;
     mHill->setAppearNum(mHill->mPieceNum);
 }
 
@@ -364,22 +401,23 @@ void Dodoryu::nextState() {
 
     mStateIndex++;
 
-    if (mStateIndex >= mState.size()) {
-        MR::startAfterBossBGM();
-        MR::requestAppearPowerStar(this, mPosition);
-        mRabbit->setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitReturn));
-
-        if (MR::isValidSwitchB(this)) {
-            MR::onSwitchB(this);
-        }
-
-        MR::setImageEffectControlAuto();
-        kill();
-    } else {
+    if (mStateIndex < mState.size()) {
         MR::turnOnDepthOfField(true);
-        MR::setDepthOfFieldBlurIntensity(0.75f);
+        MR::setDepthOfFieldBlurIntensity(::sStateStartBlur);
         mState[mStateIndex]->start();
+        return;
     }
+
+    MR::startAfterBossBGM();
+    MR::requestAppearPowerStar(this, mPosition);
+    mRabbit->setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitReturn));
+
+    if (MR::isValidSwitchB(this)) {
+        MR::onSwitchB(this);
+    }
+
+    MR::setImageEffectControlAuto();
+    kill();
 }
 
 void Dodoryu::pauseOff() {
@@ -403,11 +441,11 @@ void Dodoryu::endPlayerCenterCamera() {
     }
 }
 
-void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 param2) const {
-    char buf[256];
-    nebula_snprintf(buf, sizeof(buf), "マリオ再セット%d", param2 + 1);
+void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 index) const {
+    char name[256];
+    nebula_snprintf(name, sizeof(name), "マリオ再セット%d", index + 1);
 
-    MR::tryFindNamePos(buf, (MtxPtr)pMtx);
+    MR::tryFindNamePos(name, (MtxPtr)pMtx);
 }
 
 bool Dodoryu::checkWallWithVelocity() {
@@ -453,7 +491,7 @@ void Dodoryu::reactJumpOutCommon() const {
 }
 
 void Dodoryu::startSpinOutCamera() {
-    MR::startGlobalEventCamera(::sSpinOutCamera, CameraTargetArg(mSpinOutCameraTarget), 120);
+    MR::startGlobalEventCamera(::sSpinOutCamera, CameraTargetArg(mSpinOutCameraTarget), ::sSpinOutCameraSteps);
 }
 
 void Dodoryu::endSpinOutCamera() {
@@ -537,23 +575,23 @@ bool Dodoryu::isHeadNeedle(HitSensor* pReceiver, HitSensor* pSender) const {
     jointMtx.set(MR::getJointMtx(this, ::sHeadJointName));
     jointMtx.getXDir(xDir);
 
-    return xDir.dot(deltaPos) >= 105.0f;
+    return xDir.dot(deltaPos) >= ::sHeadNeedleReach;
 }
 
-void Dodoryu::shiftMoveStateRail(f32 param1) {
-    mMoveStateHolder->shiftRail(param1);
+void Dodoryu::shiftMoveStateRail(f32 speed) {
+    mMoveStateHolder->shiftRail(speed);
 }
 
-void Dodoryu::shiftMoveStateChase(f32 param1, f32 param2, f32 param3, f32 param4) {
-    mMoveStateHolder->shiftChase(param1, param2, param3, param4);
+void Dodoryu::shiftMoveStateChase(f32 accel, f32 lateralDamping, f32 maxSpeed, f32 turnAngle) {
+    mMoveStateHolder->shiftChase(accel, lateralDamping, maxSpeed, turnAngle);
 }
 
-void Dodoryu::shiftMoveStateEscape(f32 param1, s32 param2, s32 param3, f32 param4, f32 param5) {
-    mMoveStateHolder->shiftEscape(param1, param2, param3, param4, param5);
+void Dodoryu::shiftMoveStateEscape(f32 speed, s32 dirStepMin, s32 dirStepMax, f32 dirAngleMax, f32 turnAngle) {
+    mMoveStateHolder->shiftEscape(speed, dirStepMin, dirStepMax, dirAngleMax, turnAngle);
 }
 
-void Dodoryu::shiftMoveStateJumpOut(f32 param1, f32 param2) {
-    mMoveStateHolder->shiftJumpOut(param1, param2);
+void Dodoryu::shiftMoveStateJumpOut(f32 speed, f32 turnAngle) {
+    mMoveStateHolder->shiftJumpOut(speed, turnAngle);
 }
 
 void Dodoryu::shiftMoveStateNull() {
@@ -585,7 +623,7 @@ void Dodoryu::setHillAppearNumHalf() {
 }
 
 void Dodoryu::setHillAppearNumMax() {
-    mHill->setAppearNum(mHill->mPieceNum - 10);
+    mHill->setAppearNum(mHill->mPieceNum - ::sHillMaxSpare);
 }
 
 void Dodoryu::startLeadHillBck(const char* pBckName) {
@@ -601,18 +639,14 @@ void Dodoryu::killLeadHill() {
 }
 
 void Dodoryu::appearBank() {
-    if (MR::isDead(mBank)) {
-    }
 }
 
 void Dodoryu::leaveRabbit() {
-    DodoryuRabbit* rabbit = mRabbit;
-
-    if (MR::isDead(rabbit)) {
+    if (MR::isDead(mRabbit)) {
         return;
     }
 
-    rabbit->setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitJump));
+    mRabbit->setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitJump));
 }
 
 void Dodoryu::resetRabbit() {
@@ -640,26 +674,26 @@ void Dodoryu::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (MR::isSensorMapObj(pReceiver)) {
-        if (MR::isSensor(pSender, ::sMapObjSensorName)) {
-            MR::sendMsgEnemyAttack(pReceiver, pSender);
-        }
-    } else {
+    if (!MR::isSensorMapObj(pReceiver)) {
         mState[mStateIndex]->catchAttackSensor(pSender, pReceiver);
+        return;
+    }
+
+    if (MR::isSensor(pSender, ::sMapObjSensorName)) {
+        MR::sendMsgEnemyAttack(pReceiver, pSender);
     }
 }
 
 bool Dodoryu::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensor(pReceiver, ::sStarPieceSensorName)) {
-        if (MR::isMsgStarPieceAttack(msg)) {
-            MR::startSound(this, "SE_OJ_STAR_PIECE_HIT_STOP");
-            mAnimScaleCtrl->startHitReaction();
-            mMoveStateHolder->brake();
-
-            return true;
+        if (!MR::isMsgStarPieceAttack(msg)) {
+            return false;
         }
 
-        return false;
+        MR::startSound(this, "SE_OJ_STAR_PIECE_HIT_STOP");
+        mAnimScaleCtrl->startHitReaction();
+        mMoveStateHolder->brake();
+        return true;
     }
 
     if (MR::isMsgStarPieceReflect(msg)) {
@@ -674,17 +708,18 @@ bool Dodoryu::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 }
 
 void Dodoryu::initHitSensor() {
-    LiveActor::initHitSensor(9);
+    LiveActor::initHitSensor(::sSensorCount);
 
-    MR::addHitSensorAtJointEnemy(this, ::sHeadSensorName, ::sHeadJointName, 8, ::sHeadRadius, ::sHeadOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sBodySensorName, "Hip", 8, ::sBodyRadius, ::sBodyOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sLegLSensorName, "LegL2", 8, ::sLegRadius, ::sLegOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sLegRSensorName, "LegR2", 8, ::sLegRadius, ::sLegOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sArmLSensorName, "HandL", 8, ::sArmRadius, ::sArmOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sArmRSensorName, "HandR", 8, ::sArmRadius, ::sArmOffset);
-    MR::addHitSensorAtJointEnemy(this, ::sTailSensorName, "Tail", 8, ::sTailRadius, ::sTailOffset);
-    MR::addHitSensorEye(this, ::sMapObjSensorName, 16, ::sMapObjSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorAtJointMapObjSimple(this, ::sStarPieceSensorName, "Hip", 16, ::sStarPieceSensorRadius, ::sStarPieceSensorOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sHeadSensorName, ::sHeadJointName, ::sEnemySensorGroupSize, ::sHeadRadius, ::sHeadOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sBodySensorName, "Hip", ::sEnemySensorGroupSize, ::sBodyRadius, ::sBodyOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sLegLSensorName, "LegL2", ::sEnemySensorGroupSize, ::sLegRadius, ::sLegOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sLegRSensorName, "LegR2", ::sEnemySensorGroupSize, ::sLegRadius, ::sLegOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sArmLSensorName, "HandL", ::sEnemySensorGroupSize, ::sArmRadius, ::sArmOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sArmRSensorName, "HandR", ::sEnemySensorGroupSize, ::sArmRadius, ::sArmOffset);
+    MR::addHitSensorAtJointEnemy(this, ::sTailSensorName, "Tail", ::sEnemySensorGroupSize, ::sTailRadius, ::sTailOffset);
+    MR::addHitSensorEye(this, ::sMapObjSensorName, ::sMapObjSensorGroupSize, ::sMapObjSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObjSimple(this, ::sStarPieceSensorName, "Hip", ::sMapObjSensorGroupSize, ::sStarPieceSensorRadius,
+                                        ::sStarPieceSensorOffset);
 }
 
 void Dodoryu::initSwitch(const TableIter& rIter) {
@@ -697,7 +732,7 @@ void Dodoryu::initSwitch(const TableIter& rIter) {
 
 void Dodoryu::createMogucchiHill() {
     mHill = new DodoryuHill(this);
-    mHill->setAppearNum(5);
+    mHill->setAppearNum(::sHillStartPieces);
 }
 
 void Dodoryu::createDodoryuBank() {
@@ -705,23 +740,21 @@ void Dodoryu::createDodoryuBank() {
     mBank->initWithoutIter();
 }
 
-void Dodoryu::turnUpVecTo(const Vec3f& rVec) {
+void Dodoryu::turnUpVecTo(const Vec3f& rUp) {
+    Vec3f up;
+    mBaseMtx.getYDir(up);
+
     Pos3f rotation;
-    Vec3f zDir, yDir, xDir;
-    Vec3f dir;
-    mBaseMtx.getYDir(dir);
-    rotation.setRotate(dir, rVec);
+    rotation.setRotate(up, rUp);
     mBaseMtx.concat(rotation, mBaseMtx);
+
+    // Re-orthonormalize: y = z x x, then z = x x y.
+    Vec3f xDir, yDir, zDir;
     mBaseMtx.getXYZDir(xDir, yDir, zDir);
-    Vec* pZ;
-    Vec* pY = &yDir;
-    pZ = &zDir;
-    NebulaVecCrossProduct(pZ, &xDir, pY);
-    NebulaVecCrossProduct(&xDir, pY, pZ);
-    NebulaVecMag(pY);
-    NebulaVecNormalize(pY, pY);
-    NebulaVecMag(pZ);
-    NebulaVecNormalize(pZ, pZ);
+    NebulaVecCrossProduct(&zDir, &xDir, &yDir);
+    NebulaVecCrossProduct(&xDir, &yDir, &zDir);
+    NebulaVecNormalize(&yDir, &yDir);
+    NebulaVecNormalize(&zDir, &zDir);
     mBaseMtx.setXDir(xDir);
     mBaseMtx.setYDir(yDir);
     mBaseMtx.setZDir(zDir);
@@ -746,27 +779,21 @@ void Dodoryu::initState() {
 }
 
 void Dodoryu::updateRumblePad() {
-    if (!mIsRumbling) {
-        return;
+    if (mIsRumbling) {
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
-
-    mRumbleStep++;
-
-    MR::tryRumblePadWeak(this, PLAYER_1);
 }
 
 void Dodoryu::updateCameraTarget() {
-    Pos3f m1;
-    m1.setInline(MR::getJointMtx(this, "Hip"));
+    Pos3f hipMtx;
+    hipMtx.setInline(MR::getJointMtx(this, "Hip"));
 
-    Vec3f v1;
-    m1.getTrans(v1);
+    Vec3f hipPos;
+    hipMtx.getTrans(hipPos);
 
-    Vec3f v4 = v1 * 0.7f + *MR::getPlayerPos() * 0.3f;
-
-    v1 = v4;
-    m1.setTrans(v1);
-    mSpinOutCameraTarget->mMatrix.setInline(m1);
+    Vec3f target = hipPos * ::sCameraHipWeight + *MR::getPlayerPos() * ::sCameraPlayerWeight;
+    hipMtx.setTrans(target);
+    mSpinOutCameraTarget->mMatrix.setInline(hipMtx);
 }
 
 DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", reinterpret_cast< MtxPtr >(&mBankMtx), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
@@ -786,8 +813,8 @@ void DodoryuBank::exeAppear() {
 }
 
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
-    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&mRabbitMtx), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), mRailCoord(), mTalkCtrl(), mTalkSwitchStep(300),
-      mTalkNode(), mTrampleRumbler(), mStarPieceRumbler(), mIsDisplayMessage() {
+    : ModelObj("ドドリュウに追われるウサギ", "DodoryuRabbit", reinterpret_cast< MtxPtr >(&mRabbitMtx), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost),
+      mRailCoord(), mTalkCtrl(), mTalkSwitchStep(::sRabbitTalkSwitchSteps), mTalkNode(), mTrampleRumbler(), mStarPieceRumbler(), mIsDisplayMessage() {
     mRabbitMtx.identity();
 
     initWithoutIter();
@@ -796,17 +823,17 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     mTalkMtx.setTrans(mPosition);
 
     mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), mTalkMtx);
-    MR::setDistanceToTalk(mTalkCtrl, 1500.0f);
+    MR::setDistanceToTalk(mTalkCtrl, ::sRabbitTalkDistance);
 }
 
 void DodoryuRabbit::init(const TableIter& rIter) {
     initNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscape));
     initHitSensor(4);
-    MR::addHitSensorAtJointEnemy(this, "body", "Spine", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEnemy(this, "body", "Spine", 8, ::sRabbitBodyRadius, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowFromCSV(this, "Shadow");
 
-    mTrampleRumbler = new JointRumbler(this, "Spine", 4.0f, 0.2f, 60, true, 0);
-    mStarPieceRumbler = new JointRumbler(this, "Spine", 4.0f, 0.2f, 30, true, 0);
+    mTrampleRumbler = new JointRumbler(this, "Spine", ::sRabbitRumbleRadius, ::sRabbitRumbleSpeed, ::sRabbitTrampleRumbleSteps, true, 0);
+    mStarPieceRumbler = new JointRumbler(this, "Spine", ::sRabbitRumbleRadius, ::sRabbitRumbleSpeed, ::sRabbitStarPieceRumbleSteps, true, 0);
 
     MR::initLightCtrl(this);
     reset(false);
@@ -822,8 +849,8 @@ void DodoryuRabbit::control() {
         mTalkSwitchStep--;
 
         if (mTalkSwitchStep <= 0) {
-            mTalkSwitchStep = 300;
-            mTalkNode = (mTalkNode + 1) % 2;
+            mTalkSwitchStep = ::sRabbitTalkSwitchSteps;
+            mTalkNode = (mTalkNode + 1) % ::sRabbitTalkNodeCount;
 
             MR::resetAndForwardNode(mTalkCtrl, mTalkNode);
         }
@@ -837,7 +864,7 @@ void DodoryuRabbit::control() {
         mStarPieceRumbler->update();
     }
 
-    if (isNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitPleasure)) && getNerveStep() > 30) {
+    if (isNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitPleasure)) && getNerveStep() > ::sRabbitPleasureTalkFollowSteps) {
         return;
     }
 
@@ -865,7 +892,7 @@ void DodoryuRabbit::exeEscape() {
         MR::startBtp(this, "Blink");
     }
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, ::sRabbitHopSoundFrame)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
@@ -883,7 +910,7 @@ void DodoryuRabbit::exeEscapeSlow() {
         MR::startBtp(this, "blink");
     }
 
-    if (MR::checkPassBckFrame(this, 3.0f)) {
+    if (MR::checkPassBckFrame(this, ::sRabbitHopSoundFrame)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
@@ -942,8 +969,8 @@ void DodoryuRabbit::exePleasure() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "StarWait");
         MR::startBtp(this, "blink");
-        MR::resetAndForwardNode(mTalkCtrl, 2);
-        MR::setDistanceToTalk(mTalkCtrl, 350.0f);
+        MR::resetAndForwardNode(mTalkCtrl, ::sRabbitPleasureTalkNode);
+        MR::setDistanceToTalk(mTalkCtrl, ::sRabbitPleasureTalkDistance);
     }
 
     tryTalk();
@@ -964,35 +991,33 @@ bool DodoryuRabbit::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
         }
 
         mTrampleRumbler->start();
-
         return true;
     }
 
+    // A reflected star piece shakes the rabbit but is not taken.
     if (MR::isMsgStarPieceReflect(msg)) {
         if (mTrampleRumbler->isRumbling()) {
             mTrampleRumbler->reset();
         }
 
         mStarPieceRumbler->start();
-
-        return false;
     }
 
     return false;
 }
 
-void DodoryuRabbit::reset(bool param1) {
-    mRailCoord = MR::getRailCoord(mHost) + 1075.0f;
+void DodoryuRabbit::reset(bool isPlace) {
+    mRailCoord = MR::getRailCoord(mHost) + ::sRabbitLead;
 
     setNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscape));
 
-    if (param1) {
+    if (isPlace) {
         updatePos(0.0f);
     }
 }
 
-void DodoryuRabbit::updatePos(f32 f1) {
-    mRailCoord += f1;
+void DodoryuRabbit::updatePos(f32 speed) {
+    mRailCoord += speed;
 
     if (mRailCoord >= MR::getRailTotalLength(mHost)) {
         mRailCoord -= MR::getRailTotalLength(mHost);
@@ -1002,23 +1027,23 @@ void DodoryuRabbit::updatePos(f32 f1) {
     MR::calcRailPosAtCoord(&railPos, mHost, mRailCoord);
     mPosition.set(railPos);
 
-    MR::calcGravityVector(this, &mGravity, nullptr, false);
+    MR::calcGravityVector(this, &mGravity, nullptr, 0);
 
     Vec3f upVec(-mGravity);
     Vec3f railDir;
     MR::calcRailDirectionAtCoord(&railDir, mHost, mRailCoord);
 
-    Vec3f vec98;
-    vec98.cross(upVec, railDir);
+    Vec3f side;
+    side.cross(upVec, railDir);
 
-    Triangle triangle = Triangle();
-    Vec3f vecA4;
-    if (!MR::getFirstPolyOnLineToMap(&vecA4, &triangle, mPosition - mGravity.scaleInline(200.0f), mGravity.scaleInline(1200.0f))) {
-        vecA4.set(railPos);
+    Triangle triangle;
+    Vec3f groundPos;
+    if (!MR::getFirstPolyOnLineToMap(&groundPos, &triangle, mPosition - mGravity.scaleInline(::sGroundProbeRise), mGravity.scaleInline(::sGroundProbeLength))) {
+        groundPos.set(railPos);
     }
 
-    mRabbitMtx.setXYZDir(vec98, upVec, railDir);
-    mRabbitMtx.setTrans(vecA4);
+    mRabbitMtx.setXYZDir(side, upVec, railDir);
+    mRabbitMtx.setTrans(groundPos);
 }
 
 f32 DodoryuRabbit::calcCoordDiff() const {
@@ -1059,7 +1084,7 @@ void DodoryuLeadHill::init(const TableIter& rIter) {
 }
 
 void DodoryuLeadHill::control() {
-    mSpinAngle += 0.07f;
+    mSpinAngle += ::sLeadHillSpinSpeed;
 }
 
 bool DodoryuLeadHill::calcJoint(Pos3f* pDst, const JointControllerInfo&) {
@@ -1085,9 +1110,9 @@ void DodoryuLeadHill::calcAndSetBaseMtx() {
 
 void DodoryuLeadHill::initJoint() {
     for (int i = 0; i < ARRAY_SIZE(mJointCtrls); i++) {
-        char buf[256];
-        nebula_snprintf(buf, sizeof(buf), "DodoryuLeadHill%d", i + 1);
+        char name[256];
+        nebula_snprintf(name, sizeof(name), "DodoryuLeadHill%d", i + 1);
 
-        mJointCtrls[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, buf);
+        mJointCtrls[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, name);
     }
 }
