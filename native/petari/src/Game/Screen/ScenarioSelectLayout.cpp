@@ -127,7 +127,7 @@ void ScenarioSelectLayout::init(const TableIter& rIter) {
     mBackButton = new BackButton("戻るボタン", false);
     mBackButton->initWithoutIter();
 
-    if (!NebulaRegion::isPal()) {
+    if (!NebulaRegion::isEurope()) {
         MR::hidePaneRecursive(this, "CometAppear");
     }
 
@@ -216,7 +216,7 @@ void ScenarioSelectLayout::appear() {
     mScenarioSky->appear();
     MultiScene::startBtk(mScenarioSky, "ScenarioSelectSky");
 
-    if (NebulaRegion::isPal()) {
+    if (NebulaRegion::isEurope()) {
         MR::hidePaneRecursive(this, "CometAppear");
     }
 
