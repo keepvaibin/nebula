@@ -1644,7 +1644,7 @@ namespace MR {
 
     void setJointTransformLocalMtx(const LiveActor* pActor, const char* pName, MtxPtr pMtx) {
         XjointTransform* pTransform = pActor->mModelManager->getJointTransform(pName);
-        pTransform->_68 = (uintptr_t)pMtx;
+        pTransform->mLocalMtx = pMtx;
     }
 
     f32 getBckFrame(const LiveActor* pActor) {

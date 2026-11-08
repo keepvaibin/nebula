@@ -5,54 +5,94 @@
 #include "Game/Render/Model.hpp"
 #include <nebula_geometry.hpp>
 
+namespace {
+    // Divides each rotation row of pMtx by the matching component of rScale where it is not 1.
+    void divideRowsByScale(MtxPtr pMtx, const Vec& rScale) {
+        if (rScale.x != 1.0f) {
+            f32 inverseScale = 1.0f / rScale.x;
+            pMtx[0][0] *= inverseScale;
+            pMtx[0][1] *= inverseScale;
+            pMtx[0][2] *= inverseScale;
+        }
+
+        if (rScale.y != 1.0f) {
+            f32 inverseScale = 1.0f / rScale.y;
+            pMtx[1][0] *= inverseScale;
+            pMtx[1][1] *= inverseScale;
+            pMtx[1][2] *= inverseScale;
+        }
+
+        if (rScale.z != 1.0f) {
+            f32 inverseScale = 1.0f / rScale.z;
+            pMtx[2][0] *= inverseScale;
+            pMtx[2][1] *= inverseScale;
+            pMtx[2][2] *= inverseScale;
+        }
+    }
+
+    void addTranslation(MtxPtr pMtx, const Vec3f& rTranslate) {
+        pMtx[0][3] += rTranslate.x;
+        pMtx[1][3] += rTranslate.y;
+        pMtx[2][3] += rTranslate.z;
+    }
+
+    void setTranslation(MtxPtr pMtx, const Vec3f& rTranslate) {
+        pMtx[0][3] = rTranslate.x;
+        pMtx[1][3] = rTranslate.y;
+        pMtx[2][3] = rTranslate.z;
+    }
+
+    // Sets the model's scale flag for `joint` and applies rScale to pMtx unless it is 1.
+    void applyScale(Model* pModel, u32 joint, MtxPtr pMtx, const Vec3f& rScale) {
+        if (rScale.x == 1.0f && rScale.y == 1.0f && rScale.z == 1.0f) {
+            pModel->setScaleFlag(joint, 1);
+        } else {
+            pModel->setScaleFlag(joint, 0);
+            NebulaMtxApplyScale(pMtx, pMtx, rScale.x, rScale.y, rScale.z);
+        }
+    }
+
+    void setIdentityRotation(Quaternion* pRotation) {
+        pRotation->z = 0.0f;
+        pRotation->y = 0.0f;
+        pRotation->x = 0.0f;
+        pRotation->w = 1.0f;
+    }
+}  // namespace
+
 void XanimeTrack::init() {
-    _0 = nullptr;
+    mClip = nullptr;
     mWeight = 0.0f;
-    _C = 0;
-    _8 = 0.0f;
 }
 
 XjointInfo::XjointInfo() {
-    _0._0.set< f32 >(1.0f, 1.0f, 1.0f);
-    _0._C.x = 0.0f;
-    _0._C.y = 0.0f;
-    _0._C.z = 0.0f;
-    _0.mRotation.z = 0.0f;
-    _0.mRotation.y = 0.0f;
-    _0.mRotation.x = 0.0f;
-    _0.mRotation.w = 1.0f;
-    _28 = _0;
-    _5C = 1.0f;
-    _60 = 1.0f;
-    _50.zero();
+    mFrozen.mScale.set< f32 >(1.0f, 1.0f, 1.0f);
+    mFrozen.mTranslate.x = 0.0f;
+    mFrozen.mTranslate.y = 0.0f;
+    mFrozen.mTranslate.z = 0.0f;
+    setIdentityRotation(&mFrozen.mRotation);
+    mLast = mFrozen;
+    mSpecialBlend = 1.0f;
+    mSpecialBlendStep = 1.0f;
 }
 
 XjointTransform::XjointTransform() {
-    _0 = nullptr;
-    _4 = NEBULA_NONE32;
+    mJoint = nullptr;
+    mParentIndex = NEBULA_NONE32;
     mScale.set(1.0f);
     _14.set(1.0f);
     _64 = nullptr;
     _6C = nullptr;
-    _68 = 0;
-    _20.x = 0.0f;
-    _20.y = 0.0f;
-    _20.z = 0.0f;
+    mLocalMtx = nullptr;
+    mPostTranslate.x = 0.0f;
+    mPostTranslate.y = 0.0f;
+    mPostTranslate.z = 0.0f;
     _2C.x = 0.0f;
     _2C.y = 0.0f;
     _2C.z = 0.0f;
     _38.x = 0.0f;
     _38.y = 0.0f;
     _38.z = 0.0f;
-    _44.mScale.x = 0.0f;
-    _44.mScale.y = 0.0f;
-    _44.mScale.z = 0.0f;
-    _44.mRotation.x = 0;
-    _44.mRotation.y = 0;
-    _44.mRotation.z = 0;
-    _44.mTranslate.x = 0.0f;
-    _44.mTranslate.y = 0.0f;
-    _44.mTranslate.z = 0.0f;
 }
 
 void XanimeCore::shareJointTransform(const XanimeCore* pOther) {
@@ -64,22 +104,26 @@ void XanimeCore::enableJointTransform(ModelData* pModelData) {
 
     for (u32 i = 0; i < mJointCount; i++) {
         Joint* pJoint = pModelData->getJointAt(i);
-        mTransformList[i]._0 = pJoint;
-        mTransformList[i]._44 = pJoint->getTransformInfo();
+        mTransformList[i].mJoint = pJoint;
 
-        if (mTransformList[i]._4 == NEBULA_NONE32) {
-            for (u32 j = 0; j < mJointCount; j++) {
-                if (mTransformList[j]._0 != nullptr) {
-                    if (mTransformList[j]._0->getChild() == pJoint) {
-                        mTransformList[i]._4 = j;
-                        break;
-                    }
+        if (mTransformList[i].mParentIndex != NEBULA_NONE32) {
+            continue;
+        }
 
-                    if (mTransformList[j]._0->getYounger() == pJoint && mTransformList[j]._4 != NEBULA_NONE32) {
-                        mTransformList[i]._4 = mTransformList[j]._4;
-                        break;
-                    }
-                }
+        // The parent is the earlier joint whose first child this is, or the parent of an earlier sibling.
+        for (u32 j = 0; j < mJointCount; j++) {
+            if (mTransformList[j].mJoint == nullptr) {
+                continue;
+            }
+
+            if (mTransformList[j].mJoint->getChild() == pJoint) {
+                mTransformList[i].mParentIndex = j;
+                break;
+            }
+
+            if (mTransformList[j].mJoint->getYounger() == pJoint && mTransformList[j].mParentIndex != NEBULA_NONE32) {
+                mTransformList[i].mParentIndex = mTransformList[j].mParentIndex;
+                break;
             }
         }
     }
@@ -87,34 +131,28 @@ void XanimeCore::enableJointTransform(ModelData* pModelData) {
 
 void XanimeCore::reconfigJointTransform(ModelData* pModelData) {
     for (u32 i = 0; i < mJointCount; i++) {
-        Joint* pJoint = pModelData->getJointAt(i);
-        mTransformList[i]._0 = pJoint;
-        mTransformList[i]._44 = pJoint->getTransformInfo();
+        mTransformList[i].mJoint = pModelData->getJointAt(i);
     }
 }
 
 void XanimeCore::initMember(u32 trackCount) {
-    _1C = 1.0f;
-    _20 = 1.0f;
+    mInterpoleRatio = 1.0f;
+    mPoseBlendRatio = 1.0f;
     mFrameRatio = 0.0f;
-    _28 = 0;
-    _29 = 0;
+    mIsFreezeRequested = false;
+    mIsCaptureFrozen = false;
     _6 = 0;
-    _C = 0;
     mTrackList = new XanimeTrack[trackCount];
 
-    s32 curTrack = 0;
-
-    while (curTrack < trackCount) {
-        mTrackList[curTrack].init();
-        curTrack++;
+    for (u32 i = 0; i < trackCount; i++) {
+        mTrackList[i].init();
     }
 
     setWeight(0, 1.0f);
 }
 
-XanimeCore::XanimeCore(u32 trackCount, u32 jointCount, u8 a3) {
-    _4 = a3;
+XanimeCore::XanimeCore(u32 trackCount, u32 jointCount, u8 scaleMode) {
+    mScaleMode = scaleMode;
     mTrackCount = trackCount;
     mJointCount = jointCount;
     mJointList = new XjointInfo[jointCount];
@@ -125,279 +163,211 @@ XanimeCore::XanimeCore(u32 trackCount, u32 jointCount, u8 a3) {
 XanimeCore::XanimeCore(u32 trackCount, XanimeCore* pOtherCore) {
     mTrackCount = trackCount;
     mJointCount = pOtherCore->mJointCount;
-    _4 = pOtherCore->_4;
+    mScaleMode = pOtherCore->mScaleMode;
     mJointList = pOtherCore->mJointList;
     mTransformList = pOtherCore->mTransformList;
     initMember(trackCount);
 }
 
 void XanimeCore::doFreeze() {
-    _28 = 1;
-    _1C = 0.0f;
+    mIsFreezeRequested = true;
+    mInterpoleRatio = 0.0f;
 }
 
 void XanimeCore::setBck(u32 index, Clip* pAnm) {
-    mTrackList[index]._0 = pAnm;
-    mTrackList[index].setFrame(0.0f);
-    mTrackList[index]._C = 0;
+    mTrackList[index].mClip = pAnm;
 }
 
 void XanimeCore::setWeight(u8 idx, f32 weight) {
     mTrackList[idx].mWeight = weight;
 }
 
+f32 XanimeCore::sumTrackWeight() const {
+    f32 totalWeight = 0.0f;
+
+    for (s32 i = 0; i < mTrackCount; i++) {
+        if (mTrackList[i].mClip != nullptr) {
+            totalWeight += mTrackList[i].mWeight;
+        }
+    }
+
+    return totalWeight;
+}
+
+// Adds each weighted track's scale and translation into the outputs and slerps the rotation by running weight.
+void XanimeCore::blendTracks(u32 joint, f32 totalWeight, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation) const {
+    TransformInfo transform;
+    f32 accumulatedWeight = 0.0f;
+    f32 inverseWeight = 1.0f / totalWeight;
+
+    for (s32 i = 0; i < mTrackCount; i++) {
+        const XanimeTrack* pTrack = &mTrackList[i];
+
+        if (pTrack->mClip != nullptr && pTrack->mWeight != 0.0f) {
+            pTrack->mClip->getTransform(joint, &transform);
+            Quaternion trackRotation;
+            eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
+
+            f32 weight = inverseWeight * pTrack->mWeight;
+            *pScale += reinterpret_cast< const Vec3f& >(transform.mScale) * weight;
+            *pTranslate += reinterpret_cast< const Vec3f& >(transform.mTranslate) * weight;
+            accumulatedWeight += weight;
+            NebulaQuatLerp(pRotation, &trackRotation, weight / accumulatedWeight, pRotation);
+        }
+    }
+}
+
+// Blends from the frozen pose by `blend` (when below 1), then from last frame's pose by mPoseBlendRatio, and stores the result as last.
+void XanimeCore::blendWithFrozenAndLast(u32 joint, f32 blend, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation) {
+    XjointInfo& rJoint = mJointList[joint];
+
+    if (blend < 1.0f) {
+        *pScale = rJoint.mFrozen.mScale * (1.0f - blend) + *pScale * blend;
+        *pTranslate = rJoint.mFrozen.mTranslate * (1.0f - blend) + *pTranslate * blend;
+        NebulaQuatLerp(&rJoint.mFrozen.mRotation, pRotation, blend, pRotation);
+    }
+
+    if (mPoseBlendRatio != 1.0f) {
+        *pScale = rJoint.mLast.mScale * (1.0f - mPoseBlendRatio) + *pScale * mPoseBlendRatio;
+        *pTranslate = rJoint.mLast.mTranslate * (1.0f - mPoseBlendRatio) + *pTranslate * mPoseBlendRatio;
+        NebulaQuatLerp(&rJoint.mLast.mRotation, pRotation, mPoseBlendRatio, pRotation);
+    }
+
+    rJoint.mLast.mScale = *pScale;
+    rJoint.mLast.mTranslate = *pTranslate;
+    rJoint.mLast.mRotation = *pRotation;
+}
+
+void XanimeCore::captureFrozen(u32 joint) {
+    if (mIsCaptureFrozen) {
+        mJointList[joint].mFrozen = mJointList[joint].mLast;
+    }
+}
+
 void XanimeCore::calcBlend(Vec3f* pScale, Vec3f* pTranslate) {
     u32 joint = Skeleton::getJoint()->getJntNo();
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
-    TransformInfo transform;
     Quaternion rotation;
-    f32 inverseWeight;
-    f32 weight;
-    f32 accumulatedWeight = 0.0f;
     pScale->z = 0.0f;
     pScale->y = 0.0f;
     pScale->x = 0.0f;
     pTranslate->z = 0.0f;
     pTranslate->y = 0.0f;
     pTranslate->x = 0.0f;
-    rotation.z = 0.0f;
-    rotation.y = 0.0f;
-    rotation.x = 0.0f;
-    rotation.w = 1.0f;
+    setIdentityRotation(&rotation);
 
-    f32 totalWeight = 0.0f;
-
-    for (s32 i = 0; i < mTrackCount; i++) {
-        if (mTrackList[i]._0 != nullptr) {
-            totalWeight += mTrackList[i].mWeight;
-        }
-    }
+    f32 totalWeight = sumTrackWeight();
 
     if (totalWeight == 0.0f) {
-        *pScale = mJointList[joint]._28._0;
-        *pTranslate = mJointList[joint]._28._C;
-        NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
+        *pScale = mJointList[joint].mLast.mScale;
+        *pTranslate = mJointList[joint].mLast.mTranslate;
+        NebulaMtxQuat(pMtx, &mJointList[joint].mLast.mRotation);
         return;
     }
 
-    inverseWeight = 1.0f / totalWeight;
-
-    for (s32 i = 0; i < mTrackCount; i++) {
-        XanimeTrack* pTrack = &mTrackList[i];
-
-        if (pTrack->_0 != nullptr && pTrack->mWeight != 0.0f) {
-            pTrack->_0->getTransform(joint, &transform);
-            Quaternion trackRotation;
-            eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
-
-            weight = inverseWeight * pTrack->mWeight;
-            *pScale += reinterpret_cast< const Vec3f& >(transform.mScale) * weight;
-            *pTranslate += reinterpret_cast< const Vec3f& >(transform.mTranslate) * weight;
-            accumulatedWeight += weight;
-            NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
-        }
-    }
-
-    if (_29 != 0) {
-        mJointList[joint]._0 = mJointList[joint]._28;
-    }
-
-    mJointList[joint]._50 = *pTranslate;
-    f32 blend = _1C;
-
-    if (blend < 1.0f) {
-        const Vec3f* pFrozenScale = &mJointList[joint]._0._0;
-        const Vec3f* pFrozenTranslate = &mJointList[joint]._0._C;
-        XjointInfo& rJoint = mJointList[joint];
-        *pScale = *pFrozenScale * (1.0f - blend) + *pScale * blend;
-        *pTranslate = *pFrozenTranslate * (1.0f - blend) + *pTranslate * blend;
-        NebulaQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
-    }
-
-    if (_20 != 1.0f) {
-        Vec3f* pPreviousScale = &mJointList[joint]._28._0;
-        Vec3f* pPreviousTranslate = &mJointList[joint]._28._C;
-        XjointInfo& rJoint = mJointList[joint];
-        *pScale = *pPreviousScale * (1.0f - _20) + *pScale * _20;
-        *pTranslate = *pPreviousTranslate * (1.0f - _20) + *pTranslate * _20;
-        NebulaQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
-    }
-
-    mJointList[joint]._28._0 = *pScale;
-    mJointList[joint]._28._C = *pTranslate;
-    mJointList[joint]._28.mRotation = rotation;
+    blendTracks(joint, totalWeight, pScale, pTranslate, &rotation);
+    captureFrozen(joint);
+    blendWithFrozenAndLast(joint, mInterpoleRatio, pScale, pTranslate, &rotation);
     NebulaMtxQuat(pMtx, &rotation);
 }
 
 void XanimeCore::calcSingle(Vec3f* pScale, Vec3f* pTranslate) {
     u32 joint = Skeleton::getJoint()->getJntNo();
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
+    XjointInfo& rJoint = mJointList[joint];
     TransformInfo transform;
     Quaternion rotation;
 
-    if (mTrackList[0]._0 == nullptr) {
-        *pScale = mJointList[joint]._28._0;
-        *pTranslate = mJointList[joint]._28._C;
-        NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
+    if (mTrackList[0].mClip == nullptr) {
+        *pScale = rJoint.mLast.mScale;
+        *pTranslate = rJoint.mLast.mTranslate;
+        NebulaMtxQuat(pMtx, &rJoint.mLast.mRotation);
         return;
     }
 
-    mTrackList[0]._0->getTransform(joint, &transform);
+    mTrackList[0].mClip->getTransform(joint, &transform);
     eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &rotation);
     *pScale = reinterpret_cast< const Vec3f& >(transform.mScale);
     *pTranslate = reinterpret_cast< const Vec3f& >(transform.mTranslate);
 
-    if (_29 != 0) {
-        mJointList[joint]._0 = mJointList[joint]._28;
-    }
+    captureFrozen(joint);
 
-    mJointList[joint]._50 = *pTranslate;
-    f32 blend = _1C;
-
+    f32 blend = mInterpoleRatio;
     if (blend < 1.0f) {
-        XjointInfo* pJoints = mJointList;
-        MR::vecBlend(pJoints[joint]._0._0, *pScale, pScale, blend);
-        MR::vecBlend(pJoints[joint]._0._C, *pTranslate, pTranslate, blend);
-        NebulaQuatLerp(&pJoints[joint]._0.mRotation, &rotation, blend, &rotation);
+        MR::vecBlend(rJoint.mFrozen.mScale, *pScale, pScale, blend);
+        MR::vecBlend(rJoint.mFrozen.mTranslate, *pTranslate, pTranslate, blend);
+        NebulaQuatLerp(&rJoint.mFrozen.mRotation, &rotation, blend, &rotation);
     }
 
-    mJointList[joint]._28._0 = *pScale;
-    mJointList[joint]._28._C = *pTranslate;
-    mJointList[joint]._28.mRotation = rotation;
+    rJoint.mLast.mScale = *pScale;
+    rJoint.mLast.mTranslate = *pTranslate;
+    rJoint.mLast.mRotation = rotation;
     NebulaMtxQuat(pMtx, &rotation);
 }
 
+// Updates mLast only; the joint's matrix is left for calcScaleBlendSpecial.
 void XanimeCore::calcBlendSpecial() {
     u32 joint = Skeleton::getJoint()->getJntNo();
-    TransformInfo transform;
     Quaternion rotation;
     Vec3f scale(0.0f, 0.0f, 0.0f);
     Vec3f translate(0.0f, 0.0f, 0.0f);
-    f32 inverseWeight;
-    f32 weight;
-    f32 accumulatedWeight = 0.0f;
-    rotation.z = 0.0f;
-    rotation.y = 0.0f;
-    rotation.x = 0.0f;
-    rotation.w = 1.0f;
+    setIdentityRotation(&rotation);
 
-    f32 totalWeight = 0.0f;
-
-    for (s32 i = 0; i < mTrackCount; i++) {
-        if (mTrackList[i]._0 != nullptr) {
-            totalWeight += mTrackList[i].mWeight;
-        }
-    }
+    f32 totalWeight = sumTrackWeight();
 
     if (totalWeight == 0.0f) {
         return;
     }
 
-    inverseWeight = 1.0f / totalWeight;
+    blendTracks(joint, totalWeight, &scale, &translate, &rotation);
+    captureFrozen(joint);
 
-    for (s32 i = 0; i < mTrackCount; i++) {
-        XanimeTrack* pTrack = &mTrackList[i];
+    XjointInfo& rJoint = mJointList[joint];
+    f32 blend = mInterpoleRatio;
 
-        if (pTrack->_0 != nullptr && pTrack->mWeight != 0.0f) {
-            pTrack->_0->getTransform(joint, &transform);
-            Quaternion trackRotation;
-            eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &trackRotation);
-
-            weight = inverseWeight * pTrack->mWeight;
-            scale += reinterpret_cast< const Vec3f& >(transform.mScale) * weight;
-            translate += reinterpret_cast< const Vec3f& >(transform.mTranslate) * weight;
-            accumulatedWeight += weight;
-            NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
-        }
+    if (rJoint.mSpecialBlend != 1.0f) {
+        rJoint.mSpecialBlend += rJoint.mSpecialBlendStep;
+        rJoint.mSpecialBlend = MR::clamp(rJoint.mSpecialBlend, 0.0f, 1.0f);
+        blend = rJoint.mSpecialBlend;
     }
 
-    if (_29 != 0) {
-        mJointList[joint]._0 = mJointList[joint]._28;
-    }
-
-    mJointList[joint]._50 = translate;
-    f32 blend = _1C;
-
-    if (mJointList[joint]._5C != 1.0f) {
-        mJointList[joint]._5C += mJointList[joint]._60;
-        mJointList[joint]._5C = MR::clamp(mJointList[joint]._5C, 0.0f, 1.0f);
-        blend = mJointList[joint]._5C;
-    }
-
-    if (blend < 1.0f) {
-        const Vec3f* pFrozenScale = &mJointList[joint]._0._0;
-        const Vec3f* pFrozenTranslate = &mJointList[joint]._0._C;
-        XjointInfo& rJoint = mJointList[joint];
-        scale = *pFrozenScale * (1.0f - blend) + scale * blend;
-        translate = *pFrozenTranslate * (1.0f - blend) + translate * blend;
-        NebulaQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
-    }
-
-    if (_20 != 1.0f) {
-        Vec3f* pPreviousScale = &mJointList[joint]._28._0;
-        Vec3f* pPreviousTranslate = &mJointList[joint]._28._C;
-        XjointInfo& rJoint = mJointList[joint];
-        scale = *pPreviousScale * (1.0f - _20) + scale * _20;
-        translate = *pPreviousTranslate * (1.0f - _20) + translate * _20;
-        NebulaQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
-    }
-
-    mJointList[joint]._28._0 = scale;
-    mJointList[joint]._28._C = translate;
-    mJointList[joint]._28.mRotation = rotation;
+    blendWithFrozenAndLast(joint, blend, &scale, &translate, &rotation);
 }
 
 void XanimeCore::updateFrame() {
     for (u32 i = 0; i < mTrackCount; i++) {
-        if (mTrackList[i]._0 != nullptr) {
-            if (mTrackList[i]._C != 0) {
-                f32 frame = mTrackList[i]._8;
-                mTrackList[i]._0->setFrame(frame * mTrackList[i]._0->getFrameMax());
-            } else {
-                mTrackList[i]._0->setFrame(mFrameRatio * mTrackList[i]._0->getFrameMax());
-            }
+        Clip* pClip = mTrackList[i].mClip;
+        if (pClip != nullptr) {
+            pClip->setFrame(mFrameRatio * pClip->getFrameMax());
         }
     }
 
-    if (_28 != 0) {
-        _28 = 0;
-        _29 = 1;
-    } else {
-        _29 = 0;
+    mIsCaptureFrozen = mIsFreezeRequested;
+    mIsFreezeRequested = false;
+}
+
+// The parent's actor scale is divided back out so it does not carry to this joint's rotation.
+void XanimeCore::divideParentTransformScale(MtxPtr pMtx, u32 joint) const {
+    if (mTransformList != nullptr && mTransformList[joint].mParentIndex != NEBULA_NONE32) {
+        divideRowsByScale(pMtx, mTransformList[mTransformList[joint].mParentIndex].mScale);
     }
 }
 
-void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate) {
-    Joint* pJoint = Skeleton::getJoint();
-    u32 joint = pJoint->getJntNo();
-    MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
-
-    if (mTransformList != nullptr) {
-        if (mTransformList[joint]._64 != nullptr) {
-            NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
-        }
-
-        if (mTransformList[joint]._68 != 0) {
-            NebulaMtxConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
-        }
+void XanimeCore::applyLocalMatrices(MtxPtr pMtx, u32 joint) const {
+    if (mTransformList == nullptr) {
+        return;
     }
 
-    if (mTransformList != nullptr && mTransformList[joint]._4 != NEBULA_NONE32 && mTransformList[mTransformList[joint]._4]._68 != 0) {
-        Mtx inverse;
-        NebulaMtxInverse(reinterpret_cast< MtxPtr >(mTransformList[mTransformList[joint]._4]._68), inverse);
-        NebulaMtxConcat(inverse, pMtx, pMtx);
+    if (mTransformList[joint]._64 != nullptr) {
+        NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
     }
 
-    pMtx[0][3] = rTranslate.x;
-    pMtx[1][3] = rTranslate.y;
-    pMtx[2][3] = rTranslate.z;
-
-    if (mTransformList != nullptr) {
-        pMtx[0][3] += mTransformList[joint]._2C.x;
-        pMtx[1][3] += mTransformList[joint]._2C.y;
-        pMtx[2][3] += mTransformList[joint]._2C.z;
+    if (mTransformList[joint].mLocalMtx != nullptr) {
+        NebulaMtxConcat(pMtx, mTransformList[joint].mLocalMtx, pMtx);
     }
+}
 
+Vec3f XanimeCore::calcTransformScale(const Vec3f& rScale, u32 joint) const {
     Vec3f scale(rScale);
 
     if (mTransformList != nullptr) {
@@ -406,57 +376,34 @@ void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate
         scale.z *= mTransformList[joint].mScale.z * mTransformList[joint]._14.z;
     }
 
-    if (scale.x == 1.0f && scale.y == 1.0f && scale.z == 1.0f) {
-        Skeleton::mModel->setScaleFlag(joint, 1);
-    } else {
-        Skeleton::mModel->setScaleFlag(joint, 0);
-        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
+    return scale;
+}
+
+void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate) {
+    Joint* pJoint = Skeleton::getJoint();
+    u32 joint = pJoint->getJntNo();
+    MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
+
+    applyLocalMatrices(pMtx, joint);
+
+    if (mTransformList != nullptr && mTransformList[joint].mParentIndex != NEBULA_NONE32 &&
+        mTransformList[mTransformList[joint].mParentIndex].mLocalMtx != nullptr) {
+        Mtx inverse;
+        NebulaMtxInverse(mTransformList[mTransformList[joint].mParentIndex].mLocalMtx, inverse);
+        NebulaMtxConcat(inverse, pMtx, pMtx);
     }
 
-    if (mTransformList != nullptr && mTransformList[joint]._4 != NEBULA_NONE32) {
-        if (mTransformList[mTransformList[joint]._4].mScale.x != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.x;
-            pMtx[0][0] *= inverseScale;
-            pMtx[0][1] *= inverseScale;
-            pMtx[0][2] *= inverseScale;
-        }
+    setTranslation(pMtx, rTranslate);
 
-        if (mTransformList[mTransformList[joint]._4].mScale.y != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.y;
-            pMtx[1][0] *= inverseScale;
-            pMtx[1][1] *= inverseScale;
-            pMtx[1][2] *= inverseScale;
-        }
-
-        if (mTransformList[mTransformList[joint]._4].mScale.z != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.z;
-            pMtx[2][0] *= inverseScale;
-            pMtx[2][1] *= inverseScale;
-            pMtx[2][2] *= inverseScale;
-        }
+    if (mTransformList != nullptr) {
+        addTranslation(pMtx, mTransformList[joint]._2C);
     }
+
+    applyScale(Skeleton::mModel, joint, pMtx, calcTransformScale(rScale, joint));
+    divideParentTransformScale(pMtx, joint);
 
     if (pJoint->getScaleCompensate() == 1) {
-        if (Skeleton::mParentS.x != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.x;
-            pMtx[0][0] *= inverseScale;
-            pMtx[0][1] *= inverseScale;
-            pMtx[0][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.y != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.y;
-            pMtx[1][0] *= inverseScale;
-            pMtx[1][1] *= inverseScale;
-            pMtx[1][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.z != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.z;
-            pMtx[2][0] *= inverseScale;
-            pMtx[2][1] *= inverseScale;
-            pMtx[2][2] *= inverseScale;
-        }
+        divideRowsByScale(pMtx, Skeleton::mParentS);
     }
 
     NebulaMtxConcat(Skeleton::mCurrentMtx, pMtx, Skeleton::mCurrentMtx);
@@ -470,17 +417,13 @@ void XanimeCore::calcScaleBlendMaya(const Vec3f& rScale, const Vec3f& rTranslate
     }
 
     if (mTransformList != nullptr) {
-        Skeleton::mCurrentMtx[0][3] += mTransformList[joint]._38.x;
-        Skeleton::mCurrentMtx[1][3] += mTransformList[joint]._38.y;
-        Skeleton::mCurrentMtx[2][3] += mTransformList[joint]._38.z;
+        addTranslation(Skeleton::mCurrentMtx, mTransformList[joint]._38);
     }
 
     NebulaMtxCopy(Skeleton::mCurrentMtx, pMtx);
 
     if (mTransformList != nullptr) {
-        pMtx[0][3] += mTransformList[joint]._20.x;
-        pMtx[1][3] += mTransformList[joint]._20.y;
-        pMtx[2][3] += mTransformList[joint]._20.z;
+        addTranslation(pMtx, mTransformList[joint].mPostTranslate);
     }
 
     Skeleton::mParentS.x = rScale.x;
@@ -493,40 +436,11 @@ void XanimeCore::calcScaleBlendMayaNoTransform(const Vec3f& rScale, const Vec3f&
     u32 joint = pJoint->getJntNo();
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
 
-    pMtx[0][3] = rTranslate.x;
-    pMtx[1][3] = rTranslate.y;
-    pMtx[2][3] = rTranslate.z;
-
-    Vec3f scale(rScale);
-
-    if (scale.x == 1.0f && scale.y == 1.0f && scale.z == 1.0f) {
-        Skeleton::mModel->setScaleFlag(joint, 1);
-    } else {
-        Skeleton::mModel->setScaleFlag(joint, 0);
-        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
-    }
+    setTranslation(pMtx, rTranslate);
+    applyScale(Skeleton::mModel, joint, pMtx, rScale);
 
     if (pJoint->getScaleCompensate() == 1) {
-        if (Skeleton::mParentS.x != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.x;
-            pMtx[0][0] *= inverseScale;
-            pMtx[0][1] *= inverseScale;
-            pMtx[0][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.y != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.y;
-            pMtx[1][0] *= inverseScale;
-            pMtx[1][1] *= inverseScale;
-            pMtx[1][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.z != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.z;
-            pMtx[2][0] *= inverseScale;
-            pMtx[2][1] *= inverseScale;
-            pMtx[2][2] *= inverseScale;
-        }
+        divideRowsByScale(pMtx, Skeleton::mParentS);
     }
 
     NebulaMtxConcat(Skeleton::mCurrentMtx, pMtx, Skeleton::mCurrentMtx);
@@ -543,75 +457,12 @@ void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) 
     u32 joint = pJoint->getJntNo();
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
 
-    if (mTransformList != nullptr) {
-        if (mTransformList[joint]._64 != nullptr) {
-            NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
-        }
-
-        if (mTransformList[joint]._68 != 0) {
-            NebulaMtxConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
-        }
-    }
-
-    Vec3f scale(rScale);
-
-    if (mTransformList != nullptr) {
-        scale.x *= mTransformList[joint].mScale.x * mTransformList[joint]._14.x;
-        scale.y *= mTransformList[joint].mScale.y * mTransformList[joint]._14.y;
-        scale.z *= mTransformList[joint].mScale.z * mTransformList[joint]._14.z;
-    }
-
-    if (scale.x == 1.0f && scale.y == 1.0f && scale.z == 1.0f) {
-        Skeleton::mModel->setScaleFlag(joint, 1);
-    } else {
-        Skeleton::mModel->setScaleFlag(joint, 0);
-        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
-    }
-
-    if (mTransformList != nullptr && mTransformList[joint]._4 != NEBULA_NONE32) {
-        if (mTransformList[mTransformList[joint]._4].mScale.x != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.x;
-            pMtx[0][0] *= inverseScale;
-            pMtx[0][1] *= inverseScale;
-            pMtx[0][2] *= inverseScale;
-        }
-
-        if (mTransformList[mTransformList[joint]._4].mScale.y != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.y;
-            pMtx[1][0] *= inverseScale;
-            pMtx[1][1] *= inverseScale;
-            pMtx[1][2] *= inverseScale;
-        }
-
-        if (mTransformList[mTransformList[joint]._4].mScale.z != 1.0f) {
-            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.z;
-            pMtx[2][0] *= inverseScale;
-            pMtx[2][1] *= inverseScale;
-            pMtx[2][2] *= inverseScale;
-        }
-    }
+    applyLocalMatrices(pMtx, joint);
+    applyScale(Skeleton::mModel, joint, pMtx, calcTransformScale(rScale, joint));
+    divideParentTransformScale(pMtx, joint);
 
     if (pJoint->getScaleCompensate() == 1) {
-        if (Skeleton::mParentS.x != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.x;
-            pMtx[0][0] *= inverseScale;
-            pMtx[0][1] *= inverseScale;
-            pMtx[0][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.y != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.y;
-            pMtx[1][0] *= inverseScale;
-            pMtx[1][1] *= inverseScale;
-            pMtx[1][2] *= inverseScale;
-        }
-
-        if (Skeleton::mParentS.z != 1.0f) {
-            f32 inverseScale = 1.0f / Skeleton::mParentS.z;
-            pMtx[2][0] *= inverseScale;
-            pMtx[2][1] *= inverseScale;
-            pMtx[2][2] *= inverseScale;
-        }
+        divideRowsByScale(pMtx, Skeleton::mParentS);
     }
 
     pMtx[0][3] = rTranslate.x * rCurrentScale.x;
@@ -619,9 +470,7 @@ void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) 
     pMtx[2][3] = rTranslate.z * rCurrentScale.z;
 
     if (mTransformList != nullptr) {
-        pMtx[0][3] += mTransformList[joint]._2C.x;
-        pMtx[1][3] += mTransformList[joint]._2C.y;
-        pMtx[2][3] += mTransformList[joint]._2C.z;
+        addTranslation(pMtx, mTransformList[joint]._2C);
     }
 
     NebulaMtxConcat(Skeleton::mCurrentMtx, pMtx, Skeleton::mCurrentMtx);
@@ -642,9 +491,7 @@ void XanimeCore::calcScaleBlendSI(const Vec3f& rScale, const Vec3f& rTranslate) 
     }
 
     if (mTransformList != nullptr) {
-        pMtx[0][3] += mTransformList[joint]._20.x;
-        pMtx[1][3] += mTransformList[joint]._20.y;
-        pMtx[2][3] += mTransformList[joint]._20.z;
+        addTranslation(pMtx, mTransformList[joint].mPostTranslate);
     }
 }
 
@@ -654,9 +501,7 @@ void XanimeCore::calcScaleBlendBasic(const Vec3f& rScale, const Vec3f& rTranslat
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
 
     Vec3f& rCurrentScale = reinterpret_cast< Vec3f& >(Skeleton::mCurrentS);
-    pMtx[0][3] = rTranslate.x;
-    pMtx[1][3] = rTranslate.y;
-    pMtx[2][3] = rTranslate.z;
+    setTranslation(pMtx, rTranslate);
 
     rCurrentScale.x *= rScale.x;
     rCurrentScale.y *= rScale.y;
@@ -678,37 +523,27 @@ void XanimeCore::calcScaleBlendSpecial() {
     MtxPtr pMtx = Skeleton::mModel->getAnmMtx(joint);
     Vec3f scale;
     Vec3f translate;
-    scale = mJointList[joint]._28._0;
-    translate = mJointList[joint]._28._C;
-    NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
+    scale = mJointList[joint].mLast.mScale;
+    translate = mJointList[joint].mLast.mTranslate;
+    NebulaMtxQuat(pMtx, &mJointList[joint].mLast.mRotation);
     calcScaleBlendMaya(scale, translate);
 }
 
+// Copies this core's last pose of `joint` and its descendants into pOther's frozen pose, blended away over `duration` frames.
 void XanimeCore::freezeCopy(ModelData* pModelData, XanimeCore* pOther, u32 joint, u32 duration) {
-    Joint* pChild = pModelData->getJointAt(joint)->getChild();
-
-    if (pChild != nullptr) {
+    for (Joint* pChild = pModelData->getJointAt(joint)->getChild(); pChild != nullptr; pChild = pChild->getYounger()) {
         freezeCopy(pModelData, pOther, pChild->getJntNo(), duration);
-
-        while (true) {
-            pChild = pChild->getYounger();
-            if (pChild == nullptr) {
-                break;
-            }
-
-            freezeCopy(pModelData, pOther, pChild->getJntNo(), duration);
-        }
     }
 
-    pOther->mJointList[joint]._0 = mJointList[joint]._28;
-    pOther->mJointList[joint]._5C = 0.0f;
+    pOther->mJointList[joint].mFrozen = mJointList[joint].mLast;
+    pOther->mJointList[joint].mSpecialBlend = 0.0f;
     f32 rate = 1.0f;
 
     if (duration != 0) {
         rate = 1.0f / duration;
     }
 
-    pOther->mJointList[joint]._60 = rate;
+    pOther->mJointList[joint].mSpecialBlendStep = rate;
 }
 
 void XanimeCore::initT(ModelData* pModelData) {
@@ -716,21 +551,10 @@ void XanimeCore::initT(ModelData* pModelData) {
         const TransformInfo& rTransform = pModelData->getJointAt(i)->getTransformInfo();
         Quaternion rotation;
         eulerRadiansToQuat(rTransform.mRotation.x, rTransform.mRotation.y, rTransform.mRotation.z, &rotation);
-        mJointList[i]._0._0 = reinterpret_cast< const Vec3f& >(rTransform.mScale);
-        mJointList[i]._0._C = reinterpret_cast< const Vec3f& >(rTransform.mTranslate);
-        mJointList[i]._0.mRotation = rotation;
-        mJointList[i]._28._0 = mJointList[i]._0._0;
-        mJointList[i]._28._C = mJointList[i]._0._C;
-        mJointList[i]._28.mRotation = mJointList[i]._0.mRotation;
-    }
-}
-
-void XanimeCore::fixT(Vec3f* pTranslate) {
-    u32 joint = Skeleton::getJoint()->getJntNo();
-    ModelData* pModelData = Skeleton::mModel->getModelData();
-
-    if (joint != 0 && joint != _C) {
-        *pTranslate = reinterpret_cast< const Vec3f& >(pModelData->getJointAt(joint)->getTransformInfo().mTranslate);
+        mJointList[i].mFrozen.mScale = reinterpret_cast< const Vec3f& >(rTransform.mScale);
+        mJointList[i].mFrozen.mTranslate = reinterpret_cast< const Vec3f& >(rTransform.mTranslate);
+        mJointList[i].mFrozen.mRotation = rotation;
+        mJointList[i].mLast = mJointList[i].mFrozen;
     }
 }
 
@@ -738,12 +562,9 @@ XanimeCore::~XanimeCore() {
 }
 
 XtransformInfo::XtransformInfo() {
-    _0.zero();
-    _C.zero();
-    mRotation.z = 0.0f;
-    mRotation.y = 0.0f;
-    mRotation.x = 0.0f;
-    mRotation.w = 1.0f;
+    mScale.zero();
+    mTranslate.zero();
+    setIdentityRotation(&mRotation);
 }
 
 void XanimeCore::calc() {
@@ -768,20 +589,17 @@ void XanimeCore::calc() {
         calcBlend(&scale, &translate);
     }
 
-    if (_6 == 3) {
-        fixT(&translate);
-    }
-
-    switch (_4) {
-    case 1:
+    switch (mScaleMode) {
+    case ScaleMode_SoftImage:
         calcScaleBlendSI(scale, translate);
         break;
-    case 0:
+    case ScaleMode_Basic:
         if (mTransformList == nullptr) {
             calcScaleBlendBasic(scale, translate);
             break;
         }
-    case 2:
+        [[fallthrough]];
+    case ScaleMode_Maya:
         if (mTransformList != nullptr) {
             calcScaleBlendMaya(scale, translate);
         } else {
@@ -792,10 +610,10 @@ void XanimeCore::calc() {
 }
 
 void XanimeCore::init(const Vec& rScale, const Mtx& rMtx) {
-    switch (_4) {
-    case 0:
-    case 1:
-    case 2:
+    switch (mScaleMode) {
+    case ScaleMode_Basic:
+    case ScaleMode_SoftImage:
+    case ScaleMode_Maya:
         Skeleton::initMaya(rScale, rMtx);
         break;
     }
