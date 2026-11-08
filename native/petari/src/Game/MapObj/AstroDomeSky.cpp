@@ -15,7 +15,7 @@
 
 namespace {
     const Vec cJumpOutDemoRotate = {347.0f, 0.0f, 0.0f};
-    const char* cAstroDomeSkyTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
+    const char* const cAstroDomeSkyTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
     const s32 cAppearanceBrkTotalFrame = 200;
     const s32 cRotateDisappearBrkFrame = 30;
     const s32 cRotateAppearBrkFrame = 59;

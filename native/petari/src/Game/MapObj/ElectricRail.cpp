@@ -21,7 +21,7 @@
 
 namespace {
     // One per rail level; arg 0 (the level count) is at most this many.
-    const char* cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
+    const char* const cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
 
     const f32 cLevelHeight = 100.0f;
     const f32 cPointSensorRadius = 35.0f;

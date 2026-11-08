@@ -11,7 +11,7 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    const char* cBckForRipple[] = {"WaitReverse", "Talk", "StartWait", "StartTalk", "Delight", nullptr};
+    const char* const cBckForRipple[] = {"WaitReverse", "Talk", "StartWait", "StartTalk", "Delight", nullptr};
 
     static const Vec sMarioMoveLocalOffsetRing = {6.0f, -33.0f, -776.0f};
     static const Vec sMarioMoveLocalOffsetDeepSea = {6.0f, -176.0f, -590.0f};

@@ -3,8 +3,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const char* sFollowInfoTagName[3] = {"MapParts_ID", "Obj_ID", "ChildObjId"};
-    static const char* sInfoNameTable[3] = {"mappartsinfo", "objinfo", "childobjinfo"};
+    const char* const sFollowInfoTagName[3] = {"MapParts_ID", "Obj_ID", "ChildObjId"};
+    const char* const sInfoNameTable[3] = {"mappartsinfo", "objinfo", "childobjinfo"};
 
     s32 getInfoType(const Table* pInfo) {
         const char* pName = pInfo->getName();

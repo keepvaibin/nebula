@@ -4774,7 +4774,7 @@ namespace {
         },
     };
 
-    const char* cPlayerArchiveLoaderObjTable[] = {
+    const char* const cPlayerArchiveLoaderObjTable[] = {
         "Hopper",          "BenefitItemInvincible", "MorphItemNeoBee", "MorphItemNeoFire",
         "MorphItemNeoFoo", "MorphItemNeoHopper",    "MorphItemNeoIce", "MorphItemNeoTeresa",
     };

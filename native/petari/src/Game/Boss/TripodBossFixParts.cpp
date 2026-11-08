@@ -26,7 +26,7 @@ struct TripodBossSetting {
 };
 
 namespace {
-    static TripodBossSetting sTripodBossSettingTable[] = {{"TripodBossBodyABloom", 3},
+    const TripodBossSetting sTripodBossSettingTable[] = {{"TripodBossBodyABloom", 3},
                                                           {"TripodBossFootBloom", 3},
                                                           {"TriPodBossLeg2ABloom", 3},
                                                           {"TripodBossEyeLight", 2},

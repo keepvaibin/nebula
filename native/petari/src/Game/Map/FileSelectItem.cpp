@@ -44,7 +44,7 @@ namespace {
         return !(vecCopy.distance(diff) > f1);
     }
 
-    const char* sFellowModel[5] = {"FileSelectDataMario", "FileSelectDataLuigi", "FileSelectDataYoshi", "FileSelectDataKinopio",
+    const char* const sFellowModel[5] = {"FileSelectDataMario", "FileSelectDataLuigi", "FileSelectDataYoshi", "FileSelectDataKinopio",
                                    "FileSelectDataPeach"};
 
     static const Vec sDataInfoOffset = {0.0f, 2150.0f, 0.0f};

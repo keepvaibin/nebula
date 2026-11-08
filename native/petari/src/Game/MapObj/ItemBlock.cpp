@@ -20,7 +20,7 @@ namespace NrvItemBlock {
 };  // namespace NrvItemBlock
 
 namespace {
-    static Color8 hPointLight(0xFF, 0xE6, 0, 0xFF);
+    const Color8 hPointLight(0xFF, 0xE6, 0, 0xFF);
 };  // namespace
 
 ItemBlock::ItemBlock(const char* pName) : LiveActor(pName) {

@@ -22,7 +22,7 @@ template TableIter Table::findElement< const char* >(const char*, const char*, i
 // for some reason these two strings only emit here
 // shrug
 namespace {
-    static const char* cLayerDirName[33] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE", "LayerAF"};
+    const char* const cLayerDirName[33] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE", "LayerAF"};
 
     static bool isPrioPlacementObjInfo(const char* pName) {
         return MR::isEqualStringCase(pName, "AreaObjInfo") || MR::isEqualStringCase(pName, "PlanetObjInfo") ||

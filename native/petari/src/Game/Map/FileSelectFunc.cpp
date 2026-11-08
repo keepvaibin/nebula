@@ -6,7 +6,7 @@
 
 namespace {
     /// @brief The array of message identifiers corresponding to File Selection Screen icon names.
-    static const char* sIconNameMessageID[] = {
+    const char* const sIconNameMessageID[] = {
         "System_FileSelect_Icon000", "System_FileSelect_Icon001", "System_FileSelect_Icon002",
         "System_FileSelect_Icon003", "System_FileSelect_Icon004",
     };

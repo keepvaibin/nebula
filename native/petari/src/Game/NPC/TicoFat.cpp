@@ -69,7 +69,7 @@ namespace {
 
     static const char* sInfoMessageID = "InformationPlanet";
     static TicoFatParam sParam;
-    static Color8 hPointLight = Color8(0xFF, 0x7D, 0xE6, 0xFF);
+    const Color8 hPointLight(0xFF, 0x7D, 0xE6, 0xFF);
 };  // namespace
 
 const char* TicoFat::getActionName(const char* pName) {
