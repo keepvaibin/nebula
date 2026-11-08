@@ -5,23 +5,30 @@
 
 class Color8;
 
+// A miniature galaxy's orbit ring in the observatory, drawn as a flat band in the normal and bloom passes.
 class AstroDomeOrbit : public LiveActor {
 public:
     AstroDomeOrbit();
 
-    virtual ~AstroDomeOrbit();
     virtual void init(const TableIter&);
     virtual void draw() const;
 
     void drawBloom() const;
-    void setup(s32);
+    void setup(s32 galaxyIndex);
     void moveCoord();
     void calcGalaxyPos(Vec3f*) const;
-    SiteMaterial loadMaterial(const Color8&) const;
-    void drawCelling(TypedDraw&, f32, bool, f32) const;
-    void drawSide(TypedDraw&, f32, bool, f32) const;
-    f32 calcRepeatedRotateCoord(f32) const;
 
+    // The ring divides into 64 segments; the last point repeats the first.
+    static const s32 cRingPointNum = 65;
+
+private:
+    void drawBand(const Color8& rColor, f32 width, f32 height) const;
+    void drawFlat(TypedDraw&, f32 width, bool isTop, f32 height) const;
+    void drawSide(TypedDraw&, f32 width, bool isOuter, f32 height) const;
+
+public:
     f32 mOrbitRadius;
     f32 mAngle;
+    f32 mRingCos[cRingPointNum];
+    f32 mRingSin[cRingPointNum];
 };
