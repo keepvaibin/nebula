@@ -7,10 +7,10 @@ class LodCtrl;
 class LavaStrangeRock : public LiveActor {
 public:
     enum Type {
-        Type_0,
-        Type_1,
-        Type_2,
-        Type_3,
+        Type_Normal,
+        Type_Large,  // LavaStrangeRockL
+        Type_Table,  // LavaStrangeRockTable
+        Type_None,
     };
 
     LavaStrangeRock(const char* pName);

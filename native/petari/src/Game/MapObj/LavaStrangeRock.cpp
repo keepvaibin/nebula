@@ -20,20 +20,20 @@ namespace NrvLavaStrangeRock {
 LavaStrangeRock::~LavaStrangeRock() {
 }
 
-LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_3), mHitType(), mLodCtrlPlanet() {
+LavaStrangeRock::LavaStrangeRock(const char* pName) : LiveActor(pName), mRockType(Type_None), mHitType(), mLodCtrlPlanet() {
 }
 
 void LavaStrangeRock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    s32 hitType = -1;
+    MR::getPlacementArg0NoInit(rIter, &hitType);
 
-    if (arg0 + 1 <= 1U) {
+    if (hitType == -1 || hitType == 0) {
         mHitType = 0;
-    } else if (arg0 == 1) {
+    } else if (hitType == 1) {
         mHitType = 1;
-    } else if (arg0 == 2) {
+    } else if (hitType == 2) {
         mHitType = 2;
     }
 
@@ -41,18 +41,18 @@ void LavaStrangeRock::init(const TableIter& rIter) {
     MR::getObjectName(&objName, rIter);
 
     if (MR::isEqualString(objName, "LavaStrangeRockTable")) {
-        mRockType = Type_2;
+        mRockType = Type_Table;
         setName("溶岩奇岩台形");
     } else if (MR::isEqualString(objName, "LavaStrangeRockL")) {
-        mRockType = Type_1;
+        mRockType = Type_Large;
         setName("溶岩奇岩大");
     } else {
-        mRockType = Type_0;
+        mRockType = Type_Normal;
     }
 
     initModelAndClipping(rIter);
 
-    if (mRockType == 1) {
+    if (mRockType == Type_Large) {
         mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1);
     }
 
@@ -66,19 +66,16 @@ void LavaStrangeRock::init(const TableIter& rIter) {
 void LavaStrangeRock::initModelAndClipping(const TableIter& rIter) {
     MR::setGroupClipping(this, rIter, 16);
 
-    s32 arg3 = 0;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
-
     switch (mRockType) {
-    case Type_0:
+    case Type_Normal:
         initModelManagerWithAnm("LavaStrangeRock", nullptr, false);
         MR::setClippingTypeSphere(this, ::sHitRange * mScale.y);
         break;
-    case Type_1:
+    case Type_Large:
         initModelManagerWithAnm("LavaStrangeRockL", nullptr, false);
         MR::setClippingTypeSphere(this, ::sHitRangeL * mScale.y);
         break;
-    case Type_2:
+    case Type_Table:
         initModelManagerWithAnm("LavaStrangeRockTable", nullptr, false);
         MR::setClippingTypeSphere(this, ::sHitRangeTable * mScale.y);
         break;
@@ -87,20 +84,20 @@ void LavaStrangeRock::initModelAndClipping(const TableIter& rIter) {
 
 void LavaStrangeRock::initEffect() {
     switch (mRockType) {
-    case Type_0:
+    case Type_Normal:
         initEffectKeeper(1, "LavaStrangeRock");
         break;
-    case Type_1:
+    case Type_Large:
         initEffectKeeper(1, "LavaStrangeRockL");
         break;
-    case Type_2:
+    case Type_Table:
         initEffectKeeper(1, "LavaStrangeRockTable");
         break;
     }
 }
 
 void LavaStrangeRock::control() {
-    if (mRockType == Type_1) {
+    if (mRockType == Type_Large) {
         mLodCtrlPlanet->update();
     }
 }
@@ -116,15 +113,15 @@ void LavaStrangeRock::exeWait() {
     f32 radius = 0.0f;
 
     switch (mRockType) {
-    case Type_0:
+    case Type_Normal:
         hitOffset *= ::sHitRange;
         radius = ::sRockSLength * mScale.y;
         break;
-    case Type_1:
+    case Type_Large:
         hitOffset *= ::sHitRangeL;
         radius = ::sRockLLength * mScale.y;
         break;
-    case Type_2:
+    case Type_Table:
         hitOffset *= ::sHitRangeTable;
         radius = ::sRockTableLength * mScale.y;
         break;
@@ -142,11 +139,11 @@ void LavaStrangeRock::exeWait() {
         MR::emitEffect(this, "Break");
 
         switch (mRockType) {  // the lack of breaks here is intentional
-        case Type_0:
+        case Type_Normal:
             MR::startSound(this, "SE_OJ_STRANGEROCK_BREAK_S");
-        case Type_1:
+        case Type_Large:
             MR::startSound(this, "SE_OJ_STRANGEROCK_BREAK_L");
-        case Type_2:
+        case Type_Table:
             MR::startSound(this, "SE_OJ_STRANGEROCK_BREAK_M");
         }
 

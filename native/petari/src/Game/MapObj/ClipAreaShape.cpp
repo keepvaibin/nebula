@@ -72,26 +72,27 @@ void ClipAreaShapeBox::calcVolumeMatrix(Pos3f* pPos, const Pos3f& rPos, const Ve
     MR::preScaleMtx(pPos->toMtxPtr(), rVec);
 }
 
-ClipAreaShapeCone::ClipAreaShapeCone(s32 a1) : ClipAreaShape("ClipVolumeSphere") {
+ClipAreaShapeCone::ClipAreaShapeCone(s32 originType) : ClipAreaShape("ClipVolumeSphere") {
     mRadius = 500.0f;
     mHeight = 1000.0f;
-    mOriginType = a1;
+    mOriginType = originType;
 }
 
+// rVec is in the cone's space, its tip at y 0 (origin type 1: at mHeight).
 bool ClipAreaShapeCone::isInArea(const Vec3f& rVec) const {
-    f32 v3 = (rVec.y / mHeight);
+    f32 heightRate = (rVec.y / mHeight);
 
-    if (!MR::isInRange(v3, 0.0f, 1.0f)) {
+    if (!MR::isInRange(heightRate, 0.0f, 1.0f)) {
         return false;
     }
 
     if (mOriginType == 1) {
-        v3 = (1.0f - v3);
+        heightRate = (1.0f - heightRate);
     }
 
-    f32 v23 = ((rVec.x * rVec.x) + (rVec.z * rVec.z));
-    f32 v24 = (v3 * mRadius) * (v3 * mRadius);
-    return v23 < v24;
+    f32 distanceSq = ((rVec.x * rVec.x) + (rVec.z * rVec.z));
+    f32 radiusSq = (heightRate * mRadius) * (heightRate * mRadius);
+    return distanceSq < radiusSq;
 }
 
 bool ClipAreaShape::isInArea(const Vec3f&) const {
