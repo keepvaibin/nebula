@@ -198,7 +198,7 @@ void Flag::appear() {
 }
 
 void Flag::setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
-                      s32 numPointsV, f32 /* unused */) {
+                      s32 numPointsV) {
     mObjName = pObjName;
     mBasePos = pPos;
     mSide.set(rSide);

@@ -32,8 +32,8 @@ public:
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();
     void executeRequirementDisconnectDraw();
-    void requestMovementOn(int);
-    void requestMovementOff(int);
+    void requestMovementOn(int movementType);
+    void requestMovementOff(int movementType);
     void findLightInfo() const;
     void connectToScene();
     void disconnectToScene();
@@ -66,8 +66,8 @@ public:
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();
     void executeRequirementDisconnectDraw();
-    void requestMovementOn(int);
-    void requestMovementOff(int);
+    void requestMovementOn(int movementType);
+    void requestMovementOff(int movementType);
     NameObjExecuteInfo* getConnectToSceneInfo(const NameObj*) const;
 
 private:

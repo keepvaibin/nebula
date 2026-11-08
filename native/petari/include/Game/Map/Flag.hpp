@@ -29,7 +29,7 @@ public:
     virtual void appear();
 
     void setInfoPos(const char* pObjName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height, s32 numPointsU,
-                    s32 numPointsV, f32);
+                    s32 numPointsV);
     void updateFlag();
     SiteMaterial loadMaterial() const;
     // Vertex `index`'s colour and texture coordinate (its mColors and mTexST entries) for the draw being sent.

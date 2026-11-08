@@ -29,13 +29,12 @@ void WaterPoint::initAfterPlacement() {
     }
 }
 
-void WaterPoint::updatePos(f32 waveTheta1, f32 waveTheta2, f32 waveHeight1, f32 waveHeight2, f32 a5) {
+void WaterPoint::updatePos(f32 waveTheta1, f32 waveTheta2, f32 waveHeight1, f32 waveHeight2, f32 heightRate) {
     f32 height = calcHeight(waveTheta1, waveTheta2, waveHeight1, waveHeight2, mCoordAcrossRail, mCoordOnRail);
-    // inlined TVec scale(f32, Vec3f)?
-    f32 v9 = a5 * height;
-    mPosition.x = mUpVec.x * v9;
-    mPosition.y = mUpVec.y * v9;
-    mPosition.z = mUpVec.z * v9;
+    f32 offset = heightRate * height;
+    mPosition.x = mUpVec.x * offset;
+    mPosition.y = mUpVec.y * offset;
+    mPosition.z = mUpVec.z * offset;
     mPosition.add(mOrigPos);
 }
 

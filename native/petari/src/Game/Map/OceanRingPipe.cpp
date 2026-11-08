@@ -30,10 +30,10 @@ void OceanRingPipe::init(const TableIter& rIter) {
     mPipeOutside->initWithoutIter();
 
     if (MR::isName(mOceanRing, "オーシャンリング（旗）")) {
-        f32 f30 = 300.0f;
-        f32 f29 = 200.0f;
-        f32 f28 = 500.0f;
-        Vec3f vec(1.0f, 0.0f, 0.0f);
+        f32 flagWidth = 300.0f;
+        f32 flagHeight = 200.0f;
+        f32 stickLength = 500.0f;
+        Vec3f side(1.0f, 0.0f, 0.0f);
         for (s32 i = 0; i < mNumSegments; i += 7) {
             Vec3f grav(0.0f, -1.0f, 0.0f);
             MR::calcGravityVector(this, mPositions[calcPointIndex(i, 0)], &grav, nullptr, 0);
@@ -42,9 +42,11 @@ void OceanRingPipe::init(const TableIter& rIter) {
             }
 
             if (i & 1) {
-                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, 0)], vec, f28, f30, f29, 2, 3, -1.0f));
+                MR::setClippingFarMax(
+                    MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, 0)], side, stickLength, flagWidth, flagHeight, 2, 3));
             } else {
-                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, mNumSides - 1)], vec, f28, f30, f29, 2, 3, -1.0f));
+                MR::setClippingFarMax(MR::createMapFlag("旗", "FlagSurfing", &mPositions[calcPointIndex(i, mNumSides - 1)], side, stickLength, flagWidth,
+                                                        flagHeight, 2, 3));
             }
         }
     }

@@ -151,7 +151,7 @@ s32 ScenarioData::getZoneId(const char* pZoneName) const {
     return 0;
 }
 
-ScenarioDataIter::ScenarioDataIter(const ScenarioDataParser* pParser, int param2) : mParser(pParser), mCur(param2) {
+ScenarioDataIter::ScenarioDataIter(const ScenarioDataParser* pParser, int index) : mParser(pParser), mCur(index) {
 }
 
 bool ScenarioDataIter::isEnd() const {
@@ -242,16 +242,15 @@ namespace ScenarioDataFunction {
         return SingletonHolder< GameSystem >::get()->mSceneController->mScenarioParser;
     }
 
-    u32 getCurrentCommonLayers(const char* pParam1) {
-        ::getCurrentScenarioData();
-
+    // The common layer is bit 0 of every zone.
+    u32 getCurrentCommonLayers(const char* pZoneName) {
         return 1;
     }
 
-    u32 getCurrentScenarioLayers(const char* pParam1, s32 param2) {
+    u32 getCurrentScenarioLayers(const char* pZoneName, s32 scenarioNo) {
         u32 layerNum;
 
-        if (::getCurrentScenarioData()->getValueU32(pParam1, param2, &layerNum)) {
+        if (::getCurrentScenarioData()->getValueU32(pZoneName, scenarioNo, &layerNum)) {
             return layerNum * 2;
         }
 

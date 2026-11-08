@@ -43,12 +43,12 @@ void CometEventKeeper::init() {
     }
 }
 
-bool CometEventKeeper::isStartEvent(const char* pParam1) const {
+bool CometEventKeeper::isStartEvent(const char* pCometName) const {
     if (mCometName == nullptr) {
         return false;
     }
 
-    return MR::isEqualString(mCometName, pParam1);
+    return MR::isEqualString(mCometName, pCometName);
 }
 
 void CometEventKeeper::startCometEventIfExist() {

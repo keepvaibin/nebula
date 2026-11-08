@@ -20,7 +20,7 @@ class DrawBufferShapeDrawer {
 public:
     DrawBufferShapeDrawer(Material*, MaterialEntry*);
 
-    void init(s32);
+    void init(s32 maxActors);
     void swap(DrawBufferShapeDrawer*);
     void draw() const;
     void add(const MeshEntry*, const ActorLightCtrl*);
@@ -48,7 +48,7 @@ class DrawBuffer {
 public:
     DrawBuffer(Model* pModel);
 
-    void init(int);
+    void init(int maxActors);
     void add(const LiveActor*);
     void remove(const LiveActor*);
     void resetLightSort(const ActorLightCtrl*);

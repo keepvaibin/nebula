@@ -17,7 +17,7 @@ public:
     void endInitActorSystemInfo();
     void registerActor(LiveActor*);
     void initActorSystemInfo(LiveActor*, const TableIter&);
-    void joinToGroupClipping(LiveActor*, const TableIter&, int);
+    void joinToGroupClipping(LiveActor*, const TableIter&, int capacity);
     void entryLodCtrl(LodCtrl*, const TableIter&);
 
     ClippingJudge* mJudge;

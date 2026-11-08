@@ -50,12 +50,12 @@ void RumbleChannel::update() {
     mStep++;
 }
 
-void RumbleChannel::setPattern(const void* pParam1, const RumblePattern& rParam2, u32 param3, bool param4) {
-    mSerial = param3;
+void RumbleChannel::setPattern(const void* pOwner, const RumblePattern& rPattern, u32 serial, bool isLoop) {
+    mSerial = serial;
     mStep = 0;
-    mPattern = &rParam2;
-    mOwner = pParam1;
-    mIsLoop = param4;
+    mPattern = &rPattern;
+    mOwner = pOwner;
+    mIsLoop = isLoop;
 }
 
 InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
@@ -158,37 +158,29 @@ InputRumble* InputRumble::getRumbleInstance() const {
     return sInstanceForCallback[mPad->mChannel];
 }
 
-bool InputRumble::vibratePatternIfNotExist(const void* pParam1, const char* pPatternName) {
-    return setRumblePatternIfNotExist(pParam1, *RumbleData::getPattern(pPatternName), false);
+bool InputRumble::vibratePatternIfNotExist(const void* pOwner, const char* pPatternName) {
+    return setRumblePatternIfNotExist(pOwner, *RumbleData::getPattern(pPatternName), false);
 }
 
-bool InputRumble::setRumblePatternIfNotExist(const void* pParam1, const RumblePattern& rParam2, bool param3) {
-    s32 v1 = -1;
-    s32 v2 = -1;
-    s32 v3 = -1;
+// A pattern already playing is left alone; a new one takes a free channel, else the oldest.
+bool InputRumble::setRumblePatternIfNotExist(const void* pOwner, const RumblePattern& rPattern, bool isLoop) {
+    s32 existing = -1;
+    s32 empty = -1;
+    s32 oldest = -1;
 
-    findRubmlePattern(pParam1, &v1, &v2, &v3, rParam2);
+    findRumblePattern(pOwner, &existing, &empty, &oldest, rPattern);
 
-    if (v1 != -1) {
+    if (existing != -1) {
         return false;
     }
 
-    if (v2 != -1) {
-        mSerial = (mSerial + 1) & 0x7FFFFFFF;
-
-        mChannel[v2].setPattern(pParam1, rParam2, mSerial, param3);
-
-        return true;
-    }
-
     mSerial = (mSerial + 1) & 0x7FFFFFFF;
-
-    mChannel[v3].setPattern(pParam1, rParam2, mSerial, param3);
+    mChannel[empty != -1 ? empty : oldest].setPattern(pOwner, rPattern, mSerial, isLoop);
 
     return true;
 }
 
-bool InputRumble::findRubmlePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern& rPattern) {
+bool InputRumble::findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern& rPattern) {
     u32 oldest = -1;
     u8 oldestIndex = 0xFF;
     u8 emptyIndex = 0xFF;

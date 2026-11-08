@@ -9,8 +9,8 @@ DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry*
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
 }
 
-void DrawBufferShapeDrawer::init(s32 a1) {
-    mMaxPackets = a1 * mNumShapes;
+void DrawBufferShapeDrawer::init(s32 maxActors) {
+    mMaxPackets = maxActors * mNumShapes;
     mPackets = new PacketInfo*[mMaxPackets];
 
     for (s32 idx = 0; idx < mMaxPackets; idx++) {
@@ -147,8 +147,8 @@ DrawBuffer::DrawBuffer(Model* pModel)
       mNumOpaShapeDrawers(0), mShapeDrawers(nullptr) {
 }
 
-void DrawBuffer::init(int a1) {
-    mMaxActors = a1;
+void DrawBuffer::init(int maxActors) {
+    mMaxActors = maxActors;
     initTable();
 }
 

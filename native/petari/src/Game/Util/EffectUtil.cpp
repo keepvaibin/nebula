@@ -54,11 +54,11 @@ namespace MR {
         return ::getEffectKeeper(pActor)->createEmitter(pEffectName);
     }
 
-    MultiEmitter* emitEffectWithScale(LiveActor* pActor, const char* pEffectName, f32 a3, s32 a4) {
+    MultiEmitter* emitEffectWithScale(LiveActor* pActor, const char* pEffectName, f32 scale, s32 emitterIndex) {
         MultiEmitter* pEmitter;
 
         pEmitter = emitEffect(pActor, pEffectName);
-        pEmitter->setGlobalScale(Vec3f(a3, a3, a3), a4);
+        pEmitter->setGlobalScale(Vec3f(scale, scale, scale), emitterIndex);
 
         return pEmitter;
     }
@@ -237,11 +237,12 @@ namespace MR {
         }
     }
 
-    void updateEffectFloorCodeLineToMap(LiveActor* pActor, f32 a2, f32 a3) {
+    // The line runs along gravity from startDist to endDist past the actor.
+    void updateEffectFloorCodeLineToMap(LiveActor* pActor, f32 endDist, f32 startDist) {
         Vec3f gravity = pActor->mGravity;
-        Vec3f sumPosScaledGrav = pActor->mPosition + gravity * a3;
+        Vec3f lineStart = pActor->mPosition + gravity * startDist;
 
-        updateEffectFloorCodeLineToMap(pActor, sumPosScaledGrav, gravity * (a2 - a3));
+        updateEffectFloorCodeLineToMap(pActor, lineStart, gravity * (endDist - startDist));
     }
 
     void initEffectSyncBck(LiveActor* pActor, const char* pEffectName, const char* const* pStrList) {

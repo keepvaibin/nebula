@@ -117,16 +117,16 @@ void NameObjExecuteInfo::executeRequirementDisconnectDraw() {
     }
 }
 
-void NameObjExecuteInfo::requestMovementOn(int a1) {
-    if (mMovementType != static_cast< s8 >(a1)) {
+void NameObjExecuteInfo::requestMovementOn(int movementType) {
+    if (mMovementType != static_cast< s8 >(movementType)) {
         return;
     }
 
     MR::requestMovementOn(mExecutedObj);
 }
 
-void NameObjExecuteInfo::requestMovementOff(int a1) {
-    if (mMovementType != static_cast< s8 >(a1)) {
+void NameObjExecuteInfo::requestMovementOff(int movementType) {
+    if (mMovementType != static_cast< s8 >(movementType)) {
         return;
     }
 
@@ -302,15 +302,15 @@ void NameObjExecuteHolder::executeRequirementDisconnectDraw() {
     run(&mDisconnectDraw, &NameObjExecuteInfo::executeRequirementDisconnectDraw);
 }
 
-void NameObjExecuteHolder::requestMovementOn(int idx) {
+void NameObjExecuteHolder::requestMovementOn(int movementType) {
     for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].requestMovementOn(idx);
+        mExecuteArray[i].requestMovementOn(movementType);
     }
 }
 
-void NameObjExecuteHolder::requestMovementOff(int idx) {
+void NameObjExecuteHolder::requestMovementOff(int movementType) {
     for (s32 i = 0; i < mExecuteArraySize; i++) {
-        mExecuteArray[i].requestMovementOff(idx);
+        mExecuteArray[i].requestMovementOff(movementType);
     }
 }
 

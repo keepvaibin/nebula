@@ -9,7 +9,7 @@ public:
     WaterPoint(const Vec3f&, const Vec3f&, f32, f32, f32, f32);
 
     void initAfterPlacement();
-    void updatePos(f32, f32, f32, f32, f32);
+    void updatePos(f32 waveTheta1, f32 waveTheta2, f32 waveHeight1, f32 waveHeight2, f32 heightRate);
     f32 calcHeight(f32, f32, f32, f32, f32, f32) const;
 
     Vec3f mPosition;

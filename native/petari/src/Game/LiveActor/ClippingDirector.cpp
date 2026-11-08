@@ -38,13 +38,13 @@ void ClippingDirector::initActorSystemInfo(LiveActor* pActor, const TableIter& r
     mActorHolder->initSystemInfo(pActor, rIter);
 }
 
-void ClippingDirector::joinToGroupClipping(LiveActor* pActor, const TableIter& rIter, int a3) {
+void ClippingDirector::joinToGroupClipping(LiveActor* pActor, const TableIter& rIter, int capacity) {
     s32 clippingID = -1;
     MR::getPlacementClippingGroupID(rIter, &clippingID);
 
     if (clippingID >= 0) {
         ClippingActorInfo* inf = mActorHolder->startGroupClipping(pActor, rIter);
-        mGroupHolder->createAndAdd(inf, rIter, a3);
+        mGroupHolder->createAndAdd(inf, rIter, capacity);
     }
 }
 

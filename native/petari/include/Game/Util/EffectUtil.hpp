@@ -21,7 +21,7 @@ namespace MR {
     bool isExistEffectKeeper(const LiveActor*);
     bool isExistEffectKeeper(const LayoutActor*);
     MultiEmitter* emitEffect(LiveActor*, const char*);
-    MultiEmitter* emitEffectWithScale(LiveActor*, const char*, f32, s32);
+    MultiEmitter* emitEffectWithScale(LiveActor*, const char* pEffectName, f32 scale, s32 emitterIndex);
     MultiEmitter* emitEffectWithEmitterCallBack(LiveActor*, const char*, MultiEmitterCallBackBase*);
     MultiEmitter* emitEffectWithParticleCallBack(LiveActor*, const char*, MultiEmitterParticleCallBack*);
     MultiEmitter* tryEmitEffect(LiveActor*, const char*);
@@ -51,8 +51,8 @@ namespace MR {
     void emitEffectHitBetweenSensors(LiveActor*, const HitSensor*, const HitSensor*, f32, const char*);
     void initEffectAfterPlacement(LiveActor*);
     void updateEffectFloorCode(LiveActor*, const Triangle*);
-    void updateEffectFloorCodeLineToMap(LiveActor*, const Vec3f&, const Vec3f&);
-    void updateEffectFloorCodeLineToMap(LiveActor*, f32, f32);
+    void updateEffectFloorCodeLineToMap(LiveActor*, const Vec3f& rPosition, const Vec3f& rDirection);
+    void updateEffectFloorCodeLineToMap(LiveActor*, f32 endDist, f32 startDist);
     void initEffectSyncBck(LiveActor*, const char*, const char* const*);
     void addEffectHitNormal(LiveActor*, const char*);
 };  // namespace MR
