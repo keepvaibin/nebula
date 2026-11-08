@@ -63,7 +63,7 @@ public:
     FullnessMeter* mMeter;
     SpinDriverShootPath* mShootPath;
     TalkMessageCtrl* mHungryTalkCtrl;
-    u8 mIsCameraOn;
+    bool mIsCameraOn;
     bool mStartEat;
     s32 mNearStep;
     s32 mPointingStep;
