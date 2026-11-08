@@ -5,7 +5,6 @@
 
 class CameraTargetMtx;
 class GCaptureRibbon;
-class SpringValue;
 
 class GCaptureTargetable {
 public:
@@ -54,6 +53,7 @@ public:
     bool tryRelease();
     void endBindByDamage(s32);
     void endBindByFireDamage();
+    void endBindAfterDamage();
     void calcBindActorPose();
     void updateBindActorMatrix();
     bool canRequestTarget() const;
@@ -92,14 +92,12 @@ public:
     GCaptureTargetable* mTractTarget;
     GCaptureRibbon* mCaptureRibbon;
     CameraTargetMtx* mTargetMtx;
-    SpringValue* mSpringValue;
     f32 mTractPower;
     f32 mEffectBlend;
     f32 mRibbonRate;
     s32 mTargetKeepTime;
     f32 mTargetDist;
     s32 mGuidanceTime;
-    bool mIsStarPointerPointing;  // useless
 };
 
 namespace MR {
