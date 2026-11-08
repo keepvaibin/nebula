@@ -1,87 +1,80 @@
 #include "Game/Player/Mario.hpp"
 
 void Mario::initMember() {
-    _40.zero();
-    _4C.zero();
-    NebulaMtxIdentity(_F4.toMtxPtr());
+    NebulaMtxIdentity(m2DRotateMtx.toMtxPtr());
     mPosition.zero();
-    _16C.zero();
+    mPrevVelocity.zero();
     mVelocityAfter.zero();
-    _1B4.zero();
-    _274 = 0;
-    _280 = 0.0f;
-    _284.zero();
-    _2B8.zero();
-    _2C4.zero();
-    _304.zero();
+    mTurnLeft = 0;
+    mSlopeSideSpeed = 0.0f;
+    mSlopeSideDir.zero();
+    mSlipTurnMove.zero();
+    mWallSlope.zero();
+    mForceJumpVec.zero();
     mShadowPos.zero();
 
-    _340 = 0.0f;
-    _3A4.zero();
-    _3B0.zero();
+    mCeilNorm.zero();
+    mCeilDistNorm.zero();
 
-    _422 = 0;
-    _42A = 0;
-    _438 = 0;
-    _448.zero();
+    mHipDropStillTimer = 0;
+    mInvincibleJump = 0;
+    mRocketBoostVec.zero();
 
-    _454 = 0.0f;
+    mRocketBoostDecay = 0.0f;
     mGroundPos.zero();
-    _498.zero();
-    _4BC.zero();
-    _50C.zero();
-    _518.zero();
-    _600.zero();
-    _60C = 0;
-    _638 = 0;
-    _660.zero();
-    _688.zero();
-    _694.zero();
+    mSlopeFloorPos.zero();
+    mLastGroundLocalPos.zero();
+    mStepHitPos.zero();
+    mBumpHitPos.zero();
+    mOnimasuLocalPos.zero();
+    mOnimasuFound = 0;
+    m2DGroundNorm.zero();
+    m2DPlanePos.zero();
+    m2DCubePos.zero();
 
-    _6C8.y = 0.0f;
-    _6C8.x = 0.0f;
-    _6D0.zero();
-    _6DC.zero();
-    _6E8.zero();
-    _6F4.zero();
-    _700.zero();
-    _70C.zero();
+    m25DStick.y = 0.0f;
+    m25DStick.x = 0.0f;
+    m25DNormal.zero();
+    m25DUp.zero();
+    m25DAcross.zero();
+    mTowerCenter.zero();
+    mTowerAxis.zero();
+    mHipDropSlideGravity.zero();
 
-    _718 = 0.0f;
-    _71D = 0;
-    _71F = 0;
-    _720 = nullptr;
-    _724 = nullptr;
-    _728 = nullptr;
+    mTowerRadius = 0.0f;
+    mBrakeTimer = 0;
+    mPrevWalkSpeedIndex = 0;
+    mHipDropStartAnim = nullptr;
+    mHipDropAnim = nullptr;
+    mHipDropLandAnim = nullptr;
 
-    _75C.zero();
-    _790.zero();
-    _7C4.zero();
-    _7D4.zero();
-    NebulaMtxIdentity(_7E4.toMtxPtr());
-    _814.zero();
-    NebulaMtxIdentity(_824.toMtxPtr());
+    mWallTopHead.zero();
+    mBumpGravityVec.zero();
+    mDamageDir.zero();
+    mSafetyPos.zero();
+    NebulaMtxIdentity(mSafetyBaseMtx.toMtxPtr());
+    mLastSafetyPos.zero();
+    NebulaMtxIdentity(mLastSafetyBaseMtx.toMtxPtr());
 
-    _8B0.zero();
-    _8BC.zero();
-    _8DC.zero();
+    mRelativeWallPos[0].zero();
+    mRelativeWallPos[1].zero();
+    mEnforceJumpVec.zero();
 
-    _8EC = 0;
-    _8F4 = 0.0f;
+    mSlopeDashSpeed = 0.0f;
 
-    for (int i = 0; i < ARRAY_SIZE(_A08); i++) {
-        _A08[i] = 0;
+    for (int i = 0; i < ARRAY_SIZE(mExtraTaskFlags); i++) {
+        mExtraTaskFlags[i] = 0;
     }
 
-    _A34 = 0;
-    _A3C = 0;
+    mTornadoCenteringTimer = 0;
+    mSlideTimer = 0;
 
-    _A40.zero();
-    _A4C.zero();
-    _A58.zero();
-    _A64 = 0.0f;
+    mSlideVec.zero();
+    mHipDropSlideSensorStart.zero();
+    mHipDropSlideSide.zero();
+    mHipDropSlideSpeed = 0.0f;
 
-    for (int i = 0; i < ARRAY_SIZE(_A6C); i++) {
-        _A6C[i] = 0;
+    for (int i = 0; i < ARRAY_SIZE(mIndexedAnimeOn); i++) {
+        mIndexedAnimeOn[i] = 0;
     }
 }

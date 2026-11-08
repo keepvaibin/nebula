@@ -79,7 +79,7 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
             return;
         }
 
-        mMario->_10._27 = false;
+        mMario->mActionStates._27 = false;
     }
 
     if (distance < radius + mSensorRadiusAttack) {
@@ -145,13 +145,13 @@ void MarioActor::attackOrPushSensor(HitSensor* pSensor, f32 distance) {
                 bool pushed = MR::sendMsgPush(pSensor, getSensor("dummy"));
                 touching = true;
                 if (!pushed && !pSensor->isType(ATYPE_POWER_STAR_BIND)) {
-                    mMario->_10._27 = false;
+                    mMario->mActionStates._27 = false;
                 }
             }
         }
 
         addRushSensor(pSensor, touching);
-    } else if (mMario->_10._6) {
+    } else if (mMario->mActionStates._6) {
         f32 width = 20.0f + _4B0;
         f32 height = _4B4;
         if (isJumping()) {
@@ -231,7 +231,7 @@ void MarioActor::attackOrPushSensorInDamage(HitSensor* pReceiver, f32 radius) {
         return;
     }
 
-    if (!mMario->_10._6) {
+    if (!mMario->mActionStates._6) {
         return;
     }
 
@@ -301,7 +301,7 @@ bool MarioActor::isUnderTarget(HitSensor* pSensor) {
         MR::calcGravityVectorOrZero(this, pSensor->mPosition, &down, mGravityInfo, 0);
     }
 
-    if (down.dot(mPosition - pSensor->mPosition) <= 0.0f && mMario->_424 == 0) {
+    if (down.dot(mPosition - pSensor->mPosition) <= 0.0f && mMario->mZeroGravityTimer == 0) {
         return true;
     }
 
@@ -381,7 +381,7 @@ bool MarioActor::tryTrampleAttack(HitSensor* pSensor) {
 
 bool MarioActor::cylinderHorizontalCheck(HitSensor* pSensor) {
     f32 radius = pSensor->mRadius;
-    Vec3f diff = pSensor->mPosition - (mCenterPos + mMario->_350 + mMario->_35C + mVelocity);
+    Vec3f diff = pSensor->mPosition - (mCenterPos + mMario->mPushVec + mMario->mPushVelocity + mVelocity);
     Vec3f vec;
     MR::vecKillElement(diff, getGravityVector(), &vec);
 

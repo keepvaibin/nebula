@@ -9,7 +9,7 @@
 #include <nebula_geometry.hpp>
 
 bool Mario::checkPressDamage() {
-    if (_5FC) {
+    if (mOnimasuSensor) {
         return false;
     }
     if (isSwimming()) {
@@ -23,8 +23,8 @@ bool Mario::checkPressDamage() {
             if (mActor->_390) {
                 return true;
             }
-            _350.zero();
-            _35C.zero();
+            mPushVec.zero();
+            mPushVelocity.zero();
             return true;
         }
     }
@@ -36,22 +36,22 @@ bool Mario::checkPressDamage() {
         return true;
     }
     if (checkWallFloorCode(0x1D) && mMovementStates._1 && getFloorCode() != 0x1D) {
-        mActor->_3B4 = _368;
+        mActor->_3B4 = mGroundNorm;
         mActor->setPress(4, 120);
         return true;
     }
-    if (_72C < 200.0f) {
+    if (mCeilDist < 200.0f) {
         if (mMovementStates._8 && (!mMovementStates.jumping || !(getFrontWallNorm().dot(getAirGravityVec()) > 0.707f))) {
-            if (_72C < 100.0f) {
-                _72C = 100.0f;
+            if (mCeilDist < 100.0f) {
+                mCeilDist = 100.0f;
             }
-            addVelocity(getFrontWallNorm() * (_4E4 * (200.0f / _72C) - _4E4));
+            addVelocity(getFrontWallNorm() * (mFrontWallDist * (200.0f / mCeilDist) - mFrontWallDist));
         }
         if (mMovementStates._1A && (!mMovementStates.jumping || !(getSideWallNorm().dot(getAirGravityVec()) > 0.707f))) {
-            if (_72C < 100.0f) {
-                _72C = 100.0f;
+            if (mCeilDist < 100.0f) {
+                mCeilDist = 100.0f;
             }
-            addVelocity(getSideWallNorm() * (60.0f * (200.0f / _72C) - 60.0f));
+            addVelocity(getSideWallNorm() * (60.0f * (200.0f / mCeilDist) - 60.0f));
         }
     }
     return false;
@@ -105,7 +105,7 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
                     }
                     return true;
                 }
-                mActor->_3B4 = _368;
+                mActor->_3B4 = mGroundNorm;
                 return true;
             }
         } else if (!atCurrentPosition && MR::isSensorPressObj(ceiling.mSensor)) {
@@ -128,7 +128,7 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
                         }
                     } else {
                         mActor->_F48 = ceiling.mSensor;
-                        mActor->_3B4 = _368;
+                        mActor->_3B4 = mGroundNorm;
                         return true;
                     }
                 } else if (blended) {
@@ -141,11 +141,11 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
 }
 
 bool Mario::checkSidePressPre() {
-    if (_5FC) {
+    if (mOnimasuSensor) {
         return false;
     }
     if (mMovementStates._8 && mMovementStates._19) {
-        if ((_4F4 - _4E8).length() < 100.0f && mFrontWallTriangle->mSensor != mBackWallTriangle->mSensor &&
+        if ((mBackWallPos - mFrontWallPos).length() < 100.0f && mFrontWallTriangle->mSensor != mBackWallTriangle->mSensor &&
             (MR::isSensorPressObj(mFrontWallTriangle->mSensor) || MR::isSensorPressObj(mBackWallTriangle->mSensor))) {
             if (isDossun(mFrontWallTriangle) || isDossun(mBackWallTriangle)) {
                 return false;
@@ -155,13 +155,13 @@ bool Mario::checkSidePressPre() {
                 return true;
             }
         }
-    } else if (isStatusActive(MarioStatus_Hang) && mMovementStates._19 && _8C8->isValid() && _8C8->mSensor != mBackWallTriangle->mSensor &&
-               (MR::isSensorPressObj(_8C8->mSensor) || MR::isSensorPressObj(mBackWallTriangle->mSensor))) {
-        if (isDossun(_8C8) || isDossun(mBackWallTriangle)) {
+    } else if (isStatusActive(MarioStatus_Hang) && mMovementStates._19 && mRelativePolygon->isValid() && mRelativePolygon->mSensor != mBackWallTriangle->mSensor &&
+               (MR::isSensorPressObj(mRelativePolygon->mSensor) || MR::isSensorPressObj(mBackWallTriangle->mSensor))) {
+        if (isDossun(mRelativePolygon) || isDossun(mBackWallTriangle)) {
             return false;
         }
         Vec3f horizontal;
-        MR::vecKillElement(mPosition - _4F4, getAirGravityVec(), &horizontal);
+        MR::vecKillElement(mPosition - mBackWallPos, getAirGravityVec(), &horizontal);
         if (horizontal.length() < 100.0f) {
             mActor->_3B4 = getWallNorm();
             return true;
@@ -280,8 +280,8 @@ bool Mario::checkSidePress() {
                         }
                         continue;
                     }
-                    s32 previousFloorCode = _95C->getCode(_45C);
-                    if (previousFloorCode != _95C->getCode(mGroundPolygon) && MR::isSensorPressObj(mGroundPolygon->mSensor) &&
+                    s32 previousFloorCode = mFloorCodeReader->getCode(mShadowPolygon);
+                    if (previousFloorCode != mFloorCodeReader->getCode(mGroundPolygon) && MR::isSensorPressObj(mGroundPolygon->mSensor) &&
                         mVerticalSpeed >= 200.0f) {
                         mDrawStates._A = true;
                         Vec3f horizontal;

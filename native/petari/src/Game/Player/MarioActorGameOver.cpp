@@ -214,18 +214,18 @@ void MarioActor::exeGameOverSink() {
 
         MR::startStarPointerModeDemoMarioDeath(this);
 
-        if (mMario->_960 == 25 || mMario->_960 == 17) {
+        if (mMario->mFloorCode == 25 || mMario->mFloorCode == 17) {
             playEffect("砂埋まり体");
             playEffect("砂埋まり手");
         }
 
-        if (mMario->_960 == 31) {
+        if (mMario->mFloorCode == 31) {
             playEffect("泥埋まり体");
             playEffect("泥埋まり手");
         }
     }
 
-    if (mMario->_960 == 31 || mMario->_960 == 18) {
+    if (mMario->mFloorCode == 31 || mMario->mFloorCode == 18) {
         playSound("沼死亡", -1);
 
         if (getNerveStep() == 90) {

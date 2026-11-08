@@ -32,7 +32,7 @@ bool MarioState::proc(u32 msg) {
 void Mario::sendStateMsg(u32 msg) {
     MarioState* pNext;
 
-    for (MarioState* pState = _97C; pState != nullptr;) {
+    for (MarioState* pState = mCurrentState; pState != nullptr;) {
         pNext = pState->_8;
 
         if (isStatusActive(pState->mStatusId) == MarioStatus_None) {
@@ -53,8 +53,8 @@ void Mario::sendStateMsg(u32 msg) {
 }
 
 bool Mario::updatePosture(MtxPtr mtx) {
-    if (_97C != nullptr) {
-        return _97C->postureCtrl(mtx);
+    if (mCurrentState != nullptr) {
+        return mCurrentState->postureCtrl(mtx);
     }
 
     postureCtrl(mtx);
@@ -73,36 +73,36 @@ void Mario::changeStatus(MarioState* pState) {
         return;
     }
 
-    _980 = pState;
+    mNoticedState = pState;
 
     sendStateMsg(MarioStateMsg_Notice);
 
-    if (_97C) {
-        pState->_8 = _97C;
+    if (mCurrentState) {
+        pState->_8 = mCurrentState;
     }
 
-    _97C = pState;
+    mCurrentState = pState;
 
     if (!pState->proc(MarioStateMsg_Start)) {
         closeStatus(pState);
 
-        _97C = pState->_8;
+        mCurrentState = pState->_8;
     }
 }
 
 void Mario::closeStatus(MarioState* pState) {
     if (pState == nullptr) {
-        while (_97C != nullptr) {
-            closeStatus(_97C);
+        while (mCurrentState != nullptr) {
+            closeStatus(mCurrentState);
         }
 
         return;
     }
 
-    MarioState* pCurr = _97C;
+    MarioState* pCurr = mCurrentState;
 
     if (pCurr == pState) {
-        _97C = pState->_8;
+        mCurrentState = pState->_8;
     } else {
         while (pCurr != nullptr) {
             MarioState* pNext = pCurr->_8;
@@ -122,7 +122,7 @@ void Mario::closeStatus(MarioState* pState) {
 }
 
 u32 Mario::getCurrentStatus() const {
-    MarioState* pState = _97C;
+    MarioState* pState = mCurrentState;
 
     if (pState == nullptr) {
         return MarioStatus_None;
@@ -132,7 +132,7 @@ u32 Mario::getCurrentStatus() const {
 }
 
 bool Mario::isStatusActive(u32 statusId) const {
-    MarioState* pState = _97C;
+    MarioState* pState = mCurrentState;
 
     if (pState == nullptr) {
         return false;
@@ -154,5 +154,5 @@ bool Mario::isStatusActive(u32 statusId) const {
 }
 
 u32 MarioState::getNoticedStatus() const {
-    return getPlayer()->_980->mStatusId;
+    return getPlayer()->mNoticedState->mStatusId;
 }

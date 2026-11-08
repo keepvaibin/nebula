@@ -142,7 +142,7 @@ void MarioActor::trySetLockOnTarget(HitSensor* pSensor) {
         return;
     }
 
-    if (isJumping() && mMario->_430 == 5) {
+    if (isJumping() && mMario->mJumpKind == 5) {
         return;
     }
 
@@ -229,8 +229,8 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
         ground = center - _4B8 * 600.0f;
     } else if (mMario->mMovementStates._1) {
         Vec3f offset = ground - center;
-        f32 height = MR::vecKillElement(offset, mMario->_368, &offset);
-        ground = center + mMario->_368 * height;
+        f32 height = MR::vecKillElement(offset, mMario->mGroundNorm, &offset);
+        ground = center + mMario->mGroundNorm * height;
     }
 
     Vec3f foot;
@@ -486,7 +486,7 @@ void MarioActor::tryReleaseBombTeresa() {
     if (!mMario->getMovementStates().jumping) {
         MarioStopWalk();
         _38C = 5;
-        mMario->_420 = 25;
+        mMario->mMoveLockTimer = 25;
     }
 
     changeAnimation("ハンマー投げリリース");

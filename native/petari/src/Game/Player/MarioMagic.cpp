@@ -28,7 +28,7 @@ void Mario::startMagic() {
                         clearSlope();
                         changeStatus(mMagic);
                         stopAnimationUpper(nullptr);
-                        _10._1 = 1;
+                        mActionStates._1 = 1;
                     }
                 }
             }

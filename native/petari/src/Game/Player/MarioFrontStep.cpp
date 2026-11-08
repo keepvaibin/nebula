@@ -30,7 +30,7 @@ bool Mario::doFrontStep() {
         return false;
     }
 
-    if (_1C._5) {
+    if (mHitStates._5) {
         return false;
     }
 
@@ -42,15 +42,15 @@ bool Mario::doFrontStep() {
         return false;
     }
 
-    if (_960 == 2) {
+    if (mFloorCode == 2) {
         return false;
     }
 
-    if (calcAngleD(_368) >= 30.0f) {
+    if (calcAngleD(mGroundNorm) >= 30.0f) {
         return false;
     }
 
-    if (mAirGravityVec.dot(_374) >= 0.25f) {
+    if (mAirGravityVec.dot(mGroundDown) >= 0.25f) {
         return false;
     }
 
@@ -90,7 +90,7 @@ MarioFrontStep::MarioFrontStep(MarioActor* pActor) : MarioState(pActor, MarioSta
 bool MarioFrontStep::update() {
     getPlayer()->stopWalk();
 
-    if (getPlayer()->_1C._5) {
+    if (getPlayer()->mHitStates._5) {
         return false;
     }
 

@@ -19,7 +19,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (_3CE < 5) {
+    if (mLandTimer < 5) {
         return true;
     }
 
@@ -51,15 +51,15 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (_10.debugMode) {
+    if (mActionStates.debugMode) {
         return true;
     }
 
-    if (_960 == 27) {
+    if (mFloorCode == 27) {
         return true;
     }
 
-    if (_960 == 28) {
+    if (mFloorCode == 28) {
         return true;
     }
 
@@ -71,19 +71,19 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (!MR::isNearZero(_928)) {
+    if (!MR::isNearZero(mReactionVec)) {
         return true;
     }
 
-    if (!MR::isNearZero(_350)) {
+    if (!MR::isNearZero(mPushVec)) {
         return true;
     }
 
-    if (!MR::isNearZero(_35C)) {
+    if (!MR::isNearZero(mPushVelocity)) {
         return true;
     }
 
-    if (!MR::isNearZero(_184)) {
+    if (!MR::isNearZero(mRelativeMove)) {
         return true;
     }
 
@@ -99,7 +99,7 @@ bool Mario::isDisableStayHere() const {
         return true;
     }
 
-    if (_10._15) {
+    if (mActionStates._15) {
         return true;
     }
 
@@ -115,7 +115,7 @@ bool Mario::isDisableStayHere() const {
 }
 
 bool Mario::isDisableFpViewMode() const {
-    if (_97C) {
+    if (mCurrentState) {
         return true;
     }
 

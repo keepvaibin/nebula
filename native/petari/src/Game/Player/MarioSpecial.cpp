@@ -12,12 +12,12 @@ void Mario::checkOnimasu(const HitSensor* pSensor) {
         return;
     }
 
-    if (_5FC == nullptr) {
-        _5FC = pSensor;
-        _60C = 1;
-    } else if (_5FC != pSensor && (pSensor->mPosition - mPosition).length() < (_5FC->mPosition - mPosition).length()) {
-        _5FC = pSensor;
-        _60C = 1;
+    if (mOnimasuSensor == nullptr) {
+        mOnimasuSensor = pSensor;
+        mOnimasuFound = 1;
+    } else if (mOnimasuSensor != pSensor && (pSensor->mPosition - mPosition).length() < (mOnimasuSensor->mPosition - mPosition).length()) {
+        mOnimasuSensor = pSensor;
+        mOnimasuFound = 1;
     }
 }
 
@@ -42,7 +42,7 @@ bool Mario::isNoWalkFallOnDossun() const {
         return false;
     }
 
-    if (isDossun(mGroundPolygon) && isDossun(_45C)) {
+    if (isDossun(mGroundPolygon) && isDossun(mShadowPolygon)) {
         return true;
     }
 
@@ -109,31 +109,31 @@ bool Mario::isUseFooSpecialGravity(const Vec3f& rA1, Vec3f* pA2) const {
 }
 
 void Mario::updateOnimasu() {
-    if (!_5FC) {
+    if (!mOnimasuSensor) {
         return;
     }
 
-    if ((_5FC->mPosition - mPosition).length() >= 1000.0f) {
-        _5FC = nullptr;
+    if ((mOnimasuSensor->mPosition - mPosition).length() >= 1000.0f) {
+        mOnimasuSensor = nullptr;
         return;
     }
 
-    const HitSensor* sensor = _5FC;
+    const HitSensor* sensor = mOnimasuSensor;
     MtxPtr inverse = sensor->mHost->mCollisionParts->mInvBaseMatrix;
     Vec3f localPosition;
     Vec3f previousPosition;
-    previousPosition = _600;
+    previousPosition = mOnimasuLocalPos;
     NebulaMtxMultVec(inverse, &mActor->mPosition, &localPosition);
-    if (_60C) {
-        _600 = localPosition;
-        _60C = 0;
+    if (mOnimasuFound) {
+        mOnimasuLocalPos = localPosition;
+        mOnimasuFound = 0;
         return;
     }
 
-    if (!_10._1D) {
+    if (!mActionStates._1D) {
         if (previousPosition.y < -400.0f && localPosition.y > -400.0f) {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
-                localPosition = _600;
+                localPosition = mOnimasuLocalPos;
                 Vec3f position;
                 NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
                 setTrans(position, nullptr);
@@ -141,7 +141,7 @@ void Mario::updateOnimasu() {
             }
         } else if (previousPosition.y > 400.0f && localPosition.y <= 400.0f) {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
-                _10._1D = true;
+                mActionStates._1D = true;
                 if (previousPosition.x < -320.0f) {
                     previousPosition.x = -320.0f;
                 } else if (previousPosition.x > 320.0f) {
@@ -159,7 +159,7 @@ void Mario::updateOnimasu() {
         } else if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.y, -400.0f, 400.0f) &&
                    MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
             mVelocity.zero();
-            localPosition = _600;
+            localPosition = mOnimasuLocalPos;
             Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
             Vec3f displacement(position - mPosition);
@@ -298,7 +298,7 @@ void Mario::updateOnimasu() {
             }
         }
     } else if (localPosition.y > 400.0f) {
-        _10._1D = false;
+        mActionStates._1D = false;
     } else {
         bool corrected = false;
         if (previousPosition.y >= -320.0f && localPosition.y < -320.0f) {
@@ -328,13 +328,13 @@ void Mario::updateOnimasu() {
 
         if (corrected) {
             Vec3f position;
-            NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &_600, &position);
+            NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &mOnimasuLocalPos, &position);
             setTrans(position, nullptr);
-            localPosition = _600;
+            localPosition = mOnimasuLocalPos;
         }
     }
 
-    _600 = localPosition;
+    mOnimasuLocalPos = localPosition;
 }
 
 bool Mario::isHeadPushEnableArea() const {

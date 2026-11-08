@@ -140,7 +140,7 @@ public:
     }
 
     inline Vec3f getPlayer380() const {
-        return getPlayer()->_380;
+        return getPlayer()->mWallNorm;
     }
 
     inline bool check7Aand7C() const {

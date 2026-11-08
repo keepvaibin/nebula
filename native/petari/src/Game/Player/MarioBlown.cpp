@@ -25,7 +25,7 @@ bool Mario::blown(const Vec3f& rVec) {
 
     mMovementStates._2C = true;
     mMovementStates._A = false;
-    _430 = 3;
+    mJumpKind = 3;
 
     return true;
 }
@@ -87,7 +87,7 @@ bool MarioBlown::update() {
             getPlayer()->mMovementStates._D = true;
 
             if (getPlayer()->damagePolygonCheck(getPlayer()->getGroundPolygon())) {
-                getPlayer()->_1C._16 = true;
+                getPlayer()->mHitStates._16 = true;
                 _24 = true;
                 return false;
             }

@@ -137,7 +137,7 @@ bool MarioFoo::update() {
 
     _3C = -getGravityVec();
     jet();
-    if (getPlayer()->_1C._9) {
+    if (getPlayer()->mHitStates._9) {
         if (_6B0) {
             _6B0--;
         }
@@ -228,7 +228,7 @@ bool MarioFoo::update() {
         blend *= 0.5f;
     }
 
-    if (getPlayer()->_1C._9) {
+    if (getPlayer()->mHitStates._9) {
         targetAngle = 1.0471976f;
         if (getStickY() > 0.1f) {
             f32 ratio = 1.1f * (getStickY() - 0.1f);
@@ -280,7 +280,7 @@ bool MarioFoo::update() {
     spin();
 
     Vec3f direction;
-    direction = getPlayer()->_1FC;
+    direction = getPlayer()->mPostureUpVec;
     Vec3f velocity = direction * _28;
     f32 vertical = MR::vecKillElement(velocity, _3C, &velocity);
     f32 ratio;
@@ -362,7 +362,7 @@ bool MarioFoo::close() {
     case 3:
         changeAnimation("フーファイター解除");
         getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
-        getPlayer()->_10._21 = true;
+        getPlayer()->mActionStates._21 = true;
         break;
     }
 
@@ -373,7 +373,7 @@ bool MarioFoo::close() {
     }
 
     Mario* player = getPlayer();
-    player->_4B0 = player->mPosition;
+    player->mJumpStartPos = player->mPosition;
     getPlayer()->forceSetHeadVecKeepSide(-getGravityVec());
     changeAnimationInterpoleFrame(6);
     mActor->setBlendMtxTimer(4);
@@ -381,7 +381,7 @@ bool MarioFoo::close() {
     mActor->_F44 = true;
     mActor->resetWaterLife();
     _54 = 0.0f;
-    getPlayer()->_10._7 = true;
+    getPlayer()->mActionStates._7 = true;
     return true;
 }
 
@@ -417,7 +417,7 @@ void MarioFoo::jet() {
         }
 
         _AE = 1;
-        getPlayer()->_1C._9 = true;
+        getPlayer()->mHitStates._9 = true;
     } else if (_14 < 8) {
         _AC++;
         _AE = 1;
@@ -514,7 +514,7 @@ void MarioFoo::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
     if (sendPunch(pSensor, false) != true) {
         _11 = 1;
         if (MR::diffAngleAbs(rNormal, -getGravityVec()) <= 0.7853982f) {
-            if (MR::diffAngleAbs(rNormal, -getPlayer()->_1FC) <= 0.7853982f) {
+            if (MR::diffAngleAbs(rNormal, -getPlayer()->mPostureUpVec) <= 0.7853982f) {
                 _59 = 0;
             } else {
                 _59 = 1;
@@ -634,7 +634,7 @@ void MarioFoo::draw3D() const {
     Vec3f nextLeftEdge[2];
     Vec3f nextRightEdge[2];
 
-    if (getPlayer()->_1C._9) {
+    if (getPlayer()->mHitStates._9) {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
         material.mShader = NEBULA_SHADER_TEX_ALPHA_LERP;

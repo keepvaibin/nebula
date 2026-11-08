@@ -200,7 +200,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         }
 
         _3DC = 0;
-        mMario->_76C = 0;
+        mMario->mBeeGravityReviveTimer = 0;
 
         if (mMario->isSwimming()) {
             if (mTakeCount == 0) {
@@ -272,8 +272,8 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         _9E4->appear();
         MR::showModel(_9E4);
 
-        mMario->_402 = mConst->getTable()->mAirWalkTime;
-        mMario->_42A = 0;
+        mMario->mAirWalkTimer = mConst->getTable()->mAirWalkTime;
+        mMario->mInvincibleJump = 0;
 
         _9E8->appear();
         _9F0 = 0;

@@ -232,14 +232,14 @@ void MarioActor::doFreezeAttack() {
     }
 
     if (isJumping()) {
-        if (mMario->_430 != 13) {
+        if (mMario->mJumpKind != 13) {
             changeAnimation("アイスひねり空中");
             playSound("スピンジャンプ", -1);
             playSound("声スピン", -1);
 
-            if (mMario->_42C == 0) {
+            if (mMario->mFireShotCount == 0) {
                 jumpHop();
-                mMario->_42C++;
+                mMario->mFireShotCount++;
             }
         }
 

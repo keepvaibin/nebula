@@ -7,11 +7,11 @@
 #include "Game/Util/MtxUtil.hpp"
 
 bool Mario::isSkatableFloor() const {
-    if (_960 == CollisionFloorCode_Ice) {
+    if (mFloorCode == CollisionFloorCode_Ice) {
         return true;
     }
 
-    return _960 == CollisionFloorCode_GlassIce;
+    return mFloorCode == CollisionFloorCode_GlassIce;
 }
 
 bool Mario::doSkate() {
@@ -109,7 +109,7 @@ bool MarioSkate::update() {
 
     if (getPlayer()->mMovementStates._10) {
         getPlayer()->mMovementStates._10 = false;
-        getPlayer()->_3D2 = 0;
+        getPlayer()->mTurnReadyTimer = 0;
     }
 
     if (checkTrgZ()) {
@@ -266,7 +266,7 @@ bool MarioSkate::update() {
 bool MarioSkate::close() {
     if (_18) {
         if (!_1A) {
-            switch (getPlayer()->_430) {
+            switch (getPlayer()->mJumpKind) {
             case 1:
                 changeAnimationNonStop("スケートジャンプ2");
                 break;

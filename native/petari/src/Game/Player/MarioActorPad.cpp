@@ -51,9 +51,9 @@ bool MarioActor::isRequestRush() const {
     }
 
     bool out = checkButtonType(_F10, false);
-    if (mMario->_10._D) {
+    if (mMario->mActionStates._D) {
         if (!out) {
-            mMario->_10._D = false;
+            mMario->mActionStates._D = false;
         }
 
         out = false;
@@ -72,9 +72,9 @@ bool MarioActor::isRequestThrow() const {
     }
 
     bool out = checkButtonType(_F10, false);
-    if (mMario->_10._D) {
+    if (mMario->mActionStates._D) {
         if (!out) {
-            mMario->_10._D = false;
+            mMario->mActionStates._D = false;
         }
 
         out = false;
@@ -88,7 +88,7 @@ bool MarioActor::isRequestSpin() const {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->mAirTimer > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -361,11 +361,11 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (mMario->getMovementStates().jumping && mMario->_430 == 2 && mMario->_10._1F) {
+    if (mMario->getMovementStates().jumping && mMario->mJumpKind == 2 && mMario->mActionStates._1F) {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
+    if (isJumping() && mMario->mAirTimer > 6 && MR::isStarPointerPointing2P(this, "弱", true, false) && MR::isPressedJump(1)) {
         return true;
     }
 

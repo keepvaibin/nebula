@@ -216,18 +216,18 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         return 1;
     }
 
-    s32 floor = mMario->_960;
+    s32 floor = mMario->mFloorCode;
     if ((floor == 0x0D || floor == 0x1E) && !mMario->isCurrentFloorSand()) {
-        floor = mMario->_962;
+        floor = mMario->mPolygonFloorCode;
     }
 
     if (mMario->isStatusActive(MarioStatus_Wall)) {
         if (mMario->mMovementStates._8) {
-            floor = mMario->_964[0];
+            floor = mMario->mWallFloorCodes[0];
         } else if (mMario->mMovementStates._19) {
-            floor = mMario->_964[1];
+            floor = mMario->mWallFloorCodes[1];
         } else if (mMario->mMovementStates._1A) {
-            floor = mMario->_964[2];
+            floor = mMario->mWallFloorCodes[2];
         }
     }
 
@@ -245,7 +245,7 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         }
     }
 
-    if (mMario->_2D0 != 0.0f) {
+    if (mMario->mWalkingResist != 0.0f) {
         floor = 0x1A;
     }
 
@@ -272,14 +272,14 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         break;
     case 0x20:
         materialIndex = 5;
-        if (strcmp(MR::getSoundCodeString(mMario->_45C), "Honey") == 0) {
+        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Honey") == 0) {
             materialIndex = 6;
         }
 
         break;
     case 0x1B:
     case 0x1C:
-        if (strcmp(MR::getSoundCodeString(mMario->_45C), "Sand") == 0) {
+        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Sand") == 0) {
             materialIndex = 3;
         }
 
@@ -647,7 +647,7 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
                     emitter->setGlobalTranslation(mPosition, -1);
                 }
             } else {
-                Vec3f dir(mMario->_368);
+                Vec3f dir(mMario->mGroundNorm);
                 Pos3f mtx;
                 Vec3f rot;
                 MR::makeMtxUpNoSupportPos(&mtx, dir, Vec3f(0.0f, 0.0f, 0.0f));
@@ -664,7 +664,7 @@ MultiEmitter* MarioActor::playCommonEffect(const char* pName) {
             }
 
             if (entry->mFlags.byte2() & 0x2) {
-                Vec3f trans(mMario->_4E8);
+                Vec3f trans(mMario->mFrontWallPos);
                 if (emitter != nullptr) {
                     emitter->setGlobalTranslation(trans, -1);
                 }
@@ -1071,7 +1071,7 @@ void MarioActor::updateEffect() {
         effectA = 1;
     }
 
-    if (mMario->mMovementStates._1 && mMario->_3F4 > 0.1f) {
+    if (mMario->mMovementStates._1 && mMario->mSpinInertiaBlend > 0.1f) {
         effectA = 1;
     }
 
@@ -1155,7 +1155,7 @@ void MarioActor::updateEffect() {
 
     effectC = 0;
     if (getMovementStates().jumping) {
-        if (mPlayerMode == 4 && mMario->checkLvlA() && mMario->_402 != 0 && ((_37C & 3) == 0)) {
+        if (mPlayerMode == 4 && mMario->checkLvlA() && mMario->mAirWalkTimer != 0 && ((_37C & 3) == 0)) {
             if (mMario->mVerticalSpeed < 300.0f) {
                 effectC = 1;
             } else if (mMario->mSwim->_1B2 != 0) {
@@ -1168,7 +1168,7 @@ void MarioActor::updateEffect() {
     }
 
     if (effectC) {
-        playEffectRT("属性ハチ風", mMario->_368, mMario->mShadowPos);
+        playEffectRT("属性ハチ風", mMario->mGroundNorm, mMario->mShadowPos);
     } else {
         if (mEffectFlags.mBeeWind) {
             stopEffect("属性ハチ風");
@@ -1213,7 +1213,7 @@ void MarioEffect::playSwingEffect() {
     }
 
     Mario* mario = getPlayer();
-    playEffectRT("属性スピン", mario->_368, getTrans());
+    playEffectRT("属性スピン", mario->mGroundNorm, getTrans());
 }
 
 void MarioEffect::doCubeEffect() {
@@ -1251,9 +1251,9 @@ void MarioEffect::doCubeEffect() {
         _18 = 0;
     }
 
-    if (getPlayer()->_10._1) {
+    if (getPlayer()->mActionStates._1) {
         playSwingEffect();
-        getPlayer()->_10._1 = 0;
+        getPlayer()->mActionStates._1 = 0;
     }
 }
 

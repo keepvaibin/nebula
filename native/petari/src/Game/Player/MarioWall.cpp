@@ -145,27 +145,27 @@ bool Mario::fixWallingTop() {
         return false;
     }
 
-    _75C.cross(getWallNorm(), side);
-    MR::normalizeOrZero(&_75C);
-    if (MR::isNearZero(_75C)) {
+    mWallTopHead.cross(getWallNorm(), side);
+    MR::normalizeOrZero(&mWallTopHead);
+    if (MR::isNearZero(mWallTopHead)) {
         return false;
     }
 
     getWallNorm().dot(getAirGravityVec());
-    getPlayer()->forceSetHeadVecKeepSide(_75C);
+    getPlayer()->forceSetHeadVecKeepSide(mWallTopHead);
     return true;
 }
 
 bool Mario::checkWallFloorCode(u16 code) const {
-    if ((mMovementStates._8 || mMovementStates._32) && _964[0] == code) {
+    if ((mMovementStates._8 || mMovementStates._32) && mWallFloorCodes[0] == code) {
         return true;
     }
 
-    if (mMovementStates._19 && _964[1] == code) {
+    if (mMovementStates._19 && mWallFloorCodes[1] == code) {
         return true;
     }
 
-    if (mMovementStates._1A && _964[2] == code) {
+    if (mMovementStates._1A && mWallFloorCodes[2] == code) {
         return true;
     }
 
@@ -250,7 +250,7 @@ void Mario::setWallCancel() {
 void Mario::keepDistFrontWall() {
     if (mMovementStates._8) {
         Vec3f horizontal;
-        MR::vecKillElement(_4E8 - mGroundPos, *getGravityVec(), &horizontal);
+        MR::vecKillElement(mFrontWallPos - mGroundPos, *getGravityVec(), &horizontal);
         if (horizontal.length() < 80.0f) {
             push(*mFrontWallTriangle->getNormal(0) * (80.0f - horizontal.length()));
         }
@@ -297,7 +297,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    if (mMovementStates._15 && _4E0 < mActor->getConst().getTable()->mWallStickFrHeight && !getWallPolygon()->mSensor->isType(0x57)) {
+    if (mMovementStates._15 && mFrontFloorHeight < mActor->getConst().getTable()->mWallStickFrHeight && !getWallPolygon()->mSensor->isType(0x57)) {
         return false;
     }
 
@@ -310,7 +310,7 @@ bool Mario::isEnableStickWall() {
     }
 
     if (mMovementStates._15 && mMovementStates._2 && mMovementStates._39) {
-        if ((_4A4 - mShadowPos).dot(-*getGravityVec()) < mActor->getConst().getTable()->mWallStickStepHeight) {
+        if ((mFrontFloorPos - mShadowPos).dot(-*getGravityVec()) < mActor->getConst().getTable()->mWallStickStepHeight) {
             return false;
         }
     }
@@ -393,7 +393,7 @@ bool MarioWall::start() {
     changeAnimation("壁くっつき");
     startPadVib(0u);
     getPlayer()->mMovementStates._28 = false;
-    getPlayer()->_20._28 = false;
+    getPlayer()->mPrevMovementStates._28 = false;
     _1D = 0;
     initTriangleJump();
     _1E = 0;
@@ -419,7 +419,7 @@ bool MarioWall::update() {
         return false;
     }
 
-    if ((isStatusActiveID(MarioStatus_Rabbit) || mActor->_37C - getPlayer()->_558 < 6) && startJump()) {
+    if ((isStatusActiveID(MarioStatus_Rabbit) || mActor->_37C - getPlayer()->mJumpFrame < 6) && startJump()) {
         return false;
     }
 
@@ -568,7 +568,7 @@ bool MarioWall::update() {
     }
 
     _20 = _20 * blend + speed * (1.0f - blend);
-    addVelocity(getPlayer()->_75C, -_20);
+    addVelocity(getPlayer()->mWallTopHead, -_20);
     if (side <= 1) {
         f32 ratio;
         if (_14 < getActor()->getConst().getTable()->mWallStickTime) {
@@ -642,9 +642,9 @@ bool MarioWall::startBackJump(u32 type) {
         playEffectRTZ("結界ヒット", _24, getPlayer()->getWallPos());
         playSound("結界ヒット");
         Mario* player = getPlayer();
-        player->_402 = 0;
+        player->mAirWalkTimer = 0;
         player = getPlayer();
-        player->_428 = 60;
+        player->mAirControlInhibitTimer = 60;
         break;
     }
 
@@ -669,21 +669,21 @@ bool Mario::fixWallingDist() {
     }
 
     if (mMovementStates._19) {
-        Vec3f position(_4F4 + *mBackWallTriangle->getNormal(0) * 79.0f);
+        Vec3f position(mBackWallPos + *mBackWallTriangle->getNormal(0) * 79.0f);
         f32 distance = MR::vecKillElement(position - mPosition, *mBackWallTriangle->getNormal(0), &position);
         mPosition += *mBackWallTriangle->getNormal(0) * distance;
         if (!fixWallingTop()) {
             return false;
         }
 
-        mPosition = _4F4 + *mBackWallTriangle->getNormal(0) * 60.0f - _75C * 80.0f;
+        mPosition = mBackWallPos + *mBackWallTriangle->getNormal(0) * 60.0f - mWallTopHead * 80.0f;
     } else if (mMovementStates._8) {
         if (!fixWallingTop()) {
             return false;
         }
 
         if (MR::isExistMapCollision(mPosition, mFrontVec * 100.0f) && mFrontVec.dot(*mFrontWallTriangle->getNormal(0)) < -0.999f) {
-            Vec3f position(_4E8 + *mFrontWallTriangle->getNormal(0) * 60.0f - _75C * 80.0f);
+            Vec3f position(mFrontWallPos + *mFrontWallTriangle->getNormal(0) * 60.0f - mWallTopHead * 80.0f);
             Vec3f correction;
             MR::vecKillElement(position - mPosition, *getGravityVec(), &correction);
             if (!MR::isNearZero(correction)) {

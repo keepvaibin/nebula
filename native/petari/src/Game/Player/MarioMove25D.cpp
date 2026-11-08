@@ -13,25 +13,25 @@ void Mario::set25Dmode(const AreaObj* pArea) {
     MR::makeMtxTR(matrix, 0.0f, 0.0f, 0.0f, rotation.x, rotation.y, rotation.z);
     NebulaMtxMultVec(matrix, &normal, &normal);
     NebulaMtxMultVec(matrix, &up, &up);
-    _6D0 = normal;
-    _6DC = up;
-    _6E8.cross(_6D0, _6DC);
-    MR::normalize(&_6E8);
+    m25DNormal = normal;
+    m25DUp = up;
+    m25DAcross.cross(m25DNormal, m25DUp);
+    MR::normalize(&m25DAcross);
     mMovementStates._3A = true;
 }
 
 void Mario::update25Dmode() {
     Vec3f up;
-    MR::vecKillElement(-*getGravityVec(), _6D0, &up);
+    MR::vecKillElement(-*getGravityVec(), m25DNormal, &up);
     MR::normalizeOrZero(&up);
     if (MR::isNearZero(up)) {
-        _6AC = -getGravityVec()->dot(_6D0) > 0.0f ? 4 : 5;
+        m25DMode = -getGravityVec()->dot(m25DNormal) > 0.0f ? 4 : 5;
         return;
     }
 
-    f32 sideDot = up.dot(_6E8);
-    f32 upDot = up.dot(_6DC);
-    f32 normalDot = up.dot(_6D0);
+    f32 sideDot = up.dot(m25DAcross);
+    f32 upDot = up.dot(m25DUp);
+    f32 normalDot = up.dot(m25DNormal);
     f32 sideAbs = MR::abs(sideDot);
     f32 upAbs = MR::abs(upDot);
     f32 normalAbs = MR::abs(normalDot);
@@ -48,11 +48,10 @@ void Mario::update25Dmode() {
         mode = normalDot > 0.0f ? 4 : 5;
     }
 
-    _6AD = mode;
     if (mode == 2 || mode == 3) {
         if (mode == 2 || mode == 3) {
             f32 threshold = 0.965f;
-            if (_6AC == 2 || _6AC == 3) {
+            if (m25DMode == 2 || m25DMode == 3) {
                 threshold = 0.9397f;
             }
 
@@ -71,17 +70,17 @@ void Mario::update25Dmode() {
     }
 
     if (!isStickOn()) {
-        _6AC = mode;
+        m25DMode = mode;
         mMovementStates._3B = false;
     } else if (!mMovementStates._3B && mStickPos.z > 0.7f) {
-        _6C8.set(mStickPos.x, mStickPos.y);
-        _6AC = mode;
+        m25DStick.set(mStickPos.x, mStickPos.y);
+        m25DMode = mode;
         mMovementStates._3B = true;
     } else {
         Vec2f stick(mStickPos.x, mStickPos.y);
-        if (MR::diffAngleAbs(_6C8, stick) >= 0.7853982f) {
-            _6AC = mode;
-            _6C8.set(mStickPos.x, mStickPos.y);
+        if (MR::diffAngleAbs(m25DStick, stick) >= 0.7853982f) {
+            m25DMode = mode;
+            m25DStick.set(mStickPos.x, mStickPos.y);
         }
     }
 }
@@ -96,32 +95,32 @@ void Mario::updateAxisFromMode(u8 mode) {
     if (mode < 4) {
         Vec3f up;
         Vec3f planeUp;
-        MR::vecKillElement(-*getGravityVec(), _6D0, &up);
-        MR::vecKillElement(_6DC, _6D0, &planeUp);
+        MR::vecKillElement(-*getGravityVec(), m25DNormal, &up);
+        MR::vecKillElement(m25DUp, m25DNormal, &planeUp);
         MR::normalizeOrZero(&up);
         MR::normalizeOrZero(&planeUp);
         f32 dot = up.dot(planeUp);
         if (MR::abs(dot) > 0.99f) {
             switch (mode) {
             case 0:
-                side = _6E8;
-                normal = _6D0;
+                side = m25DAcross;
+                normal = m25DNormal;
                 if (dot < 0.0f) {
                     side = -side;
                 }
 
                 break;
             case 1:
-                side = _6E8;
-                normal = _6D0;
+                side = m25DAcross;
+                normal = m25DNormal;
                 if (dot > 0.0f) {
                     side = -side;
                 }
 
                 break;
             case 2:
-                side = _6D0;
-                normal = -_6E8;
+                side = m25DNormal;
+                normal = -m25DAcross;
                 if (dot < 0.0f) {
                     side = -side;
                     normal = -normal;
@@ -129,8 +128,8 @@ void Mario::updateAxisFromMode(u8 mode) {
 
                 break;
             case 3:
-                side = -_6D0;
-                normal = _6E8;
+                side = -m25DNormal;
+                normal = m25DAcross;
                 if (dot < 0.0f) {
                     side = -side;
                     normal = -normal;
@@ -142,7 +141,7 @@ void Mario::updateAxisFromMode(u8 mode) {
             Vec3f axis;
             axis.cross(up, planeUp);
             MR::normalize(&axis);
-            if (axis.dot(_6D0) < 0.0f) {
+            if (axis.dot(m25DNormal) < 0.0f) {
                 axis = -axis;
             }
 
@@ -170,10 +169,10 @@ void Mario::updateAxisFromMode(u8 mode) {
         }
     }
 
-    _6B0 = side;
-    _6BC = -normal;
+    m25DSideVec = side;
+    m25DDownVec = -normal;
 }
 
 void Mario::calcMoveDir25D(f32 x, f32 y, Vec3f* pDirection) {
-    *pDirection = _6B0 * x - _6BC * y;
+    *pDirection = m25DSideVec * x - m25DDownVec * y;
 }

@@ -12,13 +12,10 @@ void Mario::checkTornado() {
 }
 
 void Mario::resetTornado() {
-    _530 = 0.0f;
-    _534 = 0;
-    _538 = 0.0f;
     mMovementStates._F = false;
-    _544 = 0;
+    mTornadoTimer = 0;
     mYAngleOffset = 0.0f;
-    _3F0 = 1.0f;
+    mHandScaleX = 1.0f;
 }
 
 void Mario::calcTornadoTilt() {
@@ -32,43 +29,39 @@ void Mario::calcTornadoTilt() {
 
     bool tilted = spinning | flying;
     if (!isStickOn() || !tilted) {
-        _548 *= mActor->getConst().getTable()->mTornadoTiltCancel;
+        mTornadoTilt *= mActor->getConst().getTable()->mTornadoTiltCancel;
         bool blended;
         if (tilted) {
-            blended = MR::vecBlendSphere(_54C, mHeadVec, &_54C, mActor->getConst().getTable()->mTornadoTiltSpeed);
+            blended = MR::vecBlendSphere(mTornadoTiltUp, mHeadVec, &mTornadoTiltUp, mActor->getConst().getTable()->mTornadoTiltSpeed);
         } else {
-            blended = MR::vecBlendSphere(_54C, mHeadVec, &_54C, mActor->getConst().getTable()->mTornadoTiltOffSpeed);
+            blended = MR::vecBlendSphere(mTornadoTiltUp, mHeadVec, &mTornadoTiltUp, mActor->getConst().getTable()->mTornadoTiltOffSpeed);
         }
 
         if (!blended) {
-            _54C = mHeadVec;
+            mTornadoTiltUp = mHeadVec;
         }
     } else {
         Vec3f tilt(getWorldPadDir() * mActor->getConst().getTable()->mTornadoTiltAngle +
                     mHeadVec * (1.0f - mActor->getConst().getTable()->mTornadoTiltAngle));
         MR::normalize(&tilt);
-        bool blended = MR::vecBlendSphere(_54C, tilt, &_54C, mActor->getConst().getTable()->mTornadoTiltSpeed);
-        MR::normalize(&_54C);
+        bool blended = MR::vecBlendSphere(mTornadoTiltUp, tilt, &mTornadoTiltUp, mActor->getConst().getTable()->mTornadoTiltSpeed);
+        MR::normalize(&mTornadoTiltUp);
         f32 alignment = MR::abs(getWorldPadDir().dot(mFrontVec));
-        _548 = _548 * mActor->getConst().getTable()->mTornadoTiltNear + alignment * (1.0f - mActor->getConst().getTable()->mTornadoTiltNear);
+        mTornadoTilt = mTornadoTilt * mActor->getConst().getTable()->mTornadoTiltNear + alignment * (1.0f - mActor->getConst().getTable()->mTornadoTiltNear);
         if (!blended) {
-            _54C = tilt;
+            mTornadoTiltUp = tilt;
         }
     }
 }
 
 void Mario::reflectWallOnSpinning(const Vec3f& rNormal, u16 time) {
     setFrontVecKeepUp(rNormal);
-    _3F8 = time;
-    _328 = mFrontVec;
+    mReflectSlipTimer = time;
+    mMoveFrontVec = mFrontVec;
     doSpinWallEffect();
 }
 
 void Mario::forceStopTornado() {
-    if (mMovementStates._F) {
-        _40A = mActor->getConst().getTable()->mTornadoRestartTime;
-    }
-
     resetTornado();
     if (mMovementStates.jumping) {
         cancelTornadoJump();
