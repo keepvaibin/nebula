@@ -22,14 +22,15 @@ namespace MR {
     void addShadowVolumeCylinder(LiveActor*, const char*, f32);
     void addShadowVolumeBox(LiveActor*, const char*, const Vec3f&);
     void addShadowVolumeBox(LiveActor*, const char*, const Vec3f&, MtxPtr);
-    void addShadowVolumeLine(LiveActor*, const char*, LiveActor*, const char*, f32, LiveActor*, const char*, f32);
-    void addShadowVolumeFlatModel(LiveActor*, const char*, const char*);
-    void addShadowVolumeFlatModel(LiveActor*, const char*, const char*, MtxPtr);
+    void addShadowVolumeLine(LiveActor*, const char* pName, LiveActor* pFromActor, const char* pFromName, f32 fromWidth, LiveActor* pToActor,
+                             const char* pToName, f32 toWidth);
+    void addShadowVolumeFlatModel(LiveActor*, const char* pName, const char* pModelName);
+    void addShadowVolumeFlatModel(LiveActor*, const char* pName, const char* pModelName, MtxPtr);
     void initShadowVolumeBox(LiveActor*, const Vec3f&, MtxPtr);
     void initShadowVolumeFlatModel(LiveActor*, const char*, MtxPtr);
     void setShadowDropPositionPtr(LiveActor*, const char*, const Vec3f*);
     void setShadowDropPositionMtxPtr(LiveActor*, const char*, MtxPtr, const Vec3f&);
-    void setShadowDropPositionAtJoint(LiveActor*, const char*, const char*, const Vec3f&);
+    void setShadowDropPositionAtJoint(LiveActor*, const char* pName, const char* pJointName, const Vec3f&);
     void setShadowDropDirectionPtr(LiveActor*, const char*, const Vec3f*);
     void setShadowProjectionPtr(LiveActor*, const char*, const Vec3f*, const Vec3f*);
     void setShadowDropPosition(LiveActor*, const char*, const Vec3f&);

@@ -80,12 +80,13 @@ void WaterPressureBullet::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, pos);
 }
 
-void WaterPressureBullet::shotWaterBullet(LiveActor* pActor, const Pos3f& rPos, f32 a3, bool a4, bool a5, bool a6, ActorCameraInfo** pInfo) {
-    mSpeed = a3;
+void WaterPressureBullet::shotWaterBullet(LiveActor* pActor, const Pos3f& rPos, f32 speed, bool isNoGravity, bool isGroundSlide,
+                                          bool isInvalidSpinKill, ActorCameraInfo** pInfo) {
+    mSpeed = speed;
     mHost = pActor;
-    mIsNoGravity = a4;
-    mIsGroundSlide = a5;
-    mIsInvalidSpinKill = a6;
+    mIsNoGravity = isNoGravity;
+    mIsGroundSlide = isGroundSlide;
+    mIsInvalidSpinKill = isInvalidSpinKill;
     mCameraInfo = pInfo;
     rPos.getZDir(mFront);
     mVelocity.scale(mSpeed, mFront);
@@ -133,13 +134,7 @@ void WaterPressureBullet::exeFly() {
         return;
     }
 
-    bool v2 = false;
-
     if (MR::isBinded(this) || MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
-        v2 = true;
-    }
-
-    if (v2) {
         if (mIsGroundSlide && isBound() && MR::isBindedGroundSand(this)) {
             const Vec3f& vel = mVelocity;
             const Vec3f& grav = mGravity;

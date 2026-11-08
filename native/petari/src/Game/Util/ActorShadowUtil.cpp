@@ -109,25 +109,26 @@ namespace MR {
         pBox->setSize(rSize);
     }
 
-    void addShadowVolumeLine(LiveActor* pActor1, const char* pName1, LiveActor* pActor2, const char* pName2, f32 fromWidth, LiveActor* pActor3,
-                             const char* pName3, f32 toWidth) {
-        ShadowController* pController = ActorShadow::createShadowControllerVolumeParam(pActor1, pName1);
+    // A shadow line from the shadow pFromName of pFromActor to pToName of pToActor.
+    void addShadowVolumeLine(LiveActor* pActor, const char* pName, LiveActor* pFromActor, const char* pFromName, f32 fromWidth, LiveActor* pToActor,
+                             const char* pToName, f32 toWidth) {
+        ShadowController* pController = ActorShadow::createShadowControllerVolumeParam(pActor, pName);
         ShadowVolumeLine* pLine = new ShadowVolumeLine();
         pController->setShadowDrawer(pLine);
         pController->offCalcCollision();
         pLine->setFromWidth(fromWidth);
         pLine->setToWidth(toWidth);
-        pLine->setFromShadowController(ActorShadow::getShadowController(pActor2, pName2));
-        pLine->setToShadowController(ActorShadow::getShadowController(pActor3, pName3));
+        pLine->setFromShadowController(ActorShadow::getShadowController(pFromActor, pFromName));
+        pLine->setToShadowController(ActorShadow::getShadowController(pToActor, pToName));
     }
 
     void addShadowVolumeFlatModel(LiveActor* pActor, const char* pName, const char* pModelName) {
         addShadowVolumeFlatModel(pActor, pName, pModelName, pActor->getBaseMtx());
     }
 
-    void addShadowVolumeFlatModel(LiveActor* pActor, const char* pName1, const char* pName2, MtxPtr pMtx) {
-        ShadowController* pController = ActorShadow::createShadowControllerVolumeParam(pActor, pName1);
-        ShadowVolumeFlatModel* pModel = new ShadowVolumeFlatModel(pName2);
+    void addShadowVolumeFlatModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx) {
+        ShadowController* pController = ActorShadow::createShadowControllerVolumeParam(pActor, pName);
+        ShadowVolumeFlatModel* pModel = new ShadowVolumeFlatModel(pModelName);
         pController->setShadowDrawer(pModel);
         pController->offCalcCollision();
         pModel->setBaseMatrixPtr(pMtx);
@@ -151,8 +152,8 @@ namespace MR {
         ActorShadow::getShadowController(pActor, pName)->setDropPosMtxPtr(pMtx, rPos);
     }
 
-    void setShadowDropPositionAtJoint(LiveActor* pActor, const char* pName1, const char* pName2, const Vec3f& rPos) {
-        setShadowDropPositionMtxPtr(pActor, pName1, getJointMtx(pActor, pName2), rPos);
+    void setShadowDropPositionAtJoint(LiveActor* pActor, const char* pName, const char* pJointName, const Vec3f& rPos) {
+        setShadowDropPositionMtxPtr(pActor, pName, getJointMtx(pActor, pJointName), rPos);
     }
 
     void setShadowDropDirectionPtr(LiveActor* pActor, const char* pName, const Vec3f* pDir) {

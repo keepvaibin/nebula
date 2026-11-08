@@ -115,14 +115,11 @@ bool HipDropRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
 
 void HipDropRock::initBreakModel() {
     mBreakModelMtx.set(getBaseMtx());
-    Vec3f v1;
-    Vec3f v2;
-    v1.x = 0.0f;
-    v1.y = 1.0f;
-    v1.z = 0.0f;
-    v2.scale(MR::getRandom(0.0f, 180.0f), v1);
+    // The broken model turns a random 0-180 about y.
+    Vec3f moment;
+    moment.scale(MR::getRandom(0.0f, 180.0f), Vec3f(0.0f, 1.0f, 0.0f));
     Pos3f mtx;
-    MR::makeMtxMoment(&mtx, v2);
+    MR::makeMtxMoment(&mtx, moment);
     mBreakModelMtx.concat(mtx);
 
     mBreakModel = MR::createModelObjMapObj("ヒビ石壊れモデル", "HipDropRockBreak", mBreakModelMtx);

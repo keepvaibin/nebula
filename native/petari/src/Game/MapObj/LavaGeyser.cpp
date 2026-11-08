@@ -57,19 +57,20 @@ void LavaGeyser::startClipped() {
 void LavaGeyser::updateHitSensor(HitSensor* pSensor) {
     Vec3f cPos = *MR::getPlayerCenterPos();
     cPos -= mPosition;
-    f32 v1 = mUp.dot(cPos);
-    Vec3f v2 = mTopPos;
-    v2 -= mPosition;
-    f32 v3 = mUp.dot(v2) + -100.f;
-    if (v3 < 0.f) {
+    // The sensor follows the player's height up the column, stopping 100 short of the top.
+    f32 playerHeight = mUp.dot(cPos);
+    Vec3f toTop = mTopPos;
+    toTop -= mPosition;
+    f32 maxHeight = mUp.dot(toTop) + -100.f;
+    if (maxHeight < 0.f) {
         pSensor->mPosition.set(mTopPos);
         return;
     }
 
-    f32 v4 = MR::clamp(v1, 0.0f, v3);
+    f32 sensorHeight = MR::clamp(playerHeight, 0.0f, maxHeight);
 
     pSensor->mPosition.set(mPosition);
-    pSensor->mPosition.add(mUp * v4);
+    pSensor->mPosition.add(mUp * sensorHeight);
 }
 
 void LavaGeyser::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

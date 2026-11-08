@@ -18,7 +18,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void shotWaterBullet(LiveActor*, const Pos3f&, f32, bool, bool, bool, ActorCameraInfo**);
+    void shotWaterBullet(LiveActor*, const Pos3f&, f32 speed, bool isNoGravity, bool isGroundSlide, bool isInvalidSpinKill, ActorCameraInfo**);
 
     bool isBound() const {
         return mHostActor != nullptr;

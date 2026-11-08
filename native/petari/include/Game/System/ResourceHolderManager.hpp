@@ -13,8 +13,6 @@ namespace MR {
 }
 
 typedef bool (*MakeArchiveFileNameFuncPtr)(MR::FormattedName&, const char*);
-typedef void (*FuncPtrB)(const char*, CreateResourceHolderArgs*);
-typedef void (ResourceHolderManager::*FuncPtrC)(const char*, CreateResourceHolderArgs*);
 
 class CreateResourceHolderArgs {
 public:
@@ -44,20 +42,20 @@ class ResourceHolderManager {
 public:
     ResourceHolderManager();
 
-    ResourceHolder* createAndAdd(const char*, NebulaArena*);
-    LayoutHolder* createAndAddLayoutHolder(const char*, NebulaArena*);
-    LayoutHolder* createAndAddLayoutHolderRawData(const char*);
+    ResourceHolder* createAndAdd(const char* pArcName, NebulaArena*);
+    LayoutHolder* createAndAddLayoutHolder(const char* pArcName, NebulaArena*);
+    LayoutHolder* createAndAddLayoutHolderRawData(const char* pArcPath);
     LayoutHolder* createAndAddGameLayoutHolder(const char* pArcName);
     void removeIfIsEqualHeap(NebulaArena*);
-    static void startCreateResourceHolder(const char*, CreateResourceHolderArgs*);
-    static void startCreateLayoutHolder(const char*, CreateResourceHolderArgs*);
 
 private:
-    ResourceHolderManagerName2Resource* createAndAddInner(const char*, MakeArchiveFileNameFuncPtr, FuncPtrB);
-    void createResourceHolder(const char*, CreateResourceHolderArgs*);
-    void createLayoutHolder(const char*, CreateResourceHolderArgs*);
-    ResourceHolderManagerName2Resource* add(const char*, const CreateResourceHolderArgs&);
-    ResourceHolderManagerName2Resource* find(const char*);
+    typedef void (ResourceHolderManager::*CreateHolderFunc)(const char*, CreateResourceHolderArgs*);
+
+    ResourceHolderManagerName2Resource* createAndAddInner(const char* pArcName, MakeArchiveFileNameFuncPtr, CreateHolderFunc create);
+    void createResourceHolder(const char* pArcPath, CreateResourceHolderArgs*);
+    void createLayoutHolder(const char* pArcPath, CreateResourceHolderArgs*);
+    ResourceHolderManagerName2Resource* add(const char* pPath, const CreateResourceHolderArgs&);
+    ResourceHolderManagerName2Resource* find(const char* pName);
 
 private:
     MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
