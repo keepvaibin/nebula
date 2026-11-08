@@ -14,11 +14,11 @@ DemoStartInfo::DemoStartInfo() {
     mDemoName = nullptr;
     mPartName = nullptr;
     mDemoNerve = nullptr;
-    mMovementType = 0;
-    mDemoType = DemoType_0;
-    mFrameType = CinemaFrameType_0;
-    mPointerType = StarPointerType_0;
-    mDeleteEffectType = DeleteEffectType_0;
+    mMovementType = MR::MovementControlType_Resume;
+    mDemoType = DemoType_Programmable;
+    mFrameType = CinemaFrameType_Frame;
+    mPointerType = StarPointerType_Demo;
+    mDeleteEffectType = DeleteEffectType_Keep;
 }
 
 void DemoStartRequestHolder::pushRequest(LiveActor* pActor, const char* pName) {

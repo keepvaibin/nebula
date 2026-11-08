@@ -66,7 +66,7 @@ namespace DemoFunction {
             return false;
         }
         if (pPartName != nullptr) {
-            return executor->tryStartDemoSystemPart(pPartName, 2);
+            return executor->tryStartDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
         } else {
             return MR::tryStartTimeKeepDemoMarioPuppetable(executor, executor->mName, nullptr);
         }

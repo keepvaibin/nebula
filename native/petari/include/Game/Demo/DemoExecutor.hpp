@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Demo/DemoCastGroup.hpp"
+#include "Game/Scene/MovementControlType.hpp"
 #include "Game/Util/Array.hpp"
 
 class DemoActionKeeper;
@@ -65,12 +66,12 @@ public:
 
     virtual void registerDemoActor(LiveActor*, const TableIter&);
 
-    void start(NameObj*, const char*, s32);
-    void startPart(NameObj*, const char*, const char*, s32);
+    void start(NameObj*, const char*, MR::MovementControlType);
+    void startPart(NameObj*, const char*, const char*, MR::MovementControlType);
     void startProperDemoSystem();
-    void startDemoSystemPart(const char*, s32);
+    void startDemoSystemPart(const char*, MR::MovementControlType);
     bool tryStartProperDemoSystem();
-    bool tryStartDemoSystemPart(const char*, s32);
+    bool tryStartDemoSystemPart(const char*, MR::MovementControlType);
     bool tryStartProperDemoSystemPart(const char*);
     void pause();
     void resume();
@@ -92,7 +93,7 @@ public:
     StageSwitchCtrl* mStageSwitchCtrl;
     NameObj* mDemoStarter;
     const char* mDemoName;
-    s32 mEndType;
+    MR::MovementControlType mMovementType;  // None while not running
     MR::Vector< MR::FixedArray< LiveActor*, 192 > > mActor;
     MR::Vector< MR::FixedArray< DemoTalkAnimCtrl*, 8 > > mTalkAnimCtrl;
     MR::Vector< MR::FixedArray< DemoTalkMessageCtrl, 8 > > mTalkMessageCtrl;

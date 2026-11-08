@@ -125,8 +125,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_Frame,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -136,8 +136,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_Frame,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -147,8 +147,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -158,8 +158,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(1), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_DemoWithStarPointer, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -169,8 +169,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pObj, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(2), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pObj, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_DemoWithHandPointerFinger, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -180,8 +180,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 1, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(2), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_DemoWithHandPointerFinger, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -191,8 +191,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 2, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_Frame,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -202,8 +202,8 @@ namespace MR {
             return false;
         }
 
-        DemoStartRequestUtil::startDemoSystem(pActor, pName, 2, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
 
         return true;
     }
@@ -226,12 +226,12 @@ namespace MR {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
 
         if (pPartName != nullptr) {
-            executor->startDemoSystemPart(pPartName, 2);
+            executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
         } else {
             bool isExistPosName = executor->mPlayerKeeper != nullptr && executor->mPlayerKeeper->isExistPosName();
 
-            DemoStartRequestUtil::startDemoSystem(pObj, pName, 2, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                  DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(isExistPosName), nullptr);
+            DemoStartRequestUtil::startDemoSystem(pObj, pName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                  DemoStartInfo::StarPointerType_Demo, isExistPosName ? DemoStartInfo::DeleteEffectType_OneTimeEmitter : DemoStartInfo::DeleteEffectType_Keep, nullptr);
         }
 
         return true;
@@ -245,93 +245,93 @@ namespace MR {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
 
         if (pPartName != nullptr) {
-            executor->startDemoSystemPart(pPartName, 2);
+            executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
         } else {
             bool isExistPosName = executor->mPlayerKeeper != nullptr && executor->mPlayerKeeper->isExistPosName();
 
-            DemoStartRequestUtil::startDemoSystem(pActor, pName, 2, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                  DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(isExistPosName), nullptr);
+            DemoStartRequestUtil::startDemoSystem(pActor, pName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                  DemoStartInfo::StarPointerType_Demo, isExistPosName ? DemoStartInfo::DeleteEffectType_OneTimeEmitter : DemoStartInfo::DeleteEffectType_Keep, nullptr);
         }
 
         return true;
     }
 
     bool requestStartDemo(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 1, DemoStartInfo::DemoType(0),
-                                                      DemoStartInfo::CinemaFrameType(0), DemoStartInfo::StarPointerType(0),
-                                                      DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable,
+                                                      DemoStartInfo::CinemaFrameType_Frame, DemoStartInfo::StarPointerType_Demo,
+                                                      DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoWithoutCinemaFrame(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                             const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 1, DemoStartInfo::DemoType(0),
-                                                      DemoStartInfo::CinemaFrameType(1), DemoStartInfo::StarPointerType(0),
-                                                      DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable,
+                                                      DemoStartInfo::CinemaFrameType_None, DemoStartInfo::StarPointerType_Demo,
+                                                      DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoWithoutCinemaFrame(LayoutActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                             const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 1, DemoStartInfo::DemoType(0),
-                                                      DemoStartInfo::CinemaFrameType(1), DemoStartInfo::StarPointerType(0),
-                                                      DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo, DemoStartInfo::DemoType_Programmable,
+                                                      DemoStartInfo::CinemaFrameType_None, DemoStartInfo::StarPointerType_Demo,
+                                                      DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoMarioPuppetable(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 2, DemoStartInfo::DemoType(0),
-                                                      DemoStartInfo::CinemaFrameType(0), DemoStartInfo::StarPointerType(0),
-                                                      DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_Programmable,
+                                                      DemoStartInfo::CinemaFrameType_Frame, DemoStartInfo::StarPointerType_Demo,
+                                                      DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoMarioPuppetable(NerveExecutor* pExecutor, LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                          const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pExecutor, pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 2,
-                                                      DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
-                                                      DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pExecutor, pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                      DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_Frame,
+                                                      DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoMarioPuppetableWithoutCinemaFrame(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                                            const Nerve* pCannotStartDemoNerve) {
-        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, 2, DemoStartInfo::DemoType(0),
-                                                      DemoStartInfo::CinemaFrameType(1), DemoStartInfo::StarPointerType(0),
-                                                      DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartDemo(pActor, pName, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_Programmable,
+                                                      DemoStartInfo::CinemaFrameType_None, DemoStartInfo::StarPointerType_Demo,
+                                                      DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemo(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve,
                                   const char* pParam5) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, 1,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemo(NameObj* pObj, const char* pName, const char* pParam3) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, 1, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, MR::MovementControlType_Demo, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoMarioPuppetable(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                                  const Nerve* pCannotStartDemoNerve, const char* pParam5) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, 2,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam5, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoMarioPuppetable(NerveExecutor* pExecutor, LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                                  const Nerve* pCannotStartDemoNerve, const char* pParam6) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pExecutor, pActor, pName, pParam6, pCanStartDemoNerve, pCannotStartDemoNerve, 2,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pExecutor, pActor, pName, pParam6, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoMarioPuppetable(NameObj* pObj, const char* pName, const char* pParam3) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, 2, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pObj, pName, pParam3, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartTimeKeepDemoWithoutCinemaFrame(LiveActor* pActor, const char* pName, const Nerve* pCanStartDemoNerve,
                                                     const Nerve* pCannotStartDemoNerve, const char* pParam4) {
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, 1,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(1),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, pName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_None,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoRegistered(LiveActor* pActor, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve, const char* pParam4) {
@@ -341,9 +341,9 @@ namespace MR {
             return false;
         }
 
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, 1,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_Demo,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     bool requestStartDemoRegisteredMarioPuppetable(LiveActor* pActor, const Nerve* pCanStartDemoNerve, const Nerve* pCannotStartDemoNerve,
@@ -354,9 +354,9 @@ namespace MR {
             return false;
         }
 
-        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, 2,
-                                                              DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0));
+        return DemoStartRequestUtil::requestStartTimeKeepDemo(pActor, executor->mName, pParam4, pCanStartDemoNerve, pCannotStartDemoNerve, MR::MovementControlType_DemoMarioPuppetable,
+                                                              DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep);
     }
 
     void endDemo(NameObj* pObj, const char* pName) {
@@ -406,10 +406,10 @@ namespace MR {
 
     void startTimeKeepDemo(NameObj* pObj, const char* pName, const char* pPartName) {
         if (pPartName != nullptr) {
-            DemoFunction::findDemoExecutor(pName)->startDemoSystemPart(pPartName, 1);
+            DemoFunction::findDemoExecutor(pName)->startDemoSystemPart(pPartName, MR::MovementControlType_Demo);
         } else {
-            DemoStartRequestUtil::startDemoSystem(pObj, pName, 1, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                  DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+            DemoStartRequestUtil::startDemoSystem(pObj, pName, MR::MovementControlType_Demo, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                  DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
         }
     }
 
@@ -417,12 +417,12 @@ namespace MR {
         DemoExecutor* executor = DemoFunction::findDemoExecutor(pName);
 
         if (pPartName != nullptr) {
-            executor->startDemoSystemPart(pPartName, 2);
+            executor->startDemoSystemPart(pPartName, MR::MovementControlType_DemoMarioPuppetable);
         } else {
             bool isExistPosName = executor->mPlayerKeeper != nullptr && executor->mPlayerKeeper->isExistPosName();
 
-            DemoStartRequestUtil::startDemoSystem(pObj, pName, 2, DemoStartInfo::DemoType(1), DemoStartInfo::CinemaFrameType(0),
-                                                  DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(isExistPosName), nullptr);
+            DemoStartRequestUtil::startDemoSystem(pObj, pName, MR::MovementControlType_DemoMarioPuppetable, DemoStartInfo::DemoType_TimeKeep, DemoStartInfo::CinemaFrameType_Frame,
+                                                  DemoStartInfo::StarPointerType_Demo, isExistPosName ? DemoStartInfo::DeleteEffectType_OneTimeEmitter : DemoStartInfo::DeleteEffectType_Keep, nullptr);
         }
     }
 
@@ -573,8 +573,8 @@ namespace MR {
     }
 
     void startTalkingSequenceWithoutCinemaFrame(NameObj* pObj) {
-        DemoStartRequestUtil::startDemoSystem(pObj, "会話", 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(1),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pObj, "会話", MR::MovementControlType_StopEnemy, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_None,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
     }
 
     void endTalkingSequence(NameObj* pObj) {
@@ -610,7 +610,7 @@ namespace MR {
     }
 
     void startTalkingSequence(NameObj* pObj) {
-        DemoStartRequestUtil::startDemoSystem(pObj, "会話", 3, DemoStartInfo::DemoType(0), DemoStartInfo::CinemaFrameType(0),
-                                              DemoStartInfo::StarPointerType(0), DemoStartInfo::DeleteEffectType(0), nullptr);
+        DemoStartRequestUtil::startDemoSystem(pObj, "会話", MR::MovementControlType_StopEnemy, DemoStartInfo::DemoType_Programmable, DemoStartInfo::CinemaFrameType_Frame,
+                                              DemoStartInfo::StarPointerType_Demo, DemoStartInfo::DeleteEffectType_Keep, nullptr);
     }
 };  // namespace MR

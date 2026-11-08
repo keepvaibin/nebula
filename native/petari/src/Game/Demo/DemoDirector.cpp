@@ -21,7 +21,7 @@
 
 DemoDirector::DemoDirector(const char* pName)
     : NameObj(pName), mIsActive(), mExecutor(), mIsWaitingCamera(), mCastGroupHolder(), mSimpleCastHolder(new DemoSimpleCastHolder(512, 64, 128)), mResourceHolder(),
-      mStartRequestHolder(new DemoStartRequestHolder()), mDemoStarter(), mDemoName(), mMovementType(-1), mUseCinemaFrame(true) {
+      mStartRequestHolder(new DemoStartRequestHolder()), mDemoStarter(), mDemoName(), mMovementType(MR::MovementControlType_None), mUseCinemaFrame(true) {
     MR::connectToScene(this, MR::MovementType_DemoDirector, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 
     mCastGroupHolder = new DemoCastGroupHolder();
@@ -55,24 +55,25 @@ void DemoDirector::movement() {
     doDemoEndRequest();
 }
 
-void DemoDirector::startDemoProgrammable(NameObj* pParam1, const char* pParam2, bool param3, s32 param4) {
-    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pParam2);
-    startDemo(pParam1, pParam2, param3, param4);
+void DemoDirector::startDemoProgrammable(NameObj* pStarter, const char* pDemoName, bool useCinemaFrame, MR::MovementControlType movementType) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pDemoName);
+    startDemo(pStarter, pDemoName, useCinemaFrame, movementType);
 }
 
-void DemoDirector::startDemoTimeKeep(NameObj* pParam1, const char* pParam2, s32 param3, bool param4, const char* pParam5) {
-    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pParam2);
-    startDemo(pParam1, pParam2, param4, param3);
-    startDemoExecutor(pParam1, pParam2, param3, pParam5);
+void DemoDirector::startDemoTimeKeep(NameObj* pStarter, const char* pDemoName, MR::MovementControlType movementType, bool useCinemaFrame,
+                                     const char* pPartName) {
+    NebulaMods::fire(NEBULA_MOD_EVENT_CUTSCENE_START, 0, nullptr, pDemoName);
+    startDemo(pStarter, pDemoName, useCinemaFrame, movementType);
+    startDemoExecutor(pStarter, pDemoName, movementType, pPartName);
 }
 
-void DemoDirector::startDemoExecutor(NameObj* pParam1, const char* pParam2, s32 param3, const char* pParam4) {
-    mExecutor = DemoFunction::findDemoExecutor(pParam2);
+void DemoDirector::startDemoExecutor(NameObj* pStarter, const char* pDemoName, MR::MovementControlType movementType, const char* pPartName) {
+    mExecutor = DemoFunction::findDemoExecutor(pDemoName);
 
-    if (pParam4 != nullptr) {
-        mExecutor->startPart(pParam1, pParam2, pParam4, param3);
+    if (pPartName != nullptr) {
+        mExecutor->startPart(pStarter, pDemoName, pPartName, movementType);
     } else {
-        mExecutor->start(pParam1, pParam2, param3);
+        mExecutor->start(pStarter, pDemoName, movementType);
     }
 }
 
@@ -93,7 +94,7 @@ void DemoDirector::endDemo(NameObj* pParam1, const char* pParam2, bool param3) {
 
         doDemoEndRequest();
         startDemoRequested();
-    } else if (param3 && !MR::isCameraInterpolatingNearlyEnd() && mMovementType != 3) {
+    } else if (param3 && !MR::isCameraInterpolatingNearlyEnd() && mMovementType != MR::MovementControlType_StopEnemy) {
         mIsWaitingCamera = true;
 
         MR::sendMsgToAllLiveActor(ACTMES_END_DEMO, nullptr);
@@ -174,12 +175,12 @@ bool DemoDirector::tryStartDemoRequested() {
     return true;
 }
 
-void DemoDirector::startDemo(NameObj* pObj, const char* pParam2, bool param3, s32 param4) {
+void DemoDirector::startDemo(NameObj* pObj, const char* pDemoName, bool useCinemaFrame, MR::MovementControlType movementType) {
     mDemoStarter = pObj;
     mIsActive = true;
-    mDemoName = pParam2;
-    mMovementType = param4;
-    mUseCinemaFrame = param3;
+    mDemoName = pDemoName;
+    mMovementType = movementType;
+    mUseCinemaFrame = useCinemaFrame;
 
     mSimpleCastHolder->movementOnAllCasts();
     MR::initStarPieceGetCSSound();
@@ -190,12 +191,12 @@ void DemoDirector::startDemoRequested() {
 
     const DemoStartInfo& info = *mStartRequestHolder->getCurrentInfo();
 
-    startDemo(DemoStartRequestUtil::getDemoStarter(info), info.mDemoName, info.mFrameType == 0, info.mMovementType);
+    startDemo(DemoStartRequestUtil::getDemoStarter(info), info.mDemoName, info.mFrameType == DemoStartInfo::CinemaFrameType_Frame, info.mMovementType);
     DemoStartRequestUtil::popStartDemoRequest(mStartRequestHolder);
 }
 
 void DemoDirector::doDemoEndRequest() {
-    MR::getSceneNameObjMovementController()->requestPlaySceneFor(MR::MovementControlType(mMovementType), mDemoStarter);
+    MR::getSceneNameObjMovementController()->requestPlaySceneFor(mMovementType, mDemoStarter);
     MR::activateDefaultGameLayout();
     MR::endStarPointerMode(mDemoStarter);
 
@@ -203,7 +204,7 @@ void DemoDirector::doDemoEndRequest() {
         MR::tryFrameToScreenCinemaFrame();
     }
 
-    if (mMovementType == MR::MovementControlType_2 || mMovementType == MR::MovementControlType_3) {
+    if (MR::isMarioRemoteDemo(mMovementType)) {
         MarioAccess::endRemoteDemo(nullptr);
     }
 
