@@ -153,9 +153,9 @@ void FireBubble::initMapToolInfo(const TableIter& rIter) {
     Mtx.getZDir(mAppearFront);
 }
 
-void FireBubble::updateChaseFrontVec(f32 flt) {
-    Vec3f vec2;
-    Vec3f vec3;
+void FireBubble::updateChaseFrontVec(f32 turnDegree) {
+    Vec3f toPlayer;
+    Vec3f down;
     Vec3f pos;
     Vec3f playerUpVec;
 
@@ -164,28 +164,28 @@ void FireBubble::updateChaseFrontVec(f32 flt) {
     playerUpVec.scale(40.0f);
 
     pos.add(*MR::getPlayerPos(), playerUpVec);
-    vec2.sub(pos, *getPosition());
+    toPlayer.sub(pos, *getPosition());
 
-    if (!MR::normalizeOrZero(&vec2)) {
+    if (!MR::normalizeOrZero(&toPlayer)) {
         if (MR::isBindedGround(this)) {
-            vec3.negate(*MR::getGroundNormal(this));
+            down.negate(*MR::getGroundNormal(this));
         } else {
-            vec3.set(mGravity);
+            down.set(mGravity);
         }
 
-        if (!MR::isSameDirection(vec2, vec3)) {
-            MR::vecKillElement(vec2, vec3, &vec2);
-            MR::normalize(&vec2);
+        if (!MR::isSameDirection(toPlayer, down)) {
+            MR::vecKillElement(toPlayer, down, &toPlayer);
+            MR::normalize(&toPlayer);
 
             Vec3f copy(mFront);
 
-            MR::turnVecToVecCos(&mFront, copy, vec2, MR::cosDegree(flt), vec3);
+            MR::turnVecToVecCos(&mFront, copy, toPlayer, MR::cosDegree(turnDegree), down);
         }
     }
 }
 
-void FireBubble::updateChaseFrontVecAndVelocity(f32 flt) {
-    updateChaseFrontVec(flt);
+void FireBubble::updateChaseFrontVecAndVelocity(f32 turnDegree) {
+    updateChaseFrontVec(turnDegree);
     mVelocity.set(mFront);
     mVelocity.mult(::cChaseSpeed);
 }

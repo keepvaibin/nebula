@@ -275,12 +275,12 @@ void HomingKiller::control() {
 
 void HomingKiller::calcAndSetBaseMtx() {
 
-    Pos3f mtx2;
-    Pos3f mtx;
-    mtx.makeRotate(Vec3f(0.0f, 0.0f, 1.0f), MR::toRadian(mRotation.z));
+    Pos3f baseMtx;
+    Pos3f rollMtx;
+    rollMtx.makeRotate(Vec3f(0.0f, 0.0f, 1.0f), MR::toRadian(mRotation.z));
 
-    mtx2.concat(mBaseMtx, mtx);
-    MR::setBaseTRMtx(this, mtx2);
+    baseMtx.concat(mBaseMtx, rollMtx);
+    MR::setBaseTRMtx(this, baseMtx);
 }
 
 void HomingKiller::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

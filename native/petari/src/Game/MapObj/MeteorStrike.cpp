@@ -286,11 +286,11 @@ void MeteorStrike::startRumble() {
 }
 
 bool MeteorStrike::isInScreen() const {
-    Vec3f vec2;
-    Vec3f vec(mRailDir * mStepSize);
-    vec2.add(mPosition, vec);
+    Vec3f nextPos;
+    Vec3f step(mRailDir * mStepSize);
+    nextPos.add(mPosition, step);
 
-    return !MR::isJudgedToClipFrustum(vec2, 200.0f);
+    return !MR::isJudgedToClipFrustum(nextPos, 200.0f);
 }
 
 void MeteorStrike::exeMove() {

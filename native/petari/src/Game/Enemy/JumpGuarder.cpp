@@ -207,9 +207,9 @@ void JumpGuarder::control() {
 
     mHeadMtx.set(mBodyJointMtx);
 
-    Mtx34f mtx2;
-    mtx2.concat(mHeadMtx, mtx);
-    mHeadMtx.set(mtx2);
+    Mtx34f headMtx;
+    headMtx.concat(mHeadMtx, mtx);
+    mHeadMtx.set(headMtx);
 
     mBumpCooldown = MR::max(mBumpCooldown - 1, 0);
 

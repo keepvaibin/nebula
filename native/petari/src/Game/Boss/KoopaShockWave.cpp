@@ -102,12 +102,12 @@ void KoopaShockWave::exeWaveAttack() {
         mFront.set(mKoopa->mFront);
         MR::normalizeOrZero(&mUp);
 
-        Vec3f vec2 = mUp;
-        vec2.scale(KoopaFunction::getPlanetRadius(mKoopa));
+        Vec3f surfacePos = mUp;
+        surfacePos.scale(KoopaFunction::getPlanetRadius(mKoopa));
 
-        vec2.add(KoopaFunction::getPlanetCenterPos(mKoopa));
+        surfacePos.add(KoopaFunction::getPlanetCenterPos(mKoopa));
 
-        MR::makeMtxUpFrontPos(&mKoopaMtx, -mKoopa->mGravity, mKoopa->mFront, vec2);
+        MR::makeMtxUpFrontPos(&mKoopaMtx, -mKoopa->mGravity, mKoopa->mFront, surfacePos);
 
         MR::startSound(mKoopa, "SE_BM_KOOPA_SWAVE_SHOOT");
 
