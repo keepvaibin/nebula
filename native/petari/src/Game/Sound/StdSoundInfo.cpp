@@ -28,9 +28,8 @@ u16 StdSoundInfo::getBgmSeqResourceID(SoundID soundID) const {
 }
 
 int StdSoundInfo::getSoundType(SoundID soundID) const {
-    // Sections 0, 1, 2 are SE, sequences and streams.
     const u32 section = soundID.getSectionID();
-    return section <= 2 ? static_cast< int >(section) : -1;
+    return section <= SoundID::SOUND_STREAM ? static_cast< int >(section) : -1;
 }
 
 int StdSoundInfo::getCategory(SoundID soundID) const {
