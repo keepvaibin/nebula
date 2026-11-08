@@ -12,9 +12,8 @@ namespace nw4r {
         public:
             static constexpr UiPaneKind cKind = UiPaneKind_Picture;
 
-            Picture(u8 texNum);
-            Picture(const TexMap& texMap);
-            Picture(const UiPaneData*, const ResBlockSet&);
+            Picture(Layout&, const TexMap& texMap);
+            Picture(Layout&, const UiPaneData*, const ResBlockSet&);
 
             virtual ~Picture();
             virtual void DrawSelf(const DrawInfo& rInfo);

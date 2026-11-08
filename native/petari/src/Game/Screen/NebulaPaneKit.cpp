@@ -7,12 +7,13 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/lyt/window.h>
 
-NebulaPaneKit::NebulaPaneKit() : mBlocks{nullptr, nullptr, nullptr} {
+NebulaPaneKit::NebulaPaneKit() : mBlocks{nullptr, nullptr, nullptr}, mpInto(nullptr) {
 }
 
-bool NebulaPaneKit::init(LayoutHolder* pHolder) {
+bool NebulaPaneKit::init(LayoutHolder* pHolder, nw4r::lyt::Layout* pInto) {
     mBlocks = nw4r::lyt::ResBlockSet{nullptr, nullptr, nullptr};
-    if (pHolder == nullptr || pHolder->mLayoutRes.mCount == 0) {
+    mpInto = pInto;
+    if (pHolder == nullptr || pInto == nullptr || pHolder->mLayoutRes.mCount == 0) {
         return false;
     }
     const UiLayoutHeader* const pLayout = static_cast< const UiLayoutHeader* >(pHolder->mLayoutRes.getRes(0u));
@@ -31,7 +32,7 @@ nw4r::lyt::Pane* NebulaPaneKit::make(const char* pName, const char* pNewName) co
     if (idx == cUiNone16) {
         return nullptr;
     }
-    nw4r::lyt::Pane* pPane = nw4r::lyt::Layout::BuildPaneObj(mBlocks.PaneAt(idx), mBlocks);
+    nw4r::lyt::Pane* pPane = mpInto->BuildPaneObj(mBlocks.PaneAt(idx), mBlocks);
     if (pPane != nullptr) {
         pPane->SetName(pNewName);
         pPane->mTranslate = nw4r::math::VEC3(0.0f, 0.0f, 0.0f);
@@ -44,12 +45,8 @@ nw4r::lyt::Pane* NebulaPaneKit::make(const char* pName, const char* pNewName) co
 }
 
 nw4r::lyt::Window* NebulaPaneKit::makeWindow(const char* pName, const char* pNewName) const {
-    nw4r::lyt::Pane* pPane = make(pName, pNewName);
-    nw4r::lyt::Window* pWindow = nw4r::lyt::PaneCast< nw4r::lyt::Window >(pPane);
-    if (pPane != nullptr && pWindow == nullptr) {
-        nw4r::lyt::Layout::DeleteObj(pPane);
-    }
-    return pWindow;
+    // A pane of another kind stays unjoined in the layout until it ends.
+    return nw4r::lyt::PaneCast< nw4r::lyt::Window >(make(pName, pNewName));
 }
 
 nw4r::lyt::TextBox* NebulaPaneKit::makeText(const char* pName, const char* pNewName, u32 length) const {
@@ -59,7 +56,6 @@ nw4r::lyt::TextBox* NebulaPaneKit::makeText(const char* pName, const char* pNewN
     }
     nw4r::lyt::TextBox* pText = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
     if (pText == nullptr) {
-        nw4r::lyt::Layout::DeleteObj(pPane);
         return nullptr;
     }
     LayoutCoreUtil::initTextBoxPane(pText, nullptr, length);

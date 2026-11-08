@@ -24,7 +24,7 @@ namespace nw4r {
 
             static constexpr UiPaneKind cKind = UiPaneKind_Window;
 
-            Window(const UiPaneData*, const ResBlockSet&);
+            Window(Layout&, const UiPaneData*, const ResBlockSet&);
 
             virtual ~Window();
             virtual void DrawSelf(const DrawInfo&);

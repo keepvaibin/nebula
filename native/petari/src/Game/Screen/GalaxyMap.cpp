@@ -482,9 +482,8 @@ void GalaxyMap::initPaneCtrlPointing() {
     ::initIconArray(mCometIcon, new GalaxyMapCometIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     initPointingTarget(galaxyInfo.getNumEntries());
 
-    // A mod's galaxy names a pane its map layout may not have. Each that says where it goes gets it made, all before
-    // the controls below, and the pane list is built again once with them in it.
-    bool added = false;
+    // A mod's galaxy names a pane its map layout may not have. Each that says where it goes gets it made before the
+    // controls below look the panes up.
     for (s32 i = 0; i < galaxyInfo.getNumEntries(); i++) {
         const char* pPaneName = nullptr;
         if (!galaxyInfo.getValue(i, "MapPaneName", &pPaneName) || MR::isEqualString(pPaneName, "") ||
@@ -492,7 +491,7 @@ void GalaxyMap::initPaneCtrlPointing() {
             continue;
         }
         // The tree itself: a pane made for an earlier galaxy of this loop is not listed yet.
-        if (getLayoutManager()->mLayout->mpRootPane->FindPaneByName(pPaneName, true) != nullptr) {
+        if (getLayoutManager()->getPane(pPaneName) != nullptr) {
             continue;
         }
         const char* pGalaxyName = nullptr;
@@ -509,15 +508,11 @@ void GalaxyMap::initPaneCtrlPointing() {
         if (pParent == nullptr) {
             continue;
         }
-        nw4r::lyt::Pane* pPane = new nw4r::lyt::Pane();
+        nw4r::lyt::Pane* pPane = pParent->GetLayout()->NewPane< nw4r::lyt::Pane >();
         pPane->SetName(pPaneName);
         pPane->SetSRTElement(0, x);
         pPane->SetSRTElement(1, y);
         pParent->AppendChild(pPane);
-        added = true;
-    }
-    if (added) {
-        getLayoutManager()->rebuildPaneInfo();
     }
 
     for (s32 i = 0; i < galaxyInfo.getNumEntries(); i++) {

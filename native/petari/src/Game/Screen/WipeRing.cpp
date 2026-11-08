@@ -48,15 +48,12 @@ void WipeRing::exeClose() {
 }
 
 void WipeRing::calcAnim() {
+    // The mask scales about its followed centre (moving that centre would detach it from Mario): its own screen scale,
+    // which its children do not inherit.
+    if (nw4r::lyt::Pane* pRing = mLayoutManager->findPaneByName("Ring")) {
+        pRing->mScreenScale = ringCanvasScale();
+    }
     LayoutActor::calcAnim();
-    if (!MR::isExecuteCalcAnimLayout(this)) return;
-    auto* ring = mLayoutManager->findPaneByName("Ring");
-    if (ring == nullptr) return;
-    // Scale the mask about its followed centre; moving that centre would detach it from Mario.
-    // Matrices are rebuilt above on every frame, so folding never compounds this scale.
-    const f32 scale = ringCanvasScale();
-    for (int row = 0; row < 2; ++row)
-        for (int col = 0; col < 3; ++col) ring->mGlbMtx.m[row][col] *= scale;
 }
 
 void WipeRing::exeWipeIn() {

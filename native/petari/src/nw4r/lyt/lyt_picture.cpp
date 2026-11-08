@@ -4,27 +4,16 @@
 
 namespace nw4r {
     namespace lyt {
-        Picture::Picture(u8 texNum) {
-            mKind = cKind;
-            Init(texNum);
-            mpMaterial = Layout::NewObj< Material >();
-            if (mpMaterial) {
-                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
-            }
-        }
-
-        Picture::Picture(const TexMap& texMap) {
+        Picture::Picture(Layout& rLayout, const TexMap& texMap) : Pane(rLayout) {
             mKind = cKind;
             const int texNum = 1;
             Init(texNum);
-            mpMaterial = Layout::NewObj< Material >();
-            if (mpMaterial) {
-                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
-                Append(texMap);
-            }
+            mpMaterial = rLayout.NewInArena< Material >();
+            mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
+            Append(texMap);
         }
 
-        Picture::Picture(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
+        Picture::Picture(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(rLayout, pRes, rBlockSet) {
             const UiPictureData* const pPic = rBlockSet.At< UiPictureData >(pRes->mPayload);
             u8 num = ut::Min< u8 >(pPic->mCoordCount, 8);
             Init(num);
@@ -37,11 +26,7 @@ namespace nw4r {
                 mTexCoordAry.Copy(rBlockSet.At< u8 >(pPic->mCoords), num);
             }
 
-            void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
-
-            if (pMaterialBuf != NULL) {
-                mpMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pPic->mMaterial), rBlockSet);
-            }
+            mpMaterial = rLayout.NewInArena< Material >(rBlockSet.MaterialAt(pPic->mMaterial), rBlockSet);
         }
 
         void Picture::Init(u8 num) {
@@ -55,12 +40,6 @@ namespace nw4r {
         }
 
         Picture::~Picture() {
-            if (mpMaterial != NULL && !mpMaterial->IsUserAllocated()) {
-                mpMaterial->~Material();
-                Layout::FreeMemory(mpMaterial);
-                mpMaterial = NULL;
-            }
-
             mTexCoordAry.Free();
         }
 
@@ -113,7 +92,7 @@ namespace nw4r {
 
             bool useVtxColor = mpMaterial->Setup(detail::IsModulateVertexColor(mVtxColors, mGlbAlpha), mGlbAlpha);
 
-            detail::DrawQuad(GetVtxPos(), mSize, mTexCoordAry.GetSize(), mTexCoordAry.GetArray(), useVtxColor ? mVtxColors : NULL, mGlbAlpha);
+            detail::DrawQuad(GetVtxPos(), GetDrawSize(), mTexCoordAry.GetSize(), mTexCoordAry.GetArray(), useVtxColor ? mVtxColors : NULL, mGlbAlpha);
         }
 
     };  // namespace lyt

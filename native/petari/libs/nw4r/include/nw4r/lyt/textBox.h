@@ -22,7 +22,7 @@ namespace nw4r {
         public:
             static constexpr UiPaneKind cKind = UiPaneKind_TextBox;
 
-            TextBox(const UiPaneData*, const ResBlockSet&);
+            TextBox(Layout&, const UiPaneData*, const ResBlockSet&);
 
             virtual ~TextBox();
             virtual void DrawSelf(const DrawInfo& drawInfo);

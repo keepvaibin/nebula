@@ -1027,8 +1027,6 @@ void NebulaSettingsScreen::init(const TableIter& rIter) {
     if (!mBuilt) {
         JUTNativeLog("NebulaSettingsMenu: a layout or pane is missing\n");
     }
-    // The pane list with the menu's panes in it.
-    pManager->rebuildPaneInfo();
     kill();
 }
 
@@ -1042,8 +1040,11 @@ bool NebulaSettingsScreen::makeButton(Pane* pParent, Button* pButton, const char
 bool NebulaSettingsScreen::build() {
     LayoutManager* pManager = getLayoutManager();
     Pane* pRoot = pManager->mLayout->mpRootPane;
-    if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder) || !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc")) ||
-        !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc")) || !mButtonKit.init(MR::createAndAddLayoutHolder("BackButton.arc"))) {
+    nw4r::lyt::Layout* const pInto = pManager->mLayout;
+    if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, pInto) ||
+        !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc"), pInto) ||
+        !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"), pInto) ||
+        !mButtonKit.init(MR::createAndAddLayoutHolder("BackButton.arc"), pInto)) {
         return false;
     }
     // The question window's own panes stay hidden; the menu is built beside them.

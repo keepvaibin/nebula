@@ -5,7 +5,7 @@
 #include <nw4r/lyt/pane.h>
 
 LayoutPaneCtrl::LayoutPaneCtrl(LayoutManager* pHost, const char* pPaneName, u32 animLayerNum)
-    : mHost(pHost), mPane(), mPaneIndex(-1), mAnmPlayerArray(animLayerNum), mFollowType(), mFollowPos() {
+    : mHost(pHost), mPane(), mStatePane(), mAnmPlayerArray(animLayerNum), mFollowType(), mFollowPos() {
     LayoutManager* pManager = mHost;
     mPane = pPaneName == nullptr ? pManager->mLayout->mpRootPane : pManager->mLayout->mpRootPane->FindPaneByName(pPaneName, true);
 
@@ -55,13 +55,15 @@ bool LayoutPaneCtrl::isAnimStopped(u32 layer) const {
     return mAnmPlayerArray[layer]->isStop();
 }
 
-void LayoutPaneCtrl::reflectFollowPos() {
-    if (mFollowPos == nullptr) {
-        return;
+void LayoutPaneCtrl::setFollowPos(const Vec2f* pFollowPos) {
+    mFollowPos = pFollowPos;
+    if (mPane != nullptr) {
+        mPane->mpFollow = pFollowPos != nullptr ? this : nullptr;
     }
+}
 
-    nw4r::math::MTX34 global;
-    nw4r::math::MTX34Copy(&global, &mPane->mGlbMtx);
+void LayoutPaneCtrl::Follow(const nw4r::lyt::Pane& rPane, nw4r::math::MTX34& rWorld) const {
+    nw4r::math::MTX34& global = rWorld;
 
     switch (mFollowType) {
     case 0: {
@@ -82,7 +84,7 @@ void LayoutPaneCtrl::reflectFollowPos() {
         break;
     }
     case 2: {
-        nw4r::math::MTX34 local = mPane->mMtx;
+        nw4r::math::MTX34 local = rPane.mMtx;
         nw4r::math::MTX34 inverse;
         NebulaMtxInverse(local, inverse);
         nw4r::math::MTX34Mult(&global, &global, &inverse);
@@ -97,26 +99,14 @@ void LayoutPaneCtrl::reflectFollowPos() {
     }
     case 3: {
         nw4r::math::VEC3 offset(mFollowPos->x, mFollowPos->y, 0.0f);
-        nw4r::math::VEC3TransformNormal(&offset, &mPane->mMtx, &offset);
+        nw4r::math::VEC3TransformNormal(&offset, &rPane.mMtx, &offset);
         global._03 += offset.x;
         global._13 += offset.y;
         break;
     }
     }
-
-    mPane->mGlbMtx = global;
-    recalcChildGlobalMtx(mPane);
 }
 
 FrameCtrl* LayoutPaneCtrl::getFrameCtrl(u32 layer) const {
     return &mAnmPlayerArray[layer]->mFrameCtrl;
-}
-
-void LayoutPaneCtrl::recalcChildGlobalMtx(nw4r::lyt::Pane* pPane) {
-    for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
-        nw4r::math::MTX34 global;
-        nw4r::math::MTX34Mult(&global, &pChild->GetParent()->mGlbMtx, &pChild->mMtx);
-        pChild->mGlbMtx = global;
-        recalcChildGlobalMtx(pChild);
-    }
 }

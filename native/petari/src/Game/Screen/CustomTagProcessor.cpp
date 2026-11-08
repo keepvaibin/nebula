@@ -662,7 +662,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(nw4r::ut
     nw4r::ut::Rect bounds;
     if (mTextBox->GetTextPositionV() == 0) {
         writer->CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-        writer->MoveCursorY((mTextBox->mSize.height - bounds.GetHeight()) / 2.0f);
+        writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / 2.0f);
     }
 
     return OPERATION_NO_CHAR_SPACE;
@@ -674,7 +674,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(nw4r::ut
     const char16_t* string = context->str + tag.getSkipLength();
     nw4r::ut::Rect bounds;
     writer.CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-    f32 offset = (mTextBox->mSize.width - bounds.GetWidth()) / 2.0f;
+    f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / 2.0f;
     context->writer->MoveCursorX(offset);
     context->xOrigin += offset;
     return OPERATION_NO_CHAR_SPACE;

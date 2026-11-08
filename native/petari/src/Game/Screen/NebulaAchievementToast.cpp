@@ -152,16 +152,11 @@ void NebulaAchievementToast::init(const TableIter& rIter) {
         mToast = nullptr;
         return;
     }
-    mIcon = nw4r::lyt::Layout::NewObj< nw4r::lyt::Pane >();
-    if (mIcon != nullptr) {
-        mIcon->SetName("NebulaIcon");
-        mGlyph->mpParent->RemoveChild(mGlyph);
-        mIcon->AppendChild(mGlyph);
-        mToast->AppendChild(mIcon);
-    } else {
-        mToast = nullptr;
-        return;
-    }
+    mIcon = mToast->GetLayout()->NewPane< nw4r::lyt::Pane >();
+    mIcon->SetName("NebulaIcon");
+    mGlyph->mpParent->RemoveChild(mGlyph);
+    mIcon->AppendChild(mGlyph);
+    mToast->AppendChild(mIcon);
     // (The Japanese text boxes are already gone, or stand in for the others in Japanese: LayoutManager.)
     if (nw4r::lyt::Pane* pUpper = MR::getPane(this, "InfoWindowUp")) {
         pUpper->SetVisible(false);
@@ -188,8 +183,6 @@ void NebulaAchievementToast::init(const TableIter& rIter) {
     }
 
     loadTextures();
-    // The layout's pane list, counted when it was built, again for the moved and added panes.
-    pManager->rebuildPaneInfo();
     LayoutActor::appear();
 }
 
@@ -216,7 +209,7 @@ void NebulaAchievementToast::loadTextures() {
         }
     }
     if (mTextures[0] != nullptr) {
-        mPicture = nw4r::lyt::Layout::NewObj< nw4r::lyt::Picture >(*mTextures[0]);
+        mPicture = mIcon->GetLayout()->NewPane< nw4r::lyt::Picture >(*mTextures[0]);
     }
     if (mPicture != nullptr) {
         mPicture->SetName("NebulaIconPic");

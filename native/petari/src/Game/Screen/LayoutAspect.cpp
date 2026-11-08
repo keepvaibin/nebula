@@ -1,30 +1,30 @@
-#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutAspect.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Screen/LayoutManager.hpp"
-#include "Game/Screen/LayoutPaneCtrl.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
-#include "Game/System/NebulaHost.hpp"
 
 namespace {
-    // How a pane follows a canvas wider or taller than the authored 608x456.
+    using namespace nw4r::lyt;
+
+    // How a pane follows a canvas wider or taller than the authored 608x456 (nw4r/lyt/anchor.h).
     enum {
-        FitLeft = 1 << 0,  // the branch moves with the left edge
-        FitRight = 1 << 1,
-        FitTop = 1 << 2,
-        FitBottom = 1 << 3,
-        FitWidth = 1 << 4,       // the picture scales to the canvas width
-        FitHeight = 1 << 5,      // the picture scales to the canvas height
-        FitCover = 1 << 6,       // artwork scales uniformly until it covers the canvas
-        FitFrame = 1 << 7,       // a window grows so its border keeps its distance from the edge
-        FitExtendUp = 1 << 8,    // a bar grows upward to the canvas top
-        FitExtendDown = 1 << 9,  // a bar grows downward to the canvas bottom
-        FitSlide = 1 << 10,      // slides further in proportion; width = its 16:9 off-screen x
-        FitFlipSlide = 1 << 11,  // the pane's animated vertical slide runs the other way, at every canvas
+        FitLeft = AnchorLeft,
+        FitRight = AnchorRight,
+        FitTop = AnchorTop,
+        FitBottom = AnchorBottom,
+        FitWidth = AnchorWidth,
+        FitHeight = AnchorHeight,
+        FitCover = AnchorCover,
+        FitFrame = AnchorFrame,
+        FitExtendUp = AnchorExtendUp,
+        FitExtendDown = AnchorExtendDown,
+        FitSlide = AnchorSlide,
+        FitFlipSlide = AnchorFlipSlide,
     };
 
     struct FitRule {
@@ -136,244 +136,94 @@ namespace {
         {"TiltGuidanceReplace", "TiltGuidance", FitRight},
     };
 
-    struct Extent {
-        f32 mWidth;
-        f32 mHeight;
-        f32 mHorizontalDelta;  // how much further each side edge lies than at the authored width
-        f32 mVerticalDelta;
-    };
-
-    // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
-    Extent getExtent() {
-        Extent extent = {NebulaFrameClock::cLayoutWidth, NebulaFrameClock::cScreenHeight, 0.0f, 0.0f};
-        if (MR::isScreen16Per9() && MR::getDisplay().wide) {
-            extent.mWidth = MR::getDisplay().layout_width;
-            extent.mHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
-            extent.mHorizontalDelta = (extent.mWidth - NebulaFrameClock::cLayoutWidth) * 0.5f;
-            extent.mVerticalDelta = (extent.mHeight - NebulaFrameClock::cScreenHeight) * 0.5f;
-        }
-        return extent;
-    }
-
-    bool isNamed(const nw4r::lyt::Pane* pPane, const char* pName) {
+    bool isNamed(const Pane* pPane, const char* pName) {
         return strcmp(pPane->mName, pName) == 0;
     }
 
-    // Pane::CalculateMtx skips an invisible pane and its branch, whose matrices are then an earlier frame's.
-    bool isDrawn(const nw4r::lyt::Pane* pPane, const nw4r::lyt::Pane* pRoot) {
-        for (s32 depth = 0; depth < 32 && pPane != nullptr; depth++) {
-            if (!pPane->IsVisible()) {
-                return false;
-            }
-            if (pPane == pRoot) {
-                return true;
-            }
-            pPane = pPane->mpParent;
+    bool add(LayoutManager* pManager, Pane* pPane, u32 fit, f32 width, f32 height) {
+        const s32 capacity = static_cast< s32 >(sizeof(pManager->mAnchors) / sizeof(pManager->mAnchors[0]));
+        if (pPane == nullptr || pManager->mAnchorCount == capacity) {
+            return false;
         }
-        return false;
-    }
-
-    // Moves a branch's global matrices (rebuilt by CalculateMtx each frame), not the local transforms animations own.
-    void translateBranch(nw4r::lyt::Pane* pPane, f32 x, f32 y, s32 depth) {
-        if (depth > 16 || !pPane->IsVisible()) {
-            return;
-        }
-        pPane->mGlbMtx._03 += x;
-        pPane->mGlbMtx._13 += y;
-        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
-            translateBranch(pChild, x, y, depth + 1);
-        }
-    }
-
-    // Scales one row of the drawn matrix: the pane scales about the canvas centre.
-    void scaleRow(nw4r::lyt::Pane* pPane, s32 row, f32 k) {
-        for (s32 i = 0; i < 4; i++) {
-            pPane->mGlbMtx.m[row][i] *= k;
-        }
-    }
-
-    // Grows a bar about its inner edge until its outer edge is `delta` further out. A picture spans 0..-h, h/2..-h/2
-    // or h..0 by its base position's row.
-    void extendVertical(nw4r::lyt::Pane* pPane, f32 delta, bool up) {
-        const f32 height = pPane->mSize.height;
-        const s32 row = pPane->mBasePosition / 3;
-        const f32 top = row == 0 ? 0.0f : row == 1 ? height * 0.5f : height;
-        const f32 m11 = pPane->mGlbMtx._11;
-        const f32 m13 = pPane->mGlbMtx._13;
-        const f32 a = m11 * top + m13;
-        const f32 b = m11 * (top - height) + m13;
-        const f32 span = __builtin_fabsf(a - b);
-        if (!(span > 0.0f) || delta == 0.0f) {
-            return;
-        }
-        const f32 inner = up ? (a < b ? a : b) : (a > b ? a : b);
-        const f32 k = (span + delta) / span;
-        pPane->mGlbMtx._10 *= k;
-        pPane->mGlbMtx._11 *= k;
-        pPane->mGlbMtx._12 *= k;
-        pPane->mGlbMtx._13 = inner + (m13 - inner) * k;
-    }
-
-    // True when the branch moved, so the copied matrices need copying again.
-    bool applyFit(nw4r::lyt::Pane* pPane, const FitRule& rRule, const Extent& rExtent) {
-        const f32 wide = rExtent.mWidth / NebulaFrameClock::cLayoutWidth;
-        const f32 tall = rExtent.mHeight / NebulaFrameClock::cScreenHeight;
-        if (rRule.mFit & FitCover) {
-            const f32 k = wide > tall ? wide : tall;
-            scaleRow(pPane, 0, k);
-            scaleRow(pPane, 1, k);
-        }
-        if (rRule.mFit & FitWidth) {
-            scaleRow(pPane, 0, wide);
-        }
-        if (rRule.mFit & FitHeight) {
-            scaleRow(pPane, 1, tall);
-        }
-        if (rRule.mFit & (FitExtendUp | FitExtendDown)) {
-            extendVertical(pPane, rExtent.mVerticalDelta, (rRule.mFit & FitExtendUp) != 0);
-        }
-        bool moved = false;
-        if ((rRule.mFit & FitFlipSlide) && pPane->mpParent != nullptr && pPane->mTranslate.y != 0.0f) {
-            translateBranch(pPane, 0.0f, -2.0f * pPane->mpParent->mGlbMtx._11 * pPane->mTranslate.y, 0);
-            moved = true;
-        }
-        if (rRule.mFit & FitFrame) {
-            // Window::DrawSelf reads the size when drawing and CalculateMtx never restores it: always from the
-            // authored size.
-            const f32 sx = __builtin_fabsf(pPane->mGlbMtx._00);
-            const f32 sy = __builtin_fabsf(pPane->mGlbMtx._11);
-            if (sx > 0.0f && sy > 0.0f) {
-                pPane->mSize.width = rRule.mWidth + 2.0f * rExtent.mHorizontalDelta / sx;
-                pPane->mSize.height = rRule.mHeight + 2.0f * rExtent.mVerticalDelta / sy;
-            }
-        }
-        f32 x = (rRule.mFit & FitLeft) ? -rExtent.mHorizontalDelta : (rRule.mFit & FitRight) ? rExtent.mHorizontalDelta : 0.0f;
-        // A pane the game slides off the 16:9 canvas (local x reaching mWidth) must leave the wider one too.
-        if (rRule.mFit & FitSlide) {
-            x += pPane->mTranslate.x * rExtent.mHorizontalDelta / rRule.mWidth;
-        }
-        const f32 y = (rRule.mFit & FitTop) ? rExtent.mVerticalDelta : (rRule.mFit & FitBottom) ? -rExtent.mVerticalDelta : 0.0f;
-        if (x == 0.0f && y == 0.0f) {
-            return moved;
-        }
-        translateBranch(pPane, x, y, 0);
+        Anchor& rAnchor = pManager->mAnchors[pManager->mAnchorCount++];
+        rAnchor.mpPane = pPane;
+        rAnchor.mFit = fit;
+        rAnchor.mWidth = width;
+        rAnchor.mHeight = height;
         return true;
     }
 
-    // The cinema bars (CinemaFrame's FrameU and FrameD) stay at the edges of a taller canvas. Wait, Appear and End
-    // author a 60-unit bar; Close and Open animate it to 250 to meet at the centre, so a closing bar also gains its
-    // share of the extra half height.
-    void fitCinemaBars(nw4r::lyt::Pane* pRoot, const Extent& rExtent) {
-        if (rExtent.mVerticalDelta == 0.0f) {
+    // In the order they apply: the cinema bars, the backings, then the layout's rules in table order (an offset
+    // moves the screen matrices the later ones read).
+    void resolve(LayoutManager* pManager) {
+        pManager->mAnchorCount = 0;
+        Pane* pRoot = pManager->mLayout->mpRootPane;
+        if (pRoot == nullptr) {
             return;
         }
-        for (nw4r::lyt::Pane* pOwner : pRoot->GetChildList()) {
-            if (!isNamed(pOwner, "CinemaFrame")) {
-                continue;
+        // The owning layout and exact names identify each backing: generic Base and PicBG panes elsewhere stay.
+        if (isNamed(pRoot, "RootPane")) {
+            bool title = false;
+            for (Pane* pChild : pRoot->GetChildList()) {
+                title |= isNamed(pChild, "SMGTitleLogo");
             }
-            for (nw4r::lyt::Pane* pBar : pOwner->GetChildList()) {
-                const bool upper = isNamed(pBar, "FrameU");
-                if (!upper && !isNamed(pBar, "FrameD")) {
-                    continue;
+            for (Pane* pPane : pRoot->GetChildList()) {
+                if (isNamed(pPane, "CinemaFrame")) {
+                    for (Pane* pBar : pPane->GetChildList()) {
+                        if (isNamed(pBar, "FrameU")) {
+                            add(pManager, pBar, AnchorCinemaUpper, 0.0f, 0.0f);
+                        } else if (isNamed(pBar, "FrameD")) {
+                            add(pManager, pBar, AnchorCinemaLower, 0.0f, 0.0f);
+                        }
+                    }
                 }
-                const f32 height = pBar->mSize.height;
-                if (!(height > 0.0f)) {
-                    continue;
+            }
+            for (Pane* pPane : pRoot->GetChildList()) {
+                if (title && isNamed(pPane, "PicFlash")) {
+                    add(pManager, pPane, AnchorFill, 0.0f, 0.0f);
+                } else if (isNamed(pPane, "PrologueDemo")) {
+                    for (Pane* pBacking : pPane->GetChildList()) {
+                        if (isNamed(pBacking, "Base") || isNamed(pBacking, "Fade")) {
+                            add(pManager, pBacking, AnchorFill, 0.0f, 0.0f);
+                        }
+                    }
                 }
-                f32 closing = (height - 60.0f) / 190.0f;
-                closing = closing < 0.0f ? 0.0f : closing > 1.0f ? 1.0f : closing;
-                pBar->mSize.height = height + closing * rExtent.mVerticalDelta;
-                translateBranch(pBar, 0.0f, upper ? rExtent.mVerticalDelta : -rExtent.mVerticalDelta, 0);
             }
         }
+        for (u32 i = 0; pManager->mLayoutName != nullptr && i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
+            const FitRule& rRule = cFitRules[i];
+            if (strcmp(rRule.mLayout, pManager->mLayoutName) == 0) {
+                add(pManager, pRoot->FindPaneByName(rRule.mPane, true), rRule.mFit, rRule.mWidth, rRule.mHeight);
+            }
+        }
+        if (pManager->mAnchorCount != 0) {
+            pManager->mLayout->SetAnchors(pManager->mAnchors, static_cast< u32 >(pManager->mAnchorCount));
+        }
+    }
+
+    // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
+    Canvas getCanvas() {
+        Canvas canvas = {NebulaFrameClock::cLayoutWidth, NebulaFrameClock::cScreenHeight, 0.0f, 0.0f, 1.0f, 1.0f, false};
+        if (MR::isScreen16Per9() && MR::getDisplay().wide) {
+            canvas.mWide = true;
+            canvas.mWidth = MR::getDisplay().layout_width;
+            canvas.mHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
+            canvas.mHorizontalDelta = (canvas.mWidth - NebulaFrameClock::cLayoutWidth) * 0.5f;
+            canvas.mVerticalDelta = (canvas.mHeight - NebulaFrameClock::cScreenHeight) * 0.5f;
+        }
+        canvas.mScaleX = canvas.mWidth / NebulaFrameClock::cLayoutWidth;
+        canvas.mScaleY = canvas.mHeight / NebulaFrameClock::cScreenHeight;
+        return canvas;
     }
 };  // namespace
 
 namespace LayoutAspect {
-    void extendBackings(LayoutManager* pManager) {
-        if (!MR::isScreen16Per9() || !MR::getDisplay().wide) {
-            return;
+    void prepare(LayoutManager* pManager) {
+        if (pManager->mAnchorCount < 0) {
+            resolve(pManager);
         }
-        nw4r::lyt::Pane* pRoot = pManager->mLayout->mpRootPane;
-        if (pRoot == nullptr || !isNamed(pRoot, "RootPane")) {
-            return;
-        }
-        // The owning layout and exact names identify each backing: generic Base and PicBG panes elsewhere stay.
-        const Extent extent = getExtent();
-        bool title = false;
-        for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
-            title |= isNamed(pChild, "SMGTitleLogo");
-        }
-        for (nw4r::lyt::Pane* pPane : pRoot->GetChildList()) {
-            if (title && isNamed(pPane, "PicFlash")) {
-                pPane->mSize.width = extent.mWidth;
-                pPane->mSize.height = extent.mHeight;
-            } else if (isNamed(pPane, "CinemaFrame")) {
-                for (nw4r::lyt::Pane* pBar : pPane->GetChildList()) {
-                    if (isNamed(pBar, "FrameU") || isNamed(pBar, "FrameD")) {
-                        pBar->mSize.width = extent.mWidth;
-                    }
-                }
-            } else if (isNamed(pPane, "PrologueDemo")) {
-                for (nw4r::lyt::Pane* pBacking : pPane->GetChildList()) {
-                    if (isNamed(pBacking, "Base") || isNamed(pBacking, "Fade")) {
-                        pBacking->mSize.width = extent.mWidth;
-                        pBacking->mSize.height = extent.mHeight;
-                    }
-                }
-            }
-        }
-    }
-
-    void fit(LayoutManager* pManager) {
-        nw4r::lyt::Pane* pRoot = pManager->mLayout->mpRootPane;
-        if (pRoot == nullptr) {
-            return;
-        }
-        const Extent extent = getExtent();
-        if (MR::isScreen16Per9() && MR::getDisplay().wide && isNamed(pRoot, "RootPane")) {
-            fitCinemaBars(pRoot, extent);
-        }
-
-        // This layout's rules and panes, looked up once.
-        if (pManager->mFitRuleCount < 0) {
-            pManager->mFitRuleCount = 0;
-            for (u32 i = 0; i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
-                if (pManager->mLayoutName == nullptr || strcmp(cFitRules[i].mLayout, pManager->mLayoutName) != 0) {
-                    continue;
-                }
-                if (pManager->mFitRuleCount == (s32)(sizeof(pManager->mFitPanes) / sizeof(pManager->mFitPanes[0]))) {
-                    break;  // a layout's rules are contiguous and at most mFitPanes' size
-                }
-                if (pManager->mFitRuleCount == 0) {
-                    pManager->mFitRules = &cFitRules[i];
-                }
-                pManager->mFitPanes[pManager->mFitRuleCount] = pRoot->FindPaneByName(cFitRules[i].mPane, true);
-                pManager->mFitRuleCount++;
-            }
-        }
-        const bool enlarged = extent.mHorizontalDelta != 0.0f || extent.mVerticalDelta != 0.0f;
-        bool moved = false;
-        for (s32 i = 0; i < pManager->mFitRuleCount; i++) {
-            const FitRule& rule = static_cast< const FitRule* >(pManager->mFitRules)[i];
-            nw4r::lyt::Pane* pPane = pManager->mFitPanes[i];
-            if (pPane == nullptr || (!enlarged && !(rule.mFit & (FitFrame | FitFlipSlide))) || !isDrawn(pPane, pRoot)) {
-                continue;
-            }
-            moved |= applyFit(pPane, rule, extent);
-        }
-        if (!moved) {
-            return;
-        }
-        // The matrix copies (LayoutPaneInfo::mMtxRef) follow the moved panes, in screen units as the first copy.
-        for (u32 i = 0; i < pManager->mPaneCount; i++) {
-            if (pManager->mPaneInfoList[i].mMtxRef == nullptr) {
-                continue;
-            }
-            NebulaMtxCopy(pManager->mPaneInfoList[i].mPane->mGlbMtx, pManager->mPaneInfoList[i].mMtxRef);
-            if (MR::isScreen16Per9()) {
-                pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
-            }
+        if (pManager->mAnchorCount != 0) {
+            pManager->mLayout->SetCanvas(getCanvas());
         }
     }
 };  // namespace LayoutAspect

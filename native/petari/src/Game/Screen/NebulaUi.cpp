@@ -359,12 +359,10 @@ namespace NebulaUi {
     }
 
     Pane* makeGroup(Pane* pParent, const char* pName) {
-        Pane* pPane = nw4r::lyt::Layout::NewObj< Pane >();
-        if (pPane != nullptr) {
-            pPane->SetName(pName);
-            pPane->SetInfluencedAlpha(true);
-            pParent->AppendChild(pPane);
-        }
+        Pane* pPane = pParent->GetLayout()->NewPane< Pane >();
+        pPane->SetName(pName);
+        pPane->SetInfluencedAlpha(true);
+        pParent->AppendChild(pPane);
         return pPane;
     }
 
@@ -372,15 +370,13 @@ namespace NebulaUi {
         if (pTexture == nullptr) {
             return nullptr;
         }
-        Picture* pPicture = nw4r::lyt::Layout::NewObj< Picture >(*pTexture);
-        if (pPicture != nullptr) {
-            pPicture->SetName(pName);
-            pPicture->SetInfluencedAlpha(true);
-            for (u32 i = 0; i < 4; i++) {
-                pPicture->SetVtxColor(i, color(0xFFFFFFFF));
-            }
-            pParent->AppendChild(pPicture);
+        Picture* pPicture = pParent->GetLayout()->NewPane< Picture >(*pTexture);
+        pPicture->SetName(pName);
+        pPicture->SetInfluencedAlpha(true);
+        for (u32 i = 0; i < 4; i++) {
+            pPicture->SetVtxColor(i, color(0xFFFFFFFF));
         }
+        pParent->AppendChild(pPicture);
         return pPicture;
     }
 
