@@ -25,7 +25,7 @@ void SpiderThreadWindCtrl::update() {
     speed = mWindSpeed;
     target = mWindTargetSpeed;
 
-    // converge speed towards target... MR::converge maybe?
+    // Toward the target by the accel a frame, never past it.
     if (speed != target) {
         accel = mWindAccel;
         if (speed < target) {
