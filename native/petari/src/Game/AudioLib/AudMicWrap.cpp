@@ -5,8 +5,8 @@
 #include "Game/AudioLib/AudWrap.hpp"
 
 namespace AudMicWrap {
-    void setMicMtx(MtxPtr pMtx, s32 param2) {
-        AudWrap::getSystem()->setMicMtx(pMtx, param2);
+    void setMicMtx(MtxPtr pMtx, s32 mic) {
+        AudWrap::getSystem()->setMicMtx(pMtx, mic);
     }
 
     void setMicEnv() {

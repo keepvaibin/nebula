@@ -105,9 +105,9 @@ void Kuribo::init(const TableIter& rIter) {
     MR::initStarPointerTarget(this, 70.0f * mScale.y, Vec3f(0.0f, 75.0f * mScale.y, 0.0f));
     initSound(4, false);
     if (MR::isEqualStageName("KoopaBattleVs2Galaxy")) {
-        MR::setSeVersion(this, 1);
+        MR::setSeVersion(this, SeVersion_2D);
     } else {
-        MR::setSeVersion(this, 0);
+        MR::setSeVersion(this, SeVersion_NORMAL);
     }
 
     initBinder((70.0f * mScale.y), (70.0f * mScale.y), 0);

@@ -36,32 +36,32 @@ void AudEffectDirector::movement() {
     mPriority = 0;
 }
 
-void AudEffectDirector::setEffectType(s32 a1, s32 a2) {
-    if (a2 < 0) {
-        a2 = 0;
+void AudEffectDirector::setEffectType(s32 effectType, s32 priority) {
+    if (priority < 0) {
+        priority = 0;
     }
 
-    if (a2 > 127) {
-        a2 = 127;
+    if (priority > 127) {
+        priority = 127;
     }
 
-    if (a2 >= mPriority) {
-        mEffectType = a1;
-        mPriority = a2;
+    if (priority >= mPriority) {
+        mEffectType = effectType;
+        mPriority = priority;
     }
 }
 
-void AudEffectDirector::setAudioEffectParam(s32 a1) {
+void AudEffectDirector::setAudioEffectParam(s32 effectType) {
     AudEffector* pAudEffector = AudWrap::getSystem()->getAudEffector();
 
-    pAudEffector->setFxSend(::cAudEffectDataList[a1].mFxSend);
-    pAudEffector->setCutoff(::cAudEffectDataList[a1].mCutoff);
+    pAudEffector->setFxSend(::cAudEffectDataList[effectType].mFxSend);
+    pAudEffector->setCutoff(::cAudEffectDataList[effectType].mCutoff);
 
     if (!MR::isStageStateScenarioOpeningCamera()) {
-        MR::moveVolumeStageBGM(::cAudEffectDataList[a1].mVolume, ::cAudEffectDataList[a1].mFadeFrames);
+        MR::moveVolumeStageBGM(::cAudEffectDataList[effectType].mVolume, ::cAudEffectDataList[effectType].mFadeFrames);
     }
 
-    switch (a1) {
+    switch (effectType) {
     case 1:
         pAudEffector->setSpecialFx(1);
         break;
@@ -74,8 +74,8 @@ void AudEffectDirector::setAudioEffectParam(s32 a1) {
     }
 }
 
-void AudEffectDirector::playEffectSound(s32 a1) {
-    switch (a1) {
+void AudEffectDirector::playEffectSound(s32 effectType) {
+    switch (effectType) {
     case 3:
         MR::startAtmosphereLevelSE("SE_AT_LV_WATERFALL_CAVE");
         break;

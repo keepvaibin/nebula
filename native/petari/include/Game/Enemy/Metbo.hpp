@@ -9,6 +9,11 @@ class WalkerStateBindStarPointer;
 
 class Metbo : public LiveActor {
 public:
+    enum SeVersion {
+        SeVersion_NORMAL = 0,
+        SeVersion_2D = 1,
+    };
+
     Metbo(const char*);
 
     virtual void init(const TableIter&);

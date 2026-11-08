@@ -43,9 +43,9 @@ public:
     bool writePort(SoundHandle*, u32, u16);
     bool isLimitedSound(SoundID);
     SoundHandle* startLevelSound(const char*);
-    SoundHandle* startSoundParam(SoundID, s32, s32);
-    SoundHandle* startLevelSoundParam(SoundID, s32, s32);
-    SoundHandle* startLevelSoundParam(const char*, s32, s32);
+    SoundHandle* startSoundParam(SoundID, s32 level, s32 subLevel);
+    SoundHandle* startLevelSoundParam(SoundID, s32 level, s32 subLevel);
+    SoundHandle* startLevelSoundParam(const char*, s32 level, s32 subLevel);
     bool modifyLimitedSound(SoundID);
     bool isPlayingID(SoundID);
     void releaseHandle(SoundID);
@@ -59,17 +59,13 @@ public:
     void setMapCodeToPort(SoundHandle*, SoundID);
     void setCutoffToPort(SoundHandle*, SoundID);
     SoundID convertSoundIdFromSeVersion(SoundID) const;
-    void modifySe_Kawamura(SoundHandle*, s32);
-    bool modifyLimitedSound_Kawamura(SoundID);
-    void modifySe_Takezawa(SoundHandle*, s32, s32);
-    bool modifyLimitedSound_Takezawa(SoundID);
-    void modifySe_Gohara(SoundHandle*, s32, s32);
+    void modifySe(SoundHandle*, s32 level, s32 subLevel);
 
     bool isEnableStartSound(SoundID soundID) {
         return AudWrap::getSystem()->isEnableStartSound(soundID);
     }
 
-    u32 mSeVersion;  // TODO: Kuribo and Metbo "_DARK"?
+    u32 mSeVersion;  // Which variant of the owner's sounds plays; each actor class names its versions.
     s32 mMapCode;
     s32 mMapCodeExtra;
 };

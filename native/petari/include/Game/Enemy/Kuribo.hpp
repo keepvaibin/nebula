@@ -15,6 +15,11 @@ class WalkerStateFindPlayer;
 
 class Kuribo : public LiveActor {
 public:
+    enum SeVersion {
+        SeVersion_NORMAL = 0,
+        SeVersion_2D = 1,
+    };
+
     Kuribo(const char*);
 
     virtual ~Kuribo();
