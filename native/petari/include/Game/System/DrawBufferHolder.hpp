@@ -7,6 +7,7 @@ class LiveActor;
 
 typedef MR::Vector< MR::AssignableArray< DrawBufferGroup* > > ExecutorList;
 
+// One row per draw buffer type; a row with mDrawBufferType 0xFFFFFFFF ends the table.
 struct DrawBufferInitialTable {
     u32 mDrawBufferType;
     s32 mCapacity;
@@ -14,9 +15,10 @@ struct DrawBufferInitialTable {
     u32 mDrawCameraType;
 };
 
+// Each draw buffer group is listed for entry in its camera type's list only while it has active actors.
 class DrawBufferHolder {
 public:
-    DrawBufferHolder();
+    static const s32 cDrawCameraTypeNum = 3;
 
     void initTable(const DrawBufferInitialTable*, s32);
 
@@ -33,18 +35,6 @@ public:
     ExecutorList& getExecuteList(s32 drawBufferType);
     bool isBufferGroupEmpty(s32 drawBufferType) const;
 
-    // debug symbol map functions
-    s32 getActiveActorCount(const char*);
-    void onEntryAll();
-    void offEntryAll();
-    void onDrawOpaAll();
-    void offDrawOpaAll();
-    void onDrawXluAll();
-    void offDrawXluAll();
-
-    // TODO: see .cpp
-
     MR::AssignableArray< DrawBufferGroup > mBufferGroups;
-    ExecutorList mExecuteLists[3];
-    bool mTableInitialized;
+    ExecutorList mExecuteLists[cDrawCameraTypeNum];
 };

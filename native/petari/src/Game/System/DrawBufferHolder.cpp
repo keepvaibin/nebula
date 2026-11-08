@@ -1,48 +1,36 @@
 #include "Game/System/DrawBufferHolder.hpp"
 #include "Game/System/DrawBufferGroup.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include <algorithm>
-
-DrawBufferHolder::DrawBufferHolder() : mTableInitialized() {
-}
 
 bool DrawBufferHolder::isBufferGroupEmpty(s32 drawBufferType) const {
     return mBufferGroups[drawBufferType].mActiveExecutors.size() == 0;
 }
 
+// Each camera type's entry list is sized for every group of that type.
 void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s32 numGroups) {
     mBufferGroups.init(numGroups);
 
-    s32 cameraTypeCounts[3];
-    MR::zeroMemory(cameraTypeCounts, 3 * sizeof(s32));
+    s32 cameraTypeCounts[cDrawCameraTypeNum] = {};
 
-    const DrawBufferInitialTable* entry;
-    for (s32 idx = 0; entry = &pInitialTable[idx], entry->mDrawBufferType != -1; idx++) {
-        u32 drawType = entry->mDrawBufferType;
-        cameraTypeCounts[entry->mDrawCameraType]++;
+    for (const DrawBufferInitialTable* pEntry = pInitialTable; pEntry->mDrawBufferType != static_cast< u32 >(-1); pEntry++) {
+        const u32 drawType = pEntry->mDrawBufferType;
+        cameraTypeCounts[pEntry->mDrawCameraType]++;
 
-        mBufferGroups[drawType].init(entry->mCapacity);
-        mBufferGroups[drawType].setDrawCameraType(entry->mDrawCameraType);
-        mBufferGroups[drawType].setLightType(entry->mLightType);
+        mBufferGroups[drawType].init(pEntry->mCapacity);
+        mBufferGroups[drawType].setDrawCameraType(pEntry->mDrawCameraType);
+        mBufferGroups[drawType].setLightType(pEntry->mLightType);
     }
 
-    s32* pCounts = cameraTypeCounts;
-
-    for (s32 idx = 0; idx < 3; idx++) {
-        if (pCounts[idx] > 0) {
-            mExecuteLists[idx].init(pCounts[idx]);
+    for (s32 i = 0; i < cDrawCameraTypeNum; i++) {
+        if (cameraTypeCounts[i] > 0) {
+            mExecuteLists[i].init(cameraTypeCounts[i]);
         }
     }
-
-    mTableInitialized = true;
 }
 
 void DrawBufferHolder::allocateActorListBuffer() {
-    mTableInitialized = false;
-    // NOTE: this symbol does not appear in the debug map, instead it likely uses std::for_each. However the current std::for_each does not support
-    // flat array iteration
-    for (auto& item : mBufferGroups) {
-        item.allocateActorListBuffer();
+    for (auto& rGroup : mBufferGroups) {
+        rGroup.allocateActorListBuffer();
     }
 }
 
@@ -51,23 +39,23 @@ s32 DrawBufferHolder::registerDrawBuffer(LiveActor* pActor, s32 drawBufferType) 
 }
 
 void DrawBufferHolder::active(LiveActor* pActor, s32 drawBufferType, s32 executorIndex) {
-    bool isEmpty = isBufferGroupEmpty(drawBufferType);
+    const bool isEmpty = isBufferGroupEmpty(drawBufferType);
     mBufferGroups[drawBufferType].active(pActor, executorIndex);
 
     if (isEmpty) {
-        ExecutorList& executeList = getExecuteList(drawBufferType);
-        executeList.mArray[executeList.mCount++] = &mBufferGroups[drawBufferType];
+        ExecutorList& rExecuteList = getExecuteList(drawBufferType);
+        rExecuteList.mArray[rExecuteList.mCount++] = &mBufferGroups[drawBufferType];
     }
 }
 
+// A group that empties leaves its entry list; the last listed group takes its place.
 void DrawBufferHolder::deactive(LiveActor* pActor, s32 drawBufferType, s32 executorIndex) {
     mBufferGroups[drawBufferType].deactive(pActor, executorIndex);
 
     if (isBufferGroupEmpty(drawBufferType)) {
-        ExecutorList& executeList = getExecuteList(drawBufferType);
-        executeList[std::find(executeList.begin(), executeList.end(), &mBufferGroups[drawBufferType]) - executeList.begin()] =
-            executeList[executeList.mCount - 1];
-        executeList.mCount--;
+        ExecutorList& rExecuteList = getExecuteList(drawBufferType);
+        *std::find(rExecuteList.begin(), rExecuteList.end(), &mBufferGroups[drawBufferType]) = rExecuteList[rExecuteList.mCount - 1];
+        rExecuteList.mCount--;
     }
 }
 
@@ -75,9 +63,9 @@ void DrawBufferHolder::findLightInfo(LiveActor* pActor, s32 drawBufferType, s32 
     mBufferGroups[drawBufferType].findLightInfo(pActor, executorIndex);
 }
 
-void DrawBufferHolder::entry(s32 drawBufferType) {
-    for (auto& item : mExecuteLists[drawBufferType]) {
-        item->entry();
+void DrawBufferHolder::entry(s32 drawCameraType) {
+    for (auto& rGroup : mExecuteLists[drawCameraType]) {
+        rGroup->entry();
     }
 }
 
@@ -98,7 +86,5 @@ void DrawBufferHolder::drawXlu(s32 drawBufferType) const {
 }
 
 ExecutorList& DrawBufferHolder::getExecuteList(s32 drawBufferType) {
-    s32 listId = mBufferGroups[drawBufferType].mDrawCameraType;
-    return mExecuteLists[listId];
+    return mExecuteLists[mBufferGroups[drawBufferType].mDrawCameraType];
 }
-
