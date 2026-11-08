@@ -34,13 +34,11 @@
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
 
-const char sAudioResFile[] = "/AudioRes/SMR";
-const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq";
-const char sJaiChordArc[] = "/AudioRes/Info/JaiChord";
-const char sJaiMeArc[] = "/AudioRes/Info/JaiMe";
-const char sJaiRemixArc[] = "/AudioRes/Info/JaiRemixSeq";
-const char sJaiAudioArc[] = "AudioRes/SMR.baa";
-const char sJaiSeqResArc[] = "/AudioRes/JaiSeq";
+const char cSoundDataPath[] = "/AudioRes/SMR";
+const char cSeqArchivePath[] = "/AudioRes/Seqs/JaiSeq";
+const char cChordArchivePath[] = "/AudioRes/Info/JaiChord";
+const char cMeArchivePath[] = "/AudioRes/Info/JaiMe";
+const char cRemixArchivePath[] = "/AudioRes/Info/JaiRemixSeq";
 
 AudSystem* AudSystem::msBasic;
 
@@ -62,22 +60,22 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFo
     SoundArchive* audioData = new (soundHeap, 0) SoundArchive(soundHeap);
     soundHeap->becomeCurrentHeap();
 
-    audioData->load(sAudioResFile);
+    audioData->load(cSoundDataPath);
     audioData->setAllWaves(AudSceneMgr::cPlayerVoiceBank);
     SoundEngine::get()->rhythm().setup(SoundEngine::get(), cRhythmParsers, soundHeap);
     SoundSystem::start();
 
-    if (pSeqArchive == nullptr && GameAssets::find(sJaiSeqArc) >= 0) {
-        pSeqArchive = AssetFolder::mount(sJaiSeqArc, currHeap);
+    if (pSeqArchive == nullptr && GameAssets::find(cSeqArchivePath) >= 0) {
+        pSeqArchive = AssetFolder::mount(cSeqArchivePath, currHeap);
     }
     audioData->setSeqArchive(pSeqArchive);
 
     if (pChordArchive == nullptr) {
-        pChordArchive = AssetFolder::mount(sJaiChordArc, soundHeap);
+        pChordArchive = AssetFolder::mount(cChordArchivePath, soundHeap);
     }
 
     if (pMeArchive == nullptr) {
-        pMeArchive = AssetFolder::mount(sJaiMeArc, soundHeap);
+        pMeArchive = AssetFolder::mount(cMeArchivePath, soundHeap);
     }
 
     AudSystem* system = AudNewAudSystem_(audioData, pChordArchive, pMeArchive, pRemixArchive, 1);
