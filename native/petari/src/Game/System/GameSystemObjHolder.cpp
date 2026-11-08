@@ -14,7 +14,6 @@
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -24,7 +23,7 @@
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::decideLanguage()) {
     initNameObj();
-    MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive", MR::getPermanentHeap()), MR::getPermanentHeap(), "ErrorMessageArchive");
+    MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive", Arenas::permanent()), Arenas::permanent(), "ErrorMessageArchive");
 }
 
 void GameSystemObjHolder::initAfterSystemArchiveLoaded() {

@@ -24,7 +24,7 @@
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -114,7 +114,7 @@ void MarioActor::initDrawAndModel() {
     createRainbowMesh();
 
     {
-        MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
+        NebulaArena::CurrentScope restorer(Arenas::scene());
         mBlurTexture = JUTTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {

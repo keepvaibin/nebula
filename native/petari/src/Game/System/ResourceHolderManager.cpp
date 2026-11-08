@@ -3,7 +3,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
@@ -45,7 +45,7 @@ LayoutHolder* ResourceHolderManager::createAndAddGameLayoutHolder(const char* pA
     CreateResourceHolderArgs args = CreateResourceHolderArgs();
     args.mHeap = pArena;
     {
-        MR::CurrentHeapRestorer heapRestorer(pArena);
+        NebulaArena::CurrentScope heapRestorer(pArena);
         args.mLayoutHolder = new LayoutHolder(*pArchive);
     }
     return add(name.c_str(), args)->mLayoutHolder;
@@ -115,7 +115,7 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInner(con
 void ResourceHolderManager::createResourceHolder(const char* pArcPath, CreateResourceHolderArgs* pArgs) {
     AssetFolder* const pArchive = MR::getArchive(pArcPath);
     pArgs->mHeap = MR::getArchiveArena(pArcPath);
-    MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
+    NebulaArena::CurrentScope heapRestorer(pArgs->mHeap);
 
     pArgs->mResourceHolder = new ResourceHolder(*pArchive);
 }
@@ -123,7 +123,7 @@ void ResourceHolderManager::createResourceHolder(const char* pArcPath, CreateRes
 void ResourceHolderManager::createLayoutHolder(const char* pArcPath, CreateResourceHolderArgs* pArgs) {
     AssetFolder* const pArchive = MR::getArchive(pArcPath);
     pArgs->mHeap = MR::getArchiveArena(pArcPath);
-    MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
+    NebulaArena::CurrentScope heapRestorer(pArgs->mHeap);
 
     pArgs->mLayoutHolder = new LayoutHolder(*pArchive);
 }

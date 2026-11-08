@@ -1,4 +1,6 @@
 #include "Game/MapObj/StarPieceDirector.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
@@ -320,7 +322,7 @@ StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameO
 }
 
 void StarPieceDirector::createStarPieces(unsigned count) {
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
     for (unsigned i = 0; i < count; i++) {
         StarPiece* pStarPiece = new StarPiece("スターピースディレクターピース");
         pStarPiece->initWithoutIter();

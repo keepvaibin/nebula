@@ -2,9 +2,9 @@
 
 #include "Game/RhythmLib/AudMeHandles.hpp"
 #include <nebula_geometry.hpp>
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-class AudMeObject : public AudMeHandles, public JKRDisposer {
+class AudMeObject : public AudMeHandles, public ArenaOwned {
 public:
     AudMeObject(Vec3f*, u8, NebulaArena*);
 

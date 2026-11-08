@@ -10,13 +10,11 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaClock.hpp"
 
@@ -34,7 +32,7 @@ namespace {
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("ムービープレイヤー", true), JKRDisposer(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
+    : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
     mMovie = new Movie();
     mMovie->mMovieName = "";
     mMovie->mBuffer = nullptr;
@@ -58,7 +56,7 @@ void MoviePlayerSimple::init(const TableIter& rIter) {
 
     mStream = new MovieStream();
 
-    mHeap = NebulaArena::create(MR::getCurrentHeap());
+    mHeap = NebulaArena::create(NebulaArena::current());
 
     initNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
     kill();

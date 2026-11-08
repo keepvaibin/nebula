@@ -13,7 +13,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/PlacedHiddenStarScenarioTable.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -213,7 +213,7 @@ namespace MR {
 
     AssetFolder* getStageArchive(const char* pStageName) {
         // A zone's archive lives with the stage's files, also on the file select stage.
-        return getArchive(MR::FormattedName("/StageData/%s", pStageName).c_str(), getSceneArchiveHeap());
+        return getArchive(MR::FormattedName("/StageData/%s", pStageName).c_str(), Arenas::sceneFiles());
     }
 
     s32 getGeneralPosNum() {

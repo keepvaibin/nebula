@@ -7,7 +7,7 @@
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFontHolder.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstdio>
@@ -1484,7 +1484,7 @@ namespace {
         const u32 pageBytes = 256u * sizeof(u16);
         const u32 blockNum = rOld.pageBlockNum + addedPages;
         const u32 bytes = sheetsBytes + glyphBytes + pageBytes + blockNum * pageBytes;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getPermanentHeap()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, Arenas::permanent()));
         memcpy(pBlock, rOld.pSheets, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {

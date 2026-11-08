@@ -52,11 +52,11 @@ AudSystem* AudNewAudSystem_(SoundArchive* pHeap, AssetFolder* pChordArchive, Ass
 // The engine, then the archive's banks (the engine's before its clock runs), then the clock.
 AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
                            AssetFolder* pRemixArchive) {
-    NebulaArena* currHeap = NebulaArena::getCurrentHeap();
+    NebulaArena* currHeap = NebulaArena::current();
     NebulaArena* soundHeap = NebulaArena::create(pHeap);
     SoundSystem::create(soundHeap, AudParams::outputGain);
     SoundArchive* audioData = new (soundHeap, 0) SoundArchive(soundHeap);
-    soundHeap->becomeCurrentHeap();
+    soundHeap->makeCurrent();
 
     audioData->load(cSoundDataPath);
     audioData->setAllWaves(AudSceneMgr::cPlayerVoiceBank);
@@ -77,7 +77,7 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFo
     }
 
     AudSystem* system = AudNewAudSystem_(audioData, pChordArchive, pMeArchive, pRemixArchive, 1);
-    currHeap->becomeCurrentHeap();
+    currHeap->makeCurrent();
 
     return system;
 }

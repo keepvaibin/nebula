@@ -22,7 +22,7 @@ namespace {
 }  // namespace
 
 AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
+    : SoundObject(pPos, numHandles, pHeap), ArenaOwned(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
 }
 
 AudSoundObject::~AudSoundObject() {

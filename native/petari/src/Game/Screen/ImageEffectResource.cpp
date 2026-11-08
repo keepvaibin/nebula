@@ -1,5 +1,5 @@
 #include "Game/Screen/ImageEffectResource.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
@@ -35,7 +35,7 @@ void ImageEffectResource::createDOFTexture() {
 JUTTexture* ImageEffectResource::createTexture(f32 scale) {
     JUTTexture* pTexture;
 
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
 
     pTexture = JUTTexture::createTarget(scale, scale);
     pTexture->mWrapS = NEBULA_WRAP_CLAMP;

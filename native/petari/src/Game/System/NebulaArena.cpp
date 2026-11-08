@@ -22,8 +22,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #define UNPOISON_BLOCK(p, n)
 #endif
 
-NebulaArena* NebulaArena::sCurrentHeap;
-NebulaArena* NebulaArena::sRootHeap;
+NebulaArena* NebulaArena::sCurrent;
+NebulaArena* NebulaArena::sRoot;
 
 namespace {
     // Addresses each arena has to itself, not memory: only what it uses is committed.
@@ -88,7 +88,19 @@ namespace {
     }
 }  // namespace
 
-NebulaArena::NebulaArena() : JKRDisposer() {
+ArenaOwned::ArenaOwned() : mArena(NebulaArena::findFromRoot(this)) {
+    if (mArena != nullptr) {
+        mArena->mOwned.append(this);
+    }
+}
+
+ArenaOwned::~ArenaOwned() {
+    if (mArena != nullptr) {
+        mArena->mOwned.remove(this);
+    }
+}
+
+NebulaArena::NebulaArena() {
     const NebulaHostServices* const host = nebula_host();
     mStart = static_cast< u8* >(host->memory_reserve(host->user, cSpan));
     if (mStart == nullptr) {
@@ -119,8 +131,8 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
     addToList(pArena);
 
     if (pParent == nullptr) {
-        sRootHeap = pArena;
-        sCurrentHeap = pArena;
+        sRoot = pArena;
+        sCurrent = pArena;
         return pArena;
     }
 
@@ -135,7 +147,7 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 
 void NebulaArena::destroy(NebulaArena* pArena) {
     // Its objects first: one that owns a child arena destroys it itself.
-    pArena->dispose();
+    pArena->destroyOwned();
 
     while (pArena->mFirstChild != nullptr) {
         destroy(pArena->mFirstChild);
@@ -153,10 +165,10 @@ void NebulaArena::destroy(NebulaArena* pArena) {
         }
         *ppLink = pArena->mNextSibling;
     }
-    NebulaArena* const pNext = sRootHeap->mFirstChild;
+    NebulaArena* const pNext = sRoot->mFirstChild;
 
-    if (sCurrentHeap == pArena) {
-        sCurrentHeap = pNext != nullptr ? pNext : sRootHeap;
+    if (sCurrent == pArena) {
+        sCurrent = pNext != nullptr ? pNext : sRoot;
     }
 
     pArena->~NebulaArena();
@@ -252,7 +264,7 @@ void NebulaArena::free(void* pData) {
 }
 
 void NebulaArena::freeAll() {
-    dispose();
+    destroyOwned();
 
     while (mFirstChild != nullptr) {
         destroy(mFirstChild);
@@ -269,16 +281,16 @@ void NebulaArena::freeAll() {
     memset(mFree, 0, sizeof(mFree));
 }
 
-NebulaArena* NebulaArena::becomeCurrentHeap() {
-    NebulaArena* const pPrevious = sCurrentHeap;
-    sCurrentHeap = this;
+NebulaArena* NebulaArena::makeCurrent() {
+    NebulaArena* const pPrevious = sCurrent;
+    sCurrent = this;
     return pPrevious;
 }
 
-void NebulaArena::dispose() {
+void NebulaArena::destroyOwned() {
     // Each one's destructor takes it out of the list.
-    while (mDisposerList.getFirst() != mDisposerList.getEnd()) {
-        mDisposerList.getFirst()->getObject()->~JKRDisposer();
+    while (mOwned.getFirst() != mOwned.getEnd()) {
+        mOwned.getFirst()->getObject()->~ArenaOwned();
     }
 }
 
@@ -287,7 +299,7 @@ void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
         return pArena->alloc(size, alignment);
     }
 
-    return sCurrentHeap != nullptr ? sCurrentHeap->alloc(size, alignment) : nullptr;
+    return sCurrent != nullptr ? sCurrent->alloc(size, alignment) : nullptr;
 }
 
 void NebulaArena::free(void* pData, NebulaArena* pArena) {

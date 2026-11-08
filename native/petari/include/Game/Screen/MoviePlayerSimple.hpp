@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
-#include <JSystem/JKernel/JKRDisposer.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Screen/MovieStream.hpp"
 class NebulaArena;
 
@@ -17,7 +17,7 @@ struct Movie {
     u32 _24;
 };
 
-class MoviePlayerSimple : public LayoutActor, public JKRDisposer {
+class MoviePlayerSimple : public LayoutActor, public ArenaOwned {
 public:
     /// @brief Creates a new `MoviePlayerSimple`.
     MoviePlayerSimple();

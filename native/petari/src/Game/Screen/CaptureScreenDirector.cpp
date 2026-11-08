@@ -1,7 +1,7 @@
 #include "Game/Screen/CaptureScreenDirector.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -15,7 +15,7 @@ namespace {
 };  // namespace
 
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
-    MR::CurrentHeapRestorer heapRestorer(MR::getPermanentHeap());
+    NebulaArena::CurrentScope heapRestorer(Arenas::permanent());
 
     mTexture = JUTTexture::createTarget(1.0f, 1.0f);
 }
