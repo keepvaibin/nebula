@@ -33,7 +33,7 @@ namespace GameAssets {
     // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
     const void* map(s32 entryNum);
     // Every file mapped for this arena: its views go with it, and the archives held for it.
-    void unloadHeap(const NebulaArena* pHeap);
+    void unloadArena(const NebulaArena* pArena);
 
     // The archive held under pPath (letters in either case), or null; *ppArena, when asked, gets the arena holding it.
     // `game`: the game's own copy held apart from a mod's (getGameArchive).

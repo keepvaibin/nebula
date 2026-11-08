@@ -178,7 +178,7 @@ void GameSystemSceneController::destroyScene() {
     GameSystemFunction::resetAllControllerRumble();
     MR::removeResourceHolders(Arenas::scene());
 
-    if (tryDestroyFileCacheHeap(false)) {
+    if (releaseSceneFiles(false)) {
         Arenas::resetGame();
     } else {
         Arenas::destroyScene();
@@ -443,7 +443,7 @@ bool GameSystemSceneController::isPreparedReset() {
 }
 
 void GameSystemSceneController::restartGameAfterResetting() {
-    tryDestroyFileCacheHeap(true);
+    releaseSceneFiles(true);
     Arenas::resetGame();
 
     mIsResetProcessing = false;
@@ -504,7 +504,7 @@ const Nerve* GameSystemSceneController::getNextNerveOnResetProcessing() const {
     return nextNerve;
 }
 
-bool GameSystemSceneController::tryDestroyFileCacheHeap(bool isForce) {
+bool GameSystemSceneController::releaseSceneFiles(bool isForce) {
     if (!isForce && Arenas::sceneFiles() != nullptr && isSameAtNextSceneAndStage()) {
         return false;
     }

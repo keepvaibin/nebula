@@ -155,7 +155,7 @@ void NebulaArena::destroy(NebulaArena* pArena) {
 
     // What the renderer and the file views hold from this arena go with it.
     ModelDataList::forget(reinterpret_cast< uintptr_t >(pArena->mStart), reinterpret_cast< uintptr_t >(pArena->mNext));
-    GameAssets::unloadHeap(pArena);
+    GameAssets::unloadArena(pArena);
 
     removeFromList(pArena);
     if (pArena->mParent != nullptr) {
@@ -271,7 +271,7 @@ void NebulaArena::freeAll() {
     }
 
     ModelDataList::forget(reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
-    GameAssets::unloadHeap(this);
+    GameAssets::unloadArena(this);
 
     const NebulaHostServices* host = nebula_host();
     UNPOISON_BLOCK(mStart, mCommitted - mStart);
