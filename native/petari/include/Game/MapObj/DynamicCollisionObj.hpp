@@ -7,12 +7,8 @@ struct KCLFile;
 
 class DynamicCollisionObj : public LiveActor {
 public:
-    class TriangleIndexing {
-    public:
-        inline TriangleIndexing() {
-        }
-
-        u16 mIndex[3];
+    struct TriangleIndexing {
+        u32 mIndex[3];
     };
 
     DynamicCollisionObj(const char* pName);
@@ -29,8 +25,8 @@ public:
 
     KCLFile* mKCLFile;
     CollisionParts* mParts;
-    u16 mTriangleNum;
-    u16 mPositionNum;
+    s32 mTriangleNum;
+    s32 mPositionNum;
     Vec3f* mPositions;
     TriangleIndexing* mIndices;
 };

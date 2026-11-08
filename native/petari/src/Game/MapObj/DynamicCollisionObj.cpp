@@ -24,11 +24,15 @@ void DynamicCollisionObj::syncCollision() {
 }
 
 void DynamicCollisionObj::updateTriangle() {
+    if (mKCLFile == nullptr) {
+        return;
+    }
+
     s32 nrmidxa, nrmidxb, nrmidxc;
     s32 prismidx;
     s32 normalidx = 0;
 
-    for (u16 i = 0; i < mTriangleNum; i++) {
+    for (s32 i = 0; i < mTriangleNum; i++) {
         Vec3f Vertex1(mPositions[mIndices[i].mIndex[0]]);
         Vec3f Vertex2(mPositions[mIndices[i].mIndex[1]]);
         Vec3f Vertex3(mPositions[mIndices[i].mIndex[2]]);
@@ -45,10 +49,6 @@ void DynamicCollisionObj::updateTriangle() {
         MR::normalizeOrZero(&c);
         Vec3f cross = b.cross(a);
         MR::normalizeOrZero(&cross);
-
-        if (mKCLFile == nullptr) {
-            continue;
-        }
 
         Vec3f cross2 = (-a).cross(cross);
         Vec3f cross3 = b.cross(cross);

@@ -6,15 +6,15 @@ class LiveActor;
 
 class LiveActorGroup : public NameObjGroup {
 public:
-    /// @brief Creates a new `LiveActorGroup`.
-    /// @param pName A pointer to the null-terminated name of the object.
-    /// @param numMax The maximum allowed number of `LiveActor` instances in the group.
-    LiveActorGroup(const char*, int);
+    // capacity > 0; the group grows past it.
+    LiveActorGroup(const char* pName, int capacity);
 
-    void registerActor(LiveActor*);
-    LiveActor* getActor(int) const;
+    void registerActor(LiveActor* pActor);
+    LiveActor* getActor(int index) const;
+    // The first dead member in join order, or null.
     LiveActor* getDeadActor() const;
     s32 getLivingActorNum() const;
+    // Appears the dead members.
     void appearAll();
     void killAll();
 
@@ -32,10 +32,7 @@ public:
 template < typename T >
 class DeriveActorGroup : public LiveActorGroup {
 public:
-    /// @brief Creates a new `DeriveActorGroup`.
-    /// @param pName A pointer to the null-terminated name of the object.
-    /// @param numMax The maximum allowed number of derived `LiveActor` instances in the group.
-    DeriveActorGroup(const char* pName, int numMax) : LiveActorGroup(pName, numMax) {
+    DeriveActorGroup(const char* pName, int capacity) : LiveActorGroup(pName, capacity) {
     }
 
     T* getMember(int index) const {
@@ -43,11 +40,6 @@ public:
     }
 
     T* getDeadMember() const {
-        if (getDeadActor() != nullptr) {
-            T* pActor = static_cast< T* >(getDeadActor());
-            return pActor;
-        }
-
-        return nullptr;
+        return static_cast< T* >(getDeadActor());
     }
 };

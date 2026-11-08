@@ -127,7 +127,6 @@ void CameraFixedThere::updateUpVec(const Vec3f& rAxis) {
 }
 
 void CameraFixedThere::updateNormalUpVec(const Vec3f& rFront) {
-    // FIXME: Rot3f::setRotate
     Vec3f up = mUp;
     Vec3f side = up.cross(rFront);
     up.cross(mAxis, side);

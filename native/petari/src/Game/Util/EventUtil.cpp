@@ -24,6 +24,11 @@ namespace {
     ScenePlayingResult* getScenePlayingResult() {
         return MR::getSceneObj< ScenePlayingResult >(SceneObj_ScenePlayingResult);
     }
+
+    // Indexed by MR::CometNameId.
+    const char* const cCometNames[] = {"Red", "Ghost", "Dark", "Quick", "Purple"};
+    // The black comet's name; it shares the purple look.
+    const char* const cCometNameBlack = "Black";
 };  // namespace
 
 namespace MR {
@@ -551,57 +556,31 @@ namespace MR {
     }
 
     int getCometNameIdFromString(const char* pCometName) {
-        if (MR::isEqualString(pCometName, "Red")) {
-            return 0;
+        for (int id = 0; id < ARRAY_SIZE(::cCometNames); id++) {
+            if (MR::isEqualString(pCometName, ::cCometNames[id])) {
+                return id;
+            }
         }
 
-        if (MR::isEqualString(pCometName, "Dark")) {
-            return 2;
+        if (MR::isEqualString(pCometName, ::cCometNameBlack)) {
+            return CometNameId_Purple;
         }
 
-        if (MR::isEqualString(pCometName, "Ghost")) {
-            return 1;
-        }
-
-        if (MR::isEqualString(pCometName, "Quick")) {
-            return 3;
-        }
-
-        if (MR::isEqualString(pCometName, "Purple")) {
-            return 4;
-        }
-
-        if (MR::isEqualString(pCometName, "Black")) {
-            return 4;
-        }
-
-        return 0;
+        return CometNameId_Red;
     }
 
     const char* getCometNameFromId(int cometId) {
-        switch (cometId) {
-        case 0:
-            return "Red";
-        case 2:
-            return "Dark";
-        case 1:
-            return "Ghost";
-        case 3:
-            return "Quick";
-        case 4:
-            return "Purple";
-        default:
+        if (cometId < 0 || cometId >= ARRAY_SIZE(::cCometNames)) {
             return nullptr;
         }
+
+        return ::cCometNames[cometId];
     }
 
     bool isStarComplete(const char* pGalaxyName) {
-        GalaxyStatusAccessor aAccessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
-        GalaxyStatusAccessor bAccessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
-        s32 powerStarNumOwned = bAccessor.getPowerStarNumOwned();
-        s32 powerStarNum = aAccessor.getPowerStarNum();
+        GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
 
-        return powerStarNumOwned == powerStarNum;
+        return accessor.getPowerStarNumOwned() == accessor.getPowerStarNum();
     }
 
     bool isStarCompleteNormalScenario(const char* pGalaxyName) {
