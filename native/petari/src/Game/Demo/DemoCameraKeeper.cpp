@@ -11,7 +11,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    extern char sSheetName[];
+    const char sSheetName[] = "Camera";
 };  // namespace
 
 DemoCameraInfo::DemoCameraInfo()
@@ -146,17 +146,13 @@ DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIt
 
         s32 animNameLen = executorNameLen + strlen(curInfo->mPartName) + 3;
 
-        char* aninName = new char[animNameLen];
+        char* cameraName = new char[animNameLen];
 
-        nebula_snprintf(aninName, animNameLen, "%s[%s]", mExecutor->mName, curInfo->mPartName);
+        nebula_snprintf(cameraName, animNameLen, "%s[%s]", mExecutor->mName, curInfo->mPartName);
 
-        curInfo->mCameraName = aninName;
+        curInfo->mCameraName = cameraName;
         if (curInfo->mCameraTargetName == nullptr || DemoCameraFunction::isCameraTargetMario(curInfo)) {
             initActorCamera(curInfo, rIter);
         }
     }
 }
-
-namespace {
-    char sSheetName[] = "Camera";
-};  // namespace
