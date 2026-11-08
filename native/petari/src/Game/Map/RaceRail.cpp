@@ -11,13 +11,24 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
-// TODO: this file has some weird compiler flags going on
-
 namespace {
-    static const f32 sRaceJudgeLength = 10000.0f;
-};  // namespace
+    // A player further than this from the rail is not judged; a coord jump this long is not taken.
+    const f32 cRaceJudgeLength = 10000.0f;
+    const f32 cGoalReach = 100.0f;
+    // The Penguin race starts on the water: cast from cWaterCheckHeight above, cWaterCheckLength down, and sink by cWaterSinkDepth.
+    const f32 cWaterCheckHeight = 500.0f;
+    const f32 cWaterCheckLength = 1000.0f;
+    const f32 cWaterSinkDepth = 15.0f;
+    const f32 cGroundCheckLength = 1000.0f;
+}  // namespace
 
 RaceRail::RaceRail(const char* pName) : NameObj(pName) {
+}
+
+void RaceRail::init(const TableIter& rIter) {
+    mPlayerRacer = new PlayerRacer("レース判定用レール");
+    mPlayerRacer->init(rIter);
+    RaceManagerFunction::entryRacerPlayer(mPlayerRacer);
 }
 
 PlayerRacer::PlayerRacer(const char* pName) : LiveActor(pName), mCameraInfo() {
@@ -43,70 +54,6 @@ void PlayerRacer::init(const TableIter& rIter) {
     MR::invalidateClipping(this);
 }
 
-void PlayerRacer::startRacer() {
-    MR::endActorCamera(this, mCameraInfo, true);
-}
-
-bool PlayerRacer::updateRacer(const RaceManager* pRaceManager) {
-    PlayerRacer* racer = pRaceManager->mPlayerRacer;
-    f32 railCoord = MR::calcNearestRailCoord(racer, *MR::getPlayerCenterPos());
-    f32 railLength = MR::getRailTotalLength(racer);
-
-    mPrevPosition.set(mCurrPosition);
-    mCurrPosition.set(*MR::getPlayerCenterPos());
-
-    Vec3f railPos;
-    MR::calcNearestRailPos(&railPos, racer, *MR::getPlayerCenterPos());
-
-    if ((railPos - *MR::getPlayerCenterPos()).length() > ::sRaceJudgeLength) {
-        return false;
-    }
-    if (MR::fabs(mRailCoord - railCoord) < ::sRaceJudgeLength) {
-        mRailCoord = railCoord;
-    }
-
-    s32 a1, a2;
-    MR::getCurrentRailPointArg0WithInit(this, &a1);
-    MR::setRailCoord(this, mRailCoord);
-    MR::getCurrentRailPointArg0WithInit(this, &a2);
-
-    if (a1 != -1 && a1 == a2) {
-        mRailCoord = railCoord;
-    }
-
-    if (MR::fabs(mRailCoord - railLength) < 100.0f) {
-        if (pRaceManager->isGoal(this)) {
-            MR::tryRumblePadVeryStrong(this, PLAYER_1);
-            return true;
-        }
-        return false;
-    }
-
-    return false;
-}
-
-bool PlayerRacer::goalRacer() {
-    return true;
-}
-
-void PlayerRacer::loseRacer() {
-}
-
-void PlayerRacer::exitRacer() {
-}
-
-PlayerRacer::~PlayerRacer() {
-}
-
-RaceRail::~RaceRail() {
-}
-
-void RaceRail::init(const TableIter& rIter) {
-    mPlayerRacer = new PlayerRacer("レース判定用レール");
-    mPlayerRacer->init(rIter);
-    RaceManagerFunction::entryRacerPlayer(mPlayerRacer);
-}
-
 void PlayerRacer::initRacer() {
     AbstractRacer::initRacer();
     MR::startBckPlayer("Watch");
@@ -116,32 +63,32 @@ void PlayerRacer::prepRacer(const RaceManager* pRaceManager) {
     MR::moveCoordToStartPos(this);
     MR::moveTransToCurrentRailPos(this);
 
-    Vec3f grav;
-    MR::calcGravityVector(this, mPosition, &grav, nullptr, 0);
+    Vec3f gravity;
+    MR::calcGravityVector(this, mPosition, &gravity, nullptr, 0);
 
     Pos3f mtx;
     Vec3f pos;
 
     switch (pRaceManager->mCurrentRace) {
     case RaceID_Penguin: {
-        Vec3f s = mPosition - grav * 500.f;
-        Vec3f pos(mPosition);
-        MR::getFirstPolyOnLineToWaterSurface(&pos, nullptr, s, grav * 1000.0f);
-        pos -= grav * 15.0f;
-        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
+        Vec3f checkStart = mPosition - gravity * ::cWaterCheckHeight;
+        Vec3f waterPos(mPosition);
+        MR::getFirstPolyOnLineToWaterSurface(&waterPos, nullptr, checkStart, gravity * ::cWaterCheckLength);
+        waterPos -= gravity * ::cWaterSinkDepth;
+        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -gravity, waterPos);
         MR::startBckPlayer("SwimDrift", 1);
         break;
     }
     case RaceID_TeresaPhantom: {
         pos = mPosition;
-        MR::convertPosOnGround(&pos, grav * 1000.0f);
-        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
+        MR::convertPosOnGround(&pos, gravity * ::cGroundCheckLength);
+        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -gravity, pos);
         MR::startBckPlayer("BattleWait", 1);
         break;
     }
     case RaceID_TeresaDeathPromenade: {
         pos = mPosition;
-        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
+        MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -gravity, pos);
         MR::startBckPlayer("Wait", 1);
         MR::onFollowDemoEffect();
         break;
@@ -151,6 +98,49 @@ void PlayerRacer::prepRacer(const RaceManager* pRaceManager) {
     MR::tryPlayerKillTakingActor();
     MR::setPlayerBaseMtx(mtx);
     MR::startActorCameraTargetPlayer(this, mCameraInfo);
+}
+
+void PlayerRacer::startRacer() {
+    MR::endActorCamera(this, mCameraInfo, true);
+}
+
+// Progress takes the player's nearest rail coord only when it moved less than cRaceJudgeLength; inside one tagged
+// rail section (point arg0 not -1) it is taken outright.
+bool PlayerRacer::updateRacer(const RaceManager* pRaceManager) {
+    PlayerRacer* pRail = pRaceManager->mPlayerRacer;
+    f32 nearestCoord = MR::calcNearestRailCoord(pRail, *MR::getPlayerCenterPos());
+    f32 railLength = MR::getRailTotalLength(pRail);
+
+    mPrevPosition.set(mCurrPosition);
+    mCurrPosition.set(*MR::getPlayerCenterPos());
+
+    Vec3f railPos;
+    MR::calcNearestRailPos(&railPos, pRail, *MR::getPlayerCenterPos());
+
+    if ((railPos - *MR::getPlayerCenterPos()).length() > ::cRaceJudgeLength) {
+        return false;
+    }
+
+    if (MR::fabs(mRailCoord - nearestCoord) < ::cRaceJudgeLength) {
+        mRailCoord = nearestCoord;
+    }
+
+    s32 sectionBefore;
+    MR::getCurrentRailPointArg0WithInit(this, &sectionBefore);
+    MR::setRailCoord(this, mRailCoord);
+    s32 sectionAfter;
+    MR::getCurrentRailPointArg0WithInit(this, &sectionAfter);
+
+    if (sectionBefore != -1 && sectionBefore == sectionAfter) {
+        mRailCoord = nearestCoord;
+    }
+
+    if (MR::fabs(mRailCoord - railLength) < ::cGoalReach && pRaceManager->isGoal(this)) {
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
+        return true;
+    }
+
+    return false;
 }
 
 void PlayerRacer::resetRacer(const RaceManager* pRaceManager) {
@@ -166,11 +156,7 @@ void PlayerRacer::resetRacer(const RaceManager* pRaceManager) {
         break;
     case RaceID_TeresaDeathPromenade:
         MR::onFollowDemoEffect();
-        if (pRaceManager->mRank != 1) {
-            MR::startBckPlayer("Sad", 0);
-        } else {
-            MR::startBckPlayer("Wait", 0);
-        }
+        MR::startBckPlayer(pRaceManager->mRank != 1 ? "Sad" : "Wait", 0);
         break;
     }
 

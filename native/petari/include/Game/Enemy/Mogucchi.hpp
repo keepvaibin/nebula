@@ -9,7 +9,6 @@ class MogucchiHill;
 class Mogucchi : public LiveActor {
 public:
     Mogucchi(const char*);
-    virtual ~Mogucchi();
 
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
@@ -39,14 +38,15 @@ public:
     bool receiveAttackBySpinSensor(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     void calcScatterVec(const Vec3f&, const Vec3f&);
+    bool isHittableDown() const;
+    void startScatter(HitSensor* pSender, HitSensor* pReceiver);
 
     MogucchiHill* mHill;
     ModelObj* mHole;
-    Pos3f mNewHolePos;
+    Pos3f mHoleMtx;
     Vec3f mRailGravity;
-    bool mGrounded;
-    f32 mScatterPropulsionSpeed;
-    Vec3f mScatterNormal;
+    f32 mScatterUpSpeed;
+    Vec3f mScatterDir;
     f32 mStrollSpeed;
     f32 mMaxStrollSpeed;
     bool mIsStoppedByP2;
