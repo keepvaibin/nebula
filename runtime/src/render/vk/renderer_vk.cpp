@@ -525,6 +525,12 @@ bool RendererVk::create_layouts() {
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes[wide ? 1u : 0u][aux]),
                   "temporal scene render pass");
+        for (VkAttachmentDescription& attachment : attachments) {
+            attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        }
+        attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes_clear[wide ? 1u : 0u][aux]),
+                  "temporal scene clearing render pass");
     }
     // One target written whole (copies; RGBA8: screen probes): its old contents are dropped; it ends shader-readable.
     {
@@ -1208,7 +1214,8 @@ void RendererVk::shutdown() {
                 }
             }
         }
-        for (auto& passes : draw_layout_.aux_passes) {
+        for (auto* group : {&draw_layout_.aux_passes, &draw_layout_.aux_passes_clear})
+        for (auto& passes : *group) {
             for (VkRenderPass& pass : passes) {
                 if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
                 pass = VK_NULL_HANDLE;

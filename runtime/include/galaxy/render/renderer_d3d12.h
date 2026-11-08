@@ -311,6 +311,11 @@ public:
     // jitter, no upscale): clears the motion target for the scene. False
     // otherwise or when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
+    // RendererVk's: a clear here opens no render pass to keep.
+    [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t clear_rgba) noexcept {
+        (void)clear_rgba;
+        return false;
+    }
     // The game's effects begin (the scene's ShadowSurface draw type, after its translucent lists) in a scene whose
     // blended draws write the reactive mask: the effects layer opens (cleared: nothing added, everything let through)
     // and its draws record what they blend over the scene target until the water's composite (kRenderStateLayerTarget).

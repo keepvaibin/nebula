@@ -83,8 +83,11 @@ struct RenderLayout {
     // A temporal scene's passes: the scene target and depth with one more target, single-sample (aux 1 the
     // motion vectors, 2 the reactive mask), over the 8-bit or the wide scene's colour.
     std::array<std::array<VkRenderPass, 2>, 2> aux_passes{};
-    [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux) const noexcept {
-        return aux_passes[(samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u][aux - 1u];
+    // The same, every attachment cleared as the pass begins (the scene's first clear): compatible with aux_passes.
+    std::array<std::array<VkRenderPass, 2>, 2> aux_passes_clear{};
+    [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux, bool clear = false) const noexcept {
+        const unsigned wide = (samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u;
+        return clear ? aux_passes_clear[wide][aux - 1u] : aux_passes[wide][aux - 1u];
     }
     [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
         if ((samples_log2 & kSceneVariantTarget) != 0u) {
@@ -248,6 +251,11 @@ public:
     // Temporal upscaling (RendererD3D12's).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     [[nodiscard]] bool begin_motion_scene();
+    // The whole frame cleared (`clear_rgba`, far, stencil 0) just before a scene the temporal path will run: the motion
+    // pass opens with the scene target, its depth and the motion vectors cleared as it begins, where the clear's own pass
+    // would end at begin_motion_scene for a transfer clear of the motion targets and the motion pass load them all again.
+    // False when the scene will not run temporal here (clear_scene clears).
+    [[nodiscard]] bool begin_cleared_motion_scene(std::uint32_t clear_rgba);
     void record_motion_debug_view() noexcept {}
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     void set_present_game_frame(bool) noexcept {}
@@ -571,7 +579,7 @@ private:
     };
     MotionTargets motion_;
     [[nodiscard]] bool ensure_motion_targets();
-    void clear_motion_targets();
+    void clear_motion_targets(bool motion = true);  // the reactive mask too where it is read
     void destroy_motion_framebuffers();
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
@@ -591,6 +599,7 @@ private:
     bool temporal_history_valid_ = false;
     bool scene_temporal_ = false;
     bool scene_motion_ = false;
+    bool motion_cleared_ = false;  // begin_cleared_motion_scene opened the motion pass cleared for the next scene
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.
