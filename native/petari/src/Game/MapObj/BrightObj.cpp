@@ -72,16 +72,17 @@ void BrightInfo::write(const Vec2f& rBrightnessCenter, const Vec2f& rRealCenter,
     mRealCenter[mIndex].set(rRealCenter);
     mBright[mIndex] = brightness;
 
-    u32 val = mIndex;
+    // Three slots: the write moves on unless that would land on the slot being read.
+    u32 next = mIndex;
 
-    val++;
+    next++;
 
-    if (val > 2) {
-        val = 0;
+    if (next > 2) {
+        next = 0;
     }
 
-    if (val != mCurrIndex) {
-        mIndex = val;
+    if (next != mCurrIndex) {
+        mIndex = next;
     }
 }
 

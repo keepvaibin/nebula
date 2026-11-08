@@ -180,9 +180,8 @@ s32 StageDataHolder::getCurrentStartZoneId() const {
 s32 StageDataHolder::getCurrentStartCameraId() const {
     TableIter marioIter = makeCurrentMarioTableIter();
     s32 cameraID;
-    bool ret = marioIter.getValue< s32 >("Camera_id", &cameraID);
 
-    if (ret) {
+    if (marioIter.getValue< s32 >("Camera_id", &cameraID)) {
         return cameraID;
     }
 
@@ -375,19 +374,14 @@ void StageDataHolder::initPlacementMario() {
 }
 
 TableIter StageDataHolder::makeMarioTableIter(const PlacementId& rInfo) const {
-    const StageDataHolder* hldr = getStageDataHolderFromZoneId(rInfo.mZoneID);
-    s32 id = rInfo.mId;
-    const Table* i = hldr->mStartObjs.begin();
+    const StageDataHolder* pHolder = getStageDataHolderFromZoneId(rInfo.mZoneID);
 
-    while (i != hldr->mStartObjs.end()) {
-        TableIter iter = i->findElement< s32 >("MarioNo", id, 0);
-        bool res = !(iter == i->end());
+    for (const Table* pTable = pHolder->mStartObjs.begin(); pTable != pHolder->mStartObjs.end(); pTable++) {
+        TableIter iter = pTable->findElement< s32 >("MarioNo", rInfo.mId, 0);
 
-        if (res) {
+        if (!(iter == pTable->end())) {
             return iter;
         }
-
-        i++;
     }
 
     return TableIter();

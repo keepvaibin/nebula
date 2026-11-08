@@ -19,6 +19,12 @@ public:
     u8 mAlpha;
 };
 
+// The six-sided outline both whirlpool surfaces sweep, as (side, normal) weights; the first corner repeats to close it.
+const f32 cWhirlPoolOutline[7][2] = {
+    {0.5f, 0.70710677f}, {-0.5f, 0.70710677f}, {-1.0f, 0.0f}, {-0.5f, -0.70710677f},
+    {0.5f, -0.70710677f}, {1.0f, 0.0f},        {0.5f, 0.70710677f},
+};
+
 class WhirlPoolAccelerator : public LiveActor {
 public:
     WhirlPoolAccelerator(const char* pName);
@@ -30,7 +36,7 @@ public:
 
     bool calcInfo(const Vec3f& rPosition, Vec3f* pAcceleration) const;
     void initPoints();
-    void drawPlane(TypedDraw& rDraw, f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1) const;
+    void drawPlane(TypedDraw& rDraw, f32 side0, f32 normal0, f32 side1, f32 normal1, f32 u0, f32 u1) const;
     SiteMaterial loadMaterial() const;
 
     f32 mRadius;

@@ -535,9 +535,7 @@ void Poihana::endPointerSwoon() {
 }
 
 void Poihana::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    bool ret = MR::isSensorPlayer(pReceiver) || MR::isSensorEnemy(pReceiver) || MR::isSensorMapObj(pReceiver);
-
-    if (!ret) {
+    if (!MR::isSensorPlayer(pReceiver) && !MR::isSensorEnemy(pReceiver) && !MR::isSensorMapObj(pReceiver)) {
         return;
     }
 
@@ -554,10 +552,10 @@ void Poihana::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (MR::isSensorPlayer(pReceiver)) {
-        ret = isNerve(GET_NERVE(Poihana, PoihanaNrvShock)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand)) ||
-              isNerve(GET_NERVE(Poihana, PoihanaNrvSwoon)) || isNerve(GET_NERVE(Poihana, PoihanaNrvRecover));
+        const bool isStunned = isNerve(GET_NERVE(Poihana, PoihanaNrvShock)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand)) ||
+                               isNerve(GET_NERVE(Poihana, PoihanaNrvSwoon)) || isNerve(GET_NERVE(Poihana, PoihanaNrvRecover));
 
-        if (ret) {
+        if (isStunned) {
             return;
         }
     }
@@ -579,18 +577,12 @@ bool Poihana::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     }
 
     if (MR::isMsgPlayerTrample(msg) || MR::isMsgPlayerHipDrop(msg)) {
-        bool flag = isNerve(GET_NERVE(Poihana, PoihanaNrvShock)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand)) ||
-                    isNerve(GET_NERVE(Poihana, PoihanaNrvSwoon)) || isNerve(GET_NERVE(Poihana, PoihanaNrvRecover));
+        const bool isStunned = isNerve(GET_NERVE(Poihana, PoihanaNrvShock)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand)) ||
+                               isNerve(GET_NERVE(Poihana, PoihanaNrvSwoon)) || isNerve(GET_NERVE(Poihana, PoihanaNrvRecover));
+        const bool isAsleep = isNerve(GET_NERVE(Poihana, PoihanaNrvSleepStart)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSleep)) ||
+                              isNerve(GET_NERVE(Poihana, PoihanaNrvGetUp));
 
-        if (flag) {
-            goto here;
-        }
-
-        flag = isNerve(GET_NERVE(Poihana, PoihanaNrvSleepStart)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSleep)) ||
-               isNerve(GET_NERVE(Poihana, PoihanaNrvGetUp));
-
-        if (flag) {
-        here:
+        if (isStunned || isAsleep) {
             startBound();
             MR::startSound(this, "SE_EV_POIHANA_TRAMPLE");
 
@@ -920,23 +912,12 @@ bool Poihana::isNeedForBackHome() const {
 }
 
 bool Poihana::isNeedForGetUp() const {
-    bool ret = false;
-
-    if (MR::isNearPlayer(this, ::sGetUpRadius)) {
-        bool flag = true;
-
-        f32 mag = MR::getPlayerVelocity()->length();
-
-        if (!(mag >= ::sJudgeForGetUpSpeed) && !MR::isPlayerSwingAction()) {
-            flag = false;
-        }
-
-        if (flag) {
-            ret = true;
-        }
+    // A near player who moves fast or spins wakes it.
+    if (!MR::isNearPlayer(this, ::sGetUpRadius)) {
+        return false;
     }
 
-    return ret;
+    return MR::getPlayerVelocity()->length() >= ::sJudgeForGetUpSpeed || MR::isPlayerSwingAction();
 }
 
 bool Poihana::isBackAttack(HitSensor* pMySensor) const {

@@ -97,17 +97,8 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
         GameSystemFunction::requestResetAudioSystem(mResetOperation != ResetOperation_ApplicationReset);
     }
 
-    bool b = mFadeinoutControl->mFrame == 0;
-
-    if (b) {
-        b = GameSystemFunction::isPrepareResetSaveDataHandleSequence();
-    }
-
-    if (b) {
-        b = MR::isGreaterStep(this, 2) && GameSystemFunction::isDoneResetAudioSystem();
-    }
-
-    if (b) {
+    if (mFadeinoutControl->mFrame == 0 && GameSystemFunction::isPrepareResetSaveDataHandleSequence() && MR::isGreaterStep(this, 2) &&
+        GameSystemFunction::isDoneResetAudioSystem()) {
         setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessReset));
     }
 }

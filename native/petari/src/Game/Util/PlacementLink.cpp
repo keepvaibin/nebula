@@ -32,14 +32,7 @@ PlacementLink::PlacementLink(const TableIter& rIter, bool linked) {
 }
 
 bool PlacementLink::isValid() const {
-    bool ret = false;
-    if (mLinkId >= 0 && mZoneId >= 0) {
-        if (mInfoType >= 0) {
-            ret = true;
-        }
-    }
-
-    return ret;
+    return mLinkId >= 0 && mZoneId >= 0 && mInfoType >= 0;
 }
 
 void PlacementLink::invalidate() {

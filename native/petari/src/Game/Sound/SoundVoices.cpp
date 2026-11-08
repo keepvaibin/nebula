@@ -171,10 +171,10 @@ f32 SoundMath::pow2(f32 x) {
     if (rest < 0.0f) {
         fracIndex = 1;
     }
-    f32 ret = rest;
-    ret += scaleFrac[fracIndex];
-    ret = ret * (ret * (ret * (ret * (ret * (ret * twoToX[5] + twoToX[4]) + twoToX[3]) + twoToX[2]) + twoToX[1]) + twoToX[0]);
-    return scale * (0.75f * twoToFrac[fracIndex] + ((0.25f + ret) * twoToFrac[fracIndex]));
+    const f32 frac = rest + scaleFrac[fracIndex];
+    // 2^frac - 1 by its series.
+    const f32 fracPowMinusOne = frac * (frac * (frac * (frac * (frac * (frac * twoToX[5] + twoToX[4]) + twoToX[3]) + twoToX[2]) + twoToX[1]) + twoToX[0]);
+    return scale * (0.75f * twoToFrac[fracIndex] + ((0.25f + fracPowMinusOne) * twoToFrac[fracIndex]));
 }
 
 void Oscillator::initStart(const OscData* pData) {
@@ -427,14 +427,16 @@ s32 Voices::noteCallback(s32 slot, u32 type) {
 void Voices::updateSlot(s32 slot) {
     Slot& rSlot = mSlots[slot];
     NebulaVoice* voice = &mVoices[slot];
-    s32 ret = 0;
+    // A note's callback below 0 ends it; a slot without a note always ends. An ended slot gives up its priority.
+    auto stopNote = [&]() {
+        if ((rSlot.mHasNote ? noteCallback(slot, SLOT_STOP) : -1) < 0) {
+            rSlot.mPriority = -1;
+        }
+    };
     if (voice->finished != 0) {
         rSlot.mFlags &= ~2u;
         if (rSlot.mStatus == SLOT_ACTIVE) {
-            ret = rSlot.mHasNote ? noteCallback(slot, SLOT_STOP) : -1;
-            if (ret < 0) {
-                rSlot.mPriority = -1;
-            }
+            stopNote();
         }
         rSlot.mStatus = SLOT_INACTIVE;
         voice->finished = 0;
@@ -447,26 +449,18 @@ void Voices::updateSlot(s32 slot) {
             rSlot.mFlags &= ~1u;
             rSlot.mStatus = SLOT_ACTIVE;
             initVoice(voice);
-            ret = rSlot.mHasNote ? noteCallback(slot, SLOT_START) : 0;
-            if (ret < 0) {
+            if ((rSlot.mHasNote ? noteCallback(slot, SLOT_START) : 0) < 0) {
                 rSlot.mStatus = SLOT_INACTIVE;
-                ret = rSlot.mHasNote ? noteCallback(slot, SLOT_STOP) : -1;
-                if (ret < 0) {
-                    rSlot.mPriority = -1;
-                }
+                stopNote();
             } else {
                 voice->starting = 1;
                 voice->active = 1;
                 nameSound(slot);
             }
         } else if (rSlot.mStatus != SLOT_INACTIVE) {
-            ret = rSlot.mHasNote ? noteCallback(slot, SLOT_PLAY) : 0;
-            if (ret < 0) {
+            if ((rSlot.mHasNote ? noteCallback(slot, SLOT_PLAY) : 0) < 0) {
                 rSlot.mStatus = SLOT_INACTIVE;
-                ret = rSlot.mHasNote ? noteCallback(slot, SLOT_STOP) : -1;
-                if (ret < 0) {
-                    rSlot.mPriority = -1;
-                }
+                stopNote();
                 voice->active = 0;
             } else {
                 rSlot.mAge++;

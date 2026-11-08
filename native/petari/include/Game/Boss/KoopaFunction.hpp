@@ -47,7 +47,7 @@ namespace KoopaFunction {
     bool escapeKoopaFromPlayer(Koopa* pKoopa, const MR::ActorMoveParam& rMoveParam);
     bool isKoopaVs1(const Koopa* pKoopa);
     bool isKoopaVs2(const Koopa* pKoopa);
-    bool isKoopaVs3(const Koopa* pKoopa);  // otherwise inlines in startKoopaPlateDamageAnimPowerStarAppear
+    bool isKoopaVs3(const Koopa* pKoopa);
     bool isKoopaLv1(const Koopa* pKoopa);
     bool isKoopaLv2(const Koopa* pKoopa);
     bool isKoopaLv3(const Koopa* pKoopa);

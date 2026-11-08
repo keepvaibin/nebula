@@ -7,31 +7,31 @@ const f32 sSinRate2 = 0.003f;
 const f32 sHeight0 = 40.0f;
 const f32 sHeight1 = 30.0f;
 
-OceanBowlPoint::OceanBowlPoint(const Vec3f& rVec) : mVertexPosition(rVec), mPosition(rVec) {
+OceanBowlPoint::OceanBowlPoint(const Vec3f& rPos) : mVertexPosition(rPos), mPosition(rPos) {
     mAlpha = 255;
     mWaveScale = 1.0f;
 }
 
-void OceanBowlPoint::updatePos(f32 a, f32 b) {
+void OceanBowlPoint::updatePos(f32 phaseX, f32 phaseZ) {
     if (mWaveScale == 0.0f) {
         return;
     }
     f32 z = mPosition.z;
     f32 x = mPosition.x;
-    f32 height = mWaveScale * calcHeightStatic(a, b, x, z);
+    f32 height = mWaveScale * calcHeightStatic(phaseX, phaseZ, x, z);
     mVertexPosition.set(Vec3f(0.0f, 1.0f, 0.0f));
     mVertexPosition *= height;
     mVertexPosition.add(mPosition);
 }
 
-f32 OceanBowlPoint::calcHeightStatic(f32 a, f32 b, f32 c, f32 d) {
-    return (MR::sin((a + (sSinRate1 * c)) + (sSinRate2 * d)) * sHeight1) + (MR::sin(b + (sSinRate0 * d)) * sHeight0);
+// Two sine waves: one along x + z (30 high), one along z (40 high).
+f32 OceanBowlPoint::calcHeightStatic(f32 phaseX, f32 phaseZ, f32 x, f32 z) {
+    return (MR::sin((phaseX + (sSinRate1 * x)) + (sSinRate2 * z)) * sHeight1) + (MR::sin(phaseZ + (sSinRate0 * z)) * sHeight0);
 }
 
-void OceanBowlPoint::reset(const Vec3f& rVec, f32 f) {
-    mPosition.set(rVec);
+void OceanBowlPoint::reset(const Vec3f& rPos, f32 waveScale) {
+    mPosition.set(rPos);
     mVertexPosition.set(mPosition);
-    mWaveScale = f;
-    f32 v = 255.0f;
-    mAlpha = (s32)(v * (f32)((f64)f));
+    mWaveScale = waveScale;
+    mAlpha = (s32)(255.0f * waveScale);
 }

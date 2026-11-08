@@ -8,7 +8,6 @@ public:
     inline NPCActorItem() {
     }
 
-    // cannot be noinline because of NPCItemParameterReader constructor
     NPCActorItem(const char* pName) {
         mActor = pName;
         mGoods0 = "";

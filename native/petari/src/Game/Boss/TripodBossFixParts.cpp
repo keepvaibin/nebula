@@ -53,11 +53,12 @@ void TripodBossFixParts::init(const TableIter& rIter) {
     MR::getObjectName(&objName, rIter);
     setName(objName);
     TripodBossFixPartsBase::init(rIter);
-    bool val = false;
+    // Setting type bit 0: drawn as bloom; bit 1: no break movement.
+    bool isBloom = false;
     const TripodBossSetting* setting = ::getSetting(objName);
 
     if (setting != nullptr) {
-        val = (setting->mType & 0x1);
+        isBloom = (setting->mType & 0x1);
         mHasBreakMovement = !(setting->mType & 0x2);
     }
 
@@ -65,7 +66,7 @@ void TripodBossFixParts::init(const TableIter& rIter) {
     MR::getMapPartsObjectNameIfExistShapeID(mapPartsID, rIter);
     initModelManagerWithAnm(mapPartsID.c_str(), nullptr, false);
 
-    if (val) {
+    if (isBloom) {
         MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObjDecoration, MR::DrawBufferType_BloomModel,
                            MR::DrawType_None);
     } else {

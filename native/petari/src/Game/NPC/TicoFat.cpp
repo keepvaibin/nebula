@@ -457,14 +457,14 @@ void TicoFat::shootStarPiece() {
 }
 
 void TicoFat::receiveStarPiece(s32 num) {
-    s32 val = mStarPieceLeft;
-    if (val >= num) {
-        val = num;
+    s32 taken = mStarPieceLeft;
+    if (taken >= num) {
+        taken = num;
     }
 
-    mCurrentFed -= val;
-    mStarPieceLeft -= val;
-    addStarPieceSaveData(val);
+    mCurrentFed -= taken;
+    mStarPieceLeft -= taken;
+    addStarPieceSaveData(taken);
     setScale(calcScale());
     mMeter->setNumber(mStarPieceNeed - mStarPieceLeft);
     MR::tryRumblePadVeryWeak(this, PLAYER_1);
@@ -562,16 +562,17 @@ void TicoFat::updateScreenEffect() {
 }
 
 s32 TicoFat::getDanceSeTranspose() const {
-    s32 val = (mStarPieceNeed - mStarPieceLeft - 1) / 50;
-    if (val < 0) {
-        val = 0;
+    // The eating sound's transpose: one step up every 50 fed, at most 32.
+    s32 transpose = (mStarPieceNeed - mStarPieceLeft - 1) / 50;
+    if (transpose < 0) {
+        transpose = 0;
     }
 
-    if (val > 32) {
+    if (transpose > 32) {
         return 32;
     }
 
-    return val;
+    return transpose;
 }
 
 void TicoFat::startAbsorbSound() {

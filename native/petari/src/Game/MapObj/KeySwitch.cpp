@@ -104,7 +104,7 @@ void KeySwitch::exeAppear() {
     MR::setBckRate(this, MR::calcNerveValue(this, 0xB4, 3.0f, 1.5f));
     MR::addVelocityToGravity(this, 2.0f);
 
-    bool val = false;
+    bool isSettled = false;
 
     if (MR::isBindedGround(this)) {
         if (mVelocity.length() >= 10.0f) {
@@ -119,12 +119,12 @@ void KeySwitch::exeAppear() {
             neg.negate(mGravity);
             MR::calcReboundVelocity(&mVelocity, neg, 0.60f, 0.7f);
         } else {
-            val = true;
+            isSettled = true;
         }
     }
 
     if (!tryAvoid()) {
-        if (val) {
+        if (isSettled) {
             MR::validateClipping(this);
             setNerve(GET_NERVE(KeySwitch, KeySwitchNrvWait));
         }

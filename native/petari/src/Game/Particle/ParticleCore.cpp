@@ -296,13 +296,8 @@ bool ParticleCore::calc_c(EmitterWork* pWork) {
 
 bool ParticleCore::canCreateChild(EmitterWork* pWork) {
     ChildShape* csp = pWork->mpRes->getCsp();
-    bool ret = false;
-    int time = mAge - (int)((mLifeTime - 1) * csp->getTiming());
-    if (time >= 0 && time % (csp->getStep() + 1) == 0) {
-        ret = true;
-    }
-
-    return ret;
+    int sinceStart = mAge - (int)((mLifeTime - 1) * csp->getTiming());
+    return sinceStart >= 0 && sinceStart % (csp->getStep() + 1) == 0;
 }
 
 /* NEW IN SMG1 */

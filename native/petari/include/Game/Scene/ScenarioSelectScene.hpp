@@ -22,6 +22,9 @@ public:
     void startBackground();
     bool isActive() const;
     bool isExecForeground() const;
+    bool isRunning() const {
+        return isExecForeground() && mIsResetRequested == 0;
+    }
     bool isScenarioSelecting() const;
     void validateScenarioSelect();
     void requestReset(bool waitForInitialize);

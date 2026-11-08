@@ -6,7 +6,7 @@ class HomeButtonStateNotifier {
 public:
     HomeButtonStateNotifier();
 
-    void update(bool);
+    void update(bool isActive);
     void registerMoviePlayerSimple(MoviePlayerSimple* pMoviePlayer);
     void unregisterMoviePlayerSimple(MoviePlayerSimple* pMoviePlayer);
     void notifyHomeButtonDeactive();

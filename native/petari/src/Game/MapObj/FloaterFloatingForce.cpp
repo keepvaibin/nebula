@@ -8,13 +8,13 @@ FloaterFloatingForce::~FloaterFloatingForce() {
 
 FloaterFloatingForce::FloaterFloatingForce(LiveActor* pHost, const char* pName) : MapPartsFunction(pHost, "浮力"), mObjName(pName), mBasePos(gZeroVec) {
     mUp = Vec3f(0.0f, 1.0f, 0.0f);
-    mMoveConditionType = 0.0f;
+    mMaxSinkDepth = 0.0f;
 }
 
 void FloaterFloatingForce::init(const TableIter& rIter) {
-    s32 moveConditionType = 0;
-    MR::getMapPartsArgMoveConditionType(&moveConditionType, rIter);
-    mMoveConditionType = moveConditionType;
+    s32 maxSinkDepth = 0;
+    MR::getMapPartsArgMoveConditionType(&maxSinkDepth, rIter);
+    mMaxSinkDepth = maxSinkDepth;
 }
 
 void FloaterFloatingForce::start() {

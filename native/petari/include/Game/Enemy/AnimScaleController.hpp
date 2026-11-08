@@ -29,10 +29,10 @@ public:
     virtual ~AnimScaleController();
 
     void update();
-    void updateScale(f32, f32);
+    void updateScale(f32 spring, f32 damping);
     void startCrush();
     void startAnim();
-    void startAndAddScaleVelocityY(f32);
+    void startAndAddScaleVelocityY(f32 velocity);
 
     void setParamTight();
     void startHitReaction();

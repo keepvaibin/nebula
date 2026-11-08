@@ -55,16 +55,16 @@ void LightZoneDataHolder::initZoneData() {
 }
 
 const char* LightZoneDataHolder::getAreaLightNameInZoneData(const ZoneLightID& zoneID) const {
-    s32 val = zoneID.mZoneId;
+    s32 zoneId = zoneID.mZoneId;
 
-    if (val < 0) {
-        val = 0;
+    if (zoneId < 0) {
+        zoneId = 0;
     }
 
-    return mZoneInfo[val].getAreaLightNameInZoneData(zoneID.mLightID);
+    return mZoneInfo[zoneId].getAreaLightNameInZoneData(zoneID.mLightID);
 }
 
-// this will load the first entry, but they will all return the same thing anyways
+// Light -1 names the stage default, the same in every zone.
 const char* LightZoneDataHolder::getDefaultStageAreaLightName() const {
     return mZoneInfo->getAreaLightNameInZoneData(-1);
 }

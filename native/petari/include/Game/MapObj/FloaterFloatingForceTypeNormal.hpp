@@ -20,8 +20,8 @@ public:
     void exeMoveFirst();
     void exeMove();
 
-    f32 mRotateAngle;
-    f32 mRotateSpeed;
+    f32 mRiseAccel;  // the placement's rotate-angle argument
+    f32 mSinkAccel;  // the placement's rotate-speed argument
     f32 mSinkDepth;
     f32 mSinkSpeed;
     Vec3f mVelocity;

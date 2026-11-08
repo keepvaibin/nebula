@@ -84,21 +84,21 @@ void HipDropTimerSwitch::control() {
 
 void HipDropTimerSwitch::calcAnim() {
     LiveActor::calcAnim();
-    MtxPtr mtx = MR::getJointMtx(this, "Move");
-    Pos3f mtx2;
-    mtx2.setInline(mtx);
-    f32 val = mSpring->mSpringValue;
+    MtxPtr jointMtx = MR::getJointMtx(this, "Move");
+    Pos3f moveMtx;
+    moveMtx.setInline(jointMtx);
+    f32 springOffset = mSpring->mSpringValue;
 
-    if (!MR::isNearZero(val)) {
+    if (!MR::isNearZero(springOffset)) {
         Vec3f pos, up;
-        mtx2.getTrans(pos);
+        moveMtx.getTrans(pos);
         MR::calcUpVec(&up, this);
-        pos += up * val;
-        mtx2.setTrans(pos);
-        NebulaMtxCopy(mtx2, mtx);
+        pos += up * springOffset;
+        moveMtx.setTrans(pos);
+        NebulaMtxCopy(moveMtx, jointMtx);
     }
 
-    mCollisionParts->setMtx(mtx2);
+    mCollisionParts->setMtx(moveMtx);
 }
 
 void HipDropTimerSwitch::calcAndSetBaseMtx() {

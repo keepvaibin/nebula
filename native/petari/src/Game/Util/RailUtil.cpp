@@ -608,48 +608,47 @@ namespace {
     bool getRailPointArgF32WithInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
-        bool b = railRider->getPointArgS32WithInit(getRailPointArgName(argNum), &arg, index);
+        bool isFound = railRider->getPointArgS32WithInit(getRailPointArgName(argNum), &arg, index);
         *pArg = arg;
-        return b;
+        return isFound;
     }
 
     bool getRailPointArgF32NoInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
-        bool b = railRider->getPointArgS32NoInit(getRailPointArgName(argNum), &arg, index);
+        bool isFound = railRider->getPointArgS32NoInit(getRailPointArgName(argNum), &arg, index);
         *pArg = arg;
-        return b;
+        return isFound;
     }
 
     bool getRailCurrentPointArgF32WithInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
-        bool b = railRider->getCurrentPointArgS32WithInit(getRailPointArgName(argNum), &arg);
+        bool isFound = railRider->getCurrentPointArgS32WithInit(getRailPointArgName(argNum), &arg);
         *pArg = arg;
-        return b;
+        return isFound;
     }
 
     bool getRailCurrentPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
-        bool b = railRider->getCurrentPointArgS32NoInit(getRailPointArgName(argNum), &arg);
+        bool isFound = railRider->getCurrentPointArgS32NoInit(getRailPointArgName(argNum), &arg);
         *pArg = arg;
-        return b;
+        return isFound;
     }
 
     bool getRailNextPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
-        bool b = railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg);
+        bool isFound = railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg);
         *pArg = arg;
-        return b;
+        return isFound;
     }
 
     bool getRailNextPointArgBoolNoInit(const LiveActor* pActor, s32 argNum, bool* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = -1;
-        bool b = railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg);
-        if (!b) {
+        if (!railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg)) {
             return false;
         }
 

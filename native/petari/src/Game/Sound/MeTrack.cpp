@@ -243,11 +243,9 @@ s32 MeTrack::rhythmProc(s32 type) {
         return 0;
     }
     if (!mIsProcStopped) {
-        const s32 ret = seqProc(type);
-        if (ret == 1 && mStopAfterNote) {
-            mIsProcStopped = true;
-        }
-        if (ret < 0) {
+        // seqProc: -1 when the program ends, 1 at a note boundary, else 0.
+        const s32 procResult = seqProc(type);
+        if ((procResult == 1 && mStopAfterNote) || procResult < 0) {
             mIsProcStopped = true;
         }
     }
@@ -255,11 +253,8 @@ s32 MeTrack::rhythmProc(s32 type) {
     for (MeTrack* track = mFirstChild; track != nullptr;) {
         MeTrack* const next = track->mNextSibling;
         const u32 index = static_cast< u32 >(track->mBrotherNo);
-        const s32 ret = track->seqProc(type);
-        if (ret == 1 && mStopAfterNote) {
-            deleteChild(index);
-        }
-        if (ret < 0) {
+        const s32 procResult = track->seqProc(type);
+        if ((procResult == 1 && mStopAfterNote) || procResult < 0) {
             deleteChild(index);
         }
         track = next;
@@ -686,11 +681,11 @@ s32 MeTrack::seqProc(s32 type) {
         return 0;
     }
     while (mWaitTime == 0 && !mIsLocked) {
-        const s32 ret = parse();
-        if (ret < 0) {
+        const s32 opResult = parse();
+        if (opResult < 0) {
             return -1;
         }
-        if (ret == 1 && mCtrlStopAfterNote) {
+        if (opResult == 1 && mCtrlStopAfterNote) {
             return 1;
         }
     }

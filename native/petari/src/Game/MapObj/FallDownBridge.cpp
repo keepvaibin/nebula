@@ -58,32 +58,33 @@ void FallDownBridge::init(const TableIter& rIter) {
 }
 
 void FallDownBridge::control() {
-    f32 val = MR::sin(MR::toRadian(MR::abs(mAngle) - 9.090277f));
+    // Tips away from its balance angle (about 9.09 degrees either side), faster the further it leans.
+    f32 tip = MR::sin(MR::toRadian(MR::abs(mAngle) - 9.090277f));
 
     if (mAngle < 0.0f) {
-        val = -val;
+        tip = -tip;
     }
 
-    mAngleSpeed += val * 0.06f;
+    mAngleSpeed += tip * 0.06f;
     mAngle += mAngleSpeed;
 
     if (!mIsFallen && MR::abs(mAngleSpeed) >= 0.06f) {
         MR::startLevelSound(this, "SE_OJ_LV_CHAL_FD_BRIDGE_FL");
     }
 
-    bool ret = false;
+    bool isAtStop = false;
 
     if (mAngle > mMaxAngle) {
         mAngle = mMaxAngle;
-        ret = true;
+        isAtStop = true;
     }
 
     if (mAngle < mMinAngle) {
         mAngle = mMinAngle;
-        ret = true;
+        isAtStop = true;
     }
 
-    if (ret) {
+    if (isAtStop) {
         if (MR::abs(mAngleSpeed) > ::sShakeCameraNormalVelocity) {
             MR::startSound(this, "SE_OJ_CHAL_FD_BRIDGE_END");
             MR::shakeCameraNormal();

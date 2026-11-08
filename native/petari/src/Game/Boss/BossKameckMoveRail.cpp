@@ -13,10 +13,10 @@ void BossKameckMoveRail::init(const TableIter& rIter) {
     mStoppablePointNum = 0;
     s32 pointNum = MR::getRailPointNum(this);
     for (s32 i = 0; i < pointNum; i++) {
-        s32 val = -1;
-        MR::getRailPointArg0WithInit(this, i, &val);
+        s32 stoppable = -1;
+        MR::getRailPointArg0WithInit(this, i, &stoppable);
 
-        if (val != 0) {
+        if (stoppable != 0) {
             mStoppablePointNum++;
         }
     }
@@ -53,12 +53,12 @@ s32 BossKameckMoveRail::calcRandomStoppableIndex(s32 idx) const {
         last = mStoppablePointNum;
     }
 
+    // The rand-th stoppable point, skipping idx.
     s32 rand = (last <= 0) ? 0 : MR::getRandom(0, last);
     s32 pointNum = MR::getRailPointNum(this);
-    s32 cpy = pointNum;
-    s32 val = 0;
+    s32 stoppableSeen = 0;
 
-    for (s32 i = 0; i < cpy; i++) {
+    for (s32 i = 0; i < pointNum; i++) {
         if (i == idx) {
             continue;
         }
@@ -70,11 +70,11 @@ s32 BossKameckMoveRail::calcRandomStoppableIndex(s32 idx) const {
             continue;
         }
 
-        if (val == rand) {
+        if (stoppableSeen == rand) {
             return i;
         }
 
-        val++;
+        stoppableSeen++;
     }
 
     return 0;

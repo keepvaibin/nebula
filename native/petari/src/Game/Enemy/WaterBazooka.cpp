@@ -838,9 +838,7 @@ bool WaterBazooka::tryPanic() {
         return false;
     }
 
-    bool b1 = isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvPanic)) || isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvStorm));
-
-    if (b1) {
+    if (isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvPanic)) || isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvStorm))) {
         return false;
     }
 

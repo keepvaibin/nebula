@@ -84,15 +84,7 @@ namespace MR {
             return false;
         }
 
-        bool ret = false;
-
-        if (pCtrl->requestTalk()) {
-            if (pCtrl->startTalk()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return pCtrl->requestTalk() && pCtrl->startTalk();
     }
 
     bool tryTalkNearPlayerAtEnd(TalkMessageCtrl* pCtrl) {
@@ -123,13 +115,7 @@ namespace MR {
             return false;
         }
 
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce() && pCtrl->startTalkForce()) {
-            ret = true;
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForce();
     }
 
     bool tryTalkForceAtEnd(TalkMessageCtrl* pCtrl) {
@@ -159,13 +145,7 @@ namespace MR {
             return false;
         }
 
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce() && pCtrl->startTalkForceWithoutDemo()) {
-            ret = true;
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForceWithoutDemo();
     }
 
     bool tryTalkForceWithoutDemoMarioPuppetable(TalkMessageCtrl* pCtrl) {
@@ -176,15 +156,7 @@ namespace MR {
             return false;
         }
 
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce()) {
-            if (pCtrl->startTalkForceWithoutDemoPuppetable()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForceWithoutDemoPuppetable();
     }
 
     bool tryTalkForceWithoutDemoAtEnd(TalkMessageCtrl* pCtrl) {
@@ -229,45 +201,21 @@ namespace MR {
         if (pCtrl == nullptr) {
             return false;
         }
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce()) {
-            if (pCtrl->startTalkForce()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForce();
     }
 
     bool tryTalkTimeKeepDemoMarioPuppetable(TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce()) {
-            if (pCtrl->startTalkForcePuppetable()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForcePuppetable();
     }
 
     bool tryTalkTimeKeepDemoWithoutPauseMarioPuppetable(TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        bool ret = false;
-
-        if (pCtrl->requestTalkForce()) {
-            if (pCtrl->startTalkForceWithoutDemoPuppetable()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return pCtrl->requestTalkForce() && pCtrl->startTalkForceWithoutDemoPuppetable();
     }
 
     bool tryTalkRequest(TalkMessageCtrl* pCtrl) {
@@ -281,30 +229,14 @@ namespace MR {
         if (pCtrl == nullptr) {
             return false;
         }
-        bool ret = false;
-
-        if (MR::isYesNoSelected()) {
-            if (MR::isYesNoSelectedYes()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return MR::isYesNoSelected() && MR::isYesNoSelectedYes();
     }
 
     bool tryTalkSelectRight(TalkMessageCtrl* pCtrl) {
         if (pCtrl == nullptr) {
             return false;
         }
-        bool ret = false;
-
-        if (MR::isYesNoSelected()) {
-            if (!MR::isYesNoSelectedYes()) {
-                ret = true;
-            }
-        }
-
-        return ret;
+        return MR::isYesNoSelected() && !MR::isYesNoSelectedYes();
     }
 
     const MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl* pCtrl) {

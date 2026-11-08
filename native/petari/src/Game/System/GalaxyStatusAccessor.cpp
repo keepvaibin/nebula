@@ -193,17 +193,17 @@ s32 GalaxyStatusAccessor::getNormalScenarioNum() const {
 
 const char* GalaxyStatusAccessor::getAppearPowerStarObjName(s32 scenarioNo) const {
     const char* pObjName;
-    bool ret = mScenarioData->getValueString("AppearPowerStarObj", scenarioNo, &pObjName);
+    bool hasObjName = mScenarioData->getValueString("AppearPowerStarObj", scenarioNo, &pObjName);
 
     if (isValidCoin100(scenarioNo)) {
         return "１００枚コイン";
     }
 
-    if (ret) {
+    if (hasObjName) {
         return pObjName;
     }
 
-    return 0;
+    return nullptr;
 }
 
 u32 GalaxyStatusAccessor::getActivePowerStarId(s32 scenarioNo) const {

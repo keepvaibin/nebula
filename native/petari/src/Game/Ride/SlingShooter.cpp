@@ -701,7 +701,7 @@ bool SlingShooter::tryAttackMap() {
     }
 
     bool attackSuccess = true;
-    bool b2 = false;
+    bool isAnyHit = false;
     for (s32 plane = 0; plane < MR::getBindedPlaneNum(this); plane++) {
         if (!(mVelocity.dot(*MR::getBindedPlaneNormal(this, plane)) > 0.0f)) {
             HitSensor* planeSensor = MR::getBindedPlaneSensor(this, plane);
@@ -718,13 +718,13 @@ bool SlingShooter::tryAttackMap() {
                     continue;
                 }
             }
-            b2 = true;
+            isAnyHit = true;
             MR::emitEffectHit(this, mPosition, nullptr);
         }
     }
 
     if (attackSuccess) {
-        if (b2) {
+        if (isAnyHit) {
             setNerve(GET_NERVE(SlingShooter, SlingShooterNrvAttackSuccess));
         }
         return false;

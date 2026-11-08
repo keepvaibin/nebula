@@ -435,10 +435,10 @@ void GameSystemSceneController::prepareReset() {
 
     mPlayTimerScene->stop();
 
-    bool b = isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene)) ||
-             isNextNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));
+    bool isInitializingScene = isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene)) ||
+                               isNextNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));
 
-    mScenarioSelectScene->requestReset(b);
+    mScenarioSelectScene->requestReset(isInitializingScene);
 
     if (isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal))) {
         const Nerve* nextNerve = getNextNerveOnResetProcessing();

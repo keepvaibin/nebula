@@ -605,9 +605,9 @@ void MR::getCsvDataS32(s32* pOut, const Table* pMapInfo, const char* pKey, s32 i
 }
 
 void MR::getCsvDataU8(u8* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {
-    s32 val = 0;
-    pMapInfo->getValue< s32 >(idx, pKey, &val);
-    *pOut = val;
+    s32 value = 0;
+    pMapInfo->getValue< s32 >(idx, pKey, &value);
+    *pOut = value;
 }
 
 void MR::getCsvDataF32(f32* pOut, const Table* pMapInfo, const char* pKey, s32 idx) {

@@ -313,7 +313,7 @@ bool KameckBeam::tryChangeFire() {
         MR::normalize(&result);
     }
 
-    bool b1 = false;
+    bool isAnyFired = false;
     for (u32 i = 0; i < fireAngleListIndex; i++) {
         mKameckFireBalls[i] = MR::getKameckFireBall();
         if (mKameckFireBalls[i] != nullptr) {
@@ -322,11 +322,11 @@ bool KameckBeam::tryChangeFire() {
             Vec3f result2;
             MR::rotateVecDegree(&result2, result, mGravity, ::sFireAngleList[fireAngleListIndex][i]);
             mKameckFireBalls[i]->appearDirection(result2);
-            b1 = true;
+            isAnyFired = true;
         }
     }
 
-    if (b1) {
+    if (isAnyFired) {
         MR::offBind(this);
         MR::invalidateShadow(this, nullptr);
         MR::invalidateHitSensors(this);

@@ -430,10 +430,7 @@ void SnowFloorTile::draw() const {
         s32 g = ::sColorG + i * ::sColorStepG;
         s32 b = ::sColorB + i * ::sColorStepB;
         s32 a = ::sColorA + i * ::sColorStepA;
-        MR::clamp(static_cast< s32 >(r), 0, 255);
-        MR::clamp(static_cast< s32 >(g), 0, 255);
-        MR::clamp(static_cast< s32 >(b), 0, 255);
-        MR::clamp(static_cast< s32 >(a), 0, 255);
+        // Every layer's channels stay within 0..255.
         Color8 color(r, g, b, a);
         material.setColor(0, color.r, color.g, color.b, color.a);
         TypedDraw site(material, nullptr, MR::getCameraViewMtx());

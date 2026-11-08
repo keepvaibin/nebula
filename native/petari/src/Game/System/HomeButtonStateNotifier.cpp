@@ -4,12 +4,12 @@
 HomeButtonStateNotifier::HomeButtonStateNotifier() : mWasActive(false), mMoviePlayer(nullptr) {
 }
 
-void HomeButtonStateNotifier::update(bool param1) {
-    if ((mWasActive || !param1) && mWasActive && !param1) {
+void HomeButtonStateNotifier::update(bool isActive) {
+    if (mWasActive && !isActive) {
         notifyHomeButtonDeactive();
     }
 
-    mWasActive = param1;
+    mWasActive = isActive;
 }
 
 void HomeButtonStateNotifier::registerMoviePlayerSimple(MoviePlayerSimple* pMoviePlayer) {

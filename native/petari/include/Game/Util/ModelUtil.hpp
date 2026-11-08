@@ -47,7 +47,7 @@ namespace MR {
     void hideMaterial(const LiveActor*, const char*);
     void showMaterial(const Model*, const char*);
     void showMaterial(const LiveActor*, const char*);
-    void calcFogStartEnd(Vec3f, f32, f32*, f32*);
+    void calcFogStartEnd(Vec3f pos, f32 strength, f32* pFogStart, f32* pFogEnd);
     bool isUseTex(Material*, u32);
     bool isNormalTexMtx(Material*);
     bool isUseTexMtx(Material*, u32);

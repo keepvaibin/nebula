@@ -706,67 +706,67 @@ s32 ChordInfo::getScaleNoteIndex(u8 pClass, bool up) {
 }
 
 s32 ChordInfo::addIndexInScaleNoteList(s32 idx, s32 count, s32& wrapCount) {
-    s32 ret = idx;
+    s32 noteIndex = idx;
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {
-        ret++;
+        noteIndex++;
 
-        if (ret >= OCTAVE) {
+        if (noteIndex >= OCTAVE) {
             wrapCount++;
-            ret = 0;
+            noteIndex = 0;
         }
 
         s32 skip = 0;
 
-        while (getScaleNoteUp(ret) == NULL_NOTE) {
+        while (getScaleNoteUp(noteIndex) == NULL_NOTE) {
             skip++;
-            ret++;
+            noteIndex++;
 
             if (skip >= OCTAVE) {
                 return -1;
             }
 
-            if (ret >= OCTAVE) {
+            if (noteIndex >= OCTAVE) {
                 wrapCount++;
-                ret = 0;
+                noteIndex = 0;
             }
         }
     }
 
-    return ret;
+    return noteIndex;
 }
 
 s32 ChordInfo::subIndexInScaleNoteList(s32 idx, s32 count, s32& wrapCount) {
-    s32 ret = idx;
+    s32 noteIndex = idx;
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {
-        ret--;
+        noteIndex--;
 
-        if (ret < 0) {
+        if (noteIndex < 0) {
             wrapCount--;
-            ret = OCTAVE - 1;
+            noteIndex = OCTAVE - 1;
         }
 
         s32 skip = 0;
 
-        while (getScaleNoteDown(ret) == NULL_NOTE) {
+        while (getScaleNoteDown(noteIndex) == NULL_NOTE) {
             skip++;
-            ret--;
+            noteIndex--;
 
             if (skip >= OCTAVE) {
                 return -1;
             }
 
-            if (ret < 0) {
+            if (noteIndex < 0) {
                 wrapCount--;
-                ret = OCTAVE - 1;
+                noteIndex = OCTAVE - 1;
             }
         }
     }
 
-    return ret;
+    return noteIndex;
 }
 
 void ChordInfo::initParams() {

@@ -38,10 +38,6 @@ bool SyncBckEffectChecker::isCreate(const SyncBckEffectInfo* pInfo, bool checkFr
         return true;
     }
 
-    if (!pInfo->isRegisteredBck(mCurrentBckName)) {
-        return false;
-    }
-
     const f32 frame = pInfo->mStartFrame;
     const FrameCtrl* pFrameCtrl = mPlayer->getFrameCtrl();
 

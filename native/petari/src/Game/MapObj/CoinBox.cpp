@@ -46,8 +46,8 @@ void CoinBox::exeHit() {
         MR::getRotatedAxisY(&axis_y, mRotation);
         MR::calcGravityOrZero(this);
         Vec3f horiz;
-        f32 val = MR::vecKillElement(axis_y, mGravity, &horiz);
-        axis_y = (mGravity * val) * 30.0f + horiz * 10.0f;
+        f32 alongGravity = MR::vecKillElement(axis_y, mGravity, &horiz);
+        axis_y = (mGravity * alongGravity) * 30.0f + horiz * 10.0f;
         MR::appearCoinToVelocity(this, mPosition, axis_y, 1);
         kill();
     }

@@ -41,19 +41,11 @@ void Air::init(const TableIter& rIter) {
     bool registered = MR::tryRegisterDemoCast(this, rIter);
 
     if (registered) {
-        bool val = true;
+        // Hidden until a demo fades it out or in.
+        const bool isDemoAction = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeOut), "消滅") ||
+                                  MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeIn), nullptr);
 
-        bool ret = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeOut), "消滅");
-
-        if (!ret) {
-            ret = MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &Air::appearFadeIn), nullptr);
-
-            if (!ret) {
-                val = false;
-            }
-        }
-
-        if (val) {
+        if (isDemoAction) {
             makeActorDead();
         }
     } else {
@@ -64,10 +56,10 @@ void Air::init(const TableIter& rIter) {
 void Air::appear() {
     LiveActor::appear();
 
-    f32 val = 100.0f * mDistance;
+    f32 appearDist = 100.0f * mDistance;
     f32 dist = MR::calcDistanceToPlayer(this);
 
-    if (dist < val) {
+    if (dist < appearDist) {
         MR::tryStartAllAnim(this, "Appear");
         MR::setAllAnimFrameAtEnd(this, "Appear");
         setNerve(GET_NERVE(Air, HostTypeIn));
@@ -126,8 +118,8 @@ void Air::exeIn() {
 
     if (!isCameraNotEnd) {
         tryChange();
-        f32 val = (100.0f * (20.0f + mDistance));
-        if (val < MR::calcDistanceToPlayer(this)) {
+        f32 disappearDist = (100.0f * (20.0f + mDistance));
+        if (disappearDist < MR::calcDistanceToPlayer(this)) {
             MR::tryStartAllAnim(this, "Disappear");
             setNerve(GET_NERVE(Air, HostTypeOut));
         }
@@ -135,9 +127,9 @@ void Air::exeIn() {
 }
 
 void Air::exeOut() {
-    bool flag = mIsWaitStartCamera && !MR::isStartAnimCameraEnd();
+    bool isCameraNotEnd = mIsWaitStartCamera && !MR::isStartAnimCameraEnd();
 
-    if (!flag) {
+    if (!isCameraNotEnd) {
         tryChange();
 
         if (!MR::isHiddenModel(this) && MR::isAnyAnimStopped(this, "Disappear")) {

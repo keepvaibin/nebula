@@ -14,21 +14,22 @@ void CamHeliEffector::update(CameraMan* pCamera) {
             return;
         }
 
-        f32 val = mRate;
-        val *= 0.98f;
-        mRate = val;
-        if (val < 0.001f) {
+        f32 rate = mRate;
+        rate *= 0.98f;
+        mRate = rate;
+        if (rate < 0.001f) {
             mRate = 0.0f;
         }
     } else {
-        f32 val = mStep / 60.0f;
-        if (val > 1.0f) {
-            val = 1.0f;
+        // Toward 1 by (step / 60)^4, capped at 1 after a second.
+        f32 approach = mStep / 60.0f;
+        if (approach > 1.0f) {
+            approach = 1.0f;
         }
 
-        val *= val;
-        val *= val;
-        mRate += (1.0f - mRate) * val;
+        approach *= approach;
+        approach *= approach;
+        mRate += (1.0f - mRate) * approach;
         mStep++;
     }
 
