@@ -111,6 +111,10 @@ LayoutHolder* MR::createAndAddLayoutHolder(const char* pArcName) {
     return SingletonHolder< ResourceHolderManager >::get()->createAndAddLayoutHolder(pArcName, nullptr);
 }
 
+LayoutHolder* MR::createAndAddGameLayoutHolder(const char* pArcName) {
+    return SingletonHolder< ResourceHolderManager >::get()->createAndAddGameLayoutHolder(pArcName);
+}
+
 LayoutHolder* MR::createAndAddLayoutHolderRawData(const char* pArcPath) {
     return SingletonHolder< ResourceHolderManager >::get()->createAndAddLayoutHolderRawData(pArcPath);
 }

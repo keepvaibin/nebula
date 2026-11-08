@@ -22,6 +22,38 @@ LayoutHolder* ResourceHolderManager::createAndAddLayoutHolder(const char* pParam
     return createAndAddInner(pParam1, MR::makeLayoutArchiveFileName, startCreateLayoutHolder)->mLayoutHolder;
 }
 
+// The game's own copy of the layout archive pArcName under a mod's, listed under its own name ("<name>|game", which no
+// archive has) so the mod's copy and it never stand for each other. Null when no mod's copy is over the game's, or the
+// game has none.
+LayoutHolder* ResourceHolderManager::createAndAddGameLayoutHolder(const char* pArcName) {
+    MR::FormattedName name("%s|game", pArcName);
+    ResourceHolderManagerName2Resource* pFound = find(name.c_str());
+    if (pFound != nullptr) {
+        return pFound->mLayoutHolder;
+    }
+
+    MR::FormattedName gamePath;
+    if (!MR::makeGameLayoutArchiveFileName(gamePath, pArcName)) {
+        return nullptr;
+    }
+    NebulaArena* pArena = nullptr;
+    AssetFolder* const pArchive = MR::getGameArchive(gamePath.c_str(), &pArena);
+    // With no mod's copy over the game's, the holder the game has is its own.
+    MR::FormattedName heldPath;
+    MR::makeLayoutArchiveFileName(heldPath, pArcName);
+    if (pArchive == nullptr || pArchive == MR::getArchive(heldPath.c_str())) {
+        return nullptr;
+    }
+
+    CreateResourceHolderArgs args = CreateResourceHolderArgs();
+    args.mHeap = pArena;
+    {
+        MR::CurrentHeapRestorer heapRestorer(pArena);
+        args.mLayoutHolder = new LayoutHolder(*pArchive);
+    }
+    return add(name.c_str(), args)->mLayoutHolder;
+}
+
 LayoutHolder* ResourceHolderManager::createAndAddLayoutHolderRawData(const char* pParam1) {
     FuncPtrC create = &ResourceHolderManager::createLayoutHolder;
     CreateResourceHolderArgs args = CreateResourceHolderArgs();

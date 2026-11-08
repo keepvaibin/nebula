@@ -21,6 +21,8 @@ namespace GameAssets {
 
     // The file or folder at pPath: its entry, or -1.
     s32 find(const char* pPath);
+    // The game's own file or folder at pPath under any mod's: its entry, or -1.
+    s32 findGame(const char* pPath);
     bool open(const char* pPath, File* pFile);
     bool open(s32 entry, File* pFile);
     // The `index`-th entry of the folder at pPath, in the store's order: false past the last.
@@ -34,9 +36,10 @@ namespace GameAssets {
     void unloadHeap(const NebulaArena* pHeap);
 
     // The archive held under pPath (letters in either case), or null; *ppArena, when asked, gets the arena holding it.
-    AssetFolder* findArchive(const char* pPath, NebulaArena** ppArena);
+    // `game`: the game's own copy held apart from a mod's (getGameArchive).
+    AssetFolder* findArchive(const char* pPath, NebulaArena** ppArena, bool game = false);
     // Holds pFolder under pPath until pArena goes.
-    void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena);
+    void holdArchive(const char* pPath, AssetFolder* pFolder, NebulaArena* pArena, bool game = false);
 
     // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
     // current heap when null): null when there is no such file. A block has a zero past the file.

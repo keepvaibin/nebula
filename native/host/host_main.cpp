@@ -1962,6 +1962,10 @@ int svc_asset_find(void*, const char* path, NebulaAssetEntry* out) {
     return path != nullptr ? disc_entry_out(disc_table().find(path), out) : 0;
 }
 
+int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
+    return path != nullptr ? disc_entry_out(disc_table().find_game(path), out) : 0;
+}
+
 int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
     return disc_entry_out(disc_table().entry(index), out);
 }
@@ -3617,6 +3621,7 @@ int main(int argc, char** argv) {
     services.calendar_ns = svc_calendar_ns;
     services.code_patch = svc_code_patch;
     services.asset_find = svc_asset_find;
+    services.asset_find_game = svc_asset_find_game;
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;
     services.asset_added_child = svc_asset_added_child;

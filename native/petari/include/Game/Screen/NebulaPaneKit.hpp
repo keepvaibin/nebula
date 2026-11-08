@@ -17,19 +17,33 @@ namespace nw4r {
 // authored look, without children, and belongs to the screen's layout (made in it, freed with it). Nebula's screens
 // draw with the game's own windows and fonts this way (NebulaAchievementBoard). The holder's archive must stay loaded
 // while the copies live (a scene's layouts do).
+//
+// Under a mod's copy of the archive the screens never lose a pane: one the mod's lacks, or has as another kind, comes
+// from the game's own copy (opened the first time one is missing), and a mod's copy with no usable layout gives way
+// whole. Each such pane is logged.
 class NebulaPaneKit {
 public:
     NebulaPaneKit();
 
-    // The holder's layout, copied into pInto; false when the holder has none.
-    bool init(LayoutHolder* pHolder, nw4r::lyt::Layout* pInto);
-    // A copy of the named pane under a new name (at most 16 characters); null when the layout has no such pane.
+    // The layout of pHolder, the holder of the layout archive pArchive ("SysInfoWindow.arc": a name the kit keeps),
+    // copied into pInto; false when neither it nor the game's own copy has one.
+    bool init(LayoutHolder* pHolder, const char* pArchive, nw4r::lyt::Layout* pInto);
+    // As above, with the archive's holder.
+    bool init(const char* pArchive, nw4r::lyt::Layout* pInto);
+    // A copy of the named pane under a new name (at most 16 characters); null when neither copy has such a pane.
     nw4r::lyt::Pane* make(const char* pName, const char* pNewName) const;
     nw4r::lyt::Window* makeWindow(const char* pName, const char* pNewName) const;
     // A text box copy ready for the game's text: a buffer of `length` characters and the game's tag processor.
     nw4r::lyt::TextBox* makeText(const char* pName, const char* pNewName, u32 length) const;
 
 private:
-    nw4r::lyt::ResBlockSet mBlocks;  // the holder's cooked layout; none before init
-    nw4r::lyt::Layout* mpInto;       // the layout the copies are made in
+    // The named pane of kind `kind` (-1 any) in the blocks, or none.
+    static u32 find(const nw4r::lyt::ResBlockSet& rBlocks, const char* pName, s32 kind);
+    nw4r::lyt::Pane* build(const char* pName, const char* pNewName, s32 kind) const;
+
+    nw4r::lyt::ResBlockSet mBlocks;        // the holder's cooked layout; none before init
+    mutable nw4r::lyt::ResBlockSet mGame;  // the game's own copy's, under a mod's; none until a pane is missing
+    mutable bool mGameOpened;
+    const char* mpArchive;            // the archive's name
+    nw4r::lyt::Layout* mpInto;        // the layout the copies are made in
 };

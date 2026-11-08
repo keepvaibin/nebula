@@ -22,6 +22,11 @@ namespace MR {
     // the permanent arena. Null when the store has no such archive.
     AssetFolder* getArchive(const char* pFilePath, NebulaArena* pArena = nullptr);
 
+    // The game's own archive at pFilePath under any mod's, held apart from the mod's (in the asker's arena, as
+    // getArchive); with no mod's over it, getArchive's. *ppArena, when asked, gets the arena holding it. Null when the
+    // game has none.
+    AssetFolder* getGameArchive(const char* pFilePath, NebulaArena** ppArena);
+
     // The arena holding pFilePath's archive; null when none is held.
     NebulaArena* getArchiveArena(const char* pFilePath);
 
@@ -57,6 +62,8 @@ namespace MR {
     /// @param[in] pFileName A pointer to the null-terminated name of the archive file.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
     bool makeLayoutArchiveFileName(FormattedName& rDst, const char* pFileName);
+    // As makeLayoutArchiveFileName, among the game's own files.
+    bool makeGameLayoutArchiveFileName(FormattedName& rDst, const char* pFileName);
 
     /// @brief Creates an absolute path to the given layout's archive file.
     /// @param[out] rDst The path made.
