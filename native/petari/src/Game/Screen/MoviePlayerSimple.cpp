@@ -27,23 +27,20 @@ namespace {
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovieName(""), mBuffer(nullptr), mArena(nullptr), mStream(nullptr),
-      mLoop(false), mInputCheckedBefore(false) {
+    : LayoutActor("ムービープレイヤー", true), ArenaOwned(), mMovieName(""), mStream(nullptr), mLoop(false),
+      mInputCheckedBefore(false) {
 }
 
 MoviePlayerSimple::~MoviePlayerSimple() {
     SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->unregisterMoviePlayerSimple(this);
     mStream->quit();
     delete mStream;
-    NebulaArena::destroy(mArena);
 }
 
 void MoviePlayerSimple::init(const TableIter& rIter) {
     MR::connectToSceneMovie(this);
 
     mStream = new MovieStream();
-
-    mArena = NebulaArena::create(MR::getCurrentHeap());
 
     initNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
     kill();
@@ -74,7 +71,7 @@ void MoviePlayerSimple::draw() const {
     drawBands(x, y, width, height);
     MovieDraw::setLinearFilter(true);
     if (playing) {
-        mStream->decodeFrameAtPosition();
+        mStream->pickFrameAtPosition();
     }
     mStream->drawCurrentFrame(x, y, width, height);
 }
@@ -155,8 +152,6 @@ void MoviePlayerSimple::exeSimpleOff() {
 
 void MoviePlayerSimple::exeOpen() {
     mStream->open(mMovieName);
-    mBuffer = new (mArena, 0) u8[mStream->calcNeedMemory()];
-    mStream->setBuffer(mBuffer);
     mStream->start(mLoop);
     setNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying));
     appear();
@@ -189,8 +184,6 @@ void MoviePlayerSimple::play(bool loop) {
 void MoviePlayerSimple::stop() {
     mStream->stop();
     mStream->close();
-    delete[] mBuffer;
-    mBuffer = nullptr;
     MR::endStarPointerMode(this);
     GameSystemFunction::setPermissionToCheckInput(mInputCheckedBefore);
 }

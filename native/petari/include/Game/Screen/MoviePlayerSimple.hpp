@@ -3,7 +3,6 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/System/ArenaOwned.hpp"
 #include "Game/Screen/MovieStream.hpp"
-class NebulaArena;
 
 // The scene's movie: as large as the screen holds it at its own shape, centred, black around it; its time is its
 // sound's, or the game's steps for a movie with none.
@@ -35,9 +34,6 @@ private:
     void drawBands(f32 x, f32 y, f32 width, f32 height) const;
 
     const char* mMovieName;
-    // The decoded picture's planes, from mArena while a movie is open.
-    u8* mBuffer;
-    NebulaArena* mArena;
     MovieStream* mStream;
     bool mLoop;
     // Whether input was being checked before the movie took it, for when it ends.

@@ -8,7 +8,7 @@
 
 #include "galaxy/render/device_gate.h"
 #include "galaxy/render/gpu_texture_backend.h"
-#include "galaxy/render/movie_replacement.h"
+#include "galaxy/render/movie_playback.h"
 #include "galaxy/render/texture_pack.h"
 #include "galaxy/render/texture_sampler.h"
 
@@ -108,9 +108,8 @@ public:
     void apply_texture_packs();
     [[nodiscard]] TexturePacks::Stats texture_pack_stats() const noexcept { return packs_.stats(); }
 
-    // HD movie replacements: `frame`'s planes in place of textures `mark.y/u/v` until the next call; null draws the
-    // game's own.
-    void set_movie_override(const MovieFrameMark& mark, const MovieReplacementFrame* frame);
+    // The movie: `frame`'s planes as textures NEBULA_TEXTURE_MOVIE_Y, _U and _V until the next call; null: none.
+    void set_movie_override(const MovieFrameMark& mark, const MovieFrame* frame);
     [[nodiscard]] bool movie_override_active() const noexcept { return movie_active_; }
 
 private:

@@ -11,12 +11,12 @@ struct OddHalf {
   float out7, out6, out5, out4;
 };
 
-EvenHalf aan_even(float sum04, float dif04, float sum26, float dif26) noexcept {
+[[maybe_unused]] EvenHalf aan_even(float sum04, float dif04, float sum26, float dif26) noexcept {
   const float rotated = madd(dif26, kSqrt2, -sum26);
   return {sum04 + sum26, dif04 + rotated, dif04 - rotated, sum04 - sum26};
 }
 
-OddHalf aan_odd(float z10, float z11, float z12, float z13) noexcept {
+[[maybe_unused]] OddHalf aan_odd(float z10, float z11, float z12, float z13) noexcept {
   const float out7 = z11 + z13;
   const float z5 = (z10 + z12) * kC2;
   const float out6 = madd(-z10, kC2PlusC6, z5) - out7;
@@ -25,14 +25,14 @@ OddHalf aan_odd(float z10, float z11, float z12, float z13) noexcept {
   return {out7, out6, out5, out4};
 }
 
-FloatRow combine(const EvenHalf& even, const OddHalf& odd) noexcept {
+[[maybe_unused]] FloatRow combine(const EvenHalf& even, const OddHalf& odd) noexcept {
   return {
       even.out0 + odd.out7, even.out1 + odd.out6, even.out2 + odd.out5, even.out3 + odd.out4,
       even.out3 - odd.out4, even.out2 - odd.out5, even.out1 - odd.out6, even.out0 - odd.out7,
   };
 }
 
-FloatRow transform_row(const s16* coefficients, const float* quant) noexcept {
+[[maybe_unused]] FloatRow transform_row(const s16* coefficients, const float* quant) noexcept {
   const float x0 = static_cast<float>(coefficients[0]) * quant[0];
   const float x1 = static_cast<float>(coefficients[1]) * quant[1];
   const float x2 = static_cast<float>(coefficients[2]) * quant[2];
@@ -48,7 +48,7 @@ FloatRow transform_row(const s16* coefficients, const float* quant) noexcept {
   return combine(even, odd);
 }
 
-FloatRow transform_row_low4(const FloatRow& x) noexcept {
+[[maybe_unused]] FloatRow transform_row_low4(const FloatRow& x) noexcept {
   const float sum02 = x[0] + x[2];
   const float dif02 = x[0] - x[2];
   const EvenHalf even{sum02, madd(x[2], kSqrt2, dif02), madd(-x[2], kSqrt2, sum02), dif02};
@@ -56,7 +56,7 @@ FloatRow transform_row_low4(const FloatRow& x) noexcept {
   return combine(even, odd);
 }
 
-FloatRow transform_row_dc_ac(float dc, float ac) noexcept {
+[[maybe_unused]] FloatRow transform_row_dc_ac(float dc, float ac) noexcept {
   const float a1 = madd(ac, kC2, -ac);
   const float a2 = madd(ac, kSqrt2, -a1);
   const float a3 = madd(-ac, kC6, a2);
@@ -67,13 +67,13 @@ FloatRow transform_row_dc_ac(float dc, float ac) noexcept {
   }
 }
 
-FloatRow transform_column(const FloatRow& x) noexcept {
+[[maybe_unused]] FloatRow transform_column(const FloatRow& x) noexcept {
   const EvenHalf even = aan_even((x[0] + x[4]) + kOutputBias, (x[0] - x[4]) + kOutputBias, x[2] + x[6], x[2] - x[6]);
   const OddHalf odd = aan_odd(x[5] - x[3], x[1] + x[7], x[1] - x[7], x[5] + x[3]);
   return combine(even, odd);
 }
 
-size_t row_extent(const s16* coefficients) noexcept {
+[[maybe_unused]] size_t row_extent(const s16* coefficients) noexcept {
   size_t extent = 8;
   while (extent > 0 && coefficients[extent - 1] == 0) {
     --extent;
@@ -81,8 +81,23 @@ size_t row_extent(const s16* coefficients) noexcept {
   return extent;
 }
 
-std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
-                               const QuantizationTable& quantization) noexcept {
+// One block's inverse DCT into 8 rows of 8 texels, `pitch` bytes apart. `last`: the zigzag index of the block's last
+// coefficient.
+void inverse_dct(const std::array<s16, 64>& coefficients, const QuantizationTable& quantization, size_t last, u8* out,
+                 size_t pitch) noexcept {
+  if (last == 0) {
+    // The DC alone: every other term of both passes adds or subtracts +0, so the 64 texels are one value.
+    const float dc = static_cast<float>(coefficients[0]) * quantization.values[0];
+    const float scaled = (dc + kOutputBias) * 0.125f;
+    const u8 value = scaled <= 0.0f ? 0 : scaled >= 255.0f ? 255 : static_cast<u8>(scaled);
+    for (size_t row = 0; row < 8; ++row) {
+      std::memset(out + row * pitch, value, 8);
+    }
+    return;
+  }
+#if defined(MOVIE_VIDEO_IDCT_SIMD)
+  idct_simd(coefficients.data(), quantization.transposed.data(), out, pitch);
+#else
   std::array<float, 64> workspace{};
   for (size_t row = 0; row < 8; ++row) {
     const s16* rowCoefficients = &coefficients[row * 8];
@@ -113,10 +128,6 @@ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
     std::copy(transformed.begin(), transformed.end(), workspace.begin() + row * 8);
   }
 
-  std::array<u8, 64> output{};
-#if defined(MOVIE_VIDEO_COLUMNS_SIMD)
-  columns_simd(workspace.data(), output.data());
-#else
   for (size_t column = 0; column < 8; ++column) {
     FloatRow input{};
     for (size_t row = 0; row < 8; ++row) {
@@ -125,48 +136,58 @@ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
     const FloatRow transformed = transform_column(input);
     for (size_t row = 0; row < 8; ++row) {
       const float scaled = transformed[row] * 0.125f;
-      output[row * 8 + column] = scaled <= 0.0f ? 0 : scaled >= 255.0f ? 255 : static_cast<u8>(scaled);
+      out[row * pitch + column] = scaled <= 0.0f ? 0 : scaled >= 255.0f ? 255 : static_cast<u8>(scaled);
     }
   }
 #endif
-  return output;
 }
 
-bool decode_and_write_block(BitReader& reader, DecodeContext& context, size_t component, u8* output, u16 width,
-                            u16 height, u16 x, u16 y) noexcept {
-  std::array<s16, 64> coefficients{};
-  if (!decode_block(reader, context, component, coefficients)) {
+bool decode_and_write_block(BitReader& reader, DecodeContext& context, size_t component, u8* plane, size_t pitch,
+                            u16 width, u16 height, u16 x, u16 y) noexcept {
+  std::array<s16, 64> coefficients;
+  size_t last = 0;
+  if (!decode_block(reader, context, component, coefficients, last)) {
     return false;
   }
   const QuantizationTable& quantization = context.quantizationTables[context.components[component].quantizationTable];
   if (!quantization.valid) {
     return false;
   }
-  write_block(output, width, height, x, y, inverse_dct(coefficients, quantization));
+  if (x + 8 <= width && y + 8 <= height) {
+    inverse_dct(coefficients, quantization, last, plane + static_cast<size_t>(y) * pitch + x, pitch);
+    return true;
+  }
+  // A block over the plane's edge: only its part inside.
+  std::array<u8, 64> pixels;
+  inverse_dct(coefficients, quantization, last, pixels.data(), 8);
+  write_block(plane, pitch, width, height, x, y, pixels);
   return true;
 }
 
-s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* planeY, u8* planeU, u8* planeV) noexcept {
+s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* planeY, u8* planeU, u8* planeV,
+                const std::array<size_t, 3>& pitches) noexcept {
   const u16 chromaWidth = static_cast<u16>((context.width + 1) / 2);
   const u16 chromaHeight = static_cast<u16>((context.height + 1) / 2);
   BitReader bits{file, context.scanOffset};
   const u16 mcuColumns = static_cast<u16>((context.width + 15) / 16);
   const u16 mcuRows = static_cast<u16>((context.height + 15) / 16);
+  const u16 width = context.width;
+  const u16 height = context.height;
   for (u16 mcuY = 0; mcuY < mcuRows; ++mcuY) {
     for (u16 mcuX = 0; mcuX < mcuColumns; ++mcuX) {
       const u16 lumaX = static_cast<u16>(mcuX * 16);
       const u16 lumaY = static_cast<u16>(mcuY * 16);
-      if (!decode_and_write_block(bits, context, 0, planeY, context.width, context.height, lumaX, lumaY) ||
-          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height,
-                                  static_cast<u16>(lumaX + 8), lumaY) ||
-          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height, lumaX,
+      const u16 chromaX = static_cast<u16>(mcuX * 8);
+      const u16 chromaY = static_cast<u16>(mcuY * 8);
+      if (!decode_and_write_block(bits, context, 0, planeY, pitches[0], width, height, lumaX, lumaY) ||
+          !decode_and_write_block(bits, context, 0, planeY, pitches[0], width, height, static_cast<u16>(lumaX + 8),
+                                  lumaY) ||
+          !decode_and_write_block(bits, context, 0, planeY, pitches[0], width, height, lumaX,
                                   static_cast<u16>(lumaY + 8)) ||
-          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height,
-                                  static_cast<u16>(lumaX + 8), static_cast<u16>(lumaY + 8)) ||
-          !decode_and_write_block(bits, context, 1, planeU, chromaWidth, chromaHeight,
-                                  static_cast<u16>(mcuX * 8), static_cast<u16>(mcuY * 8)) ||
-          !decode_and_write_block(bits, context, 2, planeV, chromaWidth, chromaHeight,
-                                  static_cast<u16>(mcuX * 8), static_cast<u16>(mcuY * 8))) {
+          !decode_and_write_block(bits, context, 0, planeY, pitches[0], width, height, static_cast<u16>(lumaX + 8),
+                                  static_cast<u16>(lumaY + 8)) ||
+          !decode_and_write_block(bits, context, 1, planeU, pitches[1], chromaWidth, chromaHeight, chromaX, chromaY) ||
+          !decode_and_write_block(bits, context, 2, planeV, pitches[2], chromaWidth, chromaHeight, chromaX, chromaY)) {
         return kBadSyntax;
       }
     }

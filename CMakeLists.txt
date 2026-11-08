@@ -395,7 +395,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/texture_store.cpp
     runtime/src/render/texture_pack.cpp
     runtime/src/render/texture_pack_codecs.cpp
-    runtime/src/render/movie_replacement.cpp
+    runtime/src/render/movie_playback.cpp
+    runtime/src/movie_video.cpp
     runtime/src/render/gpu_texture_backend_d3d12.cpp
     runtime/src/render/gpu_placed_textures.cpp
     runtime/src/render/frame_pass.cpp
@@ -449,7 +450,7 @@ if(GALAXY_STREAMLINE_SDK)
     target_include_directories(galaxy_render SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_render PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
-# HD movie replacements decode through Media Foundation (movie_replacement.cpp).
+# HD movie replacements decode through Media Foundation (movie_playback.cpp).
 target_link_libraries(galaxy_render PRIVATE mfplat mfreadwrite mfuuid d3d11)
 target_link_libraries(galaxy_render
     PUBLIC
@@ -478,7 +479,7 @@ endif()
 
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
 # (smg_game.dll, beside the executable or --module) on Nebula's renderer.
-add_executable(NebulaNative native/host/host_main.cpp runtime/src/movie_video.cpp runtime/src/frame_phase.cpp)
+add_executable(NebulaNative native/host/host_main.cpp runtime/src/frame_phase.cpp)
 if(WIN32)
     enable_language(RC)
 endif()
@@ -608,7 +609,7 @@ target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name render_config gpu_sampler rt_materials texture_pack movie_replacement frame_pass post_process
+foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
         render_core_host)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
@@ -669,7 +670,8 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/texture_store.cpp
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
-        runtime/src/render/movie_replacement.cpp
+        runtime/src/render/movie_playback.cpp
+        runtime/src/movie_video.cpp
         runtime/src/render/frame_pass.cpp
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/display_modes.cpp
@@ -744,7 +746,7 @@ runtime/src/render/host_window_win32.cpp
         target_link_libraries(galaxy_render_vk PRIVATE mfplat mfreadwrite mfuuid d3d11)
     endif()
 
-    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/frame_phase.cpp runtime/src/movie_video.cpp)
+    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/frame_phase.cpp)
     nebula_file_details(NebulaNativeVk NebulaNative.exe "Super Mario Galaxy on PC" ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
     target_sources(NebulaNativeVk PRIVATE ${galaxy_programs_spirv})
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)

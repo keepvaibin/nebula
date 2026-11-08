@@ -1,14 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// HD movie replacements: a video file (MP4 and what else the platform decodes) in place of one of the game's THP
-// movies. The game still plays its THP (its timing, sound, subtitles and rumble follow it); each frame it draws,
-// the texture cache shows the replacement's frame of the same time in place of the THP's Y, U and V planes, at the
-// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's material converts them; each is a
+// The game's movies, decoded off the game thread. The game names the frame it shows (its sound keeps the time) and
+// draws its movie quad with the reserved texture ids NEBULA_TEXTURE_MOVIE_Y, _U and _V; the texture store shows that
+// frame's planes there. The planes are JPEG's full-range BT.601 YCbCr, as the movie material converts them; each is a
 // one-byte texture whose view repeats its value in every channel.
 //
-// Files: <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders configure() gives (a later folder
-// wins). Decoding runs on its own thread a few frames ahead into upload buffers; the render thread only records copies.
+// The frame comes from one of two decoders, each on its own thread, ahead of the game, into upload buffers (the
+// render thread only records copies):
+// - the cooked movie (NMOV in the asset store, galaxy/movie_video.h's JPEG frames): every frame exactly the one the
+//   game names, the render thread waiting for it when the decoder is behind;
+// - an HD replacement video (MP4 and what else the platform decodes): <folder>/<name>.<ext> for the disc's
+//   /MovieData/<name>.thp, from the folders configure() gives (a later folder wins), the frame of the same time at the
+//   replacement's resolution, in place of the cooked one once its first frame is decoded.
 
 #include "galaxy/render/gpu_texture_backend.h"
 
@@ -31,19 +35,18 @@ namespace galaxy::render {
 struct MovieFrameMark {
     static constexpr std::int32_t kNone = -1;     // no movie in this submission
     std::array<char, 64> name{};  // the disc path, e.g. /MovieData/PrologueA.thp
-    std::int32_t frame = kNone;
+    std::int32_t frame = kNone;   // below 0: the movie is opening
     float frame_rate = 0.0f;
-    std::uint32_t y = 0;  // the planes' texture ids
-    std::uint32_t u = 0;
-    std::uint32_t v = 0;
+    const std::uint8_t* data = nullptr;  // the cooked movie, mapped for the session; null before the game opens it
+    std::uint64_t size = 0;
     std::uint32_t width = 0;  // the Y plane; U and V are half each way
     std::uint32_t height = 0;
 };
 
 // A decoded frame: Y (width x height) and U, V (half each way), a byte per texel, in one upload buffer.
-struct MovieReplacementFrame {
+struct MovieFrame {
     std::int32_t frame = -1;
-    std::int64_t time = 0;  // the file's presentation time, 100 ns units
+    std::int64_t time = 0;  // a replacement's presentation time, 100 ns units
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::shared_ptr<TextureBackend::UploadChunk> staging;
@@ -77,50 +80,70 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
 std::uint64_t movie_plane_layout(std::uint32_t width, std::uint32_t height, std::array<std::uint64_t, 3>& offsets,
                                  std::array<std::uint32_t, 3>& pitches) noexcept;
 
-class MovieReplacements {
+// One cooked movie's frame table: each frame's JPEG in the NMOV (crates/nebula-import/src/cook/thp.rs). Empty when the
+// bytes are not a whole NMOV.
+struct CookedMovieIndex {
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::vector<std::uint64_t> video_at;   // per frame: its JPEG's offset in the file
+    std::vector<std::uint32_t> video_size;
+};
+[[nodiscard]] CookedMovieIndex index_cooked_movie(const std::uint8_t* data, std::uint64_t size);
+
+class MoviePlayback {
 public:
-    MovieReplacements();
-    MovieReplacements(const MovieReplacements&) = delete;
-    MovieReplacements& operator=(const MovieReplacements&) = delete;
-    ~MovieReplacements();
+    MoviePlayback();
+    MoviePlayback(const MoviePlayback&) = delete;
+    MoviePlayback& operator=(const MoviePlayback&) = delete;
+    ~MoviePlayback();
 
     // The folders searched for replacements (a later folder wins) and the upload buffers' maker (any thread).
     void configure(std::vector<std::filesystem::path> folders,
                    std::function<TextureBackend::UploadChunk(std::uint64_t)> stager);
     void shutdown() noexcept;
 
-    // Render thread, each submission: the replacement frame for the game's movie frame, or null (the THP shows).
-    // The frame stays valid until the next call.
-    [[nodiscard]] const MovieReplacementFrame* frame(const MovieFrameMark& mark);
+    // Render thread, each submission: the frame the mark names, or null (no movie, or no frame). Valid until the next
+    // call.
+    [[nodiscard]] const MovieFrame* frame(const MovieFrameMark& mark);
 
     // The replacement file for a disc movie path (none: empty).
     [[nodiscard]] std::filesystem::path find(const char* disc_path) const;
 
     struct Stats {
-        std::uint64_t opened = 0;
+        std::uint64_t opened = 0;  // replacements
         std::uint64_t decoded = 0;
         std::uint64_t shown = 0;
-        std::uint64_t late = 0;  // submissions that showed an older frame (or the THP) as the decoder caught up
+        std::uint64_t late = 0;  // submissions that showed an older replacement frame as its decoder caught up
         std::uint64_t seeks = 0;
         double convert_ms = 0.0;
+        std::uint64_t cooked_decoded = 0;  // the cooked movie's frames
+        std::uint64_t cooked_shown = 0;
+        std::uint64_t cooked_waits = 0;  // submissions whose frame the render thread waited for
+        std::uint64_t cooked_seeks = 0;
+        std::uint64_t cooked_failed = 0;  // frames whose data did not decode
+        double cooked_decode_ms = 0.0;
+        double cooked_wait_ms = 0.0;
     };
     [[nodiscard]] Stats stats() const;
-    // Any thread: a replacement's frames are showing for the open movie (the THP's own decode is then unseen).
-    [[nodiscard]] static bool showing() noexcept;
 
 private:
     class Decoder;
+    class CookedDecoder;
     void close() noexcept;
 
     std::vector<std::filesystem::path> folders_;
     std::function<TextureBackend::UploadChunk(std::uint64_t)> stager_;
     std::unique_ptr<Decoder> decoder_;
+    std::unique_ptr<CookedDecoder> cooked_;
+    const std::uint8_t* cooked_data_ = nullptr;
     std::string current_name_;
     bool current_missing_ = false;  // no file for current_name_ (looked up once per opening)
-    MovieReplacementFrame shown_;
+    MovieFrame shown_;
+    MovieFrame cooked_shown_;
     std::uint64_t shown_count_ = 0;
     std::uint64_t late_ = 0;
     std::uint64_t opened_ = 0;
+    Stats retired_;  // the closed decoders' counts
 };
 
 }  // namespace galaxy::render

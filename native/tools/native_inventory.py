@@ -194,7 +194,7 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/(?:post_process|game_bloom|ambient_occlusion|enhanced_lighting|"
      r"curved_surfaces|game_lights|galaxy_select)", "feature-graphics", "CONVERT",
      "Graphics features: on native targets and native data (phase 2)."),
-    (r"^runtime/(?:src|include/galaxy)/render/(?:texture_pack|movie_replacement)", "feature-packs", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/render/(?:texture_pack|movie_playback)", "feature-packs", "CONVERT",
      "Texture packs and HD movies: names from the cooker (Dolphin hashes of original data), native textures/video."),
     (r"^runtime/(?:src|include/galaxy)/render/host_window_win32", "host-ui-win32", "CONVERT",
      "Window, settings and achievements overlay: move the UI model to shared code for every host."),

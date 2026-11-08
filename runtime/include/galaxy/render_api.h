@@ -142,12 +142,10 @@ struct GameLight {
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
-// Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
-// until the movie closes (frame -1).
-void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
-                        std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept;
-// Any thread: a replacement video's frames show for the open movie (its THP frames need no decode).
-[[nodiscard]] bool movie_replacement_showing() noexcept;
+// Simulation thread: the movie frame the game draws (movie_playback.h); every later submission carries it until the
+// next. `data`: the cooked movie (null keeps the one given).
+void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
+                        std::uint32_t width, std::uint32_t height);
 
 // Channel `channel`'s latest finished probes (nebula_game_api.h NebulaHostServices::screen_probe_results).
 [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);

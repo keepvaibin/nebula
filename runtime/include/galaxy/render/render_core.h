@@ -8,7 +8,7 @@
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/movie_replacement.h"
+#include "galaxy/render/movie_playback.h"
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/renderer_vk.h"
 #else
@@ -88,9 +88,9 @@ public:
     // The list the next render_frame hands over.
     void attach_frame_list(NebulaFrameList* list) noexcept { producer_list_ = list; }
 
-    // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
-    void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
-                            std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
+    // Simulation thread: the movie frame later submissions carry (movie_playback.h).
+    void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
+                            std::uint32_t width, std::uint32_t height) noexcept {
         MovieFrameMark& mark = producer_movie_frame_;
         if (frame == MovieFrameMark::kNone) {
             mark = {};
@@ -102,9 +102,10 @@ public:
         }
         mark.frame = frame;
         mark.frame_rate = frame_rate;
-        mark.y = y;
-        mark.u = u;
-        mark.v = v;
+        if (data != nullptr) {
+            mark.data = static_cast<const std::uint8_t*>(data);
+            mark.size = size;
+        }
         mark.width = width;
         mark.height = height;
     }
@@ -409,8 +410,8 @@ private:
     float scene_jitter_px_[2]{};
     bool producer_movie_content_{},render_movie_content_{};
     MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
-    // HD movie replacements: the decoder (render thread) and the folders last applied.
-    MovieReplacements movie_replacements_;
+    // The game's movies: the cooked movie's decoder (a worker), HD replacements (render thread), the folders last applied.
+    MoviePlayback movie_playback_;
     std::uint64_t movie_mods_generation_ = ~0ull;
     std::uint64_t movie_stats_tick_ = 0;
     std::array<std::uint64_t,512> pointer_latency_bins_{};

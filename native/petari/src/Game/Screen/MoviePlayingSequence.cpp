@@ -269,7 +269,7 @@ void MoviePlayingSequence::exePlayWait() {
         // An HD replacement's decoder starts here, the play wait before the THP opens, so its first frames are ready
         // with the game's.
         const NebulaHostServices* const host = nebula_host();
-        host->movie_frame(host->user, ::getMovieName(mInfo), NEBULA_MOVIE_OPENING, 0.0f, 0, 0, 0, 0, 0);
+        host->movie_frame(host->user, ::getMovieName(mInfo), NEBULA_MOVIE_OPENING, 0.0f, nullptr, 0, 0, 0);
         MR::startStarPointerModeDemo(this);
         MR::stopSubBGM(60);
         MR::stopStageBGM(60);

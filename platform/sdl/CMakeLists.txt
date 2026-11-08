@@ -88,7 +88,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/texture_store.cpp
     ${rt}/render/texture_pack.cpp
     ${rt}/render/texture_pack_codecs.cpp
-    ${rt}/render/movie_replacement.cpp
+    ${rt}/render/movie_playback.cpp
+    ${rt}/movie_video.cpp
     ${rt}/render/frame_pass.cpp
     ${rt}/render/post_process_settings.cpp
     ${rt}/render/render_core.cpp
@@ -208,7 +209,6 @@ add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
 # activity calls its SDL_main), an executable elsewhere.
 set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
-    "${nebula_root}/runtime/src/movie_video.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"

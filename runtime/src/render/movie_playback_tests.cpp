@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // HD movie replacements: the planes' layout, the JPEG YCbCr of known colours and the file lookup.
 
-#include "galaxy/render/movie_replacement.h"
+#include "galaxy/render/movie_playback.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -127,21 +127,118 @@ void test_find() {
     std::ofstream(root / "a" / "PrologueA.mp4") << "x";
     std::ofstream(root / "b" / "prologuea.MKV") << "x";
     std::ofstream(root / "b" / "EndingA.txt") << "x";
-    MovieReplacements movies;
+    MoviePlayback movies;
     movies.configure({root / "a", root / "b"}, nullptr);
     const std::filesystem::path found = movies.find("/MovieData/PrologueA.thp");
     expect(found.parent_path() == root / "b", "a later folder wins, names and extensions in any case");
     expect(movies.find("/MovieData/EndingA.thp").empty(), "other extensions are not videos");
     expect(movies.find("/MovieData/PrologueB.thp").empty(), "no file: none");
-    // Without a stager no decoder starts: the THP shows.
+    // Without a stager no decoder starts.
     MovieFrameMark mark{};
     const char name[] = "/MovieData/PrologueA.thp";
     std::memcpy(mark.name.data(), name, sizeof(name));
     mark.frame = 0;
     mark.frame_rate = 30.0f;
-    expect(movies.frame(mark) == nullptr, "no upload buffers: no replacement");
+    expect(movies.frame(mark) == nullptr, "no upload buffers: no frame");
     movies.shutdown();
     std::filesystem::remove_all(root);
+}
+
+// A cooked movie of `frames` 16x16 frames, each one baseline JPEG of a constant picture (six blocks with zero DC and
+// end of block: every texel 128), as the importer lays them out.
+std::vector<std::uint8_t> cooked_movie(std::uint32_t frames) {
+    std::vector<std::uint8_t> jpeg{0xFF, 0xD8};
+    const auto segment = [&jpeg](std::uint8_t marker, std::vector<std::uint8_t> bytes) {
+        const auto length = bytes.size() + 2;
+        jpeg.insert(jpeg.end(), {0xFF, marker, static_cast<std::uint8_t>(length >> 8), static_cast<std::uint8_t>(length)});
+        jpeg.insert(jpeg.end(), bytes.begin(), bytes.end());
+    };
+    std::vector<std::uint8_t> quant(65, 1);
+    quant[0] = 0;
+    segment(0xDB, quant);
+    segment(0xC0, {8, 0, 16, 0, 16, 3, 1, 0x22, 0, 2, 0x11, 0, 3, 0x11, 0});
+    for (const auto descriptor : {0, 0x10}) {
+        std::vector<std::uint8_t> huffman(18, 0);
+        huffman[0] = static_cast<std::uint8_t>(descriptor);
+        huffman[1] = 1;
+        segment(0xC4, huffman);
+    }
+    segment(0xDA, {3, 1, 0, 2, 0, 3, 0, 0, 63, 0});
+    jpeg.insert(jpeg.end(), {0, 0});
+    const auto padded = static_cast<std::uint32_t>((16 + jpeg.size() + 31) / 32 * 32);
+    std::vector<std::uint8_t> out(0x40, 0);
+    const auto put = [&out](std::size_t at, std::uint32_t value) { std::memcpy(out.data() + at, &value, 4); };
+    std::memcpy(out.data(), "NMOV", 4);
+    put(4, frames);
+    const float rate = 30.0f;
+    std::memcpy(out.data() + 8, &rate, 4);
+    put(12, padded);
+    put(16, padded);
+    put(20, 16);
+    put(24, 16);
+    for (std::uint32_t f = 0; f < frames; ++f) {
+        const std::size_t at = out.size();
+        out.resize(at + padded, 0);
+        put(at, f + 1 < frames ? padded : 0u);
+        put(at + 4, static_cast<std::uint32_t>(jpeg.size()));
+        std::memcpy(out.data() + at + 16, jpeg.data(), jpeg.size());
+    }
+    return out;
+}
+
+void test_index() {
+    const std::vector<std::uint8_t> movie = cooked_movie(3);
+    const CookedMovieIndex index = index_cooked_movie(movie.data(), movie.size());
+    expect(index.width == 16u && index.height == 16u && index.video_at.size() == 3u, "a cooked movie's frame table");
+    expect(index.video_at.size() == 3u && index.video_at[0] == 0x50u &&
+               index.video_at[2] - index.video_at[1] == index.video_at[1] - index.video_at[0] &&
+               index.video_size[0] == index.video_size[2],
+           "frames follow the next-size chain");
+    // Frames are padded to 32 bytes: a cut into the padding leaves every picture whole; a cut into the last one doesn't.
+    expect(index_cooked_movie(movie.data(), movie.size() - 1).video_at.size() == 3u, "a movie cut in its padding keeps its table");
+    expect(index_cooked_movie(movie.data(), index.video_at[2] + index.video_size[2] - 1u).video_at.empty(), "a cut-off movie has no table");
+    std::vector<std::uint8_t> bad = movie;
+    bad[0] = 'X';
+    expect(index_cooked_movie(bad.data(), bad.size()).video_at.empty(), "not NMOV: no table");
+
+#if defined(_WIN32)
+    // The cooked decoder through the playback: frames in turn, a repeat, a loop, a wrap past the end, a jump back.
+    std::vector<std::unique_ptr<std::vector<std::uint8_t>>> buffers;
+    std::mutex buffers_mutex;
+    MoviePlayback playback;
+    playback.configure({}, [&](std::uint64_t size) {
+        std::lock_guard<std::mutex> lock(buffers_mutex);
+        buffers.push_back(std::make_unique<std::vector<std::uint8_t>>(size));
+        TextureBackend::UploadChunk chunk{};
+        chunk.cpu_base = buffers.back()->data();
+        chunk.size = size;
+        return chunk;
+    });
+    MovieFrameMark mark{};
+    const char name[] = "/MovieData/Test.thp";
+    std::memcpy(mark.name.data(), name, sizeof(name));
+    mark.frame_rate = 30.0f;
+    mark.data = movie.data();
+    mark.size = movie.size();
+    mark.width = 16;
+    mark.height = 16;
+    mark.frame = -2;
+    expect(playback.frame(mark) == nullptr, "opening: no frame yet");
+    bool right = true;
+    for (const std::int32_t wanted : {0, 1, 1, 2, 3, 5, 0, 2, 1}) {
+        mark.frame = wanted;
+        const MovieFrame* shown = playback.frame(mark);
+        right &= shown != nullptr && shown->frame == wanted % 3 && shown->staging &&
+                 shown->staging->cpu_base[shown->offsets[0]] == 128 && shown->staging->cpu_base[shown->offsets[1]] == 128 &&
+                 shown->staging->cpu_base[shown->offsets[2] + shown->pitches[2] * 7 + 7] == 128;
+    }
+    expect(right, "every frame the mark names, decoded");
+    const MoviePlayback::Stats stats = playback.stats();
+    expect(stats.cooked_failed == 0u && stats.cooked_shown >= 8u, "no frame failed");
+    mark.frame = MovieFrameMark::kNone;
+    expect(playback.frame(mark) == nullptr, "closed: no frame");
+    playback.shutdown();
+#endif
 }
 
 }  // namespace
@@ -152,6 +249,7 @@ int main() {
 #if defined(_WIN32)
     test_find();
 #endif
-    if (failures == 0) std::cout << "movie replacement tests passed\n";
+    test_index();
+    if (failures == 0) std::cout << "movie playback tests passed\n";
     return failures == 0 ? 0 : 1;
 }

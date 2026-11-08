@@ -30,9 +30,9 @@ struct MovieVideoInfo {
     u32 mHeight;
 };
 
-// A movie in the mapped store. Its sound is read ahead into the host's mixer; its picture is the frame at its place, decoded
-// into the Y, U and V planes when that frame comes up. Its place is its sound's, or for a movie with none, the game's
-// steps at the movie's frame rate.
+// A movie in the mapped store. Its sound is read ahead into the host's mixer; its picture is the frame at its place,
+// which the host decodes off the game thread into the movie planes (movie_frame). Its place is its sound's, or for a
+// movie with none, the game's steps at the movie's frame rate.
 class MovieStream {
 public:
     MovieStream();
@@ -40,8 +40,6 @@ public:
     bool open(const char*);
     bool close();
     void quit();
-    u32 calcNeedMemory() const;
-    void setBuffer(u8*);
     void start(bool);
     void stop();
     bool hasSound() const;
@@ -51,13 +49,14 @@ public:
     void stepSilent();
     // Where playing has reached, in frames from the start through any loops; the frame count once the sound has gone out.
     f64 getPosition() const;
-    // Puts the frame nearest that place in the planes. A next frame comes in turn; only a whole frame late are any passed over.
-    s32 decodeFrameAtPosition();
-    // The planes' frame drawn at x, y (width x height, screen units); the frame drawn, or -1 before the first.
+    // Names the frame nearest that place for the host to show. A next frame comes in turn; only a whole frame late are
+    // any passed over. 0, or 2 when not playing.
+    s32 pickFrameAtPosition();
+    // The picked frame drawn at x, y (width x height, screen units); the frame drawn, or -1 before the first.
     s32 drawCurrentFrame(f32 x, f32 y, f32 width, f32 height);
-    // The frame last decoded (-1 before the first).
+    // The frame last picked (-1 before the first).
     s32 getPictureFrame() const {
-        return mPlanesFrame;
+        return mShownFrame;
     }
     f32 getDisplayAspect() const {
         return mHeader.mDisplayAspect;
@@ -67,10 +66,9 @@ public:
     void setUnpauseFrameFlag();
 
 private:
-    void rewind();
     void rewindSound();
-    // The frame at the picture's place, undecoded: moves on to the next.
-    const MovieFrameHeader* stepPicture();
+    // Moves the picture's place on a frame.
+    void stepPicture();
 
     bool mOpen;
     bool mPlaying;
@@ -79,18 +77,12 @@ private:
     const u8* mData;
     MovieFileHeader mHeader;
     MovieVideoInfo mVideoInfo;
-    u32 mCurOffset;
-    u32 mFrameSize;
-    s32 mFrame;
+    s32 mFrame;  // the picture's place
     u32 mSoundOffset;
     u32 mSoundFrameSize;
     s32 mSoundFrame;
     s32 mSoundFed;
     s32 mPicturesTaken;
     f64 mSilentPosition;
-    u8* mPlaneY;
-    u8* mPlaneU;
-    u8* mPlaneV;
-    s32 mPlanesFrame;
-    s32 mPlanesUploaded;
+    s32 mShownFrame;  // the frame picked, -1 before the first
 };
