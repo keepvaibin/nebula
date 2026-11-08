@@ -29,11 +29,11 @@ public:
     s32 getNumShootShells() const;
     f32 getPropellerRotSpeed() const;
     void updateCoordSpeed();
-    void calcLauncherInfo(Vec3f*, Vec3f*, s32) const;
-    void calcLauncherInfoKiller(Vec3f*, Vec3f*, s32) const;
-    void shootShell(s32);
+    void calcLauncherInfo(Vec3f* pPos, Vec3f* pDir, s32 idx) const;
+    void calcLauncherInfoKiller(Vec3f* pPos, Vec3f* pDir, s32 idx) const;
+    void shootShell(s32 idx);
     bool tryShootAllKillers();
-    void shootKiller(s32);
+    void shootKiller(s32 idx);
     void shootKillersAfterDamage();
     bool isExistActiveKiller() const;
     bool isExistActiveKameck() const;
@@ -57,9 +57,9 @@ public:
     void exeBreakEnd();
     void exeTurnFront();
 
-
-    inline bool isNextStateDamage(s32& x) {
-        return --x <= 0;
+    // Takes a hit point; true when none is left.
+    inline bool damageAndIsBroken(s32& rHitPoint) {
+        return --rHitPoint <= 0;
     }
 
     inline bool isStateBreak() const;
