@@ -3,12 +3,9 @@
 #include <nebula_geometry.hpp>
 
 ParallelGravity::ParallelGravity()
-    : PlanetGravity(), mPlanePosition(0, 0, 0), mPlaneUpVec(0.0f, 1.0f, 0.0f), mWorldPlanePosition(0, 0, 0), mWorldPlaneUpVec(0.0f, 1.0f, 0.0f) {
-    mCylinderHeight = 1000.0f;
-    mCylinderRadius = 500.0f;
-    mBaseDistance = 2000.0f;
-    mRangeType = RangeType_Sphere;
-    mDistanceCalcType = DistanceCalcType_Default;
+    : PlanetGravity(), mExtentX(0.0f), mExtentY(0.0f), mExtentZ(0.0f), mPlanePosition(0, 0, 0), mPlaneUpVec(0.0f, 1.0f, 0.0f),
+      mWorldPlanePosition(0, 0, 0), mWorldPlaneUpVec(0.0f, 1.0f, 0.0f), mCylinderHeight(1000.0f), mCylinderRadius(500.0f), mBaseDistance(2000.0f),
+      mRangeType(RangeType_Sphere), mDistanceCalcType(DistanceCalcType_Default) {
     mLocalMtx.identity();
     mWorldMtx.identity();
 }
@@ -118,19 +115,15 @@ bool ParallelGravity::isInBoxRange(const Vec3f& rPosition, f32* pScalar) const {
     }
 
     if (pScalar != nullptr) {
-        f32 abs;
         switch (mDistanceCalcType) {
         case DistanceCalcType_X:
-            abs = MR::abs(dotX);
-            *pScalar = mBaseDistance + abs / MR::sqrt(mExtentX);
+            *pScalar = mBaseDistance + MR::abs(dotX) / MR::sqrt(mExtentX);
             break;
         case DistanceCalcType_Y:
-            abs = MR::abs(dotY);
-            *pScalar = mBaseDistance + abs / MR::sqrt(mExtentY);
+            *pScalar = mBaseDistance + MR::abs(dotY) / MR::sqrt(mExtentY);
             break;
         case DistanceCalcType_Z:
-            abs = MR::abs(dotZ);
-            *pScalar = mBaseDistance + abs / MR::sqrt(mExtentZ);
+            *pScalar = mBaseDistance + MR::abs(dotZ) / MR::sqrt(mExtentZ);
             break;
         case DistanceCalcType_Default:
             *pScalar = mBaseDistance;

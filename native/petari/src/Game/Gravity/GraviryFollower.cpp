@@ -3,8 +3,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 
 GraviryFollower::GraviryFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter)
-    : BaseMatrixFollower(pGravityObj, rIter), mGravity(nullptr) {
-    mGravity = pGravityObj->getGravity();
+    : BaseMatrixFollower(pGravityObj, rIter), mGravity(pGravityObj->getGravity()) {
 }
 
 void GraviryFollower::setGravityFollowHost(const NameObj* pHost) {
