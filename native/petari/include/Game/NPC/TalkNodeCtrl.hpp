@@ -19,7 +19,6 @@ class TalkNode {
 public:
     u8 mNodeType;  // 1 message, 2 branch, 3 event
     u8 mGroupID;   // an event's kind
-    u16 mPad;
     u32 mIndex;  // a message's number, a branch's condition, an event's first branch
     union {
         u32 mNextIdx;  // a message's next node (MessageData::cNoNode at the end), a branch's parameter
@@ -27,6 +26,7 @@ public:
     };
     u32 mNextGroup;  // a message's group, a branch's first branch
 };
+static_assert(sizeof(TalkNode) == 16 && __builtin_offsetof(TalkNode, mIndex) == 4, "NMSG node layout");
 
 class RecursiveHelper {
 public:

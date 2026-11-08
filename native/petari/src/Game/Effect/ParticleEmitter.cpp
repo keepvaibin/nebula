@@ -1,7 +1,7 @@
 #include "Game/Effect/ParticleEmitter.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 
-ParticleEmitter::ParticleEmitter() : mEmitter(), mPaused(), mStopped() {
+ParticleEmitter::ParticleEmitter() : mEmitter(), mPaused() {
 }
 
 void ParticleEmitter::invalidate() {
@@ -10,7 +10,6 @@ void ParticleEmitter::invalidate() {
 
 void ParticleEmitter::init() {
     mPaused = false;
-    mStopped = false;
     mEmitter->mStatus |= EmitterStatus_Immortal;
 }
 

@@ -24,5 +24,4 @@ public:
 
     EmitterCore* mEmitter;
     bool mPaused;
-    bool mStopped;  // Not sure if it is stopped, but good chance it is.
 };
