@@ -61,7 +61,6 @@ void RumbleChannel::setPattern(const void* pOwner, const RumblePattern& rPattern
 InputRumble::InputRumble(PlayerInput* pPad) : mPad(pPad), mStrength(), mSerial(1), mStopTimer() {
     if (sInstanceForCallback == nullptr) {
         sInstanceForCallback = new InputRumble*[MR::getPlayerMaxCount()]();
-        RumbleData::initHashValue();
     }
 
     for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
@@ -187,7 +186,8 @@ bool InputRumble::findRumblePattern(const void* pOwner, s32* pExisting, s32* pEm
                 emptyIndex = i;
             }
         } else {
-            if (pPattern->mHash == rPattern.mHash) {
+            // Both are table entries, whose name hashes differ.
+            if (pPattern == &rPattern) {
                 *pExisting = i;
                 return true;
             }
