@@ -45,10 +45,10 @@ void TeresaWater::init(const TableIter& rIter) {
     mBindStarPointer = new WalkerStateBindStarPointer(this, mScaleCtrl);
     MR::declareCoin(this, 1);
     MR::calcFrontVec(&mFront, this);
-    f32 arg0 = ::sDefaultMoveLength;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    f32 moveLength = ::sDefaultMoveLength;
+    MR::getPlacementArg0NoInit(rIter, &moveLength);
     mInitPos.set(mPosition);
-    mFarPos.scaleAdd(arg0, mFront, mInitPos);
+    mFarPos.scaleAdd(moveLength, mFront, mInitPos);
     mTarget = &mFarPos;
     MR::initShadowVolumeCylinder(this, 100.0f);
     initNerve(GET_NERVE(TeresaWater, TeresaWaterNrvMove));

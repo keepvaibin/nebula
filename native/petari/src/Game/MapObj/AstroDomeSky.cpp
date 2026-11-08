@@ -40,10 +40,10 @@ AstroDomeSky::AstroDomeSky(const char* pName) : LiveActor(pName), mBrkFrame(), m
 }
 
 void AstroDomeSky::init(const TableIter& rIter) {
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    s32 domeId = -1;
+    MR::getPlacementArg0NoInit(rIter, &domeId);
 
-    const char* pSkyName = ::cAstroDomeSkyTable[arg0 - 1];
+    const char* pSkyName = ::cAstroDomeSkyTable[domeId - 1];
     initModelManagerWithAnm(pSkyName, nullptr, true);
 
     mProjmap = MR::initMaterialProjmapEffectMtxSetter(this);

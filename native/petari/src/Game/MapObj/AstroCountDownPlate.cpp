@@ -92,9 +92,8 @@ void AstroCountDownPlate::exeCountToZero() {
         MR::startSound(this, "SE_OJ_CDN_PLATE_ONE_TO_ZERO");
     }
 
-    f32 v2 = MR::calcNerveRate(this, ::sStepForCountToZero);
-    f32 v3 = MR::getConvergeVibrationValue(v2, 0.1f, 0.0f, 0.3f, 4.0f);
-    mOnesTexMtx.getInfo().mSRT.mTranslationY = v3;
+    f32 rate = MR::calcNerveRate(this, ::sStepForCountToZero);
+    mOnesTexMtx.getInfo().mSRT.mTranslationY = MR::getConvergeVibrationValue(rate, 0.1f, 0.0f, 0.3f, 4.0f);
 
     if (mIsLightOn) {
         MR::startLevelSound(this, "SE_OJ_LV_CDN_PLATE_LIGHT");

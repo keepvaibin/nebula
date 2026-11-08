@@ -82,9 +82,9 @@ void Butterfly::init(const TableIter& rIter) {
     initBinder(::sRadius, 0.0f, 0);
     initSound(2, false);
 
-    s32 arg1 = -1;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    if (arg1 == -1) {
+    s32 noStarPiece = -1;
+    MR::getPlacementArg1NoInit(rIter, &noStarPiece);
+    if (noStarPiece == -1) {
         MR::declareStarPiece(this, 1);
     } else {
         mStarPieceAppeared = true;

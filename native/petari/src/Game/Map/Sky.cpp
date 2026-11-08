@@ -44,10 +44,11 @@ void Sky::init(const TableIter& rIter) {
         }
     }
 
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    // 0: also drawn in the mirror.
+    s32 mirrorType = -1;
+    MR::getPlacementArg0NoInit(rIter, &mirrorType);
 
-    if (arg0 == 0) {
+    if (mirrorType == 0) {
         mReflectionModel = new MirrorReflectionModel(this, "鏡内モデル", objName, getBaseMtx());
         mReflectionModel->initWithoutIter();
     }

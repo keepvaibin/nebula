@@ -124,10 +124,10 @@ void ChipGroup::init(const TableIter& rIter) {
     mUIRangeFixed = -1.0f;
     MR::getPlacementArg2NoInit(rIter, &mUIRangeFixed);
 
-    s32 arg3 = 0;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
+    s32 useDoneFlag = 0;
+    MR::getPlacementArg3NoInit(rIter, &useDoneFlag);
 
-    if (arg3 == 1) {
+    if (useDoneFlag == 1) {
         mIsDeactivated = 0;
         mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("チップ集め済み", rIter, &mIsDeactivated);
     } else {
