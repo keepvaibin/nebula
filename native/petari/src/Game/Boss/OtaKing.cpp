@@ -226,18 +226,19 @@ bool OtaKing::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
 
     CocoNutBall* rallyBall = static_cast< CocoNutBall* >(pSender->mHost);
 
-    s32 a1 = mHits;
+    // The rally must outlast the hits taken (at least one on Lv2) before a ball hurts.
+    s32 rallyToDamage = mHits;
 
     if (mIsLv2) {
-        a1 = MR::max(a1, 1);
+        rallyToDamage = MR::max(rallyToDamage, 1);
     }
 
-    bool b1 = rallyBall->mRallyNum <= a1;
+    bool isHitBack = rallyBall->mRallyNum <= rallyToDamage;
 
     bool isReceiverBody = pReceiver == getSensor("body");
 
     if (isReceiverBody) {
-        if (b1) {
+        if (isHitBack) {
             if (!isNerve(GET_NERVE(OtaKing, OtaKingNrvHitBack))) {
                 setNerve(GET_NERVE(OtaKing, OtaKingNrvHitBack));
             }
@@ -252,7 +253,7 @@ bool OtaKing::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
             return true;
         }
     } else {
-        if (b1 && !isNerve(GET_NERVE(OtaKing, OtaKingNrvHitBackStart))) {
+        if (isHitBack && !isNerve(GET_NERVE(OtaKing, OtaKingNrvHitBackStart))) {
             setNerve(GET_NERVE(OtaKing, OtaKingNrvHitBackStart));
         }
     }
@@ -291,9 +292,9 @@ void OtaKing::initMapToolInfo(const TableIter& rIter) {
     MR::useStageSwitchWriteB(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
 
-    bool arg1 = false;
-    MR::getPlacementArg1NoInit(rIter, &arg1);
-    mIsLv2 = arg1;
+    bool isLv2 = false;
+    MR::getPlacementArg1NoInit(rIter, &isLv2);
+    mIsLv2 = isLv2;
 }
 
 void OtaKing::initModel(const TableIter& rIter) {
@@ -666,13 +667,13 @@ void OtaKing::initLongFoot(const TableIter& rIter) {
     }
 }
 
-bool OtaKing::tryThrowCocoNutOrFireBallIfWait(s32 a1) {
-    if (MR::isGreaterStep(this, a1) && isValidThrowCocoNut()) {
+bool OtaKing::tryThrowCocoNutOrFireBallIfWait(s32 waitFrame) {
+    if (MR::isGreaterStep(this, waitFrame) && isValidThrowCocoNut()) {
         setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowCocoNut));
         return true;
     }
 
-    if (MR::isGreaterStep(this, a1 * 2) && isValidThrowFireBall()) {
+    if (MR::isGreaterStep(this, waitFrame * 2) && isValidThrowFireBall()) {
         setNerve(GET_NERVE(OtaKing, OtaKingNrvThrowFireBall));
         return false;
     }

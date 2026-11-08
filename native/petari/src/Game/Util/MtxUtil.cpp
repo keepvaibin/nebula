@@ -840,10 +840,10 @@ namespace MR {
         MR::multMtx(pDst, pDst, order == 5 ? mtxX : mtxZ);
     }
 
-    void rotAxisVecRad(const Vec3f& rAxis, const Vec3f& rVec, Vec3f* pOut, f32 rad) {
+    void rotAxisVecRad(const Vec3f& rVec, const Vec3f& rAxis, Vec3f* pOut, f32 rad) {
         Mtx rot;
-        NebulaMtxRotAxisRad(rot, &rVec, rad);
-        NebulaMtxMultVec(rot, &rAxis, pOut);
+        NebulaMtxRotAxisRad(rot, &rAxis, rad);
+        NebulaMtxMultVec(rot, &rVec, pOut);
     }
 };  // namespace MR
 

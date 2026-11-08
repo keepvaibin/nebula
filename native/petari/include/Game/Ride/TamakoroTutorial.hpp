@@ -32,7 +32,7 @@ public:
     void exeWait();
     void exeTrample();
     void exeRecover();
-    void startTimerSound(s32, s32);
+    void startTimerSound(s32 step, s32 level);
 
     Tamakoro* mHost;
     TalkMessageCtrl* mTalkCtrl;

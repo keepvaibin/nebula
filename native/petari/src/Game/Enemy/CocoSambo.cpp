@@ -188,21 +188,22 @@ bool CocoSamboHead::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-void CocoSamboHead::updateFrontVecToPlayer(const Vec3f& rVec) {
-    Vec3f v5;
-    Vec3f v4 = -rVec;
-    v5.sub(*MR::getPlayerPos(), mPosition);
+void CocoSamboHead::updateFrontVecToPlayer(const Vec3f& rGravity) {
+    Vec3f toPlayer;
+    Vec3f up = -rGravity;
+    toPlayer.sub(*MR::getPlayerPos(), mPosition);
 
-    if (MR::isNearZero(v5) || MR::isSameDirection(v4, v5)) {
-        if (MR::getMaxAbsElementIndex(v4) == 2) {
-            v5.set< f32 >(0.0f, 1.0f, 0.0f);
+    // With the player on the up line, any axis off up will do.
+    if (MR::isNearZero(toPlayer) || MR::isSameDirection(up, toPlayer)) {
+        if (MR::getMaxAbsElementIndex(up) == 2) {
+            toPlayer.set< f32 >(0.0f, 1.0f, 0.0f);
         } else {
-            v5.set< f32 >(0.0f, 0.0f, 1.0f);
+            toPlayer.set< f32 >(0.0f, 0.0f, 1.0f);
         }
     }
 
-    MR::normalize(&v5);
-    MR::vecKillElement(v5, v4, &mFrontVec);
+    MR::normalize(&toPlayer);
+    MR::vecKillElement(toPlayer, up, &mFrontVec);
     MR::normalize(&mFrontVec);
 }
 

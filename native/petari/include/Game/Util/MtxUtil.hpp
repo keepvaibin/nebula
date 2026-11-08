@@ -85,7 +85,8 @@ namespace MR {
     MtxPtr tmpMtxRotYDeg(f32);
     MtxPtr tmpMtxRotZDeg(f32);
     void orderRotateMtx(s16, const Vec3f&, MtxPtr);
-    void rotAxisVecRad(const Vec3f&, const Vec3f&, Vec3f*, f32);
+    // *pOut = rVec turned rad about rAxis.
+    void rotAxisVecRad(const Vec3f& rVec, const Vec3f& rAxis, Vec3f* pOut, f32 rad);
 
     void makeMtxTR(MtxPtr, const LiveActor*);
 

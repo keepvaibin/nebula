@@ -9,6 +9,7 @@
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Screen/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
+#include "Game/System/StorySequenceExecutor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -119,34 +120,14 @@ void Butler::killIfBatlerMapAppear() {
 }
 
 void Butler::startDemoButlerReport(const char* pEvent) {
-    s32 eventNum = 2;
-    s32 executingStorySequenceEventNum = GameSequenceFunction::getExecutingStorySequenceEventNum();
-    switch (executingStorySequenceEventNum) {
-    case 4:
-        eventNum = 2;
-        break;
-
-    case 5:
-        eventNum = 3;
-        break;
-
-    case 6:
-        eventNum = 4;
-        break;
-
-    case 7:
-        eventNum = 5;
-        break;
-
-    case 8:
-        eventNum = 6;
-        break;
-
-    default:
-        break;
+    // Reports Event_ButlerReportNewGalaxy..Event_ButlerGreenDriverRelease use talk messages 2-6, in order.
+    const s32 event = GameSequenceFunction::getExecutingStorySequenceEventNum();
+    s32 messageIndex = 2;
+    if (event >= StorySequenceExecutorType::Event_ButlerReportNewGalaxy && event <= StorySequenceExecutorType::Event_ButlerGreenDriverRelease) {
+        messageIndex = event - StorySequenceExecutorType::Event_ButlerReportNewGalaxy + 2;
     }
 
-    DemoFunction::setDemoTalkMessageCtrlDirect(this, mTalkMessage[eventNum << 0], pEvent);
+    DemoFunction::setDemoTalkMessageCtrlDirect(this, mTalkMessage[messageIndex], pEvent);
     MR::invalidateClipping(this);
     LiveActor::appear();
     setNerve(GET_NERVE(Butler, ButlerNrvDemo));
@@ -201,8 +182,7 @@ void Butler::startDemoStarPiece2() {
 }
 
 void Butler::tryStartShowGalaxyMap() {
-    bool storySequence = GameSequenceFunction::getExecutingStorySequenceEventNum() == 8;
-    if (storySequence) {
+    if (GameSequenceFunction::getExecutingStorySequenceEventNum() == StorySequenceExecutorType::Event_ButlerGreenDriverRelease) {
         setNerve(GET_NERVE(Butler, ButlerNrvDemoShowGalaxyMap));
     }
 }

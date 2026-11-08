@@ -18,7 +18,7 @@ public:
 
     bool isBodySensor(const HitSensor*) const;
     bool isNerveSwoon() const;
-    void updateFrontVecToPlayer(const Vec3f&);
+    void updateFrontVecToPlayer(const Vec3f& rGravity);
     void exeConnectedBody() {
     }
 

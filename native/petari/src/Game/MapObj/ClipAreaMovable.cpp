@@ -102,40 +102,40 @@ void ClipAreaMovable::updateMatrix() {
     __builtin_memcpy(mBaseMtx, mtx, sizeof(Mtx));
 }
 
-NameObj* MR::createClipAreaSphere(const char* pParam1) {
-    ClipArea* pClipArea = new ClipAreaMovable(pParam1);
+NameObj* MR::createClipAreaSphere(const char* pModel) {
+    ClipArea* pClipArea = new ClipAreaMovable(pModel);
 
     MR::setClipSphereArea(pClipArea);
 
     return pClipArea;
 }
 
-NameObj* MR::createClipAreaCenterBox(const char* pParam1) {
-    ClipArea* pClipArea = new ClipAreaMovable(pParam1);
+NameObj* MR::createClipAreaCenterBox(const char* pModel) {
+    ClipArea* pClipArea = new ClipAreaMovable(pModel);
 
     MR::setClipCenterBoxArea(pClipArea);
 
     return pClipArea;
 }
 
-NameObj* MR::createClipAreaBottomBox(const char* pParam1) {
-    ClipArea* pClipArea = new ClipAreaMovable(pParam1);
+NameObj* MR::createClipAreaBottomBox(const char* pModel) {
+    ClipArea* pClipArea = new ClipAreaMovable(pModel);
 
     MR::setClipBottomBoxArea(pClipArea);
 
     return pClipArea;
 }
 
-NameObj* MR::createClipAreaTopCone(const char* pParam1) {
-    ClipArea* pClipArea = new ClipAreaMovable(pParam1);
+NameObj* MR::createClipAreaTopCone(const char* pModel) {
+    ClipArea* pClipArea = new ClipAreaMovable(pModel);
 
     MR::setClipTopConeArea(pClipArea);
 
     return pClipArea;
 }
 
-NameObj* MR::createClipAreaBottomCone(const char* pParam1) {
-    ClipArea* pClipArea = new ClipAreaMovable(pParam1);
+NameObj* MR::createClipAreaBottomCone(const char* pModel) {
+    ClipArea* pClipArea = new ClipAreaMovable(pModel);
 
     MR::setClipBottomConeArea(pClipArea);
 

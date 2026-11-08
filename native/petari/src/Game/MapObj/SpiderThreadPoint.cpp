@@ -26,18 +26,18 @@ SpiderThreadPoint::SpiderThreadPoint(const Vec3f& rPos, f32 friction)
 
 bool SpiderThreadPoint::updateSpring() {
     mVelocity.scale(mFriction);
-    Vec3f v1(mBasePos - mPosition);
-    Vec3f v2(v1 * ::sAccelRate);
-    mVelocity.add(v2);
+    Vec3f toBase(mBasePos - mPosition);
+    Vec3f accel(toBase * ::sAccelRate);
+    mVelocity.add(accel);
     mPosition.add(mVelocity);
 
-    Vec3f v3(mBasePos - mPosition);
-    v3.z = 0.0f;
+    Vec3f offsetOnPlane(mBasePos - mPosition);
+    offsetOnPlane.z = 0.0f;
 
-    f32 mag1 = v3.length();
-    f32 mag2 = mVelocity.length();
+    f32 distance = offsetOnPlane.length();
+    f32 speed = mVelocity.length();
 
-    if (mag2 < ::sSpeedMinToStop && mag1 < ::sDistanceToStop) {
+    if (speed < ::sSpeedMinToStop && distance < ::sDistanceToStop) {
         mVelocity.zero();
         return true;
     }
@@ -80,12 +80,12 @@ void SpiderThreadPoint::restrict(const Vec3f* pAnchor, f32 length) {
     nextPosDiff.add(mVelocity);
     nextPosDiff.sub(*pAnchor);
 
-    Vec3f v2(nextPosDiff);
-    if (!MR::isNearZero(v2)) {
-        MR::normalize(&v2);
+    Vec3f dir(nextPosDiff);
+    if (!MR::isNearZero(dir)) {
+        MR::normalize(&dir);
 
         if (nextPosDiff.squared() >= length * length) {
-            Vec3f restriction = v2 * length;
+            Vec3f restriction = dir * length;
             mVelocity.x -= nextPosDiff.x - restriction.x;
             mVelocity.y -= nextPosDiff.y - restriction.y;
             mVelocity.z -= nextPosDiff.z - restriction.z;

@@ -29,20 +29,20 @@ void MultiEventCamera::setEndCameraTypeAtLanding() {
     mCameraType = CameraType_AtLanding;
 }
 
-void MultiEventCamera::start(s32 param1) {
+void MultiEventCamera::start(s32 cameraIndex) {
     CameraTargetArg target = CameraTargetArg();
 
-    start(target, param1);
+    start(target, cameraIndex);
 }
 
-void MultiEventCamera::start(const CameraTargetArg& rParam1, s32 param2) {
+void MultiEventCamera::start(const CameraTargetArg& rTarget, s32 cameraIndex) {
     if (mCameraNum <= 0) {
         return;
     }
 
     mFrame = 0;
-    mCameraIndex = param2;
-    mTarget = rParam1;
+    mCameraIndex = cameraIndex;
+    mTarget = rTarget;
 
     startCamera();
 }
@@ -108,14 +108,14 @@ void MultiEventCamera::changeTargetPlayer() {
     changeTarget(target);
 }
 
-bool MultiEventCamera::isActive(s32 param1) const {
-    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, param1);
+bool MultiEventCamera::isActive(s32 cameraIndex) const {
+    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, cameraIndex);
 
     return MR::isEventCameraActive(mCameraInfo, name.c_str());
 }
 
-void MultiEventCamera::declareEventCamera(s32 param1) {
-    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, param1);
+void MultiEventCamera::declareEventCamera(s32 cameraIndex) {
+    MR::FormattedName name("%s:%03d:%02d番目", mName, mCameraInfo->mCameraSetID, cameraIndex);
 
     return MR::declareEventCamera(mCameraInfo, name.c_str());
 }

@@ -25,6 +25,6 @@ namespace MR {
     void requestEndMissDemo();
     void requestShowGalaxyMap();
     void executeOnWelcomeAndRetry();
-    void requestGoToAstroGalaxy(s32);
-    void requestGoToAstroDomeFromAstroGalaxy(s32, s32);
+    void requestGoToAstroGalaxy(s32 startId);
+    void requestGoToAstroDomeFromAstroGalaxy(s32 scenarioNo, s32 startId);
 };  // namespace MR

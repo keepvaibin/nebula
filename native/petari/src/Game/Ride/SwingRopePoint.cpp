@@ -9,6 +9,24 @@ void SwingRopePoint::addAccel(const Vec3f& rAccel) {
     mVelocity.add(rAccel);
 }
 
+namespace {
+    // The unit direction from the anchor to the point's next position; *pUp turns to face the anchor.
+    // At the anchor itself the direction is -*pUp.
+    Vec3f dirFromAnchor(const Vec3f& rNextPosDiff, Vec3f* pUp) {
+        Vec3f dir = rNextPosDiff;
+        if (MR::isNearZero(dir)) {
+            dir.set(*pUp);
+            dir.scale(-1.0f);
+        } else {
+            MR::normalize(&dir);
+            pUp->set(dir);
+            pUp->mult(-1.0f);
+        }
+
+        return dir;
+    }
+};  // namespace
+
 bool SwingRopePoint::restrict(const Vec3f& rAnchor, f32 length, const Vec3f* pVel) {
     Vec3f nextPosDiff(mPosition);
     nextPosDiff.add(mVelocity);
@@ -18,18 +36,10 @@ bool SwingRopePoint::restrict(const Vec3f& rAnchor, f32 length, const Vec3f* pVe
         nextPosDiff.sub(*pVel);
     }
 
-    Vec3f v2 = nextPosDiff;
-    if (MR::isNearZero(v2)) {
-        v2.set(mUp);
-        v2.scale(-1.0f);
-    } else {
-        MR::normalize(&v2);
-        mUp.set(v2);
-        mUp.mult(-1.0f);
-    }
+    const Vec3f dir = dirFromAnchor(nextPosDiff, &mUp);
 
     if (nextPosDiff.squared() >= length * length) {
-        Vec3f restriction = v2 * length;
+        Vec3f restriction = dir * length;
         mVelocity.x -= nextPosDiff.x - restriction.x;
         mVelocity.y -= nextPosDiff.y - restriction.y;
         mVelocity.z -= nextPosDiff.z - restriction.z;
@@ -44,17 +54,9 @@ void SwingRopePoint::strain(const Vec3f& rAnchor, f32 length) {
     nextPosDiff.add(mVelocity);
     nextPosDiff.sub(rAnchor);
 
-    Vec3f v2 = nextPosDiff;
-    if (MR::isNearZero(v2)) {
-        v2.set(mUp);
-        v2.scale(-1.0f);
-    } else {
-        MR::normalize(&v2);
-        mUp.set(v2);
-        mUp.mult(-1.0f);
-    }
+    const Vec3f dir = dirFromAnchor(nextPosDiff, &mUp);
 
-    Vec3f restriction = v2 * length;
+    Vec3f restriction = dir * length;
     mVelocity.x -= nextPosDiff.x - restriction.x;
     mVelocity.y -= nextPosDiff.y - restriction.y;
     mVelocity.z -= nextPosDiff.z - restriction.z;

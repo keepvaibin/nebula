@@ -47,8 +47,5 @@ private:
     TakeOutStar* mTakeOutStar;
     ActorCameraInfo* mCameraInfo;
     BombTimerLayout* mBombTimerLayout;
-    s32 mObjArg0;
-    s32 mObjArg4;
-    s32 mBodyColorFrame;
     s32 mTidyTimeLimit;
 };
