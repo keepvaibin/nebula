@@ -147,8 +147,8 @@ public:
     SoundAnimator(SoundHandles*);
 
     virtual SoundHandle* getFreeHandle(const SoundAnimationSound* pAnimation);
-    virtual u32 getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32);
-    virtual bool playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32);
+    virtual u32 getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed);
+    virtual bool playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed);
     virtual void modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pAnimation, f32 time);
 
     void ageSounds_();

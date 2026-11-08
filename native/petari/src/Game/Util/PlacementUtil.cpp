@@ -464,7 +464,7 @@ bool MR::isConnectedWithRail(const TableIter& rIter) {
 
     s32 arg;
 
-    if (::getPlacementArgWithInit(rIter, "CommonPath_ID", &arg) == false) {
+    if (!::getPlacementArgWithInit(rIter, "CommonPath_ID", &arg)) {
         return false;
     }
 
@@ -587,34 +587,29 @@ bool MR::isEqualRailUsage(const TableIter& rIter, const char* pUsage) {
     return isEqualStringCase(usage, pUsage);
 }
 
-void MR::getRailPointPos0(const TableIter& rIter, Vec3f* pOut) {
-    rIter.getValue< f32 >("pnt0_x", &pOut->x);
-    rIter.getValue< f32 >("pnt0_y", &pOut->y);
-    rIter.getValue< f32 >("pnt0_z", &pOut->z);
+namespace {
+    // A rail point's position (pnt0 the point, pnt1/pnt2 its control points), placed in its zone.
+    void getRailPointPosByField(const TableIter& rIter, const char* pX, const char* pY, const char* pZ, Vec3f* pOut) {
+        rIter.getValue< f32 >(pX, &pOut->x);
+        rIter.getValue< f32 >(pY, &pOut->y);
+        rIter.getValue< f32 >(pZ, &pOut->z);
 
-    if (isPlacementLocalStage()) {
-        getZonePlacementMtx(rIter)->mult(*pOut, *pOut);
+        if (MR::isPlacementLocalStage()) {
+            MR::getZonePlacementMtx(rIter)->mult(*pOut, *pOut);
+        }
     }
+}  // namespace
+
+void MR::getRailPointPos0(const TableIter& rIter, Vec3f* pOut) {
+    ::getRailPointPosByField(rIter, "pnt0_x", "pnt0_y", "pnt0_z", pOut);
 }
 
 void MR::getRailPointPos1(const TableIter& rIter, Vec3f* pOut) {
-    rIter.getValue< f32 >("pnt1_x", &pOut->x);
-    rIter.getValue< f32 >("pnt1_y", &pOut->y);
-    rIter.getValue< f32 >("pnt1_z", &pOut->z);
-
-    if (isPlacementLocalStage()) {
-        getZonePlacementMtx(rIter)->mult(*pOut, *pOut);
-    }
+    ::getRailPointPosByField(rIter, "pnt1_x", "pnt1_y", "pnt1_z", pOut);
 }
 
 void MR::getRailPointPos2(const TableIter& rIter, Vec3f* pOut) {
-    rIter.getValue< f32 >("pnt2_x", &pOut->x);
-    rIter.getValue< f32 >("pnt2_y", &pOut->y);
-    rIter.getValue< f32 >("pnt2_z", &pOut->z);
-
-    if (isPlacementLocalStage()) {
-        getZonePlacementMtx(rIter)->mult(*pOut, *pOut);
-    }
+    ::getRailPointPosByField(rIter, "pnt2_x", "pnt2_y", "pnt2_z", pOut);
 }
 
 bool MR::isLoopRailPathIter(const TableIter& rIter) {

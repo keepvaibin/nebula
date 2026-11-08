@@ -282,18 +282,17 @@ bool KuriboChief::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 }
 
 bool KuriboChief::requestStagger(HitSensor* pSender, HitSensor* pReceiver) {
-    bool isDwn = isDown() == false;
-    if (isDwn) {
-        mStateStagger->setPunchDirection(pSender, pReceiver), setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvStagger));
-        return true;
+    if (isDown()) {
+        return false;
     }
 
-    return false;
+    mStateStagger->setPunchDirection(pSender, pReceiver);
+    setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvStagger));
+    return true;
 }
 
 bool KuriboChief::requestBlowDown(HitSensor* pSender, HitSensor* pReceiver) {
-    bool isDwn = isDown() == false;
-    if (!isDwn) {
+    if (isDown()) {
         return false;
     }
 

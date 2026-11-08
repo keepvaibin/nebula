@@ -350,7 +350,7 @@ namespace TDDraw {
 
     void invProject(Vec3f* pDest, const Vec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {
         f32 screenZ;
-        if (normalizedZ == false) {
+        if (!normalizedZ) {
             screenZ = rScreen.z / 16777215.0f;
         } else {
             screenZ = rScreen.z;

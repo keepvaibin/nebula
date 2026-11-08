@@ -10,8 +10,8 @@ public:
     virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const;
 
     void setLocalMatrix(const Pos3f& rMtx);
-    void setEnableBottom(bool val);
-    void setTopCutRate(f32 val);
+    void setEnableBottom(bool isEnable);
+    void setTopCutRate(f32 topCutRate);
 
     /*
      * The x column represents the radius vector. The y column represents the central axis vector,

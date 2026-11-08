@@ -204,7 +204,7 @@ void GalaxyCometTimeTable::deserializeStateFromGameData(const GalaxyCometSeriali
 }
 
 bool GalaxyCometTimeTable::isLand() const {
-    if (mIsReady == false) {
+    if (!mIsReady) {
         return false;
     }
     return mState->isLand();

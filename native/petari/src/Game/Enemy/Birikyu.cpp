@@ -136,12 +136,11 @@ void Birikyu::initFromJmpArgs(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mSpeed);
     s32 num = -1;
     MR::getPlacementArg2NoInit(rIter, &num);
-    mHasShadow = num == true;
+    mHasShadow = num == 1;
 }
 
 void Birikyu::initRail(const TableIter& rIter) {
-    bool result = MR::isConnectedWithRail(rIter);
-    mHasRail = result;
+    mHasRail = MR::isConnectedWithRail(rIter);
     if (mHasRail) {
         initRailRider(rIter);
         MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);

@@ -317,17 +317,8 @@ bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 }
 
 bool ScenarioStarter::trySkipTrigger() const {
-    bool result;
-    if (!MR::isAlreadyVisitedCurrentStageAndScenario()) {
-        result = false;
-    } else {
-        result = false;
-        if (MR::isGreaterStep(this, 10) && MR::isLessStep(this, mFlyEndStep) && MR::testSystemPadTriggerDecide()) {
-            result = true;
-        }
-    }
-
-    return result;
+    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::isGreaterStep(this, 10) && MR::isLessStep(this, mFlyEndStep) &&
+           MR::testSystemPadTriggerDecide();
 }
 
 bool ScenarioStarter::isStartBgmOnWelcome() {

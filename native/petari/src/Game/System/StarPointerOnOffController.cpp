@@ -8,14 +8,126 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
-
-    // to help clean up the code so it is not a nightmare to read
     inline StarPointerDirector* getStarPointerDirector() {
         return StarPointerFunction::getStarPointerDirector();
     }
 
     inline StarPointerLayout* getStarPointerLayout(s32 channel) {
         return getStarPointerDirector()->getStarPointerLayout(channel);
+    }
+
+    enum PointerKind {
+        Pointer_Keep,
+        Pointer_Star,
+        Pointer_Finger,
+        Pointer_Hand,
+        Pointer_HandCross,
+        Pointer_Nozzle,
+    };
+
+    // A mode's pointers: each player's shown and valid, the pointer kind (Keep leaves it), guidance, star bit shooting,
+    // and 2P shooting on whatever shooting says.
+    struct ModeSetup {
+        bool mIsShown1P;
+        bool mIsShown2P;
+        u8 mPointer;
+        bool mIsValid1P;
+        bool mIsValid2P;
+        bool mIsGuidance;
+        bool mIsShoot;
+        bool mIsShoot2P;
+    };
+
+    // By StarPointerModeEnum. 1PInvalid2PValid validates both; the mode is read by isStarPointer1PInvalid2PValidMode.
+    const ModeSetup cModeSetups[StarPointerMode_Count] = {
+        {false, false, Pointer_Keep, true, true, false, false, false},       // HomeButton
+        {false, false, Pointer_Keep, true, true, false, false, false},       // ErrorWindow
+        {true, true, Pointer_Finger, true, true, false, false, false},       // SaveLoad (as PauseMenu)
+        {false, false, Pointer_Star, false, false, false, false, false},     // Boot
+        {false, false, Pointer_Star, false, false, false, false, false},     // Title
+        {true, true, Pointer_Finger, true, true, true, false, false},        // FileSelect
+        {true, true, Pointer_Finger, true, true, true, false, false},        // ScenarioSelectScene
+        {true, true, Pointer_Finger, true, true, false, false, false},       // PauseMenu
+        {true, true, Pointer_Finger, true, true, true, false, false},        // ChooseYesNo
+        {true, true, Pointer_Finger, true, false, false, false, false},      // PictureBook
+        {true, true, Pointer_Star, true, true, true, false, false},          // DemoWithStarPointer
+        {true, true, Pointer_Finger, true, true, true, false, false},        // DemoWithHandPointerFinger
+        {false, false, Pointer_Star, false, false, false, false, false},     // Demo
+        {true, true, Pointer_Star, false, false, true, false, false},        // DemoMarioDeath
+        {false, false, Pointer_Star, false, false, false, false, false},     // PowerStarGetDemo
+        {true, true, Pointer_Star, true, true, false, true, false},          // 1PInvalid2PValid
+        {true, true, Pointer_HandCross, true, true, true, false, false},     // SphereSelectorOnReaction
+        {true, true, Pointer_Finger, true, true, true, false, false},        // SphereSelectorFinger
+        {false, true, Pointer_Finger, false, false, true, false, false},     // MarioLauncher
+        {true, true, Pointer_Star, true, true, true, false, true},           // CommandStream
+        {true, true, Pointer_Hand, true, true, true, true, false},           // BlueStar
+        {true, true, Pointer_Hand, true, true, true, true, false},           // BlueStarReady
+        {false, false, Pointer_Finger, true, true, true, false, false},      // StarPieceTarget
+        {true, true, Pointer_Nozzle, true, true, true, false, true},         // BigBubble
+        {false, false, Pointer_Star, false, false, false, false, false},     // Base
+        {true, true, Pointer_Star, true, true, true, true, false},           // Game
+    };
+
+    void showOrHide(StarPointerLayout* pLayout, bool isShown) {
+        if (isShown) {
+            pLayout->show();
+        } else {
+            pLayout->hide();
+        }
+    }
+
+    void validateOrNot(StarPointerLayout* pLayout, bool isValid) {
+        if (isValid) {
+            pLayout->validate();
+        } else {
+            pLayout->invalidate();
+        }
+    }
+
+    void applyModeSetup(s32 mode) {
+        const ModeSetup& rSetup = cModeSetups[mode];
+        StarPointerDirector* director = ::getStarPointerDirector();
+        showOrHide(::getStarPointerLayout(PLAYER_1), rSetup.mIsShown1P);
+        showOrHide(::getStarPointerLayout(PLAYER_2), rSetup.mIsShown2P);
+
+        switch (rSetup.mPointer) {
+        case Pointer_Star:
+            director->startStarPointer();
+            break;
+        case Pointer_Finger:
+            director->startFingerPointer();
+            break;
+        case Pointer_Hand:
+            director->startHandPointer();
+            break;
+        case Pointer_HandCross:
+            director->startHandPointerReactionWithCrossCursor();
+            break;
+        case Pointer_Nozzle:
+            director->startStarPointerNozzle();
+            break;
+        default:
+            break;
+        }
+
+        validateOrNot(::getStarPointerLayout(PLAYER_1), rSetup.mIsValid1P);
+        validateOrNot(::getStarPointerLayout(PLAYER_2), rSetup.mIsValid2P);
+
+        if (rSetup.mIsGuidance) {
+            MR::activeStarPointerGuidance();
+        } else {
+            MR::deactiveStarPointerGuidance();
+        }
+
+        if (rSetup.mIsShoot) {
+            MR::enableStarPointerShootStarPiece();
+        } else {
+            MR::disableStarPointerShootStarPiece();
+        }
+
+        if (rSetup.mIsShoot2P) {
+            director->mIsAllowP2StarPieceShot = true;
+        }
     }
 };  // namespace
 
@@ -64,256 +176,6 @@ void StarPointerOnOffController::requestMode(void* pRequester, StarPointerModeEn
     mRequested[mode] = true;
 }
 
-void StarPointerOnOffController::setupHomeButton() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-}
-
-void StarPointerOnOffController::setupErrorWindow() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-}
-
-void StarPointerOnOffController::setupBoot() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupTitle() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupFileSelect() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupPictureBook() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupDemo() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupDemoWithStarPointer() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupDemoWithHandPointerFinger() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupDemoMarioDeath() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setup1PInvalid2PValid() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::deactiveStarPointerGuidance();
-    MR::enableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupMarioLauncher() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupChooseYesNo() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupPauseMenu() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupScenarioSelectScene() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupBlueStar() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startHandPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::enableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupBlueStarReady() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startHandPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::enableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupPowerStarGetDemo() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupStarPieceTarget() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupSphereSelectorFinger() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupSphereSelectorOnReaction() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startHandPointerReactionWithCrossCursor();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupBigBubble() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointerNozzle();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-    ::getStarPointerDirector()->mIsAllowP2StarPieceShot = true;
-}
-
-void StarPointerOnOffController::setupCommandStream() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-    ::getStarPointerDirector()->mIsAllowP2StarPieceShot = true;
-}
-
-void StarPointerOnOffController::setupGame() {
-    ::getStarPointerLayout(PLAYER_1)->show();
-    ::getStarPointerLayout(PLAYER_2)->show();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->validate();
-    ::getStarPointerLayout(PLAYER_2)->validate();
-    MR::activeStarPointerGuidance();
-    MR::enableStarPointerShootStarPiece();
-}
-
-void StarPointerOnOffController::setupBase() {
-    ::getStarPointerLayout(PLAYER_1)->hide();
-    ::getStarPointerLayout(PLAYER_2)->hide();
-    ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(PLAYER_1)->invalidate();
-    ::getStarPointerLayout(PLAYER_2)->invalidate();
-    MR::deactiveStarPointerGuidance();
-    MR::disableStarPointerShootStarPiece();
-}
-
 void StarPointerOnOffController::updateMode() {
     if (::getStarPointerLayout(PLAYER_1) == nullptr) {
         return;
@@ -326,87 +188,7 @@ void StarPointerOnOffController::updateMode() {
             if (mode != mMode) {
                 mMode = mode;
                 NebulaHost::gameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
-
-                switch (mMode) {
-                case StarPointerMode_HomeButton:
-                    setupHomeButton();
-                    break;
-                case StarPointerMode_ErrorWindow:
-                    setupErrorWindow();
-                    break;
-                case StarPointerMode_SaveLoad:
-                    setupPauseMenu();
-                    break;
-                case StarPointerMode_Boot:
-                    setupBoot();
-                    break;
-                case StarPointerMode_Title:
-                    setupTitle();
-                    break;
-                case StarPointerMode_FileSelect:
-                    setupFileSelect();
-                    break;
-                case StarPointerMode_PauseMenu:
-                    setupPauseMenu();
-                    break;
-                case StarPointerMode_ChooseYesNo:
-                    setupChooseYesNo();
-                    break;
-                case StarPointerMode_PictureBook:
-                    setupPictureBook();
-                    break;
-                case StarPointerMode_Demo:
-                    setupDemo();
-                    break;
-                case StarPointerMode_DemoWithStarPointer:
-                    setupDemoWithStarPointer();
-                    break;
-                case StarPointerMode_DemoWithHandPointerFinger:
-                    setupDemoWithHandPointerFinger();
-                    break;
-                case StarPointerMode_DemoMarioDeath:
-                    setupDemoMarioDeath();
-                    break;
-                case StarPointerMode_PowerStarGetDemo:
-                    setupPowerStarGetDemo();
-                    break;
-                case StarPointerMode_1PInvalid2PValid:
-                    setup1PInvalid2PValid();
-                    break;
-                case StarPointerMode_ScenarioSelectScene:
-                    setupScenarioSelectScene();
-                    break;
-                case StarPointerMode_SphereSelectorOnReaction:
-                    setupSphereSelectorOnReaction();
-                    break;
-                case StarPointerMode_SphereSelectorFinger:
-                    setupSphereSelectorFinger();
-                    break;
-                case StarPointerMode_MarioLauncher:
-                    setupMarioLauncher();
-                    break;
-                case StarPointerMode_BlueStar:
-                    setupBlueStar();
-                    break;
-                case StarPointerMode_BlueStarReady:
-                    setupBlueStarReady();
-                    break;
-                case StarPointerMode_StarPieceTarget:
-                    setupStarPieceTarget();
-                    break;
-                case StarPointerMode_BigBubble:
-                    setupBigBubble();
-                    break;
-                case StarPointerMode_CommandStream:
-                    setupCommandStream();
-                    break;
-                case StarPointerMode_Base:
-                    setupBase();
-                    break;
-                case StarPointerMode_Game:
-                    setupGame();
-                    break;
-                }
+                ::applyModeSetup(mMode);
             }
             return;
         }
@@ -414,7 +196,7 @@ void StarPointerOnOffController::updateMode() {
 
     mMode = -1;
     NebulaHost::gameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
-    setupBase();
+    ::applyModeSetup(StarPointerMode_Base);
 }
 
 void StarPointerOnOffController::clearInfo() {
@@ -426,7 +208,6 @@ void StarPointerOnOffController::clearInfo() {
         (*request)->mRequester = nullptr;
         (*request)->mMode = -1;
     }
-
 }
 
 void StarPointerOnOffController::incModeCounter(void* pRequester, s32 mode) {

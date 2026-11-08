@@ -200,15 +200,15 @@ namespace MR {
     }
 
     bool testSystemPadTriggerDecide() {
-        return isPressedJump(PLAYER_1) != false;
+        return isPressedJump(PLAYER_1);
     }
 
     bool testSystemTriggerA() {
-        return isPressedJump(PLAYER_1) != false;
+        return isPressedJump(PLAYER_1);
     }
 
     bool testSystemTriggerB() {
-        return isPressedFire(PLAYER_1) != false;
+        return isPressedFire(PLAYER_1);
     }
 
     bool testPointerMenuPadDecideTrigger() {

@@ -151,10 +151,10 @@ void ElectricBall::initBalls(const TableIter& rIter) {
     }
 
     Vec3f vec(mRadius, 0.0f, 0.0f);
-    f32 f1 = TWO_PI / mBalls.size();
+    f32 angleStep = TWO_PI / mBalls.size();
 
     for (Ball* ball = mBalls.begin(); ball != mBalls.end(); ball++) {
-        f32 angle = f1 * (ball - mBalls.begin());
+        f32 angle = angleStep * (ball - mBalls.begin());
         MR::rotateVecRadian(&ball->mPosition, vec, Vec3f(0.0f, 1.0f, 0.0f), angle);
     }
 }

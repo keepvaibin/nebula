@@ -103,7 +103,7 @@ void CocoSamboHead::kill() {
 }
 
 void CocoSamboHead::calcAndSetBaseMtx() {
-    if (mIsCalcOwnMtx != false) {
+    if (mIsCalcOwnMtx) {
         PartsModel::calcAndSetBaseMtx();
     } else {
         Vec3f grav;

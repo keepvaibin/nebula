@@ -137,7 +137,7 @@ const Vec3f Binder::bind(const Vec3f& rVelocity) {
         position.add(firstReaction);
         Vec3f previousReaction(firstReaction);
 
-        while (!stopAtFirstHit && hasRemainingMovement == true) {
+        while (!stopAtFirstHit && hasRemainingMovement) {
             Vec3f remaining(rVelocity - movement);
             moveAlongHittedPlanes(&movement, &position, &remaining, rVelocity, previousReaction, planes, capacity, &hasRemainingMovement);
             obtainMomentFixReaction(planes, capacity, &reaction, firstHitCount);

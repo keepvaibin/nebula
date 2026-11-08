@@ -214,5 +214,5 @@ bool GravityLightRoad::isPlayerInCylinder() const {
         return false;
     }
 
-    return lengthVec.length() > boundingBox.f.y - boundingBox.i.y == false;
+    return !(lengthVec.length() > boundingBox.f.y - boundingBox.i.y);
 }

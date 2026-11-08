@@ -115,7 +115,7 @@ void DemoCameraKeeper::executeLast(const DemoCameraInfo* pInfo) {
 
 void DemoCameraKeeper::endCurrentCamera() {
     if (mCurrentInfo != nullptr) {
-        MR::endEventCamera(mCurrentInfo->mCameraInfo, mCurrentInfo->mCameraName, mCurrentInfo->mIsContinuous != false);
+        MR::endEventCamera(mCurrentInfo->mCameraInfo, mCurrentInfo->mCameraName, mCurrentInfo->mIsContinuous != 0);
     }
 
     mCurrentInfo = nullptr;
@@ -140,7 +140,7 @@ DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIt
         s32 continuous = -1;
         map->getValue< s32 >(i, "IsContinuous", &continuous);
 
-        curInfo->mIsContinuous = (continuous == true);
+        curInfo->mIsContinuous = continuous == 1;
         DemoCameraFunction::setStringNullIfEmpty(&curInfo->mCameraTargetName);
         DemoCameraFunction::setStringNullIfEmpty(&curInfo->mAnimCameraName);
 

@@ -122,21 +122,11 @@ namespace MR {
     }
 
     static bool isStageKoopaVs1Or2() {
-        bool result = true;
-        if (!isEqualStageName("KoopaBattleVs1Galaxy") && !isEqualStageName("KoopaBattleVs2Galaxy")) {
-            result = false;
-        }
-        return result;
+        return isEqualStageName("KoopaBattleVs1Galaxy") || isEqualStageName("KoopaBattleVs2Galaxy");
     }
 
     bool isStageKoopaVs() {
-        bool isKoopaVs = true;
-        bool isFirstOrSecond = isStageKoopaVs1Or2();
-        if (!isFirstOrSecond && !isStageKoopaVs3()) {
-            isKoopaVs = false;
-        }
-
-        return isKoopaVs;
+        return isStageKoopaVs1Or2() || isStageKoopaVs3();
     }
 
     bool isStageKoopaVs3() {

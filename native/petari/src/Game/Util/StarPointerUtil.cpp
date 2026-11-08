@@ -558,8 +558,6 @@ namespace MR {
     }
 
     bool calcStarPointerPosOnPlane(Vec3f* pPos, const Vec3f& rPlaneBasePos, const Vec3f& rPlaneNorm, s32 channel, bool clampEdge) {
-        ::getStarPointerController(channel);  // something stripped
-
         Vec2f screenPos;
         if (clampEdge) {
             screenPos = getStarPointerScreenPositionOrEdge(channel);
@@ -573,7 +571,7 @@ namespace MR {
         pointRay.sub(camPos);
         MR::normalize(&pointRay);
 
-        if (MR::checkHitSemilinePlane(pPos, camPos, pointRay, rPlaneBasePos, rPlaneNorm) == true) {
+        if (MR::checkHitSemilinePlane(pPos, camPos, pointRay, rPlaneBasePos, rPlaneNorm)) {
             return true;
         }
 

@@ -82,7 +82,7 @@ namespace MR {
     }
 
     MultiEmitter* tryEmitEffect(LiveActor* pActor, const char* pEffectName) {
-        if (::isExistEffect(pActor, pEffectName) == false) {
+        if (!::isExistEffect(pActor, pEffectName)) {
             return nullptr;
         }
 
@@ -90,7 +90,7 @@ namespace MR {
     }
 
     bool tryDeleteEffect(LiveActor* pActor, const char* pEffectName) {
-        if (::isExistEffect(pActor, pEffectName) == false) {
+        if (!::isExistEffect(pActor, pEffectName)) {
             return false;
         }
 

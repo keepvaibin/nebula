@@ -681,12 +681,7 @@ namespace MR {
     }
 
     bool isLuigiDisappearFromAstroGalaxyOrHiding() {
-        bool result = GameSequenceFunction::isLuigiDisappearFromAstroGalaxy();
-        if (!result) {
-            result = MR::isOnLuigiHiding();
-        }
-
-        return result;
+        return GameSequenceFunction::isLuigiDisappearFromAstroGalaxy() || MR::isOnLuigiHiding();
     }
 
     bool isLuigiLetterArrivalAtMessenger() {

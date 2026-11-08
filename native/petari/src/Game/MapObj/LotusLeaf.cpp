@@ -89,8 +89,8 @@ void LotusLeaf::exeShake() {
         MR::emitEffect(this, "LotusLeafRipple");
     }
 
-    f32 f1 = TWO_PI / mShakePeriod;
-    f32 angle = getNerveStep() * f1;
+    f32 angularSpeed = TWO_PI / mShakePeriod;
+    f32 angle = getNerveStep() * angularSpeed;
     f32 vel = -mShakeSpeed * MR::cos(angle);
     mShakePeriod += ::sShakePeriodSlowPitch;
     mShakeSpeed *= ::sShakeSpeedAtten;

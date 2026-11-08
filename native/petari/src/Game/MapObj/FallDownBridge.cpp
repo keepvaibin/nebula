@@ -136,20 +136,20 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
             return false;
         }
 
-        f32 val;
+        f32 push;
 
         if (msg == ACTMES_BALL_DASH_WALL) {
-            val = 0.45f;
+            push = 0.45f;
             MR::startSound(this, "SE_OJ_CHAL_FD_BRIDGE_HIT");
         } else {
-            val = 0.3f;
+            push = 0.3f;
         }
 
         if (dot < 0.0f) {
-            val = -val;
+            push = -push;
         }
 
-        mAngleSpeed += val;
+        mAngleSpeed += push;
 
         setNerve(GET_NERVE(FallDownBridge, FallDownBridgeNrvQuake));
 

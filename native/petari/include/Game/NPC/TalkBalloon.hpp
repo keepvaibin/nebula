@@ -24,7 +24,7 @@ public:
     virtual void skipMessage();
     virtual bool isTextAppearedAll();
 
-    void create(const char*, bool, bool);
+    void create(const char* pLayoutName, bool hasBeak, bool isTalkLayout);
 
     TalkMessageCtrl* mMessageCtrl;
     TalkTextFormer* mTextFormer;

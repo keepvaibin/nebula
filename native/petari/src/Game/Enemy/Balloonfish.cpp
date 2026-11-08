@@ -99,7 +99,7 @@ void Balloonfish::exeWait() {
     toPredictedPlayerPos -= mPosition;
 
     f32 ratio = static_cast< f32 >(mNotBoundStep) / ::hWaitTime;
-    f32 scale = (1.0f - ratio) * 1.0f + ratio * ::hWaitMaxScale;
+    f32 scale = (1.0f - ratio) + ratio * ::hWaitMaxScale;
     mScale.set(scale, scale, scale);
     MR::blendQuatFrontUp(&mQuat, -mGravity, toPredictedPlayerPos, 0.02f, 0.1f);
 
@@ -205,7 +205,7 @@ void Balloonfish::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (MR::sendMsgEnemyAttackMaximum(pReceiver, pSender) != true) {
+    if (!MR::sendMsgEnemyAttackMaximum(pReceiver, pSender)) {
         MR::sendMsgPush(pReceiver, pSender);
     }
 }

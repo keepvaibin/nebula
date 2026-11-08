@@ -290,7 +290,7 @@ bool MeteorStrike::isInScreen() const {
     Vec3f vec(mRailDir * mStepSize);
     vec2.add(mPosition, vec);
 
-    return MR::isJudgedToClipFrustum(vec2, 200.0f) == false;
+    return !MR::isJudgedToClipFrustum(vec2, 200.0f);
 }
 
 void MeteorStrike::exeMove() {

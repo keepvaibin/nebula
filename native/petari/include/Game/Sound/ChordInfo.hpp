@@ -78,6 +78,7 @@ public:
         return mCurScaleDown[idx];
     }
 
+    u8 findInterval(bool isChordTone, u8 loStep, u8 hiStep, bool isSkipThird);
     u8 getThird();
     u8 getFifth();
     u8 getSeventh();

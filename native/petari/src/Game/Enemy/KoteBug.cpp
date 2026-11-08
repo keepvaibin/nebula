@@ -593,7 +593,7 @@ void KoteBug::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
                 return;
             }
 
-            if (MR::sendMsgEnemyAttack(pReceiver, pSender) == true) {
+            if (MR::sendMsgEnemyAttack(pReceiver, pSender)) {
                 setNerve(GET_NERVE(KoteBug, HostTypeNrvHitToPlayer));
                 return;
             }

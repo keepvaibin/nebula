@@ -208,7 +208,7 @@ void Karikari::exeLand() {
         mVelocity.zero();
     }
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -270,7 +270,7 @@ void Karikari::exeWait() {
         mIsPushable = true;
     }
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -303,7 +303,7 @@ void Karikari::exePrePursue() {
     applyEnvironmentInfluenceToVelocity();
     mVelocity += mGravity * ::sGravity;
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -343,7 +343,7 @@ void Karikari::exePursue() {
     applyEnvironmentInfluenceToVelocity();
     mVelocity += mGravity * ::sGravity;
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -401,7 +401,7 @@ void Karikari::exeWatchFor() {
     applyEnvironmentInfluenceToVelocity();
     mVelocity += mGravity * ::sWatchForGravity;
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -442,7 +442,7 @@ void Karikari::exePreCling() {
         mIsPushable = false;
     }
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 
@@ -475,7 +475,7 @@ void Karikari::exeCling() {
         mVelocity.zero();
     }
 
-    if (tryPointerAttacked() == true) {
+    if (tryPointerAttacked()) {
         return;
     }
 

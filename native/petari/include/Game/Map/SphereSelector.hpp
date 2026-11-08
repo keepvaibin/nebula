@@ -69,10 +69,10 @@ public:
     static s32 getSelectStartFrame();
     static s32 getConfirmStartCancelFrame();
     static void selectStart();
-    static void selectCancel(bool);
+    static void selectCancel(bool isSePlayed);
     static void selectEnd();
     static void confirmStart();
-    static void confirmCancel(bool);
+    static void confirmCancel(bool isSePlayed);
     static void confirmed();
     static bool isSelectWait();
     static bool isConfirmWait();

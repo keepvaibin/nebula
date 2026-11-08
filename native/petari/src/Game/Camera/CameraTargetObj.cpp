@@ -13,7 +13,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace {
-    static Vec3f sZeroVec(0.0f, 0.0f, 0.0f);
+    const Vec3f sZeroVec(0.0f, 0.0f, 0.0f);
 };  // namespace
 
 CameraTargetObj::CameraTargetObj(const char* pName) : NameObj(pName), mCameraWall() {
@@ -41,13 +41,7 @@ void CameraTargetActor::movement() {
         matrix.getXDir(mSide);
     }
 
-    CubeCameraArea* area = static_cast< CubeCameraArea* >(MR::getAreaObj("CubeCamera", mActor->mPosition));
-
-    if (area == nullptr) {
-        mCameraArea = nullptr;
-    } else {
-        mCameraArea = area;
-    }
+    mCameraArea = static_cast< CubeCameraArea* >(MR::getAreaObj("CubeCamera", mActor->mPosition));
 }
 
 const Vec3f& CameraTargetActor::getPosition() const {
@@ -120,13 +114,7 @@ void CameraTargetPlayer::movement() {
 
     mGroundPos.set(*mActor->getShadowPos());
 
-    CubeCameraArea* area = MR::getCameraCube();
-    if (area != nullptr) {
-        mCameraArea = area;
-    } else {
-        mCameraArea = nullptr;
-    }
-
+    mCameraArea = MR::getCameraCube();
     mGroundTriangle = MR::getPlayerGroundingPolygon();
 
     if (MR::isNearZero(mUp)) {
@@ -135,12 +123,7 @@ void CameraTargetPlayer::movement() {
         MR::normalize(&mUp);
     }
 
-    if (mPlayerMovementTimer != MR::getPlayerMovementTimer()) {
-        mIsPlayerMoving = true;
-    } else {
-        mIsPlayerMoving = false;
-    }
-
+    mIsPlayerMoving = mPlayerMovementTimer != MR::getPlayerMovementTimer();
     mPlayerMovementTimer = MR::getPlayerMovementTimer();
 }
 

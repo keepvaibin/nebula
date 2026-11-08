@@ -189,7 +189,7 @@ void LavaProminenceTriple::updateEffectClippingIndividual(bool* pIsAppear, const
     Vec3f jointPos;
     MR::copyJointPos(this, pJointName, &jointPos);
 
-    if (*pIsAppear == true) {
+    if (*pIsAppear) {
         if (MR::isJudgedToClipFrustum(jointPos, 1.0f)) {
             MR::deleteEffect(this, pEffectName);
             *pIsAppear = false;

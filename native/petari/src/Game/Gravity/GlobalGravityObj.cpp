@@ -46,7 +46,7 @@ void GlobalGravityObj::updateSwitch() {
             switchA = MR::isOnSwitchA(this);
         }
         if (MR::isValidSwitchB(this)) {
-            switchB = MR::isOnSwitchB(this) == false;
+            switchB = !MR::isOnSwitchB(this);
         }
 
         PlanetGravity* pGravity = mGravityCreator->getGravity();

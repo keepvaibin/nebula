@@ -152,7 +152,7 @@ void FootPrint::draw() const {
         printPos += mPrints[i].mNormal * 5.0f;
 
         TypedDraw site = TDDraw::site(material, 0);
-        TDDraw::drawTexture3D(site, printPos, mPrints[i].mNormal, mPrints[i].mUp, mWidth, mHeight, nullptr, mPrints[i].mIsFlipX != false, false);
+        TDDraw::drawTexture3D(site, printPos, mPrints[i].mNormal, mPrints[i].mUp, mWidth, mHeight, nullptr, mPrints[i].mIsFlipX, false);
     }
 
     TDDraw::close();
@@ -176,5 +176,5 @@ void FootPrint::invalidate(u32 index) {
 }
 
 bool FootPrint::isValid(u32 index) const {
-    return mPrints[index % mPrintMaxNum].mIsValid != false;
+    return mPrints[index % mPrintMaxNum].mIsValid;
 }

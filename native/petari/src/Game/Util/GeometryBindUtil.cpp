@@ -3,12 +3,7 @@
 
 namespace {
     inline s32 isWithinConeSide(f32 along, f32 length) {
-        s32 result = 0;
-        if (0.0f < along && along < length) {
-            result = 1;
-        }
-
-        return result;
+        return 0.0f < along && along < length;
     }
 };  // namespace
 

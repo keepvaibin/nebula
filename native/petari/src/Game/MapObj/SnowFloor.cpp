@@ -589,7 +589,7 @@ void SnowFloor::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         }
 
-        if (MR::sendArbitraryMsg(ACTMES_ASK_HIDDEN_BY_SNOW, pReceiver, pSender) == true) {
+        if (MR::sendArbitraryMsg(ACTMES_ASK_HIDDEN_BY_SNOW, pReceiver, pSender)) {
             addCheckList(pReceiver);
             return;
         }

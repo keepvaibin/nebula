@@ -158,8 +158,8 @@ namespace MR {
     void makeQuatUpNoSupport(Quat4f* pQuat, const Vec3f& rUp);
     void blendQuatUpFront(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
     void blendQuatUpFront(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
-    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rFront, const Vec3f& rUp, f32 upRate, f32 frontRate);
-    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFront, const Vec3f& rUp, f32 frontRate, f32 upRate);
+    void blendQuatFrontUp(Quat4f* pDst, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
+    void blendQuatFrontUp(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rUp, const Vec3f& rFront, f32 upRate, f32 frontRate);
     void rotateQuatMoment(Quat4f* pQuat, const Vec3f& rMoment);
     void rotateQuatRollBall(Quat4f* pQuat, const Vec3f& rVel, const Vec3f& rNorm, f32 radius);
     bool turnQuat(Quat4f* pDst, const Quat4f& rSrc, const Vec3f& rFrom, const Vec3f& rTo, f32 angle);

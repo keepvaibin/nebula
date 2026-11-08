@@ -7,9 +7,33 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const f32 sAttenuation = 0.05f;
-    static const f32 sRoundAddition = 0.08f;
-    static const f32 sRoundInterval = FloatUtil::PI() / 4.0f;
+    const f32 sAttenuation = 0.05f;
+    const f32 sRoundAddition = 0.08f;
+    const f32 sRoundInterval = FloatUtil::PI() / 4.0f;
+
+    // The tower works in zone space: the watch point goes in through rInv, the finished pose comes out through rMtx.
+    void toZoneWatchPos(Camera* pCamera, const Pos3f& rInv) {
+        Vec3f watchPoint = CameraLocalUtil::getWatchPos(pCamera);
+        rInv.mult(watchPoint, watchPoint);
+        CameraLocalUtil::setWatchPos(pCamera, watchPoint);
+    }
+
+    void toWorldPose(Camera* pCamera, const Pos3f& rMtx) {
+        Vec3f pos = CameraLocalUtil::getPos(pCamera);
+        Vec3f watchPos = CameraLocalUtil::getWatchPos(pCamera);
+        Vec3f up = CameraLocalUtil::getUpVec(pCamera);
+        Vec3f watchUp = CameraLocalUtil::getWatchUpVec(pCamera);
+
+        rMtx.mult(pos, pos);
+        rMtx.mult(watchPos, watchPos);
+        rMtx.mult33(up);
+        rMtx.mult33(watchUp);
+
+        CameraLocalUtil::setPos(pCamera, pos);
+        CameraLocalUtil::setWatchPos(pCamera, watchPos);
+        CameraLocalUtil::setUpVec(pCamera, up);
+        CameraLocalUtil::setWatchUpVec(pCamera, watchUp);
+    }
 };  // namespace
 
 CameraTower::CameraTower(const char* pName)
@@ -26,28 +50,10 @@ void CameraTower::reset() {
     Pos3f inv = mtx;
     inv.invert(inv);
 
-    Vec3f watchPoint = CameraLocalUtil::getWatchPos(this);
-    inv.mult(watchPoint, watchPoint);
-    CameraLocalUtil::setWatchPos(this, watchPoint);
-
+    ::toZoneWatchPos(this, inv);
     calcIdealPos();
-
     mPos.set(CameraLocalUtil::getPos(this));
-
-    Vec3f pos = CameraLocalUtil::getPos(this);
-    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
-    Vec3f up = CameraLocalUtil::getUpVec(this);
-    Vec3f watchUp = CameraLocalUtil::getWatchUpVec(this);
-
-    mtx.mult(pos, pos);
-    mtx.mult(watchPos, watchPos);
-    mtx.mult33(up);
-    mtx.mult33(watchUp);
-
-    CameraLocalUtil::setPos(this, pos);
-    CameraLocalUtil::setWatchPos(this, watchPos);
-    CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, watchUp);
+    ::toWorldPose(this, mtx);
 
     mVPan->reset();
 }
@@ -60,31 +66,14 @@ CameraTargetObj* CameraTower::calc() {
     Pos3f inv = mtx;
     inv.invert(inv);
 
-    Vec3f watchPoint = CameraLocalUtil::getWatchPos(this);
-    inv.mult(watchPoint, watchPoint);
-    CameraLocalUtil::setWatchPos(this, watchPoint);
-
+    ::toZoneWatchPos(this, inv);
     calcIdealPos();
     arrangeRound();
-
-    Vec3f pos = CameraLocalUtil::getPos(this);
-    Vec3f watchPos = CameraLocalUtil::getWatchPos(this);
-    Vec3f up = CameraLocalUtil::getUpVec(this);
-    Vec3f watchUp = CameraLocalUtil::getWatchUpVec(this);
-
-    mtx.mult(pos, pos);
-    mtx.mult(watchPos, watchPos);
-    mtx.mult33(up);
-    mtx.mult33(watchUp);
-
-    CameraLocalUtil::setPos(this, pos);
-    CameraLocalUtil::setWatchPos(this, watchPos);
-    CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, watchUp);
+    ::toWorldPose(this, mtx);
 
     mVPan->arrange();
 
-    pos.set(CameraLocalUtil::getPos(this));
+    Vec3f pos = CameraLocalUtil::getPos(this);
     inv.mult(pos, pos);
     mPos.y = pos.y;
 
@@ -104,37 +93,17 @@ bool CameraTower::isEnableToRoundRight() const {
 }
 
 void CameraTower::calcIdealPos() {
-    if (MR::isNearZero(mAxis)) {
-        mAxis.set(0.0f, 1.0f, 0.0f);
-    } else {
-        mAxis.normalize();
-    }
-
-    Vec3f front = CameraLocalUtil::getWatchPos(this) - mWPoint;
-    front.set(front - mAxis * mAxis.dot(front));
-    if (MR::isNearZero(front)) {
+    Vec3f pos;
+    if (!CameraLocalUtil::calcTowerIdealPos(&pos, &mAxis, mWPoint, CameraLocalUtil::getWatchPos(this), mAngleX, mDist)) {
         return;
     }
 
-    MR::normalize(&front);
-
-    Vec3f up(0.0f, 1.0f, 0.0f);
-    Vec3f side = front.cross(up);
-
-    Quat4f rot;
-    rot.setRotate(side, mAngleX);
-    rot.transform(front);
-
-    Vec3f pos = front * mDist + CameraLocalUtil::getWatchPos(this);
-
     CameraLocalUtil::setPos(this, pos);
-    CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
+    CameraLocalUtil::setUpVecAndWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }
 
 void CameraTower::arrangeRoundingPose() {
     Vec3f pos = CameraLocalUtil::getPos(this);
-    Vec3f idealPos = mPos;
-    idealPos.y = CameraLocalUtil::getWatchPos(this).y;
     pos.y = CameraLocalUtil::getWatchPos(this).y;
 
     f32 length, angleX, angleY;

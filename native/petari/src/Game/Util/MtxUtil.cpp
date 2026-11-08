@@ -728,15 +728,9 @@ namespace MR {
         Vec3f yDirA, yDirB;
         ((Rot3f*)pMtxA)->getYDir(yDirA);
         ((Rot3f*)pMtxB)->getYDir(yDirB);
-        bool result = false;
-
-        if (FloatUtil::epsilonEquals(yDirA.x, yDirB.x, FloatUtil::epsilon()) &&
-            FloatUtil::epsilonEquals(yDirA.y, yDirB.y, FloatUtil::epsilon()) &&
-            FloatUtil::epsilonEquals(yDirA.z, yDirB.z, FloatUtil::epsilon())) {
-            result = true;
-        }
-
-        return result;
+        return FloatUtil::epsilonEquals(yDirA.x, yDirB.x, FloatUtil::epsilon()) &&
+               FloatUtil::epsilonEquals(yDirA.y, yDirB.y, FloatUtil::epsilon()) &&
+               FloatUtil::epsilonEquals(yDirA.z, yDirB.z, FloatUtil::epsilon());
     }
 
     void calcMtxRotAxis(Vec3f* pOut, MtxPtr pMtxA, MtxPtr pMtxB) {

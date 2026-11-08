@@ -729,16 +729,7 @@ void Poihana::calcBound() {
 }
 
 void Poihana::contactMario(HitSensor* pSender, HitSensor* pReceiver) {
-    bool isShooting;
-
-    if (!isNerveTypeWalkOrWait()) {
-        isShooting = isNerve(GET_NERVE(Poihana, PoihanaNrvShootUpCharge)) || isNerve(GET_NERVE(Poihana, PoihanaNrvShootUp));
-    } else {
-        goto doFlip;
-    }
-
-    if (isShooting) {
-    doFlip:
+    if (isNerveTypeWalkOrWait() || isNerve(GET_NERVE(Poihana, PoihanaNrvShootUpCharge)) || isNerve(GET_NERVE(Poihana, PoihanaNrvShootUp))) {
         if (!isBackAttack(pReceiver)) {
             return;
         }
@@ -851,18 +842,8 @@ bool Poihana::tryPointerSwoon() {
 }
 
 bool Poihana::tryShock() {
-    bool ret =
-        isNerve(GET_NERVE(Poihana, PoihanaNrvDrown)) || isNerve(GET_NERVE(Poihana, PoihanaNrvHide)) || isNerve(GET_NERVE(Poihana, PoihanaNrvAppear));
-
-    if (ret) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(Poihana, PoihanaNrvShock))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand))) {
+    if (isNerve(GET_NERVE(Poihana, PoihanaNrvDrown)) || isNerve(GET_NERVE(Poihana, PoihanaNrvHide)) || isNerve(GET_NERVE(Poihana, PoihanaNrvAppear)) ||
+        isNerve(GET_NERVE(Poihana, PoihanaNrvShock)) || isNerve(GET_NERVE(Poihana, PoihanaNrvSwoonLand))) {
         return false;
     }
 
@@ -872,17 +853,7 @@ bool Poihana::tryShock() {
 }
 
 bool Poihana::tryHipDropShock() {
-    bool isNotNear = !MR::isNearPlayerAnyTime(this, ::sDistanceForHipDropShock);
-
-    if (isNotNear) {
-        return false;
-    }
-
-    if (MR::isPlayerHipDropLand()) {
-        return tryShock();
-    }
-
-    return false;
+    return MR::isNearPlayerAnyTime(this, ::sDistanceForHipDropShock) && MR::isPlayerHipDropLand() && tryShock();
 }
 
 bool Poihana::isNerveTypeWalkOrWait() const {
@@ -897,15 +868,11 @@ bool Poihana::isNeedForBackHome() const {
     }
 
     if (isNerve(GET_NERVE(Poihana, PoihanaNrvChasePlayer))) {
-        bool ret;
-
         if (mBehavior == Behavior_NewHome) {
-            ret = !MR::isNearPlayer(this, ::sChaseRadius);
-        } else {
-            ret = !MR::isNear(this, mHomePos, ::sDistanceForNeedBack) || !MR::isNearPlayer(this, ::sChaseRadius);
+            return !MR::isNearPlayer(this, ::sChaseRadius);
         }
 
-        return ret;
+        return !MR::isNear(this, mHomePos, ::sDistanceForNeedBack) || !MR::isNearPlayer(this, ::sChaseRadius);
     }
 
     return false;

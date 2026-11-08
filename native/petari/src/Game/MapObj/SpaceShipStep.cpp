@@ -90,7 +90,7 @@ bool SpaceShipStep::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor
 
 void SpaceShipStep::updateResetToInitPosCheck() {
     if (!mHasBeenSeen) {
-        mHasBeenSeen = MR::isJudgedToClipFrustum(mPosition, 700.0f) == false;
+        mHasBeenSeen = !MR::isJudgedToClipFrustum(mPosition, 700.0f);
     } else {
         if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait)) || !MR::isJudgedToClipFrustum(mPosition, 700.0f)) {
             mHiddenStep = 0;

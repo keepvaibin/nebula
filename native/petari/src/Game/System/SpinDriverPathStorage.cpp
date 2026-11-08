@@ -152,13 +152,13 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             return 0;
         }
 
-        const u8 val = pData[readOffset + cScenarioHeaderSize];
-        if (val == ScenarioByte_End) {
+        const u8 lead = pData[readOffset + cScenarioHeaderSize];
+        if (lead == ScenarioByte_End) {
             return readOffset + cScenarioHeaderSize + 1;
         }
 
-        if ((val & ScenarioByte_ZoneStart) == ScenarioByte_ZoneStart) {
-            zoneId = val & ScenarioByte_ZoneIdMask;
+        if ((lead & ScenarioByte_ZoneStart) == ScenarioByte_ZoneStart) {
+            zoneId = lead & ScenarioByte_ZoneIdMask;
             readOffset++;
             continue;
         }
@@ -167,7 +167,7 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             return 0;
         }
 
-        if ((val & EntryFlag_Interrupted) != 0 && static_cast< u32 >(readOffset) + cScenarioHeaderSize + 2 > dataSize) {
+        if ((lead & EntryFlag_Interrupted) != 0 && static_cast< u32 >(readOffset) + cScenarioHeaderSize + 2 > dataSize) {
             return 0;
         }
 

@@ -168,12 +168,12 @@ void AstroDomeBlueStar::forceKill() {
 }
 
 void AstroDomeBlueStar::control() {
-    bool result = isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvGalaxySelect)) ||
+    bool isSelecting = isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvGalaxySelect)) ||
                   isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvGalaxyConfirmStart)) ||
                   isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvGalaxyConfirm)) ||
                   isNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvGalaxyConfirmCancel));
 
-    if (result) {
+    if (isSelecting) {
         MR::makeMtxUpFrontPos(&mHostMtx, MR::getCamYdir(), MR::getCamZdir(), mPosition);
         mCaptureActor->setPosAll(mPosition);
     }

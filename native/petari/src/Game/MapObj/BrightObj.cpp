@@ -44,13 +44,8 @@ namespace {
             newPos.scale(1.0f / clipPos.w, *clipPos.toVec3());
         }
 
-        bool ret;
-
-        if (1.0f < MR::abs(newPos.x) || 1.0f < MR::abs(newPos.y)) {
-            ret = false;
-        } else {
-            ret = 0.0f < newPos.z == false;
-        }
+        // Inside the screen and in front of the near plane.
+        bool isOnScreen = !(1.0f < MR::abs(newPos.x) || 1.0f < MR::abs(newPos.y)) && !(0.0f < newPos.z);
 
         f32 width = MR::getScreenWidth();
         f32 height = static_cast< s32 >(NebulaFrameClock::cScreenLines);
@@ -59,7 +54,7 @@ namespace {
         pDst->x = screenPos.x;
         pDst->y = screenPos.y;
 
-        return ret;
+        return isOnScreen;
     }
 };  // namespace
 

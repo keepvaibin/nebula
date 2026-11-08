@@ -84,74 +84,22 @@ const Vec3f* Triangle::getPos(int index) const {
     return &mPos[index];
 }
 
+// Normal 0 the face's, 1-3 edge plane 0-2's, recomputed from the parts' current matrix.
 const Vec3f* Triangle::calcAndGetNormal(int index) {
-    KCollisionServer* server = mParts->mServer;
-    KC_PrismData* prism = server->getPrismData(mIdx);
-
-    MtxPtr matrix = reinterpret_cast< MtxPtr >(&mParts->mBaseMatrix);
-
-    switch (index) {
-    case 0: {
-        mNormals[0].set(*server->getFaceNormal(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[0], &mNormals[0]);
-        MR::normalize(&mNormals[0]);
-
-        return &mNormals[0];
-    } break;
-    case 1: {
-        mNormals[1].set(*server->getEdgeNormal1(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[1], &mNormals[1]);
-        MR::normalize(&mNormals[1]);
-
-        return &mNormals[1];
-    } break;
-    case 2: {
-        mNormals[2].set(*server->getEdgeNormal2(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[2], &mNormals[2]);
-        MR::normalize(&mNormals[2]);
-
-        return &mNormals[2];
-    } break;
-    case 3: {
-        mNormals[3].set(*server->getEdgeNormal3(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[3], &mNormals[3]);
-        MR::normalize(&mNormals[3]);
-
-        return &mNormals[3];
-    } break;
+    if (0 <= index && index <= 3) {
+        KCollisionServer* server = mParts->mServer;
+        KC_PrismData* prism = server->getPrismData(mIdx);
+        mNormals[index].set(*server->getNormal(index == 0 ? prism->mNormalIndex : prism->mEdgeIndices[index - 1]));
+        NebulaMtxMultVecSR(reinterpret_cast< MtxPtr >(&mParts->mBaseMatrix), &mNormals[index], &mNormals[index]);
+        MR::normalize(&mNormals[index]);
     }
 
     return &mNormals[index];
 }
 
 const Vec3f* Triangle::calcAndGetEdgeNormal(int index) {
-    KCollisionServer* server = mParts->mServer;
-    KC_PrismData* prism = server->getPrismData(mIdx);
-
-    MtxPtr matrix = reinterpret_cast< MtxPtr >(&mParts->mBaseMatrix);
-
-    switch (index) {
-    case 0: {
-        mNormals[1].set(*server->getEdgeNormal1(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[1], &mNormals[1]);
-        MR::normalize(&mNormals[1]);
-
-        return &mNormals[1];
-    } break;
-    case 1: {
-        mNormals[2].set(*server->getEdgeNormal2(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[2], &mNormals[2]);
-        MR::normalize(&mNormals[2]);
-
-        return &mNormals[2];
-    } break;
-    case 2: {
-        mNormals[3].set(*server->getEdgeNormal3(prism));
-        NebulaMtxMultVecSR(matrix, &mNormals[3], &mNormals[3]);
-        MR::normalize(&mNormals[3]);
-
-        return &mNormals[3];
-    } break;
+    if (0 <= index && index <= 2) {
+        return calcAndGetNormal(index + 1);
     }
 
     return &mNormals[index + 1];

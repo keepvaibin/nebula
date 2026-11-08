@@ -19,10 +19,10 @@ public:
 
     void setPosition(const Vec3f& rPosition);
     void setDirection(const Vec3f& rDirection);
-    void setRadius(f32 val);
-    void setDiskRadius(f32 val);
-    void setEdgeType(s32 val);
-    void setBothSide(bool val);
+    void setRadius(f32 radius);
+    void setDiskRadius(f32 diskRadius);
+    void setEdgeType(s32 edgeType);
+    void setBothSide(bool isBothSide);
 
     Vec3f mLocalPosition;
     Vec3f mTranslation;

@@ -73,7 +73,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/Material.hpp"
-#include "JSystem/JUtility/JUTNameTab.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Map/StageSwitch.hpp"
@@ -593,7 +592,7 @@ void GameScene::drawOverlay() const {
 }
 
 bool GameScene::isValidScenarioOpeningCamera() const {
-    return MR::hasStartAnimCamera() != false;
+    return MR::hasStartAnimCamera();
 }
 
 void GameScene::startStagePlayFirst() {

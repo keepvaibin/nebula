@@ -11,7 +11,7 @@ public:
     void clear();
     void init(const char*, s32, s32);
     bool isEqual(const AlreadyDoneInfo&) const;
-    void set(bool);
+    void set(bool isDone);
 
     bool operator==(const AlreadyDoneInfo& other) const {
         return isEqual(other);

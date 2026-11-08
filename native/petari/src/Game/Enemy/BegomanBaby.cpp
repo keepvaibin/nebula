@@ -314,10 +314,9 @@ void BegomanBaby::exeAfterLaunch() {
     }
 
     if (MR::isLessStep(this, 80)) {
-        f32 f1 = 5.0f * MR::cos(getNerveStep() * (16 * PI) / 80.0f);
-        Vec3f& vel = mVelocity;
-        const Vec3f& gravity = mGravity;
-        vel.set(mFaceVec * 5.0f - gravity * f1);
+        // Eight bobs over the 80 steps.
+        f32 bob = 5.0f * MR::cos(getNerveStep() * (16 * PI) / 80.0f);
+        mVelocity.set(mFaceVec * 5.0f - mGravity * bob);
     } else if (MR::isLessStep(this, 85)) {
         mVelocity.zero();
     } else {
@@ -472,9 +471,9 @@ bool BegomanBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* 
 
         const f32 bodyRadius = getSensor("body")->mRadius;
         const f32 senderRadius = pSender->mRadius;
-        f32 f1 = senderRadius / bodyRadius;
+        f32 sizeRatio = senderRadius / bodyRadius;
 
-        MR::addVelocityLimit(this, dirFromReceiverToSender * 4.0f * f1);
+        MR::addVelocityLimit(this, dirFromReceiverToSender * 4.0f * sizeRatio);
 
         if (reflected) {
             MR::startSound(this, "SE_EM_BABYBEGO_COLLI_BEGOMAN");

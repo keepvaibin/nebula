@@ -453,45 +453,27 @@ void CollisionParts::calcCollidePosition(Vec3f* pPos, const KC_PrismData& rPrism
     Vec3f normal;
 
     switch (classification) {
-    // face, project into the triangle's plane
+    // The face: into the triangle's plane.
     case 1:
         projectToPlane(pPos, *pPos, mServer->getPos(&rPrism, 0), *mServer->getNormal(rPrism.mNormalIndex));
         break;
-    // edge 0, between verts 0-2
+    // Edge plane 0 (vertices 0-2), 1 (0-1) or 2 (1-2): into the triangle's plane, then onto the edge.
     case 2:
-        projectToPlane(pPos, *pPos, mServer->getPos(&rPrism, 0), *mServer->getNormal(rPrism.mNormalIndex));
-        normal.set(*mServer->getNormal(rPrism.mEdgeIndices[0]));
-        offset.set(*pPos);
-        offset -= mServer->getPos(&rPrism, 0);
-        *pPos += -normal * offset.dot(normal);
-        break;
-    // edge 1, between verts 0-1
     case 3:
+    case 4: {
+        s32 plane = classification - 2;
         projectToPlane(pPos, *pPos, mServer->getPos(&rPrism, 0), *mServer->getNormal(rPrism.mNormalIndex));
-        normal.set(*mServer->getNormal(rPrism.mEdgeIndices[1]));
+        normal.set(*mServer->getNormal(rPrism.mEdgeIndices[plane]));
         offset.set(*pPos);
-        offset -= mServer->getPos(&rPrism, 0);
+        offset -= mServer->getPos(&rPrism, plane == 2 ? 1 : 0);
         *pPos += -normal * offset.dot(normal);
         break;
-    // edge 2, between verts 1-2
-    case 4:
-        projectToPlane(pPos, *pPos, mServer->getPos(&rPrism, 0), *mServer->getNormal(rPrism.mNormalIndex));
-        normal.set(*mServer->getNormal(rPrism.mEdgeIndices[2]));
-        offset.set(*pPos);
-        offset -= mServer->getPos(&rPrism, 1);
-        *pPos += -normal * offset.dot(normal);
-        break;
-    // vertex 0
+    }
+    // Vertex 0-2.
     case 5:
-        pPos->set(mServer->getPos(&rPrism, 0));
-        break;
-    // vertex 1
     case 6:
-        pPos->set(mServer->getPos(&rPrism, 1));
-        break;
-    // vertex 2
     case 7:
-        pPos->set(mServer->getPos(&rPrism, 2));
+        pPos->set(mServer->getPos(&rPrism, classification - 5));
         break;
     }
 }

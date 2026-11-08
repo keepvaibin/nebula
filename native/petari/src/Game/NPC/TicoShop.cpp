@@ -88,16 +88,17 @@ bool TicoShop::branchFunc(u32) {
     return hasEnoughStarPiece();
 }
 
-bool TicoShop::eventFunc(u32 var) {
-    if (var < 3) {
-        return TicoComet::eventFunc(var);
+bool TicoShop::eventFunc(u32 event) {
+    // Events 0-2 are the eating Tico's; 3 and 4 the two purchases.
+    if (event < 3) {
+        return TicoComet::eventFunc(event);
     }
 
-    if (var == 3) {
+    if (event == 3) {
         mChoseLifeUp = true;
     }
 
-    if (var == 4) {
+    if (event == 4) {
         mChoseOneUp = true;
     }
 

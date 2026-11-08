@@ -248,8 +248,7 @@ bool KuriboMini::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if ((MR::isSensorEnemy(pSender) || MR::isSensorRide(pSender) || (!isEnableAttack() && MR::isSensorPlayer(pSender)))) {
-        bool isDwn = isDown() == false;
-        if (isDwn) {
+        if (!isDown()) {
             MR::addVelocityFromPush(this, 1.5f, pSender, pReceiver);
             return true;
         }
@@ -322,11 +321,6 @@ bool KuriboMini::requestBlowDown(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    bool isDwn = isDown() == false;
-    if (!isDwn) {
-        return false;
-    }
-
     MR::setVelocityBlowAttack(this, pSender, pReceiver, 22.0f, 25.0f, 4);
     setNerve(GET_NERVE(KuriboMini, KuriboMiniNrvBlowDown));
     return true;
@@ -337,14 +331,9 @@ bool KuriboMini::requestStagger(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    bool isDwn = isDown() == false;
-    if (isDwn) {
-        mStateStagger->setPunchDirection(pSender, pReceiver);
-        setNerve(GET_NERVE(KuriboMini, KuriboMiniNrvStagger));
-        return true;
-    }
-
-    return false;
+    mStateStagger->setPunchDirection(pSender, pReceiver);
+    setNerve(GET_NERVE(KuriboMini, KuriboMiniNrvStagger));
+    return true;
 }
 
 bool KuriboMini::requestAttackSuccess() {
@@ -548,9 +537,6 @@ bool KuriboMini::isEnableKick() const {
 }
 
 bool KuriboMini::isDown() const {
-    if (isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvFlatDown)) || isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvHipDropDown)) ||
-        isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvPressDown)) || isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvBlowDown))) {
-        return true;
-    }
-    return false;
+    return isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvFlatDown)) || isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvHipDropDown)) ||
+           isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvPressDown)) || isNerve(GET_NERVE(KuriboMini, KuriboMiniNrvBlowDown));
 }

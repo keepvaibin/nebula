@@ -50,13 +50,13 @@ bool GameEventFlagChecker::canOn(const char* pFlagName) const {
         return mDataHolder->getStarPieceNumGivingToTicoSeed(pFlag->mStarPieceIndex + 8) >= needStarPieceNum;
     }
     case GameEventFlag::Type_EventValueIsZero: {
-        GameEventFlagAccessor accessor2 = GameEventFlagAccessor(pFlag);
+        GameEventFlagAccessor accessor = GameEventFlagAccessor(pFlag);
 
-        if (isOn(accessor2.getRequirement()) == false) {
+        if (!isOn(accessor.getRequirement())) {
             return false;
         }
 
-        return static_cast< u16 >(mDataHolder->getGameEventValue(accessor2.getEventValueName())) == 0;
+        return static_cast< u16 >(mDataHolder->getGameEventValue(accessor.getEventValueName())) == 0;
     }
     case GameEventFlag::Type_CompleteMarioAndLuigi:
         return mDataHolder->isCompleteMarioAndLuigi();
@@ -141,24 +141,21 @@ bool GameEventFlagChecker::isOnGalaxyDepended(const char* pGalaxyName) const {
     const char* galaxyDependedFlags[3];
 
     s32 length = GameEventFlagTable::getGalaxyDependedFlags(galaxyDependedFlags, ARRAY_SIZE(galaxyDependedFlags), pGalaxyName);
-    bool isGalaxyDepended = true;
-
     for (s32 i = 0; i < length; i++) {
-        if (isOn(galaxyDependedFlags[i]) == false) {
-            isGalaxyDepended = false;
-            break;
+        if (!isOn(galaxyDependedFlags[i])) {
+            return false;
         }
     }
 
-    return isGalaxyDepended;
+    return true;
 }
 
 bool GameEventFlagChecker::isOnComet(const GameEventFlag* pFlag) const {
     const char* pGalaxyName = pFlag->mGalaxyName;
 
-    if (isOn(pFlag->mRequirement) == false) {
+    if (!isOn(pFlag->mRequirement)) {
         return false;
     }
 
-    return mDataHolder->hasPowerStar(pGalaxyName, pFlag->mStarID) != false;
+    return mDataHolder->hasPowerStar(pGalaxyName, pFlag->mStarID);
 }

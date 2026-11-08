@@ -20,19 +20,19 @@ void AudioEffectArea::init(const TableIter& rIter) {
 }
 
 void AudioEffectArea::movement() {
-    bool val;
+    bool isInside;
 
     switch (mEffectType) {
     case 3:
     case 4:
-        val = isInVolume(MR::getCamPos()) || isInVolume(*MR::getPlayerPos());
+        isInside = isInVolume(MR::getCamPos()) || isInVolume(*MR::getPlayerPos());
         break;
     default:
-        val = isInVolume(*MR::getPlayerPos());
+        isInside = isInVolume(*MR::getPlayerPos());
         break;
     }
 
-    if (val) {
+    if (isInside) {
         MR::setAudioEffectType(mEffectType, mEffectParam);
     } else {
         MR::setAudioEffectType(0, 0);

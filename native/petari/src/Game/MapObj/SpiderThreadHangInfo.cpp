@@ -40,8 +40,8 @@ void SpiderThreadHangInfo::startHang() {
     mThreadPart->startHang(mHangIndex);
 }
 
-void SpiderThreadHangInfo::endHang(bool b) {
-    if (b) {
+void SpiderThreadHangInfo::endHang(bool isCancel) {
+    if (isCancel) {
         MR::sendSimpleMsgToActor(ACTMES_HANG_CANCEL, mBindedActor);
     }
 

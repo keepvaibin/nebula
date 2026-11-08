@@ -7,10 +7,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace {
-    static const f32 sCollideRate = 0.03f;
-    static const s32 sCollideCountMax = 60;
-    static const f32 sLastMoveLen = 5.0f;
-    static const f32 sRateWhenBraking = 0.05f;
+    const f32 sRateWhenBraking = 0.05f;
 };  // namespace
 
 CameraFooFighter::CameraFooFighter(const char* pName)
@@ -33,53 +30,8 @@ CameraTargetObj* CameraFooFighter::calc() {
     CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
 
     Vec3f gravUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    Vec3f watchFront = watchPoint - CameraLocalUtil::getPos(this);
-    f32 camDist = watchFront.length();
-    f32 dist;
-    if (MR::isNearZero(watchFront)) {
-        watchFront.cross(CameraLocalUtil::getTarget(this)->getSideVec(), gravUp);
-        dist = camDist;
-    } else {
-        if (camDist < mDistMin) {
-            dist = mDistMin;
-        } else if (camDist > mDistMax) {
-            dist = mDistMax;
-        } else {
-            dist = camDist;
-        }
-    }
-    MR::normalize(&watchFront);
-
-    Vec3f up = CameraLocalUtil::getUpVec(this);
-    Vec3f front = CameraLocalUtil::getWatchPos(this) - CameraLocalUtil::getPos(this);
-    MR::normalize(&front);
-    Quat4f rotFront;
-    rotFront.setRotate(front, watchFront);
-
-    Vec3f newFront, newUp;
-    newFront.set(watchFront);
-    newUp.set(up);
-    rotFront.transform(newUp);
-
-    Vec3f newSide = newUp.cross(newFront);
-    newSide -= gravUp * gravUp.dot(newSide);
-    MR::normalize(&newSide);
-
-    newUp.cross(newFront, newSide);
-    newSide.cross(newUp, newFront);
-
-    if (gravUp.dot(newUp) < 0.0f) {
-        Quat4f rotFrontUp;
-        if (newFront.dot(gravUp) < 0.0f) {
-            rotFrontUp.setRotate(newFront, -gravUp);
-        } else {
-            rotFrontUp.setRotate(newFront, gravUp);
-        }
-
-        rotFrontUp.transform(newFront);
-        rotFrontUp.transform(newSide);
-        rotFrontUp.transform(newUp);
-    }
+    Vec3f newFront, newUp, newSide;
+    f32 dist = CameraLocalUtil::calcFollowFrame(this, watchPoint, gravUp, mDistMin, mDistMax, true, &newFront, &newUp, &newSide);
 
     if (MR::isPlayerNeedBrakingCamera()) {
         Pos3f mtx1;
@@ -123,27 +75,11 @@ CameraTargetObj* CameraFooFighter::calc() {
         rot.transform(newFront);
         rot.transform(newUp);
         Vec3f pos = watchPoint - newFront * dist;
-
-        f32 lastMoveLen = CameraLocalUtil::getTarget(this)->getLastMove().length();
-        if (lastMoveLen > ::sLastMoveLen) {
-            mTargetLastMoveDir.set(CameraLocalUtil::getTarget(this)->getLastMove());
-            MR::normalize(&mTargetLastMoveDir);
-        }
-
-        if (lastMoveLen > ::sLastMoveLen && Collision::checkStrikeLineToMap(pos, newFront * dist, 0, nullptr, nullptr) != 0) {
-            mCollideCount++;
-            if (mCollideCount > ::sCollideCountMax) {
-                mCollideCount = ::sCollideCountMax;
-            }
-        } else {
-            mCollideCount--;
-            if (mCollideCount < 0) {
-                mCollideCount = 0;
-            }
-        }
+        f32 collideRate =
+            CameraLocalUtil::updateMoveCollision(&mCollideCount, &mTargetLastMoveDir, CameraLocalUtil::getTarget(this), pos, newFront * dist);
 
         if (mCollideCount > 0) {
-            rot.setRotate(newFront, mTargetLastMoveDir, (mCollideCount * ::sCollideRate) / ::sCollideCountMax);
+            rot.setRotate(newFront, mTargetLastMoveDir, collideRate);
             rot.transform(newFront);
             rot.transform(newUp);
         }

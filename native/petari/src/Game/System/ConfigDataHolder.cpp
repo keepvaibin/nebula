@@ -20,8 +20,9 @@ u32 ConfigDataCreateChunk::getSignature() const {
 s32 ConfigDataCreateChunk::serialize(u8* pBuffer, u32 size) const {
     JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
 
-    u8 isCreated = -(mIsCreated != false);
-    stream.write(&isCreated, sizeof(mIsCreated));
+    // Saved as 0xFF when created.
+    u8 isCreated = mIsCreated ? 0xFF : 0;
+    stream.write(&isCreated, sizeof(isCreated));
 
     return stream.mPosition;
 }

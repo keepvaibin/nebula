@@ -30,6 +30,11 @@ public:
     void exePowerUpVs2();
     void exeDownVs1();
     void exeDownVs2();
+    void startCastAnim(const char* pAnimName);
+    void endCastAnim(const char* pAnimName);
+    void updateWaitAppear(const Nerve* pAppearNerve);
+    void updatePowerUp(const char* pAnimName, const char* pDemoName, const char* pLevelSe);
+    void updateDown(const char* pAnimName, const char* pDemoName);
     void updateCastPose();
 
     BossKameckDemoPosition* mDemoPos;

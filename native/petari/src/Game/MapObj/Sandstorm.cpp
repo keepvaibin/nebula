@@ -459,15 +459,15 @@ void Sandstorm::endBind() {
 
 void Sandstorm::updateSpiral() {
     f32 x = mBindStartStep / mStepStorm;
-    f32 value1 = MR::getLinerValue(x, 0.0f, mSpiralRadius, 1.0f);
-    f32 value2 = MR::getLinerValue(x, 0.0f, mBindHeight, 1.0f);
+    f32 startRadius = MR::getLinerValue(x, 0.0f, mSpiralRadius, 1.0f);
+    f32 startOffsetY = MR::getLinerValue(x, 0.0f, mBindHeight, 1.0f);
     f32 startAngle = MR::toRadian(-mSpiralRot * x);
 
     if (mBindStep <= mStepStorm) {
         f32 x = static_cast< f32 >(mBindStep) / mStepStorm;
 
-        mBindRadius = MR::getLinerValue(x, value1, mSpiralRadius, 1.0f);
-        mBindOffsetY = MR::getLinerValue(x, value2, mBindHeight, 1.0f);
+        mBindRadius = MR::getLinerValue(x, startRadius, mSpiralRadius, 1.0f);
+        mBindOffsetY = MR::getLinerValue(x, startOffsetY, mBindHeight, 1.0f);
     } else {
         mBindRadius = MR::getLinerValue(static_cast< f32 >(mBindStep - mStepStorm) / mStepAdjust, mAdjustStartRadius, 0.0f, 1.0f);
         mBindOffsetY = mBindHeight;

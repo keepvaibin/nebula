@@ -569,7 +569,7 @@ void CameraDirector::startSubjectiveCamera(s32 camType) {
 void CameraDirector::endSubjectiveCamera(s32 endType) {
     bool forceEnd = endType == 0 || endType == 1;
 
-    if (mIsSubjectiveCamera == true) {
+    if (mIsSubjectiveCamera) {
         mIsSubjectiveCamera = false;
 
         if (!forceEnd) {

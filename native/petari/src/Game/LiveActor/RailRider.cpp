@@ -59,7 +59,7 @@ void RailRider::moveToNextPoint() {
 }
 
 void RailRider::reverse() {
-    if (mIsNotReverse != false) {
+    if (mIsNotReverse) {
         mIsNotReverse = false;
     } else {
         mIsNotReverse = true;
@@ -97,28 +97,7 @@ bool RailRider::isReachedGoal() const {
         return false;
     }
 
-    bool result;
-    bool forwardGoal;
-    result = true;
-    forwardGoal = false;
-    if (mIsNotReverse) {
-        if (MR::isNearZero(mCoord - getTotalLength())) {
-            forwardGoal = true;
-        }
-    }
-
-    if (!forwardGoal) {
-        bool reverseGoal = false;
-        if (!mIsNotReverse && MR::isNearZero(mCoord)) {
-            reverseGoal = true;
-        }
-
-        if (!reverseGoal) {
-            result = false;
-        }
-    }
-
-    return result;
+    return (mIsNotReverse && MR::isNearZero(mCoord - getTotalLength())) || (!mIsNotReverse && MR::isNearZero(mCoord));
 }
 
 bool RailRider::isReachedEdge() const {
@@ -135,31 +114,27 @@ void RailRider::setCoord(f32 coord) {
     syncPosDir();
 }
 
-void RailRider::setSpeed(f32 coord) {
-    mSpeed = coord;
+void RailRider::setSpeed(f32 speed) {
+    mSpeed = speed;
 }
 
 bool RailRider::getRailArgWithInit(const char* pStr, s32* pOut) const {
-    s32 val;
-    if (!mBezierRail->mIter->getValue< s32 >(pStr, &val)) {
+    s32 arg;
+    if (!mBezierRail->mIter->getValue< s32 >(pStr, &arg)) {
         return false;
     }
 
-    *pOut = val;
+    *pOut = arg;
     return true;
 }
 
 bool RailRider::getRailArgNoInit(const char* pStr, s32* pOut) const {
-    s32 val;
-    if (!mBezierRail->mIter->getValue< s32 >(pStr, &val)) {
+    s32 arg;
+    if (!mBezierRail->mIter->getValue< s32 >(pStr, &arg) || arg == -1) {
         return false;
     }
 
-    if (val == -1) {
-        return false;
-    }
-
-    *pOut = val;
+    *pOut = arg;
     return true;
 }
 
@@ -194,16 +169,15 @@ void RailRider::initBezierRail(const TableIter& rIter, const Table* pInfo) {
     mStartPos.set(mCurPos);
 }
 
+// A point argument of -1, or none, is unset: *pOut is left as it was.
 bool RailRider::getPointArgS32NoInit(const char* pStr, s32* pOut, s32 pointNum) const {
-    s32 val;
     TableIter iter;
-
     mBezierRail->calcRailCtrlPointIter(&iter, pointNum);
-    val = -1;
-    iter.getValue< s32 >(pStr, &val);
+    s32 arg = -1;
+    iter.getValue< s32 >(pStr, &arg);
 
-    if (val != -1) {
-        *pOut = val;
+    if (arg != -1) {
+        *pOut = arg;
         return true;
     }
 
@@ -218,49 +192,19 @@ bool RailRider::getPointArgS32WithInit(const char* pStr, s32* pOut, s32 pointNum
 }
 
 bool RailRider::getCurrentPointArgS32NoInit(const char* pStr, s32* pOut) const {
-    s32 val;
-    TableIter iter;
-
-    mBezierRail->calcRailCtrlPointIter(&iter, mCurPoint);
-    val = -1;
-    iter.getValue< s32 >(pStr, &val);
-
-    if (val != -1) {
-        *pOut = val;
-        return true;
-    }
-
-    return false;
+    return getPointArgS32NoInit(pStr, pOut, mCurPoint);
 }
 
 bool RailRider::getCurrentPointArgS32WithInit(const char* pStr, s32* pOut) const {
-    TableIter iter;
-    mBezierRail->calcRailCtrlPointIter(&iter, mCurPoint);
-    iter.getValue< s32 >(pStr, pOut);
-    return true;
+    return getPointArgS32WithInit(pStr, pOut, mCurPoint);
 }
 
 bool RailRider::getNextPointArgS32NoInit(const char* pStr, s32* pOut) const {
-    s32 val;
-    TableIter iter;
-
-    mBezierRail->calcRailCtrlPointIter(&iter, getNextPointNo());
-    val = -1;
-    iter.getValue< s32 >(pStr, &val);
-
-    if (val != -1) {
-        *pOut = val;
-        return true;
-    }
-
-    return false;
+    return getPointArgS32NoInit(pStr, pOut, getNextPointNo());
 }
 
 bool RailRider::getNextPointArgS32WithInit(const char* pStr, s32* pOut) const {
-    TableIter iter;
-    mBezierRail->calcRailCtrlPointIter(&iter, getNextPointNo());
-    iter.getValue< s32 >(pStr, pOut);
-    return true;
+    return getPointArgS32WithInit(pStr, pOut, getNextPointNo());
 }
 
 s32 RailRider::getNextPointNo() const {
@@ -274,16 +218,15 @@ s32 RailRider::getNextPointNo() const {
 
     s32 nextPoint = mCurPoint + step;
     s32 lastPoint = getPointNum() - 1;
-    s32 result;
     if (nextPoint < 0) {
-        result = 0;
-    } else if (nextPoint > lastPoint) {
-        result = lastPoint;
-    } else {
-        result = nextPoint;
+        return 0;
     }
 
-    return result;
+    if (nextPoint > lastPoint) {
+        return lastPoint;
+    }
+
+    return nextPoint;
 }
 
 void RailRider::syncPosDir() {

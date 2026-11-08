@@ -1960,10 +1960,10 @@ namespace MR {
         return &pActor->mBinder->mFixReactionVector;
     }
 
-    void setBinderOffsetVec(LiveActor* pActor, const Vec3f* pVec, bool b) {
+    void setBinderOffsetVec(LiveActor* pActor, const Vec3f* pVec, bool isInHostFrame) {
         Binder* binder = pActor->mBinder;
         binder->mOffsetVec = pVec;
-        binder->mIsOffsetInHostFrame = b;
+        binder->mIsOffsetInHostFrame = isInHostFrame;
     }
 
     void setBinderRadius(LiveActor* pActor, f32 radius) {

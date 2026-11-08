@@ -6,6 +6,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
 
+namespace {
+    // An arrow's hit part by which edge planes it lies on (bit 0-2 for plane 0-2): one, its edge; two, their vertex; else
+    // the face.
+    const u8 cHitPartByEdges[8] = {1, 2, 3, 5, 4, 7, 6, 1};
+}  // namespace
+
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new Table()), mMaxVertexDistance(1.0f), mModel() {
 }
 
@@ -53,17 +59,17 @@ void KCollisionServer::initModel(KCLFile* pModel, const void* pMapData) {
 }
 
 bool KCollisionServer::calcFarthestVertexDistance() {
+    // Also flattens near-parallel prisms and registers each prism's camera code; false when any prism has no attributes.
     s32 triCount = getTriangleNum();
-    f32 maxDistance = 0.0f;
-    KC_PrismData* prism;
-    bool result = true;
+    f32 maxDistanceSq = 0.0f;
+    bool isAllAttributed = true;
 
     for (u32 i = 0; i < (u32)triCount; i++) {
-        prism = &mFile->mPrisms[i + 1];
+        KC_PrismData* prism = &mFile->mPrisms[i + 1];
         TableIter iter = getAttributes(i);
 
         if (!iter.isValid()) {
-            result = false;
+            isAllAttributed = false;
         } else {
             MR::registerCameraCode(MR::getCollisionDirector()->mCode->getCameraID(iter));
         }
@@ -75,15 +81,15 @@ bool KCollisionServer::calcFarthestVertexDistance() {
                 Vec3f pos = getPos(prism, j);
                 f32 distSq = pos.squared();
 
-                if (maxDistance < distSq) {
-                    maxDistance = distSq;
+                if (maxDistanceSq < distSq) {
+                    maxDistanceSq = distSq;
                 }
             }
         }
     }
 
-    mMaxVertexDistance = MR::sqrt(maxDistance);
-    return result;
+    mMaxVertexDistance = MR::sqrt(maxDistanceSq);
+    return isAllAttributed;
 }
 
 KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) {
@@ -160,14 +166,71 @@ KC_PrismData* KCollisionServer::checkPoint(Fxyz* pPoint, f32 param, f32* pDist) 
     return nullptr;
 }
 
-u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u32 maxCount) {
-    s32 remX;
-    s32 yStep;
-    s32 zStep;
-    s32 bestRemY;
-    const u32* list;
+// Every prism with a height in the blocks over rPointMin..rPointMax, x fastest; a block that already covered the row before
+// is skipped. Stops when visit returns true.
+template < typename Visit >
+void KCollisionServer::visitPrismsInBlocks(const V3u& rPointMin, const V3u& rPointMax, Visit visit) const {
     const u32* nextSkipList = nullptr;
     const u32* skipList = nullptr;
+    u32 z = rPointMin.z;
+
+    do {
+        u32 y = rPointMin.y;
+        s32 zStep = 1000000;
+
+        do {
+            u32 x = rPointMin.x;
+            s32 yStep = 1000000;
+            s32 bestRemY = 0;
+
+            do {
+                s32 shift;
+                const u32* list = searchBlock(&shift, x, y, z);
+                s32 blockSize = 1 << shift;
+                s32 mask = blockSize - 1;
+                s32 remX = blockSize - (x & mask);
+                s32 remY = blockSize - (y & mask);
+                s32 remZ = blockSize - (z & mask);
+
+                if (remZ < zStep) {
+                    zStep = remZ;
+                }
+
+                if (remY < yStep) {
+                    yStep = remY;
+                }
+
+                if (remY > bestRemY && list[1] != 0) {
+                    bestRemY = remY;
+                    nextSkipList = list;
+                }
+
+                if (skipList == nullptr || list != skipList) {
+                    while (*++list != 0) {
+                        KC_PrismData* prism = &mFile->mPrisms[*list];
+
+                        if (prism->mHeight <= 0.0f) {
+                            continue;
+                        }
+
+                        if (visit(prism)) {
+                            return;
+                        }
+                    }
+                }
+
+                x += remX;
+            } while (x <= rPointMax.x);
+
+            skipList = nextSkipList;
+            y += yStep;
+        } while (y <= rPointMax.y);
+
+        z += zStep;
+    } while (z <= rPointMax.z);
+}
+
+u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u32 maxCount) {
     u32 foundCount = 0;
 
     Fxyz box[2];
@@ -199,250 +262,50 @@ u32 KCollisionServer::checkArea3D(Fxyz* pMin, Fxyz* pMax, KC_PrismData** pOut, u
         return 0;
     }
 
-    u32 x;
-    u32 y;
-    u32 z;
-    KC_PrismData* prism;
-    s32 shift;
-    z = pointMin.z;
+    visitPrismsInBlocks(pointMin, pointMax, [&](KC_PrismData* prism) {
+        KC_PrismData** end = pOut + foundCount;
 
-    do {
-        y = pointMin.y;
-        zStep = 1000000;
+        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
+            return false;
+        }
 
-        do {
-            x = pointMin.x;
-            yStep = 1000000;
-            bestRemY = 0;
+        Vec3f verts[3];
+        verts[0] = getPos(prism, 0);
+        verts[1] = getPos(prism, 1);
+        verts[2] = getPos(prism, 2);
 
-            do {
-                list = searchBlock(&shift, x, y, z);
-                shift = 1 << shift;
-                s32 blockSize = shift;
-                s32 remZ;
-                s32 mask = blockSize - 1;
-                remX = blockSize - (x & mask);
-                s32 remY = blockSize - (y & mask);
-                remZ = blockSize - (z & mask);
+        Vec3f prismMin;
+        Vec3f prismMax;
+        MR::createBoundingBox(verts, 3, &prismMin, &prismMax);
 
-                if (remZ < zStep) {
-                    zStep = remZ;
-                }
+        if (prismMax.x < queryMin.x || prismMax.y < queryMin.y || prismMax.z < queryMin.z || queryMax.x < prismMin.x ||
+            queryMax.y < prismMin.y || queryMax.z < prismMin.z) {
+            return false;
+        }
 
-                if (remY < yStep) {
-                    yStep = remY;
-                }
-
-                if (remY > bestRemY && list[1] != 0) {
-                    bestRemY = remY;
-                    nextSkipList = list;
-                }
-
-                if (skipList == nullptr || list != skipList) {
-                    while (*++list != 0) {
-                        prism = &mFile->mPrisms[*list];
-
-                        if (prism->mHeight <= 0.0f) {
-                            continue;
-                        }
-
-                        KC_PrismData** end = pOut + foundCount;
-
-                        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
-                            continue;
-                        }
-
-                        Vec3f verts[3];
-                        verts[0] = getPos(prism, 0);
-                        verts[1] = getPos(prism, 1);
-                        verts[2] = getPos(prism, 2);
-
-                        Vec3f prismMin;
-                        Vec3f prismMax;
-                        MR::createBoundingBox(verts, 3, &prismMin, &prismMax);
-
-                        if (prismMax.x < queryMin.x) {
-                            continue;
-                        }
-
-                        if (prismMax.y < queryMin.y) {
-                            continue;
-                        }
-
-                        if (prismMax.z < queryMin.z) {
-                            continue;
-                        }
-
-                        if (queryMax.x < prismMin.x) {
-                            continue;
-                        }
-
-                        if (queryMax.y < prismMin.y) {
-                            continue;
-                        }
-
-                        if (queryMax.z < prismMin.z) {
-                            continue;
-                        }
-
-                        *end = prism;
-                        foundCount++;
-
-                        if (foundCount == maxCount) {
-                            return maxCount;
-                        }
-                    }
-                }
-
-                x += remX;
-            } while (x <= pointMax.x);
-
-            skipList = nextSkipList;
-            y += yStep;
-        } while (y <= pointMax.y);
-
-        z += zStep;
-    } while (z <= pointMax.z);
+        *end = prism;
+        foundCount++;
+        return foundCount == maxCount;
+    });
 
     return foundCount;
 }
 
-u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pFlags) {
-    KC_PrismData** end;
-    s32 remX;
-    s32 yStep;
-    s32 zStep;
-    s32 bestRemY;
-    const u32* list;
-    const u32* nextSkipList = nullptr;
-    const u32* skipList = nullptr;
-    u32 foundCount = 0;
-
-    V3u pointMin;
-    V3u pointMax;
-    Vec3f boxMax;
-    Vec3f boxMin;
-    u32 x;
-    u32 y;
-    u32 z;
-    KC_PrismData* prism;
-    f32 dist = 0.0f;
-    s32 shift;
-    u8 flag;
-    boxMax.x = pCenter->x + radius;
-    boxMax.y = pCenter->y + radius;
-    boxMax.z = pCenter->z + radius;
-
-    boxMin.x = pCenter->x - radius;
-    boxMin.y = pCenter->y - radius;
-    boxMin.z = pCenter->z - radius;
-
-    if (!outCheck(&boxMin, &boxMax, &pointMin, &pointMax)) {
-        return 0;
-    }
-
-    z = pointMin.z;
-
-    do {
-        y = pointMin.y;
-        zStep = 1000000;
-
-        do {
-            x = pointMin.x;
-            yStep = 1000000;
-            bestRemY = 0;
-
-            do {
-                list = searchBlock(&shift, x, y, z);
-                s32 remZ;
-                s32 blockSize = 1 << shift;
-                s32 mask = blockSize - 1;
-                remX = blockSize - (x & mask);
-                s32 remY = blockSize - (y & mask);
-                remZ = blockSize - (z & mask);
-
-                if (remZ < zStep) {
-                    zStep = remZ;
-                }
-
-                if (remY < yStep) {
-                    yStep = remY;
-                }
-
-                if (remY > bestRemY && list[1] != 0) {
-                    bestRemY = remY;
-                    nextSkipList = list;
-                }
-
-                if (skipList == nullptr || list != skipList) {
-                    while (*++list != 0) {
-                        prism = &mFile->mPrisms[*list];
-
-                        if (prism->mHeight <= 0.0f) {
-                            continue;
-                        }
-
-                        end = pOut + foundCount;
-
-                        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
-                            continue;
-                        }
-
-                        if (!KCHitSphere(prism, pCenter, radius, param, &dist, &flag)) {
-                            continue;
-                        }
-
-                        if (foundCount >= maxCount) {
-                            continue;
-                        }
-
-                        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
-                            continue;
-                        }
-
-                        *end = prism;
-                        pDists[foundCount] = dist;
-                        pFlags[foundCount] = flag;
-                        foundCount++;
-                    }
-                }
-
-                x += remX;
-            } while (x <= pointMax.x);
-
-            skipList = nextSkipList;
-            y += yStep;
-        } while (y <= pointMax.y);
-
-        z += zStep;
-    } while (z <= pointMax.z);
-
-    return foundCount;
+u32 KCollisionServer::checkSphere(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts) {
+    return checkSpherePrisms(pCenter, radius, mFile->mThickness * param, false, maxCount, pOut, pDists, pHitParts);
 }
 
-u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pFlags,
+u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 param, u32 maxCount, KC_PrismData** pOut, f32* pDists, u8* pHitParts,
                                                f32 thickness) {
-    KC_PrismData** end;
-    s32 remX;
-    s32 yStep;
-    s32 zStep;
-    s32 bestRemY;
-    const u32* list;
-    const u32* nextSkipList = nullptr;
-    const u32* skipList = nullptr;
-    u32 foundCount = 0;
+    return checkSpherePrisms(pCenter, radius, thickness * param, true, maxCount, pOut, pDists, pHitParts);
+}
 
+u32 KCollisionServer::checkSpherePrisms(Fxyz* pCenter, f32 radius, f32 threshold, bool isThick, u32 maxCount, KC_PrismData** pOut, f32* pDists,
+                                        u8* pHitParts) {
     V3u pointMin;
     V3u pointMax;
     Vec3f boxMax;
     Vec3f boxMin;
-    u32 x;
-    u32 y;
-    u32 z;
-    KC_PrismData* prism;
-    f32 dist = 0.0f;
-    s32 shift;
-    u8 flag;
     boxMax.x = pCenter->x + radius;
     boxMax.y = pCenter->y + radius;
     boxMax.z = pCenter->z + radius;
@@ -455,86 +318,38 @@ u32 KCollisionServer::checkSphereWithThickness(Fxyz* pCenter, f32 radius, f32 pa
         return 0;
     }
 
-    z = pointMin.z;
+    u32 foundCount = 0;
 
-    do {
-        y = pointMin.y;
-        zStep = 1000000;
+    visitPrismsInBlocks(pointMin, pointMax, [&](KC_PrismData* prism) {
+        KC_PrismData** end = pOut + foundCount;
 
-        do {
-            x = pointMin.x;
-            yStep = 1000000;
-            bestRemY = 0;
+        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
+            return false;
+        }
 
-            do {
-                list = searchBlock(&shift, x, y, z);
-                s32 remZ;
-                s32 blockSize = 1 << shift;
-                s32 mask = blockSize - 1;
-                remX = blockSize - (x & mask);
-                s32 remY = blockSize - (y & mask);
-                remZ = blockSize - (z & mask);
+        f32 dist;
+        u8 hitPart;
 
-                if (remZ < zStep) {
-                    zStep = remZ;
-                }
+        if (!hitSpherePrism(prism, pCenter, radius, threshold, &dist, &hitPart, isThick)) {
+            return false;
+        }
 
-                if (remY < yStep) {
-                    yStep = remY;
-                }
+        // Full: nothing more is written.
+        if (foundCount >= maxCount) {
+            return true;
+        }
 
-                if (remY > bestRemY && list[1] != 0) {
-                    bestRemY = remY;
-                    nextSkipList = list;
-                }
-
-                if (skipList == nullptr || list != skipList) {
-                    while (*++list != 0) {
-                        prism = &mFile->mPrisms[*list];
-
-                        if (prism->mHeight <= 0.0f) {
-                            continue;
-                        }
-
-                        end = pOut + foundCount;
-
-                        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
-                            continue;
-                        }
-
-                        if (!KCHitSphereWithThickness(prism, pCenter, radius, param, &dist, &flag, thickness)) {
-                            continue;
-                        }
-
-                        if (foundCount >= maxCount) {
-                            continue;
-                        }
-
-                        if (std::find(pOut, end, (KC_PrismData* const&)prism) != end) {
-                            continue;
-                        }
-
-                        *end = prism;
-                        pDists[foundCount] = dist;
-                        pFlags[foundCount] = flag;
-                        foundCount++;
-                    }
-                }
-
-                x += remX;
-            } while (x <= pointMax.x);
-
-            skipList = nextSkipList;
-            y += yStep;
-        } while (y <= pointMax.y);
-
-        z += zStep;
-    } while (z <= pointMax.z);
+        *end = prism;
+        pDists[foundCount] = dist;
+        pHitParts[foundCount] = hitPart;
+        foundCount++;
+        return foundCount >= maxCount;
+    });
 
     return foundCount;
 }
 
-KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rDir, f32* pDists, u8* pFlags, u32* pCount, KC_PrismData** pOut,
+KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rDir, f32* pDists, u8* pHitParts, u32* pCount, KC_PrismData** pOut,
                                            u32 maxCount) const {
     if (rDir.x == 0.0f && rDir.y == 0.0f && rDir.z == 0.0f) {
         return nullptr;
@@ -566,58 +381,32 @@ KC_PrismData* KCollisionServer::checkArrow(const Vec3f& rOrigin, const Vec3f& rD
         boxMax.y = (f32)(u32)~mFile->mYMask;
         boxMax.z = (f32)(u32)~mFile->mZMask;
 
-        if (dir.x != 0.0f) {
-            f32 edge = 0.0f < dir.x ? 0.0f : boxMax.x;
-            startT = (edge - start.x) / dir.x;
-
-            if (0.0f <= startT && startT <= length) {
-                Vec3f step(dir);
-                step.scale(startT);
-                hitPoint.set(step);
-                hitPoint += start;
-                cell.setUsingCast(hitPoint);
-                if (isInsideMinMaxInLocalSpace(cell)) {
-                    goto searchStart;
-                }
+        // Into the grid through the first of its faces (x, then y, then z) the ray crosses at a cell inside it.
+        auto isEnteredAt = [&](f32 dirAxis, f32 startAxis, f32 boxMaxAxis) {
+            if (dirAxis == 0.0f) {
+                return false;
             }
-        }
 
-        if (dir.y != 0.0f) {
-            f32 edge = 0.0f < dir.y ? 0.0f : boxMax.y;
-            startT = (edge - start.y) / dir.y;
+            f32 edge = 0.0f < dirAxis ? 0.0f : boxMaxAxis;
+            startT = (edge - startAxis) / dirAxis;
 
-            if (0.0f <= startT && startT <= length) {
-                Vec3f step(dir);
-                step.scale(startT);
-                hitPoint.set(step);
-                hitPoint += start;
-                cell.setUsingCast(hitPoint);
-                if (isInsideMinMaxInLocalSpace(cell)) {
-                    goto searchStart;
-                }
+            if (!(0.0f <= startT && startT <= length)) {
+                return false;
             }
+
+            Vec3f step(dir);
+            step.scale(startT);
+            hitPoint.set(step);
+            hitPoint += start;
+            cell.setUsingCast(hitPoint);
+            return isInsideMinMaxInLocalSpace(cell);
+        };
+
+        if (!isEnteredAt(dir.x, start.x, boxMax.x) && !isEnteredAt(dir.y, start.y, boxMax.y) && !isEnteredAt(dir.z, start.z, boxMax.z)) {
+            return nullptr;
         }
-
-        if (dir.z != 0.0f) {
-            f32 edge = 0.0f < dir.z ? 0.0f : boxMax.z;
-            startT = (edge - start.z) / dir.z;
-
-            if (0.0f <= startT && startT <= length) {
-                Vec3f step(dir);
-                step.scale(startT);
-                hitPoint.set(step);
-                hitPoint += start;
-                cell.setUsingCast(hitPoint);
-                if (isInsideMinMaxInLocalSpace(cell)) {
-                    goto searchStart;
-                }
-            }
-        }
-
-        return nullptr;
     }
 
-searchStart:
     const u32* prismList;
     u32 foundCount;
     foundCount = 0;
@@ -698,9 +487,9 @@ searchStart:
                 continue;
             }
 
-            u8 flag = 0;
+            u8 hitPart = 0;
 
-            if (!KCHitArrow(prism, rOrigin, rDir, &dist, &flag)) {
+            if (!KCHitArrow(prism, rOrigin, rDir, &dist, &hitPart)) {
                 continue;
             }
 
@@ -729,7 +518,7 @@ searchStart:
                 bestFraction = dist;
                 *pDists = dist;
                 bestPrism = prism;
-                *pFlags = flag;
+                *pHitParts = hitPart;
             }
         }
 
@@ -774,10 +563,13 @@ searchStart:
     return bestPrism;
 }
 
-bool KCollisionServer::KCHitSphere(KC_PrismData* pPrism, Fxyz* pCenter, f32 radius, f32 param, f32* pDist, u8* pFlag) {
+// distances: 0 the face plane, 1-3 the three edge planes (the third offset by the prism height). A one-sided test also
+// misses when the centre is nearer the face plane than the edge or corner; a thick one misses only when the sphere is wholly
+// behind the face.
+bool KCollisionServer::hitSpherePrism(KC_PrismData* pPrism, Fxyz* pCenter, f32 radius, f32 threshold, f32* pDist, u8* pHitPart,
+                                      bool isThick) {
     f32 radiusSq = radius * radius;
-    f32 threshold = mFile->mThickness * param;
-    *pFlag = 0;
+    *pHitPart = 0;
 
     Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
 
@@ -816,399 +608,80 @@ bool KCollisionServer::KCHitSphere(KC_PrismData* pPrism, Fxyz* pCenter, f32 radi
         return false;
     }
 
-    f32 nn;
+    const Vec3f* edgeNormals[3] = {n0, n1, n2};
+    const f32* edgeDistances = &distances[1];
+
+    // The edge plane the centre is farthest out of; the later plane on a tie.
+    s32 side;
 
     if (distances[1] > distances[2]) {
-        if (!(distances[1] > distances[3])) {
-            goto side2;
-        }
-        goto side0;
+        side = distances[1] > distances[3] ? 0 : 2;
     } else {
-        if (!(distances[2] > distances[3])) {
-            goto side2;
-        }
-        goto side1;
+        side = distances[2] > distances[3] ? 1 : 2;
     }
 
-side0:
-    if (distances[1] <= 0.0f) {
+    if (edgeDistances[side] <= 0.0f) {
+        // Inside all three: the face.
         if (threshold < *pDist) {
             return false;
         }
 
-        *pFlag = 1;
-        goto success;
+        *pHitPart = 1;
+        return true;
     }
 
-    if (distances[2] > distances[3]) {
-        nn = n0->x * n1->x + n0->y * n1->y + n0->z * n1->z;
+    // Of the side plane's two neighbours, the one the centre is farther out of (the previous one on a tie).
+    s32 next = side == 2 ? 0 : side + 1;
+    s32 prev = side == 0 ? 2 : side - 1;
+    s32 other = edgeDistances[next] > edgeDistances[prev] ? next : prev;
 
-        if (nn * distances[1] > distances[2]) {
-            goto vertex2;
-        } else {
-            goto region5;
+    const Vec3f* sideNormal = edgeNormals[side];
+    const Vec3f* otherNormal = edgeNormals[other];
+    f32 nn = sideNormal->x * otherNormal->x + sideNormal->y * otherNormal->y + sideNormal->z * otherNormal->z;
+    u8 hitPart;
+
+    if (nn * edgeDistances[side] > edgeDistances[other]) {
+        // The side plane's edge (hit parts 2-4).
+        if (!isThick && edgeDistances[side] > distances[0]) {
+            return false;
         }
-    }
 
-    nn = n0->x * n2->x + n0->y * n2->y + n0->z * n2->z;
-
-    if (nn * distances[1] > distances[3]) {
-        goto vertex2;
+        *pDist = radiusSq - edgeDistances[side] * edgeDistances[side];
+        hitPart = 2 + side;
     } else {
-        goto region7;
-    }
+        // The corner between planes a and the one after it around the prism (hit parts 5-7).
+        s32 a = other == next ? side : other;
+        s32 b = a == 2 ? 0 : a + 1;
+        f32 t = (nn * edgeDistances[b] - edgeDistances[a]) / (nn * nn - 1.0f);
+        f32 s = edgeDistances[b] - t * nn;
+        dir.x = t * edgeNormals[a]->x + s * edgeNormals[b]->x;
+        dir.y = t * edgeNormals[a]->y + s * edgeNormals[b]->y;
+        dir.z = t * edgeNormals[a]->z + s * edgeNormals[b]->z;
 
-side1:
-    if (distances[2] <= 0.0f) {
-        if (threshold < *pDist) {
+        f32 closestSq = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
+        f32 dist = MR::sqrt(closestSq);
+
+        if ((!isThick && dist > distances[0]) || dist >= radius) {
             return false;
         }
 
-        *pFlag = 1;
-        goto success;
+        *pDist = radiusSq - closestSq;
+        hitPart = 5 + a;
     }
 
-    if (distances[3] > distances[1]) {
-        nn = n1->x * n2->x + n1->y * n2->y + n1->z * n2->z;
+    f32 distance = MR::sqrt(*pDist);
 
-        if (nn * distances[2] > distances[3]) {
-            goto vertex3;
-        } else {
-            goto region6;
-        }
-    }
-
-    nn = n1->x * n0->x + n1->y * n0->y + n1->z * n0->z;
-
-    if (nn * distances[2] > distances[1]) {
-        goto vertex3;
-    } else {
-        goto region5;
-    }
-
-side2:
-
-    if (distances[3] <= 0.0f) {
-        if (threshold < *pDist) {
-            return false;
-        }
-
-        *pFlag = 1;
-        goto success;
-    }
-
-    if (distances[1] > distances[2]) {
-        nn = n2->x * n0->x + n2->y * n0->y + n2->z * n0->z;
-
-        if (nn * distances[3] > distances[1]) {
-            goto vertex4;
-        } else {
-            goto region7;
-        }
-    }
-
-    nn = n2->x * n1->x + n2->y * n1->y + n2->z * n1->z;
-
-    if (nn * distances[3] > distances[2]) {
-        goto vertex4;
-    } else {
-        goto region6;
-    }
-
-vertex2:
-    if (distances[1] > distances[0]) {
-        return false;
-    }
-
-    *pDist = radiusSq - distances[1] * distances[1];
-    *pFlag = 2;
-    goto finish;
-
-vertex3:
-    if (distances[2] > distances[0]) {
-        return false;
-    }
-
-    *pDist = radiusSq - distances[2] * distances[2];
-    *pFlag = 3;
-    goto finish;
-
-vertex4:
-    if (distances[3] > distances[0]) {
-        return false;
-    }
-
-    *pDist = radiusSq - distances[3] * distances[3];
-    *pFlag = 4;
-    goto finish;
-
-region5: {
-    f32 t = (nn * distances[2] - distances[1]) / (nn * nn - 1.0f);
-    f32 s = distances[2] - t * nn;
-    dir.x = t * n0->x + s * n1->x;
-    dir.y = t * n0->y + s * n1->y;
-    dir.z = t * n0->z + s * n1->z;
-    *pFlag = 5;
-    goto edgeFinish;
-}
-
-region6: {
-    f32 t = (nn * distances[3] - distances[2]) / (nn * nn - 1.0f);
-    f32 s = distances[3] - t * nn;
-    dir.x = t * n1->x + s * n2->x;
-    dir.y = t * n1->y + s * n2->y;
-    dir.z = t * n1->z + s * n2->z;
-    *pFlag = 6;
-    goto edgeFinish;
-}
-
-region7: {
-    f32 t = (nn * distances[1] - distances[3]) / (nn * nn - 1.0f);
-    f32 s = distances[1] - t * nn;
-    dir.x = t * n2->x + s * n0->x;
-    dir.y = t * n2->y + s * n0->y;
-    dir.z = t * n2->z + s * n0->z;
-    *pFlag = 7;
-}
-
-edgeFinish: {
-    f32 closestSq = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
-    f32 dist = MR::sqrt(closestSq);
-
-    if (dist > distances[0] || dist >= radius) {
-        *pFlag = 0;
-        return false;
-    }
-
-    *pDist = radiusSq - closestSq;
-}
-
-finish:
-    *pDist = MR::sqrt(*pDist) - distances[0];
-
-    if (*pDist < 0.0f || threshold < *pDist) {
-        *pFlag = 0;
-        return false;
-    }
-
-success:
-    return true;
-}
-
-bool KCollisionServer::KCHitSphereWithThickness(KC_PrismData* pPrism, Fxyz* pCenter, f32 radius, f32 param, f32* pDist, u8* pFlag, f32 thickness) {
-    f32 radiusSq = radius * radius;
-    f32 threshold = thickness * param;
-    *pFlag = 0;
-
-    Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
-
-    Fxyz dir;
-    f32 distances[4];
-    dir.x = pCenter->x - pCorner->x;
-    dir.y = pCenter->y - pCorner->y;
-    dir.z = pCenter->z - pCorner->z;
-
-    Vec3f* n0 = &mFile->mNorms[pPrism->mEdgeIndices[0]];
-    distances[1] = dir.x * n0->x + dir.y * n0->y + dir.z * n0->z;
-
-    if (distances[1] >= radius) {
-        return false;
-    }
-
-    Vec3f* n1 = &mFile->mNorms[pPrism->mEdgeIndices[1]];
-    distances[2] = dir.x * n1->x + dir.y * n1->y + dir.z * n1->z;
-
-    if (distances[2] >= radius) {
-        return false;
-    }
-
-    Vec3f* n2 = &mFile->mNorms[pPrism->mEdgeIndices[2]];
-    distances[3] = dir.x * n2->x + dir.y * n2->y + dir.z * n2->z - pPrism->mHeight;
-
-    if (distances[3] >= radius) {
-        return false;
-    }
-
-    Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
-    distances[0] = dir.x * faceNormal->x + dir.y * faceNormal->y + dir.z * faceNormal->z;
-    *pDist = radius - distances[0];
-
-    if (*pDist < 0.0f) {
-        return false;
-    }
-
-    f32 nn;
-
-    if (distances[1] > distances[2]) {
-        if (!(distances[1] > distances[3])) {
-            goto side2;
-        }
-        goto side0;
-    } else {
-        if (!(distances[2] > distances[3])) {
-            goto side2;
-        }
-        goto side1;
-    }
-
-side0:
-    if (distances[1] <= 0.0f) {
-        if (threshold < *pDist) {
-            return false;
-        }
-
-        *pFlag = 1;
-        goto success;
-    }
-
-    if (distances[2] > distances[3]) {
-        nn = n0->x * n1->x + n0->y * n1->y + n0->z * n1->z;
-
-        if (!(nn * distances[1] > distances[2])) {
-            goto region5;
-        }
-
-        goto vertex2;
-    }
-
-    nn = n0->x * n2->x + n0->y * n2->y + n0->z * n2->z;
-
-    if (!(nn * distances[1] > distances[3])) {
-        goto region7;
-    }
-
-    goto vertex2;
-
-side1:
-    if (distances[2] <= 0.0f) {
-        if (threshold < *pDist) {
-            return false;
-        }
-
-        *pFlag = 1;
-        goto success;
-    }
-
-    if (distances[3] > distances[1]) {
-        nn = n1->x * n2->x + n1->y * n2->y + n1->z * n2->z;
-
-        if (!(nn * distances[2] > distances[3])) {
-            goto region6;
-        }
-
-        goto vertex3;
-    }
-
-    nn = n1->x * n0->x + n1->y * n0->y + n1->z * n0->z;
-
-    if (!(nn * distances[2] > distances[1])) {
-        goto region5;
-    }
-
-    goto vertex3;
-
-side2:
-
-    if (distances[3] <= 0.0f) {
-        if (threshold < *pDist) {
-            return false;
-        }
-
-        *pFlag = 1;
-        goto success;
-    }
-
-    if (distances[1] > distances[2]) {
-        nn = n2->x * n0->x + n2->y * n0->y + n2->z * n0->z;
-
-        if (!(nn * distances[3] > distances[1])) {
-            goto region7;
-        }
-
-        goto vertex4;
-    }
-
-    nn = n2->x * n1->x + n2->y * n1->y + n2->z * n1->z;
-
-    if (!(nn * distances[3] > distances[2])) {
-        goto region6;
-    }
-
-    goto vertex4;
-
-vertex2:
-    *pDist = radiusSq - distances[1] * distances[1];
-    *pFlag = 2;
-    goto finish;
-
-vertex3:
-    *pDist = radiusSq - distances[2] * distances[2];
-    *pFlag = 3;
-    goto finish;
-
-vertex4:
-    *pDist = radiusSq - distances[3] * distances[3];
-    *pFlag = 4;
-    goto finish;
-
-region5: {
-    f32 t = (nn * distances[2] - distances[1]) / (nn * nn - 1.0f);
-    f32 s = distances[2] - t * nn;
-    dir.x = t * n0->x + s * n1->x;
-    dir.y = t * n0->y + s * n1->y;
-    dir.z = t * n0->z + s * n1->z;
-    *pFlag = 5;
-    goto edgeFinish;
-}
-
-region6: {
-    f32 t = (nn * distances[3] - distances[2]) / (nn * nn - 1.0f);
-    f32 s = distances[3] - t * nn;
-    dir.x = t * n1->x + s * n2->x;
-    dir.y = t * n1->y + s * n2->y;
-    dir.z = t * n1->z + s * n2->z;
-    *pFlag = 6;
-    goto edgeFinish;
-}
-
-region7: {
-    f32 t = (nn * distances[1] - distances[3]) / (nn * nn - 1.0f);
-    f32 s = distances[1] - t * nn;
-    dir.x = t * n2->x + s * n0->x;
-    dir.y = t * n2->y + s * n0->y;
-    dir.z = t * n2->z + s * n0->z;
-    *pFlag = 7;
-}
-
-edgeFinish: {
-    f32 closestSq = dir.x * dir.x + dir.y * dir.y + dir.z * dir.z;
-    f32 dist = MR::sqrt(closestSq);
-
-    if (dist >= radius) {
-        *pFlag = 0;
-        return false;
-    }
-
-    *pDist = radiusSq - closestSq;
-}
-
-finish:
-    f32 distance;
-    distance = MR::sqrt(*pDist);
-
-    if (distances[0] + distance < 0.0f) {
-        *pFlag = 0;
+    if (isThick && distances[0] + distance < 0.0f) {
         return false;
     }
 
     *pDist = distance - distances[0];
 
     if (*pDist < 0.0f || threshold < *pDist) {
-        *pFlag = 0;
         return false;
     }
 
-success:
+    *pHitPart = hitPart;
     return true;
 }
 
@@ -1217,16 +690,10 @@ bool KCollisionServer::isNearParallelNormal(const KC_PrismData* pPrism) const {
     Vec3f edge1 = mFile->mNorms[pPrism->mEdgeIndices[1]];
     Vec3f edge2 = mFile->mNorms[pPrism->mEdgeIndices[2]];
 
-    bool isNear = false;
-
-    if (MR::isSameDirection(edge0, edge1) || MR::isSameDirection(edge0, edge2) || MR::isSameDirection(edge1, edge2)) {
-        isNear = true;
-    }
-
-    return isNear;
+    return MR::isSameDirection(edge0, edge1) || MR::isSameDirection(edge0, edge2) || MR::isSameDirection(edge1, edge2);
 }
 
-bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, const Vec3f& rDir, f32* pDist, u8* pFlag) const {
+bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, const Vec3f& rDir, f32* pDist, u8* pHitPart) const {
     Vec3f* pCorner = &mFile->mPos[pPrism->mPositionIndex];
     Vec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
 
@@ -1236,14 +703,14 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
     f32 t = NebulaVecDotProduct(rel, faceNormal);
 
     if (t <= 0.0f) {
-        *pFlag = 0;
+        *pHitPart = 0;
         return false;
     }
 
     f32 dirDotFace = NebulaVecDotProduct(faceNormal, rDir);
 
     if (0.0f < t + dirDotFace) {
-        *pFlag = 0;
+        *pHitPart = 0;
         return false;
     }
 
@@ -1259,7 +726,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
     f32 e0 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[0]]);
 
     if (0.01f < e0) {
-        *pFlag = 0;
+        *pHitPart = 0;
         return false;
     }
 
@@ -1270,7 +737,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
     f32 e1 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[1]]);
 
     if (0.01f < e1) {
-        *pFlag = 0;
+        *pHitPart = 0;
         return false;
     }
 
@@ -1281,7 +748,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
     f32 e2 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[2]]);
 
     if (0.01f + pPrism->mHeight < e2) {
-        *pFlag = 0;
+        *pHitPart = 0;
         return false;
     }
 
@@ -1291,36 +758,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const Vec3f& rOrigin, co
 
     *pDist = t;
 
-    if (onEdge0) {
-        if (onEdge1) {
-            if (onEdge2) {
-                *pFlag = 1;
-            } else {
-                *pFlag = 5;
-            }
-        } else {
-            if (onEdge2) {
-                *pFlag = 7;
-            } else {
-                *pFlag = 2;
-            }
-        }
-    } else {
-        if (onEdge1) {
-            if (onEdge2) {
-                *pFlag = 6;
-            } else {
-                *pFlag = 3;
-            }
-        } else {
-            if (onEdge2) {
-                *pFlag = 4;
-            } else {
-                *pFlag = 1;
-            }
-        }
-    }
-
+    *pHitPart = cHitPartByEdges[onEdge0 | onEdge1 << 1 | onEdge2 << 2];
     return true;
 }
 
@@ -1361,31 +799,20 @@ Vec3f KCollisionServer::getPos(const KC_PrismData* pPrism, int vertexIndex) cons
 
         return Vec3f(pos->x, pos->y, pos->z);
     }
-    case 1: {
-        Fxyz* pos = reinterpret_cast< Fxyz* >(&mFile->mPos[pPrism->mPositionIndex]);
-        Fxyz* edge2 = reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[2]]);
-
-        Fxyz finalPos;
-
-        calXvec(reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[1]]), reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mNormalIndex]),
-                &finalPos);
-
-        f32 sideLength = pPrism->mHeight / (finalPos.x * edge2->x + finalPos.y * edge2->y + finalPos.z * edge2->z);
-
-        finalPos.x = pos->x + sideLength * finalPos.x;
-        finalPos.y = pos->y + sideLength * finalPos.y;
-        finalPos.z = pos->z + sideLength * finalPos.z;
-
-        return Vec3f(finalPos.x, finalPos.y, finalPos.z);
-    }
+    // From vertex 0 along edge plane 1's edge (vertex 1) or edge plane 0's (vertex 2) to edge plane 2, mHeight out.
+    case 1:
     case 2: {
         Fxyz* pos = reinterpret_cast< Fxyz* >(&mFile->mPos[pPrism->mPositionIndex]);
         Fxyz* edge2 = reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[2]]);
+        Fxyz* face = reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mNormalIndex]);
 
         Fxyz finalPos;
 
-        calXvec(reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mNormalIndex]), reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[0]]),
-                &finalPos);
+        if (vertexIndex == 1) {
+            calXvec(reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[1]]), face, &finalPos);
+        } else {
+            calXvec(face, reinterpret_cast< Fxyz* >(&mFile->mNorms[pPrism->mEdgeIndices[0]]), &finalPos);
+        }
 
         f32 sideLength = pPrism->mHeight / (finalPos.x * edge2->x + finalPos.y * edge2->y + finalPos.z * edge2->z);
 
