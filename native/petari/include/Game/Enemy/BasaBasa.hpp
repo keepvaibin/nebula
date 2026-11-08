@@ -9,19 +9,19 @@ class SpinHitController;
 
 class BasaBasa : public LiveActor {
 public:
-    BasaBasa(const char*);
+    BasaBasa(const char* pName);
 
     virtual ~BasaBasa();
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();
     virtual void control();
     virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void exeWait();
     void exeAirWait();
@@ -49,7 +49,8 @@ public:
     void updateRailType();
     void controlVelocity();
     void tuneHeight();
-    bool isNearTarget(f32) const;
+    bool isNearTarget(f32 distance) const;
+    bool isDown() const;
     bool isNrvEnableStun() const;
 
     ModelObj* mHangModel;
@@ -57,15 +58,15 @@ public:
     AnimStampController* mStampController;
     SpinHitController* mSpinHitController;
     Vec3f mFront;
-    f32 mChaseDistance;
-    f32 mAttackDistance;
-    const Vec3f* mTarget;
-    f32 mChaseTurnAngle;
+    f32 mChaseDistance;   // Obj_arg0
+    f32 mAttackDistance;  // random 600..800
+    const Vec3f* mTarget;  // the player's center, the rail position or mHomePos
+    f32 mChaseTurnAngle;  // random -25..25 degrees off the target
     Vec3f mAttackTarget;
     bool mIsIceModel;
     Vec3f mHomePos;
     Vec3f mHomeFront;
-    f32 mHomeDistance;
+    f32 mHomeDistance;  // Obj_arg1, default mChaseDistance + 1000
     s32 mClipStep;
-    u8 mIsOnCeiling;
+    bool mIsOnCeiling;
 };
