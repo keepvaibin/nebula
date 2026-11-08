@@ -30,23 +30,25 @@ public:
 
 class TalkDirector : public LayoutActor {
 public:
+    // Flow-data branch results by index (TalkFunction::getBranchAstroGalaxyResult).
+    static const s32 cBranchResultNum = 28;
+
     TalkDirector(const char*);
 
-    virtual ~TalkDirector();
     virtual void init(const TableIter&);
     virtual void movement();
 
-    bool request(TalkMessageCtrl*, bool);
-    bool test(TalkMessageCtrl*, bool, bool);
-    bool start(TalkMessageCtrl*, bool, bool, bool);
+    bool request(TalkMessageCtrl*, bool isForce);
+    bool test(TalkMessageCtrl*, bool isForce, bool isDemo);
+    bool start(TalkMessageCtrl*, bool isForce, bool isDemo, bool isPlayerTalk);
     void updateMessage();
-    void prepTalk(TalkMessageCtrl*, bool, bool, bool);
+    void prepTalk(TalkMessageCtrl*, bool isSkipTerm, bool isDemo, bool isPlayerTalk);
     void termTalk();
     TalkState* initState(TalkMessageCtrl*);
     bool isInvalidTalk() const;
     void appearYesNoSelector(const TalkMessageCtrl*) const;
-    s32 getDemoType(const TalkMessageCtrl*, bool) const;
-    bool getBranchResult(u16);
+    s32 getDemoType(const TalkMessageCtrl*, bool isDemo) const;
+    bool getBranchResult(u16 index) const;
     void initBranchResult();
     void pauseOff();
     void balloonOff();
@@ -77,34 +79,11 @@ public:
     s32 mDemoType;
     bool mIsSkipTerm;
     bool mIsPlayerTalk;
+    // The last talk with a camera: termTalk ends that camera.
     TalkMessageInfo mMessageInfo;
     ActorCameraInfo* mCameraInfo;
     LiveActor* mHostActor;
-    bool mIsKinopioExplorerRescued;
-    bool mIsKinopioExplorerOrganize;
-    bool mIsKinopioExplorerTalkGetGrandStar2;
-    bool mIsKinopioExplorerTrickComet;
-    bool mIsKinopioExplorerTalkGetGrandStar3;
-    bool mIsKinopioExplorerStartMessenger;
-    bool mIsKinopioExplorerTalkGetGrandStar4;
-    bool mIsKinopioExplorerTalkGetGrandStar5;
-    bool mIsKinopioExplorerTalkGetGrandStar6;
-    bool mIsKinopioExplorerTalkGoFinalBattle;
-    bool mIsEndLuigiHideAndSeek;
-    bool mIsKinopioExplorerCompleteTrickComet;
-    bool mHasOneGreenStar;
-    bool mHasTwoGreenStars;
-    bool mHasThreeGreenStars;
-    bool mIsUnlockedRedDriver;
-    bool mIsActiveLuigiHideAndSeek;
-    bool mIsGalaxyPurpleCometLaunch;
-    bool misRosettaTalkTorchLecture;
-    bool mIsRosettaTalkTrickComet;
-    bool mIsRosettaTalkKoopa;
-    bool mIsRosettaTalkCountDownStart;
-    bool mIsRosettaTalkAstroDemoRecover;
-    bool mIsRosettaTalkTorchProgress;
-    bool mIsOnGameEventFlagViewNormalEnding;
+    bool mBranchResult[cBranchResultNum];
 };
 
 namespace MR {
