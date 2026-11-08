@@ -4,7 +4,6 @@
 
 class AllLiveActorGroup : public LiveActorGroup {
 public:
-    /// @brief Creates a new `AllLiveActorGroup`.
     AllLiveActorGroup();
 
     void startInitActorSystemInfo();

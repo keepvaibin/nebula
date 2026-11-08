@@ -7,8 +7,6 @@ class ClipAreaShape;
 
 class ClipArea : public LiveActor {
 public:
-    /// @brief Creates a new `ClipArea`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ClipArea(const char* pName);
 
     virtual void init(const TableIter&);

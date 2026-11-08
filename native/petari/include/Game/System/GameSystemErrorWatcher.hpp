@@ -18,7 +18,6 @@ public:
         ErrorMessageWindow::MessageType mType;
     };
 
-    /// @brief Creates a new `GameSystemErrorWatcher`.
     GameSystemErrorWatcher();
 
     void initAfterResourceLoaded();

@@ -7,7 +7,6 @@ class TripodBossStepPoint;
 // The step points of one sequence, lowest priority first; it grows with what placement adds.
 class TripodBossStepSequence {
 public:
-    /// @brief Creates a new `TripodBossStepSequence`.
     TripodBossStepSequence();
 
     void addStepPoint(TripodBossStepPoint*);

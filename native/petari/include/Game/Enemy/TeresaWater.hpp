@@ -7,8 +7,6 @@ class WalkerStateBindStarPointer;
 
 class TeresaWater : public LiveActor {
 public:
-    /// @brief Creates a new `TeresaWater`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TeresaWater(const char* pName);
 
     virtual void init(const TableIter&);

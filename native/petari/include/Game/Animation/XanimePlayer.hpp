@@ -11,7 +11,6 @@ class XanimeResourceTable;
 
 class XanimeFrameCtrl : public FrameCtrl {
 public:
-    /// @brief Creates a new `XanimeFrameCtrl`.
     XanimeFrameCtrl();
 
     // Frames left to blend in from the previous animation's pose.

@@ -8,8 +8,6 @@ class StageResultInformer;
 
 class StarReturnDemoStarter : public LiveActor {
 public:
-    /// @brief Creates a new `StarReturnDemoStarter`.
-    /// @param pName A pointer to the null-terminated name of the object.
     StarReturnDemoStarter(const char* pName);
 
     virtual void init(const TableIter&);

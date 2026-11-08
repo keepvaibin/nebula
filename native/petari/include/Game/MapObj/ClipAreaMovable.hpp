@@ -7,8 +7,6 @@ class MapPartsRotator;
 
 class ClipAreaMovable : public ClipArea {
 public:
-    /// @brief Creates a new `ClipAreaMovable`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ClipAreaMovable(const char* pName);
 
     virtual void init(const TableIter& rIter);

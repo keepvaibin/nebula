@@ -6,8 +6,6 @@ class ButlerStateStarPieceReaction;
 
 class ButlerMap : public NPCActor {
 public:
-    /// @brief Creates a new `ButlerMap`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ButlerMap(const char* pName);
 
     virtual void init(const TableIter& rIter);

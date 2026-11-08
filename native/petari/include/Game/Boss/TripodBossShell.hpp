@@ -6,8 +6,6 @@ class ModelObj;
 
 class TripodBossShell : public TripodBossFixPartsBase {
 public:
-    /// @brief Creates a new `TripodBossShell`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossShell(const char* pName);
 
     virtual ~TripodBossShell();

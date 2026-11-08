@@ -10,8 +10,6 @@ class ScenarioData;
 
 class ScenarioDataParser : public NameObj {
 public:
-    /// @brief Creates a new `ScenarioDataParser`.
-    /// @param pName A pointer to the null-terminated name of the object.
     ScenarioDataParser(const char* pName);
 
     // The galaxy of that name (any case), through the name index: null when there is none.

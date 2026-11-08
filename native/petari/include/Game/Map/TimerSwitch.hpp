@@ -4,8 +4,6 @@
 
 class TimerSwitch : public LiveActor {
 public:
-    /// @brief Creates a new `TimerSwitch`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TimerSwitch(const char* pName);
 
     virtual void init(const TableIter&);

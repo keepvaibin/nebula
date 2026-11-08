@@ -6,8 +6,6 @@ class KameckBeamEventListener;
 
 class KameckFireBall : public LiveActor {
 public:
-    /// @brief Creates a new `KameckFireBall`.
-    /// @param pName A pointer to the null-terminated name of the object.
     KameckFireBall(const char* pName);
 
     virtual void init(const TableIter&);

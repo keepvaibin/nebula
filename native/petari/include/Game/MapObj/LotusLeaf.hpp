@@ -4,8 +4,6 @@
 
 class LotusLeaf : public LiveActor {
 public:
-    /// @brief Creates a new `LotusLeaf`.
-    /// @param pName A pointer to the null-terminated name of the object.
     LotusLeaf(const char* pName);
 
     virtual void init(const TableIter&);

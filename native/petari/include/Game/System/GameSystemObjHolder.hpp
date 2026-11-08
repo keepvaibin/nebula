@@ -15,7 +15,6 @@ class PlayerInputs;
 
 class GameSystemObjHolder {
 public:
-    /// @brief Creates a new `GameSystemObjHolder`.
     GameSystemObjHolder();
 
     void initAfterSystemArchiveLoaded();

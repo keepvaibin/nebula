@@ -12,7 +12,6 @@ class ViewGroupCtrl;
 // Every registered actor's info sits in exactly one of the four lists; the table finds an actor's info.
 class ClippingActorHolder : public NameObj {
 public:
-    /// @brief Creates a new `ClippingActorHolder`.
     ClippingActorHolder();
 
     virtual void movement() override;

@@ -20,7 +20,6 @@ private:
 
 class StageResultSequenceChecker {
 public:
-    /// @brief Creates a new `StageResultSequenceChecker`.
     StageResultSequenceChecker();
 
     void check();

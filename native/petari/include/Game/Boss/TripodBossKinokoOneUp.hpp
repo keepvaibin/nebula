@@ -7,8 +7,6 @@ class BenefitItemOneUp;
 
 class TripodBossKinokoOneUp : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossKinokoOneUp`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossKinokoOneUp(const char* pName);
 
     virtual void init(const TableIter&);

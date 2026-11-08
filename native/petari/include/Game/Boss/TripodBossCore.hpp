@@ -6,8 +6,6 @@ class ModelObj;
 
 class TripodBossCore : public TripodBossFixPartsBase {
 public:
-    /// @brief Creates a new `TripodBossCore`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossCore(const char* pName);
 
     virtual void init(const TableIter&);

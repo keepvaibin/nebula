@@ -7,7 +7,6 @@
 
 class StopSceneStateControl : public NerveExecutor {
 public:
-    /// @brief Creates a new `StopSceneStateControl`.
     StopSceneStateControl();
 
     void requestStopSceneFor(MR::MovementControlType, const NameObj*);
@@ -24,7 +23,6 @@ private:
 
 class SceneNameObjMovementController : public NameObj {
 public:
-    /// @brief Creates a new `SceneNameObjMovementController`.
     SceneNameObjMovementController();
 
     virtual void movement();

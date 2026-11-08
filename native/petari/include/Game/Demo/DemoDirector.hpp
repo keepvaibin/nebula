@@ -13,8 +13,6 @@ class ResourceHolder;
 
 class DemoDirector : public NameObj {
 public:
-    /// @brief Creates a new `DemoDirector`.
-    /// @param pName A pointer to the null-terminated name of the object.
     DemoDirector(const char* pName);
 
     virtual void movement();

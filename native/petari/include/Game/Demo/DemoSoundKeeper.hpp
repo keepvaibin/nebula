@@ -4,7 +4,6 @@
 
 class DemoSoundInfo {
 public:
-    /// @brief Creates a new `DemoSoundInfo`.
     DemoSoundInfo();
 
     const char* mPartName;

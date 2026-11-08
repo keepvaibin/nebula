@@ -3,7 +3,6 @@
 
 class SoundAudience3DSetting {
 public:
-    /// @brief Creates a new `SoundAudience3DSetting`.
     SoundAudience3DSetting() {
         init();
     }

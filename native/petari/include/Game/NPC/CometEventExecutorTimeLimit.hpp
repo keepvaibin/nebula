@@ -6,7 +6,6 @@ class TimeLimitLayout;
 
 class CometEventExecutorTimeLimit : public LiveActor {
 public:
-    /// @brief Creates a new `CometEventExecutorTimeLimit`.
     /// @param timeLimit The number of seconds to initialize the timer with.
     CometEventExecutorTimeLimit(u32 timeLimit);
 

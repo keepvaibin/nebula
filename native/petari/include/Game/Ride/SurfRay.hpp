@@ -8,8 +8,6 @@ class ProjmapEffectMtxSetter;
 
 class SurfRay : public LiveActor {
 public:
-    /// @brief Creates a new `SurfRay`.
-    /// @param pName A pointer to the null-terminated name of the object.
     /// @param padChannel The player.
     SurfRay(const char* pName, s32 padChannel = 0);
 

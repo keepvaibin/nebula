@@ -4,8 +4,6 @@
 
 class KoopaJr : public NPCActor {
 public:
-    /// @brief Creates a new `KoopaJr`.
-    /// @param pName A pointer to the null-terminated name of the object.
     KoopaJr(const char* pName);
 
     virtual void init(const TableIter& rIter);

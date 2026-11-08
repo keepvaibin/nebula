@@ -4,7 +4,6 @@
 
 class DemoWipeInfo {
 public:
-    /// @brief Creates a new `DemoWipeInfo`.
     DemoWipeInfo();
 
     const char* mPartName;

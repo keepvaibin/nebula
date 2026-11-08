@@ -7,7 +7,6 @@ class Rosetta;
 
 class RosettaDemoEpilogue : public NerveExecutor {
 public:
-    /// @brief Creates a new `RosettaDemoEpilogue`.
     /// @param pRosetta The pointer to the actor instance for Rosalina.
     /// @param rIter Rosalina's placement entry.
     RosettaDemoEpilogue(Rosetta* pRosetta, const TableIter& rIter);

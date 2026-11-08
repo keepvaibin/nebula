@@ -7,8 +7,6 @@ class PictureBookLayout;
 
 class RosettaPictureBook : public LiveActor {
 public:
-    /// @brief Creates a new `RosettaPictureBook`.
-    /// @param pName A pointer to the null-terminated name of the object.
     RosettaPictureBook(const char* pName);
 
     virtual void init(const TableIter& rIter);

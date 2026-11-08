@@ -18,7 +18,6 @@ class XjointTransform;
 
 class ModelManager {
 public:
-    /// @brief Creates a new `ModelManager`.
     ModelManager();
 
     void update();

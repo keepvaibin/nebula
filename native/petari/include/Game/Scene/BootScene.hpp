@@ -4,10 +4,8 @@
 
 class BootScene : public Scene {
 public:
-    /// @brief Creates a new `BootScene`.
     BootScene();
 
-    /// @brief Destroys the `BootScene`.
     virtual ~BootScene();
 
     virtual void init();

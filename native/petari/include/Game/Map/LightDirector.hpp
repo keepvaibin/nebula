@@ -12,7 +12,6 @@ class LightAreaHolder;
 
 class LightDirector : public NameObj {
 public:
-    /// @brief Creates a new `LightDirector`.
     LightDirector();
 
     virtual void init(const TableIter&);

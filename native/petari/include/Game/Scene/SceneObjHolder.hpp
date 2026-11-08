@@ -131,7 +131,6 @@ enum SceneObj {
 /// @brief The container for global scene objects.
 class SceneObjHolder {
 public:
-    /// @brief Creates a new `SceneObjHolder`.
     SceneObjHolder();
 
     /// @brief Creates the requested object, returning the existing instance if it has already been created.

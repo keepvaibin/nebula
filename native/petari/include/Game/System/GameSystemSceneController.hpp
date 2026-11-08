@@ -15,7 +15,6 @@ class Spine;
 
 class SceneControlInfo {
 public:
-    /// @brief Creates a new `SceneControlInfo`.
     SceneControlInfo();
 
     void setScene(const char*);
@@ -43,7 +42,6 @@ class GameSystemSceneController {
 public:
     void holdSceneInitialize();
     bool resumeSceneInitialize();
-    /// @brief Creates a new `GameSystemSceneController`.
     GameSystemSceneController();
 
     void initAfterSystemArchiveLoaded();

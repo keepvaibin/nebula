@@ -5,8 +5,6 @@
 
 class HipDropMoveObj : public LiveActor {
 public:
-    /// @brief Creates a new `HipDropMoveObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
     HipDropMoveObj(const char* pName);
 
     virtual ~HipDropMoveObj();
@@ -26,8 +24,6 @@ public:
 
 class HipDropDemoMoveObj : public HipDropMoveObj {
 public:
-    /// @brief Creates a new `HipDropDemoMoveObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
     HipDropDemoMoveObj(const char* pName);
 
     virtual ~HipDropDemoMoveObj();

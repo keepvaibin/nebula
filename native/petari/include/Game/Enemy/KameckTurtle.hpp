@@ -7,8 +7,6 @@ class SmallKameckBeamEventListener;
 
 class KameckTurtle : public LiveActor {
 public:
-    /// @brief Creates a new `KameckTurtle`.
-    /// @param pName A pointer to the null-terminated name of the object.
     KameckTurtle(const char* pName);
 
     virtual void init(const TableIter&);

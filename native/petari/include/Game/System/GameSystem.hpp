@@ -14,7 +14,6 @@ class SystemWipeHolder;
 
 class GameSystem : public NerveExecutor {
 public:
-    /// @brief Creates a new `GameSystem`.
     GameSystem();
 
     void init();

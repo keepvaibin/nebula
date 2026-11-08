@@ -7,7 +7,6 @@ class PartsModel;
 
 class AssemblyBlock : public LiveActor {
 public:
-    /// @brief Creates a new `AssemblyBlock`.
     /// @param A pointer to the null-terminated name of the object.
     AssemblyBlock(const char* pName);
 

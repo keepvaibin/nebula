@@ -15,7 +15,6 @@ public:
 
 class TripodBossMovableArea {
 public:
-    /// @brief Creates a new `TripodBossMovableArea`.
     TripodBossMovableArea();
 
     virtual bool collideSphere(HitResult* pResult, const Vec3f& rStart, f32 radius, const Vec3f& rMove) const;

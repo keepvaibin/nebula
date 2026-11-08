@@ -6,8 +6,6 @@ class JUTTexture;
 
 class FallOutFieldDraw : public NameObj {
 public:
-    /// @brief Creates a new `FallOutFieldDraw`.
-    /// @param pName A pointer to the null-terminated name of the object.
     FallOutFieldDraw(const char* pName);
 
     virtual void init(const TableIter&);

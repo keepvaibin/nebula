@@ -4,7 +4,6 @@
 
 class AudBgmConductor : public NameObj {
 public:
-    /// @brief Creates a new `AudBgmConductor`.
     AudBgmConductor();
 
     virtual void init(const TableIter& rIter);

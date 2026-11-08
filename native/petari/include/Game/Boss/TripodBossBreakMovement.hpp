@@ -7,8 +7,6 @@ class SpringValue;
 
 class TripodBossBreakMovement : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossBreakMovement`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossBreakMovement(const char* pName);
 
     virtual void movement();

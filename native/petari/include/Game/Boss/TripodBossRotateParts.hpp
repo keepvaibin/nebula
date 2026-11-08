@@ -6,8 +6,6 @@ class MapPartsRotator;
 
 class TripodBossRotateParts : public TripodBossFixParts {
 public:
-    /// @brief Creates a new `TripodBossRotateParts`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossRotateParts(const char* pName);
 
     virtual ~TripodBossRotateParts();

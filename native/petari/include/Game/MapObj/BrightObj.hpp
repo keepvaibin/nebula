@@ -8,7 +8,6 @@ class Sun;
 
 class BrightInfo {
 public:
-    /// @brief Creates a new `BrightInfo`.
     BrightInfo();
 
     void write(const Vec2f&, const Vec2f&, f32);

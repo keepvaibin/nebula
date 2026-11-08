@@ -17,7 +17,6 @@ public:
         FLAG_CONTINUE_ANIM_END = 1 << 6,
     };
 
-    /// @brief Creates a new `AutoEffectInfo`.
     AutoEffectInfo();
 
     void init(const TableIter& rIter);

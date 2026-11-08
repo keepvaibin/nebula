@@ -25,7 +25,6 @@ public:
 
 class StorySequenceExecutor : public NerveExecutor {
 public:
-    /// @brief Creates a new `StorySequenceExecutor`.
     StorySequenceExecutor();
 
     void update();

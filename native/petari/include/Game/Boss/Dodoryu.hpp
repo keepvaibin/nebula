@@ -24,8 +24,6 @@ class TalkMessageCtrl;
 
 class Dodoryu : public LiveActor {
 public:
-    /// @brief Creates a new `Dodoryu`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Dodoryu(const char* pName);
 
     virtual void init(const TableIter& rIter);
@@ -107,7 +105,6 @@ public:
 
 class DodoryuBank : public ModelObj {
 public:
-    /// @brief Creates a new `DodoryuBank`.
     DodoryuBank();
 
     virtual void init(const TableIter& rIter);

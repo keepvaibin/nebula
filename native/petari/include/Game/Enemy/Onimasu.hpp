@@ -6,11 +6,8 @@
 /// @brief Tox Box
 class Onimasu : public LiveActor {
 public:
-    /// @brief Creates a new `Onimasu`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Onimasu(const char* pName);
 
-    /// @brief Destroys the `Onimasu`.
     virtual ~Onimasu();
 
     virtual void init(const TableIter& rIter);

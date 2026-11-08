@@ -5,7 +5,6 @@
 
 class SunshadeMapHolder : public NameObj {
 public:
-    /// @brief Creates a new `SunshadeMapHolder`.
     SunshadeMapHolder();
 
 };

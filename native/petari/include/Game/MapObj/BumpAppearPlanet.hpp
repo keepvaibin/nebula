@@ -4,8 +4,6 @@
 
 class BumpAppearPlanet : public MapObjActor {
 public:
-    /// @brief Creates a new `BumpAppearPlanet`.
-    /// @param pName A pointer to the null-terminated name of the object.
     BumpAppearPlanet(const char* pName);
 
     virtual void init(const TableIter&);

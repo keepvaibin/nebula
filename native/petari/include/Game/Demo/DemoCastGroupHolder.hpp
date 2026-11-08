@@ -8,7 +8,6 @@ class LiveActor;
 
 class DemoCastGroupHolder : public NameObjGroup {
 public:
-    /// @brief Creates a new `DemoCastGroupHolder`.
     DemoCastGroupHolder();
 
     bool tryRegisterDemoActor(LiveActor*, const TableIter&, const PlacementId&) const;

@@ -4,8 +4,6 @@
 
 class TripodBossStepPoint : public LiveActor {
 public:
-    /// @brief Creates a new `TripodBossStepPoint`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBossStepPoint(const char* pName);
 
     virtual void init(const TableIter&);

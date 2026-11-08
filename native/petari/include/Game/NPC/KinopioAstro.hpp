@@ -18,8 +18,6 @@ public:
         LetterEvent_OffMsgLedPattern,
     };
 
-    /// @brief Creates a new `KinopioAstro`.
-    /// @param pName A pointer to the null-terminated name of the object.
     KinopioAstro(const char* pName);
 
     virtual void init(const TableIter& rIter);

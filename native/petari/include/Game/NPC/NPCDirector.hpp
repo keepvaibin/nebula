@@ -8,7 +8,6 @@ class ResourceHolder;
 
 class NPCDirector : public NameObj {
 public:
-    /// @brief Creates a new `NPCDirector`.
     NPCDirector();
 
     virtual void init(const TableIter& rIter);

@@ -30,8 +30,6 @@ public:
         f32* mSwingStrength3;
     };
 
-    /// @brief Creates a new `WaterPlant`.
-    /// @param pName A pointer to the null-terminated name of the object.
     WaterPlant(const char* pName);
 
     virtual void init(const TableIter& rIter);
@@ -54,7 +52,6 @@ public:
 
 class WaterPlantDrawInit : public NameObj {
 public:
-    /// @brief Creates a new `WaterPlantDrawInit`.
     WaterPlantDrawInit();
 
     virtual void movement();

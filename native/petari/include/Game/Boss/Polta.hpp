@@ -15,7 +15,6 @@ class PoltaSensorCtrl;
 
 class BombTeresaHolder : public DeriveActorGroup< BombTeresa > {
 public:
-    /// @brief Creates a new `BombTeresaHolder`.
     BombTeresaHolder();
 
     void disperseAll();
@@ -24,8 +23,6 @@ public:
 /// @brief Bouldergeist
 class Polta : public LiveActor {
 public:
-    /// @brief Creates a new `Polta`.
-    /// @param pName A pointer to the null-terminated name of the object.
     Polta(const char* pName);
 
     virtual void init(const TableIter& rIter);

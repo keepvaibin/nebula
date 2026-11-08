@@ -6,7 +6,6 @@ class NameObjGroup;
 
 class StopSceneDelayRequest : public NameObj {
 public:
-    /// @brief Creates a new `StopSceneDelayRequest`.
     StopSceneDelayRequest();
 
     virtual void movement();
@@ -17,7 +16,6 @@ public:
 
 class StopSceneController : public NameObj {
 public:
-    /// @brief Creates a new `StopSceneController`.
     StopSceneController();
 
     virtual void movement();

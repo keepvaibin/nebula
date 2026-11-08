@@ -4,8 +4,6 @@
 
 class PenguinMaster : public NPCActor {
 public:
-    /// @brief Creates a new `PenguinMaster`.
-    /// @param pName A pointer to the null-terminated name of the object.
     PenguinMaster(const char* pName);
 
     virtual void init(const TableIter& rIter);

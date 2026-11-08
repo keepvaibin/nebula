@@ -10,7 +10,6 @@ class SwitchEventListener;
 
 class SleepControllerHolder : public NameObj {
 public:
-    /// @brief Creates a new `SleepControllerHolder`.
     SleepControllerHolder();
 
     virtual void movement();

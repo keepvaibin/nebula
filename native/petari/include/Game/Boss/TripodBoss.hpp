@@ -54,8 +54,6 @@ public:
     static const s32 cBodyBone = 21;  // bones 0-20 are the legs, 7 each
     static const s32 cBoneNum = 22;
 
-    /// @brief Creates a new `TripodBoss`.
-    /// @param pName A pointer to the null-terminated name of the object.
     TripodBoss(const char*);
 
     virtual void init(const TableIter&);

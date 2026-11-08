@@ -11,7 +11,6 @@ class AstroDomeBlueStar : public LiveActor {
 public:
     class CaptureActor : public LiveActor {
     public:
-        /// @brief Creates a new `CaptureActor`.
         CaptureActor();
 
         virtual void init(const TableIter&);
@@ -32,8 +31,6 @@ public:
         Pos3f mHostMtx;
     };
 
-    /// @brief Creates a new `AstroDomeBlueStar`.
-    /// @param pName A pointer to the null-terminated name of the object.
     AstroDomeBlueStar(const char* pName);
 
     virtual void init(const TableIter&);

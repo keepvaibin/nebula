@@ -10,8 +10,6 @@ class FixedPosition;
 
 class OtaRock : public LiveActor {
 public:
-    /// @brief Creates a new `OtaRock`.
-    /// @param pName A pointer to the null-terminated name of the object.
     OtaRock(const char* pName);
 
     virtual ~OtaRock();
