@@ -479,9 +479,7 @@ void RhythmSystem::apply(const SoundCommand& rCommand) {
     }
     case SOUND_ME_PARAMS:
         player->mRoot->setSound(rCommand.payload< SoundParams >());
-        if (rCommand.mArg != 0) {
-            player->mRoot->gframeProc();
-        }
+        player->mRoot->gframeProc();
         break;
     case SOUND_ME_STOP_AT_NOTE_END:
         player->mRoot->stopAtCurrentNoteEnd();

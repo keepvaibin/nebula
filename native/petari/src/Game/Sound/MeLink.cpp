@@ -25,9 +25,7 @@ void MeLink::start(u32 tracks, const u8* pData, u32 start, const SoundParams& rS
 }
 
 void MeLink::frame(const SoundParams& rSound) {
-    SoundCommand& rCommand = next(SOUND_ME_PARAMS);
-    rCommand.mArg = 1;
-    rCommand.payload< SoundParams >() = rSound;
+    next(SOUND_ME_PARAMS).payload< SoundParams >() = rSound;
     send();
 }
 
