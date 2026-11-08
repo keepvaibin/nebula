@@ -88,7 +88,8 @@ void DriftWood::exeVibrate() {
 
     if (!tryVibrate() && MR::isGreaterEqualStep(this, ::sVibrateStep)) {
         mVibrateOffset.zero();
-        setNerve(MR::isOnPlayer(this) ? GET_NERVE(DriftWood, DriftWoodNrvWaitLand) : GET_NERVE(DriftWood, DriftWoodNrvWait));
+        setNerve(MR::isOnPlayer(this) ? static_cast< const Nerve* >(GET_NERVE(DriftWood, DriftWoodNrvWaitLand))
+                                      : GET_NERVE(DriftWood, DriftWoodNrvWait));
     }
 }
 

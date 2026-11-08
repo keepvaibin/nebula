@@ -39,8 +39,9 @@ void MechaKoopaPartsArm::init(const TableIter& rIter) {
 
 void MechaKoopaPartsArm::exeWait() {
     if (MapObjActorUtil::isRotatorMoving(this)) {
-        setNerve(isNerve(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitFront)) ? GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveStartRear)
-                                                                                        : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveStartFront));
+        setNerve(isNerve(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitFront))
+                     ? static_cast< const Nerve* >(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveStartRear))
+                     : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveStartFront));
     }
 }
 
@@ -59,7 +60,8 @@ void MechaKoopaPartsArm::exeMoveStart() {
     }
 
     if (MR::isBckStopped(this)) {
-        setNerve(isFront ? GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveFront) : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveRear));
+        setNerve(isFront ? static_cast< const Nerve* >(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveFront))
+                         : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveRear));
     }
 }
 
@@ -76,8 +78,9 @@ void MechaKoopaPartsArm::exeMove() {
 
     MR::startSound(this, "SE_OJ_M_KOOPA_ARM_END");
 
-    setNerve(isNerve(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveFront)) ? GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitFront)
-                                                                                   : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitRear));
+    setNerve(isNerve(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvMoveFront))
+                 ? static_cast< const Nerve* >(GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitFront))
+                 : GET_NERVE(MechaKoopaPartsArm, MechaKoopaPartsArmNrvWaitRear));
 }
 
 void MechaKoopaPartsArm::exeBreakStart() {

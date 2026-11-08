@@ -34,9 +34,8 @@ namespace {
     };
 };  // namespace
 
-GameEventValueChecker::GameEventValueChecker() : mValues(), mNumValues() {
-    mValues = new u16[ARRAY_SIZE(::cGameEventValueTable)];
-    mNumValues = ARRAY_SIZE(::cGameEventValueTable);
+GameEventValueChecker::GameEventValueChecker()
+    : mValues(new u16[ARRAY_SIZE(::cGameEventValueTable)]), mNumValues(ARRAY_SIZE(::cGameEventValueTable)) {
     initializeData();
 }
 
@@ -59,44 +58,32 @@ u32 GameEventValueChecker::getSignature() const {
 s32 GameEventValueChecker::serialize(u8* pData, u32 maxBufferSize) const {
     JSUMemoryOutputStream stream(pData, maxBufferSize);
 
-    s32 hash;
-
+    // Each entry: the name's hash (low 16 bits), then the value.
     for (s32 idx = 0; idx < mNumValues; idx++) {
-        hash = MR::getHashCode(::cGameEventValueTable[idx].mName);
-        const u16 value = mValues[idx];
-
-        stream.writeU16(hash);
-        stream.writeU16(value);
+        stream.writeU16(MR::getHashCode(::cGameEventValueTable[idx].mName));
+        stream.writeU16(mValues[idx]);
     }
 
     return stream.mPosition;
 }
 
 s32 GameEventValueChecker::deserialize(const u8* pData, u32 maxBufferSize) {
-    s32 readError = 0;
-
+    bool isFailed = false;
     JSUMemoryInputStream stream(pData, maxBufferSize);
-
-    s32 numEntries = static_cast< s32 >(maxBufferSize) / 2;
+    const s32 numEntries = static_cast< s32 >(maxBufferSize) / 2;
 
     for (s32 idx = 0; idx < numEntries; idx++) {
-        u16 hash = stream.readU16();
-        u16 value = stream.readU16();
-
-        s32 valueIndex = findIndexFromHashCode(hash);
-
+        const u16 hash = stream.readU16();
+        const u16 value = stream.readU16();
+        const s32 valueIndex = findIndexFromHashCode(hash);
         if (valueIndex >= 0) {
             mValues[valueIndex] = value;
         } else {
-            readError = 1;
+            isFailed = true;
         }
     }
 
-    if (stream.mState != JSUIosBase::IO_OK && stream.getState(JSUIosBase::IO_MEMORY_ERROR) == 0) {
-        stream.mState = JSUIosBase::IO_OK;
-    }
-
-    return readError ? 1 : 0;
+    return isFailed;
 }
 
 void GameEventValueChecker::initializeData() {
