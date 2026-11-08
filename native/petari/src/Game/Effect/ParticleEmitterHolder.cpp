@@ -86,7 +86,7 @@ ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
         pLast = pChunk;
     }
 
-    // Full: as many again, in the heap this lies in. Effects keep pointers to the records, so the old ones stay.
+    // Full: as many again, in the arena this lies in. Effects keep pointers to the records, so the old ones stay.
     Chunk* pChunk = new (NebulaArena::findFromRoot(this), 0) Chunk();
     pChunk->mEmitters.mArr = new (NebulaArena::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
     pChunk->mEmitters.mMaxSize = mFirst.mEmitters.size();

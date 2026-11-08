@@ -25,8 +25,8 @@ namespace MR {
             (mCaller->*mCallee)();
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV0M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV0M(*this);
         };
 
         T mCaller;
@@ -49,8 +49,8 @@ namespace MR {
             (mCaller->*mCallee)(mArg0);
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV1M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV1M(*this);
         };
 
         T mCaller;
@@ -75,8 +75,8 @@ namespace MR {
             (mCaller->*mCallee)(mArg0, mArg1);
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV2M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV2M(*this);
         };
 
         T mCaller;
@@ -127,8 +127,8 @@ namespace MR {
         virtual void operator()() const {
             (*mFunc)();
         }
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV0F(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV0F(*this);
         }
 
         void (*mFunc)();

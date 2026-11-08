@@ -1,16 +1,16 @@
 #include "Game/AudioLib/AudRemixMgr.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-AudRemixMgr::AudRemixMgr(NebulaArena* pHeap) {
-    mHeap = pHeap;
+AudRemixMgr::AudRemixMgr(NebulaArena* pArena) {
+    mArena = pArena;
     mGroups = nullptr;
     mSoundObj = nullptr;
     mRemixSeq = nullptr;
 }
 
 void AudRemixMgr::init() {
-    mSoundObj = new (mHeap, 0) AudSoundObject(nullptr, 0x10, mHeap);
-    mRemixSeq = new (mHeap, 0) AudRemixSequencer();
+    mSoundObj = new (mArena, 0) AudSoundObject(nullptr, 0x10, mArena);
+    mRemixSeq = new (mArena, 0) AudRemixSequencer();
 }
 
 void AudRemixMgr::update() {
@@ -23,14 +23,14 @@ void AudRemixMgr::setRemixSeqResource(void* ptr) {
     newPtr++;
     mGroupCount = groupCount;
     newPtr += mGroupCount;
-    mGroups = new (mHeap, 0) RemixNoteGroupData[mGroupCount];
+    mGroups = new (mArena, 0) RemixNoteGroupData[mGroupCount];
     for (int i = 0; i < mGroupCount; i++) {
         RemixNoteGroupData* pGroupData = &mGroups[i];
         pGroupData->mIndex = i;
         pGroupData->mTrackCount = *newPtr++;
         pGroupData->mNoteCount = *newPtr++;
         newPtr += pGroupData->mNoteCount;
-        pGroupData->mRemixTracks = new (mHeap, 0) RemixNoteTrackData[pGroupData->mTrackCount];
+        pGroupData->mRemixTracks = new (mArena, 0) RemixNoteTrackData[pGroupData->mTrackCount];
         for (int j = 0; j < pGroupData->mTrackCount; j++) {
             pGroupData->mRemixTracks[j].mTrackNo = *newPtr++;
             pGroupData->mRemixTracks[j].mNotes = reinterpret_cast< RemixNoteData* >(newPtr);

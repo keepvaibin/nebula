@@ -113,7 +113,7 @@ private:
 
 class AudMeMgr : public SoundGlobal< AudMeMgr > {
 public:
-    AudMeMgr(NebulaArena* pHeap);
+    AudMeMgr(NebulaArena* pArena);
 
     void setMeSeq(const void*);
     void setMeTable(void*);
@@ -133,7 +133,7 @@ public:
         return mParams.mParams[index].mPriority;
     }
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     const MeProgramFile* mMeSeq;
     NebulaList< AudMe > mMeList;
     f32 mMeVolume;

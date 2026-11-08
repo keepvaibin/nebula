@@ -6,8 +6,8 @@ class NebulaArena;
 
 // The game thread's hold on the sound engine as a whole: made once, its output, and the reset that fades it out.
 namespace SoundSystem {
-    // The engine, its heap and its output level (before anything plays).
-    void create(NebulaArena* pHeap, f32 outputLevel);
+    // The engine, its arena and its output level (before anything plays).
+    void create(NebulaArena* pArena, f32 outputLevel);
     // The engine's clock: after the archive has set its banks up.
     void start();
     // Each game frame: the memory the audio thread has let go.

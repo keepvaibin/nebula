@@ -142,7 +142,7 @@ Coin* CoinHolder::takeDeadCoin() {
 }
 
 void CoinHolder::createCoins() {
-    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
+    NebulaArena::CurrentScope scope(Arenas::scene());
     for (int i = 0; i < ::sCreateCoinNum; i++) {
         Coin* pCoin = new Coin("コイン(共用)");
         pCoin->initWithoutIter();

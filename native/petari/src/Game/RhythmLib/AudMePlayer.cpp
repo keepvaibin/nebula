@@ -211,7 +211,7 @@ bool AudMe::isRequested(u32 place) const {
     return status == MeTrack::STATUS_RUN || status == MeTrack::STATUS_READY;
 }
 
-AudMeMgr::AudMeMgr(NebulaArena* pHeap) : SoundGlobal< AudMeMgr >(true), mHeap(pHeap), mMeSeq(), mMeVolume(1.0f) {
+AudMeMgr::AudMeMgr(NebulaArena* pArena) : SoundGlobal< AudMeMgr >(true), mArena(pArena), mMeSeq(), mMeVolume(1.0f) {
 }
 
 void AudMeMgr::setMeSeq(const void* pData) {
@@ -242,7 +242,7 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
         }
     }
 
-    AudMe* me = new (mHeap, 0) AudMe();
+    AudMe* me = new (mArena, 0) AudMe();
 
     if (pHandle != nullptr) {
         me->attachHandle(pHandle);

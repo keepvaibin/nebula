@@ -17,7 +17,7 @@
 #include "Game/Util/TriangleFilter.hpp"
 
 namespace {
-    // getNearPolyOnLineSort's hits, nearest first, in the system heap; it grows to the most hits one line has had.
+    // getNearPolyOnLineSort's hits, nearest first, in the permanent arena; it grows to the most hits one line has had.
     HitInfo* sSortBuffer = nullptr;
     f32* sSortDistance = nullptr;
     u32 sSortRoom = 0;

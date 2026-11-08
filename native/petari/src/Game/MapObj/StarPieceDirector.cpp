@@ -322,7 +322,7 @@ StarPieceReceiverInfo* StarPieceDirector::findReceiverInfo(const NameObj* pNameO
 }
 
 void StarPieceDirector::createStarPieces(unsigned count) {
-    NebulaArena::CurrentScope heapRestorer(Arenas::scene());
+    NebulaArena::CurrentScope scope(Arenas::scene());
     for (unsigned i = 0; i < count; i++) {
         StarPiece* pStarPiece = new StarPiece("スターピースディレクターピース");
         pStarPiece->initWithoutIter();

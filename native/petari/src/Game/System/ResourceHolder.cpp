@@ -24,7 +24,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
       mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mTotalResourceSize(0) {
-    mHeap = NebulaArena::current();
+    mArena = NebulaArena::current();
     initializeArc(*mArchive);
 
     if (mModelResTable->mCount != 0 && isExistMaterialAnm()) {
@@ -68,7 +68,7 @@ void ResourceHolder::bindMaterialAnimations(ModelData* pModelData) {
 }
 
 void ResourceHolder::newBckCtrl() {
-    NebulaArena::CurrentScope heap(mHeap);
+    NebulaArena::CurrentScope scope(mArena);
     // Its table has the archive's name.
     mBckCtrl = new BckCtrl(this, mArchive->getName());
 }
@@ -88,7 +88,7 @@ void ResourceHolder::initializeArc(AssetFolder& rArchive) {
 
     for (u32 table = 0; table < cTableCount; table++) {
         if (sizes[table] != 0) {
-            ResTable* const pTable = new (mHeap, 0) ResTable();
+            ResTable* const pTable = new (mArena, 0) ResTable();
             pTable->newFileInfoTable(sizes[table]);
             this->*cTables[table] = pTable;
         }

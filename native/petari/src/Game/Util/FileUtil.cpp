@@ -121,7 +121,7 @@ namespace MR {
     }
 
     void removeResourceHolders(NebulaArena* pArena) {
-        SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pArena);
+        SingletonHolder< ResourceHolderManager >::get()->removeArenaHolders(pArena);
     }
 
     bool isExistObjectOrLayoutArchive(const char* pName) {

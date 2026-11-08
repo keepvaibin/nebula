@@ -18,8 +18,8 @@ namespace {
         NEBULA_AUDIO_BUS_DISCARD,        NEBULA_AUDIO_BUS_CENTER,        NEBULA_AUDIO_BUS_NONE,
     };
 
-    void* zeroed(NebulaArena* pHeap, u32 bytes, int alignment) {
-        void* memory = NebulaArena::alloc(bytes, alignment, pHeap);
+    void* zeroed(NebulaArena* pArena, u32 bytes, int alignment) {
+        void* memory = NebulaArena::alloc(bytes, alignment, pArena);
         if (memory == nullptr) {
             NEBULA_PANIC("no memory for the sound engine (%u bytes)", bytes);
         }
@@ -61,19 +61,19 @@ SoundPlayer* SoundPlayer::create(void* pMemory, u32 tracks, u32 mgrCount, u32 sl
     return player;
 }
 
-SoundEngine* SoundEngine::create(NebulaArena* pHeap) {
-    SoundEngine* engine = new (zeroed(pHeap, sizeof(SoundEngine), 64)) SoundEngine();
+SoundEngine* SoundEngine::create(NebulaArena* pArena) {
+    SoundEngine* engine = new (zeroed(pArena, sizeof(SoundEngine), 64)) SoundEngine();
     sEngine = engine;
-    engine->mRing.setup(pHeap);
-    engine->mHostVoices = static_cast< NebulaVoice* >(zeroed(pHeap, sizeof(NebulaVoice) * cVoices, 32));
-    engine->mEffects = static_cast< NebulaEffectLine* >(zeroed(pHeap, sizeof(NebulaEffectLine) * 4, 32));
+    engine->mRing.setup(pArena);
+    engine->mHostVoices = static_cast< NebulaVoice* >(zeroed(pArena, sizeof(NebulaVoice) * cVoices, 32));
+    engine->mEffects = static_cast< NebulaEffectLine* >(zeroed(pArena, sizeof(NebulaEffectLine) * 4, 32));
     for (u8 i = 0; i < 4; i++) {
         EffectLineCommand off = {};
         off.mLine = i;
         engine->setEffectLine(off);
     }
-    Voices::Slot* slots = static_cast< Voices::Slot* >(zeroed(pHeap, sizeof(Voices::Slot) * cVoices, 16));
-    Note* notes = static_cast< Note* >(zeroed(pHeap, sizeof(Note) * cVoices, 16));
+    Voices::Slot* slots = static_cast< Voices::Slot* >(zeroed(pArena, sizeof(Voices::Slot) * cVoices, 16));
+    Note* notes = static_cast< Note* >(zeroed(pArena, sizeof(Note) * cVoices, 16));
     for (u32 i = 0; i < cVoices; i++) {
         new (&slots[i]) Voices::Slot();
         new (&notes[i]) Note();
@@ -85,8 +85,8 @@ SoundEngine* SoundEngine::create(NebulaArena* pHeap) {
     return engine;
 }
 
-void SoundEngine::setupBank(const BankFile* pFile, u32 size, NebulaArena* pHeap) {
-    OscData* oscs = static_cast< OscData* >(zeroed(pHeap, sizeof(OscData) * (pFile->mOscCount + 1), 16));
+void SoundEngine::setupBank(const BankFile* pFile, u32 size, NebulaArena* pArena) {
+    OscData* oscs = static_cast< OscData* >(zeroed(pArena, sizeof(OscData) * (pFile->mOscCount + 1), 16));
     SoundBank bank;
     if (!bank.setup(pFile, size, oscs)) {
         NEBULA_PANIC("a sound bank not cooked by this version of the importer");
@@ -99,21 +99,21 @@ void SoundEngine::setupBank(const BankFile* pFile, u32 size, NebulaArena* pHeap)
     mHasBank[number] = true;
 }
 
-void SoundEngine::setupWaveBanks(u32 count, NebulaArena* pHeap) {
-    mWaveBanks = static_cast< WaveBank* >(zeroed(pHeap, sizeof(WaveBank) * (count + 1), 16));
+void SoundEngine::setupWaveBanks(u32 count, NebulaArena* pArena) {
+    mWaveBanks = static_cast< WaveBank* >(zeroed(pArena, sizeof(WaveBank) * (count + 1), 16));
     for (u32 i = 0; i < count; i++) {
         new (&mWaveBanks[i]) WaveBank();
     }
     mWaveBankCount = count;
 }
 
-void SoundEngine::setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pHeap) {
+void SoundEngine::setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pArena) {
     const u32 ids = pFile->mIdCount;
     const u32 groups = pFile->mGroupCount;
-    s32* current = static_cast< s32* >(zeroed(pHeap, sizeof(s32) * (ids + 1), 16));
-    u32* live = static_cast< u32* >(zeroed(pHeap, sizeof(u32) * (groups + 1), 16));
-    const u8** data = static_cast< const u8** >(zeroed(pHeap, sizeof(u8*) * (groups + 1), 16));
-    u32* dataBytes = static_cast< u32* >(zeroed(pHeap, sizeof(u32) * (groups + 1), 16));
+    s32* current = static_cast< s32* >(zeroed(pArena, sizeof(s32) * (ids + 1), 16));
+    u32* live = static_cast< u32* >(zeroed(pArena, sizeof(u32) * (groups + 1), 16));
+    const u8** data = static_cast< const u8** >(zeroed(pArena, sizeof(u8*) * (groups + 1), 16));
+    u32* dataBytes = static_cast< u32* >(zeroed(pArena, sizeof(u32) * (groups + 1), 16));
     if (index >= mWaveBankCount || !mWaveBanks[index].setup(pFile, size, current, live, data, dataBytes)) {
         NEBULA_PANIC("a wave bank not cooked by this version of the importer");
     }

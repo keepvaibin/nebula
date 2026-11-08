@@ -24,12 +24,12 @@ public:
     void receiveResourceForInitialize();
 
     AudSystem* mAudSystem;
-    NebulaArena* mSolidHeap;
+    NebulaArena* mArena;
     AssetFolder* mSeqArchive;
     AssetFolder* mChordArchive;
     AssetFolder* mMeArchive;
     AssetFolder* mRemixArchive;
-    NebulaArena* mSpkHeap;
+    NebulaArena* mSpeakerArena;
     AssetFolder* mSpkRes;
     bool mIsResetDone;
 };

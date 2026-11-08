@@ -6,8 +6,8 @@
 #include "Game/Sound/SoundGlobal.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-SoundObject::SoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundHandles(new(pHeap, 0) SoundHandle[numHandles], numHandles), mPos(pPos) {
+SoundObject::SoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena)
+    : SoundHandles(new(pArena, 0) SoundHandle[numHandles], numHandles), mPos(pPos) {
     mIsAllocated = true;
 }
 

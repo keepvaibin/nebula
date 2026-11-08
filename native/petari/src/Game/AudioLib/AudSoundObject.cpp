@@ -21,8 +21,8 @@ namespace {
     const s32 cLpfCutoffSpecialFx1 = 20;
 }  // namespace
 
-AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pHeap)
-    : SoundObject(pPos, numHandles, pHeap), ArenaOwned(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
+AudSoundObject::AudSoundObject(Vec3f* pPos, u8 numHandles, NebulaArena* pArena)
+    : SoundObject(pPos, numHandles, pArena), ArenaOwned(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0) {
 }
 
 AudSoundObject::~AudSoundObject() {

@@ -43,81 +43,81 @@ AudSystem* AudSystem::msBasic;
 // The beat readers: the game side and the audio thread's must have the same count.
 static const u32 cRhythmParsers = 3;
 
-AudSystem* AudNewAudSystem_(SoundArchive* pHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
-    AudSystem* system = new AudSystem(pHeap, pChordArchive, pMeArchive, pRemixArchive);
+AudSystem* AudNewAudSystem_(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
+    AudSystem* system = new AudSystem(pSoundArchive, pChordArchive, pMeArchive, pRemixArchive);
     system->mAudience.mMaxChannels = maxChannels;
     return system;
 }
 
 // The engine, then the archive's banks (the engine's before its clock runs), then the clock.
-AudSystem* AudNewAudSystem(NebulaArena* pHeap, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
+AudSystem* AudNewAudSystem(NebulaArena* pArena, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
                            AssetFolder* pRemixArchive) {
-    NebulaArena* currHeap = NebulaArena::current();
-    NebulaArena* soundHeap = NebulaArena::create(pHeap);
-    SoundSystem::create(soundHeap, AudParams::outputGain);
-    SoundArchive* audioData = new (soundHeap, 0) SoundArchive(soundHeap);
-    soundHeap->makeCurrent();
+    NebulaArena* previous = NebulaArena::current();
+    NebulaArena* soundArena = NebulaArena::create(pArena);
+    SoundSystem::create(soundArena, AudParams::outputGain);
+    SoundArchive* audioData = new (soundArena, 0) SoundArchive(soundArena);
+    soundArena->makeCurrent();
 
     audioData->load(cSoundDataPath);
     audioData->setAllWaves(AudSceneMgr::cPlayerVoiceBank);
-    SoundEngine::get()->rhythm().setup(SoundEngine::get(), cRhythmParsers, soundHeap);
+    SoundEngine::get()->rhythm().setup(SoundEngine::get(), cRhythmParsers, soundArena);
     SoundSystem::start();
 
     if (pSeqArchive == nullptr && GameAssets::find(cSeqArchivePath) >= 0) {
-        pSeqArchive = AssetFolder::mount(cSeqArchivePath, currHeap);
+        pSeqArchive = AssetFolder::mount(cSeqArchivePath, previous);
     }
     audioData->setSeqArchive(pSeqArchive);
 
     if (pChordArchive == nullptr) {
-        pChordArchive = AssetFolder::mount(cChordArchivePath, soundHeap);
+        pChordArchive = AssetFolder::mount(cChordArchivePath, soundArena);
     }
 
     if (pMeArchive == nullptr) {
-        pMeArchive = AssetFolder::mount(cMeArchivePath, soundHeap);
+        pMeArchive = AssetFolder::mount(cMeArchivePath, soundArena);
     }
 
     AudSystem* system = AudNewAudSystem_(audioData, pChordArchive, pMeArchive, pRemixArchive, 1);
-    currHeap->makeCurrent();
+    previous->makeCurrent();
 
     return system;
 }
 
-AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
-    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSectionHeap(pSectionHeap),
+AudSystem::AudSystem(SoundArchive* pSoundArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
+    : mIsResetReady(), mIsReset(), mStopThreads(), mIsPaused(), mIsTrigSeBlocked(), mIsLevelSeBlocked(), mSeMuteFrames(-1), mSoundArchive(pSoundArchive),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsErrorWindowOpen(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
-    mLimitedSoundInfo = new (mSectionHeap->getHeap(), 0) AudLimitedSoundInfo[2];
+    mLimitedSoundInfo = new (mSoundArchive->getArena(), 0) AudLimitedSoundInfo[2];
     clearAllLimitedSound();
 
-    SeqSource* effects = pSectionHeap->getEffectSource();
+    SeqSource* effects = pSoundArchive->getEffectSource();
     if (effects != nullptr) {
         getSeMgr().setSeqDataMgr(effects);
     }
-    getSeqMgr().setSeqDataMgr(pSectionHeap);
+    getSeqMgr().setSeqDataMgr(pSoundArchive);
 
     setAudience(&mAudience);
 
     // Every sound's start reads the table.
-    if (mSectionHeap->getSoundTable() == nullptr) {
+    if (mSoundArchive->getSoundTable() == nullptr) {
         NEBULA_PANIC("the sound archive has no sound table");
     }
-    new (mSectionHeap->getHeap(), 0) AudSoundInfo();
+    new (mSoundArchive->getArena(), 0) AudSoundInfo();
 
     initCategoryArrangement();
     initVolumeSetting();
 
-    mSoundObjHolder = new (mSectionHeap->getHeap(), 0) AudSoundObjHolder(mSectionHeap->getHeap(), AudParams::numInspectableSoundObj);
-    mSystemSeObject = new (mSectionHeap->getHeap(), 0) AudSoundObject(nullptr, 10, mSectionHeap->getHeap());
-    mAtmosphereSeObject = new (mSectionHeap->getHeap(), 0) AudSoundObject(nullptr, 8, mSectionHeap->getHeap());
-    mSceneMgr = new (mSectionHeap->getHeap(), 0) AudSceneMgr(mSectionHeap);
-    mRhythmMeSystem = new (mSectionHeap->getHeap(), 0) AudRhythmMeSystem(mSectionHeap->getHeap(), cRhythmParsers, true);
-    mRemixMgr = new (mSectionHeap->getHeap(), 0) AudRemixMgr(mSectionHeap->getHeap());
+    mSoundObjHolder = new (mSoundArchive->getArena(), 0) AudSoundObjHolder(mSoundArchive->getArena(), AudParams::numInspectableSoundObj);
+    mSystemSeObject = new (mSoundArchive->getArena(), 0) AudSoundObject(nullptr, 10, mSoundArchive->getArena());
+    mAtmosphereSeObject = new (mSoundArchive->getArena(), 0) AudSoundObject(nullptr, 8, mSoundArchive->getArena());
+    mSceneMgr = new (mSoundArchive->getArena(), 0) AudSceneMgr(mSoundArchive);
+    mRhythmMeSystem = new (mSoundArchive->getArena(), 0) AudRhythmMeSystem(mSoundArchive->getArena(), cRhythmParsers, true);
+    mRemixMgr = new (mSoundArchive->getArena(), 0) AudRemixMgr(mSoundArchive->getArena());
     mRemixMgr->init();
-    mSeStrategyMgr = new (mSectionHeap->getHeap(), 0) AudSeStrategyMgr();
+    mSeStrategyMgr = new (mSoundArchive->getArena(), 0) AudSeStrategyMgr();
     mSeMgr.setStrategyMgr(mSeStrategyMgr);
-    mAudEffector = new (mSectionHeap->getHeap(), 0) AudEffector();
+    mAudEffector = new (mSoundArchive->getArena(), 0) AudEffector();
     mAudEffector->initFxLine();
 
     if (pChordArchive != nullptr) {
@@ -132,9 +132,9 @@ AudSystem::AudSystem(SoundArchive* pSectionHeap, AssetFolder* pChordArchive, Ass
         mRemixMgr->setRemixSeqResource(pRemixArchive->getResource(static_cast< u16 >(0)));
     }
 
-    mSystemMeObject = new (mSectionHeap->getHeap(), 0) AudMeObject(nullptr, 8, mSectionHeap->getHeap());
-    mSpkSystem = new (mSectionHeap->getHeap(), 0) SpkSystem(mSectionHeap->getHeap());
-    mVolumeController = new (mSectionHeap->getHeap(), 0) AudSystemVolumeController(this);
+    mSystemMeObject = new (mSoundArchive->getArena(), 0) AudMeObject(nullptr, 8, mSoundArchive->getArena());
+    mSpkSystem = new (mSoundArchive->getArena(), 0) SpkSystem(mSoundArchive->getArena());
+    mVolumeController = new (mSoundArchive->getArena(), 0) AudSystemVolumeController(this);
 }
 
 AudChordInfo* AudSystem::getChordInfo() {
