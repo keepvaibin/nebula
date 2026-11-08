@@ -55,7 +55,6 @@ public:
     /// @brief The number of universally collected Star Bits.
     u32 mStockedStarPiece;
 
-    /// @brief TODO.
     u8 mStoryProgress;
 
 private:

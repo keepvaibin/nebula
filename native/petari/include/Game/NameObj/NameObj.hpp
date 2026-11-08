@@ -3,47 +3,31 @@
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/Table.hpp"
 
-
-/// @brief The most basic form of an object.
+// The base of every scene object.
 class NameObj {
 public:
-    /// @brief Creates a new `NameObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
+    // mMovementFlag bits. Requests take effect at the next syncWithFlags.
+    enum MovementFlag {
+        MovementFlag_Off = 1,
+        MovementFlag_SuspendRequest = 2,
+        MovementFlag_ResumeRequest = 4,
+    };
+
     NameObj(const char* pName);
 
-    /// @brief Destroys the `NameObj`.
     virtual ~NameObj();
-
-    /// @brief Intializes the `NameObj` while being placed into a scene.
-    /// @param rIter A reference to an iterator over a `Table`.
     virtual void init(const TableIter& rIter);
-
-    /// @brief Intializes the `NameObj` after being placed into a scene.
     virtual void initAfterPlacement();
-
     virtual void movement();
-
-    /// @brief Draws the `NameObj` to the screen.
     virtual void draw() const;
-
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 
-    /// @brief Initializes the `NameObj` without an iterator over a `Table`.
     void initWithoutIter();
-
-    /// @brief Updates the name of the `NameObj`.
-    /// @param pName A pointer to the new null-terminated name of the object.
     void setName(const char* pName);
 
-    /// @brief Returns the name of the `NameObj`.
-    /// @return A pointer to the null-terminated name of the object.
     const char* getName() const {
         return mName;
-    }
-
-    u16 getFlag() const {
-        return mFlag;
     }
 
     void executeMovement();
@@ -54,14 +38,17 @@ public:
     // Loading-only continuation. Actors may yield before the scene is made playable.
     virtual bool initStep(const TableIter& iter, uint64_t) { init(iter); return true; }
 
-    const char* mName;  ///< A string to identify the NameObj.
-    u16 mFlag;          ///< Flags in relation to movement.
-    s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
-    mutable u32 mDrawSlot;  ///< Names its draws from frame to frame
-    u32 mMotionEpoch;  ///< Counts the object's lives (MotionSignal)
+    const char* mName;
+    // MovementFlag bits.
+    u16 mMovementFlag;
+    // The index into the NameObjExecuteInfo array.
+    s16 mExecutorIdx;
+    // Names its draws from frame to frame.
+    mutable u32 mDrawSlot;
+    // Counts the object's lives (MotionSignal).
+    u32 mMotionEpoch;
 };
 
-/// @brief Contains static functions to begin and end movement in a NameObj.
 class NameObjFunction {
 public:
     static void requestMovementOn(NameObj*);

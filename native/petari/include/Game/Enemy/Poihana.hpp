@@ -9,6 +9,14 @@ class WalkerStateBindStarPointer;
 
 class Poihana : public LiveActor {
 public:
+    // Placement arg 3.
+    enum Behavior {
+        Behavior_Normal = 0,
+        Behavior_Sleep = 1,
+        // Takes the spot where it recovers as home and chases with no home leash.
+        Behavior_NewHome = 2,
+    };
+
     Poihana(const char* pName);
 
     virtual ~Poihana();

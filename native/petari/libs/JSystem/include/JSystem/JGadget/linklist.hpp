@@ -7,10 +7,6 @@
 #include "JSystem/JGadget/predicate.hpp"
 
 
-#ifndef JGADGET_LINKLIST_NOINLINE
-#define JGADGET_LINKLIST_NOINLINE
-#endif
-
 #define JGADGET_LINK_LIST(type, node) JGadget::TLinkList< type, -offsetof(type, node) >
 
 namespace JGadget {
@@ -93,7 +89,7 @@ namespace JGadget {
 
         ~TNodeLinkList();
 
-        void Initialize_() JGADGET_LINKLIST_NOINLINE {
+        void Initialize_() {
             mLen = 0;
             mEnd.mNext = &mEnd;
             mEnd.mPrev = &mEnd;
@@ -249,5 +245,3 @@ namespace JGadget {
         }
     };
 }  // namespace JGadget
-
-#undef JGADGET_LINKLIST_NOINLINE

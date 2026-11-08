@@ -10,7 +10,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 SoundEngine* SoundEngine::sEngine;
 
 namespace {
-    // The buses an effect line's sends name (EffectConfig::_2 and _6).
+    // The buses an effect line's two sends name (mBusA and mBusB).
     const u16 cEffectDestinations[12] = {
         NEBULA_AUDIO_BUS_LEFT,           NEBULA_AUDIO_BUS_RIGHT,         NEBULA_AUDIO_BUS_EFFECT0,
         NEBULA_AUDIO_BUS_EFFECT1,        NEBULA_AUDIO_BUS_EFFECT2,       NEBULA_AUDIO_BUS_EFFECT3,

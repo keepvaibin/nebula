@@ -22,9 +22,9 @@ void BumpAppearPlanet::init(const TableIter& rIter) {
     initialize(rIter, info);
 
     mCollisionB = MR::createCollisionPartsFromLiveActor(this, "BumpAppearPlanetB", getSensor("body"), MR::getJointMtx(this, "BumpAppearPlanetB"),
-                                                MR::CollisionScaleType_Unk2);
+                                                MR::CollisionScaleType_Default);
     mCollisionC = MR::createCollisionPartsFromLiveActor(this, "BumpAppearPlanetC", getSensor("body"), MR::getJointMtx(this, "BumpAppearPlanetC"),
-                                                MR::CollisionScaleType_Unk2);
+                                                MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mCollisionC);
 }
 

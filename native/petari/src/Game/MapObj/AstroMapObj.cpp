@@ -110,8 +110,8 @@ void AstroMapObj::init(const TableIter& rIter) {
     }
 
     if (mIsDoor) {
-        mCloseCollision = MR::createCollisionPartsFromLiveActor(this, "Close", getSensor("body"), MR::CollisionScaleType_Unk2);
-        mOpenCollision = MR::createCollisionPartsFromLiveActor(this, "Open", getSensor("body"), MR::CollisionScaleType_Unk2);
+        mCloseCollision = MR::createCollisionPartsFromLiveActor(this, "Close", getSensor("body"), MR::CollisionScaleType_Default);
+        mOpenCollision = MR::createCollisionPartsFromLiveActor(this, "Open", getSensor("body"), MR::CollisionScaleType_Default);
     }
 
     AstroMapObjFunction::initilizePeculiar(mObjName, this, rIter);

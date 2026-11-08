@@ -52,10 +52,10 @@ public:
     bool isTypeAttributeEffect(const char*) const;
 
     const char* mName;
-    ResourceHolder* mResourceHolder;  // mResourceHolder
-    const char* mResourceName;      // mResourceName
+    ResourceHolder* mResourceHolder;
+    const char* mResourceName;
     MR::Vector< MR::AssignableArray< MultiEmitter* > > mEmitters;
-    // An emitter's name (its unique name, else its effect name) to its index in _C. The names are held by pointer:
+    // An emitter's name (its unique name, else its effect name) to its index in mEmitters. The names are held by pointer:
     // resource, table and literal strings, which outlive the keeper.
     MR::NameIndex mNames;
     SyncBckEffectChecker* mSyncBckChecker;

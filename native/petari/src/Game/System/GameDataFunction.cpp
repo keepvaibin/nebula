@@ -174,12 +174,12 @@ namespace GameDataFunction {
         getCurrentGameDataHolder()->incPlayerMissNum();
     }
 
-    s32 registerStorageSpinDriverPathDrawRange(const char* pGalaxyName, int scenarioNo, int zoneId, int param4, f32* pParam5) {
-        return getCurrentGameDataHolder()->setupSpinDriverPathStorage(pGalaxyName, scenarioNo, zoneId, param4, pParam5);
+    s32 registerStorageSpinDriverPathDrawRange(const char* pGalaxyName, int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange) {
+        return getCurrentGameDataHolder()->setupSpinDriverPathStorage(pGalaxyName, scenarioNo, zoneId, spinDriverId, pDrawRange);
     }
 
-    void updateStorageSpinDriverPathDrawRange(const char* pGalaxyName, int scenarioNo, int param3, f32 param4) {
-        getCurrentGameDataHolder()->updateSpinDriverPathStorage(pGalaxyName, scenarioNo, param3, param4);
+    void updateStorageSpinDriverPathDrawRange(const char* pGalaxyName, int scenarioNo, int spinDriverIndex, f32 drawRange) {
+        getCurrentGameDataHolder()->updateSpinDriverPathStorage(pGalaxyName, scenarioNo, spinDriverIndex, drawRange);
     }
 
     u32 getStarPieceNumGivingToTicoSeed(int index) {

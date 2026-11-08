@@ -600,7 +600,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupColor(nw4r::ut::
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    if (MR::getLanguage() != LANGUAGE_JPJAPANESE) {
+    if (MR::getLanguage() != LanguageId_JpJapanese) {
         return OPERATION_NO_CHAR_SPACE;
     }
 

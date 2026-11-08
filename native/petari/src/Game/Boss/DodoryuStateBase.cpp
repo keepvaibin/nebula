@@ -20,7 +20,6 @@ void DodoryuStateBase::calcAttackDir(Vec3f* pVec, const Vec3f& rVec1, const Vec3
 }
 
 bool DodoryuStateBase::calcVerticalizedDir(Vec3f* pVec, const Vec3f& rVec) {
-    // TODO: Possibly an inline of `DodoryuUtil::calcVerticalizedDir`.
     Vec3f yDir;
     mHost->mBaseMtx.getYDir(yDir);
 

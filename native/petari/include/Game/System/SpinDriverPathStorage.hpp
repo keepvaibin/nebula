@@ -5,15 +5,16 @@
 
 class GalaxyStatusAccessor;
 
+// How far one spin driver's path has been drawn (0 to 1; -1 unused).
 class SpinDriverPathStorageOne {
 public:
     SpinDriverPathStorageOne();
 
     void reset();
-    f32 registerToUse(int, int);
-    void updateValue(f32);
-    s32 serialize(u8*) const;
-    s32 deserialize(const u8*, int);
+    f32 registerToUse(int zoneId, int spinDriverId);
+    void updateValue(f32 drawRange);
+    s32 serialize(u8* pData) const;
+    s32 deserialize(const u8* pData, int zoneId);
 
     f32 getDrawRange() const {
         return mDrawRange;
@@ -33,10 +34,10 @@ public:
     SpinDriverPathStorageScenario();
 
     void resetAllData();
-    s32 setup(int, int, f32*);
-    void updateValue(int, f32);
-    s32 serialize(u8*, u32) const;
-    s32 deserialize(const u8*, u32);
+    s32 setup(int zoneId, int spinDriverId, f32* pDrawRange);
+    void updateValue(int spinDriverIndex, f32 drawRange);
+    s32 serialize(u8* pData, u32 dataSize) const;
+    s32 deserialize(const u8* pData, u32 dataSize);
     s32 calcMaxZoneId() const;
 
     MR::Vector< MR::AssignableArray< SpinDriverPathStorageOne > > mOneStorage;
@@ -44,12 +45,12 @@ public:
 
 class SpinDriverPathStorageGalaxy {
 public:
-    SpinDriverPathStorageGalaxy(const GalaxyStatusAccessor&);
+    SpinDriverPathStorageGalaxy(const GalaxyStatusAccessor& rAccessor);
 
     void resetAllData();
-    void updateValue(int, int, f32);
-    s32 serialize(u8*, u32) const;
-    s32 deserialize(const u8*, u32);
+    void updateValue(int scenarioNo, int spinDriverIndex, f32 drawRange);
+    s32 serialize(u8* pData, u32 maxBufferSize) const;
+    s32 deserialize(const u8* pData, u32 maxBufferSize);
 
     SpinDriverPathStorageScenario& getScenarioStorage(int scenarioNo) {
         return mScenarioStorage[scenarioNo - 1];
@@ -60,28 +61,20 @@ public:
     const char* mGalaxyName;
 };
 
-// NOTE/TODO: This dummy is here to ensure vtable alignment in GameDataAllGalaxyStorage.
-// This double-inheritance with BinaryDataChunkBase behavior is repeated for a few
-// different classes. What actually is the class that takes this role?
-class Dummy {
-public:
-    Dummy() {};
-};
-
-class SpinDriverPathStorage : public Dummy, public BinaryDataChunkBase {
+class SpinDriverPathStorage : public BinaryDataChunkBase {
 public:
     SpinDriverPathStorage();
 
     virtual u32 makeHeaderHashCode() const;
     virtual u32 getSignature() const;
-    virtual s32 serialize(u8*, u32) const;
-    virtual s32 deserialize(const u8*, u32);
+    virtual s32 serialize(u8* pData, u32 maxBufferSize) const;
+    virtual s32 deserialize(const u8* pData, u32 maxBufferSize);
     virtual void initializeData();
 
-    s32 setup(const char*, int, int, int, f32*);
-    void updateValue(const char*, int, int, f32);
-    SpinDriverPathStorageGalaxy* findFromGalaxy(const char*);
-    SpinDriverPathStorageGalaxy* findFromHashCode(u16);
+    s32 setup(const char* pGalaxyName, int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange);
+    void updateValue(const char* pGalaxyName, int scenarioNo, int spinDriverIndex, f32 drawRange);
+    SpinDriverPathStorageGalaxy* findFromGalaxy(const char* pGalaxyName);
+    SpinDriverPathStorageGalaxy* findFromHashCode(u16 galaxyNameHash);
 
     MR::Vector< MR::AssignableArray< SpinDriverPathStorageGalaxy* > > mGalaxyStorage;
 };

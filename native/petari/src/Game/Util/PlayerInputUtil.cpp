@@ -172,19 +172,19 @@ namespace MR {
     }
 
     bool isMoveStickPressedUp(s32 channel) {
-        return (MR::getPlayerInput(channel)->mStick->mTrigger & 1) != 0;
+        return (MR::getPlayerInput(channel)->mStick->mTrigger & InputStick::Direction_Up) != 0;
     }
 
     bool isMoveStickPressedDown(s32 channel) {
-        return (MR::getPlayerInput(channel)->mStick->mTrigger & 2) != 0;
+        return (MR::getPlayerInput(channel)->mStick->mTrigger & InputStick::Direction_Down) != 0;
     }
 
     bool isMoveStickPressedLeft(s32 channel) {
-        return (MR::getPlayerInput(channel)->mStick->mTrigger & 8) != 0;
+        return (MR::getPlayerInput(channel)->mStick->mTrigger & InputStick::Direction_Left) != 0;
     }
 
     bool isMoveStickPressedRight(s32 channel) {
-        return (MR::getPlayerInput(channel)->mStick->mTrigger & 4) != 0;
+        return (MR::getPlayerInput(channel)->mStick->mTrigger & InputStick::Direction_Right) != 0;
     }
 
     void getSubTilt(Vec3f* pAccel, s32 channel) {

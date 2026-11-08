@@ -4,44 +4,43 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-ItemGenerator::ItemGenerator() {
-    mNumType = 1;
-    mType = TYPE_COIN;
+namespace {
+    const f32 cStarPieceSpeedH = 10.0f;
+    const f32 cStarPieceSpeedV = 40.0f;
+}  // namespace
+
+ItemGenerator::ItemGenerator() : mNum(1), mType(Type_Coin) {
 }
 
 void ItemGenerator::setTypeNone() {
-    mType = TYPE_NONE;
-    mNumType = 0;
+    mType = Type_None;
+    mNum = 0;
 }
 
-void ItemGenerator::setTypeCoin(s32 arg0) {
-    mNumType = arg0;
-    mType = TYPE_COIN;
+void ItemGenerator::setTypeCoin(s32 num) {
+    mNum = num;
+    mType = Type_Coin;
 }
 
-void ItemGenerator::setTypeStarPeace(s32 arg0) {
-    mNumType = arg0;
-    mType = TYPE_STARPIECE;
+void ItemGenerator::setTypeStarPeace(s32 num) {
+    mNum = num;
+    mType = Type_StarPiece;
 }
 
 void ItemGenerator::generate(const LiveActor* pActor) {
-    if (mNumType > 0) {
-        switch (mType) {
-        case 1:
-            MR::appearCoinPopToDirection(pActor, pActor->mPosition, -pActor->mGravity, mNumType);
-            break;
-        case 2:
-            MR::appearStarPieceToDirection(pActor, pActor->mPosition, -pActor->mGravity, mNumType, 10.0f, 40.0f, false);
-            if (ItemGenerator::isUseFarSE()) {
-                MR::startSound(pActor, "SE_OJ_STAR_PIECE_BURST_F");
-            } else {
-                MR::startSound(pActor, "SE_OJ_STAR_PIECE_BURST");
-            }
-            break;
-        }
+    if (mNum <= 0) {
+        return;
+    }
+
+    if (mType == Type_Coin) {
+        MR::appearCoinPopToDirection(pActor, pActor->mPosition, -pActor->mGravity, mNum);
+    } else if (mType == Type_StarPiece) {
+        MR::appearStarPieceToDirection(pActor, pActor->mPosition, -pActor->mGravity, mNum, ::cStarPieceSpeedH, ::cStarPieceSpeedV, false);
+        MR::startSound(pActor, isUseFarSE() ? "SE_OJ_STAR_PIECE_BURST_F" : "SE_OJ_STAR_PIECE_BURST");
     }
 }
 
+// The final Bowser fight hears the burst from afar.
 bool ItemGenerator::isUseFarSE() const {
     return MR::isEqualStageName("KoopaBattleVs2Galaxy");
 }

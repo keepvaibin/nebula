@@ -421,21 +421,7 @@ void HomingKiller::updateRotateZ(const Vec3f& rDir) {
             mRotation.z = MR::clamp(mRotation.z - ::cChaseRotateZSpeed, -::cChaseRotateZMax, ::cChaseRotateZMax);
         }
     } else {
-        // TODO: this is likely MR::converge
-        f32 angle = mRotation.z;
-        if (angle < 0.0f) {
-            angle += ::cChaseRotateZSpeed;
-            if (angle > 0.0f) {
-                angle = 0.0f;
-            }
-        } else {
-            angle -= ::cChaseRotateZSpeed;
-            if (angle < 0.0f) {
-                angle = 0.0f;
-            }
-        }
-
-        mRotation.z = angle;
+        mRotation.z = MR::converge(mRotation.z, 0.0f, ::cChaseRotateZSpeed);
     }
 }
 

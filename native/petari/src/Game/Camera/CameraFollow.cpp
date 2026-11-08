@@ -14,7 +14,7 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const f32 sCameraRadius = 15.0f;  // TODO: check if this makes sense as this const
+    static const f32 sCameraRadius = 15.0f;  // the move speed that turns the camera at the full round speed
     static const f32 sSlopeFrontDist = 500.0f;
     static const f32 sColCheckHeight = 100.0f;
     static const f32 sRoundAddition = 0.08f;

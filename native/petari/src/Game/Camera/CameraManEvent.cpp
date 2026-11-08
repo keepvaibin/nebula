@@ -18,7 +18,7 @@ namespace {
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
     : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mCamera(), mChunk(), mRequestReset() {
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         mItems[i].mFirst.mChunk = nullptr;
         mItems[i].mSecond.mChunk = nullptr;
     }
@@ -68,7 +68,7 @@ bool CameraManEvent::isEventActive(s32 zoneID, const char* pName) const {
         CameraParamChunkEvent* chunk = reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 
         // Nice loop, probably they wanted i--
-        for (s32 i = NR_FIFO_ITEMS - 1; i >= 0; i++) {
+        for (s32 i = cFifoItemNum - 1; i >= 0; i++) {
             if (mItems[i].mSecond.mChunk != nullptr) {
                 return mItems[i].mSecond.mChunk == chunk;
             }
@@ -121,7 +121,7 @@ bool CameraManEvent::isZeroFrameMoveOff() const {
 bool CameraManEvent::doesNextChunkHaveInterpolation() const {
     const ChunkFIFOItem* item = nullptr;
 
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mSecond.mChunk != nullptr) {
             item = &mItems[i].mSecond;
             break;
@@ -169,7 +169,7 @@ void CameraManEvent::pauseOffAnimCamera(s32 zoneID, const char* pName) {
 }
 
 void CameraManEvent::updateChunkFIFO() {
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mSecond.mChunk != nullptr) {
             mItems[i].mFirst = mItems[i].mSecond;
             mItems[i].mSecond.mChunk = nullptr;
@@ -180,7 +180,7 @@ void CameraManEvent::updateChunkFIFO() {
 void CameraManEvent::applyChunk() {
     ChunkFIFOItem* item = nullptr;
 
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mFirst.mChunk != nullptr) {
             item = &mItems[i].mFirst;
             break;
@@ -334,7 +334,7 @@ void CameraManEvent::requestChunk(CameraParamChunkEvent* pChunk, EPriority prior
 bool CameraManEvent::cleanChunkFIFO(CameraParamChunk* pChunk) {
     s32 nr = 0;
 
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mSecond.mChunk != nullptr && mItems[i].mSecond.mChunk == pChunk) {
             mItems[i].mFirst.mChunk = nullptr;
             mItems[i].mSecond.mChunk = nullptr;
@@ -355,7 +355,7 @@ bool CameraManEvent::cleanChunkFIFO(CameraParamChunk* pChunk) {
 }
 
 bool CameraManEvent::isChunkFIFOEmpty() const {
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mFirst.mChunk != nullptr) {
             return false;
         }
@@ -419,7 +419,7 @@ void CameraManEvent::sendFinishInterpolateFrame(CameraParamChunkEvent* pChunk, s
 s32 CameraManEvent::searchPriority(CameraParamChunk* pChunk) const {
     s32 i;
 
-    for (i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mFirst.mChunk == pChunk) {
             break;
         }
@@ -433,7 +433,7 @@ s32 CameraManEvent::searchPriority(CameraParamChunk* pChunk) const {
 }
 
 bool CameraManEvent::isInFIFO(CameraParamChunk* pChunk) const {
-    for (u32 i = 0; i < NR_FIFO_ITEMS; i++) {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
         if (mItems[i].mFirst.mChunk == pChunk || mItems[i].mSecond.mChunk == pChunk) {
             return true;
         }

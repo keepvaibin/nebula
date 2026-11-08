@@ -994,10 +994,6 @@ void BigBubble::updateBindActorMatrix() {
 void BigBubble::updateNormalVelocity() {
     MR::addVelocityToGravity(this, -::sBuoyancyAccel * mScale.x);
     MR::attenuateVelocity(this, ::sNormalFric);
-    // TODO: "windDistance" here makes more sense if the function was using the
-    // result of the calculation from BigFan, not BigFanFunction.
-    // The value returned by calcWindInfo makes more sense as "windForce".
-    // Is this a case of these consts not being used here, or is this a deeper issue?
     Vec3f windDir;
     f32 windDistance;
     BigFanFunction::calcWindInfo(&windDir, mPosition, &windDistance);

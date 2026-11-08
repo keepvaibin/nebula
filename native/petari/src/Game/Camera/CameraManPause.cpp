@@ -7,6 +7,7 @@
 
 namespace {
     static const f32 sDistance = 6000.0f;
+    static const f32 sAngleXMax = 1.4959966f;  // just short of straight up or down
 };  // namespace
 
 CameraManPause::CameraManPause(const char* pName)
@@ -51,7 +52,7 @@ void CameraManPause::calc() {
     }
 
     MR::clampBoth(&mDistOffset, -mDistBase * 0.7f, mDistBase * 4.5f);
-    MR::clampBoth(&mAngle.x, -1.4959966f, 1.4959966f);  // TODO: result of a const calculation?
+    MR::clampBoth(&mAngle.x, -::sAngleXMax, ::sAngleXMax);
 
     if (MR::isHeldCamera(PLAYER_1) && MR::isPressedCrouch(PLAYER_1)) {
         mDistOffset = mDistBase * 4.5f;

@@ -1,6 +1,5 @@
 #include "Game/Camera/CameraParamChunkID.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstdio>
 #include <cstring>
 
 CameraParamChunkID::CameraParamChunkID() {
@@ -10,12 +9,10 @@ CameraParamChunkID::CameraParamChunkID() {
 
 CameraParamChunkID::CameraParamChunkID(const CameraParamChunkID& other) {
     mZoneID = other.mZoneID;
-    u32 length = strlen(other.mName);
-    char* buffer = getBuffer(length + 1);
-    memcpy(buffer, other.mName, length + 1);
-    mName = buffer;
+    copyName(other.mName);
 }
 
+// Zone first, then name; an unnamed id is greater than every named one.
 bool CameraParamChunkID::operator>(const CameraParamChunkID& other) const {
     if (mName == nullptr) {
         return other.mName != nullptr;
@@ -25,17 +22,11 @@ bool CameraParamChunkID::operator>(const CameraParamChunkID& other) const {
         return false;
     }
 
-    bool result = true;
-
-    if (mZoneID <= other.mZoneID) {
-        bool isSame = mZoneID == other.mZoneID && strcmp(mName, other.mName) > 0;
-
-        if (!isSame) {
-            result = false;
-        }
+    if (mZoneID != other.mZoneID) {
+        return mZoneID > other.mZoneID;
     }
 
-    return result;
+    return strcmp(mName, other.mName) > 0;
 }
 
 bool CameraParamChunkID::operator==(const CameraParamChunkID& other) const {
@@ -45,11 +36,6 @@ bool CameraParamChunkID::operator==(const CameraParamChunkID& other) const {
 
     if (other.mName == nullptr) {
         return false;
-    }
-
-    if (mZoneID == other.mZoneID) {
-        if (strcmp(mName, other.mName) != 0) {
-        }
     }
 
     return mZoneID == other.mZoneID && strcmp(mName, other.mName) == 0;
@@ -70,48 +56,41 @@ char* CameraParamChunkID::getBuffer(u32 length) {
 void CameraParamChunkID::createCubeID(s32 zoneID, u16 id) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    const u32 formatSize = 7;
-    char* buffer = getBuffer(formatSize);
-    nebula_snprintf(buffer, formatSize, "c:%04x", id);
-
-    mName = buffer;
+    setName(MR::FormattedName("c:%04x", id));
 }
 
-void CameraParamChunkID::createGroupID(s32 zoneID, const char* a2, u32 a3, u32 a4) {
+void CameraParamChunkID::createGroupID(s32 zoneID, const char* pName, u32 index, u32 subIndex) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    setName(MR::FormattedName("g:%s:%d:%d", a2, a3, a4));
+    setName(MR::FormattedName("g:%s:%d:%d", pName, index, subIndex));
 }
 
-void CameraParamChunkID::setName(const MR::FormattedName& rName) {
-    const u32 length = strlen(rName.c_str());
-    char* const pBuffer = getBuffer(length + 1);
-
-    memcpy(pBuffer, rName.c_str(), length + 1);
-    mName = pBuffer;
-}
-
-void CameraParamChunkID::createOtherID(s32 zoneID, const char* a2) {
+void CameraParamChunkID::createOtherID(s32 zoneID, const char* pName) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    setName(MR::FormattedName("o:%s", a2));
+    setName(MR::FormattedName("o:%s", pName));
 }
 
-void CameraParamChunkID::createEventID(s32 zoneID, const char* a2) {
+void CameraParamChunkID::createEventID(s32 zoneID, const char* pName) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    setName(MR::FormattedName("e:%s", a2));
+    setName(MR::FormattedName("e:%s", pName));
 }
 
 void CameraParamChunkID::createStartID(s32 zoneID, u16 id) {
     mZoneID = static_cast< s8 >(zoneID);
 
-    char buffer[0x100];
-    nebula_snprintf(buffer, sizeof(buffer), "s:%04x", id);
+    setName(MR::FormattedName("s:%04x", id));
+}
 
-    u32 actualSize = strlen(&buffer[0]);
-    char* buffer2 = getBuffer(actualSize + 1);
+void CameraParamChunkID::setName(const MR::FormattedName& rName) {
+    copyName(rName.c_str());
+}
 
-    memcpy(buffer2, buffer, actualSize + 1);
-    mName = buffer2;
+void CameraParamChunkID::copyName(const char* pName) {
+    const u32 size = strlen(pName) + 1;
+    char* const pBuffer = getBuffer(size);
+
+    memcpy(pBuffer, pName, size);
+    mName = pBuffer;
 }

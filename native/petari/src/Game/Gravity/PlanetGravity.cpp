@@ -7,8 +7,8 @@ PlanetGravity::PlanetGravity() {
     mPriority = 0;
     mGravityId = -1;
     mHost = this;
-    mGravityType = GRAVITY_TYPE_NORMAL;
-    mGravityPower = GRAVITY_POWER_NORMAL;
+    mGravityType = GravityType_Normal;
+    mGravityPower = GravityPower_Normal;
     mActivated = true;
     mIsInverse = false;
     mValidFollower = true;

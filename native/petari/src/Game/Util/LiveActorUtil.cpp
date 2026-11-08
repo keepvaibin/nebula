@@ -20,6 +20,7 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
+#include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Map/Flag.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -38,7 +39,7 @@
 
 namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const Pos3f& rMtx,
-                                         MR::CollisionScaleType scaleType, s32 unk) {
+                                         MR::CollisionScaleType scaleType, s32 category) {
         CollisionParts* parts = new CollisionParts();
         MR::FormattedName kcl("%s.kcl", pName);
         MR::FormattedName pa("%s.pa", pName);
@@ -52,13 +53,13 @@ namespace {
 
         switch (scaleType) {
         case MR::CollisionScaleType_AutoEqualScale:
-            parts->initWithAutoEqualScale(rMtx, pSensor, kclRes, paRes, unk, false);
+            parts->initWithAutoEqualScale(rMtx, pSensor, kclRes, paRes, category, false);
             break;
         case MR::CollisionScaleType_NotUsingScale:
-            parts->initWithNotUsingScale(rMtx, pSensor, kclRes, paRes, unk, false);
+            parts->initWithNotUsingScale(rMtx, pSensor, kclRes, paRes, category, false);
             break;
-        case MR::CollisionScaleType_Unk2:
-            parts->init(rMtx, pSensor, kclRes, paRes, unk, false);
+        case MR::CollisionScaleType_Default:
+            parts->init(rMtx, pSensor, kclRes, paRes, category, false);
             break;
         }
 
@@ -254,7 +255,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "MoveLimit";
         MR::makeMtxTRS(mtx, pActor);
-        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 3);
+        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Default, CollisionCategory_MoveLimit);
 
         if (parts != nullptr) {
             MR::validateCollisionParts(parts);
@@ -277,7 +278,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "WaterSurface";
         MR::makeMtxTRS(mtx, pActor);
-        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 2);
+        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Default, CollisionCategory_WaterSurface);
 
         if (parts != nullptr) {
             MR::validateCollisionParts(parts);
@@ -300,7 +301,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "Sunshade";
         MR::makeMtxTRS(mtx, pActor);
-        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Unk2, 1);
+        CollisionParts* parts = ::createCollisionParts(MR::getResourceHolder(pActor), pCollisionName, pSensor, mtx, MR::CollisionScaleType_Default, CollisionCategory_Sunshade);
 
         if (parts != nullptr) {
             MR::validateCollisionParts(parts);
@@ -409,7 +410,7 @@ namespace MR {
         if (isBindedWall(pActor)) {
             const CollisionParts* parts = pActor->mBinder->mWallInfo.mParentTriangle.mParts;
 
-            if (parts->mKeeperIndex == 0) {
+            if (parts->mKeeperIndex == CollisionCategory_Map) {
                 isMap = true;
             }
         }
@@ -423,7 +424,7 @@ namespace MR {
         if (isBindedWall(pActor)) {
             const CollisionParts* parts = pActor->mBinder->mWallInfo.mParentTriangle.mParts;
 
-            if (parts->mKeeperIndex == 3) {
+            if (parts->mKeeperIndex == CollisionCategory_MoveLimit) {
                 isMoveLimit = true;
             }
         }
@@ -2219,7 +2220,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "MoveLimit";
         mtx.set(pMtx);
-        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 3);
+        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_MoveLimit);
         pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
@@ -2243,7 +2244,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "WaterSurface";
         mtx.set(pMtx);
-        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 2);
+        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_WaterSurface);
         pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {
@@ -2267,7 +2268,7 @@ namespace MR {
         Pos3f mtx;
         const char* pCollisionName = "Sunshade";
         mtx.set(pMtx);
-        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Unk2, 1);
+        CollisionParts* pParts = ::createCollisionParts(getResourceHolder(pActor), pCollisionName, pSensor, mtx, CollisionScaleType_Default, CollisionCategory_Sunshade);
         pParts->mFollowMtx = reinterpret_cast< Pos3f* >(pMtx);
 
         if (pParts != nullptr) {

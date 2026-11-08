@@ -21,10 +21,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 
-#define POIHANA_BEHAVIOR_NORMAL 0
-#define POIHANA_BEHAVIOR_SLEEP 1
-#define POIHANA_BEHAVIOR_NEW_HOME 2
-
 namespace {
     static const f32 sGravity = 2.0f;
     static const f32 sReceivePushPower = 1.5f;
@@ -95,7 +91,7 @@ namespace NrvPoihana {
 
 Poihana::Poihana(const char* pName)
     : LiveActor(pName), mAnimScaleCtrl(), mBindStarPointer(), mCamInfo(), mBindedActor(), mLaunchIntensity(), mRespawnPos(0.0f), mHomePos(0.0f),
-      mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(POIHANA_BEHAVIOR_NORMAL), mCanDrown(), mWaterColumn(), mIsActive() {
+      mFrontVec(0.0f, 0.0f, 1.0f), mBoundTimer(-1), mBehavior(Behavior_Normal), mCanDrown(), mWaterColumn(), mIsActive() {
 }
 
 void Poihana::init(const TableIter& rIter) {
@@ -148,7 +144,7 @@ void Poihana::init(const TableIter& rIter) {
 
     MR::tryCreateMirrorActor(this, "Poihana");
 
-    if (mBehavior == POIHANA_BEHAVIOR_SLEEP) {
+    if (mBehavior == Behavior_Sleep) {
         initNerve(GET_NERVE(Poihana, PoihanaNrvSleep));
     } else {
         initNerve(GET_NERVE(Poihana, PoihanaNrvWait));
@@ -205,7 +201,7 @@ void Poihana::exeNonActive() {
     }
 
     if (MR::isNearPlayerAnyTime(this, ::sActiveRadius)) {
-        if (mBehavior == POIHANA_BEHAVIOR_SLEEP) {
+        if (mBehavior == Behavior_Sleep) {
             setNerve(GET_NERVE(Poihana, PoihanaNrvSleep));
         } else {
             setNerve(GET_NERVE(Poihana, PoihanaNrvWait));
@@ -260,7 +256,7 @@ void Poihana::exeWalkAround() {
     } else if (MR::isNearPlayer(this, ::sSearchRadius)) {
         setNerve(GET_NERVE(Poihana, PoihanaNrvSearch));
     } else if (MR::isGreaterStep(this, ::sWalkAroundKeepTime)) {
-        if (mBehavior == POIHANA_BEHAVIOR_SLEEP) {
+        if (mBehavior == Behavior_Sleep) {
             setNerve(GET_NERVE(Poihana, PoihanaNrvSleepStart));
         } else {
             setNerve(GET_NERVE(Poihana, PoihanaNrvWait));
@@ -374,7 +370,7 @@ void Poihana::exeShootUp() {
     }
 
     if (MR::isBckStopped(this)) {
-        if (mBehavior == POIHANA_BEHAVIOR_NEW_HOME) {
+        if (mBehavior == Behavior_NewHome) {
             mHomePos = mPosition;
             setNerve(GET_NERVE(Poihana, PoihanaNrvWalkAround));
         } else {
@@ -911,7 +907,7 @@ bool Poihana::isNeedForBackHome() const {
     if (isNerve(GET_NERVE(Poihana, PoihanaNrvChasePlayer))) {
         bool ret;
 
-        if (mBehavior == POIHANA_BEHAVIOR_NEW_HOME) {
+        if (mBehavior == Behavior_NewHome) {
             ret = !MR::isNearPlayer(this, ::sChaseRadius);
         } else {
             ret = !MR::isNear(this, mHomePos, ::sDistanceForNeedBack) || !MR::isNearPlayer(this, ::sChaseRadius);

@@ -37,7 +37,8 @@ namespace MR {
     enum CollisionScaleType {
         CollisionScaleType_AutoEqualScale,
         CollisionScaleType_NotUsingScale,
-        CollisionScaleType_Unk2,
+        // The matrix's scale as it is.
+        CollisionScaleType_Default,
     };
 
     bool isExistIndirectTexture(const LiveActor*);

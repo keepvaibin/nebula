@@ -49,7 +49,7 @@ void HipDropSwitch::init(const TableIter& rIter) {
     MR::addHitSensorMapObj(this, "hit", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     initStarPointerTarget();
     MR::initCollisionParts(this, "HipDropSwitch", getSensor("body"), nullptr);
-    mSpringModel = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Unk2);
+    mSpringModel = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mSpringModel);
     initNerve(GET_NERVE(HipDropSwitch, HipDropSwitchNrvOff));
     MR::needStageSwitchWriteA(this, rIter);

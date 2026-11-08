@@ -9,8 +9,10 @@
 #include <cstring>
 #include "Game/System/AssetFolder.hpp"
 
-#define SYSTEMMESSAGE_ARC "/Memory/SystemMessage"
-#define MESSAGE_ARC "/MessageData/Message"
+namespace {
+    const char* const cSystemMessageArc = "/Memory/SystemMessage";
+    const char* const cMessageArc = "/MessageData/Message";
+}  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
     if (const char16_t* pWords = NebulaMods::text(pMessage)) {
@@ -142,9 +144,9 @@ s32 MessageData::findMessageIndex(const char* pMessage) const {
 }
 
 void MessageHolder::initSystemData() {
-    mSystemMessageData = new MessageData(SYSTEMMESSAGE_ARC);
+    mSystemMessageData = new MessageData(::cSystemMessageArc);
 }
 
 void MessageHolder::initGameData() {
-    mGameMessageData = new MessageData(MESSAGE_ARC);
+    mGameMessageData = new MessageData(::cMessageArc);
 }

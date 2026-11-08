@@ -18,7 +18,7 @@ void MarioLauncherAttractor::init(const TableIter& rIter) {
     mGravityCreator = new PointGravityCreator();
     mGravityCreator->createFromPlacement(rIter);
     PlanetGravity* pGravity = mGravityCreator->getGravity();
-    pGravity->mGravityType = GRAVITY_TYPE_MARIO_LAUNCHER;
+    pGravity->mGravityType = GravityType_MarioLauncher;
 
     // Set clipping & scale
     f32 scale = pGravity->mRange / 1000.0f;

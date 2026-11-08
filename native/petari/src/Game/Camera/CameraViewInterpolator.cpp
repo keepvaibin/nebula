@@ -22,7 +22,7 @@ CameraViewInterpolator::CameraViewInterpolator()
       mTargetPosition(0.0f, 0.0f, 0.0f), mRate(0.7f), mIsCollisionOff(), mIsRepulsionOff(), mTargetFovy(45.0f), mFovy(45.0f),
       mIsInterpolatingNearlyEnd(true), mIsInterpolating(), mIsCorrectErpPositionOn(true), mCalcState(), mTargetObj(),
       mBinder(new Binder(nullptr, &mPosition, &mGravity, 100.0f, 0.0f, 64)), mPosition(0.0f, 0.0f, 0.0f), mGravity(0.0f, -1.0f, 0.0f),
-      mIsCollided(true), mLErpOffset(0.0f, 0.0f, 0.0f) {
+      mIsCollided(true) {
     mTargetMtx.identity();
     mMtx.identity();
     mBinder->setTriangleFilter(MR::createTriangleFilterFunc(MR::isCameraCodeThrough));
@@ -120,7 +120,8 @@ bool CameraViewInterpolator::calcCollision(const Pos3f& rMtx) {
     mPosition.set(pos);
     resetGravity();
 
-    targetPos += mLErpOffset;
+    // + 0 turns -0 into +0.
+    targetPos += Vec3f(0.0f, 0.0f, 0.0f);
 
     Vec3f bindDir;
     if (!calcBinder(&bindDir, targetPos, pos)) {
@@ -129,7 +130,6 @@ bool CameraViewInterpolator::calcCollision(const Pos3f& rMtx) {
     }
 
     mIsCollided = false;
-    mLErpOffset.zero();
 
     bindDir *= 0.25f;
     Vec3f newPos = pos;

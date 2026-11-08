@@ -646,7 +646,7 @@ void SkeletalFishBoss::initCollision() {
 
     for (u32 i = 0; i < 0xE; i++) {
         mPartsArray[i] = MR::createCollisionPartsFromLiveActor(this, ::sColInfo[i].mColliderName, mBossHead->getSensor("body"),
-                                                               MR::getJointMtx(this, ::sColInfo[i].mJointName), MR::CollisionScaleType_Unk2);
+                                                               MR::getJointMtx(this, ::sColInfo[i].mJointName), MR::CollisionScaleType_Default);
         MR::validateCollisionParts(mPartsArray[i]);
     }
 }
@@ -1005,10 +1005,10 @@ SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)
 
     MR::initLightCtrl(this);
     mHeadCollisionMtx.identity();
-    mHeadCollision = MR::createCollisionPartsFromLiveActor(this, "Head", getSensor("body"), mHeadCollisionMtx.toMtxPtr(), MR::CollisionScaleType_Unk2);
+    mHeadCollision = MR::createCollisionPartsFromLiveActor(this, "Head", getSensor("body"), mHeadCollisionMtx.toMtxPtr(), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mHeadCollision);
     mJawCollisionMtx.identity();
-    mJawCollision = MR::createCollisionPartsFromLiveActor(this, "Jow", getSensor("body"), mJawCollisionMtx.toMtxPtr(), MR::CollisionScaleType_Unk2);
+    mJawCollision = MR::createCollisionPartsFromLiveActor(this, "Jow", getSensor("body"), mJawCollisionMtx.toMtxPtr(), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mJawCollision);
     MR::addToAttributeGroupSearchTurtle(this);
     createSubModel();

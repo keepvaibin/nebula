@@ -6,150 +6,147 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-#define COMET_CATEGORY_NORMAL 0
-#define COMET_CATEGORY_COIN_100 1
-
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy1[] = {
-    {"EggStarGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"EggStarGalaxy", COMET_CATEGORY_COIN_100},
-    {"EggStarGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"EggStarGalaxy", COMET_CATEGORY_COIN_100},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"EggStarGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"EggStarGalaxy", COMET_CATEGORY_COIN_100},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"EggStarGalaxy", COMET_CATEGORY_NORMAL},
-    {"HoneyBeeKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"EggStarGalaxy", COMET_CATEGORY_COIN_100},
+    {"EggStarGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"EggStarGalaxy", GalaxyCometCategory_Coin100},
+    {"EggStarGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"EggStarGalaxy", GalaxyCometCategory_Coin100},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"EggStarGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"EggStarGalaxy", GalaxyCometCategory_Coin100},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"EggStarGalaxy", GalaxyCometCategory_Normal},
+    {"HoneyBeeKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"EggStarGalaxy", GalaxyCometCategory_Coin100},
     {nullptr, 0},
 };
 
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy2[] = {
-    {"StarDustGalaxy", COMET_CATEGORY_NORMAL},
-    {"StarDustGalaxy", COMET_CATEGORY_COIN_100},
-    {"BattleShipGalaxy", COMET_CATEGORY_NORMAL},
-    {"BattleShipGalaxy", COMET_CATEGORY_COIN_100},
-    {"StarDustGalaxy", COMET_CATEGORY_COIN_100},
-    {"BattleShipGalaxy", COMET_CATEGORY_NORMAL},
-    {"StarDustGalaxy", COMET_CATEGORY_NORMAL},
-    {"BattleShipGalaxy", COMET_CATEGORY_COIN_100},
-    {"StarDustGalaxy", COMET_CATEGORY_NORMAL},
-    {"StarDustGalaxy", COMET_CATEGORY_COIN_100},
-    {"BattleShipGalaxy", COMET_CATEGORY_NORMAL},
-    {"BattleShipGalaxy", COMET_CATEGORY_COIN_100},
-    {"StarDustGalaxy", COMET_CATEGORY_NORMAL},
-    {"BattleShipGalaxy", COMET_CATEGORY_NORMAL},
-    {"StarDustGalaxy", COMET_CATEGORY_COIN_100},
-    {"BattleShipGalaxy", COMET_CATEGORY_COIN_100},
+    {"StarDustGalaxy", GalaxyCometCategory_Normal},
+    {"StarDustGalaxy", GalaxyCometCategory_Coin100},
+    {"BattleShipGalaxy", GalaxyCometCategory_Normal},
+    {"BattleShipGalaxy", GalaxyCometCategory_Coin100},
+    {"StarDustGalaxy", GalaxyCometCategory_Coin100},
+    {"BattleShipGalaxy", GalaxyCometCategory_Normal},
+    {"StarDustGalaxy", GalaxyCometCategory_Normal},
+    {"BattleShipGalaxy", GalaxyCometCategory_Coin100},
+    {"StarDustGalaxy", GalaxyCometCategory_Normal},
+    {"StarDustGalaxy", GalaxyCometCategory_Coin100},
+    {"BattleShipGalaxy", GalaxyCometCategory_Normal},
+    {"BattleShipGalaxy", GalaxyCometCategory_Coin100},
+    {"StarDustGalaxy", GalaxyCometCategory_Normal},
+    {"BattleShipGalaxy", GalaxyCometCategory_Normal},
+    {"StarDustGalaxy", GalaxyCometCategory_Coin100},
+    {"BattleShipGalaxy", GalaxyCometCategory_Coin100},
     {nullptr, 0},
 };
 
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy3[] = {
-    {"PhantomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_NORMAL},
-    {"PhantomGalaxy", COMET_CATEGORY_COIN_100},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_COIN_100},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_NORMAL},
-    {"PhantomGalaxy", COMET_CATEGORY_COIN_100},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_COIN_100},
-    {"PhantomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_COIN_100},
-    {"PhantomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_NORMAL},
-    {"PhantomGalaxy", COMET_CATEGORY_COIN_100},
-    {"PhantomGalaxy", COMET_CATEGORY_NORMAL},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_COIN_100},
-    {"PhantomGalaxy", COMET_CATEGORY_COIN_100},
-    {"HeavenlyBeachGalaxy", COMET_CATEGORY_NORMAL},
+    {"PhantomGalaxy", GalaxyCometCategory_Normal},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Normal},
+    {"PhantomGalaxy", GalaxyCometCategory_Coin100},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Coin100},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Normal},
+    {"PhantomGalaxy", GalaxyCometCategory_Coin100},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Coin100},
+    {"PhantomGalaxy", GalaxyCometCategory_Normal},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Coin100},
+    {"PhantomGalaxy", GalaxyCometCategory_Normal},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Normal},
+    {"PhantomGalaxy", GalaxyCometCategory_Coin100},
+    {"PhantomGalaxy", GalaxyCometCategory_Normal},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Coin100},
+    {"PhantomGalaxy", GalaxyCometCategory_Coin100},
+    {"HeavenlyBeachGalaxy", GalaxyCometCategory_Normal},
     {nullptr, 0},
 };
 
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy4[] = {
-    {"SandClockGalaxy", COMET_CATEGORY_NORMAL},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_NORMAL},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_NORMAL},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_COIN_100},
-    {"SandClockGalaxy", COMET_CATEGORY_NORMAL},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_NORMAL},
-    {"SandClockGalaxy", COMET_CATEGORY_COIN_100},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_COIN_100},
-    {"SandClockGalaxy", COMET_CATEGORY_NORMAL},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_COIN_100},
-    {"SandClockGalaxy", COMET_CATEGORY_COIN_100},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_NORMAL},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_NORMAL},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_COIN_100},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_COIN_100},
-    {"SandClockGalaxy", COMET_CATEGORY_NORMAL},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_NORMAL},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_COIN_100},
-    {"SandClockGalaxy", COMET_CATEGORY_COIN_100},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_COIN_100},
-    {"CosmosGardenGalaxy", COMET_CATEGORY_NORMAL},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_NORMAL},
-    {"SandClockGalaxy", COMET_CATEGORY_COIN_100},
-    {"IceVolcanoGalaxy", COMET_CATEGORY_COIN_100},
+    {"SandClockGalaxy", GalaxyCometCategory_Normal},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Normal},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Normal},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Coin100},
+    {"SandClockGalaxy", GalaxyCometCategory_Normal},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Normal},
+    {"SandClockGalaxy", GalaxyCometCategory_Coin100},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Coin100},
+    {"SandClockGalaxy", GalaxyCometCategory_Normal},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Coin100},
+    {"SandClockGalaxy", GalaxyCometCategory_Coin100},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Normal},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Normal},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Coin100},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Coin100},
+    {"SandClockGalaxy", GalaxyCometCategory_Normal},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Normal},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Coin100},
+    {"SandClockGalaxy", GalaxyCometCategory_Coin100},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Coin100},
+    {"CosmosGardenGalaxy", GalaxyCometCategory_Normal},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Normal},
+    {"SandClockGalaxy", GalaxyCometCategory_Coin100},
+    {"IceVolcanoGalaxy", GalaxyCometCategory_Coin100},
     {nullptr, 0},
 };
 
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy5[] = {
-    {"OceanRingGalaxy", COMET_CATEGORY_COIN_100},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"OceanRingGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"FactoryGalaxy", COMET_CATEGORY_NORMAL},
-    {"OceanRingGalaxy", COMET_CATEGORY_COIN_100},
-    {"FactoryGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"FactoryGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanRingGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"FactoryGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanRingGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"FactoryGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_NORMAL},
-    {"FactoryGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanRingGalaxy", COMET_CATEGORY_COIN_100},
-    {"FactoryGalaxy", COMET_CATEGORY_NORMAL},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanRingGalaxy", COMET_CATEGORY_NORMAL},
-    {"FactoryGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanRingGalaxy", COMET_CATEGORY_COIN_100},
-    {"ReverseKingdomGalaxy", COMET_CATEGORY_COIN_100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Coin100},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"OceanRingGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"FactoryGalaxy", GalaxyCometCategory_Normal},
+    {"OceanRingGalaxy", GalaxyCometCategory_Coin100},
+    {"FactoryGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"FactoryGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"FactoryGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"FactoryGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Normal},
+    {"FactoryGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Coin100},
+    {"FactoryGalaxy", GalaxyCometCategory_Normal},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Normal},
+    {"FactoryGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanRingGalaxy", GalaxyCometCategory_Coin100},
+    {"ReverseKingdomGalaxy", GalaxyCometCategory_Coin100},
     {nullptr, 0},
 };
 
 const GalaxyCometTimePaper sCometTimeTableGrandGalaxy6[] = {
-    {"CannonFleetGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_COIN_100},
-    {"CannonFleetGalaxy", COMET_CATEGORY_NORMAL},
-    {"HellProminenceGalaxy", COMET_CATEGORY_NORMAL},
-    {"CannonFleetGalaxy", COMET_CATEGORY_COIN_100},
-    {"HellProminenceGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_NORMAL},
-    {"CannonFleetGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_COIN_100},
-    {"CannonFleetGalaxy", COMET_CATEGORY_COIN_100},
-    {"HellProminenceGalaxy", COMET_CATEGORY_NORMAL},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_COIN_100},
-    {"CannonFleetGalaxy", COMET_CATEGORY_NORMAL},
-    {"HellProminenceGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_NORMAL},
-    {"HellProminenceGalaxy", COMET_CATEGORY_NORMAL},
-    {"CannonFleetGalaxy", COMET_CATEGORY_NORMAL},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_NORMAL},
-    {"HellProminenceGalaxy", COMET_CATEGORY_COIN_100},
-    {"CannonFleetGalaxy", COMET_CATEGORY_NORMAL},
-    {"HellProminenceGalaxy", COMET_CATEGORY_NORMAL},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_COIN_100},
-    {"HellProminenceGalaxy", COMET_CATEGORY_COIN_100},
-    {"OceanPhantomCaveGalaxy", COMET_CATEGORY_NORMAL},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Coin100},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Normal},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Normal},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Coin100},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Normal},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Coin100},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Coin100},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Normal},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Coin100},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Normal},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Normal},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Normal},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Normal},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Normal},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Coin100},
+    {"CannonFleetGalaxy", GalaxyCometCategory_Normal},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Normal},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Coin100},
+    {"HellProminenceGalaxy", GalaxyCometCategory_Coin100},
+    {"OceanPhantomCaveGalaxy", GalaxyCometCategory_Normal},
     {nullptr, 0},
 };
 
@@ -196,24 +193,14 @@ void GalaxyCometTimeTable::checkIsReady() {
 }
 
 void GalaxyCometTimeTable::serializeStateToGameData(GalaxyCometSerializeInfo* pInfo) {
-    s32 stateIndex = mState->getStateIndex();
-    pInfo->mStateIndexPacked = (mTimePaperPos << 1) + stateIndex;
-
-    s32 pastSecond = mState->getPastSecond();
-    pInfo->mPastSecond = pastSecond;
+    pInfo->mStateIndexPacked = (mTimePaperPos << 1) + mState->getStateIndex();
+    pInfo->mPastSecond = mState->getPastSecond();
 }
 
 void GalaxyCometTimeTable::deserializeStateFromGameData(const GalaxyCometSerializeInfo* pInfo) {
-    u32 stateIndex = pInfo->mStateIndexPacked;
-    u32 stateMask = stateIndex >> 31;
-    u32 timePaperPos = stateIndex >> 1;
-
-    stateIndex &= 1;
-    stateIndex ^= stateMask;
-    mTimePaperPos = timePaperPos;
-
-    s32 state = stateIndex - stateMask;
-    mState->setStateAndPastSecond(state, pInfo->mPastSecond);
+    const u32 packed = pInfo->mStateIndexPacked;
+    mTimePaperPos = packed >> 1;
+    mState->setStateAndPastSecond(packed & 1, pInfo->mPastSecond);
 }
 
 bool GalaxyCometTimeTable::isLand() const {
@@ -258,10 +245,10 @@ bool GalaxyCometTimeTable::findSuitableTimePaperPos(s32* pResultPos, s32 startPo
         const char* galaxyName = mTimePaper[timePaperPos].mGalaxyName;
         bool canAppear;
         switch (category) {
-        case COMET_CATEGORY_NORMAL:
+        case GalaxyCometCategory_Normal:
             canAppear = MR::canAppearNormalComet(galaxyName);
             break;
-        case COMET_CATEGORY_COIN_100:
+        case GalaxyCometCategory_Coin100:
             canAppear = MR::canAppearCoin100Comet(galaxyName);
             break;
         default:
@@ -406,9 +393,9 @@ s32 GalaxyCometScheduler::getEncounterCometPowerStarId(const char* pGalaxyName) 
     GalaxyCometTimeTable* timeTable = findFromGalaxy(pGalaxyName);
 
     switch (timeTable->getCometCategory()) {
-    case COMET_CATEGORY_NORMAL:
+    case GalaxyCometCategory_Normal:
         return 4;
-    case COMET_CATEGORY_COIN_100:
+    case GalaxyCometCategory_Coin100:
         return 5;
     default:
         return 0;

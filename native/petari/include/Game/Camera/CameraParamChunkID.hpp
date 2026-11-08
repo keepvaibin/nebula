@@ -21,6 +21,7 @@ public:
     void createEventID(s32, const char*);
     void createStartID(s32, u16);
     void setName(const MR::FormattedName& rName);
+    void copyName(const char* pName);
 
     s8 mZoneID;
     char* mName;

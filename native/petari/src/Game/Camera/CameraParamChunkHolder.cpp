@@ -10,11 +10,9 @@
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
-#define CHUNK_CAPACITY 0x400
-
 CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, const char* pName)
-    : NameObj(pName), mCameraHolder(pCameraHolder), mChunkCapacity(CHUNK_CAPACITY), mNrChunks(), mChunks(new CameraParamChunk*[CHUNK_CAPACITY]),
-      mIsSorted() {
+    : NameObj(pName), mCameraHolder(pCameraHolder), mChunkCapacity(cInitialCapacity), mNrChunks(),
+      mChunks(new CameraParamChunk*[cInitialCapacity]), mIsSorted() {
 }
 
 CameraParamChunkHolder::~CameraParamChunkHolder() {
@@ -132,10 +130,10 @@ CameraParamChunk* CameraParamChunkHolder::findChunk(s32 zoneID, const char* pNam
 
 void CameraParamChunkHolder::loadFile(s32 zoneID) {
     void* data;
-    s32 local44;
-    MR::getStageCameraData(&data, &local44, zoneID);
+    s32 dataSize;
+    MR::getStageCameraData(&data, &dataSize, zoneID);
 
-    if (local44 != 0) {
+    if (dataSize != 0) {
         DotCamReaderInBin reader = DotCamReaderInBin(data);
         mCameraVersion = reader.mVersion;
 
