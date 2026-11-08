@@ -23,7 +23,7 @@ public:
     void initModel();
     void initCubeBox();
     bool isInCubeBox(const Vec3f&) const;
-    void updateModelScale(f32, f32);
+    void updateModelScale(f32 rangeScale, f32 coreScale);
     void exeWait();
     void exeDemo();
     void exeDisappear();

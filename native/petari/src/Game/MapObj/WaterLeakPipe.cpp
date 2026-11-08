@@ -119,10 +119,10 @@ bool WaterLeakPipe::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     if (MR::isMsgPlayerTrample(msg) || MR::isMsgPlayerHipDrop(msg)) {
         Vec3f upVec;
         MR::calcUpVec(&upVec, this);
-        Vec3f v8;
-        v8.sub(*MR::getPlayerPos(), mPosition);
+        Vec3f toPlayer;
+        toPlayer.sub(*MR::getPlayerPos(), mPosition);
 
-        if (v8.dot(upVec) < 0.0f) {
+        if (toPlayer.dot(upVec) < 0.0f) {
             return false;
         }
 
@@ -142,9 +142,9 @@ void WaterLeakPipe::initPipeHeight() {
     mtx.set(mTopMtx);
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
-    Vec3f v10;
-    v10.scaleAdd(mPipeHeight, upVec, mPosition);
-    mtx.setTrans(v10);
+    Vec3f topPos;
+    topPos.scaleAdd(mPipeHeight, upVec, mPosition);
+    mtx.setTrans(topPos);
     NebulaMtxCopy(mtx, mTopMtx);
     calcAndSetBaseMtx();
 }

@@ -180,10 +180,10 @@ bool AstroMapObjFunction::isEnableOpen(const char* pObjName, s32 domeId) {
 }
 
 s32 AstroMapObjFunction::getDomeIdFromArg0(const TableIter& rIter) {
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    s32 domeId = -1;
+    MR::getPlacementArg0NoInit(rIter, &domeId);
 
-    return arg0;
+    return domeId;
 }
 
 const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) {
@@ -217,18 +217,18 @@ const Table* AstroMapObjFunction::createAstroNamePlateParser() {
 }
 
 bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, const Table* pInfo, const Vec3f& rPos,
-                                                 const char* pObjName, s32 domeId, bool param6) {
+                                                 const char* pObjName, s32 domeId, bool needsOpen) {
     AreaObj* astroOverlookAreaObj = MR::getCurrentAstroOverlookAreaObj();
 
     if (astroOverlookAreaObj == nullptr) {
         return false;
     }
 
-    if (!param6 && !isAlreadyRevival(pObjName, domeId)) {
+    if (!needsOpen && !isAlreadyRevival(pObjName, domeId)) {
         return false;
     }
 
-    if (param6 && !isAlreadyOpen(pObjName, domeId)) {
+    if (needsOpen && !isAlreadyOpen(pObjName, domeId)) {
         return false;
     }
 

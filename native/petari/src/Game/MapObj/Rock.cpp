@@ -243,8 +243,8 @@ void Rock::control() {
         MR::showModel(this);
 
         if (updateFront) {
-            Vec3f v2(mFront);
-            MR::turnVecToVecCos(&mFront, v2, front, ::cRotateCosineMax, mGravity);
+            Vec3f oldFront(mFront);
+            MR::turnVecToVecCos(&mFront, oldFront, front, ::cRotateCosineMax, mGravity);
         }
     }
 
@@ -956,10 +956,10 @@ void Rock::exeFreeze() {
     f32 rumbleOffset = ::cFreezeRumbleWidth * MR::cosDegree(MR::repeatDegree(mFreezeTime * ::cFreezeRumbleSpeed)) *
                        static_cast< f32 >(::cFreezeFrame - getNerveStep()) / ::cFreezeFrame;
 
-    Vec3f v1;
-    v1.set(MR::getCamXdir());
-    v1 *= rumbleOffset;
-    mPosition.add(mFreezePos, v1);
+    Vec3f rumble;
+    rumble.set(MR::getCamXdir());
+    rumble *= rumbleOffset;
+    mPosition.add(mFreezePos, rumble);
 
     if (MR::isStarPointerPointing2POnPressButton(this, "弱", true, false)) {
         setNerve(GET_NERVE(Rock, RockNrvFreeze));

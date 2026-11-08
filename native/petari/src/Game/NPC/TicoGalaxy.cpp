@@ -36,14 +36,14 @@ void TicoGalaxy::initAfterPlacement() {
 }
 
 void TicoGalaxy::shootStarPiece() {
-    s32 v5 = 5;
+    s32 count = 5;
 
     if (mStarPieceLeft <= 5) {
-        v5 = mStarPieceLeft;
+        count = mStarPieceLeft;
     }
 
-    if (MR::giftStarPieceToTarget(getSensor("Mouth"), v5)) {
-        mCurrentFed += v5;
+    if (MR::giftStarPieceToTarget(getSensor("Mouth"), count)) {
+        mCurrentFed += count;
         MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 }
@@ -69,8 +69,8 @@ void TicoGalaxy::addStarPieceSaveData(s32 num) {
     MR::addStarPieceGivingToTicoGalaxy(mTicoSeedId, num);
 }
 
-void TicoGalaxy::disappear(bool a1) {
-    if (a1) {
+void TicoGalaxy::disappear(bool isJustFed) {
+    if (isJustFed) {
         MR::onGameEventFlagGalaxyOpen(mGalaxyName);
         MR::callAppearAllGroupMember(this);
     } else {

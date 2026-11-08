@@ -38,15 +38,15 @@ void PunchBox::init(const TableIter& rIter) {
 
     MR::initCollisionParts(this, "PunchBox", getSensor("body"), nullptr);
 
-    s32 arg0 = 1;
-    s32 arg1 = 1;
+    s32 coinCount = 1;
+    s32 hasShadow = 1;
 
     if (rIter.isValid()) {
-        MR::getPlacementArg0NoInit(rIter, &arg0);
-        MR::getPlacementArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg0NoInit(rIter, &coinCount);
+        MR::getPlacementArg1NoInit(rIter, &hasShadow);
     }
 
-    mCoinCount = arg0;
+    mCoinCount = coinCount;
     mHitPoint = 1;
     mHitCoolDown = 0;
     mShadowStep = MR::getRandom(0, 31);
@@ -57,10 +57,7 @@ void PunchBox::init(const TableIter& rIter) {
     MR::validateClipping(this);
     MR::setGroupClipping(this, rIter, 128);
 
-    mHasShadow = false;
-    if (arg1 != 0) {
-        mHasShadow = true;
-    }
+    mHasShadow = hasShadow != 0;
 
     MR::declareCoin(this, mCoinCount);
     MR::declareStarPiece(this, 1);

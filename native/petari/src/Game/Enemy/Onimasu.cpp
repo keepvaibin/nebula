@@ -205,24 +205,24 @@ void Onimasu::land() {
 }
 
 bool Onimasu::calcTurnDirection(f32* pTurnDir) const {
-    s32 arg0 = -1;
-    MR::getCurrentRailPointArg0NoInit(this, &arg0);
+    s32 turnType = -1;
+    MR::getCurrentRailPointArg0NoInit(this, &turnType);
 
-    if (arg0 == -1) {
+    if (turnType == -1) {
         return false;
     }
 
-    if (arg0 == 0) {
+    if (turnType == 0) {
         *pTurnDir = 0.5f;
         return true;
     }
 
-    if (arg0 == 1) {
+    if (turnType == 1) {
         *pTurnDir = -0.5f;
         return true;
     }
 
-    if (arg0 == 2) {
+    if (turnType == 2) {
         *pTurnDir = -1.0f;
         return true;
     }

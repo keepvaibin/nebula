@@ -298,29 +298,30 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
         if (pointNum < mNumLinePoints) {
             f32 t = (MR::getRailCoord(pRoad) - mRailCoords[pointNum - 1]) / (mRailCoords[pointNum] - mRailCoords[pointNum - 1]);
 
-            const Vec3f& v1 = mPoints[calcPointIndex(pointNum - 1, loopIdx)];
-            s32 idx2 = calcPointIndex(pointNum, loopIdx);
-            const Vec3f& v2 = mPoints[idx2];
-            const Vec3f& v3 = mPoints[calcPointIndex(pointNum - 1, nextLoopIdx)];
-            const Vec3f& v4 = mPoints[calcPointIndex(pointNum, nextLoopIdx)];
+            // The road's end: points and normals between the last line passed and the next, on both loop sides.
+            const Vec3f& prevA = mPoints[calcPointIndex(pointNum - 1, loopIdx)];
+            s32 currAIdx = calcPointIndex(pointNum, loopIdx);
+            const Vec3f& currA = mPoints[currAIdx];
+            const Vec3f& prevB = mPoints[calcPointIndex(pointNum - 1, nextLoopIdx)];
+            const Vec3f& currB = mPoints[calcPointIndex(pointNum, nextLoopIdx)];
 
-            const Vec3s& n1 = mNormals[calcPointIndex(pointNum - 1, loopIdx)];
-            const Vec3s& n2 = mNormals[idx2];
-            const Vec3s& n3 = mNormals[calcPointIndex(pointNum - 1, nextLoopIdx)];
-            const Vec3s& n4 = mNormals[calcPointIndex(pointNum, nextLoopIdx)];
+            const Vec3s& prevNormA = mNormals[calcPointIndex(pointNum - 1, loopIdx)];
+            const Vec3s& currNormA = mNormals[currAIdx];
+            const Vec3s& prevNormB = mNormals[calcPointIndex(pointNum - 1, nextLoopIdx)];
+            const Vec3s& currNormB = mNormals[calcPointIndex(pointNum, nextLoopIdx)];
 
-            Vec3f vA = v1 * (1.0f - t) + v2 * t;
-            Vec3f vB = v3 * (1.0f - t) + v4 * t;
+            Vec3f vA = prevA * (1.0f - t) + currA * t;
+            Vec3f vB = prevB * (1.0f - t) + currB * t;
 
             Vec3s nA;
-            nA.x = (s32)(n1.x * (1.0f - t) + n2.x * t);
-            nA.y = (s32)(n1.y * (1.0f - t) + n2.y * t);
-            nA.z = (s32)(n1.z * (1.0f - t) + n2.z * t);
+            nA.x = (s32)(prevNormA.x * (1.0f - t) + currNormA.x * t);
+            nA.y = (s32)(prevNormA.y * (1.0f - t) + currNormA.y * t);
+            nA.z = (s32)(prevNormA.z * (1.0f - t) + currNormA.z * t);
 
             Vec3s nB;
-            nB.x = (s32)(n3.x * (1.0f - t) + n4.x * t);
-            nB.y = (s32)(n3.y * (1.0f - t) + n4.y * t);
-            nB.z = (s32)(n3.z * (1.0f - t) + n4.z * t);
+            nB.x = (s32)(prevNormB.x * (1.0f - t) + currNormB.x * t);
+            nB.y = (s32)(prevNormB.y * (1.0f - t) + currNormB.y * t);
+            nB.z = (s32)(prevNormB.z * (1.0f - t) + currNormB.z * t);
 
             f32 texV0 = MR::getRailCoord(pRoad) * ::sTexRateV0;
             f32 texV1 = MR::getRailCoord(pRoad) * ::sTexRateV1;

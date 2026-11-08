@@ -194,11 +194,11 @@ void SpinDriverPathDrawer::initClipping() {
 }
 
 void SpinDriverPathDrawer::initPathEnd() {
-    s32 arg1 = -1;
-    MR::getRailArg1WithInit(mShootPath->mRailRider, &arg1);
+    s32 endCutPerMille = -1;
+    MR::getRailArg1WithInit(mShootPath->mRailRider, &endCutPerMille);
 
-    if (arg1 >= 0) {
-        mEndCut = arg1 / 1000.0f;
+    if (endCutPerMille >= 0) {
+        mEndCut = endCutPerMille / 1000.0f;
     } else {
         mEndCut = 0.0f;
     }
@@ -302,33 +302,33 @@ void SpinDriverPathDrawer::draw() const {
 
     TypedDraw site(sPathMaterial, nullptr, MR::getCameraViewMtx());
     for (u32 i = 1; i < mPositionCount; i++) {
-        Vec3f prev90(mPositions[i - 1]), curr90(mPositions[i]);
-        Vec3f prev94(mSides[i - 1] * 100.0f), curr94(mSides[i] * 100.0f);
-        Vec3f prev98(mUps[i - 1] * 100.0f), curr98(mUps[i] * 100.0f);
+        Vec3f prevPos(mPositions[i - 1]), currPos(mPositions[i]);
+        Vec3f prevSide(mSides[i - 1] * 100.0f), currSide(mSides[i] * 100.0f);
+        Vec3f prevUp(mUps[i - 1] * 100.0f), currUp(mUps[i] * 100.0f);
 
         f32 prevVal = mCoords[i - 1];
         f32 val = mCoords[i];
 
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
 
-        sendPoint(vtx, prev90 - prev98, 0.0f, prevVal);
-        sendPoint(vtx, curr90 - curr98, 0.0f, val);
-        sendPoint(vtx, prev90, 0.5f, prevVal);
-        sendPoint(vtx, curr90, 0.5f, val);
-        sendPoint(vtx, prev90 + prev98, 1.0f, prevVal);
-        sendPoint(vtx, curr90 + curr98, 1.0f, val);
+        sendPoint(vtx, prevPos - prevUp, 0.0f, prevVal);
+        sendPoint(vtx, currPos - currUp, 0.0f, val);
+        sendPoint(vtx, prevPos, 0.5f, prevVal);
+        sendPoint(vtx, currPos, 0.5f, val);
+        sendPoint(vtx, prevPos + prevUp, 1.0f, prevVal);
+        sendPoint(vtx, currPos + currUp, 1.0f, val);
 
         vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6);
 
-        sendPoint(vtx, prev90 - prev94, 0.0f, prevVal);
-        sendPoint(vtx, curr90 - curr94, 0.0f, val);
-        sendPoint(vtx, prev90, 0.5f, prevVal);
-        sendPoint(vtx, curr90, 0.5f, val);
-        sendPoint(vtx, prev90 + prev94, 1.0f, prevVal);
-        sendPoint(vtx, curr90 + curr94, 1.0f, val);
+        sendPoint(vtx, prevPos - prevSide, 0.0f, prevVal);
+        sendPoint(vtx, currPos - currSide, 0.0f, val);
+        sendPoint(vtx, prevPos, 0.5f, prevVal);
+        sendPoint(vtx, currPos, 0.5f, val);
+        sendPoint(vtx, prevPos + prevSide, 1.0f, prevVal);
+        sendPoint(vtx, currPos + currSide, 1.0f, val);
     }
 }
 
-void SpinDriverPathDrawer::sendPoint(VertexPT*& rVtx, const Vec3f& rA1, f32 a2, f32 a3) const {
-    *rVtx++ = {rA1.x, rA1.y, rA1.z, a2, a3};
+void SpinDriverPathDrawer::sendPoint(VertexPT*& rVtx, const Vec3f& rPos, f32 u, f32 v) const {
+    *rVtx++ = {rPos.x, rPos.y, rPos.z, u, v};
 }

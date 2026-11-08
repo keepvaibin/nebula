@@ -26,7 +26,7 @@ public:
     void setColorPink();
     void setMaskLength(f32);
     void setFadeScale(f32);
-    void sendPoint(VertexPT*&, const Vec3f&, f32, f32) const;
+    void sendPoint(VertexPT*&, const Vec3f& rPos, f32 u, f32 v) const;
 
     SpinDriverShootPath* mShootPath;
     Vec3f* mPositions;

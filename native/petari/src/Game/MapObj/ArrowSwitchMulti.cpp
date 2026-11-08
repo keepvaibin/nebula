@@ -28,10 +28,10 @@ ArrowSwitchTarget::ArrowSwitchTarget(const char* pName) : NameObj(pName), mIdInf
 }
 
 void ArrowSwitchTarget::init(const TableIter& rIter) {
-    s32 arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
+    s32 switchId;
+    MR::getPlacementArg0WithInit(rIter, &switchId);
 
-    mIdInfo = new PlacementId(arg0, rIter);
+    mIdInfo = new PlacementId(switchId, rIter);
 
     MR::getPlacementArg1WithInit(rIter, &mTargetIndex);
     mStageSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
@@ -82,10 +82,10 @@ void ArrowSwitchMulti::init(const TableIter& rIter) {
     initModelManagerWithAnm("ArrowSwitch", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
-    s32 arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
+    s32 switchId;
+    MR::getPlacementArg0WithInit(rIter, &switchId);
 
-    mIdInfo = new PlacementId(arg0, rIter);
+    mIdInfo = new PlacementId(switchId, rIter);
 
     if (MR::isInAreaObj("PlaneModeCube", mPosition)) {
         initHitSensor(1);

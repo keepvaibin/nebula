@@ -126,10 +126,10 @@ void WaterBazooka::init(const TableIter& rIter) {
     initNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvWait));
 
     if (MR::isEqualStageName("OceanPhantomCaveGalaxy")) {
-        u32 a1 = 0;
-        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("ウォータバズーカ撃破", rIter, &a1);
+        u32 isDone = 0;
+        mAlreadyDoneFlag = MR::setupAlreadyDoneFlag("ウォータバズーカ撃破", rIter, &isDone);
 
-        if (a1 != 0) {
+        if (isDone != 0) {
             if (MR::isValidSwitchDead(this)) {
                 MR::onSwitchDead(this);
             }
@@ -715,9 +715,9 @@ bool WaterBazooka::aimAtMario() {
     const Vec3f& rGravity = mGravity;
     MR::turnVecToVecCos(&side, side, aim, turnCos, rGravity);
 
-    Vec3f v1;
-    MR::turnVecToPlane(&v1, side, -mGravity);
-    MR::clampVecAngleDeg(&side, v1, 15.0f);
+    Vec3f sideOnPlane;
+    MR::turnVecToPlane(&sideOnPlane, side, -mGravity);
+    MR::clampVecAngleDeg(&side, sideOnPlane, 15.0f);
 
     if (side.dot(-mGravity) > 0.0f) {
         MR::turnVecToPlane(&side, side, -mGravity);

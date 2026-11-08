@@ -10,7 +10,7 @@ class RockCreator;
 
 class Rock : public LiveActor {
 public:
-    Rock(f32 a1 = 10.0f, const char* pName = "ゴロゴロ岩");
+    Rock(f32 moveSpeed = 10.0f, const char* pName = "ゴロゴロ岩");
 
     enum Type { NormalRock = 0, WanwanRolling = 1, WanwanRollingMini = 2, WanwanRollingGold = 3 };
 
