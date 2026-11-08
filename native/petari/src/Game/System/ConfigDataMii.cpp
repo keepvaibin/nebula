@@ -1,7 +1,6 @@
 #include "Game/System/ConfigDataMii.hpp"
+#include "Game/System/SaveBytes.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JSupport/JSUMemoryInputStream.hpp>
-#include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
 
 ConfigDataMii::ConfigDataMii() {
     initializeData();
@@ -41,29 +40,29 @@ u32 ConfigDataMii::getSignature() const {
 }
 
 s32 ConfigDataMii::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
+    SaveWriter writer(pBuffer, size);
 
-    stream.write(&mFlag, sizeof(mFlag));
-    stream.write(&mMiiId, sizeof(mMiiId));
-    stream.write(&mIconId, sizeof(mIconId));
+    writer.write(&mFlag, sizeof(mFlag));
+    writer.write(&mMiiId, sizeof(mMiiId));
+    writer.write(&mIconId, sizeof(mIconId));
 
-    return stream.mPosition;
+    return writer.getPosition();
 }
 
 s32 ConfigDataMii::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream = JSUMemoryInputStream(pBuffer, size);
+    SaveReader reader(pBuffer, size);
 
-    stream.read(&mFlag, sizeof(mFlag));
-    stream.read(&mMiiId, sizeof(mMiiId));
+    reader.read(&mFlag, sizeof(mFlag));
+    reader.read(&mMiiId, sizeof(mMiiId));
 
-    if (stream.getAvailable() == 0) {
+    if (reader.getAvailable() == 0) {
         if ((mFlag & Flag_UseMii) != 0) {
             mIconId = IconId_Mii;
         }
     } else {
-        stream.read(&mIconId, sizeof(mIconId));
+        reader.read(&mIconId, sizeof(mIconId));
     }
 
     return 0;
