@@ -30,7 +30,7 @@ public:
     void setGroupID(s32);
     void setHost(LiveActor*);
     void appearWait();
-    void appearFlashing(s32);
+    void appearFlashing(s32 timer);
     bool requestGet(HitSensor*, HitSensor*);
     bool requestShow();
     bool requestHide();

@@ -46,8 +46,9 @@ namespace {
         return pPartsModel;
     };
 
-    KoopaBattleMapPlanet* createKoopaBattleMapPlanet(const char* pName1, const char* pName2, const char* pResetPositionName, bool a2, bool a3) {
-        KoopaBattleMapPlanet* pBattleMapPlanet = new KoopaBattleMapPlanet(pName1, pName2, a2, a3);
+    KoopaBattleMapPlanet* createKoopaBattleMapPlanet(const char* pName, const char* pModelName, const char* pResetPositionName, bool isFinalPlanet,
+                                                     bool isNoPlate) {
+        KoopaBattleMapPlanet* pBattleMapPlanet = new KoopaBattleMapPlanet(pName, pModelName, isFinalPlanet, isNoPlate);
         MR::resetPosition(pBattleMapPlanet, pResetPositionName);
         pBattleMapPlanet->initWithoutIter();
         return pBattleMapPlanet;
@@ -294,12 +295,12 @@ void KoopaParts::createCommonParts() {
     }
 }
 
-void KoopaParts::createFireStairs(bool a1) {
+void KoopaParts::createFireStairs(bool isKoopaJr) {
     mFireStairs = new LiveActorGroup("炎（階段用）保持", ::sFireStairsNum);
     mFireStairs->initWithoutIter();
 
     for (int idx = 0; idx < ::sFireStairsNum; idx++) {
-        KoopaFireStairs* pFireStairs = new KoopaFireStairs("炎（階段用）", a1);
+        KoopaFireStairs* pFireStairs = new KoopaFireStairs("炎（階段用）", isKoopaJr);
         pFireStairs->initWithoutIter();
         mFireStairs->registerActor(pFireStairs);
     }

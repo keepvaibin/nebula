@@ -43,7 +43,6 @@ public:
     f32 mSpeed;
     SkeletalFishRailControl* mRailControl;
     Pos3f mRailMtxInv;
-    f32 mObjArg1;
     AnimScaleController* mScaleController;
     LiveActor* mStarPieceTargets[4];
 };

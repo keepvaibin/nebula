@@ -26,9 +26,9 @@ namespace NrvKoopaBattleMapPlanet {
 KoopaBattleMapPlanet::~KoopaBattleMapPlanet() {
 }
 
-KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool b2, bool b3)
+KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate)
     : LiveActor(pName), mModelName(pModelName), mRotateMoment(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(),
-      mIsFinalPlanet(b2), mIsNoPlate(b3) {
+      mIsFinalPlanet(isFinalPlanet), mIsNoPlate(isNoPlate) {
     mBaseMtx.identity();
 }
 

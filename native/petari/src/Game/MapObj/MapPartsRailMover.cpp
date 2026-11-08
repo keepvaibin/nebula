@@ -405,19 +405,20 @@ void MapPartsRailMover::exeMoveStart() {
         }
     }
 
-    f32 v3;
+    // The start signal: shake along the rail, 3 steps each way.
+    f32 shakeSign;
 
     if ((getStep() / 3) % 2 == 0) {
-        v3 = 1.0f;
+        shakeSign = 1.0f;
     } else {
-        v3 = -1.0f;
+        shakeSign = -1.0f;
     }
 
     if (MR::isRailGoingToEnd(mHost)) {
-        v3 *= -1.0f;
+        shakeSign *= -1.0f;
     }
 
-    MR::setRailCoord(mHost, mSignCoord + (7.0f * (v3 * ((getStep() % 3)))));
+    MR::setRailCoord(mHost, mSignCoord + (7.0f * (shakeSign * ((getStep() % 3)))));
     mStartPos.set(MR::getRailPos(mHost));
     if (isStep(MapParts::getMoveStartSignalTime())) {
         MR::setRailCoord(mHost, mSignCoord);

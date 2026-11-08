@@ -11,7 +11,7 @@ public:
 
     virtual void movement();
 
-    void start(const Pos3f&, s32);
+    void start(const Pos3f& rMtx, s32 jointIndex);
     void setBreakDownLevel(s32);
 
     void exeWait();

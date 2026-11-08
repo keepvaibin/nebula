@@ -730,9 +730,9 @@ void SkeletalFishBoss::invalidateCollision() {
     MR::invalidateCollisionParts(head->mJawCollision);
 }
 
-void SkeletalFishBoss::getMouthSensorCenterPos(Vec3f& rPos, f32 a2) const {
+void SkeletalFishBoss::getMouthSensorCenterPos(Vec3f& rPos, f32 forward) const {
     Pos3f mtx(MR::getJointMtx(this, "Head"));
-    rPos.z = a2;
+    rPos.z = forward;
     rPos.x = 0.0f;
     rPos.y = 0.0f;
     mtx.mult(rPos, rPos);
@@ -811,18 +811,18 @@ void SkeletalFishBoss::updateBgm() {
 
     if (curType < 0 || (mBgmHoldStep = curType - 1, curType - 1 < 0)) {
         mBgmHoldStep = -1;
-        s32 bgType, v4;
+        s32 bgType, fadeTime;
 
         if (MR::calcDistanceToPlayer(this) <= 4200.0f) {
             bgType = 2;
-            v4 = 60;
+            fadeTime = 60;
         } else {
             bgType = 1;
-            v4 = 120;
+            fadeTime = 120;
         }
 
         if (bgType != mBgmType) {
-            MR::setStageBGMState(bgType, v4);
+            MR::setStageBGMState(bgType, fadeTime);
         }
 
         mBgmType = bgType;

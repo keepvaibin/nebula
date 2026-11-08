@@ -38,51 +38,39 @@ void WoodBox::init(const TableIter& rIter) {
     Vec3f sensorOffset(0.0f, radius, 0.0f);
     MR::addHitSensor(this, "body", ATYPE_PUNCH_BOX, 8, radius, sensorOffset);
 
-    s32 arg0_Coins = 1;
-    s32 arg1_Respawn = -1;
-    s32 arg2_StarBits = 0;
-    s32 arg3 = 0;
-    s32 arg4_1Up = 0;
-    s32 arg7_PowerStar = 0;
+    s32 coinCount = 1;
+    s32 respawn = -1;
+    s32 starPieceCount = 0;
+    s32 playSolveSE = 0;
+    s32 hasOneUp = 0;
+    s32 hasPowerStar = 0;
 
     if (rIter.isValid()) {
-        MR::getPlacementArg0NoInit(rIter, &arg0_Coins);
-        MR::getPlacementArg1NoInit(rIter, &arg1_Respawn);
-        MR::getPlacementArg2NoInit(rIter, &arg2_StarBits);
-        MR::getPlacementArg3NoInit(rIter, &arg3);
-        MR::getPlacementArg4NoInit(rIter, &arg4_1Up);
-        MR::getPlacementArg7NoInit(rIter, &arg7_PowerStar);
+        MR::getPlacementArg0NoInit(rIter, &coinCount);
+        MR::getPlacementArg1NoInit(rIter, &respawn);
+        MR::getPlacementArg2NoInit(rIter, &starPieceCount);
+        MR::getPlacementArg3NoInit(rIter, &playSolveSE);
+        MR::getPlacementArg4NoInit(rIter, &hasOneUp);
+        MR::getPlacementArg7NoInit(rIter, &hasPowerStar);
     }
 
     calcAndSetBaseMtx();
     NebulaMtxCopy(getBaseMtx(), mBaseMtx);
-    ;
     MR::addTransMtx(mBaseMtx, Vec3f(0.0f, 100.0f, 0.0f));
 
-    mHasPowerStar = false;
+    mHasPowerStar = hasPowerStar != 0;
 
-    if (arg7_PowerStar != 0) {
-        mHasPowerStar = true;
+    if (mHasPowerStar) {
         MR::declarePowerStar(this);
         mStarDemoModel = MR::createPowerStarDemoModel(this, "パワースターデモモデル", mBaseMtx);
         mStarDemoModel->makeActorDead();
     }
 
-    mCoinCount = arg0_Coins;
-    mStarBitCount = arg2_StarBits;
-    s32 arg4 = arg4_1Up;
+    mCoinCount = coinCount;
+    mStarBitCount = starPieceCount;
     mHitPoint = 1;
-    mIsNoRespawn = true;
-
-    if (arg1_Respawn == 0) {
-        mIsNoRespawn = false;
-    }
-
-    mPlaySolveSE = false;
-
-    if (arg3 == 1) {
-        mPlaySolveSE = true;
-    }
+    mIsNoRespawn = respawn != 0;
+    mPlaySolveSE = playSolveSE == 1;
 
     mBreakModel = new ModelObj("壊れモデル", "WoodBoxBreak", getBaseMtx(), MR::DrawBufferType_NoSilhouettedMapObjStrongLight, -2, -2, false);
     mBreakModel->mScale = mScale;
@@ -106,7 +94,7 @@ void WoodBox::init(const TableIter& rIter) {
         MR::declareStarPiece(this, mStarBitCount);
     }
 
-    if (arg4 != 0) {
+    if (hasOneUp != 0) {
         mOneUp = MR::createKinokoOneUp();
         mOneUp->mIsThrownHigh = 1;
     } else {

@@ -7,7 +7,7 @@ class LiveActorGroup;
 
 class KoopaBattleMapPlanet : public LiveActor {
 public:
-    KoopaBattleMapPlanet(const char*, const char*, bool, bool);
+    KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate);
 
     virtual ~KoopaBattleMapPlanet();
     virtual void init(const TableIter&);

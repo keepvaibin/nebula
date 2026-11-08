@@ -31,11 +31,10 @@ TripodBossBreakMovement::TripodBossBreakMovement(const char* pName)
     setBreakDownLevel(1);
 }
 
-void TripodBossBreakMovement::start(const Pos3f& a1, s32 a2) {
-    mMtx.set(a1);
+void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
+    mMtx.set(rMtx);
     mMtx.getTrans(mPos);
 
-    mMoment.zero();
     mMoment.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
                    MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
     MR::normalizeOrZero(&mMoment);
@@ -45,16 +44,16 @@ void TripodBossBreakMovement::start(const Pos3f& a1, s32 a2) {
 
     MR::zeroVelocity(this);
 
-    mJointIndex = a2;
+    mJointIndex = jointIndex;
 
     Pos3f jointMtx;
     MR::getTripodBossJointMatrix(&jointMtx, mJointIndex);
     jointMtx.getYDir(mFlyDir);
 
-    Vec3f v25;
-    v25.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
-                   MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
-    mFlyDir += v25 * mFlyDirRandomRate;
+    Vec3f jitter;
+    jitter.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
+                      MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
+    mFlyDir += jitter * mFlyDirRandomRate;
 
     mSpring->mVelocity += MR::getRandom(20.0f, 25.0f);
 
