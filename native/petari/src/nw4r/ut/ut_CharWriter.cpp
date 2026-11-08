@@ -11,10 +11,11 @@ namespace {
     // LoadTexture binds. Blended by alpha, no depth, no culling.
     SiteMaterial sMaterial;
 
-    // The run of glyphs not yet sent: one sheet, one material, one matrix. A glyph's quad blends over the ones before
-    // it in the run as it would over a draw before it, so a run draws what a draw a glyph drew.
+    // The run of glyphs not yet sent: one sheet, one material, one matrix, one instance per glyph
+    // (runtime/src/render/materials/glyph_instances.hlsl). A glyph's quad blends over the ones before it in the run as it
+    // would over a draw before it, so a run draws what a draw a glyph drew.
     const u32 cRunGlyphs = 256;
-    VertexPCT sRun[cRunGlyphs * 4];
+    NebulaGlyphInstance sRun[cRunGlyphs];
     u32 sRunGlyphs;
     f32 sRunMtx[3][4];
 
@@ -22,27 +23,41 @@ namespace {
         if (sRunGlyphs == 0) {
             return;
         }
+        u32 first;
+        void* pRows = FrameRing::instanceRows(sRunGlyphs * (sizeof(NebulaGlyphInstance) / 16), &first);
+        memcpy(pRows, sRun, sRunGlyphs * sizeof(NebulaGlyphInstance));
         TypedDraw site = TypedDraw::eyeSpace(sMaterial, sRunMtx);
-        VertexPCT* pOut = site.vertices< VertexPCT >(NEBULA_PRIMITIVE_QUADS, sRunGlyphs * 4);
-        memcpy(pOut, sRun, sRunGlyphs * 4 * sizeof(VertexPCT));
+        site.drawGlyphs(first, sRunGlyphs);
         sRunGlyphs = 0;
     }
 
-    // Where the next glyph's corners go; the run is sent first when it is full or the matrix moved.
-    VertexPCT* RunQuad(const f32 (*pMtx)[4]) {
+    // The next glyph's instance; the run is sent first when it is full or the matrix moved. The glyph's plane z is the
+    // matrix's: its translation moved along the third column (z 0 leaves it as it is).
+    NebulaGlyphInstance* RunGlyph(const f32 (*pMtx)[4], f32 z) {
+        f32 mtx[3][4];
+        for (u32 r = 0; r < 3; r++) {
+            mtx[r][0] = pMtx[r][0];
+            mtx[r][1] = pMtx[r][1];
+            mtx[r][2] = pMtx[r][2];
+            mtx[r][3] = pMtx[r][3] + pMtx[r][2] * z;
+        }
         if (sRunGlyphs != 0) {
             bool same = sRunGlyphs < cRunGlyphs;
             for (u32 i = 0; same && i < 12; i++) {
-                same = __builtin_bit_cast(u32, (&pMtx[0][0])[i]) == __builtin_bit_cast(u32, (&sRunMtx[0][0])[i]);
+                same = __builtin_bit_cast(u32, (&mtx[0][0])[i]) == __builtin_bit_cast(u32, (&sRunMtx[0][0])[i]);
             }
             if (!same) {
                 SendRun();
             }
         }
         if (sRunGlyphs == 0) {
-            memcpy(sRunMtx, pMtx, sizeof(sRunMtx));
+            memcpy(sRunMtx, mtx, sizeof(sRunMtx));
         }
-        return &sRun[sRunGlyphs++ * 4];
+        return &sRun[sRunGlyphs++];
+    }
+
+    u32 ColorWord(nw4r::ut::Color color) {
+        return static_cast< u32 >(color.r) << 24 | static_cast< u32 >(color.g) << 16 | static_cast< u32 >(color.b) << 8 | color.a;
     }
 
     // `range`: the font's distance range in sheet texels, 0 for sheets that are images.
@@ -218,16 +233,20 @@ namespace nw4r {
 
             LoadTexture(glyph, 0);
 
-            VertexPCT* vtx = RunQuad(lyt::detail::GetDrawMtx());
-            {
-                *vtx++ = {posLeft, posTop, posZ, Rgba8(mVertexColor.lu), texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
-
-                *vtx++ = {posRight, posTop, posZ, Rgba8(mVertexColor.ru), texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
-
-                *vtx++ = {posRight, posBottom, posZ, Rgba8(mVertexColor.rd), texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
-
-                *vtx++ = {posLeft, posBottom, posZ, Rgba8(mVertexColor.ld), texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS)};
-            }
+            const f32 one = static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS);
+            NebulaGlyphInstance* pGlyph = RunGlyph(lyt::detail::GetDrawMtx(), posZ);
+            pGlyph->left = posLeft;
+            pGlyph->top = posTop;
+            pGlyph->right = posRight;
+            pGlyph->bottom = posBottom;
+            pGlyph->s0 = texLeft / one;
+            pGlyph->t0 = texTop / one;
+            pGlyph->s1 = texRight / one;
+            pGlyph->t1 = texBottom / one;
+            pGlyph->colors[0] = ColorWord(mVertexColor.lu);
+            pGlyph->colors[1] = ColorWord(mVertexColor.ru);
+            pGlyph->colors[2] = ColorWord(mVertexColor.rd);
+            pGlyph->colors[3] = ColorWord(mVertexColor.ld);
         }
 
         void CharWriter::UpdateVertexColor() {

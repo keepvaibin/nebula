@@ -118,7 +118,8 @@ enum {
     NEBULA_ITEM_NO_CULL = 1u << 4,     /* not culled by its bounds */
     NEBULA_ITEM_PARTICLE = 1u << 5,    /* ring vertices are particle corners: position, position before, two colours, coordinate */
     NEBULA_ITEM_DISCRETE_VERTICES = 1u << 6, /* regenerated or sorted topology: vertex ordinals have no identity */
-    NEBULA_ITEM_INSTANCES = 1u << 7,   /* particles: `ring_count` of the list's `particles` from `ring_at`, `count` vertices each */
+    NEBULA_ITEM_INSTANCES = 1u << 7,   /* `ring_count` instances of `mesh` rows each from row `ring_at` of the list's
+                                          `instance_rows`, `count` vertices each: the pipeline's vertex stage reads them */
     NEBULA_ITEM_WIDE = 1u << 8,        /* ring corners of widened lines or points */
     NEBULA_ITEM_ONE_MATRIX = 1u << 9,  /* a registered mesh under one matrix, whatever its vertices name */
     NEBULA_ITEM_SPREAD_LINES = 1u << 10,
@@ -137,9 +138,18 @@ typedef struct NebulaParticleInstance {
     uint32_t reserved;
 } NebulaParticleInstance;
 
+/* A glyph a NEBULA_ITEM_INSTANCES draw places (glyph_instances.hlsl, nw4r CharWriter's runs): three rows of four. Its
+   quad in the draw matrix's plane z = 0, corners top left, top right, bottom right, bottom left. */
+typedef struct NebulaGlyphInstance {
+    float left, top, right, bottom;
+    float s0, t0, s1, t1;  /* the sheet's coordinates at the top left and the bottom right */
+    uint32_t colors[4];    /* the corners' colours in that order, R << 24 | G << 16 | B << 8 | A */
+} NebulaGlyphInstance;
+
 /* One draw. Everything it needs is named here. `slot`, `generation`, `part` and the view name it from frame to frame. */
 typedef struct NebulaFrameItem {
-    uint32_t mesh;             /* registered mesh, or the bytes of a ring vertex with NEBULA_ITEM_RING */
+    uint32_t mesh;             /* registered mesh; the bytes of a ring vertex with NEBULA_ITEM_RING; an instance's rows
+                                  with NEBULA_ITEM_INSTANCES */
     uint32_t pipeline;         /* pipeline_register's id */
     uint32_t constants;        /* index in the list's constants */
     uint32_t textures;         /* texture_table's id */
@@ -233,12 +243,12 @@ typedef struct NebulaFrameList {
     const void* ring_vertices;
     const uint32_t* ring_indices;
     const struct NebulaScreenProbe* probes;
-    const NebulaParticleInstance* particles;
+    const float (*instance_rows)[4]; /* NEBULA_ITEM_INSTANCES draws' instances (NebulaParticleInstance, NebulaGlyphInstance) */
     uint32_t pass_count, item_count, view_count, camera_count;
     uint32_t block_count, light_set_count, constants_count, probe_count;
     uint64_t ring_vertex_bytes;
     uint32_t ring_index_count;
-    uint32_t particle_count;
+    uint32_t instance_row_count;
     uint32_t flags;
     uint32_t camera_epoch;
     float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */

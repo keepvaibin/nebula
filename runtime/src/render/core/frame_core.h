@@ -38,6 +38,9 @@ inline constexpr std::uint32_t kLightRows = 4u * NEBULA_LIGHTS_PER_SET;
 // An instanced particle's rows (NebulaParticleInstance), as particle_instances.hlsl reads them.
 inline constexpr std::uint32_t kParticleRows = 10u;
 static_assert(sizeof(NebulaParticleInstance) == kParticleRows * 16u);
+// An instanced glyph's rows (NebulaGlyphInstance), as glyph_instances.hlsl reads them.
+inline constexpr std::uint32_t kGlyphRows = 3u;
+static_assert(sizeof(NebulaGlyphInstance) == kGlyphRows * 16u);
 using render::kTableTextures;
 
 // A presented frame's place between two lists.

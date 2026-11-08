@@ -46,4 +46,5 @@ static const unsigned char nebula_shader_rows[] = {
     2, /* FRAME_RIPPLE */
     1, /* FRAME_DEPTH */
     0, /* PARTICLE_INSTANCES */
+    0, /* GLYPH_INSTANCES */
 };

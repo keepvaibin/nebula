@@ -13,10 +13,12 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
+#if !NATIVE_OWN_VERTEX
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color = v.color0;
     o.uv[0] = float4(v.uv[0], 1.0, 0.0);
 }
+#endif
 
 float4 material_color(NativeVaryings i) {
     float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
