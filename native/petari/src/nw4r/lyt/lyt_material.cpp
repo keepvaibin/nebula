@@ -291,8 +291,6 @@ namespace nw4r {
             InitStorageNums(&mCap);
             InitStorageNums(&mNum);
 
-            mbUserAllocated = false;
-
             mpStorage = 0;
             mNativeForms = nullptr;
             // A material without its own stages: each texture by its own coordinate.

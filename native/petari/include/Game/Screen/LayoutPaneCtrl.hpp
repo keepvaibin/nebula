@@ -2,18 +2,15 @@
 
 #include "Game/Util/Array.hpp"
 #include <nebula_geometry.hpp>
-
-namespace nw4r {
-    namespace lyt {
-        class Pane;
-    };  // namespace lyt
-};  // namespace nw4r
+#include <nw4r/lyt/pane.h>
 
 class FrameCtrl;
 class LayoutAnmPlayer;
 class LayoutManager;
 
-class LayoutPaneCtrl {
+// A pane's animation layers, and its follow: with a follow position (MR::setFollowPos) it is its pane's PaneFollow,
+// placing the pane on that point in the layout's matrix pass before the pane's children are placed.
+class LayoutPaneCtrl : public nw4r::lyt::PaneFollow {
 public:
     LayoutPaneCtrl(LayoutManager* pHost, const char* pPaneName, u32 animLayerNum);
 
@@ -22,13 +19,15 @@ public:
     void start(const char* pAnimName, u32 layer);
     void stop(u32 layer);
     bool isAnimStopped(u32 layer) const;
-    void reflectFollowPos();
+    void Follow(const nw4r::lyt::Pane& rPane, nw4r::math::MTX34& rWorld) const override;
+    // Follows pFollowPos from the next pass on; null stops.
+    void setFollowPos(const Vec2f* pFollowPos);
     FrameCtrl* getFrameCtrl(u32 layer) const;
-    void recalcChildGlobalMtx(nw4r::lyt::Pane* pPane);
 
     LayoutManager* mHost;
     nw4r::lyt::Pane* mPane;
-    s32 mPaneIndex;
+    // The pane whose state holds this control (LayoutManager::addPaneCtrl): its branch is what bind and unbind walk.
+    nw4r::lyt::Pane* mStatePane;
     MR::AssignableArray< LayoutAnmPlayer* > mAnmPlayerArray;
     s32 mFollowType;
     const Vec2f* mFollowPos;

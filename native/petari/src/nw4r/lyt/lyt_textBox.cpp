@@ -30,7 +30,7 @@ namespace {
 namespace nw4r {
     namespace lyt {
 
-        TextBox::TextBox(const UiPaneData* pRes, const ResBlockSet& resBlockSet) : Pane(pRes, resBlockSet) {
+        TextBox::TextBox(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& resBlockSet) : Pane(rLayout, pRes, resBlockSet) {
             const UiTextBoxData* const pBlock = resBlockSet.At< UiTextBoxData >(pRes->mPayload);
             u16 allocStrBufLen = static_cast< u16 >(pBlock->mBufferBytes / sizeof(char16_t));
             if (allocStrBufLen > 0) {
@@ -71,10 +71,7 @@ namespace nw4r {
                 }
             }
 
-            void* pMem = Layout::AllocMemory(sizeof(Material));
-            if (pMem != nullptr) {
-                mpMaterial = new (pMem) Material(resBlockSet.MaterialAt(pBlock->mMaterial), resBlockSet);
-            }
+            mpMaterial = rLayout.NewInArena< Material >(resBlockSet.MaterialAt(pBlock->mMaterial), resBlockSet);
         }
 
         void TextBox::Init(u16 allocStrLen) {
@@ -97,13 +94,6 @@ namespace nw4r {
 
         TextBox::~TextBox() {
             SetFont(nullptr);
-
-            if (mpMaterial != NULL && !mpMaterial->IsUserAllocated()) {
-                mpMaterial->~Material();
-                Layout::FreeMemory(mpMaterial);
-                mpMaterial = NULL;
-            }
-
             FreeStringBuffer();
         }
 
@@ -258,7 +248,7 @@ namespace nw4r {
             for (u16 i = 0; i < mTextLen && isNumber; i++) {
                 isNumber = mTextBuf[i] >= L'0' && mTextBuf[i] <= L'9';
             }
-            pWriter->SetWidthLimit(isNumber ? math::F_MAX : mSize.width);
+            pWriter->SetWidthLimit(isNumber ? math::F_MAX : GetDrawSize().width);
             pWriter->SetDrawFlag(MakeDrawFlag());
 
             if (mpTagProcessor != NULL) {
@@ -268,7 +258,7 @@ namespace nw4r {
             pWriter->CalcStringRect(&rect, mTextBuf, mTextLen);
 
             const math::VEC2 base = GetVtxPos();
-            rect.MoveTo(base.x + (mSize.width - rect.GetWidth()) * GetTextMagH(), base.y + (mSize.height - rect.GetHeight()) * GetTextMagV());
+            rect.MoveTo(base.x + (GetDrawSize().width - rect.GetWidth()) * GetTextMagH(), base.y + (GetDrawSize().height - rect.GetHeight()) * GetTextMagV());
 
             return rect;
         }

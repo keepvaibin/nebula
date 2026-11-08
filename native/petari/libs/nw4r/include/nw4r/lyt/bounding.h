@@ -9,7 +9,7 @@ namespace nw4r {
         class Bounding : public Pane {
         public:
             static constexpr UiPaneKind cKind = UiPaneKind_Bounding;
-            Bounding(const UiPaneData*, const ResBlockSet&);
+            Bounding(Layout&, const UiPaneData*, const ResBlockSet&);
 
             virtual ~Bounding();
             virtual void DrawSelf(const DrawInfo&);

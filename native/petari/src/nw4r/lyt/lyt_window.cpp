@@ -119,7 +119,7 @@ namespace nw4r {
         };  // namespace
 
 
-        Window::Window(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
+        Window::Window(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(rLayout, pRes, rBlockSet) {
             const UiWindowData* const pWnd = rBlockSet.At< UiWindowData >(pRes->mPayload);
             mContentInflation.l = pWnd->mInflation[0];
             mContentInflation.r = pWnd->mInflation[1];
@@ -141,53 +141,23 @@ namespace nw4r {
                 }
             }
 
-            void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
+            mpMaterial = rLayout.NewInArena< Material >(rBlockSet.MaterialAt(pResContent->mMaterial), rBlockSet);
 
-            if (pMaterialBuf != NULL) {
-                mpMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pResContent->mMaterial), rBlockSet);
-            }
-
-            mFrameNum = 0;
+            // The frames and their materials are the layout's, like the window.
+            mFrameNum = pWnd->mFrameCount;
             mFrames = NULL;
-
-            if (pWnd->mFrameCount > 0) {
-                mFrames = static_cast< Frame* >(Layout::AllocMemory(pWnd->mFrameCount * sizeof(Frame)));
-
-                if (mFrames != NULL) {
-                    mFrameNum = pWnd->mFrameCount;
-
-                    const UiWindowFrameData* const pResFrames = rBlockSet.At< UiWindowFrameData >(pWnd->mFrames);
-
-                    for (int i = 0; i < mFrameNum; i++) {
-                        mFrames[i].textureFlip = pResFrames[i].mFlip;
-                        mFrames[i].pMaterial = NULL;
-
-                        void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
-
-                        if (pMaterialBuf != NULL) {
-                            mFrames[i].pMaterial = new (pMaterialBuf) Material(rBlockSet.MaterialAt(pResFrames[i].mMaterial), rBlockSet);
-                        }
-                    }
+            if (mFrameNum > 0) {
+                mFrames = static_cast< Frame* >(rLayout.ArenaAlloc(mFrameNum * sizeof(Frame)));
+                const UiWindowFrameData* const pResFrames = rBlockSet.At< UiWindowFrameData >(pWnd->mFrames);
+                for (int i = 0; i < mFrameNum; i++) {
+                    new (&mFrames[i]) Frame();
+                    mFrames[i].textureFlip = pResFrames[i].mFlip;
+                    mFrames[i].pMaterial = rLayout.NewInArena< Material >(rBlockSet.MaterialAt(pResFrames[i].mMaterial), rBlockSet);
                 }
             }
         }
 
         Window::~Window() {
-            if (mFrames != NULL) {
-                for (int i = 0; i < mFrameNum; i++) {
-                    mFrames[i].pMaterial->~Material();
-                    Layout::FreeMemory(mFrames[i].pMaterial);
-                }
-
-                Layout::FreeMemory(mFrames);
-            }
-
-            if (mpMaterial != NULL && !mpMaterial->IsUserAllocated()) {
-                mpMaterial->~Material();
-                Layout::FreeMemory(mpMaterial);
-                mpMaterial = NULL;
-            }
-
             mContent.texCoordAry.Free();
         }
 
@@ -285,8 +255,8 @@ namespace nw4r {
 
             detail::DrawQuad(math::VEC2(rBase.x + rFrameSize.l - mContentInflation.l, rBase.y + rFrameSize.t - mContentInflation.t),
 
-                             Size(mSize.width - rFrameSize.l + mContentInflation.l - rFrameSize.r + mContentInflation.r,
-                                  mSize.height - rFrameSize.t + mContentInflation.t - rFrameSize.b + mContentInflation.b),
+                             Size(GetDrawSize().width - rFrameSize.l + mContentInflation.l - rFrameSize.r + mContentInflation.r,
+                                  GetDrawSize().height - rFrameSize.t + mContentInflation.t - rFrameSize.b + mContentInflation.b),
 
                              mContent.texCoordAry.GetSize(), mContent.texCoordAry.GetArray(),
 
@@ -308,19 +278,19 @@ namespace nw4r {
             math::VEC2 polPt;
             Size polSize;
 
-            GetLTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+            GetLTFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
             GetLTTexCoord(texCds[0], polSize, texSize, 0);
             detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
 
-            GetRTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+            GetRTFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
             GetRTTexCoord(texCds[0], polSize, texSize, 1);
             detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
 
-            GetRBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+            GetRBFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
             GetRBTexCoord(texCds[0], polSize, texSize, 4);
             detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
 
-            GetLBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+            GetLBFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
             GetLBTexCoord(texCds[0], polSize, texSize, 2);
             detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
         }
@@ -336,28 +306,28 @@ namespace nw4r {
 
             if (frames[0].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[0].pMaterial->Setup(bModVtxCol, alpha);
-                GetLTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+                GetLTFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
                 GetLTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[0].pMaterial, 0), frames[0].textureFlip);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
             if (frames[1].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[1].pMaterial->Setup(bModVtxCol, alpha);
-                GetRTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+                GetRTFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[1].pMaterial, 0), frames[1].textureFlip);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
             if (frames[3].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[3].pMaterial->Setup(bModVtxCol, alpha);
-                GetRBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+                GetRBFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[3].pMaterial, 0), frames[3].textureFlip);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
             if (frames[2].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[2].pMaterial->Setup(bModVtxCol, alpha);
-                GetLBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
+                GetLBFrameSize(&polPt, &polSize, basePt, GetDrawSize(), frameSize);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[2].pMaterial, 0), frames[2].textureFlip);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -379,7 +349,7 @@ namespace nw4r {
 
             if (frames[6].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[6].pMaterial->Setup(bModVtxCol, alpha);
-                polSize = Size(mSize.width - frameSize.l - frameSize.r, frameSize.t);
+                polSize = Size(GetDrawSize().width - frameSize.l - frameSize.r, frameSize.t);
                 GetLTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[6].pMaterial, 0), frames[6].textureFlip);
                 detail::DrawQuad(math::VEC2(basePt.x + frameSize.l, basePt.y), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -388,15 +358,15 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[1].pMaterial->Setup(bModVtxCol, alpha);
                 polSize = Size(frameSize.r, frameSize.t);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[1].pMaterial, 0), frames[1].textureFlip);
-                detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0,
+                detail::DrawQuad(math::VEC2(basePt.x + GetDrawSize().width - frameSize.r, basePt.y), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0,
                                  alpha);
             }
 
             if (frames[5].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[5].pMaterial->Setup(bModVtxCol, alpha);
-                polSize = Size(frameSize.r, mSize.height - frameSize.t - frameSize.b);
+                polSize = Size(frameSize.r, GetDrawSize().height - frameSize.t - frameSize.b);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[5].pMaterial, 0), frames[5].textureFlip);
-                detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y + frameSize.t), polSize, texCoordNum, texCds,
+                detail::DrawQuad(math::VEC2(basePt.x + GetDrawSize().width - frameSize.r, basePt.y + frameSize.t), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -404,15 +374,15 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[3].pMaterial->Setup(bModVtxCol, alpha);
                 polSize = Size(frameSize.r, frameSize.b);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[3].pMaterial, 0), frames[3].textureFlip);
-                detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum,
+                detail::DrawQuad(math::VEC2(basePt.x + GetDrawSize().width - frameSize.r, basePt.y + GetDrawSize().height - frameSize.b), polSize, texCoordNum,
                                  texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
             if (frames[7].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[7].pMaterial->Setup(bModVtxCol, alpha);
-                polSize = Size(mSize.width - frameSize.l - frameSize.r, frameSize.b);
+                polSize = Size(GetDrawSize().width - frameSize.l - frameSize.r, frameSize.b);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[7].pMaterial, 0), frames[7].textureFlip);
-                detail::DrawQuad(math::VEC2(basePt.x + frameSize.l, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum, texCds,
+                detail::DrawQuad(math::VEC2(basePt.x + frameSize.l, basePt.y + GetDrawSize().height - frameSize.b), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -420,13 +390,13 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[2].pMaterial->Setup(bModVtxCol, alpha);
                 polSize = Size(frameSize.l, frameSize.b);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[2].pMaterial, 0), frames[2].textureFlip);
-                detail::DrawQuad(math::VEC2(basePt.x, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum, texCds,
+                detail::DrawQuad(math::VEC2(basePt.x, basePt.y + GetDrawSize().height - frameSize.b), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
 
             if (frames[4].pMaterial->GetTextureNum() > 0) {
                 const bool bUseVtxCol = frames[4].pMaterial->Setup(bModVtxCol, alpha);
-                polSize = Size(frameSize.l, mSize.height - frameSize.t - frameSize.b);
+                polSize = Size(frameSize.l, GetDrawSize().height - frameSize.t - frameSize.b);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[4].pMaterial, 0), frames[4].textureFlip);
                 detail::DrawQuad(math::VEC2(basePt.x, basePt.y + frameSize.t), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }

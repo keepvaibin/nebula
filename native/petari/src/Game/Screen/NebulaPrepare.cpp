@@ -61,8 +61,6 @@ public:
         if (!mBuilt) {
             JUTNativeLog("NebulaPrepare: a layout or pane is missing\n");
         }
-        // The pane list with the screen's panes in it.
-        pManager->rebuildPaneInfo();
         kill();
     }
 
@@ -117,9 +115,9 @@ private:
     bool build() {
         LayoutManager* pManager = getLayoutManager();
         Pane* pRoot = pManager->mLayout->mpRootPane;
-        if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder) ||
-            !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc")) ||
-            !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"))) {
+        if (pRoot == nullptr || !mModalKit.init(pManager->mLayoutHolder, pManager->mLayout) ||
+            !mTextKit.init(MR::createAndAddLayoutHolder("InformationWindow.arc"), pManager->mLayout) ||
+            !mWindowKit.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"), pManager->mLayout)) {
             return false;
         }
         // The question window's own panes stay hidden; the screen is built beside them.

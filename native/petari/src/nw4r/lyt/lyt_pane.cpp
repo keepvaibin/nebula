@@ -1,7 +1,6 @@
 #include "nw4r/lyt/animation.h"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
-#include "Game/Util/MotionSignal.hpp"
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/drawInfo.h"
 #include "nw4r/lyt/layout.h"
@@ -21,9 +20,21 @@ namespace nw4r {
 
 namespace nw4r {
     namespace lyt {
+        namespace {
+            bool SameBits(const f32* pA, const f32* pB, u32 num) {
+                for (u32 i = 0; i < num; i++) {
+                    if (__builtin_bit_cast(u32, pA[i]) != __builtin_bit_cast(u32, pB[i])) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }  // namespace
+
         // A pane made in code (Nebula's own panes, Picture(const TexMap&)): at the origin, unscaled, visible.
-        Pane::Pane() {
+        Pane::Pane(Layout& rLayout) {
             Init();
+            rLayout.Join(this);
             mBasePosition = 4;
             memset(mName, 0, sizeof(mName));
             memset(mUserData, 0, sizeof(mUserData));
@@ -37,8 +48,9 @@ namespace nw4r {
             SetVisible(true);
         }
 
-        Pane::Pane(const UiPaneData* pRes, const ResBlockSet& rBlockSet) {
+        Pane::Pane(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& rBlockSet) {
             Init();
+            rLayout.Join(this);
             mKind = pRes->mKind;
 
             mBasePosition = pRes->mBasePosition;
@@ -60,34 +72,21 @@ namespace nw4r {
             detail::SetBit(&mFlag, 2, pRes->mLocationAdjust != 0);
         }
 
+        // Its children and its material are the layout's too: ~Layout destroys each of them on its own.
         Pane::~Pane() {
-            for (Pane *pChild = mChildList.First(), *pNext; pChild != nullptr; pChild = pNext) {
-                pNext = PaneList::Next(pChild);
-                mChildList.Erase(pChild);
-                if (!pChild->IsUserAllocated()) {
-                    pChild->~Pane();
-                    Layout::FreeMemory(pChild);
-                }
-            }
-
             UnbindAnimationSelf(0);
-
-            if (mpMaterial && !mpMaterial->IsUserAllocated()) {
-                mpMaterial->~Material();
-                Layout::FreeMemory(mpMaterial);
-            }
         }
 
         void Pane::Init() {
             mKind = UiPaneKind_Pane;
             mpParent = NULL;
             mpMaterial = NULL;
-            mbUserAllocated = false;
         }
 
         void Pane::SetName(const char* pName) {
             strncpy(mName, pName, 0x10);
             mName[0x10] = '\0';
+            mpLayout->TouchStructure();
         }
 
         void Pane::SetUserData(const char* pUserData) {
@@ -98,11 +97,16 @@ namespace nw4r {
         void Pane::AppendChild(Pane* pChild) {
             mChildList.PushBack(pChild);
             pChild->mpParent = this;
+            // Its world was built from another parent's.
+            pChild->mBuiltParentVersion = cNoVersion;
+            mpLayout->TouchStructure();
         }
 
         void Pane::RemoveChild(Pane* pChild) {
             mChildList.Erase(pChild);
             pChild->mpParent = nullptr;
+            pChild->mBuiltParentVersion = cNoVersion;
+            mpLayout->TouchStructure();
         }
 
         const ut::Color Pane::GetVtxColor(u32 idx) const {
@@ -177,95 +181,94 @@ namespace nw4r {
             return nullptr;
         }
 
-        void Pane::CalculateMtx(const DrawInfo& rInfo) {
-            if (!IsVisible() && !rInfo.IsInvisiblePaneCalculateMtx()) {
-                return;
-            }
-
-            math::MTX34 mtx1, mtx2;
-            math::MTX34 rotateMtx;
-
+        void Pane::CalculateMtxSelf(const DrawInfo& rInfo, f32& rContextAlpha, bool& rContextInfluenced, u32 rootVersion,
+                                    bool resetScreen) {
             math::VEC2 scale = mScale;
             if (rInfo.IsLocationAdjust() && IsLocationAdjust()) {
                 scale.x *= rInfo.GetLocationAdjustScale().x;
                 scale.y *= rInfo.GetLocationAdjustScale().y;
             }
 
-            NebulaMtxScale(mtx2, scale.x, scale.y, 1.0f);
+            const bool localChanged = !mLocalBuilt || !SameBits(&mTranslate.x, &mBuiltTranslate.x, 3) ||
+                                      !SameBits(&mRotate.x, &mBuiltRotate.x, 3) || !SameBits(&scale.x, &mBuiltScale.x, 2);
+            if (localChanged) {
+                math::MTX34 mtx1, mtx2;
+                math::MTX34 rotateMtx;
 
-            NebulaMtxRotRad(rotateMtx, 'x', NW4R_MATH_DEG_TO_RAD(mRotate.x));
-            NebulaMtxConcat(rotateMtx, mtx2, mtx1);
+                NebulaMtxScale(mtx2, scale.x, scale.y, 1.0f);
 
-            NebulaMtxRotRad(rotateMtx, 'y', NW4R_MATH_DEG_TO_RAD(mRotate.y));
-            NebulaMtxConcat(rotateMtx, mtx1, mtx2);
+                NebulaMtxRotRad(rotateMtx, 'x', NW4R_MATH_DEG_TO_RAD(mRotate.x));
+                NebulaMtxConcat(rotateMtx, mtx2, mtx1);
 
-            NebulaMtxRotRad(rotateMtx, 'z', NW4R_MATH_DEG_TO_RAD(mRotate.z));
-            NebulaMtxConcat(rotateMtx, mtx2, mtx1);
+                NebulaMtxRotRad(rotateMtx, 'y', NW4R_MATH_DEG_TO_RAD(mRotate.y));
+                NebulaMtxConcat(rotateMtx, mtx1, mtx2);
 
-            NebulaMtxTransApply(mtx1, mMtx, mTranslate.x, mTranslate.y, mTranslate.z);
+                NebulaMtxRotRad(rotateMtx, 'z', NW4R_MATH_DEG_TO_RAD(mRotate.z));
+                NebulaMtxConcat(rotateMtx, mtx2, mtx1);
 
-            if (mpParent != NULL) {
-                math::MTX34Mult(&mGlbMtx, &mpParent->mGlbMtx, &mMtx);
-            } else if (rInfo.IsMultipleViewMtxOnDraw()) {
-                mGlbMtx = mMtx;
-            } else {
-                math::MTX34Mult(&mGlbMtx, &rInfo.GetViewMtx(), &mMtx);
+                NebulaMtxTransApply(mtx1, mMtx, mTranslate.x, mTranslate.y, mTranslate.z);
+                mBuiltTranslate = mTranslate;
+                mBuiltRotate = mRotate;
+                mBuiltScale = scale;
+                mLocalBuilt = true;
             }
 
-            if (rInfo.IsInfluencedAlpha() && mpParent != NULL) {
-                mGlbAlpha = static_cast< u8 >((s32)(mAlpha * rInfo.GetGlobalAlpha()));
+            // A follow places the pane anew each pass; the world's version moves only when its bits do, so the
+            // children rebuild only then.
+            const u32 parentVersion = mpParent != NULL ? mpParent->mWorldVersion : rootVersion;
+            bool worldChanged = false;
+            if (localChanged || parentVersion != mBuiltParentVersion || mpFollow != nullptr) {
+                math::MTX34 world;
+                if (mpParent != NULL) {
+                    math::MTX34Mult(&world, &mpParent->mWorldMtx, &mMtx);
+                } else if (rInfo.IsMultipleViewMtxOnDraw()) {
+                    world = mMtx;
+                } else {
+                    math::MTX34Mult(&world, &rInfo.GetViewMtx(), &mMtx);
+                }
+                if (mpFollow != nullptr) {
+                    mpFollow->Follow(*this, world);
+                }
+                if (mWorldVersion == 0 || !SameBits(&world.m[0][0], &mWorldMtx.m[0][0], 12)) {
+                    mWorldMtx = world;
+                    mWorldVersion = mWorldVersion + 1 == cNoVersion ? 1 : mWorldVersion + 1;
+                    worldChanged = true;
+                }
+                mBuiltParentVersion = parentVersion;
+            }
+
+            if (worldChanged || resetScreen || !SameBits(&mScreenScale, &mBuiltScreenScale, 1)) {
+                mGlbMtx = mWorldMtx;
+                if (mScreenScale != 1.0f) {
+                    for (s32 row = 0; row < 2; row++) {
+                        for (s32 col = 0; col < 3; col++) {
+                            mGlbMtx.m[row][col] *= mScreenScale;
+                        }
+                    }
+                }
+                mBuiltScreenScale = mScreenScale;
+            }
+
+            // The alpha context comes in as the parent's children got it and leaves as this pane's children get it.
+            if (rContextInfluenced && mpParent != NULL) {
+                mGlbAlpha = static_cast< u8 >((s32)(mAlpha * rContextAlpha));
             } else {
                 mGlbAlpha = mAlpha;
             }
 
-            f32 glbAlpha = rInfo.GetGlobalAlpha();
-            bool influenced = rInfo.IsInfluencedAlpha();
-            bool modifyInfo = IsInfluencedAlpha() && mAlpha != 255;
-
-            if (modifyInfo) {
-                DrawInfo& rMtInfo = const_cast< DrawInfo& >(rInfo);
-                rMtInfo.SetGlobalAlpha(glbAlpha * mAlpha * (1.0f / 255.0f));
-                rMtInfo.SetInfluencedAlpha(true);
-            }
-
-            CalculateMtxChild(rInfo);
-
-            if (modifyInfo) {
-                DrawInfo& rMtInfo = const_cast< DrawInfo& >(rInfo);
-                rMtInfo.SetGlobalAlpha(glbAlpha);
-                rMtInfo.SetInfluencedAlpha(influenced);
-            }
-        }
-
-        void Pane::CalculateMtxChild(const DrawInfo& rInfo) {
-            for (Pane* pChild : mChildList) {
-                pChild->CalculateMtx(rInfo);
+            if (IsInfluencedAlpha() && mAlpha != 255) {
+                rContextAlpha = rContextAlpha * mAlpha * (1.0f / 255.0f);
+                rContextInfluenced = true;
             }
         }
 
         void Pane::Draw(const DrawInfo& rInfo) {
-            if (!IsVisible()) {
-                return;
-            }
-
-            MotionSignal::drawObject(mDrawSlot, 0);
-            DrawSelf(rInfo);
-            for (Pane* pChild : mChildList) {
-                pChild->Draw(rInfo);
+            if (mpLayout != nullptr) {
+                mpLayout->DrawBranch(this, rInfo);
             }
         }
 
         void Pane::DrawSelf(const DrawInfo& rInfo) {
-        }
-
-        void Pane::Animate(u32 option) {
-            AnimateSelf(option);
-
-            if (IsVisible() || !(option & 1)) {
-                for (Pane* pChild : mChildList) {
-                    pChild->Animate(option);
-                }
-            }
         }
 
         void Pane::AnimateSelf(u32 option) {
@@ -370,12 +373,12 @@ namespace nw4r {
             }
 
             case 1: {
-                base.x = -mSize.width / 2;
+                base.x = -GetDrawSize().width / 2;
                 break;
             }
 
             case 2: {
-                base.x = -mSize.width;
+                base.x = -GetDrawSize().width;
                 break;
             }
             }
@@ -388,12 +391,12 @@ namespace nw4r {
             }
 
             case 1: {
-                base.y = -mSize.height / 2;
+                base.y = -GetDrawSize().height / 2;
                 break;
             }
 
             case 2: {
-                base.y = -mSize.height;
+                base.y = -GetDrawSize().height;
                 break;
             }
             }

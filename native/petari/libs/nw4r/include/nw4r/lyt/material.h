@@ -30,10 +30,6 @@ namespace nw4r {
                 return mName;
             }
 
-            bool IsUserAllocated() const {
-                return mbUserAllocated;
-            }
-
             virtual ~Material();
             virtual bool Setup(bool, u8);
             virtual void BindAnimation(AnimTransform*);
@@ -169,7 +165,6 @@ namespace nw4r {
             detail::StorageNums mNum;
             void* mpStorage;
             char mName[21];
-            u8 mbUserAllocated;
             const UiFormData* mNativeForms;  // the cook's four forms in the layout file
             u8 mCoordMap[8];  // each texture coordinate's texture (the cook's; its size scales the coordinate)
             bool mHasStages;  // the shader combines more than the default of a material without its own

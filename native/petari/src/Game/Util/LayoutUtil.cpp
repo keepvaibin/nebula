@@ -301,7 +301,7 @@ void MR::hideScreen(LayoutActor* pActor) {
 }
 
 void MR::setFollowPos(const Vec2f* pFollowPos, const LayoutActor* pActor, const char* pPaneName) {
-    pActor->getLayoutManager()->getPaneCtrl(pPaneName)->mFollowPos = pFollowPos;
+    pActor->getLayoutManager()->getPaneCtrl(pPaneName)->setFollowPos(pFollowPos);
 }
 
 void MR::setFollowTypeReplace(const LayoutActor* pActor, const char* pPaneName) {

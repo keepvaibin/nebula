@@ -15,13 +15,15 @@ namespace nw4r {
 
         typedef UiList< detail::PaneLink > PaneLinkList;
 
+        class Layout;
+
+        // A layout's group: the panes the cook named for it, in order. It, its links and the container are the
+        // layout's arena objects (Layout::NewInArena) and go with it.
         class Group {
         public:
-            Group(const UiGroupData*, const ResBlockSet&);
+            Group(Layout&, const UiGroupData*, const ResBlockSet&);
 
             virtual ~Group();
-
-            void Init();
 
             const char* GetName() const {
                 return mName;
@@ -31,17 +33,9 @@ namespace nw4r {
                 return mPaneLinkList;
             }
 
-            inline void AppendPane(Pane*);
-
-            bool IsUserAllocated() const {
-                return mbUserAllocated;
-            }
-
             UiLink< Group > mLink;
             PaneLinkList mPaneLinkList;
             char mName[17];
-            u8 mbUserAllocated;
-            u8 mPadding[2];
         };
 
         typedef UiList< Group > GroupList;

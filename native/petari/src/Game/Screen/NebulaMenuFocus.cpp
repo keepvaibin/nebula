@@ -72,18 +72,18 @@ namespace {
         f32 y = 0.0f;
         switch (pPane->mBasePosition % 3) {
         case 0:
-            x = pPane->mSize.width / 2.0f;
+            x = pPane->GetDrawSize().width / 2.0f;
             break;
         case 2:
-            x = -pPane->mSize.width / 2.0f;
+            x = -pPane->GetDrawSize().width / 2.0f;
             break;
         }
         switch (pPane->mBasePosition / 3) {
         case 0:
-            y = -pPane->mSize.height / 2.0f;
+            y = -pPane->GetDrawSize().height / 2.0f;
             break;
         case 2:
-            y = pPane->mSize.height / 2.0f;
+            y = pPane->GetDrawSize().height / 2.0f;
             break;
         }
         const nw4r::math::MTX34& rMtx = pPane->mGlbMtx;

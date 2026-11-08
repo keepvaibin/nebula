@@ -3,7 +3,7 @@
 
 namespace nw4r {
     namespace lyt {
-        Bounding::Bounding(const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(pRes, rBlockSet) {
+        Bounding::Bounding(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(rLayout, pRes, rBlockSet) {
         }
 
         Bounding::~Bounding() {
