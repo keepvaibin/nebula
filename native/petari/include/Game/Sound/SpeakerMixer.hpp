@@ -38,6 +38,12 @@ public:
     NebulaAtomic< s32 > mShownState = STATE_NONE;
     NebulaAtomic< bool > mReleased = false;
 
+    // The audio thread's state and the game thread's view of it.
+    void setState(s32 state) {
+        mState = state;
+        mShownState = state;
+    }
+
     // The audio thread's.
     s32 mState = STATE_NONE;
     const s16* mWave = nullptr;

@@ -2,12 +2,12 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const f32 sSinRate0 = 0.003f;
-    static const f32 sSinRate1 = 0.0003f;
-    static const f32 sSinRate2 = 0.0025f;
-    static const f32 sMapCheckHeight = 400.0f;
-    static const f32 sMapWaveRateMin = 0.1f;
-    static const f32 sAlphaMin = 30.0f;
+    const f32 sSinRate0 = 0.003f;
+    const f32 sSinRate1 = 0.0003f;
+    const f32 sSinRate2 = 0.0025f;
+    const f32 sMapCheckHeight = 400.0f;
+    const f32 sMapWaveRateMin = 0.1f;
+    const f32 sAlphaMin = 30.0f;
 };  // namespace
 
 WaterPoint::WaterPoint(const Vec3f& rPos, const Vec3f& rUpVec, f32 coordAcrossRail, f32 coordOnRail, f32 height, f32 flowSpeedRate)

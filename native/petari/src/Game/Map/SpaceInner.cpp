@@ -15,7 +15,7 @@ SpaceInner::SpaceInner(const char* pName) : LiveActor(pName) {
 
 void SpaceInner::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    initModelManagerWithAnm("SpaceInner", 0, false);
+    initModelManagerWithAnm("SpaceInner", nullptr, false);
     MR::connectToSceneSky(this);
     initNerve(GET_NERVE(SpaceInner, HostTypeAppear));
     MR::invalidateClipping(this);
@@ -49,9 +49,5 @@ void SpaceInner::disappear() {
 }
 
 bool SpaceInner::isAppeared() const {
-    if (isNerve(GET_NERVE(SpaceInner, HostTypeAppear))) {
-        return MR::isBrkStopped(this);
-    }
-
-    return false;
+    return isNerve(GET_NERVE(SpaceInner, HostTypeAppear)) && MR::isBrkStopped(this);
 }

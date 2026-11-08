@@ -4,8 +4,8 @@
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const s32 sDefaultBlendTime = 30;
-    static const f32 sDefaultDistRef = 15.0f;
+    const s32 sDefaultBlendTime = 30;
+    const f32 sDefaultDistRef = 15.0f;
 };  // namespace
 
 LightPointCtrl::LightPointCtrl()

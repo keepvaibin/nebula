@@ -20,8 +20,8 @@ void GravityDustParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* p
     }
 
     offsetPosition.set(pParticle->mOffsetPosition);
-    u32 userWork = pParticle->getUserWork();
-    f32 speed = reinterpret_cast< f32& >(userWork);
+    // The particle's user word holds its speed's bits.
+    f32 speed = __builtin_bit_cast(f32, static_cast< u32 >(pParticle->getUserWork()));
     baseAxis.set(pParticle->mBaseAxis);
     baseAxis.scale(speed);
     Vec3f gravityVector(0.0f, 0.0f, 0.0f);
@@ -45,8 +45,7 @@ void GravityDustParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* p
         return;
     }
 
-    userWork = reinterpret_cast< u32& >(speed);
-    pParticle->setUserWork(userWork);
+    pParticle->setUserWork(__builtin_bit_cast(u32, speed));
 
     if (MR::isNearZero(baseAxis)) {
         return;

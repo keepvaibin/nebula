@@ -3,8 +3,8 @@
 #include "Game/Map/StageSwitch.hpp"
 
 SleepController::SleepController(const TableIter& rIter, SwitchEventListener* pListener)
-    : mSwitchEventListener(pListener), mSwitchIdInfo(), mIsOnSwitchByIdInfo() {
-    mSwitchIdInfo = StageSwitchFunction::createSwitchIdInfo("SW_SLEEP", rIter, false);
+    : mSwitchIdInfo(StageSwitchFunction::createSwitchIdInfo("SW_SLEEP", rIter, false)), mSwitchEventListener(pListener),
+      mIsOnSwitchByIdInfo() {
 }
 
 void SleepController::initSync() {
