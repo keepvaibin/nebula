@@ -28,7 +28,7 @@ class PlanetMapCreator : public NameObj {
 public:
     PlanetMapCreator(const char*);
 
-    CreatorFuncPtr getCreateFunc(const char*);
+    CreatorFuncPtr getCreateFunc(const char* pName);
     void createPlanetMapDataTable(Table*);
     void addTableData(const Table*, s32);
     PlanetMapData* getTableData(const char*) const;
@@ -54,5 +54,5 @@ public:
     static bool isLoadArchiveAfterScenarioSelected(const char*);
     static bool isRegisteredObj(const char*);
 
-    static CreatorFuncPtr getPlanetMapCreator(const char*);
+    static CreatorFuncPtr getPlanetMapCreator(const char* pName);
 };

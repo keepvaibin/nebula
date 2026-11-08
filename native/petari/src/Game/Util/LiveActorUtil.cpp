@@ -692,8 +692,8 @@ namespace MR {
         }
     }
 
-    void setGroupClipping(LiveActor* pActor, const TableIter& rIter, int a3) {
-        MR::getClippingDirector()->joinToGroupClipping(pActor, rIter, a3);
+    void setGroupClipping(LiveActor* pActor, const TableIter& rIter, int capacity) {
+        MR::getClippingDirector()->joinToGroupClipping(pActor, rIter, capacity);
     }
 
     void validateClipping(LiveActor* pActor) {
@@ -2558,10 +2558,10 @@ namespace MR {
         return pLod;
     }
 
-    Flag* createMapFlag(const char* pName, const char* pInfoName, const Vec3f* pPos, const Vec3f& rRot, f32 a5, f32 a6, f32 a7, s32 a8, s32 a9,
-                        f32 a10) {
+    Flag* createMapFlag(const char* pName, const char* pInfoName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height,
+                        s32 numPointsU, s32 numPointsV) {
         Flag* pFlag = new Flag(pName);
-        pFlag->setInfoPos(pInfoName, pPos, rRot, a5, a6, a7, a8, a9, a10);
+        pFlag->setInfoPos(pInfoName, pPos, rSide, stickLength, width, height, numPointsU, numPointsV);
         pFlag->initWithoutIter();
 
         return pFlag;

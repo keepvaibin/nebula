@@ -31,7 +31,7 @@ public:
     }
 
     WarpCube* getPairCube(const AreaObj* pObj);
-    void setInvalidateTimer(AreaObj* pAreaObj, u16 a2);
+    void setInvalidateTimer(AreaObj* pAreaObj, u16 timer);
     void startEventCamera(const AreaObj* pAreaObj);
     void endEventCamera();
 

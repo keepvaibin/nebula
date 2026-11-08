@@ -33,7 +33,7 @@ private:
 
 class ScenarioDataIter {
 public:
-    ScenarioDataIter(const ScenarioDataParser*, int);
+    ScenarioDataIter(const ScenarioDataParser*, int index);
 
     bool isEnd() const;
     void goNext();
@@ -65,8 +65,8 @@ public:
 
 namespace ScenarioDataFunction {
     ScenarioDataParser* getScenarioDataParser();
-    u32 getCurrentCommonLayers(const char*);
-    u32 getCurrentScenarioLayers(const char*, s32);
+    u32 getCurrentCommonLayers(const char* pZoneName);
+    u32 getCurrentScenarioLayers(const char* pZoneName, s32 scenarioNo);
 };  // namespace ScenarioDataFunction
 
 namespace MR {

@@ -160,11 +160,11 @@ public:
         mPointingAction = pReaction;
     }
 
-    inline void setDefaults4(const char* a1, const char* a2, const char* a3, const char* a4) {
-        mSpinAction = a4;
-        mReactionAction = a2;
-        mTrampleAction = a3;
-        mPointingAction = a1;
+    inline void setDefaults4(const char* pPointingAction, const char* pReactionAction, const char* pTrampleAction, const char* pSpinAction) {
+        mSpinAction = pSpinAction;
+        mReactionAction = pReactionAction;
+        mTrampleAction = pTrampleAction;
+        mPointingAction = pPointingAction;
     }
 
     inline void setDefaultsParam() {

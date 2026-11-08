@@ -175,11 +175,11 @@ bool StrayTico::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-bool StrayTico::requestCompleteDemo(const Vec3f& rParam1, const Vec3f& rParam2, f32 param3) {
+bool StrayTico::requestCompleteDemo(const Vec3f& rCenter, const Vec3f& rUp, f32 angle) {
     mDemoStartPos = mPosition;
-    mDemoCenter = rParam1;
-    mDemoUp = rParam2;
-    mDemoAngle = param3;
+    mDemoCenter = rCenter;
+    mDemoUp = rUp;
+    mDemoAngle = angle;
 
     MR::normalize(&mDemoUp);
     MR::makeAxisVerticalZX(&mDemoFront, mDemoUp);

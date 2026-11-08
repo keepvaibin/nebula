@@ -23,7 +23,7 @@ public:
     void setShadowDrop(const char*);
     void initShadow();
     void startGlad();
-    bool requestCompleteDemo(const Vec3f&, const Vec3f&, f32);
+    bool requestCompleteDemo(const Vec3f& rCenter, const Vec3f& rUp, f32 angle);
     void updateWarp();
     void updateChase();
     bool isEnableSpin() const;

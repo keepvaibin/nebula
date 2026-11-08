@@ -8,7 +8,7 @@ class RumbleChannel {
 public:
     void clear();
     void update();
-    void setPattern(const void*, const RumblePattern&, u32, bool);
+    void setPattern(const void* pOwner, const RumblePattern&, u32 serial, bool isLoop);
 
     const RumblePattern* mPattern;
     bool mIsLoop;
@@ -30,9 +30,9 @@ public:
     void update();
     void updateRumble();
     InputRumble* getRumbleInstance() const;
-    bool vibratePatternIfNotExist(const void*, const char*);
-    bool setRumblePatternIfNotExist(const void*, const RumblePattern&, bool);
-    bool findRubmlePattern(const void*, s32*, s32*, s32*, const RumblePattern&);
+    bool vibratePatternIfNotExist(const void* pOwner, const char* pPatternName);
+    bool setRumblePatternIfNotExist(const void* pOwner, const RumblePattern&, bool isLoop);
+    bool findRumblePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern&);
 
     PlayerInput* mPad;
     u8 mStrength;

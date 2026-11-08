@@ -652,9 +652,8 @@ namespace MR {
 
     bool isOnLuigiHiding() {
         s32 scenarioNo = MR::getCurrentSelectedScenarioNo();
-        bool v1 = scenarioNo != -1 && GameDataConst::isPowerStarLuigiHas(MR::getCurrentStageName(), scenarioNo);
 
-        if (v1) {
+        if (scenarioNo != -1 && GameDataConst::isPowerStarLuigiHas(MR::getCurrentStageName(), scenarioNo)) {
             return true;
         }
 
@@ -667,9 +666,8 @@ namespace MR {
         }
 
         s32 scenarioNo = MR::getCurrentSelectedScenarioNo();
-        bool v1 = scenarioNo != -1 && GameDataConst::isPowerStarLuigiHas(MR::getCurrentStageName(), scenarioNo);
 
-        if (v1) {
+        if (scenarioNo != -1 && GameDataConst::isPowerStarLuigiHas(MR::getCurrentStageName(), scenarioNo)) {
             return true;
         }
 

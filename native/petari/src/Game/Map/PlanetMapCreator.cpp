@@ -298,8 +298,8 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
     return false;
 }
 
-CreatorFuncPtr PlanetMapCreatorFunction::getPlanetMapCreator(const char* pParam1) {
-    return MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getCreateFunc(pParam1);
+CreatorFuncPtr PlanetMapCreatorFunction::getPlanetMapCreator(const char* pName) {
+    return MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getCreateFunc(pName);
 }
 
 bool PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(const char* pArchive) {

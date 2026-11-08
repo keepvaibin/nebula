@@ -12,7 +12,7 @@ public:
     CometEventKeeper();
 
     void init();
-    bool isStartEvent(const char*) const;
+    bool isStartEvent(const char* pCometName) const;
     void startCometEventIfExist();
     void endCometEvent();
     static u32 getTimeLimitFromTable(const GalaxyTimeLimitInfo*, int);

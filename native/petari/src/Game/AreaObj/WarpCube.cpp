@@ -37,10 +37,10 @@ WarpCube* WarpCubeMgr::getPairCube(const AreaObj* pObj) {
     return nullptr;
 }
 
-void WarpCubeMgr::setInvalidateTimer(AreaObj* pAreaObj, u16 a2) {
+void WarpCubeMgr::setInvalidateTimer(AreaObj* pAreaObj, u16 timer) {
     WarpCube* pWarpCube = static_cast< WarpCube* >(pAreaObj);
 
-    pWarpCube->mInvalidateTimer = a2;
+    pWarpCube->mInvalidateTimer = timer;
     pWarpCube->mIsValid = false;
 }
 
@@ -119,11 +119,11 @@ void WarpCube::init(const TableIter& rIter) {
 
     mCameraInfo = new ActorCameraInfo(rIter);
 
-    s32 arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
+    s32 cameraIndex;
+    MR::getPlacementArg0WithInit(rIter, &cameraIndex);
 
     char eventName[0x100];
-    nebula_sprintf(eventName, "ワープカメラ %d-%c", groupID, arg0 + 65);
+    nebula_snprintf(eventName, sizeof(eventName), "ワープカメラ %d-%c", groupID, 'A' + cameraIndex);
 
     MR::declareEventCamera(mCameraInfo, eventName);
 

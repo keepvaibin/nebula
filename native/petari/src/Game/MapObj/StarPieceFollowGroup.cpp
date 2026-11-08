@@ -27,10 +27,10 @@ StarPieceFollowGroup::StarPieceFollowGroup(const char* pName)
 
 void StarPieceFollowGroup::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    if (arg0 != -1) {
-        mNumPiecesTotal = arg0;
+    s32 numPieces = -1;
+    MR::getPlacementArg0NoInit(rIter, &numPieces);
+    if (numPieces != -1) {
+        mNumPiecesTotal = numPieces;
     }
 
     MR::getPlacementArg1NoInit(rIter, &mTimeLimit);

@@ -91,7 +91,7 @@ namespace MR {
     void setClippingFarMax(LiveActor*);
     void setClippingFar(LiveActor*, f32);
 
-    void setGroupClipping(LiveActor*, const TableIter&, int);
+    void setGroupClipping(LiveActor*, const TableIter&, int capacity);
     void validateClipping(LiveActor*);
     void invalidateClipping(LiveActor*);
 
@@ -428,7 +428,8 @@ namespace MR {
     LodCtrl* createLodCtrlPlanet(LiveActor*, const TableIter&, f32);
     LodCtrl* createLodCtrlMapObj(LiveActor*, const TableIter&, f32);
 
-    Flag* createMapFlag(const char*, const char*, const Vec3f*, const Vec3f&, f32, f32, f32, s32, s32, f32);
+    Flag* createMapFlag(const char* pName, const char* pInfoName, const Vec3f* pPos, const Vec3f& rSide, f32 stickLength, f32 width, f32 height,
+                        s32 numPointsU, s32 numPointsV);
 
     void stopSceneAtStep(const LiveActor*, s32, s32);
 
