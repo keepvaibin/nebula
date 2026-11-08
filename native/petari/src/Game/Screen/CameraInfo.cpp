@@ -83,7 +83,7 @@ void CameraInfo::exeAppear() {
         MR::startAnim(this, "Appear", 0);
         hideCrossLineAll();
 
-        _25 = true;
+        mCanSkipAppearAnim = true;
         mStep = 0;
     }
 
@@ -166,13 +166,13 @@ void CameraInfo::hideCrossLineAll() {
 }
 
 bool CameraInfo::tryAnimShortCut() {
-    if (!_25) {
+    if (!mCanSkipAppearAnim) {
         return false;
     }
 
     MR::setAnimFrameAndStop(this, MR::getAnimFrameMax(this, 1), 1);
 
-    _25 = false;
+    mCanSkipAppearAnim = false;
 
     return true;
 }

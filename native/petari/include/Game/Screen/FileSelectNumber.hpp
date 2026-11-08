@@ -44,6 +44,5 @@ public:
 
 private:
     s32 mNumber;
-    u8 _24[8];
     FileSelectNumberSub::SelectAnimController* mSelectAnimCtrl;
 };

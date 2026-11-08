@@ -10,17 +10,12 @@
 #include "Game/Util/SystemUtil.hpp"
 
 namespace {
-    // static const _32 hFlashShiftNum =
-    // static const _32 hTexSpeed =
-    // static const _32 hTexRate =
-    // static const _32 hDrawHalfWidth =
     static const f32 sMinWidth = 6.0f;
     static const f32 sMaxWidth = 32.0f;
     static const f32 sMinLineWidthDistance = 40.0f;
     static const f32 sMaxLineWidthDistance = 400.0f;
     static const f32 hDefaultLength = 80.0f;
     static const f32 hDefaultWidth = 30.0f;
-    // static const _32 h16x9ScaleX =
 };  // namespace
 
 namespace NrvStarPointerCommandStream {
@@ -33,12 +28,11 @@ namespace {
 };  // namespace
 
 StarPointerCommandStream::StarPointerCommandStream(const Vec2f* pScreenPos)
-    : LayoutActor("スターポインタ指示線", true), _20(false), mOffScreenTime(), _28(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
+    : LayoutActor("スターポインタ指示線", true), mOffScreenTime(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
 }
 
 void StarPointerCommandStream::start(const Vec3f* pPos, bool b) {
     mWorldPos = pPos;
-    _20 = b;
     MR::showLayout(this);
     MR::startAnim(this, "Wait", 0);
     Vec2f screenPos;
@@ -58,7 +52,6 @@ void StarPointerCommandStream::hide() {
 
 void StarPointerCommandStream::clear() {
     mWorldPos = nullptr;
-    _20 = false;
 }
 
 void StarPointerCommandStream::init(const TableIter& rIter) {
@@ -77,7 +70,6 @@ void StarPointerCommandStream::init(const TableIter& rIter) {
 void StarPointerCommandStream::control() {
     if (MR::isStarPointerInScreen(mPadChannel)) {
         mOffScreenTime = 0;
-        _28 -= 0.05f;
     } else {
         mOffScreenTime++;
         if ((mOffScreenTime & 0x10) != 0 && (mOffScreenTime & 0x0F) == 0) {

@@ -74,6 +74,6 @@ public:
     GalaxyMapIcon* mPointingIcon;
     GalaxyMapTitle* mTitle;
     const char* mGalaxyName;
-    bool _70;
-    bool _71;
+    bool mIsPointingNew;  // the pointed galaxy icon is new
+    bool mIsFocusEnabled;  // pointing at an icon may focus it
 };

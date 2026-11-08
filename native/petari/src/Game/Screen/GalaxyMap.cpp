@@ -42,7 +42,7 @@ namespace {
 
 GalaxyMap::GalaxyMap()
     : LayoutActor("ギャラクシー・天文台マップ", true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
-      _70(), _71(true) {
+      mIsPointingNew(), mIsFocusEnabled(true) {
 }
 
 template <>
@@ -272,7 +272,7 @@ void GalaxyMap::setModeNormal() {
     }
     mTitle->setModeNormal();
 
-    _71 = true;
+    mIsFocusEnabled = true;
 }
 
 void GalaxyMap::setModeNewGalaxyDiscover() {
@@ -287,7 +287,7 @@ void GalaxyMap::setModeNewGalaxyDiscover() {
     }
     mTitle->setModeHideInformation();
 
-    _71 = false;
+    mIsFocusEnabled = false;
 }
 
 void GalaxyMap::setModeNewTicoGalaxyDiscover() {
@@ -302,7 +302,7 @@ void GalaxyMap::setModeNewTicoGalaxyDiscover() {
     }
     mTitle->setModeHideInformation();
 
-    _71 = false;
+    mIsFocusEnabled = false;
 }
 
 void GalaxyMap::setModeNewDomeDiscover() {
@@ -317,7 +317,7 @@ void GalaxyMap::setModeNewDomeDiscover() {
     }
     mTitle->setModeHideInformation();
 
-    _71 = false;
+    mIsFocusEnabled = false;
 }
 
 void GalaxyMap::setModeTicoCometPray() {
@@ -332,7 +332,7 @@ void GalaxyMap::setModeTicoCometPray() {
     }
     mTitle->setModeHideInformation();
 
-    _71 = false;
+    mIsFocusEnabled = false;
 }
 
 void GalaxyMap::setModeCapture() {
@@ -453,7 +453,7 @@ void GalaxyMap::exeFadeinAstroMap() {
 
 void GalaxyMap::exeShowDetail() {
     if (MR::isFirstStep(this)) {
-        mGalaxyDetail->startDisplay(mGalaxyName, _70);
+        mGalaxyDetail->startDisplay(mGalaxyName, mIsPointingNew);
         for (auto& item : mIcon) {
             item->deactivatePointing();
         }
@@ -627,7 +627,7 @@ void GalaxyMap::initTicoIcon() {
 }
 
 bool GalaxyMap::tryFocusIn() {
-    if (!_71) {
+    if (!mIsFocusEnabled) {
         mGalaxyName = nullptr;
         mPointingIcon = nullptr;
 
@@ -647,7 +647,7 @@ bool GalaxyMap::tryFocusIn() {
         }
 
         if (pointingGalaxyIcon != nullptr) {
-            _70 = pointingGalaxyIcon->isStatusNew();
+            mIsPointingNew = pointingGalaxyIcon->isStatusNew();
 
             MR::startSystemSE("SE_SY_GALAMAP_ICON_POINT");
         }

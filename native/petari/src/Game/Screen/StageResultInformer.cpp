@@ -113,7 +113,7 @@ void DisplayInformationForResult::exeIdle() {
 }
 
 StageResultInformer::StageResultInformer()
-    : LayoutActor("リザルト通知", true), mInformationDisplayer(), mSequenceChecker(), mIconAButton(), _30(), _31() {
+    : LayoutActor("リザルト通知", true), mInformationDisplayer(), mSequenceChecker(), mIconAButton(), mHasBufferedDecide(), mIsNewBestCoin() {
     mInformationDisplayer = new DisplayInformationForResult(this);
     mSequenceChecker = new StageResultSequenceChecker();
 }
@@ -185,7 +185,7 @@ void StageResultInformer::exeCountUpPowerStar() {
     }
 
     if (isTriggerDecide()) {
-        _30 = true;
+        mHasBufferedDecide = true;
     }
 
     MR::setNerveAtAnimStopped(this, GET_NERVE_ANON(StageResultInformerDisplayGetPowerStar), 0);
@@ -402,7 +402,7 @@ void StageResultInformer::initBestScoreWindow() {
         MR::hidePane(this, ::cNameBestCoinRoot);
     }
 
-    _31 = newMax;
+    mIsNewBestCoin = newMax;
 }
 
 void StageResultInformer::decideNextNerve() {
@@ -415,7 +415,7 @@ void StageResultInformer::decideNextNerve() {
 
     if (afterStar && mSequenceChecker->isJustCompleteGalaxy()) {
         setNerve(GET_NERVE_ANON(StageResultInformerShowGalaxyComplete));
-    } else if (afterComplete && _31) {
+    } else if (afterComplete && mIsNewBestCoin) {
         setNerve(GET_NERVE_ANON(StageResultInformerAppearUpdateBestScore));
     } else if (afterScore && GameSequenceFunction::isNeedToReflectStageResultSequenceStarPiece()) {
         setNerve(GET_NERVE_ANON(StageResultInformerAppearGetStarPiece));
@@ -431,8 +431,8 @@ void StageResultInformer::decideNextNerve() {
 }
 
 bool StageResultInformer::tryWaitSystemPadTriggerDecide(const Nerve* pNerve) {
-    if (isTriggerDecide() || _30) {
-        _30 = false;
+    if (isTriggerDecide() || mHasBufferedDecide) {
+        mHasBufferedDecide = false;
 
         setNerve(pNerve);
         MR::startSystemSE("SE_SY_TALK_OK");
@@ -445,7 +445,7 @@ bool StageResultInformer::tryWaitSystemPadTriggerDecide(const Nerve* pNerve) {
 
 bool StageResultInformer::tryWaitIntervalBeforeKeyWait(const Nerve* pNerve, int step) {
     if (isTriggerDecide()) {
-        _30 = true;
+        mHasBufferedDecide = true;
     }
 
     if (MR::isStep(this, step)) {

@@ -15,7 +15,7 @@ public:
     virtual void control();
 
 private:
-    f32 _8C;
+    f32 mHazeDistance;  // distance in front of the camera
 };
 
 class HeatHazeDirector : public NameObj {

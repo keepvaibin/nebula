@@ -62,26 +62,25 @@ namespace {
 };  // namespace
 
 DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
-    : ImageEffectBase(pName), _14(), mFrameKey(), mFrameDepthKey(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
+    : ImageEffectBase(pName), mFrameKey(), mFrameDepthKey(), mHalfTexture(), mQuarterTexture(), mDepthRampTexture(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createDOFTexture();
-    _14 = MR::getImageEffectResource()->_0;
     mFrameKey = ImageEffectLocalUtil::createFrameKey();
     mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
-    _20 = MR::getImageEffectResource()->_8;
-    _24 = MR::getImageEffectResource()->_C;
-    _28 = JUTTexture::createPixelTarget(128, 2);
-    _28->mWrapS = NEBULA_WRAP_CLAMP;
-    _28->mWrapT = NEBULA_WRAP_CLAMP;
-    _28->mMinType = NEBULA_FILTER_LINEAR;
-    _28->mMagType = NEBULA_FILTER_LINEAR;
-    mQuarter = JUTTexture::createTarget(_24->mShareAcross, _24->mShareDown);
+    mHalfTexture = MR::getImageEffectResource()->_8;
+    mQuarterTexture = MR::getImageEffectResource()->_C;
+    mDepthRampTexture = JUTTexture::createPixelTarget(128, 2);
+    mDepthRampTexture->mWrapS = NEBULA_WRAP_CLAMP;
+    mDepthRampTexture->mWrapT = NEBULA_WRAP_CLAMP;
+    mDepthRampTexture->mMinType = NEBULA_FILTER_LINEAR;
+    mDepthRampTexture->mMagType = NEBULA_FILTER_LINEAR;
+    mQuarter = JUTTexture::createTarget(mQuarterTexture->mShareAcross, mQuarterTexture->mShareDown);
     mQuarter->mWrapS = NEBULA_WRAP_CLAMP;
     mQuarter->mWrapT = NEBULA_WRAP_CLAMP;
     mQuarter->mMinType = NEBULA_FILTER_LINEAR;
     mQuarter->mMagType = NEBULA_FILTER_LINEAR;
-    mBlurScratch = JUTTexture::createTarget(_24->mShareAcross, _24->mShareDown);
+    mBlurScratch = JUTTexture::createTarget(mQuarterTexture->mShareAcross, mQuarterTexture->mShareDown);
     mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
     mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
     mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
@@ -93,12 +92,12 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    Frame::targetBeginPixels(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
+    Frame::targetBeginPixels(mDepthRampTexture->mImage, mDepthRampTexture->getWidth(), mDepthRampTexture->getHeight(), 0);
     drawZAlphaTex();
-    Frame::targetEnd(_28->mImage, NEBULA_TARGET_RED);
+    Frame::targetEnd(mDepthRampTexture->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    ImageEffectLocalUtil::drawFrameDepth(_20, mFrameDepthKey);
+    ImageEffectLocalUtil::drawFrameDepth(mHalfTexture, mFrameDepthKey);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();
@@ -155,10 +154,10 @@ void DepthOfFieldBlur::createBlurTexture() const {
     ImageEffectLocalUtil::drawTexture(mFrameKey, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setupDrawTexture();
     Frame::targetEnd(mQuarter->mImage, NEBULA_TARGET_RGB);
-    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
+    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, mQuarterTexture, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {
-    ImageEffectLocalUtil::drawQuad(finalMaterial(_24, _28, _20, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f))));
+    ImageEffectLocalUtil::drawQuad(finalMaterial(mQuarterTexture, mDepthRampTexture, mHalfTexture, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f))));
     ImageEffectLocalUtil::setupDrawTexture();
 }

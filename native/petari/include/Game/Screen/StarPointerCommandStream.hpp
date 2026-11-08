@@ -24,9 +24,7 @@ public:
         mColor = color;
     }
 
-    bool _20;
     s32 mOffScreenTime;
-    f32 _28;
     const Vec2f* mScreenPos;
     const Vec3f* mWorldPos;
     Vec2f mFollowPos;

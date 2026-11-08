@@ -25,10 +25,10 @@ public:
     void exeWait();
 
     const char* mGalaxyName;
-    bool _24;
-    bool _25;
+    bool mIsShownThisFrame;  // show() ran since the last control()
+    bool mIsAppearNow;  // last show() skipped the ready wait
     bool mShowBalloonNozzle;
     GalaxyNamePlatePrioritied* mDrawerEntry;
-    s32 _2C;
-    bool _30;
+    s32 mStateFrame;  // frame of the Unknown anim: the galaxy state (1 is new)
+    bool mPlayNewSe;  // the new-galaxy sound has not played yet
 };

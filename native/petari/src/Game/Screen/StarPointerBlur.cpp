@@ -22,7 +22,7 @@ StarPointerBlur::~StarPointerBlur() {
 
 StarPointerBlur::StarPointerBlur(JUTTexture* pTexture)
     : NameObj("スターポインタ用ブラー"), mTexture(pTexture), mPadChannel(PLAYER_1), mMainColor(nullptr), mSubColor(nullptr), mBlurPoints(nullptr),
-      mBlurThicks(nullptr), mBlurTexCoords(nullptr), mNumHiddenPoints(0), _2C(false), _2D(false), _30(0), _34(0), _38(0), _3C(0) {
+      mBlurThicks(nullptr), mBlurTexCoords(nullptr), mNumHiddenPoints(0) {
     mBlurPoints = new BlurPoint[BLUR_POINT_NUM];
     mBlurThicks = new f32[BLUR_POINT_NUM];
     mBlurTexCoords = new f32[BLUR_POINT_NUM];

@@ -12,6 +12,6 @@ public:
     void showBlink();
 
 private:
-    LayoutActor* _20;
-    const char* _24;
+    LayoutActor* mTargetLayout;  // layout whose pane this icon follows
+    const char* mTargetPaneName;  // the pane it follows
 };

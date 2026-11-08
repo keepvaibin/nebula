@@ -27,7 +27,7 @@ public:
     bool isCurrentAlive() const;
 
 private:
-    bool _1C;
+    bool mIsCapturing;  // the game screen capture is held
 };
 
 namespace MR {

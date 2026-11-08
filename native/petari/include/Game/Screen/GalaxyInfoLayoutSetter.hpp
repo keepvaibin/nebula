@@ -34,6 +34,6 @@ public:
 
     LayoutActor* mHost;
     Ui::TexMap** mReplaceTexture;
-    Ui::TexMap* mUnknownTexture;
+    Ui::TexMap* mHiddenGalaxyTexture;  // picture shown for a galaxy that is not open yet
     IconComet* mIconComet;
 };

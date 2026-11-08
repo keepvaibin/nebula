@@ -42,10 +42,6 @@ void StarPointerDirector::update() {
 
     mIsOSPointerMode = false;
 
-    if (_18 < 0) {
-        _18++;
-    }
-
     mTransHolder->movement();
 
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {

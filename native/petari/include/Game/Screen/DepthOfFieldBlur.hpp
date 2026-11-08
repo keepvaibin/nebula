@@ -17,12 +17,11 @@ public:
     void createBlurTexture() const;
     void drawFinal() const;
 
-    JUTTexture* _14;
     JUTTexture* mFrameKey;       // the frame, in the blur source's pass
     JUTTexture* mFrameDepthKey;  // its depth, in the depth pass
-    JUTTexture* _20;
-    JUTTexture* _24;
-    JUTTexture* _28;
+    JUTTexture* mHalfTexture;  // half-size frame, filled with the depth
+    JUTTexture* mQuarterTexture;  // quarter-size frame; the blur result
+    JUTTexture* mDepthRampTexture;  // 128x2 ramp from distance to blur strength
     JUTTexture* mQuarter;  // the blur's source
     JUTTexture* mBlurScratch;
     f32 mIntensity;

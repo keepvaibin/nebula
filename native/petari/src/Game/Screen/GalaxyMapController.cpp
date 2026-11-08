@@ -335,7 +335,7 @@ void GalaxyMapController::exeAppearGalaxyMap() {
 
 void GalaxyMapController::exeDisplayGalaxyMap() {
     if (MR::isFirstStep(this)) {
-        mMap->_71 = true;
+        mMap->mIsFocusEnabled = true;
     }
 
     if (!mMap->isShowDetail() && tryPushBackButton()) {
@@ -359,7 +359,7 @@ void GalaxyMapController::exeAppearAstroMap() {
 
 void GalaxyMapController::exeDisplayAstroMap() {
     if (MR::isFirstStep(this)) {
-        mMap->_71 = true;
+        mMap->mIsFocusEnabled = true;
     }
 
     if (!mMap->isShowDetail() && tryPushBackButton()) {
@@ -373,7 +373,7 @@ void GalaxyMapController::exeReadyPowerStarList() {
     if (MR::isFirstStep(this)) {
         mWipe->forceOpen();
         mWipe->wipe(::sMapFadeinoutFrame);
-        mMap->_71 = false;
+        mMap->mIsFocusEnabled = false;
 
         mMapSelectButton->changeToStarList();
     }
@@ -584,7 +584,7 @@ bool GalaxyMapController::tryAppearGalaxyMap() {
 
 bool GalaxyMapController::tryDisplayAndKeyWait() {
     if (MR::isFirstStep(this)) {
-        mMap->_71 = false;
+        mMap->mIsFocusEnabled = false;
     }
 
 

@@ -37,6 +37,6 @@ public:
     CounterLayoutAppearer* mLayoutAppearer;
     CountUpPaneRumbler* mPaneRumbler;
     Vec2f mFollowPos;
-    s32 _3C;
+    s32 mForcedAppear;  // 0 none, 1 forced up, 2 forced up in the centre
     int mMode;
 };

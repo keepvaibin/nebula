@@ -36,7 +36,7 @@ namespace {
 };  // namespace
 
 Manual2P::Manual2P(const char* pName)
-    : LayoutActor(pName, true), mPageIndex(), mPageNum(), mLeftPaneCtrl(), mRightPaneCtrl(), _30(true), _31(true), mBackButton() {
+    : LayoutActor(pName, true), mPageIndex(), mPageNum(), mLeftPaneCtrl(), mRightPaneCtrl(), mCanScrollLeft(true), mCanScrollRight(true), mBackButton() {
 }
 
 void Manual2P::init(const TableIter& rIter) {
@@ -101,7 +101,7 @@ void Manual2P::exeWait() {
         MR::startAnim(this, "Wait", 0);
     }
 
-    if (_30) {
+    if (mCanScrollLeft) {
         mLeftPaneCtrl->trySelect();
 
         if (mLeftPaneCtrl->mIsSelected) {
@@ -119,7 +119,7 @@ void Manual2P::exeWait() {
         }
     }
 
-    if (_31) {
+    if (mCanScrollRight) {
         mRightPaneCtrl->trySelect();
 
         if (mRightPaneCtrl->mIsSelected) {
@@ -254,24 +254,24 @@ void Manual2P::reflectPageIndex() {
         ButtonPaneController* pPaneCtrl = mLeftPaneCtrl;
         MR::startPaneAnim(this, pPaneCtrl->mPaneName, "ButtonOff", 1);
         MR::setPaneAnimFrameAndStop(this, pPaneCtrl->mPaneName, 1.0f, 1);
-        _30 = false;
+        mCanScrollLeft = false;
     } else {
         ButtonPaneController* pPaneCtrl = mLeftPaneCtrl;
         MR::startPaneAnim(this, pPaneCtrl->mPaneName, "ButtonOff", 1);
         MR::setPaneAnimFrameAndStop(this, pPaneCtrl->mPaneName, 0.0f, 1);
-        _30 = true;
+        mCanScrollLeft = true;
     }
 
     if (mPageIndex == (mPageNum - 1)) {
         ButtonPaneController* pPaneCtrl = mRightPaneCtrl;
         MR::startPaneAnim(this, pPaneCtrl->mPaneName, "ButtonOff", 1);
         MR::setPaneAnimFrameAndStop(this, pPaneCtrl->mPaneName, 1.0f, 1);
-        _31 = false;
+        mCanScrollRight = false;
     } else {
         ButtonPaneController* pPaneCtrl = mRightPaneCtrl;
         MR::startPaneAnim(this, pPaneCtrl->mPaneName, "ButtonOff", 1);
         MR::setPaneAnimFrameAndStop(this, pPaneCtrl->mPaneName, 0.0f, 1);
-        _31 = true;
+        mCanScrollRight = true;
     }
 }
 

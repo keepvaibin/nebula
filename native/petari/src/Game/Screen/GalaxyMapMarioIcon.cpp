@@ -2,7 +2,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 
-GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("マリオ", true), _20(pParam1), _24(pParam2) {
+GalaxyMapMarioIcon::GalaxyMapMarioIcon(LayoutActor* pParam1, const char* pParam2) : LayoutActor("マリオ", true), mTargetLayout(pParam1), mTargetPaneName(pParam2) {
 }
 
 void GalaxyMapMarioIcon::init(const TableIter& rIter) {
@@ -27,6 +27,6 @@ void GalaxyMapMarioIcon::showBlink() {
 }
 
 void GalaxyMapMarioIcon::control() {
-    MR::setLayoutScalePosAtPaneScaleTrans(this, _20, _24);
-    MR::setLayoutAlpha(this, MR::getPaneAlpha(_20, _24));
+    MR::setLayoutScalePosAtPaneScaleTrans(this, mTargetLayout, mTargetPaneName);
+    MR::setLayoutAlpha(this, MR::getPaneAlpha(mTargetLayout, mTargetPaneName));
 }

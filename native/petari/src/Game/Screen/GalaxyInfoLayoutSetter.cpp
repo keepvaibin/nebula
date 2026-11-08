@@ -34,7 +34,7 @@ namespace {
     }
 };  // namespace
 
-GalaxyInfoLayoutSetter::GalaxyInfoLayoutSetter(LayoutActor* pHost) : mHost(pHost), mReplaceTexture(), mUnknownTexture(), mIconComet() {
+GalaxyInfoLayoutSetter::GalaxyInfoLayoutSetter(LayoutActor* pHost) : mHost(pHost), mReplaceTexture(), mHiddenGalaxyTexture(), mIconComet() {
     MR::setInfluencedAlphaToChild(pHost);
     initReplaceTexture();
 
@@ -102,7 +102,7 @@ void GalaxyInfoLayoutSetter::initReplaceTexture() {
         mReplaceTexture[i] = MR::createLytTexMap("GalaxyInfoTexture", resName);
 
         if (MR::isEqualStringCase("GalaxyInfoTextureUnknown.bti", resName)) {
-            mUnknownTexture = mReplaceTexture[i];
+            mHiddenGalaxyTexture = mReplaceTexture[i];
         }
     }
 }
@@ -134,7 +134,7 @@ void GalaxyInfoLayoutSetter::updateInfoWithoutComet(const char* pGalaxyName, Gal
     if (isOpened) {
         replaceTexture(pGalaxyName);
     } else {
-        MR::replacePaneTexture(mHost, "PicDummy", mUnknownTexture, 0);
+        MR::replacePaneTexture(mHost, "PicDummy", mHiddenGalaxyTexture, 0);
     }
 
     if (isOpened) {

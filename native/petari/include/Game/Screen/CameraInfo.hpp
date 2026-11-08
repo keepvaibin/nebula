@@ -31,5 +31,5 @@ public:
 private:
     s32 mStep;
     bool mIsActive;
-    bool _25;
+    bool mCanSkipAppearAnim;  // the appear animation is playing and can be cut to its end
 };

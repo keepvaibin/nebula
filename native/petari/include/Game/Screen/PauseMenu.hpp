@@ -34,15 +34,14 @@ public:
     void exeGameDataSave();
     void exeLuigiLetter();
 
-    ButtonPaneController* _20;
-    ButtonPaneController* _24;
-    Vec2f _28;
-    SysInfoWindow* _30;
+    ButtonPaneController* mUpperButton;  // pane NBackUp
+    ButtonPaneController* mLowerButton;  // pane NBackDown
+    SysInfoWindow* mConfirmWindow;  // the yes/no confirm
     LuigiLetter* mLuigiLetter;
-    ButtonPaneController* _38;
+    ButtonPaneController* mLetterButton;
     Vec2f mStageTitleOffset;
     Vec2f mCoinNumPos;
     Vec2f mStarPieceNumPos;
-    bool _54;
+    bool mWasDefaultLayoutActive;  // restored on kill
     NebulaPauseSettingsButton* mSettingsButton;  // Nebula's settings menu, from the lower band
 };
