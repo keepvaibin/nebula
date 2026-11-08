@@ -52,21 +52,21 @@ bool MarioSlider::postureCtrl(MtxPtr) {
 
 void MarioSlider::calcWallHit() {
     if (getPlayer()->mMovementStates.sideWall) {
-        Vec3f stack_50(mVelocity);
-        f32 sideDot = MR::vecKillElement(stack_50, *getPlayer()->mSideWallTriangle->getNormal(0), &stack_50);
+        Vec3f alongSideWall(mVelocity);
+        f32 sideDot = MR::vecKillElement(alongSideWall, *getPlayer()->mSideWallTriangle->getNormal(0), &alongSideWall);
 
         if (sideDot < 0.0f) {
             if (-sideDot < 10.0f) {
                 sideDot = -10.0f;
             }
 
-            mVelocity = stack_50 - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
+            mVelocity = alongSideWall - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
         }
     }
 
     if (getPlayer()->mMovementStates.frontWall) {
-        Vec3f stack_44(mVelocity);
-        f32 frontDot = MR::vecKillElement(stack_44, *getPlayer()->mFrontWallTriangle->getNormal(0), &stack_44);
+        Vec3f alongFrontWall(mVelocity);
+        f32 frontDot = MR::vecKillElement(alongFrontWall, *getPlayer()->mFrontWallTriangle->getNormal(0), &alongFrontWall);
 
         if (frontDot < 0.0f) {
             if (-frontDot < 10.0f) {
@@ -74,11 +74,11 @@ void MarioSlider::calcWallHit() {
             }
 
             f32 frontScale = 0.5f * frontDot;
-            mVelocity = stack_44 - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
+            mVelocity = alongFrontWall - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
 
-            Vec3f stack_38(mVelocity);
-            MR::normalize(&stack_38);
-            getPlayer()->setFrontVecKeepUp(stack_38);
+            Vec3f newFront(mVelocity);
+            MR::normalize(&newFront);
+            getPlayer()->setFrontVecKeepUp(newFront);
         }
     }
 }

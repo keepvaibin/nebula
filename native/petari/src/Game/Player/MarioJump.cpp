@@ -751,10 +751,10 @@ void Mario::tryForcePowerJump(const Vec3f& rVec, bool a2) {
     mJumpKind = 0xD;
     mMovementStates.slipUpBlocked = true;
     mMovementStates.wallJump = false;
-    const bool _2FPrev = mMovementStates.forcedLaunch;
+    const bool forcedLaunchPrev = mMovementStates.forcedLaunch;
     mMovementStates.forcedLaunch = true;
     tryForceJump(rVec, true);
-    mMovementStates.forcedLaunch = _2FPrev;
+    mMovementStates.forcedLaunch = forcedLaunchPrev;
     mAirTimer = 0;
     mMovementStates.beeFly = false;
 

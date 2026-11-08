@@ -1328,7 +1328,7 @@ void Mario::checkHeadPoint() {
     bool swimSpin = false;
 
     if (isSwimming()) {
-        if (mSwim->check7Aand7C()) {
+        if (mSwim->isSpinning()) {
             swimSpin = true;
         }
     }

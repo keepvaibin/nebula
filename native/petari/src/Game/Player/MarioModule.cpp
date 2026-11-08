@@ -574,14 +574,14 @@ f32 MarioModule::calcPolygonAngleD(const Triangle* pTri) const {
 }
 
 f32 MarioModule::calcAngleD(const Vec3f& rVec) const {
-    f32 f31 = (MR::acosEx(-mActor->mMario->getAirGravityVec().dot(rVec)) / 3.14159f) * 180.0f;
-    if (MR::isNearZero(f31, 1.0f)) {
-        f31 = 0.0f;
+    f32 angleDeg = (MR::acosEx(-mActor->mMario->getAirGravityVec().dot(rVec)) / 3.14159f) * 180.0f;
+    if (MR::isNearZero(angleDeg, 1.0f)) {
+        angleDeg = 0.0f;
     }
-    if (MR::isNearZero(f31 - 90.0f, 1.0f)) {
-        f31 = 90.0f;
+    if (MR::isNearZero(angleDeg - 90.0f, 1.0f)) {
+        angleDeg = 90.0f;
     }
-    return f31;
+    return angleDeg;
 }
 
 Triangle* MarioModule::getTmpPolygon() const {

@@ -15,13 +15,13 @@ bool Mario::blown(const Vec3f& rVec) {
         return false;
     }
 
-    if (getCurrentStatus() == MarioStatus_13) {
+    if (getCurrentStatus() == MarioStatus_RecoveryOrWarp) {
         return false;
     }
 
     stopWalk();
 
-    mBlown->vecKillActor240(rVec);
+    mBlown->setVelocityOffGravity(rVec);
 
     mMovementStates.blown = true;
     mMovementStates.squat = false;
@@ -127,7 +127,7 @@ bool MarioBlown::update() {
         break;
     }
 
-    f32 dot = vecKillActor240(mVelocity);
+    f32 dot = setVelocityOffGravity(mVelocity);
 
     if (mVelocity.length() > 10.0f) {
         mVelocity.mult(0.5f);

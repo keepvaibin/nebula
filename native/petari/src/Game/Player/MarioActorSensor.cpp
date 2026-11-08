@@ -168,7 +168,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
                 mPunchSensorOn = true;
             }
 
-            if (mMario->isSwimming() && mMario->mSwim->check7Aand7C()) {
+            if (mMario->isSwimming() && mMario->mSwim->isSpinning()) {
                 mPunchSensorOn = true;
             }
 

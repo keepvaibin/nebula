@@ -113,22 +113,22 @@ bool MarioStick::update() {
     Mtx rotMtx;
     NebulaMtxRotAxisRad(rotMtx, &player->mSideVec, 0.01f * getStickY());
 
-    Vec3f stack_2C(mStickPos - mFlowerPos);
-    NebulaMtxMultVec(rotMtx, &stack_2C, &stack_2C);
+    Vec3f fromFlower(mStickPos - mFlowerPos);
+    NebulaMtxMultVec(rotMtx, &fromFlower, &fromFlower);
 
-    if (MR::diffAngleAbs(stack_2C, mFlowerUp) < 1.308997f) {
-        Vec3f stack_20(-stack_2C);
-        if (!MR::normalizeOrZero(&stack_20)) {
-            mPoseFront = stack_20;
+    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < 1.308997f) {
+        Vec3f front(-fromFlower);
+        if (!MR::normalizeOrZero(&front)) {
+            mPoseFront = front;
         }
 
-        getPlayer()->setFrontVecKeepSide(stack_20);
+        getPlayer()->setFrontVecKeepSide(front);
     }
 
     const f32 angle = 0.01f * -getStickX();
     const Vec3f* gravityVec = getPlayer()->getGravityVec();
     NebulaMtxRotAxisRad(secondRotMtx, gravityVec, angle);
-    NebulaMtxMultVec(secondRotMtx, &stack_2C, &stack_2C);
+    NebulaMtxMultVec(secondRotMtx, &fromFlower, &fromFlower);
 
     if (getStickP() > 0.0f) {
         changeAnimation("ハチ花移動");
@@ -136,15 +136,15 @@ bool MarioStick::update() {
         stopAnimation("ハチ花移動");
     }
 
-    if (MR::diffAngleAbs(stack_2C, mFlowerUp) < 1.308997f) {
-        Vec3f stack_14(-stack_2C);
-        if (!MR::normalizeOrZero(&stack_14)) {
-            mPoseFront = stack_14;
+    if (MR::diffAngleAbs(fromFlower, mFlowerUp) < 1.308997f) {
+        Vec3f secondFront(-fromFlower);
+        if (!MR::normalizeOrZero(&secondFront)) {
+            mPoseFront = secondFront;
         }
 
-        getPlayer()->setFrontVecKeepUp(stack_14);
-        stack_2C.setLength(mFlowerRadius);
-        mStickPos = stack_2C + mFlowerPos;
+        getPlayer()->setFrontVecKeepUp(secondFront);
+        fromFlower.setLength(mFlowerRadius);
+        mStickPos = fromFlower + mFlowerPos;
     }
 
     mPoseFront = getFrontVec();

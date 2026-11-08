@@ -650,7 +650,7 @@ void MarioActor::updateFace() {
         return;
     }
 
-    if (MR::isHiddenModel(this) || is481or482On() || mMario->mMovementStates.tornado || mDarkMaskOn) {
+    if (MR::isHiddenModel(this) || isHidden() || mMario->mMovementStates.tornado || mDarkMaskOn) {
         MR::hideModel(mFaceModel);
         return;
     }
@@ -724,7 +724,7 @@ void MarioActor::draw() const {
         mFootPrint->draw();
     }
 
-    if (!is481or482On() && !mPreWipeOn && !mDarkMaskOn) {
+    if (!isHidden() && !mPreWipeOn && !mDarkMaskOn) {
         if (mWallShadeOn) {
             drawWallShade(mWallShadePos, mWallShadeNormal, mWallShadeDist);
         }
