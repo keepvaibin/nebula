@@ -324,7 +324,7 @@ bool BombTeresa::requestDrift() {
     return false;
 }
 
-bool BombTeresa::tryCheseEnd() {
+bool BombTeresa::tryChaseEnd() {
     if (MR::isGreaterStep(this, 240) || MR::isPlayerElementModeTeresa() || isOutOfRange(2000.0f)) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait));
         return true;
@@ -424,14 +424,7 @@ void BombTeresa::exeShadowAppear() {
         MR::addVelocityToGravity(this, 1.0f);
     }
 
-    f32 v2;
-    if (MR::isLessStep(this, 130)) {
-        v2 = 0.995f;
-    } else {
-        v2 = 0.8f;
-    }
-
-    MR::attenuateVelocity(this, v2);
+    MR::attenuateVelocity(this, MR::isLessStep(this, 130) ? 0.995f : 0.8f);
     MR::turnDirectionToPlayerDegree(this, &mFront, 3.0f);
     mTonguePos = mPosition;
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
@@ -453,9 +446,9 @@ void BombTeresa::exeBallAppear() {
 
     mTonguePos = mPosition;
     MR::addVelocityToGravity(this, 1.0f);
-    bool v2 = MR::reboundVelocityFromCollision(this, 0.95f, 2.0f, 1.0f);
+    bool isBounced = MR::reboundVelocityFromCollision(this, 0.95f, 2.0f, 1.0f);
     MR::attenuateVelocity(this, 0.99f);
-    if (v2) {
+    if (isBounced) {
         MR::startSound(this, "SE_EM_BOMBTERE_BOUND");
     }
 
@@ -531,7 +524,7 @@ void BombTeresa::exeChase() {
     MR::addVelocityMoveToDirection(this, mFront, (0.9f * MR::calcNerveRate(this, 60)));
     mTonguePos = mPosition;
     updateNormalVelocity();
-    if (!tryCheseEnd() && tryDirectTackle()) {
+    if (!tryChaseEnd() && tryDirectTackle()) {
         return;
     }
 }
@@ -583,9 +576,6 @@ void BombTeresa::exeDirectTackle() {
 }
 
 void BombTeresa::exeDrift() {
-    Vec3f v14;
-    Pos3f v16;
-    Vec3f v15;
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Spin");
         MR::startBrk(this, "Normal");
@@ -598,33 +588,38 @@ void BombTeresa::exeDrift() {
         mTongueRate = 1.0f;
     }
 
-    v14.cross(mGravity, mFront);
-    v15.cross(mGravity, *MR::getPlayerPos() - MR::getCamPos());
+    // The swing sound plays while it swings across the view (its side close to the camera's).
+    Vec3f side;
+    side.cross(mGravity, mFront);
+    Vec3f viewSide;
+    viewSide.cross(mGravity, *MR::getPlayerPos() - MR::getCamPos());
 
-    if (MR::isNearZero(v14)) {
-        MR::makeAxisVerticalZX(&v14, mGravity);
+    if (MR::isNearZero(side)) {
+        MR::makeAxisVerticalZX(&side, mGravity);
     }
 
-    if (MR::isNearZero(v15)) {
-        MR::makeAxisVerticalZX(&v15, mGravity);
+    if (MR::isNearZero(viewSide)) {
+        MR::makeAxisVerticalZX(&viewSide, mGravity);
     }
 
-    MR::normalize(&v14);
-    MR::normalize(&v15);
-    if (v14.dot(v15) >= 0.8f) {
+    MR::normalize(&side);
+    MR::normalize(&viewSide);
+    if (side.dot(viewSide) >= 0.8f) {
         MR::startLevelSound(this, "SE_EM_LV_BOMBTERE_SWING");
     }
 
-    MR::calcPlayerJointMtx(&v16, "HandR");
-    Vec3f v13;
-    v16.getTrans(v13);
-    Vec3f v12;
-    v16.getZDir(v12);
-    if (!MR::normalizeOrZero(&v12)) {
-        v13.scaleAdd(20.0f, v12, v13);
+    // The tongue end eases into the player's right hand, 20 along it.
+    Pos3f handMtx;
+    MR::calcPlayerJointMtx(&handMtx, "HandR");
+    Vec3f handPos;
+    handMtx.getTrans(handPos);
+    Vec3f handDir;
+    handMtx.getZDir(handDir);
+    if (!MR::normalizeOrZero(&handDir)) {
+        handPos.scaleAdd(20.0f, handDir, handPos);
     }
 
-    MR::vecBlend(mTonguePos, v13, &mTonguePos, MR::calcNerveEaseInRate(this, 15));
+    MR::vecBlend(mTonguePos, handPos, &mTonguePos, MR::calcNerveEaseInRate(this, 15));
     MR::turnDirectionToTarget(this, &mFront, *MR::getPlayerPos(), 0.0f);
     if (mDriftStep <= 0) {
         if (MR::isSpin(PLAYER_1)) {
@@ -861,11 +856,12 @@ bool BombTeresa::appearShadow(const Vec3f& rPosition, const Vec3f& rVelocity) {
     return true;
 }
 
-void BombTeresa::addTeresaSpinPullVelocity(f32 arg0) {
-    Vec3f PlayerCenterPos = Vec3f(*MR::getPlayerCenterPos());
-    MR::addVelocityClockwiseToTarget(this, PlayerCenterPos, mDriftPullSpeed);
-    MR::addVelocityMoveToTarget(this, PlayerCenterPos, 0.0f, mDriftSpinSpeed, 0.0f, 150.0f);
-    MR::addVelocityKeepHeight(this, PlayerCenterPos, arg0, 3.0f, 100.0f);
+// Circles the player, pulled in, at height above the player's center.
+void BombTeresa::addTeresaSpinPullVelocity(f32 height) {
+    Vec3f centerPos(*MR::getPlayerCenterPos());
+    MR::addVelocityClockwiseToTarget(this, centerPos, mDriftPullSpeed);
+    MR::addVelocityMoveToTarget(this, centerPos, 0.0f, mDriftSpinSpeed, 0.0f, 150.0f);
+    MR::addVelocityKeepHeight(this, centerPos, height, 3.0f, 100.0f);
 }
 
 bool BombTeresa::requestDisperse() {
