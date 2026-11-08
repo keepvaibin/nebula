@@ -345,7 +345,7 @@ typedef struct NebulaDisplay {
     int32_t wide;          /* 0: 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
     int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
-    float layout_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
+    float layout_width;    /* the layout canvas (608 at 16:9 and narrower) */
     float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
 } NebulaDisplay;
 

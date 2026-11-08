@@ -41,19 +41,19 @@ namespace MR {
         return SingletonHolder< GameSystem >::get()->mFontHolder->getMessageFont();
     }
 
-    Ui::Font* getPictureFontNW4R() {
+    Ui::Font* getPictureFont() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mPictureFont;
     }
 
-    Ui::Font* getMenuFontNW4R() {
+    Ui::Font* getMenuFont() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mMenuFont;
     }
 
-    Ui::Font* getNumberFontNW4R() {
+    Ui::Font* getNumberFont() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mNumberFont;
     }
 
-    Ui::Font* getCinemaFontNW4R() {
+    Ui::Font* getCinemaFont() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mCinemaFont;
     }
 

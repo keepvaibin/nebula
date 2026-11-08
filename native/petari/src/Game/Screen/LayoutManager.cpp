@@ -206,7 +206,7 @@ void LayoutManager::draw() const {
         return;
     }
 
-    MR::setupDrawForNW4RLayout(1.0f, true);
+    MR::setupDrawForLayout();
     mLayout->Draw(mDrawInfo);
 }
 
