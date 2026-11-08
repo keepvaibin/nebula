@@ -3,6 +3,7 @@
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/BenefitItemOneUp.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorStateUtil.hpp"
@@ -32,29 +33,28 @@ namespace {
         const char* mBackBck;
     };
 
-    static const f32 sDefaultForwardSpeed = 15.0f;
-    static const f32 sDefaultBackSpeed = 10.0f;
-    static const f32 sGoHomeSpeedNormal = 20.0f;
-    static const f32 sGoHomeSpeedRace = 50.0f;
-    static const s32 sStepForWaitBig = 30;
-    static const s32 sStepForRestBig = 100;
-    static const s32 sStepForWaitSmall = 60;
-    static const s32 sStepForRestSmall = 120;
-    static const s32 sStepForWaitBigRace = 30;
-    static const s32 sStepForRestBigRace = 100;
-    static const s32 sStepForWaitSmallRace = 60;
-    static const s32 sStepForRestSmallRace = 120;
-    static const f32 sStartCoord = 300.0f;
+    const f32 sDefaultForwardSpeed = 15.0f;
+    const f32 sDefaultBackSpeed = 10.0f;
+    const f32 sGoHomeSpeedWaylay = 20.0f;
+    const f32 sGoHomeSpeedMove = 50.0f;
+    const s32 sStepForWaitBig = 30;
+    const s32 sStepForRestBig = 100;
+    const s32 sStepForWaitSmall = 60;
+    const s32 sStepForRestSmall = 120;
+    const f32 sStartCoord = 300.0f;  // Home: this far along the rail.
+    const f32 sPushRadiusSmall = 100.0f;
+    const f32 sPushRadiusBig = 300.0f;
+    const f32 sNearHomeSlowDown = 1.5f;
 
-    static const SnakeheadData sSnakeheadDataTable[] = {
-        {::sStepForWaitBig, ::sStepForRestBig, ::sGoHomeSpeedNormal, "StraightAppear", "StraightWait", "StraightForward", "StraightForwardSmoke",
-         "StraightBack"},
-        {::sStepForWaitSmall, ::sStepForRestSmall, ::sGoHomeSpeedNormal, "StraightAppear", "Wait", "StraightForward", nullptr, "StraightBack"},
-        {::sStepForWaitBigRace, ::sStepForRestBigRace, ::sGoHomeSpeedRace, nullptr, "Wait", "Forward", "ForwardSmoke", "Back"},
-        {::sStepForWaitSmallRace, ::sStepForRestSmallRace, ::sGoHomeSpeedRace, nullptr, "Wait", "Forward", nullptr, "Back"}};
+    // By SnakeheadType.
+    const SnakeheadData sSnakeheadDataTable[] = {
+        {sStepForWaitBig, sStepForRestBig, sGoHomeSpeedWaylay, "StraightAppear", "StraightWait", "StraightForward", "StraightForwardSmoke", "StraightBack"},
+        {sStepForWaitSmall, sStepForRestSmall, sGoHomeSpeedWaylay, "StraightAppear", "Wait", "StraightForward", nullptr, "StraightBack"},
+        {sStepForWaitBig, sStepForRestBig, sGoHomeSpeedMove, nullptr, "Wait", "Forward", "ForwardSmoke", "Back"},
+        {sStepForWaitSmall, sStepForRestSmall, sGoHomeSpeedMove, nullptr, "Wait", "Forward", nullptr, "Back"}};
 
-    const SnakeheadData* getParam(s32 index) {
-        return &::sSnakeheadDataTable[index];
+    const SnakeheadData& getParam(SnakeheadType type) {
+        return sSnakeheadDataTable[type];
     }
 };  // namespace
 
@@ -69,11 +69,13 @@ namespace NrvSnakehead {
 };  // namespace NrvSnakehead
 
 Snakehead::Snakehead(const char* pName)
-    : LiveActor(pName), mController(), mStarPointer(), mSmokePos(0.0f, 0.0f, 0.0f), mForwardSpeed(::sDefaultForwardSpeed),
-      mBackwardSpeed(::sDefaultBackSpeed), mActivationRadius(1000.0f), mRailCenter(0.0f, 0.0f, 0.0f), mType(), mItem() {
+    : LiveActor(pName), mController(nullptr), mStarPointer(nullptr), mSmokePos(0.0f, 0.0f, 0.0f), mForwardSpeed(sDefaultForwardSpeed),
+      mBackwardSpeed(sDefaultBackSpeed), mActivationRadius(1000.0f), mRailCenter(0.0f, 0.0f, 0.0f), mType(SnakeheadType_BigWait), mItem(nullptr) {
     mBodyMtx.identity();
 }
 
+// Args: 0 forward speed, 1 back speed, 2 the player's distance from the rail that wakes it, 3 = 1 to swim back and forth
+// without waiting for the player (a waylaying one hides until the player comes near).
 void Snakehead::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
@@ -85,10 +87,9 @@ void Snakehead::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &mBackwardSpeed);
     MR::getPlacementArg2NoInit(rIter, &mActivationRadius);
 
-    s32 arg3 = 0;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
-
-    mType = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + arg3 * 2);
+    s32 moveType = 0;
+    MR::getPlacementArg3NoInit(rIter, &moveType);
+    mType = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + moveType * 2);
 
     MR::connectToSceneEnemy(this);
 
@@ -105,7 +106,7 @@ void Snakehead::init(const TableIter& rIter) {
 
     initEffectKeeper(1, nullptr);
 
-    const char* smokeName = ::getParam(mType)->mForwardEffect;
+    const char* smokeName = getParam(mType).mForwardEffect;
     if (smokeName != nullptr) {
         mSmokePos = mPosition;
         MR::setEffectHostSRT(this, smokeName, &mSmokePos, nullptr, nullptr);
@@ -121,7 +122,6 @@ void Snakehead::init(const TableIter& rIter) {
 
     mController = new AnimScaleController(nullptr);
     mController->setParamTight();
-
     mStarPointer = new WalkerStateBindStarPointer(this, mController);
 
     mBodyMtx.set(MR::getJointMtx(this, "Body04"));
@@ -139,7 +139,7 @@ void Snakehead::init(const TableIter& rIter) {
 
     initRailRider(rIter);
     MR::initAndSetRailClipping(&mRailCenter, this, 100.0f, 500.0f);
-    MR::setRailCoord(this, ::sStartCoord);
+    MR::setRailCoord(this, sStartCoord);
     MR::moveTransToCurrentRailPos(this);
 
     MR::addToAttributeGroupSearchTurtle(this);
@@ -154,48 +154,44 @@ void Snakehead::init(const TableIter& rIter) {
         initNerve(GET_NERVE(Snakehead, SnakeheadNrvWait));
     } else {
         initNerve(GET_NERVE(Snakehead, SnakeheadNrvWaylay));
-
         MR::hideModel(this);
-
         MR::invalidateShadow(this, nullptr);
     }
 
     makeActorAppeared();
 }
 
+// The forward smoke sits on the ground under where the head will be at the rail's end.
 void Snakehead::initAfterPlacement() {
-    Vec3f headPos;
-    MR::copyJointPos(this, "Head", &headPos);
+    Vec3f headAtEnd;
+    MR::copyJointPos(this, "Head", &headAtEnd);
+    headAtEnd -= MR::getRailPointPosStart(this);
+    headAtEnd += MR::getRailPointPosEnd(this);
 
-    headPos -= MR::getRailPointPosStart(this);
-    headPos += (MR::getRailPointPosEnd(this));
-
-    Vec3f v7;
-    v7.scaleAdd(-50.0f, mGravity, headPos);
-    MR::getFirstPolyOnLineToMapExceptSensor(&mSmokePos, nullptr, v7, mGravity * 1000.0f, getSensor("body"));
+    Vec3f rayStart;
+    rayStart.scaleAdd(-50.0f, mGravity, headAtEnd);
+    MR::getFirstPolyOnLineToMapExceptSensor(&mSmokePos, nullptr, rayStart, mGravity * 1000.0f, getSensor("body"));
 
     mBodyMtx.set(MR::getJointMtx(this, "Body04"));
 }
 
 void Snakehead::kill() {
     MR::startSound(this, "SE_EM_EXPLODE_UNDER_WATER");
-
     MR::emitEffect(this, "Death");
 
     if (isSmall()) {
         Vec3f headPos;
         MR::copyJointPos(this, "Head", &headPos);
-        MR::appearStarPiece(this, headPos, 9, 10.0f, 40.0f, 0);
-
+        MR::appearStarPiece(this, headPos, 9, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
     } else {
-        Vec3f attPos;
-        MR::copyJointPos(this, "Antenna", &attPos);
+        Vec3f antennaPos;
+        MR::copyJointPos(this, "Antenna", &antennaPos);
 
         Pos3f itemMtx;
         itemMtx.set(getBaseMtx());
-        itemMtx.setTrans(attPos);
-        MR::appearKinokoOneUpPop(reinterpret_cast< BenefitItemObj* >(mItem), itemMtx, 15.0f);
+        itemMtx.setTrans(antennaPos);
+        MR::appearKinokoOneUpPop(mItem, itemMtx, 15.0f);
     }
 
     LiveActor::kill();
@@ -203,24 +199,23 @@ void Snakehead::kill() {
 
 void Snakehead::control() {
     mController->updateNerve();
-
     tryPointerSwoon();
 
-    Vec3f jointPos;
-    MR::copyJointPos(this, "Body04", &jointPos);
-    mBodyMtx.setTrans(jointPos);
+    Vec3f bodyPos;
+    MR::copyJointPos(this, "Body04", &bodyPos);
+    mBodyMtx.setTrans(bodyPos);
 
+    // The big one's body shadow box spans Body01 to Body04.
     if (!isSmall()) {
         Vec3f body01Pos;
         MR::copyJointPos(this, "Body01", &body01Pos);
 
-        Vec3f v6;
-        f32 dist = jointPos.distance(body01Pos);
-
-        v6.add(jointPos, body01Pos);
-        v6.scale(0.5f);
-        MR::setShadowDropPosition(this, "Body", v6);
-        MR::setShadowVolumeBoxSize(this, "Body", Vec3f(480.0f, 300.0f, dist));
+        f32 length = bodyPos.distance(body01Pos);
+        Vec3f bodyMid;
+        bodyMid.add(bodyPos, body01Pos);
+        bodyMid.scale(0.5f);
+        MR::setShadowDropPosition(this, "Body", bodyMid);
+        MR::setShadowVolumeBoxSize(this, "Body", Vec3f(480.0f, 300.0f, length));
     }
 }
 
@@ -236,18 +231,17 @@ void Snakehead::calcAndSetBaseMtx() {
     MR::setBaseScale(this, scale);
 }
 
+// Hidden on frame 0 until the player is near, then plays the appear animation (shadow on from frame 2) and lunges.
 void Snakehead::exeWaylay() {
     if (MR::isFirstStep(this)) {
-        choiceAndStartBck("Waylay");
+        choiceAndStartBck(Bck_Waylay);
         MR::setBckFrameAndStop(this, 0.0f);
-
         mBodyMtx.set(MR::getJointMtx(this, "Body04"));
     }
 
     if (isNearPlayerFromRail() && MR::getBckFrame(this) == 0.0f) {
-        choiceAndStartBck("Waylay");
+        choiceAndStartBck(Bck_Waylay);
         MR::setBckFrame(this, 1.0f);
-
         MR::showModel(this);
     }
 
@@ -262,25 +256,23 @@ void Snakehead::exeWaylay() {
 
 void Snakehead::exeWait() {
     if (MR::isFirstStep(this)) {
-        choiceAndStartBck("Wait");
+        choiceAndStartBck(Bck_Wait);
     }
 
-    if (MR::isGreaterEqualStep(this, ::getParam(mType)->mWaitStep) && (isMove() || isNearPlayerFromRail())) {
+    if (MR::isGreaterEqualStep(this, getParam(mType).mWaitStep) && (isMove() || isNearPlayerFromRail())) {
         setNerve(GET_NERVE(Snakehead, SnakeheadNrvMoveForward));
     }
 }
 
 void Snakehead::exeMoveForward() {
     if (MR::isFirstStep(this)) {
-        choiceAndStartBck("Forward");
-
+        choiceAndStartBck(Bck_Forward);
         MR::setRailDirectionToEnd(this);
-
         MR::startSound(this, "SE_EM_SNAKEHEAD_FORWARD");
     }
 
-    if (!isMove() && MR::isRailReachedNearGoal(this, ::sStartCoord)) {
-        MR::moveCoordAndFollowTrans(this, mForwardSpeed / 1.5f);
+    if (!isMove() && MR::isRailReachedNearGoal(this, sStartCoord)) {
+        MR::moveCoordAndFollowTrans(this, mForwardSpeed / sNearHomeSlowDown);
     } else {
         MR::moveCoordAndFollowTrans(this, mForwardSpeed);
     }
@@ -291,45 +283,41 @@ void Snakehead::exeMoveForward() {
 }
 
 void Snakehead::exeRest() {
-    if (MR::isStep(this, ::getParam(mType)->mRestStep)) {
+    if (MR::isStep(this, getParam(mType).mRestStep)) {
         setNerve(GET_NERVE(Snakehead, SnakeheadNrvMoveBack));
     }
 }
 
 void Snakehead::exeMoveBack() {
     if (MR::isFirstStep(this)) {
-        choiceAndStartBck("Back");
-
+        choiceAndStartBck(Bck_Back);
         MR::setRailDirectionToStart(this);
-
         MR::startSound(this, "SE_EM_SNAKEHEAD_BACKWARD");
     }
 
     MR::moveCoordAndFollowTrans(this, mBackwardSpeed);
 
-    if (MR::isRailReachedNearGoal(this, ::sStartCoord)) {
-        MR::setRailCoord(this, ::sStartCoord);
+    if (MR::isRailReachedNearGoal(this, sStartCoord)) {
+        MR::setRailCoord(this, sStartCoord);
         MR::moveTransToCurrentRailPos(this);
-
         setNerve(GET_NERVE(Snakehead, SnakeheadNrvWait));
     }
 }
 
+// Hit by a shell: pulls back home while the damage animation plays, then dies.
 void Snakehead::exeTurtleDown() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Damage");
-
         MR::setRailDirectionToStart(this);
-
         MR::startSound(this, "SE_EV_SNAKEHEAD_DAMAGE");
     }
 
-    f32 coord = ::getParam(mType)->mGoHomeSpeed;
-    if (MR::isRailReachedNearGoal(this, ::sStartCoord + coord)) {
-        MR::setRailCoord(this, ::sStartCoord);
+    f32 goHomeSpeed = getParam(mType).mGoHomeSpeed;
+    if (MR::isRailReachedNearGoal(this, sStartCoord + goHomeSpeed)) {
+        MR::setRailCoord(this, sStartCoord);
         MR::moveTransToCurrentRailPos(this);
     } else {
-        MR::moveCoordAndFollowTrans(this, coord);
+        MR::moveCoordAndFollowTrans(this, goHomeSpeed);
     }
 
     if (MR::isBckStopped(this)) {
@@ -337,12 +325,10 @@ void Snakehead::exeTurtleDown() {
     }
 }
 
+// The head sensors attack (or push when swooning); the body attacks or pushes as a capsule along the rail: the push is
+// sent from the nearest point on the rail with the capsule's radius.
 void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvTurtleDown))) {
-        return;
-    }
-
-    if (!MR::isSensorEnemy(pSender)) {
+    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvTurtleDown)) || !MR::isSensorEnemy(pSender)) {
         return;
     }
 
@@ -350,7 +336,8 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (pSender != getSensor("body")) {
+    HitSensor* pBody = getSensor("body");
+    if (pSender != pBody) {
         if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon)) || !MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
             MR::sendMsgPush(pReceiver, pSender);
         }
@@ -358,18 +345,14 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (pSender != getSensor("body")) {
-        return;
-    }
+    Vec3f footOnRail;
+    MR::calcPerpendicFootToLineInside(&footOnRail, pReceiver->mPosition, MR::getRailPointPosStart(this), MR::getRailPointPosEnd(this));
 
-    Vec3f vec40;
-    MR::calcPerpendicFootToLineInside(&vec40, pReceiver->mPosition, MR::getRailPointPosStart(this), MR::getRailPointPosEnd(this));
+    Vec3f fromRail;
+    fromRail.sub(pReceiver->mPosition, footOnRail);
 
-    Vec3f vec4C;
-    vec4C.sub(pReceiver->mPosition, vec40);
-
-    f32 pushRadius = isSmall() ? 100.0f : ::sStartCoord;
-    if (vec4C.length() > pushRadius) {
+    f32 pushRadius = isSmall() ? sPushRadiusSmall : sPushRadiusBig;
+    if (fromRail.length() > pushRadius) {
         return;
     }
 
@@ -377,16 +360,13 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    Vec3f pos(getSensor("body")->mPosition);
-    f32 radius = getSensor("body")->mRadius;
-
-    getSensor("body")->mPosition.set(vec40);
-    getSensor("body")->mRadius = pushRadius;
-
+    Vec3f bodyPos(pBody->mPosition);
+    f32 bodyRadius = pBody->mRadius;
+    pBody->mPosition.set(footOnRail);
+    pBody->mRadius = pushRadius;
     MR::sendMsgPush(pReceiver, pSender);
-
-    getSensor("body")->mPosition.set(pos);
-    getSensor("body")->mRadius = radius;
+    pBody->mPosition.set(bodyPos);
+    pBody->mRadius = bodyRadius;
 }
 
 bool Snakehead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -410,44 +390,46 @@ bool Snakehead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-void Snakehead::choiceAndStartBck(const char* pBck) {
-    const char* v1 = nullptr;
-    if (MR::isEqualString(pBck, "Forward")) {
-        v1 = ::getParam(mType)->mForwardBck;
-    } else if (MR::isEqualString(pBck, "Back")) {
-        v1 = ::getParam(mType)->mBackBck;
-    } else if (MR::isEqualString(pBck, "Waylay")) {
-        v1 = ::getParam(mType)->mWaylayBck;
-    } else if (MR::isEqualString(pBck, "Wait")) {
-        v1 = ::getParam(mType)->mWaitBck;
+// The type's animation for `kind` (none for some types); its texture animation if it has one, else Wait's held on frame 0.
+void Snakehead::choiceAndStartBck(BckKind kind) {
+    const SnakeheadData& rParam = getParam(mType);
+    const char* pBck = nullptr;
+    switch (kind) {
+    case Bck_Forward:
+        pBck = rParam.mForwardBck;
+        break;
+    case Bck_Back:
+        pBck = rParam.mBackBck;
+        break;
+    case Bck_Waylay:
+        pBck = rParam.mWaylayBck;
+        break;
+    case Bck_Wait:
+        pBck = rParam.mWaitBck;
+        break;
     }
 
-    if (v1 != nullptr) {
-        if (!MR::isEqualString(pBck, "Waylay")) {
-            MR::startBck(this, v1);
-        } else {
-            MR::startBckNoInterpole(this, v1);
-        }
+    if (pBck == nullptr) {
+        return;
+    }
 
-        if (MR::isExistBtk(this, v1)) {
-            MR::startBtk(this, v1);
-        } else if (MR::isExistBtk(this, "Wait")) {
-            MR::startBtk(this, "Wait");
-            MR::setBtkFrameAndStop(this, 0.0f);
-        }
+    if (kind == Bck_Waylay) {
+        MR::startBckNoInterpole(this, pBck);
+    } else {
+        MR::startBck(this, pBck);
+    }
+
+    if (MR::isExistBtk(this, pBck)) {
+        MR::startBtk(this, pBck);
+    } else if (MR::isExistBtk(this, "Wait")) {
+        MR::startBtk(this, "Wait");
+        MR::setBtkFrameAndStop(this, 0.0f);
     }
 }
 
 bool Snakehead::tryPointerSwoon() {
-    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvWaylay))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvTurtleDown))) {
+    if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon)) || isNerve(GET_NERVE(Snakehead, SnakeheadNrvWaylay)) ||
+        isNerve(GET_NERVE(Snakehead, SnakeheadNrvTurtleDown))) {
         return false;
     }
 
@@ -456,14 +438,12 @@ bool Snakehead::tryPointerSwoon() {
     }
 
     setNerve(GET_NERVE(Snakehead, SnakeheadNrvPointerSwoon));
-
     return true;
 }
 
 bool Snakehead::isNearPlayerFromRail() const {
     Vec3f nearestPos;
     MR::calcNearestRailPos(&nearestPos, this, *MR::getPlayerPos());
-
     return nearestPos.distance(*MR::getPlayerPos()) <= mActivationRadius;
 }
 

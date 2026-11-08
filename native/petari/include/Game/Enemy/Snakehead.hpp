@@ -34,15 +34,23 @@ public:
     void exeTurtleDown();
     void exePointerSwoon();
     void endPointerSwoon();
-    void choiceAndStartBck(const char*);
+    enum BckKind {
+        Bck_Waylay,
+        Bck_Wait,
+        Bck_Forward,
+        Bck_Back
+    };
+
+    void choiceAndStartBck(BckKind);
     bool tryPointerSwoon();
     bool isNearPlayerFromRail() const;
 
-    bool isSmall() {
+    bool isSmall() const {
         return mType == SnakeheadType_SmallWait || mType == SnakeheadType_SmallMove;
     }
 
-    bool isMove() {
+    // Swims back and forth on its own instead of waylaying the player.
+    bool isMove() const {
         return mType == SnakeheadType_SmallMove || mType == SnakeheadType_BigMove;
     }
 
