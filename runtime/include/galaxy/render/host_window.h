@@ -2,11 +2,10 @@
 #pragma once
 
 // The game window as the renderers see it, on every platform: its size and state, opening and closing it, showing
-// it, its display's refresh rate, the settings overlay and HOME Menu drawing, and (Vulkan) its surface. Implemented by
+// it, its display's refresh rate, the settings menu's per-present step, and (Vulkan) its surface. Implemented by
 // host_window_win32.cpp (Windows) and the SDL host's window (platform/sdl).
 
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/window_owner.h"
 
 #include <atomic>
@@ -38,8 +37,6 @@ extern std::atomic<double> measured_present_hz;
 // The mouse wheel's turn the game has not taken yet (pointer_wheel in nebula_game_api.h), in 120ths of a notch,
 // positive away from the player; the settings menu takes the wheel itself while it shows.
 extern std::atomic<std::int32_t> pointer_wheel;
-// The game's files (set_native_settings_content_root in render_api.h).
-extern std::string native_settings_content_root;
 extern std::atomic<bool> borderless_active;
 // The last internal resolution refused for the video-memory budget (0: none).
 // The window is being moved or sized.
@@ -92,7 +89,8 @@ void set_state_wake(void* event) noexcept;
 [[nodiscard]] bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
                                 std::int64_t& now_ns) noexcept;
 
-void draw_native_settings_overlay(UiCanvas& renderer);
+// Each present: the vendor upscaler download's progress, and GALAXY_TEST_WINDOW_SIZES (a live resize at a present).
+void native_settings_present();
 // The settings menu's test hooks taken at the game's frame `frame` (frame_begun's count, as the scripted input's).
 void native_settings_test_frame(std::uint32_t frame);
 
@@ -143,7 +141,6 @@ extern std::atomic<bool> ray_tracing_offered;  // the RAY TRACING row is offered
 extern std::atomic<bool> rtx_adapter;          // the session's GPU is an NVIDIA RTX (DLSS)
 [[nodiscard]] float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height);
 void save_native_settings_now();
-void draw_home_menu(UiCanvas& renderer);
 
 #if defined(NEBULA_GPU_VULKAN)
 // The instance extensions the window's surface needs, and the surface (VK_NULL_HANDLE when it cannot be made).

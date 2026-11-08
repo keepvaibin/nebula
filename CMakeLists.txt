@@ -432,7 +432,6 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
     runtime/src/perf_hint.cpp
-    runtime/src/render/game_asset_extract.cpp
 )
 target_include_directories(galaxy_render PUBLIC runtime/src)
 target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render)
@@ -515,10 +514,6 @@ if(NEBULA_HOST_IPO)
     endif()
 endif()
 message(STATUS "Host Release IPO: ${nebula_host_ipo_effective}")
-
-# Developer tool (tools/dev): the cosmetic asset extractor run against real game files.
-add_executable(galaxy_verify_asset_extract tools/dev/verify_asset_extract.cpp)
-target_link_libraries(galaxy_verify_asset_extract PRIVATE galaxy_render)
 
 enable_testing()
 # A unit test: an executable from SOURCES linked with LIBS, registered with ctest (run with ARGS).
@@ -605,9 +600,6 @@ galaxy_test(galaxy_settings_system_page_tests SOURCES ${rt}/ui/settings_system_p
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(render_src runtime/src/render)
-galaxy_test(galaxy_game_asset_extract_tests SOURCES ${render_src}/game_asset_extract_tests.cpp ${render_src}/game_asset_extract.cpp)
-target_include_directories(galaxy_game_asset_extract_tests PRIVATE native/include)
-target_link_libraries(galaxy_game_asset_extract_tests PRIVATE galaxy_disc_files)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.cpp ${render_src}/core/pairing.cpp
@@ -625,8 +617,7 @@ target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 
 if(MSVC)
     foreach(target galaxy_render galaxy_runtime_settings galaxy_atomic_file galaxy_frame_cadence_diagnostics
-            galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer
-            galaxy_verify_asset_extract)
+            galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer)
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()
 endif()
@@ -700,7 +691,6 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/streamline_bridge.cpp
         $<$<NOT:$<BOOL:${NEBULA_RELEASE}>>:runtime/src/frame_telemetry.cpp>
         runtime/src/perf_hint.cpp
-        runtime/src/render/game_asset_extract.cpp
         runtime/src/render/vk/vk_context.cpp
         runtime/src/render/vk/device_quirks_vk.cpp
         runtime/src/render/vk/vk_libraries.cpp

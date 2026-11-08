@@ -19,7 +19,6 @@ struct HomeMenuModel {
     std::atomic<unsigned> row{0};
     std::atomic<int> asking{0};
     std::atomic<int> choice{-1};
-    std::atomic<bool> drawn_by_game{false};
 
     void open() {
         const std::lock_guard<std::mutex> lock(mutex);
@@ -32,9 +31,8 @@ struct HomeMenuModel {
     int poll() const { return choice.load(std::memory_order_acquire); }
     void hide() { visible.store(false, std::memory_order_release); }
 
-    int view(bool drawing) {
+    int view() {
         if (!visible.load(std::memory_order_acquire)) return -1;
-        if (drawing) drawn_by_game.store(true, std::memory_order_relaxed);
         const std::lock_guard<std::mutex> lock(mutex);
         const unsigned selected = row.load(std::memory_order_relaxed) % answer_count();
         return static_cast<int>(selected | static_cast<unsigned>(asking.load(std::memory_order_relaxed)) << 8u);

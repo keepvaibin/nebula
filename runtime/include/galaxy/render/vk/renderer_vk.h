@@ -19,7 +19,6 @@
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/ambient_occlusion_vk.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
@@ -109,7 +108,7 @@ struct RenderLayout {
 
 }  // namespace vk
 
-class RendererVk final : public UiCanvas {
+class RendererVk final {
 public:
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
 
@@ -322,13 +321,6 @@ public:
     [[nodiscard]] unsigned frame_slot() const noexcept { return frame_slot_; }
     void bind_draw_tables(gpu::Table, gpu::Table) noexcept {}
     [[nodiscard]] gpu::Table sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count);
-
-    // UiCanvas: the settings overlay, the HOME Menu and the start hint, drawn into the backbuffer.
-    void ensure_native_settings_corner_texture_loaded() override;
-    void draw_ui_textured_quad(int x, int y, int w, int h, float u0, float v0, float u1, float v1,
-                               const std::array<float, 4>& tint) override;
-    void draw_ui_solid_quad(int x, int y, int w, int h, const std::array<float, 4>& color) override;
-    void draw_ui_glyph(int x, int y, int scale, std::uint64_t bitmap, const std::array<float, 4>& color) override;
 
 private:
     struct Frame {
@@ -668,11 +660,6 @@ private:
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline ui_solid_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline ui_textured_pipeline_ = VK_NULL_HANDLE;
-    gpu::TextureRef corner_texture_;
-    VkDescriptorSet corner_set_ = VK_NULL_HANDLE;
-    bool corner_texture_tried_ = false;
 
     // draws.
     UploadRing vertex_ring_;

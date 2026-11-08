@@ -79,7 +79,7 @@ namespace NebulaHomeMenu {
     }
 
     s32 view() {
-        return request(NEBULA_HBM_VIEW, 1);
+        return request(NEBULA_HBM_VIEW, 0);
     }
 
     void point(s32 answer) {

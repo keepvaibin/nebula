@@ -36,7 +36,6 @@
 #include "galaxy/render/renderer_common.h"
 #include "render/core/gpu_encoder.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
 
@@ -179,7 +178,7 @@ create_scene_conversion_source_views(
 
 }  // namespace detail
 
-class RendererD3D12 final : public UiCanvas {
+class RendererD3D12 final {
 public:
     // Creates the Win32 window, device, queue, swap chain, scene target targets at
     // at the frame's size, the shared root signature, the
@@ -489,29 +488,6 @@ public:
     void bind_draw_tables(gpu::Table textures, gpu::Table samplers);
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_for(const std::array<SamplerKey, kSamplerTableSlots>& keys,
                                                                 unsigned count);
-
-    // Loads and uploads the settings overlay's corner texture on the first call;
-    // later calls do nothing.
-    void ensure_native_settings_corner_texture_loaded() override;
-    // Draws one quad of the corner texture (screen pixel coordinates); the UV
-    // range mirrors it for each panel corner. No-op if the texture failed to load.
-    void draw_ui_textured_quad(
-        int x, int y, int w, int h,
-        float u0, float v0, float u1, float v1,
-        const std::array<float, 4>& tint) override;
-
-    // Creates the solid-fill quad root signature and PSO on first use. Solid quads
-    // are draws, not rect-limited clears: ClearRenderTargetView with non-null pRects
-    // faults inside nvwgf2umx.dll (STATUS_STACK_BUFFER_OVERRUN) on some NVIDIA drivers.
-    void ensure_native_settings_solid_pipeline_loaded();
-    // Draws one flat-colored quad (screen pixel coordinates).
-    void draw_ui_solid_quad(
-        int x, int y, int w, int h,
-        const std::array<float, 4>& color) override;
-    // Packed row-major 5x7 bitmap, drawn with one instanced submission.
-    void draw_ui_glyph(
-        int x, int y, int scale, std::uint64_t bitmap,
-        const std::array<float, 4>& color) override;
 
 private:
     void invalidate_draw_bindings();
@@ -911,22 +887,6 @@ private:
     // heaps rather than committed one by one (gpu_placed_textures.h).
     PlacedTextureAllocator frame_pass_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
-
-    // Settings overlay: the game's window-frame corner texture (read from
-    // files/LayoutData/FileSelect.arc, galaxy/render/game_asset_extract.h), drawn at the
-    // panel's four corners. Loaded once, when the overlay is first shown; without it
-    // the overlay keeps solid-color corners.
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> ui_texture_root_sig_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ui_texture_pipeline_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ui_texture_srv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> ui_corner_texture_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> ui_corner_upload_;
-    bool ui_corner_texture_load_attempted_ = false;
-    bool ui_corner_texture_ready_ = false;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> ui_solid_root_sig_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ui_solid_pipeline_;
-    bool ui_solid_pipeline_load_attempted_ = false;
-    bool ui_solid_pipeline_ready_ = false;
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;

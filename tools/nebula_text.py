@@ -174,15 +174,13 @@ def host_missing(text, ids):
 
 def host_literals():
     """The capitals the host hands the menu, as the sources spell them. Pieces joined at run time (a space at an end) and
-    %s cannot be checked. The overlay the game's menu replaces is left out."""
+    %s cannot be checked."""
     for pattern in HOST_TEXT:
         for path in glob.glob(os.path.join(ROOT, pattern)):
             if path.endswith('_tests.cpp'):
                 continue
             with open(path, encoding='utf-8') as f:
                 source = re.sub(r'//.*', '', f.read())
-            source = re.sub(r'void draw_native_settings_overlay.*?\nNativeSettingsView build_native_settings_view', '', source,
-                            flags=re.S)
             source = re.sub(r'"\s*\n\s*"', '', source)  # adjacent literals are one text
             for match in re.finditer(r'"((?:[^"\\\n]|\\.)*)"', source):
                 text = match.group(1)

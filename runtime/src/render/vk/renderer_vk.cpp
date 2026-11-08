@@ -10,7 +10,6 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
-#include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/game_paths.h"
@@ -975,11 +974,6 @@ bool RendererVk::create_utility_pipelines() {
     }
     blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs, vk::UtilitySpirv::BlitPs,
                                              kAll, false, false, false);
-    ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::UiSolidVs,
-                                                 vk::UtilitySpirv::UiSolidPs, kAll, true, true, false);
-    ui_textured_pipeline_ = create_utility_pipeline(
-        present_pass_, utility_layout_, vk::UtilitySpirv::UiTexturedVs,
-        vk::UtilitySpirv::UiTexturedPs, kAll, true, true, false);
     return true;
 }
 
@@ -1128,7 +1122,7 @@ void RendererVk::shutdown() {
         }
         pictures_.clear();
         for (VkPipeline* pipeline : {&conversion_pipeline_, &probe_pipeline_, &display_filter_pipeline_,
-             &depth_resolve_pipeline_, &blit_pipeline_, &ui_solid_pipeline_, &ui_textured_pipeline_}) {
+             &depth_resolve_pipeline_, &blit_pipeline_}) {
             if (*pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, *pipeline, nullptr);
             *pipeline = VK_NULL_HANDLE;
         }
@@ -1167,7 +1161,6 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         output_scene_active_ = false;
-        corner_texture_.reset();
         for (ProbeSlot& slot : probe_slots_) {
             if (slot.queries != VK_NULL_HANDLE) vkDestroyQueryPool(device, slot.queries, nullptr);
         }
@@ -2152,19 +2145,8 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
             vkCmdDraw(commands, 3, 1, 0, 0);
         }
     }
-
-    // The overlays are authored in backbuffer pixels over the whole surface.
-    const VkViewport full{0.0f, static_cast<float>(bb_h), static_cast<float>(bb_w), -static_cast<float>(bb_h), 0.0f,
-                          1.0f};
-    const VkRect2D full_scissor{{0, 0}, swapchain_.image};
-    vkCmdSetViewport(commands, 0, 1, &full);
-    vkCmdSetScissor(commands, 0, 1, &full_scissor);
-    // The overlays are drawn unturned (Windows); turned images belong to platforms whose overlays are their own screens.
-    if (swapchain_.transform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
-        host_window::draw_native_settings_overlay(*this);
-        host_window::draw_home_menu(*this);
-    }
     vkCmdEndRenderPass(commands);
+    host_window::native_settings_present();
     reset_draw_bindings();
     const auto hand_to_amd = [&] {
         if (swapchain_fsr_) {
@@ -2214,132 +2196,6 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     }
     hand_to_amd();
     return false;
-}
-
-void RendererVk::ensure_native_settings_corner_texture_loaded() {
-    if (corner_texture_tried_) {
-        return;
-    }
-    corner_texture_tried_ = true;
-    if (host_window::native_settings_content_root.empty()) {
-        return;
-    }
-    const auto texture = load_game_texture(host_window::native_settings_content_root,
-                                           "LayoutData/FileSelect.arc", "myfileselwinframe.tpl");
-    if (!texture.has_value() || texture->width == 0u || texture->height == 0u) {
-        return;
-    }
-    vk::Context& context = vk::Context::get();
-    corner_texture_ = context.create_texture(texture->width, texture->height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
-                                             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false,
-                                             "settings corner");
-    std::shared_ptr<vk::Buffer> staging = context.create_buffer(
-        static_cast<std::uint64_t>(texture->width) * texture->height * 4u, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-        "settings corner upload");
-    if (!corner_texture_ || !staging) {
-        corner_texture_.reset();
-        return;
-    }
-    std::memcpy(staging->mapped, texture->rgba8.data(), static_cast<std::size_t>(staging->size));
-    // Recorded with the frame's uploads, which run before its draws.
-    const VkCommandBuffer commands = frames_[frame_slot_].uploads;
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = corner_texture_->image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &barrier);
-    VkBufferImageCopy region{};
-    region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageExtent = {texture->width, texture->height, 1};
-    vkCmdCopyBufferToImage(commands, staging->buffer, corner_texture_->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                           &region);
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &barrier);
-    corner_texture_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    // The staging buffer lives until this frame's submission completes.
-    context.defer([staging] {});
-    VkDescriptorSetAllocateInfo alloc{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    alloc.descriptorPool = persistent_pool_;
-    alloc.descriptorSetCount = 1;
-    alloc.pSetLayouts = &utility_set_layout_;
-    vk::check(vkAllocateDescriptorSets(context.device(), &alloc, &corner_set_), "corner set");
-    const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, corner_texture_->view,
-                                           VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    write.dstSet = corner_set_;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    write.pImageInfo = &image_info;
-    vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
-}
-
-void RendererVk::draw_ui_textured_quad(int x, int y, int w, int h, float u0, float v0, float u1, float v1,
-                                       const std::array<float, 4>& tint) {
-    if (!corner_texture_ || corner_set_ == VK_NULL_HANDLE) {
-        return;
-    }
-    const float constants[14] = {
-        static_cast<float>(x), static_cast<float>(y), static_cast<float>(w), static_cast<float>(h),
-        u0, v0, u1, v1, tint[0], tint[1], tint[2], tint[3],
-        static_cast<float>(host_window::backbuffer_width), static_cast<float>(host_window::backbuffer_height),
-    };
-    const VkCommandBuffer commands = commands_;
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_textured_pipeline_);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &corner_set_, 0,
-                            nullptr);
-    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), constants);
-    vkCmdDraw(commands, 4, 1, 0, 0);
-}
-
-void RendererVk::draw_ui_solid_quad(int x, int y, int w, int h, const std::array<float, 4>& color) {
-    if (w <= 0 || h <= 0) {
-        return;
-    }
-    const int left = std::clamp(x, 0, static_cast<int>(host_window::backbuffer_width));
-    const int top = std::clamp(y, 0, static_cast<int>(host_window::backbuffer_height));
-    const int right = std::clamp(x + w, 0, static_cast<int>(host_window::backbuffer_width));
-    const int bottom = std::clamp(y + h, 0, static_cast<int>(host_window::backbuffer_height));
-    if (right <= left || bottom <= top) {
-        return;
-    }
-    const UiSolidQuadConstants constants{
-        {left, top, right - left, bottom - top},
-        {color[0], color[1], color[2], color[3]},
-        {host_window::backbuffer_width, host_window::backbuffer_height},
-        {0u, 0u},
-        0u,
-    };
-    const VkCommandBuffer commands = commands_;
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_solid_pipeline_);
-    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
-    vkCmdDraw(commands, 4, 1, 0, 0);
-}
-
-void RendererVk::draw_ui_glyph(int x, int y, int scale, std::uint64_t bitmap, const std::array<float, 4>& color) {
-    if (scale <= 0 || bitmap == 0u || host_window::backbuffer_width == 0u || host_window::backbuffer_height == 0u) {
-        return;
-    }
-    const UiSolidQuadConstants constants{
-        {x, y, scale, scale},
-        {color[0], color[1], color[2], color[3]},
-        {host_window::backbuffer_width, host_window::backbuffer_height},
-        {static_cast<std::uint32_t>(bitmap), static_cast<std::uint32_t>(bitmap >> 32u)},
-        1u,
-    };
-    const VkCommandBuffer commands = commands_;
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_solid_pipeline_);
-    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
-    // One instance per cell, row-major; unlit cells have degenerate geometry.
-    vkCmdDraw(commands, 4, 35, 0, 0);
 }
 
 }  // namespace galaxy::render
