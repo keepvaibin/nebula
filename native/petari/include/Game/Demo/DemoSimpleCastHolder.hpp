@@ -8,7 +8,8 @@ class NameObj;
 
 class DemoSimpleCastHolder {
 public:
-    DemoSimpleCastHolder(s32, s32, s32);
+    // Starting capacities: the lists grow past them.
+    DemoSimpleCastHolder(s32 liveActorCapacity, s32 layoutActorCapacity, s32 nameObjCapacity);
 
     void registerActor(LiveActor*);
     void registerActor(LayoutActor*);

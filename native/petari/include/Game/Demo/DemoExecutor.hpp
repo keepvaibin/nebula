@@ -94,7 +94,7 @@ public:
     NameObj* mDemoStarter;
     const char* mDemoName;
     MR::MovementControlType mMovementType;  // None while not running
-    MR::InlineVector< LiveActor*, 192 > mActor;
+    MR::InlineVector< LiveActor*, 192 > mUnclippedCasts;  // casts start() stopped clipping; end() restores them
     MR::InlineVector< DemoTalkAnimCtrl*, 8 > mTalkAnimCtrl;
     MR::InlineVector< DemoTalkMessageCtrl, 8 > mTalkMessageCtrl;
 };
