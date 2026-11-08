@@ -7,7 +7,7 @@
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include "Game/System/ErrorMessageArchive.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/MessageHolder.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
@@ -90,7 +90,7 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
 }
 
 void GameSystemObjHolder::initAudio() {
-    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getPermanentHeap());
+    mAudioSystem = new AudSystemWrapper(Arenas::permanent());
 }
 
 void GameSystemObjHolder::initPicture() {

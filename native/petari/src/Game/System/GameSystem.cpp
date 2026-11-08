@@ -17,7 +17,7 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
 #include "Game/System/GameFrame.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -50,8 +50,8 @@ namespace NrvGameSystem {
 extern "C" void nebula_game_main(void) {
     NebulaArena::create(nullptr);
     Ui::LytInit();
-    SingletonHolder< HeapMemoryWatcher >::init();
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
+    Arenas::create();
+    MR::becomeCurrentHeap(Arenas::permanent());
     SingletonHolder< GameSystem >::init();
     SingletonHolder< GameSystem >::get()->init();
 
@@ -101,7 +101,7 @@ bool GameSystem::isDoneLoadSystemArchive() const {
 void GameSystem::startToLoadSystemArchive() {
     mIsExecuteLoadSystemArchive = true;
 
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
+    MR::becomeCurrentHeap(Arenas::permanent());
     SingletonHolder< NameObjRegister >::get()->setCurrentHolder(mObjHolder->mObjHolder);
     setNerve(GET_NERVE(GameSystem, GameSystemLoadSystemArchive));
 }
@@ -128,7 +128,7 @@ void GameSystem::exeInitializeBootScene() {
 
 void GameSystem::exeLoadSystemArchive() {
     initAfterSystemArchiveLoaded();
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToGameHeap();
+    MR::becomeCurrentHeap(Arenas::permanent());
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     updateSceneController();
     setNerve(GET_NERVE(GameSystem, GameSystemNormal));

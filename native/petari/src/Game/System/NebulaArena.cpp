@@ -24,7 +24,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 NebulaArena* NebulaArena::sCurrentHeap;
 NebulaArena* NebulaArena::sRootHeap;
-NebulaArena* NebulaArena::sSystemHeap;
 
 namespace {
     // Addresses each arena has to itself, not memory: only what it uses is committed.
@@ -121,7 +120,6 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 
     if (pParent == nullptr) {
         sRootHeap = pArena;
-        sSystemHeap = pArena;
         sCurrentHeap = pArena;
         return pArena;
     }
@@ -159,9 +157,6 @@ void NebulaArena::destroy(NebulaArena* pArena) {
 
     if (sCurrentHeap == pArena) {
         sCurrentHeap = pNext != nullptr ? pNext : sRootHeap;
-    }
-    if (sSystemHeap == pArena) {
-        sSystemHeap = pNext != nullptr ? pNext : sRootHeap;
     }
 
     pArena->~NebulaArena();
@@ -272,12 +267,6 @@ void NebulaArena::freeAll() {
     mCommitted = mStart;
     mNext = mStart;
     memset(mFree, 0, sizeof(mFree));
-}
-
-NebulaArena* NebulaArena::becomeSystemHeap() {
-    NebulaArena* const pPrevious = sSystemHeap;
-    sSystemHeap = this;
-    return pPrevious;
 }
 
 NebulaArena* NebulaArena::becomeCurrentHeap() {

@@ -12,7 +12,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -118,12 +118,12 @@ void GameSystemSceneController::initializeScene() {
     mSceneInitializeState = SceneInitializeState_Init;
     mSceneInitializeHeld = false;
 
-    if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
-        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap();
+    if (Arenas::sceneFiles() == nullptr || !isSameAtNextSceneAndStage()) {
+        Arenas::createSceneFiles();
     }
 
-    SingletonHolder< HeapMemoryWatcher >::get()->createSceneHeapOnGameHeap();
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    Arenas::createScene();
+    MR::becomeCurrentHeap(Arenas::scene());
     updateSceneControlInfo();
     MR::setRandomSeedFromStageName();
 
@@ -154,7 +154,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
         return false;
     }
     MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    MR::becomeCurrentHeap(Arenas::scene());
     bool complete = false;
     NebulaLoadTrace::measure("initAfterScenarioChosen", [&] { complete = mScene->initAfterScenarioChosen(); });
     if (!complete) return false;
@@ -181,9 +181,9 @@ void GameSystemSceneController::destroyScene() {
     MR::removeResourceHolders(MR::getSceneHeap());
 
     if (tryDestroyFileCacheHeap(false)) {
-        SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
+        Arenas::resetGame();
     } else {
-        SingletonHolder< HeapMemoryWatcher >::get()->destroySceneHeap();
+        Arenas::destroyScene();
     }
 }
 
@@ -446,7 +446,7 @@ bool GameSystemSceneController::isPreparedReset() {
 
 void GameSystemSceneController::restartGameAfterResetting() {
     tryDestroyFileCacheHeap(true);
-    SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
+    Arenas::resetGame();
 
     mIsResetProcessing = false;
 }
@@ -507,11 +507,11 @@ const Nerve* GameSystemSceneController::getNextNerveOnResetProcessing() const {
 }
 
 bool GameSystemSceneController::tryDestroyFileCacheHeap(bool isForce) {
-    if (!isForce && SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap != nullptr && isSameAtNextSceneAndStage()) {
+    if (!isForce && Arenas::sceneFiles() != nullptr && isSameAtNextSceneAndStage()) {
         return false;
     }
 
-    MR::removeResourceHolders(SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap);
+    MR::removeResourceHolders(Arenas::sceneFiles());
 
     return true;
 }

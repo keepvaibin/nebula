@@ -13,7 +13,7 @@
 class NebulaArena : public JKRDisposer {
 public:
     // A new arena under `pParent`, which destroys it when it goes. Only the root (null parent) changes the
-    // system and current arenas.
+    // current arena.
     static NebulaArena* create(NebulaArena* pParent);
     static void destroy(NebulaArena* pArena);
 
@@ -22,7 +22,6 @@ public:
     // Everything in it goes; the arena stays.
     void freeAll();
 
-    NebulaArena* becomeSystemHeap();
     NebulaArena* becomeCurrentHeap();
 
     void dispose();
@@ -45,16 +44,8 @@ public:
         return sRootHeap;
     }
 
-    static NebulaArena* getSystemHeap() {
-        return sSystemHeap;
-    }
-
     static NebulaArena* getCurrentHeap() {
         return sCurrentHeap;
-    }
-
-    static void setSystemHeap(NebulaArena* pArena) {
-        sSystemHeap = pArena;
     }
 
     static void setCurrentHeap(NebulaArena* pArena) {
@@ -63,8 +54,8 @@ public:
 
     // Where plain `new` allocates. Only the game thread allocates (the sound engine's thread takes nothing).
     static NebulaArena* sCurrentHeap;
+    // Lasts as long as the process (Arenas::create makes the game's arenas under it).
     static NebulaArena* sRootHeap;
-    static NebulaArena* sSystemHeap;
 
     NebulaList< JKRDisposer > mDisposerList;
 
