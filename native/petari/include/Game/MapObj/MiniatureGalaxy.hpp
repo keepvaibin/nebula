@@ -10,6 +10,7 @@ enum MiniatureGalaxyType {
     MiniatureGalaxyType_Koopa,
 };
 
+// Also the state index GalaxySelectInfo shows.
 enum MiniatureGalaxyState {
     MiniatureGalaxyState_Hatena,
     MiniatureGalaxyState_Unknown,
@@ -34,10 +35,9 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-
     void initPartsModel();
     void setScale(f32);
-    void tryZoomIn(bool);
+    void tryZoomIn(bool isDisappearSelect);
     void tryZoomOut();
     bool isZoomEnd() const;
     void updateZoomInOut();
@@ -46,9 +46,12 @@ public:
     void showUnknownModel();
     void showSelectModel();
     void hideUnknownModel();
+    void showOpenModel();
+    void hideOpenModel();
     void appearSelectModel();
     void disappearSelectModel();
-    void showNamePlate(bool);
+    // isAppearNow false leaves the plate ready but hidden.
+    void showNamePlate(bool isAppearNow);
     bool isUseKoopaFaceModel() const;
     void playPointedME();
     void playNeedStarME();
@@ -68,11 +71,11 @@ public:
     Pos3f mPosMtx;
     Pos3f mShadowBaseMtx;
     ProjmapEffectMtxSetter* mProjmapEffectMtxSetter;
-    Vec3f mInitPos;
     const char* mObjectName;
     const char* mGalaxyName;
-    s32 mCanZoomIn;
-    s32 mZoomLevel;
+    // Zoom target; mZoomStep counts up to the zoom frame count.
+    bool mIsZoomOut;
+    s32 mZoomStep;
     CoordMatrix mOnesTexMtx;
     CoordMatrix mTensTexMtx;
     AstroDomeOrbit* mOrbit;

@@ -286,7 +286,7 @@ void SphereSelectorHandle::exeWait() {
     }
 
     if (isPointing()) {
-        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
+        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority_Last);
     }
 
     if (mNotPointingStep > ::cDemoRotateStartFrame) {
@@ -326,7 +326,7 @@ void SphereSelectorHandle::exeSpin() {
     mRotateSpeed *= ::cSpinReduceRate;
     mRotateSpeedX *= ::cSpinReduceRate;
     if (MR::isStarPointerInScreen(PLAYER_1)) {
-        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
+        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority_Last);
     }
 
     if (MR::isNearZero(mRotateSpeed) && MR::isNearZero(mRotateSpeedX)) {
@@ -337,7 +337,7 @@ void SphereSelectorHandle::exeSpin() {
 void SphereSelectorHandle::exeDemoRotate() {
     mRotateSpeed = ::cDemoRotateSpeedY;
     if (isPointing()) {
-        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
+        SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority_Last);
     }
 
     if (mNotPointingStep == 0) {

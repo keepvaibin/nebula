@@ -108,18 +108,10 @@ bool AstroDomeGalaxySelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSe
 }
 
 void AstroDomeGalaxySelector::showGalaxyInfo(const MiniatureGalaxy* pMiniGalaxy) {
-    s32 state = 3;
+    s32 state = pMiniGalaxy->mState;
     s32 cometID = -1;
 
-    if (pMiniGalaxy->mState == 2) {
-        state = 2;
-    } else if (pMiniGalaxy->mState == 1) {
-        state = 1;
-    } else if (pMiniGalaxy->mState == 0) {
-        state = 0;
-    }
-
-    if (state == 3 && pMiniGalaxy == MiniatureGalaxyFunction::getCometLandMiniatureGalaxy()) {
+    if (state == MiniatureGalaxyState_Open && pMiniGalaxy == MiniatureGalaxyFunction::getCometLandMiniatureGalaxy()) {
         cometID = MiniatureGalaxyFunction::getCometNameId();
     }
 
@@ -179,7 +171,7 @@ void AstroDomeGalaxySelector::exeGalaxySelect() {
         }
 
         if (!SphereSelectorFunction::isHandleHolding() && mBackButton->isPointing()) {
-            SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(2));
+            SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority_First);
 
             if (!mIsBackButtonPointed) {
                 MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");

@@ -68,10 +68,10 @@ void SphereSelector::registerPointingTarget(LiveActor* pActor, HandlePointingPri
 
     u32 distance;
     switch (priority) {
-    case Unknown_1:
+    case HandlePointingPriority_Last:
         distance = -1;
         break;
-    case Unknown_2:
+    case HandlePointingPriority_First:
         distance = 0;
         break;
     default:
