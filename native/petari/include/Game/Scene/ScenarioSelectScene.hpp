@@ -44,14 +44,14 @@ public:
     void exeWaitResumeInitializeThreadIfRequestedReset();
     void exeWaitResumeInitializeThreadIfCanceledSelect();
 
-    u8 mIsInitialized;
-    u8 mIsBackground;
-    u8 mIsCanceled;
+    bool mIsInitialized;
+    bool mIsBackground;
+    bool mIsCanceled;
     ScenarioSelectLayout* mScenarioLayout;
     CinemaFrame* mCinemaFrame;
     ItemBuffer* mDrawBufferOpa;
     ItemBuffer* mDrawBufferXlu;
-    u8 mIsResetRequested;
+    bool mIsResetRequested;
     EffectSystem* mEffectSystem;
     CameraContext* mCameraContext;
 };

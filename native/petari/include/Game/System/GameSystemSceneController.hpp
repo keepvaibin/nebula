@@ -7,7 +7,6 @@ class PlacementId;
 class NameObjHolder;
 class NameObjListExecutor;
 class Nerve;
-class PlayTimerScene;
 class ScenarioDataParser;
 class ScenarioSelectScene;
 class Scene;
@@ -108,6 +107,5 @@ public:
     bool mSceneInitializeHeld = false;
     bool mSceneInitializeDone = false;
     IntermissionScene* mIntermissionScene;
-    PlayTimerScene* mPlayTimerScene;
     ScenarioSelectScene* mScenarioSelectScene;
 };

@@ -115,10 +115,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
-SceneObjHolder::SceneObjHolder() {
-    for (int i = 0; i < SceneObj_NumMax; i++) {
-        mObj[i] = nullptr;
-    }
+SceneObjHolder::SceneObjHolder() : mObj() {
 }
 
 NameObj* SceneObjHolder::create(int id) {

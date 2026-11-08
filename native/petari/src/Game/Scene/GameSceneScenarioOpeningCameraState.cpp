@@ -98,5 +98,5 @@ bool GameSceneScenarioOpeningCameraState::trySkipTrigger() const {
         return false;
     }
 
-    return !MR::isAlreadyVisitedCurrentStageAndScenario() ? false : MR::testSystemPadTriggerDecide();
+    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::testSystemPadTriggerDecide();
 }
