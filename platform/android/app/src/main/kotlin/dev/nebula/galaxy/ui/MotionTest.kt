@@ -119,7 +119,8 @@ private class MotionProbe : PadSensors.Sink {
             pad.accel[1] = gy / 9.80665f
             pad.accel[2] = gz / 9.80665f
             val g = sqrt(pad.accel[0] * pad.accel[0] + pad.accel[1] * pad.accel[1] + pad.accel[2] * pad.accel[2])
-            if (abs(g - 1f) > 1.2f) pad.shakeNs = timeNs
+            // When it came, on the clock the screen reads (a sensor's own clock may be another).
+            if (abs(g - 1f) > 1.2f) pad.shakeNs = System.nanoTime()
             return
         }
         if (type != Sensor.TYPE_GYROSCOPE) return
@@ -150,7 +151,7 @@ private class MotionProbe : PadSensors.Sink {
     }
 
     class View(
-        val id: Int, val name: String, val ids: String, val gyroscope: String?, val accelerometer: String?,
+        val id: Int, val name: String, val ids: String, val nintendo: Boolean, val gyroscope: String?, val accelerometer: String?,
         val gyroSamples: Long, val accelSamples: Long, val gyroRate: Double, val accelRate: Double, val worstGapMs: Double,
         val gyro: List<Float>, val accel: List<Float>, val pointerX: Float, val pointerY: Float, val shaking: Boolean,
     )
@@ -158,7 +159,7 @@ private class MotionProbe : PadSensors.Sink {
     @Synchronized
     fun snapshot(nowNs: Long): List<View> = pads.values.map { p ->
         View(
-            p.id, p.name, p.ids, p.gyroscope, p.accelerometer, p.gyroSamples, p.accelSamples, p.gyroRate, p.accelRate,
+            p.id, p.name, p.ids, p.nintendo, p.gyroscope, p.accelerometer, p.gyroSamples, p.accelSamples, p.gyroRate, p.accelRate,
             p.worstGapMs, p.gyro.toList(), p.accel.toList(), p.pointerX, p.pointerY,
             p.shakeNs != 0L && nowNs - p.shakeNs < 400_000_000L,
         )
@@ -169,9 +170,18 @@ private class MotionProbe : PadSensors.Sink {
             "range ${String.format(java.util.Locale.ROOT, "%.1f", sensor.maximumRange)}"
 }
 
+private fun kernelVersion(): String = System.getProperty("os.version")?.substringBefore('-') ?: "?"
+
+// Linux before 6.1: hid-nintendo without the IMU (Android's android12-5.10 and android13/14-5.15 kernels).
+private fun oldNintendoDriver(): Boolean {
+    val parts = kernelVersion().split('.').mapNotNull { it.toIntOrNull() }
+    if (parts.size < 2) return false
+    return parts[0] < 6 || (parts[0] == 6 && parts[1] < 1)
+}
+
 private fun report(views: List<MotionProbe.View>): String = buildString {
     append("Nebula motion test, Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT}), ")
-    append("${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}\n")
+    append("${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, Linux ${System.getProperty("os.version")}\n")
     if (views.isEmpty()) append("No controller connected.\n")
     for (v in views) {
         append("${v.name} ${v.ids}\n")
@@ -243,9 +253,13 @@ private fun PadCard(v: MotionProbe.View, onRecenter: () -> Unit) {
         Gap(10.dp)
         val works = v.gyroscope != null && v.gyroSamples > 0
         val verdict = when {
-            v.gyroscope == null -> "Android lists no gyroscope for this controller, so no app can read its motion " +
-                "this way. Its kernel driver gives none, or the system keeps it from apps. A Switch Pro Controller " +
-                "on a USB cable is read directly by the game instead."
+            v.gyroscope == null && v.nintendo && oldNintendoDriver() -> "No motion over Bluetooth on this device: " +
+                "its Linux ${kernelVersion()} has Nintendo's controller driver from before motion was added (Linux 6.1), " +
+                "so Android gives no app this controller's gyroscope. Connect it with a USB cable: the game then reads " +
+                "the controller itself, motion included, as on a PC (this test shows only what Android gives)."
+            v.gyroscope == null -> "Android lists no gyroscope for this controller: its driver gives none to apps. " +
+                "On a USB cable the game reads a Switch or PlayStation controller itself, motion included (this test " +
+                "shows only what Android gives)."
             v.gyroSamples == 0L -> "Android lists a gyroscope, but no sample has come yet. Move the controller."
             v.gyroRate in 1.0..59.0 -> String.format(java.util.Locale.ROOT,
                 "Motion works, but only %.0f samples a second come: the pointer will be coarse.", v.gyroRate)

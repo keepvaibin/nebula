@@ -64,6 +64,11 @@ inline constexpr std::size_t kMaxPads = 4;
 // One coherent copy of everything the input poll reads.
 // A pad's sensors and touch surface.
 struct PadMotion {
+    // What the pad has, as the settings show it: motion sensors (SDL's, or the controller's own through Android) and a
+    // touch surface.
+    bool has_gyro = false;
+    bool has_accel = false;
+    bool has_touch = false;
     bool imu_live = false;
     bool touch_live = false;
     bool gravity_valid = false;
