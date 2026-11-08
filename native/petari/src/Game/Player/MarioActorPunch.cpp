@@ -9,7 +9,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 bool MarioActor::isEnableSpinPunch() {
-    if (getMovementStates()._23) {
+    if (getMovementStates().slopeSlide) {
         return false;
     }
 
@@ -34,7 +34,7 @@ bool MarioActor::isEnableSpinPunch() {
         return out;
     }
 
-    if (getMovementStates()._A && mMario->calcDistToCeil(false) < 160.0f) {
+    if (getMovementStates().squat && mMario->calcDistToCeil(false) < 160.0f) {
         return false;
     }
 
@@ -52,7 +52,7 @@ bool MarioActor::trySpinPunch() {
             playSound("スケキヨ終了スピン", -1);
         }
 
-        if (getMovementStates()._A) {
+        if (getMovementStates().squat) {
             if (mMario->calcDistToCeil(false) > 160.0f) {
                 changeAnimation("サマーソルト");
                 playSound("スピンジャンプ", -1);
@@ -96,7 +96,7 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
         }
     }
 
-    if (!getMovementStates()._2B) {
+    if (!getMovementStates().spinBlocked) {
         jumpHop();
     }
 
@@ -196,7 +196,7 @@ bool MarioActor::sendBodyAttack(HitSensor* pSensor) {
         isStatus = false;
     }
 
-    if (isStatus && !getMovementStates()._8 && !isDamaging() && !getMovementStates()._B) {
+    if (isStatus && !getMovementStates().frontWall && !isDamaging() && !getMovementStates().hipDrop) {
         Vec3f newPos(pSensor->mPosition - getSensor("body")->mPosition);
         Vec3f* frontVec = &mMario->mFrontVec;
         if (MR::diffAngleAbsHorizontal(newPos, *frontVec, getGravityVector()) >= HALF_PI) {

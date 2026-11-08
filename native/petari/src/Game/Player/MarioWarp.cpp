@@ -10,10 +10,6 @@
 
 
 bool Mario::doObjWarp(LiveActor* pActor) {
-    if (getPlayer()->getMovementStates().debugMode) {
-        return false;
-    }
-
     if (isStatusActive(MarioStatus_Warp)) {
         return false;
     }
@@ -61,10 +57,6 @@ bool Mario::doObjWarp(LiveActor* pActor) {
 }
 
 bool Mario::doPointWarp(const Vec3f& rVec1, const Vec3f& rVec2, s32 myInt) {
-    if (getPlayer()->getMovementStates().debugMode) {
-        return false;
-    }
-
     if (isStatusActive(MarioStatus_Warp)) {
         return false;
     }
@@ -171,10 +163,6 @@ void MarioWarp::calcAxis() {
 }
 
 void Mario::doCubeWarp() {
-    if (getPlayer()->getMovementStates().debugMode) {
-        return;
-    }
-
     if (isStatusActive(MarioStatus_Warp)) {
         return;
     }
@@ -232,10 +220,6 @@ void Mario::doCubeWarp() {
 }
 
 bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
-    if (getPlayer()->getMovementStates().debugMode) {
-        return false;
-    }
-
     if (isStatusActive(MarioStatus_Warp)) {
         return false;
     }
@@ -355,7 +339,7 @@ bool MarioWarp::start() {
     }
 
     if (!_44) {
-        getPlayer()->mMovementStates._2B = true;
+        getPlayer()->mMovementStates.spinBlocked = true;
     }
 
     return true;
@@ -363,8 +347,8 @@ bool MarioWarp::start() {
 
 bool MarioWarp::update() {
     if (!_44) {
-        getPlayer()->mMovementStates._2B = true;
-        getPlayer()->mMovementStates._22 = true;
+        getPlayer()->mMovementStates.spinBlocked = true;
+        getPlayer()->mMovementStates.inputLocked = true;
     }
 
     clearVelocity();
@@ -473,7 +457,7 @@ bool MarioWarp::update() {
 }
 
 bool MarioWarp::close() {
-    getPlayer()->mMovementStates._1 = true;
+    getPlayer()->mMovementStates.onGround = true;
     getPlayer()->mMovementStates.jumping = false;
     Mario* player = getPlayer();
     player->mMoveLockTimer = 16;
@@ -536,9 +520,9 @@ bool MarioWarp::close() {
             mActor->_A6E = 0;
         }
 
-        getPlayer()->mMovementStates._1 = false;
+        getPlayer()->mMovementStates.onGround = false;
         getPlayer()->mMovementStates.jumping = true;
-        getPlayer()->mMovementStates._2B = true;
+        getPlayer()->mMovementStates.spinBlocked = true;
         getPlayer()->mAirWalkTimer = 0;
         getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
         changeAnimation("落下");
@@ -564,9 +548,9 @@ bool MarioWarp::close() {
     }
 
     if (getPlayerMode() != 6) {
-        getPlayer()->mMovementStates._22 = true;
+        getPlayer()->mMovementStates.inputLocked = true;
     } else {
-        getPlayer()->mMovementStates._22 = false;
+        getPlayer()->mMovementStates.inputLocked = false;
     }
 
     _4C = nullptr;

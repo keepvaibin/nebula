@@ -133,7 +133,7 @@ bool MarioActor::tryAttackMsg(u32 msg, const HitSensor* pSensor, bool* pHandled)
 
     switch (msg) {
     case ACTMES_ENEMY_ATTACK_FLIP_VERYWEAK:
-        if (getMovementStates()._1 && !isAnimationRun(nullptr)) {
+        if (getMovementStates().onGround && !isAnimationRun(nullptr)) {
             changeAnimation("ノーダメージ");
         }
 
@@ -287,7 +287,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
                 return false;
             }
 
-            if (mMario->mMovementStates._B && mMario->mMovementStates.jumping && tryHipDropAttack(pSender)) {
+            if (mMario->mMovementStates.hipDrop && mMario->mMovementStates.jumping && tryHipDropAttack(pSender)) {
                 return false;
             }
         }
@@ -323,7 +323,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
                 }
 
                 if (!mMario->isRising() && !MR::sendMsgPush(pSender, pReceiver)) {
-                    if (getMovementStates()._B) {
+                    if (getMovementStates().hipDrop) {
                         mMario->startHipDropSlide(pSender);
                     } else {
                         mMario->startJumpDropSlide(pSender);
@@ -364,7 +364,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         mMario->invalidateRelativePosition();
         break;
     case ACTMES_INHALE_BLACK_HOLE:
-        if (mMario->mHitStates._8) {
+        if (mMario->mHitStates.launchedFar) {
             return false;
         }
 
@@ -374,8 +374,8 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         return true;
     case ACTMES_REFLECT_V:
         if (mMario->getCurrentStatus() != MarioStatus_Damage && MR::isSensorPlayer(pReceiver)) {
-            mMario->mMovementStates._5 = false;
-            mMario->mMovementStates._2B = true;
+            mMario->mMovementStates.jumpChain = false;
+            mMario->mMovementStates.spinBlocked = true;
             mMario->mAirWalkTimer = 0;
             mMario->cutGravityElementFromJumpVec(true);
             return true;
@@ -399,8 +399,8 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
             }
 
             mMario->tryForceFreeJump(velocity);
-            mMario->mMovementStates._9 = false;
-            mMario->mMovementStates._6 = false;
+            mMario->mMovementStates.wallJump = false;
+            mMario->mMovementStates.wallSlipUp = false;
             return true;
         }
 
@@ -422,8 +422,8 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 
             mMario->tryForcePowerJump(velocity, false);
             stopAnimation(nullptr);
-            mMario->mMovementStates._9 = false;
-            mMario->mMovementStates._6 = false;
+            mMario->mMovementStates.wallJump = false;
+            mMario->mMovementStates.wallSlipUp = false;
             playSound("声壁反射", -1);
             return true;
         }
@@ -586,7 +586,7 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
         }
     }
 
-    if (mMario->getMovementStates()._A && mMario->mMovementStates._1) {
+    if (mMario->getMovementStates().squat && mMario->mMovementStates.onGround) {
         return false;
     }
 

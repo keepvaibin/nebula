@@ -166,7 +166,6 @@ public:
     virtual CubeCameraArea* getCubeCameraArea() const;
     virtual Triangle* getGroundTriangle() const;
     virtual GravityInfo* getGravityInfo() const;
-    virtual bool isDebugMode() const;
     virtual Pos3f* getMapBaseMtx() const;
 
     const MarioActor* mActor;

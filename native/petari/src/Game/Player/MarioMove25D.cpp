@@ -17,7 +17,7 @@ void Mario::set25Dmode(const AreaObj* pArea) {
     m25DUp = up;
     m25DAcross.cross(m25DNormal, m25DUp);
     MR::normalize(&m25DAcross);
-    mMovementStates._3A = true;
+    mMovementStates.mode25D = true;
 }
 
 void Mario::update25Dmode() {
@@ -71,11 +71,11 @@ void Mario::update25Dmode() {
 
     if (!isStickOn()) {
         m25DMode = mode;
-        mMovementStates._3B = false;
-    } else if (!mMovementStates._3B && mStickPos.z > 0.7f) {
+        mMovementStates.stick25DLatched = false;
+    } else if (!mMovementStates.stick25DLatched && mStickPos.z > 0.7f) {
         m25DStick.set(mStickPos.x, mStickPos.y);
         m25DMode = mode;
-        mMovementStates._3B = true;
+        mMovementStates.stick25DLatched = true;
     } else {
         Vec2f stick(mStickPos.x, mStickPos.y);
         if (MR::diffAngleAbs(m25DStick, stick) >= 0.7853982f) {

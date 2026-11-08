@@ -23,8 +23,8 @@ bool Mario::blown(const Vec3f& rVec) {
 
     mBlown->vecKillActor240(rVec);
 
-    mMovementStates._2C = true;
-    mMovementStates._A = false;
+    mMovementStates.blown = true;
+    mMovementStates.squat = false;
     mJumpKind = 3;
 
     return true;
@@ -48,9 +48,9 @@ bool MarioBlown::start() {
 
     playEffectTrans("壁ヒット", getPlayer()->getWallPos());
 
-    getPlayer()->mMovementStates._1 = false;
+    getPlayer()->mMovementStates.onGround = false;
     getPlayer()->mMovementStates.jumping = true;
-    getPlayer()->mMovementStates._B = false;
+    getPlayer()->mMovementStates.hipDrop = false;
 
     _18 += -mActor->_240 * mActor->getConst().getTable()->mJumpHeightBlown;
     getPlayer()->setJumpVec(_18);
@@ -82,12 +82,12 @@ bool MarioBlown::update() {
             }
         }
 
-        if (getPlayer()->getMovementStates()._1 || MR::isNearZero(getPlayer()->mVerticalSpeed)) {
+        if (getPlayer()->getMovementStates().onGround || MR::isNearZero(getPlayer()->mVerticalSpeed)) {
             getPlayer()->mMovementStates.jumping = false;
-            getPlayer()->mMovementStates._D = true;
+            getPlayer()->mMovementStates.forceGroundOnce = true;
 
             if (getPlayer()->damagePolygonCheck(getPlayer()->getGroundPolygon())) {
-                getPlayer()->mHitStates._16 = true;
+                getPlayer()->mHitStates.blown = true;
                 _24 = true;
                 return false;
             }
@@ -105,7 +105,7 @@ bool MarioBlown::update() {
 
         break;
     case 1:
-        if (!getPlayer()->getMovementStates()._1 && !MR::isNearZero(getPlayer()->mVerticalSpeed)) {
+        if (!getPlayer()->getMovementStates().onGround && !MR::isNearZero(getPlayer()->mVerticalSpeed)) {
             _25 = true;
             return false;
         }
@@ -153,7 +153,7 @@ bool MarioBlown::close() {
     getPlayer()->unlockGroundCheck(this);
 
     if (!_24) {
-        getPlayer()->mMovementStates._36 = false;
+        getPlayer()->mMovementStates.simpleGroundCheck = false;
     }
 
     return true;

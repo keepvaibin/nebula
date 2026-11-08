@@ -253,7 +253,7 @@ bool MarioRecovery::update() {
         break;
     }
     case 2:
-        getPlayer()->mActionStates._2 = true;
+        getPlayer()->mActionStates.recoveryLand = true;
         return false;
     case 3:
         if (_16) {
@@ -281,7 +281,7 @@ bool MarioRecovery::update() {
 
 bool MarioRecovery::close() {
     MR::endGlobalEventCamera("引き戻し", -1, true);
-    getPlayer()->mMovementStates._1 = true;
+    getPlayer()->mMovementStates.onGround = true;
     getPlayer()->mMovementStates.jumping = false;
     Mario* player = getPlayer();
     player->mMoveLockTimer = 16;

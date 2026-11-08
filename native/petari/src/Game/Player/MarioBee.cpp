@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 void Mario::beeMarioOnGround() {
-    if (getPlayerMode() == PlayerMode_Bee && !mDrawStates._C && mMovementStates._1 && !mMovementStates._23 && !isStatusActive(MarioStatus_Slider)) {
+    if (getPlayerMode() == PlayerMode_Bee && !mDrawStates.onSlipFloor && mMovementStates.onGround && !mMovementStates.slopeSlide && !isStatusActive(MarioStatus_Slider)) {
         getPlayer()->incAirWalkTimer();
         getPlayer()->incAirWalkTimer();
         getPlayer()->incAirWalkTimer();
@@ -35,7 +35,7 @@ void MarioActor::entryWallWalkMode(const Vec3f& position, const Vec3f& normal) {
         mMario->setFrontVecKeepUp(front, 1u);
         setBlendMtxTimer(2);
         _38C = 5;
-        mMario->mMovementStates._38 = false;
+        mMario->mMovementStates.jumpBuffered = false;
         _214->_305 = true;
     }
 }
@@ -44,7 +44,7 @@ bool Mario::beeMarioOnAir() {
     if (mBeeFlyInhibitTimer) {
         mBeeFlyInhibitTimer--;
         if (!mBeeFlyInhibitTimer) {
-            mMovementStates._2F = false;
+            mMovementStates.forcedLaunch = false;
         }
     }
 
@@ -81,15 +81,14 @@ bool Mario::beeMarioOnAir() {
                 mJumpVec += getAirGravityVec() * verticalSpeed;
             }
 
-            if (!mMovementStates._11 && mAirWalkTimer) {
+            if (!mMovementStates.beeFly && mAirWalkTimer) {
                 if (mBeeGravityReviveTimer < 30) {
                     mBeeGravityReviveTimer = 30;
                     mBeeUpDownSpeed = 0.0f;
                 }
 
-                mMovementStates._12 = true;
                 mJumpStartPos = mPosition;
-                mMovementStates._11 = true;
+                mMovementStates.beeFly = true;
             }
 
             s16 inhibitTime = mActor->getConst().getTable()->mBeeAirWalkInhibitTime;
@@ -109,7 +108,7 @@ bool Mario::beeMarioOnAir() {
 
                 u16 previousTime = mAirWalkTimer;
                 if (mAirWalkTimer) {
-                    if (!mMovementStates._F && mAirWalkTimer > mActor->getConst().getTable()->mAirWalkTime) {
+                    if (!mMovementStates.tornado && mAirWalkTimer > mActor->getConst().getTable()->mAirWalkTime) {
                         mAirWalkTimer = mActor->getConst().getTable()->mAirWalkTime;
                     }
 
@@ -121,10 +120,10 @@ bool Mario::beeMarioOnAir() {
                         playSound("ハチ体力切れ");
                     }
 
-                    mMovementStates._11 = false;
+                    mMovementStates.beeFly = false;
                     stopAnimation("ハチ飛行中");
                 } else {
-                    if (!mMovementStates._F) {
+                    if (!mMovementStates.tornado) {
                         if (!isAnimationRun("ハチ壁ジャンプ") && !isAnimationRun("ハチスピン空中")) {
                             changeAnimation("ハチ飛行中", "落下");
                         }
@@ -172,7 +171,7 @@ bool Mario::beeMarioOnAir() {
                     }
 
                     if (!mBeeFlyInhibitTimer) {
-                        if (!getPlayer()->mHitStates._5) {
+                        if (!getPlayer()->mHitStates.karikariClinging) {
                             if (mBeeUpDownSpeed < -mActor->getConst().getTable()->mBeeUpSpeedMax) {
                                 mBeeUpDownSpeed = -mActor->getConst().getTable()->mBeeUpSpeedMax;
                             }
@@ -182,7 +181,7 @@ bool Mario::beeMarioOnAir() {
                     }
 
                     addVelocity(*getGravityVec(), mBeeUpDownSpeed);
-                    if (!getPlayer()->mHitStates._5 && verticalSpeed > 0.0f) {
+                    if (!getPlayer()->mHitStates.karikariClinging && verticalSpeed > 0.0f) {
                         verticalSpeed *= mActor->getConst().getTable()->mBeePushRiseGravityEraser;
                     }
 

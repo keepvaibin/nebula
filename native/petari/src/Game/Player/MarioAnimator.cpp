@@ -212,10 +212,10 @@ void MarioAnimator::update() {
     if (mXanimePlayer->isAnimationRunSimple()) {
         if (!mActor->_EA4 && !mActor->_3C0) {
             Mario* player = getPlayer();
-            if (!player->mMovementStates._22) {
+            if (!player->mMovementStates.inputLocked) {
                 if (!mActor->_934) {
                     player = getPlayer();
-                    if (player->mMovementStates._1) {
+                    if (player->mMovementStates.onGround) {
                         stopAnimation(nullptr);
                     }
                 }
@@ -250,7 +250,7 @@ void MarioAnimator::update() {
     }
 
     player = getPlayer();
-    if (player->mDrawStates._A) {
+    if (player->mDrawStates.atEdge) {
         bool normalMode = !isPlayerModeHopper();
         if (normalMode) {
             player = getPlayer();
@@ -260,9 +260,9 @@ void MarioAnimator::update() {
                 }
 
                 player = getPlayer();
-                if (player->mMovementStates._B) {
+                if (player->mMovementStates.hipDrop) {
                     getPlayer()->mMovementStates.jumping = false;
-                    getPlayer()->mMovementStates._B = false;
+                    getPlayer()->mMovementStates.hipDrop = false;
                     stopAnimation(nullptr, "基本");
                 }
 
@@ -277,7 +277,7 @@ void MarioAnimator::update() {
 
     if (isAnimationRun("崖ふんばり")) {
         player = getPlayer();
-        if (!player->mMovementStates._1) {
+        if (!player->mMovementStates.onGround) {
             stopAnimation("崖ふんばり", "落下");
             player = getPlayer();
             player->mLedgeFallTimer = 15;
@@ -296,7 +296,7 @@ void MarioAnimator::update() {
         }
 
         player = getPlayer();
-        if (player->mMovementStates._A) {
+        if (player->mMovementStates.squat) {
             stopAnimation(nullptr);
         }
 
@@ -304,16 +304,16 @@ void MarioAnimator::update() {
     }
 
     player = getPlayer();
-    if (player->mMovementStates._A) {
+    if (player->mMovementStates.squat) {
         goto squatWalk;
     }
 
     player = getPlayer();
-    if (player->mPrevMovementStates._A) {
+    if (player->mPrevMovementStates.squat) {
         player = getPlayer();
         if (!player->mMovementStates.jumping) {
             player = getPlayer();
-            if (player->mMovementStates._1 == 1) {
+            if (player->mMovementStates.onGround == 1) {
                 goto squatWalk;
             }
         }
@@ -323,7 +323,7 @@ void MarioAnimator::update() {
 
 squatWalk:
     player = getPlayer();
-    if (player->mMovementStates._23) {
+    if (player->mMovementStates.slopeSlide) {
         goto afterBrake;
     }
 
@@ -357,7 +357,7 @@ squatWalk:
 
 notSquat:
     player = getPlayer();
-    if (player->mMovementStates._34) {
+    if (player->mMovementStates.onIce) {
         player = getPlayer();
         player->decideWalkSpeed();
         player = getPlayer();
@@ -394,7 +394,7 @@ notSquat:
     }
 
     player = getPlayer();
-    if (player->mMovementStates.turning || getPlayer()->mMovementStates._4) {
+    if (player->mMovementStates.turning || getPlayer()->mMovementStates.turnBrake) {
         player = getPlayer();
         player->decideWalkSpeed();
         goto doBrake;
@@ -770,10 +770,10 @@ f32 MarioAnimator::getUpperFrame() const {
 }
 
 void MarioAnimator::setWalkMode() {
-    if (!getPlayer()->mMovementStates._F && getPlayer()->mMovementStates._10 && !getPlayer()->mMovementStates._A && 0.0f == getPlayer()->mSlipPower &&
+    if (!getPlayer()->mMovementStates.tornado && getPlayer()->mMovementStates.turnStickNeutral && !getPlayer()->mMovementStates.squat && 0.0f == getPlayer()->mSlipPower &&
         static_cast< u8 >(getPlayer()->checkStickFrontBack()) == 2) {
         if (!isStatusActiveID(MarioStatus_Magic) && !isStatusActiveID(MarioStatus_Skate)) {
-            if (getPlayer()->mMovementStates._35) {
+            if (getPlayer()->mMovementStates.onSkatableFloor) {
                 change("ブレーキ滑り床");
             } else {
                 change("ブレーキ");
@@ -786,7 +786,7 @@ void MarioAnimator::setWalkMode() {
         mXanimePlayer->stopAnimation("ブレーキ滑り床");
     }
 
-    if (getPlayer()->mMovementStates._4 && !getPlayer()->mMovementStates._23) {
+    if (getPlayer()->mMovementStates.turnBrake && !getPlayer()->mMovementStates.slopeSlide) {
         getPlayer();
     }
 }
@@ -949,7 +949,7 @@ void MarioAnimator::updateJointRumble() {
 
     f32 hipRot = 0.7f * ((f32)_74 / 60.0f);
 
-    if (getPlayer()->mMovementStates._1 && !getPlayer()->mMovementStates._37 && getPlayer()->mTargetWalkSpeedIndex == 0 &&
+    if (getPlayer()->mMovementStates.onGround && !getPlayer()->mMovementStates.mode2D && getPlayer()->mTargetWalkSpeedIndex == 0 &&
         getPlayer()->calcAngleD(getPlayer()->mGroundNorm) > 5.0f) {
         Vec3f dir;
         const Vec3f* airGrav = &getAirGravityVec();
@@ -1078,7 +1078,7 @@ bool MarioAnimator::isMirrorAnimation() {
     }
 
     // Check if walling (player mMovementStates._37 bit check)
-    if (getPlayer()->mMovementStates._37) {
+    if (getPlayer()->mMovementStates.mode2D) {
         if (isAnimationRun("ブレーキ") || isAnimationRun("ターンブレーキ") || isAnimationRun("ターンジャンプ")) {
             if (!_10C) {
                 f32 frontDot = camDir.dot(getPlayer()->mFrontVec);
@@ -1157,7 +1157,7 @@ void MarioAnimator::changePickupAnimation(const HitSensor* pSensor) {
                 playEffect("ひろいクイック");
                 mActor->clearNullAnimation(-3);
                 startPadVib(2);
-            } else if (getPlayer()->mMovementStates.jumping && !getPlayer()->mMovementStates._B) {
+            } else if (getPlayer()->mMovementStates.jumping && !getPlayer()->mMovementStates.hipDrop) {
                 changeAnimation("ひろい空中");
                 mActor->clearNullAnimation(-3);
                 getPlayer()->stopWalk();

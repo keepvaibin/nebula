@@ -211,10 +211,6 @@ GravityInfo* CameraTargetPlayer::getGravityInfo() const {
     return mActor->getGravityInfo();
 }
 
-bool CameraTargetPlayer::isDebugMode() const {
-    return mActor->isDebugMode();
-}
-
 Pos3f* CameraTargetPlayer::getMapBaseMtx() const {
     return reinterpret_cast< Pos3f* >(mActor->getMapBaseMtx());
 }

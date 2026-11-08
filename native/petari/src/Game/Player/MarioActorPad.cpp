@@ -51,9 +51,9 @@ bool MarioActor::isRequestRush() const {
     }
 
     bool out = checkButtonType(_F10, false);
-    if (mMario->mActionStates._D) {
+    if (mMario->mActionStates.holdButtonAfterRush) {
         if (!out) {
-            mMario->mActionStates._D = false;
+            mMario->mActionStates.holdButtonAfterRush = false;
         }
 
         out = false;
@@ -72,9 +72,9 @@ bool MarioActor::isRequestThrow() const {
     }
 
     bool out = checkButtonType(_F10, false);
-    if (mMario->mActionStates._D) {
+    if (mMario->mActionStates.holdButtonAfterRush) {
         if (!out) {
-            mMario->mActionStates._D = false;
+            mMario->mActionStates.holdButtonAfterRush = false;
         }
 
         out = false;
@@ -246,7 +246,7 @@ void MarioActor::getStickValue(f32* pStickX, f32* pStickY) {
         return;
     }
 
-    if (mMario->getDrawStates()._7) {
+    if (mMario->getDrawStates().stickLocked) {
         return;
     }
 
@@ -361,7 +361,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (mMario->getMovementStates().jumping && mMario->mJumpKind == 2 && mMario->mActionStates._1F) {
+    if (mMario->getMovementStates().jumping && mMario->mJumpKind == 2 && mMario->mActionStates.jump2P) {
         return false;
     }
 

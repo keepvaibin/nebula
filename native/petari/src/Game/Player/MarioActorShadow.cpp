@@ -295,7 +295,7 @@ void MarioActor::drawShadow() const {
         return;
     }
 
-    if (mBeeWallWalk && mMario->mMovementStates._1) {
+    if (mBeeWallWalk && mMario->mMovementStates.onGround) {
         return;
     }
 
@@ -307,7 +307,7 @@ void MarioActor::drawShadow() const {
         return;
     }
 
-    if (mMario->mMovementStates._F && mMario->mTornadoTimer > 1) {
+    if (mMario->mMovementStates.tornado && mMario->mTornadoTimer > 1) {
         return;
     }
 
@@ -347,7 +347,7 @@ void MarioActor::drawShadow() const {
 }
 
 void MarioActor::decideShadowMode() {
-    if (getMovementStates()._2 && !mMario->isNotReflectGlassGround() && !mMario->isStatusActive(MarioStatus_FpView) &&
+    if (getMovementStates().shadowFound && !mMario->isNotReflectGlassGround() && !mMario->isStatusActive(MarioStatus_FpView) &&
         (mMario->mPolygonFloorCode == 14 || mMario->mPolygonFloorCode == 33)) {
         _A08 = 2;
         f32 distance = mMario->mVerticalSpeed / 500.0f;
@@ -509,9 +509,9 @@ void MarioActor::calcViewBlurModel() {
 }
 
 void MarioActor::calcViewFootPrint() {
-    if (!_934 && mMario->mMovementStates._1 &&
-        (mMario->mTargetWalkSpeedIndex || getMario()->mHitStates.mIsUnderwater || mMario->mWalkSpeed > 0.1f || mMario->isPlayerModeHopper())) {
-        if (!mMario->mSinkTimer && !mMario->mDrawStates._9 && !mMario->mDrawStates._A && mMario->mHitStates._13 && mMario->mHitStates._14 &&
+    if (!_934 && mMario->mMovementStates.onGround &&
+        (mMario->mTargetWalkSpeedIndex || getMario()->mHitStates.landed || mMario->mWalkSpeed > 0.1f || mMario->isPlayerModeHopper())) {
+        if (!mMario->mSinkTimer && !mMario->mDrawStates.baseTransPoint && !mMario->mDrawStates.atEdge && mMario->mHitStates.groundSameSensor && mMario->mHitStates.groundEvenSlope &&
             (mMario->checkCurrentFloorCodeSevere(13) || mMario->checkCurrentFloorCodeSevere(26))) {
             _B48->addPrint(mPosition, mMario->mFrontVec, mMario->mGroundNorm, false);
         }

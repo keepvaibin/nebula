@@ -1738,7 +1738,7 @@ void Mario::playSoundJ(const char* pSoundName, s32 timing) {
         switch (soundlist[index]._8.kind() & ~0x3) {
         case 0x4:
         case 0x8:
-            if (mDrawStates.mIsUnderwater || mDrawStates._13) {
+            if (mDrawStates.inWater || mDrawStates.inShallowWater) {
                 playSoundJ(soundlist[index]._C, -1);
             }
             break;

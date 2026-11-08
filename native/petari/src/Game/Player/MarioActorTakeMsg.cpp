@@ -32,10 +32,6 @@ void MarioActor::memorizeSensorThrow(HitSensor* pSensor) {
 }
 
 bool MarioActor::tryThrow() {
-    if (mMario->getMovementStates().debugMode) {
-        return false;
-    }
-
     if (mTakeCount == 0) {
         return false;
     }
@@ -227,7 +223,7 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
     getGroundPos(&ground);
     if (IsMarioSwimming()) {
         ground = center - _4B8 * 600.0f;
-    } else if (mMario->mMovementStates._1) {
+    } else if (mMario->mMovementStates.onGround) {
         Vec3f offset = ground - center;
         f32 height = MR::vecKillElement(offset, mMario->mGroundNorm, &offset);
         ground = center + mMario->mGroundNorm * height;

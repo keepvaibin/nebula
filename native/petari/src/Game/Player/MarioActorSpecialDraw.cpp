@@ -338,7 +338,7 @@ void MarioActor::drawScreenBlend() const {
     if (_BC4) {
         u32 color = 0xFF000080;
 
-        if (mMario->mHitStates._3) {
+        if (mMario->mHitStates.swimLifeDrain) {
             color = 0x00004020;
         }
 

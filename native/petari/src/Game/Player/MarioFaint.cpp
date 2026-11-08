@@ -8,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 bool Mario::doFlipWeak(const Vec3f& rVec) {
-    if (mMovementStates._1B) {
+    if (mMovementStates.damaged) {
         return false;
     }
 
@@ -44,11 +44,11 @@ bool Mario::faint(const Vec3f& rVec) {
     mActor->damageDropThrowMemoSensor();
 
     if (getCurrentStatus() != MarioStatus_Faint) {
-        mMovementStates._27 = true;
+        mMovementStates.fainted = true;
         return true;
     }
 
-    return mMovementStates._27;
+    return mMovementStates.fainted;
 }
 
 MarioFaint::MarioFaint(MarioActor* pActor) : MarioState(pActor, MarioStatus_Faint), mTimer(), _14(), _16() {
@@ -81,7 +81,7 @@ bool MarioFaint::update() {
 
         break;
     case 1:
-        if (!getPlayer()->getMovementStates()._1) {
+        if (!getPlayer()->getMovementStates().onGround) {
             return false;
         }
 
@@ -106,7 +106,7 @@ bool MarioFaint::update() {
 bool MarioFaint::start() {
     mTimer = 0;
     _16 = 0;
-    getPlayer()->mMovementStates._B = false;
+    getPlayer()->mMovementStates.hipDrop = false;
     getPlayer()->mMovementStates.jumping = false;
 
     if (_18.dot(getPlayer()->mFrontVec) > 0.0f) {
@@ -135,7 +135,7 @@ bool MarioFaint::start() {
         mActor->resetPlayerModeOnDamage();
 
         if (mActor->mHealth == 0) {
-            if (!getPlayer()->getMovementStates()._1) {
+            if (!getPlayer()->getMovementStates().onGround) {
                 mActor->forceGameOverNonStop();
             } else {
                 mActor->forceGameOver();
@@ -151,7 +151,7 @@ bool MarioFaint::start() {
 }
 
 bool MarioFaint::close() {
-    if (getPlayer()->getMovementStates()._1) {
+    if (getPlayer()->getMovementStates().onGround) {
         stopAnimation("後方小ダメージ");
         stopAnimation("前方小ダメージ", "基本");
     }

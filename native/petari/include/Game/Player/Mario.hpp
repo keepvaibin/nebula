@@ -477,109 +477,162 @@ public:
     void stick2DadjustGround(f32&, f32&);
     void calcDir2D(f32, f32, Vec3f*);
 
-    // instruction comments to make it easier to identify each bit
+    // His movement this frame; mPrevMovementStates is last frame's.
     struct MovementStates {
-        // Code reads these as words (mMovementStates_HIGH_WORD and the others): fields from the least significant value
-        // bit up in each word.
-        unsigned _1F : 1;
-        unsigned digitalJump : 1;  // _1E
-        unsigned _1D : 1;
-        unsigned _1C : 1;
-        unsigned _1B : 1;
-        unsigned _1A : 1;        // extrwi rX, rX, 1, 26
-        unsigned _19 : 1;        // extrwi rX, rX, 1, 25
-        unsigned _18 : 1;        // rlwinm rX, rX, 0, 25, 23
-        unsigned _17 : 1;        // extrwi rX, rX, 1, 23
-        unsigned debugMode : 1;  // _16
-        unsigned _15 : 1;
-        unsigned _14 : 1;
-        unsigned _13 : 1;
-        unsigned _12 : 1;
-        unsigned _11 : 1;
-        unsigned _10 : 1;  // rlwinm rX, rX, 0, 17, 15
-        unsigned _F : 1;
-        unsigned _E : 1;
-        unsigned _D : 1;
-        unsigned _C : 1;
-        unsigned _B : 1;
-        unsigned _A : 1;  // extrwi rX, rX, 1, 10
-        unsigned _9 : 1;
-        unsigned _8 : 1;
-        unsigned _7 : 1;
-        unsigned _6 : 1;
-        unsigned _5 : 1;
-        unsigned _4 : 1;
-        unsigned turning : 1;  // _3
-        unsigned _2 : 1;
-        unsigned _1 : 1;       // extrwi rX, rX, 1, 1
-        unsigned jumping : 1;  // _0 (srwi rX, rX, 31)
-        unsigned _3E : 2;  // clrrwi rX, rX, 2
-        unsigned _3D : 1;
-        unsigned _3C : 1;
-        unsigned _3B : 1;
-        unsigned _3A : 1;
-        unsigned _39 : 1;
-        unsigned _38 : 1;  // rlwimi rX, rX, 7, 24, 24
-        unsigned _37 : 1;
-        unsigned _36 : 1;
-        unsigned _35 : 1;
-        unsigned _34 : 1;
-        unsigned _33 : 1;
-        unsigned _32 : 1;
-        unsigned _31 : 1;
-        unsigned _30 : 1;
-        unsigned _2F : 1;
-        unsigned _2E : 1;
-        unsigned _2D : 1;
-        unsigned _2C : 1;
-        unsigned _2B : 1;
-        unsigned _2A : 1;
-        unsigned _29 : 1;
-        unsigned _28 : 1;
-        unsigned _27 : 1;
-        unsigned _26 : 1;
-        unsigned _25 : 1;
-        unsigned _24 : 1;
-        unsigned _23 : 1;  // extrwi rX, rX, 1, 3
-        unsigned _22 : 1;
-        unsigned _21 : 1;
-        unsigned _20 : 1;
+        unsigned invincible : 1;  // isInvincible; nothing in the source sets it (listed)
+        unsigned waitStickNeutral : 1;  // a wall or ledge move holds off the next wall stick until the stick is let go
+        unsigned damaged : 1;  // a damage hit is pending (damage, a rush ending in a hit)
+        unsigned sideWall : 1;  // a wall at his side (checkAllWall)
+        unsigned backWall : 1;  // a wall behind him (checkAllWall)
+        unsigned baseRotated : 1;  // the base he stands on turned this frame (moveRelativePosition)
+        unsigned wallJumpQueued : 1;  // an A press starts the wall jump (procJump); nothing sets it (listed)
+        unsigned frontLedge : 1;  // the floor past the front wall is above the hit (calcFrontFloor)
+        unsigned groundMissing : 1;  // the last ground check found no ground
+        unsigned jumpHeld : 1;  // the jump button is held since takeoff (procJump clears it on release)
+        unsigned beeFly : 1;  // the bee is flying (beeMarioOnAir)
+        unsigned turnStickNeutral : 1;  // the stick went neutral while a turn was ready (mainMove)
+        unsigned tornado : 1;  // the spin-tornado jump
+        unsigned digitalJump : 1;  // a fixed-height jump (isDigitalJump)
+        unsigned forceGroundOnce : 1;  // the next ground check reports ground once (MarioBlown)
+        unsigned spinStartWithSquat : 1;  // like squat, a hard stop starts the start spin (decideInertia); nothing sets it (listed)
+        unsigned hipDrop : 1;  // the hip drop
+        unsigned squat : 1;  // squatting
+        unsigned wallJump : 1;  // a wall, stick or rush jump is rising (slip-up checks)
+        unsigned frontWall : 1;  // a wall straight ahead (checkAllWall)
+        unsigned binderHit : 1;  // the binder touched the map this frame (updateBinderInfo)
+        unsigned wallSlipUp : 1;  // sliding up a wall (decideSlipUp)
+        unsigned jumpChain : 1;  // the last jump can chain into the next (tryJump, JumpConnectTime)
+        unsigned turnBrake : 1;  // the turn brake (mainMove)
+        unsigned turning : 1;
+        unsigned shadowFound : 1;  // the shadow ray found a floor (calcShadowPos)
+        unsigned onGround : 1;
+        unsigned jumping : 1;  // in the air
+        unsigned launchKind : 2;  // 1 after a rush launch (lands on the shadow), 2 after a scenario starter (endRush)
+        unsigned scaleBody : 1;  // the actor's scale goes into the base matrix (crush, black hole)
+        unsigned stick25DLatched : 1;  // the 2.5D section latched the stick (update25Dmode)
+        unsigned mode25D : 1;  // a 2.5D section (set25Dmode)
+        unsigned frontFloorFound : 1;  // a floor to stand on past the front wall (calcFrontFloor)
+        unsigned jumpBuffered : 1;  // a jump pressed in the air, taken on landing (isEnableFutureJump)
+        unsigned mode2D : 1;  // a 2D section (check2DMode)
+        unsigned simpleGroundCheck : 1;  // the simple ground check is in use
+        unsigned onSkatableFloor : 1;
+        unsigned onIce : 1;  // ice walking and inertia (decideOnIceAnimation, decideInertiaOnIce); nothing sets it (listed)
+        unsigned sideWallCorner : 1;  // the side wall hit is at a corner or an edge
+        unsigned frontWallGlancing : 1;  // a wall ahead, not head-on (checkAllWall)
+        unsigned hangAllowed : 1;  // set on the ground, cleared under a ceiling (checkHang)
+        unsigned hangBlocked : 1;  // set on the ground, cleared once rising or 20 frames in the air: no hang or wall stick yet
+        unsigned forcedLaunch : 1;  // a forced rush launch or power jump
+        unsigned freeJumpDelay : 1;  // a free jump waits for its frame (tryFreeJumpDelay)
+        unsigned forceJumpDelay : 1;  // a forced jump waits for its frame (tryForceJumpDelay)
+        unsigned blown : 1;  // blown away (blown)
+        unsigned spinBlocked : 1;  // no spin until a tornado sensor or the next jump (flips, blows, warps, mud jumps)
+        unsigned slipUpBlocked : 1;  // this jump can't start a wall slip-up (forced jumps; a jump begun at a wall)
+        unsigned slipUpJumped : 1;  // the slip-up jump was taken; cleared on the ground
+        unsigned fainted : 1;
+        unsigned squatWalk : 1;  // the squat walk is moving (decideSquatWalkAnimation)
+        unsigned slopeFloorFound : 1;  // a floor down the slope (checkMap)
+        unsigned slopeSlide : 1;  // sliding on a slope (slopeMove)
+        unsigned inputLocked : 1;  // pad input is off (checkKeyLock, warps, rush ends; isInputDisable)
+        unsigned squatLocked : 1;  // no squat until the squat button is let go (after jumps)
+        unsigned noDropSpeedCap : 1;  // with jump kind 0xD, no cap on the fall speed (procJump)
     };
+    // Action flags kept across frames; mPrevActionStates is last frame's.
+    struct ActionStates {
+        unsigned jump2P : 1;  // the second player's assisted jump
+        unsigned jetJumped : 1;  // the swim jet jump (MarioSwim::doJetJump)
+        unsigned onimasuWrapped : 1;  // the Onimasu wrap was taken (updateOnimasu)
+        unsigned steepGravityStop : 1;  // the gravity turned steeply on the ground: mainMove holds for a frame
+        unsigned spinJumpLand : 1;  // a spin jump's landing may swing (doLanding)
+        unsigned crushRequested : 1;  // a crush is pending (requestCrush)
+        unsigned jumpOnEnforcer : 1;  // the jump started on an enforced-move floor (recordJumpEnforceMove)
+        unsigned circular2D : 1;  // a circular 2D section (check2DMode)
+        unsigned rushElectricDamage : 1;  // a rush ended in electric damage
+        unsigned inTower : 1;  // inside a tower area (updateCubeCode)
+        unsigned heavySteeringTurn : 1;  // HeavySteeringCube: the slow turn
+        unsigned heavySteeringStick : 1;  // HeavySteeringCube: the stick dead zone
+        unsigned baseRotatedAboutUp : 1;  // the base turned about the up axis (moveRelativePosition)
+        unsigned squatEnded : 1;  // a squat or hang just ended; the wait animation restarts
+        unsigned wallJumpHit : 1;  // the wall jump's hit was handled (checkWallJumpHit)
+        unsigned holdButtonAfterRush : 1;  // the rush button is still held from the rush (isRequestRush, isRequestThrow)
+        unsigned uTurn : 1;  // a large turn at full turn time (mainMove)
+        unsigned stickWasNeutral : 1;  // the stick was neutral (retainMoveDir)
+        unsigned retainInAir : 1;  // the move direction may be kept in the air (retainMoveDir)
+        unsigned rollLanding : 1;  // the rush asked for a rolling landing
+        unsigned swimExited : 1;  // swimming or flying just ended; cleared on the ground (checkStartSwim)
+        unsigned planeCollision : 1;  // inside a PlaneCollisionCube
+        unsigned groundCheckSimple : 1;  // the locked ground check is the simple one (lockGroundCheck)
+        unsigned groundCheckLocked : 1;  // an owner locked the ground check (lockGroundCheck)
+        unsigned gravityTurned : 1;  // the gravity changed direction (updateGravityVec, endRush; 2D clears it on the ground)
+        unsigned recoveryLand : 1;  // the recovery's landing (doLanding consumes it)
+        unsigned swingEffectPending : 1;  // the swing effect plays next frame (MarioEffect)
+        unsigned rushFireDamage : 1;  // a rush ended in fire or acid damage
+        unsigned zeroStickNextFrame : 1;  // inputStick reads a zero stick once (mainMove's move lock)
+        unsigned spinHipDrop : 1;  // the spin hip drop (jumpToHipDrop)
+        unsigned gravityFrontTurnPending : 1;  // the gravity turned about his front axis; HitStates gets it next frame
+        unsigned gravityFlipPending : 1;  // the gravity flipped; HitStates gets it next frame
+        unsigned gravityChangeSeen : 1;  // the gravity has changed since the last reset (setGravityVec)
+        unsigned jumpTakeoff : 1;  // a jump has started (tryJump)
+        unsigned slopePushed : 1;  // pushed while sliding (MarioActor::movement); checkGroundOnSlope passes it to HitStates
+        unsigned fooFlying : 1;  // the Foo flight ended in the air (isFlying)
+        unsigned remoteDemoSkipped : 1;  // the remote demo found him busy (readyRemoteDemo)
+    };
+    // This frame's results (cleared each frame); mPrevDrawStates is last frame's.
     struct DrawStates {
-        // Code reads these as a word (mHitStates_WORD masks): fields from the least significant value bit up, so each has
-        // the bit those masks name.
-        unsigned _1F : 1;
-        unsigned _1E : 1;
-        unsigned _1D : 1;
-        unsigned _1C : 1;
-        unsigned _1B : 1;
-        unsigned _1A : 1;
-        unsigned _19 : 1;
-        unsigned _18 : 1;
-        unsigned _17 : 1;
-        unsigned _16 : 1;
-        unsigned _15 : 1;
-        unsigned _14 : 1;
-        unsigned _13 : 1;
-        unsigned mIsUnderwater : 1;
-        unsigned _11 : 1;
-        unsigned _10 : 1;
-        unsigned _F : 1;
-        unsigned _E : 1;
-        unsigned _D : 1;
-        unsigned _C : 1;
-        unsigned _B : 1;
-        unsigned _A : 1;
-        unsigned _9 : 1;
-        unsigned _8 : 1;
-        unsigned _7 : 1;
-        unsigned _6 : 1;
-        unsigned _5 : 1;
-        unsigned _4 : 1;
-        unsigned _3 : 1;
-        unsigned _2 : 1;
-        unsigned _1 : 1;
-        unsigned _0 : 1;
+        unsigned teresaInWind : 1;  // the Boo is in wind (MarioTeresa::checkWind)
+        unsigned pressed : 1;  // pressed by the map or an object (checkVerticalPress, checkSidePress)
+        unsigned onWaterFloor : 1;  // on a water floor (floor codes 20-23)
+        unsigned teresaDrop : 1;  // the Boo's drop (MarioTeresa::procDrop)
+        unsigned keepJumpParam : 1;  // initJumpParam keeps the jump's parameters (enforced and squat jumps)
+        unsigned updated : 1;  // Mario::update ran this frame (or the stun stood in for it)
+        unsigned onFur : 1;  // the ground's wall code is Fur (the bee sticks)
+        unsigned edgePushBack : 1;  // pushed back from a ledge with no wall behind (checkGround)
+        unsigned wallSlope : 1;  // a steep wall beside the ground: mWallSlope is set (checkAllWall)
+        unsigned retainMoveDirRan : 1;  // retainMoveDir ran this frame
+        unsigned headHit : 1;  // the head hit a ceiling point (checkHeadPoint)
+        unsigned hipDropLand : 1;  // the hip drop or slider landing (isHipDropLand)
+        unsigned inShallowWater : 1;  // on a shallow-water floor (floor code 23)
+        unsigned inWater : 1;  // in water (the swim's body check or a water floor)
+        unsigned postureSet : 1;  // postureCtrl set the posture this frame
+        unsigned wallDamageCheck : 1;  // inside damageWallCheck
+        unsigned wallGravity : 1;  // mWallNorm is set: the wall's gravity applies (checkAllWall)
+        unsigned moveDirKept : 1;  // the move direction is kept from the last frame (retainMoveDir)
+        unsigned onSlipFloor : 1;  // the ground is a slip floor (updateGroundInfo)
+        unsigned enforcedMove : 1;  // an enforced move holds him: no jumps (checkEnforceMoveInner)
+        unsigned atEdge : 1;  // held back at a ledge or a danger floor's edge
+        unsigned baseTransPoint : 1;  // on a base-trans point (checkBaseTransPoint)
+        unsigned endTornado : 1;  // the tornado ends (procJump, jumpToHipDrop, forceStopTornado)
+        unsigned stickLocked : 1;  // the stick is locked (checkKeyLock)
+        unsigned binderFloorHit : 1;  // the binder touched a floor (updateBinderInfo)
+        unsigned homingLockOn : 1;  // a homing target is locked (checkLockOnHoming)
+        unsigned slopeRunUp : 1;  // running up a slope against it (slopeMove)
+        unsigned wallJumpForbidden : 1;  // no triangle jump here (camera area 2, ForbidTriangleJumpCube)
+        unsigned wallInhibited : 1;  // no wall moves here (camera area 1; isInhibitWall)
+        unsigned snappedToGround : 1;  // the velocity was pulled to the ground (checkGround)
+    };
+    // This frame's collision, push and gravity results (cleared each frame).
+    struct HitStates {
+        unsigned blown : 1;  // blown this frame (MarioBlown; damageFloorCheck)
+        unsigned groundEvenSlope : 1;  // three or more ground probes share the slope (checkGround)
+        unsigned groundSameSensor : 1;  // a ground probe hit the ground polygon's sensor (checkGround)
+        unsigned landed : 1;  // landed this frame (doLanding)
+        unsigned groundAllProbes : 1;  // every ground probe hit (checkGround)
+        unsigned enforcedMove : 1;  // an enforced move this frame (checkEnforceMoveInner)
+        unsigned ceilingNear : 1;  // the ceiling is within 160
+        unsigned safetySaved : 1;  // the last safe position was saved (saveLastSafetyTrans)
+        unsigned binderPushed : 1;  // the binder pushed him off an edge or a corner (updateBinderInfo)
+        unsigned slopePushed : 1;  // pushed while sliding (from ActionStates.slopePushed)
+        unsigned jump2PRequest : 1;  // the second player asked for a jump
+        unsigned jump2PDelayed : 1;  // the second player's delayed jump fires
+        unsigned jet : 1;  // the Foo or swim jet fired
+        unsigned launchedFar : 1;  // the rush launched him far (endRush)
+        unsigned jumpForbidden : 1;  // inside a ForbidJumpCube
+        unsigned trampleBlocked : 1;  // doTrampleJump returns at once; nothing sets it (listed)
+        unsigned karikariClinging : 1;  // Karikari cling to him
+        unsigned teresaAccel : 1;  // the Boo accelerates (MarioTeresa::checkAccel)
+        unsigned swimLifeDrain : 1;  // the swim drains his life (MarioSwim::updateLifeByTime)
+        unsigned gravityFrontTurn : 1;  // the gravity turned about his front axis
+        unsigned gravityFlip : 1;  // the gravity flipped
+        unsigned gravityChangeSeen : 1;  // from ActionStates.gravityChangeSeen
     };
 
     inline const MovementStates& getMovementStates() const {
@@ -624,39 +677,12 @@ public:
         mDamageAfterTimer = val;
     }
 
-    union {
-        MovementStates mMovementStates;
-        struct {
-            u32 mMovementStates_LOW_WORD;
-            u32 mMovementStates_HIGH_WORD;
-        };
-    };
-
-    union {
-        MovementStates mActionStates;  // action flags kept across frames (jumps, turns, landings); bits named in the bitfield batch
-        struct {
-            u32 mActionStates_LOW_WORD;
-            u32 mActionStates_HIGH_WORD;
-        };
-    };
-
-    union {
-        DrawStates mDrawStates;
-        u32 mDrawStates_WORD;
-    };
-    union {
-        DrawStates mHitStates;  // this frame's collision and push results (cleared each frame); bits named in the bitfield batch
-        u32 mHitStates_WORD;
-    };
-    union {
-        MovementStates mPrevMovementStates;  // last frame's mMovementStates (updateAndClearStrideParameter)
-        struct {
-            u32 mPrevMovementStates_LOW_WORD;
-            u32 mPrevMovementStates_HIGH_WORD;
-        };
-    };
-    u32 mPrevActionStatesLow;  // last frame's mActionStates low word (check2DMode reads bit 10)
-
+    MovementStates mMovementStates;
+    ActionStates mActionStates;
+    DrawStates mDrawStates;
+    HitStates mHitStates;
+    MovementStates mPrevMovementStates;
+    ActionStates mPrevActionStates;
     DrawStates mPrevDrawStates;
 
     f32 mPrevStickPower;  // last frame's stick power (inputStick keeps it before the new one)

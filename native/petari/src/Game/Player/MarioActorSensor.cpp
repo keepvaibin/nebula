@@ -58,7 +58,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
         }
 
         pSensor->mPosition.set(mCenterPos);
-        if (getMovementStates()._B && !getMovementStates()._1) {
+        if (getMovementStates().hipDrop && !getMovementStates().onGround) {
             pSensor->mPosition.add(mMario->mJumpVec);
         }
 
@@ -75,7 +75,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
 
         f32 radius = 600.0f;
         pSensor->mPosition.set(mCenterPos);
-        if (mMario->mMovementStates._F) {
+        if (mMario->mMovementStates.tornado) {
             radius = 1000.0f;
         }
 
@@ -194,7 +194,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
 }
 
 void MarioActor::doTrampleJump(HitSensor* pSensor) {
-    if (mMario->mHitStates._6) {
+    if (mMario->mHitStates.trampleBlocked) {
         return;
     }
 
@@ -203,7 +203,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
     }
 
     mMario->mAirWalkTimer = getConst().getTable()->mAirWalkTimeTornado;
-    mMario->mMovementStates._2B = false;
+    mMario->mMovementStates.spinBlocked = false;
     switch (pSensor->mType) {
     case 0x1F:
         _988 = 0;
@@ -275,7 +275,7 @@ void MarioActor::trampleJump(f32 normal, f32 extra) {
     mMario->tryForceFreeJump(velocity);
     mMario->popTask(&Mario::taskOnHipDropSlide);
     if (mPlayerMode != PlayerMode_Hopper) {
-        if (!mMario->mMovementStates._A) {
+        if (!mMario->mMovementStates.squat) {
             _988++;
             if (_988 == 1) {
                 changeAnimation("ジャンプふみ1");
@@ -301,9 +301,9 @@ void MarioActor::trampleJump(f32 normal, f32 extra) {
     playSound("声踏み", -1);
     playEffect("ふみつぶし");
     mMario->startPadVib(0u);
-    mMario->mMovementStates._2F = false;
-    mMario->mMovementStates._22 = false;
-    mMario->mMovementStates._3E = 0;
+    mMario->mMovementStates.forcedLaunch = false;
+    mMario->mMovementStates.inputLocked = false;
+    mMario->mMovementStates.launchKind = 0;
 }
 
 void MarioActor::attackSensor(HitSensor* pOwn, HitSensor* pOther) {

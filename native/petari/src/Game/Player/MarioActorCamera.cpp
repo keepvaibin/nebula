@@ -26,7 +26,7 @@ bool MarioActor::isFastRise() const {
 }
 
 bool MarioActor::isLongDrop() const {
-    if (mMario->getMovementStates()._2 == 0) {
+    if (mMario->getMovementStates().shadowFound == 0) {
         return true;
     }
 
@@ -34,16 +34,16 @@ bool MarioActor::isLongDrop() const {
 }
 
 bool MarioActor::isFastDrop() const {
-    return mMario->getMovementStates()._B;
+    return mMario->getMovementStates().hipDrop;
 }
 
 u32 MarioActor::getSpecialMode() const {
     u32 mode = 0;
-    if (mMario->getMovementStates().jumping && mMario->getMovementStates()._F) {
+    if (mMario->getMovementStates().jumping && mMario->getMovementStates().tornado) {
         mode = 1;
     }
 
-    if (mMario->getMovementStates().jumping && mMario->getMovementStates()._11) {
+    if (mMario->getMovementStates().jumping && mMario->getMovementStates().beeFly) {
         mode = 1;
     }
 

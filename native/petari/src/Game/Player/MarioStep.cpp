@@ -15,11 +15,11 @@ void Mario::checkStep() {
         return;
     }
 
-    if (mMovementStates._A) {
+    if (mMovementStates.squat) {
         return;
     }
 
-    if (!mMovementStates._1) {
+    if (!mMovementStates.onGround) {
         return;
     }
 
@@ -60,7 +60,7 @@ void Mario::checkStep() {
         return;
     }
 
-    if (mDrawStates._C) {
+    if (mDrawStates.onSlipFloor) {
         return;
     }
 
@@ -68,7 +68,7 @@ void Mario::checkStep() {
         return;
     }
 
-    if (mStepPolygon->isValid() && !mMovementStates._8 && mMovementStates._1) {
+    if (mStepPolygon->isValid() && !mMovementStates.frontWall && mMovementStates.onGround) {
         const f32 frontDot = mFrontVec.dot(*mStepPolygon->getNormal(0));
         Vec3f horizontal;
         MR::vecKillElement(mStepHitPos - mPosition, -*getGravityVec(), &horizontal);
@@ -87,11 +87,11 @@ void Mario::checkStep() {
         return;
     }
 
-    if (!mMovementStates._15) {
+    if (!mMovementStates.frontLedge) {
         return;
     }
 
-    if (!mMovementStates._39) {
+    if (!mMovementStates.frontFloorFound) {
         return;
     }
 
@@ -161,7 +161,7 @@ void Mario::startStep(const Vec3f& rVec) {
     mVelocity.z = zero;
     mVelocity.y = zero;
     mVelocity.x = zero;
-    mMovementStates._10 = false;
+    mMovementStates.turnStickNeutral = false;
 }
 
 MarioStep::MarioStep(MarioActor* pActor) : MarioState(pActor, MarioStatus_Step) {

@@ -4,12 +4,12 @@
 #include "Game/Player/MarioSwim.hpp"
 
 bool Mario::checkWaterDamage() {
-    if (mMovementStates._1B) {
-        mMovementStates._1B = 0;
+    if (mMovementStates.damaged) {
+        mMovementStates.damaged = 0;
         mSwim->addDamage(mDamageDir);
         return true;
-    } else if (mMovementStates._27) {
-        mMovementStates._27 = 0;
+    } else if (mMovementStates.fainted) {
+        mMovementStates.fainted = 0;
         mSwim->addFaint(mDamageDir);
         return true;
     } else {

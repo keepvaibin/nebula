@@ -38,22 +38,22 @@ void Mario::checkHang() {
     }
 
     if (mMovementStates.jumping && isRising()) {
-        mMovementStates._30 = false;
+        mMovementStates.hangBlocked = false;
     }
 
     if (mMovementStates.jumping && mAirTimer > 20) {
-        mMovementStates._30 = false;
+        mMovementStates.hangBlocked = false;
     }
 
     if (isCeiling()) {
-        mMovementStates._31 = false;
+        mMovementStates.hangAllowed = false;
     }
 
-    if (!mMovementStates._31) {
+    if (!mMovementStates.hangAllowed) {
         return;
     }
 
-    if (getPlayer()->mDrawStates.mIsUnderwater) {
+    if (getPlayer()->mDrawStates.inWater) {
         return;
     }
 
@@ -76,7 +76,7 @@ void Mario::checkHang() {
     bool front = true;
     bool back = true;
     bool side = true;
-    if (mMovementStates._1A) {
+    if (mMovementStates.sideWall) {
         const Triangle* pTriangle = mSideWallTriangle;
         if (!MR::isSameMtx(pTriangle->getBaseMtx()->toMtxPtr(), pTriangle->getPrevBaseMtx()->toMtxPtr())) {
             front = false;
@@ -84,7 +84,7 @@ void Mario::checkHang() {
         }
     }
 
-    if (mMovementStates._8) {
+    if (mMovementStates.frontWall) {
         const Triangle* pTriangle = mFrontWallTriangle;
         if (!MR::isSameMtx(pTriangle->getBaseMtx()->toMtxPtr(), pTriangle->getPrevBaseMtx()->toMtxPtr())) {
             side = false;
@@ -92,7 +92,7 @@ void Mario::checkHang() {
         }
     }
 
-    if (mMovementStates._19) {
+    if (mMovementStates.backWall) {
         const Triangle* pTriangle = mBackWallTriangle;
         if (!MR::isSameMtx(pTriangle->getBaseMtx()->toMtxPtr(), pTriangle->getPrevBaseMtx()->toMtxPtr())) {
             front = false;
@@ -101,7 +101,7 @@ void Mario::checkHang() {
     }
 
     Vec3f previousPosition(mPosition);
-    if (front && mMovementStates._39 && isEnableHang()) {
+    if (front && mMovementStates.frontFloorFound && isEnableHang()) {
         Vec3f direction(mFrontFloorPos - mPosition);
         MR::vecKillElement(direction, getAirGravityVec(), &direction);
         MR::normalizeOrZero(&direction);
@@ -187,7 +187,7 @@ void Mario::checkHang() {
             bool found = fixHangDir(position, &hangDirection);
             setTrans(position, nullptr);
             setFrontVecKeepUp(normal);
-            mMovementStates._1D = true;
+            mMovementStates.waitStickNeutral = true;
             if (!found) {
                 mHang->recordWallPolygon(mBackWallTriangle);
             }
@@ -246,7 +246,7 @@ void Mario::checkHang() {
             bool found = fixHangDir(position, &hangDirection);
             setTrans(position, nullptr);
             setFrontVecKeepUp(normal);
-            mMovementStates._1D = true;
+            mMovementStates.waitStickNeutral = true;
             if (!found) {
                 mHang->recordWallPolygon(mSideWallTriangle);
             }
@@ -260,7 +260,7 @@ void Mario::checkHang() {
         mLedgeFallTimer = 0;
         for (u32 i = 0; i < 10; i++) {
             updateGroundInfo();
-            if (mMovementStates._1) {
+            if (mMovementStates.onGround) {
                 return;
             }
 
@@ -270,19 +270,19 @@ void Mario::checkHang() {
 }
 
 bool Mario::isEnableHang() {
-    if (!mMovementStates._8) {
+    if (!mMovementStates.frontWall) {
         return false;
     }
 
-    if (!mMovementStates._15) {
+    if (!mMovementStates.frontLedge) {
         return false;
     }
 
-    if (mMovementStates._B) {
+    if (mMovementStates.hipDrop) {
         return false;
     }
 
-    if (mDrawStates._1E) {
+    if (mDrawStates.pressed) {
         return false;
     }
 
@@ -347,15 +347,15 @@ bool Mario::isEnableBackHang() {
         }
 
         turn = true;
-    } else if (!mMovementStates._30) {
+    } else if (!mMovementStates.hangBlocked) {
         return false;
     }
 
-    if (!mMovementStates._19) {
+    if (!mMovementStates.backWall) {
         return false;
     }
 
-    if (mMovementStates._B) {
+    if (mMovementStates.hipDrop) {
         return false;
     }
 
@@ -412,15 +412,15 @@ bool Mario::isEnableBackHang() {
 }
 
 bool Mario::isEnableSideHang() {
-    if (mHitStates._1 || mHitStates._2) {
+    if (mHitStates.gravityFlip || mHitStates.gravityFrontTurn) {
         return false;
     }
 
-    if (!mMovementStates._30) {
+    if (!mMovementStates.hangBlocked) {
         return false;
     }
 
-    if (!mMovementStates._1A) {
+    if (!mMovementStates.sideWall) {
         return false;
     }
 
@@ -465,7 +465,7 @@ bool Mario::isEnableSideHang() {
         }
     }
 
-    if (!mMovementStates._33) {
+    if (!mMovementStates.sideWallCorner) {
         return false;
     }
 
@@ -538,7 +538,7 @@ bool MarioHang::start() {
 }
 
 bool MarioHang::update() {
-    getPlayer()->mDrawStates._A = false;
+    getPlayer()->mDrawStates.atEdge = false;
     Pos3f matrix;
     matrix.identity();
     MR::makeMtxWithoutScale(&matrix, *_20->getBaseMtx());
@@ -568,7 +568,7 @@ bool MarioHang::update() {
             return false;
         }
     } else {
-        if (getPlayer()->mMovementStates._1A && _14 > 2) {
+        if (getPlayer()->mMovementStates.sideWall && _14 > 2) {
             Vec3f movement(mActor->getLastMove());
             if (movement.dot(getPlayer()->getSideWallNorm()) < 0.0f) {
                 _1C = 1;
@@ -609,7 +609,7 @@ bool MarioHang::update() {
             }
         }
 
-        if (!getPlayer()->mMovementStates._1) {
+        if (!getPlayer()->mMovementStates.onGround) {
             _1C = 1;
         }
 
@@ -630,12 +630,12 @@ bool MarioHang::update() {
         _12++;
         return true;
     case 2:
-        if (!getPlayer()->mMovementStates._1) {
+        if (!getPlayer()->mMovementStates.onGround) {
             addVelocity(getFrontVec() * 6.0f);
         }
 
         if (!isAnimationRun(nullptr) || isAnimationTerminate(nullptr)) {
-            getPlayer()->mMovementStates._1 = true;
+            getPlayer()->mMovementStates.onGround = true;
             return false;
         }
 
@@ -653,7 +653,7 @@ bool MarioHang::update() {
         tryClimb(true);
     }
 
-    if (getPlayer()->mMovementStates._1D) {
+    if (getPlayer()->mMovementStates.waitStickNeutral) {
         return true;
     }
 
@@ -684,8 +684,8 @@ bool MarioHang::update() {
             mActor->setBlendMtxTimer(16);
             Mario* pPlayer = getPlayer();
             pPlayer->mDropWaitTimer = 0;
-            getPlayer()->mMovementStates._31 = false;
-            getPlayer()->mMovementStates._1 = false;
+            getPlayer()->mMovementStates.hangAllowed = false;
+            getPlayer()->mMovementStates.onGround = false;
             getPlayer()->tryDrop();
             pPlayer = getPlayer();
             pPlayer->mBackJumpTimer = 120;
@@ -712,7 +712,7 @@ bool MarioHang::close() {
     stopAnimation("崖つかまり中");
     stopAnimation("崖つかまり終了");
     stopAnimation("崖つかまり終了坂");
-    if (getPlayer()->mMovementStates._1) {
+    if (getPlayer()->mMovementStates.onGround) {
         changeAnimation(nullptr, "基本");
     } else {
         changeAnimation(nullptr, "落下");
@@ -723,7 +723,7 @@ bool MarioHang::close() {
     if (_1A) {
         getPlayer()->tryHangSlipUp();
     } else {
-        getPlayer()->mActionStates._F = true;
+        getPlayer()->mActionStates.squatEnded = true;
     }
 
     mActor->_F44 = 1;

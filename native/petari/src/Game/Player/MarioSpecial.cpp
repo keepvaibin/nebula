@@ -130,7 +130,7 @@ void Mario::updateOnimasu() {
         return;
     }
 
-    if (!mActionStates._1D) {
+    if (!mActionStates.onimasuWrapped) {
         if (previousPosition.y < -400.0f && localPosition.y > -400.0f) {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
                 localPosition = mOnimasuLocalPos;
@@ -141,7 +141,7 @@ void Mario::updateOnimasu() {
             }
         } else if (previousPosition.y > 400.0f && localPosition.y <= 400.0f) {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
-                mActionStates._1D = true;
+                mActionStates.onimasuWrapped = true;
                 if (previousPosition.x < -320.0f) {
                     previousPosition.x = -320.0f;
                 } else if (previousPosition.x > 320.0f) {
@@ -288,7 +288,7 @@ void Mario::updateOnimasu() {
         if (correctX | correctY | correctZ) {
             Vec3f position;
             NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
-            if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
+            if (mMovementStates.frontWall || mMovementStates.backWall || mMovementStates.sideWall) {
                 Vec3f displacement(position - mPosition);
                 if (getWallNorm().dot(displacement) < 0.0f) {
                     addVelocity(-displacement);
@@ -298,7 +298,7 @@ void Mario::updateOnimasu() {
             }
         }
     } else if (localPosition.y > 400.0f) {
-        mActionStates._1D = false;
+        mActionStates.onimasuWrapped = false;
     } else {
         bool corrected = false;
         if (previousPosition.y >= -320.0f && localPosition.y < -320.0f) {
@@ -338,7 +338,7 @@ void Mario::updateOnimasu() {
 }
 
 bool Mario::isHeadPushEnableArea() const {
-    if (!mMovementStates._37) {
+    if (!mMovementStates.mode2D) {
         return false;
     }
 

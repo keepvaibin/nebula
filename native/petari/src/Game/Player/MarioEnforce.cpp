@@ -20,9 +20,9 @@ void Mario::checkEnforceMove() {
 }
 
 void Mario::checkEnforceMoveInner() {
-    mMovementStates._18 = 0;
+    mMovementStates.baseRotated = 0;
     Vec3f v15(mRelativeMove);
-    if (mMovementStates._1 != 0 || mMovementStates.jumping != 0) {
+    if (mMovementStates.onGround != 0 || mMovementStates.jumping != 0) {
         mRelativeMove.zero();
     }
 
@@ -36,7 +36,7 @@ void Mario::checkEnforceMoveInner() {
                 f32 element = MR::vecKillElement(mVelocity, mGroundNorm, &mVelocity);
                 f32 v8 = element;
 
-                if (!mMovementStates._1) {
+                if (!mMovementStates.onGround) {
                     if (element < 0.0f) {
                         if (-element > mVerticalSpeed) {
                             v8 = -mVerticalSpeed;
@@ -48,7 +48,7 @@ void Mario::checkEnforceMoveInner() {
             }
         }
 
-        mDrawStates._B = 1;
+        mDrawStates.enforcedMove = 1;
 
         if (!mActor->_F44) {
             addTrans(mVelocity, nullptr);
@@ -56,7 +56,7 @@ void Mario::checkEnforceMoveInner() {
             bool v11 = false;
             Vec3f v14(mPosition);
 
-            if (mMovementStates._A == 0) {
+            if (mMovementStates.squat == 0) {
                 if (200.0f == mCeilDist) {
                     v11 = true;
                 }
@@ -67,7 +67,7 @@ void Mario::checkEnforceMoveInner() {
             if (v11) {
                 if (calcDistToCeil(false) < 200.0f) {
                     mPosition = v14;
-                    mHitStates._10 = 1;
+                    mHitStates.enforcedMove = 1;
                 }
             }
 
@@ -89,11 +89,11 @@ void Mario::recordRelativePosition() {
     mRelativeWallPolygons[1]->mIdx = -1;
 
     f32 strikeRadius = 85.0f;
-    if (mMovementStates._1 && mShadowPolygon->isValid() && MR::isSameMtx(*mShadowPolygon->getBaseMtx(), *mShadowPolygon->getPrevBaseMtx())) {
+    if (mMovementStates.onGround && mShadowPolygon->isValid() && MR::isSameMtx(*mShadowPolygon->getBaseMtx(), *mShadowPolygon->getPrevBaseMtx())) {
         strikeRadius = 81.0f;
     }
 
-    if (mMovementStates._A) {
+    if (mMovementStates.squat) {
         strikeRadius = 51.0f;
     }
 
@@ -151,8 +151,8 @@ void Mario::recordRelativePosition() {
     if (sameSensorFloor == nullptr) {
         if (isStatusActive(MarioStatus_Wall)) {
             *mRelativePolygon = *mFrontWallTriangle;
-        } else if (mMovementStates._1) {
-            if (mHitStates._13) {
+        } else if (mMovementStates.onGround) {
+            if (mHitStates.groundSameSensor) {
                 *mRelativePolygon = *mGroundPolygon;
             } else if (isUseAnotherMovingPolygon()) {
                 *mRelativePolygon = *mGroundPolygon;
@@ -162,7 +162,7 @@ void Mario::recordRelativePosition() {
         } else {
             invalidateRelativePosition();
         }
-    } else if (mHitStates._13) {
+    } else if (mHitStates.groundSameSensor) {
         if (sameSensorFloor->mSensor == mGroundPolygon->mSensor) {
             *mRelativePolygon = *sameSensorFloor;
         } else if (isUseAnotherMovingPolygon()) {
@@ -261,16 +261,16 @@ u32 Mario::moveRelativePosition(u32) {
     }
 
     if (!MR::isSameMtxRot(*rTri->getBaseMtx(), *rTri->getPrevBaseMtx())) {
-        mMovementStates._18 = 1;
+        mMovementStates.baseRotated = 1;
 
         if (MR::isRotAxisY(*rTri->getBaseMtx(), *rTri->getPrevBaseMtx())) {
-            mActionStates._10 = 1;
+            mActionStates.baseRotatedAboutUp = 1;
         }
 
         Vec3f rotAxis;
         MR::calcMtxRotAxis(&rotAxis, *rTri->getBaseMtx(), *rTri->getPrevBaseMtx());
         if (MR::isSameDirection(rotAxis, getAirGravityVec())) {
-            mActionStates._10 = 1;
+            mActionStates.baseRotatedAboutUp = 1;
         }
     }
 
@@ -308,7 +308,7 @@ u32 Mario::moveRelativePositionWall() {
         }
 
         if (!MR::isSameMtxRot(*tri->getBaseMtx(), *tri->getPrevBaseMtx())) {
-            mMovementStates._18 = 1;
+            mMovementStates.baseRotated = 1;
         }
 
         if (mRelativeSensor == nullptr || tri->mSensor != mHang->mWallSensor) {
@@ -413,7 +413,7 @@ void Mario::tryPushToVelocity() {
             if (isStatusActive(MarioStatus_Bury)) {
                 closeStatus(mBury);
             } else {
-                if (mMovementStates.jumping && !mMovementStates._1) {
+                if (mMovementStates.jumping && !mMovementStates.onGround) {
                     Vec3f pushDir(mPushVec);
                     MR::normalizeOrZero(&pushDir);
 
@@ -424,15 +424,13 @@ void Mario::tryPushToVelocity() {
                     if (mVelocity.dot(mPushVec) < 0.0f) {
                         MR::vecKillElement(mVelocity, pushDir, &mVelocity);
                     }
-                } else if (isDamaging() && mMovementStates._1) {
+                } else if (isDamaging() && mMovementStates.onGround) {
                     MR::vecKillElement(mPushVec, *getGravityVec(), &mPushVec);
                 }
 
                 mVelocity += mPushVec;
             }
         }
-
-        mHitStates._15 = 1;
     }
 
     mVelocity += mPushVelocity;
@@ -442,19 +440,17 @@ void Mario::tryPushToVelocity() {
 
 void Mario::push(const Vec3f& rVec) {
     mPushVec += rVec;
-    mHitStates._15 = 1;
 }
 
 void Mario::push2(const Vec3f& rVec) {
     mPushVelocity += rVec;
-    mHitStates._15 = 1;
 }
 
 void Mario::powerAreaMove() {
     mAreaMoveVelocity.zero();
 
-    if (mMovementStates._1 && !mMovementStates.jumping && mFloorCode == 28 && MR::calcAreaMoveVelocity(&mAreaMoveVelocity, mPosition)) {
-        if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
+    if (mMovementStates.onGround && !mMovementStates.jumping && mFloorCode == 28 && MR::calcAreaMoveVelocity(&mAreaMoveVelocity, mPosition)) {
+        if (mMovementStates.frontWall || mMovementStates.backWall || mMovementStates.sideWall) {
             const Vec3f* norm = &getWallNorm();
             f32 dot = norm->dot(mAreaMoveVelocity);
 
@@ -471,7 +467,7 @@ void Mario::powerAreaMove() {
 void Mario::powerRailMove() {
     mRailMoveVelocity.zero();
 
-    if (mMovementStates._1 && !mMovementStates.jumping && mFloorCode == 0x1B) {
+    if (mMovementStates.onGround && !mMovementStates.jumping && mFloorCode == 0x1B) {
         const LiveActor* host = getGroundPolygon()->mSensor->mHost;
         if (host == nullptr) {
             return;
@@ -489,7 +485,7 @@ void Mario::powerRailMove() {
 
         MR::normalizeOrZero(&railDir);
 
-        if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
+        if (mMovementStates.frontWall || mMovementStates.backWall || mMovementStates.sideWall) {
             const Vec3f* wallNorm = &getWallNorm();
             if (wallNorm->dot(railDir) < 0.0f) {
                 MR::vecKillElement(railDir, *wallNorm, &railDir);
@@ -505,7 +501,7 @@ void Mario::powerRailMove() {
 }
 
 void Mario::recordJumpEnforceMove() {
-    mActionStates._17 = 1;
+    mActionStates.jumpOnEnforcer = 1;
     mJumpEnforceSensor = mRelativeSensor;
     mEnforceJumpVec = mRelativeMove;
     *mJumpEnforcePolygon = *mRelativePolygon;
@@ -513,7 +509,7 @@ void Mario::recordJumpEnforceMove() {
 
 void Mario::doEnforceJump(f32 param) {
     if (mJumpVec.dot(mRelativeMove) < 0.0f) {
-        mDrawStates._1B = 1;
+        mDrawStates.keepJumpParam = 1;
         initActiveJumpVec();
     }
 
@@ -546,11 +542,6 @@ void Mario::pushedByWind() {
             stopAnimation("向かい風走り");
         }
 
-        if (mActionStates.debugMode) {
-            getPlayerMode();
-        }
-
-        mActionStates.debugMode = 0;
         return;
     }
 
@@ -566,7 +557,6 @@ void Mario::pushedByWind() {
             windMag -= table->mWindSlideLimit;
             windMag *= table->mWindSlideFriction;
             mPushVec += windDir * windMag;
-            mHitStates._15 = 1;
             changeAnimation("向かい風ふんばり");
         }
         return;
@@ -577,7 +567,6 @@ void Mario::pushedByWind() {
     if (mVelocity.dot(windDir) > 0.0f) {
         const MarioConstTable* table = mActor->getConst().getTable();
         mPushVec += scaled * table->mWindForwardFriction;
-        mHitStates._15 = 1;
         stopAnimation("向かい風ふんばり");
         stopAnimation("向かい風走り");
         return;
@@ -600,5 +589,4 @@ void Mario::pushedByWind() {
 
     changeAnimation("向かい風走り");
     mPushVec += scaled;
-    mHitStates._15 = 1;
 }

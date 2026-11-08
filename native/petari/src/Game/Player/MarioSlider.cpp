@@ -11,7 +11,7 @@ bool Mario::isSliderFloor() const {
 }
 
 bool Mario::checkSliderMode() const {
-    if (!mMovementStates.jumping && mMovementStates._1) {
+    if (!mMovementStates.jumping && mMovementStates.onGround) {
         if (isSliderFloor()) {
             return true;
         }
@@ -52,7 +52,7 @@ bool MarioSlider::postureCtrl(MtxPtr) {
 }
 
 void MarioSlider::calcWallHit() {
-    if (getPlayer()->mMovementStates._1A) {
+    if (getPlayer()->mMovementStates.sideWall) {
         Vec3f stack_50(_14);
         f32 sideDot = MR::vecKillElement(stack_50, *getPlayer()->mSideWallTriangle->getNormal(0), &stack_50);
 
@@ -65,7 +65,7 @@ void MarioSlider::calcWallHit() {
         }
     }
 
-    if (getPlayer()->mMovementStates._8) {
+    if (getPlayer()->mMovementStates.frontWall) {
         Vec3f stack_44(_14);
         f32 frontDot = MR::vecKillElement(stack_44, *getPlayer()->mFrontWallTriangle->getNormal(0), &stack_44);
 
@@ -86,9 +86,9 @@ void MarioSlider::calcWallHit() {
 
 void Mario::startSlider() {
     if (!isStatusActive(mSlider->mStatusId)) {
-        if (getPlayer()->mMovementStates._B) {
+        if (getPlayer()->mMovementStates.hipDrop) {
             if (getPlayer()->mMovementStates.jumping) {
-                mDrawStates._14 = true;
+                mDrawStates.hipDropLand = true;
                 playSound("尻ドロップ着地");
                 playSound("声尻ドロップ着地");
                 playEffectRT("属性尻ドロップ", mGroundNorm, mPosition);
@@ -118,7 +118,7 @@ bool MarioSlider::start() {
 
 bool MarioSlider::update() {
     if (!getPlayer()->checkSliderMode()) {
-        if (getPlayer()->mMovementStates._1 != 0) {
+        if (getPlayer()->mMovementStates.onGround != 0) {
             if (isSlipPolygon(getGroundPolygon())) {
                 Mario* player = getPlayer();
                 player->mSlopeMoveVec = _14;
