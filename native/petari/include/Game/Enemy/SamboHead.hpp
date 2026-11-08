@@ -40,6 +40,12 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
     void exeBindStarPointerEnd();
+    // Returns the angle turned this step.
+    f32 turnToPlayer();
+    void updateFall();
+    void updateBounceFall();
+    bool isPursuing() const;
+    bool isInactive() const;
 
     SpinHitController* mSpinCtrl;
     AnimScaleController* mScaleController;
