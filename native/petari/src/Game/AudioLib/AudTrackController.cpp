@@ -17,48 +17,31 @@ void AudTrackController::stop() {
     mAutoMute = false;
 }
 
+namespace {
+    void muteTrack(SoundHandle* pHandle, s32 trackNo, bool isMute) {
+        if (pHandle == nullptr) {
+            return;
+        }
+
+        Sound* sound = pHandle->getSound();
+        if (sound == nullptr || trackNo < 0) {
+            return;
+        }
+
+        TrackPath path;
+        PlayerLink* player = sound->getChildTrack(trackNo, &path);
+        if (player != nullptr) {
+            player->mute(path, isMute);
+        }
+    }
+}  // namespace
+
 void AudTrackController::mute() {
-    if (mHandle == nullptr) {
-        return;
-    }
-
-    Sound* sound = mHandle->getSound();
-    if (sound == nullptr) {
-        return;
-    }
-
-    if (mTrackNo < 0) {
-        return;
-    }
-
-    TrackPath path;
-    PlayerLink* player = sound->getChildTrack(mTrackNo, &path);
-    if (player == nullptr) {
-        return;
-    }
-    player->mute(path, true);
+    ::muteTrack(mHandle, mTrackNo, true);
 }
 
 void AudTrackController::unmute() {
-    if (mHandle == nullptr) {
-        return;
-    }
-
-    Sound* sound = mHandle->getSound();
-    if (sound == nullptr) {
-        return;
-    }
-
-    if (mTrackNo < 0) {
-        return;
-    }
-
-    TrackPath path;
-    PlayerLink* player = sound->getChildTrack(mTrackNo, &path);
-    if (player == nullptr) {
-        return;
-    }
-    player->mute(path, false);
+    ::muteTrack(mHandle, mTrackNo, false);
 }
 
 void AudTrackController::setMuteState(u8 state, s32 fadeTime, bool autoMute) {
