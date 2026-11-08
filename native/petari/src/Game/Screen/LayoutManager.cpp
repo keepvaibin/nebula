@@ -15,7 +15,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 #include <cstring>

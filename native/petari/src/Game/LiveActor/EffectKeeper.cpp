@@ -10,7 +10,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include <nebula_module.h>
 #include <algorithm>
 
 namespace {
@@ -205,7 +205,7 @@ void EffectKeeper::changeEffectName(const char* pEffectName, const char* pNewNam
     const bool renamed = mNames.rename(pEffectName, pNewName);
 #if defined(NEBULA_DEV)
     if (!renamed) {
-        JUTNativeLog("effect %s of %s: not renamed to %s (absent, or the name is held)\n", pEffectName, mName != nullptr ? mName : "", pNewName);
+        nebula_log("effect %s of %s: not renamed to %s (absent, or the name is held)\n", pEffectName, mName != nullptr ? mName : "", pNewName);
     }
 #else
     (void)renamed;

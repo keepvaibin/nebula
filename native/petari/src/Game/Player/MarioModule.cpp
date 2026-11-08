@@ -1,5 +1,4 @@
 #include "Game/Player/MarioModule.hpp"
-#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
