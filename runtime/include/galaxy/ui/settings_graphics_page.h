@@ -22,6 +22,7 @@ struct GraphicsPageState {
     bool temporal_upscaling = false;
     bool spatial_upscaling = false;
     bool curved_surfaces_offered = false;
+    bool folders_open = true;  // the platform shows a folder's files (host_window::folders_open)
     double measured_fps = 0;
     FrameRateCaps frame_rates;
     std::string anti_aliasing_text;

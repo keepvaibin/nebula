@@ -13,21 +13,15 @@ struct GeneralPageState {
     std::string mii_status;
     bool choosing_miis = false;
     int mii_count = 0;
-    // A phone's on-screen controls; size in percent, 0: what the game gives this screen.
-    bool touch_controls = false;
-    unsigned touch_size = 0;
-    unsigned touch_opacity = 60;
-    bool touch_vibration = true;
-    bool touch_reset_places = false;  // BUTTON PLACES' Reset pressed, done at Apply
+    bool folders_open = true;  // the platform shows a folder's files (host_window::folders_open)
 };
 
-enum class GeneralPageAction { ImportMiis, OpenMiiFolder, ResetTouchPlaces };
+enum class GeneralPageAction { ImportMiis, OpenMiiFolder };
 class GeneralPageHost {
 public:
     virtual ~GeneralPageHost() = default;
     virtual GeneralPageState query(const RuntimeSettings& settings) const = 0;
     virtual void act(GeneralPageAction action) const = 0;
-    virtual void set_touch_controls(unsigned, unsigned, bool) const {}
 };
 
 // The host and draft outlive the rows that refer to them.

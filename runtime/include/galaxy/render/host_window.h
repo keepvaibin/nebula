@@ -107,9 +107,13 @@ struct SettingsMonitor {
 [[nodiscard]] bool window_modal_active() noexcept;
 void test_resize_window(unsigned long width, unsigned long height) noexcept;
 enum class FilePick { Miis, ModArchives, ModFolders };
-// The platform's file picker; `done` runs off the window's thread with what was chosen.
+// The platform's file picker; `done` runs off the window's thread with what was chosen. Android picks documents
+// (no folders: ModFolders is not offered there) and hands over copies the game can read by path.
 void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
+// Shows a folder of the game's in the platform's file manager; folders_open is false where none can (Android: the
+// app's own storage is private to it).
 void open_folder(const std::filesystem::path& folder);
+[[nodiscard]] bool folders_open() noexcept;
 struct UpscalerCaps {
     bool dlss = false, xess = false, frame_generation = false, frame_generation_dynamic = false, fsr_frame_generation = false;
     unsigned frame_generation_max = 0, frames_presented = 1;

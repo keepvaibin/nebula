@@ -91,6 +91,11 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativePadSensorDevice(int id, String name, String descriptor, int vendor, int product, boolean gyro, boolean accel);
     static native void nativePadSensorRemoved(int id);
     static native void nativePadSensor(int id, int type, long timeNs, float x, float y, float z);
+    static native void nativeFilesPicked(byte[][] paths);
+
+    // The settings' Import (pickFiles): its own request code beside SDL's.
+    private static final int PICK_FILES_REQUEST = 0x4E42;
+    private int pickKind;
 
     private TouchControlsView controls;
     private boolean menuOpen;
@@ -219,6 +224,8 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             Log.e(TAG, "NEBULA_DATA_DIR not set", e);
         }
         GameFiles.lastError(this).delete();
+        // The last run's picked copies were imported then.
+        deleteTree(pickedFolder());
         super.onCreate(savedInstanceState);
         if (mBrokenLibraries || mLayout == null) {
             return;
@@ -489,7 +496,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         });
     }
 
-    // Called by libmain.so: GENERAL's on-screen control rows (on SDL's thread).
+    // Called by libmain.so: CONTROLS' on-screen control rows, applied (on SDL's thread).
     public void touchSettingsChanged() {
         final int size = nativeTouchWanted(0);
         final int opacity = nativeTouchWanted(1);
@@ -501,13 +508,113 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         });
     }
 
-    // Called by libmain.so: GENERAL's Reset (on SDL's thread).
+    // Called by libmain.so: CONTROLS' BUTTON PLACES reset, applied (on SDL's thread).
     public void resetControlPlaces() {
         runOnUiThread(() -> {
             if (controls != null) {
                 controls.resetPlaces();
             }
         });
+    }
+
+    // Called by libmain.so: the settings' Import, Miis (kind 0) or mods and texture packs (1), on SDL's thread. The
+    // chosen documents are copied where the game reads them by path, then handed over (nativeFilesPicked); none when
+    // the picker is cancelled or cannot open.
+    public void pickFiles(int kind) {
+        runOnUiThread(() -> {
+            pickKind = kind;
+            final Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            try {
+                startActivityForResult(intent, PICK_FILES_REQUEST);
+            } catch (android.content.ActivityNotFoundException e) {
+                Log.e(TAG, "no document picker", e);
+                nativeFilesPicked(new byte[0][]);
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode != PICK_FILES_REQUEST) {
+            super.onActivityResult(requestCode, resultCode, data);
+            return;
+        }
+        final java.util.ArrayList<android.net.Uri> uris = new java.util.ArrayList<>();
+        if (resultCode == RESULT_OK && data != null) {
+            if (data.getClipData() != null) {
+                for (int i = 0; i < data.getClipData().getItemCount(); ++i) {
+                    uris.add(data.getClipData().getItemAt(i).getUri());
+                }
+            } else if (data.getData() != null) {
+                uris.add(data.getData());
+            }
+        }
+        final File folder = new File(pickedFolder(), pickKind == 0 ? "miis" : "mods");
+        // Copied off the UI thread: a texture pack can be large.
+        new Thread(() -> {
+            deleteTree(folder);
+            final java.util.ArrayList<byte[]> paths = new java.util.ArrayList<>();
+            for (int i = 0; i < uris.size(); ++i) {
+                final File copy = copyDocument(uris.get(i), new File(folder, Integer.toString(i)));
+                if (copy != null) {
+                    paths.add(copy.getPath().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            }
+            nativeFilesPicked(paths.toArray(new byte[0][]));
+        }, "Nebula Picked Files").start();
+    }
+
+    private File pickedFolder() {
+        return new File(nativeData(), ".picked");
+    }
+
+    // A document into `folder` under its own name; null when it cannot be read or written.
+    private File copyDocument(android.net.Uri uri, File folder) {
+        String name = null;
+        try (android.database.Cursor cursor = getContentResolver().query(uri,
+                new String[] {android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst() && !cursor.isNull(0)) {
+                name = cursor.getString(0);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "no name for a picked file", e);
+        }
+        name = name == null ? "" : name.replaceAll("[/\\\\:*?\"<>|]", "_").trim();
+        if (name.isEmpty()) {
+            name = "file";
+        }
+        if (!folder.mkdirs() && !folder.isDirectory()) {
+            return null;
+        }
+        final File copy = new File(folder, name);
+        try (InputStream from = getContentResolver().openInputStream(uri);
+             OutputStream to = new FileOutputStream(copy)) {
+            if (from == null) {
+                return null;
+            }
+            final byte[] buffer = new byte[1 << 20];
+            for (int read; (read = from.read(buffer)) >= 0; ) {
+                to.write(buffer, 0, read);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "a picked file could not be copied", e);
+            copy.delete();
+            return null;
+        }
+        return copy;
+    }
+
+    private static void deleteTree(File file) {
+        final File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                deleteTree(child);
+            }
+        }
+        file.delete();
     }
 
     // Called by libmain.so: the game starts again, straight back into the game (on SDL's thread). One game per process, so

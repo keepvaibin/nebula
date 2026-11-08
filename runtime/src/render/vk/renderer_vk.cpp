@@ -649,9 +649,11 @@ bool RendererVk::create_swapchain() {
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     // Pre-rotated to the display's current transform (Android's turned display), so the compositor does no turning
-    // of its own; the image then has the display's natural orientation.
+    // of its own; the image then has the display's natural orientation. Not under AMD's frame generation: it blends
+    // the presented pictures by the scene's motion, which is in the picture's own orientation.
+    const bool fsr = fsr_generation_wanted();
     VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    switch (caps.currentTransform) {
+    switch (fsr ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : caps.currentTransform) {
     case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
     case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
     case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
@@ -680,7 +682,6 @@ bool RendererVk::create_swapchain() {
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_.handle;
     VkSwapchainKHR handle = VK_NULL_HANDLE;
-    const bool fsr = fsr_generation_wanted();
     if (swapchain_fsr_) {
         vkDeviceWaitIdle(device);
         fsr_generation_.destroy(swapchain_.handle);
@@ -719,6 +720,7 @@ bool RendererVk::create_swapchain() {
     swapchain_.extent = extent;
     swapchain_.image = image_extent;
     swapchain_.transform = transform;
+    swapchain_.surface_transform = caps.currentTransform;
     swapchain_.copyable = (info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     swapchain_.mode = mode;
     swapchain_calls_.get_images(device, handle, &count, nullptr);
@@ -820,7 +822,7 @@ bool RendererVk::surface_changed() const {
         return true;
     }
     const bool size_known = caps.currentExtent.width != UINT32_MAX;
-    return caps.currentTransform != swapchain_.transform ||
+    return caps.currentTransform != swapchain_.surface_transform ||
         (size_known && (caps.currentExtent.width != swapchain_.extent.width ||
                         caps.currentExtent.height != swapchain_.extent.height));
 }
@@ -1850,11 +1852,13 @@ void RendererVk::refresh_display_rate() {
 }
 
 // Swapchain changes (window size, VSYNC) and Match Output's internal resolution, between frames.
-// FSR 3 frame generation: chosen, with an upscaler that gives it depth and motion, and not DLSS, whose presents are Streamline's.
+// FSR 3 frame generation: chosen, with an upscaler that gives it depth and motion (FSR 3, XeSS, SGSR 2), and not DLSS,
+// whose presents are Streamline's.
 bool RendererVk::fsr_generation_wanted() const {
     const RenderConfig cfg = get_render_config();
     const vk::Context& context = vk::Context::get();
-    return fsr_frame_generation_compiled() && cfg.frame_generation == 2u && (cfg.upscaler == 2u || cfg.upscaler == 4u) &&
+    return fsr_frame_generation_compiled() && cfg.frame_generation == 2u &&
+           (cfg.upscaler == 2u || cfg.upscaler == 4u || cfg.upscaler == 5u) &&
            context.generation_present_queue() != VK_NULL_HANDLE && context.temporal_upscaling();
 }
 

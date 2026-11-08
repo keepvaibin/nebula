@@ -94,8 +94,11 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                     },
                     "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
     rows.push_back({"INTERFACE", {}, nullptr, {}, true});
-    rows.push_back({"HUD RESOLUTION", (render.hud_output_resolution || render.internal_height != 0u) ? "DISPLAY" : "INTERNAL",
-                    [fixed = render.internal_height != 0u](RenderConfig& draft, int) { if (!fixed) draft.hud_output_resolution = !draft.hud_output_resolution; },
+    // An exact internal resolution and a temporal upscaler always draw the HUD at the display's.
+    const bool fixed = render_internal_height(render) != 0u || state.temporal_upscaling;
+    rows.push_back({"HUD RESOLUTION", (render.hud_output_resolution || fixed) ? "DISPLAY" : "INTERNAL",
+                    fixed ? std::function<void(RenderConfig&, int)>{}
+                          : std::function<void(RenderConfig&, int)>{[](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; }},
                     "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
     return rows;
 }

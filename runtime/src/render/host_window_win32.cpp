@@ -1320,8 +1320,8 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
                 dialog->SetTitle(L"Import mod folders");
             } else {
                 const COMDLG_FILTERSPEC filters[] = {
-                    {L"Mods and texture packs (zip, 7z, rar, tar)",
-                     L"*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
+                    {L"Mods and texture packs (luma, zip, 7z, rar, tar)",
+                     L"*.luma;*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
                     {L"All files", L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
                 dialog->SetTitle(L"Import mods");
@@ -1365,6 +1365,10 @@ void open_folder(const std::filesystem::path& folder) {
             CoUninitialize();
         }
     }).detach();
+}
+
+bool folders_open() noexcept {
+    return true;
 }
 
 UpscalerCaps upscaler_caps() noexcept {

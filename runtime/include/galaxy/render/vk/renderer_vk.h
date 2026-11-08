@@ -333,6 +333,9 @@ private:
         // into them by `transform`, so the compositor shows them as they are.
         VkExtent2D image{};
         VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        // The surface's own transform when the swap chain was made (`transform` stays identity under AMD's frame
+        // generation, which reads the pictures and motion in one orientation; the compositor turns them then).
+        VkSurfaceTransformFlagBitsKHR surface_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
         bool copyable = false;  // transfer source (test snapshots of the backbuffer)
         std::vector<VkImage> images;
