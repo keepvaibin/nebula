@@ -321,8 +321,8 @@ Vec3f& MarioModule::getVelocity() const {
     return mActor->mMario->mVelocity;
 }
 
-void MarioModule::addTrans(const Vec3f& rShift, const char* pName) {
-    mActor->mMario->addTrans(rShift, pName);
+void MarioModule::addTrans(const Vec3f& rShift) {
+    mActor->mMario->addTrans(rShift);
 }
 
 f32 MarioModule::cutGravityElementFromJumpVec(bool useActorGravity) {

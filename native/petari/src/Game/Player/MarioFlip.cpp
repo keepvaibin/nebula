@@ -28,18 +28,18 @@ bool Mario::doFlipJump(const Vec3f& rVec) {
 }
 
 bool Mario::doFlipBackRoll(const Vec3f& rVec) {
-    Vec3f vec20;
-    MR::vecKillElement(rVec, getAirGravityVec(), &vec20);
+    Vec3f flat;
+    MR::vecKillElement(rVec, getAirGravityVec(), &flat);
 
-    if (doFlipLarge(vec20)) {
+    if (doFlipLarge(flat)) {
         checkDamage();
         changeAnimationNonStop("後転ふっとび");
 
         mDamage->setStrings("後転ふっとび空中", "後転ふっとび着地");
 
-        Vec3f vec28;
-        MR::vecKillElement(rVec, getAirGravityVec(), &vec28);
-        setFrontVecKeepUp(-vec28, static_cast< u32 >(12));
+        Vec3f flatAfter;
+        MR::vecKillElement(rVec, getAirGravityVec(), &flatAfter);
+        setFrontVecKeepUp(-flatAfter, static_cast< u32 >(12));
 
         return true;
     }

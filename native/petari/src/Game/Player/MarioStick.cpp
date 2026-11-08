@@ -70,7 +70,7 @@ bool MarioStick::setStickSensor(const HitSensor* pSensor) {
 
         v11.setLength(pSensor->mRadius);
         mStickPos = pSensor->mPosition + v11 * 0.9f;
-        getPlayer()->setTrans(mStickPos, "Stick");
+        getPlayer()->setTrans(mStickPos);
         clearVelocity();
         MR::normalize(&v11);
         mStickDir = v11;
@@ -98,7 +98,7 @@ bool MarioStick::start() {
 }
 
 bool MarioStick::update() {
-    getPlayer()->setTrans(mStickPos, nullptr);
+    getPlayer()->setTrans(mStickPos);
 
     if (checkTrgA()) {
         if (!isAnimationRun("ハチ壁くっつき")) {

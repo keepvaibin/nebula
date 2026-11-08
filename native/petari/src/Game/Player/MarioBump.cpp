@@ -47,7 +47,7 @@ void Mario::startBump(const Vec3f& rVec) {
         closeStatus(mBump);
     }
 
-    setTrans(rVec, "段差");
+    setTrans(rVec);
     changeStatus(mBump);
     mVelocity.zero();
     mTurnSlipTimer = 0;

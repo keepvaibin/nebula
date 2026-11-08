@@ -104,7 +104,7 @@ bool Mario::checkStartSwim() {
 
     if (mSwim->checkWaterCube(false)) {
         if (getPlayerMode() == 3) {
-            addTrans(-*getGravityVec() * 100.0f, nullptr);
+            addTrans(-*getGravityVec() * 100.0f);
             if (getPlayer()->getMovementStates().jumping) {
                 stopJump();
             }
@@ -1689,7 +1689,7 @@ bool MarioSwim::close() {
             player->mSlipInhibitTimer = 120;
         } else {
             // Snap to ground
-            addTrans(groundPos - getTrans(), "Module");
+            addTrans(groundPos - getTrans());
             Mario* player = getPlayer();
             player->mSlipInhibitTimer = 60;
         }

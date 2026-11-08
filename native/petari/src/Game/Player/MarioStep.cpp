@@ -154,7 +154,7 @@ void Mario::startStep(const Vec3f& rVec) {
         }
     }
 
-    setTrans(rVec, "階段");
+    setTrans(rVec);
     changeStatus(mStep);
     mTurnSlipTimer = 0;
     const f32 zero = 0.0f;

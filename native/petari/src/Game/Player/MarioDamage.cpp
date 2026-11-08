@@ -672,7 +672,7 @@ bool MarioAbyssDamage::start() {
 }
 
 bool MarioAbyssDamage::update() {
-    addTrans(mMove, "Module");
+    addTrans(mMove);
     switch (mStep) {
     case 0:
         mStep++;

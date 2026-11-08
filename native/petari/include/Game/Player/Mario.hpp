@@ -101,8 +101,8 @@ public:
     void forceSetHeadVecKeepSide(const Vec3f&);
     void setGravityVec(const Vec3f&);
     void draw() const;
-    void addTrans(const Vec3f&, const char*);
-    void setTrans(const Vec3f&, const char*);
+    void addTrans(const Vec3f&);
+    void setTrans(const Vec3f&);
     bool isEnableRush() const;
     bool isForceStopRush() const;
     bool isInvincible() const;

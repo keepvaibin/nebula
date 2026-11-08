@@ -1126,7 +1126,7 @@ void Mario::draw() const {
     drawTask();
 }
 
-void Mario::addTrans(const Vec3f& rShift, const char* pA2) {
+void Mario::addTrans(const Vec3f& rShift) {
     mPosition += rShift;
     Vec3f shifted(mLookOfsBody);
     shifted -= rShift;
@@ -1143,10 +1143,10 @@ void Mario::addTrans(const Vec3f& rShift, const char* pA2) {
     }
 }
 
-void Mario::setTrans(const Vec3f& rShift, const char* pA2) {
-    Vec3f reqShift(rShift);
+void Mario::setTrans(const Vec3f& rPos) {
+    Vec3f reqShift(rPos);
     reqShift -= mPosition;
-    mPosition = rShift;
+    mPosition = rPos;
     Vec3f shifted(mLookOfsBody);
     shifted -= reqShift;
     if (MR::abs(mLookOfsBody.x) <= MR::abs(shifted.x)) {
@@ -1389,7 +1389,7 @@ void Mario::writeBackPhyisicalVector() {
     u32 i;
     if (mHitStates.enforcedMove) {
         Vec3f startPos(mPosition);
-        addTrans(mVelocity, nullptr);
+        addTrans(mVelocity);
         if (calcDistToCeil(false) < 200.0f) {
             mVelocity.zero();
             stopWalk();
@@ -1769,7 +1769,7 @@ void Mario::updateGroundInfo() {
                 mJumpVec.dot(*mShadowPolygon->getNormal(0)) < 0.0f && mPostureUpVec.dot(*getGravityVec()) > 0.0f && mVerticalSpeed < 170.0f) {
                 mMovementStates.onGround = true;
                 setGroundNorm(*mShadowPolygon->getNormal(0));
-                setTrans(mShadowPos, nullptr);
+                setTrans(mShadowPos);
             }
         }
     }
