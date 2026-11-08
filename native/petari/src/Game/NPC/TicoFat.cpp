@@ -132,7 +132,7 @@ TicoFat::TicoFat(const char* pName) : NPCActor(pName) {
     mCameraInfo = nullptr;
     mItem = nullptr;
     mShootPath = nullptr;
-    mIsCameraOn = 0;
+    mIsCameraOn = false;
     mItemType = -1;
     mTicoSeedId = -1;
     mEatInterval = 5;
@@ -203,15 +203,14 @@ void TicoFat::init(const TableIter& rIter) {
     MR::onRootNodeAutomatic(mMsgCtrl);
     MR::onStartOnlyFront(mMsgCtrl);
     MR::onStartOnlyFront(mHungryTalkCtrl);
-    s32 arg2 = -1;
-    MR::getPlacementArg2NoInit(rIter, &arg2);
-    if (arg2 != -1) {
+    // Arg 2 set: starts eating at once. Arg 3: the guidance message.
+    s32 eatAtStart = -1;
+    MR::getPlacementArg2NoInit(rIter, &eatAtStart);
+    if (eatAtStart != -1) {
         startEat();
     }
 
-    s32 arg3 = -1;
-    MR::getPlacementArg3NoInit(rIter, &arg3);
-    mGuidanceId = arg3;
+    MR::getPlacementArg3NoInit(rIter, &mGuidanceId);
     mMeter = new FullnessMeter(this, mStarPieceNeed, mStarPieceNeed - mStarPieceLeft);
     mMeter->initWithoutIter();
     mMeter->setNumber(mStarPieceNeed - mStarPieceLeft);
@@ -320,15 +319,15 @@ void TicoFat::control() {
         }
 
         if (mNearStep > 0) {
-            if (mIsCameraOn == 0) {
-                mIsCameraOn = 1;
+            if (!mIsCameraOn) {
+                mIsCameraOn = true;
                 CameraTargetArg arg(this);
                 MR::startGlobalEventCamera("デブチコカメラ", arg, 120);
                 setCameraParam();
             }
         } else {
             if (mIsCameraOn) {
-                mIsCameraOn = 0;
+                mIsCameraOn = false;
                 MR::endGlobalEventCamera("デブチコカメラ", 120, true);
             }
         }
@@ -397,45 +396,43 @@ void TicoFat::setScale(f32 scale) {
         mScaleController->startHitReaction();
     }
 
-    f32 v5 = (scale - 1.0f) / 0.9f;
-    if (v5 > 1.0f) {
-        v5 = 1.0f;
+    // Reddens with fullness (scale 1 to 1.9); the talk distance grows with it up to scale 1.5.
+    f32 fullness = (scale - 1.0f) / 0.9f;
+    if (fullness > 1.0f) {
+        fullness = 1.0f;
     }
 
-    f32 frameMax = v5 * MR::getBrkFrameMax(this);
+    f32 frameMax = fullness * MR::getBrkFrameMax(this);
     MR::startBrk(this, "FatRed");
     MR::setBrkFrameAndStop(this, frameMax);
     MR::setSensorRadius(this, "Body", (100.0f * scale));
     MR::setStarPointerTargetRadius3d(this, 110.0f * scale);
-    f32 v7 = 1.5f;
+    f32 talkScale = 1.5f;
     if (scale < 1.5f) {
-        v7 = scale;
+        talkScale = scale;
     }
 
-    MR::setDistanceToTalk(mMsgCtrl, (280.0f * v7));
-    f32 v8 = 1.5f;
-    if (scale < 1.5f) {
-        v8 = scale;
-    }
-    MR::setDistanceToTalk(mHungryTalkCtrl, (280.0f * v8));
+    MR::setDistanceToTalk(mMsgCtrl, (280.0f * talkScale));
+    MR::setDistanceToTalk(mHungryTalkCtrl, (280.0f * talkScale));
     MR::setMessageBalloonFollowOffset(mMsgCtrl, Vec3f(0.0f, 220.0f * scale, 0.0f));
     MR::setMessageBalloonFollowOffset(mHungryTalkCtrl, Vec3f(0.0f, 220.0f * scale, 0.0f));
 }
 
 void TicoFat::setMessage(s32 msg) {
     s32 nodeCount = 0;
-    f32 v5 = ((f32)mStarPieceLeft / (f32)mStarPieceNeed);
+    f32 leftRate = ((f32)mStarPieceLeft / (f32)mStarPieceNeed);
     MR::resetNode(mHungryTalkCtrl);
 
     switch (msg) {
     case 1: {
-        if (1.0f == v5) {
+        // The hungrier, the earlier the message node.
+        if (1.0f == leftRate) {
             nodeCount = 1;
-        } else if (v5 >= 0.5f) {
+        } else if (leftRate >= 0.5f) {
             nodeCount = 2;
-        } else if (v5 >= 0.25f) {
+        } else if (leftRate >= 0.25f) {
             nodeCount = 3;
-        } else if (v5 >= 0.05f) {
+        } else if (leftRate >= 0.05f) {
             nodeCount = 4;
         } else {
             nodeCount = 5;
@@ -512,7 +509,8 @@ void TicoFat::appearInformation() const {
     MR::appearInformationMessage(MR::getGameMessageDirect(::sInfoMessageID), true);
 }
 
-void TicoFat::disappear(bool a1) {
+// isJustFed: fed in this visit (gives the pieces to the seed and brings the group in); false when it was fed before.
+void TicoFat::disappear(bool isJustFed) {
     if (mItem != nullptr) {
         Pos3f pos;
         pos.setInline(getBaseMtx());
@@ -524,7 +522,7 @@ void TicoFat::disappear(bool a1) {
         MR::appearKinokoOneUpPop(mItem, pos, 15.0f);
     }
 
-    if (a1) {
+    if (isJustFed) {
         if (mTicoSeedId != -1) {
             MR::addStarPieceGivingToTicoSeed(mTicoSeedId, mStarPieceNeed);
         }
@@ -557,9 +555,10 @@ void TicoFat::emitScreenEffect() {
 }
 
 void TicoFat::updateScreenEffect() {
-    Vec3f v19 = mPosition - MR::getCamPos();
-    MR::normalizeOrZero(&v19);
-    MR::makeMtxFrontUpPos(&mScreenEffectMtx, -MR::getCamZdir(), MR::getCamYdir(), MR::getCamPos() + (v19 * 500.0f));
+    // The screen effect faces the camera 500 in front of it toward the Tico.
+    Vec3f toTico = mPosition - MR::getCamPos();
+    MR::normalizeOrZero(&toTico);
+    MR::makeMtxFrontUpPos(&mScreenEffectMtx, -MR::getCamZdir(), MR::getCamYdir(), MR::getCamPos() + (toTico * 500.0f));
     MR::makeMtxFrontUpPos(&mScreenLightMtx, -MR::getCamZdir(), MR::getCamYdir(), mPosition);
 }
 
@@ -849,18 +848,19 @@ void TicoFat::exeFly() {
     }
 
     MR::tryRumblePadVeryWeak(this, PLAYER_1);
-    f32 v4 = mFlyCoord / mShootPath->getTotalLength();
-    if (v4 > 1.0f) {
-        v4 = 1.0f;
+    // Eases in over the first half of the path and out over the second.
+    f32 pathRate = mFlyCoord / mShootPath->getTotalLength();
+    if (pathRate > 1.0f) {
+        pathRate = 1.0f;
     }
 
     f32 easeIn;
 
-    if (v4 < 0.5f) {
-        easeIn = MR::getEaseInValue((2.0f * v4) * (2.0f * v4), 0.0f, 0.5f, 1.0f);
+    if (pathRate < 0.5f) {
+        easeIn = MR::getEaseInValue((2.0f * pathRate) * (2.0f * pathRate), 0.0f, 0.5f, 1.0f);
     } else {
-        f32 v6 = (2.0f * (1.0f - v4));
-        easeIn = (1.0f - MR::getEaseInValue((v6 * v6), 0.0f, 0.5f, 1.0f));
+        f32 restRate = (2.0f * (1.0f - pathRate));
+        easeIn = (1.0f - MR::getEaseInValue((restRate * restRate), 0.0f, 0.5f, 1.0f));
     }
 
     Vec3f shootPos, direction;
