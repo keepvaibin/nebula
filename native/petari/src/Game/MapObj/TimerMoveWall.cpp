@@ -11,8 +11,8 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const s32 sDefaultTimer = 300;
-    static const f32 sDefaultMoveLength = 1000.0f;
+    const s32 sDefaultTimer = 300;
+    const f32 sDefaultMoveLength = 1000.0f;
 };  // namespace
 
 namespace NrvTimerMoveWall {
@@ -21,22 +21,21 @@ namespace NrvTimerMoveWall {
     NEW_NERVE(TimerMoveWallNrvMoveBack, TimerMoveWall, Move);
 };  // namespace NrvTimerMoveWall
 
-TimerMoveWall::TimerMoveWall(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer), mMoveLenght(::sDefaultMoveLength) {
+TimerMoveWall::TimerMoveWall(const char* pName) : MapObjActor(pName), mTimer(::sDefaultTimer), mMoveLength(::sDefaultMoveLength) {
 }
 
 void TimerMoveWall::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;
-    MapObjActorUtil util;
-    util.setupInitInfoSimpleMapObj(&info);
+    MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupSound(4);
     info.setupNerve(GET_NERVE(TimerMoveWall, TimerMoveWallNrvWait));
     initialize(rIter, info);
     MR::getPlacementArg0NoInit(rIter, &mTimer);
-    MR::getPlacementArg1NoInit(rIter, &mMoveLenght);
+    MR::getPlacementArg1NoInit(rIter, &mMoveLength);
 }
 
-inline void TimerMoveWall::exeWait() {
+void TimerMoveWall::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::validateClipping(this);
     }
@@ -52,7 +51,7 @@ void TimerMoveWall::exeMove() {
             frontVec.negate();
         }
 
-        mVelocity.scale(mMoveLenght / mTimer, frontVec);
+        mVelocity.scale(mMoveLength / mTimer, frontVec);
         MR::startSound(this, "SE_OJ_TRIBBL_T_MVWALL_ST");
     }
 

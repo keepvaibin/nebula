@@ -7,8 +7,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sSensorRadius = 150.0f;
-    static const s32 sRattleTime = 45;
+    const f32 sSensorRadius = 150.0f;
+    const s32 sRattleTime = 45;
 };  // namespace
 
 namespace NrvManholeCover {
@@ -22,7 +22,7 @@ void ManholeCover::init(const TableIter& rIter) {
     MapObjActorInitInfo info;
     info.setupDefaultPos();
     info.setupConnectToScene();
-    info.setupEffect(0);
+    info.setupEffect(nullptr);
     info.setupSound(4);
     info.setupHitSensor();
     info.setupHitSensorParam(1, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));

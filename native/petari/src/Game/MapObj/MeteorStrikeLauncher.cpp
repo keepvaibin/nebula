@@ -12,6 +12,10 @@ namespace NrvMeteorStrikeLauncher {
     NEW_NERVE(MeteorStrikeLauncherNrvInterval, MeteorStrikeLauncher, Interval);
 };  // namespace NrvMeteorStrikeLauncher
 
+namespace {
+    const f32 sClipRadius = 200.0f;
+};  // namespace
+
 MeteorStrikeLauncher::MeteorStrikeLauncher(const char* pName)
     : LiveActor(pName), mMeteorStrikeArray(), mMeteorStrikeCount(), mIntervalStep(-1), mCreateStep(), mIsMeteorStrike(), mIsValidMultiMeteor() {
 }
@@ -97,10 +101,6 @@ MeteorStrike* MeteorStrikeLauncher::getUnusedMeteorStrike() {
     return nullptr;
 }
 
-bool isNotJudgedToClipFrustum(const Vec3f& pVec) {
-    return !MR::isJudgedToClipFrustum(pVec, 200.0f);
-}
-
 bool MeteorStrikeLauncher::create() {
     MeteorStrike* pUnusedStrike = getUnusedMeteorStrike();
     if (pUnusedStrike == nullptr) {
@@ -117,20 +117,17 @@ bool MeteorStrikeLauncher::create() {
         Vec3f movedPos;
         pUnusedStrike->getMovedPos(&movedPos, 0);
 
-        if (!isNotJudgedToClipFrustum(movedPos)) {
+        if (MR::isJudgedToClipFrustum(movedPos, ::sClipRadius)) {
             pUnusedStrike->appear();
         }
 
         return true;
     }
 
+    // Starts the meteor part way along its fall, at the latest step that is still out of view.
     for (; mCreateStep >= 0; mCreateStep -= mIntervalStep) {
         Vec3f movedPos;
-        if (!pUnusedStrike->getMovedPos(&movedPos, mCreateStep)) {
-            continue;
-        }
-
-        if (isNotJudgedToClipFrustum(movedPos)) {
+        if (!pUnusedStrike->getMovedPos(&movedPos, mCreateStep) || !MR::isJudgedToClipFrustum(movedPos, ::sClipRadius)) {
             continue;
         }
 

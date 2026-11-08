@@ -3,8 +3,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
-CircleCoinGroup::CircleCoinGroup(const char* pName) : CoinGroup(pName) {
-    mCoinRadius = 200.0f;
+CircleCoinGroup::CircleCoinGroup(const char* pName) : CoinGroup(pName), mCoinRadius(200.0f) {
 }
 
 void CircleCoinGroup::initCoinArray(const TableIter& rIter) {
@@ -35,14 +34,13 @@ void CircleCoinGroup::placementCoin() {
 
 namespace MR {
     NameObj* createCircleCoinGroup(const char* pName) {
-        CircleCoinGroup* group = new CircleCoinGroup(pName);
-        return group;
+        return new CircleCoinGroup(pName);
     }
 
     NameObj* createCirclePurpleCoinGroup(const char* pName) {
-        CircleCoinGroup* group = new CircleCoinGroup(pName);
-        group->mIsPurpleCoinGroup = true;
-        return group;
+        CircleCoinGroup* pGroup = new CircleCoinGroup(pName);
+        pGroup->mIsPurpleCoinGroup = true;
+        return pGroup;
     }
 };  // namespace MR
 

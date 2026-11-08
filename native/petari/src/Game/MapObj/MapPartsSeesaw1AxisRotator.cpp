@@ -60,17 +60,14 @@ void MapPartsSeesaw1AxisRotator::start() {
     rotateMtx.setRotateDegree(mHost->mRotation);
     mRotateMtx.set(rotateMtx);
 
-    Pos3f baseMtx;
-    baseMtx.identity();
-    baseMtx.set(mHost->getBaseMtx());
+    Pos3f baseMtx(mHost->getBaseMtx());
     baseMtx.getZDir(mRotateAxis);
     MR::normalize(&mRotateAxis);
 
     f32 angle = 0.0f;
     calcRotatedAngle(&angle, mRotateMtx);
-    bool hasAngleLimit = isAngleLimited();
 
-    if (hasAngleLimit && mRotateAngle < angle) {
+    if (isAngleLimited() && mRotateAngle < angle) {
         Pos3f correction;
         correction.identity();
         correction.setRotate(mRotateAxis, 1.05f * (PI_180 * (angle - mRotateAngle)));
@@ -89,19 +86,12 @@ void MapPartsSeesaw1AxisRotator::end() {
 }
 
 bool MapPartsSeesaw1AxisRotator::receiveMsg(u32 msg) {
-    if (msg == ACTMES_PLAYER_HIP_DROP_FLOOR) {
-        if (!MR::isOnPlayer(MR::getBodySensor(mHost))) {
-            return false;
-        }
-
-        mHipDrop = true;
-
-        if (tryHipDrop()) {
-            return true;
-        }
+    if (msg != ACTMES_PLAYER_HIP_DROP_FLOOR || !MR::isOnPlayer(MR::getBodySensor(mHost))) {
+        return false;
     }
 
-    return false;
+    mHipDrop = true;
+    return tryHipDrop();
 }
 
 void MapPartsSeesaw1AxisRotator::exeMove() {
@@ -136,17 +126,13 @@ void MapPartsSeesaw1AxisRotator::exeHipDrop() {
 
     if (!mHipDrop) {
         setNerve(GET_NERVE(MapPartsSeesaw1AxisRotator, HostTypeMove));
-        mHipDrop = false;
-        return;
     }
 
     mHipDrop = false;
 }
 
 void MapPartsSeesaw1AxisRotator::rotate() {
-    Pos3f baseMtx;
-    baseMtx.identity();
-    baseMtx.set(mHost->getBaseMtx());
+    Pos3f baseMtx(mHost->getBaseMtx());
     baseMtx.getZDir(mRotateAxis);
     mAngularVelocity += mAngularAccel;
     updateVelocity();
@@ -170,8 +156,7 @@ void MapPartsSeesaw1AxisRotator::rotate() {
     mRotateMtx.set(rotation);
     Vec3f angles;
     mRotateMtx.getEuler(angles);
-    Vec3f& rotationAngles = mHost->mRotation;
-    rotationAngles.set(angles * _180_PI);
+    mHost->mRotation.set(angles * _180_PI);
 }
 
 void MapPartsSeesaw1AxisRotator::updateVelocity() {
@@ -194,9 +179,7 @@ void MapPartsSeesaw1AxisRotator::updateVelocity() {
 }
 
 void MapPartsSeesaw1AxisRotator::updateRestoreForce() {
-    Pos3f baseMtx;
-    baseMtx.identity();
-    baseMtx.set(mHost->getBaseMtx());
+    Pos3f baseMtx(mHost->getBaseMtx());
     Vec3f up;
     baseMtx.getYDir(up);
     MR::normalize(&up);
@@ -219,11 +202,8 @@ void MapPartsSeesaw1AxisRotator::clampAngularSpeed() {
 }
 
 f32 MapPartsSeesaw1AxisRotator::getDistanceFromRotAxis() const {
-    Vec3f position(mHost->mPosition);
-    Vec3f offset(*MR::getPlayerPos() - position);
-    Pos3f baseMtx;
-    baseMtx.identity();
-    baseMtx.set(mHost->getBaseMtx());
+    Vec3f offset(*MR::getPlayerPos() - mHost->mPosition);
+    Pos3f baseMtx(mHost->getBaseMtx());
     Vec3f axis;
     baseMtx.getXDir(axis);
     Vec3f projection;
@@ -243,9 +223,7 @@ void MapPartsSeesaw1AxisRotator::addForceHipDrop() {
 }
 
 bool MapPartsSeesaw1AxisRotator::isGoingToReachTargetAngle() const {
-    bool hasAngleLimit = isAngleLimited();
-
-    if (!hasAngleLimit) {
+    if (!isAngleLimited()) {
         return false;
     }
 
@@ -262,20 +240,18 @@ void MapPartsSeesaw1AxisRotator::calcRotatedAngle(f32* pAngle, const Pos3f& rMtx
     Vec3f up;
     rMtx.getYDir(up);
     MR::normalize(&up);
-    Vec3f gravityUp;
     Vec3f gravity;
     MR::calcGravityVector(mHost, &gravity, nullptr, 0);
 
+    Vec3f gravityUp;
     if (!gravity.isZero()) {
-        Vec3f oppositeGravity(-gravity);
-        gravityUp.set(oppositeGravity);
+        gravityUp.set(-gravity);
     } else {
         gravityUp.set< f32 >(0.0f, 1.0f, 0.0f);
     }
 
     MR::normalize(&gravityUp);
-    Vec3f normal(gravityUp);
-    f32 cosine = up.dot(normal);
+    f32 cosine = up.dot(gravityUp);
 
     if (MR::isNearZero(1.0f - cosine)) {
         cosine = 1.0f;

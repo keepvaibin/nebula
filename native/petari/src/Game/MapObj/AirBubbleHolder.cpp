@@ -4,7 +4,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 
 namespace {
-    static const s32 sCreateAirBubbleNum = 32;
+    const s32 sCreateAirBubbleNum = 32;
 };  // namespace
 
 AirBubbleHolder::AirBubbleHolder(const char* pName) : DeriveActorGroup< AirBubble >(pName, ::sCreateAirBubbleNum) {

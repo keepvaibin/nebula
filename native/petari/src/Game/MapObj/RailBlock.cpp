@@ -5,9 +5,9 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStartSignTime = 60;
-    static const s32 sCycle = 3;
-    static const f32 sAmplitude = 30.0f;
+    const s32 sStartSignTime = 60;
+    const s32 sCycle = 3;
+    const f32 sAmplitude = 30.0f;
 };  // namespace
 
 namespace NrvRailBlock {
@@ -16,27 +16,25 @@ namespace NrvRailBlock {
     NEW_NERVE(RailBlockNrvTerminate, RailBlock, Terminate);
 };  // namespace NrvRailBlock
 
-RailBlock::RailBlock(const char* pName) : LiveActor(pName), mRailSpeed(10), mMoveTime(100), mIsConnectedToRail(), mIsBig() {
+RailBlock::RailBlock(const char* pName) : LiveActor(pName), mRailSpeed(10), mMoveTime(100), mIsConnectedToRail() {
 }
 
 void RailBlock::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    const char* objName = nullptr;
-    MR::getObjectName(&objName, rIter);
-    initModelManagerWithAnm(objName, nullptr, false);
+    const char* pObjName = nullptr;
+    MR::getObjectName(&pObjName, rIter);
+    initModelManagerWithAnm(pObjName, nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
     MR::addHitSensorMapObjPress(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
+    MR::initCollisionParts(this, pObjName, getSensor("body"), nullptr);
     MR::setClippingTypeSphere(this, MR::getCollisionBoundingSphereRange(this));
     initSound(4, false);
 
-    if (MR::isConnectedWithRail(rIter)) {
+    mIsConnectedToRail = MR::isConnectedWithRail(rIter);
+    if (mIsConnectedToRail) {
         initRailRider(rIter);
         MR::moveCoordToNearestPos(this, mPosition);
-        mIsConnectedToRail = true;
-    } else {
-        mIsConnectedToRail = false;
     }
 
     MR::setGroupClipping(this, rIter, 16);
@@ -45,12 +43,6 @@ void RailBlock::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &mMoveTime);
 
     initNerve(GET_NERVE(RailBlock, RailBlockNrvMove));
-
-    if (strcmp(objName, "RailBlockBig") == 0) {
-        mIsBig = true;
-    } else if (strcmp(objName, "TsukidashikunBig") == 0) {
-        mIsBig = true;
-    }
 
     if (MR::useStageSwitchReadB(this, rIter)) {
         MR::listenStageSwitchOnOffB(this, MR::Functor(this, &RailBlock::startMove), MR::Functor(this, &RailBlock::stopMove));
@@ -63,10 +55,6 @@ void RailBlock::init(const TableIter& rIter) {
     } else {
         makeActorAppeared();
     }
-}
-
-void RailBlock::calcViewAndEntry() {
-    LiveActor::calcViewAndEntry();
 }
 
 void RailBlock::startMove() {
@@ -90,18 +78,13 @@ void RailBlock::exeMove() {
     }
 }
 
+// Shakes at the rail end for sStartSignTime steps before it turns back.
 void RailBlock::exeTerminate() {
     if (getNerveStep() >= mMoveTime - ::sStartSignTime) {
         s32 step = getNerveStep() - mMoveTime + ::sStartSignTime;
         f32 rate = static_cast< f32 >(step % ::sCycle) / ::sCycle;
 
-        f32 coord;
-        if ((step / ::sCycle) % 2 == 0) {
-            coord = ::sAmplitude * rate;
-        } else {
-            coord = ::sAmplitude * (1.0f - rate);
-        }
-
+        f32 coord = (step / ::sCycle) % 2 == 0 ? ::sAmplitude * rate : ::sAmplitude * (1.0f - rate);
         if (MR::isRailGoingToEnd(this)) {
             coord = MR::getRailTotalLength(this) - coord;
         }
@@ -118,8 +101,4 @@ void RailBlock::exeTerminate() {
 }
 
 void RailBlock::exeWait() {
-}
-
-void RailBlock::calcAndSetBaseMtx() {
-    LiveActor::calcAndSetBaseMtx();
 }

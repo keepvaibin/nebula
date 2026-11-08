@@ -12,7 +12,6 @@ public:
     MapPartsRailGuideHolder();
 
     virtual ~MapPartsRailGuideHolder();
-    virtual void init(const TableIter& rIter);
 
     MapPartsRailGuideDrawer* createRailGuide(LiveActor* pHost, const char* pModelName, const TableIter& rIter);
     MapPartsRailGuideDrawer* find(s32 railId);

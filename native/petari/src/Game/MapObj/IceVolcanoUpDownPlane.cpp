@@ -45,6 +45,3 @@ Vec3f* IceVolcanoUpDownPlane::getSoundCalcPos() {
 
 IceVolcanoUpDownPlane::~IceVolcanoUpDownPlane() {
 }
-
-void RailMoveObj::setupInitInfo(const TableIter& rIter, MapObjActorInitInfo* pActorInitInfo) {
-}

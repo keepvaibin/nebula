@@ -13,11 +13,11 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
+    const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
 
-    static const f32 sTestScale = 1.0f;
-    static const f32 sPunchVelocit = 6.0f;
-    static const s32 sFreqRotY = 4;
+    const f32 sScale = 1.0f;
+    const f32 sPunchSpeed = 6.0f;
+    const s32 sRotYTargetNum = 4;
 };  // namespace
 
 namespace NrvArrowSwitch {
@@ -32,7 +32,7 @@ ArrowSwitch::ArrowSwitch(const char* pName)
 
 void ArrowSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    mScale.set(::sTestScale);
+    mScale.set(::sScale);
     initModelManagerWithAnm("ArrowSwitch", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
 
@@ -133,8 +133,8 @@ bool ArrowSwitch::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     mRotYTargetIndex += mIsRotPlus ? getOneStep() : -getOneStep();
-    mRotYTargetIndex = (mRotYTargetIndex + ::sFreqRotY) % ::sFreqRotY;
-    mRotSpeed = mIsRotPlus ? ::sPunchVelocit : -::sPunchVelocit;
+    mRotYTargetIndex = (mRotYTargetIndex + ::sRotYTargetNum) % ::sRotYTargetNum;
+    mRotSpeed = mIsRotPlus ? ::sPunchSpeed : -::sPunchSpeed;
     mIsPunch = true;
 
     MR::invalidateClipping(this);
@@ -152,22 +152,22 @@ void ArrowSwitch::listenOnSwitch() {
     case -1:
     case SwitchType_HalfPlus:
         mIsRotPlus = true;
-        mRotSpeed = ::sPunchVelocit;
+        mRotSpeed = ::sPunchSpeed;
         mRotYTargetIndex = Direction_Down;
         break;
     case SwitchType_HalfMinus:
         mIsRotPlus = false;
-        mRotSpeed = -::sPunchVelocit;
+        mRotSpeed = -::sPunchSpeed;
         mRotYTargetIndex = Direction_Down;
         break;
     case SwitchType_QuarterPlus:
         mIsRotPlus = true;
-        mRotSpeed = ::sPunchVelocit;
+        mRotSpeed = ::sPunchSpeed;
         mRotYTargetIndex = Direction_Right;
         break;
     case SwitchType_QuarterMinus:
         mIsRotPlus = false;
-        mRotSpeed = -::sPunchVelocit;
+        mRotSpeed = -::sPunchSpeed;
         mRotYTargetIndex = Direction_Left;
         break;
     default:
@@ -190,12 +190,12 @@ void ArrowSwitch::listenOffSwitch() {
     case SwitchType_QuarterPlus:
     case SwitchType_HalfPlus:
         mIsRotPlus = false;
-        mRotSpeed = -::sPunchVelocit;
+        mRotSpeed = -::sPunchSpeed;
         break;
     case SwitchType_QuarterMinus:
     case SwitchType_HalfMinus:
         mIsRotPlus = true;
-        mRotSpeed = ::sPunchVelocit;
+        mRotSpeed = ::sPunchSpeed;
         break;
     default:
         return;

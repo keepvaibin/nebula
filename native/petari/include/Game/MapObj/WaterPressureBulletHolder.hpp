@@ -1,21 +1,10 @@
 #pragma once
 
-#include "Game/NameObj/NameObj.hpp"
+#include "Game/MapObj/PressureBulletHolder.hpp"
+#include "Game/MapObj/WaterPressureBullet.hpp"
 
-class WaterPressureBullet;
-
-class WaterPressureBulletHolder : public NameObj {
+// Shared by WaterPressure and WaterBazooka.
+class WaterPressureBulletHolder : public PressureBulletHolder< WaterPressureBullet, 16 > {
 public:
-    WaterPressureBulletHolder(const char* pName);
-
-    virtual ~WaterPressureBulletHolder();
-    virtual void init(const TableIter& rIter);
-
-    // Null when all are out: the shot is skipped (WaterPressure::shotBullet, WaterBazooka).
-    WaterPressureBullet* callEmptyBullet();
-
-    // A pool, as authored: how many bullets fly at once is part of the fights' design.
-    static const s32 cBulletCount = 16;
-
-    WaterPressureBullet* mBullet[cBulletCount];
+    WaterPressureBulletHolder(const char* pName) : PressureBulletHolder(pName, "ウォータープレッシャーの弾") {}
 };

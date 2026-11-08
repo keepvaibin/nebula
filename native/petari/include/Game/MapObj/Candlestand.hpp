@@ -29,6 +29,11 @@ public:
     inline void exeAttack();
     inline void exeBurn();
 
+private:
+    bool isBurning() const;
+    bool tryFire(HitSensor* pSender, HitSensor* pReceiver);
+
+public:
     s32 mItem;
     bool mHasItemAppear;
     SpinPullParticleCallBack* mSpinPtclCb;

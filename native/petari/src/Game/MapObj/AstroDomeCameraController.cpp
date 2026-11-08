@@ -114,9 +114,9 @@ void AstroDomeCameraController::calcZoomInUp(Vec3f* pDst) const {
 
 void AstroDomeCameraController::exeGalaxySelectStart() {
     s32 startFrame = SphereSelectorFunction::getSelectStartFrame();
-    Vec3f zoomOutPos;
 
     if (MR::isFirstStep(this)) {
+        Vec3f zoomOutPos;
         calcZoomOutPos(&zoomOutPos);
 
         mZoomPos.setEnd(zoomOutPos);

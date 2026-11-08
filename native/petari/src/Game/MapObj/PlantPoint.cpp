@@ -5,8 +5,8 @@
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
 
-PlantPoint::PlantPoint(const Vec3f& pPosition, const Vec3f& pUp, f32 thickness)
-    : mPosition(pPosition.x, pPosition.y, pPosition.z), mSide(1.0f, 0.0f, 0.0f), mUp(pUp), mFront(0.0f, 0.0f, 1.0f), mThickness(thickness) {
+PlantPoint::PlantPoint(const Vec3f& rPosition, const Vec3f& rUp, f32 thickness)
+    : mPosition(rPosition), mSide(1.0f, 0.0f, 0.0f), mUp(rUp), mFront(0.0f, 0.0f, 1.0f), mThickness(thickness) {
     Vec3f front = mSide.cross(mUp);
 
     if (MR::isNearZero(front)) {
@@ -16,9 +16,9 @@ PlantPoint::PlantPoint(const Vec3f& pPosition, const Vec3f& pUp, f32 thickness)
     }
 }
 
-void PlantPoint::setAxisAndPos(const Vec3f& pSide, const Vec3f& pUp, const Vec3f& pFront, const Vec3f& pPosition) {
-    mSide.set(pSide);
-    mUp.set(pUp);
-    mFront.set(pFront);
-    mPosition.set(pPosition);
+void PlantPoint::setAxisAndPos(const Vec3f& rSide, const Vec3f& rUp, const Vec3f& rFront, const Vec3f& rPosition) {
+    mSide.set(rSide);
+    mUp.set(rUp);
+    mFront.set(rFront);
+    mPosition.set(rPosition);
 }

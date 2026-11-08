@@ -12,4 +12,7 @@ public:
     void exeWait();
     void exeScaleUp();
     void exeScaleDown();
+
+private:
+    void updateScale(f32 startScale, f32 endScale, const Nerve* pNextNerve);
 };

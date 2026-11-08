@@ -7,7 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sSensorRadius = 70.0f;
+    const f32 sSensorRadius = 70.0f;
 };  // namespace
 
 SnowplowSwitch::SnowplowSwitch(const char* pName) : LiveActor(pName), mIsDiscovered() {

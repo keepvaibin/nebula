@@ -24,7 +24,7 @@ void CutBushModelObj::init(const TableIter& rIter) {
 }
 
 void CutBushModelObj::initAfterPlacement() {
-    if (MR::getLightCtrl(this)) {
+    if (MR::getLightCtrl(this) != nullptr) {
         MR::updateLightCtrlDirect(this);
     }
 }

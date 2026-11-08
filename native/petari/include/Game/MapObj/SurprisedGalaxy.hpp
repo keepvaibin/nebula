@@ -4,11 +4,9 @@
 
 class SurprisedGalaxy : public LiveActor {
 public:
-    SurprisedGalaxy(const char*);
+    SurprisedGalaxy(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
+    virtual void init(const TableIter& rIter);
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 

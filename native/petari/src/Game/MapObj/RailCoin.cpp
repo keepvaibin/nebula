@@ -6,11 +6,11 @@
 namespace {
     class RailCoinMercatorDivInfo : public DivideMercatorRailPosInfo {
     public:
-        inline RailCoinMercatorDivInfo(CoinGroup* pGroup) {
-            mGroup = pGroup;
-        }
+        RailCoinMercatorDivInfo(CoinGroup* pGroup) : mGroup(pGroup) {}
 
-        virtual void setPosition(s32, const Vec3f&);
+        virtual void setPosition(s32 idx, const Vec3f& rPos) {
+            mGroup->setCoinTrans(idx, rPos);
+        }
 
         CoinGroup* mGroup;
     };
@@ -59,17 +59,11 @@ namespace MR {
     }
 
     NameObj* createRailPurpleCoin(const char* pName) {
-        RailCoin* coin = new RailCoin(pName);
-        coin->mIsPurpleCoinGroup = true;
-        return coin;
+        RailCoin* pCoin = new RailCoin(pName);
+        pCoin->mIsPurpleCoinGroup = true;
+        return pCoin;
     }
 };  // namespace MR
-
-namespace {
-    void RailCoinMercatorDivInfo::setPosition(s32 idx, const Vec3f& rPos) {
-        mGroup->setCoinTrans(idx, rPos);
-    }
-};  // namespace
 
 RailCoin::~RailCoin() {
 }

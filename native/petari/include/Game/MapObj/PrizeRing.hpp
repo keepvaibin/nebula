@@ -8,15 +8,13 @@ public:
     PrizeRing();
 
     virtual ~PrizeRing();
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    inline s32 getNumber() const;
-
-    void setLife(int);
-    void setNumber(int);
+    void setLife(s32 lifeTime);
+    void setNumber(s32 num);
     void setNervePass();
     bool isReadyToPass() const;
     bool isReadyToKill() const;
@@ -27,8 +25,11 @@ public:
     void exeReadyToPass();
     void exePass();
     bool isPassed() const;
+
+private:
+    s32 getNumber() const;
     void playSound() const;
     bool isOnTriggerTimeoutFlash() const;
 
-    int mLifeTime;
+    s32 mLifeTime;
 };

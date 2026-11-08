@@ -4,14 +4,14 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sStepForWhiteFadeOut = 60;
-    static const s32 sStepForWhiteFadeIn = 60;
-    static const s32 sStepToBreakFaceEffect = 120;
-    static const s32 sStepToExplosionEffect = 300;
-    static const char* const sDemoPartNameBreak = "壊れ開始";
-    static const char* const sDemoPartNameFadeOut = "フェードアウト";
-    static const char* const sDemoPartNameWhite = "白画面";
-    static const char* const sDemoPartNameFadeIn = "フェードイン";
+    const s32 sStepForWhiteFadeOut = 60;
+    const s32 sStepForWhiteFadeIn = 60;
+    const s32 sStepToBreakFaceEffect = 120;
+    const s32 sStepToExplosionEffect = 300;
+    const char* const sDemoPartNameBreak = "壊れ開始";
+    const char* const sDemoPartNameFadeOut = "フェードアウト";
+    const char* const sDemoPartNameWhite = "白画面";
+    const char* const sDemoPartNameFadeIn = "フェードイン";
 };  // namespace
 
 namespace NrvMechaKoopaPartsHead {

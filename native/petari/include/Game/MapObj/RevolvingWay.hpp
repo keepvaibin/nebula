@@ -5,17 +5,17 @@
 
 class RevolvingWay : public LiveActor {
 public:
-    RevolvingWay(const char*);
+    RevolvingWay(const char* pName);
 
     virtual ~RevolvingWay();
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
 
     void exeWait();
     void addAccelMoment();
 
-    /* 0x0x8C */ Quat4f mRotateQuat;
-    /* 0x0x9C */ Vec3f mFriction;
-    /* 0x0xA8 */ f32 mRadius;
+    Quat4f mRotateQuat;
+    // Rotation per step, from pointer strokes; decays each step.
+    Vec3f mRotateMoment;
+    f32 mRadius;
 };

@@ -12,6 +12,11 @@ namespace NrvLavaBallRisingPlanetLava {
     NEW_NERVE(LavaBallRisingPlanetLavaNrvScaleDown, LavaBallRisingPlanetLava, ScaleDown);
 };  // namespace NrvLavaBallRisingPlanetLava
 
+namespace {
+    const s32 sWaitStep = 120;
+    const s32 sScaleStep = 240;
+};  // namespace
+
 LavaBallRisingPlanetLava::LavaBallRisingPlanetLava(const char* pName) : MapObjActor(pName) {
 }
 
@@ -29,7 +34,7 @@ void LavaBallRisingPlanetLava::init(const TableIter& rIter) {
 void LavaBallRisingPlanetLava::exeWait() {
     MR::startLevelSound(this, "SE_AT_LV_MAGMA_WIND_RISING");
 
-    if (!MR::isLessStep(this, 120)) {
+    if (!MR::isLessStep(this, ::sWaitStep)) {
         if (isNerve(GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitSmall))) {
             setNerve(GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvScaleUp));
         } else {
@@ -39,22 +44,20 @@ void LavaBallRisingPlanetLava::exeWait() {
 }
 
 void LavaBallRisingPlanetLava::exeScaleUp() {
-    MR::startLevelSound(this, "SE_AT_LV_MAGMA_WIND_RISING");
-    MR::startLevelSound(this, "SE_OJ_LV_LAVA_MOVE_RISING");
-    mScale.setAll< f32 >(MR::calcNerveValue(this, 240, 1.0f, 1.1f));
-
-    if (MR::isStep(this, 240)) {
-        setNerve(GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitBig));
-    }
+    updateScale(1.0f, 1.1f, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitBig));
 }
 
 void LavaBallRisingPlanetLava::exeScaleDown() {
+    updateScale(1.1f, 1.0f, GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitSmall));
+}
+
+void LavaBallRisingPlanetLava::updateScale(f32 startScale, f32 endScale, const Nerve* pNextNerve) {
     MR::startLevelSound(this, "SE_AT_LV_MAGMA_WIND_RISING");
     MR::startLevelSound(this, "SE_OJ_LV_LAVA_MOVE_RISING");
-    mScale.setAll< f32 >(MR::calcNerveValue(this, 240, 1.1f, 1.0f));
+    mScale.setAll< f32 >(MR::calcNerveValue(this, ::sScaleStep, startScale, endScale));
 
-    if (MR::isStep(this, 240)) {
-        setNerve(GET_NERVE(LavaBallRisingPlanetLava, LavaBallRisingPlanetLavaNrvWaitSmall));
+    if (MR::isStep(this, ::sScaleStep)) {
+        setNerve(pNextNerve);
     }
 }
 

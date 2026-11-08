@@ -22,7 +22,7 @@ namespace {
     const f32 sWindRandomAccelFar = 0.03f;
     const s32 sStepToWindStartMin = 15;
     const s32 sStepToWindStartMax = 150;
-    const s32 sSteptoWindStartAfterLand = 120;
+    const s32 sStepToWindStartAfterLand = 120;
     const s32 sStepWindMin = 10;
     const s32 sStepWindMax = 30;
 };  // namespace
@@ -54,7 +54,7 @@ void CoconutTreeLeaf::update(f32 windAccel, f32 windRandomAccel) {
 
     if (MR::isOnPlayer(this)) {
         mWindStep = 0;
-        mWindStartStep = ::sSteptoWindStartAfterLand;
+        mWindStartStep = ::sStepToWindStartAfterLand;
         springAccelRate = ::sSpringAccelRateLand;
         friction = ::sFrictionLand;
         gravity = ::sGravityLand;

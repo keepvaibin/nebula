@@ -4,18 +4,14 @@
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-MercatorRotateParts::MercatorRotateParts(const char* pName) : LiveActor(pName) {
-    mRotator = nullptr;
-    mAppearController = nullptr;
+MercatorRotateParts::MercatorRotateParts(const char* pName) : LiveActor(pName), mRotator(nullptr), mAppearController(nullptr) {
 }
 
 void MercatorRotateParts::initAfterPlacement() {
     Vec3f trans;
     Pos3f rotate;
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mLocalTrans, false);
-    mPosition.x = trans.x;
-    mPosition.y = trans.y;
-    mPosition.z = trans.z;
+    mPosition.set(trans);
     mAppearController->storeCurrentPosture();
 }
 
@@ -28,18 +24,16 @@ void MercatorRotateParts::control() {
 }
 
 void MercatorRotateParts::calcAndSetBaseMtx() {
+    Mtx34f localRotateMtx;
+    MR::makeMtxRotate(localRotateMtx.toMtxPtr(), mLocalRotate.x, mLocalRotate.y, mLocalRotate.z);
+    Pos3f baseMtx;
+    baseMtx.concat(mRotator->getRotateMtx(), localRotateMtx);
+
     Vec3f trans;
     Pos3f rotate;
-    Mtx34f mtx;
-    Pos3f baseMtx;
-    baseMtx.identity();
-    MR::makeMtxRotate(mtx.toMtxPtr(), mLocalRotate.x, mLocalRotate.y, mLocalRotate.z);
-    baseMtx.concat(mRotator->getRotateMtx(), mtx);
     MR::convertMercatorPlaneToSphereTransAndRotate(&trans, &rotate, mLocalTrans, false);
     baseMtx.concat(rotate, baseMtx);
-    baseMtx.mMtx[0][3] = trans.x;
-    baseMtx.mMtx[1][3] = trans.y;
-    baseMtx.mMtx[2][3] = trans.z;
+    baseMtx.setTrans(trans);
     MR::setBaseTRMtx(this, baseMtx);
 }
 

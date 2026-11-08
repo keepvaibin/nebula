@@ -99,7 +99,7 @@ void ClipAreaMovable::updateMatrix() {
     }
 
     mtx.setTrans(mPosition);
-    __builtin_memcpy(mBaseMtx, mtx, sizeof(Mtx));
+    mBaseMtx = mtx;
 }
 
 NameObj* MR::createClipAreaSphere(const char* pModel) {

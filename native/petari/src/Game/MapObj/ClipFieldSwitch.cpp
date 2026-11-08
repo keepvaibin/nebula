@@ -11,21 +11,20 @@ ClipFieldSwitch::ClipFieldSwitch(const char* pName) : LiveActor(pName) {
 
 void ClipFieldSwitch::control() {
     mPosition = *MR::getPlayerPos();
+    const bool isInArea = MR::isInClipArea(mPosition, 5.0f);
 
-    if (MR::isInClipArea(*MR::getPlayerPos(), 5.0f)) {
-        if (MR::isValidSwitchA(this)) {
+    if (MR::isValidSwitchA(this)) {
+        if (isInArea) {
             MR::onSwitchA(this);
-        }
-
-        if (MR::isValidSwitchB(this)) {
-            MR::offSwitchB(this);
-        }
-    } else {
-        if (MR::isValidSwitchA(this)) {
+        } else {
             MR::offSwitchA(this);
         }
+    }
 
-        if (MR::isValidSwitchB(this)) {
+    if (MR::isValidSwitchB(this)) {
+        if (isInArea) {
+            MR::offSwitchB(this);
+        } else {
             MR::onSwitchB(this);
         }
     }

@@ -4,21 +4,18 @@
 
 class RailBlock : public LiveActor {
 public:
-    RailBlock(const char*);
+    RailBlock(const char* pName);
 
-    virtual ~RailBlock(){};
-    virtual void init(const TableIter&);
-    virtual void calcViewAndEntry();
-    virtual void calcAndSetBaseMtx();
+    virtual ~RailBlock() {}
+    virtual void init(const TableIter& rIter);
 
     void startMove();
     void stopMove();
-    inline void exeWait();
+    void exeWait();
     void exeMove();
     void exeTerminate();
 
     s32 mRailSpeed;
     s32 mMoveTime;
     bool mIsConnectedToRail;
-    bool mIsBig;
 };

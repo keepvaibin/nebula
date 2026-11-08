@@ -18,7 +18,7 @@ void ReverseGravityRoomPlanet::init(const TableIter& rIter) {
     MapObjActorInitInfo info;
     info.setupDefaultPos();
     info.setupConnectToScene();
-    info.setupEffect(0);
+    info.setupEffect(nullptr);
     info.setupFarClipping(-1.0f);
     info.setupNerve(GET_NERVE(ReverseGravityRoomPlanet, ReverseGravityRoomPlanetNrvDownWait));
     initialize(rIter, info);
@@ -50,7 +50,7 @@ void ReverseGravityRoomPlanet::exeUpStart() {
 void ReverseGravityRoomPlanet::exeUpWait() {
 }
 
-void ReverseGravityRoomPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rIter) {
+void ReverseGravityRoomPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
     MR::listenStageSwitchOnOffA(this, MR::Functor(this, &ReverseGravityRoomPlanet::startSwitchOn),
                                 MR::Functor(this, &ReverseGravityRoomPlanet::startSwitchOff));
 }

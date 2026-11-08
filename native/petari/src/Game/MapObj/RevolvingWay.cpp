@@ -10,6 +10,13 @@
 #include <nebula_math.h>
 #include <nebula_geometry.hpp>
 
+namespace {
+    const f32 sDecayHeld = 0.98f;
+    const f32 sDecay = 0.9f;
+    const f32 sStrokeRate = 0.04f;
+    const f32 sMomentMax = 0.15f;
+};  // namespace
+
 namespace NrvRevolvingWay {
     NEW_NERVE(RevolvingWayNrvWait, RevolvingWay, Wait);
 };  // namespace NrvRevolvingWay
@@ -17,11 +24,7 @@ namespace NrvRevolvingWay {
 RevolvingWay::~RevolvingWay() {
 }
 
-RevolvingWay::RevolvingWay(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 1.0f) {
-    mFriction.x = 0.0f;
-    mFriction.y = 0.0f;
-    mFriction.z = 0.0f;
-    mRadius = 500.0f;
+RevolvingWay::RevolvingWay(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f), mRadius(500.0f) {
 }
 
 void RevolvingWay::init(const TableIter& rIter) {
@@ -30,14 +33,11 @@ void RevolvingWay::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     MR::makeQuatFromRotate(&mRotateQuat, this);
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 0x10u, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "RevolvingWay", getSensor("body"), nullptr);
     MR::initStarPointerTarget(this, mRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initNerve(GET_NERVE(RevolvingWay, RevolvingWayNrvWait));
     makeActorAppeared();
-}
-
-void RevolvingWay::control() {
 }
 
 void RevolvingWay::calcAndSetBaseMtx() {
@@ -46,24 +46,18 @@ void RevolvingWay::calcAndSetBaseMtx() {
 
 void RevolvingWay::exeWait() {
     addAccelMoment();
-    MR::rotateQuatMoment(&mRotateQuat, mFriction);
-    f32 friction;
-    if (MR::isHeldFire(PLAYER_1)) {
-        friction = 0.98f;
-    } else {
-        friction = 0.9f;
-    }
-    mFriction *= friction;
+    MR::rotateQuatMoment(&mRotateQuat, mRotateMoment);
+    mRotateMoment *= MR::isHeldFire(PLAYER_1) ? ::sDecayHeld : ::sDecay;
 }
 
 void RevolvingWay::addAccelMoment() {
     Vec3f rotateMoment;
     if (MR::isStarPointerPointing(this, 0, true, "弱") && MR::isHeldFire(PLAYER_1) &&
         MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, mRadius, 0)) {
-        mFriction += rotateMoment * 0.04f;
-        f32 mag = mFriction.length();
-        if (mag > 0.15f) {
-            mFriction *= (0.15f / mag);
+        mRotateMoment += rotateMoment * ::sStrokeRate;
+        f32 mag = mRotateMoment.length();
+        if (mag > ::sMomentMax) {
+            mRotateMoment *= (::sMomentMax / mag);
         }
     }
 }

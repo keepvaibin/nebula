@@ -11,24 +11,25 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace NrvSurprisedGalaxy {
     NEW_NERVE(SurprisedGalaxyNrvExit, SurprisedGalaxy, Exit);
     NEW_NERVE(SurprisedGalaxyNrvWait, SurprisedGalaxy, Wait);
 };  // namespace NrvSurprisedGalaxy
 
-SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName) {
+namespace {
+    // "SurpXxxGalaxy" opens XxxGalaxy; the plain name opens the surfing galaxy.
+    const char sObjNamePrefix[] = "Surp";
+};  // namespace
+
+SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName), mGalaxyName() {
 }
 
 void SurprisedGalaxy::init(const TableIter& rIter) {
-    const char* objName;
-    MR::getObjectName(&objName, rIter);
-
-    if (strcmp(objName, "SurprisedGalaxy") == 0) {
-        mGalaxyName = "SurfingLv1Galaxy";
-    } else {
-        mGalaxyName = &objName[strlen("Surp")];
-    }
+    const char* pObjName;
+    MR::getObjectName(&pObjName, rIter);
+    mGalaxyName = MR::isEqualString(pObjName, "SurprisedGalaxy") ? "SurfingLv1Galaxy" : pObjName + sizeof(::sObjNamePrefix) - 1;
 
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("MiniSurprisedGalaxy", nullptr, false);
@@ -59,19 +60,9 @@ void SurprisedGalaxy::init(const TableIter& rIter) {
     }
 }
 
-void SurprisedGalaxy::appear() {
-    LiveActor::appear();
-}
-
-void SurprisedGalaxy::kill() {
-    LiveActor::kill();
-}
-
 void SurprisedGalaxy::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isSensorPlayerOrRide(pReceiver)) {
-        if (!isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit))) {
-            setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
-        }
+    if (MR::isSensorPlayerOrRide(pReceiver) && !isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit))) {
+        setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
     }
 }
 
@@ -98,13 +89,9 @@ void SurprisedGalaxy::exeWait() {
 }
 
 bool SurprisedGalaxy::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    switch (msg) {
-    case ACTMES_IS_RUSH_TAKEOVER:
-        if (isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvWait))) {
-            setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
-        }
-        return false;
-    default:
-        return false;
+    if (msg == ACTMES_IS_RUSH_TAKEOVER && isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvWait))) {
+        setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
     }
+
+    return false;
 }

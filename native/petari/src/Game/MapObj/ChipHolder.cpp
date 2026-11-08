@@ -10,8 +10,7 @@ ChipHolder::ChipHolder(const char* pName, s32 chipType) : NameObj(pName), mChipC
 }
 
 void ChipHolder::registerChipGroup(ChipGroup* pChipGroup) {
-    mChipGroups.at(mNumChipGroups) = pChipGroup;
-    mNumChipGroups++;
+    mChipGroups.at(mNumChipGroups++) = pChipGroup;
 }
 
 ChipGroup* ChipHolder::findChipGroup(s32 groupId) const {
@@ -59,16 +58,16 @@ void MR::registerChip(s32 chipType, ChipBase* pChip, s32 groupId) {
 }
 
 void MR::noticeGetChip(s32 chipType, ChipBase* pChip, s32 groupId) {
-    ChipHolder* holder = getChipHolder(chipType);
-    ChipGroup* group = holder->findChipGroup(groupId);
-    group->noticeGet(pChip);
-    holder->mChipCounter->setCount(group->getGotCount());
+    ChipHolder* pHolder = getChipHolder(chipType);
+    ChipGroup* pGroup = pHolder->findChipGroup(groupId);
+    pGroup->noticeGet(pChip);
+    pHolder->mChipCounter->setCount(pGroup->getGotCount());
     incPlayerOxygen(8);
 }
 
 void MR::showChipCounter(s32 chipType, s32 groupId) {
-    ChipHolder* holder = getChipHolder(chipType);
-    holder->mChipCounter->requestShow(groupId, holder->findChipGroup(groupId)->getGotCount());
+    ChipHolder* pHolder = getChipHolder(chipType);
+    pHolder->mChipCounter->requestShow(groupId, pHolder->findChipGroup(groupId)->getGotCount());
 }
 
 void MR::hideChipCounter(s32 chipType, s32 groupId) {

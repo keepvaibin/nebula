@@ -12,10 +12,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
+    const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
 
-    static const f32 sPunchVelocit = 6.0f;
-    static const s32 sFreqRotY = 4;
+    const f32 sPunchSpeed = 6.0f;
+    const s32 sRotYTargetNum = 4;
 };  // namespace
 
 namespace NrvArrowSwitchMulti {
@@ -62,12 +62,8 @@ void ArrowSwitchTarget::offTarget() {
 }
 
 ArrowSwitchMulti::ArrowSwitchMulti(const char* pName)
-    : LiveActor(pName), mIdInfo(), mRotAngle(), mRotSpeed(), mActiveTargetIndex(), mRotYTargetIndex(), mIsRotPlus(true) {
+    : LiveActor(pName), mIdInfo(), mTargetArray(), mRotAngle(), mRotSpeed(), mActiveTargetIndex(), mRotYTargetIndex(), mIsRotPlus(true) {
     MR::createArrowSwitchMultiHolder();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTargetArray); i++) {
-        mTargetArray[i] = nullptr;
-    }
 }
 
 void ArrowSwitchMulti::registerTarget(ArrowSwitchTarget* pTarget) {
@@ -103,9 +99,6 @@ void ArrowSwitchMulti::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-void ArrowSwitchMulti::control() {
-}
-
 void ArrowSwitchMulti::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
     Pos3f pos;
@@ -118,11 +111,7 @@ void ArrowSwitchMulti::calcAndSetBaseMtx() {
 }
 
 bool ArrowSwitchMulti::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgPlayerHitAll(msg)) {
-        return requestPunch(pSender, pReceiver);
-    }
-
-    return false;
+    return MR::isMsgPlayerHitAll(msg) && requestPunch(pSender, pReceiver);
 }
 
 bool ArrowSwitchMulti::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
@@ -136,13 +125,13 @@ bool ArrowSwitchMulti::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (mIsRotPlus) {
         mRotYTargetIndex++;
-        mRotSpeed = ::sPunchVelocit;
+        mRotSpeed = ::sPunchSpeed;
     } else {
         mRotYTargetIndex--;
-        mRotSpeed = -::sPunchVelocit;
+        mRotSpeed = -::sPunchSpeed;
     }
 
-    mRotYTargetIndex = (mRotYTargetIndex + ::sFreqRotY) % ::sFreqRotY;
+    mRotYTargetIndex = (mRotYTargetIndex + ::sRotYTargetNum) % ::sRotYTargetNum;
     MR::invalidateClipping(this);
     setNerve(GET_NERVE(ArrowSwitchMulti, ArrowSwitchMultiNrvRotate));
 
@@ -151,12 +140,7 @@ bool ArrowSwitchMulti::requestPunch(HitSensor* pSender, HitSensor* pReceiver) {
 
 void ArrowSwitchMulti::exeWait() {
     if (MR::isFirstStep(this)) {
-        if (mRotYTargetIndex % 2 == 1) {
-            MR::startBtk(this, "On");
-        } else {
-            MR::startBtk(this, "Off");
-        }
-
+        MR::startBtk(this, mRotYTargetIndex % 2 == 1 ? "On" : "Off");
         MR::validateClipping(this);
     }
 }

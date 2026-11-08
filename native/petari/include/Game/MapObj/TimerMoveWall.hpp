@@ -16,5 +16,5 @@ public:
     void exeMove();
 
     s32 mTimer;
-    f32 mMoveLenght;
+    f32 mMoveLength;
 };

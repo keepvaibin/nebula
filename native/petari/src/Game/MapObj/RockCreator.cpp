@@ -33,7 +33,7 @@ void RockCreator::init(const TableIter& rIter) {
         MR::declareStarPiece(this, Rock::getAppearStarPieceNum(rockType));
     } else {
         const s32 frames = static_cast< s32 >(MR::getRailTotalLength(this) / mRockSpeed) + Rock::getAppearFrame();
-    mNumRocks = (mSpawnDelay != 0 ? frames / mSpawnDelay : frames < 0 ? -1 : 0) + 2;
+        mNumRocks = (mSpawnDelay != 0 ? frames / mSpawnDelay : frames < 0 ? -1 : 0) + 2;
         MR::declareStarPiece(this, Rock::getAppearStarPieceNum(rockType) * 3);
     }
 
@@ -88,8 +88,7 @@ void RockCreator::initMapToolInfo(const TableIter& rIter) {
     if (Rock::getType(rIter) == Rock::NormalRock) {
         MR::getPlacementArg2NoInit(rIter, &mBreakModelOnRailGoal);
     } else {
-        // ObjArg 5 is for brekaing ONLY SPECIFICALLY for WanWans.
-        // if the object is a rock, ObjArg 5 determines if the rock should bounce on attack
+        // WanWan placements keep the flag in arg 5.
         MR::getPlacementArg5NoInit(rIter, &mBreakModelOnRailGoal);
     }
 }

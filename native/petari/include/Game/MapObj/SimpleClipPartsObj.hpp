@@ -4,15 +4,12 @@
 
 class SimpleClipPartsObj : public MapObjActor {
 public:
-    SimpleClipPartsObj(const char*);
+    SimpleClipPartsObj(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter& rIter);
     virtual void control();
-    virtual void connectToScene(const MapObjActorInitInfo&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
-
-    void exeWait();
+    virtual void connectToScene(const MapObjActorInitInfo& rInfo);
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo& rInfo);
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo);
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo);
 };

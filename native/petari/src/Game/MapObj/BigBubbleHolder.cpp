@@ -15,17 +15,8 @@ namespace {
     }
 };  // namespace
 
-BigBubbleHolder::BigBubbleHolder(const char* pName) : NameObj(pName), mDrawer(), mNumLimitters(), mNumBubbles(), mIsMarioBinded() {
-    for (s32 idx = 0; idx < cBubbleCount; idx++) {
-        mBubbles[idx] = nullptr;
-        mDrawBubbles[idx] = nullptr;
-    }
-
-    for (s32 idx = 0; idx < 64; idx++) {
-        mLimitters[idx] = nullptr;
-    }
-
-    mDrawer = new BigBubbleDrawer();
+BigBubbleHolder::BigBubbleHolder(const char* pName)
+    : NameObj(pName), mDrawer(new BigBubbleDrawer()), mBubbles(), mDrawBubbles(), mLimitters(), mNumLimitters(), mNumBubbles(), mIsMarioBinded() {
     MR::registerPreDrawFunction(MR::Functor(&MR::setUpBigBubbleDraw), MR::DrawType_BigBubble);
     MR::connectToScene(this, MR::MovementType_EnemyDecoration, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_BigBubble);
 }

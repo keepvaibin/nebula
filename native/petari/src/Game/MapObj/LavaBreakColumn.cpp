@@ -10,7 +10,7 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const f32 sEffectPosOffsetY = 5000.0f;
+    const f32 sEffectPosOffsetY = 5000.0f;
 };  // namespace
 
 LavaBreakColumn::LavaBreakColumn(const char* pName) : AnmModelSwitchMoveEndKill(pName), mEffectPos(gZeroVec), mIsPillarFallen() {

@@ -5,7 +5,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const f32 sGunPointOffset = 200.0f;
+    const f32 sGunPointOffset = 200.0f;
 };  // namespace
 
 WaterPressure::~WaterPressure() {
@@ -35,15 +35,14 @@ bool WaterPressure::shotBullet(f32 speed) {
     return true;
 }
 
+// The cannon fires along its joint's X axis.
 void WaterPressure::calcGunPointFromCannon(Pos3f* pMtx) {
     Pos3f jointMtx = MR::getJointMtx(this, "Cannon1");
-    Vec3f sideVec, pos;
-    jointMtx.getXDir(sideVec);
+    Vec3f front, pos;
+    jointMtx.getXDir(front);
     jointMtx.getTrans(pos);
-    pos.scaleAdd(::sGunPointOffset, sideVec, pos);
-    pMtx->set(jointMtx);
-    Vec3f upVec, frontVec;
-    jointMtx.getYDir(upVec);
-    jointMtx.getZDir(frontVec);
-    MR::makeMtxFrontUpPos(pMtx, sideVec, upVec, pos);
+    pos.scaleAdd(::sGunPointOffset, front, pos);
+    Vec3f up;
+    jointMtx.getYDir(up);
+    MR::makeMtxFrontUpPos(pMtx, front, up, pos);
 }
