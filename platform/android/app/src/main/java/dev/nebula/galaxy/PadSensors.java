@@ -20,6 +20,12 @@ import android.view.InputDevice;
  * Controller's three per report, 200 a second), on a thread of its own, with the sensor's own time. A controller whose
  * sensors appear after it connects (a driver adds them as a second input device) is picked up when Android reports the
  * change. Values are Android's: metres a second squared and radians a second, on the axes the driver reports.
+ * A controller's motion sensors that Android lists as a device of their own (a driver's IMU node it does not take as
+ * part of the controller) are read too: an external device with a vendor and product id and motion sensors.
+ *
+ * Android's kernels before Linux 6.1 (android12-5.10, android13-5.15, android14-5.15) carry hid-nintendo without its
+ * IMU: a Switch controller over Bluetooth has no motion for any app there. Over a cable SDL reads the controller's own
+ * reports (HIDAPI), motion included.
  */
 public final class PadSensors implements InputManager.InputDeviceListener {
     /** What the sensors report, on the sensor thread. */
@@ -86,6 +92,16 @@ public final class PadSensors implements InputManager.InputDeviceListener {
             || (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
     }
 
+    /** A device that is not a controller but carries a controller's motion sensors (vendor and product ids). */
+    private static boolean isMotionNode(InputDevice device) {
+        if (device == null || device.isVirtual() || !device.isExternal() || device.getVendorId() == 0) {
+            return false;
+        }
+        final SensorManager manager = device.getSensorManager();
+        return manager != null && (manager.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null
+            || manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null);
+    }
+
     public synchronized void start() {
         if (thread != null) {
             return;
@@ -126,7 +142,7 @@ public final class PadSensors implements InputManager.InputDeviceListener {
     // On the sensor thread.
     private void refresh(int deviceId) {
         final InputDevice device = InputDevice.getDevice(deviceId);
-        if (!isController(device)) {
+        if (!isController(device) && !isMotionNode(device)) {
             drop(deviceId);
             return;
         }

@@ -652,6 +652,24 @@ void report_pad_motion(std::size_t index) {
 // A pad's touch surface into g_input.motion, as the Windows host's worker does.
 void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     PadMotion& motion = g_input.motion[index];
+    const PadMotionSource& source = g_motion_source[index];
+    motion.has_gyro = source.has_gyro || motion.imu_live;
+    motion.has_accel = source.has_accel || motion.imu_live;
+#if defined(__ANDROID__)
+    if (!motion.has_gyro && !sdl_hid_driver(gamepad)) {
+        // The controller's own sensors as Android lists them, before their first sample.
+        std::lock_guard<std::mutex> lock(g_android_pad_mutex);
+        const std::uint16_t vendor = SDL_GetGamepadVendor(gamepad);
+        const std::uint16_t product = SDL_GetGamepadProduct(gamepad);
+        for (const AndroidPadDevice& device : g_android_pads) {
+            if (device.vendor == vendor && device.product == product) {
+                motion.has_gyro = motion.has_gyro || device.gyro;
+                motion.has_accel = motion.has_accel || device.accel;
+            }
+        }
+    }
+#endif
+    motion.has_touch = SDL_GetNumGamepadTouchpads(gamepad) > 0;
     if (SDL_GetNumGamepadTouchpads(gamepad) > 0) {
         bool down = false;
         float x = 0.0f;
@@ -857,6 +875,17 @@ bool start() noexcept {
     SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "0");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
+#if defined(__ANDROID__)
+    // A Switch or PlayStation controller on a cable is read from its own reports by SDL's drivers (HIDAPI), motion
+    // included, as on a PC; Android asks once whether Nebula may use the USB device. SDL leaves HIDAPI off on Android
+    // (for that question), and Android's kernels before Linux 6.1 give a Switch controller no motion. Over Bluetooth
+    // Android's driver serves the controller and PadSensors.java its motion. Other HIDAPI drivers stay off (the
+    // DolphinBar is WiimoteUsb.java's).
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_SWITCH2, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4, "1");
+    SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5, "1");
+#endif
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC | SDL_INIT_SENSOR)) {
         std::fprintf(stderr, "[sdl] SDL_Init failed: %s\n", SDL_GetError());
         return false;
@@ -1186,6 +1215,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePhon
 // PadSensors.java (Java's sensor thread): a controller's motion sensors as Android lists them, gone, and each sample.
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensorDevice(
     JNIEnv* env, jclass, jint id, jstring name, jstring descriptor, jint vendor, jint product, jboolean gyro, jboolean accel) {
+    using namespace galaxy::sdl;
     std::uint16_t crc = 0u;
     if (const char* const chars = descriptor != nullptr ? env->GetStringUTFChars(descriptor, nullptr) : nullptr) {
         crc = SDL_crc16(0u, chars, std::strlen(chars));
@@ -1213,6 +1243,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadS
 }
 
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensorRemoved(JNIEnv*, jclass, jint id) {
+    using namespace galaxy::sdl;
     std::lock_guard<std::mutex> lock(g_android_pad_mutex);
     g_android_pads.erase(std::remove_if(g_android_pads.begin(), g_android_pads.end(), [id](const AndroidPadDevice& d) { return d.id == id; }),
                          g_android_pads.end());
@@ -1220,6 +1251,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadS
 
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePadSensor(JNIEnv*, jclass, jint id, jint type, jlong time_ns,
                                                                                         jfloat x, jfloat y, jfloat z) {
+    using namespace galaxy::sdl;
     std::lock_guard<std::mutex> lock(g_android_pad_mutex);
     if (g_android_samples.size() >= kAndroidSampleLimit) {
         return;  // SDL's thread is not pumping (the game is out of sight): the newest are dropped
@@ -1573,6 +1605,9 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
             info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
                          : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
                                                                                     : "Controller";
+            info.gyro = state.motion[i].has_gyro;
+            info.sensors = state.motion[i].has_gyro || state.motion[i].has_accel;
+            info.touch = state.motion[i].has_touch;
             out[count++] = info;
         }
     }
