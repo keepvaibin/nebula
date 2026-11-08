@@ -346,15 +346,17 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     static std::uint64_t s_direct_held_land_ms = 0;  // the touch that held A
     bool direct_finger = false;
     bool direct_press = false;
-    // Until the finger moves past the touch slop it points where it landed: a press, a hold that picks a mod up and a
-    // slider's grab hold still under a fingertip's tremor on any screen.
+    // Until A is down and the finger has moved past the touch slop it points where it landed: the press lands on what the
+    // finger touched however fast it then moves (a mod pressed and dragged in one motion), and a press or a slider's grab
+    // holds still under a fingertip's tremor on any screen.
+    if (captured && state.finger_down && state.finger_land_ms != s_direct_land_ms) {
+        s_direct_land_ms = state.finger_land_ms;
+        s_direct_land_frame = frame;
+    }
+    const bool at_land = !state.finger_moved || frame <= s_direct_land_frame + kTapHoverFrames;
     if (captured && state.finger_down &&
-        project_window_point(state, state.finger_moved ? state.finger_x : state.finger_land_x,
-                             state.finger_moved ? state.finger_y : state.finger_land_y, x, y)) {
-        if (state.finger_land_ms != s_direct_land_ms) {
-            s_direct_land_ms = state.finger_land_ms;
-            s_direct_land_frame = frame;
-        }
+        project_window_point(state, at_land ? state.finger_land_x : state.finger_x,
+                             at_land ? state.finger_land_y : state.finger_y, x, y)) {
         finger_to(x, y, now);
         direct_finger = true;
         if (frame >= s_direct_land_frame + kTapHoverFrames) {
