@@ -113,11 +113,9 @@ void SequenceSound::managerCalc_() {
 }
 
 void SequenceSound::die_() {
-    for (int i = 0; i < NUM_CHILDREN; i++) {
-        if (mSoundChild[i]) {
-            delete mSoundChild[i];
-            mSoundChild[i] = nullptr;
-        }
+    for (s32 i = 0; i < NUM_CHILDREN; i++) {
+        delete mSoundChild[i];
+        mSoundChild[i] = nullptr;
     }
 
     if (mSoundStrategy) {

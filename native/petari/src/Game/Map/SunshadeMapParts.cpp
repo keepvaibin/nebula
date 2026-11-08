@@ -2,8 +2,7 @@
 #include "Game/Map/SunshadeMapHolder.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-SunshadeMapParts::SunshadeMapParts(const char* pName) : GeneralMapParts(pName) {
-    mCollision = nullptr;
+SunshadeMapParts::SunshadeMapParts(const char* pName) : GeneralMapParts(pName), mCollision(nullptr) {
 }
 
 void SunshadeMapParts::calcAnim() {

@@ -6,8 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-OceanRingBloomDrawer::OceanRingBloomDrawer(OceanRing* pRing) : NameObj("オーシャンリング[ブルーム描画]") {
-    mRing = pRing;
+OceanRingBloomDrawer::OceanRingBloomDrawer(OceanRing* pRing) : NameObj("オーシャンリング[ブルーム描画]"), mRing(pRing) {
 }
 
 void OceanRingBloomDrawer::init(const TableIter& rIter) {

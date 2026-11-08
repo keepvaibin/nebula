@@ -18,39 +18,26 @@ void GroupSwitchWatcher::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
+bool GroupSwitchWatcher::isGroupOn() const {
+    switch (mLogicType) {
+    case -1:
+        return mSwitchCtrl->isOnAllSwitchAfterB(mNumSwitches);
+    case 0:
+        return mSwitchCtrl->isOnAnyOneSwitchAfterB(mNumSwitches);
+    default:
+        return false;
+    }
+}
+
 void GroupSwitchWatcher::control() {
     if (mActionType == -1) {
-        if (!mSwitchCtrl->isOnSwitchA()) {
-            bool activate = false;
-            switch (mLogicType) {
-            case -1:
-                activate = mSwitchCtrl->isOnAllSwitchAfterB(mNumSwitches);
-                break;
-            case 0:
-                activate = mSwitchCtrl->isOnAnyOneSwitchAfterB(mNumSwitches);
-                break;
-            }
-
-            if (activate) {
-                mSwitchCtrl->onSwitchA();
-                kill();
-            }
-        }
-    } else {
-        bool activate = false;
-        switch (mLogicType) {
-        case -1:
-            activate = mSwitchCtrl->isOnAllSwitchAfterB(mNumSwitches);
-            break;
-        case 0:
-            activate = mSwitchCtrl->isOnAnyOneSwitchAfterB(mNumSwitches);
-            break;
-        }
-
-        if (activate) {
+        if (!mSwitchCtrl->isOnSwitchA() && isGroupOn()) {
             mSwitchCtrl->onSwitchA();
-        } else {
-            mSwitchCtrl->offSwitchA();
+            kill();
         }
+    } else if (isGroupOn()) {
+        mSwitchCtrl->onSwitchA();
+    } else {
+        mSwitchCtrl->offSwitchA();
     }
 }

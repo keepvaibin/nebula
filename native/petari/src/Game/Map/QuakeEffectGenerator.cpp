@@ -7,10 +7,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sQuakeInterval = 400;
-    static const f32 sCamShakeIntensity = 0.05f;
-    static const f32 sCamShakeSpeed = 1.5f;
-    static const s32 sCamShakeFrame = 120;
+    const s32 sQuakeInterval = 400;
+    const f32 sCamShakeIntensity = 0.05f;
+    const f32 sCamShakeSpeed = 1.5f;
+    const s32 sCamShakeFrame = 120;
 };  // namespace
 
 namespace NrvQuakeEffectGenerator {

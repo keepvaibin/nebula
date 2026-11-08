@@ -11,30 +11,41 @@
 #include "Game/Util/RailUtil.hpp"
 
 namespace {
-    static const s32 sDefaultFishNum = 10;
-    static const f32 sDefaultGroupSpeed = 5.0f;
-    static const f32 sFriction = 0.95f;
-    static const f32 sWanderAccel = 1.0f;
-    static const s32 sStepToWanderMoveMin = 60;
-    static const s32 sStepToWanderMoveMax = 180;
-    static const f32 sApproachAccel = 5.0f;
-    static const s32 sStepToApproachMin = 5;
-    static const s32 sStepToApproachMax = 30;
-    static const f32 sDistanceToApproachMin = 100.0f;
-    static const f32 sDistanceToApproachMax = 500.0f;
-    static const f32 sEscapeAccel = 5.0f;
-    static const s32 sStepToEscapeMin = 5;
-    static const s32 sStepToEscapeMax = 20;
-    static const f32 sDistanceSafe = 600.0f;
-    static const f32 sDistanceToSpinEscape = 500.0f;
-    static const s32 sTimeToSearchPlayerMin = 5;
-    static const s32 sTimeToSearchPlayerMax = 10;
-    static const f32 sDistanceToEscapeFromPlayer = 150.0f;
-    static const f32 sRotateDotMax = 0.9f;
-    static const f32 sRotateRate = 0.2f;
-    static const f32 sDirectionMaxY = 0.99f;
-    static const f32 sAnimFrameRate = 0.2f;
-    static const f32 sFollowPosOffsetMax = 150.0f;
+    const s32 sDefaultFishNum = 10;
+    const f32 sDefaultGroupSpeed = 5.0f;
+    const f32 sFriction = 0.95f;
+    const f32 sWanderAccel = 1.0f;
+    const s32 sStepToWanderMoveMin = 60;
+    const s32 sStepToWanderMoveMax = 180;
+    const f32 sApproachAccel = 5.0f;
+    const s32 sStepToApproachMin = 5;
+    const s32 sStepToApproachMax = 30;
+    const f32 sDistanceToApproachMin = 100.0f;
+    const f32 sDistanceToApproachMax = 500.0f;
+    const f32 sEscapeAccel = 5.0f;
+    const s32 sStepToEscapeMin = 5;
+    const s32 sStepToEscapeMax = 20;
+    const f32 sDistanceSafe = 600.0f;
+    const f32 sDistanceToSpinEscape = 500.0f;
+    const s32 sTimeToSearchPlayerMin = 5;
+    const s32 sTimeToSearchPlayerMax = 10;
+    const f32 sDistanceToEscapeFromPlayer = 150.0f;
+    const f32 sRotateDotMax = 0.9f;
+    const f32 sRotateRate = 0.2f;
+    const f32 sDirectionMaxY = 0.99f;
+    const f32 sAnimFrameRate = 0.2f;
+    const f32 sFollowPosOffsetMax = 150.0f;
+
+    // Indexed by Fish::mFishType; an unlisted group object name is kind 0.
+    struct FishKind {
+        const char* mGroupName;
+        const char* mModelName;
+    };
+
+    const FishKind sFishKinds[] = {
+        {"FishGroupA", "FishA"}, {"FishGroupB", "FishB"}, {"FishGroupC", "FishC"},
+        {"FishGroupD", "FishD"}, {"FishGroupE", "FishE"}, {"FishGroupF", "FishF"},
+    };
 };  // namespace
 
 namespace NrvFish {
@@ -62,8 +73,7 @@ void Fish::init(const TableIter& rIter) {
     mPosition.set(mFollowPos);
     mFront.set(MR::getRailDirection(mGroup));
 
-    const char* names[] = {"FishA", "FishB", "FishC", "FishD", "FishE", "FishF"};
-    initModelManagerWithAnm(names[mFishType], nullptr, false);
+    initModelManagerWithAnm(::sFishKinds[mFishType].mModelName, nullptr, false);
     MR::startBck(this, "Swim");
     MR::connectToSceneEnvironment(this);
     initNerve(GET_NERVE(Fish, FishNrvWander));
@@ -241,7 +251,6 @@ void FishGroup::init(const TableIter& rIter) {
     initRailRider(rIter);
     MR::moveCoordToNearestPos(this, mPosition);
 
-    int fishType = 0;
     MR::getPlacementArg0NoInit(rIter, &mFishNum);
 
     bool canEscape = false;
@@ -254,18 +263,12 @@ void FishGroup::init(const TableIter& rIter) {
     }
     const char* objName;
     MR::getObjectName(&objName, rIter);
-    if (strcmp(objName, "FishGroupA") == 0) {
-        fishType = 0;
-    } else if (strcmp(objName, "FishGroupB") == 0) {
-        fishType = 1;
-    } else if (strcmp(objName, "FishGroupC") == 0) {
-        fishType = 2;
-    } else if (strcmp(objName, "FishGroupD") == 0) {
-        fishType = 3;
-    } else if (strcmp(objName, "FishGroupE") == 0) {
-        fishType = 4;
-    } else if (strcmp(objName, "FishGroupF") == 0) {
-        fishType = 5;
+    int fishType = 0;
+    for (u32 i = 0; i < ARRAY_SIZE(::sFishKinds); i++) {
+        if (strcmp(objName, ::sFishKinds[i].mGroupName) == 0) {
+            fishType = static_cast< int >(i);
+            break;
+        }
     }
 
     mFish = new Fish*[mFishNum];
