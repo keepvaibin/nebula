@@ -14,8 +14,6 @@ public:
     void draw() const;
     bool isInitializedGameDataHolder() const;
     GameDataHolder* getGameDataHolder();
-    void executeOnSaveSuccess();
-    void executeJustBeforeSave();
 
     GameDataTemporaryInGalaxy* mGameDataTemporaryInGalaxy;
     GameSequenceProgress* mGameSequenceProgress;

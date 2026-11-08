@@ -10,17 +10,11 @@ class SaveIcon;
 class SysInfoWindow;
 class UserFile;
 
-namespace MR {
-    class FunctorBase;
-};  // namespace MR
-
 class SaveDataHandleSequence : public NerveExecutor {
 public:
     SaveDataHandleSequence();
 
     void initAfterResourceLoaded();
-    void registerFunctorOnSaveSuccess(const MR::FunctorBase&);
-    void registerFunctorJustBeforeSave(const MR::FunctorBase&);
     void update();
     void draw() const;
     void startPreLoad();
@@ -87,8 +81,6 @@ public:
     UserFile* mWorkUserFile;
     const Nerve* mNerveForError;
     u8* mTempBuffer;
-    MR::FunctorBase* mOnSaveSuccessFunc;
-    MR::FunctorBase* mJustBeforeSaveFunc;
     SaveIcon* mSaveIcon;
     bool mWindowFollows;
     int mSaveCopyLoading = 0;

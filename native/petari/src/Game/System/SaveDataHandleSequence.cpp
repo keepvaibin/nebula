@@ -32,10 +32,7 @@ namespace {
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("セーブ/ロード"), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), mResultState(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), mIsCorrupted(), mIsNoSaveMode(), mWorkUserFile(),
-      mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
-      ,
-      mWindowFollows(false)
-{
+      mNerveForError(), mTempBuffer(), mSaveIcon(), mWindowFollows(false) {
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
@@ -56,14 +53,6 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
 
     mSaveIcon = new SaveIcon(mSysInfoWindowSave);
     mSaveIcon->kill();
-}
-
-void SaveDataHandleSequence::registerFunctorOnSaveSuccess(const MR::FunctorBase& rFunctor) {
-    mOnSaveSuccessFunc = rFunctor.clone(nullptr);
-}
-
-void SaveDataHandleSequence::registerFunctorJustBeforeSave(const MR::FunctorBase& rFunctor) {
-    mJustBeforeSaveFunc = rFunctor.clone(nullptr);
 }
 
 void SaveDataHandleSequence::update() {
@@ -257,10 +246,6 @@ void SaveDataHandleSequence::exeSaveConfirm() {
 
 void SaveDataHandleSequence::exeSave() {
     if (MR::isFirstStep(this)) {
-        if (mJustBeforeSaveFunc != nullptr) {
-            (*mJustBeforeSaveFunc)();
-        }
-
         mSaveDataHandler->storeUserFile(mWorkUserFile);
     }
 
@@ -292,10 +277,6 @@ void SaveDataHandleSequence::exeSaveWindowDisappear() {
         return;
     }
 
-    if (mOnSaveSuccessFunc != nullptr) {
-        (*mOnSaveSuccessFunc)();
-    }
-
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveDoneKeyWait));
 }
 
@@ -313,13 +294,6 @@ void SaveDataHandleSequence::exeSaveDoneKeyWait() {
 }
 
 void SaveDataHandleSequence::exeSaveAllWithoutKeyWait() {
-    if (MR::isFirstStep(this)) {
-        if (mJustBeforeSaveFunc != nullptr) {
-            (*mJustBeforeSaveFunc)();
-        }
-
-    }
-
     if (tryNoSave()) {
         return;
     }
@@ -344,23 +318,12 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWaitDisappear() {
         return;
     }
 
-    if (mOnSaveSuccessFunc != nullptr) {
-        (*mOnSaveSuccessFunc)();
-    }
-
     mResultState = 2;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
 void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
-    if (MR::isFirstStep(this)) {
-        if (mJustBeforeSaveFunc != nullptr) {
-            (*mJustBeforeSaveFunc)();
-        }
-
-    }
-
     if (tryNoSave()) {
         return;
     }
@@ -378,10 +341,6 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
 
         if (isErr) {
             return;
-        }
-
-        if (mOnSaveSuccessFunc != nullptr) {
-            (*mOnSaveSuccessFunc)();
         }
 
         mResultState = 2;
