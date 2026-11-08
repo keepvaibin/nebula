@@ -115,7 +115,7 @@ void TripodBoss::init(const TableIter& rIter) {
     mDummyModelMtx.set(mBodyMtx);
     MR::addTransMtxLocal(mDummyModelMtx, mDummyModelOffset);
 
-    mDummyModel = MR::createDummyDisplayModel(this, rIter, mDummyModelMtx, 13, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mDummyModel = MR::createDummyDisplayModel(this, rIter, mDummyModelMtx, DummyDisplayModelId_GrandStar, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     MR::startBrk(mDummyModel, "Recover");
     MR::setBrkFrameAndStop(mDummyModel, 0.0f);
 

@@ -251,13 +251,7 @@ bool BreakableCage::isTypeCage() const {
 }
 
 bool BreakableCage::isAppearPowerStar() const {
-    bool res = false;
-
-    if (mItemModel != nullptr && MR::getDummyDisplayModelId(mItemModel) == 7) {
-        res = true;
-    }
-
-    return res;
+    return mItemModel != nullptr && MR::getDummyDisplayModelId(mItemModel) == DummyDisplayModelId_PowerStar;
 }
 
 bool BreakableCage::tryBreak() {

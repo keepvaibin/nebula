@@ -5,12 +5,23 @@
 class LodCtrl;
 
 // The table rows (arg 7 of the hosts) with special handling.
+// Rows of the model table (placement arg 7).
 enum DummyDisplayModelId {
     DummyDisplayModelId_Coin = 0,
     DummyDisplayModelId_Kinopio = 1,
+    DummyDisplayModelId_SpinDriver = 2,
+    DummyDisplayModelId_SuperSpinDriver = 3,
     DummyDisplayModelId_StarPiece = 4,
+    DummyDisplayModelId_Tico = 5,
+    DummyDisplayModelId_KeySwitch = 6,
     DummyDisplayModelId_PowerStar = 7,
-    DummyDisplayModelId_GrandStar = 13
+    DummyDisplayModelId_KinokoOneUp = 8,
+    DummyDisplayModelId_Kuribo = 9,
+    DummyDisplayModelId_BlueChip = 10,
+    DummyDisplayModelId_YellowChip = 11,
+    DummyDisplayModelId_StrayTico = 12,
+    DummyDisplayModelId_GrandStar = 13,
+    DummyDisplayModelId_KinokoLifeUp = 14
 };
 
 struct DummyDisplayModelInfo {

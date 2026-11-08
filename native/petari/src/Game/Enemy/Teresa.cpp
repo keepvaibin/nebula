@@ -129,7 +129,7 @@ void Teresa::initDummyModel(const TableIter& rIter) {
     if (mDisplayModel != nullptr) {
         mDisplayModel->kill();
 
-        if (MR::getDummyDisplayModelId(rIter, -1) == 6) {
+        if (MR::getDummyDisplayModelId(rIter, -1) == DummyDisplayModelId_KeySwitch) {
             mKeySwitch = new KeySwitch("鍵スイッチ");
             mKeySwitch->initKeySwitchByOwner(rIter);
             mHasCoin = false;
