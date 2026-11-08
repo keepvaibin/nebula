@@ -16,9 +16,32 @@ public:
 
 class BenefitItemObj : public LiveActor {
 public:
-    /// @brief Creates a new `BenefitItemObj`.
-    /// @param pName A pointer to the null-terminated name of the object.
-    /// @param pModelName A pointer to the null-terminated name of the model.
+    // mAppearType.
+    enum {
+        AppearType_InPlace = 0,
+        AppearType_Ground = 1,
+        AppearType_ThrowUp = 2,
+        AppearType_ThrowUpQuestionBox = 3
+    };
+
+    // mEscapeType: 1 and 3 run straight.
+    enum {
+        EscapeType_None = 0,
+        EscapeType_FromPlayer = 2
+    };
+
+    // mShadowType bits; 0 is no shadow.
+    enum {
+        ShadowBit_PrivateGravity = 1,
+        ShadowBit_EveryFrame = 2,
+        ShadowBit_Once = 4
+    };
+
+    // mRotateFlags: any bit turns it while it waits; this one also while it escapes.
+    enum {
+        RotateBit_Escape = 4
+    };
+
     BenefitItemObj(const char* pName, const char* pModelName);
 
     virtual void init(const TableIter&);
@@ -60,20 +83,20 @@ public:
     Vec3f mEscapeVelocity;
     Vec3f mFallVelocity;
     MtxPtr mFollowMtx;
-    u8 mIsDisabled;
+    bool mIsDisabled;
     u8 mAppearType;
     u8 mEscapeType;
     u8 mRotateFlags;
     u8 mShadowType;
-    u8 mIsThrownHigh;
-    u8 mHasAppearPicture;
-    u8 mIsActive;
-    u8 mIsWaitingAppear;
-    u8 mIsItemMoving;
-    u8 mIsOnRail;
-    u8 mHasAppearCamera;
-    u8 mIsInAir;
-    u8 mIsDemoPending;
+    bool mIsThrownHigh;
+    bool mHasAppearPicture;
+    bool mIsActive;
+    bool mIsWaitingAppear;
+    bool mIsItemMoving;
+    bool mIsOnRail;
+    bool mHasAppearCamera;
+    bool mIsInAir;
+    bool mIsDemoPending;
     f32 mRailSpeed;
     f32 mRotateY;
     Mtx34f mModelMtx;

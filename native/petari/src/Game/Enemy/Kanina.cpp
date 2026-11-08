@@ -2,6 +2,7 @@
 #include "Game/LiveActor/AnimationRandomPlayer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/BenefitItemOneUp.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/JointRumbler.hpp"
 #include "Game/System/NebulaInput.hpp"
@@ -516,7 +517,7 @@ void Kanina::initForType(const TableIter& rIter, KaninaType type) {
     }
 
     if (mType == KaninaType_Blue) {
-        mKinokoOneUp = reinterpret_cast< BenefitItemObj* >(MR::createKinokoOneUp());
+        mKinokoOneUp = MR::createKinokoOneUp();
     }
 }
 
