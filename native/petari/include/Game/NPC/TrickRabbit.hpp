@@ -85,13 +85,13 @@ public:
     void doJumpStart();
     void doJump();
     void tearDownWait();
-    bool checkDivingThicket(const Vec3f& rVec1, const Vec3f& rVec2);
+    bool checkDivingThicket(const Vec3f& rStart, const Vec3f& rSegment);
     bool selectEdgeStartEvent(RailGraphIter* pIter);
-    void selectEdgeRunnaway(RailGraphIter* pIter, const Vec3f& rVec, f32 f);
-    void startRouteLevelControl(s32 l1, s32 l2);
+    void selectEdgeRunnaway(RailGraphIter* pIter, const Vec3f& rAway, f32 minDot);
+    void startRouteLevelControl(s32 level, s32 delaySteps);
     void controlRouteLevel();
-    void addMovingAccel(const Vec3f& rVec, f32 f);
-    void addKeepRouteRange(f32 f1, f32 f2, f32 f3);
+    void addMovingAccel(const Vec3f& rToNode, f32 accel);
+    void addKeepRouteRange(f32 rate, f32 nearDist, f32 farDist);
     void updateFootPrint();
     bool isCaughtable() const;
     bool isTumbable() const;
@@ -114,10 +114,10 @@ public:
     RailGraphIter* mRailGraphIter;
     ParabolicPath* mParabolicPath;
     SpotMarkLight* mSpotMarkLight;
-    s32 mJumpStartStep;
-    f32 mMoveSpeed;
-    s32 mRouteLevelStep;
-    s32 mRouteLevel;
+    s32 mPhaseSteps;        // steps of the current crouch or jump
+    f32 mNextNodeDistance;  // off the gravity axis
+    s32 mRouteLevelStep;    // steps until mRouteLevelTarget applies
+    s32 mRouteLevel;        // edges of other levels (edge arg 7) are passed over while running
     s32 mRouteLevelTarget;
     bool mIsRouteLevelControl;
     bool mIsGhost;
