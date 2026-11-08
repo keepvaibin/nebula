@@ -34,9 +34,6 @@ namespace {
     }
 };  // namespace
 
-DashRing::~DashRing() {
-}
-
 // A ring the swimming player passes through for a speed boost: arg 0 the boost steps, arg 1 the longest dash, arg 2
 // the speed scale. It turns toward the player unless arg 3 is set. The player reads the three from the sensor's host.
 void DashRing::init(const TableIter& rIter) {

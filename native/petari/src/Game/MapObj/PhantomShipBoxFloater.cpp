@@ -110,6 +110,3 @@ void PhantomShipBoxFloater::playRippleSe() {
         mRippleSeCounter = MR::getRandom(20, 90);
     }
 }
-
-PhantomShipBoxFloater::~PhantomShipBoxFloater() {
-}

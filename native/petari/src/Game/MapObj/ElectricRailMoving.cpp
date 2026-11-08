@@ -480,9 +480,3 @@ void ElectricRailMoving::exeWait() {
     updateHitSensorPos();
     MR::startLevelSound(this, "SE_OJ_LV_ELEC_RAIL_HAM");
 }
-
-ElectricRailMoving::~ElectricRailMoving() {
-}
-
-ElectricRailMovingPoint::~ElectricRailMovingPoint() {
-}

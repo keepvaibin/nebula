@@ -580,6 +580,3 @@ bool Gesso::tryPointerSwoon() {
     setNerve(GET_NERVE(Gesso, GessoNrvPointerSwoon));
     return true;
 }
-
-Gesso::~Gesso() {
-}

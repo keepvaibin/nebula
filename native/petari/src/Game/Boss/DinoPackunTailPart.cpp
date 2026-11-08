@@ -87,6 +87,3 @@ void DinoPackunTailPart::exeWait() {
     MR::attenuateVelocity(this, 0.88f);
     MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 }
-
-DinoPackunTailPart::~DinoPackunTailPart() {
-}

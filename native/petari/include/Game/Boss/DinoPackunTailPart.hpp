@@ -6,7 +6,6 @@ class DinoPackunTailPart : public DinoPackunTailNode {
 public:
     DinoPackunTailPart(const char*, DinoPackun*);
 
-    virtual ~DinoPackunTailPart();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);

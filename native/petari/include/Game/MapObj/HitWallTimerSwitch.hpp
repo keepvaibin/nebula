@@ -8,7 +8,6 @@ class HitWallTimerSwitch : public LiveActor {
 public:
     HitWallTimerSwitch(const char*);
 
-    virtual ~HitWallTimerSwitch();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void calcAnim();

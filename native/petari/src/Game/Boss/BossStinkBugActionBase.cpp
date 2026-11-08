@@ -225,9 +225,6 @@ void BossStinkBugActionBase::updateSoundFly() {
     }
 }
 
-BossStinkBugActionBase::~BossStinkBugActionBase() {
-}
-
 bool BossStinkBugActionBase::updateGroundRegainRail(f32 speed) {
     if (MR::isFirstStep(this)) {
         MR::tryStartBck(getHost(), "GroundWalk");

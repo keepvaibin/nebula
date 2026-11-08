@@ -8,7 +8,6 @@ class DinoPackunBattleEgg : public DinoPackunAction {
 public:
     DinoPackunBattleEgg(DinoPackun* pHost);
 
-    virtual ~DinoPackunBattleEgg();
     virtual void init();
     virtual void appear();
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);

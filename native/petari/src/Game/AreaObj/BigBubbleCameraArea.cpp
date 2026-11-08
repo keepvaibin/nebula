@@ -14,9 +14,3 @@ BigBubbleSwitchArea::BigBubbleSwitchArea(int formType, const char* pName) : Swit
 bool BigBubbleSwitchArea::isInVolume(const Vec3f& rPos) const {
     return MR::isPlayerBindedBigBubble() && AreaObj::isInVolume(rPos);
 }
-
-BigBubbleCameraArea::~BigBubbleCameraArea() {
-}
-
-BigBubbleSwitchArea::~BigBubbleSwitchArea() {
-}

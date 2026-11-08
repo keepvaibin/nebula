@@ -85,6 +85,3 @@ void TicoDomeLecture::exeMetamorphosis() {
         kill();
     }
 }
-
-TicoDomeLecture::~TicoDomeLecture() {
-}

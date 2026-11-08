@@ -66,9 +66,6 @@ void ModelObjNpc::calcAndSetBaseMtx() {
     mJointCtrl->setCallBackFunction();
 }
 
-ModelObjNpc::~ModelObjNpc() {
-}
-
 ModelObjNpc::ModelObjNpc(const char* pName, const char* pModelName, MtxPtr pMtx) : LiveActor(pName), mMtx(pMtx), mLodCtrl(), mJointCtrl() {
     if (mMtx != nullptr) {
         mPosition.set< f32 >(mMtx[0][3], mMtx[1][3], mMtx[2][3]);

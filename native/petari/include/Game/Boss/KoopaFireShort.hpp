@@ -8,7 +8,6 @@ class KoopaFireShort : public LiveActor {
 public:
     KoopaFireShort(const Koopa* pKoopa);
 
-    virtual ~KoopaFireShort();
     virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void calcAndSetBaseMtx();

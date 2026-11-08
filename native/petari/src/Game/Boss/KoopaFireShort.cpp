@@ -250,6 +250,3 @@ void KoopaFireShort::updateFrontAndVelocity() {
 
     mVelocity.scale(mSpeed);
 }
-
-KoopaFireShort::~KoopaFireShort() {
-}

@@ -8,7 +8,6 @@ class GlaringLightArea : public AreaObj {
 public:
     GlaringLightArea(int, const char*);
 
-    virtual ~GlaringLightArea();
     virtual void init(const TableIter&);
     virtual void movement();
 
@@ -24,5 +23,4 @@ class GlaringLightAreaMgr : public AreaObjMgr {
 public:
     GlaringLightAreaMgr(s32, const char*);
 
-    virtual ~GlaringLightAreaMgr();
 };

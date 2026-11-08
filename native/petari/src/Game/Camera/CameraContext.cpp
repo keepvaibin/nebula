@@ -5,9 +5,6 @@
 
 #include <cmath>
 
-CameraContext::~CameraContext() {
-}
-
 CameraContext::CameraContext() : NameObj("カメラコンテキスト") {
     initParams();
 }

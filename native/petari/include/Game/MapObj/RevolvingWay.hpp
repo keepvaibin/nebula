@@ -7,7 +7,6 @@ class RevolvingWay : public LiveActor {
 public:
     RevolvingWay(const char* pName);
 
-    virtual ~RevolvingWay();
     virtual void init(const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
 

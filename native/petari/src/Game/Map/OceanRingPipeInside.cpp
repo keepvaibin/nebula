@@ -115,6 +115,3 @@ void OceanRingPipeInside::sendGD() {
         farV1 += ::sTexRateV1;
     }
 }
-
-OceanRingPipeInside::~OceanRingPipeInside() {
-}

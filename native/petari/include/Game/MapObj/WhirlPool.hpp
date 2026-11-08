@@ -11,7 +11,6 @@ class WhirlPool : public LiveActor {
 public:
     WhirlPool(const char* pName);
 
-    virtual ~WhirlPool();
     virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;

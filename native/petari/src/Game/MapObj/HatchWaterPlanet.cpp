@@ -67,6 +67,3 @@ void HatchWaterPlanet::exeWaitAfterOpen() {
         MR::validateCollisionParts(mCollisionParts);
     }
 }
-
-HatchWaterPlanet::~HatchWaterPlanet() {
-}

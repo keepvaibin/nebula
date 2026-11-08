@@ -12,9 +12,6 @@ namespace {
     static const f32 sHopSpeed = 30.0f;
 };  // namespace
 
-KoopaBattleMapCoinPlate::~KoopaBattleMapCoinPlate() {
-}
-
 KoopaBattleMapCoinPlate::KoopaBattleMapCoinPlate(const char* pName) : LiveActor(pName) {
     mBaseMtx.identity();
 }

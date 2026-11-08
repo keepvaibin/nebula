@@ -11,7 +11,6 @@ class BigBubbleMoveLimitter;
 class BigBubbleHolder : public NameObj {
 public:
     BigBubbleHolder(const char*);
-    virtual ~BigBubbleHolder();
     virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;

@@ -15,9 +15,6 @@ CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, cons
       mChunks(new CameraParamChunk*[cInitialCapacity]), mIsSorted() {
 }
 
-CameraParamChunkHolder::~CameraParamChunkHolder() {
-}
-
 CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pHeap) {
     if (isNewAttribute(rID)) {
         char firstChar = rID.mName[0];

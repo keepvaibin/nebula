@@ -12,9 +12,6 @@ namespace NrvPicketSwitch {
 PicketSwitch::PicketSwitch(const char* pName) : LiveActor(pName) {
 }
 
-PicketSwitch::~PicketSwitch() {
-}
-
 void PicketSwitch::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::needStageSwitchWriteA(this, rIter);

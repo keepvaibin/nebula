@@ -12,9 +12,6 @@ void PlayerSeArea::init(const TableIter& rIter) {
     mSeType = mObjArg0;
 }
 
-PlayerSeArea::~PlayerSeArea() {
-}
-
 void PlayerSeArea::movement() {
     if (!isInVolume(*MR::getPlayerPos()) || mSeType != 0) {
         return;

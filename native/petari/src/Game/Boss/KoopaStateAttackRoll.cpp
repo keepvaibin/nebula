@@ -273,6 +273,3 @@ void KoopaStateAttackRoll::exeEndLand() {
         kill();
     }
 }
-
-KoopaStateAttackRoll::~KoopaStateAttackRoll() {
-}

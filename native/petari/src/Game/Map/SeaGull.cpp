@@ -258,9 +258,3 @@ Vec3f* SeaGullGroup::updatePosInfo(s32* pPointIndex, bool isReverse) const {
 
     return &mPoints[*pPointIndex];
 }
-
-SeaGull::~SeaGull() {
-}
-
-SeaGullGroup::~SeaGullGroup() {
-}

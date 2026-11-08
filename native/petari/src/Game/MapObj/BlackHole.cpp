@@ -216,6 +216,3 @@ void BlackHole::exeDisappear() {
         kill();
     }
 }
-
-BlackHole::~BlackHole() {
-}

@@ -32,6 +32,3 @@ void TicoAstro::init(const TableIter& rIter) {
         break;
     }
 }
-
-TicoAstro::~TicoAstro() {
-}

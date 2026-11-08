@@ -12,7 +12,6 @@ class KoopaBattleMain : public KoopaBattleBase {
 public:
     KoopaBattleMain(const char* pName, Koopa* pKoopa);
 
-    virtual ~KoopaBattleMain();
     virtual void init();
     virtual void appear();
 

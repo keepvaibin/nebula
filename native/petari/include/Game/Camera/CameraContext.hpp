@@ -6,7 +6,6 @@
 class CameraContext : public NameObj {
 public:
     CameraContext();
-    virtual ~CameraContext();
 
     void initParams();
     const Pos3f& getViewMtx() const;

@@ -117,6 +117,3 @@ void SpaceShipStep::updateResetToInitPosCheck() {
         }
     }
 }
-
-SpaceShipStep::~SpaceShipStep() {
-}

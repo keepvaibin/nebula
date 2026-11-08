@@ -23,9 +23,6 @@ void BegomanHead::calcAndSetBaseMtx() {
 BegomanSpringHead::BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx) : BegomanHead(pActor, "バネ頭", "BegomanSpringHead", pMtx, MR::DrawBufferType_MapObjStrongLight, false) {
 }
 
-BegomanHead::~BegomanHead() {
-}
-
 void BegomanSpringHead::init(const TableIter& rIter) {
     initNerve(GET_NERVE(BegomanSpringHead, HostTypeNrvWait));
     MR::initLightCtrl(this);
@@ -107,7 +104,4 @@ void BegomanSpringHead::exeHopJump() {
     }
 
     MR::setNerveAtBckStopped(this, GET_NERVE(BegomanSpringHead, HostTypeNrvHopWait));
-}
-
-BegomanSpringHead::~BegomanSpringHead() {
 }

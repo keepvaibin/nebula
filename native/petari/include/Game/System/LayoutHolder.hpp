@@ -9,7 +9,6 @@ class LayoutHolder : public Ui::ResourceAccessor {
 public:
     LayoutHolder(AssetFolder&);
 
-    virtual ~LayoutHolder();
     virtual void* GetResource(u32, const char*, u32*);
     virtual Ui::Font* GetFont(const char*);
     virtual void* getResOther(const char* pName) const {

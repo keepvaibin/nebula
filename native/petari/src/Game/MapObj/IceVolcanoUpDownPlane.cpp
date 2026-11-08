@@ -42,6 +42,3 @@ bool IceVolcanoUpDownPlane::tryCalcNearestPosToPlayer(Vec3f* pDst) const {
 Vec3f* IceVolcanoUpDownPlane::getSoundCalcPos() {
     return &mNearestPosToPlayer;
 }
-
-IceVolcanoUpDownPlane::~IceVolcanoUpDownPlane() {
-}

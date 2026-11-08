@@ -25,9 +25,6 @@ BootScene::BootScene()
     : Scene("BootScene") {
 }
 
-BootScene::~BootScene() {
-}
-
 void BootScene::init() {
         // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
         initNerve(GET_NERVE_ANON(BootSceneWaitReadDoneSystemArchive));

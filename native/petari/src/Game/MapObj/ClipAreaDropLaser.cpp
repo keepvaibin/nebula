@@ -119,6 +119,3 @@ void ClipAreaDropLaser::incrementDrawCount() {
         mNumPointsToDraw += 1.0f;
     }
 }
-
-ClipAreaDropLaser::~ClipAreaDropLaser() {
-}

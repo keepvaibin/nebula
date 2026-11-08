@@ -8,7 +8,6 @@ class MercatorRotateParts : public LiveActor {
 public:
     MercatorRotateParts(const char*);
 
-    virtual ~MercatorRotateParts();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();

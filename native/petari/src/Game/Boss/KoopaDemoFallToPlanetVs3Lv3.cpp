@@ -139,6 +139,3 @@ void KoopaDemoFallToPlanetVs3Lv3::exeWaitPlayer() {
         kill();
     }
 }
-
-KoopaDemoFallToPlanetVs3Lv3::~KoopaDemoFallToPlanetVs3Lv3() {
-}

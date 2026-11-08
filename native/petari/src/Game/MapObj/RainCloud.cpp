@@ -384,6 +384,3 @@ bool RainCloud::isNextStartOK() const {
 
     return true;
 }
-
-RainCloud::~RainCloud() {
-}

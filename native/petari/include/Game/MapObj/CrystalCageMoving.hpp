@@ -10,7 +10,6 @@ class CrystalCageMoving : public MapObjActor {
 public:
     CrystalCageMoving(const char*);
 
-    virtual ~CrystalCageMoving();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

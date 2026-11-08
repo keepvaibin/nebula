@@ -34,6 +34,3 @@ void MapPartsRailGuidePoint::init(const TableIter& rIter) {
 
     kill();
 }
-
-MapPartsRailGuidePoint::~MapPartsRailGuidePoint() {
-}

@@ -591,9 +591,3 @@ void Pukupuku::calcAndSetBaseMtx() {
     scale.mul(scale, mScaleCtrl->mScale);
     MR::setBaseScale(this, scale);
 }
-
-PukupukuStateLanding::~PukupukuStateLanding() {
-}
-
-Pukupuku::~Pukupuku() {
-}

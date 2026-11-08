@@ -25,6 +25,3 @@ void Peach::exeWait() {
         MR::tryTalkNearPlayer(mMsgCtrl);
     }
 }
-
-Peach::~Peach() {
-}

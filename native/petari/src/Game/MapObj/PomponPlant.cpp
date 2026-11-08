@@ -102,6 +102,3 @@ void PomponPlant::exeSwingPlayer() {
         setNerve(GET_NERVE(PomponPlant, HostTypeWait));
     }
 }
-
-PomponPlant::~PomponPlant() {
-}

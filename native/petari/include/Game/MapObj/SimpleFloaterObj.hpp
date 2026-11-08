@@ -7,7 +7,6 @@ class SimpleFloaterObj : public LiveActor {
 public:
     SimpleFloaterObj(const char*);
 
-    virtual ~SimpleFloaterObj();
     virtual void init(const TableIter&);
 
     void exeWait();

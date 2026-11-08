@@ -169,6 +169,3 @@ GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
 }
-
-GameSystemResetAndPowerProcess::~GameSystemResetAndPowerProcess() {
-}

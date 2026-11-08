@@ -6,7 +6,6 @@ class SunshadeMapParts : public GeneralMapParts {
 public:
     SunshadeMapParts(const char*);
 
-    virtual ~SunshadeMapParts();
     virtual void init(const TableIter&);
     virtual void calcAnim();
 

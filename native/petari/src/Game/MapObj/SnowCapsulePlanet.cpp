@@ -15,9 +15,6 @@ SnowCapsulePlanet::SnowCapsulePlanet(const char* pName) : MapObjActor(pName) {
     mDoor2 = nullptr;
 }
 
-SnowCapsulePlanet::~SnowCapsulePlanet() {
-}
-
 void SnowCapsulePlanet::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;

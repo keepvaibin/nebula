@@ -15,9 +15,6 @@ namespace NrvMapPartsRotator {
     NEW_NERVE(HostTypeStopAtEnd, MapPartsRotator, StopAtEnd);
 };  // namespace NrvMapPartsRotator
 
-MapPartsRotatorBase::~MapPartsRotatorBase() {
-}
-
 MapPartsRotator::MapPartsRotator(LiveActor* pActor) : MapPartsRotatorBase(pActor, "自身回転") {
     mTargetRotateSpeed = 0.0f;
     mRotateAngle = 0.0f;

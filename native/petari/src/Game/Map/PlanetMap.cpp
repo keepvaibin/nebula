@@ -179,9 +179,6 @@ bool PlanetMap::tryDeleteMyEffect() {
 FurPlanetMap::FurPlanetMap(const char* pName) : PlanetMap(pName, nullptr) {
 }
 
-PlanetMap::~PlanetMap() {
-}
-
 void FurPlanetMap::init(const TableIter& rIter) {
     PlanetMap::init(rIter);
     MR::initFurPlanet(this);
@@ -193,11 +190,6 @@ RailPlanetMap::RailPlanetMap(const char* pName) : PlanetMap(pName, nullptr) {
 void RailPlanetMap::init(const TableIter& rIter) {
     PlanetMap::init(rIter);
     initRailRider(rIter);
-}
-
-FurPlanetMap::~FurPlanetMap() {
-}
-RailPlanetMap::~RailPlanetMap() {
 }
 
 f32 PlanetMap::getFarClipDistance() const {

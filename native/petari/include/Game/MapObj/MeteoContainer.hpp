@@ -6,7 +6,6 @@ class MeteoContainer : public LiveActor {
 public:
     MeteoContainer(const char*);
 
-    virtual ~MeteoContainer();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void kill();

@@ -153,9 +153,6 @@ namespace MR {
     }
 };  // namespace MR
 
-SensorHitChecker::~SensorHitChecker() {
-}
-
 // The sizes are first capacities; the groups grow.
 SensorHitChecker::SensorHitChecker(const char* pName)
     : NameObj(pName), mPlayerGroup(new SensorGroup(0x10)), mRideGroup(new SensorGroup(0x80)), mEyeGroup(new SensorGroup(0x200)),

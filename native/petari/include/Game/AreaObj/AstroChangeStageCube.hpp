@@ -6,8 +6,6 @@ class AstroChangeStageCube : public AreaObj {
 public:
     AstroChangeStageCube(int, const char*);
 
-    virtual ~AstroChangeStageCube();
-
     virtual void init(const TableIter&);
     virtual void movement();
     virtual bool isInVolume(const Vec3f&) const;

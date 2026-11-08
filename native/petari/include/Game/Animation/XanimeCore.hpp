@@ -90,7 +90,6 @@ public:
     XanimeCore(u32, u32, u8);
     XanimeCore(u32, XanimeCore*);
 
-    virtual ~XanimeCore();
     virtual void setWeight(u8, f32);
     virtual void init(const Vec&, const Mtx&);
     virtual void calc();

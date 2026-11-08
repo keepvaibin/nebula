@@ -13,7 +13,6 @@ class DinoPackunBattleVs2Lv1 : public DinoPackunAction {
 public:
     DinoPackunBattleVs2Lv1(DinoPackun*);
 
-    virtual ~DinoPackunBattleVs2Lv1();
     virtual void init();
     virtual void appear();
     virtual void control();

@@ -17,7 +17,6 @@ enum CollisionCategory {
 class CollisionDirector : public NameObj {
 public:
     CollisionDirector();
-    virtual ~CollisionDirector();
 
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();

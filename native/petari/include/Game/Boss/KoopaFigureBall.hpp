@@ -13,7 +13,6 @@ class KoopaFigureBall : public LiveActor {
 public:
     KoopaFigureBall(const char* pName, Koopa* pKoopa, f32, const MR::ActorMoveParam* pMoveParam);
 
-    virtual ~KoopaFigureBall();
     virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void makeActorDead();

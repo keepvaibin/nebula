@@ -6,7 +6,6 @@ class SnowCapsulePlanet : public MapObjActor {
 public:
     SnowCapsulePlanet(const char*);
 
-    virtual ~SnowCapsulePlanet();
     virtual void init(const TableIter&);
 
     void exeCloseWait();

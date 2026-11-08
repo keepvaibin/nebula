@@ -74,6 +74,3 @@ void PoltaStateGroundRockAttack::exeEnd() {
         kill();
     }
 }
-
-PoltaStateGroundRockAttack::~PoltaStateGroundRockAttack() {
-}

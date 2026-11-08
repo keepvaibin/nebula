@@ -21,9 +21,6 @@ namespace NrvRevolvingWay {
     NEW_NERVE(RevolvingWayNrvWait, RevolvingWay, Wait);
 };  // namespace NrvRevolvingWay
 
-RevolvingWay::~RevolvingWay() {
-}
-
 RevolvingWay::RevolvingWay(const char* pName) : LiveActor(pName), mRotateQuat(0.0f, 1.0f), mRotateMoment(0.0f, 0.0f, 0.0f), mRadius(500.0f) {
 }
 

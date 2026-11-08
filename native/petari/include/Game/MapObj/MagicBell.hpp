@@ -7,7 +7,6 @@ class MagicBell : public LiveActor {
 public:
     MagicBell(const char*);
 
-    virtual ~MagicBell();
     virtual void init(const TableIter&);
     virtual MtxPtr getBaseMtx() const;
     virtual void attackSensor(HitSensor*, HitSensor*);

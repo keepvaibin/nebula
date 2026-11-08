@@ -871,9 +871,3 @@ void GoldenTurtle::reset(u32 reason) {
     JetTurtle::reset(reason);
     getSensor("body")->setType(ATYPE_JET_TURTLE_SLOW);
 }
-
-JetTurtle::~JetTurtle() {
-}
-
-GoldenTurtle::~GoldenTurtle() {
-}

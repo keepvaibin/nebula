@@ -492,6 +492,3 @@ bool StinkBugSmall::isNrvEnableStarPieceAttack() const {
            isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDashSign)) || isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvDashSignEnd)) ||
            isNerve(GET_NERVE(StinkBugSmall, StinkBugSmallNrvBack));
 }
-
-StinkBugSmall::~StinkBugSmall() {
-}

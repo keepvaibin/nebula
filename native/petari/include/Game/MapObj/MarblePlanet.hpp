@@ -10,7 +10,6 @@ class MarblePlanet : public LiveActor {
 public:
     MarblePlanet(const char*);
 
-    virtual ~MarblePlanet();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void startClipped();
@@ -33,7 +32,6 @@ class MarblePlanetElectron : public LiveActor {
 public:
     MarblePlanetElectron(LiveActor*, const Vec3f&, const Vec3f&, const char*);
 
-    virtual ~MarblePlanetElectron();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
@@ -53,7 +51,6 @@ class MarblePlanetElectronShadow : public LiveActor {
 public:
     MarblePlanetElectronShadow(LiveActor*, const Vec3f&, const char*);
 
-    virtual ~MarblePlanetElectronShadow();
     virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
 

@@ -20,7 +20,6 @@ public:
 
     Kanina(const char*);
 
-    virtual ~Kanina();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();

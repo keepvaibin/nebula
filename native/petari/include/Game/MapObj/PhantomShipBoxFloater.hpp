@@ -8,7 +8,6 @@ class PhantomShipBoxFloater : public LiveActor {
 public:
     PhantomShipBoxFloater(const char*);
 
-    virtual ~PhantomShipBoxFloater();
     virtual void init(const TableIter&);
     virtual void control();
 

@@ -177,6 +177,3 @@ void BaseMatrixFollower::update() {
 
 template MR::AssignableArray< BaseMatrixFollowTarget* >::~AssignableArray();
 template MR::AssignableArray< BaseMatrixFollower* >::~AssignableArray();
-
-BaseMatrixFollowTargetHolder::~BaseMatrixFollowTargetHolder() {
-}

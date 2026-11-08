@@ -148,9 +148,6 @@ void Halo::exeDisappear() {
 PowerStarHalo::PowerStarHalo(const char* pName) : Halo(pName), mAppearDuringOpeningCam(-1) {
 }
 
-Halo::~Halo() {
-}
-
 void PowerStarHalo::init(const TableIter& rIter) {
     Halo::init(rIter);
     MR::getPlacementArg1NoInit(rIter, &mAppearDuringOpeningCam);
@@ -181,7 +178,4 @@ void PowerStarHalo::exeWaitScenarioOpeningEnd() {
         MR::showModel(this);
         Halo::appear();
     }
-}
-
-PowerStarHalo::~PowerStarHalo() {
 }

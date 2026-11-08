@@ -22,7 +22,6 @@ public:
 
     Kuribo(const char*);
 
-    virtual ~Kuribo();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();

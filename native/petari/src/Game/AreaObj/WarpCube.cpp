@@ -12,9 +12,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-WarpCube::~WarpCube() {
-}
-
 WarpCube* WarpCubeMgr::getPairCube(const AreaObj* pObj) {
     if (static_cast< const WarpCube* >(pObj)->mMapIdInfo == nullptr) {
         return nullptr;

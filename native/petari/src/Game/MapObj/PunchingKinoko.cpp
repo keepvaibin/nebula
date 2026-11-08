@@ -27,9 +27,6 @@ PunchingKinoko::PunchingKinoko(const char* pName)
       mShadowNormal(0, 1, 0), mStarPointerHitCoolDown(0), mIsPointerHeld(true), mInvincibleHitCoolDown(-1) {
 }
 
-PunchingKinoko::~PunchingKinoko() {
-}
-
 // The head is its own actor (mGroundChecker) on a spring to the rest point; the stem is a shadow line between the two.
 void PunchingKinoko::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);

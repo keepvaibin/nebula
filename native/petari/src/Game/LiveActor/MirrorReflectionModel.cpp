@@ -71,6 +71,3 @@ void MirrorReflectionModel::calcAndSetBaseMtx() {
         MR::setBaseTRMtx(this, mHostMtx);
     }
 }
-
-MirrorReflectionModel::~MirrorReflectionModel() {
-}

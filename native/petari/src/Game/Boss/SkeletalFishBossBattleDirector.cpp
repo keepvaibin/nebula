@@ -130,6 +130,3 @@ void SkeletalFishBossBattleDirector::killBirdLouse() {
         mClipActors[i]->startClipped();
     }
 }
-
-SkeletalFishBossBattleDirector::~SkeletalFishBossBattleDirector() {
-}

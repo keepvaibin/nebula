@@ -444,9 +444,6 @@ void CameraManEvent::notifyDeactivate() {
     mCamera = nullptr;
 }
 
-CameraManEvent::~CameraManEvent() {
-}
-
 bool CameraManEvent::isAnimCameraEnd(s32 zoneID, const char* pName) const {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 

@@ -8,7 +8,6 @@ class Candlestand : public MapObjActor {
 public:
     Candlestand(const char* pName);
 
-    virtual ~Candlestand();
     virtual void init(const TableIter& rIter);
     virtual void makeActorAppeared();
     virtual void startClipped();

@@ -9,7 +9,6 @@ class KoopaBattleVs3Lv2 : public KoopaBattleBase {
 public:
     KoopaBattleVs3Lv2(Koopa* pKoopa);
 
-    virtual ~KoopaBattleVs3Lv2();
     virtual void init();
     virtual void appear();
 

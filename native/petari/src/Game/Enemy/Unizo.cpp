@@ -118,9 +118,6 @@ Unizo::Unizo(const char* pName)
     mQuat.set(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-Unizo::~Unizo() {
-}
-
 void Unizo::initType() {
     if (MR::isEqualStringCase(mName, "ウニゾー")) {
         mType = TypeSea;

@@ -116,6 +116,3 @@ inline void SoundEmitter::exeStandBy() {
         }
     }
 }
-
-SoundEmitter::~SoundEmitter() {
-}

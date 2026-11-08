@@ -9,7 +9,6 @@ class StinkBugSmall : public StinkBugBase {
 public:
     StinkBugSmall(const char*);
 
-    virtual ~StinkBugSmall();
     virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();

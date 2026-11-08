@@ -14,6 +14,3 @@ void KoopaPowerUpSwitch::init(const TableIter& rIter) {
 void KoopaPowerUpSwitch::initAfterPlacement() {
     KoopaFunction::registerKoopaPowerUpSwitch(this);
 }
-
-KoopaPowerUpSwitch::~KoopaPowerUpSwitch() {
-}

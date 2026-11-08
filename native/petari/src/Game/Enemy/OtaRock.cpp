@@ -359,6 +359,3 @@ void OtaRock::exeShow() {
     updateBaseMtx();
     MR::setNerveAtBckStopped(this, GET_NERVE(OtaRock, OtaRockNrvWait));
 }
-
-OtaRock::~OtaRock() {
-}

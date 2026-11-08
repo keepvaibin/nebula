@@ -58,9 +58,6 @@ namespace NrvRabbit {
 Rabbit::Rabbit(const char* pName) : NPCActor(pName) {
 }
 
-Rabbit::~Rabbit() {
-}
-
 void Rabbit::init(const TableIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);

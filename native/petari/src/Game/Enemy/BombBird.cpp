@@ -50,9 +50,6 @@ namespace NrvBombBird {
     NEW_NERVE_ONEND(HostTypeNrvBindStarPointer, BombBird, BindStarPointer, BindStarPointer);
 };  // namespace NrvBombBird
 
-BombBird::~BombBird() {
-}
-
 BombBird::BombBird(const char* pName)
     : LiveActor(pName), mHeldBomb(), mFront(0, 0, 1), mSearchPlayer(), mHoldBomb(), mFixedPos(), mSpinHitController(), mScaleController(),
       mStarPointer() {

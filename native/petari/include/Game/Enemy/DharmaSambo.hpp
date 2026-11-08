@@ -14,7 +14,6 @@ class DharmaSambo : public LiveActor {
 public:
     DharmaSambo(const char*);
 
-    virtual ~DharmaSambo();
     virtual void init(const TableIter&) override;
     virtual void initAfterPlacement() override;
     virtual void appear() override;
@@ -60,7 +59,6 @@ class DharmaSamboParts : public ModelObj {
 public:
     DharmaSamboParts(DharmaSambo*, const char*, const char*, MtxPtr, int, int, int);
 
-    virtual ~DharmaSamboParts();
     virtual void init(const TableIter&) override;
     virtual void appear() override;
     virtual void kill() override;

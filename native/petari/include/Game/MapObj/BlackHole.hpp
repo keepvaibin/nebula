@@ -11,7 +11,6 @@ class BlackHole : public LiveActor {
 public:
     BlackHole(const char*);
 
-    virtual ~BlackHole();
     virtual void init(const TableIter&);
     virtual void makeActorAppeared();
     virtual void kill();

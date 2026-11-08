@@ -13,6 +13,3 @@ void PoltaWaitStart::appear() {
     PoltaFunction::killRightArm(getHost());
     MR::hideModel(getHost());
 }
-
-PoltaWaitStart::~PoltaWaitStart() {
-}

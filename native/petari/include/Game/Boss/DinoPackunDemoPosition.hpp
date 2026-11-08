@@ -6,7 +6,6 @@ class DinoPackunDemoPosition : public LiveActor {
 public:
     DinoPackunDemoPosition(const char* pName);
 
-    virtual ~DinoPackunDemoPosition();
     virtual void init(const TableIter& rIter);
 
     void startOpeningDemo();

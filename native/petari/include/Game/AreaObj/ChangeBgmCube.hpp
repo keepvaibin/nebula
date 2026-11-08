@@ -6,7 +6,6 @@ class ChangeBgmCube : public AreaObj {
 public:
     ChangeBgmCube(int, const char*);
 
-    virtual ~ChangeBgmCube();
     virtual void init(const TableIter&);
     virtual void movement();
 

@@ -60,6 +60,3 @@ void LavaBallRisingPlanetLava::updateScale(f32 startScale, f32 endScale, const N
         setNerve(pNextNerve);
     }
 }
-
-LavaBallRisingPlanetLava::~LavaBallRisingPlanetLava() {
-}

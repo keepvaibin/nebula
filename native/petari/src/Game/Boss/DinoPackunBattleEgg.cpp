@@ -33,9 +33,6 @@ namespace NrvDinoPackunBattleEgg {
 DinoPackunBattleEgg::DinoPackunBattleEgg(DinoPackun* pHost) : DinoPackunAction("1回戦卵バトル", pHost), mStateDamage(nullptr) {
 }
 
-DinoPackunBattleEgg::~DinoPackunBattleEgg() {
-}
-
 void DinoPackunBattleEgg::init() {
     initNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
     mStateDamage = new DinoPackunStateDamage(getHost());

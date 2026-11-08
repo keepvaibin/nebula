@@ -980,6 +980,3 @@ void Kanina::exePointing() {
 void Kanina::endPointing() {
     MR::tryDeleteEffect(this, "Touch");
 }
-
-Kanina::~Kanina() {
-}

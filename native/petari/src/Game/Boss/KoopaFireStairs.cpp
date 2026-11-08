@@ -24,9 +24,6 @@ namespace NrvKoopaFireStairs {
     NEW_NERVE(KoopaFireStairsNrvBreak, KoopaFireStairs, Break);
 };  // namespace NrvKoopaFireStairs
 
-KoopaFireStairs::~KoopaFireStairs() {
-}
-
 KoopaFireStairs::KoopaFireStairs(const char* pName, bool isKoopaJr)
     : LiveActor(pName), mIsKoopaJr(isKoopaJr), mStair(nullptr), mFront(0.0f, 0.0f, 1.0f), mStartPos(0.0f, 0.0f, 0.0f), mFlyUpDir(0.0f, 1.0f, 0.0f),
       mBreakModel(nullptr) {

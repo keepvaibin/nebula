@@ -11,8 +11,6 @@ class BossStinkBugActionBase : public ActorStateBase< BossStinkBug > {
 public:
     BossStinkBugActionBase(const char*, BossStinkBug*);
 
-    virtual ~BossStinkBugActionBase();
-
     virtual bool isValidFollowId(s32 id) const {
         return false;
     };

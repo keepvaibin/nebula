@@ -13,7 +13,6 @@ public:
 
     BreakableCage(const char* pName);
 
-    virtual ~BreakableCage();
     virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();

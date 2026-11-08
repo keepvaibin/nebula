@@ -401,8 +401,6 @@ bool DinoPackunBattleVs2Lv1::emitFireTail() {
     return true;
 }
 
-DinoPackunBattleVs2Lv1::~DinoPackunBattleVs2Lv1() {}
-
 void DinoPackunBattleVs2Lv1::exeDamage() {
     if (MR::updateActorState(this, mStateDamage)) {
         kill();

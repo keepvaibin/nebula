@@ -49,6 +49,3 @@ void AnimationRandomPlayer::exePlay() {
         setNerve(GET_NERVE(AnimationRandomPlayer, HostTypeWait));
     }
 }
-
-AnimationRandomPlayer::~AnimationRandomPlayer() {
-}

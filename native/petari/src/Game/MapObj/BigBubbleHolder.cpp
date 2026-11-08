@@ -132,9 +132,6 @@ bool MR::isPlayerBindedBigBubble() {
     return ::getBigBubbleHolder()->mIsMarioBinded;
 }
 
-BigBubbleHolder::~BigBubbleHolder() {
-}
-
 void BigBubbleHolder::init(const TableIter& rIter) {
     for (s32 idx = 0; idx < cBubbleCount; idx++) {
         mBubbles[idx] = new BigBubble("オオアワ[共有]");

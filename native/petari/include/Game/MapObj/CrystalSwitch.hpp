@@ -6,7 +6,6 @@ class CrystalSwitch : public LiveActor {
 public:
     CrystalSwitch(const char*);
 
-    virtual ~CrystalSwitch();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);

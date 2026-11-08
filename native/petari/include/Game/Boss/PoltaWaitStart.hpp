@@ -6,6 +6,5 @@ class PoltaWaitStart : public PoltaActionBase {
 public:
     PoltaWaitStart(Polta*);
 
-    virtual ~PoltaWaitStart();
     virtual void appear();
 };

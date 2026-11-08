@@ -38,6 +38,3 @@ void CameraCover::cover(u32 frames) {
     mCoverFrames = frames;
     mIsCoverRequested = true;
 }
-
-CameraCover::~CameraCover() {
-}

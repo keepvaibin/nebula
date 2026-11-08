@@ -19,9 +19,6 @@ namespace NrvAirBubbleGenerator {
     NEW_NERVE(AirBubbleGeneratorNrvGenerate, AirBubbleGenerator, Generate);
 };  // namespace NrvAirBubbleGenerator
 
-AirBubbleGenerator::~AirBubbleGenerator() {
-}
-
 AirBubbleGenerator::AirBubbleGenerator(const char* pName) : LiveActor(pName), mWaitTime(180), mBubbleLifeTime(-1) {
 }
 

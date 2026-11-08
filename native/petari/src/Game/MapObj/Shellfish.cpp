@@ -320,6 +320,3 @@ void Shellfish::putItem() {
 
     NebulaMtxMultVec(getBaseMtx(), pOffset, &mItem->mPosition);
 }
-
-Shellfish::~Shellfish() {
-}

@@ -9,8 +9,6 @@ public:
     inline MapPartsRotatorBase(LiveActor* pActor, const char* pName) : MapPartsFunction(pActor, pName) {
     }
 
-    virtual ~MapPartsRotatorBase();
-
     virtual const Mtx34f& getRotateMtx() const = 0;
 
     virtual bool isMoving() const {

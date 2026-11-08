@@ -21,9 +21,6 @@ namespace NrvWoodBox {
 WoodBox::WoodBox(const char* pName) : LiveActor(pName) {
 }
 
-WoodBox::~WoodBox() {
-}
-
 void WoodBox::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("WoodBox", nullptr, false);

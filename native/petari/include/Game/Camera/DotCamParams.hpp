@@ -24,7 +24,6 @@ public:
 class DotCamReaderInBin : public DotCamReader {
 public:
     DotCamReaderInBin(const void*);
-    virtual ~DotCamReaderInBin();
 
     virtual u32 getVersion() const;
     virtual bool hasMoreChunk() const;

@@ -11,7 +11,6 @@ class Koopa : public LiveActor {
 public:
     Koopa(const char* pName, KoopaSequencer* pSequencer);
 
-    virtual ~Koopa();
     virtual void init(const TableIter& rIter);
     virtual void kill();
     virtual void control();

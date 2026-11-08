@@ -6,7 +6,6 @@ class BenefitItemInvincible : public BenefitItemObj {
 public:
     BenefitItemInvincible(const char*);
 
-    virtual ~BenefitItemInvincible();
     virtual void init(const TableIter&);
     virtual void appearThrowUp();
     virtual void initModelAndEfx();

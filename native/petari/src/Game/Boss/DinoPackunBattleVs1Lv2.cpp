@@ -51,9 +51,6 @@ DinoPackunBattleVs1Lv2::DinoPackunBattleVs1Lv2(DinoPackun* pHost)
     mStateDamage->setDamageNormal();
 }
 
-DinoPackunBattleVs1Lv2::~DinoPackunBattleVs1Lv2() {
-}
-
 void DinoPackunBattleVs1Lv2::appear() {
     if (MR::isDead(getHost())) {
         getHost()->makeActorAppeared();

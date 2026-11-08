@@ -152,6 +152,3 @@ void KoopaSequencerVs1::testHit(HitSensor* pPlayer) {
     }
 }
 #endif
-
-KoopaSequencerVs1::~KoopaSequencerVs1() {
-}

@@ -54,12 +54,6 @@ namespace NrvFish {
     NEW_NERVE(FishNrvEscape, Fish, Escape);
 };  // namespace NrvFish
 
-Fish::~Fish() {
-}
-
-FishGroup::~FishGroup() {
-}
-
 Fish::Fish(const char* pName, FishGroup* pGroup, int fishType, bool canEscape)
     : LiveActor(pName), mGroup(pGroup), mFishType(fishType), mCanEscape(canEscape), mFollowPos(0.0f, 0.0f, 0.0f),
       mFollowPosOffset(MR::getRandom(-::sFollowPosOffsetMax, ::sFollowPosOffsetMax), MR::getRandom(-::sFollowPosOffsetMax, ::sFollowPosOffsetMax),

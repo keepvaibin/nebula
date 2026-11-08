@@ -38,9 +38,6 @@ namespace NrvOnimasu {
     NEW_NERVE(HostTypeStamp, Onimasu, Stamp);
 };  // namespace NrvOnimasu
 
-Onimasu::~Onimasu() {
-}
-
 Onimasu::Onimasu(const char* pName) : LiveActor(pName), mRotateAxis(1.0f, 0.0f, 0.0f), mClipCenter(gZeroVec) {
     mMoveEffectMtx.identity();
     mStartQuat.set(0.0f, 0.0f, 0.0f, 1.0f);

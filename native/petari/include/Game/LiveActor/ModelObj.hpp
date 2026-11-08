@@ -21,7 +21,6 @@ class ModelObjNpc : public LiveActor {
 public:
     ModelObjNpc(const char*, const char*, MtxPtr);
 
-    virtual ~ModelObjNpc();
     virtual void init(const TableIter&) override;
     virtual void control() override;
     virtual void calcAndSetBaseMtx() override;

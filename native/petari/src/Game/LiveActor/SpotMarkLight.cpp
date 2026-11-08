@@ -31,6 +31,3 @@ void SpotMarkLight::control() {
 void SpotMarkLight::calcAndSetBaseMtx() {
     PartsModel::calcAndSetBaseMtx();
 }
-
-SpotMarkLight::~SpotMarkLight() {
-}

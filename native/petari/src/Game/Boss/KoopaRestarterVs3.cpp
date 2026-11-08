@@ -17,6 +17,3 @@ void KoopaRestarterVs3::appear() {
 
     KoopaFunction::tryRestartKoopa();
 }
-
-KoopaRestarterVs3::~KoopaRestarterVs3() {
-}

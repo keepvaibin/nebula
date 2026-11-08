@@ -7,9 +7,6 @@
 SpinGuidanceArea::SpinGuidanceArea(int formType, const char* pName) : AreaObj(formType, pName) {
 }
 
-SpinGuidanceArea::~SpinGuidanceArea() {
-}
-
 void SpinGuidanceArea::init(const TableIter& rIter) {
     AreaObj::init(rIter);
     MR::createSceneObj(SceneObj_PlayerActionGuidance);

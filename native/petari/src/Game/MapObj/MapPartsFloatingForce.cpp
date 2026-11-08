@@ -232,6 +232,3 @@ void MapPartsFloatingForce::exeMoveReturn() {
         tryOn();
     }
 }
-
-MapPartsFloatingForce::~MapPartsFloatingForce() {
-}

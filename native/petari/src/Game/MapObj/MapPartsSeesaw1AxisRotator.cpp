@@ -274,9 +274,6 @@ bool MapPartsSeesaw1AxisRotator::tryHipDrop() {
     return false;
 }
 
-MapPartsSeesaw1AxisRotator::~MapPartsSeesaw1AxisRotator() {
-}
-
 bool MapPartsSeesaw1AxisRotator::isWorking() const {
     return true;
 }

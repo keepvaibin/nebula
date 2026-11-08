@@ -8,7 +8,6 @@ public:
         : PartsModel(pHost, pName, pModelName, pMtx, drawBufferType, useHostLight), mHostScale() {
     }
 
-    virtual ~BegomanHead();
     virtual void calcAndSetBaseMtx();
 
     Vec3f* mHostScale;
@@ -18,7 +17,6 @@ class BegomanSpringHead : public BegomanHead {
 public:
     BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx);
 
-    virtual ~BegomanSpringHead();
     virtual void init(const TableIter& rIter);
 
     bool isSpringHop();

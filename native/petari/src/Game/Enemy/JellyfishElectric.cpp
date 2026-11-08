@@ -345,6 +345,3 @@ bool JellyfishElectric::selectNerveAfterWait() {
 
     return false;
 }
-
-JellyfishElectric::~JellyfishElectric() {
-}

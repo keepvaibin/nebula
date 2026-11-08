@@ -239,6 +239,3 @@ bool FirePressureRadiate::calcJointCannon(Pos3f* pOutPos, const JointControllerI
     pOutPos->concat(*pOutPos, mtx);
     return true;
 }
-
-FirePressureRadiate::~FirePressureRadiate() {
-}

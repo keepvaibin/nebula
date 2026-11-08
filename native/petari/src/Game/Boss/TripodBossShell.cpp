@@ -28,9 +28,6 @@ namespace NrvTripodBossShell {
     NEW_NERVE(TripodBossShellNrvBreak, TripodBossShell, Break);
 };  // namespace NrvTripodBossShell
 
-TripodBossShell::~TripodBossShell() {
-}
-
 TripodBossShell::TripodBossShell(const char* pName) : TripodBossFixPartsBase(pName), mBreakModel() {
 }
 

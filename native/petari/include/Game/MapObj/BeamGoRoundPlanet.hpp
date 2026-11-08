@@ -9,7 +9,6 @@ class BeamGoRoundBeam : public LiveActor {
 public:
     BeamGoRoundBeam(MtxPtr);
 
-    virtual ~BeamGoRoundBeam();
     virtual void init(const TableIter&);
     virtual void draw() const;
     virtual void calcAndSetBaseMtx();
@@ -25,7 +24,6 @@ class BeamGoRoundPlanet : public MapObjActor {
 public:
     BeamGoRoundPlanet(const char*);
 
-    virtual ~BeamGoRoundPlanet();
     virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 

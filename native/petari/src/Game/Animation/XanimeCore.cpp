@@ -562,9 +562,6 @@ void XanimeCore::initT(ModelData* pModelData) {
     }
 }
 
-XanimeCore::~XanimeCore() {
-}
-
 XtransformInfo::XtransformInfo() {
     mScale.zero();
     mTranslate.zero();

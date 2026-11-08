@@ -54,6 +54,3 @@ void GravityDustParticleCallBack::execute(EmitterCore* pEmitter, ParticleCore* p
     MR::normalize(&baseAxis);
     pParticle->mBaseAxis.set(baseAxis);
 }
-
-GravityDustParticleCallBack::~GravityDustParticleCallBack() {
-}

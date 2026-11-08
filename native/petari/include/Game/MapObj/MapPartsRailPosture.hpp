@@ -15,7 +15,6 @@ public:
 
     MapPartsRailPosture(LiveActor*);
 
-    virtual ~MapPartsRailPosture();
     virtual void init(const TableIter&);
     virtual bool isWorking() const;
     virtual void start();

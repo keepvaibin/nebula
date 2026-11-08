@@ -24,9 +24,6 @@ namespace NrvBallOpener {
     NEW_NERVE(BallOpenerNrvOpen, BallOpener, Open);
 };  // namespace NrvBallOpener
 
-BallOpener::~BallOpener() {
-}
-
 BallOpener::BallOpener(const char* pName)
     : LiveActor(pName), mBoundSensor(), mInitialVelocity(0, 0, 0), mBindVelocity(0, 0, 0), mSettledFrames() {
     mCone = new BindCone(mPosition, Vec3f(0.0f, 1.0f, 0.0f), ::sHoleDepth, ::sHoleRadius);

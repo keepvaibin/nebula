@@ -5,7 +5,6 @@
 class CameraInwardSphere : public Camera {
 public:
     CameraInwardSphere(const char* pName = "球内部カメラ");
-    virtual ~CameraInwardSphere();
 
     virtual void reset();
     virtual CameraTargetObj* calc();

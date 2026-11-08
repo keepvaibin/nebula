@@ -31,8 +31,6 @@ public:
     NameObjCategoryList(u32, const CategoryListInitialTable*, NameObjMethod, bool, const char*);
     NameObjCategoryList(u32, const CategoryListInitialTable*, NameObjMethodConst, bool, const char*);
 
-    ~NameObjCategoryList();
-
     void execute(int);
     void incrementCheck(NameObj*, int);
     void allocateBuffer();

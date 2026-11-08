@@ -13,7 +13,6 @@ class OceanRing : public LiveActor {
 public:
     OceanRing(const char* pName);
 
-    virtual ~OceanRing();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void movement();

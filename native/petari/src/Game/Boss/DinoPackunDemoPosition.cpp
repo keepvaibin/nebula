@@ -50,6 +50,3 @@ void DinoPackunDemoPosition::exeOpeningDemo() {
     calcAnim();
     MR::setPlayerBaseMtx(MR::getJointMtx(this, "MarioPosition"));
 }
-
-DinoPackunDemoPosition::~DinoPackunDemoPosition() {
-}

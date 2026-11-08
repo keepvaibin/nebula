@@ -24,9 +24,6 @@ namespace NrvPrizeRing {
 PrizeRing::PrizeRing() : ModelObj("PrizeRing", "PrizeRing", nullptr, -2, -2, -2, false), mLifeTime(::sDefaultLifeTime) {
 }
 
-PrizeRing::~PrizeRing() {
-}
-
 void PrizeRing::init(const TableIter& rIter) {
     initNerve(GET_NERVE(PrizeRing, PrizeRingStart));
     initHitSensor(1);

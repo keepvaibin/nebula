@@ -10,7 +10,6 @@ class DinoPackunBattleEggVs2 : public DinoPackunAction {
 public:
     DinoPackunBattleEggVs2(DinoPackun* pHost);
 
-    virtual ~DinoPackunBattleEggVs2();
     virtual void init();
     virtual void appear();
     virtual void control();

@@ -76,9 +76,6 @@ namespace MR {
     }
 };  // namespace MR
 
-MirrorCamera::~MirrorCamera() {
-}
-
 void MirrorCamera::movement() {
     if (MR::isPlayerInAreaObj("MirrorArea")) {
         updateViewMtx();

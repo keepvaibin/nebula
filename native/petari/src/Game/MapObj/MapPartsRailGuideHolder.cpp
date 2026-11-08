@@ -28,6 +28,3 @@ MapPartsRailGuideDrawer* MapPartsRailGuideHolder::find(s32 railId) {
 
     return nullptr;
 }
-
-MapPartsRailGuideHolder::~MapPartsRailGuideHolder() {
-}

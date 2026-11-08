@@ -9,7 +9,6 @@ class GCaptureRibbon : public LiveActor {
 public:
     GCaptureRibbon(const char*);
 
-    virtual ~GCaptureRibbon();
     virtual void init(const TableIter&);
     virtual void draw() const;
 

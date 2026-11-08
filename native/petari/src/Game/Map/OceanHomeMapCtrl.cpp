@@ -64,6 +64,3 @@ void OceanHomeMapCtrl::movement() {
         mOceanRingPlanetLowInWater->makeActorDead();
     }
 }
-
-OceanHomeMapCtrl::~OceanHomeMapCtrl() {
-}

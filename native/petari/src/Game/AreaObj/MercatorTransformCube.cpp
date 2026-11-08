@@ -294,6 +294,3 @@ namespace MR {
         return pMover;
     }
 };  // namespace MR
-
-MercatorTransformCube::~MercatorTransformCube() {
-}

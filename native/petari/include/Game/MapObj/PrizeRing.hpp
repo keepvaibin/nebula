@@ -7,7 +7,6 @@ class PrizeRing : public ModelObj {
 public:
     PrizeRing();
 
-    virtual ~PrizeRing();
     virtual void init(const TableIter& rIter);
     virtual void appear();
     virtual void kill();

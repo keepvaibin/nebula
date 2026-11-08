@@ -9,7 +9,6 @@ class Shellfish : public LiveActor {
 public:
     Shellfish(const char*);
 
-    virtual ~Shellfish();
     virtual void init(const TableIter&) override;
     virtual void initAfterPlacement() override;
     virtual void calcAndSetBaseMtx() override;

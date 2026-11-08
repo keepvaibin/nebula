@@ -28,9 +28,6 @@ void ChangeBgmCube::init(const TableIter& rIter) {
     MR::connectToSceneAreaObj(this);
 }
 
-ChangeBgmCube::~ChangeBgmCube() {
-}
-
 void ChangeBgmCube::movement() {
     if (!isValid()) {
         return;

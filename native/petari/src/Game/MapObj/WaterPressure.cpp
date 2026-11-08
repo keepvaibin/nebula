@@ -8,9 +8,6 @@ namespace {
     const f32 sGunPointOffset = 200.0f;
 };  // namespace
 
-WaterPressure::~WaterPressure() {
-}
-
 WaterPressure::WaterPressure(const char* pName) : PressureBase(pName), mCameraInfo(), mIsInvalidSpinKill() {
 }
 

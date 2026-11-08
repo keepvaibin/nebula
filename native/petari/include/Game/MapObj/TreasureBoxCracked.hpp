@@ -9,7 +9,6 @@ class TreasureBoxCracked : public LiveActor {
 public:
     TreasureBoxCracked(const char*);
 
-    virtual ~TreasureBoxCracked();
     virtual void init(const TableIter&);
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);

@@ -15,7 +15,6 @@ public:
 
     LavaStrangeRock(const char* pName);
 
-    virtual ~LavaStrangeRock();
     virtual void init(const TableIter&);
     virtual void control();
 

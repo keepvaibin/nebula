@@ -10,9 +10,6 @@ void PlanetMapWithoutHighModel::connectToScene(const MapObjActorInitInfo&) {
     MR::connectToScenePlanet(this);
 }
 
-PlanetMapWithoutHighModel::~PlanetMapWithoutHighModel() {
-}
-
 void PlanetMapWithoutHighModel::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
     MapObjActorInitInfo info;

@@ -31,9 +31,6 @@ namespace {
     const f32 cHipdropDigRadius = 50.0f;
 };  // namespace
 
-SnowFloorTile::~SnowFloorTile() {
-}
-
 SnowFloorTile::SnowFloorTile(const char* pName) : LiveActor(pName) {
 }
 

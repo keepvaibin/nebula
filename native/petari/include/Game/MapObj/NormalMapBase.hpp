@@ -12,7 +12,6 @@ class NormalMapBase : public LiveActor {
 public:
     NormalMapBase(const char*);
 
-    virtual ~NormalMapBase();
     virtual void draw() const;
     virtual void calcAnim();
     virtual void control();

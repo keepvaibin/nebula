@@ -65,9 +65,6 @@ namespace MR {
     }
 };  // namespace MR
 
-RailCoin::~RailCoin() {
-}
-
 void RailCoin::placementCoin() {
     if (MR::isInAreaObj("MercatorCube", mPosition)) {
         placementMercatorRail();

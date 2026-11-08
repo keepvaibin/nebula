@@ -23,9 +23,6 @@ SimpleFloaterObj::SimpleFloaterObj(const char* pName) : LiveActor(pName) {
     mEffectPos.set(0.0f, 0.0f, 0.0f);
 }
 
-SimpleFloaterObj::~SimpleFloaterObj() {
-}
-
 void SimpleFloaterObj::init(const TableIter& rrIter) {
     MR::initDefaultPos(this, rrIter);
     MR::getObjectName(&mObjName, rrIter);

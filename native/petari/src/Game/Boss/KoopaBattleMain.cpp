@@ -427,6 +427,3 @@ void KoopaBattleMain::exeFind() {
 void KoopaBattleMain::exeAttackFireLong() {
     MR::updateActorStateAndNextNerve(this, GET_NERVE(KoopaBattleMain, KoopaBattleMainNrvAttackShockWave));
 }
-
-KoopaBattleMain::~KoopaBattleMain() {
-}

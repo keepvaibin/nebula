@@ -171,6 +171,3 @@ void KoopaShockWave::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         mKoopa->receiveMessage(ACTMES_KOOPA_PLAYER_DAMAGE, pSender, MR::getMessageSensor());
     }
 }
-
-KoopaShockWave::~KoopaShockWave() {
-}

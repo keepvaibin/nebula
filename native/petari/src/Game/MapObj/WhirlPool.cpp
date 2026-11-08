@@ -150,6 +150,3 @@ SiteMaterial WhirlPool::loadMaterial() const {
     material.setTexture(2, mIndirectTexture);
     return material;
 }
-
-WhirlPool::~WhirlPool() {
-}

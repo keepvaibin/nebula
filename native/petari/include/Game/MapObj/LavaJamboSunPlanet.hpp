@@ -9,7 +9,6 @@ class LavaJamboSunPlanet : public LiveActor {
 public:
     LavaJamboSunPlanet(const char*);
 
-    virtual ~LavaJamboSunPlanet();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void control();

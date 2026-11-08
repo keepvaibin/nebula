@@ -9,7 +9,6 @@ class Gesso : public LiveActor {
 public:
     Gesso(const char*);
 
-    virtual ~Gesso();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

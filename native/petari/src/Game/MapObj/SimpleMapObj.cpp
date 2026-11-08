@@ -193,31 +193,3 @@ void SimpleMirrorObj::init(const TableIter& rIter) {
 s32 SimpleTextureSwitchChangeObj::getChangedTextureNo() const {
     return 1;
 }
-
-SimpleEnvironmentObj::~SimpleEnvironmentObj() {
-}
-
-SimpleMapObjNoSilhouetted::~SimpleMapObjNoSilhouetted() {
-}
-
-SimpleTextureSwitchChangeObj::~SimpleTextureSwitchChangeObj() {
-}
-
-GlaringLight::~GlaringLight() {
-}
-
-SimpleMirrorObj::~SimpleMirrorObj() {
-}
-
-SimpleMirrorReflectionObj::~SimpleMirrorReflectionObj() {
-}
-
-SimpleSeesawObj::~SimpleSeesawObj() {
-}
-
-SimpleMapObjPush::~SimpleMapObjPush() {
-}
-
-UFOKinokoUnderConstruction::~UFOKinokoUnderConstruction() {
-}
-

@@ -308,6 +308,3 @@ bool ItemBubble::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
 
     return false;
 }
-
-ItemBubble::~ItemBubble() {
-}

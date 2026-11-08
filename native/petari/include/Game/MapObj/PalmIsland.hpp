@@ -7,7 +7,6 @@ class PalmIsland : public LiveActor {
 public:
     PalmIsland(const char*);
 
-    virtual ~PalmIsland();
     virtual void init(const TableIter&);
 
     void exeFloat();

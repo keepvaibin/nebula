@@ -7,7 +7,6 @@ class KoopaBattleMapCoinPlate : public LiveActor {
 public:
     KoopaBattleMapCoinPlate(const char*);
 
-    virtual ~KoopaBattleMapCoinPlate();
     virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);

@@ -14,7 +14,6 @@ class DinoPackunFire : public LiveActor {
 public:
     DinoPackunFire(const char*);
 
-    virtual ~DinoPackunFire();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void control();

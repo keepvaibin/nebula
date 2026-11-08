@@ -302,12 +302,6 @@ void BrightSun::controlSunModel() {
     mSun->mRotation.set(rotation);
 }
 
-BrightObj::~BrightObj() {
-}
-
-BrightSun::~BrightSun() {
-}
-
 BrightObjBase::~BrightObjBase() {
 }
 

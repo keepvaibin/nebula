@@ -517,6 +517,3 @@ SiteMaterial Creeper::loadMaterial() const {
     material.setTexture(0, mTexture);
     return material;
 }
-
-Creeper::~Creeper() {
-}

@@ -359,6 +359,3 @@ bool KoopaSequencerVs3::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
 bool KoopaSequencerVs3::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     return isNerveBattleMain() && mBattleMain->receiveOtherMsg(msg, pSender, pReceiver);
 }
-
-KoopaSequencerVs3::~KoopaSequencerVs3() {
-}

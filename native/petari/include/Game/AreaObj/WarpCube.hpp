@@ -10,8 +10,6 @@ public:
     WarpCube(int formType, const char* pName) : AreaObj(formType, pName), mMapIdInfo() {
     }
 
-    virtual ~WarpCube();
-
     virtual void init(const TableIter& rIter);
     virtual void movement();
     virtual void draw() const;

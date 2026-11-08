@@ -10,7 +10,6 @@ class TakoHei : public LiveActor {
 public:
     TakoHei(const char*);
 
-    virtual ~TakoHei();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();

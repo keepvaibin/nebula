@@ -28,6 +28,3 @@ bool DemoCastSubGroup::tryRegisterDemoActor(LiveActor* pActor, const TableIter& 
     mExecutor->registerDemoActor(pActor, rIter);
     return true;
 }
-
-DemoCastSubGroup::~DemoCastSubGroup() {
-}

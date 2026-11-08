@@ -6,7 +6,6 @@ class PlayerSeArea : public AreaObj {
 public:
     PlayerSeArea(int, const char*);
 
-    virtual ~PlayerSeArea();
     virtual void init(const TableIter&);
     virtual void movement();
 

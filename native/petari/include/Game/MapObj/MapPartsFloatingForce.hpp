@@ -22,7 +22,6 @@ class MapPartsFloatingForce : public MapPartsFunction {
 public:
     MapPartsFloatingForce(LiveActor* pActor);
 
-    virtual ~MapPartsFloatingForce();
     virtual void init(const TableIter& rIter);
     virtual void start();
 

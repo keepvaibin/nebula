@@ -46,9 +46,6 @@ DinoPackunStateDamage::DinoPackunStateDamage(DinoPackun* pHost)
     initNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched));
 }
 
-DinoPackunStateDamage::~DinoPackunStateDamage() {
-}
-
 void DinoPackunStateDamage::appear() {
     mIsDead = false;
     setNerve(GET_NERVE(DinoPackunStateDamage, DinoPackunStateDamageNrvPunched));

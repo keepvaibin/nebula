@@ -6,8 +6,6 @@ class MirrorActor : public LiveActor {
 public:
     MirrorActor(LiveActor*, const char*, const char*);
 
-    virtual ~MirrorActor();
-
     virtual void init(const TableIter&) override;
     virtual void movement() override;
     virtual void calcAnim() override;

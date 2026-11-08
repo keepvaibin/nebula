@@ -6,7 +6,6 @@ class SpiderMapBlock : public LiveActor {
 public:
     SpiderMapBlock(const char*);
 
-    virtual ~SpiderMapBlock();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);

@@ -6,7 +6,6 @@
 class CameraTargetMtx : public CameraTargetObj {
 public:
     CameraTargetMtx(const char*);
-    virtual ~CameraTargetMtx();
 
     virtual void movement();
 

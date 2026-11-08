@@ -65,6 +65,3 @@ void LavaHomeVolcanoFlow::exeMove() {
         setNerve(GET_NERVE(LavaHomeVolcanoFlow, HostTypeDone));
     }
 }
-
-LavaHomeVolcanoFlow::~LavaHomeVolcanoFlow() {
-}

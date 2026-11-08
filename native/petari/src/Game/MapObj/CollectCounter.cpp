@@ -49,6 +49,3 @@ void CollectCounter::setPosition() {
     mFollowPosition.x = screenPos.x;
     mFollowPosition.y = screenPos.y - pointRadius;
 }
-
-CollectCounter::~CollectCounter() {
-}

@@ -6,7 +6,6 @@ class AstroMapBoard : public MapObjActor {
 public:
     AstroMapBoard(const char*);
 
-    virtual ~AstroMapBoard();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void connectToScene(const MapObjActorInitInfo&);

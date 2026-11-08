@@ -30,6 +30,3 @@ void CollisionDirector::movement() {
 CollisionDirector* MR::getCollisionDirector() {
     return MR::getSceneObj< CollisionDirector >(SceneObj_CollisionDirector);
 }
-
-CollisionDirector::~CollisionDirector() {
-}

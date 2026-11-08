@@ -14,9 +14,6 @@ namespace NrvSphereRailDash {
     NEW_NERVE(SphereRailDashNrvRailMove, SphereRailDash, RailMove);
 };  // namespace NrvSphereRailDash
 
-SphereRailDash::~SphereRailDash() {
-}
-
 SphereRailDash::SphereRailDash(const char* pName)
     : LiveActor(pName), mBinderSensor(), mOffset(0.0f, 0.0f, 0.0f), mEndSpeed(50.0f), mCoordCubic(), mCoordQuadratic(), mCoordLinear(), mMoveStep() {
 }
@@ -105,4 +102,3 @@ void SphereRailDash::exeRailMove() {
         setNerve(GET_NERVE(SphereRailDash, SphereRailDashNrvWait));
     }
 }
-

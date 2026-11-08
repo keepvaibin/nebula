@@ -9,8 +9,6 @@ class MirrorCamera : public NameObj {
 public:
     MirrorCamera(const char*);
 
-    virtual ~MirrorCamera();
-
     virtual void init(const TableIter&) override;
     virtual void movement() override;
 

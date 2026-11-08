@@ -7,7 +7,6 @@ class FirePressureBullet : public LiveActor {
 public:
     FirePressureBullet(const char*);
 
-    virtual ~FirePressureBullet();
     virtual void init(const TableIter&);
     virtual void kill();
     virtual void calcAndSetBaseMtx();

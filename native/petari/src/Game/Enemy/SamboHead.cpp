@@ -533,6 +533,3 @@ bool SamboHead::isInactive() const {
            isNerve(GET_NERVE(SamboHead, HostTypeNrvStampFall)) || isNerve(GET_NERVE(SamboHead, HostTypeNrvStampDeath)) ||
            isNerve(GET_NERVE(SamboHead, HostTypeNrvHitBlow));
 }
-
-SamboHead::~SamboHead() {
-}

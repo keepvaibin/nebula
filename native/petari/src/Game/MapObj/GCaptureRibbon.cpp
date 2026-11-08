@@ -69,9 +69,6 @@ f32 GCaptureRibbon::calcLineWidth() const {
     return (20.0f * rate) + (90.0f * (1.0f - rate));
 }
 
-GCaptureRibbon::~GCaptureRibbon() {
-}
-
 void GCaptureRibbon::init(const TableIter& rIter) {
     mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon", "GCaptureRibbon.bti"));
     MR::invalidateClipping(this);

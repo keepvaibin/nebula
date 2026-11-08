@@ -11,7 +11,6 @@ class KoopaShockWave : public LiveActor {
 public:
     KoopaShockWave(Koopa*);
 
-    virtual ~KoopaShockWave();
     virtual void init(const TableIter&);
     virtual void appear();
     virtual void makeActorDead();

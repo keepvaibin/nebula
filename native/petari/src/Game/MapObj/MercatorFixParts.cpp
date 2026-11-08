@@ -15,9 +15,6 @@ bool MercatorFixParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* p
     return mAppearController->receiveMsg(msg);
 }
 
-MercatorFixParts::~MercatorFixParts() {
-}
-
 void MercatorFixParts::init(const TableIter& rIter) {
     MR::FormattedName objectName;
     MR::getMapPartsObjectName(objectName, rIter);

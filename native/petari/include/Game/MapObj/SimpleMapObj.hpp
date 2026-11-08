@@ -26,7 +26,6 @@ public:
     inline SimpleEnvironmentObj(const char* pName) : MapObjActor(pName) {
     }
 
-    virtual ~SimpleEnvironmentObj();
     virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
@@ -47,7 +46,6 @@ public:
     inline SimpleMapObjPush(const char* pName) : SimpleMapObj(pName) {
     }
 
-    virtual ~SimpleMapObjPush();
     virtual void attackSensor(HitSensor*, HitSensor*);
 };
 
@@ -56,7 +54,6 @@ public:
     inline SimpleMapObjNoSilhouetted(const char* pName) : SimpleMapObj(pName) {
     }
 
-    virtual ~SimpleMapObjNoSilhouetted();
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
 
@@ -64,7 +61,6 @@ class SimpleSeesawObj : public MapObjActor {
 public:
     SimpleSeesawObj(const char*);
 
-    virtual ~SimpleSeesawObj();
     virtual void init(const TableIter&);
     virtual void control();
 
@@ -74,7 +70,6 @@ class SimpleMirrorObj : public MapObjActor {
 public:
     SimpleMirrorObj(const char* pName, const char* a2 = nullptr, MtxPtr = nullptr);
 
-    virtual ~SimpleMirrorObj();
     virtual void init(const TableIter&);
     virtual void calcAndSetBaseMtx();
 
@@ -86,7 +81,6 @@ public:
     inline SimpleMirrorReflectionObj(const char* pName) : SimpleMapObj(pName) {
     }
 
-    virtual ~SimpleMirrorReflectionObj();
     virtual void init(const TableIter&);
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
@@ -96,7 +90,6 @@ public:
     inline SimpleTextureSwitchChangeObj(const char* pName) : SimpleMapObj(pName) {
     }
 
-    virtual ~SimpleTextureSwitchChangeObj();
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
     virtual s32 getChangedTextureNo() const;
 
@@ -108,7 +101,6 @@ public:
     inline UFOKinokoUnderConstruction(const char* pName) : MapObjActor(pName) {
     }
 
-    virtual ~UFOKinokoUnderConstruction();
     virtual void init(const TableIter&);
 };
 
@@ -117,7 +109,6 @@ public:
     inline GlaringLight(const char* pName) : SimpleMapObj(pName) {
     }
 
-    virtual ~GlaringLight();
     virtual void connectToScene(const MapObjActorInitInfo&);
 };
 

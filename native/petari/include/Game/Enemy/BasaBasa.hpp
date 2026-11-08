@@ -11,7 +11,6 @@ class BasaBasa : public LiveActor {
 public:
     BasaBasa(const char* pName);
 
-    virtual ~BasaBasa();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();

@@ -115,6 +115,3 @@ void DinoPackunFire::exeGround() {
         kill();
     }
 }
-
-DinoPackunFire::~DinoPackunFire() {
-}

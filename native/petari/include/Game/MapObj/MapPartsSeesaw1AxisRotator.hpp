@@ -6,7 +6,6 @@ class MapPartsSeesaw1AxisRotator : public MapPartsRotatorBase {
 public:
     MapPartsSeesaw1AxisRotator(LiveActor*, const char*, f32);
 
-    virtual ~MapPartsSeesaw1AxisRotator();
     virtual void init(const TableIter&) override;
     virtual bool isWorking() const override;
     virtual void start() override;

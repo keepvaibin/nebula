@@ -6,7 +6,6 @@ class SpaceMine : public MapObjActor {
 public:
     SpaceMine(const char* pName);
 
-    virtual ~SpaceMine();
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
     virtual void kill();

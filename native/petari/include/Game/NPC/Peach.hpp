@@ -6,7 +6,6 @@ class Peach : public NPCActor {
 public:
     Peach(const char*);
 
-    virtual ~Peach();
     virtual void init(const TableIter&);
 
     void exeWait();

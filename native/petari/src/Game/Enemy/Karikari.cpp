@@ -971,6 +971,3 @@ void Karikari::calcAndSetBaseMtx() {
     MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mFront);
     MR::setBaseTRMtx(this, mtx);
 }
-
-Karikari::~Karikari() {
-}

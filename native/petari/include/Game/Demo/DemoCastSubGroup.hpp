@@ -7,7 +7,6 @@ class DemoCastSubGroup : public DemoCastGroup {
 public:
     DemoCastSubGroup(const char*);
 
-    virtual ~DemoCastSubGroup();
     virtual void init(const TableIter&);
     virtual bool tryRegisterDemoActor(LiveActor*, const TableIter&, const PlacementId&);
 

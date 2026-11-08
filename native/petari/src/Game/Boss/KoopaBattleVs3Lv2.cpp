@@ -137,6 +137,3 @@ void KoopaBattleVs3Lv2::exeJumpAway() {
 void KoopaBattleVs3Lv2::exeRecover() {
     updateRecover(GET_NERVE(KoopaBattleVs3Lv2, KoopaBattleVs3Lv2NrvAttackFire));
 }
-
-KoopaBattleVs3Lv2::~KoopaBattleVs3Lv2() {
-}

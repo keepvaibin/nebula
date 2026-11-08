@@ -911,5 +911,3 @@ bool TakoHei::isInSightMario() const {
         return false;
     }
 }
-
-TakoHei::~TakoHei(){};

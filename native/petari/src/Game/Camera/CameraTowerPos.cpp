@@ -8,9 +8,6 @@ namespace {
     const f32 sAttenuation = 0.05f;
 };  // namespace
 
-CameraTowerPos::~CameraTowerPos() {
-}
-
 CameraTowerPos::CameraTowerPos(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleYMaxSpeed(), mAngleX(), mDist(1000.0f), mAngleXRate(0.5f),
       mPos(0.0f, 0.0f, 0.0f) {

@@ -55,6 +55,3 @@ bool BattleShipElevator::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 
     return false;
 }
-
-BattleShipElevator::~BattleShipElevator() {
-}

@@ -100,6 +100,3 @@ void KoopaStateGuard::exeGuardTail() {
 
     updateGuard();
 }
-
-KoopaStateGuard::~KoopaStateGuard() {
-}

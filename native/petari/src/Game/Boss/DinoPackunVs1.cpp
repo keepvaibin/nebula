@@ -119,6 +119,3 @@ void DinoPackunVs1::exeDownDemo() {
 
 void DinoPackunVs1::exeWaitStart() {
 }
-
-DinoPackunVs1::~DinoPackunVs1() {
-}

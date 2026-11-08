@@ -95,9 +95,6 @@ namespace MR {
     }
 };  // namespace MR
 
-EffectSystem::~EffectSystem() {
-}
-
 void EffectSystem::entry(ParticleResourceHolder* pResourceHolder, u32 emitterCount) {
     mEmitterManager = new EmitterManager(emitterCount, MR::getCurrentHeap(), 9, 1);
     mEmitterManager->entryResourceManager(pResourceHolder->mResourceMgr, 0);

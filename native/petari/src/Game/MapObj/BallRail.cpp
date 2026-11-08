@@ -149,6 +149,3 @@ void BallRail::exeNoBind() {
         setNerve(GET_NERVE(BallRail, BallRailNrvWait));
     }
 }
-
-BallRail::~BallRail() {
-}

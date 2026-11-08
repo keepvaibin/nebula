@@ -254,6 +254,3 @@ bool CrystalCageMoving::isNerveTypeEnd() const {
            isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoStop)) ||
            isNerve(GET_NERVE(CrystalCageMoving, CrystalCageMovingNrvDemoTicoChange));
 }
-
-CrystalCageMoving::~CrystalCageMoving() {
-}

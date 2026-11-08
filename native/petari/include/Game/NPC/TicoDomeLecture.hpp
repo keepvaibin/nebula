@@ -6,7 +6,6 @@ class TicoDomeLecture : public LiveActor {
 public:
     TicoDomeLecture(const char*);
 
-    virtual ~TicoDomeLecture();
     virtual void init(const TableIter&);
     virtual void appear();
 

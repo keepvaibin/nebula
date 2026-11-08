@@ -81,6 +81,3 @@ namespace MR {
         return getClippingDirector()->mJudge;
     }
 };  // namespace MR
-
-ClippingJudge::~ClippingJudge() {
-}

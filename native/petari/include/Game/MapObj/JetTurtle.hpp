@@ -12,7 +12,6 @@ public:
 
     JetTurtle(const char*);
 
-    virtual ~JetTurtle();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void appear();
@@ -67,7 +66,6 @@ public:
     GoldenTurtle(const char* pName) : JetTurtle(pName) {
     }
 
-    virtual ~GoldenTurtle();
     virtual void init(const TableIter&);
     virtual void resetPosition();
     virtual void reset(u32);

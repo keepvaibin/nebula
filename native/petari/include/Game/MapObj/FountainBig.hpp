@@ -6,7 +6,6 @@ class FountainBig : public LiveActor {
 public:
     FountainBig(const char*);
 
-    virtual ~FountainBig();
     virtual void init(const TableIter&);
     virtual void updateHitSensor(HitSensor*);
     virtual void attackSensor(HitSensor*, HitSensor*);

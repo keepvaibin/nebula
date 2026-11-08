@@ -423,6 +423,3 @@ bool TreasureBoxCracked::isHalfOpen() const {
 
     return !MR::isBckStopped(this);
 }
-
-TreasureBoxCracked::~TreasureBoxCracked() {
-}

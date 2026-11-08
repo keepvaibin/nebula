@@ -62,6 +62,3 @@ void ReverseGravityRoomPlanet::startSwitchOn() {
 void ReverseGravityRoomPlanet::startSwitchOff() {
     setNerve(GET_NERVE(ReverseGravityRoomPlanet, ReverseGravityRoomPlanetNrvDownStart));
 }
-
-ReverseGravityRoomPlanet::~ReverseGravityRoomPlanet() {
-}

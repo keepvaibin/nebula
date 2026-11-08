@@ -286,6 +286,3 @@ void Candlestand::exeAttack() {
 void Candlestand::exeBurn() {
     MR::startLevelSound(this, ::sBurnSound);
 }
-
-Candlestand::~Candlestand() {
-}

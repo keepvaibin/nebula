@@ -5,7 +5,6 @@
 class CameraWonderPlanet : public Camera {
 public:
     CameraWonderPlanet(const char* pName = "ワンダープラネットカメラ");
-    virtual ~CameraWonderPlanet();
 
     virtual void reset();
     virtual CameraTargetObj* calc();

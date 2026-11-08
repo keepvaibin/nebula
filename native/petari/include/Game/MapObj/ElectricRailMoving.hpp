@@ -9,7 +9,6 @@ class ElectricRailMovingPoint : public LiveActor {
 public:
     ElectricRailMovingPoint(const char* pName = "移動電撃レール点");
 
-    virtual ~ElectricRailMovingPoint();
     virtual void init(const TableIter&);
     virtual void attackSensor(HitSensor*, HitSensor*);
 
@@ -21,7 +20,6 @@ class ElectricRailMoving : public ElectricRailDrawn {
 public:
     ElectricRailMoving(const char*);
 
-    virtual ~ElectricRailMoving();
     virtual void init(const TableIter&);
     virtual void drawWith(MaterialDraw& rMaterial) const;
     virtual void attackSensor(HitSensor*, HitSensor*);

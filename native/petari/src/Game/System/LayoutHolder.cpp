@@ -10,9 +10,6 @@ LayoutHolder::LayoutHolder(AssetFolder& rArchive) : Ui::ResourceAccessor(), mArc
     initializeArc();
 }
 
-LayoutHolder::~LayoutHolder() {
-}
-
 void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResourceInfo) {
     void* pResource = nullptr;
 

@@ -8,7 +8,6 @@ class RestartCube : public AreaObj {
 public:
     RestartCube(int, const char*);
 
-    virtual ~RestartCube();
     virtual void init(const TableIter&);
 
     void updatePlayerRestartIdInfo();

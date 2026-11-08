@@ -10,9 +10,6 @@ namespace {
     static const f32 sWallJumpSpeed = 15.0f;
 };  // namespace
 
-KoopaFigureBall::~KoopaFigureBall() {
-}
-
 KoopaFigureBall::KoopaFigureBall(const char* pName, Koopa* pKoopa, f32 myFloat, const MR::ActorMoveParam* pMoveParam)
     : LiveActor(pName), mKoopa(pKoopa), mFront(0.0f, 0.0f, 1.0f), mRadius(myFloat), mAngle(), mMoveParam(pMoveParam) {
     mBaseMtx.identity();

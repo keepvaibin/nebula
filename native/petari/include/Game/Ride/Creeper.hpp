@@ -46,8 +46,6 @@ class Creeper : public LiveActor {
 public:
     Creeper(const char*);
 
-    virtual ~Creeper();
-
     virtual void init(const TableIter&);
     virtual void control();
     virtual void draw() const;

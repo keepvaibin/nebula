@@ -23,9 +23,6 @@ namespace NrvKoopaBattleMapPlanet {
     NEW_NERVE(KoopaBattleMapPlanetNrvDemoGrandStarAppear, KoopaBattleMapPlanet, DemoGrandStarAppear);
 };  // namespace NrvKoopaBattleMapPlanet
 
-KoopaBattleMapPlanet::~KoopaBattleMapPlanet() {
-}
-
 KoopaBattleMapPlanet::KoopaBattleMapPlanet(const char* pName, const char* pModelName, bool isFinalPlanet, bool isNoPlate)
     : LiveActor(pName), mModelName(pModelName), mRotateMoment(0.0f, 0.0f, 0.0f), mDamagePlateGroup(), mCoinPlateGroup(), mPlateGroup(), mDamagePlate(),
       mIsFinalPlanet(isFinalPlanet), mIsNoPlate(isNoPlate) {

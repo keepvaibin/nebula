@@ -22,7 +22,6 @@ class DinoPackun : public LiveActor {
 public:
     DinoPackun(const char*);
 
-    virtual ~DinoPackun();
     virtual void init(const TableIter&);
     virtual void makeActorDead();
     virtual void control();

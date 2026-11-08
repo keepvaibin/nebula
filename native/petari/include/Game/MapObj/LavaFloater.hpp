@@ -10,7 +10,6 @@ class LavaFloater : public LiveActor {
 public:
     LavaFloater(const char*);
 
-    virtual ~LavaFloater();
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual void makeActorAppeared();

@@ -17,8 +17,6 @@ public:
 
     CameraHeightArrange(Camera*);
 
-    virtual ~CameraHeightArrange();
-
     void updateJump();
     void calcWatchPos(CameraTargetObj*);
     void arrange();

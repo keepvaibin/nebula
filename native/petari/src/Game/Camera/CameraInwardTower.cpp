@@ -11,9 +11,6 @@ namespace {
     static const f32 sResetRotSpeed = 0.2f;
 };  // namespace
 
-CameraInwardTower::~CameraInwardTower() {
-}
-
 CameraInwardTower::CameraInwardTower(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mAngleX(), mAngleMax(), mDist(2000.0f), mPos(0.0f, 10.0f, 0.0f), mAngleY(),
       mIsResetting() {

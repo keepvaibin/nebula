@@ -6,7 +6,6 @@ class AstroOverlookObj : public LiveActor {
 public:
     AstroOverlookObj(const char*);
 
-    virtual ~AstroOverlookObj();
     virtual void control();
 
     u8 mIsLayoutHidden;

@@ -44,9 +44,6 @@ namespace MR {
     }
 };  // namespace MR
 
-CircleCoinGroup::~CircleCoinGroup() {
-}
-
 const char* CircleCoinGroup::getCoinName() const {
     return mIsPurpleCoinGroup ? "パープルコイン(円形配置)" : "コイン(円形配置)";
 }

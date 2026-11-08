@@ -54,9 +54,6 @@ void TransparentWall::control() {
     }
 }
 
-TransparentWall::~TransparentWall() {
-}
-
 void TransparentWall::init(const TableIter& rIter) {
     InvisiblePolygonObj::init(rIter);
     MR::getPlacementArg4WithInit(rIter, &mSolidForms);

@@ -11,9 +11,6 @@ namespace {
     const f32 sRateWhenBraking = 0.05f;
 };  // namespace
 
-CameraFooFighterPlanet::~CameraFooFighterPlanet() {
-}
-
 CameraFooFighterPlanet::CameraFooFighterPlanet(const char* pName) : Camera(pName), mDistMin(500.0f), mDistMax(2000.0f), mPitchMax(MR::pi() / 4.0f) {
 }
 
