@@ -63,7 +63,7 @@ f32 CameraContext::getRenderFovy() const {
     return mFovy;
 }
 
-void CameraContext::setViewMtx(const Pos3f& rMtx, bool b1, bool b2, const Vec3f& rVec) {
+void CameraContext::setViewMtx(const Pos3f& rMtx) {
     mView.set(rMtx);
     mViewInv.invert(rMtx);
 }

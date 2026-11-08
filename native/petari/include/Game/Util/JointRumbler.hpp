@@ -9,13 +9,13 @@ class XjointTransform;
 class JointRumbler {
 public:
     enum Flag {
-        FLAG_1 = 1 << 0,
+        FLAG_EXTRA_SCALE = 1 << 0,  // rumble the joint's extra scale, not its scale
         FLAG_LOCK_X = 1 << 1,
         FLAG_LOCK_Y = 1 << 2,
         FLAG_LOCK_Z = 1 << 3,
     };
 
-    JointRumbler(LiveActor* pActor, const char* pJointName, f32, f32, u32, bool, s32);
+    JointRumbler(LiveActor* pActor, const char* pJointName, f32 frequency, f32 amplitude, u32 duration, bool useExtraScale, s32 startDelay);
 
     void update();
     void start();

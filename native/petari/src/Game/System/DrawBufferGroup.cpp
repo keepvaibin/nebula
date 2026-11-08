@@ -20,7 +20,7 @@ s32 DrawBufferGroup::registerDrawBuffer(LiveActor* pActor) {
     s32 idx = findExecuterIndex(pModelName);
 
     if (idx < 0) {
-        DrawBufferExecuter* exec = new DrawBufferExecuter(pModelName, MR::getModel(pActor), 0x10);
+        DrawBufferExecuter* exec = new DrawBufferExecuter(pModelName, MR::getModel(pActor));
 
         idx = mExecutors.size();
         mExecutors.push_back(exec);

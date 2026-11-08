@@ -47,10 +47,6 @@ public:
         return mPartDrawers[idx];
     }
 
-    inline f32 someInline(f32 a1, f32 a2, f32 a3) const {
-        return (a1 - a2) / a3;
-    }
-
     const OceanRing* mRing;
     s32 mDrawerCount;
     OceanRingPartDrawer** mPartDrawers;

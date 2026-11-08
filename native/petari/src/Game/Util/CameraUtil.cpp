@@ -146,8 +146,8 @@ namespace MR {
         return ::getCameraContext()->mProjection;
     }
 
-    void setCameraViewMtx(const Pos3f& rMtx, bool a2, bool a3, const Vec3f& a4) {
-        ::getCameraContext()->setViewMtx(rMtx, a2, a3, a4);
+    void setCameraViewMtx(const Pos3f& rMtx) {
+        ::getCameraContext()->setViewMtx(rMtx);
     }
 
     f32 getAspect() {

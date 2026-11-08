@@ -9,7 +9,7 @@ class DrawBuffer;
 
 class DrawBufferExecuter {
 public:
-    DrawBufferExecuter(const char*, Model*, s32);
+    DrawBufferExecuter(const char* pName, Model* pModel);
 
     void allocateActorListBuffer();
     void add(LiveActor*);
