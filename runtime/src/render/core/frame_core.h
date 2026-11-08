@@ -149,6 +149,11 @@ struct ListData {
     };
     bool targets_planned = false;
     std::vector<EarlyTargets> early_targets;
+    // Probes asked right after an earlier pass (plan_early_probes), in list order.
+    struct EarlyProbe {
+        std::uint32_t after = 0u, probe = 0u;
+    };
+    std::vector<EarlyProbe> early_probes;
 
     // Read once from the list.
     bool scanned = false;
