@@ -76,14 +76,12 @@ void ClipFieldFillDraw::draw() const {
 }
 
 namespace MR {
-    NameObj* createClipFieldFillDraw(const char* pParam1) {
+    NameObj* createClipFieldFillDraw(const char* pName) {
         return static_cast< ClipFieldFillDraw* >(MR::createSceneObj(SceneObj_ClipFieldFillDraw));
     }
 
-    NameObj* createVolumeDrawSpotLight(const char* pParam1) {
-        ClipFieldFillDraw* clipFieldFillDraw;
-
-        clipFieldFillDraw = static_cast< ClipFieldFillDraw* >(createClipFieldFillDraw(pParam1));
+    NameObj* createVolumeDrawSpotLight(const char* pName) {
+        ClipFieldFillDraw* clipFieldFillDraw = static_cast< ClipFieldFillDraw* >(createClipFieldFillDraw(pName));
         clipFieldFillDraw->mFillInsideVolume = false;
         clipFieldFillDraw->setModeSubColor();
         clipFieldFillDraw->mFillColor = static_cast< u32 >(Color8(70, 35, 11, 80));

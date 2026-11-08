@@ -94,10 +94,10 @@ void AirBubble::exeWait() {
             MR::reverseRailDirection(this);
         }
 
-        f32 arg0;
+        f32 speed;
 
-        if (MR::getCurrentRailPointArg0WithInit(this, &arg0)) {
-            mRailMoveSpeed = arg0;
+        if (MR::getCurrentRailPointArg0WithInit(this, &speed)) {
+            mRailMoveSpeed = speed;
         }
 
         MR::moveCoordAndFollowTrans(this, mRailMoveSpeed);

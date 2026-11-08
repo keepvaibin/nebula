@@ -141,10 +141,10 @@ bool ElectricBall::receiveMsgPlayerAttack(u32 msg, HitSensor*, HitSensor*) {
 }
 
 void ElectricBall::initBalls(const TableIter& rIter) {
-    s32 arg0 = ::sNumBallsDefault;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    s32 numBalls = ::sNumBallsDefault;
+    MR::getPlacementArg0NoInit(rIter, &numBalls);
 
-    mBalls.init(arg0);
+    mBalls.init(numBalls);
 
     for (auto& item : mBalls) {
         item.init(this);

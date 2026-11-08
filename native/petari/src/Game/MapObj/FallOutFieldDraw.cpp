@@ -68,9 +68,9 @@ void FallOutFieldDraw::init(const TableIter& rIter) {
         return;
     }
 
-    bool arg0;
-    MR::getPlacementArg0WithInit(rIter, &arg0);
-    mFillInsideVolume = arg0;
+    bool fillInside;
+    MR::getPlacementArg0WithInit(rIter, &fillInside);
+    mFillInsideVolume = fillInside;
 
     if (MR::isExistStageSwitchAppear(rIter)) {
         MR::listenNameObjStageSwitchOnOffAppear(this, MR::createStageSwitchCtrl(this, rIter), MR::Functor(this, &FallOutFieldDraw::activate),
