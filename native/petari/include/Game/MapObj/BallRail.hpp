@@ -2,15 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 
-class BallRailPoint {
-public:
-    BallRailPoint();
-
-    Vec3f mPos;
-    Vec3f mSide;
-    Vec3f mDir;
-};
-
+// Carries a rolling ball along its rail.
 class BallRail : public LiveActor {
 public:
     BallRail(const char*);
@@ -20,16 +12,13 @@ public:
     virtual void control();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    void initRailPoints();
     void exeWait();
     void exeSetUp();
     void exeRun();
-    inline void exeNoBind();
+    void exeNoBind();
 
-    BallRailPoint* mRailPoints;
     HitSensor* mBindSensor;
     Vec3f mBindStartPos;
-    s32 mNumPoints;
     f32 mAcceleration;
     f32 mDeceleration;
     f32 mBindSensorRadius;
