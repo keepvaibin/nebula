@@ -29,20 +29,18 @@ void ValueControl::setMaxFrame(int maxFrame) {
 }
 
 void ValueControl::update() {
-    if ((mDirection > 0 && mFrame != mMaxFrame) || (isDirToZero(mDirection) && mFrame != 0)) {
-        mFrame += getDirection();
+    if (mFrame != (mDirection > 0 ? mMaxFrame : 0)) {
+        mFrame += mDirection;
     }
 }
 
 void ValueControl::setZero() {
-    setDirToZeroResetFrame();
-
+    setDirToZero();
     mFrame = 0;
 }
 
 void ValueControl::setOne() {
-    setDirToOneResetFrame();
-
+    setDirToOne();
     mFrame = mMaxFrame;
 }
 

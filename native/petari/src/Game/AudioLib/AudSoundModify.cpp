@@ -194,8 +194,8 @@ void AudSoundObject::modifySe(SoundHandle* pHandle, s32 level, s32 subLevel) {
     }
     case SE_BM_LV_SKL_GUARD_ALARM: {
         level = clampLevel(level, 100000);
-        pitch = AudUtil::linerMinMax(level, 300, 2000, 2.0f, 1.85f);
-        f32 wait = AudUtil::linerMinMax(level, 200, 3000, 4.0f, 24.0f);
+        pitch = AudUtil::linearMinMax(level, 300, 2000, 2.0f, 1.85f);
+        f32 wait = AudUtil::linearMinMax(level, 200, 3000, 4.0f, 24.0f);
         writePort(pHandle, 11, static_cast< s32 >(wait));
         break;
     }
@@ -208,106 +208,106 @@ void AudSoundObject::modifySe(SoundHandle* pHandle, s32 level, s32 subLevel) {
     }
     case SE_SM_LV_IRONSPH_ROLL1:
     case SE_SM_LV_IRONSPH_ROLL_RAIL: {
-        volume = AudUtil::linerMax(clampLevel(level, 10000), 100, 1.0f);
+        volume = AudUtil::linearMax(clampLevel(level, 10000), 100, 1.0f);
         break;
     }
     case SE_SM_LV_BALLOONSPH_ROLL: {
-        volume = AudUtil::linerMax(clampLevel(level, 1000000), 10000, 1.0f);
+        volume = AudUtil::linearMax(clampLevel(level, 1000000), 10000, 1.0f);
         break;
     }
     case SE_SM_IRONSPH_HIT_WALL:
     case SE_SM_BALLOONSPH_HIT_WALL: {
-        volume = AudUtil::linerMax(clampLevel(level, 100), 20, 1.0f);
+        volume = AudUtil::linearMax(clampLevel(level, 100), 20, 1.0f);
         break;
     }
     case SE_SM_LV_SLED_YOS_RUN1: {
-        volume = AudUtil::linerMax(clampLevel(level, 10000), 2000, 1.0f);
+        volume = AudUtil::linearMax(clampLevel(level, 10000), 2000, 1.0f);
         break;
     }
     case SE_SM_LV_SLED_MOVE: {
         level = clampLevel(level, 10000);
-        volume = AudUtil::linerMinMax(level, 500, 3000, 0.4f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 1600, 3000, 0.85f, 1.5f);
+        volume = AudUtil::linearMinMax(level, 500, 3000, 0.4f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 1600, 3000, 0.85f, 1.5f);
         break;
     }
     case SE_SM_LV_SLED_YOS_WATER_RUN: {
-        volume = AudUtil::linerMinMax(clampLevel(level, 10000), 500, 3000, 0.4f, 1.0f);
+        volume = AudUtil::linearMinMax(clampLevel(level, 10000), 500, 3000, 0.4f, 1.0f);
         break;
     }
     case SE_EM_LV_OTAJACK_PULL: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 2000, 40000, 0.5f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 2000, 40000, 0.8f, 1.1f);
+        volume = AudUtil::linearMinMax(level, 2000, 40000, 0.5f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 2000, 40000, 0.8f, 1.1f);
         break;
     }
     case SE_SM_LV_FOLLOWKIKKI_MOVE: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMax(level, 2500, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 0, 2000, 1.0f, 1.5f);
+        volume = AudUtil::linearMax(level, 2500, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 0, 2000, 1.0f, 1.5f);
         break;
     }
     case SE_SM_LV_KART_ENGINE_LOW: {
         level = clampLevel(level, 100000);
         if (level <= 1000) {
-            volume = AudUtil::linerMinMax(level, 0, 1000, 0.3f, 1.0f);
+            volume = AudUtil::linearMinMax(level, 0, 1000, 0.3f, 1.0f);
         } else {
-            volume = AudUtil::linerMinMax(level, 1500, 2500, 1.0f, 0.0f);
+            volume = AudUtil::linearMinMax(level, 1500, 2500, 1.0f, 0.0f);
         }
-        pitch = AudUtil::linerMinMax(level, 0, 2000, 1.0f, 2.0f);
+        pitch = AudUtil::linearMinMax(level, 0, 2000, 1.0f, 2.0f);
         break;
     }
     case SE_SM_LV_KART_ENGINE_HIGH: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 1500, 2500, 0.0f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 1500, 4000, 1.0f, 2.0f);
+        volume = AudUtil::linearMinMax(level, 1500, 2500, 0.0f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 1500, 4000, 1.0f, 2.0f);
         break;
     }
     case SE_SM_KART_LAND:
     case SE_SM_JETSWING_LAND: {
-        volume = AudUtil::linerMinMax(clampLevel(level, 100000), 1000, 2500, 0.7f, 1.0f);
+        volume = AudUtil::linearMinMax(clampLevel(level, 100000), 1000, 2500, 0.7f, 1.0f);
         break;
     }
     case SE_SM_LV_HELIBIRD_FLY: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 500, 3000, 0.4f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 500, 3000, 1.0f, 1.5f);
+        volume = AudUtil::linearMinMax(level, 500, 3000, 0.4f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 500, 3000, 1.0f, 1.5f);
         break;
     }
     case SE_SM_LV_MOCINA_PULL2: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 10, 100, 0.5f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 10, 70, 1.2f, 1.8f);
+        volume = AudUtil::linearMinMax(level, 10, 100, 0.5f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 10, 70, 1.2f, 1.8f);
         break;
     }
     case SE_SM_LV_JETSWING_ENGINE: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 500, 3000, 0.2f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 1600, 8000, 0.9f, 1.4f);
+        volume = AudUtil::linearMinMax(level, 500, 3000, 0.2f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 1600, 8000, 0.9f, 1.4f);
         break;
     }
     case SE_SM_LV_JETSWING_MOVE: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 500, 3000, 0.1f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 1600, 8000, 0.85f, 1.7f);
+        volume = AudUtil::linearMinMax(level, 500, 3000, 0.1f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 1600, 8000, 0.85f, 1.7f);
         break;
     }
     case SE_SM_LV_FOOFIGHTER_MOVE1: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 500, 2500, 0.5f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 500, 2500, 1.0f, 1.7f);
+        volume = AudUtil::linearMinMax(level, 500, 2500, 0.5f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 500, 2500, 1.0f, 1.7f);
         break;
     }
     // level: speed in the high 16 bits, height in the low 16.
     case SE_SM_LV_FOOFIGHTER_MOVE2: {
         s32 speed = clampLevel(level >> 16, 100000);
         s32 height = clampLevel(level & 0xFFFF, 100000);
-        volume = AudUtil::linerMinMax(speed, 500, 10000, 0.3f, 1.0f);
-        pitch = AudUtil::linerMinMax(MR::max(height - speed / 10, 0), 5000, 11000, 1.0f, 0.5f);
+        volume = AudUtil::linearMinMax(speed, 500, 10000, 0.3f, 1.0f);
+        pitch = AudUtil::linearMinMax(MR::max(height - speed / 10, 0), 5000, 11000, 1.0f, 0.5f);
         break;
     }
     case SE_OJ_LV_MAGIC_PNT_G_PULL: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, ::cMagicPntGVolMinPrm, ::cMagicPntGVolMaxPrm, ::cMagicPntGVolMax, ::cMagicPntGVolMin);
+        volume = AudUtil::linearMinMax(level, ::cMagicPntGVolMinPrm, ::cMagicPntGVolMaxPrm, ::cMagicPntGVolMax, ::cMagicPntGVolMin);
         if (level <= ::cMagicPntGPitMinPrm) {
             pitch = ::cMagicPntGPitMin;
         } else if (level >= ::cMagicPntGPitMaxPrm) {
@@ -323,8 +323,8 @@ void AudSoundObject::modifySe(SoundHandle* pHandle, s32 level, s32 subLevel) {
     case SE_OJ_LV_SPIDER_THREAD_PULL: {
         s32 pitchLvl = clampLevel(static_cast< s32 >(static_cast< u32 >(level) >> 16), 100000);
         s32 volLvl = clampLevel(level & 0xFFFF, 100000);
-        volume = AudUtil::linerMinMax(volLvl, 10, 600, 0.0f, 1.0f);
-        pitch = AudUtil::linerMinMax(pitchLvl, 10, 500, 1.0f, 1.5f);
+        volume = AudUtil::linearMinMax(volLvl, 10, 600, 0.0f, 1.0f);
+        pitch = AudUtil::linearMinMax(pitchLvl, 10, 500, 1.0f, 1.5f);
         break;
     }
     case SE_SY_BLUECHIP_GET:
@@ -337,63 +337,63 @@ void AudSoundObject::modifySe(SoundHandle* pHandle, s32 level, s32 subLevel) {
     case SE_EM_LV_UNIZO_ROLL_GROUND: {
         level = clampLevel(level, 100000);
         if (level >= ::cUnizoRollGroundVolMinPrm) {
-            volume = AudUtil::linerMinMax(level, ::cUnizoRollGroundVolMinPrm, ::cUnizoRollGroundVolMaxPrm, ::cUnizoRollVolMin, ::cUnizoRollVolMax);
+            volume = AudUtil::linearMinMax(level, ::cUnizoRollGroundVolMinPrm, ::cUnizoRollGroundVolMaxPrm, ::cUnizoRollVolMin, ::cUnizoRollVolMax);
         } else {
             volume = 0.0f;
         }
-        pitch = AudUtil::linerMinMax(level, ::cUnizoRollPitMinPrm, ::cUnizoRollPitMaxPrm, ::cUnizoRollGroundPitMin, ::cUnizoRollGroundPitMax);
+        pitch = AudUtil::linearMinMax(level, ::cUnizoRollPitMinPrm, ::cUnizoRollPitMaxPrm, ::cUnizoRollGroundPitMin, ::cUnizoRollGroundPitMax);
         break;
     }
     case SE_EM_LV_UNIZO_ROLL_SHALLOW:
     case SE_EM_LV_UNIZO_ROLL_WATER: {
         level = clampLevel(level, 100000);
         if (level >= ::cUnizoRollVolMinPrm) {
-            volume = AudUtil::linerMinMax(level, ::cUnizoRollVolMinPrm, ::cUnizoRollVolMaxPrm, ::cUnizoRollVolMin, ::cUnizoRollVolMax);
+            volume = AudUtil::linearMinMax(level, ::cUnizoRollVolMinPrm, ::cUnizoRollVolMaxPrm, ::cUnizoRollVolMin, ::cUnizoRollVolMax);
         } else {
             volume = 0.0f;
         }
-        pitch = AudUtil::linerMinMax(level, ::cUnizoRollPitMinPrm, ::cUnizoRollPitMaxPrm, ::cUnizoRollPitMin, ::cUnizoRollPitMax);
+        pitch = AudUtil::linearMinMax(level, ::cUnizoRollPitMinPrm, ::cUnizoRollPitMaxPrm, ::cUnizoRollPitMin, ::cUnizoRollPitMax);
         break;
     }
     case SE_EM_LV_UNIZO_LAND_WATER:
     case SE_EM_LV_UNIZO_LAND: {
         level = clampLevel(level, 100000);
         if (level >= 50) {
-            volume = AudUtil::linerMinMax(level, 50, 200, 0.3f, 1.0f);
+            volume = AudUtil::linearMinMax(level, 50, 200, 0.3f, 1.0f);
         } else {
             volume = 0.0f;
         }
-        pitch = AudUtil::linerMinMax(level, 5, 100, 0.9f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 5, 100, 0.9f, 1.0f);
         break;
     }
     case SE_EM_LV_UNIZO_COLLISION_WATER:
     case SE_EM_LV_UNIZO_COLLISION: {
         level = clampLevel(level, 100000);
         if (level >= 100) {
-            volume = AudUtil::linerMinMax(level, 100, 800, 0.5f, 1.0f);
+            volume = AudUtil::linearMinMax(level, 100, 800, 0.5f, 1.0f);
         } else {
             volume = 0.0f;
         }
-        pitch = AudUtil::linerMinMax(level, 100, 800, 0.9f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 100, 800, 0.9f, 1.0f);
         break;
     }
     case SE_BM_LV_KAMECK_FLOAT: {
         level = clampLevel(level, 100000);
-        volume = AudUtil::linerMinMax(level, 100, 2000, 0.3f, 1.0f);
-        pitch = AudUtil::linerMinMax(level, 100, 2000, 0.6f, 1.0f);
+        volume = AudUtil::linearMinMax(level, 100, 2000, 0.3f, 1.0f);
+        pitch = AudUtil::linearMinMax(level, 100, 2000, 0.6f, 1.0f);
         break;
     }
     case SE_EM_LV_TORPEDO_ALARM: {
         level = clampLevel(level, 100000);
-        pitch = AudUtil::linerMinMax(level, ::cTorpedoPitMinPrm, ::cTorpedoPitMaxPrm, ::cTorpedoPitMin, ::cTorpedoPitMax);
-        f32 wait = AudUtil::linerMinMax(level, ::cTorpedoWaitMinPrm, ::cTorpedoWaitMaxPrm, ::cTorpedoWaitMin, ::cTorpedoWaitMax);
+        pitch = AudUtil::linearMinMax(level, ::cTorpedoPitMinPrm, ::cTorpedoPitMaxPrm, ::cTorpedoPitMin, ::cTorpedoPitMax);
+        f32 wait = AudUtil::linearMinMax(level, ::cTorpedoWaitMinPrm, ::cTorpedoWaitMaxPrm, ::cTorpedoWaitMin, ::cTorpedoWaitMax);
         writePort(pHandle, 11, static_cast< s32 >(wait));
         break;
     }
     case SE_EM_BOMB_BOUND: {
         level = clampLevel(level, 10000);
         if (level >= 100) {
-            volume = AudUtil::linerMinMax(level, ::cBombBoundVolMinPrm, ::cBombBoundVolMaxPrm, 0.6f, 1.0f);
+            volume = AudUtil::linearMinMax(level, ::cBombBoundVolMinPrm, ::cBombBoundVolMaxPrm, 0.6f, 1.0f);
         } else {
             volume = 0.0f;
         }

@@ -88,12 +88,7 @@ IKJointCtrlHolder::IKJointCtrlHolder(LiveActor* pActor, s32 capacity)
 
 void IKJointCtrlHolder::addCtrl(const IKJointCtrlParam& rParam) {
     if (mNumControls >= mCapacity) {
-        IKJointCtrl** pList = new IKJointCtrl*[mCapacity * 2]();
-        for (s32 i = 0; i < mNumControls; i++) {
-            pList[i] = mControls[i];
-        }
-        delete[] mControls;
-        mControls = pList;
+        mControls = MR::growArray(mControls, mCapacity);
         mCapacity *= 2;
     }
 
