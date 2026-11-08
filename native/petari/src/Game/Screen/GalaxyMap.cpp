@@ -13,7 +13,7 @@
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include <nebula_format.h>
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/Pane.hpp>
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataConst.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
@@ -234,7 +234,7 @@ void GalaxyMap::movementForCapture() {
     }
 }
 
-void GalaxyMap::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void GalaxyMap::calcAnimForCapture(const Ui::DrawInfo& rDrawInfo) {
     MR::calcAnimLayoutWithDrawInfo(this, rDrawInfo);
     for (auto& item : mDomeIcon) {
         item->calcAnimForCapture(rDrawInfo);
@@ -247,7 +247,7 @@ void GalaxyMap::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
     }
 }
 
-void GalaxyMap::drawForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void GalaxyMap::drawForCapture(const Ui::DrawInfo& rDrawInfo) {
     MR::drawLayoutWithDrawInfoWithoutProjectionSetup(this, rDrawInfo);
     for (auto& item : mDomeIcon) {
         MR::drawLayoutWithDrawInfoWithoutProjectionSetup(item, rDrawInfo);
@@ -504,11 +504,11 @@ void GalaxyMap::initPaneCtrlPointing() {
         }
         char parentName[16];
         nebula_snprintf(parentName, sizeof(parentName), dome > 0 ? "Galaxy%d" : "Tico", dome);
-        nw4r::lyt::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
+        Ui::Pane* pParent = getLayoutManager()->findPaneByName(parentName);
         if (pParent == nullptr) {
             continue;
         }
-        nw4r::lyt::Pane* pPane = pParent->GetLayout()->NewPane< nw4r::lyt::Pane >();
+        Ui::Pane* pPane = pParent->GetLayout()->NewPane< Ui::Pane >();
         pPane->SetName(pPaneName);
         pPane->SetSRTElement(0, x);
         pPane->SetSRTElement(1, y);

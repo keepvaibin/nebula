@@ -4,12 +4,12 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/AssetFolder.hpp"
 #include <cstdio>
-#include <nw4r/ut/ResFont.h>
+#include <Game/Ui/ResFont.hpp>
 
 GameSystemFontHolder::GameSystemFontHolder() : mEmbeddedFontFolder(), mEmbeddedMessageFont(), mMessageFont(), mPictureFont(), mMenuFont(), mNumberFont() {
 }
 
-nw4r::ut::Font* GameSystemFontHolder::getMessageFont() const {
+Ui::Font* GameSystemFontHolder::getMessageFont() const {
     if (mEmbeddedMessageFont != nullptr) {
         return mEmbeddedMessageFont;
     }
@@ -24,13 +24,13 @@ void GameSystemFontHolder::createFontFromEmbeddedData() {
     const char* embeddedFontPath = "/LayoutData/EmbeddedFont";
 
     mEmbeddedFontFolder = pArchive->getSubFolder(embeddedFontPath, pHeap);
-    mEmbeddedMessageFont = new (pHeap, -4) nw4r::ut::ResFont();
+    mEmbeddedMessageFont = new (pHeap, -4) Ui::ResFont();
     mEmbeddedMessageFont->SetResource(mEmbeddedFontFolder->getResource("MessageFont26.brfnt"));
 }
 
 namespace {
-    inline nw4r::ut::ResFont* createFont(AssetFolder* pArchive, const char* pName) {
-        nw4r::ut::ResFont* pFont = new nw4r::ut::ResFont();
+    inline Ui::ResFont* createFont(AssetFolder* pArchive, const char* pName) {
+        Ui::ResFont* pFont = new Ui::ResFont();
         pFont->SetResource(pArchive->getResource(pName));
         return pFont;
     }

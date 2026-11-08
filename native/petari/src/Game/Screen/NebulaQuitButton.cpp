@@ -9,8 +9,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstring>
-#include <nw4r/lyt/pane.h>
-#include <nw4r/lyt/textBox.h>
+#include <Game/Ui/Pane.hpp>
+#include <Game/Ui/TextBox.hpp>
 
 namespace {
     // The button waits this long after its corner frees up: a pointer crossing between files does not flash it.
@@ -27,13 +27,13 @@ namespace {
         return label;
     }
 
-    nw4r::lyt::TextBox* asTextBox(nw4r::lyt::Pane* pPane) {
-        return nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
+    Ui::TextBox* asTextBox(Ui::Pane* pPane) {
+        return Ui::PaneCast< Ui::TextBox >(pPane);
     }
 
     // The pill's straight middle (one of its three pieces) and its two caps, which hold on to the middle's ends.
     void setPillMiddle(const LayoutActor* pActor, const char* pMiddle, const char* pRight, const char* pLeft, f32 width) {
-        nw4r::lyt::Pane* pPane = MR::getPane(pActor, pMiddle);
+        Ui::Pane* pPane = MR::getPane(pActor, pMiddle);
         if (pPane != nullptr) {
             pPane->mSize.width = width;
         }
@@ -78,24 +78,24 @@ void NebulaQuitButton::init(const TableIter& rIter) {
 // rounded caps its padding); its top and left edges as far from the canvas's top-left corner as Start's bottom edge is
 // from the bottom, and the pill grows to the right when pointed, so its left edge never nears the screen's.
 void NebulaQuitButton::layOut() {
-    nw4r::lyt::Pane* pRoot = getLayoutManager()->mLayout->mpRootPane;
-    nw4r::lyt::Pane* pStart = MR::getPane(this, "StartButton");
-    nw4r::lyt::Pane* pButton = MR::getPane(this, "SButton");
-    nw4r::lyt::Pane* pPicture = MR::getPane(this, "PicSButton");
-    nw4r::lyt::Pane* pMiddle = MR::getPane(this, "PicCButton");
-    nw4r::lyt::Pane* pCap = MR::getPane(this, "PicRButton");
-    nw4r::lyt::Pane* pTextParent = MR::getPane(this, "StartButtonTxt");
-    nw4r::lyt::TextBox* pSecondary = asTextBox(MR::getPane(this, "TxtCopy"));
-    nw4r::lyt::Pane* pBound = MR::getPane(this, "BoxStartButton");
+    Ui::Pane* pRoot = getLayoutManager()->mLayout->mpRootPane;
+    Ui::Pane* pStart = MR::getPane(this, "StartButton");
+    Ui::Pane* pButton = MR::getPane(this, "SButton");
+    Ui::Pane* pPicture = MR::getPane(this, "PicSButton");
+    Ui::Pane* pMiddle = MR::getPane(this, "PicCButton");
+    Ui::Pane* pCap = MR::getPane(this, "PicRButton");
+    Ui::Pane* pTextParent = MR::getPane(this, "StartButtonTxt");
+    Ui::TextBox* pSecondary = asTextBox(MR::getPane(this, "TxtCopy"));
+    Ui::Pane* pBound = MR::getPane(this, "BoxStartButton");
     if (pStart == nullptr || pButton == nullptr || pPicture == nullptr || pMiddle == nullptr || pCap == nullptr || pTextParent == nullptr ||
         pSecondary == nullptr) {
         return;
     }
 
     MR::setTextBoxMessageRecursive(this, "StartButtonTxt", getLabel());
-    nw4r::lyt::TextBox* pLabel = nullptr;
-    for (nw4r::lyt::Pane* pChild : pTextParent->GetChildList()) {
-        nw4r::lyt::TextBox* pText = asTextBox(pChild);
+    Ui::TextBox* pLabel = nullptr;
+    for (Ui::Pane* pChild : pTextParent->GetChildList()) {
+        Ui::TextBox* pText = asTextBox(pChild);
         if (pText != nullptr && strncmp(pText->mName, "Txt", 3) == 0) {
             pLabel = pText;
         }
@@ -115,7 +115,7 @@ void NebulaQuitButton::layOut() {
 
     // This pill: a capsule, its straight middle as wide as the label.
     const f32 scale = pSecondary->mFontSize.height / pLabel->mFontSize.height;
-    const nw4r::ut::Rect rect = pLabel->GetTextDrawRect();
+    const Ui::Rect rect = pLabel->GetTextDrawRect();
     const f32 labelWidth = rect.right - rect.left;
     const f32 middle = labelWidth / pictureScale;
     setPillMiddle(this, "PicCFrame", "PicRFrame", "PicLFrame", middle);
@@ -125,7 +125,7 @@ void NebulaQuitButton::layOut() {
     if (pBound != nullptr) {
         pBound->mSize.width += middle - middle0;
     }
-    for (nw4r::lyt::Pane* pChild : pTextParent->GetChildList()) {
+    for (Ui::Pane* pChild : pTextParent->GetChildList()) {
         if (pChild->mSize.width < labelWidth) {
             pChild->mSize.width = labelWidth;
         }
@@ -134,7 +134,7 @@ void NebulaQuitButton::layOut() {
     // The button pane (SButton, which the animations scale) holds the pill by its left edge: the pill's pieces move
     // right by half its width.
     const f32 halfWidth = pictureScale * (middle * 0.5f + cap);
-    for (nw4r::lyt::Pane* pChild : pButton->GetChildList()) {
+    for (Ui::Pane* pChild : pButton->GetChildList()) {
         pChild->mTranslate.x += halfWidth;
     }
 

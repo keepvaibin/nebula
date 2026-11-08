@@ -8,7 +8,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <nw4r/lyt/texMap.h>
+#include <Game/Ui/TexMap.hpp>
 
 namespace {
     static const f32 sCharacterTexFrame[] = {
@@ -70,7 +70,7 @@ void MiiSelectIcon::appear(const FileSelectIconID& rIconID) {
         MR::hideLayout(this);
         mIcon->setIndex(rIconID.getMiiIndex());
 
-        nw4r::lyt::TexMap* pTexMap = mMiiTexMap;
+        Ui::TexMap* pTexMap = mMiiTexMap;
 
         MR::replacePaneTexture(this, "ShaMii", pTexMap, 0);
         MR::replacePaneTexture(this, "PicMii", pTexMap, 0);
@@ -150,7 +150,7 @@ void MiiSelectIcon::copyIconID(FileSelectIconID* pIconID) {
     pIconID->set(*mIconID);
 }
 
-nw4r::lyt::TexMap* MiiSelectIcon::getTexMap() {
+Ui::TexMap* MiiSelectIcon::getTexMap() {
     if (mIconID->isFellow()) {
         SiteTexture texObj;
 
@@ -235,7 +235,7 @@ void MiiSelectIcon::createButton() {
 }
 
 void MiiSelectIcon::createFaceImageObj() {
-    nw4r::lyt::TexMap* pTexMap;
+    Ui::TexMap* pTexMap;
 
     mIcon =
         new MiiFaceIcon(128, 128, MiiFaceRecipe(Mii::SourceLibrary, 0, 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)), "Miiアイコン");
@@ -244,7 +244,7 @@ void MiiSelectIcon::createFaceImageObj() {
     SiteTexture texObj;
     MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
 
-    mFellowTexMap = new nw4r::lyt::TexMap(texObj);
+    mFellowTexMap = new Ui::TexMap(texObj);
     mMiiTexMap = MR::createLytTexMap(reinterpret_cast< ResTIMG* >(mIcon->mImageBuffer));
     pTexMap = mMiiTexMap;
 

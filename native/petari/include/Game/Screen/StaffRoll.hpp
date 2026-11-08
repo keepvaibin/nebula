@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class InformationMessage;
 
@@ -49,7 +47,7 @@ public:
     void exeWork();
 
 private:
-    nw4r::lyt::TexMap** mReplaceTexture;
+    Ui::TexMap** mReplaceTexture;
 };
 
 class StaffRoll : public LayoutActor {

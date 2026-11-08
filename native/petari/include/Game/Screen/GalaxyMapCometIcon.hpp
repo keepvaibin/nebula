@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class DrawInfo;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class DrawInfo;
+}  // namespace Ui
 
 class GalaxyMapCometIcon : public LayoutActor {
 public:
@@ -18,7 +16,7 @@ public:
     virtual void appear();
     virtual void control();
 
-    void calcAnimForCapture(const nw4r::lyt::DrawInfo&);
+    void calcAnimForCapture(const Ui::DrawInfo&);
     void syncStatus();
 
 private:

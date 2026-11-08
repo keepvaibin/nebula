@@ -1,19 +1,17 @@
 #pragma once
 
 #include <nebula_geometry.hpp>
-#include <nw4r/lyt/drawInfo.h>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/DrawInfo.hpp>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Pane.hpp>
 
-namespace nw4r {
-    namespace lyt {
-        class AnimTransform;
-        class Group;
-        class Layout;
-        class Pane;
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class AnimTransform;
+    class Group;
+    class Layout;
+    class Pane;
+    class TexMap;
+}  // namespace Ui
 
 class LayoutGroupCtrl;
 class LayoutHolder;
@@ -45,50 +43,50 @@ public:
     LayoutPaneCtrl* getPaneCtrl(const char*) const;
     // The pane named exactly pName (the first in tree order), or the root when there is none: whose state a
     // control, group link or matrix copy for that name goes to.
-    nw4r::lyt::Pane* findPaneOrRoot(const char*) const;
+    Ui::Pane* findPaneOrRoot(const char*) const;
     // The pane's state; null when nothing was kept for it.
-    const LayoutPaneState* findState(const nw4r::lyt::Pane*) const;
+    const LayoutPaneState* findState(const Ui::Pane*) const;
     // The pane's state, made when there is none yet.
-    LayoutPaneState& stateOf(const nw4r::lyt::Pane*);
+    LayoutPaneState& stateOf(const Ui::Pane*);
     bool isExistPaneCtrl(const char*) const;
     void addGroupCtrl(LayoutGroupCtrl*);
-    bool isPointing(const nw4r::lyt::Pane*, const Vec2f&) const;
+    bool isPointing(const Ui::Pane*, const Vec2f&) const;
     LayoutGroupCtrl* createAndAddGroupCtrl(const char*, u32);
     s32 getIndexOfGroupCtrl(const char*) const;
     void createPaneMtxRef(const char*);
     MtxPtr getPaneMtxRef(const char*) const;
     bool isExistPaneMtxRef(const char*) const;
     bool isPointing(const char*, const Vec2f&) const;
-    nw4r::lyt::AnimTransform* getAnimTransform(const char*) const;
+    Ui::AnimTransform* getAnimTransform(const char*) const;
     // A control's animation on its pane's branch, down to (not into) the next pane that has a control of its own.
-    void bindPaneCtrlAnim(LayoutPaneCtrl*, nw4r::lyt::AnimTransform*);
-    void unbindPaneCtrlAnim(LayoutPaneCtrl*, nw4r::lyt::AnimTransform*);
-    void calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo&);
+    void bindPaneCtrlAnim(LayoutPaneCtrl*, Ui::AnimTransform*);
+    void unbindPaneCtrlAnim(LayoutPaneCtrl*, Ui::AnimTransform*);
+    void calcAnimWithoutLocationAdjust(const Ui::DrawInfo&);
     // Every matrix copy (LayoutPaneState::mMtxRef) from its pane's global matrix, in screen units.
     void copyPaneMtxRefs();
-    static void copyPaneMtxRef(const nw4r::lyt::Pane*, MtxPtr);
-    nw4r::lyt::Group* getGroup(const char*) const;
+    static void copyPaneMtxRef(const Ui::Pane*, MtxPtr);
+    Ui::Group* getGroup(const char*) const;
     void initArc(const char*, const char*);
     void initDrawInfo();
     void initGroupCtrlList();
-    void initTextBoxRecursive(nw4r::lyt::Pane*, nw4r::lyt::Pane*, const char*, u32);
+    void initTextBoxRecursive(Ui::Pane*, Ui::Pane*, const char*, u32);
     // Controls and group controls in tree order, each pane's own animations after its controls'.
     void animatePanes();
-    // The first pane in tree order whose name matches pName's first 16 characters (nw4r's EqualsResName); the root
+    // The first pane in tree order whose name matches pName's first 16 characters (Ui::detail::EqualsResName); the root
     // for null.
-    nw4r::lyt::Pane* getPane(const char* pName) const;
+    Ui::Pane* getPane(const char* pName) const;
     // The first pane in tree order named exactly pName.
-    nw4r::lyt::Pane* findPaneByName(const char*) const;
+    Ui::Pane* findPaneByName(const char*) const;
     void replaceIndDummyTexture();
-    void removeUnnecessaryPanes(nw4r::lyt::Pane*);
+    void removeUnnecessaryPanes(Ui::Pane*);
 
     LayoutHolder* mLayoutHolder;
-    nw4r::lyt::Layout* mLayout;
-    nw4r::lyt::AnimTransform** mAnimTransList;
-    nw4r::lyt::DrawInfo mDrawInfo;
+    Ui::Layout* mLayout;
+    Ui::AnimTransform** mAnimTransList;
+    Ui::DrawInfo mDrawInfo;
     bool mIsScreenHidden;
     bool _61;
-    nw4r::lyt::TexMap* mIndDummyTexMap;
+    Ui::TexMap* mIndDummyTexMap;
     // By pane id; grows with the layout (Layout::GetPaneNum).
     LayoutPaneState* mPaneStates = nullptr;
     u32 mPaneStateNum = 0;
@@ -96,6 +94,6 @@ public:
     LayoutGroupCtrl** mGroupCtrlList;
     char* mLayoutName;
     // This layout's anchors (LayoutAspect::prepare; count -1 until resolved), the layout's pass applies them.
-    nw4r::lyt::Anchor mAnchors[16];
+    Ui::Anchor mAnchors[16];
     s32 mAnchorCount;
 };

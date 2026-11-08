@@ -31,7 +31,7 @@ void GalaxyMapIcon::calcAnim() {
     LayoutActor::calcAnim();
 }
 
-void GalaxyMapIcon::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
+void GalaxyMapIcon::calcAnimForCapture(const Ui::DrawInfo& rDrawInfo) {
     MR::setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(this, mHost, mPaneName);
     MR::calcAnimLayoutWithDrawInfo(this, rDrawInfo);
 }

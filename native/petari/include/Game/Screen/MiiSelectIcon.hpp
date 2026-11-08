@@ -2,11 +2,9 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class TexMap;
+}  // namespace Ui
 
 class ButtonPaneController;
 class FileSelectIconID;
@@ -27,7 +25,7 @@ public:
     bool isSelected() const;
     bool isMiiDummy() const;
     void copyIconID(FileSelectIconID*);
-    nw4r::lyt::TexMap* getTexMap();
+    Ui::TexMap* getTexMap();
     bool isPointing() const;
     void exeCreate();
     void exeWait();
@@ -42,8 +40,8 @@ private:
     ButtonPaneController* _24;
     ButtonPaneController* _28;
     MiiFaceIcon* mIcon;
-    nw4r::lyt::TexMap* mMiiTexMap;
-    nw4r::lyt::TexMap* mFellowTexMap;
+    Ui::TexMap* mMiiTexMap;
+    Ui::TexMap* mFellowTexMap;
     FileSelectIconID* mIconID;
     bool mIsMiiDummy;
     bool _3D;

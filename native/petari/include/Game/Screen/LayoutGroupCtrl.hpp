@@ -2,12 +2,10 @@
 
 #include "Game/Util/Array.hpp"
 
-namespace nw4r {
-    namespace lyt {
-        class Pane;
-        class Group;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class Pane;
+    class Group;
+}  // namespace Ui
 
 class LayoutAnmPlayer;
 class LayoutManager;
@@ -19,10 +17,10 @@ public:
     void movement();
     void calcAnim();
     u32 getPaneNum() const;
-    nw4r::lyt::Pane* getPane(u32 idx) const;
+    Ui::Pane* getPane(u32 idx) const;
 
     LayoutManager* mManager;
-    nw4r::lyt::Group* mGroup;
+    Ui::Group* mGroup;
     MR::AssignableArray< LayoutAnmPlayer* > mAnmPlayerArray;
     bool _10;
 };

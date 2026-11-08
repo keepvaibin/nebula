@@ -15,9 +15,9 @@
 #include <cstring>
 #include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/material.h>
-#include <nw4r/ut/ResFont.h>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Material.hpp>
+#include <Game/Ui/ResFont.hpp>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -1356,7 +1356,7 @@ namespace {
 
     // The picture font as we extend it.
     struct Font {
-        nw4r::ut::ResFont* mFont;
+        Ui::ResFont* mFont;
         u16* mSlot[NEBULA_BUTTON_ICONS];  // each icon code's glyph entry (ResFontBase::GlyphSlot)
         u8* mSheets;                  // the font's sheets (their records as they were), then ours: records mSheetBytes apart
         s32 mSheetBytes;
@@ -1408,12 +1408,12 @@ namespace {
     // cooked) keeps its own icons.
     s32 install() {
         GameSystem* pSystem = SingletonHolder< GameSystem >::get();
-        nw4r::ut::ResFont* pFont = pSystem != nullptr && pSystem->mFontHolder != nullptr ? pSystem->mFontHolder->mPictureFont : nullptr;
+        Ui::ResFont* pFont = pSystem != nullptr && pSystem->mFontHolder != nullptr ? pSystem->mFontHolder->mPictureFont : nullptr;
         if (pFont == nullptr || pFont->GetFile() == nullptr) {
             return FontUnread;
         }
-        const nw4r::ut::FontFile& rFile = *pFont->GetFile();
-        const nw4r::ut::ResFont::Tables& rOld = pFont->GetTables();
+        const Ui::FontFile& rFile = *pFont->GetFile();
+        const Ui::ResFont::Tables& rOld = pFont->GetTables();
         const NebulaTexture* pSheet = nebula_texture_record(rOld.pSheets);
         bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
                       pSheet->width == rFile.sheetWidth && pSheet->height == rFile.sheetHeight &&
@@ -1459,10 +1459,10 @@ namespace {
         f.mKeySheets = fixedSheets + (followingCells + f.mCells - 1) / f.mCells;
         const s32 sheets = f.mKeyFirstSheet + f.mKeySheets;
         const u32 glyphs = static_cast< u32 >(sheets * f.mCells);
-        if (glyphs >= nw4r::ut::cNoGlyph) {
+        if (glyphs >= Ui::cNoGlyph) {
             return FontUnusable;
         }
-        const nw4r::ut::CharWidths widths = pFont->GetCharWidths(cCodes[0]);
+        const Ui::CharWidths widths = pFont->GetCharWidths(cCodes[0]);
         f.mGlyphWidth = widths.glyphWidth < f.mCellWidth ? widths.glyphWidth : f.mCellWidth;
         f.mGlyphHeight = f.mCellHeight;
         for (u16 code = cMapFirst; code <= cMapLast; code++) {
@@ -1473,14 +1473,14 @@ namespace {
         u32 addedPages = 0;
         for (u32 hi = 0; hi < 256; hi++) {
             const bool ours = (hi >= (cMapFirst >> 8) && hi <= (cMapLast >> 8)) || (hi >= (NebulaIcons::cKeyCodeFirst >> 8) && hi <= (keyLast >> 8));
-            if (ours && rOld.pPages[hi] == nw4r::ut::cNoGlyph) {
+            if (ours && rOld.pPages[hi] == Ui::cNoGlyph) {
                 addedPages++;
             }
         }
         // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, the glyphs, the pages
         // and their blocks.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
-        const u32 glyphBytes = (glyphs * sizeof(nw4r::ut::FontGlyph) + 31u) & ~31u;
+        const u32 glyphBytes = (glyphs * sizeof(Ui::FontGlyph) + 31u) & ~31u;
         const u32 pageBytes = 256u * sizeof(u16);
         const u32 blockNum = rOld.pageBlockNum + addedPages;
         const u32 bytes = sheetsBytes + glyphBytes + pageBytes + blockNum * pageBytes;
@@ -1492,8 +1492,8 @@ namespace {
         }
         f.mSheets = pBlock;
 
-        nw4r::ut::FontGlyph* pGlyphs = reinterpret_cast< nw4r::ut::FontGlyph* >(pBlock + sheetsBytes);
-        memcpy(pGlyphs, rOld.pGlyphs, rOld.glyphNum * sizeof(nw4r::ut::FontGlyph));
+        Ui::FontGlyph* pGlyphs = reinterpret_cast< Ui::FontGlyph* >(pBlock + sheetsBytes);
+        memcpy(pGlyphs, rOld.pGlyphs, rOld.glyphNum * sizeof(Ui::FontGlyph));
         for (u32 index = rOld.glyphNum; index < glyphs; index++) {
             const s32 cell = static_cast< s32 >(index) % f.mCells;
             pGlyphs[index].sheet = static_cast< u16 >(static_cast< s32 >(index) / f.mCells);
@@ -1509,15 +1509,15 @@ namespace {
         u32 nextPage = rOld.pageBlockNum;
         for (u32 hi = 0; hi < 256; hi++) {
             const bool ours = (hi >= (cMapFirst >> 8) && hi <= (cMapLast >> 8)) || (hi >= (NebulaIcons::cKeyCodeFirst >> 8) && hi <= (keyLast >> 8));
-            if (ours && pPages[hi] == nw4r::ut::cNoGlyph) {
+            if (ours && pPages[hi] == Ui::cNoGlyph) {
                 pPages[hi] = static_cast< u16 >(nextPage);
                 for (u32 lo = 0; lo < 256; lo++) {
-                    pPageBlocks[nextPage * 256u + lo] = nw4r::ut::cNoGlyph;
+                    pPageBlocks[nextPage * 256u + lo] = Ui::cNoGlyph;
                 }
                 nextPage++;
             }
         }
-        nw4r::ut::ResFont::Tables tables;
+        Ui::ResFont::Tables tables;
         tables.pSheets = pBlock;
         tables.sheetNum = static_cast< u16 >(sheets);
         tables.pGlyphs = pGlyphs;
@@ -1983,7 +1983,7 @@ namespace {
     // game's image.
     struct JoyConSet {
         u8* mTexels[2][NebulaIcons::JoyConLooks];
-        nw4r::lyt::TexMap mMaps[2][NebulaIcons::JoyConLooks];
+        Ui::TexMap mMaps[2][NebulaIcons::JoyConLooks];
         s32 mWidth;  // each picture's texels
         s32 mHeight;
         f32 mPixelsX;  // its pixels per unit
@@ -2242,10 +2242,10 @@ namespace {
         if (rSet.mRow < rSet.mHeight) {
             return;
         }
-        nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
+        Ui::TexMap& rMap = rSet.mMaps[half][look];
         rMap.SetImage(pRecord);
         rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));
-        rMap.SetTexelFormat(nw4r::lyt::TexMap::TEXEL_RGBA8);
+        rMap.SetTexelFormat(Ui::TexMap::TEXEL_RGBA8);
         rMap.SetWrapMode(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
         rMap.SetMipMap(false);
         rMap.SetFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
@@ -2257,22 +2257,22 @@ namespace {
     // Each of the IconAButton layout's pictures of A, ours in its place while it draws.
     const s32 cSwapsMax = 8;
     struct Swaps {
-        nw4r::lyt::TexMap* mMaps[cSwapsMax];
-        nw4r::lyt::TexMap mSaved[cSwapsMax];
+        Ui::TexMap* mMaps[cSwapsMax];
+        Ui::TexMap mSaved[cSwapsMax];
         s32 mCount;
     };
 
-    void swapPane(nw4r::lyt::Pane* pPane, Swaps& rSwaps, s32 depth) {
-        nw4r::lyt::Material* pMaterial = pPane->GetMaterial();
+    void swapPane(Ui::Pane* pPane, Swaps& rSwaps, s32 depth) {
+        Ui::Material* pMaterial = pPane->GetMaterial();
         for (u8 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum() && rSwaps.mCount < cSwapsMax; i++) {
-            nw4r::lyt::TexMap& rMap = pMaterial->GetTexMapAry()[i];
+            Ui::TexMap& rMap = pMaterial->GetTexMapAry()[i];
             for (s32 k = 0; k < 2; k++) {
-                if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == nw4r::lyt::TexMap::TEXEL_IA4) {
+                if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == Ui::TexMap::TEXEL_IA4) {
                     rSwaps.mMaps[rSwaps.mCount] = &rMap;
                     rSwaps.mSaved[rSwaps.mCount] = rMap;
                     rSwaps.mCount++;
                     rMap.SetImage(sPictures[k].mRecord);
-                    rMap.SetTexelFormat(nw4r::lyt::TexMap::TEXEL_RGBA8);
+                    rMap.SetTexelFormat(Ui::TexMap::TEXEL_RGBA8);
                     rMap.SetMipMap(false);
                     rMap.SetLOD(0.0f, 0.0f);
                     break;
@@ -2282,7 +2282,7 @@ namespace {
         if (depth > 16) {
             return;
         }
-        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+        for (Ui::Pane* pChild : pPane->GetChildList()) {
             swapPane(pChild, rSwaps, depth + 1);
         }
     }
@@ -2411,7 +2411,7 @@ namespace NebulaIcons {
         return false;
     }
 
-    nw4r::lyt::TexMap* joyConPicture(s32 half, s32 look) {
+    Ui::TexMap* joyConPicture(s32 half, s32 look) {
         return sJoyConShown >= 0 ? &sJoyConSets[sJoyConShown].mMaps[half][look] : nullptr;
     }
 

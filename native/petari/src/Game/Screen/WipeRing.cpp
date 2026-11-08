@@ -50,7 +50,7 @@ void WipeRing::exeClose() {
 void WipeRing::calcAnim() {
     // The mask scales about its followed centre (moving that centre would detach it from Mario): its own screen scale,
     // which its children do not inherit.
-    if (nw4r::lyt::Pane* pRing = mLayoutManager->findPaneByName("Ring")) {
+    if (Ui::Pane* pRing = mLayoutManager->findPaneByName("Ring")) {
         pRing->mScreenScale = ringCanvasScale();
     }
     LayoutActor::calcAnim();

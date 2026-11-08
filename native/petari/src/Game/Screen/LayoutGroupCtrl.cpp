@@ -1,7 +1,7 @@
 #include "Game/Screen/LayoutGroupCtrl.hpp"
 #include "Game/Animation/LayoutAnmPlayer.hpp"
 #include "Game/Screen/LayoutManager.hpp"
-#include <nw4r/lyt/group.h>
+#include <Game/Ui/Group.hpp>
 
 LayoutGroupCtrl::LayoutGroupCtrl(LayoutManager* pManager, const char* pName, u32 animLayerCount)
     : mManager(pManager), mGroup(), mAnmPlayerArray(animLayerCount), _10(true) {
@@ -28,8 +28,8 @@ u32 LayoutGroupCtrl::getPaneNum() const {
     return mGroup->mPaneLinkList.Size();
 }
 
-nw4r::lyt::Pane* LayoutGroupCtrl::getPane(u32 idx) const {
-    for (nw4r::lyt::detail::PaneLink* pLink : mGroup->GetPaneList()) {
+Ui::Pane* LayoutGroupCtrl::getPane(u32 idx) const {
+    for (Ui::detail::PaneLink* pLink : mGroup->GetPaneList()) {
         if (idx == 0) {
             return pLink->mTarget;
         }

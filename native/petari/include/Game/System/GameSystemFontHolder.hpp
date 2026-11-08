@@ -1,12 +1,10 @@
 #pragma once
 
 
-namespace nw4r {
-    namespace ut {
-        class Font;
-        class ResFont;
-    };  // namespace ut
-};  // namespace nw4r
+namespace Ui {
+    class Font;
+    class ResFont;
+}  // namespace Ui
 
 class AssetFolder;
 
@@ -15,15 +13,15 @@ public:
     /// @brief Creates a new `GameSystemFontHolder`.
     GameSystemFontHolder();
 
-    nw4r::ut::Font* getMessageFont() const;
+    Ui::Font* getMessageFont() const;
     void createFontFromEmbeddedData();
     void createFontFromFile();
 
     AssetFolder* mEmbeddedFontFolder;
-    nw4r::ut::ResFont* mEmbeddedMessageFont;
-    nw4r::ut::ResFont* mMessageFont;
-    nw4r::ut::ResFont* mPictureFont;
-    nw4r::ut::ResFont* mMenuFont;
-    nw4r::ut::ResFont* mNumberFont;
-    nw4r::ut::ResFont* mCinemaFont;
+    Ui::ResFont* mEmbeddedMessageFont;
+    Ui::ResFont* mMessageFont;
+    Ui::ResFont* mPictureFont;
+    Ui::ResFont* mMenuFont;
+    Ui::ResFont* mNumberFont;
+    Ui::ResFont* mCinemaFont;
 };

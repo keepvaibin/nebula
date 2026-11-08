@@ -45,7 +45,7 @@ namespace {
     }
 }  // namespace
 
-MessageEditorMessageTag::MessageEditorMessageTag(const nw4r::ut::PrintContext< char16_t >* pContext) : mMessage(pContext->str) {
+MessageEditorMessageTag::MessageEditorMessageTag(const Ui::PrintContext< char16_t >* pContext) : mMessage(pContext->str) {
 }
 
 MessageEditorMessageTag::MessageEditorMessageTag(const char16_t* pMessage) : mMessage(pMessage) {
@@ -98,26 +98,26 @@ const char16_t* MessageEditorMessageTag::getParamString() const {
     return findParamString(token);
 }
 
-MessageTagSkipTagProcessor::MessageTagSkipTagProcessor() : nw4r::ut::TagProcessorBase< char16_t >() {
+MessageTagSkipTagProcessor::MessageTagSkipTagProcessor() : Ui::TagProcessorBase< char16_t >() {
 }
 
-nw4r::ut::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::CalcRect(nw4r::ut::Rect* pRect, u16 code, ContextType* pPrintContext) {
+Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::CalcRect(Ui::Rect* pRect, u16 code, ContextType* pPrintContext) {
     if (code != 0x1A) {
-        return nw4r::ut::TagProcessorBase< char16_t >::CalcRect(pRect, code, pPrintContext);
+        return Ui::TagProcessorBase< char16_t >::CalcRect(pRect, code, pPrintContext);
     } else {
         return skipTag(pRect, pPrintContext, false);
     }
 }
 
-nw4r::ut::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::Process(u16 code, ContextType* pPrintContext) {
+Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::Process(u16 code, ContextType* pPrintContext) {
     if (code != 0x1A) {
-        return nw4r::ut::TagProcessorBase< char16_t >::Process(code, pPrintContext);
+        return Ui::TagProcessorBase< char16_t >::Process(code, pPrintContext);
     } else {
         return skipTag(nullptr, pPrintContext, false);
     }
 }
 
-nw4r::ut::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::skipTag(nw4r::ut::Rect* pRect, ContextType* pPrintContext, bool param3) {
+Ui::TagProcessorBase< char16_t >::Operation MessageTagSkipTagProcessor::skipTag(Ui::Rect* pRect, ContextType* pPrintContext, bool param3) {
     MessageEditorMessageTag tag(pPrintContext);
     pPrintContext->str += tag.getSkipLength();
     return OPERATION_DEFAULT;

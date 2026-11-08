@@ -26,7 +26,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <nw4r/lyt/init.h>
+#include <Game/Ui/UiInit.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
@@ -49,7 +49,7 @@ namespace NrvGameSystem {
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
     NebulaArena::create(nullptr);
-    nw4r::lyt::LytInit();
+    Ui::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToPermanent();
     SingletonHolder< GameSystem >::init();

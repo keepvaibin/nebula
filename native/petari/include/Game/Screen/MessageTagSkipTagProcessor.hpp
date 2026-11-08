@@ -1,24 +1,24 @@
 #pragma once
 
-#include <nw4r/ut/TagProcessorBase.h>
+#include <Game/Ui/TagProcessorBase.hpp>
 
-class MessageTagSkipTagProcessor : public nw4r::ut::TagProcessorBase< char16_t > {
+class MessageTagSkipTagProcessor : public Ui::TagProcessorBase< char16_t > {
 public:
     MessageTagSkipTagProcessor();
 
     virtual ~MessageTagSkipTagProcessor() {
     }
 
-    virtual nw4r::ut::TagProcessorBase< char16_t >::Operation Process(u16, ContextType*);
-    virtual nw4r::ut::TagProcessorBase< char16_t >::Operation CalcRect(nw4r::ut::Rect*, u16, ContextType*);
+    virtual Ui::TagProcessorBase< char16_t >::Operation Process(u16, ContextType*);
+    virtual Ui::TagProcessorBase< char16_t >::Operation CalcRect(Ui::Rect*, u16, ContextType*);
 
-    nw4r::ut::TagProcessorBase< char16_t >::Operation skipTag(nw4r::ut::Rect*, ContextType*, bool);
+    Ui::TagProcessorBase< char16_t >::Operation skipTag(Ui::Rect*, ContextType*, bool);
 };
 
 class MessageEditorMessageTag {
 public:
     MessageEditorMessageTag(const char16_t*);
-    MessageEditorMessageTag(const nw4r::ut::PrintContext< char16_t >*);
+    MessageEditorMessageTag(const Ui::PrintContext< char16_t >*);
 
     s32 getGroup() const {
         return reinterpret_cast< const u8* >(mMessage)[1];

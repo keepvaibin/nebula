@@ -4,13 +4,11 @@
 
 struct NebulaAchievementIcon;
 
-namespace nw4r {
-    namespace lyt {
-        class Pane;
-        class Picture;
-        class TexMap;
-    };  // namespace lyt
-};  // namespace nw4r
+namespace Ui {
+    class Pane;
+    class Picture;
+    class TexMap;
+}  // namespace Ui
 
 // Nebula's achievement pop-up: the game's information window (InformationWindow) in the screen's bottom-right corner,
 // rising from below its edge with the achievement's icon, "Achievement Get!" and its name. It shows the achievements
@@ -33,13 +31,13 @@ private:
     void setIcon(const NebulaAchievementIcon* pIcon, f32* pWidth, f32* pHeight);
     void place(f32 rise, f32 alpha, f32 iconScale);
 
-    nw4r::lyt::Pane* mToast;
-    nw4r::lyt::Pane* mWindow;
-    nw4r::lyt::Pane* mText;
-    nw4r::lyt::Pane* mGlyph;
-    nw4r::lyt::Pane* mIcon;  // holds the glyph or the picture, centred on the icon's place
-    nw4r::lyt::Picture* mPicture;
-    nw4r::lyt::TexMap** mTextures;  // NebulaAchievements::getIconTexture's order; null when not loaded
+    Ui::Pane* mToast;
+    Ui::Pane* mWindow;
+    Ui::Pane* mText;
+    Ui::Pane* mGlyph;
+    Ui::Pane* mIcon;  // holds the glyph or the picture, centred on the icon's place
+    Ui::Picture* mPicture;
+    Ui::TexMap** mTextures;  // NebulaAchievements::getIconTexture's order; null when not loaded
     s32 mStep;
     s32 mFrame;
     s32 mHoldFrames;

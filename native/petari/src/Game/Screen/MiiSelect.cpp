@@ -95,7 +95,7 @@ void MiiSelect::getSelectedID(FileSelectIconID* pSelectedID) {
     getIconID(pSelectedID, _1F0);
 }
 
-nw4r::lyt::TexMap* MiiSelect::getSelectedMiiTexMap() {
+Ui::TexMap* MiiSelect::getSelectedMiiTexMap() {
     return _1F4;
 }
 
@@ -425,7 +425,7 @@ void MiiSelect::getIconID(FileSelectIconID* pIconID, s32 param2) const {
     }
 }
 
-void MiiSelect::onSelect(s32 param1, nw4r::lyt::TexMap* pTexMap) {
+void MiiSelect::onSelect(s32 param1, Ui::TexMap* pTexMap) {
     _1F0 = param1;
     _1F4 = pTexMap;
 

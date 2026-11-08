@@ -1,7 +1,7 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/System/NebulaText.hpp"
-#include <nw4r/lyt/textBox.h>
+#include <Game/Ui/TextBox.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -61,14 +61,14 @@ TitleSequenceProduct::TitleSequenceProduct()
         sPrompt[at + 2] = 0x0000;
     }
     // The layout's boxes hold the prompt they ship with.
-    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
-    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
+    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
+    static_cast< Ui::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
 #else
     static char16_t sPrompt[128];
     NebulaText::get(sPrompt, 128, "PressAnyStart");
-    static_cast<nw4r::lyt::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(128);
-    static_cast<nw4r::lyt::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(128);
+    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(128);
+    static_cast<Ui::TextBox*>(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(128);
     MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
 #endif
     mAButtonChecker = new TriggerChecker();

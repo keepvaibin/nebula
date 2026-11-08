@@ -45,7 +45,7 @@ GalaxyInfoLayoutSetter::GalaxyInfoLayoutSetter(LayoutActor* pHost) : mHost(pHost
 void GalaxyInfoLayoutSetter::replaceTexture(const char* pGalaxyName) {
     MR::FormattedName btiName;
     ResTable* fileInfoTable = MR::createAndAddResourceHolder(::cTextureArcName)->mFileInfoTable;
-    nw4r::lyt::TexMap* texture = nullptr;
+    Ui::TexMap* texture = nullptr;
 
     for (s32 i = 0; i < fileInfoTable->mCount; i++) {
         btiName.format("%s.bti", pGalaxyName);
@@ -94,7 +94,7 @@ u32 GalaxyInfoLayoutSetter::getAnimLayerNum() {
 void GalaxyInfoLayoutSetter::initReplaceTexture() {
     ResTable* fileInfoTable = MR::createAndAddResourceHolder(::cTextureArcName)->mFileInfoTable;
 
-    mReplaceTexture = new nw4r::lyt::TexMap*[fileInfoTable->mCount];
+    mReplaceTexture = new Ui::TexMap*[fileInfoTable->mCount];
 
     for (u32 i = 0; i < fileInfoTable->mCount; i++) {
         const char* resName = fileInfoTable->getResName(i);

@@ -7,8 +7,8 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstring>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/pane.h>
+#include <Game/Ui/Layout.hpp>
+#include <Game/Ui/Pane.hpp>
 
 namespace {
     // The middle of the pause menu's lower band, between its counters' two rows (4 and -32 about their pane at -147).
@@ -31,15 +31,15 @@ void NebulaPauseSettingsButton::init(const TableIter& rIter) {
     memcpy(pManager->mLayoutName, cLayoutName, sizeof(cLayoutName));
 
     // The menu's lower button alone, moved down into the band.
-    nw4r::lyt::Pane* pRoot = pManager->mLayout->mpRootPane;
-    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+    Ui::Pane* pRoot = pManager->mLayout->mpRootPane;
+    for (Ui::Pane* pChild : pRoot->GetChildList()) {
         pChild->SetVisible(strcmp(pChild->mName, "BackButton") == 0);
     }
     MR::hidePane(this, "NBackUp");
-    nw4r::lyt::Pane* pGroup = MR::getPane(this, "BackButton");
-    nw4r::lyt::Pane* pLower = MR::getPane(this, "BackDown");
+    Ui::Pane* pGroup = MR::getPane(this, "BackButton");
+    Ui::Pane* pLower = MR::getPane(this, "BackDown");
     if (pGroup != nullptr && pLower != nullptr) {
-        pGroup->mScale = nw4r::math::VEC2(cScale, cScale);
+        pGroup->mScale = Vec2f(cScale, cScale);
         pGroup->mTranslate.y = cBandMiddle - pLower->mTranslate.y * cScale;
     }
     char16_t label[64];
