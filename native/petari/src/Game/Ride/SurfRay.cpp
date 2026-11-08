@@ -89,16 +89,16 @@ SurfRay::SurfRay(const char* pName, s32 channel)
     : LiveActor(pName), mSurfSpeed(0.0f), mOrthoSpeed(0.0f), mOrthoVelocity(0.0f, 0.0f, 0.0f), mSteerRate(0.0f), mSteerAccel(0.0f),
       mFront(0.0f, 0.0f, 1.0f), mUp(0.0f, 1.0f, 0.0f), mSide(1.0f, 0.0f, 0.0f), mBaseUp(0.0f, 1.0f, 0.0f), mBaseSide(1.0f, 0.0f, 0.0f),
       mGroundNormal(0.0f, 1.0f, 0.0f), mWarpPos(0.0f, 0.0f, 0.0f), mRider(nullptr), mPadChannel(channel), mRayTilt(0.0f), mInWater(false),
-      mAirTime(0), mWaterNormal(0.0f, 1.0f, 0.0f), mTwistBufferSize(8), mWaterShadowPos(0.0f, 0.0f, 0.0f), mShadowAlpha(0.0f), mTwistBuffer(nullptr),
+      mAirTime(0), mWaterNormal(0.0f, 1.0f, 0.0f), mWaterShadowPos(0.0f, 0.0f, 0.0f), mShadowAlpha(0.0f), mTwistBufferSize(8), mTwistBuffer(nullptr),
       mInTutorialArea(false), mInTutorial(false), mLectureIdx(0), mActorJointCtrl(nullptr), mProjmapFxMtxSetter(nullptr) {
     mEffectHostMtx.identity();
 }
 
-void SurfRay::init(const TableIter& pMapInfoIter) {
+void SurfRay::init(const TableIter& rIter) {
     if (MR::hasRetryGalaxySequence()) {
         MR::resetPosition(this, "スタート位置（サーフィン）");
     } else {
-        MR::initDefaultPos(this, pMapInfoIter);
+        MR::initDefaultPos(this, rIter);
     }
 
     resetAllInfo();
@@ -127,21 +127,21 @@ void SurfRay::init(const TableIter& pMapInfoIter) {
     MR::setShadowSurfaceOvalColor(this, 0, shadowColor);
     MR::setShadowSurfaceOvalAlpha(this, 0, 64);
     MR::setShadowProjectionPtr(this, 0, &mWaterShadowPos, &mWaterNormal);
-    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)(mShadowAlpha) & 0xff);
+    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)mShadowAlpha);
 
     initNerve(GET_NERVE(SurfRay, SurfRayNrvWaitPlayer));
 
-    MR::useStageSwitchWriteA(this, pMapInfoIter);
+    MR::useStageSwitchWriteA(this, rIter);
     MR::tryFindNamePos("ワープ位置（サーフィン）", &mWarpPos, nullptr);
 
     mActorJointCtrl = new ActorJointCtrl(this);
     mTwistBuffer = new f32[mTwistBufferSize];
 
-    for (s32 count = 0; count < mTwistBufferSize; count++) {
-        mTwistBuffer[count] = 0.0f;
+    for (s32 i = 0; i < mTwistBufferSize; i++) {
+        mTwistBuffer[i] = 0.0f;
     }
 
-    MR::joinToGroupArray(this, pMapInfoIter, 0, 32);
+    MR::joinToGroupArray(this, rIter, 0, 32);
 
     if (!MR::hasRetryGalaxySequence()) {
         mInTutorialArea = true;
@@ -270,10 +270,11 @@ void SurfRay::exeRideLand() {
 }
 
 void SurfRay::exeTutorial() {
-    Vec3f v1(mFront);
+    // The ray rides in place during the lesson, holding its heading.
+    Vec3f heldFront(mFront);
     updateRide();
     mOrthoVelocity.mult(0.5f);
-    mFront.set(v1);
+    mFront.set(heldFront);
 
     mSurfSpeed = 0.0f;
     mRotation.z *= 0.85f;
@@ -638,15 +639,15 @@ void SurfRay::updateInfo() {
 }
 
 void SurfRay::updateToMap() {
-    Vec3f v1(mGravity);
+    Vec3f fall(mGravity);
 
     if (mInWater) {
-        v1.scale(0.1f);
+        fall.scale(0.1f);
     } else {
-        v1.scale(0.8f);
+        fall.scale(0.8f);
     }
 
-    mOrthoVelocity.add(v1);
+    mOrthoVelocity.add(fall);
 
     if (MR::isBinded(this)) {
         if (MR::isBindedGround(this)) {
@@ -655,13 +656,14 @@ void SurfRay::updateToMap() {
         }
 
         if (MR::isBindedWall(this)) {
-            Vec3f v2(mVelocity);
-            MR::normalize(&v2);
-            MR::turnVecToPlane(&v2, v2, *MR::getWallNormal(this));
-            MR::turnVecToPlane(&v2, v2, mGravity);
-            Vec3f v3;
-            MR::vecBlend(mFront, v2, &v3, ::sBlendRatioAxisFrontWall);
-            mBaseSide.cross(mBaseUp, v3);
+            // Turns along the wall.
+            Vec3f wallDir(mVelocity);
+            MR::normalize(&wallDir);
+            MR::turnVecToPlane(&wallDir, wallDir, *MR::getWallNormal(this));
+            MR::turnVecToPlane(&wallDir, wallDir, mGravity);
+            Vec3f blendedFront;
+            MR::vecBlend(mFront, wallDir, &blendedFront, ::sBlendRatioAxisFrontWall);
+            mBaseSide.cross(mBaseUp, blendedFront);
         }
     } else if (mInWater) {
         MR::vecBlendSphere(mBaseUp, mWaterNormal, &mBaseUp, ::sBlendRatioAxisUpGround);
@@ -702,14 +704,12 @@ void SurfRay::updateToWater() {
         mWaterNormal.set(mWaterInfo.mSurfaceNormal);
         f32 innerProd = mGravity.dot(mVelocity);
 
+        // Sinking deeper than it falls in one step bounces it back up; otherwise it floats toward the wave top.
         if (innerProd > 0.0f && mWaterInfo.mDepth < innerProd) {
-            Vec3f v2(mGravity);
             mVelocity.sub(mGravity * innerProd * 1.5f);
         } else {
-            f32 camWaterDepth = mWaterInfo.mCamWaterDepth;
-            f32 waveHeight = mWaterInfo.mWaveHeight;
-            f32 f0 = camWaterDepth + waveHeight;
-            mVelocity.sub(mGravity * f0 * 0.01f);
+            f32 waveDepth = mWaterInfo.mCamWaterDepth + mWaterInfo.mWaveHeight;
+            mVelocity.sub(mGravity * waveDepth * 0.01f);
         }
     } else {
         if (mInWater) {
@@ -733,7 +733,7 @@ void SurfRay::updateToWater() {
     }
 
     mShadowAlpha = MR::clamp(mShadowAlpha, 0.0f, ::sShadowAlphaMax);
-    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)(mShadowAlpha) & 0xff);
+    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)mShadowAlpha);
 }
 
 void SurfRay::updateAccel() {
@@ -915,64 +915,46 @@ void SurfRay::updateRiderMtx() {
     MR::setBaseTRMtx(mRider, mtx);
 }
 
+// Probes the body, 100 ahead, 150 above, 150 to each side across gravity and 150 to each side of the board; the
+// first hit fills mWaterInfo.
 bool SurfRay::tryInWater() {
-    if (MR::getWaterAreaObj(&mWaterInfo, mPosition)) {
+    if (MR::getWaterAreaObj(&mWaterInfo, mPosition) || MR::getWaterAreaObj(&mWaterInfo, mFront * 100.0f + mPosition) ||
+        MR::getWaterAreaObj(&mWaterInfo, mUp * 150.0f + mPosition)) {
         return true;
     }
 
-    Vec3f v1(mFront * 100.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v1)) {
+    Vec3f rightDir(mFront);
+    MR::rotateVecDegree(&rightDir, -mGravity, -90.0f);
+    if (MR::getWaterAreaObj(&mWaterInfo, rightDir * 150.0f + mPosition)) {
         return true;
     }
 
-    Vec3f v2(mUp * 150.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v2)) {
+    Vec3f leftDir(mFront);
+    MR::rotateVecDegree(&leftDir, -mGravity, 90.0f);
+    if (MR::getWaterAreaObj(&mWaterInfo, leftDir * 150.0f + mPosition)) {
         return true;
     }
 
-    Vec3f v3(mFront);
-    MR::rotateVecDegree(&v3, -mGravity, -90.0f);
-    Vec3f v3a(v3 * 150.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v3a)) {
-        return true;
-    }
-
-    Vec3f v4(mFront);
-    MR::rotateVecDegree(&v4, -mGravity, 90.0f);
-    Vec3f v4a(v4 * 150.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v4a)) {
-        return true;
-    }
-
-    Vec3f v5(mSide * 150.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v5)) {
-        return true;
-    }
-
-    Vec3f v6(-mSide * 150.0f + mPosition);
-    if (MR::getWaterAreaObj(&mWaterInfo, v6)) {
-        return true;
-    }
-
-    return false;
+    return MR::getWaterAreaObj(&mWaterInfo, mSide * 150.0f + mPosition) || MR::getWaterAreaObj(&mWaterInfo, -mSide * 150.0f + mPosition);
 }
 
 bool SurfRay::tryJumpOrFall() {
     if (MR::isSpin(PLAYER_1) && (MR::isBinded(this) || mWaterInfo.isInWater() || mAirTime < 15)) {
-        f32 f0 = (mSurfSpeed / 40.0f) * (((70.0f - MR::abs(mRotation.z)) * 5.0f) / 70.0f) + 15.0f;
-        Vec3f v1(mGroundNormal);
+        // Jumps off the surface at 15, plus 5 per 40 of speed when level, none at a 70 degree roll.
+        f32 jumpSpeed = (mSurfSpeed / 40.0f) * (((70.0f - MR::abs(mRotation.z)) * 5.0f) / 70.0f) + 15.0f;
+        Vec3f jumpVel(mGroundNormal);
 
         if (mWaterInfo.isInWater()) {
-            v1.set(mWaterInfo.mSurfaceNormal);
+            jumpVel.set(mWaterInfo.mSurfaceNormal);
         }
 
-        v1.scale(f0);
+        jumpVel.scale(jumpSpeed);
 
         if (mOrthoVelocity.dot(mGravity) > 0.0f) {
             MR::vecKillElement(mOrthoVelocity, mGravity, &mOrthoVelocity);
         }
 
-        mOrthoVelocity.add(v1);
+        mOrthoVelocity.add(jumpVel);
 
         if (mOrthoVelocity.length() > 25.0f) {
             MR::normalize(&mOrthoVelocity);
