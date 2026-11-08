@@ -3,7 +3,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ParabolicPath.hpp"
 
-SpinDriverShootPath::SpinDriverShootPath() : mRailRider(), mPath(), mStartPosition(0.0f, 0.0f, 0.0f), mUsesParabolic() {
+namespace {
+    const f32 cInitDirectionStep = 0.01f;
+    const s32 cParabolicLengthSamples = 32;
+};  // namespace
+
+SpinDriverShootPath::SpinDriverShootPath() : mRailRider(nullptr), mPath(nullptr), mStartPosition(0.0f, 0.0f, 0.0f), mUsesParabolic(false) {
 }
 
 void SpinDriverShootPath::init(const TableIter& rIter) {
@@ -11,7 +16,8 @@ void SpinDriverShootPath::init(const TableIter& rIter) {
     mUsesParabolic = false;
 }
 
-void SpinDriverShootPath::initUsingParabolic(const TableIter& rIter, const Vec3f& rStartingPosition) {
+// A rail of two points or fewer is flown as an arc through its end, peaking at its start point's height.
+void SpinDriverShootPath::initUsingParabolic(const TableIter& rIter, const Vec3f& rStartPos) {
     mRailRider = new RailRider(rIter);
     mUsesParabolic = mRailRider->getPointNum() <= 2;
 
@@ -19,143 +25,135 @@ void SpinDriverShootPath::initUsingParabolic(const TableIter& rIter, const Vec3f
         mPath = new ParabolicPath();
     }
 
-    setStartPosition(rStartingPosition);
+    setStartPosition(rStartPos);
 }
 
+// On a rail, mStartPosition is the offset from the rail's start to `rStartPos`, faded out over the first half.
 void SpinDriverShootPath::setStartPosition(const Vec3f& rStartPos) {
     if (mUsesParabolic) {
-        Vec3f startPos(mRailRider->mStartPos);
-        Vec3f endPos(mRailRider->mEndPos);
-        mPath->initFromMaxHeight(rStartPos, endPos, startPos);
+        Vec3f railStart(mRailRider->mStartPos);
+        Vec3f railEnd(mRailRider->mEndPos);
+        mPath->initFromMaxHeight(rStartPos, railEnd, railStart);
     }
 
-    Vec3f position;
-    calcPosition(&position, 0.0f);
-    mStartPosition = rStartPos - position;
+    Vec3f pathStart;
+    calcPosition(&pathStart, 0.0f);
+    mStartPosition = rStartPos - pathStart;
 }
 
-void SpinDriverShootPath::calcPosition(Vec3f* pOutPosition, f32 a2) const {
+// `rate` runs 0 to 1 along the path.
+void SpinDriverShootPath::calcPosition(Vec3f* pOutPosition, f32 rate) const {
     if (mUsesParabolic) {
-        mPath->calcPosition(pOutPosition, a2);
+        mPath->calcPosition(pOutPosition, rate);
         return;
     }
 
-    mRailRider->calcPosAtCoord(pOutPosition, a2 * mRailRider->getTotalLength());
-
-    pOutPosition->add(mStartPosition * MR::getEaseOutValue(MR::normalize(a2, 0.0f, 0.5f), 1.0f, 0.0f, 1.0f));
+    mRailRider->calcPosAtCoord(pOutPosition, rate * mRailRider->getTotalLength());
+    pOutPosition->add(mStartPosition * MR::getEaseOutValue(MR::normalize(rate, 0.0f, 0.5f), 1.0f, 0.0f, 1.0f));
 }
 
-namespace {
-    inline void calcInitialDirection(const SpinDriverShootPath* pPath, Vec3f* pOutDirection, f32 sampleStep) {
-        f32 startTime = 0.0f;
-        f32 endTime = sampleStep;
-        Vec3f start;
-        pPath->calcPosition(&start, startTime);
-        Vec3f end;
-        pPath->calcPosition(&end, endTime);
-        Vec3f direction(end);
-        direction.sub(direction, start);
-        pOutDirection->set(direction);
-        MR::normalizeOrZero(pOutDirection);
-    }
-};  // namespace
+// The chord from `rate` over `step`, kept inside the path.
+void SpinDriverShootPath::calcDirection(Vec3f* pOutDirection, f32 rate, f32 step) const {
+    f32 fromRate;
+    f32 toRate;
 
-void SpinDriverShootPath::calcDirection(Vec3f* pOutDirection, f32 a2, f32 a3) const {
-    f32 v6;
-    f32 v7;
-
-    if (a2 < a3) {
-        v6 = a3;
-        v7 = 0.0f;
+    if (rate < step) {
+        toRate = step;
+        fromRate = 0.0f;
     } else {
-        v6 = 1.0f;
-        v7 = (1.0f - a3);
+        toRate = 1.0f;
+        fromRate = (1.0f - step);
 
-        if (a2 <= v7) {
-            v7 = a2;
-            v6 = (a2 + a3);
+        if (rate <= fromRate) {
+            fromRate = rate;
+            toRate = (rate + step);
         }
     }
 
-    Vec3f stack_20;
-    calcPosition(&stack_20, v7);
-    Vec3f stack_14;
-    calcPosition(&stack_14, v6);
-    Vec3f stack_8 = stack_14;
-    stack_8.sub(stack_8, stack_20);
-    pOutDirection->set(stack_8);
+    Vec3f from;
+    calcPosition(&from, fromRate);
+    Vec3f to;
+    calcPosition(&to, toRate);
+    Vec3f chord = to;
+    chord.sub(chord, from);
+    pOutDirection->set(chord);
     MR::normalizeOrZero(pOutDirection);
 }
 
-void SpinDriverShootPath::calcInitPose(Vec3f* pPos1, Vec3f* pPos2, Vec3f* pPos3, f32 f1) const {
-    Vec3f pos0;
-    calcPosition(&pos0, 0.0f);
+// The flier's launch frame: up along the path's first chord (it flies head first), front toward the path's end (or
+// any perpendicular) turned `rollDegree` about the up, side their cross product. Any output may be null.
+void SpinDriverShootPath::calcInitPose(Vec3f* pUp, Vec3f* pFront, Vec3f* pSide, f32 rollDegree) const {
+    Vec3f pathStart;
+    calcPosition(&pathStart, 0.0f);
 
-    Vec3f pos1;
-    calcPosition(&pos1, 1.0f);
+    Vec3f pathEnd;
+    calcPosition(&pathEnd, 1.0f);
 
-    Vec3f vec60;
-    ::calcInitialDirection(this, &vec60, 0.01f);
+    Vec3f chordEnd;
+    calcPosition(&chordEnd, cInitDirectionStep);
+    Vec3f up(chordEnd);
+    up.sub(up, pathStart);
+    MR::normalizeOrZero(&up);
 
-    Vec3f vec6C;
-    vec6C.set(pos1 - pos0);
-    vec6C.orthogonalize(vec60);
-    MR::normalizeOrZero(&vec6C);
+    Vec3f front;
+    front.set(pathEnd - pathStart);
+    front.orthogonalize(up);
+    MR::normalizeOrZero(&front);
 
-    if (MR::isNearZero(vec6C)) {
-        MR::makeAxisVerticalZX(&vec6C, vec60);
+    if (MR::isNearZero(front)) {
+        MR::makeAxisVerticalZX(&front, up);
     }
 
-    MR::rotateVecDegree(&vec6C, vec60, f1);
+    MR::rotateVecDegree(&front, up, rollDegree);
 
-    Vec3f vec78;
-    vec78.cross(vec6C, vec60);
-    MR::normalize(&vec78);
+    Vec3f side;
+    side.cross(front, up);
+    MR::normalize(&side);
 
-    if (pPos1 != nullptr) {
-        pPos1->set(vec60);
+    if (pUp != nullptr) {
+        pUp->set(up);
     }
 
-    if (pPos2 != nullptr) {
-        pPos2->set(vec6C);
+    if (pFront != nullptr) {
+        pFront->set(front);
     }
 
-    if (pPos3 != nullptr) {
-        pPos3->set(vec78);
+    if (pSide != nullptr) {
+        pSide->set(side);
     }
 }
 
 f32 SpinDriverShootPath::getTotalLength() const {
     if (mUsesParabolic) {
-        return mPath->getTotalLength(32);
+        return mPath->getTotalLength(cParabolicLengthSamples);
     }
 
     return mRailRider->getTotalLength();
 }
 
-void SpinDriverShootPath::calcClippingInfo(Vec3f* pVec, f32* pF1, f32 f2, f32 f3) {
-    s32 totalSteps = getTotalLength() / f2;
+// The box around samples every `sampleInterval` along the path, grown by `margin`: its center and half its diagonal.
+void SpinDriverShootPath::calcClippingInfo(Vec3f* pCenter, f32* pRadius, f32 sampleInterval, f32 margin) {
+    s32 sampleCount = getTotalLength() / sampleInterval;
 
-    Vec3f pos0;
-    calcPosition(&pos0, 0.0f);
+    Vec3f pathStart;
+    calcPosition(&pathStart, 0.0f);
 
     Box3f box;
-    box.set(pos0, pos0);
+    box.set(pathStart, pathStart);
 
-    for (s32 i = 1; i <= totalSteps; i++) {
+    for (s32 i = 1; i <= sampleCount; i++) {
         Vec3f pos;
-        calcPosition(&pos, static_cast< f32 >(i) / totalSteps);
-
+        calcPosition(&pos, static_cast< f32 >(i) / sampleCount);
         box.extend(pos);
     }
 
-    Vec3f padding(f3);
+    Vec3f padding(margin);
     box.i.sub(padding);
     box.f.add(padding);
-    box.getCenter(pVec);
+    box.getCenter(pCenter);
 
-    Vec3f sizeVec;
-    sizeVec.sub(box.f, box.i);
+    Vec3f size;
+    size.sub(box.f, box.i);
 
-    *pF1 = 0.5f * sizeVec.length();
+    *pRadius = 0.5f * size.length();
 }
