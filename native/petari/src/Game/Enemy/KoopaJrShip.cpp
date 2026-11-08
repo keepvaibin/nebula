@@ -30,8 +30,10 @@ namespace {
     static const char* cJointNameKoopaJrPos = "KoopaJrShip";
     static const char* cJointNamePodPos = "KoopaJrShipPod";
 
-    static const Vec sKillerLauncherAngle[] = {{0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f},
-                                               {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}};
+    const s32 sShellNum = 18;
+    const s32 sMainShellNum = 9;
+    const s32 sSpeedEaseTime = 60;
+    const f32 sKillerBackOffset = 100.0f;  // killers start this far behind their cannon
 
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
     static const Vec sKoopaJrPosFront = {0.0f, 188.0f, 135.0f};
@@ -158,21 +160,16 @@ void KoopaJrShip::control() {
     updateKillerPos();
 }
 
+// Only a thrown shell hurts the ship.
 bool KoopaJrShip::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isMsgJetTurtleAttack(msg)) {
-        if (receiveMsgJetTurtleAttack(pSender, pReceiver)) {
-            return true;
-        }
-    }
-
-    return false;
+    return MR::isMsgJetTurtleAttack(msg) && receiveMsgJetTurtleAttack(pSender, pReceiver);
 }
 
 void KoopaJrShip::initShells() {
-    mShellHolder = new CannonShellHolder(0x12);
-    CannonShellUtil::registerKoopaJrShipCannonShell(mShellHolder, 0x12);
-    mMainShellHolder = new CannonShellHolder(9);
-    CannonShellUtil::registerKoopaJrShipCannonMainShell(mMainShellHolder, 9);
+    mShellHolder = new CannonShellHolder(sShellNum);
+    CannonShellUtil::registerKoopaJrShipCannonShell(mShellHolder, sShellNum);
+    mMainShellHolder = new CannonShellHolder(sMainShellNum);
+    CannonShellUtil::registerKoopaJrShipCannonMainShell(mMainShellHolder, sMainShellNum);
 }
 
 void KoopaJrShip::initKoopaJr(const TableIter& rIter) {
@@ -203,19 +200,8 @@ void KoopaJrShip::initKiller() {
 }
 
 bool KoopaJrShip::receiveMsgJetTurtleAttack(HitSensor* pSender, HitSensor* pReceiver) {
-    if (!MR::isSensorEnemy(pReceiver)) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp))) {
-        return false;
-    }
-
-    if (isStateBreak()) {
+    if (!MR::isSensorEnemy(pReceiver) || isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage)) || isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) ||
+        isStateBreak()) {
         return false;
     }
 
@@ -223,7 +209,7 @@ bool KoopaJrShip::receiveMsgJetTurtleAttack(HitSensor* pSender, HitSensor* pRece
     mHitDir.set(pSender->mHost->mVelocity);
     MR::normalizeOrZero(&mHitDir);
 
-    if (isNextStateDamage(mHitPoint)) {
+    if (damageAndIsBroken(mHitPoint)) {
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_DAMAGE_L");
         MR::startSound(mJr, "SE_BV_KOOPAJR_DAMAGE_L");
         MR::startSystemSE("SE_SY_VS_BOSS_LAST_HIT");
@@ -262,72 +248,47 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
     return 20.0f;
 }
 
+// Slows into each rail point (top speed 4, 2 once at 2 hit points) and eases back up over sSpeedEaseTime after a stop.
 void KoopaJrShip::updateCoordSpeed() {
     f32 rate = 0.0f;
     MR::calcRailRateToNextPoint(&rate, this);
+    const f32 topSpeed = mHitPoint <= 2 ? 2.0f : 4.0f;
 
     if (0.95f < rate) {
-        f32 v3;
-        if (mHitPoint <= 2) {
-            v3 = 2.0f;
-        } else {
-            v3 = 4.0f;
-        }
-
-        mCoordSpeed = MR::getEaseInValue(rate, v3, 1.0f, 1.0f);
-    } else {
-        if (mSpeedEaseStep >= 0) {
-            f32 v5;
-            if (mHitPoint <= 2) {
-                v5 = 2.0f;
-            } else {
-                v5 = 4.0f;
-            }
-
-            f32 ease = MR::getEaseInValue(mSpeedEaseStep, v5, 0.0f, 60.0f);
-            mCoordSpeed = ease;
-            mSpeedEaseStep = mSpeedEaseStep - 1;
-            MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_ACCEL");
-        }
-
-        mPropRotateSpeed = getPropellerRotSpeed();
+        mCoordSpeed = MR::getEaseInValue(rate, topSpeed, 1.0f, 1.0f);
+        return;
     }
+
+    if (mSpeedEaseStep >= 0) {
+        mCoordSpeed = MR::getEaseInValue(mSpeedEaseStep, topSpeed, 0.0f, 60.0f);
+        mSpeedEaseStep = mSpeedEaseStep - 1;
+        MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_ACCEL");
+    }
+
+    mPropRotateSpeed = getPropellerRotSpeed();
 }
 
-void KoopaJrShip::calcLauncherInfo(Vec3f* a1, Vec3f* a2, s32 idx) const {
+// Cannon idx's position and its unit X direction.
+void KoopaJrShip::calcLauncherInfo(Vec3f* pPos, Vec3f* pDir, s32 idx) const {
     Pos3f mtx;
     mtx.set(MR::getJointMtx(this, ::cJointNameCannon[idx]));
-    mtx.getTrans(*a1);
-    mtx.getXDir(*a2);
-    MR::normalize(a2);
+    mtx.getTrans(*pPos);
+    mtx.getXDir(*pDir);
+    MR::normalize(pDir);
 }
 
-void KoopaJrShip::calcLauncherInfoKiller(Vec3f* a1, Vec3f* a2, s32 idx) const {
-    Pos3f mtx;
-    Vec3f v16;
-    Vec3f v15;
-
-    mtx.set(MR::getJointMtx(this, ::cJointNameCannon[idx]));
-    mtx.getTrans(*a1);
-    mtx.getXDir(*a2);
-    mtx.getYDir(v16);
-    MR::normalize(&v16);
-
-    mtx.getZDir(v15);
-    MR::normalize(&v15);
-    MR::rotateVecDegree(a2, v16, ::sKillerLauncherAngle[idx].y);
-    MR::rotateVecDegree(a2, v15, ::sKillerLauncherAngle[idx].z);
-    MR::normalize(a2);
-    a1->add(*a2 * -100.0f);
+void KoopaJrShip::calcLauncherInfoKiller(Vec3f* pPos, Vec3f* pDir, s32 idx) const {
+    calcLauncherInfo(pPos, pDir, idx);
+    pPos->add(*pDir * -sKillerBackOffset);
 }
 
 void KoopaJrShip::shootShell(s32 idx) {
     CannonShellBase* shell = mShellHolder->getValidShell();
 
     if (shell != nullptr) {
-        Vec3f v8, v7;
-        calcLauncherInfo(&v8, &v7, idx);
-        shell->launch(v8, v7 * 15.0f);
+        Vec3f pos, dir;
+        calcLauncherInfo(&pos, &dir, idx);
+        shell->launch(pos, dir * 15.0f);
     }
 
     MR::emitEffect(this, ::cEffectNameShoot[idx]);
@@ -343,10 +304,10 @@ bool KoopaJrShip::tryShootAllKillers() {
     }
 
     for (HomingKiller** pActor = mKillers.begin(); pActor != mKillers.end(); pActor++) {
-        Vec3f v6, v5;
+        Vec3f pos, dir;
         s32 idx = mKillers.indexOf(pActor);
-        calcLauncherInfoKiller(&v6, &v5, idx);
-        (*pActor)->appear(v6, v5);
+        calcLauncherInfoKiller(&pos, &dir, idx);
+        (*pActor)->appear(pos, dir);
         MR::emitEffect(this, ::cEffectNameShoot[idx]);
     }
 
@@ -356,9 +317,9 @@ bool KoopaJrShip::tryShootAllKillers() {
 void KoopaJrShip::shootKiller(s32 idx) {
     HomingKiller* killer = mKillers[idx];
     if (MR::isDead(killer)) {
-        Vec3f v6, v5;
-        calcLauncherInfoKiller(&v6, &v5, idx);
-        killer->appear(v6, v5);
+        Vec3f pos, dir;
+        calcLauncherInfoKiller(&pos, &dir, idx);
+        killer->appear(pos, dir);
         MR::emitEffect(this, ::cEffectNameShoot[idx]);
     }
 }
@@ -429,26 +390,26 @@ void KoopaJrShip::emitDamageSmokeEffect() {
 }
 
 void KoopaJrShip::emitDamageHitEffect() {
-    Pos3f v7;
-    v7.identity();
+    Pos3f hitMtx;
+    hitMtx.identity();
     Vec3f up;
     MR::calcUpVec(&up, this);
-    MR::makeMtxSideUpPos(&v7, -mHitDir, up, mHitPos);
-    MR::emitEffectHit(this, v7, "DamageFire");
+    MR::makeMtxSideUpPos(&hitMtx, -mHitDir, up, mHitPos);
+    MR::emitEffectHit(this, hitMtx, "DamageFire");
     MR::startSound(this, "SE_BM_KOOPAJR_SHIP_IGNIT");
 }
 
+// Koopa Jr. rides the escape pod once the ship breaks; before that he stands on the ship turned toward the player.
 void KoopaJrShip::updateKoopaJrPos() {
+    Pos3f jointMtx;
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreak))) {
-        Pos3f v8;
-        v8.set(MR::getJointMtx(mPodModel, ::cJointNamePodPos));
-        v8.mult(mJrLocalPos, mJr->mPosition);
+        jointMtx.set(MR::getJointMtx(mPodModel, ::cJointNamePodPos));
     } else {
-        Pos3f v7;
-        v7.set(MR::getJointMtx(this, ::cJointNameKoopaJrPos));
-        MR::faceToPoint(v7, *MR::getPlayerPos(), 5.0f);
-        v7.mult(mJrLocalPos, mJr->mPosition);
+        jointMtx.set(MR::getJointMtx(this, ::cJointNameKoopaJrPos));
+        MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);
     }
+
+    jointMtx.mult(mJrLocalPos, mJr->mPosition);
 }
 
 void KoopaJrShip::updateKillerPos() {
@@ -457,10 +418,10 @@ void KoopaJrShip::updateKillerPos() {
             continue;
         }
 
-        Vec3f v7;
-        Vec3f v6;
-        calcLauncherInfoKiller(&v7, &v6, mKillers.indexOf(pActor));
-        (*pActor)->setBasePosAndFront(v7, v6);
+        Vec3f pos;
+        Vec3f dir;
+        calcLauncherInfoKiller(&pos, &dir, mKillers.indexOf(pActor));
+        (*pActor)->setBasePosAndFront(pos, dir);
     }
 }
 
@@ -495,7 +456,7 @@ void KoopaJrShip::exeAppear() {
 
     if (MR::isDemoPartLastStep("クッパJr会話")) {
         mJr->endShipBattleTalk();
-        mSpeedEaseStep = 60;
+        mSpeedEaseStep = sSpeedEaseTime;
         MR::startStageBGM("MBGM_BOSS_06_A", false);
         setNerve(GET_NERVE(KoopaJrShip, HostTypeMove));
     }
@@ -510,22 +471,12 @@ void KoopaJrShip::exeMove() {
     updateCoordSpeed();
     MR::moveCoordAndFollowTrans(this);
 
-    if (MR::isGreaterStep(this, 0)) {
-        if (!(getNerveStep() % 120) && !isExistActiveKiller()) {
-            switch (mHitPoint) {
-            case 5:
-                setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot1));
-                break;
-            case 4:
-                setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2));
-                break;
-            case 3:
-                setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2));
-                break;
-            case 2:
-                setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2));
-                break;
-            }
+    // Every 120 steps with no killer out: one shell at full health, five at 2 to 4 hit points.
+    if (MR::isGreaterStep(this, 0) && getNerveStep() % 120 == 0 && !isExistActiveKiller()) {
+        if (mHitPoint == 5) {
+            setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot1));
+        } else if (mHitPoint >= 2 && mHitPoint <= 4) {
+            setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2));
         }
     }
 
@@ -603,7 +554,7 @@ void KoopaJrShip::exeStopAtEnd() {
 
     if (MR::isStep(this, step)) {
         MR::reverseRailDirection(this);
-        mSpeedEaseStep = 60;
+        mSpeedEaseStep = sSpeedEaseTime;
 
         if (mHitPoint <= 2) {
             setNerve(GET_NERVE(KoopaJrShip, HostTypeMoveFrontAttack));
@@ -615,7 +566,7 @@ void KoopaJrShip::exeStopAtEnd() {
 
 void KoopaJrShip::exePowerUp() {
     if (MR::isStep(this, 90)) {
-        mSpeedEaseStep = 60;
+        mSpeedEaseStep = sSpeedEaseTime;
         setNerve(GET_NERVE(KoopaJrShip, HostTypeMove));
     }
 }
@@ -632,6 +583,7 @@ void KoopaJrShip::exeDamage() {
         MR::stopScene(12);
     }
 
+    // At 2 hit points the turn demo takes over (setStateTurnFront); a Kameck joins at 3 and at 1.
     if (MR::isStep(this, 90)) {
         if (mHitPoint == 2) {
             MR::requestStartDemoRegistered(this, nullptr, nullptr, "旋廻");
@@ -640,19 +592,14 @@ void KoopaJrShip::exeDamage() {
 
         shootKillersAfterDamage();
         if (mHitPoint == 3) {
-            mKamecks.mArray[0]->appear();
+            mKamecks[0]->appear();
         }
 
         if (mHitPoint == 1) {
-            mKamecks.mArray[1]->appear();
+            mKamecks[1]->appear();
         }
 
-        if (mHitPoint == 2) {
-            setNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp));
-            return;
-        }
-
-        mSpeedEaseStep = 60;
+        mSpeedEaseStep = sSpeedEaseTime;
 
         if (mHitPoint <= 2) {
             setNerve(GET_NERVE(KoopaJrShip, HostTypeMoveFrontAttack));
@@ -733,7 +680,7 @@ void KoopaJrShip::exeBreak() {
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_L");
     }
 
-    if (!MR::isHiddenModel(mShipBreakModel) && (MR::isBckStopped(mShipBreakModel) || (MR::isStep(this, 320)) != 0)) {
+    if (!MR::isHiddenModel(mShipBreakModel) && (MR::isBckStopped(mShipBreakModel) || MR::isStep(this, 320))) {
         mShipBreakModel->makeActorDead();
     }
 
@@ -749,7 +696,7 @@ void KoopaJrShip::exeTurnFront() {
         mShellHolder->killActiveShells();
         mMainShellHolder->killActiveShells();
 
-        if (!MR::isDead(mKamecks.mArray[0])) {
+        if (!MR::isDead(mKamecks[0])) {
             mKamecksAtTurn.push_back(mKamecks[0]);
         }
 
@@ -771,7 +718,7 @@ void KoopaJrShip::exeTurnFront() {
     }
 
     if (MR::isDemoPartLastStep("旋廻")) {
-        mSpeedEaseStep = 60;
+        mSpeedEaseStep = sSpeedEaseTime;
         MR::startStageBGM("MBGM_BOSS_06_B", false);
 
         if (mKamecksAtTurn.size() != 0) {
