@@ -32,6 +32,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
+    const char* getVsAnimName() const;
     void initTail();
     void initFootPrint();
     void initDemoPosition(const TableIter&);
@@ -88,7 +89,7 @@ public:
     f32 mAimTailRateSpeed;
     f32 mAimTailRate;
     s32 mDamageCameraState;
-    u8 mIsPreCalcAnim;
+    bool mIsPreCalcAnim;
 };
 
 namespace MR {

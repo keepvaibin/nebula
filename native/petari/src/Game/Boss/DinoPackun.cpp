@@ -53,11 +53,11 @@ namespace {
     static Vec3f sMarioSetLocalPos = Vec3f(0.0f, -550.0f, 800.0f);
     static const char* sEventCameraName = "ダメージ";
 
-    static const char* sJointName[7] = {"Tail1", "Tail2", "Tail3", "Tail4", "Tail5", "Tail6", "Tail7"};
-
-    static const f32 sKeepBendPower[7] = {30.0f, 25.0f, 20.0f, 15.0f, 10.0f, 10.0f, 10.0f};
-
-    static const f32 sJointRadius[7] = {80.0f, 70.0f, 60.0f, 55.0f, 50.0f, 45.0f, 50.0f};
+    // The tail is a root, sTailJointNum parts and the ball.
+    const u32 sTailJointNum = 7;
+    static const char* sJointName[sTailJointNum] = {"Tail1", "Tail2", "Tail3", "Tail4", "Tail5", "Tail6", "Tail7"};
+    static const f32 sKeepBendPower[sTailJointNum] = {30.0f, 25.0f, 20.0f, 15.0f, 10.0f, 10.0f, 10.0f};
+    static const f32 sJointRadius[sTailJointNum] = {80.0f, 70.0f, 60.0f, 55.0f, 50.0f, 45.0f, 50.0f};
 
     class DinoPackunParam : public AnimScaleParam {
     public:
@@ -79,15 +79,12 @@ namespace {
 
 DinoPackun::DinoPackun(const char* pName)
     : LiveActor(pName), mTail(), mBall(), mFootPrint(), mShell(), mDemoPos(), mShellBreakModel(), mTailBall(), mCamTargetMtx(), mCameraInfo(),
-      mSequence(), mScaleJointCtrl(), mAnimScaleCtrl(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1) {
-    mCameraRegisterId = -1;
-    mCameraVec.x = 0.0f;
-    mCameraVec.y = 0.0f;
-    mCameraVec.z = 0.0f;
-    mAimTailRateSpeed = 0.0f;
-    mAimTailRate = 0.0f;
-    mDamageCameraState = -1;
-    mIsPreCalcAnim = 0;
+      mSequence(), mScaleJointCtrl(), mAnimScaleCtrl(), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0.0f, 0.0f, 1.0f), mCameraRegisterId(-1),
+      mCameraVec(0.0f, 0.0f, 0.0f), mAimTailRateSpeed(0.0f), mAimTailRate(0.0f), mDamageCameraState(-1), mIsPreCalcAnim(false) {}
+
+// Vs1 and Vs2 share the models and pick their look by animation name.
+const char* DinoPackun::getVsAnimName() const {
+    return mSequence->getVsCount() == 1 ? "Vs1" : "Vs2";
 }
 
 void DinoPackun::init(const TableIter& rIter) {
@@ -141,24 +138,21 @@ void DinoPackun::init(const TableIter& rIter) {
 }
 
 void DinoPackun::initTail() {
-    mTail = new DinoPackunTail(9);
+    mTail = new DinoPackunTail(sTailJointNum + 2);
     DinoPackunTailRoot* root = new DinoPackunTailRoot("尻尾ルート", this);
     root->createJointController(this, "TailRoot");
     root->initWithoutIter();
     root->mKeepBendPower = ::sKeepBendPower[0];
     mTail->addTailNode(root);
 
-    for (u32 i = 0; i < 7; i++) {
-        DinoPackunTailPart* p = new DinoPackunTailPart("尻尾ジョイント", this);
-        MR::copyJointPos(this, ::sJointName[i], &p->mPosition);
-        p->createJointController(this, ::sJointName[i]);
-        f32 keepBendPower = ::sKeepBendPower[i];
-        f32 radius = ::sJointRadius[i];
-        p->mKeepBendPower = keepBendPower;
-        p->mRadius = radius;
-
-        p->initWithoutIter();
-        mTail->addTailNode(p);
+    for (u32 i = 0; i < sTailJointNum; i++) {
+        DinoPackunTailPart* pPart = new DinoPackunTailPart("尻尾ジョイント", this);
+        MR::copyJointPos(this, ::sJointName[i], &pPart->mPosition);
+        pPart->createJointController(this, ::sJointName[i]);
+        pPart->mKeepBendPower = ::sKeepBendPower[i];
+        pPart->mRadius = ::sJointRadius[i];
+        pPart->initWithoutIter();
+        mTail->addTailNode(pPart);
     }
 
     mBall = new DinoPackunBall("尻尾先端球", this);
@@ -187,35 +181,19 @@ void DinoPackun::initDemoPosition(const TableIter& rIter) {
 void DinoPackun::initEggShell() {
     mShell = new DinoPackunEggShell("卵の殻", getSensor("head"), MR::getJointMtx(this, "EggShell"));
     mShell->initWithoutIter();
-
-    if (mSequence->getVsCount() == 1) {
-        MR::startBtp(mShell, "Vs1");
-        MR::startBrk(mShell, "Vs1");
-    } else {
-        MR::startBtp(mShell, "Vs2");
-        MR::startBrk(mShell, "Vs2");
-    }
+    MR::startBtp(mShell, getVsAnimName());
+    MR::startBrk(mShell, getVsAnimName());
 
     mShellBreakModel = MR::createPartsModelEnemy(this, "卵の殻壊れモデル", "DinoPackunEggShellBreak", MR::getJointMtx(this, "EggShell"));
     MR::initLightCtrl(mShellBreakModel);
     mShellBreakModel->makeActorDead();
-    if (mSequence->getVsCount() == 1) {
-        MR::startBtp(mShellBreakModel, "Vs1");
-    } else {
-        MR::startBtp(mShellBreakModel, "Vs2");
-    }
+    MR::startBtp(mShellBreakModel, getVsAnimName());
 }
 
 void DinoPackun::initBall() {
     mTailBall = MR::createPartsModelEnemy(this, "尻尾玉モデル", "DinoPackunTailBall", MR::getJointMtx(this, "TailBall"));
     MR::startBrk(mTailBall, "Normal");
-
-    if (mSequence->getVsCount() == 1) {
-        MR::startBtp(mTailBall, "Vs1");
-    } else {
-        MR::startBtp(mTailBall, "Vs2");
-    }
-
+    MR::startBtp(mTailBall, getVsAnimName());
     mTailBall->makeActorAppeared();
 }
 
@@ -255,21 +233,15 @@ void DinoPackun::startHitReaction() {
     }
 }
 
-bool DinoPackun::isHitReaction(s32 a1) const {
-    if (mAnimScaleCtrl != nullptr) {
-        return mAnimScaleCtrl->isHitReaction(a1);
-    }
-
-    return false;
+bool DinoPackun::isHitReaction(s32 step) const {
+    return mAnimScaleCtrl != nullptr && mAnimScaleCtrl->isHitReaction(step);
 }
 
-bool DinoPackun::hitScaleJoint(Pos3f* pA1, const JointControllerInfo& rA2) {
-    Vec3f v5(mAnimScaleCtrl->mScale);
-    Vec3f v4;
-    v4.x = v5.y;
-    v4.y = v5.z;
-    v4.z = v5.x;
-    MR::preScaleMtx(*pA1, v4);
+// The scale joint's X, Y and Z run along the actor's Y, Z and X.
+bool DinoPackun::hitScaleJoint(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+    const Vec3f& rScale = mAnimScaleCtrl->mScale;
+    Vec3f jointScale(rScale.y, rScale.z, rScale.x);
+    MR::preScaleMtx(*pMtx, jointScale);
     return true;
 }
 
@@ -346,10 +318,11 @@ void DinoPackun::control() {
         mAnimScaleCtrl->updateNerve();
     }
 
+    // The first animation pass only records the tail joints' animated positions.
     updatePose();
-    mIsPreCalcAnim = 1;
+    mIsPreCalcAnim = true;
     calcAnim();
-    mIsPreCalcAnim = 0;
+    mIsPreCalcAnim = false;
     mTail->updateJoint();
     updateCameraInfo();
 }
@@ -380,35 +353,38 @@ void DinoPackun::updatePose() {
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.2f);
 }
 
-void DinoPackun::updateFootPrintNerve(s32 a2, s32 a3) {
+// One foot lands at the start of each stride of period steps, the other half way.
+void DinoPackun::updateFootPrintNerve(s32 step, s32 period) {
     Vec3f side;
     mPoseQuat.getXDir(side);
-    if (!(a2 % a3)) {
+    s32 strideStep = step % period;
+    if (strideStep == 0) {
         addDinoFootPrint< false >(this, mPosition + side * -100.0f + mGravity * -100.0f);
-    } else {
-        if (a3 / 2 == a2 % a3) {
-            addDinoFootPrint< true >(this, mPosition + side * 100.0f + mGravity * -100.0f);
-        }
+    } else if (strideStep == period / 2) {
+        addDinoFootPrint< true >(this, mPosition + side * 100.0f + mGravity * -100.0f);
     }
 }
 
+// The camera looks 300 above the body, drawn up to 0.6 of the way to the tail ball while aiming at it.
 void DinoPackun::updateCameraInfo() {
-    if (mCameraRegisterId != -1) {
-        mAimTailRate = MR::clamp01(mAimTailRate + mAimTailRateSpeed);
-        Vec3f v6(0, 0, 0);
-        Vec3f v5;
-        mPoseQuat.getYDir(v5);
-        v6.scaleAdd(300.0f, v5, mPosition);
-
-        if (mAimTailRate > 0.0f) {
-            Vec3f v4;
-            mTail->getEndTailPosition(&v4);
-            MR::vecBlend(v6, v4, &v6, (0.60f * mAimTailRate));
-        }
-
-        mCameraVec.set(v6);
-        mCamTargetMtx->mMatrix.setTrans(v6);
+    if (mCameraRegisterId == -1) {
+        return;
     }
+
+    mAimTailRate = MR::clamp01(mAimTailRate + mAimTailRateSpeed);
+    Vec3f up;
+    mPoseQuat.getYDir(up);
+    Vec3f target;
+    target.scaleAdd(300.0f, up, mPosition);
+
+    if (mAimTailRate > 0.0f) {
+        Vec3f tailEnd;
+        mTail->getEndTailPosition(&tailEnd);
+        MR::vecBlend(target, tailEnd, &target, (0.60f * mAimTailRate));
+    }
+
+    mCameraVec.set(target);
+    mCamTargetMtx->mMatrix.setTrans(target);
 }
 
 void DinoPackun::updateNormalVelocity() {
@@ -444,28 +420,28 @@ void DinoPackun::resetPosition() {
     MR::resetPosition(this, mStartPos);
     MR::zeroVelocity(this);
 
-    Pos3f v28;
-    v28.setQT(mPoseQuat, mPosition);
-    Vec3f v27;
-    v28.mult(::sMarioSetLocalPos, v27);
-    Vec3f v26;
-    MR::calcGravityVector(this, v27, &v26, nullptr, 0);
+    // The player is put back at sMarioSetLocalPos, facing the boss.
+    Pos3f mtx;
+    mtx.setQT(mPoseQuat, mPosition);
+    Vec3f playerPos;
+    mtx.mult(::sMarioSetLocalPos, playerPos);
+    Vec3f gravity;
+    MR::calcGravityVector(this, playerPos, &gravity, nullptr, 0);
 
-    Vec3f v25;
-    v25 = mPosition - v27;
-    MR::makeMtxUpFrontPos(&v28, -v26, v25, v27);
-    MR::setPlayerBaseMtx(v28);
+    Vec3f playerFront = mPosition - playerPos;
+    MR::makeMtxUpFrontPos(&mtx, -gravity, playerFront, playerPos);
+    MR::setPlayerBaseMtx(mtx);
 }
 
-void DinoPackun::adjustTailRootPosition(const Vec3f& rDir, f32 ratio) {
-    Vec3f newPos;
-    mPoseQuat.transform(rDir, newPos);
-    newPos.add(mPosition);
-    Vec3f currPos;
-    currPos = mTail->getNode(1)->mPosition;
-    DinoPackunTailNode* node = mTail->getNode(1);
-    Vec3f pos = newPos * ratio + currPos * (1.0f - ratio);
-    node->mPosition.set(pos);
+// Moves the first tail node ratio of the way to rLocalPos in the body's frame.
+void DinoPackun::adjustTailRootPosition(const Vec3f& rLocalPos, f32 ratio) {
+    Vec3f targetPos;
+    mPoseQuat.transform(rLocalPos, targetPos);
+    targetPos.add(mPosition);
+    DinoPackunTailNode* pNode = mTail->getNode(1);
+    Vec3f currPos = pNode->mPosition;
+    Vec3f pos = targetPos * ratio + currPos * (1.0f - ratio);
+    pNode->mPosition.set(pos);
 }
 
 void DinoPackun::activateParts() {
@@ -489,21 +465,22 @@ void DinoPackun::onMovementParts() {
     }
 }
 
-void DinoPackun::onAimTailBall(s32 a1) {
-    if (a1 <= 0) {
+// Turns the camera to the tail ball over steps (at once for 0).
+void DinoPackun::onAimTailBall(s32 steps) {
+    if (steps <= 0) {
         mAimTailRateSpeed = 0.0f;
         mAimTailRate = 1.0f;
     } else {
-        mAimTailRateSpeed = 1.0f / a1;
+        mAimTailRateSpeed = 1.0f / steps;
     }
 }
 
-void DinoPackun::offAimTailBall(s32 a1) {
-    if (a1 <= 0) {
+void DinoPackun::offAimTailBall(s32 steps) {
+    if (steps <= 0) {
         mAimTailRateSpeed = 0.0f;
         mAimTailRate = 0.0f;
     } else {
-        mAimTailRateSpeed = -1.0f / a1;
+        mAimTailRateSpeed = -1.0f / steps;
     }
 }
 
@@ -538,9 +515,7 @@ void DinoPackun::endDamageCamera() {
     }
 }
 
-DinoPackun::~DinoPackun() {
-    return;
-}
+DinoPackun::~DinoPackun() {}
 
 namespace MR {
     NameObj* createDinoPackunVs1(const char* pName) {
