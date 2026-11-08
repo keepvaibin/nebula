@@ -13,20 +13,20 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void initSensors(const char*, const char*);
-    void appearAndThrow(const Vec3f&, f32);
+    void appearAndThrow(const Vec3f& rAppearPos, f32 angleDegree);
     void hitBackToPlayer();
-    void demoBreak(const Vec3f&);
+    void demoBreak(const Vec3f& rPos);
     HitSensor* isBindedAny() const;
     bool isValidReceivePunch() const;
-    bool isNerveTrowToOrFreeze() const;  // inline used several places
-    bool isSensorBody(HitSensor*) const;
-    void calcHitBackVelocitAndGravity();
+    bool isNerveThrowToOrFreeze() const;
+    bool isSensorBody(HitSensor* pSensor) const;
+    void calcHitBackVelocityAndGravity();
     bool isHitBackRight() const;
     bool isHitBackFront() const;
-    void calcHitBackDstPos(Vec3f*, bool, bool);
-    bool tryToKill(bool);
-    void setVelocityToPlayer(f32, f32);
+    void calcHitBackDstPos(Vec3f* pOut, bool isRight, bool isFront);
+    bool tryToKill(bool alwaysKill);
+    // angleDegree turns the aim about mUp.
+    void setVelocityToPlayer(f32 speed, f32 angleDegree);
     void freeze();
     bool isFreezable();
     void processApproachToPlayer();
