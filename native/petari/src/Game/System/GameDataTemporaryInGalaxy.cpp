@@ -67,12 +67,12 @@ void GameDataTemporaryInGalaxy::clearAlreadyDoneFlag() {
     mAlreadyDoneFlag->clear();
 }
 
-s32 GameDataTemporaryInGalaxy::setupAlreadyDoneFlag(const char* pZoneName, const TableIter& rIter, u32* pParam3) {
-    return mAlreadyDoneFlag->setupFlag(pZoneName, rIter, pParam3);
+s32 GameDataTemporaryInGalaxy::setupAlreadyDoneFlag(const char* pName, const TableIter& rIter, u32* pIsDone) {
+    return mAlreadyDoneFlag->setupFlag(pName, rIter, pIsDone);
 }
 
-void GameDataTemporaryInGalaxy::updateAlreadyDoneFlag(int index, u32 param2) {
-    mAlreadyDoneFlag->updateValue(index, param2);
+void GameDataTemporaryInGalaxy::updateAlreadyDoneFlag(int index, u32 isDone) {
+    mAlreadyDoneFlag->updateValue(index, isDone);
 }
 
 void GameDataTemporaryInGalaxy::receiveStageResultParam(const char* pStageName, s32 powerStarId, int starPieceNum, int coinNum) {

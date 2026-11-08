@@ -39,8 +39,8 @@ CometEventKeeper* EventFunction::getCometEventKeeper() {
     return MR::getSceneObj< EventDirector >(SceneObj_EventDirector)->mCometEventKeeper;
 }
 
-bool EventFunction::isStartCometEvent(const char* pParam1) {
-    return getCometEventKeeper()->isStartEvent(pParam1);
+bool EventFunction::isStartCometEvent(const char* pName) {
+    return getCometEventKeeper()->isStartEvent(pName);
 }
 
 void EventFunction::startCometEvent() {
@@ -60,28 +60,28 @@ namespace MR {
         EventFunction::getPowerStarEventKeeper()->declareStar(pDemoObj->mName, starId, killInDemo);
     }
 
-    bool isSuccessEventPowerStar(const char* pParam1, s32 param2) {
-        return EventFunction::getPowerStarEventKeeper()->isSuccess(pParam1, param2);
+    bool isSuccessEventPowerStar(const char* pName, s32 starNum) {
+        return EventFunction::getPowerStarEventKeeper()->isSuccess(pName, starNum);
     }
 
-    bool isGreenEventPowerStar(const char* pParam1, s32 param2) {
-        return EventFunction::getPowerStarEventKeeper()->isGreen(pParam1, param2);
+    bool isGreenEventPowerStar(const char* pName, s32 starNum) {
+        return EventFunction::getPowerStarEventKeeper()->isGreen(pName, starNum);
     }
 
-    bool isRedEventPowerStar(const char* pParam1, s32 param2) {
-        return EventFunction::getPowerStarEventKeeper()->isRed(pParam1, param2);
+    bool isRedEventPowerStar(const char* pName, s32 starNum) {
+        return EventFunction::getPowerStarEventKeeper()->isRed(pName, starNum);
     }
 
-    bool isGrandEventPowerStar(const char* pParam1, s32 param2) {
-        return EventFunction::getPowerStarEventKeeper()->isGrand(pParam1, param2);
+    bool isGrandEventPowerStar(const char* pName, s32 starNum) {
+        return EventFunction::getPowerStarEventKeeper()->isGrand(pName, starNum);
     }
 
-    void appearEventPowerStar(const char* pParam1, s32 param2, const Vec3f* pParam3, bool param4, bool param5) {
-        EventFunction::getPowerStarEventKeeper()->requestAppearPowerStar(pParam1, param2, pParam3, param4, param5);
+    void appearEventPowerStar(const char* pName, s32 starNum, const Vec3f* pPos, bool forceAppear, bool withoutDemo) {
+        EventFunction::getPowerStarEventKeeper()->requestAppearPowerStar(pName, starNum, pPos, forceAppear, withoutDemo);
     }
 
-    bool isEndEventPowerStarAppearDemo(const char* pParam1) {
-        int starId = EventFunction::getPowerStarEventKeeper()->findStarID(pParam1);
+    bool isEndEventPowerStarAppearDemo(const char* pName) {
+        int starId = EventFunction::getPowerStarEventKeeper()->findStarID(pName);
 
         return PowerStarFunction::isEndPowerStarAppearDemo(starId);
     }

@@ -35,63 +35,63 @@ namespace AstroDemoFunction {
         return result;
     }
 
-    void tryRegisterDemo(LiveActor* pParam1, const char* pParam2, const TableIter& rIter) {
-        if (MR::isDemoExist(pParam2) && !MR::isDemoCast(pParam1, pParam2)) {
-            MR::tryRegisterDemoCast(pParam1, pParam2, rIter);
+    void tryRegisterDemo(LiveActor* pActor, const char* pDemoName, const TableIter& rIter) {
+        if (MR::isDemoExist(pDemoName) && !MR::isDemoCast(pActor, pDemoName)) {
+            MR::tryRegisterDemoCast(pActor, pDemoName, rIter);
         }
     }
 
-    void tryRegisterAstroDemoAll(LiveActor* pParam1, const TableIter& rIter) {
-        AstroDemoFunction::tryRegisterGrandStarReturn(pParam1, rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "グランドスター帰還[２回目以降]", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "パワースター帰還", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタ状況説明デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタ最終決戦デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタコメット説明デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタトーチの炎説明デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタトーチの炎進捗デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタ天文台機能回復デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタキノピオ探検隊デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ルイージ失踪デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタカウントダウン開始デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタノーマルエンディング後デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタ銀河の中心説明デモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタルイージデモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "バトラーグリーンドライバ説明", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "バトラーマップレクチャー", rIter);
+    void tryRegisterAstroDemoAll(LiveActor* pActor, const TableIter& rIter) {
+        AstroDemoFunction::tryRegisterGrandStarReturn(pActor, rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "グランドスター帰還[２回目以降]", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "パワースター帰還", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタ状況説明デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタ最終決戦デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタコメット説明デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタトーチの炎説明デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタトーチの炎進捗デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタ天文台機能回復デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタキノピオ探検隊デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ルイージ失踪デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタカウントダウン開始デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタノーマルエンディング後デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタ銀河の中心説明デモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタルイージデモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "バトラーグリーンドライバ説明", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "バトラーマップレクチャー", rIter);
     }
 
-    void tryRegisterGrandStarReturn(LiveActor* pParam1, const TableIter& rIter) {
+    void tryRegisterGrandStarReturn(LiveActor* pActor, const TableIter& rIter) {
         for (u32 i = 0; i < ARRAY_SIZE(::cGrandStarReturnDemoTable); i++) {
-            AstroDemoFunction::tryRegisterDemo(pParam1, ::cGrandStarReturnDemoTable[i], rIter);
+            AstroDemoFunction::tryRegisterDemo(pActor, ::cGrandStarReturnDemoTable[i], rIter);
         }
     }
 
-    void tryRegisterGrandStarReturnWithFunction(LiveActor* pParam1, const TableIter& rIter, const MR::FunctorBase& rFunctor) {
+    void tryRegisterGrandStarReturnWithFunction(LiveActor* pActor, const TableIter& rIter, const MR::FunctorBase& rFunctor) {
         const char* pDemoName;
 
         for (u32 i = 0; i < ARRAY_SIZE(::cGrandStarReturnDemoTable); i++) {
             pDemoName = ::cGrandStarReturnDemoTable[i];
 
-            if (MR::isDemoExist(pDemoName) && MR::tryRegisterDemoCast(pParam1, pDemoName, rIter)) {
-                MR::tryRegisterDemoActionFunctorDirect(pParam1, rFunctor, pDemoName, nullptr);
+            if (MR::isDemoExist(pDemoName) && MR::tryRegisterDemoCast(pActor, pDemoName, rIter)) {
+                MR::tryRegisterDemoActionFunctorDirect(pActor, rFunctor, pDemoName, nullptr);
             }
         }
     }
 
-    void tryRegisterGrandStarReturnAndSimpleCast(LiveActor* pParam1, const TableIter& rIter) {
-        AstroDemoFunction::tryRegisterGrandStarReturn(pParam1, rIter);
-        AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(pParam1);
+    void tryRegisterGrandStarReturnAndSimpleCast(LiveActor* pActor, const TableIter& rIter) {
+        AstroDemoFunction::tryRegisterGrandStarReturn(pActor, rIter);
+        AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(pActor);
     }
 
-    void tryRegisterGrandStarReturnWithFunctionAndSimpleCast(LiveActor* pParam1, const TableIter& rIter, const MR::FunctorBase& rFunctor) {
-        AstroDemoFunction::tryRegisterGrandStarReturnWithFunction(pParam1, rIter, rFunctor);
-        AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(pParam1);
+    void tryRegisterGrandStarReturnWithFunctionAndSimpleCast(LiveActor* pActor, const TableIter& rIter, const MR::FunctorBase& rFunctor) {
+        AstroDemoFunction::tryRegisterGrandStarReturnWithFunction(pActor, rIter, rFunctor);
+        AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(pActor);
     }
 
-    bool tryRegisterSimpleCastIfAstroGalaxy(LiveActor* pParam1) {
+    bool tryRegisterSimpleCastIfAstroGalaxy(LiveActor* pActor) {
         if (MR::isEqualStageName("AstroGalaxy")) {
-            MR::registerDemoSimpleCastAll(pParam1);
+            MR::registerDemoSimpleCastAll(pActor);
 
             return true;
         }
@@ -99,8 +99,8 @@ namespace AstroDemoFunction {
         return false;
     }
 
-    void tryRegisterDemoForTico(LiveActor* pParam1, const TableIter& rIter) {
-        if (tryRegisterSimpleCastIfAstroGalaxy(pParam1)) {
+    void tryRegisterDemoForTico(LiveActor* pActor, const TableIter& rIter) {
+        if (tryRegisterSimpleCastIfAstroGalaxy(pActor)) {
             s32 demoCastID = MR::getDemoCastID(rIter);
             const char* pDemoName = nullptr;
 
@@ -117,15 +117,15 @@ namespace AstroDemoFunction {
             }
 
             if (pDemoName != nullptr) {
-                AstroDemoFunction::tryRegisterDemo(pParam1, pDemoName, rIter);
+                AstroDemoFunction::tryRegisterDemo(pActor, pDemoName, rIter);
             }
         }
     }
 
-    void tryRegisterDemoForLuigiAndKinopio(LiveActor* pParam1, const TableIter& rIter) {
-        AstroDemoFunction::tryRegisterGrandStarReturn(pParam1, rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタルイージデモ", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "バトラーグリーンドライバ説明", rIter);
-        AstroDemoFunction::tryRegisterDemo(pParam1, "ロゼッタ最終決戦デモ", rIter);
+    void tryRegisterDemoForLuigiAndKinopio(LiveActor* pActor, const TableIter& rIter) {
+        AstroDemoFunction::tryRegisterGrandStarReturn(pActor, rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタルイージデモ", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "バトラーグリーンドライバ説明", rIter);
+        AstroDemoFunction::tryRegisterDemo(pActor, "ロゼッタ最終決戦デモ", rIter);
     }
 };  // namespace AstroDemoFunction

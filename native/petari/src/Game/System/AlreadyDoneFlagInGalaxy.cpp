@@ -38,7 +38,8 @@ void AlreadyDoneFlagInGalaxy::clear() {
     mDoneInfos.clear();
 }
 
-u32 AlreadyDoneFlagInGalaxy::setupFlag(const char* pName, const TableIter& rIter, u32* a3) {
+// The index of the flag of pName at rIter's zone and link, added if new; *pIsDone receives its value.
+u32 AlreadyDoneFlagInGalaxy::setupFlag(const char* pName, const TableIter& rIter, u32* pIsDone) {
     u32 result;
 
     s32 linkID = -1;
@@ -52,16 +53,16 @@ u32 AlreadyDoneFlagInGalaxy::setupFlag(const char* pName, const TableIter& rIter
 
     if (it != mDoneInfos.end()) {
         result = it - mDoneInfos.begin();
-        *a3 = it->mIsDone;
+        *pIsDone = it->mIsDone;
     } else {
         result = mDoneInfos.size();
         mDoneInfos.push_back(info);
-        *a3 = 0;
+        *pIsDone = 0;
     }
 
     return result;
 }
 
-void AlreadyDoneFlagInGalaxy::updateValue(int a1, u32 a2) {
-    mDoneInfos[a1].set(a2 != 0);
+void AlreadyDoneFlagInGalaxy::updateValue(int index, u32 isDone) {
+    mDoneInfos[index].set(isDone != 0);
 }

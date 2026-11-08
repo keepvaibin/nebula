@@ -129,7 +129,8 @@ bool StarPieceDirector::hopPiece(const NameObj* pNameObj, const Vec3f& rVec1, co
     return true;
 }
 
-bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rVec, s32 a1, f32 f1, f32 f2, bool a2, bool a3) {
+bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rPosition, s32 count, f32 randomRange, f32 speed,
+                                    bool isForceEffectLight, bool notCheckInWater) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
     if (hostInfo == nullptr) {
@@ -138,7 +139,7 @@ bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rVec, 
 
     bool appearedStarPiece = false;
 
-    for (int i = 0; i < a1; i++) {
+    for (int i = 0; i < count; i++) {
         if (!hostInfo->isAppearable()) {
             break;
         }
@@ -149,15 +150,15 @@ bool StarPieceDirector::appearPiece(const NameObj* pNameObj, const Vec3f& rVec, 
             appearedStarPiece = true;
             appearPiece->setHostInfo(hostInfo);
             hostInfo->mNumAppeared++;
-            appearPiece->launch(rVec, f1, f2, a3, a2);
+            appearPiece->launch(rPosition, randomRange, speed, notCheckInWater, isForceEffectLight);
         }
     }
 
     return appearedStarPiece;
 }
 
-bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Vec3f& rVec1, const Vec3f& rVec2, s32 a1, f32 f1, f32 f2, bool a2,
-                                               bool a3) {
+bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Vec3f& rPosition, const Vec3f& rUp, s32 count, f32 randomRange,
+                                               f32 speed, bool isForceEffectLight, bool notCheckInWater) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
 
     if (hostInfo == nullptr) {
@@ -166,7 +167,7 @@ bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Ve
 
     bool appearedStarPiece = false;
 
-    for (int i = 0; i < a1; i++) {
+    for (int i = 0; i < count; i++) {
         if (!hostInfo->isAppearable()) {
             break;
         }
@@ -180,7 +181,7 @@ bool StarPieceDirector::appearPieceToDirection(const NameObj* pNameObj, const Ve
         appearedStarPiece = true;
         appearPiece->setHostInfo(hostInfo);
         hostInfo->mNumAppeared++;
-        appearPiece->launch(rVec1, rVec2, f1, f2, a3, a2);
+        appearPiece->launch(rPosition, rUp, randomRange, speed, notCheckInWater, isForceEffectLight);
     }
 
     return appearedStarPiece;
@@ -334,8 +335,8 @@ void StarPieceDirector::createStarPieces(unsigned count) {
     }
 }
 
-StarPieceShooter::StarPieceShooter(s32 a1, const char* pName)
-    : LiveActor(pName), mSearchSensor(), mShootSpeed(), mSearchDist(999999.0f), mLockOnSensor(), mPort(a1), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
+StarPieceShooter::StarPieceShooter(s32 port, const char* pName)
+    : LiveActor(pName), mSearchSensor(), mShootSpeed(), mSearchDist(999999.0f), mLockOnSensor(), mPort(port), mChargeStep(), mEffectPos(0, 0, 0), mEffectRot(0, 0, 0) {
 }
 
 void StarPieceShooter::init(const TableIter& rIter) {
