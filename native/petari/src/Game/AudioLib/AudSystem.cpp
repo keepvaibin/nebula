@@ -663,13 +663,13 @@ void AudSystem::initCategoryArrangement() {
     mSeMgr.setCategoryArrangement(arrangement);
 }
 
-void AudSystem::setMeResource(AssetFolder* pArchive, u16 a1, u16 a2) {
+void AudSystem::setMeResource(AssetFolder* pArchive, u16 tableIndex, u16 seqIndex) {
     if (pArchive == nullptr) {
         return;
     }
 
-    void* meTable = pArchive->getResource(a1);
-    const void* meSeq = pArchive->getResource(a2);
+    void* meTable = pArchive->getResource(tableIndex);
+    const void* meSeq = pArchive->getResource(seqIndex);
     mRhythmMeSystem->mMeMgr->setMeTable(meTable);
     mRhythmMeSystem->mMeMgr->setMeSeq(meSeq);
 }

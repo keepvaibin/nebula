@@ -57,8 +57,8 @@ void MapObjActorInitInfo::setupHitSensorCallBack() {
     mHasHitSensorCB = true;
 }
 
-void MapObjActorInitInfo::setupHitSensorParam(u16 a1, f32 radius, const Vec3f& rPosition) {
-    mSensorType = a1;
+void MapObjActorInitInfo::setupHitSensorParam(u16 sensorType, f32 radius, const Vec3f& rPosition) {
+    mSensorType = sensorType;
     mSensorRadius = radius;
     mSensorPosition.set(rPosition);
 }

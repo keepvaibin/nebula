@@ -51,5 +51,6 @@ namespace GameEventFlagTable {
     s32 calcSpecialPowerStarNum(const char*);
     s32 getStarPieceNumToOpenExclamationGalaxy(const char*);
     s32 calcGreenPowerStarNum();
-    s32 getGalaxyDependedFlags(const char**, int, const char*);
+    // A galaxy's open conditions (the table's OpenCondition0..2), the non-empty ones first; returns how many.
+    s32 getGalaxyDependedFlags(const char* (&pFlags)[3], const char* pName);
 };  // namespace GameEventFlagTable

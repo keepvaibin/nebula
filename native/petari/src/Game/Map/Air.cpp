@@ -29,9 +29,9 @@ void Air::init(const TableIter& rIter) {
     MR::connectToSceneAir(this);
     MR::useStageSwitchReadA(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mDistance);
-    s32 arg_1 = -1;
-    MR::getPlacementArg1NoInit(rIter, &arg_1);
-    mIsWaitStartCamera = arg_1 + 1;
+    s32 waitStartCamera = -1;
+    MR::getPlacementArg1NoInit(rIter, &waitStartCamera);
+    mIsWaitStartCamera = waitStartCamera + 1;
     MR::tryStartAllAnim(this, object_name);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     setFarClipping();
