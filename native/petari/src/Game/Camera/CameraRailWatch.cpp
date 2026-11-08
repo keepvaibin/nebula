@@ -33,8 +33,9 @@ CameraTargetObj* CameraRailWatch::calc() {
         return nullptr;
     }
 
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
 
     if (mSetDirection != 0) {
         mDirection = mSetDirection;
@@ -43,7 +44,7 @@ CameraTargetObj* CameraRailWatch::calc() {
     f32 watchCoord = mRailRider->calcNearestPos(watchPoint);
     mRailRider->setCoord(watchCoord);
 
-    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f up = -target->getGravityVector();
     Vec3f front = mRailRider->mCurDirection * mDirection;
     Vec3f side = up.cross(front);
     up.cross(front, side);
@@ -78,7 +79,7 @@ CameraTargetObj* CameraRailWatch::calc() {
     CameraLocalUtil::setPos(this, watchPoint - front * mDist);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraRailWatch::setParam(s32 zoneID, s32 railID, s32 direction, f32 offset, f32 dist, f32 angleX) {

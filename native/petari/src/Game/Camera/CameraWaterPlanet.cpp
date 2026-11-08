@@ -46,24 +46,25 @@ CameraTargetObj* CameraWaterPlanet::calc() {
     Vec3f pos = CameraLocalUtil::getPos(this);
     Vec3f up = CameraLocalUtil::getUpVec(this);
 
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
 
     Vec3f front = currWatchPos - pos;
     if (MR::isNearZero(front)) {
-        return CameraLocalUtil::getTarget(this);
+        return target;
     }
     MR::normalize(&front);
 
-    Vec3f targetFront = CameraLocalUtil::getTarget(this)->getSideVec().cross(-CameraLocalUtil::getTarget(this)->getGravityVector());
+    Vec3f targetFront = target->getSideVec().cross(-target->getGravityVector());
     if (MR::isNearZero(targetFront)) {
-        return CameraLocalUtil::getTarget(this);
+        return target;
     }
     MR::normalize(&targetFront);
 
     Pos3f mtx;
-    mtx.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
-    mtx.setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
+    mtx.setXDir(target->getSideVec());
+    mtx.setYDir(-target->getGravityVector());
     mtx.setZDir(targetFront);
     mtx.setTrans(watchPos);
 
@@ -83,7 +84,7 @@ CameraTargetObj* CameraWaterPlanet::calc() {
 
     Vec3f watchFront = watchPos - pos;
     if (MR::isNearZero(watchFront)) {
-        return CameraLocalUtil::getTarget(this);
+        return target;
     }
     MR::normalize(&watchFront);
 
@@ -104,9 +105,9 @@ CameraTargetObj* CameraWaterPlanet::calc() {
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
+    CameraLocalUtil::setWatchUpVec(this, target->getUpVec());
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraWaterPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {

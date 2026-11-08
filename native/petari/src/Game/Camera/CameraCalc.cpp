@@ -1,7 +1,4 @@
-#include "Game/Util/MathUtil.hpp"
-#include "Game/Util/VectorUtil.hpp"
-#include <nebula_geometry.hpp>
-
+#include "Game/Camera/CameraCalc.hpp"
 
 namespace MR {
     void crossToPolar(const Vec3f& rA, const Vec3f& rB, f32* pLength, f32* pAngleX, f32* pAngleY) {

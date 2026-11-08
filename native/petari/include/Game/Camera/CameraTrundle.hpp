@@ -6,7 +6,6 @@ class CameraTrundle : public Camera {
 public:
     CameraTrundle(const char* pName = "トランドルカメラ");
 
-    virtual void reset();
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 

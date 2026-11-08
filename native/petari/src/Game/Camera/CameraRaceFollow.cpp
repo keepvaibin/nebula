@@ -18,15 +18,16 @@ void CameraRaceFollow::reset() {
 }
 
 CameraTargetObj* CameraRaceFollow::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f camDirPrev = CameraLocalUtil::getPos(this) - CameraLocalUtil::getWatchPos(this);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
     CameraLocalUtil::arrangeDistanceByPushAndPull(this, mDistMin, mDistMax);
 
-    Vec3f offsetUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f offsetUp = -target->getGravityVector();
 
     Vec3f offsetDir = CameraLocalUtil::getPos(this) - CameraLocalUtil::getWatchPos(this);
     f32 camDist = offsetDir.length();
@@ -62,7 +63,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
 
     MR::normalize(&front);
 
-    Vec3f camUp = -CameraLocalUtil::getTarget(this)->getGravityVector();
+    Vec3f camUp = -target->getGravityVector();
     camUp.orthogonalize(front);
 
     Vec3f up = CameraLocalUtil::getUpVec(this);
@@ -75,7 +76,7 @@ CameraTargetObj* CameraRaceFollow::calc() {
 
     CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getUpVec(this));
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraRaceFollow::setParamFromChunk(const CameraParamChunk* pChunk) {
