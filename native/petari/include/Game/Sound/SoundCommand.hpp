@@ -68,9 +68,9 @@ public:
 private:
     struct Chunk {
         NebulaAtomic< Chunk* > mNext;
-        u8 _pad[60];
-        SoundCommand mCommands[cChunkCommands];
+        alignas(64) SoundCommand mCommands[cChunkCommands];
     };
+    static_assert(sizeof(Chunk) == 64 * (cChunkCommands + 1), "the link on its own line, each command on one line");
 
     Chunk* newChunk();
     void freeLeft();
