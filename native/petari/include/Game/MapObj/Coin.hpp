@@ -20,7 +20,7 @@ public:
 
 class Coin : public LiveActor {
 public:
-    Coin(const char*);
+    Coin(const char* pName);
 
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
@@ -28,7 +28,7 @@ public:
     virtual void makeActorAppeared();
     virtual void makeActorDead();
     virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     void initShadow(const TableIter&);
     void setShadowAndPoseModeFromPlacementIter(const TableIter&);
@@ -40,13 +40,13 @@ public:
     void exeControled();
     void exeSpinDrained();
     void exeHop();
-    void appearFixInit();
     void appearFix();
     void appearControlPose();
     void appearNonActive();
-    void appearFixTimer(s32, s32);
-    void appearMove(const Vec3f&, const Vec3f&, s32, s32);
-    void appearHop(const Vec3f&, const Vec3f&);
+    // A negative life or pickup delay takes the default.
+    void appearFixTimer(s32 life, s32 cannotTime);
+    void appearMove(const Vec3f& rPosition, const Vec3f& rVelocity, s32 life, s32 cannotTime);
+    void appearHop(const Vec3f& rPosition, const Vec3f& rUp);
     bool requestActive();
     bool requestActiveWithGravity();
     bool requestDeactive();
@@ -56,13 +56,13 @@ public:
     bool requestShow();
     bool requestHide();
     void noticeGetCoin();
-    void setLife(s32);
-    void setHostInfo(CoinHostInfo*);
+    void setLife(s32 life);
+    void setHostInfo(CoinHostInfo* pInfo);
     void setCalcShadowMode();
-    void setCannotTime(s32);
-    void calcRebouond();
+    void setCannotTime(s32 time);
+    void calcRebound();
     void attenuateVelocity();
-    static bool isNeedBubble(const TableIter&);
+    static bool isNeedBubble(const TableIter& rIter);
 
     CoinHostInfo* mHostInfo;
     FlashingCtrl* mFlashCtrl;
@@ -70,10 +70,11 @@ public:
     Vec3f mDropPosition;
     Vec3f mClippingRange;
     int mLife;
+    // Steps after appearing before it can be picked up.
     s32 mCannotTime;
     bool mIsInWater;
-    bool mIsCalcShadowAlways;  // obj_arg3
-    bool mIsPoseFromRotation;  // obj_arg4
+    bool mIsCalcShadowAlways;
+    bool mIsPoseFromRotation;
     bool mIsPurpleCoin;
     bool mIsNeedBubble;
 };
