@@ -16,9 +16,7 @@
 namespace {
     const s32 cOverlayStartStep = 122;
     const s32 cOverlayFrame = 1;
-};  // namespace
 
-namespace {
     s32 getChapterNumberMin() {
         return MR::getPictureBookChapterAlreadyRead() + 1;
     }
@@ -66,10 +64,6 @@ void RosettaReading::appear() {
     setNerve(GET_NERVE(RosettaReading, RosettaReadingNrvPictureBookBefore));
 }
 
-void RosettaReading::kill() {
-    LiveActor::kill();
-}
-
 void RosettaReading::exePictureBookBefore() {
     if (MR::isDemoPartActive("朗読開始") || MR::isDemoPartActive("ロゼッタ会話[開始]") || MR::isDemoPartLessEqualStep("絵本デモ開始", 60)) {
         MR::startSystemLevelSE("SE_SM_LV_TICO_WAIT_LIBRARY");
@@ -115,9 +109,7 @@ void RosettaReading::exePictureBookAfter() {
         MR::overlayWithPreviousScreen(::cOverlayFrame);
     }
 
-    if (MR::isTimeKeepDemoActive()) {
-        return;
+    if (!MR::isTimeKeepDemoActive()) {
+        kill();
     }
-
-    kill();
 }

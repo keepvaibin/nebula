@@ -11,17 +11,9 @@ void DeathArea::init(const TableIter& rIter) {
 }
 
 void DeathArea::movement() {
-    if (!isInVolume(*MR::getPlayerPos())) {
-        return;
+    if (isInVolume(*MR::getPlayerPos()) && getDeathType() == DeathType_Any) {
+        MR::forceKillPlayerByAbyss();
     }
-
-    bool canKillPlayer = getDeathType() == DeathType_Any;
-
-    if (!canKillPlayer) {
-        return;
-    }
-
-    MR::forceKillPlayerByAbyss();
 }
 
 bool DeathArea::isInVolume(const Vec3f& rVec) const {
@@ -33,9 +25,5 @@ bool DeathArea::isInVolume(const Vec3f& rVec) const {
 }
 
 s32 DeathArea::getDeathType() const {
-    if (mObjArg0 != -1) {
-        return mObjArg0;
-    }
-
-    return DeathType_Any;
+    return mObjArg0 != -1 ? mObjArg0 : DeathType_Any;
 }

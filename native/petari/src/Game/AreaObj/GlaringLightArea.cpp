@@ -17,9 +17,7 @@ void GlaringLightArea::init(const TableIter& rIter) {
     Vec3f pos;
     MR::calcCylinderPos(&pos, this);
 
-    mPos.x = pos.x;
-    mPos.y = pos.y;
-    mPos.z = pos.z;
+    mPos.set(pos);
 
     mSoundObj = new AudSoundObject(&mPos, 4, MR::getCurrentHeap());
 

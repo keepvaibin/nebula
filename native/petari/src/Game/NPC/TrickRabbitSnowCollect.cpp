@@ -5,7 +5,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const f32 sInStartEventRange = 700.0f;
+    const f32 sInStartEventRange = 700.0f;
 };  // namespace
 
 namespace NrvTrickRabbitFreeRunCollect {
@@ -60,14 +60,11 @@ void TrickRabbitSnowCollect::initRabbits(const TableIter& rIter) {
     mRabbitNum = MR::getChildObjNum(rIter);
     mRabbit = new TrickRabbitSnow*[mRabbitNum];
 
-    TrickRabbitCollectListener* listener = new TrickRabbitCollectListener(this);
+    TrickRabbitCollectListener* const pListener = new TrickRabbitCollectListener(this);
 
     for (s32 i = 0; i < mRabbitNum; i++) {
-        const char* childObjName;
-        MR::getChildObjName(&childObjName, rIter, i);
-
         mRabbit[i] = new TrickRabbitSnow("雪ウサギ");
-        mRabbit[i]->setListener(listener);
+        mRabbit[i]->setListener(pListener);
         MR::initChildObj(mRabbit[i], rIter, i);
     }
 }
@@ -98,11 +95,9 @@ void TrickRabbitSnowCollect::setFinishPosition() {
 
 void TrickRabbitSnowCollect::noticeCaught(TrickRabbitSnow* pSubject) {
     for (s32 i = 0; i < mRabbitNum; i++) {
-        if (pSubject == mRabbit[i]) {
-            continue;
+        if (mRabbit[i] != pSubject) {
+            mRabbit[i]->setNotCaughtable();
         }
-
-        mRabbit[i]->setNotCaughtable();
     }
 }
 
@@ -200,14 +195,8 @@ void TrickRabbitSnowCollect::exeWaitHideSnow() {
     }
 
     bool isAllHideSnow = true;
-
-    for (s32 i = 0; i < mRabbitNum; i++) {
-        if (mRabbit[i]->isHideSnow()) {
-            continue;
-        }
-
-        isAllHideSnow = false;
-        break;
+    for (s32 i = 0; i < mRabbitNum && isAllHideSnow; i++) {
+        isAllHideSnow = mRabbit[i]->isHideSnow();
     }
 
     if (isAllHideSnow) {

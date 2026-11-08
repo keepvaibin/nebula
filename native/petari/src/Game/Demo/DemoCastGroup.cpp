@@ -4,15 +4,11 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-DemoCastGroup::DemoCastGroup(const char* pName) : NameObj(pName) {
-    mInfo = 0;
-    mGroup = 0;
+DemoCastGroup::DemoCastGroup(const char* pName) : NameObj(pName), mInfo(nullptr), mGroup(nullptr) {
 }
 
 bool DemoCastGroup::tryRegisterDemoActor(LiveActor* pActor, const TableIter& rIter, const PlacementId& rInfo) {
-    bool isNotSame = !(*mInfo == rInfo);
-
-    if (isNotSame) {
+    if (!(*mInfo == rInfo)) {
         return false;
     }
 
