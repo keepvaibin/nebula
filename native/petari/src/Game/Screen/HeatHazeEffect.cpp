@@ -6,7 +6,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-HeatHazeEffect::HeatHazeEffect(const char* pName) : LiveActor(pName), _8C(1500.0f) {
+HeatHazeEffect::HeatHazeEffect(const char* pName) : LiveActor(pName), mHazeDistance(1500.0f) {
 }
 
 void HeatHazeEffect::appear() {
@@ -19,12 +19,12 @@ void HeatHazeEffect::control() {
     Vec3f direction;
     rCameraMtx.getZDir(direction);
     direction.negate();
-    direction.mult(_8C);
+    direction.mult(mHazeDistance);
     rCameraMtx.getTrans(mPosition);
     mPosition.add(direction);
     rCameraMtx.getEuler(mRotation);
     mRotation.mult(180.0f / PI);
-    mScale.setAll< f32 >(_8C / 1000.0f);
+    mScale.setAll< f32 >(mHazeDistance / 1000.0f);
 }
 
 HeatHazeDirector::HeatHazeDirector(const char* pName) : NameObj(pName) {
@@ -49,7 +49,7 @@ void HeatHazeDirector::movement() {
 
     if (pHazeCube != nullptr) {
         if (MR::isDead(mEffect)) {
-            mEffect->_8C = pHazeCube->mDistance;
+            mEffect->mHazeDistance = pHazeCube->mDistance;
             mEffect->appear();
         }
     } else if (!MR::isDead(mEffect)) {

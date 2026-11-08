@@ -79,7 +79,6 @@ public:
     StarPointerTransformHolder* mTransHolder;
     StarPointerPeekZ* mPeekZ;
     StarPointerGuidance* mGuidance;
-    s32 _18;
     Vec3f mNozzleAimPos;
 };
 

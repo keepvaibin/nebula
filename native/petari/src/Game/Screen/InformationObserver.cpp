@@ -46,7 +46,7 @@ namespace NrvInformationObserver {
     NEW_NERVE(InformationObserverNrvDisp, InformationObserver, Disp);
 };  // namespace NrvInformationObserver
 
-InformationObserver::InformationObserver() : LiveActor("初出監視"), mType(Type_Bee), _90(false), mDisplayFrame(-1) {
+InformationObserver::InformationObserver() : LiveActor("初出監視"), mType(Type_Bee), mIsTimeKeepDemo(false), mDisplayFrame(-1) {
 }
 
 void InformationObserver::init(const TableIter& rIter) {
@@ -58,12 +58,12 @@ void InformationObserver::init(const TableIter& rIter) {
 }
 
 void InformationObserver::entry(TYPE type, LiveActor* pParam2) {
-    _94 = pParam2;
+    mDemoActor = pParam2;
     mType = type;
-    _90 = MR::isTimeKeepDemoActive();
+    mIsTimeKeepDemo = MR::isTimeKeepDemoActive();
 
-    if (_90) {
-        MR::pauseTimeKeepDemo(_94);
+    if (mIsTimeKeepDemo) {
+        MR::pauseTimeKeepDemo(mDemoActor);
         setNerve(GET_NERVE(InformationObserver, InformationObserverNrvDisp));
     } else {
         MR::requestStartDemoWithoutCinemaFrame(this, "初出表示", GET_NERVE(InformationObserver, InformationObserverNrvDisp),
@@ -100,8 +100,8 @@ void InformationObserver::exeDisp() {
         return;
     }
 
-    if (_90) {
-        MR::resumeTimeKeepDemo(_94);
+    if (mIsTimeKeepDemo) {
+        MR::resumeTimeKeepDemo(mDemoActor);
     } else {
         MR::endDemo(this, "初出表示");
     }

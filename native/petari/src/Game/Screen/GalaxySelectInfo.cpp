@@ -17,7 +17,7 @@ namespace NrvGalaxySelectInfo {
 };  // namespace NrvGalaxySelectInfo
 
 GalaxySelectInfo::GalaxySelectInfo(bool param1)
-    : LayoutActor("ギャラクシー選択情報", true), _20(param1), _24(nullptr), _28(false), mFadeinoutControl(nullptr), mInfoLayoutSetter(nullptr) {
+    : LayoutActor("ギャラクシー選択情報", true), mIsOnPause(param1), mShownGalaxyName(nullptr), mIsShownThisFrame(false), mFadeinoutControl(nullptr), mInfoLayoutSetter(nullptr) {
     mFadeinoutControl = new ValueControl(::cFadeinoutFrame);
     mFadeinoutControl->setZero();
 }
@@ -28,7 +28,7 @@ void GalaxySelectInfo::init(const TableIter& rIter) {
 
     mInfoLayoutSetter = new GalaxyInfoLayoutSetter(this);
 
-    if (_20) {
+    if (mIsOnPause) {
         MR::connectToSceneLayoutOnPause(this);
         MR::connectToSceneLayoutOnPauseMovementCalcAnim(mInfoLayoutSetter->mIconComet);
     } else {
@@ -60,7 +60,7 @@ bool GalaxySelectInfo::show(const char* pParam1, u32 param2, int param3) {
 }
 
 void GalaxySelectInfo::control() {
-    _28 = false;
+    mIsShownThisFrame = false;
 
     mFadeinoutControl->update();
 
@@ -77,16 +77,16 @@ void GalaxySelectInfo::control() {
 }
 
 bool GalaxySelectInfo::show(const char* pParam1, u32 param2, bool param3, int param4) {
-    _28 = true;
+    mIsShownThisFrame = true;
 
-    if (MR::isDead(this) || !MR::isEqualString(_24, pParam1)) {
+    if (MR::isDead(this) || !MR::isEqualString(mShownGalaxyName, pParam1)) {
         if (param3) {
             mInfoLayoutSetter->updateInfo(pParam1, GalaxyInfoLayoutSetter::GalaxyState(param2), param4);
         } else {
             mInfoLayoutSetter->updateInfo(pParam1, GalaxyInfoLayoutSetter::GalaxyState(param2));
         }
 
-        _24 = pParam1;
+        mShownGalaxyName = pParam1;
 
         mFadeinoutControl->setDirToOne();
         setNerve(GET_NERVE(GalaxySelectInfo, GalaxySelectInfoNrvWait));
@@ -99,7 +99,7 @@ bool GalaxySelectInfo::show(const char* pParam1, u32 param2, bool param3, int pa
 }
 
 void GalaxySelectInfo::exeWait() {
-    if (_28) {
+    if (mIsShownThisFrame) {
         return;
     }
 

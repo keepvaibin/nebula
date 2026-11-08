@@ -20,7 +20,7 @@
 
 GameSceneLayoutHolder::GameSceneLayoutHolder()
     : NameObj("ゲームシーンのレイアウト保持"), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
-      mMissLayout(nullptr), mNoteCounter(nullptr), mYesNoLayout(nullptr), mPurpleCoinCounter(nullptr), _30(false), _31(false),
+      mMissLayout(nullptr), mNoteCounter(nullptr), mYesNoLayout(nullptr), mPurpleCoinCounter(nullptr), mIsStatusInvalidatePending(false),
       mCounterLayoutCtrl(nullptr), mIsActiveDefaultGameLayout(true) {
     MR::joinToNameObjGroup(this, "IgnorePauseNameObj");
     MR::connectToSceneLayoutMovement(this);
@@ -69,13 +69,13 @@ void GameSceneLayoutHolder::createPurpleCoinCounter() {
 }
 
 void GameSceneLayoutHolder::movement() {
-    if (!_30) {
+    if (!mIsStatusInvalidatePending) {
         return;
     }
 
     invalidateStatusLayout();
 
-    _30 = false;
+    mIsStatusInvalidatePending = false;
 }
 
 void GameSceneLayoutHolder::initLifeCount(u32 lifeCount) {

@@ -19,10 +19,10 @@ public:
     void drawBlur() const;
     void captureBlur() const;
 
-    JUTTexture* _14;
-    JUTTexture* _18;
+    JUTTexture* mFullTexture;  // full-size frame
+    JUTTexture* mHalfTexture;  // half-size frame, filled with the depth
     JUTTexture* mFrameDepthKey;  // the frame's depth, in the depth pass
     f32 mScale;
-    bool _20;
+    bool mSkipDraw;  // off until the first animation update
     f32 mIntensity;
 };

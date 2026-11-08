@@ -8,12 +8,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-// static const _32 hMarginH =
-// static const _32 hMarginV =
-// static const _32 hForcePointerOutVel =
     static const s32 hIsOutScreenCounter = 5;
-    // static const _32 hNearValue =
-    // static const _32 hDrawDebugRadius =
 };  // namespace
 
 PointerInfo::PointerInfo() : mPos(0.0f, 0.0f), mInScreen(), mDrawReady(), mZDepth(), mViewDistZ() {

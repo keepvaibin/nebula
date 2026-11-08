@@ -6,7 +6,7 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
-SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "システムワイプ保持"), _1C(false) {
+SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "システムワイプ保持"), mIsCapturing(false) {
 }
 
 void SystemWipeHolder::init(const TableIter& rIter) {
@@ -20,9 +20,9 @@ bool SystemWipeHolder::isCurrentAlive() const {
 }
 
 void SystemWipeHolder::movement() {
-    if (_1C) {
+    if (mIsCapturing) {
         if (!isCurrentAlive() || !getCurrent()->isWipeOut()) {
-            _1C = false;
+            mIsCapturing = false;
             MR::endToCaptureScreen("SystemWipe");
         }
     }
@@ -52,12 +52,12 @@ void SystemWipeHolder::setWipeRingCenter(const Vec3f& rCenter) {
 }
 
 void SystemWipeHolder::startGameScreenCapture() {
-    _1C = true;
+    mIsCapturing = true;
     MR::startToCaptureScreen("SystemWipe");
 }
 
 void SystemWipeHolder::drawGameScreenCapture() const {
-    if (!_1C) {
+    if (!mIsCapturing) {
         return;
     }
 
@@ -67,7 +67,7 @@ void SystemWipeHolder::drawGameScreenCapture() const {
 }
 
 void SystemWipeHolder::updateWipe(const char* pWipeName) {
-    _1C = false;
+    mIsCapturing = false;
     MR::endToCaptureScreen("SystemWipe");
     WipeHolderBase::updateWipe(pWipeName);
 }

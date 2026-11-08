@@ -59,6 +59,6 @@ private:
     StageResultSequenceChecker* mSequenceChecker;
     IconAButton* mIconAButton;
     s32 mClearedStarPieceNum;
-    bool _30;
-    bool _31;
+    bool mHasBufferedDecide;  // decide was pressed before the key wait
+    bool mIsNewBestCoin;  // the coin count beat the saved best
 };

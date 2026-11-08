@@ -33,5 +33,5 @@ public:
 private:
     ButtonPaneController* mButtonCtrl[5];
     MR::FunctorBase* mCallbackFunctor[5];
-    GalaxyMapGalaxyPlain* _48;
+    GalaxyMapGalaxyPlain* mGuidancePlain;  // the 2P guidance icon
 };

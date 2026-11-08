@@ -30,11 +30,11 @@ public:
 
     void notifyInArea();
 
-    f32 _8C;
-    f32 _90;
-    f32 _94;
-    TriggerChecker* _98;
-    TriggerChecker* _9C;
+    f32 mFlareStrength;  // visibility from the bright object and the distance to the screen centre
+    f32 mFadeLevel;  // 0 to 1
+    f32 mFadeStep;  // fade level change per frame
+    TriggerChecker* mAreaChecker;  // inside the lens flare area
+    TriggerChecker* mVisibleChecker;  // inside the area with a bright object showing
 };
 
 class LensFlareRing : public LensFlareModel {
@@ -45,7 +45,7 @@ public:
     virtual void appearAnim();
     virtual void controlAnim();
 
-    f32 _A0;
+    f32 mRingFrame;  // ring animation position, 0 to 1
 };
 
 class LensFlareGlow : public LensFlareModel {
@@ -94,11 +94,10 @@ public:
     struct NebulaScreenProbe* mProbes = nullptr;
     u32 mProbeCapacity = 0;
     u32 mAsker;  // the asker its probes carry
-    Vec2f _60;
-    f32 _68;
-    Vec2f _6C;
-    Vec2f _74;
-    u16 _7C;
+    Vec2f mBrightCenter;  // bright centre of the first visible bright object
+    f32 mBrightLevel;  // its brightness
+    Vec2f mObjCenter;  // its centre
+    Vec2f mNowCenter;  // its centre this frame
 };
 
 namespace MR {

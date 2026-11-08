@@ -28,6 +28,6 @@ public:
     void exeBetweenMapToListFadein();
 
 private:
-    Nerve* _20;
+    Nerve* mNextNerve;  // where the fade-in nerve goes next
     ButtonPaneController* mPaneCtrl;
 };

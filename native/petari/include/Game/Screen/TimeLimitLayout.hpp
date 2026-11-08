@@ -53,5 +53,5 @@ private:
     ValueControl* mFadeControl;
     const Timing* mCurrentTiming;
     bool mIsSuspend;
-    bool _35;
+    bool mIsNormalDisplay;  // stays up instead of fading out after the scale down
 };

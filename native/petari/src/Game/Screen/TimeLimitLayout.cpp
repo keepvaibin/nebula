@@ -31,7 +31,7 @@ namespace NrvTimeLimitLayout {
 };  // namespace NrvTimeLimitLayout
 
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
-    : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), _35() {
+    : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
 }
 
 void TimeLimitLayout::init(const TableIter& rIter) {
@@ -63,7 +63,7 @@ void TimeLimitLayout::setTimeLimit(u32 timeLimit) {
 }
 
 void TimeLimitLayout::setDisplayModeOnNormal(bool param1) {
-    _35 = param1;
+    mIsNormalDisplay = param1;
 }
 
 bool TimeLimitLayout::isReadyToTimeUp() const {
@@ -172,7 +172,7 @@ void TimeLimitLayout::exeScaleDown() {
     }
 
     if (mScaleControl->mFrame == mScaleControl->mMaxFrame) {
-        if (mCurrentTiming->_A && !_35) {
+        if (mCurrentTiming->_A && !mIsNormalDisplay) {
             setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutFadeout));
         } else {
             setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutCountDown));

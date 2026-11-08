@@ -20,9 +20,9 @@ public:
     void exeWait();
     void exeDisappear();
 
-    bool _20;
-    const char* _24;
-    bool _28;
+    bool mIsOnPause;  // drawn in the pause layer
+    const char* mShownGalaxyName;
+    bool mIsShownThisFrame;  // show() ran since the last control()
     ValueControl* mFadeinoutControl;
     GalaxyInfoLayoutSetter* mInfoLayoutSetter;
 };

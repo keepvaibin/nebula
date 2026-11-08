@@ -105,7 +105,7 @@ void FileSelectButton::control() {
     }
 
     if (mButtonCtrl[4]->isPointing()) {
-        _48->show(MR::getGameMessageDirect("2PGuidanceIcon"), "P2Button");
+        mGuidancePlain->show(MR::getGameMessageDirect("2PGuidanceIcon"), "P2Button");
     }
 }
 
@@ -130,8 +130,8 @@ void FileSelectButton::createButtonController() {
 }
 
 void FileSelectButton::createOthers() {
-    _48 = new GalaxyMapGalaxyPlain(this);
-    _48->initWithoutIter();
+    mGuidancePlain = new GalaxyMapGalaxyPlain(this);
+    mGuidancePlain->initWithoutIter();
 
-    MR::connectToSceneLayoutDecoration(_48);
+    MR::connectToSceneLayoutDecoration(mGuidancePlain);
 }

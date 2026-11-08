@@ -31,7 +31,7 @@ private:
     s32 mPageNum;
     ButtonPaneController* mLeftPaneCtrl;
     ButtonPaneController* mRightPaneCtrl;
-    bool _30;
-    bool _31;
+    bool mCanScrollLeft;  // not on the first page
+    bool mCanScrollRight;  // not on the last page
     BackButton* mBackButton;
 };
