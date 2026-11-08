@@ -2,13 +2,11 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 
 namespace {
-    static const f32 sMovingThreshold = 1.0f;
+    const f32 sMovingThreshold = 1.0f;
 };  // namespace
 
-CameraTargetHolder::CameraTargetHolder() {
-    mTarget = nullptr;
-    mTargetActor = new CameraTargetActor("アクター注目");
-    mTargetPlayer = new CameraTargetPlayer("マリオ注目");
+CameraTargetHolder::CameraTargetHolder()
+    : mTarget(nullptr), mTargetActor(new CameraTargetActor("アクター注目")), mTargetPlayer(new CameraTargetPlayer("マリオ注目")) {
 }
 
 void CameraTargetHolder::movement() {

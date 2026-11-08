@@ -1,13 +1,13 @@
 #include "Game/Camera/CameraCharmedVecReg.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 
 namespace {
-    static const f32 sRate = 0.02f;
+    const f32 sRate = 0.02f;
 };  // namespace
 
 CameraCharmedVecReg::CameraCharmedVecReg(const char* pName)
@@ -21,17 +21,19 @@ void CameraCharmedVecReg::reset() {
 }
 
 CameraTargetObj* CameraCharmedVecReg::calc() {
-    Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
 
-    Vec3f watchOffs = watchPoint - CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f watchPoint;
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
+
+    Vec3f watchOffs = watchPoint - target->getPosition();
 
     const Vec3f& vecReg = CameraLocalUtil::getVecReg(mName);
 
-    Vec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - mCamDistRatio) + vecReg * mCamDistRatio;
+    Vec3f basePos = target->getPosition() * (1.0f - mCamDistRatio) + vecReg * mCamDistRatio;
 
-    Vec3f up = -CameraLocalUtil::getTarget(this)->getGravityVector();
-    Vec3f front = CameraLocalUtil::getTarget(this)->getPosition() - vecReg;
+    Vec3f up = -target->getGravityVector();
+    Vec3f front = target->getPosition() - vecReg;
     MR::projectVecOnPlane(&front, front, up);
 
     if (MR::isNearZero(front)) {
@@ -49,7 +51,7 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     mtx.identity();
     mtx.setXYZDir(side, up, front);
 
-    Vec3f camDir = CameraLocalUtil::getPos(this) - CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f camDir = CameraLocalUtil::getPos(this) - target->getPosition();
     MR::projectVecOnPlane(&camDir, camDir, up);
     if (MR::isNearZero(camDir)) {
         return nullptr;
@@ -84,11 +86,11 @@ CameraTargetObj* CameraCharmedVecReg::calc() {
     mtx.mult33(posOffs);
 
     CameraLocalUtil::setWatchPos(this, basePos + watchOffs);
-    CameraLocalUtil::setPos(this, posOffs + CameraLocalUtil::getTarget(this)->getPosition());
+    CameraLocalUtil::setPos(this, posOffs + target->getPosition());
     CameraLocalUtil::setUpVec(this, up);
     CameraLocalUtil::setWatchUpVec(this, up);
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraCharmedVecReg::setParamFromChunk(const CameraParamChunk* pChunk) {

@@ -6,7 +6,6 @@ class CameraObjParallel : public Camera {
 public:
     CameraObjParallel(const char* pName = "オブジェ並行カメラ");
 
-    virtual void reset();
     virtual CameraTargetObj* calc();
     virtual void setParamFromChunk(const CameraParamChunk*);
 

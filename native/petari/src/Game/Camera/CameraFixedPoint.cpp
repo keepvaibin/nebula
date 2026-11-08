@@ -5,7 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-CameraFixedPoint::CameraFixedPoint(const char* pName) : Camera(pName), mPos(0.0f, 0.0f, 0.0f) {
+CameraFixedPoint::CameraFixedPoint(const char* pName) : Camera(pName), mPos(0.0f, 0.0f, 0.0f), mCameraType(CameraType_ZoneUp) {
 }
 
 void CameraFixedPoint::reset() {

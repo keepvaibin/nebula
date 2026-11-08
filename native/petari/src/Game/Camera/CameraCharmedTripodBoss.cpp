@@ -18,7 +18,7 @@ void CameraCharmedTripodBoss::reset() {
 CameraTargetObj* CameraCharmedTripodBoss::calc() {
     CameraTargetObj* obj = CameraLocalUtil::getTarget(this);
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, obj, 0.1f / 15.0f);
 
     Vec3f up = mUp;
     Vec3f jointPos(0.0f, 0.0f, 0.0f);
@@ -38,7 +38,7 @@ CameraTargetObj* CameraCharmedTripodBoss::calc() {
     Pos3f rotMtx;
     rotMtx.concat(rotY, rotX);
 
-    Vec3f front = CameraLocalUtil::getTarget(this)->getPosition() - jointPos;
+    Vec3f front = obj->getPosition() - jointPos;
     if (MR::isNearZero(front)) {
         return obj;
     }
@@ -54,9 +54,8 @@ CameraTargetObj* CameraCharmedTripodBoss::calc() {
     MR::normalize(&front);
 
     Pos3f mtx;
-    mtx.identity();
     mtx.setXYZDir(side, up, front);
-    mtx.setTrans(CameraLocalUtil::getTarget(this)->getPosition());
+    mtx.setTrans(obj->getPosition());
     mtx.concat(mtx, rotMtx);
     mtx.getZDir(front);
     mtx.getYDir(up);

@@ -1,40 +1,36 @@
 #include "Game/Camera/CameraFrontAndBack.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
-    static const s32 sInterpolation = 120;
-    static const f32 sWarpDistance = 500.0f;
+    const s32 sInterpolation = 120;
+    const f32 sWarpDistance = 500.0f;
 };  // namespace
-
-CameraFrontAndBack::~CameraFrontAndBack() {
-}
 
 CameraFrontAndBack::CameraFrontAndBack(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 1.0f, 0.0f), mRotateRate(), mMaxDipAngle(), mDist(1200.0f) {
 }
 
-void CameraFrontAndBack::reset() {
-}
-
 CameraTargetObj* CameraFrontAndBack::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f pos = CameraLocalUtil::getPos(this);
     Vec3f axis = mAxis;
     mZoneMatrix.mult33(axis);
     Vec3f wPoint = mWPoint;
     mZoneMatrix.mult(wPoint, wPoint);
 
-    Vec3f posDir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
+    Vec3f posDir = target->getPosition() - wPoint;
     posDir.orthogonalize(axis);
     if (MR::isNearZero(posDir)) {
         return nullptr;
     }
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
     Vec3f front, up;
     mZoneMatrix.getZDir(front);
     mZoneMatrix.getYDir(up);
@@ -50,13 +46,13 @@ CameraTargetObj* CameraFrontAndBack::calc() {
     dipQuat.transform(up);
 
     CameraLocalUtil::setWatchPos(this, watchPoint);
-    CameraLocalUtil::setPos(this, CameraLocalUtil::getTarget(this)->getPosition() + front * mDist);
+    CameraLocalUtil::setPos(this, target->getPosition() + front * mDist);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, up);
     if (pos.distance(CameraLocalUtil::getPos(this)) > ::sWarpDistance) {
         MR::startCameraInterpolation(::sInterpolation);
     }
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraFrontAndBack::setParamFromChunk(const CameraParamChunk* pChunk) {

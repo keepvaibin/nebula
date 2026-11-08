@@ -9,12 +9,9 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const f32 sAngleConstrainRate = 0.2f;
-    static const f32 sPartialRate = 0.5f;
+    const f32 sAngleConstrainRate = 0.2f;
+    const f32 sPartialRate = 0.5f;
 };  // namespace
-
-CameraMedianPlanet::~CameraMedianPlanet() {
-}
 
 CameraMedianPlanet::CameraMedianPlanet(const char* pName)
     : Camera(pName), mString(), mDistMin(1200.0f), mDistMax(3000.0f), mAngleMin(MR::pi() / 4.0f), mPeepAngle(), mDist(2000.0f),
@@ -29,6 +26,8 @@ void CameraMedianPlanet::reset() {
 }
 
 CameraTargetObj* CameraMedianPlanet::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f pos;
     MR::getCameraInvViewMtx().getTrans(pos);
     constrainDipAngle(&pos);
@@ -37,14 +36,14 @@ CameraTargetObj* CameraMedianPlanet::calc() {
     calcWatchPos(&watchPos);
     Vec3f up;
     if (!calcUpVec(&up, watchPos, pos)) {
-        return CameraLocalUtil::getTarget(this);
+        return target;
     }
 
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setWatchPos(this, watchPos);
     CameraLocalUtil::setUpVec(this, up);
-    CameraLocalUtil::setWatchUpVec(this, CameraLocalUtil::getTarget(this)->getUpVec());
-    return CameraLocalUtil::getTarget(this);
+    CameraLocalUtil::setWatchUpVec(this, target->getUpVec());
+    return target;
 }
 
 void CameraMedianPlanet::setParamFromChunk(const CameraParamChunk* pChunk) {
@@ -77,10 +76,11 @@ void CameraMedianPlanet::constrainDipAngle(Vec3f* pPos) {
 }
 
 void CameraMedianPlanet::makeTargetMtx(Pos3f* pMtx) {
-    pMtx->setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
-    pMtx->setYDir(-CameraLocalUtil::getTarget(this)->getGravityVector());
-    pMtx->setZDir(CameraLocalUtil::getTarget(this)->getFrontVec());
-    pMtx->setTrans(CameraLocalUtil::getTarget(this)->getPosition());
+    const CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+    pMtx->setXDir(target->getSideVec());
+    pMtx->setYDir(-target->getGravityVector());
+    pMtx->setZDir(target->getFrontVec());
+    pMtx->setTrans(target->getPosition());
 }
 
 void CameraMedianPlanet::peepMtx(Pos3f* pMtx) {
@@ -118,9 +118,10 @@ void CameraMedianPlanet::rotate33(Pos3f* pMtx, const Vec3f& axis, f32 angle) {
 
 void CameraMedianPlanet::constrainLength(Vec3f* pPos) {
     f32 rate = getMaxRate();
-    Vec3f offset = *pPos - CameraLocalUtil::getTarget(this)->getPosition();
+    const Vec3f& targetPos = CameraLocalUtil::getTarget(this)->getPosition();
+    Vec3f offset = *pPos - targetPos;
     offset.setLength(mDistMin * (1.0f - rate) + mDistMax * rate);
-    pPos->set(CameraLocalUtil::getTarget(this)->getPosition() + offset);
+    pPos->set(targetPos + offset);
 }
 
 f32 CameraMedianPlanet::getMaxRate() {
@@ -146,11 +147,11 @@ void CameraMedianPlanet::getRegisterUpVec(Vec3f* pUp) {
 
 void CameraMedianPlanet::calcWatchPos(Vec3f* pWatchPos) {
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchPoint(&watchOffset, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
-    watchOffset.sub(CameraLocalUtil::getTarget(this)->getPosition());
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+    CameraLocalUtil::makeWatchPoint(&watchOffset, this, target, 0.1f / 15.0f);
+    watchOffset.sub(target->getPosition());
 
-    pWatchPos->set(CameraLocalUtil::getTarget(this)->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate +
-                   watchOffset);
+    pWatchPos->set(target->getPosition() * (1.0f - mPartialRate) + CameraLocalUtil::getVecReg(mString) * mPartialRate + watchOffset);
 }
 
 bool CameraMedianPlanet::calcUpVec(Vec3f* pUp, const Vec3f& watchPos, const Vec3f& pos) {

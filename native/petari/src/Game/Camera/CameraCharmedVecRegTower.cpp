@@ -1,11 +1,12 @@
 #include "Game/Camera/CameraCharmedVecRegTower.hpp"
-#include "Game/Camera/CameraParamChunk.hpp"
-#include "Game/Util.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
+#include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
+#include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-CameraCharmedVecRegTower::CameraCharmedVecRegTower(const char* pName) : Camera(pName), mArrange() {
+CameraCharmedVecRegTower::CameraCharmedVecRegTower(const char* pName)
+    : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, 0.0f), mAngleX(), mAngleYMax(), mDist(), mArrange(), mName(nullptr) {
 }
 
 void CameraCharmedVecRegTower::reset() {
@@ -15,8 +16,10 @@ void CameraCharmedVecRegTower::reset() {
 }
 
 CameraTargetObj* CameraCharmedVecRegTower::calc() {
+    CameraTargetObj* target = CameraLocalUtil::getTarget(this);
+
     Vec3f watchOffset;
-    CameraLocalUtil::makeWatchOffset(&watchOffset, this, CameraLocalUtil::getTarget(this), 0.1f / 15.0f);
+    CameraLocalUtil::makeWatchOffset(&watchOffset, this, target, 0.1f / 15.0f);
 
     Vec3f wPoint = mWPoint;
     Vec3f axis = mAxis;
@@ -25,7 +28,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
     zoneMtx.mult(wPoint, wPoint);
     zoneMtx.mult33(axis, axis);
 
-    Vec3f watchDir = CameraLocalUtil::getTarget(this)->getPosition() - wPoint;
+    Vec3f watchDir = target->getPosition() - wPoint;
     if (MR::isNearZero(watchDir)) {
         return nullptr;
     }
@@ -41,7 +44,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
 
     Pos3f mtx;
     mtx.setXYZDir(side, axis, front);
-    mtx.setTrans(CameraLocalUtil::getTarget(this)->getPosition());
+    mtx.setTrans(target->getPosition());
 
     Vec3f posOffs(0.0f, 0.0f, mDist);
     mtx.mult(posOffs, posOffs);
@@ -76,7 +79,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
     Vec3f pos;
     camMtx.getTrans(pos);
 
-    CameraLocalUtil::setWatchPos(this, CameraLocalUtil::getTarget(this)->getPosition() + watchOffset);
+    CameraLocalUtil::setWatchPos(this, target->getPosition() + watchOffset);
     CameraLocalUtil::setPos(this, pos);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, axis);
 
@@ -84,7 +87,7 @@ CameraTargetObj* CameraCharmedVecRegTower::calc() {
         CameraLocalUtil::arrangeDistanceByFovy(this, CameraLocalUtil::getVecReg(mName), 200.0f);
     }
 
-    return CameraLocalUtil::getTarget(this);
+    return target;
 }
 
 void CameraCharmedVecRegTower::setParamFromChunk(const CameraParamChunk* pChunk) {
