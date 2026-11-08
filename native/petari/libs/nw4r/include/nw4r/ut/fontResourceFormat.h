@@ -27,6 +27,10 @@ namespace nw4r {
             u16 sheetLine;
             u16 sheetWidth;
             u16 sheetHeight;
+            // The sheets' distance range in their texels (nebula-import cook::distance: intensity sheets are signed
+            // distance fields, the edge at one half); 0 when they are images.
+            u8 fieldRange;
+            u8 reserved[3];
             u8* sheetImage;
         };
 

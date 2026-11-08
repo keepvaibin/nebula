@@ -61,6 +61,10 @@ namespace nw4r {
                 return static_cast< u8 >((u16)mFontInfo->pGlyph->sheetFormat);
             }
 
+            u8 ResFontBase::GetFieldRange() const {
+                return mFontInfo->pGlyph->fieldRange;
+            }
+
             int ResFontBase::GetLineFeed() const {
                 return mFontInfo->linefeed;
             }

@@ -99,7 +99,9 @@ namespace nw4r {
             void SetupForIntensity();
             void SetupDefault();
             void SetupForColor();
-            static void SetupWithColorMapping(Color, Color);
+            void SetupWithColorMapping(Color, Color);
+            // The font's distance range (Font::GetFieldRange), 0 without a font.
+            u8 FieldRange() const;
 
             void ResetTextureCache() {
                 mLoadingTexture.Reset();
