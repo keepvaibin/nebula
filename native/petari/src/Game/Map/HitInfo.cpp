@@ -170,8 +170,8 @@ const Vec3f* Triangle::calcAndGetPos(int index) {
     return pos;
 }
 
-void Triangle::calcForceMovePower(Vec3f* a1, const Vec3f& a2) const {
-    mParts->calcForceMovePower(a1, a2);
+void Triangle::calcForceMovePower(Vec3f* pMovement, const Vec3f& rPos) const {
+    mParts->calcForceMovePower(pMovement, rPos);
 }
 
 TableIter Triangle::getAttributes() const {

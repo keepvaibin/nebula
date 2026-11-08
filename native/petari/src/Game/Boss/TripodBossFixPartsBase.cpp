@@ -37,8 +37,8 @@ void TripodBossFixPartsBase::initClippingSphere() {
     mClippingRadius = mClipCenter.distance(boundingBox.i);
 }
 
-void TripodBossFixPartsBase::setClippingSphere(const Vec3f& a1, f32 radius) {
-    mClipCenter = a1;
+void TripodBossFixPartsBase::setClippingSphere(const Vec3f& rCenter, f32 radius) {
+    mClipCenter = rCenter;
     mClippingRadius = radius;
 }
 

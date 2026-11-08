@@ -7,7 +7,8 @@ SunshadeMapHolder::SunshadeMapHolder() : NameObj("日よけコリジョン管理
 }
 
 namespace MR {
-    bool isInShadeFromTheSun(const Vec3f& rPos, f32 a2) {
+    // Shade: an occluder on the vertical line from rPos up to rPos + sunHeight.
+    bool isInShadeFromTheSun(const Vec3f& rPos, f32 sunHeight) {
         if (!MR::isInAreaObj("SunLightArea", rPos)) {
             return true;
         }
@@ -16,7 +17,7 @@ namespace MR {
             return false;
         }
 
-        return Collision::checkStrikeLineToSunshade(rPos, Vec3f(0.0f, a2, 0.0f), 0, nullptr, nullptr);
+        return Collision::checkStrikeLineToSunshade(rPos, Vec3f(0.0f, sunHeight, 0.0f), 0, nullptr, nullptr);
     }
 
     void createSunshadeMapHolder() {

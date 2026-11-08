@@ -11,13 +11,13 @@ SpiderThreadHangInfo::SpiderThreadHangInfo()
 }
 
 void SpiderThreadHangInfo::startBind(LiveActor* pActor, const Vec3f* pPos, SpiderThreadPart* pThreadPart, s32 hangIndex, const Vec3f& rVel,
-                                     s32 a2) {
+                                     s32 priority) {
     mBindedActor = pActor;
     mPosition = pPos;
     mThreadPart = pThreadPart;
     mHangIndex = hangIndex;
     mIsHanging = false;
-    mPriority = a2;
+    mPriority = priority;
 
     if (!MR::isNearZero(rVel)) {
         mThreadPart->touchActor(mHangIndex, rVel);

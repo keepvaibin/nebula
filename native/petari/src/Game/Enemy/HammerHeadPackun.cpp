@@ -472,9 +472,9 @@ bool HammerHeadPackun::isTargetInRange() const {
     MtxPtr baseMtx1 = getBaseMtx();
     MtxPtr baseMtx2 = getBaseMtx();
     MtxPtr baseMtx3 = getBaseMtx();
-    Vec3f a2(baseMtx3[0][1], baseMtx2[1][1], baseMtx1[2][1]);
+    Vec3f up(baseMtx3[0][1], baseMtx2[1][1], baseMtx1[2][1]);
 
-    if (vec.dot(a2) <= 0.0f) {
+    if (vec.dot(up) <= 0.0f) {
         return false;
     } else if (MR::calcDistanceToPlayer(mPosition) < 800.0f) {
         return true;

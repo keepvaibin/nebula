@@ -19,8 +19,8 @@ namespace NrvSunakazeKunTrap {
     NEW_NERVE(SunakazeKunTrapNrvTrap, SunakazeKunTrap, Trap);
 };  // namespace NrvSunakazeKunTrap
 
-SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rParam2)
-    : ModelObj("スナカゼ用トラップ", "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), mLocalPos(rParam2) {
+SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rLocalPos)
+    : ModelObj("スナカゼ用トラップ", "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), mLocalPos(rLocalPos) {
 }
 
 void SunakazeKunTrap::init(const TableIter& rIter) {

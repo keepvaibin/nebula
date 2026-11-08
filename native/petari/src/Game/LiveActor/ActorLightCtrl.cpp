@@ -78,7 +78,7 @@ void ActorLightCtrl::initActorLightInfo() {
     return;
 }
 
-void ActorLightCtrl::tryFindNewAreaLight(bool a2) {
+void ActorLightCtrl::tryFindNewAreaLight(bool isImmediate) {
     if (LightFunction::tryFindNewAreaLightID(mActor->mPosition, &mLightID)) {
         if (mAreaLightInf != nullptr) {
             const ActorLightInfo* inf = getTargetActorLight(mAreaLightInf);
@@ -88,7 +88,7 @@ void ActorLightCtrl::tryFindNewAreaLight(bool a2) {
 
         resetCurrentLightInfo();
 
-        if (!mInterpolate || a2) {
+        if (!mInterpolate || isImmediate) {
             mInterpolate = 0;
             mBlendFrom = nullptr;
             mLightInfo = *getTargetActorLight(mAreaLightInf);

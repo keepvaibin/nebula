@@ -4,7 +4,7 @@
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Map/FileSelectEffect.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
-#include "Game/Map/FIleSelectItem.hpp"
+#include "Game/Map/FileSelectItem.hpp"
 #include "Game/Map/FileSelectItemDelegator.hpp"
 #include "Game/Map/FileSelectSky.hpp"
 #include "Game/NPC/MiiFacePartsHolder.hpp"

@@ -22,7 +22,7 @@ void FirePressure::initBullet(const TableIter& rIter) {
     MR::createSceneObj(SceneObj_FirePressureBulletHolder);
 }
 
-bool FirePressure::shotBullet(f32 a1) {
+bool FirePressure::shotBullet(f32 speed) {
     FirePressureBulletHolder* hldr = MR::getSceneObj< FirePressureBulletHolder >(SceneObj_FirePressureBulletHolder);
     FirePressureBullet* bullet = hldr->callEmptyBullet();
 
@@ -32,7 +32,7 @@ bool FirePressure::shotBullet(f32 a1) {
     } else {
         Pos3f gunPoint;
         calcGunPointFromCannon(&gunPoint);
-        bullet->shotFireBullet(this, gunPoint, a1, isShotTypeFollow(), mDisableCollsion);
+        bullet->shotFireBullet(this, gunPoint, speed, isShotTypeFollow(), mDisableCollsion);
         return true;
     }
 }

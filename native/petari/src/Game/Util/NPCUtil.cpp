@@ -697,7 +697,7 @@ void TakeOutStar::exeDemo() {
 void TakeOutStar::exeTerm() {
 }
 
-FadeStarter::FadeStarter(NPCActor* pActor, s32 a2) : NerveExecutor("フェード開始制御"), mActor(pActor), mSavedNerve(), mFadeTime(a2) {
+FadeStarter::FadeStarter(NPCActor* pActor, s32 fadeTime) : NerveExecutor("フェード開始制御"), mActor(pActor), mSavedNerve(), mFadeTime(fadeTime) {
     initNerve(GET_NERVE(FadeStarter, FadeStarterNrvFade));
 }
 

@@ -6,7 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool a6)
+PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool deferMaterials)
     : LiveActor(pName), mHost(pActor), mFixedPosition(), mMtx(pMtx), mIsCalcOwnMtx(true), mIsShownWhileHostHidden(), mIsDead() {
     if (drawBufferType < 0) {
         drawBufferType = MR::DrawBufferType_MapObj;
@@ -21,7 +21,7 @@ PartsModel::PartsModel(LiveActor* pActor, const char* pName, const char* pModelN
     mRotation.set(pActor->mRotation);
     mScale.set(pActor->mScale);
 
-    initModelManagerWithAnm(pModelName, nullptr, a6);
+    initModelManagerWithAnm(pModelName, nullptr, deferMaterials);
 
     u32 movementType = MR::MovementType_EnemyDecoration;
     u32 calcAnimType = MR::CalcAnimType_MapObjDecoration;

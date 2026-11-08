@@ -31,10 +31,10 @@ void FloaterFloatingForceTypeNormal::updateHostTrans(Vec3f* pDst) const {
     pDst->set(mBasePos - (mUp * mSinkDepth));
 }
 
-void FloaterFloatingForceTypeNormal::updateVelocity(bool param1) {
+void FloaterFloatingForceTypeNormal::updateVelocity(bool isOnPlayer) {
     f32 f;
 
-    if (param1 && (MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost)) == false) {
+    if (isOnPlayer && (MR::isValidSwitchA(mHost) && MR::isOnSwitchA(mHost)) == false) {
         if (mMoveConditionType <= mSinkDepth) {
             mSinkSpeed = MR::converge< f32 >(mSinkSpeed, 0.0f, 0.05f);
         } else {
