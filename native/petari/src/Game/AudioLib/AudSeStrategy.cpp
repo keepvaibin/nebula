@@ -25,7 +25,7 @@ void AudSeStrategy::calc(EffectSound* pSe) {
         cutoff = 0x7F;
     }
 
-    if (soundID.getGroupID() == 1 && cutoff < 50) {  // SE_PV
+    if (soundID.getGroupID() == AudGroup_VoiceSe && cutoff < 50) {
         cutoff = 50;
     }
 

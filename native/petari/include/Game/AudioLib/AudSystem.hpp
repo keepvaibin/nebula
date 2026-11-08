@@ -26,6 +26,13 @@ class AssetFolder;
 class NebulaArena;
 class SpkSystem;
 
+// SoundID groups (an id's top byte), which are also the SE categories; AudSoundId.hpp lists each group's sounds.
+enum AudGroup {
+    AudGroup_SystemSe = 0x0,  // SE_SY
+    AudGroup_VoiceSe = 0x1,   // SE_PV, the player's voice
+    AudGroup_HomeSe = 0xD,    // HOMESE, the HOME menu's
+};
+
 // The sound data and the sequence, chord, ME and remix archives in the store.
 extern const char cSoundDataPath[];
 extern const char cSeqArchivePath[];
