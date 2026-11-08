@@ -52,7 +52,7 @@ void PoltaStateStagger::exeWait() {
     MR::attenuateVelocity(getHost(), 0.9f);
     MR::addVelocityKeepHeight(getHost(), getHost()->mStartPos, 0.5f, 50.0f);
     getHost()->rotateToPlayer();
-    if (MR::isIntervalStep(this, 210) && PoltaFunction::appearBombTeresaFromRoot(getHost(), 20.0f, 15.0f, 1)) {
+    if (MR::isIntervalStep(this, 210) && PoltaFunction::appearBombTeresaFromRoot(getHost())) {
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_BOMB_TERESA");
     }
 }

@@ -8,7 +8,6 @@ class PoltaStateGenerateRock : public ActorStateBase< Polta > {
 public:
     PoltaStateGenerateRock(Polta*);
 
-    virtual ~PoltaStateGenerateRock();
     virtual void appear();
 
     void exeSign();
@@ -16,7 +15,8 @@ public:
     void exeEnd();
 
     s32 mPatternIndex;
-    s32 mIndexIntoPattern;
-    s32 mMaxIndexIntoPattern;
+    // Rocks made this attack, and how many make one attack.
+    s32 mRockCount;
+    s32 mRockNum;
     s32 mEndDelayStep;
 };
