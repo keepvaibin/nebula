@@ -11,26 +11,22 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sTmpScale = 1.2f;
-    static const f32 sAttackSensorRadius = 75.0f;
-    static const f32 sShadowRadius = 60.0f;
-    static const f32 sBinderRadius = 75.0f;
-    static const s32 sLifeTime = 300;
-    static const f32 sCameraShakeDistance = 1000.0f;
-    static const s32 sWallHitInvalidTime = 60;
-};  // namespace
+    const f32 cBaseScale = 1.2f;
+    const f32 cAttackSensorRadius = 75.0f;
+    const f32 cShadowRadius = 60.0f;
+    const f32 cBinderRadius = 75.0f;
+    const s32 cLifeTime = 300;
+    const f32 cCameraShakeDistance = 1000.0f;
+    // Wall hits are ignored this long after launch (the shell leaves the barrel).
+    const s32 cWallHitInvalidTime = 60;
+}  // namespace
 
 namespace NrvKoopaJrShipCannonMainShell {
-    NEW_NERVE(HostTypeWait, KoopaJrShipCannonMainShell, Wait);
     NEW_NERVE(HostTypeFly, KoopaJrShipCannonMainShell, Fly);
-};  // namespace NrvKoopaJrShipCannonMainShell
+}  // namespace NrvKoopaJrShipCannonMainShell
 
 KoopaJrShipCannonMainShell::KoopaJrShipCannonMainShell(const char* pName) : CannonShellBase(pName) {
-    f32 one = 1.0f;  // This makes Data match
-    mRotateQuat.set< f32 >(0.0f, 0.0f, 0.0f, one);
-}
-
-CannonShellBase::~CannonShellBase() {
+    mRotateQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
 void KoopaJrShipCannonMainShell::init(const TableIter& rIter) {
@@ -44,14 +40,14 @@ void KoopaJrShipCannonMainShell::init(const TableIter& rIter) {
     initEffectKeeper(0, "KoopaJrShipCannonShell");
     initHitSensor(1);
 
-    MR::addHitSensorEnemyAttack(this, "attack", 8, ::sAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "attack", 8, ::cAttackSensorRadius * getBaseScale(), Vec3f(0.0f, 0.0f, 0.0f));
 
-    initBinder(::sBinderRadius * getBaseScale(), 0.0f, 0);
+    initBinder(::cBinderRadius * getBaseScale(), 0.0f, 0);
     initNerve(GET_NERVE(KoopaJrShipCannonMainShell, HostTypeFly));
 
     MR::connectToSceneEnemy(this);
     MR::invalidateClipping(this);
-    MR::initShadowVolumeSphere(this, ::sShadowRadius * getBaseScale());
+    MR::initShadowVolumeSphere(this, ::cShadowRadius * getBaseScale());
     MR::offCalcGravity(this);
     makeActorDead();
 }
@@ -77,18 +73,9 @@ void KoopaJrShipCannonMainShell::attackSensor(HitSensor* pSender, HitSensor* pRe
         return;
     }
 
-    if (!MR::isSensorEnemy(pReceiver)) {
-        return;
-    }
-
-    bool isFly = isNerve(GET_NERVE(KoopaJrShipCannonMainShell, HostTypeFly)) && MR::isGreaterEqualStep(this, 0);
-
-    if (!isFly) {
-        return;
-    }
-
-    if (MR::sendMsgEnemyAttackExplosion(pReceiver, pSender)) {
-        return;
+    // Other enemies take the blast once a flight has run a step (step -1 is the frame of launch); the shell carries on.
+    if (MR::isSensorEnemy(pReceiver) && isNerve(GET_NERVE(KoopaJrShipCannonMainShell, HostTypeFly)) && MR::isGreaterEqualStep(this, 0)) {
+        MR::sendMsgEnemyAttackExplosion(pReceiver, pSender);
     }
 }
 
@@ -105,8 +92,7 @@ void KoopaJrShipCannonMainShell::launch(const Vec3f& rStartPos, const Vec3f& rVe
     appear();
 
     mPosition.set(rStartPos);
-    Vec3f dir;
-    dir = rVelocity;
+    Vec3f dir(rVelocity);
     MR::normalize(&dir);
 
     Pos3f mtx;
@@ -117,17 +103,14 @@ void KoopaJrShipCannonMainShell::launch(const Vec3f& rStartPos, const Vec3f& rVe
 }
 
 f32 KoopaJrShipCannonMainShell::getBaseScale() const {
-    return ::sTmpScale;
+    return ::cBaseScale;
 }
 
 void KoopaJrShipCannonMainShell::explosion() {
-    MR::startRumbleWithShakeCameraWeak(this, "強", "中", ::sCameraShakeDistance, ::sCameraShakeDistance * 2);
+    MR::startRumbleWithShakeCameraWeak(this, "強", "中", ::cCameraShakeDistance, ::cCameraShakeDistance * 2);
     MR::emitEffect(this, "Explosion");
     MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_FIRE");
     kill();
-}
-
-void KoopaJrShipCannonMainShell::exeWait() {
 }
 
 void KoopaJrShipCannonMainShell::exeFly() {
@@ -138,9 +121,9 @@ void KoopaJrShipCannonMainShell::exeFly() {
 
     MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_FLY_FIRE");
 
-    if (MR::isGreaterStep(this, ::sWallHitInvalidTime) && MR::isBindedWall(this)) {
+    if (MR::isGreaterStep(this, ::cWallHitInvalidTime) && MR::isBindedWall(this)) {
         explosion();
-    } else if (MR::isStep(this, ::sLifeTime)) {
+    } else if (MR::isStep(this, ::cLifeTime)) {
         kill();
     }
 }
@@ -154,4 +137,4 @@ namespace CannonShellUtil {
             pHolder->registerCannonShell(pShell);
         }
     }
-};  // namespace CannonShellUtil
+}  // namespace CannonShellUtil

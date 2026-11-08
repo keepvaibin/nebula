@@ -17,9 +17,6 @@ public:
     s32 mRepeatFrame;
     s32 mInterpole;
     u8 mLoopMode;
-    u8 _F;
-    u8 _10;
-    u8 _11;
 };
 
 class BckCtrlFunction {

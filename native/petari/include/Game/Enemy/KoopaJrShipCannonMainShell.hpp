@@ -17,7 +17,6 @@ public:
 
     void explosion();
 
-    void exeWait();
     void exeFly();
 
     Quat4f mRotateQuat;

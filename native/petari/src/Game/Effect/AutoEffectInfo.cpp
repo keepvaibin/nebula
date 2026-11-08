@@ -39,19 +39,19 @@ namespace {
 
 namespace {
     struct DrawOrderData {
-        s32 _0;
-        const char* _4;
+        s32 mDrawOrder;
+        const char* mName;
     };
 
-    static const DrawOrderData sDrawOrderDataTable[] = {
+    const DrawOrderData sDrawOrderDataTable[] = {
         {0, "3D"}, {1, "PAUSE_IGNORE"},    {2, "INDIRECT"},     {3, "AFTER_INDIRECT"}, {4, "BLOOM_EFFECT"}, {5, "AFTER_IMAGE_EFFECT"},
         {6, "2D"}, {7, "2D_PAUSE_IGNORE"}, {8, "FOR_2D_MODEL"},
     };
 
     s32 getDrawOrderData(const char* pDrawOrder) {
         for (u32 i = 0; i < ARRAY_SIZE(sDrawOrderDataTable); i++) {
-            if (MR::isEqualString(pDrawOrder, sDrawOrderDataTable[i]._4)) {
-                return sDrawOrderDataTable[i]._0;
+            if (MR::isEqualString(pDrawOrder, sDrawOrderDataTable[i].mName)) {
+                return sDrawOrderDataTable[i].mDrawOrder;
             }
         }
 

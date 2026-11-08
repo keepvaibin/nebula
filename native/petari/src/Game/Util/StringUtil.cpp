@@ -48,12 +48,18 @@ namespace {
 }  // namespace
 
 namespace MR {
+    // A message tag laid over the UTF-16 text: the escape unit, the tag's size in bytes, its group, then its data.
     struct Tag {
-        u16 _0;
+        u16 mEscape;
         u8 mDataSize;
-        u8 _3;
+        u8 mGroup;
         char16_t mBuffer[1];
     };
+
+    const u16 cTagEscape = 0x1A;
+    const u8 cTagGroupEditor = 1;
+    const u8 cTagGroupPictureFont = 3;
+    const char16_t cEditorTagNext = 1;
 
     struct TagHeader {
         u8 mDataSize;
@@ -169,9 +175,9 @@ namespace MR {
     char16_t* addPictureFontTag(char16_t* pDst, int tag) {
         Tag* pTag = reinterpret_cast< Tag* >(pDst);
 
-        pTag->_0 = 26;
+        pTag->mEscape = cTagEscape;
         pTag->mDataSize = sizeof(Tag);
-        pTag->_3 = 3;
+        pTag->mGroup = cTagGroupPictureFont;
         pTag->mBuffer[0] = tag - '0';
         pTag->mBuffer[1] = '\0';
 
@@ -289,10 +295,8 @@ namespace MR {
 
     bool isMessageEditorNextTag(const char16_t* pStr) {
         const Tag* pTag = reinterpret_cast< const Tag* >(pStr);
-        u8 v1 = pTag->_3;
-        char16_t v2 = pTag->mBuffer[0];
 
-        return v1 == 1 && v2 == 1;
+        return pTag->mGroup == cTagGroupEditor && pTag->mBuffer[0] == cEditorTagNext;
     }
 
     int getStringLengthWithMessageTag(const char16_t* pMessage) {

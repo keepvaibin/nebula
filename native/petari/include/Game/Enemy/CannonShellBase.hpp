@@ -8,23 +8,22 @@ public:
     CannonShellBase(const char* pName) : LiveActor(pName) {
     }
 
-    virtual ~CannonShellBase();
+    virtual ~CannonShellBase() {
+    }
+
     virtual void launch(const Vec3f& rStartPos, const Vec3f& rVelocity) = 0;
-    // These two virtuals get moved around based on the TU so they can't be in the CPP
+
     virtual f32 getBaseScale() const {
         return 1.0f;
     }
-    virtual s32 getLifeTime() const {
-        return 360;
-    }
 };
 
+// A fixed pool of shells; getValidShell hands out a dead one.
 class CannonShellHolder {
 public:
     CannonShellHolder(int num);
 
     void registerCannonShell(CannonShellBase*);
-    /* void printInfo(); */  // Exists according to the Debug maps
     CannonShellBase* getValidShell() const;
     void killActiveShells() const;
 

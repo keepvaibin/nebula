@@ -19,23 +19,23 @@ public:
 
     virtual void launch(const Vec3f&, const Vec3f&);
 
-    void initStarPointer();
     bool tryFreeze();
     bool isStateEnableExplosion() const;
     void explosion();
     void misfire();
 
-    void exeWait();
     void exeFly();
     void exeDown();
     void exeFreeze();
 
     Quat4f mPoseQuat;
+    // Where and how fast the shell was when the pointer froze it; restored when the freeze ends.
     Vec3f mFreezePos;
     Vec3f mFreezeVelocity;
-    s32 mFreezeStep;  // Freeze timing?
+    // Frozen frames since the last tryFreeze, across re-freezes.
+    s32 mFreezeStep;
 };
 
 namespace CannonShellUtil {
     void registerKoopaJrShipCannonShell(CannonShellHolder* pHolder, int shellNum);
-};  // namespace CannonShellUtil
+}  // namespace CannonShellUtil
