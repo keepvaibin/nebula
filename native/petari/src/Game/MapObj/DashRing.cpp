@@ -1,9 +1,6 @@
 #include "Game/MapObj/DashRing.hpp"
-#include "Game/Render/TypedDraw.hpp"
-#include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -13,60 +10,78 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 
+namespace {
+    // Passing: within this far of the ring's plane and this far of its centre.
+    const f32 cPassPlaneDistance = 20.0f;
+    const f32 cPassRadius = 200.0f;
+    // Farther than this, the ring turns a little to face the player.
+    const f32 cTurnDistance = 300.0f;
+    const f32 cTurnRate = 0.03f;
+    // After a pass it follows the player this long, then rests before coming back.
+    const u16 cActiveSteps = 15;
+    const u16 cRevivalSteps = 180;
+    // Following the player farther than this from home sends it back.
+    const f32 cFollowLimit = 2000.0f;
+    // Defaults for args 0-2 (arg 2 in hundredths).
+    const s32 cDefaultBoostTime = 300;
+    const s32 cDefaultMaxDuration = 120;
+    const f32 cDefaultSpeedScale = 2.5f;
+    const f32 cSpeedScaleArgUnit = 100.0f;
+
+    void startAnim(LiveActor* pActor, const char* pName) {
+        MR::startBck(pActor, pName);
+        MR::startBrk(pActor, pName);
+    }
+};  // namespace
+
 DashRing::~DashRing() {
 }
 
-void DashRing::initCommon(const TableIter& rIter, const char* pName) {
+// A ring the swimming player passes through for a speed boost: arg 0 the boost steps, arg 1 the longest dash, arg 2
+// the speed scale. It turns toward the player unless arg 3 is set. The player reads the three from the sensor's host.
+void DashRing::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     mActiveTime = 0;
     mRevivalTime = 0;
-    mDoLoop = false;
 
-    if (pName != nullptr) {
-        initModelManagerWithAnm(pName, nullptr, false);
-
-        MR::connectToSceneMapObj(this);
-
-        mDoLoop = true;
-    } else {
-        MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_DashRing);
-    }
+    initModelManagerWithAnm("DashRing", nullptr, false);
+    MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 4, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateClipping(this);
     calcAxis();
 
-    mBoostTime = 300;
-    mMaxDuration = 120;
-    mSpeedScale = 2.5f;
+    mBoostTime = cDefaultBoostTime;
+    mMaxDuration = cDefaultMaxDuration;
+    mSpeedScale = cDefaultSpeedScale;
     mDoTurn = true;
 
     if (MR::checkTableEntries(rIter)) {
-        s32 arg0 = -1;
-        s32 arg1 = -1;
-        s32 arg2 = -1;
+        s32 boostTime = -1;
+        s32 maxDuration = -1;
+        s32 speedScale = -1;
 
-        MR::getPlacementArg0NoInit(rIter, &arg0);
-        MR::getPlacementArg1NoInit(rIter, &arg1);
+        MR::getPlacementArg0NoInit(rIter, &boostTime);
+        MR::getPlacementArg1NoInit(rIter, &maxDuration);
 
-        if (arg0 != -1) {
-            mBoostTime = arg0;
+        if (boostTime != -1) {
+            mBoostTime = boostTime;
         }
 
-        if (arg1 != -1) {
-            mMaxDuration = arg1;
+        if (maxDuration != -1) {
+            mMaxDuration = maxDuration;
         }
 
-        if (MR::getPlacementArg2NoInit(rIter, &arg2) && arg2 != -1) {
-            mSpeedScale = arg2 / 100.0f;
+        if (MR::getPlacementArg2NoInit(rIter, &speedScale) && speedScale != -1) {
+            mSpeedScale = speedScale / cSpeedScaleArgUnit;
         }
 
-        s32 arg3 = -1;
-        MR::getPlacementArg3NoInit(rIter, &arg3);
+        s32 noTurn = -1;
+        MR::getPlacementArg3NoInit(rIter, &noTurn);
 
-        if (arg3 != -1) {
+        if (noTurn != -1) {
             mDoTurn = false;
         }
     }
@@ -75,64 +90,39 @@ void DashRing::initCommon(const TableIter& rIter, const char* pName) {
     initEffectKeeper(3, nullptr);
 
     appear();
-
-    if (mDoLoop) {
-        const char* animName = "Loop";
-        MR::startBck(this, animName);
-        MR::startBrk(this, animName);
-    }
+    startAnim(this, "Loop");
 
     mInitialPosition = mPosition;
 }
 
 void DashRing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (mRevivalTime != 0) {
-        return;
-    }
-
-    if (!MR::isSensorPlayer(pReceiver)) {
+    if (mRevivalTime != 0 || !MR::isSensorPlayer(pReceiver)) {
         return;
     }
 
     Vec3f dir(MR::getSensorPos(pReceiver) - mPosition);
-    Vec3f vec40;
-    f32 val = MR::vecKillElement(dir, mAxis, &vec40);
+    Vec3f radial;
+    f32 along = MR::vecKillElement(dir, mAxis, &radial);
 
-    if (MR::abs(val) < 20.0f && vec40.length() < 200.0f) {
+    if (MR::abs(along) < cPassPlaneDistance && radial.length() < cPassRadius) {
         MR::sendArbitraryMsg(ACTMES_PASS_RING, pReceiver, getSensor("body"));
 
         if (mActiveTime != 0) {
             return;
         }
 
-        if (mRevivalTime != 0) {
-            return;
-        }
-
-        mActiveTime = 15;
-
+        mActiveTime = cActiveSteps;
         MR::invalidateClipping(this);
-
         MR::startSystemSE("SE_SY_GET_DASH_RING");
-
-        if (mDoLoop) {
-            const char* pName = "Start";
-            MR::startBck(this, pName);
-            MR::startBrk(this, pName);
-        }
-
+        startAnim(this, "Start");
         return;
     }
 
-    if (mActiveTime != 0) {
+    if (mActiveTime != 0 || !mDoTurn) {
         return;
     }
 
-    if (!mDoTurn) {
-        return;
-    }
-
-    if (!(MR::abs(val) > 300.0f || vec40.length() > 300.0f)) {
+    if (!(MR::abs(along) > cTurnDistance || radial.length() > cTurnDistance)) {
         return;
     }
 
@@ -140,35 +130,33 @@ void DashRing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    f32 f1 = MR::diffAngleAbs(mAxis, dir);
+    // Toward whichever side of the ring faces the player.
+    f32 diffFront = MR::diffAngleAbs(mAxis, dir);
 
-    if (f1 > MR::diffAngleAbs(mAxis, -dir)) {
-        MR::vecBlendSphere(mAxis, -dir, &mAxis, 0.03f);
+    if (diffFront > MR::diffAngleAbs(mAxis, -dir)) {
+        MR::vecBlendSphere(mAxis, -dir, &mAxis, cTurnRate);
     } else {
-        MR::vecBlendSphere(mAxis, dir, &mAxis, 0.03f);
+        MR::vecBlendSphere(mAxis, dir, &mAxis, cTurnRate);
     }
 
     calcSubAxis();
 }
 
+// Passed, it rides just ahead of the player, then hides and comes back home.
 void DashRing::control() {
     if (mActiveTime != 0) {
         mActiveTime--;
 
         if (mActiveTime == 0) {
-            mRevivalTime = 180;
+            mRevivalTime = cRevivalSteps;
             MR::invalidateHitSensors(this);
-
-            const char* pName = "End";
-            MR::startBck(this, pName);
-            MR::startBrk(this, pName);
-
+            startAnim(this, "End");
             return;
         }
 
         mPosition = *MR::getPlayerPos() + *MR::getPlayerVelocity();
 
-        if ((mPosition - mInitialPosition).length() > 2000.0f) {
+        if ((mPosition - mInitialPosition).length() > cFollowLimit) {
             mPosition = mInitialPosition;
             mActiveTime = 0;
         }
@@ -183,38 +171,25 @@ void DashRing::control() {
             return;
         }
 
-        if (!mDoLoop) {
-            return;
-        }
-
         mPosition = mInitialPosition;
-
-        const char* pName = "Revival";
-        MR::startBck(this, pName);
-        MR::startBrk(this, pName);
-
+        startAnim(this, "Revival");
         MR::validateHitSensors(this);
-
         return;
     }
 
     if (MR::isBckOneTimeAndStopped(this)) {
-        const char* pName = "Loop";
-        MR::startBck(this, pName);
-        MR::startBrk(this, pName);
-
+        startAnim(this, "Loop");
         MR::validateClipping(this);
     }
 }
 
 void DashRing::calcAndSetBaseMtx() {
-    if (mDoLoop) {
-        Pos3f pos;
-        MR::makeMtxFrontSidePos(&pos, mAxis, mSubAxis, mPosition);
-        NebulaMtxCopy(pos, getBaseMtx());
-    }
+    Pos3f pos;
+    MR::makeMtxFrontSidePos(&pos, mAxis, mSubAxis, mPosition);
+    NebulaMtxCopy(pos, getBaseMtx());
 }
 
+// The ring faces along its local Y.
 void DashRing::calcAxis() {
     Vec3f axis(0.0f, 1.0f, 0.0f);
 
@@ -227,6 +202,7 @@ void DashRing::calcAxis() {
     calcSubAxis();
 }
 
+// A unit vector across the axis: in the XY plane unless the axis lies flat.
 void DashRing::calcSubAxis() {
     Vec3f axis(mAxis);
     Vec3f subAxis;
@@ -243,48 +219,4 @@ void DashRing::calcSubAxis() {
 
     MR::normalizeOrZero(&subAxis);
     mSubAxis = subAxis;
-}
-
-void DashRing::draw() const {
-    Vec3f axis, subAxis;
-    axis = mAxis;
-    subAxis = mSubAxis;
-
-    f32 f1 = 1.0f;
-
-    if (mActiveTime > 105) {
-        f1 = static_cast< f32 >(mActiveTime - 105) / 15.0f;
-
-        if (f1 > 1.0f) {
-            f1 = 1.0f;
-        }
-
-        if (f1 < 0.1f) {
-            f1 = 0.1f;
-        }
-    } else if (mActiveTime != 0) {
-        f1 = 0.1f;
-    }
-
-    f32 f2 = mScale.x * 200.0f * f1;
-    f32 segmentLength = (f2 * Angle::cRadian360) / 64.0f;
-
-    Pos3f rotMtx;
-    NebulaMtxRotAxisRad(rotMtx, axis, TWO_PI / 64.0f);
-
-    SiteMaterial material;
-    TDDraw::setupNative(&material, 0, 1, 0);
-    material.setDepth(true, NEBULA_COMPARE_LEQUAL, false);
-
-    for (u32 idx = 0; idx <= 64; idx++) {
-        Vec3f vecB0 = mPosition + subAxis * f2;
-
-        Vec3f crossVec;
-        crossVec.cross(subAxis, axis);
-
-        TypedDraw site = TDDraw::site(material, 0);
-        TDDraw::drawCylinder(site, vecB0 - crossVec * segmentLength * 0.5f, crossVec * segmentLength, mScale.y * f1 * 30.0f, 0x00808060, 0x00808080, 0x10);
-
-        NebulaMtxMultVec(rotMtx, subAxis, subAxis);
-    }
 }
