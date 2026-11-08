@@ -15,14 +15,35 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
+namespace {
+    const f32 cRadius = 120.0f;
+    // Follow speed and distance band while floating beside the owner.
+    const f32 cFollowSpeedMin = 0.0f;
+    const f32 cFollowSpeedMax = 1.2f;
+    const f32 cFollowLengthMin = 0.0f;
+    const f32 cFollowLengthMax = 200.0f;
+    const f32 cFloatHeight = 800.0f;
+    const f32 cFloatHeightSpeed = 1.5f;
+    const f32 cFloatHeightRange = 300.0f;
+    const f32 cFloatFriction = 0.92f;
+    const s32 cFloatTime = 90;
+    const s32 cSignTime = 60;
+    // The throw speeds up over cThrowAccelTime frames, then the rock drifts up against gravity until it hits or times out.
+    const s32 cThrowAccelTime = 30;
+    const f32 cThrowAccel = 3.0f;
+    const f32 cFlyGravity = -0.02f;
+    const f32 cFlyFriction = 0.999f;
+    const s32 cFlyTime = 300;
+}  // namespace
+
 namespace NrvPoltaRock {
     NEW_NERVE(PoltaRockNrvFloat, PoltaRock, Float);
     NEW_NERVE(PoltaRockNrvSign, PoltaRock, Sign);
     NEW_NERVE(PoltaRockNrvMove, PoltaRock, Move);
-};  // namespace NrvPoltaRock
+}  // namespace NrvPoltaRock
 
 PoltaRock::PoltaRock(const char* pName)
-    : LiveActor(pName), mOwner(nullptr), mRollQuat(0.0f, 0.0f, 0.0f, 1.0f), mChaseDir(0.0f, 0.0f, 1.0f), mLocalPos(0.0f, 0.0f, 0.0f), mType(0) {
+    : LiveActor(pName), mOwner(nullptr), mRollQuat(0.0f, 0.0f, 0.0f, 1.0f), mChaseDir(0.0f, 0.0f, 1.0f), mOwnerLocalPos(0.0f, 0.0f, 0.0f), mColor(Color_White) {
 }
 
 void PoltaRock::init(const TableIter& rIter) {
@@ -32,8 +53,8 @@ void PoltaRock::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     MR::onCalcGravity(this);
     initHitSensor(1);
-    MR::addHitSensorEnemy(this, "Body", 8, 120.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(120.0f, 0.0f, 0);
+    MR::addHitSensorEnemy(this, "Body", 8, ::cRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(::cRadius, 0.0f, 0);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
     MR::initShadowFromCSV(this, "Shadow");
@@ -42,21 +63,16 @@ void PoltaRock::init(const TableIter& rIter) {
     makeActorDead();
 }
 
+// A black rock leaves no break effect; its bomb boo is the break.
 void PoltaRock::kill() {
     MR::startSound(this, "SE_OJ_POLTA_ROCK_BREAK");
     LiveActor::kill();
-    switch (mType) {
-    case 2:
+    if (mColor == Color_Yellow) {
         MR::emitEffect(this, "BreakYellow");
-        break;
-    case 0:
+    } else if (mColor == Color_White) {
         MR::emitEffect(this, "BreakWhite");
-        break;
     }
     mOwner = nullptr;
-}
-
-void PoltaRock::control() {
 }
 
 void PoltaRock::calcAndSetBaseMtx() {
@@ -64,42 +80,33 @@ void PoltaRock::calcAndSetBaseMtx() {
     MR::setBaseScale(this, mScale);
 }
 
-void PoltaRock::start(Polta* pPolta, const Vec3f& rPosition, const Vec3f& rVec2) {
-    mOwner = pPolta;
+void PoltaRock::start(Polta* pOwner, const Vec3f& rPosition, const Vec3f& rOwnerLocalPos) {
+    mOwner = pOwner;
     mPosition.set(rPosition);
-    mLocalPos.set(rVec2);
+    mOwnerLocalPos.set(rOwnerLocalPos);
     setNerve(GET_NERVE(PoltaRock, PoltaRockNrvFloat));
     appear();
     MR::offBind(this);
 }
 
-void PoltaRock::setColorWhite() {
-    mType = 0;
+void PoltaRock::setColor(Color color) {
+    mColor = color;
     MR::startBva(this, "Color");
-    MR::setBvaFrameAndStop(this, 0.0f);
-}
-
-void PoltaRock::setColorBlack() {
-    mType = 1;
-    MR::startBva(this, "Color");
-    MR::setBvaFrameAndStop(this, 1.0f);
-}
-
-void PoltaRock::setColorYellow() {
-    mType = 2;
-    MR::startBva(this, "Color");
-    MR::setBvaFrameAndStop(this, 2.0f);
+    MR::setBvaFrameAndStop(this, static_cast< f32 >(color));
 }
 
 void PoltaRock::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isSensorPlayer(pReceiver)) {
-        if (isEnableAttack()) {
-            if (MR::sendMsgEnemyAttack(pReceiver, pSender)) {
-                generateKill();
-            }
-        } else {
-            MR::sendMsgPush(pReceiver, pSender);
-        }
+    if (!MR::isSensorPlayer(pReceiver)) {
+        return;
+    }
+
+    if (!isEnableAttack()) {
+        MR::sendMsgPush(pReceiver, pSender);
+        return;
+    }
+
+    if (MR::sendMsgEnemyAttack(pReceiver, pSender)) {
+        generateKill();
     }
 }
 
@@ -107,16 +114,13 @@ bool PoltaRock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return true;
     }
-    if (MR::isMsgStarPieceAttack(msg)) {
+
+    if (MR::isMsgStarPieceAttack(msg) || (MR::isMsgPlayerSpinAttack(msg) && isEnableAttack())) {
         MR::zeroVelocity(this);
         generateKill();
         return true;
     }
-    if (MR::isMsgPlayerSpinAttack(msg) && isEnableAttack()) {
-        MR::zeroVelocity(this);
-        generateKill();
-        return true;
-    }
+
     return false;
 }
 
@@ -126,39 +130,42 @@ bool PoltaRock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
         generateKill();
         return true;
     }
+
     return false;
 }
 
-void PoltaRock::exeFloat() {
-    Vec3f v3;
+void PoltaRock::followOwner() {
+    Vec3f target;
+    NebulaMtxMultVec(getOwner()->getBaseMtx(), &mOwnerLocalPos, target);
+    MR::addVelocityMoveToTarget(this, target, ::cFollowSpeedMin, ::cFollowSpeedMax, ::cFollowLengthMin, ::cFollowLengthMax);
+    MR::addVelocityKeepHeightUseShadow(this, ::cFloatHeight, ::cFloatHeightSpeed, ::cFloatHeightRange, nullptr);
+    MR::attenuateVelocity(this, ::cFloatFriction);
+}
 
+void PoltaRock::exeFloat() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_POLTA_ROCK_FLOAT_ST");
         MR::startAction(this, "Froat");
         MR::emitEffect(this, "Appear");
     }
+
     MR::startLevelSound(this, "SE_OJ_LV_POLTA_ROCK_FLOAT");
-    NebulaMtxMultVec(getOwner()->getBaseMtx(), &mLocalPos, v3);
-    MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
-    MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
-    MR::attenuateVelocity(this, 0.92f);
-    if (MR::isGreaterStep(this, 90)) {
+    followOwner();
+
+    if (MR::isGreaterStep(this, ::cFloatTime)) {
         setNerve(GET_NERVE(PoltaRock, PoltaRockNrvSign));
         MR::onBind(this);
     }
 }
 
 void PoltaRock::exeSign() {
-    Vec3f v3;
-
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Sign");
     }
-    NebulaMtxMultVec(getOwner()->getBaseMtx(), &mLocalPos, v3);
-    MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
-    MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
-    MR::attenuateVelocity(this, 0.92f);
-    if (MR::isGreaterStep(this, 60)) {
+
+    followOwner();
+
+    if (MR::isGreaterStep(this, ::cSignTime)) {
         setNerve(GET_NERVE(PoltaRock, PoltaRockNrvMove));
         MR::onBind(this);
     }
@@ -172,12 +179,14 @@ void PoltaRock::exeMove() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isLessStep(this, 30)) {
-        mVelocity.add(mChaseDir * (3.0f * MR::calcNerveRate(this, 30)));
+    if (MR::isLessStep(this, ::cThrowAccelTime)) {
+        mVelocity.add(mChaseDir * (::cThrowAccel * MR::calcNerveRate(this, ::cThrowAccelTime)));
     }
-    MR::addVelocityToGravity(this, -0.02f);
-    MR::attenuateVelocity(this, 0.999f);
-    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, 120.0f);
+
+    MR::addVelocityToGravity(this, ::cFlyGravity);
+    MR::attenuateVelocity(this, ::cFlyFriction);
+    MR::rotateQuatRollBall(&mRollQuat, mVelocity, -mGravity, ::cRadius);
+
     if (MR::isBinded(this)) {
         MR::sendMsgEnemyAttackToBindedSensor(this, getSensor("Body"));
         MR::tryRumbleDefaultHit(this, 0);
@@ -185,20 +194,19 @@ void PoltaRock::exeMove() {
         return;
     }
 
-    if (MR::isGreaterStep(this, 300)) {
+    if (MR::isGreaterStep(this, ::cFlyTime)) {
         kill();
     }
 }
 
+// Black rocks free a bomb boo and yellow ones a coin.
 void PoltaRock::generateKill() {
-    switch (mType) {
-    case 1:
+    if (mColor == Color_Black) {
         PoltaFunction::appearBombTeresaNormal(getOwner(), mPosition, Vec3f(0.0f, 0.0f, 0.0f));
-        break;
-    case 2:
+    } else if (mColor == Color_Yellow) {
         MR::appearCoinPop(getOwner(), mPosition, 1);
-        break;
     }
+
     kill();
 }
 
@@ -206,12 +214,7 @@ bool PoltaRock::isEnableAttack() const {
     return isNerve(GET_NERVE(PoltaRock, PoltaRockNrvMove));
 }
 
+// Explosions pass a rock that is still floating out (Float lasts cFloatTime + 1 frames).
 bool PoltaRock::isEnableExplosion() const {
-    if (isNerve(GET_NERVE(PoltaRock, PoltaRockNrvFloat)) && MR::isLessStep(this, 200)) {
-        return false;
-    }
-    return true;
-}
-
-PoltaRock::~PoltaRock() {
+    return !isNerve(GET_NERVE(PoltaRock, PoltaRockNrvFloat));
 }

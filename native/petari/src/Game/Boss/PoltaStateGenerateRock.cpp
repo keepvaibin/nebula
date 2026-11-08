@@ -11,27 +11,34 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 sRockPattern[][7] = {
+    const s32 cPatternLength = 7;
+    // 1 marks a black (bomb boo) rock.
+    const s32 cRockPattern[][cPatternLength] = {
         {1, 0, 0, 0, 1, 0, 0}, {0, 1, 0, 0, 0, 1, 0}, {0, 0, 1, 0, 0, 0, 1}, {0, 0, 0, 1, 0, 0, 0}, {0, 0, 0, 0, 1, 0, 0},
         {1, 0, 0, 1, 0, 0, 0}, {0, 1, 0, 0, 1, 0, 0}, {0, 0, 1, 0, 0, 1, 0}, {0, 0, 0, 1, 0, 0, 1}, {0, 0, 0, 0, 1, 0, 0},
     };
-};  // namespace
+    // The draw is a float in [0, 9) cut to an int, so the last pattern is never picked.
+    const s32 cPatternDrawMax = 9;
+    const s32 cRockInterval = 30;
+    const f32 cRockCircleRadius = 600.0f;
+    const f32 cYellowRockRate = 0.08f;
+}  // namespace
 
 namespace NrvPoltaStateGenerateRock {
     NEW_NERVE(PoltaStateGenerateRockNrvSign, PoltaStateGenerateRock, Sign);
     NEW_NERVE(PoltaStateGenerateRockNrvGenerate, PoltaStateGenerateRock, Generate);
     NEW_NERVE(PoltaStateGenerateRockNrvEnd, PoltaStateGenerateRock, End);
-};  // namespace NrvPoltaStateGenerateRock
+}  // namespace NrvPoltaStateGenerateRock
 
 PoltaStateGenerateRock::PoltaStateGenerateRock(Polta* pPolta)
-    : ActorStateBase< Polta >("ポルタ岩生成", pPolta), mPatternIndex(), mIndexIntoPattern(), mMaxIndexIntoPattern(5), mEndDelayStep(180) {
+    : ActorStateBase< Polta >("ポルタ岩生成", pPolta), mPatternIndex(), mRockCount(), mRockNum(5), mEndDelayStep(180) {
     initNerve(GET_NERVE(PoltaStateGenerateRock, PoltaStateGenerateRockNrvSign));
 }
 
 void PoltaStateGenerateRock::appear() {
     mIsDead = false;
     setNerve(GET_NERVE(PoltaStateGenerateRock, PoltaStateGenerateRockNrvSign));
-    mIndexIntoPattern = 0;
+    mRockCount = 0;
 }
 
 void PoltaStateGenerateRock::exeSign() {
@@ -47,30 +54,30 @@ void PoltaStateGenerateRock::exeSign() {
     }
 }
 
+// A marked slot gives a black rock while bomb boos are left; otherwise a rock may turn yellow while coins are left.
 void PoltaStateGenerateRock::exeGenerate() {
-    s32 patternIndex;
-
     if (MR::isFirstStep(this)) {
         PoltaFunction::startAction(getHost(), "GenerateRock", true);
         MR::zeroVelocity(getHost());
-        mPatternIndex = MR::getRandom(static_cast< s32 >(0), static_cast< s32 >(9));
+        mPatternIndex = MR::getRandom(static_cast< s32 >(0), ::cPatternDrawMax);
     }
 
     getHost()->rotateToPlayer();
-    if (MR::isIntervalStep(this, 30)) {
-        patternIndex = mIndexIntoPattern % 7;
-        if (::sRockPattern[mPatternIndex][patternIndex] && !PoltaFunction::isMaxGenerateBombTeresa(getHost())) {
-            PoltaFunction::appearBlackRockCircle(getHost(), getHost()->mPosition, 600.0f, patternIndex, mMaxIndexIntoPattern);
-        } else if (MR::getRandom(0.0f, 1.0f) < 0.08f && MR::getDeclareRemnantCoinCount(getHost()) > 0) {
-            PoltaFunction::appearYellowRockCircle(getHost(), getHost()->mPosition, 600.0f, patternIndex, mMaxIndexIntoPattern);
-        } else {
-            PoltaFunction::appearWhiteRockCircle(getHost(), getHost()->mPosition, 600.0f, patternIndex, mMaxIndexIntoPattern);
+    if (MR::isIntervalStep(this, ::cRockInterval)) {
+        const s32 slot = mRockCount % ::cPatternLength;
+
+        PoltaRock::Color color = PoltaRock::Color_White;
+        if (::cRockPattern[mPatternIndex][slot] && !PoltaFunction::isMaxGenerateBombTeresa(getHost())) {
+            color = PoltaRock::Color_Black;
+        } else if (MR::getRandom(0.0f, 1.0f) < ::cYellowRockRate && MR::getDeclareRemnantCoinCount(getHost()) > 0) {
+            color = PoltaRock::Color_Yellow;
         }
 
-        mIndexIntoPattern++;
+        PoltaFunction::appearRockCircle(getHost(), getHost()->mPosition, ::cRockCircleRadius, slot, color);
+        mRockCount++;
     }
 
-    if (mIndexIntoPattern >= mMaxIndexIntoPattern) {
+    if (mRockCount >= mRockNum) {
         setNerve(GET_NERVE(PoltaStateGenerateRock, PoltaStateGenerateRockNrvEnd));
     }
 }
@@ -81,12 +88,7 @@ void PoltaStateGenerateRock::exeEnd() {
     }
 
     getHost()->rotateToPlayer();
-    if (MR::isGreaterStep(this, mEndDelayStep)) {
-        if (MR::isActionEnd(getHost())) {
-            kill();
-        }
+    if (MR::isGreaterStep(this, mEndDelayStep) && MR::isActionEnd(getHost())) {
+        kill();
     }
-}
-
-PoltaStateGenerateRock::~PoltaStateGenerateRock() {
 }

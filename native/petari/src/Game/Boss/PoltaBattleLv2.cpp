@@ -38,7 +38,7 @@ PoltaBattleLv2::PoltaBattleLv2(Polta* pPolta) : PoltaActionBase("ボステレサ
     mStateGroundRockAttack = new PoltaStateGroundRockAttack(pPolta);
     mStateGroundRockAttack->mRockNum = 8;
     mStateGenerateRock = new PoltaStateGenerateRock(pPolta);
-    mStateGenerateRock->mMaxIndexIntoPattern = 7;
+    mStateGenerateRock->mRockNum = 7;
     mStateGenerateRock->mEndDelayStep = 180;
 }
 
@@ -51,7 +51,6 @@ void PoltaBattleLv2::appear() {
     PoltaFunction::setBodyHP(getHost(), 3);
     PoltaFunction::startArm(getHost());
     setNerve(GET_NERVE(PoltaBattleLv2, PoltaBattleLv2NrvWait));
-    PoltaFunction::emitEffectShadow(getHost());
 }
 
 void PoltaBattleLv2::control() {

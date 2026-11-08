@@ -29,7 +29,7 @@ PoltaBattleLv1::PoltaBattleLv1(Polta* pPolta) : PoltaActionBase("ポルタ1戦�
     mStateGroundRockAttack = new PoltaStateGroundRockAttack(pPolta);
     mStateGroundRockAttack->mRockNum = 4;
     mStateGenerateRock = new PoltaStateGenerateRock(pPolta);
-    mStateGenerateRock->mMaxIndexIntoPattern = 5;
+    mStateGenerateRock->mRockNum = 5;
     mStateGenerateRock->mEndDelayStep = 120;
 }
 
@@ -45,7 +45,6 @@ void PoltaBattleLv1::appear() {
     PoltaFunction::killRightArm(getHost());
     setNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvWait));
     mAttackIndex = 0;
-    PoltaFunction::emitEffectShadow(getHost());
 }
 
 void PoltaBattleLv1::control() {
