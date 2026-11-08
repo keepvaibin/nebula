@@ -32,8 +32,8 @@ void NebulaPauseSettingsButton::init(const TableIter& rIter) {
 
     // The menu's lower button alone, moved down into the band.
     nw4r::lyt::Pane* pRoot = pManager->mLayout->mpRootPane;
-    for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-        it->SetVisible(strcmp(it->mName, "BackButton") == 0);
+    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+        pChild->SetVisible(strcmp(pChild->mName, "BackButton") == 0);
     }
     MR::hidePane(this, "NBackUp");
     nw4r::lyt::Pane* pGroup = MR::getPane(this, "BackButton");

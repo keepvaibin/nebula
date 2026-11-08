@@ -31,20 +31,20 @@ namespace nw4r {
         }
 
         Group::~Group() {
-            for (PaneLinkList::Iterator it = mPaneLinkList.GetBeginIter(); it != mPaneLinkList.GetEndIter();) {
-                PaneLinkList::Iterator currIt = it++;
-                mPaneLinkList.Erase(currIt);
-                Layout::FreeMemory(&*currIt);
+            for (detail::PaneLink *pLink = mPaneLinkList.First(), *pNext; pLink != nullptr; pLink = pNext) {
+                pNext = PaneLinkList::Next(pLink);
+                mPaneLinkList.Erase(pLink);
+                Layout::FreeMemory(pLink);
             }
         }
 
         GroupContainer::~GroupContainer() {
-            for (GroupList::Iterator it = mGroupList.GetBeginIter(); it != mGroupList.GetEndIter();) {
-                GroupList::Iterator currIt = it++;
-                mGroupList.Erase(currIt);
-                if (!currIt->IsUserAllocated()) {
-                    currIt->~Group();
-                    Layout::FreeMemory(&*currIt);
+            for (Group *pGroup = mGroupList.First(), *pNext; pGroup != nullptr; pGroup = pNext) {
+                pNext = GroupList::Next(pGroup);
+                mGroupList.Erase(pGroup);
+                if (!pGroup->IsUserAllocated()) {
+                    pGroup->~Group();
+                    Layout::FreeMemory(pGroup);
                 }
             }
         }
@@ -54,9 +54,9 @@ namespace nw4r {
         }
 
         Group* GroupContainer::FindGroupByName(const char* findName) {
-            for (GroupList::Iterator it = mGroupList.GetBeginIter(); it != mGroupList.GetEndIter(); ++it) {
-                if (detail::EqualsResName(it->GetName(), findName)) {
-                    return &(*it);
+            for (Group* pGroup : mGroupList) {
+                if (detail::EqualsResName(pGroup->GetName(), findName)) {
+                    return pGroup;
                 }
             }
 

@@ -2261,8 +2261,8 @@ namespace {
         if (depth > 16) {
             return;
         }
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            swapPane(&*it, rSwaps, depth + 1);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            swapPane(pChild, rSwaps, depth + 1);
         }
     }
 };  // namespace

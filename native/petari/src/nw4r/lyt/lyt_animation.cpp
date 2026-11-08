@@ -347,9 +347,9 @@ namespace nw4r {
         namespace detail {
 
             AnimationLink* FindAnimationLink(AnimationList* pAnimList, AnimTransform* pAnimTrans) {
-                for (AnimationList::Iterator it = pAnimList->GetBeginIter(); it != pAnimList->GetEndIter(); ++it) {
-                    if (pAnimTrans == it->GetAnimTransform()) {
-                        return &(*it);
+                for (AnimationLink* pLink : *pAnimList) {
+                    if (pAnimTrans == pLink->GetAnimTransform()) {
+                        return pLink;
                     }
                 }
 
@@ -357,11 +357,11 @@ namespace nw4r {
             }
 
             void UnbindAnimationLink(AnimationList* pAnimList, AnimTransform* pAnimTrans) {
-                for (AnimationList::Iterator it = pAnimList->GetBeginIter(); it != pAnimList->GetEndIter();) {
-                    AnimationList::Iterator currIt = it++;
-                    if (!pAnimTrans || currIt->GetAnimTransform() == pAnimTrans) {
-                        pAnimList->Erase(currIt);
-                        currIt->Reset();
+                for (AnimationLink *pLink = pAnimList->First(), *pNext; pLink != nullptr; pLink = pNext) {
+                    pNext = AnimationList::Next(pLink);
+                    if (!pAnimTrans || pLink->GetAnimTransform() == pAnimTrans) {
+                        pAnimList->Erase(pLink);
+                        pLink->Reset();
                     }
                 }
             }

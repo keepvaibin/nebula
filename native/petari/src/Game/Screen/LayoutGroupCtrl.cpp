@@ -25,13 +25,13 @@ void LayoutGroupCtrl::calcAnim() {
 }
 
 u32 LayoutGroupCtrl::getPaneNum() const {
-    return mGroup->mPaneLinkList.GetSize();
+    return mGroup->mPaneLinkList.Size();
 }
 
 nw4r::lyt::Pane* LayoutGroupCtrl::getPane(u32 idx) const {
-    for (nw4r::lyt::PaneLinkList::Iterator iter = mGroup->GetPaneList().GetBeginIter(); iter != mGroup->GetPaneList().GetEndIter(); iter++) {
+    for (nw4r::lyt::detail::PaneLink* pLink : mGroup->GetPaneList()) {
         if (idx == 0) {
-            return iter->mTarget;
+            return pLink->mTarget;
         }
 
         idx--;

@@ -203,8 +203,8 @@ namespace nw4r {
             }
 
             if (recursive) {
-                for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
-                    if (Material* pMat = it->FindMaterialByName(pName, true)) {
+                for (Pane* pChild : mChildList) {
+                    if (Material* pMat = pChild->FindMaterialByName(pName, true)) {
                         return pMat;
                     }
                 }

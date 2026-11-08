@@ -476,8 +476,8 @@ namespace NebulaUi {
             return;
         }
         pPane->SetInfluencedAlpha(true);
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            setInfluencedAlphaRecursive(&*it, depth + 1);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            setInfluencedAlphaRecursive(pChild, depth + 1);
         }
     }
 

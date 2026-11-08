@@ -81,8 +81,8 @@ namespace {
     void fitText(nw4r::lyt::Pane* pParent, f32 fontSize, f32 lineSpace, f32* pWidth, f32* pHeight) {
         *pWidth = 0.0f;
         *pHeight = 0.0f;
-        for (nw4r::lyt::PaneList::Iterator it = pParent->GetChildList().GetBeginIter(); it != pParent->GetChildList().GetEndIter(); ++it) {
-            nw4r::lyt::TextBox* pText = asTextBox(&*it);
+        for (nw4r::lyt::Pane* pChild : pParent->GetChildList()) {
+            nw4r::lyt::TextBox* pText = asTextBox(pChild);
             if (pText == nullptr || !pText->IsVisible()) {
                 continue;
             }
@@ -104,10 +104,10 @@ namespace {
             *pWidth = width > *pWidth ? width : *pWidth;
             *pHeight = height > *pHeight ? height : *pHeight;
         }
-        for (nw4r::lyt::PaneList::Iterator it = pParent->GetChildList().GetBeginIter(); it != pParent->GetChildList().GetEndIter(); ++it) {
-            if (asTextBox(&*it) != nullptr) {
-                it->mSize.width = *pWidth + 4.0f;
-                it->mSize.height = *pHeight + 4.0f;
+        for (nw4r::lyt::Pane* pChild : pParent->GetChildList()) {
+            if (asTextBox(pChild) != nullptr) {
+                pChild->mSize.width = *pWidth + 4.0f;
+                pChild->mSize.height = *pHeight + 4.0f;
             }
         }
     }

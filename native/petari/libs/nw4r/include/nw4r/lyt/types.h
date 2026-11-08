@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Game/Ui/UiList.hpp"
 #include "nw4r/math/types.h"
-#include "nw4r/ut/LinkList.h"
 #include <cstddef>
 #include <cstring>
 #include <NebulaGpu.h>
@@ -313,13 +313,13 @@ namespace nw4r {
                 return mAnimTrans;
             }
 
-            ut::LinkListNode mLink;
+            UiLink< AnimationLink > mLink;
             AnimTransform* mAnimTrans;
             u16 mIdx;
             bool mbDisable;
         };
 
-        typedef ut::LinkList< AnimationLink, offsetof(AnimationLink, mLink) > AnimationList;
+        typedef UiList< AnimationLink > AnimationList;
 
     };  // namespace lyt
 };  // namespace nw4r

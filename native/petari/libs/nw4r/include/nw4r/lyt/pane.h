@@ -4,7 +4,6 @@
 #include "nw4r/lyt/types.h"
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
-#include "nw4r/ut/LinkList.h"
 #include <cstddef>
 
 namespace nw4r {
@@ -13,16 +12,6 @@ namespace nw4r {
     };
 
     namespace lyt {
-        namespace detail {
-            class PaneBase {
-            public:
-                PaneBase();
-                virtual ~PaneBase();
-
-                ut::LinkListNode mLink;
-            };
-        };  // namespace detail
-
         class AnimTransform;
         class AnimationLink;
         class AnimResource;
@@ -31,9 +20,9 @@ namespace nw4r {
         class Pane;
         struct ResBlockSet;
 
-        typedef ut::LinkList< Pane, offsetof(detail::PaneBase, mLink) > PaneList;
+        typedef UiList< Pane > PaneList;
 
-        class Pane : public detail::PaneBase {
+        class Pane {
         public:
             static constexpr UiPaneKind cKind = UiPaneKind_Pane;
 
@@ -82,7 +71,6 @@ namespace nw4r {
                 return mpParent;
             }
 
-            void InsertChild(PaneList::Iterator, Pane*);
             void RemoveChild(Pane*);
             void AppendChild(Pane*);
             void AddAnimationLink(AnimationLink*);
@@ -114,6 +102,7 @@ namespace nw4r {
                 return detail::TestBit(mFlag, 0);
             }
 
+            UiLink< Pane > mLink;  // in the parent's mChildList
             Pane* mpParent;
             PaneList mChildList;
             AnimationList mAnimList;

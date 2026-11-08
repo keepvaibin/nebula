@@ -1117,8 +1117,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
     const bool ringed = p->mWindow.init(MR::createAndAddLayoutHolder("SysInfoWindowMini.arc"));
     // The information window's own panes stay hidden; the board is built beside them.
-    for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-        it->SetVisible(false);
+    for (nw4r::lyt::Pane* pChild : pRoot->GetChildList()) {
+        pChild->SetVisible(false);
     }
 
     // The icons' textures, from the game's files.

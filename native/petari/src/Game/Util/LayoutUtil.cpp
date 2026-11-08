@@ -33,24 +33,24 @@ namespace {
 
         nw4r::lyt::PaneList& rChildren = pPane->GetChildList();
 
-        for (nw4r::lyt::PaneList::Iterator it = rChildren.GetBeginIter(); it != rChildren.GetEndIter(); it++) {
-            it->SetInfluencedAlpha(true);
+        for (nw4r::lyt::Pane* pChild : rChildren) {
+            pChild->SetInfluencedAlpha(true);
         }
     }
 
     void showPaneRecursive(nw4r::lyt::Pane* pPane) {
         pPane->SetVisible(true);
 
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            showPaneRecursive(&*it);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            showPaneRecursive(pChild);
         }
     }
 
     void hidePaneRecursive(nw4r::lyt::Pane* pPane) {
         pPane->SetVisible(false);
 
-        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-            hidePaneRecursive(&*it);
+        for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+            hidePaneRecursive(pChild);
         }
     }
 
@@ -63,8 +63,8 @@ namespace {
     bool getTextDrawRectRecursive(nw4r::ut::Rect* pRect, const nw4r::lyt::Pane* pPane, bool initialized) {
         const nw4r::lyt::PaneList& rChildren = pPane->GetChildList();
 
-        for (nw4r::lyt::PaneList::ConstIterator it = rChildren.GetBeginIter(); it != rChildren.GetEndIter(); ++it) {
-            initialized = getTextDrawRectRecursive(pRect, &*it, initialized);
+        for (const nw4r::lyt::Pane* pChild : rChildren) {
+            initialized = getTextDrawRectRecursive(pRect, pChild, initialized);
         }
 
         const nw4r::lyt::TextBox* pTextBox = nw4r::lyt::PaneCast< nw4r::lyt::TextBox >(pPane);
@@ -101,8 +101,8 @@ namespace {
         u32 max = 0;
         const nw4r::lyt::PaneList& rChildren = pPane->GetChildList();
 
-        for (nw4r::lyt::PaneList::ConstIterator it = rChildren.GetBeginIter(); it != rChildren.GetEndIter(); ++it) {
-            u32 count = getTextLineNumMaxRecursiveSub(&*it);
+        for (const nw4r::lyt::Pane* pChild : rChildren) {
+            u32 count = getTextLineNumMaxRecursiveSub(pChild);
 
             if (count > max) {
                 max = count;
@@ -180,8 +180,8 @@ void MR::executeTextBoxRecursive(LayoutActor* pActor, const char* pPaneName, con
 
     nw4r::lyt::Pane* pPane = getPane(pActor, pPaneName);
 
-    for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
-        executeTextBoxRecursive(pActor, it->mName, rOperation);
+    for (nw4r::lyt::Pane* pChild : pPane->GetChildList()) {
+        executeTextBoxRecursive(pActor, pChild->mName, rOperation);
     }
 }
 

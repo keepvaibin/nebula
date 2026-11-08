@@ -4,7 +4,6 @@
 #include "nw4r/lyt/animation.h"
 #include "nw4r/lyt/group.h"
 #include "nw4r/lyt/types.h"
-#include "nw4r/ut/LinkList.h"
 #include <cstddef>
 #include <new>
 
@@ -35,7 +34,7 @@ namespace nw4r {
             ORIGINTYPE_MAX
         };
 
-        typedef ut::LinkList< AnimTransform, offsetof(AnimTransform, mLink) > AnimTransformList;
+        typedef UiList< AnimTransform > AnimTransformList;
 
         class Layout {
         public:
