@@ -68,11 +68,7 @@ void AudSeStrategy::mix(EffectSound* pSe, SoundParams* pParams) {
 }
 
 SoundStrategy< EffectSound >* AudSeStrategyMgr::newStrategy(SoundID soundID) {
-    AudSeStrategy* strategy = new AudSeStrategy();
-    if (strategy == nullptr) {
-        return nullptr;
-    }
-    return strategy;
+    return new AudSeStrategy();
 }
 
 bool AudSeStrategyMgr::deleteStrategy(SoundStrategy< EffectSound >* pStrategy) {

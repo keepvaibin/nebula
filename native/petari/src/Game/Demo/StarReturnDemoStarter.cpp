@@ -27,17 +27,18 @@ namespace {
     const s32 cDemoAppearWaitFrame = 45;
     const s32 cFadeOutFrame = 60;
     const s32 cOverlayFrame = 3;
-    // const s32 cFlyAwayFrame = _;
     const s32 cCapHideStartStep = 21;
     const s32 cCapHideEndStep = 221;
     const s32 cFallStartFrameGrandStar = 360;
     const char* const cDemoMovePartName = "移動";
     const char* const cDemoWaitPartName = "ウェイト";
-};  // namespace
 
-namespace {
     bool isGrandStar() {
         return GameSequenceFunction::isGrandStarAtResultSequence();
+    }
+
+    const char* getResultWaitStartName() {
+        return MR::isPlayerLuigi() ? "LuigiResultWaitStart" : "ResultWaitStart";
     }
 };  // namespace
 
@@ -168,10 +169,6 @@ void StarReturnDemoStarter::tryStartResultWait() {
     }
 }
 
-const char* playerAnimName() {
-    return MR::isPlayerLuigi() ? "LuigiResultWaitStart" : "ResultWaitStart";
-}
-
 void StarReturnDemoStarter::exeAppearWait() {
     if (MR::isFirstStep(this)) {
         MR::hidePlayer();
@@ -218,7 +215,7 @@ void StarReturnDemoStarter::exeFlyWaitPowerStar() {
 
     PowerStar::requestPointLightAtResultSequence(mPowerStar);
 
-    int brakeFrame = mReturnDemoRailMove->getDemoFlyBrakeFrame();
+    const int brakeFrame = mReturnDemoRailMove->getDemoFlyBrakeFrame();
 
     if (MR::isLessStep(this, 115 - brakeFrame)) {
         MR::startLevelSound(mPowerStar, "SE_OJ_LV_RET_POW_STAR_FLY");
@@ -293,14 +290,12 @@ void StarReturnDemoStarter::exeLand() {
     }
 
     if (MR::isBckStoppedPlayer()) {
-        LiveActor* lumaModel = mLuma;
-        lumaModel->appear();
-        MR::startAllAnim(lumaModel, playerAnimName());
+        mLuma->appear();
+        MR::startAllAnim(mLuma, ::getResultWaitStartName());
 
-        LiveActor* hairModel = mHair;
-        if (hairModel != nullptr) {
-            hairModel->appear();
-            MR::startAllAnim(hairModel, playerAnimName());
+        if (mHair != nullptr) {
+            mHair->appear();
+            MR::startAllAnim(mHair, ::getResultWaitStartName());
         }
 
         setNerve(GET_NERVE(StarReturnDemoStarter, StarReturnDemoStarterNrvWait));
@@ -309,7 +304,7 @@ void StarReturnDemoStarter::exeLand() {
 
 void StarReturnDemoStarter::exeWait() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayer(playerAnimName());
+        MR::startBckPlayer(::getResultWaitStartName());
 
         mFrame = 0;
 
@@ -326,9 +321,11 @@ void StarReturnDemoStarter::exeStageResult() {
     tryStartResultWait();
 
     if (MR::isDead(mStageResultInformer) && MR::isEqualStringCase(MR::getPlayerCurrentBckName(), "ResultWait")) {
-        GameSequenceFunction::hasNextDemoForStorySequenceEvent() ?
-            setNerve(GET_NERVE(StarReturnDemoStarter, StarReturnDemoStarterNrvFadeOut)) :
+        if (GameSequenceFunction::hasNextDemoForStorySequenceEvent()) {
+            setNerve(GET_NERVE(StarReturnDemoStarter, StarReturnDemoStarterNrvFadeOut));
+        } else {
             setNerve(GET_NERVE(StarReturnDemoStarter, StarReturnDemoStarterNrvStageResultAfter));
+        }
     }
 }
 

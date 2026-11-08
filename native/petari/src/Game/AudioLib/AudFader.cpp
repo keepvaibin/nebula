@@ -12,7 +12,7 @@ void AudFader::set(f32 desiredVolume, s32 fadeTime) {
         mCurrentVolume = desiredVolume;
         mStepVolume = 0.f;
     } else {
-        mStepVolume = (desiredVolume - mCurrentVolume) / (f32)(fadeTime);
+        mStepVolume = (desiredVolume - mCurrentVolume) / static_cast< f32 >(fadeTime);
     }
     mFinalVolume = desiredVolume;
 }

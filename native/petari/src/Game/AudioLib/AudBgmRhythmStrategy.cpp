@@ -17,17 +17,15 @@ bool AudBgmRhythmStrategy::set(AudBgm* pBgm, s32 bgmIndex) {
         return false;
     }
 
-    u32 soundID = handle->getSound()->getID();
-    if (handle->isSoundAttached()) {
-        if (info->isRhythmBgm(soundID)) {
-            AudWrap::getRhythmMeSystem()->setSeq(*handle, bgmIndex);
-            mBgmIdx = bgmIndex;
-            mBgm = pBgm;
-            return true;
-        }
+    const u32 soundID = handle->getSound()->getID();
+    if (!handle->isSoundAttached() || !info->isRhythmBgm(soundID)) {
+        return false;
     }
 
-    return false;
+    AudWrap::getRhythmMeSystem()->setSeq(*handle, bgmIndex);
+    mBgmIdx = bgmIndex;
+    mBgm = pBgm;
+    return true;
 }
 
 void AudBgmRhythmStrategy::reject() {
@@ -77,10 +75,6 @@ bool AudBgmRhythmStrategy::setDominant() {
 }
 
 bool AudBgmRhythmStrategy::isDominant() const {
-    if (mBgmIdx < 0) {
-        return false;
-    }
-
-    return mBgmIdx == AudWrap::getRhythmMeSystem()->getBgmIdx();
+    return mBgmIdx >= 0 && mBgmIdx == AudWrap::getRhythmMeSystem()->getBgmIdx();
 }
 
