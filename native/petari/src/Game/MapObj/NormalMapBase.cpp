@@ -22,12 +22,11 @@
 #include <cstring>
 #include <nebula_format.h>
 
-s16 sgrad_tex_thresh;
-
-static s16 width = 0x100;
-static s16 height = 0x100;
-
 namespace {
+    // The gradient texture's size in texels.
+    const u32 cGradTexWidth = 0x100;
+    const u32 cGradTexHeight = 0x100;
+
     // The object's native material (runtime/src/render/materials/normal_map.hlsl): drawSetting and setStageForObject
     // set its program, each normal-mapped shape its textures, colours and indirect matrix (drawMaterialSetting).
     SiteMaterial sNormalMap;
@@ -109,7 +108,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (MR::getSceneHeap(), 0) u16[width * height];
+    mImagePtr = new (MR::getSceneHeap(), 0) u16[::cGradTexWidth * ::cGradTexHeight];
     createGradTexture();
 }
 
@@ -293,7 +292,7 @@ void NormalMapBase::drawShape(Model* pModel, Mesh* pShape) const {
 
 void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
     SiteTexture obj;
-    SiteTextures::init(&obj, mImagePtr, width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    SiteTextures::init(&obj, mImagePtr, ::cGradTexWidth, ::cGradTexHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
     if (mTexFlags & 1) {
         SiteTextures::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
@@ -418,8 +417,8 @@ void NormalMapBase::setStageForObject() const {
     sNormalMap.constants[30] = mBackLightMode == 4 ? 1.0f : 0.0f;
     sNormalMap.constants[31] = mLightBMode == 2 ? 1.0f : 0.0f;
     sNormalMap.constants[33] = 1.0f;
-    sNormalMap.constants[34] = width;
-    sNormalMap.constants[35] = height;
+    sNormalMap.constants[34] = ::cGradTexWidth;
+    sNormalMap.constants[35] = ::cGradTexHeight;
 }
 
 namespace {
@@ -457,28 +456,28 @@ namespace {
 // first 2 KB as each 4-row band's first eight intensities (two to a texel: alpha, then intensity) and the rest as the
 // rows' bytes read as 4x4 tiles: texel (x, y) here is what those tiles showed there.
 void NormalMapBase::createGradTexture() {
-    for (u32 x = 0; x < width; x++) {
-        const f32 ratio = gradLevel(x, width, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
+    for (u32 x = 0; x < ::cGradTexWidth; x++) {
+        const f32 ratio = gradLevel(x, ::cGradTexWidth, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
         sGradIntensity[x] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
-    for (u32 y = 0; y < height; y++) {
+    for (u32 y = 0; y < ::cGradTexHeight; y++) {
         if (mDrawFlags & 1) {
             sGradAlpha[y] = 0;
             continue;
         }
-        const f32 ratio = gradLevel(y, height, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
+        const f32 ratio = gradLevel(y, ::cGradTexHeight, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
         sGradAlpha[y] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
 
     u8* pTexels = static_cast< u8* >(mImagePtr);
-    const u32 tilesAcross = width / 4;
-    for (u32 y = 0; y < height; y++) {
-        for (u32 x = 0; x < width; x++) {
+    const u32 tilesAcross = ::cGradTexWidth / 4;
+    for (u32 y = 0; y < ::cGradTexHeight; y++) {
+        for (u32 x = 0; x < ::cGradTexWidth; x++) {
             const u32 tile = (y / 4) * tilesAcross + x / 4;
             const u32 inTile = (y % 4) * 4 + x % 4;
             u8 alpha;
             u8 intensity;
-            if (tile < static_cast< u32 >(height / 4)) {
+            if (tile < ::cGradTexHeight / 4) {
                 // Band `tile`'s entries 2 * inTile and 2 * inTile + 1: columns 0-3 of its rows, then columns 4-7.
                 const u32 first = 2 * inTile;
                 const u32 second = first + 1;
@@ -486,16 +485,16 @@ void NormalMapBase::createGradTexture() {
                 intensity = sGradIntensity[second < 16 ? second % 4 : 4 + (second - 16) % 4];
             } else {
                 const u32 written = tile * 16 + inTile;
-                alpha = sGradAlpha[written / width];
-                intensity = sGradIntensity[written % width];
+                alpha = sGradAlpha[written / ::cGradTexWidth];
+                intensity = sGradIntensity[written % ::cGradTexWidth];
             }
-            u8* pTexel = pTexels + 2 * (y * width + x);
+            u8* pTexel = pTexels + 2 * (y * ::cGradTexWidth + x);
             pTexel[0] = intensity;
             pTexel[1] = alpha;
         }
     }
 
-    RenderTexture::linear(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
+    RenderTexture::linear(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, ::cGradTexWidth, ::cGradTexHeight, 1);
 }
 
 void NormalMapBase::swapColorGB(JUTTexture* pTexture) {

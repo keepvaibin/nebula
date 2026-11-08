@@ -55,10 +55,10 @@ namespace {
     static const f32 sSelectEffectOffset = 1000.0f;
     const char* cLuigiNameMessageID = "System_FileSelect_Icon001";
     const char* cMarioNameMessageID = "System_FileSelect_Icon000";
-    static s32 sBgmFarState = 5;
-    static u32 sBgmFarStateChangeFrames = 60;
-    static s32 sBgmNearState = 6;
-    static u32 sBgmNearStateChangeFrames = 60;
+    const s32 sBgmFarState = 5;
+    const u32 sBgmFarStateChangeFrames = 60;
+    const s32 sBgmNearState = 6;
+    const u32 sBgmNearStateChangeFrames = 60;
     static const f32 sItemThetaOffset[USER_FILE_NUM] ={10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     static const s32 sIndexOrder[USER_FILE_NUM] = {1, 2, 4, 6, 5, 3};
 };  // namespace

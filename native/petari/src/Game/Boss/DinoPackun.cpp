@@ -47,10 +47,10 @@ namespace {
         }
     }
 
-    static Vec3f sHeadHitOffset = Vec3f(140.0f, -110.0f, 0.0f);
-    static Vec3f sBodyHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
-    static Vec3f sEggHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
-    static Vec3f sMarioSetLocalPos = Vec3f(0.0f, -550.0f, 800.0f);
+    const Vec3f sHeadHitOffset = Vec3f(140.0f, -110.0f, 0.0f);
+    const Vec3f sBodyHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
+    const Vec3f sEggHitOffset = Vec3f(0.0f, 200.0f, 0.0f);
+    const Vec3f sMarioSetLocalPos = Vec3f(0.0f, -550.0f, 800.0f);
     static const char* sEventCameraName = "ダメージ";
 
     // The tail is a root, sTailJointNum parts and the ball.

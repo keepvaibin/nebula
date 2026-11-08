@@ -11,9 +11,6 @@ class WaterPlant : public LiveActor {
 public:
     class PlantData {
     public:
-        /// @brief Creates a new `PlantData`.
-        PlantData();
-
         Vec3f mPosition;
         Vec3f mRotation;
         Vec3f mSpinSwingDir;
@@ -27,14 +24,10 @@ public:
         f32 mHeight1;
         f32 mHeight2;
         f32 mHeight3;
-        u8 pad_6C;
+        // Entries of WaterPlantDrawInit::mSwingPosTable, top to bottom.
         f32* mSwingStrength1;
         f32* mSwingStrength2;
         f32* mSwingStrength3;
-
-        bool newSpinWaveTimerIsGreater(s32 newTimer) {
-            return !(newTimer < mSpinWaveTimer);
-        }
     };
 
     /// @brief Creates a new `WaterPlant`.
@@ -48,11 +41,7 @@ public:
 
     void initPlant();
     void initPlantAfterPlacement();
-    void drawDirect(TypedDraw& rDraw) const;
-
-    PlantData* getData(int i) {
-        return &mPlantDataArray[i];
-    }
+    void drawDirect(TypedDraw& rDraw, const Vec3f& rSide) const;
 
     s32 mPlantNum;
     PlantData* mPlantDataArray;
@@ -76,6 +65,8 @@ public:
 
     f32 mAngleOffset;
     f32* mSwingPosTable;
+    // The camera's X axis in world space, this frame.
+    Vec3f mCameraSide;
     JUTTexture* mPlantATex;
     JUTTexture* mPlantBTex;
     JUTTexture* mPlantCTex;

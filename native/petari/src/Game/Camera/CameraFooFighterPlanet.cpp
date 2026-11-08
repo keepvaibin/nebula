@@ -8,7 +8,7 @@
 #include "Game/Util/VectorUtil.hpp"
 
 namespace {
-    static f32 sRateWhenBraking = 0.05f;
+    const f32 sRateWhenBraking = 0.05f;
 };  // namespace
 
 CameraFooFighterPlanet::~CameraFooFighterPlanet() {

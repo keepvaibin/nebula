@@ -24,10 +24,10 @@ namespace {
     const f32 sBloomCameraOffsetZ = 3000.0f;
     const f32 sDistancePartDrawBloom = 4000.0f;
 
-    static NebulaColor8 color1 = {0x28, 0x28, 0x28, 0x14};
-    static NebulaColor8 color2 = {0x76, 0xD7, 0xFF, 0xFF};
-    static u8 unknownVal = 1;
-};  // namespace
+    // Material colours 0 and 4.
+    const NebulaColor8 cBaseColor = {0x28, 0x28, 0x28, 0x14};
+    const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
+}  // namespace
 
 OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4, bool a5, f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2)
     : mPosition(0.0f, 0.0f, 0.0f) {
@@ -413,10 +413,10 @@ SiteMaterial OceanRingDrawer::loadMaterial() const {
     Pos3f projection;
     MR::calcTexProjectionMtx(&projection);
     material.setMatrix(3, 3, projection);
-    material.setColor(0, ::color1.r, ::color1.g, ::color1.b, ::color1.a);
-    material.setColor(4, ::color2.r, ::color2.g, ::color2.b, ::color2.a);
+    material.setColor(0, ::cBaseColor.r, ::cBaseColor.g, ::cBaseColor.b, ::cBaseColor.a);
+    material.setColor(4, ::cWaterColor.r, ::cWaterColor.g, ::cWaterColor.b, ::cWaterColor.a);
     material.constants[8] = ::sIndirectScale;
-    material.constants[9] = ::unknownVal != 0 && MR::isCameraInWater() ? 0.0f : 1.0f;
+    material.constants[9] = MR::isCameraInWater() ? 0.0f : 1.0f;
     material.constants[10] = static_cast< f32 >(screen.getWidth());
     material.constants[11] = static_cast< f32 >(screen.getHeight());
     material.setTexture(0, mWaterTex);

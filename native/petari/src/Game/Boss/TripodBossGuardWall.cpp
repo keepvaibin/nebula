@@ -30,7 +30,7 @@ namespace {
     static const s32 sStartCameraBlendTime = 20;
     static const s32 sEndCameraBlendTime = 30;
     static const f32 sRotateSpeed = -0.2f;
-    static s32 sMoveSeLength = 58;
+    const s32 sMoveSeLength = 58;
 };  // namespace
 
 namespace NrvTriPodBossGuardWall {
