@@ -9,27 +9,23 @@ namespace {
     static const s32 sJumpBackTime = 56;
 };  // namespace
 
-namespace NrvDinoPackunDemo {
+namespace NrvDinoPackunDemoPosition {
     NEW_NERVE(DinoPackunDemoPositionNrvOpeningDemo, DinoPackunDemoPosition, OpeningDemo);
-};  // namespace NrvDinoPackunDemo
+};  // namespace NrvDinoPackunDemoPosition
 
 DinoPackunDemoPosition::DinoPackunDemoPosition(const char* pName) : LiveActor(pName) {
 }
 
 void DinoPackunDemoPosition::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    initNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoPositionNrvOpeningDemo));
+    initNerve(GET_NERVE(DinoPackunDemoPosition, DinoPackunDemoPositionNrvOpeningDemo));
     initModelManagerWithAnm("DinoPackunDemoPosition", nullptr, false);
     MR::invalidateClipping(this);
     makeActorDead();
 }
 
-void DinoPackunDemoPosition::control() {
-    return;
-}
-
 void DinoPackunDemoPosition::startOpeningDemo() {
-    setNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoPositionNrvOpeningDemo));
+    setNerve(GET_NERVE(DinoPackunDemoPosition, DinoPackunDemoPositionNrvOpeningDemo));
     makeActorAppeared();
 }
 
@@ -40,9 +36,6 @@ void DinoPackunDemoPosition::endDemo() {
 void DinoPackunDemoPosition::exeOpeningDemo() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "OpeningDemo");
-    }
-
-    if (MR::isStep(this, 0)) {
         MR::startBckPlayer("CocoonFly");
     }
 

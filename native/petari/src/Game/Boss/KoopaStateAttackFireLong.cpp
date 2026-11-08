@@ -9,10 +9,10 @@
 #include "Game/Util/NerveUtil.hpp"
 
 namespace {
-    static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
-    static const s32 sStepEmit = 15;
-    static const s32 sEmitNumMax = 16;
-    static const f32 sTurnSpeed = 3.0f;
+    const MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
+    const s32 sStepEmit = 15;
+    const s32 sEmitNumMax = 16;
+    const f32 sTurnSpeed = 3.0f;
 };  // namespace
 
 namespace NrvKoopaStateAttackFireLong {

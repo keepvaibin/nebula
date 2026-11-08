@@ -3,10 +3,11 @@
 #include <nebula_geometry.hpp>
 
 class TombSpider;
+class TombSpiderGland;
 
 class TombSpiderAcid {
 public:
-    TombSpiderAcid(TombSpider*);
+    TombSpiderAcid(TombSpider* pParent);
 
     void start();
     void startGland();
@@ -14,7 +15,8 @@ public:
     void update();
     void updateEmitAcid();
     void updateDeleteAcid();
-    void updateGroundMtx(Pos3f*, MtxPtr);
+    void updateGroundMtx(Pos3f* pDstMtx, MtxPtr pSrcMtx);
+    void updateGlandGroundMtx(const TombSpiderGland* pGland, Pos3f* pDstMtx, MtxPtr pSrcMtx);
 
     TombSpider* mParent;
     bool mIsGlandReady;

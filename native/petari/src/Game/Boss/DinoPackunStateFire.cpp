@@ -105,25 +105,16 @@ bool DinoPackunStateFire::isFire() const {
 }
 
 bool DinoPackunStateFire::isEnableFire() const {
-    if (isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal)) ||
-        isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvCool))) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal)) ||
+           isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvCool));
 }
 
 bool DinoPackunStateFire::isEnableCool() const {
-    if (isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFireSign)) ||
-        isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire))) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFireSign)) ||
+           isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire));
 }
 
 void DinoPackunStateFire::exeFire() {
-    return;
 }
 
 DinoPackunStateFire::~DinoPackunStateFire() {

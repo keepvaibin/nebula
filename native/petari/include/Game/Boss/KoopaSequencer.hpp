@@ -28,6 +28,8 @@ public:
 
     void startBattleLevel2();
     void startBattleLevel3();
+    void updateFallVoice();
+    void updateDemoDown(const char* pPlayerPosName);
 
     Koopa* mKoopa;
     KoopaDemoPowerUp* mPowerUp;

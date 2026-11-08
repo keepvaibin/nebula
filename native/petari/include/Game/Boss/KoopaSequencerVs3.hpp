@@ -2,6 +2,7 @@
 
 #include "Game/Boss/KoopaSequencer.hpp"
 
+class ActorStateBaseInterface;
 class KoopaBattleMain;
 class KoopaBattleVs3Lv1;
 class KoopaBattleVs3Lv2;
@@ -35,6 +36,9 @@ public:
     void exeDemoDown();
     void exeDead();
     void exeWaitDemo();
+    void initDemoCasts(const TableIter& rIter, const char* pDemoName, const char* pPartName);
+    void updateFallToPlanet(ActorStateBaseInterface* pDemo, const Nerve* pNextNerve);
+    bool isNerveBattleMain() const;
 
     KoopaBattleVs3Lv1* mBattleLv1;
     KoopaBattleVs3Lv2* mBattleLv2;

@@ -31,10 +31,6 @@ void Koopa::calcAndSetBaseMtx() {
     mJointCtrl->setCallBackFunction();
 }
 
-void Koopa::updateHitSensor(HitSensor* pSensor) {
-    mSensorCtrl->update(pSensor);
-}
-
 void Koopa::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     mSequencer->attackSensor(pSender, pReceiver);
 }
@@ -103,19 +99,4 @@ void Koopa::init(const TableIter& rIter) {
         makeActorAppeared();
         MR::hideModel(this);
     }
-}
-
-void KoopaSequencer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-}
-
-bool KoopaSequencer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool KoopaSequencer::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
-}
-
-bool KoopaSequencer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
 }

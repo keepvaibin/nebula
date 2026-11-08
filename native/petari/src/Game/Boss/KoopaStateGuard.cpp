@@ -10,7 +10,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    MR::ActorMoveParam sGuardFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
+    const MR::ActorMoveParam sGuardFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
 };  // namespace
 
 namespace NrvKoopaStateGuard {
@@ -28,29 +28,29 @@ void KoopaStateGuard::init() {
     kill();
 }
 
-bool KoopaStateGuard::tryStart(u32 msg, HitSensor* pReceiver, HitSensor* pSender) {
-    if (!MR::isSensorPlayer(pReceiver) || !MR::isMsgPlayerSpinAttack(msg)) {
+bool KoopaStateGuard::tryStart(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (!MR::isSensorPlayer(pSender) || !MR::isMsgPlayerSpinAttack(msg)) {
         return false;
     }
 
-    if (MR::isSensor(pSender, "Face")) {
-        MR::sendMsgEnemyAttackFlip(pReceiver, pSender);
+    if (MR::isSensor(pReceiver, "Face")) {
+        MR::sendMsgEnemyAttackFlip(pSender, pReceiver);
 
         setNerve(GET_NERVE(KoopaStateGuard, KoopaStateGuardNrvGuardFace));
 
         return true;
     }
 
-    if (MR::isSensor(pSender, "GuardBody")) {
-        MR::sendMsgEnemyAttackFlip(pReceiver, pSender);
+    if (MR::isSensor(pReceiver, "GuardBody")) {
+        MR::sendMsgEnemyAttackFlip(pSender, pReceiver);
 
         setNerve(GET_NERVE(KoopaStateGuard, KoopaStateGuardNrvGuardBody));
 
         return true;
     }
 
-    if (MR::isSensor(pSender, "Tail") || MR::isSensor(pSender, "TailTop")) {
-        MR::sendMsgEnemyAttackFlipMaximum(pReceiver, pSender);
+    if (MR::isSensor(pReceiver, "Tail") || MR::isSensor(pReceiver, "TailTop")) {
+        MR::sendMsgEnemyAttackFlipMaximum(pSender, pReceiver);
 
         setNerve(GET_NERVE(KoopaStateGuard, KoopaStateGuardNrvGuardTail));
 
@@ -60,36 +60,35 @@ bool KoopaStateGuard::tryStart(u32 msg, HitSensor* pReceiver, HitSensor* pSender
     return false;
 }
 
-void KoopaStateGuard::exeGuardFace() {
-    if (MR::isFirstStep(this)) {
-        MR::startAction(mHost, "GuardFace");
-        MR::startSound(mHost, "SE_BV_KOOPA_GUARD");
+void KoopaStateGuard::startGuard(const char* pActionName) {
+    MR::startAction(mHost, pActionName);
+    MR::startSound(mHost, "SE_BV_KOOPA_GUARD");
 
-        MR::zeroVelocity(mHost);
-    }
+    MR::zeroVelocity(mHost);
+}
 
-    Koopa* pKoopa = mHost;
-    MR::moveAndTurnToPlayer(pKoopa, KoopaFunction::getKoopaFrontPtr(pKoopa), ::sGuardFallParam);
+void KoopaStateGuard::updateGuard() {
+    MR::moveAndTurnToPlayer(mHost, KoopaFunction::getKoopaFrontPtr(mHost), ::sGuardFallParam);
 
     if (MR::isActionEnd(mHost)) {
         kill();
     }
 }
 
+void KoopaStateGuard::exeGuardFace() {
+    if (MR::isFirstStep(this)) {
+        startGuard("GuardFace");
+    }
+
+    updateGuard();
+}
+
 void KoopaStateGuard::exeGuardBody() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(mHost, "GuardBody");
-        MR::startSound(mHost, "SE_BV_KOOPA_GUARD");
-
-        MR::zeroVelocity(mHost);
+        startGuard("GuardBody");
     }
 
-    Koopa* pKoopa = mHost;
-    MR::moveAndTurnToPlayer(pKoopa, KoopaFunction::getKoopaFrontPtr(pKoopa), ::sGuardFallParam);
-
-    if (MR::isActionEnd(mHost)) {
-        kill();
-    }
+    updateGuard();
 }
 
 void KoopaStateGuard::exeGuardTail() {
@@ -99,12 +98,7 @@ void KoopaStateGuard::exeGuardTail() {
         MR::zeroVelocity(mHost);
     }
 
-    Koopa* pKoopa = mHost;
-    MR::moveAndTurnToPlayer(pKoopa, KoopaFunction::getKoopaFrontPtr(pKoopa), ::sGuardFallParam);
-
-    if (MR::isActionEnd(mHost)) {
-        kill();
-    }
+    updateGuard();
 }
 
 KoopaStateGuard::~KoopaStateGuard() {

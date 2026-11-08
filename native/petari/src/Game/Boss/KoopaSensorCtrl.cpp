@@ -5,9 +5,6 @@
 KoopaSensorCtrl::KoopaSensorCtrl(Koopa* pHost) : mHost(pHost) {
 }
 
-void KoopaSensorCtrl::update(HitSensor* pSensor) {
-}
-
 void KoopaSensorCtrl::initSensor() {
     MR::addHitSensorAtJoint(mHost, "Body", "Spine", ATYPE_KOOPA_PUSH, 8, 150.0f, Vec3f(-70.0f, -30.0f, 0.0f));
     MR::addHitSensorAtJoint(mHost, "Face", "Face", ATYPE_KOOPA_PUSH, 8, 110.0f, Vec3f(80.0f, 0.0f, 0.0f));

@@ -30,9 +30,6 @@ void BossKameckBarrier::init(const TableIter& rIter) {
     makeActorDead();
 }
 
-void BossKameckBarrier::control() {
-}
-
 void BossKameckBarrier::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Wait");

@@ -14,7 +14,7 @@ BossAccessor::BossAccessor() : NameObj("ボスへのアクセス"), mBoss() {
 namespace BossAccess {
     void setBossAccessorKoopa(Koopa* pKoopa) {
         MR::createSceneObj(SceneObj_BossAccessor);
-        MR::getSceneObj< BossAccessor >(SceneObj_BossAccessor)->setBoss(pKoopa);
+        ::getBossAccessor()->setBoss(pKoopa);
     }
 
     Koopa* getBossAccessorKoopa() {

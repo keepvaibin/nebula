@@ -11,10 +11,10 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sAttachBodyBackRadius = 500.0f;
-    static const f32 sAttachBodyBackOffset = 100.0f;
-    static const f32 sAttachFootRadius = 300.0f;
-    static const f32 sAttachFootOffset = 100.0f;
+    const f32 sAttachBodyBackRadius = 500.0f;
+    const f32 sAttachBodyBackOffset = 100.0f;
+    const f32 sAttachFootRadius = 300.0f;
+    const f32 sAttachFootOffset = 100.0f;
 };  // namespace
 
 TombSpiderParts::TombSpiderParts(TombSpider* pParent)
@@ -76,10 +76,14 @@ namespace {
         return vitalSpot;
     }
 
-    TombSpiderThreadAttacher* createThreadAttacherFoot(TombSpider* pParent, const char* pName) {
-        TombSpiderThreadAttacher* threadAttacherFoot = new TombSpiderThreadAttacher(pParent, pName, ::sAttachFootRadius, ::sAttachFootOffset);
-        threadAttacherFoot->initWithoutIter();
-        return threadAttacherFoot;
+    TombSpiderThreadAttacher* createThreadAttacher(TombSpider* pParent, const char* pJointName, f32 radius, f32 offset) {
+        TombSpiderThreadAttacher* pAttacher = new TombSpiderThreadAttacher(pParent, pJointName, radius, offset);
+        pAttacher->initWithoutIter();
+        return pAttacher;
+    }
+
+    TombSpiderThreadAttacher* createThreadAttacherFoot(TombSpider* pParent, const char* pJointName) {
+        return createThreadAttacher(pParent, pJointName, ::sAttachFootRadius, ::sAttachFootOffset);
     }
 };  // namespace
 
@@ -93,8 +97,7 @@ void TombSpiderParts::initParts() {
     mVitalSpotL = ::createVitalSpot(mParent, "急所[左]", Vec3f(130.0f, -280.0f, -200.0f), Vec3f(10.0f, 167.0f, 0.0f), "Body1");
     mVitalSpotR = ::createVitalSpot(mParent, "急所[右]", Vec3f(130.0f, 280.0f, -200.0f), Vec3f(-10.0f, 167.0f, 0.0f), "Body1");
 
-    mThreadAttacherWing = new TombSpiderThreadAttacher(mParent, "WingL", ::sAttachBodyBackRadius, ::sAttachBodyBackOffset);
-    mThreadAttacherWing->initWithoutIter();
+    mThreadAttacherWing = ::createThreadAttacher(mParent, "WingL", ::sAttachBodyBackRadius, ::sAttachBodyBackOffset);
 
     mThreadAttacherFrontL = ::createThreadAttacherFoot(mParent, "FrontHandL3");
     mThreadAttacherCenterL = ::createThreadAttacherFoot(mParent, "CenterHandL3");

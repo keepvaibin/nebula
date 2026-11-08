@@ -7,8 +7,7 @@ public:
     DinoPackunDemoPosition(const char* pName);
 
     virtual ~DinoPackunDemoPosition();
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter& rIter);
 
     void startOpeningDemo();
     void endDemo();

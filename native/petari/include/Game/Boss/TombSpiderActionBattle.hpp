@@ -5,9 +5,22 @@
 class TombSpider;
 class HitSensor;
 
-class TombSpiderAction2nd : public TombSpiderActionBase {
+struct TombSpiderBattleParam {
+    s32 mStepWaitMin;
+    s32 mStepWaitMax;
+    s32 mStepAttackLoopMin;
+    s32 mStepAttackLoopMax;
+    f32 mAttackRotateAccel;
+    f32 mAttackRotateSpeedMax;
+    s32 mStepChanceWait;
+    /// @brief Whether the gland attack sensors hurt too, not only the body's.
+    bool mIsGlandAttack;
+};
+
+/// @brief One round of the Tomb Spider fight; the rounds differ only in their parameters.
+class TombSpiderActionBattle : public TombSpiderActionBase {
 public:
-    TombSpiderAction2nd(TombSpider*);
+    TombSpiderActionBattle(TombSpider* pParent, const char* pName, const TombSpiderBattleParam& rParam);
 
     virtual void init();
     virtual void appear();
@@ -28,4 +41,7 @@ public:
     void exeChanceDamageLast();
     void exeChanceEnd();
     void exeWaitDemo();
+
+private:
+    const TombSpiderBattleParam mParam;
 };

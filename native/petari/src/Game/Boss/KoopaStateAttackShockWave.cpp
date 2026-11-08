@@ -10,16 +10,16 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sJumpSpeed1st = 50.0f;
-    static const f32 sJumpSpeed = 40.0f;
-    static const f32 sJumpSpeedVs3 = 40.0f;
-    static const f32 sJumpGravity = 1.5f;
-    static const f32 sJumpGravityVs3 = 2.0f;
-    static const f32 sJumpTurnSpeedVs3 = 3.0f;
-    static const s32 sLandStep = 15;
-    static const s32 sLandStepVs2 = 10;
-    static const s32 sLandStepVs3 = 10;
-    static const s32 sLandStepVs3Angry = 5;
+    const f32 sJumpSpeed1st = 50.0f;
+    const f32 sJumpSpeed = 40.0f;
+    const f32 sJumpSpeedVs3 = 40.0f;
+    const f32 sJumpGravity = 1.5f;
+    const f32 sJumpGravityVs3 = 2.0f;
+    const f32 sJumpTurnSpeedVs3 = 3.0f;
+    const s32 sLandStep = 15;
+    const s32 sLandStepVs2 = 10;
+    const s32 sLandStepVs3 = 10;
+    const s32 sLandStepVs3Angry = 5;
 };  // namespace
 
 namespace NrvKoopaStateAttackShockWave {
@@ -110,15 +110,8 @@ bool KoopaStateAttackShockWave::attackSensor(HitSensor* pSender, HitSensor* pRec
         return true;
     }
 
-    if (KoopaFunction::tryKoopaPushPlayer(pSender, pReceiver)) {
-        return true;
-    }
-
-    if (KoopaFunction::tryKoopaBodyAttackPlayer(pSender, pReceiver)) {
-        return true;
-    }
-
-    return KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver);
+    return KoopaFunction::tryKoopaPushPlayer(pSender, pReceiver) || KoopaFunction::tryKoopaBodyAttackPlayer(pSender, pReceiver) ||
+           KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver);
 }
 
 void KoopaStateAttackShockWave::exeJumpStart() {
@@ -143,22 +136,16 @@ void KoopaStateAttackShockWave::exeJump() {
 
         MR::startSound(mHost, "SE_BM_KOOPA_JUMP");
 
-        if (mAttacks == 0) {
-            MR::setVelocityJump(mHost, ::sJumpSpeed1st);
-        } else {
-            MR::setVelocityJump(mHost, mJumpVelocity);
-        }
+        MR::setVelocityJump(mHost, mAttacks == 0 ? ::sJumpSpeed1st : mJumpVelocity);
     }
 
     MR::addVelocityToGravity(mHost, mGravity);
 
     if (KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaLv3(mHost)) {
-        Koopa* pKoopa = mHost;
-        MR::turnDirectionToPlayerDegree(pKoopa, KoopaFunction::getKoopaFrontPtr(pKoopa), ::sJumpTurnSpeedVs3);
+        MR::turnDirectionToPlayerDegree(mHost, KoopaFunction::getKoopaFrontPtr(mHost), ::sJumpTurnSpeedVs3);
     }
 
-    Koopa* pKoopa = mHost;
-    if (!MR::sendMsgEnemyAttackToBindedSensor(pKoopa, pKoopa->getSensor("Body")) && MR::isOnGround(mHost)) {
+    if (!MR::sendMsgEnemyAttackToBindedSensor(mHost, mHost->getSensor("Body")) && MR::isOnGround(mHost)) {
         MR::tryRumblePadAndCameraDistanceMiddle(mHost, 1500.0f, 2500.0f, 2000.0f);
         MR::shakeCameraWeak();
 

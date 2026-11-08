@@ -36,9 +36,6 @@ void KoopaPlanetShadow::calcAndSetBaseMtx() {
     MR::normalize(&direction);
 
     Pos3f transform;
-    transform.identity();
-
-    const Koopa* pKoopa = mKoopa;
-    MR::makeMtxUpFrontPos(&transform, direction, pKoopa->mFront, KoopaFunction::getPlanetCenterPos(pKoopa));
+    MR::makeMtxUpFrontPos(&transform, direction, mKoopa->mFront, KoopaFunction::getPlanetCenterPos(mKoopa));
     MR::setBaseTRMtx(this, transform);
 }

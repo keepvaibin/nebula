@@ -45,11 +45,8 @@ void TombSpiderVitalSpot::recover() {
 }
 
 bool TombSpiderVitalSpot::isDamage() const {
-    if (isNerve(GET_NERVE(TombSpiderVitalSpot, TombSpiderVitalSpotNrvDamageStart)) ||
-        isNerve(GET_NERVE(TombSpiderVitalSpot, TombSpiderVitalSpotNrvDamageWait))) {
-        return true;
-    }
-    return false;
+    return isNerve(GET_NERVE(TombSpiderVitalSpot, TombSpiderVitalSpotNrvDamageStart)) ||
+           isNerve(GET_NERVE(TombSpiderVitalSpot, TombSpiderVitalSpotNrvDamageWait));
 }
 
 void TombSpiderVitalSpot::exeWait() {

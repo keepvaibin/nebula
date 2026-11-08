@@ -24,7 +24,9 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sKoopaHitBlowStopSceneStep = 10;
+    const s32 sKoopaHitBlowStopSceneStep = 10;
+    const MR::ActorMoveParam sDemoFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
+    const MR::ActorMoveParam sDemoWaitParam = {0.0f, 1.0f, 0.9f, 1.0f};
 };  // namespace
 
 NameObj* KoopaFunction::createKoopaVs1(const char* pName) {
@@ -145,6 +147,24 @@ void KoopaFunction::startKoopaAngry(Koopa* pKoopa) {
 
 void KoopaFunction::startFaceCtrl(Koopa* pKoopa) {
     pKoopa->mJointCtrl->startFaceCtrl(-1);
+}
+
+// The heavy landing that ends each jump or fall onto a planet.
+void KoopaFunction::startLandDemo(Koopa* pKoopa) {
+    MR::startAction(pKoopa, "Land");
+    MR::startSound(pKoopa, "SE_BM_KOOPA_FLIP_RECOVER_END");
+    MR::startSound(pKoopa, "SE_BV_KOOPA_LAND_HEAVY");
+
+    MR::tryRumblePadStrong(pKoopa, PLAYER_1);
+    MR::shakeCameraNormalStrong();
+}
+
+void KoopaFunction::turnToPlayerFalling(Koopa* pKoopa) {
+    MR::moveAndTurnToPlayer(pKoopa, &pKoopa->mFront, ::sDemoFallParam);
+}
+
+void KoopaFunction::turnToPlayerWaiting(Koopa* pKoopa) {
+    MR::moveAndTurnToPlayer(pKoopa, &pKoopa->mFront, ::sDemoWaitParam);
 }
 
 void KoopaFunction::endFaceCtrl(Koopa* pKoopa, s32 val) {

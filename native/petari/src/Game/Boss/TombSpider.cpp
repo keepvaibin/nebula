@@ -1,6 +1,5 @@
 #include "Game/Boss/TombSpider.hpp"
-#include "Game/Boss/TombSpiderAction1st.hpp"
-#include "Game/Boss/TombSpiderAction2nd.hpp"
+#include "Game/Boss/TombSpiderActionBattle.hpp"
 #include "Game/Boss/TombSpiderActionCocoon.hpp"
 #include "Game/Boss/TombSpiderDemo.hpp"
 #include "Game/Boss/TombSpiderEnvironment.hpp"
@@ -22,6 +21,10 @@
 
 namespace {
     const s32 sSecondBgmStartStep = 180;
+
+    // The second round waits less, attacks longer and turns faster, and its glands hurt.
+    const TombSpiderBattleParam sBattleParam1st = {60, 90, 180, 300, 0.01f, 0.35f, 900, false};
+    const TombSpiderBattleParam sBattleParam2nd = {30, 60, 240, 360, 0.005f, 0.4f, 600, true};
 };  // namespace
 
 namespace NrvTombSpider {
@@ -70,9 +73,9 @@ void TombSpider::init(const TableIter& rIter) {
 
     mActionCocoon = new TombSpiderActionCocoon(this);
     mActionCocoon->init();
-    mAction1st = new TombSpiderAction1st(this);
+    mAction1st = new TombSpiderActionBattle(this, "戦闘１回戦[トゥームスパイダー]", ::sBattleParam1st);
     mAction1st->init();
-    mAction2nd = new TombSpiderAction2nd(this);
+    mAction2nd = new TombSpiderActionBattle(this, "戦闘２回戦[トゥームスパイダー]", ::sBattleParam2nd);
     mAction2nd->init();
 
     MR::invalidateClipping(this);

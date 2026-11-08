@@ -19,11 +19,8 @@ namespace NrvDinoPackunVs1 {
     NEW_NERVE(DinoPackunVs1NrvDownDemo, DinoPackunVs1, DownDemo);
 };  // namespace NrvDinoPackunVs1
 
-DinoPackunVs1::DinoPackunVs1(DinoPackun* pPackun) : DinoPackunSequencer("ディノパックン1戦目進行", pPackun) {
-    mDemo = nullptr;
-    mEgg = nullptr;
-    mBattleLv1 = nullptr;
-    mBattleLv2 = nullptr;
+DinoPackunVs1::DinoPackunVs1(DinoPackun* pPackun)
+    : DinoPackunSequencer("ディノパックン1戦目進行", pPackun), mDemo(nullptr), mEgg(nullptr), mBattleLv1(nullptr), mBattleLv2(nullptr) {
 }
 
 void DinoPackunVs1::init() {
@@ -117,15 +114,11 @@ void DinoPackunVs1::exeDownDemo() {
         mDemo->startDownDemo();
     }
 
-    if (MR::updateActorState(this, mDemo)) {
-        return;
-    }
+    MR::updateActorState(this, mDemo);
 }
 
 void DinoPackunVs1::exeWaitStart() {
-    return;
 }
 
 DinoPackunVs1::~DinoPackunVs1() {
-    return;
 }

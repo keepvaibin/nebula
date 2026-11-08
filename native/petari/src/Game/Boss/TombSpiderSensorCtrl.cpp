@@ -9,37 +9,43 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace {
-    static const f32 sAttackSensorDistanceOffset = 100.0f;
-    static const f32 sEyeSensorPosOffset = -100.0f;
-    static const f32 sHipSensorPosOffset = -400.0f;
+    const f32 sAttackSensorDistanceOffset = 100.0f;
+    const f32 sEyeSensorPosOffset = -100.0f;
+    const f32 sHipSensorPosOffset = -400.0f;
 };  // namespace
 
 TombSpiderSensorCtrl::TombSpiderSensorCtrl(TombSpider* pOwner) : mParent(pOwner) {
 }
 
+// The fight is side-on: every sensor sits at the player's depth.
+namespace {
+    void setSensorPosAlongZ(HitSensor* pSensor, MtxPtr pMtx, f32 offset) {
+        pSensor->mPosition.x = offset * pMtx[0][2] + pMtx[0][3];
+        pSensor->mPosition.y = offset * pMtx[1][2] + pMtx[1][3];
+        pSensor->mPosition.z = MR::getPlayerPos()->z;
+    }
+
+    void setSensorPosAtPart(HitSensor* pSensor, const LiveActor* pPart) {
+        pSensor->mPosition.set< f32 >(pPart->mPosition.x, pPart->mPosition.y, MR::getPlayerPos()->z);
+    }
+};  // namespace
+
 void TombSpiderSensorCtrl::update(HitSensor* pSensor) {
-    if (!updateMainParts(pSensor) && !updateGland(pSensor) && !updateVitalSpot(pSensor) && !updateAttackSensor(pSensor)) {
-        // Whatever was here got completely removed
+    if (updateMainParts(pSensor) || updateGland(pSensor) || updateVitalSpot(pSensor)) {
         return;
     }
+
+    updateAttackSensor(pSensor);
 }
 
 bool TombSpiderSensorCtrl::updateMainParts(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_TOMB_SPIDER_EYE)) {
-        MtxPtr eyeMtxPtr = TombSpiderFunction::getMtxEye(mParent);
-        f32 offset = ::sEyeSensorPosOffset;
-        pSensor->mPosition.x = offset * eyeMtxPtr[0][2] + eyeMtxPtr[0][3];
-        pSensor->mPosition.y = offset * eyeMtxPtr[1][2] + eyeMtxPtr[1][3];
-        pSensor->mPosition.z = MR::getPlayerPos()->z;
+        ::setSensorPosAlongZ(pSensor, TombSpiderFunction::getMtxEye(mParent), ::sEyeSensorPosOffset);
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_HIP)) {
-        MtxPtr eyeMtxPtr = TombSpiderFunction::getMtxHip(mParent);
-        f32 offset = ::sHipSensorPosOffset;
-        pSensor->mPosition.x = offset * eyeMtxPtr[0][2] + eyeMtxPtr[0][3];
-        pSensor->mPosition.y = offset * eyeMtxPtr[1][2] + eyeMtxPtr[1][3];
-        pSensor->mPosition.z = MR::getPlayerPos()->z;
+        ::setSensorPosAlongZ(pSensor, TombSpiderFunction::getMtxHip(mParent), ::sHipSensorPosOffset);
         return true;
     }
 
@@ -48,34 +54,22 @@ bool TombSpiderSensorCtrl::updateMainParts(HitSensor* pSensor) {
 
 bool TombSpiderSensorCtrl::updateGland(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_TOMB_SPIDER_GLAND_FRONT_L)) {
-        TombSpiderGland* Y = TombSpiderFunction::getGlandFrontL(mParent);
-        TombSpiderGland* X = TombSpiderFunction::getGlandFrontL(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getGlandFrontL(mParent));
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_GLAND_FRONT_R)) {
-        TombSpiderGland* Y = TombSpiderFunction::getGlandFrontR(mParent);
-        TombSpiderGland* X = TombSpiderFunction::getGlandFrontR(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getGlandFrontR(mParent));
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_GLAND_REAR_L)) {
-        TombSpiderGland* Y = TombSpiderFunction::getGlandRearL(mParent);
-        TombSpiderGland* X = TombSpiderFunction::getGlandRearL(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getGlandRearL(mParent));
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_GLAND_REAR_R)) {
-        TombSpiderGland* Y = TombSpiderFunction::getGlandRearR(mParent);
-        TombSpiderGland* X = TombSpiderFunction::getGlandRearR(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getGlandRearR(mParent));
         return true;
     }
 
@@ -84,26 +78,17 @@ bool TombSpiderSensorCtrl::updateGland(HitSensor* pSensor) {
 
 bool TombSpiderSensorCtrl::updateVitalSpot(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_TOMB_SPIDER_VITAL_SPOT_C)) {
-        TombSpiderVitalSpot* Y = TombSpiderFunction::getVitalSpotC(mParent);
-        TombSpiderVitalSpot* X = TombSpiderFunction::getVitalSpotC(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getVitalSpotC(mParent));
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_VITAL_SPOT_L)) {
-        TombSpiderVitalSpot* Y = TombSpiderFunction::getVitalSpotL(mParent);
-        TombSpiderVitalSpot* X = TombSpiderFunction::getVitalSpotL(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getVitalSpotL(mParent));
         return true;
     }
 
     if (pSensor->isType(ATYPE_TOMB_SPIDER_VITAL_SPOT_R)) {
-        TombSpiderVitalSpot* Y = TombSpiderFunction::getVitalSpotR(mParent);
-        TombSpiderVitalSpot* X = TombSpiderFunction::getVitalSpotR(mParent);
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(X->mPosition.x, Y->mPosition.y, Z);
+        ::setSensorPosAtPart(pSensor, TombSpiderFunction::getVitalSpotR(mParent));
         return true;
     }
 
@@ -119,15 +104,13 @@ namespace {
         pos.scale(dist);
         pos.x += pActor->mPosition.x;
         pos.y += pActor->mPosition.y;
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(pos.x, pos.y, Z);
+        pSensor->mPosition.set< f32 >(pos.x, pos.y, MR::getPlayerPos()->z);
     }
 };  // namespace
 
 bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_ENEMY_ATTACK)) {
-        Vec3f* pPos = &mParent->mPosition;
-        f32 dist = MR::calcDistanceXY(*pPos, *MR::getPlayerPos()) - ::sAttackSensorDistanceOffset;
+        f32 dist = MR::calcDistanceXY(mParent->mPosition, *MR::getPlayerPos()) - ::sAttackSensorDistanceOffset;
 
         Vec2f pos(1.0f, 0.0f);
 
@@ -135,8 +118,7 @@ bool TombSpiderSensorCtrl::updateAttackSensor(HitSensor* pSensor) {
         pos.scale(dist);
         pos.x += mParent->mPosition.x;
         pos.y += mParent->mPosition.y;
-        f32 Z = MR::getPlayerPos()->z;
-        pSensor->mPosition.set< f32 >(pos.x, pos.y, Z);
+        pSensor->mPosition.set< f32 >(pos.x, pos.y, MR::getPlayerPos()->z);
         return true;
     }
 

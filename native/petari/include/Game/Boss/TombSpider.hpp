@@ -4,8 +4,7 @@
 #include <nebula_geometry.hpp>
 
 class ActorCameraInfo;
-class TombSpiderAction1st;
-class TombSpiderAction2nd;
+class TombSpiderActionBattle;
 class TombSpiderActionCocoon;
 class TombSpiderDemo;
 class TombSpiderEnvironment;
@@ -44,8 +43,8 @@ public:
     TombSpiderParts* mParts;
     TombSpiderEnvironment* mEnvironment;
     TombSpiderActionCocoon* mActionCocoon;
-    TombSpiderAction1st* mAction1st;
-    TombSpiderAction2nd* mAction2nd;
+    TombSpiderActionBattle* mAction1st;
+    TombSpiderActionBattle* mAction2nd;
     TombSpiderDemo* mDemo;
     bool mNoctilucaActive;
     ActorCameraInfo* mCameraInfo;

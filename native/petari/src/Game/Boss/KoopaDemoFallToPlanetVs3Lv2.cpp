@@ -15,11 +15,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-namespace {
-    static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
-    static MR::ActorMoveParam sWaitParam = {0.0f, 1.0f, 0.9f, 1.0f};
-};  // namespace
-
 namespace NrvKoopaDemoFallToPlanetVs3Lv2 {
     NEW_NERVE(KoopaDemoFallToPlanetVs3Lv2NrvWaitFall, KoopaDemoFallToPlanetVs3Lv2, WaitFall);
     NEW_NERVE(KoopaDemoFallToPlanetVs3Lv2NrvDemoFall, KoopaDemoFallToPlanetVs3Lv2, DemoFall);
@@ -82,7 +77,7 @@ void KoopaDemoFallToPlanetVs3Lv2::exeFallToLand() {
         KoopaFunction::getKoopaPlanetShadow(mHost)->appear();
     }
 
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sFallParam);
+    KoopaFunction::turnToPlayerFalling(mHost);
 
     MR::startLevelSound(mHost, "SE_BM_LV_KOOPA_FALL_TO_PLANET");
 
@@ -94,12 +89,7 @@ void KoopaDemoFallToPlanetVs3Lv2::exeFallToLand() {
 
 void KoopaDemoFallToPlanetVs3Lv2::exeLand() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(mHost, "Land");
-        MR::startSound(mHost, "SE_BM_KOOPA_FLIP_RECOVER_END");
-        MR::startSound(mHost, "SE_BV_KOOPA_LAND_HEAVY");
-
-        MR::tryRumblePadStrong(mHost, PLAYER_1);
-        MR::shakeCameraNormalStrong();
+        KoopaFunction::startLandDemo(mHost);
     }
 
     if (MR::isActionEnd(mHost)) {
@@ -112,7 +102,7 @@ void KoopaDemoFallToPlanetVs3Lv2::exeWaitPlayer() {
         KoopaFunction::startFaceCtrl(mHost);
     }
 
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sWaitParam);
+    KoopaFunction::turnToPlayerWaiting(mHost);
 
     if (MR::isOnGroundPlayer()) {
         KoopaFunction::startFaceCtrl(mHost);

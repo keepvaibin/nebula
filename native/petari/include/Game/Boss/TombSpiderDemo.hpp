@@ -7,7 +7,7 @@ class ActorCameraInfo;
 
 class TombSpiderDemo {
 public:
-    TombSpiderDemo(TombSpider*);
+    TombSpiderDemo(TombSpider* pParent);
 
     bool updateGateOpen();
     bool updateCocoonBreak();
@@ -18,6 +18,7 @@ public:
     void updateJumpRotateToPlayer();
     bool isStartDemoGateOpen() const;
     bool updateBattle1stStartJumpToPlayer();
+    void updateRotateBetween(s32 startStep, s32 endStep);
 
     inline ActorCameraInfo* getCameraInfo() {
         return mParent->mCameraInfo;
