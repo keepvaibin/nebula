@@ -72,10 +72,10 @@ void NoteFairy::init(const TableIter& rIter) {
 
     MR::getPlacementArg4WithInit(rIter, &mSong);
     MR::getPlacementArg5WithInit(rIter, &mCompletionJingle);
-    s32 arg6;
-    MR::getPlacementArg6WithInit(rIter, &arg6);
+    s32 keepBgm;
+    MR::getPlacementArg6WithInit(rIter, &keepBgm);
 
-    if (arg6 > 0) {
+    if (keepBgm > 0) {
         mIsLowerBgm = false;
     } else {
         mIsLowerBgm = true;

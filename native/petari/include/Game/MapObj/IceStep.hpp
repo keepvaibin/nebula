@@ -12,7 +12,7 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 
-    void setOn(u32, const Vec3f&, const Vec3f&);
+    void setOn(u32 stepIndex, const Vec3f& rPosition, const Vec3f& rRotation);
     void destroy();
     void doHit();
 

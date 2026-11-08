@@ -52,10 +52,10 @@ void QuestionBoxGalleryObj::init(const TableIter& rIter) {
     initialize(rIter, rInitInfo);
     startMapPartsFunctions();
 
-    bool arg0 = false;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
+    bool isOn = false;
+    MR::getPlacementArg0NoInit(rIter, &isOn);
 
-    if (arg0) {
+    if (isOn) {
         initNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOnWait));
     } else {
         initNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOffWait));

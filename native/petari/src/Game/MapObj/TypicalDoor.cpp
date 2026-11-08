@@ -133,9 +133,9 @@ TypicalDoor::~TypicalDoor() {
 }
 
 void DarknessRoomDoor::init(const TableIter& rIter) {
-    s32 arg0 = -1;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    mIsNormalDraw = arg0 != -1;
+    s32 normalDraw = -1;
+    MR::getPlacementArg0NoInit(rIter, &normalDraw);
+    mIsNormalDraw = normalDraw != -1;
     TypicalDoor::init(rIter);
     MR::useStageSwitchReadA(this, rIter);
 }

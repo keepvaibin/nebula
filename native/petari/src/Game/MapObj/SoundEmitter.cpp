@@ -61,7 +61,7 @@ void SoundEmitter::control() {
 
 void SoundEmitter::exePlaySound() {
     RailRider* rider = mRailRider;
-    s32 v3 = -1;
+    s32 lifeTime = -1;
 
     if (rider != nullptr) {
         switch (mSoundType) {
@@ -95,7 +95,7 @@ void SoundEmitter::exePlaySound() {
         }
     } break;
     case 0x1A: {
-        v3 = 5;
+        lifeTime = 5;
     } break;
     case 0x1E: {
         MR::startSystemSE("SE_SY_READ_RIDDLE_S");
@@ -105,7 +105,7 @@ void SoundEmitter::exePlaySound() {
     }
 
     if (mSoundType >= 0) {
-        MR::startLevelSound(this, ::sSeTable[mSoundType], -1, -1, v3);
+        MR::startLevelSound(this, ::sSeTable[mSoundType], -1, -1, lifeTime);
     }
 }
 

@@ -18,7 +18,7 @@ public:
     virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
     void moveOnRail();
-    void updateEffectClipping(bool);
+    void updateEffectClipping(bool isMoving);
 
     void exeWaitSwitch();
     void exeWait();

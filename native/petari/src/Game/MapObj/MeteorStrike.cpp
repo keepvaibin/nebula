@@ -169,9 +169,9 @@ bool MeteorStrike::getMovedPos(Vec3f* pDst, s32 step) const {
 }
 
 f32 MeteorStrike::getSpeed(const TableIter& rIter) {
-    f32 arg0 = 10.0f;
-    MR::getPlacementArg0NoInit(rIter, &arg0);
-    return arg0;
+    f32 speed = 10.0f;
+    MR::getPlacementArg0NoInit(rIter, &speed);
+    return speed;
 }
 
 void MeteorStrike::calcAndSetBaseMtx() {
