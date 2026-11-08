@@ -34,7 +34,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
         }
 
         if (cylinderHitCheck(pSender, nullptr)) {
-            return MR::sendArbitraryMsg(msg, _924, pSender);
+            return MR::sendArbitraryMsg(msg, mRushSensor, pSender);
         }
 
         return false;
@@ -88,7 +88,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
 
     switch (msg) {
     case ACTMES_ENEMY_ATTACK_EXPLOSION: {
-        if (MR::isExistMapCollisionExceptActor(pSender->mPosition, _2A0 - pSender->mPosition, pSender->mHost)) {
+        if (MR::isExistMapCollisionExceptActor(pSender->mPosition, mCenterPos - pSender->mPosition, pSender->mHost)) {
             return false;
         }
 
@@ -273,7 +273,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (_934) {
-        return MR::sendMsgPush(_924, pSender);
+        return MR::sendMsgPush(mRushSensor, pSender);
     }
 
     Vec3f push;
@@ -340,8 +340,8 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (_934) {
-        if (msg == ACTMES_INHALE_BLACK_HOLE && _924->isType(ATYPE_MARIO_LAUNCHER_BIND)) {
-            if (!_924->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || _934) {
+        if (msg == ACTMES_INHALE_BLACK_HOLE && mRushSensor->isType(ATYPE_MARIO_LAUNCHER_BIND)) {
+            if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body")) || _934) {
                 RushEndInfo info(nullptr, RushEndInfo::Mode_Release, Vec3f(0.0f), false, 0);
                 endRush(&info);
             }
@@ -506,7 +506,7 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         _3A8 = 3;
         break;
     case ACTMES_BOMB_TERESA_TONGUE_TOUCH:
-        if (_468 != 0) {
+        if (mTakeCount != 0) {
             return false;
         }
 
@@ -556,7 +556,7 @@ bool MarioActor::receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
 bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
     Mario* pMario = mMario;
     f32 radius = pSensor->mRadius;
-    Vec3f delta = pSensor->mPosition - (_2A0 + pMario->_350 + pMario->_35C + mVelocity);
+    Vec3f delta = pSensor->mPosition - (mCenterPos + pMario->_350 + pMario->_35C + mVelocity);
     Vec3f radial;
     f32 axial = MR::vecKillElement(delta, _4C4, &radial);
     f32 spherePenetration = 100.0f + radius - delta.length();

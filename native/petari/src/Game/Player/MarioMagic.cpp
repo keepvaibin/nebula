@@ -19,7 +19,7 @@ void Mario::stopPunch() {
 
 void Mario::startMagic() {
     if (!mMovementStates.jumping) {
-        if (!mActor->_468) {
+        if (!mActor->mTakeCount) {
             if (!mMovementStates._23) {
                 if (!isStatusActive(MarioStatus_Slider)) {
                     if (isSkatableFloor()) {

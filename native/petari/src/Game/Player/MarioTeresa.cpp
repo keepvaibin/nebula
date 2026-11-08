@@ -146,7 +146,7 @@ f32 MarioTeresa::checkHeight() {
     f32 height = getPlayer()->mVerticalSpeed;
     MarioActor* actor;
     while (offset < 2.0f * (actor = mActor)->getConst().getTable()->mTeresaWaitHeight) {
-        const Vec3f& position = actor->_2A0;
+        const Vec3f& position = actor->mCenterPos;
         bool found = false;
         f32 radius = 120.0f;
         s32 count = Collision::checkStrikeBallToMapWithThickness(position + getGravityVec() * offset, radius, radius, nullptr, nullptr);
@@ -400,7 +400,7 @@ bool MarioTeresa::start() {
 void MarioTeresa::checkWind() {
     Vec3f wind;
     f32 strength;
-    BigFanFunction::calcWindInfo(&wind, mActor->_2A0, &strength);
+    BigFanFunction::calcWindInfo(&wind, mActor->mCenterPos, &strength);
     strength = MR::clamp(strength, 0.0f, 10.0f);
     if (strength > 0.0f) {
         playSound("テレサ風に乗る", 50.0f * strength);

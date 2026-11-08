@@ -27,8 +27,8 @@ void MarioActor::setupSensors() {
 
     getSensor("dummy")->invalidate();
 
-    _468 = 0;
-    _46C = nullptr;
+    mTakeCount = 0;
+    mTakeCandidate = nullptr;
 
     _7DC = 0;
 
@@ -36,8 +36,8 @@ void MarioActor::setupSensors() {
         _4D0[idx] = nullptr;
     }
 
-    for (s32 idx = 0; idx < ARRAY_SIZE(_428); idx++) {
-        _428[idx] = nullptr;
+    for (s32 idx = 0; idx < ARRAY_SIZE(mTakeSensors); idx++) {
+        mTakeSensors[idx] = nullptr;
     }
 
     initScouter();
@@ -57,7 +57,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
             return;
         }
 
-        pSensor->mPosition.set(_2A0);
+        pSensor->mPosition.set(mCenterPos);
         if (getMovementStates()._B && !getMovementStates()._1) {
             pSensor->mPosition.add(mMario->mJumpVec);
         }
@@ -74,12 +74,12 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
         }
 
         f32 radius = 600.0f;
-        pSensor->mPosition.set(_2A0);
+        pSensor->mPosition.set(mCenterPos);
         if (mMario->mMovementStates._F) {
             radius = 1000.0f;
         }
 
-        if (_468) {
+        if (mTakeCount) {
             radius = 2000.0f;
         }
 
@@ -343,7 +343,7 @@ bool MarioActor::sendMsgToSensor(HitSensor* pSensor, u32 msg) {
 void MarioActor::resetSensorCount() {
     _930 = 0;
     _7DC = 0;
-    _46C = 0;
+    mTakeCandidate = 0;
 }
 
 void MarioActor::recordScoutingObject(HitSensor* pSensor) {
@@ -366,7 +366,7 @@ void MarioActor::recordScoutingObject(HitSensor* pSensor) {
 }
 
 void MarioActor::updateScouter() {
-    const u32 count = _468;
+    const u32 count = mTakeCount;
     HitSensor* previous = _F24;
     _F24 = nullptr;
     if (count) {
@@ -398,7 +398,7 @@ void MarioActor::updateScouter() {
         maximum = 2400.0f;
     }
 
-    if (_468) {
+    if (mTakeCount) {
         maximum = 3000.0f;
     }
 
@@ -408,9 +408,9 @@ void MarioActor::updateScouter() {
 
     Vec3f position;
     if (mMario->isSwimming()) {
-        position = _2A0 + mUpVec * _9D0;
+        position = mCenterPos + mUpVec * _9D0;
     } else {
-        position = _2A0 + mMario->mFrontVec * _9D0;
+        position = mCenterPos + mMario->mFrontVec * _9D0;
     }
 
     getSensor("ex-eye")->mPosition = position;

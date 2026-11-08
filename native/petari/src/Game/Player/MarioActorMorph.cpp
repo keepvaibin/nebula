@@ -203,7 +203,7 @@ void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
         mMario->_76C = 0;
 
         if (mMario->isSwimming()) {
-            if (_468 == 0) {
+            if (mTakeCount == 0) {
                 changeAnimation(nullptr, "水泳基本");
             }
         } else if (isJumping()) {
@@ -372,7 +372,7 @@ static myStruct cMorphStringTable[] = {{{"DieBlackHole", 0, 0, 0, "DieBlackHoleB
 void MarioActor::touchSensor(HitSensor* pSensor) {
     switch (pSensor->mType) {
     case ATYPE_WATER_PRESSURE_BULLET_BIND:
-        if (MR::isExistMapCollision(_2A0, pSensor->mPosition - _2A0)) {
+        if (MR::isExistMapCollision(mCenterPos, pSensor->mPosition - mCenterPos)) {
             return;
         }
 

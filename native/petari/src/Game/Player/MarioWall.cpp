@@ -364,7 +364,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         if (!checkTrgA()) {
             return false;
         }
@@ -760,7 +760,7 @@ void Mario::tryWallPunch() {
                 sendPunch(mSideWallTriangle->mSensor, true);
             }
 
-            mActor->_EF6 = 30;
+            mActor->mSwingInhibitTimer = 30;
         }
     }
 }

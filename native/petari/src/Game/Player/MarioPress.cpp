@@ -63,7 +63,7 @@ bool Mario::checkVerticalPress(bool atCurrentPosition) {
     }
     Vec3f position;
     if (isStatusActive(MarioStatus_Hang)) {
-        position = mActor->_2A0;
+        position = mActor->mCenterPos;
     } else {
         position = mPosition;
     }
@@ -173,7 +173,7 @@ bool Mario::checkSidePressPre() {
 bool Mario::checkSidePress() {
     Vec3f position;
     if (isStatusActive(MarioStatus_Hang)) {
-        position = mActor->_2A0;
+        position = mActor->mCenterPos;
     } else {
         position = mPosition;
     }

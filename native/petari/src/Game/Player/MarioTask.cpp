@@ -177,7 +177,7 @@ void Mario::startHandy() {
 }
 
 bool Mario::taskOnHandy(u32) {
-    if (!mActor->_468) {
+    if (!mActor->mTakeCount) {
         stopEffect("いい汗");
         return false;
     }

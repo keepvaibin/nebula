@@ -76,9 +76,9 @@ bool MarioActor::trySpinPunch() {
 }
 
 void MarioActor::printHitMark(HitSensor* pSensor) {
-    Vec3f vec(pSensor->mPosition - _2A0);
+    Vec3f vec(pSensor->mPosition - mCenterPos);
     vec.setLength(200.0f);
-    playEffectTrans("パンチヒット", _2A0 + vec);
+    playEffectTrans("パンチヒット", mCenterPos + vec);
 }
 
 void MarioActor::reactionPunch(HitSensor* pSensor) {
@@ -109,14 +109,14 @@ void MarioActor::reactionPunch(HitSensor* pSensor) {
     if (pSensor->isType(ATYPE_BEGOMAN)) {
         mMario->stopWalk();
 
-        Vec3f reactDir(_2A0 - pSensor->mPosition);
+        Vec3f reactDir(mCenterPos - pSensor->mPosition);
         MR::vecKillElement(reactDir, getGravityVector(), &reactDir);
         reactDir.setLength(20.0f);
         mMario->addReaction(reactDir);
     }
 
     if (mMario->isSwimming()) {
-        Vec3f punchDir(_2A0 - pSensor->mPosition);
+        Vec3f punchDir(mCenterPos - pSensor->mPosition);
         punchDir.setLength(5.0f);
         mMario->mSwim->hitPunch(punchDir);
     }
@@ -179,7 +179,7 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
 
     if (sendPunch(pSensor, true)) {
         _954[_974] = pSensor;
-        _924 = pSensor;
+        mRushSensor = pSensor;
         _974++;
 
         reactionPunch(pSensor);

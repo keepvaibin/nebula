@@ -1211,8 +1211,8 @@ void Mario::draw() const {
         SiteMaterial material;
         TDDraw::setupNative(&material, 0, 1, 0);
         TypedDraw site = TDDraw::site(material, 0);
-        TDDraw::drawCylinder(site, mPosition, mShadowPos - mActor->_2A0, 32.0f, 0xffff0010, 0xff000004, 8);
-        Vec3f diff2A0_31C(mActor->_2A0 - mShadowPos);
+        TDDraw::drawCylinder(site, mPosition, mShadowPos - mActor->mCenterPos, 32.0f, 0xffff0010, 0xff000004, 8);
+        Vec3f diff2A0_31C(mActor->mCenterPos - mShadowPos);
         f32 diffMag = diff2A0_31C.length();
         MR::normalize(&diff2A0_31C);
         Vec3f _31CPlusStuff(mShadowPos);
@@ -1571,7 +1571,7 @@ void Mario::writeBackPhyisicalVector() {
                         Triangle stack_110 = Triangle();
                         MarioActor* pActor = mActor;
                         Vec3f stack_bc;
-                        if (MR::getFirstPolyOnLineToMap(&stack_bc, &stack_110, pActor->_2A0, -(*_57C[i].getNormal(0)) * 300.0f)) {
+                        if (MR::getFirstPolyOnLineToMap(&stack_bc, &stack_110, pActor->mCenterPos, -(*_57C[i].getNormal(0)) * 300.0f)) {
                             wallCodeString = MR::getWallCodeString(&stack_110);
                             if (wallCodeString != nullptr && strcmp(wallCodeString, "Fur") == 0) {
                                 MarioActor* pActor2 = getActor();
@@ -1685,7 +1685,7 @@ void Mario::update() {
         f1 = 90.0f;
     }
 
-    checkAllWall(mActor->_2A0, f1);
+    checkAllWall(mActor->mCenterPos, f1);
 
     updateGroundInfo();
 
@@ -2011,14 +2011,14 @@ void Mario::createAngleMtx(MtxPtr pMtx, bool a2) {
 
     NebulaMtxConcat(_C4, pMtx, pMtx);
 
-    HitSensor* sensor = mActor->_470;
+    HitSensor* sensor = mActor->mThrowTarget;
 
     if (isAnimationRun("投げ")) {
         sensor = mActor->_474;
     }
 
     if (mActor->isPunching()) {
-        sensor = mActor->_924;
+        sensor = mActor->mRushSensor;
     }
 
     if (sensor != nullptr) {

@@ -645,7 +645,7 @@ void MarioFoo::draw3D() const {
         const Color8 color1(255, 64, 64, 255);
         material.setColor(4, color1.r, color1.g, color1.b, color1.a);
 
-        Vec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
+        Vec3f center = mActor->mCenterPos + getPlayer()->getUpVec() * 50.0f;
         Vec3f back = -getPlayer()->getUpVec();
         Vec3f side(getPlayer()->mSideVec);
         Vec3f up;

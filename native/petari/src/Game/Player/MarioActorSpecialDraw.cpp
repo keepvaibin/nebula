@@ -554,7 +554,7 @@ void MarioActor::drawSpinEffect() const {
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
     Mtx rotation;
-    Vec3f center = _2A0 + mMario->mHeadVec * _6D8;
+    Vec3f center = mCenterPos + mMario->mHeadVec * _6D8;
     Vec3f direction(mMario->mFrontVec);
     Vec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);

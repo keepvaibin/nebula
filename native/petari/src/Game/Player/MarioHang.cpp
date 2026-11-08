@@ -61,7 +61,7 @@ void Mario::checkHang() {
         return;
     }
 
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         return;
     }
 
@@ -132,12 +132,12 @@ void Mario::checkHang() {
         }
 
         Vec3f direction(-mFrontVec);
-        u32 edge = getLastGroundEdgeIndex(mActor->_2A0, direction);
-        direction = _4F4 - mActor->_2A0;
+        u32 edge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
+        direction = _4F4 - mActor->mCenterPos;
         MR::normalizeOrZero(&direction);
-        u32 positionEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
+        u32 positionEdge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
         direction = -*mBackWallTriangle->getNormal(0);
-        u32 normalEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
+        u32 normalEdge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
         Vec3f normal;
         if (edge == positionEdge && edge == normalEdge) {
             normal = *getLastGroundEdgeNrm(edge);
@@ -202,9 +202,9 @@ void Mario::checkHang() {
             return;
         }
 
-        Vec3f direction(_500 - mActor->_2A0);
+        Vec3f direction(_500 - mActor->mCenterPos);
         MR::normalizeOrZero(&direction);
-        u32 edge = getLastGroundEdgeIndex(mActor->_2A0, direction);
+        u32 edge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
         Vec3f sideDirection(mSideVec);
         if (sideDirection.dot(direction) < 0.0f) {
             direction = -sideDirection;
@@ -212,9 +212,9 @@ void Mario::checkHang() {
             direction = sideDirection;
         }
 
-        u32 sideEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
+        u32 sideEdge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
         direction = -*mSideWallTriangle->getNormal(0);
-        u32 normalEdge = getLastGroundEdgeIndex(mActor->_2A0, direction);
+        u32 normalEdge = getLastGroundEdgeIndex(mActor->mCenterPos, direction);
         Vec3f normal;
         if (edge == sideEdge && edge == normalEdge) {
             normal = *getLastGroundEdgeNrm(edge);

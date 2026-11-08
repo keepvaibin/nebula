@@ -66,7 +66,7 @@ namespace MR {
     }
 
     Vec3f* getPlayerCenterPos() {
-        return &MarioAccess::getPlayerActor()->_2A0;
+        return &MarioAccess::getPlayerActor()->mCenterPos;
     }
 
     void getPlayerTakePos(Vec3f* pPos) {
@@ -86,7 +86,7 @@ namespace MR {
     }
 
     Vec3f* getPlayerShadowRotate() {
-        return &MarioAccess::getPlayerActor()->_A18;
+        return &MarioAccess::getPlayerActor()->mShadowRotate;
     }
 
     Vec3f* getPlayerVelocity() {
@@ -118,11 +118,11 @@ namespace MR {
     }
 
     bool checkPlayerActionTrigger() {
-        return MarioAccess::getPlayerActor()->_EED;
+        return MarioAccess::getPlayerActor()->mActionTrigger;
     }
 
     bool checkPlayerSwingTrigger() {
-        return MarioAccess::getPlayerActor()->_1E1;
+        return MarioAccess::getPlayerActor()->mSwingTrigger;
     }
 
     f32 calcDistanceToPlayer(const Vec3f& rPos) {
@@ -162,11 +162,11 @@ namespace MR {
     }
 
     void setPlayerSwingInhibitTimer(u16 timer) {
-        MarioAccess::getPlayerActor()->_EF6 = timer;
+        MarioAccess::getPlayerActor()->mSwingInhibitTimer = timer;
     }
 
     void setPlayerSwingPermission(bool permission) {
-        MarioAccess::getPlayerActor()->_EEB = permission;
+        MarioAccess::getPlayerActor()->mSwingPermission = permission;
     }
 
     void setPlayerStateWait() {
@@ -649,7 +649,7 @@ namespace MR {
             return nullptr;
         }
 
-        return MarioAccess::getPlayerActor()->_924->mHost;
+        return MarioAccess::getPlayerActor()->mRushSensor->mHost;
     }
 
     HitSensor* getCurrentRushSensor() {
@@ -657,7 +657,7 @@ namespace MR {
             return nullptr;
         }
 
-        return MarioAccess::getPlayerActor()->_924;
+        return MarioAccess::getPlayerActor()->mRushSensor;
     }
 
     void tryPlayerCoinPull() {
@@ -687,7 +687,7 @@ namespace MR {
     }
 
     bool isPlayerCarryAny() {
-        return MarioAccess::getPlayerActor()->_468 != 0;
+        return MarioAccess::getPlayerActor()->mTakeCount != 0;
     }
 
     void startSoundPlayer(const char* pName, s32 level) {
@@ -869,11 +869,11 @@ namespace MR {
     }
 
     JUTTexture* getFullScreenBlurTexture() {
-        return MarioAccess::getPlayerActor()->_B7C;
+        return MarioAccess::getPlayerActor()->mBlurTexture;
     }
 
     u16 getPlayerMovementTimer() {
-        return MarioAccess::getPlayerActor()->_378;
+        return MarioAccess::getPlayerActor()->mMovementTimer;
     }
 
     CubeCameraArea* getCameraCube() {

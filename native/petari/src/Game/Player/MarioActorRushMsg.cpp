@@ -27,7 +27,7 @@ bool MarioActor::tryStandardRush() {
     } else {
         HitSensor* target = getNearestRushTarget(false);
         if (target != nullptr) {
-            if (_468 != 0 && selectHandyRush(target)) {
+            if (mTakeCount != 0 && selectHandyRush(target)) {
                 return false;
             }
 
@@ -98,7 +98,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
             Vec3f targetPos(target->mPosition);
             f32 size2;
             f32 size1 = (targetPos - mPosition).length();
-            size2 = (targetPos - _2A0).length();
+            size2 = (targetPos - mCenterPos).length();
             f32 size3 = (targetPos - _2AC).length();
 
             if (size1 > size2) {
@@ -143,7 +143,7 @@ HitSensor* MarioActor::getNearestRushTarget(bool myBool) const {
         Vec3f pos(_7E4[idx]->mPosition);
         f32 size2;
         f32 size1 = (pos - mPosition).length();
-        size2 = (pos - _2A0).length();
+        size2 = (pos - mCenterPos).length();
         f32 size3 = (pos - _2AC).length();
 
         if (size1 > size2) {
@@ -179,14 +179,14 @@ HitSensor* MarioActor::getNearestJumpTarget() const {
             continue;
         }
 
-        if (_924 == _7E4[i]) {
+        if (mRushSensor == _7E4[i]) {
             continue;
         }
 
         Vec3f position(_7E4[i]->mPosition);
         f32 centerDistance;
         f32 distance = (position - mPosition).length();
-        centerDistance = (position - _2A0).length();
+        centerDistance = (position - mCenterPos).length();
         f32 headDistance = (position - _2AC).length();
         if (distance > centerDistance) {
             distance = centerDistance;
@@ -340,7 +340,7 @@ bool MarioActor::tryJumpRush() {
             return false;
         }
 
-        if (_468 != 0 && selectHandyRush(jumpTarget)) {
+        if (mTakeCount != 0 && selectHandyRush(jumpTarget)) {
             return false;
         }
 
@@ -376,7 +376,7 @@ void MarioActor::tryRushInRush() {
 
     _930 = 0;
 
-    if (target == _924) {
+    if (target == mRushSensor) {
         return;
     }
 
@@ -388,8 +388,8 @@ void MarioActor::tryRushInRush() {
         return;
     }
 
-    HitSensor* sensor924 = _924;
-    if (!_924->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
+    HitSensor* sensor924 = mRushSensor;
+    if (!mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getSensor("body"))) {
         return;
     }
 
@@ -409,7 +409,7 @@ void MarioActor::tryRushInRush() {
     }
 
     if (_934) {
-        _924 = target;
+        mRushSensor = target;
 
         if (mPlayerMode == 4 && selectHideFlyMeter(target)) {
             MR::getGameSceneLayoutHolder()->changeLifeMeterModeGround();

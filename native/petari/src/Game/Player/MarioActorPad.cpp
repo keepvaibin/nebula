@@ -26,7 +26,7 @@ bool MarioActor::isRequestHipDrop() const {
 }
 
 bool MarioActor::isRequestRush() const {
-    if (!_EEB) {
+    if (!mSwingPermission) {
         return false;
     }
 
@@ -34,7 +34,7 @@ bool MarioActor::isRequestRush() const {
         return false;
     }
 
-    if (_EF6 != 0) {
+    if (mSwingInhibitTimer != 0) {
         return false;
     }
 
@@ -63,7 +63,7 @@ bool MarioActor::isRequestRush() const {
 }
 
 bool MarioActor::isRequestThrow() const {
-    if (!_EEB) {
+    if (!mSwingPermission) {
         return false;
     }
 
@@ -260,7 +260,7 @@ void MarioActor::getStickValue(f32* pStickX, f32* pStickY) {
 }
 
 void MarioActor::updateActionTrigger() {
-    _EED = false;
+    mActionTrigger = false;
     _EEE = false;
 
     if (checkButtonType(3, false) || _F00 != 0) {
@@ -269,7 +269,7 @@ void MarioActor::updateActionTrigger() {
         }
 
         _EEC = true;
-        _EED = true;
+        mActionTrigger = true;
     } else {
         _EEC = false;
     }
@@ -337,7 +337,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (!_EEB) {
+    if (!mSwingPermission) {
         return false;
     }
 
@@ -345,7 +345,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (_EF6) {
+    if (mSwingInhibitTimer) {
         return false;
     }
 

@@ -183,7 +183,7 @@ void Mario::doCubeWarp() {
         return;
     }
 
-    WarpCube* pWarpCube = static_cast< WarpCube* >(MR::getAreaObj("WarpCube", mActor->_2A0));
+    WarpCube* pWarpCube = static_cast< WarpCube* >(MR::getAreaObj("WarpCube", mActor->mCenterPos));
     WarpCubeMgr* pWarpCubeMgr = static_cast< WarpCubeMgr* >(MR::getAreaObjManager("WarpCube"));
 
     if (pWarpCube != nullptr) {

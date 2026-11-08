@@ -1860,7 +1860,7 @@ PROC_HIP_DROP_MOVE:
                 if (mActor->selectHomingInSuperHipDrop(strikeInfo->mParentTriangle.mSensor->mHost->mName)) {
                     Vec3f sensorPos(strikeInfo->mParentTriangle.mSensor->mPosition);
 
-                    if (MR::diffAngleAbs(sensorPos - mActor->_2A0, *getGravityVec()) < maxAngle) {
+                    if (MR::diffAngleAbs(sensorPos - mActor->mCenterPos, *getGravityVec()) < maxAngle) {
                         homingSensor = strikeInfo->mParentTriangle.mSensor;
                     }
                 }
@@ -1871,7 +1871,7 @@ PROC_HIP_DROP_MOVE:
             }
 
             if (homingSensor != nullptr) {
-                Vec3f targetJump(homingSensor->mPosition - mActor->_2A0);
+                Vec3f targetJump(homingSensor->mPosition - mActor->mCenterPos);
                 targetJump.setLength(mJumpVec.length());
 
                 Vec3f lastMove;
@@ -2300,7 +2300,7 @@ void Mario::doLanding() {
         return;
     }
 
-    if (mActor->_EEB && (mMovementStates._2B) && _10._19 && _430 != 3) {
+    if (mActor->mSwingPermission && (mMovementStates._2B) && _10._19 && _430 != 3) {
         _10._19 = false;
         mActor->_946 = 0x10;
     }
@@ -2556,7 +2556,7 @@ void Mario::doLanding() {
                 cancelSquatMode();
             }
 
-            if (mActor->_468 == 0) {
+            if (mActor->mTakeCount == 0) {
                 stopAnimationUpper(nullptr);
             }
 

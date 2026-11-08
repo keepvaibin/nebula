@@ -756,7 +756,7 @@ void Mario::calcFrontFloor() {
 
     if (mMovementStates._8) {
         wallPos = _4E8;
-        start = mActor->_2A0;
+        start = mActor->mCenterPos;
         hit = true;
     } else {
         direction = mFrontVec * 100.0f;
@@ -884,7 +884,7 @@ const Vec3f& Mario::getWallPos() const {
         return _500;
     }
 
-    return mActor->_2A0;
+    return mActor->mCenterPos;
 }
 
 const Triangle* Mario::getWallPolygon() const {
@@ -1443,7 +1443,7 @@ bool Mario::updateBinderInfo() {
 
             if (firstGround && mMovementStates.jumping && mVerticalSpeed > 30.0f) {
                 bool oblique = false;
-                Vec3f fromHit = mActor->_2A0 - hit->mHitPos;
+                Vec3f fromHit = mActor->mCenterPos - hit->mHitPos;
 
                 if (MR::diffAngleAbs(fromHit, *triangle->getNormal(0)) > 0.10471976f) {
                     oblique = true;

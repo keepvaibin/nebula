@@ -183,8 +183,8 @@ void MarioActor::updateTakingPosition() {
                 clearNullAnimation(-3);
                 if (_424)
                     MR::sendArbitraryMsg(ACTMES_TAKE_TOUCH, _424, getSensor("body"));
-                else if (_428[0])
-                    MR::sendArbitraryMsg(ACTMES_TAKE_TOUCH, _428[0], getSensor("body"));
+                else if (mTakeSensors[0])
+                    MR::sendArbitraryMsg(ACTMES_TAKE_TOUCH, mTakeSensors[0], getSensor("body"));
                 else {
                     _480 = false;
                     clearNullAnimation(0);
@@ -195,8 +195,8 @@ void MarioActor::updateTakingPosition() {
         if (updateAnimation) {
             if (_424)
                 mMarioAnim->updateTakingAnimation(_424);
-            else if (_468)
-                mMarioAnim->updateTakingAnimation(_428[0]);
+            else if (mTakeCount)
+                mMarioAnim->updateTakingAnimation(mTakeSensors[0]);
         }
         if (_424) {
             _424->mHost->mPosition = position;
@@ -207,16 +207,16 @@ void MarioActor::updateTakingPosition() {
             getCarrySensor()->mHost->mPosition = position;
             getCarrySensor()->mHost->mRotation = rotation;
         }
-    } else if (_468) {
-        if (_428[0]->isType(ATYPE_COINTHROW) || _428[0]->isType(ATYPE_JET_TURTLE) || _428[0]->isType(ATYPE_JET_TURTLE_SLOW) ||
-            _428[0]->isType(ATYPE_BOMBHEI)) {
+    } else if (mTakeCount) {
+        if (mTakeSensors[0]->isType(ATYPE_COINTHROW) || mTakeSensors[0]->isType(ATYPE_JET_TURTLE) || mTakeSensors[0]->isType(ATYPE_JET_TURTLE_SLOW) ||
+            mTakeSensors[0]->isType(ATYPE_BOMBHEI)) {
             Vec3f position;
             _494->calc();
             _494->copyTrans(&position);
-            Vec3f& carryPosition = _428[0]->mHost->mPosition;
+            Vec3f& carryPosition = mTakeSensors[0]->mHost->mPosition;
             const Vec3f& velocity = mVelocity;
             carryPosition = position + velocity;
-            _494->copyRotate(&_428[0]->mHost->mRotation);
+            _494->copyRotate(&mTakeSensors[0]->mHost->mRotation);
             return;
         }
         Vec3f position;
@@ -227,19 +227,19 @@ void MarioActor::updateTakingPosition() {
         offset *= Angle::sinRadian(_490);
         _490 += MR::getRandom(0.1f, 1.0f);
         position.y += offset;
-        _428[0]->mHost->mPosition = position;
-        Vec3f& carryRotation = _428[0]->mHost->mRotation;
+        mTakeSensors[0]->mHost->mPosition = position;
+        Vec3f& carryRotation = mTakeSensors[0]->mHost->mRotation;
         const Vec3f& rotation = mRotation;
-        carryRotation = _438[0] + rotation;
+        carryRotation = mTakeRotations[0] + rotation;
     }
 }
 
 const HitSensor* MarioActor::getCarrySensor() const {
-    if (_468 == 0) {
+    if (mTakeCount == 0) {
         return nullptr;
     }
 
-    return _428[0];
+    return mTakeSensors[0];
 }
 
 void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
@@ -369,7 +369,7 @@ void MarioActor::hideFreezeModel() {
 void MarioActor::updateFairyStar() {
     if (_482)
         return;
-    if (!_EEB)
+    if (!mSwingPermission)
         return;
     if (!isEnableNerveChange())
         return;
@@ -412,23 +412,23 @@ void MarioActor::update2D() {
 }
 
 void MarioActor::updateThrowVector() {
-    HitSensor* sensor = _46C;
+    HitSensor* sensor = mTakeCandidate;
     if (sensor && !MR::isExistInAttributeGroupSearchTurtle(sensor->mHost))
         sensor = nullptr;
-    if (sensor && _468) {
+    if (sensor && mTakeCount) {
         if (!getDrawStates()._5) {
-            if (_470 && _46C != _470)
-                _470 = nullptr;
+            if (mThrowTarget && mTakeCandidate != mThrowTarget)
+                mThrowTarget = nullptr;
         }
         if (!getDrawStates()._5) {
             if (!_47C)
-                _484 = _2A0;
+                _484 = mCenterPos;
             _47C++;
-            Vec3f direction = _46C->mPosition - _484;
-            if (direction.length() <= 40.0f + _46C->getRadius()) {
-                _484 = _46C->mPosition;
-                _470 = _46C;
-                if (MR::isSensorEnemy(_46C)) {
+            Vec3f direction = mTakeCandidate->mPosition - _484;
+            if (direction.length() <= 40.0f + mTakeCandidate->getRadius()) {
+                _484 = mTakeCandidate->mPosition;
+                mThrowTarget = mTakeCandidate;
+                if (MR::isSensorEnemy(mTakeCandidate)) {
                     _47C = 60;
                     return;
                 }
@@ -439,14 +439,14 @@ void MarioActor::updateThrowVector() {
             _484 += direction * 40.0f;
             if (MR::checkStrikePointToMap(_484, nullptr)) {
                 _47C = 0;
-                _470 = nullptr;
+                mThrowTarget = nullptr;
             }
         }
     } else if (!getDrawStates()._5) {
         if (_47C)
             _47C--;
         if (!_47C)
-            _470 = nullptr;
+            mThrowTarget = nullptr;
     }
 }
 

@@ -1050,7 +1050,7 @@ void MarioAnimator::clearAllJointTransform() {
 }
 
 bool MarioAnimator::isMirrorAnimation() {
-    if (mActor->_468) {
+    if (mActor->mTakeCount) {
         return false;
     }
 
@@ -1182,7 +1182,7 @@ void MarioAnimator::updateTakingAnimation(const HitSensor* pSensor) {
 
     LiveActor* sensorActor = pSensor->mHost;
     if (MR::isDead(sensorActor)) {
-        if (mActor->_468 != 0) {
+        if (mActor->mTakeCount != 0) {
             mActor->rushDropThrowMemoSensor();
         }
 
@@ -1245,10 +1245,10 @@ void MarioAnimator::changeThrowAnimation(const HitSensor* pSensor) {
 
 void MarioAnimator::waterToGround() {
     HitSensor* swimSensor;
-    if (mActor->_468 == 0) {
+    if (mActor->mTakeCount == 0) {
         swimSensor = nullptr;
     } else {
-        swimSensor = mActor->_428[0];
+        swimSensor = mActor->mTakeSensors[0];
     }
 
     if (swimSensor == nullptr) {
@@ -1279,5 +1279,5 @@ HitSensor* MarioActor::getLookTargetSensor() const {
         return nullptr;
     }
 
-    return _46C;
+    return mTakeCandidate;
 }

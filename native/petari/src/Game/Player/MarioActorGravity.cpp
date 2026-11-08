@@ -90,7 +90,7 @@ void MarioActor::syncJumpBeeStickMode() {
 
     _33C = mPosition - mMario->mFrontVec * 2.0f;
     _354 = mPosition - _33C;
-    _360 = _2A0 - _33C;
+    _360 = mCenterPos - _33C;
     MR::normalize(&_360);
 }
 
@@ -133,7 +133,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
     bool resetGround = false;
     MR::calcGravityVectorOrZero(this, mPosition, &positionGravity, mGravityInfo, 0);
     if (!usePosition) {
-        MR::calcGravityVectorOrZero(this, _2A0, &gravity, mGravityInfo, 0);
+        MR::calcGravityVectorOrZero(this, mCenterPos, &gravity, mGravityInfo, 0);
     } else {
         gravity = positionGravity;
     }
