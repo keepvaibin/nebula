@@ -211,8 +211,8 @@ void* NebulaArena::takeBlock(u32 bytes) {
 }
 
 void* NebulaArena::alloc(u32 size, int alignment) {
-    // At least 16-byte aligned, as a native allocator's memory is. A negative alignment counts as its size (GameSystemFontHolder's -4).
-    u32 align = alignment < 0 ? static_cast< u32 >(-alignment) : static_cast< u32 >(alignment);
+    // At least 16-byte aligned, as a native allocator's memory is.
+    u32 align = static_cast< u32 >(alignment);
     if (align < 16) {
         align = 16;
     }

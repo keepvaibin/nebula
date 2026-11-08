@@ -19,12 +19,12 @@ Ui::Font* GameSystemFontHolder::getMessageFont() const {
 
 void GameSystemFontHolder::createFontFromEmbeddedData() {
     AssetFolder* pArchive = MR::getArchive("ErrorMessageArchive");
-    NebulaArena* pHeap = MR::getArchiveArena("ErrorMessageArchive");
+    NebulaArena* pArena = MR::getArchiveArena("ErrorMessageArchive");
 
     const char* embeddedFontPath = "/LayoutData/EmbeddedFont";
 
-    mEmbeddedFontFolder = pArchive->getSubFolder(embeddedFontPath, pHeap);
-    mEmbeddedMessageFont = new (pHeap, -4) Ui::ResFont();
+    mEmbeddedFontFolder = pArchive->getSubFolder(embeddedFontPath, pArena);
+    mEmbeddedMessageFont = new (pArena, 4) Ui::ResFont();
     mEmbeddedMessageFont->SetResource(mEmbeddedFontFolder->getResource("MessageFont26.brfnt"));
 }
 
