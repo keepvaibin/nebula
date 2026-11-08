@@ -74,6 +74,8 @@ struct RenderLayout {
     std::array<VkRenderPass, 4> wide_passes_clear{};
     // Full-screen colour replacements preserve depth but never load old colour.
     std::array<std::array<VkRenderPass, 4>, 2> discard_color_passes{};
+    // The colour and stencil loaded, the depth cleared: a whole-target depth clear opening the pass.
+    std::array<std::array<VkRenderPass, 4>, 2> depth_clear_passes{};
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
@@ -379,7 +381,8 @@ private:
     void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
     // The same with a temporal scene's second target (`aux`: 1 the motion target, 2 the reactive mask); a pass open with another one ends.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
-                               const char* caller = __builtin_FUNCTION());
+                               const char* caller = __builtin_FUNCTION(),
+                               bool clear_depth_only = false);
     void end_scene_pass(const char* caller = __builtin_FUNCTION());
     const char* scene_pass_closed_by_ = "frame start";
     void reset_draw_bindings() noexcept;
