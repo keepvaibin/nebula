@@ -119,6 +119,31 @@ bool KoopaBattleBase::updateFind() {
     return false;
 }
 
+// True once Bowser, already angry, is knocked down again: the level is over.
+bool KoopaBattleBase::updateDamageReverse(const Nerve* pEndNerve, const Nerve* pRecoverNerve) {
+    if (MR::isFirstStep(this)) {
+        mStateDamageEscape->appear();
+        mStateDamageEscape->startDamageReverse();
+    }
+
+    if (mStateDamageEscape->update()) {
+        setNerve(pEndNerve);
+        return false;
+    }
+
+    if (!mStateDamageEscape->isDownEnd()) {
+        return false;
+    }
+
+    if (KoopaFunction::isKoopaAngry(mHost)) {
+        return true;
+    }
+
+    KoopaFunction::startKoopaAngry(mHost);
+    setNerve(pRecoverNerve);
+    return false;
+}
+
 bool KoopaBattleBase::updateRecover(const Nerve* pNerve) {
     if (MR::isFirstStep(this)) {
         MR::zeroVelocity(mHost);

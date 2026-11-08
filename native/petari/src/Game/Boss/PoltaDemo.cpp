@@ -17,18 +17,19 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sOpeningBlurStart = 300;
-    static const s32 sOpeningBlurTime = 70;
-    static const f32 sOpeningBlurOffset = 18.0f;
-    static const u8 sOpeningBlurAlpha = 80;
-    static const s32 sOpeningBlurFadeIn = 5;
-    static const s32 sOpeningBlurFadeOut = 30;
-    static const s32 sPowerUpBlurStart = 530;
-    static const s32 sPowerUpBlurTime = 80;
-    static const f32 sPowerUpBlurOffset = 20.0f;
-    static const u8 sPowerUpBlurAlpha = 80;
-    static const s32 sPowerUpBlurFadeIn = 5;
-    static const s32 sPowerUpBlurFadeOut = 40;
+    const s32 sOpeningBgmStep = 60;
+    const s32 sOpeningBlurStart = 300;
+    const s32 sOpeningBlurTime = 70;
+    const f32 sOpeningBlurOffset = 18.0f;
+    const u8 sOpeningBlurAlpha = 80;
+    const s32 sOpeningBlurFadeIn = 5;
+    const s32 sOpeningBlurFadeOut = 30;
+    const s32 sPowerUpBlurStart = 530;
+    const s32 sPowerUpBlurTime = 80;
+    const f32 sPowerUpBlurOffset = 20.0f;
+    const u8 sPowerUpBlurAlpha = 80;
+    const s32 sPowerUpBlurFadeIn = 5;
+    const s32 sPowerUpBlurFadeOut = 40;
 };  // namespace
 
 namespace NrvPoltaDemo {
@@ -43,9 +44,6 @@ PoltaDemo::PoltaDemo(Polta* pPolta) : PoltaActionBase("ポルタデモ", pPolta)
 
 void PoltaDemo::init() {
     initNerve(GET_NERVE(PoltaDemo, PoltaDemoNrvOpeningDemo));
-}
-
-void PoltaDemo::control() {
 }
 
 void PoltaDemo::startOpeningDemo() {
@@ -104,7 +102,7 @@ void PoltaDemo::exeOpeningDemo() {
         MR::startCenterScreenBlur(::sOpeningBlurTime, ::sOpeningBlurOffset, ::sOpeningBlurAlpha, ::sOpeningBlurFadeIn, ::sOpeningBlurFadeOut);
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, ::sOpeningBgmStep)) {
         MR::startStageBGM("MBGM_BOSS_09_A", false);
     }
 

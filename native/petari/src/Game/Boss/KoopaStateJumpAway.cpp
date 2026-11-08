@@ -10,10 +10,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sJumpFrontSpeed = 20.0f;
-    static const f32 sJumpFlyUpSpeed = 35.0f;
-    static const f32 sJumpGravity = 1.0f;
-    static const s32 sLandStepVs3Lv3 = 30;
+    const f32 sJumpFrontSpeed = 20.0f;
+    const f32 sJumpFlyUpSpeed = 35.0f;
+    const f32 sJumpGravity = 1.0f;
+    const s32 sLandStepVs3Lv3 = 30;
 };  // namespace
 
 namespace NrvKoopaStateJumpAway {
@@ -53,9 +53,7 @@ void KoopaStateJumpAway::exeJump() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mHost, "JumpAway");
 
-        Koopa* pKoopa = mHost;
-
-        MR::setVelocity(pKoopa, KoopaFunction::getKoopaFront(pKoopa) * -::sJumpFrontSpeed);
+        MR::setVelocity(mHost, KoopaFunction::getKoopaFront(mHost) * -::sJumpFrontSpeed);
         MR::addVelocityJump(mHost, ::sJumpFlyUpSpeed);
 
         MR::startSound(mHost, "SE_BM_KOOPA_JUMP");
@@ -72,8 +70,7 @@ void KoopaStateJumpAway::exeJump() {
         KoopaFunction::getKoopaFrontPtr(mHost)->set(-newFront);
     }
 
-    Koopa* pKoopa = mHost;
-    if (!MR::sendMsgEnemyAttackToBindedSensor(pKoopa, pKoopa->getSensor("Body")) && !MR::isFirstStep(this) &&
+    if (!MR::sendMsgEnemyAttackToBindedSensor(mHost, mHost->getSensor("Body")) && !MR::isFirstStep(this) &&
         mHost->mVelocity.dot(mHost->mGravity) >= 0.0f && MR::isBindedGround(mHost)) {
         MR::tryRumblePadAndCameraDistanceStrong(mHost, 1500.0f, 2000.0f, 2000.0f);
         MR::startSound(mHost, "SE_BM_KOOPA_LAND");
@@ -89,9 +86,8 @@ void KoopaStateJumpAway::exeLand() {
         MR::startAction(mHost, "JumpAwayLand");
     }
 
-    if (KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, ::sLandStepVs3Lv3)) {
-        kill();
-    } else if (MR::isActionEnd(mHost)) {
+    if ((KoopaFunction::isKoopaVs3(mHost) && KoopaFunction::isKoopaLv3(mHost) && MR::isGreaterStep(this, ::sLandStepVs3Lv3)) ||
+        MR::isActionEnd(mHost)) {
         kill();
     }
 }

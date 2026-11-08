@@ -24,6 +24,7 @@ public:
     bool updateWander(const MR::ActorMoveParam& rMoveParam);
     bool updateSearch();
     bool updateFind();
+    bool updateDamageReverse(const Nerve* pEndNerve, const Nerve* pRecoverNerve);
     bool updateRecover(const Nerve* pNerve);
 
     KoopaStateDamageEscape* mStateDamageEscape;

@@ -46,11 +46,7 @@ bool BossStinkBugActionSequencer::isValidFollowId(s32 id) const {
         return true;
     }
 
-    if (mCurrentAction != nullptr) {
-        return mCurrentAction->isValidFollowId(id);
-    }
-
-    return false;
+    return mCurrentAction != nullptr && mCurrentAction->isValidFollowId(id);
 }
 
 void BossStinkBugActionSequencer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -60,28 +56,20 @@ void BossStinkBugActionSequencer::attackSensor(HitSensor* pSender, HitSensor* pR
 }
 
 bool BossStinkBugActionSequencer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (mCurrentAction != nullptr) {
-        return mCurrentAction->receiveMsgPlayerAttack(msg, pSender, pReceiver);
-    } else {
-        return false;
-    }
+    return mCurrentAction != nullptr && mCurrentAction->receiveMsgPlayerAttack(msg, pSender, pReceiver);
 }
 
 bool BossStinkBugActionSequencer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (mCurrentAction != nullptr) {
-        return mCurrentAction->receiveOtherMsg(msg, pSender, pReceiver);
-    } else {
-        return false;
-    }
+    return mCurrentAction != nullptr && mCurrentAction->receiveOtherMsg(msg, pSender, pReceiver);
 }
 
 bool BossStinkBugActionSequencer::startAction() {
-    if (isNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvWaitStart))) {
-        setNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvOpeningDemo));
-        return true;
-    } else {
+    if (!isNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvWaitStart))) {
         return false;
     }
+
+    setNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvOpeningDemo));
+    return true;
 }
 
 void BossStinkBugActionSequencer::exeWaitStart() {

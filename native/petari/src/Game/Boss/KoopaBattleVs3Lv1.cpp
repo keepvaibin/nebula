@@ -73,35 +73,15 @@ void KoopaBattleVs3Lv1::exeAttackShockWave() {
 }
 
 void KoopaBattleVs3Lv1::exeDamageReverse() {
-    if (MR::isFirstStep(this)) {
-        mStateDamageEscape->appear();
-        mStateDamageEscape->startDamageReverse();
-    }
-
-    if (mStateDamageEscape->update()) {
-        setNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvAttackShockWave));
-        return;
-    }
-
-    if (!mStateDamageEscape->isDownEnd()) {
-        return;
-    }
-
-    if (KoopaFunction::isKoopaAngry(mHost)) {
+    if (updateDamageReverse(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvAttackShockWave),
+                            GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvRecover))) {
         KoopaFunction::changeBgmStateNormal(120);
         kill();
-    } else {
-        KoopaFunction::startKoopaAngry(mHost);
-        setNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvRecover));
     }
 }
 
 bool KoopaBattleVs3Lv1::tryCalcAndSetBaseMtx() {
-    if (isNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvChaseRoll)) && mStateChaseRoll->tryCalcAndSetBaseMtx()) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvChaseRoll)) && mStateChaseRoll->tryCalcAndSetBaseMtx();
 }
 
 void KoopaBattleVs3Lv1::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
@@ -114,8 +94,8 @@ void KoopaBattleVs3Lv1::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     } else if (!isNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvJumpAway)) || !KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver)) {
         if (isNerve(GET_NERVE(KoopaBattleVs3Lv1, KoopaBattleVs3Lv1NrvDamageReverse))) {
             mStateDamageEscape->attackSensor(pSender, pReceiver);
-        } else if (!KoopaFunction::tryKoopaPushPlayer(pSender, pReceiver) && KoopaFunction::tryKoopaBodyAttackPlayer(pSender, pReceiver)) {
-            return;
+        } else if (!KoopaFunction::tryKoopaPushPlayer(pSender, pReceiver)) {
+            KoopaFunction::tryKoopaBodyAttackPlayer(pSender, pReceiver);
         }
     }
 }
@@ -141,11 +121,7 @@ bool KoopaBattleVs3Lv1::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
         return true;
     }
 
-    if (KoopaFunction::tryKoopaReflectStarPiece(msg, pSender, pReceiver)) {
-        return true;
-    }
-
-    return false;
+    return KoopaFunction::tryKoopaReflectStarPiece(msg, pSender, pReceiver);
 }
 
 void KoopaBattleVs3Lv1::exeAttackFire() {

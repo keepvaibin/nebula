@@ -28,12 +28,8 @@ void KoopaSubSequenceBattle::kill() {
 }
 
 bool KoopaSubSequenceBattle::isDemo() const {
-    if (isNerve(GET_NERVE(KoopaSubSequenceBattle, KoopaSubSequenceBattleNrvDemoStartLv2)) ||
-        isNerve(GET_NERVE(KoopaSubSequenceBattle, KoopaSubSequenceBattleNrvDemoStartLv3))) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(KoopaSubSequenceBattle, KoopaSubSequenceBattleNrvDemoStartLv2)) ||
+           isNerve(GET_NERVE(KoopaSubSequenceBattle, KoopaSubSequenceBattleNrvDemoStartLv3));
 }
 
 void KoopaSubSequenceBattle::exeBattleLv1() {

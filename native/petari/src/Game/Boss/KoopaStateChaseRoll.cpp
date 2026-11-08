@@ -14,17 +14,27 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
-    static MR::ActorMoveParam sChaseRollParam = {1.1f, 2.0f, 0.95f, 1.5f};
-    static MR::ActorMoveParam sChaseRollParamFast = {1.5f, 2.0f, 0.95f, 1.5f};
-    static MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
-    static const s32 sWaitToStartStep = 60;
-    static const s32 sWaitToStartStepAngry = 60;
-    static const s32 sStartStepToJump = 24;
-    static const f32 sStartJumpSpeed = 30.0f;
-    static const f32 sRotateSpeed = 5.0f;
-    static const s32 sStepRollGround = 900;
-    static const f32 sEndJumpSpeed = 30.0f;
+    const MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
+    const MR::ActorMoveParam sChaseRollParam = {1.1f, 2.0f, 0.95f, 1.5f};
+    const MR::ActorMoveParam sChaseRollParamFast = {1.5f, 2.0f, 0.95f, 1.5f};
+    const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
+    const s32 sWaitToStartStep = 60;
+    const s32 sWaitToStartStepAngry = 60;
+    const s32 sStartStepToJump = 24;
+    const f32 sStartJumpSpeed = 30.0f;
+    const f32 sRotateSpeed = 5.0f;
+    const s32 sStepRollGround = 900;
+    const f32 sEndJumpSpeed = 30.0f;
+
+    // The break model follows its own matrix only while the break animation starts.
+    void startRockBreak(Koopa* pKoopa, const char* pActionName) {
+        KoopaRockBreak* pRockBreak = KoopaFunction::getKoopaRockBreak(pKoopa);
+        pRockBreak->mIsCalcOwnMtx = true;
+        pRockBreak->appear();
+        MR::calcAnimDirect(pRockBreak);
+        MR::startAction(pRockBreak, pActionName);
+        pRockBreak->mIsCalcOwnMtx = false;
+    }
 };  // namespace
 
 namespace NrvKoopaStateChaseRoll {
@@ -70,11 +80,7 @@ void KoopaStateChaseRoll::appear() {
         mRollDelay = ::sWaitToStartStep;
     }
 
-    if (mRollDelay >= 0) {
-        setNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvWaitToStart));
-    } else {
-        setNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvStart));
-    }
+    setNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvWaitToStart));
 }
 
 void KoopaStateChaseRoll::kill() {
@@ -95,8 +101,7 @@ void KoopaStateChaseRoll::kill() {
 bool KoopaStateChaseRoll::tryCalcAndSetBaseMtx() {
     if (isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvRollAir)) ||
         isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvRollGround))) {
-        Koopa* pKoopa = mHost;
-        MR::setBaseTRMtx(pKoopa, mFigureBall->getBaseMtx());
+        MR::setBaseTRMtx(mHost, mFigureBall->getBaseMtx());
 
         return true;
     }
@@ -105,15 +110,8 @@ bool KoopaStateChaseRoll::tryCalcAndSetBaseMtx() {
 }
 
 bool KoopaStateChaseRoll::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isSensorPlayer(pReceiver) && MR::isSensor(pSender, "ChaseRollAttack") && MR::sendMsgEnemyAttackMaximum(pReceiver, pSender)) {
-        return true;
-    }
-
-    if (MR::isSensor(pSender, "ChaseRollAttack") && KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver)) {
-        return true;
-    }
-
-    return false;
+    return (MR::isSensorPlayer(pReceiver) && MR::isSensor(pSender, "ChaseRollAttack") && MR::sendMsgEnemyAttackMaximum(pReceiver, pSender)) ||
+           (MR::isSensor(pSender, "ChaseRollAttack") && KoopaFunction::tryKoopaAttackMapObj(pSender, pReceiver));
 }
 
 bool KoopaStateChaseRoll::tryDamage(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -121,32 +119,20 @@ bool KoopaStateChaseRoll::tryDamage(u32 msg, HitSensor* pSender, HitSensor* pRec
         return false;
     }
 
-    if (isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvRollGround))) {
-        KoopaRockBreak* pKoopaRockBreak = KoopaFunction::getKoopaRockBreak(mHost);
-        pKoopaRockBreak->mIsCalcOwnMtx = true;
-        KoopaFunction::getKoopaRockBreak(mHost)->appear();
-        MR::calcAnimDirect(KoopaFunction::getKoopaRockBreak(mHost));
-
-        MR::startAction(KoopaFunction::getKoopaRockBreak(mHost), "Break");
-        MR::startSound(mHost, "SE_BM_KOOPA_ROCK_BREAK");
-
-        pKoopaRockBreak = KoopaFunction::getKoopaRockBreak(mHost);
-        pKoopaRockBreak->mIsCalcOwnMtx = false;
-
-        return true;
+    if (!isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvRollGround))) {
+        return false;
     }
 
-    return false;
+    ::startRockBreak(mHost, "Break");
+    MR::startSound(mHost, "SE_BM_KOOPA_ROCK_BREAK");
+
+    return true;
 }
 
 bool KoopaStateChaseRoll::isEnableGuard() const {
-    if (isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvWaitToStart)) ||
-        isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvEndAir)) ||
-        isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvEndLand))) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvWaitToStart)) ||
+           isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvEndAir)) ||
+           isNerve(GET_NERVE(KoopaStateChaseRoll, KoopaStateChaseRollNrvEndLand));
 }
 
 void KoopaStateChaseRoll::exeWaitToStart() {
@@ -164,8 +150,7 @@ void KoopaStateChaseRoll::exeStart() {
         KoopaFunction::getKoopaRock(mHost)->appear();
         KoopaFunction::getKoopaRockBreak(mHost)->appear();
 
-        KoopaRockBreak* pKoopaRockBreak = KoopaFunction::getKoopaRockBreak(mHost);
-        pKoopaRockBreak->mIsCalcOwnMtx = true;
+        KoopaFunction::getKoopaRockBreak(mHost)->mIsCalcOwnMtx = true;
 
         MR::startAction(mHost, "ChaseRollStart");
         MR::startAction(KoopaFunction::getKoopaRock(mHost), "AttackRollStart");
@@ -241,15 +226,7 @@ void KoopaStateChaseRoll::exeEndAir() {
         MR::startAction(mHost, "ChaseRollEnd");
         MR::startAction(KoopaFunction::getKoopaRock(mHost), "AttackRollEnd");
 
-        KoopaRockBreak* pKoopaRockBreak = KoopaFunction::getKoopaRockBreak(mHost);
-        pKoopaRockBreak->mIsCalcOwnMtx = true;
-
-        KoopaFunction::getKoopaRockBreak(mHost)->appear();
-        MR::calcAnimDirect(KoopaFunction::getKoopaRockBreak(mHost));
-        MR::startAction(KoopaFunction::getKoopaRockBreak(mHost), "AttackRollEnd");
-
-        pKoopaRockBreak = KoopaFunction::getKoopaRockBreak(mHost);
-        pKoopaRockBreak->mIsCalcOwnMtx = false;
+        ::startRockBreak(mHost, "AttackRollEnd");
 
         MR::startSound(mHost, "SE_BM_KOOPA_ROCK_BREAK");
     }

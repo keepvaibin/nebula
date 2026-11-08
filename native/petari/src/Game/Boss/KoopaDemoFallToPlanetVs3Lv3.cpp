@@ -15,12 +15,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
-    static MR::ActorMoveParam sWaitParam = {0.0f, 1.0f, 0.9f, 1.0f};
-    static const s32 sFallOutsideChangeSun = 266;
-    static const s32 sFinalBgmStartStepSub = 250;
-    static const s32 sFallDownSeStep2 = 214;
-    static const s32 sFallDownSeStep3 = 328;
+    const s32 sFallOutsideChangeSun = 266;
+    const s32 sFinalBgmStartStepSub = 250;
+    const s32 sFallDownSeStep2 = 214;
+    const s32 sFallDownSeStep3 = 328;
 };  // namespace
 
 namespace NrvKoopaDemoFallToPlanetVs3Lv3 {
@@ -112,7 +110,7 @@ void KoopaDemoFallToPlanetVs3Lv3::exeFallOutside() {
 
 void KoopaDemoFallToPlanetVs3Lv3::exeFallInside() {
     MR::startAtmosphereLevelSE("SE_BM_LV_KOOPA_FALL_SUN_1");
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sFallParam);
+    KoopaFunction::turnToPlayerFalling(mHost);
 
     if (MR::isBindedGround(mHost)) {
         MR::zeroVelocity(mHost);
@@ -122,12 +120,7 @@ void KoopaDemoFallToPlanetVs3Lv3::exeFallInside() {
 
 void KoopaDemoFallToPlanetVs3Lv3::exeLand() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(mHost, "Land");
-        MR::startSound(mHost, "SE_BM_KOOPA_FLIP_RECOVER_END");
-        MR::startSound(mHost, "SE_BV_KOOPA_LAND_HEAVY");
-
-        MR::tryRumblePadStrong(mHost, PLAYER_1);
-        MR::shakeCameraNormalStrong();
+        KoopaFunction::startLandDemo(mHost);
     }
 
     if (MR::isActionEnd(mHost)) {
@@ -140,7 +133,7 @@ void KoopaDemoFallToPlanetVs3Lv3::exeWaitPlayer() {
         KoopaFunction::startFaceCtrl(mHost);
     }
 
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sWaitParam);
+    KoopaFunction::turnToPlayerWaiting(mHost);
 
     if (MR::isOnGroundPlayer()) {
         kill();

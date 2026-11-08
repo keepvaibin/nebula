@@ -17,4 +17,8 @@ public:
     void exeGuardFace();
     void exeGuardBody();
     void exeGuardTail();
+
+private:
+    void startGuard(const char* pActionName);
+    void updateGuard();
 };

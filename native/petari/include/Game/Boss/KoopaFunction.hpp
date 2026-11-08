@@ -54,6 +54,9 @@ namespace KoopaFunction {
     bool isKoopaAngry(const Koopa* pKoopa);
     void startKoopaAngry(Koopa* pKoopa);
     void startFaceCtrl(Koopa* pKoopa);
+    void startLandDemo(Koopa* pKoopa);
+    void turnToPlayerFalling(Koopa* pKoopa);
+    void turnToPlayerWaiting(Koopa* pKoopa);
     void endFaceCtrl(Koopa* pKoopa, s32 val);
     void endFaceCtrlDirect(Koopa* pKoopa);
     void startRecoverKoopaArmor(Koopa* pKoopa);

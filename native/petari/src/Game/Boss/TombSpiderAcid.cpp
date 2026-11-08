@@ -6,9 +6,9 @@
 #include "Game/Util/MapUtil.hpp"
 
 namespace {
-    static const s32 sStepToStartAcidGround = 30;
-    static const f32 sDistanceCheckMap = 2500.0f;
-    static const s32 sStepToEndAcidGround = 30;
+    const s32 sStepToStartAcidGround = 30;
+    const f32 sDistanceCheckMap = 2500.0f;
+    const s32 sStepToEndAcidGround = 30;
 };  // namespace
 
 TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsGlandReady(), mIsEmitOn(), mIsActive(), mStateChangeTimer() {
@@ -52,51 +52,35 @@ void TombSpiderAcid::update() {
     if (mIsActive) {
         updateGroundMtx(&mMouthEffectMtx, TombSpiderFunction::getMtxMouth(mParent));
 
-        if (TombSpiderFunction::getGlandFrontL(mParent)->isActive()) {
-            if (!TombSpiderFunction::getGlandFrontL(mParent)->isDamage()) {
-                updateGroundMtx(&mGlandFrontLEffectMtx, TombSpiderFunction::getMtxGlandFrontL(mParent));
-            }
-        }
-
-        if (TombSpiderFunction::getGlandFrontR(mParent)->isActive()) {
-            if (!TombSpiderFunction::getGlandFrontR(mParent)->isDamage()) {
-                updateGroundMtx(&mGlandFrontREffectMtx, TombSpiderFunction::getMtxGlandFrontR(mParent));
-            }
-        }
-
-        if (TombSpiderFunction::getGlandRearL(mParent)->isActive()) {
-            if (!TombSpiderFunction::getGlandRearL(mParent)->isDamage()) {
-                updateGroundMtx(&mGlandRearLEffectMtx, TombSpiderFunction::getMtxGlandRearL(mParent));
-            }
-        }
-
-        if (TombSpiderFunction::getGlandRearR(mParent)->isActive()) {
-            if (!TombSpiderFunction::getGlandRearR(mParent)->isDamage()) {
-                updateGroundMtx(&mGlandRearREffectMtx, TombSpiderFunction::getMtxGlandRearR(mParent));
-            }
-        }
+        updateGlandGroundMtx(TombSpiderFunction::getGlandFrontL(mParent), &mGlandFrontLEffectMtx, TombSpiderFunction::getMtxGlandFrontL(mParent));
+        updateGlandGroundMtx(TombSpiderFunction::getGlandFrontR(mParent), &mGlandFrontREffectMtx, TombSpiderFunction::getMtxGlandFrontR(mParent));
+        updateGlandGroundMtx(TombSpiderFunction::getGlandRearL(mParent), &mGlandRearLEffectMtx, TombSpiderFunction::getMtxGlandRearL(mParent));
+        updateGlandGroundMtx(TombSpiderFunction::getGlandRearR(mParent), &mGlandRearREffectMtx, TombSpiderFunction::getMtxGlandRearR(mParent));
     }
 }
+
+void TombSpiderAcid::updateGlandGroundMtx(const TombSpiderGland* pGland, Pos3f* pDstMtx, MtxPtr pSrcMtx) {
+    if (pGland->isActive() && !pGland->isDamage()) {
+        updateGroundMtx(pDstMtx, pSrcMtx);
+    }
+}
+
+namespace {
+    void tryEmitGlandAcid(TombSpiderGland* pGland) {
+        if (pGland->isActive()) {
+            MR::emitEffect(pGland, "AcidSplash");
+        }
+    }
+};  // namespace
 
 void TombSpiderAcid::updateEmitAcid() {
     if (!mIsActive && ++mStateChangeTimer >= ::sStepToStartAcidGround) {
         MR::emitEffect(mParent, "AcidSplash");
 
-        if (TombSpiderFunction::getGlandFrontL(mParent)->isActive()) {
-            MR::emitEffect(TombSpiderFunction::getGlandFrontL(mParent), "AcidSplash");
-        }
-
-        if (TombSpiderFunction::getGlandFrontR(mParent)->isActive()) {
-            MR::emitEffect(TombSpiderFunction::getGlandFrontR(mParent), "AcidSplash");
-        }
-
-        if (TombSpiderFunction::getGlandRearL(mParent)->isActive()) {
-            MR::emitEffect(TombSpiderFunction::getGlandRearL(mParent), "AcidSplash");
-        }
-
-        if (TombSpiderFunction::getGlandRearR(mParent)->isActive()) {
-            MR::emitEffect(TombSpiderFunction::getGlandRearR(mParent), "AcidSplash");
-        }
+        ::tryEmitGlandAcid(TombSpiderFunction::getGlandFrontL(mParent));
+        ::tryEmitGlandAcid(TombSpiderFunction::getGlandFrontR(mParent));
+        ::tryEmitGlandAcid(TombSpiderFunction::getGlandRearL(mParent));
+        ::tryEmitGlandAcid(TombSpiderFunction::getGlandRearR(mParent));
 
         mIsActive = true;
     }

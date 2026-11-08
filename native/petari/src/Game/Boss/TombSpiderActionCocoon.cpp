@@ -37,10 +37,7 @@ void TombSpiderActionCocoon::attackSensor(HitSensor* pSender, HitSensor* pReceiv
 
 bool TombSpiderActionCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (msg == ACTMES_IS_BROKEN) {
-        if (mIsDead || isNerve(GET_NERVE(TombSpiderActionCocoon, TombSpiderActionCocoonNrvBreak))) {
-            return true;
-        }
-        return false;
+        return mIsDead || isNerve(GET_NERVE(TombSpiderActionCocoon, TombSpiderActionCocoonNrvBreak));
     }
 
     if (msg == ACTMES_SLING_SHOOT_ATTACK) {

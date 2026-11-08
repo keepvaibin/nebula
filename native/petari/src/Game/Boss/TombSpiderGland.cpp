@@ -36,10 +36,7 @@ bool TombSpiderGland::isActive() const {
 }
 
 bool TombSpiderGland::isDamage() const {
-    if (isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageStart)) || isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageWait))) {
-        return true;
-    }
-    return false;
+    return isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageStart)) || isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageWait));
 }
 
 void TombSpiderGland::exeWait() {

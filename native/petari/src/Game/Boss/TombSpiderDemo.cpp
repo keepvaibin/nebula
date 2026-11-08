@@ -24,21 +24,22 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    static const s32 sStepDemoGateOpen = 180;
-    static const f32 sGateOpenPlayerDistance = 6000.0f;
-    static const f32 sPlanetRadius = 7000.0f;
-    static const f32 sPlanetInsideRadius = 1800.0f;
-    static const s32 sStepGateBreak = 75;
-    static const f32 sGateOpenPlayerSpeed = 60.0f;
-    static const s32 sStepGateOpenChangeCamera = 120;
-    static const s32 sStepCocoonBreak = 60;
-    static const s32 sStepJumpRotateToPlayerStart = 20;
-    static const s32 sStepJumpRotateToPlayerEnd = 70;
-    static const s32 sStepBattle2ndStartCameraInterpolateFrame = 10;
-    static const s32 sStepChanceDamagePlanetBreak = 30;
-    static const s32 sStepBattle2ndStartJumpStart = 150;
-    static const s32 sStepBattle2ndStartJumpEnd = 190;
-    static const s32 sStepBattleEndPlanetBreak = 15;
+    const s32 sStepDemoGateOpen = 180;
+    const f32 sGateOpenPlayerDistance = 6000.0f;
+    const f32 sPlanetRadius = 7000.0f;
+    const f32 sPlanetInsideRadius = 1800.0f;
+    const s32 sStepGateBreak = 75;
+    const f32 sGateOpenPlayerSpeed = 60.0f;
+    const s32 sStepGateOpenChangeCamera = 120;
+    const s32 sStepCocoonBreak = 60;
+    const s32 sStepJumpRotateToPlayerStart = 20;
+    const s32 sStepJumpRotateToPlayerEnd = 70;
+    const s32 sStepBattle2ndStartCameraInterpolateFrame = 10;
+    const s32 sStepChanceDamagePlanetBreak = 30;
+    const s32 sStepBattle2ndStartJumpStart = 150;
+    const s32 sStepBattle2ndStartJumpEnd = 190;
+    const s32 sStepBattleEndPlanetBreak = 15;
+    const s32 sBattle2ndStartStarPieceNum = 25;
 };  // namespace
 
 TombSpiderDemo::TombSpiderDemo(TombSpider* pParent) : mParent(pParent), mRotateSpeed(0.0f) {
@@ -136,11 +137,7 @@ bool TombSpiderDemo::updateCocoonBreak() {
         TombSpiderFunction::appearThreadAttacherAll(mParent);
     }
 
-    if (MR::isStep(mParent, ::sStepCocoonBreak)) {
-        return true;
-    }
-
-    return false;
+    return MR::isStep(mParent, ::sStepCocoonBreak);
 }
 
 bool TombSpiderDemo::updateBattle1stStart() {
@@ -149,11 +146,7 @@ bool TombSpiderDemo::updateBattle1stStart() {
         MR::startSound(mParent, "SE_BV_TSPIDER_APPEAR");
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
 bool TombSpiderDemo::updateBattle1stEnd() {
@@ -168,11 +161,7 @@ bool TombSpiderDemo::updateBattle1stEnd() {
         MR::startSystemSE("SE_OJ_TSPI_PLANET_BREAK_M");
     }
 
-    if (MR::isBckStopped(mParent)) {
-        return true;
-    }
-
-    return false;
+    return MR::isBckStopped(mParent);
 }
 
 bool TombSpiderDemo::updateBattle2ndStart() {
@@ -191,12 +180,10 @@ bool TombSpiderDemo::updateBattle2ndStart() {
         mRotateSpeed = TombSpiderFunction::calcRotateSpeedToPlayer(mParent, ::sStepBattle2ndStartJumpEnd - ::sStepBattle2ndStartJumpStart);
     }
 
-    if (MR::isGreaterEqualStep(mParent, ::sStepBattle2ndStartJumpStart) && MR::isLessStep(mParent, ::sStepBattle2ndStartJumpEnd)) {
-        mParent->mRotation.z += mRotateSpeed;
-    }
+    updateRotateBetween(::sStepBattle2ndStartJumpStart, ::sStepBattle2ndStartJumpEnd);
 
     if (MR::isBckStopped(mParent)) {
-        for (s32 idx = 0; idx < 25; idx++) {
+        for (s32 idx = 0; idx < ::sBattle2ndStartStarPieceNum; idx++) {
             Vec3f dir(1.0f, 0.0f, 0.0f);
             MR::rotateVecDegree(&dir, Vec3f(0.0f, 0.0f, 1.0f), MR::getRandom() * 360.0f);
             MR::appearStarPieceToDirection(mParent, mParent->mPosition, dir, 1, 0.0f, 40.0f, false);
@@ -253,7 +240,12 @@ void TombSpiderDemo::updateJumpRotateToPlayer() {
         mRotateSpeed = TombSpiderFunction::calcRotateSpeedToPlayer(mParent, ::sStepJumpRotateToPlayerEnd - ::sStepJumpRotateToPlayerStart);
     }
 
-    if (MR::isGreaterEqualStep(mParent, ::sStepJumpRotateToPlayerStart) && MR::isLessStep(mParent, ::sStepJumpRotateToPlayerEnd)) {
+    updateRotateBetween(::sStepJumpRotateToPlayerStart, ::sStepJumpRotateToPlayerEnd);
+}
+
+// Turns by mRotateSpeed on each step in [startStep, endStep).
+void TombSpiderDemo::updateRotateBetween(s32 startStep, s32 endStep) {
+    if (MR::isGreaterEqualStep(mParent, startStep) && MR::isLessStep(mParent, endStep)) {
         mParent->mRotation.z += mRotateSpeed;
     }
 }

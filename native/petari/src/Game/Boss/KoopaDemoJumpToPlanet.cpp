@@ -13,9 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 0.98f, 0.0f};
-    static MR::ActorMoveParam sWaitParam = {0.0f, 1.0f, 0.9f, 1.0f};
-    static const s32 sFallWarpStepVs3 = 90;
+    const s32 sFallWarpStepVs3 = 90;
 };  // namespace
 
 namespace NrvKoopaDemoJumpToPlanet {
@@ -65,7 +63,7 @@ void KoopaDemoJumpToPlanet::exeFall() {
         KoopaFunction::getKoopaPlanetShadow(mHost)->appear();
     }
 
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sFallParam);
+    KoopaFunction::turnToPlayerFalling(mHost);
 
     if (KoopaFunction::isKoopaVs3(mHost) && MR::isStep(this, ::sFallWarpStepVs3)) {
         KoopaFunction::setKoopaPos(mHost, "Ｌｖ１開始（クッパ）");
@@ -86,12 +84,7 @@ void KoopaDemoJumpToPlanet::exeFall() {
 
 void KoopaDemoJumpToPlanet::exeLand() {
     if (MR::isFirstStep(this)) {
-        MR::startAction(mHost, "Land");
-        MR::startSound(mHost, "SE_BM_KOOPA_FLIP_RECOVER_END");
-        MR::startSound(mHost, "SE_BV_KOOPA_LAND_HEAVY");
-
-        MR::tryRumblePadStrong(mHost, PLAYER_1);
-        MR::shakeCameraNormalStrong();
+        KoopaFunction::startLandDemo(mHost);
     }
 
     if (MR::isActionEnd(mHost)) {
@@ -104,7 +97,7 @@ void KoopaDemoJumpToPlanet::exeWaitPlayer() {
         KoopaFunction::startFaceCtrl(mHost);
     }
 
-    MR::moveAndTurnToPlayer(mHost, &mHost->mFront, ::sWaitParam);
+    KoopaFunction::turnToPlayerWaiting(mHost);
 
     if (MR::isOnGroundPlayer()) {
         KoopaFunction::startFaceCtrl(mHost);

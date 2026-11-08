@@ -2,9 +2,8 @@
 #include "Game/Boss/DinoPackunAction.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 
-DinoPackunSequencer::DinoPackunSequencer(const char* pName, DinoPackun* pParent) : NerveExecutor(pName) {
-    mParent = pParent;
-    mCurrentAction = nullptr;
+DinoPackunSequencer::DinoPackunSequencer(const char* pName, DinoPackun* pParent)
+    : NerveExecutor(pName), mParent(pParent), mCurrentAction(nullptr) {
 }
 
 void DinoPackunSequencer::update() {

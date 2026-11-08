@@ -13,10 +13,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStepToScreenBlur = 65;
-    static const s32 sScreenBlurStep = 135;
-    static const s32 sStepToScreenBlurFinal = 50;
-    static const s32 sScreenBlurStepFinal = 140;
+    const s32 sStepToScreenBlur = 65;
+    const s32 sScreenBlurStep = 135;
+    const s32 sStepToScreenBlurFinal = 50;
+    const s32 sScreenBlurStepFinal = 140;
 };  // namespace
 
 namespace NrvKoopaDemoPowerUp {
@@ -91,14 +91,9 @@ void KoopaDemoPowerUp::exeWaitDemo() {
 }
 
 void KoopaDemoPowerUp::exeDemo() {
-    if (KoopaFunction::isKoopaLv3(mHost)) {
-        if (MR::isStep(this, ::sStepToScreenBlurFinal)) {
-            MR::startCenterScreenBlur(::sScreenBlurStepFinal, 15.0f, 80, 5, 30);
-        }
-    } else {
-        if (MR::isStep(this, ::sStepToScreenBlur)) {
-            MR::startCenterScreenBlur(::sScreenBlurStep, 15.0f, 80, 5, 30);
-        }
+    const bool isFinal = KoopaFunction::isKoopaLv3(mHost);
+    if (MR::isStep(this, isFinal ? ::sStepToScreenBlurFinal : ::sStepToScreenBlur)) {
+        MR::startCenterScreenBlur(isFinal ? ::sScreenBlurStepFinal : ::sScreenBlurStep, 15.0f, 80, 5, 30);
     }
 
     if (!MR::isActionEnd(mHost)) {

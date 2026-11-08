@@ -19,10 +19,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-namespace {
-    static const s32 sKoopaFallVoiceStep = 20;
-};  // namespace
-
 namespace NrvKoopaSequencerVs1 {
     NEW_NERVE(KoopaSequencerVs1NrvBattleStairs, KoopaSequencerVs1, BattleStairs);
     NEW_NERVE(KoopaSequencerVs1NrvDemoBattleStart, KoopaSequencerVs1, DemoBattleStart);
@@ -119,39 +115,18 @@ void KoopaSequencerVs1::exeWaitDemoBattleEnd() {
 }
 
 void KoopaSequencerVs1::exeDemoBattleEnd() {
-    if (MR::isFirstStep(this)) {
-        MR::startAtmosphereSE("SE_AT_KOOPA_FALLDOWN_LV1");
-        MR::stopStageBGM(180);
-
-        KoopaFunction::endFaceCtrl(mKoopa, -1);
-
-        MR::startBrk(KoopaFunction::getKoopaPlanet(mKoopa), "Death");
-    }
-
-    if (MR::isStep(this, ::sKoopaFallVoiceStep)) {
-        MR::startSound(mKoopa, "SE_BV_KOOPA_BATTLE_END_FALL");
-    }
-
-    if (MR::isDemoLastStep()) {
-        MR::overlayWithPreviousScreen(3);
-
-        Vec3f namePos;
-        MR::findNamePos("デモ中心", &namePos, nullptr);
-
-        MR::startAfterBossBGM();
-
-        MR::requestAppearPowerStar(mKoopa, namePos);
-        KoopaFunction::startKoopaPlateDamageAnimPowerStarAppear(mKoopa);
-
-        mKoopa->kill();
-    }
+    updateDemoDown(nullptr);
 }
 
 void KoopaSequencerVs1::exeWaitDemo() {
 }
 
+bool KoopaSequencerVs1::isBattleActive() const {
+    return isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo();
+}
+
 void KoopaSequencerVs1::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+    if (isBattleActive()) {
         mBattleMain->attackSensor(pSender, pReceiver);
     }
 }
@@ -161,30 +136,18 @@ bool KoopaSequencerVs1::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
         return mBattleStairs->receiveMsgPlayerAttack(msg, pSender, pReceiver);
     }
 
-    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
-        return mBattleMain->receiveMsgPlayerAttack(msg, pSender, pReceiver);
-    }
-
-    return false;
-}
-
-bool KoopaSequencerVs1::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    return false;
+    return isBattleActive() && mBattleMain->receiveMsgPlayerAttack(msg, pSender, pReceiver);
 }
 
 bool KoopaSequencerVs1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
-        return mBattleMain->receiveOtherMsg(msg, pSender, pReceiver);
-    }
-
-    return false;
+    return isBattleActive() && mBattleMain->receiveOtherMsg(msg, pSender, pReceiver);
 }
 
 #if defined(NEBULA_DEV)
 void KoopaSequencerVs1::testHit(HitSensor* pPlayer) {
     if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattleStairs))) {
         MR::onSwitchA(mKoopa);
-    } else if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+    } else if (isBattleActive()) {
         mBattleMain->testHit(pPlayer);
     }
 }
