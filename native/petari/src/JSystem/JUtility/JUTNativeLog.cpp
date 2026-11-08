@@ -3,38 +3,29 @@
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
-namespace {
-    char sLine[1024];
-    size_t sLength = 0;
-    bool sLock = false;  // held with the compiler's atomic test-and-set
-
-    void emit() {
-        const NebulaHostServices* pHost = nebula_host();
-        sLine[sLength] = '\0';
-        if (pHost != nullptr && pHost->log != nullptr) {
-            pHost->log(pHost->user, sLine);
-        }
-        sLength = 0;
-    }
-}  // namespace
-
+// Each line goes to the host in one call, which writes it whole from any thread; nothing is shared between calls. Every
+// caller ends its text with a newline; a last piece without one is a line of its own.
 void JUTNativeLogV(const char* pFormat, va_list args) {
+    const NebulaHostServices* pHost = nebula_host();
+    if (pHost == nullptr || pHost->log == nullptr) {
+        return;
+    }
+
     char text[1024];
     const int n = nebula_vsnprintf(text, sizeof(text), pFormat, args);
     const size_t length = n < 0 ? 0 : (static_cast< size_t >(n) < sizeof(text) ? static_cast< size_t >(n) : sizeof(text) - 1);
-    while (__atomic_test_and_set(&sLock, __ATOMIC_ACQUIRE)) {
-    }
+    size_t start = 0;
     for (size_t i = 0; i < length; i++) {
         if (text[i] == '\n') {
-            emit();
-            continue;
+            text[i] = '\0';
+            pHost->log(pHost->user, text + start);
+            start = i + 1;
         }
-        if (sLength == sizeof(sLine) - 1) {
-            emit();
-        }
-        sLine[sLength++] = text[i];
     }
-    __atomic_clear(&sLock, __ATOMIC_RELEASE);
+    if (start < length) {
+        text[length] = '\0';
+        pHost->log(pHost->user, text + start);
+    }
 }
 
 void JUTNativeLog(const char* pFormat, ...) {
