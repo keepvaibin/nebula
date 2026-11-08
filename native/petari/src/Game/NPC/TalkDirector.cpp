@@ -24,7 +24,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include <cstdio>
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
@@ -32,9 +31,57 @@ namespace {
         return MR::getSceneObj< TalkDirector >(SceneObj_TalkDirector);
     }
 
-    static const f32 sTalkDistanceScale = 1.0f;
-    static const f32 sNearScale = 1.2f;
-};  // namespace
+    const f32 sTalkDistanceScale = 1.0f;
+    // Range for the host of the long talk already running.
+    const f32 sNearScale = 1.2f;
+    const char* const cTalkDemoName = "会話";
+
+    // TalkDirector::mDemoType.
+    enum TalkDemoType {
+        TalkDemo_None,
+        // The talk demo with Mario puppetable.
+        TalkDemo_Talk,
+        // A demo-wanting talk inside a time-keep demo pauses it.
+        TalkDemo_PauseTimeKeep,
+        // A talk without a demo inside a time-keep demo.
+        TalkDemo_InTimeKeep,
+    };
+
+    // Flow-data branch argument. The three live ones are asked when read and have no stored result.
+    enum BranchResultIndex {
+        BranchResult_KinopioExplorerRescued,
+        BranchResult_KinopioExplorerOrganize,
+        BranchResult_KinopioExplorerTalkGetGrandStar2,
+        BranchResult_KinopioExplorerTrickComet,
+        BranchResult_KinopioExplorerTalkGetGrandStar3,
+        BranchResult_KinopioExplorerStartMessenger,
+        BranchResult_KinopioExplorerTalkGetGrandStar4,
+        BranchResult_KinopioExplorerTalkGetGrandStar5,
+        BranchResult_KinopioExplorerTalkGetGrandStar6,
+        BranchResult_KinopioExplorerTalkGoFinalBattle,
+        BranchResult_EndLuigiHideAndSeek,
+        BranchResult_KinopioExplorerCompleteTrickComet,
+        BranchResult_LuigiDisappearFromAstroGalaxy,  // live
+        BranchResult_OnLuigiHiding,                  // live
+        BranchResult_GreenStarNum1,
+        BranchResult_GreenStarNum2,
+        BranchResult_GreenStarNum3,
+        BranchResult_RedDriver,
+        BranchResult_AnyPlayerLeftSupply,  // live
+        BranchResult_ActiveLuigiHideAndSeek,
+        BranchResult_GalaxyPurpleCometLaunch,
+        BranchResult_RosettaTalkTorchLecture,
+        BranchResult_RosettaTalkTrickComet,
+        BranchResult_RosettaTalkKoopa,
+        BranchResult_RosettaTalkCountDownStart,
+        BranchResult_RosettaTalkAstroDomeRecover,
+        BranchResult_RosettaTalkTorchProgress,
+        BranchResult_ViewNormalEnding,
+        BranchResult_Num,
+    };
+
+    static_assert(BranchResult_Num == TalkDirector::cBranchResultNum, "branch result table");
+}  // namespace
 
 namespace NrvTalkDirector {
     NEW_NERVE(TalkDirectorNrvWait, TalkDirector, Wait);
@@ -76,10 +123,9 @@ void TalkPeekZ::setDrawSyncToken() {
 }
 
 TalkDirector::TalkDirector(const char* pName)
-    : LayoutActor(pName, true), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(), mTalkState(), mIsTalkStart(), mIsTalkEnd(), mIsInvalidTalk(), mIsInvalidClipping(), mDemoType(), mIsSkipTerm(), mIsPlayerTalk() {
-}
-
-TalkDirector::~TalkDirector() {
+    : LayoutActor(pName, true), mMsgControls(), mPeekZ(), mBalloonHolder(), mStateHolder(), mMsgCtrl(), mBalloonCtrl(), mRequestCtrl(), mLastTalkCtrl(),
+      mTalkState(), mIsTalkStart(), mIsTalkEnd(), mIsInvalidTalk(), mIsInvalidClipping(), mIsNext(), mDemoType(TalkDemo_None), mIsSkipTerm(),
+      mIsPlayerTalk(), mMessageInfo(), mCameraInfo(), mHostActor(), mBranchResult() {
 }
 
 void TalkDirector::init(const TableIter& rIter) {
@@ -92,46 +138,46 @@ void TalkDirector::init(const TableIter& rIter) {
     initBranchResult();
     appear();
 }
+
 void TalkDirector::movement() {
     updateMessage();
     LayoutActor::movement();
 }
 
-bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
+bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool isForce) {
     mIsTalkEnd = false;
-    bool var31 = false;
     mIsTalkStart = false;
+
     if (isInvalidTalk()) {
         return false;
     }
 
-    if (pCtrl->mIsOnRootNodeAuto) {
-        if (TalkFunction::isShortTalk(pCtrl)) {
-            if (!isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext))) {
-                pCtrl->rootNodePre(false);
-            }
-        } else if (!isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)) && !isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext))) {
-            pCtrl->rootNodePre(false);
-        }
+    // An automatic root node goes to its first message unless this director is already past it.
+    if (pCtrl->mIsOnRootNodeAuto && !isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext)) &&
+        (TalkFunction::isShortTalk(pCtrl) || !isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)))) {
+        pCtrl->rootNodePre(false);
     }
 
-    if (!force && !TalkFunction::isShortTalk(pCtrl) && MR::isPlayerElementModeHopper()) {
+    if (!isForce && !TalkFunction::isShortTalk(pCtrl) && MR::isPlayerElementModeHopper()) {
         return false;
     }
 
+    // While a long talk runs only its own host may ask.
+    bool isTalkingHost = false;
+
     if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk)) && !TalkFunction::isShortTalk(mTalkState->mMsgCtrl)) {
-        if (mTalkState->mMsgCtrl == pCtrl) {
-            var31 = true;
-        } else {
+        if (mTalkState->mMsgCtrl != pCtrl) {
             return false;
         }
+
+        isTalkingHost = true;
     }
 
     if (MR::isTalkNone(pCtrl)) {
         TalkFunction::onTalkStateEntry(pCtrl);
     }
 
-    if (force) {
+    if (isForce) {
         if (TalkFunction::isShortTalk(pCtrl)) {
             if (pCtrl->isNearPlayer(mRequestCtrl)) {
                 mRequestCtrl = pCtrl;
@@ -142,10 +188,9 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
             mMsgCtrl = pCtrl;
         }
     } else {
-        f32 scale = var31 ? ::sNearScale : ::sTalkDistanceScale;
-        f32 talkDistance = pCtrl->mTalkDistance;
+        f32 scale = isTalkingHost ? ::sNearScale : ::sTalkDistanceScale;
 
-        if (!pCtrl->isNearPlayer(scale * talkDistance)) {
+        if (!pCtrl->isNearPlayer(scale * pCtrl->mTalkDistance)) {
             return false;
         }
 
@@ -167,12 +212,8 @@ bool TalkDirector::request(TalkMessageCtrl* pCtrl, bool force) {
     return true;
 }
 
-bool TalkDirector::test(TalkMessageCtrl* pCtrl, bool arg2, bool arg3) {
-    if (isInvalidTalk()) {
-        return false;
-    }
-
-    if (mMsgCtrl != pCtrl) {
+bool TalkDirector::test(TalkMessageCtrl* pCtrl, bool isForce, bool isDemo) {
+    if (isInvalidTalk() || mMsgCtrl != pCtrl) {
         return false;
     }
 
@@ -184,28 +225,24 @@ bool TalkDirector::test(TalkMessageCtrl* pCtrl, bool arg2, bool arg3) {
         return false;
     }
 
-    if (!arg2 && !mTalkState->test()) {
+    if (!isForce && !mTalkState->test()) {
         return false;
     }
 
-    if (getDemoType(pCtrl, arg3) == 1 && !MR::canStartDemo()) {
-        return false;
-    }
-
-    return true;
+    return getDemoType(pCtrl, isDemo) != TalkDemo_Talk || MR::canStartDemo();
 }
 
-bool TalkDirector::start(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool arg4) {
-    if (test(pCtrl, arg2, arg3)) {
-        if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk))) {
-            return true;
-        }
-    } else {
+bool TalkDirector::start(TalkMessageCtrl* pCtrl, bool isForce, bool isDemo, bool isPlayerTalk) {
+    if (!test(pCtrl, isForce, isDemo)) {
         return false;
+    }
+
+    if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk))) {
+        return true;
     }
 
     pCtrl->rootNodePre(true);
-    prepTalk(pCtrl, arg2, arg3, arg4);
+    prepTalk(pCtrl, isForce, isDemo, isPlayerTalk);
 
     if (TalkFunction::isEventNode(pCtrl)) {
         setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext));
@@ -227,15 +264,16 @@ void TalkDirector::updateMessage() {
         }
     }
 
+    // Before a talk starts, the nearest request reaches the message a frame after the balloon.
     if (isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait)) || isNerve(GET_NERVE(TalkDirector, TalkDirectorNrvPrep))) {
         mMsgCtrl = mBalloonCtrl;
         mBalloonCtrl = mRequestCtrl;
-        mRequestCtrl = nullptr;
     } else {
         mMsgCtrl = mRequestCtrl;
-        mBalloonCtrl = mMsgCtrl;
-        mRequestCtrl = nullptr;
+        mBalloonCtrl = mRequestCtrl;
     }
+
+    mRequestCtrl = nullptr;
 
     if (mMsgCtrl != nullptr) {
         mLastTalkCtrl = mMsgCtrl;
@@ -243,10 +281,7 @@ void TalkDirector::updateMessage() {
 
     if (mBalloonCtrl != nullptr) {
         mBalloonCtrl->updateBalloonPos();
-
-        TalkPeekZ* peek = mPeekZ;
-        Vec2f v1(mBalloonCtrl->mBalloonPos.x, mBalloonCtrl->mBalloonPos.y);
-        peek->mScreenPos.set(v1.x, v1.y);
+        mPeekZ->mScreenPos.set(mBalloonCtrl->mBalloonPos.x, mBalloonCtrl->mBalloonPos.y);
     }
 
     if (MR::isPowerStarGetDemoActive()) {
@@ -255,30 +290,23 @@ void TalkDirector::updateMessage() {
     }
 }
 
-void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool arg4) {
-    mIsSkipTerm = arg2;
+void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool isSkipTerm, bool isDemo, bool isPlayerTalk) {
+    mIsSkipTerm = isSkipTerm;
     mIsTalkStart = true;
-    mIsPlayerTalk = arg4;
 
     mIsInvalidClipping = MR::isInvalidClipping(pCtrl->mHostActor);
-    mDemoType = getDemoType(pCtrl, arg3);
-
-    if (mDemoType == 0) {
-        mIsPlayerTalk = false;
-    }
+    mDemoType = getDemoType(pCtrl, isDemo);
+    mIsPlayerTalk = isPlayerTalk && mDemoType != TalkDemo_None;
 
     MR::invalidateClipping(pCtrl->mHostActor);
 
     switch (mDemoType) {
-    case 2:
+    case TalkDemo_PauseTimeKeep:
         MR::pauseTimeKeepDemo(pCtrl->mHostActor);
         break;
-    case 1:
-        // "Discussion"
-        MR::tryStartDemoMarioPuppetable(pCtrl->mHostActor, "会話");
-        MR::requestMovementOn(this);
-        mBalloonHolder->pauseOff();
-        mStateHolder->pauseOff();
+    case TalkDemo_Talk:
+        MR::tryStartDemoMarioPuppetable(pCtrl->mHostActor, ::cTalkDemoName);
+        pauseOff();
         break;
     }
 
@@ -288,17 +316,17 @@ void TalkDirector::prepTalk(TalkMessageCtrl* pCtrl, bool arg2, bool arg3, bool a
 }
 
 void TalkDirector::termTalk() {
-    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
+    TalkMessageCtrl* pCtrl = mTalkState->mMsgCtrl;
     mIsTalkEnd = true;
 
     if (mMessageInfo.isCameraNormal()) {
         MR::endNPCTalkCamera(false, -1);
     } else if (mMessageInfo.isCameraEvent()) {
-        MR::endMultiActorCamera(mHostActor, mCameraInfo, "会話", false);
+        MR::endMultiActorCamera(mHostActor, mCameraInfo, ::cTalkDemoName, false);
     }
 
     if (!mIsInvalidClipping) {
-        MR::validateClipping(control->mHostActor);
+        MR::validateClipping(pCtrl->mHostActor);
     }
 
     if (mIsPlayerTalk) {
@@ -306,58 +334,42 @@ void TalkDirector::termTalk() {
     }
 
     switch (mDemoType) {
-    case 2:
-        MR::resumeTimeKeepDemo(control->mHostActor);
+    case TalkDemo_PauseTimeKeep:
+        MR::resumeTimeKeepDemo(pCtrl->mHostActor);
         break;
-    case 1:
-        MR::endDemo(control->mHostActor, "会話");
+    case TalkDemo_Talk:
+        MR::endDemo(pCtrl->mHostActor, ::cTalkDemoName);
         break;
     }
 
-    mDemoType = 0;
+    mDemoType = TalkDemo_None;
     mIsPlayerTalk = false;
     mIsInvalidClipping = false;
 }
 
 TalkState* TalkDirector::initState(TalkMessageCtrl* pCtrl) {
-    TalkState* state = mStateHolder->getState(pCtrl);
-    TalkBalloon* balloon = mBalloonHolder->getBalloon(pCtrl);
-    state->init(pCtrl, balloon);
+    TalkState* pState = mStateHolder->getState(pCtrl);
+    pState->init(pCtrl, mBalloonHolder->getBalloon(pCtrl));
 
-    TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
+    const TalkMessageInfo* pInfo = TalkFunction::getMessageInfo(pCtrl);
 
-    if (info->isCameraNormal() || info->isCameraEvent()) {
-        info = TalkFunction::getMessageInfo(pCtrl);
-        mMessageInfo = *info;
+    if (pInfo->isCameraNormal() || pInfo->isCameraEvent()) {
+        mMessageInfo = *pInfo;
         mCameraInfo = pCtrl->mCameraInfo;
         mHostActor = pCtrl->mHostActor;
     }
 
-    return state;
+    return pState;
 }
 
 bool TalkDirector::isInvalidTalk() const {
-    if (mIsInvalidTalk) {
-        return true;
-    }
-
-    if (MR::isStarPointerModeBlueStarReady()) {
-        return true;
-    }
-
-    if (MR::isFirstPersonCamera()) {
-        return true;
-    }
-
-    return MR::isPlayerDead();
+    return mIsInvalidTalk || MR::isStarPointerModeBlueStarReady() || MR::isFirstPersonCamera() || MR::isPlayerDead();
 }
 
 void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
-    const char* branchID = pCtrl->getBranchID();
-
-    MR::FormattedName buffYes("Select_%s_Yes", branchID);
-
-    MR::FormattedName buffNo("Select_%s_No", branchID);
+    const char* pBranchID = pCtrl->getBranchID();
+    MR::FormattedName yesName("Select_%s_Yes", pBranchID);
+    MR::FormattedName noName("Select_%s_No", pBranchID);
 
     if (pCtrl->isSelectYesNo()) {
         MR::resetYesNoSelectorSE();
@@ -366,74 +378,63 @@ void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
     }
 
     MR::requestMovementOn(MR::getGameSceneLayoutHolder()->mYesNoLayout);
-    MR::appearYesNoSelector(buffYes.c_str(), buffNo.c_str(), nullptr);
+    MR::appearYesNoSelector(yesName.c_str(), noName.c_str(), nullptr);
 }
 
-s32 TalkDirector::getDemoType(const TalkMessageCtrl* pCtrl, bool arg2) const {
-    s32 demoType;
-
+s32 TalkDirector::getDemoType(const TalkMessageCtrl* pCtrl, bool isDemo) const {
     if (TalkFunction::isShortTalk(pCtrl)) {
-        demoType = 0;
-    } else if (MR::isTimeKeepDemoActive()) {
-        if (arg2) {
-            demoType = 2;
-        } else {
-            demoType = 3;
-        }
-    } else {
-        demoType = 1;
+        return TalkDemo_None;
     }
 
-    if (!arg2 && demoType != 3) {
-        return 0;
+    if (MR::isTimeKeepDemoActive()) {
+        return isDemo ? TalkDemo_PauseTimeKeep : TalkDemo_InTimeKeep;
     }
 
-    return demoType;
+    return isDemo ? TalkDemo_Talk : TalkDemo_None;
 }
 
-// Gets the arg-th bool of TalkDirector's booleans, which start at 0x70
-bool TalkDirector::getBranchResult(u16 arg) {
-    if (arg == 18) {
+bool TalkDirector::getBranchResult(u16 index) const {
+    switch (index) {
+    case BranchResult_AnyPlayerLeftSupply:
         return MR::isAnyPlayerLeftSupply();
-    }
-
-    if (arg == 12) {
+    case BranchResult_LuigiDisappearFromAstroGalaxy:
         return MR::isLuigiDisappearFromAstroGalaxy();
-    }
-
-    if (arg == 13) {
+    case BranchResult_OnLuigiHiding:
         return MR::isOnLuigiHiding();
     }
 
-    return (reinterpret_cast< bool* >(this) + arg)[0x70];
+    return index < BranchResult_Num && mBranchResult[index];
 }
 
 void TalkDirector::initBranchResult() {
-    mIsKinopioExplorerRescued = MR::isKinopioExplorerRescued();
-    mIsKinopioExplorerOrganize = MR::isKinopioExplorerOrganize();
-    mIsKinopioExplorerTalkGetGrandStar2 = MR::isKinopioExplorerTalkGetGrandStar2();
-    mIsKinopioExplorerTrickComet = MR::isKinopioExplorerTrickComet();
-    mIsKinopioExplorerTalkGetGrandStar3 = MR::isKinopioExplorerTalkGetGrandStar3();
-    mIsKinopioExplorerStartMessenger = MR::isKinopioExplorerStartMessenger();
-    mIsKinopioExplorerTalkGetGrandStar4 = MR::isKinopioExplorerTalkGetGrandStar4();
-    mIsKinopioExplorerTalkGetGrandStar5 = MR::isKinopioExplorerTalkGetGrandStar5();
-    mIsKinopioExplorerTalkGetGrandStar6 = MR::isKinopioExplorerTalkGetGrandStar6();
-    mIsKinopioExplorerTalkGoFinalBattle = MR::isKinopioExplorerTalkGoFinalBattle();
-    mIsEndLuigiHideAndSeek = MR::isEndLuigiHideAndSeekEvent();
-    mIsKinopioExplorerCompleteTrickComet = MR::isKinopioExplorerCompleteTrickComet();
-    mHasOneGreenStar = MR::calcCurrentGreenStarNum() == 1;
-    mHasTwoGreenStars = MR::calcCurrentGreenStarNum() == 2;
-    mHasThreeGreenStars = MR::calcCurrentGreenStarNum() == 3;
-    mIsUnlockedRedDriver = MR::isOnGameEventFlagRedDriver();
-    mIsActiveLuigiHideAndSeek = MR::isActiveLuigiHideAndSeekEvent();
-    mIsGalaxyPurpleCometLaunch = MR::isGalaxyPurpleCometLaunch();
-    misRosettaTalkTorchLecture = MR::isRosettaTalkTorchLecture();
-    mIsRosettaTalkTrickComet = MR::isRosettaTalkTrickComet();
-    mIsRosettaTalkKoopa = MR::isRosettaTalkKoopa();
-    mIsRosettaTalkCountDownStart = MR::isRosettaTalkCountDownStart();
-    mIsRosettaTalkAstroDemoRecover = MR::isRosettaTalkAstroDomeRecover();
-    mIsRosettaTalkTorchProgress = MR::isRosettaTalkTorchProgress();
-    mIsOnGameEventFlagViewNormalEnding = MR::isOnGameEventFlagViewNormalEnding();
+    mBranchResult[BranchResult_KinopioExplorerRescued] = MR::isKinopioExplorerRescued();
+    mBranchResult[BranchResult_KinopioExplorerOrganize] = MR::isKinopioExplorerOrganize();
+    mBranchResult[BranchResult_KinopioExplorerTalkGetGrandStar2] = MR::isKinopioExplorerTalkGetGrandStar2();
+    mBranchResult[BranchResult_KinopioExplorerTrickComet] = MR::isKinopioExplorerTrickComet();
+    mBranchResult[BranchResult_KinopioExplorerTalkGetGrandStar3] = MR::isKinopioExplorerTalkGetGrandStar3();
+    mBranchResult[BranchResult_KinopioExplorerStartMessenger] = MR::isKinopioExplorerStartMessenger();
+    mBranchResult[BranchResult_KinopioExplorerTalkGetGrandStar4] = MR::isKinopioExplorerTalkGetGrandStar4();
+    mBranchResult[BranchResult_KinopioExplorerTalkGetGrandStar5] = MR::isKinopioExplorerTalkGetGrandStar5();
+    mBranchResult[BranchResult_KinopioExplorerTalkGetGrandStar6] = MR::isKinopioExplorerTalkGetGrandStar6();
+    mBranchResult[BranchResult_KinopioExplorerTalkGoFinalBattle] = MR::isKinopioExplorerTalkGoFinalBattle();
+    mBranchResult[BranchResult_EndLuigiHideAndSeek] = MR::isEndLuigiHideAndSeekEvent();
+    mBranchResult[BranchResult_KinopioExplorerCompleteTrickComet] = MR::isKinopioExplorerCompleteTrickComet();
+
+    s32 greenStarNum = MR::calcCurrentGreenStarNum();
+    mBranchResult[BranchResult_GreenStarNum1] = greenStarNum == 1;
+    mBranchResult[BranchResult_GreenStarNum2] = greenStarNum == 2;
+    mBranchResult[BranchResult_GreenStarNum3] = greenStarNum == 3;
+
+    mBranchResult[BranchResult_RedDriver] = MR::isOnGameEventFlagRedDriver();
+    mBranchResult[BranchResult_ActiveLuigiHideAndSeek] = MR::isActiveLuigiHideAndSeekEvent();
+    mBranchResult[BranchResult_GalaxyPurpleCometLaunch] = MR::isGalaxyPurpleCometLaunch();
+    mBranchResult[BranchResult_RosettaTalkTorchLecture] = MR::isRosettaTalkTorchLecture();
+    mBranchResult[BranchResult_RosettaTalkTrickComet] = MR::isRosettaTalkTrickComet();
+    mBranchResult[BranchResult_RosettaTalkKoopa] = MR::isRosettaTalkKoopa();
+    mBranchResult[BranchResult_RosettaTalkCountDownStart] = MR::isRosettaTalkCountDownStart();
+    mBranchResult[BranchResult_RosettaTalkAstroDomeRecover] = MR::isRosettaTalkAstroDomeRecover();
+    mBranchResult[BranchResult_RosettaTalkTorchProgress] = MR::isRosettaTalkTorchProgress();
+    mBranchResult[BranchResult_ViewNormalEnding] = MR::isOnGameEventFlagViewNormalEnding();
 }
 
 void TalkDirector::pauseOff() {
@@ -459,21 +460,14 @@ bool TalkDirector::isSystemTalking() const {
 }
 
 bool TalkDirector::isNormalTalking() const {
-    return isSystemTalking() && mDemoType == 1;
+    return isSystemTalking() && mDemoType == TalkDemo_Talk;
 }
 
 LiveActor* TalkDirector::getTalkingActor() const {
-    if (isSystemTalking()) {
-        return mTalkState->mMsgCtrl->mHostActor;
-    }
-
-    return nullptr;
+    return isSystemTalking() ? mTalkState->mMsgCtrl->mHostActor : nullptr;
 }
 
 void TalkDirector::exePrep() {
-    if (MR::isLessStep(this, 4)) {
-    }
-
     if (mTalkState->prep(mMsgCtrl)) {
         TalkFunction::onTalkStateEnableStart(mTalkState->mMsgCtrl);
         return;
@@ -488,24 +482,21 @@ void TalkDirector::exeWait() {
 }
 
 void TalkDirector::exeTalk() {
-    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
-    TalkFunction::onTalkStateTalking(control);
+    TalkMessageCtrl* pCtrl = mTalkState->mMsgCtrl;
+    TalkFunction::onTalkStateTalking(pCtrl);
 
-    bool cond = false;
+    // Without a demo, a talk whose host is no longer the nearest request moves on unread.
+    bool isLost = mDemoType == TalkDemo_None && mTalkState->isLostMessage(mMsgCtrl);
 
-    if (mDemoType == 0) {
-        cond = mTalkState->isLostMessage(mMsgCtrl);
-    }
-
-    if (!cond) {
+    if (!isLost) {
         if (!mTalkState->talk(mMsgCtrl)) {
             return;
         }
 
-        MR::readMessage(control);
+        MR::readMessage(pCtrl);
     }
 
-    if (TalkFunction::isSelectTalk(control)) {
+    if (TalkFunction::isSelectTalk(pCtrl)) {
         setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvSlct));
         return;
     }
@@ -513,8 +504,8 @@ void TalkDirector::exeTalk() {
     mTalkState->clos();
     mIsNext = false;
 
-    if (control->mIsOnRootNodeAuto && !mTalkState->isSelfInterrupt(mLastTalkCtrl)) {
-        control->rootNodePst();
+    if (pCtrl->mIsOnRootNodeAuto && !mTalkState->isSelfInterrupt(mLastTalkCtrl)) {
+        pCtrl->rootNodePst();
     }
 
     setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext));
@@ -522,60 +513,64 @@ void TalkDirector::exeTalk() {
 }
 
 void TalkDirector::exeSlct() {
-    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
+    TalkMessageCtrl* pCtrl = mTalkState->mMsgCtrl;
 
     if (MR::isFirstStep(this)) {
-        appearYesNoSelector(control);
+        appearYesNoSelector(pCtrl);
         MR::startSystemSE("SE_SM_TALKBLN_OPEN");
     }
 
-    TalkFunction::onTalkStateTalking(control);
+    TalkFunction::onTalkStateTalking(pCtrl);
 
-    if (MR::isYesNoSelected()) {
-        MR::resetYesNoSelectorSE();
-        mTalkState->clos();
-        mIsNext = true;
-
-        if (control->mIsOnRootNodeAuto) {
-            control->rootNodeSel(MR::isYesNoSelectedYes());
-            control->rootNodePre(true);
-        }
-
-        setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext));
-        exeNext();
+    if (!MR::isYesNoSelected()) {
+        return;
     }
+
+    MR::resetYesNoSelectorSE();
+    mTalkState->clos();
+    mIsNext = true;
+
+    if (pCtrl->mIsOnRootNodeAuto) {
+        pCtrl->rootNodeSel(MR::isYesNoSelectedYes());
+        pCtrl->rootNodePre(true);
+    }
+
+    setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvNext));
+    exeNext();
 }
 
 void TalkDirector::exeNext() {
-    TalkMessageCtrl* control = mTalkState->mMsgCtrl;
+    TalkMessageCtrl* pCtrl = mTalkState->mMsgCtrl;
 
-    bool cond = control->isCurrentNodeContinue();
+    // Read before rootNodeEve moves the node.
+    bool isContinue = pCtrl->isCurrentNodeContinue();
 
-    if (control->rootNodeEve()) {
-        mIsNext |= cond;
-
-        if (mIsNext) {
-            if (TalkFunction::isShortTalk(control)) {
-                termTalk();
-            }
-            control->rootNodePre(true);
-            mTalkState = initState(control);
-            mTalkState->open();
-            setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk));
-
-            return;
-        }
-        termTalk();
-        TalkFunction::onTalkStateEnableEnd(control);
-        setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTerm));
+    if (!pCtrl->rootNodeEve()) {
+        return;
     }
+
+    mIsNext |= isContinue;
+
+    if (!mIsNext) {
+        termTalk();
+        TalkFunction::onTalkStateEnableEnd(pCtrl);
+        setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTerm));
+        return;
+    }
+
+    if (TalkFunction::isShortTalk(pCtrl)) {
+        termTalk();
+    }
+
+    pCtrl->rootNodePre(true);
+    mTalkState = initState(pCtrl);
+    mTalkState->open();
+    setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvTalk));
 }
 
 void TalkDirector::exeTerm() {
-    if (!mIsSkipTerm) {
-        if (!mTalkState->term(mMsgCtrl)) {
-            return;
-        }
+    if (!mIsSkipTerm && !mTalkState->term(mMsgCtrl)) {
+        return;
     }
 
     TalkFunction::onTalkStateNone(mTalkState->mMsgCtrl);
@@ -584,33 +579,30 @@ void TalkDirector::exeTerm() {
     setNerve(GET_NERVE(TalkDirector, TalkDirectorNrvWait));
 }
 
-bool TalkFunction::requestTalkSystem(TalkMessageCtrl* pCtrl, bool force) {
-    return ::getTalkDirector()->request(pCtrl, force);
+bool TalkFunction::requestTalkSystem(TalkMessageCtrl* pCtrl, bool isForce) {
+    return ::getTalkDirector()->request(pCtrl, isForce);
 }
 
-bool TalkFunction::startTalkSystem(TalkMessageCtrl* pCtrl, bool force, bool demo, bool notPuppetable) {
-    return ::getTalkDirector()->start(pCtrl, force, demo, notPuppetable);
+bool TalkFunction::startTalkSystem(TalkMessageCtrl* pCtrl, bool isForce, bool isDemo, bool isPlayerTalk) {
+    return ::getTalkDirector()->start(pCtrl, isForce, isDemo, isPlayerTalk);
 }
 
 bool TalkFunction::endTalkSystem(TalkMessageCtrl* pCtrl) {
-    ::getTalkDirector();
     return MR::isTalkEnableEnd(pCtrl);
 }
 
 bool TalkFunction::isTalkSystemStart(const TalkMessageCtrl* pCtrl) {
-    TalkDirector* pDirector = ::getTalkDirector();
-
+    const TalkDirector* pDirector = ::getTalkDirector();
     return pDirector->mMsgCtrl == pCtrl && pDirector->mIsTalkStart;
 }
 
 bool TalkFunction::isTalkSystemEnd(const TalkMessageCtrl* pCtrl) {
-    TalkDirector* pDirector = ::getTalkDirector();
-
+    const TalkDirector* pDirector = ::getTalkDirector();
     return pDirector->mMsgCtrl == pCtrl && pDirector->mIsTalkEnd;
 }
 
-bool TalkFunction::getBranchAstroGalaxyResult(u16 arg) {
-    return ::getTalkDirector()->getBranchResult(arg);
+bool TalkFunction::getBranchAstroGalaxyResult(u16 index) {
+    return ::getTalkDirector()->getBranchResult(index);
 }
 
 void TalkFunction::registerTalkSystem(TalkMessageCtrl* pCtrl) {
@@ -630,15 +622,14 @@ void MR::invalidateTalkDirector() {
 }
 
 void MR::setTalkDirectorDrawSyncToken() {
-    if (::getTalkDirector() != nullptr) {
-        ::getTalkDirector()->mPeekZ->setDrawSyncToken();
+    TalkDirector* pDirector = ::getTalkDirector();
+
+    if (pDirector != nullptr) {
+        pDirector->mPeekZ->setDrawSyncToken();
     }
 }
 
 bool MR::isActiveTalkBalloonShort() {
-    if (::getTalkDirector() != nullptr) {
-        return ::getTalkDirector()->mBalloonHolder->isActiveBalloonShort();
-    }
-
-    return false;
+    const TalkDirector* pDirector = ::getTalkDirector();
+    return pDirector != nullptr && pDirector->mBalloonHolder->isActiveBalloonShort();
 }
