@@ -7,7 +7,7 @@ class ModelObj;
 
 class KoopaFireStairs : public LiveActor {
 public:
-    KoopaFireStairs(const char* pName, bool);
+    KoopaFireStairs(const char* pName, bool isKoopaJr);
 
     virtual ~KoopaFireStairs();
     virtual void init(const TableIter& rIter);
