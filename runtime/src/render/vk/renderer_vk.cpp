@@ -1488,8 +1488,12 @@ void RendererVk::present_swapchain_image() {
         } else {
             slot = retrace + (slot - retrace + step / 2) / step * step;
         }
-        // A frame too late for its slot (the compositor takes it about a vsync ahead) takes a later one.
-        while (slot - vsync < now) {
+        // A frame too late for its slot takes a later one: a slot is in reach once the frame can be shown by then, at
+        // least a vsync on (the compositor latches about one ahead) and as long as this device's frames have lately
+        // taken from their present to their first possible showing (lead_ns). A 120 Hz panel's vsync is shorter than
+        // the GPU's work and the compositor's latch together: asking a vsync ahead there, frames miss their slots.
+        const std::int64_t reach = std::max(vsync, timing.lead_ns);
+        while (slot - reach < now) {
             slot += step;
         }
         timing.last_slot = slot;
@@ -1498,6 +1502,7 @@ void RendererVk::present_swapchain_image() {
         present_time.desiredPresentTime = static_cast<std::uint64_t>(slot - vsync / 2);
         const auto at = present_time.presentID % timing.requested.size();
         timing.requested[at] = slot;
+        timing.called[at] = now;
         timing.requested_id[at] = present_time.presentID;
         timing.requested_period[at] = step;
         present_times.swapchainCount = 1;
@@ -1597,6 +1602,20 @@ void RendererVk::report_present_timing() {
         const std::int64_t requested = identified ? timing.requested[at] : 0;
         const auto expected = identified ? timing.requested_period[at] : kRetraceNs;
         timing.margin_sum += static_cast<std::int64_t>(past[i].presentMargin);
+        if (identified && timing.called[at] != 0) {
+            const std::int64_t vsync = timing.vsync_ns != 0 ? timing.vsync_ns : kRetraceNs;
+            const auto earliest = static_cast<std::int64_t>(past[i].earliestPresentTime);
+            if (actual > requested + half_vsync && earliest > requested + half_vsync) {
+                // At most four vsyncs: a stall (a pipeline built on the draw, the app put away) is not the device's pace.
+                const std::int64_t needed = std::clamp<std::int64_t>(earliest - timing.called[at], 0, 4 * vsync);
+                timing.lead_ns = std::max(timing.lead_ns, needed);
+                timing.lead_max = std::max(timing.lead_max, needed);
+                timing.on_time_run = 0;
+            } else if (actual <= requested + half_vsync && ++timing.on_time_run >= 240u) {
+                timing.on_time_run = 0;
+                timing.lead_ns = std::max<std::int64_t>(0, timing.lead_ns - vsync / 4);
+            }
+        }
         if (requested == 0) {
             ++timing.unrequested;
         } else if (actual <= requested + half_vsync) {
@@ -1619,12 +1638,15 @@ void RendererVk::report_present_timing() {
         if (++timing.frames == 600u) {
             std::fprintf(stderr, "[present-timing] %u frames: %u shown at their retrace slot, %u late, %u without one "
                          "(unmatched); %u at the target interval; actual-hz %.2f, interval-max %.2f ms, duplicate-times %u; "
-                         "late(available/delayed)=%u/%u margin %.2f ms (driver refresh %.2f, display %.2f ms)\n",
+                         "late(available/delayed)=%u/%u margin %.2f ms (driver refresh %.2f, display %.2f ms); "
+                         "present lead %.2f ms (a late frame's need, highest %.2f)\n",
                          timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
                          timing.interval_sum > 0 ? 1e9 * timing.intervals / double(timing.interval_sum) : 0.0,
                          double(timing.interval_max) / 1e6, timing.duplicates, timing.available_late, timing.delayed_late,
                          double(timing.margin_sum) / 1e6 / timing.frames,
-                         double(timing.refresh_ns) / 1e6, double(timing.vsync_ns) / 1e6);
+                         double(timing.refresh_ns) / 1e6, double(timing.vsync_ns) / 1e6, double(timing.lead_ns) / 1e6,
+                         double(timing.lead_max) / 1e6);
+            timing.lead_max = 0;
             timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
             timing.duplicates = timing.available_late = timing.delayed_late = timing.intervals = 0u;
             timing.interval_sum = timing.interval_max = timing.margin_sum = 0;

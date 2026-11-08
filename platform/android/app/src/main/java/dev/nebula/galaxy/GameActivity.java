@@ -48,6 +48,24 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     private static final String TAG = "Nebula";
     private SensorManager sensors;
     private final float[] phoneGyro = new float[3];
+    // Controllers' own motion sensors, every sample, to libmain.so.
+    private final PadSensors padSensors = new PadSensors(this, new PadSensors.Sink() {
+        @Override
+        public void device(InputDevice device, Sensor gyroscope, Sensor accelerometer) {
+            nativePadSensorDevice(device.getId(), device.getName(), device.getDescriptor(), device.getVendorId(),
+                device.getProductId(), gyroscope != null, accelerometer != null);
+        }
+
+        @Override
+        public void removed(int deviceId) {
+            nativePadSensorRemoved(deviceId);
+        }
+
+        @Override
+        public void sample(int deviceId, int type, long timeNs, float x, float y, float z) {
+            nativePadSensor(deviceId, type, timeNs, x, y, z);
+        }
+    });
 
     // libmain.so (platform/sdl/host_window_sdl.cpp).
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
@@ -70,6 +88,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativePanelRate(float hz);
     static native void nativeTouchSlop(float px);
     static native float nativeWantedFrameRate();
+    static native void nativePadSensorDevice(int id, String name, String descriptor, int vendor, int product, boolean gyro, boolean accel);
+    static native void nativePadSensorRemoved(int id);
+    static native void nativePadSensor(int id, int type, long timeNs, float x, float y, float z);
 
     private TouchControlsView controls;
     private boolean menuOpen;
@@ -301,6 +322,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         if (!mBrokenLibraries) {
             nativeSetVisible(true);
             listenToPhoneMotion(true);
+            padSensors.start();
         }
     }
 
@@ -353,6 +375,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     protected void onStop() {
         if (!mBrokenLibraries) {
             listenToPhoneMotion(false);
+            padSensors.stop();
             nativeSetVisible(false);
         }
         super.onStop();

@@ -46,7 +46,7 @@ data class DiscPick(val uri: Uri, val name: String, val bytes: Long, val identit
 /** How the last run of the game ended, when it did not end by the player's choice. */
 data class GameExit(val title: String, val message: String, val hasLog: Boolean)
 
-enum class Screen { Welcome, Disc, Import, Home, Settings, About, Licenses }
+enum class Screen { Welcome, Disc, Import, Home, Settings, MotionTest, About, Licenses }
 
 class LauncherModel(application: Application) : AndroidViewModel(application) {
     private val app = application
@@ -225,6 +225,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             Screen.Disc -> if (install != null) Screen.Settings else Screen.Welcome
             Screen.Settings, Screen.About -> Screen.Home
             Screen.Licenses -> Screen.About
+            Screen.MotionTest -> Screen.Settings
             else -> return false
         }
         return true

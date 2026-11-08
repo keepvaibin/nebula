@@ -1,39 +1,35 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The particle material's vertex stage for instanced draws (NEBULA_ITEM_INSTANCES): each instance is a particle
 // (NebulaParticleInstance, ten rows from the instance table's z), each six vertices a quad of it (twelve for a crossed
-// shape). A corner's place in the particle and its coordinates come from the quad tables (the game's jpa_pos and jpa_crd)
-// at the draw's first entries (params.w, test.w); the particle's matrices now and a game frame ago take it into the world,
+// shape). A corner's place in the particle and its coordinates come from the quad tables (the game's jpa_pos and jpa_crd,
+// computed) at the draw's first entries (params.w, test.w); the particle's matrices now and a game frame ago take it into the world,
 // where it stands at the presented frame's time. The pixel stage is particle.hlsl's.
 #define NATIVE_OWN_VERTEX 1
 #include "particle.hlsl"
 
-static const float3 kQuadPlace[108] = {
-    float3(0, 0, 0), float3(50, 0, 0), float3(50, -50, 0), float3(0, -50, 0), float3(-25, 0, 0), float3(25, 0, 0),
-    float3(25, -50, 0), float3(-25, -50, 0), float3(-50, 0, 0), float3(0, 0, 0), float3(0, -50, 0), float3(-50, -50, 0),
-    float3(0, 25, 0), float3(50, 25, 0), float3(50, -25, 0), float3(0, -25, 0), float3(-25, 25, 0), float3(25, 25, 0),
-    float3(25, -25, 0), float3(-25, -25, 0), float3(-50, 25, 0), float3(0, 25, 0), float3(0, -25, 0), float3(-50, -25, 0),
-    float3(0, 50, 0), float3(50, 50, 0), float3(50, 0, 0), float3(0, 0, 0), float3(-25, 50, 0), float3(25, 50, 0),
-    float3(25, 0, 0), float3(-25, 0, 0), float3(-50, 50, 0), float3(0, 50, 0), float3(0, 0, 0), float3(-50, 0, 0),
-    float3(0, 0, 0), float3(50, 0, 0), float3(50, 0, 50), float3(0, 0, 50), float3(-25, 0, 0), float3(25, 0, 0),
-    float3(25, 0, 50), float3(-25, 0, 50), float3(-50, 0, 0), float3(0, 0, 0), float3(0, 0, 50), float3(-50, 0, 50),
-    float3(0, 0, -25), float3(50, 0, -25), float3(50, 0, 25), float3(0, 0, 25), float3(-25, 0, -25), float3(25, 0, -25),
-    float3(25, 0, 25), float3(-25, 0, 25), float3(-50, 0, -25), float3(0, 0, -25), float3(0, 0, 25), float3(-50, 0, 25),
-    float3(0, 0, -50), float3(50, 0, -50), float3(50, 0, 0), float3(0, 0, 0), float3(-25, 0, -50), float3(25, 0, -50),
-    float3(25, 0, 0), float3(-25, 0, 0), float3(-50, 0, -50), float3(0, 0, -50), float3(0, 0, 0), float3(-50, 0, 0),
-    float3(0, 0, 0), float3(0, 0, 50), float3(0, -50, 50), float3(0, -50, 0), float3(0, 0, -25), float3(0, 0, 25),
-    float3(0, -50, 25), float3(0, -50, -25), float3(0, 0, -50), float3(0, 0, 0), float3(0, -50, 0), float3(0, -50, -50),
-    float3(0, 25, 0), float3(0, 25, 50), float3(0, -25, 50), float3(0, -25, 0), float3(0, 25, -25), float3(0, 25, 25),
-    float3(0, -25, 25), float3(0, -25, -25), float3(0, 25, -50), float3(0, 25, 0), float3(0, -25, 0), float3(0, -25, -50),
-    float3(0, 50, 0), float3(0, 50, 50), float3(0, 0, 50), float3(0, 0, 0), float3(0, 50, -25), float3(0, 50, 25),
-    float3(0, 0, 25), float3(0, 0, -25), float3(0, 50, -50), float3(0, 50, 0), float3(0, 0, 0), float3(0, 0, -50),
-};
-static const float2 kQuadCoord[16] = {
-    float2(0, 0), float2(1, 0), float2(1, 1), float2(0, 1), float2(0, 0), float2(2, 0), float2(2, 1), float2(0, 1),
-    float2(0, 0), float2(1, 0), float2(1, 2), float2(0, 2), float2(0, 0), float2(2, 0), float2(2, 2), float2(0, 2),
-};
+// The quad tables (the game's jpa_pos and jpa_crd) as arithmetic: an indexed constant array is private memory on some
+// drivers (Adreno's compiler fails the pipeline). Places: three planes (xy, xz, yz) of nine 50-unit quads, the quad's
+// corner c going (u0, v0), (u1, v0), (u1, v1), (u0, v1), u0 = -25 * (k % 3), v0 = 25 * (k / 3).
+float3 quad_place(uint i) {
+    const uint plane = min(i / 36u, 2u);
+    const uint k = (i % 36u) / 4u;
+    const uint c = i & 3u;
+    const float u = -25.0 * float(k % 3u) + ((c == 1u || c == 2u) ? 50.0 : 0.0);
+    const float v = 25.0 * float(k / 3u) - (c >= 2u ? 50.0 : 0.0);
+    return plane == 0u ? float3(u, v, 0.0) : (plane == 1u ? float3(u, 0.0, -v) : float3(0.0, v, u));
+}
+
+// Coordinates: four quads of one or two repeats each way (s & 1 across, s >> 1 down).
+float2 quad_coord(uint i) {
+    const uint s = (i / 4u) & 3u;
+    const uint c = i & 3u;
+    return float2((c == 1u || c == 2u) ? float((s & 1u) + 1u) : 0.0, c >= 2u ? float((s >> 1u) + 1u) : 0.0);
+}
 
 // A quad's two triangles: corners 0, 1, 2 and 0, 2, 3. A crossed shape's second quad takes the places 72 on.
-static const uint kQuadCorner[6] = {0u, 1u, 2u, 0u, 2u, 3u};
+uint quad_corner(uint v) {
+    return v < 3u ? v : (v == 3u ? 0u : v - 2u);
+}
 
 float3 particle_times(uint row, float4 p) {
     return float3(dot(rows[row], p), dot(rows[row + 1u], p), dot(rows[row + 2u], p));
@@ -51,9 +47,9 @@ struct ParticleVertexIn {
 NativeVaryings native_vs(ParticleVertexIn input) {
     const uint at = instances[draw_first_instance].z + input.instance * 10u;
     const uint quad = input.vertex / 6u;
-    const uint corner = kQuadCorner[input.vertex - quad * 6u];
-    const float4 p = float4(kQuadPlace[uint(material.params.w) + quad * 72u + corner], 1.0);
-    const float2 st = kQuadCoord[uint(material.test.w) + corner];
+    const uint corner = quad_corner(input.vertex - quad * 6u);
+    const float4 p = float4(quad_place(uint(material.params.w) + quad * 72u + corner), 1.0);
+    const float2 st = quad_coord(uint(material.test.w) + corner);
     const uint4 words = asuint(rows[at + 9u]);
     float2 uv = st;
     float q = 1.0;

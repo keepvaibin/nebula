@@ -121,7 +121,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
         import = { importFrom.launch(arrayOf("*/*")) },
         miis = { miisFrom.launch(arrayOf("*/*")) },
     )
-    BackHandler(enabled = model.screen in setOf(Screen.Disc, Screen.Settings, Screen.About, Screen.Licenses)) {
+    BackHandler(enabled = model.screen in setOf(Screen.Disc, Screen.Settings, Screen.MotionTest, Screen.About, Screen.Licenses)) {
         model.back()
     }
     // Files dragged in from another app (split screen, a desktop mode, a Chromebook): each to its importer.
@@ -167,6 +167,7 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
                 Screen.Import -> ImportScreen(model, onPlay = { model.importDone(context) })
                 Screen.Home -> HomeScreen(model, onPlay = { model.launchGame(context) })
                 Screen.Settings -> SettingsScreen(model, onChoose = choose, onChooseMod = chooseMod, saves = saves, onShareLog = onShareLog)
+                Screen.MotionTest -> MotionTestScreen { model.back() }
                 Screen.About -> AboutScreen(model)
                 Screen.Licenses -> LicenseScreen(model)
             }
@@ -600,6 +601,15 @@ private fun SettingsScreen(
                                 (model.miiCount?.let { " · $it of 100 now" } ?: "")
                         },
                     ) { if (!model.miiBusy) saves.miis() }
+                }
+
+                SectionTitle("Controllers")
+                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                    NavigationRow(
+                        Icons.Rounded.SportsEsports,
+                        "Motion test",
+                        "Each controller's gyroscope and accelerometer as the game reads them, live",
+                    ) { model.screen = Screen.MotionTest }
                 }
 
                 SectionTitle("Mods")

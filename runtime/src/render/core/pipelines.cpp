@@ -75,10 +75,31 @@ gpu::Pipeline* Pipelines::publish(std::atomic<gpu::Pipeline*>& at, gpu::Pipeline
     return expected;
 }
 
-void Pipelines::refuse(std::uint64_t id, unsigned variant, unsigned aux) {
+namespace {
+
+// Two refusals in different states: the pair's code is what the driver cannot take.
+constexpr unsigned kPairRefusals = 2u;
+
+std::uint64_t pair_key(const PipelineEntry& entry) noexcept {
+    return entry.desc.vertex * 0x9E3779B97F4A7C15ull ^ entry.desc.pixel;
+}
+
+}  // namespace
+
+void Pipelines::refuse(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
     failures_.fetch_add(1u, std::memory_order_relaxed);
     std::lock_guard guard(lock_);
     refused_.insert(std::uint64_t{id} << 8u | key_of(variant, aux));
+    if (++refused_pairs_[pair_key(entry)] == kPairRefusals) {
+        std::fprintf(stderr, "[pipelines] programs %llx %llx refused twice: not asked for again\n",
+                     static_cast<unsigned long long>(entry.desc.vertex), static_cast<unsigned long long>(entry.desc.pixel));
+    }
+}
+
+bool Pipelines::pair_refused(const PipelineEntry& entry) {
+    std::lock_guard guard(lock_);
+    const auto found = refused_pairs_.find(pair_key(entry));
+    return found != refused_pairs_.end() && found->second >= kPairRefusals;
 }
 
 gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
@@ -95,10 +116,13 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
             return nullptr;
         }
     }
+    if (pair_refused(entry)) {
+        return nullptr;
+    }
     ++misses_;
     gpu::Pipeline* built = build(entry, variant, aux);
     if (built == nullptr) {
-        refuse(id, variant, aux);
+        refuse(id, entry, variant, aux);
         return nullptr;
     }
     return publish(*at, built);
@@ -142,12 +166,12 @@ void Pipelines::worker() {
             jobs_.pop_front();
         }
         std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
-        if (at != nullptr && at->load(std::memory_order_acquire) == nullptr) {
+        if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
             gpu::Pipeline* built = build(job.entry, job.variant, job.aux);
             if (built != nullptr) {
                 publish(*at, built);
             } else {
-                refuse(job.id, job.variant, job.aux);
+                refuse(job.id, job.entry, job.variant, job.aux);
             }
         }
         if (pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
