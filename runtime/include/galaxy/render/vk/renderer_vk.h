@@ -730,8 +730,8 @@ private:
         std::array<std::int64_t, 64> called{};     // when each was presented (CLOCK_MONOTONIC)
         // How long after its present a frame can first be shown: the GPU's work and the compositor's latch, as this
         // device takes them. Learned from frames that missed their slot (their earliestPresentTime is when they could
-        // first be shown; a frame shown on time reports the slot it waited for), easing down a quarter vsync every 240
-        // frames on time. A slot is asked for no sooner than this after the present.
+        // first be shown; a frame shown on time reports the slot it waited for), up a vsync at most per late frame and
+        // easing down a quarter vsync every 240 frames on time. A slot is asked for no sooner than this after the present.
         std::int64_t lead_ns = 0;
         std::int64_t lead_max = 0;  // the highest a late frame needed in the reporting window
         unsigned on_time_run = 0;
