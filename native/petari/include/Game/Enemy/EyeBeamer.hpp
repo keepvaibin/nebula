@@ -9,7 +9,7 @@ class VolumeModelDrawer;
 
 class EyeBeamer : public LiveActor {
 public:
-    EyeBeamer(const char*);
+    EyeBeamer(const char* pName);
 
     virtual void init(const TableIter& rIter);
     virtual void initAfterPlacement();
@@ -29,6 +29,7 @@ public:
     void requestStartPatrol();
     bool tryGotoPatrol();
     bool tryPatrol();
+    void setPoseTurned(f32 angle);
     void exeDemoStartWait();
     void exeDemoWait();
     void exeDemoTurn();
@@ -37,7 +38,7 @@ public:
     void exeTurn();
     void exeGotoPatrol();
     void exePatrol();
-    bool isInBeamRange(const Vec3f& rVec) const;
+    bool isInBeamRange(const Vec3f& rPos) const;
     bool isOnBeam() const;
 
     MapPartsRailMover* mRailMover;
@@ -52,7 +53,7 @@ public:
     Vec3f mRailStartPos;
     Pos3f mWaterSurfaceMtx;
     Vec3f mClipCenter;
-    f32 mBeamLength;
-    f32 mWaterSurfaceHeight;
+    f32 mBeamLength;          // Obj_arg0
+    f32 mWaterSurfaceHeight;  // Obj_arg1; below 0 has no surface
     bool mIsInMercatorCube;
 };
