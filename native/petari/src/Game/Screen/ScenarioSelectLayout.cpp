@@ -74,7 +74,7 @@ namespace NrvScenarioSelectLayout {
 };  // namespace NrvScenarioSelectLayout
 
 ScenarioSelectLayout::ScenarioSelectLayout(EffectSystem* pEffectSystem, const CameraContext* pCameraContext)
-    : LayoutActor("シナリオ選択レイアウト", true), mSelectedScenarioNo(-1), _24(), _28(), mStar(), mScenarioSky(), mEffectSystem(pEffectSystem),
+    : LayoutActor("シナリオ選択レイアウト", true), mSelectedScenarioNo(-1), mIsDecided(), mStar(), mScenarioSky(), mEffectSystem(pEffectSystem),
       mCameraContext(pCameraContext), mNewTextFollowPos(0.0f, 0.0f), mNewGreenTextFollowPos(0.0f, 0.0f), mStarTopFollowPos(0.0f, 0.0f), mBackButton(),
       mMarioPaneFollowPos(0.0f, 0.0f), mMarioPaneName(), _A4(), _A8(-1) {
     mEffectHostMtx.identity();
@@ -221,8 +221,7 @@ void ScenarioSelectLayout::appear() {
     }
 
     mSelectedScenarioNo = -1;
-    _24 = 0;
-    _28 = 0;
+    mIsDecided = false;
 
     setNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvAppearStar));
 }
@@ -311,7 +310,7 @@ bool ScenarioSelectLayout::isCanceled() const {
 }
 
 void ScenarioSelectLayout::control() {
-    if (!_28 && mSelectedScenarioNo > 0) {
+    if (!mIsDecided && mSelectedScenarioNo > 0) {
         getSelectedStar()->tryPointing();
     }
 
@@ -327,19 +326,12 @@ void ScenarioSelectLayout::updateSelectedScenario() {
 
             if (!star->mIsDead && MR::isStarPointerPointingTarget(this, ::cStarPaneName[i], 0, true, "弱")) {
                 mSelectedScenarioNo = star->mScenarioNo;
-                _24 = 0;
                 return;
             }
         }
     }
 
-    if (_24 < 0) {
-        _24++;
-    }
-
-    if (_24 >= 0) {
-        mSelectedScenarioNo = -1;
-    }
+    mSelectedScenarioNo = -1;
 }
 
 void ScenarioSelectLayout::updateScenarioText() {
@@ -651,7 +643,7 @@ bool ScenarioSelectLayout::isAppearStarEndAll() const {
 }
 
 bool ScenarioSelectLayout::tryCancel() {
-    if (mBackButton->_24) {
+    if (mBackButton->isSelected()) {
         setNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvCancel));
         return true;
     }
@@ -770,7 +762,7 @@ void ScenarioSelectLayout::exeWaitScenarioSelect() {
     }
 
     if (trySelect()) {
-        _28 = true;
+        mIsDecided = true;
         MR::startSystemSE("SE_SY_DECIDE_1");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
         mBackButton->disappear();

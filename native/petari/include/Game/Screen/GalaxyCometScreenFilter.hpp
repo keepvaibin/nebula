@@ -8,6 +8,4 @@ public:
     GalaxyCometScreenFilter();
 
     void setCometType(const char*);
-
-    bool _20;
 };

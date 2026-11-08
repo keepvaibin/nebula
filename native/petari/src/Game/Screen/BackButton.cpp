@@ -4,8 +4,8 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-BackButton::BackButton(const char* pName, bool param2) : LayoutActor(pName, true), mPaneCtrl(), _24(), _25(true) {
-    if (param2) {
+BackButton::BackButton(const char* pName, bool connectToDecoration) : LayoutActor(pName, true), mPaneCtrl(), mIsSelected() {
+    if (connectToDecoration) {
         MR::connectToSceneLayoutDecoration(this);
     }
 }
@@ -14,7 +14,7 @@ void BackButton::appear() {
     LayoutActor::appear();
     mPaneCtrl->appear();
 
-    _24 = false;
+    mIsSelected = false;
 }
 
 void BackButton::disappear() {
@@ -52,12 +52,12 @@ void BackButton::control() {
         MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
     }
 
-    if (_25 && mPaneCtrl->trySelect()) {
-        if (!_24) {
+    if (mPaneCtrl->trySelect()) {
+        if (!mIsSelected) {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         }
 
-        _24 = true;
+        mIsSelected = true;
     }
 
     mPaneCtrl->update();

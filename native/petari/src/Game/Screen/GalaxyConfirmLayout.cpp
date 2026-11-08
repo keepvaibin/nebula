@@ -52,7 +52,7 @@ void GalaxyConfirmLayout::control() {
 }
 
 void GalaxyConfirmLayout::exeSelecting() {
-    if (mBackButton->_24) {
+    if (mBackButton->isSelected()) {
         setNerve(GET_NERVE(GalaxyConfirmLayout, GalaxyConfirmLayoutNrvSelectedBackButton));
     } else {
         if (mPaneCtrl->isPointingTrigger()) {

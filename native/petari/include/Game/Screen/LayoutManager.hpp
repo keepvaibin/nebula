@@ -85,7 +85,8 @@ public:
     Ui::AnimTransform** mAnimTransList;
     Ui::DrawInfo mDrawInfo;
     bool mIsScreenHidden;
-    bool _61;
+    bool mParentAnimValid; // pane animations bind through the pane to its children; false (MR::invalidateParentAnim):
+                           // through this manager's own pane list
     Ui::TexMap* mIndDummyTexMap;
     // By pane id; grows with the layout (Layout::GetPaneNum).
     LayoutPaneState* mPaneStates = nullptr;

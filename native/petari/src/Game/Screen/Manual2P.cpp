@@ -276,7 +276,7 @@ void Manual2P::reflectPageIndex() {
 }
 
 bool Manual2P::checkSelectedBackButton() {
-    if (mBackButton->_24) {
+    if (mBackButton->isSelected()) {
         return true;
     }
 

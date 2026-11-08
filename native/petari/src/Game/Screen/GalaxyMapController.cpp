@@ -525,7 +525,7 @@ void GalaxyMapController::killAllLayout() {
 bool GalaxyMapController::tryPushBackButton() {
     bool isTriggerB = MR::testSystemTriggerB();
 
-    if (mBackButton->_24 || isTriggerB) {
+    if (mBackButton->isSelected() || isTriggerB) {
         if (isTriggerB) {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         }

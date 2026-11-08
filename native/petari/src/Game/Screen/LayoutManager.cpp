@@ -127,7 +127,7 @@ namespace {
 };  // namespace
 
 LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
-    : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), _61(true), mIndDummyTexMap(), mGroupCtrlCount(),
+    : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), mParentAnimValid(true), mIndDummyTexMap(), mGroupCtrlCount(),
       mGroupCtrlList(), mLayoutName() {
     mAnchorCount = -1;
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
