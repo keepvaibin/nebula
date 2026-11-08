@@ -51,7 +51,8 @@ namespace {
 
     void onFrame() {
         sFrames++;
-        nebula_host()->frame_begun(nebula_host()->user, sPicture ? 0 : 1, sFrames);
+        const NebulaHostServices* const host = nebula_host();
+        host->frame_begun(host->user, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
     }
 

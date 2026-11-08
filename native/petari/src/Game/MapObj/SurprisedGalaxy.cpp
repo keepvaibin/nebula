@@ -20,7 +20,7 @@ namespace NrvSurprisedGalaxy {
 
 namespace {
     // "SurpXxxGalaxy" opens XxxGalaxy; the plain name opens the surfing galaxy.
-    const char sObjNamePrefix[] = "Surp";
+    const u32 sObjNamePrefixLength = sizeof("Surp") - 1;
 };  // namespace
 
 SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName), mGalaxyName() {
@@ -29,7 +29,7 @@ SurprisedGalaxy::SurprisedGalaxy(const char* pName) : LiveActor(pName), mGalaxyN
 void SurprisedGalaxy::init(const TableIter& rIter) {
     const char* pObjName;
     MR::getObjectName(&pObjName, rIter);
-    mGalaxyName = MR::isEqualString(pObjName, "SurprisedGalaxy") ? "SurfingLv1Galaxy" : pObjName + sizeof(::sObjNamePrefix) - 1;
+    mGalaxyName = MR::isEqualString(pObjName, "SurprisedGalaxy") ? "SurfingLv1Galaxy" : pObjName + ::sObjNamePrefixLength;
 
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("MiniSurprisedGalaxy", nullptr, false);

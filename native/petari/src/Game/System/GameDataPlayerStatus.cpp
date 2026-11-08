@@ -17,24 +17,18 @@ u32 GameDataPlayerStatus::getSignature() const {
 }
 
 s32 GameDataPlayerStatus::serialize(u8* pBuffer, u32 size) const {
-    JSUMemoryOutputStream stream = JSUMemoryOutputStream(pBuffer, size);
-
-    u8 storyProgress = mStoryProgress;
-    stream.write(&storyProgress, sizeof(mStoryProgress));
-
-    u32 stockedStarPiece = mStockedStarPiece;
-    stream.write(&stockedStarPiece, sizeof(mStockedStarPiece));
-
-    u16 playerLeft = mPlayerLeft;
-    stream.write(&playerLeft, sizeof(mPlayerLeft));
-
+    JSUMemoryOutputStream stream(pBuffer, size);
+    stream.write(&mStoryProgress, sizeof(mStoryProgress));
+    stream.write(&mStockedStarPiece, sizeof(mStockedStarPiece));
+    // Read back as mPlayerLeftSupply; the lives start again on every load.
+    stream.write(&mPlayerLeft, sizeof(mPlayerLeft));
     return stream.mPosition;
 }
 
 s32 GameDataPlayerStatus::deserialize(const u8* pBuffer, u32 size) {
     initializeData();
 
-    JSUMemoryInputStream stream = JSUMemoryInputStream(pBuffer, size);
+    JSUMemoryInputStream stream(pBuffer, size);
 
     stream.read(&mStoryProgress, sizeof(mStoryProgress));
     stream.read(&mStockedStarPiece, sizeof(mStockedStarPiece));

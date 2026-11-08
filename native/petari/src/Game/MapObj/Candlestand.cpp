@@ -77,7 +77,8 @@ void Candlestand::init(const TableIter& rIter) {
     }
 
     if (::getParam(mObjectName)->mCanUseSwitch) {
-        setNerve(MR::isValidSwitchA(this) ? GET_NERVE(Candlestand, HostTypeWaitFire) : GET_NERVE(Candlestand, HostTypeBurn));
+        setNerve(MR::isValidSwitchA(this) ? static_cast< const Nerve* >(GET_NERVE(Candlestand, HostTypeWaitFire))
+                                          : GET_NERVE(Candlestand, HostTypeBurn));
     }
 
     mSpinPtclCb = new SpinPullParticleCallBack();
@@ -130,7 +131,8 @@ bool Candlestand::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
         return false;
     }
 
-    setNerve(::getParam(mObjectName)->mCanUseSwitch ? GET_NERVE(Candlestand, HostTypeFlicker) : GET_NERVE(Candlestand, HostTypeExtinguish));
+    setNerve(::getParam(mObjectName)->mCanUseSwitch ? static_cast< const Nerve* >(GET_NERVE(Candlestand, HostTypeFlicker))
+                                                    : GET_NERVE(Candlestand, HostTypeExtinguish));
     return true;
 }
 

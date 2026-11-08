@@ -61,7 +61,8 @@ void Tsukidashikun::exeWait() {
     }
 
     if (MR::isGreaterEqualStep(this, mWaitTimer)) {
-        setNerve(isBack ? GET_NERVE(Tsukidashikun, TsukidashikunNrvSignForward) : GET_NERVE(Tsukidashikun, TsukidashikunNrvSignBack));
+        setNerve(isBack ? static_cast< const Nerve* >(GET_NERVE(Tsukidashikun, TsukidashikunNrvSignForward))
+                        : GET_NERVE(Tsukidashikun, TsukidashikunNrvSignBack));
     }
 }
 
@@ -84,7 +85,8 @@ void Tsukidashikun::exeSign() {
 
     if (MR::isStep(this, ::sStepForSign)) {
         MR::setBckFrameAndStop(this, 0.0f);
-        setNerve(isForward ? GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveForward) : GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveBack));
+        setNerve(isForward ? static_cast< const Nerve* >(GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveForward))
+                           : GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveBack));
     }
 }
 
@@ -99,8 +101,9 @@ void Tsukidashikun::exeMove() {
     if (MR::isRailReachedGoal(this)) {
         MR::startLevelSound(this, "SE_OJ_TSUKIDASHI_STOP");
         MR::reverseRailDirection(this);
-        setNerve(isNerve(GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveForward)) ? GET_NERVE(Tsukidashikun, TsukidashikunNrvWaitForward)
-                                                                                 : GET_NERVE(Tsukidashikun, TsukidashikunNrvWaitBack));
+        setNerve(isNerve(GET_NERVE(Tsukidashikun, TsukidashikunNrvMoveForward))
+                     ? static_cast< const Nerve* >(GET_NERVE(Tsukidashikun, TsukidashikunNrvWaitForward))
+                     : GET_NERVE(Tsukidashikun, TsukidashikunNrvWaitBack));
     }
 }
 
