@@ -128,7 +128,8 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     return publish(*at, built);
 }
 
-void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer) {
+void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
+                        bool one_pass) {
     const auto add = [&](unsigned variant, unsigned aux) {
         pending_.fetch_add(1u, std::memory_order_relaxed);
         jobs_.push_back(Job{id, entry, variant, aux});
@@ -144,6 +145,10 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
                 continue;
             }
             add(variant, 1u);
+            if (one_pass) {
+                add(variant, 4u);
+                continue;
+            }
             add(variant, 2u);
             if (layer) {
                 add(variant, 3u);

@@ -157,6 +157,10 @@ public:
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
     void end_wide_scene();
     [[nodiscard]] bool temporal_mode() const;
+    // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass, the
+    // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
+    [[nodiscard]] bool motion_pass_only() const;
+    [[nodiscard]] bool has_layer_targets() const noexcept { return false; }
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureStore& cache);
     // A table that lives until replaced: `old` is given back once the GPU is past it.
     [[nodiscard]] gpu::Table persistent_texture_table(const TextureHandle* handles, unsigned count, const TextureStore& cache, gpu::Table old);

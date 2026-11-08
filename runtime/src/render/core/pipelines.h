@@ -31,7 +31,9 @@ public:
     void initialize(gpu::Device* device, RootLayout root, void* backend = nullptr);
     void shutdown() noexcept;
 
-    // The pipeline of `id` for a target of `variant` (samples, HDR, a texture target) with `aux` beside the colour.
+    // The pipeline of `id` for a target of `variant` (samples, HDR, a texture target) with `aux` beside the colour: 0 none,
+    // 1 the motion, 2 the reactive mask, 3 the reactive mask and the effects layer, 4 the motion target there but not
+    // written (a draw sharing the motion draws' pass).
     gpu::Pipeline* get(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
         const std::uint32_t key = key_of(variant, aux);
         const Page* page = page_of(id);
@@ -44,8 +46,10 @@ public:
         return create_now(id, entry, variant, aux);
     }
 
-    // Queues `id` for every target kind and aux set of the settings, for the background threads.
-    void prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer);
+    // Queues `id` for every target kind and aux set of the settings, for the background threads: with `motion`, aux 1 and
+    // either 4 (`one_pass`: the scene's draws share the motion pass) or 2 and, with `layer`, 3.
+    void prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
+                 bool one_pass);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
     [[nodiscard]] std::uint64_t created() const noexcept { return created_.load(std::memory_order_relaxed); }
     // Pipelines a draw wanted before the background had them: the cook's list missed them.
@@ -55,12 +59,12 @@ public:
 private:
     static constexpr unsigned kPageBits = 8u;
     static constexpr std::uint32_t kPageMask = (1u << kPageBits) - 1u;
-    static constexpr std::uint32_t kKeys = 64u;
+    static constexpr std::uint32_t kKeys = 128u;
     static constexpr unsigned kDirectoryBits = 12u;
     static constexpr unsigned kDirectorySize = 1u << kDirectoryBits;
     static constexpr unsigned kRootSize = 1u << (33u - kPageBits - kDirectoryBits);
     [[nodiscard]] static constexpr std::uint32_t key_of(unsigned variant, unsigned aux) noexcept {
-        return (variant & 15u) | (aux & 3u) << 4u;
+        return (variant & 15u) | (aux & 7u) << 4u;
     }
     struct Page {
         std::array<std::array<std::atomic<gpu::Pipeline*>, kKeys>, 1u << kPageBits> rows{};

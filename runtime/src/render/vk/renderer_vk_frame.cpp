@@ -746,6 +746,10 @@ bool RendererVk::temporal_mode() const {
            (upscaler == 4u && vk::Context::get().xess_upscaling()) || upscaler == 5u;
 }
 
+bool RendererVk::motion_pass_only() const {
+    return get_render_config().upscaler == 5u;
+}
+
 void RendererVk::prepare_temporal_upscaler() {
     const FrameMap render_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
     const FrameMap output_map = upscale_output_;
@@ -923,7 +927,12 @@ void RendererVk::clear_motion_targets() {
     end_scene_pass();
     const VkClearColorValue zero{};
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    // Nothing reads the reactive mask when the scene is one pass (motion_pass_only), and nothing writes it.
+    const bool reactive = !motion_pass_only();
     for (const vk::Texture* target : {motion_.motion.get(), motion_.reactive.get()}) {
+        if (target == motion_.reactive.get() && !reactive) {
+            continue;
+        }
         image_barrier(commands_, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -1728,8 +1737,8 @@ gpu::TextureRef RendererVk::take_frame_picture(gpu::TextureRef fresh) {
 }
 
 void RendererVk::set_draw_aux(unsigned aux) {
-    // The effects layer is not on this renderer: a layer draw writes the reactive mask.
-    const unsigned wanted = aux > 2u ? 2u : aux;
+    // The effects layer is not on this renderer: a layer draw writes the reactive mask. Aux 4 draws in the motion pass.
+    const unsigned wanted = aux == 4u ? 1u : aux > 2u ? 2u : aux;
     if (scene_pass_open_ && scene_pass_aux_ == wanted) {
         return;
     }

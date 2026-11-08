@@ -110,7 +110,7 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
 }
 
 unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log2) noexcept {
-    if (aux != 0u) {
+    if (aux != 0u && aux != 4u) {
         return aux == 1u ? kProgramMotion : aux == 2u ? kProgramReactive : kProgramLayer;
     }
     return samples_log2 != 0u && exists(pixel, kProgramSample, true) ? kProgramSample : kProgramBase;

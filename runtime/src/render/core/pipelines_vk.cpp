@@ -388,9 +388,10 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         color.alphaBlendOp = color.colorBlendOp;
     }
     VkPipelineColorBlendAttachmentState targets[2]{color, {}};
+    // Aux 4: the motion pass's second target is there and left as it is.
     if (aux == 1u) {
         targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
-    } else if (aux != 0u) {
+    } else if (aux == 2u || aux == 3u) {
         targets[1].blendEnable = VK_TRUE;
         targets[1].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
         targets[1].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -421,7 +422,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout->layout;
-    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, std::min(aux, 2u)) : layout->pass_for(variant, false);
+    info.renderPass = aux != 0u ? layout->aux_pass_for(variant, aux == 4u ? 1u : std::min(aux, 2u)) : layout->pass_for(variant, false);
 
     const VkPipelineCache cache = driver_cache(device);
     VkPipeline pipeline = VK_NULL_HANDLE;
