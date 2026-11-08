@@ -18,8 +18,8 @@ public:
     void resetDynamicCtrl();
     void startFaceCtrl(s32);
     void endFaceCtrl(s32);
-    void setIKEndPosition(const char*, const Vec3f&, f32);
-    void setIKEndDirection(const char*, const Vec3f&, f32);
+    void setIKEndPosition(const char* pName, const Vec3f& rPos, f32 rate);
+    void setIKEndDirection(const char* pName, const Vec3f& rDirection, f32 rate);
     void endIKCtrlAll();
     void update();
     void startUpdate();

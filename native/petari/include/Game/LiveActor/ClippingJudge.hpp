@@ -12,8 +12,8 @@ public:
 
     virtual void movement();
 
-    bool isJudgedToClipFrustum(const Vec3f&, f32) const;
-    bool isJudgedToClipFrustum(const Vec3f&, f32, s32) const;
+    bool isJudgedToClipFrustum(const Vec3f& rPos, f32 radius) const;
+    bool isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 index) const;
     void calcViewingVolume(Hex3f*, f32);
 
     Hex3f mFrustum;

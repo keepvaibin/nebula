@@ -103,9 +103,9 @@ void OnimasuPivot::incrementNextPoint() {
 
 void OnimasuPivot::collectRailPointInfo() {
     for (s32 i = 0; i < mNormals.size(); i++) {
-        Vec3f v5(gZeroVec);
-        Vec3f v4(gZeroVec);
-        OnimasuFunction::getPolygonOnRailPoint(&v4, &v5, this, i * 2);
-        mNormals[i].set(v5);
+        Vec3f normal(gZeroVec);
+        Vec3f pos(gZeroVec);
+        OnimasuFunction::getPolygonOnRailPoint(&pos, &normal, this, i * 2);
+        mNormals[i].set(normal);
     }
 }

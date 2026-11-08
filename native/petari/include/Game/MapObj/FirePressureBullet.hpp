@@ -13,7 +13,7 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void attackSensor(HitSensor*, HitSensor*);
 
-    void shotFireBullet(LiveActor*, const Pos3f&, const f32&, bool, bool);
+    void shotFireBullet(LiveActor* pFirePressure, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash);
     void exeFly();
     bool isCrash() const;
 

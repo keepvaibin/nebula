@@ -219,12 +219,12 @@ PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetM
     createPlanetMapDataTable(pIter);
 }
 
-CreatorFuncPtr PlanetMapCreator::getCreateFunc(const char* pParam1) {
-    if (isScenarioForceLow(getTableData(pParam1))) {
+CreatorFuncPtr PlanetMapCreator::getCreateFunc(const char* pName) {
+    if (isScenarioForceLow(getTableData(pName))) {
         return createNameObj< PlanetMapWithoutHighModel >;
     }
 
-    const PlanetEntry* pEntry = ::findUniquePlanetEntry(pParam1);
+    const PlanetEntry* pEntry = ::findUniquePlanetEntry(pName);
 
     if (pEntry != nullptr) {
         return pEntry->mCreateFunc;
