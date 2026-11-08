@@ -136,9 +136,91 @@ bool sensor_bar_view(std::span<const IrLight> lights, const Gravity& gravity, Ba
     return found;
 }
 
+MotionPlusCalibration parse_motion_plus_calibration(std::span<const std::uint8_t> block) noexcept {
+    // A typical unit: zero at the middle of 16 bits, 0x4400 counts to 1200 deg/s fast, 270 slow.
+    MotionPlusCalibration c;
+    c.fast_zero.fill(32768.0f);
+    c.slow_zero.fill(32768.0f);
+    c.fast_span.fill(17408.0f);
+    c.slow_span.fill(17408.0f);
+    c.fast_degrees.fill(1200.0f);
+    c.slow_degrees.fill(270.0f);
+    if (block.size() < 32u) return c;
+    const auto be16 = [&](std::size_t at) {
+        return static_cast<float>((static_cast<unsigned>(block[at]) << 8) | block[at + 1]);
+    };
+    // Each block: yaw, roll, pitch zeros; yaw, roll, pitch scales; degrees / 6. Fast at 0, slow at 16.
+    for (int range = 0; range < 2; ++range) {
+        const std::size_t base = range == 0 ? 0u : 16u;
+        const float degrees = static_cast<float>(block[base + 12]) * 6.0f;
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+            const float zero = be16(base + axis * 2);
+            const float span = be16(base + 6 + axis * 2) - zero;
+            if (zero < 16384.0f || zero > 49152.0f || std::fabs(span) < 4096.0f || std::fabs(span) > 32768.0f ||
+                degrees <= 0.0f) {
+                continue;
+            }
+            (range == 0 ? c.fast_zero : c.slow_zero)[axis] = zero;
+            (range == 0 ? c.fast_span : c.slow_span)[axis] = span;
+            (range == 0 ? c.fast_degrees : c.slow_degrees)[axis] = degrees;
+        }
+    }
+    return c;
+}
+
+bool motion_plus_rates(std::span<const std::uint8_t> b, const MotionPlusCalibration& c, MotionRates& out,
+                       bool& passthrough_port) noexcept {
+    if (b.size() < 6u || (b[5] & 0x02u) == 0u) return false;
+    passthrough_port = (b[4] & 0x01u) != 0u;
+    // 14 bits each: yaw, roll, pitch; their slow flags in bytes 3 (pitch bit 0, yaw bit 1) and 4 (roll bit 1).
+    const auto word = [](std::uint8_t low, std::uint8_t high) noexcept {
+        return static_cast<unsigned>(low) | ((static_cast<unsigned>(high) >> 2u) << 8u);
+    };
+    const unsigned raw[3] = {word(b[0], b[3]), word(b[1], b[4]), word(b[2], b[5])};
+    const bool slow[3] = {(b[3] & 0x02u) != 0u, (b[4] & 0x02u) != 0u, (b[3] & 0x01u) != 0u};
+    constexpr float kRadians = 3.14159265358979f / 180.0f;
+    float deg[3];
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        const float zero = slow[axis] ? c.slow_zero[axis] : c.fast_zero[axis];
+        const float span = slow[axis] ? c.slow_span[axis] : c.fast_span[axis];
+        const float degrees = slow[axis] ? c.slow_degrees[axis] : c.fast_degrees[axis];
+        deg[axis] = (static_cast<float>(raw[axis] << 2u) - zero) / span * degrees;
+    }
+    // The remote's frame (x pitch, y roll, z yaw) by the right-hand rule: pitch and yaw count the other way.
+    out.fresh = true;
+    out.rate = {-deg[2] * kRadians, deg[1] * kRadians, -deg[0] * kRadians};
+    return true;
+}
+
+std::array<std::uint8_t, 6> undo_nunchuk_passthrough(std::span<const std::uint8_t> block) noexcept {
+    std::array<std::uint8_t, 6> d{};
+    for (std::size_t i = 0; i < 6 && i < block.size(); ++i) d[i] = block[i];
+    const auto bit = [](std::uint8_t v, int n) { return (v >> n) & 1u; };
+    const auto set = [](std::uint8_t& v, int n, unsigned on) {
+        v = static_cast<std::uint8_t>(on != 0u ? (v | (1u << n)) : (v & ~(1u << n)));
+    };
+    // The MotionPlus shifts Z and C up two bits and drops the low bit of each accelerometer value (WiiBrew, Motion
+    // Plus: Nunchuk passthrough). In this order, each step reading the byte as the step before left it.
+    set(d[5], 0, bit(d[5], 2));
+    set(d[5], 1, bit(d[5], 3));
+    set(d[5], 3, bit(d[5], 4));
+    set(d[4], 0, bit(d[5], 7));
+    set(d[5], 7, bit(d[5], 6));
+    // The dropped bits: their neighbour's.
+    set(d[5], 2, bit(d[5], 3));
+    set(d[5], 4, bit(d[5], 5));
+    set(d[5], 6, bit(d[5], 7));
+    return d;
+}
+
 void Reader::connect(std::span<const std::uint8_t> eeprom, std::span<const std::uint8_t> nunchuk_calibration,
-                     bool nunchuk) {
+                     bool nunchuk, std::span<const std::uint8_t> motion_plus_calibration) {
     nunchuk_ = nunchuk;
+    motion_plus_ = motion_plus_calibration.size() >= 32u;
+    motion_plus_calibration_ = parse_motion_plus_calibration(motion_plus_calibration);
+    nunchuk_c_ = nunchuk_z_ = false;
+    nunchuk_stick_x_ = nunchuk_stick_y_ = 0.0f;
+    nunchuk_gravity_ = {0.0f, 0.0f, 1.0f};
     stick_origin_set_ = false;
     pointing_ = false;
     // The accelerometer's 0 g and 1 g, twice from 0x16 with a checksum each; the first good one.
@@ -168,7 +250,8 @@ void Reader::connect(std::span<const std::uint8_t> eeprom, std::span<const std::
     set_scale(nunchuk_scale_, nunchuk_zero, nunchuk_one, 1.0f / 200.0f);
 }
 
-bool Reader::read(std::span<const std::uint8_t> report, PlayerInput& out) {
+bool Reader::read(std::span<const std::uint8_t> report, PlayerInput& out, MotionRates* rates) {
+    if (rates != nullptr) rates->fresh = false;
     if (report.size() < 3 || report[0] < 0x30 || report[0] > 0x37) {
         return false;
     }
@@ -219,27 +302,48 @@ bool Reader::read(std::span<const std::uint8_t> report, PlayerInput& out) {
     }
     point(std::span<const IrLight>(lights.data(), light_count), out);
 
-    if (nunchuk_ && extension.size() == 6) {
-        const std::uint8_t* e = extension.data();
-        buttons.c = (e[5] & 0x02) == 0;
-        buttons.z = (e[5] & 0x01) == 0;
-        // The stick from where it rested at the connection, in counts.
-        if (!stick_origin_set_) {
-            stick_origin_set_ = true;
-            stick_origin_x_ = e[0];
-            stick_origin_y_ = e[1];
+    if (extension.size() == 6) {
+        if (motion_plus_) {
+            MotionRates sample;
+            bool passthrough_port = false;
+            if (motion_plus_rates(extension, motion_plus_calibration_, sample, passthrough_port)) {
+                if (rates != nullptr) *rates = sample;
+            } else if (nunchuk_) {
+                const std::array<std::uint8_t, 6> e = undo_nunchuk_passthrough(extension);
+                read_nunchuk(e.data());
+            }
+        } else if (nunchuk_) {
+            read_nunchuk(extension.data());
         }
-        const int sx = std::clamp(static_cast<int>(e[0]) - stick_origin_x_, -128, 127);
-        const int sy = std::clamp(static_cast<int>(e[1]) - stick_origin_y_, -128, 127);
-        const StickValue stick = nunchuk_stick_counts(static_cast<float>(sx), static_cast<float>(sy));
-        out.stick_x = stick.x;
-        out.stick_y = stick.y;
-        const float raw[3] = {static_cast<float>((e[2] << 2) | ((e[5] >> 2) & 3)),
-                              static_cast<float>((e[3] << 2) | ((e[5] >> 4) & 3)),
-                              static_cast<float>((e[4] << 2) | ((e[5] >> 6) & 3))};
-        for (std::size_t i = 0; i < 3; ++i) out.nunchuk_gravity[i] = (raw[i] - nunchuk_zero_[i]) * nunchuk_scale_[i];
+    }
+    if (nunchuk_) {
+        buttons.c = nunchuk_c_;
+        buttons.z = nunchuk_z_;
+        out.stick_x = nunchuk_stick_x_;
+        out.stick_y = nunchuk_stick_y_;
+        out.nunchuk_gravity = nunchuk_gravity_;
     }
     return true;
+}
+
+void Reader::read_nunchuk(const std::uint8_t* e) {
+    nunchuk_c_ = (e[5] & 0x02) == 0;
+    nunchuk_z_ = (e[5] & 0x01) == 0;
+    // The stick from where it rested at the connection, in counts.
+    if (!stick_origin_set_) {
+        stick_origin_set_ = true;
+        stick_origin_x_ = e[0];
+        stick_origin_y_ = e[1];
+    }
+    const int sx = std::clamp(static_cast<int>(e[0]) - stick_origin_x_, -128, 127);
+    const int sy = std::clamp(static_cast<int>(e[1]) - stick_origin_y_, -128, 127);
+    const StickValue stick = nunchuk_stick_counts(static_cast<float>(sx), static_cast<float>(sy));
+    nunchuk_stick_x_ = stick.x;
+    nunchuk_stick_y_ = stick.y;
+    const float raw[3] = {static_cast<float>((e[2] << 2) | ((e[5] >> 2) & 3)),
+                          static_cast<float>((e[3] << 2) | ((e[5] >> 4) & 3)),
+                          static_cast<float>((e[4] << 2) | ((e[5] >> 6) & 3))};
+    for (std::size_t i = 0; i < 3; ++i) nunchuk_gravity_[i] = (raw[i] - nunchuk_zero_[i]) * nunchuk_scale_[i];
 }
 
 void Reader::point(std::span<const IrLight> lights, PlayerInput& out) {

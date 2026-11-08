@@ -118,6 +118,15 @@ bool is_nunchuk(std::span<const std::uint8_t> id) noexcept {
     return id.size() >= 6u && id[2] == 0xa4u && id[3] == 0x20u && id[4] == 0x00u && id[5] == 0x00u;
 }
 
+bool is_inactive_motion_plus(std::span<const std::uint8_t> id) noexcept {
+    return id.size() >= 6u && id[2] == 0xa6u && id[3] == 0x20u && id[5] == 0x05u;
+}
+
+bool is_active_motion_plus(std::span<const std::uint8_t> id) noexcept {
+    return id.size() >= 6u && id[2] == 0xa4u && id[3] == 0x20u && id[5] == 0x05u &&
+           (id[4] == 0x04u || id[4] == 0x05u || id[4] == 0x07u);
+}
+
 }  // namespace galaxy::input::wiimote
 
 namespace galaxy::host {

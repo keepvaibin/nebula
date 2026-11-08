@@ -46,6 +46,20 @@ inline constexpr std::uint32_t kExtensionSetup2 = 0xa400fb;
 inline constexpr std::uint32_t kExtensionId = 0xa400fa;
 inline constexpr std::uint32_t kExtensionCalibration = 0xa40020;
 inline constexpr std::uint16_t kExtensionCalibrationBytes = 32;
+// Wii MotionPlus (docs/WII_REMOTE.md): inactive at 0xA6, then in the extension's place at 0xA4 once a mode is written.
+inline constexpr std::uint32_t kMotionPlusInactiveId = 0xa600fa;
+inline constexpr std::uint32_t kMotionPlusInit = 0xa600f0;
+inline constexpr std::uint32_t kMotionPlusMode = 0xa600fe;
+inline constexpr std::uint32_t kMotionPlusActiveMode = 0xa400fe;
+// 0x55 written here turns an active MotionPlus off (the extension in its port comes back at 0xA4).
+inline constexpr std::uint32_t kMotionPlusOff = 0xa400f0;
+// The Nunchuk's calibration as an active MotionPlus keeps it (16 bytes).
+inline constexpr std::uint32_t kPassthroughCalibration = 0xa40040;
+inline constexpr std::uint16_t kPassthroughCalibrationBytes = 16;
+inline constexpr std::uint8_t kMotionPlusAlone = 0x04;
+inline constexpr std::uint8_t kMotionPlusNunchuk = 0x05;
+// Buttons, accelerometer, 16 extension bytes: the MotionPlus's report (no IR).
+inline constexpr std::uint8_t kMotionPlusReport = 0x35;
 
 // Output reports, report id first; each returns the bytes used (0 when `out` is too small). The rest of `out` is
 // zeroed, so the whole buffer can be sent at the device's output report length.
@@ -97,6 +111,10 @@ struct Ack {
 [[nodiscard]] bool is_wii_u_pro_name(const wchar_t* product_string) noexcept;
 // A Nunchuk's 6 id bytes end a4 20 00 00.
 [[nodiscard]] bool is_nunchuk(std::span<const std::uint8_t> id) noexcept;
+// A MotionPlus not yet on: a6 20 00 05 at 0xA600FA. One on: a4 20 0m 05 at 0xA400FA, m its mode (4 alone, 5 Nunchuk,
+// 7 Classic Controller).
+[[nodiscard]] bool is_inactive_motion_plus(std::span<const std::uint8_t> id) noexcept;
+[[nodiscard]] bool is_active_motion_plus(std::span<const std::uint8_t> id) noexcept;
 // The status report's battery byte (0xc8 full) as a level, 0 (empty) to 4, by the SDK's thresholds.
 [[nodiscard]] std::uint8_t battery_level(std::uint8_t battery) noexcept;
 
@@ -109,6 +127,11 @@ struct RealWiimoteConnection {
     std::array<std::uint8_t, input::wiimote::kCalibrationBytes> eeprom{};
     std::array<std::uint8_t, input::wiimote::kExtensionCalibrationBytes> extension_calibration{};
     bool nunchuk = false;
+    // An active MotionPlus (the motion pointer mode): its calibration; the Nunchuk then shares its reports.
+    bool motion_plus = false;
+    std::array<std::uint8_t, 32> motion_plus_calibration{};
+    // The remote has a MotionPlus (active or not): the settings say whether the motion pointer can work.
+    bool has_motion_plus = false;
     std::uint8_t battery = 0;  // a level (battery_level)
 };
 

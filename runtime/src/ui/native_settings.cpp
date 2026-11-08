@@ -591,6 +591,7 @@ enum class ControlsRow {
     Pointer,
     GyroSensitivity,
     TouchSensitivity,
+    WiimoteStatus,  // the Wii Remote modes: what the remote has and how it points (shown, not changed)
     PairJoyCon,
     ArrangeTouch,
     Reset,
@@ -690,7 +691,8 @@ std::vector<ControlsRowInfo> controls_rows() {
         joycons.lefts + joycons.rights != 0u) {
         rows.push_back({ControlsRow::PairJoyCon});
     }
-    if (s_input_mode_draft == RuntimeInputMode::RealWiimote) {
+    if (galaxy::is_wii_remote_mode(s_input_mode_draft)) {
+        rows.push_back({ControlsRow::WiimoteStatus});
         return rows;
     }
     if (s_controls_devices.count == 0u) {
@@ -1120,10 +1122,11 @@ void adjust_native_setting_unlogged(int delta) {
 #if defined(__ANDROID__)
             static constexpr RuntimeInputMode kModes[] = {RuntimeInputMode::Auto, RuntimeInputMode::Phone,
                                                           RuntimeInputMode::Controller, RuntimeInputMode::KeyboardMouse,
-                                                          RuntimeInputMode::RealWiimote};
+                                                          RuntimeInputMode::RealWiimote, RuntimeInputMode::WiimoteMotion};
 #else
             static constexpr RuntimeInputMode kModes[] = {RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse,
-                                                          RuntimeInputMode::Controller, RuntimeInputMode::RealWiimote};
+                                                          RuntimeInputMode::Controller, RuntimeInputMode::RealWiimote,
+                                                          RuntimeInputMode::WiimoteMotion};
 #endif
             unsigned index = 0u;
             for (unsigned i = 0; i < std::size(kModes); ++i) {
@@ -1206,6 +1209,8 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::ArrangeTouch:
             if (delta > 0) galaxy::host::arrange_touch_controls();
+            return;
+        case ControlsRow::WiimoteStatus:
             return;
         case ControlsRow::Reset:
             if (delta > 0) {
@@ -2797,7 +2802,8 @@ std::string native_settings_row_text(
         case ControlsRow::InputMode:
             switch (s_input_mode_draft) {
             case RuntimeInputMode::Controller: return "INPUT: CONTROLLER ONLY";
-            case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE";
+            case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE (SENSOR BAR)";
+            case RuntimeInputMode::WiimoteMotion: return "INPUT: WII REMOTE (MOTION)";
             case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
             case RuntimeInputMode::Phone: return "INPUT: PHONE";
             default: {
@@ -2877,6 +2883,17 @@ std::string native_settings_row_text(
             std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
                           static_cast<double>(tuning.gyro_sensitivity));
             return text;
+        case ControlsRow::WiimoteStatus: {
+            const galaxy::host::WiiRemoteState remote = galaxy::host::wii_remote_state();
+            // One line, no value: a state, not a setting (NebulaText has each whole).
+            if (!remote.connected) return "NO WII REMOTE CONNECTED";
+            if (s_input_mode_draft == RuntimeInputMode::WiimoteMotion) {
+                if (remote.motion_plus) return "PRESS 2 TO CENTER THE POINTER";
+                if (remote.has_motion_plus) return "TURNING ON THE MOTIONPLUS";
+                return "NO MOTIONPLUS. POINTING AT THE SENSOR BAR";
+            }
+            return remote.nunchuk ? "WII REMOTE AND NUNCHUK CONNECTED" : "WII REMOTE CONNECTED";
+        }
         case ControlsRow::PairJoyCon:
             return "PAIR JOY-CON";
         case ControlsRow::ArrangeTouch:
@@ -3721,7 +3738,9 @@ NativeSettingsView build_native_settings_view() {
             // lists of inputs.
             const ControlsRowInfo info = controls_row(row);
             // Nothing to set up (controller only, none attached): the device row shows none, fixed.
-            shown.changes = info.kind != ControlsRow::Device || s_controls_devices.count != 0u;
+            // The Wii Remote's state is a line to read, nothing to change.
+            shown.changes = (info.kind != ControlsRow::Device || s_controls_devices.count != 0u) &&
+                            info.kind != ControlsRow::WiimoteStatus;
             if (info.kind == ControlsRow::Device && s_controls_devices.count != 0u) {
                 const galaxy::input::DeviceEntry& entry =
                     s_controls_devices.entries[galaxy::input::resolve_device(s_controls_devices, s_controls_device)];

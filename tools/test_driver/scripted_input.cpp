@@ -890,7 +890,7 @@ galaxy::input::PlayerInput build_replayed_input(
         (input_mode == galaxy::RuntimeInputMode::Auto &&
          replay_controller_active);
     const bool allow_absolute_pointer =
-        input_mode != galaxy::RuntimeInputMode::RealWiimote;
+        !galaxy::is_wii_remote_mode(input_mode);
 
     const auto pad = [&](std::uint32_t mask) {
         return replay_pad_held(replay, mask);
@@ -977,7 +977,7 @@ galaxy::input::PlayerInput build_replayed_input(
     const bool keys_allowed = !force_controller;
     const bool pad_allowed = replay.xinput_connected &&
                              input_mode != galaxy::RuntimeInputMode::KeyboardMouse &&
-                             input_mode != galaxy::RuntimeInputMode::RealWiimote;
+                             !galaxy::is_wii_remote_mode(input_mode);
     bool pointer_active = false;
     // A recorded mouse is replayed in every mode, as recorded.
     const bool mouse_visible = allow_absolute_pointer && replay_pointer.visible;

@@ -2,6 +2,7 @@
 // up as the game wants it and hands its reports to the host's input thread.
 #include "galaxy/wiimote_hid.h"
 
+#include "galaxy/input/host_input.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/run_options.h"
 #include "galaxy/runtime_settings.h"
@@ -34,6 +35,8 @@ struct Shared {
     std::atomic<std::uint8_t> report{0x30};
     std::atomic<bool> ir{false};
     std::atomic<bool> rumble{false};
+    // For the settings (wii_remote_state): 1 connected, 2 Nunchuk, 4 has a MotionPlus, 8 MotionPlus on.
+    std::atomic<std::uint8_t> status{0};
     std::once_flag started;
 };
 
@@ -45,7 +48,12 @@ Shared& shared() {
 
 bool remote_wanted() {
     const RuntimeInputMode mode = get_runtime_input_mode_state().mode;
-    return mode == RuntimeInputMode::Auto || mode == RuntimeInputMode::RealWiimote;
+    return mode == RuntimeInputMode::Auto || is_wii_remote_mode(mode);
+}
+
+// The motion pointer mode: the MotionPlus on (a change sets the remote up again).
+bool motion_plus_wanted() {
+    return get_runtime_input_mode_state().mode == RuntimeInputMode::WiimoteMotion;
 }
 
 class Worker {
@@ -99,14 +107,20 @@ private:
     }
 
     void publish_connected() {
+        shared().status.store(static_cast<std::uint8_t>(1u | (connection_.nunchuk ? 2u : 0u) |
+                                                         (connection_.has_motion_plus ? 4u : 0u) |
+                                                         (connection_.motion_plus ? 8u : 0u)),
+                              std::memory_order_release);
         shared().handoff.connected(connection_);
         published_ = true;
         published_battery_ = connection_.battery;
-        std::cerr << "[wiimote] connected, nunchuk " << (connection_.nunchuk ? "yes" : "no") << ", battery level "
+        std::cerr << "[wiimote] connected, nunchuk " << (connection_.nunchuk ? "yes" : "no") << ", motionplus "
+                  << (connection_.motion_plus ? "on" : connection_.has_motion_plus ? "off" : "none") << ", battery level "
                   << static_cast<unsigned>(connection_.battery) << '\n';
     }
 
     void publish_disconnected() {
+        shared().status.store(0u, std::memory_order_release);
         shared().handoff.disconnected();
         published_ = false;
         std::cerr << "[wiimote] disconnected\n";
@@ -116,6 +130,12 @@ private:
     void take(std::span<const std::uint8_t> report) {
         if (report.empty()) return;
         if (wm::is_data_report(report[0])) {
+            // With the MotionPlus on, its samples say whether a Nunchuk is plugged into it.
+            if (connection_.motion_plus && report[0] == wm::kMotionPlusReport && report.size() >= 12u &&
+                (report[11] & 0x02u) != 0u) {
+                const bool port = (report[10] & 0x01u) != 0u;
+                if (port != passthrough_port_) passthrough_changed_ = true;
+            }
             shared().handoff.report(report);
         } else if (const wm::Status status = wm::parse_status(report); status.valid) {
             status_ = status;
@@ -178,6 +198,102 @@ private:
         return done && ack.error == 0u;
     }
 
+    // Reads for `ms`, taking what comes (an extension's change answers with a status report).
+    void drain(std::uint32_t ms) {
+        const std::uint64_t deadline = steady_ms() + ms;
+        for (std::uint64_t now = steady_ms(); now < deadline && !gone_; now = steady_ms()) {
+            const int size = link_->receive(static_cast<std::uint32_t>(deadline - now), false);
+            if (size < 0) {
+                gone_ = true;
+                return;
+            }
+            if (size > 0) take(link_->data(size));
+        }
+    }
+
+    // A MotionPlus the remote kept on since an earlier connection is turned off, so the extension behind it shows.
+    void motion_plus_left_on() {
+        if (!extension_) return;
+        std::array<std::uint8_t, 6> id{};
+        if (!read_memory(wm::kRegisters, wm::kExtensionId, static_cast<std::uint16_t>(id.size()), id.data()) ||
+            !wm::is_active_motion_plus(id)) {
+            return;
+        }
+        const std::uint8_t off = 0x55;
+        (void)write_register(wm::kMotionPlusOff, std::span(&off, 1));
+        drain(400);
+        if (status_pending_) {
+            status_pending_ = false;
+            extension_ = status_.extension;
+        }
+    }
+
+    // The MotionPlus on, passing the Nunchuk's reports on when one is in its port; its calibration. A step that fails
+    // leaves it off (the remote then points at the sensor bar).
+    void activate_motion_plus() {
+        const std::uint8_t init = 0x55;
+        const std::uint8_t mode = connection_.nunchuk ? wm::kMotionPlusNunchuk : wm::kMotionPlusAlone;
+        if (!write_register(wm::kMotionPlusInit, std::span(&init, 1)) ||
+            !write_register(wm::kMotionPlusMode, std::span(&mode, 1))) {
+            return;
+        }
+        drain(400);
+        status_pending_ = false;  // the MotionPlus arriving in the extension's place, not a new extension
+        std::array<std::uint8_t, 6> id{};
+        if (!read_memory(wm::kRegisters, wm::kExtensionId, static_cast<std::uint16_t>(id.size()), id.data()) ||
+            !wm::is_active_motion_plus(id)) {
+            return;
+        }
+        connection_.motion_plus = read_memory(wm::kRegisters, wm::kExtensionCalibration,
+                                              static_cast<std::uint16_t>(connection_.motion_plus_calibration.size()),
+                                              connection_.motion_plus_calibration.data());
+        extension_ = true;
+        motion_plus_mode_ = mode;
+        passthrough_port_ = connection_.nunchuk;
+        passthrough_changed_ = false;
+    }
+
+    // The extensions as the input mode wants them: a MotionPlus left on goes off, the Nunchuk is read, then the
+    // MotionPlus is looked for and, in the motion pointer mode, turned on.
+    void setup_extensions() {
+        connection_.motion_plus = false;
+        connection_.has_motion_plus = false;
+        connection_.motion_plus_calibration.fill(0);
+        motion_plus_left_on();
+        setup_extension(extension_);
+        std::array<std::uint8_t, 6> id{};
+        connection_.has_motion_plus =
+            read_memory(wm::kRegisters, wm::kMotionPlusInactiveId, static_cast<std::uint16_t>(id.size()), id.data()) &&
+            wm::is_inactive_motion_plus(id);
+        if (connection_.has_motion_plus && motion_wanted_) activate_motion_plus();
+    }
+
+    // A Nunchuk plugged into the MotionPlus, or taken out: the passthrough mode it needs, and its id and calibration
+    // as the MotionPlus keeps them (id at 0xA400F6: its first and last bytes are 0 for a Nunchuk).
+    void passthrough_changed() {
+        passthrough_changed_ = false;
+        passthrough_port_ = !passthrough_port_;
+        connection_.nunchuk = false;
+        connection_.extension_calibration.fill(0);
+        if (passthrough_port_) {
+            if (motion_plus_mode_ != wm::kMotionPlusNunchuk) {
+                const std::uint8_t mode = wm::kMotionPlusNunchuk;
+                if (write_register(wm::kMotionPlusActiveMode, std::span(&mode, 1))) motion_plus_mode_ = mode;
+                drain(400);
+                status_pending_ = false;
+            }
+            std::array<std::uint8_t, 4> id{};
+            connection_.nunchuk =
+                motion_plus_mode_ == wm::kMotionPlusNunchuk &&
+                read_memory(wm::kRegisters, 0xa400f6, static_cast<std::uint16_t>(id.size()), id.data()) && id[0] == 0u &&
+                id[3] == 0u &&
+                read_memory(wm::kRegisters, wm::kPassthroughCalibration, wm::kPassthroughCalibrationBytes,
+                            connection_.extension_calibration.data());
+        }
+        publish_connected();
+        apply_report();
+    }
+
     // The Nunchuk unencrypted, its id and calibration; another extension (or none) reads as none.
     void setup_extension(bool attached) {
         connection_.nunchuk = false;
@@ -195,9 +311,14 @@ private:
                                           connection_.extension_calibration.data());
     }
 
+    // The game's report, or the MotionPlus's while it is on.
+    std::uint8_t wanted_report() const {
+        return connection_.motion_plus ? wm::kMotionPlusReport : shared().report.load(std::memory_order_acquire);
+    }
+
     void apply_report() {
         Bytes out{};
-        report_ = shared().report.load(std::memory_order_acquire);
+        report_ = wanted_report();
         (void)send(wm::build_report_mode(report_, true, rumble_, out), out);
     }
 
@@ -236,7 +357,8 @@ private:
             return false;
         }
         extension_ = status.extension;
-        setup_extension(extension_);
+        motion_wanted_ = motion_plus_wanted();
+        setup_extensions();
         if (gone_) return false;
         publish_connected();
         apply_report();
@@ -248,6 +370,8 @@ private:
     void serve() {
         Shared& s = shared();
         while (!gone_ && remote_wanted()) {
+            // The motion pointer mode turned on or off: the remote is set up again (the run loop opens it again).
+            if (connection_.has_motion_plus && motion_plus_wanted() != motion_wanted_) return;
             const int size = link_->receive(1000, true);
             if (size < 0) return;
             if (size > 0) take(link_->data(size));
@@ -263,9 +387,10 @@ private:
                 status_pending_ = false;
                 const std::uint8_t battery = wm::battery_level(status_.battery);
                 connection_.battery = battery;
-                if (status_.extension != extension_) {
+                // An active MotionPlus is always the extension: its port's changes come in its samples.
+                if (!connection_.motion_plus && status_.extension != extension_) {
                     extension_ = status_.extension;
-                    setup_extension(extension_);
+                    setup_extensions();
                     publish_connected();
                 } else if (battery != published_battery_) {
                     shared().handoff.battery(battery);
@@ -279,7 +404,8 @@ private:
                 Bytes out{};
                 (void)send(wm::build_rumble(rumble_, out), out);
             }
-            if (s.report.load(std::memory_order_acquire) != report_) {
+            if (passthrough_changed_) passthrough_changed();
+            if (wanted_report() != report_) {
                 apply_report();
                 apply_ir();
             } else if ((s.ir.load(std::memory_order_acquire) ? wm::ir_mode_for_report(report_) : 0u) != ir_mode_) {
@@ -302,6 +428,10 @@ private:
     std::uint8_t report_ = 0x30;
     std::uint8_t ir_mode_ = 0;
     std::uint64_t status_asked_ms_ = 0;
+    bool motion_wanted_ = false;
+    std::uint8_t motion_plus_mode_ = 0;
+    bool passthrough_port_ = false;
+    bool passthrough_changed_ = false;
 };
 
 void name_this_thread() {
@@ -346,6 +476,16 @@ void real_wiimote_set_ir(bool on) noexcept {
 
 void real_wiimote_set_rumble(bool on) noexcept {
     if (shared().rumble.exchange(on, std::memory_order_acq_rel) != on) wl::wake();
+}
+
+WiiRemoteState wii_remote_state() noexcept {
+    const std::uint8_t bits = shared().status.load(std::memory_order_acquire);
+    WiiRemoteState status;
+    status.connected = (bits & 1u) != 0u;
+    status.nunchuk = (bits & 2u) != 0u;
+    status.has_motion_plus = (bits & 4u) != 0u;
+    status.motion_plus = (bits & 8u) != 0u;
+    return status;
 }
 
 RealWiimoteEvent real_wiimote_wait(std::uint32_t timeout_ms, std::span<std::uint8_t, 22> report, std::size_t& size,

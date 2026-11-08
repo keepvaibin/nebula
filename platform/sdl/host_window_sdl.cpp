@@ -1497,6 +1497,11 @@ bool touch_controls_present() noexcept {
     return false;
 }
 
+// No real Wii Remote on this host (wiimote_hid.cpp is Windows' and Android's).
+WiiRemoteState wii_remote_state() noexcept {
+    return {};
+}
+
 TouchControlsSettings touch_controls_settings() noexcept {
     return {};
 }

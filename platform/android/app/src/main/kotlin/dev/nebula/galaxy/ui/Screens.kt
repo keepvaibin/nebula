@@ -336,7 +336,7 @@ private fun DiscScreen(model: LauncherModel, onChoose: () -> Unit) {
                     Text("Storage", style = MaterialTheme.typography.titleMedium)
                     Gap(4.dp)
                     Text(
-                        "Needs ${formatBytes(Storage.GAME_BYTES)} · ${formatBytes(model.freeBytes)} free",
+                        "Needs ${formatBytes(Storage.GAME_BYTES)} · ${formatBytes(model.roomBytes)} available",
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (enough) Night.TextDim else Night.Error,
                     )

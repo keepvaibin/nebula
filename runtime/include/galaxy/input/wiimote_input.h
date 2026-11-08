@@ -18,16 +18,55 @@ struct IrLight {
     float y = 0.0f;
 };
 
+// One MotionPlus sample: rad/s about the remote's own axes (x out of its left side, y toward its expansion port, z out
+// of its A face), right-handed.
+struct MotionRates {
+    bool fresh = false;  // this report carried a MotionPlus sample
+    std::array<float, 3> rate{};
+};
+
+// A MotionPlus's calibration (32 bytes from 0xA40020 once it is on): per axis (yaw, roll, pitch) the zero and the
+// counts from it to `degrees` deg/s, at its fast and its slow range. Values out of reason take a typical unit's.
+struct MotionPlusCalibration {
+    std::array<float, 3> fast_zero{};
+    std::array<float, 3> fast_span{};
+    std::array<float, 3> fast_degrees{};
+    std::array<float, 3> slow_zero{};
+    std::array<float, 3> slow_span{};
+    std::array<float, 3> slow_degrees{};
+};
+[[nodiscard]] MotionPlusCalibration parse_motion_plus_calibration(std::span<const std::uint8_t> block) noexcept;
+// A MotionPlus data block (6 extension bytes, byte 5 bit 1 set) as rates; false for the Nunchuk's block it passes on.
+// `passthrough_port`: a Nunchuk is plugged into the MotionPlus.
+bool motion_plus_rates(std::span<const std::uint8_t> block, const MotionPlusCalibration& calibration, MotionRates& out,
+                       bool& passthrough_port) noexcept;
+// A Nunchuk's block as the MotionPlus passes it on (Nunchuk passthrough), back in the Nunchuk's own layout.
+[[nodiscard]] std::array<std::uint8_t, 6> undo_nunchuk_passthrough(std::span<const std::uint8_t> block) noexcept;
+
 class Reader {
 public:
     // A connection: the remote's calibration as read from its EEPROM (0x2A bytes from 0), the Nunchuk's calibration
-    // block (32 bytes from 0xA40020) when one is attached.
-    void connect(std::span<const std::uint8_t> eeprom, std::span<const std::uint8_t> nunchuk_calibration, bool nunchuk);
+    // block (32 bytes from 0xA40020, or 16 from the MotionPlus's copy) when one is attached, the MotionPlus's (32
+    // bytes) when it is on.
+    void connect(std::span<const std::uint8_t> eeprom, std::span<const std::uint8_t> nunchuk_calibration, bool nunchuk,
+                 std::span<const std::uint8_t> motion_plus_calibration = {});
     // One data report from its id (0x30-0x37) as one moment of input; false for a report this reader does not take.
-    bool read(std::span<const std::uint8_t> report, PlayerInput& out);
+    // With the MotionPlus on, a report carries either its sample (in `rates`) or the Nunchuk's; the Nunchuk's last
+    // state stays in every report.
+    bool read(std::span<const std::uint8_t> report, PlayerInput& out, MotionRates* rates = nullptr);
 
 private:
     void point(std::span<const IrLight> lights, PlayerInput& out);
+    void read_nunchuk(const std::uint8_t* e);
+
+    bool motion_plus_ = false;
+    MotionPlusCalibration motion_plus_calibration_{};
+    // The Nunchuk as last read.
+    bool nunchuk_c_ = false;
+    bool nunchuk_z_ = false;
+    float nunchuk_stick_x_ = 0.0f;
+    float nunchuk_stick_y_ = 0.0f;
+    Gravity nunchuk_gravity_{0.0f, 0.0f, 1.0f};
 
     std::array<float, 3> zero_{512.0f, 512.0f, 512.0f};
     std::array<float, 3> scale_{0.01f, 0.01f, 0.01f};  // g per count

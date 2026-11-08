@@ -270,9 +270,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
 
     // The game in place is replaced, so its room counts; an outdated one's too (it is removed before the import).
+    val roomBytes: Long
+        get() = freeBytes + (install?.bytes ?: if (outdated) GameFiles.pak(app).length() else 0L)
+
     val enoughSpace: Boolean
-        get() = freeBytes + (install?.bytes ?: if (outdated) GameFiles.pak(app).length() else 0L) >=
-            Storage.GAME_BYTES + Storage.MARGIN_BYTES
+        get() = roomBytes >= Storage.GAME_BYTES + Storage.MARGIN_BYTES
 
     fun startImport() {
         val pick = disc ?: return

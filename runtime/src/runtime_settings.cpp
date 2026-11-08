@@ -48,6 +48,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     case RuntimeInputMode::Controller:
     case RuntimeInputMode::RealWiimote:
     case RuntimeInputMode::Phone:
+    case RuntimeInputMode::WiimoteMotion:
         break;
     default:
         settings.input_mode = RuntimeInputMode::KeyboardMouse;
@@ -120,6 +121,9 @@ RuntimeInputMode parse_input_mode(
     if (text == "wiimote" || text == "wii_remote" || text == "wii-remote" ||
         text == "real_wiimote" || text == "real-wiimote") {
         return RuntimeInputMode::RealWiimote;
+    }
+    if (text == "wiimote_motion" || text == "wiimote-motion") {
+        return RuntimeInputMode::WiimoteMotion;
     }
     return fallback;
 }
@@ -540,6 +544,8 @@ const char* runtime_input_mode_name(RuntimeInputMode mode) {
         return "controller";
     case RuntimeInputMode::RealWiimote:
         return "real_wiimote";
+    case RuntimeInputMode::WiimoteMotion:
+        return "wiimote_motion";
     case RuntimeInputMode::Phone:
         return "phone";
     case RuntimeInputMode::Auto:
