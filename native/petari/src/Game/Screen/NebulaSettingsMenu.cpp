@@ -1993,6 +1993,11 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
                     mSettleFrames = 4;
                 }
             }
+            if (mDragging) {
+                // The dropped mod stays selected: the row under the pointer (the drop line rounds to the nearest gap,
+                // so it can be a neighbour) is picked again only once the pointer moves.
+                mPointerMode = false;
+            }
             mDragRow = -1;
             mDragging = false;
             mDropList = -1;
