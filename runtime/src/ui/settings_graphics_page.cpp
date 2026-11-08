@@ -203,7 +203,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             }
                             normalize_interpolation(draft, host.query(draft).frame_rates);
                         },
-                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. NATIVE OR DLSS ADD FRAMES BETWEEN"
+                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. INTERPOLATION ADDS FRAMES BETWEEN"
                         : mode == Interpolation::kNative
                             ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
                         : mode == Interpolation::kFsrGeneration ? "AMD GENERATES ONE FRAME BETWEEN EACH OF THE GAME'S 60"

@@ -2010,8 +2010,8 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
 
 }  // namespace galaxy::host
 
-#if defined(__ANDROID__) || defined(__APPLE__)
-// Mods come in through the app on these systems: nothing here reads an archive.
+#if !defined(NEBULA_MOD_IMPORT)
+// A build without the importer (mod_import.cpp, iOS): mods come in through the app there.
 namespace galaxy::mods {
 
 bool is_mod_archive(const std::filesystem::path&) {

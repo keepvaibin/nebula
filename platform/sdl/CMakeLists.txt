@@ -178,6 +178,8 @@ if(NOT IOS)
     include("${nebula_root}/cmake/archive_deps.cmake")
     target_sources(galaxy_render_vk PRIVATE ${rt}/mod_import.cpp)
     target_link_libraries(galaxy_render_vk PUBLIC nebula_archive)
+    # The host's stand-in importer (host_window_sdl.cpp) is for the systems without this one.
+    target_compile_definitions(galaxy_render_vk PUBLIC NEBULA_MOD_IMPORT=1)
 endif()
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
