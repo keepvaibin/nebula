@@ -4,95 +4,77 @@
 #include "Game/Map/RailGraphIter.hpp"
 #include "Game/Map/RailGraphNode.hpp"
 
-RailGraph::RailGraph() {
-    mNodes = 0;
-    mNodeCount = 0;
-    mNumNodes = 0;
-    mEdges = 0;
-    mEdgeCount = 0;
-    mNumEdges = 0;
+namespace {
+    const s32 cInitialCapacity = 0x100;
+}  // namespace
 
-    mNodes = new RailGraphNode[0x100];
-    mNodeCount = 0x100;
-    mEdges = new RailGraphEdge[0x100];
-    mEdgeCount = 0x100;
+RailGraph::RailGraph()
+    : mNodes(new RailGraphNode[::cInitialCapacity]), mNodeCapacity(::cInitialCapacity), mNumNodes(0),
+      mEdges(new RailGraphEdge[::cInitialCapacity]), mEdgeCapacity(::cInitialCapacity), mNumEdges(0) {
 }
 
-s32 RailGraph::addNode(const Vec3f& rVec) {
-    RailGraphNode node;
-    node.mPos.x = rVec.x;
-    node.mPos.y = rVec.y;
-    node.mPos.z = rVec.z;
-    s32 cnt = mNumNodes;
-    mNumNodes = cnt + 1;
-    if (cnt == mNodeCount) {
-        mNodes = MR::growArray(mNodes, mNodeCount);
-        mNodeCount *= 2;
+s32 RailGraph::addNode(const Vec3f& rPos) {
+    if (mNumNodes == mNodeCapacity) {
+        mNodes = MR::growArray(mNodes, mNodeCapacity);
+        mNodeCapacity *= 2;
     }
 
-    RailGraphNode* nodes = &mNodes[cnt];
-    nodes->mPos = node.mPos;
-    nodes->mFirstEdge = node.mFirstEdge;
-    return mNumNodes - 1;
+    RailGraphNode& rNode = mNodes[mNumNodes];
+    rNode.mPos = rPos;
+    rNode.mFirstEdge = -1;
+    return mNumNodes++;
 }
 
-void RailGraph::connectNodeTwoWay(s32 a1, s32 a2, const RailGraphEdge* pEdge) {
+void RailGraph::connectNodeTwoWay(s32 nodeA, s32 nodeB, const RailGraphEdge* pEdge) {
     RailGraphEdge edge;
 
-    if (pEdge) {
+    if (pEdge != nullptr) {
         edge = *pEdge;
     }
 
     edge.clearConnectInfo();
-    edge.mNodeA = a1;
-    edge.mNodeB = a2;
-    edge.mDistance = mNodes[a1].mPos.distance(mNodes[a2].mPos);
-    s32 cnt = mNumEdges;
-    mNumEdges = cnt + 1;
-    if (cnt == mEdgeCount) {
-        mEdges = MR::growArray(mEdges, mEdgeCount);
-        mEdgeCount *= 2;
-    }
-    mEdges[cnt] = edge;
-    s32 edgeIdx = mNumEdges - 1;
-    connectEdgeToNode(a1, edgeIdx);
-    connectEdgeToNode(a2, edgeIdx);
-}
+    edge.mNodeA = nodeA;
+    edge.mNodeB = nodeB;
+    edge.mDistance = mNodes[nodeA].mPos.distance(mNodes[nodeB].mPos);
 
-RailGraphNode* RailGraph::getNode(s32 idx) const {
-    return &mNodes[idx];
-}
-
-RailGraphEdge* RailGraph::getEdge(s32 idx) const {
-    return &mEdges[idx];
-}
-
-bool RailGraph::isValidEdge(s32 edgeIdx) const {
-    bool ret = false;
-
-    if (edgeIdx >= 0 && edgeIdx < mNumEdges) {
-        ret = true;
+    if (mNumEdges == mEdgeCapacity) {
+        mEdges = MR::growArray(mEdges, mEdgeCapacity);
+        mEdgeCapacity *= 2;
     }
 
-    return ret;
+    const s32 edgeIndex = mNumEdges++;
+    mEdges[edgeIndex] = edge;
+    connectEdgeToNode(nodeA, edgeIndex);
+    connectEdgeToNode(nodeB, edgeIndex);
 }
 
-void RailGraph::connectEdgeToNode(s32 a1, s32 a2) {
-    RailGraphNode* node = &mNodes[a1];
-    s32 val = node->mFirstEdge;
+RailGraphNode* RailGraph::getNode(s32 index) const {
+    return &mNodes[index];
+}
 
-    if (val == -1) {
-        node->mFirstEdge = a2;
-    } else {
-        s32 next_edge = mEdges[val].getNextEdge(a1);
+RailGraphEdge* RailGraph::getEdge(s32 index) const {
+    return &mEdges[index];
+}
 
-        while (next_edge != -1) {
-            val = next_edge;
-            next_edge = mEdges[next_edge].getNextEdge(a1);
-        }
+bool RailGraph::isValidEdge(s32 edgeIndex) const {
+    return edgeIndex >= 0 && edgeIndex < mNumEdges;
+}
 
-        mEdges[val].setNextEdge(a2, a1);
+// Appends the edge to the end of the node's edge chain.
+void RailGraph::connectEdgeToNode(s32 nodeIndex, s32 edgeIndex) {
+    RailGraphNode& rNode = mNodes[nodeIndex];
+
+    if (rNode.mFirstEdge == -1) {
+        rNode.mFirstEdge = edgeIndex;
+        return;
     }
+
+    s32 last = rNode.mFirstEdge;
+    for (s32 next = mEdges[last].getNextEdge(nodeIndex); next != -1; next = mEdges[next].getNextEdge(nodeIndex)) {
+        last = next;
+    }
+
+    mEdges[last].setNextEdge(edgeIndex, nodeIndex);
 }
 
 RailGraphIter RailGraph::getIterator() const {

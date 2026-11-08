@@ -108,7 +108,7 @@ namespace MR {
 
         f32 nearestDistance = maxDistance;
         s32 nearestNode = -1;
-        s32 nodeCount = pGraph->mNumNodes;
+        const s32 nodeCount = pGraph->getNodeNum();
         RailGraphIter iter = pGraph->getIterator();
         for (s32 i = 0; i < nodeCount; i++) {
             if (pSelector != nullptr) {

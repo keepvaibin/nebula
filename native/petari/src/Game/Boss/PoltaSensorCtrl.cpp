@@ -220,12 +220,46 @@ namespace {
     };
 };  // namespace
 
-PoltaSensorCtrl::PoltaSensorCtrl(Polta* pPolta)
-    : mPoltaPtr(pPolta), mScreamSensor(), mHeadSensor(), mCoreSensors(), mBodySensors(), mLeftArmSensors(), mRightArmSensors() {
-}
+static_assert(ARRAY_SIZE(::sCoreSensorList) == PoltaSensorCtrl::cCoreSensorNum, "core table size");
+static_assert(ARRAY_SIZE(::sBodySensorList) == PoltaSensorCtrl::cBodySensorNum, "body table size");
+static_assert(ARRAY_SIZE(::sLeftArmSensorList) == PoltaSensorCtrl::cArmSensorNum, "left arm table size");
+static_assert(ARRAY_SIZE(::sRightArmSensorList) == PoltaSensorCtrl::cArmSensorNum, "right arm table size");
 
-s32 PoltaSensorCtrl::getSensorCount() const {
-    return 28;
+namespace {
+    Vec3f getOffset(const PoltaSensorListEntry& rEntry) {
+        return Vec3f(rEntry.mOffsetX, rEntry.mOffsetY, rEntry.mOffsetZ);
+    }
+
+    template < s32 N >
+    void addJointSensors(HitSensor* (&rSensors)[N], Polta* pPolta, const PoltaSensorListEntry (&rList)[N]) {
+        for (s32 i = 0; i < N; i++) {
+            rSensors[i] = MR::addHitSensorAtJointEnemy(pPolta, rList[i].mName, rList[i].mJointName, 8, rList[i].mRadius, getOffset(rList[i]));
+        }
+    }
+
+    // Arm sensors follow the arm actor's joints.
+    template < s32 N >
+    void addArmSensors(HitSensor* (&rSensors)[N], Polta* pPolta, PoltaArm* pArm, const PoltaSensorListEntry (&rList)[N]) {
+        for (s32 i = 0; i < N; i++) {
+            rSensors[i] =
+                MR::addHitSensorMtxEnemy(pPolta, rList[i].mName, 8, rList[i].mRadius, MR::getJointMtx(pArm, rList[i].mJointName), getOffset(rList[i]));
+        }
+    }
+
+    template < s32 N >
+    bool contains(HitSensor* const (&rSensors)[N], const HitSensor* pSensor) {
+        for (s32 i = 0; i < N; i++) {
+            if (rSensors[i] == pSensor) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}  // namespace
+
+PoltaSensorCtrl::PoltaSensorCtrl(Polta* pPolta)
+    : mPoltaPtr(pPolta), mScreamSensor(nullptr), mHeadSensor(nullptr), mCoreSensors(), mBodySensors(), mLeftArmSensors(), mRightArmSensors() {
 }
 
 void PoltaSensorCtrl::setScreamSensorSize(f32 screamSensorSize) {
@@ -235,85 +269,29 @@ void PoltaSensorCtrl::setScreamSensorSize(f32 screamSensorSize) {
 }
 
 void PoltaSensorCtrl::initSensor() {
-    mCoreSensors = new HitSensor*[getCoreSensorCount()];
-
-    for (int i = 0; i < getCoreSensorCount(); i++) {
-        mCoreSensors[i] =
-            MR::addHitSensorAtJointEnemy(mPoltaPtr, ::sCoreSensorList[i].mName, ::sCoreSensorList[i].mJointName, 8, ::sCoreSensorList[i].mRadius,
-                                         Vec3f(::sCoreSensorList[i].mOffsetX, ::sCoreSensorList[i].mOffsetY, ::sCoreSensorList[i].mOffsetZ));
-    }
-
-    mBodySensors = new HitSensor*[getBodySensorCount()];
-
-    for (int i = 0; i < getBodySensorCount(); i++) {
-        mBodySensors[i] =
-            MR::addHitSensorAtJointEnemy(mPoltaPtr, ::sBodySensorList[i].mName, ::sBodySensorList[i].mJointName, 8, ::sBodySensorList[i].mRadius,
-                                         Vec3f(::sBodySensorList[i].mOffsetX, ::sBodySensorList[i].mOffsetY, ::sBodySensorList[i].mOffsetZ));
-    }
-
-    mLeftArmSensors = new HitSensor*[getArmSensorCount()];
-    PoltaArm* poltaLeftArmTemp;
-
-    for (int i = 0; i < getArmSensorCount(); i++) {
-        poltaLeftArmTemp = mPoltaPtr->mLeftArm;
-        const PoltaSensorListEntry* leftArmListEntry = &::sLeftArmSensorList[i];
-        mLeftArmSensors[i] = MR::addHitSensorMtxEnemy(mPoltaPtr, leftArmListEntry->mName, 8, leftArmListEntry->mRadius,
-                                                      MR::getJointMtx(poltaLeftArmTemp, leftArmListEntry->mJointName),
-                                                      Vec3f(leftArmListEntry->mOffsetX, leftArmListEntry->mOffsetY, leftArmListEntry->mOffsetZ));
-    }
-
-    mRightArmSensors = new HitSensor*[getArmSensorCount()];
-
-    for (int i = 0; i < getArmSensorCount(); i++) {
-        const PoltaSensorListEntry* rightArmListEntry = &::sRightArmSensorList[i];
-        PoltaArm* poltaRightArmTemp = mPoltaPtr->mRightArm;
-        mRightArmSensors[i] = MR::addHitSensorMtxEnemy(mPoltaPtr, rightArmListEntry->mName, 8, rightArmListEntry->mRadius,
-                                                       MR::getJointMtx(poltaRightArmTemp, rightArmListEntry->mJointName),
-                                                       Vec3f(rightArmListEntry->mOffsetX, rightArmListEntry->mOffsetY, rightArmListEntry->mOffsetZ));
-    }
+    ::addJointSensors(mCoreSensors, mPoltaPtr, ::sCoreSensorList);
+    ::addJointSensors(mBodySensors, mPoltaPtr, ::sBodySensorList);
+    ::addArmSensors(mLeftArmSensors, mPoltaPtr, mPoltaPtr->mLeftArm, ::sLeftArmSensorList);
+    ::addArmSensors(mRightArmSensors, mPoltaPtr, mPoltaPtr->mRightArm, ::sRightArmSensorList);
 
     mScreamSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Scream", "Tongue3", 64, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     mHeadSensor = MR::addHitSensorAtJointEnemy(mPoltaPtr, "Head", "Head5", 32, 200.0f, Vec3f(-50.0f, 0.0f, 0.0f));
 }
 
 bool PoltaSensorCtrl::isCoreSensor(const HitSensor* pSensor) const {
-    for (int i = 0; i < getCoreSensorCount(); i++) {
-        if (mCoreSensors[i] == pSensor) {
-            return true;
-        }
-    }
-
-    return false;
+    return ::contains(mCoreSensors, pSensor);
 }
 
 bool PoltaSensorCtrl::isBodySensor(const HitSensor* pSensor) const {
-    for (int i = 0; i < getBodySensorCount(); i++) {
-        if (mBodySensors[i] == pSensor) {
-            return true;
-        }
-    }
-
-    return false;
+    return ::contains(mBodySensors, pSensor);
 }
 
 bool PoltaSensorCtrl::isLeftArmSensor(const HitSensor* pSensor) const {
-    for (int i = 0; i < getArmSensorCount(); i++) {
-        if (mLeftArmSensors[i] == pSensor) {
-            return true;
-        }
-    }
-
-    return false;
+    return ::contains(mLeftArmSensors, pSensor);
 }
 
 bool PoltaSensorCtrl::isRightArmSensor(const HitSensor* pSensor) const {
-    for (int i = 0; i < getArmSensorCount(); i++) {
-        if (mRightArmSensors[i] == pSensor) {
-            return true;
-        }
-    }
-
-    return false;
+    return ::contains(mRightArmSensors, pSensor);
 }
 
 bool PoltaSensorCtrl::isHeadSensor(const HitSensor* pSensor) const {
