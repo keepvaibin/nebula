@@ -94,7 +94,7 @@ namespace MR {
     bool isStopOrFadeoutStageBgmID(u32);
     bool isStopOrFadeoutBgmName(const char*);
     bool isPreparedStageBgm();
-    void setStageBGMState(s32, u32);
+    void setStageBGMState(s32 state, u32 time);
     void setStageBGMStateBit(u32);
     SoundHandle* startSubBGM(const char*, bool lock);
     void stopSubBGM(u32 fadeTime);

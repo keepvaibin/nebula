@@ -34,14 +34,13 @@ void PoltaStateStagger::exeWait() {
         MR::zeroVelocity(getHost());
         PoltaFunction::startBckBody(getHost(), mActionName);
     }
-    Vec3f v2;
+    Vec3f toStart;
+    f32 distToStart;
+    MR::separateScalarAndDirection(&distToStart, &toStart, getHost()->mStartPos - getHost()->mPosition);
 
-    f32 v17;
-    MR::separateScalarAndDirection(&v17, &v2, getHost()->mStartPos - getHost()->mPosition);
-
-    if (v17 >= 1800.0f) {
-        MR::addVelocity(getHost(), v2 * (v17 - 1800.0f));
-        mIsClockwise = MR::isClockwiseToPlayer(getHost(), v2);
+    if (distToStart >= 1800.0f) {
+        MR::addVelocity(getHost(), toStart * (distToStart - 1800.0f));
+        mIsClockwise = MR::isClockwiseToPlayer(getHost(), toStart);
     }
 
     if (MR::isNearPlayerHorizontal(getHost(), 1500.0f)) {

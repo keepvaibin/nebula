@@ -40,7 +40,7 @@ public:
     void createRock();
     void createRollBall();
     void createCommonParts();
-    void createFireStairs(bool);
+    void createFireStairs(bool isKoopaJr);
 
     Koopa* mKoopa;
     f32 mPlanetRadius;

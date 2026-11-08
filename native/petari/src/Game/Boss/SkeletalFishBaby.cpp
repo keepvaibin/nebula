@@ -49,7 +49,7 @@ namespace {
 };  // namespace
 
 SkeletalFishBaby::SkeletalFishBaby(const char* pName)
-    : LiveActor(pName), mJointIndicies(), mSpeedMax(::sSpeed), mSpeed(::sSpeed), mRailControl(new SkeletalFishRailControl()), mObjArg1(3000.0f),
+    : LiveActor(pName), mJointIndicies(), mSpeedMax(::sSpeed), mSpeed(::sSpeed), mRailControl(new SkeletalFishRailControl()),
       mScaleController(new AnimScaleController(nullptr)) {
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
         mControllers[i] = nullptr;
@@ -64,7 +64,6 @@ void SkeletalFishBaby::init(const TableIter& rIter) {
 
     if (rIter.isValid()) {
         MR::getPlacementArg0NoInit(rIter, &mSpeedMax);
-        MR::getPlacementArg1NoInit(rIter, &mObjArg1);
     }
 
     mSpeed = mSpeedMax;

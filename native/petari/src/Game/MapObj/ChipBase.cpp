@@ -202,7 +202,7 @@ void ChipBase::appearWait() {
     setNerve(GET_NERVE(ChipBase, ChipBaseNrvWait));
 }
 
-void ChipBase::appearFlashing(s32 a1) {
+void ChipBase::appearFlashing(s32 timer) {
     if (isNerve(GET_NERVE(ChipBase, ChipBaseNrvDeactive))) {
         return;
     }
@@ -211,7 +211,7 @@ void ChipBase::appearFlashing(s32 a1) {
 
     MR::invalidateClipping(this);
 
-    mFlashingCtrl->start(a1);
+    mFlashingCtrl->start(timer);
 
     setNerve(GET_NERVE(ChipBase, ChipBaseNrvFlashing));
 }
@@ -372,9 +372,9 @@ bool ChipBase::isNeedBubble(const TableIter& rIter) {
         return false;
     }
 
-    bool arg3 = false;
-    MR::getPlacementArg3WithInit(rIter, &arg3);
+    bool isNeedBubble = false;
+    MR::getPlacementArg3WithInit(rIter, &isNeedBubble);
 
-    return arg3;
+    return isNeedBubble;
 }
 

@@ -9,7 +9,7 @@ public:
     virtual ~FlashingCtrl();
     virtual void movement();
 
-    void start(int);
+    void start(int timer);
     void end();
     s32 getCurrentInterval() const;
     bool isNowFlashing() const;

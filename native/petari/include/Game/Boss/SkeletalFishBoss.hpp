@@ -83,7 +83,7 @@ public:
     void initCamera();
     void validateCollision();
     void invalidateCollision();
-    void getMouthSensorCenterPos(Vec3f&, f32) const;
+    void getMouthSensorCenterPos(Vec3f&, f32 forward) const;
     void updateCollision();
     void powerUp();
     void startDamageAnim();

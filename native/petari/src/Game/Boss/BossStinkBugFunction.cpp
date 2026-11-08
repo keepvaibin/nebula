@@ -8,105 +8,105 @@
 #include <nebula_geometry.hpp>
 
 
-void BossStinkBugFunction::addHeightOffset(Vec3f* pOut, const BossStinkBug* pStinkBug, f32 scale) {
-    pOut->add(pStinkBug->mGravity * -scale);
+void BossStinkBugFunction::addHeightOffset(Vec3f* pOut, const BossStinkBug* pStinkBug, f32 height) {
+    pOut->add(pStinkBug->mGravity * -height);
 }
 
-void BossStinkBugFunction::addLocalHeightOffset(Vec3f* pOut, BossStinkBug* pStinkBug, f32 scale) {
-    if (!MR::isNearZero(scale)) {
+void BossStinkBugFunction::addLocalHeightOffset(Vec3f* pOut, BossStinkBug* pStinkBug, f32 height) {
+    if (!MR::isNearZero(height)) {
         pStinkBug->updatePose();
         Vec3f upVec;
         pStinkBug->calcUpVec(&upVec);
-        pOut->scaleAdd(scale, upVec, *pOut);
+        pOut->scaleAdd(height, upVec, *pOut);
     }
 }
 
-void BossStinkBugFunction::calcDiffCurrentRailPosition(Vec3f* pOut, BossStinkBug* pStinkBug, f32 scale1, f32 scale2) {
+void BossStinkBugFunction::calcDiffCurrentRailPosition(Vec3f* pOut, BossStinkBug* pStinkBug, f32 heightOffset, f32 localHeightOffset) {
     Vec3f railPosition;
     railPosition.set(MR::getRailPos(pStinkBug));
-    addHeightOffset(&railPosition, pStinkBug, scale1);
-    addLocalHeightOffset(&railPosition, pStinkBug, scale2);
+    addHeightOffset(&railPosition, pStinkBug, heightOffset);
+    addLocalHeightOffset(&railPosition, pStinkBug, localHeightOffset);
     pOut->set(pStinkBug->mPosition - railPosition);
 }
 
-void BossStinkBugFunction::moveRail(BossStinkBug* pStinkBug, f32 f1, f32 f2, f32 f3) {
-    MR::moveCoord(pStinkBug, f1);
+void BossStinkBugFunction::moveRail(BossStinkBug* pStinkBug, f32 speed, f32 heightOffset, f32 localHeightOffset) {
+    MR::moveCoord(pStinkBug, speed);
     Vec3f railPos(MR::getRailPos(pStinkBug));
-    addHeightOffset(&railPos, pStinkBug, f2);
+    addHeightOffset(&railPos, pStinkBug, heightOffset);
     MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
-    addLocalHeightOffset(&railPos, pStinkBug, f3);
+    addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     pStinkBug->mPosition.set(railPos);
 }
 
-void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, bool a1) {
-    if (MR::isRailGoingToEnd(pStinkBug) == a1) {
+void BossStinkBugFunction::turnRailGround(BossStinkBug* pStinkBug, const Vec3f& rTurnFront, f32 rate, bool isRailToEnd) {
+    if (MR::isRailGoingToEnd(pStinkBug) == isRailToEnd) {
         MR::reverseRailDirection(pStinkBug);
     }
-    MR::rotateVecDegree(&pStinkBug->mFront, rVec, pStinkBug->mGravity, MR::getEaseInOutValue(f1, 0.0f, 1.0f, 1.0f) * 180.0f * -(a1 ? 1.0f : -1.0f));
+    MR::rotateVecDegree(&pStinkBug->mFront, rTurnFront, pStinkBug->mGravity,
+                        MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * 180.0f * -(isRailToEnd ? 1.0f : -1.0f));
 }
 
-void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rVec1, f32 f1, f32 f2, f32 f3, f32 f4, f32 f5, bool a1) {
+void BossStinkBugFunction::turnRail(BossStinkBug* pStinkBug, const Vec3f& rTurnFront, f32 baseRoll, f32 rate, f32 speed, f32 heightOffset,
+                                    f32 localHeightOffset, bool isRailToEnd) {
     f32 moveCoordParameter;
 
-    if (f2 <= 0.5f) {
-        moveCoordParameter = f3 * MR::getEaseInOutValue(1.0f - MR::normalize(f2, 0.0f, 0.5f), 0.0f, 1.0f, 1.0f);
+    // Slow to a stop over the first half, turn back on the rail, speed up over the second.
+    if (rate <= 0.5f) {
+        moveCoordParameter = speed * MR::getEaseInOutValue(1.0f - MR::normalize(rate, 0.0f, 0.5f), 0.0f, 1.0f, 1.0f);
     } else {
-        if (MR::isRailGoingToEnd(pStinkBug) == a1) {
+        if (MR::isRailGoingToEnd(pStinkBug) == isRailToEnd) {
             MR::reverseRailDirection(pStinkBug);
         }
-        moveCoordParameter = f3 * MR::getEaseInOutValue(MR::normalize(f2, 0.5f, 1.0f), 0.0f, 1.0f, 1.0f);
+        moveCoordParameter = speed * MR::getEaseInOutValue(MR::normalize(rate, 0.5f, 1.0f), 0.0f, 1.0f, 1.0f);
     }
 
     MR::moveCoord(pStinkBug, moveCoordParameter);
     Vec3f railPos(MR::getRailPos(pStinkBug));
-    addHeightOffset(&railPos, pStinkBug, f4);
+    addHeightOffset(&railPos, pStinkBug, heightOffset);
 
-    f32 flt1 = (a1 ? 1.0f : -1.0f);
-    f32 bend = 4.0f * f2 * (f2 - 1.0f);
-    f32 temp = bend * bend;
-    f32 rollAngle = f1 * (1.0f - temp) + (90.0f * flt1) * temp;
+    f32 turnSign = (isRailToEnd ? 1.0f : -1.0f);
+    f32 bend = 4.0f * rate * (rate - 1.0f);
+    f32 bendSq = bend * bend;
+    f32 rollAngle = baseRoll * (1.0f - bendSq) + (90.0f * turnSign) * bendSq;
     pStinkBug->mRotation.z = MR::repeat(rollAngle, -180.0f, 360.0f);
 
-    MR::rotateVecDegree(&pStinkBug->mFront, rVec1, pStinkBug->mGravity, MR::getEaseInOutValue(f2, 0.0f, 1.0f, 1.0f) * 180.0f * -flt1);
-    addLocalHeightOffset(&railPos, pStinkBug, f5);
+    MR::rotateVecDegree(&pStinkBug->mFront, rTurnFront, pStinkBug->mGravity, MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f) * 180.0f * -turnSign);
+    addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     pStinkBug->mPosition.set(railPos);
 }
 
-void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, f32 f2, f32 f3, f32 f4) {
+void BossStinkBugFunction::regainToRail(BossStinkBug* pStinkBug, const Vec3f& rRailDiff, f32 rate, f32 speed, f32 heightOffset,
+                                        f32 localHeightOffset) {
     pStinkBug->mRotation.z *= 0.9f;
-    MR::moveCoord(pStinkBug, f2);
+    MR::moveCoord(pStinkBug, speed);
     Vec3f railPos(MR::getRailPos(pStinkBug));
-    addHeightOffset(&railPos, pStinkBug, f3);
-    addLocalHeightOffset(&railPos, pStinkBug, f4);
+    addHeightOffset(&railPos, pStinkBug, heightOffset);
+    addLocalHeightOffset(&railPos, pStinkBug, localHeightOffset);
     Vec3f dif = railPos - pStinkBug->mPosition;
     if (MR::isNearZero(dif)) {
         MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, dif, 2.0f);
     } else {
         MR::turnDirectionDegree(pStinkBug, &pStinkBug->mFront, MR::getRailDirection(pStinkBug), 10.0f);
     }
-    pStinkBug->mPosition.scaleAdd(1.0f - f1, rVec, railPos);
+    pStinkBug->mPosition.scaleAdd(1.0f - rate, rRailDiff, railPos);
 }
 
-void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const Vec3f& rVec, f32 f1, f32 f2, f32 f3) {
+void BossStinkBugFunction::setFallVelocity(BossStinkBug* pStinkBug, const Vec3f& rBase, f32 rate, f32 peakRate, f32 height) {
     f32 scaleAddFactor;
 
-    if (f1 < f2) {
-        f32 temp = 1.0f / f2 * (f1 - f2);
-        temp *= temp;
-        temp *= temp;
-        scaleAddFactor = 1.0f - temp;
+    if (rate < peakRate) {
+        f32 rise = 1.0f / peakRate * (rate - peakRate);
+        rise *= rise;
+        rise *= rise;
+        scaleAddFactor = 1.0f - rise;
     } else {
-        scaleAddFactor = 1.0f - MR::getEaseInOutValue(1.0f / (1.0f - f2) * (f1 - f2), 0.0f, 1.0f, 1.0f);
+        scaleAddFactor = 1.0f - MR::getEaseInOutValue(1.0f / (1.0f - peakRate) * (rate - peakRate), 0.0f, 1.0f, 1.0f);
     }
 
-    Vec3f temp;
-    temp.set(pStinkBug->mGravity);
+    Vec3f target;
+    target.scaleAdd(scaleAddFactor * height, pStinkBug->mGravity, rBase);
 
-    Vec3f scaleAdd;
-
-    scaleAdd.scaleAdd(scaleAddFactor * f3, temp, rVec);
-
-    pStinkBug->mVelocity.set(scaleAdd - pStinkBug->mPosition);
+    pStinkBug->mVelocity.set(target - pStinkBug->mPosition);
 }
 
 void BossStinkBugFunction::throwBomb(BossStinkBug* pStinkBug) {
@@ -122,8 +122,8 @@ bool BossStinkBugFunction::isHipDropableSensor(const BossStinkBug* pStinkBug, co
     return pStinkBug->isSensorBody(pSensor);
 }
 
-bool BossStinkBugFunction::isExistPlayerBack(const BossStinkBug* pStinkBug, f32 f1) {
-    return MR::calcDifferenceRailCoord(pStinkBug, MR::calcNearestRailCoord(pStinkBug, *MR::getPlayerPos())) < -f1;
+bool BossStinkBugFunction::isExistPlayerBack(const BossStinkBug* pStinkBug, f32 distance) {
+    return MR::calcDifferenceRailCoord(pStinkBug, MR::calcNearestRailCoord(pStinkBug, *MR::getPlayerPos())) < -distance;
 }
 
 void BossStinkBugFunction::validateAttack(BossStinkBug* pStinkBug) {
