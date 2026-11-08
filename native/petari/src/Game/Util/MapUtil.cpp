@@ -10,6 +10,7 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
@@ -263,8 +264,8 @@ namespace MR {
             delete[] sSortBuffer;
             delete[] sSortDistance;
             sSortRoom = count * 2;
-            sSortBuffer = new (NebulaArena::getSystemHeap(), 0) HitInfo[sSortRoom];
-            sSortDistance = new (NebulaArena::getSystemHeap(), 0) f32[sSortRoom];
+            sSortBuffer = new (MR::getPermanentHeap(), 0) HitInfo[sSortRoom];
+            sSortDistance = new (MR::getPermanentHeap(), 0) f32[sSortRoom];
         }
 
         // Insertion by distance: equal distances keep the order the keeper found them in.

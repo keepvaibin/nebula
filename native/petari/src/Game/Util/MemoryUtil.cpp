@@ -1,7 +1,6 @@
 #include "Game/System/SaveBinary.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
-#include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
@@ -20,15 +19,15 @@ namespace MR {
     }
 
     NebulaArena* getSceneArchiveHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
+        return Arenas::sceneFiles();
     }
 
     NebulaArena* getPermanentHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mPermanent;
+        return Arenas::permanent();
     }
 
     NebulaArena* getSceneHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
+        return Arenas::scene();
     }
 
     void becomeCurrentHeap(NebulaArena* pHeap) {

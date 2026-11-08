@@ -1,6 +1,6 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
@@ -11,13 +11,12 @@
 
 namespace {
     NebulaArena* getHoldingArena() {
-        const HeapMemoryWatcher* const pWatcher = SingletonHolder< HeapMemoryWatcher >::get();
         NebulaArena* const pCurrent = NebulaArena::getCurrentHeap();
-        if (pWatcher->mSceneHeap == nullptr || pCurrent != pWatcher->mSceneHeap) {
+        if (Arenas::scene() == nullptr || pCurrent != Arenas::scene()) {
             return pCurrent;
         }
 
-        return MR::isStageFileSelect() ? pWatcher->mPermanent : pWatcher->mFileCacheHeap;
+        return MR::isStageFileSelect() ? Arenas::permanent() : Arenas::sceneFiles();
     }
 
     // `game`: the game's own files under the mods' (GameAssets::findGame).
