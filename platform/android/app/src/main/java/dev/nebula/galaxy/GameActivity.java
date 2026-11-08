@@ -8,6 +8,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.os.Process;
@@ -64,6 +65,8 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native void nativeSurfaceWithdrawn();
     static native void nativeSurfaceReturned();
     static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
+    static native void nativePanelRate(float hz);
+    static native float nativeWantedFrameRate();
 
     private TouchControlsView controls;
     private boolean menuOpen;
@@ -111,29 +114,70 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         };
     }
 
-    // Frame rate set to the display's own (config.ini max_fps=0): DisplayRate's mode, so the renderer draws the frames in
-    // between at its rate. Without the request Android may hold the game at 60 Hz.
-    private void requestDisplayRate() {
-        String maxFps = "60";
+    // The frame-rate setting saved last (config.ini max_fps; 0: the display's own), before the game has read it.
+    private float savedFrameRate() {
+        float maxFps = 60.0f;
         try (BufferedReader reader = new BufferedReader(new FileReader(new File(nativeData(), "config.ini")))) {
             for (String line; (line = reader.readLine()) != null; ) {
                 if (line.startsWith("max_fps=")) {
-                    maxFps = line.substring("max_fps=".length()).trim();
+                    maxFps = Float.parseFloat(line.substring("max_fps=".length()).trim());
                 }
             }
         } catch (Exception e) {
-            return;
+            return 60.0f;
         }
+        return maxFps;
+    }
+
+    // The display mode for a frame-rate setting (max_fps; 0: the display's own). Interpolated rates take the mode that
+    // shows them (DisplayRate.modeFor): without the request most variable-rate panels hold the game at 60 Hz. The
+    // game's own 30 or 60 frames leave the mode to the system.
+    private void applyDisplayRate(float maxFps) {
         final Display display = getDisplay();
-        if (display == null || !"0".equals(maxFps)) {
+        if (display == null) {
             return;
         }
-        final Display.Mode current = display.getMode();
-        final Display.Mode best = DisplayRate.fastestMode(display);
+        final boolean own = maxFps > 0.0f && maxFps <= 61.0f;
+        final Display.Mode mode = own ? null : DisplayRate.modeFor(display, maxFps);
+        final int wanted = mode != null ? mode.getModeId() : 0;
         final WindowManager.LayoutParams attributes = getWindow().getAttributes();
-        attributes.preferredDisplayModeId = best.getModeId();
+        if (attributes.preferredDisplayModeId == wanted) {
+            return;
+        }
+        attributes.preferredDisplayModeId = wanted;
         getWindow().setAttributes(attributes);
-        Log.i(TAG, "display mode " + best.getRefreshRate() + " Hz requested (was " + current.getRefreshRate() + " Hz)");
+        Log.i(TAG, "display mode " + (mode != null ? mode.getRefreshRate() + " Hz" : "the system's") + " for frame rate " +
+                maxFps + " (was " + display.getMode().getRefreshRate() + " Hz)");
+    }
+
+    // The panel's fastest rate, which the game's settings offer interpolation by.
+    private void reportPanelRate() {
+        final Display display = getDisplay();
+        if (display != null) {
+            nativePanelRate(DisplayRate.fastestMode(display).getRefreshRate());
+        }
+    }
+
+    private final DisplayManager.DisplayListener displayListener = new DisplayManager.DisplayListener() {
+        @Override
+        public void onDisplayAdded(int displayId) {}
+
+        @Override
+        public void onDisplayRemoved(int displayId) {}
+
+        @Override
+        public void onDisplayChanged(int displayId) {
+            final Display display = getDisplay();
+            if (display != null && display.getDisplayId() == displayId) {
+                reportPanelRate();
+            }
+        }
+    };
+
+    // Called by libmain.so when the frame-rate setting changes (on SDL's thread).
+    public void displayRateChanged() {
+        final float maxFps = nativeWantedFrameRate();
+        runOnUiThread(() -> applyDisplayRate(maxFps));
     }
 
     @Override
@@ -155,7 +199,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        requestDisplayRate();
+        reportPanelRate();
+        getSystemService(DisplayManager.class).registerDisplayListener(displayListener, null);
+        applyDisplayRate(savedFrameRate());
 
         final SharedPreferences prefs = GameFiles.controls(this);
         controls = new TouchControlsView(this, new TouchControlsView.Listener() {
@@ -308,6 +354,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     protected void onDestroy() {
+        if (!mBrokenLibraries) {
+            getSystemService(DisplayManager.class).unregisterDisplayListener(displayListener);
+        }
         super.onDestroy();
         // One game per process: the native game cannot start twice in it.
         if (isFinishing()) {
