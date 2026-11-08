@@ -70,7 +70,7 @@ namespace LayoutCoreUtil {
 
 namespace MR {
     void convertScreenPosToLayoutPos(Vec2f* pLayoutPos, const Vec2f& rScreenPos) {
-        // The layout canvas setupDrawForNW4RLayout projects (pointer hit tests, panes following screen positions).
+        // The layout canvas setupDrawForLayout projects (pointer hit tests, panes following screen positions).
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
             pLayoutPos->x = rScreenPos.x * display.layout_width / MR::getScreenWidth() - display.layout_width * 0.5f;

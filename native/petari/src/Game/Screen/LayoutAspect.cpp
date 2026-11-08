@@ -201,7 +201,7 @@ namespace {
         }
     }
 
-    // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
+    // The canvas setupDrawForLayout projects; 608x456 when nothing changes.
     Canvas getCanvas() {
         Canvas canvas = {NebulaFrameClock::cLayoutWidth, NebulaFrameClock::cScreenHeight, 0.0f, 0.0f, 1.0f, 1.0f, false};
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {

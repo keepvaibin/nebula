@@ -17,10 +17,10 @@ namespace Ui {
 namespace MR {
     GameSystemObjHolder* getGameSystemObjHolder();
     Ui::Font* getFontOnCurrentLanguage();
-    Ui::Font* getPictureFontNW4R();
-    Ui::Font* getMenuFontNW4R();
-    Ui::Font* getNumberFontNW4R();
-    Ui::Font* getCinemaFontNW4R();
+    Ui::Font* getPictureFont();
+    Ui::Font* getMenuFont();
+    Ui::Font* getNumberFont();
+    Ui::Font* getCinemaFont();
     ParticleResourceHolder* getParticleResourceHolder();
     void callMethodAllSceneNameObj(void (NameObj::*)());
     void suspendAllSceneNameObj();
