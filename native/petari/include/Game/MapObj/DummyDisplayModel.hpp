@@ -4,11 +4,14 @@
 
 class LodCtrl;
 
-#define ITEM_TYPE_COIN 0
-#define ITEM_TYPE_KINOPIO 1
-#define ITEM_TYPE_STARPIECE 4
-#define ITEM_TYPE_POWER_STAR 7
-#define ITEM_TYPE_GRAND_STAR 13
+// The table rows (arg 7 of the hosts) with special handling.
+enum DummyDisplayModelId {
+    DummyDisplayModelId_Coin = 0,
+    DummyDisplayModelId_Kinopio = 1,
+    DummyDisplayModelId_StarPiece = 4,
+    DummyDisplayModelId_PowerStar = 7,
+    DummyDisplayModelId_GrandStar = 13
+};
 
 struct DummyDisplayModelInfo {
     const char* mName;
@@ -20,7 +23,7 @@ struct DummyDisplayModelInfo {
 
 class DummyDisplayModel : public PartsModel {
 public:
-    DummyDisplayModel(LiveActor*, const DummyDisplayModelInfo*, int, s32, s32);
+    DummyDisplayModel(LiveActor*, const DummyDisplayModelInfo*, int drawBufferType, s32 modelId, s32 colorFrame);
 
     virtual void init(const TableIter&);
     virtual void makeActorAppeared();
@@ -29,7 +32,7 @@ public:
     virtual void calcAndSetBaseMtx();
 
     const DummyDisplayModelInfo* mModelInfo;
-    s32 mItemType;
+    s32 mItemType;  // DummyDisplayModelId
     s32 mBrkFrame;
     LodCtrl* mLodCtrl;
     bool mIsInCrystal;
