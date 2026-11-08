@@ -22,9 +22,6 @@ namespace nw4r {
             static const u32 DEFAULT_COLOR_MAPPING_MIN = 0;
             static const u32 DEFAULT_COLOR_MAPPING_MAX = 0xFFFFFFFF;
 
-            static const int TEXTURE_COODINATE_FRACTION_BITS = 15;
-            static const u32 TEXTURE_COODINATE_ONE = (1 << TEXTURE_COODINATE_FRACTION_BITS);
-
             struct ColorMapping {
                 Color min;
                 Color max;

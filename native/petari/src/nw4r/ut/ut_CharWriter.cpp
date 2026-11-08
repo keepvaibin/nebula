@@ -226,23 +226,22 @@ namespace nw4r {
             const f32 posRight = posLeft + glyph.widths.glyphWidth * mScale.x;
             const f32 posBottom = posTop + glyph.height * mScale.y;
             const f32 posZ = z;
-            const u16 texLeft = static_cast< u16 >(glyph.cellX * TEXTURE_COODINATE_ONE / glyph.texWidth);
-            const u16 texTop = static_cast< u16 >(glyph.cellY * TEXTURE_COODINATE_ONE / glyph.texHeight);
-            const u16 texRight = static_cast< u16 >((glyph.cellX + glyph.widths.glyphWidth) * TEXTURE_COODINATE_ONE / glyph.texWidth);
-            const u16 texBottom = static_cast< u16 >((glyph.cellY + glyph.height) * TEXTURE_COODINATE_ONE / glyph.texHeight);
+            // The cell's corners on its sheet, in the sheet's own size (source pixels: a distance sheet's texels are
+            // finer, its coordinates the same).
+            const f32 sheetWidth = static_cast< f32 >(glyph.texWidth);
+            const f32 sheetHeight = static_cast< f32 >(glyph.texHeight);
 
             LoadTexture(glyph, 0);
 
-            const f32 one = static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS);
             NebulaGlyphInstance* pGlyph = RunGlyph(lyt::detail::GetDrawMtx(), posZ);
             pGlyph->left = posLeft;
             pGlyph->top = posTop;
             pGlyph->right = posRight;
             pGlyph->bottom = posBottom;
-            pGlyph->s0 = texLeft / one;
-            pGlyph->t0 = texTop / one;
-            pGlyph->s1 = texRight / one;
-            pGlyph->t1 = texBottom / one;
+            pGlyph->s0 = glyph.cellX / sheetWidth;
+            pGlyph->t0 = glyph.cellY / sheetHeight;
+            pGlyph->s1 = (glyph.cellX + glyph.widths.glyphWidth) / sheetWidth;
+            pGlyph->t1 = (glyph.cellY + glyph.height) / sheetHeight;
             pGlyph->colors[0] = ColorWord(mVertexColor.lu);
             pGlyph->colors[1] = ColorWord(mVertexColor.ru);
             pGlyph->colors[2] = ColorWord(mVertexColor.rd);
