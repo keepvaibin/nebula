@@ -85,6 +85,20 @@ std::array<galaxy::input::switch_hid::SwitchMotion, kMaxPads> g_motion{};
 std::array<std::uint64_t, kMaxPads> g_motion_ns{};
 std::array<std::array<float, 3>, kMaxPads> g_accel{};
 std::array<bool, kMaxPads> g_accel_valid{};
+// How each pad's motion arrives. A driver that posts sensor events (SDL_EVENT_GAMEPAD_SENSOR_UPDATE) gives every sample
+// with its own time; one that only keeps the latest values (some Android controller drivers) is read once a pump, as
+// the values held over the pump. A pad that has posted a gyro event stays on events, so no sample counts twice.
+struct PadMotionSource {
+    bool has_gyro = false;
+    bool has_accel = false;
+    bool by_events = false;
+    std::uint64_t last_feed_us = 0u;  // steady clock of the last sample fed
+    std::uint64_t gyro_events = 0u;
+    std::uint64_t accel_events = 0u;
+    std::uint64_t polled = 0u;
+    std::uint64_t reported_us = 0u;
+};
+std::array<PadMotionSource, kMaxPads> g_motion_source{};
 std::array<bool, kMaxPads> g_touch_down{};
 std::array<float, kMaxPads> g_touch_x{};
 std::array<float, kMaxPads> g_touch_y{};
@@ -185,6 +199,47 @@ void call_activity(const char* method) {
     }
     env->DeleteLocalRef(type);
     env->DeleteLocalRef(activity);
+}
+
+// The panel's fastest refresh rate at its resolution (GameActivity: Display.getSupportedModes). The settings offer
+// interpolation by it, not by the rate the system holds the app to now: a game showing 60 frames is held at 60 Hz on
+// most variable-rate panels until it asks for more.
+std::atomic<float> g_panel_fastest_hz{0.0f};
+
+// The surface's frame-rate vote for the frame-rate setting (max_fps; 0: the display's own). The game's own 30 or 60
+// frames are a fixed source, so a variable-rate panel shows each for the same time; interpolated rates are the app's
+// own rate, switched to at once (the player chose it) rather than at the next seamless moment.
+void vote_frame_rate(ANativeWindow* native, float max_fps) {
+    if (max_fps > 0.0f && max_fps <= 61.0f) {
+        ANativeWindow_setFrameRate(native, max_fps, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+        return;
+    }
+    const float rate = max_fps > 0.0f ? max_fps : g_panel_fastest_hz.load(std::memory_order_relaxed);
+    ANativeWindow_setFrameRateWithChangeStrategy(native, rate, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT,
+                                                 ANATIVEWINDOW_CHANGE_FRAME_RATE_ALWAYS);
+}
+
+// The setting last given to the display (-1: none yet).
+float g_display_rate_applied = -1.0f;
+
+// The frame-rate setting as the display's, whenever it changes: the surface's vote, and the activity's display mode
+// (GameActivity.displayRateChanged). Once a pump; while the surface is away the change waits for it.
+void sync_display_rate() {
+    const float max_fps = galaxy::render::get_render_config().max_fps;
+    if (max_fps == g_display_rate_applied || g_window == nullptr ||
+        galaxy::render::host_window::surface_withdrawn.load(std::memory_order_acquire)) {
+        return;
+    }
+    auto* native = static_cast<ANativeWindow*>(
+        SDL_GetPointerProperty(SDL_GetWindowProperties(g_window), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER, nullptr));
+    if (native == nullptr) {
+        return;
+    }
+    g_display_rate_applied = max_fps;
+    vote_frame_rate(native, max_fps);
+    call_activity("displayRateChanged");
+    std::fprintf(stderr, "[display] frame rate setting %.0f (0: the display's own); panel's fastest %.0f Hz\n",
+                 static_cast<double>(max_fps), static_cast<double>(g_panel_fastest_hz.load(std::memory_order_relaxed)));
 }
 #endif
 
@@ -293,40 +348,15 @@ float axis(SDL_Gamepad* pad, SDL_GamepadAxis which) noexcept {
     return std::clamp(static_cast<float>(SDL_GetGamepadAxis(pad, which)) / 32767.0f, -1.0f, 1.0f);
 }
 
-// One of a pad's sensor samples, as it came: every gyro sample turns the pointer by its own time step (the sensor's
-// clock), with the latest accelerometer sample for gravity, as the Windows host's worker feeds each HID report. Called
-// with g_input_mutex held.
-void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
+// One motion sample of pad `index` (gyro in radians a second, accelerometer in g) over dt seconds into its integrator
+// and g_input.motion, as the Windows host's worker feeds each HID report. Called with g_input_mutex held.
+void feed_pad_motion(std::size_t index, const float (&gyro)[3], const std::array<float, 3>& accel, float dt,
+                     std::uint64_t now_us) {
     namespace sw = galaxy::input::switch_hid;
-    std::size_t index = kMaxPads;
-    for (std::size_t i = 0; i < kMaxPads; ++i) {
-        if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == event.which) {
-            index = i;
-            break;
-        }
-    }
-    if (index == kMaxPads) {
-        return;
-    }
-    if (event.sensor == SDL_SENSOR_ACCEL) {
-        for (int axis_index = 0; axis_index < 3; ++axis_index) {
-            g_accel[index][axis_index] = event.data[axis_index] / SDL_STANDARD_GRAVITY;
-        }
-        g_accel_valid[index] = true;
-        return;
-    }
-    if (event.sensor != SDL_SENSOR_GYRO || !g_accel_valid[index]) {
-        return;
-    }
-    const std::uint64_t sensor_ns = event.sensor_timestamp != 0u ? event.sensor_timestamp : event.timestamp;
-    const float dt = g_motion_ns[index] != 0u && sensor_ns > g_motion_ns[index]
-        ? std::min(0.1f, static_cast<float>(sensor_ns - g_motion_ns[index]) * 1e-9f)
-        : 0.0f;
-    g_motion_ns[index] = sensor_ns;
     sw::ImuSample imu{};
     for (int axis_index = 0; axis_index < 3; ++axis_index) {
-        imu.gyro[axis_index] = event.data[axis_index];  // radians a second
-        imu.accel[axis_index] = g_accel[index][axis_index];
+        imu.gyro[axis_index] = gyro[axis_index];
+        imu.accel[axis_index] = accel[static_cast<std::size_t>(axis_index)];
     }
     const galaxy::input::SchemeTuning& tuning =
         galaxy::input::get_controls_config().tune(scheme_of(g_gamepads[index]));
@@ -336,7 +366,6 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
     settings.gyro_pointer = tuning.gyro_pointer;
     settings.gyro_sensitivity = tuning.gyro_sensitivity;
     settings.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
-    const std::uint64_t now_us = galaxy::steady_us();
     const sw::SwitchMotion::Output out = g_motion[index].feed(imu, dt, now_us, settings);
     PadMotion& motion = g_input.motion[index];
     motion.imu_live = true;
@@ -347,6 +376,111 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
     if (out.shake_started) {
         motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
     }
+    g_motion_source[index].last_feed_us = now_us;
+}
+
+// The steady-clock time since pad `index` was last fed, at most 0.1 s (0 for its first sample).
+float steady_motion_dt(std::size_t index, std::uint64_t now_us) {
+    const std::uint64_t last = g_motion_source[index].last_feed_us;
+    return last != 0u && now_us > last ? std::min(0.1f, static_cast<float>(now_us - last) * 1e-6f) : 0.0f;
+}
+
+// One of a pad's sensor events, as it came: every gyro sample turns the pointer by its own time step (the sensor's
+// clock), with the latest accelerometer sample for gravity. A sensor clock that does not advance by a plausible step
+// (0 to 0.1 s) is replaced by the steady clock. Called with g_input_mutex held.
+void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
+    std::size_t index = kMaxPads;
+    for (std::size_t i = 0; i < kMaxPads; ++i) {
+        if (g_gamepads[i] != nullptr && SDL_GetGamepadID(g_gamepads[i]) == event.which) {
+            index = i;
+            break;
+        }
+    }
+    if (index == kMaxPads) {
+        return;
+    }
+    PadMotionSource& source = g_motion_source[index];
+    if (event.sensor == SDL_SENSOR_ACCEL) {
+        for (int axis_index = 0; axis_index < 3; ++axis_index) {
+            g_accel[index][static_cast<std::size_t>(axis_index)] = event.data[axis_index] / SDL_STANDARD_GRAVITY;
+        }
+        g_accel_valid[index] = true;
+        ++source.accel_events;
+        return;
+    }
+    if (event.sensor != SDL_SENSOR_GYRO) {
+        return;
+    }
+    ++source.gyro_events;
+    source.by_events = true;
+    if (!g_accel_valid[index] && source.has_accel) {
+        // A driver that posts gyro events but keeps the accelerometer's values only: they are read here.
+        float accel[3]{};
+        if (!SDL_GetGamepadSensorData(g_gamepads[index], SDL_SENSOR_ACCEL, accel, 3) ||
+            (accel[0] == 0.0f && accel[1] == 0.0f && accel[2] == 0.0f)) {
+            return;  // gravity comes with the first accelerometer sample
+        }
+        for (int axis_index = 0; axis_index < 3; ++axis_index) {
+            g_accel[index][static_cast<std::size_t>(axis_index)] = accel[axis_index] / SDL_STANDARD_GRAVITY;
+        }
+    }
+    const std::uint64_t now_us = galaxy::steady_us();
+    const std::uint64_t sensor_ns = event.sensor_timestamp != 0u ? event.sensor_timestamp : event.timestamp;
+    const std::uint64_t last_ns = g_motion_ns[index];
+    g_motion_ns[index] = sensor_ns;
+    float dt = 0.0f;
+    if (last_ns != 0u && sensor_ns > last_ns && sensor_ns - last_ns <= 100'000'000u) {
+        dt = static_cast<float>(sensor_ns - last_ns) * 1e-9f;
+    } else if (last_ns != 0u) {
+        dt = steady_motion_dt(index, now_us);
+    }
+    const float gyro[3] = {event.data[0], event.data[1], event.data[2]};  // radians a second
+    feed_pad_motion(index, gyro, g_accel[index], dt, now_us);
+}
+
+// Pads whose driver posts no sensor events: their latest sensor values, held over the time since the last pump. Called
+// with g_input_mutex held, after the pump's events.
+void poll_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
+    PadMotionSource& source = g_motion_source[index];
+    if (source.by_events || !source.has_gyro) {
+        return;
+    }
+    float gyro[3]{};
+    if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO, gyro, 3)) {
+        return;
+    }
+    if (source.has_accel) {
+        float accel[3]{};
+        if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL, accel, 3) ||
+            (accel[0] == 0.0f && accel[1] == 0.0f && accel[2] == 0.0f)) {
+            return;  // no sample yet: a pad at rest always reads gravity
+        }
+        for (int axis_index = 0; axis_index < 3; ++axis_index) {
+            g_accel[index][static_cast<std::size_t>(axis_index)] = accel[axis_index] / SDL_STANDARD_GRAVITY;
+        }
+        g_accel_valid[index] = true;
+    }
+    const std::uint64_t now_us = galaxy::steady_us();
+    ++source.polled;
+    feed_pad_motion(index, gyro, g_accel[index], steady_motion_dt(index, now_us), now_us);
+}
+
+// Every 10 s while a pad has sensors: how its motion arrives, so a log shows whether a controller's motion reaches the
+// game.
+void report_pad_motion(std::size_t index) {
+    PadMotionSource& source = g_motion_source[index];
+    const std::uint64_t now_us = galaxy::steady_us();
+    if (!source.has_gyro && !source.has_accel) {
+        return;
+    }
+    if (source.reported_us != 0u && now_us - source.reported_us < 10'000'000u) {
+        return;
+    }
+    source.reported_us = now_us;
+    std::fprintf(stderr, "[input-motion] pad %zu by %s: gyro events %llu, accelerometer events %llu, polled %llu, live %d\n",
+                 index, source.by_events ? "events" : "polling", static_cast<unsigned long long>(source.gyro_events),
+                 static_cast<unsigned long long>(source.accel_events), static_cast<unsigned long long>(source.polled),
+                 g_input.motion[index].imu_live ? 1 : 0);
 }
 
 // A pad's touch surface into g_input.motion, as the Windows host's worker does.
@@ -413,6 +547,8 @@ void sample_gamepads() {
             g_last_pad.store(g_input.pad_ids[i], std::memory_order_relaxed);
         }
         sample_pad_motion(i, gamepad);
+        poll_pad_motion(i, gamepad);
+        report_pad_motion(i);
         if (g_capture_device.has_value() && g_capture_device->scheme == sample.scheme && !g_capture_result.has_value()) {
             const std::uint32_t fresh = bits & ~g_capture_previous;
             if (fresh != 0u) {
@@ -451,9 +587,17 @@ void open_gamepad(SDL_JoystickID id) {
                 g_accel_valid[index] = false;
                 g_touch_down[index] = false;
                 g_input.motion[index] = {};
-                (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
-                (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
-                std::fprintf(stderr, "[input] gamepad \"%s\" connected\n", SDL_GetGamepadName(slot));
+                PadMotionSource& source = g_motion_source[index];
+                source = {};
+                source.has_gyro = SDL_GamepadHasSensor(slot, SDL_SENSOR_GYRO) &&
+                                  SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
+                source.has_accel = SDL_GamepadHasSensor(slot, SDL_SENSOR_ACCEL) &&
+                                   SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
+                std::fprintf(stderr, "[input] gamepad \"%s\" %04x:%04x scheme %u connected; gyro %d (%.0f Hz), accelerometer %d\n",
+                             SDL_GetGamepadName(slot), SDL_GetGamepadVendor(slot), SDL_GetGamepadProduct(slot),
+                             static_cast<unsigned>(scheme_of(slot)), source.has_gyro ? 1 : 0,
+                             static_cast<double>(SDL_GetGamepadSensorDataRate(slot, SDL_SENSOR_GYRO)),
+                             source.has_accel ? 1 : 0);
             }
             return;
         }
@@ -600,6 +744,7 @@ void pump_events(int timeout_ms) noexcept {
     static auto report_time = std::chrono::steady_clock::now();
     const std::int64_t wait_start = galaxy::render::vk::thread_cpu_ns();
 #if defined(__ANDROID__)
+    sync_display_rate();
     // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
     // the thread sleeps between pumps.
     SDL_PumpEvents();
@@ -927,6 +1072,16 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurf
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceReturned(JNIEnv*, jclass) {
     galaxy::render::host_window::surface_withdrawn.store(false, std::memory_order_release);
 }
+
+// The panel's fastest refresh rate at its resolution (on start and whenever the display changes).
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePanelRate(JNIEnv*, jclass, jfloat hz) {
+    galaxy::sdl::g_panel_fastest_hz.store(hz > 1.0f ? hz : 0.0f, std::memory_order_relaxed);
+}
+
+// The frame-rate setting (max_fps; 0: the display's own) for the activity's display mode.
+extern "C" JNIEXPORT jfloat JNICALL Java_dev_nebula_galaxy_GameActivity_nativeWantedFrameRate(JNIEnv*, jclass) {
+    return galaxy::render::get_render_config().max_fps;
+}
 #endif
 
 // The renderer's window (host_window.h).
@@ -1013,6 +1168,10 @@ std::vector<SettingsMonitor> settings_monitors() {
     monitor.width = static_cast<unsigned>(state.window_width);
     monitor.height = static_cast<unsigned>(state.window_height);
     monitor.refresh_hz = galaxy::sdl::g_window != nullptr ? static_cast<unsigned>(std::lround(display_refresh_hz(galaxy::sdl::g_window))) : 0u;
+#if defined(__ANDROID__)
+    monitor.refresh_hz = std::max(monitor.refresh_hz, static_cast<unsigned>(std::lround(
+                                                          galaxy::sdl::g_panel_fastest_hz.load(std::memory_order_relaxed))));
+#endif
     monitor.max_client_width = state.window_width;
     monitor.max_client_height = state.window_height;
     monitor.primary = true;
@@ -1124,16 +1283,11 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
         return VK_NULL_HANDLE;
     }
 #if defined(__ANDROID__)
-    // The game's 60 frames a second, so a variable-rate display runs at a whole multiple of it (each frame shown for
-    // the same time) rather than at a rate the frames divide unevenly.
+    // A new surface has no vote: it gets the setting's (sync_display_rate's rule).
     if (auto* native = static_cast<ANativeWindow*>(SDL_GetPointerProperty(
             SDL_GetWindowProperties(static_cast<SDL_Window*>(window)), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER,
             nullptr))) {
-        const auto cfg = galaxy::render::get_render_config();
-        // Match Display lets the activity's requested mode set the rate; a fixed 60-Hz surface vote defeats it.
-        ANativeWindow_setFrameRate(native, cfg.max_fps,
-            cfg.max_fps > 0.0f ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
-                               : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
+        galaxy::sdl::vote_frame_rate(native, galaxy::render::get_render_config().max_fps);
     }
 #endif
     return surface;
