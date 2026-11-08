@@ -10,7 +10,6 @@
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/MessageHolder.hpp"
-#include "Game/System/RenderMode.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -23,7 +22,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
+    : mObjHolder(), mParticleResHolder(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::decideLanguage()) {
     initNameObj();
     MR::addArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive", MR::getPermanentHeap()), MR::getPermanentHeap(), "ErrorMessageArchive");
 }

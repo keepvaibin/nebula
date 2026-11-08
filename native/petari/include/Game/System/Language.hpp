@@ -7,7 +7,7 @@ enum LanguageRegion {
     LanguageRegion_Us = 2,
 };
 
-// The system's language numbers (the host's NEBULA_SC_LANGUAGE values).
+// The host's language numbers (NebulaSystemSettings::language).
 enum SystemLanguage {
     SystemLanguage_Japanese = 0,
     SystemLanguage_English = 1,
@@ -41,7 +41,7 @@ struct Language {
 
 namespace MR {
     // The language id for the host's language setting and the disc's region.
-    u32 getDecidedLanguageFromIPL();
+    u32 decideLanguage();
     u32 getLanguage();
     const char* getCurrentLanguagePrefix();
     // "Jp", "Us" or "Eu".

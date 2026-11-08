@@ -63,7 +63,7 @@ namespace {
 }  // namespace
 
 namespace MR {
-    u32 getDecidedLanguageFromIPL() {
+    u32 decideLanguage() {
         const s32 language = NebulaSystemSettings::language();
         const s32 i = language < 0 ? 0 : language < ::cSystemLanguageNum ? language : ::cSystemLanguageNum - 1;
 
