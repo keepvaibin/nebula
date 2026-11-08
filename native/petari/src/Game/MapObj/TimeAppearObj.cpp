@@ -8,7 +8,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const s32 sDefaultTimer = 30;
+    const s32 sDefaultTimer = 30;
 };  // namespace
 
 namespace NrvTimeAppearObj {

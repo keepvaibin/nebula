@@ -5,7 +5,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const f32 sClippingRadius = 200.0f;
+    const f32 sClippingRadius = 200.0f;
 };  // namespace
 
 PhantomShipHandle::PhantomShipHandle(const char* pName) : LiveActor(pName), mRotator() {
@@ -17,8 +17,6 @@ void PhantomShipHandle::control() {
 
 void PhantomShipHandle::calcAndSetBaseMtx() {
     Pos3f baseMtx;
-    baseMtx.identity();
-
     baseMtx.set(mRotator->getRotateMtx());
     baseMtx.setTrans(mPosition);
 

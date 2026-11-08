@@ -4,8 +4,8 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const f32 sFallSpeed = 15.0f;
-    static const s32 sStepForFall = 350;
+    const f32 sFallSpeed = 15.0f;
+    const s32 sStepForFall = 350;
 };  // namespace
 
 namespace NrvCannonFortressBreakStep {
@@ -73,5 +73,6 @@ void CannonFortressBreakStep::initCaseUseSwitchB(const MapObjActorInitInfo& rInf
     MR::listenStageSwitchOnB(this, MR::Functor(this, &CannonFortressBreakStep::startFall));
 }
 
+// init starts the map parts functions itself.
 void CannonFortressBreakStep::initCaseNoUseSwitchB(const MapObjActorInitInfo&) {
 }

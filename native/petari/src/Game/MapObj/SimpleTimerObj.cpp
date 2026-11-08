@@ -8,8 +8,8 @@
 #include "Game/Util/LiveActorUtil.hpp"
 
 namespace {
-    static const s32 sDefaultTimeLimit = 600;
-    static const s32 sBlinkTime = 120;
+    const s32 sDefaultTimeLimit = 600;
+    const s32 sBlinkTime = 120;
 };  // namespace
 
 namespace NrvSimpleTimerObj {

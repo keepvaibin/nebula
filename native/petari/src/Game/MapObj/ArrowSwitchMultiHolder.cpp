@@ -4,10 +4,8 @@
 #include "Game/Util/PlacementId.hpp"
 
 namespace {
-    static const s32 sMaxArrowSwitchMulti = 16;
-};  // namespace
+    const s32 sMaxArrowSwitchMulti = 16;
 
-namespace {
     ArrowSwitchMultiHolder* getArrowSwitchMultiHolder() {
         return MR::getSceneObj< ArrowSwitchMultiHolder >(SceneObj_ArrowSwitchMultiHolder);
     }

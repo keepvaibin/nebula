@@ -4,8 +4,8 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 sNumCoin = 1;
-    static const f32 sEnableSpoutLength = 2000.0f;
+    const s32 sNumCoin = 1;
+    const f32 sEnableSpoutLength = 2000.0f;
 };  // namespace
 
 namespace NrvTreasureSpot {
@@ -61,28 +61,18 @@ void TreasureSpot::exeSpout() {
     }
 }
 
+bool TreasureSpot::isSpouted() const {
+    return isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvSpout)) || isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvEnd));
+}
+
 void TreasureSpot::control() {
-    if (isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvSpout))) {
-        return;
+    if (!isSpouted()) {
+        switchEmitGlow();
     }
-
-    if (isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvEnd))) {
-        return;
-    }
-
-    switchEmitGlow();
 }
 
 bool TreasureSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvSpout))) {
-        return false;
-    }
-
-    if (isNerve(GET_NERVE(TreasureSpot, TreasureSpotNrvEnd))) {
-        return false;
-    }
-
-    if (!MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
+    if (isSpouted() || !MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
         return false;
     }
 
@@ -101,9 +91,7 @@ bool TreasureSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
 void TreasureSpot::switchEmitGlow() {
     if (!MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
         MR::deleteEffect(this, "Glow");
-    } else if (MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
-        if (!MR::isEffectValid(this, "Glow")) {
-            MR::emitEffect(this, "Glow");
-        }
+    } else if (!MR::isEffectValid(this, "Glow")) {
+        MR::emitEffect(this, "Glow");
     }
 }

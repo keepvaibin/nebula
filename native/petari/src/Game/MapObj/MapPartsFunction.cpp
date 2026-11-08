@@ -7,8 +7,7 @@ MapPartsFunction::MapPartsFunction(LiveActor* pHost, const char* pName)
 }
 
 bool MapPartsFunction::sendMsgToHost(u32 msg) {
-    LiveActor* host = mHost;
-    return host->receiveMessage(msg, host->getSensor("body"), host->getSensor("body"));
+    return mHost->receiveMessage(msg, mHost->getSensor("body"), mHost->getSensor("body"));
 }
 
 void MapPartsFunction::movement() {

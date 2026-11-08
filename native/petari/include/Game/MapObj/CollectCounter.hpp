@@ -15,8 +15,7 @@ public:
     void exeHide();
     void exeShow();
 
-    void setCount(s32);
-    bool tryEndShow();
+    void setCount(s32 num);
     void setPosition();
 
     Vec2f mFollowPosition;

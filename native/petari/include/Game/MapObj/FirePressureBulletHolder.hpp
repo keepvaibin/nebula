@@ -1,17 +1,9 @@
 #pragma once
 
-#include "Game/NameObj/NameObj.hpp"
+#include "Game/MapObj/FirePressureBullet.hpp"
+#include "Game/MapObj/PressureBulletHolder.hpp"
 
-class FirePressureBullet;
-
-class FirePressureBulletHolder : public NameObj {
+class FirePressureBulletHolder : public PressureBulletHolder< FirePressureBullet, 8 > {
 public:
-    FirePressureBulletHolder(const char* pName);
-
-    virtual ~FirePressureBulletHolder();
-    virtual void init(const TableIter& rIter);
-
-    FirePressureBullet* callEmptyBullet();
-
-    FirePressureBullet* mBullet[8];
+    FirePressureBulletHolder(const char* pName) : PressureBulletHolder(pName, "ファイアプレッシャーの弾") {}
 };

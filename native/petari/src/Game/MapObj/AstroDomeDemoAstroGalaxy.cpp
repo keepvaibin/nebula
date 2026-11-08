@@ -13,15 +13,6 @@ void AstroDomeDemoAstroGalaxy::init(const TableIter& rIter) {
     MapObjActorUtil::setupInitInfoTypical(&info, mObjectName);
     initialize(rIter, info);
 
-    f32 frame;
-
-    if (MR::hasGrandStar(5)) {
-        frame = 2.0f;
-    } else if (MR::hasGrandStar(3)) {
-        frame = 1.0f;
-    } else {
-        frame = 0.0f;
-    }
-
+    const f32 frame = MR::hasGrandStar(5) ? 2.0f : MR::hasGrandStar(3) ? 1.0f : 0.0f;
     MR::setBrkFrameAndStop(this, frame);
 }

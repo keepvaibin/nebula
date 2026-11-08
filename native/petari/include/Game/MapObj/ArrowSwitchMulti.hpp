@@ -9,13 +9,12 @@ class ArrowSwitchMulti : public LiveActor {
 public:
     ArrowSwitchMulti(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter& rIter);
     virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    void registerTarget(ArrowSwitchTarget*);
-    bool requestPunch(HitSensor*, HitSensor*);
+    void registerTarget(ArrowSwitchTarget* pTarget);
+    bool requestPunch(HitSensor* pSender, HitSensor* pReceiver);
     void exeWait();
     void exeRotate();
 

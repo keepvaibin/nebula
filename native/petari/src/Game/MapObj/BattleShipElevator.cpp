@@ -48,11 +48,9 @@ bool BattleShipElevator::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
         return false;
     }
 
-    if (MR::isMsgFloorTouch(msg)) {
-        if (MR::isOnPlayer(getSensor("body"))) {
-            MR::requestStartTimeKeepDemoMarioPuppetable(this, "エレベーター上昇", GET_NERVE(BattleShipElevator, BattleShipElevatorNrvMove), nullptr,
-                                                        nullptr);
-        }
+    if (MR::isMsgFloorTouch(msg) && MR::isOnPlayer(getSensor("body"))) {
+        MR::requestStartTimeKeepDemoMarioPuppetable(this, "エレベーター上昇", GET_NERVE(BattleShipElevator, BattleShipElevatorNrvMove), nullptr,
+                                                    nullptr);
     }
 
     return false;

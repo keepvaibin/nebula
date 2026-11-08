@@ -3,14 +3,12 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 
 namespace {
-    static const s32 sMaxClipAreaDrop = 32;
+    const s32 sMaxClipAreaDrop = 32;
 };  // namespace
 
 ClipAreaDropHolder::ClipAreaDropHolder() : DeriveActorGroup< ClipAreaDrop >("クリップエリアのしずく管理", ::sMaxClipAreaDrop) {
-    ClipAreaDrop* pClipAreaDrop = nullptr;
-
-    for (int i = 0; i < ::sMaxClipAreaDrop; i++) {
-        pClipAreaDrop = new ClipAreaDrop("クリップエリアのしずく");
+    for (s32 i = 0; i < ::sMaxClipAreaDrop; i++) {
+        ClipAreaDrop* pClipAreaDrop = new ClipAreaDrop("クリップエリアのしずく");
         pClipAreaDrop->initWithoutIter();
         registerActor(pClipAreaDrop);
     }

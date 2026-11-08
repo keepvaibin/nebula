@@ -37,24 +37,23 @@ void CoinReplica::init(const TableIter& rIter) {
     mCoin->initWithoutIter();
     mCoin->appearNonActive();
 
-    s32 calcGravity;
-    MR::getPlacementArg0WithInit(rIter, &calcGravity);
+    // -1: the coin keeps no gravity once active.
+    s32 gravityArg;
+    MR::getPlacementArg0WithInit(rIter, &gravityArg);
 
-    if (MR::isExistStageSwitchA(rIter) || MR::isExistStageSwitchB(rIter)) {
-        StageSwitchCtrl* switchCtrl = MR::createStageSwitchCtrl(this, rIter);
+    if (!MR::isExistStageSwitchA(rIter) && !MR::isExistStageSwitchB(rIter)) {
+        return;
+    }
 
-        if (switchCtrl->isValidSwitchA()) {
-            if (calcGravity == -1) {
-                MR::listenNameObjStageSwitchOnOffA(this, switchCtrl, MR::Functor(this, &CoinReplica::activeCoin),
-                                                   MR::Functor(this, &CoinReplica::deactiveCoin));
-            } else {
-                MR::listenNameObjStageSwitchOnOffA(this, switchCtrl, MR::Functor(this, &CoinReplica::activeCoinWithGravity),
-                                                   MR::Functor(this, &CoinReplica::deactiveCoin));
-            }
-        }
+    StageSwitchCtrl* pSwitchCtrl = MR::createStageSwitchCtrl(this, rIter);
 
-        if (switchCtrl->isValidSwitchB()) {
-            MR::listenNameObjStageSwitchOnB(this, switchCtrl, MR::Functor(this, &CoinReplica::removeCoin));
-        }
+    if (pSwitchCtrl->isValidSwitchA()) {
+        MR::listenNameObjStageSwitchOnOffA(this, pSwitchCtrl,
+                                           MR::Functor(this, gravityArg == -1 ? &CoinReplica::activeCoin : &CoinReplica::activeCoinWithGravity),
+                                           MR::Functor(this, &CoinReplica::deactiveCoin));
+    }
+
+    if (pSwitchCtrl->isValidSwitchB()) {
+        MR::listenNameObjStageSwitchOnB(this, pSwitchCtrl, MR::Functor(this, &CoinReplica::removeCoin));
     }
 }

@@ -9,8 +9,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const f32 sSensorRadius = 500.0f;
-    static const s32 sRiddleSeStep = 90;
+    const f32 sSensorRadius = 500.0f;
+    const s32 sRiddleSeStep = 90;
 };  // namespace
 
 namespace NrvWaterfallCaveCover {
@@ -20,16 +20,16 @@ namespace NrvWaterfallCaveCover {
 
 void WaterfallCaveCover::init(const TableIter& rIter) {
     MapObjActor::init(rIter);
-    MapObjActorInitInfo rInitInfo;
-    rInitInfo.setupDefaultPos();
-    rInitInfo.setupConnectToScene();
-    rInitInfo.setupSound(4);
-    rInitInfo.setupGroupClipping(16);
-    rInitInfo.setupNerve(GET_NERVE(WaterfallCaveCover, HostTypeWait));
-    rInitInfo.setupHitSensor();
-    rInitInfo.setupHitSensorParam(8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
-    rInitInfo.setupEffect(nullptr);
-    initialize(rIter, rInitInfo);
+    MapObjActorInitInfo info;
+    info.setupDefaultPos();
+    info.setupConnectToScene();
+    info.setupSound(4);
+    info.setupGroupClipping(16);
+    info.setupNerve(GET_NERVE(WaterfallCaveCover, HostTypeWait));
+    info.setupHitSensor();
+    info.setupHitSensorParam(8, ::sSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
+    info.setupEffect(nullptr);
+    initialize(rIter, info);
 }
 
 bool WaterfallCaveCover::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {

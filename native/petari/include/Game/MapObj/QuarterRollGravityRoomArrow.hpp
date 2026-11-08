@@ -11,7 +11,6 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo& rInfo);
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo& rInfo);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo);
 

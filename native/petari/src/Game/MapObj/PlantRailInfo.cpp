@@ -20,13 +20,11 @@ PlantRailInfo::PlantRailInfo(const TableIter& rIter, f32 speed) : mRailSpeed(spe
 
     mRailRider->setCoord(mRailRider->getTotalLength());
 
-    PlantPoint* point = new PlantPoint(mRailRider->mCurPos, getPlantPoint(mNumPlantPoints - 2)->mUp, 1.0f);
-    s32 index = mNumPlantPoints - 1;
-    mPlantPoints[index] = point;
+    mPlantPoints[mNumPlantPoints - 1] = new PlantPoint(mRailRider->mCurPos, getPlantPoint(mNumPlantPoints - 2)->mUp, 1.0f);
 
-    PlantPoint* firstPoint = getPlantPoint(0);
-    PlantPoint* lastPoint = getPlantPoint(mNumPlantPoints - 2);
-    firstPoint->setAxisAndPos(lastPoint->mSide, lastPoint->mUp, lastPoint->mFront, firstPoint->mPosition);
+    PlantPoint* pFirstPoint = getPlantPoint(0);
+    PlantPoint* pLastPoint = getPlantPoint(mNumPlantPoints - 2);
+    pFirstPoint->setAxisAndPos(pLastPoint->mSide, pLastPoint->mUp, pLastPoint->mFront, pFirstPoint->mPosition);
 }
 
 void PlantRailInfo::calcPosAndAxisY(Vec3f* pPos, Vec3f* pAxisY, f32 coord) const {
@@ -71,8 +69,5 @@ void PlantRailInfo::calcNearestPointPos(Vec3f* pPointPos, const Vec3f& rPos, s32
         }
     }
 
-    PlantPoint* nearestPoint = mPlantPoints[nearestIdx];
-    pPointPos->x = nearestPoint->mPosition.x;
-    pPointPos->y = nearestPoint->mPosition.y;
-    pPointPos->z = nearestPoint->mPosition.z;
+    pPointPos->set(mPlantPoints[nearestIdx]->mPosition);
 }

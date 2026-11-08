@@ -61,17 +61,15 @@ bool MapPartsSeesaw2AxisRotator::isWorking() const {
 }
 
 bool MapPartsSeesaw2AxisRotator::receiveMsg(u32 msg) {
-    if (msg == ACTMES_PLAYER_HIP_DROP_FLOOR) {
-        if (!MR::isOnPlayer(MR::getBodySensor(mHost))) {
-            return false;
-        }
+    if (msg != ACTMES_PLAYER_HIP_DROP_FLOOR || !MR::isOnPlayer(MR::getBodySensor(mHost))) {
+        return false;
+    }
 
-        mHipDrop = true;
+    mHipDrop = true;
 
-        if (isNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeMove)) || isNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeStay))) {
-            setNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeHipDrop));
-            return true;
-        }
+    if (isNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeMove)) || isNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeStay))) {
+        setNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeHipDrop));
+        return true;
     }
 
     return false;
@@ -129,11 +127,10 @@ void MapPartsSeesaw2AxisRotator::exeMove() {
 void MapPartsSeesaw2AxisRotator::exeHipDrop() {
     if (!mHipDrop) {
         setNerve(GET_NERVE(MapPartsSeesaw2AxisRotator, HostTypeMove));
-        mHipDrop = false;
-        return;
+    } else {
+        rotate();
     }
 
-    rotate();
     mHipDrop = false;
 }
 

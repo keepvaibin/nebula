@@ -4,9 +4,9 @@
 #include "Game/Util.hpp"
 
 namespace {
-    const char* cDemoCameraName = "注目カメラ";
-    static const s32 sStepForStartCamera = 50;
-    static const s32 sStepForEndCamera = 60;
+    const char* const cDemoCameraName = "注目カメラ";
+    const s32 sStepForStartCamera = 50;
+    const s32 sStepForEndCamera = 60;
 };  // namespace
 
 namespace NrvCapsuleCage {

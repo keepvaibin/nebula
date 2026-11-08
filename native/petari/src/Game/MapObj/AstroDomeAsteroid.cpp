@@ -47,8 +47,7 @@ void AstroDomeAsteroid::control() {
 }
 
 void AstroDomeAsteroid::calcAndSetBaseMtx() {
-    Pos3f mtx;
-    mtx = mBaseMtx;
+    Pos3f mtx(mBaseMtx);
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);
 }

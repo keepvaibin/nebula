@@ -38,6 +38,13 @@ public:
     bool tryRebound();
     void soundMoveSE();
 
+private:
+    void updateRotateAxis();
+    f32 calcPlayerTorqueSign() const;
+    f32 calcTiltFromRest() const;
+
+public:
+
     f32 mAngularSpeedMax;
     f32 mInertia;
     f32 mRotateAngle;

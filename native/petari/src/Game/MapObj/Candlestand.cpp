@@ -5,10 +5,6 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 
-namespace {
-    extern char sBurnSound[];
-};  // namespace
-
 namespace NrvCandlestand {
     NEW_NERVE(HostTypeWaitFire, Candlestand, WaitFire);
     NEW_NERVE(HostTypeFire, Candlestand, Fire);
@@ -29,11 +25,20 @@ namespace {
         bool mCanUseSwitch;
     };
 
-    static const Param sParams[] = {
+    const Param sParams[] = {
         {"PhantomCandlestand", 500.0f, 50.0f, 220.0f, 0.0f, 0.0f, false},
         {"TeresaMansionCandlestand", 800.0f, 70.0f, 300.0f, 220.0f, -5.0f, false},
         {"CandlestandIceVolcano", 500.0f, 150.0f, 220.0f, 0.0f, 0.0f, true},
     };
+
+    const char* const sBurnSound = "SE_OJ_LV_PHANTOM_TOACH_BURN";
+    const f32 sAttackRange = 50.0f;
+    const f32 sFireRange = 150.0f;
+    const f32 sSpinStormRange = 350.0f;
+    const s32 sFireStep = 60;
+    const s32 sExtinguishStep = 15;
+    const s32 sFlickerStep = 30;
+    const s32 sAttackStep = 30;
 
     const Param* getParam(const char* pObjName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sParams); i++) {
@@ -55,22 +60,13 @@ void Candlestand::init(const TableIter& rIter) {
     MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
     info.setupHitSensor();
 
-    Vec3f sensorOffset;
-    sensorOffset.y = ::getParam(mObjectName)->mSensorHeight;
-    sensorOffset.x = 0.0f;
-    sensorOffset.z = 0.0f;
-
-    f32 sensorRange = ::getParam(mObjectName)->mSensorRange;
-    info.setupHitSensorParam(8, sensorRange, sensorOffset);
-    f32 clippingRadius = ::getParam(mObjectName)->mClippingRadius;
-    info.setupClippingRadius(clippingRadius);
+    const Param* pParam = ::getParam(mObjectName);
+    info.setupHitSensorParam(8, pParam->mSensorRange, Vec3f(0.0f, pParam->mSensorHeight, 0.0f));
+    info.setupClippingRadius(pParam->mClippingRadius);
     info.setupNerve(GET_NERVE(Candlestand, HostTypeBurn));
     info.setupAffectedScale();
     initialize(rIter, info);
 
-    const char* pObjName = mObjectName;
-    ::getParam(pObjName);
-    ::getParam(pObjName);
     MR::getPlacementArg0NoInit(rIter, &mItem);
     if (mItem == -1) {
         MR::declareCoin(this, 1);
@@ -81,11 +77,7 @@ void Candlestand::init(const TableIter& rIter) {
     }
 
     if (::getParam(mObjectName)->mCanUseSwitch) {
-        if (MR::isValidSwitchA(this)) {
-            setNerve(GET_NERVE(Candlestand, HostTypeWaitFire));
-        } else {
-            setNerve(GET_NERVE(Candlestand, HostTypeBurn));
-        }
+        setNerve(MR::isValidSwitchA(this) ? GET_NERVE(Candlestand, HostTypeWaitFire) : GET_NERVE(Candlestand, HostTypeBurn));
     }
 
     mSpinPtclCb = new SpinPullParticleCallBack();
@@ -102,13 +94,13 @@ void Candlestand::makeActorAppeared() {
 void Candlestand::startClipped() {
     MapObjActor::startClipped();
 
-    if (isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack))) {
+    if (isBurning()) {
         deleteEffectFire();
     }
 }
 
 void Candlestand::endClipped() {
-    if (isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack))) {
+    if (isBurning()) {
         emitEffectFire();
     }
 
@@ -120,72 +112,39 @@ void Candlestand::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    f32 range = mScale.x * 50.0f;
-    f32 radius = pReceiver->mRadius;
-
-    if (!MR::isNear(pSender, pReceiver, range + radius)) {
-        return;
+    if (MR::isNear(pSender, pReceiver, mScale.x * ::sAttackRange + pReceiver->mRadius) && MR::sendMsgEnemyAttackFire(pReceiver, pSender)) {
+        setNerve(GET_NERVE(Candlestand, HostTypeAttack));
     }
-
-    if (!MR::sendMsgEnemyAttackFire(pReceiver, pSender)) {
-        return;
-    }
-
-    setNerve(GET_NERVE(Candlestand, HostTypeAttack));
 }
 
 bool Candlestand::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (!isNerve(GET_NERVE(Candlestand, HostTypeWaitFire))) {
-        return false;
-    }
-
-    if (!MR::isMsgFireBallAttack(msg)) {
-        return false;
-    }
-
-    f32 range = mScale.x * 150.0f;
-    f32 radius = pSender->mRadius;
-
-    if (!MR::isNear(pSender, pReceiver, range + radius)) {
-        return false;
-    }
-
-    setNerve(GET_NERVE(Candlestand, HostTypeFire));
-    return true;
+    return isNerve(GET_NERVE(Candlestand, HostTypeWaitFire)) && MR::isMsgFireBallAttack(msg) && tryFire(pSender, pReceiver);
 }
 
 bool Candlestand::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (!isNerve(GET_NERVE(Candlestand, HostTypeWaitFire))) {
+    return isNerve(GET_NERVE(Candlestand, HostTypeWaitFire)) && MR::isMsgEnemyAttackFire(msg) && tryFire(pSender, pReceiver);
+}
+
+bool Candlestand::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (!MR::isInSpinStormRange(msg, pSender, pReceiver, ::sSpinStormRange * mScale.x) || !isNerve(GET_NERVE(Candlestand, HostTypeBurn))) {
         return false;
     }
 
-    if (!MR::isMsgEnemyAttackFire(msg)) {
-        return false;
-    }
+    setNerve(::getParam(mObjectName)->mCanUseSwitch ? GET_NERVE(Candlestand, HostTypeFlicker) : GET_NERVE(Candlestand, HostTypeExtinguish));
+    return true;
+}
 
-    f32 range = mScale.x * 150.0f;
-    f32 radius = pSender->mRadius;
+bool Candlestand::isBurning() const {
+    return isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack));
+}
 
-    if (!MR::isNear(pSender, pReceiver, range + radius)) {
+bool Candlestand::tryFire(HitSensor* pSender, HitSensor* pReceiver) {
+    if (!MR::isNear(pSender, pReceiver, mScale.x * ::sFireRange + pSender->mRadius)) {
         return false;
     }
 
     setNerve(GET_NERVE(Candlestand, HostTypeFire));
     return true;
-}
-
-bool Candlestand::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isInSpinStormRange(msg, pSender, pReceiver, (350.0f * mScale.x)) && isNerve(GET_NERVE(Candlestand, HostTypeBurn))) {
-        if (::getParam(mObjectName)->mCanUseSwitch) {
-            setNerve(GET_NERVE(Candlestand, HostTypeFlicker));
-            return true;
-        } else {
-            setNerve(GET_NERVE(Candlestand, HostTypeExtinguish));
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void Candlestand::emitEffectFire() {
@@ -220,18 +179,16 @@ void Candlestand::appearItem() {
         return;
     }
 
-    f32 angle;
-    f32 radians;
-
+    const Param* pParam = ::getParam(mObjectName);
     Vec3f position(mPosition);
-    f32 height = ::getParam(mObjectName)->mItemHeight;
-    if (::getParam(mObjectName)->mCanUseSwitch) {
+    f32 height = pParam->mItemHeight;
+    if (pParam->mCanUseSwitch) {
         height *= mScale.y;
     }
 
     position.y += height;
     if (mItem == -1) {
-        angle = ::getParam(mObjectName)->mCoinAngle;
+        f32 angle = pParam->mCoinAngle;
         if (MR::isNearZero(angle)) {
             MR::appearCoinPop(this, position, 1);
         } else {
@@ -242,8 +199,7 @@ void Candlestand::appearItem() {
             MR::calcUpVec(&up, this);
 
             Pos3f rotation;
-            radians = MR::toRadian(angle);
-            rotation.makeRotate(front, radians);
+            rotation.makeRotate(front, MR::toRadian(angle));
             rotation.mult(up, up);
 
             MR::appearCoinPopToDirection(this, position, up, 1);
@@ -268,7 +224,7 @@ void Candlestand::exeFire() {
 
     MR::startLevelSound(this, ::sBurnSound);
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, ::sFireStep)) {
         if (MR::isValidSwitchA(this)) {
             MR::onSwitchA(this);
         }
@@ -277,10 +233,6 @@ void Candlestand::exeFire() {
     }
 }
 
-namespace {
-    char sBurnSound[] = "SE_OJ_LV_PHANTOM_TOACH_BURN";
-};  // namespace
-
 void Candlestand::exeExtinguish() {
     if (MR::isFirstStep(this)) {
         deleteEffectFire();
@@ -288,7 +240,7 @@ void Candlestand::exeExtinguish() {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, ::sExtinguishStep)) {
         if (MR::isValidSwitchA(this)) {
             MR::offSwitchA(this);
         }
@@ -315,14 +267,14 @@ void Candlestand::exeFlicker() {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, ::sFlickerStep)) {
         emitEffectFire();
         setNerve(GET_NERVE(Candlestand, HostTypeBurn));
     }
 }
 
 void Candlestand::exeAttack() {
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, ::sAttackStep)) {
         setNerve(GET_NERVE(Candlestand, HostTypeBurn));
     } else {
         MR::startLevelSound(this, ::sBurnSound);

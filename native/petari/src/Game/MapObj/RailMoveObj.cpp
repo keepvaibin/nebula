@@ -75,7 +75,10 @@ void RailMoveObj::init(const TableIter& rIter) {
 }
 
 Vec3f* RailMoveObj::getSoundCalcPos() {
-    return 0;
+    return nullptr;
+}
+
+void RailMoveObj::setupInitInfo(const TableIter& rIter, MapObjActorInitInfo* pInfo) {
 }
 
 void RailMoveObj::startClipped() {

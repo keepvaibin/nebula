@@ -9,13 +9,12 @@
 FirePressure::~FirePressure() {
 }
 
-FirePressure::FirePressure(const char* pName) : PressureBase(pName) {
-    mDisableCollsion = false;
+FirePressure::FirePressure(const char* pName) : PressureBase(pName), mIsDisableCollision(false) {
 }
 
 void FirePressure::init(const TableIter& rIter) {
     PressureBase::init(rIter);
-    MR::getPlacementArg7NoInit(rIter, &mDisableCollsion);
+    MR::getPlacementArg7NoInit(rIter, &mIsDisableCollision);
 }
 
 void FirePressure::initBullet(const TableIter& rIter) {
@@ -23,21 +22,18 @@ void FirePressure::initBullet(const TableIter& rIter) {
 }
 
 bool FirePressure::shotBullet(f32 speed) {
-    FirePressureBulletHolder* hldr = MR::getSceneObj< FirePressureBulletHolder >(SceneObj_FirePressureBulletHolder);
-    FirePressureBullet* bullet = hldr->callEmptyBullet();
-
-    // do we have an empty bullet slot available?
-    if (bullet == nullptr) {
+    FirePressureBullet* pBullet = MR::getSceneObj< FirePressureBulletHolder >(SceneObj_FirePressureBulletHolder)->callEmptyBullet();
+    if (pBullet == nullptr) {
         return false;
-    } else {
-        Pos3f gunPoint;
-        calcGunPointFromCannon(&gunPoint);
-        bullet->shotFireBullet(this, gunPoint, speed, isShotTypeFollow(), mDisableCollsion);
-        return true;
     }
+
+    Pos3f gunPoint;
+    calcGunPointFromCannon(&gunPoint);
+    pBullet->shotFireBullet(this, gunPoint, speed, isShotTypeFollow(), mIsDisableCollision);
+    return true;
 }
 
-void FirePressure::calcGunPointFromCannon(Pos3f* pOutPoint) {
+void FirePressure::calcGunPointFromCannon(Pos3f* pMtx) {
     Pos3f jointMtx(MR::getJointMtx(this, "Cannon1"));
     Vec3f front;
     jointMtx.getXDir(front);
@@ -46,5 +42,5 @@ void FirePressure::calcGunPointFromCannon(Pos3f* pOutPoint) {
     muzzlePos.scaleAdd(200.0f, front, muzzlePos);
     Vec3f up;
     jointMtx.getYDir(up);
-    MR::makeMtxFrontUpPos(pOutPoint, front, up, muzzlePos);
+    MR::makeMtxFrontUpPos(pMtx, front, up, muzzlePos);
 }

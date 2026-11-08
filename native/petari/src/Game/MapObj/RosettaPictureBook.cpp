@@ -14,8 +14,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 hFadeOutFrame = 60;
-    const s32 hFadeInFrame = 60;
+    const s32 sFadeOutFrame = 60;
+    const s32 sFadeInFrame = 60;
 };  // namespace
 
 namespace NrvRosettaPictureBook {
@@ -79,15 +79,7 @@ void RosettaPictureBook::exeWait() {
         mIconAButton->term();
     }
 
-    if (!mIsValidOpenIconAButton) {
-        return;
-    }
-
-    if (!mIconAButton->isOpen()) {
-        return;
-    }
-
-    if (!MR::isPressedJump(PLAYER_1)) {
+    if (!mIsValidOpenIconAButton || !mIconAButton->isOpen() || !MR::isPressedJump(PLAYER_1)) {
         return;
     }
 
@@ -103,12 +95,12 @@ void RosettaPictureBook::exeFadeOut() {
         MR::startSystemSE("SE_SY_TALK_START");
         MR::requestMovementOn(mIconAButton);
         mIconAButton->term();
-        MR::closeWipeCircle(::hFadeOutFrame);
-        MR::stopStageBGM(::hFadeOutFrame);
+        MR::closeWipeCircle(::sFadeOutFrame);
+        MR::stopStageBGM(::sFadeOutFrame);
         MR::startBckPlayer("Wait");
     }
 
-    if (MR::isGreaterStep(this, ::hFadeOutFrame)) {
+    if (MR::isGreaterStep(this, ::sFadeOutFrame)) {
         mLayout->appear();
         setNerve(GET_NERVE(RosettaPictureBook, HostTypeNrvReading));
     }
@@ -127,10 +119,10 @@ void RosettaPictureBook::exeReading() {
 
 void RosettaPictureBook::exeFadeIn() {
     if (MR::isFirstStep(this)) {
-        MR::openWipeCircle(::hFadeInFrame);
+        MR::openWipeCircle(::sFadeInFrame);
     }
 
-    if (MR::isGreaterStep(this, ::hFadeInFrame)) {
+    if (MR::isGreaterStep(this, ::sFadeInFrame)) {
         setNerve(GET_NERVE(RosettaPictureBook, HostTypeNrvWait));
     }
 }

@@ -12,16 +12,10 @@ MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHo
     if (pDrawer == nullptr) {
         pDrawer = new MapPartsRailGuideDrawer(pHost, pModelName);
         pDrawer->init(rIter);
-
-        u32 index = mNumRailGuides;
-        mNumRailGuides++;
-        mDrawers.at(index) = pDrawer;
+        mDrawers.at(mNumRailGuides++) = pDrawer;
     }
 
     return pDrawer;
-}
-
-void MapPartsRailGuideHolder::init(const TableIter& rIter) {
 }
 
 MapPartsRailGuideDrawer* MapPartsRailGuideHolder::find(s32 railId) {

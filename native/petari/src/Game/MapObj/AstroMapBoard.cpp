@@ -8,7 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const char* cDummyTexName = "MapDummy";
+    const char* const cDummyTexName = "MapDummy";
 };  // namespace
 
 namespace NrvAstroMapBoard {
