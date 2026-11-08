@@ -9,7 +9,7 @@
 
 bool Mario::checkWallJumpCode() {
     if (checkWallFloorCode(11) || checkWallFloorCode(6) || checkWallFloorCode(34) || checkWallFloorCode(7) || checkWallFloorCode(8)) {
-        if (mMovementStates._1 || isAnimationRun(_728)) {
+        if (mMovementStates._1 || isAnimationRun(mHipDropLandAnim)) {
             stopWalk();
             push(getWallNorm() * 10.0f);
             tryPushToVelocity();
@@ -51,10 +51,10 @@ bool Mario::doSideStep() {
     if (mActor->mTakeCount) {
         return false;
     }
-    if (_1C._5) {
+    if (mHitStates._5) {
         return false;
     }
-    if (_72C < 200.0f) {
+    if (mCeilDist < 200.0f) {
         return false;
     }
     if (getPlayerMode() == PlayerMode_Hopper) {
@@ -63,15 +63,15 @@ bool Mario::doSideStep() {
     if (calcPolygonAngleD(mFrontWallTriangle) > 91.0f) {
         return false;
     }
-    f32 angle = MR::diffAngleAbs(getFrontWallNorm(), _368);
+    f32 angle = MR::diffAngleAbs(getFrontWallNorm(), mGroundNorm);
     if (angle >= 1.6534699f || angle < 1.4959966f) {
         return false;
     }
-    bool cannotSideStep = !isSlipFloorCode(_960);
+    bool cannotSideStep = !isSlipFloorCode(mFloorCode);
     if (cannotSideStep) {
         return false;
     }
-    if (_960 == 2) {
+    if (mFloorCode == 2) {
         return false;
     }
     if (!getPlayer()->mMovementStates._8) {
@@ -112,7 +112,7 @@ bool MarioSideStep::update() {
     if (!getPlayer()->mMovementStates._8) {
         return false;
     }
-    if (getPlayer()->_1C._5) {
+    if (getPlayer()->mHitStates._5) {
         return false;
     }
     if (getPlayer()->mDrawStates._A) {
@@ -125,7 +125,7 @@ bool MarioSideStep::update() {
         return false;
     }
     Mario* player = getPlayer();
-    bool cannotSideStep = !isSlipFloorCode(player->_960);
+    bool cannotSideStep = !isSlipFloorCode(player->mFloorCode);
     if (cannotSideStep) {
         return false;
     }

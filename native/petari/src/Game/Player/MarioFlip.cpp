@@ -21,7 +21,7 @@ bool Mario::doFlipJump(const Vec3f& rVec) {
 
     stopPunch();
     mMovementStates._2B = true;
-    _430 = 3;
+    mJumpKind = 3;
     startPadVib(2);
 
     return true;

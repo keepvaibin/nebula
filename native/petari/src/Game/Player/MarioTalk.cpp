@@ -47,7 +47,7 @@ bool MarioTalk::notice() {
 
 bool MarioTalk::close() {
     if (getPlayer()->getMovementStates()._37) {
-        getPlayer()->setFrontVecKeepUp(getPlayer()->_334);
+        getPlayer()->setFrontVecKeepUp(getPlayer()->mPrevMoveFrontVec);
     }
 
     return true;
@@ -73,5 +73,5 @@ bool MarioTalk::start() {
 }
 
 void Mario::setLastNonFixMoveVec(const Vec3f& rVec) {
-    _334 = rVec;
+    mPrevMoveFrontVec = rVec;
 }

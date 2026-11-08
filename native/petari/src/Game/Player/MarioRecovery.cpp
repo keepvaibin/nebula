@@ -253,7 +253,7 @@ bool MarioRecovery::update() {
         break;
     }
     case 2:
-        getPlayer()->_10._2 = true;
+        getPlayer()->mActionStates._2 = true;
         return false;
     case 3:
         if (_16) {
@@ -284,7 +284,7 @@ bool MarioRecovery::close() {
     getPlayer()->mMovementStates._1 = true;
     getPlayer()->mMovementStates.jumping = false;
     Mario* player = getPlayer();
-    player->_420 = 16;
+    player->mMoveLockTimer = 16;
     stopEffectForce("引き戻し泡");
     playEffect("引き戻し泡破裂");
     stopAnimation(nullptr);

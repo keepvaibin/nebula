@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 MtxPtr MarioActor::getMapBaseMtx() const {
-    HitSensor* pSensor = mMario->_46C->mSensor;
+    HitSensor* pSensor = mMario->mCameraPolygon->mSensor;
     if (pSensor == nullptr) {
         return nullptr;
     }
@@ -72,7 +72,7 @@ bool MarioActor::isCameraStateOn(SPECIAL_STATUS_FOR_CAMERA status) const {
         break;
 
     case CASE_1:
-        if (isJumping() && mMario->_430 == 11) {
+        if (isJumping() && mMario->mJumpKind == 11) {
             return true;
         }
 
@@ -121,7 +121,7 @@ void MarioActor::updateTransForCamera() {
         return;
     }
 
-    mCameraTrans = mPosition + Vec3f(mMario->_13C);  // matches now. result of getter?
+    mCameraTrans = mPosition + Vec3f(mMario->mLookOfs);  // matches now. result of getter?
 
     if (mMario->isSwimming() && mMario->mSwim->isOnWaterSurface()) {
         if (_332 < 100) {

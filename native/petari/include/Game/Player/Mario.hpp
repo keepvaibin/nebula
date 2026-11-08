@@ -546,7 +546,7 @@ public:
         unsigned _20 : 1;
     };
     struct DrawStates {
-        // Code reads these as a word (_1C_WORD masks): fields from the least significant value bit up, so each has
+        // Code reads these as a word (mHitStates_WORD masks): fields from the least significant value bit up, so each has
         // the bit those masks name.
         unsigned _1F : 1;
         unsigned _1E : 1;
@@ -595,7 +595,7 @@ public:
     }
 
     const Vec3f& getUpVec() const {
-        return _1FC;
+        return mPostureUpVec;
     }
 
     const Vec3f& getFrontVec() const {
@@ -611,17 +611,17 @@ public:
     }
 
     inline void resetInline() {
-        _74C = 0.0f;
-        _750 = 0;
-        _754 = 0;
+        mCorrectionAngle = 0.0f;
+        mCorrectionEaseTimer = 0;
+        mCorrectionTurnTimer = 0;
     }
 
     inline void set3BC(u16 val) {
-        _3BC = val;
+        mAirTimer = val;
     }
 
     inline void set41E(u16 val) {
-        _41E = val;
+        mDamageAfterTimer = val;
     }
 
     union {
@@ -633,10 +633,10 @@ public:
     };
 
     union {
-        MovementStates _10;
+        MovementStates mActionStates;  // action flags kept across frames (jumps, turns, landings); bits named in the bitfield batch
         struct {
-            u32 _10_LOW_WORD;
-            u32 _10_HIGH_WORD;
+            u32 mActionStates_LOW_WORD;
+            u32 mActionStates_HIGH_WORD;
         };
     };
 
@@ -645,276 +645,230 @@ public:
         u32 mDrawStates_WORD;
     };
     union {
-        DrawStates _1C;
-        u32 _1C_WORD;
+        DrawStates mHitStates;  // this frame's collision and push results (cleared each frame); bits named in the bitfield batch
+        u32 mHitStates_WORD;
     };
     union {
-        MovementStates _20;
+        MovementStates mPrevMovementStates;  // last frame's mMovementStates (updateAndClearStrideParameter)
         struct {
-            u32 _20_LOW_WORD;
-            u32 _20_HIGH_WORD;
+            u32 mPrevMovementStates_LOW_WORD;
+            u32 mPrevMovementStates_HIGH_WORD;
         };
     };
-    u32 _28;
-    u32 _2C;
+    u32 mPrevActionStatesLow;  // last frame's mActionStates low word (check2DMode reads bit 10)
 
     DrawStates mPrevDrawStates;
-    // FAKE
-    u32 _34;
-    // NOT FAKE
 
-    f32 _38;
-    f32 _3C;
-    Vec3f _40;
-    Vec3f _4C;
-    Vec3f _58;
-    Mtx34f _64;
-    Mtx34f _94;
-    Mtx34f _C4;
-    Mtx34f _F4;
-    f32 _124;
-    f32 _128;
-    u32 _12C;
+    f32 mPrevStickPower;  // last frame's stick power (inputStick keeps it before the new one)
+    static constexpr f32 kFloorDotLimit = -0.515f;  // gravity against a normal below this marks a floor (updateBinderInfo, checkGround)
+    Mtx34f m2DRotateMtx;  // the 2D section's rotation, applied to its side, normal and up (stick2Dadjust)
     Vec3f mPosition;
-    Vec3f _13C;
-    Vec3f _148;
-    Vec3f _154;
+    Vec3f mLookOfs;  // the camera's offset from the position: body and sink offsets (updateLookOfs)
+    Vec3f mLookOfsBody;  // the body's offset (a wall push, the swim surface, a step down); a move cancels it (addTrans)
+    Vec3f mLookOfsSink;  // the offset of sinking into sand or quicksand
     Vec3f mVelocity;
-    Vec3f _16C;
+    Vec3f mPrevVelocity;  // the velocity at the frame's start (updateAndClearStrideParameter)
     Vec3f mVelocityAfter;
-    Vec3f _184;
-    Vec3f _190;
-    Vec3f _19C;
-    Vec3f _1A8;
-    Vec3f _1B4;
+    Vec3f mRelativeMove;  // the moving ground's shift this frame (moveRelativePosition)
+    Vec3f mAreaMoveVelocity;  // a power area's push (powerAreaMove)
+    Vec3f mRailMoveVelocity;  // a power rail's push (powerRailMove)
+    Vec3f mPreSlopeVelocity;  // the velocity before the slope began
     Vec3f mStickPos;
     Vec3f mWorldPadDir;
     Vec3f mAirGravityVec;
-    Vec3f _1E4;
     Vec3f mHeadVec;
-    Vec3f _1FC;
+    Vec3f mPostureUpVec;  // the body's up, eased toward the head (postureCtrl)
     Vec3f mFrontVec;
-    Vec3f _214;
-    Vec3f _220;
-    Vec3f _22C;
-    Vec3f _238;
-    Vec3f _244;
-    Vec3f _250;
-    Vec3f _25C;
-    Vec3f _268;
-    u8 _274;
+    Vec3f mFrontOnShadow;  // the front laid on the shadow's plane (calcShadowDir)
+    Vec3f mTurnFrontVec;  // the front a turn slip turns away from
+    Vec3f mMoveDirOnShadow;  // the move direction laid on the shadow's plane
+    Vec3f mPrevMoveDirOnShadow;  // last frame's move direction on the shadow's plane
+    Vec3f mPrevTurnCross;  // last frame's front cross the move direction
+    Vec3f mPrevStickDir;  // last frame's stick direction
+    Vec3f mBinderHitPos;  // where the binder last hit (updateBinderInfo); the Boo's wall-hit effect
+    Vec3f mBinderHitNorm;  // that hit's normal
+    u8 mTurnLeft;  // the turn goes counter-clockwise about the head
     f32 mWalkSpeed;
     f32 mPrevAnimFrame;
-    f32 _280;
-    Vec3f _284;
-    Vec3f _290;
-    Vec3f _29C;
-    Vec3f _2A8;
-    f32 _2B4;
-    Vec3f _2B8;
-    Vec3f _2C4;
-    f32 _2D0;
+    f32 mSlopeSideSpeed;  // a slope slide's sideways speed, eased (SlopeSideMoveInertia)
+    Vec3f mSlopeSideDir;  // a slope slide's sideways direction
+    Vec3f mGravityFixSideVec;  // the side kept while the head and front follow a gravity change (fixHeadFrontVecByGravity)
+    Vec3f mRetainGroundNorm;  // the ground normal when the move direction was last kept
+    f32 mRetainStickAngle;  // the stick's angle when the move direction was last kept
+    Vec3f mSlipTurnMove;  // the last move at a turn slip, added back scaled (InertiaSlipTurn)
+    Vec3f mWallSlope;  // the slope of the wall touched (checkAllWall)
+    f32 mWalkingResist;  // how much a floor slows walking (setWalkingResist), 0 none
     Vec3f mJumpVec;
-    Vec3f _2E0;
-    Vec3f _2EC;
-    Vec3f _2F8;
-    Vec3f _304;
+    Vec3f mJumpFrontVec;  // the jump's direction across gravity (initActiveJumpVec)
+    Vec3f mJumpGravityVec;  // the gravity when the jump began
+    Vec3f mHipDropJumpVec;  // the jump vector a hip drop keeps
+    Vec3f mForceJumpVec;  // a forced jump's vector, taken a frame later (tryForceJumpDelay)
     Vec3f mSideVec;
     Vec3f mShadowPos;
-    Vec3f _328;
-    Vec3f _334;
-    f32 _340;
-    Vec3f _344;  // left/right?
-    Vec3f _350;
-    Vec3f _35C;
-    Vec3f _368;
-    Vec3f _374;
-    Vec3f _380;
-    Vec3f _38C;
-    Vec3f _398;
-    Vec3f _3A4;
-    Vec3f _3B0;
-    u16 _3BC;
-    u16 _3BE;
-    u16 _3C0;
-    u16 _3C2;
-    u16 _3C4;
-    u16 _3C6;
-    u16 _3C8;
-    u16 _3CA;
-    u16 _3CC;
-    u16 _3CE;  // a timer
-    u16 _3D0;
-    u16 _3D2;
-    u16 _3D4;
-    Vec3f _3D8;
-    Vec3f _3E4;
-    f32 _3F0;
-    f32 _3F4;
-    u16 _3F8;
-    u16 _3FA;
-    u16 _3FC;
-    u16 _3FE;
-    u16 _400;
-    u16 _402;
-    u16 _404;
-    u16 _406;
-    u16 _408;
-    u16 _40A;
-    u16 _40C;
-    u16 _40E;
-    u16 _410;
-    u16 _412;
-    u16 _414;  // a timer
+    Vec3f mMoveFrontVec;  // this frame's move front (the kept one, or the front)
+    Vec3f mPrevMoveFrontVec;  // the move front kept for the next frame
+    Vec3f mFixSideVec;  // the side kept while the front follows a gravity change (fixFrontVecByGravity)
+    Vec3f mPushVec;  // pushes this frame (push, wind): taken into the jump or velocity (tryPushToVelocity)
+    Vec3f mPushVelocity;  // pushes added to the velocity as they are (push2)
+    Vec3f mGroundNorm;  // the ground's normal (setGroundNorm)
+    Vec3f mGroundDown;  // the ground normal's opposite
+    Vec3f mWallNorm;  // the touched wall's normal (checkAllWall)
+    Vec3f mWallGravityVec;  // the wall normal's opposite, the gravity while swimming at a wall
+    Vec3f mMoveUpVec;  // the up the stick's screen direction is read against, eased (calcMoveDir)
+    Vec3f mCeilNorm;  // the normals of ceilings touched, summed and normalised (isCeiling)
+    Vec3f mCeilDistNorm;  // the nearest ceiling's normal (calcDistToCeil); the Boo's wall bounce reads it
+    u16 mAirTimer;  // frames off the ground in a jump or hip drop
+    u16 mJumpTimer;  // frames since the jump began (the trample-top open time)
+    u16 mDropWaitTimer;  // frames left of the drop wait (DropWaitTime)
+    u16 mSlopeTimer;  // frames on a slope (mMovementStates._23)
+    u16 mSlopeSteerInhibitTimer;  // frames the stick doesn't steer a slope slide
+    u16 mEdgePushTimer;  // frames pushed back from a ledge (DrawStates._18); past 8 the push goes sideways
+    u16 mJump2PDelayTimer;  // frames before a second player's jump request is taken
+    u16 mBackJumpTimer;  // frames into a jump, for the back-jump limit (BackJumpLimitFrame)
+    u16 mBackAirWalkTimer;  // frames left of a backward air walk
+    u16 mLandTimer;  // frames since landing (JumpConnectTime)
+    u16 mTurnSlipTimer;  // frames left of a turn slip (TurnSlipTime)
+    u16 mTurnReadyTimer;  // frames left to start a turn jump (TurnReadyTime)
+    u16 mWeakTurnTimer;  // frames of a weak turn (WeakTurnTime)
+    Vec3f mTurnCross;  // the last turn's axis: the front cross the stick direction
+    Vec3f mTurnSlipFrontVec;  // the front when the turn slip began
+    f32 mHandScaleX;  // the hand's x scale (MarioAnimator::setHand); resetTornado sets 1
+    f32 mSpinInertiaBlend;  // blend toward the start-spin inertia
+    u16 mReflectSlipTimer;  // frames of slip after a spin hit a wall
+    u16 mStartSpinTimer;  // frames left of the start spin (StartSpinTime)
+    u16 mSlopeDashTimer;  // frames of a slope dash (SlopeDashAccelTime)
+    u16 mAirWalkTimer;  // frames left of the air walk after a spin (AirWalkTime); the bee's flight
+    u16 mSlowStartTimer;  // frames left of the slow start (SlowStartTime)
+    u16 mBeeGravityTimer;  // frames of the bee's weak gravity (BeeGravityPowerTime)
+    u16 mWeakStickIgnoreTimer;  // frames a weak forward stick is ignored after a turn
+    u16 mMoveDirRetainTimer;  // frames the move direction is kept after the stick moved
+    u16 mLedgeFallTimer;  // frames since slipping off a ledge hold
     u16 mMorphResetTimer;
-    u16 _418;
-    u16 _41A;
-    u16 _41C;
-    u16 _41E;
-    u16 _420;
-    u16 _422;
-    u16 _424;
-    u16 _426;
-    u16 _428;
-    u16 _42A;
-    u16 _42C;
-    u32 _430;
-    u16 _434;  // a timer
-    u16 _436;
-    u16 _438;
-    u16 _43A;
-    Vec3f _43C;  // front?
-    Vec3f _448;
-    f32 _454;
-    TriangleFilterDelegator< Mario >* _458;
-    Triangle* _45C;
-    Triangle* _460;
+    u16 mTeresaWallThroughTimer;  // frames left of the Boo's pass through a wall (TeresaWallThroughTime)
+    u16 mSlipGraceTimer;  // frames on a steep floor before it slips
+    u16 mDamageAfterTimer;  // frames left after damage (decDamageAfterTimer)
+    u16 mMoveLockTimer;  // frames movement is held (a throw, a recovery, a warp)
+    u16 mHipDropStillTimer;  // frames a hip drop hasn't moved; at 15 it ends
+    u16 mZeroGravityTimer;  // frames of no gravity (a tornado jump, a hip drop's start)
+    u16 mTornadoBoostTimer;  // frames left of the tornado jump's boost (TornadoBoostTimer)
+    u16 mAirControlInhibitTimer;  // frames of a jump with no air control and no spin
+    u16 mInvincibleJump;  // the jump began invincible at a run
+    u16 mFireShotCount;  // fireballs or freeze shots this jump (3 at most)
+    u32 mJumpKind;  // 0 to 2 the triple jump's steps; 8 tornado; 0xB trample top; 0xC, 0xD the special jumps
+    u16 mItemDashTimer;  // frames left of an item or special dash (ItemDashTimer)
+    u16 mDashChanceTimer;  // frames to take a special dash (noticeDashChance)
+    u16 mSlipInhibitTimer;  // frames the ground isn't marked slippery after leaving water
+    Vec3f mPrevFrontVec;  // the front at the frame's start
+    Vec3f mRocketBoostVec;  // a rocket booster's push, added to the jump and decayed (setRocketBooster)
+    f32 mRocketBoostDecay;  // the booster push kept each frame
+    TriangleFilterDelegator< Mario >* mShadowFilter;  // which polygons the shadow ray ignores
+    Triangle* mShadowPolygon;  // the polygon the shadow ray hits (below along gravity)
+    Triangle* mSlopeFloorPolygon;  // on a slope: the floor below a point ahead along the ground normal
     Triangle* mGroundPolygon;
-    Triangle* _468;
-    Triangle* _46C;
-    Triangle* _470;
-    Triangle* _474;
+    Triangle* mCameraPolygon;  // the polygon the camera reads (setCameraPolygon; its two branches were the same copy)
+    Triangle* mLastGroundPolygon;  // the ground when it was last recorded (recordLastGround)
     Triangle* mTmpPolygon;
-    Triangle* _47C;
-    Triangle* _480;
-    Triangle* _484;
+    Triangle* mFrontFloorPolygon;  // the floor ahead (calcFrontFloor)
+    Triangle* mPressFloorPolygon;  // the floor when pressed (setPress)
+    Triangle* mPressCeilPolygon;  // the ceiling when pressed (setPress)
     f32 mVerticalSpeed;
     Vec3f mGroundPos;
-    Vec3f _498;
-    Vec3f _4A4;
-    Vec3f _4B0;
-    Vec3f _4BC;
-    Triangle* _4C8;
+    Vec3f mSlopeFloorPos;  // where that slope ray hit
+    Vec3f mFrontFloorPos;  // the floor's edge ahead, where a hang takes him (calcFrontFloor)
+    Vec3f mJumpStartPos;  // where the jump began (landing compares the height)
+    Vec3f mLastGroundLocalPos;  // the last ground position in that polygon's own space (recordLastGround)
+    Triangle* mCeilPolygon;  // the ceiling (calcDistToCeil)
     Triangle* mFrontWallTriangle;
     Triangle* mBackWallTriangle;
     Triangle* mSideWallTriangle;
-    Triangle* _4D8;
-    Triangle* _4DC;
-    f32 _4E0;
-    f32 _4E4;
-    Vec3f _4E8;
-    Vec3f _4F4;
+    Triangle* mStepPolygon;  // a wall low enough to step onto (checkAllWall)
+    Triangle* mBumpPolygon;  // a wall to bump against (checkAllWall)
+    f32 mFrontFloorHeight;  // the floor ahead's height above the wall's foot (calcFrontFloor), 400 none
+    f32 mFrontWallDist;  // the distance to the wall ahead
+    Vec3f mFrontWallPos;  // where the front wall was hit (checkAllWall)
+    Vec3f mBackWallPos;  // where the back wall was hit
 
-    // FAKE
-    Vec3f _500;
-    // NOT FAKE
+    Vec3f mSideWallPos;  // where the side wall was hit
 
-    Vec3f _50C;
-    Vec3f _518;
-    f32 _524;
-    f32 _528;
-    f32 _52C;
-    f32 _530;
-    u16 _534;
-    f32 _538;
-    f32 _53C;
+    Vec3f mStepHitPos;  // where the step wall was hit
+    Vec3f mBumpHitPos;  // where the bump wall was hit
+    f32 mPrevStickAngle;  // last frame's stick angle
+    f32 mStickAngle;  // the stick's angle (inputStick)
     f32 mYAngleOffset;
-    u16 _544;
-    f32 _548;
-    Vec3f _54C;
-    u32 _558;
+    u16 mTornadoTimer;  // frames of the tornado spin (TornadoTimeAir)
+    f32 mTornadoTilt;  // the tornado's tilt, eased (TornadoTiltNear)
+    Vec3f mTornadoTiltUp;  // the tornado's tilted up, eased toward the head
+    u32 mJumpFrame;  // the actor's frame count when the jump left the ground (procJump); a wall jump within 6
 
-    /// FAKE
-    u32 _55C;
-    u32 _560;
-    // NOT FAKE
 
-    s32 _564;
-    CubeCameraArea* _568;
-    AreaObj* _56C;
-    u8 _570;
-    void* _574;
-    MR::Vector< MR::FixedArray< Triangle, 32 > > _57C;  // walls touched this frame
-    const HitSensor* _5FC;
-    Vec3f _600;
-    u8 _60C;
-    bool _60D;
-    u8 _60E;
-    u8 _60F;
-    u8 _610;
-    u8 _611;
-    f32 _614;
-    f32 _618;
-    f32 _61C;
-    f32 _620;
-    bool _624;
-    Vec3f _628;
-    f32 _634;
+    AreaObj* mArrivedWarpCube;  // the warp cube he came out of: entering it doesn't warp back (doCubeWarp)
+    void* mGroundCheckOwner;  // who locked the ground check (lockGroundCheck)
+    MR::Vector< MR::FixedArray< Triangle, 32 > > mTouchedWalls;  // walls touched this frame
+    const HitSensor* mOnimasuSensor;  // the nearest Onimasu block's sensor (checkOnimasu)
+    Vec3f mOnimasuLocalPos;  // his position in that block's space (updateOnimasu)
+    u8 mOnimasuFound;  // a block was found this frame
+    bool mCameraTurnHold;  // the move direction holds through a camera turn (45 degrees with the stick held), a bump or a climb
+    u8 m2DStickLockMode;  // which 2D stick lock is on (stick2Dadjust)
+    u8 m2DStickLocked;  // a 2D stick lock was taken
+    u8 m2DLockX;  // the 2D stick's x is locked
+    u8 m2DLockY;  // the 2D stick's y is locked
+    f32 m2DStickX;  // the 2D stick's x after adjustment (set2Dmode reads its sign)
+    f32 m2DLockStickX;  // the stick x when the lock began
+    f32 m2DLockStickY;  // the stick y when the lock began
+    bool m2DUpside;  // the 2D section's side (set2Dmode's mode)
 
-    u8 _638;
     Vec3f mSide2D;
     Vec3f mUp2D;
     Vec3f mNormal2D;
-    Vec3f _660;
-    bool _66C;
-    Vec3f _670;
-    Vec3f _67C;
+    Vec3f m2DGroundNorm;  // the ground normal in the 2D plane
+    bool m2DStickHold;  // the held 2D stick is kept while the stick doesn't turn back
+    Vec3f m2DPrevStick;  // the 2D stick when the hold began
+    Vec3f m2DHeldStick;  // the 2D stick being held
 
-    Vec3f _688;
-    Vec3f _694;
-    Vec3f _6A0;
-    u8 _6AC;
-    u8 _6AD;
-    Vec3f _6B0;
-    Vec3f _6BC;
-    Vec2f _6C8;
-    Vec3f _6D0;
-    Vec3f _6DC;
-    Vec3f _6E8;
-    Vec3f _6F4;
-    Vec3f _700;
-    Vec3f _70C;
-    f32 _718;
+    Vec3f m2DPlanePos;  // a point on the 2D plane (writeBackPhyisicalVector)
+    Vec3f m2DCubePos;  // the 2D area cube's position (check2DMode)
+    Vec3f m2DPlaneNormal;  // the 2D plane's normal
+    u8 m25DMode;  // the 2.5D axis mode (update25Dmode)
+    Vec3f m25DSideVec;  // the 2.5D stick's x axis (updateAxisFromMode)
+    Vec3f m25DDownVec;  // the 2.5D stick's y axis, negated
+    Vec2f m25DStick;  // the stick when the 2.5D mode last changed
+    Vec3f m25DNormal;  // the 2.5D plane's normal
+    Vec3f m25DUp;  // the 2.5D plane's up (set25Dmode)
+    Vec3f m25DAcross;  // the 2.5D plane's normal cross its up
+    Vec3f mTowerCenter;  // the tower's centre he walks around (fixPositionInTower)
+    Vec3f mTowerAxis;  // the tower's axis (fixPositionInTower, calcMoveDir)
+    Vec3f mHipDropSlideGravity;  // the gravity when the hip-drop slide began (taskOnHipDropSlide)
+    f32 mTowerRadius;  // the tower's radius (updateCubeCode)
     u8 mTargetWalkSpeedIndex;
-    u8 _71D;
-    u8 _71E;
-    u8 _71F;
-    const char* _720;
-    const char* _724;
-    const char* _728;
-    f32 _72C;
-    HitSensor* _730;
+    u8 mPrevWalkSpeedIndex;  // mTargetWalkSpeedIndex as of the animator's last update (MarioAnimator::update)
+    u8 mBrakeFirstTimer;  // frames left of the first brake (BrakeFirstTimer)
+    u8 mBrakeTimer;  // frames left of the brake animation (updateBrakeAnimation)
+    const char* mHipDropStartAnim;  // the hip drop's start animation for this form (jumpToHipDrop)
+    const char* mHipDropAnim;  // the hip drop's fall animation
+    const char* mHipDropLandAnim;  // the hip drop's landing animation
+    f32 mCeilDist;  // the distance to the ceiling (calcDistToCeil); under 200 he is pressed
+    HitSensor* mCeilSensor;  // the ceiling's sensor (calcDistToCeil)
     u8 mIceAnimFoot;
     u8 mSinkTimer;
-    f32 _738;
-    Vec3f _73C;
+    f32 mRippleHeight;  // the water ripples' height above the ground
+    Vec3f mRippleRotate;  // the water ripples' rotation
     u8 mPoisonTimer;
-    f32 _74C;
-    u32 _750;
-    u32 _754;
+    f32 mCorrectionAngle;  // the draw's turn about the head (createCorrectionMtx)
+    u32 mCorrectionEaseTimer;  // frames left easing that turn back to 0
+    u32 mCorrectionTurnTimer;  // frames left easing that turn to half a circle
     MarioWall* mWall;
-    Vec3f _75C;
+    Vec3f mWallTopHead;  // the head on a wall's top (fixWallingTop)
     MarioStick* mStick;
-    u16 _76C;
-    f32 _770;
-    u16 _774;
+    u16 mBeeGravityReviveTimer;  // frames left of the bee's returning gravity (BeeGravityReviveTime)
+    f32 mBeeUpDownSpeed;  // the bee's vertical speed, eased (BeeAccelRatio, BeeUpDownKiller)
+    u16 mBeeFlyInhibitTimer;  // frames the bee can't fly after a rush
     MarioRabbit* mRabbit;
     MarioFoo* mFoo;
     MarioSukekiyo* mSukekiyo;
     MarioBury* mBury;
     MarioWait* mWait;
     MarioClimb* mClimb;
-    Vec3f _790;
+    Vec3f mBumpGravityVec;  // the gravity a bump uses (startBump)
     MarioHang* mHang;
     MarioRecovery* mRecovery;
     MarioWarp* mWarp;
@@ -925,14 +879,14 @@ public:
     MarioTalk* mTalk;
     MarioTeresa* mTeresa;
     MarioDamage* mDamage;
-    Vec3f _7C4;
-    u16 _7D0;
-    Vec3f _7D4;
-    Triangle* _7E0;
-    Mtx34f _7E4;
-    Vec3f _814;
-    Triangle* _820;
-    Mtx34f _824;
+    Vec3f mDamageDir;  // the last damage's direction (damage), taken into the swim's damage
+    u16 mKarikariTimer;  // frames left of the Karikari swarm's damage hold (checkKarikariDamage)
+    Vec3f mSafetyPos;  // a safe spot being proven: the ground's centre leaned toward him (saveLastSafetyTrans)
+    Triangle* mSafetyPolygon;  // that spot's polygon
+    Mtx34f mSafetyBaseMtx;  // that polygon's base matrix then
+    Vec3f mLastSafetyPos;  // the last proven safe spot (getLastSafetyTrans)
+    Triangle* mLastSafetyPolygon;  // its polygon
+    Mtx34f mLastSafetyBaseMtx;  // its polygon's base matrix then
     MarioFlow* mFlow;
     MarioFireDamage* mFireDamage;
     MarioFireDance* mFireDance;
@@ -950,69 +904,55 @@ public:
     MarioStep* mStep;
     MarioBump* mBump;
     MarioMagic* mMagic;
-    bool _898;
+    bool mFpViewChangeFailed;  // the first-person view couldn't open this frame (isFpViewChangingFailure)
     MarioFpView* mFpView;
     MarioMove* mMove;
-    Vec3f _8A4;
-    union {
-        struct {
-            Vec3f _8B0;
-            Vec3f _8BC;
-        };
-        Vec3f mRelativeWallPos[2];
-    };
-    Triangle* _8C8;
-    Triangle* _8CC[2];
-    HitSensor* _8D4;
-    HitSensor* _8D8;
-    Vec3f _8DC;
-    Triangle* _8E8;
-    u8 _8EC;
+    Vec3f mRelativePos;  // his position in the ground polygon's space (recordRelativePosition)
+    Vec3f mRelativeWallPos[2];  // his position in each wall's space (recordRelativePosition)
+    Triangle* mRelativePolygon;  // the polygon he moves with
+    Triangle* mRelativeWallPolygons[2];  // the walls he moves with
+    HitSensor* mRelativeSensor;  // the moving ground's sensor (moveRelativePosition)
+    HitSensor* mJumpEnforceSensor;  // the sensor the jump took its push from (recordJumpEnforceMove)
+    Vec3f mEnforceJumpVec;  // the ground's push added to the jump (doEnforceJump)
+    Triangle* mJumpEnforcePolygon;  // the polygon the jump took its push from
 
-    // FAKE?
-    f32 _8F0;
-    // NOT FAKE
+    f32 mSlipPower;  // how far into a slip, 0 to 10 (slopeMove)
 
-    f32 _8F4;
+    f32 mSlopeDashSpeed;  // a slope dash's speed factor (SlopeDashSpeedFactor)
 
-    Vec3f _8F8;
-    Vec3f _904;
-    // NOT FAKE
+    Vec3f mSlopeMoveVec;  // the slope's push this frame (slopeMove)
+    Vec3f mSlopeDownDir;  // down the slope, across gravity
 
-    Vec3f _910;
-    Vec3f _91C;
-    Vec3f _928;
-    f32 _934;
-    Vec3f _938;
-    Vec3f _944;
-    Vec3f _950;
-    FloorCode* _95C;
-    u16 _960;
-    u16 _962;
-    u16 _964[3];
-    u16 _96A;
+    Vec3f mSlopeSlideVec;  // a slope slide's move, eased (moveSlopeSlide)
+    Vec3f mWindVec;  // the wind on him (pushedByWind)
+    Vec3f mReactionVec;  // reactions added (addReaction), decayed each frame
+    static constexpr f32 kReactionDecay = 0.8f;  // the reaction kept each frame (pushedByReaction)
+    Vec3f mPrevMtxUp;  // last frame's draw up (createMtxDir eases within a limit)
+    Vec3f mPrevMtxFront;  // last frame's draw front
+    Vec3f mPrevMtxSide;  // last frame's draw side
+    FloorCode* mFloorCodeReader;  // reads polygons' floor and wall codes
+    u16 mFloorCode;  // the ground's code as he uses it (a steep floor reads slip)
+    u16 mPolygonFloorCode;  // the ground polygon's own code (updateFloorCode)
+    u16 mWallFloorCodes[3];  // the front, back and side walls' codes
+    u16 mNotSafetyTimer;  // frames the spot isn't taken as safe (setNotSafetyTimer)
 
     MR::NameIndex mSounds;  // a sound's name to its index in soundlist
-    const char* _970;     // Sounds or somthing
-    MarioModuleTask* _974;
+    const char* mRunningBas;  // the sound animation running (isRunningBas)
+    MarioModuleTask* mTaskHead;  // the first module task (execTask, delTask)
 
-    // Fake
-    u32 _978;
-    // Not fake
 
-    MarioState* _97C;
-    MarioState* _980;
+    MarioState* mCurrentState;  // the state on top (changeStatus); each state holds the one under it
+    MarioState* mNoticedState;  // the state last asked for (changeStatus; MarioState::getNoticedStatus)
 
-    Task _984[0xb];
-    u32 _A08[11];
-    u16 _A34;
-    uintptr_t _A38;
-    u16 _A3C;
-    Vec3f _A40;
-    Vec3f _A4C;
-    Vec3f _A58;
-    f32 _A64;
-    HitSensor* _A68;
-    u8 _A6C[0x20];  // animations
-    Vec3f _A8C[9];
+    Task mExtraTasks[0xb];  // the extra tasks called each frame (callExtraTasks)
+    u32 mExtraTaskFlags[11];  // which call kinds each extra task runs for
+    u16 mTornadoCenteringTimer;  // frames left pulling a tornado jump to its centre
+    HitSensor* mTornadoCenteringSensor;  // the tornado jump's centre
+    u16 mSlideTimer;  // frames left of a slide task (taskOnSlide)
+    Vec3f mSlideVec;  // the slide's move
+    Vec3f mHipDropSlideSensorStart;  // where the followed sensor was when the slide began
+    Vec3f mHipDropSlideSide;  // the hip-drop slide's side
+    f32 mHipDropSlideSpeed;  // the hip-drop slide's speed
+    HitSensor* mHipDropSlideSensor;  // what the hip-drop slide follows
+    u8 mIndexedAnimeOn[0x20];  // which indexed animations count as running (MarioModule::isAnimationRun(name, index)); nothing sets one: find, listed
 };

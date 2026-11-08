@@ -30,11 +30,11 @@ bool MarioSukekiyo::postureCtrl(MtxPtr pMtx) {
 bool MarioSukekiyo::start() {
     playSound("スケキヨ開始");
     Mario* player = getPlayer();
-    playEffectRT("属性尻ドロップ", player->_368, getTrans());
+    playEffectRT("属性尻ドロップ", player->mGroundNorm, getTrans());
     startPadVib("最強");
     startCamVib(3);
     mActor->_F44 = 0;
-    _14 = getPlayer()->_368;
+    _14 = getPlayer()->mGroundNorm;
     _20 = getPlayer()->mSideVec;
     getPlayer()->forceSetHeadVecKeepSide(_14);
     _48 = 0;

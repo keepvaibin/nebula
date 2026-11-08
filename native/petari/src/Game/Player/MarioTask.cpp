@@ -21,12 +21,12 @@ void Mario::delTask(MarioModuleTask* pTask) {
         return;
     }
 
-    MarioModuleTask* head = _974;
+    MarioModuleTask* head = mTaskHead;
     if (head == pTask) {
         if (next == pTask) {
-            _974 = nullptr;
+            mTaskHead = nullptr;
         } else {
-            _974 = next;
+            mTaskHead = next;
         }
 
         pTask->mNext = nullptr;
@@ -59,7 +59,7 @@ void Mario::delTask(MarioModuleTask* pTask) {
 }
 
 void Mario::execTask() {
-    MarioModuleTask* task = _974;
+    MarioModuleTask* task = mTaskHead;
 
     while (true) {
         if (task == nullptr) {
@@ -80,7 +80,7 @@ void Mario::execTask() {
 }
 
 void Mario::drawTask() const {
-    MarioModuleTask* task = _974;
+    MarioModuleTask* task = mTaskHead;
 
     while (true) {
         if (task == nullptr) {
@@ -98,16 +98,16 @@ void Mario::drawTask() const {
 }
 
 void Mario::initTask() {
-    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
-        _984[i] = nullptr;
+    for (u32 i = 0; i < ARRAY_SIZE(mExtraTasks); i++) {
+        mExtraTasks[i] = nullptr;
     }
 
-    _974 = nullptr;
+    mTaskHead = nullptr;
 }
 
 bool Mario::isActiveTask(Task task) {
-    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
-        if (_984[i] == task) {
+    for (u32 i = 0; i < ARRAY_SIZE(mExtraTasks); i++) {
+        if (mExtraTasks[i] == task) {
             return true;
         }
     }
@@ -116,9 +116,9 @@ bool Mario::isActiveTask(Task task) {
 }
 
 bool Mario::isActiveTaskID(u32 id) {
-    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
-        if (_984[i] != nullptr) {
-            if (_A08[i] & id) {
+    for (u32 i = 0; i < ARRAY_SIZE(mExtraTasks); i++) {
+        if (mExtraTasks[i] != nullptr) {
+            if (mExtraTaskFlags[i] & id) {
                 return true;
             }
         }
@@ -133,21 +133,21 @@ bool Mario::pushTask(Task task, u32 flags) {
     }
 
     u32 index = 0;
-    for (; index < ARRAY_SIZE(_984); index++) {
-        if (_984[index] == nullptr) {
+    for (; index < ARRAY_SIZE(mExtraTasks); index++) {
+        if (mExtraTasks[index] == nullptr) {
             break;
         }
     }
 
-    _984[index] = task;
-    _A08[index] = flags;
+    mExtraTasks[index] = task;
+    mExtraTaskFlags[index] = flags;
     return true;
 }
 
 void Mario::popTask(Task task) {
-    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
-        if (_984[i] == task) {
-            _984[i] = nullptr;
+    for (u32 i = 0; i < ARRAY_SIZE(mExtraTasks); i++) {
+        if (mExtraTasks[i] == task) {
+            mExtraTasks[i] = nullptr;
             return;
         }
     }
@@ -156,17 +156,17 @@ void Mario::popTask(Task task) {
 void Mario::callExtraTasks(u32 flags) {
     execTask();
 
-    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
-        if (_984[i] == nullptr) {
+    for (u32 i = 0; i < ARRAY_SIZE(mExtraTasks); i++) {
+        if (mExtraTasks[i] == nullptr) {
             continue;
         }
 
-        if (flags != 0 && !(flags & _A08[i])) {
+        if (flags != 0 && !(flags & mExtraTaskFlags[i])) {
             continue;
         }
 
-        if (!(this->*_984[i])(_A08[i])) {
-            Task task = _984[i];
+        if (!(this->*mExtraTasks[i])(mExtraTaskFlags[i])) {
+            Task task = mExtraTasks[i];
             popTask(task);
         }
     }
@@ -247,7 +247,7 @@ bool Mario::taskOnHipDropSlide(u32 flags) {
         }
     }
 
-    if (MR::diffAngleAbs(_70C, getAirGravityVec()) > sHipDropSlideAngle) {
+    if (MR::diffAngleAbs(mHipDropSlideGravity, getAirGravityVec()) > sHipDropSlideAngle) {
         return false;
     }
 
@@ -255,7 +255,7 @@ bool Mario::taskOnHipDropSlide(u32 flags) {
         return false;
     }
 
-    HitSensor* sensor = _A68;
+    HitSensor* sensor = mHipDropSlideSensor;
     bool enabled = sensor->mValidByHost != 0 && sensor->mValidBySystem != 0;
 
     if (!enabled) {
@@ -263,26 +263,26 @@ bool Mario::taskOnHipDropSlide(u32 flags) {
     }
 
     Vec3f dir(mPosition);
-    dir -= _A4C;
-    dir.setLength(_A64);
+    dir -= mHipDropSlideSensorStart;
+    dir.setLength(mHipDropSlideSpeed);
 
     Vec3f dirCopy(dir);
     MR::normalizeOrZero(&dir);
 
-    Vec3f reverseGravity = -_70C;
+    Vec3f reverseGravity = -mHipDropSlideGravity;
     if (dir.dot(reverseGravity) <= sZero) {
         return false;
     }
 
     Mtx rot;
-    NebulaMtxRotAxisRad(rot, &_A58, sHipDropSlideRot);
+    NebulaMtxRotAxisRad(rot, &mHipDropSlideSide, sHipDropSlideRot);
     NebulaMtxMultVecSR(rot, &dir, &dir);
-    dir.setLength(_A64);
+    dir.setLength(mHipDropSlideSpeed);
     dir -= dirCopy;
     dir.setLength(sHipDropSlideLen);
 
     cutGravityElementFromJumpVec(true);
-    cutVecElementFromJumpVec(_70C);
+    cutVecElementFromJumpVec(mHipDropSlideGravity);
     addVelocity(dir);
 
     dirCopy.setLength(sOne);
@@ -313,13 +313,13 @@ void Mario::startHipDropSlide(const HitSensor* pSensor) {
 
     MR::normalizeOrZero(&dir);
 
-    _A58.cross(-getAirGravityVec(), dir);
-    MR::normalizeOrZero(&_A58);
+    mHipDropSlideSide.cross(-getAirGravityVec(), dir);
+    MR::normalizeOrZero(&mHipDropSlideSide);
 
-    _A68 = const_cast< HitSensor* >(pSensor);
-    _A4C = pSensor->mPosition;
-    _A64 = pSensor->mRadius;
-    _70C = getAirGravityVec();
+    mHipDropSlideSensor = const_cast< HitSensor* >(pSensor);
+    mHipDropSlideSensorStart = pSensor->mPosition;
+    mHipDropSlideSpeed = pSensor->mRadius;
+    mHipDropSlideGravity = getAirGravityVec();
 
     changeAnimation("ヒップドロップ滑り");
 }
@@ -351,13 +351,13 @@ void Mario::startJumpDropSlide(const HitSensor* pSensor) {
 
     MR::normalizeOrZero(&slideDir);
 
-    _A58.cross(-getAirGravityVec(), slideDir);
-    MR::normalizeOrZero(&_A58);
+    mHipDropSlideSide.cross(-getAirGravityVec(), slideDir);
+    MR::normalizeOrZero(&mHipDropSlideSide);
 
-    _A68 = const_cast< HitSensor* >(pSensor);
-    _A4C = pSensor->mPosition;
-    _A64 = pSensor->mRadius;
-    _70C = getAirGravityVec();
+    mHipDropSlideSensor = const_cast< HitSensor* >(pSensor);
+    mHipDropSlideSensorStart = pSensor->mPosition;
+    mHipDropSlideSpeed = pSensor->mRadius;
+    mHipDropSlideGravity = getAirGravityVec();
 
     bool changeSlideAnimation = !isPlayerModeHopper();
     if (changeSlideAnimation) {

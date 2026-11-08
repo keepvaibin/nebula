@@ -27,7 +27,7 @@ namespace MarioAccess {
     }
 
     bool isOnActor(const LiveActor* pActor) {
-        if (getPlayerActor()->getMario()->_1C._13) {
+        if (getPlayerActor()->getMario()->mHitStates._13) {
             Triangle* marioGroundPolygon = getPlayerActor()->getMario()->mGroundPolygon;
             if (marioGroundPolygon->isValid()) {
                 return marioGroundPolygon->mSensor->mHost == pActor;
@@ -36,8 +36,8 @@ namespace MarioAccess {
             return false;
         }
 
-        if (getPlayerActor()->getMario()->_1C._14 || (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMovementStates()._2)) {
-            Triangle* marioTri = getPlayerActor()->getMario()->_45C;
+        if (getPlayerActor()->getMario()->mHitStates._14 || (getPlayerActor()->IsMarioSwimming() && getPlayerActor()->getMovementStates()._2)) {
+            Triangle* marioTri = getPlayerActor()->getMario()->mShadowPolygon;
             if (!marioTri->isValid()) {
                 return false;
             }
@@ -102,7 +102,7 @@ namespace MarioAccess {
             return false;
         }
 
-        return getPlayerActor()->getMario()->_418;
+        return getPlayerActor()->getMario()->mTeresaWallThroughTimer;
     }
 
     bool isFlying() {
@@ -110,11 +110,11 @@ namespace MarioAccess {
             return true;
         }
 
-        return getPlayerActor()->getMario()->_10._21;
+        return getPlayerActor()->getMario()->mActionStates._21;
     }
 
     bool isNeedBrakingCamera() {
-        return getPlayerActor()->getMario()->_1C._9;
+        return getPlayerActor()->getMario()->mHitStates._9;
     }
 
     CubeCameraArea* getCameraCubeCode() {
@@ -132,7 +132,7 @@ namespace MarioAccess {
     Triangle* getGroundingPolygon(u32) {
         if (isSwimming()) {
             if (getPlayerActor()->getMovementStates()._2) {
-                return getPlayerActor()->getMario()->_45C;
+                return getPlayerActor()->getMario()->mShadowPolygon;
             }
 
             return nullptr;
@@ -151,7 +151,7 @@ namespace MarioAccess {
 
     Triangle* getShadowingPolygon() {
         if (getPlayerActor()->getMovementStates()._2) {
-            return getPlayerActor()->getMario()->_45C;
+            return getPlayerActor()->getMario()->mShadowPolygon;
         }
 
         return nullptr;
@@ -174,7 +174,7 @@ namespace MarioAccess {
     }
 
     bool isFpViewChangingFailure() {
-        return getPlayerActor()->getMario()->_898;
+        return getPlayerActor()->getMario()->mFpViewChangeFailed;
     }
 
     void stopFpView() {
@@ -185,11 +185,11 @@ namespace MarioAccess {
     }
 
     void noticeDashChance() {
-        getPlayerActor()->getMario()->_436 = 5;
+        getPlayerActor()->getMario()->mDashChanceTimer = 5;
     }
 
     void setWalkingResist(f32 walkingResist) {
-        getPlayerActor()->getMario()->_2D0 = walkingResist;
+        getPlayerActor()->getMario()->mWalkingResist = walkingResist;
     }
 
     void forceFly(const Vec3f& rVec1, const Vec3f& rVec2, s32 a3) {
@@ -211,13 +211,13 @@ namespace MarioAccess {
     }
 
     void tornadoJump() {
-        getPlayerActor()->getMario()->_544 = getPlayerActor()->getConst().getTable()->mTornadoTimeAir;
+        getPlayerActor()->getMario()->mTornadoTimer = getPlayerActor()->getConst().getTable()->mTornadoTimeAir;
         getPlayerActor()->getMario()->tryTornadoJump();
         getPlayerActor()->mMario->startTornadoCentering(getPlayerActor()->_928);
     }
 
     void tornadoJumpMini() {
-        getPlayerActor()->getMario()->_544 = getPlayerActor()->getConst().getTable()->mTornadoTimeAir;
+        getPlayerActor()->getMario()->mTornadoTimer = getPlayerActor()->getConst().getTable()->mTornadoTimeAir;
         getPlayerActor()->getMario()->tryTornadoJump();
         Vec3f up(-*getPlayerActor()->getMario()->getGravityVec() * getPlayerActor()->getConst().getTable()->mTornadoBoostPower);
         getPlayerActor()->getMario()->setRocketBooster(up, getPlayerActor()->getConst().getTable()->mTornadoBoostAttnMini,
@@ -226,7 +226,7 @@ namespace MarioAccess {
     }
 
     void becomeNormalJumpStatus() {
-        getPlayerActor()->getMario()->_430 = 0;
+        getPlayerActor()->getMario()->mJumpKind = 0;
     }
 
     void setFrontVecKeepUp(const Vec3f& rVec, u16) {
@@ -266,7 +266,7 @@ namespace MarioAccess {
         getPlayerActor()->getMario()->mPosition = rTrans;
 
         if (getPlayerActor()->getMovementStates()._37) {
-            getPlayerActor()->getMario()->_688 = rTrans;
+            getPlayerActor()->getMario()->m2DPlanePos = rTrans;
         }
 
         getPlayerActor()->_1C0 = true;
@@ -512,11 +512,11 @@ namespace MarioAccess {
 
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->mPlayerMode == PlayerMode_Hopper) {
             offControl();
-            getPlayerActor()->getMario()->_10._20 = true;
+            getPlayerActor()->getMario()->mActionStates._20 = true;
             return;
         }
 
-        getPlayerActor()->getMario()->_10._20 = false;
+        getPlayerActor()->getMario()->mActionStates._20 = false;
 
         if (getPlayerActor()->_934) {
             getPlayerActor()->mRushSensor->receiveMessage(ACTMES_RUSH_CANCEL, getPlayerActor()->getSensor("body"));
@@ -707,7 +707,7 @@ namespace MarioAccess {
 
     void endRemoteDemo(const RushEndInfo* pEndInfo) {
         if (getPlayerActor()->getMario()->isStatusActive(MarioStatus_13) || getPlayerActor()->getMario()->isStatusActive(MarioStatus_Talk) ||
-            getPlayerActor()->getMario()->_10._20 || !getPlayerActor()->_EA4) {
+            getPlayerActor()->getMario()->mActionStates._20 || !getPlayerActor()->_EA4) {
             getPlayerActor()->_3C0 = false;
             return;
         }
@@ -764,7 +764,7 @@ namespace MarioAccess {
             break;
         case 9:
             getPlayerActor()->getMario()->mMovementStates._F = true;
-            getPlayerActor()->getMario()->_544 = 3;
+            getPlayerActor()->getMario()->mTornadoTimer = 3;
             break;
         case 10:
             if (!getPlayerActor()->isEnableNerveChange()) {

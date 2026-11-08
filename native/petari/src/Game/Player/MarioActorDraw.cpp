@@ -447,7 +447,7 @@ void MarioActor::drawMarioModel() const {
 
     if (mTornadoMario != nullptr) {
         if (mMario->mMovementStates._F) {
-            if (mMario->_544 > 2) {
+            if (mMario->mTornadoTimer > 2) {
                 return;
             }
         }
@@ -741,7 +741,7 @@ void MarioActor::drawIndirect() const {
     drawModelBlur();
     drawIndirectModel();
 
-    if (mMario->_1C._3) {
+    if (mMario->mHitStates._3) {
         drawColdWaterDamage();
     }
 
@@ -769,7 +769,7 @@ void MarioActor::drawIndirectModel() const {
 
     if (mTornadoMario != nullptr) {
         if (mMario->mMovementStates._F) {
-            if (mMario->_544 > 2) {
+            if (mMario->mTornadoTimer > 2) {
                 return;
             }
         }

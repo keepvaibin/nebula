@@ -145,7 +145,7 @@ void MarioAnimator::spinClose() {
 void MarioAnimator::stageInCheck() {
     if (static_cast< s32 >(getFrame()) == 50) {
         Mario* player = getPlayer();
-        playEffectRT("属性ステージイン", player->_368, getTrans());
+        playEffectRT("属性ステージイン", player->mGroundNorm, getTrans());
     }
 }
 

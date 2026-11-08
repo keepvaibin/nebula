@@ -7,7 +7,7 @@
 #include "Game/Util/MathUtil.hpp"
 
 bool Mario::isSliderFloor() const {
-    return _960 == 9;
+    return mFloorCode == 9;
 }
 
 bool Mario::checkSliderMode() const {
@@ -30,7 +30,7 @@ MarioSlider::MarioSlider(MarioActor* pActor) : MarioState(pActor, MarioStatus_Sl
 }
 
 void MarioSlider::calcGroundAccel() {
-    Vec3f* val = &getPlayer()->_368;
+    Vec3f* val = &getPlayer()->mGroundNorm;
     Vec3f v6 = val->cross(*getPlayer()->getGravityVec());
     MR::normalizeOrZero(&v6);
     _2C.cross(v6, *val);
@@ -43,11 +43,11 @@ bool MarioSlider::postureCtrl(MtxPtr) {
     NebulaMtxRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * _3C / 2.0f));
 
     Vec3f newHeadVec;
-    NebulaMtxMultVec(rotMtx, &getPlayer()->_368, &newHeadVec);
+    NebulaMtxMultVec(rotMtx, &getPlayer()->mGroundNorm, &newHeadVec);
 
     MarioConst* pConst = mActor->mConst;
     Mario* pPlayer = getPlayer();
-    MR::vecBlendSphere(getPlayer()->_1FC, newHeadVec, &pPlayer->_1FC, pConst->getTable()->mSliderHeadRotateRatio);
+    MR::vecBlendSphere(getPlayer()->mPostureUpVec, newHeadVec, &pPlayer->mPostureUpVec, pConst->getTable()->mSliderHeadRotateRatio);
     return false;
 }
 
@@ -91,7 +91,7 @@ void Mario::startSlider() {
                 mDrawStates._14 = true;
                 playSound("尻ドロップ着地");
                 playSound("声尻ドロップ着地");
-                playEffectRT("属性尻ドロップ", _368, mPosition);
+                playEffectRT("属性尻ドロップ", mGroundNorm, mPosition);
                 startPadVib("最強");
                 startCamVib(0);
                 MR::removeAllClingingKarikari();
@@ -105,8 +105,8 @@ void Mario::startSlider() {
 }
 
 bool MarioSlider::start() {
-    _14 = getPlayer()->_16C;
-    MR::vecKillElement(_14, getPlayer()->_368, &_14);
+    _14 = getPlayer()->mPrevVelocity;
+    MR::vecKillElement(_14, getPlayer()->mGroundNorm, &_14);
     _20 = getFrontVec();
     getPlayer()->cancelSquatMode();
     changeAnimation("スライダー尻", "スライダー尻");
@@ -121,8 +121,8 @@ bool MarioSlider::update() {
         if (getPlayer()->mMovementStates._1 != 0) {
             if (isSlipPolygon(getGroundPolygon())) {
                 Mario* player = getPlayer();
-                player->_8F8 = _14;
-                player->_8F0 = 10.0f;
+                player->mSlopeMoveVec = _14;
+                player->mSlipPower = 10.0f;
                 return false;
             }
         }
@@ -166,22 +166,22 @@ bool MarioSlider::update() {
             return false;
         } else {
             MR::normalize(&v48);
-            Vec3f v47(getPlayer()->_368);
+            Vec3f v47(getPlayer()->mGroundNorm);
             Vec3f v46 = v48.cross(v47);
-            MR::vecKillElement(v46, getPlayer()->_368, &v46);
+            MR::vecKillElement(v46, getPlayer()->mGroundNorm, &v46);
             MR::normalize(&v46);
             _14.setLength(v18);
             _14 += _2C * mActor->mConst->getTable()->mSliderSlopePow;
 
             _14 += v46 * _3C * mActor->mConst->getTable()->mSliderWeightPow;
-            MR::vecKillElement(_14, getPlayer()->_368, &_14);
+            MR::vecKillElement(_14, getPlayer()->mGroundNorm, &_14);
             if (_14.length() > mActor->mConst->getTable()->mSliderMaxSpeed) {
                 _14.setLength(mActor->mConst->getTable()->mSliderMaxSpeed);
             }
 
             addVelocity(_14);
 
-            Vec3f v45(-getPlayer()->_368 * 15.0f);
+            Vec3f v45(-getPlayer()->mGroundNorm * 15.0f);
 
             MR::vecKillElement(v45, getFrontVec(), &v45);
             addVelocity(v45);

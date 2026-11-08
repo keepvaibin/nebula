@@ -8,22 +8,22 @@
 #include "Game/Util/MathUtil.hpp"
 
 void Mario::lockGroundCheck(void* owner, bool simple) {
-    _574 = owner;
-    _10._5 = simple;
-    _10._4 = true;
+    mGroundCheckOwner = owner;
+    mActionStates._5 = simple;
+    mActionStates._4 = true;
     mMovementStates._36 = simple;
 }
 
 void Mario::unlockGroundCheck(void* owner) {
-    if (!owner || _574 == owner) {
-        _574 = nullptr;
-        _10._4 = false;
+    if (!owner || mGroundCheckOwner == owner) {
+        mGroundCheckOwner = nullptr;
+        mActionStates._4 = false;
     }
 }
 
 bool Mario::isUseSimpleGroundCheck() const {
-    if (_10._4) {
-        return _10._5;
+    if (mActionStates._4) {
+        return mActionStates._5;
     }
     if (mMovementStates._23) {
         return true;
@@ -34,7 +34,7 @@ bool Mario::isUseSimpleGroundCheck() const {
     if (!mMovementStates._1) {
         return mMovementStates._23;
     }
-    if (calcAngleD(_368) > mActor->getConst().getTable()->mFlatAngle - 5.0f) {
+    if (calcAngleD(mGroundNorm) > mActor->getConst().getTable()->mFlatAngle - 5.0f) {
         Triangle ground;
         if (MR::getFirstPolyOnLineBFast(mPosition - *getGravityVec() * 30.0f, *getGravityVec() * 100.0f, nullptr, &ground)) {
             if (calcAngleD(*ground.getNormal(0)) < mActor->getConst().getTable()->mFlatAngle - 5.0f) {
@@ -52,7 +52,7 @@ bool Mario::checkGroundOnSlope() {
     if (isAnimationRun("崖ふんばり")) {
         normal = -*getGravityVec();
     } else {
-        normal = *_45C->getNormal(0);
+        normal = *mShadowPolygon->getNormal(0);
     }
     if (MR::isNearZero(normal)) {
         return false;
@@ -69,13 +69,13 @@ bool Mario::checkGroundOnSlope() {
     f32 distance;
     if (mMovementStates.jumping && isRising()) {
         distance = 10.0f;
-    } else if (_414) {
+    } else if (mLedgeFallTimer) {
         distance = 20.0f;
     } else {
         distance = 60.0f;
     }
     if (mMovementStates._1) {
-        f32 angle = calcAngleD(_368) - 30.0f;
+        f32 angle = calcAngleD(mGroundNorm) - 30.0f;
         if (angle < 0.0f) {
             angle = 0.0f;
         }
@@ -130,11 +130,11 @@ bool Mario::checkGroundOnSlope() {
         return false;
     }
     mMovementStates._14 = false;
-    Vec3f down(-_368);
+    Vec3f down(-mGroundNorm);
     Vec3f position(mGroundPos);
-    if (_10._22) {
-        _10._22 = false;
-        _1C._C = true;
+    if (mActionStates._22) {
+        mActionStates._22 = false;
+        mHitStates._C = true;
     } else if ((mMovementStates._23 || mTargetWalkSpeedIndex) && getPlayerMode() != PlayerMode_Teresa) {
         if (MR::abs((position - mPosition).dot(down)) < distance) {
             Vec3f offset(position - mPosition);
@@ -146,7 +146,7 @@ bool Mario::checkGroundOnSlope() {
                 if (!mMovementStates._23) {
                     displacement *= ratio;
                 }
-                bool notSlipping = !isSlipFloorCode(_960);
+                bool notSlipping = !isSlipFloorCode(mFloorCode);
                 if (!notSlipping && !mDrawStates._4 && !mPrevDrawStates._4) {
                     mVelocityAfter += displacement;
                 }

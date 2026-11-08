@@ -29,7 +29,7 @@ bool Mario::doFlipWeak(const Vec3f& rVec) {
 }
 
 bool Mario::faint(const Vec3f& rVec) {
-    _7C4 = rVec;
+    mDamageDir = rVec;
     if (!isEnableAddDamage()) {
         return false;
     }

@@ -187,7 +187,7 @@ void Mario::doCubeWarp() {
     WarpCubeMgr* pWarpCubeMgr = static_cast< WarpCubeMgr* >(MR::getAreaObjManager("WarpCube"));
 
     if (pWarpCube != nullptr) {
-        if (_56C == pWarpCube) {
+        if (mArrivedWarpCube == pWarpCube) {
             return;
         }
 
@@ -205,7 +205,7 @@ void Mario::doCubeWarp() {
         stopWalk();
         mActor->_38C = 10;
 
-        _56C = pPairCube;
+        mArrivedWarpCube = pPairCube;
         mWarp->_14 = cubePos;
 
         MR::calcCubePos(pWarpCube, &cubePos);
@@ -224,11 +224,11 @@ void Mario::doCubeWarp() {
         return;
     }
 
-    if (_56C != nullptr) {
-        pWarpCubeMgr->setInvalidateTimer(_56C, 300);
+    if (mArrivedWarpCube != nullptr) {
+        pWarpCubeMgr->setInvalidateTimer(mArrivedWarpCube, 300);
     }
 
-    _56C = nullptr;
+    mArrivedWarpCube = nullptr;
 }
 
 bool Mario::doPointWarpRecovery(const Vec3f& rVec1, const Vec3f& rVec2) {
@@ -476,7 +476,7 @@ bool MarioWarp::close() {
     getPlayer()->mMovementStates._1 = true;
     getPlayer()->mMovementStates.jumping = false;
     Mario* player = getPlayer();
-    player->_420 = 16;
+    player->mMoveLockTimer = 16;
     stopAnimation(nullptr);
     changeAnimation(nullptr, "基本");
     switch (_45) {
@@ -539,12 +539,12 @@ bool MarioWarp::close() {
         getPlayer()->mMovementStates._1 = false;
         getPlayer()->mMovementStates.jumping = true;
         getPlayer()->mMovementStates._2B = true;
-        getPlayer()->_402 = 0;
+        getPlayer()->mAirWalkTimer = 0;
         getPlayer()->mJumpVec = Vec3f(0.0f, 0.0f, 0.0f);
         changeAnimation("落下");
         Mario* player = getPlayer();
-        player->_42A = 0;
-        player->_430 = 0;
+        player->mInvincibleJump = 0;
+        player->mJumpKind = 0;
         break;
     }
     case 1:

@@ -14,14 +14,14 @@ void MarioAnimator::controlWaitAnimation() {
 
     Vec3f side;
     Mario* player = getPlayer();
-    side.cross(getFrontVec(), player->_368);
+    side.cross(getFrontVec(), player->mGroundNorm);
     MR::normalizeOrZero(&side);
     if (MR::isNearZero(side)) {
         return;
     }
 
     Vec3f front;
-    front.cross(getPlayer()->_368, side);
+    front.cross(getPlayer()->mGroundNorm, side);
     MR::normalizeOrZero(&front);
     f32 sideSlope = side.dot(getPlayer()->getAirGravityVec());
     f32 frontSlope = front.dot(getPlayer()->getAirGravityVec());
@@ -51,9 +51,9 @@ void MarioAnimator::controlWaitAnimation() {
             mXanimePlayer->changeTrackAnimation(2, "坂左ウエイト");
         }
 
-        if (getPlayer()->_10._F) {
+        if (getPlayer()->mActionStates._F) {
             forceSetBlendWeight(weights);
-            getPlayer()->_10._F = false;
+            getPlayer()->mActionStates._F = false;
         } else {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
@@ -73,9 +73,9 @@ void MarioAnimator::controlWaitAnimation() {
             mXanimePlayer->changeTrackAnimation(2, "坂後ウエイト");
         }
 
-        if (getPlayer()->_10._F) {
+        if (getPlayer()->mActionStates._F) {
             forceSetBlendWeight(weights);
-            getPlayer()->_10._F = false;
+            getPlayer()->mActionStates._F = false;
         } else {
             setBlendWeight(weights, mActor->getConst().getTable()->mSlopeAnimBlendRatio);
         }
@@ -118,7 +118,7 @@ bool MarioWait::checkStart() {
     }
 
     bool cancel = false;
-    switch (getPlayer()->_960) {
+    switch (getPlayer()->mFloorCode) {
     case 27:
     case 28:
         cancel = true;
@@ -151,7 +151,7 @@ bool MarioWait::checkStart() {
         cancel = true;
     }
 
-    if (getPlayer()->_1C._5) {
+    if (getPlayer()->mHitStates._5) {
         cancel = true;
     }
 
@@ -167,7 +167,7 @@ bool MarioWait::checkStart() {
         cancel = true;
     }
 
-    if (!MR::isNearZero(getPlayer()->_184)) {
+    if (!MR::isNearZero(getPlayer()->mRelativeMove)) {
         cancel = true;
     }
 
@@ -226,7 +226,7 @@ bool MarioWait::update() {
         cancel = true;
     }
 
-    if (getPlayer()->_1C._5) {
+    if (getPlayer()->mHitStates._5) {
         cancel = true;
     }
 
@@ -234,7 +234,7 @@ bool MarioWait::update() {
         cancel = true;
     }
 
-    if (!MR::isNearZero(getPlayer()->_184)) {
+    if (!MR::isNearZero(getPlayer()->mRelativeMove)) {
         cancel = true;
     }
 
@@ -284,7 +284,7 @@ bool MarioWait::close() {
 }
 
 bool Mario::isBlendWaitGround() const {
-    return calcAngleD(_368) > 8.0f;
+    return calcAngleD(mGroundNorm) > 8.0f;
 }
 
 void Mario::checkSpecialWaitAnimation() {

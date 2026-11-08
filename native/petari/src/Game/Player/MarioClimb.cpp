@@ -2,7 +2,7 @@
 #include "Game/Player/MarioActor.hpp"
 
 void Mario::connectToClimb() {
-    _790 = -getShadowNorm();
+    mBumpGravityVec = -getShadowNorm();
     changeStatus(mClimb);
 }
 

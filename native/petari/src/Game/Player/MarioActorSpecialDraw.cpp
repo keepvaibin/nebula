@@ -210,9 +210,9 @@ void MarioActor::calcFogLighting() {
         }
 
         _1A4 = _1AC * MR::sin((_1AA / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * FloatUtil::PI());
-    } else if (mMario->_434) {
+    } else if (mMario->mItemDashTimer) {
         fog.set(255, 255, 0, 0);
-        _1A4 = 0.8f * MR::sin(((mMario->_434 / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
+        _1A4 = 0.8f * MR::sin(((mMario->mItemDashTimer / static_cast< f32 >(getConst().getTable()->mItemDashTimer)) * FloatUtil::PI()) / 2.0f);
     } else {
         resetFog();
     }
@@ -289,8 +289,8 @@ void MarioActor::createRainbowMesh() {
 }
 
 void MarioActor::drawScreenBlend() const {
-    if (mMario->_97C != nullptr && mMario->_97C->getBlurOffset() != 0.0f) {
-        MR::drawFullScreenBlur(mMario->_97C->getBlurOffset());
+    if (mMario->mCurrentState != nullptr && mMario->mCurrentState->getBlurOffset() != 0.0f) {
+        MR::drawFullScreenBlur(mMario->mCurrentState->getBlurOffset());
     }
 
     if (_1C6) {
@@ -338,7 +338,7 @@ void MarioActor::drawScreenBlend() const {
     if (_BC4) {
         u32 color = 0xFF000080;
 
-        if (mMario->_1C._3) {
+        if (mMario->mHitStates._3) {
             color = 0x00004020;
         }
 

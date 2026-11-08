@@ -67,7 +67,7 @@ void MarioActor::updateBeeWingAnimation() {
     getJointCtrl("HandR")->setLocalScale(0.9f);
     getJointCtrl("HandL")->setLocalScale(0.9f);
 
-    if (mMario->checkLvlA() && mMario->_402 && getMovementStates().jumping) {
+    if (mMario->checkLvlA() && mMario->mAirWalkTimer && getMovementStates().jumping) {
         if (_9F0 != 1) {
             MR::startBck(_9E8, "Fly");
             MR::startBva(_9E8, "Fly");
@@ -82,7 +82,7 @@ void MarioActor::updateBeeWingAnimation() {
     if (getMovementStates()._1 || mMario->isStatusActive(MarioStatus_Stick)) {
         val = 0;
     } else {
-        val = mMario->_402 != 0 ? 2 : 3;
+        val = mMario->mAirWalkTimer != 0 ? 2 : 3;
     }
 
     if (_9F0 == val) {
@@ -115,9 +115,9 @@ void MarioActor::updateTornado() {
         return;
     }
 
-    if (mMario->getMovementStates()._F && mMario->_544 > 1) {
+    if (mMario->getMovementStates()._F && mMario->mTornadoTimer > 1) {
         mTornadoMario->show();
-    } else if ((!isAnimationRun("空中ひねり") || mMario->_430 != 8) && !mMario->isStatusActive(MarioStatus_Magic)) {
+    } else if ((!isAnimationRun("空中ひねり") || mMario->mJumpKind != 8) && !mMario->isStatusActive(MarioStatus_Magic)) {
         if (mMario->getDrawStates()._8 || _990 != 0) {
             mTornadoMario->hideForce();
         } else {
@@ -127,7 +127,7 @@ void MarioActor::updateTornado() {
         _990 = 0;
     }
 
-    mTornadoMario->setTrHeight(mPosition, mMario->mFrontVec, mMario->_54C, _240);
+    mTornadoMario->setTrHeight(mPosition, mMario->mFrontVec, mMario->mTornadoTiltUp, _240);
 }
 
 void MarioActor::updateTakingPosition() {
@@ -261,7 +261,7 @@ void MarioActor::changeSpecialModeAnimation(const char* pAnimName) {
 
 void MarioActor::updateSpecialModeAnimation() {
     if (!mMario->mMovementStates._A && mMario->getCurrentStatus() == MarioStatus_None) {
-        if (mMario->mMovementStates._1 && mMario->_960 == 0x20 && mMarioAnim->isAnimationStop()) {
+        if (mMario->mMovementStates._1 && mMario->mFloorCode == 0x20 && mMarioAnim->isAnimationStop()) {
             mMarioAnim->mXanimePlayer->changeTrackAnimation(0, "泥低速歩行");
             mMarioAnim->mXanimePlayer->changeTrackAnimation(1, "泥高速歩行");
             _B96 = 2;
@@ -282,7 +282,7 @@ void MarioActor::updateSpecialModeAnimation() {
         }
         break;
     default:
-        mMario->_418 = 0;
+        mMario->mTeresaWallThroughTimer = 0;
         break;
     }
     if (_B96) {
@@ -331,20 +331,20 @@ void MarioActor::shootFireBall() {
     ball->appearAndThrow(position, direction);
     playSound("声投げ", -1);
     if (!isJumping()) {
-        mMario->_420 = 45;
+        mMario->mMoveLockTimer = 45;
         changeAnimation("ファイアスピン");
         return;
     }
-    if (mMario->_42C >= 3) {
+    if (mMario->mFireShotCount >= 3) {
         changeAnimation("ファイア投げ");
         return;
     }
-    if (mMario->_42C == 0)
+    if (mMario->mFireShotCount == 0)
         changeAnimation("ファイアスピン空中");
     else
         changeAnimation("ファイア投げ");
     jumpHop();
-    mMario->_42C++;
+    mMario->mFireShotCount++;
     f32 gravitySpeed = mMario->cutGravityElementFromJumpVec(true);
     Mario* mario = mMario;
     mario->mJumpVec.x *= 0.5f;
@@ -399,7 +399,7 @@ void MarioActor::update2D() {
     layoutHolder->setLifeCount(mHealth);
 
     if (mMario->getPlayerMode() == 4) {
-        layoutHolder->setBeePowerRatio((f32)mMario->_402 / mConst->getTable()->mAirWalkTime);
+        layoutHolder->setBeePowerRatio((f32)mMario->mAirWalkTimer / mConst->getTable()->mAirWalkTime);
     }
 
     if (mMario->isSwimming()) {

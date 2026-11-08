@@ -11,12 +11,12 @@ void Mario::checkBump() {
             !isStatusActive(MarioStatus_Climb)) {
             if (!isDamaging() && getPlayerMode() != 5 && !isSwimming()) {
                 if (isStickOn()) {
-                    if (!_750 && (mMovementStates._23 == 0)) {
-                        if (_4DC->isValid()) {
-                            const char* floor = MR::getFloorCodeString(_4DC);
+                    if (!mCorrectionEaseTimer && (mMovementStates._23 == 0)) {
+                        if (mBumpPolygon->isValid()) {
+                            const char* floor = MR::getFloorCodeString(mBumpPolygon);
 
-                            if (!isSlipPolygon(_4DC) || !strcmp(floor, "NoSlip") || !strcmp(floor, "Sand")) {
-                                startBump(_518);
+                            if (!isSlipPolygon(mBumpPolygon) || !strcmp(floor, "NoSlip") || !strcmp(floor, "Sand")) {
+                                startBump(mBumpHitPos);
                             }
                         }
                     }
@@ -33,7 +33,7 @@ void Mario::startBump(const Vec3f& rVec) {
 
     Vec3f v21;
     const Vec3f* grav = &getAirGravityVec();
-    const Vec3f* norm = _4DC->getNormal(0);
+    const Vec3f* norm = mBumpPolygon->getNormal(0);
     MR::vecKillElement(*norm, *grav, &v21);
 
     if (!MR::normalizeOrZero(&v21) && MR::diffAngleAbsHorizontal(mFrontVec, -v21, getAirGravityVec()) > 0.52359879f) {
@@ -50,14 +50,14 @@ void Mario::startBump(const Vec3f& rVec) {
     setTrans(rVec, "段差");
     changeStatus(mBump);
     mVelocity.zero();
-    _3D0 = 0;
+    mTurnSlipTimer = 0;
     mMovementStates._10 = 0;
-    _790 = -(*_4DC->getNormal(0));
+    mBumpGravityVec = -(*mBumpPolygon->getNormal(0));
     Vec3f v19;
-    MR::vecKillElement(-(*_4DC->getNormal(0)), mSideVec, &v19);
+    MR::vecKillElement(-(*mBumpPolygon->getNormal(0)), mSideVec, &v19);
 
     if (!MR::normalizeOrZero(&v19)) {
-        _790 = v19;
+        mBumpGravityVec = v19;
     }
 }
 

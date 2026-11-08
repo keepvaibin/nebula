@@ -221,28 +221,28 @@ f32 MarioModule::getAnimationFrame() const {
 void MarioModule::changeAnimation(const char* pAnim, u32 index) {
     if (!mActor->_B90) {
         changeAnimation(pAnim);
-        getPlayer()->_A6C[index] = 1;
+        getPlayer()->mIndexedAnimeOn[index] = 1;
     }
 }
 
 bool MarioModule::isAnimationRun(const char* pAnim, u32 index) {
-    if (getPlayer()->_A6C[index] == 0) {
+    if (getPlayer()->mIndexedAnimeOn[index] == 0) {
         return false;
     }
 
     bool isAnimRun = isAnimationRun(pAnim);
 
     if (!isAnimRun) {
-        getPlayer()->_A6C[index] = 0;
+        getPlayer()->mIndexedAnimeOn[index] = 0;
     }
 
     return isAnimRun;
 }
 
 void MarioModule::stopAnimation(const char* pAnim, u32 index) {
-    if (!mActor->_B90 && mActor->getMario()->_A6C[index]) {
+    if (!mActor->_B90 && mActor->getMario()->mIndexedAnimeOn[index]) {
         stopAnimation(pAnim);
-        getPlayer()->_A6C[index] = 0;
+        getPlayer()->mIndexedAnimeOn[index] = 0;
     }
 }
 
@@ -277,7 +277,7 @@ bool MarioModule::calcWorldPadDir(Vec3f* pDest, f32 a2, f32 a3, bool a4) {
     if (MR::isNearZero(a2) && MR::isNearZero(a3)) {
         return false;
     }
-    if (!mActor->mMario->_10._11) {
+    if (!mActor->mMario->mActionStates._11) {
         if (MR::abs(a3) > mActor->mConst->getTable()->mStickMarginYstart) {
             if (MR::abs(a2) < mActor->mConst->getTable()->mStickMarginX) {
                 a2 = 0.0f;
@@ -540,7 +540,7 @@ bool MarioModule::isSlipPolygon(const Triangle* pTri) const {
         return false;
     }
 
-    u32 code = mActor->mMario->_95C->getCode(pTri);
+    u32 code = mActor->mMario->mFloorCodeReader->getCode(pTri);
 
     switch (code) {
     case 2:
@@ -560,7 +560,7 @@ bool MarioModule::isSlipPolygon(const Triangle* pTri) const {
 }
 
 u32 MarioModule::getFloorCode() const {
-    return mActor->mMario->_95C->getCode(mActor->mMario->mGroundPolygon);
+    return mActor->mMario->mFloorCodeReader->getCode(mActor->mMario->mGroundPolygon);
 }
 
 f32 MarioModule::calcPolygonAngleD(const Triangle* pTri) const {

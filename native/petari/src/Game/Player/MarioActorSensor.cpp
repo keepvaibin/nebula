@@ -104,7 +104,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
         }
 
         if (!mMario->isAnimationTerminate(nullptr)) {
-            if (mMario->_430 == 8 && isJumping()) {
+            if (mMario->mJumpKind == 8 && isJumping()) {
                 _3E5 = true;
             }
 
@@ -194,7 +194,7 @@ void MarioActor::updateHitSensor(HitSensor* pSensor) {
 }
 
 void MarioActor::doTrampleJump(HitSensor* pSensor) {
-    if (mMario->_1C._6) {
+    if (mMario->mHitStates._6) {
         return;
     }
 
@@ -202,7 +202,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
         mMario->closeStatus(nullptr);
     }
 
-    mMario->_402 = getConst().getTable()->mAirWalkTimeTornado;
+    mMario->mAirWalkTimer = getConst().getTable()->mAirWalkTimeTornado;
     mMario->mMovementStates._2B = false;
     switch (pSensor->mType) {
     case 0x1F:
@@ -212,7 +212,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
         mMario->startPadVib(2u);
         playSound("ヘリコプタージャンプ", -1);
         mMario->startRotationTask(4);
-        mMario->_430 = 11;
+        mMario->mJumpKind = 11;
         break;
     default:
         if (strcmp(pSensor->mHost->mName, "砲弾") == 0) {

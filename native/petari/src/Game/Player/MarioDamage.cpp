@@ -35,7 +35,7 @@ bool Mario::isDamaging() const {
         return true;
     }
 
-    if (_41E) {
+    if (mDamageAfterTimer) {
         return true;
     }
 
@@ -51,15 +51,15 @@ bool Mario::isDamaging() const {
         return true;
     }
 
-    if (_10.jumping) {
+    if (mActionStates.jumping) {
         return true;
     }
 
-    if (_10._14) {
+    if (mActionStates._14) {
         return true;
     }
 
-    if (_10._18) {
+    if (mActionStates._18) {
         return true;
     }
 
@@ -118,8 +118,8 @@ void Mario::decDamageAfterTimer() {
     }
 
     mFireDamage->decAfterTimer();
-    if (_41E) {
-        _41E--;
+    if (mDamageAfterTimer) {
+        mDamageAfterTimer--;
     }
 }
 
@@ -145,9 +145,9 @@ bool Mario::checkDamage() {
         mMovementStates._1B = false;
         mMovementStates._27 = false;
         mMovementStates._2C = false;
-        _10.jumping = false;
-        _10._14 = false;
-        _10._18 = false;
+        mActionStates.jumping = false;
+        mActionStates._14 = false;
+        mActionStates._18 = false;
         mFaint->mNoDamage = false;
         return false;
     }
@@ -179,20 +179,20 @@ bool Mario::checkDamage() {
         return true;
     }
 
-    if (_10.jumping) {
-        _10.jumping = false;
+    if (mActionStates.jumping) {
+        mActionStates.jumping = false;
         doFireDanceWithInitialDamage(1);
         return true;
     }
 
-    if (_10._14) {
-        _10._14 = false;
+    if (mActionStates._14) {
+        mActionStates._14 = false;
         doParalyze();
         return true;
     }
 
-    if (_10._18) {
-        _10._18 = false;
+    if (mActionStates._18) {
+        mActionStates._18 = false;
         if (tryCrush()) {
             return true;
         }
@@ -220,8 +220,8 @@ u16 Mario::getDamageAfterTimer() const {
         timer = mFireDamage->_12;
     }
 
-    if (timer < _41E) {
-        timer = _41E;
+    if (timer < mDamageAfterTimer) {
+        timer = mDamageAfterTimer;
     }
 
     return timer;
@@ -232,11 +232,11 @@ bool Mario::damageFloorCheck() {
         return false;
     }
 
-    if (_1C._16) {
+    if (mHitStates._16) {
         return false;
     }
 
-    switch (_960) {
+    switch (mFloorCode) {
     case CollisionFloorCode_Needle:
         if (checkCurrentFloorCodeSevere(CollisionFloorCode_Needle) && doNeedleWithInitialDamage(mGroundPolygon)) {
             return true;
@@ -263,7 +263,7 @@ bool Mario::damageFloorCheck() {
             return false;
         }
 
-        if (damage(_368 * 10.0f)) {
+        if (damage(mGroundNorm * 10.0f)) {
             return true;
         }
 
@@ -328,7 +328,7 @@ bool Mario::damagePolygonCheck(const Triangle* pTriangle) {
         return false;
     }
 
-    switch (_95C->getCode(pTriangle)) {
+    switch (mFloorCodeReader->getCode(pTriangle)) {
     case 0x81:
         if (doFireDanceWithInitialDamage(1)) {
             return true;
@@ -406,7 +406,7 @@ bool Mario::isEnableAddDamage() const {
 }
 
 bool Mario::damage(const Vec3f& rDirection) {
-    _7C4 = rDirection;
+    mDamageDir = rDirection;
     if (!isEnableAddDamage()) {
         return false;
     }
@@ -532,7 +532,7 @@ bool MarioDamage::update() {
                 changeAnimation(_28);
             }
 
-            if (getPlayer()->_1C._0) {
+            if (getPlayer()->mHitStates._0) {
                 f32 vertical = MR::vecKillElement(_1C, getAirGravityVec(), &_1C);
                 _1C.x *= 0.95f;
                 _1C.y *= 0.95f;
@@ -545,7 +545,7 @@ bool MarioDamage::update() {
             MarioActor* actor;
             if (getPlayer()->mVerticalSpeed > 30.0f && (actor = mActor, actor->selectDamagePop(getSensor(getGroundPolygon())))) {
                 Mario* player = getPlayer();
-                _1C += player->_368 * 20.0f;
+                _1C += player->mGroundNorm * 20.0f;
                 getPlayer()->mMovementStates._1 = false;
                 getPlayer()->mMovementStates.jumping = true;
             } else {
@@ -1082,7 +1082,7 @@ void MarioFireDance::impactEffect() {
 
 bool MarioFireDance::update() {
     if (getPlayer()->mMovementStates._1 && !getPlayer()->isRising()) {
-        if (getPlayer()->_960 != 0x81 && getPlayer()->_960 != CollisionFloorCode_DamageFire && getPlayer()->_960 != CollisionFloorCode_Needle) {
+        if (getPlayer()->mFloorCode != 0x81 && getPlayer()->mFloorCode != CollisionFloorCode_DamageFire && getPlayer()->mFloorCode != CollisionFloorCode_Needle) {
             if (_28 == 1) {
                 if (MR::getPlayerLeft() == 0 && !mActor->mHealth) {
                     mActor->changeGameOverAnimation();
@@ -1162,8 +1162,8 @@ bool MarioFireDance::close() {
 }
 
 void Mario::checkKarikariDamage() {
-    if (!_1C._5 || isDamaging()) {
-        _7D0 = 120;
+    if (!mHitStates._5 || isDamaging()) {
+        mKarikariTimer = 120;
         return;
     }
 
@@ -1179,12 +1179,12 @@ void Mario::checkKarikariDamage() {
         return;
     }
 
-    if (_1C._5 && _7D0) {
-        _7D0--;
-        if (!_7D0) {
+    if (mHitStates._5 && mKarikariTimer) {
+        mKarikariTimer--;
+        if (!mKarikariTimer) {
             if (mActor->mHealth == 1) {
                 faint(mHeadVec);
-                _7D0 = 120;
+                mKarikariTimer = 120;
                 return;
             }
 
@@ -1193,7 +1193,7 @@ void Mario::checkKarikariDamage() {
             playSound("ダメージ");
             mActor->decLifeSmall();
             mActor->_BC4 = 16;
-            _7D0 = 120;
+            mKarikariTimer = 120;
             if (!mActor->mHealth) {
                 mActor->forceGameOver();
             }

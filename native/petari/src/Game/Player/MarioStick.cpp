@@ -42,7 +42,7 @@ bool MarioStick::startJump() {
     f32 v2 = -mActor->getConst().getTable()->mBeeStickJumpBonus;
     v7 += getGravityVec() * v2;
     getPlayer()->tryStickJump(v7);
-    getPlayer()->_408 = 0;
+    getPlayer()->mBeeGravityTimer = 0;
     return true;
 }
 
@@ -52,7 +52,7 @@ bool MarioStick::postureCtrl(MtxPtr pMtx) {
 }
 
 bool MarioStick::setStickSensor(const HitSensor* pSensor) {
-    if (getPlayer()->_3BC < 0x78) {
+    if (getPlayer()->mAirTimer < 0x78) {
         return false;
     }
 

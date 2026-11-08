@@ -75,7 +75,7 @@ void MarioRabbit::hop() {
 
 void MarioRabbit::forceJump() {
     _26 = 1;
-    if (getPlayer()->_430 != 12) {
+    if (getPlayer()->mJumpKind != 12) {
         _68 = 1;
     }
 }
@@ -94,8 +94,8 @@ void MarioRabbit::impact() {
     getPlayer()->mMovementStates.jumping = true;
     getPlayer()->initJumpParam();
     Mario* player = getPlayer();
-    player->_42A = 0;
-    player->_430 = 0;
+    player->mInvincibleJump = 0;
+    player->mJumpKind = 0;
     getPlayer()->mMovementStates._22 = false;
     getPlayer()->mMovementStates._2B = false;
     if (_28) {
@@ -179,7 +179,7 @@ bool MarioRabbit::update() {
             }
         }
 
-        if (getPlayer()->_3CE < mActor->getConst().getTable()->mHopperLandingTime) {
+        if (getPlayer()->mLandTimer < mActor->getConst().getTable()->mHopperLandingTime) {
             if (mActor->isRequestJump() || _69) {
                 _28 = 1;
                 playEffect("共通ハイジャンプ");
@@ -198,7 +198,7 @@ bool MarioRabbit::update() {
         }
 
         if (_28) {
-            if (getPlayer()->_3CE < mActor->getConst().getTable()->mRabbitChargeTime2) {
+            if (getPlayer()->mLandTimer < mActor->getConst().getTable()->mRabbitChargeTime2) {
                 playSound("ホッパージャンプ溜め");
                 return true;
             }

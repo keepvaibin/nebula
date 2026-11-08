@@ -1709,7 +1709,7 @@ void Mario::initSound() {
         mSounds.add(soundlist[i].name, i);
     }
 
-    _970 = nullptr;
+    mRunningBas = nullptr;
 }
 
 // The reference also tries the hash sum of "声" and the name (a voice by its short name); no sum matches a listed
@@ -1782,16 +1782,16 @@ void Mario::startBas(const char* pAnimName, bool arg2, f32 startFrame, f32 speed
             mActor->mSoundObject->removeAnimation();
         }
 
-        _970 = pAnimName;
+        mRunningBas = pAnimName;
     }
 }
 
 bool Mario::isRunningBas(const char* pAnimName) const {
-    if (_970 == nullptr) {
+    if (mRunningBas == nullptr) {
         return false;
     }
 
-    if (strcmp(_970, pAnimName) == 0) {
+    if (strcmp(mRunningBas, pAnimName) == 0) {
         return true;
     }
 

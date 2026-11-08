@@ -87,7 +87,7 @@ bool MarioAnimator::isAnimationStop() const {
 void MarioAnimator::targetWeight(f32* pWeight, f32 target, f32 rate) {
     if (getPlayer()->isSwimming()) {
         *pWeight = *pWeight * (1.0f - mActor->mConst->getTable()->mWeightBlendRatioSwim) + target * mActor->mConst->getTable()->mWeightBlendRatioSwim;
-    } else if (getPlayer()->_3FA != 0) {
+    } else if (getPlayer()->mStartSpinTimer != 0) {
         *pWeight = *pWeight * 0.5f + target * 0.5f;
     } else {
         *pWeight = *pWeight * (1.0f - rate) + target * rate;
@@ -96,7 +96,7 @@ void MarioAnimator::targetWeight(f32* pWeight, f32 target, f32 rate) {
 
 void MarioAnimator::setWalkWeight(const f32* pWeights) {
     f32 rate = mActor->mConst->getTable()->mWeightBlendRatio;
-    if (getPlayer()->_3FA != 0) {
+    if (getPlayer()->mStartSpinTimer != 0) {
         rate = 0.5f;
     }
 
@@ -142,7 +142,7 @@ bool MarioAnimator::isLandingAnimationRun() const {
         return true;
     }
 
-    if (isAnimationRun(getPlayer()->_728)) {
+    if (isAnimationRun(getPlayer()->mHipDropLandAnim)) {
         return true;
     }
 
@@ -240,7 +240,7 @@ void MarioAnimator::update() {
     Mario* player = getPlayer();
     u8 prevWalkState = player->mTargetWalkSpeedIndex;
     player = getPlayer();
-    player->_71D = prevWalkState;
+    player->mPrevWalkSpeedIndex = prevWalkState;
 
     if (isWalkOrWaitingMotion() || isAnimationRun("しゃがみ基本")) {
         player = getPlayer();
@@ -280,7 +280,7 @@ void MarioAnimator::update() {
         if (!player->mMovementStates._1) {
             stopAnimation("崖ふんばり", "落下");
             player = getPlayer();
-            player->_414 = 15;
+            player->mLedgeFallTimer = 15;
         } else {
             stopAnimation("崖ふんばり");
         }
@@ -309,7 +309,7 @@ void MarioAnimator::update() {
     }
 
     player = getPlayer();
-    if (player->_20._A) {
+    if (player->mPrevMovementStates._A) {
         player = getPlayer();
         if (!player->mMovementStates.jumping) {
             player = getPlayer();
@@ -403,7 +403,7 @@ notSquat:
     if (!isAnimationRun("ハード着地")) {
         if (isAnimationRun("がんばり走り")) {
             player = getPlayer();
-            if (player->_8F0 < 1.0f) {
+            if (player->mSlipPower < 1.0f) {
                 stopAnimation(nullptr);
             }
         } else {
@@ -462,13 +462,13 @@ void MarioAnimator::updateWalkBas(const char* pAnimName, f32 speed) {
     bool shouldStart = false;
 
     // Check if player has a special animation queued
-    if (getPlayer()->_970) {
+    if (getPlayer()->mRunningBas) {
         Mario* player = getPlayer();
         const char* currentBck = mXanimePlayer->getCurrentBckName();
 
-        if (strcmp(currentBck, player->_970) != 0) {
+        if (strcmp(currentBck, player->mRunningBas) != 0) {
             shouldStart = true;
-            if (MR::strcasecmp("DamageWait", getPlayer()->_970) == 0) {
+            if (MR::strcasecmp("DamageWait", getPlayer()->mRunningBas) == 0) {
                 if (mActor->mHealth == 1) {
                     shouldStart = false;
                 }
@@ -515,7 +515,7 @@ updatePrevState:
 
 void MarioAnimator::setHand() {
     Vec3f scale;
-    scale.x = getPlayer()->_3F0;
+    scale.x = getPlayer()->mHandScaleX;
     scale.y = 1.0f;
     scale.z = 1.0f;
     XanimeCore* core = mXanimePlayer->mCore;
@@ -578,7 +578,7 @@ void MarioAnimator::setTilt() {
     f32 lookDown = player2->mWalkSpeed * table->mLookDownRatio;
 
     Mario* player3 = getPlayer();
-    f32 vertAngle = -player3->_3F4;
+    f32 vertAngle = -player3->mSpinInertiaBlend;
     vertAngle *= PI;
     f32 f4 = 0.9f * _5C + 0.1f * lookDown;
     f32 f5 = vertAngle / 4.0f;
@@ -621,7 +621,7 @@ void MarioAnimator::setHoming() {
         Vec3f toTarget = targetPos - mActor->_2AC;
 
         Mario* player = getPlayer();
-        angleH = MR::vecKillElement(toTarget, player->_1FC, &toTarget);
+        angleH = MR::vecKillElement(toTarget, player->mPostureUpVec, &toTarget);
 
         f32 dist = toTarget.length();
         f32 vAngle;
@@ -659,7 +659,7 @@ void MarioAnimator::setHoming() {
 
         Vec3f cross = toTarget.cross(getFrontVec());
         Mario* player2 = getPlayer();
-        f32 gravDot = cross.dot(player2->_1FC);
+        f32 gravDot = cross.dot(player2->mPostureUpVec);
         if (gravDot < 0.0f) {
             angleH = -angleH;
         }
@@ -770,7 +770,7 @@ f32 MarioAnimator::getUpperFrame() const {
 }
 
 void MarioAnimator::setWalkMode() {
-    if (!getPlayer()->mMovementStates._F && getPlayer()->mMovementStates._10 && !getPlayer()->mMovementStates._A && 0.0f == getPlayer()->_8F0 &&
+    if (!getPlayer()->mMovementStates._F && getPlayer()->mMovementStates._10 && !getPlayer()->mMovementStates._A && 0.0f == getPlayer()->mSlipPower &&
         static_cast< u8 >(getPlayer()->checkStickFrontBack()) == 2) {
         if (!isStatusActiveID(MarioStatus_Magic) && !isStatusActiveID(MarioStatus_Skate)) {
             if (getPlayer()->mMovementStates._35) {
@@ -802,7 +802,7 @@ void MarioAnimator::calc() {
     }
 
     Mario* player = getPlayer();
-    Vec3f playerPos(player->_13C);
+    Vec3f playerPos(player->mLookOfs);
     XjointTransform* joint0 = mXanimePlayer->mCore->getJointTransform(0);
     joint0->mWorldTranslate = playerPos;
     if (_6C) {
@@ -950,11 +950,11 @@ void MarioAnimator::updateJointRumble() {
     f32 hipRot = 0.7f * ((f32)_74 / 60.0f);
 
     if (getPlayer()->mMovementStates._1 && !getPlayer()->mMovementStates._37 && getPlayer()->mTargetWalkSpeedIndex == 0 &&
-        getPlayer()->calcAngleD(getPlayer()->_368) > 5.0f) {
+        getPlayer()->calcAngleD(getPlayer()->mGroundNorm) > 5.0f) {
         Vec3f dir;
         const Vec3f* airGrav = &getAirGravityVec();
         Mario* playerVec = getPlayer();
-        MR::vecKillElement(playerVec->_368, *airGrav, &dir);
+        MR::vecKillElement(playerVec->mGroundNorm, *airGrav, &dir);
         MR::normalizeOrZero(&dir);
 
         if (getFrontVec().dot(dir) < -0.707f) {
@@ -1056,7 +1056,7 @@ bool MarioAnimator::isMirrorAnimation() {
 
     Vec3f camDir = getCamDirX();
     Mario* player = getPlayer();
-    f32 dot = player->_1FC.dot(getCamDirY());
+    f32 dot = player->mPostureUpVec.dot(getCamDirY());
     if (dot < 0.0f) {
         camDir = -camDir;
     }

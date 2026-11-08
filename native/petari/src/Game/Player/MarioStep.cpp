@@ -48,7 +48,7 @@ void Mario::checkStep() {
         return;
     }
 
-    if (!MR::isNearZero(_184)) {
+    if (!MR::isNearZero(mRelativeMove)) {
         return;
     }
 
@@ -56,7 +56,7 @@ void Mario::checkStep() {
         return;
     }
 
-    if (_750) {
+    if (mCorrectionEaseTimer) {
         return;
     }
 
@@ -64,19 +64,19 @@ void Mario::checkStep() {
         return;
     }
 
-    if (isSlipPolygon(_45C)) {
+    if (isSlipPolygon(mShadowPolygon)) {
         return;
     }
 
-    if (_4D8->isValid() && !mMovementStates._8 && mMovementStates._1) {
-        const f32 frontDot = mFrontVec.dot(*_4D8->getNormal(0));
+    if (mStepPolygon->isValid() && !mMovementStates._8 && mMovementStates._1) {
+        const f32 frontDot = mFrontVec.dot(*mStepPolygon->getNormal(0));
         Vec3f horizontal;
-        MR::vecKillElement(_50C - mPosition, -*getGravityVec(), &horizontal);
+        MR::vecKillElement(mStepHitPos - mPosition, -*getGravityVec(), &horizontal);
 
         if (horizontal.length() < 20.0f && MR::abs(frontDot) < 0.3926991f) {
-            f32 stepHeight = (_50C - mPosition).dot(-*getGravityVec());
+            f32 stepHeight = (mStepHitPos - mPosition).dot(-*getGravityVec());
             if (stepHeight < mActor->getConst().getTable()->mWalkStepHeight) {
-                startStep(_50C);
+                startStep(mStepHitPos);
             }
         } else if (MR::abs(frontDot) < 1.0471976f) {
             Mtx rotMtx;
@@ -100,9 +100,9 @@ void Mario::checkStep() {
         return;
     }
 
-    f32 stepHeight = (_4A4 - mPosition).dot(-*getGravityVec());
+    f32 stepHeight = (mFrontFloorPos - mPosition).dot(-*getGravityVec());
     if (stepHeight < mActor->getConst().getTable()->mWalkStepHeight) {
-        startStep(_4A4);
+        startStep(mFrontFloorPos);
     }
 }
 
@@ -137,26 +137,26 @@ void Mario::startStep(const Vec3f& rVec) {
         return;
     }
 
-    if (_4C8->isValid() && MR::isSensorPressObj(_4C8->mSensor)) {
+    if (mCeilPolygon->isValid() && MR::isSensorPressObj(mCeilPolygon->mSensor)) {
         return;
     }
 
-    if (_4D8->isValid()) {
-        if (MR::isSensorPressObj(_4D8->mSensor)) {
+    if (mStepPolygon->isValid()) {
+        if (MR::isSensorPressObj(mStepPolygon->mSensor)) {
             return;
         }
 
-        MtxPtr prevBase = _4D8->getPrevBaseMtx()->toMtxPtr();
-        MtxPtr base = _4D8->getBaseMtx()->toMtxPtr();
+        MtxPtr prevBase = mStepPolygon->getPrevBaseMtx()->toMtxPtr();
+        MtxPtr base = mStepPolygon->getBaseMtx()->toMtxPtr();
 
-        if (!MR::isSameMtx(base, prevBase) && _4D8->mSensor != mGroundPolygon->mSensor) {
+        if (!MR::isSameMtx(base, prevBase) && mStepPolygon->mSensor != mGroundPolygon->mSensor) {
             return;
         }
     }
 
     setTrans(rVec, "階段");
     changeStatus(mStep);
-    _3D0 = 0;
+    mTurnSlipTimer = 0;
     const f32 zero = 0.0f;
     mVelocity.z = zero;
     mVelocity.y = zero;

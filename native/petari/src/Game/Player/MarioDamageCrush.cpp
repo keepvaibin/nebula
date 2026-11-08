@@ -4,7 +4,7 @@
 #include "Game/Player/MarioState.hpp"
 
 bool Mario::requestCrush() {
-    _10._18 = true;
+    mActionStates._18 = true;
     return true;
 }
 
