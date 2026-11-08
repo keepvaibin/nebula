@@ -24,8 +24,8 @@ public:
 private:
     Ui::TexMap* mTexture;
     IconAButton* mAButtonIcon;
-    const char* _28;
-    bool _2C;
+    const char* mGalaxyName;
+    bool mIsForTalk;
 };
 
 namespace MR {

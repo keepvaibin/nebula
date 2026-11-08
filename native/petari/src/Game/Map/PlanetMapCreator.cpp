@@ -7,7 +7,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Table.hpp"
 
 namespace {
     static const char* const sArcName = "PlanetMapDataTable";
@@ -202,7 +201,7 @@ namespace {
     }
 
     static bool isDataForceLow(const PlanetMapData* pMapData) {
-        for (s32 i = 0; i < pMapData->mForceScenarioNum; i++) {
+        for (int i = 0; i < 8; i++) {
             if (!MR::isEqualString(pMapData->mForceScenarioData[i], "Low")) {
                 return true;
             }
@@ -235,15 +234,8 @@ CreatorFuncPtr PlanetMapCreator::getCreateFunc(const char* pName) {
 }
 
 void PlanetMapCreator::createPlanetMapDataTable(Table* pInfo) {
-    // ForceLowScenarioName0, 1, ... up to the first the table lacks.
-    s32 forceNum = 0;
-    while (pInfo->searchItemInfo(MR::FormattedName("ForceLowScenarioName%d", forceNum).c_str()) >= 0) {
-        forceNum++;
-    }
-
     for (int i = 0; i < mTableCount; i++) {
         mPlanetMapData[i] = new PlanetMapData();
-        mPlanetMapData[i]->mForceScenarioNum = forceNum;
 
         addTableData(pInfo, i);
     }
@@ -266,9 +258,11 @@ void PlanetMapCreator::addTableData(const Table* pInfo, s32 idx) {
         }
     }
 
-    curData->mForceScenarioData = new const char*[curData->mForceScenarioNum];
-    for (s32 i = 0; i < curData->mForceScenarioNum; i++) {
-        MR::getCsvDataStr(&curData->mForceScenarioData[i], pInfo, MR::FormattedName("ForceLowScenarioName%d", i).c_str(), idx);
+    for (int i = 0; i < 8; i++) {
+        char data[256];
+        nebula_snprintf(data, sizeof(data), "ForceLowScenarioName%d", i);
+
+        MR::getCsvDataStr(&curData->mForceScenarioData[i], pInfo, data, idx);
     }
 }
 
@@ -291,7 +285,7 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
 
     MR::FormattedName name("%s_%d", MR::getCurrentStageName(), MR::getCurrentScenarioNo());
 
-    for (s32 i = 0; i < pData->mForceScenarioNum; i++) {
+    for (int i = 0; i < 8; i++) {
         if (MR::isEqualString(pData->mForceScenarioData[i], "Low")) {
             return false;
         }
@@ -309,13 +303,13 @@ CreatorFuncPtr PlanetMapCreatorFunction::getPlanetMapCreator(const char* pName) 
 }
 
 bool PlanetMapCreatorFunction::isLoadArchiveAfterScenarioSelected(const char* pArchive) {
-    const PlanetMapData* pData = MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive);
+    bool isExistTableData = MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive) != nullptr;
 
-    if (pData == nullptr) {
+    if (!isExistTableData) {
         return false;
     }
 
-    return ::isDataForceLow(pData);
+    return ::isDataForceLow(MR::getSceneObj< PlanetMapCreator >(SceneObj_PlanetMapCreator)->getTableData(pArchive));
 }
 
 bool PlanetMapCreatorFunction::isRegisteredObj(const char* pArchive) {

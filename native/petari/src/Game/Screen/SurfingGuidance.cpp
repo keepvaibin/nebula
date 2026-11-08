@@ -19,15 +19,13 @@ namespace {
     NEW_NERVE(SurfingGuidanceFadeOut, SurfingGuidance, FadeOut);
 };  // namespace
 
-SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true), _20(), _24(), _2C() {
+SurfingGuidance::SurfingGuidance() : LayoutActor("サーフィンガイダンス", true) {
 }
 
 void SurfingGuidance::init(const TableIter& rIter) {
     MR::connectToSceneLayout(this);
     initLayoutManager("TiltGuidance", 3);
     initNerve(GET_NERVE_ANON(SurfingGuidanceFadeIn));
-
-    _20 = 0;
 
     kill();
 }

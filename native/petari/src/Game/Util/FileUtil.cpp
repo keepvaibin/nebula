@@ -1,6 +1,6 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
@@ -11,12 +11,13 @@
 
 namespace {
     NebulaArena* getHoldingArena() {
-        NebulaArena* const pCurrent = NebulaArena::current();
-        if (Arenas::scene() == nullptr || pCurrent != Arenas::scene()) {
+        const HeapMemoryWatcher* const pWatcher = SingletonHolder< HeapMemoryWatcher >::get();
+        NebulaArena* const pCurrent = NebulaArena::getCurrentHeap();
+        if (pWatcher->mSceneHeap == nullptr || pCurrent != pWatcher->mSceneHeap) {
             return pCurrent;
         }
 
-        return MR::isStageFileSelect() ? Arenas::permanent() : Arenas::sceneFiles();
+        return MR::isStageFileSelect() ? pWatcher->mPermanent : pWatcher->mFileCacheHeap;
     }
 
     // `game`: the game's own files under the mods' (GameAssets::findGame).
@@ -121,7 +122,7 @@ namespace MR {
     }
 
     void removeResourceHolders(NebulaArena* pArena) {
-        SingletonHolder< ResourceHolderManager >::get()->removeArenaHolders(pArena);
+        SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pArena);
     }
 
     bool isExistObjectOrLayoutArchive(const char* pName) {

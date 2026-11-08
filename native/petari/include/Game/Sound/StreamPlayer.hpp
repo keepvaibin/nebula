@@ -66,9 +66,7 @@ private:
     bool mPaused = false;
     bool mLoaded = false;
     bool mArmed = false;
-    // Posted on the audio thread and read by the next job run; one more than this many is dropped.
-    static const u32 cMessageNum = 16;
-    u32 mMessages[cMessageNum] = {};
+    u32 mMessages[16] = {};
     u32 mMessageHead = 0;
     u32 mMessageCount = 0;
     u32 mOwnerSound = 0;

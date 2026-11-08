@@ -41,11 +41,10 @@ public:
     void setRecoveryCountAnimFrame();
 
     CountUpPaneRumbler* mCountUpPaneRumbler;
-    u8 _24[8];
     Vec2f mFollowPos;
     Vec2f mFollowPosW;
-    Vec2f _3C;
+    Vec2f mMeterMoveStartPos;
     s32 mCount;
     f32 mAlpha;
-    f32 _4C;
+    f32 mVisibleRate;
 };

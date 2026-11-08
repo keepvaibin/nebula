@@ -5,6 +5,8 @@
 // The game's reading of the sound table: the sound switches' bits.
 class AudSoundInfo : public StdSoundInfo {
 public:
+    AudSoundInfo() : StdSoundInfo(true) {
+    }
 
     u16 getSoundSw(SoundID) const;
     bool isLimitNumPlaying(SoundID) const;
@@ -16,6 +18,6 @@ public:
     bool isUseLpf(SoundID) const;
 
     static AudSoundInfo* getInstance() {
-        return static_cast< AudSoundInfo* >(StdSoundInfo::getInstance());
+        return static_cast< AudSoundInfo* >(SoundTableInfo::getInstance());
     }
 };

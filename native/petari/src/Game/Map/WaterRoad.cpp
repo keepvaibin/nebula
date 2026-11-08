@@ -1,5 +1,4 @@
 #include "Game/Map/WaterRoad.hpp"
-#include "Game/System/NebulaArena.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/AudioLib/AudSoundObject.hpp"
@@ -446,7 +445,7 @@ void WaterRoad::init(const TableIter& rIter) {
     mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave", "EnvMap.bti"));
 
     initSound(3, false);
-    mSoundObj = new AudSoundObject(&mCamRailNearestPos, 4, NebulaArena::current());
+    mSoundObj = new AudSoundObject(&mCamRailNearestPos, 4, MR::getCurrentHeap());
 
     MR::calcBoundingBox(this, &mBoundingBox, ::sClippingRadiusOffset);
     mBoundingBox.pad(mRadius);

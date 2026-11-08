@@ -125,7 +125,7 @@ void FileSelectButton::createButtonController() {
     mButtonCtrl[4] = new ButtonPaneController(this, "P2ManualButton", "BoxP2", 0, true);
 
     for (int i = 0; i < ARRAY_SIZE(mButtonCtrl); i++) {
-        mButtonCtrl[i]->_22 = false;
+        mButtonCtrl[i]->mDisappearsAfterDecide = false;
     }
 }
 

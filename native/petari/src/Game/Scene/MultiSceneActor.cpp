@@ -44,9 +44,16 @@ void MultiSceneActor::calcAnim() {
         return;
     }
 
+    Mtx34f mtx;
+    mtx.identity();
+
+    MR::makeMtxTR(mtx, mTranslation, mRotation);
+    NebulaMtxCopy(mtx, mModelManager->getModel()->mBaseTransformMtx);
+
     Model* pModel = mModelManager->getModel();
-    MR::makeMtxTR(pModel->mBaseTransformMtx, mTranslation, mRotation);
-    pModel->setBaseScale(mScale);
+    pModel->mBaseScale.x = mScale.x;
+    pModel->mBaseScale.y = mScale.y;
+    pModel->mBaseScale.z = mScale.z;
     // The star-select sky (ScenarioSelectLayout) is one quad at z = -1000 sized for 16:9: a wider picture scales it
     // about its centre so it still covers the screen. The base matrix is rotation and translation only.
     if (MR::isScreen16Per9() && MR::getDisplay().wide &&
@@ -104,7 +111,7 @@ MultiSceneEffectKeeper* MultiSceneActor::getEffectKeeper() const {
 void MultiSceneActor::initEffect(EffectSystem* pEffectSystem, int extraEmitterNum, const char* pResName) {
     mEffectSystem = pEffectSystem;
 
-    mEffectKeeper = new MultiSceneEffectKeeper(mModelManager, extraEmitterNum, pResName);
+    mEffectKeeper = new MultiSceneEffectKeeper(mName, mModelManager, extraEmitterNum, pResName);
     mEffectKeeper->init(this, pEffectSystem);
 }
 

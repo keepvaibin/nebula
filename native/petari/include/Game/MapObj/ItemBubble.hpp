@@ -5,10 +5,10 @@
 
 class StarPiece;
 
+// This class may not belong in this file
 class RotPartsModel : public PartsModel {
 public:
-    RotPartsModel(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr pMtx, int drawBufferType, bool deferMaterials)
-        : PartsModel(pActor, pName, pModelName, pMtx, drawBufferType, deferMaterials) {
+    RotPartsModel(LiveActor* a1, const char* a2, const char* a3, MtxPtr a4, int a5, bool a6) : PartsModel(a1, a2, a3, a4, a5, a6) {
     }
 
     virtual ~RotPartsModel() {

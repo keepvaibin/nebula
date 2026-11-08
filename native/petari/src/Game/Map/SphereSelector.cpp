@@ -392,11 +392,11 @@ void SphereSelectorFunction::calcHandledTrans(const Vec3f& rSrc, Vec3f* pDst) {
 }
 
 void SphereSelectorFunction::calcHandledRotateMtx(const Vec3f& rSrc, Pos3f* pDst) {
-    Pos3f handleMtx;
-    ::getHandleMtx(&handleMtx);
-    Mtx34f rotMtx;
-    MR::makeMtxRotate(rotMtx, rSrc);
-    pDst->concat(handleMtx, rotMtx);
+    Pos3f mtx;
+    ::getHandleMtx(&mtx);
+    Mtx34f mtx2;
+    MR::makeMtxRotate(mtx2, rSrc);
+    pDst->concat(mtx, mtx2);
 }
 
 Vec3f& SphereSelectorFunction::getHandleTrans() {

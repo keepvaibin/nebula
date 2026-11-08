@@ -35,7 +35,7 @@ InputStick::InputStick(const PlayerInput* pPad)
 }
 
 void InputStick::update() {
-    PlayerInputSample* pSample = mPad->getSample();
+    PlayerInputSample* pSample = mPad->getSample(0);
 
     if (!MR::hasMoveStick(pSample)) {
         return;

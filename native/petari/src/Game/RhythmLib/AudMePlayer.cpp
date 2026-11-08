@@ -30,6 +30,7 @@ void AudMe::requestStart(u32 trackBound, u32 place) {
 }
 
 void AudMe::start() {
+    updateTimedParams(true);
     mLink.start(mTrackBound, AudMeMgr::getInstance()->programData(), mPlace, sound());
 }
 
@@ -108,7 +109,7 @@ void AudMe::update() {
     }
 
     if (mLink.exists()) {
-        updateTimedParams();
+        updateTimedParams(false);
         mLink.frame(sound());
 
         if (mLink.status() == MeTrack::STATUS_FREE) {
@@ -144,7 +145,11 @@ void AudMe::initTimed() {
     }
 }
 
-void AudMe::updateTimedParams() {
+void AudMe::updateTimedParams(bool immediate) {
+    if (immediate) {
+        return;
+    }
+
     for (s32 i = 0; i < TIMED_PARAMS; i++) {
         if (mMoveParams[i].mDelta != 0.0f) {
             mMoveParams[i].mValue += mMoveParams[i].mDelta;
@@ -206,7 +211,7 @@ bool AudMe::isRequested(u32 place) const {
     return status == MeTrack::STATUS_RUN || status == MeTrack::STATUS_READY;
 }
 
-AudMeMgr::AudMeMgr(NebulaArena* pArena) : SoundGlobal< AudMeMgr >(true), mArena(pArena), mMeSeq(), mMeVolume(1.0f) {
+AudMeMgr::AudMeMgr(NebulaArena* pHeap) : SoundGlobal< AudMeMgr >(true), mHeap(pHeap), mMeSeq(), mMeVolume(1.0f) {
 }
 
 void AudMeMgr::setMeSeq(const void* pData) {
@@ -237,7 +242,7 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
         }
     }
 
-    AudMe* me = new (mArena, 0) AudMe();
+    AudMe* me = new (mHeap, 0) AudMe();
 
     if (pHandle != nullptr) {
         me->attachHandle(pHandle);
@@ -327,7 +332,7 @@ bool AudMeMgr::isRequestedMe(u32 place) {
 }
 
 void AudMeMgr::setOuterPlayingParam(s32 meId, AudMe* pMe) {
-    const AudMePlayingParams* params = &mParams.mParams[meId];
+    AudMePlayingParams* params = &mParams.mParams[meId];
     f32 vol = params->mChordVolume / 127.0f;
     vol *= vol;
     f32 pan = params->mPan / 127.0f;
@@ -344,6 +349,6 @@ void AudMePlayingParamsHolder::setResource(void* pRes) {
 
     mNumEntries = numEntries;
     mBase = static_cast< const u8* >(pRes);
-    mParams = reinterpret_cast< const AudMePlayingParams* >(mBase + entryOff);
+    mParams = reinterpret_cast< AudMePlayingParams* >(static_cast< u8* >(pRes) + entryOff);
     mNameOffsets = reinterpret_cast< const u32* >(mBase + namesOff);
 }

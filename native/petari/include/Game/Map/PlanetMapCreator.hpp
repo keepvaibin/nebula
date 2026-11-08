@@ -14,9 +14,7 @@ struct PlanetMapData {
 
     const char* mPlanetName;
     const char* mData[5];
-    // ForceLowScenarioName0.. as many columns as the table has.
-    const char** mForceScenarioData;
-    s32 mForceScenarioNum;
+    const char* mForceScenarioData[8];
 };
 
 typedef NameObj* (*CreatorFuncPtr)(const char*);

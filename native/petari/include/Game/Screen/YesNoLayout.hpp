@@ -19,5 +19,5 @@ public:
     void exeSelecting();
 
     YesNoController* mController;
-    bool _24;
+    bool mHasInformationMessage;
 };

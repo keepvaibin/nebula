@@ -1,16 +1,16 @@
-#include "Game/Gravity/GravityFollower.hpp"
+#include "Game/Gravity/GraviryFollower.hpp"
 #include "Game/Gravity/GlobalGravityObj.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-GravityFollower::GravityFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter)
+GraviryFollower::GraviryFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter)
     : BaseMatrixFollower(rIter), mGravity(pGravityObj->getGravity()) {
 }
 
-void GravityFollower::setGravityFollowHost(const NameObj* pHost) {
+void GraviryFollower::setGravityFollowHost(const NameObj* pHost) {
     mGravity->mHost = pHost;
 }
 
-void GravityFollower::update() {
+void GraviryFollower::update() {
     GlobalGravityObj* pFollowTarget = static_cast< GlobalGravityObj* >(getFollowTargetActor());
 
     if (MR::isDead(pFollowTarget) || MR::isClipped(pFollowTarget) || !isValid()) {
@@ -30,7 +30,7 @@ namespace MR {
             return false;
         }
 
-        MR::addBaseMatrixFollower(new GravityFollower(pGravityObj, rIter));
+        MR::addBaseMatrixFollower(new GraviryFollower(pGravityObj, rIter));
         return true;
     }
 };  // namespace MR

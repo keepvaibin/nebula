@@ -1,4 +1,5 @@
 #include "Game/Player/MarioModule.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -217,31 +218,31 @@ f32 MarioModule::getAnimationFrame() const {
     return mActor->mMarioAnim->getFrame();
 }
 
-void MarioModule::changeAnimation(const char* pAnim, MarioIndexedAnime anime) {
+void MarioModule::changeAnimation(const char* pAnim, u32 index) {
     if (!mActor->mAnimationFrozen) {
         changeAnimation(pAnim);
-        getPlayer()->mIndexedAnimeOn[anime] = 1;
+        getPlayer()->mIndexedAnimeOn[index] = 1;
     }
 }
 
-bool MarioModule::isAnimationRun(const char* pAnim, MarioIndexedAnime anime) {
-    if (getPlayer()->mIndexedAnimeOn[anime] == 0) {
+bool MarioModule::isAnimationRun(const char* pAnim, u32 index) {
+    if (getPlayer()->mIndexedAnimeOn[index] == 0) {
         return false;
     }
 
     bool isAnimRun = isAnimationRun(pAnim);
 
     if (!isAnimRun) {
-        getPlayer()->mIndexedAnimeOn[anime] = 0;
+        getPlayer()->mIndexedAnimeOn[index] = 0;
     }
 
     return isAnimRun;
 }
 
-void MarioModule::stopAnimation(const char* pAnim, MarioIndexedAnime anime) {
-    if (!mActor->mAnimationFrozen && mActor->getMario()->mIndexedAnimeOn[anime]) {
+void MarioModule::stopAnimation(const char* pAnim, u32 index) {
+    if (!mActor->mAnimationFrozen && mActor->getMario()->mIndexedAnimeOn[index]) {
         stopAnimation(pAnim);
-        getPlayer()->mIndexedAnimeOn[anime] = 0;
+        getPlayer()->mIndexedAnimeOn[index] = 0;
     }
 }
 

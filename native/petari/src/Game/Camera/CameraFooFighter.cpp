@@ -34,31 +34,31 @@ CameraTargetObj* CameraFooFighter::calc() {
     f32 dist = CameraLocalUtil::calcFollowFrame(this, watchPoint, gravUp, mDistMin, mDistMax, true, &newFront, &newUp, &newSide);
 
     if (MR::isPlayerNeedBrakingCamera()) {
-        Pos3f targetFrame;
-        targetFrame.identity();
-        targetFrame.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
-        targetFrame.setYDir(-CameraLocalUtil::getTarget(this)->getFrontVec());
-        targetFrame.setZDir(CameraLocalUtil::getTarget(this)->getUpVec());
+        Pos3f mtx1;
+        mtx1.identity();
+        mtx1.setXDir(CameraLocalUtil::getTarget(this)->getSideVec());
+        mtx1.setYDir(-CameraLocalUtil::getTarget(this)->getFrontVec());
+        mtx1.setZDir(CameraLocalUtil::getTarget(this)->getUpVec());
 
-        Quat4f targetRot;
-        targetFrame.getQuat(targetRot);
+        Quat4f rot1;
+        mtx1.getQuat(rot1);
 
-        Pos3f followFrame;
-        followFrame.identity();
-        followFrame.setXDir(newSide);
-        followFrame.setYDir(newUp);
-        followFrame.setZDir(newFront);
+        Pos3f mtx2;
+        mtx2.identity();
+        mtx2.setXDir(newSide);
+        mtx2.setYDir(newUp);
+        mtx2.setZDir(newFront);
 
-        Quat4f followRot;
-        followFrame.getQuat(followRot);
+        Quat4f rot2;
+        mtx2.getQuat(rot2);
 
-        Quat4f blendRot;
-        blendRot.slerp(followRot, targetRot, ::sRateWhenBraking);
+        Quat4f rotQ;
+        rotQ.slerp(rot2, rot1, ::sRateWhenBraking);
 
-        followFrame.makeQuat(blendRot);
-        followFrame.getXDir(newSide);
-        followFrame.getYDir(newUp);
-        followFrame.getZDir(newFront);
+        mtx2.makeQuat(rotQ);
+        mtx2.getXDir(newSide);
+        mtx2.getYDir(newUp);
+        mtx2.getZDir(newFront);
     } else {
         Vec3f targetSide = CameraLocalUtil::getTarget(this)->getSideVec();
         targetSide -= gravUp * gravUp.dot(targetSide);

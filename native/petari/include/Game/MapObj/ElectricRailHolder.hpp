@@ -37,8 +37,8 @@ public:
     void registerRail(const LiveActor*, ElectricRailType);
     ModelObj* createModel(ElectricRailType) const;
 
-    MR::InlineArray< ModelObj*, 4 > mRailModels;
-    MR::InlineVector< RailItem*, 64 > mRailItems;
+    MR::FixedArray< ModelObj*, 4 > mRailModels;
+    MR::Vector< MR::FixedArray< RailItem*, 64 > > mRailItems;
     bool mIsActive;
 };
 

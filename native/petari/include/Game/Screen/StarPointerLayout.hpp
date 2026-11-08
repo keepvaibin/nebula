@@ -124,7 +124,6 @@ public:
     s32 mTouchTimer;
     s32 mPadChannel;
     f32 mRadius;
-    f32 _3C;
     StarPointerDirector* mDirector;
     StarPointerBlur* mBlur;
     StarPointerCommandStream* mCommandStream;
@@ -144,7 +143,6 @@ public:
     bool mIsPointerValid;
     bool mIsAppear;
     s32 mAppearTime;
-    u32 _74;
     // The panes shown, hidden and tested every frame, bound in initWithPort.
     Ui::Pane* mStarPointerPane = nullptr;
     Ui::Pane* mHandPointerPane = nullptr;

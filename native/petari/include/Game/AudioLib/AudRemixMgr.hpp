@@ -27,13 +27,13 @@ struct RemixNoteGroupData {
 
 class AudRemixMgr {
 public:
-    AudRemixMgr(NebulaArena* pArena);
+    AudRemixMgr(NebulaArena* pHeap);
     void init();
     void update();
     void setRemixSeqResource(void* ptr);
     RemixNoteGroupData* getRemixNoteGroupDataFromMelodyNo(s32 melodyNo) const;
 
-    NebulaArena* mArena;
+    NebulaArena* mHeap;
     RemixNoteGroupData* mGroups;
     s32 mGroupCount;
     AudSoundObject* mSoundObj;

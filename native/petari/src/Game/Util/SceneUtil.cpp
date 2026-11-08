@@ -13,7 +13,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/PlacedHiddenStarScenarioTable.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
 #include "Game/Util/PlacementLink.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -60,8 +60,8 @@ namespace MR {
         return SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mStage;
     }
 
-    bool isCurrentScene(SceneKind kind) {
-        return SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mScene == kind;
+    bool isEqualSceneName(const char* pSceneName) {
+        return isEqualStringCase(SingletonHolder< GameSystem >::get()->mSceneController->mCurrSceneControlInfo.mScene, pSceneName);
     }
 
     bool isEqualStageName(const char* pStageName) {
@@ -213,7 +213,7 @@ namespace MR {
 
     AssetFolder* getStageArchive(const char* pStageName) {
         // A zone's archive lives with the stage's files, also on the file select stage.
-        return getArchive(MR::FormattedName("/StageData/%s", pStageName).c_str(), Arenas::sceneFiles());
+        return getArchive(MR::FormattedName("/StageData/%s", pStageName).c_str(), getSceneArchiveHeap());
     }
 
     s32 getGeneralPosNum() {
@@ -341,7 +341,9 @@ namespace MR {
 
     void getCurrentScenarioStartAnimCameraData(void** ppData, s32* pSize) {
         StageDataHolder* pHolder = getStageDataHolder();
-        *ppData = pHolder->getStageArchiveResource(MR::FormattedName("StartScenario%d.canm", getCurrentScenarioNo()).c_str());
+        char fileName[256];
+        nebula_snprintf(fileName, sizeof(fileName), "StartScenario%d.canm", getCurrentScenarioNo());
+        *ppData = pHolder->getStageArchiveResource(fileName);
         if (*ppData != nullptr) {
             *pSize = pHolder->getStageArchiveResourceSize(*ppData);
         } else {

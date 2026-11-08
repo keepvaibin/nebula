@@ -59,7 +59,7 @@ void ShockWaveGenerator::exeWait() {
         MR::startBtk(this, "SpinHit");
         MR::setBrkFrameAndStop(this, 0.0f);
         MR::setBtkFrameAndStop(this, 0.0f);
-        if (NebulaRegion::isEurope()) {
+        if (NebulaRegion::isPal()) {
             MR::validateClipping(this);
         }
     }
@@ -127,14 +127,14 @@ bool ShockWaveGenerator::isPlayerInCameraStartRange() const {
 }
 
 void ShockWaveGenerator::startShockWave() {
-    if (NebulaRegion::isEurope()) {
+    if (NebulaRegion::isPal()) {
         MR::invalidateClipping(this);
     }
 
     MR::startSound(this, "SE_OJ_SHOCK_WAVE_GENERATE");
     if (mCameraInfo != nullptr) {
         if (isPlayerInCameraStartRange()) {
-            if (!NebulaRegion::isEurope()) {
+            if (!NebulaRegion::isPal()) {
                 MR::requestStartDemoWithoutCinemaFrame(this, ::cDemoCameraName, GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvDemoEcho), nullptr);
             } else if (MR::tryStartDemoWithoutCinemaFrame(this, ::cDemoCameraName)) {
                 setNerve(GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvDemoEcho));

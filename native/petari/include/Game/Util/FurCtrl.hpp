@@ -4,7 +4,6 @@
 #include "Game/Util/FurParam.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "Game/Util/Array.hpp"
 
 template < class T >
 class SiteMesh;
@@ -39,7 +38,7 @@ public:
 
 class FurDrawManager : public NameObj {
 public:
-    FurDrawManager(u32 capacity);
+    FurDrawManager(u8 capacity);
 
     virtual ~FurDrawManager();
     virtual void draw() const;
@@ -50,7 +49,9 @@ public:
         return mBank;
     }
 
-    MR::Vector< MR::AssignableArray< FurCtrl* > > mFurCtrls[2];  // by draw order; only order 1 is drawn here
+    u8 mCapacity;
+    u8 mCounts[2];
+    FurCtrl** mFurCtrls[2];
     FurBank* mBank;
 };
 

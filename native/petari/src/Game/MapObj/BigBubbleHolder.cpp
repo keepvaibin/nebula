@@ -116,8 +116,8 @@ BigBubble* MR::generateBigBubble(LiveActor* pHost, const Vec3f& rPos, const Vec3
     return ::getBigBubbleHolder()->generateBigBubble(pHost, rPos, rUp, volume, isObstruct, actionType, shapeType, limitterID);
 }
 
-void MR::limitBigBubblePosition(Vec3f* pPos, f32 offset, s32 limitterID) {
-    ::getBigBubbleHolder()->getMoveLimitter(limitterID)->limitPosition(pPos, offset);
+void MR::limitBigBubblePosition(Vec3f* pPos, f32 f1, s32 limitterID) {
+    ::getBigBubbleHolder()->getMoveLimitter(limitterID)->limitPosition(pPos, f1);
 }
 
 void MR::addBigBubbleMoveLimitter(BigBubbleMoveLimitter* pLimitter) {

@@ -41,7 +41,7 @@ public:
     s32 mHitInfoRoom;
     s32 mNumHits;
     s32 mPartsCount;
-    MR::InlineVector< CollisionZone*, 32 > mZones;
+    MR::Vector< MR::FixedArray< CollisionZone*, 32 > > mZones;
     s32 mCategory;
     bool mZonesInitialized;
     bool mUpdateZoneBounds;
@@ -58,7 +58,7 @@ public:
     void eraseParts(CollisionParts*);
 
     s32 mZoneID;
-    MR::InlineVector< CollisionParts*, 512 > mParts;
+    MR::Vector< MR::FixedArray< CollisionParts*, 512 > > mParts;
     Vec3f mCenter;
     f32 mRadius;
     Vec3f mMin;

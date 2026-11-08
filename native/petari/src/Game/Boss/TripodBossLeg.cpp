@@ -12,7 +12,7 @@
 #include "Game/Util/IKJoint.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/System/NebulaArena.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -92,7 +92,7 @@ void TripodBossLeg::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorMtxMapObj(this, "body", 16, 1000.0f, mEndJointMtx, Vec3f(500.0f, 200.0f, 0.0f));
     initSound(6, false);
-    mSoundObj = new AudAnmSoundObject(&mForceEndPoint, 6, NebulaArena::current());
+    mSoundObj = new AudAnmSoundObject(&mForceEndPoint, 6, MR::getCurrentHeap());
     initEffectKeeper(0, "TripodBoss");
     MR::setEffectHostMtx(this, "LegSmoke", mEndJointMtx);
     makeActorAppeared();

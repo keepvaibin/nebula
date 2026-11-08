@@ -106,7 +106,7 @@ void SkeletalFishGuard::exeAppear() {
     }
 
     Vec3f gravity;
-    MR::calcGravityVector(this, mAppearStartPos, &gravity, nullptr, nullptr);
+    MR::calcGravityVector(this, mAppearStartPos, &gravity, nullptr, false);
     Vec3f turnPoint = mAppearStartPos - gravity * 1000.0f;
     calcTarget(&mTargetRailPos, &mTargetPos, &mTargetRailDir, cAppearSteps - getNerveStep());
     Vec3f appearDir = mAppearRandomDir;

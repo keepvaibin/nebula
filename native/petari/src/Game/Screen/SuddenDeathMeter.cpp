@@ -37,7 +37,7 @@ namespace NrvSuddenDeathMeter {
 };  // namespace NrvSuddenDeathMeter
 
 SuddenDeathMeter::SuddenDeathMeter(const char* pName, const char* pArcName)
-    : LayoutActor(pName, true), mCountUpPaneRumbler(), mFollowPosW(0.0f, 0.0f), _2C(0.0f, 0.0f), mCount(1), mAlpha(0.0f), mShowHideRate(1.0f) {
+    : LayoutActor(pName, true), mCountUpPaneRumbler(), mFollowPosW(0.0f, 0.0f), mMeterMoveStartPos(0.0f, 0.0f), mCount(1), mAlpha(0.0f), mShowHideRate(1.0f) {
     MR::connectToSceneLayout(this);
     initLayoutManager(pArcName, 3);
 }
@@ -137,12 +137,12 @@ void SuddenDeathMeter::exePowerUp() {
 
 void SuddenDeathMeter::exeMeterMove() {
     if (MR::isFirstStep(this)) {
-        _2C = mFollowPosW;
+        mMeterMoveStartPos = mFollowPosW;
     }
 
     f32 rate = MR::calcNerveEaseInRate(this, ::sMoveToBasePositionTime);
 
-    mFollowPosW = _2C * (1.0f - rate);
+    mFollowPosW = mMeterMoveStartPos * (1.0f - rate);
 
     if (MR::isGreaterStep(this, ::sMoveToBasePositionTime)) {
         setNerve(GET_NERVE(SuddenDeathMeter, SuddenDeathMeterNrvCounterMove));

@@ -5,6 +5,7 @@
 #include "Game/AudioLib/AudLimitedSound.hpp"
 #include "Game/Sound/SoundAudible.hpp"
 #include "Game/Sound/SoundAudience.hpp"
+#include "Game/Sound/StdSoundInfo.hpp"
 #include "Game/Sound/SoundSystem.hpp"
 #include "Game/Sound/SoundManager.hpp"
 #include <nebula_geometry.hpp>
@@ -26,19 +27,13 @@ class AssetFolder;
 class NebulaArena;
 class SpkSystem;
 
-// SoundID groups (an id's top byte), which are also the SE categories; AudSoundId.hpp lists each group's sounds.
-enum AudGroup {
-    AudGroup_SystemSe = 0x0,  // SE_SY
-    AudGroup_VoiceSe = 0x1,   // SE_PV, the player's voice
-    AudGroup_HomeSe = 0xD,    // HOMESE, the HOME menu's
-};
-
-// The sound data and the sequence, chord, ME and remix archives in the store.
-extern const char cSoundDataPath[];
-extern const char cSeqArchivePath[];
-extern const char cChordArchivePath[];
-extern const char cMeArchivePath[];
-extern const char cRemixArchivePath[];
+extern const char sAudioResFile[];
+extern const char sJaiSeqArc[];
+extern const char sJaiChordArc[];
+extern const char sJaiMeArc[];
+extern const char sJaiRemixArc[];
+extern const char sJaiAudioArc[];
+extern const char sJaiSeqResArc[];
 
 class AudSystem : public SoundManager {
 public:
@@ -131,7 +126,8 @@ public:
     bool mIsTrigSeBlocked;  // blocks startSound
     bool mIsLevelSeBlocked;  // blocks startLevelSound
     s32 mSeMuteFrames;
-    SoundArchive* mSoundArchive;
+    StdSoundInfo* mSoundInfo;
+    SoundArchive* mSectionHeap;
     AudAudience< 4 > mAudience;
     AudDopplerAudible< 4 >* mAudible;
     AudSoundObject* mSystemSeObject;

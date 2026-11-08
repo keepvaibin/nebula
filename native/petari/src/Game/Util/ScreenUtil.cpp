@@ -1,6 +1,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
+#include "Game/Scene/PlayTimerScene.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/BloomEffect.hpp"
 #include "Game/Screen/BloomEffectSimple.hpp"
@@ -26,6 +27,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/RenderMode.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -43,6 +45,10 @@ namespace {
 
     CaptureScreenDirector* getCaptureScreenDirector() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mCaptureScreenDirector;
+    }
+
+    PlayTimerScene* getPlayTimerScene() {
+        return SingletonHolder< GameSystem >::get()->mSceneController->mPlayTimerScene;
     }
 
     void appearInformationMessage(bool hasButtonLayout, bool isCenter) {
@@ -319,6 +325,21 @@ namespace MR {
 
     void startCenterScreenBlur(s32 time, f32 offset, u8 alpha, s32 fadeIn, s32 fadeOut) {
         getSceneObj< CenterScreenBlur >(SceneObj_CenterScreenBlur)->start(time, offset, alpha, fadeIn, fadeOut);
+    }
+
+    void startGlobalTimer() {
+    }
+
+    void resetGlobalTimer() {
+        ::getPlayTimerScene()->stop();
+    }
+
+    bool isGlobalTimerEnd() {
+        return ::getPlayTimerScene()->isEndGlobalTimer();
+    }
+
+    void startGlobalTimerTimeUp() {
+        ::getPlayTimerScene()->startTimeUp();
     }
 
     void requestPowerUpHPMeter() {

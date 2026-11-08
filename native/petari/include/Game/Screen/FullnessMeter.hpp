@@ -20,8 +20,8 @@ public:
     void exeWait();
     void exeEnd();
 
-    s32 _20;
-    s32 _24;
+    s32 mNumber;
+    s32 mNumberMax;
     LiveActor* mHost;
     SimpleLayout* mTargetCounter;
 };

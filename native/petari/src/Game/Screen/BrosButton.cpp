@@ -19,7 +19,7 @@ void BrosButton::init(const TableIter& rIter) {
     initLayoutManager("BrosButton", 1);
 
     mPaneCtrl = new ButtonPaneController(this, "BrosButton", "BoxBButton", 0, true);
-    mPaneCtrl->_22 = false;
+    mPaneCtrl->mDisappearsAfterDecide = false;
 
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE_ANON(BrosButtonNrvAppear));

@@ -30,10 +30,10 @@ namespace {
 static u32 sCollectedMiiGeneration = 0;
 
 MiiSelect::MiiSelect(const char* pName)
-    : LayoutActor(pName, true), _28(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), mMiiIndices(), mMiiIndexRoom(), _1EC(), _1F0(), _1F4(), _1F8(), _1FC(),
-      _200(), _204(new FileSelectIconID()) {
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-        _20[i] = nullptr;
+    : LayoutActor(pName, true), mFellowEnabled(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), mMiiIndices(), mMiiIndexRoom(), mPageBaseIndex(), mSelectedIndex(), mSelectedTexMap(), mCurrentPage(), mOtherPage(),
+      mIsIconProhibited(), mProhibitedIconID(new FileSelectIconID()) {
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+        mArrowButtons[i] = nullptr;
     }
 
     validateAllSpecialMii();
@@ -56,27 +56,27 @@ void MiiSelect::appear() {
     if (sCollectedMiiGeneration != Mii::generation()) {
         collectValidMiiIndex();
     }
-    _1EC = 0;
+    mPageBaseIndex = 0;
     refresh();
     setCurrentPageGroupA();
     appearButtons();
     updateButtons();
-    _1F8->invalidateAllIcon();
-    _1FC->invalidateAllIcon();
+    mCurrentPage->invalidateAllIcon();
+    mOtherPage->invalidateAllIcon();
     MR::setTextBoxMessageRecursive(this, "TxtName", u"");
 }
 
 void MiiSelect::disappear() {
-    _1F8->invalidateAllIcon();
-    _1FC->invalidateAllIcon();
+    mCurrentPage->invalidateAllIcon();
+    mOtherPage->invalidateAllIcon();
     disappearButtons();
     setNerve(GET_NERVE_ANON(MiiSelectNrvDisappear));
 }
 
 void MiiSelect::calcAnim() {
     LayoutActor::calcAnim();
-    _1F8->calcAnim();
-    _1FC->calcAnim();
+    mCurrentPage->calcAnim();
+    mOtherPage->calcAnim();
 }
 
 bool MiiSelect::isAppearing() const {
@@ -92,37 +92,37 @@ bool MiiSelect::isDummySelected() {
 }
 
 void MiiSelect::getSelectedID(FileSelectIconID* pSelectedID) {
-    getIconID(pSelectedID, _1F0);
+    getIconID(pSelectedID, mSelectedIndex);
 }
 
 Ui::TexMap* MiiSelect::getSelectedMiiTexMap() {
-    return _1F4;
+    return mSelectedTexMap;
 }
 
 void MiiSelect::admitIcon() {
-    _200 = 0;
+    mIsIconProhibited = 0;
 }
 
 void MiiSelect::prohibitIcon(const FileSelectIconID& rIconID) {
-    _200 = 1;
+    mIsIconProhibited = 1;
 
-    _204->set(rIconID);
+    mProhibitedIconID->set(rIconID);
 }
 
 void MiiSelect::invalidateSpecialMii(FileSelectIconID::EFellowID fellowID) {
-    if (_28->isOn(fellowID)) {
-        _28->set(fellowID, false);
+    if (mFellowEnabled->isOn(fellowID)) {
+        mFellowEnabled->set(fellowID, false);
 
         mFellowIconNum--;
     }
 }
 
 void MiiSelect::validateAllSpecialMii() {
-    for (int i = 0; i < _28->size(); i++) {
-        _28->set(i, true);
+    for (int i = 0; i < mFellowEnabled->size(); i++) {
+        mFellowEnabled->set(i, true);
     }
 
-    mFellowIconNum = _28->size();
+    mFellowIconNum = mFellowEnabled->size();
 }
 
 void MiiSelect::exeAppear() {
@@ -143,28 +143,28 @@ void MiiSelect::exeWait() {
         validateAllIcon();
         setCurrentPageGroupB();
 
-        for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-            if (_20[i]->isHidden()) {
+        for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+            if (mArrowButtons[i]->isHidden()) {
                 continue;
             }
 
-            _20[i]->_24 = true;
-            _20[i]->forceToWait();
+            mArrowButtons[i]->mIsActive = true;
+            mArrowButtons[i]->forceToWait();
         }
 
         setCurrentPageNum();
     }
 
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-        if (_20[i]->trySelect()) {
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+        if (mArrowButtons[i]->trySelect()) {
             (this->*::func[i])();
             return;
         }
     }
 
-    if (!_20[0]->isHidden() && (MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1))) {
+    if (!mArrowButtons[0]->isHidden() && (MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1))) {
         callbackLeft();
-    } else if (!_20[1]->isHidden() && (MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1))) {
+    } else if (!mArrowButtons[1]->isHidden() && (MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1))) {
         callbackRight();
     }
 }
@@ -173,18 +173,18 @@ void MiiSelect::exeScrollLeft() {
     if (MR::isFirstStep(this)) {
         MR::startAnim(this, "PreviousMii", 0);
 
-        _1EC -= 8;
+        mPageBaseIndex -= 8;
 
-        if (_1EC < 0) {
-            _1EC = ((getIconNum() - 1) / 8) * 8;
+        if (mPageBaseIndex < 0) {
+            mPageBaseIndex = ((getIconNum() - 1) / 8) * 8;
         }
 
         flipPage();
         setCurrentPageGroupB();
         refresh();
         updateButtons();
-        _1F8->invalidateAllIcon();
-        _1FC->invalidateAllIcon();
+        mCurrentPage->invalidateAllIcon();
+        mOtherPage->invalidateAllIcon();
     }
 
     if (MR::isAnimStopped(this, 0)) {
@@ -196,18 +196,18 @@ void MiiSelect::exeScrollRight() {
     if (MR::isFirstStep(this)) {
         MR::startAnim(this, "NextMii", 0);
 
-        _1EC += 8;
+        mPageBaseIndex += 8;
 
-        if (_1EC >= getIconNum()) {
-            _1EC = 0;
+        if (mPageBaseIndex >= getIconNum()) {
+            mPageBaseIndex = 0;
         }
 
         flipPage();
         setCurrentPageGroupB();
         refresh();
         updateButtons();
-        _1F8->invalidateAllIcon();
-        _1FC->invalidateAllIcon();
+        mCurrentPage->invalidateAllIcon();
+        mOtherPage->invalidateAllIcon();
     }
 
     if (MR::isAnimStopped(this, 0)) {
@@ -232,25 +232,25 @@ void MiiSelect::exeDummySelected() {
 }
 
 void MiiSelect::control() {
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-        _20[i]->update();
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+        mArrowButtons[i]->update();
     }
 
     FrameCtrl* pAnimCtrl;
 
-    if (_20[0]->isFirstStepWait() && !_20[1]->isFirstStepWait() && _20[1]->isWait()) {
-        pAnimCtrl = MR::getPaneAnimCtrl(this, _20[0]->mPaneName, 0);
+    if (mArrowButtons[0]->isFirstStepWait() && !mArrowButtons[1]->isFirstStepWait() && mArrowButtons[1]->isWait()) {
+        pAnimCtrl = MR::getPaneAnimCtrl(this, mArrowButtons[0]->mPaneName, 0);
 
-        pAnimCtrl->setFrame(MR::getPaneAnimFrame(this, _20[1]->mPaneName, 0));
+        pAnimCtrl->setFrame(MR::getPaneAnimFrame(this, mArrowButtons[1]->mPaneName, 0));
     }
 
-    if (_20[1]->isFirstStepWait() && !_20[0]->isFirstStepWait() && _20[0]->isWait()) {
-        pAnimCtrl = MR::getPaneAnimCtrl(this, _20[1]->mPaneName, 0);
+    if (mArrowButtons[1]->isFirstStepWait() && !mArrowButtons[0]->isFirstStepWait() && mArrowButtons[0]->isWait()) {
+        pAnimCtrl = MR::getPaneAnimCtrl(this, mArrowButtons[1]->mPaneName, 0);
 
-        pAnimCtrl->setFrame(MR::getPaneAnimFrame(this, _20[0]->mPaneName, 0));
+        pAnimCtrl->setFrame(MR::getPaneAnimFrame(this, mArrowButtons[0]->mPaneName, 0));
     }
 
-    _1F8->movement();
+    mCurrentPage->movement();
 }
 
 void MiiSelect::createButtons() {
@@ -263,66 +263,66 @@ void MiiSelect::createButtons() {
         "PicArrowR",
     };
 
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
         MR::createAndAddPaneCtrl(this, pane[i], 1);
 
-        _20[i] = new ButtonPaneController(this, pane[i], bound[i], 0, true);
-        _20[i]->_22 = false;
+        mArrowButtons[i] = new ButtonPaneController(this, pane[i], bound[i], 0, true);
+        mArrowButtons[i]->mDisappearsAfterDecide = false;
         // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
-        _20[i]->mIsNebulaFocusable = false;
+        mArrowButtons[i]->mIsNebulaFocusable = false;
     }
 }
 
 void MiiSelect::callbackLeft() {
-    _20[0]->_24 = false;
+    mArrowButtons[0]->mIsActive = false;
 
     MR::startSystemSE("SE_SY_FILE_SEL_MIISEL_SCRL");
     setNerve(GET_NERVE_ANON(MiiSelectNrvScrollLeft));
 }
 
 void MiiSelect::callbackRight() {
-    _20[1]->_24 = false;
+    mArrowButtons[1]->mIsActive = false;
 
     MR::startSystemSE("SE_SY_FILE_SEL_MIISEL_SCRL");
     setNerve(GET_NERVE_ANON(MiiSelectNrvScrollRight));
 }
 
 void MiiSelect::appearButtons() {
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-        _20[i]->appear();
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+        mArrowButtons[i]->appear();
     }
 }
 
 void MiiSelect::disappearButtons() {
-    for (int i = 0; i < ARRAY_SIZE(_20); i++) {
-        _20[i]->disappear();
+    for (int i = 0; i < ARRAY_SIZE(mArrowButtons); i++) {
+        mArrowButtons[i]->disappear();
     }
 }
 
 void MiiSelect::updateButtons() {
     if (getIconNum() > 16) {
-        if (_20[0]->isHidden()) {
-            _20[0]->appear();
+        if (mArrowButtons[0]->isHidden()) {
+            mArrowButtons[0]->appear();
         }
 
-        if (_20[1]->isHidden()) {
-            _20[1]->appear();
+        if (mArrowButtons[1]->isHidden()) {
+            mArrowButtons[1]->appear();
         }
     } else {
-        if (_1EC - 8 < 0) {
-            if (!_20[0]->isHidden()) {
-                _20[0]->disappear();
+        if (mPageBaseIndex - 8 < 0) {
+            if (!mArrowButtons[0]->isHidden()) {
+                mArrowButtons[0]->disappear();
             }
-        } else if (_20[0]->isHidden()) {
-            _20[0]->appear();
+        } else if (mArrowButtons[0]->isHidden()) {
+            mArrowButtons[0]->appear();
         }
 
-        if (_1EC + 8 >= getIconNum()) {
-            if (!_20[1]->isHidden()) {
-                _20[1]->disappear();
+        if (mPageBaseIndex + 8 >= getIconNum()) {
+            if (!mArrowButtons[1]->isHidden()) {
+                mArrowButtons[1]->disappear();
             }
-        } else if (_20[1]->isHidden()) {
-            _20[1]->appear();
+        } else if (mArrowButtons[1]->isHidden()) {
+            mArrowButtons[1]->appear();
         }
     }
 }
@@ -357,50 +357,50 @@ void MiiSelect::collectValidMiiIndex() {
 }
 
 void MiiSelect::createPage() {
-    _1F8 = new MiiSelectSub::Page(this);
-    _1FC = new MiiSelectSub::Page(this);
+    mCurrentPage = new MiiSelectSub::Page(this);
+    mOtherPage = new MiiSelectSub::Page(this);
 }
 
 void MiiSelect::flipPage() {
-    MiiSelectSub::Page* pPage = _1F8;
+    MiiSelectSub::Page* pPage = mCurrentPage;
 
-    _1F8 = _1FC;
-    _1FC = pPage;
+    mCurrentPage = mOtherPage;
+    mOtherPage = pPage;
 }
 
 void MiiSelect::setCurrentPageGroupA() {
-    _1F8->_20 = 1;
-    _1FC->_20 = 0;
+    mCurrentPage->mIsGroupA = 1;
+    mOtherPage->mIsGroupA = 0;
 }
 
 void MiiSelect::setCurrentPageGroupB() {
-    _1F8->_20 = 0;
-    _1FC->_20 = 1;
+    mCurrentPage->mIsGroupA = 0;
+    mOtherPage->mIsGroupA = 1;
 }
 
 void MiiSelect::setCurrentPageNum() {
     s32 v2 = (getIconNum() - 1) / 8;
-    s32 v1 = _1EC / 8;
+    s32 v1 = mPageBaseIndex / 8;
 
     MR::setTextBoxFormatRecursive(this, "TxtPage", u"%d/%d", v1 + 1, v2 + 1);
 }
 
 void MiiSelect::validateAllIcon() {
-    _1F8->validateAllIcon();
-    _1FC->validateAllIcon();
+    mCurrentPage->validateAllIcon();
+    mOtherPage->validateAllIcon();
 
-    if (_200) {
-        _1F8->prohibitIcon(*_204);
-        _1FC->prohibitIcon(*_204);
+    if (mIsIconProhibited) {
+        mCurrentPage->prohibitIcon(*mProhibitedIconID);
+        mOtherPage->prohibitIcon(*mProhibitedIconID);
     }
 }
 
 void MiiSelect::refresh() {
-    _1F8->refresh(_1EC);
+    mCurrentPage->refresh(mPageBaseIndex);
 
-    if (_200) {
-        _1F8->prohibitIcon(*_204);
-        _1FC->prohibitIcon(*_204);
+    if (mIsIconProhibited) {
+        mCurrentPage->prohibitIcon(*mProhibitedIconID);
+        mOtherPage->prohibitIcon(*mProhibitedIconID);
     }
 }
 
@@ -408,8 +408,8 @@ void MiiSelect::getIconID(FileSelectIconID* pIconID, s32 param2) const {
     if (param2 < mFellowIconNum) {
         s32 v = 0;
 
-        for (int i = 0; i < _28->size(); i++) {
-            if (!_28->isOn(i)) {
+        for (int i = 0; i < mFellowEnabled->size(); i++) {
+            if (!mFellowEnabled->isOn(i)) {
                 continue;
             }
 
@@ -426,24 +426,24 @@ void MiiSelect::getIconID(FileSelectIconID* pIconID, s32 param2) const {
 }
 
 void MiiSelect::onSelect(s32 param1, Ui::TexMap* pTexMap) {
-    _1F0 = param1;
-    _1F4 = pTexMap;
+    mSelectedIndex = param1;
+    mSelectedTexMap = pTexMap;
 
-    _1F8->invalidateAllIcon();
-    _1FC->invalidateAllIcon();
+    mCurrentPage->invalidateAllIcon();
+    mOtherPage->invalidateAllIcon();
     disappearButtons();
     setNerve(GET_NERVE_ANON(MiiSelectNrvSelected));
 }
 
 void MiiSelect::onSelectDummy() {
-    _1F8->invalidateAllIcon();
-    _1FC->invalidateAllIcon();
+    mCurrentPage->invalidateAllIcon();
+    mOtherPage->invalidateAllIcon();
     disappearButtons();
     setNerve(GET_NERVE_ANON(MiiSelectNrvDummySelected));
 }
 
 namespace MiiSelectSub {
-    Page::Page(MiiSelect* pHost) : mHost(pHost), _20(true) {
+    Page::Page(MiiSelect* pHost) : mHost(pHost), mIsGroupA(true) {
         for (u32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
             mIconArray[i] = new MiiSelectIcon(-1, -1, -1, "Miiセレクト用アイコン");
         }
@@ -511,7 +511,7 @@ namespace MiiSelectSub {
     void Page::calcAnim() {
         s32 v = 9;
 
-        if (_20) {
+        if (mIsGroupA) {
             v = 1;
         }
 

@@ -28,10 +28,10 @@ public:
     void syncStatus();
     bool hasNewGalaxy() const;
 
-    int _20;
+    int mDomeNo;
     LayoutActor* mHost;
     const char* mPaneName;
-    const char* _2C;
+    const char* mNamePaneName;
     GalaxyNamePlate* mNamePlate;
     u8 mMode;
 };

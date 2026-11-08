@@ -53,23 +53,23 @@ CameraTargetObj* CameraInnerCylinder::calc() {
     watchSide *= mSideDist;
     watchPoint.set(watchSide + watchFront + groundPos);
 
-    Pos3f frame;
-    frame.setXDir(side);
-    frame.setYDir(camUp);
-    frame.setZDir(mAxis);
-    frame.setTrans(watchPoint);
+    Pos3f mtx1;
+    mtx1.setXDir(side);
+    mtx1.setYDir(camUp);
+    mtx1.setZDir(mAxis);
+    mtx1.setTrans(watchPoint);
 
-    Pos3f pitchMtx;
-    pitchMtx.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngleA * angleX);
+    Pos3f mtx2;
+    mtx2.makeRotate(Vec3f(1.0f, 0.0f, 0.0f), mAngleA * angleX);
 
-    Pos3f yawMtx;
-    yawMtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -mAngleB * angleY);
+    Pos3f mtx3;
+    mtx3.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), -mAngleB * angleY);
 
-    frame.concat(frame, yawMtx);
-    frame.concat(frame, pitchMtx);
+    mtx1.concat(mtx1, mtx3);
+    mtx1.concat(mtx1, mtx2);
 
     Vec3f pos(0.0f, 0.0f, mDist);
-    frame.mult(pos, pos);
+    mtx1.mult(pos, pos);
     zoneMtx.mult(watchPoint, watchPoint);
     zoneMtx.mult33(up, up);
     zoneMtx.mult(pos, pos);

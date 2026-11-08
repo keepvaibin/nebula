@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Game/Scene/SceneFactory.hpp"
 
 class GalaxyMoveArgument;
 class UserFile;
@@ -25,7 +24,7 @@ namespace GameSequenceFunction {
     bool isReadyToStartScene();
     void startScene();
     void notifyToGameSequenceProgressToEndScene();
-    void requestChangeScene(SceneKind);
+    void requestChangeScene(const char*);
     void requestGalaxyMove(const GalaxyMoveArgument&);
     void requestCancelScenarioSelect();
     void sendStageResultSequenceParam(const char*, s32, int, int);

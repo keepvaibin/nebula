@@ -14,8 +14,8 @@ PlayerInputReader::PlayerInputReader() : mDevice(), mState(), mValid(false), mRe
     resetState();
 }
 
-PlayerInputSample* PlayerInputReader::getSample() {
-    return mValid ? &mState : nullptr;
+PlayerInputSample* PlayerInputReader::getSample(u32 index) {
+    return index == 0 && mValid ? &mState : nullptr;
 }
 
 void PlayerInputReader::requestReset() {
@@ -139,7 +139,7 @@ void PlayerInputs::updateProjectPadData() {
 void PlayerInputs::updateInGame() {
     const NebulaHostServices* const host = nebula_host();
     for (s32 chan = PLAYER_3; chan < PLAYER_MAX; chan++) {
-        if (mReadDataInfoArray[chan].getSample() != nullptr) {
+        if (mReadDataInfoArray[chan].getSample(0) != nullptr) {
             host->input_control(host->user, static_cast< u32 >(chan), NEBULA_INPUT_RELEASE, 0);
         }
     }

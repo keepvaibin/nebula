@@ -4,7 +4,7 @@
 #include <Game/Ui/Group.hpp>
 
 LayoutGroupCtrl::LayoutGroupCtrl(LayoutManager* pManager, const char* pName, u32 animLayerCount)
-    : mManager(pManager), mGroup(), mAnmPlayerArray(animLayerCount), _10(true) {
+    : mManager(pManager), mGroup(), mAnmPlayerArray(animLayerCount) {
     mGroup = pManager->getGroup(pName);
 
     for (u32 i = 0; i < mAnmPlayerArray.size(); i++) {

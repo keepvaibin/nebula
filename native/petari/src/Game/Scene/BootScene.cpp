@@ -26,8 +26,8 @@ BootScene::BootScene()
 }
 
 void BootScene::init() {
-    // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
-    initNerve(GET_NERVE_ANON(BootSceneWaitReadDoneSystemArchive));
+        // The system archive's load runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
+        initNerve(GET_NERVE_ANON(BootSceneWaitReadDoneSystemArchive));
 
     SceneFunction::initForNameObj();
     MR::createSceneObj(SceneObj_CameraContext);
@@ -45,10 +45,17 @@ void BootScene::calcAnim() {
 }
 
 void BootScene::draw() const {
-    const NebulaColor8 black = {0, 0, 0, 255};
-    MR::fillScreen(black);
+
+    NebulaColor8 color;
+    color.r = 0;
+    color.g = 0;
+    color.b = 0;
+    color.a = 255;
+
+    MR::fillScreen(color);
     MR::clearZBuffer();
     MR::drawInitFor2DModel();
+
 
     CategoryList::drawOpa(MR::DrawBufferType_Model3DFor2D);
     CategoryList::drawXlu(MR::DrawBufferType_Model3DFor2D);

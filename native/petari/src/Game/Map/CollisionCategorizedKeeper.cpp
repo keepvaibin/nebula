@@ -1,5 +1,6 @@
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -59,6 +60,7 @@ void CollisionCategorizedKeeper::removeFromGlobal(CollisionParts* pParts) {
 }
 
 s32 CollisionCategorizedKeeper::checkStrikePoint(const Vec3f& rPosition, HitInfo* pHitInfo) {
+    MR::getCollisionDirector();
     mNumHits = 0;
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
@@ -122,6 +124,7 @@ s32 CollisionCategorizedKeeper::checkStrikePoint(const Vec3f& rPosition, HitInfo
 
 s32 CollisionCategorizedKeeper::collectStrikeBall(const Vec3f& rPosition, f32 ballRadius, bool moving, const CollisionPartsFilterBase* pPartsFilter,
                                                 const TriangleFilterBase* pTriangleFilter) {
+    MR::getCollisionDirector();
     mNumHits = 0;
     s32 hitCount = 0;
 
@@ -194,6 +197,7 @@ s32 CollisionCategorizedKeeper::collectStrikeBall(const Vec3f& rPosition, f32 ba
 s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const Vec3f& rPosition, f32 ballRadius, f32 thickness,
                                                              const CollisionPartsFilterBase* pPartsFilter,
                                                              const TriangleFilterBase* pTriangleFilter) {
+    MR::getCollisionDirector();
     mNumHits = 0;
     s32 hitCount = 0;
 
@@ -266,6 +270,8 @@ s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const Vec3f& rPos
 
 s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec3f& rDirection, s32 maxHits,
                                                 const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
+    MR::getCollisionDirector();
+
     if (maxHits == 0 || maxHits > mHitInfoRoom) {
         maxHits = mHitInfoRoom;
     }
@@ -346,6 +352,7 @@ s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec
 }
 
 u32 CollisionCategorizedKeeper::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rStart, const Vec3f& rEnd) {
+    MR::getCollisionDirector();
     u32 triangleCount = 0;
     Vec3f min;
     Vec3f max;
@@ -408,6 +415,7 @@ u32 CollisionCategorizedKeeper::createAreaPolygonList(Triangle* pTriangles, u32 
 }
 
 u32 CollisionCategorizedKeeper::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, Vec3f* pVertices, u32 vertexCount) {
+    MR::getCollisionDirector();
     u32 triangleCount = 0;
     Vec3f min;
     Vec3f max;

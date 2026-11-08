@@ -26,6 +26,7 @@ struct ActorLightInfo {
 struct AreaLightInfo {
     const char* mAreaLightName;
     s32 mInterpolate;
+    bool mFix;
     ActorLightInfo mPlayerLight;
     ActorLightInfo mStrongLight;
     ActorLightInfo mWeakLight;

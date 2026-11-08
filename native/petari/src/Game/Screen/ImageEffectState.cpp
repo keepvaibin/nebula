@@ -60,7 +60,7 @@ void ImageEffectState::forceOff() {
     pBase = getEffect();
     pBase->_D = false;
     pBase->_C = false;
-    pBase->_10 = 0.0f;
+    pBase->mFadeLevel = 0.0f;
     pBase->notifyForceOff();
 }
 
@@ -101,16 +101,16 @@ namespace ImageEffectStateImpl {
         }
 
         u8 bloomIntensity = (s32)(_10);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->_14 = bloomIntensity;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mBloomIntensity = bloomIntensity;
 
         u8 threshold = (s32)(_18);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->_20 = threshold;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mThreshold = threshold;
 
         u8 intensity1 = (s32)(_20);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->_18 = intensity1 / 255.0f;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity1 = intensity1 / 255.0f;
 
         u8 intensity2 = (s32)(_28);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->_1C = intensity2 / 255.0f;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity2 = intensity2 / 255.0f;
 
         ImageEffectState::update();
     }

@@ -10,11 +10,11 @@ public:
 
     virtual void init(const TableIter& rIter);
     virtual void makeActorDead();
+    virtual void startClipped();
 
-    // radius <= 0 keeps the default clipping.
-    void initEffectInfo(const Vec3f& rPos, const Vec3f& rFront, const Vec3f& rUp, const char* pEffectName, f32 radius);
+    void initEffectInfo(const Vec3f&, const Vec3f&, const Vec3f&, const char*, f32);
 
-    void exeBlowWind();
+    void exeBrowWind();
 
     const char* mEffectName;
     Pos3f mMtx;

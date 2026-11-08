@@ -262,7 +262,7 @@ void Mario::slopeMove() {
                 MR::normalize(&moveDir);
 
                 f32 turnDot = MR::cos(1.0471976f);
-                if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
+                if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
                     turnDot = MR::cos(1.4959966f);
                 }
 
@@ -276,8 +276,8 @@ void Mario::slopeMove() {
 
                 if (frontOnGround.dot(slopeDown) < turnDot) {
                     setFrontVecKeepUp(moveDir, 0.1f);
-                    if (!isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
-                        changeAnimation("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp);
+                    if (!isAnimationRun("坂すべり上向きうつぶせ", 2)) {
+                        changeAnimation("坂すべり下向きあおむけ", 3);
                     }
 
                     if (isStickOn() && mPrevVelocity.dot(moveDir) > 0.0f &&
@@ -285,8 +285,8 @@ void Mario::slopeMove() {
                         setFrontVecKeepUpAngle(mPrevVelocity, getActor()->getConst().getTable()->mSlipMoveTurnAngleRad);
                     }
                 } else {
-                    if (!isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
-                        changeAnimation("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown);
+                    if (!isAnimationRun("坂すべり下向きあおむけ", 3)) {
+                        changeAnimation("坂すべり上向きうつぶせ", 2);
                     }
 
                     if (mSlopeTimer < 5) {
@@ -349,11 +349,11 @@ void Mario::slopeMove() {
 
         const MarioConstTable* table = getActor()->getConst().getTable();
         if (mSlopeMoveVec.length() < table->mSlopeAnimeFinishSpeed) {
-            if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
+            if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
                 changeAnimation("坂すべり上向き終了");
             }
 
-            if (isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
+            if (isAnimationRun("坂すべり下向きあおむけ", 3)) {
                 changeAnimation("坂すべり下向き終了");
             }
 
@@ -415,7 +415,7 @@ void Mario::moveSlopeSlide() {
 
             addVelocity(mSlopeSlideVec);
         }
-    } else if (isAnimationRun("スケーティング") || isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown) || isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
+    } else if (isAnimationRun("スケーティング") || isAnimationRun("坂すべり上向きうつぶせ", 2) || isAnimationRun("坂すべり下向きあおむけ", 3)) {
         Vec3f sideDir;
         sideDir.cross(getAirGravityVec(), mGroundNorm);
         MR::normalizeOrZero(&sideDir);

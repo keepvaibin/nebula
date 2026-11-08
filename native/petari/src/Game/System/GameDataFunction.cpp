@@ -142,7 +142,11 @@ namespace GameDataFunction {
             *pPastSecond = 0;
             return;
         }
-        *pCometStatus = getCurrentGameDataHolder()->getGameEventValue(MR::FormattedName("Comet%1dStatus", cometId).c_str());
+        char eventValueName[20];
+
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+
+        *pCometStatus = getCurrentGameDataHolder()->getGameEventValue(eventValueName);
     }
 
     void setRaceBestTime(const char* pRaceName, u32 bestTime) {
@@ -342,7 +346,11 @@ namespace GameDataFunction {
         if (cometId > 6) {
             return;
         }
-        getCurrentGameDataHolder()->setGameEventValue(MR::FormattedName("Comet%1dStatus", cometId).c_str(), cometStatus);
+        char eventValueName[20];
+
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+
+        getCurrentGameDataHolder()->setGameEventValue(eventValueName, cometStatus);
     }
 
     void addStockedStarPiece(int num) {
@@ -395,8 +403,12 @@ namespace GameDataFunction {
 
     s32 calcGreenStarNum(const GameDataHolder* pGameDataHolder) {
         s32 greenStarNum = 0;
+        char eventFlagName[256];
+
         for (int i = 1; i <= 3; i++) {
-            if (pGameDataHolder->isOnGameEventFlag(MR::FormattedName("SpecialStarGreen%1d", i).c_str())) {
+            nebula_snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);
+
+            if (pGameDataHolder->isOnGameEventFlag(eventFlagName)) {
                 greenStarNum++;
             }
         }

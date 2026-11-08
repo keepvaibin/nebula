@@ -1,4 +1,5 @@
 #include "Game/MapObj/CrystalSwitch.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"

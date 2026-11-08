@@ -31,5 +31,5 @@ private:
     LayoutActor* mLayout;
     Vec2f mAppearOffset;
     Vec2f mFollowPos;
-    Vec2f _1C;
+    Vec2f mExtraOffset;
 };

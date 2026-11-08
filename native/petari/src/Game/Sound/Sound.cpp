@@ -1,5 +1,5 @@
 #include "Game/Sound/Sound.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundHandles.hpp"
 #include "Game/Sound/PlayerLink.hpp"
@@ -132,10 +132,10 @@ bool Sound::calcSound_() {
         // stopped every sound. It fades out as a stopped sound does, and names itself.
         if (mCount == 1800 && asSe() != nullptr) {
             if (mHandle == nullptr && !hasLifeTime() && !isStopping()) {
-                nebula_log("audio: orphaned sound %08x stopped after 30 s\n", (u32)mSoundID);
+                JUTNativeLog("audio: orphaned sound %08x stopped after 30 s\n", (u32)mSoundID);
                 stop(30);
             } else {
-                nebula_log("audio: sound %08x alive 30 s (lifetime %s, handle %s)\n", (u32)mSoundID,
+                JUTNativeLog("audio: sound %08x alive 30 s (lifetime %s, handle %s)\n", (u32)mSoundID,
                          hasLifeTime() ? "on" : "off", isHandleAttached() ? "held" : "none");
             }
         }

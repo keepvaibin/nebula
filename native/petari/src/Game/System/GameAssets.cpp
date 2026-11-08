@@ -83,14 +83,14 @@ namespace GameAssets {
     }
 
     // A file loaded whole is a view of the store from cMappedFrom bytes up: nearly all its pages stay as they are (a model's few
-    // fixed-up pointers aside), so they cost no memory of the game's. The arena it was asked for decides when it goes.
+    // fixed-up pointers aside), so they cost no memory of the game's. The heap it was asked for decides when it goes.
     namespace {
         const u32 cMappedFrom = 0x2000;
 
         struct Mapped {
             void* mData;
             u32 mSize;
-            NebulaArena* mArena;
+            NebulaArena* mHeap;
         };
 
         Mapped* sMapped;
@@ -104,7 +104,7 @@ namespace GameAssets {
             host->asset_unmap(host->user, rMapped.mData, rMapped.mSize);
         }
 
-        void* loadMapped(s32 entry, u32 size, NebulaArena* pArena) {
+        void* loadMapped(s32 entry, u32 size, NebulaArena* pHeap) {
             const NebulaHostServices* const host = nebula_host();
             void* pData = host->asset_map_private(host->user, entry);
             if (pData != nullptr && sMappedCount == sMappedMax) {
@@ -115,7 +115,7 @@ namespace GameAssets {
                 Mapped& rMapped = sMapped[sMappedCount++];
                 rMapped.mData = pData;
                 rMapped.mSize = size;
-                rMapped.mArena = pArena != nullptr ? pArena : NebulaArena::current();
+                rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::getCurrentHeap();
             }
             return pData;
         }
@@ -153,9 +153,9 @@ namespace GameAssets {
         }
     }  // namespace
 
-    void unloadArena(const NebulaArena* pArena) {
+    void unloadHeap(const NebulaArena* pHeap) {
         for (u32 i = 0; i < sMappedCount;) {
-            if (sMapped[i].mArena == pArena) {
+            if (sMapped[i].mHeap == pHeap) {
                 release(sMapped[i]);
                 sMapped[i] = sMapped[--sMappedCount];
             } else {
@@ -163,7 +163,7 @@ namespace GameAssets {
             }
         }
         for (u32 i = 0; i < sHeldCount;) {
-            if (sHeld[i].mArena == pArena) {
+            if (sHeld[i].mArena == pHeap) {
                 sHeld[i] = sHeld[--sHeldCount];
             } else {
                 i++;
@@ -195,14 +195,14 @@ namespace GameAssets {
         sHeld[sHeldCount++] = {hashPath(pPath), pCopy, pFolder, pArena, game};
     }
 
-    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pArena, u32* pSize) {
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {
         File file;
         if (!open(entry, &file)) {
             return nullptr;
         }
 
         if (pDst == nullptr && maxLength == 0 && file.mLength >= cMappedFrom) {
-            void* const pMapped = loadMapped(entry, file.mLength, pArena);
+            void* const pMapped = loadMapped(entry, file.mLength, pHeap);
             if (pMapped != nullptr) {
                 if (pSize != nullptr) {
                     *pSize = file.mLength;
@@ -214,7 +214,7 @@ namespace GameAssets {
         const u32 size = maxLength != 0 && maxLength < file.mLength ? maxLength : file.mLength;
         const bool allocated = pDst == nullptr;
         if (allocated) {
-            pDst = static_cast< u8* >(NebulaArena::alloc(size + 1, 16, pArena));
+            pDst = static_cast< u8* >(NebulaArena::alloc(size + 1, 16, pHeap));
             if (pDst == nullptr) {
                 return nullptr;
             }
@@ -232,8 +232,8 @@ namespace GameAssets {
         return pDst;
     }
 
-    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pArena, u32* pSize) {
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, u32* pSize) {
         const s32 entry = find(pPath);
-        return entry >= 0 ? load(entry, pDst, maxLength, pArena, pSize) : nullptr;
+        return entry >= 0 ? load(entry, pDst, maxLength, pHeap, pSize) : nullptr;
     }
 }  // namespace GameAssets

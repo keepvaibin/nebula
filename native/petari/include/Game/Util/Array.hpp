@@ -5,65 +5,7 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace MR {
-    /// @brief Room for a list with no limit that can also be a static: no constructor (zero-initialised), it grows in
-    /// the root arena to at least `count` (doubling, from 16), keeps what it held, and never shrinks. Pointers into it do
-    /// not survive a call that grows it.
-    template < class T >
-    struct GrowBuffer {
-        T* mItems;
-        u32 mRoom;
-
-        T* room(u32 count) {
-            if (count > mRoom) {
-                u32 room = mRoom != 0 ? mRoom : 16;
-                while (room < count) {
-                    room *= 2;
-                }
-                T* const pNew = new (NebulaArena::root(), 0) T[room];
-                for (u32 i = 0; i < mRoom; i++) {
-                    pNew[i] = mItems[i];
-                }
-                delete[] mItems;
-                mItems = pNew;
-                mRoom = room;
-            }
-            return mItems;
-        }
-
-        T& operator[](u32 index) {
-            return mItems[index];
-        }
-
-        const T& operator[](u32 index) const {
-            return mItems[index];
-        }
-    };
-
-    /// @brief Scratch for `count` items: room for N in itself, from the current arena past that, freed at scope end.
-    template < class T, int N >
-    class LocalArray {
-    public:
-        explicit LocalArray(u32 count) : mItems(count <= static_cast< u32 >(N) ? mRoom : new T[count]) {
-        }
-
-        ~LocalArray() {
-            if (mItems != mRoom) {
-                delete[] mItems;
-            }
-        }
-
-        LocalArray(const LocalArray&) = delete;
-        LocalArray& operator=(const LocalArray&) = delete;
-
-        T& operator[](u32 index) {
-            return mItems[index];
-        }
-
-        T mRoom[N];
-        T* const mItems;
-    };
-
-    /// @brief A full table: twice the room, in the arena it lies in, and the old one goes. Pointers into it do not survive this.
+    /// @brief A full table: twice the room, in the heap it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {
         T* const pNew = new (NebulaArena::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
@@ -74,7 +16,7 @@ namespace MR {
         return pNew;
     }
 
-    /// @brief An arena array of mMaxSize; grow() doubles it (16 when empty).
+    /// @brief A heap array of mMaxSize; grow() doubles it (16 when empty).
     template < class T >
     class AssignableArray {
     public:
@@ -208,12 +150,20 @@ namespace MR {
         s32 mSize;
     };
 
-    /// @brief A contiguous array with room for N in itself; grow() moves it to twice the room in the arena it lies in (an
-    /// InlineVector does when full).
+    /// @brief A contiguous array with room for N in itself; a Vector over it past that moves to the arena it lies in.
     template < class T, int N >
-    class InlineArray {
+    class FixedArray {
     public:
         typedef T Item;
+        template < class X >
+        struct RemovePtr {
+            typedef X Type;
+        };
+        template < class X >
+        struct RemovePtr< X* > {
+            typedef X Type;
+        };
+        typedef typename RemovePtr< T >::Type Base;
 
         void grow() {
             const s32 num = size();
@@ -271,7 +221,7 @@ namespace MR {
         s32 mMovedSize = 0;
     };
 
-    /// @brief mCount items over a storage T (AssignableArray or InlineArray); push_back and insert grow the storage when full.
+    /// @brief mCount items over a storage T (AssignableArray or FixedArray); push_back and insert grow the storage when full.
     template < class T >
     class Vector {
     public:
@@ -375,10 +325,6 @@ namespace MR {
         T mArray;
         s32 mCount;
     };
-
-    /// @brief A Vector with room for N in itself before it moves to the arena it lies in.
-    template < class T, int N >
-    using InlineVector = Vector< InlineArray< T, N > >;
 
     template < class T >
     AssignableArray< T >::~AssignableArray() {

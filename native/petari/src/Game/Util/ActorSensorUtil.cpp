@@ -9,7 +9,6 @@
 #include "Game/LiveActor/MessageSensorHolder.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/Array.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -593,9 +592,8 @@ namespace MR {
     }
 
     bool sendMsgToBindedSensor(u32 msg, LiveActor* pActor, HitSensor* pSender) {
-        const u32 planeRoom = pActor->mBinder->mPlaneNum > 3 ? pActor->mBinder->mPlaneNum : 3;  // planes, or ground, wall and roof
-        MR::LocalArray< HitInfo*, 32 > info(planeRoom);  // a receiver may send again
-        u32 size = pActor->mBinder->copyPlaneArrayAndSortingSensor(info.mItems, planeRoom);
+        HitInfo* info[32];
+        u32 size = pActor->mBinder->copyPlaneArrayAndSortingSensor(info, ARRAY_SIZE(info));
 
         if (size == 0) {
             return false;

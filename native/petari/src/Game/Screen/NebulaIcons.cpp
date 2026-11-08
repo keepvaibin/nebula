@@ -1,5 +1,5 @@
 #include "Game/Screen/NebulaIcons.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Render/RenderTexture.hpp"
 
 #include "Game/Screen/LayoutActor.hpp"
@@ -7,7 +7,7 @@
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFontHolder.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstdio>
@@ -1426,7 +1426,7 @@ namespace {
             usable = pFont->HasGlyph(cCodes[i]);
         }
         if (!usable) {
-            nebula_log("NebulaIcons: the picture font's sheets are not RGBA8 records of usual cells; its icons stay the game's\n");
+            JUTNativeLog("NebulaIcons: the picture font's sheets are not RGBA8 records of usual cells; its icons stay the game's\n");
             return FontUnusable;
         }
         Font& f = sFont;
@@ -1477,14 +1477,14 @@ namespace {
                 addedPages++;
             }
         }
-        // One block that lasts the game (the permanent arena): the sheets, the glyphs, the pages
+        // One block that lasts the game (the permanent arena, HeapMemoryWatcher): the sheets, the glyphs, the pages
         // and their blocks.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
         const u32 glyphBytes = (glyphs * sizeof(Ui::FontGlyph) + 31u) & ~31u;
         const u32 pageBytes = 256u * sizeof(u16);
         const u32 blockNum = rOld.pageBlockNum + addedPages;
         const u32 bytes = sheetsBytes + glyphBytes + pageBytes + blockNum * pageBytes;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, Arenas::permanent()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getPermanentHeap()));
         memcpy(pBlock, rOld.pSheets, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
@@ -1830,7 +1830,7 @@ namespace {
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
     void exportArt() {
         if (sFont.mSheetWidth * cHdScale > cHdSheetMax || sFont.mSheetHeight * cHdScale > cHdSheetMax) {
-            nebula_log("NebulaIcons: the picture font's sheets are too large to export at eight times\n");
+            JUTNativeLog("NebulaIcons: the picture font's sheets are too large to export at eight times\n");
             return;
         }
         const s32 hdIcon = cCellMax * cHdScale;
@@ -1844,7 +1844,7 @@ namespace {
         u8* pImage = static_cast< u8* >(malloc(static_cast< size_t >(imagePixels) * 4));
         u8* pHdSheet = static_cast< u8* >(malloc(static_cast< size_t >(hdSheetWidth) * hdSheetHeight * 4));
         if (pHdPixels == nullptr || pHdImage == nullptr || pImage == nullptr || pHdSheet == nullptr) {
-            nebula_log("NebulaIcons: no memory to export the icons\n");
+            JUTNativeLog("NebulaIcons: no memory to export the icons\n");
             free(pHdPixels);
             free(pHdImage);
             free(pImage);
@@ -1958,7 +1958,7 @@ namespace {
         free(pHdImage);
         free(pImage);
         free(pHdSheet);
-        nebula_log("NebulaIcons: exported the icons\n");
+        JUTNativeLog("NebulaIcons: exported the icons\n");
     }
 
     // The Pair Joy-Con picture: each half a texture of Nebula's own (a record of RGBA8 rows): a Joy-Con's front drawn simply, in the
@@ -2295,7 +2295,7 @@ namespace NebulaIcons {
         }
         sFontState = install();
         if (sFontState == FontUnread) {
-            nebula_log("NebulaIcons: the picture font is not loaded; its icons stay the game's\n");
+            JUTNativeLog("NebulaIcons: the picture font is not loaded; its icons stay the game's\n");
             sFontState = FontUnusable;
         } else if (sFontState == FontReady && NebulaHost::artExport(nullptr) != 0) {
             exportArt();
@@ -2401,7 +2401,7 @@ namespace NebulaIcons {
         if (rSet.mNext < cJcPictures) {
             return true;
         }
-        nebula_log("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
+        JUTNativeLog("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
                  static_cast< int >(rSet.mHeight), static_cast< int >(rSet.mSpent / 1000),
                  static_cast< int >(rSet.mCalls));
         if (sJoyConShown >= 0) {

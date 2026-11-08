@@ -70,6 +70,7 @@ void GameStageClearSequence::exePowerStarGetDemo() {
         MR::stopStageBGM(2);
         MR::setSoundVolumeSetting(1, 20);
         MR::stopScene(::sClearDemoStopFrame);
+        MR::resetGlobalTimer();
         MR::deactivateDefaultGameLayout();
         MR::endGalaxyCometEvent();
     }
@@ -99,6 +100,7 @@ void GameStageClearSequence::exeGrandStarGetDemo() {
         MR::stopStageBGM(2);
         MR::setSoundVolumeSetting(1, 20);
         MR::stopScene(::sClearDemoStopFrame);
+        MR::resetGlobalTimer();
         MR::deactivateDefaultGameLayout();
         MR::endGalaxyCometEvent();
     }

@@ -4,6 +4,8 @@
 #include "Game/Sound/StreamSound.hpp"
 #include "Game/Sound/SoundGlobal.hpp"
 
+struct StreamSource;
+
 class StreamManager : public SoundGlobal< StreamManager > {
 public:
     StreamManager(bool setInstance);
@@ -33,6 +35,10 @@ public:
         return &mStreamList;
     }
 
+    void setStreamDataMgr(StreamSource* streamDataMgr) {
+        streamDataMgr_ = streamDataMgr;
+    }
+
 
     void pause(bool paused) {
         mActivity.pause(paused);
@@ -51,5 +57,6 @@ private:
     SoundMove mParams;
     SoundAudience* mAudience;
     NebulaList< StreamSound > mStreamList;
+    StreamSource* streamDataMgr_;
     SoundStrategyMgr< StreamSound >* soundStrategyMgr;
 };

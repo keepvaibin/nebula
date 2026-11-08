@@ -88,7 +88,11 @@ void GameSequenceProgress::startScene() {
     mMinFrame = 0;
     mIsPlayTicoSound = false;
 
-    if (MR::isCurrentScene(SceneKind_Boot)) {
+    if (MR::isEqualSceneName("Boot")) {
+        mStarPointerOnOffController->setStateToBase(this);
+    } else if (MR::isEqualSceneName("Title")) {
+        mStarPointerOnOffController->setStateToBase(this);
+    } else if (MR::isEqualSceneName("ThankYou")) {
         mStarPointerOnOffController->setStateToBase(this);
     } else if (MR::isStageFileSelect()) {
         mStarPointerOnOffController->setStateToBase(this);
@@ -99,8 +103,9 @@ void GameSequenceProgress::startScene() {
 
     GameSystemFunction::setPermissionToCheckInput(isScenePermittedUpdateInputStatus());
 
-    if (MR::isCurrentScene(SceneKind_Game)) {
+    if (MR::isEqualSceneName("Game")) {
         mStorySequenceExecutor->setNerveSceneStart();
+        MR::startGlobalTimer();
 
         if (MR::isStageFileSelect()) {
             MR::forceOpenWipeFade();
@@ -132,11 +137,11 @@ void GameSequenceProgress::endScene() {
     }
 }
 
-void GameSequenceProgress::requestChangeScene(SceneKind kind) {
+void GameSequenceProgress::requestChangeScene(const char* pName) {
     updateGameDataBeforeChangeScene();
 
     GameSystemSceneController* pSceneController = SingletonHolder< GameSystem >::get()->mSceneController;
-    pSceneController->mNextSceneControlInfo.mScene = kind;
+    pSceneController->mNextSceneControlInfo.setScene(pName);
     pSceneController->requestChangeScene();
 
     mStarPointerOnOffController->setStateToBase(this);
@@ -165,7 +170,7 @@ void GameSequenceProgress::requestGalaxyMove(const GalaxyMoveArgument& rMoveArg)
     setMinFrameBeforeStartNextStage(moveArg);
 
     GameSystemSceneController* pController = SingletonHolder< GameSystem >::get()->mSceneController;
-    pController->mNextSceneControlInfo.mScene = SceneKind_Game;
+    pController->mNextSceneControlInfo.setScene("Game");
     pController->mNextSceneControlInfo.setStage(moveArg.mStageName);
     pController->mNextSceneControlInfo.mScenarioNo = moveArg.mScenarioNo;
     pController->mNextSceneControlInfo.mSelectedScenarioNo = moveArg.mSelectedScenarioNo;
@@ -291,7 +296,7 @@ void GameSequenceProgress::exeResetProcessing() {
 }
 
 bool GameSequenceProgress::isScenePermittedUpdateInputStatus() {
-    return !MR::isCurrentScene(SceneKind_Boot);
+    return !MR::isEqualSceneName("Boot");
 }
 
 bool GameSequenceProgress::isCometStar(GalaxyMoveArgument moveArg) {
@@ -338,7 +343,7 @@ void GameSequenceProgress::resetGameDataAfterChangeScene(const GalaxyMoveArgumen
 }
 
 void GameSequenceProgress::updateGameDataGalaxyVisitedFlag() {
-    if (MR::isCurrentScene(SceneKind_Game) && !mIsCancelScenarioSelect && !isNerve(GET_NERVE_ANON(GameSequenceProgressResetProcessing))) {
+    if (MR::isEqualSceneName("Game") && !mIsCancelScenarioSelect && !isNerve(GET_NERVE_ANON(GameSequenceProgressResetProcessing))) {
         const char* pStageName = MR::getCurrentStageName();
         s32 scenarioNo = MR::getCurrentScenarioNo();
         GameDataFunction::onGalaxyScenarioFlagAlreadyVisited(pStageName, scenarioNo);
@@ -346,7 +351,7 @@ void GameSequenceProgress::updateGameDataGalaxyVisitedFlag() {
 }
 
 void GameSequenceProgress::setMinFrameBeforeStartNextStage(const GalaxyMoveArgument& rMoveArg) {
-    if (MR::isCurrentScene(SceneKind_Game) && MR::isEqualStageName("PeachCastleGardenGalaxy") &&
+    if (MR::isEqualSceneName("Game") && MR::isEqualStageName("PeachCastleGardenGalaxy") &&
         MR::isEqualString(rMoveArg.mStageName, "HeavensDoorGalaxy") && rMoveArg.mScenarioNo == 1) {
         mMinFrame = 300;
         mIsPlayTicoSound = true;

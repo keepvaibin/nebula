@@ -89,7 +89,7 @@ namespace NrvPictureBookLayout {
 
 PictureBookLayout::PictureBookLayout(s32 chapterMin, s32 chapterMax, bool isRosettaReading)
     : LayoutActor("絵本レイアウト", true), mChapterMin(chapterMin), mChapterMax(chapterMax), mChapterRosettaMax(chapterMax), mChapterNo(1), mPageNo(),
-      mTextIndex(), mNotReadedChapterNo(-1), mNotReadedPageNo(-1), mNotReadedTextIndex(-1), _44(), _48(), mTitleTexMap(), mCoverFrontTexMap(),
+      mTextIndex(), mNotReadedChapterNo(-1), mNotReadedPageNo(-1), mNotReadedTextIndex(-1), mTexMaps(), mChapterTexMaps(), mTitleTexMap(), mCoverFrontTexMap(),
       mCoverBackTexMap(), mNextItemDir(1), mIsNextItemFast(), mIconAButton(), mContentsButtonPaneController(), mCloseButton() {
     if (!isRosettaReading) {
         mContentsButtonPaneController = new ButtonPaneController*[getChapterMax()];
@@ -183,7 +183,7 @@ void PictureBookLayout::initTexture() {
         textureNum += ::getTextureNum(c);
     }
 
-    _44 = new Ui::TexMap*[textureNum];
+    mTexMaps = new Ui::TexMap*[textureNum];
 
     s32 textureIndex = 0;
 
@@ -195,7 +195,7 @@ void PictureBookLayout::initTexture() {
             char pageTexName[256];
             nebula_snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", c, p + 1);
 
-            _44[textureIndex] = MR::createLytTexMap(chapterArcName, pageTexName);
+            mTexMaps[textureIndex] = MR::createLytTexMap(chapterArcName, pageTexName);
             textureIndex++;
         }
     }
@@ -267,7 +267,7 @@ void PictureBookLayout::updateTexture() {
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
         s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
-        Ui::TexMap* pTexMap = _48[ind - 1];
+        Ui::TexMap* pTexMap = mChapterTexMaps[ind - 1];
 
         MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);
@@ -287,7 +287,7 @@ void PictureBookLayout::updateTexture() {
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
         s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
-        Ui::TexMap* pTexMap = _48[ind - 1];
+        Ui::TexMap* pTexMap = mChapterTexMaps[ind - 1];
 
         MR::replacePaneTexture(this, "PicRightPage", pTexMap, 0);
         MR::replacePaneTexture(this, "PicTurnLeftPage", pTexMap, 0);
@@ -345,14 +345,14 @@ bool PictureBookLayout::chapterNext() {
 }
 
 void PictureBookLayout::updateTexMapChapterBase() {
-    _48 = _44;
+    mChapterTexMaps = mTexMaps;
 
     for (s32 c = mChapterMin; c <= mChapterMax; c++) {
         if (c == mChapterNo) {
             break;
         }
 
-        _48 = &_48[::getTextureNum(c)];
+        mChapterTexMaps = &mChapterTexMaps[::getTextureNum(c)];
     }
 }
 
@@ -833,7 +833,7 @@ void PictureBookLayout::exeClose() {
             MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
             MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);
         } else {
-            pTexMap = _48[mPageNo - 2];
+            pTexMap = mChapterTexMaps[mPageNo - 2];
 
             MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
             MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);

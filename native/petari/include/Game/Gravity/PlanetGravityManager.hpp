@@ -13,7 +13,7 @@ public:
 
     // Skips the gravities hosted by requester and those outside gravityType (a GravityType mask). pInfo gets the
     // highest priority gravity that applies.
-    bool calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, const void* pHost) const;
+    bool calcTotalGravityVector(Vec3f* pGravity, GravityInfo* pInfo, const Vec3f& rPosition, u32 gravityType, uintptr_t requester) const;
     void registerGravity(PlanetGravity* pGravity);
 
 private:

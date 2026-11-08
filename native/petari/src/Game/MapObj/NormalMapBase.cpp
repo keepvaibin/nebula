@@ -1,6 +1,5 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/MapObj/NormalMapBase.hpp"
-#include "Game/System/Arenas.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -33,7 +32,7 @@ namespace {
     SiteMaterial sNormalMap;
 }  // namespace
 
-NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName), mTextures(nullptr) {
+NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName) {
     mTexFlags = 0;
     mGradTexMode = 0;
     mBackLightMode = 0;
@@ -86,8 +85,6 @@ void NormalMapBase::setupLighting() {
 void NormalMapBase::setupTexture() {
     mNormalTex = nullptr;
     const u32 textureCount = MR::getModelData(this)->getTextureCount();
-    delete[] mTextures;
-    mTextures = new JUTTexture*[textureCount];
     for (u32 i = 0; i < textureCount; i++) {
         const ResTIMG* pImage = MR::getResTIMG(this, i);
         const char* pName = MR::getTextureName(this, i);
@@ -111,7 +108,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (Arenas::scene(), 0) u16[::cGradTexWidth * ::cGradTexHeight];
+    mImagePtr = new (MR::getSceneHeap(), 0) u16[::cGradTexWidth * ::cGradTexHeight];
     createGradTexture();
 }
 
@@ -531,19 +528,20 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
     pTexture->mObj.mImage = pCopy;
 }
 
-// One setting per line: the number leads the line and the name anywhere on it picks the setting.
+// One setting per line: the number leads the line and the name anywhere on it picks the setting. A line longer than the
+// buffer is cut, not overrun.
 void NormalMapBase::loadData(const char* pData, u32 size) {
     const char* const pEnd = pData + size;
     const char* pCursor = pData;
-    MR::FormattedName lineText;
     while (pCursor < pEnd) {
         const char* pLineEnd = pCursor;
         while (pLineEnd < pEnd && *pLineEnd != '\n' && *pLineEnd != '\r') {
             pLineEnd++;
         }
 
-        const u32 length = static_cast< u32 >(pLineEnd - pCursor);
-        char* const line = lineText.room(length + 1);
+        char line[256];
+        const u32 found = static_cast< u32 >(pLineEnd - pCursor);
+        const u32 length = found < sizeof(line) - 1 ? found : static_cast< u32 >(sizeof(line) - 1);
         memcpy(line, pCursor, length);
         line[length] = '\0';
 

@@ -160,14 +160,14 @@ void SandUpDownEffectObj::startMoveDown() {
 }
 
 bool SandUpDownEffectObj::checkSandHit() {
-    Vec3f lineStart;
-    Vec3f line;
+    Vec3f vec1;
+    Vec3f vec2;
     Vec3f hitPos;
 
-    lineStart.scaleAdd(-mLineOffset, mGravity, mPosition);
-    line.scale(mLineLength, mGravity);
+    vec1.scaleAdd(-mLineOffset, mGravity, mPosition);
+    vec2.scale(mLineLength, mGravity);
 
-    bool isHit = MR::getFirstPolyOnLineToMap(&hitPos, nullptr, lineStart, line, nullptr, mTriFilter);
+    bool isHit = MR::getFirstPolyOnLineToMap(&hitPos, nullptr, vec1, vec2, nullptr, mTriFilter);
 
     if (isHit) {
         mEffectMtx.setTrans(hitPos);

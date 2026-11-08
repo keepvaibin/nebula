@@ -68,6 +68,10 @@ namespace MR {
     void setDepthOfFieldBlurIntensity(f32);
     void createCenterScreenBlur();
     void startCenterScreenBlur(s32, f32, u8, s32, s32);
+    void startGlobalTimer();
+    void resetGlobalTimer();
+    bool isGlobalTimerEnd();
+    void startGlobalTimerTimeUp();
     void requestPowerUpHPMeter();
     void requestForceAppearHPMeter();
     void startMissLayout();

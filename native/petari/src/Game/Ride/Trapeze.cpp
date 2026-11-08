@@ -75,6 +75,7 @@ void Trapeze::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     Pos3f mtx;
+    mtx.identity();
     MR::makeMtxTR(mtx, this);
 
     mtx.getXDir(mSide);
@@ -213,7 +214,9 @@ void Trapeze::exeSwingSlideDown() {
         MR::startBckPlayer("TrapezeSlideDown");
     }
 
-    updateSlideDown();
+    if (updateSlideDown()) {
+        return;
+    }
 }
 
 void Trapeze::exeSwingFrontStart() {
@@ -367,9 +370,16 @@ void Trapeze::exeSwingBackEnd() {
 void Trapeze::updateHitSensor(HitSensor* pSensor) {
     if (MR::isSensorAutoRush(pSensor)) {
         if (isNerve(GET_NERVE(Trapeze, TrapezeNrvStop))) {
-            pSensor->mPosition.set< f32 >(mPosition.x, MR::clamp(MR::getPlayerPos()->y, mPosition.y - mRopeLength, mPosition.y), mPosition.z);
-        } else if (isNerve(GET_NERVE(Trapeze, TrapezeNrvFree))) {
+            pSensor->mPosition.set< f32 >(mPosition.x, MR::getPlayerPos()->y, mPosition.z);
+            f32 yPos = mPosition.y;
+            yPos = MR::clamp(pSensor->mPosition.y, yPos - mRopeLength, yPos);
+            pSensor->mPosition.y = yPos;
+            return;
+        }
+
+        if (isNerve(GET_NERVE(Trapeze, TrapezeNrvFree))) {
             MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), mPosition, mStickPoint->mPosition);
+            return;
         }
         return;
     }
@@ -382,7 +392,9 @@ void Trapeze::updateHitSensor(HitSensor* pSensor) {
 
 void Trapeze::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (mRider != nullptr) {
-        MR::tryGetItem(pSender, pReceiver);
+        if (MR::tryGetItem(pSender, pReceiver)) {
+            return;
+        }
     }
 }
 
@@ -410,11 +422,17 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         grabPos = mPosition + mUp * dotUp + mFront * dotFront;
 
-        mGrabCoord = MR::clamp(grabPos.distance(mPosition), 0.0f, mRopeLength);
+        f32 coord = grabPos.distance(mPosition);
+        coord = MR::clamp(coord, 0.0f, mRopeLength);
+        mGrabCoord = coord;
 
         Vec3f frontVec;
         MR::getPlayerFrontVec(&frontVec);
-        mSwingReverse = frontVec.dot(mFront) < 0.0f;
+        if (frontVec.dot(mFront) < 0.0f) {
+            mSwingReverse = true;
+        } else {
+            mSwingReverse = false;
+        }
 
         f32 projGrabPointVel = mHangPoint->mVelocity.dot(mFront);
         f32 vel = MR::getPlayerVelocity()->dot(mFront);
@@ -443,7 +461,9 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
         MR::startSound(mRider, "SE_PV_CATCH");
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
 
-        MR::startActorCameraNoTarget(this, mCameraInfo);
+        if (!MR::isActiveActorCamera(this, mCameraInfo) || MR::isActiveActorCamera(this, mCameraInfo)) {
+            MR::startActorCameraNoTarget(this, mCameraInfo);
+        }
 
         setNerve(GET_NERVE(Trapeze, TrapezeNrvSwingSlideDownStart));
         return true;
@@ -606,12 +626,14 @@ bool Trapeze::updateBind() {
     }
 
     updateHangPoint();
+    mPosMtx.identity();
 
     if (mGrabCoord < mRopeLength) {
         updateStick(mHangPoint->mPosition, mRopeLength - mGrabCoord);
     } else {
         mStickPoint->setPosAndAxis(mHangPoint->mPosition, mHangPoint->mSide, mHangPoint->mUp, mHangPoint->mFront);
-        mStickPoint->mVelocity.zero();
+        Vec3f vel(0.0f, 0.0f, 0.0f);
+        mStickPoint->mVelocity.set(vel);
     }
 
     updateStickMtx();
@@ -655,11 +677,19 @@ bool Trapeze::updateSlideDown() {
 }
 
 bool Trapeze::isStartSwingFront() const {
-    return mIsSwingFront && !mWasSwingFront;
+    if (mIsSwingFront && !mWasSwingFront) {
+        return true;
+    }
+
+    return false;
 }
 
 bool Trapeze::isStartSwingBack() const {
-    return mIsSwingBack && !mWasSwingBack;
+    if (mIsSwingBack && !mWasSwingBack) {
+        return true;
+    }
+
+    return false;
 }
 
 namespace {
@@ -719,6 +749,7 @@ void Trapeze::drawRope(TypedDraw& rDraw, const Vec3f& rPosA, const Vec3f& rPosB,
 }
 
 TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
+    mTexture = nullptr;
     mTexture = new JUTTexture(MR::loadTexFromArc("Trapeze", "TrapezeRope.bti"));
 
     mMaterial = makeMaterial();
@@ -728,7 +759,8 @@ SiteMaterial TrapezeRopeDrawInit::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, no culling.
     SiteMaterial material;
-    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true, NEBULA_CULL_NONE);
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
     material.setTexture(0, mTexture);

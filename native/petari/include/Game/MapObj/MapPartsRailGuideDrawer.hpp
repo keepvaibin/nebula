@@ -22,7 +22,7 @@ public:
     void exeDrawAll();
     void exeDrawForward();
 
-    MR::InlineVector< MapPartsRailGuidePoint*, 256 > mGuidePoints;
+    MR::Vector< MR::FixedArray< MapPartsRailGuidePoint*, 256 > > mGuidePoints;
     s32 mGuideType;
     s32 mRailId;
     const char* mModelName;

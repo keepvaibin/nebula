@@ -188,7 +188,7 @@ void TrampleStar::toSphere(f32 radius) {
 }
 
 void TrampleStar::initCheckFlag(u32 numFlags) {
-    mCheckFlags = new u16[numFlags * numFlags];
+    mCheckFlags = new (-0x4) u16[numFlags * numFlags];
     mNumFlags = numFlags;
 
     for (u32 idx = 0; idx < mNumFlags * mNumFlags; idx++) {
@@ -242,7 +242,7 @@ void TrampleStar::divide() {
 
     mNumSurfaces = numSurfaces;
     mNumVtxs = numVtxs;
-    delete[] mCheckFlags;
+    delete mCheckFlags;
 }
 
 void TrampleStar::moveVtx(f32 deformRate, u32 vtxIdx, u32 /* unused */, f32 /* unused */, u32 /* unused */) {
@@ -547,20 +547,20 @@ void TrampleStar::drawSelf() const {
     Vec3f playerPos = *MR::getPlayerPos();
     Vec3f diff = mPosition - playerPos;
     Vec3f shadowPos = MR::getMarioShadowVec();
-    Pos3f texMtx;
-    Pos3f toPlayer;
+    Pos3f mtx3;
+    Pos3f mtx;
     Rot3f rot;
-    Pos3f shadowFrame;
+    Pos3f mtx2;
 
     if (MR::vecKillElement(diff, shadowPos, &diff) > 0.0f) {
-        NebulaMtxTrans(toPlayer, -playerPos.x, -playerPos.y, -playerPos.z);
+        NebulaMtxTrans(mtx, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
-        NebulaMtxTrans(toPlayer, 1000000.0f, 1000000.0f, 1000000.0f);
+        NebulaMtxTrans(mtx, 1000000.0f, 1000000.0f, 1000000.0f);
     }
 
     MR::makeMtxRotate(rot, -*MR::getPlayerRotate());
 
-    NebulaMtxIdentity(shadowFrame);
+    NebulaMtxIdentity(mtx2);
 
     Vec3f front;
     MR::getPlayerFrontVec(&front);
@@ -577,10 +577,10 @@ void TrampleStar::drawSelf() const {
         return;
     }
 
-    MR::makeMtxUpFront(&shadowFrame, -MR::getMarioShadowVec(), -front);
-    NebulaMtxInverse(shadowFrame, shadowFrame);
+    MR::makeMtxUpFront(&mtx2, -MR::getMarioShadowVec(), -front);
+    NebulaMtxInverse(mtx2, mtx2);
 
-    MR::multMtx(texMtx, toPlayer, shadowFrame);
+    MR::multMtx(mtx3, mtx, mtx2);
     Pos3f texProj;
 
     for (s32 row = 0; row < 3; row++) {
@@ -594,14 +594,14 @@ void TrampleStar::drawSelf() const {
     texProj[2][3] = cShadowTexQ;
     texProj[0][3] = cShadowTexOffset;
     texProj[1][3] = cShadowTexOffset;
-    MR::multMtx(texMtx, texMtx, texProj);
+    MR::multMtx(mtx3, mtx3, texProj);
 
     // runtime/src/render/materials/trample_star.hlsl: blended by alpha, depth tested early and written, no culling.
     SiteMaterial material;
     TDDraw::setupNative(&material, 0, 1, 0);
     material.mShader = NEBULA_SHADER_TRAMPLE_STAR;
     material.setDepth(true, NEBULA_COMPARE_LEQUAL, true);
-    material.setMatrix(3, 0, texMtx);
+    material.setMatrix(3, 0, mtx3);
     material.setColor(0, 0xCC, 0xCC, 0xCC, 0xFF);
     material.setColor(4, 0x7F, 0x7F, 0x93, 0xC3);
     material.constants[8] = 0xB4 / 255.0f;

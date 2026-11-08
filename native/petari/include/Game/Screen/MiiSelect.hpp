@@ -81,21 +81,21 @@ public:
     }
 
 private:
-    ButtonPaneController* _20[2];
-    MR::BitArray* _28;
+    ButtonPaneController* mArrowButtons[2];
+    MR::BitArray* mFellowEnabled;
     u32 mFellowIconNum;
     // The library's Miis the picker shows: its favourites first, then the others.
     u32 mFavoriteMiiNum;
     u32 mMiiNum;
     u32* mMiiIndices;
     u32 mMiiIndexRoom;
-    s32 _1EC;
-    s32 _1F0;
-    Ui::TexMap* _1F4;
-    MiiSelectSub::Page* _1F8;
-    MiiSelectSub::Page* _1FC;
-    u8 _200;
-    FileSelectIconID* _204;
+    s32 mPageBaseIndex;
+    s32 mSelectedIndex;
+    Ui::TexMap* mSelectedTexMap;
+    MiiSelectSub::Page* mCurrentPage;
+    MiiSelectSub::Page* mOtherPage;
+    u8 mIsIconProhibited;
+    FileSelectIconID* mProhibitedIconID;
 };
 
 namespace MiiSelectSub {
@@ -113,7 +113,7 @@ namespace MiiSelectSub {
         void prohibitIcon(const FileSelectIconID&);
 
         MiiSelectIcon* mIconArray[8];
-        bool _20;
+        bool mIsGroupA;
         MiiSelect* mHost;
         s32 mBaseIndex;
     };

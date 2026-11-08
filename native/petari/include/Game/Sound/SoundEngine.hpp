@@ -95,7 +95,7 @@ enum SoundCommandKind : u16 {
     SOUND_STREAM_CANCEL,    // stream
     SOUND_STREAM_RELEASE,   // stream
     SOUND_ME_START,         // Me player, MeStartCommand
-    SOUND_ME_PARAMS,        // Me player, SoundParams, then the frame's mix update
+    SOUND_ME_PARAMS,        // Me player, SoundParams; mArg 1: the frame's mix update too (AudMe::update's gframeProc)
     SOUND_ME_STOP_AT_NOTE_END,  // Me player
     SOUND_ME_STOP,          // Me player
     SOUND_ME_PAUSE,         // Me player, mArg
@@ -204,10 +204,10 @@ public:
     }
 
     // Game thread, before the clock starts.
-    static SoundEngine* create(NebulaArena* pArena);
-    void setupBank(const BankFile* pFile, u32 size, NebulaArena* pArena);
-    void setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pArena);
-    void setupWaveBanks(u32 count, NebulaArena* pArena);
+    static SoundEngine* create(NebulaArena* pHeap);
+    void setupBank(const BankFile* pFile, u32 size, NebulaArena* pHeap);
+    void setupWaveBank(u32 index, const WaveBankFile* pFile, u32 size, NebulaArena* pHeap);
+    void setupWaveBanks(u32 count, NebulaArena* pHeap);
     void startClock();
     SoundRing& ring() {
         return mRing;

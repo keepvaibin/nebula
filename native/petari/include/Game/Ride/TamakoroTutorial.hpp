@@ -20,6 +20,7 @@ public:
     void requestStart();
     void requestEnd();
     void exeFirst();
+    void exeDenyTalk();
     void exeFirstForceTalk();
     void exeWaitRideTalk();
     void exeWaitRide();
@@ -31,7 +32,7 @@ public:
     void exeWait();
     void exeTrample();
     void exeRecover();
-    void startTimerSound(s32 step);
+    void startTimerSound(s32 step, s32 level);
 
     Tamakoro* mHost;
     TalkMessageCtrl* mTalkCtrl;

@@ -11,7 +11,7 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/MessageHolder.hpp"
-#include "Game/System/NebulaSystemSettings.hpp"
+#include "Game/System/RenderMode.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -41,19 +41,19 @@ namespace MR {
         return SingletonHolder< GameSystem >::get()->mFontHolder->getMessageFont();
     }
 
-    Ui::Font* getPictureFont() {
+    Ui::Font* getPictureFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mPictureFont;
     }
 
-    Ui::Font* getMenuFont() {
+    Ui::Font* getMenuFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mMenuFont;
     }
 
-    Ui::Font* getNumberFont() {
+    Ui::Font* getNumberFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mNumberFont;
     }
 
-    Ui::Font* getCinemaFont() {
+    Ui::Font* getCinemaFontNW4R() {
         return SingletonHolder< GameSystem >::get()->mFontHolder->mCinemaFont;
     }
 
@@ -90,7 +90,7 @@ namespace MR {
     }
 
     bool isScreen16Per9() {
-        return NebulaSystemSettings::isWidescreen();
+        return isAspectRatioFlag16Per9();
     }
 
     void initSceneMessage() {
@@ -104,12 +104,14 @@ namespace MR {
     void resetSystemAndGameStatus() {
         GameDataFunction::resetAllGameData();
         GameSystemFunction::resetAllControllerRumble();
+        resetGlobalTimer();
     }
 
     void stopAllSound(u32 param1) {
         getGameSystemObjHolder()->mAudioSystem->stopAllSound(param1);
     }
 
+    // The output is 60 Hz: no PAL television to suggest PAL60 for.
     PlacementId* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }

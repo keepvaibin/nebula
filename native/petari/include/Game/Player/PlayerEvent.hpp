@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include "Game/Util/Array.hpp"
 #include "Game/Util/NameIndex.hpp"
 
 class EventSequence;
@@ -91,14 +90,14 @@ public:
     template < typename T >
     void addEventSequence(const char* pName) {
         mNames.add(pName, mNumSequences);
-        mSequences.at(mNumSequences++) = new T();
+        mSequences[mNumSequences++] = new T();
     }
 
 private:
-    static const u32 cSequenceNum = 6;  // the ones init adds; more grow the table
+    static const u32 cSequenceNum = 6;
 
     MR::NameIndex mNames;  // an event's name to its index in mSequences
-    MR::GrowTable< EventSequence*, cSequenceNum > mSequences;
+    EventSequence* mSequences[cSequenceNum];
     u32 mNumSequences;
     EventSequence* mSequence;
     u16 mSequenceFrame;

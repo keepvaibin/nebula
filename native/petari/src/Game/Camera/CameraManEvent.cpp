@@ -18,17 +18,20 @@ namespace {
 
 CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)
     : CameraMan(pName), mHolder(pHolder), mChunkHolder(pChunkHolder), mCamera(), mChunk(), mRequestReset() {
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        mSlots[i].mActive.mChunk = nullptr;
-        mSlots[i].mRequested.mChunk = nullptr;
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        mItems[i].mFirst.mChunk = nullptr;
+        mItems[i].mSecond.mChunk = nullptr;
     }
+}
+
+CameraManEvent::ChunkFIFOItem::ChunkFIFOItem() {
 }
 
 void CameraManEvent::init(const TableIter& rIter) {
 }
 
 void CameraManEvent::calc() {
-    takeRequests();
+    updateChunkFIFO();
     applyChunk();
     changeCamera();
     resetCameraIfRequested();
@@ -39,18 +42,19 @@ void CameraManEvent::calc() {
 
 void CameraManEvent::start(s32 zoneID, const char* pName, const CameraTargetArg& rTargetArg, s32 frame) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
-    request(chunk, chunk->mEvPriority, rTargetArg, frame);
+    requestChunk(chunk, static_cast< EPriority >(chunk->mEvPriority), rTargetArg, frame);
     rTargetArg.setTarget();
 }
 
 void CameraManEvent::end(s32 zoneID, const char* pName, s32 frame) {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
+    searchPriority(chunk);
 
-    if (removeRequest(chunk)) {
+    if (cleanChunkFIFO(chunk)) {
         sendFinishInterpolateFrame(chunk, frame);
     }
 
-    if (hasNoRequest()) {
+    if (isChunkFIFOEmpty()) {
         mChunk = nullptr;
         MR::cleanEventCameraTarget_temporally();
     }
@@ -63,14 +67,14 @@ bool CameraManEvent::isEventActive(s32 zoneID, const char* pName) const {
 
         CameraParamChunkEvent* chunk = reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 
-        // i++ walks up past the last slot when it holds no request (logged in NATIVE-STATE-Q).
-        for (s32 i = cPriorityNum - 1; i >= 0; i++) {
-            if (mSlots[i].mRequested.mChunk != nullptr) {
-                return mSlots[i].mRequested.mChunk == chunk;
+        // Nice loop, probably they wanted i--
+        for (s32 i = cFifoItemNum - 1; i >= 0; i++) {
+            if (mItems[i].mSecond.mChunk != nullptr) {
+                return mItems[i].mSecond.mChunk == chunk;
             }
 
-            if (mSlots[i].mActive.mChunk != nullptr) {
-                return mSlots[i].mActive.mChunk == chunk;
+            if (mItems[i].mFirst.mChunk != nullptr) {
+                return mItems[i].mFirst.mChunk == chunk;
             }
         }
     }
@@ -79,7 +83,7 @@ bool CameraManEvent::isEventActive(s32 zoneID, const char* pName) const {
 }
 
 bool CameraManEvent::isActive() const {
-    return !hasNoRequest();
+    return !isChunkFIFOEmpty();
 }
 
 bool CameraManEvent::isInterpolationOff() const {
@@ -115,15 +119,15 @@ bool CameraManEvent::isZeroFrameMoveOff() const {
 }
 
 bool CameraManEvent::doesNextChunkHaveInterpolation() const {
-    const Request* item = nullptr;
+    const ChunkFIFOItem* item = nullptr;
 
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mRequested.mChunk != nullptr) {
-            item = &mSlots[i].mRequested;
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mSecond.mChunk != nullptr) {
+            item = &mItems[i].mSecond;
             break;
         }
 
-        if (mSlots[i].mActive.mChunk != nullptr) {
+        if (mItems[i].mFirst.mChunk != nullptr) {
             break;
         }
     }
@@ -159,21 +163,21 @@ void CameraManEvent::pauseOffAnimCamera(s32 zoneID, const char* pName) {
     }
 }
 
-void CameraManEvent::takeRequests() {
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mRequested.mChunk != nullptr) {
-            mSlots[i].mActive = mSlots[i].mRequested;
-            mSlots[i].mRequested.mChunk = nullptr;
+void CameraManEvent::updateChunkFIFO() {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mSecond.mChunk != nullptr) {
+            mItems[i].mFirst = mItems[i].mSecond;
+            mItems[i].mSecond.mChunk = nullptr;
         }
     }
 }
 
 void CameraManEvent::applyChunk() {
-    Request* item = nullptr;
+    ChunkFIFOItem* item = nullptr;
 
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mActive.mChunk != nullptr) {
-            item = &mSlots[i].mActive;
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mFirst.mChunk != nullptr) {
+            item = &mItems[i].mFirst;
             break;
         }
     }
@@ -182,7 +186,7 @@ void CameraManEvent::applyChunk() {
     mChunk = item->mChunk;
 }
 
-void CameraManEvent::checkReset(Request* pItem) {
+void CameraManEvent::checkReset(ChunkFIFOItem* pItem) {
     CameraParamChunkEvent* itemChunk = pItem->mChunk;
 
     if (mChunk != itemChunk) {
@@ -312,44 +316,45 @@ CameraParamChunkEvent* CameraManEvent::findChunk(s32 zoneID, const char* pName) 
     return reinterpret_cast< CameraParamChunkEvent* >(mChunkHolder->getChunk(chunkID));
 }
 
-void CameraManEvent::request(CameraParamChunkEvent* pChunk, u32 priority, const CameraTargetArg& rArg, s32 frame) {
-    Request& rRequest = mSlots[priority].mRequested;
-    rRequest.mChunk = pChunk;
-    rRequest.mTargetArg = rArg;
-    rRequest.mFrame = frame;
+void CameraManEvent::requestChunk(CameraParamChunkEvent* pChunk, EPriority priority, const CameraTargetArg& rArg, s32 frame) {
+    mItems[priority].mSecond.mChunk = pChunk;
+    mItems[priority].mSecond.mTargetArg.mTargetObj = rArg.mTargetObj;
+    mItems[priority].mSecond.mTargetArg.mTargetMtx = rArg.mTargetMtx;
+    mItems[priority].mSecond.mTargetArg.mLiveActor = rArg.mLiveActor;
+    mItems[priority].mSecond.mTargetArg.mMarioActor = rArg.mMarioActor;
+    mItems[priority].mSecond.mFrame = frame;
 }
 
-// Clears pChunk's request; true when no higher-priority slot held one.
-bool CameraManEvent::removeRequest(CameraParamChunk* pChunk) {
-    s32 held = 0;
+bool CameraManEvent::cleanChunkFIFO(CameraParamChunk* pChunk) {
+    s32 nr = 0;
 
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mRequested.mChunk != nullptr && mSlots[i].mRequested.mChunk == pChunk) {
-            mSlots[i].mActive.mChunk = nullptr;
-            mSlots[i].mRequested.mChunk = nullptr;
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mSecond.mChunk != nullptr && mItems[i].mSecond.mChunk == pChunk) {
+            mItems[i].mFirst.mChunk = nullptr;
+            mItems[i].mSecond.mChunk = nullptr;
             break;
         }
 
-        if (mSlots[i].mActive.mChunk != nullptr && mSlots[i].mActive.mChunk == pChunk) {
-            mSlots[i].mActive.mChunk = nullptr;
+        if (mItems[i].mFirst.mChunk != nullptr && mItems[i].mFirst.mChunk == pChunk) {
+            mItems[i].mFirst.mChunk = nullptr;
             break;
         }
 
-        if (mSlots[i].mActive.mChunk != nullptr || mSlots[i].mRequested.mChunk != nullptr) {
-            held++;
+        if (mItems[i].mFirst.mChunk != nullptr || mItems[i].mSecond.mChunk != nullptr) {
+            nr++;
         }
     }
 
-    return held == 0;
+    return nr == 0;
 }
 
-bool CameraManEvent::hasNoRequest() const {
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mActive.mChunk != nullptr) {
+bool CameraManEvent::isChunkFIFOEmpty() const {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mFirst.mChunk != nullptr) {
             return false;
         }
 
-        if (mSlots[i].mRequested.mChunk != nullptr) {
+        if (mItems[i].mSecond.mChunk != nullptr) {
             return false;
         }
     }
@@ -405,9 +410,25 @@ void CameraManEvent::sendFinishInterpolateFrame(CameraParamChunkEvent* pChunk, s
     mDirector->setInterpolation(frames);
 }
 
-bool CameraManEvent::isRequested(CameraParamChunk* pChunk) const {
-    for (u32 i = 0; i < cPriorityNum; i++) {
-        if (mSlots[i].mActive.mChunk == pChunk || mSlots[i].mRequested.mChunk == pChunk) {
+s32 CameraManEvent::searchPriority(CameraParamChunk* pChunk) const {
+    s32 i;
+
+    for (i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mFirst.mChunk == pChunk) {
+            break;
+        }
+
+        if (mItems[i].mSecond.mChunk == pChunk) {
+            break;
+        }
+    }
+
+    return i;
+}
+
+bool CameraManEvent::isInFIFO(CameraParamChunk* pChunk) const {
+    for (u32 i = 0; i < cFifoItemNum; i++) {
+        if (mItems[i].mFirst.mChunk == pChunk || mItems[i].mSecond.mChunk == pChunk) {
             return true;
         }
     }
@@ -426,7 +447,7 @@ void CameraManEvent::notifyDeactivate() {
 bool CameraManEvent::isAnimCameraEnd(s32 zoneID, const char* pName) const {
     CameraParamChunkEvent* chunk = findChunk(zoneID, pName);
 
-    if (isRequested(chunk)) {
+    if (isInFIFO(chunk)) {
         if (chunk == mChunk) {
             if (mCamera != nullptr) {
                 return reinterpret_cast< CameraAnim* >(mCamera)->isAnimEnd();

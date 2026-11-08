@@ -121,16 +121,16 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
             return false;
         }
 
-        Vec3f wallNormal(*MR::getWallNormal(pHost));
-        MR::normalizeOrZero(&wallNormal);
+        Vec3f vec6C(*MR::getWallNormal(pHost));
+        MR::normalizeOrZero(&vec6C);
 
-        Pos3f base;
-        base.set(getBaseMtx());
+        Pos3f mtx60;
+        mtx60.set(getBaseMtx());
 
-        Vec3f side;
-        base.getXDir(side);
+        Vec3f vec78;
+        mtx60.getXDir(vec78);
 
-        f32 dot = side.dot(wallNormal);
+        f32 dot = vec78.dot(vec6C);
 
         if (MR::abs(dot) < 0.1f) {
             return false;
@@ -162,35 +162,35 @@ bool FallDownBridge::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 void FallDownBridge::calcAndSetBaseMtx() {
     LiveActor::calcAndSetBaseMtx();
 
-    Pos3f base;
-    base.set(getBaseMtx());
+    Pos3f mtx58;
+    mtx58.set(getBaseMtx());
 
-    Pos3f toPivot;
-    toPivot.identity();
+    Pos3f mtx88;
+    mtx88.identity();
 
-    Vec3f pivot;
+    Vec3f vecC4;
 
     if (mAngle >= 0.0f) {
-        pivot.set< f32 >(0.0f, 0.0f, 0.0f);
+        vecC4.set< f32 >(0.0f, 0.0f, 0.0f);
     } else {
-        pivot.set(mScale.x * 400.0f, 0.0f, 0.0f);
+        vecC4.set(mScale.x * 400.0f, 0.0f, 0.0f);
     }
 
-    toPivot.setTrans(-pivot);
+    mtx88.setTrans(-vecC4);
 
-    Pos3f mtx;
-    mtx.identity();
-    mtx.makeRotate(Vec3f(0, 0, 1), MR::toRadian(mAngle));
+    Pos3f baseMtx;
+    baseMtx.identity();
+    baseMtx.makeRotate(Vec3f(0, 0, 1), MR::toRadian(mAngle));
 
-    mtx.concat(mtx, toPivot);
+    baseMtx.concat(baseMtx, mtx88);
 
-    MR::addTransMtx(mtx, pivot);
+    MR::addTransMtx(baseMtx, vecC4);
 
-    mtx.concat(base, mtx);
+    baseMtx.concat(mtx58, baseMtx);
 
-    MR::setBaseTRMtx(this, mtx);
+    MR::setBaseTRMtx(this, baseMtx);
 
-    mtx.mult(::sBaseClipCentor, mClipCenter);
+    baseMtx.mult(::sBaseClipCentor, mClipCenter);
 }
 
 void FallDownBridge::exeWait() {

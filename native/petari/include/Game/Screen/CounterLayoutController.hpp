@@ -34,7 +34,7 @@ public:
     void exePlayerNotMoving();
 
     s32 mPlayerNotMovingFrame;
-    bool _24;
+    bool mIsTicoEatRequested;
     CoinCounter* mCoinCounter;
     StarPieceCounter* mStarPieceCounter;
     PlayerLeft* mPlayerLeft;

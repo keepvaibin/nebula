@@ -116,7 +116,7 @@ void MarioActor::initMember() {
     mPolygonAttackDone = 0;
     NebulaMtxIdentity(mBaseMtx.toMtxPtr());
     mTakenSensor = 0;
-    for (int i = 0; i < mTakeSensors.size(); i++) {
+    for (int i = 0; i < ARRAY_SIZE(mTakeSensors); i++) {
         mTakeSensors[i] = 0;
     }
 
@@ -160,7 +160,7 @@ void MarioActor::initMember() {
     mSpinTicoTimer = 0;
     mSpinStarTimer = 0;
     mSpinStarEndTimer = 0;
-    for (int i = 0; i < mAirPunchHits.size(); i++) {
+    for (int i = 0; i < ARRAY_SIZE(mAirPunchHits); i++) {
         mAirPunchHits[i] = 0;
     }
 

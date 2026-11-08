@@ -18,11 +18,13 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     static const s32 sFadeinoutFrame = 30;
+    static const s32 sResetWaitFrame = 15;
 };  // namespace
 
 namespace NrvGameSystemResetAndPowerProcess {
     NEW_NERVE(GameSystemResetAndPowerProcessIdle, GameSystemResetAndPowerProcess, Idle);
-    NEW_NERVE(GameSystemResetAndPowerProcessFadeOut, GameSystemResetAndPowerProcess, FadeOut);
+    NEW_NERVE(GameSystemResetAndPowerProcessPrepareReset, GameSystemResetAndPowerProcess, PrepareReset);
+    NEW_NERVE(GameSystemResetAndPowerProcessReset, GameSystemResetAndPowerProcess, Reset);
     NEW_NERVE(GameSystemResetAndPowerProcessWaitPrepareFadein, GameSystemResetAndPowerProcess, WaitPrepareFadein);
     NEW_NERVE(GameSystemResetAndPowerProcessFadein, GameSystemResetAndPowerProcess, Fadein);
 };  // namespace NrvGameSystemResetAndPowerProcess
@@ -56,13 +58,13 @@ void GameSystemResetAndPowerProcess::setResetOperationQuit() {
 }
 
 void GameSystemResetAndPowerProcess::requestReset(bool isImmediate) {
-    if (!isActive()) {
+    if (tryPermitReset()) {
         beginFadeOut(isImmediate);
     }
 }
 
 void GameSystemResetAndPowerProcess::requestQuitGame(bool isImmediate) {
-    if (!isActive()) {
+    if (tryPermitReset()) {
         setResetOperationQuit();
         beginFadeOut(isImmediate);
     }
@@ -76,30 +78,32 @@ void GameSystemResetAndPowerProcess::beginFadeOut(bool isImmediate) {
     }
 
     GameSystemFunction::activateScreenPreserver();
-    setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessFadeOut));
+    setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPrepareReset));
 }
 
-// Resets come from the system menu (requestReset, requestQuitGame) and the file select's quit.
+// Resets come from the HOME Menu (requestReset, requestQuitGame).
 void GameSystemResetAndPowerProcess::exeIdle() {
 }
 
-// The scene, the sound (stopped, then faded to silence) and the save sequence wind down while the picture fades.
-void GameSystemResetAndPowerProcess::exeFadeOut() {
+void GameSystemResetAndPowerProcess::exePrepareReset() {
     if (MR::isFirstStep(this)) {
         GameSystemFunction::prepareResetAudioSystem();
         GameSystemFunction::prepareResetSystem();
         GameSystemFunction::resetAllControllerRumble();
         GameSystemFunction::forceToDeactivateHomeButtonLayout();
+    }
+
+    if (MR::isStep(this, 2)) {
         GameSystemFunction::requestResetAudioSystem(mResetOperation != ResetOperation_ApplicationReset);
     }
 
-    if (mFadeinoutControl->mFrame == 0 && GameSystemFunction::isPrepareResetSaveDataHandleSequence() &&
+    if (mFadeinoutControl->mFrame == 0 && GameSystemFunction::isPrepareResetSaveDataHandleSequence() && MR::isGreaterStep(this, 2) &&
         GameSystemFunction::isDoneResetAudioSystem()) {
-        reset();
+        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessReset));
     }
 }
 
-void GameSystemResetAndPowerProcess::reset() {
+void GameSystemResetAndPowerProcess::exeReset() {
     GameSystemFunction::setPermissionToCheckInput(false);
 
     // New mods need a new run: the same fade and sound, then the game starts again with them.
@@ -107,7 +111,7 @@ void GameSystemResetAndPowerProcess::reset() {
         exitApplication();
     }
 
-    setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitPrepareFadein));
+    MR::setNerveAtStep(this, GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitPrepareFadein), ::sResetWaitFrame);
 }
 
 void GameSystemResetAndPowerProcess::exeWaitPrepareFadein() {
@@ -150,6 +154,10 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     } else {
         host->app_restart(host->user);
     }
+}
+
+bool GameSystemResetAndPowerProcess::tryPermitReset() {
+    return !isActive();
 }
 
 void GameSystemResetAndPowerProcess::control() {

@@ -1816,7 +1816,7 @@ bool Mario::postureCtrl(MtxPtr) {
         }
     }
 
-    if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", 2)) {
         vec2 = mGroundNorm;
     }
 

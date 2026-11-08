@@ -39,7 +39,7 @@ namespace NrvSysInfoWindow {
 
 SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType executeType)
     : LayoutActor("システム用インフォメーションウィンドウ", true), mWindowType(windowType), mType(Type_Key), mYesNoSelector(nullptr),
-      mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children)
+      mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), mExecutesIconAButton(executeType == ExecuteType_Children)
       ,
       mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
       mDimHandOver(DimHandOver_None), mDimHanding(false), mFadePane(nullptr), mPanelPane(nullptr), mShadowPane(nullptr)
@@ -69,7 +69,7 @@ void SysInfoWindow::init(const TableIter& rIter) {
         MR::setTextBoxGameMessageRecursive(this, "Right", "System_Save00_Yes");
     }
 
-    mIconAButton = MR::createAndSetupIconAButton(this, !_38, false);
+    mIconAButton = MR::createAndSetupIconAButton(this, !mExecutesIconAButton, false);
     mDimPane = MR::getPane(this, "BG");
     if (mWindowType == WindowType_Normal) {
         mFadePane = MR::getPane(this, mWindowParentPaneName);
@@ -83,7 +83,7 @@ void SysInfoWindow::init(const TableIter& rIter) {
 void SysInfoWindow::movement() {
     LayoutActor::movement();
 
-    if (_38) {
+    if (mExecutesIconAButton) {
         mIconAButton->movement();
     }
 }
@@ -96,7 +96,7 @@ void SysInfoWindow::calcAnim() {
     }
     updateDim();
 
-    if (_38) {
+    if (mExecutesIconAButton) {
         mIconAButton->calcAnim();
     }
 }
@@ -117,7 +117,7 @@ void SysInfoWindow::draw() const {
         LayoutActor::draw();
     }
 
-    if (_38) {
+    if (mExecutesIconAButton) {
         mIconAButton->draw();
     }
 }
@@ -350,7 +350,7 @@ void SysInfoWindow::drawDim() const {
     if (pManager == nullptr || pManager->mIsScreenHidden) {
         return;
     }
-    MR::setupDrawForLayout();
+    MR::setupDrawForNW4RLayout(1.0f, true);
     const u8 alpha = mDimPane->mGlbAlpha;
     mDimPane->mGlbAlpha = static_cast< u8 >(mDim * 255.0f + 0.5f);
     mDimPane->Draw(pManager->mDrawInfo);

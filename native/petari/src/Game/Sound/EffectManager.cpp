@@ -1,6 +1,6 @@
 #include "Game/Sound/EffectManager.hpp"
 #include "Game/Sound/SoundHandles.hpp"
-#include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/Sound/SoundInfo.hpp"
 
 void EffectCategory::managerCalc_() {
     mParams.calc();
@@ -206,8 +206,18 @@ bool EffectManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* pos
         (*handle)->stop();
     }
 
-    const StdSoundInfo* info = StdSoundInfo::getInstance();
-    EffectSound* se = newSe_(id.getGroupID(), info->getPriority(id));
+    SoundInfo* soundInfoPtr = SoundGlobal< SoundInfo >::getInstance();
+    u32 priority;
+    u32 category;
+    if (soundInfoPtr != nullptr) {
+        category = soundInfoPtr->getCategory(id);
+        priority = soundInfoPtr->getPriority(id);
+    } else {
+        category = id.getGroupID();
+        priority = 0;
+    }
+
+    EffectSound* se = newSe_(category, priority);
     if (se == nullptr) {
         return false;
     }
@@ -215,7 +225,9 @@ bool EffectManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* pos
     SoundAudience* audiencePtr = mAudience;
     se->startID_(id, posPtr, audiencePtr);
 
-    info->applySound(id, se);
+    if (soundInfoPtr != nullptr) {
+        soundInfoPtr->getSeInfo(id, se);
+    }
 
     if (handle != nullptr) {
         se->attachHandle(handle);

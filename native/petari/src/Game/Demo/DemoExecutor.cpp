@@ -18,7 +18,7 @@
 
 DemoExecutor::DemoExecutor(const char* pName)
     : DemoCastGroup(pName), mSheetName(), mTimeKeeper(), mSubPartKeeper(), mPlayerKeeper(), mCameraKeeper(), mActionKeeper(), mWipeKeeper(),
-      mSoundKeeper(), mSheetKeeper(), mStageSwitchCtrl(), mDemoStarter(), mDemoName(), mMovementType(MR::MovementControlType_None), mUnclippedCasts(),mTalkAnimCtrl(), mTalkMessageCtrl() {
+      mSoundKeeper(), mSheetKeeper(), mStageSwitchCtrl(), mDemoStarter(), mDemoName(), mMovementType(MR::MovementControlType_None),mActor(), mTalkAnimCtrl(), mTalkMessageCtrl() {
 }
 
 void DemoExecutor::init(const TableIter& rIter) {
@@ -90,7 +90,7 @@ void DemoExecutor::start(NameObj* pStarter, const char* pDemoName, MR::MovementC
         item->startDemo();
     }
 
-    mUnclippedCasts.clear();
+    mActor.clear();
 
     for (s32 i = 0; i < mGroup->getObjNum(); i++) {
         LiveActor* actor = mGroup->getActor(i);
@@ -103,7 +103,7 @@ void DemoExecutor::start(NameObj* pStarter, const char* pDemoName, MR::MovementC
         }
 
         MR::invalidateClipping(actor);
-        mUnclippedCasts.push_back(actor);
+        mActor.push_back(actor);
     }
 }
 
@@ -234,10 +234,10 @@ void DemoExecutor::end() {
     mDemoName = nullptr;
     mMovementType = MR::MovementControlType_None;
 
-    for (auto& item : mUnclippedCasts) {
+    for (auto& item : mActor) {
         MR::validateClipping(item);
     }
 
-    mUnclippedCasts.clear();
+    mActor.clear();
 }
 

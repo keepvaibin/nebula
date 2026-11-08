@@ -30,10 +30,4 @@ public:
     void exeTurnRightHold();
     void exeTurnRightSuccess();
     void exeFadeOut();
-
-private:
-    u32 _20;
-    f32 _24;
-    u32 _28;
-    u8 _2C;
 };

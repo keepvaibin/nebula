@@ -52,13 +52,13 @@ public:
     const char* mPaneName;
     const char* mBoundingPaneName;
     u32 mAnimIndex;
-    bool _18;
+    bool mReleaseOnDecide;
     f32 mPointingAnimStartFrame;
     bool mIsSelected;
     bool mIsPointing;
-    bool _22;
-    bool _23;
-    bool _24;
+    bool mDisappearsAfterDecide;
+    bool mIsPointingExternal;
+    bool mIsActive;
     const char* mAppearAnimName;
     const char* mWaitAnimName;
     const char* mDecideAnimName;

@@ -287,8 +287,8 @@ void PowerStarList::resetButtonAll() {
 
 void PowerStarList::updateButtonAppearance() {
     if (mPageNum == 1) {
-        mArrowDownButtonCtrl->_24 = false;
-        mArrowUpButtonCtrl->_24 = false;
+        mArrowDownButtonCtrl->mIsActive = false;
+        mArrowUpButtonCtrl->mIsActive = false;
 
         MR::hidePane(this, "ArrowDownButton");
         MR::hidePane(this, "ArrowUpButton");
@@ -299,18 +299,18 @@ void PowerStarList::updateButtonAppearance() {
         MR::showPane(this, "PageNumber");
 
         if (mPageNo < mPageNum - 1) {
-            mArrowDownButtonCtrl->_24 = true;
+            mArrowDownButtonCtrl->mIsActive = true;
             MR::setPaneAlpha(this, "ArrowDownButton", -1);
         } else {
-            mArrowDownButtonCtrl->_24 = false;
+            mArrowDownButtonCtrl->mIsActive = false;
             MR::setPaneAlpha(this, "ArrowDownButton", 80);
         }
 
         if (mPageNo > 0) {
-            mArrowUpButtonCtrl->_24 = true;
+            mArrowUpButtonCtrl->mIsActive = true;
             MR::setPaneAlpha(this, "ArrowUpButton", -1);
         } else {
-            mArrowUpButtonCtrl->_24 = false;
+            mArrowUpButtonCtrl->mIsActive = false;
             MR::setPaneAlpha(this, "ArrowUpButton", 80);
         }
 
@@ -676,19 +676,19 @@ void PowerStarList::exeAppear() {
     if (MR::isFirstStep(this)) {
         pController = mArrowUpButtonCtrl;
         pController->appear();
-        pController->_24 = false;
+        pController->mIsActive = false;
 
         pController = mArrowDownButtonCtrl;
         pController->appear();
-        pController->_24 = false;
+        pController->mIsActive = false;
 
         updateButtonAppearance();
         MR::startAnim(this, "Appear", 0);
     }
 
     if (MR::isAnimStopped(this, 0)) {
-        mArrowUpButtonCtrl->_24 = true;
-        mArrowDownButtonCtrl->_24 = true;
+        mArrowUpButtonCtrl->mIsActive = true;
+        mArrowDownButtonCtrl->mIsActive = true;
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvWait));
     }
 }
@@ -709,8 +709,8 @@ void PowerStarList::exeWait() {
 
 void PowerStarList::exeDisappear() {
     if (MR::isFirstStep(this)) {
-        mArrowUpButtonCtrl->_24 = false;
-        mArrowDownButtonCtrl->_24 = false;
+        mArrowUpButtonCtrl->mIsActive = false;
+        mArrowDownButtonCtrl->mIsActive = false;
 
         updateList(-1, true);
 

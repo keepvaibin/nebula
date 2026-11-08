@@ -1,7 +1,7 @@
 #include "Game/Sound/SequenceManager.hpp"
 #include "Game/Sound/SequenceSound.hpp"
 #include "Game/Sound/SoundHandles.hpp"
-#include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/Sound/SoundInfo.hpp"
 
 SequenceManager::SequenceManager(bool setInstance) : SoundGlobal< SequenceManager >(setInstance), mAudience() {
     seqDataMgr = nullptr;
@@ -29,6 +29,8 @@ bool SequenceManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* p
         (*handle)->stop();
     }
 
+    SoundInfo* soundInfo = SoundGlobal< SoundInfo >::getInstance();
+    int category = (soundInfo != nullptr) ? soundInfo->getCategory(id) : -1;
     SeqData seqData;
     if (!seqDataMgr->getSeqData(id, &seqData)) {
         return false;
@@ -36,9 +38,11 @@ bool SequenceManager::startSound(SoundID id, SoundHandle* handle, const Vec3f* p
 
     SequenceSound* seq = beginStartSeq_();
     if (seq != nullptr) {
-        seq->startID_(id, posPtr, mAudience, id.getGroupID(), mNumTracks, seqData);
+        seq->startID_(id, posPtr, mAudience, category, mNumTracks, seqData);
         if (endStartSeq_(seq, handle)) {
-            StdSoundInfo::getInstance()->applySound(id, seq);
+            if (soundInfo != nullptr) {
+                soundInfo->getSeqInfo(id, seq);
+            }
             return true;
         }
     }

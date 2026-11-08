@@ -47,6 +47,7 @@ namespace {
 
 NPCActorCaps::NPCActorCaps(const char* pName) {
     mMakeActor = false;
+    mHostIO = false;
     mInterpole = false;
     mConnectTo = false;
     mLightCtrl = false;
@@ -64,6 +65,7 @@ NPCActorCaps::NPCActorCaps(const char* pName) {
     mSwitchDead = true;
     mSwitchAppear = false;
     mMakeActor = false;
+    mHostIO = false;
     mInterpole = false;
     mConnectTo = false;
     mLightCtrl = false;
@@ -118,6 +120,7 @@ NPCActorCaps::NPCActorCaps(const char* pName) {
 
 void NPCActorCaps::setDefault() {
     mMakeActor = true;
+    mHostIO = true;
     mInterpole = true;
     mConnectTo = true;
     mLightCtrl = true;
@@ -137,6 +140,7 @@ void NPCActorCaps::setDefault() {
     mModel = true;
     mMessage = true;
     mMakeActor = true;
+    mHostIO = true;
     mInterpole = true;
     mConnectTo = true;
     mLightCtrl = true;

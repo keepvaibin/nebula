@@ -42,7 +42,13 @@ bool GameScenePauseControl::tryStartPauseMenu() {
     if (mScene->isPermitToPauseMenu()) {
         mPauseChecker->update();
 
-        if (mPauseChecker->isPermitToMinusPause() || mPauseChecker->isPermitToPlusPause()) {
+        if (mPauseChecker->isPermitToMinusPause()) {
+            mScene->mPauseSeq->startPause(GamePauseSequence::ActivePause);
+            mScene->setNerve(mPauseMenuNerve);
+            return true;
+        }
+
+        if (mPauseChecker->isPermitToPlusPause()) {
             mScene->mPauseSeq->startPause(GamePauseSequence::ActivePause);
             mScene->setNerve(mPauseMenuNerve);
             return true;

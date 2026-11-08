@@ -66,6 +66,7 @@ public:
     bool mResetChasingStarPiece;
     StarPieceShooter* mStarPieceShooters[2];
 
+    // only fist 16 entries ever get used
     static constexpr s32 cGetSoundDelay = 16;  // updates from a get to its sound
     bool mGetSoundArray[cGetSoundDelay];       // a ring: the gets queued in the last cGetSoundDelay updates
 

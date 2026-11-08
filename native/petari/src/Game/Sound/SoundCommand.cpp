@@ -2,8 +2,8 @@
 #include "Game/System/NebulaArena.hpp"
 #include <new>
 
-void SoundRing::setup(NebulaArena* pArena) {
-    mArena = pArena;
+void SoundRing::setup(NebulaArena* pHeap) {
+    mHeap = pHeap;
     Chunk* first = newChunk();
     mTail = first;
     mOldest = first;
@@ -11,7 +11,7 @@ void SoundRing::setup(NebulaArena* pArena) {
 }
 
 SoundRing::Chunk* SoundRing::newChunk() {
-    void* memory = NebulaArena::alloc(sizeof(Chunk), 64, mArena);
+    void* memory = NebulaArena::alloc(sizeof(Chunk), 64, mHeap);
     if (memory == nullptr) {
         NEBULA_PANIC("no memory for the sound commands");
     }
@@ -44,7 +44,7 @@ void SoundRing::freeLeft() {
     while (mOldest != mTail && read > mOldestFirst + cChunkCommands) {
         Chunk* next = mOldest->mNext;
         mOldest->~Chunk();
-        NebulaArena::free(mOldest, mArena);
+        NebulaArena::free(mOldest, mHeap);
         mOldest = next;
         mOldestFirst += cChunkCommands;
     }

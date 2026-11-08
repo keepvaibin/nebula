@@ -16,8 +16,8 @@ public:
     bool isForEachModel() const;
     void initDraw() const;
 
-    u8 _14;
-    f32 _18;
-    f32 _1C;
-    u8 _20;
+    u8 mBloomIntensity;
+    f32 mIntensity1;
+    f32 mIntensity2;
+    u8 mThreshold;
 };

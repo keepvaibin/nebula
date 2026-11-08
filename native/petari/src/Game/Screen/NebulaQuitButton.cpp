@@ -68,7 +68,7 @@ void NebulaQuitButton::init(const TableIter& rIter) {
     layOut();
 
     mButton = new ButtonPaneController(this, "StartButton", "BoxStartButton", 0, true);
-    mButton->_22 = false;
+    mButton->mDisappearsAfterDecide = false;
     MR::connectToSceneLayout(this);
     LayoutActor::appear();
 }

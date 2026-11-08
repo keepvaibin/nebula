@@ -10,7 +10,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <nebula_module.h>
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <algorithm>
 
 namespace {
@@ -99,7 +99,7 @@ void EffectKeeper::setBinder(const Binder* pBinder) {
 }
 
 void EffectKeeper::addEffect(const char* pEffectName, LiveActor* pActor) {
-    MR::Effect::addAutoEffect(this, pActor, MR::Effect::createAutoEffect(pEffectName));
+    MR::Effect::addAutoEffect(this, pActor, MR::Effect::createAutoEffect(mName, pEffectName));
 }
 
 void EffectKeeper::registerEffect(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale,
@@ -120,7 +120,7 @@ void EffectKeeper::registerEffectWithoutSRT(const char* pName, const char* pUniq
 }
 
 void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEffectName, const char* pBckName, s32 capacity, f32 startFrame,
-                                         f32 endFrame) {
+                                         f32 endFrame, bool deleteOnEnd) {
     if (mSyncBckChecker == nullptr) {
         mSyncBckChecker = new SyncBckEffectChecker(pPlayer);
     }
@@ -128,7 +128,7 @@ void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEff
     MultiEmitter* emitter = getEmitter(pEffectName);
 
     emitter->initSyncBck(pPlayer, pBckName, capacity, startFrame);
-    emitter->onDeleteSyncBck(endFrame);
+    emitter->onDeleteSyncBck(deleteOnEnd, endFrame);
 }
 
 MultiEmitter* EffectKeeper::createEmitter(const char* pEffectName) {
@@ -205,7 +205,7 @@ void EffectKeeper::changeEffectName(const char* pEffectName, const char* pNewNam
     const bool renamed = mNames.rename(pEffectName, pNewName);
 #if defined(NEBULA_DEV)
     if (!renamed) {
-        nebula_log("effect %s of %s: not renamed to %s (absent, or the name is held)\n", pEffectName, mName != nullptr ? mName : "", pNewName);
+        JUTNativeLog("effect %s of %s: not renamed to %s (absent, or the name is held)\n", pEffectName, mName != nullptr ? mName : "", pNewName);
     }
 #else
     (void)renamed;

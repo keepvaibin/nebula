@@ -26,8 +26,7 @@ public:
     void disconnected();
     static void connectCallback(s32, s32);
     static void extensionCallback(s32, s32);
-    // This frame's sample; null while the controller has none.
-    PlayerInputSample* getSample() const;
+    PlayerInputSample* getSample(u32) const;
 
     s32 mChannel;
     PlayerInputReader* mReadInfo;

@@ -3,20 +3,20 @@
 #include <cstring>
 #include "Game/System/NebulaDataTables.hpp"
 #include "Game/System/GameAssets.hpp"
-#include "Game/System/Arenas.hpp"
+#include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 
 // Files the cooker writes (crates/nebula-import/src/cook/dol.rs).
 namespace {
-    // A file of the folder read into the permanent arena, straight from the store, before any archive is held.
+    // A file of the folder read into the current arena, straight from the store, before any archive is held.
     const u8* load(const char* pName) {
         MR::FormattedName path("/NebulaData/%s", pName);
         GameAssets::File file;
         if (!GameAssets::open(path.c_str(), &file)) {
             NEBULA_PANIC("%s is missing: the game content was not cooked by this version", path.c_str());
         }
-        u8* pData = static_cast< u8* >(NebulaArena::alloc(file.mLength, 32, Arenas::permanent()));
+        u8* pData = static_cast< u8* >(NebulaArena::alloc(file.mLength, 32, MR::getPermanentHeap()));
         if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
             NEBULA_PANIC("%s cannot be read", path.c_str());
         }
@@ -48,7 +48,7 @@ namespace {
         const u32 cellsEnd = pOld->mRowsAt + pOld->mRows * pOld->mColumns * sizeof(u32);
         const u32 added = sAddedGalaxyCount * pOld->mColumns * sizeof(u32);
         const u32 textAt = cellsEnd + added;
-        u8* pNew = static_cast< u8* >(NebulaArena::alloc(textAt + pOld->mTextSize + words, 32, Arenas::permanent()));
+        u8* pNew = static_cast< u8* >(NebulaArena::alloc(textAt + pOld->mTextSize + words, 32, MR::getPermanentHeap()));
         memcpy(pNew, pBase, cellsEnd);
         memset(pNew + cellsEnd, 0, added);  // a cell of 0: "" or 0
         memcpy(pNew + textAt, pBase + pOld->mTextAt, pOld->mTextSize);

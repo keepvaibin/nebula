@@ -60,7 +60,7 @@ public:
     void endCapture();
 
     void addDeformVelocityOuter(const Vec3f&, bool);
-    void addDeformVelocityInternalPressure();
+    void addDeformVelocityInternalOressure();
     void addDeformVelocityRebound();
     void addCoriolisAccel();
     void addAccelMoment(s32 padChannel);

@@ -172,8 +172,7 @@ void Mario::doSwimmingHitCheck(const HitInfo* pHit, u32 type) {
 }
 
 namespace {
-    MR::GrowBuffer< Triangle > sPunchTriangles;
-    MR::GrowBuffer< Triangle > sHeadHitTriangles;
+    Triangle sPunchTriangles[256];
 }  // namespace
 
 void Mario::doSpinPunchAroundPolygons() {
@@ -186,15 +185,9 @@ void Mario::doSpinPunchAroundPolygons() {
     }
 
     Vec3f center = mPosition + mVelocity + mHeadVec * 80.0f;
-    const Vec3f start = center + mFrontVec * 120.0f + mSideVec * 120.0f + mHeadVec * 120.0f;
-    const Vec3f end = center - mFrontVec * 120.0f - mSideVec * 120.0f - mHeadVec * 120.0f;
-    u32 room = 256;
-    u32 count = MR::createAreaPolygonList(sPunchTriangles.room(room), room, start, end);
-    while (count >= room) {  // full: the box may hold more
-        room *= 2;
-        count = MR::createAreaPolygonList(sPunchTriangles.room(room), room, start, end);
-    }
-    Triangle* const triangles = sPunchTriangles.mItems;
+    Triangle* const triangles = sPunchTriangles;
+    u32 count = MR::createAreaPolygonList(triangles, 256, center + mFrontVec * 120.0f + mSideVec * 120.0f + mHeadVec * 120.0f,
+                                          center - mFrontVec * 120.0f - mSideVec * 120.0f - mHeadVec * 120.0f);
 
     for (u32 i = 0; i < count; i++) {
         sendPunch(triangles[i].mSensor, true);
@@ -1256,7 +1249,7 @@ void Mario::checkHeadPoint() {
     }
 
     u32 count = Collision::checkStrikeBallToMap(center, radius, nullptr, nullptr);
-    Triangle* const triangles = sHeadHitTriangles.room(count);
+    Triangle triangles[32];
     u32 triangleCount = 0;
     Vec3f reaction;
     reaction.zero();
@@ -1724,7 +1717,7 @@ bool Mario::checkGround() {
         count = 4;
     }
 
-    if (isAnimationRun("壁押し", MarioIndexedAnime_WallPush)) {
+    if (isAnimationRun("壁押し", 0)) {
         count = 4;
     }
 

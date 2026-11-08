@@ -14,7 +14,10 @@ struct SoundCommand {
     u32 mValue;
     // The player or stream it is for.
     void* mTarget;
-    alignas(void*) u8 mBytes[cPayloadBytes];
+    union {
+        u8 mBytes[cPayloadBytes];
+        void* mAlign;
+    };
 
     template < class T >
     T& payload() {
@@ -35,7 +38,7 @@ class SoundRing {
 public:
     static const u32 cChunkCommands = 255;
 
-    void setup(NebulaArena* pArena);
+    void setup(NebulaArena* pHeap);
 
     // Game thread: a record to fill, then send() makes it the reader's and returns sent().
     SoundCommand& next();
@@ -72,7 +75,7 @@ private:
     Chunk* newChunk();
     void freeLeft();
 
-    NebulaArena* mArena = nullptr;
+    NebulaArena* mHeap = nullptr;
     // Writer.
     Chunk* mTail = nullptr;
     u32 mTailIndex = 0;

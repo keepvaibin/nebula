@@ -1,5 +1,8 @@
 #include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/Sound/EffectSound.hpp"
+#include "Game/Sound/SequenceSound.hpp"
 #include "Game/Sound/SoundChild.hpp"
+#include "Game/Sound/SoundGlobal.hpp"
 #include "Game/Sound/SoundTable.hpp"
 #include "Game/Sound/StreamSound.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -24,6 +27,15 @@ u16 StdSoundInfo::getBgmSeqResourceID(SoundID soundID) const {
     return data != nullptr ? data->mResource : 0xffff;
 }
 
+int StdSoundInfo::getSoundType(SoundID soundID) const {
+    const u32 section = soundID.getSectionID();
+    return section <= SoundID::SOUND_STREAM ? static_cast< int >(section) : -1;
+}
+
+int StdSoundInfo::getCategory(SoundID soundID) const {
+    return soundID.getGroupID();
+}
+
 u16 StdSoundInfo::getAudibleSw(SoundID soundID) const {
     const SoundItem* data = item(soundID, DATA_SE);
     return data != nullptr ? data->mAudibleSw : 0xffff;
@@ -34,16 +46,17 @@ u32 StdSoundInfo::getPriority(SoundID soundID) const {
     return data != nullptr ? data->mPriority : 0;
 }
 
-void StdSoundInfo::applySound(SoundID soundID, Sound* pSound) const {
-    const SoundItem* data = anyItem(soundID);
-    if (data != nullptr) {
-        pSound->mParams.mProperty.mVolume = data->mVolume * (1.0f / 255.0f);
-    }
+void StdSoundInfo::getSeInfo(SoundID soundID, EffectSound* pSe) const {
+    getSoundInfo_(soundID, pSe);
+}
+
+void StdSoundInfo::getSeqInfo(SoundID soundID, SequenceSound* pSeq) const {
+    getSoundInfo_(soundID, pSeq);
 }
 
 // The channel control: two bits a channel, from the first (0 leaves it, 1 centre, 2 left, 3 right).
-void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
-    applySound(soundID, pStream);
+void StdSoundInfo::getStreamInfo(SoundID soundID, StreamSound* pStream) const {
+    getSoundInfo_(soundID, pStream);
 
     const SoundItem* data = item(soundID, DATA_STREAM);
     if (data == nullptr) {
@@ -77,12 +90,19 @@ void StdSoundInfo::applyStream(SoundID soundID, StreamSound* pStream) const {
     }
 }
 
-const char* StdSoundInfo::getStreamFilePath(SoundID soundID) const {
+void StdSoundInfo::getSoundInfo_(SoundID soundID, Sound* pSound) const {
+    const SoundItem* data = anyItem(soundID);
+    if (data != nullptr) {
+        pSound->mParams.mProperty.mVolume = data->mVolume * (1.0f / 255.0f);
+    }
+}
+
+const char* StdSoundInfo::getStreamFilePath(SoundID soundID) {
     const SoundItem* data = item(soundID, DATA_STREAM);
     return data != nullptr ? SoundGlobal< SoundTable >::getInstance()->getStreamPath(data) : nullptr;
 }
 
-s32 StdSoundInfo::getStreamFileEntry(SoundID soundID) const {
+s32 StdSoundInfo::getStreamFileEntry(SoundID soundID) {
     if (soundID.getWaveID() >= NebulaMods::cFirstTrackWave) {
         return NebulaMods::trackFile(soundID.getWaveID());
     }

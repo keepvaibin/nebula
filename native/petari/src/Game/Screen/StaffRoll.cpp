@@ -239,7 +239,7 @@ namespace NrvStaffRoll {
 
 StaffRoll::StaffRoll(const char* pName)
     : LayoutActor(pName, true), mInfo(), mLine(), mPicture(), mMsg(), mMsgLineNum(), mMsgLine(), mTitleLogoPos(0.0f, 0.0f), mEndLogoPos(0.0f, 0.0f),
-      _48(-1), _4C() {
+      mLineStep(-1), mBgmFrame() {
 }
 
 void StaffRoll::init(const TableIter& rIter) {
@@ -333,7 +333,7 @@ void StaffRoll::exePrepareBgm() {
 
     if (MR::isGreaterStep(this, ::sStepForTitleLogoAppear)) {
         MR::unlockStageBGM();
-        _4C = 0;
+        mBgmFrame = 0;
         setNerve(GET_NERVE(StaffRoll, StaffRollNrvTitleLogoAppear));
     }
 }
@@ -353,7 +353,7 @@ void StaffRoll::exeTitleLogoScroll() {
     if (MR::isFirstStep(this)) {
         MR::startPaneAnim(this, ::cPaneNameTitleLogo, "TitleLogoWait", 0);
         mPicture->appear();
-        _48 = 0;
+        mLineStep = 0;
     }
 
     mTitleLogoPos.y -= ::getStaffRollParam()->mScrollSpeed;
@@ -369,7 +369,7 @@ void StaffRoll::exeLineScroll() {
     s32 screenHeight = MR::getScreenHeight();
     s32 hasRemainder = MR::mod(screenHeight - ::sEndLogoPosY, pParam->mScrollSpeed) != 0.0f;
     s32 scrollSteps = (MR::getScreenHeight() - ::sEndLogoPosY) / ::getStaffRollParam()->mScrollSpeed;
-    if (_4C >= 14211 - (hasRemainder + scrollSteps)) {
+    if (mBgmFrame >= 14211 - (hasRemainder + scrollSteps)) {
         setNerve(GET_NERVE(StaffRoll, StaffRollNrvEndLogoScroll));
     }
 }
@@ -530,7 +530,7 @@ void StaffRoll::movement() {
     tryGenerateLine();
 
     if (MR::isPlayingStageBgm()) {
-        _4C++;
+        mBgmFrame++;
     }
 }
 
@@ -582,17 +582,17 @@ void StaffRoll::setNrvNextInfo() {
 bool StaffRoll::tryGenerateLine() {
     f32 lineLeading;
 
-    if (_48 == -1) {
+    if (mLineStep == -1) {
         return false;
     }
 
-    if (_48 == 0) {
+    if (mLineStep == 0) {
         makeLine();
 
         mMsgLine++;
     }
 
-    _48++;
+    mLineStep++;
 
     if (isNextLineEmpty()) {
         lineLeading = ::getStaffRollParam()->mEmptyLineLeading;
@@ -600,15 +600,15 @@ bool StaffRoll::tryGenerateLine() {
         lineLeading = ::getStaffRollParam()->mLineLeading;
     }
 
-    if (_48 * ::getStaffRollParam()->mScrollSpeed >= lineLeading) {
+    if (mLineStep * ::getStaffRollParam()->mScrollSpeed >= lineLeading) {
         if (mMsgLine < mMsgLineNum) {
-            _48 = 0;
+            mLineStep = 0;
         } else {
-            _48 = -1;
+            mLineStep = -1;
         }
     }
 
-    return _48 - 1 == 0;
+    return mLineStep - 1 == 0;
 }
 
 void StaffRoll::makeLine() {

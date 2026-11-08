@@ -79,7 +79,7 @@ public:
     PowerStarList* mPowerStarList;
     BackButton* mBackButton;
     WipeFade* mWipe;
-    JUTTexture* _38;
+    JUTTexture* mCaptureTexture;
     s32 mMode;
     s32 mWipeFrame;
 };

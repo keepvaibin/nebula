@@ -19,13 +19,12 @@ void SceneFunction::movementStopSceneController() {
 }
 
 void SceneFunction::executeMovementList() {
-    StopSceneController* pStopScene = MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController);
-    if (pStopScene->isSceneStopped()) {
+    if (MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->isSceneStopped()) {
         return;
     }
 
     MR::getSceneNameObjMovementController()->movement();
-    pStopScene->movementDelayRequests();
+    CategoryList::execute(MR::MovementType_StopSceneDelayRequest);
     CategoryList::execute(MR::MovementType_Camera);
     CategoryList::execute(MR::MovementType_MirrorCamera);
     MR::setStarPointerCameraMtxAtGameScene();
@@ -80,7 +79,7 @@ void SceneFunction::executeMovementList() {
 
 void SceneFunction::executeMovementListOnPlayingMovie() {
     MR::getSceneNameObjMovementController()->movement();
-    MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->movementDelayRequests();
+    CategoryList::execute(MR::MovementType_StopSceneDelayRequest);
     CategoryList::execute(MR::MovementType_Layout);
     CategoryList::execute(MR::MovementType_LayoutDecoration);
     CategoryList::execute(MR::MovementType_MovieSubtitles);
