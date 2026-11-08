@@ -2,6 +2,7 @@
 #include "Game/MapObj/SimpleBreakableObj.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/BenefitItemOneUp.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/MapObj/StageEffectDataTable.hpp"
 #include "Game/Util.hpp"
@@ -64,7 +65,7 @@ void SimpleBreakableObj::init(const TableIter& rIter) {
         MR::declareCoin(this, mItemNum);
         break;
     case 1:
-        mKinokoOneUp = reinterpret_cast< BenefitItemObj* >(MR::createKinokoOneUp());
+        mKinokoOneUp = MR::createKinokoOneUp();
         break;
     case 2:
         MR::declarePowerStar(this);

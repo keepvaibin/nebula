@@ -7,19 +7,17 @@
 #include <nebula_format.h>
 #include "Game/Util/StringUtil.hpp"
 
+// Never on a stage where a dark comet shows.
 BenefitItemLifeUp::BenefitItemLifeUp(const char* pName) : BenefitItemObj(pName, "KinokoLifeUp") {
     if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
-        mIsDisabled = 1;
+        mIsDisabled = true;
     }
 }
 
 void BenefitItemLifeUp::exeCatch() {
     MR::hideModel(this);
-
     MR::changePlayerItemStatus(PlayerItemStatus_LifeUp);
-
     runEfx("Get");
-
     kill();
 }
 
@@ -32,6 +30,7 @@ void BenefitItemLifeUp::initModelAndEfx() {
     MR::addHitSensorMapObj(this, "body", 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
 }
 
+// The shared item effects under this item's names: `pName` + "LifeUp".
 void BenefitItemLifeUp::runEfx(const char* pName) {
     MR::FormattedName str("%sLifeUp", pName);
     MR::emitEffect(this, str.c_str());

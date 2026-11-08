@@ -89,9 +89,9 @@ namespace MR {
 
     void makeMtxTR(MtxPtr, const LiveActor*);
 
-    void setMtxTrans(MtxPtr pMtx, const Vec3f& rVec); /*{
+    inline void setMtxTrans(MtxPtr pMtx, const Vec3f& rVec) {
         MR::setMtxTrans(pMtx, rVec.x, rVec.y, rVec.z);
-    }*/
+    }
 
     // Non-official symbol.
     inline void multMtx(Mtx pOut, const Mtx pA, const Mtx pB) {
