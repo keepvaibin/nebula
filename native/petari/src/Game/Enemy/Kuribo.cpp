@@ -77,7 +77,7 @@ namespace NrvKuribo {
 
 Kuribo::Kuribo(const char* pName)
     : LiveActor(pName), mScaleController(nullptr), mItemGenerator(nullptr), mStateWander(nullptr), mStateFindPlayer(nullptr),
-      mBindStarPointer(nullptr), mStateStagger(nullptr), mStateChase(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mIsNoGravitySupport(0), mHasItem(1) {
+      mBindStarPointer(nullptr), mStateStagger(nullptr), mStateChase(nullptr), mPoseQuat(0.0f, 0.0f, 0.0f, 1.0f), mFront(0, 0, 1), mIsNoGravitySupport(false), mHasItem(true) {
 }
 
 void Kuribo::init(const TableIter& rIter) {
@@ -95,9 +95,9 @@ void Kuribo::init(const TableIter& rIter) {
         MR::calcGravity(this);
     } else {
         MR::offCalcGravity(this);
-        Vec3f v8;
-        MR::getUpVecFromQuat(&v8, mPoseQuat);
-        mGravity.set(v8);
+        Vec3f up;
+        MR::getUpVecFromQuat(&up, mPoseQuat);
+        mGravity.set(up);
     }
 
     mScaleController = new AnimScaleController(nullptr);
@@ -202,9 +202,9 @@ void Kuribo::control() {
 
     MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, 0.05f, 0.5f);
     if (!isNerve(GET_NERVE(Kuribo, KuriboNrvBindStarPointer))) {
-        Vec3f v3(0, 0, 0);
-        if (MR::calcVelocityAreaOrRailMoveOnGround(&v3, this)) {
-            MR::addVelocity(this, v3 * 0.05f);
+        Vec3f groundMove(0, 0, 0);
+        if (MR::calcVelocityAreaOrRailMoveOnGround(&groundMove, this)) {
+            MR::addVelocity(this, groundMove * 0.05f);
         }
     }
 
@@ -427,22 +427,23 @@ bool Kuribo::requestAttackSuccess() {
 }
 
 void Kuribo::onNoGravitySupport() {
-    mIsNoGravitySupport = 1;
+    mIsNoGravitySupport = true;
     MR::offCalcGravity(this);
 }
 
-void Kuribo::setUp(const Vec3f& a1, const Quat4f& a2, const Vec3f& a3) {
-    mPosition.set(a1);
-    mVelocity.set(a3);
-    mPoseQuat.x = a2.x;
-    mPoseQuat.y = a2.y;
-    mPoseQuat.z = a2.z;
-    mPoseQuat.w = a2.w;
+void Kuribo::setUp(const Vec3f& rPosition, const Quat4f& rPose, const Vec3f& rVelocity) {
+    mPosition.set(rPosition);
+    mVelocity.set(rVelocity);
+    mPoseQuat.x = rPose.x;
+    mPoseQuat.y = rPose.y;
+    mPoseQuat.z = rPose.z;
+    mPoseQuat.w = rPose.w;
     mPoseQuat.getZDir(mFront);
 }
 
-void Kuribo::appearBlowed(const Vec3f& a1, const Quat4f& a2, const Vec3f& a3) {
-    setUp(a1, a2, a3);
+// Thrown out of a Kabokuri's pumpkin.
+void Kuribo::appearBlowed(const Vec3f& rPosition, const Quat4f& rPose, const Vec3f& rVelocity) {
+    setUp(rPosition, rPose, rVelocity);
     setNerve(GET_NERVE(Kuribo, KuriboNrvBlow));
     MR::startAction(this, "Blow");
     appear();
@@ -451,8 +452,9 @@ void Kuribo::appearBlowed(const Vec3f& a1, const Quat4f& a2, const Vec3f& a3) {
     }
 }
 
-void Kuribo::appearHipDropped(const Vec3f& a1, const Quat4f& a2) {
-    setUp(a1, a2, Vec3f(0.0f, 0.0f, 0.0f));
+// Left flattened when a Kabokuri's pumpkin is hip-dropped.
+void Kuribo::appearHipDropped(const Vec3f& rPosition, const Quat4f& rPose) {
+    setUp(rPosition, rPose, Vec3f(0.0f, 0.0f, 0.0f));
     appear();
     MR::startAction(this, "HipDropDown");
     setNerve(GET_NERVE(Kuribo, KuriboNrvHipDropDown));
@@ -787,9 +789,9 @@ void Kuribo::exeBlowLand() {
 
 namespace MR {
     LiveActor* createNoItemKuriboActor(const char* pName) {
-        Kuribo* kuribo = new Kuribo(pName);
-        kuribo->mHasItem = 0;
-        return kuribo;
+        Kuribo* pKuribo = new Kuribo(pName);
+        pKuribo->mHasItem = false;
+        return pKuribo;
     }
 };  // namespace MR
 

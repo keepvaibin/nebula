@@ -47,9 +47,9 @@ public:
     bool requestBlowDown(HitSensor*, HitSensor*);
     bool requestAttackSuccess();
     void onNoGravitySupport();
-    void setUp(const Vec3f&, const Quat4f&, const Vec3f&);
-    void appearBlowed(const Vec3f&, const Quat4f&, const Vec3f&);
-    void appearHipDropped(const Vec3f&, const Quat4f&);
+    void setUp(const Vec3f& rPosition, const Quat4f& rPose, const Vec3f& rVelocity);
+    void appearBlowed(const Vec3f& rPosition, const Quat4f& rPose, const Vec3f& rVelocity);
+    void appearHipDropped(const Vec3f& rPosition, const Quat4f& rPose);
     bool tryNonActive();
     bool tryActive();
     bool tryEndBlow();
@@ -93,7 +93,7 @@ public:
     Quat4f mPoseQuat;
     Vec3f mFront;
     bool mIsNoGravitySupport;
-    u8 mHasItem;
+    bool mHasItem;
 };
 
 namespace MR {
