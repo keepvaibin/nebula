@@ -144,8 +144,8 @@ namespace MR {
     void turnDirectionFromTargetDegreeHorizon(const LiveActor*, Vec3f*, const Vec3f&, f32);
     void turnDirectionFromPlayerDegree(const LiveActor*, Vec3f*, f32);
     void turnDirectionFromPlayerDegreeHorizon(const LiveActor*, Vec3f*, f32);
-    f32 turnDirectionAndGravityH(Quat4f*, const LiveActor*, const Vec3f&, f32, f32);
-    f32 turnDirectionAndGravityH(LiveActor*, const Vec3f&, f32, f32);
+    void turnDirectionAndGravityH(Quat4f*, const LiveActor*, const Vec3f&, f32, f32);
+    void turnDirectionAndGravityH(LiveActor*, const Vec3f&, f32, f32);
     void turnDirectionToGround(const LiveActor*, Vec3f*);
     void moveAndTurnToDirection(LiveActor*, Vec3f*, const Vec3f&, const ActorMoveParam&);
     void moveAndTurnToTarget(LiveActor*, Vec3f*, const Vec3f&, const ActorMoveParam&);

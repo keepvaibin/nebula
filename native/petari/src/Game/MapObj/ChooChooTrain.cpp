@@ -97,26 +97,23 @@ void ChooChooTrain::init(const TableIter& rIter) {
 void ChooChooTrain::control() {
     MR::moveCoord(this, mRailSpeed);
     MR::moveTransToCurrentRailPos(this);
-    Vec3f stack_74(MR::getRailDirection(this));
-    MR::turnDirectionAndGravityH(this, stack_74, 0.5f, 1.0f);
+    Vec3f dir(MR::getRailDirection(this));
+    MR::turnDirectionAndGravityH(this, dir, 0.5f, 1.0f);
     f32 railCoord = MR::getRailCoord(this);
     Vec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
-    Vec3f stack_5C;
-    stack_5C = mPosition - ((frontVec * 532.0f) * mScale.y);
+    // Each car faces the coupling at the back of the one ahead.
+    Vec3f coupling = mPosition - ((frontVec * 532.0f) * mScale.y);
     MR::reverseRailDirection(this);
-
-    Vec3f* vec;
 
     for (int i = 0; i < mModelArray.size(); i++) {
         MR::moveCoord(this, 1080.0f * mScale.y);
         MR::moveTransToOtherActorRailPos(mModelArray[i], this);
-        stack_74 = (stack_5C - mModelArray[i]->mPosition);
-        MR::turnDirectionAndGravityH(mModelArray[i], stack_74, 0.5f, 1.0f);
+        dir = coupling - mModelArray[i]->mPosition;
+        MR::turnDirectionAndGravityH(mModelArray[i], dir, 0.5f, 1.0f);
         MR::calcFrontVec(&frontVec, mModelArray[i]);
 
-        vec = &mModelArray[i]->mPosition;
-        stack_5C = (*vec - ((frontVec * 532.0f) * mScale.y));
+        coupling = mModelArray[i]->mPosition - ((frontVec * 532.0f) * mScale.y);
     }
 
     MR::reverseRailDirection(this);
