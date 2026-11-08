@@ -93,6 +93,8 @@ void set_state_wake(void* event) noexcept;
                                 std::int64_t& now_ns) noexcept;
 
 void draw_native_settings_overlay(UiCanvas& renderer);
+// The settings menu's test hooks taken at the game's frame `frame` (frame_begun's count, as the scripted input's).
+void native_settings_test_frame(std::uint32_t frame);
 
 // What the settings menu (runtime/src/ui/native_settings.cpp) asks of its platform.
 struct SettingsMonitor {
