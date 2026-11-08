@@ -6,7 +6,6 @@
 #include "Game/Render/Clip.hpp"
 #include <cstring>
 
-static bool unknownByte;
 XanimeResourceTable::XanimeResourceTable(ResourceHolder* pArg) {
     init();
 
@@ -17,10 +16,6 @@ XanimeResourceTable::XanimeResourceTable(ResourceHolder* pArg) {
     mAmountOfGroupInfos = 0;
 
     mMaxGroupInfoTableSize = 1;
-
-    if (unknownByte != 0) {
-        mMaxGroupInfoTableSize = unknownByte;
-    }
 
     _1C.init();
 

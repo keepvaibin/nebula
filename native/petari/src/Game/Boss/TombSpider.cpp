@@ -21,7 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static s32 sSecondBgmStartStep = 180;
+    const s32 sSecondBgmStartStep = 180;
 };  // namespace
 
 namespace NrvTombSpider {

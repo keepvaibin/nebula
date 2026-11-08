@@ -2,7 +2,7 @@
 #include "Game/Util.hpp"
 
 namespace {
-    static f32 cRadius = 50.0f;
+    const f32 cRadius = 50.0f;
 };  // namespace
 
 CollisionBlocker::CollisionBlocker(const char* pName) : LiveActor(pName) {

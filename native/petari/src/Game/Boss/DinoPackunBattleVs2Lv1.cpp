@@ -19,7 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
+    const Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 
     // While moving the tail bends up to sMovingBendRate over sBendEaseSteps.
     const s32 sBendEaseSteps = 30;

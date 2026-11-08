@@ -582,9 +582,6 @@ void TicoFat::startAbsorbSound() {
     }
 }
 
-static s32 data_806B2194 = 0;
-static s32 data_806B2198 = 0;
-
 void TicoFat::updateGuidance() {
     bool isNear = MR::isNearPlayer(mHungryTalkCtrl, -1.0f);
     if (isNear && MR::requestTicoSeedGuidanceForce()) {
@@ -603,8 +600,8 @@ void TicoFat::updateGuidance() {
     if (isNear) {
         mNearStep = 8;
     } else {
-        s32 a = mNearStep - 1;
-        mNearStep = *(data_806B2194 < a ? &a : &data_806B2194);
+        s32 step = mNearStep - 1;
+        mNearStep = step > 0 ? step : 0;
     }
 }
 
@@ -620,8 +617,8 @@ void TicoFat::updatePointing() {
     if (isPointing) {
         mPointingStep = 4;
     } else {
-        s32 a = mPointingStep - 1;
-        mPointingStep = *(data_806B2198 < a ? &a : &data_806B2198);
+        s32 step = mPointingStep - 1;
+        mPointingStep = step > 0 ? step : 0;
     }
 }
 

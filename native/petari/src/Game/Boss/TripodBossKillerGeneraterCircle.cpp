@@ -19,9 +19,9 @@ struct SetUpData {
 };
 
 namespace {
-    static f32 sUpperHorizonAngleTable[] = {42.0f, 96.0f, 140.0f, 180.0f, -140.0f, -96.0f, -42.0f};
-    static f32 sUnderHorizonAngleTable[] = {78.0f, 120.0f, 160.0f, -160.0f, -120.0f, -78.0f};
-    static f32 sBottomHorizonAngleTable[] = {0.0f, 120.0f, 240.0f};
+    const f32 sUpperHorizonAngleTable[] = {42.0f, 96.0f, 140.0f, 180.0f, -140.0f, -96.0f, -42.0f};
+    const f32 sUnderHorizonAngleTable[] = {78.0f, 120.0f, 160.0f, -160.0f, -120.0f, -78.0f};
+    const f32 sBottomHorizonAngleTable[] = {0.0f, 120.0f, 240.0f};
     static const SetUpData sSetUpDataTable[] = {
         {"TripodBossUpperKillerCannon", sUpperHorizonAngleTable, ARRAY_SIZE(sUpperHorizonAngleTable), 2150.0f, 49.0f, -29.0f, 975.0f, 1, 0x1000000},
         {"TripodBossUnderKillerCannon", sUnderHorizonAngleTable, ARRAY_SIZE(sUnderHorizonAngleTable), 2150.0f, 5.8f, 39.2f, 975.0f, 0, 0x1000000},

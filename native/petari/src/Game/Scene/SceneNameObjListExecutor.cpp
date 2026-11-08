@@ -878,16 +878,17 @@ namespace {
             0,
         },
     };
-    static bool sVar = true;
+    const bool cAllocateByCheck = true;
 };  // namespace
 
 void SceneNameObjListExecutor::initMovementList() {
-    mMovementList =
-        new NameObjCategoryList(ARRAY_SIZE(::cMovementListInitTable) - 1, ::cMovementListInitTable, &NameObj::executeMovement, ::sVar, "");
+    mMovementList = new NameObjCategoryList(ARRAY_SIZE(::cMovementListInitTable) - 1, ::cMovementListInitTable, &NameObj::executeMovement,
+                                            ::cAllocateByCheck, "");
 }
 
 void SceneNameObjListExecutor::initCalcAnimList() {
-    mCalcAnimList = new NameObjCategoryList(ARRAY_SIZE(::cCalcAnimListInitTable) - 1, ::cCalcAnimListInitTable, &NameObj::calcAnim, ::sVar, "");
+    mCalcAnimList =
+        new NameObjCategoryList(ARRAY_SIZE(::cCalcAnimListInitTable) - 1, ::cCalcAnimListInitTable, &NameObj::calcAnim, ::cAllocateByCheck, "");
 }
 
 void SceneNameObjListExecutor::initCalcViewAndEntryList() {
@@ -896,7 +897,7 @@ void SceneNameObjListExecutor::initCalcViewAndEntryList() {
 }
 
 void SceneNameObjListExecutor::initDrawList() {
-    mDrawList = new NameObjCategoryList(ARRAY_SIZE(::cDrawListInitTable) - 1, ::cDrawListInitTable, &NameObj::draw, ::sVar, "");
+    mDrawList = new NameObjCategoryList(ARRAY_SIZE(::cDrawListInitTable) - 1, ::cDrawListInitTable, &NameObj::draw, ::cAllocateByCheck, "");
 }
 
 SceneNameObjListExecutor::~SceneNameObjListExecutor() {

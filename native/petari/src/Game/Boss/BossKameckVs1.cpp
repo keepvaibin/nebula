@@ -9,9 +9,9 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static s32 sBeamPatternLv1[] = {2, 1, -1};
-    static s32 sBeamPatternLv2[] = {3, 1, -1};
-    static s32 sBeamPatternLv3[] = {4, 1, 3, -1};
+    const s32 sBeamPatternLv1[] = {2, 1, BossKameckBattlePattarn::cPatternEnd};
+    const s32 sBeamPatternLv2[] = {3, 1, BossKameckBattlePattarn::cPatternEnd};
+    const s32 sBeamPatternLv3[] = {4, 1, 3, BossKameckBattlePattarn::cPatternEnd};
     static BossKameckBattlePattarn sPatternLv1 = BossKameckBattlePattarn(sBeamPatternLv1, false);
     static BossKameckBattlePattarn sPatternLv2 = BossKameckBattlePattarn(sBeamPatternLv2, false);
     static BossKameckBattlePattarn sPatternLv3 = BossKameckBattlePattarn(sBeamPatternLv3, false);

@@ -17,7 +17,7 @@ namespace {
     const f32 sNoShadowDropLengthMax = 2000.0f;
     const f32 sRainCylinderBaseLength = 1000.0f;
     const f32 sSwitchEffectBorder = 1500.0f;
-    static s32 sThunderStep = 140;
+    const s32 sThunderStep = 140;
 };  // namespace
 
 namespace NrvRainCloud {

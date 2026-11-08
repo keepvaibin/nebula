@@ -5,9 +5,9 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static s32 cPlacementBoneIDToBoneIndexTable[] = {0,  1, 2, 7,  8,  9, 14, 15, 16, 21, 3,  4,  0,  1,  5,  6,  2,  -1, -1, -1, 10,
-                                                11, 7, 8, 12, 13, 9, -1, -1, -1, 17, 18, 14, 15, 19, 20, 16, -1, -1, -1, 21};
-    static s32 cPlacementBoneIDToBoneIndexTableSize = ARRAY_SIZE(cPlacementBoneIDToBoneIndexTable);
+    const s32 cPlacementBoneIDToBoneIndexTable[] = {0,  1, 2, 7,  8,  9, 14, 15, 16, 21, 3,  4,  0,  1,  5,  6,  2,  -1, -1, -1, 10,
+                                               11, 7, 8, 12, 13, 9, -1, -1, -1, 17, 18, 14, 15, 19, 20, 16, -1, -1, -1, 21};
+    const s32 cPlacementBoneIDToBoneIndexTableSize = ARRAY_SIZE(cPlacementBoneIDToBoneIndexTable);
 
     s32 convertBoneIDToIndex(s32 id) {
         if (id < 0 || cPlacementBoneIDToBoneIndexTableSize <= id) {

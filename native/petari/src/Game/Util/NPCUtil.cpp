@@ -31,11 +31,11 @@
 #include <cstdio>
 
 namespace {
-    static s32 sStarAppearSeStep = 103;
-    static s32 sStarAppearSeStepCaretaker = 32;
-    static s32 sStarAppearSeStepPenguinCoach = 95;
-    static s32 sStarAppearSeStepTeresaRacer = 89;
-    static s32 sStarAppearSeStepTrickRabbit = 22;
+    const s32 sStarAppearSeStep = 103;
+    const s32 sStarAppearSeStepCaretaker = 32;
+    const s32 sStarAppearSeStepPenguinCoach = 95;
+    const s32 sStarAppearSeStepTeresaRacer = 89;
+    const s32 sStarAppearSeStepTrickRabbit = 22;
 };  // namespace
 
 namespace NrvTakeOutStar {

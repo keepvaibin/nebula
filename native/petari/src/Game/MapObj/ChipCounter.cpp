@@ -9,8 +9,8 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const char* sChipPainName[] = {"Chip1", "Chip2", "Chip3", "Chip4", "Chip5"};
-    static s32 sChipPainCount = ARRAY_SIZE(sChipPainName);
+    const char* const sChipPainName[] = {"Chip1", "Chip2", "Chip3", "Chip4", "Chip5"};
+    const s32 sChipPainCount = ARRAY_SIZE(sChipPainName);
 };  // namespace
 
 namespace NrvChipCounter {

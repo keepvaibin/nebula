@@ -14,10 +14,10 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static s32 sStartRunAwayBgmState = 2;
-    static s32 sFoundRabbitBgmState = 3;
-    static s32 sCaughtRabbitBgmState = 2;
-    static s32 sEndRunAwayBgmState = 1;
+    const s32 sStartRunAwayBgmState = 2;
+    const s32 sFoundRabbitBgmState = 3;
+    const s32 sCaughtRabbitBgmState = 2;
+    const s32 sEndRunAwayBgmState = 1;
     static const s32 sStartRunAwayBgmChangeFrames = 60;
     static const s32 sFoundRabbitBgmChangeFrames = 30;
     static const s32 sCaughtRabbitBgmChangeFrames = 90;

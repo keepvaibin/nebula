@@ -43,11 +43,10 @@ namespace {
     static const s32 sSubjectivePosInterpolateFrame = 0;
     static const s32 sSubjectiveRotInterpolateFrame = 10;
     static const s32 sSubjectiveInterpolateFrame = 20;
-    static f32 sDefaultFovy = 45.0f;
+    const f32 sDefaultFovy = 45.0f;
     static const char* sTalkCameraName = "共通会話カメラ";
     static const char* sStartAnimCameraName = "スタートアニメカメラ";
     static const char* sSubjectiveCameraName = "主観カメラ";
-    static s32 sUpdateCounter;
 };  // namespace
 
 CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
@@ -98,8 +97,6 @@ void CameraDirector::init(const TableIter& rIter) {
 }
 
 void CameraDirector::movement() {
-    ::sUpdateCounter++;
-
     backLastMtx();
     mTargetHolder->movement();
     updateCameraMan();
