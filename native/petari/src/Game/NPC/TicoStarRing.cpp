@@ -68,12 +68,12 @@ void TicoStarRing::kill() {
     }
 }
 
-void TicoStarRing::initialize(LiveActor* pTicoGalaxy, LiveActor* a2, const char* pGalaxyName) {
+void TicoStarRing::initialize(LiveActor* pTicoGalaxy, LiveActor* pAppearActor, const char* pGalaxyName) {
     mTicoGalaxy = pTicoGalaxy;
-    mAppearActor = a2;
+    mAppearActor = pAppearActor;
     mGalaxyName = pGalaxyName;
     setBaseMtx(pTicoGalaxy->getBaseMtx());
-    mPosition.set(a2 != nullptr ? a2->mPosition : pTicoGalaxy->mPosition);
+    mPosition.set(pAppearActor != nullptr ? pAppearActor->mPosition : pTicoGalaxy->mPosition);
     makeActorDead();
     MR::setMessageArgToCurrentGalaxyName(mMsgCtrl, pGalaxyName);
 }

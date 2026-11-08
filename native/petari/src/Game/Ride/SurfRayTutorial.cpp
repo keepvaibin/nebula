@@ -381,16 +381,16 @@ void SurfRayTutorial::prevTutorial() {
     MR::sendMsgToGroupMember(ACTMES_TUTORIAL_PREV, mHost, MR::getSensor(mHost, 0), "body");
 }
 
-void SurfRayTutorial::startTimerSound(s32 step, s32 param2) {
+void SurfRayTutorial::startTimerSound(s32 step, s32 level) {
     if (step == 20) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", param2);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER", level);
     }
 
     if (step == 43) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", param2);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER2", level);
     }
 
     if (step == 66) {
-        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER3", param2);
+        MR::startSystemSE("SE_SY_SURF_TUTORIAL_TIMER3", level);
     }
 }

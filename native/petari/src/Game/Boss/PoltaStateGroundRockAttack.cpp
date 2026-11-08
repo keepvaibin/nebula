@@ -52,13 +52,14 @@ void PoltaStateGroundRockAttack::exeGenerate() {
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_GND_ROCK");
     }
     if (MR::isLessEqualStep(this, 15 * (mRockNum - 1)) && MR::isIntervalStep(this, 15)) {
-        s32 v14 = getNerveStep() / 15;
-        s32 v16 = v14 % 4;
+        // Rocks come in rings of four, each farther out; every new ring turns the other way.
+        s32 rockIndex = getNerveStep() / 15;
+        s32 ringStep = rockIndex % 4;
 
-        if (v14 > 0 && !v16) {
+        if (rockIndex > 0 && !ringStep) {
             mIsClockwise = !mIsClockwise;
         }
-        PoltaFunction::appearGroundRock(getHost(), (850.0f + (400.0f * v16)), mIsClockwise ? 20.0f : -20.0f);
+        PoltaFunction::appearGroundRock(getHost(), (850.0f + (400.0f * ringStep)), mIsClockwise ? 20.0f : -20.0f);
     }
     if (MR::isGreaterStep(this, 15 * mRockNum + 90)) {
         setNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvEnd));

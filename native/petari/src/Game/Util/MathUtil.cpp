@@ -349,10 +349,10 @@ namespace MR {
         mtx.getQuat(*pQuat);
     }
 
-    void makeQuatSideUp(Quat4f* pParam1, const Vec3f& rParam2, const Vec3f& rParam3) {
+    void makeQuatSideUp(Quat4f* pDst, const Vec3f& rSide, const Vec3f& rUp) {
         Pos3f mtx;
-        makeMtxSideUp(&mtx, rParam2, rParam3);
-        mtx.getQuat(*pParam1);
+        makeMtxSideUp(&mtx, rSide, rUp);
+        mtx.getQuat(*pDst);
     }
 
     void makeQuatUpFront(Quat4f* pQuat, const Vec3f& rUp, const Vec3f& rFront) {
