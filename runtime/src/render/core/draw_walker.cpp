@@ -615,6 +615,7 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
     const unsigned target_variant = renderer_.scene_variant();
     const bool scene_layer = pass.layer == NEBULA_LAYER_SCENE;
     const bool layer_window = renderer_.layer_window();
+    const bool one_pass = renderer_.motion_pass_only();
     const std::uint32_t end = pass.first_item + pass.item_count;
     const bool collect_ao = collect_ao_objects_ && scene_layer;
     for (std::uint32_t i = pass.first_item; i < end;) {
@@ -638,7 +639,11 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
             ++i;
             continue;
         }
-        const std::uint8_t aux = scene_layer && motion_scene_ ? scene_aux(state, layer_window) : 0u;
+        // With one pass for the scene, a draw that writes no motion stays in the motion draws' pass (aux 4).
+        std::uint8_t aux = scene_layer && motion_scene_ ? scene_aux(state, layer_window) : 0u;
+        if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
+            aux = 4u;
+        }
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);

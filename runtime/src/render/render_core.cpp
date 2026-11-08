@@ -2189,8 +2189,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         const bool wide = render.enhanced_lighting && render.wide_scene;
         // Native interpolation replays geometry and does not write temporal reconstruction targets.
         const bool motion = renderer_.temporal_mode();
+        const bool one_pass = motion && renderer_.motion_pass_only();
+        const bool layer = motion && renderer_.has_layer_targets();
         const unsigned samples = renderer_.scene_samples_log2();
-        const std::uint32_t settings = samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u);
+        const std::uint32_t settings =
+            samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u);
         if (settings != pipelines_settings_) {
             pipelines_settings_ = settings;
             pipelines_queued_.store(0u, std::memory_order_relaxed);
@@ -2205,7 +2208,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
                 }
-                pipelines_.prepare(id, pipeline, variants, motion, motion);
+                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass);
             }
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }

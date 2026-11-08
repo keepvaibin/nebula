@@ -297,6 +297,10 @@ public:
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
+    // Every upscaler here reads the reactive mask, so the scene's draws keep their own aux targets.
+    [[nodiscard]] bool motion_pass_only() const noexcept { return false; }
+    // The effects layer's targets (begin_layer_window).
+    [[nodiscard]] bool has_layer_targets() const noexcept { return true; }
     // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
