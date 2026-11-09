@@ -75,7 +75,7 @@ void TrickRabbitSnowCollect::initTalk(const TableIter& rIter) {
 }
 
 MtxPtr TrickRabbitSnowCollect::getBaseMtx() const {
-    return (MtxPtr)&mBaseMtx;
+    return const_cast< MtxPtr >(mBaseMtx.mMtx);
 }
 
 void TrickRabbitSnowCollect::setStartPosition() {

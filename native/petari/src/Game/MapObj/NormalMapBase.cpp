@@ -132,7 +132,7 @@ void NormalMapBase::draw() const {
         NebulaMtxIdentity(mtx);
         MR::makeMtxTRS(mtx, this);
         MR::multMtx(mtx, mtx, rCameraViewMtx);
-        NebulaMtxCopy((const MtxPtr)mtx, (MtxPtr)mDrawMtx);
+        NebulaMtxCopy(mtx, mDrawMtx);
 
         MR::makeMtxTR(lightMtx, this);
         MR::normalize(&lightMtx);

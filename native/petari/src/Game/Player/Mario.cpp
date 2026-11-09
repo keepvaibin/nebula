@@ -1099,8 +1099,8 @@ void Mario::setHeadAndFrontVecFromRotate(const Vec3f& rRotate) {
     Vec3f headVec = Vec3f(0.0f, 1.0f, 0.0f);
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rRotate.x, rRotate.y, rRotate.z);
-    NebulaMtxMultVec(mtx, (Vec*)&frontVec, (Vec*)&frontVec);
-    NebulaMtxMultVecSR(mtx, (Vec*)&headVec, (Vec*)&headVec);
+    NebulaMtxMultVec(mtx, &frontVec, &frontVec);
+    NebulaMtxMultVecSR(mtx, &headVec, &headVec);
     mHeadVec = headVec;
     MR::normalize(&mHeadVec);
     setFrontVecKeepUp(frontVec);

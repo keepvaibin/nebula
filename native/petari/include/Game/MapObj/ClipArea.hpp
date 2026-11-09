@@ -12,7 +12,7 @@ public:
     virtual void init(const TableIter&);
     virtual void draw() const;
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&mBaseMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
     virtual bool isInArea(const Vec3f&, f32) const;
 

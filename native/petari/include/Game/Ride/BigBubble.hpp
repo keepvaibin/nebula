@@ -25,7 +25,7 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)&mBaseMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     }
 
     void initSensor();

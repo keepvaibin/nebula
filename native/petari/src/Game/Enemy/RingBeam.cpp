@@ -267,7 +267,7 @@ void RingBeam::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     Vec3f ringPoint;
     Vec3f toReceiver = pReceiver->mPosition;
     toReceiver -= pSender->mPosition;
-    MR::makeMtxTR((MtxPtr)&mtx, this);
+    MR::makeMtxTR(mtx.toMtxPtr(), this);
     f32 x = mtx.mMtx[0][1];
     f32 y = mtx.mMtx[1][1];
     f32 z = mtx.mMtx[2][1];

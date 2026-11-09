@@ -1224,13 +1224,13 @@ namespace MR {
     }
 
     f32 getMaxElement(const Vec3f& rVec) {
-        f32* vec_arr = (f32*)(&rVec);
-        return vec_arr[getMaxElementIndex(rVec)];
+        const u32 index = getMaxElementIndex(rVec);
+        return index == 0 ? rVec.x : index == 1 ? rVec.y : rVec.z;
     }
 
     f32 getMaxAbsElement(const Vec3f& rVec) {
-        f32* vec_arr = (f32*)(&rVec);
-        return vec_arr[getMaxAbsElementIndex(rVec)];
+        const u32 index = getMaxAbsElementIndex(rVec);
+        return index == 0 ? rVec.x : index == 1 ? rVec.y : rVec.z;
     }
 
     u32 getMaxElementIndex(const Vec3f& rVec) {

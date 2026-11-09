@@ -442,7 +442,7 @@ void Dodoryu::endPlayerCenterCamera() {
 }
 
 void Dodoryu::getPlayerResetMtx(Pos3f* pMtx, u32 index) const {
-    MR::tryFindNamePos(MR::FormattedName("マリオ再セット%d", index + 1).c_str(), (MtxPtr)pMtx);
+    MR::tryFindNamePos(MR::FormattedName("マリオ再セット%d", index + 1).c_str(), pMtx->toMtxPtr());
 }
 
 bool Dodoryu::checkWallWithVelocity() {

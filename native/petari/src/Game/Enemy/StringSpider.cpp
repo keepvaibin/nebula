@@ -141,7 +141,7 @@ void StringSpider::init(const TableIter& rIter) {
         MR::initShadowVolumeSphere(this, mScale.y * 80.0f);
     }
 
-    mFixedPos = new FixedPosition((MtxPtr) nullptr, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mFixedPos = new FixedPosition(static_cast< MtxPtr >(nullptr),Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
     MR::setGroupClipping(this, rIter, 16);
     mString = new StringSpiderString("ストリングスパイダーの糸");
     MR::resetPosition(mString, mPosition);

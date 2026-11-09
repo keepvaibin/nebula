@@ -83,7 +83,7 @@ void SkeletalFishGuardHolder::validate() {
 void SkeletalFishGuardHolder::checkRailChangedAndReset() {
     if (mBossRail != mFishBoss->getCurrentBossRail()) {
         mAppearRailCoord = MR::getRailCoord(mFishBoss->getCurrentBossRail());
-        mBossRail = (SkeletalFishBossRail*)mFishBoss->getCurrentBossRail();
+        mBossRail = static_cast< SkeletalFishBossRail* >(mFishBoss->getCurrentBossRail());
     }
 }
 

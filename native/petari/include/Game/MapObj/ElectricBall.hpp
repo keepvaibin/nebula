@@ -27,7 +27,7 @@ public:
     virtual void init(const TableIter&);
     virtual void initAfterPlacement();
     virtual MtxPtr getBaseMtx() const {
-        return (MtxPtr)mBaseMtx.mMtx;
+        return const_cast< MtxPtr >(mBaseMtx.mMtx);
     };
     virtual void control();
     virtual void attackSensor(HitSensor*, HitSensor*);
