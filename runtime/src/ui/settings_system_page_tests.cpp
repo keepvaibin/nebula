@@ -36,7 +36,8 @@ int main() {
         check(recorded == 1, "recording action");
         galaxy::ui::GpuTimingView off;
         off.toggle = [] {};
-        check(row(galaxy::ui::system_page(caps, "POST: SMAA", record, &off), "GPU TIMING").value == "OFF", "timing is off by default");
+        auto untimed = galaxy::ui::system_page(caps, "POST: SMAA", record, &off);
+        check(row(untimed, "GPU TIMING").value == "OFF", "timing is off by default");
         galaxy::ui::GpuTimingView on;
         on.on = true;
         on.toggle = [] {};

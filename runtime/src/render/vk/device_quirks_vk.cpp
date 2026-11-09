@@ -226,4 +226,16 @@ std::string describe(const DeviceQuirks& quirks) {
     return text.empty() ? "none" : text;
 }
 
+std::string driver_key(const DeviceIdentity& id) {
+    std::string key;
+    char part[64];
+    std::snprintf(part, sizeof(part), "%04x-%08x-%08x-", id.vendor_id, id.device_id, id.raw_driver_version);
+    key = part;
+    for (const std::uint8_t byte : id.pipeline_cache_uuid) {
+        std::snprintf(part, sizeof(part), "%02x", byte);
+        key += part;
+    }
+    return key;
+}
+
 }  // namespace galaxy::render::vk
