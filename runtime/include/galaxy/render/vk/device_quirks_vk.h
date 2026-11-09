@@ -71,5 +71,7 @@ struct DeviceQuirks {
 // "Adreno (TM) 840, Qualcomm proprietary 512.842.19 (Driver Build: ...), Vulkan 1.4"
 [[nodiscard]] std::string describe(const DeviceIdentity& identity);
 [[nodiscard]] std::string describe(const DeviceQuirks& quirks);
+// What a pipeline-cache file is valid for: the device, its driver build and the driver's cache UUID.
+[[nodiscard]] std::string driver_key(const DeviceIdentity& identity);
 
 }  // namespace galaxy::render::vk

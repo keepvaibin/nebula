@@ -121,13 +121,13 @@ int main() {
         passed &= expect(p0.index == 0u && ring.persistent_cpu(p0.index).ptr != 0u && ring.persistent_cpu(p1.index).ptr != 0u,
                          "the earlier persistent descriptors keep their indices");
         passed &= expect(ring.take_replaced().size() == 1u, "the replaced heap is handed back");
-        bool refused = false;
-        try {
-            static_cast<void>(ring.allocate(1u));
-        } catch (const std::runtime_error&) {
-            refused = true;
-        }
-        passed &= expect(refused, "a full frame segment refuses instead of opening another heap");
+        // A full frame segment doubles into a new heap: this frame's tables so far move with it, at the same place in
+        // the segment.
+        const auto heap_full = ring.heap();
+        const auto t1 = ring.allocate(1u);
+        passed &= expect(ring.heap() != heap_full && t1.gpu.ptr == ring.gpu_at(ring.persistent_capacity() + 16u).ptr,
+                         "a full frame segment grows into a new heap and keeps the frame's tables");
+        passed &= expect(ring.take_replaced().size() == 1u, "the heap the segment outgrew is handed back");
         ring.begin_frame(1);
         const auto t2 = ring.allocate(16u);
         passed &= expect(t2.gpu.ptr != t0.gpu.ptr, "another frame slot never overwrites in-flight descriptors");
