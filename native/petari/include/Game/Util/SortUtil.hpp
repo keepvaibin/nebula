@@ -21,7 +21,7 @@ namespace MR {
 
     // Orders three elements so the median ends up at `third` (the pivot slot).
     template < typename TCompare, typename TIt >
-    void sort132(TIt first, TIt second, TIt third, TCompare compare) {
+    void orderMedianLast(TIt first, TIt second, TIt third, TCompare compare) {
         bool thirdNotBeforeFirst = !compare(*third, *first);
         bool secondNotBeforeThird = !compare(*second, *third);
 
@@ -78,7 +78,7 @@ namespace MR {
             }
 
             TIt j = last - 1;
-            sort132< TCompare&, TIt >(m, i1, j, compare);
+            orderMedianLast< TCompare&, TIt >(m, i1, j, compare);
 
             m = first;
             i1 = j;

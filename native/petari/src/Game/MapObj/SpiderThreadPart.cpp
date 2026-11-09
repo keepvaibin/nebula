@@ -480,10 +480,10 @@ void SpiderThreadPart::updateDrawVec() {
 
 namespace {
     // One edge of the thread's cross-section: two corners, each `pos + s * side + f * front`, texture u 0 then 1.
-    void sendEdge(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2, f32 s0, f32 f0,
-                  Rgba8 color0, f32 s1, f32 f1, Rgba8 color1) {
-        const f32 s[2] = {s0, s1};
-        const f32 f[2] = {f0, f1};
+    void sendEdge(VertexPCT2*& rVtx, const Vec3f& rPos, const Vec3f& rSide, const Vec3f& rFront, f32 texY1, f32 texY2, f32 side0, f32 front0,
+                  Rgba8 color0, f32 side1, f32 front1, Rgba8 color1) {
+        const f32 s[2] = {side0, side1};
+        const f32 f[2] = {front0, front1};
         const Rgba8 color[2] = {color0, color1};
         for (int i = 0; i < 2; i++) {
             const f32 u = static_cast< f32 >(i);
