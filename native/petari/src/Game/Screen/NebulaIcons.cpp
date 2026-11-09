@@ -27,7 +27,7 @@
 // controller shows; the A bubble's two pictures are ours only while it draws. Every picture of ours is a texture record
 // (nebula_cooked_texture.h) of RGBA8 rows, as the cooked picture font's sheets are. The game's textures keep their
 // names (a texture pack's replacements of them still apply) and ours are the same every run, so a pack names them by
-// their texels too (GALAXY_EXPORT_ART writes one, eight times their size). Each of ours drawn is also painted at that
+// their texels too (exportArt hands a host that serves art_export each picture at eight times its size; none does yet). Each of ours drawn is also painted at that
 // size and replaces itself (NebulaHostServices::texture_hd), so it stays sharp at any window size.
 namespace {
     // The picture font's code of each icon, in NEBULA_BUTTON_ICONS' order (A, B, C, Z, 1, 2, Plus, Minus, HOME, Control
@@ -1945,7 +1945,7 @@ namespace {
     const s32 cPictureSizes[2] = {48, 40};
     const s32 cPictureLooks[2] = {LookUp, LookPressed};
     Picture sPictures[2];
-    Picture sExportPicture;  // GALAXY_EXPORT_ART's A bubble picture
+    Picture sExportPicture;  // exportArt's A bubble picture
     bool sPicturesShown = false;
 
     // The font's glyph `glyph` scaled into the canvas (an icon the style borrows from the game's).
@@ -2052,7 +2052,7 @@ namespace {
         }
     }
 
-    // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
+    // For a host that serves art_export: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
     void exportArt() {
         if (sFont.mSheetWidth * cHdScale > cHdSheetMax || sFont.mSheetHeight * cHdScale > cHdSheetMax) {
             nebula_log("NebulaIcons: the picture font's sheets are too large to export at eight times\n");

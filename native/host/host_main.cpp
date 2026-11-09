@@ -2043,8 +2043,8 @@ int32_t svc_pointer_wheel(void*) {
 #endif
 }
 
-// GALAXY_EXPORT_ART=<folder> (Nebula's own pictures as a texture pack): this host writes none; 0 tells the game that no
-// export is on, so it paints nothing for one.
+// Nebula's own pictures as a texture pack: this host writes none; 0 tells the game that no export is on, so it paints
+// nothing for one.
 uint32_t svc_art_export(void*, const NebulaArtExport*) {
     return 0u;
 }
@@ -3271,11 +3271,11 @@ std::string json_text(std::string_view text) {
 // The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
 // this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id);
-void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
-    galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+// `mods`: the start's scan (scan_mods(game_id) with the played language set).
+void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
-    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language);
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gModPatches = plan.native_patches;
     gPlugins = plan.plugins;
     gModRows = plan.rows;
@@ -3736,14 +3736,14 @@ int main(int argc, char** argv) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
             galaxy::mods::set_mods_store_file(gPak.store_file);
-            {
-                // The mods mods.ini has on: their packs and movies from the first frame.
-                const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
-                galaxy::render::set_texture_pack_mod_folders(galaxy::mods::texture_folders(mods),
-                                                             galaxy::mods::texture_folder_categories_off(mods));
-                galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
-            }
-            prepare_mod_files(settings_folder, game_id);
+            // One scan for the start, in the language played (a .luma's layers and text follow it): the mods
+            // mods.ini has on give their packs and movies from the first frame, and the same list is planned.
+            galaxy::mods::set_played_language(static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+            std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
+            galaxy::render::set_texture_pack_mod_folders(galaxy::mods::texture_folders(mods),
+                                                         galaxy::mods::texture_folder_categories_off(mods));
+            galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
+            prepare_mod_files(settings_folder, game_id, std::move(mods));
         }
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
