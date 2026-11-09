@@ -23,9 +23,14 @@ LargeChain::LargeChain(const char* pName) : LiveActor(pName), mBottomFixParts(),
 void LargeChain::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    s32 chainLen;
+    s32 chainLen = 0;
     MR::getPlacementArg0NoInit(rIter, &chainLen);
     mChainCount = static_cast< s32 >(chainLen / ::sPartsLength);
+
+    // A chain has at least one link (the fixed parts and the break step read link 0).
+    if (mChainCount < 1) {
+        mChainCount = 1;
+    }
 
     createChainParts();
 

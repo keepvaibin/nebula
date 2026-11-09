@@ -192,10 +192,10 @@ void SpiderThread::cutSpiderThread() {
         return;
     }
 
-    mMainPoint->cutNearPoints(&mNumCutPoints, mCutPoints);
+    mMainPoint->cutNearPoints(&mNumCutPoints, mCutPoints, mCutPointsBufferSize);
 
     for (s32 idx = 0; idx < ARRAY_SIZE(::sCutPointNoTable); idx++) {
-        getMainRadialLine(::sCutPointNoTable[idx].mRadialIdx)->getPoint(::sCutPointNoTable[idx].mPointIdx)->cutNearPoints(&mNumCutPoints, mCutPoints);
+        getMainRadialLine(::sCutPointNoTable[idx].mRadialIdx)->getPoint(::sCutPointNoTable[idx].mPointIdx)->cutNearPoints(&mNumCutPoints, mCutPoints, mCutPointsBufferSize);
     }
 }
 

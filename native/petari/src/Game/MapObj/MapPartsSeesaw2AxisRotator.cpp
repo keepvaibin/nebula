@@ -81,7 +81,11 @@ void MapPartsSeesaw2AxisRotator::rotate() {
     f32 distance = position.length();
     Vec3f axis;
     axis.cross(mUp, position);
-    MR::normalize(&axis);
+
+    // A player on the up line through the seesaw's origin gives no tilt axis (normalising it made the whole matrix NaN).
+    if (MR::normalizeOrZero(&axis)) {
+        return;
+    }
     Pos3f tilt;
     tilt.identity();
     tilt.setRotate(axis, MR::toRadian(mRotateAngle));

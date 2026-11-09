@@ -120,6 +120,16 @@ void SkeletalFishBoss::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mLevelNum);
     MR::getPlacementArg1NoInit(rIter, &mGuardNum);
+
+    // The boss has at least one level (powerUp reads level 0) and no fewer than 0 guards (both size arrays).
+    if (mLevelNum < 1) {
+        mLevelNum = 1;
+    }
+
+    if (mGuardNum < 0) {
+        mGuardNum = 0;
+    }
+
     initLevelStatus();
     mBossInfo->initWithoutIter();
     mPlacementMtx.setInline(MR::getZonePlacementMtx(rIter));

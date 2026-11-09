@@ -31,7 +31,7 @@ public:
     void removeNearPoint(const SpiderThreadPoint*);
     void addNearPointToRadial(SpiderThreadPoint*);
     void removeNearPointFromRadial(const SpiderThreadPoint*);
-    void cutNearPoints(s32*, SpiderThreadMainPoint**);
+    void cutNearPoints(s32*, SpiderThreadMainPoint**, s32);
     void updateVelocity();
     void closeToNearPoint(const SpiderThreadPointNearInfo*);
 
@@ -46,4 +46,5 @@ public:
     SpiderThreadRadialLine* mRadialLine;
     s32 mNumNearInfos;
     SpiderThreadPointNearInfo* mNearInfos;  // array
+    s32 mNearInfoCapacity;
 };

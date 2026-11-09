@@ -54,17 +54,27 @@ const Vec3f* SpiderThreadPointNearInfo::getPos() const {
 }
 
 SpiderThreadMainPoint::SpiderThreadMainPoint(const Vec3f& rPos, int nearInfoBufferSize)
-    : SpiderThreadPoint(rPos, ::sFrictionRate), mRadialLine(nullptr), mNumNearInfos(0), mNearInfos(nullptr) {
-    mNearInfos = new SpiderThreadPointNearInfo[nearInfoBufferSize];
+    : SpiderThreadPoint(rPos, ::sFrictionRate), mRadialLine(nullptr), mNumNearInfos(0), mNearInfos(nullptr),
+      mNearInfoCapacity(nearInfoBufferSize > 0 ? nearInfoBufferSize : 0) {
+    mNearInfos = new SpiderThreadPointNearInfo[mNearInfoCapacity];
 }
 
 void SpiderThreadMainPoint::addNearMainPoint(SpiderThreadMainPoint* pMainPoint, SpiderThreadPart* pThreadPart) {
+    // An entry past the buffer is not kept: that neighbour pulls no spring.
+    if (mNumNearInfos >= mNearInfoCapacity) {
+        return;
+    }
+
     getNearPointInfo(mNumNearInfos)->mMainPoint = pMainPoint;
     getNearPointInfo(mNumNearInfos)->setInfo(::sNearMainPointAccelRate, pThreadPart, mPosition);
     mNumNearInfos++;
 }
 
 void SpiderThreadMainPoint::addNearPartPoint(SpiderThreadPoint* pThreadPoint, f32 springFactor) {
+    if (mNumNearInfos >= mNearInfoCapacity) {
+        return;
+    }
+
     getNearPointInfo(mNumNearInfos)->mPartPoint = pThreadPoint;
     getNearPointInfo(mNumNearInfos)->setInfo(springFactor, nullptr, mPosition);
     mNumNearInfos++;
@@ -101,11 +111,12 @@ void SpiderThreadMainPoint::removeNearPointFromRadial(const SpiderThreadPoint* p
     }
 }
 
-void SpiderThreadMainPoint::cutNearPoints(s32* numCutPoints, SpiderThreadMainPoint** pMainPoints) {
+void SpiderThreadMainPoint::cutNearPoints(s32* numCutPoints, SpiderThreadMainPoint** pMainPoints, s32 numMainPoints) {
     SpiderThreadPart* threadPart;
     for (s32 idx = 0; idx < mNumNearInfos; idx++) {
         SpiderThreadMainPoint* mainPoint;
-        if (getNearPointInfo(idx)->mMainPoint != nullptr) {
+        // A neighbour with no cut point left in the buffer stays joined.
+        if (getNearPointInfo(idx)->mMainPoint != nullptr && *numCutPoints < numMainPoints) {
             getNearPointInfo(idx)->mMainPoint->removeNearPoint(this);
 
             mainPoint = pMainPoints[*numCutPoints];

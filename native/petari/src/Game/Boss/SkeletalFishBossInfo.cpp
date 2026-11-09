@@ -91,6 +91,11 @@ void SkeletalFishBossInfo::loadLevelStatus(const TableIter& rIter) {
 void SkeletalFishBossInfo::loadGuardStatus(const TableIter& rIter, s32 levelIdx, s32 guardLevel) {
     LevelStatus* pStatus = getLevelStatus(levelIdx);
 
+    // A level has mGuardNum guard places; a file asking for more fills only those.
+    if (guardLevel > mGuardNum) {
+        guardLevel = mGuardNum;
+    }
+
     for (s32 i = 0; i < guardLevel; i++) {
         MR::FormattedName paramName;
 
