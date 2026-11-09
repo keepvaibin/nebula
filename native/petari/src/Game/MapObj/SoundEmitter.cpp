@@ -30,6 +30,9 @@ SoundEmitter::SoundEmitter(const char* pName) : LiveActor(pName) {
 void SoundEmitter::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     MR::getPlacementArg0NoInit(rIter, &mSoundType);
+    if (mSoundType >= ARRAY_SIZE(::sSeTable)) {
+        mSoundType = -1;  // past the table: silent, as an unset one
+    }
     MR::connectToSceneMapObjMovement(this);
     MR::registerDemoSimpleCastAll(this);
 

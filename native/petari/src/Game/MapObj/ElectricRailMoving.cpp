@@ -126,6 +126,12 @@ void ElectricRailMoving::initMapToolInfo(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mSegmentNum);
     MR::getPlacementArg1NoInit(rIter, &mMovementSpeed);
     MR::getPlacementArg3NoInit(rIter, &mStackHeight);
+    if (mSegmentNum < 1) {
+        mSegmentNum = 1;
+    }
+    if (mStackHeight < 1) {
+        mStackHeight = 1;
+    }
 
     if (MR::useStageSwitchReadA(this, rIter)) {
         MR::listenStageSwitchOnA(this, MR::Functor(this, &ElectricRailMoving::disappear));
