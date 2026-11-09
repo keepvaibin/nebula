@@ -50,6 +50,16 @@ public:
     void release_into(std::vector<gpu::BufferRef>& out);
     // The bytes of chunks made since initialize (diagnostics).
     [[nodiscard]] std::size_t chunk_bytes_made() const { return chunk_bytes_made_; }
+    // The bytes of chunks that exist now (the frame slots' that have not begun again), for the video memory breakdown.
+    [[nodiscard]] std::size_t live_chunk_bytes() const {
+        std::size_t bytes = 0u;
+        for (const std::vector<Chunk>& slot : chunk_slots_) {
+            for (const Chunk& chunk : slot) {
+                bytes += chunk.size;
+            }
+        }
+        return bytes;
+    }
     // A new segmentation inside the existing buffer (the caller has retired every GPU
     // reference to its contents); false when it does not fit.
     bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);

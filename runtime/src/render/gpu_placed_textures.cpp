@@ -28,6 +28,19 @@ struct PlacedTextureAllocator::State {
         ComPtr<ID3D12Heap> heap;
         // Free ranges, offset -> size, coalesced on release.
         std::map<std::uint64_t, std::uint64_t> free;
+        // The bytes in `free` (a heap's fullness, for allocate).
+        std::uint64_t free_bytes = 0;
+
+        // The smallest free range that holds `size` at `alignment`, or free.end().
+        [[nodiscard]] std::map<std::uint64_t, std::uint64_t>::iterator best_fit(std::uint64_t size, std::uint64_t alignment) {
+            auto best = free.end();
+            for (auto it = free.begin(); it != free.end(); ++it) {
+                const std::uint64_t start = it->first;
+                if (align_up(start, alignment) + size > start + it->second) continue;
+                if (best == free.end() || it->second < best->second) best = it;
+            }
+            return best;
+        }
     };
 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
@@ -50,6 +63,7 @@ struct PlacedTextureAllocator::State {
         Heap heap;
         if (FAILED(device->CreateHeap(&desc, IID_PPV_ARGS(&heap.heap)))) return false;
         heap.free.emplace(0u, heap_bytes);
+        heap.free_bytes = heap_bytes;
         // A heap given back (release) leaves its place for the next one: the owners name heaps by index.
         for (Heap& slot : heaps) {
             if (!slot.heap) {
@@ -70,26 +84,33 @@ struct PlacedTextureAllocator::State {
         return live;
     }
 
-    // First fit over every heap's free ranges.
+    // Packed: the fullest heap with room takes the range (the lowest index on a tie), and inside it the smallest free range
+    // that fits. Textures come and go with each scene; filling the fullest heap first lets the lightly used ones drain until a
+    // heap is empty and release() gives its memory back, where first fit in index order scattered the long-lived textures
+    // over every heap and kept all of them (64 MB each) for the rest of the run.
     bool allocate(std::uint64_t size, std::uint64_t alignment,
                   std::size_t& heap_index, std::uint64_t& offset) {
+        std::size_t chosen = heaps.size();
         for (std::size_t h = 0; h < heaps.size(); ++h) {
-            auto& free = heaps[h].free;
-            for (auto it = free.begin(); it != free.end(); ++it) {
-                const std::uint64_t start = it->first;
-                const std::uint64_t end = start + it->second;
-                const std::uint64_t aligned = align_up(start, alignment);
-                if (aligned + size > end) continue;
-                free.erase(it);
-                if (aligned > start) free.emplace(start, aligned - start);
-                if (aligned + size < end) free.emplace(aligned + size, end - aligned - size);
-                heap_index = h;
-                offset = aligned;
-                used += size;
-                return true;
-            }
+            Heap& heap = heaps[h];
+            if (!heap.heap || heap.free_bytes < size) continue;
+            if (chosen != heaps.size() && heap.free_bytes >= heaps[chosen].free_bytes) continue;
+            if (heap.best_fit(size, alignment) != heap.free.end()) chosen = h;
         }
-        return false;
+        if (chosen == heaps.size()) return false;
+        Heap& heap = heaps[chosen];
+        const auto it = heap.best_fit(size, alignment);
+        const std::uint64_t start = it->first;
+        const std::uint64_t end = start + it->second;
+        const std::uint64_t aligned = align_up(start, alignment);
+        heap.free.erase(it);
+        if (aligned > start) heap.free.emplace(start, aligned - start);
+        if (aligned + size < end) heap.free.emplace(aligned + size, end - aligned - size);
+        heap.free_bytes -= size;  // the head left in front of an aligned range stays free
+        heap_index = chosen;
+        offset = aligned;
+        used += size;
+        return true;
     }
 
     void release(std::size_t heap_index, std::uint64_t offset, std::uint64_t size) noexcept {
@@ -112,12 +133,14 @@ struct PlacedTextureAllocator::State {
             free.erase(next);
         }
         free.emplace(start, length);
+        heaps[heap_index].free_bytes += size;
         used -= std::min(used, size);
         // A heap with nothing placed in it gives its memory back to the adapter (the first stays: textures come back at once).
         // Every range was returned by a resource that is gone, which only happens once the GPU is past the frames that read it.
         if (heap_index != 0u && length == heap_bytes && free.size() == 1u && heaps[heap_index].heap) {
             heaps[heap_index].heap.Reset();
             free.clear();
+            heaps[heap_index].free_bytes = 0u;
         }
     }
 };

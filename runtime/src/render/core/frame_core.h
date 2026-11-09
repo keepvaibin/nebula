@@ -22,6 +22,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -76,6 +77,9 @@ struct GpuMesh {
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
     std::uint32_t arena = 0u;
     std::uint32_t model = 0u;
+    // A mesh registered on its own (mesh_register): its place in `arena`, given back when it retires. Zero for a model's
+    // meshes, whose place is the model's.
+    std::size_t arena_offset = 0u, arena_size = 0u;
 };
 
 struct GpuModel {
@@ -89,6 +93,8 @@ struct GpuModel {
     std::uint32_t first_mesh = 0u, mesh_count = 0u;
     std::uint32_t arena = 0u;
     std::uint32_t generation = 0u;
+    // The model's geometry in `arena`: where, and how many bytes (zero: none placed), given back when the model retires.
+    std::size_t arena_offset = 0u, arena_size = 0u;
 };
 
 // One registered list of textures: what it names, and what the draws read it through (this walk's texture list of
@@ -259,6 +265,16 @@ public:
     }
     [[nodiscard]] std::span<const ao::ObjectSlot> object_slots(const GpuMesh& mesh) const noexcept;
     [[nodiscard]] std::uint64_t memory_bytes() noexcept;
+    // What the geometry pages and the material slot pages hold (any thread).
+    struct MemoryStats {
+        std::uint32_t pages = 0u;         // geometry pages holding memory
+        std::uint32_t empty_pages = 0u;   // of them, with no model or mesh in
+        std::uint64_t page_bytes = 0u;    // their memory
+        std::uint64_t live_bytes = 0u;    // the part of it placed models and meshes hold
+        std::uint64_t slot_bytes = 0u;    // material slot pages (never given back: a slot's id is the game's)
+        std::uint32_t slots = 0u;         // material slots registered
+    };
+    [[nodiscard]] MemoryStats memory_stats() noexcept;
 #if defined(NEBULA_DEV)
     // The rows a registered slot holds, and what a registered mesh's stream holds, for the inspector.
     [[nodiscard]] const float* slot_rows(std::uint32_t id) const noexcept { return id < slot_rows_.size() ? slot_rows_[id] : nullptr; }
@@ -269,16 +285,20 @@ public:
 #endif
 
 private:
+    // A page of upload memory models and meshes are placed in: free ranges (offset -> size), taken best fit and given back
+    // when what was placed retires, so a model that lives on does not keep the space of the ones freed around it.
     struct Arena {
         gpu::UploadMemory memory;
         std::size_t bytes = 0u;
-        std::size_t used = 0u;
+        std::size_t free_bytes = 0u;
+        std::map<std::size_t, std::size_t> free;
         std::uint32_t live = 0u;
     };
     struct Placed {
         std::byte* cpu = nullptr;
         gpu::Address gpu = 0u;
         std::uint32_t arena = 0u;
+        std::size_t offset = 0u, size = 0u;
     };
     struct Retired {
         std::uint64_t fence = 0u;
@@ -286,6 +306,7 @@ private:
         std::uint32_t model = 0u;
         std::uint32_t first_mesh = 0u, mesh_count = 0u;
         bool has_geometry = false;
+        std::size_t arena_offset = 0u, arena_size = 0u;
     };
     struct SlotRecord {
         std::uint32_t vertex_rows = 0u, pixel_rows = 0u, id = 0u;
@@ -305,6 +326,9 @@ private:
         std::uint32_t vertex_bytes = 0u, stride = 0u, index_count = 0u;
     };
     Placed place(std::size_t bytes);
+    // `size` bytes at `offset` of page `index` are free again (lock_ held). The last thing leaving a page frees the page's
+    // memory, except for one spare page that stays for the next scene.
+    void give_back(std::uint32_t index, std::size_t offset, std::size_t size);
     void place_model(std::uint32_t id, const LiveModel& live, GpuModel model, std::vector<GpuMesh>& meshes, const Placed& placed);
     void place_mesh(std::uint32_t id, const LiveMesh& live);
     void place_slot(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);

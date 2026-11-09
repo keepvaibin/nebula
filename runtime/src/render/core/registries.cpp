@@ -79,6 +79,23 @@ std::uint64_t Registries::memory_bytes() noexcept {
     return bytes + slot_bytes_;
 }
 
+Registries::MemoryStats Registries::memory_stats() noexcept {
+    const std::lock_guard guard(lock_);
+    MemoryStats stats;
+    for (const Arena& arena : arenas_) {
+        if (!arena.memory) {
+            continue;
+        }
+        ++stats.pages;
+        stats.empty_pages += arena.live == 0u ? 1u : 0u;
+        stats.page_bytes += arena.bytes;
+        stats.live_bytes += arena.bytes - arena.free_bytes;
+    }
+    stats.slot_bytes = slot_bytes_;
+    stats.slots = next_slot_;
+    return stats;
+}
+
 void Registries::initialize(gpu::Device* device, DeviceGate& gate) {
     device_ = device;
     gate_ = &gate;
@@ -103,27 +120,115 @@ void Registries::shutdown() noexcept {
     device_ = nullptr;
 }
 
+// The fullest page with room takes the range (the lowest index on a tie), and inside it the smallest free range that fits:
+// the lightly filled pages drain as their models retire and give_back frees them. (A bump cursor that rewound only when a
+// whole page emptied let one model that lived on pin the page's every freed byte, and a scene's worth of new models
+// opened another 64 MB page.)
 Registries::Placed Registries::place(std::size_t bytes) {
-    bytes = (bytes + 255u) & ~std::size_t{255u};
+    bytes = (std::max<std::size_t>(bytes, 256u) + 255u) & ~std::size_t{255u};
+    constexpr std::uint32_t kNone = ~0u;
+    std::uint32_t chosen = kNone;
+    std::size_t chosen_offset = 0u;
     for (std::uint32_t i = 0; i < arenas_.size(); ++i) {
-        Arena& arena = arenas_[i];
-        if (arena.memory && arena.bytes - arena.used >= bytes) {
-            const Placed placed{arena.memory.cpu + arena.used, arena.memory.gpu + arena.used, i};
-            arena.used += bytes;
-            ++arena.live;
-            return placed;
+        const Arena& arena = arenas_[i];
+        if (!arena.memory || arena.free_bytes < bytes) {
+            continue;
+        }
+        if (chosen != kNone && arena.free_bytes >= arenas_[chosen].free_bytes) {
+            continue;
+        }
+        const std::map<std::size_t, std::size_t>::const_iterator end = arena.free.end();
+        std::map<std::size_t, std::size_t>::const_iterator fit = end;
+        for (auto it = arena.free.begin(); it != end; ++it) {
+            if (it->second >= bytes && (fit == end || it->second < fit->second)) {
+                fit = it;
+            }
+        }
+        if (fit != end) {
+            chosen = i;
+            chosen_offset = fit->first;
         }
     }
-    const auto index = static_cast<std::uint32_t>(arenas_.size());
-    Arena& arena = arenas_.emplace_back();
-    arena.bytes = std::max(bytes, kArenaPage);
-    arena.memory = gpu::create_upload_memory(device_, arena.bytes, "Nebula Meshes");
-    if (!arena.memory) {
+    if (chosen != kNone) {
+        Arena& arena = arenas_[chosen];
+        const auto range = arena.free.find(chosen_offset);
+        const std::size_t range_size = range->second;
+        arena.free.erase(range);
+        if (range_size > bytes) {
+            arena.free.emplace(chosen_offset + bytes, range_size - bytes);
+        }
+        arena.free_bytes -= bytes;
+        ++arena.live;
+        return {arena.memory.cpu + chosen_offset, arena.memory.gpu + chosen_offset, chosen, chosen_offset, bytes};
+    }
+    // A new page, in the place of one given back when there is one (a page's index is held by what is placed in it only).
+    auto index = static_cast<std::uint32_t>(arenas_.size());
+    for (std::uint32_t i = 0; i < arenas_.size(); ++i) {
+        if (!arenas_[i].memory && arenas_[i].live == 0u) {
+            index = i;
+            break;
+        }
+    }
+    const std::size_t page = std::max(bytes, kArenaPage);
+    gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes");
+    if (!memory) {
         throw std::runtime_error("no memory for meshes");
     }
-    arena.used = bytes;
+    if (index == arenas_.size()) {
+        arenas_.emplace_back();
+    }
+    Arena& arena = arenas_[index];
+    arena.memory = std::move(memory);
+    arena.bytes = page;
+    arena.free.clear();
+    if (page > bytes) {
+        arena.free.emplace(bytes, page - bytes);
+    }
+    arena.free_bytes = page - bytes;
     arena.live = 1u;
-    return {arena.memory.cpu, arena.memory.gpu, index};
+    return {arena.memory.cpu, arena.memory.gpu, index, 0u, bytes};
+}
+
+void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t size) {
+    if (index >= arenas_.size() || !arenas_[index].memory || size == 0u) {
+        return;
+    }
+    Arena& arena = arenas_[index];
+    std::size_t start = offset;
+    std::size_t length = size;
+    const auto next = arena.free.lower_bound(offset);
+    if (next != arena.free.begin()) {
+        const auto previous = std::prev(next);
+        if (previous->first + previous->second == start) {
+            start = previous->first;
+            length += previous->second;
+            arena.free.erase(previous);
+        }
+    }
+    if (next != arena.free.end() && offset + size == next->first) {
+        length += next->second;
+        arena.free.erase(next);
+    }
+    arena.free.emplace(start, length);
+    arena.free_bytes += size;
+    if (arena.live != 0u) {
+        --arena.live;
+    }
+    if (arena.live != 0u) {
+        return;
+    }
+    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of an
+    // unusual size, or a second empty one, gives its memory back; one empty page stays for the next scene.
+    bool release = arena.bytes != kArenaPage;
+    for (std::uint32_t other = 0; other < arenas_.size() && !release; ++other) {
+        release = other != index && arenas_[other].memory && arenas_[other].live == 0u;
+    }
+    if (release) {
+        arena.memory = {};
+        arena.bytes = 0u;
+        arena.free.clear();
+        arena.free_bytes = 0u;
+    }
 }
 
 std::uint32_t Registries::take_mesh_ids(std::uint32_t count) {
@@ -237,6 +342,8 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
     const auto* file_meshes = at<NebulaModelMesh>(live.file, header.meshes_at);
     model.first_mesh = live.first_mesh;
     model.arena = placed.arena;
+    model.arena_offset = placed.offset;
+    model.arena_size = placed.size;
     const auto stream = [&](std::uint32_t offset) -> gpu::Address {
         return offset != 0u ? placed.gpu + (offset - header.geometry_at) : gpu::Address{0u};
     };
@@ -306,6 +413,8 @@ void Registries::place_mesh(std::uint32_t id, const LiveMesh& live) {
     gpu_mesh.index_count = live.index_count;
     gpu_mesh.site_stride = live.stride;
     gpu_mesh.arena = placed.arena;
+    gpu_mesh.arena_offset = placed.offset;
+    gpu_mesh.arena_size = placed.size;
     incoming_.meshes.emplace_back(id, gpu_mesh);
 }
 
@@ -555,10 +664,12 @@ void Registries::apply(RegistryOps& ops, std::uint64_t submitted_fence) {
     // The last list has walked for good: what it freed retires now, at the work submitted so far.
     for (const std::uint32_t id : held_freed_models_) {
         const GpuModel& model = models_[id];
-        retired_.push_back({submitted_fence, model.arena, id, model.first_mesh, model.mesh_count, model.mesh_count != 0u});
+        retired_.push_back({submitted_fence, model.arena, id, model.first_mesh, model.mesh_count, model.arena_size != 0u,
+                            model.arena_offset, model.arena_size});
     }
     for (const std::uint32_t id : held_freed_meshes_) {
-        retired_.push_back({submitted_fence, meshes_[id].arena, 0u, id, 1u, true});
+        const GpuMesh& mesh = meshes_[id];
+        retired_.push_back({submitted_fence, mesh.arena, 0u, id, 1u, mesh.arena_size != 0u, mesh.arena_offset, mesh.arena_size});
     }
     held_freed_models_ = std::move(ops.freed_models);
     held_freed_meshes_ = std::move(ops.freed_meshes);
@@ -575,14 +686,7 @@ void Registries::reclaim(std::uint64_t completed_fence) {
             return false;
         }
         if (retired.has_geometry) {
-            Arena& arena = arenas_[retired.arena];
-            if (--arena.live == 0u) {
-                arena.used = 0u;
-                if (arena.bytes != kArenaPage) {
-                    arena.memory = {};
-                    arena.bytes = 0u;
-                }
-            }
+            give_back(retired.arena, retired.arena_offset, retired.arena_size);
         }
         for (std::uint32_t m = 0; m < retired.mesh_count; ++m) {
             meshes_[retired.first_mesh + m] = GpuMesh{};

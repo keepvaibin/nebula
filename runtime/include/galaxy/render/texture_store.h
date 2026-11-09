@@ -112,6 +112,8 @@ public:
         std::uint64_t reductions = 0, freed_bytes = 0, restores = 0;  // since the start
     };
     [[nodiscard]] BudgetStats budget_stats() const;
+    // The bytes of the staging chunks that exist now (in use, kept for frames in flight, or spare), any thread.
+    [[nodiscard]] static std::uint64_t staging_bytes() noexcept;
 #if defined(NEBULA_DEV)
     [[nodiscard]] std::uint64_t name_hash(std::uint32_t id) const noexcept {
         return id < entries_.size() && entries_[id] != nullptr ? entries_[id]->name.hash : 0u;
@@ -242,6 +244,9 @@ private:
     ChunkRef arena_chunk_;
     std::uint64_t arena_used_ = 0u;
     std::vector<ChunkRef> free_chunks_;
+    // A request for staging came since the last begin_frame, and the frames since one did (the spare chunks go when none for long).
+    bool staging_requested_ = false;
+    unsigned staging_idle_frames_ = 0u;
 
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
