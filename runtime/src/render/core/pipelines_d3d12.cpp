@@ -449,6 +449,12 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     return raw;
 }
 
+// Direct3D 12 has no library parts to link: its draws wait for the whole pipeline, and ID3D12PipelineLibrary (the driver cache
+// loaded at start) makes that a load, not a compile, for every pipeline a run has made before.
+gpu::Pipeline* Pipelines::build_fast(const PipelineEntry&, unsigned, unsigned) {
+    return nullptr;
+}
+
 void Pipelines::destroy_all() noexcept {
     owned_.clear();
     release_driver_cache();

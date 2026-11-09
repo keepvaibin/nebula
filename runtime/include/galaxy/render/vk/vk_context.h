@@ -159,6 +159,16 @@ public:
     // What XeSS asked for, enabled (Context::create).
     [[nodiscard]] bool xess_upscaling() const noexcept { return xess_upscaling_; }
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
+    // VK_KHR_present_wait with VK_KHR_present_id, enabled: vkWaitForPresentKHR waits until a presented frame is on the screen.
+    [[nodiscard]] bool present_wait() const noexcept { return present_wait_; }
+    // Swapchain maintenance 1, enabled with its surface extension on the instance: a swap chain made with a list of present
+    // modes takes any of them per present (VkSwapchainPresentModeInfoEXT).
+    [[nodiscard]] bool present_mode_switching() const noexcept { return present_mode_switching_; }
+    // The surface extension of swapchain maintenance 1 was enabled on the instance (the capability query of a mode's compatible
+    // modes needs it).
+    [[nodiscard]] bool surface_maintenance() const noexcept { return surface_maintenance_; }
+    // VK_EXT_graphics_pipeline_library enabled on a driver that links fast: pipelines are linked from parts (pipelines_vk.cpp).
+    [[nodiscard]] bool pipeline_libraries() const noexcept { return pipeline_libraries_; }
     // VK_EXT_host_image_copy was enabled (the device has it and its feature, and copies into SHADER_READ_ONLY_OPTIMAL): a
     // texture made with VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT is written from host memory with no command (texture_backend_vk.cpp).
     [[nodiscard]] bool host_image_copy() const noexcept { return host_image_copy_; }
@@ -273,6 +283,11 @@ private:
     bool bc_textures_ = false;
     bool memory_budget_ = false;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
+    bool present_wait_ = false;             // VK_KHR_present_wait and present_id, enabled
+    bool pipeline_libraries_ = false;       // VK_EXT_graphics_pipeline_library, enabled, fast linking
+    bool present_mode_switching_ = false;   // swapchain maintenance 1, enabled
+    bool surface_maintenance_ = false;      // the instance has the surface extension of that kind (decided in initialize)
+    bool surface_maintenance_khr_ = false;  // ... in its KHR form (else EXT)
     bool host_image_copy_ = false;      // VK_EXT_host_image_copy, enabled, with the layout the textures rest in
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
     bool device_fault_binary_ = false;  // and its vendor binary feature

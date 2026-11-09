@@ -715,9 +715,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         monitor_changed.store(true, std::memory_order_release);
     }
     if (msg == WM_WINDOWPOSCHANGED || msg == WM_DPICHANGED) {
-        // The message goes on to the default handling below.
+        // The message goes on to the default handling below. A new monitor, or a new density on the same one (the user's scale
+        // setting): the renderer reads the output's rate and colour space again, and the menus' size follows the window's width
+        // in density-independent units (window_width_dp, read as the window is drawn).
         const HMONITOR now = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-        if (now != s_window_monitor) {
+        if (now != s_window_monitor || msg == WM_DPICHANGED) {
             s_window_monitor = now;
             monitor_changed.store(true, std::memory_order_release);
         }

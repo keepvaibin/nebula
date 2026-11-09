@@ -2,6 +2,7 @@
 // Mii import (mii_import.h, mii_formats.h): file formats, merging into the library, its file, the library's files.
 
 #include "galaxy/mii_formats.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/mii_import.h"
 
 #include <algorithm>
@@ -293,7 +294,7 @@ bool merging() {
 
 bool library() {
     bool ok = true;
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "nebula_mii_import_tests";
+    const std::filesystem::path root = galaxy::test_temp_path("nebula_mii_import_tests");
     std::error_code error;
     std::filesystem::remove_all(root, error);
     std::filesystem::create_directories(root / "miis", error);

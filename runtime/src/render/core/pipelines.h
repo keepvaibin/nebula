@@ -80,6 +80,7 @@ private:
         std::uint32_t id;
         PipelineEntry entry;
         unsigned variant, aux;
+        bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
     };
     gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
@@ -88,6 +89,12 @@ private:
     [[nodiscard]] bool pair_refused(const PipelineEntry& entry);
     gpu::Pipeline* publish(std::atomic<gpu::Pipeline*>& at, gpu::Pipeline* built) noexcept;
     gpu::Pipeline* build(const PipelineEntry& entry, unsigned variant, unsigned aux);  // per backend
+    // A pipeline for a draw that cannot wait: linked at once from parts that exist (Vulkan with graphics pipeline libraries), or
+    // null where the backend has no such thing (the caller then builds the whole pipeline). The workers replace it by build()'s.
+    gpu::Pipeline* build_fast(const PipelineEntry& entry, unsigned variant, unsigned aux);  // per backend
+#if defined(NEBULA_GPU_VULKAN)
+    gpu::Pipeline* build_vk(const PipelineEntry& entry, unsigned variant, unsigned aux, bool fast);
+#endif
     void destroy_all() noexcept;  // per backend
     std::size_t save_cache() noexcept;  // per backend: the driver's pipelines to disk when they changed; bytes written
     void drained() noexcept;
@@ -115,6 +122,20 @@ private:
     std::chrono::steady_clock::time_point started_{};
     bool quit_ = false;
 };
+
+#if defined(NEBULA_DEV)
+// The order pipelines were first drawn in, for the warm-up (test builds only; a release warms in the cooked order). A run notes
+// each pipeline's first draw and its draw count and writes shader_cache_directory()/pipeline_use.tsv when its pipelines shut
+// down (key, first draw, draws; the earlier file's pipelines this run did not draw follow, in their old order); the next run
+// reads it, and the warm-up queue orders the pipelines a list adds by it, pipelines no run has drawn last.
+void note_pipeline_use(std::uint32_t id, const PipelineEntry& entry);
+// The place of `entry` in the file's order; kPipelineUnranked when it is not there or there is no file.
+inline constexpr std::uint32_t kPipelineUnranked = 0xFFFFFFFFu;
+[[nodiscard]] std::uint32_t pipeline_use_rank(const PipelineEntry& entry);
+#define NEBULA_PIPELINE_USE(id, entry) ::galaxy::render::core::note_pipeline_use(id, entry)
+#else
+#define NEBULA_PIPELINE_USE(id, entry)
+#endif
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept;

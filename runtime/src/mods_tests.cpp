@@ -4,6 +4,7 @@
 // mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
 
 #include "galaxy/mod_import.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/mod_xml.h"
 #include "galaxy/mods.h"
 
@@ -82,7 +83,7 @@ bool xml() {
 // update in place, a file that is no archive.
 bool importing() {
     bool ok = true;
-    const fs::path root = fs::temp_directory_path() / "nebula_mods_import";
+    const fs::path root = galaxy::test_temp_path("nebula_mods_import");
     std::error_code ec;
     fs::remove_all(root, ec);
     fs::create_directories(root / "mods");

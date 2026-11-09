@@ -10,8 +10,121 @@
 #include <cstdio>
 #include <fstream>
 #include <stdexcept>
+#if defined(NEBULA_DEV)
+#include "galaxy/render/render_config.h"
+
+#include <cinttypes>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#endif
 
 namespace galaxy::render::core {
+
+#if defined(NEBULA_DEV)
+namespace {
+
+// The use order of the pipelines (see pipelines.h): this run's, by first draw, and the file the last runs left.
+struct UseOrder {
+    std::mutex lock;
+    bool loaded = false;
+    std::unordered_map<std::uint64_t, std::uint32_t> file_rank;  // key -> place in the file
+    std::vector<std::uint64_t> file_keys;                         // the file's keys, in order
+    std::vector<std::uint32_t> slot_of_id;                        // pipeline id -> 1 + index in `drawn`, 0 none
+    struct Drawn {
+        std::uint64_t key;
+        std::uint64_t draws;
+    };
+    std::vector<Drawn> drawn;  // this run's pipelines, in first-draw order
+};
+UseOrder gUse;
+
+std::filesystem::path use_file() {
+    return shader_cache_directory() / "pipeline_use.tsv";
+}
+
+// A pipeline's identity, field by field as the registry's.
+std::uint64_t use_key(const PipelineEntry& entry) noexcept {
+    std::uint64_t hash = 0xCBF29CE484222325ull;
+    const auto mix = [&hash](std::uint64_t value) {
+        hash = (hash ^ value) * 0x9E3779B97F4A7C15ull;
+        hash ^= hash >> 29u;
+    };
+    mix(entry.desc.vertex);
+    mix(entry.desc.pixel);
+    mix((std::uint64_t{entry.desc.state} << 32u) | entry.desc.input_count);
+    mix(entry.desc.position_stride);
+    for (const NebulaLayoutInput& input : entry.inputs) {
+        mix((std::uint64_t{input.semantic} << 16u) | (std::uint64_t{input.stream} << 8u) | input.format);
+        mix((std::uint64_t{input.offset} << 32u) | input.stride);
+    }
+    return hash;
+}
+
+void load_use_file_locked() {
+    if (gUse.loaded) {
+        return;
+    }
+    gUse.loaded = true;
+    std::ifstream in(use_file());
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const std::uint64_t key = std::strtoull(line.c_str(), nullptr, 16);
+        if (gUse.file_rank.emplace(key, static_cast<std::uint32_t>(gUse.file_keys.size())).second) {
+            gUse.file_keys.push_back(key);
+        }
+    }
+}
+
+// Writes this run's order (and the file's unused pipelines after it) whole through a temporary file.
+void save_use_file() {
+    std::lock_guard guard(gUse.lock);
+    if (gUse.drawn.empty()) {
+        return;  // a run that drew nothing keeps the file it has
+    }
+    std::string text = "# pipeline key, first draw order, draws; read by the next run's warm-up (pipelines.h)";
+    text += '\n';
+    char row[96];
+    std::unordered_set<std::uint64_t> written;
+    for (const UseOrder::Drawn& item : gUse.drawn) {
+        std::snprintf(row, sizeof(row), "%016" PRIx64 "\t%" PRIu64 "\n", item.key, item.draws);
+        text += row;
+        written.insert(item.key);
+    }
+    for (const std::uint64_t key : gUse.file_keys) {
+        if (written.insert(key).second) {
+            std::snprintf(row, sizeof(row), "%016" PRIx64 "\t0\n", key);
+            text += row;
+        }
+    }
+    static_cast<void>(replace_file(use_file(), text.data(), text.size()));
+}
+
+}  // namespace
+
+void note_pipeline_use(std::uint32_t id, const PipelineEntry& entry) {
+    std::lock_guard guard(gUse.lock);
+    if (id >= gUse.slot_of_id.size()) {
+        gUse.slot_of_id.resize(std::size_t{id} + 1024u, 0u);
+    }
+    std::uint32_t& slot = gUse.slot_of_id[id];
+    if (slot == 0u) {
+        gUse.drawn.push_back({use_key(entry), 0u});
+        slot = static_cast<std::uint32_t>(gUse.drawn.size());
+    }
+    ++gUse.drawn[slot - 1u].draws;
+}
+
+std::uint32_t pipeline_use_rank(const PipelineEntry& entry) {
+    std::lock_guard guard(gUse.lock);
+    load_use_file_locked();
+    const auto found = gUse.file_rank.find(use_key(entry));
+    return found != gUse.file_rank.end() ? found->second : kPipelineUnranked;
+}
+#endif
 
 void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) {
     device_ = device;
@@ -34,6 +147,13 @@ void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) 
 }
 
 void Pipelines::shutdown() noexcept {
+#if defined(NEBULA_DEV)
+    try {
+        save_use_file();
+    } catch (...) {
+        // a test aid: a failed write loses the order, nothing else
+    }
+#endif
     {
         std::lock_guard guard(lock_);
         quit_ = true;
@@ -127,12 +247,28 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
         return nullptr;
     }
     ++misses_;
-    gpu::Pipeline* built = build(entry, variant, aux);
+    // Where pipelines link from parts, the draw gets a quick link and a worker replaces it with the optimised one.
+    gpu::Pipeline* built = build_fast(entry, variant, aux);
+    const bool linked = built != nullptr;
+    if (built == nullptr) {
+        built = build(entry, variant, aux);
+    }
     if (built == nullptr) {
         refuse(id, entry, variant, aux);
         return nullptr;
     }
-    return publish(*at, built);
+    gpu::Pipeline* const published = publish(*at, built);
+    if (linked && published == built) {
+        {
+            std::lock_guard guard(lock_);
+            if (!quit_) {
+                pending_.fetch_add(1u, std::memory_order_relaxed);
+                jobs_.push_back(Job{static_cast<std::uint32_t>(id), entry, variant, aux, true});
+            }
+        }
+        wake_.notify_one();
+    }
+    return published;
 }
 
 void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
@@ -182,7 +318,15 @@ void Pipelines::worker() {
             jobs_.pop_front();
         }
         std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
-        if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
+        if (job.optimize) {
+            // The draw's pipeline was linked quickly: the optimised link takes its place for the draws after it (frames in flight
+            // keep the first, which lives until shutdown).
+            if (at != nullptr && !pair_refused(job.entry)) {
+                if (gpu::Pipeline* better = build(job.entry, job.variant, job.aux); better != nullptr) {
+                    at->store(better, std::memory_order_release);
+                }
+            }
+        } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
             gpu::Pipeline* built = build(job.entry, job.variant, job.aux);
             if (built != nullptr) {
                 publish(*at, built);

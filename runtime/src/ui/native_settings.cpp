@@ -2619,8 +2619,18 @@ std::vector<SettingsRow> advanced_page() {
 }
 
 std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
+    ui::GpuTimingView timing;
+    timing.on = gpu_timing_on();
+    timing.toggle = [] { set_gpu_timing(!gpu_timing_on()); };
+    if (timing.on) {
+        GpuPassTime times[32];
+        const std::size_t count = gpu_pass_times(times, std::size(times));
+        for (std::size_t i = 0u; i < count; ++i) {
+            timing.passes.emplace_back(times[i].name, times[i].ms);
+        }
+    }
     return ui::system_page(caps, post_process_caps_text(get_post_process_status()),
-                           [] { s_diagnostics_ask.store(true, std::memory_order_release); });
+                           [] { s_diagnostics_ask.store(true, std::memory_order_release); }, &timing);
 }
 
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,

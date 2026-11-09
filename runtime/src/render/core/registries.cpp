@@ -629,10 +629,10 @@ void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vect
     }
 }
 
-void Registries::retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired) {
+void Registries::retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired, std::uint64_t idle_frames) {
     for (const std::unique_ptr<TextureTable>& entry : tables_) {
         TextureTable* const table = entry.get();
-        if (table == nullptr || table->retired || frame < table->last_frame || frame - table->last_frame <= kTableIdleFrames) {
+        if (table == nullptr || table->retired || frame < table->last_frame || frame - table->last_frame <= idle_frames) {
             continue;
         }
         // A table holding a target lives for one frame (texture_table_for): its set is the renderer's to recycle.

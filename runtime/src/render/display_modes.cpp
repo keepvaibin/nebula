@@ -65,7 +65,7 @@ BOOL CALLBACK collect_monitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
         // The rate is unknown (0), not a guess: the vblank grid measures it.
         entry.current = {
             static_cast<unsigned>(info.rcMonitor.right - info.rcMonitor.left),
-            static_cast<unsigned>(info.rcMonitor.bottom - info.rcMonitor.top), 0u};
+            static_cast<unsigned>(info.rcMonitor.bottom - info.rcMonitor.top), 0u};  // 0: the refresh rate is not known
     }
     for (DWORD index = 0u;; ++index) {
         DEVMODEW candidate{};

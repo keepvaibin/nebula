@@ -3,6 +3,7 @@
 // loses the pointer). Hidden window: no live keyboard or mouse.
 
 #include "galaxy/runtime_settings.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/native_input.h"
 
@@ -78,7 +79,7 @@ void scripted_input() {
 
 // A replay log (key_order as the recorder writes it): `rows` tab-separated after the header.
 std::filesystem::path write_replay(const char* name, const char* rows) {
-    const std::filesystem::path path = std::filesystem::temp_directory_path() / name;
+    const std::filesystem::path path = galaxy::test_temp_path(name);
     std::ofstream out(path, std::ios::binary);
     out << "meta\tkey_order\tLButton,RButton,Space,Enter,Shift,LShift,RShift,Left,Up,Right,Down,1,2,A,B,C,D,E,I,J,K,L,"
            "Q,R,S,W,Z,Ctrl,LCtrl,RCtrl\n";

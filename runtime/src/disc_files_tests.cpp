@@ -1,6 +1,7 @@
 // Tests for galaxy/disc_files.h on a small store: paths in either case, "." and "..", '/' returning to the root, a folder's
 // entries in order, 64-bit positions, malformed stores refused.
 #include "galaxy/disc_files.h"
+#include "galaxy/test_temp.h"
 
 #include <algorithm>
 #include <cstring>
@@ -173,7 +174,7 @@ int main() {
                          table.map(bytes.size(), 0) != nullptr,
                      "a store in memory maps inside itself only");
     // From a file: every byte where the store says it is, and the mapping gone with the store.
-    const auto path = std::filesystem::temp_directory_path() / "nebula_disc_files_test.pak";
+    const auto path = galaxy::test_temp_path("nebula_disc_files_test.pak");
     {
         std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         AssetStore from_file;

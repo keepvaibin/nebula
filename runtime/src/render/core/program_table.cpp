@@ -148,10 +148,6 @@ bool program_lit(std::uint64_t pixel) noexcept {
     return row != nullptr && (row->flags & kLit) != 0u;
 }
 
-std::uint32_t program_count(bool pixel) noexcept {
-    return pixel ? blob().pixel_count : blob().vertex_count;
-}
-
 const char* program_file_name() noexcept {
 #if defined(NEBULA_GPU_VULKAN)
     return "spirv.shaders";

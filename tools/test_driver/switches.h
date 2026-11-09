@@ -192,6 +192,33 @@ inline const char* present_snapshot_last() noexcept { return nullptr; }
 inline const char* present_snapshot_last() noexcept { return std::getenv("GALAXY_PRESENT_SNAPSHOT_LAST"); }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* present_snapshot_game_only() noexcept { return nullptr; }
+inline constexpr const char* present_snapshot_game_only_name() noexcept { return ""; }
+inline constexpr const wchar_t* present_snapshot_game_only_wide_name() noexcept { return L""; }
+#else
+inline const char* present_snapshot_game_only() noexcept { return std::getenv("GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"); }
+inline constexpr const char* present_snapshot_game_only_name() noexcept { return "GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"; }
+inline constexpr const wchar_t* present_snapshot_game_only_wide_name() noexcept { return L"GALAXY_PRESENT_SNAPSHOT_GAME_ONLY"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_motion_probe() noexcept { return nullptr; }
+inline constexpr const char* test_motion_probe_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_motion_probe_wide_name() noexcept { return L""; }
+#else
+inline const char* test_motion_probe() noexcept { return std::getenv("GALAXY_TEST_MOTION_PROBE"); }
+inline constexpr const char* test_motion_probe_name() noexcept { return "GALAXY_TEST_MOTION_PROBE"; }
+inline constexpr const wchar_t* test_motion_probe_wide_name() noexcept { return L"GALAXY_TEST_MOTION_PROBE"; }
+#endif
+#if !defined(NEBULA_DEV)
+inline const char* test_frame_inputs() noexcept { return nullptr; }
+inline constexpr const char* test_frame_inputs_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_frame_inputs_wide_name() noexcept { return L""; }
+#else
+inline const char* test_frame_inputs() noexcept { return std::getenv("GALAXY_TEST_FRAME_INPUTS"); }
+inline constexpr const char* test_frame_inputs_name() noexcept { return "GALAXY_TEST_FRAME_INPUTS"; }
+inline constexpr const wchar_t* test_frame_inputs_wide_name() noexcept { return L"GALAXY_TEST_FRAME_INPUTS"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* profile_game() noexcept { return nullptr; }
 #else
 inline const char* profile_game() noexcept { return std::getenv("GALAXY_PROFILE_GAME"); }

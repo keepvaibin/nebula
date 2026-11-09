@@ -1676,7 +1676,7 @@ void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, c
 // The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
 uint64_t svc_clock_ns(void*) {
     if (deterministic_mode()) {
-        return gDeterministicFrames.load(std::memory_order_relaxed) * 1000000000ull / static_cast<unsigned>(galaxy::kGameStepsPerSecond) + 1u;
+        return gDeterministicFrames.load(std::memory_order_relaxed) * 1000000000ull / static_cast<uint64_t>(galaxy::kGameStepsPerSecond) + 1u;
     }
     static const Clock::time_point start = Clock::now();
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
@@ -3833,29 +3833,26 @@ int main(int argc, char** argv) {
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
 #else
-        // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report. Out of sight, at most
-        // 100 ms: a window the OS shows again is noticed by then (a covered window sends no message).
-        static bool out_of_sight = false;
+        // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
         {
             const auto until = std::chrono::duration_cast<std::chrono::milliseconds>(next_report - Clock::now()).count();
             const DWORD wait = first_frame ? static_cast<DWORD>(std::clamp<long long>(until + 1, 0, 1000)) : 5u;
-            MsgWaitForMultipleObjects(1, &gHostWake, FALSE, out_of_sight ? std::min<DWORD>(wait, 100u) : wait, QS_ALLINPUT);
+            MsgWaitForMultipleObjects(1, &gHostWake, FALSE, wait, QS_ALLINPUT);
         }
-        // Minimised, or covered so that the OS shows none of it (a hidden test window is not): the game and its sound stop, as
-        // on the platforms that suspend, and the renderer presents nothing of its own. The game's clock starts again from the
-        // return (svc_frame_wait: no step is owed), and the device is kept, so showing the window again rebuilds nothing.
-        static const bool test_window = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
+        // Minimised: the game and its sound stop, as on the platforms that suspend, and the renderer presents nothing of its
+        // own. The game's clock starts again from the return (svc_frame_wait: no step is owed), and the device is kept, so
+        // showing the window again rebuilds nothing. A covered window is not this: the game and its sound go on, and the
+        // renderer alone stops presenting (RenderCore, which looks at the window itself every 100 ms).
         const bool minimised = galaxy::render::host_window::is_minimized();
-        if (const bool away = minimised || (!test_window && galaxy::render::window_occluded()); away != gSuspended) {
-            out_of_sight = away;
-            galaxy::render::set_window_hidden(away);
+        if (minimised != gSuspended) {
+            galaxy::render::set_window_hidden(minimised);
             {
                 std::lock_guard<std::mutex> lock(gSuspendLock);
-                gSuspended = away;
+                gSuspended = minimised;
             }
             gSuspendWake.notify_all();
-            gAudio->set_paused(away);
-            log_line("host:", away ? (minimised ? "suspended (minimised)" : "suspended (covered)") : "resumed");
+            gAudio->set_paused(minimised);
+            log_line("host:", minimised ? "suspended (minimised)" : "resumed");
         }
 #endif
         galaxy::render::pump_messages();

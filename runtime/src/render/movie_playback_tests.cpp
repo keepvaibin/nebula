@@ -2,6 +2,7 @@
 // HD movie replacements: the planes' layout, the JPEG YCbCr of known colours and the file lookup.
 
 #include "galaxy/render/movie_playback.h"
+#include "galaxy/test_temp.h"
 
 #include <cstdint>
 #include <cstdlib>
@@ -119,8 +120,7 @@ void test_nv12() {
 }
 
 void test_find() {
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / ("nebula-movie-test-" + std::to_string(GetCurrentProcessId()));
+    const std::filesystem::path root = galaxy::test_temp_path("nebula-movie-test");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "a");
     std::filesystem::create_directories(root / "b");

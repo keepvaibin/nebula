@@ -1,5 +1,6 @@
 // Tests for galaxy/atomic_file.h: name collisions, a locked destination, an invalid parent.
 #include "galaxy/atomic_file.h"
+#include "galaxy/test_temp.h"
 
 #include "galaxy/windows_api.h"
 
@@ -66,11 +67,8 @@ bool test_collision_exception_preserves_unowned_sibling(
 
 int main() {
     bool passed = true;
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() /
-        ("galaxy_atomic_file_tests_" +
-         std::to_string(GetCurrentProcessId()) + "_" +
-         std::to_string(GetTickCount64()));
+    const std::filesystem::path root = galaxy::test_temp_path("galaxy_atomic_file_tests");
+    std::filesystem::remove_all(root);  // left by an earlier run that had this process id
     const std::filesystem::path target = root / "settings.ini";
     if (!std::filesystem::create_directory(root)) {
         std::cerr << "FAILED: fixture directory was not newly created\n";

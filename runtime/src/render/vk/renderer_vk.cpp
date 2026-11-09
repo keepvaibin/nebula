@@ -25,6 +25,7 @@
 #include <vk_mem_alloc.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -34,6 +35,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 namespace galaxy::render {
@@ -716,8 +718,9 @@ bool RendererVk::create_swapchain() {
     if (extent.width == UINT32_MAX) {
         extent = {host_window::backbuffer_width, host_window::backbuffer_height};
     }
-    if (caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u) {
-        return false;  // minimised: try again later
+    if (caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u ||
+        (caps.currentExtent.width == 0u && caps.currentExtent.height == 0u)) {
+        return false;  // minimised: follow_window_and_resize asks again at the next frame boundary without waiting for the device
     }
     extent.width = std::clamp(extent.width, std::max(1u, caps.minImageExtent.width), caps.maxImageExtent.width);
     extent.height = std::clamp(extent.height, std::max(1u, caps.minImageExtent.height), caps.maxImageExtent.height);
@@ -751,11 +754,13 @@ bool RendererVk::create_swapchain() {
     const auto supported = [&](VkPresentModeKHR mode) {
         return std::find(modes.begin(), modes.end(), mode) != modes.end();
     };
-    // VSYNC on: FIFO. Off: immediate (tearing allowed, as D3D12's ALLOW_TEARING), else mailbox.
+    // VSYNC on: FIFO, which a late frame may leave as FIFO_RELAXED (below). Off: mailbox (the newest frame replaces a waiting
+    // one, no tearing), else immediate (tearing, as D3D12's ALLOW_TEARING), else FIFO, the one mode every surface has.
+    const bool vsync = wants_vsync();
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
-    if (!wants_vsync()) {
-        mode = supported(VK_PRESENT_MODE_IMMEDIATE_KHR) ? VK_PRESENT_MODE_IMMEDIATE_KHR
-            : supported(VK_PRESENT_MODE_MAILBOX_KHR) ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
+    if (!vsync) {
+        mode = supported(VK_PRESENT_MODE_MAILBOX_KHR) ? VK_PRESENT_MODE_MAILBOX_KHR
+            : supported(VK_PRESENT_MODE_IMMEDIATE_KHR) ? VK_PRESENT_MODE_IMMEDIATE_KHR : VK_PRESENT_MODE_FIFO_KHR;
     }
 
     // The image count, one rule on every platform from the surface's own limits: MAILBOX and IMMEDIATE take 3 (clamped to the
@@ -811,6 +816,37 @@ bool RendererVk::create_swapchain() {
     info.presentMode = mode;
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_.handle;
+    // With VSync, a frame that misses its refresh is better shown at once (FIFO_RELAXED may tear) than held for the next one.
+    // Where the device takes a present mode per present and the surface says FIFO_RELAXED is compatible with FIFO, the swap
+    // chain is made with both and present_swapchain_image chooses; elsewhere it stays FIFO. Not under AMD's wrapped swap chain.
+    const std::array<VkPresentModeKHR, 2> switchable{VK_PRESENT_MODE_FIFO_KHR, VK_PRESENT_MODE_FIFO_RELAXED_KHR};
+    VkSwapchainPresentModesCreateInfoEXT switch_info{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT};
+    bool relaxed = false;
+    if (!fsr && vsync && mode == VK_PRESENT_MODE_FIFO_KHR && context.present_mode_switching() &&
+        supported(VK_PRESENT_MODE_FIFO_RELAXED_KHR)) {
+        VkSurfacePresentModeEXT surface_mode{VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT};
+        surface_mode.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        VkPhysicalDeviceSurfaceInfo2KHR surface_info{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR};
+        surface_info.pNext = &surface_mode;
+        surface_info.surface = surface_;
+        std::array<VkPresentModeKHR, 8> listed{};
+        VkSurfacePresentModeCompatibilityEXT compatible{VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_COMPATIBILITY_EXT};
+        compatible.presentModeCount = static_cast<std::uint32_t>(listed.size());
+        compatible.pPresentModes = listed.data();
+        VkSurfaceCapabilities2KHR caps2{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR};
+        caps2.pNext = &compatible;
+        if (vkGetPhysicalDeviceSurfaceCapabilities2KHR(context.physical_device(), &surface_info, &caps2) == VK_SUCCESS) {
+            const std::size_t count_listed = std::min<std::size_t>(compatible.presentModeCount, listed.size());
+            relaxed = std::find(listed.begin(), listed.begin() + static_cast<std::ptrdiff_t>(count_listed),
+                                VK_PRESENT_MODE_FIFO_RELAXED_KHR) != listed.begin() + static_cast<std::ptrdiff_t>(count_listed);
+        }
+        if (relaxed) {
+            switch_info.presentModeCount = static_cast<std::uint32_t>(switchable.size());
+            switch_info.pPresentModes = switchable.data();
+            switch_info.pNext = info.pNext;
+            info.pNext = &switch_info;
+        }
+    }
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     if (swapchain_fsr_) {
         vkDeviceWaitIdle(device);
@@ -847,12 +883,16 @@ bool RendererVk::create_swapchain() {
     present_timing_.refresh_ns = 0;  // the new swapchain's, at the next report
     present_timing_.last_actual = 0;
     swapchain_.format = format.format;
+    swapchain_.color_space = format.colorSpace;
     swapchain_.extent = extent;
     swapchain_.image = image_extent;
     swapchain_.transform = transform;
     swapchain_.surface_transform = caps.currentTransform;
     swapchain_.copyable = (info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     swapchain_.mode = mode;
+    swapchain_.vsync = vsync;
+    swapchain_.relaxed = relaxed;
+    last_present_id_ = 0u;  // present ids belong to a swap chain: nothing to wait for on the new one
     swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
     swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
@@ -865,7 +905,15 @@ bool RendererVk::create_swapchain() {
         const char* const name = mode == VK_PRESENT_MODE_IMMEDIATE_KHR ? "IMMEDIATE"
             : mode == VK_PRESENT_MODE_MAILBOX_KHR ? "MAILBOX"
             : mode == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? "FIFO_RELAXED" : "FIFO";
-        std::fprintf(stderr, "[vk] swap chain: %u images, %s\n", count, name);
+        std::string offered;
+        for (const VkPresentModeKHR offer : modes) {
+            offered += offer == VK_PRESENT_MODE_IMMEDIATE_KHR ? " IMMEDIATE" : offer == VK_PRESENT_MODE_MAILBOX_KHR ? " MAILBOX"
+                : offer == VK_PRESENT_MODE_FIFO_KHR ? " FIFO" : offer == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? " FIFO_RELAXED" : " other";
+        }
+        const bool waits = context.present_wait() && mode == VK_PRESENT_MODE_FIFO_KHR && !amd;
+        std::fprintf(stderr, "[vk] swap chain: %u images, %s (offered:%s); late frames %s; frame latency by %s\n", count, name,
+                     offered.c_str(), relaxed ? "present as FIFO_RELAXED" : "wait for the next refresh",
+                     waits ? "present wait (the previous frame must show before the next is queued, 100 ms at most)" : "the frame fences");
     }
 
     if (present_pass_ == VK_NULL_HANDLE || swapchain_.format != format.format) {
@@ -964,6 +1012,51 @@ bool RendererVk::surface_changed() const {
     return caps.currentTransform != swapchain_.surface_transform ||
         (size_known && (caps.currentExtent.width != swapchain_.extent.width ||
                         caps.currentExtent.height != swapchain_.extent.height));
+}
+
+// After a move to another monitor, a density change or a display mode change: the swap chain's format, colour space and present
+// mode must still be among what the surface offers there, else the swap chain is made again; if they are, nothing is rebuilt
+// (the refresh rate is read separately and sets the pacing).
+bool RendererVk::surface_offers_swapchain() const {
+    if (surface_ == VK_NULL_HANDLE || swapchain_.handle == VK_NULL_HANDLE) {
+        return true;
+    }
+    const VkPhysicalDevice physical = vk::Context::get().physical_device();
+    std::uint32_t count = 0;
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface_, &count, nullptr) != VK_SUCCESS) {
+        return true;
+    }
+    std::vector<VkSurfaceFormatKHR> formats(count);
+    if (vkGetPhysicalDeviceSurfaceFormatsKHR(physical, surface_, &count, formats.data()) < VK_SUCCESS) {
+        return true;
+    }
+    formats.resize(count);
+    const bool format_offered = formats.empty() || std::any_of(formats.begin(), formats.end(), [this](const VkSurfaceFormatKHR& offer) {
+        return offer.format == swapchain_.format && offer.colorSpace == swapchain_.color_space;
+    });
+    count = 0;
+    if (vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface_, &count, nullptr) != VK_SUCCESS) {
+        return format_offered;
+    }
+    std::vector<VkPresentModeKHR> modes(count);
+    if (vkGetPhysicalDeviceSurfacePresentModesKHR(physical, surface_, &count, modes.data()) < VK_SUCCESS) {
+        return format_offered;
+    }
+    modes.resize(count);
+    const bool mode_offered = swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR ||
+        std::find(modes.begin(), modes.end(), swapchain_.mode) != modes.end();
+    return format_offered && mode_offered;
+}
+
+// Whether the surface has no pixels to present to (a minimised window): a zero current or largest extent.
+bool RendererVk::surface_has_no_area() const {
+    VkSurfaceCapabilitiesKHR caps{};
+    if (surface_ == VK_NULL_HANDLE ||
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk::Context::get().physical_device(), surface_, &caps) != VK_SUCCESS) {
+        return false;
+    }
+    return caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u ||
+           (caps.currentExtent.width == 0u && caps.currentExtent.height == 0u);
 }
 
 void RendererVk::release_surface() noexcept {
@@ -1729,6 +1822,41 @@ void RendererVk::present_swapchain_image() {
     info.swapchainCount = 1;
     info.pSwapchains = &swapchain_.handle;
     info.pImageIndices = &swap_image_;
+    // The same latency rule as Direct3D 12's waitable object: with VSync, the frame before the last one queued is on the screen
+    // before this one is queued, so one frame waits at most; 100 ms bounds a display that stopped. Where the device has no
+    // present wait, or under frame generation (whose presents are the library's), the frame fences bound the queue.
+    const bool ids = context.present_wait() && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR && !swapchain_fsr_ &&
+                     !frame_generation_running();
+    if (ids && last_present_id_ != 0u) {
+        const VkResult waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, last_present_id_, 100'000'000ull);
+        if (waited == VK_TIMEOUT && ++present_wait_timeouts_ <= 4u) {
+            std::fprintf(stderr, "[present] the previous frame was not shown within 100 ms\n");
+        }
+    }
+    std::uint64_t this_present_id = 0u;
+    VkPresentIdKHR present_id_info{VK_STRUCTURE_TYPE_PRESENT_ID_KHR};
+    if (ids) {
+        this_present_id = ++present_id_counter_;
+        present_id_info.swapchainCount = 1;
+        present_id_info.pPresentIds = &this_present_id;
+        present_id_info.pNext = info.pNext;
+        info.pNext = &present_id_info;
+    }
+    // A frame that comes a refresh late (the time since the previous present is over a quarter longer than the rate asks for)
+    // is shown at once rather than held for the next refresh.
+    VkPresentModeKHR this_mode = VK_PRESENT_MODE_FIFO_KHR;
+    VkSwapchainPresentModeInfoEXT mode_info{VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT};
+    if (swapchain_.relaxed && swap_present_qpc_ != 0 && !frame_generation_running()) {
+        const double since = static_cast<double>(galaxy::qpc_now() - swap_present_qpc_) / static_cast<double>(galaxy::qpc_frequency());
+        const double wanted = 1.0 / present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+        if (since > wanted * 1.25) {
+            this_mode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+        }
+        mode_info.swapchainCount = 1;
+        mode_info.pPresentModes = &this_mode;
+        mode_info.pNext = info.pNext;
+        info.pNext = &mode_info;
+    }
     VkPresentTimeGOOGLE present_time{};
     VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
     std::int64_t frame_start = 0, period = 0, vsync = 0, now = 0;
@@ -1766,6 +1894,7 @@ void RendererVk::present_swapchain_image() {
         timing.requested_period[at] = step;
         present_times.swapchainCount = 1;
         present_times.pTimes = &present_time;
+        present_times.pNext = info.pNext;
         info.pNext = &present_times;
     } else {
         present_timing_.last_slot = 0;
@@ -1788,6 +1917,7 @@ void RendererVk::present_swapchain_image() {
     vk::streamline_vk::mark_present_start();
     const VkResult result = swapchain_calls_.present(context.queue(), &info);
     vk::streamline_vk::mark_present_end();
+    last_present_id_ = ids && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) ? this_present_id : 0u;
     streamline_frame_open_ = false;
     vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
     surface_lock_ = {};
@@ -1996,12 +2126,33 @@ void RendererVk::gpu_pass(GpuPass pass) {
     pass_marks_[frame_slot_][marks++] = pass;
 }
 
+namespace {
+constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
+                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
+                                          "ao denoise", "ao upsample", "ao apply"};
+}  // namespace
+
+std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
+    std::size_t count = 0u;
+    for (std::size_t pass = 0u; pass < std::size(kPassTimeNames) && count < capacity; ++pass) {
+        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
+            out[count++] = {kPassTimeNames[pass], ms};
+        }
+    }
+    return count;
+}
+
 void RendererVk::prepare_gpu_pass_queries() {
     const bool full = ::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false);
-    // A prime stride samples across real/generated/present-only cadence instead of repeatedly hitting one phase: one
-    // frame in 61, a timestamp at each pass boundary (no pass is split), so every log has each pass's GPU time.
-    // Developer profiling can explicitly record every submission.
-    profile_frame_ = timestamps_ != VK_NULL_HANDLE && (full || frame_index_ % 61u == 0u);
+    // Passes are timed only on request: GALAXY_GPU_PASSES, a diagnostics recording, or the settings page's GPU TIMING. A timestamp
+    // at each pass boundary (no pass is split) of every submission then; with none of them nothing is recorded or read.
+    const bool wanted = full || ::galaxy::diagnostics_recording() || gpu_timing_wanted_.load(std::memory_order_relaxed);
+    if (!wanted && profile_frame_) {
+        for (std::atomic<float>& average : pass_ema_ms_) {
+            average.store(0.0f, std::memory_order_relaxed);
+        }
+    }
+    profile_frame_ = timestamps_ != VK_NULL_HANDLE && wanted;
     if (!profile_frame_) return;
     const VkDevice device = vk::Context::get().device();
     if (pass_queries_ == VK_NULL_HANDLE) {
@@ -2034,10 +2185,20 @@ void RendererVk::read_gpu_passes() {
                                             marks * sizeof(std::uint64_t), ticks.data(), sizeof(std::uint64_t),
                                             VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
         ++profile_samples_;
+        std::array<double, static_cast<std::size_t>(GpuPass::Count)> frame_ms{};
         for (unsigned i = 0; i + 1u < marks; ++i) {
             if (ticks[i + 1u] >= ticks[i]) {
-                pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] +=
-                    static_cast<double>(ticks[i + 1u] - ticks[i]) * ms_per_tick;
+                const double ms = static_cast<double>(ticks[i + 1u] - ticks[i]) * ms_per_tick;
+                pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
+                frame_ms[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
+            }
+        }
+        // The page's running average of each pass over the frames that ran it.
+        for (std::size_t pass = 0u; pass < frame_ms.size(); ++pass) {
+            if (frame_ms[pass] > 0.0) {
+                const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
+                const float value = static_cast<float>(frame_ms[pass]);
+                pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
             }
         }
     }
@@ -2177,19 +2338,31 @@ void RendererVk::follow_window_and_resize() {
             swapchain_dirty_ = true;
         }
     }
-    if (wants_vsync() != (swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR) || fsr_generation_wanted() != swapchain_fsr_) {
+    if (wants_vsync() != swapchain_.vsync || fsr_generation_wanted() != swapchain_fsr_) {
         swapchain_dirty_ = true;
     }
+    bool monitor_moved = false;
+#if defined(_WIN32)
+    // The window moved to another monitor, whose rate may differ, or its density or display mode changed: the rate is measured at
+    // once, not at the next periodic check, and the swap chain is made again only if its format, colour space or present mode
+    // is no longer what the surface offers.
+    monitor_moved = host_window::monitor_changed.exchange(false, std::memory_order_acq_rel);
+    if (monitor_moved && !swapchain_dirty_ && !surface_offers_swapchain()) {
+        std::fprintf(stderr, "[display] the new monitor does not offer the swap chain's format or present mode: made again\n");
+        swapchain_dirty_ = true;
+    }
+#endif
     if (swapchain_dirty_) {
+        // A surface with no area (the window minimised) is not retried: nothing is waited for or made until the surface has an
+        // area again, and that is noticed here, at the next frame boundary the game's resumed frames bring (the host stops
+        // the game while minimised, so no frame comes in between).
+        if (surface_has_no_area()) {
+            return;
+        }
         vk::streamline_vk::generation_off();
         vkDeviceWaitIdle(vk::Context::get().device());
         create_swapchain();
     }
-    bool monitor_moved = false;
-#if defined(_WIN32)
-    // The window moved to another monitor, whose rate may differ: measured at once, not at the next periodic check.
-    monitor_moved = host_window::monitor_changed.exchange(false, std::memory_order_acq_rel);
-#endif
     if (monitor_moved || display_refresh_checks_++ % 120u == 0u) {
         refresh_display_rate();
     }

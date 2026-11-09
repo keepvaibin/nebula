@@ -51,6 +51,16 @@ constexpr PoolSizes constants_sets(std::uint32_t sets, PoolSizes others = {}) {
     others.storage += 3u * sets;
     return others;
 }
+// A pool `factor` times the size of another (an overflow pool after a full one).
+constexpr PoolSizes scaled(PoolSizes sizes, std::uint32_t factor) {
+    sizes.images *= factor;
+    sizes.samplers *= factor;
+    sizes.dynamic_uniforms *= factor;
+    sizes.dynamic_storage *= factor;
+    sizes.storage *= factor;
+    sizes.storage_images *= factor;
+    return sizes;
+}
 // A frame's descriptor pool: its constants sets, the renderer's own passes' sets, and without descriptor indexing a bound
 // table of kBoundTableSlots maps for each set.
 constexpr PoolSizes frame_pool(bool bound_tables, std::uint32_t sets = kFrameSets) {

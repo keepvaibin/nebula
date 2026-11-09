@@ -82,6 +82,9 @@ RunOptions read_options() {
     o.present_snapshot_every = nebula_switch::present_snapshot_every();
     o.present_snapshot_first = nebula_switch::present_snapshot_first();
     o.present_snapshot_last = nebula_switch::present_snapshot_last();
+    o.present_snapshot_game_only = nebula_switch::present_snapshot_game_only();
+    o.test_motion_probe = nebula_switch::test_motion_probe();
+    o.test_frame_inputs = nebula_switch::test_frame_inputs();
     o.profile_game = nebula_switch::profile_game();
     o.render_config_path = nebula_switch::render_config_path();
     o.runtime_settings_path = nebula_switch::runtime_settings_path();

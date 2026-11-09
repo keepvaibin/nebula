@@ -219,7 +219,19 @@ public:
     void inspect_query_end(std::uint32_t index);
     void inspect_queries_read(std::uint32_t count, std::uint64_t* out);
     [[nodiscard]] bool inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out);
+    // The reactive mask (kind 0: R8, out[0] the byte) and the effects layer's transmittance (kind 1: RGBA16F, four halves) at a
+    // pixel of the frame that just ended. False: not read.
+    [[nodiscard]] bool inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out);
 #endif
+    // GPU time by pass (render_api.h GpuPassTime): any thread. Off: no query is recorded or read.
+    void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
+    [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
+    [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
+    // The latest scene's jitter: its index in the sequence and the sequence's length (0 phases: no temporal scene yet).
+    void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
+        index = scene_jitter_index_;
+        phases = scene_jitter_phases_;
+    }
     void wait_for_fence_value(std::uint64_t fence_value);
 
     void bind_scene();
@@ -359,6 +371,7 @@ private:
         VkCommandBuffer upscale = VK_NULL_HANDLE;  // a generated frame's temporal upscale
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
         std::vector<VkDescriptorPool> overflow_descriptors;  // when a frame outgrows its pool
+        std::uint32_t overflow_sets = 0;  // sets of the last overflow pool made (each next one has twice as many); kept across frames
         VkSemaphore acquired = VK_NULL_HANDLE;
         std::uint64_t fence = 0;  // the submission that used this slot last
         std::vector<gpu::TextureRef> retired;  // kept until the slot's fence passes
@@ -368,6 +381,7 @@ private:
     struct Swapchain {
         VkSwapchainKHR handle = VK_NULL_HANDLE;
         VkFormat format = VK_FORMAT_UNDEFINED;
+        VkColorSpaceKHR color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
         VkExtent2D extent{};  // the window as it is displayed
         // Pre-rotation: on a display turned from its natural orientation (Android), the images keep the natural
         // orientation (`image`, extent's sides swapped for a quarter turn) and the present pass turns the picture
@@ -378,6 +392,8 @@ private:
         // generation, which reads the pictures and motion in one orientation; the compositor turns them then).
         VkSurfaceTransformFlagBitsKHR surface_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
+        bool vsync = true;      // wants_vsync() when it was made (FIFO may be all a surface offers with VSync off)
+        bool relaxed = false;   // made with {FIFO, FIFO_RELAXED}: a late present may ask for the second (present_swapchain_image)
         bool copyable = false;  // transfer source (test snapshots of the backbuffer)
         std::vector<VkImage> images;
         std::vector<VkImageView> views;
@@ -400,6 +416,9 @@ private:
     // Device objects.
     bool create_surface_and_device();
     bool create_swapchain();
+    [[nodiscard]] bool surface_has_no_area() const;
+    // The surface still offers the swap chain's format, colour space and present mode (they can differ per monitor).
+    [[nodiscard]] bool surface_offers_swapchain() const;
     void destroy_swapchain() noexcept;
     // The window's surface withdrawn (host_window::surface_withdrawn) or lost, and made again once it is back.
     void release_surface() noexcept;
@@ -541,6 +560,8 @@ private:
     bool inspect_queries_reset_ = false;  // the next recording resets the pool
     gpu::BufferRef inspect_motion_buffer_;
     unsigned inspect_motion_width_ = 0u, inspect_motion_height_ = 0u;
+    gpu::BufferRef inspect_mask_buffer_[2];
+    unsigned inspect_mask_width_[2]{}, inspect_mask_height_[2]{};
 #endif
     VkCommandBuffer commands_ = VK_NULL_HANDLE;  // where work records
     std::uint64_t frame_index_ = 0;
@@ -556,6 +577,7 @@ private:
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
     VkDescriptorPool persistent_pool_ = VK_NULL_HANDLE;
     std::vector<VkDescriptorPool> persistent_overflow_;
+    std::uint32_t persistent_overflow_sets_ = 0;  // sets of the last overflow pool made (the next has twice as many)
 
     // The scene target.
     FrameMap scene_map_{};  // the bound scene target's map (E-08)
@@ -621,7 +643,12 @@ private:
     bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, TextureStore& textures);
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
-    static constexpr std::uint64_t kTargetIdleFrames = 600u;
+    static constexpr std::uint64_t kTargetIdleFrames = 600u;  // frames at the game's 60 a second
+    // The same idle time at the rate frames are being presented (a 240 Hz picture counts four frames per game frame).
+    [[nodiscard]] std::uint64_t target_idle_frames() const noexcept {
+        const double rate = measured_present_hz_.load(std::memory_order_relaxed);
+        return kTargetIdleFrames * std::max<std::uint64_t>(1u, static_cast<std::uint64_t>(rate / kGameStepRate + 0.5));
+    }
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs
     std::uint64_t target_key_ = 0;
@@ -706,6 +733,7 @@ private:
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;
     float scene_jitter_[2]{};
+    unsigned scene_jitter_index_ = 0u, scene_jitter_phases_ = 0u;
     float scene_lens_[3]{1.0f, 100000.0f, 1.0f};
     std::int64_t temporal_last_upscale_us_ = 0;
     bool scene_set_storage_ = false;  // create_scene_set: its colour takes the upscaler's output
@@ -839,6 +867,12 @@ private:
     std::uint64_t display_refresh_checks_ = 0;
     std::int64_t measured_present_window_qpc_ = 0;
     std::int64_t swap_present_qpc_ = 0;   // every present's (last_present_qpc)
+    // VK_KHR_present_id / present_wait: the id of each present on a FIFO swap chain (rising for the renderer's life), and the
+    // last one that went in on this swap chain (0: none yet, nothing to wait for); present_swapchain_image waits for it to show
+    // before queueing the next frame, 100 ms at most.
+    std::uint64_t present_id_counter_ = 0;
+    std::uint64_t last_present_id_ = 0;
+    unsigned present_wait_timeouts_ = 0u;
     std::uint64_t measured_present_count_ = 0;
 
     // A table, a target's picture: what the GPU may still read until a fence passes.
@@ -986,6 +1020,10 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
+    // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running
+    // average for the page.
+    std::atomic<bool> gpu_timing_wanted_{false};
+    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
 };
 
 using Renderer = RendererVk;

@@ -1,5 +1,6 @@
 // Stats: counting, names, keeping them across sessions, the background write (galaxy/stats.h).
 #include "galaxy/stats.h"
+#include "galaxy/test_temp.h"
 
 #include <chrono>
 #include <cstdio>
@@ -25,7 +26,7 @@ std::string read(const std::filesystem::path& path) {
 
 int main() {
     namespace st = galaxy::stats;
-    const std::filesystem::path path = std::filesystem::temp_directory_path() / "nebula_stats_test.ini";
+    const std::filesystem::path path = galaxy::test_temp_path("nebula_stats_test.ini");
     std::filesystem::remove(path);
     st::set_path_for_tests(path);
 

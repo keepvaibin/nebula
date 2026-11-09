@@ -298,6 +298,21 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         }
     }
 #endif
+    // Present modes chosen per present (VK_EXT_swapchain_maintenance1, or its KHR form): it needs the surface extension of its
+    // own kind and surface capabilities 2 on the instance; the device side is decided with the device.
+    if (const char* const surface_maintenance = has_instance_extension("VK_KHR_surface_maintenance1") ? "VK_KHR_surface_maintenance1"
+                                                : has_instance_extension("VK_EXT_surface_maintenance1") ? "VK_EXT_surface_maintenance1"
+                                                                                                         : nullptr;
+        surface_maintenance != nullptr && has_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME)) {
+        for (const char* name : {surface_maintenance, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME}) {
+            if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
+                             [&](const char* have) { return std::strcmp(have, name) == 0; })) {
+                instance_extensions.push_back(name);
+            }
+        }
+        surface_maintenance_khr_ = std::strcmp(surface_maintenance, "VK_KHR_surface_maintenance1") == 0;
+        surface_maintenance_ = true;
+    }
     VkInstanceCreateInfo instance_info{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
     instance_info.pApplicationInfo = &app;
     instance_info.enabledExtensionCount = static_cast<std::uint32_t>(instance_extensions.size());
@@ -426,6 +441,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     bool test_no_indexing = false;
     bool test_no_device_fault = false;
     bool test_no_host_image_copy = false;
+    bool test_no_present_wait = false;
+    bool test_no_present_mode_switch = false;
+    bool test_no_pipeline_library = false;
     if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
@@ -435,6 +453,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         test_no_indexing = off("indexing");
         test_no_device_fault = off("device_fault");
         test_no_host_image_copy = off("host_image_copy");
+        test_no_present_wait = off("present_wait");
+        test_no_present_mode_switch = off("present_mode_switch");
+        test_no_pipeline_library = off("pipeline_library");
     }
     VkPhysicalDeviceFeatures enabled{};
     enabled.sampleRateShading = available.sampleRateShading;
@@ -650,6 +671,59 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
             host_copy.pNext = nullptr;
         }
     }
+    // Waiting for a presented frame to show (renderer_vk.cpp present_swapchain_image): VK_KHR_present_wait on VK_KHR_present_id,
+    // both features.
+    VkPhysicalDevicePresentIdFeaturesKHR present_id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_FEATURES_KHR};
+    VkPhysicalDevicePresentWaitFeaturesKHR present_wait{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR};
+    if (!test_no_present_wait && has_device_extension(physical_, VK_KHR_PRESENT_ID_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_PRESENT_WAIT_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &present_id;
+        present_id.pNext = &present_wait;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        present_wait_ = present_id.presentId == VK_TRUE && present_wait.presentWait == VK_TRUE;
+        if (present_wait_) {
+            device_extensions.push_back(VK_KHR_PRESENT_ID_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_PRESENT_WAIT_EXTENSION_NAME);
+        }
+        present_id.pNext = nullptr;
+        present_wait.pNext = nullptr;
+    }
+    // A present mode per present (the surface side was enabled on the instance): swapchain maintenance 1 and its feature.
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swap_maintenance{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
+    if (surface_maintenance_ && !test_no_present_mode_switch) {
+        const char* const name = surface_maintenance_khr_ ? "VK_KHR_swapchain_maintenance1" : "VK_EXT_swapchain_maintenance1";
+        if (has_device_extension(physical_, name)) {
+            VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            features.pNext = &swap_maintenance;
+            vkGetPhysicalDeviceFeatures2(physical_, &features);
+            present_mode_switching_ = swap_maintenance.swapchainMaintenance1 == VK_TRUE;
+            if (present_mode_switching_) {
+                device_extensions.push_back(name);
+            }
+            swap_maintenance.pNext = nullptr;
+        }
+    }
+    // Graphics pipeline libraries (core/pipelines_vk.cpp): the four parts of a pipeline made once and linked quickly at a draw's
+    // first use. Taken only where the driver says linking is fast (graphicsPipelineLibraryFastLinking): else a library is a
+    // detour, and the monolithic pipeline stays.
+    VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT pipeline_library{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT};
+    if (!test_no_pipeline_library && has_device_extension(physical_, VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &pipeline_library;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        pipeline_library.pNext = nullptr;
+        VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT library_properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT};
+        VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        properties2.pNext = &library_properties;
+        vkGetPhysicalDeviceProperties2(physical_, &properties2);
+        pipeline_libraries_ = pipeline_library.graphicsPipelineLibrary == VK_TRUE && library_properties.graphicsPipelineLibraryFastLinking == VK_TRUE;
+        if (pipeline_libraries_) {
+            device_extensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+        }
+    }
     // Synchronization2 (barriers_vk.h): copy, resolve and clear apart from other transfers, stages per image. A device
     // and instance of Vulkan 1.3 (the frame generation device always) take it as core through the 1.3 features chain;
     // a 1.2 device takes the extension where it has it; any other uses version-1 barriers.
@@ -725,6 +799,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     if (host_image_copy_) {
         host_copy.pNext = const_cast<void*>(device_info.pNext);
         device_info.pNext = &host_copy;
+    }
+    if (present_wait_) {
+        present_wait.pNext = const_cast<void*>(device_info.pNext);
+        present_id.pNext = &present_wait;
+        device_info.pNext = &present_id;
+    }
+    if (present_mode_switching_) {
+        swap_maintenance.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &swap_maintenance;
+    }
+    if (pipeline_libraries_) {
+        pipeline_library.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &pipeline_library;
     }
     if (core_12) {
         if (temporal_upscaling_) {
@@ -920,12 +1007,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     std::fprintf(stderr,
                  "[vulkan] features: depth-clamp=%d depth-clip=%d bc=%d "
                  "anisotropy=%d display-timing=%d queues=%u temporal-upscaling=%d frame-generation-queues=%d "
-                 "synchronization2=%s device-fault=%s host-image-copy=%d\n",
+                 "synchronization2=%s device-fault=%s host-image-copy=%d present-wait=%d present-mode-switching=%d pipeline-libraries=%d\n",
                  depth_clamp_, depth_clip_enable_, bc_textures_,
                  sampler_anisotropy_, display_timing_, queue_info.queueCount, temporal_upscaling_ ? 1 : 0,
                  generation_present_queue_ != VK_NULL_HANDLE ? 1 : 0,
                  sync2_core ? "core" : sync2_extension ? "extension" : "off",
-                 device_fault_binary_ ? "report+binary" : device_fault_ ? "report" : "off", host_image_copy_ ? 1 : 0);
+                 device_fault_binary_ ? "report+binary" : device_fault_ ? "report" : "off", host_image_copy_ ? 1 : 0,
+                 present_wait_ ? 1 : 0, present_mode_switching_ ? 1 : 0, pipeline_libraries_ ? 1 : 0);
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).
     {

@@ -1,4 +1,5 @@
 #include "galaxy/texture_categories.h"
+#include "galaxy/test_temp.h"
 // SPDX-License-Identifier: GPL-3.0-only
 // Texture packs: hashes, names, DDS layouts and decodes, PNG round trips, the index, loads, the budget and dumps, and
 // the texture cache swapping a replacement in on a WARP device.
@@ -603,7 +604,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
 void test_categories_off() {
     using galaxy::textures::Category;
     galaxy::textures::set_index_for_tests({{0x1111111111111111ull, Category::MarioLuigi}, {0x2222222222222222ull, Category::Items}});
-    const std::filesystem::path root = std::filesystem::temp_directory_path() / "nebula_pack_categories";
+    const std::filesystem::path root = galaxy::test_temp_path("nebula_pack_categories");
     std::error_code error;
     std::filesystem::remove_all(root, error);
     std::filesystem::create_directories(root / "Misc", error);
@@ -626,8 +627,7 @@ void test_categories_off() {
 
 int main() {
     test_categories_off();
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() / ("nebula-texture-pack-test-" + std::to_string(GetCurrentProcessId()));
+    const std::filesystem::path root = galaxy::test_temp_path("nebula-texture-pack-test");
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     test_hash();
