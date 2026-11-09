@@ -241,6 +241,11 @@ namespace MR {
 
     DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor* pHost, s32 modelId, const Vec3f& rLocalTrans, const Vec3f& rLocalRotate) {
         DummyDisplayModel* pModel = tryCreateDummyModel(pHost, TableIter(), modelId, MR::DrawBufferType_CrystalItem);
+
+        if (pModel == nullptr) {
+            return nullptr;
+        }
+
         pModel->initFixedPosition(rLocalTrans, rLocalRotate, nullptr);
         return pModel;
     }

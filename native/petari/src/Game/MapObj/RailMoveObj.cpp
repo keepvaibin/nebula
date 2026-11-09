@@ -175,6 +175,12 @@ bool RailMoveObj::tryStartMove() {
 }
 
 void RailMoveObj::exeMove() {
+    // An object placed without a rail has nothing to move along.
+    if (mRailMover == nullptr) {
+        setNerve(GET_NERVE(RailMoveObj, HostTypeDone));
+        return;
+    }
+
     if (MR::isFirstStep(this)) {
         startMapPartsFunctions();
     }

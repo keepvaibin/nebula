@@ -844,11 +844,20 @@ bool MapObjActorUtil::isBreakStopped(const MapObjActor* pActor) {
     return false;
 }
 
+// An object without a "Bloom" sub model has no bloom model.
 void MapObjActorUtil::killBloomModel(MapObjActor* pActor) {
+    if (pActor->mBloomModel == nullptr) {
+        return;
+    }
+
     pActor->mBloomModel->kill();
 }
 
 void MapObjActorUtil::appearBloomModel(MapObjActor* pActor) {
+    if (pActor->mBloomModel == nullptr) {
+        return;
+    }
+
     pActor->mBloomModel->appear();
     MR::FormattedName buf("%sBloom", pActor->mObjectName);
     MR::tryStartAllAnim(pActor->mBloomModel, buf.c_str());

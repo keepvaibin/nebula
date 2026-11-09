@@ -359,10 +359,13 @@ void CrystalCage::exeBreak() {
         if (mCrystalCageType == CrystalCageType_Large) {
             MR::startSound(this, "SE_OJ_CRYSTAL_CAGE_L_BREAK");
 
+            // The star appears where its crystal model hung; a mod may have removed that model.
+            const Vec3f& rStarPos = mDisplayModel != nullptr ? mDisplayModel->mPosition : mPosition;
+
             if (mPowerStarId == -1) {
-                MR::requestAppearPowerStar(this, mDisplayModel->mPosition);
+                MR::requestAppearPowerStar(this, rStarPos);
             } else {
-                MR::requestAppearPowerStar(this, mPowerStarId, mDisplayModel->mPosition);
+                MR::requestAppearPowerStar(this, mPowerStarId, rStarPos);
             }
         } else {
             MR::emitEffect(this, "Break");

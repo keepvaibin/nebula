@@ -187,7 +187,13 @@ s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity
         }
     }
 
-    pCenter->scale(1.0f / placedCount);
+    // No member found ground: the group's own place stands as the center.
+    if (placedCount > 0) {
+        pCenter->scale(1.0f / placedCount);
+    } else {
+        pCenter->set(mPosition);
+    }
+
     return placedCount;
 }
 

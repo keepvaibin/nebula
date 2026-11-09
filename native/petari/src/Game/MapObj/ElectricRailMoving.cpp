@@ -423,12 +423,26 @@ bool ElectricRailMoving::isValidCoord(f32 coord) const {
 
 f32 ElectricRailMoving::getRepeatedCoord(f32 coord) const {
     f32 len = MR::getRailTotalLength(this);
+
+    // A rail with no length has one coord (the repeat divides by the length).
+    if (!(len > 0.0f)) {
+        return 0.0f;
+    }
+
     return MR::repeat(coord, 0.0f, len);
 }
 
 // Between the kept positions around coord; the last stretch is the rail's remainder.
 void ElectricRailMoving::calcPointPos(Vec3f* pOutPos, f32 coord) const {
-    s32 index = (coord / 100.0f);
+    // The pair of kept positions stays inside the table (a speed past the rail's length can leave coord outside it).
+    f32 indexValue = coord / 100.0f;
+    if (!(indexValue >= 0.0f)) {
+        indexValue = 0.0f;
+    } else if (indexValue > static_cast< f32 >(mRailPosNum - 2)) {
+        indexValue = static_cast< f32 >(mRailPosNum - 2);
+    }
+
+    s32 index = static_cast< s32 >(indexValue);
     f32 within = MR::mod(coord, 100.0f);
     f32 stretch = 100.0f;
 
@@ -436,12 +450,17 @@ void ElectricRailMoving::calcPointPos(Vec3f* pOutPos, f32 coord) const {
         stretch = (MR::getRailTotalLength(this) - (100.0f * index));
     }
 
-    pOutPos->lerp(mRailPositions[index], mRailPositions[index + 1], (within / stretch));
+    pOutPos->lerp(mRailPositions[index], mRailPositions[index + 1], stretch > 0.0f ? (within / stretch) : 0.0f);
 }
 
 // Moves the segments on; the texture scrolls with them and the alpha follows the segments' share of the rail.
 void ElectricRailMoving::move() {
     mCoord = getRepeatedCoord(mCoord + mMovementSpeed);
+
+    // A rail with no length keeps its first placement (the texture scale and segment share divide by the length).
+    if (!(MR::getRailTotalLength(this) > 0.0f)) {
+        return;
+    }
 
     f32 scale = (100.0f * mSegmentNum) / (0.25f * MR::getRailTotalLength(this));
 
