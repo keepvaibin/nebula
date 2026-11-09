@@ -6,7 +6,6 @@ class CameraFixedThere : public Camera {
 public:
     enum CameraType {
         CameraType_GravityUp,
-        CameraType_WorldUp,
     };
 
     CameraFixedThere(const char* pName = "その場定点カメラ");

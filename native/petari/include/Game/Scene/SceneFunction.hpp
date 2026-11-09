@@ -112,6 +112,7 @@ namespace MR {
         DrawBufferType_MirrorMapObj,
     };
 
+    // A draw order slot: the draw tables are indexed by it, in this order.
     enum DrawType {
         DrawType_None = -1,
         DrawType_SwingRope,

@@ -30,7 +30,6 @@ namespace Ui {
         ORIGINTYPE_TOPLEFT,
         ORIGINTYPE_CENTER,
 
-        ORIGINTYPE_MAX
     };
 
     typedef UiList< AnimTransform > AnimTransformList;

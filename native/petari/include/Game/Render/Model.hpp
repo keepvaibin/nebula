@@ -140,14 +140,11 @@ class ItemBuffer {
 public:
     enum DrawMode {
         DrawMode_Head,
-        DrawMode_Tail,
     };
     enum SortMode {
         SortMode_Mat,
         SortMode_MatAnm,
         SortMode_Z,
-        SortMode_Model,
-        SortMode_Invalid,
         SortMode_Non,
     };
 

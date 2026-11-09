@@ -27,6 +27,7 @@ public:
 /// @brief Megaleg
 class TripodBoss : public LiveActor {
 public:
+    // A leg part number; the range test LEFT_LEG..RIGHT_LEG takes BACK_LEG too.
     enum PART_ID {
         PART_ID_LEFT_LEG,
         PART_ID_BACK_LEG,

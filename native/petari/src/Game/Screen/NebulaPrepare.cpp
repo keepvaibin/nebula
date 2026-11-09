@@ -36,7 +36,7 @@ namespace {
     // The shown progress moves this share of the way to the host's each frame.
     const f32 cFollow = 0.12f;
 
-    enum { PhaseNone = 0, PhaseOpening = 1, PhaseCompiling = 2 };
+    enum { PhaseNone = 0, PhaseCompiling = 2 };
 };  // namespace
 
 class NebulaPrepareScreen : public LayoutActor {

@@ -128,7 +128,6 @@ private:
 class FrameCtrl {
 public:
     enum Attribute {
-        EMode_NULL = -1,
         EMode_NONE,
         EMode_RESET,
         EMode_LOOP,

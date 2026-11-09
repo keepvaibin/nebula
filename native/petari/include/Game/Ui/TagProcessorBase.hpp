@@ -29,7 +29,6 @@ namespace Ui {
             OPERATION_CHAR_SPACE,
             OPERATION_NEXT_LINE,
             OPERATION_END_DRAW,
-            NUM_OF_OPERATION
         };
 
         TagProcessorBase();

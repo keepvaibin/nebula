@@ -48,7 +48,6 @@ enum SceneObj {
     SceneObj_MoviePlayerSimple = 0x2B,
     SceneObj_WarpPodMgr = 0x2C,
     SceneObj_CenterScreenBlur = 0x2D,
-    SceneObj_OdhConverter = 0x2E,
     SceneObj_CometRetryButton = 0x2F,
     SceneObj_AllLiveActorGroup = 0x30,
     SceneObj_CameraDirector = 0x31,

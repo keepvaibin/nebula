@@ -4,6 +4,7 @@
 
 class DeathArea : public AreaObj {
 public:
+    // DeathArea's arg 0 in the stage data: 0 kills anyone, 1 anyone but the player; the code names only 0.
     enum EDeathType { DeathType_Any, DeathType_AnyNoPlayer };
 
     DeathArea(int, const char*);

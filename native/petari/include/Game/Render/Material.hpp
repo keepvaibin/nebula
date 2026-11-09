@@ -31,6 +31,7 @@ struct CoordMatrixInfo {
     Mtx44 mEffectMtx;
 };
 
+// The coordinate matrix mode numbers of the cooked material table.
 enum CoordMatrixMode {
     CoordMatrixMode_None,
     CoordMatrixMode_EnvmapBasic,
@@ -48,7 +49,6 @@ enum CoordMatrixMode {
 
 // A matrix place in a material's coordinate: the identity, or matrix n at NEBULA_COORD_MATRIX0 + n * 3.
 enum : u32 {
-    NEBULA_COORD_MATRIX0 = 0,
     NEBULA_COORD_IDENTITY = NEBULA_NONE32,
 };
 
@@ -326,9 +326,7 @@ private:
     enum {
         Edit_Register1 = 1u << 0,    // and 2, 3
         Edit_MaterialColor0 = 1u << 3,
-        Edit_MaterialColor1 = 1u << 4,
         Edit_Ambient0 = 1u << 5,
-        Edit_Ambient1 = 1u << 6,
         Edit_Fog = 1u << 7,
         Edit_Coord0 = 1u << 8,       // through slot 15
         Edit_Scale0 = 1u << 24,

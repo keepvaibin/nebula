@@ -9,7 +9,7 @@
 #include <nebula_types.h>
 
 namespace Mii {
-    enum { NameLength = 10, CreatorLength = 10, DefaultCount = 6, FavoriteColorCount = 12 };
+    enum { NameLength = 10, DefaultCount = 6, FavoriteColorCount = 12 };
 
     typedef NebulaMii Character;
 
