@@ -217,9 +217,6 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
     return count + hid_controllers(out.subspan(count));
 }
 
-namespace {
-}  // namespace
-
 std::optional<input::DeviceKey> last_input_device() noexcept {
     const std::uint64_t key = g_last_input.load(std::memory_order_relaxed);
     if (key == kLastInputNone) return std::nullopt;

@@ -469,34 +469,44 @@ int main() {
             galaxy::get_runtime_settings().input_mode == galaxy::RuntimeInputMode::Controller,
         "a long comment is one record, not an injected continuation setting");
 
-    const auto before_failed_load = galaxy::get_runtime_input_mode_state();
+    // A file with a NUL byte or a line over 4096 bytes is set aside as "<name>.unreadable" and the start goes on with
+    // defaults: nothing from before the bad line is published, and the player's file stays on disk.
+    std::filesystem::path aside = settings_path;
+    aside += ".unreadable";
+    const auto before_unreadable = galaxy::get_runtime_input_mode_state();
     std::string corrupt = "input_mode=real_wiimote\naudio_master_gain=0.25";
     corrupt.push_back('\0');
     corrupt += "\n";
     write_text(settings_path, corrupt);
-    bool corrupt_rejected = false;
+    bool corrupt_loaded = true;
     try {
         galaxy::load_runtime_settings_from_file();
     } catch (const std::exception&) {
-        corrupt_rejected = true;
+        corrupt_loaded = false;
     }
-    const auto after_failed_load = galaxy::get_runtime_input_mode_state();
+    const auto after_unreadable = galaxy::get_runtime_input_mode_state();
     passed &= expect(
-        corrupt_rejected && after_failed_load.mode == before_failed_load.mode &&
-            after_failed_load.generation == before_failed_load.generation,
-        "invalid file data cannot publish a partially parsed source transition");
+        corrupt_loaded && after_unreadable.mode == galaxy::RuntimeInputMode::Auto &&
+            after_unreadable.generation == before_unreadable.generation + 1u &&
+            galaxy::get_runtime_settings().audio.master == 1.0f,
+        "a settings file with a NUL byte gives the defaults, not a partly parsed source");
+    passed &= expect(
+        !std::filesystem::exists(settings_path) && read_text(aside) == corrupt,
+        "the unreadable file is kept as .unreadable");
 
-    write_text(settings_path, "input_mode=real_wiimote\n" + std::string(4097u, '#'));
-    bool overlong_rejected = false;
+    const std::string overlong = "input_mode=real_wiimote\n" + std::string(4097u, '#');
+    write_text(settings_path, overlong);
+    bool overlong_loaded = true;
     try {
         galaxy::load_runtime_settings_from_file();
     } catch (const std::exception&) {
-        overlong_rejected = true;
+        overlong_loaded = false;
     }
     passed &= expect(
-        overlong_rejected &&
-            galaxy::get_runtime_input_mode_state().generation == before_failed_load.generation,
-        "an overlong logical line rejects the whole file before publication");
+        overlong_loaded && galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::Auto &&
+            galaxy::get_runtime_input_mode_state().generation == after_unreadable.generation &&
+            !std::filesystem::exists(settings_path) && read_text(aside) == overlong,
+        "an overlong line gives the defaults and replaces the older .unreadable file");
 
     write_text(settings_path, "input_mode=real_wiimote\n");
     HANDLE unreadable = CreateFileW(
@@ -513,17 +523,18 @@ int main() {
         (void)CloseHandle(unreadable);
         passed &= expect(
             read_rejected &&
-                galaxy::get_runtime_input_mode_state().generation == before_failed_load.generation,
+                galaxy::get_runtime_input_mode_state().generation == after_unreadable.generation,
             "file access error preserves the prior published settings generation");
     }
 
+    const auto before_invalid = galaxy::get_runtime_input_mode_state();
     galaxy::RuntimeSettings invalid_mode = galaxy::get_runtime_settings();
     invalid_mode.input_mode = static_cast<galaxy::RuntimeInputMode>(99u);
     galaxy::set_runtime_settings(invalid_mode);
     const auto sanitized_mode = galaxy::get_runtime_input_mode_state();
     passed &= expect(
         sanitized_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
-            sanitized_mode.generation == before_failed_load.generation + 1u,
+            sanitized_mode.generation == before_invalid.generation + 1u,
         "invalid direct input mode becomes one coherent keyboard and mouse transition");
     galaxy::set_runtime_settings(invalid_mode);
     passed &= expect(

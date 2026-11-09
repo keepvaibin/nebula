@@ -1,4 +1,3 @@
-#include <string_view>
 // SPDX-License-Identifier: GPL-3.0-only
 // Mods (mods.h, virtual_disc.h, mod_xml.h): the XML reader, the disc's patching and reads, Riivolution mods, files
 // mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
@@ -18,6 +17,8 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -29,26 +30,12 @@ bool expect(bool condition, const char* message) {
     return condition;
 }
 
-void put32(std::vector<std::uint8_t>& b, std::size_t at, std::uint32_t v) {
-    b[at] = static_cast<std::uint8_t>(v >> 24u);
-    b[at + 1] = static_cast<std::uint8_t>(v >> 16u);
-    b[at + 2] = static_cast<std::uint8_t>(v >> 8u);
-    b[at + 3] = static_cast<std::uint8_t>(v);
-}
-
-std::uint32_t get32(const std::uint8_t* p) {
-    return static_cast<std::uint32_t>(p[0]) << 24u | static_cast<std::uint32_t>(p[1]) << 16u |
-           static_cast<std::uint32_t>(p[2]) << 8u | static_cast<std::uint32_t>(p[3]);
-}
-
 void write(const fs::path& path, std::string_view text) {
     fs::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
-// A partition: a file table (/opening.bnr, /StageData/A.arc, /StageData/B.arc), its files, main.dol.
-// Reads a file through a built table: its position and size by path ("/StageData/A.arc").
 bool xml() {
     bool ok = true;
     std::string error;
@@ -76,9 +63,6 @@ bool xml() {
     return ok;
 }
 
-// A partition with these files (path, contents), directories as the paths name them; an empty main.dol after them.
-// Loose files, every name match, disc layouts a folder down, packs without textures/, hidden folders, region
-// options, a sole option as the mod's switch, and text in the language played.
 // Importing: zip and 7z made with libarchive's writer, a top folder lifted, a path that would leave refused, an
 // update in place, a file that is no archive.
 bool importing() {
@@ -184,7 +168,6 @@ bool importing() {
 
 }  // namespace
 
-// A patch by the disc file's offsets into a file the import cooked is refused and reported; the game's file stays.
 // Each kind of game file goes to the category a player would look for it in.
 void test_texture_categories() {
     using galaxy::textures::Category;

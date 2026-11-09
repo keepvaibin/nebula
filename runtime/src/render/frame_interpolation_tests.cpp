@@ -192,19 +192,6 @@ void test_light() {
           "an unsplit light at t=1 is b");
 }
 
-bool same_direction(const std::array<float, 3>& v, const std::array<float, 3>& w, float eps) {
-    const float lv = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    const float lw = std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
-    return lv > 0.0f && lw > 0.0f && (v[0] * w[0] + v[1] * w[1] + v[2] * w[2]) / (lv * lw) > 1.0f - eps;
-}
-
-// Eye-space direction of a world direction under a camera.
-std::array<float, 3> eye_direction(const Affine34& view, const std::array<float, 3>& d) {
-    std::array<float, 3> e{};
-    for (unsigned r = 0; r < 3u; ++r) e[r] = view[r * 4u] * d[0] + view[r * 4u + 1u] * d[1] + view[r * 4u + 2u] * d[2];
-    return e;
-}
-
 void test_occlusion_budget_and_sky_direction() {
     for (unsigned height=1; height<=8192; ++height) {
         const unsigned divisor=ao::occlusion_divisor(height);
