@@ -39,24 +39,12 @@ bool GameDataConst::isGalaxyLuigiArrested(const char* pGalaxyName, s32 starId) {
     return MR::isEqualString(accessor.getGalaxyName(), pGalaxyName) && (starId == -1 || starId == accessor.getStarId());
 }
 
+// The flag named Appear<galaxy>, when it is of the open-star kind.
 bool GameDataConst::isQuestionGalaxy(const char* pGalaxyName) {
-    for (GameEventFlagIter iter = GameEventFlagTable::getBeginIter(); !iter.isEnd(); iter.goNext()) {
-        GameEventFlagAccessor accessor(iter.getFlag());
+    MR::FormattedName flagName("Appear%s", pGalaxyName);
+    const GameEventFlag* pFlag = GameEventFlagTable::findFlag(flagName.c_str());
 
-        if (!accessor.isTypeGalaxyOpenStar()) {
-            continue;
-        }
-
-        MR::FormattedName flagName("Appear%s", pGalaxyName);
-
-        if (!MR::isEqualString(accessor.getName(), flagName.c_str())) {
-            continue;
-        }
-
-        return true;
-    }
-
-    return false;
+    return pFlag != nullptr && GameEventFlagAccessor(pFlag).isTypeGalaxyOpenStar();
 }
 
 bool GameDataConst::isGalaxyAppearGreenDriver(const char* pGalaxyName) {
@@ -78,27 +66,5 @@ u32 GameDataConst::getIncludedGrandGalaxyId(const char* pGalaxyName) {
 }
 
 bool GameDataConst::isPowerStarSpecial(const char* pGalaxyName, s32 starId, const char* pSpecialStarName) {
-    for (GameEventFlagIter iter = GameEventFlagTable::getBeginIter(); !iter.isEnd(); iter.goNext()) {
-        GameEventFlagAccessor accessor(iter.getFlag());
-
-        if (!accessor.isTypeSpecialStar()) {
-            continue;
-        }
-
-        if (accessor.getStarId() != starId) {
-            continue;
-        }
-
-        if (!MR::isEqualString(accessor.getGalaxyName(), pGalaxyName)) {
-            continue;
-        }
-
-        if (strstr(accessor.getName(), pSpecialStarName) == nullptr) {
-            continue;
-        }
-
-        return true;
-    }
-
-    return false;
+    return GameEventFlagTable::findSpecialPowerStar(pGalaxyName, starId, pSpecialStarName) != nullptr;
 }

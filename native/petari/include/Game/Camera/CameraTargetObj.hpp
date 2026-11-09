@@ -83,22 +83,12 @@ public:
         return nullptr;
     }
 
-    virtual void enableCameraWall() {
-    }
-
-    virtual void disableCameraWall() {
-    }
-
-    virtual void setCameraWall(bool enable) {
-    }
-
     virtual Pos3f* getMapBaseMtx() const {
         return nullptr;
     }
 
     virtual void resetStatus() {
     }
-
 };
 
 class CameraTargetActor : public CameraTargetObj {

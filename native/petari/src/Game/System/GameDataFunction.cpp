@@ -74,6 +74,14 @@ namespace GameDataFunction {
         return getCurrentGameDataHolder()->getPowerStarNumOwned(pGalaxyName);
     }
 
+    const char* findStarGalaxyName(const char* pGalaxyName) {
+        const ScenarioData* pData = ScenarioDataFunction::getScenarioDataParser()->getScenarioData(pGalaxyName);
+        if (pData == nullptr || getCurrentGameDataHolder()->mAllGalaxyStorage->findIndex(pData->mGalaxyName) < 0) {
+            return nullptr;
+        }
+        return pData->mGalaxyName;
+    }
+
     s32 getPowerStarNumMax() {
         s32 powerStarNumMax = 0;
 

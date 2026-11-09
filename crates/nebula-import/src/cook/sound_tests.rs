@@ -69,6 +69,47 @@ fn a_program_decodes_with_its_targets_as_operations() {
     assert_eq!(word(2), 9); // operations
     assert_eq!(word(6), 2); // tracks: the root and its child
     assert_eq!(word(7), 4); // note slots: slot 3
+    assert_eq!(word(8), 1); // stack: one call
+    assert_eq!(word(9), 0); // envelope points: none set
+}
+
+#[test]
+fn the_envelope_bound_counts_through_the_ending_mode() {
+    #[rustfmt::skip]
+    let b = [
+        0xE8, 0x00, 0x00, 0x00, 0x06, // 0x00: envelope of oscillator 0 at 0x06
+        0xFF,                         // 0x05: finish
+        0x00, 0x00, 0x00, 0x10, 0x7F, 0xFF, // 0x06: mode 0
+        0x00, 0x01, 0x00, 0x10, 0x00, 0x00, // 0x0C: mode 1
+        0x00, 0x0F, 0x00, 0x00, 0x00, 0x00, // 0x12: mode 0xF ends it
+    ];
+    let file = program_file(&b, &[vec![0]]).unwrap();
+    assert_eq!(word(&file, 9), 3);
+    // No ending mode before the program's end.
+    let b = [0xE8, 0x00, 0x00, 0x00, 0x06, 0xFF, 0x00, 0x00, 0x00, 0x10, 0x7F, 0xFF];
+    assert!(program_file(&b, &[vec![0]]).is_err());
+}
+
+#[test]
+fn the_stack_bound_counts_nested_calls_and_loops() {
+    #[rustfmt::skip]
+    let b = [
+        0xCB, 0x00, 0x02,             // 0x00: loop 2
+        0xC3, 0x00, 0x00, 0x09,       // 0x03: call 0x09
+        0xCC,                         // 0x07: loop end
+        0xFF,                         // 0x08: finish
+        0xCB, 0x00, 0x03,             // 0x09: loop 3
+        0xC3, 0x00, 0x00, 0x12,       // 0x0C: call 0x12
+        0xCC,                         // 0x10: loop end
+        0xC5,                         // 0x11: return
+        0xC5,                         // 0x12: return
+    ];
+    let file = program_file(&b, &[vec![0]]).unwrap();
+    // loop, call, loop, call.
+    assert_eq!(word(&file, 8), 4);
+    // A call to itself nests without end.
+    let b = [0xC3, 0x00, 0x00, 0x00, 0xFF];
+    assert!(program_file(&b, &[vec![0]]).is_err());
 }
 
 #[test]
@@ -118,12 +159,12 @@ fn the_disc_cooks() {
         let effects = word(&file, 9) as usize;
         let seq = &file[effects..effects + word(&file, 10) as usize];
         println!(
-            "{path}: {} bytes, sections {} groups {} items {}, banks {} wave banks {}, effects: {} groups {} entries {} ops, tracks {} slots {}",
+            "{path}: {} bytes, sections {} groups {} items {}, banks {} wave banks {}, effects: {} groups {} entries {} ops, tracks {} slots {} stack {} envelope {}",
             file.len(), word(&file, 2), word(&file, 3), word(&file, 4), word(&file, 6), word(&file, 7),
-            word(seq, 4), word(seq, 5), word(seq, 2), word(seq, 6), word(seq, 7)
+            word(seq, 4), word(seq, 5), word(seq, 2), word(seq, 6), word(seq, 7), word(seq, 8), word(seq, 9)
         );
     }
-    let (mut count, mut ops, mut tracks, mut slots) = (0, 0, 0, 0);
+    let (mut count, mut ops, mut tracks, mut slots, mut stack, mut envelope) = (0, 0, 0, 0, 0, 0);
     for member in archive::members(&read(&format!("{files}/AudioRes/Seqs/JaiSeq.arc"))).unwrap() {
         let name = format!("AudioRes/Seqs/JaiSeq.arc/{}", member.path.rsplit('/').next().unwrap());
         assert!(is_sequence_path(&name));
@@ -132,16 +173,19 @@ fn the_disc_cooks() {
         ops += word(&file, 2);
         tracks = tracks.max(word(&file, 6));
         slots = slots.max(word(&file, 7));
+        stack = stack.max(word(&file, 8));
+        envelope = envelope.max(word(&file, 9));
     }
-    println!("sequences {count}: {ops} ops, tracks at most {tracks}, slots at most {slots}");
+    println!("sequences {count}: {ops} ops, tracks at most {tracks}, slots at most {slots}, stack at most {stack}, envelope at most {envelope}");
     for member in archive::members(&read(&format!("{files}/AudioRes/Info/JaiMe.arc"))).unwrap() {
         if !member.path.to_ascii_lowercase().ends_with(".bme") {
             continue;
         }
         let file = me_program(&member.bytes).unwrap_or_else(|e| panic!("{}: {e:#}", member.path));
         let entries = word(&file, 2) as usize;
-        let most = (0..entries).map(|i| word(&file, 5 + 2 * i)).max().unwrap_or(0);
-        println!("{}: {entries} entries, {} bytes, tracks at most {most}", member.path, word(&file, 3));
+        let most = (0..entries).map(|i| word(&file, 5 + 3 * i)).max().unwrap_or(0);
+        let stack = (0..entries).map(|i| word(&file, 6 + 3 * i)).max().unwrap_or(0);
+        println!("{}: {entries} entries, {} bytes, tracks at most {most}, stack at most {stack}", member.path, word(&file, 3));
     }
 }
 
@@ -171,4 +215,28 @@ fn a_me_bound_counts_children_once_each() {
     assert_eq!(word(2), 1);
     assert_eq!(word(4), 8); // start
     assert_eq!(word(5), 4); // itself, child 0 (A and its child), child 1
+    assert_eq!(word(6), 0); // stack: no call or loop
+}
+
+#[test]
+fn a_me_stack_bound_counts_calls_loops_and_children() {
+    // Entry (8): loop 2, call C, loop end, open 0 at D, end. C (0x16): return. D (0x17): call C, end.
+    #[rustfmt::skip]
+    let bytes = [
+        0, 0, 0, 1, 0, 0, 0, 8,       // one entry, at 8
+        0x33, 0x00, 0x02,             // 0x08: loop 2
+        0x31, 0x00, 0x00, 0x16,       // 0x0B: call C
+        0x34,                         // 0x0F: loop end
+        0x10, 0x00, 0x00, 0x00, 0x17, // 0x10: open 0 at D
+        0x24,                         // 0x15: end
+        0x32,                         // 0x16: C: return
+        0x31, 0x00, 0x00, 0x16,       // 0x17: D: call C
+        0x24,                         // 0x1B: end
+    ];
+    let file = me_program(&bytes).unwrap();
+    let word = |i: usize| u32::from_le_bytes(file[4 * i..4 * i + 4].try_into().unwrap());
+    assert_eq!(word(6), 2); // the entry's loop and call; D's one call
+    // A call to itself nests without end.
+    let bytes = [0, 0, 0, 1, 0, 0, 0, 8, 0x31, 0x00, 0x00, 0x08, 0x24];
+    assert!(me_program(&bytes).is_err());
 }

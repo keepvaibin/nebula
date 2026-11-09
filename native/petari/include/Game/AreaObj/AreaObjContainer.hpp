@@ -2,6 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 #include <nebula_geometry.hpp>
 
 class AreaObj;
@@ -28,6 +29,8 @@ public:
 
 private:
     MR::Vector< MR::AssignableArray< AreaObjMgr* > > mManagers;
+    MR::NameIndex mIndex;  // manager name -> index in mManagers
+    bool mHashesShared;    // two manager names share a hash: lookups scan
 };
 
 namespace MR {

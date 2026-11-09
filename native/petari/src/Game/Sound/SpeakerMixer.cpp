@@ -56,17 +56,32 @@ f32 SpeakerEnvelope::calc(bool& rKill) {
     return mReleaseVolume * mReleaseVolume * mFadeOutVolume * mFadeVolume * mBaseVolume;
 }
 
+// The blocks, then the sound lists, then the connections (zeroed memory: nothing connected, no sounds).
+u32 SpeakerMixer::bytes(u32 pads) {
+    return pads * (sizeof(s16) * cBlockSamples + sizeof(SpeakerVoice*) + sizeof(bool));
+}
+
+void SpeakerMixer::setup(void* pMemory, u32 pads) {
+    u8* cursor = static_cast< u8* >(pMemory);
+    mSamples = reinterpret_cast< s16(*)[cBlockSamples] >(cursor);
+    cursor += pads * sizeof(s16) * cBlockSamples;
+    mFirst = reinterpret_cast< SpeakerVoice** >(cursor);
+    cursor += pads * sizeof(SpeakerVoice*);
+    mConnected = reinterpret_cast< bool* >(cursor);
+    mPads = pads;
+}
+
 void SpeakerMixer::apply(const SoundCommand& rCommand) {
     SpeakerVoice* const voice = static_cast< SpeakerVoice* >(rCommand.mTarget);
     const u32 pad = rCommand.mArg;
     switch (rCommand.mKind) {
     case SOUND_SPEAKER_PAD:
-        if (pad < cPads) {
+        if (pad < mPads) {
             mConnected[pad] = rCommand.mValue != 0;
         }
         break;
     case SOUND_SPEAKER_START: {
-        if (pad >= cPads) {
+        if (pad >= mPads) {
             break;
         }
         const SpeakerStartCommand& rStart = rCommand.payload< SpeakerStartCommand >();
@@ -97,7 +112,7 @@ void SpeakerMixer::apply(const SoundCommand& rCommand) {
         }
         break;
     case SOUND_SPEAKER_RELEASE:
-        for (u32 i = 0; i < cPads; i++) {
+        for (u32 i = 0; i < mPads; i++) {
             unlist(voice, i);
         }
         voice->mReleased = true;
@@ -118,7 +133,7 @@ void SpeakerMixer::job(void* pSelf) {
 
 // A controller's block goes out when it has a sound, even one not yet heard.
 void SpeakerMixer::block() {
-    for (u32 pad = 0; pad < cPads; pad++) {
+    for (u32 pad = 0; pad < mPads; pad++) {
         if (!mConnected[pad]) {
             continue;
         }

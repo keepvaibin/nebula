@@ -170,8 +170,8 @@ public:
 
     template < typename T >
     bool getValue(const char* pKey, T* pValueOut) const {
-        // An object made with no placement behind it (a mod's spawn): its numbers are simply not there.
-        if (mInfo == nullptr) {
+        // An object made with no placement behind it (a mod's spawn), or a row a find did not find (end()): no value.
+        if (!isValid()) {
             return false;
         }
         return mInfo->getValue(mIndex, pKey, pValueOut);
@@ -181,13 +181,19 @@ public:
     s32 mIndex;
 };
 
+// The column is looked up once; a table without it has no such element.
 template < typename T >
 TableIter Table::findElement(const char* pKey, T searchValue, int startIndex) const {
+    const s32 itemIndex = searchItemInfo(pKey);
+    if (itemIndex < 0) {
+        return end();
+    }
+
     int entryIndex = startIndex;
     T value;
 
     while (entryIndex < getNumEntries()) {
-        getValue< T >(entryIndex, pKey, &value);
+        getValueFast(entryIndex, itemIndex, &value);
         if (compareValues< T >(value, searchValue)) {
             return TableIter(this, entryIndex);
         }
@@ -205,7 +211,3 @@ TableIter Table::begin() const {
 TableIter Table::end() const {
     return TableIter(this, getNumEntries());
 }
-
-namespace MR {
-    TableIter findTableElementNoCase(const Table* pInfo, const char* pKey, const char* pValue, int startIndex);
-};  // namespace MR

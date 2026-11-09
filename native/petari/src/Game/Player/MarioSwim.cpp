@@ -2194,9 +2194,6 @@ void MarioSwim::jet() {
             }
         }
 
-        f32 speedScale = 1.0f;
-        targetSpeed *= speedScale;
-
         if (mJetTimer == 1) {
             if (checkLvlZ()) {
                 MR::emitEffect(mActor->getCarrySensor()->mHost, "BrakeLamp");

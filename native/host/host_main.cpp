@@ -2549,12 +2549,25 @@ galaxy::input::PlayerInput controls_input() {
 }
 #endif
 
+// The players svc_input_read serves: player 1's live controls, and with the renderer player 2 (co-star mode).
+enum HostPlayer : uint32_t {
+    kHostPlayerMain,
+#if defined(NEBULA_HOST_RENDERER)
+    kHostPlayerCoStar,
+#endif
+    kHostPlayers
+};
+
+uint32_t svc_input_players(void*) {
+    return kHostPlayers;
+}
+
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
         // Player 2, when someone plays it (co-star mode): the pointer and its buttons, no move stick.
-        if (player == 1) {
+        if (player == kHostPlayerCoStar) {
             galaxy::input::PlayerInput co_star{};
             if (galaxy::host::native_game_co_star(&co_star)) {
                 device->connected = 1;
@@ -2567,7 +2580,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
             return 0;
         }
 #endif
-        if (player == 0) {
+        if (player == kHostPlayerMain) {
             device->connected = 1;
 #if defined(NEBULA_HOST_RENDERER)
             device->connected = gInputConnected.load(std::memory_order_relaxed);
@@ -3686,6 +3699,7 @@ int main(int argc, char** argv) {
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;
     services.speaker_samples = svc_speaker_samples;
+    services.input_players = svc_input_players;
     services.voices_setup = svc_audio_setup;
     services.voices_mix = svc_audio_mix;
     services.voices_frame = svc_audio_frame;

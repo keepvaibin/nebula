@@ -346,8 +346,6 @@ void OceanRing::initPoints() {
 
         f32 railCoord = MR::getRailCoord(this);
         f32 widthRate = calcCurrentWidthRate(railCoord);
-        railCoord = MR::getRailCoord(this);
-        f32 flowSpeedRate = calcCurrentFlowSpeedRate(railCoord);
 
         for (s32 j = -cCenterPoint; j <= cCenterPoint; j++) {
             Vec3f pos(side);
@@ -360,7 +358,7 @@ void OceanRing::initPoints() {
                 ease = MR::getEaseOutValue(edgeRate, 0.0f, 1.0f, 1.0f);
             }
 
-            mWaterPoints[index] = new WaterPoint(pos, up, ((j + cCenterPoint) * cPointSpacing), (seg * segLength), ease, flowSpeedRate);
+            mWaterPoints[index] = new WaterPoint(pos, up, ((j + cCenterPoint) * cPointSpacing), (seg * segLength), ease);
             index++;
         }
 

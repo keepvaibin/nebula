@@ -172,33 +172,20 @@ bool Mario::checkWallFloorCode(u16 code) const {
     return false;
 }
 
-bool Mario::checkWallCode(const char* pCode, bool frontBackOnly) const {
-    if (mMovementStates.backWall) {
-        const char* wallCode = MR::getWallCodeString(mBackWallTriangle);
-        if (wallCode && strcmp(wallCode, pCode) == 0) {
-            return true;
-        }
+bool Mario::checkWallCode(u16 code, bool frontBackOnly) const {
+    if (mMovementStates.backWall && MR::getWallCodeIndex(mBackWallTriangle) == code) {
+        return true;
     }
 
-    if (mMovementStates.frontWall || mMovementStates.frontWallGlancing) {
-        const char* wallCode = MR::getWallCodeString(mFrontWallTriangle);
-        if (wallCode && strcmp(wallCode, pCode) == 0) {
-            return true;
-        }
+    if ((mMovementStates.frontWall || mMovementStates.frontWallGlancing) && MR::getWallCodeIndex(mFrontWallTriangle) == code) {
+        return true;
     }
 
     if (frontBackOnly) {
         return false;
     }
 
-    if (mMovementStates.sideWall) {
-        const char* wallCode = MR::getWallCodeString(mSideWallTriangle);
-        if (wallCode && strcmp(wallCode, pCode) == 0) {
-            return true;
-        }
-    }
-
-    return false;
+    return mMovementStates.sideWall && MR::getWallCodeIndex(mSideWallTriangle) == code;
 }
 
 bool Mario::checkWallCodeNorm(u16 code, Vec3f* pNormal, bool frontBackOnly) const {
@@ -340,7 +327,7 @@ bool Mario::isEnableStickWall() {
         return false;
     }
 
-    if (checkWallCode("NoAction", true)) {
+    if (checkWallCode(CollisionWallCode_NoAction, true)) {
         return false;
     }
 
@@ -707,11 +694,11 @@ bool Mario::isInhibitWall() const {
         return true;
     }
 
-    if (checkWallCode("NotWallJump", true)) {
+    if (checkWallCode(CollisionWallCode_NotWallJump, true)) {
         return true;
     }
 
-    return checkWallCode("NoAction", true);
+    return checkWallCode(CollisionWallCode_NoAction, true);
 }
 
 void Mario::tryWallPunch() {

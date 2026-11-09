@@ -23,9 +23,6 @@ void WaterPressure::initBullet(const TableIter& rIter) {
 
 bool WaterPressure::shotBullet(f32 speed) {
     WaterPressureBullet* pBullet = MR::getSceneObj< WaterPressureBulletHolder >(SceneObj_WaterPressureBulletHolder)->callEmptyBullet();
-    if (pBullet == nullptr) {
-        return false;
-    }
     Pos3f point;
     calcGunPointFromCannon(&point);
     pBullet->shotWaterBullet(this, point, speed, !isShotTypeOnGravity(), false, mIsInvalidSpinKill, &mCameraInfo);

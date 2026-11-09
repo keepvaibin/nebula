@@ -248,6 +248,10 @@ namespace MR {
         return ::nebula_stricmp(pStr1, pStr2);
     }
 
+    int compareString(const char* pStr1, const char* pStr2) {
+        return strcmp(pStr1, pStr2);
+    }
+
     bool isEqualString(const char* pStr1, const char* pStr2) {
         if (pStr1 == nullptr || pStr2 == nullptr) {
             return pStr1 == pStr2;
@@ -275,6 +279,15 @@ namespace MR {
 
     bool isEqualSubString(const char* pStr, const char* pSubStr) {
         return strstr(pStr, pSubStr) != nullptr;
+    }
+
+    bool isHeadString(const char* pStr, const char* pHead) {
+        for (; *pHead != '\0'; pStr++, pHead++) {
+            if (*pStr != *pHead) {
+                return false;
+            }
+        }
+        return true;
     }
 
     bool hasStringSpace(const char* pStr) {

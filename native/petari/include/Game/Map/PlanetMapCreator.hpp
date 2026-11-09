@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Map/PlanetMap.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 
 struct PlanetMapData {
@@ -38,6 +39,7 @@ public:
 
     PlanetMapData** mPlanetMapData;
     s32 mTableCount;
+    MR::NameIndex mIndex;  // planet name -> its first row
 };
 
 class PlanetMapFarClippable : public PlanetMap {

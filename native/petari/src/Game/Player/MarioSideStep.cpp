@@ -42,10 +42,10 @@ bool Mario::doSideStep() {
     if (getCurrentStatus() == MarioStatus_SideStep) {
         return false;
     }
-    if (checkWallCode("NotSideStep", false)) {
+    if (checkWallCode(CollisionWallCode_NotSideStep, false)) {
         return false;
     }
-    if (checkWallCode("NoAction", false)) {
+    if (checkWallCode(CollisionWallCode_NoAction, false)) {
         return false;
     }
     if (mActor->mTakeCount) {

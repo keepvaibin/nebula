@@ -242,8 +242,12 @@ bool GalaxyCometTimeTable::findSuitableTimePaperPos(s32* pResultPos, s32 startPo
         }
 
         s32 category = mTimePaper[timePaperPos].mCategory;
-        const char* galaxyName = mTimePaper[timePaperPos].mGalaxyName;
+        // A mod's schedule may name a galaxy the save keeps no stars for: it never appears.
+        const char* galaxyName = GameDataFunction::findStarGalaxyName(mTimePaper[timePaperPos].mGalaxyName);
         bool canAppear;
+        if (galaxyName == nullptr) {
+            category = -1;
+        }
         switch (category) {
         case GalaxyCometCategory_Normal:
             canAppear = MR::canAppearNormalComet(galaxyName);

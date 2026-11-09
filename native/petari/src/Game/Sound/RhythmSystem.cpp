@@ -248,6 +248,8 @@ s32 RhythmSeqParser::nextNoteOff(SeqTrack* pTrack, u32 slot, u32 next) {
     scan.mData = pTrack->seqData();
     scan.mBytes = pTrack->seqBytes();
     scan.mCursor = next;
+    scan.mCallStack = pTrack->scanStack();
+    scan.mCallRoom = pTrack->stackRoom();
     u32 noteOff = 0;
     for (u32 i = 0; i < cLookAheadSteps; i++) {
         const u8 data = scan.read8();
@@ -343,8 +345,8 @@ u32 RhythmSeqParser::passCommand(SeqTrack* pTrack, Scan& rScan, u8 code, u16 wid
             }
         }
         return 0;
-    case 0xC3:  // call
-        if (rScan.mCallDepth < 8) {
+    case 0xC3:  // call: the cook's stack bound covers the look ahead's calls too
+        if (rScan.mCallDepth < rScan.mCallRoom) {
             rScan.mCallStack[rScan.mCallDepth++] = rScan.mCursor;
             rScan.mCursor = args[0];
         }

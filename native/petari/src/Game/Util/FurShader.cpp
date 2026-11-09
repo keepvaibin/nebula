@@ -4,6 +4,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_cooked_texture.h>
+#include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
 namespace {
@@ -77,7 +78,7 @@ SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG*
     const f32* pPlaces = reinterpret_cast< const f32* >(pData->at(rMesh.positions_at));
     const f32* pAttributes = reinterpret_cast< const f32* >(pData->at(rMesh.attributes_at));
     const u8* pIndices = reinterpret_cast< const u8* >(pData->at(rMesh.indices_at));
-    const bool grows = (rMesh.attributes & NEBULA_MESH_NORMAL) != 0 && (rMesh.attributes & NEBULA_MESH_COORD0) != 0;
+    const bool grows = (rMesh.attributes & NEBULA_MESH_NORMAL) != 0 && nebula_mesh_has_coord(&rMesh, 0) != 0;
     const bool hasColor = (rMesh.attributes & NEBULA_MESH_COLOR0) != 0;
     const u32* pMatrices = rMesh.single_matrix == NEBULA_MODEL_NONE ? reinterpret_cast< const u32* >(pData->at(rMesh.matrices_at)) : nullptr;
 
@@ -96,7 +97,7 @@ SiteMesh< VertexFur >* createFurMesh(ModelData* pData, u32 shape, const ResTIMG*
             continue;
         }
         const Mesh* pOther = pData->getMeshAt(other);
-        if (strstr(pData->getMaterialName(pOther->mMaterial->mIndex), "Fur") != nullptr) {
+        if (MR::isEqualSubString(pData->getMaterialName(pOther->mMaterial->mIndex), "Fur")) {
             continue;
         }
         const NebulaModelMesh& rOther = *pOther->mFile;

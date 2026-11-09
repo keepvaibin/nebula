@@ -1,6 +1,6 @@
 #include "Game/Player/MarioConst.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstddef>
-#include <cstring>
 
 static MarioConstTable gMarioConstDefault = {
     /* mJumpHeight */ {22.0f, 26.0f, 36.0f, 24.0f, 32.0f, 15.0f, 32.0f, 22.0f, 1.0f},
@@ -1006,7 +1006,7 @@ namespace {
 
     const ConstField* findConstField(const char* pName) {
         for (const ConstField& rField : cConstFields) {
-            if (strcmp(rField.mName, pName) == 0) {
+            if (MR::isEqualString(rField.mName, pName)) {
                 return &rField;
             }
         }

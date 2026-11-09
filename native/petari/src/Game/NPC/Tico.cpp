@@ -130,6 +130,9 @@ void Tico::initMessage(const char* pMessageId) {
 void Tico::init(const TableIter& rIter) {
     s32 color = 0;
     MR::getPlacementArg0NoInit(rIter, &color);
+    if (color < 0 || color >= ARRAY_SIZE(::hPointLight)) {
+        color = 0;
+    }
     s32 behavior = 0;
     s32 clr = color;
     MR::getPlacementArg1NoInit(rIter, &behavior);

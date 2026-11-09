@@ -50,6 +50,7 @@ void EffectSystem::forceDeleteEmitter(ParticleEmitter* pEmitter) const {
 
         mEmitterManager->forceDeleteEmitter(pEmitter->mEmitter);
         pEmitter->invalidate();
+        pEmitter->mHolder->released(pEmitter);
     }
 }
 
@@ -61,6 +62,7 @@ void EffectSystem::forceDeleteSingleEmitter(SingleEmitter* pSingleEmitter) const
 
         mEmitterManager->forceDeleteEmitter(pEmitter->mEmitter);
         pEmitter->invalidate();
+        pEmitter->mHolder->released(pEmitter);
     }
 }
 

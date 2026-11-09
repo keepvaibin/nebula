@@ -6,8 +6,13 @@ enum {
     PLAYER_1 = 0,
     PLAYER_2 = 1,
     PLAYER_3 = 2,
-    PLAYER_MAX = 4,
 };
+
+// The controllers the game reads, 0 to count() - 1: the host's players, never fewer than the game's own two (PlayerInputs'
+// pads); the rest are let go in play. Fixed for the session.
+namespace NebulaInputPlayers {
+    u32 count();
+}  // namespace NebulaInputPlayers
 
 // A player's two hands: motion in each; the sub hand has the move stick.
 enum {

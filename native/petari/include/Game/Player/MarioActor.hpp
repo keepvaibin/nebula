@@ -65,12 +65,6 @@ enum PlayerMode {
     PlayerMode_Tornado = 9,  // no mode is 8
 };
 
-template < int SIZE, class T, class U >
-class AudGenericAudible;
-class SoundDopplerChannel;
-class SoundDopplerAbsPos;
-typedef AudGenericAudible< 4, SoundDopplerChannel, SoundDopplerAbsPos > AudGeneric;
-
 extern bool gIsLuigi;  // set by MarioActor::init2 from MR::isPlayerLuigi
 
 class MarioActor : public LiveActor {
@@ -180,7 +174,6 @@ public:
     void initEffect();
     void initMaterialEffect();
     void initCommonEffect();
-    void addSoundObjHolder();
 
     void initMember();
 
@@ -233,7 +226,6 @@ public:
     bool checkEffectWaterColumn();
 
     void bodyClap();
-    bool selectWaterInOut(const char*) const;
     void playEffectRT(const char*, const Vec3f&, const Vec3f&);
     void playEffectRTZ(const char*, const Vec3f&, const Vec3f&);
     void playEffectRTW(const char*, const Vec3f&, const Vec3f&);
@@ -540,11 +532,6 @@ public:
         return mMario->mPrevDrawStates;
     }
 
-    // Only used in isSleeping() to make it match
-    inline bool IsMarioAnimationRun(const char* pAnimName) const {
-        return mMario->isAnimationRun(pAnimName);
-    }
-
     inline bool IsMarioSwimming() const {
         return mMario->isSwimming();
     }
@@ -554,7 +541,7 @@ public:
     }
 
     inline const bool isBeeMarioOnFur() const {
-        return mMario->getMovementStates().onGround && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0;
+        return mMario->getMovementStates().onGround && MR::getWallCodeIndex(mMario->getGroundPolygon()) == CollisionWallCode_Fur && mBeeWallWalk == 0;
     }
 
     inline const bool isHidden() const {
@@ -669,7 +656,6 @@ public:
     bool mRemoteDemo;  // a remote demo drives him (pad reads stop; readyRemoteDemo)
     Vec3f mRushEndFront;  // the front a rush ends facing
     u16 mRushEndFrontMode;  // 0 keep the base's, 1 keep the up, more: the turn's frames
-    u16 mModelSet;  // a bit per model made (initDrawAndModel and the form inits)
     u16 mPlayerMode;
     u16 mPrevPlayerMode;  // the form before the morph (setPlayerMode)
     u16 mMorphTimer;  // frames left of the morph flash

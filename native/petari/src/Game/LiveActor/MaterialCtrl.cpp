@@ -71,7 +71,7 @@ ViewProjmapEffectMtxSetter::ViewProjmapEffectMtxSetter(Model* pModel) : Material
     const auto each = [&](auto visit) {
         for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
             Material* material = pModelData->getMaterialAt(i);
-            for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
+            for (u32 j = 0; j < material->getSlotCount(); j++) {
                 CoordMatrix* matrix = material->getCoordMatrix(j);
                 if (matrix && matrix->getMode() == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
                     visit(i, j);
@@ -107,7 +107,7 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(Model* pModel, const ResourceHold
     mEffectMtx.identity();
     for (u32 i = 0; i < modelData->getMaterialCount(); i++) {
         Material* material = modelData->getMaterialAt(i);
-        for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
+        for (u32 j = 0; j < material->getSlotCount(); j++) {
             CoordMatrix* texMtx = material->getCoordMatrix(j);
             if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
                 mNumUpdatingMtx++;
@@ -119,7 +119,7 @@ ProjmapEffectMtxSetter::ProjmapEffectMtxSetter(Model* pModel, const ResourceHold
     s32 matrixCount = 0;
     for (u32 i = 0; i < modelData->getMaterialCount(); i++) {
         Material* material = modelData->getMaterialAt(i);
-        for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
+        for (u32 j = 0; j < material->getSlotCount(); j++) {
             CoordMatrix* texMtx = material->getCoordMatrix(j);
             if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(material, j)) {
                 mUpdatingMtxInfo[matrixCount].mTexMtx = pModel->ownMaterial(i)->getCoordMatrix(j);
@@ -175,7 +175,7 @@ void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexNo(Model* pModel, u32 te
 }
 
 void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexCoord(Material* pMaterial) {
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
+    for (u32 i = 0; i < pMaterial->getSlotCount(); i++) {
         CoordMatrix* texMtx = pMaterial->getCoordMatrix(i);
         if (texMtx && texMtx->getMode() == CoordMatrixMode_Projmap && MR::isUseTexMtx(pMaterial, i)) {
             addUpdatingTexMtx(texMtx);
@@ -227,17 +227,14 @@ void MarioShadowProjmapMtxSetter::update() {
 }
 
 TexMtxCtrl::TexMtxCtrl(Model* pModel, const char* pMaterialName) : MaterialCtrl(pModel, pMaterialName) {
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
-        mMatricies[i] = nullptr;
-    }
 }
 
 void TexMtxCtrl::setTexMtx(u32 index, CoordMatrix* pTexMtx) {
-    mMatricies[index] = pTexMtx;
+    mMatricies.at(static_cast< s32 >(index)) = pTexMtx;
 }
 
 void TexMtxCtrl::updateMaterial(Material* pMaterial) {
-    for (u32 i = 0; i < NEBULA_MATERIAL_SLOTS; i++) {
+    for (s32 i = 0; i < mMatricies.size(); i++) {
         if (mMatricies[i]) {
             pMaterial->setCoordMatrix(i, *mMatricies[i]);
         }

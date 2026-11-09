@@ -12,11 +12,10 @@ void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s3
 
     s32 cameraTypeCounts[cDrawCameraTypeNum] = {};
 
-    for (const DrawBufferInitialTable* pEntry = pInitialTable; pEntry->mDrawBufferType != static_cast< u32 >(-1); pEntry++) {
+    for (const DrawBufferInitialTable* pEntry = pInitialTable; pEntry != pInitialTable + numGroups; pEntry++) {
         const u32 drawType = pEntry->mDrawBufferType;
         cameraTypeCounts[pEntry->mDrawCameraType]++;
 
-        mBufferGroups[drawType].init(pEntry->mCapacity);
         mBufferGroups[drawType].setDrawCameraType(pEntry->mDrawCameraType);
         mBufferGroups[drawType].setLightType(pEntry->mLightType);
     }

@@ -22,7 +22,7 @@ bool MarioActor::isEnableSpinPunch() {
     }
 
     if (mMario->getCurrentStatus() == MarioStatus_Flip) {
-        return mMario->mFlip->mStep >= 2;  // FIXME
+        return mMario->mFlip->mStep >= 2;
     }
 
     if (mMario->getCurrentStatus() == MarioStatus_Stun) {

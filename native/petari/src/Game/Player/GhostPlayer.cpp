@@ -76,6 +76,12 @@ namespace {
                                              {"氷上力行左", nullptr, "SE_BV_GHOST_MARIO_JUMP_S"},
                                              {"ショートジャンプ", "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"}};
 
+    // Animations whose frame control stays as the file gives it; a frame naming its animation tests the first four.
+    const char* const cGhostSpecialAnims[] = {"基本", "壁押し", "しゃがみ歩き", "がんばり走り", "スケートアクセルジャンプ", "スケートジャンプ2", "スケートジャンプ3"};
+    const u32 cGhostNamedSpecialAnims = 4;
+    // The one that takes the recorded track weights.
+    const char* const cGhostWeightedAnim = cGhostSpecialAnims[0];
+
     static const AnimSoundInfo* getAnimSoundInfo(const char* pAnimName) {
         for (u32 i = 0; i < ARRAY_SIZE(sAnimSoundTable); i++) {
             if (MR::isEqualString(pAnimName, sAnimSoundTable[i].pAnimName)) {
@@ -234,7 +240,7 @@ void GhostPlayer::control() {
         return;
     }
 
-    if (strcmp("powerstarget", MR::getPlayerCurrentBckName()) == 0 && isNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun))) {
+    if (MR::isEqualString("powerstarget", MR::getPlayerCurrentBckName()) && isNerve(GET_NERVE(GhostPlayer, HostTypeNrvRun))) {
         setNerve(GET_NERVE(GhostPlayer, HostTypeNrvLostDemo));
         mKilledByStar = true;
     } else if (mFrame != nullptr) {
@@ -527,7 +533,7 @@ void GhostPlayer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (pReceiver->isType(ATYPE_POWER_STAR_BIND)) {
         HitSensor* currentRushSensor = MR::getCurrentRushSensor();
         if ((currentRushSensor == nullptr || !currentRushSensor->isType(ATYPE_POWER_STAR_BIND)) && (!MR::isPlayerConfrontDeath() && !mKilledByStar)) {
-            if (strcmp("powerstarget", MR::getPlayerCurrentBckName()) != 0) {
+            if (!MR::isEqualString("powerstarget", MR::getPlayerCurrentBckName())) {
                 setNerve(GET_NERVE(GhostPlayer, HostTypeNrvWinDemo));
                 mKilledByStar = true;
                 MR::preventPlayerRush();
@@ -668,17 +674,10 @@ u32 GhostPlayer::receiveGhostFrame() {
         setAnimation(animName);
         ::playSound(this, animName);
 
-        bool isSpecialAnim = false;
-        if (strcmp(animName, "基本") == 0) {
-            isSpecialAnim = true;
+        if (MR::isEqualString(animName, cGhostWeightedAnim)) {
             setAnimationWeight(mAnimTrackWeights);
-        } else if (strcmp(animName, "壁押し") == 0) {
-            isSpecialAnim = true;
-        } else if (strcmp(animName, "しゃがみ歩き") == 0) {
-            isSpecialAnim = true;
-        } else if (strcmp(animName, "がんばり走り") == 0) {
-            isSpecialAnim = true;
         }
+        const bool isSpecialAnim = MR::isExistString(animName, cGhostSpecialAnims, cGhostNamedSpecialAnims);
 
         if (!isSpecialAnim) {
             mXanimePlayer->mFrameCtrl->mAttribute = 1;
@@ -688,44 +687,25 @@ u32 GhostPlayer::receiveGhostFrame() {
     if ((updateFlags & 0x2000) != 0) {
         mXanimePlayer->changeAnimationByHash(rFrame.mHash);
 
-        bool isSpecialAnim = false;
         const char* currentAnimName = mXanimePlayer->getCurrentAnimationName();
         ::playSound(this, currentAnimName);
 
-        if (strcmp(currentAnimName, "基本") == 0) {
-            isSpecialAnim = true;
+        if (MR::isEqualString(currentAnimName, cGhostWeightedAnim)) {
             setAnimationWeight(mAnimTrackWeights);
         }
-        if (strcmp(currentAnimName, "壁押し") == 0) {
-            isSpecialAnim = true;
-        }
-        if (strcmp(currentAnimName, "しゃがみ歩き") == 0) {
-            isSpecialAnim = true;
-        }
-        if (strcmp(currentAnimName, "がんばり走り") == 0) {
-            isSpecialAnim = true;
-        }
-        if (strcmp(currentAnimName, "スケートアクセルジャンプ") == 0) {
-            isSpecialAnim = true;
-        }
-        if (strcmp(currentAnimName, "スケートジャンプ2") == 0) {
-            isSpecialAnim = true;
-        }
-        if (strcmp(currentAnimName, "スケートジャンプ3") == 0) {
-            isSpecialAnim = true;
-        }
+        const bool isSpecialAnim = MR::isExistString(currentAnimName, cGhostSpecialAnims, ARRAY_SIZE(cGhostSpecialAnims));
 
-        if (strstr(currentAnimName, "水泳ジェット") != nullptr) {
+        if (MR::isEqualSubString(currentAnimName, "水泳ジェット")) {
             mHasJetTurtle = true;
-        } else if (strstr(currentAnimName, "カメ持ち") != nullptr) {
+        } else if (MR::isEqualSubString(currentAnimName, "カメ持ち")) {
             mHasJetTurtle = true;
-        } else if (strstr(currentAnimName, "投げ") != nullptr) {
+        } else if (MR::isEqualSubString(currentAnimName, "投げ")) {
             mHasJetTurtle = false;
             mXanimePlayerUpper->stopAnimation();
             MR::getModelData(this)->getJointAt(MR::getJointIndex(this, "Spine1"))->setMtxCalc(nullptr);
         }
 
-        if (mHasJetTurtle && (strcmp(currentAnimName, "基本") != 0 || strcmp(currentAnimName, "ジャンプ") != 0)) {
+        if (mHasJetTurtle && (!MR::isEqualString(currentAnimName, cGhostWeightedAnim) || !MR::isEqualString(currentAnimName, "ジャンプ"))) {
             mXanimePlayerUpper->changeAnimation("ひろいウエイト");
             mXanimePlayerUpper->overWriteMtxCalc(MR::getJointIndex(this, "PartsControl"));
         }

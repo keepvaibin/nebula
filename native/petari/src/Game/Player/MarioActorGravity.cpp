@@ -38,7 +38,7 @@ u8 MarioActor::getGravityLevel() const {
 }
 
 bool MarioActor::checkBeeWallStick(Vec3f& rVec) {
-    if (getMovementStates().frontWall && mMario->checkWallCode("Fur", false) && mBeeWallWalk == 0 && !mBeeStickInhibit) {
+    if (getMovementStates().frontWall && mMario->checkWallCode(CollisionWallCode_Fur, false) && mBeeWallWalk == 0 && !mBeeStickInhibit) {
         Vec3f head = mMario->mHeadVec;
 
         mBeeWallWalk = 5;
@@ -68,7 +68,7 @@ bool MarioActor::checkBeeWallStick(Vec3f& rVec) {
 }
 
 bool MarioActor::checkBeeFloorStick(Vec3f& rVec) {
-    if (mMario->getMovementStates().onGround && strcmp("Fur", MR::getWallCodeString(mMario->getGroundPolygon())) == 0 && mBeeWallWalk == 0) {
+    if (mMario->getMovementStates().onGround && MR::getWallCodeIndex(mMario->getGroundPolygon()) == CollisionWallCode_Fur && mBeeWallWalk == 0) {
         mBeeWallWalk = 5;
         rVec = -mMario->mGroundNorm;
 
@@ -322,8 +322,7 @@ bool MarioActor::checkBeeCeilStick(Vec3f& rVec) {
         if (getDrawStates().headHit) {
             out = true;
         } else {
-            const char* pWallCodeString = MR::getWallCodeString(mMario->mCeilPolygon);
-            if (pWallCodeString != nullptr && strcmp(pWallCodeString, "Fur") == 0) {
+            if (MR::getWallCodeIndex(mMario->mCeilPolygon) == CollisionWallCode_Fur) {
                 out = true;
             }
         }
@@ -345,8 +344,7 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
         bool detach = false;
         bool fur = getDrawStates().onFur;
         if (!fur) {
-            const char* pWallCode = MR::getWallCodeString(mMario->mShadowPolygon);
-            if (pWallCode != nullptr && strcmp(pWallCode, "Fur") == 0) {
+            if (MR::getWallCodeIndex(mMario->mShadowPolygon) == CollisionWallCode_Fur) {
                 fur = true;
             }
         }
@@ -359,7 +357,7 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
 
             if (mMario->mVerticalSpeed > radius) {
                 detach = true;
-            } else if (isJumping() && mMario->checkWallCode("Normal", false)) {
+            } else if (isJumping() && mMario->checkWallCode(CollisionWallCode_Normal, false)) {
                 detach = true;
             } else {
                 mBeeWallWalk = 5;
@@ -373,7 +371,7 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
                 mBeeWallWalk--;
             }
 
-            if (mMario->checkWallCode("Normal", false)) {
+            if (mMario->checkWallCode(CollisionWallCode_Normal, false)) {
                 detach = true;
             }
 

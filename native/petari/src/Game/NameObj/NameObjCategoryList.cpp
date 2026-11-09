@@ -1,11 +1,11 @@
 #include "Game/NameObj/NameObjCategoryList.hpp"
-#include <algorithm>
 
-NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethod pMethod) : mCategoryInfo(categoryNum), mMethod(pMethod), mMethodConst(nullptr) {
+NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethod pMethod, s32 placeSlot)
+    : mCategoryInfo(categoryNum), mMethod(pMethod), mMethodConst(nullptr), mPlaceSlot(placeSlot) {
 }
 
-NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethodConst pMethod)
-    : mCategoryInfo(categoryNum), mMethod(nullptr), mMethodConst(pMethod) {
+NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethodConst pMethod, s32 placeSlot)
+    : mCategoryInfo(categoryNum), mMethod(nullptr), mMethodConst(pMethod), mPlaceSlot(placeSlot) {
 }
 
 void NameObjCategoryList::execute(int idx) {
@@ -38,21 +38,35 @@ void NameObjCategoryList::incrementCheck(NameObj*, int index) {
 
 void NameObjCategoryList::allocateBuffer() {
     for (CategoryInfo& rInfo : mCategoryInfo) {
-        rInfo.mNameObjArr.mArray.mArr = new NameObj*[rInfo.mCheck];
-        rInfo.mNameObjArr.mArray.mMaxSize = rInfo.mCheck;
+        if (rInfo.mCheck != 0) {
+            rInfo.mNameObjArr.mArray.init(static_cast< s32 >(rInfo.mCheck));
+        }
     }
 }
 
 void NameObjCategoryList::add(NameObj* pObj, int idx) {
-    mCategoryInfo[idx].mNameObjArr.push_back(pObj);
+    MR::Vector< MR::AssignableArray< NameObj* > >& rArray = mCategoryInfo[idx].mNameObjArr;
+    pObj->mListPlace[mPlaceSlot] = rArray.size();
+    rArray.push_back(pObj);
 }
 
+// The last object takes the removed one's place.
 void NameObjCategoryList::remove(NameObj* pObj, int idx) {
     MR::Vector< MR::AssignableArray< NameObj* > >& rArray = mCategoryInfo[idx].mNameObjArr;
-    s32 size = rArray.size();
-    NameObj** pBegin = rArray.begin();
-    NameObj** pFound = std::find(pBegin, pBegin + size, pObj);
-    rArray[pFound - pBegin] = rArray[rArray.size() - 1];
+    const s32 size = rArray.size();
+    s32 place = pObj->mListPlace[mPlaceSlot];
+    if (place < 0 || place >= size || rArray[place] != pObj) {
+        for (place = 0; place < size && rArray[place] != pObj; place++) {
+        }
+        if (place == size) {
+            return;
+        }
+    }
+
+    NameObj* pLast = rArray[size - 1];
+    rArray[place] = pLast;
+    pLast->mListPlace[mPlaceSlot] = place;
+    pObj->mListPlace[mPlaceSlot] = -1;
     rArray.pop_back();
 }
 

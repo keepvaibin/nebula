@@ -7,14 +7,13 @@
 #include "Game/AreaObj/WarpCube.hpp"
 #include "Game/AreaObj/WaterArea.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include <cstring>
 
 namespace {
     struct IsManagerName {
         bool operator()(const AreaObjMgr* pManager, const char* pName) const {
-            const char* pMatch = strstr(pName, pManager->mName);
-            return pMatch != nullptr && pMatch == pName;
+            return MR::isHeadString(pName, pManager->mName);
         }
     };
 
@@ -362,25 +361,56 @@ namespace {
     };
 };  // namespace
 
-AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName) {
+AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName), mIndex(), mHashesShared(false) {
 }
 
 void AreaObjContainer::init(const TableIter& rIter) {
     mManagers.init(ARRAY_SIZE(::cCreateTable));
+    mIndex.reset(ARRAY_SIZE(::cCreateTable));
     for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {
         const Name2CreateManagerFunc* pName2CreateManagerFunc = &::cCreateTable[i];
         AreaObjMgr* mgr = pName2CreateManagerFunc->mCreateFunc(pName2CreateManagerFunc->mFirstCapacity,pName2CreateManagerFunc->mName);
         mgr->init(TableIter());
         mManagers.push_back(mgr);
+        mIndex.add(pName2CreateManagerFunc->mName, i);
+    }
+
+    // findHash finds only the first of a hash.
+    for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {
+        if (mIndex.findHash(MR::getHashCode(::cCreateTable[i].mName)) != i) {
+            mHashesShared = true;
+        }
     }
 }
 
+// The first manager in table order whose name heads pName; null for none. Each prefix of pName is looked up by its
+// hash, taken a character at a time as MR::getHashCode steps.
 AreaObjMgr* AreaObjContainer::getManager(const char* pName) const {
-    return *std::find_if(mManagers.begin(), mManagers.end(), [&](const auto& item) { return IsManagerName()(item, pName); });
+    if (mHashesShared) {
+        AreaObjMgr* const* ppManager =
+            std::find_if(mManagers.begin(), mManagers.end(), [&](const auto& item) { return IsManagerName()(item, pName); });
+        return ppManager != mManagers.end() ? *ppManager : nullptr;
+    }
+
+    u32 best = MR::NameIndex::cNoValue;
+    u32 hash = 0;
+    for (u32 length = 1; pName[length - 1] != '\0'; length++) {
+        hash = static_cast< s8 >(pName[length - 1]) + hash * 31;
+        const u32 index = mIndex.findHash(hash);
+        if (index < best) {
+            const char* pManagerName = mManagers[static_cast< int >(index)]->mName;
+            if (pManagerName[length] == '\0' && MR::isHeadString(pName, pManagerName)) {
+                best = index;
+            }
+        }
+    }
+
+    return best == MR::NameIndex::cNoValue ? nullptr : mManagers[static_cast< int >(best)];
 }
 
 AreaObj* AreaObjContainer::getAreaObj(const char* pName, const Vec3f& rVec) const {
-    return getManager(pName)->find_in(rVec);
+    AreaObjMgr* pManager = getManager(pName);
+    return pManager != nullptr ? pManager->find_in(rVec) : nullptr;
 }
 
 namespace MR {

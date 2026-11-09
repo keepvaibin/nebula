@@ -74,5 +74,7 @@ public:
     void framework();
 
     NebulaArena* mArena;
-    NebulaList< SpkSound > mSoundList[PLAYER_MAX];
+    // Per controller (NebulaInputPlayers::count): its sounds, and the last one AudSpeakerWrap started.
+    NebulaList< SpkSound >* mSoundList;
+    SpkSoundHandle* mPadHandles;
 };

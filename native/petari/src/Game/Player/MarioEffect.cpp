@@ -22,7 +22,6 @@
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleMath.hpp"
 #include <cstdio>
-#include <cstring>
 #include "Game/Util/StringUtil.hpp"
 
 // A table's flags, written 0xAABBCCDD: AA first. By value, on any machine.
@@ -271,14 +270,14 @@ s32 MarioActor::getFloorMaterialIndex(u32 flags) const {
         break;
     case 0x20:
         materialIndex = 5;
-        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Honey") == 0) {
+        if (MR::getSoundCodeIndex(mMario->mShadowPolygon) == CollisionSoundCode_Honey) {
             materialIndex = 6;
         }
 
         break;
     case 0x1B:
     case 0x1C:
-        if (strcmp(MR::getSoundCodeString(mMario->mShadowPolygon), "Sand") == 0) {
+        if (MR::getSoundCodeIndex(mMario->mShadowPolygon) == CollisionSoundCode_Sand) {
             materialIndex = 3;
         }
 
@@ -906,11 +905,11 @@ void MarioActor::emitEffectWaterColumn(const Vec3f& rDir, const Vec3f& rTrans) {
 
 // A common effect's name starts with 共, a material effect's with 属 (3 bytes each in UTF-8).
 bool MarioActor::isCommonEffect(const char* pName) const {
-    return strncmp(pName, "共", 3) == 0;
+    return MR::isHeadString(pName, "共");
 }
 
 bool MarioActor::isMaterialEffect(const char* pName) const {
-    return strncmp(pName, "属", 3) == 0;
+    return MR::isHeadString(pName, "属");
 }
 
 MultiEmitter* MarioActor::playEffect(const char* pName) {

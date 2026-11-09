@@ -124,6 +124,9 @@ void StarPieceGroup::init(const TableIter& rIter) {
     }
 
     MR::useStageSwitchWriteDead(this, rIter);
+    if (mNumPieces < 0) {
+        mNumPieces = 0;
+    }
     mPieces = new StarPiece*[mNumPieces];
     mRailCoords = new f32[mNumPieces];
 

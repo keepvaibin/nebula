@@ -9,8 +9,9 @@ public:
     bool exists() const {
         return mPlayer != nullptr;
     }
-    // A player for `tracks` tracks alive at once, `mgrCount` channel groups and `slots` note slots a group.
-    void create(u32 tracks, u32 mgrCount, u32 slots, u32 ownerSound, u8 ownerRoute);
+    // A player for `tracks` tracks alive at once and `mgrCount` channel groups, each track with `rRoom`; `named` root
+    // children whose own children the game names (SoundPlayer::create).
+    void create(u32 tracks, u32 mgrCount, const TrackRoom& rRoom, u32 named, u32 ownerSound, u8 ownerRoute);
     // The player goes to the audio thread to finish; SoundMemory frees it once the audio thread lets it go.
     void release();
 
@@ -42,11 +43,11 @@ public:
         return path;
     }
     static TrackPath child(u32 child) {
-        TrackPath path = {1, static_cast< u8 >(child), 0};
+        TrackPath path = {1, child, 0};
         return path;
     }
     static TrackPath grandchild(u32 child, u32 grandchild) {
-        TrackPath path = {2, static_cast< u8 >(child), static_cast< u8 >(grandchild)};
+        TrackPath path = {2, child, grandchild};
         return path;
     }
 
@@ -59,7 +60,10 @@ private:
     u32 mMgrCount = 0;
     s32 mStatus = SeqTrack::STATUS_FREE;
     u64 mStatusSerial = 0;
-    u32 mPresent[3] = {0, 0, 0};
+    // The tracks its own commands make present until the audio thread has run them (SoundPlayer::mPresent's layout).
+    u32* mPresent = nullptr;
+    u32 mRootWords = 0;
+    u32 mNamed = 0;
     u64 mPresentSerial = 0;
     // What the audio thread was last sent for each group.
     SoundParams* mSent = nullptr;

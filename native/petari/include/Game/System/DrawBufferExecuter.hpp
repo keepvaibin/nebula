@@ -12,6 +12,7 @@ public:
     DrawBufferExecuter(const char* pName, Model* pModel);
 
     void allocateActorListBuffer();
+    void reserve(s32 count);
     void add(LiveActor*);
     void remove(LiveActor*);
     void findLightInfo(LiveActor*);

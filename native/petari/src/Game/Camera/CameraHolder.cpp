@@ -49,9 +49,7 @@
 
 struct CameraTableEntry {
     const char* mName;
-    const char* mExplain;
     Camera* (*mCreateFunc)(void);
-    bool mIsPublic;
 };
 
 namespace {
@@ -61,57 +59,62 @@ namespace {
     }
 
     static const CameraTableEntry sCameraTable[] = {
-        {"CAM_TYPE_XZ_PARA", "並行", createCamera< CameraParallel >, true},
-        {"CAM_TYPE_TOWER", "塔", createCamera< CameraTower >, true},
-        {"CAM_TYPE_FOLLOW", "フォロー", createCamera< CameraFollow >, true},
-        {"CAM_TYPE_WONDER_PLANET", "プラネット", createCamera< CameraWonderPlanet >, true},
-        {"CAM_TYPE_POINT_FIX", "完全固定", createCamera< CameraFix >, true},
-        {"CAM_TYPE_EYEPOS_FIX", "定点", createCamera< CameraFixedPoint >, true},
-        {"CAM_TYPE_SLIDER", "スライダー", createCamera< CameraBehind >, true},
-        {"CAM_TYPE_INWARD_TOWER", "塔内部", createCamera< CameraInwardTower >, true},
-        {"CAM_TYPE_EYEPOS_FIX_THERE", "その場定点", createCamera< CameraFixedThere >, true},
-        {"CAM_TYPE_TRIPOD_BOSS", "三脚ボス", createCamera< CameraTripodBoss >, true},
-        {"CAM_TYPE_TOWER_POS", "塔（サブターゲット付き）", createCamera< CameraTowerPos >, true},
-        {"CAM_TYPE_TRIPOD_PLANET", "三脚惑星", createCamera< CameraTripodPlanet >, true},
-        {"CAM_TYPE_DEAD", "通常死亡", createCamera< CameraDead >, true},
-        {"CAM_TYPE_INWARD_SPHERE", "球内部", createCamera< CameraInwardSphere >, true},
-        {"CAM_TYPE_RAIL_DEMO", "レールデモ", createCamera< CameraRailDemo >, true},
-        {"CAM_TYPE_RAIL_FOLLOW", "レールフォロー", createCamera< CameraRailFollow >, true},
-        {"CAM_TYPE_TRIPOD_BOSS_JOINT", "三脚ボスジョイント", createCamera< CameraTripodBossJoint >, true},
-        {"CAM_TYPE_CHARMED_TRIPOD_BOSS", "三脚ボスジョイント注視", createCamera< CameraCharmedTripodBoss >, true},
-        {"CAM_TYPE_OBJ_PARALLEL", "オブジェ並行", createCamera< CameraObjParallel >, true},
-        {"CAM_TYPE_CHARMED_FIX", "サンボ", createCamera< CameraCharmedFix >, true},
-        {"CAM_TYPE_GROUND", "地面", createCamera< CameraGround >, true},
-        {"CAM_TYPE_TRUNDLE", "トランドル", createCamera< CameraTrundle >, true},
-        {"CAM_TYPE_CUBE_PLANET", "キューブ惑星", createCamera< CameraCubePlanet >, true},
-        {"CAM_TYPE_INNER_CYLINDER", "円筒内部", createCamera< CameraInnerCylinder >, true},
-        {"CAM_TYPE_SPIRAL_DEMO", "螺旋デモ", createCamera< CameraSpiral >, true},
-        {"CAM_TYPE_TALK", "会話", createCamera< CameraTalk >, true},
-        {"CAM_TYPE_MTXREG_PARALLEL", "マトリクスレジスタ並行", createCamera< CameraMtxRegParallel >, true},
-        {"CAM_TYPE_CHARMED_VECREG", "ベクトルレジスタ注目", createCamera< CameraCharmedVecReg >, true},
-        {"CAM_TYPE_MEDIAN_PLANET", "中点注目プラネット", createCamera< CameraMedianPlanet >, true},
-        {"CAM_TYPE_TWISTED_PASSAGE", "ねじれ回廊", createCamera< CameraTwistedPassage >, true},
-        {"CAM_TYPE_MEDIAN_TOWER", "中点塔カメラ", createCamera< CameraMedianTower >, true},
-        {"CAM_TYPE_CHARMED_VECREG_TOWER", "VecReg角度補正塔カメラ", createCamera< CameraCharmedVecRegTower >, true},
-        {"CAM_TYPE_FRONT_AND_BACK", "表裏カメラ", createCamera< CameraFrontAndBack >, true},
-        {"CAM_TYPE_RACE_FOLLOW", "レース用フォロー", createCamera< CameraRaceFollow >, true},
-        {"CAM_TYPE_2D_SLIDE", "２Ｄスライド", createCamera< CameraSlide >, true},
-        {"CAM_TYPE_FOO_FIGHTER", "フーファイター", createCamera< CameraFooFighter >, true},
-        {"CAM_TYPE_FOO_FIGHTER_PLANET", "フーファイタープラネット", createCamera< CameraFooFighterPlanet >, true},
-        {"CAM_TYPE_BLACK_HOLE", "ブラックホール", createCamera< CameraBlackHole >, false},
-        {"CAM_TYPE_ANIM", "アニメ", createCamera< CameraAnim >, false},
-        {"CAM_TYPE_DPD", "ＤＰＤ", createCamera< CameraPointer >, true},
-        {"CAM_TYPE_WATER_FOLLOW", "水中フォロー", createCamera< CameraWaterFollow >, true},
-        {"CAM_TYPE_WATER_PLANET", "水中プラネット", createCamera< CameraWaterPlanet >, true},
-        {"CAM_TYPE_WATER_PLANET_BOSS", "水中プラネットボス", createCamera< CameraWaterPlanetBoss >, true},
-        {"CAM_TYPE_RAIL_WATCH", "レール注目", createCamera< CameraRailWatch >, true},
-        {"CAM_TYPE_SUBJECTIVE", "主観", createCamera< CameraSubjective >, true},
+        {"CAM_TYPE_XZ_PARA", createCamera< CameraParallel >},
+        {"CAM_TYPE_TOWER", createCamera< CameraTower >},
+        {"CAM_TYPE_FOLLOW", createCamera< CameraFollow >},
+        {"CAM_TYPE_WONDER_PLANET", createCamera< CameraWonderPlanet >},
+        {"CAM_TYPE_POINT_FIX", createCamera< CameraFix >},
+        {"CAM_TYPE_EYEPOS_FIX", createCamera< CameraFixedPoint >},
+        {"CAM_TYPE_SLIDER", createCamera< CameraBehind >},
+        {"CAM_TYPE_INWARD_TOWER", createCamera< CameraInwardTower >},
+        {"CAM_TYPE_EYEPOS_FIX_THERE", createCamera< CameraFixedThere >},
+        {"CAM_TYPE_TRIPOD_BOSS", createCamera< CameraTripodBoss >},
+        {"CAM_TYPE_TOWER_POS", createCamera< CameraTowerPos >},
+        {"CAM_TYPE_TRIPOD_PLANET", createCamera< CameraTripodPlanet >},
+        {"CAM_TYPE_DEAD", createCamera< CameraDead >},
+        {"CAM_TYPE_INWARD_SPHERE", createCamera< CameraInwardSphere >},
+        {"CAM_TYPE_RAIL_DEMO", createCamera< CameraRailDemo >},
+        {"CAM_TYPE_RAIL_FOLLOW", createCamera< CameraRailFollow >},
+        {"CAM_TYPE_TRIPOD_BOSS_JOINT", createCamera< CameraTripodBossJoint >},
+        {"CAM_TYPE_CHARMED_TRIPOD_BOSS", createCamera< CameraCharmedTripodBoss >},
+        {"CAM_TYPE_OBJ_PARALLEL", createCamera< CameraObjParallel >},
+        {"CAM_TYPE_CHARMED_FIX", createCamera< CameraCharmedFix >},
+        {"CAM_TYPE_GROUND", createCamera< CameraGround >},
+        {"CAM_TYPE_TRUNDLE", createCamera< CameraTrundle >},
+        {"CAM_TYPE_CUBE_PLANET", createCamera< CameraCubePlanet >},
+        {"CAM_TYPE_INNER_CYLINDER", createCamera< CameraInnerCylinder >},
+        {"CAM_TYPE_SPIRAL_DEMO", createCamera< CameraSpiral >},
+        {"CAM_TYPE_TALK", createCamera< CameraTalk >},
+        {"CAM_TYPE_MTXREG_PARALLEL", createCamera< CameraMtxRegParallel >},
+        {"CAM_TYPE_CHARMED_VECREG", createCamera< CameraCharmedVecReg >},
+        {"CAM_TYPE_MEDIAN_PLANET", createCamera< CameraMedianPlanet >},
+        {"CAM_TYPE_TWISTED_PASSAGE", createCamera< CameraTwistedPassage >},
+        {"CAM_TYPE_MEDIAN_TOWER", createCamera< CameraMedianTower >},
+        {"CAM_TYPE_CHARMED_VECREG_TOWER", createCamera< CameraCharmedVecRegTower >},
+        {"CAM_TYPE_FRONT_AND_BACK", createCamera< CameraFrontAndBack >},
+        {"CAM_TYPE_RACE_FOLLOW", createCamera< CameraRaceFollow >},
+        {"CAM_TYPE_2D_SLIDE", createCamera< CameraSlide >},
+        {"CAM_TYPE_FOO_FIGHTER", createCamera< CameraFooFighter >},
+        {"CAM_TYPE_FOO_FIGHTER_PLANET", createCamera< CameraFooFighterPlanet >},
+        {"CAM_TYPE_BLACK_HOLE", createCamera< CameraBlackHole >},
+        {"CAM_TYPE_ANIM", createCamera< CameraAnim >},
+        {"CAM_TYPE_DPD", createCamera< CameraPointer >},
+        {"CAM_TYPE_WATER_FOLLOW", createCamera< CameraWaterFollow >},
+        {"CAM_TYPE_WATER_PLANET", createCamera< CameraWaterPlanet >},
+        {"CAM_TYPE_WATER_PLANET_BOSS", createCamera< CameraWaterPlanetBoss >},
+        {"CAM_TYPE_RAIL_WATCH", createCamera< CameraRailWatch >},
+        {"CAM_TYPE_SUBJECTIVE", createCamera< CameraSubjective >},
     };
     static const char* sDefaultCamera = "CAM_TYPE_XZ_PARA";
 };  // namespace
 
-CameraHolder::CameraHolder(const char* pName) : NameObj(pName) {
+CameraHolder::CameraHolder(const char* pName) : NameObj(pName), mIndex() {
     createCameras();
+
+    mIndex.reset(static_cast< u32 >(getNum()));
+    for (s32 i = 0; i < getNum(); i++) {
+        mIndex.add(getNameStrOf(i), static_cast< u32 >(i));
+    }
 
     mDefaultCameraIndex = getIndexOf(getNameStrOfDefault());
 }
@@ -121,13 +124,8 @@ s32 CameraHolder::getNum() const {
 }
 
 s32 CameraHolder::getIndexOf(const char* pName) const {
-    for (s32 i = 0; i < getNum(); i++) {
-        if (MR::isEqualString(pName, getNameStrOf(i))) {
-            return i;
-        }
-    }
-
-    return -1;
+    const u32 index = mIndex.find(pName);
+    return index == MR::NameIndex::cNoValue ? -1 : static_cast< s32 >(index);
 }
 
 const char* CameraHolder::getNameStrOf(s32 index) const {

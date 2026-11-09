@@ -20,7 +20,8 @@ SoundEmitterSphere::SoundEmitterSphere(int formType, const char* pName)
 void SoundEmitterSphere::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
-    mSoundName = ::cSoundNameTable[mObjArg0];
+    // Outside the table (unset is -1): silent.
+    mSoundName = mObjArg0 >= 0 && mObjArg0 < ARRAY_SIZE(::cSoundNameTable) ? ::cSoundNameTable[mObjArg0] : nullptr;
     mSoundIndex = mObjArg0;
     mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, NebulaArena::current());
 
@@ -54,5 +55,7 @@ void SoundEmitterSphere::movement() {
     }
 
     mSoundObj->process();
-    MR::startSoundObjectLevel(mSoundObj, mSoundName);
+    if (mSoundName != nullptr) {
+        MR::startSoundObjectLevel(mSoundObj, mSoundName);
+    }
 }

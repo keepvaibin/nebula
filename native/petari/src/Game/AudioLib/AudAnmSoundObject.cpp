@@ -21,13 +21,6 @@ void AudAnmSoundObject::update(f32 time) {
     updateAnimSound(time, *mPos, nullptr);
 }
 
-void AudAnmSoundObject::modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pSound, f32 speed) {
-    if (speed > 3.0f) {
-        speed = 3.0f;
-    }
-    SoundAnimator::modifySoundParams(pParams, pSound, speed);
-}
-
 bool AudAnmSoundObject::playsSound(const SoundAnimationSound* pSound, const Vec3f& rPos, f32 speed) {
     if (!SoundAnimator::playsSound(pSound, rPos, speed)) {
         return false;

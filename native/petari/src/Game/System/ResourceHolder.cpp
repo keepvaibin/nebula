@@ -23,7 +23,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
-      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr) {
+      mMaterialBound(false), mBckCtrl(nullptr), mBackupMaterialData(nullptr), mBackupMaterialFirst(nullptr) {
     mArena = NebulaArena::current();
     initializeArc(*mArchive);
 
@@ -74,7 +74,7 @@ void ResourceHolder::newBckCtrl() {
 }
 
 Mtx44& ResourceHolder::getInitEffectMtx(int materialIndex, int mtxIndex) const {
-    return mBackupMaterialData[materialIndex * NEBULA_MATERIAL_SLOTS + mtxIndex];
+    return mBackupMaterialData[mBackupMaterialFirst[materialIndex] + mtxIndex];
 }
 
 void ResourceHolder::initializeArc(AssetFolder& rArchive) {
@@ -168,16 +168,22 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const AssetFolder::Item& rI
 
 void ResourceHolder::backupInitMaterialData(const ModelData* pModelData) {
     u32 numMaterials = pModelData->getMaterialCount();
-    mBackupMaterialData = new Mtx44[numMaterials * NEBULA_MATERIAL_SLOTS];
+    mBackupMaterialFirst = new u32[numMaterials];
+    u32 numMatrices = 0;
+    for (u32 matIdx = 0; matIdx < numMaterials; matIdx++) {
+        mBackupMaterialFirst[matIdx] = numMatrices;
+        numMatrices += pModelData->getMaterialAt(matIdx)->getSlotCount();
+    }
+    mBackupMaterialData = new Mtx44[numMatrices];
 
     for (u32 matIdx = 0; matIdx < numMaterials; matIdx++) {
         Material* material = pModelData->getMaterialAt(matIdx);
-        for (u32 mtxIdx = 0; mtxIdx < NEBULA_MATERIAL_SLOTS; mtxIdx++) {
+        for (u32 mtxIdx = 0; mtxIdx < material->getSlotCount(); mtxIdx++) {
             CoordMatrix* texMtx = material->getCoordMatrix(mtxIdx);
             if (texMtx != nullptr) {
-                NebulaMtx44Copy(texMtx->getInfo().mEffectMtx, mBackupMaterialData[matIdx * NEBULA_MATERIAL_SLOTS + mtxIdx]);
+                NebulaMtx44Copy(texMtx->getInfo().mEffectMtx, mBackupMaterialData[mBackupMaterialFirst[matIdx] + mtxIdx]);
             } else {
-                NebulaMtx44Identity(mBackupMaterialData[matIdx * NEBULA_MATERIAL_SLOTS + mtxIdx]);
+                NebulaMtx44Identity(mBackupMaterialData[mBackupMaterialFirst[matIdx] + mtxIdx]);
             }
         }
     }

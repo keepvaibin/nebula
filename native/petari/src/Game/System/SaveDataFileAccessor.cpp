@@ -1,6 +1,5 @@
 #include "Game/System/SaveDataFileAccessor.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <cstring>
 
 SaveDataFileAccessor::SaveDataFileAccessor(u8* pSaveDataFile) : mFile(pSaveDataFile) {
 }
@@ -27,11 +26,11 @@ void SaveDataFileAccessor::makeUserFileInfo(SaveDataUserFileInfo* pUserFileInfo,
 
         pUserFileInfo->mData = mFile + getFileOffset(i);
 
-        if (strstr(pEntryName, "mario") != nullptr || strstr(pEntryName, "luigi") != nullptr) {
+        if (MR::isEqualSubString(pEntryName, "mario") || MR::isEqualSubString(pEntryName, "luigi")) {
             pUserFileInfo->mKind = SaveDataUserFileKind_Game;
         }
 
-        if (strstr(pEntryName, "sysconf") != nullptr) {
+        if (MR::isEqualSubString(pEntryName, "sysconf")) {
             pUserFileInfo->mKind = SaveDataUserFileKind_SysConf;
         }
     }

@@ -2,36 +2,55 @@
 #include "Game/Sound/SequenceManager.hpp"
 #include "Game/Sound/SoundAudience.hpp"
 #include "Game/Sound/SoundChild.hpp"
-SequenceSound::SequenceSound(SequenceManager* seqMgr, SoundStrategyMgr< SequenceSound >* soundStrategyMgr) {
+#include "Game/Sound/SoundMemory.hpp"
+#include "Game/System/NebulaArena.hpp"
+
+SequenceSound::SequenceSound(SequenceManager* seqMgr) {
     mManager = seqMgr;
-    mStrategyMgr = soundStrategyMgr;
     mSoundParams.init();
-    mSoundStrategy = nullptr;
-    for (int i = 0; i < NUM_CHILDREN; i++) {
-        mSoundChild[i] = nullptr;
+    for (int i = 0; i < cInlineChildren; i++) {
+        mInlineChild[i] = nullptr;
     }
+    mSoundChild = mInlineChild;
+    mChildRoom = cInlineChildren;
+    mNumChild = cInlineChildren;
 }
 
 SequenceSound::~SequenceSound() {
     mPlayer.release();
+    if (mSoundChild != mInlineChild) {
+        SoundMemory::free(mSoundChild);
+    }
 }
 
-// The player is made with the sound: the tracks its program keeps alive at once and the reserved ones (two children, and
-// `numTracks` numbered tracks under them).
+void SequenceSound::growChildren(s32 count) {
+    if (count <= mChildRoom) {
+        return;
+    }
+    SoundChild** children = static_cast< SoundChild** >(SoundMemory::alloc(static_cast< u32 >(count) * sizeof(SoundChild*)));
+    for (s32 i = 0; i < mChildRoom; i++) {
+        children[i] = mSoundChild[i];
+    }
+    if (mSoundChild != mInlineChild) {
+        SoundMemory::free(mSoundChild);
+    }
+    mSoundChild = children;
+    mChildRoom = count;
+}
+
+// The player is made with the sound: the tracks its program keeps alive at once and the reserved ones (the named children,
+// at least two, and `numTracks` numbered tracks under them, 16 to a child).
 void SequenceSound::startID_(SoundID id, const Vec3f* posPtr, SoundAudience* audience, int category, int numTracks, const SeqData& rData) {
     mCategory = category;
     const SeqFile* pFile = rData.mFile;
-    const u32 reserved = 2 + static_cast< u32 >(numTracks < 0 ? 0 : numTracks > 32 ? 32 : numTracks);
-    const u32 mgrCount = posPtr != nullptr && audience != nullptr ? static_cast< u32 >(audience->getMaxChannels()) : 1;
-    mPlayer.create((pFile != nullptr ? pFile->mTrackBound : 1) + reserved, mgrCount, pFile != nullptr ? pFile->mNoteSlots : 1, (u32)id, 2);
+    const u32 tracks = static_cast< u32 >(numTracks < 0 ? 0 : numTracks);
+    const u32 named = (tracks + 15) / 16 > 2 ? (tracks + 15) / 16 : 2;
+    const u32 mgrCount = posPtr != nullptr && audience != nullptr ? static_cast< u32 >(audience->getListenerCount()) : 1;
+    mPlayer.create((pFile != nullptr ? pFile->mTrackBound : 1) + named + tracks, mgrCount, TrackRoom::of(pFile), named, (u32)id, 2);
     mPlayer.reserve(static_cast< u32 >(numTracks));
+    mNumChild = static_cast< s32 >(named * 16);
+    growChildren(mNumChild);
     startSound_(id, posPtr, audience);
-
-    if (mStrategyMgr) {
-        mSoundStrategy = mStrategyMgr->newStrategy(id);
-    } else {
-        mSoundStrategy = nullptr;
-    }
 }
 
 void SequenceSound::playSeqData_(const SoundParams& params, SoundActivity activity) {
@@ -100,27 +119,18 @@ void SequenceSound::managerCalc_() {
 
     if (calcSound_()) {
         mTempoMgr.calc();
-        for (int i = 0; i < NUM_CHILDREN; i++) {
+        for (int i = 0; i < mChildRoom; i++) {
             if (mSoundChild[i]) {
                 mSoundChild[i]->calc();
             }
-        }
-
-        if (mSoundStrategy) {
-            mSoundStrategy->calc(this);
         }
     }
 }
 
 void SequenceSound::die_() {
-    for (s32 i = 0; i < NUM_CHILDREN; i++) {
+    for (s32 i = 0; i < mChildRoom; i++) {
         delete mSoundChild[i];
         mSoundChild[i] = nullptr;
-    }
-
-    if (mSoundStrategy) {
-        mStrategyMgr->deleteStrategy(mSoundStrategy);
-        mSoundStrategy = nullptr;
     }
 
     mPlayer.release();
@@ -148,20 +158,15 @@ void SequenceSound::mixOut_(const SoundParams& params, SoundActivity activity) {
     SoundParams outParams;
     mParams.mixOutAll(params, &outParams, mFader.getIntensity());
 
-    if (mSoundStrategy) {
-        mSoundStrategy->mix(this, &outParams);
-    }
-
     if (mAudible) {
-        int maxChannels = mAudience->getMaxChannels();
-        for (int i = 0; i < maxChannels; i++) {
+        for (s32 i = 0; i < mAudible->getChannelCount(); i++) {
             mAudience->mixChannelOut(outParams, mAudible, i);
         }
         sendGroups_(&mPlayer);
     } else {
         mSoundParams = outParams;
         mPlayer.setMgrSound(0, &mSoundParams);
-        for (int i = 0; i < NUM_CHILDREN; i++) {
+        for (int i = 0; i < mChildRoom; i++) {
             if (mSoundChild[i]) {
                 TrackPath path;
                 if (getChildTrack(i, &path) != nullptr) {
@@ -179,18 +184,20 @@ void SequenceSound::managerMixOut_(const SoundParams& params, SoundActivity acti
 }
 
 s32 SequenceSound::getNumChild() const {
-    return NUM_CHILDREN;
+    return mNumChild;
 }
 
+// An id past the room grows it (16 at a time); such a child names no track until a start reserves it.
 SoundChild* SequenceSound::getChild(int index) {
+    growChildren((index / 16 + 1) * 16);
     if (mSoundChild[index] == nullptr) {
-        mSoundChild[index] = new SoundChild();
+        mSoundChild[index] = new (SoundMemory::arena(), 0) SoundChild();
     }
     return mSoundChild[index];
 }
 
 void SequenceSound::releaseChild(int index) {
-    if (mPlayer.status() == SeqTrack::STATUS_RUN && mSoundChild[index]) {
+    if (mPlayer.status() == SeqTrack::STATUS_RUN && index < mChildRoom && mSoundChild[index]) {
         TrackPath path;
         if (getChildTrack(index, &path) != nullptr) {
             mPlayer.setTrackSound(path, nullptr);

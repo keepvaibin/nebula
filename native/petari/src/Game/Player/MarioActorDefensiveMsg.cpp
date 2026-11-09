@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     bool carrying = getCarrySensor() != nullptr;
@@ -298,7 +298,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
             return false;
         }
 
-        if (strstr(pSender->mHost->mName, "ゴーストマリオ") != nullptr && (isJumping() || mMario->isHanging())) {
+        if (MR::isEqualSubString(pSender->mHost->mName, "ゴーストマリオ") && (isJumping() || mMario->isHanging())) {
             return false;
         }
 

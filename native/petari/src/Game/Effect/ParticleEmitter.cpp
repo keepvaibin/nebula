@@ -1,7 +1,7 @@
 #include "Game/Effect/ParticleEmitter.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 
-ParticleEmitter::ParticleEmitter() : mEmitter(), mPaused(), mUpdated() {
+ParticleEmitter::ParticleEmitter() : mEmitter(), mPaused(), mUpdated(), mHolder(), mPlace() {
 }
 
 void ParticleEmitter::invalidate() {

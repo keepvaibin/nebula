@@ -101,7 +101,6 @@ void MarioActor::initMember() {
     mRemoteDemo = 0;
     mRushEndFront.zero();
     mRushEndFrontMode = 0;
-    mModelSet = 0;
     mPlayerMode = 0;
     mPrevPlayerMode = 0;
     mMorphTimer = 0;

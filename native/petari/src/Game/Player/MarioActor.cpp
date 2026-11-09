@@ -121,7 +121,6 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), mFlashFogColor(0xF
     mNullAnimationKind = 0;
     mPlayerMode = 0;
     mPrevPlayerMode = 0;
-    mModelSet = 1;
     mMorphFlashDone = 0;
     mMorphAnimDone = 0;
     mSwingPermission = 1;
@@ -1479,7 +1478,7 @@ void MarioActor::incLife(u32 amt) {
 
         if (health == 1 && mMarioAnim->isAnimationStop()) {
             mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "ノーマルウエイト");
-            if (mMario->mRunningBas && strcmp(mMario->mRunningBas, "DamageWait")) {
+            if (mMario->mRunningBas && !mMario->mRunningDamageWait) {
                 mMario->startBas(nullptr, false, 0.0f, 0.0f);
                 setBlink(nullptr);
             }
@@ -1822,7 +1821,6 @@ void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
 
 void MarioActor::calcAnim() {
     CollisionShadow* pShadow;
-    // FIXME: switch stuff
     if (mHidden != 0) {
         mBlendMtxTimer = 0;
         return;
@@ -2459,17 +2457,10 @@ bool MarioActor::isStaggering() const {
 }
 
 bool MarioActor::isSleeping() const {
-    // No way that this is a real inline but only way I could make it match
-    bool out = true;
-    if (!IsMarioAnimationRun("特殊ウエイト1B") && !IsMarioAnimationRun("特殊ウエイト1A")) {
-        out = false;
-    }
-
-    return out;
+    return mMario->isAnimationRun("特殊ウエイト1B") || mMario->isAnimationRun("特殊ウエイト1A");
 }
 
 bool MarioActor::isRefuseTalk() const {
-    // FIXME: isPlayerModeTeresa() is giving issues
     if (!isEnableNerveChange()) {
         return true;
     }

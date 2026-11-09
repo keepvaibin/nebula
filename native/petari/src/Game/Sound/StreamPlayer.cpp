@@ -25,6 +25,7 @@ void StreamPlayer::init() {
         mChannelDolby[i] = 0.0f;
     }
     mMixConfig[0] = 0xffff;
+    mConsumed = static_cast< u32 >(mConsumed) + mMessageCount;
     mMessageHead = 0;
     mMessageCount = 0;
 }
@@ -43,12 +44,27 @@ void StreamPlayer::prepare(SoundEngine* pEngine, const u8* pData, u32 ownerSound
     mEngine->addJob(&mJob);
 }
 
+// StreamSound::nextMessage sends a room first whenever its sent count could reach this one.
 void StreamPlayer::post(u32 message) {
-    if (mMessageCount == cMessageNum) {
-        return;
+    if (mMessageCount == mMessageRoom) {
+        NEBULA_PANIC("a stream message past the %u its game side made room for", mMessageRoom);
     }
-    mMessages[(mMessageHead + mMessageCount) % cMessageNum] = message;
+    mMessages[(mMessageHead + mMessageCount) % mMessageRoom] = message;
     mMessageCount++;
+}
+
+void StreamPlayer::grow(MessageRoom* pRoom) {
+    u32* messages = pRoom->messages();
+    for (u32 i = 0; i < mMessageCount; i++) {
+        messages[i] = mMessages[(mMessageHead + i) % mMessageRoom];
+    }
+    if (mRoom != nullptr) {
+        mRoom->mReleased = true;
+    }
+    mRoom = pRoom;
+    mMessages = messages;
+    mMessageRoom = pRoom->mCapacity;
+    mMessageHead = 0;
 }
 
 void StreamPlayer::cancel() {
@@ -61,6 +77,9 @@ void StreamPlayer::cancel() {
 void StreamPlayer::release(SoundEngine* pEngine) {
     cancel();
     pEngine->voices().forgetOwners(this, this + 1);
+    if (mRoom != nullptr) {
+        mRoom->mReleased = true;
+    }
     mReleased = true;
 }
 
@@ -134,9 +153,10 @@ void StreamPlayer::process() {
     if (!mLoaded) {
         return;
     }
+    mConsumed = static_cast< u32 >(mConsumed) + mMessageCount;
     while (mMessageCount != 0) {
         const u32 message = mMessages[mMessageHead];
-        mMessageHead = (mMessageHead + 1) % cMessageNum;
+        mMessageHead = (mMessageHead + 1) % mMessageRoom;
         mMessageCount--;
         switch (message & 0xff) {
         case MESSAGE_START:

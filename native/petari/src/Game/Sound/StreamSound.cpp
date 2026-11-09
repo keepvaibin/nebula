@@ -4,20 +4,22 @@
 #include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StreamManager.hpp"
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
 
-StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSound >* soundStrategyMgr_) {
+StreamSound::StreamSound(StreamManager* streamMgr_) {
     mPrepareState = 0;
-    soundStrategyMgr = soundStrategyMgr_;
     streamMgr = streamMgr_;
-    soundStrategy = nullptr;
     mIsPaused = false;
     for (int i = 0; i < NUM_CHILDREN; i++) {
         children[i] = nullptr;
         mSentKnown[i] = false;
     }
     mStream = new (SoundMemory::alloc(sizeof(StreamPlayer))) StreamPlayer();
+    mRoom = nullptr;
+    mMessageRoom = StreamPlayer::cInlineMessages;
+    mPosted = 0;
     mLoaded = false;
     mFinishBase = 0;
     mCanceled = false;
@@ -27,11 +29,33 @@ StreamSound::StreamSound(StreamManager* streamMgr_, SoundStrategyMgr< StreamSoun
 StreamSound::~StreamSound() {
     next(SOUND_STREAM_RELEASE);
     send();
+    if (mRoom != nullptr) {
+        SoundMemory::retire(mRoom, mRoom->mReleased);
+    }
     SoundMemory::retire(mStream, mStream->mReleased);
 }
 
 SoundCommand& StreamSound::next(u16 kind) {
     return SoundEngine::get()->ring().next(kind, mStream);
+}
+
+// The audio thread's queue holds at most the messages sent less those it has taken (a count it only raises).
+SoundCommand& StreamSound::nextMessage(u16 kind) {
+    if (mPosted - static_cast< u32 >(mStream->mConsumed) >= mMessageRoom) {
+        const u32 capacity = mMessageRoom * 2;
+        StreamPlayer::MessageRoom* pRoom =
+            new (SoundMemory::alloc(StreamPlayer::MessageRoom::bytes(capacity))) StreamPlayer::MessageRoom();
+        pRoom->mCapacity = capacity;
+        next(SOUND_STREAM_ROOM).payload< StreamPlayer::MessageRoom* >() = pRoom;
+        send();
+        if (mRoom != nullptr) {
+            SoundMemory::retire(mRoom, mRoom->mReleased);
+        }
+        mRoom = pRoom;
+        mMessageRoom = capacity;
+    }
+    mPosted++;
+    return next(kind);
 }
 
 u64 StreamSound::send() {
@@ -108,12 +132,6 @@ void StreamSound::startID_(SoundID id, s32 streamFileEntry, const Vec3f* posPtr,
     mStreamFileEntry = streamFileEntry;
     startSound_(id, posPtr, audience);
     mPrepareState = 0;
-
-    if (soundStrategyMgr != nullptr) {
-        soundStrategy = soundStrategyMgr->newStrategy(id);
-    } else {
-        soundStrategy = nullptr;
-    }
 }
 
 bool StreamSound::prepare_prepareStream_() {
@@ -125,8 +143,8 @@ bool StreamSound::prepare_prepareStream_() {
         break;
     case 1:
         if (mAudible != nullptr) {
-            const SoundParams* soundParams = mAudible->getOuterParams(0);
-            sendChannel(0xff, *soundParams, soundParams->mPitch);
+            const SoundParams& rSoundParams = mAudible->getOuterParams(0);
+            sendChannel(0xff, rSoundParams, rSoundParams.mPitch);
         }
 
         mLoaded = false;
@@ -181,7 +199,7 @@ void StreamSound::prepare_() {
 }
 
 void StreamSound::prepare_startStream_() {
-    next(SOUND_STREAM_START);
+    nextMessage(SOUND_STREAM_START);
     send();
     mFinishBase = mStream->mFinishes;
     mCanceled = false;
@@ -193,20 +211,11 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
     SoundParams outParams;
     mParams.mixOutAll(inParams, &outParams, (mStatus.isMute() || activity.isMute()) ? 0.0f : mFader.getIntensity());
 
-    if (soundStrategy != nullptr) {
-        soundStrategy->mix(this, &outParams);
-    }
-
+    // A stream is heard from the first listener only.
     const SoundParams* mixParams = &outParams;
     if (mAudible != nullptr && mAudience != nullptr) {
-        for (int i = 0; i < mAudience->getMaxChannels(); i++) {
-            const SoundParams* outerParams = mAudible->getOuterParams(i);
-            if (outerParams != nullptr) {
-                mAudience->mixChannelOut(outParams, mAudible, i);
-                mixParams = outerParams;
-                break;
-            }
-        }
+        mAudience->mixChannelOut(outParams, mAudible, 0);
+        mixParams = &mAudible->getOuterParams(0);
     }
 
     for (int i = 0; i < NUM_CHILDREN; i++) {
@@ -231,7 +240,7 @@ void StreamSound::managerMixOut_(const SoundParams& inParams, SoundActivity acti
     if (mPrepareState == 4) {
         const bool isPaused = mStatus.isPaused() || activity.isPaused();
         if (isPaused != mIsPaused) {
-            SoundCommand& rCommand = next(SOUND_STREAM_PAUSE);
+            SoundCommand& rCommand = nextMessage(SOUND_STREAM_PAUSE);
             rCommand.mArg = isPaused ? 1 : 0;
             send();
             mIsPaused = isPaused;
@@ -247,11 +256,6 @@ void StreamSound::dieStream_() {
             delete children[i];
             children[i] = nullptr;
         }
-    }
-
-    if (soundStrategy != nullptr) {
-        soundStrategyMgr->deleteStrategy(soundStrategy);
-        soundStrategy = nullptr;
     }
 }
 
@@ -275,7 +279,7 @@ bool StreamSound::tryDie_() {
         break;
     case 4: {
         mPrepareState = 6;
-        SoundCommand& rCommand = next(SOUND_STREAM_STOP);
+        SoundCommand& rCommand = nextMessage(SOUND_STREAM_STOP);
         rCommand.mArg = 10;
         send();
         break;
@@ -297,10 +301,6 @@ void StreamSound::managerCalc_() {
                 children[i]->calc();
             }
         }
-
-        if (soundStrategy != nullptr) {
-            soundStrategy->calc(this);
-        }
     }
 }
 
@@ -310,7 +310,7 @@ s32 StreamSound::getNumChild() const {
 
 SoundChild* StreamSound::getChild(int index) {
     if (children[index] == nullptr) {
-        children[index] = new SoundChild();
+        children[index] = new (SoundMemory::arena(), 0) SoundChild();
     }
     return children[index];
 }

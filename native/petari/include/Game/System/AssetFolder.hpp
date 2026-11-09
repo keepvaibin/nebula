@@ -51,7 +51,6 @@ private:
     s32 findPath(const char* pPath) const;
     s32 findName(s32 folder, const char* pName) const;
     u32 findSize(s32 folder, const void* pData) const;
-    u32 countFiles(s32 folder) const;
     void* dataOf(const NebulaAssetEntry& rEntry) const;
 
     s32 mEntry;

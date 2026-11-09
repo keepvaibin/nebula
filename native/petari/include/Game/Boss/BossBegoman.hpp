@@ -56,10 +56,8 @@ public:
     void endTurn();
     void exeOnWeak();
     void endOnWeak();
-    void exeOnWeakTurn();
     void exeBrake();
     void exeStepBack();
-    void exeStepBackOnWeak();
     void exeReturn();
     void exeProvoke();
     void exeTrampleReaction();

@@ -1,5 +1,4 @@
 #include "Game/AudioLib/AudMicWrap.hpp"
-#include "Game/AudioLib/AudAudience.hpp"
 #include "Game/AudioLib/AudParams.hpp"
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"

@@ -18,23 +18,21 @@ void LightDataHolder::initLightData() {
     mLightCount = LightFunction::createLightDataParser(&data);
     mLights = new AreaLightInfo[mLightCount];
 
+    mIndex.reset(static_cast< u32 >(mLightCount));
     for (s32 i = 0; i < mLightCount; i++) {
         LightFunction::getAreaLightLightData(data, i, &mLights[i]);
+        if (mLights[i].mAreaLightName != nullptr) {
+            mIndex.add(mLights[i].mAreaLightName, static_cast< u32 >(i));
+        }
     }
 
     mCoinLight = ::sDefaultLightSetCoin;
 }
 
+// A name not held gets the first light.
 AreaLightInfo* LightDataHolder::findAreaLight(const char* pName) const {
-    for (s32 i = 0; i < mLightCount; i++) {
-        AreaLightInfo* inf = getLightInfo(i);
-
-        if (MR::isEqualString(pName, inf->mAreaLightName)) {
-            return inf;
-        }
-    }
-
-    return mLights;
+    const u32 index = mIndex.find(pName);
+    return index == MR::NameIndex::cNoValue ? mLights : getLightInfo(static_cast< s32 >(index));
 }
 
 const char* LightDataHolder::getDefaultAreaLightName() const {

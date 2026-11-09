@@ -9,11 +9,13 @@ use anyhow::Result;
 use std::collections::HashMap;
 
 pub const MAGIC: u32 = 0x4C44_4D4E;
-pub const VERSION: u32 = 3;
+pub const VERSION: u32 = 4;
 pub const HEADER_WORDS: usize = 28;
 pub const JOINT_BYTES: usize = 96;
-pub const MESH_BYTES: usize = 92;
-pub const MATERIAL_BYTES: usize = 228;
+pub const MESH_BYTES: usize = 100;
+pub const MESH_COORD_BYTES: usize = 4;
+pub const MATERIAL_BYTES: usize = 208;
+pub const SLOT_BYTES: usize = 8;
 pub const FORM_BYTES: usize = 64;
 pub const TEXTURE_BYTES: usize = 40;
 pub const COORD_MATRIX_BYTES: usize = 104;
@@ -23,7 +25,12 @@ pub const MESH_NORMAL: u32 = 1 << 0;
 pub const MESH_COLOR0: u32 = 1 << 1;
 pub const MESH_COLOR1: u32 = 1 << 2;
 pub const MESH_TANGENTS: u32 = 1 << 3;
-pub const MESH_COORD0: u32 = 1 << 8;
+/// NebulaModelMeshCoord.stream for a coordinate the mesh has none of.
+pub const MESH_NO_COORD: u8 = 0xFF;
+/// NebulaModelSlot.uses
+pub const SLOT_USES_MAP: u8 = 1 << 0;
+pub const SLOT_USES_COORD: u8 = 1 << 1;
+pub const SLOT_NO_MAP: u16 = 0xFFFF;
 
 /// A pipeline's fixed state as one word (nebula_model.h NEBULA_STATE_*).
 pub fn pipeline_state(m: &MaterialIr) -> u32 {
@@ -43,34 +50,57 @@ pub fn name_hash(text: &str) -> u32 {
     h
 }
 
-/// The texture maps its stages read, and the coordinates its stages and warp orders read.
-fn used_masks(m: &MaterialIr) -> (u16, u16) {
-    let mut maps = 0u16;
-    let mut coords = 0u16;
+/// A material's slots: slot n is map n, coordinate n and matrix n. Its texture, the map its coordinate's scale comes from,
+/// and whether its stages and warp orders read the map and the coordinate (255 names neither).
+pub fn material_slots(m: &MaterialIr) -> Vec<(u32, u16, u8)> {
+    let mut count = m.textures.len().max(m.coords.len()).max(m.coordinate_maps.len());
     for stage in &m.stages {
-        if stage.coord < MATERIAL_SLOTS as u8 {
-            coords |= 1 << stage.coord;
-        }
-        if stage.map < MATERIAL_SLOTS as u8 {
-            maps |= 1 << stage.map;
+        for n in [stage.coord, stage.map] {
+            if n != 255 {
+                count = count.max(usize::from(n) + 1);
+            }
         }
     }
     for order in &m.warp_orders {
-        if order[0] < MATERIAL_SLOTS as u8 {
-            coords |= 1 << order[0];
+        if order[0] != 255 {
+            count = count.max(usize::from(order[0]) + 1);
         }
     }
-    (maps, coords)
+    for t in &m.matrices {
+        count = count.max(usize::from(t.slot) + 1);
+    }
+    let mut out: Vec<(u32, u16, u8)> = (0..count)
+        .map(|n| {
+            let map = m.coordinate_maps.get(n).copied().unwrap_or(255);
+            (m.textures.get(n).copied().unwrap_or(NONE), if map == 255 { SLOT_NO_MAP } else { u16::from(map) }, 0)
+        })
+        .collect();
+    for stage in &m.stages {
+        if stage.coord != 255 {
+            out[usize::from(stage.coord)].2 |= SLOT_USES_COORD;
+        }
+        if stage.map != 255 {
+            out[usize::from(stage.map)].2 |= SLOT_USES_MAP;
+        }
+    }
+    for order in &m.warp_orders {
+        if order[0] != 255 {
+            out[usize::from(order[0])].2 |= SLOT_USES_COORD;
+        }
+    }
+    out
 }
 
 /// A mesh's streams, every corner of the shape's groups once.
 #[derive(Default, Clone)]
 pub struct MeshStreams {
     pub attributes: u32,
+    /// Which coordinate numbers it has; `coords` holds as many per vertex (zeros where it has none).
+    pub coordinates: Vec<bool>,
     pub positions: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub colors: Vec<u32>,
-    pub coords: Vec<[[f32; 2]; MATERIAL_SLOTS]>,
+    pub coords: Vec<[f32; 2]>,
     pub colors1: Vec<u32>,
     pub tangents: Vec<[[f32; 3]; 2]>,
     pub matrices: Vec<u32>,
@@ -82,6 +112,21 @@ pub struct MeshStreams {
     pub flats: Vec<bool>,
 }
 
+impl MeshStreams {
+    pub fn has_coord(&self, k: usize) -> bool {
+        self.coordinates.get(k).copied().unwrap_or(false)
+    }
+    /// Vertex i's coordinate k.
+    pub fn coord(&self, i: usize, k: usize) -> [f32; 2] {
+        self.coords[i * self.coordinates.len() + k]
+    }
+    fn push_coords(&mut self, uv: &[[f32; 2]]) {
+        for k in 0..self.coordinates.len() {
+            self.coords.push(uv.get(k).copied().unwrap_or([0.0; 2]));
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Hash)]
 struct CornerKey {
     position: u32,
@@ -89,7 +134,7 @@ struct CornerKey {
     tangent: u32,
     binormal: u32,
     color: [u32; 2],
-    coord: [u32; MATERIAL_SLOTS],
+    coord: Vec<u32>,
     matrix: u32,
     nbt: bool,
 }
@@ -113,6 +158,17 @@ pub fn corner_normal(a: &ArraysIr, attr: u64, c: &Corner) -> [[f32; 3]; 3] {
 /// the previous group's.
 pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result<MeshStreams> {
     let mut out = MeshStreams::default();
+    out.coordinates = vec![false; shape.groups.iter().map(|g| g.coordinates.len()).max().unwrap_or(0)];
+    for group in &shape.groups {
+        for (k, &present) in group.coordinates.iter().enumerate() {
+            out.coordinates[k] |= present;
+        }
+    }
+    // Only coordinates some group carries take room.
+    while out.coordinates.last() == Some(&false) {
+        out.coordinates.pop();
+    }
+    let room = out.coordinates.len();
     let mut seen: HashMap<CornerKey, u32> = HashMap::new();
     let mut table: Vec<u32> = Vec::new();
     let mut plans: Vec<GroupRefine> = Vec::new();
@@ -137,11 +193,6 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
                 out.attributes |= MESH_COLOR0 << k;
             }
         }
-        for k in 0..MATERIAL_SLOTS {
-            if attr & (ATTR_COORD0 << k) != 0 {
-                out.attributes |= MESH_COORD0 << k;
-            }
-        }
         let curve_data = curved.filter(|_| attr & ATTR_NORMAL != 0 && attr & ATTR_NBT == 0);
         let mut mesh_of = vec![u32::MAX; group.corners.len()];
         for &i in &group.indices {
@@ -154,7 +205,7 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
                 tangent: 0,
                 binormal: 0,
                 color: [0; 2],
-                coord: [0; MATERIAL_SLOTS],
+                coord: (0..room).map(|k| if group.has_coord(k) { c.coord_at(k) } else { 0 }).collect(),
                 matrix: resolved,
                 nbt: attr & ATTR_NBT != 0,
             };
@@ -168,11 +219,6 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
                     key.color[k] = c.color[k];
                 }
             }
-            for k in 0..MATERIAL_SLOTS {
-                if attr & (ATTR_COORD0 << k) != 0 {
-                    key.coord[k] = c.coord[k];
-                }
-            }
             let next = out.positions.len() as u32;
             let index = *seen.entry(key).or_insert(next);
             if index == next {
@@ -182,13 +228,9 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
                 out.tangents.push([n[1], n[2]]);
                 out.colors.push(if attr & ATTR_COLOR0 != 0 { a.colors[0].get(c.color[0] as usize).copied().unwrap_or(0) } else { 0 });
                 out.colors1.push(if attr & (ATTR_COLOR0 << 1) != 0 { a.colors[1].get(c.color[1] as usize).copied().unwrap_or(0) } else { 0 });
-                let mut uv = [[0.0f32; 2]; MATERIAL_SLOTS];
-                for k in 0..MATERIAL_SLOTS {
-                    if attr & (ATTR_COORD0 << k) != 0 {
-                        uv[k] = a.coords[k].get(c.coord[k] as usize).copied().unwrap_or([0.0; 2]);
-                    }
+                for k in 0..room {
+                    out.coords.push(if group.has_coord(k) { a.coord(k, c.coord_at(k)) } else { [0.0; 2] });
                 }
-                out.coords.push(uv);
                 out.matrices.push(resolved);
                 out.flats.push(curve_data.is_some_and(|cd| cd.flat_of(c.position, c.normal)));
             }
@@ -197,7 +239,7 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
         }
         // Refinement mixes a group's corners; its vertices follow the whole plain mesh.
         if let Some(cd) = curved.filter(|cd| cd.bends) {
-            let corners: Vec<Vertex> = group.corners.iter().map(|c| corner_vertex(a, attr, c, curve_data)).collect();
+            let corners: Vec<Vertex> = group.corners.iter().map(|c| corner_vertex(a, attr, &group.coordinates, c, curve_data)).collect();
             let (added, indices) = curves::refine(&corners, &group.indices);
             let _ = cd;
             let table_now: Vec<u32> = (0..table.len()).map(|k| u32::from(table[k])).collect();
@@ -216,7 +258,7 @@ pub fn flatten(a: &ArraysIr, shape: &ShapeIr, curved: Option<&Curves>) -> Result
                 out.tangents.push([v.tangent, v.binormal]);
                 out.colors.push(v.color0);
                 out.colors1.push(v.color1);
-                out.coords.push(v.uv);
+                out.push_coords(&v.uv);
                 out.matrices.push(plan.table.get(v.matrix as usize).copied().unwrap_or(first));
                 out.flats.push(v.flat);
             }
@@ -235,7 +277,7 @@ struct GroupRefine {
 }
 
 /// A group's corner as refinement reads it: its matrix by the group's own number, its curve data where the group has any.
-pub fn corner_vertex(a: &ArraysIr, attr: u64, c: &Corner, curved: Option<&Curves>) -> Vertex {
+pub fn corner_vertex(a: &ArraysIr, attr: u64, coordinates: &[bool], c: &Corner, curved: Option<&Curves>) -> Vertex {
     let n = corner_normal(a, attr, c);
     let mut v = Vertex {
         position: a.positions.get(c.position as usize).copied().unwrap_or([0.0; 3]),
@@ -247,11 +289,7 @@ pub fn corner_vertex(a: &ArraysIr, attr: u64, c: &Corner, curved: Option<&Curves
         color1: if attr & (ATTR_COLOR0 << 1) != 0 { a.colors[1].get(c.color[1] as usize).copied().unwrap_or(0) } else { 0 },
         ..Vertex::default()
     };
-    for k in 0..MATERIAL_SLOTS {
-        if attr & (ATTR_COORD0 << k) != 0 {
-            v.uv[k] = a.coords[k].get(c.coord[k] as usize).copied().unwrap_or([0.0; 2]);
-        }
-    }
+    v.uv = coordinates.iter().enumerate().map(|(k, &present)| if present { a.coord(k, c.coord_at(k)) } else { [0.0; 2] }).collect();
     if let Some(cd) = curved {
         if (c.position as usize) < cd.places.len() {
             v.bend = cd.bend_of(c.position, c.normal);
@@ -488,7 +526,29 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.u32(streams.refined_indices.len() as u32);
         b.u32(0);
         b.u32(0);
+        b.u32(streams.coordinates.len() as u32);
+        b.u32(0);
         meshes.push(streams);
+    }
+    // Each mesh's coordinates by number: coordinate 0 in stream 1, the others packed in stream 3 in ascending order.
+    // Their place counts from the mesh's record, so a mesh record alone gives its layout.
+    b.align(4);
+    for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
+        b.patch32(slot + 96, b.at() - slot as u32);
+        let mut further = 0u32;
+        for k in 0..streams.coordinates.len() {
+            let (stream, offset) = if !streams.has_coord(k) {
+                (MESH_NO_COORD, 0)
+            } else if k == 0 {
+                (1, 16)
+            } else {
+                further += 8;
+                (3, further - 8)
+            };
+            b.u8(stream);
+            b.u8(0);
+            b.u16(offset as u16);
+        }
     }
     // Materials: fixed part, then their variable tables.
     let materials_at = b.at();
@@ -509,13 +569,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         b.u32(m.channel_count as u32);
         b.u32(m.coords.len() as u32);
         b.u32(m.warps.len() as u32);
-        b.u32(m.textures.len() as u32);
+        b.u32(material_slots(m).len() as u32);
         b.u32(m.matrices.len() as u32);
         b.u32(0); // its forms' count
-        let (used_maps, used_coords) = used_masks(m);
-        b.u16(used_maps);
-        b.u16(used_coords);
-        b.0.extend_from_slice(&m.coordinate_maps);
         for c in m.material_color.iter().chain(m.ambient_color.iter()) {
             b.0.extend_from_slice(c);
         }
@@ -550,11 +606,13 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             b.0.extend_from_slice(&[c.kind, c.source, 0, 0]);
             b.u32(c.matrix);
         }
-        let textures_at = b.at();
-        for &t in &m.textures {
-            b.u32(t);
+        let slots_at = b.at();
+        for (texture, scale_map, uses) in material_slots(m) {
+            b.u32(texture);
+            b.u16(scale_map);
+            b.u8(uses);
+            b.u8(0);
         }
-        b.align(4);
         let matrices_at = b.at();
         for t in &m.matrices {
             b.u32(u32::from(t.slot));
@@ -617,7 +675,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         }
         b.patch32(slot + 44, forms.len() as u32);
         b.patch32(tail, coords_at);
-        b.patch32(tail + 4, textures_at);
+        b.patch32(tail + 4, slots_at);
         b.patch32(tail + 8, matrices_at);
         b.patch32(tail + 12, warps_at);
         b.patch32(tail + 16, forms_at);
@@ -674,7 +732,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
         for i in 0..streams.positions.len() {
             b.fs(&streams.normals[i]);
             b.u32(streams.colors[i].swap_bytes());
-            b.fs(&streams.coords[i][0]);
+            b.fs(&if streams.has_coord(0) { streams.coord(i, 0) } else { [0.0; 2] });
         }
         let mut matrices_at = 0;
         if streams.single_matrix == NONE {
@@ -689,9 +747,9 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
             b.align(32);
             further_at = b.at();
             for i in 0..streams.positions.len() {
-                for k in 1..MATERIAL_SLOTS {
-                    if streams.attributes & (MESH_COORD0 << k) != 0 {
-                        b.fs(&streams.coords[i][k]);
+                for k in 1..streams.coordinates.len() {
+                    if streams.has_coord(k) {
+                        b.fs(&streams.coord(i, k));
                     }
                 }
                 if streams.attributes & MESH_COLOR1 != 0 {
@@ -807,8 +865,8 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written) -> Result<Vec<u8>> {
 
 pub fn further_stride(s: &MeshStreams) -> u32 {
     let mut stride = 0u32;
-    for k in 1..MATERIAL_SLOTS {
-        if s.attributes & (MESH_COORD0 << k) != 0 {
+    for k in 1..s.coordinates.len() {
+        if s.has_coord(k) {
             stride += 8;
         }
     }
@@ -830,9 +888,9 @@ mod tests {
             let mut ir = ModelIr::default();
             ir.arrays.positions = (0..count).map(|n| [n as f32, 0.0, 0.0]).collect();
             ir.source_vertex_count = count as u32;
-            let corners = (0..count).map(|n| Corner { position: n as u32, normal: 0, tangent: 0, binormal: 0, color: [0;2], coord: [0;MATERIAL_SLOTS], matrix: 0, texture_matrix: [0;MATERIAL_SLOTS] }).collect();
+            let corners = (0..count).map(|n| Corner { position: n as u32, normal: 0, tangent: 0, binormal: 0, color: [0;2], coord: Vec::new(), matrix: 0, texture_matrix: Vec::new() }).collect();
             ir.shapes.push(ShapeIr {
-                groups: vec![GroupIr { attributes: 0, corners, indices: (0..(count as u32 + (3-count as u32%3)%3)).map(|i| i % count as u32).collect(), use_table: vec![70000], places: count as u32 }],
+                groups: vec![GroupIr { attributes: 0, coordinates: Vec::new(), corners, indices: (0..(count as u32 + (3-count as u32%3)%3)).map(|i| i % count as u32).collect(), use_table: vec![70000], places: count as u32 }],
                 material: NONE, matrix_type: 0, radius: 0.0, min: [0.0;3], max: [0.0;3]
             });
             let bytes = write(&ir, "wide", &Written::unknown()).unwrap();

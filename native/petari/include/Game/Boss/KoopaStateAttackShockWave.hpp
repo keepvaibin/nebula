@@ -18,7 +18,6 @@ public:
     void exeJumpStart();
     void exeJump();
     void exeLand();
-    void exeJumpFast();
 
     s32 mMaxAttacks;
     s32 mAttacks;
