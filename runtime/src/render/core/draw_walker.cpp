@@ -1558,7 +1558,7 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         }
         walk_pass(now, p, target_channels);
         for (const core::ListData::EarlyProbe& early : now.early_probes) {
-            if (early.after == p && !now.probes_done) {
+            if (early.after == p && now.probes_due(walk_.between)) {
                 const NebulaFramePass& probe = list.passes[early.probe];
                 record_screen_probes(probe.probe_channel, list.probes + probe.first_probe, probe.probe_count,
                                      probe.arg0 == NEBULA_PROBE_COMPARED);
@@ -1568,7 +1568,8 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     if (target_open_) {
         walk_target_end(target_channels);
     }
-    now.probes_done = true;
+    // A generated frame asks nothing: its depth is the scene at t, and the points are the camera's at t = 1.
+    now.probes_done = now.probes_done || !walk_.between;
     NEBULA_INSPECT_END(*this);
 }
 
@@ -1667,8 +1668,8 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             renderer_.game_bloom(pass.kind, pass.arg0, pass.arg1);
             break;
         case NEBULA_PASS_PROBE:
-            // On the list's first walk, so the game reads the answers when it always did; some were asked earlier.
-            if (!now.probes_done && std::none_of(now.early_probes.begin(), now.early_probes.end(),
+            // On the list's real walk (probes_due), so the points and the depth are of one camera; some were asked earlier.
+            if (now.probes_due(walk_.between) && std::none_of(now.early_probes.begin(), now.early_probes.end(),
                                                  [p](const core::ListData::EarlyProbe& early) { return early.probe == p; })) {
                 record_screen_probes(pass.probe_channel, list.probes + pass.first_probe, pass.probe_count,
                                      pass.arg0 == NEBULA_PROBE_COMPARED);

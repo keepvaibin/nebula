@@ -308,6 +308,17 @@ void test_eye_space_world_rows() {
     }
 }
 
+// A list asks its screen probes once, on its real walk: frames generated between two lists see the scene at t < 1.
+void test_probes_asked_on_the_real_walk() {
+    ListData list;
+    check(!list.probes_done, "a new list has asked no probes");
+    check(!list.probes_due(true), "a generated frame asks no probes");
+    check(list.probes_due(false), "the real walk asks the list's probes");
+    list.probes_done = true;
+    check(!list.probes_due(false), "a list's probes are asked once");
+    check(!list.probes_due(true), "a generated frame after the real walk asks none");
+}
+
 }  // namespace
 
 int main() {
@@ -338,6 +349,7 @@ int main() {
     test_wide_identity_parts_do_not_alias_generations();
     test_joints_between_frames();
     test_teleport_shows_this_frame();
+    test_probes_asked_on_the_real_walk();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;

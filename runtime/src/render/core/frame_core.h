@@ -161,7 +161,10 @@ struct ListData {
     std::vector<std::uint32_t> light_set_before;
     std::vector<std::uint32_t> item_before;
     bool motion_ready = false;
+    // The list's screen probes are asked once, on its first real walk: a frame between lists (`between`) draws the scene at
+    // t < 1, not the camera the game's points were made with.
     bool probes_done = false;
+    [[nodiscard]] bool probes_due(bool between) const noexcept { return !probes_done && !between; }
     std::vector<EyeMotion> eye_motions;        // an eye-space block's joints, in `joint_motion`'s place
 
     // Target passes drawn before the list's other passes (plan_early_targets): passes [first, end), and the
