@@ -21,7 +21,8 @@ CoinHolder::CoinHolder(const char* pName) : DeriveActorGroup< Coin >(pName, ::sC
 bool CoinHolder::hopCoin(const NameObj* pObj, const Vec3f& rPosition, const Vec3f& rDirection) {
     CoinHostInfo* hostInfo = findHostInfo(pObj);
 
-    if (hostInfo->mAppeared >= hostInfo->mDeclared) {
+    // An object that declared no coins hops none.
+    if (hostInfo == nullptr || hostInfo->mAppeared >= hostInfo->mDeclared) {
         return false;
     }
 
@@ -106,7 +107,7 @@ CoinHostInfo* CoinHolder::declare(const NameObj* pObj, s32 count) {
 s32 CoinHolder::getDeclareRemnantCoinCount(const NameObj* pObj) const {
     CoinHostInfo* hostInfo = findHostInfo(pObj);
 
-    if (MR::isGalaxyDarkCometAppearInCurrentStage()) {
+    if (hostInfo == nullptr || MR::isGalaxyDarkCometAppearInCurrentStage()) {
         return 0;
     }
 

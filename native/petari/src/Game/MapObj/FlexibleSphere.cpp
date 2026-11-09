@@ -256,7 +256,8 @@ void FlexibleSphere::draw() const {
     if (!MR::isDead(this)) {
         PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
         pModel->viewCalc2();
-        sCoordScale = 0.05f / mScale.x + 0.95f;
+        // A sphere shrunk to a scale of 0 (a minimum of 0 in placement arg 1) keeps the plain pattern size.
+        sCoordScale = mScale.x > 0.0f ? 0.05f / mScale.x + 0.95f : 1.0f;
         pModel->directDraw();
     }
 }

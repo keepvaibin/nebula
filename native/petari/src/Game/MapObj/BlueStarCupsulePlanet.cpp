@@ -65,7 +65,9 @@ void BlueStarCupsulePlanet::init(const TableIter& rIter) {
     mtx.set(getBaseMtx());
     mtx.invert(mtx);
     mtx.mult(vec, offset);
-    MR::initStarPointerTarget(this, ::getParam(mName)->mRadius, offset);
+    // A model name outside the table takes the first entry's radius.
+    const BlueStarCupsulePlanetParam* pParam = ::getParam(mName);
+    MR::initStarPointerTarget(this, pParam != nullptr ? pParam->mRadius : ::sParams[0].mRadius, offset);
     MR::setClippingTypeSphere(this, 600.0f);
 
     if (MR::isConnectedWithRail(rIter)) {

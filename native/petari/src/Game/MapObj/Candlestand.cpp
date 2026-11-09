@@ -48,7 +48,8 @@ namespace {
             }
         }
 
-        return nullptr;
+        // An object name outside the table takes the first entry's values.
+        return &::sParams[0];
     }
 };  // namespace
 
