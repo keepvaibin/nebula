@@ -18,6 +18,9 @@
 
 namespace {
     const f32 cHitSensorRadius = 30.0f;
+    // Draw numbers a rail owns among the holder's: its place in the list times this. Room for the strips of a rail
+    // (two planes a level) or its sent mesh.
+    const u32 cPartsPerRail = 1024;
 
     ElectricRailHolder* getHolder() {
         return MR::getSceneObj< ElectricRailHolder >(SceneObj_ElectricRailHolder);
@@ -75,6 +78,8 @@ void ElectricRailHolder::draw() const {
             continue;
         }
 
+        // A rail skipped (clipped, hidden) does not renumber the rails after it.
+        Frame::setPart(static_cast< u32 >(i) * ::cPartsPerRail);
         MaterialEntry* pPacket = pItem->mMatPacket;
         MaterialDraw material(pPacket->getMaterial());
         material.sendOwn(pPacket->getFirstMeshEntry()->mMaterial, pPacket->getMaterial());

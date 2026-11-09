@@ -25,6 +25,11 @@ bool ShadowVolumeSphere::isDraw() const {
     return controller->isProjected() && controller->isDraw();
 }
 
+// The sphere stands where the drop meets the ground: that point jumping at a ledge starts a new object.
+void ShadowVolumeSphere::calcDrawAnchor(Vec3f* pOut) const {
+    getController()->getProjectionPos(pOut);
+}
+
 void ShadowVolumeSphere::loadModelDrawMtx(TypedDraw& rDraw) const {
     ShadowController* controller = getController();
     f32 radius = mRadius / ::sModelScale;

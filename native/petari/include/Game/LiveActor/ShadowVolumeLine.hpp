@@ -9,6 +9,7 @@ public:
     virtual ~ShadowVolumeLine() override;
     virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
     virtual void drawShape(TypedDraw& rDraw) const override;
+    virtual u32 calcDrawLives() const override;
 
     void setFromShadowController(const ShadowController*);
     void setToShadowController(const ShadowController*);

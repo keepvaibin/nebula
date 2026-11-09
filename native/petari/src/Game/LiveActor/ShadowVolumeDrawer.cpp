@@ -84,6 +84,9 @@ bool ShadowVolumeDrawer::isDraw() const {
 
 void ShadowVolumeDrawer::draw() const {
     if (isDraw()) {
+        // The host's life and the shape's run of smooth steps name the draws: a host renewed in place, or a shape that
+        // jumped, is never blended from where it was (world-space shapes carry no teleport test of their own).
+        beginDrawObject();
         NebulaColor8 shapeColor = ::sShapeColor;
         SiteMaterial material;
         MR::initShadowVolumeMaterial(material, shapeColor);

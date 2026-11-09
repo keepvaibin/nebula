@@ -8,6 +8,7 @@ public:
 
     virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
     virtual bool isDraw() const override;
+    virtual void calcDrawAnchor(Vec3f* pOut) const override;
 
     void setSize(const Vec3f&);
 

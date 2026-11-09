@@ -109,6 +109,10 @@ void FurCtrl::drawFur() {
     mDrawer->mColorBlend.mCurve = mParam->mSkinAlphaCurve;
     mDrawer->setupMaterial(mDynamicParam);
 
+    // The manager skips the fur of an actor clipped, dead or hidden: each fur draws as its model's object, in a range past
+    // the model's own meshes' numbers by its shape (a layer each), so the fur after a skipped one is not renumbered.
+    Frame::setObject(mModel->getSlot(), mModel->mMotionEpoch);
+    Frame::setPart(0x1000u + static_cast< u32 >(mShapeIndex) * 64u);
     TypedDraw site(mDrawer->material(), nullptr);
     site.setModelBlock(pModelData, mModel->block(pShape->getMaterial()));
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {

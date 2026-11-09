@@ -41,7 +41,8 @@ public:
     void startEventCamera() const;
     void endEventCamera();
     void initDraw();
-    void drawCylinder() const;
+    // The tube's segments take the draw numbers `firstPart` + the point's index, whatever segments are left out.
+    void drawCylinder(u32 firstPart) const;
 
     // Opens by the saved warp pod path flag (arg 3 = 0).
     bool isSavedPath() const {

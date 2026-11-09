@@ -239,7 +239,10 @@ namespace Mii {
         if (!mBuilt) {
             return;
         }
+        // A part that is not there (drawPart returns) does not renumber the parts after it.
+        const u32 first = Frame::nextPart();
         for (u32 i = PartBeard; i <= PartFace; i++) {
+            Frame::setPart(first + i);
             drawPart(mParts[i], rStyle, mParts[i].textured ? &mParts[i].texture : nullptr);
         }
     }
@@ -248,8 +251,12 @@ namespace Mii {
         if (!mBuilt) {
             return;
         }
+        const u32 first = Frame::nextPart();
+        Frame::setPart(first + PartMask);
         drawPart(mParts[PartMask], rStyle, hasExpression(mExpression) ? &mFaceTextures[mExpression] : nullptr);
+        Frame::setPart(first + PartNoseLine);
         drawPart(mParts[PartNoseLine], rStyle, mParts[PartNoseLine].textured ? &mParts[PartNoseLine].texture : nullptr);
+        Frame::setPart(first + PartGlasses);
         drawPart(mParts[PartGlasses], rStyle, mParts[PartGlasses].textured ? &mParts[PartGlasses].texture : nullptr);
     }
 }  // namespace Mii

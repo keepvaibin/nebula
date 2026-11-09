@@ -45,6 +45,8 @@ public:
     virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
     virtual void drawShape(TypedDraw& rDraw) const override;
     virtual bool isDraw() const override;
+    virtual void calcDrawAnchor(Vec3f* pOut) const override;
+    virtual u32 calcDrawLives() const override;
 
     const LiveActor* mHost;
     f32 mRadius;
