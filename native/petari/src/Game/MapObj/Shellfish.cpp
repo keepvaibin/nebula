@@ -8,6 +8,7 @@
 #include "Game/MapObj/Coin.hpp"
 #include "Game/MapObj/YellowChip.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec sBodyHitOffset = {0.0f, 100.0f, 0.0f};
@@ -16,16 +17,16 @@ namespace {
     const Vec sChipOffset = {0.0f, 100.0f, 50.0f};
     const Vec sKinokoOneUpOffset = {0.0f, 70.0f, 30.0f};
     const s32 sStepToOpen = NebulaFrameClock::stepsOfMilliseconds(2500);
-    const s32 sStepToSetPosItem = 100;
-    const s32 sStepToCloseSignal = 170;
+    NEBULA_TUNABLE(s32, sStepToSetPosItem, 100);
+    NEBULA_TUNABLE(s32, sStepToCloseSignal, 170);
     const s32 sStepToClose = NebulaFrameClock::stepsOfMilliseconds(2500);
-    const s32 sStepToHitSensorOn = 0;
-    const s32 sStepToHitSensorOff = 15;
-    const s32 sStepToApperItem = 40;
-    const s32 sStepToDeadItem = 5;
+    NEBULA_TUNABLE(s32, sStepToHitSensorOn, 0);
+    NEBULA_TUNABLE(s32, sStepToHitSensorOff, 15);
+    NEBULA_TUNABLE(s32, sStepToApperItem, 40);
+    NEBULA_TUNABLE(s32, sStepToDeadItem, 5);
     const s32 sStepToRecover = NebulaFrameClock::stepsOfSeconds(9);
-    const s32 sShockToInterpole = 2;
-    const f32 sHitPushPower = 40.0f;
+    NEBULA_TUNABLE(s32, sShockToInterpole, 2);
+    NEBULA_TUNABLE(f32, sHitPushPower, 40.0f);
 };  // namespace
 
 namespace NrvShellfish {

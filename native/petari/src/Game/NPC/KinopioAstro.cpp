@@ -21,10 +21,11 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sMessangerOneUpNum = 5;
-    const s32 sMessangerOneUpExNum = 20;
+    NEBULA_TUNABLE(s32, sMessangerOneUpNum, 5);
+    NEBULA_TUNABLE(s32, sMessangerOneUpExNum, 20);
 
     // The larger supply's 1-ups (a mod may change them: NEBULA_PATCH_MESSENGER_EX_ONE_UPS).
     s32 messengerOneUpExNum() {
@@ -32,8 +33,8 @@ namespace {
         NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
         return static_cast< s32 >(count);
     }
-    const f32 sMessangerTalkDistance = 3000.0f;
-    const f32 sGotMailSePlayAreaRadius = 1500.0f;
+    NEBULA_TUNABLE(f32, sMessangerTalkDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, sGotMailSePlayAreaRadius, 1500.0f);
 };  // namespace
 
 KinopioAstro::KinopioAstro(const char* pName)

@@ -16,11 +16,12 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sDemoAnimStartDelayTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sStopTime = NebulaFrameClock::stepsOfSeconds(5);
-    static const f32 sCanRestartPlayerDistance = 230.0f;
+    NEBULA_TUNABLE(f32, sCanRestartPlayerDistance, 230.0f);
 };  // namespace
 
 namespace NrvTripodBossKillerGenerater {

@@ -9,18 +9,19 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sMarioWorldOffset = 120.0f;
-    static const f32 sMarioScreenOffsetX = 32.0f;
-    static const f32 sMarioScreenOffsetY = -38.0f;
-    static const s32 sMoveToBasePositionTime = 25;
-    static const f32 sMinAlpha = 0.3f;
-    static const f32 sMaxAlpha = 1.2f;
+    NEBULA_TUNABLE(f32, sMarioWorldOffset, 120.0f);
+    NEBULA_TUNABLE(f32, sMarioScreenOffsetX, 32.0f);
+    NEBULA_TUNABLE(f32, sMarioScreenOffsetY, -38.0f);
+    NEBULA_TUNABLE(s32, sMoveToBasePositionTime, 25);
+    NEBULA_TUNABLE(f32, sMinAlpha, 0.3f);
+    NEBULA_TUNABLE(f32, sMaxAlpha, 1.2f);
     // static const f32 sHideSpeed = _;
     // static const f32 sShowSpeed = _;
     static const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(2);
-    static const s32 sBreakDelayTime = 40;
+    NEBULA_TUNABLE(s32, sBreakDelayTime, 40);
     static const s32 sPowerUpWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sRecoveryCountInterval = _;
     // static const s32 sRecoveryCountStartTime = _;

@@ -4,9 +4,10 @@
 #include "Game/MapObj/BigFanHolder.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBaseWindWidth = 400.0f;
+    NEBULA_TUNABLE(f32, sBaseWindWidth, 400.0f);
 };  // namespace
 
 namespace NrvBigFan {

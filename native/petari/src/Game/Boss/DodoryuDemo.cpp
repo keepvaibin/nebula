@@ -13,11 +13,12 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sOpeningHideFrame = 60;
-    static const s32 sOpeningAppearSmileSoundStep = 55;
-    static const s32 sDieSoundStep = 242;
+    NEBULA_TUNABLE(s32, sOpeningHideFrame, 60);
+    NEBULA_TUNABLE(s32, sOpeningAppearSmileSoundStep, 55);
+    NEBULA_TUNABLE(s32, sDieSoundStep, 242);
 };  // namespace
 
 namespace {

@@ -18,10 +18,11 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace {
-    static const f32 sPointableRange = 3400.0f;
+    NEBULA_TUNABLE(f32, sPointableRange, 3400.0f);
 
     static const BlueStarCupsulePlanetParam sParams[] = {{"BlueStarCupsulePlanet", 500.0f}, {"UFOBlueStarCupsule", 200.0f}};
 

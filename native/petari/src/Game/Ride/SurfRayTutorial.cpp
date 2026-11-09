@@ -9,15 +9,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sStepTalk = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const s32 sStepToSuccess = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const s32 sStepToOK = 10;
-    static const f32 sPadAccelStraightMinX = 0.25f;
-    static const f32 sPadAccelStraightMinY = 0.45f;
-    static const f32 sPadAccelTurnMinX = 0.65f;
-    static const f32 sPadAccelTurnLimitY = 0.5f;
+    NEBULA_TUNABLE(s32, sStepToOK, 10);
+    NEBULA_TUNABLE(f32, sPadAccelStraightMinX, 0.25f);
+    NEBULA_TUNABLE(f32, sPadAccelStraightMinY, 0.45f);
+    NEBULA_TUNABLE(f32, sPadAccelTurnMinX, 0.65f);
+    NEBULA_TUNABLE(f32, sPadAccelTurnLimitY, 0.5f);
 };  // namespace
 
 namespace NrvSurfRayTutorial {

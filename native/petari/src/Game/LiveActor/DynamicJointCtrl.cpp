@@ -1,10 +1,11 @@
 #include "Game/LiveActor/DynamicJointCtrl.hpp"
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     DynamicJointCtrlParam sDefaultParam = {0.3f, 0.98f, 0.01f, 45.0f, -1};
-    const s32 sDefaultCtrlTime = 10;
+    NEBULA_TUNABLE(s32, sDefaultCtrlTime, 10);
     const char* sTextOutFileName = "DynamicJointCtrl";
 
     s32 calcJointChildNum(Joint* pJoint) {

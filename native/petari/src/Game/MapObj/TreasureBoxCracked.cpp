@@ -9,6 +9,7 @@
 #include "Game/MapObj/YellowChip.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaMods.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvTreasureBoxCracked {
     NEW_NERVE(TreasureBoxCrackedNrvWait, TreasureBoxCracked, Wait);
@@ -27,13 +28,13 @@ namespace {
     const Vec sKinokoOneUpOffset = {0.0f, 130.0f, 0.0f};
     const Vec sKinokoLifeUpOffset = {0.0f, 130.0f, 0.0f};
     const Vec sAirBubbleOffset = {0.0f, 220.0f, 0.0f};
-    const f32 sFirstSpeed = 15.0f;
-    const f32 sAccelRate = 1.2f;
-    const f32 sBoundSpeedMax = 15.0f;
-    const s32 sBoundTime = 20;
-    const s32 sDefaultWaitForSwitchOn = 5;
-    const f32 sPointLightBrightness = 0.99f;
-    const f32 sStepForCollisionMove = 15.0f;
+    NEBULA_TUNABLE(f32, sFirstSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sAccelRate, 1.2f);
+    NEBULA_TUNABLE(f32, sBoundSpeedMax, 15.0f);
+    NEBULA_TUNABLE(s32, sBoundTime, 20);
+    NEBULA_TUNABLE(s32, sDefaultWaitForSwitchOn, 5);
+    NEBULA_TUNABLE(f32, sPointLightBrightness, 0.99f);
+    NEBULA_TUNABLE(f32, sStepForCollisionMove, 15.0f);
 };  // namespace
 
 TreasureBoxCracked::TreasureBoxCracked(const char* pName)

@@ -6,10 +6,11 @@
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sListCapacity = 2560;
-    const u32 sTableSize = 8192;
+    NEBULA_TUNABLE(s32, sListCapacity, 2560);
+    NEBULA_TUNABLE(u32, sTableSize, 8192);
 
     u32 hashActor(const LiveActor* pActor) {
         return static_cast< u32 >(reinterpret_cast< uintptr_t >(pActor) >> 4) * 0x9E3779B1u;

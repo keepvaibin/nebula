@@ -13,23 +13,24 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStopSceneFrame = 10;
-    static const f32 sKnockSpeed = 10.0f;
-    static const f32 sSpeed = 8.0f;
-    static const f32 sAppearSpeed = 4.0f;
-    static const f32 sRailAccel = 0.1f;
-    static const s32 sHideTermMin = 150;
-    static const s32 sHideTermMax = 200;
-    static const s32 sAppearStartAttackFrame = 16;
-    static const s32 sAppearTermMin = 15;
-    static const s32 sAppearTermMax = 30;
-    static const s32 sSwoonTerm = 180;
-    static const s32 sDiveShadowOffFrame = 50;
-    static const s32 sSpinOutEndFrame = 80;
-    static const s32 sAppearSignFrame = 30;
-    static const s32 sDiveAttackInvalidFrame = 20;
+    NEBULA_TUNABLE(s32, sStopSceneFrame, 10);
+    NEBULA_TUNABLE(f32, sKnockSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sSpeed, 8.0f);
+    NEBULA_TUNABLE(f32, sAppearSpeed, 4.0f);
+    NEBULA_TUNABLE(f32, sRailAccel, 0.1f);
+    NEBULA_TUNABLE(s32, sHideTermMin, 150);
+    NEBULA_TUNABLE(s32, sHideTermMax, 200);
+    NEBULA_TUNABLE(s32, sAppearStartAttackFrame, 16);
+    NEBULA_TUNABLE(s32, sAppearTermMin, 15);
+    NEBULA_TUNABLE(s32, sAppearTermMax, 30);
+    NEBULA_TUNABLE(s32, sSwoonTerm, 180);
+    NEBULA_TUNABLE(s32, sDiveShadowOffFrame, 50);
+    NEBULA_TUNABLE(s32, sSpinOutEndFrame, 80);
+    NEBULA_TUNABLE(s32, sAppearSignFrame, 30);
+    NEBULA_TUNABLE(s32, sDiveAttackInvalidFrame, 20);
 };  // namespace
 
 namespace {

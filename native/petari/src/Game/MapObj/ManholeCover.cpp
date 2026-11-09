@@ -5,10 +5,11 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSensorRadius = 150.0f;
-    const s32 sRattleTime = 45;
+    NEBULA_TUNABLE(f32, sSensorRadius, 150.0f);
+    NEBULA_TUNABLE(s32, sRattleTime, 45);
 };  // namespace
 
 namespace NrvManholeCover {

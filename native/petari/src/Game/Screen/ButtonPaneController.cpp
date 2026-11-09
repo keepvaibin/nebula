@@ -7,9 +7,10 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cDecidedToDisappearAnimRate = 1.5f;
+    NEBULA_TUNABLE(f32, cDecidedToDisappearAnimRate, 1.5f);
 };  // namespace
 
 namespace NrvButtonPaneController {

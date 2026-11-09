@@ -16,40 +16,41 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 hForceBindOffset = 65.0f;
-    static const f32 hForceBindMul = 0.5f;
-    static const f32 sShadowSize = 160.0f;
-    static const f32 hGravityVel = 3.0f;
-    static const f32 hVelHMin = 10.0f;
-    static const f32 hReflectRate = 0.5f;
-    static const f32 hSpinningAttackStrongVel = 10.0f;
-    static const f32 hStopCheckVel = 0.1f;
-    static const f32 hGroundCosine = 0.4f;
+    NEBULA_TUNABLE(f32, hForceBindOffset, 65.0f);
+    NEBULA_TUNABLE(f32, hForceBindMul, 0.5f);
+    NEBULA_TUNABLE(f32, sShadowSize, 160.0f);
+    NEBULA_TUNABLE(f32, hGravityVel, 3.0f);
+    NEBULA_TUNABLE(f32, hVelHMin, 10.0f);
+    NEBULA_TUNABLE(f32, hReflectRate, 0.5f);
+    NEBULA_TUNABLE(f32, hSpinningAttackStrongVel, 10.0f);
+    NEBULA_TUNABLE(f32, hStopCheckVel, 0.1f);
+    NEBULA_TUNABLE(f32, hGroundCosine, 0.4f);
     static const s32 hWaitTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 hPlayerIsSideDotCheck = 0.25f;
-    static const f32 hSpinningAngle = 2.0f;
-    static const f32 hDampVelHWait = 0.6f;
-    static const f32 hDampVelVWait = 0.6f;
-    static const f32 hTurnYDirRatio = 0.125f;
-    static const f32 hPointedRotDamp = 0.8f;
-    static const f32 hSlidingVelocitySub = 0.08f;
-    static const f32 hSlidingVelMax = 17.0f;
-    static const f32 hSlidingRotateSub = 0.01f;
-    static const f32 hSlidingRotVelMin = 0.02f;
-    static const f32 hSlidingRotVelMax = 0.02f;
+    NEBULA_TUNABLE(f32, hPlayerIsSideDotCheck, 0.25f);
+    NEBULA_TUNABLE(f32, hSpinningAngle, 2.0f);
+    NEBULA_TUNABLE(f32, hDampVelHWait, 0.6f);
+    NEBULA_TUNABLE(f32, hDampVelVWait, 0.6f);
+    NEBULA_TUNABLE(f32, hTurnYDirRatio, 0.125f);
+    NEBULA_TUNABLE(f32, hPointedRotDamp, 0.8f);
+    NEBULA_TUNABLE(f32, hSlidingVelocitySub, 0.08f);
+    NEBULA_TUNABLE(f32, hSlidingVelMax, 17.0f);
+    NEBULA_TUNABLE(f32, hSlidingRotateSub, 0.01f);
+    NEBULA_TUNABLE(f32, hSlidingRotVelMin, 0.02f);
+    NEBULA_TUNABLE(f32, hSlidingRotVelMax, 0.02f);
     static const s32 hKickableTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 hSpinningVelocitySub = 0.01f;
-    static const f32 hSpinningVelMin = 0.0f;
-    static const f32 hSpinningVelMax = 25.0f;
-    static const f32 hSpinningRotateSub = 0.001f;
-    static const f32 hSpinningRotVelMin = 0.1f;
-    static const f32 hSpinningRotVelMax = 0.5f;
-    static const f32 hPlayerVelocityCheck = 10.0f;
-    static const f32 hIceInitBlowVelV = 100.0f;
-    static const f32 hKickCheckOffsetUp = 0.0f;
-    static const f32 hIceInitBlowVelH = 0.0f;
+    NEBULA_TUNABLE(f32, hSpinningVelocitySub, 0.01f);
+    NEBULA_TUNABLE(f32, hSpinningVelMin, 0.0f);
+    NEBULA_TUNABLE(f32, hSpinningVelMax, 25.0f);
+    NEBULA_TUNABLE(f32, hSpinningRotateSub, 0.001f);
+    NEBULA_TUNABLE(f32, hSpinningRotVelMin, 0.1f);
+    NEBULA_TUNABLE(f32, hSpinningRotVelMax, 0.5f);
+    NEBULA_TUNABLE(f32, hPlayerVelocityCheck, 10.0f);
+    NEBULA_TUNABLE(f32, hIceInitBlowVelV, 100.0f);
+    NEBULA_TUNABLE(f32, hKickCheckOffsetUp, 0.0f);
+    NEBULA_TUNABLE(f32, hIceInitBlowVelH, 0.0f);
 };  // namespace
 
 namespace NrvSpinningBox {

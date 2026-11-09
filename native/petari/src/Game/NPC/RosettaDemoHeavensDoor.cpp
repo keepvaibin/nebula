@@ -4,11 +4,12 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/Rosetta.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sRosettaSwingVoiceFrame = 70;
-    const s32 sRosettaSwingFrame = 80;
-    const s32 sRosettaHideFrame = 10;
+    NEBULA_TUNABLE(s32, sRosettaSwingVoiceFrame, 70);
+    NEBULA_TUNABLE(s32, sRosettaSwingFrame, 80);
+    NEBULA_TUNABLE(s32, sRosettaHideFrame, 10);
 };  // namespace
 
 namespace NrvRosettaDemoHeavensDoor1 {

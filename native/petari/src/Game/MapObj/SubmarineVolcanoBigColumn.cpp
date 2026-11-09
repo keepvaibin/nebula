@@ -5,12 +5,13 @@
 #include "Game/MapObj/AirBubbleHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sShakeDistance = 800.0f;
+    NEBULA_TUNABLE(f32, sShakeDistance, 800.0f);
     static const s32 sGenerateInterval = NebulaFrameClock::stepsOfSeconds(6);
-    static const s32 sGenerateLife = 360;
-    static const f32 sGenerateOffsetY = 1250.0f;
+    NEBULA_TUNABLE(s32, sGenerateLife, 360);
+    NEBULA_TUNABLE(f32, sGenerateOffsetY, 1250.0f);
 };  // namespace
 
 namespace NrvSubmarineVolcanoBigColumn {

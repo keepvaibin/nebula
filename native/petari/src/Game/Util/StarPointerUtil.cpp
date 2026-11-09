@@ -26,10 +26,11 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
 
-    static const f32 hPointColRayLength = 99999.0f;
+    NEBULA_TUNABLE(f32, hPointColRayLength, 99999.0f);
 
     class StarPointerTargetInfo {
     public:

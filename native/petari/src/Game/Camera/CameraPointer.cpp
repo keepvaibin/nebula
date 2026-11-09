@@ -6,10 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sMaxDistance = 0.15f;
-    static const f32 sFovyBlendRate = 0.05f;
+    NEBULA_TUNABLE(f32, sMaxDistance, 0.15f);
+    NEBULA_TUNABLE(f32, sFovyBlendRate, 0.05f);
 };  // namespace
 
 CameraPointer::CameraPointer(const char* pName)

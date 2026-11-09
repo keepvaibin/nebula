@@ -2,11 +2,12 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/RumbleCalculator.hpp"
 #include "math_types.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cRumbleFreq = 2.0f;
-    const f32 cRumbleAmp = 8.0f;
-    const s32 cRumbleFrame = 15;
+    NEBULA_TUNABLE(f32, cRumbleFreq, 2.0f);
+    NEBULA_TUNABLE(f32, cRumbleAmp, 8.0f);
+    NEBULA_TUNABLE(s32, cRumbleFrame, 15);
 };  // namespace
 
 CountUpPaneRumbler::CountUpPaneRumbler(LayoutActor* pHost, const char* pPaneName) : mRumbleCalculator(), mPosition(0.0f, 0.0f) {

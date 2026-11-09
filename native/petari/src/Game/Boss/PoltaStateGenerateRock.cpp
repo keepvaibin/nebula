@@ -10,6 +10,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 cPatternLength = 7;
@@ -19,10 +20,10 @@ namespace {
         {1, 0, 0, 1, 0, 0, 0}, {0, 1, 0, 0, 1, 0, 0}, {0, 0, 1, 0, 0, 1, 0}, {0, 0, 0, 1, 0, 0, 1}, {0, 0, 0, 0, 1, 0, 0},
     };
     // The draw is a float in [0, 9) cut to an int, so the last pattern is never picked.
-    const s32 cPatternDrawMax = 9;
+    NEBULA_TUNABLE(s32, cPatternDrawMax, 9);
     const s32 cRockInterval = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 cRockCircleRadius = 600.0f;
-    const f32 cYellowRockRate = 0.08f;
+    NEBULA_TUNABLE(f32, cRockCircleRadius, 600.0f);
+    NEBULA_TUNABLE(f32, cYellowRockRate, 0.08f);
 }  // namespace
 
 namespace NrvPoltaStateGenerateRock {

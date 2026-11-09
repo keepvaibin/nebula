@@ -18,13 +18,14 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec cZoomInOffset = {400.0f, 2550.0f, -7600.0f};
-    const s32 cTryStartBindFrame = 30;
-    const s32 cBindTractionFrame = 90;
-    const s32 cBubbleGrowFrame = 30;
-    const f32 cBubbleMaxRadius = 150.0f;
+    NEBULA_TUNABLE(s32, cTryStartBindFrame, 30);
+    NEBULA_TUNABLE(s32, cBindTractionFrame, 90);
+    NEBULA_TUNABLE(s32, cBubbleGrowFrame, 30);
+    NEBULA_TUNABLE(f32, cBubbleMaxRadius, 150.0f);
 };  // namespace
 
 AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("キャプチャ用アクター") {

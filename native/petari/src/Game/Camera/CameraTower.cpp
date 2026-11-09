@@ -5,10 +5,11 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAttenuation = 0.05f;
-    const f32 sRoundAddition = 0.08f;
+    NEBULA_TUNABLE(f32, sAttenuation, 0.05f);
+    NEBULA_TUNABLE(f32, sRoundAddition, 0.08f);
     const f32 sRoundInterval = FloatUtil::PI() / 4.0f;
 
     // The tower works in zone space: the watch point goes in through rInv, the finished pose comes out through rMtx.

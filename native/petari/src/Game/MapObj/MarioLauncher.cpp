@@ -28,40 +28,41 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sEjectSpeed = 40.0f;
-    static const f32 sGravityScale = 0.8f;
-    static const f32 sGravityRatio = 0.95f;
-    static const f32 sShellRadius = 80.0f;
-    static const f32 sShellOffset = 180.0f;
-    static const f32 sGravityRoll = 0.01f;
-    static const f32 sLandingSpeedRatio = 0.4f;
-    static const s32 sLoopStart = 65;
-    static const s32 sDieStart = 300;
-    static const s32 sDispLaunch = 90;
-    static const f32 sPointerCameraYRot = 0.3f;
-    static const f32 sPointerCameraXRot = 0.3f;
-    static const f32 sPointerCameraElevation = 0.62f;
-    static const s32 sKillFrame = 360;
-    static const s32 sStartActiveFrame = 10;
-    static const s32 sInterpolateTest1 = 15;
-    static const f32 sSensorRadius = 80.0f;
-    static const f32 sSensorOffsetY = 20.0f;
-    static const s32 sPrepFrame = 26;
-    static const s32 sRejectFrame = 20;
+    NEBULA_TUNABLE(f32, sEjectSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, sGravityScale, 0.8f);
+    NEBULA_TUNABLE(f32, sGravityRatio, 0.95f);
+    NEBULA_TUNABLE(f32, sShellRadius, 80.0f);
+    NEBULA_TUNABLE(f32, sShellOffset, 180.0f);
+    NEBULA_TUNABLE(f32, sGravityRoll, 0.01f);
+    NEBULA_TUNABLE(f32, sLandingSpeedRatio, 0.4f);
+    NEBULA_TUNABLE(s32, sLoopStart, 65);
+    NEBULA_TUNABLE(s32, sDieStart, 300);
+    NEBULA_TUNABLE(s32, sDispLaunch, 90);
+    NEBULA_TUNABLE(f32, sPointerCameraYRot, 0.3f);
+    NEBULA_TUNABLE(f32, sPointerCameraXRot, 0.3f);
+    NEBULA_TUNABLE(f32, sPointerCameraElevation, 0.62f);
+    NEBULA_TUNABLE(s32, sKillFrame, 360);
+    NEBULA_TUNABLE(s32, sStartActiveFrame, 10);
+    NEBULA_TUNABLE(s32, sInterpolateTest1, 15);
+    NEBULA_TUNABLE(f32, sSensorRadius, 80.0f);
+    NEBULA_TUNABLE(f32, sSensorOffsetY, 20.0f);
+    NEBULA_TUNABLE(s32, sPrepFrame, 26);
+    NEBULA_TUNABLE(s32, sRejectFrame, 20);
     static const s32 sWaitFrame = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sLandFrame = 1;
-    static const f32 sEarthenPipeInScale = 4.0f;
-    static const f32 sCameraYOffset = 150.0f;
-    static const f32 sCameraZOffset = 200.0f;
-    static const f32 sRejectJumpY = 10.0f;
-    static const f32 sRejectJumpZ = 10.0f;
-    static const s32 sInvalidCollideFrame = 0;
-    static const s32 sFrontVecFrame = 1;
-    static const f32 sReboundScale0 = 0.0f;
-    static const f32 sReboundScale1 = 0.0f;
-    static const f32 sReboundScale2 = 0.0f;
+    NEBULA_TUNABLE(s32, sLandFrame, 1);
+    NEBULA_TUNABLE(f32, sEarthenPipeInScale, 4.0f);
+    NEBULA_TUNABLE(f32, sCameraYOffset, 150.0f);
+    NEBULA_TUNABLE(f32, sCameraZOffset, 200.0f);
+    NEBULA_TUNABLE(f32, sRejectJumpY, 10.0f);
+    NEBULA_TUNABLE(f32, sRejectJumpZ, 10.0f);
+    NEBULA_TUNABLE(s32, sInvalidCollideFrame, 0);
+    NEBULA_TUNABLE(s32, sFrontVecFrame, 1);
+    NEBULA_TUNABLE(f32, sReboundScale0, 0.0f);
+    NEBULA_TUNABLE(f32, sReboundScale1, 0.0f);
+    NEBULA_TUNABLE(f32, sReboundScale2, 0.0f);
 };  // namespace
 
 namespace NrvMarioLauncher {

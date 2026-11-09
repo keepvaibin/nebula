@@ -6,10 +6,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRandomPieceValue = 15.0f;
-    static const f32 sLaunchYVel = 40.0f;
+    NEBULA_TUNABLE(f32, sRandomPieceValue, 15.0f);
+    NEBULA_TUNABLE(f32, sLaunchYVel, 40.0f);
 };  // namespace
 
 StarPieceSpot::StarPieceSpot(const char* pName) : LiveActor(pName) {

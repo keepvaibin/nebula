@@ -5,10 +5,11 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include <ModelFileNumbers.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The layout's units: a 64-unit face, its parts' sizes and offsets in those units.
-    const f32 cScaleX = 0.88961464f;
+    NEBULA_TUNABLE(f32, cScaleX, 0.88961464f);
     const f32 cScaleY = 0.9276675f;
     const f32 cStepY = 1.16f * cScaleY;
 
@@ -27,7 +28,7 @@ namespace {
     // Each eye and eyebrow type's own tilt, added to the Mii's.
     const u8 cEyeTilt[50] = {29, 28, 28, 28, 29, 28, 28, 28, 29, 28, 28, 28, 28, 29, 29, 28, 28, 28, 29, 29, 28, 29, 28, 29, 29,
                              28, 29, 28, 28, 29, 28, 28, 28, 29, 29, 29, 28, 28, 29, 29, 29, 28, 28, 29, 29, 29, 29, 29, 28, 28};
-    const u8 cEyebrowTilt[24] = {26, 26, 27, 25, 26, 25, 26, 25, 28, 25, 26, 24, 27, 27, 26, 26, 25, 25, 26, 26, 27, 26, 25, 27};
+    NEBULA_TUNABLE_LIST(u8, cEyebrowTilt, 24, {26, 26, 27, 25, 26, 25, 26, 25, 28, 25, 26, 24, 27, 27, 26, 26, 25, 25, 26, 26, 27, 26, 25, 27});
 
     const NebulaColor8 cMoleColor = {18, 15, 15, 255};
     const NebulaColor8 cEyeColors[6] = {{0, 0, 0, 255},     {124, 128, 128, 255}, {112, 80, 64, 255},

@@ -3,9 +3,10 @@
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAttenuation = 0.05f;
+    NEBULA_TUNABLE(f32, sAttenuation, 0.05f);
 };  // namespace
 
 CameraTowerPos::CameraTowerPos(const char* pName)

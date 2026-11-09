@@ -13,16 +13,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sFireRadius = 58.0f;
-    static const s32 sLife = 180;
-    static const f32 sInitVerticalSpeed = 15.0f;
-    static const f32 sInitHorizonSpeed = 15.0f;
-    static const f32 sGravityAccel = 0.5f;
-    static const f32 sFreqRate = 0.995f;
-    static const f32 sReboundRate = 0.4f;
-    static const s32 sSweepTime = 40;
+    NEBULA_TUNABLE(f32, sFireRadius, 58.0f);
+    NEBULA_TUNABLE(s32, sLife, 180);
+    NEBULA_TUNABLE(f32, sInitVerticalSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sInitHorizonSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sGravityAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sFreqRate, 0.995f);
+    NEBULA_TUNABLE(f32, sReboundRate, 0.4f);
+    NEBULA_TUNABLE(s32, sSweepTime, 40);
     static Color8 sPointLightColor(0xFF, 0x64, 0, 0xFF);
 };  // namespace
 

@@ -4,11 +4,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sStartSignTime = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sCycle = 3;
-    const f32 sAmplitude = 30.0f;
+    NEBULA_TUNABLE(s32, sCycle, 3);
+    NEBULA_TUNABLE(f32, sAmplitude, 30.0f);
 };  // namespace
 
 namespace NrvRailBlock {

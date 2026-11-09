@@ -5,10 +5,11 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sOffsetY = 60.0f;
-    static const f32 sOffsetYMin = 160.0f;
+    NEBULA_TUNABLE(f32, sOffsetY, 60.0f);
+    NEBULA_TUNABLE(f32, sOffsetYMin, 160.0f);
 };  // namespace
 
 namespace NrvOneUpBoard {

@@ -24,23 +24,24 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec sSensorOffsetNormal = {0.0f, 0.0f, 30.0f};
-    const f32 sSensorRadiusNormal = 120.0f;
-    const f32 sSensorRadiusAttack = 60.0f;
-    const f32 sSensorRadiusShell = 50.0f;
-    const f32 sShadowRadius = 60.0f;
-    const f32 sWalkSpeed = 1.6f;
-    const f32 sPoseLerpRate = 0.3f;
+    NEBULA_TUNABLE(f32, sSensorRadiusNormal, 120.0f);
+    NEBULA_TUNABLE(f32, sSensorRadiusAttack, 60.0f);
+    NEBULA_TUNABLE(f32, sSensorRadiusShell, 50.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 60.0f);
+    NEBULA_TUNABLE(f32, sWalkSpeed, 1.6f);
+    NEBULA_TUNABLE(f32, sPoseLerpRate, 0.3f);
     const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 sAppearValidDistance = 350.0f;
+    NEBULA_TUNABLE(f32, sAppearValidDistance, 350.0f);
     const s32 sDeadTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 sShellWaitTime = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 sSceneStopTimePunch = 3;
-    const f32 sWalkSpeedFast = 3.2f;
-    const s32 sShellStartPeakPosFrame = 27;
-    const f32 sPushPower = 0.0f;
+    NEBULA_TUNABLE(s32, sSceneStopTimePunch, 3);
+    NEBULA_TUNABLE(f32, sWalkSpeedFast, 3.2f);
+    NEBULA_TUNABLE(s32, sShellStartPeakPosFrame, 27);
+    NEBULA_TUNABLE(f32, sPushPower, 0.0f);
 
     void startBckBtp(LiveActor* pActor, const char* pBck, const char* pBtp = nullptr) {
         if (pBtp == nullptr) {

@@ -17,24 +17,25 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cBodyRadius = 145.0f;
-    const f32 cBodyHopRadius = 120.0f;
+    NEBULA_TUNABLE(f32, cBodyRadius, 145.0f);
+    NEBULA_TUNABLE(f32, cBodyHopRadius, 120.0f);
     // The shadow grows from the hidden to the up radius as it rises.
-    const f32 cShadowHideRadius = 110.0f;
-    const f32 cShadowRiseRadius = 30.0f;
+    NEBULA_TUNABLE(f32, cShadowHideRadius, 110.0f);
+    NEBULA_TUNABLE(f32, cShadowRiseRadius, 30.0f);
     // Comes up when the player is this near, and hides again past the leave distance.
-    const f32 cAppearDistance = 3000.0f;
-    const f32 cLeaveDistance = 3200.0f;
-    const f32 cGroupHeight = 500.0f;
+    NEBULA_TUNABLE(f32, cAppearDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, cLeaveDistance, 3200.0f);
+    NEBULA_TUNABLE(f32, cGroupHeight, 500.0f);
     const s32 cHopWaitSteps = NebulaFrameClock::stepsOfSeconds(5);
     // One beam each interval, charged over the interval; then it closes.
     const s32 cBeamInterval = 80;
     const s32 cOpenSteps = cBeamInterval * JumpBeamer::sBeamCount;
-    const s32 cInterSteps = 80;
-    const f32 cDefaultBeamSpeed = 20.0f;
-    const s32 cDefaultBeamLife = 100;
+    NEBULA_TUNABLE(s32, cInterSteps, 80);
+    NEBULA_TUNABLE(f32, cDefaultBeamSpeed, 20.0f);
+    NEBULA_TUNABLE(s32, cDefaultBeamLife, 100);
 };  // namespace
 
 namespace NrvJumpBeamer {

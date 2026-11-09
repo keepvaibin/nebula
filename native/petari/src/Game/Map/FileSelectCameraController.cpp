@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // const Vec cTitleTargetPos = {};
@@ -12,9 +13,9 @@ namespace {
     const Vec cFarPoint = {0.0f, 0.0f, 15000.0f};
     const Vec cNearTargetOffset = {0.0f, 1100.0f, 0.0f};
     const Vec cNearPointOffset = {0.0f, 0.0f, 4800.0f};
-    const f32 cTitleFovy = 60.0f;
-    const f32 cFarFovy = 40.0f;
-    const f32 cNearFovy = 50.0f;
+    NEBULA_TUNABLE(f32, cTitleFovy, 60.0f);
+    NEBULA_TUNABLE(f32, cFarFovy, 40.0f);
+    NEBULA_TUNABLE(f32, cNearFovy, 50.0f);
 };  // namespace
 
 namespace {

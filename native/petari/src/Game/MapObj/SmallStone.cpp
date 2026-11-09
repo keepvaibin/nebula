@@ -2,20 +2,21 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 hSize = 100.0f;
-    const f32 hBreakSize = 400.0f;
-    const f32 hBreakOffsetY = 120.0f;
-    const f32 hCircleRadius = 300.0f;
-    const f32 hCollisionRadius = 20.0f;
-    const f32 hWindRadius = 800.0f;
-    const f32 hMaxAnimRate = 4.0f;
-    const f32 hMinAnimRate = 0.2f;
-    const f32 hCheckLineLength = 1000.0f;
-    const f32 hRandomRotateAngle = 360.0f;
-    const f32 hRandomScaleMin = 0.75f;
-    const f32 hRandomScaleMax = 1.25f;
+    NEBULA_TUNABLE(f32, hSize, 100.0f);
+    NEBULA_TUNABLE(f32, hBreakSize, 400.0f);
+    NEBULA_TUNABLE(f32, hBreakOffsetY, 120.0f);
+    NEBULA_TUNABLE(f32, hCircleRadius, 300.0f);
+    NEBULA_TUNABLE(f32, hCollisionRadius, 20.0f);
+    NEBULA_TUNABLE(f32, hWindRadius, 800.0f);
+    NEBULA_TUNABLE(f32, hMaxAnimRate, 4.0f);
+    NEBULA_TUNABLE(f32, hMinAnimRate, 0.2f);
+    NEBULA_TUNABLE(f32, hCheckLineLength, 1000.0f);
+    NEBULA_TUNABLE(f32, hRandomRotateAngle, 360.0f);
+    NEBULA_TUNABLE(f32, hRandomScaleMin, 0.75f);
+    NEBULA_TUNABLE(f32, hRandomScaleMax, 1.25f);
 };  // namespace
 
 SmallStone::SmallStone(const char* pName) : LiveActor(pName), mMembers(), mMemberCount(), mPlacementOffset(), mStoneType(), mUseGravity(true) {

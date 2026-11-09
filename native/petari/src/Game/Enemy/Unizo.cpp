@@ -28,6 +28,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // rQuat = Z * X * Y of the half-angle axis turns in rRot (radians).
@@ -40,57 +41,57 @@ namespace {
         rQuat.mult(rQuat, quatY);
     }
 
-    const f32 sChaseRadius = 1500.0f;
-    const f32 sChaseDegree = 90.0f;
-    const f32 sChaseCycle = 20.0f;
-    const f32 sRollHeightSea = 30.0f;
-    const f32 sRollCycle = 60.0f;
-    const f32 sAccelerate = 0.1f;
-    const f32 sChaseSpeedMax = 4.0f;
-    const f32 sSpinSpeedMax = 6.0f;
-    const f32 sTotalSpeedMax = 12.0f;
-    const f32 sBrakeRate = 0.9f;
-    const f32 sBrakeRateChase = 0.96f;
-    const f32 sGravityRateSea = 0.15f;
-    const f32 sGravityRateLand = 0.8f;
-    const f32 sGravityRateGround0 = 0.2f;
-    const f32 sGravityRateGround1 = 0.8f;
-    const f32 sDriftSpeedRate = 0.02f;
-    const f32 sStopSpeed = 0.5f;
-    const f32 sReboundFloor = 0.6f;
-    const f32 sReboundEnemy = 0.2f;
-    const f32 sReboundPlayerV = 5.0f;
-    const f32 sReboundPlayerH = 1.0f;
-    const f32 sRadiusScale = 1.0f;
-    const f32 sJumpHeight = 70.0f;
-    const s32 sCollidePlayerCount = 120;
-    const s32 sCollideEnemyCount = 60;
-    const s32 sSpinAnimationCount = 50;
-    const s32 sRollSoundTime = 20;
-    const f32 sRollSoundSpeed = 2.0f;
-    const f32 sLandSoundLandSpeed = 2.0f;
-    const f32 sWallHitSoundSpeed = 3.0f;
+    NEBULA_TUNABLE(f32, sChaseRadius, 1500.0f);
+    NEBULA_TUNABLE(f32, sChaseDegree, 90.0f);
+    NEBULA_TUNABLE(f32, sChaseCycle, 20.0f);
+    NEBULA_TUNABLE(f32, sRollHeightSea, 30.0f);
+    NEBULA_TUNABLE(f32, sRollCycle, 60.0f);
+    NEBULA_TUNABLE(f32, sAccelerate, 0.1f);
+    NEBULA_TUNABLE(f32, sChaseSpeedMax, 4.0f);
+    NEBULA_TUNABLE(f32, sSpinSpeedMax, 6.0f);
+    NEBULA_TUNABLE(f32, sTotalSpeedMax, 12.0f);
+    NEBULA_TUNABLE(f32, sBrakeRate, 0.9f);
+    NEBULA_TUNABLE(f32, sBrakeRateChase, 0.96f);
+    NEBULA_TUNABLE(f32, sGravityRateSea, 0.15f);
+    NEBULA_TUNABLE(f32, sGravityRateLand, 0.8f);
+    NEBULA_TUNABLE(f32, sGravityRateGround0, 0.2f);
+    NEBULA_TUNABLE(f32, sGravityRateGround1, 0.8f);
+    NEBULA_TUNABLE(f32, sDriftSpeedRate, 0.02f);
+    NEBULA_TUNABLE(f32, sStopSpeed, 0.5f);
+    NEBULA_TUNABLE(f32, sReboundFloor, 0.6f);
+    NEBULA_TUNABLE(f32, sReboundEnemy, 0.2f);
+    NEBULA_TUNABLE(f32, sReboundPlayerV, 5.0f);
+    NEBULA_TUNABLE(f32, sReboundPlayerH, 1.0f);
+    NEBULA_TUNABLE(f32, sRadiusScale, 1.0f);
+    NEBULA_TUNABLE(f32, sJumpHeight, 70.0f);
+    NEBULA_TUNABLE(s32, sCollidePlayerCount, 120);
+    NEBULA_TUNABLE(s32, sCollideEnemyCount, 60);
+    NEBULA_TUNABLE(s32, sSpinAnimationCount, 50);
+    NEBULA_TUNABLE(s32, sRollSoundTime, 20);
+    NEBULA_TUNABLE(f32, sRollSoundSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, sLandSoundLandSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, sWallHitSoundSpeed, 3.0f);
     const s32 sUnizoCollisionSePlayTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sSurfaceEffectMinLimit = 40.0f;
-    const f32 sSurfaceEffectMaxLimit = 200.0f;
-    const f32 sSurfaceEffectMaxRunLimit = 280.0f;
-    const f32 sSurfaceEffectRunSpeed = 5.0f;
-    const f32 sFireDownVertical = 22.0f;
-    const f32 sFireDownHorizontal = 6.0f;
-    const f32 sFireDownAttenuate = 1.0f;
-    const f32 sFireDownGravity = 1.1f;
-    const s32 sFireDownStarPiece = 34;
-    const f32 sDamageFloorVertical = 30.0f;
-    const s32 sDamageFloorFrame = 50;
-    const s32 sJumpNow = 1;
-    const s32 sStarPieceNum = 6;
-    const f32 sRollHeightLand = 0.0f;
-    const s32 sStartSearch = 0;
-    const f32 sSurfaceEffectMinRunLimit = 0.0f;
-    const f32 sBodyRadius = 126.36f;  // binder and roll radius; the body sensor sits this high
-    const f32 sSensorRadius = 115.2f;
-    const f32 sShadowRadius = 106.36f;
-    const s32 sBlinkCycle = 200;
+    NEBULA_TUNABLE(f32, sSurfaceEffectMinLimit, 40.0f);
+    NEBULA_TUNABLE(f32, sSurfaceEffectMaxLimit, 200.0f);
+    NEBULA_TUNABLE(f32, sSurfaceEffectMaxRunLimit, 280.0f);
+    NEBULA_TUNABLE(f32, sSurfaceEffectRunSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sFireDownVertical, 22.0f);
+    NEBULA_TUNABLE(f32, sFireDownHorizontal, 6.0f);
+    NEBULA_TUNABLE(f32, sFireDownAttenuate, 1.0f);
+    NEBULA_TUNABLE(f32, sFireDownGravity, 1.1f);
+    NEBULA_TUNABLE(s32, sFireDownStarPiece, 34);
+    NEBULA_TUNABLE(f32, sDamageFloorVertical, 30.0f);
+    NEBULA_TUNABLE(s32, sDamageFloorFrame, 50);
+    NEBULA_TUNABLE(s32, sJumpNow, 1);
+    NEBULA_TUNABLE(s32, sStarPieceNum, 6);
+    NEBULA_TUNABLE(f32, sRollHeightLand, 0.0f);
+    NEBULA_TUNABLE(s32, sStartSearch, 0);
+    NEBULA_TUNABLE(f32, sSurfaceEffectMinRunLimit, 0.0f);
+    NEBULA_TUNABLE(f32, sBodyRadius, 126.36f);  // binder and roll radius; the body sensor sits this high
+    NEBULA_TUNABLE(f32, sSensorRadius, 115.2f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 106.36f);
+    NEBULA_TUNABLE(s32, sBlinkCycle, 200);
 
     inline f32 toDeg(f32 x) {
         return _180_PI * x;

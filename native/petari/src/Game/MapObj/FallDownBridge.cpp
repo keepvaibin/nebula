@@ -9,6 +9,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec3f sBaseClipCentor = Vec3f(0.0f, 1250.0f, 0.0f);
@@ -21,9 +22,9 @@ namespace {
     // const f32 sNormalPushPower = 0.0f;
     // const f32 sDashPushPower = 0.0f;
     // const f32 sTestPushPower = 0.0f;
-    const s32 sQuakeTime = 80;
-    const f32 sShakeCameraNormalVelocity = 1.0f;
-    const f32 sShakeCameraWeakVelocity = 0.5f;
+    NEBULA_TUNABLE(s32, sQuakeTime, 80);
+    NEBULA_TUNABLE(f32, sShakeCameraNormalVelocity, 1.0f);
+    NEBULA_TUNABLE(f32, sShakeCameraWeakVelocity, 0.5f);
     // const f32 sLimitFallDownDgree = 0.0f;
 };  // namespace
 

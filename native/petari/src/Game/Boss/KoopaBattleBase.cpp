@@ -10,16 +10,17 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sFindParam = {0.0f, 1.0f, 0.98f, 3.0f};
-    static const f32 sChasePlayerJumpSpeed = 15.0f;
-    static const f32 sWalkAnimRate = 0.18f;
+    NEBULA_TUNABLE(f32, sChasePlayerJumpSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sWalkAnimRate, 0.18f);
     static const s32 sWanderStepToAttackMin = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sWanderStepToAttackMax = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sSearchStep = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 sSearchTurnSpeed = 2.4f;
-    static const f32 sFindJumpSpeed = 10.0f;
+    NEBULA_TUNABLE(f32, sSearchTurnSpeed, 2.4f);
+    NEBULA_TUNABLE(f32, sFindJumpSpeed, 10.0f);
 };  // namespace
 
 KoopaBattleBase::KoopaBattleBase(const char* pName, Koopa* pKoopa)

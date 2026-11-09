@@ -21,45 +21,46 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cBinderRadius = 70.0f;
+    NEBULA_TUNABLE(f32, cBinderRadius, 70.0f);
     // Body sensor radius and height, both times the placement's Y scale.
-    const f32 cBodySize = 90.0f;
-    const f32 cShadowRadius = 60.0f;
-    const f32 cStarPointerRadius = 100.0f;
-    const f32 cStarPointerOffsetY = 50.0f;
-    const s32 cGroupClippingNum = 32;
-    const f32 cTerritoryRadius = 500.0f;
-    const f32 cPursueDistance = 700.0f;
-    const f32 cPursueGiveUpDistance = 1200.0f;
-    const f32 cFaceToDegree = 80.0f;
-    const f32 cFollowRailDistance = 600.0f;
+    NEBULA_TUNABLE(f32, cBodySize, 90.0f);
+    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
+    NEBULA_TUNABLE(f32, cStarPointerRadius, 100.0f);
+    NEBULA_TUNABLE(f32, cStarPointerOffsetY, 50.0f);
+    NEBULA_TUNABLE(s32, cGroupClippingNum, 32);
+    NEBULA_TUNABLE(f32, cTerritoryRadius, 500.0f);
+    NEBULA_TUNABLE(f32, cPursueDistance, 700.0f);
+    NEBULA_TUNABLE(f32, cPursueGiveUpDistance, 1200.0f);
+    NEBULA_TUNABLE(f32, cFaceToDegree, 80.0f);
+    NEBULA_TUNABLE(f32, cFollowRailDistance, 600.0f);
     const s32 cWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cStarPieceHitWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cWalkLimitTime = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 cGoalDist = 40.0f;
+    NEBULA_TUNABLE(f32, cGoalDist, 40.0f);
     // A turn may end only after this many steps.
-    const s32 cTurnMinTime = 10;
+    NEBULA_TUNABLE(s32, cTurnMinTime, 10);
     const s32 cBrokenTime = NebulaFrameClock::stepsOfSeconds(5);
-    const f32 cPrePursueJumpVel = 10.0f;
-    const f32 cHitReactionVelH = 10.0f;
-    const f32 cHitReactionVelV = 20.0f;
+    NEBULA_TUNABLE(f32, cPrePursueJumpVel, 10.0f);
+    NEBULA_TUNABLE(f32, cHitReactionVelH, 10.0f);
+    NEBULA_TUNABLE(f32, cHitReactionVelV, 20.0f);
     // Player counted as above Karon within the body radius and this share of it.
-    const f32 cPlayerUpRate = 0.25f;
-    const f32 cPushRate = 2.0f;
+    NEBULA_TUNABLE(f32, cPlayerUpRate, 0.25f);
+    NEBULA_TUNABLE(f32, cPushRate, 2.0f);
     // Ledge probe: distance ahead, height above, depth below.
-    const f32 cFallCheckAhead = 150.0f;
-    const f32 cFallCheckUpper = 140.0f;
-    const f32 cFallCheckLower = 150.0f;
+    NEBULA_TUNABLE(f32, cFallCheckAhead, 150.0f);
+    NEBULA_TUNABLE(f32, cFallCheckUpper, 140.0f);
+    NEBULA_TUNABLE(f32, cFallCheckLower, 150.0f);
     // forceBindOnGround(offset, scale) when broken: first step, then while airborne.
-    const f32 cBrokenBindOffsetStart = 0.0f;
-    const f32 cBrokenBindMulStart = 1.0f;
-    const f32 cBrokenBindOffset = 1.0f;
-    const f32 cBrokenBindMul = 0.8f;
-    const s32 cStarPieceNum = 3;
-    const f32 cStarPieceSpeedH = 10.0f;
-    const f32 cStarPieceSpeedV = 40.0f;
+    NEBULA_TUNABLE(f32, cBrokenBindOffsetStart, 0.0f);
+    NEBULA_TUNABLE(f32, cBrokenBindMulStart, 1.0f);
+    NEBULA_TUNABLE(f32, cBrokenBindOffset, 1.0f);
+    NEBULA_TUNABLE(f32, cBrokenBindMul, 0.8f);
+    NEBULA_TUNABLE(s32, cStarPieceNum, 3);
+    NEBULA_TUNABLE(f32, cStarPieceSpeedH, 10.0f);
+    NEBULA_TUNABLE(f32, cStarPieceSpeedV, 40.0f);
 
     const MR::ActorMoveParam cNoMoveNoTurnParam = {0.0f, 1.2f, 0.8f, 0.0f};
     const MR::ActorMoveParam cNoMoveNoTurnOnAirParam = {0.0f, 2.0f, 0.95f, 0.0f};

@@ -24,6 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // By arg 6.
@@ -31,17 +32,17 @@ namespace {
         {0, 100, 200}, {44, 255, 42}, {255, 60, 60}, {196, 166, 0}, {0, 255, 0}, {255, 0, 255}, {255, 255, 0}, {255, 255, 255},
     };
 
-    const f32 cSensorRadiusHidden = 120.0f;
-    const f32 cSensorRadiusVisible = 15.0f;
+    NEBULA_TUNABLE(f32, cSensorRadiusHidden, 120.0f);
+    NEBULA_TUNABLE(f32, cSensorRadiusVisible, 15.0f);
     const s32 cDefaultCameraTime = NebulaFrameClock::stepsOfSeconds(2);
     const u16 cRestDelay = NebulaFrameClock::stepsOfSeconds(1);
     const u16 cRestDelayAfterTouch = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 cStandOnDistance = 200.0f;
-    const u16 cPathPointCount = 60;
-    const f32 cPathLift = 200.0f;
+    NEBULA_TUNABLE(f32, cStandOnDistance, 200.0f);
+    NEBULA_TUNABLE(u16, cPathPointCount, 60);
+    NEBULA_TUNABLE(f32, cPathLift, 200.0f);
     // Draw numbers a pod's tube owns (a segment for each of cPathPointCount points).
-    const u32 cPartsPerPod = 256;
-    const f32 cPathTubeRadius = 30.0f;
+    NEBULA_TUNABLE(u32, cPartsPerPod, 256);
+    NEBULA_TUNABLE(f32, cPathTubeRadius, 30.0f);
 
     // After a warp the far pod rests (closed) for a while before it takes the player back.
     void startRest(WarpPod* pPod) {

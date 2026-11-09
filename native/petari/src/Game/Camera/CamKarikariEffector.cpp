@@ -5,11 +5,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sKarikariViewRate = 0.8f;
-    const s32 sKarikariCounterMax = 30;
-    const f32 sPlayerRadius = 75.0f;
+    NEBULA_TUNABLE(f32, sKarikariViewRate, 0.8f);
+    NEBULA_TUNABLE(s32, sKarikariCounterMax, 30);
+    NEBULA_TUNABLE(f32, sPlayerRadius, 75.0f);
 
     // The view angle (radians) whose tangent is 1/0.3 of the player's radius seen from dist.
     f32 calcFovy(f32 dist) {

@@ -7,10 +7,11 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 // The host's settings are fixed for the session, so each is read once per call.
 namespace {
-    const s32 cCoinNumMin = 0;
+    NEBULA_TUNABLE(s32, cCoinNumMin, 0);
 
     s32 getCoinNumMax() {
         return NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999);

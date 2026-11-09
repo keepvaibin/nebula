@@ -19,53 +19,54 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSize = 30.0f;
+    NEBULA_TUNABLE(f32, sSize, 30.0f);
 
-    static const f32 sGravity = 2.4f;
-    static const f32 sTurnRatio = 0.25f;
-    static const f32 sVelocityDampGround = 0.8f;
-    static const f32 sVelocityDampAir = 0.98f;
-    static const f32 sStopVelocitySquared = 100.0f;
-    static const s32 sJumpAgainTime = 11;
-    static const s32 sStopSceneTime = 5;
-    static const f32 sScratchStrongVel = 18.0f;
-    static const f32 sFromCursorVelScale = 5.0f;
-    static const f32 sJumpToPrePursueVel = 50.0f;
-    static const f32 sJumpToPursueVel = 33.0f;
-    static const f32 sPursueVel = 10.0f;
-    static const f32 sJumpAnimRate = 1.0f;
-    static const f32 sDistToPursue = 1000.0f;
-    static const f32 sWatchForGravity = 1.4f;
-    static const f32 sWatchForJumpVel = 35.0f;
-    static const f32 sWatchForDistance = 500.0f;
-    static const s32 sWatchForJumpTime = 7;
-    static const s32 sWatchForLoopInterval = 45;
-    static const s32 sPreClingTime = 3;
-    static const f32 sDistToCling = 80.0f;
-    static const s32 sSpinAttackedTime = 8;
-    static const f32 sVelocityDampSpinAttacked = 0.9f;
+    NEBULA_TUNABLE(f32, sGravity, 2.4f);
+    NEBULA_TUNABLE(f32, sTurnRatio, 0.25f);
+    NEBULA_TUNABLE(f32, sVelocityDampGround, 0.8f);
+    NEBULA_TUNABLE(f32, sVelocityDampAir, 0.98f);
+    NEBULA_TUNABLE(f32, sStopVelocitySquared, 100.0f);
+    NEBULA_TUNABLE(s32, sJumpAgainTime, 11);
+    NEBULA_TUNABLE(s32, sStopSceneTime, 5);
+    NEBULA_TUNABLE(f32, sScratchStrongVel, 18.0f);
+    NEBULA_TUNABLE(f32, sFromCursorVelScale, 5.0f);
+    NEBULA_TUNABLE(f32, sJumpToPrePursueVel, 50.0f);
+    NEBULA_TUNABLE(f32, sJumpToPursueVel, 33.0f);
+    NEBULA_TUNABLE(f32, sPursueVel, 10.0f);
+    NEBULA_TUNABLE(f32, sJumpAnimRate, 1.0f);
+    NEBULA_TUNABLE(f32, sDistToPursue, 1000.0f);
+    NEBULA_TUNABLE(f32, sWatchForGravity, 1.4f);
+    NEBULA_TUNABLE(f32, sWatchForJumpVel, 35.0f);
+    NEBULA_TUNABLE(f32, sWatchForDistance, 500.0f);
+    NEBULA_TUNABLE(s32, sWatchForJumpTime, 7);
+    NEBULA_TUNABLE(s32, sWatchForLoopInterval, 45);
+    NEBULA_TUNABLE(s32, sPreClingTime, 3);
+    NEBULA_TUNABLE(f32, sDistToCling, 80.0f);
+    NEBULA_TUNABLE(s32, sSpinAttackedTime, 8);
+    NEBULA_TUNABLE(f32, sVelocityDampSpinAttacked, 0.9f);
     static const s32 sBlowOutTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sBlowOutGravity = 1.3f;
-    static const f32 sBlowOutVel = 10.0f;
-    static const f32 sBlowOutVerticalVel = 38.0f;
-    static const f32 sPointerAttackedGravity = 2.4f;
-    static const f32 sVelocityDampAttacked = 0.9f;
-    static const f32 sAttackedVel = 43.0f;
-    static const f32 sAttackedVerticalVel = 33.0f;
+    NEBULA_TUNABLE(f32, sBlowOutGravity, 1.3f);
+    NEBULA_TUNABLE(f32, sBlowOutVel, 10.0f);
+    NEBULA_TUNABLE(f32, sBlowOutVerticalVel, 38.0f);
+    NEBULA_TUNABLE(f32, sPointerAttackedGravity, 2.4f);
+    NEBULA_TUNABLE(f32, sVelocityDampAttacked, 0.9f);
+    NEBULA_TUNABLE(f32, sAttackedVel, 43.0f);
+    NEBULA_TUNABLE(f32, sAttackedVerticalVel, 33.0f);
     static const s32 sFrozenLimitTime = NebulaFrameClock::stepsOfSeconds(3);
-    static const f32 sFrozenRecoverGravity = 2.4f;
-    static const f32 sJumpToFrozenRecoverVel = 40.0f;
+    NEBULA_TUNABLE(f32, sFrozenRecoverGravity, 2.4f);
+    NEBULA_TUNABLE(f32, sJumpToFrozenRecoverVel, 40.0f);
     static const s32 sPreWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const s32 sBeginWaitMotionFrame = 20;
-    static const s32 sPressTime = 40;
-    static const f32 sExplosionBlowOutVel = 30.0f;
-    static const f32 sEnemyAttackHitVel = 30.0f;
-    static const f32 sSpinXAnimRate = 2.0f;
+    NEBULA_TUNABLE(s32, sBeginWaitMotionFrame, 20);
+    NEBULA_TUNABLE(s32, sPressTime, 40);
+    NEBULA_TUNABLE(f32, sExplosionBlowOutVel, 30.0f);
+    NEBULA_TUNABLE(f32, sEnemyAttackHitVel, 30.0f);
+    NEBULA_TUNABLE(f32, sSpinXAnimRate, 2.0f);
 
-    static const f32 sGravitySpinAttacked = 0.0f;
-    static const s32 sIceAppearTime = 0;
+    NEBULA_TUNABLE(f32, sGravitySpinAttacked, 0.0f);
+    NEBULA_TUNABLE(s32, sIceAppearTime, 0);
 
     KarikariDirector* getKarikariDirector() {
         return MR::getSceneObj< KarikariDirector >(SceneObj_KarikariDirector);

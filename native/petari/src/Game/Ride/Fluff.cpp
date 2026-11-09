@@ -6,37 +6,38 @@
 #include "Game/Ride/FluffWind.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sFreeBloomFlyUpStep = 15;
-    static const f32 sSpeedWaitAir = 10.0f;
-    static const f32 sSpeedWaitAir2nd = 5.0f;
-    static const f32 sGravityWaitAir = 0.15f;
-    static const f32 sSpeedMaxWaitAir = 0.8f;
+    NEBULA_TUNABLE(s32, sFreeBloomFlyUpStep, 15);
+    NEBULA_TUNABLE(f32, sSpeedWaitAir, 10.0f);
+    NEBULA_TUNABLE(f32, sSpeedWaitAir2nd, 5.0f);
+    NEBULA_TUNABLE(f32, sGravityWaitAir, 0.15f);
+    NEBULA_TUNABLE(f32, sSpeedMaxWaitAir, 0.8f);
     static const s32 sStepToFreeWaitAir2nd = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sRideStartUpSpeedMax = 15.0f;
-    static const f32 sRideStartUpAccel = 0.2f;
-    static const f32 sRideGravity = 0.15f;
-    static const f32 sRideFrictionRate = 0.98f;
-    static const f32 sRideMoveFrontAccel = 0.2f;
-    static const f32 sRideFrontSpeedMax = 6.0f;
-    static const f32 sRideFrontBlendRate = 0.1f;
-    static const f32 sRideFallRotateSpeed = 10.0f;
-    static const f32 sWindDistanceMin = 0.0f;
-    static const f32 sWindDistanceMax = 300.0f;
-    static const f32 sWindAccelNear = 0.3f;
-    static const f32 sWindAccelFar = 0.08f;
-    static const f32 sDistanceToWindNear = 200.0f;
-    static const f32 sDistanceToWindFar = 1500.0f;
-    static const f32 sBlendRateToWind = 0.08f;
-    static const f32 sBlendRateAxisY = 0.01f;
-    static const f32 sBlendRateWindUp = 0.5f;
+    NEBULA_TUNABLE(f32, sRideStartUpSpeedMax, 15.0f);
+    NEBULA_TUNABLE(f32, sRideStartUpAccel, 0.2f);
+    NEBULA_TUNABLE(f32, sRideGravity, 0.15f);
+    NEBULA_TUNABLE(f32, sRideFrictionRate, 0.98f);
+    NEBULA_TUNABLE(f32, sRideMoveFrontAccel, 0.2f);
+    NEBULA_TUNABLE(f32, sRideFrontSpeedMax, 6.0f);
+    NEBULA_TUNABLE(f32, sRideFrontBlendRate, 0.1f);
+    NEBULA_TUNABLE(f32, sRideFallRotateSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sWindDistanceMin, 0.0f);
+    NEBULA_TUNABLE(f32, sWindDistanceMax, 300.0f);
+    NEBULA_TUNABLE(f32, sWindAccelNear, 0.3f);
+    NEBULA_TUNABLE(f32, sWindAccelFar, 0.08f);
+    NEBULA_TUNABLE(f32, sDistanceToWindNear, 200.0f);
+    NEBULA_TUNABLE(f32, sDistanceToWindFar, 1500.0f);
+    NEBULA_TUNABLE(f32, sBlendRateToWind, 0.08f);
+    NEBULA_TUNABLE(f32, sBlendRateAxisY, 0.01f);
+    NEBULA_TUNABLE(f32, sBlendRateWindUp, 0.5f);
     static const s32 sStepSpinUpAccel = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sSpinUpAccelY = 0.8f;
-    static const f32 sSpinUpAccelOnWindY = 1.3f;
+    NEBULA_TUNABLE(f32, sSpinUpAccelY, 0.8f);
+    NEBULA_TUNABLE(f32, sSpinUpAccelOnWindY, 1.3f);
     static const s32 sStepToSpinUp2nd = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sWindRemainTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sJumpSpeedY = 18.0f;
+    NEBULA_TUNABLE(f32, sJumpSpeedY, 18.0f);
 };  // namespace
 
 namespace NrvFluff {

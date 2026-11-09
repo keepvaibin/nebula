@@ -17,11 +17,12 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sFireStairsNum = 16;
-    static const s32 sFireShortNum = 32;
-    static const s32 sShockWaveNum = 8;
+    NEBULA_TUNABLE(s32, sFireStairsNum, 16);
+    NEBULA_TUNABLE(s32, sFireShortNum, 32);
+    NEBULA_TUNABLE(s32, sShockWaveNum, 8);
 };  // namespace
 
 KoopaParts::KoopaParts(Koopa* pKoopa, const TableIter& rIter)

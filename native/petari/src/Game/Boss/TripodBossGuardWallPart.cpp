@@ -10,11 +10,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRepairPlayerDistance = 1000.0f;
-    static const s32 sRepairTiming = 600;
-    static const s32 sMoveStopSeTiming = 38;
+    NEBULA_TUNABLE(f32, sRepairPlayerDistance, 1000.0f);
+    NEBULA_TUNABLE(s32, sRepairTiming, 600);
+    NEBULA_TUNABLE(s32, sMoveStopSeTiming, 38);
 };  // namespace
 
 namespace NrvTripodBossGuardWallPart {

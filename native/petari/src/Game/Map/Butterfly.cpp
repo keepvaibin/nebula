@@ -16,6 +16,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvButterfly {
     NEW_NERVE(HostTypeWait, Butterfly, Wait);
@@ -28,35 +29,35 @@ namespace NrvButterfly {
 };  // namespace NrvButterfly
 
 namespace {
-    static const f32 sRadius = 30.0f;
-    static const f32 sPointerRadius = 200.0f;
-    static const f32 sPointerRadiusFast = 100.0f;
-    static const f32 sPointerSpeedFast = 3.0f;
-    static const f32 sAppearStarPeaceScreenRadius = 10.0f;
-    static const f32 sWaitAnimRate = 1.0f;
-    static const f32 sHomeRadius = 200.0f;
-    static const f32 sRunAwayVel = 12.0f;
-    static const f32 sRunAwayTime = 30.0f;
-    static const f32 sRunAwayAttenVel = 0.97f;
-    static const f32 sRunAwayAnimRate = 3.0f;
-    static const f32 sBackToHomeAccel = 0.01f;
-    static const f32 sBackToHomeVelMax = 2.0f;
-    static const f32 sBackToHomeAttenVel = 0.99f;
-    static const f32 sMoveDistanceMax = 500.0f;
-    static const f32 sHiveRadius = 100.0f;
-    static const f32 sHiveAccel = 0.05f;
-    static const f32 sHiveVelMax = 2.5f;
-    static const f32 sHiveAnimRate = 1.2f;
-    static const f32 sPerchOnAnimRate = 0.7f;
-    static const f32 sAnimInterpolateRate = 0.02f;
-    static const f32 sSleepingMarioNearDistance = 500.0f;
-    static const f32 sPerchOnNearDistance = 10.0f;
-    static const f32 sGotoSleepingMarioWaitTime = 300.0f;
-    static const f32 sGotoSleepingMarioSpeedMax = 2.0f;
-    static const f32 sReadyToPerchOnAnimRate = 0.5f;
-    static const f32 sTransBlendRatio = 0.7f;
-    static const f32 sTurnLimit = 0.997f;  // ~4.44 degrees
-    static const f32 sUpdatePostureMinVel = 0.5f;
+    NEBULA_TUNABLE(f32, sRadius, 30.0f);
+    NEBULA_TUNABLE(f32, sPointerRadius, 200.0f);
+    NEBULA_TUNABLE(f32, sPointerRadiusFast, 100.0f);
+    NEBULA_TUNABLE(f32, sPointerSpeedFast, 3.0f);
+    NEBULA_TUNABLE(f32, sAppearStarPeaceScreenRadius, 10.0f);
+    NEBULA_TUNABLE(f32, sWaitAnimRate, 1.0f);
+    NEBULA_TUNABLE(f32, sHomeRadius, 200.0f);
+    NEBULA_TUNABLE(f32, sRunAwayVel, 12.0f);
+    NEBULA_TUNABLE(f32, sRunAwayTime, 30.0f);
+    NEBULA_TUNABLE(f32, sRunAwayAttenVel, 0.97f);
+    NEBULA_TUNABLE(f32, sRunAwayAnimRate, 3.0f);
+    NEBULA_TUNABLE(f32, sBackToHomeAccel, 0.01f);
+    NEBULA_TUNABLE(f32, sBackToHomeVelMax, 2.0f);
+    NEBULA_TUNABLE(f32, sBackToHomeAttenVel, 0.99f);
+    NEBULA_TUNABLE(f32, sMoveDistanceMax, 500.0f);
+    NEBULA_TUNABLE(f32, sHiveRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sHiveAccel, 0.05f);
+    NEBULA_TUNABLE(f32, sHiveVelMax, 2.5f);
+    NEBULA_TUNABLE(f32, sHiveAnimRate, 1.2f);
+    NEBULA_TUNABLE(f32, sPerchOnAnimRate, 0.7f);
+    NEBULA_TUNABLE(f32, sAnimInterpolateRate, 0.02f);
+    NEBULA_TUNABLE(f32, sSleepingMarioNearDistance, 500.0f);
+    NEBULA_TUNABLE(f32, sPerchOnNearDistance, 10.0f);
+    NEBULA_TUNABLE(f32, sGotoSleepingMarioWaitTime, 300.0f);
+    NEBULA_TUNABLE(f32, sGotoSleepingMarioSpeedMax, 2.0f);
+    NEBULA_TUNABLE(f32, sReadyToPerchOnAnimRate, 0.5f);
+    NEBULA_TUNABLE(f32, sTransBlendRatio, 0.7f);
+    NEBULA_TUNABLE(f32, sTurnLimit, 0.997f);  // ~4.44 degrees
+    NEBULA_TUNABLE(f32, sUpdatePostureMinVel, 0.5f);
 
     static const Vec sMarioCapPosOffset = {0.0f, 50.2f, 24.9f};
 

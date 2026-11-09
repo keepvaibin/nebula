@@ -4,6 +4,7 @@
 #include "Game/MapObj/SpinDriverShootPath.hpp"
 #include "Game/Util.hpp"
 #include "math_types.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const cJumpOutPartName = "飛び出す";
@@ -11,10 +12,10 @@ namespace {
     // const s32 cJumpOutStopStep = _;
     // const s32 cJumpOutStopFrame = _;
     // const f32 cJumpOutStartSpeed = _;
-    const f32 cJumpOutRotateSpeed = -18.0f;
-    const f32 cJumpOutNearClipDistance = 250.0f;
-    const s32 cWhiteOutFrame = 146;
-    const s32 cBgmStartFrame = 108;
+    NEBULA_TUNABLE(f32, cJumpOutRotateSpeed, -18.0f);
+    NEBULA_TUNABLE(f32, cJumpOutNearClipDistance, 250.0f);
+    NEBULA_TUNABLE(s32, cWhiteOutFrame, 146);
+    NEBULA_TUNABLE(s32, cBgmStartFrame, 108);
 
     f32 countRotations(f32 angle) {
         s32 rotations = angle / TWO_PI;

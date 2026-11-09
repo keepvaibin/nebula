@@ -6,10 +6,11 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const s32 sStepToStartAcidGround = NebulaFrameClock::stepsOfMilliseconds(500);
-    const f32 sDistanceCheckMap = 2500.0f;
+    NEBULA_TUNABLE(f32, sDistanceCheckMap, 2500.0f);
     const s32 sStepToEndAcidGround = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 

@@ -4,10 +4,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sDefaultCollapseTime = 140;
-    static const f32 sScaleMin = 0.7f;
+    NEBULA_TUNABLE(s32, sDefaultCollapseTime, 140);
+    NEBULA_TUNABLE(f32, sScaleMin, 0.7f);
 };  // namespace
 
 namespace NrvCollapsePlane {

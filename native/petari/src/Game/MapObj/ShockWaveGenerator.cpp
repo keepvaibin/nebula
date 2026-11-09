@@ -12,13 +12,14 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const char* cDemoCameraName = "衝撃波カメラ";
-    static const s32 sStepForGenerate = 50;
-    static const s32 sStepForDemoEcho = 1;
-    static const f32 sHitCylinderRadius = 400.0f;
-    static const f32 sEnableCameraStartDistance = 2000.0f;
+    NEBULA_TUNABLE(s32, sStepForGenerate, 50);
+    NEBULA_TUNABLE(s32, sStepForDemoEcho, 1);
+    NEBULA_TUNABLE(f32, sHitCylinderRadius, 400.0f);
+    NEBULA_TUNABLE(f32, sEnableCameraStartDistance, 2000.0f);
 };  // namespace
 
 namespace NrvShockWaveGenerator {

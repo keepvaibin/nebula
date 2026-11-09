@@ -13,12 +13,13 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sNoShadowDropLengthMax = 2000.0f;
-    const f32 sRainCylinderBaseLength = 1000.0f;
-    const f32 sSwitchEffectBorder = 1500.0f;
-    const s32 sThunderStep = 140;
+    NEBULA_TUNABLE(f32, sNoShadowDropLengthMax, 2000.0f);
+    NEBULA_TUNABLE(f32, sRainCylinderBaseLength, 1000.0f);
+    NEBULA_TUNABLE(f32, sSwitchEffectBorder, 1500.0f);
+    NEBULA_TUNABLE(s32, sThunderStep, 140);
 };  // namespace
 
 namespace NrvRainCloud {

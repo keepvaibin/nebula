@@ -4,18 +4,19 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sDemoCameraZoomOutStartFrame = 630;
-    static const s32 sDemoCameraZoomOutEndFrame = 730;
-    static const s32 sDemoCameraZoomOutBgmStartFrame = 617;
-    static const s32 sDemoFadeOut = 90;
-    static const s32 sDemoFadeIn = 75;
+    NEBULA_TUNABLE(s32, sDemoCameraZoomOutStartFrame, 630);
+    NEBULA_TUNABLE(s32, sDemoCameraZoomOutEndFrame, 730);
+    NEBULA_TUNABLE(s32, sDemoCameraZoomOutBgmStartFrame, 617);
+    NEBULA_TUNABLE(s32, sDemoFadeOut, 90);
+    NEBULA_TUNABLE(s32, sDemoFadeIn, 75);
     static const s32 sDemoFadeWait = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sAwayYOffset = -49.7357f;
+    NEBULA_TUNABLE(f32, sAwayYOffset, -49.7357f);
     static const s32 sWaitSeStartFrame = NebulaFrameClock::stepsOfMilliseconds(3500);
-    static const s32 sFloatSeStartFrame = 560;
-    static const s32 sAppearSeStep = 23;
+    NEBULA_TUNABLE(s32, sFloatSeStartFrame, 560);
+    NEBULA_TUNABLE(s32, sAppearSeStep, 23);
 };  // namespace
 
 namespace NrvRunawayTico {

@@ -23,31 +23,32 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cFlyAccel = 2.0f;
-    const f32 cTurnDegree = 2.55f;
-    const f32 cChaseTurnDegree = 1.7f;
-    const f32 cChaseFaceDegree = 60.0f;
-    const f32 cHomeDistanceMargin = 1000.0f;  // over the chase distance when Obj_arg1 is unset
-    const f32 cHomeArriveDistance = 300.0f;
+    NEBULA_TUNABLE(f32, cFlyAccel, 2.0f);
+    NEBULA_TUNABLE(f32, cTurnDegree, 2.55f);
+    NEBULA_TUNABLE(f32, cChaseTurnDegree, 1.7f);
+    NEBULA_TUNABLE(f32, cChaseFaceDegree, 60.0f);
+    NEBULA_TUNABLE(f32, cHomeDistanceMargin, 1000.0f);  // over the chase distance when Obj_arg1 is unset
+    NEBULA_TUNABLE(f32, cHomeArriveDistance, 300.0f);
     const s32 cComeHomeChaseSteps = NebulaFrameClock::stepsOfSeconds(2);
-    const f32 cAttachDistance = 10.0f;
-    const f32 cAttachSpeedRate = 5.0f;
-    const f32 cAttackRise = 100.0f;  // above the player's feet
-    const f32 cAttackSpeed = 10.0f;
-    const f32 cAttackHitDistance = 40.0f;
+    NEBULA_TUNABLE(f32, cAttachDistance, 10.0f);
+    NEBULA_TUNABLE(f32, cAttachSpeedRate, 5.0f);
+    NEBULA_TUNABLE(f32, cAttackRise, 100.0f);  // above the player's feet
+    NEBULA_TUNABLE(f32, cAttackSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, cAttackHitDistance, 40.0f);
     const s32 cAttackSteps = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 cIceAttackUpRate = 5.0f;
-    const f32 cAttackEndEffectHeight = 200.0f;
-    const f32 cHitBackSpeed = 15.0f;
-    const f32 cPushSpeed = 1.5f;
-    const f32 cSpinStormDistance = 500.0f;
-    const f32 cClipNearPlayerDistance = 2500.0f;
+    NEBULA_TUNABLE(f32, cIceAttackUpRate, 5.0f);
+    NEBULA_TUNABLE(f32, cAttackEndEffectHeight, 200.0f);
+    NEBULA_TUNABLE(f32, cHitBackSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, cPushSpeed, 1.5f);
+    NEBULA_TUNABLE(f32, cSpinStormDistance, 500.0f);
+    NEBULA_TUNABLE(f32, cClipNearPlayerDistance, 2500.0f);
     const s32 cClipResetSteps = NebulaFrameClock::stepsOfSeconds(3);
-    const f32 cSideDamping = 0.5f;
-    const f32 cHoverBelowAttack = 350.0f;  // hover height is the attack distance minus this
-    const f32 cTuneMinOffset = 2.0f;
+    NEBULA_TUNABLE(f32, cSideDamping, 0.5f);
+    NEBULA_TUNABLE(f32, cHoverBelowAttack, 350.0f);  // hover height is the attack distance minus this
+    NEBULA_TUNABLE(f32, cTuneMinOffset, 2.0f);
 
     inline bool isPointerHolding(const LiveActor* pActor) {
         return MR::isStarPointerPointing2POnPressButton(pActor, "弱", true, false);

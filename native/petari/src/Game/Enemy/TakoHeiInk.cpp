@@ -2,12 +2,13 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sModelSize = 50.0f;
-    static const f32 sNormalFric = 0.99f;
-    static const f32 sGravityAccel = 0.8f;
-    static const s32 sBindOnTime = 10;
+    NEBULA_TUNABLE(f32, sModelSize, 50.0f);
+    NEBULA_TUNABLE(f32, sNormalFric, 0.99f);
+    NEBULA_TUNABLE(f32, sGravityAccel, 0.8f);
+    NEBULA_TUNABLE(s32, sBindOnTime, 10);
     static const s32 sForceBreakTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 

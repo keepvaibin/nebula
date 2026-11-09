@@ -14,17 +14,18 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(2);
-    static const s32 hAttackBeginTime = 82;
-    static const f32 hTargetPlayerVelocityMult = 10.0f;
-    static const f32 hWaitMaxScale = 1.5f;
+    NEBULA_TUNABLE(s32, hAttackBeginTime, 82);
+    NEBULA_TUNABLE(f32, hTargetPlayerVelocityMult, 10.0f);
+    NEBULA_TUNABLE(f32, hWaitMaxScale, 1.5f);
     static const s32 hDashTime = NebulaFrameClock::stepsOfSeconds(3);
-    static const f32 hDashVel = 10.0f;
-    static const f32 hDashScale = 0.5f;
-    static const s32 hDashEndTime = 95;
-    static const f32 hRotateAngle = 0.0f;
+    NEBULA_TUNABLE(f32, hDashVel, 10.0f);
+    NEBULA_TUNABLE(f32, hDashScale, 0.5f);
+    NEBULA_TUNABLE(s32, hDashEndTime, 95);
+    NEBULA_TUNABLE(f32, hRotateAngle, 0.0f);
 };  // namespace
 
 namespace NrvBalloonfish {

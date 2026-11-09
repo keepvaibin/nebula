@@ -1,9 +1,10 @@
 #include "Game/Util/OctahedronBezierSurface.hpp"
 #include "Game/Util/BezierSurface.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sCoefTableDivideNum = 6;
+    NEBULA_TUNABLE(s32, sCoefTableDivideNum, 6);
 
     void calcBezierHandlePoint(Vec3f* pHandle1, Vec3f* pHandle2, const Vec3f& rPointA, const Vec3f& rPointB, const Vec3f& rPointC,
                                f32 diagonalRate) {

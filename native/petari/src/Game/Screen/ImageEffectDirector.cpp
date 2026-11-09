@@ -12,10 +12,11 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectState.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sIntensityCountMax = 60;
-    static const f32 sDOFIntensity = 1.0f;
+    NEBULA_TUNABLE(s32, sIntensityCountMax, 60);
+    NEBULA_TUNABLE(f32, sDOFIntensity, 1.0f);
 };  // namespace
 
 ImageEffectDirector::ImageEffectDirector(const char* pName)

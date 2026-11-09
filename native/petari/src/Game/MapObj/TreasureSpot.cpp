@@ -2,11 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sNumCoin = 1;
-    const f32 sEnableSpoutLength = 2000.0f;
-    const f32 sGlowLeaveMargin = 200.0f;
+    NEBULA_TUNABLE(s32, sNumCoin, 1);
+    NEBULA_TUNABLE(f32, sEnableSpoutLength, 2000.0f);
+    NEBULA_TUNABLE(f32, sGlowLeaveMargin, 200.0f);
 };  // namespace
 
 namespace NrvTreasureSpot {

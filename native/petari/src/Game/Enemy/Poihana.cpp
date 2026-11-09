@@ -21,47 +21,48 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGravity = 2.0f;
-    static const f32 sReceivePushPower = 1.5f;
-    static const f32 sVelocityDownRate = 0.95f;
-    static const f32 sVelocityDownRateSide = 0.8f;
-    static const f32 sActiveRadius = 3500.0f;
-    static const f32 sNormalBinderRadius = 125.0f;
-    static const f32 sTrampleBinderRadius = 200.0f;
-    static const f32 sWalkSpeedMax = 5.0f;
-    static const f32 sWalkAccel = 0.5f;
-    static const f32 sWalkTurnRate = 2.0f;
-    static const f32 sWalkAroundRadius = 350.0f;
+    NEBULA_TUNABLE(f32, sGravity, 2.0f);
+    NEBULA_TUNABLE(f32, sReceivePushPower, 1.5f);
+    NEBULA_TUNABLE(f32, sVelocityDownRate, 0.95f);
+    NEBULA_TUNABLE(f32, sVelocityDownRateSide, 0.8f);
+    NEBULA_TUNABLE(f32, sActiveRadius, 3500.0f);
+    NEBULA_TUNABLE(f32, sNormalBinderRadius, 125.0f);
+    NEBULA_TUNABLE(f32, sTrampleBinderRadius, 200.0f);
+    NEBULA_TUNABLE(f32, sWalkSpeedMax, 5.0f);
+    NEBULA_TUNABLE(f32, sWalkAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sWalkTurnRate, 2.0f);
+    NEBULA_TUNABLE(f32, sWalkAroundRadius, 350.0f);
     static const s32 sWalkAroundBreakTime = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sWalkAroundKeepTime = NebulaFrameClock::stepsOfSeconds(2);
-    static const s32 sWalkAroundTurn = 2;
-    static const f32 sJudgeForGetUpSpeed = 10.0f;
-    static const f32 sGetUpRadius = 500.0f;
-    static const f32 sSearchRadius = 800.0f;
-    static const f32 sChaseSpeedMax = 10.0f;
-    static const f32 sChaseAccel = 0.5f;
-    static const f32 sChaseTurnRate = 4.0f;
-    static const f32 sChaseRadius = 1100.0f;
-    static const f32 sChargeStartDistance = 100.0f;
-    static const s32 sDefaultShootHeight = 1000;
-    static const s32 sBindOffTiming = 2;
-    static const s32 sBindOnTiming = 30;
-    static const f32 sDistanceForNeedBack = 2000.0f;
-    static const f32 sJudgeForGoBackRadius = 100.0f;
+    NEBULA_TUNABLE(s32, sWalkAroundTurn, 2);
+    NEBULA_TUNABLE(f32, sJudgeForGetUpSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sGetUpRadius, 500.0f);
+    NEBULA_TUNABLE(f32, sSearchRadius, 800.0f);
+    NEBULA_TUNABLE(f32, sChaseSpeedMax, 10.0f);
+    NEBULA_TUNABLE(f32, sChaseAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sChaseTurnRate, 4.0f);
+    NEBULA_TUNABLE(f32, sChaseRadius, 1100.0f);
+    NEBULA_TUNABLE(f32, sChargeStartDistance, 100.0f);
+    NEBULA_TUNABLE(s32, sDefaultShootHeight, 1000);
+    NEBULA_TUNABLE(s32, sBindOffTiming, 2);
+    NEBULA_TUNABLE(s32, sBindOnTiming, 30);
+    NEBULA_TUNABLE(f32, sDistanceForNeedBack, 2000.0f);
+    NEBULA_TUNABLE(f32, sJudgeForGoBackRadius, 100.0f);
     static const s32 sStepForNonSearch = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 sShockReactionY = -30.0f;
-    static const f32 sDistanceForHipDropShock = 500.0f;
-    static const s32 sStepForSwoon = 110;
-    static const s32 sStepToShockLand = 12;
-    static const s32 sBoundTime = 40;
-    static const f32 sBoundAmpMax = 0.4f;
-    static const s32 sStepForShake = 20;
-    static const f32 sShakeAmpMax = 0.2f;
+    NEBULA_TUNABLE(f32, sShockReactionY, -30.0f);
+    NEBULA_TUNABLE(f32, sDistanceForHipDropShock, 500.0f);
+    NEBULA_TUNABLE(s32, sStepForSwoon, 110);
+    NEBULA_TUNABLE(s32, sStepToShockLand, 12);
+    NEBULA_TUNABLE(s32, sBoundTime, 40);
+    NEBULA_TUNABLE(f32, sBoundAmpMax, 0.4f);
+    NEBULA_TUNABLE(s32, sStepForShake, 20);
+    NEBULA_TUNABLE(f32, sShakeAmpMax, 0.2f);
     static const s32 sStepForHide = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const s32 sStepToAppearEffectEnd = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sGravityOffsetY = 20.0f;
+    NEBULA_TUNABLE(f32, sGravityOffsetY, 20.0f);
 
     const Vec sNormalBinderPos = {0.0f, 130.0f, 120.0f};
     const Vec sTrampleBinderPos = {0.0f, 150.0f, 0.0f};

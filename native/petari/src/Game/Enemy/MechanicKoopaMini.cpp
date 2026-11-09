@@ -24,6 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvMechanicKoopaMini {
     NEW_NERVE(HostTypeNrvWait, MechanicKoopaMini, Wait);
@@ -58,8 +59,8 @@ namespace {
     static const MR::ActorMoveParam hJumpAirParam = {0.5f, 2.0f, 0.95f, 0.0f};
     static const MR::ActorMoveParam hTurnParam = {0.0f, 2.0f, 0.8f, 2.0f};
     static const Vec3f hBinderOffset(0.0f, 110.0f, 20.0f);
-    static const f32 hTrampleUpRangeSub = 80;
-    static const f32 hPushUpRangeSub = 130;
+    NEBULA_TUNABLE(f32, hTrampleUpRangeSub, 80);
+    NEBULA_TUNABLE(f32, hPushUpRangeSub, 130);
 };  // namespace
 
 MechanicKoopaMini::MechanicKoopaMini(const char* pName) : LiveActor(pName) {

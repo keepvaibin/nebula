@@ -14,10 +14,11 @@
 #include "Game/Util/SpringValue.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace {
-    static const s32 sOnSomethingAcc = 0;
+    NEBULA_TUNABLE(s32, sOnSomethingAcc, 0);
 };  // namespace
 
 namespace NrvHipDropSwitch {

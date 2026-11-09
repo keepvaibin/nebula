@@ -24,6 +24,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace NrvNPCActor {
@@ -35,7 +36,7 @@ namespace NrvNPCActor {
 
 namespace {
     // Steps since the pointer's sound last played, held here (past the 60 it waits).
-    const s32 cPointingSeStepMax = 0x400;
+    NEBULA_TUNABLE(s32, cPointingSeStepMax, 0x400);
 
     class NPCParam : public AnimScaleParam {
     public:

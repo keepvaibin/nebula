@@ -19,41 +19,42 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSensorOffsetY = 50.0f;
-    static const f32 sPlayerDistanceToValid = 300.0f;
-    static const f32 sPlayerSpeedToCatchMin = 6.0f;
-    static const f32 sPlayerSpeedToCatchMax = 10.0f;
-    static const f32 sBindStartRotateSpeed = 5.0f;
-    static const f32 sBindStartRotateSpeedFast = 9.0f;
-    static const f32 sInvalidPlayerSpeedMaxXZ = 5.0f;
-    static const f32 sInvalidPlayerSpeedMinY = 1.0f;
-    static const s32 sStepInvalid = 45;
-    static const f32 sClimbUpSpeedRate = 6.0f;
-    static const f32 sFallDownAccelRate = 0.3f;
-    static const f32 sFallDownSpeedMaxY = 15.0f;
-    static const f32 sSquareFallDownAccelRate = 0.5f;
-    static const f32 sSquareFallDownSpeedMaxY = 18.0f;
-    static const f32 sTurnStickMin = 0.8f;
-    static const f32 sRotateSpeedRate = 2.5f;
-    static const f32 sClimbUpRotateSpeedRate = 0.0f;
-    static const f32 sFallDownRotateSpeedRate = 0.8f;
-    static const f32 sJumpSpeedXZ = 10.0f;
-    static const f32 sJumpSpeedY = 25.0f;
-    static const s32 sStepJumpReverseHandstandStart = 25;
-    static const s32 sStepJumpReverseHandstandEnd = 25;
-    static const f32 sSquareJumpPosOffset = 50.0f;
-    static const s32 sStepSquareJumpChangeDir = 7;
-    static const f32 sEndHandstandStickY = -0.8f;
-    static const f32 sLandingHeightMin = 120.0f;
-    static const f32 sLandingHeightMinSquare = 50.0f;
-    static const f32 sPlayerPosOffsetAtLanding = 30.0f;
-    static const f32 sClimbUpAnimFrameRate = 1.75f;
-    static const f32 sSquareClimbUpAnimFrameRate = 1.6f;
+    NEBULA_TUNABLE(f32, sSensorOffsetY, 50.0f);
+    NEBULA_TUNABLE(f32, sPlayerDistanceToValid, 300.0f);
+    NEBULA_TUNABLE(f32, sPlayerSpeedToCatchMin, 6.0f);
+    NEBULA_TUNABLE(f32, sPlayerSpeedToCatchMax, 10.0f);
+    NEBULA_TUNABLE(f32, sBindStartRotateSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sBindStartRotateSpeedFast, 9.0f);
+    NEBULA_TUNABLE(f32, sInvalidPlayerSpeedMaxXZ, 5.0f);
+    NEBULA_TUNABLE(f32, sInvalidPlayerSpeedMinY, 1.0f);
+    NEBULA_TUNABLE(s32, sStepInvalid, 45);
+    NEBULA_TUNABLE(f32, sClimbUpSpeedRate, 6.0f);
+    NEBULA_TUNABLE(f32, sFallDownAccelRate, 0.3f);
+    NEBULA_TUNABLE(f32, sFallDownSpeedMaxY, 15.0f);
+    NEBULA_TUNABLE(f32, sSquareFallDownAccelRate, 0.5f);
+    NEBULA_TUNABLE(f32, sSquareFallDownSpeedMaxY, 18.0f);
+    NEBULA_TUNABLE(f32, sTurnStickMin, 0.8f);
+    NEBULA_TUNABLE(f32, sRotateSpeedRate, 2.5f);
+    NEBULA_TUNABLE(f32, sClimbUpRotateSpeedRate, 0.0f);
+    NEBULA_TUNABLE(f32, sFallDownRotateSpeedRate, 0.8f);
+    NEBULA_TUNABLE(f32, sJumpSpeedXZ, 10.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedY, 25.0f);
+    NEBULA_TUNABLE(s32, sStepJumpReverseHandstandStart, 25);
+    NEBULA_TUNABLE(s32, sStepJumpReverseHandstandEnd, 25);
+    NEBULA_TUNABLE(f32, sSquareJumpPosOffset, 50.0f);
+    NEBULA_TUNABLE(s32, sStepSquareJumpChangeDir, 7);
+    NEBULA_TUNABLE(f32, sEndHandstandStickY, -0.8f);
+    NEBULA_TUNABLE(f32, sLandingHeightMin, 120.0f);
+    NEBULA_TUNABLE(f32, sLandingHeightMinSquare, 50.0f);
+    NEBULA_TUNABLE(f32, sPlayerPosOffsetAtLanding, 30.0f);
+    NEBULA_TUNABLE(f32, sClimbUpAnimFrameRate, 1.75f);
+    NEBULA_TUNABLE(f32, sSquareClimbUpAnimFrameRate, 1.6f);
     static const s32 sStepDemoAppear = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sHeightRate = 100.0f;
-    static const f32 sSquareHeightOffset = 100.0f;
+    NEBULA_TUNABLE(f32, sHeightRate, 100.0f);
+    NEBULA_TUNABLE(f32, sSquareHeightOffset, 100.0f);
 };  // namespace
 
 namespace NrvPole {

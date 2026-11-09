@@ -15,18 +15,19 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sTurnPlayerDegree = 6.0f;
+    NEBULA_TUNABLE(f32, sTurnPlayerDegree, 6.0f);
     static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sMoveTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const s32 sFinalMoveTime = 40;
+    NEBULA_TUNABLE(s32, sFinalMoveTime, 40);
     static const s32 sAttackWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sAttackTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sShootTiming = 23;
-    static const f32 sBeamSpeed = 20.0f;
+    NEBULA_TUNABLE(s32, sShootTiming, 23);
+    NEBULA_TUNABLE(f32, sBeamSpeed, 20.0f);
     static const s32 sRecoverMoveStartTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sSwingSeTiming = 12;
+    NEBULA_TUNABLE(s32, sSwingSeTiming, 12);
 };  // namespace
 
 namespace NrvBossKameckStateBattle {

@@ -16,34 +16,35 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDefaultPointIntervalU = 40.0f;
-    static const f32 sDefaultPointIntervalV = 40.0f;
-    static const f32 sDefaultGravity = 0.1f;
-    static const f32 sDefaultFrictionRateMin = 0.6f;
-    static const f32 sDefaultFrictionRateMax = 1.0f;
-    static const f32 sWindTimeSpeed = 5.0f;
-    static const f32 sWindPosRateU = 10.0f;
-    static const f32 sWindPosRateV = 10.0f;
-    static const f32 sDefaultWindAccelRate = 10.0f;
-    static const f32 sDefaultWindAccelMin = 0.1f;
-    static const f32 sDefaultRandomWindAccelMin = 1.0f;
-    static const f32 sDefaultRandomWindAccelMax = 4.0f;
-    static const s32 sRandomWaitTimeMax = 2;
-    static const f32 sLightBorderMin = -1.0f;
-    static const f32 sLightBorderMax = 0.5f;
-    static const f32 sLightColorMinNear = 200.0f;
-    static const f32 sLightColorMinFar = 120.0f;
-    static const f32 sLightDistanceNear = 500.0f;
-    static const f32 sLightDistanceFar = 1000.0f;
-    static const f32 sDefaultAlphaDistanceNear = 1000.0f;
-    static const f32 sDefaultAlphaDistanceFar = 2000.0f;
-    static const f32 sStickWidth = 5.0f;
-    static const f32 sClippingRadiusOffset = 300.0f;
-    static const s32 sSeStepMin = 36;
-    static const s32 sSeStepMax = 66;
-    static const s32 sRandomWaitTimeMin = 0;
+    NEBULA_TUNABLE(f32, sDefaultPointIntervalU, 40.0f);
+    NEBULA_TUNABLE(f32, sDefaultPointIntervalV, 40.0f);
+    NEBULA_TUNABLE(f32, sDefaultGravity, 0.1f);
+    NEBULA_TUNABLE(f32, sDefaultFrictionRateMin, 0.6f);
+    NEBULA_TUNABLE(f32, sDefaultFrictionRateMax, 1.0f);
+    NEBULA_TUNABLE(f32, sWindTimeSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sWindPosRateU, 10.0f);
+    NEBULA_TUNABLE(f32, sWindPosRateV, 10.0f);
+    NEBULA_TUNABLE(f32, sDefaultWindAccelRate, 10.0f);
+    NEBULA_TUNABLE(f32, sDefaultWindAccelMin, 0.1f);
+    NEBULA_TUNABLE(f32, sDefaultRandomWindAccelMin, 1.0f);
+    NEBULA_TUNABLE(f32, sDefaultRandomWindAccelMax, 4.0f);
+    NEBULA_TUNABLE(s32, sRandomWaitTimeMax, 2);
+    NEBULA_TUNABLE(f32, sLightBorderMin, -1.0f);
+    NEBULA_TUNABLE(f32, sLightBorderMax, 0.5f);
+    NEBULA_TUNABLE(f32, sLightColorMinNear, 200.0f);
+    NEBULA_TUNABLE(f32, sLightColorMinFar, 120.0f);
+    NEBULA_TUNABLE(f32, sLightDistanceNear, 500.0f);
+    NEBULA_TUNABLE(f32, sLightDistanceFar, 1000.0f);
+    NEBULA_TUNABLE(f32, sDefaultAlphaDistanceNear, 1000.0f);
+    NEBULA_TUNABLE(f32, sDefaultAlphaDistanceFar, 2000.0f);
+    NEBULA_TUNABLE(f32, sStickWidth, 5.0f);
+    NEBULA_TUNABLE(f32, sClippingRadiusOffset, 300.0f);
+    NEBULA_TUNABLE(s32, sSeStepMin, 36);
+    NEBULA_TUNABLE(s32, sSeStepMax, 66);
+    NEBULA_TUNABLE(s32, sRandomWaitTimeMin, 0);
 };  // namespace
 
 namespace {

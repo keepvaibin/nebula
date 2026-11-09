@@ -21,49 +21,50 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sPointInterval = 50.0f;
-    static const f32 sDrawWidthX = 30.0f;
-    static const f32 sDrawWidthZ = 40.0f;
-    static const f32 sDrawWidthLongOffsetX = 13.0f;
-    static const f32 sDrawWidthShortOffsetX = 3.0f;
-    static const f32 sDrawWidthShortOffsetZ = 3.0f;
-    static const f32 sTexRate = 0.13f;
-    static const f32 sHangAccelRateLoose = 0.8f;
-    static const f32 sHangAccelRateStretch = 0.5f;
-    static const f32 sHangPointGravityLoose = 0.6f;
-    static const f32 sHangPointGravityStretcn = 0.8f;
-    static const f32 sHangPointFrictionRate = 0.995f;
-    static const f32 sHangPointReboundRate = 0.7f;
-    static const s32 sAnimInterpoleFrame = 10;
-    static const s32 sAnimInterpoleFrameToSlowWait = 10;
-    static const s32 sStepWaitAfterSwing = 0;
-    static const f32 sHangPointDownAccel = 0.5f;
-    static const f32 sHangPointDownSpeedMax = -10.0f;
-    static const f32 sHangCoordMin = 100.0f;
-    static const f32 sJumpSpeedRate = 5.0f;
-    static const f32 sJumpSpeedMinXZ = 5.0f;
-    static const f32 sJumpSpeedMaxXZ = 35.0f;
-    static const f32 sJumpSpeedMinY = 25.0f;
-    static const f32 sJumpSpeedMaxY = 50.0f;
-    static const f32 sBindPointFrictionRateHead = 0.7f;
-    static const f32 sBindPointFrictionRateTail = 0.8f;
-    static const s32 sStepFixUpperPointPos = 10;
-    static const f32 sCoordStretchToLoose = 5.0f;
-    static const f32 sCoordLooseToStretch = 1.0f;
-    static const f32 sPointGravity = 1.0f;
-    static const f32 sFreePointFrictionRateHead = 0.8f;
-    static const f32 sFreePointFrictionRateTail = 0.92f;
-    static const f32 sPointSpeedToStop = 0.1f;
-    static const f32 sPointNormalToStop = 0.9999f;
-    static const f32 sTransDiffMinY = 1.0f;
-    static const f32 sSensorRiderOffsetY = -50.0f;
-    static const f32 sFootPosOffsetY = -20.0f;
-    static const f32 sFootPosOffsetZ = 10.0f;
-    static const f32 sHangPointBlendRateAxisZ = 0.1f;
-    static const f32 sPointBlendRateAxisZ = 0.5f;
-    static const f32 sFootPointAxisBlendRate = 0.3f;
+    NEBULA_TUNABLE(f32, sPointInterval, 50.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthX, 30.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthZ, 40.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthLongOffsetX, 13.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetX, 3.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetZ, 3.0f);
+    NEBULA_TUNABLE(f32, sTexRate, 0.13f);
+    NEBULA_TUNABLE(f32, sHangAccelRateLoose, 0.8f);
+    NEBULA_TUNABLE(f32, sHangAccelRateStretch, 0.5f);
+    NEBULA_TUNABLE(f32, sHangPointGravityLoose, 0.6f);
+    NEBULA_TUNABLE(f32, sHangPointGravityStretcn, 0.8f);
+    NEBULA_TUNABLE(f32, sHangPointFrictionRate, 0.995f);
+    NEBULA_TUNABLE(f32, sHangPointReboundRate, 0.7f);
+    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 10);
+    NEBULA_TUNABLE(s32, sAnimInterpoleFrameToSlowWait, 10);
+    NEBULA_TUNABLE(s32, sStepWaitAfterSwing, 0);
+    NEBULA_TUNABLE(f32, sHangPointDownAccel, 0.5f);
+    NEBULA_TUNABLE(f32, sHangPointDownSpeedMax, -10.0f);
+    NEBULA_TUNABLE(f32, sHangCoordMin, 100.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedRate, 5.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMinXZ, 5.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMaxXZ, 35.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMinY, 25.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMaxY, 50.0f);
+    NEBULA_TUNABLE(f32, sBindPointFrictionRateHead, 0.7f);
+    NEBULA_TUNABLE(f32, sBindPointFrictionRateTail, 0.8f);
+    NEBULA_TUNABLE(s32, sStepFixUpperPointPos, 10);
+    NEBULA_TUNABLE(f32, sCoordStretchToLoose, 5.0f);
+    NEBULA_TUNABLE(f32, sCoordLooseToStretch, 1.0f);
+    NEBULA_TUNABLE(f32, sPointGravity, 1.0f);
+    NEBULA_TUNABLE(f32, sFreePointFrictionRateHead, 0.8f);
+    NEBULA_TUNABLE(f32, sFreePointFrictionRateTail, 0.92f);
+    NEBULA_TUNABLE(f32, sPointSpeedToStop, 0.1f);
+    NEBULA_TUNABLE(f32, sPointNormalToStop, 0.9999f);
+    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
+    NEBULA_TUNABLE(f32, sSensorRiderOffsetY, -50.0f);
+    NEBULA_TUNABLE(f32, sFootPosOffsetY, -20.0f);
+    NEBULA_TUNABLE(f32, sFootPosOffsetZ, 10.0f);
+    NEBULA_TUNABLE(f32, sHangPointBlendRateAxisZ, 0.1f);
+    NEBULA_TUNABLE(f32, sPointBlendRateAxisZ, 0.5f);
+    NEBULA_TUNABLE(f32, sFootPointAxisBlendRate, 0.3f);
 };  // namespace
 
 namespace NrvSwingRope {
@@ -82,8 +83,8 @@ namespace {
     static Color8 sColorPlusX(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorMinusX(0xFF, 0xFF, 0xFF, 0xFF);
 
-    static const f32 sHangCoordMaxOffset = 200.0f;
-    static const f32 sFootPosOffsetX = 0.0f;
+    NEBULA_TUNABLE(f32, sHangCoordMaxOffset, 200.0f);
+    NEBULA_TUNABLE(f32, sFootPosOffsetX, 0.0f);
 };  // namespace
 
 SwingRope::SwingRope(const char* pName)

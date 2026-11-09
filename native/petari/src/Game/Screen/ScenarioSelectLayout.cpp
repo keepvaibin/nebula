@@ -20,6 +20,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const cStarPaneName[] = {"Star1", "Star2", "Star3", "Star4", "Star5", "Star6", "Star7"};
@@ -28,22 +29,22 @@ namespace {
         "NewStar2",
     };
     const Vec cSkyTrans = {0.0f, 0.0f, -10000.0f};
-    const f32 cPointingTargetRadius = 60.0f;
-    const s32 cDecideFrame = 40;
+    NEBULA_TUNABLE(f32, cPointingTargetRadius, 60.0f);
+    NEBULA_TUNABLE(s32, cDecideFrame, 40);
     const s32 cSelectedAccelStartStep = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 cSelectedAccelFrame = 150;
-    const f32 cSelectedEffectRateMin = 2.0f;
-    const f32 cSelectedEffectRateMax = 15.0f;
-    const f32 cSelectedEffectSpeedMin = 9.0f;
-    const f32 cSelectedEffectSpeedMax = 15.0f;
+    NEBULA_TUNABLE(s32, cSelectedAccelFrame, 150);
+    NEBULA_TUNABLE(f32, cSelectedEffectRateMin, 2.0f);
+    NEBULA_TUNABLE(f32, cSelectedEffectRateMax, 15.0f);
+    NEBULA_TUNABLE(f32, cSelectedEffectSpeedMin, 9.0f);
+    NEBULA_TUNABLE(f32, cSelectedEffectSpeedMax, 15.0f);
     const s32 cSelectedEndAnimStartStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cSelectedFadeOutStartStep = NebulaFrameClock::stepsOfSeconds(3);
-    const s32 cSelectedFadeOutFrame = 30;
-    const s32 cSelectedFadeInFrame = 180;
-    const s32 cCancelFadeOutFrame = 90;
-    const f32 cSkyScale = 10.0f;
-    const s32 cCometWarningWaitFrame = 15;
-    const s32 cCometWarningFrame = 180;
+    NEBULA_TUNABLE(s32, cSelectedFadeOutFrame, 30);
+    NEBULA_TUNABLE(s32, cSelectedFadeInFrame, 180);
+    NEBULA_TUNABLE(s32, cCancelFadeOutFrame, 90);
+    NEBULA_TUNABLE(f32, cSkyScale, 10.0f);
+    NEBULA_TUNABLE(s32, cCometWarningWaitFrame, 15);
+    NEBULA_TUNABLE(s32, cCometWarningFrame, 180);
 };  // namespace
 
 namespace {

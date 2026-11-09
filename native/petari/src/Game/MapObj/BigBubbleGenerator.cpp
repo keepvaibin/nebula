@@ -9,11 +9,12 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sActiveDistance = 1500.0f;
-    const f32 sNonActiveDistance = 2000.0f;
-    const f32 sGenerateOffsetY = 60.0f;
+    NEBULA_TUNABLE(f32, sActiveDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sNonActiveDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, sGenerateOffsetY, 60.0f);
 };  // namespace
 
 namespace NrvBigBubbleGenerator {

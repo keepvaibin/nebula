@@ -5,10 +5,11 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Rim segments of the fan.
-    const u32 cSegments = 20;
+    NEBULA_TUNABLE(u32, cSegments, 20);
 };  // namespace
 
 ShadowSurfaceCircle::~ShadowSurfaceCircle() {

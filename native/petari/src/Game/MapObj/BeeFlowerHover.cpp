@@ -6,9 +6,10 @@
 #include "Game/MapObj/MapPartsRailPosture.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDefaultRotateSpeed = 50.0f;
+    NEBULA_TUNABLE(f32, sDefaultRotateSpeed, 50.0f);
     static const s32 sStepToRecoverStart = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

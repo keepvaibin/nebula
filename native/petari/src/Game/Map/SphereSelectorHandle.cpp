@@ -4,33 +4,34 @@
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cHoldReduceOutScreenFrame = 5;
-    const f32 cRotateSpeedChangeMax = 0.2f;
-    const f32 cHoldReduceRate = 0.9f;
-    const f32 cSpinReduceRate = 0.95f;
-    const f32 cRotateSpeedMaxY = 5.0f;
-    const f32 cHoldRotateRateY = 0.2f;
-    const s32 cDemoRotateStartFrame = 60;
-    const f32 cDemoRotateSpeedY = 0.03f;
-    const f32 cRotateSpeedMaxX = 2.0f;
-    const f32 cHoldRotateRateX = 0.075f;
-    const f32 cRotateAppearX = 40.0f;
-    const f32 cRotateMinX = -15.0f;
-    const f32 cRotateMaxX = 80.0f;
-    const s32 cBgmAppearState = 2;
-    const s32 cBgmAppearFrames = 60;
-    const s32 cBgmDisappearState = 1;
-    const s32 cBgmDisappearFrames = 90;
-    const s32 cBgmRotateState = 4;
-    const s32 cBgmRotateFrames = 60;
-    const s32 cBgmNotRotateState = 3;
-    const s32 cBgmNotRotateFrames = 30;
-    const s32 cBgmConfirmState = 6;
-    const s32 cBgmConfirmFrames = 60;
-    const s32 cBgmNotConfirmState = 5;
-    const s32 cBgmNotConfirmFrames = 60;
+    NEBULA_TUNABLE(s32, cHoldReduceOutScreenFrame, 5);
+    NEBULA_TUNABLE(f32, cRotateSpeedChangeMax, 0.2f);
+    NEBULA_TUNABLE(f32, cHoldReduceRate, 0.9f);
+    NEBULA_TUNABLE(f32, cSpinReduceRate, 0.95f);
+    NEBULA_TUNABLE(f32, cRotateSpeedMaxY, 5.0f);
+    NEBULA_TUNABLE(f32, cHoldRotateRateY, 0.2f);
+    NEBULA_TUNABLE(s32, cDemoRotateStartFrame, 60);
+    NEBULA_TUNABLE(f32, cDemoRotateSpeedY, 0.03f);
+    NEBULA_TUNABLE(f32, cRotateSpeedMaxX, 2.0f);
+    NEBULA_TUNABLE(f32, cHoldRotateRateX, 0.075f);
+    NEBULA_TUNABLE(f32, cRotateAppearX, 40.0f);
+    NEBULA_TUNABLE(f32, cRotateMinX, -15.0f);
+    NEBULA_TUNABLE(f32, cRotateMaxX, 80.0f);
+    NEBULA_TUNABLE(s32, cBgmAppearState, 2);
+    NEBULA_TUNABLE(s32, cBgmAppearFrames, 60);
+    NEBULA_TUNABLE(s32, cBgmDisappearState, 1);
+    NEBULA_TUNABLE(s32, cBgmDisappearFrames, 90);
+    NEBULA_TUNABLE(s32, cBgmRotateState, 4);
+    NEBULA_TUNABLE(s32, cBgmRotateFrames, 60);
+    NEBULA_TUNABLE(s32, cBgmNotRotateState, 3);
+    NEBULA_TUNABLE(s32, cBgmNotRotateFrames, 30);
+    NEBULA_TUNABLE(s32, cBgmConfirmState, 6);
+    NEBULA_TUNABLE(s32, cBgmConfirmFrames, 60);
+    NEBULA_TUNABLE(s32, cBgmNotConfirmState, 5);
+    NEBULA_TUNABLE(s32, cBgmNotConfirmFrames, 60);
 };  // namespace
 
 namespace NrvSphereSelectorHandle {

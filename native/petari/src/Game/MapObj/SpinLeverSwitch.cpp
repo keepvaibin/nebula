@@ -2,11 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sStepToOnSwitch = 15;
-    static const s32 sStepOnSE = 8;
-    static const s32 sStepForHitStop = 8;
+    NEBULA_TUNABLE(s32, sStepToOnSwitch, 15);
+    NEBULA_TUNABLE(s32, sStepOnSE, 8);
+    NEBULA_TUNABLE(s32, sStepForHitStop, 8);
 };  // namespace
 
 namespace NrvSpinLeverSwitch {

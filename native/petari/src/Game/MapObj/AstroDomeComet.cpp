@@ -8,13 +8,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const cCometBrkName[] = {"Red", "Blue", "White", "Yellow", "Purple"};
     const s32 cPointingActorNum = 6;
-    const f32 cPointingRadius = 1000.0f;
-    const f32 cPointingPosY = 2000.0f;
-    const f32 cPointingOffsetY = 1500.0f;
+    NEBULA_TUNABLE(f32, cPointingRadius, 1000.0f);
+    NEBULA_TUNABLE(f32, cPointingPosY, 2000.0f);
+    NEBULA_TUNABLE(f32, cPointingOffsetY, 1500.0f);
 };  // namespace
 
 namespace NrvAstroDomeComet {

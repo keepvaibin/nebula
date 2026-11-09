@@ -22,6 +22,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     NEW_NERVE(PukupukuStateLandingLandingMoveLand, PukupukuStateLanding, LandingMoveLand);
@@ -55,27 +56,27 @@ namespace {
         return nullptr;
     }
 
-    const s32 sJumpFrameMax = 30;
-    const f32 sHopHeight = 300.0f;
-    const f32 sJumpHeight = 500.0f;
-    const f32 sJumpSpeed = 15.0f;
-    const f32 sJumpPoseRate = 0.15f;
-    const f32 sRailPoseRate = 0.08f;
-    const f32 sEndJumpOnGroundRate = 0.5f;
-    const f32 sSwimSpeed = 5.0f;
-    const f32 sBinderRadius = 70.0f;
-    const f32 sBodyRadius = 60.0f;
-    const f32 sBodyRadiusBound = 100.0f;
-    const f32 sGroundProbeLength = 100.0f;
-    const f32 sWaterColumnScale = 1.5f;
-    const f32 sTrampleFallSpeed = 10.0f;
-    const f32 sTrampleFriction = 0.89f;
+    NEBULA_TUNABLE(s32, sJumpFrameMax, 30);
+    NEBULA_TUNABLE(f32, sHopHeight, 300.0f);
+    NEBULA_TUNABLE(f32, sJumpHeight, 500.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, sJumpPoseRate, 0.15f);
+    NEBULA_TUNABLE(f32, sRailPoseRate, 0.08f);
+    NEBULA_TUNABLE(f32, sEndJumpOnGroundRate, 0.5f);
+    NEBULA_TUNABLE(f32, sSwimSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sBinderRadius, 70.0f);
+    NEBULA_TUNABLE(f32, sBodyRadius, 60.0f);
+    NEBULA_TUNABLE(f32, sBodyRadiusBound, 100.0f);
+    NEBULA_TUNABLE(f32, sGroundProbeLength, 100.0f);
+    NEBULA_TUNABLE(f32, sWaterColumnScale, 1.5f);
+    NEBULA_TUNABLE(f32, sTrampleFallSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sTrampleFriction, 0.89f);
     const s32 sTrampledSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    const s32 sBlownOffSteps = 15;
-    const f32 sBlowSpeed = 35.0f;
-    const f32 sBlowUpSpeed = 20.0f;
-    const f32 sBlowRateInWater = 0.6f;
-    const f32 sBlowRateOnLand = 1.0f;
+    NEBULA_TUNABLE(s32, sBlownOffSteps, 15);
+    NEBULA_TUNABLE(f32, sBlowSpeed, 35.0f);
+    NEBULA_TUNABLE(f32, sBlowUpSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, sBlowRateInWater, 0.6f);
+    NEBULA_TUNABLE(f32, sBlowRateOnLand, 1.0f);
 };  // namespace
 
 PukupukuStateLanding::PukupukuStateLanding(Pukupuku* pParent)

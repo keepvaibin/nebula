@@ -2,9 +2,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sAnimFrame = 90;
+    NEBULA_TUNABLE(s32, sAnimFrame, 90);
 };  // namespace
 
 namespace {

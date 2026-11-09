@@ -21,6 +21,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvJellyfish {
     NEW_NERVE(JellyfishNrvWait, Jellyfish, Wait);
@@ -38,14 +39,14 @@ namespace NrvJellyfish {
 
 namespace {
     const Color8 sPointLightColor(255, 50, 202, 255);
-    const f32 sFindDistance = 1000.0f;
-    const f32 sThreatDistance = 1500.0f;
-    const f32 sThreatFaceAngle = 35.0f;
-    const f32 sMaxTiltAngle = 30.0f;
-    const f32 sWaitTurnDegree = 0.2f;
-    const f32 sThreatTurnDegree = 1.5f;
-    const f32 sKnockOutSpeed = 40.0f;
-    const s32 sWaitSteps = 280;
+    NEBULA_TUNABLE(f32, sFindDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, sThreatDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sThreatFaceAngle, 35.0f);
+    NEBULA_TUNABLE(f32, sMaxTiltAngle, 30.0f);
+    NEBULA_TUNABLE(f32, sWaitTurnDegree, 0.2f);
+    NEBULA_TUNABLE(f32, sThreatTurnDegree, 1.5f);
+    NEBULA_TUNABLE(f32, sKnockOutSpeed, 40.0f);
+    NEBULA_TUNABLE(s32, sWaitSteps, 280);
     const s32 sDeathSteps = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 

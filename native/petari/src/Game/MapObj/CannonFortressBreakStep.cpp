@@ -2,10 +2,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sFallSpeed = 15.0f;
-    const s32 sStepForFall = 350;
+    NEBULA_TUNABLE(f32, sFallSpeed, 15.0f);
+    NEBULA_TUNABLE(s32, sStepForFall, 350);
 };  // namespace
 
 namespace NrvCannonFortressBreakStep {

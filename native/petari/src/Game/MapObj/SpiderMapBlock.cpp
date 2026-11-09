@@ -6,9 +6,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sCoinSpeed = 35.0f;
+    NEBULA_TUNABLE(f32, sCoinSpeed, 35.0f);
 };  // namespace
 
 SpiderMapBlock::SpiderMapBlock(const char* pName) : LiveActor(pName), mPosZ() {

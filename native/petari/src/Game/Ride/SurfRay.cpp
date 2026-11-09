@@ -24,6 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvSurfRay {
     NEW_NERVE(SurfRayNrvWaitPlayer, SurfRay, WaitPlayer);
@@ -44,26 +45,26 @@ namespace NrvSurfRay {
 };  // namespace NrvSurfRay
 
 namespace {
-    static const f32 sDistancePlayerNear = 1300.0f;
-    static const f32 sSpeedToRumble = 5.0f;
-    static const f32 sBlendRatioAxisUpAir = 0.02f;
-    static const f32 sBlendRatioAxisUpGround = 0.1f;
-    static const f32 sBlendRatioAxisFrontWall = 0.1f;
-    static const f32 sTwistStartDiffMin = 0.2f;
-    static const f32 sBtkSpeedMin = 1.0f;
-    static const f32 sBtkSpeedMax = 4.0f;
-    static const f32 sBtkSpeedRate = 0.4f;
-    static const f32 sShadowAlphaMax = 64.0f;
-    static const f32 sShadowAlphaSpeed = 10.0f;
-    static const f32 sSpeedToEmitEffect = 6.0f;
-    static const f32 sSpeedToEmitEffectFast = 20.0f;
-    static const f32 sMoveSe0StartSpeed = 2.5f;
-    static const f32 sMoveSe1StartSpeed = 7.5f;
-    static const f32 sMoveSe2StartSpeed = 14.0f;
-    static const f32 sMoveSe3StartSpeed = 25.0f;
-    static const f32 sMoveSe3MaxSpeed = 35.0f;
-    static const f32 sWindSeStartSpeed = 32.0f;
-    static const f32 sWindSeMaxSpeed = 50.0f;
+    NEBULA_TUNABLE(f32, sDistancePlayerNear, 1300.0f);
+    NEBULA_TUNABLE(f32, sSpeedToRumble, 5.0f);
+    NEBULA_TUNABLE(f32, sBlendRatioAxisUpAir, 0.02f);
+    NEBULA_TUNABLE(f32, sBlendRatioAxisUpGround, 0.1f);
+    NEBULA_TUNABLE(f32, sBlendRatioAxisFrontWall, 0.1f);
+    NEBULA_TUNABLE(f32, sTwistStartDiffMin, 0.2f);
+    NEBULA_TUNABLE(f32, sBtkSpeedMin, 1.0f);
+    NEBULA_TUNABLE(f32, sBtkSpeedMax, 4.0f);
+    NEBULA_TUNABLE(f32, sBtkSpeedRate, 0.4f);
+    NEBULA_TUNABLE(f32, sShadowAlphaMax, 64.0f);
+    NEBULA_TUNABLE(f32, sShadowAlphaSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sSpeedToEmitEffect, 6.0f);
+    NEBULA_TUNABLE(f32, sSpeedToEmitEffectFast, 20.0f);
+    NEBULA_TUNABLE(f32, sMoveSe0StartSpeed, 2.5f);
+    NEBULA_TUNABLE(f32, sMoveSe1StartSpeed, 7.5f);
+    NEBULA_TUNABLE(f32, sMoveSe2StartSpeed, 14.0f);
+    NEBULA_TUNABLE(f32, sMoveSe3StartSpeed, 25.0f);
+    NEBULA_TUNABLE(f32, sMoveSe3MaxSpeed, 35.0f);
+    NEBULA_TUNABLE(f32, sWindSeStartSpeed, 32.0f);
+    NEBULA_TUNABLE(f32, sWindSeMaxSpeed, 50.0f);
 
     bool calcWaterShadowPos(Vec3f* pShadowPos, const Vec3f& rStartPos, const Vec3f& rShadowDir) {
         pShadowPos->set(rStartPos);

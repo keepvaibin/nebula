@@ -22,6 +22,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TextString.hpp"
 #include <cstdio>
+#include "Game/Util/Tunable.hpp"
 
 #define PICTURE_TEXTURE_NUM 20
 #define LINE_NUM 64
@@ -89,14 +90,14 @@ namespace {
         "FrameOut",
     };
     // static const s32 sStepForStartMargin = _;
-    static const s32 sStepForPrepareInfo = 100;
+    NEBULA_TUNABLE(s32, sStepForPrepareInfo, 100);
     static const s32 sStepForTitleLogoAppear = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sStepToEndLogoStop = _;
-    static const s32 sStepToThankYouVoice = 190;
+    NEBULA_TUNABLE(s32, sStepToThankYouVoice, 190);
     // static const _ sTitleLogoHeight = _;
-    static const f32 sDoubleInterval = 60.0f;
-    static const f32 sTripleInterval = 200.0f;
-    static const f32 sEndLogoPosY = 220.0f;
+    NEBULA_TUNABLE(f32, sDoubleInterval, 60.0f);
+    NEBULA_TUNABLE(f32, sTripleInterval, 200.0f);
+    NEBULA_TUNABLE(f32, sEndLogoPosY, 220.0f);
 };  // namespace
 
 namespace {

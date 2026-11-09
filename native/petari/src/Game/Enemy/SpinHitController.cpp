@@ -4,14 +4,15 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cDefaultFlyStepMax = 15;
-    const s32 cDefaultFlyStepMin = 10;
-    const s32 cDefaultStopSceneFrames = 3;
-    const f32 cDefaultGravityAccel = 0.0f;
-    const f32 cDefaultHorizontalSpeed = 40.0f;
-    const f32 cDefaultVerticalSpeed = 20.0f;
+    NEBULA_TUNABLE(s32, cDefaultFlyStepMax, 15);
+    NEBULA_TUNABLE(s32, cDefaultFlyStepMin, 10);
+    NEBULA_TUNABLE(s32, cDefaultStopSceneFrames, 3);
+    NEBULA_TUNABLE(f32, cDefaultGravityAccel, 0.0f);
+    NEBULA_TUNABLE(f32, cDefaultHorizontalSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, cDefaultVerticalSpeed, 20.0f);
 };  // namespace
 
 SpinHitController::SpinHitController(const NameObj* pObj, s32 itemNum, bool isCoin) {

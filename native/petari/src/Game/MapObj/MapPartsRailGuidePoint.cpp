@@ -3,9 +3,10 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sShadowRadius = 20.0f;
+    NEBULA_TUNABLE(f32, sShadowRadius, 20.0f);
 };  //  namespace
 
 MapPartsRailGuidePoint::MapPartsRailGuidePoint(const LiveActor* pActor, const char* pName, f32 coord, bool isPointModel) : LiveActor("レイル点") {

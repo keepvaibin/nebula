@@ -8,6 +8,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvCocoSamboHead {
     NEW_NERVE(CocoSamboHeadNrvHeadConnectedBody, CocoSamboHead, ConnectedBody);
@@ -23,27 +24,27 @@ namespace {
     const Vec cBlowVelocity = {0.0f, 20.0f, -100.0f};
     const Vec cSensorOffset = {40.0f, 0.0f, 0.0f};
     const char* const cPointingJointName[] = {"Spine1", "Spine2", "Spine3", "Head"};
-    const f32 cHeadSensorRadius = 100.0f;
-    const f32 cTrampleSensorRadius = 150.0f;
-    const s32 cFallFrame = 45;
+    NEBULA_TUNABLE(f32, cHeadSensorRadius, 100.0f);
+    NEBULA_TUNABLE(f32, cTrampleSensorRadius, 150.0f);
+    NEBULA_TUNABLE(s32, cFallFrame, 45);
     // const f32 cFallGravity =
-    const s32 cSwoonFrame = 180;
-    const s32 cSwoonEndDamagedFrame = 95;
+    NEBULA_TUNABLE(s32, cSwoonFrame, 180);
+    NEBULA_TUNABLE(s32, cSwoonEndDamagedFrame, 95);
     // const s32 cRecoverWaitFrame =
-    const s32 cPressFrame = 35;
+    NEBULA_TUNABLE(s32, cPressFrame, 35);
     // const s32 cAttackEffectEmitStep =
     // const s32 cHitStopSceneFrame =
     // const s32 cBlowStopSceneStep =
     // const s32 cBlowStopSceneFrame =
     // const f32 cBlowGravity =
-    const s32 cBlowFrame = 20;
+    NEBULA_TUNABLE(s32, cBlowFrame, 20);
     // const f32 cSensorRadius =
     // const f32 cAttackDistance =
     // const s32 cAttackInterval =
     // const f32 cRotateSpeed =
     // const s32 cAttackRotateFrame =
-    const s32 cAppearUpFrame = 60;
-    const s32 cAppearLandFrame = 105;
+    NEBULA_TUNABLE(s32, cAppearUpFrame, 60);
+    NEBULA_TUNABLE(s32, cAppearLandFrame, 105);
     // const s32 cHideDownFrame =
     // const s32 cSwoonEndHideShadowFrame =
     const s32 cPointingActorNum = 4;

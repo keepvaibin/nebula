@@ -6,15 +6,16 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvKabokuriFire {
     NEW_NERVE(KabokuriFireNrvWait, KabokuriFire, Wait);
 };  // namespace NrvKabokuriFire
 
 namespace {
-    static const f32 sBodyHitSize = 40.0f;
-    static const f32 sBodyHitYOffset = 90.0f;
-    static const s32 sFireTime = 320;
+    NEBULA_TUNABLE(f32, sBodyHitSize, 40.0f);
+    NEBULA_TUNABLE(f32, sBodyHitYOffset, 90.0f);
+    NEBULA_TUNABLE(s32, sFireTime, 320);
 };  // namespace
 
 KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {

@@ -18,24 +18,25 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 // The water is a grid along the rail: one cross-section of cPointsAcross points every sPointIntervalLine,
 // cPointSpacing apart at width rate 1 (sDefaultWidth either side of the center point).
 namespace {
-    const f32 sPointIntervalLine = 200.0f;
-    const f32 sDefaultWidth = 1200.0f;
-    const f32 sEdgePointNum = 2.0f;
-    const f32 sUpdateDistanceMax = 5000.0f;
-    const f32 sWaveSpeed0 = -0.04f;
-    const f32 sWaveSpeed1 = -0.06f;
+    NEBULA_TUNABLE(f32, sPointIntervalLine, 200.0f);
+    NEBULA_TUNABLE(f32, sDefaultWidth, 1200.0f);
+    NEBULA_TUNABLE(f32, sEdgePointNum, 2.0f);
+    NEBULA_TUNABLE(f32, sUpdateDistanceMax, 5000.0f);
+    NEBULA_TUNABLE(f32, sWaveSpeed0, -0.04f);
+    NEBULA_TUNABLE(f32, sWaveSpeed1, -0.06f);
 
-    const s32 cPointsAcross = 15;
-    const s32 cCenterPoint = 7;
-    const f32 cPointSpacing = 171.42857f;  // sDefaultWidth / cCenterPoint
+    NEBULA_TUNABLE(s32, cPointsAcross, 15);
+    NEBULA_TUNABLE(s32, cCenterPoint, 7);
+    NEBULA_TUNABLE(f32, cPointSpacing, 171.42857f);  // sDefaultWidth / cCenterPoint
     // Segments kept updating behind the player; mUpdateSegsAhead are ahead.
-    const s32 cUpdateSegsBehind = 8;
-    const s32 cFadeSegs = 3;
-    const f32 cNormalSampleOffset = 10.0f;
+    NEBULA_TUNABLE(s32, cUpdateSegsBehind, 8);
+    NEBULA_TUNABLE(s32, cFadeSegs, 3);
+    NEBULA_TUNABLE(f32, cNormalSampleOffset, 10.0f);
 };  // namespace
 
 OceanRing::OceanRing(const char* pName) : LiveActor(pName) {

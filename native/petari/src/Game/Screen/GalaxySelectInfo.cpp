@@ -6,9 +6,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 cFadeinoutFrame = 5;
+    NEBULA_TUNABLE(s32, cFadeinoutFrame, 5);
 };  // namespace
 
 namespace NrvGalaxySelectInfo {

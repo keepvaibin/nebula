@@ -19,16 +19,17 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sMinDistance = 300.0f;
+    NEBULA_TUNABLE(f32, sMinDistance, 300.0f);
     const char* sThruCamName = "デフォルトカメラ";
     const char* sDefaultWaterCamName = "デフォルト水中カメラ";
     const char* sDefaultWaterSurfaceCamName = "デフォルト水面カメラ";
     const char* sDefaultFooFighterCamName = "デフォルトフーファイターカメラ";
     const char* sStartAnimCamName = "スタートアニメカメラ";
-    static const f32 sZoomRadius = 100.0f;
-    static const s32 sInterpolateOffCounterMax = 5;
+    NEBULA_TUNABLE(f32, sZoomRadius, 100.0f);
+    NEBULA_TUNABLE(s32, sInterpolateOffCounterMax, 5);
 };  // namespace
 
 CameraManGame::CameraManGame(CameraHolder* pHolder, CameraParamChunkHolder* pChunkHolder, const char* pName)

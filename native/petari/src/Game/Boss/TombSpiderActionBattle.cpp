@@ -7,9 +7,10 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sChanceDamageLastStep = 5;
+    NEBULA_TUNABLE(s32, sChanceDamageLastStep, 5);
 };  // namespace
 
 namespace NrvTombSpiderActionBattle {

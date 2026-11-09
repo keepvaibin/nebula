@@ -21,10 +21,11 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sUpVecBlendRate = 0.04f;
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.04f);
 };  // namespace
 
 BossKameck::BossKameck(const char* pName, const char* pModelName)

@@ -11,6 +11,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include <nebula_game_api.h>
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // An actor that asked for the point light, with its last request (NEBULA_LIGHT_POINT_REQUEST values).
@@ -23,7 +24,7 @@ namespace {
     // A requester silent for more frames than this keeps its light only while the game clips it: a clipped actor runs
     // no control, which is where it asks. One that died, or that the game runs but that stopped asking, lets its light
     // fade out.
-    const u32 cRequestGap = 2;
+    NEBULA_TUNABLE(u32, cRequestGap, 2);
     // Every actor that asked: no limit.
     MR::GrowBuffer< Requester > sRequesters;
     u32 sRequesterCount;

@@ -36,12 +36,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_format.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sSubjectivePosInterpolateFrame = 0;
-    static const s32 sSubjectiveRotInterpolateFrame = 10;
-    static const s32 sSubjectiveInterpolateFrame = 20;
-    const f32 sDefaultFovy = 45.0f;
+    NEBULA_TUNABLE(s32, sSubjectivePosInterpolateFrame, 0);
+    NEBULA_TUNABLE(s32, sSubjectiveRotInterpolateFrame, 10);
+    NEBULA_TUNABLE(s32, sSubjectiveInterpolateFrame, 20);
+    NEBULA_TUNABLE(f32, sDefaultFovy, 45.0f);
     static const char* sTalkCameraName = "共通会話カメラ";
     static const char* sStartAnimCameraName = "スタートアニメカメラ";
     static const char* sSubjectiveCameraName = "主観カメラ";

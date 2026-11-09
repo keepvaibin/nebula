@@ -10,12 +10,13 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Shadow-space x and z onto the shadow texture: s = x * scale + 0.5, t = -z * scale + 0.5, q = 1.
-    const f32 cShadowTexScale = 0.003331f;
-    const f32 cShadowTexOffset = 0.5f;
-    const f32 cShadowTexQ = 1.0f;
+    NEBULA_TUNABLE(f32, cShadowTexScale, 0.003331f);
+    NEBULA_TUNABLE(f32, cShadowTexOffset, 0.5f);
+    NEBULA_TUNABLE(f32, cShadowTexQ, 1.0f);
 };  // namespace
 
 namespace {

@@ -8,9 +8,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cFireSpeed = 30.0f;
+    NEBULA_TUNABLE(f32, cFireSpeed, 30.0f);
     const s32 cMeteorNum = 3;
     const char* const cMeteorDemoAnimName[cMeteorNum] = {
         "DemoKoopaBattleStairsVs3Start01",

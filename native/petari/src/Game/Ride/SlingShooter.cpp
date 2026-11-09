@@ -21,24 +21,25 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sStepFreeInvalid = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sNpcSensorPosOffsetZ = 200.0f;
-    static const f32 sAimFollowRate = 0.1f;
-    static const f32 sAimDistanceMin = 100.0f;
-    static const f32 sAimDistanceMax = 300.0f;
-    static const s32 sAimAnimInterpole = 10;
-    static const f32 sAimDistanceToStretch = 300.0f;
-    static const f32 sAimDistanceToWait = 200.0f;
-    static const f32 sBindAttackSpeed = 45.0f;
-    static const f32 sBindAttackFrictionRate = 1.0f;
+    NEBULA_TUNABLE(f32, sNpcSensorPosOffsetZ, 200.0f);
+    NEBULA_TUNABLE(f32, sAimFollowRate, 0.1f);
+    NEBULA_TUNABLE(f32, sAimDistanceMin, 100.0f);
+    NEBULA_TUNABLE(f32, sAimDistanceMax, 300.0f);
+    NEBULA_TUNABLE(s32, sAimAnimInterpole, 10);
+    NEBULA_TUNABLE(f32, sAimDistanceToStretch, 300.0f);
+    NEBULA_TUNABLE(f32, sAimDistanceToWait, 200.0f);
+    NEBULA_TUNABLE(f32, sBindAttackSpeed, 45.0f);
+    NEBULA_TUNABLE(f32, sBindAttackFrictionRate, 1.0f);
     static const s32 sStepBindAttack = NebulaFrameClock::stepsOfSeconds(2);
-    static const s32 sBindAttackInvalidTime = 10;
-    static const s32 sStepToStopScene = 1;
-    static const s32 sStepStopSceneAttackSuccess = 15;
+    NEBULA_TUNABLE(s32, sBindAttackInvalidTime, 10);
+    NEBULA_TUNABLE(s32, sStepToStopScene, 1);
+    NEBULA_TUNABLE(s32, sStepStopSceneAttackSuccess, 15);
     static const s32 sStepStopSceneLastDamage = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sStepToEnableBindCancel = 10;
+    NEBULA_TUNABLE(s32, sStepToEnableBindCancel, 10);
 
     void endBindAndPlayerNoJump(LiveActor* pActor) {
         MR::endBindAndPlayerJump(pActor, Vec3f(0.0f, 0.0f, 0.0f), 0);

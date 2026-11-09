@@ -3,16 +3,17 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDistance = 200.0f;
-    static const f32 sHeight = 120.0f;
-    static const f32 sDivW = 10.0f;
-    static const f32 sDivH = 10.0f;
-    static const f32 sRotXMax = 80.0f;
-    static const f32 sRotYMax = 90.0f;
-    static const f32 sPadStickPlay = 0.3f;
-    static const f32 sRotSpeedEff = 3.0f;
+    NEBULA_TUNABLE(f32, sDistance, 200.0f);
+    NEBULA_TUNABLE(f32, sHeight, 120.0f);
+    NEBULA_TUNABLE(f32, sDivW, 10.0f);
+    NEBULA_TUNABLE(f32, sDivH, 10.0f);
+    NEBULA_TUNABLE(f32, sRotXMax, 80.0f);
+    NEBULA_TUNABLE(f32, sRotYMax, 90.0f);
+    NEBULA_TUNABLE(f32, sPadStickPlay, 0.3f);
+    NEBULA_TUNABLE(f32, sRotSpeedEff, 3.0f);
 
     // A stick value outside the play, rescaled to -1..1.
     f32 removeStickPlay(f32 value) {

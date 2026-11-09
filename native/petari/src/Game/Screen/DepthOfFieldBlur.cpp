@@ -16,6 +16,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
+#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -23,8 +24,8 @@ namespace {
     // static const s32 sFirstBlurCount = _;
     // static const f32 sFirstBlurRadius = _;
     // static const f32 sBlendRate = _;
-    static const f32 sViewDistance = 10000.0f;
-    static const s8 sScaleExp = 1;
+    NEBULA_TUNABLE(f32, sViewDistance, 10000.0f);
+    NEBULA_TUNABLE(s8, sScaleExp, 1);
 
     // The depth-to-alpha pass (runtime/src/render/materials/vertex_color.hlsl): the ramp's vertex colours, no blending,
     // depth or culling.

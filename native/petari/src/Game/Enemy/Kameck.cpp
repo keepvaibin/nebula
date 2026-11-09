@@ -8,20 +8,21 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDefaultActiveDistance = 3000.0f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sUpVecBlendRate = 0.04f;
-    static const f32 sTurnPlayerLimit = 0.98f;
-    static const s32 sGuardTime = 50;
-    static const f32 sAttackRange = 2000.0f;
+    NEBULA_TUNABLE(f32, sDefaultActiveDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.04f);
+    NEBULA_TUNABLE(f32, sTurnPlayerLimit, 0.98f);
+    NEBULA_TUNABLE(s32, sGuardTime, 50);
+    NEBULA_TUNABLE(f32, sAttackRange, 2000.0f);
     static const s32 sAttackWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sBeamSpeed = 12.0f;
-    static const f32 sHitHorizontalPower = 25.0f;
-    static const f32 sHitVerticalPower = 25.0f;
-    static const f32 sDownGravityAccel = 1.0f;
-    static const f32 sDownFreq = 0.99f;
+    NEBULA_TUNABLE(f32, sBeamSpeed, 12.0f);
+    NEBULA_TUNABLE(f32, sHitHorizontalPower, 25.0f);
+    NEBULA_TUNABLE(f32, sHitVerticalPower, 25.0f);
+    NEBULA_TUNABLE(f32, sDownGravityAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sDownFreq, 0.99f);
 };  // namespace
 
 namespace NrvKameck {

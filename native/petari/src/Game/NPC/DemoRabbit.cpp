@@ -2,28 +2,29 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sUpVecBlendRate = 0.1f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const f32 sGroundGravityAccel = 0.1f;
-    static const f32 sAirGravityAccel = 1.0f;
-    static const f32 sGroundFric = 0.9f;
-    static const f32 sAirFric = 0.99f;
-    static const s32 sIsAirTime = 5;
-    static const f32 sInRunawayRange = 800.0f;
-    static const f32 sOutRunawayRange = 1100.0f;
-    static const f32 sTalkRunawayRange = 1300.0f;
-    static const f32 sRunawayAccel = 1.55f;
-    static const f32 sRunawayEndAccel = 1.2f;
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sGroundGravityAccel, 0.1f);
+    NEBULA_TUNABLE(f32, sAirGravityAccel, 1.0f);
+    NEBULA_TUNABLE(f32, sGroundFric, 0.9f);
+    NEBULA_TUNABLE(f32, sAirFric, 0.99f);
+    NEBULA_TUNABLE(s32, sIsAirTime, 5);
+    NEBULA_TUNABLE(f32, sInRunawayRange, 800.0f);
+    NEBULA_TUNABLE(f32, sOutRunawayRange, 1100.0f);
+    NEBULA_TUNABLE(f32, sTalkRunawayRange, 1300.0f);
+    NEBULA_TUNABLE(f32, sRunawayAccel, 1.55f);
+    NEBULA_TUNABLE(f32, sRunawayEndAccel, 1.2f);
     static const s32 sRunawayDeccelTime = NebulaFrameClock::stepsOfSeconds(15);
-    static const f32 sRunawayTurnStartLimit = 10.0f;
-    static const f32 sRunawayTurnLimit = 1.5f;
+    NEBULA_TUNABLE(f32, sRunawayTurnStartLimit, 10.0f);
+    NEBULA_TUNABLE(f32, sRunawayTurnLimit, 1.5f);
     static const s32 sRunawayTurnDeccelTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sWallJumpPowerV = 30.0f;
-    static const f32 sAppearJumpPowerV = 20.0f;
-    static const f32 sNearGoalDistance = 130.0f;
-    static const f32 sReachGoalDistance = 100.0f;
+    NEBULA_TUNABLE(f32, sWallJumpPowerV, 30.0f);
+    NEBULA_TUNABLE(f32, sAppearJumpPowerV, 20.0f);
+    NEBULA_TUNABLE(f32, sNearGoalDistance, 130.0f);
+    NEBULA_TUNABLE(f32, sReachGoalDistance, 100.0f);
 };  // namespace
 
 namespace NrvDemoRabbit {

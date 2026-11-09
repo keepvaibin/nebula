@@ -22,40 +22,41 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 hStartBrkTime = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 hBrkRateUpTime = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 hBrkSlowRate = 0.5f;
-    static const f32 hBrkFastRate = 2.0f;
-    static const f32 hTurnLimitRadian = 3.0f;
-    static const f32 hGravity = 1.0f;
-    static const f32 hGravityPhysicsOnGround = 0.5f;
-    static const f32 hSpinHitJumpVel = 10.0f;
-    static const f32 hPushedAcc = 2.0f;
-    static const s32 hExplodeTime = 8;
+    NEBULA_TUNABLE(f32, hBrkSlowRate, 0.5f);
+    NEBULA_TUNABLE(f32, hBrkFastRate, 2.0f);
+    NEBULA_TUNABLE(f32, hTurnLimitRadian, 3.0f);
+    NEBULA_TUNABLE(f32, hGravity, 1.0f);
+    NEBULA_TUNABLE(f32, hGravityPhysicsOnGround, 0.5f);
+    NEBULA_TUNABLE(f32, hSpinHitJumpVel, 10.0f);
+    NEBULA_TUNABLE(f32, hPushedAcc, 2.0f);
+    NEBULA_TUNABLE(s32, hExplodeTime, 8);
     static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(3);
-    static const s32 hWalkTime = 160;
+    NEBULA_TUNABLE(s32, hWalkTime, 160);
     static const f32 hWalkVel = 0.5f;
     static const f32 hPursueVel = 1.5f;
     static const f32 hPursueVelFast = 2.0f;
-    static const f32 hPrePursueJumpVel = 10.0f;
-    static const s32 hPursueHitTime = 38;
-    static const f32 hGravityThrown = 0.75;
-    static const f32 hThrownDampVel = 0.98f;
-    static const f32 hThrownReboundRate = 0.8f;
-    static const f32 hThrownReboundMin = 0.0f;
+    NEBULA_TUNABLE(f32, hPrePursueJumpVel, 10.0f);
+    NEBULA_TUNABLE(s32, hPursueHitTime, 38);
+    NEBULA_TUNABLE(f32, hGravityThrown, 0.75);
+    NEBULA_TUNABLE(f32, hThrownDampVel, 0.98f);
+    NEBULA_TUNABLE(f32, hThrownReboundRate, 0.8f);
+    NEBULA_TUNABLE(f32, hThrownReboundMin, 0.0f);
     static const f32 hTurnVecValue = 2.0f;
     static const s32 hThrownCanNotGotTime = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 hMultVelAngle = 1.0f;
+    NEBULA_TUNABLE(f32, hMultVelAngle, 1.0f);
     static const s32 hThrownOffCalcGravityTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 hGroundCosine = 0.75f;
-    static const f32 hStopDampValue = 0.8f;
-    static const f32 hToStopVelLen = 5.0f;
-    static const f32 hThrowVelH = 25.0f;
-    static const f32 hThrowVelV = 18.0f;
-    static const f32 hTranslateHeight = 53.0f;
-    static const s32 hStopFrame = 3;
+    NEBULA_TUNABLE(f32, hGroundCosine, 0.75f);
+    NEBULA_TUNABLE(f32, hStopDampValue, 0.8f);
+    NEBULA_TUNABLE(f32, hToStopVelLen, 5.0f);
+    NEBULA_TUNABLE(f32, hThrowVelH, 25.0f);
+    NEBULA_TUNABLE(f32, hThrowVelV, 18.0f);
+    NEBULA_TUNABLE(f32, hTranslateHeight, 53.0f);
+    NEBULA_TUNABLE(s32, hStopFrame, 3);
     static const s32 hSpinHitCanGetTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 hTrampleTime = NebulaFrameClock::stepsOfSeconds(1);
 

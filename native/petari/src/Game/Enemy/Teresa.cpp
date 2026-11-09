@@ -24,6 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static Color8 sPointLightColor(255, 255, 255, 255);
@@ -34,12 +35,12 @@ namespace {
         APPEAR_FROM_WALL = 1,
     };
 
-    const f32 sShadowRadius = 80.0f;
-    const f32 sChaseDistance = 1800.0f;
-    const f32 sLoveDistance = 1500.0f;
-    const f32 sShyDistance = 1500.0f;
-    const f32 sWalkEndDistance = 200.0f;
-    const f32 sFloatHeight = 150.0f;
+    NEBULA_TUNABLE(f32, sShadowRadius, 80.0f);
+    NEBULA_TUNABLE(f32, sChaseDistance, 1800.0f);
+    NEBULA_TUNABLE(f32, sLoveDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sShyDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sWalkEndDistance, 200.0f);
+    NEBULA_TUNABLE(f32, sFloatHeight, 150.0f);
 };  // namespace
 
 namespace NrvTeresa {

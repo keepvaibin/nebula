@@ -8,6 +8,7 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvSearchBeamer {
     NEW_NERVE_ONEND(SearchBeamerNrvNonActive, SearchBeamer, NonActive, NonActive);
@@ -27,19 +28,19 @@ namespace NrvSearchBeamer {
 };  // namespace NrvSearchBeamer
 
 namespace {
-    const f32 cActiveDistance = 4000.0f;
-    const f32 cNearDistance = 2500.0f;
-    const f32 cFarDistance = 3000.0f;
-    const f32 cTurnDegree = 3.0f;
-    const f32 cStopTurnDegree = 15.0f;
-    const f32 cPitchLimitDegree = 35.0f;
-    const f32 cTerritoryFaceDegree = 45.0f;
-    const f32 cBeamOverTerritory = 300.0f;
-    const f32 cBeamWidth = 15.0f;
-    const f32 cPropellerAccel = 0.30f;
-    const f32 cPropellerMinSpeed = 10.0f;
-    const f32 cPropellerMaxSpeed = 40.0f;
-    const f32 cAimBelowCenter = 20.0f;
+    NEBULA_TUNABLE(f32, cActiveDistance, 4000.0f);
+    NEBULA_TUNABLE(f32, cNearDistance, 2500.0f);
+    NEBULA_TUNABLE(f32, cFarDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, cTurnDegree, 3.0f);
+    NEBULA_TUNABLE(f32, cStopTurnDegree, 15.0f);
+    NEBULA_TUNABLE(f32, cPitchLimitDegree, 35.0f);
+    NEBULA_TUNABLE(f32, cTerritoryFaceDegree, 45.0f);
+    NEBULA_TUNABLE(f32, cBeamOverTerritory, 300.0f);
+    NEBULA_TUNABLE(f32, cBeamWidth, 15.0f);
+    NEBULA_TUNABLE(f32, cPropellerAccel, 0.30f);
+    NEBULA_TUNABLE(f32, cPropellerMinSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, cPropellerMaxSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, cAimBelowCenter, 20.0f);
 
     // A little below the player's center.
     inline void calcPlayerAimPos(Vec3f* pPos) {

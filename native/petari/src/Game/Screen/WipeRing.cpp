@@ -10,9 +10,10 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sAnimFrame = 60;
+    NEBULA_TUNABLE(s32, sAnimFrame, 60);
     static const char* sOutAnimName = "Out";
     static const char* sInAnimName = "In";
 

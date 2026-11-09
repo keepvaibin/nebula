@@ -22,6 +22,7 @@
 #include "Game/Render/ModelData.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
@@ -33,14 +34,14 @@ namespace {
                                                    {0.0f, 0.0f, 0.0f},
                                                    {0.0f, 0.0f, 0.0f},
                                                    {0.0f, 0.0f, 0.0f}};
-    static const f32 sStarPointerTargetSize[] = {220.0f, 150.0f, 120.0f, 120.0f};
-    static const f32 sSensorRadius = 190.0f;
-    static const f32 sBustSensorRadius = 120.0f;
-    static const f32 sWaistSensorRadius = 120.0f;
-    static const f32 sTailSensorRadius = 100.0f;
-    static const f32 sSpeed = 20.0f;
-    static const s32 sStarPieceNum = 10;
-    static const f32 sAccel = 0.1f;
+    NEBULA_TUNABLE_LIST(f32, sStarPointerTargetSize, , {220.0f, 150.0f, 120.0f, 120.0f});
+    NEBULA_TUNABLE(f32, sSensorRadius, 190.0f);
+    NEBULA_TUNABLE(f32, sBustSensorRadius, 120.0f);
+    NEBULA_TUNABLE(f32, sWaistSensorRadius, 120.0f);
+    NEBULA_TUNABLE(f32, sTailSensorRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sSpeed, 20.0f);
+    NEBULA_TUNABLE(s32, sStarPieceNum, 10);
+    NEBULA_TUNABLE(f32, sAccel, 0.1f);
 };  // namespace
 
 namespace {

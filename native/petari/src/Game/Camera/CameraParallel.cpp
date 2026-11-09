@@ -4,11 +4,12 @@
 #include "Game/Camera/CameraHeightArrange.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sDistance = 3000.0f;
-    const f32 sRoundDiv = 8.0f;
-    const f32 sRoundAddition = 0.08f;
+    NEBULA_TUNABLE(f32, sDistance, 3000.0f);
+    NEBULA_TUNABLE(f32, sRoundDiv, 8.0f);
+    NEBULA_TUNABLE(f32, sRoundAddition, 0.08f);
 };  // namespace
 
 CameraParallel::CameraParallel(const char* pName)

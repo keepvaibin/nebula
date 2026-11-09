@@ -4,11 +4,12 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The cooked camera tracks store a key's slopes per authored frame of 30 a second (the cooker reads them the same way);
     // key times are in those frames.
-    const f32 cKeySlopeUnit = 30.0f;
+    NEBULA_TUNABLE(f32, cKeySlopeUnit, 30.0f);
 
     // The first key at or before the key (a binary search; one before the first when the key is before it).
     u32 searchKey(const f32* pValues, f32 key, u32 count, u32 stride) {
@@ -173,4 +174,4 @@ bool CameraAnim::loadBin(u8* pFile) {
     mNrFrames = mClip->mNrFrames;
     return true;
 }
-
+

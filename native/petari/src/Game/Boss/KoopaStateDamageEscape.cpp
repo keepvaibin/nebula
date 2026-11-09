@@ -11,6 +11,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sEscapeStartParam = {1.8f, 1.5f, 0.95f, 3.0f};
@@ -25,21 +26,21 @@ namespace {
     static MR::ActorMoveParam sDamageTailRunParamLv3 = {8.0f, 1.5f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunFinalParam = {13.0f, 3.0f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunEndParam = {0.0f, 1.0f, 0.98f, 0.0f};
-    static const f32 sEscapeStartJumpSpeed = 80.0f;
+    NEBULA_TUNABLE(f32, sEscapeStartJumpSpeed, 80.0f);
     static const s32 sEscapeStepVs1Lv1 = NebulaFrameClock::stepsOfSeconds(15);
     static const s32 sEscapeStep = NebulaFrameClock::stepsOfSeconds(10);
-    static const f32 sEscapeRunWallJumpSpeed = 15.0f;
+    NEBULA_TUNABLE(f32, sEscapeRunWallJumpSpeed, 15.0f);
     static const s32 sDamageTailStep = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 sDamageTailStepFinal = NebulaFrameClock::stepsOfSeconds(8);
-    static const s32 sDamageTailRunStartBreakStep = 40;
-    static const f32 sDamageTailRunStartSpeed = 40.0f;
-    static const f32 sDamageTailWallJumpSpeed = 15.0f;
-    static const s32 sDamageTailRunEndRecoverStep = 105;
-    static const f32 sDamageTailTurnDegree = 0.1f;
-    static const s32 sDownStopSceneStep = 5;
-    static const f32 sDownFlyUpSpeed = 40.0f;
-    static const f32 sDownFlyUpSpeedLv3 = 60.0f;
-    static const f32 sDownGravity = 2.0f;
+    NEBULA_TUNABLE(s32, sDamageTailRunStartBreakStep, 40);
+    NEBULA_TUNABLE(f32, sDamageTailRunStartSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, sDamageTailWallJumpSpeed, 15.0f);
+    NEBULA_TUNABLE(s32, sDamageTailRunEndRecoverStep, 105);
+    NEBULA_TUNABLE(f32, sDamageTailTurnDegree, 0.1f);
+    NEBULA_TUNABLE(s32, sDownStopSceneStep, 5);
+    NEBULA_TUNABLE(f32, sDownFlyUpSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, sDownFlyUpSpeedLv3, 60.0f);
+    NEBULA_TUNABLE(f32, sDownGravity, 2.0f);
 };  // namespace
 
 namespace NrvKoopaStateDamageEscape {

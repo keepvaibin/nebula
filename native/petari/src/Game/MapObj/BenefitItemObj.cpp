@@ -22,36 +22,37 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cAppearThrowUpSpd = 10.0f;
-    const f32 cAppearThrowUpSpd2 = 15.0f;
-    const f32 cGravity = 0.5f;
-    const f32 cReflectWallX = 0.3f;
+    NEBULA_TUNABLE(f32, cAppearThrowUpSpd, 10.0f);
+    NEBULA_TUNABLE(f32, cAppearThrowUpSpd2, 15.0f);
+    NEBULA_TUNABLE(f32, cGravity, 0.5f);
+    NEBULA_TUNABLE(f32, cReflectWallX, 0.3f);
     // Half a turn a second.
     const f32 cSpdRotateY = FloatUtil::PI() / static_cast< f32 >(NebulaFrameClock::stepsOfSeconds(1));
-    const f32 cDefaultRailSpeed = 5.0f;
-    const f32 cDefaultShadowLength = 2000.0f;
-    const s32 cDefaultDemoFrames = 120;
-    const s32 cShootLandSteps = 10;
+    NEBULA_TUNABLE(f32, cDefaultRailSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, cDefaultShadowLength, 2000.0f);
+    NEBULA_TUNABLE(s32, cDefaultDemoFrames, 120);
+    NEBULA_TUNABLE(s32, cShootLandSteps, 10);
     const s32 cShootSensorOnStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cGroundAppearStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cPreEscapeSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s16 cEscapeLifeSteps = NebulaFrameClock::stepsOfSeconds(10);
-    const f32 cEscapeSpeed = 7.0f;
-    const f32 cEscapeTurnAway = 0.02f;
-    const f32 cEscapeKeepAway = 0.01f;
-    const f32 cEscapeSpeedUp = 1.1f;
-    const f32 cEscapeAirFriction = 0.95f;
-    const f32 cEscapeGroundFall = 5.0f;
-    const f32 cEscapeFallAccel = 1.0f;
-    const f32 cEscapeFallSpeedMax = 20.0f;
-    const f32 cEscapeWallHop = 20.0f;
+    NEBULA_TUNABLE(f32, cEscapeSpeed, 7.0f);
+    NEBULA_TUNABLE(f32, cEscapeTurnAway, 0.02f);
+    NEBULA_TUNABLE(f32, cEscapeKeepAway, 0.01f);
+    NEBULA_TUNABLE(f32, cEscapeSpeedUp, 1.1f);
+    NEBULA_TUNABLE(f32, cEscapeAirFriction, 0.95f);
+    NEBULA_TUNABLE(f32, cEscapeGroundFall, 5.0f);
+    NEBULA_TUNABLE(f32, cEscapeFallAccel, 1.0f);
+    NEBULA_TUNABLE(f32, cEscapeFallSpeedMax, 20.0f);
+    NEBULA_TUNABLE(f32, cEscapeWallHop, 20.0f);
 
     // Before the escape runs out the item blinks: from these steps left, hidden this many of every this many steps.
-    const s16 cBlinkSlowLife = 180;
-    const s16 cBlinkMidLife = 120;
-    const s16 cBlinkFastLife = 60;
+    NEBULA_TUNABLE(s16, cBlinkSlowLife, 180);
+    NEBULA_TUNABLE(s16, cBlinkMidLife, 120);
+    NEBULA_TUNABLE(s16, cBlinkFastLife, 60);
 
     u8 toShadowType(s32 shadowArg) {
         switch (shadowArg) {

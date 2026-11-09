@@ -2,29 +2,30 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sPointInterval = 100.0f;
-    const f32 sSpringAccelRateFree = 0.001f;
-    const f32 sSpringAccelRateLand = 0.01f;
-    const f32 sFrictionFree = 0.99f;
-    const f32 sFrictionLand = 0.95f;
-    const f32 sGravityFree = 0.005f;
-    const f32 sGravityLand = 0.2f;
-    const f32 sDistanceNear = 1000.0f;
-    const f32 sDistanceFar = 5000.0f;
-    const f32 sAxisLeanRateY = 0.01f;
-    const f32 sHipDropAccel = 0.1f;
-    const f32 sWindAccelNear = 0.02f;
-    const f32 sWindAccelMiddle = 0.03f;
-    const f32 sWindAccelFar = 0.05f;
-    const f32 sWindRandomAccelNear = 0.005f;
-    const f32 sWindRandomAccelMiddle = 0.01f;
-    const f32 sWindRandomAccelFar = 0.03f;
-    const s32 sStepToWindStartMin = 15;
+    NEBULA_TUNABLE(f32, sPointInterval, 100.0f);
+    NEBULA_TUNABLE(f32, sSpringAccelRateFree, 0.001f);
+    NEBULA_TUNABLE(f32, sSpringAccelRateLand, 0.01f);
+    NEBULA_TUNABLE(f32, sFrictionFree, 0.99f);
+    NEBULA_TUNABLE(f32, sFrictionLand, 0.95f);
+    NEBULA_TUNABLE(f32, sGravityFree, 0.005f);
+    NEBULA_TUNABLE(f32, sGravityLand, 0.2f);
+    NEBULA_TUNABLE(f32, sDistanceNear, 1000.0f);
+    NEBULA_TUNABLE(f32, sDistanceFar, 5000.0f);
+    NEBULA_TUNABLE(f32, sAxisLeanRateY, 0.01f);
+    NEBULA_TUNABLE(f32, sHipDropAccel, 0.1f);
+    NEBULA_TUNABLE(f32, sWindAccelNear, 0.02f);
+    NEBULA_TUNABLE(f32, sWindAccelMiddle, 0.03f);
+    NEBULA_TUNABLE(f32, sWindAccelFar, 0.05f);
+    NEBULA_TUNABLE(f32, sWindRandomAccelNear, 0.005f);
+    NEBULA_TUNABLE(f32, sWindRandomAccelMiddle, 0.01f);
+    NEBULA_TUNABLE(f32, sWindRandomAccelFar, 0.03f);
+    NEBULA_TUNABLE(s32, sStepToWindStartMin, 15);
     const s32 sStepToWindStartMax = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 sStepToWindStartAfterLand = NebulaFrameClock::stepsOfSeconds(2);
-    const s32 sStepWindMin = 10;
+    NEBULA_TUNABLE(s32, sStepWindMin, 10);
     const s32 sStepWindMax = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 

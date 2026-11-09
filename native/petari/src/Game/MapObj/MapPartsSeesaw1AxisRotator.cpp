@@ -7,14 +7,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAngularVelocityFric = 0.99f;
-    const f32 sAngularAccelHipDrop = 40.0f;
-    const f32 sCollisionEfficiency = -0.5f;
-    const f32 sAngularSpeedMin = 0.1f;
-    const s32 sMoveStartFrame = 2;
-    const f32 sInertiaConstDefault = 1000.0f;
+    NEBULA_TUNABLE(f32, sAngularVelocityFric, 0.99f);
+    NEBULA_TUNABLE(f32, sAngularAccelHipDrop, 40.0f);
+    NEBULA_TUNABLE(f32, sCollisionEfficiency, -0.5f);
+    NEBULA_TUNABLE(f32, sAngularSpeedMin, 0.1f);
+    NEBULA_TUNABLE(s32, sMoveStartFrame, 2);
+    NEBULA_TUNABLE(f32, sInertiaConstDefault, 1000.0f);
 };  // namespace
 
 namespace NrvMapPartsSeesaw1AxisRotator {

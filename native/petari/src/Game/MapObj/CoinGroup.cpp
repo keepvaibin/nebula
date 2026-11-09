@@ -3,10 +3,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/Coin.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sAppearCameraTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sAppearDelayTime = 3;
+    NEBULA_TUNABLE(s32, sAppearDelayTime, 3);
     static const s32 sDemoAppearTime = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 

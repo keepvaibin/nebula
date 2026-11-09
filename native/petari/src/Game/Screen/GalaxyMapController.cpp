@@ -23,13 +23,14 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <Game/Ui/DrawInfo.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sDisplayKeepFrame = 30;
-    static const s32 sMapFadeinoutFrame = 12;
-    static const s32 sTicoCometFadeinoutFrame = 60;
+    NEBULA_TUNABLE(s32, sDisplayKeepFrame, 30);
+    NEBULA_TUNABLE(s32, sMapFadeinoutFrame, 12);
+    NEBULA_TUNABLE(s32, sTicoCometFadeinoutFrame, 60);
     static const s32 sTicoCometWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sWaitForNewGalaxyDiscoverPhaseAstroMap = 1;
+    NEBULA_TUNABLE(s32, sWaitForNewGalaxyDiscoverPhaseAstroMap, 1);
     // static const s32 sCaptureWidth = _;
     // static const s32 sCaptureHeight = _;
 };  // namespace

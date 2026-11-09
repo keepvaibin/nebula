@@ -7,6 +7,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvCocoNut {
     NEW_NERVE(CocoNutNrvWait, CocoNut, Wait);
@@ -18,9 +19,9 @@ namespace NrvCocoNut {
 };  // namespace NrvCocoNut
 
 namespace {
-    const f32 cMinSpeed = 1.5f;
-    const f32 cMaxSpeed = 35.0f;
-    const f32 cMaxFallSpeed = 25.0f;
+    NEBULA_TUNABLE(f32, cMinSpeed, 1.5f);
+    NEBULA_TUNABLE(f32, cMaxSpeed, 35.0f);
+    NEBULA_TUNABLE(f32, cMaxFallSpeed, 25.0f);
 
     // The sound level of a speed: 100 at cMaxSpeed.
     s32 calcSoundLevel(f32 speed) {

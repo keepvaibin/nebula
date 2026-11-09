@@ -5,20 +5,21 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sSteamTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const s32 sAppearTime = 82;
+    NEBULA_TUNABLE(s32, sAppearTime, 82);
     static const s32 sDisappearTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sSteamWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sSteamEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    static const f32 sSensorRadius = 250.0f;
-    static const f32 sSensorOffsetY = 250.0f;
-    static const f32 sHitCylinderRange = 10.0f;
-    static const f32 sHitSphereRadius = 70.0f;
-    static const f32 sHitSphereOffsetY = 400.0f;
-    static const s32 sMaxNumGroupClipping = 16;
-    static const f32 sHitCylinderHeight = 330.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 250.0f);
+    NEBULA_TUNABLE(f32, sSensorOffsetY, 250.0f);
+    NEBULA_TUNABLE(f32, sHitCylinderRange, 10.0f);
+    NEBULA_TUNABLE(f32, sHitSphereRadius, 70.0f);
+    NEBULA_TUNABLE(f32, sHitSphereOffsetY, 400.0f);
+    NEBULA_TUNABLE(s32, sMaxNumGroupClipping, 16);
+    NEBULA_TUNABLE(f32, sHitCylinderHeight, 330.0f);
 };  // namespace
 
 namespace NrvLavaSteam {

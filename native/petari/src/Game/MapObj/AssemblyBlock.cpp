@@ -16,14 +16,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
-    static const s32 sStepForAssemble = 10;
-    static const s32 sStepForReturn = 10;
-    static const s32 sFlashTime = 100;
-    static const f32 sReturnOffset = 50.0f;
-    static const f32 sFloatRotSpeedNoSign = 0.1f;
+    NEBULA_TUNABLE(s32, sStepForAssemble, 10);
+    NEBULA_TUNABLE(s32, sStepForReturn, 10);
+    NEBULA_TUNABLE(s32, sFlashTime, 100);
+    NEBULA_TUNABLE(f32, sReturnOffset, 50.0f);
+    NEBULA_TUNABLE(f32, sFloatRotSpeedNoSign, 0.1f);
     static const char* const sReturnPosName = "合体ブロック故郷点";
 };  // namespace
 

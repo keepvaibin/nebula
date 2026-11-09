@@ -17,6 +17,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     struct WallPartPlacementAngle {
@@ -28,10 +29,10 @@ namespace {
                                                                     {180.0f, 20}, {225.0f, 24}, {270.0f, 28}, {315.0f, 32}};
     static const s32 sEventCameraStartTime = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const s32 sEventAnimeStartTime = NebulaFrameClock::stepsOfSeconds(3);
-    static const s32 sStartCameraBlendTime = 20;
+    NEBULA_TUNABLE(s32, sStartCameraBlendTime, 20);
     static const s32 sEndCameraBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sRotateSpeed = -0.2f;
-    const s32 sMoveSeLength = 58;
+    NEBULA_TUNABLE(f32, sRotateSpeed, -0.2f);
+    NEBULA_TUNABLE(s32, sMoveSeLength, 58);
 };  // namespace
 
 namespace NrvTriPodBossGuardWall {

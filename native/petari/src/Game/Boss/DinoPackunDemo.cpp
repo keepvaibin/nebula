@@ -15,29 +15,30 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sCryBlurStart = 100;
-    static const s32 sCryBlurTime = 20;
-    static const f32 sCryBlurOffset = 12.0f;
-    static const u8 sCryBlurAlpha = 80;
-    static const s32 sCryBlurFadeIn = 5;
-    static const s32 sCryBlurFadeOut = 10;
-    static const s32 sAngryLv1BlurStart = 99;
-    static const s32 sAngryLv1BlurTime = 80;
-    static const f32 sAngryLv1BlurOffset = 18.0f;
-    static const u8 sAngryLv1BlurAlpha = 80;
-    static const s32 sAngryLv1BlurFadeIn = 5;
-    static const s32 sAngryLv1BlurFadeOut = 30;
-    static const s32 sAngryLv2BlurStart = 220;
-    static const s32 sAngryLv2BlurTime = 80;
-    static const u8 sAngryLv2BlurAlpha = 80;
-    static const s32 sDeathBlurStart = 20;
-    static const s32 sDeathBlurTime = 130;
-    static const f32 sDeathBlurOffset = 18.0f;
-    static const u8 sDeathBlurAlpha = 80;
-    static const s32 sDeathBlurFadeIn = 15;
-    static const s32 sDeathBlurFadeOut = 40;
+    NEBULA_TUNABLE(s32, sCryBlurStart, 100);
+    NEBULA_TUNABLE(s32, sCryBlurTime, 20);
+    NEBULA_TUNABLE(f32, sCryBlurOffset, 12.0f);
+    NEBULA_TUNABLE(u8, sCryBlurAlpha, 80);
+    NEBULA_TUNABLE(s32, sCryBlurFadeIn, 5);
+    NEBULA_TUNABLE(s32, sCryBlurFadeOut, 10);
+    NEBULA_TUNABLE(s32, sAngryLv1BlurStart, 99);
+    NEBULA_TUNABLE(s32, sAngryLv1BlurTime, 80);
+    NEBULA_TUNABLE(f32, sAngryLv1BlurOffset, 18.0f);
+    NEBULA_TUNABLE(u8, sAngryLv1BlurAlpha, 80);
+    NEBULA_TUNABLE(s32, sAngryLv1BlurFadeIn, 5);
+    NEBULA_TUNABLE(s32, sAngryLv1BlurFadeOut, 30);
+    NEBULA_TUNABLE(s32, sAngryLv2BlurStart, 220);
+    NEBULA_TUNABLE(s32, sAngryLv2BlurTime, 80);
+    NEBULA_TUNABLE(u8, sAngryLv2BlurAlpha, 80);
+    NEBULA_TUNABLE(s32, sDeathBlurStart, 20);
+    NEBULA_TUNABLE(s32, sDeathBlurTime, 130);
+    NEBULA_TUNABLE(f32, sDeathBlurOffset, 18.0f);
+    NEBULA_TUNABLE(u8, sDeathBlurAlpha, 80);
+    NEBULA_TUNABLE(s32, sDeathBlurFadeIn, 15);
+    NEBULA_TUNABLE(s32, sDeathBlurFadeOut, 40);
     static const s32 sAppearPowerStarTime = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

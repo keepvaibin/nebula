@@ -20,23 +20,24 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
 
     static const s32 sMainRadialLinePointNum = 8;
-    static const f32 sMainRadialLineInterval = 175.0f;
-    static const f32 sMainRadialLineLength = 1800.0f;
-    static const f32 sMainPointRadius = 100.0f;
-    static const f32 sPartPointRadius = 100.0f;
-    static const f32 sTouchPointerSpeedMin = 5.0f;
-    static const f32 sTouchPointerSpeedAccelRate = 2.0f;
-    static const f32 sTouchSpeedMax = 50.0f;
+    NEBULA_TUNABLE(f32, sMainRadialLineInterval, 175.0f);
+    NEBULA_TUNABLE(f32, sMainRadialLineLength, 1800.0f);
+    NEBULA_TUNABLE(f32, sMainPointRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sPartPointRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sTouchPointerSpeedMin, 5.0f);
+    NEBULA_TUNABLE(f32, sTouchPointerSpeedAccelRate, 2.0f);
+    NEBULA_TUNABLE(f32, sTouchSpeedMax, 50.0f);
     static const s32 sHangActorNumMax = 8 * sMainRadialLinePointNum;
-    static const f32 sIndirectScaleX = 0.035f;
-    static const f32 sIndirectScaleY = 0.03f;
+    NEBULA_TUNABLE(f32, sIndirectScaleX, 0.035f);
+    NEBULA_TUNABLE(f32, sIndirectScaleY, 0.03f);
     // The strips SpiderThreadPart::draw writes for one part (drawLine and drawPoints each write three).
-    static const s32 sStripsPerPart = 3;
+    NEBULA_TUNABLE(s32, sStripsPerPart, 3);
 };  // namespace
 
 inline SpiderThreadPart* connectPoints(SpiderThreadPoint* pPointA, SpiderThreadPoint* pPointB) {

@@ -5,24 +5,25 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 hIsShakableStep = 20;
-    const f32 sSize = 160.0f;
-    const f32 sCollisionRadius = 50.0f;
-    const f32 sCheckLineLength = 1000.0f;
-    const f32 sCoinVel = 30.0f;
-    const f32 sPointerTouchRadius = 100.0f;
-    const f32 sScratchVel = 6.0f;
-    const s32 hGenerateItemTouch = 1;
+    NEBULA_TUNABLE(s32, hIsShakableStep, 20);
+    NEBULA_TUNABLE(f32, sSize, 160.0f);
+    NEBULA_TUNABLE(f32, sCollisionRadius, 50.0f);
+    NEBULA_TUNABLE(f32, sCheckLineLength, 1000.0f);
+    NEBULA_TUNABLE(f32, sCoinVel, 30.0f);
+    NEBULA_TUNABLE(f32, sPointerTouchRadius, 100.0f);
+    NEBULA_TUNABLE(f32, sScratchVel, 6.0f);
+    NEBULA_TUNABLE(s32, hGenerateItemTouch, 1);
     const s32 sHintEffectEmitInterval = NebulaFrameClock::stepsOfSeconds(5);
-    const f32 hShakeStartFrame = 3.0f;
-    const f32 hWeakRate = 0.5f;
-    const f32 hMiddleRate = 1.0f;
-    const f32 hStrongRate = 1.5f;
-    const f32 hStrongDist = 100.0f;
-    const f32 hMiddleDist = 300.0f;
-    const f32 hWeakDist = 500.0f;
+    NEBULA_TUNABLE(f32, hShakeStartFrame, 3.0f);
+    NEBULA_TUNABLE(f32, hWeakRate, 0.5f);
+    NEBULA_TUNABLE(f32, hMiddleRate, 1.0f);
+    NEBULA_TUNABLE(f32, hStrongRate, 1.5f);
+    NEBULA_TUNABLE(f32, hStrongDist, 100.0f);
+    NEBULA_TUNABLE(f32, hMiddleDist, 300.0f);
+    NEBULA_TUNABLE(f32, hWeakDist, 500.0f);
 };  // namespace
 
 namespace NrvPlantMember {

@@ -21,6 +21,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     NEW_NERVE(SkeletalFishGuardNrvWait, SkeletalFishGuard, Wait);
@@ -34,11 +35,11 @@ namespace {
 
     // The appear flight: out to a point 1000 above and 500 aside, then onto the guard's slot by the boss.
     const s32 cAppearSteps = NebulaFrameClock::stepsOfSeconds(5);
-    const s32 cAppearRiseSteps = 99;
-    const s32 cAppearJoinSteps = 201;
-    const s32 cApartSteps = 80;
-    const f32 cMaxSpeed = 22.0f;
-    const f32 cAccel = 0.8f;
+    NEBULA_TUNABLE(s32, cAppearRiseSteps, 99);
+    NEBULA_TUNABLE(s32, cAppearJoinSteps, 201);
+    NEBULA_TUNABLE(s32, cApartSteps, 80);
+    NEBULA_TUNABLE(f32, cMaxSpeed, 22.0f);
+    NEBULA_TUNABLE(f32, cAccel, 0.8f);
 };  // namespace
 
 SkeletalFishGuard::SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pName)

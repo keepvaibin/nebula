@@ -25,37 +25,38 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSensorRadius = 300.0f;
-    const f32 sClippingRadius = 300.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
+    NEBULA_TUNABLE(f32, sClippingRadius, 300.0f);
     // 350 and 240 squared.
-    const f32 sFarPlayerDistanceSq = 122500.0f;
-    const f32 sPullPlayerDistanceSq = 57600.0f;
-    const f32 sBindSpeedMax = 40.0f;
-    const s32 sCaptureFrame = 40;
-    const f32 sCaptureEndDistance = 15.0f;
-    const f32 sCapturePullRate = 1.5f;
-    const f32 sCapturePullDistance = 120.0f;
-    const f32 sCaptureDamp = 0.8f;
-    const s32 sShootStartFrame = 20;
-    const f32 sShootStartFrameF = 20.0f;
-    const s32 sShootStartSoundStep = 4;
+    NEBULA_TUNABLE(f32, sFarPlayerDistanceSq, 122500.0f);
+    NEBULA_TUNABLE(f32, sPullPlayerDistanceSq, 57600.0f);
+    NEBULA_TUNABLE(f32, sBindSpeedMax, 40.0f);
+    NEBULA_TUNABLE(s32, sCaptureFrame, 40);
+    NEBULA_TUNABLE(f32, sCaptureEndDistance, 15.0f);
+    NEBULA_TUNABLE(f32, sCapturePullRate, 1.5f);
+    NEBULA_TUNABLE(f32, sCapturePullDistance, 120.0f);
+    NEBULA_TUNABLE(f32, sCaptureDamp, 0.8f);
+    NEBULA_TUNABLE(s32, sShootStartFrame, 20);
+    NEBULA_TUNABLE(f32, sShootStartFrameF, 20.0f);
+    NEBULA_TUNABLE(s32, sShootStartSoundStep, 4);
     // The player dips this far below the driver at the start of the spin, back up by the end.
-    const f32 sShootStartDip = 200.0f;
-    const s32 sCoolDownFrame = 60;
+    NEBULA_TUNABLE(f32, sShootStartDip, 200.0f);
+    NEBULA_TUNABLE(s32, sCoolDownFrame, 60);
     const s32 sCoolDownWaitStep = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 sSpinDamp = 0.95f;
-    const f32 sSwingSpinAccel = 0.05f;
-    const f32 sNonActiveSpinMax = 0.15f;
-    const f32 sCoolDownSpinAccel = 0.008f;
-    const f32 sCaptureSpinAccel = 0.008f;
-    const f32 sShootStartSpinAccel = 0.04f;
-    const f32 sHeadTurnRate = 0.4f;
+    NEBULA_TUNABLE(f32, sSpinDamp, 0.95f);
+    NEBULA_TUNABLE(f32, sSwingSpinAccel, 0.05f);
+    NEBULA_TUNABLE(f32, sNonActiveSpinMax, 0.15f);
+    NEBULA_TUNABLE(f32, sCoolDownSpinAccel, 0.008f);
+    NEBULA_TUNABLE(f32, sCaptureSpinAccel, 0.008f);
+    NEBULA_TUNABLE(f32, sShootStartSpinAccel, 0.04f);
+    NEBULA_TUNABLE(f32, sHeadTurnRate, 0.4f);
     // The last frames of the flight are the fall; the short loop starts a fifth of the way to the fly end.
-    const s32 sFallFrame = 20;
-    const s32 sFlyShortDivide = 5;
-    const s32 sDefaultSpaceFlyEndFrame = 50;
+    NEBULA_TUNABLE(s32, sFallFrame, 20);
+    NEBULA_TUNABLE(s32, sFlyShortDivide, 5);
+    NEBULA_TUNABLE(s32, sDefaultSpaceFlyEndFrame, 50);
     const char* const cDemoNameAppear = "出現";
     const char* const cLightEffect = "SpinDriverLight";
 }  // namespace

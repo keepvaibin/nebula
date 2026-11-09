@@ -3,9 +3,10 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sFadeFrame = 30;
+    NEBULA_TUNABLE(s32, sFadeFrame, 30);
 };  // namespace
 
 WipeFade::WipeFade(const char* pName, const Color8& rFillColor)

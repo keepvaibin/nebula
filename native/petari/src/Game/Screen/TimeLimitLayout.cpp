@@ -5,16 +5,17 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const Timing sTimingTable[] = {
         {NebulaFrameClock::stepsOfSeconds(300), 100, true, true, true}, {NebulaFrameClock::stepsOfSeconds(180), 100, true, true, true},  {NebulaFrameClock::stepsOfSeconds(60), 100, true, true, true},
         {NebulaFrameClock::stepsOfSeconds(30), 100, true, true, false}, {NebulaFrameClock::stepsOfSeconds(10), NebulaFrameClock::stepsOfSeconds(10), false, false, false},
     };
-    static const s32 sScaleUpDownFrame = 8;
-    static const f32 sScaleMaxAdd = 0.5f;
-    static const s32 sFadeoutBeforeFrame = 90;
-    static const s32 sFadeinoutFrame = 60;
+    NEBULA_TUNABLE(s32, sScaleUpDownFrame, 8);
+    NEBULA_TUNABLE(f32, sScaleMaxAdd, 0.5f);
+    NEBULA_TUNABLE(s32, sFadeoutBeforeFrame, 90);
+    NEBULA_TUNABLE(s32, sFadeinoutFrame, 60);
 };  // namespace
 
 void TimeUpLayout::init(const TableIter& /*rIter*/) {

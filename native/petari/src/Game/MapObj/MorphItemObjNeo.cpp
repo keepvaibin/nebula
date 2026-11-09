@@ -25,15 +25,16 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Model per PlayerItemStatus.
     const char* const cxNameList[] = {"-----", "PowerupHopper", "PowerUpBee", "PowerupTeresa", "PowerupIce", "PowerupFire", "PowerupFoo", "END"};
     // A switch-appear spirals in for cSpiralFrames, one turn per cSpiralTurnFrames, the radius shrinking to cSpiralRadiusMin.
-    const u16 cSpiralFrames = 60;
-    const u16 cSpiralTurnFrames = 30;
-    const f32 cSpiralRadiusPerFrame = 2.0f;
-    const f32 cSpiralRadiusMin = 30.0f;
+    NEBULA_TUNABLE(u16, cSpiralFrames, 60);
+    NEBULA_TUNABLE(u16, cSpiralTurnFrames, 30);
+    NEBULA_TUNABLE(f32, cSpiralRadiusPerFrame, 2.0f);
+    NEBULA_TUNABLE(f32, cSpiralRadiusMin, 30.0f);
 
     HitSensor* getBodySensor(LiveActor* pActor) {
         return pActor->getSensor("body");

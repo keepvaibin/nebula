@@ -3,9 +3,10 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sCreateAirBubbleNum = 32;
+    NEBULA_TUNABLE(s32, sCreateAirBubbleNum, 32);
 };  // namespace
 
 AirBubbleHolder::AirBubbleHolder(const char* pName) : DeriveActorGroup< AirBubble >(pName, ::sCreateAirBubbleNum) {

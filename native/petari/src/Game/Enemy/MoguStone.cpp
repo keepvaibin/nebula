@@ -14,12 +14,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sIceArcAddHeight = 200.0f;
-    const s32 sThrowSteps = 100;
+    NEBULA_TUNABLE(f32, sIceArcAddHeight, 200.0f);
+    NEBULA_TUNABLE(s32, sThrowSteps, 100);
     const s32 sFallSteps = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sIcePathSteps = 101;
+    NEBULA_TUNABLE(s32, sIcePathSteps, 101);
 };  // namespace
 
 namespace NrvMoguStone {

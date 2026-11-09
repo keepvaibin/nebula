@@ -12,6 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     struct Anim {
@@ -22,7 +23,7 @@ namespace {
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
     static const char* sPartName = "クッパＪｒ．デモ";
     static const char* sJointNameKoopaJrPos = "obj";
-    static const s32 sBgmStartStep = 309;
+    NEBULA_TUNABLE(s32, sBgmStartStep, 309);
     static const Anim sAnim[] = {
         {
             "KoopaJrEntryTriPodDemo",

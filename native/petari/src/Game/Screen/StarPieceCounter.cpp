@@ -8,16 +8,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cAppearOffsetCenterY = 30.0f;
-    const f32 cAppearOffsetRightX = 50.0f;
-    const s32 cInvalidCountUpInterval = 3;
-    const s32 cHideFrameMin = 3;
-    const s32 cDecCounterValueFast = 10;
-    const f32 cBaseOffsetEatTicoY = -120.0f;
-    const f32 cBaseOffsetTicoFatY = -94.0f;
-    const s32 cHideFrameMinTicoEat = 20;
+    NEBULA_TUNABLE(f32, cAppearOffsetCenterY, 30.0f);
+    NEBULA_TUNABLE(f32, cAppearOffsetRightX, 50.0f);
+    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
+    NEBULA_TUNABLE(s32, cHideFrameMin, 3);
+    NEBULA_TUNABLE(s32, cDecCounterValueFast, 10);
+    NEBULA_TUNABLE(f32, cBaseOffsetEatTicoY, -120.0f);
+    NEBULA_TUNABLE(f32, cBaseOffsetTicoFatY, -94.0f);
+    NEBULA_TUNABLE(s32, cHideFrameMinTicoEat, 20);
 };  // namespace
 
 namespace NrvStarPieceCounter {

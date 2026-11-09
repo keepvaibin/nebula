@@ -14,21 +14,22 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sGrowSpeedMin = 15.0f;
-    static const f32 sGrowSpeedMax = 100.0f;
-    static const f32 sGrowSpeedFriction = 0.95f;
-    static const f32 sGrowAccelMin = 15.0f;
-    static const f32 sGrowAccelMax = 30.0f;
-    static const s32 sGrowAccelTimeMin = 5;
+    NEBULA_TUNABLE(f32, sGrowSpeedMin, 15.0f);
+    NEBULA_TUNABLE(f32, sGrowSpeedMax, 100.0f);
+    NEBULA_TUNABLE(f32, sGrowSpeedFriction, 0.95f);
+    NEBULA_TUNABLE(f32, sGrowAccelMin, 15.0f);
+    NEBULA_TUNABLE(f32, sGrowAccelMax, 30.0f);
+    NEBULA_TUNABLE(s32, sGrowAccelTimeMin, 5);
     static const s32 sGrowAccelTimeMax = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sOffsetPointNum = 3;
-    static const f32 sInterval = 30.0f;
-    static const f32 sWidthRateMin = 0.45f;
+    NEBULA_TUNABLE(s32, sOffsetPointNum, 3);
+    NEBULA_TUNABLE(f32, sInterval, 30.0f);
+    NEBULA_TUNABLE(f32, sWidthRateMin, 0.45f);
     static const f32 sDrawWidthX = 10.0f;
     static const f32 sDrawWidthZ = 10.0f;
-    static const f32 sTexRate = 1.0f;
+    NEBULA_TUNABLE(f32, sTexRate, 1.0f);
     static const f32 sDrawWidthLongOffsetX = ::sDrawWidthX;
     static const f32 sDrawWidthShortOffsetX = ::sDrawWidthX;
     static const f32 sDrawWidthShortOffsetZ = ::sDrawWidthZ;

@@ -1,9 +1,10 @@
 #include "Game/Enemy/KabokuriFireHolder.hpp"
 #include "Game/Enemy/KabokuriFire.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sMaxKabokuriFire = 16;
+    NEBULA_TUNABLE(s32, sMaxKabokuriFire, 16);
 };  // namespace
 
 // "Kabokuri flame holder"

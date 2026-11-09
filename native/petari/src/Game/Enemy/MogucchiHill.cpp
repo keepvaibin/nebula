@@ -8,6 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const sPieceModelTable[] = {
@@ -15,10 +16,10 @@ namespace {
         "MogucchiHillB",
         "MogucchiHillC",
     };
-    static const f32 sPieceSensorRadius = 120.0f;
-    static const f32 sMinScale = 0.6f;
-    static const s32 sCrumbleFrame = 40;
-    static const f32 sAppearDist = 300.0f;
+    NEBULA_TUNABLE(f32, sPieceSensorRadius, 120.0f);
+    NEBULA_TUNABLE(f32, sMinScale, 0.6f);
+    NEBULA_TUNABLE(s32, sCrumbleFrame, 40);
+    NEBULA_TUNABLE(f32, sAppearDist, 300.0f);
 };  // namespace
 
 namespace {

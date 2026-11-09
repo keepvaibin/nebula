@@ -5,9 +5,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sWallJumpSpeed = 15.0f;
+    NEBULA_TUNABLE(f32, sWallJumpSpeed, 15.0f);
 };  // namespace
 
 KoopaFigureBall::KoopaFigureBall(const char* pName, Koopa* pKoopa, f32 myFloat, const MR::ActorMoveParam* pMoveParam)

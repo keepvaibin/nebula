@@ -3,9 +3,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sDangerTransFrame = 600;
+    NEBULA_TUNABLE(s32, sDangerTransFrame, 600);
 };  // namespace
 
 namespace NrvBombTimerLayout {

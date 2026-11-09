@@ -9,20 +9,21 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sClearDemoStopFrame = 10;
-    static const s32 sLayoutStartStepPowerStar = 247;
-    static const s32 sClearDemoWipeStepPowerStar = 325;
-    static const s32 sClearDemoWipeFramePowerStar = 80;
-    static const s32 sFanfareStartStepPowerStar = 15;
-    static const f32 sLayoutOffsetYPowerStar = 80.0f;
+    NEBULA_TUNABLE(s32, sClearDemoStopFrame, 10);
+    NEBULA_TUNABLE(s32, sLayoutStartStepPowerStar, 247);
+    NEBULA_TUNABLE(s32, sClearDemoWipeStepPowerStar, 325);
+    NEBULA_TUNABLE(s32, sClearDemoWipeFramePowerStar, 80);
+    NEBULA_TUNABLE(s32, sFanfareStartStepPowerStar, 15);
+    NEBULA_TUNABLE(f32, sLayoutOffsetYPowerStar, 80.0f);
     static const s32 sLayoutStartStepGrandStar = NebulaFrameClock::stepsOfMilliseconds(8500);
-    static const s32 sClearDemoWipeStepGrandStar = 670;
-    static const s32 sFanfareStartStepGrandStar = 53;
-    static const f32 sLayoutOffsetYGrandStar = 20.0f;
+    NEBULA_TUNABLE(s32, sClearDemoWipeStepGrandStar, 670);
+    NEBULA_TUNABLE(s32, sFanfareStartStepGrandStar, 53);
+    NEBULA_TUNABLE(f32, sLayoutOffsetYGrandStar, 20.0f);
     static const s32 sClearDemoWipeStepKoopaVs3 = NebulaFrameClock::stepsOfSeconds(14);
-    static const s32 sClearDemoWipeFrameKoopaVs3 = 60;
+    NEBULA_TUNABLE(s32, sClearDemoWipeFrameKoopaVs3, 60);
 };  // namespace
 
 namespace NrvGameStageClearSequence {

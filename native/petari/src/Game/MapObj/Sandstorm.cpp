@@ -3,16 +3,17 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRailSpeed = 3.0f;
-    static const f32 sTurnRate = 2.0f;
-    static const f32 sActiveRadius = 7000.0f;
-    static const s32 sStepToEnableSpin = 15;
+    NEBULA_TUNABLE(f32, sRailSpeed, 3.0f);
+    NEBULA_TUNABLE(f32, sTurnRate, 2.0f);
+    NEBULA_TUNABLE(f32, sActiveRadius, 7000.0f);
+    NEBULA_TUNABLE(s32, sStepToEnableSpin, 15);
     static const s32 sTrapNum = 2;  // on opposite sides
-    static const f32 sTrapOffsetY = 200.0f;
-    static const f32 sTrapOffsetZ = 220.0f;
-    static const f32 sTrapRotateSpeed = 4.0f;
+    NEBULA_TUNABLE(f32, sTrapOffsetY, 200.0f);
+    NEBULA_TUNABLE(f32, sTrapOffsetZ, 220.0f);
+    NEBULA_TUNABLE(f32, sTrapRotateSpeed, 4.0f);
     static const char* const sParamFileName = "SandstormParam.bcsv";
 };  // namespace
 

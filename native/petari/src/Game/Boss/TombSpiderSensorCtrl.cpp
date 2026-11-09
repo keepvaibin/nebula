@@ -7,11 +7,12 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAttackSensorDistanceOffset = 100.0f;
-    const f32 sEyeSensorPosOffset = -100.0f;
-    const f32 sHipSensorPosOffset = -400.0f;
+    NEBULA_TUNABLE(f32, sAttackSensorDistanceOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sEyeSensorPosOffset, -100.0f);
+    NEBULA_TUNABLE(f32, sHipSensorPosOffset, -400.0f);
 };  // namespace
 
 TombSpiderSensorCtrl::TombSpiderSensorCtrl(TombSpider* pOwner) : mParent(pOwner) {

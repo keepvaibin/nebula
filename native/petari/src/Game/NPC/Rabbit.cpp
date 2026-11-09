@@ -24,18 +24,19 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cJumpSpeed = 20.0f;
-    const f32 cProgressSpeed = 18.0f;
-    const f32 cGravity = 3.0f;
-    const f32 cFinalDisappearRadius = 300.0f;
-    const f32 cDistEscape = 400.0f;
-    const f32 cDistWait = 500.0f;
-    const f32 cDistNear = 600.0f;
-    const f32 cAppearHeight = 150.0f;
-    const f32 cAppearHop = 10.0f;
-    const f32 cRegistNormal = 0.98f;
+    NEBULA_TUNABLE(f32, cJumpSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, cProgressSpeed, 18.0f);
+    NEBULA_TUNABLE(f32, cGravity, 3.0f);
+    NEBULA_TUNABLE(f32, cFinalDisappearRadius, 300.0f);
+    NEBULA_TUNABLE(f32, cDistEscape, 400.0f);
+    NEBULA_TUNABLE(f32, cDistWait, 500.0f);
+    NEBULA_TUNABLE(f32, cDistNear, 600.0f);
+    NEBULA_TUNABLE(f32, cAppearHeight, 150.0f);
+    NEBULA_TUNABLE(f32, cAppearHop, 10.0f);
+    NEBULA_TUNABLE(f32, cRegistNormal, 0.98f);
 };  // namespace
 
 namespace NrvRabbit {

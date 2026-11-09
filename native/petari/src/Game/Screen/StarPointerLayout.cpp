@@ -24,6 +24,7 @@
 
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Two colours for each of the four pad channels (setPortAndColor): the blur takes both, the command stream the first.
@@ -41,19 +42,19 @@ namespace {
         {0x7F, 0x7F, 0x00, 0xFF},
     };
 
-    static const s32 sTouchCount = 1;
-    static const f32 sNormalRadius = 15;
-    static const f32 sHoldRadius = 45;
-    static const f32 sHandRadius = 20;
+    NEBULA_TUNABLE(s32, sTouchCount, 1);
+    NEBULA_TUNABLE(f32, sNormalRadius, 15);
+    NEBULA_TUNABLE(f32, sHoldRadius, 45);
+    NEBULA_TUNABLE(f32, sHandRadius, 20);
 
-    static const s32 hGripTime = 20;
+    NEBULA_TUNABLE(s32, hGripTime, 20);
     static const s32 hReleaseTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 hHideRumbleTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const f32 sRotateMult = 900.0f;
+    NEBULA_TUNABLE(f32, sRotateMult, 900.0f);
     // static const f32 sRotateHandMult =
-    static const f32 hEndAnimRate = 2.0f;
-    static const s32 sBeginHideTime = 0;
-    static const f32 sDegreeMin = 0.0f;
+    NEBULA_TUNABLE(f32, hEndAnimRate, 2.0f);
+    NEBULA_TUNABLE(s32, sBeginHideTime, 0);
+    NEBULA_TUNABLE(f32, sDegreeMin, 0.0f);
 
     // A layout a mod changed may lack one of these panes (null): no pane, nothing to show, hide or turn.
     static void setPaneVisible(Ui::Pane* pPane, bool visible) {

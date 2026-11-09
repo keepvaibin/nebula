@@ -2,9 +2,10 @@
 #include "Game/MapObj/BigFan.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sMaxBigFan = 32;
+    NEBULA_TUNABLE(s32, sMaxBigFan, 32);
 
     BigFanHolder* getBigFanHolder() {
         return MR::getSceneObj< BigFanHolder >(SceneObj_BigFanHolder);

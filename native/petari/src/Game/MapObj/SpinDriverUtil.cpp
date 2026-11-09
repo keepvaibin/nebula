@@ -2,9 +2,10 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSearchLength = 1500.0f;
+    NEBULA_TUNABLE(f32, sSearchLength, 1500.0f);
 };  // namespace
 
 void SpinDriverUtil::setShadowAndClipping(LiveActor* pActor, Vec3f* pClippingCenter, f32 dropLength, f32 heightMargin, f32* pClippingRadius) {

@@ -5,9 +5,10 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sRateWhenBraking = 0.05f;
+    NEBULA_TUNABLE(f32, sRateWhenBraking, 0.05f);
 };  // namespace
 
 CameraFooFighter::CameraFooFighter(const char* pName)

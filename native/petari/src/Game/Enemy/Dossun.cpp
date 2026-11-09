@@ -13,16 +13,17 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sUpperHeight = 1000.0f;
-    const s32 sUpperFrame = 180;
-    const f32 sFallingSpeed = 30.0f;
-    const s32 sOnGroundFrame = 120;
-    const f32 sRisingSpeed = 10.0f;
-    const f32 sQuickRatio = 2.5f;
-    const f32 sCamShakeDistanceStrong = 2000.0f;
-    const f32 sCamShakeDistanceWeak = 3500.0f;
+    NEBULA_TUNABLE(f32, sUpperHeight, 1000.0f);
+    NEBULA_TUNABLE(s32, sUpperFrame, 180);
+    NEBULA_TUNABLE(f32, sFallingSpeed, 30.0f);
+    NEBULA_TUNABLE(s32, sOnGroundFrame, 120);
+    NEBULA_TUNABLE(f32, sRisingSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sQuickRatio, 2.5f);
+    NEBULA_TUNABLE(f32, sCamShakeDistanceStrong, 2000.0f);
+    NEBULA_TUNABLE(f32, sCamShakeDistanceWeak, 3500.0f);
 };  // namespace
 
 namespace NrvDossun {

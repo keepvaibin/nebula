@@ -2,24 +2,25 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cSensorRadius = 30.0f;
-    const f32 cBinderRadius = 40.0f;
-    const s32 cCoinMaxNum = 2;
-    const s32 cRandomActFrame = 120;
-    const f32 cStarWandRadius = 150.0f;
-    const f32 cAppearGravity = 0.75f;
-    const s32 cChaseInvalidFrame = 300;
-    const s32 cForceKillFrame = 600;
-    const f32 cChaseStartDistance = 2000.0f;
-    const f32 cChaseSpeed = 4.0f;
-    const f32 cChaseGravity = 2.0f;
-    const f32 cChaseRotateSpeed = 1.0f;
-    const s32 cChaseFrame = 30;
-    const f32 cReflectGravity = 1.5f;
+    NEBULA_TUNABLE(f32, cSensorRadius, 30.0f);
+    NEBULA_TUNABLE(f32, cBinderRadius, 40.0f);
+    NEBULA_TUNABLE(s32, cCoinMaxNum, 2);
+    NEBULA_TUNABLE(s32, cRandomActFrame, 120);
+    NEBULA_TUNABLE(f32, cStarWandRadius, 150.0f);
+    NEBULA_TUNABLE(f32, cAppearGravity, 0.75f);
+    NEBULA_TUNABLE(s32, cChaseInvalidFrame, 300);
+    NEBULA_TUNABLE(s32, cForceKillFrame, 600);
+    NEBULA_TUNABLE(f32, cChaseStartDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, cChaseSpeed, 4.0f);
+    NEBULA_TUNABLE(f32, cChaseGravity, 2.0f);
+    NEBULA_TUNABLE(f32, cChaseRotateSpeed, 1.0f);
+    NEBULA_TUNABLE(s32, cChaseFrame, 30);
+    NEBULA_TUNABLE(f32, cReflectGravity, 1.5f);
     const s32 cReflectWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    const f32 cReflectCursorSpeed = 10.0f;
+    NEBULA_TUNABLE(f32, cReflectCursorSpeed, 10.0f);
     const s32 cAppearInterval = NebulaFrameClock::stepsOfSeconds(2);
     const Vec cAppearVelocity = {0.0f, 35.0f, 6.0f};
     const Vec cReflectVelocity = {0.0f, 40.0f, -15.0f};

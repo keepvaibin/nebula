@@ -29,13 +29,14 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/Clip.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sStarAppearSeStep = 103;
-    const s32 sStarAppearSeStepCaretaker = 32;
-    const s32 sStarAppearSeStepPenguinCoach = 95;
-    const s32 sStarAppearSeStepTeresaRacer = 89;
-    const s32 sStarAppearSeStepTrickRabbit = 22;
+    NEBULA_TUNABLE(s32, sStarAppearSeStep, 103);
+    NEBULA_TUNABLE(s32, sStarAppearSeStepCaretaker, 32);
+    NEBULA_TUNABLE(s32, sStarAppearSeStepPenguinCoach, 95);
+    NEBULA_TUNABLE(s32, sStarAppearSeStepTeresaRacer, 89);
+    NEBULA_TUNABLE(s32, sStarAppearSeStepTrickRabbit, 22);
 };  // namespace
 
 namespace NrvTakeOutStar {

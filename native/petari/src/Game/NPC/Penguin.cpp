@@ -16,14 +16,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sDistanceCall = 350.0f;
-    static const f32 sSpeedWalk = 1.5f;
-    static const f32 sSpeedDash = 6.0f;
-    static const f32 sBlendDash = 0.08f;
-    static const f32 sSpeedSwim = 5.0f;
-    static const f32 sSpeedSwimTurtle = 10.0f;
+    NEBULA_TUNABLE(f32, sDistanceCall, 350.0f);
+    NEBULA_TUNABLE(f32, sSpeedWalk, 1.5f);
+    NEBULA_TUNABLE(f32, sSpeedDash, 6.0f);
+    NEBULA_TUNABLE(f32, sBlendDash, 0.08f);
+    NEBULA_TUNABLE(f32, sSpeedSwim, 5.0f);
+    NEBULA_TUNABLE(f32, sSpeedSwimTurtle, 10.0f);
     static const s32 sStepToDiveMin = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sStepToDiveMax = NebulaFrameClock::stepsOfSeconds(5);
 };  // namespace

@@ -8,9 +8,10 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sMeterUpSpeed = 0.05f;
+    NEBULA_TUNABLE(f32, sMeterUpSpeed, 0.05f);
 };  // namespace
 
 BigBubbleGoalArea::BigBubbleGoalArea(int formType, const char* pName)

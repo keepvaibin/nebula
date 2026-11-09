@@ -21,41 +21,42 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sStickLength = 120.0f;
-    static const f32 sDrawWidthX = 12.0f;
-    static const f32 sDrawWidthZ = 12.0f;
-    static const f32 sDrawWidthLongOffsetX = 7.0f;
-    static const f32 sDrawWidthShortOffsetX = 0.0f;
-    static const f32 sDrawWidthShortOffsetZ = 7.0f;
-    static const f32 sTexRate = 0.003f;
-    static const f32 sTexRateDiff1 = 0.7f;
-    static const f32 sTexRateDiff2 = 0.5f;
-    static const f32 sHangAccelRate = 5.0f;
-    static const f32 sHangPointGravity = 0.8f;
-    static const f32 sHangPointFrictionRate = 0.995f;
-    static const f32 sHangCoordSpeed = 0.5f;
-    static const f32 sSensorOffsetY = -70.0f;
-    static const s32 sAnimInterpoleFrame = 12;
-    static const f32 sSpeedToSwingWait = 10.0f;
-    static const f32 sAxisToSwingWait = 0.99f;
-    static const f32 sJumpSpeedRate = 1.0f;
-    static const f32 sJumpSpeedMinXZ = 15.0f;
-    static const f32 sJumpSpeedMaxXZ = 20.0f;
-    static const f32 sJumpSpeedMinY = 20.0f;
-    static const f32 sJumpSpeedMaxY = 50.0f;
-    static const f32 sStickPointGravity = 1.0f;
-    static const f32 sStickPointFrictionRate = 0.995f;
-    static const f32 sPointSpeedMin = 1.0f;
-    static const f32 sPointNormalMin = 0.001f;
-    static const f32 sDistanceToValid = 500.0f;
-    static const s32 sStepToValid = 40;
-    static const f32 sDistanceStartBindZ = 80.0f;
-    static const s32 sStepSlideToRumble = 20;
-    static const f32 sSpeedMinToKeepFreeSwing = 80.0f;
-    static const f32 sTransDiffMinY = 1.0f;
-    static const f32 sTexRateDiff0 = 0.0f;
+    NEBULA_TUNABLE(f32, sStickLength, 120.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthX, 12.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthZ, 12.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthLongOffsetX, 7.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetX, 0.0f);
+    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetZ, 7.0f);
+    NEBULA_TUNABLE(f32, sTexRate, 0.003f);
+    NEBULA_TUNABLE(f32, sTexRateDiff1, 0.7f);
+    NEBULA_TUNABLE(f32, sTexRateDiff2, 0.5f);
+    NEBULA_TUNABLE(f32, sHangAccelRate, 5.0f);
+    NEBULA_TUNABLE(f32, sHangPointGravity, 0.8f);
+    NEBULA_TUNABLE(f32, sHangPointFrictionRate, 0.995f);
+    NEBULA_TUNABLE(f32, sHangCoordSpeed, 0.5f);
+    NEBULA_TUNABLE(f32, sSensorOffsetY, -70.0f);
+    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 12);
+    NEBULA_TUNABLE(f32, sSpeedToSwingWait, 10.0f);
+    NEBULA_TUNABLE(f32, sAxisToSwingWait, 0.99f);
+    NEBULA_TUNABLE(f32, sJumpSpeedRate, 1.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMinXZ, 15.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMaxXZ, 20.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMinY, 20.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedMaxY, 50.0f);
+    NEBULA_TUNABLE(f32, sStickPointGravity, 1.0f);
+    NEBULA_TUNABLE(f32, sStickPointFrictionRate, 0.995f);
+    NEBULA_TUNABLE(f32, sPointSpeedMin, 1.0f);
+    NEBULA_TUNABLE(f32, sPointNormalMin, 0.001f);
+    NEBULA_TUNABLE(f32, sDistanceToValid, 500.0f);
+    NEBULA_TUNABLE(s32, sStepToValid, 40);
+    NEBULA_TUNABLE(f32, sDistanceStartBindZ, 80.0f);
+    NEBULA_TUNABLE(s32, sStepSlideToRumble, 20);
+    NEBULA_TUNABLE(f32, sSpeedMinToKeepFreeSwing, 80.0f);
+    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
+    NEBULA_TUNABLE(f32, sTexRateDiff0, 0.0f);
 
     static Color8 sColorPlusZ(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorPlusX(0xB4, 0xB4, 0xB4, 0xFF);

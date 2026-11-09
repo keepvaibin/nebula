@@ -1,9 +1,10 @@
 #include "Game/AudioLib/AudBgmVolumeController.hpp"
 #include "Game/AudioLib/AudParams.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Frames a held fader stays down after its last request.
-    const s32 cHoldTime = 2;
+    NEBULA_TUNABLE(s32, cHoldTime, 2);
 
     s32 getRecoverTime(s32 fader) {
         if (fader == AudBgmVolumeController::Fader_VolDown) {

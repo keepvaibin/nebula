@@ -1,10 +1,11 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // A starting capacity: registerGravity grows past it.
-    const s32 sFirstCapacity = 128;
+    NEBULA_TUNABLE(s32, sFirstCapacity, 128);
 };  // namespace
 
 PlanetGravityManager::PlanetGravityManager(const char* pName)

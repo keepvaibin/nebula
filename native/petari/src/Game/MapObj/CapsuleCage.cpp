@@ -3,10 +3,11 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* const cDemoCameraName = "注目カメラ";
-    const s32 sStepForStartCamera = 50;
+    NEBULA_TUNABLE(s32, sStepForStartCamera, 50);
     const s32 sStepForEndCamera = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

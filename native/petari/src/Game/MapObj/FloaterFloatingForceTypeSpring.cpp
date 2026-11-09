@@ -2,9 +2,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSpeedMin = 0.1f;
+    NEBULA_TUNABLE(f32, sSpeedMin, 0.1f);
 };  // namespace
 
 namespace NrvFloaterFloatingForceTypeSpring {

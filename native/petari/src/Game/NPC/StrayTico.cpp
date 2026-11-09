@@ -4,23 +4,24 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/CollectTico.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sPushAccel = 0.3f;
-    static const f32 sWaitTurnDegree = 2.0f;
-    static const f32 sChaseTurnDegree = 4.0f;
-    static const f32 sChaseFric = 0.97f;
-    static const f32 sChaseDistance = 400.0f;
-    static const f32 sWarpTryDistance = 2000.0f;
-    static const f32 sUpdateWarpDistance = 1600.0f;
-    static const f32 sAwayDistance = 300.0f;
-    static const f32 sUpVecBlendRate = 0.2f;
-    static const f32 sFrontVecBlendRate = 0.2f;
-    static const s32 sCompletePlacementTime = 40;
+    NEBULA_TUNABLE(f32, sPushAccel, 0.3f);
+    NEBULA_TUNABLE(f32, sWaitTurnDegree, 2.0f);
+    NEBULA_TUNABLE(f32, sChaseTurnDegree, 4.0f);
+    NEBULA_TUNABLE(f32, sChaseFric, 0.97f);
+    NEBULA_TUNABLE(f32, sChaseDistance, 400.0f);
+    NEBULA_TUNABLE(f32, sWarpTryDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, sUpdateWarpDistance, 1600.0f);
+    NEBULA_TUNABLE(f32, sAwayDistance, 300.0f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
+    NEBULA_TUNABLE(s32, sCompletePlacementTime, 40);
     static const s32 sCompleteRotateStartTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sCompleteDemoTime = 200;
-    static const f32 sCompleteDemoRotate = 4.0f;
-    static const f32 sCompleteStartRadius = 450.0f;
+    NEBULA_TUNABLE(s32, sCompleteDemoTime, 200);
+    NEBULA_TUNABLE(f32, sCompleteDemoRotate, 4.0f);
+    NEBULA_TUNABLE(f32, sCompleteStartRadius, 450.0f);
 };  // namespace
 
 namespace NrvStrayTico {

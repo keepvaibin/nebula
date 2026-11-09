@@ -7,12 +7,13 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sStepShowWait = NebulaFrameClock::stepsOfSeconds(3);
-    static const s32 sStepMove = 10;
-    static const f32 sTransMinY = -100.0f;
-    static const f32 sTransMaxY = 0.0f;
+    NEBULA_TUNABLE(s32, sStepMove, 10);
+    NEBULA_TUNABLE(f32, sTransMinY, -100.0f);
+    NEBULA_TUNABLE(f32, sTransMaxY, 0.0f);
 };  // namespace
 
 namespace NrvNoteCounter {

@@ -4,9 +4,10 @@
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Map/KoopaBattleMapStair.hpp"
 #include "Game/Util/JointUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cFireRadius = 90.0f;
+    NEBULA_TUNABLE(f32, cFireRadius, 90.0f);
 }  // namespace
 
 KoopaBattleStairsBase::KoopaBattleStairsBase(Koopa* pKoopa) : NerveExecutor("クッパ戦（階段の戦い）"), mKoopa(pKoopa), mStairsGroup() {

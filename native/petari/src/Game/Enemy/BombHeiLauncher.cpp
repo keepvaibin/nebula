@@ -11,10 +11,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 hThrowVel = 35.0f;
-    static const f32 hThrowFrontVel = 1.0f;
+    NEBULA_TUNABLE(f32, hThrowVel, 35.0f);
+    NEBULA_TUNABLE(f32, hThrowFrontVel, 1.0f);
     static const s32 hCountTimer = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

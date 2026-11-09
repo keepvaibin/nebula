@@ -17,6 +17,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // A skipped star return (NebulaCutsceneSkip) closes each panel as soon as it is up.
@@ -43,9 +44,9 @@ namespace {
     const char cNameTotalStarPieceNum[] = "ShaTPieceRNum";
     const char cNameBestCoinNum[] = "ShaCoinNum";
     const char cNameBestCoinRoot[] = "Coin";
-    static const s32 sWaitBeforeCountUpPowerStar = 85;
-    static const s32 sWaitAppearInformationWindow = 15;
-    static const s32 sWaitDisplayStarPieceCount = 45;
+    NEBULA_TUNABLE(s32, sWaitBeforeCountUpPowerStar, 85);
+    NEBULA_TUNABLE(s32, sWaitAppearInformationWindow, 15);
+    NEBULA_TUNABLE(s32, sWaitDisplayStarPieceCount, 45);
 };  // namespace
 
 namespace {

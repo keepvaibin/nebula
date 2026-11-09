@@ -4,15 +4,16 @@
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sSensorRadius = 400.0f;
-    static const f32 sSensorOffsetY = 250.0f;
-    static const f32 sHitCylinderRange = 20.0f;
-    static const f32 sHitSphereRadius = 120.0f;
-    static const f32 sHitSphereOffsetY = 600.0f;
-    static const s32 sMaxNumGroupClipping = 16;
-    static const f32 sHitCylinderHeight = 480.0f;
+    NEBULA_TUNABLE(f32, sSensorRadius, 400.0f);
+    NEBULA_TUNABLE(f32, sSensorOffsetY, 250.0f);
+    NEBULA_TUNABLE(f32, sHitCylinderRange, 20.0f);
+    NEBULA_TUNABLE(f32, sHitSphereRadius, 120.0f);
+    NEBULA_TUNABLE(f32, sHitSphereOffsetY, 600.0f);
+    NEBULA_TUNABLE(s32, sMaxNumGroupClipping, 16);
+    NEBULA_TUNABLE(f32, sHitCylinderHeight, 480.0f);
 };  // namespace
 
 namespace NrvSubmarineSteam {

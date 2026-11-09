@@ -31,19 +31,20 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBinderSize = 300.0f;
-    static const f32 sBinderYOffset = 300.0f;
-    static const f32 sUpVecBlendRate = 0.05f;
-    static const f32 sFrontVecBlendRate = 0.5f;
-    static const f32 sTurnLimitDegree = 5.0f;
+    NEBULA_TUNABLE(f32, sBinderSize, 300.0f);
+    NEBULA_TUNABLE(f32, sBinderYOffset, 300.0f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.05f);
+    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.5f);
+    NEBULA_TUNABLE(f32, sTurnLimitDegree, 5.0f);
     static const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const s32 sBlowDownLandTime = 5;
-    static const s32 sBoundSoundStep = 27;
-    static const s32 sSwoonSoundWait = 56;
-    static const s32 sSpinSoundStartStep = 10;
-    static const s32 sSpinSoundEndStep = 105;
+    NEBULA_TUNABLE(s32, sBlowDownLandTime, 5);
+    NEBULA_TUNABLE(s32, sBoundSoundStep, 27);
+    NEBULA_TUNABLE(s32, sSwoonSoundWait, 56);
+    NEBULA_TUNABLE(s32, sSpinSoundStartStep, 10);
+    NEBULA_TUNABLE(s32, sSpinSoundEndStep, 105);
 };  // namespace
 
 namespace {

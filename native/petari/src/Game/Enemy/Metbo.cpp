@@ -24,40 +24,41 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cSpeedMax = 30.0f;
-    const f32 cReceivePushPower = 1.5f;
+    NEBULA_TUNABLE(f32, cSpeedMax, 30.0f);
+    NEBULA_TUNABLE(f32, cReceivePushPower, 1.5f);
     const s32 cStepForWait = NebulaFrameClock::stepsOfMilliseconds(2500);
-    const s32 cStepForWalkAround = 200;
+    NEBULA_TUNABLE(s32, cStepForWalkAround, 200);
     const s32 cStepForChaseMin = NebulaFrameClock::stepsOfSeconds(2);
-    const s32 cStepForChaseMax = 220;
+    NEBULA_TUNABLE(s32, cStepForChaseMax, 220);
     const s32 cStepForSwoonWait = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 cStepForRest = NebulaFrameClock::stepsOfSeconds(1);
     // Beyond this from the player Metbo goes inactive; within it it wakes.
-    const f32 cActiveRadius = 3000.0f;
-    const f32 cWalkAroundRadius = 300.0f;
-    const f32 cWalkAroundTurn = 20.0f;
+    NEBULA_TUNABLE(f32, cActiveRadius, 3000.0f);
+    NEBULA_TUNABLE(f32, cWalkAroundRadius, 300.0f);
+    NEBULA_TUNABLE(f32, cWalkAroundTurn, 20.0f);
     // Every this many steps the walk direction turns by cWalkAroundTurn either way.
-    const s32 cWalkAroundTurnInterval = 10;
+    NEBULA_TUNABLE(s32, cWalkAroundTurnInterval, 10);
     // One chance in this many per step of a chase ending early.
-    const s32 cChaseGiveUpChance = 50;
-    const f32 cFindRadiusIn = 800.0f;
-    const f32 cFindRadiusOut = 1200.0f;
-    const s32 cSpinHitStop = 3;
-    const f32 cSpinPower = 45.0f;
+    NEBULA_TUNABLE(s32, cChaseGiveUpChance, 50);
+    NEBULA_TUNABLE(f32, cFindRadiusIn, 800.0f);
+    NEBULA_TUNABLE(f32, cFindRadiusOut, 1200.0f);
+    NEBULA_TUNABLE(s32, cSpinHitStop, 3);
+    NEBULA_TUNABLE(f32, cSpinPower, 45.0f);
     // Horizontal share of the swoon launch before it is normalised with the up vector.
-    const f32 cSpinPowerHRate = 0.4f;
+    NEBULA_TUNABLE(f32, cSpinPowerHRate, 0.4f);
     // Ledge probe: distance ahead, drop height, ground search depth.
-    const f32 cFallCheckAhead = 200.0f;
-    const f32 cFallCheckHeight = 100.0f;
-    const f32 cFallCheckDepth = 300.0f;
-    const f32 cBaseMtxBlendRate = 0.3f;
-    const f32 cBodyRadius = 100.0f;
-    const f32 cAttackRadius = 80.0f;
-    const f32 cShadowRadius = 80.0f;
-    const s32 cGroupClippingNum = 32;
-    const s32 cStarPieceNum = 3;
+    NEBULA_TUNABLE(f32, cFallCheckAhead, 200.0f);
+    NEBULA_TUNABLE(f32, cFallCheckHeight, 100.0f);
+    NEBULA_TUNABLE(f32, cFallCheckDepth, 300.0f);
+    NEBULA_TUNABLE(f32, cBaseMtxBlendRate, 0.3f);
+    NEBULA_TUNABLE(f32, cBodyRadius, 100.0f);
+    NEBULA_TUNABLE(f32, cAttackRadius, 80.0f);
+    NEBULA_TUNABLE(f32, cShadowRadius, 80.0f);
+    NEBULA_TUNABLE(s32, cGroupClippingNum, 32);
+    NEBULA_TUNABLE(s32, cStarPieceNum, 3);
 
     const MR::ActorMoveParam cFallParam = {0.0f, 3.0f, 0.99f, 0.0f};
     const MR::ActorMoveParam cDontMoveParam = {0.0f, 2.0f, 0.5f, 0.0f};

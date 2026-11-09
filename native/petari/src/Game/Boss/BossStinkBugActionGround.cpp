@@ -10,15 +10,16 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sWalkSpeed = 5.0f;
-    static const f32 sFindDegreeH = 45.0f;
-    static const f32 sFindDegreeV = 15.0f;
-    static const f32 sFindMinDistance = 500.0f;
-    static const f32 sFindMaxDistance = 1900.0f;
-    static const f32 sRunSpeed = 20.0f;
-    static const f32 sTurnStartDistance = 2500.0f;
+    NEBULA_TUNABLE(f32, sWalkSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, sFindDegreeH, 45.0f);
+    NEBULA_TUNABLE(f32, sFindDegreeV, 15.0f);
+    NEBULA_TUNABLE(f32, sFindMinDistance, 500.0f);
+    NEBULA_TUNABLE(f32, sFindMaxDistance, 1900.0f);
+    NEBULA_TUNABLE(f32, sRunSpeed, 20.0f);
+    NEBULA_TUNABLE(f32, sTurnStartDistance, 2500.0f);
 };  // namespace
 
 namespace NrvBossStinkBugGroundBattle {

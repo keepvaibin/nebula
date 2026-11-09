@@ -14,9 +14,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sTalkBalloonOffset = 950.0f;
+    NEBULA_TUNABLE(f32, sTalkBalloonOffset, 950.0f);
 
     struct CollisionPartInfo {
         const char* mCollisionName;

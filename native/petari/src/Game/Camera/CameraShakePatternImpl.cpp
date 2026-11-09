@@ -1,8 +1,9 @@
 #include "Game/Camera/CameraShakePatternImpl.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sSinglyMaxFrame = 25;
+    NEBULA_TUNABLE(s32, sSinglyMaxFrame, 25);
 };  // namespace
 
 CameraShakePatternSingly::CameraShakePatternSingly(f32 intensity) : CameraShakePattern(), mIntensity(intensity), mDirection(0.0f, 1.0f) {

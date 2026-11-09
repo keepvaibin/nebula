@@ -13,6 +13,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
@@ -21,11 +22,11 @@ namespace {
     const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
     const s32 sWaitToStartStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sWaitToStartStepAngry = NebulaFrameClock::stepsOfSeconds(1);
-    const s32 sStartStepToJump = 24;
-    const f32 sStartJumpSpeed = 30.0f;
-    const f32 sRotateSpeed = 5.0f;
+    NEBULA_TUNABLE(s32, sStartStepToJump, 24);
+    NEBULA_TUNABLE(f32, sStartJumpSpeed, 30.0f);
+    NEBULA_TUNABLE(f32, sRotateSpeed, 5.0f);
     const s32 sStepRollGround = NebulaFrameClock::stepsOfSeconds(15);
-    const f32 sEndJumpSpeed = 30.0f;
+    NEBULA_TUNABLE(f32, sEndJumpSpeed, 30.0f);
 
     // The break model follows its own matrix only while the break animation starts.
     void startRockBreak(Koopa* pKoopa, const char* pActionName) {

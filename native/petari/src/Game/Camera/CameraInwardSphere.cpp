@@ -7,9 +7,10 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sBaseDist = 300.0f;
+    NEBULA_TUNABLE(f32, sBaseDist, 300.0f);
 };  // namespace
 
 CameraInwardSphere::CameraInwardSphere(const char* pName)

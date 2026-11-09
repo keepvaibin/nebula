@@ -1,13 +1,14 @@
 #include "Game/Map/WaterPoint.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sSinRate0 = 0.003f;
-    const f32 sSinRate1 = 0.0003f;
-    const f32 sSinRate2 = 0.0025f;
-    const f32 sMapCheckHeight = 400.0f;
-    const f32 sMapWaveRateMin = 0.1f;
-    const f32 sAlphaMin = 30.0f;
+    NEBULA_TUNABLE(f32, sSinRate0, 0.003f);
+    NEBULA_TUNABLE(f32, sSinRate1, 0.0003f);
+    NEBULA_TUNABLE(f32, sSinRate2, 0.0025f);
+    NEBULA_TUNABLE(f32, sMapCheckHeight, 400.0f);
+    NEBULA_TUNABLE(f32, sMapWaveRateMin, 0.1f);
+    NEBULA_TUNABLE(f32, sAlphaMin, 30.0f);
 };  // namespace
 
 WaterPoint::WaterPoint(const Vec3f& rPos, const Vec3f& rUpVec, f32 coordAcrossRail, f32 coordOnRail, f32 height)

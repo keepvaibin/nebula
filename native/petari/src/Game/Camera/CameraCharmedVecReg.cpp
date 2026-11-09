@@ -5,9 +5,10 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sRate = 0.02f;
+    NEBULA_TUNABLE(f32, sRate, 0.02f);
 };  // namespace
 
 CameraCharmedVecReg::CameraCharmedVecReg(const char* pName)

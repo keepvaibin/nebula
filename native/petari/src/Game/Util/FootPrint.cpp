@@ -11,9 +11,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sFadeBufferCount = 10;
+    NEBULA_TUNABLE(s32, sFadeBufferCount, 10);
     static const s32 sFadeOutTime = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

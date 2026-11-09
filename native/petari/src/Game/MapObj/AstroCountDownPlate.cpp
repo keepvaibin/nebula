@@ -10,6 +10,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvAstroCountDownPlate {
     NEW_NERVE(AstroCountDownPlateNrvDead, AstroCountDownPlate, Wait);
@@ -23,7 +24,7 @@ namespace {
     const char* cMaterialName10 = "StarNumber01_v_x(2)";
     const char* cLastBattleDemoName = "ロゼッタ最終決戦デモ";
     const char* cStartCountDownDemoName = "ロゼッタカウントダウン開始デモ";
-    static const s32 sStepForCountToZero = 50;
+    NEBULA_TUNABLE(s32, sStepForCountToZero, 50);
 };  // namespace
 
 AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), mIsLightOn() {

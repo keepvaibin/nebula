@@ -14,9 +14,10 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRotateFriction = 0.995f;
+    NEBULA_TUNABLE(f32, sRotateFriction, 0.995f);
 };  // namespace
 
 namespace NrvKoopaBattleMapPlanet {

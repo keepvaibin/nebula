@@ -27,6 +27,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Leg i follows this joint of the boss model in demos.
@@ -35,13 +36,13 @@ namespace {
     const Vec3f sEndMarioPosition(0.0f, 2160.0f, 1260.0f);
     const s32 sBreakDownTime = NebulaFrameClock::stepsOfSeconds(4);
     const s32 sExplosionTime = NebulaFrameClock::stepsOfMilliseconds(2500);
-    const s32 sKillerGeneraterIncreaseSeTiming = 90;
-    const s32 sHeadExplodeSeTiming = 0;
-    const s32 sDamageTime = 129;
+    NEBULA_TUNABLE(s32, sKillerGeneraterIncreaseSeTiming, 90);
+    NEBULA_TUNABLE(s32, sHeadExplodeSeTiming, 0);
+    NEBULA_TUNABLE(s32, sDamageTime, 129);
     const s32 sRideMarioKeepTime = NebulaFrameClock::stepsOfSeconds(2);  // steps "riding" lasts after the player leaves the boss's gravity
-    const s32 sBgmStateNormal = 1;
-    const s32 sBgmStateRide = 3;
-    const f32 sLegAngleStep = 2.0943952f;  // 2 pi / 3
+    NEBULA_TUNABLE(s32, sBgmStateNormal, 1);
+    NEBULA_TUNABLE(s32, sBgmStateRide, 3);
+    NEBULA_TUNABLE(f32, sLegAngleStep, 2.0943952f);  // 2 pi / 3
     const s32 sBonesPerLeg = 7;
     // The demo blends the legs in over half a second.
     const s32 sDemoBlendSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;

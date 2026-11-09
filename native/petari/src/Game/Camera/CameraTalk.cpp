@@ -3,11 +3,12 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sRate = 0.5f;
-    const f32 sAngleX = 0.12f;
-    const f32 sAngleY = 0.7f;
+    NEBULA_TUNABLE(f32, sRate, 0.5f);
+    NEBULA_TUNABLE(f32, sAngleX, 0.12f);
+    NEBULA_TUNABLE(f32, sAngleY, 0.7f);
 };  // namespace
 
 CameraTalk::CameraTalk(const char* pName)

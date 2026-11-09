@@ -14,11 +14,12 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sFlyLectureWaitStep = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sHipLectureWaitStep = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 sFlyMoveSpeed = 5.0f;
+    NEBULA_TUNABLE(f32, sFlyMoveSpeed, 5.0f);
 };  // namespace
 
 namespace NrvHoneyBee {

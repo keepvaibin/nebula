@@ -25,13 +25,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sBombTeresaBufferSize = 6;
-    static const f32 sTurnAccel = 0.1f;
-    static const f32 sTurnFric = 0.998f;
-    static const f32 sTurnBreakFric = 0.99f;
-    static const f32 sTurnMaxSpeed = 1.1f;
+    NEBULA_TUNABLE(s32, sBombTeresaBufferSize, 6);
+    NEBULA_TUNABLE(f32, sTurnAccel, 0.1f);
+    NEBULA_TUNABLE(f32, sTurnFric, 0.998f);
+    NEBULA_TUNABLE(f32, sTurnBreakFric, 0.99f);
+    NEBULA_TUNABLE(f32, sTurnMaxSpeed, 1.1f);
 };  // namespace
 
 BombTeresaHolder::BombTeresaHolder() : DeriveActorGroup< BombTeresa >("ボムテレサ管理", ::sBombTeresaBufferSize) {

@@ -2,6 +2,7 @@
 #include "Game/Sound/SoundEngine.hpp"
 #include <cstring>
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const f32 cCurveLinear[17] = {
@@ -22,10 +23,10 @@ namespace {
     const f32* const cCurves[4] = {cCurveLinear, cCurveSquare, cCurveSqRoot, cCurveSampleCell};
 
     // A full note's gain on its way to the mix.
-    const f32 cNoteGain = 0.18310547f;
+    NEBULA_TUNABLE(f32, cNoteGain, 0.18310547f);
     // Envelope and LFO steps of one tick.
-    const f32 cLfoStep = 1.000890625f;
-    const f32 cEnvelopeStep = 1.5f;
+    NEBULA_TUNABLE(f32, cLfoStep, 1.000890625f);
+    NEBULA_TUNABLE(f32, cEnvelopeStep, 1.5f);
 
     void effectOsc(const Oscillator& rOsc, OscEffect* pEffect) {
         f32 value = rOsc.getValue();

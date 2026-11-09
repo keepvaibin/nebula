@@ -11,10 +11,11 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sStepToSwitchOn = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sDefaultStarPeaceNum = 6;
+    NEBULA_TUNABLE(s32, sDefaultStarPeaceNum, 6);
 };  // namespace
 
 namespace NrvHipDropRock {

@@ -8,18 +8,19 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sJumpSpeed1st = 50.0f;
-    const f32 sJumpSpeed = 40.0f;
-    const f32 sJumpSpeedVs3 = 40.0f;
-    const f32 sJumpGravity = 1.5f;
-    const f32 sJumpGravityVs3 = 2.0f;
-    const f32 sJumpTurnSpeedVs3 = 3.0f;
-    const s32 sLandStep = 15;
-    const s32 sLandStepVs2 = 10;
-    const s32 sLandStepVs3 = 10;
-    const s32 sLandStepVs3Angry = 5;
+    NEBULA_TUNABLE(f32, sJumpSpeed1st, 50.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeed, 40.0f);
+    NEBULA_TUNABLE(f32, sJumpSpeedVs3, 40.0f);
+    NEBULA_TUNABLE(f32, sJumpGravity, 1.5f);
+    NEBULA_TUNABLE(f32, sJumpGravityVs3, 2.0f);
+    NEBULA_TUNABLE(f32, sJumpTurnSpeedVs3, 3.0f);
+    NEBULA_TUNABLE(s32, sLandStep, 15);
+    NEBULA_TUNABLE(s32, sLandStepVs2, 10);
+    NEBULA_TUNABLE(s32, sLandStepVs3, 10);
+    NEBULA_TUNABLE(s32, sLandStepVs3Angry, 5);
 };  // namespace
 
 namespace NrvKoopaStateAttackShockWave {

@@ -12,10 +12,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const s32 sFadeOutFrame = 60;
-    const s32 sFadeInFrame = 60;
+    NEBULA_TUNABLE(s32, sFadeOutFrame, 60);
+    NEBULA_TUNABLE(s32, sFadeInFrame, 60);
 };  // namespace
 
 namespace NrvRosettaPictureBook {

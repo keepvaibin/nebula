@@ -11,13 +11,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sRotYTargetList[] = {0.0f, 90.0f, 180.0f, -90.0f};
+    NEBULA_TUNABLE_LIST(f32, sRotYTargetList, , {0.0f, 90.0f, 180.0f, -90.0f});
 
-    const f32 sScale = 1.0f;
-    const f32 sPunchSpeed = 6.0f;
-    const s32 sRotYTargetNum = 4;
+    NEBULA_TUNABLE(f32, sScale, 1.0f);
+    NEBULA_TUNABLE(f32, sPunchSpeed, 6.0f);
+    NEBULA_TUNABLE(s32, sRotYTargetNum, 4);
 };  // namespace
 
 namespace NrvArrowSwitch {

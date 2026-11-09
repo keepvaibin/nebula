@@ -4,10 +4,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRailAccel = 0.05f;
-    static const f32 sEscapeAccel = 0.05f;
+    NEBULA_TUNABLE(f32, sRailAccel, 0.05f);
+    NEBULA_TUNABLE(f32, sEscapeAccel, 0.05f);
 };  // namespace
 
 namespace DodoryuSub {

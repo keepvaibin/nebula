@@ -4,23 +4,24 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // By mSpeedType.
-    const f32 sThrowSpdStraight[] = {30.0f, 20.0f, 30.0f};
-    const f32 sThrowSpdHoming[] = {24.0f, 20.0f, 24.0f};
-    const f32 sGravityLevel[] = {0.017f, 0.01f, 0.0055f};
-    const u16 sResetStep[] = {300, 480, 300};
+    NEBULA_TUNABLE_LIST(f32, sThrowSpdStraight, , {30.0f, 20.0f, 30.0f});
+    NEBULA_TUNABLE_LIST(f32, sThrowSpdHoming, , {24.0f, 20.0f, 24.0f});
+    NEBULA_TUNABLE_LIST(f32, sGravityLevel, , {0.017f, 0.01f, 0.0055f});
+    NEBULA_TUNABLE_LIST(u16, sResetStep, , {300, 480, 300});
 
     // Share of the into-surface part of the flight direction a rebound keeps.
-    const f32 sBounceRateFloor = 0.8f;  // ground and roof
-    const f32 sBounceRateWall = 0.9f;
+    NEBULA_TUNABLE(f32, sBounceRateFloor, 0.8f);  // ground and roof
+    NEBULA_TUNABLE(f32, sBounceRateWall, 0.9f);
 
-    const f32 sHomingAngle = 0.5235988f;  // 30 degrees
-    const f32 sResetFarDistance = 5000.0f;  // past this from the throw, the reset shows a star
-    const f32 sFlightMaxDistance = 10000.0f;
-    const s32 sReviveStep = 45;
-    const s32 sReviveEndStep = 105;
+    NEBULA_TUNABLE(f32, sHomingAngle, 0.5235988f);  // 30 degrees
+    NEBULA_TUNABLE(f32, sResetFarDistance, 5000.0f);  // past this from the throw, the reset shows a star
+    NEBULA_TUNABLE(f32, sFlightMaxDistance, 10000.0f);
+    NEBULA_TUNABLE(s32, sReviveStep, 45);
+    NEBULA_TUNABLE(s32, sReviveEndStep, 105);
 };  // namespace
 
 namespace NrvJetTurtle {

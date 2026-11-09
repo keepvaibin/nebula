@@ -18,25 +18,26 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const f32 sRotateDegree = 3.0f;
+    NEBULA_TUNABLE(f32, sRotateDegree, 3.0f);
     static const s32 sHopStep = NebulaFrameClock::stepsOfSeconds(5);
-    static const s32 sOpenInt = 74;
-    static const s32 sAttack = 360;
-    static const s32 sBabyNum = 4;
-    static const f32 sAppearHeight = 500.0f;
-    static const f32 sAppearDistance = 2000.0f;
-    static const f32 sDisappearDistance = 2200.0f;
-    static const f32 sHeadOffset = -100.0f;
-    static const f32 sBabyVelocity = 16.0f;
-    static const f32 sBabyOffset = 64.0f;
-    static const f32 sShadowRadius = 140.0f;
-    static const f32 sHideShadowRadius = 110.0f;
-    static const s32 sHitInt = 60;
-    static const s32 sCoinDefault = 4;
-    static const f32 sCameraLimitLength = 6250000.0f;
-    static const s32 sOpen = 70;
+    NEBULA_TUNABLE(s32, sOpenInt, 74);
+    NEBULA_TUNABLE(s32, sAttack, 360);
+    NEBULA_TUNABLE(s32, sBabyNum, 4);
+    NEBULA_TUNABLE(f32, sAppearHeight, 500.0f);
+    NEBULA_TUNABLE(f32, sAppearDistance, 2000.0f);
+    NEBULA_TUNABLE(f32, sDisappearDistance, 2200.0f);
+    NEBULA_TUNABLE(f32, sHeadOffset, -100.0f);
+    NEBULA_TUNABLE(f32, sBabyVelocity, 16.0f);
+    NEBULA_TUNABLE(f32, sBabyOffset, 64.0f);
+    NEBULA_TUNABLE(f32, sShadowRadius, 140.0f);
+    NEBULA_TUNABLE(f32, sHideShadowRadius, 110.0f);
+    NEBULA_TUNABLE(s32, sHitInt, 60);
+    NEBULA_TUNABLE(s32, sCoinDefault, 4);
+    NEBULA_TUNABLE(f32, sCameraLimitLength, 6250000.0f);
+    NEBULA_TUNABLE(s32, sOpen, 70);
 };  // namespace
 
 namespace NrvJumpGuarder {

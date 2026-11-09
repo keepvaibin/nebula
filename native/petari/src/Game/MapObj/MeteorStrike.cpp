@@ -15,19 +15,20 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     inline f32 toDegree(f32 angle) {
         return _180_PI * angle;
     }
 
-    const f32 cSensorRadius = 90.0f;
-    const f32 cBinderRadius = 80.0f;
-    const f32 cShadowRadius = 120.0f;
-    const f32 cRumbleDistance = 1000.0f;
-    const f32 cRumbleDistanceCannonL = 2500.0f;
-    const f32 cRotateSpeed = -7.5f;
-    const s32 cShowShadowFrame = 150;
+    NEBULA_TUNABLE(f32, cSensorRadius, 90.0f);
+    NEBULA_TUNABLE(f32, cBinderRadius, 80.0f);
+    NEBULA_TUNABLE(f32, cShadowRadius, 120.0f);
+    NEBULA_TUNABLE(f32, cRumbleDistance, 1000.0f);
+    NEBULA_TUNABLE(f32, cRumbleDistanceCannonL, 2500.0f);
+    NEBULA_TUNABLE(f32, cRotateSpeed, -7.5f);
+    NEBULA_TUNABLE(s32, cShowShadowFrame, 150);
 };  // namespace
 
 namespace NrvMeteorStrike {

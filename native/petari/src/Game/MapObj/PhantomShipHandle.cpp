@@ -3,9 +3,10 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sClippingRadius = 200.0f;
+    NEBULA_TUNABLE(f32, sClippingRadius, 200.0f);
 };  // namespace
 
 PhantomShipHandle::PhantomShipHandle(const char* pName) : LiveActor(pName), mRotator() {

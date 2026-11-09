@@ -5,17 +5,18 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const f32 sFireAngleLebel1[] = {0.0f};
     const f32 sFireAngleLebel2[] = {30.0f, -30.0f};
     const f32 sFireAngleLebel3[] = {0.0f, 120.0f, -120.0f};
     const f32* sFireAngleList[] = {nullptr, sFireAngleLebel1, sFireAngleLebel2, sFireAngleLebel3, nullptr};
-    static const s32 sMaxBeamLife = 360;
-    static const f32 sBeamRadius = 80.0f;
+    NEBULA_TUNABLE(s32, sMaxBeamLife, 360);
+    NEBULA_TUNABLE(f32, sBeamRadius, 80.0f);
     // const s32 sMorphTime =
-    static const s32 sBurningTime = 40;
-    static const f32 sStormRange = 500.0f;
+    NEBULA_TUNABLE(s32, sBurningTime, 40);
+    NEBULA_TUNABLE(f32, sStormRange, 500.0f);
 };  // namespace
 
 KameckBeamEventListener::KameckBeamEventListener() {

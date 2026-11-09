@@ -15,16 +15,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sStepForLaugh = NebulaFrameClock::stepsOfSeconds(2);
-    static const s32 sStepToAngerBlur = 40;
+    NEBULA_TUNABLE(s32, sStepToAngerBlur, 40);
     static const s32 sAngerBlurTime = NebulaFrameClock::stepsOfSeconds(1);
-    static const f32 sAngerBlurOffset = 100.0f;
-    static const s32 sExplosionBlurTime = 50;
-    static const f32 sExplosionBlurOffset = 100.0f;
-    static const f32 sTurnRate = 1.0f;
-    static const f32 sLimitAngleOfTurn = 30.0f;
+    NEBULA_TUNABLE(f32, sAngerBlurOffset, 100.0f);
+    NEBULA_TUNABLE(s32, sExplosionBlurTime, 50);
+    NEBULA_TUNABLE(f32, sExplosionBlurOffset, 100.0f);
+    NEBULA_TUNABLE(f32, sTurnRate, 1.0f);
+    NEBULA_TUNABLE(f32, sLimitAngleOfTurn, 30.0f);
 };  // namespace
 
 namespace NrvMogucchiShooter {

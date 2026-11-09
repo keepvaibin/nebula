@@ -8,10 +8,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sGenerateTime = 6;
-    static const f32 sGenerateOffsetY = 120.0f;
+    NEBULA_TUNABLE(s32, sGenerateTime, 6);
+    NEBULA_TUNABLE(f32, sGenerateOffsetY, 120.0f);
 };  // namespace
 
 namespace NrvAirBubbleGenerator {

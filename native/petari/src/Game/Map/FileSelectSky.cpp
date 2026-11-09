@@ -4,10 +4,11 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 cAngleIncY = 0.001f;
-    const f32 cCycleX = 3000.0f;
+    NEBULA_TUNABLE(f32, cAngleIncY, 0.001f);
+    NEBULA_TUNABLE(f32, cCycleX, 3000.0f);
 };  // namespace
 
 namespace NrvFileSelectSky {

@@ -3,6 +3,7 @@
 #include "Game/Sound/RhythmSystem.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include <new>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const SeqPoint cAdsTable[4] = {{0, 0, 0x7fff}, {0, 0, 0x7fff}, {0, 0, 0}, {0xe, 0, 0}};
@@ -11,7 +12,7 @@ namespace {
 
     enum ModifyType : s32 { ModifyType_Chord, ModifyType_Scale, ModifyType_Steps, ModifyType_Octave };
     enum ModifyDir : s32 { ModifyDir_Up, ModifyDir_Down, ModifyDir_None, ModifyDir_Rand };
-    const u8 cNullNote = 0x7f;
+    NEBULA_TUNABLE(u8, cNullNote, 0x7f);
 
     u32 align16(u32 bytes) {
         return (bytes + 15) & ~15u;

@@ -1,11 +1,12 @@
 #include "Game/Map/OceanBowlPoint.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
-const f32 sSinRate0 = 0.003f;
-const f32 sSinRate1 = 0.003f;
-const f32 sSinRate2 = 0.003f;
-const f32 sHeight0 = 40.0f;
-const f32 sHeight1 = 30.0f;
+NEBULA_TUNABLE(f32, sSinRate0, 0.003f);
+NEBULA_TUNABLE(f32, sSinRate1, 0.003f);
+NEBULA_TUNABLE(f32, sSinRate2, 0.003f);
+NEBULA_TUNABLE(f32, sHeight0, 40.0f);
+NEBULA_TUNABLE(f32, sHeight1, 30.0f);
 
 OceanBowlPoint::OceanBowlPoint(const Vec3f& rPos) : mVertexPosition(rPos), mPosition(rPos) {
     mAlpha = 255;

@@ -21,6 +21,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     inline f32 toDegree(f32 angle) {
@@ -28,40 +29,40 @@ namespace {
     }
 
     const Vec cWeakSensorOffset = {0.0f, 0.0f, -150.0f};
-    static const f32 cBinderRadius = 225.0f;
-    static const f32 cSensorRadius = 225.0f;
-    static const f32 cGravity = 1.5f;
-    static const f32 cWeakGravity = 0.2f;
-    static const f32 cWallBreakDot = -0.5f;
-    static const f32 cRotateSpeedRate = 1.1f;
-    static const f32 cRotateCosineMax = 0.999f;
-    static const f32 cRumbleDistance = 1000.0f;
-    static const s32 cNoBindJudgeFrame = 20;
-    static const f32 cStarWandRadius3d = 275.0f;
-    static const s32 cAppearMoveFrame = 45;
-    static const s32 cAppearRumbleFrame = 15;
-    static const s32 cAppearStopFrame = 25;
-    static const s32 cAppearMoveFrameRock = 8;
-    static const s32 cAppearStopFrameRock = 4;
-    static const s32 cAppearInvalidBindFrame = 45;
-    static const f32 cAppearMoveSpeed = 7.0f;
-    static const f32 cAppearRumbleSpeed = 100.0f;
-    static const f32 cAppearRumbleAngle = 5.0f;
-    static const s32 cStarPieceNum = 9;
-    static const s32 cStarPieceNumWanwanMini = 1;
-    static const f32 cWeakSensorRadius = 125.0f;
+    NEBULA_TUNABLE(f32, cBinderRadius, 225.0f);
+    NEBULA_TUNABLE(f32, cSensorRadius, 225.0f);
+    NEBULA_TUNABLE(f32, cGravity, 1.5f);
+    NEBULA_TUNABLE(f32, cWeakGravity, 0.2f);
+    NEBULA_TUNABLE(f32, cWallBreakDot, -0.5f);
+    NEBULA_TUNABLE(f32, cRotateSpeedRate, 1.1f);
+    NEBULA_TUNABLE(f32, cRotateCosineMax, 0.999f);
+    NEBULA_TUNABLE(f32, cRumbleDistance, 1000.0f);
+    NEBULA_TUNABLE(s32, cNoBindJudgeFrame, 20);
+    NEBULA_TUNABLE(f32, cStarWandRadius3d, 275.0f);
+    NEBULA_TUNABLE(s32, cAppearMoveFrame, 45);
+    NEBULA_TUNABLE(s32, cAppearRumbleFrame, 15);
+    NEBULA_TUNABLE(s32, cAppearStopFrame, 25);
+    NEBULA_TUNABLE(s32, cAppearMoveFrameRock, 8);
+    NEBULA_TUNABLE(s32, cAppearStopFrameRock, 4);
+    NEBULA_TUNABLE(s32, cAppearInvalidBindFrame, 45);
+    NEBULA_TUNABLE(f32, cAppearMoveSpeed, 7.0f);
+    NEBULA_TUNABLE(f32, cAppearRumbleSpeed, 100.0f);
+    NEBULA_TUNABLE(f32, cAppearRumbleAngle, 5.0f);
+    NEBULA_TUNABLE(s32, cStarPieceNum, 9);
+    NEBULA_TUNABLE(s32, cStarPieceNumWanwanMini, 1);
+    NEBULA_TUNABLE(f32, cWeakSensorRadius, 125.0f);
     static const s32 cSeWanwanVoiceInterval = NebulaFrameClock::stepsOfSeconds(2);
-    static const f32 cSeWanwanVoiceDistance = 600.0f;
-    static const s32 cRollSoundTime = 20;
-    static const s32 cFreezeFrame = 20;
-    static const f32 cFreezeRumbleSpeed = 75.0f;
-    static const f32 cFreezeRumbleWidth = 5.0f;
-    static const f32 cNearClipDistance = 400.0f;
-    static const s32 cSlowMoveFrame = 150;
-    static const s32 cSlowMoveRumbleFrame = 20;
-    static const s32 cBreakStopStep = 2;
-    static const s32 cBreakStopFrame = 12;
-    static const s32 cAppearPowerStarStep = 2;
+    NEBULA_TUNABLE(f32, cSeWanwanVoiceDistance, 600.0f);
+    NEBULA_TUNABLE(s32, cRollSoundTime, 20);
+    NEBULA_TUNABLE(s32, cFreezeFrame, 20);
+    NEBULA_TUNABLE(f32, cFreezeRumbleSpeed, 75.0f);
+    NEBULA_TUNABLE(f32, cFreezeRumbleWidth, 5.0f);
+    NEBULA_TUNABLE(f32, cNearClipDistance, 400.0f);
+    NEBULA_TUNABLE(s32, cSlowMoveFrame, 150);
+    NEBULA_TUNABLE(s32, cSlowMoveRumbleFrame, 20);
+    NEBULA_TUNABLE(s32, cBreakStopStep, 2);
+    NEBULA_TUNABLE(s32, cBreakStopFrame, 12);
+    NEBULA_TUNABLE(s32, cAppearPowerStarStep, 2);
 };  // namespace
 
 namespace NrvRock {

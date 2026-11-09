@@ -12,23 +12,24 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sParamRunStart = {3.0f, 1.0f, 0.9f, 3.0f};
     static MR::ActorMoveParam sParamJumpStart = {0.0f, 1.0f, 0.95f, 0.0f};
     static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
-    static const f32 sDistanceToJump = 1000.0f;
-    static const f32 sDistanceToJumpVs3 = 2000.0f;
+    NEBULA_TUNABLE(f32, sDistanceToJump, 1000.0f);
+    NEBULA_TUNABLE(f32, sDistanceToJumpVs3, 2000.0f);
     static const s32 sRunStepMax = NebulaFrameClock::stepsOfSeconds(3);
-    static const f32 sRunWallJumpSpeed = 10.0f;
-    static const f32 sJumpUpSpeedFrontMax = 20.0f;
-    static const f32 sJumpUpSpeedUp = 50.0f;
-    static const f32 sJumpUpGravity = 1.0f;
-    static const f32 sJumpUpTurnSpeed = 3.0f;
+    NEBULA_TUNABLE(f32, sRunWallJumpSpeed, 10.0f);
+    NEBULA_TUNABLE(f32, sJumpUpSpeedFrontMax, 20.0f);
+    NEBULA_TUNABLE(f32, sJumpUpSpeedUp, 50.0f);
+    NEBULA_TUNABLE(f32, sJumpUpGravity, 1.0f);
+    NEBULA_TUNABLE(f32, sJumpUpTurnSpeed, 3.0f);
     static const s32 sJumpWaitAirStep = NebulaFrameClock::stepsOfMilliseconds(500);
-    static const s32 sJumpWaitAirStepVs2 = 15;
-    static const s32 sJumpWaitAirStepVs3 = 15;
-    static const f32 sJumpWaitAirTurnSpeed = 2.0f;
+    NEBULA_TUNABLE(s32, sJumpWaitAirStepVs2, 15);
+    NEBULA_TUNABLE(s32, sJumpWaitAirStepVs3, 15);
+    NEBULA_TUNABLE(f32, sJumpWaitAirTurnSpeed, 2.0f);
 };  // namespace
 
 namespace NrvKoopaStateAttackHipDrop {

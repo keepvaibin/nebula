@@ -8,9 +8,10 @@
 #include <cstring>
 #include <nebula_game_api.h>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const bool sOff = false;
+    NEBULA_TUNABLE(bool, sOff, false);
 
     // The levels place view cubes for the actors that ship distance models, and only those follow them.
     bool hasDistanceModels(const LiveActor* pActor) {

@@ -18,14 +18,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    static const s32 sLiftUpSeTiming = 87;
-    static const f32 sAfraidSeRange = 600.0f;
-    static const f32 sTreeDist = 16.0f;
-    static const f32 sShadowOffset = -25.0f;
-    static const f32 sHitJump = 20.0f;
-    static const f32 sHitMove = 4.0f;
+    NEBULA_TUNABLE(s32, sLiftUpSeTiming, 87);
+    NEBULA_TUNABLE(f32, sAfraidSeRange, 600.0f);
+    NEBULA_TUNABLE(f32, sTreeDist, 16.0f);
+    NEBULA_TUNABLE(f32, sShadowOffset, -25.0f);
+    NEBULA_TUNABLE(f32, sHitJump, 20.0f);
+    NEBULA_TUNABLE(f32, sHitMove, 4.0f);
 };  // namespace
 
 namespace NrvLuigiNPC {

@@ -7,12 +7,13 @@
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Screen/BombTimerLayout.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const s32 sTidyTimeLimit = NebulaFrameClock::stepsOfSeconds(30);
-    static const s32 sBgmStartStep = 166;
-    static const s32 sPreRaceWait = 100;
-    static const s32 sPstRaceWait = 50;
+    NEBULA_TUNABLE(s32, sBgmStartStep, 166);
+    NEBULA_TUNABLE(s32, sPreRaceWait, 100);
+    NEBULA_TUNABLE(s32, sPstRaceWait, 50);
 };  // namespace
 
 namespace NrvCaretaker {

@@ -19,14 +19,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 
 namespace {
-    static const f32 hGroundDamp = 0.8f;
-    static const f32 hAirDampH = 0.98f;
-    static const f32 hAirDampV = 0.98f;
-    static const f32 hJumpVelV = 1.0f;
-    static const s32 hStampDeathTime = 20;
+    NEBULA_TUNABLE(f32, hGroundDamp, 0.8f);
+    NEBULA_TUNABLE(f32, hAirDampH, 0.98f);
+    NEBULA_TUNABLE(f32, hAirDampV, 0.98f);
+    NEBULA_TUNABLE(f32, hJumpVelV, 1.0f);
+    NEBULA_TUNABLE(s32, hStampDeathTime, 20);
     static const s32 hNoPowerWaitTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 

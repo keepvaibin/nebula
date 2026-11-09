@@ -22,6 +22,7 @@
 #include "Game/Render/GameTexture.hpp"
 #include <cstdint>
 #include <cstring>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     f32 cCheckOffset0 = 5.0f;
@@ -30,14 +31,14 @@ namespace {
     // The shadow texture covers 300 units across (the capture's orthographic box).
     const f32 cTexScale = 1.0f / 300.0f;
     // A step in which the centre moves farther than this, or an axis turns past 60 degrees, is a jump: nothing pairs across it.
-    const f32 cJumpDistance = 300.0f;
-    const f32 cJumpAxisDot = 0.5f;
+    NEBULA_TUNABLE(f32, cJumpDistance, 300.0f);
+    NEBULA_TUNABLE(f32, cJumpAxisDot, 0.5f);
 
     // The numbers of a shadow's draws among its object's draws (Frame::setPart). A polygon takes one from its triangle in
     // [cPolygonPartFirst, cPolygonPartEnd) plus its pass's base; the other draws take fixed ones past every polygon.
-    const u32 cPolygonPartFirst = 0x10000u;
+    NEBULA_TUNABLE(u32, cPolygonPartFirst, 0x10000u);
     const u32 cPolygonPartEnd = 1u << 28;
-    const u32 cMarkPartBase = 0u;
+    NEBULA_TUNABLE(u32, cMarkPartBase, 0u);
     const u32 cColorPartBase = 1u << 28;
     const u32 cEdgePart = 2u << 28;
     // The wipe box's first draw (CollisionShadow::draw3).

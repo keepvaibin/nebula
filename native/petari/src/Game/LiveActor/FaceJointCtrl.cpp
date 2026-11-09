@@ -3,9 +3,10 @@
 #include "Game/Util/JointController.hpp"
 
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sDefaultDegreeMax = 45.0f;
+    NEBULA_TUNABLE(f32, sDefaultDegreeMax, 45.0f);
     const char* sTextOutFileName = "FaceJointCtrl";
 };  // namespace
 

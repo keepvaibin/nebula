@@ -11,11 +11,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // One sensor per stacked rail (obj_arg3).
     const char* const cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
-    const f32 sRailStep = 100.0f;  // between kept rail positions, and between stacked rails
+    NEBULA_TUNABLE(f32, sRailStep, 100.0f);  // between kept rail positions, and between stacked rails
 };  // namespace
 
 namespace NrvElectricRailMoving {

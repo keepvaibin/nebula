@@ -7,6 +7,7 @@
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace NrvKinopio {
     NEW_NERVE(KinopioNrvReaction, Kinopio, Reaction);
@@ -41,20 +42,20 @@ namespace {
 
     static Param sParam;
 
-    static const f32 sDistancePlayerIsNear = 200.0f;
-    static const f32 sDistancePlayerIsFar = 300.0f;
-    static const f32 sDistancePlayerIsEvent = 450.0f;
-    static const f32 sTurnLimit = 0.997f;
-    static const f32 sUpVecBlendRate = 1.0f;
-    static const f32 sDistanceEventPlayerIsNear = 600.0f;
+    NEBULA_TUNABLE(f32, sDistancePlayerIsNear, 200.0f);
+    NEBULA_TUNABLE(f32, sDistancePlayerIsFar, 300.0f);
+    NEBULA_TUNABLE(f32, sDistancePlayerIsEvent, 450.0f);
+    NEBULA_TUNABLE(f32, sTurnLimit, 0.997f);
+    NEBULA_TUNABLE(f32, sUpVecBlendRate, 1.0f);
+    NEBULA_TUNABLE(f32, sDistanceEventPlayerIsNear, 600.0f);
     static const s32 sTimeToCancelEvent = NebulaFrameClock::stepsOfSeconds(3);
-    static const f32 sFallGravity = 0.6f;
-    static const f32 sFallFrictionRate = 0.98f;
-    static const s32 sLandingTime = 3;
-    static const s32 sPickelIndex = 2;
-    static const f32 sDefaultScale = 1.2f;
-    static const f32 sWalkSpeed = 0.83f;
-    static const f32 sRunSpeed = 3.32f;
+    NEBULA_TUNABLE(f32, sFallGravity, 0.6f);
+    NEBULA_TUNABLE(f32, sFallFrictionRate, 0.98f);
+    NEBULA_TUNABLE(s32, sLandingTime, 3);
+    NEBULA_TUNABLE(s32, sPickelIndex, 2);
+    NEBULA_TUNABLE(f32, sDefaultScale, 1.2f);
+    NEBULA_TUNABLE(f32, sWalkSpeed, 0.83f);
+    NEBULA_TUNABLE(f32, sRunSpeed, 3.32f);
 };  // namespace
 
 Kinopio::Kinopio(const char* pName)

@@ -12,14 +12,15 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     const Vec cJumpOutDemoRotate = {347.0f, 0.0f, 0.0f};
     const char* const cAstroDomeSkyTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
-    const s32 cAppearanceBrkTotalFrame = 200;
-    const s32 cRotateDisappearBrkFrame = 30;
-    const s32 cRotateAppearBrkFrame = 59;
-    const f32 cAppearanceRotateSpeed = 0.1f;
+    NEBULA_TUNABLE(s32, cAppearanceBrkTotalFrame, 200);
+    NEBULA_TUNABLE(s32, cRotateDisappearBrkFrame, 30);
+    NEBULA_TUNABLE(s32, cRotateAppearBrkFrame, 59);
+    NEBULA_TUNABLE(f32, cAppearanceRotateSpeed, 0.1f);
 
     const NebulaColor8 sColor1 = {0x00, 0x00, 0x00, 0xFF};
     const NebulaColor8 sColor2 = {0x00, 0x00, 0x00, 0xFF};

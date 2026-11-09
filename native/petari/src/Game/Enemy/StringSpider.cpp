@@ -27,27 +27,28 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Swing sounds: volume 0 to 100 over these speeds.
-    const f32 cSwing1MinSpeed = 2.0f;
-    const f32 cSwing1MaxSpeed = 12.0f;
-    const f32 cSwing2MinSpeed = 5.0f;
-    const f32 cSwing2MaxSpeed = 25.0f;
+    NEBULA_TUNABLE(f32, cSwing1MinSpeed, 2.0f);
+    NEBULA_TUNABLE(f32, cSwing1MaxSpeed, 12.0f);
+    NEBULA_TUNABLE(f32, cSwing2MinSpeed, 5.0f);
+    NEBULA_TUNABLE(f32, cSwing2MaxSpeed, 25.0f);
     // Collision sound: volume 0 to cCollisionMaxVolume over speed 0 to cCollisionFullSpeed.
-    const f32 cCollisionFullSpeed = 15.0f;
-    const f32 cCollisionMaxVolume = 100.0f;
+    NEBULA_TUNABLE(f32, cCollisionFullSpeed, 15.0f);
+    NEBULA_TUNABLE(f32, cCollisionMaxVolume, 100.0f);
     // Spin sound: volume cSpinMinVolume..100 as the spin slows, sub level cSpinMinSubLevel..24.
-    const f32 cSpinMinVolume = 40.0f;
-    const f32 cSpinMinSubLevel = 5.0f;
+    NEBULA_TUNABLE(f32, cSpinMinVolume, 40.0f);
+    NEBULA_TUNABLE(f32, cSpinMinSubLevel, 5.0f);
     // A spin or star piece knocks the spider 30 away along the floor; the side and up parts are zero.
-    const f32 cSpinHitSpeed = 30.0f;
-    const f32 cSpinHitSideSpeed = -0.0f;
-    const f32 cSpinHitUpSpeed = 0.0f;
+    NEBULA_TUNABLE(f32, cSpinHitSpeed, 30.0f);
+    NEBULA_TUNABLE(f32, cSpinHitSideSpeed, -0.0f);
+    NEBULA_TUNABLE(f32, cSpinHitUpSpeed, 0.0f);
     // The string never gets shorter than this share of its placed length (Obj_arg0).
-    const f32 cMinStringRate = 0.333f;
+    NEBULA_TUNABLE(f32, cMinStringRate, 0.333f);
     const s32 cSpinnedSteps = NebulaFrameClock::stepsOfSeconds(8);
-    const f32 cNoticeDistance = 1400.0f;
+    NEBULA_TUNABLE(f32, cNoticeDistance, 1400.0f);
 };  // namespace
 
 namespace NrvStringSpider {

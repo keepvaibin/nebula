@@ -4,11 +4,12 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sPartialRate = 0.5f;
-    const f32 sAngularVel = 0.5f;
-    const s32 sInterpolate = 120;
+    NEBULA_TUNABLE(f32, sPartialRate, 0.5f);
+    NEBULA_TUNABLE(f32, sAngularVel, 0.5f);
+    NEBULA_TUNABLE(s32, sInterpolate, 120);
 };  // namespace
 
 CameraMedianTower::CameraMedianTower(const char* pName)

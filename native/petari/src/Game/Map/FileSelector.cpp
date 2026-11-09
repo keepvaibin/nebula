@@ -47,21 +47,22 @@
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The save's user files (SaveDataHandler's cUserFiles).
     const s32 cUserFileNum = 6;
-    const f32 cSlopeDegree = 20.0f;
-    const f32 cItemPosRadius = 5000.0f;
-    const f32 cSelectEffectOffset = 1000.0f;
+    NEBULA_TUNABLE(f32, cSlopeDegree, 20.0f);
+    NEBULA_TUNABLE(f32, cItemPosRadius, 5000.0f);
+    NEBULA_TUNABLE(f32, cSelectEffectOffset, 1000.0f);
     const char* const cLuigiNameMessageID = "System_FileSelect_Icon001";
     const char* const cMarioNameMessageID = "System_FileSelect_Icon000";
-    const s32 cBgmFarState = 5;
-    const u32 cBgmFarStateChangeFrames = 60;
-    const s32 cBgmNearState = 6;
-    const u32 cBgmNearStateChangeFrames = 60;
-    const f32 cItemThetaOffset[cUserFileNum] = {10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f};
-    const s32 cIndexOrder[cUserFileNum] = {1, 2, 4, 6, 5, 3};
+    NEBULA_TUNABLE(s32, cBgmFarState, 5);
+    NEBULA_TUNABLE(u32, cBgmFarStateChangeFrames, 60);
+    NEBULA_TUNABLE(s32, cBgmNearState, 6);
+    NEBULA_TUNABLE(u32, cBgmNearStateChangeFrames, 60);
+    NEBULA_TUNABLE_LIST(f32, cItemThetaOffset, cUserFileNum, {10.0f, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+    NEBULA_TUNABLE_LIST(s32, cIndexOrder, cUserFileNum, {1, 2, 4, 6, 5, 3});
 };  // namespace
 
 namespace {

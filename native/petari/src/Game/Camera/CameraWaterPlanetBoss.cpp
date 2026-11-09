@@ -4,10 +4,11 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
-    const f32 sAngleRate = 0.02f;
-    const s32 sRoundingFrame = 60;
+    NEBULA_TUNABLE(f32, sAngleRate, 0.02f);
+    NEBULA_TUNABLE(s32, sRoundingFrame, 60);
 };  // namespace
 
 CameraWaterPlanetBoss::CameraWaterPlanetBoss(const char* pName)

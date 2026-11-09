@@ -20,6 +20,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
     static const Vec sBodySensorOffset = {0.0f, 60.0f, 0.0f};
@@ -34,12 +35,12 @@ namespace {
 
     // To the player: hiding closer than sJumpOutDistance on screen, chasing past sApproachStartDistance until
     // sApproachEndDistance, running from closer than sEscapeStartDistance until sEscapeEndDistance.
-    const f32 sJumpOutDistance = 1500.0f;
-    const f32 sApproachStartDistance = 700.0f;
-    const f32 sApproachEndDistance = 600.0f;
-    const f32 sEscapeStartDistance = 500.0f;
-    const f32 sEscapeEndDistance = 710.0f;
-    const f32 sWallLookDistance = 600.0f;
+    NEBULA_TUNABLE(f32, sJumpOutDistance, 1500.0f);
+    NEBULA_TUNABLE(f32, sApproachStartDistance, 700.0f);
+    NEBULA_TUNABLE(f32, sApproachEndDistance, 600.0f);
+    NEBULA_TUNABLE(f32, sEscapeStartDistance, 500.0f);
+    NEBULA_TUNABLE(f32, sEscapeEndDistance, 710.0f);
+    NEBULA_TUNABLE(f32, sWallLookDistance, 600.0f);
 };  // namespace
 
 namespace {
