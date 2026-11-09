@@ -6,9 +6,9 @@ class AstroCore : public MapObjActor {
 public:
     AstroCore(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeGrow();

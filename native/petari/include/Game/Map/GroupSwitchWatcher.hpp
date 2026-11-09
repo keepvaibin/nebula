@@ -8,8 +8,8 @@ class GroupSwitchWatcher : public LiveActor {
 public:
     GroupSwitchWatcher(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     StageSwitchCtrl* mSwitchCtrl;
     s32 mNumSwitches;

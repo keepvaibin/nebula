@@ -9,8 +9,8 @@ class CoinGroup : public LiveActor {
 public:
     CoinGroup(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
 
     virtual void initCoinArray(const TableIter&) = 0;
     virtual void placementCoin() {

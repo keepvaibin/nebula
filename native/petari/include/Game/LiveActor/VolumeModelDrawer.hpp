@@ -10,7 +10,7 @@ class VolumeModelDrawer : public NameObj {
 public:
     VolumeModelDrawer(const char*, const char*, MtxPtr);
 
-    virtual void draw() const;
+    virtual void draw() const override;
 
 
     MtxPtr mMtx;

@@ -217,7 +217,7 @@ bool Kameck::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
     return false;
 }
 
-bool Kameck::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Kameck::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStartPowerStarGet(msg)) {
         makeActorDead();
         return true;
@@ -261,7 +261,7 @@ bool Kameck::requestDown(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool Kameck::requestGuard(HitSensor* pSender, HitSensor* pReceiver) {
+bool Kameck::requestGuard(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isEnableGurad()) {
         Vec3f vec;
         vec.killElement(-pSender->mHost->mVelocity, mGravity);

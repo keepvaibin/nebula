@@ -198,15 +198,15 @@ void DesertMovingLand::exeStop() {
         mVelocity.zero();
 }
 
-void DesertMovingLand::connectToScene(const MapObjActorInitInfo& rInfo) {
+void DesertMovingLand::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneCollisionMapObj(this);
 }
 
-void DesertMovingLand::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void DesertMovingLand::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
-void DesertMovingLand::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void DesertMovingLand::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
-void DesertMovingLand::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void DesertMovingLand::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
 }

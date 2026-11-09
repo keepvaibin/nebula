@@ -147,7 +147,7 @@ bool GCapture::receiveMsgEnemyAttack(u32 msg, HitSensor*, HitSensor*) {
     return requestDamageCancel(msg);
 }
 
-bool GCapture::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool GCapture::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_IS_RUSH_TAKEOVER) {
         return isNerve(GET_NERVE(GCapture, GCaptureNrvCapture));
     }

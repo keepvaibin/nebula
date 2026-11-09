@@ -319,7 +319,7 @@ void HomingKiller::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool HomingKiller::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HomingKiller::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isInactive()) {
         return false;
     }
@@ -340,7 +340,7 @@ bool HomingKiller::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-bool HomingKiller::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HomingKiller::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isInactive()) {
         return false;
     }
@@ -352,7 +352,7 @@ bool HomingKiller::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor*
     return true;
 }
 
-bool HomingKiller::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HomingKiller::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::tryForceKillIfMsgStartPowerStarGet(this, msg);
 }
 
@@ -936,7 +936,7 @@ void HomingKillerLauncher::appear() {
     setNerve(GET_NERVE(HomingKiller, HomingKillerLauncherNrvAppearKiller));
 }
 
-bool HomingKillerLauncher::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HomingKillerLauncher::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::tryForceKillIfMsgStartPowerStarGet(this, msg);
 }
 

@@ -6,9 +6,9 @@ class CameraCharmedVecRegTower : public Camera {
 public:
     CameraCharmedVecRegTower(const char* pName = "CameraCharmedVecRegTower");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const char* pName, const Vec3f& rWPoint, const Vec3f& rAxis, f32 angleX, f32 angleYMax, f32 dist, bool arrange) {
         mName = pName;

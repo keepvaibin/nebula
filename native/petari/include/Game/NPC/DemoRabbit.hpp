@@ -6,9 +6,9 @@ class DemoRabbit : public NPCActor {
 public:
     DemoRabbit(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
 
     void fadeOut();
     void fadeIn();

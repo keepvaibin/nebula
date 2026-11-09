@@ -9,10 +9,10 @@ class ChooChooTrain : public LiveActor {
 public:
     ChooChooTrain(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     MR::Vector< MR::AssignableArray< ModelObj* > > mModelArray;
     Vec3f mClipCenter;

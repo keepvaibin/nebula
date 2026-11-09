@@ -29,7 +29,7 @@ WaterPressureBullet::WaterPressureBullet(const char* pName) : LiveActor(pName) {
     mCameraInfo = nullptr;
 }
 
-void WaterPressureBullet::init(const TableIter& rIter) {
+void WaterPressureBullet::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("WaterBullet", nullptr, false);
     MR::connectToSceneMapObjStrongLight(this);
     initHitSensor(2);
@@ -169,13 +169,13 @@ void WaterPressureBullet::exeSpinKill() {
     kill();
 }
 
-void WaterPressureBullet::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void WaterPressureBullet::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorMapObj(pReceiver)) {
         kill();
     }
 }
 
-bool WaterPressureBullet::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WaterPressureBullet::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgFireBallAttack(msg)) {
         kill();
         return true;
@@ -184,7 +184,7 @@ bool WaterPressureBullet::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hi
     return false;
 }
 
-bool WaterPressureBullet::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WaterPressureBullet::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isDead(this)) {
         return false;
     }

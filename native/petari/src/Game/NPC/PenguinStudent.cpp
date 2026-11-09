@@ -94,7 +94,7 @@ void PenguinStudent::initAfterPlacement() {
     }
 }
 
-bool PenguinStudent::branchFunc(u32 msg) {
+bool PenguinStudent::branchFunc(u32 /*msg*/) {
     return mActor->isNerve(GET_NERVE(PenguinStudent, PenguinStudentNrvLead));
 }
 
@@ -166,7 +166,7 @@ void PenguinStudent::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     NPCActor::attackSensor(pSender, pReceiver);
 }
 
-bool PenguinStudent::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PenguinStudent::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgSpinStormRange(msg) && tryReleaseTurtle()) {
         return true;
     }

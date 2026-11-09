@@ -9,12 +9,12 @@ public:
 
     /// @brief Intializes the `CenterScreenBlur` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     /// @brief Draws the `CenterScreenBlur` to the screen.
-    virtual void draw() const;
+    virtual void draw() const override;
 
-    virtual void appear();
+    virtual void appear() override;
 
     void start(s32, f32, u8, s32, s32);
     void exeFadeIn();

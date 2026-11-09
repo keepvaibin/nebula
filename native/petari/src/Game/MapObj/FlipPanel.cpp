@@ -185,7 +185,7 @@ void FlipPanel::calcAndSetBaseMtx() {
     }
 }
 
-bool FlipPanel::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FlipPanel::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(FlipPanel, FlipPanelNrvEnd))) {
         return false;
     }
@@ -206,7 +206,7 @@ bool FlipPanel::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
     return false;
 }
 
-bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool FlipPanel::calcJointMove(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     if (!mIsPlayerOn) {
         return false;
     }
@@ -351,7 +351,7 @@ void FlipPanelObserver::initAfterPlacement() {
     }
 }
 
-bool FlipPanelObserver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FlipPanelObserver::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SUCCESS) {
         if (!mFlippedNum) {
             if (mIsHeavensDoor) {

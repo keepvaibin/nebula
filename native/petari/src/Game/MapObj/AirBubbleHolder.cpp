@@ -35,7 +35,7 @@ namespace MR {
     }
 };  // namespace MR
 
-void AirBubbleHolder::init(const TableIter& rIter) {
+void AirBubbleHolder::init(const TableIter& /*rIter*/) {
     createAirBubbles();
 }
 

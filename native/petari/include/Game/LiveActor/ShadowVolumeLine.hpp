@@ -6,9 +6,9 @@ class ShadowVolumeLine : public ShadowVolumeDrawer {
 public:
     ShadowVolumeLine();
 
-    virtual ~ShadowVolumeLine();
-    virtual void loadModelDrawMtx(TypedDraw& rDraw) const;
-    virtual void drawShape(TypedDraw& rDraw) const;
+    virtual ~ShadowVolumeLine() override;
+    virtual void loadModelDrawMtx(TypedDraw& rDraw) const override;
+    virtual void drawShape(TypedDraw& rDraw) const override;
 
     void setFromShadowController(const ShadowController*);
     void setToShadowController(const ShadowController*);

@@ -8,9 +8,9 @@ class MeteorStrikeLauncher : public LiveActor {
 public:
     MeteorStrikeLauncher(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
 
     void initMapToolInfo(const TableIter&);
     bool initRail(const TableIter&);

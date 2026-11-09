@@ -9,8 +9,8 @@ class MarioMeter : public NameObj {
 public:
     MarioMeter(const char*);
 
-    virtual ~MarioMeter();
-    virtual void init(const TableIter& rIter);
+    virtual ~MarioMeter() override;
+    virtual void init(const TableIter& rIter) override;
 
     void initLifeCount(s32);
     void setLifeCount(s32);

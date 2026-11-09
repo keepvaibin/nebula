@@ -61,7 +61,7 @@ template <>
 inline MR::Vector< MR::AssignableArray< GalaxyMapTicoIcon* > >::~Vector() {
 }
 
-void GalaxyMap::init(const TableIter& rIter) {
+void GalaxyMap::init(const TableIter& /*rIter*/) {
     initLayoutManager("MapGrandGalaxy", 1);
     initPaneCtrlPointing();
     initDomeIcon();

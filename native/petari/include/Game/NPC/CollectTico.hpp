@@ -8,7 +8,7 @@ class CollectTico : public LiveActor {
 public:
     CollectTico(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     void exeCompleteDemo();

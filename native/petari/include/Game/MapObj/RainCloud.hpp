@@ -11,14 +11,14 @@ class RainCloud : public LiveActor {
 public:
     RainCloud(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void updateHitSensor(HitSensor* pSensor);
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void updateHitSensor(HitSensor* pSensor) override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeAppear();
     void exeWait();

@@ -717,7 +717,7 @@ void StorySequenceExecutor::decideNextEventForMoveGalaxy(GalaxyMoveArgument* pMo
     }
 }
 
-void StorySequenceExecutor::decideNextEventForAfterLoading(GalaxyMoveArgument* pMoveArgument) {
+void StorySequenceExecutor::decideNextEventForAfterLoading(GalaxyMoveArgument* /*pMoveArgument*/) {
     if (GameDataFunction::isOnGameEventFlag("RosettaTalkAfterNormalEnding")) {
         return;
     }

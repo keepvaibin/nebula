@@ -148,7 +148,7 @@ f32 ElectricRailFunction::getHitSensorRadius() {
     return ::cHitSensorRadius;
 }
 
-void ElectricRailHolder::init(const TableIter& rIter) {
+void ElectricRailHolder::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_ElectricRailHolder);
 
     MR::invalidateClipping(this);

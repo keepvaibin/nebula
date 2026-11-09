@@ -13,7 +13,7 @@ KoopaPlanetShadow::~KoopaPlanetShadow() {
 KoopaPlanetShadow::KoopaPlanetShadow(const Koopa* pKoopa) : LiveActor("惑星用の影"), mKoopa(pKoopa), mHipMtx() {
 }
 
-void KoopaPlanetShadow::init(const TableIter& rIter) {
+void KoopaPlanetShadow::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("KoopaPlanetShadow", nullptr, false);
 
     MR::connectToSceneEnemyDecoration(this);

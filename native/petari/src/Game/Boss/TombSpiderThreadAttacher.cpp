@@ -14,7 +14,7 @@ TombSpiderThreadAttacher::TombSpiderThreadAttacher(LiveActor* pActor, const char
     : LiveActor("巣の付着点"), mJointMtx(MR::getJointMtx(pActor, pJointName)), mRadius(radius), mZOffset(offset) {
 }
 
-void TombSpiderThreadAttacher::init(const TableIter& rIter) {
+void TombSpiderThreadAttacher::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemyMovement(this);
     initNerve(GET_NERVE(TombSpiderThreadAttacher, TombSpiderThreadAttacherNrvFree));
     MR::invalidateClipping(this);

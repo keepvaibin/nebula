@@ -845,7 +845,7 @@ void Karikari::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Karikari::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Karikari::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgHitmarkEmit(msg)) {
         return true;
     }
@@ -858,7 +858,7 @@ bool Karikari::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver
     return false;
 }
 
-bool Karikari::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Karikari::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return true;
     }

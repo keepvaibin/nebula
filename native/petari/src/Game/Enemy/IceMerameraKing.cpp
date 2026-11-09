@@ -626,7 +626,7 @@ void IceMerameraKing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool IceMerameraKing::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool IceMerameraKing::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         return true;
     }
@@ -753,7 +753,7 @@ ThrowingIce* IceMerameraKing::getDeadWeaponAndAppear() {
 }
 
 // The escape roll turns the joint about its own position.
-bool IceMerameraKing::calcJoint(Pos3f* pJointMtx, const JointControllerInfo& rInfo) {
+bool IceMerameraKing::calcJoint(Pos3f* pJointMtx, const JointControllerInfo& /*rInfo*/) {
     Pos3f rollMtx;
     Vec3f trans;
     rollMtx.makeQuat(mRollQuat);

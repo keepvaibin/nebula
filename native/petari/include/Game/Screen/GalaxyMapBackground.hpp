@@ -6,5 +6,5 @@ class GalaxyMapBackground : public LayoutActor {
 public:
     GalaxyMapBackground();
 
-    virtual void appear();
+    virtual void appear() override;
 };

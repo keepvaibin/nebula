@@ -607,7 +607,7 @@ bool Poihana::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool Poihana::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Poihana::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg) && tryShock()) {
         return true;
     }
@@ -615,7 +615,7 @@ bool Poihana::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
     return false;
 }
 
-bool Poihana::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool Poihana::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorEnemy(pSender) || MR::isSensorMapObj(pSender)) {
         Vec3f pushOffset;
         pushOffset.sub(mPosition, pSender->mHost->mPosition);

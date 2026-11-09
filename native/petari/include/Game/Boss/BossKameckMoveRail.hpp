@@ -6,7 +6,7 @@ class BossKameckMoveRail : public LiveActor {
 public:
     BossKameckMoveRail(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void calcMovePosition(Vec3f*, s32) const;
     s32 calcRandomIndex(s32) const;

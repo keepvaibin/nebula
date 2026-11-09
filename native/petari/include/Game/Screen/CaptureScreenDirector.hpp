@@ -44,7 +44,7 @@ public:
     CaptureScreenActor(u32 drawType, const char* pCameraName);
 
     /// @brief Draws the `CaptureScreenActor` to the screen.
-    virtual void draw() const;
+    virtual void draw() const override;
 
 private:
     const char* mCameraName;

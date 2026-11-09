@@ -28,7 +28,7 @@ namespace NrvAstroDomeCameraController {
 AstroDomeCameraController::AstroDomeCameraController(const char* pName) : LiveActor(pName), mStartPos(gZeroVec), mEaseRate(), mZeroPos(gZeroVec) {
 }
 
-void AstroDomeCameraController::init(const TableIter& rIter) {
+void AstroDomeCameraController::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
 
     MR::invalidateClipping(this);
@@ -69,7 +69,7 @@ void AstroDomeCameraController::control() {
     MR::setProgrammableCameraParamFovy(this, ::cFovy);
 }
 
-bool AstroDomeCameraController::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDomeCameraController::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::trySyncAppearMsgSelectStart(this, msg)) {
         return true;
     }

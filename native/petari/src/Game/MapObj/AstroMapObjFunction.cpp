@@ -129,7 +129,7 @@ namespace {
         return num;
     }
 
-    s32 getNumGrandStarForOpen(const char* pObjName, s32 domeId) {
+    s32 getNumGrandStarForOpen(const char* /*pObjName*/, s32 domeId) {
         s32 num = -1;
 
         if (domeId != -1) {

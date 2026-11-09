@@ -11,8 +11,8 @@ class BossBegomanHead : public PartsModel {
 public:
     BossBegomanHead(LiveActor*, MtxPtr);
 
-    virtual void init(const TableIter&);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void calcAndSetBaseMtx() override;
 
     bool isSwitchOn();
     bool isEdgeOut();

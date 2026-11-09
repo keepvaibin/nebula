@@ -103,7 +103,7 @@ void SwitchBox::kill() {
     LiveActor::kill();
 }
 
-void SwitchBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
+void SwitchBox::doHit(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mHitPoint != 0) {
         --mHitPoint;
     }
@@ -147,7 +147,7 @@ bool SwitchBox::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool SwitchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SwitchBox::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
@@ -156,7 +156,7 @@ bool SwitchBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pR
     return false;
 }
 
-bool SwitchBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SwitchBox::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_IS_PUNCH_ENABLE) {
         return mHitPoint;
     }

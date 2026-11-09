@@ -23,7 +23,7 @@ namespace NrvHomeButtonLayout {
 HomeButtonLayout::HomeButtonLayout() : LayoutActor("HOMEボタン", false), mIsInitialized(false), mForcedClosed(false) {
 }
 
-void HomeButtonLayout::init(const TableIter& rIter) {
+void HomeButtonLayout::init(const TableIter& /*rIter*/) {
     // The host keeps the menu (NebulaHomeMenu).
     mIsInitialized = true;
     initNerve(GET_NERVE(HomeButtonLayout, HomeButtonLayoutDeactive));

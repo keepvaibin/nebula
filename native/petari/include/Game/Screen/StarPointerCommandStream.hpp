@@ -6,8 +6,8 @@ class StarPointerCommandStream : public LayoutActor {
 public:
     StarPointerCommandStream(const Vec2f*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void start(const Vec3f*, bool);
     void show();

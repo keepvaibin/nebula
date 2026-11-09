@@ -31,7 +31,7 @@ SphereSelector::SphereSelector()
       mIsPointingInvalid(), mIsSePlayed() {
 }
 
-void SphereSelector::init(const TableIter& rIter) {
+void SphereSelector::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjDecorationMovement(this);
     MR::invalidateClipping(this);
     mSphereGroup = new LiveActorGroup("スフィアセレクターアクターグループ", 32);

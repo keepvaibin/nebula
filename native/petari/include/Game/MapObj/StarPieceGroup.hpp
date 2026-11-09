@@ -8,13 +8,13 @@ class StarPieceGroup : public LiveActor {
 public:
     StarPieceGroup(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     bool isExistAnyStarPiece();
     void forceReplaceStarPieceAll();

@@ -6,9 +6,9 @@ class CameraInnerCylinder : public Camera {
 public:
     CameraInnerCylinder(const char* pName = "CameraInnerCylinder");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec3f& rWPoint, const Vec3f& rAxis, const Vec2f& angle, f32 dist, f32 sideDist) {
         mWPoint.set(rWPoint);

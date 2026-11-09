@@ -134,7 +134,7 @@ NebulaAchievementToast::NebulaAchievementToast()
       mPicture(nullptr), mTextures(nullptr), mStep(StepIdle), mFrame(0), mHoldFrames(cHoldFrames), mWidth(0.0f), mHeight(0.0f) {
 }
 
-void NebulaAchievementToast::init(const TableIter& rIter) {
+void NebulaAchievementToast::init(const TableIter& /*rIter*/) {
     initLayoutManager("InformationWindow", 2);
 
     // Its own name for the canvas rules (LayoutAspect): the window follows the right and bottom edges.

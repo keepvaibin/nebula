@@ -14,7 +14,7 @@ class StageDataHolder : public NameObj {
 public:
     StageDataHolder(const char* pStageName, int zoneID, bool loadCommon);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void initAfterScenarioSelected();
     void initPlacement();

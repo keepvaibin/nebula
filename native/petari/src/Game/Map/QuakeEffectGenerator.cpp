@@ -22,7 +22,7 @@ namespace NrvQuakeEffectGenerator {
 QuakeEffectGenerator::QuakeEffectGenerator() : LiveActor("地震効果生成") {
 }
 
-void QuakeEffectGenerator::init(const TableIter& rIter) {
+void QuakeEffectGenerator::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(QuakeEffectGenerator, HostTypeWait));
     MR::connectToSceneMapObjMovement(this);
     MR::invalidateClipping(this);

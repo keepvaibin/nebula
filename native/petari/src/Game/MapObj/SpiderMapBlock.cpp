@@ -14,7 +14,7 @@ namespace {
 SpiderMapBlock::SpiderMapBlock(const char* pName) : LiveActor(pName), mPosZ() {
 }
 
-bool SpiderMapBlock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpiderMapBlock::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerHipDropFloor(msg)) {
         kill();
         return true;
@@ -22,7 +22,7 @@ bool SpiderMapBlock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSens
     return false;
 }
 
-bool SpiderMapBlock::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpiderMapBlock::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     kill();
     return true;
 }

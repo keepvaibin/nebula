@@ -238,7 +238,7 @@ bool CrystalCage::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return true;
 }
 
-bool CrystalCage::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool CrystalCage::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mCrystalCageType != CrystalCageType_Large && isNerve(GET_NERVE(CrystalCage, CrystalCageNrvWait))) {
         startBreak();
         return true;

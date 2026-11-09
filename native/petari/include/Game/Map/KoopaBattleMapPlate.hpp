@@ -7,9 +7,9 @@ class KoopaBattleMapPlate : public LiveActor {
 public:
     KoopaBattleMapPlate(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAndSetBaseMtx();
-    bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAndSetBaseMtx() override;
+    bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
 private:
     Pos3f mBaseMtx;

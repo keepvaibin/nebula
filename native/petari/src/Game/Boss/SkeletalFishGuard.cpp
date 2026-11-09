@@ -48,7 +48,7 @@ SkeletalFishGuard::SkeletalFishGuard(SkeletalFishBoss* pFishBoss, const char* pN
     mScaleController = new AnimScaleController(nullptr);
 }
 
-void SkeletalFishGuard::init(const TableIter& rIter) {
+void SkeletalFishGuard::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("SkeletalFishGuard", nullptr, false);
     MR::addToAttributeGroupSearchTurtle(this);
     MR::connectToSceneEnemy(this);
@@ -382,7 +382,7 @@ void SkeletalFishGuard::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SkeletalFishGuard::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SkeletalFishGuard::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE_ANON(SkeletalFishGuardNrvKill))) {
         return false;
     }

@@ -6,9 +6,9 @@ class CameraFooFighterPlanet : public Camera {
 public:
     CameraFooFighterPlanet(const char* pName = "フーファイタープラネットカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void goRoundBehind(Vec3f&, Vec3f&, Vec3f&);
 

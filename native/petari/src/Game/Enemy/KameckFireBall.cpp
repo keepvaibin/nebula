@@ -98,7 +98,7 @@ void KameckFireBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool KameckFireBall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KameckFireBall::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return true;
     }
@@ -111,7 +111,7 @@ bool KameckFireBall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSens
     return false;
 }
 
-bool KameckFireBall::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KameckFireBall::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStartPowerStarGet(msg)) {
         makeActorDead();
         return true;

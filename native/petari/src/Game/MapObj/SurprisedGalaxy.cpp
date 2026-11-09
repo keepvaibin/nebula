@@ -60,7 +60,7 @@ void SurprisedGalaxy::init(const TableIter& rIter) {
     }
 }
 
-void SurprisedGalaxy::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void SurprisedGalaxy::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorPlayerOrRide(pReceiver) && !isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit))) {
         setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
     }
@@ -88,7 +88,7 @@ void SurprisedGalaxy::exeExit() {
 void SurprisedGalaxy::exeWait() {
 }
 
-bool SurprisedGalaxy::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SurprisedGalaxy::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_IS_RUSH_TAKEOVER && isNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvWait))) {
         setNerve(GET_NERVE(SurprisedGalaxy, SurprisedGalaxyNrvExit));
     }

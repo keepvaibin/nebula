@@ -238,7 +238,7 @@ bool DinoPackun::isHitReaction(s32 step) const {
 }
 
 // The scale joint's X, Y and Z run along the actor's Y, Z and X.
-bool DinoPackun::hitScaleJoint(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool DinoPackun::hitScaleJoint(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     const Vec3f& rScale = mAnimScaleCtrl->mScale;
     Vec3f jointScale(rScale.y, rScale.z, rScale.x);
     MR::preScaleMtx(*pMtx, jointScale);

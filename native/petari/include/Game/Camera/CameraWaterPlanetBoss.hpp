@@ -6,12 +6,12 @@ class CameraWaterPlanetBoss : public Camera {
 public:
     CameraWaterPlanetBoss(const char* pName = "水中プラネットボス");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isEnableToReset() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isEnableToReset() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(f32 distMin, f32 distMax, f32 blendRateMin, bool blendUpEnabled, const Vec3f wPoint, f32 dotFrontMin, f32 dotFrontMax,
                   f32 angleXMin, f32 angleXMax) {

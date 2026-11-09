@@ -30,7 +30,7 @@ namespace {
 namespace Ui {
     TextBox::TextBox(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& resBlockSet) : Pane(rLayout, pRes, resBlockSet) {
         const UiTextBoxData* const pBlock = resBlockSet.At< UiTextBoxData >(pRes->mPayload);
-        u16 allocStrBufLen = static_cast< u16 >(pBlock->mBufferBytes / sizeof(char16_t));
+        u32 allocStrBufLen = pBlock->mBufferBytes / sizeof(char16_t);
         if (allocStrBufLen > 0) {
             allocStrBufLen -= 1;
         }
@@ -39,7 +39,7 @@ namespace Ui {
 
         if (pBlock->mTextBytes >= sizeof(char16_t) && mTextBuf) {
             const char16_t* const pBlockText = resBlockSet.At< char16_t >(pBlock->mText);
-            const u16 resStrLen = static_cast< u16 >(pBlock->mTextBytes / sizeof(char16_t) - 1);
+            const u32 resStrLen = static_cast< u32 >(pBlock->mTextBytes / sizeof(char16_t) - 1);
             SetString(pBlockText, 0, resStrLen);
         }
 
@@ -72,7 +72,7 @@ namespace Ui {
         mpMaterial = rLayout.NewInArena< Material >(resBlockSet.MaterialAt(pBlock->mMaterial), resBlockSet);
     }
 
-    void TextBox::Init(u16 allocStrLen) {
+    void TextBox::Init(u32 allocStrLen) {
         mTextBuf = 0;
         mTextBufBytes = 0;
         mTextLen = 0;
@@ -155,7 +155,7 @@ namespace Ui {
         writer.Print(mTextBuf, mTextLen);
     }
 
-    u16 TextBox::GetStringBufferLength() const {
+    u32 TextBox::GetStringBufferLength() const {
         if (mTextBufBytes == 0) {
             return 0;
         }
@@ -163,13 +163,13 @@ namespace Ui {
         return mTextBufBytes / sizeof(char16_t) - 1;
     }
 
-    void TextBox::AllocStringBuffer(u16 len) {
+    void TextBox::AllocStringBuffer(u32 len) {
         if (len == 0) {
             return;
         }
 
-        u16 chars = len + 1;
-        u16 bytes = chars * sizeof(char16_t);
+        u32 chars = len + 1;
+        u32 bytes = chars * sizeof(char16_t);
 
         if (bytes > mTextBufBytes) {
             FreeStringBuffer();
@@ -192,21 +192,21 @@ namespace Ui {
         mTextBufBytes = 0;
     }
 
-    u16 TextBox::SetString(const char16_t* pStr, u16 pos) {
+    u32 TextBox::SetString(const char16_t* pStr, u32 pos) {
         return SetString(pStr, pos, MR::textLength(pStr));
     }
 
-    u16 TextBox::SetString(const char16_t* pStr, u16 pos, u16 len) {
+    u32 TextBox::SetString(const char16_t* pStr, u32 pos, u32 len) {
         if (mTextBuf == NULL) {
             return 0;
         }
 
-        const u16 maxlen = GetStringBufferLength();
+        const u32 maxlen = GetStringBufferLength();
         if (pos >= maxlen) {
             return 0;
         }
 
-        const u16 chars = Min< u16 >(len, maxlen - pos);
+        const u32 chars = Min< u32 >(len, maxlen - pos);
         memcpy(&mTextBuf[pos], pStr, chars * sizeof(char16_t));
 
         mTextLen = pos + chars;
@@ -244,7 +244,7 @@ namespace Ui {
 
         // A number stays on one line, however many digits a mod's counters reach.
         bool isNumber = mTextLen > 0;
-        for (u16 i = 0; i < mTextLen && isNumber; i++) {
+        for (u32 i = 0; i < mTextLen && isNumber; i++) {
             isNumber = mTextBuf[i] >= L'0' && mTextBuf[i] <= L'9';
         }
         pWriter->SetWidthLimit(isNumber ? cWidthUnlimited : GetDrawSize().width);

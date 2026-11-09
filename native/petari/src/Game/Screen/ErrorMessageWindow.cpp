@@ -17,7 +17,7 @@ namespace {
 ErrorMessageWindow::ErrorMessageWindow() : LayoutActor("エラーメッセージ表示", false), mMessageId(nullptr), mTexture(nullptr) {
 }
 
-void ErrorMessageWindow::init(const TableIter& rIter) {
+void ErrorMessageWindow::init(const TableIter& /*rIter*/) {
     initLayoutManagerNoConvertFilename("ErrorMessageWindow", 1);
     initNerve(GET_NERVE_ANON(ErrorMessageWindowHide));
     kill();

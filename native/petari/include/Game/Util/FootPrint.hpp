@@ -29,8 +29,8 @@ public:
     FootPrint(const char*, s32);
     FootPrint(const char*, s32, s32);
 
-    virtual void movement();
-    virtual void draw() const;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void setTexture(ResTIMG*);
     bool addPrint(const Vec3f& rPos, const Vec3f& rUp, const Vec3f& rNormal, bool isFlipX);

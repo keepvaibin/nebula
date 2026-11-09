@@ -8,9 +8,9 @@ class Fish : public LiveActor {
 public:
     Fish(const char*, FishGroup*, int, bool);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWander();
     void exeApproach();
@@ -35,10 +35,10 @@ class FishGroup : public LiveActor {
 public:
     FishGroup(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     Vec3f mUp;
     s32 mFishNum;

@@ -7,7 +7,7 @@
 
 BigBubbleMoveLimitter::BigBubbleMoveLimitter(const char* pName, s32 limitterType)
     : NameObj(pName), mID(-1), mPosition(0, 0, 0), mAxis(0, 1, 0), mSide(1, 0, 0), mUp(0, 1, 0), mFront(0, 0, 1),
-      mLimitMarginType(LimitterMarginType_Center), mCylinderRadius(500.0f), mCylinderHeight(500.0f), mPlaneWidth(500.0f), mPlaneHeight(500.0f),
+      mCylinderRadius(500.0f), mCylinderHeight(500.0f), mPlaneWidth(500.0f), mPlaneHeight(500.0f), mLimitMarginType(LimitterMarginType_Center),
       mType(limitterType) {
 }
 

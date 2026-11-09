@@ -530,7 +530,7 @@ bool MechanicKoopaMini::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     return false;
 }
 
-bool MechanicKoopaMini::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MechanicKoopaMini::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg)) {
         kill();
         MR::appearCoinPop(this, mPosition, 1);
@@ -540,7 +540,7 @@ bool MechanicKoopaMini::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
     return false;
 }
 
-bool MechanicKoopaMini::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MechanicKoopaMini::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInhaleBlackHole(msg)) {
         kill();
         return true;

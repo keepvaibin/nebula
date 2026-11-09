@@ -48,7 +48,7 @@ private:
     s8 mCalcAnimType;
     s8 mDrawType;
     s8 mDrawBufferType;
-    s16 mDrawBufferIndex;
+    s32 mDrawBufferIndex;
 };
 
 class NameObjExecuteHolder : public NameObj {

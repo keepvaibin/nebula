@@ -8,9 +8,9 @@ class SeaGull : public LiveActor {
 public:
     SeaGull(SeaGullGroup* pGroup);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeHoverFront();
     void exeHoverLeft();
@@ -37,7 +37,7 @@ class SeaGullGroup : public LiveActor {
 public:
     SeaGullGroup(const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     Vec3f* updatePosInfo(s32* pPointIndex, bool isReverse) const;
 

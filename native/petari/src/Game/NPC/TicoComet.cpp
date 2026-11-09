@@ -54,7 +54,7 @@ TicoEat::TicoEat(const char* pName) : Tico(pName) {
     mStarPieceLeft = 0;
 }
 
-void TicoEat::init(const TableIter& rIter) {
+void TicoEat::init(const TableIter& /*rIter*/) {
     mScaleController = new AnimScaleController(&::sParam);
     mReactionNerve = GET_NERVE(TicoEat, TicoEatNrvReaction);
     mLightJointMtx = MR::getJointMtx(this, "Center");
@@ -229,7 +229,7 @@ void TicoComet::init(const TableIter& rIter) {
     mLightColor.set(0xC8, 0, 0xFF, 0xFF);
 }
 
-bool TicoComet::branchFunc(u32 val) {
+bool TicoComet::branchFunc(u32 /*val*/) {
     return MR::getStarPieceNum() >= mStarPieceNeed;
 }
 

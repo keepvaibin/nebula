@@ -12,11 +12,11 @@ class TripodBossLeg : public LiveActor {
 public:
     TripodBossLeg(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void control();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initShadow(const char* pName);
     void setBody(TripodBoss* pBoss);

@@ -22,12 +22,12 @@ public:
     /// @brief Creates a new `GalaxyMap`.
     GalaxyMap();
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void kill();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void kill() override;
 
     void movementForCapture();
     void calcAnimForCapture(const Ui::DrawInfo&);

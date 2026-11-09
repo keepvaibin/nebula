@@ -18,11 +18,11 @@ public:
 
     MarioLauncher(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeReady();
@@ -66,8 +66,8 @@ public:
     MarioLauncherLayout() : LayoutActor("移動用砲台用レイアウト", true), mLayout() {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void kill();
+    virtual void init(const TableIter& rIter) override;
+    virtual void kill() override;
 
     void appearAt(const Vec2f& pos) {
         mLayout->appear();
@@ -90,9 +90,9 @@ public:
         mReboundDir.zero();
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual MtxPtr getBaseMtx() const;
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual MtxPtr getBaseMtx() const override;
+    virtual void calcAndSetBaseMtx() override;
     virtual void calcBaseMtx();
 
     Vec3f& getPosition() {

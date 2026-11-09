@@ -14,7 +14,7 @@ public:
     const RumblePattern* mPattern;
     bool mIsLoop;
     u32 mSerial;
-    s16 mStep;
+    s32 mStep;
     u8 mStrength;
     const void* mOwner;
 };

@@ -33,7 +33,7 @@ GalaxyNamePlate::GalaxyNamePlate(const char* pGalaxyName, bool param2)
     MR::startAnim(this, "OneLine", 2);
 }
 
-void GalaxyNamePlate::init(const TableIter& rIter) {
+void GalaxyNamePlate::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(GalaxyNamePlate, GalaxyNamePlateNrvAppear));
 }
 

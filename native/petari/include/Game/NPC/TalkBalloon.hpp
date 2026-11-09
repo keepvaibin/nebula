@@ -11,8 +11,8 @@ class TalkBalloon : public LayoutActor {
 public:
     TalkBalloon(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
 
     virtual void open(TalkMessageCtrl*);
     virtual void close();
@@ -36,10 +36,10 @@ class TalkBalloonShort : public TalkBalloon {
 public:
     TalkBalloonShort(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void open(TalkMessageCtrl*);
-    virtual void close();
-    virtual void updateBalloon();
+    virtual void init(const TableIter&) override;
+    virtual void open(TalkMessageCtrl*) override;
+    virtual void close() override;
+    virtual void updateBalloon() override;
 
     void initInterval();
     void exeTalk();
@@ -53,12 +53,12 @@ class TalkBalloonEvent : public TalkBalloon {
 public:
     TalkBalloonEvent(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void open(TalkMessageCtrl*);
-    virtual void close();
-    virtual bool turnPage();
-    virtual void skipMessage();
-    virtual bool isTextAppearedAll();
+    virtual void init(const TableIter&) override;
+    virtual void open(TalkMessageCtrl*) override;
+    virtual void close() override;
+    virtual bool turnPage() override;
+    virtual void skipMessage() override;
+    virtual bool isTextAppearedAll() override;
 
     void initInterval();
     void exeTalk();
@@ -75,21 +75,21 @@ class TalkBalloonSign : public TalkBalloonEvent {
 public:
     TalkBalloonSign(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 };
 
 class TalkBalloonInfo : public TalkBalloon {
 public:
     TalkBalloonInfo(const char*);
 
-    virtual void open(TalkMessageCtrl*);
-    virtual void close();
-    virtual bool isTextAppearedAll() {
+    virtual void open(TalkMessageCtrl*) override;
+    virtual void close() override;
+    virtual bool isTextAppearedAll() override {
         return true;
     }
-    virtual void updateBalloon() {
+    virtual void updateBalloon() override {
     }
-    virtual void updateTalking() {
+    virtual void updateTalking() override {
     }
 };
 
@@ -97,8 +97,8 @@ class TalkBalloonIcon : public TalkBalloonShort {
 public:
     TalkBalloonIcon(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void open(TalkMessageCtrl*);
+    virtual void init(const TableIter&) override;
+    virtual void open(TalkMessageCtrl*) override;
 };
 
 class TalkBalloonHolder {

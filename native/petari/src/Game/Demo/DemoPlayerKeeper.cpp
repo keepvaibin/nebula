@@ -20,7 +20,7 @@ DemoPlayerKeeper::DemoPlayerKeeper(const DemoExecutor* pExecutor) : mExecutor(pE
     }
 }
 
-DemoPlayerInfo::DemoPlayerInfo() : mPosName(nullptr), mPartName(nullptr), mBckName(nullptr) {
+DemoPlayerInfo::DemoPlayerInfo() : mPartName(nullptr), mPosName(nullptr), mBckName(nullptr) {
 }
 
 void DemoPlayerKeeper::update() {

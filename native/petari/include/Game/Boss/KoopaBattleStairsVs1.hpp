@@ -11,7 +11,7 @@ public:
 
     KoopaBattleStairsVs1(Koopa* pKoopa);
 
-    virtual s32 registerStair(KoopaBattleMapStair* pStair);
+    virtual s32 registerStair(KoopaBattleMapStair* pStair) override;
 
     void exeWaitDemo();
     void exeDemo();

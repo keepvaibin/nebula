@@ -9,8 +9,8 @@ class GravityFollower : public BaseMatrixFollower {
 public:
     GravityFollower(GlobalGravityObj* pGravityObj, const TableIter& rIter);
 
-    virtual void setGravityFollowHost(const NameObj* pHost);
-    virtual void update();
+    virtual void setGravityFollowHost(const NameObj* pHost) override;
+    virtual void update() override;
 
     PlanetGravity* mGravity;
 };

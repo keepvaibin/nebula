@@ -16,7 +16,7 @@ namespace {
 
         void operator()(const TableIter& rIter);
 
-        virtual void execute(const char* pGalaxyName) {
+        virtual void execute(const char* /*pGalaxyName*/) {
         }
 
         MR::FormattedName mGalaxyText;  // "Galaxy" and the dome's number, whole
@@ -130,7 +130,7 @@ bool GalaxyMapDomeIcon::isComplete() const {
     return checker.mIsPass;
 }
 
-void GalaxyMapDomeIcon::init(const TableIter& rIter) {
+void GalaxyMapDomeIcon::init(const TableIter& /*rIter*/) {
     initLayoutManager("MapDomeIcon", 3);
 
     mNamePlate = new GalaxyNamePlate(nullptr, false);

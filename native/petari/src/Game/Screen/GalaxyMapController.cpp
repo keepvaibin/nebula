@@ -68,7 +68,7 @@ GalaxyMapController::GalaxyMapController()
       mWipeFrame(::sMapFadeinoutFrame) {
 }
 
-void GalaxyMapController::init(const TableIter& rIter) {
+void GalaxyMapController::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayoutOnPause(this);
 
     mMap = new GalaxyMap();

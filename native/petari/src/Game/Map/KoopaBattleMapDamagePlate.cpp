@@ -97,7 +97,7 @@ void KoopaBattleMapDamagePlate::attackSensor(HitSensor* pSender, HitSensor* pRec
     }
 }
 
-bool KoopaBattleMapDamagePlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool KoopaBattleMapDamagePlate::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_KOOPA_PLATE_DAMAGE) {
         return true;
     }

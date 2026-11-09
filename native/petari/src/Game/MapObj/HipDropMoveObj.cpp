@@ -37,7 +37,7 @@ void HipDropMoveObj::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-bool HipDropMoveObj::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropMoveObj::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgPlayerHipDropFloor(msg)) {
         if (!isNerve(GET_NERVE(HipDropMoveObj, HostTypeWait))) {
             return false;

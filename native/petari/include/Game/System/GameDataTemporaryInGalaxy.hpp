@@ -27,7 +27,7 @@ public:
     PlacementId* mPlayerRestartIdInfo;
     bool mIsRetry;
     u32 mClearState;
-    s16 mPowerStarId;
+    s32 mPowerStarId;
     const char* mStageName;  // MR::internName
     int mStarPieceNum;
     int mLast1upStarPieceNum;

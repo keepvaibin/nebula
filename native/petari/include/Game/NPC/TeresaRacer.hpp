@@ -10,16 +10,16 @@ class TeresaRacer : public NPCActor, AbstractRacer {
 public:
     TeresaRacer(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void initRacer();
-    virtual void prepRacer(const RaceManager* pRaceManager);
-    virtual void startRacer();
-    virtual bool updateRacer(const RaceManager* pRaceManager);
-    virtual bool goalRacer();
-    virtual void loseRacer();
-    virtual void resetRacer(const RaceManager* pRaceManager);
-    virtual void exitRacer();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void initRacer() override;
+    virtual void prepRacer(const RaceManager* pRaceManager) override;
+    virtual void startRacer() override;
+    virtual bool updateRacer(const RaceManager* pRaceManager) override;
+    virtual bool goalRacer() override;
+    virtual void loseRacer() override;
+    virtual void resetRacer(const RaceManager* pRaceManager) override;
+    virtual void exitRacer() override;
 
     bool branchFunc(u32);
     bool animeFunc(u32);

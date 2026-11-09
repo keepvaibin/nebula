@@ -39,7 +39,7 @@ Manual2P::Manual2P(const char* pName)
     : LayoutActor(pName, true), mPageIndex(), mPageNum(), mLeftPaneCtrl(), mRightPaneCtrl(), mCanScrollLeft(true), mCanScrollRight(true), mBackButton() {
 }
 
-void Manual2P::init(const TableIter& rIter) {
+void Manual2P::init(const TableIter& /*rIter*/) {
     initLayoutManager("P2Manual", 2);
     MR::invalidateParentAnim(this);
     MR::createAndAddPaneCtrl(this, "LeftButton", 2);

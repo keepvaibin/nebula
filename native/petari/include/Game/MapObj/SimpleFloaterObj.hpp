@@ -7,7 +7,7 @@ class SimpleFloaterObj : public LiveActor {
 public:
     SimpleFloaterObj(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     inline bool isVelocityClose() {

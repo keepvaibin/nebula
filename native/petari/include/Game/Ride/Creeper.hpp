@@ -42,10 +42,10 @@ class Creeper : public LiveActor {
 public:
     Creeper(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void draw() const;
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void draw() const override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeFree();
     void exeFreeInvalid();

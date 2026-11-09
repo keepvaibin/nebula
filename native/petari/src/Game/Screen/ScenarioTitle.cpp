@@ -13,7 +13,7 @@ namespace {
 ScenarioTitle::ScenarioTitle() : LayoutActor("シナリオ名表示", true) {
 }
 
-void ScenarioTitle::init(const TableIter& rInfo) {
+void ScenarioTitle::init(const TableIter& /*rInfo*/) {
     initNerve(GET_NERVE_ANON(ScenarioTitleAppear));
     MR::connectToSceneLayout(this);
     initLayoutManager("StageTitle", 1);

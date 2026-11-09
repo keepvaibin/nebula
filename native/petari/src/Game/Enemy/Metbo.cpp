@@ -433,7 +433,7 @@ void Metbo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Metbo::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool Metbo::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNrvDown()) {
         return false;
     }
@@ -532,7 +532,7 @@ bool Metbo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return true;
 }
 
-bool Metbo::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Metbo::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInhaleBlackHole(msg)) {
         kill();
         return true;

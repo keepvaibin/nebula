@@ -627,7 +627,7 @@ void BegomanSpring::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     setNerve(GET_NERVE(BegomanSpring, HostTypeNrvHitReaction));
 }
 
-bool BegomanSpring::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanSpring::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 
@@ -750,7 +750,7 @@ bool BegomanSpring::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
     return true;
 }
 
-bool BegomanSpring::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BegomanSpring::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgHitmarkEmit(msg);
 }
 

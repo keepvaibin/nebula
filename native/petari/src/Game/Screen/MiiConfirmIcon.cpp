@@ -11,7 +11,7 @@ namespace {
 MiiConfirmIcon::MiiConfirmIcon(const char* pName) : LayoutActor(pName, true) {
 }
 
-void MiiConfirmIcon::init(const TableIter& rIter) {
+void MiiConfirmIcon::init(const TableIter& /*rIter*/) {
     initLayoutManager("MiiConfirmIcon", 1);
     initNerve(GET_NERVE_ANON(MiiConfirmIconNrvAppear));
 }

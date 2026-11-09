@@ -92,7 +92,7 @@ void SideSpikeMoveStep::control() {
     MapObjActor::control();
 }
 
-bool SideSpikeMoveStep::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SideSpikeMoveStep::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_GROUP_MOVE_STOP) {
         if (!isNerve(GET_NERVE(SideSpikeMoveStep, SideSpikeMoveStepNrvWait))) {
             return false;

@@ -183,7 +183,7 @@ bool WoodBox::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-bool WoodBox::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WoodBox::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (mHitPoint != 0) {
         doHit(pSender, pReceiver);
         return true;
@@ -257,7 +257,7 @@ void WoodBox::exeHit() {
 void WoodBox::exeKilled() {
 }
 
-void WoodBox::doHit(HitSensor* pSender, HitSensor* pReceiver) {
+void WoodBox::doHit(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mHitPoint != 0) {
         if (mHitPoint != 0) {
             mHitPoint--;

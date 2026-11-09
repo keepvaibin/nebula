@@ -212,7 +212,7 @@ namespace MR {
             setupMultiEmitter(pKeeper, pActor->mModelManager, pInfo);
         }
 
-        void addAutoEffect(PaneEffectKeeper* pKeeper, const LayoutActor* pActor, const AutoEffectInfo* pInfo) {
+        void addAutoEffect(PaneEffectKeeper* pKeeper, const LayoutActor* /*pActor*/, const AutoEffectInfo* pInfo) {
             pKeeper->add(pInfo->mJointName, pInfo->mEffectName, pInfo->mUniqueName);
             ::setupMultiEmitter(pKeeper->getEmitter(pInfo->mUniqueName), pInfo);
         }

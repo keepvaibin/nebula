@@ -6,15 +6,15 @@ class LavaHomeSeesawRotator : public MapPartsRotatorBase {
 public:
     LavaHomeSeesawRotator(LiveActor*, const char*, f32);
 
-    virtual void init(const TableIter&);
-    virtual bool isWorking() const {
+    virtual void init(const TableIter&) override;
+    virtual bool isWorking() const override {
         return true;
     }
 
-    virtual void start();
-    virtual void end();
-    virtual bool receiveMsg(u32);
-    virtual const Mtx34f& getRotateMtx() const {
+    virtual void start() override;
+    virtual void end() override;
+    virtual bool receiveMsg(u32) override;
+    virtual const Mtx34f& getRotateMtx() const override {
         return mRotateMtx;
     }
 

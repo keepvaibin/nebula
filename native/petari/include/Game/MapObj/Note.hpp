@@ -42,8 +42,8 @@ class NoteGroup : public LiveActorGroup {
 public:
     NoteGroup();
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
     f32 mRotation;
 };

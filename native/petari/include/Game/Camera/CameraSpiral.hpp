@@ -10,9 +10,9 @@ public:
     };
     CameraSpiral(const char* pName = "螺旋カメラ（デモ用）");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(s32 easeType, s32 endTime, s32 startTime, f32 offYStart, f32 offYEnd, f32 distStart, f32 distEnd, f32 angleStart, f32 angleEnd) {
         mEndTime = endTime;

@@ -7,9 +7,9 @@ class CameraMedianPlanet : public Camera {
 public:
     CameraMedianPlanet(const char* pName = "中点注目プラネットカメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void getPrevFront(Vec3f*);
     void constrainDipAngle(Vec3f*);

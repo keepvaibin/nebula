@@ -40,7 +40,7 @@ MiiSelect::MiiSelect(const char* pName)
     validateAllSpecialMii();
 }
 
-void MiiSelect::init(const TableIter& rIter) {
+void MiiSelect::init(const TableIter& /*rIter*/) {
     initLayoutManager("MiiSelect", 1);
     MR::invalidateParentAnim(this);
     createButtons();
@@ -444,7 +444,7 @@ void MiiSelect::onSelectDummy() {
 }
 
 namespace MiiSelectSub {
-    Page::Page(MiiSelect* pHost) : mHost(pHost), mIsGroupA(true) {
+    Page::Page(MiiSelect* pHost) : mIsGroupA(true), mHost(pHost) {
         for (u32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
             mIconArray[i] = new MiiSelectIcon(-1, -1, -1, "Miiセレクト用アイコン");
         }

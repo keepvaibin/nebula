@@ -39,7 +39,7 @@ public:
     CameraParamChunkID_Tmp(const CameraParamChunkID_Tmp&) = delete;
     CameraParamChunkID_Tmp& operator=(const CameraParamChunkID_Tmp&) = delete;
 
-    virtual char* getBuffer(u32 size) {
+    virtual char* getBuffer(u32 size) override {
         if (size <= sizeof(mBuffer)) {
             return &mBuffer[0];
         }

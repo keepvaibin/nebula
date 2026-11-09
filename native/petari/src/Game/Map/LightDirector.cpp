@@ -13,7 +13,7 @@ LightDirector::LightDirector()
     GameLightSignal::sceneStart();
 }
 
-void LightDirector::init(const TableIter& rIter) {
+void LightDirector::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
     LightFunction::loadAllLightWhite();
 

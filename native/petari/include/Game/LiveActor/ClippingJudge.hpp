@@ -11,7 +11,7 @@ public:
 
     ClippingJudge(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
     bool isJudgedToClipFrustum(const Vec3f& rPos, f32 radius) const;
     bool isJudgedToClipFrustum(const Vec3f& rPos, f32 radius, s32 farClipLevel) const;

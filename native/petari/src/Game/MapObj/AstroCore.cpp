@@ -62,7 +62,7 @@ void AstroCore::exeGrow() {
     }
 }
 
-bool AstroCore::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroCore::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

@@ -484,7 +484,7 @@ void TrampleStar::draw() const {
     }
 }
 
-bool TrampleStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TrampleStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_AUTORUSH_BEGIN) {
         mCaptureFrames = 10;
         mDeformRate = MR::getPlayerVelocity()->length();

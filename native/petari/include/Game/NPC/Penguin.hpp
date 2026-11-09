@@ -34,10 +34,10 @@ public:
 
     Penguin(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeReaction();
     void exeWait();
@@ -56,13 +56,13 @@ public:
         : PartsModel(pActor, pName, pModelName, mtx, drawBufferType, deferMaterials) {
     }
 
-    virtual void appear() {
+    virtual void appear() override {
         LiveActor::appear();
         MR::startBtk(this, "KouraShine");
         MR::emitEffect(this, "HandyGlow");
     }
 
-    virtual void init(const TableIter& rIter) {
+    virtual void init(const TableIter& /*rIter*/) override {
         initEffectKeeper(8, "koura");
         initSound(8, false);
         MR::invalidateClipping(this);

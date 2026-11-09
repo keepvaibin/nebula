@@ -410,7 +410,7 @@ void Unizo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Unizo::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Unizo::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceReflect(msg)) {
         mAnimScaleController->startHitReaction();
         return true;
@@ -437,7 +437,7 @@ bool Unizo::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
 }
 
 // Another Unizo pushes it away by the overlap; any other enemy attack breaks it.
-bool Unizo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Unizo::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorType(pSender, ATYPE_UNIZO)) {
         Vec3f direction = pReceiver->mPosition - pSender->mPosition;
         f32 distance = direction.length();
@@ -453,7 +453,7 @@ bool Unizo::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRecei
     return true;
 }
 
-bool Unizo::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Unizo::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgSpinStormRange(msg)) {
         doSpin();
         return true;

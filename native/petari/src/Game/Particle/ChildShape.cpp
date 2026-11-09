@@ -20,12 +20,12 @@ void ParticleRegistChildPrmEnv(EmitterWork* work) {
     ParticleMaterial::prmEnv(prm, env);
 }
 
-void ParticleCalcChildAlphaOut(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcChildAlphaOut(EmitterWork* /*work*/, ParticleCore* ptcl) {
     f32 anm = (1.0f - ptcl->mTime) * 255.0f;
     ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(anm);
 }
 
-void ParticleCalcChildScaleOut(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcChildScaleOut(EmitterWork* /*work*/, ParticleCore* ptcl) {
     ptcl->mParticleScaleX = ptcl->mScaleOut * (1.0f - ptcl->mTime);
     ptcl->mParticleScaleY = ptcl->mAlphaWaveRandom * (1.0f - ptcl->mTime);
 }

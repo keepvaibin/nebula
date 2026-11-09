@@ -33,7 +33,7 @@ void WaterfallCaveCover::init(const TableIter& rIter) {
     initialize(rIter, info);
 }
 
-bool WaterfallCaveCover::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool WaterfallCaveCover::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgJetTurtleAttack(msg) && isNerve(GET_NERVE(WaterfallCaveCover, HostTypeWait))) {
         setNerve(GET_NERVE(WaterfallCaveCover, HostTypeBreak));
         return true;

@@ -10,13 +10,13 @@ class MogucchiHillPiece : public LiveActor {
 public:
     MogucchiHillPiece(const char* pName = "モグッチ塚ピース");
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initWithModelName(const char* pModelName, const char* pJointName, const char* pAutoEffectName, bool hasLightCtrl);
     void crumble();
@@ -42,13 +42,13 @@ class MogucchiHill : public LiveActor {
 public:
     MogucchiHill(LiveActor* pHost, s32 pieceCount, const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual bool notifyAppearAttackToPlayer(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool notifyAppearAttackToPlayer(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool notifyWaitAttackToPlayer(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool notifyWaitAttackToPlayer(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 

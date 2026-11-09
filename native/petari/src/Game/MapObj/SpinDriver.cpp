@@ -224,7 +224,7 @@ void SpinDriver::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-bool SpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     switch (msg) {
     case ACTMES_IS_RUSH_TAKEOVER:
         mCoolDown = ::sCoolDownFrame;

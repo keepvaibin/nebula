@@ -69,10 +69,10 @@ f32 ShadowVolumeDrawer::calcBaseDropLength(const ShadowController* pController) 
     return length;
 }
 
-void ShadowVolumeDrawer::loadModelDrawMtx(TypedDraw& rDraw) const {
+void ShadowVolumeDrawer::loadModelDrawMtx(TypedDraw& /*rDraw*/) const {
 }
 
-void ShadowVolumeDrawer::drawShape(TypedDraw& rDraw) const {
+void ShadowVolumeDrawer::drawShape(TypedDraw& /*rDraw*/) const {
 }
 
 bool ShadowVolumeDrawer::isDraw() const {

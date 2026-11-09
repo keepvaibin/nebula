@@ -12,7 +12,7 @@ namespace {
 MissLayout::MissLayout() : LayoutActor("ミス!", true) {
 }
 
-void MissLayout::init(const TableIter& rIter) {
+void MissLayout::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("TooBad", 1);
     initEffectKeeper(0, nullptr, nullptr);

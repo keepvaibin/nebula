@@ -39,7 +39,7 @@ public:
     TextBoxRecursiveSetMessage(const char16_t* pMessage) : mMessage(pMessage) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         LayoutCoreUtil::setTextBoxMessage(pTextBox, mMessage);
     }
 
@@ -53,7 +53,7 @@ public:
     TextBoxRecursiveSetArgNumber(s32 arg, s32 argIndex) : mArg(arg), mArgIndex(argIndex) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         static_cast< CustomTagProcessor* >(pTextBox->mpTagProcessor)->setArgNumber(mArg, mArgIndex);
     }
 
@@ -68,7 +68,7 @@ public:
     TextBoxRecursiveSetArgString(const char16_t* pArg, s32 argIndex) : mArg(pArg), mArgIndex(argIndex) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         static_cast< CustomTagProcessor* >(pTextBox->mpTagProcessor)->setArgString(mArg, mArgIndex);
     }
 
@@ -83,7 +83,7 @@ public:
     TextBoxRecursiveSetVerticalPosition(u8 position) : mPosition(position) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         pTextBox->SetTextPositionV(mPosition);
     }
 
@@ -97,7 +97,7 @@ public:
     TextBoxRecursiveSetHorizontalPosition(u8 position) : mPosition(position) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         pTextBox->SetTextPositionH(mPosition);
     }
 
@@ -111,7 +111,7 @@ public:
     TextBoxRecursiveSetFont(Ui::Font* pFont) : mFont(pFont) {
     }
 
-    virtual void execute(Ui::TextBox* pTextBox) const {
+    virtual void execute(Ui::TextBox* pTextBox) const override {
         Ui::Size size = pTextBox->mFontSize;
         pTextBox->SetFont(mFont);
         pTextBox->SetFontSize(size);

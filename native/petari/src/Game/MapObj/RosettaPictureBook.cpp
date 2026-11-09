@@ -63,7 +63,7 @@ void RosettaPictureBook::control() {
     mIsValidOpenIconAButton = false;
 }
 
-void RosettaPictureBook::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void RosettaPictureBook::attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isOnGroundPlayer()) {
         mIsValidOpenIconAButton = true;
     }

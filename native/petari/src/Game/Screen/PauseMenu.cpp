@@ -44,7 +44,7 @@ PauseMenu::PauseMenu()
     mSettingsButton = nullptr;
 }
 
-void PauseMenu::init(const TableIter& rIter) {
+void PauseMenu::init(const TableIter& /*rIter*/) {
     initLayoutManager("PauseMenu", 1);
     MR::createAndAddPaneCtrl(this, "BG", 1);
     MR::createAndAddPaneCtrl(this, "PicStagebase", 1);

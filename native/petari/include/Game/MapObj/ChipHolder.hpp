@@ -12,7 +12,7 @@ class ChipHolder : public NameObj {
 public:
     ChipHolder(const char* pName, s32 chipType);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void registerChipGroup(ChipGroup*);
     ChipGroup* findChipGroup(s32) const;

@@ -18,7 +18,7 @@ public:
 
     BigBubbleMoveLimitter(const char*, s32);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     bool limitPosition(Vec3f*, f32) const;
     bool limitVelocity(Vec3f*, const Vec3f&, f32) const;

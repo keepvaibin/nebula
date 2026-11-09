@@ -8,7 +8,7 @@ public:
     BloomEffectSimple();
 
     /// @brief Draws the `BloomEffectSimple` to the screen.
-    virtual void draw() const;
+    virtual void draw() const override;
 
     s32 mMaskFilter;
     u8 mThreshold;

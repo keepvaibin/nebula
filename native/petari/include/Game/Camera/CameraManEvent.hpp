@@ -26,15 +26,15 @@ public:
 
     CameraManEvent(CameraHolder*, CameraParamChunkHolder*, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
-    virtual void calc();
-    virtual void notifyActivate();
-    virtual void notifyDeactivate();
-    virtual bool isInterpolationOff() const;
-    virtual bool isCollisionOff() const;
-    virtual bool isZeroFrameMoveOff() const;
-    virtual bool isCorrectingErpPositionOff() const;
+    virtual void calc() override;
+    virtual void notifyActivate() override;
+    virtual void notifyDeactivate() override;
+    virtual bool isInterpolationOff() const override;
+    virtual bool isCollisionOff() const override;
+    virtual bool isZeroFrameMoveOff() const override;
+    virtual bool isCorrectingErpPositionOff() const override;
 
     void start(s32, const char*, const CameraTargetArg&, s32);
     void end(s32, const char*, s32);

@@ -9,13 +9,13 @@ class MapPartsRailMover : public MapPartsFunction {
 public:
     MapPartsRailMover(LiveActor*);
 
-    virtual ~MapPartsRailMover();
-    virtual void init(const TableIter&);
-    virtual void movement();
-    virtual bool isWorking() const;
-    virtual void start();
-    virtual void end();
-    virtual bool receiveMsg(u32);
+    virtual ~MapPartsRailMover() override;
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
+    virtual bool isWorking() const override;
+    virtual void start() override;
+    virtual void end() override;
+    virtual bool receiveMsg(u32) override;
 
     void moveToInitPos();
     void startWithSignalMotion();

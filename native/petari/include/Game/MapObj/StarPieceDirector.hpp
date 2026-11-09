@@ -32,7 +32,7 @@ class StarPieceDirector : public LiveActorGroup {
 public:
     StarPieceDirector(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
     void declare(const NameObj*, s32);
     void declareReceiveNum(const NameObj*, s32);
@@ -72,9 +72,9 @@ class StarPieceShooter : public LiveActor {
 public:
     StarPieceShooter(s32, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeLockOn();

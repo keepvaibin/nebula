@@ -90,7 +90,7 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     MR::createCenterScreenBlur();
 }
 
-void CameraDirector::init(const TableIter& rIter) {
+void CameraDirector::init(const TableIter& /*rIter*/) {
 }
 
 void CameraDirector::movement() {
@@ -536,7 +536,7 @@ void CameraDirector::endTalkCamera(bool resetView, s32 frame) {
     endEvent(0, ::sTalkCameraName, resetView, frame);
 }
 
-void CameraDirector::startSubjectiveCamera(s32 camType) {
+void CameraDirector::startSubjectiveCamera(s32 /*camType*/) {
     mIsStartCameraActive = false;
     mCameraManGame->endStartPosCamera();
     mIsSubjectiveCamera = true;

@@ -6,14 +6,14 @@ class CameraTower : public Camera {
 public:
     CameraTower(const char* pName = "塔カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isEnableToRoundLeft() const;
-    virtual bool isEnableToRoundRight() const;
-    virtual bool isEnableToReset() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isEnableToRoundLeft() const override;
+    virtual bool isEnableToRoundRight() const override;
+    virtual bool isEnableToReset() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
     virtual void arrangeRound();
 
     void setParam(const Vec3f& wPoint, const Vec3f& axis, f32 dist, const Vec2f& angle) {

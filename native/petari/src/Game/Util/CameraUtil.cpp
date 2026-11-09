@@ -634,7 +634,7 @@ namespace MR {
         rCamTarget.setTarget();
     }
 
-    void changeEventCameraTarget(const ActorCameraInfo* pInfo, const char* pEvetName, const CameraTargetArg& rCamTarget) {
+    void changeEventCameraTarget(const ActorCameraInfo* /*pInfo*/, const char* /*pEvetName*/, const CameraTargetArg& rCamTarget) {
         rCamTarget.setTarget();
     }
 

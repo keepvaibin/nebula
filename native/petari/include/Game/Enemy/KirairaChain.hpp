@@ -11,9 +11,9 @@ class KirairaChain : public LiveActor {
 public:
     KirairaChain(const LiveActor*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void draw() const;
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void draw() const override;
+    virtual void control() override;
 
     void initPoints();
     void updatePoints();

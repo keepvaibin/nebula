@@ -15,8 +15,8 @@ public:
 
     LavaStrangeRock(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void initModelAndClipping(const TableIter&);
     void initEffect();

@@ -164,7 +164,7 @@ void StarPointerOnOffController::setStateToFileSelect(void* pRequester) {
     incModeCounter(pRequester, StarPointerMode_FileSelect);
 }
 
-void StarPointerOnOffController::setStateToBase(void* pRequester) {
+void StarPointerOnOffController::setStateToBase(void* /*pRequester*/) {
     clearInfo();
 }
 
@@ -172,7 +172,7 @@ void StarPointerOnOffController::popState(void* pRequester) {
     decModeCounter(pRequester);
 }
 
-void StarPointerOnOffController::requestMode(void* pRequester, StarPointerModeEnum mode) {
+void StarPointerOnOffController::requestMode(void* /*pRequester*/, StarPointerModeEnum mode) {
     mRequested[mode] = true;
 }
 
@@ -215,20 +215,35 @@ void StarPointerOnOffController::incModeCounter(void* pRequester, s32 mode) {
         return;
     }
 
+    RequestInfo* pFree = nullptr;
     for (RequestInfo** request = mRequests.begin(); request < mRequests.end(); request++) {
         if ((*request)->mRequester == nullptr) {
-            if (mode == StarPointerMode_DemoMarioDeath && mModeCounter[mode] != 0) {
-                return;
-            }
-
-            (*request)->mRequester = pRequester;
-            (*request)->mMode = mode;
-
-            mModeCounter[mode]++;
-            updateMode();
-            return;
+            pFree = *request;
+            break;
         }
     }
+
+    if (pFree == nullptr) {
+        // Every slot is taken: the list grows, so a request is never dropped.
+        const s32 used = mRequests.size();
+        mRequests.grow();
+        for (s32 idx = used; idx < mRequests.size(); idx++) {
+            mRequests[idx] = new RequestInfo();
+            mRequests[idx]->mRequester = nullptr;
+            mRequests[idx]->mMode = -1;
+        }
+        pFree = mRequests[used];
+    }
+
+    if (mode == StarPointerMode_DemoMarioDeath && mModeCounter[mode] != 0) {
+        return;
+    }
+
+    pFree->mRequester = pRequester;
+    pFree->mMode = mode;
+
+    mModeCounter[mode]++;
+    updateMode();
 }
 
 void StarPointerOnOffController::decModeCounter(void* pRequester) {

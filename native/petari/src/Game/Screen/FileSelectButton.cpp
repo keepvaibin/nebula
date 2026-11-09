@@ -20,7 +20,7 @@ FileSelectButton::FileSelectButton(const char* pName) : LayoutActor(pName, true)
     }
 }
 
-void FileSelectButton::init(const TableIter& rIter) {
+void FileSelectButton::init(const TableIter& /*rIter*/) {
     initLayoutManager("FileSelect", 1);
     createPaneControl();
     createButtonController();

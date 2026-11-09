@@ -5,7 +5,7 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
 
-AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mResTable(pResTable), mAnmRes(), mFrameCtrl(), mAnmName(nullptr) {
+AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mAnmRes(), mResTable(pResTable), mFrameCtrl(), mAnmName(nullptr) {
 }
 
 void AnmPlayerBase::update() {

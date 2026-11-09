@@ -6,8 +6,8 @@ class TimeAppearObj : public MapObjActor {
 public:
     TimeAppearObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
 
     void exeHide();
     void exeEnd();

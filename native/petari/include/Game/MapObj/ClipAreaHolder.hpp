@@ -23,7 +23,7 @@ class ClipAreaCollisionFilter : public CollisionPartsFilterBase {
 public:
     ClipAreaCollisionFilter(const Vec3f* pClipCenter, f32 clipRadius);
 
-    virtual bool isInvalidParts(const CollisionParts*) const;
+    virtual bool isInvalidParts(const CollisionParts*) const override;
 
     const Vec3f* mClipCenter;
     f32 mClipRadius;

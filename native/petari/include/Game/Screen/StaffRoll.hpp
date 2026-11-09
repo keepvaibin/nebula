@@ -14,11 +14,11 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     StaffRollLine(const char* pName);
 
-    virtual ~StaffRollLine() {
+    virtual ~StaffRollLine() override {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
 
     void exeScroll();
 
@@ -36,10 +36,10 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     StaffRollPicture(const char* pName);
 
-    virtual ~StaffRollPicture() {
+    virtual ~StaffRollPicture() override {
     }
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void initReplaceTexture();
     void startPictureAction(s32, const char*, const char*);
@@ -56,15 +56,15 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     StaffRoll(const char* pName);
 
-    virtual ~StaffRoll() {
+    virtual ~StaffRoll() override {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void kill();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void kill() override;
 
     void startInfo();
     bool isPauseOrEnd() const;

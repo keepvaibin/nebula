@@ -154,7 +154,7 @@ void AirBubble::exeKillWait() {
     }
 }
 
-bool AirBubble::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool AirBubble::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isSensorPlayer(pSender)) {
         if (isNerve(GET_NERVE(AirBubble, AirBubbleNrvKillWait))) {
             MR::incPlayerOxygen(8);

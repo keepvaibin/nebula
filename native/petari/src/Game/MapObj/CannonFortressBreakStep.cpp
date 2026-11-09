@@ -69,7 +69,7 @@ void CannonFortressBreakStep::startFall() {
     setNerve(GET_NERVE(CannonFortressBreakStep, CannonFortressBreakStepNrvFallStart));
 }
 
-void CannonFortressBreakStep::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void CannonFortressBreakStep::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &CannonFortressBreakStep::startFall));
 }
 

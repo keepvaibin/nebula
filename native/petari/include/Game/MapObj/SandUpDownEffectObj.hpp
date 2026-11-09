@@ -9,7 +9,7 @@ class SandUpDownEffectObj : public LiveActor {
 public:
     SandUpDownEffectObj(const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void startMoveUp();
     void startMoveDown();

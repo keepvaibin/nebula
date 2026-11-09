@@ -8,10 +8,10 @@ class KoopaFireShort : public LiveActor {
 public:
     KoopaFireShort(const Koopa* pKoopa);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
     void emitNormal();
     void emitFast();

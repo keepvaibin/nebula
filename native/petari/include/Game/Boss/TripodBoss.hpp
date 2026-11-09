@@ -57,11 +57,11 @@ public:
 
     TripodBoss(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void initEventCamera(const TableIter&);
     void initLeg(const TableIter&);

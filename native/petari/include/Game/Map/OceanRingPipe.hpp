@@ -10,8 +10,8 @@ class OceanRingPipe : public LiveActor {
 public:
     OceanRingPipe(const OceanRing*, f32, f32);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
     void initPoints();
     f32 getAngle() {

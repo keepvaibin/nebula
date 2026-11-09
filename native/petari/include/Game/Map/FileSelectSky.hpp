@@ -9,12 +9,12 @@ class FileSelectSky : public LiveActor {
 public:
     FileSelectSky(const char* pName);
 
-    virtual ~FileSelectSky();
+    virtual ~FileSelectSky() override;
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAnim();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAnim() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
 

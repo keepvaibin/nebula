@@ -35,8 +35,8 @@ public:
 
     TalkDirector(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
     bool request(TalkMessageCtrl*, bool isForce);
     bool test(TalkMessageCtrl*, bool isForce, bool isDemo);

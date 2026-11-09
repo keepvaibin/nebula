@@ -12,9 +12,9 @@ class CameraTargetObj : public NameObj {
 public:
     CameraTargetObj(const char*);
 
-    virtual void init(const TableIter&) {};
+    virtual void init(const TableIter&) override {};
 
-    virtual void movement() = 0;
+    virtual void movement() override = 0;
 
     virtual const Vec3f& getPosition() const = 0;
     virtual const Vec3f& getUpVec() const = 0;
@@ -95,22 +95,22 @@ class CameraTargetActor : public CameraTargetObj {
 public:
     CameraTargetActor(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
-    virtual const Vec3f& getPosition() const;
-    virtual const Vec3f& getUpVec() const;
-    virtual const Vec3f& getFrontVec() const;
-    virtual const Vec3f& getSideVec() const;
-    virtual const Vec3f& getLastMove() const;
-    virtual const Vec3f& getGroundPos() const;
-    virtual const Vec3f& getGravityVector() const;
+    virtual const Vec3f& getPosition() const override;
+    virtual const Vec3f& getUpVec() const override;
+    virtual const Vec3f& getFrontVec() const override;
+    virtual const Vec3f& getSideVec() const override;
+    virtual const Vec3f& getLastMove() const override;
+    virtual const Vec3f& getGroundPos() const override;
+    virtual const Vec3f& getGravityVector() const override;
 
-    virtual f32 getRadius() const {
+    virtual f32 getRadius() const override {
         return 150.0f;
     }
 
-    virtual CubeCameraArea* getCubeCameraArea() const;
-    virtual Triangle* getGroundTriangle() const;
+    virtual CubeCameraArea* getCubeCameraArea() const override;
+    virtual Triangle* getGroundTriangle() const override;
 
     const LiveActor* mActor;
     Vec3f mUp;
@@ -123,30 +123,30 @@ class CameraTargetPlayer : public CameraTargetObj {
 public:
     CameraTargetPlayer(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
-    virtual const Vec3f& getPosition() const;
-    virtual const Vec3f& getUpVec() const;
-    virtual const Vec3f& getFrontVec() const;
-    virtual const Vec3f& getSideVec() const;
-    virtual const Vec3f& getLastMove() const;
-    virtual const Vec3f& getGroundPos() const;
-    virtual const Vec3f& getGravityVector() const;
+    virtual const Vec3f& getPosition() const override;
+    virtual const Vec3f& getUpVec() const override;
+    virtual const Vec3f& getFrontVec() const override;
+    virtual const Vec3f& getSideVec() const override;
+    virtual const Vec3f& getLastMove() const override;
+    virtual const Vec3f& getGroundPos() const override;
+    virtual const Vec3f& getGravityVector() const override;
 
-    virtual bool isTurning() const;
-    virtual bool isJumping() const;
-    virtual bool isLongDrop() const;
-    virtual bool isFastDrop() const;
-    virtual bool isFastRise() const;
-    virtual bool isWaterMode() const;
-    virtual bool isOnWaterSurface() const;
-    virtual bool isFooFighterMode() const;
-    virtual u32 getSpecialMode() const;
-    virtual bool isCameraStateOn(u32) const;
-    virtual CubeCameraArea* getCubeCameraArea() const;
-    virtual Triangle* getGroundTriangle() const;
-    virtual GravityInfo* getGravityInfo() const;
-    virtual Pos3f* getMapBaseMtx() const;
+    virtual bool isTurning() const override;
+    virtual bool isJumping() const override;
+    virtual bool isLongDrop() const override;
+    virtual bool isFastDrop() const override;
+    virtual bool isFastRise() const override;
+    virtual bool isWaterMode() const override;
+    virtual bool isOnWaterSurface() const override;
+    virtual bool isFooFighterMode() const override;
+    virtual u32 getSpecialMode() const override;
+    virtual bool isCameraStateOn(u32) const override;
+    virtual CubeCameraArea* getCubeCameraArea() const override;
+    virtual Triangle* getGroundTriangle() const override;
+    virtual GravityInfo* getGravityInfo() const override;
+    virtual Pos3f* getMapBaseMtx() const override;
 
     const MarioActor* mActor;
     Vec3f mSide;
@@ -156,7 +156,7 @@ public:
     Vec3f mGroundPos;
     CubeCameraArea* mCameraArea;
     Triangle* mGroundTriangle;
-    u16 mPlayerMovementTimer;
+    s32 mPlayerMovementTimer;
     bool mIsPlayerMoving;
 };
 
@@ -164,8 +164,8 @@ class CameraTargetDemoActor : public LiveActor {
 public:
     CameraTargetDemoActor(MtxPtr, const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter& rIter) override;
+    virtual MtxPtr getBaseMtx() const override {
         return (const MtxPtr)mMtx.mMtx;
     }
 

@@ -67,7 +67,7 @@ StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCo
     mPlacementMtx.identity();
 }
 
-void StageDataHolder::init(const TableIter& rIter) {
+void StageDataHolder::init(const TableIter& /*rIter*/) {
     if (!mZoneID) {
         initTableData();
     }

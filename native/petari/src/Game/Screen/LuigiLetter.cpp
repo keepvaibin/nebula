@@ -19,7 +19,7 @@ LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
     : LayoutActor("ルイージの手紙", true), mTexture(nullptr), mAButtonIcon(nullptr), mGalaxyName(pParam2), mIsForTalk(param1) {
 }
 
-void LuigiLetter::init(const TableIter& rIter) {
+void LuigiLetter::init(const TableIter& /*rIter*/) {
     MR::FormattedName archiveName;
     MR::FormattedName textureName;
 

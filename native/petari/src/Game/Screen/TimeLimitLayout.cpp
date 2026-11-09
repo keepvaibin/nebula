@@ -17,7 +17,7 @@ namespace {
     static const s32 sFadeinoutFrame = 60;
 };  // namespace
 
-void TimeUpLayout::init(const TableIter& rIter) {
+void TimeUpLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("TimeUp", 1);
 }
 
@@ -35,7 +35,7 @@ TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
     : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
 }
 
-void TimeLimitLayout::init(const TableIter& rIter) {
+void TimeLimitLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("TimeLimit", 1);
 
     mScaleControl = new ValueControl(::sScaleUpDownFrame);

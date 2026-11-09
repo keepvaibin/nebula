@@ -6,8 +6,8 @@ class CoinSpot : public LiveActor {
 public:
     CoinSpot(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void initSensor();
     void exeWait();

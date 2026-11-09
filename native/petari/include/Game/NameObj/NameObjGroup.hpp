@@ -7,7 +7,7 @@ class NameObjGroup : public NameObj {
 public:
     // capacity > 0.
     NameObjGroup(const char* pName, int capacity);
-    virtual ~NameObjGroup();
+    virtual ~NameObjGroup() override;
 
     NameObj* getObj(int index) const {
         return mObjArray[index];

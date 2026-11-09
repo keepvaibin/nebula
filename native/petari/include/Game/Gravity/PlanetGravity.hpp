@@ -25,7 +25,7 @@ public:
 
     virtual void updateMtx(const Pos3f& rMtx);
 
-    virtual bool calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& rPosition) const {
+    virtual bool calcOwnGravityVector(Vec3f* /*pDest*/, f32* /*pScalar*/, const Vec3f& /*rPosition*/) const {
         return false;
     }
 

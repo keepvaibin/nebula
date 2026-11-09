@@ -47,7 +47,7 @@ public:
     PlanetMapFarClippable(const char* pName) : PlanetMap(pName) {
     }
 
-    f32 getFarClipDistance() const {
+    f32 getFarClipDistance() const override {
         return 50.0f;
     }
 };

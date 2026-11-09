@@ -57,7 +57,7 @@ namespace NrvBossKamecBattleDemo {
 };  // namespace NrvBossKamecBattleDemo
 
 BossKameckBattleDemo::BossKameckBattleDemo(BossKameck* pBoss, const TableIter& rIter)
-    : BossKameckAction("ボスカメック戦デモ", pBoss), mDemoPos(), mCurDemoName(), mDemoNerve() {
+    : BossKameckAction("ボスカメック戦デモ", pBoss), mDemoPos(), mDemoNerve(), mCurDemoName() {
     mDemoPos = new BossKameckDemoPosition();
     mDemoPos->init(rIter);
 }

@@ -8,9 +8,9 @@ class CoconutTreeLeaf : public LiveActor {
 public:
     CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection);
 
-    virtual void init(const TableIter& rIter);
-    virtual MtxPtr getBaseMtx() const;
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual MtxPtr getBaseMtx() const override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void update(f32 windAccel, f32 windRandomAccel);
 
@@ -32,10 +32,10 @@ class CoconutTreeLeafGroup : public LiveActor {
 public:
     CoconutTreeLeafGroup(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     s32 mNumLeaves;
     CoconutTreeLeaf** mLeaves;

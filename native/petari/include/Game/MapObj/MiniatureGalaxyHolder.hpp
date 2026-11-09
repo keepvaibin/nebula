@@ -9,7 +9,7 @@ class MiniatureGalaxyHolder : public LiveActor {
 public:
     MiniatureGalaxyHolder();
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void registerActor(LiveActor*, const TableIter&);
     bool isRegisteredActor(const LiveActor*);

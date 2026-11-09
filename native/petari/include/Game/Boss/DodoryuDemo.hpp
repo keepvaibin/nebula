@@ -7,11 +7,11 @@ class DodoryuDemoOpening : public DodoryuStateBase {
 public:
     DodoryuDemoOpening(Dodoryu* pHost, const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
-    virtual void start();
-    virtual void end();
+    virtual void start() override;
+    virtual void end() override;
 
     bool tryFinish();
     void turnToRabbit();
@@ -31,10 +31,10 @@ class DodoryuDemoAppear : public DodoryuStateBase {
 public:
     DodoryuDemoAppear(Dodoryu* pHost, const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void start();
-    virtual void end();
+    virtual void start() override;
+    virtual void end() override;
 
     void exeDemoWait();
     void exePlay();
@@ -46,10 +46,10 @@ class DodoryuDemoAngry : public DodoryuStateBase {
 public:
     DodoryuDemoAngry(Dodoryu* pHost, const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void start();
-    virtual void end();
+    virtual void start() override;
+    virtual void end() override;
 
     void exeDemoWait();
     void exePlay();
@@ -61,10 +61,10 @@ class DodoryuDemoDown : public DodoryuStateBase {
 public:
     DodoryuDemoDown(Dodoryu* pHost, const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
-    virtual void start();
-    virtual void end();
+    virtual void start() override;
+    virtual void end() override;
 
     void exeDemoWait();
     void exePlay();

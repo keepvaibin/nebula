@@ -7,9 +7,9 @@ class IconAButton : public LayoutActor {
 public:
     IconAButton(bool, bool);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void draw() const override;
 
     void setFollowActorPane(LayoutActor*, const char*);
     bool isOpen();

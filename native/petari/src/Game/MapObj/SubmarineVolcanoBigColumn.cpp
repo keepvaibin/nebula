@@ -95,7 +95,7 @@ void SubmarineVolcanoBigColumn::pauseOff() {
     MR::requestMovementOn(mBreakModel);
 }
 
-bool SubmarineVolcanoBigColumn::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SubmarineVolcanoBigColumn::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(SubmarineVolcanoBigColumn, SubmarineVolcanoBigColumnNrvWait))) {
         setNerve(GET_NERVE(SubmarineVolcanoBigColumn, SubmarineVolcanoBigColumnNrvBreak));
         return true;

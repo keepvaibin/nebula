@@ -799,7 +799,7 @@ DodoryuBank::DodoryuBank() : ModelObj("ドドリュウ盛土", "DodoryuBank", re
     mBankMtx.identity();
 }
 
-void DodoryuBank::init(const TableIter& rIter) {
+void DodoryuBank::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE_ANON(DodoryuBankNrvBankAppear));
     makeActorDead();
 }
@@ -825,7 +825,7 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     MR::setDistanceToTalk(mTalkCtrl, ::sRabbitTalkDistance);
 }
 
-void DodoryuRabbit::init(const TableIter& rIter) {
+void DodoryuRabbit::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE_ANON(DodoryuRabbitNrvRabbitEscape));
     initHitSensor(4);
     MR::addHitSensorAtJointEnemy(this, "body", "Spine", 8, ::sRabbitBodyRadius, Vec3f(0.0f, 0.0f, 0.0f));
@@ -983,7 +983,7 @@ void DodoryuRabbit::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool DodoryuRabbit::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DodoryuRabbit::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerTrample(msg)) {
         if (mStarPieceRumbler->isRumbling()) {
             mStarPieceRumbler->reset();
@@ -1071,7 +1071,7 @@ DodoryuLeadHill::DodoryuLeadHill(Dodoryu* pHost) : LiveActor("ドドリュウ塚
     initWithoutIter();
 }
 
-void DodoryuLeadHill::init(const TableIter& rIter) {
+void DodoryuLeadHill::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("DodoryuLeadHill", nullptr, false);
     MR::connectToSceneMapObjDecorationStrongLight(this);
     MR::initLightCtrl(this);

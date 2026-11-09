@@ -20,7 +20,7 @@ public:
     TriangleFilterFunc(TriangleFunc func) : mFunction(func) {
     }
 
-    virtual bool isInvalidTriangle(const Triangle* pTriangle) const {
+    virtual bool isInvalidTriangle(const Triangle* pTriangle) const override {
         return mFunction(pTriangle);
     }
 
@@ -48,7 +48,7 @@ public:
 
 class TriangleFilterDangerCode : public TriangleFilterBase {
 public:
-    virtual bool isInvalidTriangle(const Triangle* pTriangle) const;
+    virtual bool isInvalidTriangle(const Triangle* pTriangle) const override;
 };
 
 namespace MR {

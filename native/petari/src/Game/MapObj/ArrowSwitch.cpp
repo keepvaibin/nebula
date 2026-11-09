@@ -103,7 +103,7 @@ bool ArrowSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool ArrowSwitch::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool ArrowSwitch::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

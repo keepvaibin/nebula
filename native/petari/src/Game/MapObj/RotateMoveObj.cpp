@@ -50,12 +50,12 @@ void RotateMoveObj::init(const TableIter& rIter) {
     }
 }
 
-void RotateMoveObj::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void RotateMoveObj::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffB(this, MR::Functor(this, &RotateMoveObj::setStateMove),
                                 MR::Functor< MapObjActor >(this, &MapObjActor::pauseMapPartsFunctions));
 }
 
-void RotateMoveObj::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void RotateMoveObj::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
 void RotateMoveObj::setStateMove() {

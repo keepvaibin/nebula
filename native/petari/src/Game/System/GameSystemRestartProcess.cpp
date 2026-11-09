@@ -27,7 +27,7 @@ namespace NrvGameSystemRestartProcess {
     NEW_NERVE(GameSystemRestartProcessFadein, GameSystemRestartProcess, Fadein);
 };  // namespace NrvGameSystemRestartProcess
 
-void GameSystemRestartProcess::init(const TableIter& rIter) {
+void GameSystemRestartProcess::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessIdle));
     appear();
 }

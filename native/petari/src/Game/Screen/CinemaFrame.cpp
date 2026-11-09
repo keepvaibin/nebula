@@ -21,7 +21,7 @@ CinemaFrame::CinemaFrame(bool isConnectToScene) : LayoutActor("シネマフレ�
     }
 }
 
-void CinemaFrame::init(const TableIter& rIter) {
+void CinemaFrame::init(const TableIter& /*rIter*/) {
     initLayoutManager("CinemaFrame", 1);
     initNerve(GET_NERVE(CinemaFrame, CinemaFrameNrvScreen));
     kill();

@@ -26,7 +26,7 @@ void MercatorRailMoveParts::initAfterPlacement() {
     }
 }
 
-bool MercatorRailMoveParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MercatorRailMoveParts::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mAppearController->receiveMsg(msg)) {
         return true;
     }

@@ -14,7 +14,7 @@ namespace {
 FileSelectNumber::FileSelectNumber(const char* pName) : LayoutActor(pName, true), mNumber(-1), mSelectAnimCtrl() {
 }
 
-void FileSelectNumber::init(const TableIter& rIter) {
+void FileSelectNumber::init(const TableIter& /*rIter*/) {
     initLayoutManager("FileNumber", 2);
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE_ANON(FileSelectNumberNrvWait));

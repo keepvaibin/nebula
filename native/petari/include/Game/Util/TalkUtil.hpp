@@ -86,7 +86,7 @@ namespace MR {
     bool tryTalkRequest(TalkMessageCtrl*);
     bool tryTalkSelectLeft(TalkMessageCtrl*);
     bool tryTalkSelectRight(TalkMessageCtrl*);
-    const MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl*);
+    MtxPtr getMessageBalloonFollowMatrix(const TalkMessageCtrl*);
     const Vec3f& getMessageBalloonFollowOffset(const TalkMessageCtrl*);
     void setMessageBalloonFollowOffset(TalkMessageCtrl*, const Vec3f&);
     bool isNearPlayer(const TalkMessageCtrl*, f32);

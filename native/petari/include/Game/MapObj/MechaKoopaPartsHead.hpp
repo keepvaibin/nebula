@@ -6,11 +6,11 @@ class MechaKoopaPartsHead : public MapObjActor {
 public:
     MechaKoopaPartsHead(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) {};
-    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) {};
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) {};
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) {};
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override {};
+    virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo&) override {};
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override {};
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) override {};
 
     void exeWait();
     void exeDemoBreak();

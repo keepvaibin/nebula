@@ -86,15 +86,15 @@ class DodoryuStateLv2 : public DodoryuStateBase {
 public:
     DodoryuStateLv2(Dodoryu* pHost, const DodoryuChaseParam* pChaseParam, const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
-    virtual void start();
-    virtual void catchAttackSensor(HitSensor*, HitSensor*);
-    virtual void catchHipDrop();
-    virtual bool catchPlayerAttack(u32, HitSensor*, HitSensor*);
-    virtual void catchStartClipped();
-    virtual void catchSendPlayerFlying(HitSensor*, HitSensor*);
+    virtual void start() override;
+    virtual void catchAttackSensor(HitSensor*, HitSensor*) override;
+    virtual void catchHipDrop() override;
+    virtual bool catchPlayerAttack(u32, HitSensor*, HitSensor*) override;
+    virtual void catchStartClipped() override;
+    virtual void catchSendPlayerFlying(HitSensor*, HitSensor*) override;
 
     void knockOver();
     bool isEnableToCatchHipDrop() const;

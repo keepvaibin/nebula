@@ -48,7 +48,7 @@ namespace MR {
             return ::getParam(pParamName)->pRumbleName != nullptr;
         }
 
-        const char* getStartEffect(const char* pParamName) {
+        const char* getStartEffect(const char* /*pParamName*/) {
             return "Open";
         }
     };  // namespace Demo

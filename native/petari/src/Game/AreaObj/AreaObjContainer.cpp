@@ -364,7 +364,7 @@ namespace {
 AreaObjContainer::AreaObjContainer(const char* pName) : NameObj(pName), mIndex(), mHashesShared(false) {
 }
 
-void AreaObjContainer::init(const TableIter& rIter) {
+void AreaObjContainer::init(const TableIter& /*rIter*/) {
     mManagers.init(ARRAY_SIZE(::cCreateTable));
     mIndex.reset(ARRAY_SIZE(::cCreateTable));
     for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {

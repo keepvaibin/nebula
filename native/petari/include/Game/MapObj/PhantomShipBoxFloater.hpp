@@ -8,8 +8,8 @@ class PhantomShipBoxFloater : public LiveActor {
 public:
     PhantomShipBoxFloater(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     f32 getCurrentSinkDepth() const;
 

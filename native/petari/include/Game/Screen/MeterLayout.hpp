@@ -11,8 +11,8 @@ public:
     /// @param pArcName A pointer to the null-terminated name of the resource archive.
     MeterLayout(const char* pName, const char* pArcName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void requestActive();
     void requestDeactivate();

@@ -80,7 +80,7 @@ void SnowFloorTile::init(const TableIter& rIter) {
     mDirtyFrames = 2;
 }
 
-void SnowFloorTile::initLocalPoint(const TableIter& rIter) {
+void SnowFloorTile::initLocalPoint(const TableIter& /*rIter*/) {
     mRight.set(1.0f, 0.0f, 0.0f);
     mUp.set(0.0f, 1.0f, 0.0f);
     mForward.set(0.0f, 0.0f, 1.0f);
@@ -396,7 +396,7 @@ void SnowFloorTile::createTexture() {
     }
 }
 
-void SnowFloorTile::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void SnowFloorTile::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorEnemy(pReceiver)) {
         if (MR::isEqualString(pReceiver->mHost->mName, "マリオ炎球")) {
             Vec3f localPoint;

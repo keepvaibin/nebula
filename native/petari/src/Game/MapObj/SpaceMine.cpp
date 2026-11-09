@@ -88,7 +88,7 @@ void SpaceMine::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SpaceMine::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SpaceMine::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInvincibleAttack(msg)) {
         kill();
         return true;

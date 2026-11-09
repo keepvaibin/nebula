@@ -9,7 +9,7 @@ class TripodBossBreakMovement : public LiveActor {
 public:
     TripodBossBreakMovement(const char* pName);
 
-    virtual void movement();
+    virtual void movement() override;
 
     void start(const Pos3f& rMtx, s32 jointIndex);
     void setBreakDownLevel(s32);

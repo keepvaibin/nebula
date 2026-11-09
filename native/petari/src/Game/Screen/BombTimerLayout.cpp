@@ -22,7 +22,7 @@ BombTimerLayout::BombTimerLayout(bool isConnectToScene)
     }
 }
 
-void BombTimerLayout::init(const TableIter& rIter) {
+void BombTimerLayout::init(const TableIter& /*rIter*/) {
     initLayoutManager("BombTimer", 2);
     initNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvAppear));
     kill();

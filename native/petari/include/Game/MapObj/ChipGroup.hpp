@@ -16,8 +16,8 @@ public:
         bool mIsGotten;
     };
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
     void updateUIRange();
     void registerChip(ChipBase*);

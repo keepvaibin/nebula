@@ -84,7 +84,7 @@ void GeneralMapParts::kill() {
     LiveActor::kill();
 }
 
-bool GeneralMapParts::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool GeneralMapParts::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (mAppearController->receiveMsg(msg)) {
         return true;
     }

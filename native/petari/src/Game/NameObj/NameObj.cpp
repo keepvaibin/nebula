@@ -19,7 +19,7 @@ NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mExecutorId
 NameObj::~NameObj() {
 }
 
-void NameObj::init(const TableIter& rIter) {
+void NameObj::init(const TableIter& /*rIter*/) {
 }
 
 void NameObj::initAfterPlacement() {

@@ -52,7 +52,7 @@ void PartsModel::makeActorDead() {
     mIsDead = true;
 }
 
-void PartsModel::init(const TableIter& rIter) {
+void PartsModel::init(const TableIter& /*rIter*/) {
     initEffectKeeper(8, nullptr);
     initSound(8, false);
     MR::invalidateClipping(this);

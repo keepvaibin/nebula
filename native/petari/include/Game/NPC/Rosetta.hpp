@@ -11,10 +11,10 @@ public:
     /// @param pName The pointer to the null-terminated name of the object.
     Rosetta(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor*, HitSensor*) override;
 
     bool branchFunc(u32);
     bool eventFunc(u32);

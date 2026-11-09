@@ -153,7 +153,7 @@ void JumpEmitter::updateRotate() {
     head->mRotation.y = MR::repeat(head->mRotation.y, -180.0f, 360.0f);
 }
 
-bool JumpGuarder::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JumpGuarder::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgPlayerTrample(msg)) {
         if (pReceiver->isType(ATYPE_PLAYER_AUTO_JUMP)) {
             Vec3f upVec;
@@ -184,7 +184,7 @@ bool JumpGuarder::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return MR::isMsgStarPieceReflect(msg);
 }
 
-bool JumpGuarder::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JumpGuarder::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_GROUP_ATTACK) {
         MR::invalidateClipping(this);
         setNerve(GET_NERVE(JumpGuarder, JumpGuarderNrvUp));

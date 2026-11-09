@@ -11,15 +11,15 @@ class EyeBeamer : public LiveActor {
 public:
     EyeBeamer(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initStartNerve(const TableIter& rIter);
     void initModel();

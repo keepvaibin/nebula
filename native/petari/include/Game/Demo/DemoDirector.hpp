@@ -15,7 +15,7 @@ class DemoDirector : public NameObj {
 public:
     DemoDirector(const char* pName);
 
-    virtual void movement();
+    virtual void movement() override;
 
     void startDemoProgrammable(NameObj*, const char*, bool, MR::MovementControlType);
     void startDemoTimeKeep(NameObj*, const char*, MR::MovementControlType, bool, const char*);

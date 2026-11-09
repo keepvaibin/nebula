@@ -9,14 +9,14 @@ class ShadowVolumeDrawInit : public NameObj {
 public:
     ShadowVolumeDrawInit();
 
-    virtual ~ShadowVolumeDrawInit();
+    virtual ~ShadowVolumeDrawInit() override;
 };
 
 class ShadowVolumeDrawer : public ShadowDrawer {
 public:
     ShadowVolumeDrawer(const char*);
 
-    virtual ~ShadowVolumeDrawer() {
+    virtual ~ShadowVolumeDrawer() override {
     }
 
     virtual void draw() const override;

@@ -15,7 +15,7 @@ public:
     // GameScene, after the stage's own actors are placed: the Luma, when isHere.
     static void tryCreate();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void exeNebulaWait();
     void exeNebulaOpen();

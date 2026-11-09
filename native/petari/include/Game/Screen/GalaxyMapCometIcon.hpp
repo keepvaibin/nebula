@@ -10,11 +10,11 @@ class GalaxyMapCometIcon : public LayoutActor {
 public:
     GalaxyMapCometIcon(const char*, LayoutActor*, const char*);
 
-    virtual ~GalaxyMapCometIcon();
-    virtual void init(const TableIter&);
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void control();
+    virtual ~GalaxyMapCometIcon() override;
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void control() override;
 
     void calcAnimForCapture(const Ui::DrawInfo&);
     void syncStatus();

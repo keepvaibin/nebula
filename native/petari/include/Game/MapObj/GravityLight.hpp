@@ -11,12 +11,12 @@ class GravityLight : public LiveActor {
 public:
     GravityLight(const char* pName);
 
-    virtual ~GravityLight() {
+    virtual ~GravityLight() override {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mBaseMtx;
     }
 

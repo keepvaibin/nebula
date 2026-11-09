@@ -16,9 +16,9 @@ public:
 
     GameSystemRestartProcess();
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual void control() override;
 
     bool isActive() const;
     void setResetOperationApplicationReset();

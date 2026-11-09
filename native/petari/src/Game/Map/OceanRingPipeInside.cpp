@@ -30,7 +30,7 @@ OceanRingPipeInside::OceanRingPipeInside(const OceanRingPipe* pPipe)
     : LiveActor("オーシャンリングの内側"), mRingPipe(pPipe), mTexU0(), mTexV0(), mTexU1(), mTexV1(), mWaterPipeInsideTex() {
 }
 
-void OceanRingPipeInside::init(const TableIter& rIter) {
+void OceanRingPipeInside::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeInside);
     initMesh();
     MR::invalidateClipping(this);

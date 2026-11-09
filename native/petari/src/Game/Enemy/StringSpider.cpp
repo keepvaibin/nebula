@@ -69,7 +69,7 @@ namespace NrvStringSpider {
 
 StringSpider::StringSpider(const char* pName)
     : LiveActor(pName), mSpinHitController(nullptr), mScaleController(nullptr), mStampController(nullptr), mString(nullptr), mFixedPos(nullptr),
-      mPoseQuat(0, 0, 0, 1), mIsPointerPulled(false), mStringLengthMax(300.0f), mStringLength(300.0f), mPointerStep(0), mSwingFront(nullptr), mSwingSide(nullptr) {
+      mPoseQuat(0, 0, 0, 1), mStringLengthMax(300.0f), mStringLength(300.0f), mIsPointerPulled(false), mPointerStep(0), mSwingFront(nullptr), mSwingSide(nullptr) {
 }
 
 // A spider on a fixed swing line (Obj_arg1 == 2) attacks sooner.
@@ -869,7 +869,7 @@ bool StringSpider::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
     return false;
 }
 
-bool StringSpider::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StringSpider::receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

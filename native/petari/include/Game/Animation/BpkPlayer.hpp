@@ -6,5 +6,5 @@ class BpkPlayer : public MaterialAnmPlayerBase {
 public:
     BpkPlayer(const ResourceHolder*, ModelData*);
 
-    virtual void apply(Clip*, Model*);
+    virtual void apply(Clip*, Model*) override;
 };

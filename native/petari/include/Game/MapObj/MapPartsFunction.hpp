@@ -10,10 +10,10 @@ class MapPartsFunction : public NameObj {
 public:
     MapPartsFunction(LiveActor* pHost, const char* pName);
 
-    virtual void init(const TableIter& rIter) {
+    virtual void init(const TableIter& /*rIter*/) override {
     }
 
-    virtual void movement();
+    virtual void movement() override;
 
     virtual bool isWorking() const;
 
@@ -22,7 +22,7 @@ public:
     virtual void end() {
     }
 
-    virtual bool receiveMsg(u32 msg) {
+    virtual bool receiveMsg(u32 /*msg*/) {
         return false;
     }
 

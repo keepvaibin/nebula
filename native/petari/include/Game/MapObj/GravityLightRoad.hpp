@@ -6,9 +6,9 @@ class GravityLightRoad : public LiveActor {
 public:
     GravityLightRoad(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void updateHitSensor(HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void updateBindActorMtx();
     void endBind();

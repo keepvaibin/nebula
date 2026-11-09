@@ -6,7 +6,7 @@ class WaterArea : public AreaObj {
 public:
     WaterArea(int, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
 };
 

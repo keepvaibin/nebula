@@ -18,20 +18,20 @@ public:
     MapObjActor(const char* pName);
     MapObjActor(const char* pName, const char* pObjName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
     virtual void connectToScene(const MapObjActorInitInfo& rInfo);
     virtual void initCaseUseSwitchA(const MapObjActorInitInfo& rInfo);
     virtual void initCaseNoUseSwitchA(const MapObjActorInitInfo& rInfo);
     virtual void initCaseUseSwitchB(const MapObjActorInitInfo& rInfo);
     virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo);
-    virtual void makeSubModels(const TableIter& rIter, const MapObjActorInitInfo& rInfo) {
+    virtual void makeSubModels(const TableIter& /*rIter*/, const MapObjActorInitInfo& /*rInfo*/) {
     }
 
     void initialize(const TableIter& rIter, const MapObjActorInitInfo& rInfo);

@@ -65,7 +65,7 @@ void GalaxyMapGalaxyPlain::adjustTransInScreen() {
     mNamePlate->setTrans(plateTrans);
 }
 
-void GalaxyMapGalaxyPlain::init(const TableIter& rIter) {
+void GalaxyMapGalaxyPlain::init(const TableIter& /*rIter*/) {
     mNamePlate = new GalaxyNamePlate(nullptr, false);
     mNamePlate->initWithoutIter();
     mNamePlate->setShowBalloonNozzle(false);

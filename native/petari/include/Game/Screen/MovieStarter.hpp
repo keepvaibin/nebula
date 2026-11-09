@@ -8,10 +8,10 @@ public:
     /// @param pName A pointer to the null-terminated name of the object.
     MovieStarter(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
 private:
     s32 mMovieType;

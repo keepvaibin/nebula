@@ -12,17 +12,17 @@ class Plant : public LiveActor {
 public:
     Plant(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void updateHitSensor(HitSensor* pSensor);
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void updateHitSensor(HitSensor* pSensor) override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWaitFar();
     void exeSeedWait();

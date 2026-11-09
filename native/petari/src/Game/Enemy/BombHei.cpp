@@ -573,7 +573,7 @@ void BombHei::calcAndSetBaseMtx() {
     mBodyJoint->registerCallBack();
 }
 
-bool BombHei::calcJoint(Pos3f* pMtx, const JointControllerInfo& rJointInfo) {
+bool BombHei::calcJoint(Pos3f* pMtx, const JointControllerInfo& /*rJointInfo*/) {
     Pos3f mtx;
     mtx.makeQuat(mRotQuat);
 
@@ -734,7 +734,7 @@ bool BombHei::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool BombHei::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BombHei::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg) && !isNerve(GET_NERVE(BombHei, HostTypeNrvExplode))) {
         setNerve(GET_NERVE(BombHei, HostTypeNrvExplode));
         return true;
@@ -795,7 +795,7 @@ bool BombHei::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
     return false;
 }
 
-bool BombHei::receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
+bool BombHei::receiveMsgThrow(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(BombHei, HostTypeNrvExplode))) {
         return true;
     }

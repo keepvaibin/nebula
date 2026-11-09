@@ -21,21 +21,21 @@ namespace Ui {
 
         TextBox(Layout&, const UiPaneData*, const ResBlockSet&);
 
-        virtual ~TextBox();
-        virtual void DrawSelf(const DrawInfo& drawInfo);
-        virtual const Color8 GetVtxColor(u32) const;
-        virtual void SetVtxColor(u32, Color8);
-        virtual u8 GetVtxColorElement(u32) const;
-        virtual void SetVtxColorElement(u32, u8);
-        virtual void AllocStringBuffer(u16);
+        virtual ~TextBox() override;
+        virtual void DrawSelf(const DrawInfo& drawInfo) override;
+        virtual const Color8 GetVtxColor(u32) const override;
+        virtual void SetVtxColor(u32, Color8) override;
+        virtual u8 GetVtxColorElement(u32) const override;
+        virtual void SetVtxColorElement(u32, u8) override;
+        virtual void AllocStringBuffer(u32);
         virtual void FreeStringBuffer();
-        virtual u16 SetString(const char16_t*, u16 dstIdx = 0);
-        virtual u16 SetString(const char16_t*, u16, u16);
+        virtual u32 SetString(const char16_t*, u32 dstIdx = 0);
+        virtual u32 SetString(const char16_t*, u32, u32);
 
         const Rect GetTextDrawRect(TextWriterBase< char16_t >*) const;
         void SetTextColor(Color8, Color8);
         void SetFont(const Font*);
-        u16 GetStringBufferLength() const;
+        u32 GetStringBufferLength() const;
         u32 MakeDrawFlag() const;
         f32 GetTextMagH() const;
         f32 GetTextMagV() const;
@@ -43,7 +43,7 @@ namespace Ui {
         const Rect GetTextDrawRect() const;
         const Rect GetTextDrawRect(const DrawInfo&) const;
 
-        void Init(u16);
+        void Init(u32);
         void SetTagProcessor(TagProcessorBase< char16_t >* pTagProcessor) {
             mpTagProcessor = pTagProcessor;
         }
@@ -83,8 +83,8 @@ namespace Ui {
         f32 mLineSpace;
         f32 mCharSpace;
         TagProcessorBase< char16_t >* mpTagProcessor;
-        u16 mTextBufBytes;
-        u16 mTextLen;
+        u32 mTextBufBytes;
+        u32 mTextLen;
         u8 mTextPosition;
         union {
             struct {

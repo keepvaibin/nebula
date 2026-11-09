@@ -36,10 +36,10 @@ class OceanSphere : public LiveActor {
 public:
     OceanSphere(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual void draw() const override;
 
     bool isInWater(const Vec3f& rPos) const;
     bool calcWaterInfo(const Vec3f& rPos, const Vec3f& rGravity, WaterInfo* pInfo) const;

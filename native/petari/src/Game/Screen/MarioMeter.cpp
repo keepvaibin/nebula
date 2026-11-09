@@ -58,7 +58,7 @@ void MarioMeter::deactivate() {
 MarioMeter::~MarioMeter() {
 }
 
-void MarioMeter::init(const TableIter& rIter) {
+void MarioMeter::init(const TableIter& /*rIter*/) {
     mHitPointMeter = new MeterLayout("通常HPメーター", "HitPointMeter");
     mHitPointMeter->initWithoutIter();
     mSuddenDeathMeter = new SuddenDeathMeter("サドンデスHPメーター", "SuddenDeathMeter");

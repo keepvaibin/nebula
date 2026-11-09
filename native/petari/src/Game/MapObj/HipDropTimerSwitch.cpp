@@ -149,7 +149,7 @@ void HipDropTimerSwitch::updateTimerSE() {
     }
 }
 
-bool HipDropTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgStarPieceAttack(msg)) {
         mIsLightPressed = true;
         return true;
@@ -165,7 +165,7 @@ bool HipDropTimerSwitch::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hit
     return false;
 }
 
-bool HipDropTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool HipDropTimerSwitch::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgFloorTouch(msg) && mCollisionParts->mHitSensor == pReceiver) {
         mIsLightPressed = true;
         return !mWasLightPressed;

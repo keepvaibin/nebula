@@ -42,7 +42,7 @@ ScenarioSelectStar::ScenarioSelectStar(EffectSystem* pSystem)
     initEffect(pSystem, 0, "ScenarioStar");
 }
 
-void ScenarioSelectStar::init(const TableIter& rIter) {
+void ScenarioSelectStar::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(ScenarioSelectStar, ScenarioSelectStarNrvNotPointing));
 }
 

@@ -12,19 +12,19 @@ class StringSpider : public LiveActor {
 public:
     StringSpider(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void calcAnim();
-    virtual void kill();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void calcAnim() override;
+    virtual void kill() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     s32 getSearchToAttackTime();
     void doSwingAction(f32 accel, bool isSideSwing);
@@ -73,7 +73,7 @@ class StringSpiderString : public LiveActor {
 public:
     StringSpiderString(const char* pName);
 
-    virtual void calcAndSetBaseMtx();
+    virtual void calcAndSetBaseMtx() override;
 
     Quat4f mRotateQuat;
     Vec3f mRootPos;

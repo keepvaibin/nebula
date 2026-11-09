@@ -63,7 +63,7 @@ void BumpAppearPlanet::control() {
     }
 }
 
-void BumpAppearPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void BumpAppearPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffA(this, MR::Functor(this, &BumpAppearPlanet::startBumpOut), MR::Functor(this, &BumpAppearPlanet::startBumpIn));
 }
 

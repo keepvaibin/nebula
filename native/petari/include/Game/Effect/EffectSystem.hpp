@@ -17,7 +17,7 @@ class EffectSystem : public NameObj {
 public:
     EffectSystem(const char*, bool);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     ParticleEmitter* createEmitter(u16, u8, u8);
     void forceDeleteEmitter(ParticleEmitter*) const;

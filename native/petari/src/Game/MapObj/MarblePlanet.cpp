@@ -140,7 +140,7 @@ void MarblePlanet::kill() {
     LiveActor::kill();
 }
 
-bool MarblePlanet::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MarblePlanet::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(MarblePlanet, MarblePlanetNrvScaleUpCore))) {
         return false;
     }
@@ -198,7 +198,7 @@ MarblePlanetElectron::MarblePlanetElectron(LiveActor* pPlanet, const Vec3f& rPos
     mRotation.set(rRotation);
 }
 
-void MarblePlanetElectron::init(const TableIter& rIter) {
+void MarblePlanetElectron::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("MarblePlanetElectron", 0, false);
     MR::connectToScenePlanet(this);
     initHitSensor(1);
@@ -274,7 +274,7 @@ void MarblePlanetElectron::attackSensor(HitSensor* pSender, HitSensor* pReceiver
     }
 }
 
-bool MarblePlanetElectron::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MarblePlanetElectron::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(MarblePlanetElectron, MarblePlanetElectronNrvAttack))) {
         return false;
     }
@@ -287,7 +287,7 @@ bool MarblePlanetElectron::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, H
     return false;
 }
 
-bool MarblePlanetElectron::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool MarblePlanetElectron::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!MR::isSensorEnemy(pSender)) {
         return false;
     }
@@ -314,7 +314,7 @@ MarblePlanetElectronShadow::MarblePlanetElectronShadow(LiveActor* pElectronPtr, 
     mGroundPos = &rVec;
 }
 
-void MarblePlanetElectronShadow::init(const TableIter& rIter) {
+void MarblePlanetElectronShadow::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("MarblePlanetElectronShadow", 0, false);
     MR::connectToScenePlanet(this);
     MR::invalidateClipping(this);

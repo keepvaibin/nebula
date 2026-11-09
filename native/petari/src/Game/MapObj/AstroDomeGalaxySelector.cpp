@@ -86,7 +86,7 @@ void AstroDomeGalaxySelector::kill() {
     MR::disappearStarCounter();
 }
 
-bool AstroDomeGalaxySelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDomeGalaxySelector::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::isMsgSelectStart(msg)) {
         appear();
         return true;

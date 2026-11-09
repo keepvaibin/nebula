@@ -30,7 +30,7 @@ class ShadowControllerHolder : public NameObj {
 public:
     ShadowControllerHolder();
 
-    virtual ~ShadowControllerHolder();
+    virtual ~ShadowControllerHolder() override;
     virtual void initAfterPlacement() override;
     virtual void movement() override;
 
@@ -127,7 +127,7 @@ public:
     f32 mStartOffset;
     f32 mDropLength;
     CollisionCalc mCollisionCalc;
-    u8 mCollisionCount;  // projections since CollisionCalc::Once was set
+    u32 mCollisionCount;  // projections since CollisionCalc::Once was set
     DropGravity mDropGravity;
     DropType mDropType;
     Visibility mVisibility;

@@ -9,10 +9,10 @@ class BossKameckVs2 : public BossKameckSequencer {
 public:
     BossKameckVs2();
 
-    virtual void start();
-    virtual void init(BossKameck*, const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void start() override;
+    virtual void init(BossKameck*, const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void exeOpeningDemo();
     void exeBattleLv1();

@@ -77,7 +77,7 @@ void AstroDome::control() {
     }
 }
 
-bool AstroDome::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDome::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::isMsgSelectStart(msg)) {
         setNerve(GET_NERVE(AstroDome, AstroDomeNrvDisappear));
         return true;

@@ -8,9 +8,9 @@ class BigBubbleGenerator : public LiveActor {
 public:
     BigBubbleGenerator(const char* pName, bool isObstruct);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
 
     void exeNonActive();
     void exeActive();

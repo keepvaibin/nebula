@@ -692,7 +692,7 @@ void Syati::setupBalloonFollowMtx(const Vec3f& rVec) {
     mBalloonFollowMtx.setTrans(position);
 }
 
-bool Syati::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool Syati::calcHeadJoint(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     bool nrv = false;
     nrv = isNerve(GET_NERVE(Syati, SyatiWaitOnShore)) || isNerve(GET_NERVE(Syati, SyatiWaitTalkNormal)) || isNerve(GET_NERVE(Syati, SyatiTalkNormal));
 
@@ -749,7 +749,7 @@ void Syati::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Syati::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Syati::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgJetTurtleAttack(msg) || MR::isMsgStarPieceReflect(msg)) {
         return true;
     }

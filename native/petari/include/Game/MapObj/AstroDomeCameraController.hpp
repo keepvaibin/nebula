@@ -30,11 +30,11 @@ public:
 
     AstroDomeCameraController(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void calcZoomOutPos(Vec3f*) const;
     void calcZoomInPos(Vec3f*, const Vec3f&) const;

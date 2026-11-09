@@ -93,11 +93,11 @@ void PoltaBattleLv2::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool PoltaBattleLv2::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaBattleLv2::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     return !isEnableSensor(pReceiver) ? false : MR::isMsgStarPieceReflect(msg);
 }
 
-bool PoltaBattleLv2::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool PoltaBattleLv2::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!isEnableDamage()) {
         return false;
     }

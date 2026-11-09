@@ -13,7 +13,7 @@ SubMeterLayout::SubMeterLayout(const char* pName, const char* pLayoutName) : Lay
     MR::createAndAddPaneCtrl(this, "Count", 1);
 }
 
-void SubMeterLayout::init(const TableIter& rIter) {
+void SubMeterLayout::init(const TableIter& /*rIter*/) {
     MR::startPaneAnim(this, "Count", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "Count", 0.0f, 0);
     appear();

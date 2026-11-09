@@ -12,7 +12,7 @@ class PressureBulletHolder : public NameObj {
 public:
     PressureBulletHolder(const char* pName, const char* pBulletName) : NameObj(pName), mBullet(), mBulletName(pBulletName) {}
 
-    virtual void init(const TableIter& rIter) {
+    virtual void init(const TableIter& /*rIter*/) {
         mBullet.init(N);
         for (s32 i = 0; i < N; i++) {
             createBullet();

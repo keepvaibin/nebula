@@ -26,7 +26,7 @@ Note::Note(const char* pName, const Vec3f& rRailDirection, NoteFairy* pParent) :
     mFlashCtrl = nullptr;
 }
 
-void Note::init(const TableIter& rIter) {
+void Note::init(const TableIter& /*rIter*/) {
     MR::createSceneObj(SceneObj_NoteGroup);
     initModelManagerWithAnm("Note", nullptr, false);
     MR::connectToSceneNoSilhouettedMapObjStrongLight(this);
@@ -105,7 +105,7 @@ void Note::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, baseMtx);
 }
 
-void Note::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void Note::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorPlayerOrRide(pReceiver)) {
         if (!isNerve(GET_NERVE(Note, NoteNrvFlyUp))) {
             MR::emitEffect(this, "Get");
@@ -120,7 +120,7 @@ NoteGroup::NoteGroup() : LiveActorGroup("音符グループ", 0x100) {
     mRotation = 0.0f;
 }
 
-void NoteGroup::init(const TableIter& rIter) {
+void NoteGroup::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjMovement(this);
 }
 

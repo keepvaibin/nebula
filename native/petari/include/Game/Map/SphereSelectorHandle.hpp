@@ -7,11 +7,11 @@ class SphereSelectorHandle : public LiveActor {
 public:
     SphereSelectorHandle(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mBaseMtx;
     }
 

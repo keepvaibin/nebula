@@ -506,7 +506,7 @@ void Karon::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Karon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Karon::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNrvBroken() || isNerve(GET_NERVE(Karon, HostTypeNrvDeath)) || isNerve(GET_NERVE(Karon, HostTypeNrvSinkDown))) {
         return false;
     }
@@ -553,7 +553,7 @@ bool Karon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
     return false;
 }
 
-bool Karon::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Karon::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!MR::isMsgExplosionAttack(msg)) {
         return false;
     }
@@ -572,7 +572,7 @@ bool Karon::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool Karon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Karon::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgInhaleBlackHole(msg) || MR::isMsgStartPowerStarGet(msg)) {
         kill();
         return true;

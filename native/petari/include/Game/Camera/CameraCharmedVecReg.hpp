@@ -6,9 +6,9 @@ class CameraCharmedVecReg : public Camera {
 public:
     CameraCharmedVecReg(const char* pName = "ベクトルレジスタ注目カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const char* pName, f32 dist, f32 angleX, f32 angleYMax, f32 angleYMin, f32 distRatio, f32 angleRate) {
         mName = pName;

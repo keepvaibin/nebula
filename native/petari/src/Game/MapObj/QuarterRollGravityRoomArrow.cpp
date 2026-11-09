@@ -53,17 +53,17 @@ void QuarterRollGravityRoomArrow::exeRollOffB() {
     }
 }
 
-void QuarterRollGravityRoomArrow::initCaseUseSwitchA(const MapObjActorInitInfo& rInfo) {
+void QuarterRollGravityRoomArrow::initCaseUseSwitchA(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffA(this, MR::Functor(this, &QuarterRollGravityRoomArrow::onRollA),
                                 MR::Functor(this, &QuarterRollGravityRoomArrow::offRollA));
 }
 
-void QuarterRollGravityRoomArrow::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void QuarterRollGravityRoomArrow::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffB(this, MR::Functor(this, &QuarterRollGravityRoomArrow::onRollB),
                                 MR::Functor(this, &QuarterRollGravityRoomArrow::offRollB));
 }
 
-void QuarterRollGravityRoomArrow::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void QuarterRollGravityRoomArrow::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
 }
 
 void QuarterRollGravityRoomArrow::onRollA() {

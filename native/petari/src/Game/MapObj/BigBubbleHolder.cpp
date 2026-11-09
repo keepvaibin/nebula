@@ -150,7 +150,7 @@ bool MR::isPlayerBindedBigBubble() {
     return ::getBigBubbleHolder()->mIsMarioBinded;
 }
 
-void BigBubbleHolder::init(const TableIter& rIter) {
+void BigBubbleHolder::init(const TableIter& /*rIter*/) {
     mBubbles.init(cBubbleCount);
     mDrawBubbles.init(cBubbleCount);
     for (s32 idx = 0; idx < cBubbleCount; idx++) {

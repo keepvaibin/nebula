@@ -14,7 +14,7 @@ void FirePressure::init(const TableIter& rIter) {
     MR::getPlacementArg7NoInit(rIter, &mIsDisableCollision);
 }
 
-void FirePressure::initBullet(const TableIter& rIter) {
+void FirePressure::initBullet(const TableIter& /*rIter*/) {
     MR::createSceneObj(SceneObj_FirePressureBulletHolder);
 }
 

@@ -7,8 +7,8 @@ class TimerMoveWall : public MapObjActor {
 public:
     TimerMoveWall(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
 
     void startMove();
 

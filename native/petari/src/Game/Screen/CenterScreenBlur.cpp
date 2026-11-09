@@ -15,7 +15,7 @@ namespace NrvCenterScreenBlur {
 CenterScreenBlur::CenterScreenBlur() : LiveActor("画面中心ブラー"), mTime(), mFadeIn(), mFadeOut(), mOffset(), mAlpha(), mBlendRate() {
 }
 
-void CenterScreenBlur::init(const TableIter& rIter) {
+void CenterScreenBlur::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_ImageEffect, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_CenterScreenBlur);
     MR::invalidateClipping(this);
     MR::registerDemoSimpleCastAll(this);

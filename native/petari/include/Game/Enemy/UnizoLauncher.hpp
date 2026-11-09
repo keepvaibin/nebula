@@ -9,7 +9,7 @@ class UnizoLauncher : public LiveActor {
 public:
     UnizoLauncher(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void exeWait();
     void exeLaunch();

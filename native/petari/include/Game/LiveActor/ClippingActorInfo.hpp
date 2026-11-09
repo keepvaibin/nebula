@@ -32,7 +32,7 @@ public:
     f32 mRadius;
     PlacementId* mInfo;  // the clipping group; null: none
     s16 mFarClipLevel;
-    s16 mViewGroupId;
+    s32 mViewGroupId;
     ViewGroupCtrlDataEntry* mViewGroup;
     const ClippingActorInfo* mGround;  // the planet it stands on; null: none
     bool mGroundFound;

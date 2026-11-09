@@ -19,7 +19,7 @@ CutBushModelObj::CutBushModelObj(const char* pName, const char* pModelName, bool
     }
 }
 
-void CutBushModelObj::init(const TableIter& rIter) {
+void CutBushModelObj::init(const TableIter& /*rIter*/) {
     makeActorAppeared();
 }
 

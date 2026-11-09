@@ -8,8 +8,8 @@ class ShockWaveGenerator : public LiveActor {
 public:
     ShockWaveGenerator(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeDemoEcho();

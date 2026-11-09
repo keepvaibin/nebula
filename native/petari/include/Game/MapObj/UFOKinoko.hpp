@@ -7,10 +7,10 @@ class UFOKinoko : public MapObjActor {
 public:
     UFOKinoko(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) override;
 
 
     void startMove();

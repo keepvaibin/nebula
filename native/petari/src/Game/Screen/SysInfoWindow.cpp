@@ -56,7 +56,7 @@ SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType ex
     }
 }
 
-void SysInfoWindow::init(const TableIter& rIter) {
+void SysInfoWindow::init(const TableIter& /*rIter*/) {
     initLayoutManager(getLayoutName(), 1);
     MR::createAndAddPaneCtrl(this, mTextParentPaneName, 1);
     MR::createAndAddPaneCtrl(this, mWindowParentPaneName, 1);

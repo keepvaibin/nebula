@@ -9,10 +9,10 @@ class SideSpikeMoveStep : public MapObjActor {
 public:
     SideSpikeMoveStep(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exePointerStop();

@@ -30,7 +30,7 @@ KoopaJrShipCannonMainShell::KoopaJrShipCannonMainShell(const char* pName) : Cann
     mRotateQuat.set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
 }
 
-void KoopaJrShipCannonMainShell::init(const TableIter& rIter) {
+void KoopaJrShipCannonMainShell::init(const TableIter& /*rIter*/) {
     mScale.setAll< f32 >(getBaseScale());
 
     initModelManagerWithAnm("KoopaJrShipCannonMainShell", nullptr, false);

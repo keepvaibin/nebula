@@ -8,7 +8,7 @@ class MarioLauncherAttractor : public LiveActor {
 public:
     MarioLauncherAttractor(const char* pName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void exeWait();
 

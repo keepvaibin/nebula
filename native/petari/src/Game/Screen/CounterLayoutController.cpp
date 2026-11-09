@@ -29,7 +29,7 @@ CounterLayoutController::CounterLayoutController()
       mStarCounter(), mHPMeter() {
 }
 
-void CounterLayoutController::init(const TableIter& rIter) {
+void CounterLayoutController::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE(CounterLayoutController, CounterLayoutControllerNrvPlayerMoving));
 

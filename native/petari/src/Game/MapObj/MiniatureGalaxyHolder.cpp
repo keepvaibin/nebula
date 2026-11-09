@@ -31,7 +31,7 @@ void MiniatureGalaxyHolder::registerActor(LiveActor* pActor, const TableIter& rI
     mIsRegistered = true;
 }
 
-void MiniatureGalaxyHolder::init(const TableIter& rIter) {
+void MiniatureGalaxyHolder::init(const TableIter& /*rIter*/) {
     makeActorAppeared();
 }
 

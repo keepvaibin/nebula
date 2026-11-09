@@ -8,11 +8,11 @@ class BigBubbleGoalArea : public AreaObj {
 public:
     BigBubbleGoalArea(int, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "BigBubbleGoalArea";
     };
 

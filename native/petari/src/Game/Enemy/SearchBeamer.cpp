@@ -326,7 +326,7 @@ void SearchBeamer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool SearchBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SearchBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!MR::isSensorEnemy(pReceiver) || isStopNerve()) {
         return false;
     }
@@ -341,7 +341,7 @@ bool SearchBeamer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor
 }
 
 // Standing on it stops it; while it is stopped, each touch restarts the StopForPlayerOff wait.
-bool SearchBeamer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SearchBeamer::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!MR::isMsgFloorTouch(msg)) {
         return false;
     }
@@ -366,17 +366,17 @@ void SearchBeamer::updateHitSensor(HitSensor* pSensor) {
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, aimPos, mPosition, mBeamEnd);
 }
 
-bool SearchBeamer::calcJointPropeller(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointPropeller(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     MR::rotateMtxLocalYDegree(*pPos, mPropellerAngle);
     return true;
 }
 
-bool SearchBeamer::calcJointBeamStart(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointBeamStart(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     pPos->setTrans(mBeamStart);
     return true;
 }
 
-bool SearchBeamer::calcJointBeamEnd(Pos3f* pPos, const JointControllerInfo& rInfo) {
+bool SearchBeamer::calcJointBeamEnd(Pos3f* pPos, const JointControllerInfo& /*rInfo*/) {
     pPos->setTrans(mBeamEnd);
     return true;
 }

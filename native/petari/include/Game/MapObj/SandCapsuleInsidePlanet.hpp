@@ -6,8 +6,8 @@ class SandCapsuleInsidePlanet : public MapObjActor {
 public:
     SandCapsuleInsidePlanet(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override;
 
     void startOn();
     void startOff();

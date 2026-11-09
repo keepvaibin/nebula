@@ -35,13 +35,13 @@ namespace Ui {
     public:
         AnimTransformBasic();
 
-        virtual ~AnimTransformBasic();
-        virtual void SetResource(const UiAnimationHeader*, ResourceAccessor*);
-        virtual void SetResource(const UiAnimationHeader*, ResourceAccessor*, u16);
-        virtual void Bind(Pane*, bool);
-        virtual void Bind(Material*);
-        virtual void Animate(u32, Pane*);
-        virtual void Animate(u32, Material*);
+        virtual ~AnimTransformBasic() override;
+        virtual void SetResource(const UiAnimationHeader*, ResourceAccessor*) override;
+        virtual void SetResource(const UiAnimationHeader*, ResourceAccessor*, u16) override;
+        virtual void Bind(Pane*, bool) override;
+        virtual void Bind(Material*) override;
+        virtual void Animate(u32, Pane*) override;
+        virtual void Animate(u32, Material*) override;
 
         template < typename T >
         AnimationLink* Bind(T* target, AnimationLink* link, u16 idx);

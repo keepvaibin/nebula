@@ -20,10 +20,10 @@ class SpiderThread : public LiveActor {
 public:
     SpiderThread(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initThread(const Vec3f&);
     void startActorBind(LiveActor*, const Vec3f**, const Vec3f**, const Vec3f**, const Vec3f&, const Vec3f&, s32);

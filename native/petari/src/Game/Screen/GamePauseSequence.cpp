@@ -20,7 +20,7 @@ namespace {
 GamePauseSequence::GamePauseSequence() : LayoutActor("ポーズ画面管理", true), mMenuType(ActivePause), mPauseMenu(nullptr), mWindowMenuFunc(nullptr) {
 }
 
-void GamePauseSequence::init(const TableIter& rIter) {
+void GamePauseSequence::init(const TableIter& /*rIter*/) {
     if (!MR::isStageDisablePauseMenu()) {
         mPauseMenu = new PauseMenu();
         mPauseMenu->initWithoutIter();

@@ -443,39 +443,39 @@ namespace {
     }
 }  // namespace
 
-void MR::listenNameObjStageSwitchOnAppear(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
+void MR::listenNameObjStageSwitchOnAppear(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerAppear(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOnOffAppear(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
+void MR::listenNameObjStageSwitchOnOffAppear(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                              const MR::FunctorBase& rOffFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerAppear(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOnA(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
+void MR::listenNameObjStageSwitchOnA(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerA(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOnOffA(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
+void MR::listenNameObjStageSwitchOnOffA(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                         const MR::FunctorBase& rOffFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerA(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOnB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
+void MR::listenNameObjStageSwitchOnB(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, nullptr);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOffB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOffFunctor) {
+void MR::listenNameObjStageSwitchOffB(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOffFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(nullptr, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);
 }
 
-void MR::listenNameObjStageSwitchOnOffB(const NameObj* pObj, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
+void MR::listenNameObjStageSwitchOnOffB(const NameObj* /*pObj*/, const StageSwitchCtrl* pSwitchCtrl, const MR::FunctorBase& rOnFunctor,
                                         const MR::FunctorBase& rOffFunctor) {
     SwitchEventFunctorListener* pListener = ::createSwitchListener(&rOnFunctor, &rOffFunctor);
     MR::getSwitchWatcherHolder()->joinSwitchEventListenerB(pSwitchCtrl, pListener);

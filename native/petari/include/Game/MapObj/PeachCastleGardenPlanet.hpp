@@ -8,9 +8,9 @@ class PeachCastleGardenPlanet : public MapObjActor {
 public:
     PeachCastleGardenPlanet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void connectToScene(const MapObjActorInitInfo&);
-    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void connectToScene(const MapObjActorInitInfo&) override;
+    virtual void initCaseUseSwitchA(const MapObjActorInitInfo&) override;
 
     void startDamage();
     void exeWait();

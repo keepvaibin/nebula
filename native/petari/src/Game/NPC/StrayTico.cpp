@@ -155,7 +155,7 @@ bool StrayTico::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool StrayTico::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool StrayTico::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (!isNerve(GET_NERVE(StrayTico, StrayTicoNrvWait)) && MR::isSensorNpc(pSender)) {
         MR::addVelocityAwayFromTarget(this, MR::getSensorPos(pSender), ::sPushAccel);
 
@@ -165,7 +165,7 @@ bool StrayTico::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool StrayTico::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool StrayTico::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isEnableSpin() && MR::isMsgSpinStormRange(msg)) {
         MR::addVelocityClockwiseToTarget(this, MR::getSensorPos(pSender), 2.0f);
         MR::addVelocityMoveToTarget(this, MR::getSensorPos(pSender), 1.0f);

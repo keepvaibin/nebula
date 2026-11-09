@@ -8,10 +8,10 @@ class ElectricPressureBullet : public LiveActor {
 public:
     ElectricPressureBullet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void shotElectricBullet(LiveActor*, const Pos3f&, const f32&);
     void exeFly();

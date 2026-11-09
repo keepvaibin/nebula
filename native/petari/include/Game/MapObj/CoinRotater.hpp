@@ -7,7 +7,7 @@ class CoinRotater : public NameObj {
 public:
     CoinRotater(const char*);
 
-    virtual void movement();
+    virtual void movement() override;
 
     f32 mRotateY;
     f32 mWaterRotateY;

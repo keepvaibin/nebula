@@ -23,7 +23,7 @@ void SleepControllerHolder::movement() {
     }
 }
 
-void SleepControllerHolder::add(NameObj* pObj, const TableIter& rIter, SwitchEventListener* pListener) {
+void SleepControllerHolder::add(NameObj* /*pObj*/, const TableIter& rIter, SwitchEventListener* pListener) {
     SleepController* sleepControl = new SleepController(rIter, pListener);
 
     mSleepControl.push_back(sleepControl);

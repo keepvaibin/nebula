@@ -93,7 +93,7 @@ void DashRing::init(const TableIter& rIter) {
     mInitialPosition = mPosition;
 }
 
-void DashRing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void DashRing::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (mRevivalTime != 0 || !MR::isSensorPlayer(pReceiver)) {
         return;
     }

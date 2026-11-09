@@ -8,9 +8,9 @@ class WaterPressure : public PressureBase {
 public:
     WaterPressure(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initBullet(const TableIter&);
-    virtual bool shotBullet(f32);
+    virtual void init(const TableIter&) override;
+    virtual void initBullet(const TableIter&) override;
+    virtual bool shotBullet(f32) override;
 
     void calcGunPointFromCannon(Pos3f*);
 

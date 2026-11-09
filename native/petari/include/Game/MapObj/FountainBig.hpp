@@ -6,9 +6,9 @@ class FountainBig : public LiveActor {
 public:
     FountainBig(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void updateHitSensor(HitSensor*);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void updateHitSensor(HitSensor*) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeSign();

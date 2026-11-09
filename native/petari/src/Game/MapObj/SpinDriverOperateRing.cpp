@@ -34,7 +34,7 @@ SpinDriverOperateRing::SpinDriverOperateRing(const char* pName)
       mOffsetLength(), mOffsetRate(), mOperateState(OperateState_None) {
 }
 
-void SpinDriverOperateRing::init(const TableIter& rIter) {
+void SpinDriverOperateRing::init(const TableIter& /*rIter*/) {
     makeActorAppeared();
     MR::invalidateClipping(this);
 }

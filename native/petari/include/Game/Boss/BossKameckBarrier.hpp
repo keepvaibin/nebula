@@ -6,7 +6,7 @@ class BossKameckBarrier : public LiveActor {
 public:
     BossKameckBarrier(const char* pName, const char* pModelName);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void exeWait();
 

@@ -6,8 +6,8 @@ class MogucchiShooter : public PartsModel {
 public:
     MogucchiShooter(LiveActor*, const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAndSetBaseMtx() override;
 
     void panicDeath();
     void explosion();

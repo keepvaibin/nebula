@@ -12,7 +12,7 @@
 
 namespace MR {
 
-    XanimePlayer* newXanimePlayer(const ResourceHolder* pModelResourceHolder, const char* pChar, const ResourceHolder* pUnused, ModelFlag mdlFlag,
+    XanimePlayer* newXanimePlayer(const ResourceHolder* pModelResourceHolder, const char* pChar, const ResourceHolder* /*pUnused*/, ModelFlag mdlFlag,
                                   XanimeResourceTable* pAnimeResourceTable) {
         Model* newModel = createModel(pModelResourceHolder, pChar, mdlFlag);
         return new XanimePlayer(newModel, pAnimeResourceTable);

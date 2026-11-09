@@ -6,9 +6,9 @@ class CameraTalk : public Camera {
 public:
     CameraTalk(const char* pName = "会話カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec3f& pos, const Vec3f& up, f32 height, f32 dist);
 

@@ -8,13 +8,13 @@ class JumpHole : public LiveActor {
 public:
     JumpHole(const char* pName);
 
-    virtual ~JumpHole() {
+    virtual ~JumpHole() override {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeSetCenter();

@@ -6,13 +6,13 @@ class AirBubble : public LiveActor {
 public:
     AirBubble(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual bool receiveMsgPush(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void appearMove(const Vec3f&, s32);
     void exeWait();

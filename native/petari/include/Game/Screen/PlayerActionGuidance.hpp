@@ -9,8 +9,8 @@ public:
     /// @brief Creates a new `PlayerActionGuidance`.
     PlayerActionGuidance();
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     void createSpinLayout();
     void createTamakoroLayout();

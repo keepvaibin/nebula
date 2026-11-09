@@ -8,8 +8,8 @@ class CameraCover : public NameObj {
 public:
     CameraCover(const char*);
 
-    virtual void movement();
-    virtual void draw() const;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void cover(u32 frames);
 

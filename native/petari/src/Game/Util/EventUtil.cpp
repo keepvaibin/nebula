@@ -456,7 +456,7 @@ namespace MR {
         GameDataFunction::setGameEventValueForBit("WarpPodSaveBits", bit, isOn);
     }
 
-    s32 registerStorageSpinDriverPathDrawRange(const NameObj* pObj, const TableIter& rIter, int spinDriverId, f32* pDrawRange) {
+    s32 registerStorageSpinDriverPathDrawRange(const NameObj* /*pObj*/, const TableIter& rIter, int spinDriverId, f32* pDrawRange) {
         const char* pStageName = MR::getCurrentStageName();
         int scenarioNo = MR::getCurrentScenarioNo();
         int zoneId = MR::getPlacedZoneId(rIter);

@@ -6,7 +6,7 @@
 
 namespace LayoutCoreUtil {
     const char* getPaneUserData(const Ui::Pane*, char*);
-    u16 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg);
+    u32 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg);
     void initTextBoxPane(Ui::TextBox* pTextBox, const char* pStr, u32 allocSize);
     void reallocateTextBoxMessage(Ui::TextBox* pTextBox, u32 allocSize);
 };  // namespace LayoutCoreUtil

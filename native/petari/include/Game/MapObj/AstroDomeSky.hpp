@@ -9,10 +9,10 @@ class AstroDomeSky : public LiveActor {
 public:
     AstroDomeSky(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     bool tryRotateAppearance();
     void exeHide();

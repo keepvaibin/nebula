@@ -21,12 +21,12 @@ class FileSelectItem : public LiveActor {
 public:
     FileSelectItem(s32 fileNo, bool isNewFile, const FileSelectIconID&, const char* pName);
 
-    virtual ~FileSelectItem();
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void control();
+    virtual ~FileSelectItem() override;
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
 
     bool isNew() const;
     bool isExist() const;

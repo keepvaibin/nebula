@@ -75,7 +75,7 @@ void DragonHeadFlower::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgPush(pReceiver, pSender);
 }
 
-bool DragonHeadFlower::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DragonHeadFlower::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SPHERE_PLAYER_BINDED) {
         mPlayerSensor = pSender;
         mTargetVelocity = pSender->mHost->mVelocity;

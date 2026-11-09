@@ -8,15 +8,15 @@ class StarPieceMother : public LiveActor {
 public:
     StarPieceMother(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void exeMoveOnRail();
     void placementPieceOnRail(f32);
     void onSwitchA();
     void offSwitchA();
-    void attackSensor(HitSensor*, HitSensor*);
+    void attackSensor(HitSensor*, HitSensor*) override;
     void emitStarPieces();
     void exeWait();
 

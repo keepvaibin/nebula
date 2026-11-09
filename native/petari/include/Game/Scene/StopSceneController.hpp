@@ -6,7 +6,7 @@ class StopSceneController : public NameObj {
 public:
     StopSceneController();
 
-    virtual void movement();
+    virtual void movement() override;
 
     // Counts the delayed requests down; held while the scene's objects are suspended.
     void movementDelayRequests();

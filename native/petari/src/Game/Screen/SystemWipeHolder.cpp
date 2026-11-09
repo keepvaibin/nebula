@@ -9,7 +9,7 @@
 SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "システムワイプ保持"), mIsCapturing(false) {
 }
 
-void SystemWipeHolder::init(const TableIter& rIter) {
+void SystemWipeHolder::init(const TableIter& /*rIter*/) {
     addWipeLayout(new WipeFade("フェードワイプ", Color8(0, 0, 0, 255)));
     addWipeLayout(new WipeRing(false, "円ワイプ"));
     addWipeLayout(new WipeFade("白フェードワイプ", Color8(255, 255, 255, 255)));

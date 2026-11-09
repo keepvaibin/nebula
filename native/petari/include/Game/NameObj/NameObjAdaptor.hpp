@@ -11,11 +11,11 @@ class NameObjAdaptor : public NameObj {
 public:
     NameObjAdaptor(const char*);
 
-    virtual ~NameObjAdaptor();
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void calcViewAndEntry();
+    virtual ~NameObjAdaptor() override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
 
     void connectToMovement(const MR::FunctorBase&);
     void connectToCalcAnim(const MR::FunctorBase&);

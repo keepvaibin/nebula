@@ -113,7 +113,7 @@ void GravityLightRoad::exeDisappear() {
     }
 }
 
-bool GravityLightRoad::receiveOtherMsg(u32 msg, HitSensor* pReceiver, HitSensor* pSender) {
+bool GravityLightRoad::receiveOtherMsg(u32 msg, HitSensor* pReceiver, HitSensor* /*pSender*/) {
     if (isNerve(GET_NERVE(GravityLightRoad, GravityLightRoadNrvDisappear))) {
         return false;
     }

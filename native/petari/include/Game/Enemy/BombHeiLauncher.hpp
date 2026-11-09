@@ -9,10 +9,10 @@ class BombHeiLauncher : public LiveActor {
 public:
     BombHeiLauncher(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void startCountdown();
     void onSwitchA();

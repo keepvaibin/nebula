@@ -14,11 +14,11 @@ class MiiFacePartsHolder : public LiveActorGroup {
 public:
     MiiFacePartsHolder(int partsNumMax);
 
-    virtual ~MiiFacePartsHolder();
-    virtual void init(const TableIter& rIter);
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void calcViewAndEntry();
+    virtual ~MiiFacePartsHolder() override;
+    virtual void init(const TableIter& rIter) override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
 
     void buildWaitingHeads();
     bool isInitEnd() const;

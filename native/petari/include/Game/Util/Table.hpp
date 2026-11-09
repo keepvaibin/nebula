@@ -126,7 +126,7 @@ public:
     TableIter findElementBinary(const char* pKey, const char* pValue) const;
 
     template < typename T >
-    const bool getValue(int entryIndex, const char* pKey, T* pValueOut) const;
+    bool getValue(int entryIndex, const char* pKey, T* pValueOut) const;
 
     template < typename T >
     TableIter findElement(const char* pKey, T searchValue, int startIndex) const;
@@ -139,7 +139,7 @@ public:
 };
 
 template < typename T >
-const bool Table::getValue(int entryIndex, const char* pKey, T* pValueOut) const {
+bool Table::getValue(int entryIndex, const char* pKey, T* pValueOut) const {
     s32 itemIndex = searchItemInfo(pKey);
     if (itemIndex < 0) {
         return false;

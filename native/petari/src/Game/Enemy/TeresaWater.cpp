@@ -148,7 +148,7 @@ void TeresaWater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool TeresaWater::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TeresaWater::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceAttack(msg)) {
         setNerve(GET_NERVE(TeresaWater, TeresaWaterNrvStun));
 

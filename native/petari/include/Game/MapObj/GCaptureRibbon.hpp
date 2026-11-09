@@ -9,8 +9,8 @@ class GCaptureRibbon : public LiveActor {
 public:
     GCaptureRibbon(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void draw() const override;
 
     void reset();
     void setLine(const Vec3f&, const Vec3f&);

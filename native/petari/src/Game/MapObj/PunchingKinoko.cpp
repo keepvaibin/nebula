@@ -89,7 +89,7 @@ void PunchingKinoko::initJointControl() {
 }
 
 // The ball joint points from the base to the head, squashed along mShadowNormal, and sits on the head.
-bool PunchingKinoko::ballMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rJoint) {
+bool PunchingKinoko::ballMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*rJoint*/) {
     Vec3f stemDir;
     stemDir.sub(mGroundChecker->mPosition, mPosition);
     MR::orthogonalize(pMtx);

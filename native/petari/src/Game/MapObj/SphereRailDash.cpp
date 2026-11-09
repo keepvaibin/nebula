@@ -31,7 +31,7 @@ void SphereRailDash::init(const TableIter& rIter) {
     appear();
 }
 
-bool SphereRailDash::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SphereRailDash::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_SPHERE_PLAYER_BINDED) {
         mBinderSensor = pSender;
         return true;

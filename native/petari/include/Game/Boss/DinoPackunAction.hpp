@@ -10,33 +10,33 @@ class DinoPackunAction : public ActorStateBase< DinoPackun > {
 public:
     DinoPackunAction(const char* pName, DinoPackun* pHost);
 
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual void attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     }
 
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPlayerAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveOtherMsg(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual void attackSensorTail(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual void attackSensorTail(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     }
 
-    virtual bool receiveMsgPlayerAttackTail(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPlayerAttackTail(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 
-    virtual bool receiveOtherMsgTail(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveOtherMsgTail(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
         return false;
     }
 

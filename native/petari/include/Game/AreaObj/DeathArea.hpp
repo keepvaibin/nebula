@@ -9,12 +9,12 @@ public:
 
     DeathArea(int, const char*);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
 
-    virtual bool isInVolume(const Vec3f&) const;
+    virtual bool isInVolume(const Vec3f&) const override;
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "DeathArea";
     }
 

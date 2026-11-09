@@ -13,7 +13,7 @@ MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)
 MiiFaceParts::~MiiFaceParts() {
 }
 
-void MiiFaceParts::init(const TableIter& rIter) {
+void MiiFaceParts::init(const TableIter& /*rIter*/) {
 }
 
 void MiiFaceParts::calcAnim() {

@@ -14,11 +14,11 @@ class DinoPackunFire : public LiveActor {
 public:
     DinoPackunFire(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter&) override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver) override;
 
     void appearShot(const Vec3f&, const Vec3f&);
     void exeShot();

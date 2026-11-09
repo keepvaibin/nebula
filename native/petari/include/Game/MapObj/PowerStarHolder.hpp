@@ -14,7 +14,7 @@ class PowerStarHolder : public NameObj {
 public:
     PowerStarHolder(const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void registerPowerStar(PowerStar*, int);
     void requestAppearPowerStar(int, const Vec3f*, bool);

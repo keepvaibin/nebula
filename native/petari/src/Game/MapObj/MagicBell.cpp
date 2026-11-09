@@ -116,7 +116,7 @@ void MagicBell::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return false;
     }

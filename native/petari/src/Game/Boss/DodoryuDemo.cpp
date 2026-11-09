@@ -55,7 +55,7 @@ DodoryuDemoOpening::DodoryuDemoOpening(Dodoryu* pHost, const char* pName) : Dodo
     initWithoutIter();
 }
 
-void DodoryuDemoOpening::init(const TableIter& rIter) {
+void DodoryuDemoOpening::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuDemoOpeningNrvOpeningUnderground));
     MR::initAnimCamera(mHost, &mActorCameraInfo, "OpeningDemo");
@@ -230,7 +230,7 @@ DodoryuDemoAppear::DodoryuDemoAppear(Dodoryu* pHost, const char* pName) : Dodory
     initWithoutIter();
 }
 
-void DodoryuDemoAppear::init(const TableIter& rIter) {
+void DodoryuDemoAppear::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuDemoAppearNrvAppearPlay));
     MR::initAnimCamera(mHost, &mActorCameraInfo, "AppearDemo");
@@ -290,7 +290,7 @@ DodoryuDemoAngry::DodoryuDemoAngry(Dodoryu* pHost, const char* pName) : DodoryuS
     initWithoutIter();
 }
 
-void DodoryuDemoAngry::init(const TableIter& rIter) {
+void DodoryuDemoAngry::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuDemoAngryNrvAngryPlay));
     MR::initAnimCamera(mHost, &mActorCameraInfo, "AngryDemo");
@@ -350,7 +350,7 @@ DodoryuDemoDown::DodoryuDemoDown(Dodoryu* pHost, const char* pName) : DodoryuSta
     initWithoutIter();
 }
 
-void DodoryuDemoDown::init(const TableIter& rIter) {
+void DodoryuDemoDown::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuDemoDownNrvDownPlay));
     MR::initAnimCamera(mHost, &mActorCameraInfo, "DownDemo");

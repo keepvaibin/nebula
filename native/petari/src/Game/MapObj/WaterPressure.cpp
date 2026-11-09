@@ -17,7 +17,7 @@ void WaterPressure::init(const TableIter& rIter) {
     MR::getPlacementArg7NoInit(rIter, &mIsInvalidSpinKill);
 }
 
-void WaterPressure::initBullet(const TableIter& rIter) {
+void WaterPressure::initBullet(const TableIter& /*rIter*/) {
     MR::createSceneObj(SceneObj_WaterPressureBulletHolder);
 }
 

@@ -23,7 +23,7 @@ SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rLocalPos)
     : ModelObj("スナカゼ用トラップ", "SunakazeKunTrap", nullptr, -2, -2, -2, false), mHost(pHost), mLocalPos(rLocalPos) {
 }
 
-void SunakazeKunTrap::init(const TableIter& rIter) {
+void SunakazeKunTrap::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
     MR::addHitSensorEnemyAttack(this, "attack", 4, 40.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initShadowVolumeCylinder(this, 40.0f);

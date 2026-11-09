@@ -61,10 +61,10 @@ public:
     /// @brief Creates a new `DemoExecutor`
     DemoExecutor(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
 
-    virtual void registerDemoActor(LiveActor*, const TableIter&);
+    virtual void registerDemoActor(LiveActor*, const TableIter&) override;
 
     void start(NameObj*, const char*, MR::MovementControlType);
     void startPart(NameObj*, const char*, const char*, MR::MovementControlType);

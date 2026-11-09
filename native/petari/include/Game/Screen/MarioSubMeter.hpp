@@ -8,8 +8,8 @@ class MarioSubMeter : public NameObj {
 public:
     MarioSubMeter(const char* pName);
 
-    virtual ~MarioSubMeter();
-    virtual void init(const TableIter& rIter);
+    virtual ~MarioSubMeter() override;
+    virtual void init(const TableIter& rIter) override;
 
     void setBeeLifeRatio(f32);
     void setWaterLifeRatio(f32);

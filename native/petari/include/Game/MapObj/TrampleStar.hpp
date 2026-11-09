@@ -21,11 +21,11 @@ public:
 
     TrampleStar(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void draw() const;
-    virtual void calcAnim();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void toSphere(f32);
     void initCheckFlag(u32);
@@ -66,7 +66,7 @@ public:
     f32 mDeformRate;
     f32 mJumpVel;
     f32 mSpringRate;
-    u16 mCaptureFrames;
+    s32 mCaptureFrames;
 };
 
 class TrampleStarShare : public LiveActor {

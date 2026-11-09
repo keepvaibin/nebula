@@ -28,10 +28,10 @@ class ElectricRailHolder : public LiveActor {
 public:
     ElectricRailHolder(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAnim();
-    virtual void draw() const;
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAnim() override;
+    virtual void draw() const override;
+    virtual void control() override;
 
     bool isTouchRail(const HitSensor*, Vec3f*, Vec3f*) const;
     void registerRail(const LiveActor*, ElectricRailType);

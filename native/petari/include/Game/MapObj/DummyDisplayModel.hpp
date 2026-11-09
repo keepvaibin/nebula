@@ -37,11 +37,11 @@ class DummyDisplayModel : public PartsModel {
 public:
     DummyDisplayModel(LiveActor*, const DummyDisplayModelInfo*, int drawBufferType, s32 modelId, s32 colorFrame);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     const DummyDisplayModelInfo* mModelInfo;
     s32 mItemType;  // DummyDisplayModelId

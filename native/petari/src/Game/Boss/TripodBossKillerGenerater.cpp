@@ -90,7 +90,7 @@ void TripodBossKillerGenerater::kill() {
     MR::emitEffect(this, "ExplosionM");
 }
 
-bool TripodBossKillerGenerater::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TripodBossKillerGenerater::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg)) {
         return requestBreak();
     }

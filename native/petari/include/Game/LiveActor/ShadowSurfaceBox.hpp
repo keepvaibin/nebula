@@ -7,7 +7,7 @@ class ShadowSurfaceBox : public ShadowSurfaceDrawer {
 public:
     ShadowSurfaceBox();
 
-    virtual ~ShadowSurfaceBox();
+    virtual ~ShadowSurfaceBox() override;
 
     virtual void draw() const override;
 

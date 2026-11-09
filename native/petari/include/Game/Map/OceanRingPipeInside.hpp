@@ -10,9 +10,9 @@ class OceanRingPipeInside : public LiveActor {
 public:
     OceanRingPipeInside(const OceanRingPipe*);
 
-    virtual void init(const TableIter&);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter&) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     void initMesh();
     SiteMaterial loadMaterial() const;

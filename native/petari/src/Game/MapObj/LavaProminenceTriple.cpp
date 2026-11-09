@@ -18,8 +18,8 @@ namespace {
 };  // namespace
 
 LavaProminenceTriple::LavaProminenceTriple(const char* pName)
-    : LiveActor(pName), mBloomModel(), mBaseRot(0, 0, 0, 1), mCurrRot(0, 0, 0, 1), mSide(0, 0, 1), mFront(1, 0, 0), mIsAppearDrop1(),
-      mRotateVel(::sInitRotateVel), mIsAppearDrop2(), mIsAppearDrop3(), mIsEnvironment(), mDefaultAppearTime() {
+    : LiveActor(pName), mBloomModel(), mBaseRot(0, 0, 0, 1), mCurrRot(0, 0, 0, 1), mSide(0, 0, 1), mFront(1, 0, 0), mRotateVel(::sInitRotateVel),
+      mIsAppearDrop1(), mIsAppearDrop2(), mIsAppearDrop3(), mIsEnvironment(), mDefaultAppearTime() {
     mBloomMtx.identity();
 }
 

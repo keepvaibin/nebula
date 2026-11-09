@@ -15,7 +15,7 @@ namespace {
 PrologueLetter::PrologueLetter(const char* pName) : LayoutActor(pName, true), mAButtonIcon() {
 }
 
-void PrologueLetter::init(const TableIter& rIter) {
+void PrologueLetter::init(const TableIter& /*rIter*/) {
     initLayoutManager("PeachLetterMini", 1);
     MR::createAndAddPaneCtrl(this, "AButtonPosition", 1);
 

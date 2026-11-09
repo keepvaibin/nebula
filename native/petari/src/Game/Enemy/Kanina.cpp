@@ -330,7 +330,7 @@ bool Kanina::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool Kanina::receiveTrample(HitSensor* pSender, HitSensor* pReceiver) {
+bool Kanina::receiveTrample(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!isNerve(GET_NERVE(Kanina, HostTypeAttack))) {
         setNerve(GET_NERVE(Kanina, HostTypeGuard));
         return true;
@@ -509,7 +509,7 @@ bool Kanina::isStateStayOnGround() const {
     return true;
 }
 
-void Kanina::initForType(const TableIter& rIter, KaninaType type) {
+void Kanina::initForType(const TableIter& /*rIter*/, KaninaType type) {
     mType = type;
     if (mType == KaninaType_Red) {
         MR::declareStarPiece(this, ::sStarPieceNum);

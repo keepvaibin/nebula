@@ -11,7 +11,7 @@ class AreaObj : public NameObj {
 public:
     AreaObj(int, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     virtual bool isInVolume(const Vec3f&) const;
 

@@ -43,7 +43,7 @@ void NebulaAchievementLuma::tryCreate() {
     pLuma->initWithoutIter();
 }
 
-void NebulaAchievementLuma::init(const TableIter& rIter) {
+void NebulaAchievementLuma::init(const TableIter& /*rIter*/) {
     // Its place, before the actor is set up (with no placement entry it keeps the position it has).
     Vec3f start(0.0f, 0.0f, 0.0f);
     Vec3f startRotate(0.0f, 0.0f, 0.0f);

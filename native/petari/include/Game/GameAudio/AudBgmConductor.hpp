@@ -6,8 +6,8 @@ class AudBgmConductor : public NameObj {
 public:
     AudBgmConductor();
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
 
     void playPinchEventBgmLevel(bool);
     void setStateBit(u32);

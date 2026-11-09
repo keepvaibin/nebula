@@ -1,7 +1,7 @@
 #include "Game/AreaObj/CameraRepulsiveArea.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 
-Vec3f CameraRepulsiveSphere::getRepulsion(const Vec3f& rRep) {
+Vec3f CameraRepulsiveSphere::getRepulsion(const Vec3f& /*rRep*/) {
     return Vec3f(0.0f, 0.0f, 0.0f);
 }
 

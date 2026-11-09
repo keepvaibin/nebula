@@ -49,7 +49,7 @@ FileSelectInfo::FileSelectInfo(s32 nameBufferSize, const char* pName)
     MR::zeroMemory(mName, nameBufferSize * sizeof(char16_t));
 }
 
-void FileSelectInfo::init(const TableIter& rIter) {
+void FileSelectInfo::init(const TableIter& /*rIter*/) {
     initLayoutManager("FileInfo", 3);
     MR::connectToSceneLayout(this);
     initNerve(GET_NERVE_ANON(FileSelectInfoNrvAppear));

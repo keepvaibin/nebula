@@ -292,7 +292,7 @@ void Penguin::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     NPCActor::attackSensor(pSender, pReceiver);
 }
 
-bool Penguin::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Penguin::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgSpinStormRange(msg) && tryReleaseTurtle()) {
         return true;
     }

@@ -6,8 +6,8 @@ class KillerGunnerSingle : public LiveActor {
 public:
     KillerGunnerSingle(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void exeWait();
     void exeCharge();

@@ -208,7 +208,7 @@ PowerStarList::PowerStarList()
 PowerStarList::Separator::Separator() {
 }
 
-void PowerStarList::init(const TableIter& rIter) {
+void PowerStarList::init(const TableIter& /*rIter*/) {
     initLayoutManager("AllStarList", 1);
     MR::createAndAddPaneCtrl(this, "PicBG", 1);
     MR::createAndAddPaneCtrl(this, "List1", 1);

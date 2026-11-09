@@ -58,7 +58,7 @@ void BaseMatrixFollowTarget::set(LiveActor* pActor, const Pos3f& rMtx, const Pos
     }
 }
 
-const MtxPtr BaseMatrixFollowTarget::getHostBaseMtx() const {
+MtxPtr BaseMatrixFollowTarget::getHostBaseMtx() const {
     if (!mHostBaseMtx) {
         return mActor->getBaseMtx();
     }

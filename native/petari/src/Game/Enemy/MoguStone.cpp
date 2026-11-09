@@ -154,7 +154,7 @@ void MoguStone::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 void MoguStone::exeTaken() {
 }
 
-bool MoguStone::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool MoguStone::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (!isNerve(GET_NERVE(MoguStone, MoguStoneNrvThrow))) {
         return false;
     }

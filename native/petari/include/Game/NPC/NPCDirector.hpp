@@ -9,7 +9,7 @@ class NPCDirector : public NameObj {
 public:
     NPCDirector();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     NPCItemParameterReader* mItemParameterReader;
     ResourceHolder* mDataResourceHolder;

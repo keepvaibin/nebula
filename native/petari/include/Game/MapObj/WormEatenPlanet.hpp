@@ -10,10 +10,10 @@ class WormEatenPlanet : public LiveActor {
 public:
     WormEatenPlanet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
     void exeFirstWait();
     void exeSecondWait();

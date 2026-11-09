@@ -6,6 +6,6 @@ class MultiEmitterParticleCallBack : public ParticleCallBack {
 public:
     MultiEmitterParticleCallBack();
 
-    virtual ~MultiEmitterParticleCallBack() {
+    virtual ~MultiEmitterParticleCallBack() override {
     }
 };

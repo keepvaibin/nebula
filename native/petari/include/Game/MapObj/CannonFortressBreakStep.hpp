@@ -8,9 +8,9 @@ class CannonFortressBreakStep : public MapObjActor {
 public:
     CannonFortressBreakStep(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
-    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&);
+    virtual void init(const TableIter&) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
+    virtual void initCaseNoUseSwitchB(const MapObjActorInitInfo&) override;
 
     void exeWait();
     void exeFall();

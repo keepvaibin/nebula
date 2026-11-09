@@ -8,7 +8,7 @@ public:
         : PartsModel(pHost, pName, pModelName, pMtx, drawBufferType, useHostLight), mHostScale() {
     }
 
-    virtual void calcAndSetBaseMtx();
+    virtual void calcAndSetBaseMtx() override;
 
     Vec3f* mHostScale;
 };
@@ -17,7 +17,7 @@ class BegomanSpringHead : public BegomanHead {
 public:
     BegomanSpringHead(LiveActor* pActor, MtxPtr pMtx);
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     bool isSpringHop();
     s32 getHopEndBckFrameMax();

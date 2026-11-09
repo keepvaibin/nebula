@@ -15,19 +15,19 @@ class CameraManGame : public CameraMan {
 public:
     CameraManGame(CameraHolder*, CameraParamChunkHolder*, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
-    virtual void calc();
-    virtual void notifyActivate();
-    virtual void notifyDeactivate() {};
-    virtual bool isInterpolationOff() const;
-    virtual bool isCollisionOff() const;
-    virtual bool isZeroFrameMoveOff() const;
-    virtual bool isSubjectiveCameraOff() const;
-    virtual bool isCorrectingErpPositionOff() const;
-    virtual bool isEnableToReset() const;
-    virtual bool isEnableToRoundLeft() const;
-    virtual bool isEnableToRoundRight() const;
+    virtual void calc() override;
+    virtual void notifyActivate() override;
+    virtual void notifyDeactivate() override {};
+    virtual bool isInterpolationOff() const override;
+    virtual bool isCollisionOff() const override;
+    virtual bool isZeroFrameMoveOff() const override;
+    virtual bool isSubjectiveCameraOff() const override;
+    virtual bool isCorrectingErpPositionOff() const override;
+    virtual bool isEnableToReset() const override;
+    virtual bool isEnableToRoundLeft() const override;
+    virtual bool isEnableToRoundRight() const override;
 
     void closeCreatingCameraChunk();
     void startStartPosCamera(bool);

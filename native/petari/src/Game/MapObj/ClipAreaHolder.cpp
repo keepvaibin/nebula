@@ -19,7 +19,7 @@ namespace {
 ClipAreaHolder::ClipAreaHolder(const char* pName) : DeriveActorGroup< ClipArea >(pName, ::sClipAreaMax), mIsActive(true) {
 }
 
-void ClipAreaHolder::init(const TableIter& rIter) {
+void ClipAreaHolder::init(const TableIter& /*rIter*/) {
 }
 
 bool ClipAreaHolder::isInArea(const Vec3f& rPos, f32 radius) const {

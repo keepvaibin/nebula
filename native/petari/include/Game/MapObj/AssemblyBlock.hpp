@@ -10,8 +10,8 @@ public:
     /// @param A pointer to the null-terminated name of the object.
     AssemblyBlock(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void calcAndSetBaseMtx() override;
 
     void exeWait();
     void exeAssemble();

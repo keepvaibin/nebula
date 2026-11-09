@@ -163,7 +163,7 @@ void BombTeresa::updateDriftReleaseVelocity() {
     MR::blendQuatUpFront(&mPoseQuat, -mGravity, mFront, 0.1f, 0.6f);
 }
 
-bool BombTeresa::rootTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool BombTeresa::rootTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     if (mTongueRate == 0.0f) {
         return false;
     }
@@ -185,7 +185,7 @@ bool BombTeresa::rootTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& r
     return true;
 }
 
-bool BombTeresa::endTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool BombTeresa::endTongueMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     if (mTongueRate == 0.0f) {
         return false;
     }
@@ -257,7 +257,7 @@ bool BombTeresa::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return false;
 }
 
-bool BombTeresa::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BombTeresa::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceAttack(msg) && isEnableStarPieceAttack()) {
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse));
         return true;
@@ -301,7 +301,7 @@ bool BombTeresa::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool BombTeresa::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BombTeresa::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_DISPERSE_BOMB_TERESA && isEnableDisperse()) {
         MR::zeroVelocity(this);
         setNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse));

@@ -28,8 +28,8 @@ class AreaFormCube : public AreaForm {
 public:
     AreaFormCube(int cubeType);
 
-    virtual void init(const TableIter&);
-    virtual bool isInVolume(const Vec3f&) const;
+    virtual void init(const TableIter&) override;
+    virtual bool isInVolume(const Vec3f&) const override;
 
     void calcWorldPos(Vec3f*) const;
     void calcWorldRotate(Vec3f*) const;
@@ -64,8 +64,8 @@ class AreaFormSphere : public AreaForm {
 public:
     AreaFormSphere();
 
-    virtual void init(const TableIter&);
-    virtual bool isInVolume(const Vec3f&) const;
+    virtual void init(const TableIter&) override;
+    virtual bool isInVolume(const Vec3f&) const override;
 
     void calcUpVec(Vec3f*) const;
     void calcPos(Vec3f*) const;
@@ -79,8 +79,8 @@ class AreaFormBowl : public AreaForm {
 public:
     AreaFormBowl();
 
-    virtual void init(const TableIter&);
-    virtual bool isInVolume(const Vec3f&) const;
+    virtual void init(const TableIter&) override;
+    virtual bool isInVolume(const Vec3f&) const override;
 
     void calcUpVec(const Vec3f&);
 
@@ -93,8 +93,8 @@ class AreaFormCylinder : public AreaForm {
 public:
     AreaFormCylinder();
 
-    virtual void init(const TableIter&);
-    virtual bool isInVolume(const Vec3f&) const;
+    virtual void init(const TableIter&) override;
+    virtual bool isInVolume(const Vec3f&) const override;
 
     void calcPos(Vec3f*) const;
     void calcCenterPos(Vec3f*) const;

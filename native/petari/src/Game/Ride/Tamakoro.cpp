@@ -214,8 +214,8 @@ namespace NrvTamakoro {
 Tamakoro::Tamakoro(const char* pName)
     : LiveActor(pName), mTutorial(nullptr), mJointCtrl(nullptr), mBallRotateQuat(0, 0, 0, 1), mMarioRotateQuat(0, 0, 0, 1),
       mRingUp(0, 1, 0), mKickVel(0, 0, 0), mMarioBindRequestPos(0, 0, 0), mMarioUp(0, 1, 0), mMarioPos(0, 0, 0), mMoment(0, 0, 0),
-      mMarioFront(0, 0, 1), mDirectionToMario(0, 0, 0), mAccelDir(0, 0, 0), mAirTime(0), mAccelRate(0.0f), mMarioRotateYAngle(0.0f),
-      mMarioOffset(0.0f), mMarioOffsetVelocity(0.0f), mBgmCtrl(nullptr), mControlDisabled(false), mHasTutorial(false) {
+      mMarioFront(0, 0, 1), mDirectionToMario(0, 0, 0), mAccelDir(0, 0, 0), mAccelRate(0.0f), mMarioRotateYAngle(0.0f), mMarioOffset(0.0f),
+      mMarioOffsetVelocity(0.0f), mAirTime(0), mBgmCtrl(nullptr), mControlDisabled(false), mHasTutorial(false) {
     mBgmCtrl = new AudTamakoroBgmCtrl();
 }
 
@@ -259,7 +259,7 @@ void Tamakoro::initJointControl() {
     mJointCtrl = MR::createJointDelegatorWithNullChildFunc(this, &Tamakoro::ringMtxCallBack, "Ring");
 }
 
-bool Tamakoro::ringMtxCallBack(Pos3f* pMtx, const JointControllerInfo& pJointCtrlInfo) {
+bool Tamakoro::ringMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*pJointCtrlInfo*/) {
     Vec3f trans;
     pMtx->getTrans(trans);
 
@@ -358,7 +358,7 @@ void Tamakoro::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Tamakoro::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Tamakoro::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return MR::isMsgStarPieceReflect(msg);
 }
 
@@ -372,7 +372,7 @@ bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
     return false;
 }
 
-bool Tamakoro::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Tamakoro::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg) && requestBind(pSender)) {
         NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 1);
         return true;

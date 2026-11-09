@@ -46,7 +46,7 @@ namespace {
 AstroDomeOrbit::AstroDomeOrbit() : LiveActor("天文ドームの軌道"), mOrbitRadius(5000.0f), mAngle(), mRingCos(), mRingSin() {
 }
 
-void AstroDomeOrbit::init(const TableIter& rIter) {
+void AstroDomeOrbit::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_AstroDomeOrbit);
 
     MR::invalidateClipping(this);

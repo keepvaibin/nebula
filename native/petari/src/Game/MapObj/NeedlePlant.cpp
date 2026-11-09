@@ -98,7 +98,7 @@ void NeedlePlant::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool NeedlePlant::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool NeedlePlant::receiveMsgPush(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(NeedlePlant, NeedlePlantNrvShake))) {
         return false;
     }
@@ -112,7 +112,7 @@ bool NeedlePlant::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool NeedlePlant::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool NeedlePlant::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         setNerve(GET_NERVE(NeedlePlant, NeedlePlantNrvShake));
 
@@ -128,7 +128,7 @@ bool NeedlePlant::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     return false;
 }
 
-bool NeedlePlant::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool NeedlePlant::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     kill();
 
     return true;

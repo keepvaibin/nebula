@@ -119,7 +119,7 @@ bool GalaxyMapIcon::isNewOnDiscoverMode() const {
 GalaxyMapIcon::~GalaxyMapIcon() {
 }
 
-void GalaxyMapIcon::init(const TableIter& rIter) {
+void GalaxyMapIcon::init(const TableIter& /*rIter*/) {
     initLayoutManager("MapGalaxyIcon", 2);
     MR::createAndAddPaneCtrl(this, "GalaxyIcon", 1);
 

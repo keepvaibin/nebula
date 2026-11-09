@@ -277,7 +277,7 @@ bool KuriboMini::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-bool KuriboMini::requestHipDropDown(HitSensor* pSender, HitSensor* pReceiver) {
+bool KuriboMini::requestHipDropDown(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (isDown()) {
         return false;
     }
@@ -293,7 +293,7 @@ bool KuriboMini::requestHipDropDown(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool KuriboMini::requestFlatDown(HitSensor* pSender, HitSensor* pReceiver) {
+bool KuriboMini::requestFlatDown(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isDown()) {
         return false;
     }

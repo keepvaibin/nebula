@@ -83,7 +83,7 @@ f32 Halo::getDistance() const {
     return MR::calcDistanceToPlayer(this);
 }
 
-void Halo::connectToScene(const MapObjActorInitInfo& rIter) {
+void Halo::connectToScene(const MapObjActorInitInfo& /*rIter*/) {
     MR::connectToSceneAir(this);
 }
 

@@ -117,7 +117,7 @@ bool SphereSelectorHandle::isWaitOrSpinOrDemoRotate() {
             isNerve(GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvDemoRotate)));
 }
 
-bool SphereSelectorHandle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SphereSelectorHandle::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (SphereSelectorFunction::isMsgSelectStart(msg)) {
         appear();
         return true;

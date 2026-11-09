@@ -6,7 +6,7 @@ class SunLightArea : public AreaObj {
 public:
     SunLightArea(int, const char*);
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "SunLightArea";
     }
 };

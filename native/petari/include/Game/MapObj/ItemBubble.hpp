@@ -11,10 +11,10 @@ public:
         : PartsModel(pActor, pName, pModelName, pMtx, drawBufferType, deferMaterials) {
     }
 
-    virtual ~RotPartsModel() {
+    virtual ~RotPartsModel() override {
     }
 
-    virtual void calcAndSetBaseMtx() {
+    virtual void calcAndSetBaseMtx() override {
         PartsModel::calcAndSetBaseMtx();
         Rot3f mtx;
         mtx.identity();
@@ -29,13 +29,13 @@ class ItemBubble : public LiveActor {
 public:
     ItemBubble(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver);
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeBreak();
@@ -51,8 +51,8 @@ public:
     f32 mSwing;
     RotPartsModel** mCoins;
     StarPiece** mStarPieces;
-    u16 mItemCount;
-    u16 mItemType;
+    u32 mItemCount;
+    u32 mItemType;
     Pos3f mTargetMtx;
     Pos3f mItemMtx;
     Vec3f mClipCenter;

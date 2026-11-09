@@ -10,12 +10,12 @@ public:
 
     CameraDead(const char* pName = "通常死亡カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual bool isInterpolationOff() const {
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual bool isInterpolationOff() const override {
         return true;
     }
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(f32 dist, s32 deadTime, s32 cameraType) {
         mDist = dist;

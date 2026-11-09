@@ -246,7 +246,7 @@ void TreasureBoxCracked::attackSensor(HitSensor* pSender, HitSensor* pReceiver) 
     }
 }
 
-bool TreasureBoxCracked::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TreasureBoxCracked::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(TreasureBoxCracked, TreasureBoxCrackedNrvOpenWait))) {
         return false;
     }
@@ -270,7 +270,7 @@ bool TreasureBoxCracked::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, Hit
     return false;
 }
 
-bool TreasureBoxCracked::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TreasureBoxCracked::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgExplosionAttack(msg) && isNerve(GET_NERVE(TreasureBoxCracked, TreasureBoxCrackedNrvWait))) {
         if (mOpenCondition == 1) {
             MR::startSound(this, "SE_OJ_TERAS_BOX_GOLD_REFUSE");
@@ -395,7 +395,7 @@ LiveActor* TreasureBoxCracked::initBlueChip(const TableIter& rIter) {
     return chip;
 }
 
-LiveActor* TreasureBoxCracked::initKinokoOneUp(const TableIter& rIter) {
+LiveActor* TreasureBoxCracked::initKinokoOneUp(const TableIter& /*rIter*/) {
     return new BenefitItemOneUp("１ＵＰキノコ");
 }
 

@@ -1174,7 +1174,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mKits.mButton = &mButtonKit;
 }
 
-void NebulaSettingsScreen::init(const TableIter& rIter) {
+void NebulaSettingsScreen::init(const TableIter& /*rIter*/) {
     initLayoutManager("SysInfoWindow", 0);
     LayoutManager* pManager = getLayoutManager();
     static const char cLayoutName[] = "NebulaSettingsMenu";
@@ -1828,9 +1828,8 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         const char16_t* const page = pageText.c_str();
         setAnchor(mQuestionText, 3);
         setTextSize(mQuestionText, cLicenseTextSize);
-        // The text box takes its lengths as 16 bits.
-        u16 pageLength = 0;
-        while (pageLength < 0xFFFE && page[pageLength] != 0) {
+        u32 pageLength = 0;
+        while (page[pageLength] != 0) {
             pageLength++;
         }
         if (pageLength > mQuestionText->GetStringBufferLength()) {
@@ -1838,31 +1837,31 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         }
         const f32 pageRoom = mPanelWidth - cLicenseInset * 2.0f - cQuestionMargin * 2.0f;
         // Lines broken at the last space that fits, measured once for a page: the box alone would break inside a word.
-        static u16 shownLength = 0;
+        static u32 shownLength = 0;
         char16_t* const pShown = shown.room(static_cast< u32 >(pageLength) + 1);
         bool samePage = shownLength == pageLength;
-        for (u16 i = 0; samePage && i < pageLength; i++) {
+        for (u32 i = 0; samePage && i < pageLength; i++) {
             samePage = page[i] == pShown[i] || (page[i] == u' ' && pShown[i] == u'\n');
         }
         if (!samePage) {
             memcpy(pShown, page, pageLength * sizeof(char16_t));
             pShown[pageLength] = 0;
             shownLength = pageLength;
-            u16 lineStart = 0;
-            u16 lastSpace = 0;
-            for (u16 i = 0; i <= pageLength; i++) {
+            u32 lineStart = 0;
+            u32 lastSpace = 0;
+            for (u32 i = 0; i <= pageLength; i++) {
                 if (i != pageLength && pShown[i] != u' ' && pShown[i] != u'\n') {
                     continue;
                 }
-                mQuestionText->SetString(pShown + lineStart, 0, static_cast< u16 >(i - lineStart));
+                mQuestionText->SetString(pShown + lineStart, 0, i - lineStart);
                 measure(mQuestionText, 4000.0f, &width, &height);
                 if (width > pageRoom && lastSpace > lineStart) {
                     pShown[lastSpace] = u'\n';
-                    lineStart = static_cast< u16 >(lastSpace + 1);
+                    lineStart = lastSpace + 1;
                 }
                 if (i != pageLength) {
                     if (pShown[i] == u'\n') {
-                        lineStart = static_cast< u16 >(i + 1);
+                        lineStart = i + 1;
                     } else {
                         lastSpace = i;
                     }

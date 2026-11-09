@@ -14,14 +14,14 @@ public:
 
     /// @brief Intializes the `PauseMenu` while being placed into a scene.
     /// @param rIter The reference to an iterator over a `Table`.
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     /// @brief Draws the `PauseMenu` to the screen.
-    virtual void draw() const;
+    virtual void draw() const override;
 
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void updateStarPane();
     void startPaneAnimWithoutButton(const char*);

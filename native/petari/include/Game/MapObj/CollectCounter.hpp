@@ -8,8 +8,8 @@ class CollectCounter : public LayoutActor {
 public:
     CollectCounter(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void exeHide();
     void exeShow();

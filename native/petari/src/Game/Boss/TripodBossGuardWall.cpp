@@ -41,7 +41,7 @@ namespace NrvTriPodBossGuardWall {
     NEW_NERVE(TripodBossGuardWallNrvRotate, TripodBossGuardWall, Rotate);
 };  // namespace NrvTriPodBossGuardWall
 
-TripodBossGuardWall::TripodBossGuardWall(const char* pName) : LiveActor(pName), mCameraTargetMtx(), mCameraInfo(), mStartTrans(0.0f, 0.0f, 0.0f) {
+TripodBossGuardWall::TripodBossGuardWall(const char* pName) : LiveActor(pName), mCameraTargetMtx(), mStartTrans(0.0f, 0.0f, 0.0f), mCameraInfo() {
     mBaseMtx.identity();
 }
 
@@ -105,7 +105,7 @@ void TripodBossGuardWall::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mBaseMtx);
 }
 
-bool TripodBossGuardWall::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool TripodBossGuardWall::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (msg == ACTMES_TRIPODBOSS_STARTED) {
         for (s32 i = 0; i < ARRAY_SIZE(mParts); i++) {
             mParts[i].makeActorAppeared();

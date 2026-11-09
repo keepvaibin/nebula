@@ -73,7 +73,7 @@ void SnowMan::kill() {
     LiveActor::kill();
 }
 
-bool SnowMan::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool SnowMan::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isMsgFireBallAttack(msg)) {
         if (pReceiver == getSensor("head")) {
             damageHead();

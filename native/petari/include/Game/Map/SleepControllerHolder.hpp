@@ -12,7 +12,7 @@ class SleepControllerHolder : public NameObj {
 public:
     SleepControllerHolder();
 
-    virtual void movement();
+    virtual void movement() override;
 
     void add(NameObj*, const TableIter&, SwitchEventListener*);
     void initSync();

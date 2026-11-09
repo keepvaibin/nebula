@@ -17,7 +17,7 @@ class MercatorTransformCube : public AreaObj {
 public:
     MercatorTransformCube(int, const char*);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void convertTransAndRotate(Vec3f*, Pos3f*, const Vec3f&, bool) const;
     f32 getSphereRadius() const;

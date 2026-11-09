@@ -10,14 +10,14 @@ public:
     WarpCube(int formType, const char* pName) : AreaObj(formType, pName), mMapIdInfo() {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     PlacementId* mMapIdInfo;
     ActorCameraInfo* mCameraInfo;
     char* mEventName;
-    u16 mInvalidateTimer;
+    s32 mInvalidateTimer;
 };
 
 class WarpCubeMgr : public AreaObjMgr {
@@ -25,7 +25,7 @@ public:
     WarpCubeMgr(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName), mWarpCube() {
     }
 
-    virtual ~WarpCubeMgr() {
+    virtual ~WarpCubeMgr() override {
     }
 
     WarpCube* getPairCube(const AreaObj* pObj);

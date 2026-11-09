@@ -265,7 +265,7 @@ public:
     f32 mScaleOut;
     u32 mTick;
     s16 mWaitTime;
-    s16 mRateStepTimer;
+    s32 mRateStepTimer;
     NebulaColor8 mPrmClr;
     NebulaColor8 mEnvClr;
     u8 mDrawTimes;

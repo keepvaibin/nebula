@@ -16,16 +16,16 @@ class GeneralMapParts : public MapParts {
 public:
     GeneralMapParts(const char* pName);
 
-    virtual ~GeneralMapParts() {
+    virtual ~GeneralMapParts() override {
     }
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void initMapPartsFunction(const TableIter& rIter);
     void initSensorType(const TableIter& rIter);

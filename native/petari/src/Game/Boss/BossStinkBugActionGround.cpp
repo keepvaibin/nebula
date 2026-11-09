@@ -59,10 +59,10 @@ bool BossStinkBugActionGround::isValidFollowId(s32 id) const {
     return id == 0;
 }
 
-void BossStinkBugActionGround::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void BossStinkBugActionGround::attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
 }
 
-bool BossStinkBugActionGround::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BossStinkBugActionGround::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgPlayerHipDropFloor(msg) && isEnableHipDrop()) {
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();

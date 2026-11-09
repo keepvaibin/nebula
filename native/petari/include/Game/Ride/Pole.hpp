@@ -9,13 +9,13 @@ class Pole : public LiveActor {
 public:
     Pole(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void calcAnim();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
-    virtual MtxPtr getBaseMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void calcAnim() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
+    virtual MtxPtr getBaseMtx() const override {
         if (mNoModel) {
             return (MtxPtr)&mBaseMtx;
         } else {

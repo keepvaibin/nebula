@@ -8,7 +8,7 @@ ClipAreaShape::ClipAreaShape(const char* pName) : mModelData() {
     mModelData = MR::getModelData(pName);
 }
 
-bool ClipAreaShape::isInArea(const Vec3f& rPosition, f32 radius, const Pos3f& rMtx, const Vec3f& rScale) const {
+bool ClipAreaShape::isInArea(const Vec3f& rPosition, f32 /*radius*/, const Pos3f& rMtx, const Vec3f& rScale) const {
     if (MR::isNearZero(rScale.x) || (MR::isNearZero(rScale.y) || MR::isNearZero(rScale.z))) {
         return false;
     }

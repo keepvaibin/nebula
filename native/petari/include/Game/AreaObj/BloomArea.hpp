@@ -6,10 +6,10 @@ class BloomArea : public ImageEffectArea {
 public:
     BloomArea(int, const char*);
 
-    virtual ~BloomArea();
-    virtual void init(const TableIter&);
+    virtual ~BloomArea() override;
+    virtual void init(const TableIter&) override;
 
-    virtual const char* getManagerName() const {
+    virtual const char* getManagerName() const override {
         return "ImageEffectArea";
     }
 

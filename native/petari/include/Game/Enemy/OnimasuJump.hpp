@@ -7,15 +7,15 @@ class OnimasuJump : public Onimasu {
 public:
     OnimasuJump(const char* pName);
 
-    virtual void initFromRailPoint();
-    virtual void incrementNextPoint();
-    virtual void collectRailPointInfo();
-    virtual s32 getNextPointNo() const;
-    virtual s32 getLastPointNo() const;
-    virtual const Vec3f& getLastPointNormal() const;
-    virtual const Vec3f& getNextPointNormal() const;
-    virtual void startMoveInner();
-    virtual void updatePoseInner();
+    virtual void initFromRailPoint() override;
+    virtual void incrementNextPoint() override;
+    virtual void collectRailPointInfo() override;
+    virtual s32 getNextPointNo() const override;
+    virtual s32 getLastPointNo() const override;
+    virtual const Vec3f& getLastPointNormal() const override;
+    virtual const Vec3f& getNextPointNormal() const override;
+    virtual void startMoveInner() override;
+    virtual void updatePoseInner() override;
 
     void calcJumpVelocity();
 

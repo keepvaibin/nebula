@@ -58,7 +58,7 @@ void TypicalDoor::init(const TableIter& rIter) {
     makeActorAppeared();
 }
 
-void TypicalDoor::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void TypicalDoor::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor(this, &TypicalDoor::open));
 }
 
@@ -123,7 +123,7 @@ void TypicalDoorOpen::init(const TableIter& rIter) {
     open();
 }
 
-void TypicalDoorOpen::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void TypicalDoorOpen::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnB(this, MR::Functor< TypicalDoor >(this, &TypicalDoor::close));
 }
 

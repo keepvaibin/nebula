@@ -4,7 +4,7 @@
 MessageSensorHolder::MessageSensorHolder(const char* pName) : LiveActor(pName) {
 }
 
-void MessageSensorHolder::init(const TableIter& rIter) {
+void MessageSensorHolder::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
     MR::addBodyMessageSensor(this, ATYPE_MESSAGE_SENSOR);
     MR::invalidateClipping(this);

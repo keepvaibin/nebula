@@ -508,7 +508,7 @@ void Pole::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Pole::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Pole::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (mRider != nullptr && MR::isSensor(pReceiver, "bind")) {
         MR::endActorCamera(this, mCameraInfo, true);
         MR::endBindAndPlayerDamageMsg(this, msg);
@@ -520,7 +520,7 @@ bool Pole::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     return false;
 }
 
-bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgIsRushTakeOver(msg)) {
         return true;
     }

@@ -53,7 +53,7 @@ void DinoPackunBattleEgg::attackSensor(HitSensor* pSender, HitSensor* pReceiver)
 }
 
 // The egg takes reflected star pieces.
-bool DinoPackunBattleEgg::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool DinoPackunBattleEgg::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     return getHost()->isSensorEgg(pReceiver) && MR::isMsgStarPieceReflect(msg);
 }
 

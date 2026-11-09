@@ -733,7 +733,7 @@ DharmaSamboParts::DharmaSamboParts(DharmaSambo* pHost, const char* pName, const 
       mSpinHitController(), mHitDistance(-1.0f), mIsHead() {
 }
 
-void DharmaSamboParts::init(const TableIter& rIter) {
+void DharmaSamboParts::init(const TableIter& /*rIter*/) {
     mSpinHitController = new SpinHitController(this, 0, false);
     initNerve(GET_NERVE(DharmaSamboParts, HostTypeNrvDoNothing));
     f32 scale = mScale.y;

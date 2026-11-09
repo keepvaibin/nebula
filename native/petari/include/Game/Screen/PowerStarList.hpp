@@ -21,10 +21,10 @@ public:
     /// @brief Creates a new `PowerStarList`.
     PowerStarList();
 
-    virtual void init(const TableIter& rIter);
-    virtual void calcAnim();
-    virtual void appear();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void calcAnim() override;
+    virtual void appear() override;
+    virtual void control() override;
 
     bool isAppearing() const;
     ButtonPaneController* createButtonController(const char*, const char*);

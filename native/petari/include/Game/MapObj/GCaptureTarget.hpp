@@ -10,22 +10,22 @@ class GCaptureTarget : public LiveActor, public GCaptureTargetable {
 public:
     GCaptureTarget(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
 
-    void decidedTarget();
-    void releasedTarget();
+    void decidedTarget() override;
+    void releasedTarget() override;
     void emitNerveEffect();
-    void getTargetPosition(Vec3f*);
-    bool isReleaseForce() const;
-    f32 getPointableRange() const;
-    f32 releaseDistance() const;
+    void getTargetPosition(Vec3f*) override;
+    bool isReleaseForce() const override;
+    f32 getPointableRange() const override;
+    f32 releaseDistance() const override;
 
     void exeTryDemoAppear();
     void exeAppear();

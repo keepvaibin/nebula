@@ -182,7 +182,7 @@ LensFlareDirector::LensFlareDirector()
 LensFlareDirector::~LensFlareDirector() {
 }
 
-void LensFlareDirector::init(const TableIter& rIter) {
+void LensFlareDirector::init(const TableIter& /*rIter*/) {
     mRing = new LensFlareRing();
     mGlow = new LensFlareGlow();
     mLine = new LensFlareLine();

@@ -9,11 +9,11 @@ class OceanFloaterLandParts : public LiveActor {
 public:
     OceanFloaterLandParts(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void control();
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void initMoveType(const TableIter&);
     void initRailMoveFunction(const TableIter&);

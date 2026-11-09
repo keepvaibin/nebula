@@ -43,7 +43,7 @@ inline void FireBall::initHitSensors(const char* const hitSensor) {
     MR::addHitSensorEnemy(this, hitSensor, 8, ::cSensorRadius, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
-void FireBall::init(const TableIter& rIter) {
+void FireBall::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("FireBall", nullptr, false);
 
     MR::connectToSceneEnemyDecoration(this);
@@ -123,7 +123,7 @@ void FireBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool FireBall::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool FireBall::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgJetTurtleAttack(msg)) {
         kill();
         return false;

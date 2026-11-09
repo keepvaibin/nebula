@@ -6,8 +6,8 @@ class CameraTripodPlanet : public Camera {
 public:
     CameraTripodPlanet(const char* pName = "三脚惑星カメラ");
 
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(const Vec3f& wPoint, const Vec3f& axis, const Vec2f& angle, f32 dist) {
         mWPoint.set(wPoint);

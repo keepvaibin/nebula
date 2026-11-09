@@ -29,9 +29,9 @@ class WhirlPoolAccelerator : public LiveActor {
 public:
     WhirlPoolAccelerator(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void movement();
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void movement() override;
+    virtual void draw() const override;
 
     bool calcInfo(const Vec3f& rPosition, Vec3f* pAcceleration) const;
     void initPoints();

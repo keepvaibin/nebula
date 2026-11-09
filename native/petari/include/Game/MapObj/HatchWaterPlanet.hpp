@@ -9,8 +9,8 @@ class HatchWaterPlanet : public LiveActor {
 public:
     HatchWaterPlanet(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
 
     void exeWait();
     void exeOpen();

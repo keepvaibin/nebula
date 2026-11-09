@@ -7,7 +7,7 @@ class IntermissionScene : public Scene {
 public:
     IntermissionScene();
 
-    virtual void draw() const;
+    virtual void draw() const override;
 
     void setCurrentSceneControllerState(const char*, ...) ATTRIBUTE_PRINTF(2, 3);
 

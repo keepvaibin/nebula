@@ -18,7 +18,7 @@ public:
     void offDraw(u32);
     void onDraw(u32);
 
-    u8 mCount;
+    u32 mCount;
     LiveActor* mActor;
     Model* mModel;
     FurCtrl** mFurCtrls;

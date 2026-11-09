@@ -24,7 +24,7 @@ CameraManEvent::CameraManEvent(CameraHolder* pHolder, CameraParamChunkHolder* pC
     }
 }
 
-void CameraManEvent::init(const TableIter& rIter) {
+void CameraManEvent::init(const TableIter& /*rIter*/) {
 }
 
 void CameraManEvent::calc() {

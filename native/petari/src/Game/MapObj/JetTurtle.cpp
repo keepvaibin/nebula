@@ -724,7 +724,7 @@ void JetTurtle::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool JetTurtle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JetTurtle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgItemGet(msg)) {
         if (mFlag.mIsDead) {
             return false;
@@ -775,7 +775,7 @@ bool JetTurtle::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
 
 // The player throws along its throw vector; anything else throws toward itself, homing when it is a search target
 // (green shells never home). Speed type 0 adds the player's speed.
-bool JetTurtle::receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
+bool JetTurtle::receiveMsgThrow(HitSensor* pSender, HitSensor* /*pReceiver*/) {
     setNerve(GET_NERVE(JetTurtle, JetTurtleNrvThrowing));
     MR::deleteEffect(this, "BrakeLamp");
 
@@ -805,7 +805,7 @@ bool JetTurtle::receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
     return true;
 }
 
-bool JetTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JetTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgStarPieceReflect(msg)) {
         return true;
     }
@@ -828,7 +828,7 @@ bool JetTurtle::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* p
     return false;
 }
 
-bool JetTurtle::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool JetTurtle::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserve)) || isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenReserveD)) ||
         isNerve(GET_NERVE(JetTurtle, JetTurtleNrvTakenStart))) {
         return false;

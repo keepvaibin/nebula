@@ -14,12 +14,12 @@ class WaterRoad : public LiveActor {
 public:
     WaterRoad(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void appear();
-    virtual void movement();
-    virtual void draw() const;
-    virtual void updateHitSensor(HitSensor* pSensor);
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void init(const TableIter& rIter) override;
+    virtual void appear() override;
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void updateHitSensor(HitSensor* pSensor) override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
 
     void exeWait();
     void exeWaitInvalid();

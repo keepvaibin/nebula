@@ -30,18 +30,18 @@ public:
 
     enum AxisType { AxisType_XAxis, AxisType_YAxis, AxisType_ZAxis };
 
-    virtual void init(const TableIter&);
-    virtual bool isWorking() const;
-    virtual void start();
-    virtual void end();
-    virtual const Mtx34f& getRotateMtx() const {
+    virtual void init(const TableIter&) override;
+    virtual bool isWorking() const override;
+    virtual void start() override;
+    virtual void end() override;
+    virtual const Mtx34f& getRotateMtx() const override {
         return mRotateMtx;
     }
-    virtual bool isMoving() const;
-    virtual f32 getRotateSpeed() const {
+    virtual bool isMoving() const override;
+    virtual f32 getRotateSpeed() const override {
         return mRotateSpeed;
     }
-    virtual bool isOnReverse() const {
+    virtual bool isOnReverse() const override {
         return mIsOnReverse;
     }
 

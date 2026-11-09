@@ -6,11 +6,11 @@ class SubmarineSteam : public LiveActor {
 public:
     SubmarineSteam(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
 
     void exeSteam();
     void exeWaitForSwitchOn();

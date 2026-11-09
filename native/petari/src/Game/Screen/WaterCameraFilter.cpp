@@ -61,7 +61,7 @@ WaterCameraFilter::WaterCameraFilter()
     : LiveActor("水中カメラフィルター"), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
 }
 
-void WaterCameraFilter::init(const TableIter& rIter) {
+void WaterCameraFilter::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WaterCameraFilter);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAir));

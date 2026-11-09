@@ -159,7 +159,7 @@ PlanetGravity* PlaneGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void PlaneGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
+void PlaneGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& /*rScale*/) {
     Pos3f mtx;
     MR::makeMtxRotate(mtx.toMtxPtr(), rRotate);
 
@@ -246,7 +246,7 @@ PlanetGravity* PointGravityCreator::createInstance() {
     return mGravityInstance;
 }
 
-void PointGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& rRotate, const Vec3f& rScale) {
+void PointGravityCreator::settingFromSRT(const Vec3f& rTrans, const Vec3f& /*rRotate*/, const Vec3f& rScale) {
     mGravityInstance->mDistant = 500.0f * rScale.x;
     mGravityInstance->setOrig(rTrans);
 }

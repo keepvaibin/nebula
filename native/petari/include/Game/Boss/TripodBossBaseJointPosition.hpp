@@ -7,14 +7,14 @@ class TripodBossBaseJointPosition : public LiveActor {
 public:
     TripodBossBaseJointPosition(const char* pName);
 
-    virtual void init(const TableIter&);
-    virtual void initAfterPlacement();
+    virtual void init(const TableIter&) override;
+    virtual void initAfterPlacement() override;
 
-    virtual MtxPtr getBaseMtx() const {
+    virtual MtxPtr getBaseMtx() const override {
         return (MtxPtr)&mMtx;
     }
 
-    virtual void control();
+    virtual void control() override;
 
     s32 mID;
     Pos3f mMtx;

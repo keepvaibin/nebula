@@ -25,7 +25,7 @@ CollisionParts::CollisionParts()
 }
 
 void CollisionParts::init(const Pos3f& rMatrix, HitSensor* pHitSensor, const void* pKclData, const void* pMapInfo, s32 keeperIndex,
-                          bool useAutoScale) {
+                          bool /*useAutoScale*/) {
     mServer->init(const_cast< void* >(pKclData), pMapInfo);
     mHitSensor = pHitSensor;
 
@@ -45,7 +45,7 @@ void CollisionParts::init(const Pos3f& rMatrix, HitSensor* pHitSensor, const voi
 }
 
 void CollisionParts::init(const Pos3f& rMatrix, HitSensor* pHitSensor, KCLFile* pModel, const void* pMapInfo, s32 keeperIndex,
-                          bool useAutoScale) {
+                          bool /*useAutoScale*/) {
     mServer->initModel(pModel, pMapInfo);
     mHitSensor = pHitSensor;
 

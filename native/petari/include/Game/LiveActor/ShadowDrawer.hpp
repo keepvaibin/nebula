@@ -8,7 +8,7 @@ class ShadowDrawer : public NameObj {
 public:
     ShadowDrawer(const char*);
 
-    virtual ~ShadowDrawer() {
+    virtual ~ShadowDrawer() override {
     }
 
     ShadowController* getController() const;

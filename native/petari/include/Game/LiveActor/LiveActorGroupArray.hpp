@@ -25,7 +25,7 @@ class LiveActorGroupArray : public NameObj {
 public:
     LiveActorGroupArray(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     LiveActorGroup* getLiveActorGroup(const LiveActor*) const;
     LiveActorGroup* createGroup(const TableIter&, const char*, s32);

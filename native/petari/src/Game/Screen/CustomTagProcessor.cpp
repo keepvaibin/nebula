@@ -452,7 +452,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroup(Ui::Rect* rect
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(Ui::Rect* rect, const MessageEditorMessageTag& tag, ContextType* /*context*/) {
     if (rect || mIsText || !mAlphaCtrl.alpha()) {
         return OPERATION_NO_CHAR_SPACE;
     }
@@ -653,7 +653,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* r
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupWait(Ui::Rect* rect, u16 frames, ContextType* context) {
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupWait(Ui::Rect* rect, u16 frames, ContextType* /*context*/) {
     if (!rect) {
         mAlphaCtrl.mWaitTime += frames;
     }
@@ -661,7 +661,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupWait(Ui::Rect* 
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect* rect, const MessageEditorMessageTag& tag,
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect* /*rect*/, const MessageEditorMessageTag& tag,
                                                                         ContextType* context) {
     Ui::TextWriterBase< char16_t >* writer = context->writer;
     const char16_t* string = context->str + tag.getSkipLength();
@@ -674,7 +674,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect
     return OPERATION_NO_CHAR_SPACE;
 }
 
-CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect* rect, const MessageEditorMessageTag& tag,
+CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect* /*rect*/, const MessageEditorMessageTag& tag,
                                                                         ContextType* context) {
     Ui::TextWriterBase< char16_t > writer = *context->writer;
     const char16_t* string = context->str + tag.getSkipLength();

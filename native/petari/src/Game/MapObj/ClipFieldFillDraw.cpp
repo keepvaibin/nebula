@@ -76,7 +76,7 @@ void ClipFieldFillDraw::draw() const {
 }
 
 namespace MR {
-    NameObj* createClipFieldFillDraw(const char* pName) {
+    NameObj* createClipFieldFillDraw(const char* /*pName*/) {
         return static_cast< ClipFieldFillDraw* >(MR::createSceneObj(SceneObj_ClipFieldFillDraw));
     }
 

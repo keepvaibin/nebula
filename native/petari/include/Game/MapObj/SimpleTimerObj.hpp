@@ -8,10 +8,10 @@ class SimpleTimerObj : public MapObjActor {
 public:
     SimpleTimerObj(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
 
     void exeTimer();
 

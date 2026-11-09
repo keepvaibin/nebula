@@ -127,7 +127,7 @@ namespace NrvStaffRollLine {
 StaffRollLine::StaffRollLine(const char* pName) : LayoutActor(pName, true), mPosition(0.0f, 0.0f) {
 }
 
-void StaffRollLine::init(const TableIter& rIter) {
+void StaffRollLine::init(const TableIter& /*rIter*/) {
     initLayoutManager("StaffRoll", 1);
     MR::createAndAddPaneCtrl(this, ::cPaneNameText, 1);
     MR::setFollowPos(&mPosition, this, ::cPaneNameText);
@@ -160,7 +160,7 @@ namespace NrvStaffRollPicture {
 StaffRollPicture::StaffRollPicture(const char* pName) : LayoutActor(pName, true), mReplaceTexture() {
 }
 
-void StaffRollPicture::init(const TableIter& rIter) {
+void StaffRollPicture::init(const TableIter& /*rIter*/) {
     initLayoutManager("StaffRollPicture", 1);
     MR::createAndAddPaneCtrl(this, "PictureLU", 1);
     MR::createAndAddPaneCtrl(this, "PictureLD", 1);
@@ -259,7 +259,7 @@ StaffRoll::StaffRoll(const char* pName)
       mLineStep(-1), mBgmFrame() {
 }
 
-void StaffRoll::init(const TableIter& rIter) {
+void StaffRoll::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayout(this);
     initLayoutManager("StaffRollTitle", 1);
 

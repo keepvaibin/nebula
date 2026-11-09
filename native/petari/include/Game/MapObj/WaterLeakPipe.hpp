@@ -6,8 +6,8 @@ class IceStepNoSlip : public ModelObj {
 public:
     IceStepNoSlip(MtxPtr);
 
-    virtual void init(const TableIter&);
-    virtual void appear();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
 
     void exeAppear();
     void exeBreak();
@@ -17,9 +17,9 @@ class WaterLeakPipe : public LiveActor {
 public:
     WaterLeakPipe(const char*);
 
-    virtual void init(const TableIter&);
-    virtual void calcAnim() {};
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void calcAnim() override {};
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void initPipeHeight();
 

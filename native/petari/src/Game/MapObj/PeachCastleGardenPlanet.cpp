@@ -26,7 +26,7 @@ void PeachCastleGardenPlanet::startDamage() {
     setNerve(GET_NERVE(PeachCastleGardenPlanet, PeachCastleGardenPlanetNrvDamage));
 }
 
-void PeachCastleGardenPlanet::connectToScene(const MapObjActorInitInfo& rIter) {
+void PeachCastleGardenPlanet::connectToScene(const MapObjActorInitInfo& /*rIter*/) {
     MR::connectToScenePlanet(this);
 }
 
@@ -42,6 +42,6 @@ void PeachCastleGardenPlanet::exeDamage() {
     }
 }
 
-void PeachCastleGardenPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& rIter) {
+void PeachCastleGardenPlanet::initCaseUseSwitchA(const MapObjActorInitInfo& /*rIter*/) {
     MR::listenStageSwitchOnA(this, MR::Functor(this, &PeachCastleGardenPlanet::startDamage));
 }

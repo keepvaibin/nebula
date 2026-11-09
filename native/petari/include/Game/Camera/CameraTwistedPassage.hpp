@@ -7,9 +7,9 @@ class CameraTwistedPassage : public Camera {
 public:
     CameraTwistedPassage(const char* pName = "ねじれ回廊カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(s32, s32, f32, f32);
     void initStartPos();

@@ -15,12 +15,12 @@ class LayoutActor : public NameObj {
 public:
     LayoutActor(const char*, bool);
 
-    virtual ~LayoutActor() {
+    virtual ~LayoutActor() override {
     }
 
-    virtual void movement();
-    virtual void draw() const;
-    virtual void calcAnim();
+    virtual void movement() override;
+    virtual void draw() const override;
+    virtual void calcAnim() override;
     virtual void appear();
     virtual void kill();
 

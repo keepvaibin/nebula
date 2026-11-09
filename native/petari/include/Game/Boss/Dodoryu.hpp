@@ -26,14 +26,14 @@ class Dodoryu : public LiveActor {
 public:
     Dodoryu(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void initAfterPlacement();
-    virtual void startClipped();
-    virtual void endClipped();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void initAfterPlacement() override;
+    virtual void startClipped() override;
+    virtual void endClipped() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     void snapToGround();
     bool snapToWall();
@@ -107,7 +107,7 @@ class DodoryuBank : public ModelObj {
 public:
     DodoryuBank();
 
-    virtual void init(const TableIter& rIter);
+    virtual void init(const TableIter& rIter) override;
 
     void exeAppear();
 
@@ -118,10 +118,10 @@ class DodoryuRabbit : public ModelObj {
 public:
     DodoryuRabbit(Dodoryu* pDodoryu, const TableIter& rIter);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
 
     // isPlace also moves the rabbit onto its new rail point.
     void reset(bool isPlace);
@@ -154,9 +154,9 @@ class DodoryuLeadHill : public LiveActor {
 public:
     DodoryuLeadHill(Dodoryu* pHost);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void initJoint();
     bool calcJoint(Pos3f*, const JointControllerInfo&);

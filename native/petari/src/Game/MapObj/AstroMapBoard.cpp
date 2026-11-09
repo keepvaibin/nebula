@@ -38,7 +38,7 @@ void AstroMapBoard::init(const TableIter& rIter) {
     }
 }
 
-void AstroMapBoard::connectToScene(const MapObjActorInitInfo& rInfo) {
+void AstroMapBoard::connectToScene(const MapObjActorInitInfo& /*rInfo*/) {
     MR::connectToSceneIndirectMapObj(this);
 }
 

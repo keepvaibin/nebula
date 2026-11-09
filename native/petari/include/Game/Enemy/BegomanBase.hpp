@@ -30,11 +30,11 @@ public:
 
     BegomanBase(const char* pName);
 
-    virtual void initAfterPlacement();
-    virtual void appear();
-    virtual void kill();
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
+    virtual void initAfterPlacement() override;
+    virtual void appear() override;
+    virtual void kill() override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
     virtual u32 getKind() const = 0;
     // Returns true when the contact has lasted long enough to knock the begoman away.
     virtual bool onTouchElectric(const Vec3f& rRailPos, const Vec3f& rRailDir);
@@ -138,8 +138,8 @@ class BegomanAttackPermitter : public LiveActor {
 public:
     BegomanAttackPermitter(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
 
     bool requestAttack(BegomanBase* pBegoman);
 

@@ -371,7 +371,7 @@ void Snakehead::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     pBody->mRadius = bodyRadius;
 }
 
-bool Snakehead::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Snakehead::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (isNerve(GET_NERVE(Snakehead, SnakeheadNrvWaylay))) {
         return false;
     }

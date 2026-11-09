@@ -24,7 +24,7 @@ namespace NrvPrizeRing {
 PrizeRing::PrizeRing() : ModelObj("PrizeRing", "PrizeRing", nullptr, -2, -2, -2, false), mLifeTime(::sDefaultLifeTime) {
 }
 
-void PrizeRing::init(const TableIter& rIter) {
+void PrizeRing::init(const TableIter& /*rIter*/) {
     initNerve(GET_NERVE(PrizeRing, PrizeRingStart));
     initHitSensor(1);
     MR::addHitSensorMapObjSimple(this, "body", 4, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
@@ -130,7 +130,7 @@ bool PrizeRing::isPassed() const {
     return isReadyToPass() || isNerve(GET_NERVE(PrizeRing, PrizeRingPass)) || isReadyToKill();
 }
 
-void PrizeRing::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void PrizeRing::attackSensor(HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver) && !isPassed()) {
         setNerve(GET_NERVE(PrizeRing, PrizeRingReadyToPass));
     }

@@ -11,11 +11,11 @@ public:
     /// @param padChannel The player.
     SurfRay(const char* pName, s32 padChannel = 0);
 
-    virtual void init(const TableIter&);
-    virtual void control();
-    virtual void calcAndSetBaseMtx();
-    virtual void attackSensor(HitSensor*, HitSensor*);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual void control() override;
+    virtual void calcAndSetBaseMtx() override;
+    virtual void attackSensor(HitSensor*, HitSensor*) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     void exeWaitPlayer();
     void exeTurnToWait();

@@ -50,7 +50,7 @@ namespace NrvInformationObserver {
 InformationObserver::InformationObserver() : LiveActor("初出監視"), mType(Type_Bee), mIsTimeKeepDemo(false), mDisplayFrame(-1) {
 }
 
-void InformationObserver::init(const TableIter& rIter) {
+void InformationObserver::init(const TableIter& /*rIter*/) {
     MR::connectToSceneLayoutMovement(this);
     MR::declareEventCameraProgrammable("初出監視カメラ");
     initNerve(GET_NERVE(InformationObserver, InformationObserverNrvWait));

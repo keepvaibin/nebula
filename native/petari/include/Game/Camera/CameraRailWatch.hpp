@@ -8,9 +8,9 @@ class CameraRailWatch : public Camera {
 public:
     CameraRailWatch(const char* pName = "レール注目カメラ");
 
-    virtual void reset();
-    virtual CameraTargetObj* calc();
-    virtual void setParamFromChunk(const CameraParamChunk*);
+    virtual void reset() override;
+    virtual CameraTargetObj* calc() override;
+    virtual void setParamFromChunk(const CameraParamChunk*) override;
 
     void setParam(s32, s32, s32, f32, f32, f32);
 

@@ -31,7 +31,7 @@ AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("キャプチャ用�
     mHostMtx.identity();
 }
 
-void AstroDomeBlueStar::CaptureActor::init(const TableIter& rIter) {
+void AstroDomeBlueStar::CaptureActor::init(const TableIter& /*rIter*/) {
     MR::connectToSceneMapObjDecorationMovement(this);
 
     initEffectKeeper(0, "GCapture");
@@ -91,7 +91,7 @@ namespace NrvAstroDomeBlueStar {
     NEW_NERVE(AstroDomeBlueStarNrvGalaxyConfirmCancel, AstroDomeBlueStar, GalaxyConfirmCancel);
 };  // namespace NrvAstroDomeBlueStar
 
-AstroDomeBlueStar::AstroDomeBlueStar(const char* pName) : LiveActor(pName), mCaptureRibbon(), mCameraInfo(), mCaptureActor(), mZoomPos(gZeroVec) {
+AstroDomeBlueStar::AstroDomeBlueStar(const char* pName) : LiveActor(pName), mCaptureRibbon(), mCameraInfo(), mZoomPos(gZeroVec), mCaptureActor() {
     mHostMtx.identity();
     mBindStartMtx.identity();
 }
@@ -196,7 +196,7 @@ void AstroDomeBlueStar::control() {
     MR::requestBlueStarGuidance();
 }
 
-bool AstroDomeBlueStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool AstroDomeBlueStar::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (MR::isMsgAutoRushBegin(msg)) {
         return tryStartBind(pSender->mHost);
     }

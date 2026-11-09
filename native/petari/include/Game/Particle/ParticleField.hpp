@@ -29,8 +29,8 @@ public:
     inline FieldSpin() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 
     Mtx mRotation;  // one step about the field axis in world space; translation column 0
 };
@@ -40,7 +40,7 @@ public:
     inline FieldRandom() {
     }
 
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 };
 
 class FieldNewton : public FieldBase {
@@ -48,8 +48,8 @@ public:
     inline FieldNewton() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 
     Vec3f mDir;
     f32 mCutoff;
@@ -60,8 +60,8 @@ public:
     inline FieldMagnet() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 
     Vec3f mDir;
 };
@@ -71,8 +71,8 @@ public:
     inline FieldGravity() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 };
 
 class FieldDrag : public FieldBase {
@@ -80,7 +80,7 @@ public:
     inline FieldDrag() {
     }
 
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 };
 
 class FieldConvection : public FieldBase {
@@ -88,8 +88,8 @@ public:
     inline FieldConvection() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 
     // World-space unit frame: toward the ring from the axis, the axis, and around it.
     Vec3f mRadial;
@@ -102,8 +102,8 @@ public:
     inline FieldVortex() {
     }
 
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 
     Vec3f mAxis;
     f32 mRadiusSq;  // inside it the strength blends from mag at the axis to mag-random at the edge
@@ -114,8 +114,8 @@ class FieldAir : public FieldBase {
 public:
     inline FieldAir() {
     }
-    void prepare(EmitterWork*, ParticleField*);
-    void calc(EmitterWork*, ParticleField*, ParticleCore*);
+    void prepare(EmitterWork*, ParticleField*) override;
+    void calc(EmitterWork*, ParticleField*, ParticleCore*) override;
 };
 
 class ParticleField {

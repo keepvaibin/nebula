@@ -219,7 +219,7 @@ void Coin::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, pos);
 }
 
-bool Coin::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Coin::receiveOtherMsg(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgItemGet(msg)) {
         noticeGetCoin();
         MR::emitEffect(this, "CoinGet");

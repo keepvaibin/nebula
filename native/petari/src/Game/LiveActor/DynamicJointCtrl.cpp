@@ -113,7 +113,7 @@ void DynamicJointCtrlNode::reset() {
     mVelocity.zero();
 }
 
-bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& rInfo) {
+bool DynamicJointCtrlNode::updateJointMtxCallBack(Pos3f* pMtx, const JointControllerInfo& /*rInfo*/) {
     Vec3f axis;
     pMtx->getXDir(axis);
 

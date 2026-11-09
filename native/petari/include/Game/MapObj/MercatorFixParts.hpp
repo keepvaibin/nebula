@@ -8,8 +8,8 @@ class MercatorFixParts : public LiveActor {
 public:
     MercatorFixParts(const char*);
 
-    virtual void init(const TableIter&);
-    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+    virtual void init(const TableIter&) override;
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*) override;
 
     MapPartsAppearController* mAppearController;
 };

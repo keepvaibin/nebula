@@ -22,7 +22,7 @@ GalaxySelectInfo::GalaxySelectInfo(bool param1)
     mFadeinoutControl->setZero();
 }
 
-void GalaxySelectInfo::init(const TableIter& rIter) {
+void GalaxySelectInfo::init(const TableIter& /*rIter*/) {
     initLayoutManager("GalaxyInfo", GalaxyInfoLayoutSetter::getAnimLayerNum());
     MR::setInfluencedAlphaToChild(this);
 

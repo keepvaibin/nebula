@@ -19,7 +19,7 @@ namespace NrvBossStinkBugBomb {
 BossStinkBugBomb::BossStinkBugBomb(const char* pName) : LiveActor(pName) {
 }
 
-void BossStinkBugBomb::init(const TableIter& rIter) {
+void BossStinkBugBomb::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("BossStinkBugBomb", nullptr, false);
     MR::connectToSceneEnemy(this);
     MR::onCalcGravity(this);
@@ -68,7 +68,7 @@ void BossStinkBugBomb::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool BossStinkBugBomb::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool BossStinkBugBomb::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     if (MR::isMsgLockOnStarPieceShoot(msg)) {
         return true;
     }
@@ -82,7 +82,7 @@ bool BossStinkBugBomb::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
     return false;
 }
 
-bool BossStinkBugBomb::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+bool BossStinkBugBomb::receiveMsgPush(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
     return false;
 }
 

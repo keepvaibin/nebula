@@ -21,7 +21,7 @@ KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {
     mBaseMtx.identity();
 }
 
-void KabokuriFire::init(const TableIter& rIter) {
+void KabokuriFire::init(const TableIter& /*rIter*/) {
     MR::connectToSceneEnemyMovement(this);
     initNerve(GET_NERVE(KabokuriFire, KabokuriFireNrvWait));
     initEffectKeeper(0, "KabokuriFire");

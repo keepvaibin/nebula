@@ -25,7 +25,7 @@ void ParticleCalcScaleY(EmitterWork* work, ParticleCore* ptcl) {
     }
 }
 
-void ParticleCalcScaleCopy(EmitterWork* work, ParticleCore* ptcl) {
+void ParticleCalcScaleCopy(EmitterWork* /*work*/, ParticleCore* ptcl) {
     ptcl->mParticleScaleY = ptcl->mParticleScaleX;
 }
 

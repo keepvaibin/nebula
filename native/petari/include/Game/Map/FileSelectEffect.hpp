@@ -6,9 +6,9 @@ class FileSelectEffect : public LiveActor {
 public:
     FileSelectEffect(const char* pName = "選択時エフェクト");
 
-    virtual void init(const TableIter&);
-    virtual void appear();
-    virtual void calcAndSetBaseMtx();
+    virtual void init(const TableIter&) override;
+    virtual void appear() override;
+    virtual void calcAndSetBaseMtx() override;
 
     void disappear();
 

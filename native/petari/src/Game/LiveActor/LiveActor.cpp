@@ -34,7 +34,7 @@ LiveActor::LiveActor(const char* pName)
     MR::getClippingDirector()->registerActor(this);
 }
 
-void LiveActor::init(const TableIter& rIter) {
+void LiveActor::init(const TableIter& /*rIter*/) {
 }
 
 void LiveActor::appear() {
@@ -462,7 +462,7 @@ void LiveActor::initActorLightCtrl() {
     mActorLightCtrl = new ActorLightCtrl(this);
 }
 
-void LiveActor::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+void LiveActor::attackSensor(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {
 }
 
 bool LiveActor::receiveMsgApart(HitSensor* pSender, HitSensor* pReceiver) {

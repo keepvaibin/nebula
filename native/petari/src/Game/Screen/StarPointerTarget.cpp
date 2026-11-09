@@ -168,7 +168,7 @@ void StarPointerLayoutTarget::calcBasePos(Vec2f* pPos) const {
     pPos->y += mPosition.y;
 }
 
-StarPointerLayoutTargetKeeper::StarPointerLayoutTargetKeeper(int maxNumTargets) : mMaxNumTargets(maxNumTargets), mNumTargets(), mTargets() {
+StarPointerLayoutTargetKeeper::StarPointerLayoutTargetKeeper(int maxNumTargets) : mNumTargets(), mMaxNumTargets(maxNumTargets), mTargets() {
     mTargets = new StarPointerLayoutTarget*[mMaxNumTargets];
     memset(mTargets, 0, mMaxNumTargets * sizeof(StarPointerLayoutTarget*));
 }

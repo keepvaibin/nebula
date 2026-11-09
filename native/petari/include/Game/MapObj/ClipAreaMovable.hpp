@@ -9,10 +9,10 @@ class ClipAreaMovable : public ClipArea {
 public:
     ClipAreaMovable(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void makeActorAppeared();
-    virtual void makeActorDead();
-    virtual void control();
+    virtual void init(const TableIter& rIter) override;
+    virtual void makeActorAppeared() override;
+    virtual void makeActorDead() override;
+    virtual void control() override;
 
     void initMoveFunction(const TableIter& rIter);
     void startMoveFunction();

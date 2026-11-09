@@ -413,11 +413,11 @@ void MapObjActor::initCaseUseSwitchA(const MapObjActorInitInfo&) {
 void MapObjActor::initCaseNoUseSwitchA(const MapObjActorInitInfo&) {
 }
 
-void MapObjActor::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void MapObjActor::initCaseUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MR::listenStageSwitchOnOffB(this, MR::Functor(this, &MapObjActor::startMapPartsFunctions), MR::Functor(this, &MapObjActor::endMapPartsFunctions));
 }
 
-void MapObjActor::initCaseNoUseSwitchB(const MapObjActorInitInfo& rInfo) {
+void MapObjActor::initCaseNoUseSwitchB(const MapObjActorInitInfo& /*rInfo*/) {
     MapObjActorUtil::startAllMapPartsFunctions(this);
 }
 

@@ -8,7 +8,7 @@ class DodoryuHill : public MogucchiHill {
 public:
     DodoryuHill(Dodoryu* pHost);
 
-    virtual bool notifyAppearAttackToPlayer(HitSensor*, HitSensor*);
+    virtual bool notifyAppearAttackToPlayer(HitSensor*, HitSensor*) override;
 
     Dodoryu* mHost;
 };

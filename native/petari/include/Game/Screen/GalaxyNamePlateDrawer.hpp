@@ -18,8 +18,8 @@ public:
     /// @brief Creates a new `GalaxyNamePlateDrawer`.
     GalaxyNamePlateDrawer();
 
-    virtual void init(const TableIter& rIter);
-    virtual void draw() const;
+    virtual void init(const TableIter& rIter) override;
+    virtual void draw() const override;
 
     GalaxyNamePlatePrioritied* registerPlate(const LayoutActor*);
 

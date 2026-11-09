@@ -16,7 +16,7 @@ public:
     inline CollisionPartsFilterSensor(const HitSensor* pSensor) : mSensor(pSensor) {
     }
 
-    virtual bool isInvalidParts(const CollisionParts* pParts) const;
+    virtual bool isInvalidParts(const CollisionParts* pParts) const override;
 
     const HitSensor* mSensor;
 };
@@ -26,7 +26,7 @@ public:
     inline CollisionPartsFilterActor(const LiveActor* pActor) : mActor(pActor) {
     }
 
-    virtual bool isInvalidParts(const CollisionParts* pParts) const;
+    virtual bool isInvalidParts(const CollisionParts* pParts) const override;
 
     const LiveActor* mActor;
 };

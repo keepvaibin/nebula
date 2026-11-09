@@ -25,7 +25,7 @@ class SceneNameObjMovementController : public NameObj {
 public:
     SceneNameObjMovementController();
 
-    virtual void movement();
+    virtual void movement() override;
 
     void requestStopSceneFor(MR::MovementControlType, const NameObj*);
     void requestStopSceneOverwrite(const NameObj*);

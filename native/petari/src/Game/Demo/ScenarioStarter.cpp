@@ -302,7 +302,7 @@ void ScenarioStarter::calcShootMotionTime() {
     mSpinAngleMax = static_cast< s32 >(duration / TWO_PI) * TWO_PI;
 }
 
-bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pReceiver*/) {
     if (mBindActor == nullptr && MR::isMsgAutoRushBegin(msg) && isNerve(GET_NERVE(ScenarioStarter, ScenarioStarterWaitToStart))) {
         mBindActor = MR::getSensorHost(pSender);
         setNerve(GET_NERVE(ScenarioStarter, ScenarioStarterCinemaFrameBlank));

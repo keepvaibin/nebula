@@ -50,7 +50,7 @@ DodoryuStateLv1::DodoryuStateLv1(Dodoryu* pHost, const char* pName)
     initWithoutIter();
 }
 
-void DodoryuStateLv1::init(const TableIter& rIter) {
+void DodoryuStateLv1::init(const TableIter& /*rIter*/) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE_ANON(DodoryuStateLv1NrvHide));
     makeActorAppeared();

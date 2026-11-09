@@ -20,7 +20,7 @@ PurpleCoinCounter::PurpleCoinCounter(const char* pName)
       mIsValid(false) {
 }
 
-void PurpleCoinCounter::init(const TableIter& rIter) {
+void PurpleCoinCounter::init(const TableIter& /*rIter*/) {
     initLayoutManager("PurpleCoinCounter", 2);
     MR::createAndAddPaneCtrl(this, "Counter", 1);
     initEffectKeeper(0, nullptr, nullptr);

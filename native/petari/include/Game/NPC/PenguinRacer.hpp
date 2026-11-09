@@ -7,17 +7,17 @@ class PenguinRacer : public NPCActor, public AbstractRacer {
 public:
     PenguinRacer(const char*);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual void initRacer();
-    virtual void prepRacer(const RaceManager* pRaceManager);
-    virtual void startRacer();
-    virtual bool updateRacer(const RaceManager* pRaceManager);
-    virtual bool goalRacer();
-    virtual void loseRacer();
-    virtual void resetRacer(const RaceManager* pRaceManager);
-    virtual void exitRacer();
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual void initRacer() override;
+    virtual void prepRacer(const RaceManager* pRaceManager) override;
+    virtual void startRacer() override;
+    virtual bool updateRacer(const RaceManager* pRaceManager) override;
+    virtual bool goalRacer() override;
+    virtual void loseRacer() override;
+    virtual void resetRacer(const RaceManager* pRaceManager) override;
+    virtual void exitRacer() override;
     virtual const Nerve* getMoveNerve() const;
     virtual f32 getMoveSpeed() const;
 

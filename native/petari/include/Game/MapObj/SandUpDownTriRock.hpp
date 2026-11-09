@@ -8,10 +8,10 @@ class SandUpDownTriRock : public MapObjActor {
 public:
     SandUpDownTriRock(const char* pName);
 
-    virtual void init(const TableIter& rIter);
-    virtual void control();
-    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&);
+    virtual void init(const TableIter& rIter) override;
+    virtual void control() override;
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) override;
+    virtual void initCaseUseSwitchB(const MapObjActorInitInfo&) override;
 
     void startDown();
 

@@ -345,7 +345,7 @@ namespace GameDataFunction {
         return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName.c_str());
     }
 
-    void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 pastSecond) {
+    void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 /*pastSecond*/) {
         // The save keeps the game's six domes' comets: a mod's further ones start over each play.
         if (cometId > 6) {
             return;

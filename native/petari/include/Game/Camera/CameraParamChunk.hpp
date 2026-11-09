@@ -10,8 +10,8 @@ class DotCamReader;
 class CameraGeneralParam {
 public:
     CameraGeneralParam()
-        : mString(), mDist(1200.0f), mAxis(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mAngleA(), mAngleB(0.3f), mNum1(),
-          mNum2() {
+        : mDist(1200.0f), mAxis(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mAngleA(), mAngleB(0.3f), mNum1(), mNum2(),
+          mString() {
     }
 
     CameraGeneralParam& operator=(const CameraGeneralParam&);
@@ -123,10 +123,10 @@ class CameraParamChunkGame : public CameraParamChunk {
 public:
     CameraParamChunkGame(CameraHolder*, const CameraParamChunkID&);
 
-    virtual void copy(const CameraParamChunk*);
-    virtual void load(DotCamReader*, CameraHolder*);
-    virtual void initiate();
-    virtual const char* getClassName() const {
+    virtual void copy(const CameraParamChunk*) override;
+    virtual void load(DotCamReader*, CameraHolder*) override;
+    virtual void initiate() override;
+    virtual const char* getClassName() const override {
         return "Game";
     }
 
@@ -139,10 +139,10 @@ class CameraParamChunkEvent : public CameraParamChunk {
 public:
     CameraParamChunkEvent(CameraHolder*, const CameraParamChunkID&);
 
-    virtual void copy(const CameraParamChunk*);
-    virtual void load(DotCamReader*, CameraHolder*);
-    virtual void initiate();
-    virtual const char* getClassName() const {
+    virtual void copy(const CameraParamChunk*) override;
+    virtual void load(DotCamReader*, CameraHolder*) override;
+    virtual void initiate() override;
+    virtual const char* getClassName() const override {
         return "Event";
     }
 

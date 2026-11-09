@@ -6,7 +6,7 @@ class LotusLeaf : public LiveActor {
 public:
     LotusLeaf(const char* pName);
 
-    virtual void init(const TableIter&);
+    virtual void init(const TableIter&) override;
 
     void convergeToInitPos();
 

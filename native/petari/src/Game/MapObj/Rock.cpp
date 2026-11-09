@@ -75,7 +75,7 @@ namespace NrvRock {
 
 Rock::Rock(f32 moveSpeed, const char* pName)
     : LiveActor(pName), mCreator(), mRockType(NormalRock), mBreakModel(), mMoveSpeed(moveSpeed), mBreakModelOnRailGoal(), mSlowDownOnAttack(),
-      mAppearPos(gZeroVec), mRadius(::cBinderRadius), mRotateSpeed(), mFallVelocity(gZeroVec), mCurrentRailPoint(-1), mGravityRate(::cGravity),
+      mAppearPos(gZeroVec), mRadius(::cBinderRadius), mRotateSpeed(), mFallVelocity(gZeroVec), mGravityRate(::cGravity), mCurrentRailPoint(-1),
       mPrevPos(gZeroVec), mFront(0.0f, 0.0f, 1.0f), mAirTime(), mIsNormalGravity(), mWanwanVoiceTimer(), mFreezeTime(), mFreezePos(gZeroVec),
       mUnfreezeNerve(), mInvalidBindTime(), mAppearTime(::cAppearMoveFrameRock), mAppearAngle(), mRollSoundTimer(), mSlowDownTimer() {
     mBaseMtx.identity();
@@ -336,7 +336,7 @@ void Rock::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-bool Rock::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+bool Rock::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
     if (!isNerve(GET_NERVE(Rock, RockNrvBreak))) {
         if (isBodySensor(pReceiver)) {
             if (MR::isMsgInvincibleAttack(msg)) {

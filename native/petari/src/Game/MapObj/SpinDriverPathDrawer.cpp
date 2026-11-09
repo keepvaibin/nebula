@@ -85,7 +85,7 @@ namespace MR {
     }
 };  // namespace MR
 
-void SpinDriverPathDrawer::init(const TableIter& rIter) {
+void SpinDriverPathDrawer::init(const TableIter& /*rIter*/) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_SpinDriverPathDrawer);
 
     initPositionList(75.0f, 20.0f);

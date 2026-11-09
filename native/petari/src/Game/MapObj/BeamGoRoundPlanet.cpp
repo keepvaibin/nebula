@@ -14,7 +14,7 @@ BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("ビームゴーラウ
     mBeamJointMtx = pMtx;
 }
 
-void BeamGoRoundBeam::init(const TableIter& rIter) {
+void BeamGoRoundBeam::init(const TableIter& /*rIter*/) {
     initModelManagerWithAnm("BeamGoRoundBeam", nullptr, false);
     mPosition.set< f32 >(mBeamJointMtx[0][3], mBeamJointMtx[1][3], mBeamJointMtx[2][3]);
     MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_MapObj, MR::DrawBufferType_IndirectMapObj, MR::DrawType_VolumeModel);
