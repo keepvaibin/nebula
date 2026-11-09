@@ -11,6 +11,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeInter_1, "exeInter.1", 80);
 
 namespace {
     // One beam per interval of the attack.
@@ -109,7 +113,7 @@ void RingBeamer::exeAttack() {
 }
 
 void RingBeamer::exeInter() {
-    if (MR::isGreaterEqualStep(this, 80)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeInter_1)) {
         for (s32 i = 0; i < ::sBeamNum; i++) {
             if (!MR::isDead(mBeams[i])) {
                 return;

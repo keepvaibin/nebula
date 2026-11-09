@@ -24,6 +24,11 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRailMove_1, "exeRailMove.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_trySkipTrigger_1, "trySkipTrigger.1", 10);
 
 namespace NrvScenarioStarter {
     NEW_NERVE(ScenarioStarterWaitScenarioCameraEnd, ScenarioStarter, WaitScenarioCameraEnd);
@@ -101,7 +106,7 @@ void ScenarioStarter::exeRailMove() {
         rotMtx.getQuat(mBindQuat);
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeRailMove_1)) {
         MR::tryBlankToFrameCinemaFrame();
         mTitle->start();
     }
@@ -318,7 +323,7 @@ bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*
 }
 
 bool ScenarioStarter::trySkipTrigger() const {
-    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::isGreaterStep(this, 10) && MR::isLessStep(this, mFlyEndStep) &&
+    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::isGreaterStep(this, cStep_trySkipTrigger_1) && MR::isLessStep(this, mFlyEndStep) &&
            MR::testSystemPadTriggerDecide();
 }
 

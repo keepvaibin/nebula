@@ -20,6 +20,9 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitPointer_1, "exeHitPointer.1", 3);
+
 
 namespace {
     NEBULA_TUNABLE(f32, sPointableRange, 3400.0f);
@@ -205,7 +208,7 @@ void BlueStarCupsulePlanet::exeHitPointer() {
         emitNerveEffect();
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeHitPointer_1)) {
         MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 

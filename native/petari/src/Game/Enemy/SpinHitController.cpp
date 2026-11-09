@@ -6,6 +6,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_execute_1, "execute.1", 1);
+
 namespace {
     NEBULA_TUNABLE(s32, cDefaultFlyStepMax, 15);
     NEBULA_TUNABLE(s32, cDefaultFlyStepMin, 10);
@@ -77,7 +80,7 @@ bool SpinHitController::execute(LiveActor* pActor) {
         emitItem(pActor);
     }
 
-    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, 1)) || MR::isGreaterStep(pActor, mFlyStepMax)) {
+    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, cStep_execute_1)) || MR::isGreaterStep(pActor, mFlyStepMax)) {
         MR::validateClipping(pActor);
         pActor->kill();
 

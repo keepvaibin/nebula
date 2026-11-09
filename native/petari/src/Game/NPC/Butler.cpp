@@ -26,6 +26,11 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoStarPiece2_1, "exeDemoStarPiece2.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoShowGalaxyMap_1, "exeDemoShowGalaxyMap.1", 70);
 
 namespace {
     const char* const cDemoNameDomeLecture1 = "ドームレクチャー１";
@@ -449,7 +454,7 @@ void Butler::exeDemoDomeLecture2() {
 }
 
 void Butler::exeDemoStarPiece2() {
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeDemoStarPiece2_1)) {
         MR::resetPlayerEffect();
     }
 
@@ -472,7 +477,7 @@ void Butler::exeDemoShowGalaxyMap() {
         MR::startAstroMapLayoutForChallengeGalaxyDiscover();
     }
 
-    if (MR::isStep(this, 70)) {
+    if (MR::isStep(this, cStep_exeDemoShowGalaxyMap_1)) {
         MR::resumeTimeKeepDemo(this);
         setNerve(GET_NERVE(Butler, ButlerNrvDemo));
     }

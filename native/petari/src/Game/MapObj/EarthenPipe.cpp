@@ -9,6 +9,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitToHideDown_1, "exeWaitToHideDown.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitToShowUp_1, "exeWaitToShowUp.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHideDown_1, "exeHideDown.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHideDown_2, "exeHideDown.2", 15);
+
 namespace NrvEarthenPipe {
     NEW_NERVE(EarthenPipeNrvWait, EarthenPipe, Wait);
     NEW_NERVE(EarthenPipeNrvReady, EarthenPipe, Ready);
@@ -321,13 +327,13 @@ void EarthenPipe::exeHide() {}
 void EarthenPipe::exeShow() {}
 
 void EarthenPipe::exeWaitToHideDown() {
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeWaitToHideDown_1)) {
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHideDown));
     }
 }
 
 void EarthenPipe::exeWaitToShowUp() {
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeWaitToShowUp_1)) {
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp));
     }
 }
@@ -360,11 +366,11 @@ void EarthenPipe::exeHideDown() {
 
     f32 easeIn = MR::getEaseInValue((15 - getNerveStep()) / 15.0f, 0.0f, 1.0f, 1.0f);
     calcTrans(easeIn);
-    if (MR::isLessStep(this, 15)) {
+    if (MR::isLessStep(this, cStep_exeHideDown_1)) {
         MR::startLevelSound(this, "SE_OJ_LV_PIPE_VANISH_MAGMA");
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, cStep_exeHideDown_2)) {
         MR::hideModel(this);
         MR::invalidateCollisionParts(this);
         MR::validateClipping(this);

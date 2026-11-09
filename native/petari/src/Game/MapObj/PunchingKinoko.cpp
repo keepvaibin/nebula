@@ -7,6 +7,13 @@
 #include <nebula_math.h>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exePointSnaped_1, "exePointSnaped.1", 6);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePunched_1, "exePunched.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePunchedBrake_1, "exePunchedBrake.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitted_1, "exeHitted.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCrushedEnd_1, "exeCrushedEnd.1", 10);
+
 namespace NrvPunchingKinoko {
     NEW_NERVE(PunchingKinokoNrvWait, PunchingKinoko, Wait);
     NEW_NERVE(PunchingKinokoNrvSwing, PunchingKinoko, Swing);
@@ -425,7 +432,7 @@ void PunchingKinoko::exePointSnaped() {
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
     addVelocityKeepHeight();
     MR::attenuateVelocity(mGroundChecker, 0.99f);
-    if (MR::isGreaterStep(this, 6)) {
+    if (MR::isGreaterStep(this, cStep_exePointSnaped_1)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing));
     }
 }
@@ -437,7 +444,7 @@ void PunchingKinoko::exePunched() {
     MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, getSensor("Head"));
     mCameraTarget.set(mGroundChecker->mPosition);
 
-    if (MR::isGreaterStep(this, 5)) {
+    if (MR::isGreaterStep(this, cStep_exePunched_1)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunchedBrake));
     }
 }
@@ -448,7 +455,7 @@ void PunchingKinoko::exePunchedBrake() {
     MR::attenuateVelocity(mGroundChecker, 0.9f);
     MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
     mCameraTarget.set(mGroundChecker->mPosition);
-    if (!MR::isGreaterStep(this, 40) && !MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, getSensor("Head"))) {
+    if (!MR::isGreaterStep(this, cStep_exePunchedBrake_1) && !MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, getSensor("Head"))) {
         return;
     }
     MR::startSound(this, "SE_OJ_PNC_KINOKO_RETURN");
@@ -461,7 +468,7 @@ void PunchingKinoko::exeHitted() {
     }
     addVelocityKeepHeight();
     MR::attenuateVelocity(mGroundChecker, 0.99f);
-    if (MR::isGreaterStep(this, 5)) {
+    if (MR::isGreaterStep(this, cStep_exeHitted_1)) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
     }
 }
@@ -492,7 +499,7 @@ void PunchingKinoko::exeCrushed() {
 }
 
 void PunchingKinoko::exeCrushedEnd() {
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeCrushedEnd_1)) {
         MR::startBrk(this, "Revival");
         mScaleController->startAnim();
         MR::startSound(this, "SE_OJ_PNC_KINOKO_RECOVER");

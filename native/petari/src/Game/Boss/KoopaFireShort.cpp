@@ -15,6 +15,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFly_1, "exeFly.1", 50);
+
 namespace {
     NEBULA_TUNABLE(f32, sFlySpeedNormal, 15.0f);
     NEBULA_TUNABLE(f32, sFlySpeedFast, 30.0f);
@@ -167,7 +170,7 @@ void KoopaFireShort::exeFly() {
     } else {
         updateFly();
 
-        if (MR::isLessStep(this, 50)) {
+        if (MR::isLessStep(this, cStep_exeFly_1)) {
             mPosition += mGravity * 4.0f;
         }
 

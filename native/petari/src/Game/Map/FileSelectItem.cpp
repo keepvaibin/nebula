@@ -21,6 +21,21 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_1, "exeFormat.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_2, "exeFormat.2", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFormat_3, "exeFormat.3", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_1, "exeChangeFellow.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_2, "exeChangeFellow.2", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeFellow_3, "exeChangeFellow.3", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_1, "exeChangeMii.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_2, "exeChangeMii.2", 39);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_3, "exeChangeMii.3", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeChangeMii_4, "exeChangeMii.4", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeShut_1, "exeShut.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlink_1, "exeBlink.1", 40);
 
 namespace {
     // The icon's size ease lasts half a second.
@@ -257,11 +272,11 @@ void FileSelectItem::turnToFront(s32 angle) {
 
 void FileSelectItem::exeFormat() {
 
-    if (MR::isLessStep(this, 40)) {
+    if (MR::isLessStep(this, cStep_exeFormat_1)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeFormat_2)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_DUMMY");
         emitVanish();
         killAllModels();
@@ -270,7 +285,7 @@ void FileSelectItem::exeFormat() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, 40)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeFormat_3)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -282,11 +297,11 @@ void FileSelectItem::exeFormat() {
 
 void FileSelectItem::exeChangeFellow() {
 
-    if (MR::isLessStep(this, 40)) {
+    if (MR::isLessStep(this, cStep_exeChangeFellow_1)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeChangeFellow_2)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_MARIO");
         appearFellowModel();
         emitCompleteEffect();
@@ -296,7 +311,7 @@ void FileSelectItem::exeChangeFellow() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, 40)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeChangeFellow_3)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -308,15 +323,15 @@ void FileSelectItem::exeChangeFellow() {
 
 void FileSelectItem::exeChangeMii() {
 
-    if (MR::isLessStep(this, 40)) {
+    if (MR::isLessStep(this, cStep_exeChangeMii_1)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
     }
 
-    if (MR::isStep(this, 39)) {
+    if (MR::isStep(this, cStep_exeChangeMii_2)) {
         mFaceParts->changeFaceModel(MiiFaceRecipe(Mii::SourceLibrary, mIconID->getMiiIndex(), 256, Mii::expressionBit(Mii::ExpressionNormal) | Mii::expressionBit(Mii::ExpressionBlink)));
     }
 
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeChangeMii_3)) {
         MR::startSystemSE("SE_SY_FILE_SEL_MORPH_MARIO");
         killAllModels();
         mFaceParts->makeActorAppeared();
@@ -327,7 +342,7 @@ void FileSelectItem::exeChangeMii() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterEqualStep(this, 40)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeChangeMii_4)) {
         mRotation.y = 0.0f;
         mRotateSpeed = 0.0f;
     }
@@ -803,7 +818,7 @@ namespace FileSelectItemSub {
             shut();
         }
 
-        if (MR::isGreaterEqualStep(this, 10)) {
+        if (MR::isGreaterEqualStep(this, cStep_exeShut_1)) {
             open();
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
         }
@@ -848,7 +863,7 @@ namespace FileSelectItemSub {
         }
 
         if (mItem->mIconID->isMii()) {
-            if (MR::isGreaterEqualStep(this, 40)) {
+            if (MR::isGreaterEqualStep(this, cStep_exeBlink_1)) {
                 mItem->mFaceParts->changeExpressionNormal();
                 setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvOpen));
             }

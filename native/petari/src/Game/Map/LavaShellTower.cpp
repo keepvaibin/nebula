@@ -8,6 +8,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemo_1, "exeDemo.1", 1);
+
 namespace {
     NEBULA_TUNABLE(f32, sCamShakeIntensity, 0.1f);
     NEBULA_TUNABLE(f32, sCamShakeSpeed, 2.2f);
@@ -47,7 +50,7 @@ void LavaShellTower::exeDemo() {
     MR::startSystemLevelSE("SE_DM_LV_SHELL_TOWER");
     MR::tryRumblePadStrong(this, PLAYER_1);
 
-    if (MR::isGreaterStep(this, 1) && MR::isDemoLastStep()) {
+    if (MR::isGreaterStep(this, cStep_exeDemo_1) && MR::isDemoLastStep()) {
         MR::stopShakingCamera(this);
         setNerve(GET_NERVE(LavaShellTower, HostTypeDone));
     }

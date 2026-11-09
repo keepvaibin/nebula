@@ -20,6 +20,10 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exePlay_1, "exePlay.1", 3);
 
 namespace {
     /// @brief A type of screen transition.
@@ -314,7 +318,7 @@ void MoviePlayingSequence::exePlay() {
         ::openWipe(WipeType(mInfo->mOpenWipeType), mInfo->mOpenWipeTime);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exePlay_1)) {
         MR::setMovieVolume(mInfo->mVolume, 50);
     }
 

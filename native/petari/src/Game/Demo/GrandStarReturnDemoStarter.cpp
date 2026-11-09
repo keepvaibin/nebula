@@ -21,6 +21,11 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRevival_1, "exeRevival.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRevival_2, "exeRevival.2", 40);
 
 namespace {
     const char* const cDemoMovePartName = "移動";
@@ -251,12 +256,12 @@ void GrandStarReturnDemoStarter::exeRevival() {
         MR::startAnimCameraTargetSelf(this, mActorCameraInfo, cameraName.c_str(), 0, 1.0f);
     }
 
-    if (MR::isLessStep(this, 40)) {
+    if (MR::isLessStep(this, cStep_exeRevival_1)) {
         updateRushStarPos(mPowerStarPosition, -(40 - getNerveStep()));
         MR::startLevelSound(mPowerStar, "SE_OJ_LV_GND_STAR_RUSH");
     }
 
-    if (MR::isStep(this, 40)) {
+    if (MR::isStep(this, cStep_exeRevival_2)) {
         MR::startSound(mPowerStar, "SE_OJ_GND_STAR_ENTER_CORE");
         MR::forceDeleteEffect(mPowerStar, "DemoKoopaGrandStarVs3");
         mPowerStar->kill();

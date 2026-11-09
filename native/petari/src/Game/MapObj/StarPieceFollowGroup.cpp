@@ -16,6 +16,10 @@
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFollowEnd_1, "exeFollowEnd.1", 20);
 
 namespace NrvStarPieceFollowGroup {
     NEW_NERVE(HostTypeNrvFollowToPlayer, StarPieceFollowGroup, FollowToPlayer);
@@ -208,7 +212,7 @@ void StarPieceFollowGroup::exeFollowToPlayer() {
 
 void StarPieceFollowGroup::exeFollowEnd() {
     bool pullBack = false;
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeFollowEnd_1)) {
         pullBack = true;
     }
 

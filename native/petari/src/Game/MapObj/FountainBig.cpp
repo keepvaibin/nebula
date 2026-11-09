@@ -3,6 +3,12 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSign_1, "exeSign.1", 80);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSpout_1, "exeSpout.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSpoutEnd_1, "exeSpoutEnd.1", 10);
 
 namespace NrvFountainBig {
     NEW_NERVE(FountainBigNrvWait, FountainBig, Wait);
@@ -54,7 +60,7 @@ void FountainBig::exeSign() {
         MR::emitEffect(this, "FountainBigSign");
     }
     MR::startLevelSound(this, "SE_OJ_LV_FOUNTAIN_BIG_SIGN");
-    if (MR::isStep(this, 80)) {
+    if (MR::isStep(this, cStep_exeSign_1)) {
         setNerve(GET_NERVE(FountainBig, FountainBigNrvSignStop));
     }
 }
@@ -85,7 +91,7 @@ void FountainBig::exeSpout() {
             mSpoutTimer++;
         }
     }
-    if (MR::isLessEqualStep(this, 20)) {
+    if (MR::isLessEqualStep(this, cStep_exeSpout_1)) {
         f32 calcNerve = MR::calcNerveRate(this, 20);
         mScale.y = calcNerve;
         mScale.x = 1.0f;
@@ -106,7 +112,7 @@ void FountainBig::exeSpoutEnd() {
     mScale.z = 1.0f;
     mScale.y = calcNerve;
     MR::clamp(calcNerve, 0.01f, 1.0f);
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeSpoutEnd_1)) {
         MR::hideModel(this);
         setNerve(GET_NERVE(FountainBig, FountainBigNrvWait));
     }

@@ -9,6 +9,10 @@
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitStarAppeared_1, "exeWaitStarAppeared.1", 1);
 
 namespace {
     const char* const cBckForRipple[] = {"WaitReverse", "Talk", "StartWait", "StartTalk", "Delight", nullptr};
@@ -321,7 +325,7 @@ void Syati::exeWaitStarAppeared() {
         MR::requestAppearPowerStar(this, mStarSpawnType, starPosition);
     }
 
-    if (MR::isGreaterStep(this, 1) && MR::isStageStatePowerStarAppeared()) {
+    if (MR::isGreaterStep(this, cStep_exeWaitStarAppeared_1) && MR::isStageStatePowerStarAppeared()) {
         kill();
     }
 }

@@ -22,6 +22,14 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeThreat_1, "exeThreat.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttackStart_1, "exeAttackStart.1", 70);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttack_1, "exeAttack.1", 12);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSwoon_1, "exeSwoon.1", 250);
 
 
 namespace NrvPackunPetit {
@@ -141,7 +149,7 @@ void PackunPetit::exeThreat() {
         MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *pos, 2.0f);
     }
 
-    if (MR::isGreaterStep(this, 50) && MR::isNearPlayer(this, 1100.0f) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f) || mDontTurn)) {
+    if (MR::isGreaterStep(this, cStep_exeThreat_1) && MR::isNearPlayer(this, 1100.0f) && (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f) || mDontTurn)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttackStart));
     } else if (!MR::isNearPlayer(this, 2000.0f)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvWait));
@@ -174,13 +182,13 @@ void PackunPetit::exeAttackStart() {
         MR::startBck(this, "Attack");
     }
 
-    if (MR::isStep(this, 70)) {
+    if (MR::isStep(this, cStep_exeAttackStart_1)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttack));
     }
 }
 
 void PackunPetit::exeAttack() {
-    if (MR::isStep(this, 12)) {
+    if (MR::isStep(this, cStep_exeAttack_1)) {
         setNerve(GET_NERVE(PackunPetit, PackunPetitNrvAttackBack));
     }
 }
@@ -238,7 +246,7 @@ void PackunPetit::exePunchDown() {
 
     mBlownModel->mVelocity.scaleAdd(2.5f, mGravity, mBlownModel->mVelocity);
 
-    if (!MR::isHiddenModel(mBlownModel) && (MR::isStep(this, 20) || MR::checkStrikeBallToMap(mBlownModel->mPosition, 50.0f))) {
+    if (!MR::isHiddenModel(mBlownModel) && (MR::isStep(this, cStep_exePunchDown_1) || MR::checkStrikeBallToMap(mBlownModel->mPosition, 50.0f))) {
         MR::emitEffect(mBlownModel, "Death");
         MR::appearStarPiece(this, mBlownModel->mPosition, 3, 10.0f, 40.0f, false);
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
@@ -267,7 +275,7 @@ void PackunPetit::exeSwoon() {
 
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
 
-    if (MR::isStep(this, 250)) {
+    if (MR::isStep(this, cStep_exeSwoon_1)) {
         selectNrvWait();
     }
 }

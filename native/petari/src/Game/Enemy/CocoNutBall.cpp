@@ -6,6 +6,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_1, "exeHitBackToHost.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_2, "exeHitBackToHost.2", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHitBackToHost_3, "exeHitBackToHost.3", 1);
+
 namespace {
     const Vec cReboundVelocity = {0.0f, 15.0f, 5.0f};
     NEBULA_TUNABLE(f32, cBodyRadius, 40.0f);
@@ -449,15 +454,15 @@ void CocoNutBall::exeHitBackToHost() {
         calcHitBackVelocityAndGravity();
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeHitBackToHost_1)) {
         MR::stopScene(cHitBackStopSceneFrames);
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeHitBackToHost_2)) {
         MR::shakeCameraWeak();
     }
 
-    if (MR::isGreaterEqualStep(this, 1)) {
+    if (MR::isGreaterEqualStep(this, cStep_exeHitBackToHost_3)) {
         mVelocity.add(mHitBackGravity);
     }
 

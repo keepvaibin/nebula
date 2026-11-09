@@ -20,6 +20,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHopStart_1, "exeHopStart.1", 10);
+
 namespace {
     NEBULA_TUNABLE(f32, sRotateDegree, 3.0f);
     static const s32 sHopStep = NebulaFrameClock::stepsOfSeconds(5);
@@ -286,7 +289,7 @@ void JumpGuarder::exeHopStart() {
 
     MR::startLevelSound(this, "SE_EM_LV_JGUARDER_SHAKE");
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeHopStart_1)) {
         for (u32 i = 0; i < mNumActiveBabies; i++) {
             mActiveBabies[i]->makeActorDead();
         }

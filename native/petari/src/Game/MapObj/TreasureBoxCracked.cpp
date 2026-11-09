@@ -11,6 +11,9 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOpenWait_1, "exeOpenWait.1", 10);
+
 namespace NrvTreasureBoxCracked {
     NEW_NERVE(TreasureBoxCrackedNrvWait, TreasureBoxCracked, Wait);
     NEW_NERVE(TreasureBoxCrackedNrvOpen, TreasureBoxCracked, Open);
@@ -186,7 +189,7 @@ void TreasureBoxCracked::exeOpenWait() {
         if (MR::isValidSwitchA(this)) {
             MR::onSwitchA(this);
         }
-    } else if (mItemType == 7 && MR::isStep(this, 10)) {
+    } else if (mItemType == 7 && MR::isStep(this, cStep_exeOpenWait_1)) {
         if (mPowerStarId == -1) {
             MR::requestAppearPowerStar(this, mPosition);
         } else {

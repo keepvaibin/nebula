@@ -24,6 +24,12 @@
 #include <algorithm>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeShootMain_1, "exeShootMain.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreak_1, "exeBreak.1", 287);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBreak_2, "exeBreak.2", 320);
+
 namespace {
     static const char* cJointNamePropellerBack0 = "Screw00";
     static const char* cJointNamePropellerBack1 = "Screw01";
@@ -450,7 +456,7 @@ void KoopaJrShip::exeAppear() {
         MR::hideModel(this);
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeAppear_1)) {
         MR::showModel(this);
         mJr->appear();
         mJr->setStateShipBattleAppear();
@@ -539,7 +545,7 @@ void KoopaJrShip::exeShootMain() {
         }
     }
 
-    if (MR::isStep(this, 15)) {
+    if (MR::isStep(this, cStep_exeShootMain_1)) {
         shootMainShells();
     }
 
@@ -667,7 +673,7 @@ void KoopaJrShip::exeBreak() {
         MR::hideModel(mJr);
     }
 
-    if (MR::isStep(this, 287)) {
+    if (MR::isStep(this, cStep_exeBreak_1)) {
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_S");
     }
 
@@ -682,7 +688,7 @@ void KoopaJrShip::exeBreak() {
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_L");
     }
 
-    if (!MR::isHiddenModel(mShipBreakModel) && (MR::isBckStopped(mShipBreakModel) || MR::isStep(this, 320))) {
+    if (!MR::isHiddenModel(mShipBreakModel) && (MR::isBckStopped(mShipBreakModel) || MR::isStep(this, cStep_exeBreak_2))) {
         mShipBreakModel->makeActorDead();
     }
 

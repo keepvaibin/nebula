@@ -6,6 +6,12 @@
 #include "Game/Util.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exePrepareToRadiate_1, "exePrepareToRadiate.1", 34);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRadiate_1, "exeRadiate.1", 25);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRadiateMargin_1, "exeRadiateMargin.1", 50);
 
 namespace NrvFirePressureRadiate {
     NEW_NERVE(FirePressureRadiateNrvRelax, FirePressureRadiate, Relax);
@@ -114,7 +120,7 @@ void FirePressureRadiate::exePrepareToRadiate() {
         MR::startBck(this, "FireShotStart");
     }
 
-    if (MR::isStep(this, 34)) {
+    if (MR::isStep(this, cStep_exePrepareToRadiate_1)) {
         setNerve(GET_NERVE(FirePressureRadiate, FirePressureRadiateNrvRadiate));
     }
 }
@@ -127,7 +133,7 @@ void FirePressureRadiate::exeRadiate() {
         MR::startBck(this, "FireShot");
     }
 
-    if (MR::isStep(this, 25)) {
+    if (MR::isStep(this, cStep_exeRadiate_1)) {
         MR::validateHitSensor(this, "radiate");
         mRadiateStep = 0;
     }
@@ -142,7 +148,7 @@ void FirePressureRadiate::exeRadiateMargin() {
         MR::startBck(this, "FireShotEnd");
     }
 
-    if (MR::isStep(this, 50)) {
+    if (MR::isStep(this, cStep_exeRadiateMargin_1)) {
         MR::invalidateHitSensor(this, "radiate");
 
         if (mGroup != nullptr) {

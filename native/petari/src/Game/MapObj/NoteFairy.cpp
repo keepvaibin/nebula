@@ -5,6 +5,11 @@
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoAppear_1, "exeDemoAppear.1", 70);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoAppear_2, "exeDemoAppear.2", 130);
 
 namespace NrvNoteFairy {
     NEW_NERVE(NoteFairyNrvHide, NoteFairy, Hide);
@@ -288,7 +293,7 @@ void NoteFairy::exeDemoAppear() {
         mPosition.z = (mInitPos.z * (1.0f - ease)) + (mDemoJumpPos.z * ease);
     }
 
-    if (MR::isGreaterStep(this, 70)) {
+    if (MR::isGreaterStep(this, cStep_exeDemoAppear_1)) {
         f32 ease = MR::getEaseInValue(NebulaFrameClock::secondsOfSteps(getNerveStep() - 70), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mDemoJumpPos.x * (1.0f - ease)) + (ease * MR::getRailPos(this).x);
         mPosition.y = mDemoJumpPos.y - (MR::sinDegree(90.0f * ease) * (mDemoJumpPos.y - MR::getRailPos(this).y));
@@ -298,7 +303,7 @@ void NoteFairy::exeDemoAppear() {
     MR::startLevelSound(this, "SE_OJ_LV_FLOWER_FAIRY_MOVE");
     mRotation.y = MR::getSceneObj< NoteGroup >(SceneObj_NoteGroup)->mRotation;
 
-    if (MR::isStep(this, 130)) {
+    if (MR::isStep(this, cStep_exeDemoAppear_2)) {
         setNerve(GET_NERVE(NoteFairy, NoteFairyNrvAppearNoteBloom));
     }
 }

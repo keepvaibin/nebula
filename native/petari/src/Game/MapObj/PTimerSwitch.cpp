@@ -3,6 +3,10 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOn_1, "exeOn.1", 25);
 
 namespace NrvPTimerSwitch {
     NEW_NERVE(PTimerSwitchNrvOff, PTimerSwitch, Off);
@@ -148,7 +152,7 @@ void PTimerSwitch::exeOn() {
         MR::startSound(this, "SE_OJ_SWITCH_1");
     }
 
-    if (MR::isGreaterStep(this, 25)) {
+    if (MR::isGreaterStep(this, cStep_exeOn_1)) {
         kill();
     }
 }

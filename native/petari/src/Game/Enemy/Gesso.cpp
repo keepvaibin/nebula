@@ -7,6 +7,11 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeComeFromBox_1, "exeComeFromBox.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeWait_1, "exeWait.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 20);
+
 namespace {
     NEBULA_TUNABLE(s32, sStepForWalk, 43);
 };  // namespace
@@ -138,7 +143,7 @@ void Gesso::exeComeFromBox() {
         mUp.set(mUpTarget);
     }
 
-    if (MR::isLessStep(this, 10)) {
+    if (MR::isLessStep(this, cStep_exeComeFromBox_1)) {
         calcAndSetVelocity(0.0f, 10.0f, 5.0f);
     } else {
         mVelocity.zero();
@@ -157,7 +162,7 @@ void Gesso::exeWait() {
         calcAndSetUpVecTarget(0.0f, 0.0f, 0.0f);
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeWait_1)) {
         MR::invalidateClipping(this);
     }
 
@@ -275,7 +280,7 @@ void Gesso::exePunchDown() {
     }
 
     MR::turnDirectionToTargetDegree(this, &mFront, *MR::getPlayerPos(), 1.5f);
-    if (MR::isStep(this, 20) || MR::isBinded(this)) {
+    if (MR::isStep(this, cStep_exePunchDown_1) || MR::isBinded(this)) {
         MR::startSound(this, "SE_EM_GESSO_DEAD");
         kill();
     }

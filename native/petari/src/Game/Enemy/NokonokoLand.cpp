@@ -26,6 +26,9 @@
 #include "Game/Util/VectorUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlyAway_1, "exeFlyAway.1", 33);
+
 namespace {
     const Vec sSensorOffsetNormal = {0.0f, 0.0f, 30.0f};
     NEBULA_TUNABLE(f32, sSensorRadiusNormal, 120.0f);
@@ -529,7 +532,7 @@ void NokonokoLand::exeFlyAway() {
 
     mVelocity.add(mGravity * 1.5f);
     mVelocity.mult(0.99f);
-    if (MR::isStep(this, 33)) {
+    if (MR::isStep(this, cStep_exeFlyAway_1)) {
         mVelocity.zero();
         setNerve(GET_NERVE(NokonokoLand, HostTypeDead));
     }

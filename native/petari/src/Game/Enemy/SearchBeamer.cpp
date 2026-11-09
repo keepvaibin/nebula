@@ -10,6 +10,15 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseSearch_1, "exeCloseSearch.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamPrepare_1, "exeBeamPrepare.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamStart_1, "exeBeamStart.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBeamStart_2, "exeBeamStart.2", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseMouth_1, "exeCloseMouth.1", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeCloseMouth_2, "exeCloseMouth.2", 5);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeStopForPlayerOff_1, "exeStopForPlayerOff.1", 5);
+
 namespace NrvSearchBeamer {
     NEW_NERVE_ONEND(SearchBeamerNrvNonActive, SearchBeamer, NonActive, NonActive);
     NEW_NERVE(SearchBeamerNrvCloseWaitFar, SearchBeamer, CloseWaitFar);
@@ -133,7 +142,7 @@ void SearchBeamer::exeCloseSearch() {
     reformDirection(false);
     MR::rotateVecDegree(&mFront, mUp, cTurnDegree);
 
-    if (MR::isStep(this, 50)) {
+    if (MR::isStep(this, cStep_exeCloseSearch_1)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvCloseWaitFar));
     }
 }
@@ -172,7 +181,7 @@ void SearchBeamer::exeBeamPrepare() {
         MR::startBck(this, "Attack");
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeBeamPrepare_1)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvBeamStart));
     }
 }
@@ -194,10 +203,10 @@ void SearchBeamer::exeBeamStart() {
     Vec3f corePos;
     MR::copyJointPos(this, "Core", &corePos);
     MR::vecBlend(corePos, beamHit, &mBeamEnd, MR::calcNerveRate(this, 15));
-    updateBeamEffect(MR::isGreaterStep(this, 15));
+    updateBeamEffect(MR::isGreaterStep(this, cStep_exeBeamStart_1));
     updateBeamShadow();
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeBeamStart_2)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvBeamAim));
     }
 }
@@ -243,13 +252,13 @@ void SearchBeamer::exeCloseMouth() {
 
     reformDirection(false);
 
-    if (MR::isLessStep(this, 5)) {
+    if (MR::isLessStep(this, cStep_exeCloseMouth_1)) {
         Vec3f corePos;
         MR::copyJointPos(this, "Core", &corePos);
         MR::vecBlend(corePos, mBeamEnd, &mBeamStart, MR::calcNerveRate(this, 5));
     }
 
-    if (MR::isStep(this, 5)) {
+    if (MR::isStep(this, cStep_exeCloseMouth_2)) {
         initBeamPos();
     }
 
@@ -534,7 +543,7 @@ void SearchBeamer::endPointerSwoon() {
 
 void SearchBeamer::exeStopForPlayerOff() {
     reformDirection(true);
-    if (MR::isStep(this, 5)) {
+    if (MR::isStep(this, cStep_exeStopForPlayerOff_1)) {
         setNerve(GET_NERVE(SearchBeamer, SearchBeamerNrvRecover));
     }
 }

@@ -124,7 +124,7 @@ namespace {
             return 0.0;
         }
     }
-    // "<stem>.<name>" or "<stem>.<name>[<place>]": the stem ends at the last dot before any bracket.
+    // "<stem>.<name>" or "<stem>.<name>[<place>]": the stem ends at the first dot (a name may hold dots: "exeWalk.1").
     struct Key {
         const char* mText;
         s32 mDot;
@@ -142,7 +142,7 @@ namespace {
         for (; pKey[length] != '\0'; ++length) {
             if (pKey[length] == '[' && bracket < 0) {
                 bracket = length;
-            } else if (pKey[length] == '.' && bracket < 0) {
+            } else if (pKey[length] == '.' && bracket < 0 && dot < 0) {
                 dot = length;
             }
         }

@@ -20,6 +20,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMove_1, "exeMove.1", 1);
+
 namespace {
     static const s32 sWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sTimeToNextPoint = NebulaFrameClock::stepsOfMilliseconds(500);
@@ -301,7 +304,7 @@ void Onimasu::exeMove() {
         startMoveInner();
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeMove_1)) {
         MR::offCalcGravity(this);
     }
 

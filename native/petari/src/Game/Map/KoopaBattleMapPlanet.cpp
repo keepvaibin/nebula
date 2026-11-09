@@ -16,6 +16,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDemoGrandStarAppear_1, "exeDemoGrandStarAppear.1", 151);
+
 namespace {
     NEBULA_TUNABLE(f32, sRotateFriction, 0.995f);
 };  // namespace
@@ -78,7 +81,7 @@ void KoopaBattleMapPlanet::exeWait() {
 }
 
 void KoopaBattleMapPlanet::exeDemoGrandStarAppear() {
-    if ((!mIsFinalPlanet && MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) || (mIsFinalPlanet && MR::isStep(this, 151))) {
+    if ((!mIsFinalPlanet && MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) || (mIsFinalPlanet && MR::isStep(this, cStep_exeDemoGrandStarAppear_1))) {
         MR::startBrk(mDamagePlate, "PowerStarAppear");
         MR::emitEffect(mDamagePlate, "GrandStarAppear");
     }

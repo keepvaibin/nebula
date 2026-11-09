@@ -16,6 +16,20 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemo_1, "exeAppearDemo.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_1, "exeDamage.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_2, "exeDamage.2", 3);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_1, "exePowerUp.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_2, "exePowerUp.2", 3);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_3, "exePowerUp.3", 83);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_4, "exePowerUp.4", 195);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_5, "exePowerUp.5", 215);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_6, "exePowerUp.6", 215);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_1, "exeDown.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_2, "exeDown.2", 3);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDownDemo_1, "exeDownDemo.1", 1);
+
 
 namespace NrvOtaKing {
     NEW_NERVE(OtaKingNrvWaitOnSwitch, OtaKing, WaitOnSwitch);
@@ -740,7 +754,7 @@ void OtaKing::exeAppearDemo() {
         }
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeAppearDemo_1)) {
         MR::hidePlayer();
     }
 
@@ -920,11 +934,11 @@ void OtaKing::exeDamage() {
         mMagma->damage();
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeDamage_1)) {
         MR::stopScene(mIsLv2 ? 6 : 16);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeDamage_2)) {
         MR::shakeCameraNormalStrong();
     }
 
@@ -949,11 +963,11 @@ void OtaKing::exePowerUp() {
         mMagma->damage();
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exePowerUp_1)) {
         MR::stopScene(mIsLv2 ? 6 : 16);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exePowerUp_2)) {
         MR::shakeCameraNormalStrong();
     }
 
@@ -968,7 +982,7 @@ void OtaKing::exePowerUp() {
         MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, 83)) {
+    if (MR::isStep(this, cStep_exePowerUp_3)) {
         MR::hideMaterial(this, "lambert141_v");
         MR::hideMaterial(this, "Daiya_v");
     }
@@ -978,15 +992,15 @@ void OtaKing::exePowerUp() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isStep(this, 195)) {
+    if (MR::isStep(this, cStep_exePowerUp_4)) {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isStep(this, 215)) {
+    if (MR::isStep(this, cStep_exePowerUp_5)) {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterStep(this, ::cBlurStartStep) && MR::isLessStep(this, 215)) {
+    if (MR::isGreaterStep(this, ::cBlurStartStep) && MR::isLessStep(this, cStep_exePowerUp_6)) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
@@ -1063,11 +1077,11 @@ void OtaKing::exeDown() {
         }
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeDown_1)) {
         MR::stopScene(20);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeDown_2)) {
         invalidateClippingAndStartDemo("ダウン", GET_NERVE(OtaKing, OtaKingNrvDownDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
     }
 }
@@ -1092,7 +1106,7 @@ void OtaKing::exeDownDemo() {
         MR::requestAppearPowerStar(this, starAppearPos);
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeDownDemo_1)) {
         MR::hidePlayer();
     }
 

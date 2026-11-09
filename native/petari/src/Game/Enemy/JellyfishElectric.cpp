@@ -19,6 +19,10 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_selectNerveAfterWait_1, "selectNerveAfterWait.1", 280);
 
 namespace NrvJellyfishElectric {
     NEW_NERVE(JellyfishElectricNrvWait, JellyfishElectric, Wait);
@@ -324,7 +328,7 @@ bool JellyfishElectric::tryPointerSwoon() {
 }
 
 bool JellyfishElectric::selectNerveAfterWait() {
-    if (MR::isStep(this, 280)) {
+    if (MR::isStep(this, cStep_selectNerveAfterWait_1)) {
         s32 rand;
 
         if (isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvWait))) {

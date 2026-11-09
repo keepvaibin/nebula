@@ -8,6 +8,10 @@
 #include "Game/Render/Clip.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeToLuigi_1, "exeToLuigi.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeToMario_1, "exeToMario.1", 10);
+
 namespace {
     NEBULA_TUNABLE(f32, sDisappearAnimRate, 0.25f);
 
@@ -281,7 +285,7 @@ namespace FileSelectInfoSub {
             MR::startAnim(mHost, "MariottoLuigi", 2);
         }
 
-        if (MR::isStep(this, 10)) {
+        if (MR::isStep(this, cStep_exeToLuigi_1)) {
             mHost->reflectInfo();
         }
 
@@ -301,7 +305,7 @@ namespace FileSelectInfoSub {
             MR::startAnim(mHost, "LuigitoMario", 2);
         }
 
-        if (MR::isStep(this, 10)) {
+        if (MR::isStep(this, cStep_exeToMario_1)) {
             mHost->reflectInfo();
         }
 

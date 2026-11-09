@@ -17,6 +17,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOpeningDemo_1, "exeOpeningDemo.1", 28);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOpeningDemo_2, "exeOpeningDemo.2", 118);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeOpeningDemo_3, "exeOpeningDemo.3", 245);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAngryDemo_1, "exeAngryDemo.1", 205);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDownDemo_1, "exeDownDemo.1", 319);
+
 namespace {
     NEBULA_TUNABLE(s32, sCryBlurStart, 100);
     NEBULA_TUNABLE(s32, sCryBlurTime, 20);
@@ -114,20 +121,20 @@ void DinoPackunDemo::exeOpeningDemo() {
 
     getHost()->mDemoPos->movement();
 
-    if (MR::isStep(this, 28)) {
+    if (MR::isStep(this, cStep_exeOpeningDemo_1)) {
         MR::startSystemSE("SE_DM_MEET_BOSS");
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_EGG_CREAK");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_EGG_CREAK");
     }
 
-    if (MR::isStep(this, 118)) {
+    if (MR::isStep(this, cStep_exeOpeningDemo_2)) {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_EGG_DIG_OUT");
         MR::startSound(getHost(), "SE_BV_D_PAKKUN_EGG_GROAN");
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    if (MR::isStep(this, 245)) {
+    if (MR::isStep(this, cStep_exeOpeningDemo_3)) {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_TAIL_ATTACK");
     }
 
@@ -186,7 +193,7 @@ void DinoPackunDemo::exeAngryDemo() {
     }
 
     if (getHost()->mSequence->getVsCount() == 2) {
-        if (MR::isLessStep(this, 205)) {
+        if (MR::isLessStep(this, cStep_exeAngryDemo_1)) {
             MR::startLevelSound(getHost(), "SE_BM_LV_D_PAKKUN_ANGRY");
         }
 
@@ -220,7 +227,7 @@ void DinoPackunDemo::exeDownDemo() {
         MR::startCenterScreenBlur(::sDeathBlurTime, ::sDeathBlurOffset, ::sDeathBlurAlpha, ::sDeathBlurFadeIn, ::sDeathBlurFadeOut);
     }
 
-    if (MR::isStep(this, 319)) {
+    if (MR::isStep(this, cStep_exeDownDemo_1)) {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_FALL_DOWN");
     }
 

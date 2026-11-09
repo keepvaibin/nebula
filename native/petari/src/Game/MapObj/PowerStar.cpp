@@ -30,6 +30,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemoKoopa_1, "exeAppearDemoKoopa.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeStageClearDemo_1, "exeStageClearDemo.1", 1);
+
 namespace {
     // Indexed by PowerStar::Color.
     const NebulaColor8 cLightColor[] = {
@@ -702,7 +706,7 @@ void PowerStar::exeAppearDemoKoopa() {
         MR::setPlayerBaseMtx(mBaseMtx);
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeAppearDemoKoopa_1)) {
         MR::startBckPlayer(pDemoName, 0);
     }
 
@@ -799,7 +803,7 @@ void PowerStar::exeStageClearDemo() {
         MR::startAnimCameraTargetSelf(mPowerStarModelObj, mCameraInfo, getGetDemoName(), 0, 1.0f);
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeStageClearDemo_1)) {
         if (mIsCameraActorPose && mCameraActor != nullptr) {
             MR::makeMtxTR(mBaseMtx, mCameraActor);
             mBaseMtx.zeroTrans();

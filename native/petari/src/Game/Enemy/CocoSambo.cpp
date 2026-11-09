@@ -10,6 +10,13 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHide_1, "exeHide.1", 65);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFallHead_1, "exeFallHead.1", 2);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFallHead_2, "exeFallHead.2", 3);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_2, "exeBlow.2", 2);
+
 namespace NrvCocoSamboHead {
     NEW_NERVE(CocoSamboHeadNrvHeadConnectedBody, CocoSamboHead, ConnectedBody);
     NEW_NERVE(CocoSamboHeadNrvHeadFall, CocoSamboHead, Fall);
@@ -570,7 +577,7 @@ void CocoSambo::exeHide() {
         startBckThisAndHead("Hide");
     }
 
-    if (MR::isStep(this, 65)) {
+    if (MR::isStep(this, cStep_exeHide_1)) {
         MR::emitEffect(this, "CocoSamboSmoke");
         MR::startSound(this, "SE_EM_SFSAMBO_HIDE");
         MR::invalidateShadow(this, nullptr);
@@ -623,11 +630,11 @@ void CocoSambo::exeFallHead() {
         MR::hideMaterial(mHead, "SanboNeedleMat_v");
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeFallHead_1)) {
         MR::stopScene(10);
     }
 
-    if (MR::isStep(this, 3)) {
+    if (MR::isStep(this, cStep_exeFallHead_2)) {
         MR::shakeCameraNormal();
     }
 
@@ -693,11 +700,11 @@ void CocoSambo::exeBlow() {
         mHead->setNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadBlow));
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeBlow_1)) {
         MR::stopScene(6);
     }
 
-    if (MR::isStep(this, 2)) {
+    if (MR::isStep(this, cStep_exeBlow_2)) {
         MR::shakeCameraNormal();
     }
 

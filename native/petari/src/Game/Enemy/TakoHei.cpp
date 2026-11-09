@@ -8,6 +8,9 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exePunchDown_1, "exePunchDown.1", 5);
+
 namespace {
     static Vec3f sInkShotOffset(0.0f, 20.0f, 0.0f);
     NEBULA_TUNABLE(f32, sBaseScale, 1.0f);
@@ -797,7 +800,7 @@ void TakoHei::exePunchDown() {
 
     updateNormalVelocity();
 
-    if (MR::isGreaterStep(this, ::sPunchDownTime) || (MR::isBinded(this) && MR::isGreaterStep(this, 5))) {
+    if (MR::isGreaterStep(this, ::sPunchDownTime) || (MR::isBinded(this) && MR::isGreaterStep(this, cStep_exePunchDown_1))) {
         kill();
     }
 }

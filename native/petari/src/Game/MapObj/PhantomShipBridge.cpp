@@ -4,6 +4,13 @@
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveA_1, "exeMoveA.1", 55);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveA_2, "exeMoveA.2", 55);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveB_1, "exeMoveB.1", 55);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeMoveB_2, "exeMoveB.2", 55);
 
 namespace NrvPhantomShipBridge {
     NEW_NERVE(HostTypeWait, PhantomShipBridge, Wait);
@@ -79,7 +86,7 @@ void PhantomShipBridge::exeMoveA() {
         MR::startBck(this, "MoveA");
     }
 
-    if (MR::isLessStep(this, 55)) {
+    if (MR::isLessStep(this, cStep_exeMoveA_1)) {
         if (mIsNutShipBridge == 1) {
             MR::startLevelSound(this, "SE_OJ_LV_NUT_SHIP_BRIDGE_MV");
         } else {
@@ -87,7 +94,7 @@ void PhantomShipBridge::exeMoveA() {
         }
     }
 
-    if (MR::isStep(this, 55)) {
+    if (MR::isStep(this, cStep_exeMoveA_2)) {
         if (mIsNutShipBridge == 1) {
             MR::startSound(this, "SE_OJ_NUT_SHIP_BRIDGE_ED");
         } else {
@@ -109,7 +116,7 @@ void PhantomShipBridge::exeMoveB() {
         MR::startBck(this, "MoveB");
     }
 
-    if (MR::isLessStep(this, 55)) {
+    if (MR::isLessStep(this, cStep_exeMoveB_1)) {
         if (mIsNutShipBridge == 1) {
             MR::startLevelSound(this, "SE_OJ_LV_NUT_SHIP_BRIDGE_MV");
         } else {
@@ -117,7 +124,7 @@ void PhantomShipBridge::exeMoveB() {
         }
     }
 
-    if (MR::isStep(this, 55)) {
+    if (MR::isStep(this, cStep_exeMoveB_2)) {
         if (mIsNutShipBridge == 1) {
             MR::startSound(this, "SE_OJ_NUT_SHIP_BRIDGE_ED");
         } else {

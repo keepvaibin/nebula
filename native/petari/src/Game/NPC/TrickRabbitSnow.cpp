@@ -10,6 +10,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearFromSnow_1, "exeAppearFromSnow.1", 5);
+
 TrickRabbitSnowListener::TrickRabbitSnowListener() {
 }
 
@@ -361,7 +364,7 @@ void TrickRabbitSnow::exeAppearFromSnow() {
     MR::addVelocityToGravity(this, 1.0f);
     MR::attenuateVelocity(this, ::sBrakeAccelRate);
 
-    if (MR::isGreaterStep(this, 5)) {
+    if (MR::isGreaterStep(this, cStep_exeAppearFromSnow_1)) {
         if (MR::isBindedGround(this)) {
             setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvRunaway));
         }

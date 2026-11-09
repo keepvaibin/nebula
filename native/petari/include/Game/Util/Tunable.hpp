@@ -75,6 +75,14 @@ namespace nebula {
     NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
         __FILE_NAME__, #name, &name, &name##_nebula_game, ::nebula::TunableKindOf<type>::value, 1u}
 
+// A number written inside a function (a step count: `MR::isStep(this, 60)`), named for luma.json as
+// "<file stem>.<function>.<k>": NEBULA_TUNABLE_NAMED(s32, cStep_exeWalk_1, "exeWalk.1", 60);
+#define NEBULA_TUNABLE_NAMED(type, name, key, number)                                                                        \
+    static type name = (number);                                                                                              \
+    static const type name##_nebula_game = (number);                                                                          \
+    NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
+        __FILE_NAME__, key, &name, &name##_nebula_game, ::nebula::TunableKindOf<type>::value, 1u}
+
 // A list: NEBULA_TUNABLE_LIST(f32, cSpeeds, 3, {1.0f, 2.0f, 4.0f}); for `const f32 cSpeeds[3] = {1.0f, 2.0f, 4.0f};`
 // (the size may be left empty, as the definition had it). luma.json sets it as a list, null keeping a place.
 #define NEBULA_TUNABLE_LIST(type, name, size, ...)                                                                            \

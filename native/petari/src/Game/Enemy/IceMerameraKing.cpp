@@ -28,6 +28,22 @@
 #include <nebula_geometry.hpp>
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSearch_1, "exeSearch.1", 100);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeSearch_2, "exeSearch.2", 200);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeThrow_1, "exeThrow.1", 22);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeExtinguish_1, "exeExtinguish.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeEscapeJump_1, "exeEscapeJump.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeEscapeJump_2, "exeEscapeJump.2", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_1, "exeDamage.1", 20);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePreRecover_1, "exePreRecover.1", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exePreRecover_2, "exePreRecover.2", 50);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRecover_1, "exeRecover.1", 80);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeRecover_2, "exeRecover.2", 160);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAngryDemo_1, "exeAngryDemo.1", 1);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAngryDemo_2, "exeAngryDemo.2", 85);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAngryDemo_3, "exeAngryDemo.3", 85);
+
 namespace NrvIceMerameraKing {
     NEW_NERVE(HostTypeNrvSearch, IceMerameraKing, Search);
     NEW_NERVE_ONEND(HostTypeNrvBeginDemo, IceMerameraKing, Throw, Throw);
@@ -243,11 +259,11 @@ void IceMerameraKing::exeSearch() {
     // Full health throws 3 every 200 steps; once hit, 6 every 100.
     if (isEnableThrow()) {
         if (mHitPoint <= 2) {
-            if (MR::isGreaterStep(this, 100) && isDeadAllIce()) {
+            if (MR::isGreaterStep(this, cStep_exeSearch_1) && isDeadAllIce()) {
                 mThrowNum = 0;
                 setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvThrow2nd));
             }
-        } else if (MR::isGreaterStep(this, 200) && isDeadAllIce()) {
+        } else if (MR::isGreaterStep(this, cStep_exeSearch_2) && isDeadAllIce()) {
             mThrowNum = 0;
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvThrow));
         }
@@ -265,7 +281,7 @@ void IceMerameraKing::exeThrow() {
     MR::addVelocityKeepHeightUseShadow(this, 400.0f, 1.5f, 300.0f, nullptr);
     addVelocityToInitPos();
 
-    if (MR::isStep(this, 22)) {
+    if (MR::isStep(this, cStep_exeThrow_1)) {
         mThrowingIce = getDeadWeaponAndAppear();
         if (mThrowingIce == nullptr) {
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
@@ -328,7 +344,7 @@ void IceMerameraKing::exeExtinguish() {
         mExtinguishHeight = 200.0f + MR::getShadowNearProjectionLength(this);
     }
 
-    if (MR::isLessStep(this, 40)) {
+    if (MR::isLessStep(this, cStep_exeExtinguish_1)) {
         MR::addVelocityKeepHeightUseShadow(this, mExtinguishHeight, 1.3f, 700.0f, nullptr);
         MR::moveAndTurnToPlayer(this, &mFront, ::hExtinguishOnAirParam);
     } else if (MR::isOnGround(this) && MR::isActionEnd(this)) {
@@ -375,7 +391,7 @@ void IceMerameraKing::endEscape() {
 }
 
 void IceMerameraKing::exeEscapeJump() {
-    if (MR::isStep(this, 20)) {
+    if (MR::isStep(this, cStep_exeEscapeJump_1)) {
         MR::addVelocitySeparateHV(this, mFront, 20.0f, 90.0f);
         MR::startSound(this, "SE_BM_ICEMERAKING_JUMP");
     }
@@ -386,7 +402,7 @@ void IceMerameraKing::exeEscapeJump() {
         MR::rotateQuatRollBall(&mRollQuat, mVelocity, *MR::getGroundNormal(this), (0.5f * radius));
         MR::moveAndTurnToPlayer(this, &mFront, ::hEscapeOnGroundParam);
 
-        if (MR::isGreaterStep(this, 20)) {
+        if (MR::isGreaterStep(this, cStep_exeEscapeJump_2)) {
             MR::emitEffect(this, "Land");
             MR::startSound(this, "SE_BM_ICEMERAKING_LAND");
             setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvEscape));
@@ -408,7 +424,7 @@ void IceMerameraKing::exeDamage() {
         MR::stopSceneForDefaultHit(4);
     }
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeDamage_1)) {
         MR::addVelocityKeepHeightUseShadow(this, 900.0f, 3.0f, 300.0f, nullptr);
     }
 
@@ -436,9 +452,9 @@ void IceMerameraKing::exePreRecover() {
     }
     addVelocityToInitPos();
 
-    if (MR::isLessStep(this, 50)) {
+    if (MR::isLessStep(this, cStep_exePreRecover_1)) {
         MR::moveAndTurnToPlayer(this, &mFront, ::hPreRecoverJumpParam);
-    } else if (MR::isStep(this, 50)) {
+    } else if (MR::isStep(this, cStep_exePreRecover_2)) {
         MR::startAction(this, "PreRecover");
         MR::setBinderRadius(this, sBodyRadius);
         getSensor("body")->mRadius = sBodyRadius;
@@ -459,14 +475,14 @@ void IceMerameraKing::exeRecover() {
         MR::startSound(this, "SE_BM_ICEMERAKING_PRE_RECOVER");
     }
 
-    if (MR::isStep(this, 80)) {
+    if (MR::isStep(this, cStep_exeRecover_1)) {
         MR::startSound(this, "SE_BM_ICEMERAKING_RECOVER");
     }
     addVelocityToInitPos();
     MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
     MR::addVelocityKeepHeightUseShadow(this, 750.0f, 1.5f, 300.0f, nullptr);
 
-    if (MR::isGreaterStep(this, 160)) {
+    if (MR::isGreaterStep(this, cStep_exeRecover_2)) {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
     }
 }
@@ -530,7 +546,7 @@ void IceMerameraKing::exeAngryDemo() {
         }
     }
 
-    if (MR::isStep(this, 1)) {
+    if (MR::isStep(this, cStep_exeAngryDemo_1)) {
         MR::resetPosition(this, mInitPos);
     }
     MR::moveAndTurnToPlayer(this, &mFront, ::hAngryDemoParam);
@@ -542,9 +558,9 @@ void IceMerameraKing::exeAngryDemo() {
         }
     }
 
-    if (isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd)) && MR::isStep(this, 85)) {
+    if (isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd)) && MR::isStep(this, cStep_exeAngryDemo_2)) {
         MR::startSound(this, "SE_BM_ICEMERAKING_ANGRY2");
-    } else if (MR::isStep(this, 85)) {
+    } else if (MR::isStep(this, cStep_exeAngryDemo_3)) {
         MR::startSound(this, "SE_BM_ICEMERAKING_ANGRY1");
     }
     MR::playLevelMarioPinchBGM(true);

@@ -11,6 +11,10 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlash_1, "exeFlash.1", 10);
 
 namespace NrvCollectTico {
     NEW_NERVE(CollectTicoNrvWait, CollectTico, Wait);
@@ -98,7 +102,7 @@ void CollectTico::exeFlash() {
         MR::startSound(this, "SE_SM_STRAYTICO_FUSION");
     }
 
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeFlash_1)) {
         for (s32 i = 0; i < mTicoNum; i++) {
             mStrayTicos[i]->kill();
         }

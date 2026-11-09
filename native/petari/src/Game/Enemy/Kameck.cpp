@@ -10,6 +10,9 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_exeAttack_1, "exeAttack.1", 9);
+
 namespace {
     NEBULA_TUNABLE(f32, sDefaultActiveDistance, 3000.0f);
     NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
@@ -566,7 +569,7 @@ void Kameck::exeAttack() {
         MR::startSound(this, "SE_EV_KAMECK_STAFF_SWING");
     }
 
-    if (MR::isStep(this, 9)) {
+    if (MR::isStep(this, cStep_exeAttack_1)) {
         mBeam->requestShootToPlayerCenter(::sBeamSpeed);
         mActiveActorList->addActor(mBeam);
         mBeam = nullptr;

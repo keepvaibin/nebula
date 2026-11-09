@@ -27,6 +27,14 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_math.h>
+#include "Game/Util/Tunable.hpp"
+
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlow_1, "tryEndBlow.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlowLand_1, "tryEndBlowLand.1", 15);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 10);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropDown_1, "exeHipDropDown.1", 40);
+NEBULA_TUNABLE_NAMED(s32, cStep_exeFlatDown_1, "exeFlatDown.1", 20);
 
 namespace {
     class KuriboParam {
@@ -484,7 +492,7 @@ bool Kuribo::tryActive() {
 }
 
 bool Kuribo::tryEndBlow() {
-    if (MR::isBindedGround(this) && MR::isGreaterStep(this, 10)) {
+    if (MR::isBindedGround(this) && MR::isGreaterStep(this, cStep_tryEndBlow_1)) {
         MR::startAction(this, "Land");
         MR::onBind(this);
         setNerve(GET_NERVE(Kuribo, KuriboNrvBlowLand));
@@ -495,7 +503,7 @@ bool Kuribo::tryEndBlow() {
 }
 
 bool Kuribo::tryEndBlowLand() {
-    if (MR::isGreaterStep(this, 15)) {
+    if (MR::isGreaterStep(this, cStep_tryEndBlowLand_1)) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvChase));
         return true;
     }
@@ -614,7 +622,7 @@ void Kuribo::exeAppearFromBox() {
 
 void Kuribo::exeBlow() {
     calcPassiveMovement();
-    if (MR::isStep(this, 10)) {
+    if (MR::isStep(this, cStep_exeBlow_1)) {
         MR::onBind(this);
     }
 
@@ -649,7 +657,7 @@ void Kuribo::exeHipDropDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, 40)) {
+    if (MR::isGreaterStep(this, cStep_exeHipDropDown_1)) {
         kill();
     }
 }
@@ -660,7 +668,7 @@ void Kuribo::exeFlatDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, 20)) {
+    if (MR::isGreaterStep(this, cStep_exeFlatDown_1)) {
         kill();
     }
 }

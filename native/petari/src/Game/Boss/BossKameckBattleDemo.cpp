@@ -14,6 +14,9 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/Tunable.hpp"
 
+// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
+NEBULA_TUNABLE_NAMED(s32, cStep_updatePowerUp_1, "updatePowerUp.1", 200);
+
 namespace {
     static const s32 sAppearKameckTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sVs1DemoAppearSeStopTime = NebulaFrameClock::stepsOfMilliseconds(4500);
@@ -233,7 +236,7 @@ void BossKameckBattleDemo::updatePowerUp(const char* pAnimName, const char* pDem
         MR::startLevelSound(mHost, pLevelSe);
     }
 
-    if (MR::isStep(this, 200)) {
+    if (MR::isStep(this, cStep_updatePowerUp_1)) {
         mHost->startDemoAppearKameck();
     }
 
