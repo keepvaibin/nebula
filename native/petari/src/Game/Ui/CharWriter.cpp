@@ -5,6 +5,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Ui/UiCommon.hpp"
 #include "Game/Ui/Font.hpp"
+#include "Game/Util/Array.hpp"
 
 namespace {
     // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it, with the glyph sheet
@@ -14,8 +15,7 @@ namespace {
     // The run of glyphs not yet sent: one sheet, one material, one matrix, one instance per glyph
     // (runtime/src/render/materials/glyph_instances.hlsl). A glyph's quad blends over the ones before it in the run as it
     // would over a draw before it, so a run draws what a draw a glyph drew.
-    const u32 cRunGlyphs = 256;
-    NebulaGlyphInstance sRun[cRunGlyphs];
+    MR::GrowBuffer< NebulaGlyphInstance > sRun;
     u32 sRunGlyphs;
     f32 sRunMtx[3][4];
 
@@ -25,13 +25,13 @@ namespace {
         }
         u32 first;
         void* pRows = FrameRing::instanceRows(sRunGlyphs * (sizeof(NebulaGlyphInstance) / 16), &first);
-        memcpy(pRows, sRun, sRunGlyphs * sizeof(NebulaGlyphInstance));
+        memcpy(pRows, sRun.mItems, sRunGlyphs * sizeof(NebulaGlyphInstance));
         TypedDraw site = TypedDraw::eyeSpace(sMaterial, sRunMtx);
         site.drawGlyphs(first, sRunGlyphs);
         sRunGlyphs = 0;
     }
 
-    // The next glyph's instance; the run is sent first when it is full or the matrix moved. The glyph's plane z is the
+    // The next glyph's instance; the run is sent first when the matrix moved. The glyph's plane z is the
     // matrix's: its translation moved along the third column (z 0 leaves it as it is).
     NebulaGlyphInstance* RunGlyph(const f32 (*pMtx)[4], f32 z) {
         f32 mtx[3][4];
@@ -42,7 +42,7 @@ namespace {
             mtx[r][3] = pMtx[r][3] + pMtx[r][2] * z;
         }
         if (sRunGlyphs != 0) {
-            bool same = sRunGlyphs < cRunGlyphs;
+            bool same = true;
             for (u32 i = 0; same && i < 12; i++) {
                 same = __builtin_bit_cast(u32, (&mtx[0][0])[i]) == __builtin_bit_cast(u32, (&sRunMtx[0][0])[i]);
             }
@@ -53,7 +53,8 @@ namespace {
         if (sRunGlyphs == 0) {
             memcpy(sRunMtx, mtx, sizeof(sRunMtx));
         }
-        return &sRun[sRunGlyphs++];
+        NebulaGlyphInstance* const pRun = sRun.room(sRunGlyphs + 1);
+        return &pRun[sRunGlyphs++];
     }
 
     u32 ColorWord(Color8 color) {

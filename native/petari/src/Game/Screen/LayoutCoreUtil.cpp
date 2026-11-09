@@ -20,9 +20,18 @@ namespace LayoutCoreUtil {
     }
 
     u16 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg) {
-        char16_t buffer[512];
+        char16_t stack[512];
+        MR::Text16 heap;
+        const u32 room = ReplaceTagProcessor::getReplaceRoom(pMsg);
+        char16_t* const buffer = room <= 512 ? stack : heap.room(room);
         ReplaceTagProcessor::Replace(buffer, pMsg);
-        return pTextBox->SetString(buffer, 0, MR::getStringLengthWithMessageTag(buffer));
+        const u16 length = MR::getStringLengthWithMessageTag(buffer);
+        // A box that has a string buffer holds whatever is set; its buffer grows to the text.
+        if (pTextBox->GetStringBufferLength() != 0 && length > pTextBox->GetStringBufferLength()) {
+            pTextBox->AllocStringBuffer(length);
+        }
+
+        return pTextBox->SetString(buffer, 0, length);
     }
 
     void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {

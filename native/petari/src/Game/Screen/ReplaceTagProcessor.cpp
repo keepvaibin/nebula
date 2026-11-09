@@ -46,6 +46,31 @@ namespace ReplaceTagProcessor {
         }
     };  // namespace ImplArgs
 
+    u32 getReplaceRoom(const char16_t* pSrc) {
+        u32 room = 1;
+        // A mod's galaxy that names no text for itself.
+        for (; pSrc != nullptr && *pSrc != 0 && !MR::isMessageEditorNextTag(pSrc);) {
+            if (*pSrc == 0x1A) {
+                MessageEditorMessageTag tag(pSrc + 1);
+                const u32 skip = tag.getSkipLength() + 1;
+                if (tag.getGroup() == 5) {
+                    room += getLocalizeGroupRoom(tag);
+                } else if (tag.getGroup() == 9) {
+                    room += 9;
+                } else {
+                    room += skip;
+                }
+
+                pSrc += skip;
+            } else {
+                room++;
+                pSrc++;
+            }
+        }
+
+        return room;
+    }
+
     u32 Replace(char16_t* pDst, const char16_t* pSrc) {
         char16_t* pStart = pDst;
         // A mod's galaxy that names no text for itself.
@@ -180,15 +205,24 @@ namespace ReplaceTagProcessor {
         return 0;
     }
 
-    u32 exeLocalizeGroupPlayerName(char16_t* pDst, u8 form) {
-        char name[0x100];
-        if (MR::isPlayerLuigi()) {
-            nebula_snprintf(name, sizeof(name), "System_PlayerName1%02d", form);
-        } else {
-            nebula_snprintf(name, sizeof(name), "System_PlayerName0%02d", form);
+    namespace {
+        const char16_t* findPlayerName(u8 form) {
+            MR::FormattedName name(MR::isPlayerLuigi() ? "System_PlayerName1%02d" : "System_PlayerName0%02d", form);
+            return MR::getGameMessageDirect(name.c_str());
+        }
+    }  // namespace
+
+    u32 getLocalizeGroupRoom(const MessageEditorMessageTag& rTag) {
+        switch (rTag.getTag()) {
+        case 0:
+            return static_cast< u32 >(MR::getStringLengthWithMessageTag(findPlayerName(rTag.getParam8(0)))) + 1;
         }
 
-        const char16_t* pMessage = MR::getGameMessageDirect(name);
+        return 1;
+    }
+
+    u32 exeLocalizeGroupPlayerName(char16_t* pDst, u8 form) {
+        const char16_t* pMessage = findPlayerName(form);
         int length = MR::getStringLengthWithMessageTag(pMessage);
         MR::copyString(pDst, pMessage, length + 1);
         return length;
@@ -206,7 +240,24 @@ namespace ReplaceTagProcessor {
 };  // namespace ReplaceTagProcessor
 
 u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, ...) {
-    char16_t buffer[0x200];
+    // Room for the replaced text: a number tag gives at most 12 units, a string tag at most the 0x100 its group
+    // function writes, any other tag keeps its length.
+    u32 room = 1;
+    for (const char16_t* pText = pFormat; *pText != 0 && !MR::isMessageEditorNextTag(pText);) {
+        if (*pText == 0x1A) {
+            MessageEditorMessageTag tag(pText + 1);
+            const u32 skip = tag.getSkipLength() + 1;
+            room += tag.getGroup() == 7 ? 0x100 : tag.getGroup() == 6 ? 12 : skip;
+            pText += skip;
+        } else {
+            room++;
+            pText++;
+        }
+    }
+
+    char16_t stack[0x200];
+    MR::Text16 heap;
+    char16_t* const buffer = room <= 0x200 ? stack : heap.room(room);
     va_list args;
     va_start(args, pFormat);
     s32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args);

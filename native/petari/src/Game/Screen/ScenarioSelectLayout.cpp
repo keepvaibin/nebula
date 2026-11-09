@@ -564,10 +564,16 @@ void ScenarioSelectLayout::appearPage(s32 page) {
     }
 
     // The page, after the galaxy's name.
-    char16_t text[256];
     const char16_t* pName = MR::getGalaxyNameOnCurrentLanguage(MR::getCurrentStageName());
+    s32 nameLength = 0;
+    while (pName != nullptr && pName[nameLength] != 0) {
+        nameLength++;
+    }
+    // The name, then " < " and up to two digits, "/", up to two digits, " >" and the terminator.
+    MR::Text16 textBuffer;
+    char16_t* const text = textBuffer.room(static_cast< u32 >(nameLength) + 16);
     s32 at = 0;
-    while (pName != nullptr && pName[at] != 0 && at < 200) {
+    while (at < nameLength) {
         text[at] = pName[at];
         at++;
     }

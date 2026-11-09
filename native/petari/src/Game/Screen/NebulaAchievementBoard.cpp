@@ -19,6 +19,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/TextString.hpp"
 #include <cstdio>
 #include <cstring>
 #include <Game/Ui/Layout.hpp>
@@ -129,28 +130,34 @@ namespace {
 
 
     // A whole number, at least `digits` long (the game's wide characters are 16-bit everywhere: no swprintf).
-    void formatInt(char16_t* pDst, s32 capacity, s32 value, s32 digits) {
-        char text[16];
-        nebula_snprintf(text, sizeof(text), "%0*d", digits, value);
-        s32 i = 0;
-        for (; text[i] != 0 && i + 1 < capacity; i++) {
-            pDst[i] = static_cast< char16_t >(text[i]);
+    void formatInt(MR::Text16& rDst, s32 value, s32 digits) {
+        const MR::FormattedName text("%0*d", digits, value);
+        const char* const pText = text.c_str();
+        u32 length = 0;
+        while (pText[length] != 0) {
+            length++;
         }
-        pDst[i] = 0;
+        char16_t* const pDst = rDst.room(length + 1);
+        for (u32 i = 0; i < length; i++) {
+            pDst[i] = static_cast< char16_t >(pText[i]);
+        }
+        pDst[length] = 0;
     }
 
     // A number with its digits grouped by threes, as the language writes them (NebulaText's DigitGroup).
-    void formatNumber(char16_t* pDst, s32 capacity, u64 value) {
-        char digits[24];
+    void formatNumber(MR::Text16& rDst, u64 value) {
+        char digits[24];  // a u64 has at most 20 digits
         nebula_snprintf(digits, sizeof(digits), "%llu", static_cast< unsigned long long >(value));
-        char16_t group[4];
-        NebulaText::get(group, 4, "DigitGroup");
+        MR::Text16 group;
+        getText(group, "DigitGroup");
         const s32 count = static_cast< s32 >(strlen(digits));
+        const u32 room = static_cast< u32 >(count) + static_cast< u32 >((count - 1) / 3) * static_cast< u32 >(MR::textLength(group.c_str())) + 1;
+        char16_t* const pDst = rDst.room(room);
         char16_t* p = pDst;
-        char16_t* pEnd = pDst + capacity;
+        char16_t* pEnd = pDst + room;
         for (s32 i = 0; i < count && p + 1 < pEnd; i++) {
             if (i > 0 && (count - i) % 3 == 0) {
-                p = append(p, pEnd, group);
+                p = append(p, pEnd, group.c_str());
             }
             *p++ = static_cast< char16_t >(digits[i]);
         }
@@ -158,11 +165,25 @@ namespace {
     }
 
     // NebulaText's `pId` with its {name} tokens replaced.
-    void fill(char16_t* pDst, s32 capacity, const char* pId, const char* const* pNames, const char16_t* const* pValues, s32 count) {
-        char16_t pattern[128];
-        NebulaText::get(pattern, 128, pId);
+    void fill(MR::Text16& rDst, const char* pId, const char* const* pNames, const char16_t* const* pValues, s32 count) {
+        MR::Text16 patternText;
+        getText(patternText, pId);
+        const char16_t* const pattern = patternText.c_str();
+        // Room for the pattern with every {token} replaced by the longest value.
+        u32 longest = 0;
+        for (s32 i = 0; i < count; i++) {
+            const u32 length = static_cast< u32 >(MR::textLength(pValues[i]));
+            longest = length > longest ? length : longest;
+        }
+        u32 room = static_cast< u32 >(MR::textLength(pattern)) + 1;
+        for (const char16_t* s = pattern; *s != 0; s++) {
+            if (*s == u'{') {
+                room += longest;
+            }
+        }
+        char16_t* const pDst = rDst.room(room);
         char16_t* p = pDst;
-        char16_t* pEnd = pDst + capacity;
+        char16_t* pEnd = pDst + room;
         *p = 0;
         for (const char16_t* s = pattern; *s != 0;) {
             bool replaced = false;
@@ -190,23 +211,23 @@ namespace {
         }
     }
 
-    void formatDate(char16_t* pDst, s32 capacity, s32 date) {
-        char16_t y[8], m[4], d[4];
-        formatInt(y, 8, date / 10000, 1);
-        formatInt(m, 4, date / 100 % 100, 2);
-        formatInt(d, 4, date % 100, 2);
+    void formatDate(MR::Text16& rDst, s32 date) {
+        MR::Text16 y, m, d;
+        formatInt(y, date / 10000, 1);
+        formatInt(m, date / 100 % 100, 2);
+        formatInt(d, date % 100, 2);
         const char* const names[] = {"y", "m", "d"};
-        const char16_t* const values[] = {y, m, d};
-        fill(pDst, capacity, "DateFormat", names, values, 3);
+        const char16_t* const values[] = {y.c_str(), m.c_str(), d.c_str()};
+        fill(rDst, "DateFormat", names, values, 3);
     }
 
-    void formatCount(char16_t* pDst, s32 capacity, s32 current, s32 goal) {
-        char16_t n[16], total[16];
-        formatNumber(n, 16, static_cast< u64 >(current));
-        formatNumber(total, 16, static_cast< u64 >(goal));
+    void formatCount(MR::Text16& rDst, s32 current, s32 goal) {
+        MR::Text16 n, total;
+        formatNumber(n, static_cast< u64 >(current));
+        formatNumber(total, static_cast< u64 >(goal));
         const char* const names[] = {"n", "total"};
-        const char16_t* const values[] = {n, total};
-        fill(pDst, capacity, "BoardCount", names, values, 2);
+        const char16_t* const values[] = {n.c_str(), total.c_str()};
+        fill(rDst, "BoardCount", names, values, 2);
     }
 
     struct Card {
@@ -223,7 +244,7 @@ namespace {
         TextBox* mMeta;
         Window* mTrack;
         Window* mBar;
-        char16_t mHintText[192];  // what the player did (shown unlocked), or the locked line
+        MR::GrowBuffer< char16_t > mHintText;  // what the player did (shown unlocked), or the locked line
         bool mUnlocked;
         s32 mDate;
         s32 mCurrent;
@@ -500,11 +521,11 @@ namespace {
             // The sentence below it: two lines at most, smaller if a language needs a third.
             rCard.mHintSize = cHintSize;
             setTextSize(rCard.mHint, rCard.mHintSize);
-            wrapWords(rCard.mHint, rCard.mHintText, textWidth, &width, &rCard.mHintHeight);
+            wrapWords(rCard.mHint, rCard.mHintText.mItems, textWidth, &width, &rCard.mHintHeight);
             if (countLines(rCard.mHintHeight, rCard.mHintSize) > 2) {
                 rCard.mHintSize = cHintSize * 0.86f;
                 setTextSize(rCard.mHint, rCard.mHintSize);
-                wrapWords(rCard.mHint, rCard.mHintText, textWidth, &width, &rCard.mHintHeight);
+                wrapWords(rCard.mHint, rCard.mHintText.mItems, textWidth, &width, &rCard.mHintHeight);
             }
             f32 block;
             cardTextTop(rCard, &block);
@@ -546,11 +567,11 @@ namespace {
         }
 
         // The empty list's line.
-        char16_t empty[96] = {0};
+        MR::Text16 empty;
         if (p->mTab != TabStats && p->mShownNum == 0) {
-            NebulaText::get(empty, 96, p->mFilterMode == FilterLocked ? "BoardEmptyLocked" : "BoardEmptyUnlocked");
+            getText(empty, p->mFilterMode == FilterLocked ? "BoardEmptyLocked" : "BoardEmptyUnlocked");
         }
-        wrapWords(p->mEmpty, empty, p->mListRight - p->mListLeft - 40.0f, &width, &height);
+        wrapWords(p->mEmpty, empty.c_str(),p->mListRight - p->mListLeft - 40.0f, &width, &height);
 
         // The tabs across the panel's whole width, each the same; a label too long for its tab narrows.
         const f32 tabWidth = (right - left - cTabGap * (TabNum - 1)) / TabNum;
@@ -575,7 +596,7 @@ namespace {
             x += rChip.mWidth + cTabGap;
         }
         // The tab's count at the row's right: how many of its achievements are unlocked (the header has All's).
-        char16_t count[48] = {0};
+        MR::Text16 count;
         if (p->mTab != TabAll && p->mTab != TabStats) {
             s32 unlocked = 0;
             s32 total = 0;
@@ -585,9 +606,9 @@ namespace {
                     unlocked += p->mCards[i].mUnlocked ? 1 : 0;
                 }
             }
-            formatCount(count, 48, unlocked, total);
+            formatCount(count, unlocked, total);
         }
-        setText(p->mTabCount, count);
+        setText(p->mTabCount, count.c_str());
         measure(p->mTabCount, 4000.0f, &width, &height);
 
         // The footer: Back on the left (its arrow, then its label), the pad's guide on the right.
@@ -1163,10 +1184,10 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
     paint(p->mSummaryTrack, cTrack, cTrack);
     paint(p->mSummaryBar, cGold, cGoldTop);
-    char16_t text[192];
-    NebulaText::get(text, 64, "BoardTitle");
-    setText(p->mTitle, text);
-    setText(p->mTitleShadow, text);
+    MR::Text16 text;
+    getText(text, "BoardTitle");
+    setText(p->mTitle, text.c_str());
+    setText(p->mTitleShadow, text.c_str());
     setTextStyle(p->mTitle, cTitleSize, cGoldTop, cGoldBottom, 3);
     setTextStyle(p->mTitleShadow, cTitleSize, cTextShadow, cTextShadow, 3);
     setGlyph(p->mTitleGlyph, cGlyphCrown, cTitleGlyph);
@@ -1180,8 +1201,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             p->mBoard = nullptr;
             return;
         }
-        NebulaText::get(text, 48, cTabIds[i]);
-        setText(p->mTabs[i].mText, text);
+        getText(text, cTabIds[i]);
+        setText(p->mTabs[i].mText, text.c_str());
     }
     static const char* const cFilterIds[FilterNum] = {"FilterAll", "FilterUnlocked", "FilterLocked"};
     for (s32 i = 0; i < FilterNum; i++) {
@@ -1191,8 +1212,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             p->mBoard = nullptr;
             return;
         }
-        NebulaText::get(text, 48, cFilterIds[i]);
-        setText(p->mFilters[i].mText, text);
+        getText(text, cFilterIds[i]);
+        setText(p->mFilters[i].mText, text.c_str());
         setTextStyle(p->mFilters[i].mText, cFilterSize, cButtonText, cButtonText, 4);
     }
     p->mTabCount = makeText(p, pBoard, "NbTabCnt", 32);
@@ -1260,9 +1281,10 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
         paint(rCard.mBar, cGold, cGoldTop);
 
         // Its name in the played language.
-        NebulaAchievements::getName(text, 96, NebulaAchievements::getId(i));
-        setText(rCard.mName, text);
-        setText(rCard.mNameShadow, text);
+        rCard.mHintText.room(1)[0] = 0;
+        NebulaAchievements::getName(text.room(256), 256, NebulaAchievements::getId(i));
+        setText(rCard.mName, text.c_str());
+        setText(rCard.mNameShadow, text.c_str());
         setTextStyle(rCard.mName, cNameSize, cWhite, cWhite, 0);
         setTextStyle(rCard.mNameShadow, cNameSize, cTextShadow, cTextShadow, 0);
         setTextStyle(rCard.mHint, cHintSize, cSubText, cSubText, 0);
@@ -1277,8 +1299,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             p->mBoard = nullptr;
             return;
         }
-        NebulaText::get(text, 64, i == 0 ? "StatsFile" : "StatsAllTime");
-        setText(p->mSections[i], text);
+        getText(text, i == 0 ? "StatsFile" : "StatsAllTime");
+        setText(p->mSections[i], text.c_str());
         setTextStyle(p->mSections[i], cSectionSize, cGoldTop, cGoldBottom, 0);
     }
     for (s32 i = 0; i < StatNum; i++) {
@@ -1316,8 +1338,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
             return;
         }
         paint(rTile.mBody, cTileFill, cTileRing);
-        NebulaText::get(text, 64, cStatLabels[i]);
-        setText(rTile.mLabel, text);
+        getText(text, cStatLabels[i]);
+        setText(rTile.mLabel, text.c_str());
         setTextStyle(rTile.mValueShadow, cValueSize, cTextShadow, cTextShadow, 0);
         setTextStyle(rTile.mValue, cValueSize, cWhite, cWhite, 0);
         setTextStyle(rTile.mLabel, cLabelSize, cSubText, cSubText, 0);
@@ -1345,8 +1367,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
         return;
     }
     setGlyph(p->mBack.mGlyph, cGlyphB, cBackGlyph);
-    NebulaText::get(text, 48, "BoardBack");
-    const char16_t* pBack = text;
+    getText(text, "BoardBack");
+    const char16_t* pBack = text.c_str();
     while (*pBack == u' ') {
         pBack++;
     }
@@ -1375,8 +1397,8 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
         p->mHintGlyphs[i]->SetFontSize(glyphFontSize(p->mHintGlyphs[i], cFooterGlyph));
         p->mHintGlyphs[i]->mCharSpace = 3.0f;
         setAnchor(p->mHintGlyphs[i], 4);
-        NebulaText::get(text, 48, cHintIds[i]);
-        setText(p->mHintLabels[i], text);
+        getText(text, cHintIds[i]);
+        setText(p->mHintLabels[i], text.c_str());
         setTextStyle(p->mHintLabels[i], cFooterSize, cSubText, cSubText, 5);
     }
 
@@ -1440,21 +1462,21 @@ void NebulaAchievementBoard::open() {
         }
         if (rCard.mUnlocked) {
             MR::FormattedName id("AchievementHint.%s", NebulaAchievements::getId(i));
-            NebulaText::get(rCard.mHintText, 192, id.c_str());
+            getText(rCard.mHintText, id.c_str());
         } else if (rCard.mGoal > 0) {
             // Its progress bar says enough.
             rCard.mHintText[0] = 0;
         } else {
             // What earns it stays a surprise until it is unlocked.
-            NebulaText::get(rCard.mHintText, 192, "AchievementLocked");
+            getText(rCard.mHintText, "AchievementLocked");
         }
-        char16_t meta[48] = {0};
+        MR::Text16 meta;
         if (rCard.mDate > 1) {
-            formatDate(meta, 48, rCard.mDate);
+            formatDate(meta, rCard.mDate);
         } else if (rCard.mGoal > 0) {
-            formatCount(meta, 48, rCard.mCurrent, rCard.mGoal);
+            formatCount(meta, rCard.mCurrent, rCard.mGoal);
         }
-        setText(rCard.mMeta, meta);
+        setText(rCard.mMeta, meta.c_str());
         const bool on = rCard.mUnlocked;
         paint(rCard.mBody, on ? cCardFill : cLockedFill, on ? cCardRing : cLockedRing);
         paint(rCard.mBadge, on ? cBadgeFill : cLockedBadgeFill, on ? cCardRing : cLockedRing);
@@ -1467,16 +1489,16 @@ void NebulaAchievementBoard::open() {
     }
 
     // The header: how many are unlocked.
-    char16_t text[48];
-    formatCount(text, 48, p->mUnlockedNum, p->mCardNum);
-    setText(p->mSummary, text);
+    MR::Text16 text;
+    formatCount(text, p->mUnlockedNum, p->mCardNum);
+    setText(p->mSummary, text.c_str());
     setTextStyle(p->mSummary, cSummarySize, cWhite, cWhite, 5);
-    char16_t percent[8];
-    formatInt(percent, 8, p->mCardNum > 0 ? p->mUnlockedNum * 100 / p->mCardNum : 0, 1);
+    MR::Text16 percent;
+    formatInt(percent, p->mCardNum > 0 ? p->mUnlockedNum * 100 / p->mCardNum : 0, 1);
     const char* const percentNames[] = {"n"};
-    const char16_t* const percentValues[] = {percent};
-    fill(text, 48, "BoardPercent", percentNames, percentValues, 1);
-    setText(p->mPercent, text);
+    const char16_t* const percentValues[] = {percent.c_str()};
+    fill(text, "BoardPercent", percentNames, percentValues, 1);
+    setText(p->mPercent, text.c_str());
     setTextStyle(p->mPercent, cSummarySize, cGoldTop, cGoldBottom, 5);
 
     // The stats page's numbers.
@@ -1550,21 +1572,21 @@ void NebulaAchievementBoard::open() {
             count = NebulaAchievements::getStat(NebulaStat_PlaySeconds), glyph = 'W';
             break;
         }
-        char16_t value[48];
+        MR::Text16 value;
         if (i == StatPlayTime) {
-            char16_t hours[16], minutes[8];
-            formatNumber(hours, 16, count / 3600);
-            formatInt(minutes, 8, static_cast< s32 >(count / 60 % 60), 1);
+            MR::Text16 hours, minutes;
+            formatNumber(hours, count / 3600);
+            formatInt(minutes, static_cast< s32 >(count / 60 % 60), 1);
             const char* const names[] = {"h", "m"};
-            const char16_t* const values[] = {hours, minutes};
-            fill(value, 48, "PlayTime", names, values, 2);
+            const char16_t* const values[] = {hours.c_str(), minutes.c_str()};
+            fill(value, "PlayTime", names, values, 2);
         } else if (current >= 0 && goal > 0) {
-            formatCount(value, 48, current, goal);
+            formatCount(value, current, goal);
         } else {
-            formatNumber(value, 48, count);
+            formatNumber(value, count);
         }
-        setText(rTile.mValue, value);
-        setText(rTile.mValueShadow, value);
+        setText(rTile.mValue, value.c_str());
+        setText(rTile.mValueShadow, value.c_str());
         if (glyph == 0) {
             setIcon(p, rTile.mGlyph, rTile.mPicture, pPicture, 36.0f, cWhite);
         } else {

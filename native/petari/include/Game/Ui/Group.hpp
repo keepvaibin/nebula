@@ -34,7 +34,7 @@ namespace Ui {
 
         UiLink< Group > mLink;
         PaneLinkList mPaneLinkList;
-        char mName[17];
+        NameText< 17 > mName;
     };
 
     typedef UiList< Group > GroupList;

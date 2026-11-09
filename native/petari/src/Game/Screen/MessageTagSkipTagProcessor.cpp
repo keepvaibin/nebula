@@ -1,19 +1,13 @@
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
+#include "Game/Util/Array.hpp"
 #include <string.h>
 
 namespace {
     // A string argument's slot in the text has 4 bytes: it holds a token naming the string in
-    // this table (0: none). Each distinct string keeps its entry; a full table reuses the oldest, and a token to a
-    // reused entry reads as no string. The game's arguments are long-lived (messages, galaxy names, a few buffers).
-    const u32 kParamStringCount = 1024;
-    const char16_t* sParamStrings[kParamStringCount];
-    u32 sParamStringGenerations[kParamStringCount];
+    // this table (0: none). Each distinct string keeps its entry. The game's arguments are long-lived (messages,
+    // galaxy names, a few buffers).
+    MR::GrowBuffer< const char16_t* > sParamStrings;
     u32 sParamStringUsed;
-    u32 sParamStringNext;
-
-    u32 paramStringToken(u32 index) {
-        return 1 + index + sParamStringGenerations[index] * kParamStringCount;
-    }
 
     u32 nameParamString(const char16_t* pString) {
         if (pString == nullptr) {
@@ -21,27 +15,19 @@ namespace {
         }
         for (u32 i = 0; i < sParamStringUsed; i++) {
             if (sParamStrings[i] == pString) {
-                return paramStringToken(i);
+                return i + 1;
             }
         }
-        u32 index;
-        if (sParamStringUsed < kParamStringCount) {
-            index = sParamStringUsed++;
-        } else {
-            index = sParamStringNext;
-            sParamStringNext = (sParamStringNext + 1) % kParamStringCount;
-            sParamStringGenerations[index]++;
-        }
-        sParamStrings[index] = pString;
-        return paramStringToken(index);
+        const char16_t** const ppStrings = sParamStrings.room(sParamStringUsed + 1);
+        ppStrings[sParamStringUsed] = pString;
+        return ++sParamStringUsed;
     }
 
     const char16_t* findParamString(u32 token) {
-        if (token == 0) {
+        if (token == 0 || token > sParamStringUsed) {
             return nullptr;
         }
-        const u32 index = (token - 1) % kParamStringCount;
-        return index < sParamStringUsed && paramStringToken(index) == token ? sParamStrings[index] : nullptr;
+        return sParamStrings[token - 1];
     }
 }  // namespace
 

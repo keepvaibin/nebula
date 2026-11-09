@@ -109,11 +109,11 @@ namespace {
 namespace Ui {
     namespace detail {
         bool EqualsResName(const char* a1, const char* a2) {
-            return strncmp(a1, a2, 0x10) == 0;
+            return uiSameName(a1, a2);
         }
 
         bool EqualsMaterialName(const char* a1, const char* a2) {
-            return strncmp(a1, a2, 0x14) == 0;
+            return uiSameName(a1, a2);
         }
 
         TexCoordAry::TexCoordAry() {

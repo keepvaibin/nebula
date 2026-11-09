@@ -101,8 +101,10 @@ void FileSelectInfo::setInfo(u16* pName, s32 number, s32 starNum, s32 starPieceN
     mIsViewNormalEnding = isViewNormalEnding;
     mIsViewCompleteEnding = isViewCompleteEnding;
 
-    MR::copyString(mDateMessage, pDateMessage, ARRAY_SIZE(mDateMessage));
-    MR::copyString(mTimeMessage, pTimeMessage, ARRAY_SIZE(mTimeMessage));
+    const u32 dateUnits = static_cast< u32 >(MR::textLength(pDateMessage)) + 1;
+    MR::copyText(mDateMessage.room(dateUnits), pDateMessage, dateUnits);
+    const u32 timeUnits = static_cast< u32 >(MR::textLength(pTimeMessage)) + 1;
+    MR::copyText(mTimeMessage.room(timeUnits), pTimeMessage, timeUnits);
 
     mMissNum = missNum;
 }
@@ -176,8 +178,8 @@ void FileSelectInfo::reflectInfo() {
     MR::setTextBoxMessageRecursive(this, "FileName", mName);
     MR::setTextBoxNumberRecursive(this, "Star", mStarNum);
     MR::setTextBoxNumberRecursive(this, "StarPiece", mStarPieceNum);
-    MR::setTextBoxMessageRecursive(this, "TxtDay", mDateMessage);
-    MR::setTextBoxMessageRecursive(this, "TxtTime", mTimeMessage);
+    MR::setTextBoxMessageRecursive(this, "TxtDay", mDateMessage.c_str());
+    MR::setTextBoxMessageRecursive(this, "TxtTime", mTimeMessage.c_str());
 
     if (mMissNum >= 0) {
         MR::setTextBoxNumberRecursive(this, "MissCounter", mMissNum);

@@ -17,8 +17,51 @@ namespace Ui {
     enum { VERTICALPOSITION_TOP, VERTICALPOSITION_CENTER, VERTICALPOSITION_BOTTOM, VERTICALPOSITION_MAX };
 
     enum AnimContentType { ANIMCONTENTTYPE_PANE, ANIMCONTENTTYPE_MATERIAL };
-    const int ResourceNameStrMax = 16;
-    const int MaterialNameStrMax = ResourceNameStrMax + 4;
+
+    // A name of any length: N characters with the terminator in itself, a longer one in a new array. It reads as a
+    // const char*.
+    template < u32 N >
+    class NameText {
+    public:
+        NameText() : mText(mInline) {
+            mInline[0] = '\0';
+        }
+
+        ~NameText() {
+            if (mText != mInline) {
+                delete[] mText;
+            }
+        }
+
+        NameText(const NameText&) = delete;
+        NameText& operator=(const NameText&) = delete;
+
+        // pName may lie in this name's own text: it is copied before the old text goes.
+        void set(const char* pName) {
+            u32 length = 0;
+            while (pName[length] != '\0') {
+                length++;
+            }
+
+            char* const pOld = mText != mInline ? mText : nullptr;
+            char* const pNew = length < N ? mInline : new char[length + 1];
+            for (u32 i = 0; i <= length; i++) {
+                pNew[i] = pName[i];
+            }
+
+            mText = pNew;
+            delete[] pOld;
+        }
+
+        operator const char*() const {
+            return mText;
+        }
+
+    private:
+        char* mText;
+        char mInline[N];
+    };
+
     namespace detail {
         template < typename T >
         inline void SetBit(T* pBits, int pos, bool val) {

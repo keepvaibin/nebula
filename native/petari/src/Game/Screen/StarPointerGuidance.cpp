@@ -7,6 +7,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Screen/NebulaMenuFocus.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 
 namespace {
     static const s32 hOutScreenTime = 60;
@@ -55,10 +56,10 @@ void StarPointerGuidance::init(const TableIter& rIter) {
     mTextLineNum1P = MR::getTextLineNumMaxRecursive(this, "PointerFrame1");
     mTextLineNum2P = MR::getTextLineNumMaxRecursive(this, "PointerFrame2");
 #if !defined(__ANDROID__)
-    char16_t prompt[128];
-    NebulaText::get(prompt, 128, "PointerSelect");
-    MR::setTextBoxMessageRecursive(this, "Guide1", prompt);
-    MR::setTextBoxMessageRecursive(this, "Guide2", prompt);
+    MR::Text16 prompt;
+    NebulaUi::getText(prompt, "PointerSelect");
+    MR::setTextBoxMessageRecursive(this, "Guide1", prompt.c_str());
+    MR::setTextBoxMessageRecursive(this, "Guide2", prompt.c_str());
 #endif
 }
 

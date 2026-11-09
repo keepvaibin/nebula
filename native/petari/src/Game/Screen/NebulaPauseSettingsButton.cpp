@@ -2,6 +2,7 @@
 
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -42,9 +43,9 @@ void NebulaPauseSettingsButton::init(const TableIter& rIter) {
         pGroup->mScale = Vec2f(cScale, cScale);
         pGroup->mTranslate.y = cBandMiddle - pLower->mTranslate.y * cScale;
     }
-    char16_t label[64];
-    NebulaText::get(label, 64, "SettingsTitle");
-    MR::setTextBoxMessageRecursive(this, "NBackDown", label);
+    MR::Text16 label;
+    NebulaUi::getText(label, "SettingsTitle");
+    MR::setTextBoxMessageRecursive(this, "NBackDown", label.c_str());
 
     mButton = new ButtonPaneController(this, "NBackDown", "BoxButton2", 0, true);
     mButton->mDisappearsAfterDecide = false;

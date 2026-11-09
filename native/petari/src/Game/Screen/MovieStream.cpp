@@ -4,6 +4,7 @@
 #include "Game/Render/RenderTexture.hpp"
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
@@ -13,7 +14,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
-    char sMovieName[256];
+    MR::GrowBuffer< char > sMovieName;
 
     void movieFrame(const char* pName, s32 frame, f32 frameRate, u32 pY, u32 pU, u32 pV, u32 width, u32 height) {
         const NebulaHostServices* const host = nebula_host();
@@ -44,18 +45,18 @@ bool MovieStream::open(const char* pName) {
         return false;
     }
 
-    strncpy(sMovieName, pName, sizeof(sMovieName) - 1);
-    sMovieName[sizeof(sMovieName) - 1] = '\0';
-    movieFrame(sMovieName, NEBULA_MOVIE_OPENING, 0.0f, 0, 0, 0, 0, 0);
+    char* const pMovieName = sMovieName.room(static_cast< u32 >(strlen(pName)) + 1);
+    memcpy(pMovieName, pName, strlen(pName) + 1);
+    movieFrame(pMovieName, NEBULA_MOVIE_OPENING, 0.0f, 0, 0, 0, 0, 0);
 
     mData = static_cast< const u8* >(GameAssets::map(mFile.mEntry));
     if (mData == nullptr) {
-        NEBULA_PANIC("%s cannot be loaded", sMovieName);
+        NEBULA_PANIC("%s cannot be loaded", pMovieName);
     }
 
     memcpy(&mHeader, mData, sizeof(mHeader));
     if (strncmp(mHeader.mMagic, "NMOV", 4) != 0) {
-        NEBULA_PANIC("%s: a movie not cooked (the importer rewrites THP files)", sMovieName);
+        NEBULA_PANIC("%s: a movie not cooked (the importer rewrites THP files)", pMovieName);
     }
     if (!(mHeader.mDisplayAspect > 0.0f) || mHeader.mWidth == 0 || mHeader.mHeight == 0) {
         NEBULA_PANIC("%s: a movie with no picture shape", sMovieName);
@@ -266,7 +267,7 @@ s32 MovieStream::drawCurrentFrame(f32 x, f32 y, f32 width, f32 height) {
         MovieDraw::uploadPlanes(mPlaneY, mPlaneU, mPlaneV, mVideoInfo.mWidth, mVideoInfo.mHeight);
         mPlanesUploaded = mPlanesFrame;
     }
-    movieFrame(sMovieName, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate,
+    movieFrame(sMovieName.mItems, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate,
                RenderTexture::idOf(mPlaneY), RenderTexture::idOf(mPlaneU), RenderTexture::idOf(mPlaneV), mVideoInfo.mWidth, mVideoInfo.mHeight);
     MovieDraw::drawFrame(MR::getScreenWidth(), MR::getScreenHeight(), mPlaneY, mPlaneU, mPlaneV, mVideoInfo.mWidth,
                          mVideoInfo.mHeight, x, y, width, height);

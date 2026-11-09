@@ -187,7 +187,6 @@ namespace Ui {
 
     Material::Material() {
         Init();
-        memset(mName, 0, sizeof(mName));
     }
 
 
@@ -414,8 +413,7 @@ namespace Ui {
     }
 
     void Material::SetName(const char* pName) {
-        strncpy(mName, pName, sizeof(mName) - 1);
-        mName[sizeof(mName) - 1] = '\0';
+        mName.set(pName);
     }
 
     void Material::SetTextureNum(u8 num) {

@@ -7,6 +7,7 @@
 #include "Game/Ui/Font.hpp"
 #include "Game/Ui/ResFont.hpp"
 #include "Game/Ui/WideTextWriter.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 extern "C" {
 }
@@ -172,7 +173,8 @@ namespace Ui {
 
         if (bytes > mTextBufBytes) {
             FreeStringBuffer();
-            mTextBuf = static_cast< char16_t* >(Layout::AllocMemory(bytes));
+            // In the arena that holds the box: a box grown later (a longer text) keeps its text as long as the box.
+            mTextBuf = new (NebulaArena::findFromRoot(this), 0) char16_t[chars];
 
             if (mTextBuf != NULL) {
                 mTextBufBytes = bytes;

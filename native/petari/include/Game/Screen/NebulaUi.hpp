@@ -5,6 +5,8 @@
 #include <Game/Ui/TextBox.hpp>
 #include <Game/Ui/Window.hpp>
 #include <Game/Ui/Font.hpp>
+#include <Game/Util/Array.hpp>
+#include <Game/Util/StringUtil.hpp>
 #include <NebulaGpu.h>
 
 class NebulaPaneKit;
@@ -118,6 +120,9 @@ namespace NebulaUi {
     f32 easeOut(f32 t);
     u8 toAlpha(f32 a);
     char16_t* append(char16_t* pDst, char16_t* pEnd, const char16_t* pSrc);
+    // NebulaText's text for `pId` whole, in room that grows to hold it; its length.
+    s32 getText(MR::Text16& rText, const char* pId);
+    s32 getText(MR::GrowBuffer< char16_t >& rText, const char* pId);
 
     Window* makeWindow(const Kits& rKits, Pane* pParent, const char* pName);
     TextBox* makeText(const Kits& rKits, Pane* pParent, const char* pName, u32 length);

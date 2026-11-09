@@ -151,10 +151,10 @@ private:
 
     // The title in the played language and the window's shape around it.
     void fill() {
-        char16_t text[96];
+        MR::Text16 text;
         const u32 kind = NebulaHost::option(NEBULA_OPTION_PREPARE_KIND);
-        NebulaText::get(text, 96, kind == 1 ? "ModsPrepareTitle" : kind == 2 ? "PipelinePrepareTitle" : "RtPrepareTitle");
-        setText(mTitle, text);
+        getText(text, kind == 1 ? "ModsPrepareTitle" : kind == 2 ? "PipelinePrepareTitle" : "RtPrepareTitle");
+        setText(mTitle, text.c_str());
         f32 width = 0.0f;
         f32 titleHeight = 0.0f;
         measure(mTitle, 4000.0f, &width, &titleHeight);
@@ -199,11 +199,18 @@ private:
         const s32 percent = static_cast< s32 >(mShown * 100.0f + 0.0001f);
         if (percent != mPercentShown) {
             mPercentShown = percent;
-            char16_t pattern[32];
-            char16_t text[32];
-            NebulaText::get(pattern, 32, "RtPreparePercent");
+            MR::Text16 patternText;
+            getText(patternText, "RtPreparePercent");
+            const char16_t* const pattern = patternText.c_str();
+            // Room for the pattern with each {n} written out in up to eight digits.
+            u32 room = 1;
+            for (const char16_t* p = pattern; *p != 0; p++) {
+                room += *p == u'{' ? 8 : 1;
+            }
+            MR::Text16 outText;
+            char16_t* const text = outText.room(room);
             s32 length = 0;
-            for (const char16_t* p = pattern; *p != 0 && length < 24; p++) {
+            for (const char16_t* p = pattern; *p != 0; p++) {
                 if (p[0] == u'{' && p[1] == u'n' && p[2] == u'}') {
                     char16_t digits[8];
                     s32 count = 0;

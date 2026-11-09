@@ -149,14 +149,17 @@ void GalaxyInfoLayoutSetter::updateInfoWithoutComet(const char* pGalaxyName, Gal
 void GalaxyInfoLayoutSetter::setTextBoxStarNum(const char* pGalaxyName) {
     GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
 
-    char16_t starBaseBuffer[16];
-    char16_t starIconBuffer[16];
-    
+    // One code per scenario in each text, and the terminator.
+    const s32 normalNum = accessor.getNormalScenarioNum();
+    const s32 powerStarNum = accessor.getPowerStarNum();
+    const u32 room = static_cast< u32 >(normalNum > powerStarNum ? normalNum : powerStarNum) + 1;
+    MR::Text16 starBaseText;
+    MR::Text16 starIconText;
+    char16_t* const starBaseBuffer = starBaseText.room(room);
+    char16_t* const starIconBuffer = starIconText.room(room);
+
     char16_t* pStarBase = starIconBuffer;
     char16_t* pStarIcon = starBaseBuffer;
-
-    starIconBuffer[0] = '\0';
-    starBaseBuffer[0] = '\0';
 
     for (s32 i = 1; i <= accessor.getNormalScenarioNum(); i++) {
         if (MR::isOnGameEventFlagPowerStarSuccess(pGalaxyName, i)) {

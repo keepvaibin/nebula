@@ -3,6 +3,7 @@
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -18,13 +19,13 @@ namespace {
 
     // The label in the played language (NebulaText; the game's own Yes and No answer the question).
     const char16_t* getLabel() {
-        static char16_t label[64];
+        static MR::GrowBuffer< char16_t > label;
 #if defined(__ANDROID__)
-        NebulaText::get(label, 64, "Quit");  // no desktop to quit to
+        NebulaUi::getText(label, "Quit");  // no desktop to quit to
 #else
-        NebulaText::get(label, 64, "QuitToDesktop");
+        NebulaUi::getText(label, "QuitToDesktop");
 #endif
-        return label;
+        return label.mItems;
     }
 
     Ui::TextBox* asTextBox(Ui::Pane* pPane) {
@@ -200,7 +201,7 @@ bool NebulaQuitButton::isPointing() const {
 
 // The question the button asks, in the played language.
 const char16_t* NebulaQuitButton::getQuestion() {
-    static char16_t question[128];
-    NebulaText::get(question, 128, "QuitQuestion");
-    return question;
+    static MR::GrowBuffer< char16_t > question;
+    NebulaUi::getText(question, "QuitQuestion");
+    return question.mItems;
 }

@@ -9,6 +9,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
 #include "Game/Mii/Mii.hpp"
 
@@ -516,10 +517,9 @@ namespace MiiSelectSub {
         }
 
         for (s32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
-            char paneName[256];
+            MR::FormattedName paneName("Mii%02d", v + i);
 
-            nebula_snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
-            MR::setLayoutPosAtPaneTrans(mIconArray[i], mHost, paneName);
+            MR::setLayoutPosAtPaneTrans(mIconArray[i], mHost, paneName.c_str());
             mIconArray[i]->calcAnim();
         }
     }

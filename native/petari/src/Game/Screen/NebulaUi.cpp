@@ -5,9 +5,11 @@
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/TextString.hpp"
 #include <cstdio>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Material.hpp>
@@ -137,26 +139,29 @@ namespace NebulaUi {
     }
 
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
-        const s32 cMax = 256;
-        char16_t out[cMax];
-        char16_t line[cMax];
+        // The result holds the source's units, one break in place of each run of spaces; a line holds a word more.
+        const u32 room = static_cast< u32 >(MR::textLength(pSource)) + 3;
+        MR::Text16 outText;
+        MR::Text16 lineText;
+        char16_t* const out = outText.room(room);
+        char16_t* const line = lineText.room(room);
         s32 length = 0;
         s32 lineStart = 0;
         s32 i = 0;
-        while (pSource[i] != 0 && length < cMax - 2) {
+        while (pSource[i] != 0) {
             s32 end = i;
             while (pSource[end] != 0 && pSource[end] != u' ') {
                 end += unitLength(&pSource[end]);
             }
             // The line so far with the word added.
             s32 n = 0;
-            for (s32 k = lineStart; k < length && n < cMax - 1; k++) {
+            for (s32 k = lineStart; k < length; k++) {
                 line[n++] = out[k];
             }
-            if (length > lineStart && n < cMax - 1) {
+            if (length > lineStart) {
                 line[n++] = u' ';
             }
-            for (s32 k = i; k < end && n < cMax - 1; k++) {
+            for (s32 k = i; k < end; k++) {
                 line[n++] = pSource[k];
             }
             line[n] = 0;
@@ -169,7 +174,7 @@ namespace NebulaUi {
             } else if (length > lineStart) {
                 out[length++] = u' ';
             }
-            for (s32 k = i; k < end && length < cMax - 1; k++) {
+            for (s32 k = i; k < end; k++) {
                 out[length++] = pSource[k];
             }
             i = end;
@@ -331,6 +336,29 @@ namespace NebulaUi {
         }
         *pDst = 0;
         return pDst;
+    }
+
+    // The room is asked again at twice the size while the text fills it (NebulaText cuts at the room it is given).
+    s32 getText(MR::Text16& rText, const char* pId) {
+        u32 units = rText.capacity();
+        for (;;) {
+            const s32 length = NebulaText::get(rText.room(units), static_cast< s32 >(units), pId);
+            if (length < static_cast< s32 >(units) - 1) {
+                return length;
+            }
+            units *= 2;
+        }
+    }
+
+    s32 getText(MR::GrowBuffer< char16_t >& rText, const char* pId) {
+        u32 units = rText.mRoom > 256 ? rText.mRoom : 256;
+        for (;;) {
+            const s32 length = NebulaText::get(rText.room(units), static_cast< s32 >(units), pId);
+            if (length < static_cast< s32 >(units) - 1) {
+                return length;
+            }
+            units *= 2;
+        }
     }
 
     Window* makeWindow(const Kits& rKits, Pane* pParent, const char* pName) {

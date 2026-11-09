@@ -5,9 +5,10 @@
 #include "Game/System/NebulaArena.hpp"
 
 namespace MR {
-    /// @brief Room for a list with no limit that can also be a static: no constructor (zero-initialised), it grows in
-    /// the root heap to at least `count` (doubling, from 16), keeps what it held, and never shrinks. Pointers into it do
-    /// not survive a call that grows it.
+    /// @brief Room for a list with no limit that can also be a static: no constructor (zero-initialised), it grows to at
+    /// least `count` (doubling, from 16), keeps what it held, and never shrinks. It grows in the arena that holds it, so a
+    /// member goes with its owner's arena; a static's room is the root heap's. Pointers into it do not survive a call
+    /// that grows it.
     template < class T >
     struct GrowBuffer {
         T* mItems;
@@ -19,7 +20,8 @@ namespace MR {
                 while (room < count) {
                     room *= 2;
                 }
-                T* const pNew = new (NebulaArena::getRootHeap(), 0) T[room];
+                NebulaArena* const pHome = NebulaArena::findFromRoot(this);
+                T* const pNew = new (pHome != nullptr ? pHome : NebulaArena::getRootHeap(), 0) T[room];
                 for (u32 i = 0; i < mRoom; i++) {
                     pNew[i] = mItems[i];
                 }

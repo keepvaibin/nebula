@@ -19,7 +19,10 @@ struct SubtitlesInfo {
     const char* mMovieName;
 
     /// @brief An array of general parameters for each subtitle.
-    SubtitlesMessageInfo mMessageInfo[5];
+    const SubtitlesMessageInfo* mMessageInfo;
+
+    /// @brief The number of subtitles in the array.
+    s32 mMessageNum;
 };
 
 namespace MovieSubtitlesUtil {

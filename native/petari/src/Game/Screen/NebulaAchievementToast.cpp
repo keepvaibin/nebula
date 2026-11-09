@@ -2,6 +2,7 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -12,6 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/Util/TextString.hpp"
 #include <cstring>
 #include <Game/Ui/Layout.hpp>
 #include <Game/Ui/Material.hpp>
@@ -65,8 +67,8 @@ namespace {
         return pDst + 4;
     }
 
-    char16_t* addString(char16_t* pDst, const char16_t* pSrc, s32 capacity) {
-        while (*pSrc != 0 && capacity-- > 1) {
+    char16_t* addString(char16_t* pDst, const char16_t* pSrc) {
+        while (*pSrc != 0) {
             *pDst++ = *pSrc++;
         }
         *pDst = 0;
@@ -318,15 +320,19 @@ void NebulaAchievementToast::setIcon(const NebulaAchievementIcon* pIcon, f32* pW
 }
 
 void NebulaAchievementToast::start(const char16_t* pName, const NebulaAchievementIcon* pIcon) {
-    char16_t text[160];
-    char16_t* pText = addFontSizeTag(text, 0);
+    // The heading and the name, each after its size and colour tags, with the line break between and the terminator.
+    MR::Text16 heading;
+    const u32 headingLength = static_cast< u32 >(NebulaUi::getText(heading, "AchievementGet"));
+    MR::Text16 text;
+    char16_t* const pBegin = text.room(3 + 4 + headingLength + 1 + 3 + 4 + static_cast< u32 >(MR::textLength(pName)) + 1);
+    char16_t* pText = addFontSizeTag(pBegin, 0);
     pText = addColorTag(pText, 4);
-    pText += NebulaText::get(pText, 48, "AchievementGet");
-    pText = addString(pText, u"\n", 2);
+    pText = addString(pText, heading.c_str());
+    pText = addString(pText, u"\n");
     pText = addFontSizeTag(pText, 1);
     pText = addColorTag(pText, 0);
-    addString(pText, pName, 64);
-    MR::setTextBoxMessageRecursive(this, "ConfirmC", text);
+    addString(pText, pName);
+    MR::setTextBoxMessageRecursive(this, "ConfirmC", pBegin);
 
     f32 textWidth, textHeight, iconWidth, iconHeight;
     setIcon(pIcon, &iconWidth, &iconHeight);

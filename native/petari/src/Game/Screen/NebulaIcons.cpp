@@ -42,8 +42,8 @@ namespace {
     enum { IconPlus = 6, IconMinus = 7, IconHome = 8, IconPad = 9 };
     const u16 cMapFirst = 0x30;
     const u16 cMapLast = 0x49;
-    // The canvas's largest picture at the game's size (the A bubble, 48 pixels), and a pack's size of ours.
-    const s32 cCellMax = 48;
+    // The A bubble's largest picture at the game's size (48 pixels), and a pack's size of ours.
+    const s32 cPictureMax = 48;
     const s32 cHdScale = 8;
     const s32 cHdSheetMax = 1024;
 
@@ -86,7 +86,13 @@ namespace {
             rDst.a = a;
         }
     };
-    Rgba sCanvasPixels[cCellMax * cCellMax];
+    MR::GrowBuffer< Rgba > sCanvasStore;
+
+    // Room for a picture of width x height pixels (a font's cell, an A bubble); the last picture's pixels are gone when a
+    // larger one is asked for.
+    Rgba* canvasPixels(s32 width, s32 height) {
+        return sCanvasStore.room(static_cast< u32 >(width * height));
+    }
 
     // A circle (half width = half height = radius) or a rounded box, centred on (x, y).
     struct Shape {
@@ -637,19 +643,18 @@ namespace {
 
     // `pText` (letters of cLetters) in `rInk`, its ink centred on (x, y), `capital` pixels tall.
     void drawText(Canvas& rCanvas, const char* pText, f32 x, f32 y, f32 capital, const Rgba& rInk) {
-        const Letter* letters[8];
-        s32 count = 0;
+        MR::Vector< MR::FixedArray< const Letter*, 8 > > letters;
         f32 width = 0.0f;
-        for (const char* p = pText; *p != 0 && count < 8; p++) {
-            letters[count] = findLetter(static_cast< u8 >(*p));
-            if (letters[count] != nullptr) {
-                width += (count > 0 ? cLetterGap : 0.0f) + letters[count]->mAdvance;
-                count++;
+        for (const char* p = pText; *p != 0; p++) {
+            const Letter* const pLetter = findLetter(static_cast< u8 >(*p));
+            if (pLetter != nullptr) {
+                width += (letters.size() > 0 ? cLetterGap : 0.0f) + pLetter->mAdvance;
+                letters.push_back(pLetter);
             }
         }
         f32 left = x - width * capital * 0.5f;
         const f32 top = y - capital * 0.5f;
-        for (s32 i = 0; i < count; i++) {
+        for (s32 i = 0; i < letters.size(); i++) {
             const Letter& rLetter = *letters[i];
             // Only the pixels its box (and a stroke's half around it) covers.
             const f32 margin = capital * cStrokeHalf + 1.0f;
@@ -864,8 +869,7 @@ namespace {
 
     // A line of a legend: codes of cLetters (' ' a space), its capitals' size against the legend's.
     struct KeyLine {
-        u16 mCodes[8];
-        s32 mCount;
+        MR::Vector< MR::FixedArray< u16, 8 > > mCodes;
         f32 mScale;
     };
     struct KeyLegend {
@@ -876,10 +880,10 @@ namespace {
     };
 
     void setLine(KeyLine& rLine, const char* pText, f32 scale) {
-        rLine.mCount = 0;
+        rLine.mCodes.clear();
         rLine.mScale = scale;
-        for (const char* p = pText; *p != 0 && rLine.mCount < 8; p++) {
-            rLine.mCodes[rLine.mCount++] = static_cast< u8 >(*p);
+        for (const char* p = pText; *p != 0; p++) {
+            rLine.mCodes.push_back(static_cast< u8 >(*p));
         }
     }
 
@@ -910,12 +914,14 @@ namespace {
 
     // Key `slot`'s legend; `layout`: what the layout keys print (NebulaButtonIcons::layout; 0 or a character the icons'
     // letters lack: the US legend); `name`: a named cell's key's name.
-    KeyLegend keyLegend(s32 slot, const u16* pLayout, const char* pName) {
-        KeyLegend k;
-        memset(&k, 0, sizeof(k));
+    void keyLegend(KeyLegend& k, s32 slot, const u16* pLayout, const char* pName) {
         k.mShape = KeySquare;
         k.mLineCount = 1;
+        k.mTag = 0;
+        k.mLine[0].mCodes.clear();
         k.mLine[0].mScale = 1.0f;
+        k.mLine[1].mCodes.clear();
+        k.mLine[1].mScale = 0.0f;
         char text[8] = {0};
         if (slot >= cKeyNamed) {
             const char* pText = pName != nullptr ? pName : "";
@@ -949,15 +955,15 @@ namespace {
             const s32 index = slot - NEBULA_KEY_LAYOUT_FIRST;
             const u16 printed = pLayout != nullptr ? pLayout[index] : 0;
             const u16 code = printed != 0 && findLetter(printed) != nullptr ? printed : cUsLayout[index];
-            k.mLine[0].mCount = code != 0 ? 1 : 0;
-            k.mLine[0].mCodes[0] = code;
+            if (code != 0) {
+                k.mLine[0].mCodes.push_back(code);
+            }
         } else if (slot < NEBULA_KEY_OTHER) {
             k.mShape = KeyMouse;
             k.mLineCount = 0;
         } else {
             k.mLineCount = 0;  // any other key: a key, unnamed
         }
-        return k;
     }
 
     // A line's width and its ink's top and foot, in capitals (an accented capital's mark above, a cedilla below).
@@ -965,9 +971,9 @@ namespace {
         f32 width = 0.0f;
         f32 top = 0.0f;
         f32 foot = 1.0f;
-        for (s32 i = 0; i < rLine.mCount; i++) {
+        for (s32 i = 0; i < rLine.mCodes.size(); i++) {
             const Letter* pLetter = rLine.mCodes[i] == ' ' ? nullptr : findLetter(rLine.mCodes[i]);
-            width += (i > 0 ? cLetterGap : 0.0f) + (pLetter != nullptr ? pLetter->mAdvance : cSpaceAdvance);
+            width +=(i > 0 ? cLetterGap : 0.0f) + (pLetter != nullptr ? pLetter->mAdvance : cSpaceAdvance);
             for (s32 s = 0; pLetter != nullptr && s < pLetter->mCount; s++) {
                 const Stroke& rStroke = cStrokes[pLetter->mFirst + s];
                 f32 low;
@@ -996,7 +1002,7 @@ namespace {
         f32 width, inkTop, inkFoot;
         lineExtent(rLine, &width, &inkTop, &inkFoot);
         f32 left = x - width * capital * 0.5f;
-        for (s32 i = 0; i < rLine.mCount; i++) {
+        for (s32 i = 0; i < rLine.mCodes.size(); i++) {
             const Letter* pLetter = rLine.mCodes[i] == ' ' ? nullptr : findLetter(rLine.mCodes[i]);
             if (pLetter == nullptr) {
                 left += (cSpaceAdvance + cLetterGap) * capital;
@@ -1036,13 +1042,17 @@ namespace {
             widest = widths[i] * scale > widest ? widths[i] * scale : widest;
         }
         // The tag's room on the left: its letter at half the legend's size.
-        const KeyLine tag = {{rLegend.mTag}, rLegend.mTag != 0 ? 1 : 0, 0.5f};
+        KeyLine tag;
+        tag.mScale = 0.5f;
+        if (rLegend.mTag != 0) {
+            tag.mCodes.push_back(rLegend.mTag);
+        }
         f32 tagWidth = 0.0f, tagTop = 0.0f, tagFoot = 1.0f;
-        if (tag.mCount != 0) {
+        if (tag.mCodes.size() != 0) {
             lineExtent(tag, &tagWidth, &tagTop, &tagFoot);
         }
-        const f32 room = tag.mCount != 0 ? (tagWidth * tag.mScale + 0.55f) : 0.0f;
-        const f32 single = rLegend.mLineCount == 1 && rLegend.mLine[0].mCount == 1 ? 0.62f : 0.72f;
+        const f32 room = tag.mCodes.size() != 0 ? (tagWidth * tag.mScale + 0.55f) : 0.0f;
+        const f32 single = rLegend.mLineCount == 1 && rLegend.mLine[0].mCodes.size() == 1 ? 0.62f : 0.72f;
         f32 capital = halfHeight * 2.0f * single / height;
         const f32 byWidth = halfWidth * 2.0f * 0.84f / (widest + room);
         capital = byWidth < capital ? byWidth : capital;
@@ -1053,7 +1063,7 @@ namespace {
             drawLine(rCanvas, rLegend.mLine[i], x + shift, top - tops[i] * lineCapital, lineCapital, rInk);
             top += (feet[i] - tops[i]) * lineCapital + lineGap * capital;
         }
-        if (tag.mCount != 0) {
+        if (tag.mCodes.size() != 0) {
             const f32 tagCapital = capital * tag.mScale;
             const f32 centre = x + shift - widest * capital * 0.5f - 0.55f * capital * 0.5f - tagWidth * tagCapital * 0.5f;
             drawLine(rCanvas, tag, centre, y - tagCapital * 0.5f, tagCapital, rInk);
@@ -1143,8 +1153,9 @@ namespace {
             if (pPadKeys[i] >= NEBULA_KEYS) {
                 continue;
             }
-            KeyLegend legend = keyLegend(pPadKeys[i], pLayout, nullptr);
-            if (legend.mShape != KeySquare || legend.mLineCount != 1 || legend.mLine[0].mCount != 1) {
+            KeyLegend legend;
+            keyLegend(legend, pPadKeys[i], pLayout, nullptr);
+            if (legend.mShape != KeySquare || legend.mLineCount != 1 || legend.mLine[0].mCodes.size() != 1) {
                 continue;  // a word does not fit: the key shows alone
             }
             drawLegend(rCanvas, legend, face.mX, face.mY, face.mHalfWidth, face.mHalfHeight, rgba(cInk));
@@ -1171,7 +1182,8 @@ namespace {
         if (slot >= cKeyNamed && (pName == nullptr || pName[0] == 0)) {
             return;
         }
-        const KeyLegend legend = keyLegend(slot, pLayout, pName);
+        KeyLegend legend;
+        keyLegend(legend, slot, pLayout, pName);
         const f32 halfWidth = unit * (legend.mShape == KeyWide ? 0.5f : 0.46f);
         const f32 halfHeight = unit * (legend.mShape == KeyWide ? 0.34f : 0.46f);
         if (look == LookUp) {
@@ -1195,7 +1207,7 @@ namespace {
     }
 
     // Each key's name in the art's exports.
-    void keyName(s32 slot, char* pName, s32 capacity) {
+    void keyName(s32 slot, MR::FormattedName& rName) {
         static const char* const cNames[NEBULA_KEY_LAYOUT_FIRST - NEBULA_KEY_SPACE] = {
             "space", "enter", "tab", "backspace", "escape", "shift", "shift-left", "shift-right", "ctrl", "ctrl-left",
             "ctrl-right", "alt", "alt-left", "alt-right", "up", "down", "left", "right", "insert", "delete", "home", "end",
@@ -1203,26 +1215,26 @@ namespace {
             "win-right"};
         static const char* const cMice[5] = {"mouse-left", "mouse-right", "mouse-middle", "mouse-back", "mouse-forward"};
         if (slot < NEBULA_KEY_0) {
-            nebula_snprintf(pName, capacity, "key-%c", static_cast< char >('a' + slot));
+            rName.format("key-%c", static_cast< char >('a' + slot));
         } else if (slot < NEBULA_KEY_F1) {
-            nebula_snprintf(pName, capacity, "key-%d", static_cast< int >(slot - NEBULA_KEY_0));
+            rName.format("key-%d", static_cast< int >(slot - NEBULA_KEY_0));
         } else if (slot < NEBULA_KEY_NUM0) {
-            nebula_snprintf(pName, capacity, "key-f%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
+            rName.format("key-f%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
         } else if (slot < NEBULA_KEY_NUM_ADD) {
-            nebula_snprintf(pName, capacity, "key-num%d", static_cast< int >(slot - NEBULA_KEY_NUM0));
+            rName.format("key-num%d", static_cast< int >(slot - NEBULA_KEY_NUM0));
         } else if (slot < NEBULA_KEY_SPACE) {
             static const char* const cNumbers[5] = {"add", "subtract", "multiply", "divide", "decimal"};
-            nebula_snprintf(pName, capacity, "key-num-%s", cNumbers[slot - NEBULA_KEY_NUM_ADD]);
+            rName.format("key-num-%s", cNumbers[slot - NEBULA_KEY_NUM_ADD]);
         } else if (slot < NEBULA_KEY_LAYOUT_FIRST) {
-            nebula_snprintf(pName, capacity, "key-%s", cNames[slot - NEBULA_KEY_SPACE]);
+            rName.format("key-%s", cNames[slot - NEBULA_KEY_SPACE]);
         } else if (slot < NEBULA_KEY_MOUSE_LEFT) {
-            nebula_snprintf(pName, capacity, "key-layout-%d", static_cast< int >(slot - NEBULA_KEY_LAYOUT_FIRST + 1));
+            rName.format("key-layout-%d", static_cast< int >(slot - NEBULA_KEY_LAYOUT_FIRST + 1));
         } else if (slot < NEBULA_KEY_OTHER) {
-            nebula_snprintf(pName, capacity, "%s", cMice[slot - NEBULA_KEY_MOUSE_LEFT]);
+            rName.format("%s", cMice[slot - NEBULA_KEY_MOUSE_LEFT]);
         } else if (slot == cKeyPad) {
-            nebula_snprintf(pName, capacity, "control-pad");
+            rName.format("control-pad");
         } else {
-            nebula_snprintf(pName, capacity, "key-named-%d", static_cast< int >(slot - cKeyNamed + 1));
+            rName.format("key-named-%d", static_cast< int >(slot - cKeyNamed + 1));
         }
     }
 
@@ -1418,7 +1430,6 @@ namespace {
         bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
                       pSheet->width == rFile.sheetWidth && pSheet->height == rFile.sheetHeight &&
                       rFile.sheetSize >= pSheet->size && rFile.sheetRow > 0 && rFile.sheetLine > 0 &&
-                      rFile.cellWidth <= cCellMax && rFile.cellHeight <= cCellMax &&
                       (rFile.cellWidth + 1) * rFile.sheetRow <= rFile.sheetWidth &&
                       (rFile.cellHeight + 1) * rFile.sheetLine <= rFile.sheetHeight &&
                       rOld.glyphNum == static_cast< u32 >(rOld.sheetNum) * rFile.sheetRow * rFile.sheetLine;
@@ -1536,6 +1547,13 @@ namespace {
             f.mSlot[i] = pFont->GlyphSlot(cCodes[i]);
             *f.mSlot[i] = f.mOriginal[cCodes[i] - cMapFirst];
         }
+        bool* const pWanted = sHdWanted.room(static_cast< u32 >(sheets));
+        bool* const pDone = sHdDone.room(static_cast< u32 >(sheets));
+        for (s32 sheet = 0; sheet < sheets; sheet++) {
+            pWanted[sheet] = false;
+            pDone[sheet] = false;
+        }
+        sHdSheetNum = sheets;
         return FontReady;
     }
 
@@ -1544,7 +1562,7 @@ namespace {
         if (sFont.mFamilyDrawn[family]) {
             return;
         }
-        Canvas canvas = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+        Canvas canvas = {canvasPixels(sFont.mGlyphWidth, sFont.mGlyphHeight), sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
         for (s32 k = 0; k < cAtlasIcons; k++) {
             sFont.mPainted[family][k] = paint(canvas, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
             if (sFont.mPainted[family][k]) {
@@ -1566,11 +1584,12 @@ namespace {
     // Each of our sheets once it has been drawn from, painted eight times larger, a band of rows per update and with
     // mip levels for a small window, and handed over to stand in for it (NebulaHostServices::texture_hd). A sheet painted
     // again loses its large one until it is drawn from again.
-    const s32 cHdSheets = 64;
     const s32 cHdBandRows = 32;
     const s32 cHdLevels = 4;
-    bool sHdWanted[cHdSheets];
-    bool sHdDone[cHdSheets];
+    // A flag for each sheet of the picture font, set up when our sheets are installed.
+    MR::GrowBuffer< bool > sHdWanted;
+    MR::GrowBuffer< bool > sHdDone;
+    s32 sHdSheetNum = 0;
     struct HdPainting {
         u8* mRecord;
         Rgba* mBand;
@@ -1581,7 +1600,7 @@ namespace {
     HdPainting sHd = {nullptr, nullptr, -1, 0, 0};
 
     void forgetHdSheet(s32 sheet) {
-        if (sheet < cHdSheets) {
+        if (sheet < sHdSheetNum) {
             sHdWanted[sheet] = false;
             if (sHdDone[sheet]) {
                 NebulaHost::textureHd(RenderTexture::idOf(sFont.mSheets + sheet * sFont.mSheetBytes), nullptr);
@@ -1645,7 +1664,7 @@ namespace {
         }
         if (sHd.mSheet < 0) {
             const s32 sheets = sFont.mKeyFirstSheet + sFont.mKeySheets;
-            for (s32 sheet = sFont.mFirstSheet; sheet < sheets && sheet < cHdSheets && sHd.mSheet < 0; sheet++) {
+            for (s32 sheet = sFont.mFirstSheet; sheet < sheets && sHd.mSheet < 0; sheet++) {
                 if (sHdWanted[sheet] && !sHdDone[sheet]) {
                     sHd.mSheet = sheet;
                 }
@@ -1694,7 +1713,7 @@ namespace {
     // The keyboard's cells: its fixed keys the first time they show; the keys that follow the layout, the Control Pad
     // and the named keys whenever these change (a US layout, the arrows and no named key until the host says otherwise).
     void drawKeys(const u16* pLayout, const u8* pPadKeys, const char (*pNames)[NEBULA_KEY_NAME_CHARS]) {
-        Canvas canvas = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+        Canvas canvas = {canvasPixels(sFont.mGlyphWidth, sFont.mGlyphHeight), sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
         if (!sFont.mKeysDrawn) {
             for (s32 slot = 0; slot < cKeyCells; slot++) {
                 if (keyFollows(slot) || !keyHasCell(slot)) {
@@ -1785,7 +1804,7 @@ namespace {
     // The A button over people and signs: IconAButton's two pictures (the button up, 48 pixels square, and pressed, 40;
     // small) give way to ours (records), drawn as the font's A is, while it draws.
     struct Picture {
-        u8 mRecord[NEBULA_TEXTURE_HEADER + cCellMax * cCellMax * 4];
+        u8 mRecord[NEBULA_TEXTURE_HEADER + cPictureMax * cPictureMax * 4];
     };
     const s32 cPictureSizes[2] = {48, 40};
     const s32 cPictureLooks[2] = {LookUp, LookPressed};
@@ -1815,7 +1834,7 @@ namespace {
 
     // The A bubble's picture `k` of the icon at A's code (a keyboard's key: family cFamilies).
     void drawPicture(s32 k, s32 family, s32 glyph, s32 place, s32 model) {
-        Canvas canvas = {sCanvasPixels, cPictureSizes[k], cPictureSizes[k], 1.0f};
+        Canvas canvas = {canvasPixels(cPictureSizes[k], cPictureSizes[k]), cPictureSizes[k], cPictureSizes[k], 1.0f};
         if (family == cFamilies) {
             const bool named = !keyHasCell(place);
             paintKey(canvas, named ? cKeyNamed : place, cPictureLooks[k], sFont.mKeyLayout, sFont.mKeyPad,
@@ -1833,12 +1852,15 @@ namespace {
             JUTNativeLog("NebulaIcons: the picture font's sheets are too large to export at eight times\n");
             return;
         }
-        const s32 hdIcon = cCellMax * cHdScale;
+        // The largest icon alone: a font cell, or an A bubble picture.
+        s32 iconMax = sFont.mGlyphWidth > sFont.mGlyphHeight ? sFont.mGlyphWidth : sFont.mGlyphHeight;
+        iconMax = iconMax > cPictureMax ? iconMax : cPictureMax;
+        const s32 hdIcon = iconMax * cHdScale;
         const s32 scale = cHdScale;
         const s32 hdSheetWidth = sFont.mSheetWidth * scale;
         const s32 hdSheetHeight = sFont.mSheetHeight * scale;
         // An icon alone at the game's size (sheets and A bubble pictures export their own records' texels).
-        const s32 imagePixels = cCellMax * cCellMax;
+        const s32 imagePixels = iconMax * iconMax;
         Rgba* pHdPixels = static_cast< Rgba* >(malloc(sizeof(Rgba) * hdIcon * hdIcon));
         u8* pHdImage = static_cast< u8* >(malloc(static_cast< size_t >(hdIcon) * hdIcon * 4));
         u8* pImage = static_cast< u8* >(malloc(static_cast< size_t >(imagePixels) * 4));
@@ -1867,7 +1889,7 @@ namespace {
                     paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
                     canvasToRgba8(hd, pHdSheet, hdSheetWidth, x * scale, y * scale);
                     // The icon alone, as text shows it.
-                    Canvas native = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+                    Canvas native = {canvasPixels(sFont.mGlyphWidth, sFont.mGlyphHeight), sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
                     paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
                     canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
@@ -1886,7 +1908,7 @@ namespace {
             for (s32 k = 0; k < cAtlasIcons; k++) {
                 for (s32 look = 0; look < 2 && sFont.mPainted[family][k]; look++) {
                     const s32 size = cPictureSizes[look];
-                    Canvas native = {sCanvasPixels, size, size, 1.0f};
+                    Canvas native = {canvasPixels(size, size), size, size, 1.0f};
                     paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look], cAtlas[k].mModel);
                     initRecord(sExportPicture.mRecord, size, size);
                     paintInto(native, sExportPicture.mRecord, size, 0, 0);
@@ -1906,7 +1928,7 @@ namespace {
         drawKeys(nullptr, nullptr, nullptr);
         static const u8 cArrowKeys[4] = {NEBULA_KEY_UP, NEBULA_KEY_DOWN, NEBULA_KEY_LEFT, NEBULA_KEY_RIGHT};
         static const u16 cUs[NEBULA_KEY_LAYOUT_KEYS] = {0};
-        char keyText[32];
+        MR::FormattedName keyText;
         for (s32 sheet = 0; sheet < sFont.mKeySheets; sheet++) {
             memset(pHdSheet, 0, static_cast< size_t >(hdSheetWidth) * hdSheetHeight * 4);
             for (s32 slot = 0; slot < cKeyCells; slot++) {
@@ -1920,12 +1942,12 @@ namespace {
                 Canvas hd = {pHdPixels, sFont.mGlyphWidth * scale, sFont.mGlyphHeight * scale, static_cast< f32 >(scale)};
                 paintKey(hd, slot, LookText, cUs, cArrowKeys);
                 canvasToRgba8(hd, pHdSheet, hdSheetWidth, x * scale, y * scale);
-                Canvas native = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+                Canvas native = {canvasPixels(sFont.mGlyphWidth, sFont.mGlyphHeight), sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
                 paintKey(native, slot, LookText, cUs, cArrowKeys);
                 canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                keyName(slot, keyText, sizeof(keyText));
-                name.format("Keyboard/%s", keyText);
+                keyName(slot, keyText);
+                name.format("Keyboard/%s", keyText.c_str());
                 NebulaArtExport art = {name.c_str(), nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
@@ -1939,15 +1961,15 @@ namespace {
         for (s32 slot = 0; slot < NEBULA_KEYS; slot++) {
             for (s32 look = 0; look < 2 && keyHasCell(slot); look++) {
                 const s32 size = cPictureSizes[look];
-                Canvas native = {sCanvasPixels, size, size, 1.0f};
+                Canvas native = {canvasPixels(size, size), size, size, 1.0f};
                 paintKey(native, slot, cPictureLooks[look], cUs, cArrowKeys);
                 initRecord(sExportPicture.mRecord, size, size);
                 paintInto(native, sExportPicture.mRecord, size, 0, 0);
                 Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
                 paintKey(hd, slot, cPictureLooks[look], cUs, cArrowKeys);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                keyName(slot, keyText, sizeof(keyText));
-                name.format("Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
+                keyName(slot, keyText);
+                name.format("Keyboard/bubble-%s-%s", keyText.c_str(), look == 0 ? "up" : "pressed");
                 const u8* pTexels = texelsOf(sExportPicture.mRecord);
                 NebulaArtExport art = {name.c_str(), pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
@@ -1971,8 +1993,7 @@ namespace {
     const f32 cJcBodyWidth = NebulaIcons::cJoyConBody[0];
     const f32 cJcBodyHeight = NebulaIcons::cJoyConBody[1];
     const f32 cJcOutline = 0.12f;
-    const s32 cJcMaxSide = 1024;  // the largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
-    const s32 cJcMaxTexels = 1024 * 512;
+    const s32 cJcMaxSide = 65532;  // the largest texture (TexMap's sizes are 16-bit, whole tiles): past it, a picture is a little magnified
     const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
     const s32 cJcOrder[NebulaIcons::JoyConLooks] = {NebulaIcons::JoyConShown, NebulaIcons::JoyConAway, NebulaIcons::JoyConHeld};
@@ -1982,6 +2003,7 @@ namespace {
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
     // game's image.
     struct JoyConSet {
+        u8* mBlock;  // the pictures' records, in the root arena
         u8* mTexels[2][NebulaIcons::JoyConLooks];
         Ui::TexMap mMaps[2][NebulaIcons::JoyConLooks];
         s32 mWidth;  // each picture's texels
@@ -2001,8 +2023,7 @@ namespace {
     f32 sJoyConPixelsX = 0.0f;
     f32 sJoyConPixelsY = 0.0f;
     s32 sJoyConAsked = 0;  // the frames running it has been asked for
-    u8 sJoyConTexels[2][cJcPictures * (NEBULA_TEXTURE_HEADER + cJcMaxTexels * 4)];
-    Rgba sJoyConBand[cJcMaxSide * cJcBand];
+    MR::GrowBuffer< Rgba > sJoyConBand;
 
     // Where a band of a half's picture is painted: pixels per unit on each axis, the pixels per unit an edge is smoothed
     // over, the body's place in the picture (units, centred) and the band's first row in it.
@@ -2210,10 +2231,16 @@ namespace {
     // Set `index` made ready for the density asked for, its pictures unpainted records (each 32-byte aligned).
     void startJoyConSet(s32 index) {
         JoyConSet& rSet = sJoyConSets[index];
+        // The pictures of the density before are given up once the new block is taken.
+        u8* const pOld = rSet.mBlock;
         memset(&rSet, 0, sizeof(rSet));
         const u32 bytes = (NEBULA_TEXTURE_HEADER + static_cast< u32 >(sJoyConWidth * sJoyConHeight * 4) + 31u) & ~31u;
+        rSet.mBlock = static_cast< u8* >(NebulaArena::alloc(bytes * cJcPictures, 32, NebulaArena::getRootHeap()));
+        if (pOld != nullptr) {
+            NebulaArena::free(pOld, NebulaArena::getRootHeap());
+        }
         for (s32 i = 0; i < cJcPictures; i++) {
-            u8* pRecord = sJoyConTexels[index] + bytes * i;
+            u8* pRecord = rSet.mBlock + bytes * i;
             initRecord(pRecord, sJoyConWidth, sJoyConHeight);
             rSet.mTexels[i % 2][cJcOrder[i / 2]] = pRecord;
         }
@@ -2228,7 +2255,7 @@ namespace {
         const s32 half = rSet.mNext % 2;
         const s32 look = cJcOrder[rSet.mNext / 2];
         const s32 rows = rSet.mHeight - rSet.mRow < cJcBand ? rSet.mHeight - rSet.mRow : cJcBand;
-        Canvas canvas = {sJoyConBand, rSet.mWidth, rows, 1.0f};
+        Canvas canvas = {sJoyConBand.room(static_cast< u32 >(rSet.mWidth * rows)), rSet.mWidth, rows, 1.0f};
         const JcFrame frame = {rSet.mPixelsX,
                                rSet.mPixelsY,
                                rSet.mPixelsX < rSet.mPixelsY ? rSet.mPixelsX : rSet.mPixelsY,
@@ -2255,22 +2282,19 @@ namespace {
     }
 
     // Each of the IconAButton layout's pictures of A, ours in its place while it draws.
-    const s32 cSwapsMax = 8;
     struct Swaps {
-        Ui::TexMap* mMaps[cSwapsMax];
-        Ui::TexMap mSaved[cSwapsMax];
-        s32 mCount;
+        MR::Vector< MR::FixedArray< Ui::TexMap*, 8 > > mMaps;
+        MR::Vector< MR::FixedArray< Ui::TexMap, 8 > > mSaved;
     };
 
     void swapPane(Ui::Pane* pPane, Swaps& rSwaps, s32 depth) {
         Ui::Material* pMaterial = pPane->GetMaterial();
-        for (u8 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum() && rSwaps.mCount < cSwapsMax; i++) {
+        for (u8 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum(); i++) {
             Ui::TexMap& rMap = pMaterial->GetTexMapAry()[i];
             for (s32 k = 0; k < 2; k++) {
                 if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == Ui::TexMap::TEXEL_IA4) {
-                    rSwaps.mMaps[rSwaps.mCount] = &rMap;
-                    rSwaps.mSaved[rSwaps.mCount] = rMap;
-                    rSwaps.mCount++;
+                    rSwaps.mMaps.push_back(&rMap);
+                    rSwaps.mSaved.push_back(rMap);
                     rMap.SetImage(sPictures[k].mRecord);
                     rMap.SetTexelFormat(Ui::TexMap::TEXEL_RGBA8);
                     rMap.SetMipMap(false);
@@ -2339,7 +2363,7 @@ namespace NebulaIcons {
             return;
         }
         const s32 sheet = static_cast< s32 >((static_cast< const u8* >(pSheet) - sFont.mSheets) / sFont.mSheetBytes);
-        if (sheet >= sFont.mFirstSheet && sheet < sFont.mKeyFirstSheet + sFont.mKeySheets && sheet < cHdSheets) {
+        if (sheet >= sFont.mFirstSheet && sheet < sFont.mKeyFirstSheet + sFont.mKeySheets && sheet < sHdSheetNum) {
             sHdWanted[sheet] = true;
         }
     }
@@ -2364,8 +2388,6 @@ namespace NebulaIcons {
             return;
         }
         f32 fit = cJcMaxSide / width < cJcMaxSide / height ? cJcMaxSide / width : cJcMaxSide / height;
-        const f32 area = __builtin_sqrtf((cJcMaxTexels - 8.0f * cJcMaxSide) / (width * height));  // room for the tiles' rounding
-        fit = fit < area ? fit : area;
         fit = fit < 1.0f ? fit : 1.0f;
         // Whole 4 x 4 tiles: a picture's few extra texels widen its box a little (joyConPictureSize), at the density.
         const s32 w = (static_cast< s32 >(__builtin_ceilf(width * fit)) + 3) & ~3;
@@ -2424,13 +2446,12 @@ namespace NebulaIcons {
     void drawWithIcons(const LayoutActor* pActor) {
         LayoutManager* pManager = pActor->getLayoutManager();
         Swaps swaps;
-        swaps.mCount = 0;
         if (sPicturesShown && pManager != nullptr && pManager->mLayout != nullptr && pManager->mLayout->mpRootPane != nullptr) {
             swapPane(pManager->mLayout->mpRootPane, swaps, 0);
         }
         pActor->LayoutActor::draw();
         // The original again: its animation and the next frame see the layout as it was.
-        for (s32 i = 0; i < swaps.mCount; i++) {
+        for (s32 i = 0; i < swaps.mMaps.size(); i++) {
             *swaps.mMaps[i] = swaps.mSaved[i];
         }
     }
