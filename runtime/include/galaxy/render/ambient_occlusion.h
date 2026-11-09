@@ -70,6 +70,7 @@ private:
     };
     std::vector<float> object_values_;
     std::vector<std::uint32_t> object_tiles_;
+    ao::ObjectBinScratch object_scratch_;
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,
                        std::uint64_t frame_index, unsigned frames_in_flight);
     void transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use);

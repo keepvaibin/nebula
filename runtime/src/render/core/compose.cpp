@@ -98,9 +98,15 @@ inline void billboard_y(float (*m)[4]) noexcept {
     float z = m[0][2] * m[0][2] + m[1][2] * m[1][2] + m[2][2] * m[2][2];
     if (x > 0.0f) x = std::sqrt(x);
     if (z > 0.0f) z = std::sqrt(z);
-    const float vy = -m[2][1];
-    const float vz = m[1][1];
-    const float r = 1.0f / std::sqrt((0.0f * 0.0f + vz * vz) + vy * vy);
+    float vy = -m[2][1];
+    float vz = m[1][1];
+    float r = 1.0f / std::sqrt((0.0f * 0.0f + vz * vz) + vy * vy);
+    if (!std::isfinite(r)) {
+        // A Y column along X has no direction in the Y-Z plane: the Z axis stands in.
+        r = 1.0f;
+        vy = 0.0f;
+        vz = 1.0f;
+    }
     m[0][0] = x;
     m[0][2] = 0.0f;
     m[1][0] = 0.0f;

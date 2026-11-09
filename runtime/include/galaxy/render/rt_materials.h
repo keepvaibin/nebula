@@ -220,7 +220,7 @@ private:
 // XXH64 with seed 0 of a texture's base level: the texture-pack key.
 [[nodiscard]] std::uint64_t texture_pack_hash(const std::uint8_t* data, std::size_t bytes) noexcept;
 
-// The table is loaded on first use; false when it is missing or empty (nothing is hashed then).
+// The table is loaded on the first call of this or of any reader below (not at start); false when it is missing or empty.
 [[nodiscard]] bool rt_materials_loaded() noexcept;
 // 0: not in the table; else its index + 1.
 [[nodiscard]] std::uint16_t rt_material_index(std::uint64_t hash) noexcept;

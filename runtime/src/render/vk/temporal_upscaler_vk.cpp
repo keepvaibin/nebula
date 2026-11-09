@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // FSR 3.1 on Vulkan (temporal_upscaler_vk.h).
+#include "galaxy/render/halton.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 
 #include "barriers_vk.h"
@@ -25,16 +26,6 @@
 namespace galaxy::render::vk {
 
 namespace {
-
-float halton(unsigned index, unsigned base) {
-    float f = 1.0f;
-    float r = 0.0f;
-    for (; index > 0u; index /= base) {
-        f /= static_cast<float>(base);
-        r += f * static_cast<float>(index % base);
-    }
-    return r;
-}
 
 #if defined(_WIN32)
 class XessUpscaler final : public TemporalUpscaler {

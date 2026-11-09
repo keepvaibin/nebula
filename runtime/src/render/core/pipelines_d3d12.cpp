@@ -388,7 +388,12 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     if (aux == 1u) {
         pd.NumRenderTargets = 2u;
         pd.RTVFormats[1] = kMotionVectorFormat;
-    } else if (aux >= 2u) {
+    } else if (aux == 4u) {
+        // The motion pass's second target is bound and left as it is (the base program writes target 0 only).
+        pd.NumRenderTargets = 2u;
+        pd.RTVFormats[1] = kMotionVectorFormat;
+        pd.BlendState.RenderTarget[1].RenderTargetWriteMask = 0u;
+    } else if (aux == 2u || aux == 3u) {
         pd.NumRenderTargets = 2u;
         pd.RTVFormats[1] = kReactiveMaskFormat;
         pd.BlendState.IndependentBlendEnable = TRUE;

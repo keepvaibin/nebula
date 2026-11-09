@@ -272,7 +272,7 @@ bool AmbientOcclusionVk::prepare(VkCommandBuffer commands, const Texture& depth,
     for (Texture* target : {distance_.get(), raw_.get(), denoised_.get(), scale_.get()}) {
         to_general(commands, *target);
     }
-    ao::bin_objects(objects, constants_, object_values_, object_tiles_);
+    ao::bin_objects(objects, constants_, object_values_, object_tiles_, object_scratch_);
     const VkDeviceSize alignment = Context::get().properties().limits.minStorageBufferOffsetAlignment;
     const std::size_t object_bytes = object_values_.size() * sizeof(float);
     const std::size_t tile_bytes = object_tiles_.size() * sizeof(std::uint32_t);

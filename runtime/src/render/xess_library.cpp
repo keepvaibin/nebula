@@ -2,6 +2,8 @@
 // xess_library.h.
 #include "galaxy/render/xess_library.h"
 
+#include "locked_file.h"
+
 #include "galaxy/platform_paths.h"
 #include "galaxy/run_options.h"
 
@@ -57,6 +59,12 @@ HMODULE module() noexcept {
         }
         const std::wstring path = folder + L"\\libxess.dll";
         if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            return;
+        }
+        // Held from the check to the load: the file checked is the file loaded.
+        const LockedFile held(path.c_str());
+        if (!held.held()) {
+            std::cerr << "[xess] libxess.dll could not be opened: not loaded\n";
             return;
         }
         if (!signature_trusted(path.c_str())) {

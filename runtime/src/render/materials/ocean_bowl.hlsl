@@ -32,7 +32,7 @@ float4 material_color(NativeVaryings i) {
     c += material.band.rgb * level_line(c.r * 255.0, material.band.a * 255.0);
     if (material.warp.z > 0.5) {
         const float2 step = round(TEX(2).Sample(SAMP(2), i.uv[1].xy).ab * 255.0) - 128.0;
-        const float2 screen = i.uv[2].xy / i.uv[2].z + step * material.warp.xy;
+        const float2 screen = (i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy) + step * material.warp.xy;
         c += TEX(1).Sample(SAMP(1), screen).rgb * material.tint.rgb;
     }
     return float4(saturate(c), alpha);

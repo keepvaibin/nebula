@@ -136,6 +136,17 @@ FsrFrameGeneration::FsrFrameGeneration() : impl_(std::make_unique<Impl>()) {}
 FsrFrameGeneration::~FsrFrameGeneration() = default;
 
 bool FsrFrameGeneration::replace_swap_chain(ID3D12CommandQueue* queue, Microsoft::WRL::ComPtr<IDXGISwapChain4>& swap_chain) noexcept {
+    // The SDK reads the chain's description, window and fullscreen state, and from then on releases the chain on every
+    // path (a failed proxy included); before that it keeps it. A chain that cannot give those, or is fullscreen (which the
+    // SDK must not release), is refused here and stays with the caller, so it is never leaked half-way.
+    DXGI_SWAP_CHAIN_DESC1 desc{};
+    DXGI_SWAP_CHAIN_FULLSCREEN_DESC fullscreen{};
+    HWND window = nullptr;
+    if (FAILED(swap_chain->GetDesc1(&desc)) || FAILED(swap_chain->GetFullscreenDesc(&fullscreen)) ||
+        FAILED(swap_chain->GetHwnd(&window)) || fullscreen.Windowed == FALSE) {
+        std::cerr << "[fsr3-fg] swap chain: not replaceable\n";
+        return false;
+    }
     FfxSwapchain ffx = ffxGetSwapchainDX12(swap_chain.Detach());
     const FfxErrorCode result = ffxReplaceSwapchainForFrameinterpolationDX12(ffxGetCommandQueueDX12(queue), ffx);
     if (result != FFX_OK) {

@@ -214,10 +214,19 @@ private:
     float max_[3]{};
 };
 
+// What bin_objects works in, kept by the caller so a frame allocates nothing once the buffers have grown to the scene.
+struct ObjectBinScratch {
+    std::vector<float> reach;
+    std::vector<float> on_screen;
+    std::vector<std::uint32_t> order;
+    std::vector<std::uint32_t> counts;
+    std::vector<std::uint32_t> lists;  // kObjectTileMost slots a tile; only the first counts[t] of a tile are ever read
+};
+
 // The shaders' buffers. objects: per occluder four float4s (each axis over its length squared with that length squared; the
 // centre with the strength). tiles: columns, rows, then each tile's first index and count, then the indices.
 inline void bin_objects(std::span<const ObjectOccluder> occluders, const Constants& c, std::vector<float>& objects,
-                        std::vector<std::uint32_t>& tiles) {
+                        std::vector<std::uint32_t>& tiles, ObjectBinScratch& scratch) {
     const std::uint32_t cols = (c.size[0] + kObjectTilePixels - 1u) / kObjectTilePixels;
     const std::uint32_t rows = (c.size[1] + kObjectTilePixels - 1u) / kObjectTilePixels;
     const std::uint32_t count = cols * rows;
@@ -226,9 +235,12 @@ inline void bin_objects(std::span<const ObjectOccluder> occluders, const Constan
     tiles[0] = cols;
     tiles[1] = rows;
     // Largest on the screen first: a full tile keeps those, the same ones each frame the view holds still.
-    std::vector<float> reach(occluders.size());
-    std::vector<float> on_screen(occluders.size());
-    std::vector<std::uint32_t> order(occluders.size());
+    std::vector<float>& reach = scratch.reach;
+    std::vector<float>& on_screen = scratch.on_screen;
+    std::vector<std::uint32_t>& order = scratch.order;
+    reach.resize(occluders.size());
+    on_screen.resize(occluders.size());
+    order.resize(occluders.size());
     std::iota(order.begin(), order.end(), 0u);
     for (std::size_t i = 0; i < occluders.size(); ++i) {
         float largest = 0.0f;
@@ -239,8 +251,10 @@ inline void bin_objects(std::span<const ObjectOccluder> occluders, const Constan
         on_screen[i] = reach[i] / std::max(-occluders[i].centre[2], 1.0f);
     }
     std::stable_sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) { return on_screen[a] > on_screen[b]; });
-    std::vector<std::uint32_t> counts(count, 0u);
-    std::vector<std::uint32_t> lists(static_cast<std::size_t>(count) * kObjectTileMost);
+    std::vector<std::uint32_t>& counts = scratch.counts;
+    std::vector<std::uint32_t>& lists = scratch.lists;
+    counts.assign(count, 0u);
+    lists.resize(static_cast<std::size_t>(count) * kObjectTileMost);
     const float divisor = static_cast<float>(c.size[2]);
     for (const std::uint32_t i : order) {
         const ObjectOccluder& o = occluders[i];
