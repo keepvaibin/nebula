@@ -254,7 +254,9 @@ void Pairing::log_flicker(const ListData& now) {
             }
         }
         if (kind >= 0) {
-            const std::uint64_t count_key = static_cast<std::uint64_t>(item.source_hash) << 2u | static_cast<std::uint32_t>(kind);
+            // Of a draw with no material name, the slot (bit 33 set): "[names] slot" lines name it.
+            const std::uint64_t who = item.source_hash != 0u ? item.source_hash : (1ull << 32u | item.slot);
+            const std::uint64_t count_key = who << 2u | static_cast<std::uint32_t>(kind);
             if (flicker_counts_[count_key]++ == 0u) {
                 if (kind == 1) {
                     const NebulaFrameLight& l = list.lights[list.light_sets[item.light_set].first + which];
@@ -301,8 +303,9 @@ void Pairing::log_flicker(const ListData& now) {
     std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     std::fprintf(stderr, "[flicker] lists %u: presence %u light %u colour %u\n", flicker_lists_, totals[0], totals[1], totals[2]);
     for (std::size_t r = 0; r < ranked.size() && r < 12u; ++r) {
-        std::fprintf(stderr, "[flicker]   material %08x %s: %u\n", static_cast<std::uint32_t>(ranked[r].second >> 2u),
-                     kKind[ranked[r].second & 3u], ranked[r].first);
+        const std::uint64_t who = ranked[r].second >> 2u;
+        std::fprintf(stderr, "[flicker]   %s %08x %s: %u\n", (who >> 32u) != 0u ? "slot" : "material",
+                     static_cast<std::uint32_t>(who), kKind[ranked[r].second & 3u], ranked[r].first);
     }
 }
 
@@ -354,7 +357,8 @@ void Pairing::log_lost_ring_pairs(const ListData& now, const NebulaFrameList& la
             }
         }
         if (why == nullptr) continue;
-        const std::uint64_t key = static_cast<std::uint64_t>(item.source_hash) << 32u ^ reinterpret_cast<std::uintptr_t>(why);
+        const std::uint64_t who = item.source_hash != 0u ? item.source_hash : (1ull << 32u | item.slot);
+        const std::uint64_t key = who * 0x9E3779B97F4A7C15ull ^ reinterpret_cast<std::uintptr_t>(why);
         if (!pair_logged_.insert(key).second) continue;
         std::fprintf(stderr, "[pair] ring item lost its history: %s (material %08x, slot %u, part %u, vertices %u, before %u)\n",
                      why, item.source_hash, item.slot, item.part, item.ring_count, was);
