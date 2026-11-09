@@ -88,8 +88,8 @@ namespace {
 
 SwingRope::SwingRope(const char* pName)
     : LiveActor(pName), mBasePos(0.0f, 0.0f, 0.0f), mRopeLength(), mIsStretched(), mStretchTime(), mAccelTime(), mNumPoints(), mPoints(), mRider(),
-      mGrabCoord(), mGrabPointNum(), mSlideSpeed(), mSledPoint(), mCameraInfo(), mFootCoord(), mFootPointNum(), mGrabToFootDist(),
-      mFootPos(0.0f, 0.0f, 0.0f), mShadowDropPos(0.0f, 0.0f, 0.0f), mShadowDropOffset(), mPrevSoundLvl() {
+      mGrabCoord(), mGrabPointNum(), mSlideSpeed(), mSledPoint(), mCameraInfo(), mFootPos(0.0f, 0.0f, 0.0f),
+      mShadowDropPos(0.0f, 0.0f, 0.0f), mPrevSoundLvl() {
     mRideMtx.identity();
 }
 
@@ -126,13 +126,12 @@ void SwingRope::draw() const {
         return;
     }
 
+    // A held rope draws through its points like a free one.
     TypedDraw site(MR::getSceneObj< SwingRopeGroup >(SceneObj_SwingRopeGroup)->mMaterial, nullptr, MR::getCameraViewMtx());
     if (isNerve(GET_NERVE(SwingRope, SwingRopeNrvStop))) {
         drawStop(site);
-    } else if (isNerve(GET_NERVE(SwingRope, SwingRopeNrvFree)) || isNerve(GET_NERVE(SwingRope, SwingRopeNrvFreeInvalid))) {
-        drawFree(site);
     } else {
-        drawBind(site);
+        drawFree(site);
     }
 }
 
@@ -143,7 +142,7 @@ void SwingRope::exeStop() {
 
     s32 index = mNumPoints - 1;
     mShadowDropPos.x = mPoints[index]->mPosition.x;
-    mShadowDropPos.y = mBasePos.y - (mRopeLength + mShadowDropOffset);
+    mShadowDropPos.y = mBasePos.y - mRopeLength;
     mShadowDropPos.z = mPoints[index]->mPosition.z;
 }
 
@@ -166,7 +165,7 @@ void SwingRope::exeFree() {
 
     s32 index = mNumPoints - 1;
     mShadowDropPos.x = mPoints[index]->mPosition.x;
-    mShadowDropPos.y = mBasePos.y - (mRopeLength + mShadowDropOffset);
+    mShadowDropPos.y = mBasePos.y - mRopeLength;
     mShadowDropPos.z = mPoints[index]->mPosition.z;
 
     if (isAllPointsStop()) {
@@ -177,7 +176,7 @@ void SwingRope::exeFree() {
     }
 }
 
-inline void SwingRope::exeFreeInvalid() {
+void SwingRope::exeFreeInvalid() {
     exeFree();
 
     if (MR::isOnGroundPlayer()) {
@@ -201,9 +200,7 @@ void SwingRope::exeBindSlideDown() {
         MR::startBckPlayer("SwingRopeSlideDown", ::sAnimInterpoleFrame);
     }
 
-    if (!updateSlideDown()) {
-        return;
-    }
+    updateSlideDown();
 }
 
 void SwingRope::exeBindStretch() {
@@ -281,9 +278,7 @@ bool SwingRope::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceive
         MR::calcPerpendicFootToLine(&pos, *MR::getPlayerPos(), mBasePos, mBasePos + grav * mRopeLength);
 
         Vec3f posDiff = pos - mBasePos;
-        f32 grabCoord = posDiff.dot(grav);
-        grabCoord = MR::clamp(grabCoord, ::sHangCoordMin, mRopeLength - ::sHangCoordMaxOffset);
-        mGrabCoord = grabCoord;
+        mGrabCoord = MR::clamp(posDiff.dot(grav), ::sHangCoordMin, mRopeLength - ::sHangCoordMaxOffset);
         mGrabPointNum = calcPointNo(mGrabCoord);
 
         Vec3f front;
@@ -418,7 +413,7 @@ bool SwingRope::tryJump() {
         } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isMoveStickOperated(PLAYER_1)) {
             Vec3f stick(0.0f, 0.0f, 0.0f);
             MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
-            front.set< f32 >(stick.x, stick.y, stick.z);
+            front.set(stick);
             jumpXZ.set(stick * ::sJumpSpeedRate);
             MR::vecKillElement(jumpXZ, mGravity, &jumpXZ);
         } else if (!MR::isNearZero(jumpXZ)) {
@@ -521,9 +516,6 @@ void SwingRope::updateFootPos() {
     footMtx.getTrans(mFootPos);
 
     mFootPos.add(side * ::sFootPosOffsetX + up * ::sFootPosOffsetY + front * ::sFootPosOffsetZ);
-    mGrabToFootDist = mFootPos.distance(mSledPoint->mPosition);
-    mFootCoord = mGrabCoord + mGrabToFootDist;
-    mFootPointNum = calcPointNo(mFootCoord);
 }
 
 bool SwingRope::updateStretch() {
@@ -627,8 +619,7 @@ void SwingRope::updateStretchHangUpperPoints() {
 
         if (mStretchTime < ::sStepFixUpperPointPos) {
             f32 t = MR::getEaseOutValue(static_cast< f32 >(mStretchTime + 1) / ::sStepFixUpperPointPos, 0.0f, 1.0f, 1.0f);
-            Vec3f stretchPos = pos;
-            pos = stretchPos * t + mPoints[idx]->mPosition * (1.0f - t);
+            pos = pos * t + mPoints[idx]->mPosition * (1.0f - t);
         }
         mPoints[idx]->setAndUpdatePosAndAxis(pos, mSledPoint->mUp, front);
         front.set(mPoints[idx]->mFront);
@@ -643,8 +634,7 @@ void SwingRope::updateHangLowerPoints() {
         mPoints[nextIndex]->setPosAndAxis(mFootPos, mSledPoint->mSide, mSledPoint->mUp, mSledPoint->mFront);
 
         Vec3f up, front, side;
-        Vec3f zero(0.0f, 0.0f, 0.0f);
-        mPoints[nextIndex]->mVelocity.set(zero);
+        mPoints[nextIndex]->mVelocity.zero();
         restrictPointToTail(nextIndex + 1, &mFootPos);
         updateHangLowerPointPos(nextIndex + 1);
 
@@ -666,9 +656,8 @@ void SwingRope::updateHangLowerPointPos(s32 index) {
     for (; index < mNumPoints; index++) {
         SwingRopePoint* point = mPoints[index];
         SwingRopePoint* prevPoint = mPoints[index - 1];
-        Vec3f front = prevPoint->mFront;
-        prevPoint->mUp.dot(point->mUp);
-        MR::vecBlend(mPoints[index]->mFront, mPoints[index - 1]->mFront, &front, ::sFootPointAxisBlendRate);
+        Vec3f front;
+        MR::vecBlend(point->mFront, prevPoint->mFront, &front, ::sFootPointAxisBlendRate);
         point->updatePosAndAxis(front, calcFriction(index));
     }
 }
@@ -712,28 +701,6 @@ namespace {
         }
     }
 
-    void drawLineAtHanging(TypedDraw& rDraw, const SwingRope* pRope, u32 color1, u32 color2, f32 texY1, f32 texY2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        VertexPCT* vtx = rDraw.vertices< VertexPCT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2);
-        {
-            const Vec3f& front = pRope->mPoints[0]->getFront();
-            const Vec3f& side = pRope->mPoints[0]->getSide();
-            const Vec3f& pos = pRope->getBasePos();
-
-            sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, 0.0f);
-            sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, 0.0f);
-
-            SwingRopePoint* point;
-            for (s32 idx = 0; idx < pRope->mNumPoints; idx++) {
-                point = pRope->mPoints[idx];
-                const Vec3f& front = point->getFront();
-                const Vec3f& side = point->getSide();
-                const Vec3f& pos = point->getPosition();
-
-                sendPoint(vtx, pos, side, front, x1, y1, color1, 0.0f, ::sTexRate * (idx + 1));
-                sendPoint(vtx, pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
-            }
-        }
-    }
 };  // namespace
 
 void SwingRope::drawStop(TypedDraw& rDraw) const {
@@ -762,19 +729,7 @@ void SwingRope::drawFree(TypedDraw& rDraw) const {
                -(::sDrawWidthX + ::sDrawWidthLongOffsetX), -::sDrawWidthShortOffsetZ);
 }
 
-void SwingRope::drawBind(TypedDraw& rDraw) const {
-    f32 texYGrab = (mGrabPointNum + 1.0f) * ::sTexRate;
-    f32 texYFoot = (calcPointNo(mFootCoord) + 1.0f) * ::sTexRate;
-    ::drawLineAtHanging(rDraw, this, ::sColorPlusZ, ::sColorPlusX, texYGrab, texYFoot, -::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ),
-                        ::sDrawWidthX + ::sDrawWidthShortOffsetX, -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLineAtHanging(rDraw, this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, -(::sDrawWidthX + ::sDrawWidthShortOffsetX),
-                        -(::sDrawWidthZ + ::sDrawWidthShortOffsetZ), ::sDrawWidthX, (::sDrawWidthZ + ::sDrawWidthShortOffsetZ));
-    ::drawLineAtHanging(rDraw, this, ::sColorMinusX, ::sColorPlusZ, texYGrab, texYFoot, ::sDrawWidthX + ::sDrawWidthLongOffsetX, -::sDrawWidthShortOffsetZ,
-                        -(::sDrawWidthX + ::sDrawWidthLongOffsetX), -::sDrawWidthShortOffsetZ);
-}
-
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
-    mTexture = nullptr;
     mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope", "SwingRope.bti"));
 
     mMaterial = makeMaterial();
@@ -784,8 +739,7 @@ SiteMaterial SwingRopeGroup::makeMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
     // the alpha is above 0, depth tested and written, no culling.
     SiteMaterial material;
-    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
-                       NEBULA_CULL_NONE);
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true, NEBULA_CULL_NONE);
     material.constants[0] = 1.0f;
     material.constants[1] = 0.0f;
     material.setTexture(0, mTexture);
