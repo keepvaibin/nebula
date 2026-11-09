@@ -5,6 +5,7 @@
 
 #include "render/core/inspector.h"
 
+#include "galaxy/render/halton.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/run_options.h"
@@ -650,18 +651,6 @@ struct Access {
         std::fprintf(stderr, " %s%c", wrong ? "WRONG (over 1 px)" : "ok", '\n');
     }
 
-    // The Halton sequence the upscalers document (bases 2 and 3, phase index % count + 1, centred), in the same float steps.
-    static float halton_value(unsigned index, unsigned base) {
-        float result = 0.0f;
-        float fraction = 1.0f / static_cast<float>(base);
-        while (index > 0u) {
-            result += fraction * static_cast<float>(index % base);
-            index /= base;
-            fraction /= static_cast<float>(base);
-        }
-        return result;
-    }
-
     // GALAXY_TEST_FRAME_INPUTS=1: every real frame the previous view terms are kept; every 300th one the inputs the temporal
     // upscaler gets are checked and one line says ok, WRONG or skipped for each:
     //   depth        the scene projection maps the near plane to the far end of the viewport's depth range and the far plane to
@@ -683,8 +672,8 @@ struct Access {
             if (phases == 0u) {
                 std::fprintf(stderr, " jitter skipped (no temporal scene);");
             } else {
-                const float expected_x = halton_value(index % phases + 1u, 2u) - 0.5f;
-                const float expected_y = halton_value(index % phases + 1u, 3u) - 0.5f;
+                const float expected_x = halton(index % phases + 1u, 2u) - 0.5f;
+                const float expected_y = halton(index % phases + 1u, 3u) - 0.5f;
                 const bool exact = std::bit_cast<std::uint32_t>(expected_x) == std::bit_cast<std::uint32_t>(core.scene_jitter_px_[0]) &&
                                    std::bit_cast<std::uint32_t>(expected_y) == std::bit_cast<std::uint32_t>(core.scene_jitter_px_[1]);
                 std::fprintf(stderr, " jitter %s (%u of %u: %.6f,%.6f);", exact ? "ok" : "WRONG", index, phases,

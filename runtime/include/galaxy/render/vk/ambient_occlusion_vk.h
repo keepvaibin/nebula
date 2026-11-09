@@ -68,6 +68,7 @@ private:
     ao::Constants constants_{};
     std::vector<float> object_values_;
     std::vector<std::uint32_t> object_tiles_;
+    ao::ObjectBinScratch object_scratch_;
     VkDescriptorBufferInfo objects_{};
     VkDescriptorBufferInfo tiles_{};
 };

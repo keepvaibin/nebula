@@ -604,9 +604,8 @@ void TextureStore::create_entry(Op& op) {
     entry->name = op.name;
     if (op.name.named) {
         ++pack_hashed_;
-        if (rt_materials_loaded()) {
-            note_rt_texture(op.id, op.name.hash, entry->own.width, entry->own.height, op.name.format);
-        }
+        // Keeps the name only under GALAXY_RT_LOG_GLOWS; the RT tables load when RT first reads them, not here.
+        note_rt_texture(op.id, op.name.hash, entry->own.width, entry->own.height, op.name.format);
         if (packs_.dumping()) {
             dump_base_level(op.staged, op.name);
         }

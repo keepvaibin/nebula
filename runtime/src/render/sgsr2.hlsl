@@ -163,7 +163,10 @@ SgsrOutput UpscalePS(SgsrVertex v) {
     box_var *= box_rcp;
     box_var = sqrt(abs(box_var - box_center * box_center));
 
-    upsampled.rgb = clamp(upsampled.rgb / upsampled.w, box_min - min16float(0.075f), box_max + min16float(0.075f));
+    // All five Lanczos weights can reach zero (a wide kernel bias with the output pixel at a render pixel's corner): the
+    // centre colour stands in then, where the division would be 0 / 0.
+    const min16float3 average = upsampled.w > min16float(1.0e-5f) ? upsampled.rgb / upsampled.w : min16float3(center.rgb);
+    upsampled.rgb = clamp(average, box_min - min16float(0.075f), box_max + min16float(0.075f));
     upsampled.w = upsampled.w * min16float(1.0f / 3.0f);
 
     min16float base_update = min16float(1.0f) - depth_factor;

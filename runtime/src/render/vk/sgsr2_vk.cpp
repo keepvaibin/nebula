@@ -2,6 +2,7 @@
 // Snapdragon Game Super Resolution 2 on Vulkan (temporal_upscaler_vk.h; the shaders: sgsr2.hlsl). Two fragment passes, no
 // compute: the depth separation at the render size, then the upsample at the output size, which writes the output and
 // the next frame's history together. Tile GPUs keep both passes on chip.
+#include "galaxy/render/halton.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 
 #include "galaxy/render/vk/utility_spirv.h"
@@ -39,16 +40,6 @@ struct Constants {
     float pad;
 };
 static_assert(sizeof(Constants) == 72u, "sgsr2.hlsl's constants");
-
-float halton(unsigned index, unsigned base) {
-    float f = 1.0f;
-    float r = 0.0f;
-    for (; index > 0u; index /= base) {
-        f /= static_cast<float>(base);
-        r += f * static_cast<float>(index % base);
-    }
-    return r;
-}
 
 VkShaderModule module_of(VkDevice device, UtilitySpirv shader) {
     const std::span<const std::uint32_t> spirv = utility_spirv(shader);

@@ -20,7 +20,7 @@ public:
     FsrFrameGeneration();
     ~FsrFrameGeneration();
 
-    // The swap chain given is released and `swap_chain` becomes AMD's for the same window; on failure it is left null.
+    // The swap chain given is released and `swap_chain` becomes AMD's for the same window; on failure it is left null, or as it was when refused before the SDK took it (a chain it cannot describe, or a fullscreen one).
     [[nodiscard]] static bool replace_swap_chain(ID3D12CommandQueue* queue, Microsoft::WRL::ComPtr<IDXGISwapChain4>& swap_chain) noexcept;
 
     // Its context for these sizes (made at the first frame; the GPU must be idle when they change, and at destroy).

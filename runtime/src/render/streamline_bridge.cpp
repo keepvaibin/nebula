@@ -22,6 +22,7 @@
 #include <sl_pcl.h>
 #include <sl_reflex.h>
 #include <sl_security.h>
+#include "locked_file.h"
 #include "streamline_common.h"
 #include "streamline_frame_generation.h"
 #endif
@@ -108,13 +109,22 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
             std::cerr << "[streamline] not installed\n";
             return false;
         }
-        // Streamline's own check: an Authenticode signature chaining to a
-        // trusted root, by Streamline's signing key.
-        if (!sl::security::verifyEmbeddedSignature(interposer.c_str())) {
-            std::cerr << "[streamline] sl.interposer.dll is not signed by NVIDIA: not loaded\n";
-            return false;
+        HMODULE module = nullptr;
+        {
+            // Held from the check to the load: the file checked is the file loaded.
+            const LockedFile held(interposer.c_str());
+            if (!held.held()) {
+                std::cerr << "[streamline] sl.interposer.dll could not be opened: not loaded\n";
+                return false;
+            }
+            // Streamline's own check: an Authenticode signature chaining to a
+            // trusted root, by Streamline's signing key.
+            if (!sl::security::verifyEmbeddedSignature(interposer.c_str())) {
+                std::cerr << "[streamline] sl.interposer.dll is not signed by NVIDIA: not loaded\n";
+                return false;
+            }
+            module = LoadLibraryExW(interposer.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         }
-        HMODULE module = LoadLibraryExW(interposer.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
         if (module == nullptr) {
             std::cerr << "[streamline] sl.interposer.dll did not load\n";
             return false;

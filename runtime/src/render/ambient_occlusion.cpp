@@ -280,7 +280,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
 
     list->SetComputeRootSignature(root_signature_.Get());
     list->SetComputeRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
-    ao::bin_objects(*in.objects, c, object_values_, object_tiles_);
+    ao::bin_objects(*in.objects, c, object_values_, object_tiles_, object_scratch_);
     const UploadRing::Allocation objects = in.ring->allocate(object_values_.size() * sizeof(float), 16u);
     const UploadRing::Allocation tiles = in.ring->allocate(object_tiles_.size() * sizeof(std::uint32_t), 16u);
     std::memcpy(objects.cpu, object_values_.data(), object_values_.size() * sizeof(float));

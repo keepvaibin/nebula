@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // XeSS Super Resolution behind TemporalUpscaler (temporal_upscaler.h).
+#include "galaxy/render/halton.h"
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render/xess_library.h"
 #include "barriers_d3d12.h"
@@ -13,16 +14,6 @@
 namespace galaxy::render {
 
 namespace {
-
-float halton(unsigned index, unsigned base) {
-    float f = 1.0f;
-    float r = 0.0f;
-    for (; index > 0u; index /= base) {
-        f /= static_cast<float>(base);
-        r += f * static_cast<float>(index % base);
-    }
-    return r;
-}
 
 class XessUpscaler final : public TemporalUpscaler {
 public:

@@ -435,8 +435,13 @@ float ao_scale(float visibility) {
 void UpsampleCS(uint3 id : SV_DispatchThreadID) {
     const int2 q = int2(id.xy);
     const float2 pixel = float2(q) + 0.5f;
+    // The viewport lies inside the target: nothing outside it is read.
+    if (!inside(pixel)) {
+        u_scale[id.xy] = 1.0f;
+        return;
+    }
     const float depth = t_depth.Load(int3(q, 0));
-    if (far_plane(depth) || !inside(pixel)) {
+    if (far_plane(depth)) {
         u_scale[id.xy] = 1.0f;
         return;
     }
