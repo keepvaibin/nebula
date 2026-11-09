@@ -30,8 +30,6 @@ public:
     void hideAll();
     void updatePoint(const Vec2f&, bool, Vec2f*);
     u16 findDrawPointRange(u16*, u16*) const;
-    void draw0(NebulaColor8) const;
-    void draw1() const;
     void draw2(TypedDraw& rDraw) const;
     SiteMaterial loadMaterial() const;
 
