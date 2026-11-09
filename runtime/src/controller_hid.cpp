@@ -150,6 +150,39 @@ struct WinUsbPipes {
     }
 };
 
+// A wait for one overlapped read or write: the thread pool waits on the event (once, WT_EXECUTEONLYONCE) and, when it is signalled,
+// sets `ready` and the worker's `wake` event. The worker so waits on a handful of handles whatever the number of pads (one
+// WaitForMultipleObjects takes 64); each pad arms its own wait when it has a read or a write in flight. `ready` may be stale (a
+// wake from an earlier arming): the worker checks the overlapped result itself.
+struct IoWait {
+    HANDLE wait = nullptr;
+    HANDLE wake = nullptr;  // the worker's event; set when the worker owns the device
+    std::atomic<bool> ready{false};
+};
+
+VOID CALLBACK on_io_signalled(PVOID context, BOOLEAN) {
+    auto* io = static_cast<IoWait*>(context);
+    io->ready.store(true, std::memory_order_release);
+    SetEvent(io->wake);
+}
+
+// `blocking`: returns once a callback running now has finished (before the event or the IoWait goes away).
+void disarm_io(IoWait& io, bool blocking) noexcept {
+    if (io.wait == nullptr) return;
+    if (blocking) UnregisterWaitEx(io.wait, INVALID_HANDLE_VALUE); else UnregisterWait(io.wait);
+    io.wait = nullptr;
+}
+
+void arm_io(IoWait& io, HANDLE event) noexcept {
+    disarm_io(io, false);
+    io.ready.store(false, std::memory_order_release);
+    if (io.wake == nullptr || event == nullptr) return;
+    if (!RegisterWaitForSingleObject(&io.wait, event, on_io_signalled, &io, INFINITE,
+                                     WT_EXECUTEONLYONCE | WT_EXECUTEINWAITTHREAD)) {
+        io.wait = nullptr;
+    }
+}
+
 struct Device {
     std::wstring path;
     USHORT vendor = 0;
@@ -174,6 +207,7 @@ struct Device {
     bool needs_driver = false;
     UniqueHandle handle;
     UniqueHandle read_event;
+    IoWait read_io;
     OVERLAPPED read_ov{};
     bool read_pending = false;
     bool resume = false;   // read_event set by hand to continue a burst
@@ -263,6 +297,7 @@ struct Device {
     std::vector<std::uint8_t> post_buffer;
     OVERLAPPED post_ov{};
     UniqueHandle post_event;
+    IoWait post_io;
     bool post_pending = false;
     std::uint64_t post_started_us = 0;
 };
@@ -1172,6 +1207,7 @@ void finish_post(Device& device, bool wait) {
         GetOverlappedResult(device.handle.get(), &device.post_ov, &done, TRUE);
     }
     device.post_pending = false;
+    disarm_io(device.post_io, false);
 }
 
 void pump_output(Device& device) {
@@ -1192,6 +1228,7 @@ void pump_output(Device& device) {
         if (!done && GetLastError() == ERROR_IO_PENDING) {
             device.post_pending = true;
             device.post_started_us = steady_us();
+            arm_io(device.post_io, device.post_event.get());
         }
     }
 }
@@ -1336,7 +1373,8 @@ public:
     // holds back another controller's input.
     void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
         setup_done_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        if (!setup_done_) return;
+        wake_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+        if (!setup_done_ || !wake_) return;
         setup_ = std::thread([this, stop, rescan] {
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-setup");
             setup_main(stop, rescan);
@@ -1346,42 +1384,18 @@ public:
         if (ble_wanted) ble::start(rescan);
         service_device_timers();
         for (;;) {
-            std::array<HANDLE, 3 + 2 * kMaxHidPads> waits{};
-            std::array<Device*, 3 + 2 * kMaxHidPads> owners{};
-            std::array<bool, 3 + 2 * kMaxHidPads> writes{};
-            DWORD count = 0;
-            waits[count++] = stop;
-            waits[count++] = setup_done_.get();
-            waits[count++] = rumble;
-            for (auto& device : devices_) {
-                if (device->read_pending) {
-                    owners[count] = device.get();
-                    writes[count] = false;
-                    waits[count++] = device->read_event.get();
-                }
-                if (device->post_pending) {
-                    owners[count] = device.get();
-                    writes[count] = true;
-                    waits[count++] = device->post_event.get();
-                }
-            }
-            // A timer only while a motor runs or device work is due: it
-            // refreshes the motor, stops it when the game's state goes stale
-            // and sends deferred writes.
-            const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE, wait_timeout_ms());
+            // Four handles whatever the number of pads: a pad's read or write completing wakes `wake_` through the thread
+            // pool (arm_io), and service_io then finds the pads that are ready. A timer only while a motor runs or device
+            // work is due: it refreshes the motor, stops it when the game's state goes stale and sends deferred writes.
+            const HANDLE waits[4] = {stop, setup_done_.get(), rumble, wake_.get()};
+            const DWORD result = WaitForMultipleObjects(4, waits, FALSE, wait_timeout_ms());
             if (result == WAIT_OBJECT_0) break;
             if (result == WAIT_OBJECT_0 + 1) {
                 take_setup();
-            } else if (result >= WAIT_OBJECT_0 + 3 && result < WAIT_OBJECT_0 + count) {
-                Device* device = owners[result - WAIT_OBJECT_0];
-                if (writes[result - WAIT_OBJECT_0]) {
-                    pump_output(*device);
-                } else {
-                    complete_read(*device);
-                }
-            } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_TIMEOUT) {
+            } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_OBJECT_0 + 3 && result != WAIT_TIMEOUT) {
                 break;  // WAIT_FAILED: leave rather than spin
             }
+            service_io();
             drop_failed();
             service_rumble();
             service_device_timers();
@@ -1504,6 +1518,8 @@ private:
                 continue;
             }
             Device& ref = *device;
+            ref.read_io.wake = wake_.get();
+            ref.post_io.wake = wake_.get();
             devices_.push_back(std::move(device));
             if (ref.joycon == sw::JoyConSide::None && !ref.puck && !ref.grip) {
                 publish_device(ref);
@@ -1672,9 +1688,9 @@ private:
             published.state.scheme = device.scheme;
             published.state.left = device.partner != nullptr ? device.partner->left : device.left;
             published.state.right = device.right;
-            published.state.slot = static_cast<std::uint8_t>(device.slot);
+            published.state.slot = static_cast<std::uint32_t>(device.slot);
             published.info.scheme = device.scheme;
-            published.info.slot = static_cast<std::uint8_t>(device.slot);
+            published.info.slot = static_cast<std::uint32_t>(device.slot);
             // A pair is Bluetooth when either half is.
             published.info.link = device.partner != nullptr && device.partner->link == ControllerLink::Bluetooth
                                       ? ControllerLink::Bluetooth
@@ -1782,6 +1798,8 @@ private:
     }
 
     void close_device(Device& device) {
+        disarm_io(device.read_io, true);
+        disarm_io(device.post_io, true);
         stop_device_rumble(device);
         finish_post(device, true);
         device.outputs.clear();
@@ -1814,6 +1832,8 @@ private:
             if (device.ble->lost()) {
                 device.read_pending = false;
                 device.failed = true;
+            } else {
+                arm_io(device.read_io, device.read_event.get());
             }
             return;
         }
@@ -1831,6 +1851,7 @@ private:
             }
             if (GetLastError() == ERROR_IO_PENDING) {
                 device.read_pending = true;
+                arm_io(device.read_io, device.read_event.get());
                 return;
             }
             device.read_pending = false;
@@ -1840,6 +1861,26 @@ private:
         device.resume = true;
         device.read_pending = true;
         SetEvent(device.read_event.get());  // continue after the other waits
+        arm_io(device.read_io, device.read_event.get());
+    }
+
+    // The pads whose reads or writes completed since the last look (IoWait::ready).
+    void service_io() {
+        for (auto& entry : devices_) {
+            Device& device = *entry;
+            if (device.failed) continue;
+            if (device.post_pending && device.post_io.ready.exchange(false, std::memory_order_acq_rel)) {
+                pump_output(device);
+                if (device.post_pending) arm_io(device.post_io, device.post_event.get());  // still in flight: wait again
+            }
+            if (device.read_pending && device.read_io.ready.exchange(false, std::memory_order_acq_rel)) {
+                if (device.ble || device.resume || HasOverlappedIoCompleted(&device.read_ov)) {
+                    complete_read(device);
+                } else {
+                    arm_io(device.read_io, device.read_event.get());  // a wake from an earlier arming: wait again
+                }
+            }
+        }
     }
 
     void complete_read(Device& device) {
@@ -2085,7 +2126,7 @@ private:
         state.touch_down = decoded.touch_surface && decoded.touch_down;
         state.touch_dx = std::clamp(state.touch_dx + touch_dx, -2.0f, 2.0f);
         state.touch_dy = std::clamp(state.touch_dy + touch_dy, -2.0f, 2.0f);
-        state.slot = static_cast<std::uint8_t>(target->slot);
+        state.slot = static_cast<std::uint32_t>(target->slot);
         ReleaseSRWLockExclusive(&hub().lock);
     }
 
@@ -2151,7 +2192,7 @@ private:
             const std::size_t slot = device->joycon == sw::JoyConSide::Left && device->partner != nullptr
                                          ? device->partner->slot
                                          : device->slot;
-            const bool target = rumble_targets_hid_device(request.target,{device->scheme,static_cast<std::uint8_t>(slot)});
+            const bool target = rumble_targets_hid_device(request.target,{device->scheme,static_cast<std::uint32_t>(slot)});
             if (service_hid_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
                 const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
                 timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);
@@ -2412,6 +2453,7 @@ private:
     // and every path open here or handed over.
     std::thread setup_;
     UniqueHandle setup_done_;
+    UniqueHandle wake_;  // set by a pad whose read or write completed (IoWait)
     SRWLOCK setup_lock_ = SRWLOCK_INIT;
     std::vector<std::unique_ptr<Device>> setup_ready_;
     std::vector<std::wstring> setup_seen_;
@@ -2468,14 +2510,16 @@ void ensure_controller_hid_started() noexcept {
     }
 }
 
-std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept {
+std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noexcept {
     Hub& h = hub();
+    out.clear();
     if (!h.started.load(std::memory_order_acquire)) return 0;
     std::size_t count = 0;
     if (consume_gyro) AcquireSRWLockExclusive(&h.lock); else AcquireSRWLockShared(&h.lock);
     for (Published& published : h.pads) {
-        if (!published.connected || count >= out.size()) continue;
-        out[count++] = published.state;
+        if (!published.connected) continue;
+        out.push_back(published.state);
+        ++count;
         if (consume_gyro) {
             published.state.gyro_x = 0.0f;
             published.state.gyro_y = 0.0f;
@@ -2577,7 +2621,7 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
             input::ControllerInfo& info = out[count];
             info = {};
             info.scheme = candidate.info.scheme;
-            info.slot = static_cast<std::uint8_t>(count);
+            info.slot = static_cast<std::uint32_t>(count);
             info.link = link_of(candidate);
             info.model = candidate.info.name;
             info.icons = icon_model(candidate.info.simple, candidate.vendor == sw::kNintendoVendorId &&

@@ -32,6 +32,7 @@ struct PlacedTextureAllocator::State {
 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
     std::uint64_t heap_bytes = 0;
+    D3D12_HEAP_PROPERTIES properties{D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0u, 0u};
     ComPtr<ID3D12Device> device;
     mutable std::mutex mutex;
     std::vector<Heap> heaps;
@@ -43,14 +44,30 @@ struct PlacedTextureAllocator::State {
         if (!device) return false;
         D3D12_HEAP_DESC desc{};
         desc.SizeInBytes = heap_bytes;
-        desc.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+        desc.Properties = properties;
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Flags = flags;
         Heap heap;
         if (FAILED(device->CreateHeap(&desc, IID_PPV_ARGS(&heap.heap)))) return false;
         heap.free.emplace(0u, heap_bytes);
+        // A heap given back (release) leaves its place for the next one: the owners name heaps by index.
+        for (Heap& slot : heaps) {
+            if (!slot.heap) {
+                slot = std::move(heap);
+                return true;
+            }
+        }
         heaps.push_back(std::move(heap));
         return true;
+    }
+
+    // The heaps holding memory now.
+    [[nodiscard]] std::uint64_t live_heaps() const noexcept {
+        std::uint64_t live = 0u;
+        for (const Heap& heap : heaps) {
+            if (heap.heap) ++live;
+        }
+        return live;
     }
 
     // First fit over every heap's free ranges.
@@ -96,6 +113,12 @@ struct PlacedTextureAllocator::State {
         }
         free.emplace(start, length);
         used -= std::min(used, size);
+        // A heap with nothing placed in it gives its memory back to the adapter (the first stays: textures come back at once).
+        // Every range was returned by a resource that is gone, which only happens once the GPU is past the frames that read it.
+        if (heap_index != 0u && length == heap_bytes && free.size() == 1u && heaps[heap_index].heap) {
+            heaps[heap_index].heap.Reset();
+            free.clear();
+        }
     }
 };
 
@@ -141,10 +164,14 @@ private:
 }  // namespace
 
 PlacedTextureAllocator::PlacedTextureAllocator(D3D12_HEAP_FLAGS heap_flags,
-                                               std::uint64_t heap_bytes)
+                                               std::uint64_t heap_bytes,
+                                               const D3D12_HEAP_PROPERTIES* properties)
     : state_(std::make_shared<State>()) {
     state_->flags = heap_flags;
     state_->heap_bytes = heap_bytes;
+    if (properties != nullptr) {
+        state_->properties = *properties;
+    }
 }
 
 PlacedTextureAllocator::~PlacedTextureAllocator() { shutdown(); }
@@ -222,8 +249,7 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
         }
     }
 
-    D3D12_HEAP_PROPERTIES properties{};
-    properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    const D3D12_HEAP_PROPERTIES properties = state_->properties;
     const HRESULT hr = create_texture(device.Get(), &properties, D3D12_HEAP_FLAG_NONE, &desc, initial, clear_value,
                                       IID_PPV_ARGS(&resource));
     if (SUCCEEDED(hr)) {
@@ -236,8 +262,8 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
 PlacedTextureAllocator::Stats PlacedTextureAllocator::stats() const {
     std::lock_guard lock(state_->mutex);
     Stats stats;
-    stats.heaps = state_->heaps.size();
-    stats.heap_bytes = state_->heaps.size() * state_->heap_bytes;
+    stats.heaps = state_->live_heaps();
+    stats.heap_bytes = stats.heaps * state_->heap_bytes;
     stats.used_bytes = state_->used;
     stats.placed = state_->placed;
     stats.committed_fallbacks = state_->committed;

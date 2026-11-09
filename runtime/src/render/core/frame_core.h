@@ -34,7 +34,14 @@ struct TextureHandle;
 
 namespace galaxy::render::core {
 
-inline constexpr std::uint32_t kLightRows = 4u * NEBULA_LIGHTS_PER_SET;
+// A light set in the rows: one header row (x the light count, as a float; program.hlsli light_count), then four rows a light.
+// The rows before the sets hold an empty set, the one a draw without lights reads.
+inline constexpr std::uint32_t kLightSetHeaderRows = 1u;
+inline constexpr std::uint32_t kRowsPerLight = 4u;
+[[nodiscard]] constexpr std::uint32_t light_set_rows(std::uint32_t lights) noexcept {
+    return kLightSetHeaderRows + kRowsPerLight * lights;
+}
+static_assert(sizeof(NebulaFrameLight) == kRowsPerLight * 16u);
 // An instanced particle's rows (NebulaParticleInstance), as particle_instances.hlsl reads them.
 inline constexpr std::uint32_t kParticleRows = 10u;
 static_assert(sizeof(NebulaParticleInstance) == kParticleRows * 16u);
@@ -100,6 +107,10 @@ struct TextureTable {
     float samplers_mip_lines = 0.0f, samplers_scene_bias = 0.0f;
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
+    // The last frame (RenderCore::frame_index_) a walk named the table; a table idle for kTableIdleFrames gives up what was built
+    // for it (retire_idle_tables) and is `retired` until a walk names it again.
+    std::uint64_t last_frame = 0u;
+    bool retired = false;
 };
 
 struct StaticSlot {
@@ -214,6 +225,21 @@ public:
     void reclaim(std::uint64_t completed_fence);
     // Tables naming a freed texture go; their descriptor tables join `retired`.
     void forget_textures(std::span<const std::uint32_t> freed, std::vector<gpu::Table>& retired);
+    // Render thread, every kTableSweepFrames: the one rule for a table's life. A table no walk has named for kTableIdleFrames
+    // frames releases what the renderer built for it (a Vulkan device without descriptor indexing: its persistent texture table,
+    // which joins `retired` for the renderer to hand back once the fence of the work that may read it has passed; a device with
+    // texture lists builds nothing per table) and the arrays it caches per walk; the registered list itself stays, and a
+    // walk that names the table again builds it anew. A table's id is kept for the session: the game keeps the ids it was
+    // given in its materials (checked against its own stamps), so an id given to another list would draw the wrong textures.
+    static constexpr std::uint64_t kTableIdleFrames = 600u;
+    static constexpr std::uint64_t kTableSweepFrames = 60u;
+    void retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired);
+    struct TableCounts {
+        std::uint32_t live = 0u;     // named within kTableIdleFrames
+        std::uint32_t retired = 0u;  // idle longer: built resources released
+        std::uint64_t retirements = 0u;  // retire_idle_tables's releases since the start
+    };
+    [[nodiscard]] TableCounts table_counts() const noexcept;
 
     [[nodiscard]] const GpuMesh& mesh(std::uint32_t id) const noexcept { return meshes_[id]; }
     [[nodiscard]] const GpuModel& model(std::uint32_t id) const noexcept { return models_[id]; }
@@ -300,6 +326,7 @@ private:
     // A freed table's id stays empty: a stale id reads no table, not another one.
     std::vector<std::unique_ptr<TextureTable>> tables_;
     TextureTable no_table_;
+    std::uint64_t table_retirements_ = 0u;
 
     std::uint32_t next_model_ = 1u, next_mesh_ = 1u, next_slot_ = 0u, next_table_ = 1u;
     // Every pipeline the game registered, with its inputs (the entries' copies, in registration order).

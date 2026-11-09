@@ -40,7 +40,9 @@ float level_line(float value, float level) {
 static uint g_light_base;
 float4 native_position_row(uint r) { return rows[r]; }
 float4 native_normal_row(uint r) { return rows[r + 3u]; }
-float4 native_light_row(uint n, uint w) { return rows[g_light_base + 4u * n + w]; }
+// Row w of light n, or zero when the set holds no light n.
+float4 native_light_row(uint n, uint w) { return n < light_count(g_light_base) ? rows[light_row(g_light_base, n) + w] : float4(0.0, 0.0, 0.0, 0.0); }
+uint native_light_count() { return light_count(g_light_base); }
 float4 channel_light(uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
     return light_term(g_light_base, n, atten, diffuse, pos, nrm);
 }

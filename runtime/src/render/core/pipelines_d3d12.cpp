@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/pipelines.h"
 
-
+#include "render/core/pipeline_cache_file.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -22,63 +22,34 @@
 namespace galaxy::render::core {
 namespace {
 
-// The cache file: a header (magic, size and hash of the library blob), then the blob. A file whose header or hash does not
-// fit is never handed to the runtime. The runtime itself refuses a blob from another driver version or adapter
-// (D3D12_ERROR_DRIVER_VERSION_MISMATCH, D3D12_ERROR_ADAPTER_NOT_FOUND) and the cache starts empty; the file's name carries the
-// adapter's identity, so two cards do not take turns replacing one file.
-struct CacheFileHeader {
-    char magic[8];
-    std::uint64_t size;
-    std::uint64_t hash;
-};
-constexpr char kCacheMagic[8] = {'N', 'B', 'D', '3', 'D', 'P', 'L', '1'};
-
+// The cache file: a header (pipeline_cache_file.h: the adapter's vendor, device, revision and driver version, and the size and
+// hash of the library blob), then the blob. A file whose header or hash does not fit is never handed to the runtime. The runtime
+// itself also refuses a blob from another driver version or adapter (D3D12_ERROR_DRIVER_VERSION_MISMATCH,
+// D3D12_ERROR_ADAPTER_NOT_FOUND) and the cache starts empty; the file's name carries the adapter's identity, so two cards do not
+// take turns replacing one file.
 std::uint64_t blob_hash(const void* data, std::size_t size) noexcept {
-    const auto* bytes = static_cast<const unsigned char*>(data);
-    std::uint64_t hash = 0x9E3779B97F4A7C15ull ^ size;
-    std::size_t i = 0u;
-    for (; i + 8u <= size; i += 8u) {
-        std::uint64_t word;
-        std::memcpy(&word, bytes + i, 8u);
-        hash = (hash ^ word) * 0xFF51AFD7ED558CCDull;
-        hash ^= hash >> 32u;
-    }
-    for (; i < size; ++i) {
-        hash = (hash ^ bytes[i]) * 0x100000001B3ull;
-    }
-    return hash;
-}
-
-// The library blob inside a cache file; empty when the header, the size or the hash is wrong.
-std::vector<char> unwrap_cache_file(const std::vector<char>& file) {
-    CacheFileHeader header{};
-    if (file.size() <= sizeof(header)) {
-        return {};
-    }
-    std::memcpy(&header, file.data(), sizeof(header));
-    if (std::memcmp(header.magic, kCacheMagic, sizeof(kCacheMagic)) != 0 || header.size != file.size() - sizeof(header) ||
-        header.hash != blob_hash(file.data() + sizeof(header), static_cast<std::size_t>(header.size))) {
-        return {};
-    }
-    return std::vector<char>(file.begin() + sizeof(header), file.end());
+    return cache_bytes_hash(data, size);
 }
 
 // What the cache is good for: the adapter's vendor, device and revision and its user-mode driver's version.
-std::string adapter_key(gpu::Device* device) {
+D3d12CacheIdentity adapter_identity(gpu::Device* device) {
     Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
     Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
     if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) || FAILED(factory->EnumAdapterByLuid(device->GetAdapterLuid(), IID_PPV_ARGS(&adapter)))) {
-        return "unknown";
+        return {};
     }
     DXGI_ADAPTER_DESC1 desc{};
     LARGE_INTEGER driver{};
     if (FAILED(adapter->GetDesc1(&desc)) || FAILED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &driver))) {
-        return "unknown";
+        return {};
     }
-    char text[64]{};
-    std::snprintf(text, sizeof(text), "%04x_%04x_%02x_%016llx", desc.VendorId, desc.DeviceId, desc.Revision,
-                  static_cast<unsigned long long>(driver.QuadPart));
-    return text;
+    D3d12CacheIdentity identity;
+    identity.known = true;
+    identity.vendor_id = desc.VendorId;
+    identity.device_id = desc.DeviceId;
+    identity.revision = desc.Revision;
+    identity.driver_version = static_cast<std::uint64_t>(driver.QuadPart);
+    return identity;
 }
 
 // The driver's compiled pipelines, kept between runs. A blob from another driver or device fails to open and starts over.
@@ -86,6 +57,7 @@ struct DriverCache {
     Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> library;
     std::vector<char> blob;  // the library reads it for as long as it lives
     std::filesystem::path file;
+    D3d12CacheIdentity identity;
     std::mutex lock;
     bool opened = false;
     bool changed = false;
@@ -107,12 +79,13 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1)))) {
         return nullptr;
     }
-    gCache.file = shader_cache_directory() / (std::string("d3d12_pipelines_") + adapter_key(device) + ".bin");
+    gCache.identity = adapter_identity(device);
+    gCache.file = shader_cache_directory() / d3d12_cache_file_name(gCache.identity);
     if (std::ifstream in(gCache.file, std::ios::binary | std::ios::ate); in) {
         std::vector<char> file(static_cast<std::size_t>(in.tellg()));
         in.seekg(0);
         in.read(file.data(), static_cast<std::streamsize>(file.size()));
-        gCache.blob = unwrap_cache_file(file);
+        gCache.blob = unwrap_d3d12_cache(gCache.identity, file);
     }
     if (gCache.blob.empty() || FAILED(device1->CreatePipelineLibrary(gCache.blob.data(), gCache.blob.size(), IID_PPV_ARGS(&gCache.library)))) {
         gCache.blob.clear();
@@ -136,15 +109,11 @@ std::size_t write_driver_cache() noexcept {
             return 0u;
         }
         const std::size_t blob_size = gCache.library->GetSerializedSize();
-        bytes.resize(sizeof(CacheFileHeader) + blob_size);
-        if (blob_size == 0u || FAILED(gCache.library->Serialize(bytes.data() + sizeof(CacheFileHeader), blob_size))) {
+        std::vector<char> blob(blob_size);
+        if (blob_size == 0u || FAILED(gCache.library->Serialize(blob.data(), blob_size))) {
             return 0u;
         }
-        CacheFileHeader header{};
-        std::memcpy(header.magic, kCacheMagic, sizeof(kCacheMagic));
-        header.size = blob_size;
-        header.hash = blob_hash(bytes.data() + sizeof(header), blob_size);
-        std::memcpy(bytes.data(), &header, sizeof(header));
+        bytes = wrap_d3d12_cache(gCache.identity, blob.data(), blob.size());
         gCache.changed = false;
         file = gCache.file;
     }

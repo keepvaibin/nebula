@@ -6,6 +6,8 @@
 #include "barriers_vk.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
 #include <stdexcept>
 
 namespace galaxy::render {
@@ -22,7 +24,51 @@ void transition(VkCommandBuffer commands, vk::Texture& texture, VkImageLayout to
 
 }  // namespace
 
+namespace {
+
+VkFormat vulkan_format_of(TexelFormat format) noexcept {
+    return format == TexelFormat::R8    ? VK_FORMAT_R8_UNORM
+           : format == TexelFormat::Rg8 ? VK_FORMAT_R8G8_UNORM
+           : format == TexelFormat::Bc1 ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK
+                                        : VK_FORMAT_R8G8B8A8_UNORM;
+}
+
+// Whether images of `format` can be made for host copies, and the device reads them as fast as its own layout (the extension's
+// device performance query): both asked of the device, not assumed.
+bool host_copy_format(VkFormat format) {
+    VkHostImageCopyDevicePerformanceQueryEXT performance{VK_STRUCTURE_TYPE_HOST_IMAGE_COPY_DEVICE_PERFORMANCE_QUERY_EXT};
+    VkImageFormatProperties2 properties{VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2};
+    properties.pNext = &performance;
+    VkPhysicalDeviceImageFormatInfo2 info{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2};
+    info.format = format;
+    info.type = VK_IMAGE_TYPE_2D;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT;
+    return vkGetPhysicalDeviceImageFormatProperties2(vk::Context::get().physical_device(), &info, &properties) == VK_SUCCESS &&
+           performance.optimalDeviceAccess == VK_TRUE;
+}
+
+}  // namespace
+
 bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
+    host_formats_ = 0u;
+    if (vk::Context::get().host_image_copy()) {
+        for (const TexelFormat format : {TexelFormat::Rgba8, TexelFormat::R8, TexelFormat::Rg8, TexelFormat::Bc1}) {
+            if ((format != TexelFormat::Bc1 || supports_bc1()) && host_copy_format(vulkan_format_of(format))) {
+                host_formats_ |= 1u << static_cast<unsigned>(format);
+            }
+        }
+    }
+    {
+        // The path, once (again only if a new device chooses another).
+        static std::atomic<int> logged{-1};
+        const int path = host_formats_ != 0u ? 1 : 0;
+        if (logged.exchange(path) != path) {
+            std::fprintf(stderr, "[textures] uploads: %s\n",
+                         path != 0 ? "direct host copies (VK_EXT_host_image_copy, no copy command or staging buffer read by the GPU)"
+                                   : "staged copies");
+        }
+    }
     // The null view: one transparent black texel, sampled where a draw binds no map.
     null_texture_ = vk::Context::get().create_texture(
         1u, 1u, 1u, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false,
@@ -150,13 +196,14 @@ bool TextureBackend::supports_bc1() {
 }
 
 gpu::TextureRef TextureBackend::create_texture(
-    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format) {
-    const VkFormat vk_format = format == TexelFormat::R8    ? VK_FORMAT_R8_UNORM
-                               : format == TexelFormat::Rg8 ? VK_FORMAT_R8G8_UNORM
-                               : format == TexelFormat::Bc1 ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK
-                                                            : VK_FORMAT_R8G8B8A8_UNORM;
+    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format,
+    bool writable) {
+    const VkFormat vk_format = vulkan_format_of(format);
+    const bool host = writable && (host_formats_ & (1u << static_cast<unsigned>(format))) != 0u;
     auto texture = vk::Context::get().create_texture(
-        width, height, levels, vk_format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false, nullptr);
+        width, height, levels, vk_format,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | (host ? VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT : 0u), false,
+        nullptr);
     if (!texture) {
         throw std::runtime_error("[TextureStore] create default texture failed");
     }
@@ -198,6 +245,39 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
     // A reused pooled texture was last sampled; a new one has no contents to keep.
     if (!reused) {
         texture->layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    }
+    if (direct_written(texture)) {
+        // Host copies: the layout change and the levels are done by the host, in the staged rows; nothing is recorded. A new
+        // image no frame reads yet.
+        const VkDevice device = vk::Context::get().device();
+        VkHostImageLayoutTransitionInfoEXT transition{VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO_EXT};
+        transition.image = texture->image;
+        transition.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        transition.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        transition.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture->levels, 0, 1};
+        vk::check(vkTransitionImageLayoutEXT(device, 1, &transition), "host image layout transition");
+        std::vector<VkMemoryToImageCopyEXT> regions(levels);
+        for (unsigned l = 0; l < levels; ++l) {
+            VkMemoryToImageCopyEXT& region = regions[l];
+            region = {VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT};
+            region.pHostPointer = staging.cpu_base + offset + offsets[l];
+            // In texels, as the copy path's bufferRowLength.
+            region.memoryRowLength = texture->format == VK_FORMAT_R8_UNORM          ? pitches[l]
+                                     : texture->format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
+                                     : texture->format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
+                                                                                    : pitches[l] / 4u;
+            region.memoryImageHeight = 0;
+            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
+            region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
+        }
+        VkCopyMemoryToImageInfoEXT copy{VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT};
+        copy.dstImage = texture->image;
+        copy.dstImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        copy.regionCount = levels;
+        copy.pRegions = regions.data();
+        vk::check(vkCopyMemoryToImageEXT(device, &copy), "host image copy");
+        texture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        return;
     }
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                reused ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,

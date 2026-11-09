@@ -410,8 +410,8 @@ void RenderCore::trace_memory() {
     // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
     static const bool heaps = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) == 2u;
     if (heaps) {
-        HANDLE list[64];
-        const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
+        std::vector<HANDLE> list(GetProcessHeaps(0, nullptr));  // as many as the process has
+        const DWORD count = list.empty() ? 0u : std::min<DWORD>(GetProcessHeaps(static_cast<DWORD>(list.size()), list.data()), static_cast<DWORD>(list.size()));
         for (DWORD i = 0; i < count; ++i) {
             std::unordered_map<std::uint64_t, std::uint64_t> by_size;
             std::uint64_t busy = 0u;
@@ -1632,6 +1632,10 @@ bool RenderCore::restart_device() {
         return false;
     }
     std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency() << " ms\n";
+    if (test_loss_frame_ != 0u) {
+        std::cerr << "[gpu] recovered from the test device loss at frame " << test_loss_frame_ << " (rendering goes on)\n";
+        test_loss_frame_ = 0u;
+    }
     return true;
 }
 
@@ -1658,6 +1662,26 @@ void RenderCore::render_loop() {
             fail_queued_utilities(std::current_exception());
             break;
         }
+        // Out of sight: no picture of its own is presented, and nothing polls. A covered window is looked at every 100 ms to see
+        // whether the OS shows it again (the host resumes the game then); the device and its resources stay as they are, so a
+        // return costs no rebuild.
+        const bool hidden = window_hidden_.load(std::memory_order_relaxed);
+        if (hidden) {
+            try {
+                if (interp_sequence_.active) {
+                    supersede_interp_sequence();
+                }
+                const std::int64_t now = galaxy::qpc_now();
+                if (renderer_.occluded() && now >= occlusion_probe_due_qpc_) {
+                    occlusion_probe_due_qpc_ = now + galaxy::qpc_frequency() / 10;
+                    renderer_.probe_occlusion();
+                }
+            } catch (...) {
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                fail_queued_utilities(std::current_exception());
+                break;
+            }
+        }
         FrameChunk chunk;
         bool have_chunk = false;
         bool idle_present = false;
@@ -1665,7 +1689,7 @@ void RenderCore::render_loop() {
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
-            idle_present = cfg.frame_rate_decouple &&
+            idle_present = !hidden && cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop: queued frames present without generated frames.
@@ -1673,7 +1697,7 @@ void RenderCore::render_loop() {
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
             // interpolation waits while the settings are open): the latest frame again at each display slot, so the
             // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
-            overlay_idle = !stop_render_thread_ && overlay_idle_presents();
+            overlay_idle = !hidden && !stop_render_thread_ && overlay_idle_presents();
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
             } else if (overlay_idle_due_qpc_ == 0) {
@@ -1713,7 +1737,7 @@ void RenderCore::render_loop() {
                 });
             } else {
                 // A service waiting for a new card can't reach this thread any other way (DeviceGate).
-                queue_cv_.wait_for(lock, std::chrono::milliseconds(250), [this] {
+                queue_cv_.wait_for(lock, std::chrono::milliseconds(hidden ? 100 : 250), [this] {
                     return stop_render_thread_ || !frame_queue_.empty();
                 });
             }
@@ -2038,6 +2062,34 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     }
 }
 
+// Video memory: no size of it is assumed anywhere. The adapter's own figures (DXGI's local segment budget, Vulkan's device-local
+// heap budget) are read at each frame boundary; past the budget the store gives back textures no frame in flight names.
+// GALAXY_TEST_VRAM_BUDGET_MB=N (test builds) replaces the budget with N megabytes of the same reading.
+void RenderCore::enforce_video_memory() {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!renderer_.video_memory(usage, budget)) {
+        return;
+    }
+    if (const std::uint64_t forced = ::galaxy::run_option_u64(::galaxy::run_options().test_vram_budget_mb, 0u); forced != 0u) {
+        budget = forced << 20u;
+    }
+    texture_store_.enforce_budget(usage, budget);
+#if defined(NEBULA_DEV)
+    if (frame_index_ >= vram_log_at_) {
+        vram_log_at_ = frame_index_ + 600u;
+        const TextureStore::BudgetStats stats = texture_store_.budget_stats();
+        std::fprintf(stderr,
+                     "[vram] usage=%llu MB budget=%llu MB textures=%u resident=%llu MB evicted=%u (%llu evictions, %llu MB, "
+                     "%llu rebuilt, %llu blank draws)\n",
+                     static_cast<unsigned long long>(usage >> 20u), static_cast<unsigned long long>(budget >> 20u), stats.resident,
+                     static_cast<unsigned long long>(stats.resident_bytes >> 20u), stats.evicted,
+                     static_cast<unsigned long long>(stats.evictions), static_cast<unsigned long long>(stats.evicted_bytes >> 20u),
+                     static_cast<unsigned long long>(stats.rebuilds), static_cast<unsigned long long>(stats.blank_draws));
+    }
+#endif
+}
+
 void RenderCore::begin_walk_frame(ListEntry& entry) {
     const RenderConfig render = get_render_config();
     enhanced_lighting_ = render.enhanced_lighting;
@@ -2059,7 +2111,10 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         matrix_bytes += matrices * core::kRowsPerMatrix * 16u * 2u;
     }
-    matrix_bytes += std::size_t{list.light_set_count} * core::kLightRows * 16u;
+    matrix_bytes += std::size_t{core::light_set_rows(0u)} * 16u;
+    for (std::uint32_t s = 0; s < list.light_set_count; ++s) {
+        matrix_bytes += std::size_t{core::light_set_rows(list.light_sets[s].count)} * 16u;
+    }
     matrix_bytes += std::size_t{list.instance_row_count} * 16u;
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
@@ -2081,6 +2136,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
     texture_store_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+    enforce_video_memory();
     // New textures upload through this frame's command list.
     renderer_.attach_texture_uploads(texture_store_);
     {
@@ -2156,6 +2212,27 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 renderer_.free_target(id, texture_store_);
             }
         }
+        // Tables no walk has named for a long while give up what was built for them (core::Registries::retire_idle_tables).
+        if (frame_index_ >= table_sweep_at_) {
+            table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames;
+            retired_tables_.clear();
+            registries_.retire_idle_tables(frame_index_, retired_tables_);
+#if defined(NEBULA_GPU_VULKAN)
+            if (!renderer_.bindless()) {
+                for (const gpu::Table table : retired_tables_) {
+                    renderer_.retire_texture_table(table);
+                }
+            }
+#endif
+        }
+#if defined(NEBULA_DEV)
+        if (frame_index_ >= table_log_at_) {
+            table_log_at_ = frame_index_ + 600u;
+            const core::Registries::TableCounts tables = registries_.table_counts();
+            std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
+                         tables.retired, static_cast<unsigned long long>(tables.retirements));
+        }
+#endif
     }
     registries_.reclaim(renderer_.completed_fence_value());
     // Finished replacements upload here and take the place of their originals.
@@ -2266,11 +2343,18 @@ void RenderCore::flush_waiting_list() {
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
-    // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1): the card is lost at frame n and every
-    // 300 frames after, that many times.
-    static const std::uint64_t lose_at = ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
-    if (lose_at != 0u && frame_index_ >= lose_at + std::uint64_t{device_losses_} * 300u) [[unlikely]] {
-        if (device_losses_ < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
+    // GALAXY_TEST_DEVICE_LOST=n (GALAXY_TEST_GPU_LOST_FRAME is the older name; GALAXY_TEST_GPU_LOST_TIMES, default 1, how
+    // many): the card is lost on purpose at frame n and every 300 frames after. Direct3D 12 removes its device; Vulkan has no
+    // call for that, so its next submission reports VK_ERROR_DEVICE_LOST. Both go on through the loss recovery below.
+    static const std::uint64_t lose_at = [] {
+        const std::uint64_t named = ::galaxy::run_option_u64(::galaxy::run_options().test_device_lost, 0u);
+        return named != 0u ? named : ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
+    }();
+    if (lose_at != 0u && frame_index_ >= lose_at + std::uint64_t{test_losses_injected_} * 300u) [[unlikely]] {
+        if (test_losses_injected_ < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
+            ++test_losses_injected_;
+            test_loss_frame_ = frame_index_;
+            std::cerr << "[gpu] device lost (test) at frame " << frame_index_ << '\n';
             renderer_.test_lose_device();
         }
     }

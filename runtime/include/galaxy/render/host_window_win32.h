@@ -26,6 +26,9 @@ inline constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 inline constexpr UINT kPlaceWindowMessage = WM_USER + 0x44;
 // Tests (GALAXY_TEST_WINDOW_SIZES): the client area resized to wParam x lParam, as a drag of the window's edge would.
 inline constexpr UINT kTestResizeMessage = WM_USER + 0x45;
+// A second start of the game asks the running one to come forward (show_existing_instance): the window restores itself if it is
+// minimised and takes the foreground.
+inline constexpr UINT kShowInstanceMessage = WM_USER + 0x46;
 struct WindowPlacement {
     DWORD style = 0;
     RECT rect{};
@@ -38,8 +41,18 @@ extern std::atomic<std::uintptr_t> settings_window;
 extern std::atomic<std::uintptr_t> pointer_hwnd;
 // The desktop's monitors changed: a borderless window's bounds are out of date.
 extern std::atomic<bool> display_changed;
+// The window moved onto another monitor (its refresh rate may differ): the renderer measures the rate at once instead of at
+// its next periodic check. Set by the window's thread; the renderer clears it.
+extern std::atomic<bool> monitor_changed;
 // The window is minimised, as the last message said.
 [[nodiscard]] bool is_minimized() noexcept;
+
+// One game per data folder. `key` names this process's folder: the window made afterwards carries it, and a second start finds
+// the first's window by it (another folder's game is not disturbed). show_existing_instance waits up to `wait_ms` for the
+// window to exist (the first start may still be opening it), lets that process take the foreground, and asks it to come
+// forward (restoring a minimised window). False: no window carries the key.
+void set_instance_key(std::uint64_t key) noexcept;
+[[nodiscard]] bool show_existing_instance(std::uint64_t key, unsigned wait_ms) noexcept;
 
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);

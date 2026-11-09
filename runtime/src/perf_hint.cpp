@@ -2,6 +2,13 @@
 #include "galaxy/perf_hint.h"
 #include "galaxy/game_step.h"
 
+#if defined(_WIN32)
+#include "galaxy/windows_power.h"
+
+#include <atomic>
+#include <cstdio>
+#endif
+
 #if !defined(_WIN32)
 #include <pthread.h>
 #include <time.h>
@@ -140,12 +147,34 @@ std::int64_t perf_hint_frame_done() noexcept {
 
 #else
 
+namespace {
+std::atomic<bool> g_on_battery{false};
+}  // namespace
+
 void perf_hint_add_current_thread() noexcept {}
 
 std::int64_t perf_hint_frame_done() noexcept {
+    // Two seconds of game frames: the power state is looked at, a change said once.
+    static std::atomic<unsigned> frames{0u};
+    if (frames.fetch_add(1u, std::memory_order_relaxed) % (120u) == 0u) {
+        const bool battery = galaxy::host::running_on_battery();
+        if (g_on_battery.exchange(battery, std::memory_order_relaxed) != battery) {
+            std::fprintf(stderr, "[power] %s\n", battery ? "on battery" : "on mains power");
+        }
+    }
     return 0;
 }
 
+#endif
+
+#if defined(_WIN32)
+bool perf_hint_on_battery() noexcept {
+    return g_on_battery.load(std::memory_order_relaxed);
+}
+#else
+bool perf_hint_on_battery() noexcept {
+    return false;
+}
 #endif
 
 }  // namespace galaxy::host

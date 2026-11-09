@@ -69,7 +69,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     // sections (tilt.h) its tilt steers when it has motion sensors (Pro Controller 1/2); otherwise the
     // stick steers (Xbox, keyboard). Vibration goes to it.
     const auto pad_key = [](const LivePad& pad) {
-        return (static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot;
+        return (static_cast<std::uint64_t>(pad.sample.scheme) << 32u) | pad.device_slot;
     };
     galaxy::input::tilt::Vec3 tilt_up_value{0.0f, 1.0f, 0.0f};
     const galaxy::input::tilt::Vec3* tilt_up = nullptr;
@@ -159,8 +159,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     }
     result.rumble.focused = window_focused;
     if (use_pads && s_driving_pad != kDrivingNone && s_driving_pad != kDrivingKeyboard) {
-        const auto scheme = static_cast<galaxy::input::ControlScheme>((s_driving_pad >> 8u) & 0xFFu);
-        const auto slot = static_cast<std::uint8_t>(s_driving_pad & 0xFFu);
+        const auto scheme = static_cast<galaxy::input::ControlScheme>((s_driving_pad >> 32u) & 0xFFu);
+        const auto slot = static_cast<std::uint32_t>(s_driving_pad & 0xFFFFFFFFu);
         result.rumble.device = galaxy::input::DeviceKey{scheme, slot};
         if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
             const auto& tuning = config.tune(scheme);

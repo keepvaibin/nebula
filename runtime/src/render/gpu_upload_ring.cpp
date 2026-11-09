@@ -25,9 +25,23 @@ void UploadRing::reset() noexcept {
     *this = UploadRing{};
 }
 
+void UploadRing::release_into(std::vector<gpu::BufferRef>& out) {
+    if (buffer_) {
+        out.push_back(std::move(buffer_));
+    }
+    for (std::vector<Chunk>& slot : chunk_slots_) {
+        for (Chunk& chunk : slot) {
+            if (chunk.memory.buffer) {
+                out.push_back(std::move(chunk.memory.buffer));
+            }
+        }
+    }
+    reset();
+}
+
 bool UploadRing::initialize(
     gpu::Device* device, const char* name, std::size_t bytes_per_frame,
-    unsigned frames_in_flight, std::size_t capacity) {
+    unsigned frames_in_flight, std::size_t capacity, bool chunks) {
     if (device == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
         bytes_per_frame > std::numeric_limits<std::size_t>::max() / frames_in_flight) {
         return false;
@@ -44,6 +58,11 @@ bool UploadRing::initialize(
     std::cout << "[ring] name=" << (name != nullptr ? name : "") << " gpu=0x"
               << std::hex << gpu_base << "-0x" << (gpu_base + total) << std::dec
               << " bytes=" << total << '\n';
+    device_ = device;
+    chunks_ = chunks;
+    chunk_slots_.clear();
+    chunk_slots_.resize(chunks ? frames_in_flight : 0u);
+    chunk_bytes_made_ = 0u;
     buffer_ = std::move(memory.buffer);
     mapped_ = memory.cpu;
     gpu_base_ = gpu_base;
@@ -91,12 +110,47 @@ void UploadRing::begin_frame(unsigned frame_slot) {
         throw std::runtime_error("UploadRing frame slot is out of range");
     }
     active_slot_ = frame_slot;
+    if (frame_slot < chunk_slots_.size()) {
+        chunk_slots_[frame_slot].clear();  // that slot's last frame has retired: its chunks go
+    }
     ++epoch_;
     segment_allocation_pending_ = true;
     segment_base_ = static_cast<std::size_t>(frame_slot) * bytes_per_frame_;
     cursor_       = segment_base_;
     frame_spill_ = 0u;
     frame_ready_ = true;
+}
+
+// A request past the segment and the spill: a chunk of this frame slot (the newest if it has room, else a new buffer at least
+// twice the one before, and at least the request), counted into the frame's use so the ring grows at the next boundary.
+UploadRing::Allocation UploadRing::allocate_in_chunk(std::size_t size, std::size_t alignment) {
+    std::vector<Chunk>& chunks = chunk_slots_[active_slot_];
+    const auto place = [&](Chunk& chunk) -> Allocation {
+        const std::size_t at = chunk.used + ((std::size_t{0} - chunk.used) & (alignment - 1u));
+        if (at > chunk.size || size > chunk.size - at) {
+            return {};
+        }
+        chunk.used = at + size;
+        return Allocation{chunk.memory.cpu + at, chunk.memory.gpu + static_cast<gpu::Address>(at), at, gpu::raw(chunk.memory.buffer)};
+    };
+    if (!chunks.empty()) {
+        if (const Allocation placed = place(chunks.back()); placed.cpu != nullptr) {
+            return placed;
+        }
+    }
+    constexpr std::size_t kFirstChunk = std::size_t{4} << 20u;
+    const std::size_t wanted = std::max({size + alignment, kFirstChunk, chunks.empty() ? std::size_t{0} : chunks.back().size * 2u});
+    Chunk chunk;
+    chunk.memory = gpu::create_upload_memory(device_, wanted, name_);
+    if (!chunk.memory) {
+        throw std::runtime_error(std::string("UploadRing '") + name_ + "' out of upload memory for a chunk of " +
+                                 std::to_string(wanted) + " B");
+    }
+    chunk.size = wanted;
+    chunk_bytes_made_ += wanted;
+    std::cout << "[ring] name=" << name_ << " chunk bytes=" << wanted << " (a frame took more than its segment and the spill)\n";
+    chunks.push_back(std::move(chunk));
+    return place(chunks.back());
 }
 
 UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignment) {
@@ -113,6 +167,8 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         return padding <= remaining && size <= remaining - padding;
     };
     std::size_t aligned = 0u;
+    gpu::Resource* chunk_resource = nullptr;
+    Allocation chunked;
     if (fits(cursor_, segment_base_ + bytes_per_frame_)) [[likely]] {
         aligned = cursor_ + ((std::size_t{0} - cursor_) & (alignment - 1u));
         cursor_ = aligned + size;
@@ -120,6 +176,10 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         aligned = spill_cursor_ + ((std::size_t{0} - spill_cursor_) & (alignment - 1u));
         frame_spill_ += aligned + size - spill_cursor_;
         spill_cursor_ = aligned + size;
+    } else if (chunks_ && device_ != nullptr && active_slot_ < chunk_slots_.size()) {
+        chunked = allocate_in_chunk(size, alignment);
+        chunk_resource = chunked.resource;
+        frame_spill_ += size + alignment;
     } else {
         throw std::runtime_error(
             std::string("UploadRing '") + name_ + "' exhausted: request " +
@@ -140,10 +200,14 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         ++slot_generations_[active_slot_];
         segment_allocation_pending_ = false;
     }
+    if (chunk_resource != nullptr) {
+        return chunked;
+    }
     return Allocation{
         mapped_ + aligned,
         gpu_base_ + static_cast<gpu::Address>(aligned),
-        aligned
+        aligned,
+        nullptr
     };
 }
 

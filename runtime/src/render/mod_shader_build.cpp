@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Programs a mod needs and didn't bring, or brought for an earlier Nebula: built here from the texts the cooker wrote, in the file
 // format of mod_shaders.h. Each graphics interface compiles a stage its own way (compile_mod_shader_stage).
+#include "galaxy/cpu_count.h"
 #include "galaxy/render/mod_shaders.h"
 
 #include <algorithm>
@@ -134,9 +135,8 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
     std::vector<Stage> built;
     std::atomic<std::size_t> next{0u};
     std::atomic<unsigned> done{0u};
-    // Every core but the one this call runs on, and no more than there are shaders to build.
-    const unsigned hardware = std::thread::hardware_concurrency();
-    const unsigned threads = std::max(1u, std::min(hardware > 1u ? hardware - 1u : 1u, static_cast<unsigned>(jobs.size())));
+    // One worker per logical processor, and no more than there are programs to build.
+    const auto threads = static_cast<unsigned>(std::min<std::size_t>(logical_cores(), jobs.size()));
     std::vector<std::thread> pool;
     for (unsigned t = 0u; t < threads; ++t) {
         pool.emplace_back([&]() {
@@ -188,9 +188,27 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
         thread.join();
     }
     if (!built.empty()) {
-        std::ofstream out(output, std::ios::binary);
+        // Written once, whole: to a temporary file beside it, then renamed over, so a crash or a full disk never leaves a
+        // half-written file for the next start to read.
         const std::string bytes = file_of(built);
-        out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        fs::path temporary = output;
+        temporary += ".tmp";
+        bool written = false;
+        {
+            std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+            out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            written = static_cast<bool>(out);
+        }
+        std::error_code rename_error;
+        if (written) {
+            fs::rename(temporary, output, rename_error);
+        }
+        if (!written || rename_error) {
+            fs::remove(temporary, rename_error);
+            if (result.problem.empty()) {
+                result.problem = "the built shaders could not be written";
+            }
+        }
     }
     return result;
 }

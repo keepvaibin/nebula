@@ -45,7 +45,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const uint src = uint(material.params.z);
     float3 litColor = float3(0.0, 0.0, 0.0);
     float litAlpha = 0.0;
-    for (uint n = 0u; n < 8u; ++n) {
+    for (uint n = 0u; n < min(native_light_count(), 24u); ++n) {
         if (((maskColor >> n) & 1u) != 0u) {
             litColor += channel_light(n, 2u, 2u, v.eye, nrm).rgb;
         }

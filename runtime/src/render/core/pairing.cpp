@@ -15,6 +15,20 @@ Affine34 affine_of(const float (*rows)[4]) noexcept {
     return out;
 }
 
+// Whether the lights two sets share (the first of each, as many as the smaller set holds) follow the camera alike.
+bool same_follow(const NebulaFrameList& a, const NebulaFrameLightSet& set_a, const NebulaFrameList& b,
+                 const NebulaFrameLightSet& set_b) noexcept {
+    const std::uint32_t common = std::min(set_a.count, set_b.count);
+    for (std::uint32_t l = 0u; l < common; ++l) {
+        const std::uint32_t bit_a = a.light_follow[set_a.follow_first + l / 32u] >> (l % 32u) & 1u;
+        const std::uint32_t bit_b = b.light_follow[set_b.follow_first + l / 32u] >> (l % 32u) & 1u;
+        if (bit_a != bit_b) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 void Pairing::pair(ListData& now, const ListData* before) {
@@ -141,7 +155,7 @@ void Pairing::pair(ListData& now, const ListData* before) {
             }
             if (item.light_set != NEBULA_NONE32 && other.light_set != NEBULA_NONE32 &&
                 now.light_set_before[item.light_set] == NEBULA_NONE32 &&
-                list.light_sets[item.light_set].follows_camera == last.light_sets[other.light_set].follows_camera) {
+                same_follow(list, list.light_sets[item.light_set], last, last.light_sets[other.light_set])) {
                 const auto camera = list.light_sets[item.light_set].camera_plus_one;
                 const auto previous_camera = last.light_sets[other.light_set].camera_plus_one;
                 const bool same_camera = camera == 0u ? previous_camera == 0u

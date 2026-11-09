@@ -31,6 +31,12 @@ namespace galaxy::render::vk {
 inline constexpr VkFormat kSceneColorFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 // A texture target's colour: the game keeps masks in its alpha.
 inline constexpr VkFormat kTargetColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+// The effects layer's colour and transmittance (RendererD3D12's kLayerFormat): in the scene target's own encoding.
+inline constexpr VkFormat kLayerFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+// A material's constants as a draw's binding sees them: 4096 rows, what Direct3D 12's constant buffer view holds, cut to
+// the device's maxUniformBufferRange where that is less. A dynamic binding's whole range must lie in its buffer at any
+// offset, so every upload buffer has this much room past its end (create_upload_memory).
+inline constexpr std::uint64_t kMaterialConstantRange = 65536u;
 
 class Context;
 
@@ -153,6 +159,18 @@ public:
     // What XeSS asked for, enabled (Context::create).
     [[nodiscard]] bool xess_upscaling() const noexcept { return xess_upscaling_; }
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
+    // VK_EXT_host_image_copy was enabled (the device has it and its feature, and copies into SHADER_READ_ONLY_OPTIMAL): a
+    // texture made with VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT is written from host memory with no command (texture_backend_vk.cpp).
+    [[nodiscard]] bool host_image_copy() const noexcept { return host_image_copy_; }
+    // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports VK_ERROR_DEVICE_LOST without reaching the driver, as a
+    // lost device would; no API removes a Vulkan device. The fault report is skipped (the device is not lost).
+    void simulate_device_loss() noexcept { simulated_loss_.store(true, std::memory_order_release); }
+    // VK_EXT_device_fault was enabled (the device has the extension and its feature).
+    [[nodiscard]] bool device_fault() const noexcept { return device_fault_; }
+    // After VK_ERROR_DEVICE_LOST (`where` names the call): what vkGetDeviceFaultInfoEXT knows, to the log, once per device.
+    // Test builds also write the vendor binary beside the run log (logs/device_fault_<vendor>_<device>.bin in the settings folder). Nothing without the
+    // extension; never throws.
+    void report_device_fault(const char* where) noexcept;
     // vkCmdPipelineBarrier2: the core function on a Vulkan 1.3 device with the feature, the KHR one on a 1.2 device with
     // VK_KHR_synchronization2, else null (barriers_vk.h falls back to version-1 barriers).
     [[nodiscard]] PFN_vkCmdPipelineBarrier2 pipeline_barrier2() const noexcept { return pipeline_barrier2_; }
@@ -255,6 +273,12 @@ private:
     bool bc_textures_ = false;
     bool memory_budget_ = false;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
+    bool host_image_copy_ = false;      // VK_EXT_host_image_copy, enabled, with the layout the textures rest in
+    bool device_fault_ = false;         // VK_EXT_device_fault, enabled
+    bool device_fault_binary_ = false;  // and its vendor binary feature
+    std::atomic<bool> fault_reported_{false};
+    std::atomic<bool> simulated_loss_{false};  // simulate_device_loss: asked, not yet submitted
+    bool loss_was_simulated_ = false;          // the last loss was a simulated one: no fault to ask the driver for
     PFN_vkCmdPipelineBarrier2 pipeline_barrier2_ = nullptr;
     bool depth_clamp_ = false;
     bool depth_clip_enable_ = false;

@@ -112,6 +112,9 @@ public:
     [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
+    // Out of sight (render_api.h set_window_hidden): no presents of its own, longer waits. Any thread.
+    void set_window_hidden(bool hidden) noexcept { window_hidden_.store(hidden, std::memory_order_relaxed); }
+    [[nodiscard]] bool window_occluded() const noexcept { return initialized_ && renderer_.occluded(); }
     [[nodiscard]] std::uint64_t pictures_made() const noexcept;
     [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
@@ -255,6 +258,15 @@ private:
     DeviceGate device_gate_;
     bool device_lost_ = false;
     std::uint32_t device_losses_ = 0u;
+    std::uint64_t table_sweep_at_ = 0u;  // the frame the next texture table sweep and (test builds) its log line are due
+    std::uint64_t table_log_at_ = 0u;
+    std::uint64_t vram_log_at_ = 0u;  // (test builds) the frame the next video memory line is due
+    std::atomic<bool> window_hidden_{false};
+    std::int64_t occlusion_probe_due_qpc_ = 0;  // render thread: the next look at whether a covered window shows again
+    // The frame boundary's read of the adapter's video memory: past its budget the texture store gives textures back.
+    void enforce_video_memory();
+    std::uint32_t test_losses_injected_ = 0u;  // GALAXY_TEST_DEVICE_LOST: losses made on purpose so far
+    std::uint64_t test_loss_frame_ = 0u;       // the frame of the one being recovered from (0: none)
     std::int64_t last_device_loss_qpc_ = 0;
     NebulaFrameList* in_hand_list_ = nullptr;  // popped from the queue, not yet a ListEntry
 
@@ -273,6 +285,7 @@ private:
     std::uint64_t walk_serial_ = 0u;
     std::vector<Affine34> walk_cameras_;
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
+    std::vector<std::uint32_t> walk_light_rows_;  // per light set: its header row in this walk's rows
     std::vector<float> walk_rows_, walk_joints_, walk_lerped_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
     std::vector<WalkView> walk_views_;

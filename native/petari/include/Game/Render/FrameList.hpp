@@ -95,6 +95,7 @@ namespace Frame {
     u32 currentLightSet(u32 block);
     void setLight(u32 index, const NebulaLight& rLight);
     void setLightFollowsCamera(u32 mask);
+    void setLightFollows(u32 index, bool follows);
 
     // A state word with what the pass decides: its alpha and its stencil.
     u32 finishState(u32 state);

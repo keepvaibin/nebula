@@ -108,7 +108,8 @@ private:
     std::vector<gpu::PipelineRef> owned_;
     std::atomic<std::uint32_t> pending_{0u};
     std::atomic<std::uint64_t> created_{0u}, failures_{0u};
-    std::uint64_t misses_ = 0u;
+    std::atomic<std::uint64_t> misses_{0u};  // the render thread counts, a worker reports
+    unsigned workers_ = 0u;
     std::atomic<bool> unsaved_{false};  // a pipeline was made since the cache was last written
     std::atomic<bool> reported_{false};
     std::chrono::steady_clock::time_point started_{};

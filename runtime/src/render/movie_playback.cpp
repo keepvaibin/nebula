@@ -4,6 +4,7 @@
 // the format (through a D3D11 device), else in software; its planes are JPEG's YCbCr of that picture.
 
 #include "galaxy/render/movie_playback.h"
+#include "galaxy/cpu_count.h"
 #include "galaxy/movie_video.h"
 #include "galaxy/path_text.h"
 
@@ -73,8 +74,9 @@ std::uint8_t clamp_byte(std::int32_t value) {
 class RowBands {
 public:
     RowBands() {
-        const unsigned cores = std::max(1u, std::thread::hardware_concurrency());
-        const unsigned helpers = std::min(3u, cores > 2u ? cores / 2u : 0u);
+        // Half the logical processors help the calling thread; a picture uses as many bands as it has rows for (run).
+        const unsigned cores = logical_cores();
+        const unsigned helpers = cores > 2u ? cores / 2u : 0u;
         for (unsigned i = 0; i < helpers; ++i) {
             workers_.emplace_back([this, i] { work(i); });
         }
@@ -90,7 +92,8 @@ public:
 
     // fn(first, end) over [0, rows), one band per thread; returns when every band is done. One caller at a time.
     void run(std::uint32_t rows, const std::function<void(std::uint32_t, std::uint32_t)>& fn) {
-        const auto bands = static_cast<std::uint32_t>(workers_.size() + 1u);
+        // A band is at least 64 rows: a small picture does not wake helpers it cannot use.
+        const auto bands = static_cast<std::uint32_t>(std::min<std::size_t>(workers_.size() + 1u, std::max(1u, rows / 64u)));
         if (bands == 1u || rows < 64u) {
             fn(0u, rows);
             return;
@@ -118,6 +121,7 @@ private:
             const std::function<void(std::uint32_t, std::uint32_t)>* fn = nullptr;
             std::uint32_t begin = 0;
             std::uint32_t end = 0;
+            bool idle = false;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 start_.wait(lock, [&] { return stop_ || generation_ != seen; });
@@ -126,6 +130,10 @@ private:
                 fn = fn_;
                 begin = rows_ * band / bands_;
                 end = rows_ * (band + 1u) / bands_;
+                idle = band + 1u >= bands_;  // the caller takes the last band; helpers past the bands in use sit this one out
+            }
+            if (idle) {
+                continue;
             }
             (*fn)(begin, end);
             std::lock_guard<std::mutex> lock(mutex_);
