@@ -96,6 +96,10 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
 }
 
 #if defined(_WIN32)
+// The file the records go to at exit: `--timeline <file>` (the launcher's recording session), else the test switch's
+// GALAXY_FRAME_TIMELINE_PATH, else %LOCALAPPDATA%\Nebula\timeline-<process id>.bin.
+inline std::wstring g_path;
+
 // Called once on the main thread before any worker thread starts.
 inline void initialize_from_environment() noexcept {
     char flag[8]{};
@@ -128,7 +132,9 @@ inline void dump() noexcept {
     std::wstring path;
     try {
         const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
-        if (named != nullptr && named[0] != L'\0') {
+        if (!g_path.empty()) {
+            path = g_path;
+        } else if (named != nullptr && named[0] != L'\0') {
             path = named;
         } else {
             const std::wstring base = ::galaxy::windows::environment_text(L"LOCALAPPDATA");

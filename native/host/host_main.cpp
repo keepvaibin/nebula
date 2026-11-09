@@ -3606,6 +3606,18 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--diagnostics") == 0) {
             galaxy::g_diagnostics_recording = argv[i + 1][0] == '1';
         }
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+        // The timeline's file, in UTF-16 (argv is in the system's code page).
+        if (std::strcmp(argv[i], "--timeline") == 0) {
+            int count = 0;
+            if (LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count)) {
+                if (i + 1 < count) {
+                    galaxy::timeline::g_path = wide[i + 1];
+                }
+                LocalFree(wide);
+            }
+        }
+#endif
     }
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
@@ -3659,7 +3671,7 @@ int main(int argc, char** argv) {
             saves = arg_path(i + 1);
         } else if (key == "--module") {
             module = arg_path(i + 1);
-        } else if (key == "--diagnostics") {
+        } else if (key == "--diagnostics" || key == "--timeline") {
             // Read above, before the timeline starts.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);

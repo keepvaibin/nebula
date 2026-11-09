@@ -35,7 +35,7 @@ namespace Nebula
 
         public static long DownloadBytes { get { return Package.DownloadBytes; } }
 
-        /// <summary>The runtime loads Streamline from here (GALAXY_STREAMLINE_DIR).</summary>
+        /// <summary>The runtime loads Streamline from here (vendor\streamline-2.14.1 under the data root).</summary>
         public static string Folder { get { return Package.Folder; } }
 
         public static bool Installed() { return Package.Installed(); }

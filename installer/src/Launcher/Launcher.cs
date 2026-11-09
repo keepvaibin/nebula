@@ -248,16 +248,14 @@ namespace Nebula.Launcher
         private void StartRecorded(ProcessStartInfo start, string saves)
         {
             string session = Sessions.Create("diagnostics");
-            start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
+            // --diagnostics 1 records the frame timeline; it is written into the session at exit.
+            start.Arguments += " --timeline " + ProcessRunner.Quote(Path.Combine(session, "timeline.bin"));
             var launchFiles = new Dictionary<string, object>();
             foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "Nebula.exe" })
             {
                 string path = Path.Combine(App, name);
                 if (File.Exists(path)) launchFiles[name] = FileUtil.Sha256File(path);
             }
-            var launchEnvironment = new Dictionary<string, object>();
-            foreach (string name in start.EnvironmentVariables.Keys)
-                if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = start.EnvironmentVariables[name];
             var graphics = GraphicsSettings.Load();
             var sessionInfo = new Dictionary<string, object>
             {
@@ -266,7 +264,7 @@ namespace Nebula.Launcher
                 { "app", App }, { "displayMode", graphics.DisplayMode }, { "window", graphics.WindowWidth + "x" + graphics.WindowHeight },
                 { "aspect", GraphicsSettings.AspectNames[graphics.Aspect] },
                 { "detailedRendererTimings", Recording == RecordingMode.Detailed },
-                { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
+                { "launchFileSha256", launchFiles }, { "arguments", start.Arguments }
             };
             Json.Save(Path.Combine(session, "session.json"), sessionInfo);
             var game = Process.Start(start);

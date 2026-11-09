@@ -27,19 +27,7 @@ namespace Nebula.Launcher
             if (game.RedirectStandardOutput) game.StandardOutputEncoding = game.StandardErrorEncoding = Encoding.UTF8;
             foreach (var name in game.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
                 game.EnvironmentVariables.Remove(name);
-            game.EnvironmentVariables["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
-            ApplyRecording(game, recording);
             return game;
-        }
-
-        internal static void ApplyRecording(ProcessStartInfo start, RecordingMode mode)
-        {
-            bool record = mode != RecordingMode.None;
-            var env = start.EnvironmentVariables;
-            foreach (var flag in new[] { "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS" })
-                env[flag] = record ? "1" : "0";
-            env["GALAXY_FRAME_TIMELINE"] = record ? "1" : "0";
-            env["GALAXY_FRAME_TIMELINE_EVENTS"] = "4000000";
         }
 
         public static void ValidatePair(string app)
