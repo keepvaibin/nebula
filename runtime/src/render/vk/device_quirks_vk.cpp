@@ -175,13 +175,20 @@ const char* driver_kind_name(DriverKind kind) noexcept {
 }
 
 std::string describe(const DeviceIdentity& id) {
-    char text[512];
-    std::snprintf(text, sizeof(text), "%s (vendor 0x%04x device 0x%x), %s %u.%u.%u%s%s%s, Vulkan %u.%u.%u",
-                  id.device_name.c_str(), id.vendor_id, id.device_id, driver_kind_name(id.driver),
-                  id.driver_version.major, id.driver_version.minor, id.driver_version.patch,
-                  id.driver_info.empty() ? "" : " (", id.driver_info.c_str(), id.driver_info.empty() ? "" : ")",
-                  VK_API_VERSION_MAJOR(id.api_version), VK_API_VERSION_MINOR(id.api_version),
-                  VK_API_VERSION_PATCH(id.api_version));
+    const auto write = [&id](char* out, std::size_t size) {
+        return std::snprintf(out, size, "%s (vendor 0x%04x device 0x%x), %s %u.%u.%u%s%s%s, Vulkan %u.%u.%u",
+                             id.device_name.c_str(), id.vendor_id, id.device_id, driver_kind_name(id.driver),
+                             id.driver_version.major, id.driver_version.minor, id.driver_version.patch,
+                             id.driver_info.empty() ? "" : " (", id.driver_info.c_str(), id.driver_info.empty() ? "" : ")",
+                             VK_API_VERSION_MAJOR(id.api_version), VK_API_VERSION_MINOR(id.api_version),
+                             VK_API_VERSION_PATCH(id.api_version));
+    };
+    const int length = write(nullptr, 0u);
+    if (length <= 0) {
+        return {};
+    }
+    std::string text(static_cast<std::size_t>(length), '\0');
+    write(text.data(), text.size() + 1u);
     return text;
 }
 

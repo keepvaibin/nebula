@@ -1,5 +1,9 @@
 #pragma once
 
+namespace MR {
+    class Text16;
+}
+
 
 // An achievement's icon: a picture-font glyph, or a texture from the game's files (a layout archive's TPL in
 // LayoutData, or an object archive's BTI in ObjectData), the part [u0, u1] x [v0, v1] of it.
@@ -64,7 +68,7 @@ namespace NebulaAchievements {
     s32 getNum();
     const char* getId(s32 index);
     // Its name in the played language: Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file when there is one.
-    s32 getName(char16_t* pDst, s32 capacity, const char* pId);
+    s32 getName(MR::Text16& rText, const char* pId);
     s32 getGroup(s32 index);
     // Whether the board lists it while locked: a secret never; the 120-star goals once Halfway There is unlocked.
     bool isShownLocked(s32 index);

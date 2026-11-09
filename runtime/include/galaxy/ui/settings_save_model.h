@@ -21,7 +21,6 @@ public:
     bool queue();
     bool pending();
     void save_now();
-    void wait_until_idle();
 
 private:
     void run();

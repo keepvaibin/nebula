@@ -3,6 +3,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Player/MarioActor.hpp"  // DO NOT REMOVE
 #include "Game/Util/MathUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 CamHeliEffector::CamHeliEffector() : mStep(), mRate() {
 }
@@ -22,7 +23,7 @@ void CamHeliEffector::update(CameraMan* pCamera) {
         }
     } else {
         // Toward 1 by (step / 60)^4, capped at 1 after a second.
-        f32 approach = mStep / 60.0f;
+        f32 approach = NebulaFrameClock::secondsOfSteps(mStep);
         if (approach > 1.0f) {
             approach = 1.0f;
         }

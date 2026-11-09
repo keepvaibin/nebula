@@ -14,6 +14,7 @@ class Host final : public galaxy::ui::DisplayPageHost {
 public:
     bool empty_sizes = false;
     bool phone = false;
+    unsigned refresh_hz = 144;
     mutable int last = -1;
     galaxy::ui::DisplayPageState query(const galaxy::ui::RenderConfig& render) const override {
         galaxy::ui::DisplayPageState state;
@@ -22,7 +23,7 @@ public:
         state.output_size = {1280, 720};
         state.fullscreen_only = phone;
         if (!empty_sizes) state.window_sizes = {{640, 480}, {1280, 720}, {1920, 1080}};
-        state.frame_rates.refresh_hz = 144;
+        state.frame_rates.refresh_hz = refresh_hz;
         return state;
     }
     void changed(galaxy::ui::DisplayChange change, galaxy::ui::RenderConfig&) const override {
@@ -60,6 +61,10 @@ int main() {
         const unsigned width = config.window_width;
         row(rows, "RESOLUTION").change(config, -1);
         check(config.window_width == width, "empty window choices ignored");
+        host.refresh_hz = 0;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "REFRESH RATE").value == "UNKNOWN", "a refresh rate the system did not report is said so");
+        host.refresh_hz = 144;
         host.phone = true;
         rows = galaxy::ui::display_page(config, host);
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "RESOLUTION" || r.label == "MONITOR" || r.label == "DISPLAY MODE"; }), "phone output follows the surface, without desktop display controls");

@@ -84,9 +84,6 @@ public:
     void deleteAllParticle();
     ParticleCore* createChild(ParticleCore*);
     ParticleCore* createParticle();
-    u32 getCurrentCreateNumber() const;
-    u8 getDrawCount() const;
-    bool loadTexture(u8, u8);
 
     void initStatus(u32 status) {
         mStatus = status;
@@ -122,12 +119,6 @@ public:
     void setDirectionalSpeed(f32 i_speed) {
         mDirSpeed = i_speed;
     }
-    void setRandomDirectionSpeed(f32 i_speed) {
-        mRndmDirSpeed = i_speed;
-    }
-    void setEmitterCallBackPtr(EmitterCallBack* ptr) {
-        mpEmtrCallBack = ptr;
-    }
     void setGlobalRTMatrix(const Mtx m) {
         ParticleMath::splitRT(m, mGlobalRot, &mGlobalTrs);
     }
@@ -141,35 +132,8 @@ public:
     void setGlobalTranslation(const Vec3f& trs) {
         mGlobalTrs.set(trs);
     }
-    void getLocalTranslation(Vec3f& vec) {
-        vec.set(mLocalTrs);
-    }
-    void getLocalTranslation(Vec3f* vec) const {
-        vec->set(mLocalTrs);
-    }
     void setGlobalRotation(const Vec3< s16 >& rot) {
         ParticleMath::xyzRotateMtx(rot.x, rot.y, rot.z, mGlobalRot);
-    }
-    void getGlobalTranslation(Vec3f* out) const {
-        out->set(mGlobalTrs);
-    }
-    void setGlobalDynamicsScale(const Vec3f& i_scale) {
-        mGlobalScl.set(i_scale);
-    }
-    void getGlobalDynamicsScale(Vec3f* i_scale) const {
-        i_scale->set(mGlobalScl);
-    }
-    void setGlobalAlpha(u8 alpha) {
-        mGlobalPrmClr.a = alpha;
-    }
-    u8 getGlobalAlpha() const {
-        return mGlobalPrmClr.a;
-    }
-    void getGlobalPrmColor(NebulaColor8& color) {
-        color = mGlobalPrmClr;
-    }
-    void getGlobalPrmColor(NebulaColor8* color) const {
-        *color = mGlobalPrmClr;
     }
     void setGlobalPrmColor(u8 r, u8 g, u8 b) {
         mGlobalPrmClr.r = r;
@@ -181,46 +145,10 @@ public:
         mGlobalEnvClr.g = g;
         mGlobalEnvClr.b = b;
     }
-    void setVolumeSize(u16 size) {
-        mVolumeSize = size;
-    }
     void setLifeTime(s16 lifetime) {
         mLifeTime = lifetime;
     }
-    void setAwayFromCenterSpeed(f32 i_speed) {
-        mAwayFromCenterSpeed = i_speed;
-    }
-    void setAwayFromAxisSpeed(f32 i_speed) {
-        mAwayFromAxisSpeed = i_speed;
-    }
-    void setSpread(f32 i_spread) {
-        mSpread = i_spread;
-    }
-    void setLocalTranslation(const Vec3f& i_trans) {
-        mLocalTrs.set(i_trans);
-    }
-    void setLocalRotation(const Vec3< s16 >& i_rot) {
-        mLocalRot.set((s32)(i_rot.x * 0.005493248f), (s32)(i_rot.y * 0.005493248f), (s32)(i_rot.z * 0.005493248f));
-    }
-    void setRateStep(u8 i_step) {
-        mRateStep = i_step;
-    }
 
-    void setGlobalParticleHeightScale(f32 height) {
-        mGlobalPScl.y = height;
-    }
-    void setGlobalParticleScale(const Vec3f& scale) {
-        mGlobalPScl.set(scale.x, scale.y);
-    }
-    void setGlobalParticleScale(f32 scaleX, f32 scaleY) {
-        mGlobalPScl.set(scaleX, scaleY);
-    }
-    void getGlobalParticleScale(Vec3f& scale) const {
-        scale.set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
-    }
-    void getGlobalParticleScale(Vec3f* scale) const {
-        scale->set(mGlobalPScl.x, mGlobalPScl.y, 1.0f);
-    }
     void setGlobalScale(const Vec3f& scale) {
         mGlobalScl.set(scale);
         mGlobalPScl.set(scale.x, scale.y);
@@ -249,26 +177,11 @@ public:
     void stopCreateParticle() {
         setStatus(EmitterStatus_StopEmit);
     }
-    void playCreateParticle() {
-        clearStatus(EmitterStatus_StopEmit);
-    }
-    void becomeImmortalEmitter() {
-        setStatus(EmitterStatus_Immortal);
-    }
-    void becomeContinuousParticle() {
-        mMaxFrame = 0;
-    }
-    void becomeDeleteEmitter() {
-        setStatus(EmitterStatus_Delete);
-    }
     void becomeInvalidEmitter() {
         stopCreateParticle();
         mMaxFrame = 1;
     }
 
-    void quitImmortalEmitter() {
-        clearStatus(EmitterStatus_Immortal);
-    }
     void stopCalcEmitter() {
         setStatus(EmitterStatus_StopCalc);
     }
@@ -294,24 +207,14 @@ public:
     bool isEnableDeleteEmitter() const {
         return checkStatus(EmitterStatus_EnableDeleteEmitter) && getParticleNumber() == 0;
     }
-    void setDrawTimes(u8 drawTimes) {
-        mDrawTimes = drawTimes;
-    }
     void setParticleCallBackPtr(ParticleCallBack* cb) {
         mpPtclCallBack = cb;
-    }
-    ParticleCallBack* getParticleCallBackPtr() const {
-        return mpPtclCallBack;
     }
     EmitterCallBack* getEmitterCallBackPtr() const {
         return mpEmtrCallBack;
     }
     u32 getAge() const {
         return mTick;
-    }
-
-    void setVolumeMiniRadius(f32 radius) {
-        mVolumeMinRad = radius;
     }
 
     void setMaxFrame(s32 maxFrame) {

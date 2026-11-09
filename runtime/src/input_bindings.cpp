@@ -589,7 +589,7 @@ std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept 
     return std::nullopt;
 }
 
-std::optional<GameInput> parse_wii_target(std::string_view id) noexcept {
+std::optional<GameInput> parse_game_input(std::string_view id) noexcept {
     for (std::size_t i = 0; i < kTargetIds.size(); ++i) {
         if (iequals(id, kTargetIds[i])) return static_cast<GameInput>(i);
     }
@@ -742,7 +742,7 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
     const std::string_view name = key_text.substr(dot + 1u);
     if (!scheme) return true;
     if (bind) {
-        const auto target = parse_wii_target(name);
+        const auto target = parse_game_input(name);
         if (!target) return true;
         TargetBindings bindings{};
         if (parse_target_bindings(*scheme, value, bindings)) {

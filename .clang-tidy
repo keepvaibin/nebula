@@ -1,0 +1,21 @@
+# clang-tidy for the game module (native/petari): bugprone and performance checks, and a few readability ones that
+# find real mistakes. Nothing stylistic. Run it with tools/dev/tidy.py on a build's compile_commands.json.
+Checks: >-
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  performance-*,
+  -performance-no-int-to-ptr,
+  readability-container-size-empty,
+  readability-duplicate-include,
+  readability-misleading-indentation,
+  readability-redundant-control-flow,
+  readability-redundant-smartptr-get,
+  readability-simplify-boolean-expr
+WarningsAsErrors: ''
+HeaderFilterRegex: 'native/petari/(include|src)/'
+FormatStyle: none

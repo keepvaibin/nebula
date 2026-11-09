@@ -19,6 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include <cstring>
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include <nebula_game_api.h>

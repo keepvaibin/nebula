@@ -155,9 +155,6 @@ public:
     u8 getState() const {
         return mState;
     }
-    u8 andState(u8 state) const {
-        return mState & state;
-    }
     bool checkState(u8 state) const {
         return (mState & state) != 0;
     }

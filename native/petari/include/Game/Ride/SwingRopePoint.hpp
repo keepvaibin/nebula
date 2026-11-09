@@ -21,10 +21,6 @@ public:
         return mSide;
     }
 
-    const Vec3f& getUp() const {
-        return mUp;
-    }
-
     const Vec3f& getFront() const {
         return mFront;
     }

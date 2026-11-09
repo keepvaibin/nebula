@@ -29,7 +29,6 @@ class AssetStore {
 public:
     // Mods' cooked files over this store (cook/overlay.rs): found first, by the same paths. False when it cannot be read.
     bool attach_overlay(const std::filesystem::path& path);
-    [[nodiscard]] bool has_overlay() const noexcept { return overlay_ != nullptr; }
     AssetStore() = default;
     AssetStore(const AssetStore&) = delete;
     AssetStore& operator=(const AssetStore&) = delete;

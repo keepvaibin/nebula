@@ -27,18 +27,6 @@ public:
     f32 getRateRndm() const {
         return mpData->mRateRndm;
     }
-    void getEmitterScl(Vec3f* vec) const {
-        vec->set(mpData->mEmitterScl.x, mpData->mEmitterScl.y, mpData->mEmitterScl.z);
-    }
-    void getEmitterTrs(Vec3f* vec) const {
-        vec->set(mpData->mEmitterTrs.x, mpData->mEmitterTrs.y, mpData->mEmitterTrs.z);
-    }
-    void getEmitterDir(Vec3f* vec) const {
-        vec->set(mpData->mEmitterDir.x, mpData->mEmitterDir.y, mpData->mEmitterDir.z);
-    }
-    void getEmitterRot(Vec3< s16 >* vec) const {
-        vec->set(mpData->mEmitterRot.x, mpData->mEmitterRot.y, mpData->mEmitterRot.z);
-    }
     s16 getMaxFrame() {
         return mpData->mMaxFrame;
     }

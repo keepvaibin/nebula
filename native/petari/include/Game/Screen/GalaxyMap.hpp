@@ -42,7 +42,6 @@ public:
     bool isTransition() const;
     bool isPointingAnything() const;
     bool isShowDetail() const;
-    void dispIconAButton();
     void changeToGalaxyMap();
     void changeToAstroMap();
     void forceToGalaxyMap();

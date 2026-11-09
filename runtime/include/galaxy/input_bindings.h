@@ -299,7 +299,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
 [[nodiscard]] const char* game_input_id(GameInput target) noexcept;
 [[nodiscard]] const char* game_input_label(GameInput target) noexcept;
 [[nodiscard]] std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept;
-[[nodiscard]] std::optional<GameInput> parse_wii_target(std::string_view id) noexcept;
+[[nodiscard]] std::optional<GameInput> parse_game_input(std::string_view id) noexcept;
 
 // Textual source names are per scheme: "A" on a Switch scheme is the east
 // face button, on Xbox the south one. Keyboard names are key names

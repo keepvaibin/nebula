@@ -161,9 +161,6 @@ public:
     void setNonSort() {
         mSortMode = SortMode_Non;
     }
-    void setZSort() {
-        mSortMode = SortMode_Z;
-    }
     void setZMtx(MtxPtr pMtx) {
         mZMtx = pMtx;
     }
@@ -274,12 +271,6 @@ public:
     Vec* getBaseScale() {
         return &mBaseScale;
     }
-    void setUserArea(uintptr_t area) {
-        mUserArea = area;
-    }
-    uintptr_t getUserArea() const {
-        return mUserArea;
-    }
 
     MaterialEntry* getMaterialEntry(u32 index) const {
         return &mMaterialEntries[index];
@@ -303,9 +294,6 @@ public:
     }
     void setScaleFlag(int joint, u8 flag) {
         mScaleFlags[joint] = flag;
-    }
-    u8 getScaleFlag(int joint) const {
-        return mScaleFlags[joint];
     }
 
     // The view its draw matrices are made in.

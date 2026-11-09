@@ -2,8 +2,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Table.hpp"
 
-template bool TableIter::getValue< s32 >(const char*, s32*) const;
-
 DotCamReaderInBin::DotCamReaderInBin(const void* pData) : mVersion(), mMapInfo() {
     init(pData);
 }

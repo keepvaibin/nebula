@@ -1,5 +1,6 @@
 #!/bin/sh
-# Builds and runs the native layer's tests (the math library, the text strings) with the game module's flags.
+# Builds and runs the native layer's tests (the math library, the text strings, the UI names and the formatted
+# names) with the game module's flags.
 #   native/tests/run_tests.sh <petari checkout> <output dir> [clang]
 set -e
 P=$1
@@ -23,5 +24,12 @@ CXXFL=$(echo "$FL" | sed 's/-std=gnu11/-std=gnu++17/; s/-Werror=implicit-functio
     s/-Werror=incompatible-function-pointer-types//; s/-Werror=int-conversion//')
 $CC $FL "$N/math/tests/math_tests.c" "$N/math/src/nebula_math.c" -o "$OUT/math_tests$EXE"
 ${CC}++ $CXXFL "$N/tests/text_string_tests.cpp" "$P/src/Game/Util/TextString.cpp" -o "$OUT/text_string_tests$EXE"
+# NameText is header-only. StringUtil.cpp is linked with the few game functions its test defines; the linker drops the
+# sections nothing in the test reaches.
+${CC}++ $CXXFL "$N/tests/name_text_tests.cpp" -o "$OUT/name_text_tests$EXE"
+$CC $FL -c "$P/src/Game/System/NebulaFormat.c" -o "$OUT/NebulaFormat.o"
+${CC}++ $CXXFL -ffunction-sections -fdata-sections "$N/tests/formatted_name_tests.cpp" "$P/src/Game/Util/StringUtil.cpp" "$P/src/Game/Util/TextString.cpp" "$OUT/NebulaFormat.o" -Wl,--gc-sections -o "$OUT/formatted_name_tests$EXE"
 "$OUT/math_tests$EXE"
 "$OUT/text_string_tests$EXE"
+"$OUT/name_text_tests$EXE"
+"$OUT/formatted_name_tests$EXE"

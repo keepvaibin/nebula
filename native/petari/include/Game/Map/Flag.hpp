@@ -41,10 +41,6 @@ public:
         return mNumPointsV;
     }
 
-    const FixPoints& getFixPoint(s32 idx) const {
-        return mFixPoints[idx];
-    }
-
     SwingRopePoint* getPoint(s32 idxV, s32 idxU) const {
         return mFixPoints[idxV].mPoints[idxU];
     }

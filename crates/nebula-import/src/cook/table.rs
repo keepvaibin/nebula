@@ -3,7 +3,7 @@
 //!
 //! Layout, little-endian:
 //! - header (32 bytes): "NTBL", rows, columns, rows_at, text_at, text_size, two reserved words (0);
-//! - columns at 32, 12 bytes each: hash (x31 of the name), value mask, kind (u8), width (u8), 2 bytes 0;
+//! - columns at 32, 12 bytes each: hash (x31 of the name), value mask, kind (u8), width (u8), reserved (u16, 0);
 //! - rows at rows_at: rows x columns cells, each a u32;
 //! - text at text_at: UTF-8, NUL-terminated; offset 0 is "".
 //!
@@ -19,6 +19,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 pub const MAGIC: &[u8; 4] = b"NTBL";
+/// A column's reserved u16 (TableColumn::mReserved).
+const COLUMN_RESERVED: [u8; 2] = [0, 0];
 const HEADER: usize = 32;
 const COLUMN: usize = 12;
 
@@ -278,7 +280,8 @@ impl TableIr {
         for column in &self.columns {
             out.extend_from_slice(&column.hash.to_le_bytes());
             out.extend_from_slice(&column.mask.to_le_bytes());
-            out.extend_from_slice(&[column.kind as u8, column.width, 0, 0]);
+            out.extend_from_slice(&[column.kind as u8, column.width]);
+            out.extend_from_slice(&COLUMN_RESERVED);
         }
         for row in &self.rows {
             for cell in row {

@@ -30,17 +30,17 @@ StarPointerDirector::StarPointerDirector()
 
 void StarPointerDirector::update() {
     if (MR::isStarPointerModeHomeButton() || MR::isStarPointerModeErrorWindow()) {
-        mIsOSPointerMode = true;
+        mIsSystemPointerMode = true;
         return;
     }
 
-    if (mIsOSPointerMode && mStarPointerLayouts != nullptr) {
+    if (mIsSystemPointerMode && mStarPointerLayouts != nullptr) {
         for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
             getStarPointerLayout(channel)->hideBlur();
         }
     }
 
-    mIsOSPointerMode = false;
+    mIsSystemPointerMode = false;
 
     mTransHolder->movement();
 
@@ -273,14 +273,6 @@ namespace StarPointerFunction {
 
     s32 getNumStarPointer() {
         return 2;
-    }
-
-    s32 getPastPointNum(s32 channel) {
-        return getStarPointerDirector()->getStarPointerController(channel)->mPastPointNum;
-    }
-
-    const Vec2f& getPastPosition(s32 channel, s32 index) {
-        return getStarPointerDirector()->getStarPointerController(channel)->mPastPosition[index];
     }
 
     const Vec2f& getNextPastPosition(s32 channel, s32 index) {

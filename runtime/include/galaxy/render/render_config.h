@@ -296,16 +296,13 @@ void note_camera_water(float depth) noexcept;
 void set_render_config(const RenderConfig& cfg);
 
 // The ray-traced effects players choose (RenderConfig::rt_reflections, rt_water, rt_sun_rays, rt_lens_bloom), as the
-// frame being drawn takes them. Tests: GALAXY_TEST_RT_EFFECT_AB=reflections|water|sun_rays|lens_bloom turns that one off
-// in frames that end in an odd present (set_rt_effect_frame, the snapshots' numbering): at 60 fps consecutive
-// pictures of one run differ by the effect alone.
+// frame being drawn takes them.
 enum class RtEffect : std::uint8_t { Reflections, Water, SunRays, LensBloom };
 [[nodiscard]] bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept;
 // Whether the renderer refines curved surfaces: the CURVED SURFACES row is offered and
 // RenderConfig::curved_surfaces takes effect.
 void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;
-void set_rt_effect_frame(std::uint64_t frame) noexcept;
 
 // The scene target scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.

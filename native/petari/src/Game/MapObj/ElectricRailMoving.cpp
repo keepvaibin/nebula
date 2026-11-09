@@ -231,8 +231,8 @@ void ElectricRailMoving::initMesh() {
 
 // Two crossed planes (the diagonals of the width x width square around the rail).
 void ElectricRailMoving::drawRail(TypedDraw& rDraw, f32 width) const {
-    drawPlaneGX(rDraw, width, width, -width, -width);
-    drawPlaneGX(rDraw, -width, width, width, -width);
+    drawPlaneQuad(rDraw, width, width, -width, -width);
+    drawPlaneQuad(rDraw, -width, width, width, -width);
 }
 
 void ElectricRailMoving::drawPlane(f32 side0, f32 up0, f32 side1, f32 up1) {
@@ -245,7 +245,7 @@ void ElectricRailMoving::drawPlane(f32 side0, f32 up0, f32 side1, f32 up1) {
     }
 }
 
-void ElectricRailMoving::drawPlaneGX(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const {
+void ElectricRailMoving::drawPlaneQuad(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const {
     for (s32 level = 0; level < mStackHeight; level++) {
         VertexPT* vtx = rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mRailPosNum * 2);
 

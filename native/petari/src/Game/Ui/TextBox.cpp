@@ -344,18 +344,4 @@ namespace Ui {
 
         return flag;
     }
-
-    f32 TextBox::GetTextAlignMag() const {
-        switch (GetTextAlignment()) {
-        case 0:
-        default:
-            return GetTextMagH();
-        case 1:
-            return 0;
-        case 2:
-            return 0.5f;
-        case 3:
-            return 1.0f;
-        }
-    }
 }  // namespace Ui

@@ -20,7 +20,7 @@ namespace LayoutCoreUtil {
     }
 
     u16 setTextBoxMessage(Ui::TextBox* pTextBox, const char16_t* pMsg) {
-        char16_t stack[512];
+        char16_t stack[512];  // the common case on the stack; past it the text is made in a Text16, whole
         MR::Text16 heap;
         const u32 room = ReplaceTagProcessor::getReplaceRoom(pMsg);
         char16_t* const buffer = room <= 512 ? stack : heap.room(room);
@@ -87,7 +87,7 @@ namespace MR {
                             display.vertical_fit;
             return;
         }
-        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - 304.0f;
+        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - NebulaFrameClock::cLayoutWidth * 0.5f;
         pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f));
     }
 

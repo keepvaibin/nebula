@@ -284,7 +284,7 @@ void RaceManager::exeCount() {
 
     mLayout->movement();
 
-    if (getNerveStep() % 60 == 0) {
+    if (getNerveStep() % NebulaFrameClock::stepsOfSeconds(1) == 0) {
         MR::startSystemSE("SE_SY_RACE_COUNT_DOWN");
     }
 

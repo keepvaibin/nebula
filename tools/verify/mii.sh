@@ -1,12 +1,12 @@
 #!/bin/sh
 # mii.sh BASE_BIN NEW_BIN TAG [FIRST LAST]: the Mii picker in both builds (1280x720, 1x, 60 fps, 60 s): A+B at the
 # title (frame 760), A twice on the first file, the pointer moved onto "Yes" (frame 1800) before the third press, the
-# scripted input on the game-frame clock so the presses meet the same frames in every run. NEBULA_MII_NAND names a
+# scripted input on the game-frame clock so the presses meet the same frames in every run. NEBULA_MII_SAVES names a
 # test saves folder holding at least two Miis (each build runs on its own copy). Every present from FIRST to LAST (default
 # 2380-2420) is snapshotted; the picker's backdrop turns on its own clock, so the test is the two Mii icons
 # (region_ab.py; a build against itself: max 13, at most 6 pixels over 8). The whole picture is printed for reference.
 . "$(dirname "$0")/common.sh"
-: "${NEBULA_MII_NAND:?NEBULA_MII_NAND is not set}"
+: "${NEBULA_MII_SAVES:?NEBULA_MII_SAVES is not set}"
 base=$1
 new=$2
 tag=$3
@@ -16,7 +16,7 @@ i=0
 for bin in "$base" "$new"; do
     saves="$NEBULA_WORK/saves_mii_${tag}_$i"
     rm -rf "$saves"
-    cp -r "$(cygpath -u "$NEBULA_MII_NAND")" "$saves"
+    cp -r "$(cygpath -u "$NEBULA_MII_SAVES")" "$saves"
     # shellcheck disable=SC2086
     NEBULA_SAVES="$(cygpath -w "$saves")" run_build "$bin" "mii_${tag}_$i" 60 GALAXY_MAX_FPS=60 \
         GALAXY_TEST_SCRIPT_CLOCK=frames 'GALAXY_INPUT_AUTOPRESS_SCRIPT=760:30:A+B;1300:10:A;1700:10:A;1900:10:A' \

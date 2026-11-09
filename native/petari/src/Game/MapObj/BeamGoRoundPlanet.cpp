@@ -1,4 +1,5 @@
 #include "Game/MapObj/BeamGoRoundPlanet.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/VolumeModelDrawer.hpp"

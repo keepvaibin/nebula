@@ -4,6 +4,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvNoteFairy {
     NEW_NERVE(NoteFairyNrvHide, NoteFairy, Hide);
@@ -97,7 +98,7 @@ void NoteFairy::init(const TableIter& rIter) {
     }
 
     mInitPos.set(mPosition);
-    mTimeLimit *= 60;
+    mTimeLimit *= NebulaFrameClock::stepsOfSeconds(1);
     mHasDemo = MR::tryRegisterDemoCast(this, rIter);
     initRailRider(rIter);
     initModelManagerWithAnm("Note", nullptr, false);
@@ -271,14 +272,14 @@ void NoteFairy::exeDemoAppear() {
     }
 
     if (MR::isLessEqualStep(this, 60)) {
-        f32 ease = MR::getEaseOutValue(getNerveStep() / 60.0f, 0.0f, 1.0f, 1.0f);
+        f32 ease = MR::getEaseOutValue(NebulaFrameClock::secondsOfSteps(getNerveStep()), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mInitPos.x * (1.0f - ease)) + (mDemoJumpPos.x * ease);
         mPosition.y = (((mInitPos.y * (1.0f - ease)) + (mDemoJumpPos.y * ease)) - (300.0f * MR::sinDegree(180.0f * ease)));
         mPosition.z = (mInitPos.z * (1.0f - ease)) + (mDemoJumpPos.z * ease);
     }
 
     if (MR::isGreaterStep(this, 70)) {
-        f32 ease = MR::getEaseInValue((getNerveStep() - 70) / 60.0f, 0.0f, 1.0f, 1.0f);
+        f32 ease = MR::getEaseInValue(NebulaFrameClock::secondsOfSteps(getNerveStep() - 70), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mDemoJumpPos.x * (1.0f - ease)) + (ease * MR::getRailPos(this).x);
         mPosition.y = mDemoJumpPos.y - (MR::sinDegree(90.0f * ease) * (mDemoJumpPos.y - MR::getRailPos(this).y));
         mPosition.z = (mDemoJumpPos.z * (1.0f - ease)) + (ease * MR::getRailPos(this).z);

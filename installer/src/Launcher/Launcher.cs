@@ -166,20 +166,46 @@ namespace Nebula.Launcher
             catch (Exception error) { return error.Message; }
         }
 
-        // The game's lease: a named mutex it holds while it runs.
-        // TODO: create the lease in NebulaNative (native/host/host_main.cpp); without it this never sees the game running.
+        private static readonly string[] Releases = { "RMGE01", "RMGP01", "RMGJ01" };
+
+        // Waits up to `milliseconds` for the game of every release to end: its lease is free (or abandoned) once the
+        // process is gone.
+        internal static bool WaitForRuntimeLease(int milliseconds)
+        {
+            var timer = Stopwatch.StartNew();
+            foreach (string release in Releases)
+            {
+                Mutex lease;
+                if (!Mutex.TryOpenExisting(@"Local\Nebula." + release + ".NativeRuntime", out lease)) continue;
+                using (lease)
+                {
+                    bool acquired;
+                    try { acquired = lease.WaitOne((int)Math.Max(0, milliseconds - timer.ElapsedMilliseconds)); }
+                    catch (AbandonedMutexException) { acquired = true; }
+                    if (!acquired) return false;
+                    lease.ReleaseMutex();
+                }
+            }
+            return true;
+        }
+
+        // The game's lease: a named mutex it holds while it runs, one per release (host_main.cpp hold_runtime_lease).
         internal static bool RuntimeLeaseHeld()
         {
-            Mutex lease;
-            if (!Mutex.TryOpenExisting(@"Local\Nebula.RMGE01.NativeRuntime", out lease)) return false;
-            using (lease)
+            foreach (string release in Releases)
             {
-                bool acquired;
-                try { acquired = lease.WaitOne(0); }
-                catch (AbandonedMutexException) { acquired = true; }
-                if (acquired) lease.ReleaseMutex();
-                return !acquired;
+                Mutex lease;
+                if (!Mutex.TryOpenExisting(@"Local\Nebula." + release + ".NativeRuntime", out lease)) continue;
+                using (lease)
+                {
+                    bool acquired;
+                    try { acquired = lease.WaitOne(0); }
+                    catch (AbandonedMutexException) { acquired = true; }
+                    if (acquired) lease.ReleaseMutex();
+                    if (!acquired) return true;
+                }
             }
+            return false;
         }
 
         // A game that stopped responding can keep the lease after its window is gone. Offers to end this
@@ -206,8 +232,7 @@ namespace Nebula.Launcher
                 {
                     try { process.Kill(); process.WaitForExit(5000); } catch (Exception) { }
                 }
-                for (int i = 0; i < 50 && RuntimeLeaseHeld(); i++) Thread.Sleep(100);
-                return !RuntimeLeaseHeld();
+                return WaitForRuntimeLease(5000);
             }
             finally
             {

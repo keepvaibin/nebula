@@ -1,6 +1,6 @@
 #!/bin/sh
-# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_NAND (an empty saves folder to copy).
-: "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_NAND:?NEBULA_TEST_NAND is not set}"
+# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path), NEBULA_RUNS (output), NEBULA_TEST_SAVES (an empty saves folder to copy).
+: "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_SAVES:?NEBULA_TEST_SAVES is not set}"
 # fs_det.sh OLD NEW TAG: the file select with File 1 saved, deterministic, frames 2300-2400, both builds: the gate's real-time row measured without the animation's phase.
 V=$(cd "$(dirname "$0")" && pwd)
 O=$1; N=$2; T=$3

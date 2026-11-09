@@ -40,7 +40,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     s_device_input_suspended = !use_pads;
     const bool window_focused = frame.window_focused, allow_absolute_pointer = frame.allow_absolute_pointer;
     const bool drop_injected = frame.drop_injected;
-    const auto current_vi = frame.vi;
+    const auto current_frame = frame.game_frame;
     const auto play_context = frame.context;
     const auto tilt_section = frame.tilt_section;
     const float trigger_threshold = static_cast<float>(kXInputTriggerThreshold) / 255.0f;
@@ -465,7 +465,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const bool shake_pressed =
         script.shake || held(GameInput::Shake) || motion_shake_remote || device_shake;
     if (shake_pressed && !s_previous_shake) {
-        std::cerr << "[input-shake] vi=" << current_vi << " source="
+        std::cerr << "[input-shake] frame=" << current_frame << " source="
                   << (motion_shake_remote || device_shake ? "motion" : held(GameInput::Shake) ? "binding" : "script")
                   << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
     }

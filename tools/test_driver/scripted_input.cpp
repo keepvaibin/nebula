@@ -4,6 +4,7 @@
 #include "galaxy/input/controls_engine.h"
 #include "switches.h"
 #include "galaxy/host_env.h"
+#include "galaxy/game_step.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/pointer_control.h"
 #include <algorithm>
@@ -474,14 +475,15 @@ const NativeInputReplayLog* active_native_input_replay_log() {
     return s_log.get();
 }
 
-const NativeInputReplaySample* native_input_replay_sample_for_vi(
+const NativeInputReplaySample* native_input_replay_sample_for_frame(
     std::uint64_t current_frame) {
     const NativeInputReplayLog* log = active_native_input_replay_log();
     if (log == nullptr) {
         return nullptr;
     }
-    const auto seconds = current_frame / 60u;
-    const auto fraction = (current_frame % 60u) * 1000u / 60u;
+    constexpr auto kSteps = static_cast<std::uint64_t>(galaxy::kGameStepsPerSecond);
+    const auto seconds = current_frame / kSteps;
+    const auto fraction = (current_frame % kSteps) * 1000u / kSteps;
     const auto maximum = std::numeric_limits<std::uint64_t>::max();
     const std::uint64_t target_ms = seconds > (maximum - fraction) / 1000u
         ? maximum : seconds * 1000u + fraction;
@@ -693,7 +695,7 @@ void apply_stick_script_env(
                 env_name);
         }
         std::uint64_t start = 0u;
-        if (!galaxy::input::resolve_native_input_script_start_vi(
+        if (!galaxy::input::resolve_native_input_script_start_frame(
                 anchor, fields[0], start)) {
             throw std::runtime_error(
                 std::string(
@@ -955,7 +957,7 @@ galaxy::input::PlayerInput build_replayed_input(
     static float s_replay_pointer_x = 0.0f;
     static float s_replay_pointer_y = 0.0f;
     static galaxy::input::PointerOwner s_replay_owner{};
-    static std::uint64_t s_replay_pointer_vi = 0u;
+    static std::uint64_t s_replay_pointer_frame = 0u;
     static int s_replay_mouse_x = -1;
     static int s_replay_mouse_y = -1;
     static galaxy::input::RecenterHold s_replay_recenter{};
@@ -965,15 +967,15 @@ galaxy::input::PlayerInput build_replayed_input(
         s_replay_log_identity = log;
         s_replay_pointer_x = s_replay_pointer_y = 0.0f;
         s_replay_owner = {};
-        s_replay_pointer_vi = 0u;
+        s_replay_pointer_frame = 0u;
         s_replay_mouse_x = s_replay_mouse_y = -1;
         s_replay_recenter = {};
     }
-    const float dt = s_replay_pointer_vi == 0u || current_frame <= s_replay_pointer_vi
+    const float dt = s_replay_pointer_frame == 0u || current_frame <= s_replay_pointer_frame
         ? 0.0f
-        : std::min(static_cast<float>(current_frame - s_replay_pointer_vi) / 60.0f, 0.05f);
-    s_replay_pointer_vi = current_frame;
-    const std::uint64_t now_us = current_frame * 1'000'000ull / 60u;
+        : std::min(static_cast<float>(current_frame - s_replay_pointer_frame) / static_cast<float>(galaxy::kGameStepsPerSecond), 0.05f);
+    s_replay_pointer_frame = current_frame;
+    const std::uint64_t now_us = current_frame * 1'000'000ull / static_cast<std::uint64_t>(galaxy::kGameStepsPerSecond);
     const bool keys_allowed = !force_controller;
     const bool pad_allowed = replay.xinput_connected &&
                              input_mode != galaxy::RuntimeInputMode::KeyboardMouse &&

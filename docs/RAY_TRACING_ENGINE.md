@@ -162,12 +162,11 @@ is not traced and shows the game's picture.
   (a dense spray is a white cloud whose lit face the eye sees: as white as a surface facing that light) times one minus
   that. Turbulence: value noise anchored in the world at the mist's mean point along the ray, rising half a metre a
   second, moves 45 % of its density. It composites after the water and clear composites, under the effects layer (the
-  sparkles stay over it), on sub-frames reprojected (ReplayKind::RtMist). GALAXY_RT_MIST=0: the game's sprites;
-  GALAXY_RT_MIST_VIEW=1 no cut at the water, 2 the water found under the puffs.
+  sparkles stay over it), on sub-frames reprojected (ReplayKind::RtMist).
 - Particles are never a water surface: effects drawn with indexed positions (a waterfall's spray, smoke, sparkles,
   bubbles) had the water pass's body painted over them.
-- Texture de-lighting takes out half of each texel's measured shading (GALAXY_RT_DELIGHT_STRENGTH 0.5) and turns it
-  into relief at 0.5 (GALAXY_RT_DELIGHT_RELIEF): Retinex cannot tell painted light from a pattern of one colour.
+- Texture de-lighting takes out half of each texel's measured shading (strength 0.5) and turns it
+  into relief at 0.5: Retinex cannot tell painted light from a pattern of one colour.
 - Clear solids (crystal, glass, gems): the pixel is the game's refraction of the lit scene behind, shown at 1 - F
   (F0 0.08, a dense crystal's) plus the traced reflection; they stop 0.6 of the light of the sun and the lights behind
   them (a partial shadow, hashed per ray).
@@ -222,7 +221,7 @@ slot, rewritten each frame: no root-signature limits).
 | E2 | DirectInitialCS | full | the sun's disc (one direction: interleaved gradient noise across pixels, the R2 sequence across frames; a shadow ray; kept as the penumbra its blocker makes, 0.5 d tan(radius), and the water its light crosses); ReSTIR DI: 8 (16 high) light candidates (emissive triangles and the game's point lights, from the surface's light grid cell, E1b), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks) through the light remap (below): a reservoir keeps its light and the point on it, and its sample is rebuilt from the light as this frame has it; then the boiling filter (below) |
 | E3 | DirectSpatialCS | full | 4 spatial neighbours (30 px at 1056 lines: footprints below; normal > 0.9, depth 10%) combined by the generalized balance heuristic (below), final shadow ray, diffuse irradiance and specular (GGX) of the kept light; an occluded sample stays in its reservoir; reservoir stored as its light, the point on it (a triangle's barycentrics, a sphere's world direction), W and M: 16 bytes |
 | E3b | ShadowBlurCS, ShadowPostCS, ShadowStabilizeCS | full | the sun's visibility (after NVIDIA's SIGMA): two blurs, each a dense 5 x 5 estimating the penumbra about the pixel (occluded neighbours', the smaller preferred) and 12 taps on a disc of its radius on screen (at most 32 px at 1056 lines, narrowed on slanted surfaces, turned per frame), on the pixel's plane, a smaller penumbra than the estimate counting less; then a history of at most 7 frames (weight at most 5/6) clamped to the 5 x 5 neighbourhood's mean +- its deviation (x 1 to 3 as the history grows), shortened by how far the clamp moved it. Contact shadows stay sharp, far blockers' soft; a moving caster leaves no trail |
-| E4 | IndirectCS | full at High (GALAXY_RT_ENGINE_GI_FULL), else half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH), or, where the picture showed the hit when its slot last ran, its whole diffuse light then (a radiance cache: every bounce after the first; GALAXY_RT_ENGINE_BOUNCES); miss: sky radiance. ReSTIR GI temporal reuse and the boiling filter, then spatial reuse (sample point, normal, radiance; within 10 half-pixels at 1056 lines; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
+| E4 | IndirectCS | full at High, else half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH), or, where the picture showed the hit when its slot last ran, its whole diffuse light then (a radiance cache: every bounce after the first); miss: sky radiance. ReSTIR GI temporal reuse and the boiling filter, then spatial reuse (sample point, normal, radiance; within 10 half-pixels at 1056 lines; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
 | E5 | SpecularCS | full | GGX VNDF ray, hit shaded as E4 (emission, sun, lights by RIS, sky ray) |
 | E5d | MistLightCS (the water's trace) | per puff | the waterfall mist's puffs (above): the sun's share by 32 shadow rays, the light from above by 16 rays (sky, or the hit lit as the clear pass lights it), the water's surface under it, exposed; MistCompositePS after the water's composites (scissored to the puffs' reach) |
 | E5c | CacheCS | 1M cells | the world's radiance cache (below): each cell's new samples from E4's and E5's hits onto its light |
@@ -232,7 +231,7 @@ slot, rewritten each frame: no root-signature limits).
 | E7b | FinalCS | full | the sun's diffuse and specular light by E3b's visibility (its facing from the disc's centre, the water's tint) onto the a-trous result; the slot's result at the exposure |
 | E8 | CompositePS | full | albedo x diffuse + specular + emission, x exposure, sRGB-encoded into the HDR scene frame |
 | E9 | The game's additive draws | full | drawn as the game drew them (gain 1): halos, sparks, number plates, flames are display effects; their light reaches the scene as emitting geometry (raised to radiance x exposure, b40-b71, whole halos saturated into white blobs) |
-| E10 | Camera | full | adaptation from the scene's log luminance (up to 4x for dim views; highlight priority both ways, down to half: the brightest tenth of surfaces no brighter than the stage's own light on a surface facing it, as the camera's stage exposure shows it), a stage sun at 1.25 x the stage's key (GALAXY_RT_SUN_STRENGTH) with the camera exposed for the stage's own light, bloom, sun shafts (screen-space radial gather from a visible sun, quarter resolution, weighted by Henyey-Greenstein g 0.76 forward scattering of the pixel's angle from the sun and the air in front of its surface, 1 - exp(-d / sky distance); samples above 8 clamped), tone curve |
+| E10 | Camera | full | adaptation from the scene's log luminance (up to 4x for dim views; highlight priority both ways, down to half: the brightest tenth of surfaces no brighter than the stage's own light on a surface facing it, as the camera's stage exposure shows it), a stage sun at 1.25 x the stage's key with the camera exposed for the stage's own light, bloom, sun shafts (screen-space radial gather from a visible sun, quarter resolution, weighted by Henyey-Greenstein g 0.76 forward scattering of the pixel's angle from the sun and the air in front of its surface, 1 - exp(-d / sky distance); samples above 8 clamped), tone curve |
 
 Translucent draws after the composite read the diffuse irradiance as the light texture (the existing interface), in
 thirds (rt_lighting.hlsl LightTexturePS; the draw's tex_dims[7].w picks one): water, glass and crystal the light of the
@@ -266,7 +265,7 @@ texture table, stage records) it and the glass pass read are uploaded again into
 (refresh_draw_tables); read from the trace's ring, since reused, they hung the GPU under Dusty Dune's crystals.
 The water pass makes its own samples' buffers (RtReflections::ensure_buffers without the opaque pass's): the opaque
 pass made them before the engine took its place, and from then to b103 the water pass refused every frame (no water
-reflections, mirror glass or metal coats; GALAXY_RT_LOG_SEQ prints each step and refusal).
+reflections, mirror glass or metal coats).
 
 Emitting triangles: nearer than its own size (d^2 < A / pi) a triangle lights a point as its near field (at most about
 its radiance), not 1 / d^2.
@@ -281,8 +280,7 @@ Player choices (Graphics, RAY TRACING; `render_config.h` `rt_effect_on`, read ea
 and metals take diffuse light, so they show the game's own reflection, and glass and crystal are the game's draws
 again), WATER REFLECTIONS (the water draws join the water window, `RenderCore::rt_water_draw`; off, the game's water),
 SUN RAYS and LENS BLOOM (E10's shafts and pyramid, independent). There is no switch for the bounce light: E4 also
-carries the sky's light, which needs a fallback before it can be turned off. Tests: GALAXY_TEST_RT_EFFECT_AB turns one
-off in frames that end in an odd present, so at 60 fps consecutive presents of one run show it on and off.
+carries the sky's light, which needs a fallback before it can be turned off.
 
 ## 6. Algorithms
 - BRDF: Lambert + GGX (Smith height-correlated visibility, Schlick Fresnel, F0 = lerp(0.04, albedo, metallic)).
@@ -297,9 +295,7 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   in the Observatory's still night (each pixel's candidates come from its own light grid cell, each frame's slots
   drawn anew, so the combined pixels' samples cover different lights; the spatial result fed the next frame's
   temporal reuse): now 7.6 % (the whole engine 2.6 %, against 32 %), its error 18 % where the reference's own
-  estimator reads 16.7 %. Visibility shades the kept sample only. GALAXY_RT_ENGINE_DI_SPATIAL=0,
-  GALAXY_RT_ENGINE_LIGHT_HISTORY=0 and GALAXY_RT_ENGINE_FIREFLY=0 take the reuse and the history's firefly clamp out
-  for such measurements.
+  estimator reads 16.7 %. Visibility shades the kept sample only.
 - Indirect light at every pixel at High: one cosine ray a pixel a frame (half resolution: one pixel of each 2 x 2,
   rotating, which an animated character's pixels, with little history, showed as sparkle on his sleeves).
 - Light identity (RTXDI's light index mapping, RAB_TranslateLightIndex): every traced draw carries a key from the game's
@@ -309,7 +305,7 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   frame's groups map onto this trace's index for index (kEvLightRemap; a key two draws share maps nothing). Temporal
   reuse reads a reservoir's light through it: a light that moved carries its samples along, one no longer drawn ends
   its history. Kept as a point and a radiance, a sample lit where a light had been (a meteor's flash on the ground for
-  a second after it was gone, at 5 % less a frame) and trailed a moving light. GALAXY_RT_LOG_EMITTERS: [rt-remap].
+  a second after it was gone, at 5 % less a frame) and trailed a moving light.
 - Light change (A-SVGF's temporal gradients, Schied, Peters and Dachsbacher 2018, on RTXDI's reservoirs, as its
   confidence pass does): each pixel shades the last frame's kept light sample again as this frame has its light (the
   same light point and weight: no sampling noise in the difference; gone: 0) at the surface point it was shaded at
@@ -339,7 +335,7 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   (sharp reflections would show the cells). A hit's sky ray that meets a surface takes that surface's cell light times
   its albedo (no sample of its own): every further bounce through the cache, converging over frames. With one bounce
   the off-picture hits had only their direct light, and the Grand Star room read 31 to 58 % darker than the converged
-  reference's 8 bounces. GALAXY_RT_ENGINE_CACHE=0 turns it off.
+  reference's 8 bounces.
 - ReSTIR GI: sample = (hit position, hit normal, outgoing radiance); spatial reuse with the solid-angle Jacobian and
   a shadow ray for the reused sample.
 - Denoiser: SVGF (Schied 2017) with ReBLUR's fast-history anti-lag for both histories; history length cap 32. The
@@ -374,7 +370,7 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   much of a surface but that the candidates rarely find is held by the one reservoir that found it, and the reuse
   spreads it as a bubble that appears, grows and fades (the Gateway's Grand Star room under its sparks). After
   temporal reuse, a reservoir whose weight sum passes 41 times the mean nonzero weight sum of its 8 x 8 group is
-  emptied (strength 0.2, RTXDI's default, for direct and indirect light). GALAXY_RT_ENGINE_BOILING=0 turns it off.
+  emptied (strength 0.2, RTXDI's default, for direct and indirect light).
 - Moving surfaces: the camera's reprojection puts a surface that moved by itself (a character, a hopping Star Bunny's
   ears, a rotating platform) where something else was, so its histories failed the depth and normal checks every
   frame and it showed one frame's samples: glitter on everything that moves. The raster's motion target (every opaque
@@ -384,19 +380,8 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   carry the upscaler's jitter (positions are rebuilt from the jittered depth) and the motion does not, so the motion
   takes the previous frame's jitter less this frame's (g_motion_jitter): without it every pixel was off by the jitter's
   step (up to 0.8 px, the Halton sequence's frame differences, measured). Still surfaces read 0.001 to 0.03 px.
-- Diagnostics: GALAXY_RT_ENGINE_VIEW=14 shows the light sources' direct light alone (no sun, no bounce);
-  GALAXY_RT_LIGHT_METER=x,y,r (fractions of the picture) logs per traced frame the means over that disc's surfaces of
-  the light sources' direct light, the whole diffuse light as the picture takes it, the sun's, the bounce's, the
-  filtered light less the sun and the diffuse history's length ([rt-light-meter], the stage's light units; frames),
-  and with the raster's motion where it takes
-  them against the camera's reprojection ([rt-motion-meter]: mean x, y, distance in render pixels, the share past half
-  a pixel); GALAXY_RT_ENGINE_VIEW=15 shows the motion less the camera's (red x, green y, 0.5 none, 8 px to full); GALAXY_RT_LOG_INTERVAL sets the emitter logs'
-  spacing (120 frames); GALAXY_D3D_DRED=1 records device-removed breadcrumbs, page faults and each ray tracing pass's
-  marker (printed in order as [dred] marker n name, so a stopped list's markers name its passes).
-  GALAXY_RT_DEBUG_UNTRACE=id,... keeps those table materials out of the traced scene (still drawn), with
-  GALAXY_RT_DEBUG_UNTRACE_AB=1 on odd presents only: two snapshots in a row differ by what those draws add to the
-  traced picture (Mario's image in a crystal). GALAXY_RT_ENGINE_CLEAR=10 shows a clear solid's light still inside
-  where its path ran out of segments; GALAXY_RT_LOG_TEV=id prints that material's stage program once.
+- Diagnostics: the debug views, light and motion meters, probes, material mutes and logs of this engine were
+  selected by `GALAXY_RT_*` and `GALAXY_D3D_DRED` switches that no code reads now.
 - Visible surface: the camera ray's triangle within the raster's depth; else the candidate nearest that depth (the
   raster drew a surface there): an alpha-tested light source a few units off was no draw at all. Draws the picture
   never shows are skipped (kDrawTableUnseen): the clear solids and the trace-only draws.
@@ -408,7 +393,7 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
 ## 7. Deleted (b90)
 TraceCS, the art GBufferCS, TemporalCS, SpatialA/M/BCS, ReferenceCS and ReferenceExposureCS (the engine's reference
 replaces them), BakedFitCS / BakedReduceCS (the baked-light fit), the glow bloom (BloomDown/Blur/PS), rt_post.hlsl (the
-cinematic finish), GALAXY_RT_PHYSICAL and GALAXY_RT_ENGINE (always on), and every shader declaration only those
+cinematic finish), the physical and engine switches (always on), and every shader declaration only those
 reached (port/tools/hlsl_reach.py: 2278 lines). Still to go: the art model's knobs and constants the kept shaders no
 longer read, the old passes' buffers (light history, reservoirs: 242 MB), CaptureCS's picture feedback, GlowEmitCS /
 AuthoredEmitCS / EmitMergeCS, the night model, RtReflections for opaque surfaces (skipped under the engine; the water
@@ -419,23 +404,16 @@ light sources (dropping them in build 39 left the Octoombas' lamps unlit, owner 
 G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composite + camera 0.4 ms: 5.4 ms.
 
 ## 9. Verification
-1. Converged reference: GALAXY_RT_ENGINE_REFERENCE=1 (from GALAXY_RT_REFERENCE_FROM, a still view): EngineReferenceCS
-   traces one unbiased path a pixel a present on the engine's own G-buffer, materials and light (next-event estimation
-   at every vertex, the sky through the cosine ray, Russian roulette from the third bounce, 8 bounces);
-   [rt-reference-engine] prints the engine's diffuse light against it over the ordinary non-metal surfaces (bias, mean
-   error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. GALAXY_RT_ENGINE_VIEW=8 shows it.
-   Diagnostic views: 1 direct, 2 indirect, 3 specular, 7 albedo, 8 reference, 9 / 10 the texture coordinate of the
-   table's glowing region (u / v as 16 hues), 11 the sun's filtered visibility, 12 its ray's, 13 the penumbra's radius
-   on screen; GALAXY_RT_PROBE prints [rt-probe-engine], [rt-probe-uv], [rt-probe-sun] (what stops the sun's
-   centre ray there: triangle, draw, material, instance, distance, the water above) and [rt-probe-fall] (the light at
-   falling water in front of it). [rt-stats] counts the water window's triangles per scene and the water draws it had
-   no room for; GALAXY_RT_UNTRACED's [rt-untraced] names each draw's material identity and whether the water window was
-   open; water-pass view 2 shows falling water violet; engine view 7 shows a traced fall's own colour.
+1. Converged reference: EngineReferenceCS traces one unbiased path a pixel a present on the engine's own G-buffer,
+   materials and light (next-event estimation at every vertex, the sky through the cosine ray, Russian roulette from
+   the third bounce, 8 bounces) and compares the engine's diffuse light against it over the ordinary non-metal
+   surfaces (bias, mean error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. The switches that
+   ran it and the diagnostic views and probes around it are not read by any code now.
 2. Pictures vs the game and the previous build, hidden runs, frozen bins, rt-images.
 3. Temporal stability: frame-to-frame change of a still view against the game's own (port/tools/flicker.py, 60
-   consecutive presents, GALAXY_PRESENT_SNAPSHOT_EVERY=1 with _LAST): Observatory plaza b93, 0.16 / 255 more than
+   consecutive presents, present snapshots of every present in the range): Observatory plaza b93, 0.16 / 255 more than
    the game on average, 0.08 % of pixels more than 4 / 255.
-4. GALAXY_RT_PASS_TIMING against the budget.
+4. Each pass's GPU time against the budget.
 5. Sub-frame replay (interpolation on), DLSS/FSR, every resolution and aspect.
 
 ## 10. Then

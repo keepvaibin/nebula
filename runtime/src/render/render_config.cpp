@@ -26,6 +26,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 
 #if defined(_WIN32)
@@ -60,14 +61,12 @@ static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept
 #endif
 }
 
-static void trim(char* s, char* out, std::size_t out_cap) {
-    const char* p = s;
-    while (*p == ' ' || *p == '\t') ++p;
-    std::size_t n = std::strlen(p);
-    while (n > 0 && (p[n-1] == ' ' || p[n-1] == '\t' || p[n-1] == '\r' || p[n-1] == '\n')) --n;
-    n = std::min(n, out_cap - 1);
-    std::memcpy(out, p, n);
-    out[n] = '\0';
+static std::string trim_text(std::string_view text) {
+    std::size_t begin = 0;
+    while (begin < text.size() && (text[begin] == ' ' || text[begin] == '\t')) ++begin;
+    std::size_t end = text.size();
+    while (end > begin && (text[end - 1] == ' ' || text[end - 1] == '\t' || text[end - 1] == '\r' || text[end - 1] == '\n')) --end;
+    return std::string(text.substr(begin, end - begin));
 }
 
 static unsigned parse_uint(const char* v, unsigned def) {
@@ -210,24 +209,28 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
 }
 
 static void parse_ini(FILE* f, RenderConfig& cfg) {
-    char line[512];
-    while (std::fgets(line, sizeof(line), f)) {
-        if (std::strchr(line, '\n') == nullptr && !std::feof(f)) {
-            // An overlong line is skipped whole, so its tail does not read as another setting.
-            int c;
-            do { c = std::fgetc(f); } while (c != '\n' && c != EOF);
-            continue;
+    // A line longer than this is skipped whole, so its tail does not read as another setting.
+    constexpr std::size_t kMaxLine = 8192;
+    std::string line;
+    for (;;) {
+        line.clear();
+        bool overlong = false;
+        int c = 0;
+        while ((c = std::fgetc(f)) != EOF && c != '\n') {
+            if (line.size() < kMaxLine) {
+                line.push_back(static_cast<char>(c));
+            } else {
+                overlong = true;
+            }
         }
-        char key_buf[128], val_buf[256];
-        char* eq = std::strchr(line, '=');
-        if (!eq) continue;
-        if (static_cast<std::size_t>(eq - line) >= sizeof(key_buf) ||
-            std::strlen(eq + 1) >= sizeof(val_buf)) continue;
-        *eq = '\0';
-        trim(line, key_buf, sizeof(key_buf));
-        trim(eq + 1, val_buf, sizeof(val_buf));
-        if (key_buf[0] == '#' || key_buf[0] == ';' || key_buf[0] == '\0') continue;
-        apply_kv(cfg, key_buf, val_buf);
+        if (c == EOF && line.empty() && !overlong) break;
+        if (overlong) continue;
+        const std::size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        const std::string key = trim_text(std::string_view(line).substr(0, eq));
+        const std::string val = trim_text(std::string_view(line).substr(eq + 1));
+        if (key.empty() || key[0] == '#' || key[0] == ';') continue;
+        apply_kv(cfg, key.c_str(), val.c_str());
     }
 }
 
@@ -416,22 +419,12 @@ RenderFeatureStatus make_render_feature_status(
     return status;
 }
 
-namespace {
-
-std::atomic<std::uint64_t> s_rt_effect_frame{0};
-
-}  // namespace
-
 bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
     const bool configured = effect == RtEffect::Reflections ? cfg.rt_reflections
                             : effect == RtEffect::Water     ? cfg.rt_water
                             : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
                                                             : cfg.rt_lens_bloom;
     return configured;
-}
-
-void set_rt_effect_frame(std::uint64_t frame) noexcept {
-    s_rt_effect_frame.store(frame, std::memory_order_relaxed);
 }
 
 namespace {

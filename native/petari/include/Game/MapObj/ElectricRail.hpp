@@ -64,7 +64,7 @@ public:
     void initMesh();
     void drawRail(TypedDraw& rDraw, f32 radius) const;
     void drawPlane(f32 side0, f32 up0, f32 side1, f32 up1);
-    void drawPlaneGX(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const;
+    void drawPlaneQuad(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const;
     void initShadow(const TableIter&);
     void updateHitSensorPos();
     void calcGravity(Vec3f* pOut, const Vec3f& rPos) const;

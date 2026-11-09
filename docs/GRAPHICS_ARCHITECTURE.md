@@ -19,7 +19,7 @@ The list is the only order. Scene boundaries are records too.
 |---|---|
 | Models | Cooked meshes: float arrays, corners, triangles (`cook/mesh.rs`). Vertices expand once and stay in the resident vertex buffer, in two streams: 44 bytes every vertex has, 92 more only for meshes with tangents or further coordinates |
 | A model's matrices | One block a view (`shape_palette`): twelve floats a position matrix, then twelve a normal matrix. Vertices name a row; interpolation moves the block |
-| Materials | A shader compiled at build (`NebulaShaderId`) with its constants, textures and state (`NebulaNativeMaterial`). J3D materials come from `tools/dev/gen_j3d_materials.py`, sites and layouts from `runtime/src/render/materials` |
+| Materials | A shader compiled at build (`NebulaShaderId`) with its constants, textures and state (`NebulaNativeMaterial`). The programs are built by `tools/dev/build_programs.py` into `runtime/src/render/programs`; sites and layouts are in `runtime/src/render/materials` |
 | Draw state | `NebulaPassState` on every draw: blend, depth, cull, writes, position matrix, line and point sizes |
 | Vertices the game makes | `immediate`, written into the frame's pool. Consecutive quads with nothing changing between them are one draw |
 | Particles | An emitter's corners, in the world, with the camera as the draw's matrix; each knows where it was a game frame ago (`NebulaParticleCorner`). The vertex stage places them at the presented frame's time |

@@ -154,19 +154,33 @@ void set_touch_controls_settings(const TouchControlsSettings&) noexcept {}
 void reset_touch_controls_places() noexcept {}
 
 bool keyboard_or_mouse_attached() noexcept {
+    const auto holds = [](const RAWINPUTDEVICELIST* devices, UINT listed) {
+        for (UINT i = 0; i < listed; ++i) {
+            if (devices[i].dwType == RIM_TYPEKEYBOARD || devices[i].dwType == RIM_TYPEMOUSE) {
+                return true;
+            }
+        }
+        return false;
+    };
     RAWINPUTDEVICELIST devices[32];
     UINT count = static_cast<UINT>(std::size(devices));
     const UINT listed = GetRawInputDeviceList(devices, &count, sizeof(RAWINPUTDEVICELIST));
-    if (listed == static_cast<UINT>(-1)) {
-        // More devices than the list holds, or no answer: nothing says they are gone.
+    if (listed != static_cast<UINT>(-1)) {
+        return holds(devices, listed);
+    }
+    // No answer: nothing says they are gone.
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
         return true;
     }
-    for (UINT i = 0; i < listed; ++i) {
-        if (devices[i].dwType == RIM_TYPEKEYBOARD || devices[i].dwType == RIM_TYPEMOUSE) {
-            return true;
-        }
+    // More devices than the first list holds: `count` says how many, and a few more may have arrived since.
+    try {
+        std::vector<RAWINPUTDEVICELIST> more(static_cast<std::size_t>(count) + 8u);
+        UINT room = static_cast<UINT>(more.size());
+        const UINT all = GetRawInputDeviceList(more.data(), &room, sizeof(RAWINPUTDEVICELIST));
+        return all == static_cast<UINT>(-1) || holds(more.data(), all);
+    } catch (...) {
+        return true;
     }
-    return false;
 }
 
 void set_input_missing_shown(bool shown) noexcept {
@@ -175,16 +189,6 @@ void set_input_missing_shown(bool shown) noexcept {
 
 bool input_missing_shown() noexcept {
     return g_input_missing_shown.load(std::memory_order_relaxed);
-}
-
-bool controller_present_now() noexcept {
-    for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
-        XINPUT_STATE state{};
-        if (XInputGetState(slot, &state) == ERROR_SUCCESS) {
-            return true;
-        }
-    }
-    return hid_controller_present_now();
 }
 
 std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept {
@@ -1071,14 +1075,14 @@ void update_co_star(std::span<LivePad> pads, const galaxy::input::ControlsConfig
 }
 
 galaxy::input::PlayerInput build_live_input(
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const galaxy::RuntimeInputModeState& input_mode_state,
     galaxy::input::PlayContext play_context,
     galaxy::input::tilt::Section tilt_section) {
     const NativeInputScriptOverlay script = build_native_input_script_overlay(
-        current_vi, {galaxy::qpc_now});
+        current_frame, {galaxy::qpc_now});
     if (const NativeInputReplaySample* replay =
-            native_input_replay_sample_for_vi(current_vi);
+            native_input_replay_sample_for_frame(current_frame);
         replay != nullptr) {
         // Replayed pads reach the settings overlay the way live pads do.
         NativeInputReplaySample routed = *replay;
@@ -1094,7 +1098,7 @@ galaxy::input::PlayerInput build_live_input(
             routed.thumb_rx = routed.thumb_ry = 0;
         }
         return build_replayed_input(
-            current_vi,
+            current_frame,
             routed,
             script,
             input_mode_state.mode,
@@ -1221,7 +1225,7 @@ galaxy::input::PlayerInput build_live_input(
     frame.pads = live_pads;
     frame.keyboard_levels = keyboard_levels;
     frame.script = script;
-    frame.vi = current_vi;
+    frame.game_frame = current_frame;
     frame.script_pointer_grace_ms = 250u;
     frame.window_focused = window_focused;
     frame.use_keyboard = use_keyboard;
@@ -1260,7 +1264,7 @@ bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept {
 }
 
 galaxy::input::PlayerInput native_game_input(
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     std::int32_t star_pointer_mode,
     std::uint8_t tilt_section) {
     const galaxy::input::PlayContext context =
@@ -1270,7 +1274,7 @@ galaxy::input::PlayerInput native_game_input(
     const galaxy::input::tilt::Section section = tilt_section == 1u ? galaxy::input::tilt::Section::StarBall
         : tilt_section == 2u ? galaxy::input::tilt::Section::Ray
         : galaxy::input::tilt::Section::None;
-    return build_live_input(current_vi, galaxy::get_runtime_input_mode_state(), context, section);
+    return build_live_input(current_frame, galaxy::get_runtime_input_mode_state(), context, section);
 }
 
 void native_game_rumble(std::uint8_t strength, std::int32_t star_pointer_mode) noexcept {

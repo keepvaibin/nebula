@@ -3,6 +3,10 @@
 #include "galaxy/luma.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <limits>
+#include <optional>
 #include <string>
 
 namespace {
@@ -130,6 +134,77 @@ int main() {
 
     check(switch_number("dodoryu_shell_only") != 0u && switch_number("nope") == 0u, "switches by name");
     check(language_code("EuFrench") == "fr" && language_code("JpJapanese") == "ja" && language_code("?") == "en", "language codes");
+
+    // Rows: a dome is any number from 1 (the game checks it against the domes its data has), a number is cut to its type.
+    const auto with_rows = [](const std::string& rows) {
+        return std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG",)") + rows + R"(,"layers":[]})";
+    };
+    {
+        const std::optional<Manifest> comets = parse_manifest(with_rows(
+            R"("comet_schedule":[{"dome":1,"comets":[{"galaxy":"EggStarGalaxy","coins":0}]},{"dome":17,"comets":[{"galaxy":"Other","coins":1}]}])"));
+        check(comets && comets->comet_schedule.size() == 2u && comets->comet_schedule[0].dome == 1 && comets->comet_schedule[1].dome == 17 &&
+                  comets->comet_schedule[1].comets.size() == 1u && comets->comet_schedule[1].comets[0].second == 1,
+              "comet domes past 16 are read");
+        const std::optional<Manifest> huge = parse_manifest(with_rows(R"("comet_schedule":[{"dome":1e300,"comets":[{"galaxy":"G","coins":0}]}])"));
+        check(huge && huge->comet_schedule.size() == 1u && huge->comet_schedule[0].dome == std::numeric_limits<int>::max(),
+              "a dome past the int range stops at its end");
+        check(!parse_manifest(with_rows(R"("comet_schedule":[{"dome":0,"comets":[{"galaxy":"G","coins":0}]}])")).has_value(), "dome 0 is refused");
+        check(!parse_manifest(with_rows(R"("comet_schedule":[{"dome":-5,"comets":[{"galaxy":"G","coins":0}]}])")).has_value(), "a negative dome is refused");
+        check(!parse_manifest(with_rows(R"("comet_schedule":[{"dome":2,"comets":[]}])")).has_value(), "a dome with no comets is refused");
+    }
+    {
+        check(parse_manifest(with_rows(R"("galaxies":[{"name":"G","stars_to_open":255,"dome":255}])")).has_value(), "stars and dome up to a byte");
+        check(!parse_manifest(with_rows(R"("galaxies":[{"name":"G","stars_to_open":256}])")).has_value(), "stars past a byte are refused");
+        check(!parse_manifest(with_rows(R"("galaxies":[{"name":"G","dome":256}])")).has_value(), "a galaxy's dome past a byte is refused");
+        check(!parse_manifest(with_rows(R"("galaxies":[{"name":"G","dome":-1}])")).has_value(), "a negative dome is refused");
+        check(!parse_manifest(with_rows(R"("galaxies":[{"name":"G","stars_to_open":1e300}])")).has_value(), "a number past the int range is refused, not cast");
+    }
+    {
+        // A range of choices: counted, so numbers too large for the step cannot loop for ever.
+        const std::optional<Manifest> ranged = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","options":[)") +
+            R"({"id":"r1","name":"R","range":{"from":1,"to":5,"step":1}},)" +
+            R"({"id":"r2","name":"R","range":{"from":1e300,"to":1e300,"step":1}},)" +
+            R"({"id":"r3","name":"R","range":{"from":5,"to":1,"step":1}},)" +
+            R"({"id":"r4","name":"R","range":{"from":0,"to":1,"step":0.25}}],"layers":[]})");
+        check(ranged && ranged->options.size() == 4u, "options with ranges read");
+        if (ranged && ranged->options.size() == 4u) {
+            check(ranged->options[0].choices.size() == 5u && ranged->options[0].choices[4].id == "5", "1 to 5 gives five choices");
+            check(ranged->options[1].choices.size() == 1u, "a range of one huge number gives one choice and ends");
+            check(ranged->options[2].choices.empty(), "a range that runs backwards gives none");
+            check(ranged->options[3].choices.size() == 5u && ranged->options[3].choices[1].id == "0.25", "fractional steps");
+        }
+    }
+    {
+        // Switch values are 32-bit numbers that wrap; a value past the type stops at its end.
+        const std::optional<Manifest> switches = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[)") +
+            R"({"switches":{"a":-1,"b":1e300,"c":4294967295,"d":-1e300,"e":7}}]})");
+        check(switches && switches->layers.size() == 1u, "switch values read");
+        if (switches && switches->layers.size() == 1u) {
+            const auto& values = switches->layers[0].switches;
+            check(values.at("a") == 0xFFFFFFFFu && values.at("b") == 0xFFFFFFFFu && values.at("c") == 0xFFFFFFFFu && values.at("d") == 0x80000000u &&
+                      values.at("e") == 7u,
+                  "switch values stop at the type's ends");
+        }
+    }
+    {
+        // The manifest file is read only when it is a sensible size.
+        const std::filesystem::path folder = std::filesystem::temp_directory_path() / "nebula-luma-test-manifest";
+        std::error_code error;
+        std::filesystem::create_directories(folder, error);
+        {
+            std::ofstream out(folder / "luma.json", std::ios::binary);
+            out << R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[]})";
+        }
+        check(read_manifest(folder).has_value(), "a small luma.json is read");
+        {
+            std::ofstream out(folder / "luma.json", std::ios::binary | std::ios::trunc);
+            out << R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","description":")";
+            const std::string filler(17u << 20u, 'x');
+            out << filler << R"(","layers":[]})";
+        }
+        check(!read_manifest(folder).has_value(), "a luma.json past 16 MB is not read");
+        std::filesystem::remove_all(folder, error);
+    }
 
     if (failed == 0) std::puts("luma: all passed");
     return failed == 0 ? 0 : 1;

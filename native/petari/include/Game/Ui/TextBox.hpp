@@ -42,7 +42,6 @@ namespace Ui {
         void SetTextColor(u32, Color8);
         const Rect GetTextDrawRect() const;
         const Rect GetTextDrawRect(const DrawInfo&) const;
-        f32 GetTextAlignMag() const;
 
         void Init(u16);
         void SetTagProcessor(TagProcessorBase< char16_t >* pTagProcessor) {

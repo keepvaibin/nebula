@@ -134,7 +134,7 @@ private:
 public:
     // The model's ScaleMode.
     u8 mScaleMode;
-    u8 mTrackCount;
+    u32 mTrackCount;
     // A CalcMode.
     u8 mCalcMode;
     u32 mJointCount;

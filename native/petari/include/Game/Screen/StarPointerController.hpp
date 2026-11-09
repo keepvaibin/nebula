@@ -38,10 +38,6 @@ public:
         return mPastInfo.mViewDistZ;
     }
 
-    const Vec2f& getPastPos() const {
-        return mPastInfo.mPos;
-    }
-
     s32 mPadChannel;
     PointerInfo mPastInfo;
     PointerInfo mInfo;

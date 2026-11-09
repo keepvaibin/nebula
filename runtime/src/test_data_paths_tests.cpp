@@ -40,6 +40,17 @@ int main() {
             check(galaxy::host::test_data_paths_error(3, argv), "missing path rejected");
             _wputenv_s(name, (root / name).c_str());
         }
+        const wchar_t* outputs[] = {nebula_switch::frame_timeline_path_wide_name(), nebula_switch::audio_wav_dump_wide_name(),
+                                    nebula_switch::texture_dump_dir_wide_name(), nebula_switch::xess_dir_wide_name(),
+                                    nebula_switch::streamline_dir_wide_name(), L"GALAXY_PRESENT_SNAPSHOT_DIR",
+                                    L"GALAXY_INSPECT_DIR", L"GALAXY_PIPELINE_LIST_OUT"};
+        for (const auto* name : outputs) {
+            _wputenv_s(name, (root / "out" / name).c_str());
+            check(!galaxy::host::test_data_paths_error(3, argv), "private output path accepted");
+            _wputenv_s(name, (root / "../outside").c_str());
+            check(galaxy::host::test_data_paths_error(3, argv), "output path outside rejected");
+            _wputenv_s(name, L"");
+        }
         saves = (root / "../outside").string(); argv[2] = saves.data();
         check(galaxy::host::test_data_paths_error(3, argv), "save argument escape rejected");
         _wputenv_s(L"NEBULA_WORK", L"");

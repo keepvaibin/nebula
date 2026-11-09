@@ -188,9 +188,6 @@ std::filesystem::path settings_path() {
 #if defined(_WIN32)
     if (const wchar_t* override_value = ::galaxy::run_options().runtime_settings_path_w; override_value != nullptr && override_value[0] != L'\0') {
         const std::filesystem::path path(override_value);
-        if (path.native().size() >= MAX_PATH) {
-            throw std::runtime_error("the settings path exceeds the supported path length");
-        }
         if (path.filename().empty()) {
             throw std::runtime_error("the settings path must name a settings file");
         }
@@ -308,13 +305,13 @@ RuntimeSettings get_runtime_settings() {
 }
 
 namespace {
-// kNotAsked until the game first asks for its language, then that language's SC code.
+// kNotAsked until the game first asks for its language, then that language's number.
 constexpr std::uint8_t kNotAsked = 0xFFu;
 std::atomic<std::uint8_t> s_running_language{kNotAsked};
-// A bit for each GameLanguage on the disc (bit `value`); all until set_disc_languages.
+// A bit for each GameLanguage the game's data holds (bit `value`); all until set_disc_languages.
 std::atomic<std::uint32_t> s_disc_languages{~0u};
 
-// The language a disc's folder holds, whatever its release ("UsEnglish", "EuEnglish": English); Auto for none.
+// The language a language folder holds, whatever its release ("UsEnglish", "EuEnglish": English); Auto for none.
 GameLanguage folder_language(std::string_view folder) noexcept {
     static constexpr std::pair<std::string_view, GameLanguage> kNames[] = {
         {"Japanese", GameLanguage::Japanese}, {"English", GameLanguage::English}, {"German", GameLanguage::German},
@@ -368,7 +365,7 @@ void set_disc_languages(std::span<const std::string> folders) noexcept {
             bits |= 1u << static_cast<unsigned>(language);
         }
     }
-    // A disc without language folders the game knows (not one it plays): English, as the game's own fallback.
+    // No language folder the game knows (not one it plays): English, as the game's own fallback.
     s_disc_languages.store(bits != 0u ? bits : 1u << static_cast<unsigned>(GameLanguage::English),
                            std::memory_order_release);
 }

@@ -3,6 +3,7 @@
 #include "galaxy/render/mod_shaders.h"
 
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_paths.h"
 
 #include <atomic>
 #include <fstream>
@@ -22,9 +23,7 @@ bool mod_shader_has_bound_form() noexcept {
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
                                                    const std::vector<const char*>& defines, std::string& problem, bool) {
     namespace fs = std::filesystem;
-    wchar_t exe[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exe, MAX_PATH);
-    const fs::path compiler = fs::path(exe).parent_path() / "dxc" / "dxc.exe";
+    const fs::path compiler = fs::path(windows::executable_path()).parent_path() / "dxc" / "dxc.exe";
     std::error_code error;
     if (!fs::is_regular_file(compiler, error)) {
         problem = "the shader compiler isn't installed";

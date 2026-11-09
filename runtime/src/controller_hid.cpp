@@ -1441,7 +1441,13 @@ private:
                 open = open_paths_.size();
                 ReleaseSRWLockShared(&setup_lock_);
                 if (known) continue;
-                if (open >= kMaxHidPads) break;
+                if (open >= kMaxHidPads) {
+                    static std::atomic<bool> told{false};
+                    if (!told.exchange(true)) {
+                        std::fprintf(stderr, "[controller] %zu controllers are open; the others are not read\n", kMaxHidPads);
+                    }
+                    break;
+                }
                 std::unique_ptr<Device> device = open_device(candidate, refused);
                 if (!device) continue;
                 const bool rail = std::find(empty_rails.begin(), empty_rails.end(), candidate.path) != empty_rails.end();
@@ -2593,14 +2599,6 @@ JoyConStatus joycon_status() noexcept {
 
 void set_joycon_pairing(bool on) noexcept {
     hub().joycon_pairing.store(on, std::memory_order_release);
-}
-
-bool hid_controller_present_now() noexcept {
-    try {
-        return !enumerate_hid_pads().empty();
-    } catch (...) {
-        return false;
-    }
 }
 
 }  // namespace galaxy::host

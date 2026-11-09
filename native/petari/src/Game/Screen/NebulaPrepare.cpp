@@ -212,7 +212,7 @@ private:
             s32 length = 0;
             for (const char16_t* p = pattern; *p != 0; p++) {
                 if (p[0] == u'{' && p[1] == u'n' && p[2] == u'}') {
-                    char16_t digits[8];
+                    char16_t digits[8];  // a percent is at most three digits; the loop below stops at eight
                     s32 count = 0;
                     s32 value = percent;
                     do {

@@ -116,10 +116,8 @@ std::string present_snapshot_path() {
     static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
     static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
-        char value[1024]{};
-        std::size_t length = 0;
-        return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().present_snapshot_dir) == 0 && length > 1u
-            ? std::string(value) : std::string{};
+        const char* value = ::galaxy::run_options().present_snapshot_dir;
+        return value != nullptr ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
     if (every == 0u || directory.empty() || presents < first || presents > last ||

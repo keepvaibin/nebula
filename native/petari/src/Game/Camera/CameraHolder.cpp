@@ -134,14 +134,6 @@ const char* CameraHolder::getNameStrOf(s32 index) const {
     return ::sCameraTable[index].mName;
 }
 
-const char* CameraHolder::getExplainStrOf(s32 index) const {
-    return ::sCameraTable[index].mExplain;
-}
-
-bool CameraHolder::isPublic(s32 index) const {
-    return ::sCameraTable[index].mIsPublic;
-}
-
 Camera* CameraHolder::getDefaultCamera() {
     return mCameras[mDefaultCameraIndex];
 }

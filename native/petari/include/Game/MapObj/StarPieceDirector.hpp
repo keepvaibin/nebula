@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
+#include "Game/Util/DueRing.hpp"
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
@@ -15,7 +16,6 @@ class StarPieceShooter;
 namespace MR {
     StarPieceDirector* getStarPieceDirector();
 
-    void createStarPiece();
     StarPiece* getDeadStarPiece();
 
     void resetChasingStarPiece();
@@ -66,10 +66,9 @@ public:
     bool mResetChasingStarPiece;
     StarPieceShooter* mStarPieceShooters[2];
 
-    static constexpr s32 cGetSoundDelay = 16;  // updates from a get to its sound
-    bool mGetSoundArray[cGetSoundDelay];       // a ring: the gets queued in the last cGetSoundDelay updates
-
-    s32 mSoundIndex;
+    // The gets waiting for their sound: the update step each is due at.
+    MR::DueRing mGetSounds;
+    u32 mSoundStep;  // updates since initCSSound
     bool mQueueNewGetSound;
 };
 

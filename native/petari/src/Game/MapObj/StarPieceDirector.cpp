@@ -8,6 +8,7 @@
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaAchievements.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvStarPieceShooter {
     NEW_NERVE(HostTypeNrvWait, StarPieceShooter, Wait);
@@ -16,10 +17,6 @@ namespace NrvStarPieceShooter {
 
 StarPieceDirector* MR::getStarPieceDirector() {
     return MR::getSceneObj< StarPieceDirector >(SceneObj_StarPieceDirector);
-}
-
-void MR::createStarPiece() {
-    getStarPieceDirector()->createStarPieces();
 }
 
 StarPiece* MR::getDeadStarPiece() {
@@ -52,7 +49,7 @@ void MR::incNumStarPieceNewed() {
 
 StarPieceDirector::StarPieceDirector(const char* pName)
     : LiveActorGroup(pName, 128), mNumStarPieceNewed(), mNumStarPieceGettable(), mColorIndex(), mNumStarPiecesLaunched(),
-      mResetChasingStarPiece(), mSoundIndex(), mQueueNewGetSound() {
+      mResetChasingStarPiece(), mGetSounds(), mSoundStep(), mQueueNewGetSound() {
     MR::connectToSceneMapObjMovement(this);
 
     for (int i = 0; i < ARRAY_SIZE(mStarPieceShooters); i++) {
@@ -203,32 +200,30 @@ void StarPieceDirector::movement() {
     updateSound();
 }
 
+// A get's sound plays 4/15 of a second after it: 16 steps at 60 a second, the same time at any step rate.
 void StarPieceDirector::updateSound() {
-    if (mGetSoundArray[mSoundIndex]) {
+    const u32 delay = (NebulaFrameClock::cStepsPerSecond * 4u + 7u) / 15u;
+    if (mGetSounds.isDue(mSoundStep)) {
         MR::startCSSound("CS_STARDUST_GET", nullptr, -1);
+        mGetSounds.pop();
     }
 
-    mGetSoundArray[mSoundIndex] = false;
-
     if (mQueueNewGetSound) {
-        mGetSoundArray[mSoundIndex] = true;
+        mGetSounds.push(mSoundStep + delay);
     }
 
     mQueueNewGetSound = false;
-    mSoundIndex++;
-    mSoundIndex %= cGetSoundDelay;
+    mSoundStep++;
 }
 
 void StarPieceDirector::initCSDelay() {
-    for (int i = 0; i < cGetSoundDelay; i++) {
-        mGetSoundArray[i] = false;
-    }
+    mGetSounds.clear();
 }
 
 void StarPieceDirector::initCSSound() {
     mQueueNewGetSound = false;
     initCSDelay();
-    mSoundIndex = 0;
+    mSoundStep = 0;
 }
 
 bool StarPieceDirector::giftToTarget(HitSensor* pGiftSensor, u32 numGift) {

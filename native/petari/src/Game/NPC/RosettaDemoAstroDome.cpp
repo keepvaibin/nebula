@@ -1,4 +1,5 @@
 #include "Game/NPC/RosettaDemoAstroDome.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include <nebula_game_api.h>
 #include "Game/Demo/DemoFunction.hpp"

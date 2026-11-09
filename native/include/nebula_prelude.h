@@ -32,9 +32,7 @@
 /* The game's constants, as floats. */
 #undef M_PI
 #define M_PI 3.14159265358979323846f
-#define M_SQRT3 1.73205f
 #define DEG_TO_RAD(degrees) (degrees * (M_PI / 180.0f))
-#define RAD_TO_DEG(radians) (radians * (180.0f / M_PI))
 
 /* "C"-locale case-insensitive compare: -1, 0 or 1. */
 static inline int nebula_stricmp(const char* s1, const char* s2) {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "render/core/pipelines.h"
 
+
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -15,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <system_error>
 #include <vector>
 
 namespace galaxy::render::core {

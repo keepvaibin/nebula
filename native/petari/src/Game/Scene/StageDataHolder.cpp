@@ -15,9 +15,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/AssetFolder.hpp"
 
-template TableIter Table::findElement< s32 >(const char*, s32, int) const;
-template TableIter Table::findElement< const char* >(const char*, const char*, int) const;
-
 namespace {
     // One per bit of a layer mask.
     const char* const cLayerDirName[32] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE"};

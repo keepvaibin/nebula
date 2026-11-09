@@ -3,6 +3,7 @@
 #include "Game/MapObj/Rock.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvRockCreator {
     NEW_NERVE(RockCreatorNrvActive, RockCreator, Active);
@@ -82,7 +83,7 @@ void RockCreator::initMapToolInfo(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mRockSpeed);
 
     if (MR::getPlacementArg1NoInit(rIter, &mSpawnDelay)) {
-        mSpawnDelay *= 60;
+        mSpawnDelay *= NebulaFrameClock::stepsOfSeconds(1);
     }
 
     if (Rock::getType(rIter) == Rock::NormalRock) {

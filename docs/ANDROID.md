@@ -63,11 +63,11 @@ Uninstalling asks whether to keep this data (`hasFragileUserData`).
 - The surface asks for 60 frames a second (`ANativeWindow_setFrameRate`). The game's frame clock runs on the display's
   vsync grid, predicted from Choreographer's vsync times (every second vsync at 120 Hz, `display_clock.cpp`), so a
   late callback never delays it; the host's clock takes over when the display gives no vsync or runs at a rate 60
-  does not divide. Each frame is presented for the vsync slot after its frame start (`VK_GOOGLE_display_timing`), so
+  does not divide. Each frame is presented for the vsync slot after its game frame (`VK_GOOGLE_display_timing`), so
   the compositor shows it for exactly one frame period.
 - The game and render threads are a performance-hint session (ADPF, Android 13+): each frame's work (the busier
   thread's CPU time) is reported against 16.7 ms, so the CPU clocks rise before a frame runs late.
-- The log reports every 10 s: `[pacing]` (frame starts on the display's vsync, frame work), `[present-timing]` (frames
+- The log reports every 10 s: `[pacing]` (game frames on the display's vsync, frame work), `[present-timing]` (frames
   the display showed at their slot, and one frame period after the frame before), `[vk-cpu]` (the render thread's CPU and
   the driver calls' share), `[host-events]` (the main thread).
 - Profiling over adb: the app is `profileable` (simpleperf, Android Studio), and

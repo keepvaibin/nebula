@@ -19,6 +19,7 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     const char* const sTimerSeSet[2][4] = {{"SE_SY_TIMER_A_2", "SE_SY_TIMER_A_1", "SE_SY_TIMER_A_QUASI_0", "SE_SY_TIMER_A_0"},
@@ -115,14 +116,14 @@ void HipDropTimerSwitch::updateTimerSE() {
         return;
     }
 
-    s32 subSecond = mTimerMax % 60;
+    s32 subSecond = mTimerMax % NebulaFrameClock::stepsOfSeconds(1);
     s32 timeElapsed = getNerveStep() - subSecond;
 
     if (subSecond != 0) {
-        timeElapsed += 60;
+        timeElapsed += NebulaFrameClock::stepsOfSeconds(1);
     }
 
-    if (timeElapsed < 60) {
+    if (timeElapsed < NebulaFrameClock::stepsOfSeconds(1)) {
         return;
     }
 
@@ -132,14 +133,14 @@ void HipDropTimerSwitch::updateTimerSE() {
         return;
     }
 
-    if (timeElapsed % 60 != 0) {
+    if (timeElapsed % NebulaFrameClock::stepsOfSeconds(1) != 0) {
         return;
     }
 
-    if (timeElapsed < mTimerMax - 600) {
+    if (timeElapsed < mTimerMax - NebulaFrameClock::stepsOfSeconds(10)) {
         // > 10s remaining
         MR::startSystemSE(::sTimerSeSet[mTimerSFXType][0]);
-    } else if (timeElapsed < mTimerMax - 120) {
+    } else if (timeElapsed < mTimerMax - NebulaFrameClock::stepsOfSeconds(2)) {
         // 8 to 2s remaining
         MR::startSystemSE(::sTimerSeSet[mTimerSFXType][1]);
     } else if (timeElapsed < mTimerMax) {

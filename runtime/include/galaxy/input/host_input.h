@@ -3,7 +3,6 @@
 #pragma once
 
 #include "galaxy/controller_roster.h"
-#include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
@@ -104,10 +103,6 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 [[nodiscard]] input::ButtonIconStyle button_icons_auto_style() noexcept;
 // A person typed or clicked (overlay keys included).
 void note_keyboard_input() noexcept;
-#if defined(__ANDROID__)
-// A keyboard or mouse plugged in, not the touch screen that stands in for them.
-[[nodiscard]] bool physical_keyboard_attached() noexcept;
-#endif
 // The system lists a keyboard or a mouse.
 [[nodiscard]] bool keyboard_or_mouse_attached() noexcept;
 // The phone's on-screen controls: the editor where they are arranged (the settings menu shows its words and answers
@@ -141,8 +136,6 @@ void note_touch_target(std::uint32_t circle) noexcept;
 // settings menu as F1 does.
 void set_input_missing_shown(bool shown) noexcept;
 [[nodiscard]] bool input_missing_shown() noexcept;
-// Synchronous check (settings UI only): a controller is attached now.
-[[nodiscard]] bool controller_present_now() noexcept;
 // SDL hosts: the player took up a real Wii Remote, or let it go. A phone's on-screen controls step aside for it, as
 // for a controller.
 void real_wiimote_taken(bool taken) noexcept;
@@ -156,10 +149,10 @@ struct WiiRemoteState {
 [[nodiscard]] WiiRemoteState wii_remote_state() noexcept;
 
 // The live controls (bindings, keyboard and mouse, controllers, the scripted and replayed test input) as player 1's
-// input at game frame `current_vi` (the console's video interface count: one per frame). `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come
+// input at game frame `current_frame`. `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come
 // from the game: the control mapping's menu or play context and the tilt steering.
 [[nodiscard]] galaxy::input::PlayerInput native_game_input(
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     std::int32_t star_pointer_mode,
     std::uint8_t tilt_section);
 // Player 2 (co-star mode), as of the last native_game_input: false while nobody plays it.

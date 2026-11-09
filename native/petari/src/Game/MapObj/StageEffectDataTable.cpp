@@ -374,13 +374,6 @@ namespace MR {
         return ::isExistAny(pObjectName);
     }
 
-    void StageEffect::shakeStartCamera(LiveActor* pActor, const char* pObjectName) {
-        const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
-        if (::isDistanceValidShake(pActor, pCamera)) {
-            ::shakeCamera(pCamera != nullptr ? pCamera->mStartShakeType : CameraShakeType_None);
-        }
-    }
-
     void StageEffect::shakeStopCamera(LiveActor* pActor, const char* pObjectName) {
         const StageEffectCameraData* pCamera = ::getStageEffectCameraParam(pObjectName);
         if (::isDistanceValidShake(pActor, pCamera)) {

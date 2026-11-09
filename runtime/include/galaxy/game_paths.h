@@ -4,7 +4,6 @@
 #include "galaxy/host_env.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/controller_roster.h"
-#include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"

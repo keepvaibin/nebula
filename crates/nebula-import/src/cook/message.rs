@@ -7,7 +7,7 @@
 //!   type, _A, _B;
 //! - text: UTF-16 units, each message ending in a 0. A 0x1A unit starts a tag: the next unit holds the tag's length in
 //!   bytes (from the 0x1A) and its group as two bytes, then the tag's id and parameters in units;
-//! - nodes (16 bytes): type (1 message, 2 branch, 3 event), group (an event's kind), 0 (u16), index (a message's
+//! - nodes (16 bytes): type (1 message, 2 branch, 3 event), group (an event's kind), reserved (u16, 0), index (a message's
 //!   number, a branch's condition, an event's first branch), next (a message's next node, NONE at the end; a branch's
 //!   parameter; an event's value), next group (a message's group; a branch's first branch);
 //! - branches: node numbers, NONE for none.
@@ -15,6 +15,8 @@
 use anyhow::{bail, Context, Result};
 
 pub const MAGIC: &[u8; 4] = b"NMSG";
+/// A node's reserved u16 (TalkNode::mReserved).
+const NODE_RESERVED: [u8; 2] = [0, 0];
 pub const NONE: u32 = u32::MAX;
 const HEADER: usize = 48;
 
@@ -199,7 +201,8 @@ impl Nmsg {
         }
         out.resize(nodes_at, 0);
         for n in &self.nodes {
-            out.extend_from_slice(&[n.kind, n.group, 0, 0]);
+            out.extend_from_slice(&[n.kind, n.group]);
+            out.extend_from_slice(&NODE_RESERVED);
             for word in [n.index, n.next, n.next_group] {
                 out.extend_from_slice(&word.to_le_bytes());
             }

@@ -36,11 +36,4 @@ namespace TDDraw {
     void invProject(Vec3f*, const Vec3f&, MtxPtr, const f32*, const f32*, bool);
     void project2D(Vec3f*, const Vec3f&);
     void project2D(Vec2f*, const Vec3f&);
-
-    inline void setColor8(u32 color, NebulaColor8* pColor) {
-        pColor->r = (color >> 24) & 0xFF;
-        pColor->g = (color >> 16) & 0xFF;
-        pColor->b = (color >> 8) & 0xFF;
-        pColor->a = color & 0xFF;
-    }
 };  // namespace TDDraw

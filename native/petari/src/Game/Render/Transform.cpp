@@ -54,34 +54,6 @@ void billboardYMtx(Mtx mtx) {
     mtx[2][2] = vec.z * z;
 }
 
-// dst = the inverse transpose of src's 3x3 part (cofactors over the determinant); dst is left alone when the
-// determinant is 0.
-void inverseTranspose33(Mtx src, Mtx33 dst) {
-    const f32 c00 = src[1][1] * src[2][2] - src[2][1] * src[1][2];
-    const f32 c01 = src[1][2] * src[2][0] - src[2][2] * src[1][0];
-    const f32 c02 = src[1][0] * src[2][1] - src[1][1] * src[2][0];
-    const f32 c10 = src[2][1] * src[0][2] - src[0][1] * src[2][2];
-    const f32 c11 = src[2][2] * src[0][0] - src[0][2] * src[2][0];
-    const f32 c12 = src[0][1] * src[2][0] - src[0][0] * src[2][1];
-    const f32 c20 = src[0][1] * src[1][2] - src[1][1] * src[0][2];
-    const f32 c21 = src[0][2] * src[1][0] - src[1][2] * src[0][0];
-    const f32 c22 = src[0][0] * src[1][1] - src[0][1] * src[1][0];
-    const f32 det = src[0][0] * c00 + src[1][0] * c10 + src[2][0] * c20;
-    if (det == 0.0f) {
-        return;
-    }
-    const f32 inv = 1.0f / det;
-    dst[0][0] = c00 * inv;
-    dst[0][1] = c01 * inv;
-    dst[0][2] = c02 * inv;
-    dst[1][0] = c10 * inv;
-    dst[1][1] = c11 * inv;
-    dst[1][2] = c12 * inv;
-    dst[2][0] = c20 * inv;
-    dst[2][1] = c21 * inv;
-    dst[2][2] = c22 * inv;
-}
-
 void Skeleton::translateRotateMtx(const TransformInfo& tx, Mtx dst) {
     f32 cxsz;
     f32 sxcz;
@@ -218,23 +190,6 @@ void textureMtxMayaOld(const TextureTransform& srt, Mtx dst) {
 
     dst[0][2] = dst[1][2] = dst[2][0] = dst[2][1] = dst[2][3] = 0.0f;
     dst[2][2] = 1.0f;
-}
-
-// Scales the columns of mtx's 3x3 part by scl.
-void scaleNormalMtx(Mtx mtx, const Vec& scl) {
-    for (int i = 0; i < 3; i++) {
-        mtx[i][0] *= scl.x;
-        mtx[i][1] *= scl.y;
-        mtx[i][2] *= scl.z;
-    }
-}
-
-void scaleNormalMtx33(Mtx33 mtx, const Vec& scale) {
-    for (int i = 0; i < 3; i++) {
-        mtx[i][0] *= scale.x;
-        mtx[i][1] *= scale.y;
-        mtx[i][2] *= scale.z;
-    }
 }
 
 // dst = mtx1 (3x4) times mtx2 read as 4x4 (all four of its rows).

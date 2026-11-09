@@ -314,7 +314,7 @@ TexturePacks::NameKey TexturePacks::name_key(SizeKey size, std::uint64_t hash, s
 void TexturePacks::start_workers() {
     if (!workers_.empty()) return;
     stopping_ = false;
-    const unsigned count = std::clamp(std::thread::hardware_concurrency() / 8u, 2u, 4u);
+    const unsigned count = std::max(2u, std::thread::hardware_concurrency() / 4u);
     for (unsigned i = 0; i < count; ++i) {
         workers_.emplace_back([this] { worker_main(); });
     }

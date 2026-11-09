@@ -18,7 +18,7 @@ Nothing is pushed. This file is the hand-off: what exists, what was measured, wh
 - Material table: `rt-materials.tsv` (texture-hash keyed; shipped beside the executable, kept outside the repository
   with the game data it describes). Stage rows; `untextured` stage rows; tokens include
   `emitter`, `emissive-area`, `tint`, `strip`, `star`, `mirror`.
-- Reference path tracer (`GALAXY_RT_REFERENCE=1`, `_BOUNCES`, `_EXPOSURE`, `_FROM`): one path per sample per
+- Reference path tracer (its test switches are no longer read): one path per sample per
   frame, every bounce shaded from the scene in linear light, averaged in float32 while the camera holds still.
   0.5-2.5 ms per frame on an RTX 5090 at internal 2x.
 
@@ -102,7 +102,7 @@ glass, emissive (glowing things light nothing), lamps, particles, metals, glitte
   (a galaxy tour, teleports, present snapshots), one session at a time.
 - Views: plaza = tour `GALAXY_TEST_GRAND_STARS=6;GALAXY_TEST_TELEPORT=3100,700,1150,900/...` presents 6600-6660;
   garden = `GALAXY_TEST_TELEPORT=3200.7,392,1050.6,900`, presents 3900-3960.
-- Views of single terms: `GALAXY_RT_VIEW` 2 sun, 3 sky and bounce, 4 lamps and glows, 7 contact occlusion;
-  `GALAXY_RT_REFLECT_VIEW=7` material-row probe; `GALAXY_RT_LOG_EMITTERS=1`; `GALAXY_RT_VALIDATE=1` with
-  `GALAXY_RT_DUMP`, `_EVERY`, `_COUNT`, `_DIR`.
+- The views of single terms (sun, sky and bounce, lamps and glows, contact occlusion), the material-row probe, the
+  emitter log and the validation dumps were selected by `GALAXY_RT_*` switches that no code reads now; only
+  `GALAXY_RT_LOG_GLOWS` and the render settings' `GALAXY_<KEY>` overrides remain.
 - A reference run lasts until `-Seconds` after its snapshot; give it about 200 s.

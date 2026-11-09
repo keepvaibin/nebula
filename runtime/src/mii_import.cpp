@@ -122,7 +122,7 @@ bool stored_id(const MiiRecord& record) {
 }
 
 // The same Mii whatever its create ID (one exported twice by a tool that writes none) and favourite flag (a choice
-// about the Mii, not the Mii; earlier builds cleared it past ten favourites).
+// about the Mii, not the Mii).
 bool same_mii(MiiFields a, MiiFields b) {
     a.create_id = b.create_id = {};
     a.favorite = b.favorite = 0;

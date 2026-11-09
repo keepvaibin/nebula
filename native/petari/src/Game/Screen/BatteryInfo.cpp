@@ -5,12 +5,13 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 #define INPUT_BATTERY_EMPTY -1
 
 namespace {
     static const s32 sDisplayFrameBatteryLow = 120;
-    static const s32 sLowIntervalFrame = 18000;
+    static const s32 sLowIntervalFrame = NebulaFrameClock::stepsOfSeconds(300);
     static const s32 sDisplayFrameBatteryNone = 450;
 };  // namespace
 

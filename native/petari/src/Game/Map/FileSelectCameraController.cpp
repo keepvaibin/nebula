@@ -3,6 +3,7 @@
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     // const Vec cTitleTargetPos = {};
@@ -87,7 +88,7 @@ void FileSelectCameraController::exeMoveToFarPoint() {
         mUpVec.set(0.0f, 1.0f, 0.0f);
     }
 
-    f32 squaredTime = getNerveStep() / 60.0f;
+    f32 squaredTime = NebulaFrameClock::secondsOfSteps(getNerveStep());
 
     squaredTime *= squaredTime;
     mWPoint += (Vec3f(::cFarTarget) - mWPoint) * squaredTime;
@@ -105,7 +106,7 @@ void FileSelectCameraController::exeFarPoint() {
 
 void FileSelectCameraController::exeMoveToNearPoint() {
     Vec3f nearPoint = mNearTarget + ::cNearPointOffset;
-    f32 squaredTime = getNerveStep() / 60.0f;
+    f32 squaredTime = NebulaFrameClock::secondsOfSteps(getNerveStep());
 
     squaredTime *= squaredTime;
     mWPoint += (mNearTarget - mWPoint) * squaredTime;

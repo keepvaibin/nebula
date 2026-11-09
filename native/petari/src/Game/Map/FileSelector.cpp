@@ -308,10 +308,6 @@ namespace {
     }
 };  // namespace
 
-void FileSelector::createFileItems() {
-    while (!createFileItemStep()) {}
-}
-
 bool FileSelector::createFileItemStep() {
     if (mInitItem >= ::cUserFileNum) return true;
     if (mInitItem == 0u) {

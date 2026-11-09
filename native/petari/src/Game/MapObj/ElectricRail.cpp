@@ -430,8 +430,8 @@ void ElectricRail::initMesh() {
 
 // Two crossed planes of half-width `radius` along each level.
 void ElectricRail::drawRail(TypedDraw& rDraw, f32 radius) const {
-    drawPlaneGX(rDraw, radius, radius, -radius, -radius);
-    drawPlaneGX(rDraw, -radius, radius, radius, -radius);
+    drawPlaneQuad(rDraw, radius, radius, -radius, -radius);
+    drawPlaneQuad(rDraw, -radius, radius, radius, -radius);
 }
 
 void ElectricRail::drawPlane(f32 side0, f32 up0, f32 side1, f32 up1) {
@@ -440,7 +440,7 @@ void ElectricRail::drawPlane(f32 side0, f32 up0, f32 side1, f32 up1) {
     }
 }
 
-void ElectricRail::drawPlaneGX(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const {
+void ElectricRail::drawPlaneQuad(TypedDraw& rDraw, f32 side0, f32 up0, f32 side1, f32 up1) const {
     for (s32 level = 0; level < mRailHeight; level++) {
         writePlaneStrip(rDraw.vertices< VertexPT >(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount), mSeparators, mSeparatorCount, level, side0, up0,
                         side1, up1);

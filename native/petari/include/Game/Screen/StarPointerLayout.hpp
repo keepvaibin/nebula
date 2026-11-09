@@ -13,7 +13,7 @@ class StarPointerDirector;
 class StarPointerBlur;
 class StarPointerNumber;
 
-// TODO: what are the missing values?
+// The pointer pictures the layout switches on; kinds 2 and 5 have no name of their own in its branches.
 enum StarPointerKind {
     StarPointerKind_NULL = -1,
     StarPointerKind_StarPointer = 0,
@@ -58,7 +58,6 @@ public:
     void exeRelease();
     void exeOutScreen();
     void exeNotConnected();
-    void endNotConnected();
     void exeHide();
     void endHide();
 

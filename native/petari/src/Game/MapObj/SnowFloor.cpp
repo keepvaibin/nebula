@@ -9,6 +9,7 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Render/GameTexture.hpp"
+#include "Game/Util/Array.hpp"
 
 namespace {
     const u16 sTextureSize = 128;
@@ -351,7 +352,7 @@ bool SnowFloor::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
 }
 
 namespace {
-    // Floors move on the game thread.
+    // Floors move on the game thread; a move holds at most one entry per cell of its box.
     MR::GrowBuffer< u16 > sXs;
     MR::GrowBuffer< u16 > sYs;
     MR::GrowBuffer< f32 > sWeights;
@@ -376,10 +377,11 @@ f32 SnowFloor::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     u32 minY = MR::clamp(top, 0, static_cast< s32 >(::sTextureSize));
     u32 maxX = MR::clamp(right, 0, static_cast< s32 >(::sTextureSize));
     u32 maxY = MR::clamp(bottom, 0, static_cast< s32 >(::sTextureSize));
-    const u32 room = (maxX - minX) * (maxY - minY);  // every cell of the box
-    u16* const xs = sXs.room(room);
-    u16* const ys = sYs.room(room);
-    f32* const weights = sWeights.room(room);
+    // One entry per cell of the box at most.
+    const u32 cells = maxX > minX && maxY > minY ? (maxX - minX) * (maxY - minY) : 0;
+    u16* const xs = sXs.room(cells + 1);
+    u16* const ys = sYs.room(cells + 1);
+    f32* const weights = sWeights.room(cells + 1);
     f32 outerRadiusSq = outerRadius * outerRadius;
     f32 radiusSq = radius * radius;
 

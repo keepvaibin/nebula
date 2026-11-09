@@ -139,9 +139,14 @@ struct GameLight {
     // actor, else its place), never 0.
     std::uint32_t key = 0u;
 };
+// How many lights were noted within `max_age_ms` (not black): the room game_point_lights / game_world_lights need.
+[[nodiscard]] std::size_t game_point_light_count(std::uint64_t max_age_ms) noexcept;
+[[nodiscard]] std::size_t game_world_light_count(std::uint64_t max_age_ms) noexcept;
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
+// Test hook: the light stores' clock runs `ms` ahead from now on (an entry unseen for 10 s is reused).
+void advance_game_lights_clock(std::uint64_t ms) noexcept;
 // Simulation thread: the movie frame the game draws (movie_playback.h); every later submission carries it until the
 // next. `data`: the cooked movie (null keeps the one given).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
@@ -201,8 +206,8 @@ void request_sharp_2d(bool on) noexcept;
 
 // The native game's HOME Menu with its choices, taking the keyboard and controllers while open: return
 // to the game, reset, or leave it, the last two after "are you sure?". The game opens it
-// (HBMInit) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
-// draws it from home_menu_view (NEBULA_HBM_VIEW) and sends the pointer's answers.
+// (home_menu_open) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
+// draws it from home_menu_view (NEBULA_HOME_MENU_VIEW) and sends the pointer's answers.
 void home_menu_open() noexcept;
 [[nodiscard]] int home_menu_poll() noexcept;
 void home_menu_close() noexcept;

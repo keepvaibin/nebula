@@ -619,7 +619,7 @@ void GalaxyMapController::setFaderParam(NebulaColor8 color, int frame) {
 void GalaxyMapController::capture() {
     Mtx44 projectionMtx;
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
-    f32 halfWidth = 304.0f;
+    f32 halfWidth = NebulaFrameClock::cLayoutWidth * 0.5f;
     NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
     Frame::targetBegin(mCaptureTexture->image(), mCaptureTexture->shareAcross(), mCaptureTexture->shareDown(), 0);
     Frame::setOrthographic(projectionMtx);

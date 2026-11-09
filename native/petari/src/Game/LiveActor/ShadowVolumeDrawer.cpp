@@ -9,7 +9,6 @@
 
 namespace {
     static Color8 sShapeColor(0xC0, 0xC0, 0, 4);
-    static Color8 sDebugShapeColor(0xFF, 0, 0, 0x80);
 };  // namespace
 
 ShadowVolumeDrawInit::ShadowVolumeDrawInit() : NameObj("シャドウボリューム描画初期化") {

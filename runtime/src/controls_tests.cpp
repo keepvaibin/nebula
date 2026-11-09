@@ -51,7 +51,7 @@ void test_names_round_trip() {
         const BindingTable table = default_binding_table(scheme);
         for (std::size_t t = 0; t < kGameInputCount; ++t) {
             const auto target = static_cast<GameInput>(t);
-            expect(parse_wii_target(game_input_id(target)) == target, "target id round trip");
+            expect(parse_game_input(game_input_id(target)) == target, "target id round trip");
             const std::string text = format_target_bindings(scheme, table[target]);
             TargetBindings parsed{};
             expect(parse_target_bindings(scheme, text, parsed), "default bindings parse");

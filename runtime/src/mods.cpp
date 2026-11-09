@@ -547,32 +547,6 @@ void read_pack(ModInfo& mod, const fs::path& textures) {
     }
 }
 
-// A whole number field of a package's manifest, at the top of the file; `fallback` when it has none.
-long long json_number(const std::string& text, std::string_view field, long long fallback) {
-    const std::string key = '"' + std::string(field) + '"';
-    std::size_t at = text.find(key);
-    if (at == std::string::npos) return fallback;
-    at = text.find(':', at + key.size());
-    if (at == std::string::npos) return fallback;
-    ++at;
-    while (at < text.size() && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n')) ++at;
-    long long value = 0;
-    bool any = false;
-    for (; at < text.size() && text[at] >= '0' && text[at] <= '9'; ++at) {
-        value = value * 10 + (text[at] - '0');
-        any = true;
-    }
-    return any ? value : fallback;
-}
-
-bool json_true(const std::string& text, std::string_view field) {
-    const std::string key = '"' + std::string(field) + '"';
-    std::size_t at = text.find(key);
-    if (at == std::string::npos) return false;
-    at = text.find(':', at + key.size());
-    return at != std::string::npos && text.find("true", at) == text.find_first_not_of(" \t\r\n", at + 1u);
-}
-
 // The language played, as language_folder takes it (the host says; English until it does).
 std::atomic<unsigned> s_played_language{1u};
 

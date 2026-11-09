@@ -1195,9 +1195,9 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     // The tabs and the filter.
     static const char* const cTabIds[TabNum] = {"TabAll", "TabStory", "TabChallenges", "TabExtras", "TabStats"};
     for (s32 i = 0; i < TabNum; i++) {
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbTab%d", i);
-        if (!makeChip(p, pBoard, &p->mTabs[i], name, false)) {
+        MR::FormattedName name;
+        name.format("NbTab%d", i);
+        if (!makeChip(p, pBoard, &p->mTabs[i], name.c_str(), false)) {
             p->mBoard = nullptr;
             return;
         }
@@ -1206,9 +1206,9 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
     static const char* const cFilterIds[FilterNum] = {"FilterAll", "FilterUnlocked", "FilterLocked"};
     for (s32 i = 0; i < FilterNum; i++) {
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbFlt%d", i);
-        if (!makeChip(p, pBoard, &p->mFilters[i], name, false)) {
+        MR::FormattedName name;
+        name.format("NbFlt%d", i);
+        if (!makeChip(p, pBoard, &p->mFilters[i], name.c_str(), false)) {
             p->mBoard = nullptr;
             return;
         }
@@ -1234,41 +1234,41 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     memset(static_cast< void* >(p->mCards), 0, sizeof(Card) * p->mCardNum);
     for (s32 i = 0; i < p->mCardNum; i++) {
         Card& rCard = p->mCards[i];
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbC%02d", i);
-        rCard.mRoot = makeGroup(p->mList, name);
+        MR::FormattedName name;
+        name.format("NbC%02d", i);
+        rCard.mRoot = makeGroup(p->mList, name.c_str());
         if (rCard.mRoot == nullptr) {
             p->mCardNum = i;
             break;
         }
-        nebula_snprintf(name, sizeof(name), "NbC%02dF", i);
-        rCard.mFocus = makeWindow(p, rCard.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbC%02dS", i);
-        rCard.mShadow = makeWindow(p, rCard.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbC%02dB", i);
-        rCard.mBody = makeWindow(p, rCard.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbC%02dI", i);
-        rCard.mBadge = makeWindow(p, rCard.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbC%02dY", i);
-        rCard.mGlyph = makeText(p, rCard.mRoot, name, 8);
+        name.format("NbC%02dF", i);
+        rCard.mFocus = makeWindow(p, rCard.mRoot, name.c_str());
+        name.format("NbC%02dS", i);
+        rCard.mShadow = makeWindow(p, rCard.mRoot, name.c_str());
+        name.format("NbC%02dB", i);
+        rCard.mBody = makeWindow(p, rCard.mRoot, name.c_str());
+        name.format("NbC%02dI", i);
+        rCard.mBadge = makeWindow(p, rCard.mRoot, name.c_str());
+        name.format("NbC%02dY", i);
+        rCard.mGlyph = makeText(p, rCard.mRoot, name.c_str(), 8);
         const NebulaAchievementIcon* pIcon = NebulaAchievements::getIcon(i);
         const s32 texture = pIcon != nullptr && pIcon->mGlyph == 0 ? NebulaAchievements::findIconTexture(pIcon) : -1;
         if (texture >= 0) {
-            nebula_snprintf(name, sizeof(name), "NbC%02dP", i);
-            rCard.mPicture = makePicture(rCard.mRoot, name, p->mTextures[texture]);
+            name.format("NbC%02dP", i);
+            rCard.mPicture = makePicture(rCard.mRoot, name.c_str(), p->mTextures[texture]);
         }
-        nebula_snprintf(name, sizeof(name), "NbC%02dn", i);
-        rCard.mNameShadow = makeText(p, rCard.mRoot, name, 96);
-        nebula_snprintf(name, sizeof(name), "NbC%02dN", i);
-        rCard.mName = makeText(p, rCard.mRoot, name, 96);
-        nebula_snprintf(name, sizeof(name), "NbC%02dH", i);
-        rCard.mHint = makeText(p, rCard.mRoot, name, 256);
-        nebula_snprintf(name, sizeof(name), "NbC%02dM", i);
-        rCard.mMeta = makeText(p, rCard.mRoot, name, 48);
-        nebula_snprintf(name, sizeof(name), "NbC%02dT", i);
-        rCard.mTrack = makeWindow(p, rCard.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbC%02dR", i);
-        rCard.mBar = makeWindow(p, rCard.mRoot, name);
+        name.format("NbC%02dn", i);
+        rCard.mNameShadow = makeText(p, rCard.mRoot, name.c_str(), 96);
+        name.format("NbC%02dN", i);
+        rCard.mName = makeText(p, rCard.mRoot, name.c_str(), 96);
+        name.format("NbC%02dH", i);
+        rCard.mHint = makeText(p, rCard.mRoot, name.c_str(), 256);
+        name.format("NbC%02dM", i);
+        rCard.mMeta = makeText(p, rCard.mRoot, name.c_str(), 48);
+        name.format("NbC%02dT", i);
+        rCard.mTrack = makeWindow(p, rCard.mRoot, name.c_str());
+        name.format("NbC%02dR", i);
+        rCard.mBar = makeWindow(p, rCard.mRoot, name.c_str());
         if (rCard.mFocus == nullptr || rCard.mShadow == nullptr || rCard.mBody == nullptr || rCard.mBadge == nullptr ||
             rCard.mGlyph == nullptr || rCard.mNameShadow == nullptr || rCard.mName == nullptr || rCard.mHint == nullptr ||
             rCard.mMeta == nullptr || rCard.mTrack == nullptr || rCard.mBar == nullptr) {
@@ -1282,7 +1282,7 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
 
         // Its name in the played language.
         rCard.mHintText.room(1)[0] = 0;
-        NebulaAchievements::getName(text.room(256), 256, NebulaAchievements::getId(i));
+        NebulaAchievements::getName(text, NebulaAchievements::getId(i));
         setText(rCard.mName, text.c_str());
         setText(rCard.mNameShadow, text.c_str());
         setTextStyle(rCard.mName, cNameSize, cWhite, cWhite, 0);
@@ -1292,9 +1292,9 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
 
     for (s32 i = 0; i < 2; i++) {
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbSec%d", i);
-        p->mSections[i] = makeText(p, p->mList, name, 64);
+        MR::FormattedName name;
+        name.format("NbSec%d", i);
+        p->mSections[i] = makeText(p, p->mList, name.c_str(), 64);
         if (p->mSections[i] == nullptr) {
             p->mBoard = nullptr;
             return;
@@ -1305,33 +1305,33 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     }
     for (s32 i = 0; i < StatNum; i++) {
         Tile& rTile = p->mTiles[i];
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbS%02d", i);
-        rTile.mRoot = makeGroup(p->mList, name);
+        MR::FormattedName name;
+        name.format("NbS%02d", i);
+        rTile.mRoot = makeGroup(p->mList, name.c_str());
         if (rTile.mRoot == nullptr) {
             p->mBoard = nullptr;
             return;
         }
-        nebula_snprintf(name, sizeof(name), "NbS%02dB", i);
-        rTile.mBody = makeWindow(p, rTile.mRoot, name);
-        nebula_snprintf(name, sizeof(name), "NbS%02dY", i);
-        rTile.mGlyph = makeText(p, rTile.mRoot, name, 8);
+        name.format("NbS%02dB", i);
+        rTile.mBody = makeWindow(p, rTile.mRoot, name.c_str());
+        name.format("NbS%02dY", i);
+        rTile.mGlyph = makeText(p, rTile.mRoot, name.c_str(), 8);
         if (i == StatJumps || i == StatLivesLost || i == StatChapters) {
             // A picture: the player's face (Mario's or Luigi's, chosen when the board opens), the storybook's cover.
             const char* pTexture = i == StatChapters ? "PictureBookCoverFront.bti" : "mymiimario.tpl";
             for (s32 t = 0; t < textureNum; t++) {
                 if (MR::isEqualString(NebulaAchievements::getIconTexture(t)->mTexture, pTexture) && p->mTextures[t] != nullptr) {
-                    nebula_snprintf(name, sizeof(name), "NbS%02dP", i);
-                    rTile.mPicture = makePicture(rTile.mRoot, name, p->mTextures[t]);
+                    name.format("NbS%02dP", i);
+                    rTile.mPicture = makePicture(rTile.mRoot, name.c_str(), p->mTextures[t]);
                 }
             }
         }
-        nebula_snprintf(name, sizeof(name), "NbS%02dv", i);
-        rTile.mValueShadow = makeText(p, rTile.mRoot, name, 48);
-        nebula_snprintf(name, sizeof(name), "NbS%02dV", i);
-        rTile.mValue = makeText(p, rTile.mRoot, name, 48);
-        nebula_snprintf(name, sizeof(name), "NbS%02dL", i);
-        rTile.mLabel = makeText(p, rTile.mRoot, name, 64);
+        name.format("NbS%02dv", i);
+        rTile.mValueShadow = makeText(p, rTile.mRoot, name.c_str(), 48);
+        name.format("NbS%02dV", i);
+        rTile.mValue = makeText(p, rTile.mRoot, name.c_str(), 48);
+        name.format("NbS%02dL", i);
+        rTile.mLabel = makeText(p, rTile.mRoot, name.c_str(), 64);
         if (rTile.mBody == nullptr || rTile.mGlyph == nullptr || rTile.mValueShadow == nullptr || rTile.mValue == nullptr ||
             rTile.mLabel == nullptr) {
             p->mBoard = nullptr;
@@ -1376,16 +1376,16 @@ void NebulaAchievementBoard::init(const TableIter& rIter) {
     setTextStyle(p->mBack.mText, cFooterSize + 1.0f, cButtonText, cButtonText, 3);
     static const char* const cHintIds[HintNum] = {"HintTabs", "HintMove"};
     for (s32 i = 0; i < HintNum; i++) {
-        char name[17];
-        nebula_snprintf(name, sizeof(name), "NbHint%dY", i);
-        p->mHintGlyphs[i] = makeText(p, pBoard, name, 16);
-        nebula_snprintf(name, sizeof(name), "NbHint%dT", i);
-        p->mHintLabels[i] = makeText(p, pBoard, name, 48);
+        MR::FormattedName name;
+        name.format("NbHint%dY", i);
+        p->mHintGlyphs[i] = makeText(p, pBoard, name.c_str(), 16);
+        name.format("NbHint%dT", i);
+        p->mHintLabels[i] = makeText(p, pBoard, name.c_str(), 48);
         if (p->mHintGlyphs[i] == nullptr || p->mHintLabels[i] == nullptr) {
             p->mBoard = nullptr;
             return;
         }
-        char16_t glyphs[16] = {0};
+        char16_t glyphs[16] = {0};  // two picture font tags (3 units each) and the terminator
         char16_t* q = glyphs;
         if (i == HintTabs) {
             q = MR::addPictureFontTag(q, cGlyphMinus);

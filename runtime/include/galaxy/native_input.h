@@ -19,12 +19,12 @@ namespace galaxy::input {
     std::string_view text,
     std::uint64_t& value) noexcept;
 
-// `anchor_vi` plus the script offset `offset_text`, failing on overflow.
-// `start_vi` is changed only on success.
-[[nodiscard]] bool resolve_native_input_script_start_vi(
-    std::uint64_t anchor_vi,
+// `anchor_frame` plus the script offset `offset_text`, failing on overflow.
+// `start_frame` is changed only on success.
+[[nodiscard]] bool resolve_native_input_script_start_frame(
+    std::uint64_t anchor_frame,
     std::string_view offset_text,
-    std::uint64_t& start_vi) noexcept;
+    std::uint64_t& start_frame) noexcept;
 
 struct ButtonState {
     bool left = false;

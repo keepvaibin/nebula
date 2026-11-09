@@ -2,6 +2,8 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/NebulaText.hpp"
+#include "Game/Screen/NebulaUi.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/LayoutUtil.hpp"

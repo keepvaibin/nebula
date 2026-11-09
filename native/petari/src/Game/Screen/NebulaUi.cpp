@@ -200,7 +200,7 @@ namespace NebulaUi {
         if (pText == nullptr) {
             return;
         }
-        char16_t glyph[8] = {0};
+        char16_t glyph[8] = {0};  // one picture font tag (3 units) and the terminator
         MR::addPictureFontTag(glyph, code);
         setText(pText, glyph);
         pText->SetFontSize(glyphFontSize(pText, size));

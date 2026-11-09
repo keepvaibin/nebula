@@ -6,6 +6,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvMeteorStrikeLauncher {
     NEW_NERVE(MeteorStrikeLauncherNrvCreate, MeteorStrikeLauncher, Create);
@@ -83,7 +84,7 @@ void MeteorStrikeLauncher::initMapToolInfo(const TableIter& rIter) {
     MR::useStageSwitchReadAppear(this, rIter);
 
     if (MR::getPlacementArg1NoInit(rIter, &mIntervalStep)) {
-        mIntervalStep *= 60;
+        mIntervalStep *= NebulaFrameClock::stepsOfSeconds(1);
     }
 
     mIsMeteorStrike = MR::isEqualObjectName(rIter, "MeteorStrike");

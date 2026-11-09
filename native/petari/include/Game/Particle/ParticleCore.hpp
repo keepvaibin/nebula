@@ -31,22 +31,6 @@ public:
         return mAge;
     }
 
-    void setOffsetPosition(const Vec3f& pos) {
-        mOffsetPosition.set(pos);
-    }
-
-    void setOffsetPosition(f32 x, f32 y, f32 z) {
-        mOffsetPosition.set(x, y, z);
-    }
-
-    void getOffsetPosition(Vec3f& pos) {
-        pos.set(mOffsetPosition);
-    }
-
-    void getOffsetPosition(Vec3f* pos) const {
-        pos->set(mOffsetPosition);
-    }
-
     u16 getRotateAngle() const {
         return mRotateAngle;
     }
@@ -57,14 +41,6 @@ public:
 
     void getGlobalPosition(Vec3f* pos) const {
         pos->set(mPosition);
-    }
-
-    f32 getParticleScaleX() const {
-        return mParticleScaleX;
-    }
-
-    f32 getParticleScaleY() const {
-        return mParticleScaleY;
     }
 
     void setStatus(u32 flag) {
@@ -79,14 +55,6 @@ public:
         mStatus = status;
     }
 
-    void setInvisibleParticleFlag() {
-        setStatus(8);
-    }
-
-    void setDeleteParticleFlag() {
-        setStatus(2);
-    }
-
     void getVelVec(Vec3f& vec) const {
         vec.set(mVelocity);
     }
@@ -97,14 +65,6 @@ public:
 
     void getLocalPosition(Vec3f* vec) const {
         vec->set(mLocalPosition);
-    }
-
-    void getBaseAxis(Vec3f& vec) const {
-        vec.set(mBaseAxis);
-    }
-
-    void getBaseAxis(Vec3f* vec) const {
-        vec->set(mBaseAxis);
     }
 
     u32 getUserWork() const {

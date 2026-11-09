@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
+#include "galaxy/game_step.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/runtime_settings.h"
 #include <cstddef>
@@ -11,6 +12,9 @@
 
 namespace galaxy::ui {
 using render::RenderConfig;
+// The game's steps a second, and the half rate a frame-rate limit also offers. A display rate of 0 is unknown.
+inline constexpr unsigned kStepRate = static_cast<unsigned>(kGameStepsPerSecond);
+inline constexpr unsigned kHalfStepRate = kStepRate / 2u;
 struct SettingsRow {
     std::string label;
     std::string value;

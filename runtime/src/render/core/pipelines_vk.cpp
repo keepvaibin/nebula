@@ -4,6 +4,7 @@
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
+#include "galaxy/render/vk/device_quirks_vk.h"
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 #include "galaxy/render/vk/vk_context.h"
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <system_error>
 #include <unordered_map>
 #include <vector>
 
@@ -263,7 +265,10 @@ VkPipelineCache driver_cache(VkDevice device) {
         return gModules.cache;
     }
     gModules.device = device;
-    gModules.cache_file = shader_cache_directory() / "vk_pipelines.bin";
+    // Named for what the data is valid for: the device, its driver build and the driver's cache UUID.
+    gModules.cache_file = shader_cache_directory() / ("vk_pipelines-" + vk::driver_key(vk::Context::get().identity()) + ".bin");
+    std::error_code ignored;
+    std::filesystem::remove(shader_cache_directory() / "vk_pipelines.bin", ignored);  // the one file every GPU shared
     std::vector<char> bytes;
     if (std::ifstream in(gModules.cache_file, std::ios::binary | std::ios::ate); in) {
         std::vector<char> file(static_cast<std::size_t>(in.tellg()));

@@ -2,7 +2,7 @@
 import sys, glob, os
 from PIL import Image, ImageChops
 R = sys.argv[1]
-names = sorted(os.path.basename(f) for f in glob.glob(R + '/new/runs/fp/present_*.ppm') if 'xfb' not in f and os.path.exists(R + '/old/runs/fp/' + os.path.basename(f)))
+names = sorted(os.path.basename(f) for f in glob.glob(R + '/new/runs/fp/present_*.ppm') if 'display' not in f and os.path.exists(R + '/old/runs/fp/' + os.path.basename(f)))
 rows = []
 same = 0
 for n in names:

@@ -402,10 +402,10 @@ void XanimePlayer::updateInterpoleRatio() {
 // The translation of `joint` in the heaviest track (ties within 0.01 keep the earlier track).
 void XanimePlayer::getMainAnimationTrans(u32 joint, Vec3f* pOut) const {
     XanimeTrack* pTracks = mCore->mTrackList;
-    const u8 trackCount = mCore->mTrackCount;
-    u8 index = 0;
+    const u32 trackCount = mCore->mTrackCount;
+    u32 index = 0;
     f32 threshold = pTracks[0].getWeight() + 0.01f;
-    for (u8 i = 1; i < trackCount; i++) {
+    for (u32 i = 1; i < trackCount; i++) {
         const XanimeTrack& rTrack = pTracks[i];
         if (rTrack.mClip != nullptr && rTrack.getWeight() > threshold) {
             threshold = rTrack.getWeight() + 0.01f;

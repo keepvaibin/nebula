@@ -79,21 +79,6 @@ int ResTable::getResIndex(const char* pName) const {
     return -1;
 }
 
-const char* ResTable::findResName(const void* pRes) const {
-    for (int i = 0; i < mCount; i++) {
-        ResFileInfo* inf = &mFileInfoTable[i];
-        if (pRes == inf->mResource) {
-            return inf->mName;
-        }
-    }
-
-    return 0;
-}
-
-const char* ResTable::getResName(const void* pResource) const {
-    return findResName(pResource);
-}
-
 void ResFileInfo::setName(const char* pName, bool stripExt) {
     size_t len = strlen(pName) + 1;
     mName = new char[len];

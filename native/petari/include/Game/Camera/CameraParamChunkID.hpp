@@ -49,6 +49,6 @@ public:
         return mLong;
     }
 
-    char mBuffer[0x100];
+    char mBuffer[0x100];  // the common case in itself; a longer id is in mLong, whole
     char* mLong = nullptr;
 };

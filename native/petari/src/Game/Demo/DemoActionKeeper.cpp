@@ -11,10 +11,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 
-// done due to inlining
-template const bool Table::getValue< s32 >(int, const char*, s32*) const;
-template const bool Table::getValue< const char* >(int, const char*, const char**) const;
-
 namespace {
     TalkMessageCtrl* findTalkMessageCtrl(LiveActor* pActor) {
         DemoExecutor* executor = DemoFunction::findDemoExecutorActive(pActor);

@@ -74,7 +74,12 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
     }
     {
         const unsigned hz = state.frame_rates.refresh_hz;
-        std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
+        // A rate the system did not report is said so, not guessed.
+        if (hz != 0u) {
+            std::snprintf(text, sizeof(text), "%u HZ", hz);
+        } else {
+            std::snprintf(text, sizeof(text), "UNKNOWN");
+        }
         rows.push_back({"REFRESH RATE", text, nullptr, state.fullscreen_only ? "FOLLOWS THE PHONE DISPLAY" : "SET IN THE SYSTEM DISPLAY SETTINGS"});
     }
     {

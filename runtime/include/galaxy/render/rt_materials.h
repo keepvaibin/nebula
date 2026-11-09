@@ -6,7 +6,7 @@
 // emission: a point or spot light at the object (Lumas, star bits, a headlamp) or light from the surface itself
 // (lava, magma). The table holds hashes and numbers only, no game data.
 //
-// Files: GALAXY_RT_MATERIALS_FILE (several separated by ';'), else rt-materials.tsv then rt-materials-lights.tsv
+// Files: rt-materials.tsv then rt-materials-lights.tsv
 // beside the executable. Tab-separated, with a header row naming the columns:
 //   hash  class  roughness  metallic  r  g  b  intensity  range  pulse  cone  shadow  glow  stage  region  object
 //   material  (others ignored)
@@ -177,7 +177,7 @@ private:
     std::size_t skipped_ = 0;
 };
 
-// A stage's sun: GALAXY_RT_SUNS_FILE, else rt-suns.tsv beside the executable. Tab-separated, with a header row naming
+// A stage's sun: rt-suns.tsv beside the executable. Tab-separated, with a header row naming
 // the columns:
 //   stage  source  x  y  z  r  g  b  strength  size  shafts  day  ambient  core  (others ignored)
 // stage: the game's stage name (EggStarGalaxy).
@@ -188,9 +188,9 @@ private:
 //   moon: x y z its world direction, the `strength` share of the stage's key in r g b, the camera exposed for the
 //   stage's full light).
 // r g b: its colour (0-1). strength: its light relative to the default. size: the disc's radius in degrees.
-// shafts: the light shafts' strength (times GALAXY_RT_CAMERA_SHAFTS). day: 1 the day model (the art as drawn, with
+// shafts: the light shafts' strength. day: 1 the day model (the art as drawn, with
 //   modern shadows), 0 the night model (lit by its lights), a blend between; empty: from the sky's brightness.
-// ambient: the night model's open-art level (times GALAXY_RT_NIGHT_LEVEL). Empty fields keep the defaults.
+// ambient: the night model's open-art level. Empty fields keep the defaults.
 struct RtStageSun {
     enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2, Core = 3, Moon = 4 };
     Source source = Source::Game;
@@ -201,7 +201,7 @@ struct RtStageSun {
     float size = -1.0f;                   // < 0: the default
     float shafts = -1.0f;                 // < 0: the default
     float day = -1.0f;                    // < 0: by the sky's brightness
-    float ambient = 1.0f;                 // the night model's open-art level for this stage (x GALAXY_RT_NIGHT_LEVEL)
+    float ambient = 1.0f;                 // the night model's open-art level for this stage
     float core = 0.0f;                    // source core: the star core's radiance (white under the full light: 1)
 };
 

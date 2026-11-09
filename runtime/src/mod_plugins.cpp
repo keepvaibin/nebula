@@ -5,6 +5,7 @@
 #include "galaxy/luma.h"
 
 #include <algorithm>
+#include <limits>
 #include <cstring>
 #include <string>
 #include <filesystem>
@@ -116,7 +117,10 @@ std::map<std::string, std::int32_t> read_store(const NebulaPlugin* self) {
         if (equals == std::string::npos) continue;
         char* end = nullptr;
         const long value = std::strtol(line.c_str() + equals + 1, &end, 10);
-        if (end != nullptr && end != line.c_str() + equals + 1) values[line.substr(0, equals)] = static_cast<std::int32_t>(value);
+        if (end != nullptr && end != line.c_str() + equals + 1) {
+            values[line.substr(0, equals)] = static_cast<std::int32_t>(
+                std::clamp<long>(value, std::numeric_limits<std::int32_t>::min(), std::numeric_limits<std::int32_t>::max()));
+        }
     }
     return values;
 }
@@ -312,7 +316,12 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             say(flag.mod_id + ": the row " + flag.name + " can't be set");
         }
     }
-    for (const CometsToSet& dome : rows.comets) {
+    // By dome number, so a mod's further domes come in the order the game data takes them (the next dome after the last).
+    std::vector<const CometsToSet*> comet_domes;
+    for (const CometsToSet& dome : rows.comets) comet_domes.push_back(&dome);
+    std::stable_sort(comet_domes.begin(), comet_domes.end(), [](const CometsToSet* a, const CometsToSet* b) { return a->dome < b->dome; });
+    for (const CometsToSet* dome_row : comet_domes) {
+        const CometsToSet& dome = *dome_row;
         std::vector<const char*> galaxies;
         std::vector<std::int32_t> coins;
         for (const auto& [galaxy, coin] : dome.comets) {

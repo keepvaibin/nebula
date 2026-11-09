@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 class GalaxyNamePlate;
 
@@ -26,6 +27,6 @@ private:
     const LayoutActor* mHost;
     const char* mPaneName;
     GalaxyNamePlate* mNamePlate;
-    char16_t* mGalaxyName;
+    MR::Text16 mGalaxyName;
     bool mIsShow;
 };

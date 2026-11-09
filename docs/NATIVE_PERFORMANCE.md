@@ -63,7 +63,7 @@ The game thread waits 92 % of the time at four heavy stops (real time, 900 frame
 
 The stand-in's 2-CU iGPU at Battlerock Galaxy's first stop: a 1280x720 window, 60 fps, default settings. GPU time per
 frame from the frame's timestamps; by pass with `GALAXY_GPU_PASSES=1` (present-stats' `gpu-pass-ms`, with the
-pipeline statistics in `gpu-stats`), by pipeline with `GALAXY_GPU_DRAWS=1` (`[gpu-draws]`, `[pso-desc]`); the same on
+pipeline statistics in `gpu-stats`); the same on
 Vulkan, whose log also lists the device's memory heaps and types (`[vulkan] memory`).
 
 | internal resolution 1x | GPU ms/frame | evidence |
@@ -105,10 +105,10 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   from a local copy. They are now kept in local memory only, each run copied once when it becomes resident through
   staging memory of that frame (Vulkan writes them straight into device memory the CPU can map,
   `vk::BufferPlace::DeviceMapped`: unified memory, resizable BAR, else host memory).
-- Debanding ran at the picture's own size before scaling, 3 ms of the 3x frame (`GALAXY_DEBAND=0`: presentation 4.18
+- Debanding ran at the picture's own size before scaling, 3 ms of the 3x frame (debanding off: presentation 4.18
   -> 1.16 ms): 3 million pixels, taps up to 70 pixels away. A reduced picture is now scaled to the window first and
   debanded there (a third of the pixels, the radius the same share of the height, the dither at the size it is
-  seen); an enlarged one as before. Same run (`GALAXY_TEST_DEBAND_AB=1` alternates the two): the paused Battlerock
+  seen); an enlarged one as before. Same run (the two alternating): the paused Battlerock
   frame differs by at most 4 of 255 everywhere; the title's sky, contrast stretched, is smooth in both.
 - The game clears the frame by drawing a quad (`GameFrame clearFrame`, colour and depth; `MR::clearZBuffer`, depth
   only) whose pixel shader writes the depth of a Z texture with the compare always: every pixel exports its depth,
@@ -116,9 +116,9 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   (`__NebulaGXClearQuadMarker`, the texture's depth); the renderer clears the depth (the shader's formula,
   1 - z/2^24) and draws the colour, where written, with the same quad less the Z texture and the depth compare, so the
   colour is the shader's own (0.33 ms). A quad that is not the expected one (another compare, blending, a 16-bit
-  depth frame, a viewport short of the scissor) draws as written. Same run (`GALAXY_TEST_CLEAR_QUAD_AB=1`, paused):
+  depth frame, a viewport short of the scissor) draws as written. Same run (the two alternating, paused):
   identical at 1x and at 3x with 4x MSAA.
-- Pictures (same run, `GALAXY_TEST_CURVED_SPLIT_AB=1` draws curved surfaces whole every other frame; the pause menu
+- Pictures (same run, curved surfaces drawn whole every other frame; the pause menu
   holds the scene, which is still drawn each frame), with the sort: identical at 1x, at 3x, and at 1x with 4x MSAA.
   At 3x with 4x MSAA two pixels at an edge differ by up to 3 of 255: with the sort a triangle moves between the two
   lists, and samples exactly on an edge where two surfaces meet at equal depth go to whichever is drawn last. With a
@@ -140,7 +140,7 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   never drawn on Vulkan (the curve data, TEXCOORD16, had no location between stages); once built they drew unculled,
   under a lower-left domain origin that reversed their winding. NVIDIA's compiler crashed building them on a `Patch`
   decoration glslang puts on `SV_DomainLocation` (`TessCoord`), which the compile now drops.
-- Pipelines were created again at every start (`GALAXY_TEST_HITCHES=1`, frames of 50 ms or more, stand-in at 1x: 7 on
+- Pipelines were created again at every start (frames of 50 ms or more, stand-in at 1x: 7 on
   a second start, the worst 748 ms; 11-13 on the first, 800-860 ms). psos.bin's reload stopped at the first curved
   surface's key (patch topology, which the key check did not accept) and the repair dropped the rest: 2 of 167 keys
   known at the next start. The D3D12 pipeline library (pipelines.bin) was written only at shutdown, which the host
@@ -153,7 +153,7 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
 - The shadow volumes (the alpha-only sums above: 40 draws, 6,240 triangles a frame at Battlerock) drew whole, every
   triangle a patch. Split, the stand-in at 1x: 5.28 / 5.37 / 5.28 -> 5.02 / 5.01 / 5.14 ms (three alternating pairs;
   scene 3.58 -> 3.20, sort 0.67 -> 0.81), hull shader invocations 14.2k -> 7.6k a frame, domain 74.9k -> 55.0k. Same
-  run (`GALAXY_TEST_CURVED_SPLIT_AB`, paused): identical.
+  run (the two alternating, paused): identical.
 - Interpolation's vertex blend and physical ray tracing's de-baking are left out of the vertex shaders of frames that
   run neither (`kVsFeature*`). The blend read a buffer per vertex and every attribute (it blends them all), so every
   attribute was fetched. No change measured on the stand-in at 1x (three pairs, within run-to-run noise); same run
@@ -182,14 +182,14 @@ named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the 
   (first-draw building alone: 999,672 of 1,000,000); the parser's commands a frame 77 KB -> 28 KB; render thread
   84.0 / 84.2 / 84.4 -> 80.1 / 78.6 / 77.2 ms/s, GPU 4.96 / 4.99 / 5.03 -> 4.92 / 4.83 / 4.80 ms; boot's two frames over
   50 ms unchanged (76 + 87 against 75 + 88 ms; the builder at normal priority made one of 218 ms). Same run
-  (`GALAXY_TEST_NATIVE_SHAPES_AB`, native every other presented frame, paused): identical; with ray tracing High the
+  (native shapes every other presented frame, paused): identical; with ray tracing High the
   native and old-path frames differ no more than two old-path frames do.
 - Matrix palette snapshots copy 3,584 of their 6,656 bytes: XF memory has nothing at 0x100-0x3FF, which no reader
   addresses (98 snapshots a frame at Battlerock: 652,288 -> 351,232 bytes copied).
 - Display copies. SMG's copy to the picture filters every frame (weights 32, 32, 0: each row averaged with the one above,
   the Wii's deflicker), so it is a pass of its own: `display_filter_shader_source`, the general conversion's integer
   arithmetic for a 1:1 copy without gamma (rows loaded, not filtered by the sampler; truncated to 8 bits, weighted,
-  shifted down by six). Same run (`GALAXY_TEST_DISPLAY_FILTER_AB`, paused): identical pictures and pictures. Stand-in at
+  shifted down by six). Same run (the two alternating, paused): identical pictures and pictures. Stand-in at
   1x: Display copy 0.14 -> 0.10 ms; 4K at 5x: 3.65 -> 2.61 ms. Vulkan has the same pass.
 - A copy that changes nothing (the identity filter at boot, no gamma, the whole picture, one frame pixel to one picture
   pixel) is not copied: the frame's colour target becomes the picture (`can_hand_over_display_copy`), and the frame takes an
@@ -230,7 +230,7 @@ D3D12, GPU ms a game frame:
   now carries the colour, and the renderer clears it as it clears the depth, with the values the quad's pixel shader
   stores (8-bit colour; on a frame with alpha the 6-bit alpha: the material's, where one writes zero, or the destination
   alpha constant; `kFrameClearExact`). Fog, the temporal upscalers' targets or a lit translucent keep the quad. Same run
-  (`GALAXY_TEST_CLEAR_QUAD_AB`): identical at 1x and 3x on D3D12 and Vulkan.
+  (the two alternating): identical at 1x and 3x on D3D12 and Vulkan.
 - Ambient occlusion's apply read the depth and four occlusion pixels with five loads a pixel. It now gathers the four
   (two gathers) and, before reading the depth, skips a pixel whose least occlusion leaves its colour within a half
   level: the visibility is a weighted mean of the four and the colour's multiplier rises with it, so those pixels
@@ -262,8 +262,8 @@ the game's 60):
   240 fps at 4x needs the engine under about 4 ms.
 - The neighbour taps (a-trous, spatial reuse, upsampling, shadow blurs) read a 12-byte guide the G-buffer pass copies
   from its records, bit for bit (`gb_guide`): 4x 9.77 -> 9.44 ms (denoise 2.95 -> 2.73, shadow 0.90 -> 0.80).
-- GPU timers serialise the work: with `GALAXY_GPU_PASSES` and `GALAXY_RT_PASS_TIMING` on, 3x fell from 240 to 120 fps.
-- By dispatch (`GALAXY_RT_PASS_TIMING=2`, `[rt-engine-kernels]`), 4x: G-buffer 0.92 ms, direct 1.05 and its spatial
+- GPU timers serialise the work: with `GALAXY_GPU_PASSES` and the ray tracing dispatch timing on, 3x fell from 240 to 120 fps.
+- By dispatch, 4x: G-buffer 0.92 ms, direct 1.05 and its spatial
   reuse 1.03 (up to 25 target evaluations a pixel: the generalized balance heuristic over five samples), the sun
   shadow's blur, post and stabilisation 0.30, 0.31 and 0.19, indirect 1.75 and its spatial reuse 0.30, specular 0.47,
   temporal 0.68, the five a-trous iterations 0.45, 0.38, 0.39, 0.42 and 0.43, final 0.35.

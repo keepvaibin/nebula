@@ -127,11 +127,6 @@ static inline uint32_t nebula_texture_level_bytes(uint32_t width, uint32_t heigh
     return total;
 }
 
-/* The header of a one-level record the game keeps in static memory (an image it made): `{header, texels}`. */
-#define NEBULA_TEXTURE_STATIC(width, height, layout, texel_bytes)                                                  \
-    {{'N', 'b', 'T', 'e', 'x', 't', 'u', 'r'}, NEBULA_TEXTURE_VERSION, NEBULA_TEXTURE_HEADER + (texel_bytes), (width), \
-     (height), 1, (layout), NEBULA_TEXTURE_MADE, 0, 0, 0, 0, {0}}
-
 /* The record at `p`, or NULL when `p` holds none (or one of another version). */
 static inline const NebulaTexture* nebula_texture_record(const void* p) {
     const NebulaTexture* t = (const NebulaTexture*)p;

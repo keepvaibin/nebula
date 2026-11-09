@@ -41,7 +41,6 @@ public:
     u32 Size() const { return mSize; }
     bool Empty() const { return mFirst == nullptr; }
     static T* Next(const T* p) { return p->mLink.mNext; }
-    static T* Prev(const T* p) { return p->mLink.mPrev; }
 
     Iter< T* > begin() { return Iter< T* >(mFirst); }
     Iter< T* > end() { return Iter< T* >(nullptr); }

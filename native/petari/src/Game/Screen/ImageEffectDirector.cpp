@@ -123,7 +123,7 @@ void ImageEffectDirector::updateManual() {
         incPlayerSyncIntensity();
     }
 
-    f32 intensity = mDepthOfFieldIntensity * (mPlayerSyncIntensity / 60.0f);
+    f32 intensity = mDepthOfFieldIntensity * (mPlayerSyncIntensity / static_cast< f32 >(::sIntensityCountMax));
 
     if (mState == mStateScreenBlur) {
         mStateScreenBlur->setIntensity(intensity);
@@ -182,13 +182,13 @@ void ImageEffectDirector::setBloomSimpleParams(ImageEffectArea* pArea) {
 void ImageEffectDirector::setScreenBlurParams(ImageEffectArea* pArea) {
     ScreenBlurArea* pScreenBlurArea = static_cast< ScreenBlurArea* >(pArea);
     updatePlayerSyncIntensity(pScreenBlurArea, mStateScreenBlur);
-    mStateScreenBlur->setIntensity(mPlayerSyncIntensity / 60.0f);
+    mStateScreenBlur->setIntensity(mPlayerSyncIntensity / static_cast< f32 >(::sIntensityCountMax));
 }
 
 void ImageEffectDirector::setDepthOfFieldParams(ImageEffectArea* pArea) {
     DepthOfFieldArea* pDepthOfFieldArea = static_cast< DepthOfFieldArea* >(pArea);
     updatePlayerSyncIntensity(pDepthOfFieldArea, mStateDepthOfField);
-    f32 syncIntensity = mPlayerSyncIntensity / 60.0f;
+    f32 syncIntensity = mPlayerSyncIntensity / static_cast< f32 >(::sIntensityCountMax);
     f32 areaIntensity = pDepthOfFieldArea->getIntensity();
     mStateDepthOfField->setIntensity(syncIntensity * areaIntensity);
     mStateDepthOfField->setBlurMaxDist(pDepthOfFieldArea->getBlurMaxDist());

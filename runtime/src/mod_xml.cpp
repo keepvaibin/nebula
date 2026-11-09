@@ -101,6 +101,8 @@ private:
             else if (entity.size() > 1 && entity[0] == '#') {
                 const bool hex = entity[1] == 'x' || entity[1] == 'X';
                 code = std::strtoul(std::string(entity.substr(hex ? 2 : 1)).c_str(), nullptr, hex ? 16 : 10);
+                // No character, past Unicode's last or half of a surrogate pair: the replacement character.
+                if (code == 0 || code > 0x10FFFFul || (code >= 0xD800ul && code <= 0xDFFFul)) code = 0xFFFDul;
             } else {
                 known = false;
             }

@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <variant>
 
@@ -347,13 +348,30 @@ bool contains(const std::vector<std::string>& list, std::string_view wanted) {
     return std::find(list.begin(), list.end(), wanted) != list.end();
 }
 
+// A manifest's number as a whole one: a fraction is cut and a value past the type's range stops at its end (a plain
+// cast of such a double is undefined).
+int whole_int(double value) {
+    if (!(value == value)) return 0;
+    if (value >= 2147483647.0) return std::numeric_limits<int>::max();
+    if (value <= -2147483648.0) return std::numeric_limits<int>::min();
+    return static_cast<int>(value);
+}
+
+// The same as 32 bits that wrap: a negative number counts back from 2^32.
+std::uint32_t whole_u32(double value) {
+    if (!(value == value)) return 0u;
+    if (value >= 4294967295.0) return 0xFFFFFFFFu;
+    if (value >= 0.0) return static_cast<std::uint32_t>(value);
+    return static_cast<std::uint32_t>(whole_int(value));
+}
+
 bool read_rows(const Value& from, Rows& out) {
     if (const Value* story = from.get("story"); story != nullptr && story->object() != nullptr) {
         for (const auto& [key, value] : *story->object()) {
             if (const std::string* words = value.string()) {
                 out.story[key] = *words;
             } else if (const double* number = value.number()) {
-                out.story[key] = std::to_string(static_cast<int>(*number));
+                out.story[key] = std::to_string(whole_int(*number));
             } else if (const bool* flag = std::get_if<bool>(&value.data)) {
                 out.story[key] = *flag ? "on" : "off";
             }
@@ -375,14 +393,15 @@ bool read_rows(const Value& from, Rows& out) {
                     if (condition.string() != nullptr && galaxy.open_conditions.size() < 3u) galaxy.open_conditions.push_back(*condition.string());
                 }
             }
-            if (const Value* stars = entry.get("stars_to_open"); stars != nullptr && stars->number() != nullptr) galaxy.stars_to_open = static_cast<int>(*stars->number());
-            if (const Value* dome = entry.get("dome"); dome != nullptr && dome->number() != nullptr) galaxy.dome = static_cast<int>(*dome->number());
+            if (const Value* stars = entry.get("stars_to_open"); stars != nullptr && stars->number() != nullptr) galaxy.stars_to_open = whole_int(*stars->number());
+            if (const Value* dome = entry.get("dome"); dome != nullptr && dome->number() != nullptr) galaxy.dome = whole_int(*dome->number());
+            if (galaxy.stars_to_open < 0 || galaxy.stars_to_open > 255 || galaxy.dome < 0 || galaxy.dome > 255) return false;
             if (const Value* hungry = entry.get("hungry_luma"); hungry != nullptr && hungry->object() != nullptr) {
                 const Value* slot = hungry->get("slot");
                 const Value* bits = hungry->get("star_bits");
                 if (slot == nullptr || slot->number() == nullptr || bits == nullptr || bits->number() == nullptr) return false;
-                galaxy.hungry_slot = static_cast<int>(*slot->number());
-                galaxy.hungry_star_bits = static_cast<int>(*bits->number());
+                galaxy.hungry_slot = whole_int(*slot->number());
+                galaxy.hungry_star_bits = whole_int(*bits->number());
             }
             if (const Value* place = entry.get("map_position"); place != nullptr && place->array() != nullptr && place->array()->size() == 2u) {
                 const Value& x = (*place->array())[0];
@@ -406,8 +425,8 @@ bool read_rows(const Value& from, Rows& out) {
                     MusicPlace place;
                     place.stage = text_field(row, "stage");
                     if (place.stage.empty()) return false;
-                    if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) place.scenario = static_cast<int>(*scenario->number());
-                    if (const Value* area = row.get("change_area"); area != nullptr && area->number() != nullptr) place.change_area = static_cast<int>(*area->number());
+                    if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) place.scenario = whole_int(*scenario->number());
+                    if (const Value* area = row.get("change_area"); area != nullptr && area->number() != nullptr) place.change_area = whole_int(*area->number());
                     track.places.push_back(std::move(place));
                 }
             }
@@ -421,7 +440,7 @@ bool read_rows(const Value& from, Rows& out) {
             if (flag.name.empty()) return false;
             const auto whole = [&entry](const char* key) {
                 const Value* value = entry.get(key);
-                return value != nullptr && value->number() != nullptr ? static_cast<int>(*value->number()) : 0;
+                return value != nullptr && value->number() != nullptr ? whole_int(*value->number()) : 0;
             };
             flag.kind = whole("kind");
             flag.a = whole("a");
@@ -434,14 +453,14 @@ bool read_rows(const Value& from, Rows& out) {
     if (const Value* schedule = from.get("comet_schedule"); schedule != nullptr && schedule->array() != nullptr) {
         for (const Value& entry : *schedule->array()) {
             CometSchedule dome;
-            if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = static_cast<int>(*number->number());
-            if (dome.dome < 1 || dome.dome > 16) return false;
+            if (const Value* number = entry.get("dome"); number != nullptr && number->number() != nullptr) dome.dome = whole_int(*number->number());
+            if (dome.dome < 1) return false;
             if (const Value* comets = entry.get("comets"); comets != nullptr && comets->array() != nullptr) {
                 for (const Value& comet : *comets->array()) {
                     std::string galaxy = text_field(comet, "galaxy");
                     if (galaxy.empty()) return false;
                     const Value* coins = comet.get("coins");
-                    dome.comets.emplace_back(std::move(galaxy), coins != nullptr && coins->number() != nullptr ? static_cast<int>(*coins->number()) : 0);
+                    dome.comets.emplace_back(std::move(galaxy), coins != nullptr && coins->number() != nullptr ? whole_int(*coins->number()) : 0);
                 }
             }
             if (dome.comets.empty()) return false;
@@ -468,7 +487,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     Manifest out;
     const Value* format = root->get("format");
     if (format == nullptr || format->number() == nullptr || *format->number() < 1.0) return std::nullopt;
-    out.format = static_cast<std::uint32_t>(*format->number());
+    out.format = whole_u32(*format->number());
     // A newer format's other fields may mean anything: the number is all a reader can say of it.
     if (out.format > kFormat) return out;
     out.id = text_field(*root, "id");
@@ -512,8 +531,11 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 const double from = number("from", 0.0);
                 const double to = number("to", from);
                 const double step = number("step", 1.0);
-                if (step > 0.0 && (to - from) / step <= 10000.0) {
-                    for (double at = from; at <= to + step * 0.001; at += step) {
+                if (step > 0.0 && to >= from && (to - from) / step <= 10000.0) {
+                    // Counted, so that a step too small for the numbers' size (1e300 + 1) cannot loop for ever.
+                    const std::size_t count = static_cast<std::size_t>((to - from) / step + 0.001) + 1u;
+                    for (std::size_t i = 0; i < count; ++i) {
+                        const double at = from + static_cast<double>(i) * step;
                         char id[32];
                         std::snprintf(id, sizeof(id), "%g", at);
                         Choice choice;
@@ -561,8 +583,8 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 const Value* mission = row.get("mission");
                 const Value* seconds = row.get("seconds");
                 if (mission == nullptr || mission->number() == nullptr || seconds == nullptr || seconds->number() == nullptr) return std::nullopt;
-                limit.mission = static_cast<int>(*mission->number());
-                limit.seconds = static_cast<int>(*seconds->number());
+                limit.mission = whole_int(*mission->number());
+                limit.seconds = whole_int(*seconds->number());
                 layer.comet_time_limits.push_back(std::move(limit));
             }
         }
@@ -571,7 +593,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 StageRule rule;
                 rule.stage = text_field(row, "stage");
                 if (rule.stage.empty()) return std::nullopt;
-                if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) rule.scenario = static_cast<int>(*scenario->number());
+                if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) rule.scenario = whole_int(*scenario->number());
                 rule.acts_as = string_list(row.get("acts_as"));
                 if (const Value* own = row.get("own_rules"); own != nullptr) {
                     if (const bool* flag = std::get_if<bool>(&own->data)) rule.own_rules = *flag;
@@ -618,7 +640,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
         }
         if (const Value* switches = entry.get("switches"); switches != nullptr && switches->object() != nullptr) {
             for (const auto& [name, value] : *switches->object()) {
-                if (const double* number = value.number()) layer.switches[name] = static_cast<std::uint32_t>(*number);
+                if (const double* number = value.number()) layer.switches[name] = whole_u32(*number);
                 else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) layer.switch_options[name] = *option->string();
             }
         }
@@ -654,7 +676,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
                 }
             }
             const Value* api = entry.get("api");
-            plugin.api = api != nullptr && api->number() != nullptr ? static_cast<std::uint32_t>(*api->number()) : 0u;
+            plugin.api = api != nullptr && api->number() != nullptr ? whole_u32(*api->number()) : 0u;
             plugin.when = read_when(entry.get("when"));
             out.plugins.push_back(std::move(plugin));
         }
@@ -662,7 +684,13 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     return out;
 }
 
+// A luma.json past this is not read: real ones are kilobytes.
+constexpr std::uintmax_t kManifestLimit = 16u << 20u;
+
 std::optional<Manifest> read_manifest(const std::filesystem::path& folder) {
+    std::error_code size_error;
+    const std::uintmax_t size = std::filesystem::file_size(folder / "luma.json", size_error);
+    if (size_error || size > kManifestLimit) return std::nullopt;
     std::ifstream in(folder / "luma.json", std::ios::binary);
     if (!in) return std::nullopt;
     const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());

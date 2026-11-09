@@ -97,7 +97,6 @@ std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcep
 // worker running these are its devices and slots; without it the devices are
 // enumerated synchronously and numbered in order.
 std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
-[[nodiscard]] bool hid_controller_present_now() noexcept;
 
 // Joy-Con halves: those connected, whether a left half's L or a right half's R is held, and the pairs (each pair is
 // one controller; a half without its partner is none). `paired` grows with every pair made. While the Pair Joy-Con

@@ -19,7 +19,6 @@ namespace Ui {
         const Vec2f& GetLocationAdjustScale() const { return mLocationAdjustScale; }
         void SetLocationAdjustScale(const Vec2f& scale) { mLocationAdjustScale = scale; }
         f32 GetGlobalAlpha() const { return mGlobalAlpha; }
-        void SetGlobalAlpha(f32 alpha) { mGlobalAlpha = alpha; }
         bool IsInvisiblePaneCalculateMtx() const { return mFlag.invisiblePaneCalculateMtx; }
         bool IsYAxisUp() const { return mViewRect.bottom - mViewRect.top < 0.0f; }
 

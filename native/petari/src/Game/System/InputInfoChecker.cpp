@@ -1,9 +1,10 @@
 #include "Game/System/InputInfoChecker.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-    const s32 sCheckInfoInterval = 18000;
+    const s32 sCheckInfoInterval = NebulaFrameClock::stepsOfSeconds(300);
 };  // namespace
 
 InputInfoChecker::InputInfoChecker(PlayerInput* pPad) : mPad(pPad) {

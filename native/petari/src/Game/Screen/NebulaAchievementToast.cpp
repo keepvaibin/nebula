@@ -308,7 +308,7 @@ void NebulaAchievementToast::setIcon(const NebulaAchievementIcon* pIcon, f32* pW
     }
 
     // A glyph (or a texture that is missing: the Power Star).
-    char16_t picture[8];
+    char16_t picture[8];  // one picture font tag (3 units) and the terminator
     MR::addPictureFontTag(picture, pIcon != nullptr && pIcon->mGlyph != 0 ? pIcon->mGlyph : '7');
     MR::setTextBoxMessageRecursive(this, "ConfirmU", picture);
     fitText(mGlyph, cIconSize, 0.0f, pWidth, pHeight);

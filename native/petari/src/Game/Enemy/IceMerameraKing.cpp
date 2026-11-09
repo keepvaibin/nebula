@@ -59,7 +59,6 @@ namespace {
     static const MR::ActorMoveParam hExtinguishOnAirParam = {0.0f, 0.125f, 0.96f, 0.0f};
     static const MR::ActorMoveParam hExtinguishFallOnAirParam = {0.0f, 4.0f, 0.96f, 0.0f};
     static const Vec3f hBinderOffset(-100.586f, 222.65601f, -91.796898f);
-    static const Vec3f hEscapeBinderOffset(-39.0625f, 91.796898f, -47.851601f);
 
     const s32 sIceNum = 6;
     const f32 sBodyRadius = 130.0f;  // at joint scale 1

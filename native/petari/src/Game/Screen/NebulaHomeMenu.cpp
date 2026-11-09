@@ -23,7 +23,7 @@ namespace {
 
     s32 request(u32 what, u32 value) {
         const NebulaHostServices* const host = nebula_host();
-        return host->hbm(host->user, what, value);
+        return host->home_menu(host->user, what, value);
     }
 
     void play(Sound sound) {
@@ -34,8 +34,8 @@ namespace {
 namespace NebulaHomeMenu {
     void open(bool widescreen) {
         sChoice = cChoiceNone;
-        request(NEBULA_HBM_OPEN, widescreen ? 1 : 0);
-        sView = request(NEBULA_HBM_VIEW, 0);
+        request(NEBULA_HOME_MENU_OPEN, widescreen ? 1 : 0);
+        sView = request(NEBULA_HOME_MENU_VIEW, 0);
         play(cSoundHomeButton);
     }
 
@@ -45,7 +45,7 @@ namespace NebulaHomeMenu {
         }
 
         // Another answer selected; "are you sure?" asked, or left for the list.
-        const s32 current = request(NEBULA_HBM_VIEW, 0);
+        const s32 current = request(NEBULA_HOME_MENU_VIEW, 0);
         if (current >= 0 && sView >= 0 && current != sView) {
             if ((current >> 8) != (sView >> 8)) {
                 play((current >> 8) != 0 ? cSoundSelect : cSoundCancel);
@@ -55,7 +55,7 @@ namespace NebulaHomeMenu {
         }
         sView = current;
 
-        sChoice = static_cast< Choice >(request(NEBULA_HBM_POLL, 0));
+        sChoice = static_cast< Choice >(request(NEBULA_HOME_MENU_POLL, 0));
         switch (sChoice) {
         case cChoiceClose:
             play(cSoundReturnApp);
@@ -74,19 +74,19 @@ namespace NebulaHomeMenu {
     }
 
     void close() {
-        request(NEBULA_HBM_CLOSE, 0);
+        request(NEBULA_HOME_MENU_CLOSE, 0);
         sChoice = cChoiceClose;
     }
 
     s32 view() {
-        return request(NEBULA_HBM_VIEW, 0);
+        return request(NEBULA_HOME_MENU_VIEW, 0);
     }
 
     void point(s32 answer) {
-        request(NEBULA_HBM_POINT, static_cast< u32 >(answer));
+        request(NEBULA_HOME_MENU_POINT, static_cast< u32 >(answer));
     }
 
     void choose(s32 answer) {
-        request(NEBULA_HBM_CHOOSE, static_cast< u32 >(answer));
+        request(NEBULA_HOME_MENU_CHOOSE, static_cast< u32 >(answer));
     }
 }  // namespace NebulaHomeMenu

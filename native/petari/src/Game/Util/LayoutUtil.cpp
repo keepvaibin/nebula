@@ -357,11 +357,6 @@ void MR::setLayoutScaleAtPaneScale(LayoutActor* pActor, const LayoutActor* pFoll
     setPaneScale(pActor, scale.x, scale.y, nullptr);
 }
 
-void MR::copyPaneRotate(Vec3f* pRotate, const LayoutActor* pActor, const char* pPaneName) {
-    Ui::Pane* pPane = getPane(pActor, pPaneName);
-    pRotate->set< f32 >(pPane->mRotate.x, pPane->mRotate.y, pPane->mRotate.z);
-}
-
 void MR::setPaneRotate(const LayoutActor* pActor, f32 x, f32 y, f32 z, const char* pPaneName) {
     Vec3f rotate;
     rotate.x = x;

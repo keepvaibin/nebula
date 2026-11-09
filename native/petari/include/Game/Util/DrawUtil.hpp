@@ -38,8 +38,7 @@ namespace MR {
     const Vec3f& getMarioShadowVec();
     void setMarioShadowTex(const GameTexture*);
     void setMarioShadowVec(const Vec3f&);
-    void loadTexProjectionMtx(u32);
-    // The camera's projection to screen texture coordinates (s, t, q from a world position) loadTexProjectionMtx loads.
+    // The camera's projection to screen texture coordinates (s, t, q from a world position).
     void calcTexProjectionMtx(Pos3f*);
     void simpleDraw(Model*, Material*);
     void activateGameSceneDraw3D();

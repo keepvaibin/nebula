@@ -151,7 +151,7 @@ bool SaveDataHandler::readNative() {
     place = rows;
     for (u32 i = 0; i < count; i++) {
         const u8* const pRow = mBuffer + cHeaderSize + i * cRowSize;
-        char name[cRowNameSize + 1];
+        char name[cRowNameSize + 1];  // a row's name in Nebula.sav is cRowNameSize bytes; the terminator is ours
         memcpy(name, pRow, cRowNameSize);
         name[cRowNameSize] = '\0';
         const u32 size = readU32(pRow + cRowNameSize);
@@ -297,7 +297,7 @@ void SaveDataHandler::requestSaveSaveData() {
     u32 place = cHeaderSize + count * cRowSize;
     for (u32 i = 0; i < count; i++) {
         u8* const pRow = mBuffer + cHeaderSize + i * cRowSize;
-        char name[cRowNameSize];
+        char name[cRowNameSize];  // the file's fixed-width row name (makeFileName fits it)
         makeFileName(name, {static_cast< SaveFileId::Kind >(i % cKindNum), static_cast< s32 >(i / cKindNum + 1)});
         memset(pRow, 0, cRowNameSize);
         memcpy(pRow, name, strlen(name));

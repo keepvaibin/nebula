@@ -12,11 +12,6 @@ class NPCActorItem;
 class PartsModel;
 class TalkMessageCtrl;
 
-static const char* ReactionDefault = "Reaction";
-static const char* PointingDefault = "Pointing";
-static const char* TrampledDefault = "Trampled";
-static const char* SpinDefault = "Spin";
-
 class NPCActorCaps {
 public:
     NPCActorCaps(const char*);
@@ -92,7 +87,6 @@ public:
     void pushNerve(const Nerve*);
     const Nerve* popAndPushNerve(const Nerve*);
     const Nerve* popNerve();
-    bool tryPullNullNerve();
     bool isEmptyNerve() const;
     bool isScaleAnim() const;
     bool isPointingSe() const;

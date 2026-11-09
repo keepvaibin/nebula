@@ -66,7 +66,10 @@ int main() {
     expect(st::get("coins") == 12u && st::get("deaths") == 2u && st::get("spins") == 0u, "a damaged file keeps its good lines");
 
     for (int i = 0; i < 80; ++i) st::add("c" + std::to_string(i), 1);
-    expect(st::get("c70") == 0u && st::get("c10") == 1u, "at most 64 counters");
+    expect(st::get("c70") == 1u && st::get("c10") == 1u && st::get("c79") == 1u, "any number of counters");
+    st::flush();
+    st::set_path_for_tests(path);
+    expect(st::get("c70") == 1u && st::get("c79") == 1u && st::get("coins") == 12u, "every counter in the file is kept");
 
     st::set_path_for_tests(path);
     std::filesystem::remove(path);

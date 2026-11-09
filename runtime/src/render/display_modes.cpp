@@ -62,9 +62,10 @@ BOOL CALLBACK collect_monitor(HMONITOR monitor, HDC, LPRECT, LPARAM user) {
     if (EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode)) {
         entry.current = {mode.dmPelsWidth, mode.dmPelsHeight, mode.dmDisplayFrequency};
     } else {
+        // The rate is unknown (0), not a guess: the vblank grid measures it.
         entry.current = {
             static_cast<unsigned>(info.rcMonitor.right - info.rcMonitor.left),
-            static_cast<unsigned>(info.rcMonitor.bottom - info.rcMonitor.top), 60u};
+            static_cast<unsigned>(info.rcMonitor.bottom - info.rcMonitor.top), 0u};
     }
     for (DWORD index = 0u;; ++index) {
         DEVMODEW candidate{};

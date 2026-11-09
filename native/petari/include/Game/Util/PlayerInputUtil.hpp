@@ -55,7 +55,6 @@ namespace MR {
 
     bool isPressedMap(s32 channel);
 
-    bool isPressedAnyWithoutHome(s32 channel);
 
     bool isPressedHome(s32 channel);
 

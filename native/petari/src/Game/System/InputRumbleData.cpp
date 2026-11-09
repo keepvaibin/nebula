@@ -1,6 +1,7 @@
 #include "Game/System/InputRumbleData.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
+#include "Game/System/GameLog.hpp"
 
 namespace {
 // Each pattern: its name, its length in frames, on/off per frame.

@@ -63,9 +63,4 @@ void SettingsSaveModel::save_now() {
     (void)write();
 }
 
-void SettingsSaveModel::wait_until_idle() {
-    std::unique_lock<std::mutex> lock(mutex_);
-    changed_.wait(lock, [this] { return !requested_ && !running_; });
-}
-
 }  // namespace galaxy::ui
