@@ -59,7 +59,7 @@ bool MovieStream::open(const char* pName) {
         NEBULA_PANIC("%s: a movie not cooked (the importer rewrites THP files)", pMovieName);
     }
     if (!(mHeader.mDisplayAspect > 0.0f) || mHeader.mWidth == 0 || mHeader.mHeight == 0) {
-        NEBULA_PANIC("%s: a movie with no picture shape", sMovieName);
+        NEBULA_PANIC("%s: a movie with no picture shape", pMovieName);
     }
 
     mVideoInfo.mWidth = mHeader.mWidth;
