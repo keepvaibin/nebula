@@ -519,11 +519,17 @@ HostPointerButtonSample consume_host_pointer_button_transitions(
             sample = {};
         }
         if (poll.result == HostPointerTransitionReadResult::Overflow) {
-            std::ostringstream message;
-            message << "host pointer transition overflow: cursor="
-                    << g_host_pointer_transition_state.cursor
-                    << " latest=" << poll.latest_sequence;
-            throw std::runtime_error(message.str());
+            // The window thread published more edges than the journal holds while this reader was away (a stall
+            // of seconds under a hammered button): the lost edges are dropped and the buttons are what the pointer
+            // state reports now, as after a focus change.
+            std::cerr << "[input] pointer journal overrun: cursor=" << g_host_pointer_transition_state.cursor
+                      << " latest=" << poll.latest_sequence << ", buttons resynchronised\n";
+            g_host_pointer_transition_state.cursor = poll.latest_sequence;
+            g_host_pointer_transition_state.left_button = current.left_button;
+            g_host_pointer_transition_state.right_button = current.right_button;
+            sample = {};
+            drain_completed = true;
+            break;
         }
         if (poll.result == HostPointerTransitionReadResult::Empty) {
             drain_completed = true;
@@ -874,6 +880,20 @@ bool current_process_window_under_cursor(POINT& cursor, HWND& window) {
 }
 
 bool current_process_runtime_window(HWND& window) {
+    // The runtime's own window once found: a search walks every top-level window of the desktop, and this is asked
+    // each frame while the pointer is elsewhere. It is searched for again when that window is gone or has no client area.
+    static std::atomic<HWND> s_runtime_window{nullptr};
+    if (const HWND known = s_runtime_window.load(std::memory_order_relaxed); known != nullptr) {
+        DWORD known_pid = 0;
+        RECT known_client{};
+        if (IsWindow(known) && IsWindowVisible(known) && GetWindowThreadProcessId(known, &known_pid) != 0u &&
+            known_pid == GetCurrentProcessId() && GetClientRect(known, &known_client) &&
+            known_client.right > known_client.left && known_client.bottom > known_client.top) {
+            window = known;
+            return true;
+        }
+        s_runtime_window.store(nullptr, std::memory_order_relaxed);
+    }
     struct SearchState {
         DWORD pid = GetCurrentProcessId();
         HWND window = nullptr;
@@ -921,6 +941,9 @@ bool current_process_runtime_window(HWND& window) {
         },
         reinterpret_cast<LPARAM>(&state));
 
+    if (state.window != nullptr) {
+        s_runtime_window.store(state.window, std::memory_order_relaxed);
+    }
     window = state.window != nullptr ? state.window : state.fallback_window;
     return window != nullptr;
 }
