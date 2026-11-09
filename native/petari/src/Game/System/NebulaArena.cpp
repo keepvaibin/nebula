@@ -28,6 +28,16 @@ namespace {
     // Addresses each arena has to itself, not memory: only what it uses is committed.
     const u64 cSpan = 1ull << 32;
     const u64 cCommitStep = 1ull << 20;
+    // The largest block: a size past it is a bad count (a corrupt file's length, a wrapped sum), and cut to 32 bits or
+    // rounded to a class it would become a small block that the caller then writes past.
+    const u64 cMaxBlock = 0x7FFFFF00ull;
+
+    u32 blockSize(u64 size) {
+        if (size > cMaxBlock) {
+            NEBULA_PANIC("an allocation of %llu bytes", static_cast< unsigned long long >(size));
+        }
+        return static_cast< u32 >(size);
+    }
 
     // Before each block: its class, and how far back its start lies.
     struct alignas(16) Header {
@@ -218,7 +228,7 @@ void* NebulaArena::alloc(u32 size, int alignment) {
     }
 
     const u32 extra = align > 16 ? align : 0;
-    const u32 bytes = size + static_cast< u32 >(sizeof(Header)) + extra;
+    const u32 bytes = blockSize(static_cast< u64 >(size) + sizeof(Header) + extra);
     u32 rounded;
     const u32 index = classOf(bytes, &rounded);
 
@@ -321,31 +331,31 @@ NebulaArena* NebulaArena::findFromRoot(void* pData) {
 }
 
 void* operator new(size_t size) {
-    return NebulaArena::alloc(static_cast< u32 >(size), 4, nullptr);
+    return NebulaArena::alloc(blockSize(size), 4, nullptr);
 }
 
 void* operator new(size_t size, int alignment) {
-    return NebulaArena::alloc(static_cast< u32 >(size), alignment, nullptr);
+    return NebulaArena::alloc(blockSize(size), alignment, nullptr);
 }
 
 void* operator new(size_t size, NebulaArena* pArena) {
-    return NebulaArena::alloc(static_cast< u32 >(size), 4, pArena);
+    return NebulaArena::alloc(blockSize(size), 4, pArena);
 }
 
 void* operator new(size_t size, NebulaArena* pArena, int alignment) {
-    return NebulaArena::alloc(static_cast< u32 >(size), alignment, pArena);
+    return NebulaArena::alloc(blockSize(size), alignment, pArena);
 }
 
 void* operator new[](size_t size) {
-    return NebulaArena::alloc(static_cast< u32 >(size), 4, nullptr);
+    return NebulaArena::alloc(blockSize(size), 4, nullptr);
 }
 
 void* operator new[](size_t size, int alignment) {
-    return NebulaArena::alloc(static_cast< u32 >(size), alignment, nullptr);
+    return NebulaArena::alloc(blockSize(size), alignment, nullptr);
 }
 
 void* operator new[](size_t size, NebulaArena* pArena, int alignment) {
-    return NebulaArena::alloc(static_cast< u32 >(size), alignment, pArena);
+    return NebulaArena::alloc(blockSize(size), alignment, pArena);
 }
 
 void operator delete(void* pData) {

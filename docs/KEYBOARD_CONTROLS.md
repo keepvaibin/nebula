@@ -222,7 +222,7 @@ names: key names (`Space`, `LShift`, `W`, `Num1`, `F5`, `Equals`, `VK2E`),
 LT RT LS RS Menu View DpadUp...`; Switch `A B X Y L R ZL ZR LS RS Plus Minus
 Home Capture GL GR C DpadUp...`; PlayStation `Cross Circle Square Triangle L1 R1
 L2 R2 L3 R3 Options Share Create PS Touchpad LeftPaddle RightPaddle Mute
-DpadUp...`; Steam `A B X Y LB RB LT RT LS RS Menu View Steam QAM L4 R4 L5 R5
+LeftFn RightFn DpadUp...`; Steam `A B X Y LB RB LT RT LS RS Menu View Steam QAM L4 R4 L5 R5
 LPad RPad DpadUp...`; generic `Button1`..`Button19 LT RT DpadUp...`; sticks
 `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
@@ -261,7 +261,7 @@ turns vibration off, and values the player changed stay.
   calibration from the controller (over Bluetooth this also switches it to full
   reports), sets the light bar to a neutral grey once (a DualSense over Bluetooth
   after its pairing animation), and drives the light motor for vibration. Buttons,
-  sticks, analog triggers, the touchpad click, mute and Edge paddles are read; the
+  sticks, analog triggers, the touchpad click, mute and the Edge paddles and Fn buttons are read; the
   touchpad surface is not. The USB wireless adapter and third-party clones are not
   claimed.
 - Steam Controller (2026): USB (`28de:1302`), Bluetooth LE (`28de:1303`) and the

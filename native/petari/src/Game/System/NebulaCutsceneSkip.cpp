@@ -39,7 +39,7 @@ namespace {
     };
 
     const s32 cEndQuietFrames = 2;        // frames with no cutscene before the picture returns
-    const u32 cStepBudgetMicros = NebulaFrameClock::stepsOfSeconds(150);   // the extra steps' share of a frame
+    const u32 cStepBudgetMicros = 9000;   // the extra steps' share of a frame, in microseconds of wall time (not of play)
     const s32 cStepsPerFrameMax = 40;
     const s32 cStallSteps = NebulaFrameClock::stepsOfSeconds(10);          // a demo's clock held this long waits on the player: the skip ends there
     const u32 cSkipMaxMicros = 15000000;  // a skip that has not ended by then shows the game as it is

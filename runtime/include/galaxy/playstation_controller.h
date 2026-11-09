@@ -95,7 +95,7 @@ struct SensorClock {
 // padding up to the handle's report length is ignored). `out.normalized` is
 // set; buttons use the unified bits (Cross = South, Share/Create = Back,
 // Options = Start, PS = Home, touchpad click = Capture, mute = Chat, Edge
-// paddles = GL/GR). Over Bluetooth a full report with a bad CRC is rejected.
+// paddles = GL/GR, Edge Fn buttons = kFnLeftBit/kFnRightBit). Over Bluetooth a full report with a bad CRC is rejected.
 [[nodiscard]] bool decode_report(Model model, Transport transport, std::span<const std::uint8_t> report,
                                  const ImuCal& cal, SensorClock& clock, switch_hid::DecodedState& out,
                                  const Capabilities& caps = {}) noexcept;

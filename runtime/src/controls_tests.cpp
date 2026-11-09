@@ -1506,11 +1506,14 @@ void test_playstation_and_steam_schemes() {
     };
     expect(allowed(ControlScheme::PlayStation, pad::kCaptureBit) && allowed(ControlScheme::PlayStation, pad::kChatBit) &&
                allowed(ControlScheme::PlayStation, pad::kGripLeftBit) &&
+               allowed(ControlScheme::PlayStation, pad::kFnLeftBit) && allowed(ControlScheme::PlayStation, pad::kFnRightBit) &&
                !allowed(ControlScheme::PlayStation, pad::kLeftPadBit) &&
                !allowed(ControlScheme::PlayStation, pad::kGripLeft2Bit),
            "PlayStation buttons");
     expect(allowed(ControlScheme::Steam, pad::kLeftPadBit) && allowed(ControlScheme::Steam, pad::kGripRight2Bit) &&
-               allowed(ControlScheme::Steam, pad::kGripLeftBit) && !allowed(ControlScheme::Steam, pad::kChatBit),
+               allowed(ControlScheme::Steam, pad::kGripLeftBit) && !allowed(ControlScheme::Steam, pad::kChatBit) &&
+               !allowed(ControlScheme::Steam, pad::kFnLeftBit) && !allowed(ControlScheme::Generic, pad::kFnRightBit) &&
+               allowed(ControlScheme::Generic, pad::kRightPadBit),
            "Steam buttons");
     expect(!allowed(ControlScheme::Xbox, pad::kLeftPadBit) && !allowed(ControlScheme::SwitchPro2, pad::kLeftPadBit) &&
                allowed(ControlScheme::SwitchPro2, pad::kChatBit) && !allowed(ControlScheme::SwitchPro, pad::kGripLeftBit) &&
@@ -1704,6 +1707,18 @@ void test_button_icons() {
     expect(icon(steam_icons, ButtonIcon::Home) == Glyph{ButtonGlyph::Home, 0u} &&
                icon(button_icon_spec(ButtonIconStyle::Xbox, steam_pad, false), ButtonIcon::Home) == Glyph{ButtonGlyph::Keep, 0u},
            "HOME is the Steam button on the Steam model alone");
+    // The Edge's Fn buttons: cells on the Edge model alone; anywhere else the game's own icon stays.
+    BindingTable fn_pad = playstation;
+    fn_pad[GameInput::A] = {};
+    fn_pad[GameInput::A][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kFnLeftBit)};
+    fn_pad[GameInput::B] = {};
+    fn_pad[GameInput::B][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kFnRightBit)};
+    const ButtonIconSpec fn_edge = button_icon_spec(ButtonIconStyle::PlayStation, fn_pad, false, ButtonIconModel::DualSenseEdge);
+    const ButtonIconSpec fn_plain = button_icon_spec(ButtonIconStyle::PlayStation, fn_pad, false);
+    expect(icon(fn_edge, ButtonIcon::A) == Glyph{ButtonGlyph::Grip, 4u} && icon(fn_edge, ButtonIcon::B) == Glyph{ButtonGlyph::Grip, 5u} &&
+               icon(fn_plain, ButtonIcon::A) == Glyph{ButtonGlyph::Keep, 0u} &&
+               icon(fn_plain, ButtonIcon::B) == Glyph{ButtonGlyph::Keep, 0u},
+           "the Edge's Fn buttons show on the Edge model only");
 }
 
 // The keyboard's icons: every key and mouse button has one; each Wii button shows its input as it is reached for there.
