@@ -72,7 +72,8 @@ namespace MR {
         pScreenPos->scale(1.0f / pos.w, *pos.toVec3());
         pScreenPos->y = -pScreenPos->y;
 
-        if (1.0f < MR::abs(pScreenPos->x) || 1.0f < MR::abs(pScreenPos->y)) {
+        // A point on the camera's plane divides by zero: not finite is not on screen.
+        if (!(MR::abs(pScreenPos->x) <= 1.0f) || !(MR::abs(pScreenPos->y) <= 1.0f)) {
             return false;
         }
 

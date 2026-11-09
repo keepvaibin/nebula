@@ -223,7 +223,8 @@ namespace MR {
         f32 distance = playerPos.distance(actorPos);
         f32 angle = MR::atan2(1.0f, cosDegree(67.5f));
         f32 height = vecKillElement(actorPos - playerPos, up, &side);
-        f32 scale = (height + offset.y) / distance / 0.75f;
+        // Player and NPC on one spot: no direction to scale, the nearest the camera goes is used.
+        f32 scale = distance > 0.001f ? (height + offset.y) / distance / 0.75f : 1.0f;
         scale = scale >= 1.0f ? scale : 1.0f;
         distance *= angle;
         distance *= scale;

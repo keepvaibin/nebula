@@ -342,8 +342,12 @@ bool MR::getPlacementArg7NoInit(const TableIter& rIter, bool* pOut) {
 }
 
 bool MR::isEqualObjectName(const TableIter& rIter, const char* pOtherName) {
-    const char* objName;
-    getObjectName(&objName, rIter);
+    const char* objName = nullptr;
+
+    // A row with no object name is no object of that name.
+    if (!getObjectName(&objName, rIter) || objName == nullptr) {
+        return false;
+    }
 
     return isEqualStringCase(objName, pOtherName);
 }
@@ -577,7 +581,7 @@ bool MR::isEqualRailUsage(const TableIter& rIter, const char* pUsage) {
     const char* usage = nullptr;
     rIter.getValue< const char* >("usage", &usage);
 
-    return isEqualStringCase(usage, pUsage);
+    return usage != nullptr && isEqualStringCase(usage, pUsage);
 }
 
 namespace {

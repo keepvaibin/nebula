@@ -283,6 +283,13 @@ namespace MR {
 
     // beatLength: player travel per beat; the tempo follows the player's speed (3 at least).
     void startRemixSound(s32 melodyNo, s32 noteNo, f32 beatLength) {
+        RemixNoteGroupData* pRemixNoteGroupData = AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo);
+
+        // A melody the remix data does not hold, a note past its end, or a rail with no length: no sound.
+        if (pRemixNoteGroupData == nullptr || noteNo < 0 || noteNo >= pRemixNoteGroupData->mNoteCount || !(beatLength > 0.0f)) {
+            return;
+        }
+
         AudRemixSequencer* pRemixSequencer = AudWrap::getRemixSequencer();
         f32 playerSpeed = getPlayerVelocity()->length();
 
@@ -292,8 +299,6 @@ namespace MR {
 
         pRemixSequencer->setTempo((playerSpeed * 3600.0f) / beatLength);
 
-        RemixNoteGroupData* pRemixNoteGroupData = AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo);
-
         for (s32 i = 0; i < pRemixNoteGroupData->mTrackCount; i++) {
             RemixNoteTrackData* pRemixNoteTrackData = &pRemixNoteGroupData->mRemixTracks[i];
 
@@ -301,8 +306,11 @@ namespace MR {
         }
     }
 
+    // A melody the remix data does not hold counts one note (callers divide by it).
     s32 getRemixMelodyNoteNum(s32 melodyNo) {
-        return AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo)->mNoteCount;
+        const RemixNoteGroupData* pRemixNoteGroupData = AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo);
+
+        return pRemixNoteGroupData != nullptr && pRemixNoteGroupData->mNoteCount > 0 ? pRemixNoteGroupData->mNoteCount : 1;
     }
 
     void limitedSound(const char* pName, s32 delay) {

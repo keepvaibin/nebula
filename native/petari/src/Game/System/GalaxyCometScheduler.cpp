@@ -199,7 +199,9 @@ void GalaxyCometTimeTable::serializeStateToGameData(GalaxyCometSerializeInfo* pI
 
 void GalaxyCometTimeTable::deserializeStateFromGameData(const GalaxyCometSerializeInfo* pInfo) {
     const u32 packed = pInfo->mStateIndexPacked;
-    mTimePaperPos = packed >> 1;
+    // A saved place past the end of the schedule (a save from another schedule) starts it over.
+    const s32 pos = static_cast< s32 >(packed >> 1);
+    mTimePaperPos = pos < calcTimePaperLength() ? pos : 0;
     mState->setStateAndPastSecond(packed & 1, pInfo->mPastSecond);
 }
 
@@ -367,8 +369,9 @@ void GalaxyCometScheduler::restoreStateFromGameData() {
 }
 
 void GalaxyCometScheduler::setScheduleFirstContact() {
+    // The game's six domes have a first-contact state; a mod's further domes start at the top of their schedule.
     for (s32 i = 0; i < mTimeTables.size(); i++) {
-        mTimeTables[i]->deserializeStateFromGameData(&cSerializeInfoFirstContact[i]);
+        mTimeTables[i]->deserializeStateFromGameData(&cSerializeInfoFirstContact[i < ARRAY_SIZE(cSerializeInfoFirstContact) ? i : 1]);
     }
 }
 
@@ -393,7 +396,7 @@ bool GalaxyCometScheduler::isCometLand(const char* pGalaxyName) const {
         GalaxyCometTimeTable* timeTable = mTimeTables[i];
         if (timeTable->isLand()) {
             const char* name = timeTable->mTimePaper[timeTable->mTimePaperPos].mGalaxyName;
-            if (MR::isEqualString(name, pGalaxyName)) {
+            if (name != nullptr && MR::isEqualString(name, pGalaxyName)) {
                 return true;
             }
         }
@@ -404,6 +407,10 @@ bool GalaxyCometScheduler::isCometLand(const char* pGalaxyName) const {
 s32 GalaxyCometScheduler::getEncounterCometPowerStarId(const char* pGalaxyName) const {
     MR::makeGalaxyStatusAccessor(pGalaxyName);
     GalaxyCometTimeTable* timeTable = findFromGalaxy(pGalaxyName);
+
+    if (timeTable == nullptr) {
+        return 0;
+    }
 
     switch (timeTable->getCometCategory()) {
     case GalaxyCometCategory_Normal:
@@ -427,7 +434,7 @@ GalaxyCometTimeTable* GalaxyCometScheduler::findFromGalaxy(const char* pGalaxyNa
         s32 pos = timeTable->mTimePaperPos;
         const char* name = timeTable->mTimePaper[pos].mGalaxyName;
 
-        if (MR::isEqualString(name, pGalaxyName)) {
+        if (name != nullptr && MR::isEqualString(name, pGalaxyName)) {
             return timeTable;
         }
     }

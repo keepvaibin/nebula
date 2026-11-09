@@ -357,6 +357,8 @@ namespace GameEventFlagTable {
         delete[] ::sAddedFlags;
         ::sAddedFlags = pFlags;
         ::sAddedFlagCount++;
+        // The merged rows are built again on the next use (they would be one row short of the table size).
+        ::sMergedFlags = nullptr;
     }
 
     bool addGalaxy(const char* pGalaxyName) {
@@ -392,6 +394,7 @@ namespace GameEventFlagTable {
         delete[] ::sSetFlags;
         ::sSetFlags = pFlags;
         ::sSetFlagCount++;
+        ::sMergedFlags = nullptr;
     }
 
     bool addHungryLuma(const char* pGalaxyName, s32 slot, s32 starBits) {
@@ -519,6 +522,11 @@ namespace GameEventFlagTable {
 
     bool isDependedAnother(const char* pFlagName1, const char* pFlagName2) {
         const GameEventFlag* pFlag1 = findFlag(pFlagName1);
+
+        // A flag the table lacks depends on nothing.
+        if (pFlag1 == nullptr) {
+            return false;
+        }
 
         if (pFlag1->mType == GameEventFlag::Type_EventFlag) {
             if (pFlag1->mRequirement1 != nullptr && MR::isEqualString(pFlag1->mRequirement1, pFlagName2)) {

@@ -691,6 +691,11 @@ namespace MR {
     const Triangle* getCameraPolyFast(const Vec3f& rStart, const Vec3f& rDirection, const HitSensor* pSensor) {
         Triangle triangle;
         f32 remaining = rDirection.length();
+        // A line that is not a finite length would never reach its end.
+        if (!(remaining < 1.0e9f)) {
+            return nullptr;
+        }
+
         Vec3f direction(rDirection);
         direction.normalize();
         Vec3f start(rStart);
@@ -717,6 +722,10 @@ namespace MR {
     bool getFirstPolyOnLineBFast(const Vec3f& rStart, const Vec3f& rDirection, Vec3f* pPos, Triangle* pTriangle) {
         Triangle triangle;
         f32 remaining = rDirection.length();
+        if (!(remaining < 1.0e9f)) {
+            return false;
+        }
+
         Vec3f direction(rDirection);
         direction.normalize();
         Vec3f start(rStart);
