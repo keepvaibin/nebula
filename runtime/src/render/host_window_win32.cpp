@@ -430,30 +430,6 @@ bool input_message_injected() noexcept {
     return GetCurrentInputMessageSource(&source) && source.originId == IMO_INJECTED;
 }
 
-// While the game window is in front the display stays on and the PC stays awake: Windows does not count controller
-// input as activity. Window thread only.
-void hold_display_on(bool hold) noexcept {
-    static const HANDLE request = [] {
-        REASON_CONTEXT reason{};
-        reason.Version = POWER_REQUEST_CONTEXT_VERSION;
-        reason.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
-        reason.Reason.SimpleReasonString = const_cast<LPWSTR>(L"Nebula is running");
-        return PowerCreateRequest(&reason);
-    }();
-    static bool held = false;
-    if (request == INVALID_HANDLE_VALUE || hold == held || (hold && hidden_window_mode_enabled())) return;
-    if (hold) {
-        (void)PowerSetRequest(request, PowerRequestDisplayRequired);
-        (void)PowerSetRequest(request, PowerRequestSystemRequired);
-    } else {
-        (void)PowerClearRequest(request, PowerRequestDisplayRequired);
-        (void)PowerClearRequest(request, PowerRequestSystemRequired);
-    }
-    held = hold;
-}
-
-
-
 std::wstring launcher_path() {
     std::wstring launcher = ::galaxy::windows::executable_path();
     if (launcher.empty()) {
@@ -1009,7 +985,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_ACTIVATEAPP) {
         s_pointer_focused.store(wp != 0, std::memory_order_relaxed);
-        hold_display_on(wp != 0);
         if (wp != 0) {
             s_pointer_focus_valid.store(true, std::memory_order_release);
             raw_mouse_attach(hwnd);
@@ -1048,7 +1023,6 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
         wake_main_thread();
-        hold_display_on(false);
         raw_mouse_detach(hwnd);
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
