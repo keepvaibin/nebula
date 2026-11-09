@@ -118,6 +118,10 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
 
         if (pInfo->mDemoName != nullptr) {
             PowerStar* pPowerStar = PowerStarFunction::findPowerStar(mStartScenario + powerStarNo);
+            // A star number no star is placed for has no demo flag to set.
+            if (pPowerStar == nullptr) {
+                continue;
+            }
             pPowerStar->mIsInDemo = true;
 
             if (pInfo->mIsKillInDemo) {
@@ -128,7 +132,10 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
         }
 
         if (pInfo->mIsAppearAtStart) {
-            PowerStarFunction::findPowerStar(mStartScenario + powerStarNo)->appear();
+            PowerStar* const pAppearStar = PowerStarFunction::findPowerStar(mStartScenario + powerStarNo);
+            if (pAppearStar != nullptr) {
+                pAppearStar->appear();
+            }
         }
     }
 }

@@ -53,6 +53,11 @@ f32 RailPart::getTotalLength() const {
 
 f32 RailPart::getParam(f32 t) const {
     if (mRailPartLinear) {
+        // A part of no length (two points on one place) has no parameter.
+        if (mRailPartLinear->mLength <= 0.0f) {
+            return 0.0f;
+        }
+
         return (t / mRailPartLinear->mLength);
     }
 
@@ -78,7 +83,13 @@ f32 LinearRailPart::getNearestParam(const Vec3f& rPos, f32 /*t*/) const {
     Vec3f v = rPos;
     v -= mStart;
 
-    f32 proj = v.dot(mCtrlDegree1) / mCtrlDegree1.squared();
+    // A part of no length (two points on one place) is nearest at its start.
+    const f32 sq = mCtrlDegree1.squared();
+    if (!(sq > 0.0f)) {
+        return 0.0f;
+    }
+
+    f32 proj = v.dot(mCtrlDegree1) / sq;
 
     if (proj < 0.0f) {
         return 0.0f;

@@ -282,6 +282,11 @@ PlanetMapData* PlanetMapCreator::getTableData(const char* pName) const {
 }
 
 bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
+    // A planet the table does not list (a mod's) has no forced scenarios.
+    if (pData == nullptr) {
+        return false;
+    }
+
     bool isForce = ::isDataForceLow(pData);
 
     if (!isForce) {

@@ -97,12 +97,14 @@ namespace MR {
         return false;
     }
 
+    // A material name the model lacks (or a null name) is the first material.
     u32 getMaterialNo(ModelData* pModelData, const char* pMaterialName) {
-        return pModelData->findMaterial(pMaterialName);
+        const s32 idx = pModelData->findMaterial(pMaterialName);
+        return idx >= 0 ? static_cast< u32 >(idx) : 0;
     }
 
     u32 getMaterialNo(Model* pModel, const char* pMaterialName) {
-        return pModel->getModelData()->findMaterial(pMaterialName);
+        return MR::getMaterialNo(pModel->getModelData(), pMaterialName);
     }
 
     Material* getMaterial(ModelData* pModelData, const char* pMaterialName) {

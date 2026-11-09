@@ -66,6 +66,10 @@ namespace {
     }
 
     const char* createSubModelObjName(const LiveActor* pActor, const char* pSubName) {
+        // A null sub model name is the empty name.
+        if (pSubName == nullptr) {
+            pSubName = "";
+        }
         u32 subLength = strlen(pSubName);
         u32 actorLength = strlen(pActor->mName);
         u32 length = actorLength + subLength + strlen("（）") + 1;

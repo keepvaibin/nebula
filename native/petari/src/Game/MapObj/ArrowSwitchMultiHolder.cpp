@@ -36,6 +36,10 @@ namespace MR {
     }
 
     void registerArrowSwitchTarget(ArrowSwitchTarget* pTarget) {
-        ::getArrowSwitchMultiHolder()->findSwitch(pTarget->mIdInfo)->registerTarget(pTarget);
+        // A target whose id no switch has (a mod's data) is not registered.
+        ArrowSwitchMulti* const pSwitch = ::getArrowSwitchMultiHolder()->findSwitch(pTarget->mIdInfo);
+        if (pSwitch != nullptr) {
+            pSwitch->registerTarget(pTarget);
+        }
     }
 };  // namespace MR

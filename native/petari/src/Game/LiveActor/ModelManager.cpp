@@ -252,7 +252,8 @@ void ModelManager::initJointTransform() {
 
 XjointTransform* ModelManager::getJointTransform(const char* pJointName) {
     s32 index = getModel()->getModelData()->findJoint(pJointName);
-    return mXanimePlayer->mCore->getJointTransform(index);
+    // A joint name the model lacks is the root joint.
+    return mXanimePlayer->mCore->getJointTransform(index >= 0 ? index : 0);
 }
 
 ResourceHolder* ModelManager::getResourceHolder() const {

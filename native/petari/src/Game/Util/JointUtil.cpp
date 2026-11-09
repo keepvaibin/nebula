@@ -35,7 +35,9 @@ namespace MR {
     }
 
     u32 getJointIndex(const LiveActor* pActor, const char* pName) {
-        return MR::getModelData(pActor)->findJoint(pName);
+        // A joint name the model lacks is the root joint, as in getJoint.
+        const s32 idx = MR::getModelData(pActor)->findJoint(pName);
+        return idx >= 0 ? static_cast< u32 >(idx) : 0;
     }
 
     const char* getJointName(const LiveActor* pActor, int idx) {

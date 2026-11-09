@@ -47,6 +47,11 @@ namespace {
     s32 calcDemoPartStep(const char* pExecutorName, const char* pMainPartName) {
         DemoExecutor* exec = DemoFunction::findDemoExecutor(pExecutorName);
 
+        // A demo no sheet has has no parts.
+        if (exec == nullptr) {
+            return 0;
+        }
+
         DemoSubPartInfo* subpart;
         DemoSubPartKeeper* subpartkeeper = exec->mSubPartKeeper;
         for (int i = 0; i < subpartkeeper->mNumSubPartInfos; i++) {

@@ -210,7 +210,15 @@ Clip* XanimeResourceTable::findResMotion(const char* pName) const {
 }
 
 const char* XanimeResourceTable::findStringMotion(const char* pName) const {
-    return mResourceHolder->mMotionResTable->findFileInfo(pName)->mName;
+    const ResTable* pTable = mResourceHolder->mMotionResTable;
+    const ResFileInfo* pInfo = pTable->findFileInfo(pName);
+
+    // A clip found only under its swapped name has the table's name for that.
+    if (pInfo == nullptr) {
+        pInfo = pTable->findFileInfo(swapBckName(pName, mSwapTable));
+    }
+
+    return pInfo != nullptr ? pInfo->mName : nullptr;
 }
 
 const char* XanimeResourceTable::swapBckName(const char* pOriginal, XanimeSwapTable* pTable) const {

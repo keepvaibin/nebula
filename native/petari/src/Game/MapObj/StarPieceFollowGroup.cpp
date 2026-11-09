@@ -31,7 +31,8 @@ void StarPieceFollowGroup::init(const TableIter& rIter) {
     s32 numPieces = -1;
     MR::getPlacementArg0NoInit(rIter, &numPieces);
     if (numPieces != -1) {
-        mNumPiecesTotal = numPieces;
+        // A count under zero is no pieces.
+        mNumPiecesTotal = numPieces > 0 ? numPieces : 0;
     }
 
     MR::getPlacementArg1NoInit(rIter, &mTimeLimit);

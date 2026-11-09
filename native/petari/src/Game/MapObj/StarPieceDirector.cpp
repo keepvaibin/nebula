@@ -83,11 +83,18 @@ void StarPieceDirector::declareReceiveNum(const NameObj* pNameObj, s32 num) {
 
 s32 StarPieceDirector::getDeclareRemnantStarPieceCount(const NameObj* pNameObj) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
+    // A host that declared no star pieces has none left.
+    if (hostInfo == nullptr) {
+        return 0;
+    }
     return hostInfo->mNumPieces - hostInfo->mNumGot;
 }
 
 s32 StarPieceDirector::getDeclareRemnantStarPieceCountNotExist(const NameObj* pNameObj) {
     StarPieceHostInfo* hostInfo = findHostInfo(pNameObj);
+    if (hostInfo == nullptr) {
+        return 0;
+    }
     return hostInfo->mNumPieces - hostInfo->mNumGot - hostInfo->mNumAppeared;
 }
 
@@ -284,7 +291,9 @@ Vec3f StarPieceDirector::calcPosCameraShoot(s32 addOrSubXDir) {
 
 void StarPieceDirector::clearGotCountReceiver(const NameObj* pNameObj) {
     StarPieceReceiverInfo* receiverInfo = findReceiverInfo(pNameObj);
-    receiverInfo->mGotCount = 0;
+    if (receiverInfo != nullptr) {
+        receiverInfo->mGotCount = 0;
+    }
 }
 
 StarPieceHostInfo* StarPieceDirector::findHostInfo(const NameObj* pNameObj) {

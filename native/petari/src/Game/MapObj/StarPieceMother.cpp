@@ -52,7 +52,8 @@ void StarPieceMother::init(const TableIter& rIter) {
     s32 arg = -1;
     MR::getPlacementArg0NoInit(rIter, &arg);
     if (arg != -1) {
-        mNumPieces = arg;
+        // A count under zero is no pieces.
+        mNumPieces = arg > 0 ? arg : 0;
     }
 
     mStarPieceArray = new StarPiece*[mNumPieces];

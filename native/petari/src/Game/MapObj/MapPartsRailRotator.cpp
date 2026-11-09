@@ -100,7 +100,8 @@ void MapPartsRailRotator::updateInfo(s32 point) {
         MR::getMapPartsArgRailRotateTime(&time, mHost, point);
         f32 angle = 0.0f;
         MR::getMapPartsArgRailRotateAngle(&angle, mHost, point);
-        mRotateSpeed = angle / time;
+        // A time under one step turns the whole angle in one step.
+        mRotateSpeed = time > 0 ? angle / time : angle;
     } else {
         f32 speed = -1.0f;
         MR::getMapPartsArgRailRotateSpeed(&speed, mHost, point);

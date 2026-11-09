@@ -172,7 +172,8 @@ void MapPartsRotator::initRotateSpeed(const TableIter& rIter) {
     if (mRotateAccelType == 2) {
         s32 rotate_time = 0;
         MR::getMapPartsArgRotateTime(&rotate_time, rIter);
-        mTargetRotateSpeed = mRotateAngle / rotate_time;
+        // A time under one step turns the whole angle in one step.
+        mTargetRotateSpeed = rotate_time > 0 ? mRotateAngle / rotate_time : mRotateAngle;
     } else {
         MR::getMapPartsArgRotateSpeed(&mTargetRotateSpeed, rIter);
         mTargetRotateSpeed *= 0.01f;

@@ -132,6 +132,10 @@ DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const TableIter& rIt
     for (s32 i = 0; i < mNumInfos; i++) {
         DemoCameraInfo* curInfo = &mInfos[i];
         map->getValue< const char* >(i, "PartName", &curInfo->mPartName);
+        // A sheet without a PartName column names its part with the empty name.
+        if (curInfo->mPartName == nullptr) {
+            curInfo->mPartName = "";
+        }
         map->getValue< const char* >(i, "CameraTargetName", &curInfo->mCameraTargetName);
         map->getValue< s32 >(i, "CameraTargetCastID", &curInfo->mCameraTargetCastID);
         map->getValue< const char* >(i, "AnimCameraName", &curInfo->mAnimCameraName);

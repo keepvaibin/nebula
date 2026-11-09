@@ -58,7 +58,11 @@ void MsgSharedGroup::movement() {
     }
 
     for (s32 i = 0; i < getObjNum(); i++) {
-        getActor(i)->getSensor(mSensorName)->receiveMessage(mMsg, mSensor);
+        // A member without a sensor of that name gets no message.
+        HitSensor* const pReceiver = getActor(i)->getSensor(mSensorName);
+        if (pReceiver != nullptr) {
+            pReceiver->receiveMessage(mMsg, mSensor);
+        }
     }
 
     mMsg = -1;

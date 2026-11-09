@@ -111,7 +111,10 @@ void PenguinCoach::init(const TableIter& rIter) {
 void PenguinCoach::initAfterPlacement() {
     if (mBehavior == Behavior_Tutorial) {
         LiveActorGroup* group = MR::getGroupFromArray(this);
-        mActor = group->getActor(0) == this ? group->getActor(1) : group->getActor(0);
+        // A coach placed without its group (or alone in it) has no student to watch.
+        if (group != nullptr && group->getObjNum() > 1) {
+            mActor = group->getActor(0) == this ? group->getActor(1) : group->getActor(0);
+        }
     }
 }
 

@@ -46,6 +46,11 @@ void MeteorStrikeLauncher::init(const TableIter& rIter) {
         mMeteorStrikeCount = 2;
     }
 
+    // A speed or interval of zero or less makes the count negative (or undefined): keep the one meteor.
+    if (mMeteorStrikeCount < 1) {
+        mMeteorStrikeCount = 1;
+    }
+
     mMeteorStrikeArray = new MeteorStrike*[mMeteorStrikeCount];
 
     for (s32 idx = 0; idx < mMeteorStrikeCount; idx++) {

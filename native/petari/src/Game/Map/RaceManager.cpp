@@ -43,6 +43,11 @@ namespace {
         {"サーフィン[チャレンジ]", MR::EventBgmID_Surfing, 180, "RaceName_SurfingChallenge", "SurfingLv2Galaxy", 1, false}};
 
     const RaceStructData& getRaceStructData(s32 id) {
+        // A race number from a rail's Arg0 outside the table takes the first race.
+        if (id < 0 || id >= static_cast< s32 >(ARRAY_SIZE(::sRaceStruct))) {
+            return ::sRaceStruct[0];
+        }
+
         return ::sRaceStruct[id];
     }
 

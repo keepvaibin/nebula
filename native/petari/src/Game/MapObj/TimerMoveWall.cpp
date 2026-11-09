@@ -52,7 +52,8 @@ void TimerMoveWall::exeMove() {
             frontVec.negate();
         }
 
-        mVelocity.scale(mMoveLength / mTimer, frontVec);
+        // A timer under one step moves the whole length in one step.
+        mVelocity.scale(mTimer > 0 ? mMoveLength / mTimer : mMoveLength, frontVec);
         MR::startSound(this, "SE_OJ_TRIBBL_T_MVWALL_ST");
     }
 

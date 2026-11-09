@@ -75,6 +75,10 @@ void WhirlPoolAccelerator::movement() {
 
 void WhirlPoolAccelerator::initPoints() {
     mPointCount = static_cast< s32 >(mHeight / 50.0f) + 1;
+    // A height under zero still has the one point.
+    if (mPointCount < 1) {
+        mPointCount = 1;
+    }
     mPoints = new WhirlPoolPoint*[mPointCount];
     Pos3f rotation;
     rotation.identity();

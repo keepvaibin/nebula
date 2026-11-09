@@ -291,7 +291,7 @@ namespace DemoFunction {
 
     void registerDemoTalkMessageCtrl(LiveActor* pActor, TalkMessageCtrl* pTalkCtrl) {
         DemoExecutor* executor = findDemoExecutor(pActor);
-        executor->addTalkMessageCtrl(pActor, pTalkCtrl);
+        DemoExecutorFunction::registerDemoTalkMessageCtrl(executor, pActor, pTalkCtrl);
     }
 
     void registerDemoTalkMessageCtrlDirect(LiveActor* pActor, TalkMessageCtrl* pTalkCtrl, const char* pDemoName) {

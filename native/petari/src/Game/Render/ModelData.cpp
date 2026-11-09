@@ -19,7 +19,7 @@ namespace {
 
     // FNV-1a over lower-case ASCII: the material table of ray tracing names materials the same way.
     u32 hashName(u32 hash, const char* pName, bool stopAtDot) {
-        for (const char* c = pName; *c != '\0' && !(stopAtDot && *c == '.'); ++c) {
+        for (const char* c = pName; c != nullptr && *c != '\0' && !(stopAtDot && *c == '.'); ++c) {
             const u8 v = static_cast< u8 >(*c >= 'A' && *c <= 'Z' ? *c + ('a' - 'A') : *c);
             hash = (hash ^ v) * 16777619u;
         }
@@ -46,7 +46,8 @@ namespace {
 
 u32 nebula_name_hash(const char* pName) {
     u32 hash = 0x811C9DC5u;
-    for (const char* c = pName; *c != '\0'; ++c) {
+    // No name hashes as the empty name does.
+    for (const char* c = pName; c != nullptr && *c != '\0'; ++c) {
         hash = (hash ^ static_cast< u8 >(*c)) * 0x01000193u;
     }
     return hash;
