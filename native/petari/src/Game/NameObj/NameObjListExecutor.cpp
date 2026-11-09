@@ -11,8 +11,6 @@ NameObjListExecutor::~NameObjListExecutor() {
     delete mBufferHolder;
 }
 
-template MR::Vector< MR::AssignableArray< DrawBufferGroup* > >::~Vector();
-
 void NameObjListExecutor::init() {
     initMovementList();
     initCalcAnimList();
