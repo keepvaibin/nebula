@@ -1003,6 +1003,16 @@ void RendererVk::trim_idle_effect_targets() {
         reactive_scene_ = false;
         motion_.map = FrameMap{};
     }
+    // The output set and the wide set are the live scene target while a swap holds them; between scenes they are idle
+    // sets of their own.
+    if (alt_scene_.color && !output_scene_active_ && !scene_.wide && frame_index_ > output_scene_used_frame_ + kIdleFrames) {
+        destroy_scene_set(alt_scene_);
+        alt_scene_map_ = FrameMap{};
+    }
+    if (wide_scene_.color && !scene_.wide && !output_scene_active_ && !target_pass_active_ &&
+        frame_index_ > wide_scene_used_frame_ + kIdleFrames) {
+        destroy_scene_set(wide_scene_);
+    }
 }
 
 bool RendererVk::ensure_motion_targets() {
@@ -1042,12 +1052,32 @@ bool RendererVk::ensure_motion_targets() {
         }
     }
     run_one_time([&](VkCommandBuffer commands) {
-        for (const vk::Texture* target : {motion.get(), reactive.get(), layer_color.get(), layer_trans.get()}) {
-            if (target == nullptr) {
-                continue;
-            }
+        for (const vk::Texture* target : {motion.get(), reactive.get()}) {
             image_barrier(commands, target->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        }
+        // The layer targets start as an empty layer (nothing added, everything let through), as clear_layer_targets leaves them,
+        // so a read before the first layer window sees that and not undefined contents.
+        const VkClearColorValue nothing{};
+        VkClearColorValue through{};
+        for (float& channel : through.float32) {
+            channel = 1.0f;
+        }
+        const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+        const vk::Texture* const layers[2] = {layer_color.get(), layer_trans.get()};
+        for (unsigned index = 0u; index < 2u; ++index) {
+            if (layers[index] == nullptr) {
+                continue;
+            }
+            image_barrier(commands, layers[index]->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                          VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+            vkCmdClearColorImage(commands, layers[index]->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, index == 0u ? &nothing : &through,
+                                 1u, &range);
+            image_barrier(commands, layers[index]->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                           VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
         }
@@ -1270,6 +1300,7 @@ void RendererVk::clear_motion_targets(bool motion) {
 }
 
 bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
+    output_scene_used_frame_ = frame_index_;
     if (alt_scene_.color && alt_scene_map_ == output && (alt_scene_storage_ || !storage)) {
         return true;
     }
@@ -1788,6 +1819,7 @@ bool RendererVk::begin_wide_scene(bool wanted, const SceneClearValues* initial_c
         return false;
     }
     end_scene_pass();
+    wide_scene_used_frame_ = frame_index_;
     if (!ensure_wide_set(wide_scene_)) {
         return false;
     }

@@ -932,6 +932,8 @@ private:
     std::uint64_t fg_hudless_used_frame_ = 0u;   // the last frame frame generation ran
     std::uint64_t hdr_capture_used_frame_ = 0u;  // the last frame a capture drew the SDR picture
     std::uint64_t motion_used_frame_ = 0u;       // the last frame a scene asked for the motion, reactive and layer targets
+    std::uint64_t output_scene_used_frame_ = 0u; // the last frame an output scene target was asked for (alt_scene_)
+    std::uint64_t wide_scene_used_frame_ = 0u;   // the last frame a scene asked for the wide colour targets (hdr_scene_scene_)
     // Once a frame: hands the frame generation and temporal targets back after 600 frames unused, at the frame's fence.
     void trim_idle_effect_targets();
     void take_fg_hudless_scene();
