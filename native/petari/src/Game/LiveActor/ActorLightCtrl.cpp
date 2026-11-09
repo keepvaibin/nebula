@@ -84,9 +84,10 @@ void ActorLightCtrl::initActorLightInfo() {
 void ActorLightCtrl::tryFindNewAreaLight(bool isImmediate) {
     if (LightFunction::tryFindNewAreaLightID(mActor->mPosition, &mLightID)) {
         if (mAreaLightInf != nullptr) {
-            const ActorLightInfo* inf = getTargetActorLight(mAreaLightInf);
-            mBlendFrom = inf;
-            mLightInfo = *inf;
+            // From the light shown now: the old area's, or where a blend still running has got to.
+            mBlendStart = *getActorLight();
+            mBlendFrom = &mBlendStart;
+            mLightInfo = mBlendStart;
         }
 
         resetCurrentLightInfo();
