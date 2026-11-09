@@ -42,7 +42,7 @@ namespace {
 GameSequenceProgress::GameSequenceProgress()
     : NerveExecutor("シーケンス進行"), mStarPointerOnOffController(), mStorySequenceExecutor(), mFindingLuigiEventScheduler(),
       mGalaxyCometScheduler(), mLuigiLeftSupplier(), mPlayerMissLeft(), mMinFrame(), mIsPlayTicoSound(), mIsCancelScenarioSelect(),
-      mIsForceWipe(true) {
+      mIsForceWipe(true), mOpenWipeDelay() {
     initNerve(GET_NERVE_ANON(GameSequenceProgressBooting));
 
     mStarPointerOnOffController = new StarPointerOnOffController();
@@ -61,6 +61,13 @@ void GameSequenceProgress::initAfterResourceLoaded() {
 }
 
 void GameSequenceProgress::update() {
+    // The scene a start began is drawn from the next frame on (startScene runs a frame before the controller shows it,
+    // and that frame draws the black intermission scene): the wipe that covered the load opens with the scene's first
+    // frame, not the one before it, so a closed white wipe does not drop to one black frame.
+    if (mOpenWipeDelay != 0 && --mOpenWipeDelay == 0) {
+        MR::forceOpenSystemWipeFade();
+    }
+
     updateNerve();
     mStarPointerOnOffController->update();
     mStorySequenceExecutor->update();
@@ -108,7 +115,7 @@ void GameSequenceProgress::startScene() {
         }
 
         if (mIsForceWipe) {
-            MR::forceOpenSystemWipeFade();
+            mOpenWipeDelay = 1;
         }
 
         if (!GameDataFunction::isPassedStoryEvent("スピン権利")) {
@@ -177,6 +184,9 @@ void GameSequenceProgress::requestGalaxyMove(const GalaxyMoveArgument& rMoveArg)
 
     switch (moveArg.mMoveType) {
     case GalaxyMoveArgument::Type_ScenarioSelect:
+        // The leaving scene's own wipe goes with it, and the intermission scene is black until the select screen
+        // fades in: a wipe it left closed carries on as the system wipe, so no black frame shows between.
+        MR::holdClosedSceneWipeOnSystemWipe();
         SingletonHolder< GameSystem >::get()->mSceneController->startScenarioSelectScene();
         MR::setStarPointerModeBase();
 

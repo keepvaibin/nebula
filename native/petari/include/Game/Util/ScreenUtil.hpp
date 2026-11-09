@@ -46,6 +46,9 @@ namespace MR {
     void openSystemWipeWhiteFade(s32 frame = -1);
     void closeSystemWipeWhiteFade(s32 frame = -1);
     void forceCloseSystemWipeWhiteFade();
+    void forceCloseSystemWipeFade();
+    // A wipe the scene being left holds fully closed carries on as the system wipe, in its colour (white or black).
+    void holdClosedSceneWipeOnSystemWipe();
     bool isSystemWipeActive();
     void closeSystemWipeCircleWithCaptureScreen(s32 frame = -1);
     void closeSystemWipeFadeWithCaptureScreen(s32 frame = -1);
