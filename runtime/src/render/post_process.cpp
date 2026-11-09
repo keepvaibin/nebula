@@ -380,6 +380,7 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
                                   std::uint64_t frame_index, unsigned frames_in_flight) {
     if (target.resource && target.width == width && target.height == height &&
         target.format == format) {
+        target.used_frame = frame_index;
         return true;
     }
     if (target.resource) {
@@ -420,7 +421,18 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
         target.rtv.ptr += static_cast<SIZE_T>(rtv_slot) * rtv_increment_;
         device_->CreateRenderTargetView(target.resource.Get(), nullptr, target.rtv);
     }
+    target.used_frame = frame_index;
     return true;
+}
+
+void PostProcessor::trim_idle_targets(std::uint64_t frame_index, unsigned frames_in_flight) {
+    constexpr std::uint64_t kTargetIdleFrames = 600u;
+    for (Target* target : {&edges_, &weights_, &antialiased_, &scaled_, &stencil_}) {
+        if (target->resource && frame_index > target->used_frame + kTargetIdleFrames) {
+            retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
+            *target = {};
+        }
+    }
 }
 
 void PostProcessor::transition(ID3D12GraphicsCommandList* list, Target& target, gpu::Use use) {
@@ -610,6 +622,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
         return AaRun::kNone;
     }
     release_retired(frame_index);
+    trim_idle_targets(frame_index, frames_in_flight);
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width,
                                                    display_height, settings_, status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
@@ -866,6 +879,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
                            unsigned frames_in_flight,
                            const PostOutput& output) {
     release_retired(frame_index);
+    trim_idle_targets(frame_index, frames_in_flight);
     // The last write's pipelines and constants: the 8-bit window's, or HDR10's when the target is (prepare_hdr made them).
     const bool hdr = output.hdr && easu_hdr_ && rcas_hdr_ && rcas_scaled_hdr_ && resample_hdr_;
     ID3D12PipelineState* const easu_last = (hdr ? easu_hdr_ : easu_window_).Get();

@@ -413,7 +413,7 @@ private:
         VkCommandBuffer upscale = VK_NULL_HANDLE;  // a generated frame's temporal upscale
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
         std::vector<VkDescriptorPool> overflow_descriptors;  // when a frame outgrows its pool
-        std::uint32_t overflow_sets = 0;  // sets of the last overflow pool made (each next one has twice as many); kept across frames
+        std::uint32_t overflow_sets = 0;  // sets of the last overflow pool made: a frame's first overflow pool has this many, each further one in the frame twice the last
         VkSemaphore acquired = VK_NULL_HANDLE;
         std::uint64_t fence = 0;  // the submission that used this slot last
         std::vector<gpu::TextureRef> retired;  // kept until the slot's fence passes

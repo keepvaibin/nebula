@@ -88,6 +88,7 @@ private:
         std::shared_ptr<Texture> texture;  // its framebuffer is the pass's (with the stencil for edges and weights)
         unsigned width = 0;
         unsigned height = 0;
+        std::uint64_t used = 0;  // clock_ when a pass last asked for it
     };
     // Target pipelines by the render pass they draw in.
     struct PassPipelines {
@@ -109,6 +110,9 @@ private:
                        bool with_stencil);
     // SMAA's edges and weights with the stencil both their framebuffers hold, made together.
     bool ensure_smaa_targets(unsigned width, unsigned height);
+    // Hands back the targets no pass has asked for in 600 scene AA calls (SMAA's after a switch to FXAA or off, the scaling
+    // intermediate after a window size that needs none); the next pass that wants one makes it again.
+    void trim_idle_targets();
     bool record_aa(VkCommandBuffer commands, AaRun pass, VkImageView source, unsigned width, unsigned height,
                    const SetAllocator& allocate);
     void begin_pass(VkCommandBuffer commands, VkRenderPass pass, const Target& target, bool clear_stencil) const;
@@ -159,6 +163,8 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
+    std::uint64_t clock_ = 0;      // scene AA calls so far
+    std::uint64_t smaa_used_ = 0;  // clock_ when SMAA's three targets were last asked for
 };
 
 }  // namespace galaxy::render::vk

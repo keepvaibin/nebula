@@ -141,6 +141,9 @@ public:
         }
         if (!sets_match(in)) {
             make_sets(in);
+            if (convert_set_ == VK_NULL_HANDLE) {
+                return false;
+            }
         }
         const bool reset = in.reset || !history_ready_;
         if (!history_ready_) {
