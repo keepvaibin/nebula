@@ -1,4 +1,5 @@
 #include "Game/Boss/DodoryuDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -167,7 +168,7 @@ void DodoryuDemoOpening::exeWalk() {
     MR::startLevelSound(mHost, "SE_BM_LV_DODORYU_MOVE_GROUND");
     turnToRabbit();
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         mHost->mIsRumbling = false;
 
         setNerve(GET_NERVE_ANON(DodoryuDemoOpeningNrvOpeningHideReady));
@@ -328,7 +329,7 @@ void DodoryuDemoAngry::exePlay() {
         MR::hidePlayer();
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::startCenterScreenBlur(60, 15.0f, 80, 5, 30);
     }
 

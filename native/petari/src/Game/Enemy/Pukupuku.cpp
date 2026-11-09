@@ -1,4 +1,5 @@
 #include "Game/Enemy/Pukupuku.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -69,7 +70,7 @@ namespace {
     const f32 sWaterColumnScale = 1.5f;
     const f32 sTrampleFallSpeed = 10.0f;
     const f32 sTrampleFriction = 0.89f;
-    const s32 sTrampledSteps = 30;
+    const s32 sTrampledSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sBlownOffSteps = 15;
     const f32 sBlowSpeed = 35.0f;
     const f32 sBlowUpSpeed = 20.0f;

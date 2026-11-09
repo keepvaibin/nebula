@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaActionBase.hpp"
 #include "Game/Boss/PoltaArm.hpp"
@@ -17,7 +18,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 sOpeningBgmStep = 60;
+    const s32 sOpeningBgmStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sOpeningBlurStart = 300;
     const s32 sOpeningBlurTime = 70;
     const f32 sOpeningBlurOffset = 18.0f;

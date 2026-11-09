@@ -1,4 +1,5 @@
 #include "Game/MapObj/ScrewSwitch.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
@@ -16,8 +17,8 @@
 
 namespace {
     static const s32 sStepForAdjust = 3;
-    static const s32 sStepToRumbleCamera = 30;
-    static const s32 sStepForScrewStart = 30;
+    static const s32 sStepToRumbleCamera = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sStepForScrewStart = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sStepForPause = 0;
 };  // namespace
 

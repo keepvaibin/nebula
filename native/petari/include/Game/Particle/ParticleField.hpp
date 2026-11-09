@@ -129,11 +129,8 @@ public:
     u32 getAddType() {
         return mpData->mAddType;
     }
-    u32 getSttFlag() {
-        return mpData->mStatus;
-    }
     bool checkStatus(u16 flag) {
-        return flag & getSttFlag();
+        return flag & mpData->mStatus;
     }
     f32 getMagRndm() const {
         return mpData->mMagRndm;

@@ -29,7 +29,6 @@ private:
     s32 mRabbitNum;
     RunawayTico** mTico;
     s32 mTicoNum;
-    u32 mLinkedRabbitCount;
     s32 mCaughtRabbitCount;
     s32 mCompleteRabbitCount;
     s32 mBgmState;

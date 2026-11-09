@@ -1,4 +1,5 @@
 #include "Game/Enemy/OtaRock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/CocoNutBall.hpp"
 #include "Game/Enemy/FireBall.hpp"
@@ -10,16 +11,16 @@
 namespace {
     const Vec cSensorOffset = {0.0f, 180.0f, 0.0f};
     const f32 cSensorRadius = 300.0f;
-    const s32 cWaitFrameMin = 30;
-    const s32 cWaitFrameMax = 90;
+    const s32 cWaitFrameMin = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 cWaitFrameMax = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 cAppearDistance = 3800.0f;
     const f32 cHideDistance = 4000.0f;
     const s32 cThrowBallStep = 40;
     const f32 cThrowAngleMin = 5.0f;
     const f32 cThrowAngleMax = 10.0f;
     const f32 cThrowFireBallSpeed = 15.0f;
-    const s32 cWaitFrameMinNoThrowCocoNut = 120;
-    const s32 cWaitFrameMaxNoThrowCocoNut = 180;
+    const s32 cWaitFrameMinNoThrowCocoNut = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cWaitFrameMaxNoThrowCocoNut = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 namespace NrvOtaRock {

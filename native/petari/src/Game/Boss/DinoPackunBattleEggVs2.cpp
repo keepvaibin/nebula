@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunBattleEggVs2.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunStateDamage.hpp"
 #include "Game/Boss/DinoPackunStateFire.hpp"
@@ -17,9 +18,9 @@
 namespace {
     // Where the tail leaves the egg, in the boss's frame.
     const Vec3f cEggOutPosition(0.0f, 60.0f, -320.0f);
-    const s32 cTurnSteps = 30;
+    const s32 cTurnSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cTurnDegree = 1.5f;
-    const s32 cWalkSteps = 750;
+    const s32 cWalkSteps = NebulaFrameClock::stepsOfMilliseconds(12500);
     const f32 cWalkSpeed = 0.9f;
     const s32 cWalkFootPrintPeriod = 40;
     const f32 cWalkTailBendRate = 1.5f;
@@ -29,7 +30,7 @@ namespace {
     // Each cycle the tail burns, cools, then warns before burning again.
     const s32 cFireCycle = 200;
     const s32 cFireSteps = 80;
-    const s32 cFireSignStep = 180;
+    const s32 cFireSignStep = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 namespace NrvDinoPackunBattleEggVs2 {

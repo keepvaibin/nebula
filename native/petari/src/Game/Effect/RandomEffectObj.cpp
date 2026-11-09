@@ -1,4 +1,5 @@
 #include "Game/Effect/RandomEffectObj.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -6,7 +7,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const s32 sLifeTime = 600;
+    static const s32 sLifeTime = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 sRandWidth = 180;
 };  // namespace
 

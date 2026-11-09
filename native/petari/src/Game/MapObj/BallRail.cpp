@@ -1,4 +1,5 @@
 #include "Game/MapObj/BallRail.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -13,7 +14,7 @@ namespace NrvBallRail {
 namespace {
     const s32 sSetUpBlendSteps = 15;
     const s32 sSetUpSteps = 45;
-    const s32 sNoBindSteps = 60;
+    const s32 sNoBindSteps = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sSetUpSpeed = 3.0f;
     const f32 sMinRunSpeed = 6.0f;
 };  // namespace

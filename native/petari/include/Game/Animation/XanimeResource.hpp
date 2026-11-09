@@ -39,11 +39,8 @@ public:
     s32 mAttribute;
     // Number of bcks (0 when none was found, 1..4).
     u8 mBckTableVariant;
-    // From the aux table (no table has entries).
-    u8 mAuxValue;
     Clip* mBcks[4];
     f32 mWeights[4];
-    XanimeOfsInfo** mAuxOfsInfo;
     u32 mHash;
     const char* mBckName;
 
@@ -60,7 +57,6 @@ public:
     XanimeBckTable mParent;
     const char* mFileName;
     u32 mAnimationHash;
-    u32 mFileHash;
 };
 
 class XanimeBckTable2 {

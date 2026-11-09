@@ -5,6 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
 
 namespace NrvEarthenPipe {
@@ -37,6 +38,8 @@ namespace {
     };
 
     const f32 sRearmDistance = 100.0f;
+    // The rise out of the lava takes half a second.
+    const s32 sRiseSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
 
     bool isPlayerAway(const LiveActor* pActor) {
         return !MR::isNearPlayer(pActor, sRearmDistance);
@@ -304,7 +307,7 @@ void EarthenPipe::exePlayerOut() {
 
 // Usable again once the player has landed (or swum or, for PIPE_REARM_WHEN_AWAY, moved) away.
 void EarthenPipe::exeInvalid() {
-    if ((MR::isGreaterStep(this, 30) && MR::isOnGroundPlayer()) || (mPipeMode == PIPE_REARM_WHEN_AWAY && ::isPlayerAway(this)) ||
+    if ((MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500)) && MR::isOnGroundPlayer()) || (mPipeMode == PIPE_REARM_WHEN_AWAY && ::isPlayerAway(this)) ||
         (MR::isPlayerSwimming() && ::isPlayerAway(this))) {
         MR::validateClipping(this);
         MR::validateHitSensors(this);
@@ -336,15 +339,14 @@ void EarthenPipe::exeShowUp() {
         MR::startSystemSE("SE_SY_ITEM_APPEAR");
     }
 
-    // A ratio over the 30-step rise (the isLessStep bound below), not a rate.
-    f32 easeIn = MR::getEaseInValue(getNerveStep() / 30.0f, 0.0f, 1.0f, 1.0f);
+    f32 easeIn = MR::getEaseInValue(static_cast< f32 >(getNerveStep()) / static_cast< f32 >(sRiseSteps), 0.0f, 1.0f, 1.0f);
     calcTrans(easeIn);
 
-    if (MR::isLessStep(this, 30)) {
+    if (MR::isLessStep(this, sRiseSteps)) {
         MR::startLevelSound(this, "SE_OJ_LV_PIPE_APPEAR_MAGMA");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, sRiseSteps)) {
         MR::deleteEffect(this, "LavaAppear");
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShow));
     }

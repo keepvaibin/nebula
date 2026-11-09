@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaBattleLv2.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaActionBase.hpp"
 #include "Game/Boss/PoltaArm.hpp"
@@ -39,7 +40,7 @@ PoltaBattleLv2::PoltaBattleLv2(Polta* pPolta) : PoltaActionBase("ボステレサ
     mStateGroundRockAttack->mRockNum = 8;
     mStateGenerateRock = new PoltaStateGenerateRock(pPolta);
     mStateGenerateRock->mRockNum = 7;
-    mStateGenerateRock->mEndDelayStep = 180;
+    mStateGenerateRock->mEndDelayStep = NebulaFrameClock::stepsOfSeconds(3);
 }
 
 void PoltaBattleLv2::appear() {
@@ -169,7 +170,7 @@ void PoltaBattleLv2::setNerveGenerateRock() {
 }
 
 bool PoltaBattleLv2::tryGenerateRock() {
-    if (PoltaFunction::isBrokenLeftArm(getHost()) && PoltaFunction::isBrokenRightArm(getHost()) && MR::isGreaterStep(this, 120)) {
+    if (PoltaFunction::isBrokenLeftArm(getHost()) && PoltaFunction::isBrokenRightArm(getHost()) && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerveGenerateRock();
         return true;
     }

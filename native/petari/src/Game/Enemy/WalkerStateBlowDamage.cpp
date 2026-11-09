@@ -1,4 +1,5 @@
 #include "Game/Enemy/WalkerStateBlowDamage.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -8,7 +9,7 @@ namespace {
     const f32 sAirFric = 0.99f;
     const f32 sAirGravityAccel = 1.0f;
     const f32 sDamageTurnLimit = 15.0f;
-    const s32 sDamageLandTime = 30;
+    const s32 sDamageLandTime = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 namespace NrvWalkerStateBlowDamage {

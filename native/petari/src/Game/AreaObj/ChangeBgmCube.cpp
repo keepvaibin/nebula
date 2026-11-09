@@ -1,4 +1,5 @@
 #include "Game/AreaObj/ChangeBgmCube.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/AudioLib/AudBgmMgr.hpp"
 #include "Game/AudioLib/AudSoundId.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
@@ -140,7 +141,7 @@ void ChangeBgmCube::movement() {
             s32 fadeTime = objArg1;
 
             if (fadeTime < 0) {
-                fadeTime = 90;
+                fadeTime = NebulaFrameClock::stepsOfMilliseconds(1500);
             }
 
             if (objArg2 >= 0) {
@@ -165,7 +166,7 @@ void ChangeBgmCube::movement() {
                 AudBgm* stageBgm = AudWrap::getStageBgm();
 
                 if (stageBgm != nullptr) {
-                    s32 fadeTime = 30;
+                    s32 fadeTime = NebulaFrameClock::stepsOfMilliseconds(500);
 
                     if (objArg2 >= 0) {
                         fadeTime = objArg2;
@@ -180,7 +181,7 @@ void ChangeBgmCube::movement() {
                     AudBgm* stageBgm = AudWrap::getStageBgm();
 
                     if (stageBgm != nullptr) {
-                        s32 fadeTime = 30;
+                        s32 fadeTime = NebulaFrameClock::stepsOfMilliseconds(500);
 
                         if (objArg2 >= 0) {
                             fadeTime = objArg2;

@@ -1,4 +1,5 @@
 #include "Game/Boss/BossBegoman.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossBegomanHead.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/Enemy/BegomanSpike.hpp"
@@ -46,12 +47,12 @@ namespace {
     const f32 sPursueRotate = 0.5f;
     const f32 sTurnRotate = 0.4f;
     const f32 sOnWeakRotate = 0.4f;
-    const s32 sOnWeakTime = 420;
-    const s32 hOnWeakSignSubTime = 240;
-    const s32 hOnWeakSignFastSubTime = 360;
+    const s32 sOnWeakTime = NebulaFrameClock::stepsOfSeconds(7);
+    const s32 hOnWeakSignSubTime = NebulaFrameClock::stepsOfSeconds(4);
+    const s32 hOnWeakSignFastSubTime = NebulaFrameClock::stepsOfSeconds(6);
     const f32 hSignSlowRate = 0.5f;
     const f32 hSignFastRate = 2.0f;
-    const s32 hOnWeakTurnTime = 30;
+    const s32 hOnWeakTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 hOnWeakSideVel = 0.35f;
     // Inside this distance a weak boss backs away from the player.
     const f32 hOnWeakEscapeDist = 600.0f;
@@ -65,9 +66,9 @@ namespace {
     // A trample within this many steps of the last one is ignored.
     const s32 sTrampleRepeatGuardTime = 5;
     // A body hit within this many steps of a trample is ignored.
-    const s32 sTrampleHitGuardTime = 30;
+    const s32 sTrampleHitGuardTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 hTrampleSlideSpeed = 25.0f;
-    const s32 sAwareTime = 60;
+    const s32 sAwareTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sAwareRotate = 0.1f;
     const f32 sHitReactionRotate = 0.25f;
     const s32 sStopSceneTime = 2;
@@ -75,17 +76,17 @@ namespace {
     const f32 hBlowVel = 40.0f;
     const f32 hBlowVerticalVel = 40.0f;
     const s32 sDeathStopSceneTime = 5;
-    const s32 sElectricDeathTime = 60;
-    const s32 sElectricDeathStarPieceTime = 30;
+    const s32 sElectricDeathTime = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sElectricDeathStarPieceTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Star pieces burst on the first and second electric hits; the declared count is their sum.
     const s32 sStarPieceFirstHit = 8;
     const s32 sStarPieceSecondHit = 16;
     const f32 hStarPieceHeight = 200.0f;
     const f32 hStarPieceSpeedMin = 20.0f;
     const f32 hStarPieceSpeedMax = 40.0f;
-    const s32 sElectricReturnTime = 60;
+    const s32 sElectricReturnTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 hElectricReturnSpeed = 25.0f;
-    const s32 sJumpToInitPosTime = 60;
+    const s32 sJumpToInitPosTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sJumpToInitPosRotate = 0.1f;
     const f32 hJumpToInitPosHeight = 700.0f;
     // The rest position sits this far below the placement.
@@ -119,7 +120,7 @@ namespace {
     const f32 hNeedleSoundVolumeMax = 100.0f;
     const s32 sBabyFollowerNum = 3;
     const s32 sSpikeFollowerNum = 2;
-    const s32 sStageBgmFadeTime = 60;
+    const s32 sStageBgmFadeTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sOpeningOverlayTime = 2;
 
     template < typename T >

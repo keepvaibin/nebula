@@ -1,4 +1,5 @@
 #include "Game/Enemy/BasaBasa.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/AnimStampController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
@@ -30,20 +31,20 @@ namespace {
     const f32 cChaseFaceDegree = 60.0f;
     const f32 cHomeDistanceMargin = 1000.0f;  // over the chase distance when Obj_arg1 is unset
     const f32 cHomeArriveDistance = 300.0f;
-    const s32 cComeHomeChaseSteps = 120;
+    const s32 cComeHomeChaseSteps = NebulaFrameClock::stepsOfSeconds(2);
     const f32 cAttachDistance = 10.0f;
     const f32 cAttachSpeedRate = 5.0f;
     const f32 cAttackRise = 100.0f;  // above the player's feet
     const f32 cAttackSpeed = 10.0f;
     const f32 cAttackHitDistance = 40.0f;
-    const s32 cAttackSteps = 180;
+    const s32 cAttackSteps = NebulaFrameClock::stepsOfSeconds(3);
     const f32 cIceAttackUpRate = 5.0f;
     const f32 cAttackEndEffectHeight = 200.0f;
     const f32 cHitBackSpeed = 15.0f;
     const f32 cPushSpeed = 1.5f;
     const f32 cSpinStormDistance = 500.0f;
     const f32 cClipNearPlayerDistance = 2500.0f;
-    const s32 cClipResetSteps = 180;
+    const s32 cClipResetSteps = NebulaFrameClock::stepsOfSeconds(3);
     const f32 cSideDamping = 0.5f;
     const f32 cHoverBelowAttack = 350.0f;  // hover height is the attack distance minus this
     const f32 cTuneMinOffset = 2.0f;
@@ -384,7 +385,7 @@ void BasaBasa::exeHitBackEnd() {
         MR::tryStartBck(this, "Fly");
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(BasaBasa, BasaBasaNrvChase));
     } else {
         trySetNervePointerSwoon();

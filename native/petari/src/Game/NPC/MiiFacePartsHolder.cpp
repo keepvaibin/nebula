@@ -108,8 +108,8 @@ void MiiFacePartsHolder::draw() const {
     MR::loadLight(1);
     Mii::Style style = {};
     style.lightMask = MODEL_FILE_LIGHT0 | MODEL_FILE_LIGHT1;
-    style.diffuse = MODEL_FILE_DF_CLAMP;
-    style.atten = MODEL_FILE_AF_NONE;
+    style.diffuse = MODEL_FILE_DIFFUSE_CLAMP;
+    style.atten = MODEL_FILE_ATTEN_NONE;
     style.ambient = NebulaColor8{128, 128, 128, 128};
     style.material = NebulaColor8{165, 165, 165, 255};
 

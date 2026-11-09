@@ -1,4 +1,5 @@
 #include "Game/MapObj/StarPieceFollowGroup.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
@@ -232,7 +233,7 @@ void StarPieceFollowGroup::exeFollowEnd() {
         currentPiece->mVelocity += (playerDir * TEN);
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         kill();
         MR::offSwitchA(this);
         allKillPieces();

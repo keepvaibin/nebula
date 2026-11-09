@@ -8,17 +8,10 @@ namespace {
     static const f32 sPlayerSpeedMin = 4.0f;
 };  // namespace
 
-TalkSupportPlayerWatcher::TalkSupportPlayerWatcher() : mEnableTalkCounter(), mDisableTalkCounter() {
+TalkSupportPlayerWatcher::TalkSupportPlayerWatcher() {
 }
 
 void TalkSupportPlayerWatcher::update() {
-    if (isEnableTalkPlayerSpeed()) {
-        mEnableTalkCounter++;
-        mDisableTalkCounter = 0;
-    } else {
-        mDisableTalkCounter++;
-        mEnableTalkCounter = 0;
-    }
 }
 
 bool TalkSupportPlayerWatcher::isEnableTalkPlayerStateNormal() const {

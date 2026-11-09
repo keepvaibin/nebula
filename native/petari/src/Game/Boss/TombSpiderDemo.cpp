@@ -1,4 +1,5 @@
 #include "Game/Boss/TombSpiderDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/TombSpider.hpp"
 #include "Game/Boss/TombSpiderFunction.hpp"
 #include "Game/Boss/TombSpiderGland.hpp"
@@ -24,19 +25,19 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    const s32 sStepDemoGateOpen = 180;
+    const s32 sStepDemoGateOpen = NebulaFrameClock::stepsOfSeconds(3);
     const f32 sGateOpenPlayerDistance = 6000.0f;
     const f32 sPlanetRadius = 7000.0f;
     const f32 sPlanetInsideRadius = 1800.0f;
     const s32 sStepGateBreak = 75;
     const f32 sGateOpenPlayerSpeed = 60.0f;
-    const s32 sStepGateOpenChangeCamera = 120;
-    const s32 sStepCocoonBreak = 60;
+    const s32 sStepGateOpenChangeCamera = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 sStepCocoonBreak = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepJumpRotateToPlayerStart = 20;
     const s32 sStepJumpRotateToPlayerEnd = 70;
     const s32 sStepBattle2ndStartCameraInterpolateFrame = 10;
-    const s32 sStepChanceDamagePlanetBreak = 30;
-    const s32 sStepBattle2ndStartJumpStart = 150;
+    const s32 sStepChanceDamagePlanetBreak = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 sStepBattle2ndStartJumpStart = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 sStepBattle2ndStartJumpEnd = 190;
     const s32 sStepBattleEndPlanetBreak = 15;
     const s32 sBattle2ndStartStarPieceNum = 25;

@@ -1,4 +1,5 @@
 #include "Game/Util/FootPrint.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -13,7 +14,7 @@
 
 namespace {
     static const s32 sFadeBufferCount = 10;
-    static const s32 sFadeOutTime = 60;
+    static const s32 sFadeOutTime = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 FootPrint::FootPrint(const char* pName, s32 amount, s32 drawType) : NameObj(pName) {

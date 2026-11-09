@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunTrackFire.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -60,8 +61,6 @@ void DinoPackunTrackFire::control() {
 }
 
 void DinoPackunTrackFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isSensorPlayer(pReceiver)) {
-    }
 
     MR::sendMsgEnemyAttackFire(pReceiver, pSender);
 }
@@ -88,7 +87,7 @@ void DinoPackunTrackFire::exeWait() {
     if (MR::isBindedGround(this)) {
         setNerve(GET_NERVE(DinoPackunFire, DinoPackunTrackFireNrvGround));
         MR::zeroVelocity(this);
-    } else if (MR::isGreaterStep(this, 300)) {
+    } else if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         MR::deleteEffect(this, "TrackFire");
         kill();
     }

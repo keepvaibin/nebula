@@ -1,4 +1,5 @@
 #include "Game/Boss/BossKameckStateBattle.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossKameck.hpp"
 #include "Game/Boss/BossKameckBattlePattern.hpp"
 #include "Game/Boss/BossKameckMoveRail.hpp"
@@ -17,14 +18,14 @@
 
 namespace {
     static const f32 sTurnPlayerDegree = 6.0f;
-    static const s32 sWaitTime = 60;
-    static const s32 sMoveTime = 90;
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sMoveTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sFinalMoveTime = 40;
-    static const s32 sAttackWaitTime = 60;
-    static const s32 sAttackTime = 30;
+    static const s32 sAttackWaitTime = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sAttackTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sShootTiming = 23;
     static const f32 sBeamSpeed = 20.0f;
-    static const s32 sRecoverMoveStartTime = 60;
+    static const s32 sRecoverMoveStartTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sSwingSeTiming = 12;
 };  // namespace
 
@@ -134,7 +135,7 @@ void BossKameckStateBattle::control() {
 }
 
 bool BossKameckStateBattle::tryAttackWait() {
-    if (MR::isGreaterStep(this, 120) && MR::isNear(mHost, mMoveTarget, 100.0f)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && MR::isNear(mHost, mMoveTarget, 100.0f)) {
         if (tryChargeBeam()) {
             setNerve(GET_NERVE(BossKameckStateBattle, BossKameckStateBattleNrvAttackWait));
         } else {

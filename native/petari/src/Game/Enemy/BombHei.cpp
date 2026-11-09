@@ -1,4 +1,5 @@
 #include "Game/Enemy/BombHei.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -23,8 +24,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const s32 hStartBrkTime = 600;
-    static const s32 hBrkRateUpTime = 120;
+    static const s32 hStartBrkTime = NebulaFrameClock::stepsOfSeconds(10);
+    static const s32 hBrkRateUpTime = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 hBrkSlowRate = 0.5f;
     static const f32 hBrkFastRate = 2.0f;
     static const f32 hTurnLimitRadian = 3.0f;
@@ -33,7 +34,7 @@ namespace {
     static const f32 hSpinHitJumpVel = 10.0f;
     static const f32 hPushedAcc = 2.0f;
     static const s32 hExplodeTime = 8;
-    static const s32 hWaitTime = 180;
+    static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 hWalkTime = 160;
     static const f32 hWalkVel = 0.5f;
     static const f32 hPursueVel = 1.5f;
@@ -45,9 +46,9 @@ namespace {
     static const f32 hThrownReboundRate = 0.8f;
     static const f32 hThrownReboundMin = 0.0f;
     static const f32 hTurnVecValue = 2.0f;
-    static const s32 hThrownCanNotGotTime = 120;
+    static const s32 hThrownCanNotGotTime = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 hMultVelAngle = 1.0f;
-    static const s32 hThrownOffCalcGravityTime = 30;
+    static const s32 hThrownOffCalcGravityTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 hGroundCosine = 0.75f;
     static const f32 hStopDampValue = 0.8f;
     static const f32 hToStopVelLen = 5.0f;
@@ -55,8 +56,8 @@ namespace {
     static const f32 hThrowVelV = 18.0f;
     static const f32 hTranslateHeight = 53.0f;
     static const s32 hStopFrame = 3;
-    static const s32 hSpinHitCanGetTime = 30;
-    static const s32 hTrampleTime = 60;
+    static const s32 hSpinHitCanGetTime = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 hTrampleTime = NebulaFrameClock::stepsOfSeconds(1);
 
     const BombHeiParam hNoMoveNoTurnParam = {0.0f, 2.0f, 0.8f, 0.0f};
     const BombHeiParam hWalkParam = {hWalkVel, 2.0f, 0.8f, hTurnVecValue};

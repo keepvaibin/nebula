@@ -64,7 +64,6 @@ ParticleResources::ParticleResources(void const* pFile, NebulaArena* pHeap) : mp
                 pRes->mpKeyBlocks[k] = new (pHeap, 0) ParticleKey(particleRecord< ParticleKeyData >(pFile, pKeys[k]));
             }
         }
-        pRes->mTDB1Num = data.mTextureIndexCount;
         pRes->mpTDB1 = particleRecord< u32 >(pFile, data.mTextureIndices);
         pRes->init();
         mpResArr[i] = pRes;

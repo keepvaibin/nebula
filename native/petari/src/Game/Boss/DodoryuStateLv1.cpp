@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Boss/DodoryuStateLv1.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -241,7 +242,7 @@ void DodoryuStateLv1::exeSpinOut() {
     mHost->snapToGround();
     calcVerticalizedDir(&mKnockDir, mKnockDir);
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         mHost->validateEyeSensor();
     }
 

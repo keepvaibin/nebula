@@ -1,4 +1,5 @@
 #include "Game/MapObj/FlameGun.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -98,7 +99,7 @@ void FlameGun::exeWait() {
         MR::startBck(this, "Wait");
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(FlameGun, HostTypeNrvPreRadiate));
     }
 }
@@ -123,7 +124,7 @@ void FlameGun::exeRadiate() {
 
     MR::startLevelSound(this, "SE_EM_LV_FLAMEGUN_FIRE");
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(FlameGun, HostTypeNrvWait));
         MR::forceDeleteEffectAll(this);
         MR::invalidateHitSensor(this, "attack");

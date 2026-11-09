@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunBattleEgg.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunStateDamage.hpp"
 #include "Game/Boss/DinoPackunTail.hpp"
@@ -10,9 +11,9 @@
 namespace {
     // Where the tail leaves the egg, in the boss's frame.
     const Vec3f cEggOutPosition(0.0f, 60.0f, -320.0f);
-    const s32 cTurnSteps = 120;
+    const s32 cTurnSteps = NebulaFrameClock::stepsOfSeconds(2);
     const f32 cTurnDegree = 0.3f;
-    const s32 cWalkSteps = 300;
+    const s32 cWalkSteps = NebulaFrameClock::stepsOfSeconds(5);
     const f32 cWalkSpeed = 0.5f;
     const s32 cWalkFootPrintPeriod = 91;
 

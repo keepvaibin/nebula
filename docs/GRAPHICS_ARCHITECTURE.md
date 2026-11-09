@@ -5,27 +5,31 @@ The game makes typed records; the renderer (`galaxy::render`, `runtime/src/rende
 ## A frame
 
 1. The main loop asks the host for its next frame (`frame_wait`).
-2. Game code draws through `nebula_game_api.h`: `shape_draw`, `immediate`, `native_material`, `state`, `target_begin`,
-   `target_end`, `target_capture`, `screen_probe`, `scene_marker`. Each call becomes one `shapes::Record`.
-3. A record's matrices, vertices and materials go in the frame's pool (`shapes::RecordPool`): one allocation a frame.
-4. `render_frame` hands records and pool to the render thread through a bounded queue.
-5. The render thread runs `on_shape_record` over the list in order, submits, presents.
+2. Game code builds a frame list (`nebula_frame_list.h`, `Game/Render/FrameList.cpp`): passes in draw order, each naming a range
+   of items, and the blocks, views, cameras, light sets and constants the items read. Models, meshes, materials, texture tables and
+   pipelines are registered with the host once (`model_register`, `mesh_register`, `material_register`, `texture_table`,
+   `pipeline_register`).
+3. The vertices the game makes (the ring), the glyph and particle instances and the constants sit in memory the game owns until the
+   renderer is done with the list.
+4. `submit_frame` hands the list to the renderer by pointer; the renderer sets `released` when it no longer reads it and keeps the
+   last two lists to interpolate between.
+5. The render thread draws the passes in order, submits, presents.
 
-The list is the only order. Scene boundaries are records too.
+The list is the only order. Scene boundaries are passes too (`NEBULA_PASS_SCENE_BEGIN`, `_OPAQUE_END`, `_SCENE_END`).
 
 ## What the game sends
 
 | Thing | How |
 |---|---|
 | Models | Cooked meshes: float arrays, corners, triangles (`cook/mesh.rs`). Vertices expand once and stay in the resident vertex buffer, in two streams: 44 bytes every vertex has, 92 more only for meshes with tangents or further coordinates |
-| A model's matrices | One block a view (`shape_palette`): twelve floats a position matrix, then twelve a normal matrix. Vertices name a row; interpolation moves the block |
-| Materials | A shader compiled at build (`NebulaShaderId`) with its constants, textures and state (`NebulaNativeMaterial`). The programs are built by `tools/dev/build_programs.py` into `runtime/src/render/programs`; sites and layouts are in `runtime/src/render/materials` |
-| Draw state | `NebulaPassState` on every draw: blend, depth, cull, writes, position matrix, line and point sizes |
-| Vertices the game makes | `immediate`, written into the frame's pool. Consecutive quads with nothing changing between them are one draw |
-| Particles | An emitter's corners, in the world, with the camera as the draw's matrix; each knows where it was a game frame ago (`NebulaParticleCorner`). The vertex stage places them at the presented frame's time |
-| Lines and points | Four corners each, made by the host (`widen_lines_points`), moved by the vertex stage. No geometry stage |
-| Passes into textures | `target_begin` and `target_end`: the texture is the renderer's, at the scene's scale |
-| Reading the frame | `target_capture` copies a rectangle to a texture (a grab pass). `screen_probe` reads named points a frame or two later (lens flare, star pointer, talk balloon) |
+| A model's matrices | One block a view (`NebulaFrameBlock`): twelve floats a position matrix, then twelve a normal matrix. Vertices name a row; interpolation moves the block |
+| Materials | A shader compiled at build (`NebulaShaderId`) with its constants, textures and state (a pipeline from `pipeline_register`). The programs are built by `tools/dev/build_programs.py` into `runtime/src/render/programs`; sites and layouts are in `runtime/src/render/materials` |
+| Draw state | A state word with the pipeline (`NEBULA_STATE_*`: blend, depth, cull, writes), the draw's block, and its line and point sizes |
+| Vertices the game makes | The ring (`ring_vertices`), written into the list. Consecutive quads with nothing changing between them are one draw |
+| Particles | An emitter's corners, in the world, with the camera as the draw's matrix; each knows where it was a game frame ago (`NebulaParticleInstance`). The vertex stage places them at the presented frame's time |
+| Lines and points | Four corners each, made by the host (`NEBULA_ITEM_WIDE`), moved by the vertex stage. No geometry stage |
+| Passes into textures | Draw passes into a target (`NEBULA_LAYER_TARGET`): the texture is the renderer's, at the scene's scale |
+| Reading the frame | `NEBULA_PASS_COPY_FRAME` makes the frame so far a texture (a grab pass). A probe pass (`NEBULA_PASS_PROBE`, `probe_results`) reads named points a frame or two later (lens flare, star pointer, talk balloon) |
 
 The rings are write-combined: code writes them and never reads them.
 
@@ -33,7 +37,7 @@ The rings are write-combined: code writes them and never reads them.
 
 Cooked at import into records (`nebula_cooked_texture.h`): BC1 for CMPR without transparent blocks, L8 and LA8 for intensity formats,
 RGBA8 otherwise, palettes applied. Textures the game writes while running are linear (`NEBULA_TEXTURE_LINEAR_*`). A texture's key is
-the address of its image; a texture leaves when its scene's heap goes (`shape_forget`).
+the address of its image; a texture leaves when its scene's heap goes (`texture_free`).
 
 ## Resolution
 

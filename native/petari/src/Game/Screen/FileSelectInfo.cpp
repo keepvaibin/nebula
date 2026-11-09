@@ -163,8 +163,6 @@ void FileSelectInfo::exeAppear() {
 }
 
 void FileSelectInfo::exeDisplay() {
-    if (MR::isFirstStep(this)) {
-    }
 }
 
 void FileSelectInfo::exeDisappear() {

@@ -243,7 +243,7 @@ void NoteFairy::exeStartAppearDemo() {
         MR::emitEffect(this, "Blur");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         Vec3f* pos = MR::getPlayerPos();
         Vec3f toFairy(mInitPos);
         toFairy.sub(*pos);
@@ -271,7 +271,7 @@ void NoteFairy::exeDemoAppear() {
         MR::emitEffect(this, "Blur");
     }
 
-    if (MR::isLessEqualStep(this, 60)) {
+    if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         f32 ease = MR::getEaseOutValue(NebulaFrameClock::secondsOfSteps(getNerveStep()), 0.0f, 1.0f, 1.0f);
         mPosition.x = (mInitPos.x * (1.0f - ease)) + (mDemoJumpPos.x * ease);
         mPosition.y = (((mInitPos.y * (1.0f - ease)) + (mDemoJumpPos.y * ease)) - (300.0f * MR::sinDegree(180.0f * ease)));
@@ -299,7 +299,7 @@ void NoteFairy::exeAppearNoteBloom() {
         MR::declareNoteNumMaxAndMelodyToCounter(this, mMelodyNoteNum, mSong, mNoteCoord);
     }
 
-    if (!mIsDemoUntilAllNotes && !mIsNoDemo && MR::isStep(this, 60) && mAppearanceType != -1) {
+    if (!mIsDemoUntilAllNotes && !mIsNoDemo && MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1)) && mAppearanceType != -1) {
         MR::endDemo(this, "出現");
         MR::endActorCamera(this, mCameraInfo, false);
     }
@@ -312,7 +312,7 @@ void NoteFairy::exeAppearNoteBloom() {
         mNoteArray[mAppearedNoteNum]->appear();
         mNoteArray[mAppearedNoteNum]->mBrkFrame = 5.0f * mAppearedNoteNum;
 
-        if (MR::isLessStep(this, 60) && mAppearanceType != -1) {
+        if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)) && mAppearanceType != -1) {
             MR::requestMovementOn(mNoteArray[mAppearedNoteNum]);
         }
 

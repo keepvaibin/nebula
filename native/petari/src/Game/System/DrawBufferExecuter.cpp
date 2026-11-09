@@ -5,7 +5,7 @@
 #include <algorithm>
 
 DrawBufferExecuter::DrawBufferExecuter(const char* pName, Model* pModel)
-    : mActors(nullptr), mMaxNumActors(0), mNumActors(0), mName(pName), mDrawBuffer(nullptr), mLightType(-1), mDrawBufferCount(0) {
+    : mActors(nullptr), mNumActors(0), mName(pName), mDrawBuffer(nullptr), mLightType(-1), mDrawBufferCount(0) {
     mDrawBuffer = new DrawBuffer(pModel);
 }
 
@@ -13,7 +13,6 @@ void DrawBufferExecuter::allocateActorListBuffer() {
     s32 count = mDrawBufferCount;
     if (count != 0) {
         mActors = new LiveActor*[count];
-        mMaxNumActors = count;
         mDrawBuffer->init(mDrawBufferCount);
     }
 }

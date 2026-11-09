@@ -12,7 +12,6 @@ public:
     void addSpringVelocity(f32);
     void setSpringBaseValue(f32);
 
-    f32 mCondition;
     f32 mSpeed;
     f32 mAngle;
     SpringValue* mSpringValue;

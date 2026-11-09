@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpringJetWater.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -11,7 +12,7 @@ namespace {
     static const f32 sHitSphereRadius = 70.0f;
     static const f32 sHitSphereOffsetY = 350.0f;
     static const f32 sClippingRadius = 1000.0f;
-    static const s32 sEndTime = 60;
+    static const s32 sEndTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sHitCylinderHeight = 280.0f;
 };  // namespace
 

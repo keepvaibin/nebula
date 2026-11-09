@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaBattleLv1.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaActionBase.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
@@ -30,7 +31,7 @@ PoltaBattleLv1::PoltaBattleLv1(Polta* pPolta) : PoltaActionBase("ポルタ1戦�
     mStateGroundRockAttack->mRockNum = 4;
     mStateGenerateRock = new PoltaStateGenerateRock(pPolta);
     mStateGenerateRock->mRockNum = 5;
-    mStateGenerateRock->mEndDelayStep = 120;
+    mStateGenerateRock->mEndDelayStep = NebulaFrameClock::stepsOfSeconds(2);
 }
 
 void PoltaBattleLv1::appear() {
@@ -121,7 +122,7 @@ bool PoltaBattleLv1::isEnableSensor(const HitSensor* pSensor) const {
 
 void PoltaBattleLv1::exeWait() {
     updateWait();
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         if (mAttackIndex == 2 && PoltaFunction::getCountDeadGroundRock(getHost()) >= 4) {
             setNerve(GET_NERVE(PoltaBattleLv1, PoltaBattleLv1NrvGenerateGroundRock));
         } else {

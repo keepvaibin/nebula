@@ -1,4 +1,5 @@
 #include "Game/Enemy/EyeBeamer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/AreaObj/MercatorTransformCube.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -228,7 +229,7 @@ void EyeBeamer::requestStartPatrol() {
 }
 
 bool EyeBeamer::tryGotoPatrol() {
-    if (MR::isGreaterStep(this, 300)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvGotoPatrol));
         return true;
     }

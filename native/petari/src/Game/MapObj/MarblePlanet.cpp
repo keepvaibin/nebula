@@ -1,4 +1,5 @@
 #include "Game/MapObj/MarblePlanet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -83,11 +84,11 @@ void MarblePlanet::exeScaleUpCore() {
         }
     }
 
-    f32 nerveRate = MR::calcNerveRate(this, 30);
+    f32 nerveRate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
     f32 scale = MR::getScaleWithReactionValueZeroToOne(nerveRate, 0.5f, -0.5f);
     mCorePlanetModel->mScale.setAll< f32 >(MR::getLinerValue(scale, 1.3f, 1.0f, 1.0f));
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(MarblePlanet, MarblePlanetNrvWait));
     }
 }

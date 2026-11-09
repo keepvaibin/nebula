@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipAreaDrop.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ClipArea.hpp"
 #include "Game/MapObj/ClipAreaShape.hpp"
@@ -8,8 +9,8 @@
 
 namespace {
     const s32 sExtendsEndTime = 15;
-    const s32 sShrinkStartTime = 60;
-    const s32 sShrinkEndTime = 240;
+    const s32 sShrinkStartTime = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sShrinkEndTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 namespace NrvClipAreaDrop {

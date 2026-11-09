@@ -1,4 +1,5 @@
 #include "Game/NPC/RosettaDemoHeavensDoor.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/Rosetta.hpp"
@@ -95,7 +96,7 @@ void RosettaDemoHeavensDoor1::exeWait() {
 }
 
 void RosettaDemoHeavensDoor1::exeFade() {
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::onPlayerControl(true);
         MR::startTimeKeepDemoMarioPuppetable(mHost, "チコガイドデモ", "スピンゲット[デモ1]");
         mLightHaloModel->kill();

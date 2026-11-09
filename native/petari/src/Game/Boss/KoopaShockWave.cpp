@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaShockWave.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -114,7 +115,7 @@ void KoopaShockWave::exeWaveAttack() {
         MR::validateHitSensors(this);
     }
 
-    mAngle = MR::calcNerveValue(this, 360, 0.0f, 180.0f);
+    mAngle = MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(6), 0.0f, 180.0f);
 
     f32 scale = MR::cosDegree(mAngle);
     ::makeShockWaveMtx(&mBaseMtx, mUp, mFront, KoopaFunction::getPlanetCenterPos(mKoopa), scale, 1300.0f);
@@ -140,7 +141,7 @@ void KoopaShockWave::exeWaveAttack() {
         MR::startBrk(mPartsModel, "Erase");
     }
 
-    if (MR::isStep(this, 360)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(6))) {
         kill();
     }
 }

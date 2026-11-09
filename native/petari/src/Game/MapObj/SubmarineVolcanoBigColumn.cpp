@@ -1,4 +1,5 @@
 #include "Game/MapObj/SubmarineVolcanoBigColumn.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/AirBubbleHolder.hpp"
@@ -7,7 +8,7 @@
 
 namespace {
     static const f32 sShakeDistance = 800.0f;
-    static const s32 sGenerateInterval = 360;
+    static const s32 sGenerateInterval = NebulaFrameClock::stepsOfSeconds(6);
     static const s32 sGenerateLife = 360;
     static const f32 sGenerateOffsetY = 1250.0f;
 };  // namespace

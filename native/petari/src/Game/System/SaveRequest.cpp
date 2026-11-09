@@ -67,9 +67,3 @@ const char* SaveRequest::setReadSeq(const char* pName, void* pBuf, u32 capacity,
     return mName;
 }
 
-SaveRequest* SaveRequest::setDelete(const char* pName) {
-    init();
-    mType = Type_Delete;
-    mName = pName;
-    return this;
-}

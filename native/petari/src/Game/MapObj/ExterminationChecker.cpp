@@ -1,4 +1,5 @@
 #include "Game/MapObj/ExterminationChecker.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/SkeletalFishBaby.hpp"
 #include "Game/Enemy/Kuribo.hpp"
 #include "Game/Enemy/Meramera.hpp"
@@ -119,7 +120,7 @@ void ExterminationChecker::exeAppearStar() {
         MR::startSystemSE("SE_SY_TOTAL_COMPLETE");
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::endDemo(this, "全滅スター出現");
         MR::startAfterBossBGM();
         MR::requestAppearPowerStar(this);
@@ -128,7 +129,7 @@ void ExterminationChecker::exeAppearStar() {
 }
 
 void ExterminationChecker::exeAppearKeySwitch() {
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         mKeySwitch->appearKeySwitch(mKeySwitchPos);
         kill();
     }

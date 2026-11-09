@@ -1,4 +1,5 @@
 #include "Game/MapObj/GCaptureTarget.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/GCapture.hpp"
@@ -146,7 +147,7 @@ void GCaptureTarget::exeAppear() {
         MR::setBrkFrameAndStop(this, 1.0f);
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         emitNerveEffect();
         MR::showModel(this);
         MR::startBck(this, "Appear");
@@ -157,7 +158,7 @@ void GCaptureTarget::exeAppear() {
         MR::startBck(this, "Wait");
     }
 
-    if (MR::isGreaterStep(this, 150)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         if (MR::isExistActorCamera(mCameraInfo)) {
             MR::endDemoWaitCameraInterpolating(this, "出現");
             MR::endActorCamera(this, mCameraInfo, false);

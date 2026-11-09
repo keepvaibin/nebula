@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateAttackRoll.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleBase.hpp"
 #include "Game/Boss/KoopaFigureBall.hpp"
@@ -19,14 +20,14 @@ namespace {
     static MR::ActorMoveParam sAttackRollParamLv3Slow = {8.0f, 2.0f, 0.8f, 0.5f};
     static MR::ActorMoveParam sAttackRollParamLv3Fast = {10.0f, 2.0f, 0.8f, 1.0f};
     static MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.95f, 1.0f};
-    static const s32 sWaitToStartStep = 90;
-    static const s32 sWaitToStartStepVs3Lv2 = 30;
+    static const s32 sWaitToStartStep = NebulaFrameClock::stepsOfMilliseconds(1500);
+    static const s32 sWaitToStartStepVs3Lv2 = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sWaitToStartStepVs3Angry = 75;
     static const s32 sStartStepToJump = 24;
     static const f32 sStartJumpSpeed = 20.0f;
     static const f32 sRotateSpeed = 5.0f;
-    static const s32 sRollGroundStep = 600;
-    static const s32 sRollGroundStepVs3Lv2Angry = 300;
+    static const s32 sRollGroundStep = NebulaFrameClock::stepsOfSeconds(10);
+    static const s32 sRollGroundStepVs3Lv2Angry = NebulaFrameClock::stepsOfSeconds(5);
     static const s32 sRollGroundStepVs3Lv3 = 280;
     static const s32 sRollGroundStepVs3Lv3Angry = 320;
     static const f32 sEndJumpSpeed = 30.0f;

@@ -28,6 +28,5 @@ public:
 private:
     WipeLayoutBase* mCurrentWipeLayout;
     WipeLayoutBase** mWipeLayoutArray;
-    u32 mWipeLayoutCapacity;
     u32 mWipeLayoutCount;
 };

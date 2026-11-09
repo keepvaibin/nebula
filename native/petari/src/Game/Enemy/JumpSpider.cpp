@@ -1,4 +1,5 @@
 #include "Game/Enemy/JumpSpider.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -26,7 +27,7 @@ namespace {
     static const f32 hAirDampV = 0.98f;
     static const f32 hJumpVelV = 1.0f;
     static const s32 hStampDeathTime = 20;
-    static const s32 hNoPowerWaitTime = 240;
+    static const s32 hNoPowerWaitTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 namespace NrvJumpSpider {
@@ -182,8 +183,6 @@ void JumpSpider::exeJump() {
 }
 
 void JumpSpider::exeJumpEnd() {
-    if (MR::isFirstStep(this)) {
-    }
 
     mPosition.set(mJumpPos);
 

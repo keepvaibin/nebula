@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunStateDamage.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunEggShell.hpp"
 #include "Game/Boss/DinoPackunTail.hpp"
@@ -18,8 +19,8 @@ namespace {
     const s32 cPullTurnNode = 3;
     // The tail end this far toward the boss's up (cosine) is over its head.
     const f32 cTailTopCos = 0.7f;
-    const s32 cEggBreakStep = 30;
-    const s32 cEggBrokenEndStep = 120;
+    const s32 cEggBreakStep = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 cEggBrokenEndStep = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cEggHitStopFrames = 5;
     const s32 cDamageHitStopFrames = 15;
     const char* const cDemoName = "ディノパックンダメージ";

@@ -50,7 +50,7 @@ public:
     s32 mSegmentNum;
     f32 mMovementSpeed;
     f32 mSegmentLength;
-    s32 mStackHeight;  // rails stacked against gravity, at most 8 (cSensorNameTable)
+    s32 mStackHeight;  // rails stacked against gravity (a sensor each)
     Pos3f mTexMtx;
     u8 mAlpha;
     Vec3f* mSensorOffsets;

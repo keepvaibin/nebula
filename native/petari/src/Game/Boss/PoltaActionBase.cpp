@@ -1,4 +1,5 @@
 #include "Game/Boss/PoltaActionBase.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Polta.hpp"
 #include "Game/Boss/PoltaArm.hpp"
 #include "Game/Boss/PoltaFunction.hpp"
@@ -16,8 +17,8 @@ PoltaActionBase::PoltaActionBase(const char* pName, Polta* pPolta) : ActorStateB
 }
 
 void PoltaActionBase::updateScreamSensor() {
-    if (MR::isLessStep(this, 30)) {
-        f32 size = MR::calcNerveValue(this, 30, 0.0f, 3200.0f);
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
+        f32 size = MR::calcNerveValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 0.0f, 3200.0f);
         PoltaFunction::setScreamSensorSize(getHost(), size);
     } else {
         PoltaFunction::setScreamSensorSize(getHost(), 0.0f);

@@ -1,4 +1,5 @@
 #include "Game/Enemy/ElectricPressureBullet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -61,7 +62,7 @@ void ElectricPressureBullet::exeFly() {
     }
     MR::startLevelSound(this, "SE_EM_LV_ELECBUBLLET_FLY");
     if (MR::isGreaterEqualStep(this, 10)) {
-        if (MR::isLessStep(this, 150)) {
+        if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
             if (getNerveStep() % 5 == 0) {
                 Vec3f toPlayer;
                 toPlayer.sub(*MR::getPlayerCenterPos(), mPosition);
@@ -74,7 +75,7 @@ void ElectricPressureBullet::exeFly() {
 
     if (MR::isBinded(this)) {
         kill();
-    } else if (MR::isStep(this, 360)) {
+    } else if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(6))) {
         kill();
     }
 }

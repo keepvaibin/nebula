@@ -1,4 +1,5 @@
 #include "Game/Enemy/KuriboChief.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/ItemGenerator.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -37,7 +38,7 @@ namespace {
     static const f32 sUpVecBlendRate = 0.05f;
     static const f32 sFrontVecBlendRate = 0.5f;
     static const f32 sTurnLimitDegree = 5.0f;
-    static const s32 sAttackSuccessTime = 60;
+    static const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sBlowDownLandTime = 5;
     static const s32 sBoundSoundStep = 27;
     static const s32 sSwoonSoundWait = 56;
@@ -67,14 +68,14 @@ namespace {
         mStateParam1.mPlayerSightFanDegreeH = 80.0f;
         mStateParam1.mPlayerSightFanDegreeV = 40.0f;
         mWanderParam.mSpeed = 0.1f;
-        mWanderParam.mWaitTime = 120;
-        mWanderParam.mWalkTime = 300;
+        mWanderParam.mWaitTime = NebulaFrameClock::stepsOfSeconds(2);
+        mWanderParam.mWalkTime = NebulaFrameClock::stepsOfSeconds(5);
         mWanderParam.mTurnMaxRateDegree = 1.0f;
         mChaseParam.mChaseSpeed = 0.2f;
         mStateParam2.mGravityAccel = 1.5f;
         mStateParam2.mAirFriction = 0.99f;
         mStateParam2.mGroundFriction = 0.6f;
-        mStaggerParam.mStaggerTime = 240;
+        mStaggerParam.mStaggerTime = NebulaFrameClock::stepsOfSeconds(4);
         mStaggerParam.mRotateRateDegree = 0.0f;
         mStaggerParam.mKickEnableStep = 70;
         mFindPlayerParam.mJumpStartStep = 56;
@@ -381,7 +382,7 @@ void KuriboChief::exeTrample() {
         MR::startSound(this, "SE_EM_KURIBOCHIEF_TRAMPLE");
     }
 
-    if (MR::isGreaterStep(this, 30)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(KuriboChief, KuriboChiefNrvWander));
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/Enemy/KoopaJrShipCannonShell.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -21,7 +22,7 @@ namespace {
     const f32 cShadowRadius = 60.0f;
     const f32 cBinderRadius = 75.0f;
     const f32 cStarWandRadius = 150.0f;
-    const s32 cLifeTime = 360;
+    const s32 cLifeTime = NebulaFrameClock::stepsOfSeconds(6);
     const f32 cCameraShakeDistance = 1000.0f;
     // Frames a stomped shell rolls before it misfires.
     const s32 cDownTime = 45;

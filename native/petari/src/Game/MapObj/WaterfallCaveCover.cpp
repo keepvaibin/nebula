@@ -1,4 +1,5 @@
 #include "Game/MapObj/WaterfallCaveCover.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -10,7 +11,7 @@
 
 namespace {
     const f32 sSensorRadius = 500.0f;
-    const s32 sRiddleSeStep = 90;
+    const s32 sRiddleSeStep = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 
 namespace NrvWaterfallCaveCover {

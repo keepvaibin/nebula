@@ -1,4 +1,5 @@
 #include "Game/Enemy/Meramera.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -64,19 +65,19 @@ namespace {
     const f32 sOverWallAccel = 0.9f;
     const f32 sOverWallProbe = 200.0f;
     const f32 sMaxOverWallHeight = 250.0f;
-    const s32 sWaitTime = 300;
-    const s32 sWalkTime = 120;
+    const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(5);
+    const s32 sWalkTime = NebulaFrameClock::stepsOfSeconds(2);
     const f32 sWalkRadius = 200.0f;
     const f32 sWalkArriveDistance = 100.0f;
-    const s32 sAttackSuccessTime = 180;
+    const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 sShrinkTime = 20;
     const f32 sChaseDistance = 900.0f;
     const f32 sTerritoryChaseRange = 3000.0f;
-    const s32 sChaseEndTime = 240;
-    const s32 sChaseStartTime = 60;
+    const s32 sChaseEndTime = NebulaFrameClock::stepsOfSeconds(4);
+    const s32 sChaseStartTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sChaseDashTime = 45;
     const s32 sChaseTurnTime = 50;
-    const s32 sChaseDashLowTime = 30;
+    const s32 sChaseDashLowTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sChaseDashMoveAccel = 0.175f;
     const f32 sChaseDashAccel = 0.98f;
     const f32 sChaseTurnAccel = 0.97f;
@@ -91,13 +92,13 @@ namespace {
     const f32 sFloatAttenuate = 0.94f;
     const f32 sDownAttenuate = 0.99f;
     const s32 sSinkTime = 50;
-    const s32 sFloatTime = 30;
+    const s32 sFloatTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sFloatUpSpeed = 50.0f;
     const s32 sIgnitionStartStep = 15;
     const f32 sIgnitionUpSpeed = 25.0f;
     const f32 sIgnitionForceJump = 15.0f;
     const s32 sIgnitionTime = 20;
-    const s32 sRunawayTime = 30;
+    const s32 sRunawayTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sDivingDelayTime = 35;
     const s32 sDivingTime = 40;
     const f32 sDivingHeight = 300.0f;
@@ -109,7 +110,7 @@ namespace {
     const f32 sDownBackSpeed = 0.0f;
     const f32 sDownUpSpeed = 25.0f;
     const f32 sDownRebound = 0.9f;
-    const s32 sReadyRestartTime = 180;
+    const s32 sReadyRestartTime = NebulaFrameClock::stepsOfSeconds(3);
     const f32 sSpinNearDistance = 300.0f;
     const f32 sSpinTurnDegree = 5.0f;
     const f32 sExtinguishTurnDegree = 10.0f;
@@ -123,7 +124,7 @@ namespace {
     // On the ground slower than this, the jump timer counts down.
     const f32 sRunawayJumpSpeedH = 3.0f;
     const s32 sRunawayJumpIntervalRandom = 10;
-    const s32 sRunawayJumpInterval = 30;
+    const s32 sRunawayJumpInterval = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sRunawayDiveProbe = 250.0f;
     const f32 sRunawayDiveSpread = 80.0f;
     const f32 sRunawayGravity = 2.0f;

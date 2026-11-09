@@ -1,4 +1,5 @@
 #include "Game/Enemy/StinkBugParent.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/CollisionParts.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -21,7 +22,7 @@ namespace {
     const s32 sStepForDashSignEnd = 10;
     const s32 sStepForShakeStart = 40;
     const s32 sStepForEnableShake = 25;
-    const s32 sStepForRecover = 60;
+    const s32 sStepForRecover = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sStepToJumpBackPlayer = 22;
     const s32 sStepForChildDeathSound = 48;
     const s32 sStepForSurpriseSound = 65;

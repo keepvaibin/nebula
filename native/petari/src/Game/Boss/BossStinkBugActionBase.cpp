@@ -1,4 +1,5 @@
 #include "Game/Boss/BossStinkBugActionBase.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossStinkBug.hpp"
 #include "Game/Boss/BossStinkBugFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -18,7 +19,7 @@
 
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)
     : ActorStateBase< BossStinkBug >(pName, pStinkBug), mSpringValue(), mRailDiff(0.0f, 0.0f, 0.0f), mTurnFront(0.0f, 0.0f, 1.0f), mFlySpeed(15.0f), mHeightOffset(), mLocalHeightOffset(),
-      mThrowBombTimer(), mIsRailToEnd(true), mCameraDistance(), mPrevCameraDistance(), mApproachStep(), mIsNearPlayer(), mWasNearPlayer() {
+      mThrowBombTimer(), mIsRailToEnd(true), mCameraDistance(), mPrevCameraDistance(), mApproachStep(), mIsNearPlayer() {
     mSpringValue = new SpringValue(mHeightOffset, mHeightOffset, 0.02f, 0.95f, 0.0f);
 }
 
@@ -93,10 +94,10 @@ bool BossStinkBugActionBase::updateFlyDash(f32 startSpeed) {
 
     startSoundFly(0);
 
-    if (MR::isLessStep(this, 30)) {
-        mSpeed = MR::calcNerveEaseInOutValue(this, 30, startSpeed, 40.0f);
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), startSpeed, 40.0f);
     } else {
-        mSpeed = MR::calcNerveEaseInOutValue(this, 30, 100, 40.0f, mFlySpeed);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfMilliseconds(500), 100, 40.0f, mFlySpeed);
     }
 
     BossStinkBugFunction::regainToRail(getHost(), mRailDiff, MR::calcNerveRate(this, 100), mSpeed, mHeightOffset, mLocalHeightOffset);
@@ -205,7 +206,6 @@ void BossStinkBugActionBase::updateSound() {
 }
 
 void BossStinkBugActionBase::updateSoundFly() {
-    mWasNearPlayer = mIsNearPlayer;
 
     if (MR::isNearPlayer(getHost(), 2000.0f)) {
         mIsNearPlayer = true;
@@ -231,11 +231,11 @@ bool BossStinkBugActionBase::updateGroundRegainRail(f32 speed) {
         BossStinkBugFunction::calcDiffCurrentRailPosition(&mRailDiff, getHost(), mHeightOffset, mLocalHeightOffset);
     }
 
-    f32 nerveRate = MR::calcNerveRate(this, 90);
+    f32 nerveRate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfMilliseconds(1500));
     BossStinkBugFunction::regainToRail(getHost(), mRailDiff, nerveRate, speed, 0.0f, 0.0f);
     mSpeed = speed;
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         return true;
     } else {
         return false;
@@ -264,7 +264,7 @@ bool BossStinkBugActionBase::updateGroundShakeOff() {
     mSpeed *= 0.95f;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         return true;
     } else {
         return false;
@@ -281,10 +281,10 @@ bool BossStinkBugActionBase::updateGroundRun(f32 maxSpeed) {
         MR::startLevelSound(getHost(), "SE_BM_LV_BOSS_BUG_RUN_ADD_WATER");
     }
 
-    mSpeed = maxSpeed * MR::calcNerveRate(this, 60);
+    mSpeed = maxSpeed * MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         return true;
     } else {
         return false;
@@ -303,7 +303,7 @@ bool BossStinkBugActionBase::updateGroundAttackSuccess() {
     mSpeed *= 0.75f;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, 0.0f, 0.0f);
 
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         return true;
     } else {
         return false;
@@ -346,7 +346,7 @@ bool BossStinkBugActionBase::updateGroundTurn() {
         mSpeed = 0.0f;
     }
 
-    BossStinkBugFunction::turnRailGround(getHost(), mTurnFront, MR::calcNerveRate(this, 120), mIsRailToEnd);
+    BossStinkBugFunction::turnRailGround(getHost(), mTurnFront, MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)), mIsRailToEnd);
 
     if (MR::isGreaterStep(this, 160)) {
         return true;
@@ -518,9 +518,9 @@ bool BossStinkBugActionBase::updateFlyTurn() {
     startSoundFly(1);
 
     mSpeed = 0.0f;
-    BossStinkBugFunction::turnRail(getHost(), mTurnFront, 0.0f, MR::calcNerveRate(this, 120), mFlySpeed, mHeightOffset, mLocalHeightOffset, mIsRailToEnd);
+    BossStinkBugFunction::turnRail(getHost(), mTurnFront, 0.0f, MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(2)), mFlySpeed, mHeightOffset, mLocalHeightOffset, mIsRailToEnd);
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         return true;
     } else {
         return false;
@@ -606,9 +606,9 @@ bool BossStinkBugActionBase::updateToGround() {
         mLandingHeight = 0.0f;
     }
 
-    f32 nerveRate = MR::calcNerveRate(this, 60);
+    f32 nerveRate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
     getHost()->mLegIKRate = nerveRate;
-    MR::rotateVecDegree(&getHost()->mFront, MR::getRailDirection(getHost()), getHost()->mGravity, MR::calcNerveValue(this, 60, 0.0f, 180.0f));
+    MR::rotateVecDegree(&getHost()->mFront, MR::getRailDirection(getHost()), getHost()->mGravity, MR::calcNerveValue(this, NebulaFrameClock::stepsOfSeconds(1), 0.0f, 180.0f));
 
     mSpeed *= 0.9f;
     BossStinkBugFunction::moveRail(getHost(), mSpeed, mLandingHeight, 0.0f);
@@ -653,16 +653,16 @@ bool BossStinkBugActionBase::updateToFly() {
         startSoundFly(2);
     }
 
-    if (MR::isLessStep(this, 60)) {
-        mSpeed = MR::calcNerveEaseInOutValue(this, 60, mToFlyStartSpeed, 40.0f);
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mToFlyStartSpeed, 40.0f);
     } else {
-        mSpeed = MR::calcNerveEaseInOutValue(this, 60, 120, 40.0f, mFlySpeed);
+        mSpeed = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), NebulaFrameClock::stepsOfSeconds(2), 40.0f, mFlySpeed);
     }
 
-    f32 nerveEaseInOutValue = MR::calcNerveEaseInOutValue(this, 120, 0.0f, mHeightOffset + mLocalHeightOffset);
+    f32 nerveEaseInOutValue = MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(2), 0.0f, mHeightOffset + mLocalHeightOffset);
     BossStinkBugFunction::moveRail(getHost(), mSpeed, nerveEaseInOutValue, 0.0f);
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         getHost()->validateCollisionFly();
         return true;
     } else {

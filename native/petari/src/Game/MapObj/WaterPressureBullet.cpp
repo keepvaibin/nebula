@@ -1,4 +1,5 @@
 #include "Game/MapObj/WaterPressureBullet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -145,7 +146,7 @@ void WaterPressureBullet::exeFly() {
         }
     }
 
-    if ((!mIsInvalidSpinKill && MR::isGreaterEqualStep(this, 180)) || (mIsInvalidSpinKill && MR::isGreaterEqualStep(this, 300))) {
+    if ((!mIsInvalidSpinKill && MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(3))) || (mIsInvalidSpinKill && MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(5)))) {
         kill();
     }
 }

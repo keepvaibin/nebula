@@ -1,4 +1,5 @@
 #include "Game/NPC/NPCActor.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -643,8 +644,6 @@ bool NPCActor::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
         return true;
     }
 
-    if (MR::isMsgStarPieceAttack(msg)) {
-    }
 
     if (MR::isMsgJetTurtleAttack(msg)) {
         mIsReaction = true;
@@ -702,7 +701,7 @@ bool NPCActor::isScaleAnim() const {
 }
 
 bool NPCActor::isPointingSe() const {
-    if (mIsPointingStart && mPointingSeStep >= 60) {
+    if (mIsPointingStart && mPointingSeStep >= NebulaFrameClock::stepsOfSeconds(1)) {
         return true;
     }
 

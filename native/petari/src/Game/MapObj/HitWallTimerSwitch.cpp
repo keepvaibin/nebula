@@ -17,7 +17,7 @@ namespace NrvHitWallTimerSwitch {
 HitWallTimerSwitch::HitWallTimerSwitch(const char* pName) : LiveActor(pName) {
     mMoveCollision = nullptr;
     mConnector = nullptr;
-    mTimer = 300;
+    mTimer = NebulaFrameClock::stepsOfSeconds(5);
     mIsHit = 0;
 }
 

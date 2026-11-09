@@ -1,4 +1,5 @@
 #include "Game/Boss/SkeletalFishGuard.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/SkeletalFishBoss.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
@@ -32,7 +33,7 @@ namespace {
     NEW_NERVE_ONEND(SkeletalFishGuardNrvNumb, SkeletalFishGuard, Numb, Numb);
 
     // The appear flight: out to a point 1000 above and 500 aside, then onto the guard's slot by the boss.
-    const s32 cAppearSteps = 300;
+    const s32 cAppearSteps = NebulaFrameClock::stepsOfSeconds(5);
     const s32 cAppearRiseSteps = 99;
     const s32 cAppearJoinSteps = 201;
     const s32 cApartSteps = 80;

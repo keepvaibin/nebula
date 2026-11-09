@@ -1,4 +1,5 @@
 #include "Game/Enemy/Petari.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -141,7 +142,7 @@ void Petari::exeWait() {
 
     MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sStandParam);
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         if (MR::isHiddenModel(this)) {
             MR::showModel(this);
             MR::emitEffect(this, "LeaveAppearanceSmoke");
@@ -233,7 +234,7 @@ void Petari::exeSwoon() {
     calcCenter();
     MR::moveAndTurnToDirection(this, &mFront, mTargetDir, sSwoonParam);
     MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
-    MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvSwoonEnd), 180);
+    MR::setNerveAtStep(this, GET_NERVE_ANON(PetariNrvSwoonEnd), NebulaFrameClock::stepsOfSeconds(3));
 }
 
 void Petari::exeSwoonEnd() {

@@ -1,4 +1,5 @@
 #include "Game/MapObj/GravityLightRoad.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -15,7 +16,7 @@ namespace {
     const f32 sBaseInterpoleRate = 0.2f;
     const f32 sAccel = 2.0f;
     const f32 sSpeedMax = 20.0f;
-    const s32 sForceEndBindTime = 1800;
+    const s32 sForceEndBindTime = NebulaFrameClock::stepsOfSeconds(30);
 };  // namespace
 
 namespace NrvGravityLightRoad {

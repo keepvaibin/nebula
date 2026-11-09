@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpinDriver.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/SpinDriverCamera.hpp"
@@ -43,7 +44,7 @@ namespace {
     // The player dips this far below the driver at the start of the spin, back up by the end.
     const f32 sShootStartDip = 200.0f;
     const s32 sCoolDownFrame = 60;
-    const s32 sCoolDownWaitStep = 60;
+    const s32 sCoolDownWaitStep = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sSpinDamp = 0.95f;
     const f32 sSwingSpinAccel = 0.05f;
     const f32 sNonActiveSpinMax = 0.15f;

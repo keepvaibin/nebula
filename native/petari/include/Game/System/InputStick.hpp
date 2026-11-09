@@ -24,8 +24,6 @@ public:
     u32 mHold;
     u32 mTrigger;
     u32 mRelease;
-    bool mIsTriggerUp;
-    bool mIsTriggerDown;
     bool mIsHoldUp;
     bool mIsHoldDown;
 };

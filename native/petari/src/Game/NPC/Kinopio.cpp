@@ -1,4 +1,5 @@
 #include "Game/NPC/Kinopio.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -46,7 +47,7 @@ namespace {
     static const f32 sTurnLimit = 0.997f;
     static const f32 sUpVecBlendRate = 1.0f;
     static const f32 sDistanceEventPlayerIsNear = 600.0f;
-    static const s32 sTimeToCancelEvent = 180;
+    static const s32 sTimeToCancelEvent = NebulaFrameClock::stepsOfSeconds(3);
     static const f32 sFallGravity = 0.6f;
     static const f32 sFallFrictionRate = 0.98f;
     static const s32 sLandingTime = 3;
@@ -337,10 +338,10 @@ void Kinopio::exeStop() {
 
     if (!(MR::tryStartReactionAndPushNerve(this, GET_NERVE(Kinopio, KinopioNrvReaction)) || MR::tryStartMoveTalkAction(this))) {
         if (isNerve(GET_NERVE(Kinopio, KinopioNrvStop0))) {
-            if (MR::isGreaterEqualStep(this, 60)) {
+            if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
                 setDefaultNerve();
             }
-        } else if (MR::isGreaterEqualStep(this, 120)) {
+        } else if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
             setDefaultNerve();
         }
     }

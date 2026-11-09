@@ -1,4 +1,5 @@
 #include "Game/Enemy/IceMerameraKing.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Effect/SpinPullParticleCallBack.hpp"
 #include "Game/Enemy/Meramera.hpp"
@@ -65,7 +66,7 @@ namespace {
     const f32 sAttackDistance = 1000.0f;
     const f32 sSearchDistance = 4500.0f;
     const f32 sPinchBgmDistance = 5000.0f;
-    const u32 sEscapeTime = 600;
+    const u32 sEscapeTime = NebulaFrameClock::stepsOfSeconds(10);
     // Shock wave hit radii by the scale of these joints.
     const char* const sShockCircleJoint = "Hirgh1";
     const char* const sShockCircleEndJoint = "WideInSide";
@@ -413,7 +414,7 @@ void IceMerameraKing::exeDamage() {
         MR::moveAndTurnToPlayer(this, &mFront, ::hDamageJumpParam);
     }
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         if (mHitPoint == 1) {
             if (MR::tryStartDemoRegisteredMarioPuppetable(this, "怒りデモ")) {
                 setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd));
@@ -439,7 +440,7 @@ void IceMerameraKing::exePreRecover() {
         getSensor("body")->mRadius = sBodyRadius;
         MR::setShadowVolumeSphereRadius(this, nullptr, sBodyRadius);
         MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
-    } else if (MR::isLessStep(this, 120)) {
+    } else if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::addVelocityKeepHeightUseShadow(this, 750.0f, 1.5f, 300.0f, nullptr);
         MR::moveAndTurnToPlayer(this, &mFront, ::hFlyParam);
     } else {
@@ -468,7 +469,7 @@ void IceMerameraKing::exeRecover() {
 
 // Hovers for 120 steps, then drops onto the player once the last shock wave is gone.
 void IceMerameraKing::exePreAttack() {
-    if (MR::isLessStep(this, 120)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
     } else if (MR::isDead(mShockWave)) {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAttack));
@@ -508,7 +509,7 @@ void IceMerameraKing::exeAttackAfter() {
     }
     MR::moveAndTurnToPlayer(this, &mFront, ::hOnAirParam);
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         setNerve(GET_NERVE(IceMerameraKing, HostTypeNrvSearch));
     }
 }
@@ -531,7 +532,7 @@ void IceMerameraKing::exeAngryDemo() {
     MR::moveAndTurnToPlayer(this, &mFront, ::hAngryDemoParam);
     MR::addVelocityKeepHeightUseShadow(this, 400.0f, 1.5f, 300.0f, nullptr);
 
-    if (isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd)) && MR::isStep(this, 90)) {
+    if (isNerve(GET_NERVE(IceMerameraKing, HostTypeNrvAngryDemo2nd)) && MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         for (int i = 0; i < mWeaponNum; i++) {
             mModelArray[i]->makeActorAppeared();
         }

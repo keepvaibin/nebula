@@ -1,4 +1,5 @@
 #include "Game/Ride/FluffWind.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -11,9 +12,9 @@
 
 namespace {
     static const f32 sEffectEmitterInterval = 600.0f;
-    static const s32 sStepBlowWindMin = 60;
-    static const s32 sStepBlowWindMax = 240;
-    static const s32 sStepToValidateClipping = 180;
+    static const s32 sStepBlowWindMin = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sStepBlowWindMax = NebulaFrameClock::stepsOfSeconds(4);
+    static const s32 sStepToValidateClipping = NebulaFrameClock::stepsOfSeconds(3);
 
     FluffWindHolder* getFluffWindHolder() {
         return MR::getSceneObj< FluffWindHolder >(SceneObj_FluffWindHolder);

@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaBattleBase.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/Boss/KoopaStateDamageEscape.hpp"
@@ -14,9 +15,9 @@ namespace {
     static MR::ActorMoveParam sFindParam = {0.0f, 1.0f, 0.98f, 3.0f};
     static const f32 sChasePlayerJumpSpeed = 15.0f;
     static const f32 sWalkAnimRate = 0.18f;
-    static const s32 sWanderStepToAttackMin = 60;
-    static const s32 sWanderStepToAttackMax = 120;
-    static const s32 sSearchStep = 120;
+    static const s32 sWanderStepToAttackMin = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sWanderStepToAttackMax = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sSearchStep = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sSearchTurnSpeed = 2.4f;
     static const f32 sFindJumpSpeed = 10.0f;
 };  // namespace

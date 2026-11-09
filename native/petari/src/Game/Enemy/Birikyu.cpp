@@ -1,4 +1,5 @@
 #include "Game/Enemy/Birikyu.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -238,7 +239,7 @@ void Birikyu::exeAttack() {
 
     MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_START, this, getSensor("body"), "body");
         goMove();
     }

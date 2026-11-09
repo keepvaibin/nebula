@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpiderCoin.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/SpiderThread.hpp"
@@ -17,7 +18,7 @@
 namespace {
     static const f32 sCoinSpeed = 20.0f;
     static const s32 sStepToTouch2nd = 5;
-    static const s32 sStepToucnAndApart = 30;
+    static const s32 sStepToucnAndApart = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sRotateSpeedY = 30.0f;
     static const f32 sPointerSpeedMin = 5.0f;
     static const f32 sPointerSpeedDotToKill = -20.0f;

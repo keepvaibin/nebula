@@ -1,4 +1,5 @@
 #include "Game/Enemy/Jellyfish.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -45,7 +46,7 @@ namespace {
     const f32 sThreatTurnDegree = 1.5f;
     const f32 sKnockOutSpeed = 40.0f;
     const s32 sWaitSteps = 280;
-    const s32 sDeathSteps = 30;
+    const s32 sDeathSteps = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 Jellyfish::Jellyfish(const char* pName)

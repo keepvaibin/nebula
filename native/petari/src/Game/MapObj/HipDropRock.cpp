@@ -1,4 +1,5 @@
 #include "Game/MapObj/HipDropRock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -12,7 +13,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sStepToSwitchOn = 30;
+    static const s32 sStepToSwitchOn = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sDefaultStarPeaceNum = 6;
 };  // namespace
 

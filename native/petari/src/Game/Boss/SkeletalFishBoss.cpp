@@ -1,4 +1,5 @@
 #include "Game/Boss/SkeletalFishBoss.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Boss/SkeletalFishBossBattleDirector.hpp"
 #include "Game/Boss/SkeletalFishBossRail.hpp"
@@ -190,7 +191,7 @@ void SkeletalFishBoss::kill() {
 void SkeletalFishBoss::control() {
     ActorCameraInfo info = ActorCameraInfo();
 
-    if (MR::isEventCameraActive(&info, "デモ終了後カメラ") && MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isEventCameraActive(&info, "デモ終了後カメラ") && MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::endGlobalEventCamera("デモ終了後カメラ", -1, true);
     }
 
@@ -395,7 +396,7 @@ void SkeletalFishBoss::exeDown() {
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_FAR");
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_NEAR");
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         stopScene("スカルシャークパワーアップ", GET_NERVE_ANON(SkeletalFishBossNrvPowerUpDemo), &SkeletalFishBoss::startPowerUpDemo);
     }
 }
@@ -413,7 +414,7 @@ void SkeletalFishBoss::exeDeadDamage() {
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_FAR");
     MR::startLevelSound(mBossHead, "SE_BM_LV_SKL_BOSS_SWIM_NEAR");
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::stopStageBGM(30);
         stopScene("スカルシャーク死亡", GET_NERVE_ANON(SkeletalFishBossNrvDeadDemo), &SkeletalFishBoss::startDeadDemo);
     }
@@ -463,7 +464,7 @@ void SkeletalFishBoss::exeAppearDemo() {
             MR::startStageBGM("MBGM_BOSS_09_A", false);
         }
 
-        mBgmHoldStep = 120;
+        mBgmHoldStep = NebulaFrameClock::stepsOfSeconds(2);
         mBossDirector->killBirdLouse();
         endAppearDemo();
     }
@@ -494,7 +495,7 @@ void SkeletalFishBoss::exePowerUpDemo() {
         }
     }
 
-    if (mLevel == 2 && MR::isStep(this, 240)) {
+    if (mLevel == 2 && MR::isStep(this, NebulaFrameClock::stepsOfSeconds(4))) {
         MR::startAtmosphereSE("SE_BM_SKL_GUARD_COME_FRONT");
     }
 
@@ -505,7 +506,7 @@ void SkeletalFishBoss::exePowerUpDemo() {
             MR::startStageBGM("MBGM_BOSS_09_B", false);
         }
 
-        mBgmHoldStep = 120;
+        mBgmHoldStep = NebulaFrameClock::stepsOfSeconds(2);
         mBossDirector->killBirdLouse();
         endPowerUpDemo();
     }
@@ -523,7 +524,7 @@ void SkeletalFishBoss::exeDeadDemo() {
         mBossDirector->appearBirdLouse();
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         MR::startSound(mBossHead, "SE_BM_SKL_BOSS_BODY_SOLID");
     }
 
@@ -814,10 +815,10 @@ void SkeletalFishBoss::updateBgm() {
 
         if (MR::calcDistanceToPlayer(this) <= 4200.0f) {
             bgType = 2;
-            fadeTime = 60;
+            fadeTime = NebulaFrameClock::stepsOfSeconds(1);
         } else {
             bgType = 1;
-            fadeTime = 120;
+            fadeTime = NebulaFrameClock::stepsOfSeconds(2);
         }
 
         if (bgType != mBgmType) {

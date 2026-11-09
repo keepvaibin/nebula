@@ -1,4 +1,5 @@
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/BezierSurface.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/MapObj/BigBubbleDrawer.hpp"
@@ -49,15 +50,15 @@ namespace {
     static const f32 sWindAccel = 0.25f;
     static const f32 sCorioriRotSpeed = 3.0f;
     static const f32 sCoriolisAccelPower = 0.1f;
-    static const s32 sReduceSizeInterval = 120;
+    static const s32 sReduceSizeInterval = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sReduceVolume = 0.5f;
     static const f32 sMaxVolume = 5.0f;
-    static const s32 sAppearTime = 30;
+    static const s32 sAppearTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sAppearAddMoment = 0.03f;
     static const s32 sWarningCycle = 40;
-    static const s32 sAutoBreakTime = 1200;
+    static const s32 sAutoBreakTime = NebulaFrameClock::stepsOfSeconds(20);
     static const s32 sBreakTime = 20;
-    static const s32 sEscapeTime = 30;
+    static const s32 sEscapeTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sEscapeVelocity = 30.0f;
     static const f32 sMargeableRate = 0.9f;
     static const f32 sMergeDeformAccel = 0.75f;

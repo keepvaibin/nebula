@@ -1,4 +1,5 @@
 #include "Game/MapObj/GCapture.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -28,14 +29,14 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    const s32 sTargetKeepSteps = 30;
+    const s32 sTargetKeepSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sGuidanceSteps = 20;
-    const s32 sCaptureSteps = 30;
+    const s32 sCaptureSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sCaptureCancelSteps = 40;
     const s32 sRecaptureSteps = 15;
     const s32 sTractionSpinSteps = 35;
-    const s32 sReleaseHoldSteps = 30;
-    const s32 sHoldReleaseSteps = 180;
+    const s32 sReleaseHoldSteps = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 sHoldReleaseSteps = NebulaFrameClock::stepsOfSeconds(3);
     const s32 sCoolDownSteps = 10;
     const s32 sBreakSteps = 5;
     const f32 sRibbonLength = 180.0f;

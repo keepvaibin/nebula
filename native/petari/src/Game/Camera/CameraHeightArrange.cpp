@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraHeightArrange.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/Camera.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
@@ -10,7 +11,7 @@ namespace {
 };  // namespace
 
 CameraHeightArrange::CameraHeightArrange(Camera* pCamera)
-    : NameObj("CameraHeightArrange"), mCamera(pCamera), mIsJumping(), mIsStartJump(), mIsEndJump(), mNextParam(new CameraPoseParam()),
+    : NameObj("CameraHeightArrange"), mCamera(pCamera), mIsJumping(), mIsStartJump(), mNextParam(new CameraPoseParam()),
       mCurrParam(new CameraPoseParam()), mCameraWatchPosBaseHeight(), mCameraTargetPosHeight(), mCameraWatchPosHeight(), mCameraPosHeight(),
       mCameraWatchPosOffset(), mCameraPosOffset(), mJumpState(), mStateTime(), mIsCatchup(), mChaseTime(), mRiseTime(), mDropTime(), mRiseEaseTime(),
       mUpdateGlobalAxis(), mGlobalAxis(0.0f, 1.0f, 0.0f), mOffsetScale(0.1f), mOffsetScaleMax(15.0f), mFocalScaleUpper(0.3f), mFocalScaleLower(0.1f),
@@ -27,12 +28,6 @@ void CameraHeightArrange::updateJump() {
         mIsStartJump = true;
     } else {
         mIsStartJump = false;
-    }
-
-    if (mIsJumping && !CameraLocalUtil::getTarget(mCamera)->isJumping()) {
-        mIsEndJump = true;
-    } else {
-        mIsEndJump = false;
     }
 
     mIsJumping = CameraLocalUtil::getTarget(mCamera)->isJumping();
@@ -75,7 +70,6 @@ void CameraHeightArrange::arrange() {
 void CameraHeightArrange::resetJump() {
     mIsJumping = false;
     mIsStartJump = false;
-    mIsEndJump = false;
 }
 
 void CameraHeightArrange::reset() {
@@ -114,9 +108,9 @@ void CameraHeightArrange::resetParameter() {
     mGndInt = 160;
     mPosOffsetMinRiseLag = 500.0f;
     mPosOffsetMinDropLag = 800.0f;
-    mRiseDelay = 120;
-    mDropDelay = 120;
-    mMaxRiseEaseTime = 120;
+    mRiseDelay = NebulaFrameClock::stepsOfSeconds(2);
+    mDropDelay = NebulaFrameClock::stepsOfSeconds(2);
+    mMaxRiseEaseTime = NebulaFrameClock::stepsOfSeconds(2);
     mVPanUse = true;
     mVPanAxis.set(0.0f, 1.0f, 0.0f);
     mGlobalAxis.set(0.0f, 1.0f, 0.0f);

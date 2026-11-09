@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateAttackHipDrop.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleBase.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
@@ -18,13 +19,13 @@ namespace {
     static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
     static const f32 sDistanceToJump = 1000.0f;
     static const f32 sDistanceToJumpVs3 = 2000.0f;
-    static const s32 sRunStepMax = 180;
+    static const s32 sRunStepMax = NebulaFrameClock::stepsOfSeconds(3);
     static const f32 sRunWallJumpSpeed = 10.0f;
     static const f32 sJumpUpSpeedFrontMax = 20.0f;
     static const f32 sJumpUpSpeedUp = 50.0f;
     static const f32 sJumpUpGravity = 1.0f;
     static const f32 sJumpUpTurnSpeed = 3.0f;
-    static const s32 sJumpWaitAirStep = 30;
+    static const s32 sJumpWaitAirStep = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sJumpWaitAirStepVs2 = 15;
     static const s32 sJumpWaitAirStepVs3 = 15;
     static const f32 sJumpWaitAirTurnSpeed = 2.0f;

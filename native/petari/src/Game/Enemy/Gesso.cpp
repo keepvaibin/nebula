@@ -1,4 +1,5 @@
 #include "Game/Enemy/Gesso.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -258,7 +259,7 @@ void Gesso::exeAttack() {
         mVelocity.scale(1.5f * (MR::sinDegree(45.0f + (2.0f * getNerveStep()))), mGravity);
     }
 
-    if (MR::isStep(this, 240)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(4))) {
         setNerve(GET_NERVE(Gesso, GessoNrvWait));
     }
 }
@@ -413,7 +414,7 @@ void Gesso::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool Gesso::clipAndInitPos() {
     if (!MR::isNearPlayer(this, 10000.0f) || MR::isJudgedToClipFrustum(mPosition, getSensor(nullptr)->getRadius())) {
-        if (mClipStep >= 300) {
+        if (mClipStep >= NebulaFrameClock::stepsOfSeconds(5)) {
             mPosition.set(mInitPos);
             setNerve(GET_NERVE(Gesso, GessoNrvWait));
             MR::validateClipping(this);

@@ -1,4 +1,5 @@
 #include "Game/Boss/BossKameckBattleDemo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/BossKameck.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
@@ -13,8 +14,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sAppearKameckTime = 120;
-    static const s32 sVs1DemoAppearSeStopTime = 270;
+    static const s32 sAppearKameckTime = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sVs1DemoAppearSeStopTime = NebulaFrameClock::stepsOfMilliseconds(4500);
     static const s32 sDeadVoiceSeTiming = 18;
     static const s32 sDeadMotionSeTiming = 150;
     static const s32 sAfterBossBgmTiming = 285;

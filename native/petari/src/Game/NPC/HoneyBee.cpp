@@ -1,4 +1,5 @@
 #include "Game/NPC/HoneyBee.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -15,8 +16,8 @@
 #include "Game/Util/TalkUtil.hpp"
 
 namespace {
-    static const s32 sFlyLectureWaitStep = 120;
-    static const s32 sHipLectureWaitStep = 120;
+    static const s32 sFlyLectureWaitStep = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sHipLectureWaitStep = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sFlyMoveSpeed = 5.0f;
 };  // namespace
 

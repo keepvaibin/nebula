@@ -1,4 +1,5 @@
 #include "Game/Boss/TombSpider.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/TombSpiderActionBattle.hpp"
 #include "Game/Boss/TombSpiderActionCocoon.hpp"
 #include "Game/Boss/TombSpiderDemo.hpp"
@@ -20,7 +21,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 sSecondBgmStartStep = 180;
+    const s32 sSecondBgmStartStep = NebulaFrameClock::stepsOfSeconds(3);
 
     // The second round waits less, attacks longer and turns faster, and its glands hurt.
     const TombSpiderBattleParam sBattleParam1st = {60, 90, 180, 300, 0.01f, 0.35f, 900, false};

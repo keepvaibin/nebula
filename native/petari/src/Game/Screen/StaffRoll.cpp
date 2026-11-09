@@ -1,4 +1,5 @@
 #include "Game/Screen/StaffRoll.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/InformationMessage.hpp"
@@ -89,7 +90,7 @@ namespace {
     };
     // static const s32 sStepForStartMargin = _;
     static const s32 sStepForPrepareInfo = 100;
-    static const s32 sStepForTitleLogoAppear = 60;
+    static const s32 sStepForTitleLogoAppear = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sStepToEndLogoStop = _;
     static const s32 sStepToThankYouVoice = 190;
     // static const _ sTitleLogoHeight = _;
@@ -359,7 +360,7 @@ void StaffRoll::exeTitleLogoAppear() {
         MR::startPaneAnim(this, ::cPaneNameTitleLogo, "TitleLogoAppear", 0);
     }
 
-    if (MR::isStep(this, 240)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(4))) {
         setNerve(GET_NERVE(StaffRoll, StaffRollNrvTitleLogoScroll));
     }
 }

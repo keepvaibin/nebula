@@ -1,4 +1,5 @@
 #include "Game/Enemy/TakoHeiInk.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
@@ -7,7 +8,7 @@ namespace {
     static const f32 sNormalFric = 0.99f;
     static const f32 sGravityAccel = 0.8f;
     static const s32 sBindOnTime = 10;
-    static const s32 sForceBreakTime = 240;
+    static const s32 sForceBreakTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace
 
 namespace NrvTakoHeiInk {

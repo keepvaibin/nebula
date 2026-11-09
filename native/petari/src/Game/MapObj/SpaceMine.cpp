@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpaceMine.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -9,7 +10,7 @@ namespace {
     const f32 sSensorRadius = 100.0f;
     const f32 sDistanceNear = 1500.0f;
     const f32 sDistanceFar = 1450.0f;
-    const s32 sAppearEffectTime = 120;
+    const s32 sAppearEffectTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 namespace NrvSpaceMine {

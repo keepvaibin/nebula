@@ -1,4 +1,5 @@
 #include "Game/Enemy/JellyfishElectric.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -43,7 +44,7 @@ JellyfishElectric::JellyfishElectric(const char* pName) : LiveActor(pName) {
     mIsDanger = false;
     mIsConnectedRail = 0;
     mRailSpeed = 5.0f;
-    mRailGoalWaitStep = 60;
+    mRailGoalWaitStep = NebulaFrameClock::stepsOfSeconds(1);
     mIsRailTurnBack = 0;
     mClipCenter.set(0.0f, 0.0f, 0.0f);
 }
@@ -162,7 +163,7 @@ void JellyfishElectric::exeDeath() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_JELLYELEC_PRE_DEAD");
-    if (MR::isStep(this, 30) || MR::isBinded(this)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500)) || MR::isBinded(this)) {
         MR::startSound(this, "SE_EM_JELLYELEC_DEAD");
         kill();
     }

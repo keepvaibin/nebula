@@ -1,4 +1,5 @@
 #include "Game/MapObj/SimpleTimerObj.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/FlashingCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
@@ -8,8 +9,8 @@
 #include "Game/Util/LiveActorUtil.hpp"
 
 namespace {
-    const s32 sDefaultTimeLimit = 600;
-    const s32 sBlinkTime = 120;
+    const s32 sDefaultTimeLimit = NebulaFrameClock::stepsOfSeconds(10);
+    const s32 sBlinkTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 namespace NrvSimpleTimerObj {

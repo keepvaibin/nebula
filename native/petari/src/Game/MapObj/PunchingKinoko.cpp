@@ -1,4 +1,5 @@
 #include "Game/MapObj/PunchingKinoko.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
@@ -484,7 +485,7 @@ void PunchingKinoko::exeCrushed() {
 
     MR::zeroVelocity(mGroundChecker);
 
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushedEnd));
     }
 }
@@ -499,7 +500,7 @@ void PunchingKinoko::exeCrushedEnd() {
     addSpringToRest();
     MR::attenuateVelocity(mGroundChecker, 0.94f);
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
         MR::onBind(mGroundChecker);
     }

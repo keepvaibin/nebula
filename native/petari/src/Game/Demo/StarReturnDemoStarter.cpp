@@ -1,4 +1,5 @@
 #include "Game/Demo/StarReturnDemoStarter.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Demo/ReturnDemoRailMove.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -23,7 +24,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    const s32 cDemoAppearEffectStep = 30;
+    const s32 cDemoAppearEffectStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cDemoAppearWaitFrame = 45;
     const s32 cFadeOutFrame = 60;
     const s32 cOverlayFrame = 3;

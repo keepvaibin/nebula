@@ -1,4 +1,5 @@
 #include "Game/MapObj/BenefitItemInvincible.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -19,7 +20,7 @@ namespace {
     const f32 cFallAccel = 0.5f;
     const f32 cFallSpeedMax = 20.0f;
     const f32 cRadius = 60.0f;
-    const s32 cEscapeSensorOffSteps = 60;
+    const s32 cEscapeSensorOffSteps = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 // Never on a stage where a dark comet shows.

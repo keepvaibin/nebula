@@ -35,7 +35,6 @@ public:
     Pos3f mViewMtx;
     Proj3f mProjMtx;
     f32 mFovy;
-    f32 mFocalLength;
 };
 
 class StarPointerDirector {

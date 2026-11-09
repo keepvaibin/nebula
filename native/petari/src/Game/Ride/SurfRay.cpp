@@ -1,4 +1,5 @@
 #include "Game/Ride/SurfRay.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include "Game/LiveActor/ActorJointCtrl.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
@@ -673,7 +674,7 @@ void SurfRay::updateToWater() {
         if (!mInWater) {
             f32 lvl = MR::getLinerValueFromMinMax(mOrthoVelocity.length(), 0.0f, 20.0f, 100.0f, 1000.0f);
 
-            if (mAirTime > 30) {
+            if (mAirTime > NebulaFrameClock::stepsOfMilliseconds(500)) {
                 MR::tryRumblePadMiddle(this, mPadChannel);
             }
 

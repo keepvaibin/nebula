@@ -11,7 +11,7 @@ namespace {
 };  // namespace
 
 OnlyCamera::OnlyCamera(const char* pName)
-    : NameObj(pName), mPoseParam(new CameraPoseParam()), mStartPose(true), mCalcIdeal(), mPos(0.0f, 0.0f, 0.0f), mSpeed(), mIsZeroFrameMoveOff(), mIsResetting() {
+    : NameObj(pName), mPoseParam(new CameraPoseParam()), mStartPose(true), mCalcIdeal(), mPos(0.0f, 0.0f, 0.0f), mSpeed(), mIsResetting() {
 }
 
 void OnlyCamera::calcPose(CameraMan* pCameraMan) {
@@ -83,7 +83,6 @@ void OnlyCamera::calcSafePose(CameraMan* pCameraMan) {
     }
 
     moveToIdealPosition(&pos);
-    mIsZeroFrameMoveOff = false;
 
     Vec3f front = watchPos - pos;
     MR::normalize(&front);

@@ -1,4 +1,5 @@
 #include "Game/Enemy/Poihana.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -33,8 +34,8 @@ namespace {
     static const f32 sWalkAccel = 0.5f;
     static const f32 sWalkTurnRate = 2.0f;
     static const f32 sWalkAroundRadius = 350.0f;
-    static const s32 sWalkAroundBreakTime = 180;
-    static const s32 sWalkAroundKeepTime = 120;
+    static const s32 sWalkAroundBreakTime = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 sWalkAroundKeepTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sWalkAroundTurn = 2;
     static const f32 sJudgeForGetUpSpeed = 10.0f;
     static const f32 sGetUpRadius = 500.0f;
@@ -49,7 +50,7 @@ namespace {
     static const s32 sBindOnTiming = 30;
     static const f32 sDistanceForNeedBack = 2000.0f;
     static const f32 sJudgeForGoBackRadius = 100.0f;
-    static const s32 sStepForNonSearch = 120;
+    static const s32 sStepForNonSearch = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sShockReactionY = -30.0f;
     static const f32 sDistanceForHipDropShock = 500.0f;
     static const s32 sStepForSwoon = 110;
@@ -58,8 +59,8 @@ namespace {
     static const f32 sBoundAmpMax = 0.4f;
     static const s32 sStepForShake = 20;
     static const f32 sShakeAmpMax = 0.2f;
-    static const s32 sStepForHide = 150;
-    static const s32 sStepToAppearEffectEnd = 60;
+    static const s32 sStepForHide = NebulaFrameClock::stepsOfMilliseconds(2500);
+    static const s32 sStepToAppearEffectEnd = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sGravityOffsetY = 20.0f;
 
     const Vec sNormalBinderPos = {0.0f, 130.0f, 120.0f};

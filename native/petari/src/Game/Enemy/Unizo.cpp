@@ -1,4 +1,5 @@
 #include "Game/Enemy/Unizo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -69,7 +70,7 @@ namespace {
     const f32 sRollSoundSpeed = 2.0f;
     const f32 sLandSoundLandSpeed = 2.0f;
     const f32 sWallHitSoundSpeed = 3.0f;
-    const s32 sUnizoCollisionSePlayTime = 30;
+    const s32 sUnizoCollisionSePlayTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sSurfaceEffectMinLimit = 40.0f;
     const f32 sSurfaceEffectMaxLimit = 200.0f;
     const f32 sSurfaceEffectMaxRunLimit = 280.0f;

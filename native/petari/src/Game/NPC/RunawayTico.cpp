@@ -1,4 +1,5 @@
 #include "Game/NPC/RunawayTico.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -10,9 +11,9 @@ namespace {
     static const s32 sDemoCameraZoomOutBgmStartFrame = 617;
     static const s32 sDemoFadeOut = 90;
     static const s32 sDemoFadeIn = 75;
-    static const s32 sDemoFadeWait = 30;
+    static const s32 sDemoFadeWait = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sAwayYOffset = -49.7357f;
-    static const s32 sWaitSeStartFrame = 210;
+    static const s32 sWaitSeStartFrame = NebulaFrameClock::stepsOfMilliseconds(3500);
     static const s32 sFloatSeStartFrame = 560;
     static const s32 sAppearSeStep = 23;
 };  // namespace

@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunFire.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -68,8 +69,6 @@ void DinoPackunFire::calcAndSetBaseMtx() {
 }
 
 void DinoPackunFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isSensorPlayer(pReceiver)) {
-    }
 
     MR::sendMsgEnemyAttackFire(pReceiver, pSender);
 }
@@ -93,13 +92,13 @@ void DinoPackunFire::exeShot() {
     MR::addVelocityToGravity(this, 2.0f);
     MR::attenuateVelocity(this, 0.98f);
     MR::reboundVelocityFromCollision(this, 0.80f, 15.0f, 0.40f);
-    if (MR::isGreaterStep(this, 120) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(DinoPackunFire, DinoPackunFireNrvGround));
         MR::zeroVelocity(this);
     } else {
         MR::startLevelSound(this, "SE_BM_LV_D_PAKKUN_FIREBALL_L");
         MR::sendMsgEnemyAttackToBindedSensor(this, getSensor(nullptr));
-        if (MR::isGreaterStep(this, 450)) {
+        if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(7500))) {
             MR::startSound(this, "SE_BM_D_PAKKUN_FIREBALL_L_END");
             kill();
         }

@@ -1,4 +1,5 @@
 #include "Game/Enemy/Kameck.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/KameckBeam.hpp"
 #include "Game/Enemy/KameckBeamHolder.hpp"
@@ -15,7 +16,7 @@ namespace {
     static const f32 sTurnPlayerLimit = 0.98f;
     static const s32 sGuardTime = 50;
     static const f32 sAttackRange = 2000.0f;
-    static const s32 sAttackWaitTime = 60;
+    static const s32 sAttackWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sBeamSpeed = 12.0f;
     static const f32 sHitHorizontalPower = 25.0f;
     static const f32 sHitVerticalPower = 25.0f;
@@ -414,7 +415,7 @@ bool Kameck::tryAttack() {
 }
 
 bool Kameck::tryAttackEnd() {
-    if (MR::isGreaterStep(this, 30)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         setNerve(GET_NERVE(Kameck, KameckNrvMoveHide));
         return true;
     }

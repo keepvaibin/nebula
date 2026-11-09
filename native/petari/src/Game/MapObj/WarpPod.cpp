@@ -1,4 +1,5 @@
 #include "Game/MapObj/WarpPod.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -32,9 +33,9 @@ namespace {
 
     const f32 cSensorRadiusHidden = 120.0f;
     const f32 cSensorRadiusVisible = 15.0f;
-    const s32 cDefaultCameraTime = 120;
-    const u16 cRestDelay = 60;
-    const u16 cRestDelayAfterTouch = 30;
+    const s32 cDefaultCameraTime = NebulaFrameClock::stepsOfSeconds(2);
+    const u16 cRestDelay = NebulaFrameClock::stepsOfSeconds(1);
+    const u16 cRestDelayAfterTouch = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 cStandOnDistance = 200.0f;
     const u16 cPathPointCount = 60;
     const f32 cPathLift = 200.0f;

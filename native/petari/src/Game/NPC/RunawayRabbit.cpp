@@ -1,4 +1,5 @@
 #include "Game/NPC/RunawayRabbit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/WalkerStateBlowDamage.hpp"
 #include "Game/Enemy/WalkerStateRunaway.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -49,7 +50,7 @@ namespace {
     static const f32 sPressureRange = 400.0f;
     static const s32 sPressureLimitTime = 2000;
     static const s32 sPressureDeccelStart = 200;
-    static const s32 sPressureDeccelTimeLv1 = 240;
+    static const s32 sPressureDeccelTimeLv1 = NebulaFrameClock::stepsOfSeconds(4);
     static const s32 sPressureDeccelTimeLv2 = 500;
     static const s32 sPressureDeccelTimeLv3 = 800;
     // f32 sRunawayTurnStartLimit;

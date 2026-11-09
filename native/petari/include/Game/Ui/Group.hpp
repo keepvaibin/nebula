@@ -48,7 +48,6 @@ namespace Ui {
 
         void AppendGroup(Group*);
 
-        Group* FindGroupByName(const char*);
 
         GroupList mGroupList;
     };

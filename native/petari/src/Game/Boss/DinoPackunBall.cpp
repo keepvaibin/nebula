@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunBall.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -26,7 +27,7 @@ namespace {
     // Shot away from the head it stays clear of it out to sDodgeFarDistance and is pushed off inside sDodgeNearDistance.
     const f32 sDodgeNearDistance = 500.0f;
     const f32 sDodgeFarDistance = 1500.0f;
-    const s32 sReboundSteps = 180;
+    const s32 sReboundSteps = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 DinoPackunBall::DinoPackunBall(const char* pName, DinoPackun* pParent)
@@ -263,7 +264,7 @@ void DinoPackunBall::exeShoot() {
 
     f32 distanceToWeakSensor = MR::getSensorPos(mWeakSensor).distance(mPosition);
 
-    if (MR::isGreaterStep(this, 30) || distanceToWeakSensor >= sDodgeFarDistance) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500)) || distanceToWeakSensor >= sDodgeFarDistance) {
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvCharge));
     }
 }

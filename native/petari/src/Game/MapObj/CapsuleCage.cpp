@@ -1,4 +1,5 @@
 #include "Game/MapObj/CapsuleCage.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -6,7 +7,7 @@
 namespace {
     const char* const cDemoCameraName = "注目カメラ";
     const s32 sStepForStartCamera = 50;
-    const s32 sStepForEndCamera = 60;
+    const s32 sStepForEndCamera = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvCapsuleCage {

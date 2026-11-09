@@ -1,4 +1,5 @@
 #include "Game/Screen/CameraInfo.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -6,7 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 
 namespace {
-    static const s32 sLifeTime = 120;
+    static const s32 sLifeTime = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 namespace NrvCameraInfo {

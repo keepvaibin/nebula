@@ -1,4 +1,5 @@
 #include "Game/Enemy/BombHeiLauncher.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -14,7 +15,7 @@
 namespace {
     static const f32 hThrowVel = 35.0f;
     static const f32 hThrowFrontVel = 1.0f;
-    static const s32 hCountTimer = 60;
+    static const s32 hCountTimer = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvBombHeiLauncher {
@@ -155,7 +156,7 @@ void BombHeiLauncher::exeStop() {
         mCountdown = -1;
     }
 
-    if (mIsActive && MR::isGreaterStep(this, 120)) {
+    if (mIsActive && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(BombHeiLauncher, HostTypeNrvLauncherWait));
     }
 }

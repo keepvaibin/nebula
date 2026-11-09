@@ -1,4 +1,5 @@
 #include "Game/MapObj/AssemblyBlock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -17,7 +18,7 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    static const s32 sDefaultTimer = 300;
+    static const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
     static const s32 sStepForAssemble = 10;
     static const s32 sStepForReturn = 10;
     static const s32 sFlashTime = 100;

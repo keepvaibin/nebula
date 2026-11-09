@@ -1,66 +1,48 @@
 #pragma once
 
-// Numbers model and layout files store for texture coordinates, culling, blending and channels. Code reading those files
-// names them here; everything else speaks the host's values (nebula_game_api.h).
+// The numbers the cooked layout material records and the Mii shape table store for culling, light terms, colour
+// sources, texture-coordinate generation, matrices and blending. Code reading those records names them here;
+// everything else speaks the host's values (nebula_game_api.h).
 enum {
-    MODEL_FILE_AF_SPEC = 0,
-    MODEL_FILE_AOP_AND = 0,
+    // Face culling.
     MODEL_FILE_CULL_NONE = 0,
-    MODEL_FILE_DF_NONE = 0,
-    MODEL_FILE_FOG_NONE = 0,
-    MODEL_FILE_SRC_REG = 0,
-    MODEL_FILE_TG_MTX3x4 = 0,
-    MODEL_FILE_TG_POS = 0,
-    MODEL_FILE_U8 = 0,
-    MODEL_FILE_AF_SPOT = 1,
-    MODEL_FILE_BM_BLEND = 1,
     MODEL_FILE_CULL_FRONT = 1,
-    MODEL_FILE_LIGHT0 = 1,
-    MODEL_FILE_MTX2x4 = 1,
-    MODEL_FILE_S8 = 1,
-    MODEL_FILE_SRC_VTX = 1,
-    MODEL_FILE_TG_MTX2x4 = 1,
-    MODEL_FILE_TG_NRM = 1,
-    MODEL_FILE_AF_NONE = 2,
-    MODEL_FILE_BL_DSTCLR = 2,
     MODEL_FILE_CULL_BACK = 2,
-    MODEL_FILE_DF_CLAMP = 2,
-    MODEL_FILE_FOG_PERSP_LIN = 2,
+
+    // Light attenuation: specular lobe, spot cone, none.
+    MODEL_FILE_ATTEN_SPECULAR = 0,
+    MODEL_FILE_ATTEN_SPOT = 1,
+    MODEL_FILE_ATTEN_NONE = 2,
+
+    // Diffuse term: clamped N.L.
+    MODEL_FILE_DIFFUSE_CLAMP = 2,
+
+    // Light mask bits.
+    MODEL_FILE_LIGHT0 = 1,
     MODEL_FILE_LIGHT1 = 2,
-    MODEL_FILE_TG_BUMP0 = 2,
-    MODEL_FILE_U16 = 2,
-    MODEL_FILE_BL_INVDSTCLR = 3,
-    MODEL_FILE_BM_SUBTRACT = 3,
-    MODEL_FILE_CULL_ALL = 3,
-    MODEL_FILE_S16 = 3,
-    MODEL_FILE_TG_TANGENT = 3,
-    MODEL_FILE_BL_SRCALPHA = 4,
-    MODEL_FILE_TG_TEX0 = 4,
-    MODEL_FILE_BL_INVSRCALPHA = 5,
-    MODEL_FILE_TG_TEX1 = 5,
-    MODEL_FILE_TG_TEX2 = 6,
-    MODEL_FILE_TG_TEX3 = 7,
-    MODEL_FILE_TG_TEX4 = 8,
-    MODEL_FILE_TG_BUMP7 = 9,
-    MODEL_FILE_TG_TEX5 = 9,
-    MODEL_FILE_TG_SRTG = 10,
-    MODEL_FILE_TG_TEX6 = 10,
-    MODEL_FILE_TG_TEX7 = 11,
-    MODEL_FILE_TG_TEXCOORD0 = 12,
-    MODEL_FILE_TG_TEXCOORD6 = 18,
-    MODEL_FILE_TG_COLOR0 = 19,
-    MODEL_FILE_TG_COLOR1 = 20,
-    MODEL_FILE_TEXMTX0 = 30,
-    MODEL_FILE_TEXMTX1 = 33,
-    MODEL_FILE_TEXMTX2 = 36,
-    MODEL_FILE_TEXMTX3 = 39,
-    MODEL_FILE_TEXMTX4 = 42,
-    MODEL_FILE_TEXMTX5 = 45,
-    MODEL_FILE_TEXMTX6 = 48,
-    MODEL_FILE_TEXMTX7 = 51,
-    MODEL_FILE_TEXMTX8 = 54,
-    MODEL_FILE_TEXMTX9 = 57,
-    MODEL_FILE_IDENTITY = 60,
-    MODEL_FILE_PTTEXMTX0 = 64,
-    MODEL_FILE_PTIDENTITY = 125,
+
+    // Where a lighting channel takes its colour from: the material register or the vertex.
+    MODEL_FILE_SOURCE_REGISTER = 0,
+    MODEL_FILE_SOURCE_VERTEX = 1,
+
+    // Texture-coordinate generation: a 2x4 matrix applied to a texture coordinate source.
+    MODEL_FILE_TEXGEN_MATRIX_2x4 = 1,
+    MODEL_FILE_TEXGEN_SOURCE_TEX0 = 4,
+
+    // Texture matrix slots: ten 3-row matrices from the first, then the identity.
+    MODEL_FILE_MATRIX_FIRST = 30,
+    MODEL_FILE_MATRIX_IDENTITY = 60,
+
+    // The alpha compare combine: both compares must pass.
+    MODEL_FILE_ALPHA_OP_AND = 0,
+
+    // Blend mode: add (blend), subtract.
+    MODEL_FILE_BLEND_ADD = 1,
+    MODEL_FILE_BLEND_SUBTRACT = 3,
+
+    // Blend factors.
+    MODEL_FILE_FACTOR_DST_COLOR = 2,
+    MODEL_FILE_FACTOR_INV_DST_COLOR = 3,
+    MODEL_FILE_FACTOR_SRC_ALPHA = 4,
+    MODEL_FILE_FACTOR_INV_SRC_ALPHA = 5,
 };

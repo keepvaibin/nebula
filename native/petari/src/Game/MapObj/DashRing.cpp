@@ -1,4 +1,5 @@
 #include "Game/MapObj/DashRing.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/PlacementUtil.hpp"
@@ -19,12 +20,12 @@ namespace {
     const f32 cTurnRate = 0.03f;
     // After a pass it follows the player this long, then rests before coming back.
     const u16 cActiveSteps = 15;
-    const u16 cRevivalSteps = 180;
+    const u16 cRevivalSteps = NebulaFrameClock::stepsOfSeconds(3);
     // Following the player farther than this from home sends it back.
     const f32 cFollowLimit = 2000.0f;
     // Defaults for args 0-2 (arg 2 in hundredths).
-    const s32 cDefaultBoostTime = 300;
-    const s32 cDefaultMaxDuration = 120;
+    const s32 cDefaultBoostTime = NebulaFrameClock::stepsOfSeconds(5);
+    const s32 cDefaultMaxDuration = NebulaFrameClock::stepsOfSeconds(2);
     const f32 cDefaultSpeedScale = 2.5f;
     const f32 cSpeedScaleArgUnit = 100.0f;
 

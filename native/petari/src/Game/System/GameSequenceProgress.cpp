@@ -1,4 +1,5 @@
 #include "Game/System/GameSequenceProgress.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/PlayerMissLeft.hpp"
 #include "Game/System/FindingLuigiEventScheduler.hpp"
@@ -221,8 +222,6 @@ GalaxyCometScheduler* GameSequenceProgress::getGalaxyCometScheduler() {
 }
 
 void GameSequenceProgress::exeBooting() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (GameSequenceFunction::isReadyToStartScene()) {
         setNerve(GET_NERVE_ANON(GameSequenceProgressBoot));
@@ -348,7 +347,7 @@ void GameSequenceProgress::updateGameDataGalaxyVisitedFlag() {
 void GameSequenceProgress::setMinFrameBeforeStartNextStage(const GalaxyMoveArgument& rMoveArg) {
     if (MR::isCurrentScene(SceneKind_Game) && MR::isEqualStageName("PeachCastleGardenGalaxy") &&
         MR::isEqualString(rMoveArg.mStageName, "HeavensDoorGalaxy") && rMoveArg.mScenarioNo == 1) {
-        mMinFrame = 300;
+        mMinFrame = NebulaFrameClock::stepsOfSeconds(5);
         mIsPlayTicoSound = true;
     }
 }

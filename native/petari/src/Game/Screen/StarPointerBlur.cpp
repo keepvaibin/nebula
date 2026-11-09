@@ -21,7 +21,7 @@ StarPointerBlur::~StarPointerBlur() {
 }
 
 StarPointerBlur::StarPointerBlur(GameTexture* pTexture)
-    : NameObj("スターポインタ用ブラー"), mTexture(pTexture), mPadChannel(PLAYER_1), mMainColor(nullptr), mSubColor(nullptr), mBlurPoints(nullptr),
+    : NameObj("スターポインタ用ブラー"), mTexture(pTexture), mPadChannel(PLAYER_1), mMainColor(nullptr), mBlurPoints(nullptr),
       mBlurThicks(nullptr), mBlurTexCoords(nullptr), mNumHiddenPoints(0) {
     mBlurPoints = new BlurPoint[BLUR_POINT_NUM];
     mBlurThicks = new f32[BLUR_POINT_NUM];
@@ -139,10 +139,10 @@ void StarPointerBlur::draw() const {
     TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
     switch (::sDrawMode) {
     case 0:
-        draw0((NebulaColor8){0, 0, 0, 0});  // NOTE: indicated by debug symbols, color is a dummy
+        draw0((NebulaColor8){0, 0, 0, 0});  // this mode draws without a colour
         break;
     case 1:
-        draw1();  // NOTE: indicated by debug symbols
+        draw1();
         break;
     case 2:
         draw2(site);

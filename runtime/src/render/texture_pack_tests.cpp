@@ -107,7 +107,7 @@ void test_names() {
         "tex1_64x64_0123456789abcde_14",                    // 15 hex digits
         "tex1_64x64_0123456789abcdef_7",                    // no format 7
         "tex1_64x64_0123456789abcdef_1234567890abcdef_14",  // palette hash on a direct format
-        "efb1_n000007_160x120_6",                           // scene target copies are never replaced
+        "target1_n000007_160x120_6",                        // scene target copies are never replaced
         "tex1_0x64_0123456789abcdef_14",
         "tex1_64x64_0123456789abcdef_14_mip0",
         "tex1_64x64_0123456789abcdef_14_mip2_arb",
@@ -510,7 +510,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
                         texels.size() - NEBULA_TEXTURE_HEADER);
     {
         auto* const record = reinterpret_cast<NebulaTexture*>(texels.data());
-        record->disc_format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
+        record->source_format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
         record->pack_hash = name.hash;
     }
     std::vector<std::uint8_t> big(96u * 96u * 4u, 0x80u);

@@ -19,9 +19,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
 namespace {
+    // The icon's size ease lasts half a second.
+    const s32 cScaleEaseSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
+
     NEW_NERVE(FileSelectItemNrvNewWait, FileSelectItem, NewWait);
     NEW_NERVE(FileSelectItemNrvExistWait, FileSelectItem, ExistWait);
     NEW_NERVE(FileSelectItemNrvFormat, FileSelectItem, Format);
@@ -250,8 +254,6 @@ void FileSelectItem::turnToFront(s32 angle) {
 }
 
 void FileSelectItem::exeFormat() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
@@ -271,14 +273,12 @@ void FileSelectItem::exeFormat() {
         mRotateSpeed = 0.0f;
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE_ANON(FileSelectItemNrvNewWait));
     }
 }
 
 void FileSelectItem::exeChangeFellow() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
@@ -299,14 +299,12 @@ void FileSelectItem::exeChangeFellow() {
         mRotateSpeed = 0.0f;
     }
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE_ANON(FileSelectItemNrvExistWait));
     }
 }
 
 void FileSelectItem::exeChangeMii() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isLessStep(this, 40)) {
         MR::startSystemLevelSE("SE_SY_LV_FILE_SEL_MORPHBLUR");
@@ -332,7 +330,7 @@ void FileSelectItem::exeChangeMii() {
         mRotateSpeed = 0.0f;
     }
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE_ANON(FileSelectItemNrvExistWait));
     }
 }
@@ -746,23 +744,21 @@ namespace FileSelectItemSub {
     }
 
     void ScaleController::exeToSmall() {
-        if (MR::isLessEqualStep(this, 30)) {
-            // A ratio over the 30-step ease this nerve lasts, not a rate.
-            f32 rate = (getNerveStep() / 30.0f);
+        if (MR::isLessEqualStep(this, cScaleEaseSteps)) {
+            f32 rate = (static_cast< f32 >(getNerveStep()) / static_cast< f32 >(cScaleEaseSteps));
             mScale += (rate * (1.0f - mScale));
         }
 
-        MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall), 30);
+        MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvSmall), cScaleEaseSteps);
     }
 
     void ScaleController::exeToBig() {
-        if (MR::isLessEqualStep(this, 30)) {
-            // A ratio over the 30-step ease this nerve lasts, not a rate.
-            f32 rate = (getNerveStep() / 30.0f);
+        if (MR::isLessEqualStep(this, cScaleEaseSteps)) {
+            f32 rate = (static_cast< f32 >(getNerveStep()) / static_cast< f32 >(cScaleEaseSteps));
             mScale += rate * (1.2f - mScale);
         }
 
-        MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), 30);
+        MR::setNerveAtStep(this, GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvBig), cScaleEaseSteps);
     }
 
     BlinkController::BlinkController(FileSelectItem* pItem) : NerveExecutor("ファイルセレクタアイコン瞬き管理") {
@@ -791,7 +787,7 @@ namespace FileSelectItemSub {
             }
         }
 
-        if (mBlinkStep > 180) {
+        if (mBlinkStep > NebulaFrameClock::stepsOfSeconds(3)) {
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvSleep));
         } else {
             if (MR::isGreaterEqualStep(this, mWaitStep)) {
@@ -823,7 +819,7 @@ namespace FileSelectItemSub {
             mBlinkStep = 0;
         }
 
-        if (mBlinkStep > 60) {
+        if (mBlinkStep > NebulaFrameClock::stepsOfSeconds(1)) {
             setNerve(GET_NERVE_DIRECT(FileSelectItemSub, BlinkControllerNrvBlink));
         }
     }

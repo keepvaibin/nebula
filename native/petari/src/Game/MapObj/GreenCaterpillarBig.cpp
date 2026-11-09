@@ -1,4 +1,5 @@
 #include "Game/MapObj/GreenCaterpillarBig.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -151,7 +152,7 @@ void GreenCaterpillarBig::exeRest() {
 }
 
 void GreenCaterpillarBig::exeEndAdjust() {
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvEnd));
     }
 }

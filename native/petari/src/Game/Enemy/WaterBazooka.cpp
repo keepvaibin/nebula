@@ -1,5 +1,6 @@
 #include <nebula_game_api.h>
 #include "Game/Enemy/WaterBazooka.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Enemy/ElectricPressureBullet.hpp"
 #include "Game/Enemy/MogucchiShooter.hpp"
@@ -304,7 +305,7 @@ void WaterBazooka::exeAim() {
         return;
     }
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvAimEnd));
     }
 }
@@ -338,7 +339,7 @@ void WaterBazooka::exeShot() {
         MR::startLevelSound(this, "SE_EM_LV_ELECBAZ_PRE_SHOOT");
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         MR::startSound(this, "SE_EM_WATERBAZ_SHOT");
         tryShotBullet();
     }
@@ -373,7 +374,7 @@ void WaterBazooka::exeShotNoMotion() {
         return;
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         if (mShotNum >= 5) {
             mShotNum = 0;
             setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvTire));
@@ -394,7 +395,7 @@ void WaterBazooka::exeTire() {
         return;
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvWait));
     }
 }
@@ -437,15 +438,15 @@ void WaterBazooka::exeDemoAnger() {
     if (mIsElectric) {
         if (MR::isFirstStep(this)) {
             MR::emitEffect(this, "AngrySign");
-        } else if (MR::isStep(this, 60)) {
+        } else if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             MR::deleteEffect(this, "AngrySign");
-        } else if (MR::isStep(this, 90)) {
+        } else if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
             MR::emitEffect(this, "Angry");
         }
 
-        if (MR::isLessStep(this, 60)) {
+        if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             MR::startLevelSound(this, "SE_EM_LV_ELECBAZ_PRE_ELEC_LEAK");
-        } else if (MR::isGreaterEqualStep(this, 90)) {
+        } else if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
             MR::startLevelSound(this, "SE_EM_LV_ELECBAZ_ELEC_LEAK");
         }
     }
@@ -492,7 +493,7 @@ void WaterBazooka::exeDemoBreakSign() {
 
     MR::tryRumblePadWeak(this, PLAYER_1);
     MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_PRE_EXPLODE");
-    if (MR::isGreaterEqualStep(this, 120)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_BREAK_FLASH");
     }
 
@@ -542,7 +543,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
 }
 
 void WaterBazooka::exeDemoBreakEnd() {
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         if (MR::isValidSwitchDead(this)) {
             MR::onSwitchDead(this);
         }
@@ -574,17 +575,17 @@ void WaterBazooka::exePanic() {
         return;
     }
 
-    if (MR::isStep(this, 180)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         mShooter->stormStart();
         startBrk("Spin");
         MR::startSound(this, "SE_EV_MOGUBAZ_PRE_STORM");
     }
 
-    if (MR::isGreaterEqualStep(this, 180)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_PRE_STORM");
     }
 
-    if (MR::isStep(this, 300)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvStorm));
     }
 }
@@ -600,17 +601,17 @@ void WaterBazooka::exeStorm() {
     mBaseMtx.getTrans(pos);
     mBaseMtx.getXDir(side);
 
-    f32 deg = MR::calcNerveEaseOutValue(this, 150, 25.0f, 0.0f);
+    f32 deg = MR::calcNerveEaseOutValue(this, NebulaFrameClock::stepsOfMilliseconds(2500), 25.0f, 0.0f);
     MR::rotateVecDegree(&side, mGravity, deg);
     MR::makeMtxSideUpPos(&mBaseMtx, side, -mGravity, pos);
 
     MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_STORM", (deg * 100.0f) / 25.0f);
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::deleteEffect(this, "Spin");
     }
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvWait));
     }
 }
@@ -763,7 +764,7 @@ void WaterBazooka::updateElectricLeak() {
             MR::startLevelSound(this, "SE_EM_LV_ELECBAZ_ELEC_LEAK");
         }
 
-        if (mElectricTime < 600) {
+        if (mElectricTime < NebulaFrameClock::stepsOfSeconds(10)) {
             mElectricTime++;
         } else {
             mElectricTime = 0;
@@ -863,7 +864,7 @@ bool WaterBazooka::isElectricLeakSign() const {
         return false;
     }
 
-    return mElectricTime >= 300 && mElectricTime < 420;
+    return mElectricTime >= NebulaFrameClock::stepsOfSeconds(5) && mElectricTime < NebulaFrameClock::stepsOfSeconds(7);
 }
 
 bool WaterBazooka::isElectricLeak() const {
@@ -871,7 +872,7 @@ bool WaterBazooka::isElectricLeak() const {
         return false;
     }
 
-    return mElectricTime >= 420 && mElectricTime < 600;
+    return mElectricTime >= NebulaFrameClock::stepsOfSeconds(7) && mElectricTime < NebulaFrameClock::stepsOfSeconds(10);
 }
 
 void WaterBazooka::initShooter() {

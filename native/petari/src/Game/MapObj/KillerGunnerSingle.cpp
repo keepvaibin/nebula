@@ -1,4 +1,5 @@
 #include "Game/MapObj/KillerGunnerSingle.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -56,7 +57,7 @@ void KillerGunnerSingle::exeWait() {
         getSensor("shell")->invalidate();
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(KillerGunnerSingle, HostTypeCharge));
     }
 }

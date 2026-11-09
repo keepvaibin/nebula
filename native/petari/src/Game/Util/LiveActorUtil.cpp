@@ -599,14 +599,6 @@ namespace MR {
         return true;
     }
 
-    bool isValidCalcViewAndEntry(const LiveActor* pActor) {
-        if (pActor->mFlag.mIsDead || pActor->mFlag.mIsClipped) {
-            return false;
-        }
-
-        return true;
-    }
-
     bool isValidDraw(const LiveActor* pActor) {
         if (pActor->mFlag.mIsDead || pActor->mFlag.mIsClipped || pActor->mFlag.mIsHiddenModel) {
             return false;

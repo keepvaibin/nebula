@@ -265,8 +265,8 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
     const std::uint8_t* const texels = first + NEBULA_TEXTURE_HEADER;
     op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
     op.generated = (record->flags & NEBULA_TEXTURE_GENERATED_LEVELS) != 0u;
-    if (record->disc_format != NEBULA_TEXTURE_MADE) {
-        op.name.format = record->disc_format;
+    if (record->source_format != NEBULA_TEXTURE_MADE) {
+        op.name.format = record->source_format;
         op.name.hash = record->pack_hash;
         op.name.palette = record->pack_palette_hash;
         op.name.mipmapped = record->levels > 1u && !op.generated;

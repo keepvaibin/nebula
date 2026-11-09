@@ -1,4 +1,5 @@
 #include "Game/MapObj/PowerStar.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -62,25 +63,25 @@ namespace {
     const f32 cGrandStarRotateSpeed = 2.0f;
     const f32 cWeakRotateSpeed = 0.3f;
     const f32 cWeakNoRotateAngle = 45.0f;
-    const s32 cWeakToWaitSteps = 30;
+    const s32 cWeakToWaitSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cBgmFadeOutSteps = 5;
-    const s32 cBgmFadeInSteps = 60;
-    const s32 cRiseEaseSteps = 60;
+    const s32 cBgmFadeInSteps = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 cRiseEaseSteps = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cRiseHeight = 300.0f;
     const f32 cRiseSpinSpeed = 10.0f;
     const s32 cRiseSteps = 80;
-    const s32 cMoveSteps = 120;
+    const s32 cMoveSteps = NebulaFrameClock::stepsOfSeconds(2);
     const f32 cMoveSpinSpeed = 20.0f;
     const f32 cArcHeightMin = 300.0f;
     const f32 cArcHeightMax = 5000.0f;
     const f32 cSpinDownSteps = 90.0f;
-    const s32 cMoveEndStep = 210;
-    const s32 cKoopaVs3LightDuration = 120;
-    const s32 cKoopaBgmStep = 90;
+    const s32 cMoveEndStep = NebulaFrameClock::stepsOfMilliseconds(3500);
+    const s32 cKoopaVs3LightDuration = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cKoopaBgmStep = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 cKoopaVs3BgmStep = 152;
     // Steps before the demo bck ends.
     const s32 cKoopaVs3StageBgmLead = 30;
-    const s32 cKoopaVs3ClearStep = 600;
+    const s32 cKoopaVs3ClearStep = NebulaFrameClock::stepsOfSeconds(10);
 
     const char* getKoopaDemoName() {
         return MR::isStageKoopaVs3() ? "DemoKoopaGrandStarVs3" : "DemoKoopaGrandStar";

@@ -13,8 +13,6 @@ namespace {
         s32 mNumPoints;
         const u16* mTriangleStripOrder;
         u16 mNumTriangleStripPoints;
-        const u16* mLineStripOrder;
-        u16 mNumLineStripPoints;
         const Vec* mTriangleST;
     };
 
@@ -575,36 +573,21 @@ namespace {
                                               25, 33, 26, 34, 27, 35, 27, 27, 26, 20, 19, 14, 13, 9,  8,  5,  4,  2,  4,  4,  8,  7,  12,
                                               11, 17, 16, 23, 22, 23, 23, 17, 24, 18, 25, 19, 26, 19, 19, 18, 13, 12, 8,  12, 12, 18, 17};
 
-    // Line Strip Vertex Index Order (for mesh debugging)
-    const u16 sBezierLineStripOrder0[] = {1, 0, 2, 1};
-    const u16 sBezierLineStripOrder1[] = {1, 0, 2, 1, 4, 2, 5, 4, 3, 1};
-    const u16 sBezierLineStripOrder2[] = {1, 0, 2, 1, 4, 2, 5, 4, 8, 5, 9, 8, 7, 4, 3, 7, 6, 3, 1};
-    const u16 sBezierLineStripOrder3[] = {1, 0, 2, 1, 4, 2, 5, 4, 8, 5, 9, 8, 13, 9, 14, 13, 12, 8, 7, 12, 11, 7, 6, 11, 10, 6, 3, 7, 4, 3, 1};
-    const u16 sBezierLineStripOrder4[] = {1,  0,  2,  1,  4,  2,  5,  4,  8,  5,  9,  8, 13, 9, 14, 13, 19, 14, 20, 19, 18, 13, 12,
-                                          18, 17, 12, 11, 17, 16, 11, 10, 16, 15, 10, 6, 11, 7, 12, 8,  7,  4,  3,  7,  6,  3,  1};
-    const u16 sBezierLineStripOrder5[] = {1,  0,  2,  1,  4,  2,  5,  4,  8,  5,  9,  8,  13, 9,  14, 13, 19, 14, 20, 19, 26, 20,
-                                          27, 26, 25, 19, 18, 25, 24, 18, 17, 24, 23, 17, 16, 23, 22, 16, 15, 22, 21, 15, 10, 16,
-                                          11, 17, 12, 18, 13, 12, 8,  7,  12, 11, 7,  6,  11, 10, 6,  3,  7,  4,  3,  1};
-    const u16 sBezierLineStripOrder6[] = {1,  0,  2,  1,  4,  2,  5,  4,  8,  5,  9,  8,  13, 9,  14, 13, 19, 14, 20, 19, 26, 20,
-                                          27, 26, 34, 27, 35, 34, 33, 26, 25, 33, 32, 25, 24, 32, 31, 24, 23, 31, 30, 23, 22, 30,
-                                          29, 22, 21, 29, 28, 21, 15, 22, 16, 23, 17, 24, 18, 25, 19, 18, 13, 12, 18, 17, 12, 11,
-                                          17, 16, 11, 10, 16, 15, 10, 6,  11, 7,  12, 8,  7,  4,  3,  7,  6,  3,  1};
-
     const TrianglePatch sTrianglePatchTableGroup[] = {
         {sBezierTriangleCoef0, sBezierTriangleCoefTangentS0, sBezierTriangleCoefTangentT0, 3, sBezierTriangleStripOrder0,
-         ARRAY_SIZE(sBezierTriangleStripOrder0), sBezierLineStripOrder0, ARRAY_SIZE(sBezierLineStripOrder0), sBezierTriangleST0},
+         ARRAY_SIZE(sBezierTriangleStripOrder0), sBezierTriangleST0},
         {sBezierTriangleCoef1, sBezierTriangleCoefTangentS1, sBezierTriangleCoefTangentT1, 6, sBezierTriangleStripOrder1,
-         ARRAY_SIZE(sBezierTriangleStripOrder1), sBezierLineStripOrder1, ARRAY_SIZE(sBezierLineStripOrder1), sBezierTriangleST1},
+         ARRAY_SIZE(sBezierTriangleStripOrder1), sBezierTriangleST1},
         {sBezierTriangleCoef2, sBezierTriangleCoefTangentS2, sBezierTriangleCoefTangentT2, 10, sBezierTriangleStripOrder2,
-         ARRAY_SIZE(sBezierTriangleStripOrder2), sBezierLineStripOrder2, ARRAY_SIZE(sBezierLineStripOrder2), sBezierTriangleST2},
+         ARRAY_SIZE(sBezierTriangleStripOrder2), sBezierTriangleST2},
         {sBezierTriangleCoef3, sBezierTriangleCoefTangentS3, sBezierTriangleCoefTangentT3, 15, sBezierTriangleStripOrder3,
-         ARRAY_SIZE(sBezierTriangleStripOrder3), sBezierLineStripOrder3, ARRAY_SIZE(sBezierLineStripOrder3), sBezierTriangleST3},
+         ARRAY_SIZE(sBezierTriangleStripOrder3), sBezierTriangleST3},
         {sBezierTriangleCoef4, sBezierTriangleCoefTangentS4, sBezierTriangleCoefTangentT4, 21, sBezierTriangleStripOrder4,
-         ARRAY_SIZE(sBezierTriangleStripOrder4), sBezierLineStripOrder4, ARRAY_SIZE(sBezierLineStripOrder4), sBezierTriangleST4},
+         ARRAY_SIZE(sBezierTriangleStripOrder4), sBezierTriangleST4},
         {sBezierTriangleCoef5, sBezierTriangleCoefTangentS5, sBezierTriangleCoefTangentT5, 28, sBezierTriangleStripOrder5,
-         ARRAY_SIZE(sBezierTriangleStripOrder5), sBezierLineStripOrder5, ARRAY_SIZE(sBezierLineStripOrder5), sBezierTriangleST5},
+         ARRAY_SIZE(sBezierTriangleStripOrder5), sBezierTriangleST5},
         {sBezierTriangleCoef6, sBezierTriangleCoefTangentS6, sBezierTriangleCoefTangentT6, 36, sBezierTriangleStripOrder6,
-         ARRAY_SIZE(sBezierTriangleStripOrder6), sBezierLineStripOrder6, ARRAY_SIZE(sBezierLineStripOrder6), sBezierTriangleST6},
+         ARRAY_SIZE(sBezierTriangleStripOrder6), sBezierTriangleST6},
     };
 };  // namespace
 

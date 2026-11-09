@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunBattleVs1Lv1.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunStateDamage.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -13,20 +14,20 @@
 namespace {
     const f32 cSightDistance = 1000.0f;
     const f32 cSightDegree = 80.0f;
-    const s32 cTurnSteps = 60;
+    const s32 cTurnSteps = NebulaFrameClock::stepsOfSeconds(1);
     const f32 cTurnDegree = 1.0f;
-    const s32 cWalkSteps = 180;
+    const s32 cWalkSteps = NebulaFrameClock::stepsOfSeconds(3);
     const f32 cWalkSpeed = 0.5f;
     const s32 cWalkFootPrintPeriod = 91;
-    const s32 cChaseSteps = 240;
+    const s32 cChaseSteps = NebulaFrameClock::stepsOfSeconds(4);
     const f32 cChaseFaceDegree = 180.0f;
     const f32 cChaseTurnDegree = 1.0f;
     const f32 cChaseSpeed = 1.5f;
-    const s32 cChaseAccelSteps = 60;
+    const s32 cChaseAccelSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cChaseFootPrintPeriod = 46;
     // A star piece hit stops the chase this long.
     const s32 cHitReactionSteps = 15;
-    const s32 cCoolDownSteps = 90;
+    const s32 cCoolDownSteps = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 cFindLandStep = 14;
     const f32 cFindTurnDegree = 1.0f;
 };  // namespace

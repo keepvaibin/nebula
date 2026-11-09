@@ -1,4 +1,5 @@
 #include "Game/Map/WaterRoad.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Render/FrameList.hpp"
@@ -33,8 +34,8 @@ namespace {
     static const f32 sRiderSpeedMax = 150.0f;
     static const f32 sRiderSpinAccel = 50.0f;
     static const f32 sRiderFrictionRate = 0.99f;
-    static const s32 sStepRideSpin = 30;
-    static const s32 sDisappearStep = 30;
+    static const s32 sStepRideSpin = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sDisappearStep = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sSensorOffsetY = 300.0f;
     static const f32 sPointIntervalLine = 100.0f;
     static const f32 sDotPointCreateHigh = 0.998f;
@@ -487,7 +488,7 @@ void WaterRoad::exeWait() {
 }
 
 void WaterRoad::exeWaitInvalid() {
-    if (MR::isStep(this, 180)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvWait));
     }
 }

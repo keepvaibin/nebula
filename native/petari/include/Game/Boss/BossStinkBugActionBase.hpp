@@ -79,5 +79,4 @@ public:
     f32 mPrevCameraDistance;
     s32 mApproachStep;
     bool mIsNearPlayer;
-    bool mWasNearPlayer;
 };

@@ -1,11 +1,12 @@
 #include "Game/MapObj/RailBlock.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 sStartSignTime = 60;
+    const s32 sStartSignTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sCycle = 3;
     const f32 sAmplitude = 30.0f;
 };  // namespace

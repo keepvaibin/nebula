@@ -1,4 +1,5 @@
 #include "Game/Enemy/KameckTurtle.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/Kameck.hpp"
 #include "Game/Enemy/KameckBeam.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -9,8 +10,8 @@ namespace {
     // const f32 sBeamRadius =
     const f32 sUpVecBlendRate = 0.2f;
     const f32 sFrontVecBlendRate = 0.2f;
-    const s32 sRunTime = 600;
-    const s32 sEnableAttackTime = 300;
+    const s32 sRunTime = NebulaFrameClock::stepsOfSeconds(10);
+    const s32 sEnableAttackTime = NebulaFrameClock::stepsOfSeconds(5);
     const s32 sDeccelStartTime = 200;
     const s32 sDeccelEndTime = 400;
     const f32 sRunSpeed = 15.0f;
@@ -189,10 +190,8 @@ void KameckTurtle::exeRun() {
 }
 
 void KameckTurtle::exeWait() {
-    if (MR::isFirstStep(this)) {
-    }
 
-    if (mTurtle->isRestart() || (mTurtle->isWait() && MR::isGreaterStep(this, 600))) {
+    if (mTurtle->isRestart() || (mTurtle->isWait() && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(10)))) {
         MR::emitEffectHit(this, mTurtle->mPosition, "BeamTurtleVanish");
         MR::startSound(this, "SE_BM_KAMECK_DISAPPEAR_TURT");
         kill();

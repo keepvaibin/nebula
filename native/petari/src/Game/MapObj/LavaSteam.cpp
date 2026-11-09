@@ -1,4 +1,5 @@
 #include "Game/MapObj/LavaSteam.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
@@ -6,11 +7,11 @@
 #include "Game/Util/CollisionShapeUtil.hpp"
 
 namespace {
-    static const s32 sSteamTime = 90;
+    static const s32 sSteamTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sAppearTime = 82;
-    static const s32 sDisappearTime = 90;
-    static const s32 sSteamWaitTime = 120;
-    static const s32 sSteamEndTime = 90;
+    static const s32 sDisappearTime = NebulaFrameClock::stepsOfMilliseconds(1500);
+    static const s32 sSteamWaitTime = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sSteamEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sSensorRadius = 250.0f;
     static const f32 sSensorOffsetY = 250.0f;
     static const f32 sHitCylinderRange = 10.0f;

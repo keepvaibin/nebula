@@ -1,4 +1,5 @@
 #include "Game/Util/NPCUtil.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/NPCActor.hpp"
@@ -773,7 +774,7 @@ void DemoStarter::exeFade() {
 }
 
 void DemoStarter::exeWait() {
-    if (MR::isLessStep(this, 30)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         return;
     }
 

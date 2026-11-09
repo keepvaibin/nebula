@@ -360,7 +360,7 @@ void NormalMapBase::drawMaterialSetting(Material* pMaterial) const {
                                                 : static_cast< const NebulaColor16& >(mStageColor0);
     const NebulaColor16& rColor1 = mUseModelStageColor ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterColor(1))
                                                 : static_cast< const NebulaColor16& >(mStageColor1);
-    // C0 and C1 as the combiner takes a register (its low 8 bits).
+    // The two stage colours as the shader reads them: the low 8 bits of each channel, 0 to 1.
     sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;
     sNormalMap.constants[9] = static_cast< u8 >(rColor0.g) / 255.0f;
     sNormalMap.constants[10] = static_cast< u8 >(rColor0.b) / 255.0f;

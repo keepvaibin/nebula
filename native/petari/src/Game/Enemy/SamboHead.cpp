@@ -1,4 +1,5 @@
 #include "Game/Enemy/SamboHead.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
@@ -30,10 +31,10 @@ namespace {
     const f32 cAppearDistance = 800.0f;
     const f32 cTurnDistance = 500.0f;
     const f32 cGiveUpDistance = 1000.0f;
-    const s32 cUnderGroundSteps = 120;
-    const s32 cHideSteps = 120;
-    const s32 cWaitHideSteps = 120;
-    const s32 cShadowHideStep = 30;
+    const s32 cUnderGroundSteps = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cHideSteps = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cWaitHideSteps = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 cShadowHideStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cShadowShowStep = 63;
     const f32 cAppearImmediatelyFrame = 45.0f;
     // Appear's rise hits the player only after this step.

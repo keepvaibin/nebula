@@ -89,7 +89,6 @@ public:
     const char* mCurrentBckName;
     const XanimeGroupInfo* mDefaultAnimation;
     const XanimeGroupInfo* mCurrentAnimation;
-    const XanimeGroupInfo* mPrevAnimation;
     // Started by the next updateAfterMovement.
     const XanimeGroupInfo* mPendingAnimation;
     XanimeCore* mCore;

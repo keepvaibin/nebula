@@ -8,9 +8,6 @@
 namespace {
     const char* const sFlagName[] = {"flag.noreset",     "flag.nofovy",       "flag.lofserpoff",
                                       "flag.antibluroff", "flag.collisionoff", "flag.subjectiveoff"};
-
-    static CameraParamChunk::ExParam sUndoExParam = CameraParamChunk::ExParam();
-    static CameraGeneralParam sUndoParam = CameraGeneralParam();
 };  // namespace
 
 CameraGeneralParam& CameraGeneralParam::operator=(const CameraGeneralParam& rOther) {

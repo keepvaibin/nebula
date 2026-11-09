@@ -1,4 +1,5 @@
 #include "Game/MapObj/BeeFlowerHover.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
@@ -8,7 +9,7 @@
 
 namespace {
     static const f32 sDefaultRotateSpeed = 50.0f;
-    static const s32 sStepToRecoverStart = 60;
+    static const s32 sStepToRecoverStart = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvBeeFlowerHover {

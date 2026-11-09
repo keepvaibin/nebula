@@ -73,8 +73,6 @@ void FileSelectNumber::control() {
 }
 
 void FileSelectNumber::exeAppear() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isAnimStopped(this, 0)) {
         setNerve(GET_NERVE_ANON(FileSelectNumberNrvWait));
@@ -85,8 +83,6 @@ void FileSelectNumber::exeWait() {
 }
 
 void FileSelectNumber::exeEnd() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isAnimStopped(this, 0)) {
         kill();

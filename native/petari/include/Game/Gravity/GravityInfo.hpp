@@ -11,6 +11,5 @@ public:
     void init();
 
     Vec3f mGravityVector;
-    s32 mLargestPriority;
     PlanetGravity* mGravityInstance;
 };

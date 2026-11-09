@@ -1,13 +1,14 @@
 #include "Game/MapObj/MechaKoopaPartsHead.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 
 namespace {
-    const s32 sStepForWhiteFadeOut = 60;
-    const s32 sStepForWhiteFadeIn = 60;
-    const s32 sStepToBreakFaceEffect = 120;
-    const s32 sStepToExplosionEffect = 300;
+    const s32 sStepForWhiteFadeOut = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sStepForWhiteFadeIn = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sStepToBreakFaceEffect = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 sStepToExplosionEffect = NebulaFrameClock::stepsOfSeconds(5);
     const char* const sDemoPartNameBreak = "壊れ開始";
     const char* const sDemoPartNameFadeOut = "フェードアウト";
     const char* const sDemoPartNameWhite = "白画面";

@@ -1,4 +1,5 @@
 #include "Game/MapObj/Candlestand.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Effect/SpinPullParticleCallBack.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -35,10 +36,10 @@ namespace {
     const f32 sAttackRange = 50.0f;
     const f32 sFireRange = 150.0f;
     const f32 sSpinStormRange = 350.0f;
-    const s32 sFireStep = 60;
+    const s32 sFireStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sExtinguishStep = 15;
-    const s32 sFlickerStep = 30;
-    const s32 sAttackStep = 30;
+    const s32 sFlickerStep = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 sAttackStep = NebulaFrameClock::stepsOfMilliseconds(500);
 
     const Param* getParam(const char* pObjName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sParams); i++) {

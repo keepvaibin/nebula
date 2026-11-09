@@ -1,4 +1,5 @@
 #include "Game/Map/ScenarioSelectStar.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/PowerStar.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -6,14 +7,14 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 cAppearWaitFrame = 60;
+    static const s32 cAppearWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 cAppearDelayFrame = 15;
     static const s32 cHideDelayFrame = 10;
     static const f32 cNotPointingRotateSpeedZ = 1.5f;
     static const f32 cPointingRotateSpeedZ = 3.0f;
     static const f32 cPointingScale = 1.5f;
     static const f32 cNotPointingScale = 0.9f;
-    static const s32 cMoveInterval = 180;
+    static const s32 cMoveInterval = NebulaFrameClock::stepsOfSeconds(3);
     static const f32 cMoveDistance = 15.0f;
     static const s32 cAppearFrame = 60;
     static const s32 cStartPointingFrame = 20;

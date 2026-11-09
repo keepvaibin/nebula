@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpaceShipStep.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
@@ -95,7 +96,7 @@ void SpaceShipStep::updateResetToInitPosCheck() {
         if (isNerve(GET_NERVE(SpaceShipStep, SpaceShipStepNrvWait)) || !MR::isJudgedToClipFrustum(mPosition, 700.0f)) {
             mHiddenStep = 0;
         } else {
-            if (mHiddenStep < 240) {
+            if (mHiddenStep < NebulaFrameClock::stepsOfSeconds(4)) {
                 mHiddenStep++;
             } else {
                 MapObjActorUtil::resetRailMoverToInitPos(this);

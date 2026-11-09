@@ -23,10 +23,6 @@ namespace NrvStarPointerCommandStream {
     NEW_NERVE(HostTypeNrvSignal, StarPointerCommandStream, Signal);
 };  // namespace NrvStarPointerCommandStream
 
-namespace {
-    static Color8 hOutColor = Color8((NebulaColor8){0xFF, 0x00, 0x00, 0xFF});
-};  // namespace
-
 StarPointerCommandStream::StarPointerCommandStream(const Vec2f* pScreenPos)
     : LayoutActor("スターポインタ指示線", true), mOffScreenTime(), mScreenPos(pScreenPos), mWorldPos(), mPadChannel(-1), mColor() {
 }
@@ -118,8 +114,6 @@ void StarPointerCommandStream::exeWait() {
 }
 
 void StarPointerCommandStream::exeSignal() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isStarPointerInScreen(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerCommandStream, HostTypeNrvWait));

@@ -1,4 +1,5 @@
 #include "Game/MapObj/Tsukidashikun.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -13,8 +14,8 @@
 
 namespace {
     const f32 sDefaultMoveSpeed = 10.0f;
-    const s32 sDefaultWaitTime = 120;
-    const s32 sStepForSign = 60;
+    const s32 sDefaultWaitTime = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 sStepForSign = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sRumblePadLength = 700.0f;
 };  // namespace
 

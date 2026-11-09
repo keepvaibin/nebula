@@ -1,4 +1,5 @@
 #include "Game/Enemy/RingBeamer.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/JumpGuarder.hpp"
 #include "Game/Enemy/RingBeam.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -82,7 +83,7 @@ void RingBeamer::exeAttack() {
         MR::startBck(this, "Open");
     }
 
-    if (MR::isGreaterEqualStep(this, 240)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(4))) {
         setNerve(GET_NERVE(RingBeamer, RingBeamerNrvInter));
         return;
     }
@@ -107,8 +108,6 @@ void RingBeamer::exeAttack() {
 }
 
 void RingBeamer::exeInter() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (MR::isGreaterEqualStep(this, 80)) {
         for (int i = 0; i < 3; i++) {

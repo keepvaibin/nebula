@@ -1,4 +1,5 @@
 #include "Game/NPC/Rabbit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NPC/NPCActor.hpp"
@@ -224,7 +225,7 @@ void Rabbit::exeWait() {
         MR::startBck(this, "Wait2");
     }
 
-    if (getNerveStep() > 30) {
+    if (getNerveStep() > NebulaFrameClock::stepsOfMilliseconds(500)) {
         Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
@@ -257,7 +258,7 @@ void Rabbit::exeGoal() {
         MR::startBck(this, "Wait");
     }
 
-    if (getNerveStep() > 30) {
+    if (getNerveStep() > NebulaFrameClock::stepsOfMilliseconds(500)) {
         Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
@@ -354,7 +355,7 @@ void Rabbit::exeForwardLand() {
 
     if (MR::isBckStopped(this)) {
         if (!MR::isNearPlayer(this, ::cDistWait)) {
-            mWaitStep = 120;
+            mWaitStep = NebulaFrameClock::stepsOfSeconds(2);
             setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
         } else {
             setNerve(GET_NERVE(Rabbit, RabbitNrvPreJump));
@@ -507,15 +508,13 @@ void Rabbit::exeReaction() {
 }
 
 void Rabbit::exeTalk() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (!MR::tryStartReactionAndPushNerve(this, GET_NERVE(Rabbit, RabbitNrvReaction)) &&
         (!MR::tryTalkNearPlayerAndStartTalkAction(this) || MR::isShortTalk(mMsgCtrl))) {
-        if (mBehavior == Behavior_UpJump && MR::isGreaterStep(this, 180)) {
+        if (mBehavior == Behavior_UpJump && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
             pushNerve(GET_NERVE(Rabbit, RabbitNrvJumpV));
         } else if (mBehavior == Behavior_LongJump) {
-            if (MR::isGreaterStep(this, 180)) {
+            if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
                 pushNerve(GET_NERVE(Rabbit, RabbitNrvJumpH));
             }
         }

@@ -1,4 +1,5 @@
 #include "Game/Demo/PrologueDirector.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/ActorCameraInfo.hpp"
@@ -133,7 +134,7 @@ void PrologueDirector::exePeachLetterStart() {
         MR::openWipeFade(::sPeachLetterStartWipeFrame);
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         setNerve(GET_NERVE_ANON(PrologueDirectorNrvPeachLetter));
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/Ride/SurfRayTutorial.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SurfingGuidance.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -10,8 +11,8 @@
 #include "Game/Util/TalkUtil.hpp"
 
 namespace {
-    static const s32 sStepTalk = 150;
-    static const s32 sStepToSuccess = 90;
+    static const s32 sStepTalk = NebulaFrameClock::stepsOfMilliseconds(2500);
+    static const s32 sStepToSuccess = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sStepToOK = 10;
     static const f32 sPadAccelStraightMinX = 0.25f;
     static const f32 sPadAccelStraightMinY = 0.45f;

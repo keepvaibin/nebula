@@ -1,11 +1,12 @@
 #include "Game/MapObj/ChooChooTrain.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 
 namespace {
-    static const s32 hWhistleStepMin = 180;
-    static const s32 hWhistleStepMax = 600;
+    static const s32 hWhistleStepMin = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 hWhistleStepMax = NebulaFrameClock::stepsOfSeconds(10);
 };  // namespace
 
 ChooChooTrain::ChooChooTrain(const char* pName) : LiveActor(pName), mModelArray(), mClipCenter(0.0f, 0.0f, 0.0f), mRailSpeed(5.0f), mWhistleTimer() {
@@ -29,8 +30,6 @@ void ChooChooTrain::endClipped() {
 
 void ChooChooTrain::init(const TableIter& rIter) {
     if (MR::isValidInfo(rIter)) {
-        if (MR::isConnectedWithRail(rIter)) {
-        }
     }
 
     MR::initDefaultPos(this, rIter);

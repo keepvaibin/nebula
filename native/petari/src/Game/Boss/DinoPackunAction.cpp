@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunAction.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -10,7 +11,7 @@
 namespace {
     // Walks faster than this use the run animation's speed.
     const f32 cRunSpeedMin = 1.2f;
-    const s32 cStartSteps = 60;
+    const s32 cStartSteps = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 DinoPackunAction::DinoPackunAction(const char* pName, DinoPackun* pHost) : ActorStateBase< DinoPackun >(pName, pHost), mSide(1.0f) {

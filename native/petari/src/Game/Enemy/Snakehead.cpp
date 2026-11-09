@@ -1,4 +1,5 @@
 #include "Game/Enemy/Snakehead.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -37,10 +38,10 @@ namespace {
     const f32 sDefaultBackSpeed = 10.0f;
     const f32 sGoHomeSpeedWaylay = 20.0f;
     const f32 sGoHomeSpeedMove = 50.0f;
-    const s32 sStepForWaitBig = 30;
+    const s32 sStepForWaitBig = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 sStepForRestBig = 100;
-    const s32 sStepForWaitSmall = 60;
-    const s32 sStepForRestSmall = 120;
+    const s32 sStepForWaitSmall = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sStepForRestSmall = NebulaFrameClock::stepsOfSeconds(2);
     const f32 sStartCoord = 300.0f;  // Home: this far along the rail.
     const f32 sPushRadiusSmall = 100.0f;
     const f32 sPushRadiusBig = 300.0f;

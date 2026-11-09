@@ -1,4 +1,5 @@
 #include "Game/Enemy/NokonokoLand.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -32,10 +33,10 @@ namespace {
     const f32 sShadowRadius = 60.0f;
     const f32 sWalkSpeed = 1.6f;
     const f32 sPoseLerpRate = 0.3f;
-    const s32 sAppearTime = 60;
+    const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sAppearValidDistance = 350.0f;
-    const s32 sDeadTime = 180;
-    const s32 sShellWaitTime = 180;
+    const s32 sDeadTime = NebulaFrameClock::stepsOfSeconds(3);
+    const s32 sShellWaitTime = NebulaFrameClock::stepsOfSeconds(3);
     const s32 sSceneStopTimePunch = 3;
     const f32 sWalkSpeedFast = 3.2f;
     const s32 sShellStartPeakPosFrame = 27;

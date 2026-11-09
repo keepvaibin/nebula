@@ -1,4 +1,5 @@
 #include "Game/Boss/DodoryuStateWait.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
@@ -45,7 +46,7 @@ void DodoryuStateWait::exeWait() {
         mNextStateCounter = 0;
     }
 
-    if (mNextStateCounter > 30) {
+    if (mNextStateCounter > NebulaFrameClock::stepsOfMilliseconds(500)) {
         if (MR::isStageSuddenDeathDodoryu() && MR::hasRetryGalaxySequence()) {
             MR::openWipeCircle();
         }

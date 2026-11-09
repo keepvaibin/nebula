@@ -1,4 +1,5 @@
 #include "Game/Enemy/KoteBug.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/AnimStampController.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
@@ -25,13 +26,13 @@ namespace {
     const f32 hKeepAcc = 1.8f;
     const f32 hFreqRange = 40.0f;
     const f32 hOverturnFallJumpVelV = 30.0f;
-    const s32 hOverturnTime = 240;
+    const s32 hOverturnTime = NebulaFrameClock::stepsOfSeconds(4);
     const f32 hRecoverJumpVelV = 24.0f;
     const f32 hDistNoCalcWait = 1000.0f;
     const s32 hSeachTime = 50;
     const s32 hEscapeSeachTime = 20;
     const f32 hPreEscapeTurnLimitDegree = 9.0f;
-    const s32 hFlyPursueLastTime = 90;
+    const s32 hFlyPursueLastTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const f32 hFlyJitabataHeightBase = 60.0f;
     const f32 hFlyJitabataHeight = 150.0f;
     const f32 hJitabataPostureRate = 0.02f;

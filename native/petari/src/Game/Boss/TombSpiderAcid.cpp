@@ -1,4 +1,5 @@
 #include "Game/Boss/TombSpiderAcid.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/TombSpider.hpp"
 #include "Game/Boss/TombSpiderFunction.hpp"
 #include "Game/Boss/TombSpiderGland.hpp"
@@ -6,12 +7,12 @@
 #include "Game/Util/MapUtil.hpp"
 
 namespace {
-    const s32 sStepToStartAcidGround = 30;
+    const s32 sStepToStartAcidGround = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sDistanceCheckMap = 2500.0f;
-    const s32 sStepToEndAcidGround = 30;
+    const s32 sStepToEndAcidGround = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
-TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsGlandReady(), mIsEmitOn(), mIsActive(), mStateChangeTimer() {
+TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsEmitOn(), mIsActive(), mStateChangeTimer() {
     mMouthEffectMtx.identity();
     mGlandFrontLEffectMtx.identity();
     mGlandFrontREffectMtx.identity();
@@ -26,7 +27,6 @@ TombSpiderAcid::TombSpiderAcid(TombSpider* pParent) : mParent(pParent), mIsGland
 }
 
 void TombSpiderAcid::start() {
-    mIsGlandReady = true;
     mIsEmitOn = true;
     mStateChangeTimer = 0;
 }
@@ -37,7 +37,6 @@ void TombSpiderAcid::startGland() {
 }
 
 void TombSpiderAcid::end() {
-    mIsGlandReady = false;
     mIsEmitOn = false;
     mStateChangeTimer = 0;
 }

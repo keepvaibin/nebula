@@ -8,7 +8,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 
 namespace {
-    const s32 sCometTimeLimitDefault = 1800;
+    const s32 sCometTimeLimitDefault = NebulaFrameClock::stepsOfSeconds(30);
 };  // namespace
 
 namespace NrvCometEventExecutorTimeLimit {

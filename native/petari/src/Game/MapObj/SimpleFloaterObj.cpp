@@ -46,8 +46,6 @@ void SimpleFloaterObj::init(const TableIter& rrIter) {
 }
 
 void SimpleFloaterObj::exeWait() {
-    if (MR::isFirstStep(this)) {
-    }
 
     if (!isVelocityClose() && !MR::isEffectValid(this, ::cEffectName)) {
         MR::emitEffect(this, ::cEffectName);

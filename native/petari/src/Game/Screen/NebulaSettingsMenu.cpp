@@ -1,5 +1,7 @@
 #include "Game/Util/TextString.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include <nebula_module.h>
 
@@ -3297,6 +3299,8 @@ void NebulaSettingsScreen::drawMenu() const {
 
 namespace NebulaSettingsMenu {
     void init() {
+        // The screen lasts as long as the process: made in the permanent arena, whatever is current.
+        NebulaArena::CurrentScope home(Arenas::permanent());
         sScreen = new NebulaSettingsScreen();
         sScreen->initWithoutIter();
     }

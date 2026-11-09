@@ -85,11 +85,6 @@ namespace Ui {
         mpLayout->TouchStructure();
     }
 
-    void Pane::SetUserData(const char* pUserData) {
-        strncpy(mUserData, pUserData, 8);
-        mUserData[8] = '\0';
-    }
-
     void Pane::AppendChild(Pane* pChild) {
         mChildList.PushBack(pChild);
         pChild->mpParent = this;

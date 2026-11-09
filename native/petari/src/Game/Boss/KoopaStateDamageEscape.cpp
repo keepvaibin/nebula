@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaStateDamageEscape.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -25,11 +26,11 @@ namespace {
     static MR::ActorMoveParam sDamageTailRunFinalParam = {13.0f, 3.0f, 0.8f, 0.0f};
     static MR::ActorMoveParam sDamageTailRunEndParam = {0.0f, 1.0f, 0.98f, 0.0f};
     static const f32 sEscapeStartJumpSpeed = 80.0f;
-    static const s32 sEscapeStepVs1Lv1 = 900;
-    static const s32 sEscapeStep = 600;
+    static const s32 sEscapeStepVs1Lv1 = NebulaFrameClock::stepsOfSeconds(15);
+    static const s32 sEscapeStep = NebulaFrameClock::stepsOfSeconds(10);
     static const f32 sEscapeRunWallJumpSpeed = 15.0f;
-    static const s32 sDamageTailStep = 600;
-    static const s32 sDamageTailStepFinal = 480;
+    static const s32 sDamageTailStep = NebulaFrameClock::stepsOfSeconds(10);
+    static const s32 sDamageTailStepFinal = NebulaFrameClock::stepsOfSeconds(8);
     static const s32 sDamageTailRunStartBreakStep = 40;
     static const f32 sDamageTailRunStartSpeed = 40.0f;
     static const f32 sDamageTailWallJumpSpeed = 15.0f;
@@ -189,11 +190,11 @@ bool KoopaStateDamageEscape::tryDamage(u32 msg, HitSensor* pSender, HitSensor* p
     }
 
     if (MR::isSensor(pReceiver, "DamageEscapeBody")) {
-        if ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunStart)) && MR::isGreaterStep(this, 60)) ||
+        if ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunStart)) && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) ||
             isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRun)) ||
-            (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEnd)) && MR::isLessStep(this, 60)) ||
+            (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEnd)) && MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) ||
             isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunFinal)) ||
-            (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEndFinal)) && MR::isLessStep(this, 60))) {
+            (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEndFinal)) && MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)))) {
             MR::tryRumblePadVeryStrong(this, PLAYER_1);
             MR::startSpinHitSound(mHost);
             MR::startBlowHitSound(mHost);

@@ -1,4 +1,5 @@
 #include "Game/Enemy/HammerHeadPackun.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -136,7 +137,7 @@ void HammerHeadPackun::exeAttack() {
             MR::tryRumblePadStrong(this, PLAYER_1);
         }
 
-        if (MR::isLessEqualStep(this, 60)) {
+        if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             if (calcPlayerDir(&dir)) {
                 turnTo(dir, 1.0f);
             }
@@ -156,7 +157,7 @@ void HammerHeadPackun::exeRest() {
     }
 
     if (!tryShiftNumb()) {
-        MR::setNerveAtStep(this, GET_NERVE_ANON(HammerHeadPackunNrvRecover), 90);
+        MR::setNerveAtStep(this, GET_NERVE_ANON(HammerHeadPackunNrvRecover), NebulaFrameClock::stepsOfMilliseconds(1500));
     }
 }
 
@@ -193,10 +194,10 @@ void HammerHeadPackun::exeDamage() {
         MR::startBck(mLeafModel, swoon);
     }
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::startLevelSound(this, "SE_EM_LV_SWOON_S");
     }
-    MR::setNerveAtStep(this, GET_NERVE_ANON(HammerHeadPackunNrvRise), 180);
+    MR::setNerveAtStep(this, GET_NERVE_ANON(HammerHeadPackunNrvRise), NebulaFrameClock::stepsOfSeconds(3));
 }
 
 void HammerHeadPackun::exeRise() {
@@ -287,7 +288,7 @@ void HammerHeadPackun::exeNumb() {
     }
 
     MR::startPointerFreezeLevelSound(this);
-    if (!(getNerveStep() % 30)) {
+    if (!(getNerveStep() % NebulaFrameClock::stepsOfMilliseconds(500))) {
         mJointRumbler->start();
     }
 
@@ -497,7 +498,7 @@ bool HammerHeadPackun::isAttackSensorValid() const {
     bool isValid = false;
     if ((!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvAttack)) || !MR::isNewNerve(this)) && !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) &&
         (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) || !MR::isLessEqualStep(this, 40)) &&
-        !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) && (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) || !MR::isLessStep(this, 60)) &&
+        !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) && (!isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) || !MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) &&
         !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb)) && !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvSmashKill)) &&
         !isNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill))) {
         isValid = true;
@@ -509,7 +510,7 @@ bool HammerHeadPackun::isChance() const {
     bool isChance = false;
     if ((isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRest)) && !MR::isNewNerve(this)) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvDamage)) ||
         (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRecover)) && MR::isLessEqualStep(this, 50)) ||
-        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) && MR::isLessEqualStep(this, 30)) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb))) {
+        (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvRise)) && MR::isLessEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) || isNerve(GET_NERVE_ANON(HammerHeadPackunNrvNumb))) {
         isChance = true;
     }
     return isChance;

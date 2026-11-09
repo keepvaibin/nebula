@@ -1,4 +1,5 @@
 #include "Game/NPC/TicoFat.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Effect/MultiEmitter.hpp"
@@ -449,7 +450,7 @@ void TicoFat::receiveStarPiece(s32 num) {
     }
 
     if (isNerve(GET_NERVE(TicoFat, TicoFatNrvEat))) {
-        MR::setBckRate(this, MR::calcNerveValue(this, 0, 180, 1.0f, 1.6f));
+        MR::setBckRate(this, MR::calcNerveValue(this, 0, NebulaFrameClock::stepsOfSeconds(3), 1.0f, 1.6f));
     } else {
         if (!isEmptyNerve()) {
             popNerve();
@@ -785,7 +786,7 @@ void TicoFat::exeDemo() {
         MR::setBrkFrameAndStop(this, 0.0f);
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::startSound(this, "SE_SM_METAMORPHOSE_SMOKE");
         MR::hideModelAndOnCalcAnim(this);
         if (mGoods0) {
@@ -870,8 +871,8 @@ void TicoFat::exeWipeIn() {
         MR::startSystemSE("SE_DM_TICOFAT_MORPH_WIPE_IN");
     }
 
-    if (!MR::isLessStep(this, 60)) {
-        if (MR::isStep(this, 60)) {
+    if (!MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
+        if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             if (MR::isValidSwitchA(this)) {
                 MR::onSwitchA(this);
             }
@@ -912,10 +913,8 @@ void TicoFat::exeInfo() {
 }
 
 void TicoFat::exeAfter() {
-    if (MR::isFirstStep(this)) {
-    }
 
-    if (MR::isGreaterEqualStep(this, 60)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::endMultiActorCamera(this, mCameraInfo, "飛行", false);
         MR::endDemo(this, "変身");
         disappear(true);

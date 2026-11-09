@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaBattleMain.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
 #include "Game/Boss/KoopaStateAttackFireLong.hpp"
@@ -25,10 +26,10 @@ namespace {
     static MR::ActorSightParam sAttackHipDropSight = {1000.0f, 90.0f, 30.0f};
     static const f32 sDistanceMaxToJumpAway = 1500.0f;
     static const f32 sSearchDistance = 2000.0f;
-    static const s32 sSearchStepToFind = 60;
+    static const s32 sSearchStepToFind = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sChasePlayerDistanceNearAttack = 500.0f;
-    static const s32 sChasePlayerStepToAttackFireShort = 90;
-    static const s32 sChasePlayerStepToAttackHipDrop = 60;
+    static const s32 sChasePlayerStepToAttackFireShort = NebulaFrameClock::stepsOfMilliseconds(1500);
+    static const s32 sChasePlayerStepToAttackHipDrop = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
 namespace NrvKoopaBattleMain {

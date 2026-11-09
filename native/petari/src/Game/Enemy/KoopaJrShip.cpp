@@ -1,4 +1,5 @@
 #include "Game/Enemy/KoopaJrShip.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/HomingKiller.hpp"
 #include "Game/Enemy/Kameck.hpp"
 #include "Game/Enemy/KoopaJrShipCannonMainShell.hpp"
@@ -32,7 +33,7 @@ namespace {
 
     const s32 sShellNum = 18;
     const s32 sMainShellNum = 9;
-    const s32 sSpeedEaseTime = 60;
+    const s32 sSpeedEaseTime = NebulaFrameClock::stepsOfSeconds(1);
     const f32 sKillerBackOffset = 100.0f;  // killers start this far behind their cannon
 
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
@@ -234,7 +235,7 @@ s32 KoopaJrShip::getNumShootShells() const {
 
 f32 KoopaJrShip::getPropellerRotSpeed() const {
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreakStart))) {
-        return (40.0f * (1.0f - MR::calcNerveRate(this, 60)));
+        return (40.0f * (1.0f - MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1))));
     }
 
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreak))) {
@@ -472,7 +473,7 @@ void KoopaJrShip::exeMove() {
     MR::moveCoordAndFollowTrans(this);
 
     // Every 120 steps with no killer out: one shell at full health, five at 2 to 4 hit points.
-    if (MR::isGreaterStep(this, 0) && getNerveStep() % 120 == 0 && !isExistActiveKiller()) {
+    if (MR::isGreaterStep(this, 0) && getNerveStep() % NebulaFrameClock::stepsOfSeconds(2) == 0 && !isExistActiveKiller()) {
         if (mHitPoint == 5) {
             setNerve(GET_NERVE(KoopaJrShip, HostTypeShoot1));
         } else if (mHitPoint >= 2 && mHitPoint <= 4) {
@@ -497,11 +498,11 @@ void KoopaJrShip::exeMoveFrontAttack() {
     MR::moveCoordAndFollowTrans(this);
 
     if (MR::isRailReachedGoal(this)) {
-        if (MR::isGreaterStep(this, 120)) {
+        if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
             MR::reverseRailDirection(this);
             setNerve(GET_NERVE(KoopaJrShip, HostTypeShootMain));
         }
-    } else if (MR::isStep(this, 120)) {
+    } else if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(KoopaJrShip, HostTypeShootMain));
     }
 }
@@ -544,7 +545,7 @@ void KoopaJrShip::exeShootMain() {
     MR::moveCoordAndFollowTrans(this);
     updateCoordSpeed();
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE(KoopaJrShip, HostTypeMoveFrontAttack));
     }
 }
@@ -565,7 +566,7 @@ void KoopaJrShip::exeStopAtEnd() {
 }
 
 void KoopaJrShip::exePowerUp() {
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         mSpeedEaseStep = sSpeedEaseTime;
         setNerve(GET_NERVE(KoopaJrShip, HostTypeMove));
     }
@@ -584,7 +585,7 @@ void KoopaJrShip::exeDamage() {
     }
 
     // At 2 hit points the turn demo takes over (setStateTurnFront); a Kameck joins at 3 and at 1.
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         if (mHitPoint == 2) {
             MR::requestStartDemoRegistered(this, nullptr, nullptr, "旋廻");
             return;
@@ -619,7 +620,7 @@ void KoopaJrShip::exeBreakStart() {
         MR::stopScene(12);
     }
 
-    if (MR::isStep(this, 60)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         mShellHolder->killActiveShells();
         mMainShellHolder->killActiveShells();
 
@@ -669,12 +670,12 @@ void KoopaJrShip::exeBreak() {
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_S");
     }
 
-    if (MR::isLessStep(this, 300)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_BURN1");
         MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_BURN2");
     }
 
-    if (MR::isStep(this, 300)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         MR::shakeCameraNormal();
         MR::tryRumblePadStrong(this, PLAYER_1);
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_L");
@@ -708,11 +709,11 @@ void KoopaJrShip::exeTurnFront() {
 
     MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_3RD_DEMO");
 
-    if (MR::isLessEqualStep(this, 150)) {
+    if (MR::isLessEqualStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         mRotation.y += 0.60f;
     }
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         MR::emitEffect(this, "EyeLight");
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_EYE_BLINK");
     }

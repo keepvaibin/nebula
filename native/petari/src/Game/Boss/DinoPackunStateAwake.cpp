@@ -1,4 +1,5 @@
 #include "Game/Boss/DinoPackunStateAwake.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/DinoPackun.hpp"
 #include "Game/Boss/DinoPackunTail.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -29,7 +30,7 @@ void DinoPackunStateAwake::exeFind() {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
     }
 
-    f32 rate = MR::calcNerveEaseOutRate(this, 30);
+    f32 rate = MR::calcNerveEaseOutRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
     getHost()->mTail->mHostVelocityRate = 0.015f * rate;
     MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 4.0f);
     getHost()->updateNormalVelocity();

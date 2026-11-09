@@ -1,4 +1,5 @@
 #include "Game/Map/FishGroup.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -16,11 +17,11 @@ namespace {
     const f32 sDefaultGroupSpeed = 5.0f;
     const f32 sFriction = 0.95f;
     const f32 sWanderAccel = 1.0f;
-    const s32 sStepToWanderMoveMin = 60;
-    const s32 sStepToWanderMoveMax = 180;
+    const s32 sStepToWanderMoveMin = NebulaFrameClock::stepsOfSeconds(1);
+    const s32 sStepToWanderMoveMax = NebulaFrameClock::stepsOfSeconds(3);
     const f32 sApproachAccel = 5.0f;
     const s32 sStepToApproachMin = 5;
-    const s32 sStepToApproachMax = 30;
+    const s32 sStepToApproachMax = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sDistanceToApproachMin = 100.0f;
     const f32 sDistanceToApproachMax = 500.0f;
     const f32 sEscapeAccel = 5.0f;

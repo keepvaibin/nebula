@@ -1,4 +1,5 @@
 #include "Game/MapObj/FirePressureBullet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
@@ -10,7 +11,6 @@ FirePressureBullet::FirePressureBullet(const char* pName) : LiveActor(pName) {
     mFront.x = 0.0f;
     mFront.y = 0.0f;
     mFront.z = 0.0f;
-    mFirePressure = nullptr;
     mSpeed = 0.0f;
     mIsHoming = false;
     mCanCrash = false;
@@ -42,7 +42,6 @@ void FirePressureBullet::calcAndSetBaseMtx() {
 }
 
 void FirePressureBullet::shotFireBullet(LiveActor* pFirePressure, const Pos3f& rMtx, const f32& rSpeed, bool isHoming, bool canCrash) {
-    mFirePressure = pFirePressure;
     mSpeed = rSpeed;
     mIsHoming = isHoming;
     mCanCrash = canCrash;
@@ -76,7 +75,7 @@ void FirePressureBullet::exeFly() {
 
     if (isCrash()) {
         kill();
-    } else if (MR::isStep(this, 300)) {
+    } else if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(5))) {
         kill();
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/NPC/DemoRabbit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
@@ -15,10 +16,10 @@ namespace {
     static const f32 sTalkRunawayRange = 1300.0f;
     static const f32 sRunawayAccel = 1.55f;
     static const f32 sRunawayEndAccel = 1.2f;
-    static const s32 sRunawayDeccelTime = 900;
+    static const s32 sRunawayDeccelTime = NebulaFrameClock::stepsOfSeconds(15);
     static const f32 sRunawayTurnStartLimit = 10.0f;
     static const f32 sRunawayTurnLimit = 1.5f;
-    static const s32 sRunawayTurnDeccelTime = 30;
+    static const s32 sRunawayTurnDeccelTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sWallJumpPowerV = 30.0f;
     static const f32 sAppearJumpPowerV = 20.0f;
     static const f32 sNearGoalDistance = 130.0f;
@@ -325,7 +326,7 @@ void DemoRabbit::exeRunaway() {
     updateNormalVelocity();
     updateJump();
 
-    if (MR::isGreaterEqualStep(this, 120)) {
+    if (MR::isGreaterEqualStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(DemoRabbit, DemoRabbitNrvChange));
     }
 }

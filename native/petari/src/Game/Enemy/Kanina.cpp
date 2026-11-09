@@ -1,4 +1,5 @@
 #include "Game/Enemy/Kanina.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/AnimationRandomPlayer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -42,11 +43,11 @@ namespace {
     static const s32 sStarPieceNum = 3;
     static const s32 sCoinNum = 1;
     static const f32 sPoseLerpRate = 0.3f;
-    static const s32 sAnimIntervalBlink = 120;
+    static const s32 sAnimIntervalBlink = NebulaFrameClock::stepsOfSeconds(2);
     static const f32 sSensorRadiusAttack = 80.0f;
     static const f32 sWalkSpeed = 3.0f;
-    static const s32 sWalkTime = 180;
-    static const s32 sWaitTime = 120;
+    static const s32 sWalkTime = NebulaFrameClock::stepsOfSeconds(3);
+    static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sPunchDamageTime = 15;
     static const f32 sPunchDamageVelocity = 25.0f;
     static const f32 sPunchUpperVec = 25.0f;
@@ -59,12 +60,12 @@ namespace {
     static const f32 sAnimRateRunAway = 1.0f;
     static const f32 sSafetyDistance = 800.0f;
     static const s32 sRunAwayRunningTime1 = 15;
-    static const s32 sRunAwayRunningTime2 = 30;
-    static const s32 sRunAwayRunningTime3 = 60;
+    static const s32 sRunAwayRunningTime2 = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sRunAwayRunningTime3 = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sRunAwayRunningTime4 = 75;
     static const s32 sRunAwayIntervalTime1 = 10;
-    static const s32 sRunAwayIntervalTime2 = 30;
-    static const s32 sRunAwayIntervalTime3 = 60;
+    static const s32 sRunAwayIntervalTime2 = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sRunAwayIntervalTime3 = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sRunAwayIntervalTime4 = 75;
     static const f32 sRunAwayDirectionAngle = 60.0f;
     static const f32 sRunAwayFaceAngle = 15.0f;
@@ -72,12 +73,12 @@ namespace {
     static const f32 sWallHitReboundAcc = 6.0f;
     static const f32 sWallHitReboundAccY = 20.0f;
     static const f32 sGravityAccelHitWall = 2.2f;
-    static const s32 sGuardTime = 90;
+    static const s32 sGuardTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sPunchAccel = 30.0f;
     static const f32 sGuardFrec = 0.88f;
     static const f32 sBackwardAngle = 30.0f;
     static const f32 sTurnSpeed = 1.7f;
-    static const s32 sTurnEndTime = 30;
+    static const s32 sTurnEndTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sBackwardAngleTurn = 120.0f;
     static const s32 sHipDropDownTime = 70;
     static const f32 sKinokoOneUpShootSpeed = 15.0f;

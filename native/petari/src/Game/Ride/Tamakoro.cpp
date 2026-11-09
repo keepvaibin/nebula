@@ -1,4 +1,5 @@
 #include "Game/Ride/Tamakoro.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include "Game/GameAudio/AudTamakoroBgmCtrl.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -70,7 +71,7 @@ namespace {
     static const f32 sDashBallRollSpeed = 60.0f;
     static const f32 sEndBindFrontPower = 5.0f;
     static const f32 sEndBindJumpPower = 35.0f;
-    static const s32 sForceBindEndTime = 90;
+    static const s32 sForceBindEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const f32 sMarioUpAdjustRate = 0.1f;
     static const f32 sMarioFrontAdjustRate = 0.25f;
     static const f32 sStandDirInterRate = 0.02f;

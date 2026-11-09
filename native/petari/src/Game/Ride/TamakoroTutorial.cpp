@@ -1,4 +1,5 @@
 #include "Game/Ride/TamakoroTutorial.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/Tamakoro.hpp"
@@ -171,7 +172,7 @@ void TamakoroTutorial::exeWaitRaiseTalk() {
     MR::getPlayerActionGuidance()->forceTamakoro(0);
     MR::tryTalkForceWithoutDemo(mTalkCtrl);
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         if (MR::isNearAngleDegree(::hRaiseAcc, mPadAccel, ::hRaiseCheckDegree)) {
             MR::startSystemSE("SE_SY_SURF_TUTORIAL_OK");
             setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvWaitRaiseStable));
@@ -189,7 +190,7 @@ void TamakoroTutorial::exeWaitRaiseStable() {
     } else {
         startTimerSound(getNerveStep());
 
-        if (MR::isGreaterStep(this, 60)) {
+        if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
             MR::startSystemSE("SE_SY_SURF_TUTORIAL_GONEXT");
             setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRaiseOk));
         }
@@ -199,7 +200,7 @@ void TamakoroTutorial::exeWaitRaiseStable() {
 void TamakoroTutorial::exeRaiseOk() {
     MR::getPlayerActionGuidance()->forceTamakoro(2);
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRaiseOkTalk));
     }
 }
@@ -255,7 +256,7 @@ void TamakoroTutorial::exeTrample() {
         }
     }
 
-    if (MR::isActionEnd(this) && MR::isGreaterStep(this, 60) && !mIsTrampled) {
+    if (MR::isActionEnd(this) && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1)) && !mIsTrampled) {
         if (isNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvTrampleFront))) {
             setNerve(GET_NERVE(TamakoroTutorial, HostTypeNrvRecoverFront));
         } else {

@@ -1,4 +1,5 @@
 #include "Game/MapObj/OceanWaveFloater.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/MapObj/FloaterFloatingForceTypeSpring.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
@@ -28,8 +29,8 @@ namespace {
         {"OceanHexagonFloater", 50.0f, 330, 150.0f, 100.0f, false},
     };
 
-    static const s32 sWaveSeStepsMin = 60;
-    static const s32 sWaveSeStepsMax = 120;
+    static const s32 sWaveSeStepsMin = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sWaveSeStepsMax = NebulaFrameClock::stepsOfSeconds(2);
 
     const Param* getParam(const char* pChar) {
         for (u32 i = 0; i < ARRAY_SIZE(::sDataTable); i++) {

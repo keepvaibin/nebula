@@ -1,5 +1,6 @@
 
 #include "Game/Enemy/BegomanLauncher.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/Enemy/BegomanSpike.hpp"
 #include "Game/Enemy/BegomanSpring.hpp"
@@ -136,7 +137,7 @@ void BegomanLauncher::exeWait() {
 }
 
 void BegomanLauncher::exeWaitForLaunch() {
-    if (MR::isGreaterStep(this, 180)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(3))) {
         setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvAppear));
     }
 }
@@ -176,7 +177,7 @@ void BegomanLauncher::exeAppear() {
     }
 
     MR::startLevelSound(this, "SE_EM_LV_BEGOMANLAUN_APPEAR");
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::stopBck(this);
         setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvLaunch));
     }
@@ -190,7 +191,7 @@ void BegomanLauncher::exeDisappear() {
         MR::deleteEffect(this, "Launcher");
     }
 
-    if (MR::isGreaterStep(this, 90)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         setNerve(GET_NERVE(BegomanLauncher, HostTypeNrvWait));
     }
 }

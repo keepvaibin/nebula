@@ -1,4 +1,5 @@
 #include "Game/Enemy/WalkerStateRunaway.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -28,7 +29,7 @@ WalkerStateRunawayParam::WalkerStateRunawayParam() {
     mWaitDistance = 1300.0f;
     mRunawayTurnRateMaxDegree = 10.0f;
     mRunawayTurnRateMinDegree = 3.0f;
-    mRunawayTurnTime = 30;
+    mRunawayTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
     mPlayerFrontLineLength = 25.0f;
     mRunawayBckRatio = 1.0f;
     mMinRunawayBckRate = 0.9f;

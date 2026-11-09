@@ -2,6 +2,7 @@
 #include <nebula_game_api.h>
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/Table.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -300,7 +301,8 @@ namespace GameEventFlagTable {
         }
         if (::sMergedFlags == nullptr) {
             const s32 size = ARRAY_SIZE(::sGameEventFlagStatic);
-            ::sMergedFlags = new GameEventFlag[size + ::sAddedFlagCount];
+            // Built on first use, which can be inside a scene: kept in the arena of the process.
+            ::sMergedFlags = new (NebulaArena::root(), 0) GameEventFlag[size + ::sAddedFlagCount];
             for (s32 i = 0; i < size; i++) {
                 ::sMergedFlags[i] = ::sGameEventFlagStatic[i];
                 for (s32 f = ::sSetFlagCount - 1; f >= 0; f--) {
@@ -346,7 +348,7 @@ namespace GameEventFlagTable {
     }
 
     static void addFlag(const GameEventFlag& rFlag) {
-        GameEventFlag* pFlags = new GameEventFlag[::sAddedFlagCount + 1];
+        GameEventFlag* pFlags = new (NebulaArena::root(), 0) GameEventFlag[::sAddedFlagCount + 1];
         for (s32 i = 0; i < ::sAddedFlagCount; i++) {
             pFlags[i] = ::sAddedFlags[i];
         }
@@ -381,7 +383,7 @@ namespace GameEventFlagTable {
             addFlag(flag);
             return;
         }
-        GameEventFlag* pFlags = new GameEventFlag[::sSetFlagCount + 1];
+        GameEventFlag* pFlags = new (NebulaArena::root(), 0) GameEventFlag[::sSetFlagCount + 1];
         for (s32 i = 0; i < ::sSetFlagCount; i++) {
             pFlags[i] = ::sSetFlags[i];
         }
@@ -393,7 +395,7 @@ namespace GameEventFlagTable {
 
     bool addHungryLuma(const char* pGalaxyName, s32 slot, s32 starBits) {
         const size_t length = strlen(pGalaxyName) + sizeof("StarPiece");
-        char* pName = new char[length];
+        char* pName = new (NebulaArena::root(), 0) char[length];
         nebula_snprintf(pName, length, "StarPiece%s", pGalaxyName);
         if (!nameIsFree(pName)) {
             return false;

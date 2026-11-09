@@ -44,12 +44,11 @@ public:
 
 class BindResult {
 public:
-    BindResult() : mPosition(0, 0, 0), mNormal(0, 0, 0), mContactPosition(0, 0, 0), mIsBound() {
+    BindResult() : mPosition(0, 0, 0), mNormal(0, 0, 0), mIsBound() {
     }
 
     Vec3f mPosition;
     Vec3f mNormal;
-    Vec3f mContactPosition;
     bool mIsBound;
 };
 

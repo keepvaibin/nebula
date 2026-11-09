@@ -1,4 +1,5 @@
 #include "Game/Enemy/Mogu.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/MoguStone.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -35,17 +36,17 @@ namespace {
     const f32 sHideNearDistance = 400.0f;
     const f32 sHideFarDistance = 2000.0f;
     const f32 sPlayerAboveDot = -0.75f;
-    const s32 sHideWaitSteps = 120;
+    const s32 sHideWaitSteps = NebulaFrameClock::stepsOfSeconds(2);
     const f32 sFastHidePlayerSpeed = 8.0f;
     const f32 sFastHideDistance = 200.0f;
     const f32 sFastHideRate = 1.5f;
-    const s32 sAppearHipDropSteps = 30;
+    const s32 sAppearHipDropSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 sTurnSpeed = 0.03f;
     const s32 sThrowAfterSteps = 45;
     const s32 sThrowReleaseStep = 47;
     const f32 sThrowSpeed = 15.0f;
-    const s32 sSwoonSteps = 120;
-    const s32 sStampDeathSteps = 60;
+    const s32 sSwoonSteps = NebulaFrameClock::stepsOfSeconds(2);
+    const s32 sStampDeathSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sHitBlowSteps = 20;
     const f32 sHipDropNearDistance = 130.0f;
     const f32 sHipDropFarDistance = 1500.0f;

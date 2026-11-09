@@ -1,4 +1,5 @@
 #include "Game/MapObj/DriftWood.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -15,8 +16,8 @@
 #include <nebula_math.h>
 
 namespace {
-    const s32 sWaveSoundStepMin = 30;
-    const s32 sWaveSoundStepMax = 90;
+    const s32 sWaveSoundStepMin = NebulaFrameClock::stepsOfMilliseconds(500);
+    const s32 sWaveSoundStepMax = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 sVibrateStep = 45;
     const f32 sRailSpeed = 3.0f;
     const f32 sAttackRange = 140.0f;

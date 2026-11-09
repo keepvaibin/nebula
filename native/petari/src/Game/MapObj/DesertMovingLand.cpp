@@ -1,4 +1,5 @@
 #include "Game/MapObj/DesertMovingLand.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
@@ -25,8 +26,8 @@ namespace NrvDesertMovingLand {
 };  // namespace NrvDesertMovingLand
 
 DesertMovingLand::DesertMovingLand(const char* pName) : MapObjActor(pName), mUpperPos(gZeroVec), mLowerPos(gZeroVec) {
-    mMoveDownTime = 720;
-    mMoveUpTime = 720;
+    mMoveDownTime = NebulaFrameClock::stepsOfSeconds(12);
+    mMoveUpTime = NebulaFrameClock::stepsOfSeconds(12);
     mDemoPlayerMtx.identity();
 }
 
@@ -118,11 +119,11 @@ void DesertMovingLand::exeMoveDown() {
         MR::startAtmosphereSE("SE_OJ_DESERT_LAND_MOVE_ST");
     }
     MR::startAtmosphereLevelSE("SE_OJ_LV_DESERT_LAND_MOVE");
-    if (MR::isLessStep(this, 90)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::stopShakingCamera(this);
     }
 
@@ -144,11 +145,11 @@ void DesertMovingLand::exeMoveUp() {
     }
     MR::startAtmosphereLevelSE("SE_OJ_LV_DESERT_LAND_MOVE");
 
-    if (MR::isLessStep(this, 90)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, 90)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
         MR::stopShakingCamera(this);
     }
 
@@ -193,7 +194,7 @@ void DesertMovingLand::exeStop() {
     if (MR::isFirstStep(this))
         MR::invalidateHitSensors(this);
 
-    if (MR::isStep(this, 30))
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500)))
         mVelocity.zero();
 }
 

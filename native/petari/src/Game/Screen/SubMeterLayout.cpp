@@ -1,4 +1,5 @@
 #include "Game/Screen/SubMeterLayout.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
 
 namespace {
@@ -97,7 +98,7 @@ void SubMeterLayout::control() {
 
     if (flag) {
         if (((mPhase + 0xFE) & 0xFF) <= 1u && mLifeFrame == 0x80) {
-            if (++mFullLifeFrame == 60) {
+            if (++mFullLifeFrame == NebulaFrameClock::stepsOfSeconds(1)) {
                 MR::startAnim(this, "End", 0);
                 mPhase = 5;
             }

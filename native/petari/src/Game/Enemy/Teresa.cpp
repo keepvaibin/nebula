@@ -1,4 +1,5 @@
 #include "Game/Enemy/Teresa.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/HitInfo.hpp"
@@ -377,7 +378,7 @@ bool Teresa::tryRailTurn() {
 }
 
 bool Teresa::tryRailTurnEnd() {
-    if (MR::isGreaterStep(this, 150)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE(Teresa, TeresaNrvRailWalk));
         return true;
     }
@@ -401,7 +402,7 @@ bool Teresa::tryWalk() {
 }
 
 bool Teresa::tryWalkEnd() {
-    if (MR::isGreaterStep(this, 300) || mWalkTarget.distance(mPosition) <= sWalkEndDistance) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(5)) || mWalkTarget.distance(mPosition) <= sWalkEndDistance) {
         setNerve(GET_NERVE(Teresa, TeresaNrvWait));
         return true;
     }
@@ -423,7 +424,7 @@ bool Teresa::tryChase() {
 }
 
 bool Teresa::tryChaseEnd() {
-    if (MR::isGreaterStep(this, 240) || MR::isPlayerElementModeTeresa() || isNotNear()) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4)) || MR::isPlayerElementModeTeresa() || isNotNear()) {
         setStartNerve();
         return true;
     }
@@ -500,7 +501,7 @@ bool Teresa::tryLoveFindEnd() {
 }
 
 bool Teresa::tryLoveChaseEnd() {
-    if (MR::isGreaterStep(this, 240)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4))) {
         setStartNerve();
         return true;
     }
@@ -584,7 +585,7 @@ bool Teresa::tryHideWall() {
 }
 
 bool Teresa::tryHideWallEnd() {
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::validateHitSensors(this);
         MR::onBind(this);
         MR::showModel(this);
@@ -635,7 +636,7 @@ void Teresa::updateAppear(const Vec3f& rDir, const char* pAction) {
     push *= 0.2f;
     mVelocity.add(push);
     MR::attenuateVelocity(this, 0.9f);
-    f32 rate = MR::calcNerveRate(this, 60);
+    f32 rate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfSeconds(1));
     MR::setShadowVolumeSphereRadius(this, nullptr, (sShadowRadius * (1.0f - (1.0f - rate) * (1.0f - rate))));
     tryAppearEnd();
 }
@@ -701,7 +702,7 @@ void Teresa::exeRailWalk() {
 }
 
 void Teresa::exeRailTurn() {
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::turnDirection(this, &mWallNormal, MR::getRailDirection(this), 0.9997f);
     }
 
@@ -802,7 +803,7 @@ void Teresa::exeShay() {
     }
 
     if (mDisplayModel != nullptr) {
-        setTransparency(MR::calcNerveEaseInOutValue(this, 60, mTransparency, 0.5f));
+        setTransparency(MR::calcNerveEaseInOutValue(this, NebulaFrameClock::stepsOfSeconds(1), mTransparency, 0.5f));
     } else {
         updateNormalTransparency();
     }
@@ -884,7 +885,7 @@ void Teresa::exeHideWater() {
         mWallHitPos.set(mInitPos);
     }
 
-    if (MR::isGreaterStep(this, 60)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         MR::validateHitSensors(this);
         MR::onBind(this);
         MR::showModel(this);
@@ -909,7 +910,7 @@ void Teresa::exeStop() {
         setTransparency(0.0f);
     }
 
-    if (!tryAscension() && MR::isGreaterStep(this, 60)) {
+    if (!tryAscension() && MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setStartNerve();
     }
 }

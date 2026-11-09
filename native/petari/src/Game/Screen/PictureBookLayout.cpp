@@ -1,4 +1,5 @@
 #include "Game/Screen/PictureBookLayout.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
@@ -26,7 +27,7 @@ namespace {
     const s32 cBookOpenFrame = 60;
     // const s32 cBookCloseFrame
     const s32 cFadeFrame = 60;
-    const s32 cWaitNoTextFrame = 60;
+    const s32 cWaitNoTextFrame = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cFadeTextFrame = 30;
     // const s32 cReadedSpeedRate
     const s32 cPageNextEndNormalSeStep = 81;
@@ -655,7 +656,8 @@ void PictureBookLayout::exeFadeInText() {
         MR::requestStarPointerModePictureBook(this);
     }
 
-    s32 step = 30 / getReadSpeed();
+    // Half a second at the normal reading speed.
+    s32 step = NebulaFrameClock::stepsOfSeconds(1) / 2 / getReadSpeed();
     f32 alpha = MR::calcNerveRate(this, step);
 
     MR::setPaneAlphaFloat(this, "Text", alpha);
@@ -728,7 +730,7 @@ void PictureBookLayout::exeFadeOutText() {
         MR::requestStarPointerModePictureBook(this);
     }
 
-    s32 step = 30 / getReadSpeed();
+    s32 step = NebulaFrameClock::stepsOfSeconds(1) / 2 / getReadSpeed();
     f32 alpha = 1.0f - MR::calcNerveRate(this, step);
 
     MR::setPaneAlphaFloat(this, "Text", alpha);
@@ -846,7 +848,7 @@ void PictureBookLayout::exeClose() {
         MR::stopStageBGM(::cFadeFrame);
     }
 
-    if (MR::isStep(this, 150)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         MR::startSystemSE("SE_SY_PICTUREBOOK_END");
     }
 

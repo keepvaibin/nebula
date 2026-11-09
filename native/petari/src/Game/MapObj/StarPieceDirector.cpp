@@ -39,16 +39,8 @@ bool MR::giftStarPieceToTarget(HitSensor* pGiftSensor, u32 numGift) {
     return getStarPieceDirector()->giftToTarget(pGiftSensor, numGift);
 }
 
-void MR::incNumStarPieceGettable(s32 inc) {
-    getStarPieceDirector()->mNumStarPieceGettable += inc;
-}
-
-void MR::incNumStarPieceNewed() {
-    getStarPieceDirector()->mNumStarPieceNewed++;
-}
-
 StarPieceDirector::StarPieceDirector(const char* pName)
-    : LiveActorGroup(pName, 128), mNumStarPieceNewed(), mNumStarPieceGettable(), mColorIndex(), mNumStarPiecesLaunched(),
+    : LiveActorGroup(pName, 128), mColorIndex(), mNumStarPiecesLaunched(),
       mResetChasingStarPiece(), mGetSounds(), mSoundStep(), mQueueNewGetSound() {
     MR::connectToSceneMapObjMovement(this);
 
@@ -73,7 +65,6 @@ void StarPieceDirector::declare(const NameObj* pNameObj, s32 num) {
         }
 
         hostInfo->mNumPieces += num;
-        MR::incNumStarPieceGettable(num);
     }
 }
 

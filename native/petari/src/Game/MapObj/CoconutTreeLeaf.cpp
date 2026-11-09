@@ -1,4 +1,5 @@
 #include "Game/MapObj/CoconutTreeLeaf.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
@@ -21,10 +22,10 @@ namespace {
     const f32 sWindRandomAccelMiddle = 0.01f;
     const f32 sWindRandomAccelFar = 0.03f;
     const s32 sStepToWindStartMin = 15;
-    const s32 sStepToWindStartMax = 150;
-    const s32 sStepToWindStartAfterLand = 120;
+    const s32 sStepToWindStartMax = NebulaFrameClock::stepsOfMilliseconds(2500);
+    const s32 sStepToWindStartAfterLand = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sStepWindMin = 10;
-    const s32 sStepWindMax = 30;
+    const s32 sStepWindMax = NebulaFrameClock::stepsOfMilliseconds(500);
 };  // namespace
 
 CoconutTreeLeaf::CoconutTreeLeaf(const CoconutTreeLeafGroup* pGroup, MtxPtr pJointMtx, const Vec3f* pWindDirection)

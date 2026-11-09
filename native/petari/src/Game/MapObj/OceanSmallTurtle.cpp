@@ -1,4 +1,5 @@
 #include "Game/MapObj/OceanSmallTurtle.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/AreaObj/MercatorTransformCube.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
@@ -17,14 +18,14 @@ namespace {
     static const f32 sCatchRailSpeed = 2.0f;
     static const f32 sJudgeForCatchRail = 100.0f;
     static const f32 sBoundAmpMax = 20.0f;
-    static const s32 sBoundTime = 150;
+    static const s32 sBoundTime = NebulaFrameClock::stepsOfMilliseconds(2500);
     static const f32 sStartFloatPower = 1.0f;
     static const f32 sRambleSide = 1.0f;
     static const f32 sRambleRotX = 1.0f;
     static const f32 sDefaultAccelRate = 20.0f;
     static const f32 sAccelMax = 40.0f;
-    static const s32 sStepForFloatSignal = 60;
-    static const s32 sStepToRisingForFloatSignal = 120;
+    static const s32 sStepForFloatSignal = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sStepToRisingForFloatSignal = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 OceanSmallTurtle::OceanSmallTurtle(const char* pName)

@@ -1,4 +1,5 @@
 #include "Game/Enemy/PackunPetit.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/WalkerStateBindStarPointer.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -244,7 +245,7 @@ void PackunPetit::exePunchDown() {
         MR::hideModel(mBlownModel);
     }
 
-    if (MR::isStep(this, 30)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         kill();
     }
 }

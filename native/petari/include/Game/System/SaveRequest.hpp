@@ -26,12 +26,10 @@ public:
     // The name is held, not copied: it must last until the request is done.
     const char* setWriteSeq(const char*, const void*, u32);
     const char* setReadSeq(const char*, void*, u32, u32*);
-    SaveRequest* setDelete(const char*);
 
 private:
     enum Type {
         Type_None,
-        Type_Delete,
         Type_Write,
         Type_Read,
     };

@@ -1,4 +1,5 @@
 #include "Game/Boss/KoopaDemoJumpToPlanet.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/Koopa.hpp"
 #include "Game/Boss/KoopaBattleBase.hpp"
 #include "Game/Boss/KoopaFunction.hpp"
@@ -13,7 +14,7 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    const s32 sFallWarpStepVs3 = 90;
+    const s32 sFallWarpStepVs3 = NebulaFrameClock::stepsOfMilliseconds(1500);
 };  // namespace
 
 namespace NrvKoopaDemoJumpToPlanet {

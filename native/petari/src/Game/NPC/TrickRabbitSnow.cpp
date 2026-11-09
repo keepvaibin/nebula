@@ -1,4 +1,5 @@
 #include "Game/NPC/TrickRabbitSnow.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/WalkerStateBlowDamage.hpp"
 #include "Game/Enemy/WalkerStateRunaway.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -194,8 +195,6 @@ bool TrickRabbitSnow::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSen
         return requestCaught();
     }
 
-    if (MR::isMsgPlayerTrample(msg)) {
-    }
 
     return false;
 }
@@ -300,7 +299,7 @@ void TrickRabbitSnow::exeStartHideSnow() {
         startJumpSound();
     }
 
-    if (MR::isGreaterStep(this, 120)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvVanish));
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/Enemy/KoopaJrShipCannonMainShell.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -15,10 +16,10 @@ namespace {
     const f32 cAttackSensorRadius = 75.0f;
     const f32 cShadowRadius = 60.0f;
     const f32 cBinderRadius = 75.0f;
-    const s32 cLifeTime = 300;
+    const s32 cLifeTime = NebulaFrameClock::stepsOfSeconds(5);
     const f32 cCameraShakeDistance = 1000.0f;
     // Wall hits are ignored this long after launch (the shell leaves the barrel).
-    const s32 cWallHitInvalidTime = 60;
+    const s32 cWallHitInvalidTime = NebulaFrameClock::stepsOfSeconds(1);
 }  // namespace
 
 namespace NrvKoopaJrShipCannonMainShell {

@@ -221,7 +221,7 @@ void RaceManager::exeWipeOut() {
 }
 
 void RaceManager::exeWipeWait() {
-    if (!MR::isStep(this, 30)) {
+    if (!MR::isStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         return;
     }
 
@@ -366,7 +366,7 @@ void RaceManager::exeGoal() {
 }
 
 void RaceManager::exeRank() {
-    if (MR::isLessStep(this, 60)) {
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         return;
     }
 

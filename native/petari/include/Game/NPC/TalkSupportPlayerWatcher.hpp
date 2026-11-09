@@ -10,6 +10,4 @@ public:
     bool isEnableTalkPlayerStateEvent() const;
     bool isEnableTalkPlayerSpeed() const;
 
-    u32 mEnableTalkCounter;
-    u32 mDisableTalkCounter;
 };

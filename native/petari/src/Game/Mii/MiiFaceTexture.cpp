@@ -280,8 +280,8 @@ namespace Mii {
         Style style = {};
         style.chain = ChainLight;
         style.lightMask = MODEL_FILE_LIGHT0;
-        style.diffuse = MODEL_FILE_DF_CLAMP;
-        style.atten = MODEL_FILE_AF_NONE;
+        style.diffuse = MODEL_FILE_DIFFUSE_CLAMP;
+        style.atten = MODEL_FILE_ATTEN_NONE;
         style.ambient = NebulaColor8{160, 160, 160, 255};
         style.material = NebulaColor8{255, 255, 255, 255};
         style.pass = PassStates::use(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA, 1, NEBULA_COMPARE_LEQUAL, 1, NEBULA_CULL_NONE, 1, 1);

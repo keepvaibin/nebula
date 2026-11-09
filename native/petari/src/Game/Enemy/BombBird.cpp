@@ -1,4 +1,5 @@
 #include "Game/Enemy/BombBird.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Enemy/AnimScaleController.hpp"
 #include "Game/Enemy/BombBirdBomb.hpp"
 #include "Game/Enemy/SpinHitController.hpp"
@@ -26,11 +27,11 @@ namespace {
     const f32 hEscapeUpVel = 5.0f;
     const f32 hSpinAttackedVelH = 10.0f;
     const f32 hSpinAttackedVelV = 20.0f;
-    const s32 hSwoonTime = 240;
+    const s32 hSwoonTime = NebulaFrameClock::stepsOfSeconds(4);
     const f32 hShiftingSandVel = 1.0f;
     const f32 hSwoonEndJump = 10.0f;
     const f32 hSwoonEndUpVel = 5.0f;
-    const s32 hSwoonEndFlyStartTime = 30;
+    const s32 hSwoonEndFlyStartTime = NebulaFrameClock::stepsOfMilliseconds(500);
     const f32 hBombFallFrontVel = 0.0f;
 };  // namespace
 

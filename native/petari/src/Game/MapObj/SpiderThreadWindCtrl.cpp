@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpiderThreadWindCtrl.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -9,10 +10,10 @@ namespace {
     static const f32 sWindAccelBattleEndTarget = 2.0f;
     static const f32 sWindAccelBattleEndCurrent = 100.0f;
     static const f32 sWindAccelSpeedBattleEnd = 0.4f;
-    static const s32 sTimeToStartWindMin = 30;
-    static const s32 sTimeToStartWindMax = 120;
-    static const s32 sWindTimeMin = 60;
-    static const s32 sWindTimeMax = 120;
+    static const s32 sTimeToStartWindMin = NebulaFrameClock::stepsOfMilliseconds(500);
+    static const s32 sTimeToStartWindMax = NebulaFrameClock::stepsOfSeconds(2);
+    static const s32 sWindTimeMin = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sWindTimeMax = NebulaFrameClock::stepsOfSeconds(2);
 };  // namespace
 
 SpiderThreadWindCtrl::SpiderThreadWindCtrl()

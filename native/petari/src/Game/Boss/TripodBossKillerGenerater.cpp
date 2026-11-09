@@ -1,4 +1,5 @@
 #include "Game/Boss/TripodBossKillerGenerater.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/TripodBossAccesser.hpp"
 #include "Game/Boss/TripodBossFixPartsBase.hpp"
 #include "Game/Enemy/HomingKiller.hpp"
@@ -17,8 +18,8 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sDemoAnimStartDelayTime = 90;
-    static const s32 sStopTime = 300;
+    static const s32 sDemoAnimStartDelayTime = NebulaFrameClock::stepsOfMilliseconds(1500);
+    static const s32 sStopTime = NebulaFrameClock::stepsOfSeconds(5);
     static const f32 sCanRestartPlayerDistance = 230.0f;
 };  // namespace
 
@@ -268,8 +269,6 @@ void TripodBossKillerGenerater::exeShowDemo() {
 
     updateTripodMatrix();
 
-    if (MR::isStep(this, 110)) {
-    }
 
     if (!MR::isDamageDemoTripodBoss()) {
         setNerve(GET_NERVE(TripodBossKillerGenerater, TripodBossKillerGeneraterNrvReady));

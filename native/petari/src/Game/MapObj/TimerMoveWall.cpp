@@ -1,4 +1,5 @@
 #include "Game/MapObj/TimerMoveWall.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
@@ -11,7 +12,7 @@
 #include <nebula_geometry.hpp>
 
 namespace {
-    const s32 sDefaultTimer = 300;
+    const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
     const f32 sDefaultMoveLength = 1000.0f;
 };  // namespace
 

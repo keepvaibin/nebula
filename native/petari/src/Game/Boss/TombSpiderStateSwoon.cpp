@@ -1,11 +1,12 @@
 #include "Game/Boss/TombSpiderStateSwoon.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Boss/TombSpider.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 
 namespace {
-    static const s32 sLoopStep = 180;
+    static const s32 sLoopStep = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
 namespace NrvTombSpiderStateSwoon {

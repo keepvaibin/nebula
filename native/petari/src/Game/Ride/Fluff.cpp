@@ -1,4 +1,5 @@
 #include "Game/Ride/Fluff.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -12,7 +13,7 @@ namespace {
     static const f32 sSpeedWaitAir2nd = 5.0f;
     static const f32 sGravityWaitAir = 0.15f;
     static const f32 sSpeedMaxWaitAir = 0.8f;
-    static const s32 sStepToFreeWaitAir2nd = 60;
+    static const s32 sStepToFreeWaitAir2nd = NebulaFrameClock::stepsOfSeconds(1);
     static const f32 sRideStartUpSpeedMax = 15.0f;
     static const f32 sRideStartUpAccel = 0.2f;
     static const f32 sRideGravity = 0.15f;
@@ -30,11 +31,11 @@ namespace {
     static const f32 sBlendRateToWind = 0.08f;
     static const f32 sBlendRateAxisY = 0.01f;
     static const f32 sBlendRateWindUp = 0.5f;
-    static const s32 sStepSpinUpAccel = 30;
+    static const s32 sStepSpinUpAccel = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sSpinUpAccelY = 0.8f;
     static const f32 sSpinUpAccelOnWindY = 1.3f;
-    static const s32 sStepToSpinUp2nd = 60;
-    static const s32 sWindRemainTime = 30;
+    static const s32 sStepToSpinUp2nd = NebulaFrameClock::stepsOfSeconds(1);
+    static const s32 sWindRemainTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const f32 sJumpSpeedY = 18.0f;
 };  // namespace
 
@@ -167,7 +168,7 @@ void Fluff::exeFreeWaitInvalid() {
         MR::invalidateHitSensors(this);
     }
 
-    if (MR::isStep(this, 120)) {
+    if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
         MR::showModel(this);
         setNerve(GET_NERVE(Fluff, FluffNrvFreeBloom));
     }
