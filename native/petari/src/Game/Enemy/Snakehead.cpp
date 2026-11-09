@@ -89,7 +89,8 @@ void Snakehead::init(const TableIter& rIter) {
 
     s32 moveType = 0;
     MR::getPlacementArg3NoInit(rIter, &moveType);
-    mType = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + moveType * 2);
+    // Only 1 moves: another value would index past the table.
+    mType = static_cast< SnakeheadType >(MR::isEqualString(objectName, "SnakeheadSmall") + (moveType == 1 ? 2 : 0));
 
     MR::connectToSceneEnemy(this);
 
