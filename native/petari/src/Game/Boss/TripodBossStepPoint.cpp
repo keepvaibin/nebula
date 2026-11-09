@@ -26,7 +26,9 @@ void TripodBossStepPoint::init(const TableIter& rIter) {
 }
 
 void TripodBossStepPoint::initAfterPlacement() {
-    if (mSequenceIndex != -1) {
+    // A point joins a sequence only with a sequence number (not the unset -1, nor a lower one) and one of the boss's three
+    // legs; any other (a mod's placement) would index past the sequence list and the legs.
+    if (mSequenceIndex >= 0 && mLeg >= 0 && mLeg < 3) {
         MR::addTripodBossStepPoint(this);
     }
 }

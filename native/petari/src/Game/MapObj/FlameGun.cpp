@@ -37,6 +37,10 @@ void FlameGun::init(const TableIter& rIter) {
         case 2:
             initNerve(GET_NERVE(FlameGun, HostTypeNrvRadiateOnly));
             break;
+        default:
+            // A mode past the three (a mod's placement) waits like mode 0: the actor needs a nerve to run.
+            initNerve(GET_NERVE(FlameGun, HostTypeNrvWait));
+            break;
         }
     }
 
