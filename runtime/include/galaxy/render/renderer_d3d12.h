@@ -1236,8 +1236,8 @@ private:
     UtilityShaderBytes clear_vs_;
     UtilityShaderBytes clear_ps_;
     // Per scene target variant (scene_variant: samples, then HDR).
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_rgb_pipelines_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_alpha_pipelines_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_rgb_pipelines_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_alpha_pipelines_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 

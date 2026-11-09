@@ -9,6 +9,11 @@ if(NEBULA_RELEASE)
 else()
     add_compile_definitions(NEBULA_DEV=1)
 endif()
+# The standard library's bounds checks (array, vector, span, string_view subscripts and the like) in every host build: an
+# index past the end stops the program at once, never reading or writing a neighbouring member.
+if(MSVC)
+    add_compile_definitions(_MSVC_STL_HARDENING=1)
+endif()
 
 # The Windows build: NebulaNative (D3D12) and, with NEBULA_VULKAN, NebulaNativeVk. The game module is
 # native/CMakeLists.txt; Android and Linux build from platform/sdl.
