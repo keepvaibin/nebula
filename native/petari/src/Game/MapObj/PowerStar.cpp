@@ -58,7 +58,9 @@ namespace {
     const f32 cBodyRadius = 75.0f;
     const f32 cClippingRadius = 5000.0f;
     const f32 cCometClipDistance = 5000.0f;
+    const f32 cCometClipLeaveMargin = 500.0f;
     const f32 cGrandStarNearClip = 250.0f;
+    const f32 cGrandStarNearClipMargin = 50.0f;
     const f32 cPowerStarRotateSpeed = 3.0f;
     const f32 cGrandStarRotateSpeed = 2.0f;
     const f32 cWeakRotateSpeed = 0.3f;
@@ -554,7 +556,8 @@ void PowerStar::processWait(f32 rotateSpeed) {
     mRotation.y = MR::repeat(mRotation.y + rotateSpeed, 0.0f, 360.0f);
 
     if (mIsGrandStar) {
-        if (MR::changeShowModelFlagSyncNearClipping(this, cGrandStarNearClip)) {
+        // Hidden inside the near distance, shown only a margin beyond it, so a camera at the line does not toggle the model and its effects.
+        if (MR::changeShowModelFlagSyncNearClipping(this, MR::isHiddenModel(this) ? cGrandStarNearClip + cGrandStarNearClipMargin : cGrandStarNearClip)) {
             MR::onDrawEffect(this);
         } else {
             MR::offDrawEffect(this);
@@ -562,7 +565,10 @@ void PowerStar::processWait(f32 rotateSpeed) {
     }
 
     if (MR::isGalaxyGhostCometAppearInCurrentStage()) {
-        if (MR::isJudgedToClipFrustum100m(mPosition, cCometClipDistance)) {
+        // Shown at the clip distance, hidden only a margin past it: one test for both deleted and made the light again
+        // at every crossing of the edge.
+        const f32 clipDistance = MR::isHiddenModel(this) ? cCometClipDistance : cCometClipDistance + cCometClipLeaveMargin;
+        if (MR::isJudgedToClipFrustum100m(mPosition, clipDistance)) {
             MR::hideModelAndOnCalcAnimIfShown(this);
             MR::forceDeleteEffect(this, "Light");
         } else {

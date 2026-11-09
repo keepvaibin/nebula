@@ -20,6 +20,7 @@ struct ViewGroupCtrlDataEntry {
     bool mIsNear;          // models at their near level
     bool mIsFar;           // models at their far level
     bool mIsHidden;
+    s32 mInsideHold = 0;  // steps mIsPlayerInside is kept after the player leaves the cubes; survives clear()
 };
 
 class ViewGroupCtrl {

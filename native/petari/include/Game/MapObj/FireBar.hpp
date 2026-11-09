@@ -15,6 +15,7 @@ public:
     void controlEmitEffect();
 
     LiveActor* mFireBarParent;
+    bool mIsEffectNear = false;  // the player was within the effect's range last step (leaving takes a margin more)
 };
 
 class FireBar : public LiveActor {

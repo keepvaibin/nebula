@@ -9,6 +9,12 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
 
+namespace {
+    // Distance a clipping sphere must pass beyond the view volume before an actor that runs is clipped (or stops being
+    // drawn while clipped); about the width of a large enemy, more than any camera or actor jitter at an edge.
+    const f32 sClipLeaveMargin = 150.0f;
+};  // namespace
+
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor)
     : mActor(pActor), mCenter(), mRadius(0.0f), mInfo(), mFarClipLevel(6), mViewGroupId(-1), mViewGroup(), mGround(), mGroundFound(false), mList(),
       mIndex(-1) {
@@ -27,8 +33,12 @@ void ClippingActorInfo::judgeClipping() {
     }
 }
 
+// An actor that runs leaves the frustum only once its sphere is a margin outside it; it comes back at the frustum itself.
+// With one test for both, a camera or actor moving by less than a unit across the edge started and stopped the actor's
+// effects every step (an emitter stopped and started leaves gaps, one deleted and made again restarts its particles).
 bool ClippingActorInfo::isJudgedToClip() const {
-    return MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, mRadius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
+    const f32 radius = MR::isClipped(mActor) ? mRadius : mRadius + ::sClipLeaveMargin;
+    return MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
 }
 
 // The level's distances say when an actor runs; the camera says whether it is seen. Past its distance and in view it
@@ -36,9 +46,11 @@ bool ClippingActorInfo::isJudgedToClip() const {
 // in or goes dark. Scenery always; coins, enemies and characters once they have run: a level may place them where only
 // another scenario uses them (Space Junk's web coins), relying on their staying clipped there. Never over a planet that
 // is not there: view cubes and switches hide a planet and leave what stands on it to its distance.
+// A clipped actor already drawn stays so until its sphere is a margin outside the frustum (same reason as isJudgedToClip).
 bool ClippingActorInfo::isDrawnWhileClipped() const {
+    const f32 radius = mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius;
     return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
-           !MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, mRadius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
+           !MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }
 
 bool ClippingActorInfo::isGroundShown() {

@@ -6,6 +6,7 @@
 namespace {
     const s32 sNumCoin = 1;
     const f32 sEnableSpoutLength = 2000.0f;
+    const f32 sGlowLeaveMargin = 200.0f;
 };  // namespace
 
 namespace NrvTreasureSpot {
@@ -89,7 +90,10 @@ bool TreasureSpot::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSe
 }
 
 void TreasureSpot::switchEmitGlow() {
-    if (!MR::isNearPlayerAnyTime(this, ::sEnableSpoutLength)) {
+    // Glow starts inside the spout range and ends only a margin past it: one test for both deleted and made it again
+    // every few steps for a player standing at the range.
+    mIsGlowNear = MR::isNearPlayerAnyTime(this, mIsGlowNear ? ::sEnableSpoutLength + ::sGlowLeaveMargin : ::sEnableSpoutLength);
+    if (!mIsGlowNear) {
         MR::deleteEffect(this, "Glow");
     } else if (!MR::isEffectValid(this, "Glow")) {
         MR::emitEffect(this, "Glow");
