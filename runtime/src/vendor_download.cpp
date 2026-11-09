@@ -325,6 +325,9 @@ bool read_directory(const Release& release, Remote& remote, std::unordered_map<s
     }
     for (std::size_t p = 0u; p + 46u <= directory.size() && u32_at(directory, p) == 0x02014B50u;) {
         const std::size_t name = u16_at(directory, p + 28u);
+        if (p + 46u + name > directory.size()) {
+            break;
+        }
         Entry entry;
         entry.method = u16_at(directory, p + 10u);
         entry.compressed = u32_at(directory, p + 20u);

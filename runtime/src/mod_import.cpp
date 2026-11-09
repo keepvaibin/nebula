@@ -120,32 +120,37 @@ bool note_file(const fs::path& file) {
 void lift_top_folder(const fs::path& staging) {
     for (int pass = 0; pass < 2; ++pass) {
         std::error_code error;
+        std::error_code walk_error;
         fs::path only;
         std::vector<fs::path> notes;
         bool lift = true;
-        for (const auto& entry : fs::directory_iterator(staging, error)) {
-            if (entry.is_directory(error)) {
+        for (auto it = fs::directory_iterator(staging, walk_error); !walk_error && it != fs::directory_iterator();
+             it.increment(walk_error)) {
+            if (it->is_directory(error)) {
                 if (!only.empty()) {
                     lift = false;
                     break;
                 }
-                only = entry.path();
-            } else if (note_file(entry.path())) {
-                notes.push_back(entry.path());
+                only = it->path();
+            } else if (note_file(it->path())) {
+                notes.push_back(it->path());
             } else {
                 lift = false;
                 break;
             }
         }
-        if (!lift || only.empty()) return;
+        // An unread folder is not known to hold one folder only.
+        if (walk_error || !lift || only.empty()) return;
         // The folder's contents up; a note whose name the folder also has stays the folder's.
         const fs::path moved = staging / from_utf8(".lifting");
         fs::rename(only, moved, error);
         if (error) return;
-        for (const auto& entry : fs::directory_iterator(moved, error)) {
-            const fs::path target = staging / entry.path().filename();
+        walk_error.clear();
+        for (auto it = fs::directory_iterator(moved, walk_error); !walk_error && it != fs::directory_iterator();
+             it.increment(walk_error)) {
+            const fs::path target = staging / it->path().filename();
             if (fs::exists(target, error)) fs::remove_all(target, error);
-            fs::rename(entry.path(), target, error);
+            fs::rename(it->path(), target, error);
         }
         fs::remove_all(moved, error);
     }
@@ -222,10 +227,12 @@ std::string identical_mod(const fs::path& staging, const fs::path& mods_folder, 
     if (fs::is_directory(mods_folder / from_utf8(id), error) && same_mod(staging, files, mods_folder / from_utf8(id), one, two)) {
         return id;
     }
-    for (const auto& entry : fs::directory_iterator(mods_folder, error)) {
-        const std::string name = utf8(entry.path().filename());
-        if (name.empty() || name.front() == '.' || name == id || !entry.is_directory(error)) continue;
-        if (same_mod(staging, files, entry.path(), one, two)) return name;
+    std::error_code walk_error;
+    for (auto it = fs::directory_iterator(mods_folder, walk_error); !walk_error && it != fs::directory_iterator();
+         it.increment(walk_error)) {
+        const std::string name = utf8(it->path().filename());
+        if (name.empty() || name.front() == '.' || name == id || !it->is_directory(error)) continue;
+        if (same_mod(staging, files, it->path(), one, two)) return name;
     }
     return {};
 }
