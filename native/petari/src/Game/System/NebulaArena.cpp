@@ -1,4 +1,4 @@
-#include "Game/Render/ModelData.hpp"
+#include "Game/Render/RenderTexture.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 #include <new>
@@ -152,8 +152,8 @@ void NebulaArena::destroy(NebulaArena* pArena) {
         destroy(pArena->mFirstChild);
     }
 
-    // What the renderer and the file views hold from this arena go with it.
-    ModelDataList::forget(reinterpret_cast< uintptr_t >(pArena->mStart), reinterpret_cast< uintptr_t >(pArena->mNext));
+    // The textures and file views it holds go with it (its models and meshes went with its objects).
+    RenderTexture::forget(reinterpret_cast< uintptr_t >(pArena->mStart), reinterpret_cast< uintptr_t >(pArena->mNext));
     GameAssets::unloadArena(pArena);
 
     removeFromList(pArena);
@@ -269,7 +269,7 @@ void NebulaArena::freeAll() {
         destroy(mFirstChild);
     }
 
-    ModelDataList::forget(reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
+    RenderTexture::forget(reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
     GameAssets::unloadArena(this);
 
     const NebulaHostServices* host = nebula_host();

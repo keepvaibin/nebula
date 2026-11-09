@@ -509,30 +509,16 @@ void TypedDraw::finish() {
     }
 }
 
-namespace {
-    SiteMeshData* sLiveSiteMeshes;
-}
-
-SiteMeshData::SiteMeshData() : mId(0), mIndexCount(0), mStride(0), mVertexCount(0), mWritten(0), mVertices(nullptr), mIndices(nullptr), mNextLive(nullptr) {
+SiteMeshData::SiteMeshData() : mId(0), mIndexCount(0), mStride(0), mVertexCount(0), mWritten(0), mVertices(nullptr), mIndices(nullptr) {
 }
 
 SiteMeshData::~SiteMeshData() {
     if (mId != 0) {
         const NebulaHostServices* pHost = nebula_host();
         pHost->mesh_free(pHost->user, mId);
-        unlink();
     }
     delete[] mVertices;
     delete[] mIndices;
-}
-
-void SiteMeshData::unlink() {
-    for (SiteMeshData** ppAt = &sLiveSiteMeshes; *ppAt != nullptr; ppAt = &(*ppAt)->mNextLive) {
-        if (*ppAt == this) {
-            *ppAt = mNextLive;
-            return;
-        }
-    }
 }
 
 void SiteMeshData::initData(u32 stride, u32 maxVertices) {
@@ -579,24 +565,8 @@ void SiteMeshData::send() {
     delete[] mIndices;
     mVertices = nullptr;
     mIndices = nullptr;
-    mNextLive = sLiveSiteMeshes;
-    sLiveSiteMeshes = this;
 }
 
 void SiteMeshData::drawData(TypedDraw& rDraw, const NebulaLayoutInput* pInputs, u32 inputCount, u32 flags) const {
     rDraw.drawSiteMesh(mId, mIndexCount, mStride, pInputs, inputCount, flags);
-}
-
-void forgetSiteMeshes(const void* pStart, const void* pEnd) {
-    const NebulaHostServices* pHost = nebula_host();
-    for (SiteMeshData** ppAt = &sLiveSiteMeshes; *ppAt != nullptr;) {
-        SiteMeshData* pMesh = *ppAt;
-        if (pMesh >= pStart && pMesh < pEnd) {
-            pHost->mesh_free(pHost->user, pMesh->mId);
-            pMesh->mId = 0;
-            *ppAt = pMesh->mNextLive;
-        } else {
-            ppAt = &pMesh->mNextLive;
-        }
-    }
 }
