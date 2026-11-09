@@ -761,11 +761,14 @@ Hanachan::Hanachan(const char* pName) : LiveActor(pName), mAttackPos(0, 0, 0), m
 }
 
 void Hanachan::init(const TableIter& rIter) {
-    if (MR::isValidInfo(rIter)) {
-        MR::isConnectedWithRail(rIter);
+    MR::initDefaultPos(this, rIter);
+
+    // Without a rail there is nowhere to walk: it stays dead.
+    if (!MR::isConnectedWithRail(rIter)) {
+        makeActorDead();
+        return;
     }
 
-    MR::initDefaultPos(this, rIter);
     initRailRider(rIter);
 
     s32 noChase = 0;
@@ -815,6 +818,10 @@ void Hanachan::init(const TableIter& rIter) {
 }
 
 void Hanachan::initAfterPlacement() {
+    if (MR::isDead(this)) {
+        return;
+    }
+
     MR::trySetMoveLimitCollision(mBodyParts[0]);
 }
 

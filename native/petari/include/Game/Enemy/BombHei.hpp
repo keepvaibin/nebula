@@ -60,6 +60,7 @@ public:
     Vec3f mBinderOffset;
     Vec3f mTargetFront;
     s32 mCountdown;
+    s32 mFuseTime;
     HitSensor* mCarrySensor;
     f32 mExplodeRadius;
     JointController* mBodyJoint;
