@@ -11,6 +11,7 @@ class MaterialUpdater;
 class FrameCtrl;
 class Model;
 class ModelData;
+class NebulaArena;
 class ResourceHolder;
 class XanimePlayer;
 class XanimeResourceTable;
@@ -69,14 +70,26 @@ public:
     void changeBckSetting(const char*, const char*, XanimePlayer*);
     void init(const char*, const char*, bool);
 
-    BtkPlayer* mBtkPlayer;
-    BrkPlayer* mBrkPlayer;
-    BtpPlayer* mBtpPlayer;
-    BpkPlayer* mBpkPlayer;
-    BvaPlayer* mBvaPlayer;
+    // A kind of animation the model has none of, reached by its class's code (a mod's model made like a game class can
+    // lack one the class plays): an empty player, made then. Starting one of its names does nothing, it counts as
+    // stopped, and its frame is its own. The game's models have what their code plays, and make none.
+    BtkPlayer* btkPlayer() const;
+    BrkPlayer* brkPlayer() const;
+    BtpPlayer* btpPlayer() const;
+    BpkPlayer* bpkPlayer() const;
+    BvaPlayer* bvaPlayer() const;
+    NebulaArena* arena() const;
+
+    mutable BtkPlayer* mBtkPlayer;
+    mutable BrkPlayer* mBrkPlayer;
+    mutable BtpPlayer* mBtpPlayer;
+    mutable BpkPlayer* mBpkPlayer;
+    mutable BvaPlayer* mBvaPlayer;
     XanimeResourceTable* mXanimeResourceTable;
     XanimePlayer* mXanimePlayer;
     Model* mModel;
     ResourceHolder* mModelResourceHolder;
     MaterialUpdater* mMaterialUpdater;
+    // The frame of a model with no skeletal animations, made when its class's code first asks for it.
+    mutable FrameCtrl* mNoBckCtrl;
 };

@@ -512,7 +512,7 @@ namespace {
         MR::FormattedName name;
         name.vformat(pArchive, pFormat);
 
-        return pHolder->mFileInfoTable->isExistRes(name.c_str());
+        return pHolder->findFile(name.c_str()) != nullptr;
     }
 };  // namespace
 
@@ -530,12 +530,13 @@ namespace {
         MR::FormattedName name;
         name.vformat(pArchive, pFormat);
 
-        if (!pHolder->mFileInfoTable->isExistRes(name.c_str())) {
+        void* const pFile = pHolder->findFile(name.c_str());
+        if (pFile == nullptr) {
             return nullptr;
         }
 
         Table* pInfo = new Table();
-        pInfo->attach(pHolder->mFileInfoTable->getRes(name.c_str()));
+        pInfo->attach(pFile);
 
         return pInfo;
     }

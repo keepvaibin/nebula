@@ -6,6 +6,8 @@
 #include "Game/Effect/SyncBckEffectChecker.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/Map/HitInfo.hpp"
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaMods.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -37,12 +39,25 @@ namespace {
 
 EffectKeeper::EffectKeeper(const char* pName, ResourceHolder* pResourceHolder, int extraEmitterNum, const char* pResourceName)
     : mName(pName), mResourceHolder(pResourceHolder), mResourceName(pResourceName), mEmitters(), mSyncBckChecker(), mBinder(), mFloorCode(),
-      mEffectFloorCode(), mFloorCodeSteps(), mHasAttributeEffect() {
+      mEffectFloorCode(), mFloorCodeSteps(), mHasAttributeEffect(), mNoEffect() {
     if (mResourceName == nullptr && mResourceHolder != nullptr) {
         mResourceName = mResourceHolder->getModelName();
     }
 
-    const s32 capacity = MR::Effect::getAutoEffectNum(mResourceName) + extraEmitterNum;
+    s32 autoNum = MR::Effect::getAutoEffectNum(mResourceName);
+    // A mod's class whose model has no effects of its own has those of the class it is made like.
+    if (autoNum == 0 && pName != nullptr) {
+        const char* pLike = NebulaMods::objectLike(pName);
+        if (pLike != pName) {
+            const s32 likeNum = MR::Effect::getAutoEffectNum(pLike);
+            if (likeNum != 0) {
+                mResourceName = pLike;
+                autoNum = likeNum;
+            }
+        }
+    }
+
+    const s32 capacity = autoNum + extraEmitterNum;
     mEmitters.init(capacity);
     mNames.reset(capacity);
 }
@@ -126,6 +141,9 @@ void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEff
     }
 
     MultiEmitter* emitter = getEmitter(pEffectName);
+    if (emitter == nullptr) {
+        return;
+    }
 
     emitter->initSyncBck(pPlayer, pBckName, capacity, startFrame);
     emitter->onDeleteSyncBck(endFrame);
@@ -133,10 +151,10 @@ void EffectKeeper::registerSyncBckEffect(XanimePlayer* pPlayer, const char* pEff
 
 MultiEmitter* EffectKeeper::createEmitter(const char* pEffectName) {
     if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
-        return getEmitter(pEffectName);  // the actor is seen throughout: its effects stay as they are
+        return getEmitterOrNone(pEffectName);  // the actor is seen throughout: its effects stay as they are
     }
 
-    MultiEmitter* emitter = getEmitter(pEffectName);
+    MultiEmitter* emitter = getEmitterOrNone(pEffectName);
 
     emitter->createEmitter();
 
@@ -148,7 +166,9 @@ void EffectKeeper::deleteEmitter(const char* pEffectName) {
         return;
     }
 
-    getEmitter(pEffectName)->deleteEmitter();
+    if (MultiEmitter* pEmitter = getEmitter(pEffectName)) {
+        pEmitter->deleteEmitter();
+    }
 }
 
 void EffectKeeper::forceDeleteEmitter(const char* pEffectName) {
@@ -156,7 +176,9 @@ void EffectKeeper::forceDeleteEmitter(const char* pEffectName) {
         return;
     }
 
-    getEmitter(pEffectName)->forceDeleteEmitter();
+    if (MultiEmitter* pEmitter = getEmitter(pEffectName)) {
+        pEmitter->forceDeleteEmitter();
+    }
 }
 
 void EffectKeeper::deleteEmitterAll() {
@@ -195,6 +217,23 @@ MultiEmitter* EffectKeeper::getEmitter(const char* pEffectName) const {
 
     const u32 index = mNames.find(pEffectName);
     return index == MR::NameIndex::cNoValue ? nullptr : mEmitters[index];
+}
+
+MultiEmitter* EffectKeeper::getEmitterOrNone(const char* pEffectName) const {
+    MultiEmitter* pEmitter = getEmitter(pEffectName);
+    if (pEmitter != nullptr) {
+        return pEmitter;
+    }
+
+    // What an effect the actor has none of is (nothing shows, nothing is deleted). It lives as long as the keeper: made in
+    // the keeper's arena, whichever is current when the code first names the effect.
+    if (mNoEffect == nullptr) {
+        NebulaArena* const pArena = NebulaArena::findFromRoot(const_cast< EffectKeeper* >(this));
+        const NebulaArena::CurrentScope scope(pArena != nullptr ? pArena : NebulaArena::current());
+        mNoEffect = new MultiEmitter("");
+    }
+
+    return mNoEffect;
 }
 
 MultiEmitter* EffectKeeper::getEmitter(s32 index) const {

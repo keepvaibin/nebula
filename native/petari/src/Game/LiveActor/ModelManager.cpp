@@ -9,6 +9,7 @@
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
 #include "Game/LiveActor/MaterialUpdater.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -17,7 +18,7 @@
 
 ModelManager::ModelManager()
     : mBtkPlayer(), mBrkPlayer(), mBtpPlayer(), mBpkPlayer(), mBvaPlayer(), mXanimeResourceTable(), mXanimePlayer(), mModel(), mModelResourceHolder(),
-      mMaterialUpdater() {
+      mMaterialUpdater(), mNoBckCtrl() {
 }
 
 void ModelManager::update() {
@@ -92,12 +93,20 @@ void ModelManager::updateList() {
 }
 
 void ModelManager::startBck(const char* pBckName, const char* pActorAnimName) {
+    if (mXanimePlayer == nullptr) {
+        return;
+    }
+
     mXanimePlayer->changeAnimationBck(pBckName);
     mXanimePlayer->changeInterpoleFrame(0);
     changeBckSetting(pBckName, pActorAnimName, nullptr);
 }
 
 void ModelManager::startBckWithInterpole(const char* pBckName, s32 interpole) {
+    if (mXanimePlayer == nullptr) {
+        return;
+    }
+
     mXanimePlayer->changeAnimationBck(pBckName);
     mXanimePlayer->changeInterpoleFrame(0);
     mXanimePlayer->changeInterpoleFrame(interpole);
@@ -105,85 +114,94 @@ void ModelManager::startBckWithInterpole(const char* pBckName, s32 interpole) {
 
 void ModelManager::startBtk(const char* pBtkName) {
     stopBtk();
-    mBtkPlayer->start(pBtkName);
+    btkPlayer()->start(pBtkName);
 }
 
 void ModelManager::startBrk(const char* pBrkName) {
     stopBrk();
-    mBrkPlayer->start(pBrkName);
+    brkPlayer()->start(pBrkName);
 }
 
 void ModelManager::startBtp(const char* pBtpName) {
     stopBtp();
-    mBtpPlayer->start(pBtpName);
+    btpPlayer()->start(pBtpName);
 }
 
 void ModelManager::startBpk(const char* pBpkName) {
     stopBpk();
-    mBpkPlayer->start(pBpkName);
+    bpkPlayer()->start(pBpkName);
 }
 
 void ModelManager::startBva(const char* pBvaName) {
     stopBva();
-    mBvaPlayer->start(pBvaName);
+    bvaPlayer()->start(pBvaName);
 }
 
 void ModelManager::stopBtk() {
-    if (mBtkPlayer->mAnmRes != nullptr) {
+    if (mBtkPlayer != nullptr && mBtkPlayer->mAnmRes != nullptr) {
         mBtkPlayer->stop();
     }
 }
 
 void ModelManager::stopBrk() {
-    if (mBrkPlayer->mAnmRes != nullptr) {
+    if (mBrkPlayer != nullptr && mBrkPlayer->mAnmRes != nullptr) {
         mBrkPlayer->stop();
     }
 }
 
 void ModelManager::stopBtp() {
-    if (mBtpPlayer->mAnmRes != nullptr) {
+    if (mBtpPlayer != nullptr && mBtpPlayer->mAnmRes != nullptr) {
         mBtpPlayer->stop();
     }
 }
 
 void ModelManager::stopBpk() {
-    if (mBpkPlayer->mAnmRes != nullptr) {
+    if (mBpkPlayer != nullptr && mBpkPlayer->mAnmRes != nullptr) {
         mBpkPlayer->stop();
     }
 }
 
 void ModelManager::stopBva() {
-    if (mBvaPlayer->mAnmRes != nullptr) {
+    if (mBvaPlayer != nullptr && mBvaPlayer->mAnmRes != nullptr) {
         mBvaPlayer->stop();
     }
 }
 
 FrameCtrl* ModelManager::getBckCtrl() const {
+    if (mXanimePlayer == nullptr) {
+        if (mNoBckCtrl == nullptr) {
+            const NebulaArena::CurrentScope scope(arena());
+            mNoBckCtrl = new FrameCtrl();
+        }
+
+        return mNoBckCtrl;
+    }
+
     return mXanimePlayer->getFrameCtrl();
 }
 
 FrameCtrl* ModelManager::getBtkCtrl() const {
-    return &mBtkPlayer->mFrameCtrl;
+    return &btkPlayer()->mFrameCtrl;
 }
 
 FrameCtrl* ModelManager::getBrkCtrl() const {
-    return &mBrkPlayer->mFrameCtrl;
+    return &brkPlayer()->mFrameCtrl;
 }
 
 FrameCtrl* ModelManager::getBtpCtrl() const {
-    return &mBtpPlayer->mFrameCtrl;
+    return &btpPlayer()->mFrameCtrl;
 }
 
 FrameCtrl* ModelManager::getBpkCtrl() const {
-    return &mBpkPlayer->mFrameCtrl;
+    return &bpkPlayer()->mFrameCtrl;
 }
 
 FrameCtrl* ModelManager::getBvaCtrl() const {
-    return &mBvaPlayer->mFrameCtrl;
+    return &bvaPlayer()->mFrameCtrl;
 }
 
 bool ModelManager::isBckStopped() const {
-    return mXanimePlayer->isTerminate();
+    return mXanimePlayer == nullptr || mXanimePlayer->isTerminate();
 }
 
 bool ModelManager::isBtkStopped() const {
@@ -227,23 +245,23 @@ bool ModelManager::isBvaStopped() const {
 }
 
 bool ModelManager::isBtkPlaying(const char* pBtkName) const {
-    return mBtkPlayer->isPlaying(pBtkName);
+    return mBtkPlayer != nullptr && mBtkPlayer->isPlaying(pBtkName);
 }
 
 bool ModelManager::isBrkPlaying(const char* pBrkName) const {
-    return mBrkPlayer->isPlaying(pBrkName);
+    return mBrkPlayer != nullptr && mBrkPlayer->isPlaying(pBrkName);
 }
 
 bool ModelManager::isBpkPlaying(const char* pBpkName) const {
-    return mBpkPlayer->isPlaying(pBpkName);
+    return mBpkPlayer != nullptr && mBpkPlayer->isPlaying(pBpkName);
 }
 
 bool ModelManager::isBtpPlaying(const char* pBtpName) const {
-    return mBtpPlayer->isPlaying(pBtpName);
+    return mBtpPlayer != nullptr && mBtpPlayer->isPlaying(pBtpName);
 }
 
 bool ModelManager::isBvaPlaying(const char* pBvaName) const {
-    return mBvaPlayer->isPlaying(pBvaName);
+    return mBvaPlayer != nullptr && mBvaPlayer->isPlaying(pBvaName);
 }
 
 void ModelManager::initJointTransform() {
@@ -296,6 +314,57 @@ void ModelManager::initModelAndAnimation(ResourceHolder* pModelHolder, const cha
         mXanimeResourceTable = MR::newXanimeResourceTable(pAnimationHolder);
         mXanimePlayer = MR::newXanimePlayer(pModelHolder, pModelName, pAnimationHolder, flags, mXanimeResourceTable);
     }
+}
+
+// The arena the manager lies in (its actor's): what it makes later lives as long as it does.
+NebulaArena* ModelManager::arena() const {
+    NebulaArena* const pArena = NebulaArena::findFromRoot(const_cast< ModelManager* >(this));
+    return pArena != nullptr ? pArena : NebulaArena::current();
+}
+
+BtkPlayer* ModelManager::btkPlayer() const {
+    if (mBtkPlayer == nullptr) {
+        const NebulaArena::CurrentScope scope(arena());
+        mBtkPlayer = new BtkPlayer(getResourceHolder(), getModelData());
+    }
+
+    return mBtkPlayer;
+}
+
+BrkPlayer* ModelManager::brkPlayer() const {
+    if (mBrkPlayer == nullptr) {
+        const NebulaArena::CurrentScope scope(arena());
+        mBrkPlayer = new BrkPlayer(getResourceHolder(), getModelData());
+    }
+
+    return mBrkPlayer;
+}
+
+BtpPlayer* ModelManager::btpPlayer() const {
+    if (mBtpPlayer == nullptr) {
+        const NebulaArena::CurrentScope scope(arena());
+        mBtpPlayer = new BtpPlayer(getResourceHolder(), getModelData());
+    }
+
+    return mBtpPlayer;
+}
+
+BpkPlayer* ModelManager::bpkPlayer() const {
+    if (mBpkPlayer == nullptr) {
+        const NebulaArena::CurrentScope scope(arena());
+        mBpkPlayer = new BpkPlayer(getResourceHolder(), getModelData());
+    }
+
+    return mBpkPlayer;
+}
+
+BvaPlayer* ModelManager::bvaPlayer() const {
+    if (mBvaPlayer == nullptr) {
+        const NebulaArena::CurrentScope scope(arena());
+        mBvaPlayer = new BvaPlayer(getResourceHolder()->getBvaResTable(), getModel());
+    }
+
+    return mBvaPlayer;
 }
 
 void ModelManager::initMaterialAnm() {

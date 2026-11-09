@@ -35,7 +35,7 @@ namespace MR {
     }
 
     MultiEmitter* getEffect(const LiveActor* pActor, const char* pEffectName) {
-        return ::getEffectKeeper(pActor)->getEmitter(pEffectName);
+        return ::getEffectKeeper(pActor)->getEmitterOrNone(pEffectName);
     }
 
     MultiEmitter* getEffect(const LayoutActor* pActor, const char* pEffectName) {
@@ -259,7 +259,9 @@ namespace MR {
         while (pStrList[0] != nullptr) {
             ModelManager* pModelManager = pActor->mModelManager;
             MultiEmitter* pEmitter = ::getEffectKeeper(pActor)->getEmitter(pEffectName);
-            Effect::addEffectSyncBck(pEmitter, pModelManager, pStrList[0]);
+            if (pEmitter != nullptr) {
+                Effect::addEffectSyncBck(pEmitter, pModelManager, pStrList[0]);
+            }
             pStrList = &pStrList[1];
         }
     }
