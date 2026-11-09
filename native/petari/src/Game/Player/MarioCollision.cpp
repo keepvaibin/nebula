@@ -416,40 +416,6 @@ f32 Mario::calcDistWidth() {
     return width;
 }
 
-void Mario::updateCameraPolygon() {
-    HitSensor* sensor;
-    const Triangle* triangle;
-
-    if (mMovementStates.onGround) {
-        triangle = mGroundPolygon;
-    } else {
-        triangle = mShadowPolygon;
-    }
-
-    sensor = triangle->mSensor;
-
-    if (triangle->isValid()) {
-        if (sensor == nullptr) {
-            setCameraPolygon(triangle);
-            return;
-        }
-
-        setCameraPolygon(triangle);
-        return;
-    }
-
-    Vec3f start = mPosition - *getGravityVec() * 100.0f;
-    const Triangle* cameraTriangle = MR::getCameraPolyFast(start, *getGravityVec() * 5000.0f, nullptr);
-
-    if (cameraTriangle != nullptr) {
-        setCameraPolygon(cameraTriangle);
-    }
-}
-
-void Mario::setCameraPolygon(const Triangle* pTriangle) {
-    *mCameraPolygon = *pTriangle;
-}
-
 void Mario::checkAllWall(const Vec3f& rPosition, f32 radius) {
     Vec3f center(rPosition);
     Vec3f front(mFrontVec);

@@ -160,7 +160,6 @@ Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     mShadowPolygon = new Triangle();
     mSlopeFloorPolygon = new Triangle();
     mGroundPolygon = new Triangle();
-    mCameraPolygon = new Triangle();
 
     mCeilPolygon = new Triangle();
     mFrontWallTriangle = new Triangle();
@@ -1771,8 +1770,6 @@ void Mario::updateGroundInfo() {
             }
         }
     }
-
-    updateCameraPolygon();
 
     if (mMovementStates.onGround) {
         mMovementStates.slipUpJumped = 0;
