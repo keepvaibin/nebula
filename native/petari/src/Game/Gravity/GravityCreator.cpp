@@ -316,6 +316,11 @@ void WireGravityCreator::settingFromPlacementOtherParam(const TableIter& rIter) 
     s32 numPointsInBetween = 20;
     MR::getPlacementArg0NoInit(rIter, &numPointsInBetween);
 
+    // A count below 0 (a placement other than the unset -1) is no points in between: numPoints is unsigned below.
+    if (numPointsInBetween < 0) {
+        numPointsInBetween = 0;
+    }
+
     // Points from the rail's start at even intervals. The rail's end is not one: the last slot stays empty.
     u32 numPoints = numPointsInBetween + 2;
     f32 railInterval = mRailRider->getTotalLength() / (numPoints - 1);

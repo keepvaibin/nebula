@@ -3,15 +3,12 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 
 SkeletalFishBossRailHolder::SkeletalFishBossRailHolder(const char* pName) : NameObj(pName) {
-    mNumRails = 0;
-
-    for (s32 i = 0; i < ARRAY_SIZE(mRails); i++) {
-        mRails[i] = nullptr;
-    }
+    // The place getByID answers with when no rail was added.
+    mRails[0] = nullptr;
 }
 
 void SkeletalFishBossRailHolder::add(SkeletalFishBossRail* pRail) {
-    mRails[mNumRails++] = pRail;
+    mRails.push_back(pRail);
 }
 
 SkeletalFishBossRail* SkeletalFishBossRailHolder::getInOrder(s32 idx) const {
@@ -19,7 +16,7 @@ SkeletalFishBossRail* SkeletalFishBossRailHolder::getInOrder(s32 idx) const {
 }
 
 SkeletalFishBossRail* SkeletalFishBossRailHolder::getByID(s32 id) const {
-    for (u32 i = 0; i < mNumRails; i++) {
+    for (s32 i = 0; i < mRails.size(); i++) {
         SkeletalFishBossRail* rail = getInOrder(i);
 
         if (id == rail->mRailId) {

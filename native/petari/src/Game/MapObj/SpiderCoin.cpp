@@ -77,7 +77,8 @@ void SpiderCoin::initAfterPlacement() {
 
 void SpiderCoin::kill() {
     LiveActor::kill();
-    Vec3f vel(-mUp->x, -mUp->y, 0.0f);
+    // A coin killed before it bound to the web (no up vector yet) pops with no sideways push.
+    Vec3f vel(mUp != nullptr ? -mUp->x : 0.0f, mUp != nullptr ? -mUp->y : 0.0f, 0.0f);
     MR::normalizeOrZero(&vel);
     vel *= ::sCoinSpeed;
     Vec3f pos(mPosition.x, mPosition.y, mThreadZ);

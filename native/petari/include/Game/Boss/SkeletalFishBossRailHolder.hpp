@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/Array.hpp"
 
 class SkeletalFishBossRail;
 
@@ -12,8 +13,8 @@ public:
     SkeletalFishBossRail* getInOrder(s32) const;
     SkeletalFishBossRail* getByID(s32) const;
 
-    s32 mNumRails;
-    SkeletalFishBossRail* mRails[3];
+    // Room for the boss's three levels in itself; a stage with more rails moves it to a larger store.
+    MR::InlineVector< SkeletalFishBossRail*, 3 > mRails;
 };
 
 namespace MR {
