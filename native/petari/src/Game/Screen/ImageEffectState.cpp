@@ -16,12 +16,12 @@ void ImageEffectState::update() {
             return;
         }
 
-        if (getEffect()->_C) {
+        if (getEffect()->mIsOn) {
             return;
         }
 
         ImageEffectBase* pBase = getEffect();
-        pBase->_C = true;
+        pBase->mIsOn = true;
         pBase->notifyTurnOn();
         return;
     }
@@ -29,8 +29,8 @@ void ImageEffectState::update() {
     ImageEffectBase* pBase = mHost->mCurrentEffect;
 
     if (pBase != nullptr) {
-        if (pBase->_C) {
-            pBase->_C = false;
+        if (pBase->mIsOn) {
+            pBase->mIsOn = false;
             pBase->notifyTurnOff();
             return;
         }
@@ -42,7 +42,7 @@ void ImageEffectState::update() {
 
     if (getEffect() != nullptr) {
         ImageEffectBase* pBase = getEffect();
-        pBase->_C = true;
+        pBase->mIsOn = true;
         pBase->notifyTurnOn();
     }
 
@@ -58,24 +58,24 @@ void ImageEffectState::forceOff() {
     }
 
     pBase = getEffect();
-    pBase->_D = false;
-    pBase->_C = false;
+    pBase->mIsShown = false;
+    pBase->mIsOn = false;
     pBase->mFadeLevel = 0.0f;
     pBase->notifyForceOff();
 }
 
 namespace ImageEffectStateImpl {
     StateBloomNormal::StateBloomNormal(ImageEffectDirector* pHost)
-        : ImageEffectState(pHost), _8(true), _C(), mBloomIntensityNow(), mBloomIntensity(), mThresholdNow(), mThreshold(), mIntensity1Now(), mIntensity1(), mIntensity2Now(), mIntensity2() {
+        : ImageEffectState(pHost), mIsSnap(true), mBloomIntensityNow(), mBloomIntensity(), mThresholdNow(), mThreshold(), mIntensity1Now(), mIntensity1(), mIntensity2Now(), mIntensity2() {
     }
 
     void StateBloomNormal::update() {
-        if (_8) {
+        if (mIsSnap) {
             mBloomIntensityNow = mBloomIntensity;
             mThresholdNow = mThreshold;
             mIntensity1Now = mIntensity1;
             mIntensity2Now = mIntensity2;
-            _8 = false;
+            mIsSnap = false;
         } else {
             f32 rate = 0.1f;
             mBloomIntensityNow += ((mBloomIntensity + 0.5f) - mBloomIntensityNow) * rate;
@@ -124,7 +124,7 @@ namespace ImageEffectStateImpl {
     }
 
     void StateBloomNormal::onChange() {
-        _8 = true;
+        mIsSnap = true;
     }
 
     void StateBloomNormal::setBloomIntensity(u8 bloomIntensity) {

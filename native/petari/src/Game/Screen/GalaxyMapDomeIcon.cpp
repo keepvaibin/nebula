@@ -18,7 +18,7 @@ namespace {
         virtual void execute(const char* pGalaxyName) {
         }
 
-        char _4[11];
+        char mGalaxyTag[11];  // "Galaxy<n>": the part of a map pane name that puts the galaxy in dome n
         bool mIsPass;
     };
 
@@ -191,7 +191,7 @@ bool GalaxyMapDomeIcon::hasNewGalaxy() const {
 
 namespace {
     AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) {
-        nebula_snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
+        nebula_snprintf(mGalaxyTag, sizeof(mGalaxyTag), "Galaxy%1d", param1);
     }
 };  // namespace
 
@@ -203,7 +203,7 @@ namespace {
         rIter.getValue("MapPaneName", &pMapPaneName);
         rIter.getValue("name", &pName);
 
-        if (pMapPaneName != nullptr && pName != nullptr && strstr(pMapPaneName, _4) != nullptr) {
+        if (pMapPaneName != nullptr && pName != nullptr && strstr(pMapPaneName, mGalaxyTag) != nullptr) {
             execute(pName);
         }
     }

@@ -41,8 +41,8 @@ ScreenBlurEffect::ScreenBlurEffect(const char* pName) : ImageEffectBase(pName), 
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createBlurTexture();
 
-    mFullTexture = MR::getImageEffectResource()->_0;
-    mHalfTexture = MR::getImageEffectResource()->_8;
+    mFullTexture = MR::getImageEffectResource()->mFullTexture;
+    mHalfTexture = MR::getImageEffectResource()->mHalfTexture;
     mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
 }
 

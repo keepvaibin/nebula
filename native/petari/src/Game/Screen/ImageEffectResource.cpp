@@ -5,30 +5,30 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
-    : _0(nullptr), _8(nullptr), _C(nullptr) {
+    : mFullTexture(nullptr), mHalfTexture(nullptr), mQuarterTexture(nullptr) {
 }
 
 void ImageEffectResource::createBlurTexture() {
-    if (_0 == nullptr) {
-        _0 = createTexture(1.0f);
+    if (mFullTexture == nullptr) {
+        mFullTexture = createTexture(1.0f);
     }
 
-    if (_8 == nullptr) {
-        _8 = createTexture(0.5f);
+    if (mHalfTexture == nullptr) {
+        mHalfTexture = createTexture(0.5f);
     }
 }
 
 void ImageEffectResource::createDOFTexture() {
-    if (_0 == nullptr) {
-        _0 = createTexture(1.0f);
+    if (mFullTexture == nullptr) {
+        mFullTexture = createTexture(1.0f);
     }
 
-    if (_C == nullptr) {
-        _C = createTexture(0.25f);
+    if (mQuarterTexture == nullptr) {
+        mQuarterTexture = createTexture(0.25f);
     }
 
-    if (_8 == nullptr) {
-        _8 = createTexture(0.5f);
+    if (mHalfTexture == nullptr) {
+        mHalfTexture = createTexture(0.5f);
     }
 }
 

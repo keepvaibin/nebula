@@ -13,7 +13,7 @@ public:
     void createDOFTexture();
     GameTexture* createTexture(f32);
 
-    GameTexture* _0;
-    GameTexture* _8;
-    GameTexture* _C;
+    GameTexture* mFullTexture;     // screen size
+    GameTexture* mHalfTexture;     // half the screen's size
+    GameTexture* mQuarterTexture;  // a quarter of it
 };

@@ -51,8 +51,8 @@ public:
 
     bool mIsAuto;
     bool mIsPlayerSync;
-    bool _E;
-    bool _F;
+    bool mWasDOFSuppressed;     // last update ran the null state in place of depth of field
+    bool mIsDOFOffInSubjective;  // depth of field is not drawn in the first-person view
     s32 mPlayerSyncIntensity;
     f32 mDepthOfFieldIntensity;
     ImageEffectStateImpl::StateNull* mStateNull;

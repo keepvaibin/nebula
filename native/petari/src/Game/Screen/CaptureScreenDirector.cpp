@@ -11,8 +11,8 @@
 #include <cstring>
 
 namespace {
-    const TimingInfo cTimingInfo[] = {{"GameScreen", 32, true, 1}, {"Indirect", 1, false, 0},    {"Camera", 4, true, 1},
-                                      {"WipeMap", 5, true, 1},     {"SystemWipe", 20, false, 1}, {"Unused", 16, false, 0}};
+    const TimingInfo cTimingInfo[] = {{"GameScreen", 32, 1}, {"Indirect", 1, 0},    {"Camera", 4, 1},
+                                      {"WipeMap", 5, 1},     {"SystemWipe", 20, 1}, {"Unused", 16, 0}};
 };  // namespace
 
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("画面キャプチャ"), mRequestedTiming(nullptr), mTimingType("Indirect"), mTexture(nullptr), mIsCaptureRequested(false), mRequestedInfo(nullptr), mTimingInfo(nullptr) {

@@ -13,22 +13,21 @@
 
 struct InformationObserverAttribute {
     const char* mMessageId;
-    bool _4;
     const char* mFirstMorphBgmName;
     const char* mBgmName;
 };
 
 static InformationObserverAttribute sAttr[] = {
-    {"InformationObserverBee", true, "BGM_FIRST_MORPH_B", nullptr},
-    {"InformationObserverTeresa", true, "BGM_FIRST_MORPH_B", nullptr},
-    {"InformationObserverHopper", true, "BGM_FIRST_MORPH_B", nullptr},
-    {"InformationObserverFire", true, "BGM_FIRST_MORPH_A", "BGM_FIRE_B"},
-    {"InformationObserverIce", true, "BGM_FIRST_MORPH_A", "BGM_ICE_B"},
-    {"InformationObserverFlying", true, "BGM_FIRST_MORPH_A", "BGM_FLYING_B"},
-    {"InformationObserverInvincible", true, "BGM_FIRST_MORPH_A", "BGM_MUTEKI_B"},
-    {"InformationObserverLifeUpMario", true, nullptr, nullptr},
-    {"InformationObserverOneUp", true, nullptr, nullptr},
-    {"InformationObserverSpin", false, nullptr, nullptr},
+    {"InformationObserverBee", "BGM_FIRST_MORPH_B", nullptr},
+    {"InformationObserverTeresa", "BGM_FIRST_MORPH_B", nullptr},
+    {"InformationObserverHopper", "BGM_FIRST_MORPH_B", nullptr},
+    {"InformationObserverFire", "BGM_FIRST_MORPH_A", "BGM_FIRE_B"},
+    {"InformationObserverIce", "BGM_FIRST_MORPH_A", "BGM_ICE_B"},
+    {"InformationObserverFlying", "BGM_FIRST_MORPH_A", "BGM_FLYING_B"},
+    {"InformationObserverInvincible", "BGM_FIRST_MORPH_A", "BGM_MUTEKI_B"},
+    {"InformationObserverLifeUpMario", nullptr, nullptr},
+    {"InformationObserverOneUp", nullptr, nullptr},
+    {"InformationObserverSpin", nullptr, nullptr},
 };
 
 namespace {
