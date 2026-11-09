@@ -8,6 +8,7 @@ struct MaterialConstants {
     float4 params;  // x the material alpha (0-1), y the indirect matrix's diagonal (0.5 x 2^exponent), zw texture 1's size
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

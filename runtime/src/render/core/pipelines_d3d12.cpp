@@ -140,21 +140,16 @@ D3D12_BLEND alpha_factor(D3D12_BLEND b) noexcept {
     }
 }
 
-// Two positions, two matrix indices, normal, tangent, binormal, two colours and every shared coordinate slot.
-constexpr UINT kInputs = 9u + NEBULA_MATERIAL_SLOTS;
-static_assert(kInputs <= D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT);
-
+// A pipeline's input elements, as many as its inputs and its program name; the device's own ceiling is checked where the
+// layout is made.
 struct InputList {
-    D3D12_INPUT_ELEMENT_DESC elements[kInputs]{};
-    UINT count = 0u;
-    void add(const char* name, UINT index, DXGI_FORMAT format, UINT slot, UINT offset) noexcept {
-        if (count < kInputs) {
-            elements[count++] = {name, index, format, slot, offset, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0u};
-        }
+    std::vector<D3D12_INPUT_ELEMENT_DESC> elements;
+    void add(const char* name, UINT index, DXGI_FORMAT format, UINT slot, UINT offset) {
+        elements.push_back({name, index, format, slot, offset, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0u});
     }
     [[nodiscard]] bool has(const char* name, UINT index) const noexcept {
-        for (UINT i = 0; i < count; ++i) {
-            if (elements[i].SemanticIndex == index && std::strcmp(elements[i].SemanticName, name) == 0) {
+        for (const D3D12_INPUT_ELEMENT_DESC& element : elements) {
+            if (element.SemanticIndex == index && std::strcmp(element.SemanticName, name) == 0) {
                 return true;
             }
         }
@@ -171,7 +166,7 @@ DXGI_FORMAT input_format(std::uint32_t format) noexcept {
     }
 }
 
-void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) noexcept {
+void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) {
     const bool site = (desc.vertex & NEBULA_PROGRAM_SITE) != 0u;
     const bool wide = site && (desc.vertex & 1u) != 0u;
     list.add("POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, gpu::kStreamPosition, 0u);
@@ -219,7 +214,9 @@ void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) n
     zero("BINORMAL", 0u, DXGI_FORMAT_R32G32B32_FLOAT);
     zero("COLOR", 0u, DXGI_FORMAT_R8G8B8A8_UNORM);
     zero("COLOR", 1u, DXGI_FORMAT_R8G8B8A8_UNORM);
-    for (UINT i = 0; i < NEBULA_MATERIAL_SLOTS; ++i) {
+    // The coordinates the written shader's vertex stage declares (its NATIVE_COORDS) beyond those sent.
+    const UINT declared = program_coords(desc.vertex);
+    for (UINT i = 0; i < declared; ++i) {
         zero("TEXCOORD", i, DXGI_FORMAT_R32G32_FLOAT);
     }
 }
@@ -245,7 +242,12 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     pd.PS = {ps.data, ps.size};
     InputList inputs;
     fill_inputs(desc, aux == 1u, inputs);
-    pd.InputLayout = {inputs.elements, inputs.count};
+    if (inputs.elements.size() > D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT) {
+        std::fprintf(stderr, "[pipelines] %zu vertex inputs: the device takes %u\n", inputs.elements.size(),
+                     static_cast<unsigned>(D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT));
+        return nullptr;
+    }
+    pd.InputLayout = {inputs.elements.data(), static_cast<UINT>(inputs.elements.size())};
 
     const std::uint32_t state = desc.state;
     const bool target = (variant & kSceneVariantTarget) != 0u;

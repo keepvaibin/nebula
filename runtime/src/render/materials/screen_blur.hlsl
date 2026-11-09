@@ -6,6 +6,7 @@ struct MaterialConstants {
     float4 params;  // x: the effect's alpha (0-1); y: the depth beyond which the blur shows (0-1, 8-bit)
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

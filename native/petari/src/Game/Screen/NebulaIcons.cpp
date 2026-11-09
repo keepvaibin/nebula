@@ -2290,7 +2290,7 @@ namespace {
 
     void swapPane(Ui::Pane* pPane, Swaps& rSwaps, s32 depth) {
         Ui::Material* pMaterial = pPane->GetMaterial();
-        for (u8 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum(); i++) {
+        for (u32 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum(); i++) {
             Ui::TexMap& rMap = pMaterial->GetTexMapAry()[i];
             for (s32 k = 0; k < 2; k++) {
                 if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == Ui::TexMap::TEXEL_IA4) {

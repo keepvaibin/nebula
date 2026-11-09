@@ -9,15 +9,16 @@ namespace Ui {
     class TexMap;
 
     namespace detail {
+        // How many of each a material holds (or has room for): the lists are counted, the single records 0 or 1.
         struct StorageNums {
-            u32 texMap : 4;
-            u32 texSRT : 4;
-            u32 texCoordGen : 4;
-            u32 indSRT : 2;
-            u32 chanCtrl : 1;
-            u32 matCol : 1;
-            u32 alpComp : 1;
-            u32 blendMode : 1;
+            u32 texMap;
+            u32 texSRT;
+            u32 texCoordGen;
+            u32 indSRT;
+            u32 chanCtrl;
+            u32 matCol;
+            u32 alpComp;
+            u32 blendMode;
         };
     };  // namespace detail
     class Material {
@@ -40,17 +41,17 @@ namespace Ui {
 
         void Init();
         void InitStorageNums(detail::StorageNums*);
-        void ReserveStorage(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 indSRTNum,
+        void ReserveStorage(u32 texMapNum, u32 texSRTNum, u32 texCoordGenNum, u32 indSRTNum,
                           bool allocChanCtrl, bool allocMatCol, bool allocAlpComp, bool allocBlendMode);
 
-        u8 GetTexSRTCap() const {
-            return u8(mCap.texSRT);
+        u32 GetTexSRTCap() const {
+            return mCap.texSRT;
         }
 
-        u8 GetIndTexSRTCap() const {
-            return u8(mCap.indSRT);
+        u32 GetIndTexSRTCap() const {
+            return mCap.indSRT;
         }
-        TexMap* GetTexturePtr(u8 idx) {
+        TexMap* GetTexturePtr(u32 idx) {
             return &GetTexMapAry()[idx];
         }
 
@@ -64,22 +65,22 @@ namespace Ui {
             srtAry[element] = value;
         }
 
-        u8 GetTextureNum() const {
-            return u8(mNum.texMap);
+        u32 GetTextureNum() const {
+            return mNum.texMap;
         }
 
-        void SetTextureNum(u8 num);
+        void SetTextureNum(u32 num);
 
-        u8 GetTextureCap() const {
-            return u8(mCap.texMap);
+        u32 GetTextureCap() const {
+            return mCap.texMap;
         }
 
-        u8 GetTexCoordGenCap() const {
-            return u8(mCap.texCoordGen);
+        u32 GetTexCoordGenCap() const {
+            return mCap.texCoordGen;
         }
 
-        void SetTexCoordGenNum(u8 num);
-        void SetTexture(u8 texMapIdx, const TexMap& texMap) {
+        void SetTexCoordGenNum(u32 num);
+        void SetTexture(u32 texMapIdx, const TexMap& texMap) {
             GetTexMapAry()[texMapIdx].Set(texMap);
         }
 
@@ -103,7 +104,7 @@ namespace Ui {
             return mCap.blendMode;
         }
 
-        const TexMap& GetTexture(u8 texMapIdx) const {
+        const TexMap& GetTexture(u32 texMapIdx) const {
             return GetTexMapAry()[texMapIdx];
         }
 
@@ -164,8 +165,10 @@ namespace Ui {
         detail::StorageNums mNum;
         void* mpStorage;
         NameText< 21 > mName;
+        const UiLayoutHeader* mpFile;    // the cooked layout the material was read from: its forms' tables lie in it
         const UiFormData* mNativeForms;  // the cook's four forms in the layout file
-        u8 mCoordMap[8];  // each texture coordinate's texture (the cook's; its size scales the coordinate)
+        const u8* mCoordMap;  // each texture coordinate's texture, 255 none (the cook's; its size scales the coordinate)
+        u32 mCoordCount;
         bool mHasStages;  // the shader combines more than the default of a material without its own
     };
 }  // namespace Ui

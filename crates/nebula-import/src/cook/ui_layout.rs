@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 pub const LAYOUT_MAGIC: u32 = 0x5459_4C4E; // NLYT
 pub const ANIMATION_MAGIC: u32 = 0x4E41_4C4E; // NLAN
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 pub const KIND_PANE: u8 = 0;
 pub const KIND_PICTURE: u8 = 1;
@@ -23,17 +23,21 @@ pub const KIND_BOUNDING: u8 = 4;
 
 pub const NONE16: u16 = 0xFFFF;
 
-// The loader's room in a material (Material::Material): more in the file is not read.
-const MAX_MAPS: usize = 8;
-const MAX_SRTS: usize = 10;
-const MAX_GENERATORS: usize = 8;
-const MAX_INDIRECT_SRTS: usize = 3;
-
-const LAYOUT_HEADER: usize = 96;
+const LAYOUT_HEADER: usize = 92;
 const PANE: usize = 72;
-// A material's fixed fields; its forms (8-aligned: they hold 64-bit hashes) follow.
-const MATERIAL_FIXED: usize = 432;
-const FORM: usize = 192;
+// A material: fixed fields, five counted lists, four forms (8-aligned: they hold 64-bit hashes). A form's three lists
+// are counted too.
+const MATERIAL: usize = 296;
+const FORM: usize = 48;
+const FORMS: usize = 4;
+const MAP: usize = 6;
+
+/// Material flags (UiMaterialFlag_* in UiData.hpp).
+const MATERIAL_CHANNEL: u8 = 1;
+const MATERIAL_COLOR: u8 = 2;
+const MATERIAL_ALPHA_COMPARE: u8 = 4;
+const MATERIAL_BLEND: u8 = 8;
+const MATERIAL_STAGES: u8 = 16;
 
 fn be16(b: &[u8], at: usize) -> Result<u16> {
     Ok(u16::from_be_bytes(b.get(at..at + 2).context("a field past the file's end")?.try_into()?))
@@ -97,9 +101,10 @@ pub struct UiMaterial {
     pub alpha_compare: Option<[u8; 4]>,
     /// type, source factor, destination factor, op.
     pub blend: Option<[u8; 4]>,
-    /// The four cooked forms (raster stage, remap), UiFormData records.
-    pub forms: Vec<u8>,
-    pub coord_map: [u8; 8],
+    /// The four cooked forms (raster stage, remap).
+    pub forms: Vec<material_layout::LayoutForm>,
+    /// Each coordinate's map, 255 none.
+    pub coord_map: Vec<u8>,
     pub has_stages: bool,
 }
 
@@ -267,21 +272,21 @@ fn read_material(block: &[u8], at: usize) -> Result<UiMaterial> {
     let blend = if has_blend { Some(bytes4(m, o)?) } else { None };
 
     let source = &m[..material_layout::source_size(m)?];
-    let mut forms = Vec::new();
-    for program in material_layout::programs(source)? {
-        material_layout::write_form(&mut forms, &program)?;
-    }
+    let forms = material_layout::programs(source)?
+        .iter()
+        .map(material_layout::form)
+        .collect::<Result<Vec<_>>>()?;
     let (coord_map, has_stages) = material_layout::coord_map(source)?;
     Ok(UiMaterial {
         name,
         registers,
         constants,
-        maps: maps.into_iter().take(MAX_MAPS).collect(),
-        srts: srts.into_iter().take(MAX_SRTS).collect(),
-        generators: generators.into_iter().take(MAX_GENERATORS).collect(),
+        maps,
+        srts,
+        generators,
         channel,
         material_color,
-        indirect_srts: indirect_srts.into_iter().take(MAX_INDIRECT_SRTS).collect(),
+        indirect_srts,
         alpha_compare,
         blend,
         forms,
@@ -574,6 +579,35 @@ fn words32(v: &[u32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_le_bytes()).collect()
 }
 
+/// A counted list in a record: its length and, past 0 entries, the offset of its table.
+fn put_list(out: &mut [u8], at: usize, count: usize, offset: u32) {
+    put32(out, at, count as u32);
+    put32(out, at + 4, if count == 0 { 0 } else { offset });
+}
+
+/// A table's bytes appended, its offset; 0 for none.
+fn table(out: &mut Vec<u8>, bytes: &[u8]) -> u32 {
+    if bytes.is_empty() {
+        0
+    } else {
+        append(out, bytes)
+    }
+}
+
+/// A form's record (UiFormData): its hashes, its three lists (the tables appended to `out`), the rows that are the
+/// vertex program's, flags.
+fn form_record(out: &mut Vec<u8>, f: &material_layout::LayoutForm) -> [u8; FORM] {
+    let mut r = [0u8; FORM];
+    r[0..8].copy_from_slice(&f.vertex.to_le_bytes());
+    r[8..16].copy_from_slice(&f.pixel.to_le_bytes());
+    put_list(&mut r, 16, f.rows.len(), table(out, &words32(&f.rows)));
+    put_list(&mut r, 24, f.textures.len(), table(out, &f.textures));
+    put_list(&mut r, 32, f.inputs.len(), table(out, &f.inputs));
+    put32(&mut r, 40, f.vertex_rows as u32);
+    r[44] = f.flags;
+    r
+}
+
 fn picture_record(p: &UiPicture, out: &mut Vec<u8>) -> u32 {
     let mut r = vec![0u8; 24];
     for (i, c) in p.vertex_colors.iter().enumerate() {
@@ -592,6 +626,10 @@ fn picture_record(p: &UiPicture, out: &mut Vec<u8>) -> u32 {
 /// Header (LAYOUT_HEADER bytes): magic, version, flags (bit 0 centred, bit 1 a group container), width, height; then (count, offset) for panes,
 /// materials, textures, fonts, groups; the string pool's offset and size; the pane, material and group hash tables'
 /// (slots, offset).
+/// Material (MATERIAL bytes, in one run): name, next same name, flags, reserved, registers[3][4] (s16), constants[4][4], channel[2],
+/// material colour[4], alpha compare[4], blend[4], reserved, then the lists (count, offset): maps (6 bytes each), SRTs
+/// (5 floats), generators (3 bytes), indirect SRTs, coordinate map (a byte per coordinate); four forms (FORM bytes: shader
+/// pair hashes, lists of rows (u32, the model's row codes), textures (u8) and inputs (u8), the count of rows that are the vertex program's, flags).
 /// Pane (PANE bytes): parent, first child, next sibling, subtree end (one past its last descendant), next same name;
 /// kind, base position, alpha, visible, influenced alpha, location adjust; name, user data[8], translate[3],
 /// rotate[3], scale[2], size[2], payload offset.
@@ -703,17 +741,21 @@ pub fn write_layout(ir: &UiLayoutIr) -> Result<Vec<u8>> {
 
     let material_names: Vec<&str> = ir.materials.iter().map(|m| m.name.as_str()).collect();
     let material_next = same_name_links(&material_names);
-    align(&mut out, 16);
-    let materials_at = out.len();
-    let form_bytes = ir.materials.first().map_or(0, |m| m.forms.len());
-    let material_size = MATERIAL_FIXED + form_bytes;
+    // Each material's tables first (maps, SRTs, generators, indirect SRTs, coordinate map, and per form its rows,
+    // textures and inputs), then the records in one run.
+    let mut records = Vec::with_capacity(ir.materials.len());
     for (i, m) in ir.materials.iter().enumerate() {
-        if m.forms.len() != form_bytes || form_bytes != 4 * FORM {
-            bail!("material {}: forms of {} bytes, not {form_bytes}", m.name, m.forms.len());
+        if m.forms.len() != FORMS {
+            bail!("material {}: {} forms, not {FORMS}", m.name, m.forms.len());
         }
-        let mut r = vec![0u8; MATERIAL_FIXED];
+        let mut r = [0u8; MATERIAL];
         put32(&mut r, 0, pool.add(&m.name));
         put16(&mut r, 4, material_next[i]);
+        r[6] = u8::from(m.channel.is_some()) * MATERIAL_CHANNEL
+            | u8::from(m.material_color.is_some()) * MATERIAL_COLOR
+            | u8::from(m.alpha_compare.is_some()) * MATERIAL_ALPHA_COMPARE
+            | u8::from(m.blend.is_some()) * MATERIAL_BLEND
+            | u8::from(m.has_stages) * MATERIAL_STAGES;
         for (a, reg) in m.registers.iter().enumerate() {
             for (c, v) in reg.iter().enumerate() {
                 put16(&mut r, 8 + a * 8 + c * 2, *v as u16);
@@ -722,48 +764,47 @@ pub fn write_layout(ir: &UiLayoutIr) -> Result<Vec<u8>> {
         for (k, c) in m.constants.iter().enumerate() {
             r[32 + 4 * k..36 + 4 * k].copy_from_slice(c);
         }
-        r[48] = m.maps.len() as u8;
-        r[49] = m.srts.len() as u8;
-        r[50] = m.generators.len() as u8;
-        r[51] = m.indirect_srts.len() as u8;
-        r[52] = u8::from(m.channel.is_some());
-        r[53] = u8::from(m.material_color.is_some());
-        r[54] = u8::from(m.alpha_compare.is_some());
-        r[55] = u8::from(m.blend.is_some());
-        for (k, map) in m.maps.iter().enumerate() {
-            let b = 56 + 8 * k;
-            put16(&mut r, b, map.texture);
-            r[b + 2..b + 6].copy_from_slice(&[map.wrap_s, map.wrap_t, map.min_filter, map.mag_filter]);
-        }
-        for (k, s) in m.srts.iter().enumerate() {
-            putf(&mut r, 120 + 20 * k, s);
-        }
-        for (k, g) in m.generators.iter().enumerate() {
-            r[320 + 4 * k..323 + 4 * k].copy_from_slice(g);
-        }
         if let Some(c) = m.channel {
-            r[352..354].copy_from_slice(&c);
+            r[48..50].copy_from_slice(&c);
         }
         if let Some(c) = m.material_color {
-            r[356..360].copy_from_slice(&c);
-        }
-        for (k, s) in m.indirect_srts.iter().enumerate() {
-            putf(&mut r, 360 + 20 * k, s);
+            r[50..54].copy_from_slice(&c);
         }
         if let Some(a) = m.alpha_compare {
-            r[420..424].copy_from_slice(&a);
+            r[54..58].copy_from_slice(&a);
         }
         if let Some(b) = m.blend {
-            r[424..428].copy_from_slice(&b);
+            r[58..62].copy_from_slice(&b);
         }
-        out.extend_from_slice(&r);
-        out.extend_from_slice(&m.forms);
-        out.extend_from_slice(&m.coord_map);
-        out.extend_from_slice(&[u8::from(m.has_stages), 0, 0, 0]);
-        align(&mut out, 8);
+        let maps: Vec<u8> = m
+            .maps
+            .iter()
+            .flat_map(|map| {
+                let mut b = map.texture.to_le_bytes().to_vec();
+                b.extend_from_slice(&[map.wrap_s, map.wrap_t, map.min_filter, map.mag_filter]);
+                b
+            })
+            .collect();
+        debug_assert_eq!(maps.len(), MAP * m.maps.len());
+        let srts: Vec<u8> = words32(&m.srts.iter().flat_map(|s| s.iter().map(|f| f.to_bits())).collect::<Vec<_>>());
+        let generators: Vec<u8> = m.generators.iter().flat_map(|g| g.iter().copied()).collect();
+        let indirect: Vec<u8> = words32(&m.indirect_srts.iter().flat_map(|s| s.iter().map(|f| f.to_bits())).collect::<Vec<_>>());
+        put_list(&mut r, 64, m.maps.len(), table(&mut out, &maps));
+        put_list(&mut r, 72, m.srts.len(), table(&mut out, &srts));
+        put_list(&mut r, 80, m.generators.len(), table(&mut out, &generators));
+        put_list(&mut r, 88, m.indirect_srts.len(), table(&mut out, &indirect));
+        put_list(&mut r, 96, m.coord_map.len(), table(&mut out, &m.coord_map));
+        for (k, f) in m.forms.iter().enumerate() {
+            let form = form_record(&mut out, f);
+            r[104 + FORM * k..104 + FORM * (k + 1)].copy_from_slice(&form);
+        }
+        records.push(r);
     }
-    let material_stride = if ir.materials.is_empty() { 0 } else { (out.len() - materials_at) / ir.materials.len() };
-    debug_assert!(ir.materials.is_empty() || material_stride >= material_size);
+    align(&mut out, 16);
+    let materials_at = out.len();
+    for r in &records {
+        out.extend_from_slice(r);
+    }
 
     let textures: Vec<u32> = ir.textures.iter().map(|t| pool.add(t)).collect();
     let fonts: Vec<u32> = ir.fonts.iter().map(|f| pool.add(f)).collect();
@@ -787,7 +828,7 @@ pub fn write_layout(ir: &UiLayoutIr) -> Result<Vec<u8>> {
     let pool_at = append(&mut out, &pool.bytes);
     align(&mut out, 4);
 
-    let header: [u32; 24] = [
+    let header: [u32; 23] = [
         LAYOUT_MAGIC,
         VERSION,
         u32::from(ir.centered) | u32::from(ir.has_group_container) << 1,
@@ -797,7 +838,6 @@ pub fn write_layout(ir: &UiLayoutIr) -> Result<Vec<u8>> {
         panes_at as u32,
         ir.materials.len() as u32,
         materials_at as u32,
-        material_stride as u32,
         ir.textures.len() as u32,
         textures_at,
         ir.fonts.len() as u32,

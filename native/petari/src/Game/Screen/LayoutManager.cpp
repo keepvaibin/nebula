@@ -606,7 +606,7 @@ void LayoutManager::replaceIndDummyTexture() {
 
         Ui::Material* pMaterial = pPicPane->GetMaterial();
 
-        for (u8 texMapIdx = 0; texMapIdx < pMaterial->GetTextureNum(); texMapIdx++) {
+        for (u32 texMapIdx = 0; texMapIdx < pMaterial->GetTextureNum(); texMapIdx++) {
             void* pImage = pMaterial->GetTexture(texMapIdx).mImage;
 
             if (pImage < pIndDummyResStart) {

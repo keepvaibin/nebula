@@ -5,6 +5,7 @@ struct MaterialConstants {
     float4 params;  // x: the constant alpha (0-1), y: 1 the constant alone (the texture's alpha unused)
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

@@ -6,6 +6,7 @@ struct MaterialConstants {
     float4 coord[6];  // the colour's matrix and the mask's, three rows each
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

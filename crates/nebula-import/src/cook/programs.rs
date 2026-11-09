@@ -886,10 +886,15 @@ pub fn has_lit_form(m: &MaterialIr) -> Result<bool> {
     Ok(false)
 }
 
+/// The program's varyings. Its own coordinates take TEXCOORD0 up; the lit varyings (three) and the motion varyings (two)
+/// follow them in that order, so their places move with the coordinate count.
 fn varyings(uv_kinds: &[bool], color: [bool; 2], lit: bool) -> String {
-    let mut s = String::from("struct Varyings {\n");
+    let lit_first = uv_kinds.len();
+    let motion_first = lit_first + if lit { 3 } else { 0 };
+    let mut s = format!("#define NEBULA_MOTION_CURRENT_INDEX {motion_first}\n#define NEBULA_MOTION_PREVIOUS_INDEX {}\n", motion_first + 1);
+    s.push_str("struct Varyings {\n");
     if lit {
-        let _ = writeln!(s, "    PER_SAMPLE float3 lit_eye : TEXCOORD{};\n    PER_SAMPLE float3 lit_nrm : TEXCOORD{};\n    nointerpolation uint lit_light : TEXCOORD{};", super::limits::LIT_EYE_INDEX, super::limits::LIT_NORMAL_INDEX, super::limits::LIT_SET_INDEX);
+        let _ = writeln!(s, "    PER_SAMPLE float3 lit_eye : TEXCOORD{lit_first};\n    PER_SAMPLE float3 lit_nrm : TEXCOORD{};\n    nointerpolation uint lit_light : TEXCOORD{};", lit_first + 1, lit_first + 2);
     }
     s.push_str("    float4 pos : SV_Position;\n");
     if color[0] {
@@ -1227,15 +1232,13 @@ pub fn finish_text(material: &str, form: Form, t: &mut Text) {
     }
 }
 
-/// A layout material's program bytes (material_layout::programs) as a material. Registers can hold anything a layout animation
+/// A layout material's program (material_layout::programs) as a material. Registers can hold anything a layout animation
 /// writes, so they stay unknown to the range analysis.
-pub fn material_from_program(p: &[u8]) -> MaterialIr {
+pub fn material_from_program(p: &super::material::LayoutProgram) -> MaterialIr {
     let mut m = MaterialIr { name: String::new(), has_stage_colors: true, ..MaterialIr::default() };
-    m.pixel_stage_count = u32::from(p[0]);
-    m.channel_count = u32::from(p[2]);
-    for i in 0..usize::from(p[0]) {
-        let b = 16 + i * 34;
-        let s = &p[b..b + 34];
+    m.pixel_stage_count = p.stages.len() as u32;
+    m.channel_count = u32::from(p.channel_count);
+    for s in &p.stages {
         let mut warp = [0u8; 9];
         warp.copy_from_slice(&s[25..34]);
         m.stages.push(StageIr {
@@ -1261,11 +1264,10 @@ pub fn material_from_program(p: &[u8]) -> MaterialIr {
             warp,
         });
     }
-    for i in 0..usize::from(p[1]) {
-        let b = 592 + i * 8;
+    for g in &p.generators {
         // Normalized coding: mode, projective, position or normal source; row; the matrix place.
-        let row = p[b + 1] & 15;
-        let projective = p[b] & 4 != 0;
+        let row = g[1] & 15;
+        let projective = g[0] & 4 != 0;
         let source = match row {
             13 => 0,
             14 => 1,
@@ -1273,28 +1275,22 @@ pub fn material_from_program(p: &[u8]) -> MaterialIr {
             2 => 19,
             n => n,
         };
-        m.coords.push(CoordIr { kind: u8::from(!projective), source: if source >= 19 { source + 13 } else { source }, matrix: if p[b + 2] == 60 { NONE } else { u32::from(p[b + 2].saturating_sub(30) / 3) } });
+        m.coords.push(CoordIr { kind: u8::from(!projective), source: if source >= 19 { source + 13 } else { source }, matrix: if g[2] == 60 { NONE } else { u32::from(g[2].saturating_sub(30) / 3) } });
     }
+    // The four channels are enabled by nothing here; the first two read the material sources the layout names.
     for c in 0..4 {
-        let b = 656 + c * 8;
         m.channels[c] = ChannelIr {
-            enable: p[b],
-            material_source: p[b + 1],
-            ambient_source: p[b + 2],
-            light_mask: p[b + 3],
-            diffuse: p[b + 4],
-            attenuation: p[b + 5],
+            enable: 0,
+            material_source: if c < 2 { p.channel_sources[c] } else { 0 },
+            ambient_source: 0,
+            light_mask: 0,
+            diffuse: 0,
+            attenuation: 1,
         };
     }
-    for i in 0..4 {
-        m.swaps[i].copy_from_slice(&p[560 + i * 4..564 + i * 4]);
-    }
-    for i in 0..usize::from(p[3]) {
-        let mut order = [0u8; 4];
-        order.copy_from_slice(&p[576 + i * 4..580 + i * 4]);
-        m.warp_orders.push(order);
-    }
-    (m.alpha_comp0, m.alpha_op, m.alpha_comp1) = (p[712], p[713], p[714]);
+    m.swaps = p.swaps;
+    m.warp_orders = p.orders.clone();
+    (m.alpha_comp0, m.alpha_op, m.alpha_comp1) = (p.alpha[0], p.alpha[1], p.alpha[2]);
     m
 }
 

@@ -375,6 +375,42 @@ private:
     u32 mCount, mRoom;
 };
 
+// A site material's textures by slot: a few inline, more as slots are named; every entry zero until set.
+class DrawTextures {
+public:
+    DrawTextures() : mData(mInline), mRoom(cInline) {
+        memset(mInline, 0, sizeof(mInline));
+    }
+    DrawTextures(const DrawTextures& rOther) : DrawTextures() { *this = rOther; }
+    ~DrawTextures() { if (mData != mInline) { delete[] mData; } }
+    DrawTextures& operator=(const DrawTextures& rOther) {
+        if (this != &rOther) {
+            ensure(rOther.mRoom);
+            memcpy(mData, rOther.mData, rOther.mRoom * sizeof(NebulaFrameTexture));
+        }
+        return *this;
+    }
+    // Room for `count` slots, the new ones zero.
+    void ensure(u32 count) {
+        if (count <= mRoom) { return; }
+        const u32 room = count > mRoom * 2 ? count : mRoom * 2;
+        NebulaFrameTexture* pNew = new NebulaFrameTexture[room];
+        memset(pNew, 0, room * sizeof(NebulaFrameTexture));
+        memcpy(pNew, mData, mRoom * sizeof(NebulaFrameTexture));
+        if (mData != mInline) { delete[] mData; }
+        mData = pNew; mRoom = room;
+    }
+    void clear() { memset(mData, 0, mRoom * sizeof(NebulaFrameTexture)); }
+    NebulaFrameTexture& operator[](u32 slot) { ensure(slot + 1); return mData[slot]; }
+    const NebulaFrameTexture& operator[](u32 slot) const { return mData[slot]; }
+    operator const NebulaFrameTexture*() const { return mData; }
+private:
+    static const u32 cInline = 4;
+    NebulaFrameTexture mInline[cInline];
+    NebulaFrameTexture* mData;
+    u32 mRoom;
+};
+
 struct SiteMaterial {
     enum Blend { BLEND_OPAQUE, BLEND_ALPHA, BLEND_ADD_ALPHA, BLEND_SUBTRACT, BLEND_ADD };
 
@@ -412,7 +448,7 @@ struct SiteMaterial {
     DrawConstants constants;
     u32 mRowCount;   // rows of four floats the shader declares, or more for its coordinate matrices
     DrawMatrixRows mCoordRows;
-    NebulaFrameTexture mTextures[NEBULA_MATERIAL_SLOTS];
+    DrawTextures mTextures;
     u32 mTextureCount;
 };
 
@@ -503,6 +539,13 @@ public:
     T* vertices(NebulaPrimitive primitive, u32 count) {
         finish();
         return static_cast< T* >(begin(primitive, count, sizeof(T), VertexLayout< T >::inputs(), VertexLayout< T >::count));
+    }
+
+    // Room for `count` vertices of `stride` bytes each, read through `inputCount` inputs that stay valid for the frame:
+    // for vertices whose layout is only known as the site runs.
+    void* vertices(NebulaPrimitive primitive, u32 count, u32 stride, const NebulaLayoutInput* pInputs, u32 inputCount) {
+        finish();
+        return begin(primitive, count, stride, pInputs, inputCount);
     }
 
     // Writes nothing and draws what was written so far.

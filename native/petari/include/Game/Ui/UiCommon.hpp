@@ -40,7 +40,7 @@ namespace Ui {
         const f32 (*GetDrawMtx())[4];
         void SetDrawNothing();
         void SetDrawPicture(const SiteMaterial& rMaterial);
-        void SetDrawForm(const UiFormData* pForm, u32 constants, u32 table, u32 state);
+        void SetDrawForm(const UiFormData* pForm, const u8* pInputs, u32 constants, u32 table, u32 state);
 
         void DrawQuad(const Vec2f&, const Size&, u8, const Vec2f (*)[4], const Color8*);
         void DrawQuad(const Vec2f&, const Size&, u8, const Vec2f (*)[4], const Color8*, u8);
@@ -91,7 +91,7 @@ namespace Ui {
             return At< UiPaneData >(pLayout->mPanes) + idx;
         }
         const UiMaterialData* MaterialAt(u32 idx) const {
-            return At< UiMaterialData >(pLayout->mMaterials + idx * pLayout->mMaterialStride);
+            return At< UiMaterialData >(pLayout->mMaterials) + idx;
         }
         const char* TextureName(u32 idx) const {
             return String(At< u32 >(pLayout->mTextures)[idx]);
@@ -115,7 +115,7 @@ namespace Ui {
             reinterpret_cast< u8* >(&pColors[idx / 4])[idx % 4] = value;
         }
 
-        const Size GetTextureSize(Material* pMaterial, u8 texMapIdx);
+        const Size GetTextureSize(Material* pMaterial, u32 texMapIdx);
 
         inline void SetHorizontalPosition(u8* pVar, u8 newVal) {
             *pVar = u8(GetVerticalPosition(*pVar) * 3 + newVal);

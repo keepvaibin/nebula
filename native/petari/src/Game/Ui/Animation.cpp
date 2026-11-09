@@ -8,6 +8,7 @@
 #include "Game/Ui/Material.hpp"
 #include "Game/Ui/Pane.hpp"
 #include "Game/Ui/ResourceAccessor.hpp"
+#include "Game/System/GameLog.hpp"
 #include <new>
 
 const f32 R_FRAME_TOLERANCE = 0.001F;
@@ -340,6 +341,9 @@ namespace Ui {
         const UiAnimationHeader* const pHead = static_cast< const UiAnimationHeader* >(anmResBuf);
         if (pHead->mMagic == cUiAnimationMagic && pHead->mVersion == cUiDataVersion) {
             mpResBlock = pHead;
+        } else if (pHead->mMagic == cUiAnimationMagic) {
+            GameLog("UiData: a layout animation of version %u; this game reads version %u (the pak needs a new cook)\n",
+                    static_cast< unsigned >(pHead->mVersion), static_cast< unsigned >(cUiDataVersion));
         }
     }
 

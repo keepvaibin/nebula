@@ -12,6 +12,7 @@ struct MaterialConstants {
     float4 warp;           // xy: the warp per indirect step, in screen texture coordinates; z: 1 above water
 };
 
+#define NATIVE_COORDS 4
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

@@ -6,6 +6,7 @@ struct MaterialConstants {
     float4 warp;  // xy: thread texels per indirect step along s (from alpha) and t (from blue); zw: the thread size
 };
 
+#define NATIVE_COORDS 2
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

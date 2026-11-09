@@ -19,6 +19,7 @@ struct MaterialConstants {
 };
 
 #define NATIVE_SHELL 1
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 float2 fur_coord(NativeVertex v, uint i) {

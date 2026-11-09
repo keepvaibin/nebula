@@ -14,7 +14,7 @@ namespace Ui {
 
     Picture::Picture(Layout& rLayout, const UiPaneData* pRes, const ResBlockSet& rBlockSet) : Pane(rLayout, pRes, rBlockSet) {
         const UiPictureData* const pPic = rBlockSet.At< UiPictureData >(pRes->mPayload);
-        u8 num = Min< u8 >(pPic->mCoordCount, 8);
+        const u8 num = pPic->mCoordCount;
         Init(num);
 
         for (int i = 0; i < 4; i++) {
@@ -47,7 +47,7 @@ namespace Ui {
             return;
         }
 
-        u8 idx = mpMaterial->GetTextureNum();
+        const u32 idx = mpMaterial->GetTextureNum();
 
         mpMaterial->SetTextureNum(idx + 1);
         mpMaterial->SetTexture(idx, rTexMap);
@@ -55,7 +55,7 @@ namespace Ui {
         mpMaterial->SetTexCoordGenNum(mpMaterial->GetTextureNum());
         mpMaterial->SetTexCoordGen(idx, TexCoordGen());
 
-        SetTexCoordNum(mpMaterial->GetTextureNum());
+        SetTexCoordNum(static_cast< u8 >(mpMaterial->GetTextureNum()));
 
         if (mSize == Size(0.0f, 0.0f) && mpMaterial->GetTextureNum() == 1) {
             mSize = detail::GetTextureSize(mpMaterial, 0);

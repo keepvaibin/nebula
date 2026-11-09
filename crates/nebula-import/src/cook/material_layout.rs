@@ -1,5 +1,5 @@
 //! Cook layout source materials, including the tint/remap choices animations use.
-use super::{normalize_program, PROGRAM_BYTES};
+use super::{LayoutProgram, STAGE_BYTES};
 use anyhow::{bail, Context, Result};
 
 pub fn source_size(source: &[u8]) -> Result<usize> {
@@ -48,7 +48,7 @@ fn material_ranges(block: &[u8]) -> Result<Vec<std::ops::Range<usize>>> {
     Ok(result)
 }
 
-pub fn file_programs(bytes: &[u8]) -> Result<Vec<[u8; PROGRAM_BYTES]>> {
+pub fn file_programs(bytes: &[u8]) -> Result<Vec<LayoutProgram>> {
     if bytes.len() < 16 || !bytes.starts_with(b"RLYT") {
         bail!("expected source layout");
     }
@@ -79,27 +79,38 @@ pub fn file_programs(bytes: &[u8]) -> Result<Vec<[u8; PROGRAM_BYTES]>> {
 }
 
 /// Each coordinate's texture (the map of the last stage or indirect order using it, 255 none) and whether the
-/// material has stages of its own; with none, coordinate i reads map i.
-pub fn coord_map(source: &[u8]) -> Result<([u8; 8], bool)> {
+/// material has stages of its own; with none, coordinate i reads map i. The table runs to the highest coordinate the
+/// generators, the maps or the stages and orders name.
+pub fn coord_map(source: &[u8]) -> Result<(Vec<u8>, bool)> {
     let bits = u32::from_be_bytes(source.get(60..64).context("short layout material")?.try_into()?);
     let textures = (bits & 15) as usize;
+    let generators = ((bits >> 8) & 15) as usize;
     let (orders_at, stages_at, rest_at) = stage_ranges(bits);
     let source = source.get(..rest_at).context("layout material truncated")?;
     let stages = ((bits >> 18) & 31) as usize;
-    let mut coord_map = [255u8; 8];
-    let mut set = |coord: u8, map: u8, high: u8| {
-        if coord < 8 && map < 8 && high == 0 {
-            coord_map[coord as usize] = map;
-        }
-    };
+    let mut named: Vec<(u8, u8)> = Vec::new();
     for s in source[stages_at..rest_at].chunks_exact(16) {
-        set(s[0], s[2], s[3] & 1);
+        if s[3] & 1 == 0 && s[0] != 255 && s[2] != 255 {
+            named.push((s[0], s[2]));
+        }
     }
     for o in source[orders_at..stages_at].chunks_exact(4) {
-        set(o[0], o[1], 0);
+        if o[0] != 255 && o[1] != 255 {
+            named.push((o[0], o[1]));
+        }
+    }
+    let mut len = generators.max(textures);
+    for &(coord, _) in &named {
+        len = len.max(coord as usize + 1);
+    }
+    let mut coord_map = vec![255u8; len];
+    for &(coord, map) in &named {
+        if (map as usize) < textures {
+            coord_map[coord as usize] = map;
+        }
     }
     if stages == 0 {
-        for (i, c) in coord_map.iter_mut().enumerate().take(textures.min(8)) {
+        for (i, c) in coord_map.iter_mut().enumerate().take(textures) {
             *c = i as u8;
         }
     }
@@ -121,45 +132,38 @@ fn stage_ranges(bits: u32) -> (usize, usize, usize) {
     (orders_at, stages_at, stages_at + stages * 16)
 }
 
-/// One of a layout material's four programs as a UiFormData record (Game/Ui/UiData.hpp): hashes, row counts, then rows, textures and
-/// inputs in fixed room.
-pub fn write_form(block: &mut Vec<u8>, program: &[u8; PROGRAM_BYTES]) -> Result<()> {
+/// One of a layout material's four programs as the game draws it (UiFormData in Game/Ui/UiData.hpp): the hashes of its
+/// shader pair, and its rows, texture slots and inputs, all of them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayoutForm {
+    pub vertex: u64,
+    pub pixel: u64,
+    /// The vertex program's rows, then the pixel program's.
+    pub rows: Vec<u32>,
+    pub vertex_rows: usize,
+    pub textures: Vec<u8>,
+    pub inputs: Vec<u8>,
+    pub flags: u8,
+}
+
+pub fn form(program: &LayoutProgram) -> Result<LayoutForm> {
     use crate::cook::programs as gen;
     let m = gen::material_from_program(program);
     let mut t = gen::generate(&m, gen::Form::default(), false, &gen::layout_registers())?;
     gen::finish_text("", gen::Form { replace: 0, normal_coord: true, ..gen::Form::default() }, &mut t);
-    if t.vertex_rows.len() + t.pixel_rows.len() > 64 || t.textures.len() > 16 || t.inputs.len() > 24 {
-        bail!("layout program past the form's room");
-    }
-    block.extend_from_slice(&gen::text_hash(&t.vertex).to_le_bytes());
-    block.extend_from_slice(&gen::text_hash(&t.pixel).to_le_bytes());
-    block.extend_from_slice(&(t.vertex_rows.len() as u16).to_le_bytes());
-    block.extend_from_slice(&(t.pixel_rows.len() as u16).to_le_bytes());
-    block.push(t.textures.len() as u8);
-    block.push(t.inputs.len() as u8);
-    block.push(u8::from(t.alpha_test) << 2);
-    block.push(0);
-    let mut rows = [0u16; 64];
-    for (i, r) in t.vertex_rows.iter().chain(t.pixel_rows.iter()).enumerate() {
-        rows[i] = u16::try_from(*r).context("layout row outside its format")?;
-    }
-    for r in rows {
-        block.extend_from_slice(&r.to_le_bytes());
-    }
-    let mut textures = [0u8; 16];
-    for (i, x) in t.textures.iter().enumerate() {
-        textures[i] = *x;
-    }
-    block.extend_from_slice(&textures);
-    let mut inputs = [0u8; 24];
-    for (i, x) in t.inputs.iter().enumerate() {
-        inputs[i] = gen::input_code(x);
-    }
-    block.extend_from_slice(&inputs);
-    Ok(())
+    let rows: Vec<u32> = t.vertex_rows.iter().chain(t.pixel_rows.iter()).copied().collect();
+    Ok(LayoutForm {
+        vertex: gen::text_hash(&t.vertex),
+        pixel: gen::text_hash(&t.pixel),
+        rows,
+        vertex_rows: t.vertex_rows.len(),
+        textures: t.textures.clone(),
+        inputs: t.inputs.iter().map(gen::input_code).collect(),
+        flags: u8::from(t.alpha_test) << 2,
+    })
 }
 
-pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
+pub fn programs(source: &[u8]) -> Result<[LayoutProgram; 4]> {
     if source.len() < 64 {
         bail!("layout material header is incomplete");
     }
@@ -170,9 +174,6 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
     let indirect_srt = ((bits >> 13) & 3) as usize;
     let indirect = ((bits >> 15) & 7) as usize;
     let stages = ((bits >> 18) & 31) as usize;
-    if textures > 8 || generators > 8 || indirect > 4 || stages > 16 {
-        bail!("invalid layout source counts");
-    }
     let mut at = 64 + textures * 4 + tex_srt * 20;
     let gens = source
         .get(at..at + generators * 4)
@@ -217,36 +218,24 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
     } else {
         [7, 0, 7]
     };
-    let mut result = [[0u8; PROGRAM_BYTES]; 4];
+    let mut result: [LayoutProgram; 4] = Default::default();
     for (variant, p) in result.iter_mut().enumerate() {
-        p[1] = generators as u8;
-        p[2] = 1;
-        p[3] = indirect as u8;
-        p[657] = channels[0];
-        p[665] = channels[1];
-        for i in 0..16 {
-            let b = 16 + i * 34;
-            p[b..b + 3].fill(255);
-            p[b + 23] = 2;
+        p.channel_count = 1;
+        p.channel_sources = channels;
+        p.swaps = swaps;
+        p.orders = orders.chunks_exact(4).map(|o| [o[0], o[1], o[2], o[3]]).collect();
+        p.alpha = alpha;
+        for g in gens.chunks_exact(4) {
+            p.generators.push([g[0], g[1], g[2], 0, 61, 0, 0, 0]);
         }
-        for (i, g) in gens.chunks_exact(4).enumerate() {
-            p[592 + i * 8..595 + i * 8].copy_from_slice(&g[..3]);
-            p[596 + i * 8] = 61;
-        }
-        for (i, s) in swaps.iter().enumerate() {
-            p[560 + i * 4..564 + i * 4].copy_from_slice(s);
-        }
-        p[576..576 + orders.len()].copy_from_slice(orders);
-        p[712..715].copy_from_slice(&alpha);
         if stages != 0 {
-            p[0] = stages as u8;
-            for (i, s) in stage_data.chunks_exact(16).enumerate() {
-                let b = 16 + i * 34;
-                p[b..b + 3].copy_from_slice(&[s[0], s[2], s[1]]);
-                p[b + 21] = (s[3] >> 1) & 3;
-                p[b + 22] = (s[3] >> 3) & 3;
-                for (from, to) in [(4, b + 3), (8, b + 12)] {
-                    p[to..to + 9].copy_from_slice(&[
+            for s in stage_data.chunks_exact(16) {
+                let mut st = LayoutProgram::new_stage();
+                st[..3].copy_from_slice(&[s[0], s[2], s[1]]);
+                st[21] = (s[3] >> 1) & 3;
+                st[22] = (s[3] >> 3) & 3;
+                for (from, to) in [(4, 3), (8, 12)] {
+                    st[to..to + 9].copy_from_slice(&[
                         s[from] & 15,
                         s[from] >> 4,
                         s[from + 1] & 15,
@@ -258,9 +247,9 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
                         (s[from + 3] >> 1) & 3,
                     ]);
                 }
-                p[b + 23] = s[7] >> 3;
-                p[b + 24] = s[11] >> 3;
-                p[b + 25..b + 34].copy_from_slice(&[
+                st[23] = s[7] >> 3;
+                st[24] = s[11] >> 3;
+                st[25..STAGE_BYTES].copy_from_slice(&[
                     s[12],
                     s[15] & 3,
                     s[13] & 7,
@@ -271,66 +260,62 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
                     (s[15] >> 3) & 1,
                     (s[15] >> 4) & 3,
                 ]);
+                p.stages.push(st);
             }
         } else {
-            let mut n = 0usize;
-            let mut add = |coord: u8,
-                           map: u8,
-                           channel: u8,
-                           color: [u8; 4],
-                           alpha: [u8; 4],
-                           constant: Option<u8>| {
-                let b = 16 + n * 34;
-                p[b..b + 3].copy_from_slice(&[coord, map, channel]);
-                p[b + 3..b + 7].copy_from_slice(&color);
-                p[b + 12..b + 16].copy_from_slice(&alpha);
-                p[b + 10] = 1;
-                p[b + 19] = 1;
+            let add = |stages: &mut Vec<[u8; STAGE_BYTES]>,
+                       coord: u8,
+                       map: u8,
+                       channel: u8,
+                       color: [u8; 4],
+                       alpha: [u8; 4],
+                       constant: Option<u8>| {
+                let mut st = LayoutProgram::new_stage();
+                st[..3].copy_from_slice(&[coord, map, channel]);
+                st[3..7].copy_from_slice(&color);
+                st[12..16].copy_from_slice(&alpha);
+                st[10] = 1;
+                st[19] = 1;
                 if let Some(k) = constant {
-                    p[b + 23] = k;
-                    p[b + 24] = k;
+                    st[23] = k;
+                    st[24] = k;
                 }
-                n += 1;
+                stages.push(st);
             };
             if textures == 0 {
-                add(255, 255, 4, [15, 4, 10, 15], [7, 2, 5, 7], None);
+                add(&mut p.stages, 255, 255, 4, [15, 4, 10, 15], [7, 2, 5, 7], None);
             } else {
                 if textures == 1 {
-                    add(0, 0, 255, [2, 4, 8, 15], [1, 2, 4, 7], None);
+                    add(&mut p.stages, 0, 0, 255, [2, 4, 8, 15], [1, 2, 4, 7], None);
                 } else {
                     if textures == 2 {
-                        add(0, 0, 255, [15, 15, 15, 8], [7, 7, 7, 4], None);
-                        add(1, 1, 255, [8, 0, 14, 15], [4, 0, 6, 7], Some(31));
+                        add(&mut p.stages, 0, 0, 255, [15, 15, 15, 8], [7, 7, 7, 4], None);
+                        add(&mut p.stages, 1, 1, 255, [8, 0, 14, 15], [4, 0, 6, 7], Some(31));
                     } else {
+                        // The constant selectors cycle through the four constant colours' colour and alpha forms.
+                        const SELECTORS: [u8; 8] = [31, 27, 23, 19, 30, 26, 22, 18];
                         for i in 0..textures {
                             add(
+                                &mut p.stages,
                                 i as u8,
                                 i as u8,
                                 255,
                                 [15, 8, 14, if i == 0 { 15 } else { 0 }],
                                 [7, 4, 6, if i == 0 { 7 } else { 0 }],
-                                Some([31, 27, 23, 19, 30, 26, 22, 18][i]),
+                                Some(SELECTORS[i % SELECTORS.len()]),
                             );
                         }
                     }
                     if variant & 2 != 0 {
-                        add(255, 255, 255, [2, 4, 0, 15], [1, 2, 0, 7], None);
+                        add(&mut p.stages, 255, 255, 255, [2, 4, 0, 15], [1, 2, 0, 7], None);
                     }
                 }
                 if variant & 1 != 0 {
-                    add(255, 255, 4, [15, 0, 10, 15], [7, 0, 5, 7], None);
+                    add(&mut p.stages, 255, 255, 4, [15, 0, 10, 15], [7, 0, 5, 7], None);
                 }
             }
-            p[0] = n as u8;
         }
-        *p = normalize_program(p)?;
-        // A layout's position or normal source is as sent: rows 13 and 14.
-        for i in 0..usize::from(p[1]) {
-            let at = 592 + 8 * i + 1;
-            if p[at] & 15 <= 1 {
-                p[at] = (p[at] & 0xF0) | (13 + (p[at] & 15));
-            }
-        }
+        p.normalize();
     }
     Ok(result)
 }

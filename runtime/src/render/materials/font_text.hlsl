@@ -11,6 +11,7 @@ struct MaterialConstants {
     float4 params;     // x: 1 an intensity font; y: the sheet's distance range in texels, 0 a picture
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 #if !NATIVE_OWN_VERTEX

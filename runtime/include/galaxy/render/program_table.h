@@ -29,6 +29,9 @@ enum ProgramVariant : unsigned {
 [[nodiscard]] ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept;
 // Its text reads the block's world rows.
 [[nodiscard]] bool program_reads_world(std::uint64_t vertex) noexcept;
+// The texture coordinates a written program's vertex stage reads (its NATIVE_COORDS); 0 for a generated program, whose
+// inputs its form names.
+[[nodiscard]] std::uint32_t program_coords(std::uint64_t vertex) noexcept;
 // It lights at the pixel: a form drawn only under per-pixel or enhanced lighting.
 [[nodiscard]] bool program_lit(std::uint64_t pixel) noexcept;
 // How many programs the build holds, for the census.

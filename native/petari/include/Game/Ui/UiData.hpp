@@ -6,7 +6,7 @@
 // place. Offsets count from the file's start; 0 is none. Names are offsets into the file's string pool. Panes are in
 // tree order (a pane's descendants follow it), so a subtree is the index range [pane, mSubtreeEnd).
 
-enum { cUiLayoutMagic = 0x54594C4E /* NLYT */, cUiAnimationMagic = 0x4E414C4E /* NLAN */, cUiDataVersion = 1 };
+enum { cUiLayoutMagic = 0x54594C4E /* NLYT */, cUiAnimationMagic = 0x4E414C4E /* NLAN */, cUiDataVersion = 2 };
 enum { cUiNone16 = 0xFFFF };
 
 enum {
@@ -25,8 +25,7 @@ struct UiLayoutHeader {
     u32 mPaneCount;
     u32 mPanes;  // UiPaneData[mPaneCount]
     u32 mMaterialCount;
-    u32 mMaterials;       // UiMaterialData, mMaterialStride bytes apart
-    u32 mMaterialStride;  // the fixed fields, the four forms, the coordinate map, padding
+    u32 mMaterials;  // UiMaterialData[mMaterialCount]
     u32 mTextureCount;
     u32 mTextures;  // u32[mTextureCount]: names
     u32 mFontCount;
@@ -42,7 +41,7 @@ struct UiLayoutHeader {
     u32 mGroupSlots;
     u32 mGroupTable;
 };
-static_assert(sizeof(UiLayoutHeader) == 96);
+static_assert(sizeof(UiLayoutHeader) == 92);
 
 struct UiPaneData {
     u16 mParent;       // cUiNone16 for the root
@@ -109,61 +108,78 @@ struct UiWindowData {
 };
 static_assert(sizeof(UiWindowData) == 28);
 
+// A counted table in the file: `mCount` entries of the list's record at `mOffset` (0 when there are none).
+struct UiDataList {
+    u32 mCount;
+    u32 mOffset;
+};
+static_assert(sizeof(UiDataList) == 8);
+
 struct UiMapData {
     u16 mTexture;  // into the layout's texture names
     u8 mWrapS;
     u8 mWrapT;
     u8 mMinFilter;
     u8 mMagFilter;
-    u8 mReserved[2];
 };
-static_assert(sizeof(UiMapData) == 8);
+static_assert(sizeof(UiMapData) == 6);
 
-// A material's form as the cook wrote it (its shader pair, the rows it reads, its texture slots and inputs).
+// A texture matrix: the translation, the rotation in degrees, the scale.
+struct UiSrtData {
+    f32 mTranslate[2];
+    f32 mRotate;
+    f32 mScale[2];
+};
+static_assert(sizeof(UiSrtData) == 20);
+
+struct UiGeneratorData {
+    u8 mType;
+    u8 mSource;
+    u8 mMatrix;
+};
+static_assert(sizeof(UiGeneratorData) == 3);
+
+// A material's form as the cook wrote it: its shader pair, and the rows it reads, its texture slots and its inputs.
 struct UiFormData {
     u64 mVertex;
     u64 mPixel;
-    u16 mVertexRows;
-    u16 mPixelRows;
-    u8 mTextureCount;
-    u8 mInputCount;
+    UiDataList mRows;      // u32[mRows.mCount]: the vertex program's first (mVertexRows of them), then the pixel program's
+    UiDataList mTextures;  // u8[mTextures.mCount]: the material's map for each slot
+    UiDataList mInputs;    // u8[mInputs.mCount]: the input codes
+    u32 mVertexRows;
     u8 mFlags;
-    u8 mReserved;
-    u16 mRows[64];
-    u8 mTextures[16];
-    u8 mInputs[24];
+    u8 mReserved[3];  // 8-aligned for the hashes
 };
-static_assert(sizeof(UiFormData) == 192);
+static_assert(sizeof(UiFormData) == 48);
+
+enum {
+    UiMaterialFlag_Channel = 1,
+    UiMaterialFlag_MaterialColor = 2,
+    UiMaterialFlag_AlphaCompare = 4,
+    UiMaterialFlag_Blend = 8,
+    UiMaterialFlag_Stages = 16,  // the shader combines more than the default of a material without its own
+};
 
 struct UiMaterialData {
     u32 mName;
     u16 mNextSameName;
-    u16 mReserved;
+    u8 mFlags;  // UiMaterialFlag_*
+    u8 mReserved;
     s16 mRegisters[3][4];  // RGBA
     u8 mConstants[4][4];   // RGBA
-    u8 mMapCount;
-    u8 mSrtCount;
-    u8 mGeneratorCount;
-    u8 mIndirectSrtCount;
-    u8 mHasChannel;
-    u8 mHasMaterialColor;
-    u8 mHasAlphaCompare;
-    u8 mHasBlend;
-    UiMapData mMaps[8];
-    f32 mSrts[10][5];          // translate x, y, rotate, scale x, y
-    u8 mGenerators[8][4];      // type, source, matrix, unused
-    u8 mChannel[4];            // colour source, alpha source
-    u8 mMaterialColor[4];      // RGBA
-    f32 mIndirectSrts[3][5];
-    u8 mAlphaCompare[4];  // comp0 | comp1 << 4, op, ref0, ref1
-    u8 mBlend[4];         // type, source factor, destination factor, op
-    u32 mReserved2;
+    u8 mChannel[2];        // colour source, alpha source
+    u8 mMaterialColor[4];  // RGBA
+    u8 mAlphaCompare[4];   // comp0 | comp1 << 4, op, ref0, ref1
+    u8 mBlend[4];          // type, source factor, destination factor, op
+    u16 mReserved2;
+    UiDataList mMaps;          // UiMapData[]
+    UiDataList mSrts;          // UiSrtData[]
+    UiDataList mGenerators;    // UiGeneratorData[]
+    UiDataList mIndirectSrts;  // UiSrtData[]
+    UiDataList mCoordMap;      // u8[]: each coordinate's map, 255 none
     UiFormData mForms[4];  // by raster stage (1) and remap (2)
-    u8 mCoordMap[8];       // each coordinate's map, 255 none
-    u8 mHasStages;
-    u8 mReserved3[3];
 };
-static_assert(sizeof(UiMaterialData) == 432 + 4 * 192 + 12 + 4);  // 8-aligned for the forms' hashes
+static_assert(sizeof(UiMaterialData) == 296);
 
 struct UiGroupData {
     u32 mName;

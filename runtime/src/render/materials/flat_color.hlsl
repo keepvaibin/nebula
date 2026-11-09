@@ -4,6 +4,7 @@ struct MaterialConstants {
     float4 color;  // rgba, 0-1
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

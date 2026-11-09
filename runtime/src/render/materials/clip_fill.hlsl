@@ -7,6 +7,7 @@ struct MaterialConstants {
                     // frame and this draw replaces it: the colour blended over it where shown, alpha 0 there
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
