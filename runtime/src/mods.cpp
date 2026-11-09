@@ -63,15 +63,19 @@ std::string read_text(const fs::path& path) {
 }
 
 // The entries of `dir`, empty when it cannot be read. A folder that changes or goes while it is read (the player
-// moves a mod in Explorer) ends the list; the range-for form of directory_iterator throws there.
-std::vector<fs::directory_entry> entries_of(const fs::path& dir) {
+// moves a mod in Explorer) ends the list; the range-for form of directory_iterator throws there. `unreadable`, when
+// given, is set if the list ended on an error, for the caller to report.
+std::vector<fs::directory_entry> entries_of(const fs::path& dir, bool* unreadable = nullptr) {
     std::vector<fs::directory_entry> entries;
     std::error_code error;
     for (auto it = fs::directory_iterator(dir, error); !error && it != fs::directory_iterator(); it.increment(error)) {
         entries.push_back(*it);
     }
+    if (error && unreadable != nullptr) *unreadable = true;
     return entries;
 }
+
+constexpr const char* kUnreadableMod = "A FOLDER OF THIS MOD COULD NOT BE READ IN FULL";
 
 // A child of `dir` named `name` whatever its case (Riivolution assumes an SD card's case-insensitive names).
 std::optional<fs::path> child_any_case(const fs::path& dir, std::string_view name, bool want_directory) {
@@ -418,6 +422,7 @@ struct ModLayout {
     fs::path textures;
     fs::path movies;
     std::vector<fs::path> loose;  // files placed by their names
+    bool unreadable = false;      // a folder of the mod ended its listing on an error
 };
 
 constexpr const char* kLanguageFolders[] = {"UsEnglish", "UsFrench", "UsSpanish", "EuEnglish", "EuFrench", "EuGerman",
@@ -620,14 +625,14 @@ ModLayout layout_of(const fs::path& mod) {
     }
     // riivolution/ in the mod, or one folder down (an archive's own top folder).
     std::vector<fs::path> roots{mod};
-    for (const auto& entry : entries_of(mod)) {
+    for (const auto& entry : entries_of(mod, &layout.unreadable)) {
         if (entry.is_directory(error)) roots.push_back(entry.path());
     }
     for (const fs::path& root : roots) {
         if (std::optional<fs::path> riiv = child_any_case(root, "riivolution", true)) {
             layout.sd_root = root;
             layout.riivolution_dir = *riiv;
-            for (const auto& entry : entries_of(*riiv)) {
+            for (const auto& entry : entries_of(*riiv, &layout.unreadable)) {
                 if (entry.is_regular_file(error) && lower(galaxy::path_text(entry.path().extension())) == ".xml") {
                     layout.xmls.push_back(entry.path());
                 }
@@ -643,7 +648,7 @@ ModLayout layout_of(const fs::path& mod) {
     } else if (layout.xmls.empty()) {
         // The disc's folders one folder down (an archive's own top folder): that folder, when only one has them.
         std::vector<fs::path> with;
-        for (const auto& entry : entries_of(mod)) {
+        for (const auto& entry : entries_of(mod, &layout.unreadable)) {
             if (entry.is_directory(error) && has_disc_folder(entry.path())) with.push_back(entry.path());
         }
         if (with.size() == 1u) layout.files_root = with.front();
@@ -652,7 +657,7 @@ ModLayout layout_of(const fs::path& mod) {
     if (std::optional<fs::path> movies = child_any_case(mod, "movies", true)) layout.movies = *movies;
     if (layout.xmls.empty() && layout.files_root.empty()) {
         // Loose files beside nothing else: each goes where the disc has a file of its name.
-        for (const auto& entry : entries_of(mod)) {
+        for (const auto& entry : entries_of(mod, &layout.unreadable)) {
             if (entry.is_regular_file(error) && !mod_note(entry.path()) &&
                 !lower(utf8_name(entry.path())).starts_with("tex1_")) {
                 layout.loose.push_back(entry.path());
@@ -953,9 +958,13 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
     if (folder.empty() || !fs::is_directory(folder, error)) return mods;
     const std::map<std::string, SavedMod> saved = read_saved(file);
     std::vector<fs::path> dirs;
-    for (const auto& entry : entries_of(folder)) {
+    bool folder_unreadable = false;
+    for (const auto& entry : entries_of(folder, &folder_unreadable)) {
         // Hidden folders: imports in progress (mod_import.cpp) and the system's own.
         if (entry.is_directory(error) && !utf8_name(entry.path()).starts_with('.')) dirs.push_back(entry.path());
+    }
+    if (folder_unreadable) {
+        std::fprintf(stderr, "[mods] the mods folder could not be read in full: %s\n", galaxy::path_text(folder).c_str());
     }
     std::sort(dirs.begin(), dirs.end());
     const std::string region_id = game_id.empty() ? std::string("RMGE01") : game_id;
@@ -1165,8 +1174,11 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             // Its files apply. LumaLink finds the native versions of known patches when it converts a mod.
             mod.problem = "MOST OF THIS MOD WORKS. " + std::to_string(mod.code_patches) + " CODE CHANGES NEED A NEBULA UPDATE OR A PLUGIN";
         }
+        mod.unreadable = layout.unreadable;
         if (!mod.package && !mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
-            mod.problem = "THIS DOESN'T LOOK LIKE A MOD";
+            mod.problem = mod.unreadable ? kUnreadableMod : "THIS DOESN'T LOOK LIKE A MOD";
+        } else if (mod.unreadable && mod.problem.empty()) {
+            mod.problem = kUnreadableMod;
         }
 #if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
         if (!mod.package && (mod.riivolution || mod.files || mod.loose)) {
@@ -1502,6 +1514,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
         const ModLayout layout = layout_of(mod.path);
         std::vector<Placed> placed;
         const auto note = [&plan, &mod](const std::string& text) { plan.notes.push_back(mod.id + ": " + text); };
+        if (layout.unreadable) note("its folder could not be read in full");
         const auto set_file = [&placed](std::string disc, const fs::path& host) {
             if (!disc.starts_with('/')) disc.insert(disc.begin(), '/');
             placed.push_back({std::move(disc), host});
@@ -1550,7 +1563,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 note(external + ": no such folder in the mod");
                 return;
             }
-            std::vector<fs::directory_entry> entries = entries_of(*dir);
+            bool unreadable = false;
+            std::vector<fs::directory_entry> entries = entries_of(*dir, &unreadable);
+            if (unreadable) note(external + ": the folder could not be read in full");
             std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.path() < b.path(); });
             for (const auto& entry : entries) {
                 const std::string name = utf8_name(entry.path());
@@ -1622,6 +1637,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                          !walk_error && walk != fs::recursive_directory_iterator(); walk.increment(walk_error)) {
                         if (walk->is_regular_file(status_error)) found.push_back(walk->path());
                     }
+                    if (walk_error) note(layer.path + "/merge: the folder could not be read in full");
                     std::sort(found.begin(), found.end());
                     for (const fs::path& file : found) {
                         plan.merges.push_back({galaxy::path_text(file.lexically_relative(*merge).generic_string()), file});
@@ -1632,7 +1648,10 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 const Loader loader{*files, *files};
                 const FolderPatch whole{"/", "/", true, true, true, 0};
                 std::error_code ec;
-                for (const auto& entry : entries_of(*files)) {
+                bool files_unreadable = false;
+                const std::vector<fs::directory_entry> top = entries_of(*files, &files_unreadable);
+                if (files_unreadable) note(layer.path + "/files: the folder could not be read in full");
+                for (const auto& entry : top) {
                     const std::string name = utf8_name(entry.path());
                     if (entry.is_directory(ec)) {
                         patch_folder(patch_folder, loader, whole, "/" + name, "/" + name);
@@ -1671,7 +1690,10 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
             const Loader loader{layout.files_root, layout.files_root};
             const FolderPatch whole{"/", "/", true, true, true, 0};
             std::error_code ec;
-            for (const auto& entry : entries_of(layout.files_root)) {
+            bool root_unreadable = false;
+            const std::vector<fs::directory_entry> top = entries_of(layout.files_root, &root_unreadable);
+            if (root_unreadable) note(utf8_name(layout.files_root) + ": the folder could not be read in full");
+            for (const auto& entry : top) {
                 const std::string name = utf8_name(entry.path());
                 if (entry.is_directory(ec)) {
                     // Beside the game's folders a mod keeps its notes and pictures: only what the game has counts.

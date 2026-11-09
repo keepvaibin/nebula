@@ -120,6 +120,7 @@ struct ModInfo {
     std::string pack_author;
     std::string pack_description;
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
+    bool unreadable = false;  // a folder of the mod could not be read in full (problem says so when nothing else does)
 };
 
 // Whether a mod changes the game's files (its files, code patches, saves): such changes take a restart.
