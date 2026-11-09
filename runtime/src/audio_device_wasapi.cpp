@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "galaxy/windows_api.h"
+#include "galaxy/windows_power.h"
 #include <audioclient.h>
 #include <audiopolicy.h>
 #include <mmreg.h>
@@ -403,6 +404,9 @@ private:
         set_audio_thread_name();
         CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         set_mmcss();
+        // The game's sound is mixed and ticked here: it keeps full speed when the process asks for efficiency (EcoQoS,
+        // the window behind another or idle), so its clocks do not run late.
+        galaxy::host::set_current_thread_efficiency(false);
         ComPtr<IMMDeviceEnumerator> endpoints;
         CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&endpoints));
         if (endpoints != nullptr) {
