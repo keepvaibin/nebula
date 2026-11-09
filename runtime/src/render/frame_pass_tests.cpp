@@ -129,6 +129,43 @@ int main() {
         passed &= expect(viewport.valid() && viewport.min_depth <= viewport.max_depth, "the depth range stays valid");
     }
 
+    {
+        // A screen probe names a point in frame units; the pixel is the one holding it, at any render scale.
+        const float units = static_cast<float>(galaxy::render::kFrameUnits);
+        const auto probe_at = [units](float fx, float fy) {
+            galaxy::render::ScreenProbe probe{};
+            probe.x = fx * units;
+            probe.y = fy * units;
+            return probe;
+        };
+        for (const galaxy::render::FrameMap frame : {galaxy::render::FrameMap(1920u, 1368u), galaxy::render::FrameMap(1067u, 760u),
+                                                     galaxy::render::FrameMap(3840u, 2736u)}) {
+            const auto middle = galaxy::render::screen_probe_pixel(probe_at(0.5f, 0.5f), frame);
+            passed &= expect(middle.x == frame.width / 2u && middle.y == frame.height / 2u,
+                             "a probe at the middle of the frame reads the pixel there at any render scale");
+            const auto first = galaxy::render::screen_probe_pixel(probe_at(0.0f, 0.0f), frame);
+            passed &= expect(first.x == 0u && first.y == 0u, "a probe at the top left reads pixel 0, 0");
+            const auto last = galaxy::render::screen_probe_pixel(probe_at(1.0f, 1.0f), frame);
+            passed &= expect(last.x == frame.width - 1u && last.y == frame.height - 1u,
+                             "a probe on the far edge reads the last pixel, not past it");
+            const auto quarter = galaxy::render::screen_probe_pixel(probe_at(0.25f, 0.75f), frame);
+            passed &= expect(quarter.x == frame.width / 4u && quarter.y == (frame.height * 3u) / 4u,
+                             "a probe reads the row and column that hold its point, top down");
+        }
+        galaxy::render::ScreenProbe off{};
+        off.x = -1.0f;
+        off.y = -1.0f;
+        passed &= expect(galaxy::render::screen_probe_pixel(off, galaxy::render::FrameMap(1920u, 1368u)).x == ~0u,
+                         "a point the game did not ask about names no pixel");
+        galaxy::render::ScreenProbe nan_probe{};
+        nan_probe.x = std::numeric_limits<float>::quiet_NaN();
+        nan_probe.y = 0.0f;
+        passed &= expect(galaxy::render::screen_probe_pixel(nan_probe, galaxy::render::FrameMap(1920u, 1368u)).x == ~0u,
+                         "a point that is not a number names no pixel");
+        passed &= expect(galaxy::render::screen_probe_pixel(probe_at(0.5f, 0.5f), galaxy::render::FrameMap()).x == ~0u,
+                         "an empty target names no pixel");
+    }
+
     if (!passed) {
         return 1;
     }
