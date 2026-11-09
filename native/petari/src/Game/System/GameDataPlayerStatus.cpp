@@ -1,7 +1,15 @@
-#include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameDataPlayerStatus.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/System/SaveBytes.hpp"
+#include "Game/Util/Tunable.hpp"
+
+namespace {
+    // The lives the player starts with and has again on every load (4).
+    NEBULA_TUNABLE(s32, cStartingPlayerLeft, 4);
+    // The most lives (99).
+    NEBULA_TUNABLE(s32, cMaxPlayerLeft, 99);
+};  // namespace
 
 GameDataPlayerStatus::GameDataPlayerStatus() {
     initializeData();
@@ -36,13 +44,13 @@ s32 GameDataPlayerStatus::deserialize(const u8* pBuffer, u32 size) {
         stream.read(&mPlayerLeftSupply, sizeof(mPlayerLeftSupply));
     }
 
-    mPlayerLeft = NebulaHost::setting(NEBULA_PATCH_STARTING_LIVES, 4);
+    mPlayerLeft = ::cStartingPlayerLeft;
 
     return 0;
 }
 
 void GameDataPlayerStatus::initializeData() {
-    mPlayerLeft = NebulaHost::setting(NEBULA_PATCH_STARTING_LIVES, 4);
+    mPlayerLeft = ::cStartingPlayerLeft;
     mPlayerLeftSupply = 4;
     mStockedStarPiece = 0;
     mStoryProgress = 0;
@@ -51,13 +59,13 @@ void GameDataPlayerStatus::initializeData() {
 s32 GameDataPlayerStatus::getPlayerLeft() const {
     s32 playerLeft = mPlayerLeft;
 
-    return MR::clamp(playerLeft, 0, NebulaHost::setting(NEBULA_PATCH_MAX_LIVES, 99));
+    return MR::clamp(playerLeft, 0, ::cMaxPlayerLeft);
 }
 
 void GameDataPlayerStatus::addPlayerLeft(int num) {
     s32 playerLeft = mPlayerLeft + num;
 
-    mPlayerLeft = MR::clamp(playerLeft, 0, NebulaHost::setting(NEBULA_PATCH_MAX_LIVES, 99));
+    mPlayerLeft = MR::clamp(playerLeft, 0, ::cMaxPlayerLeft);
 }
 
 bool GameDataPlayerStatus::isPlayerLeftSupply() const {
@@ -71,5 +79,5 @@ void GameDataPlayerStatus::offPlayerLeftSupply() {
 void GameDataPlayerStatus::addStockedStarPiece(int num) {
     s32 stockedStarPiece = mStockedStarPiece + num;
 
-    mStockedStarPiece = MR::clamp(stockedStarPiece, 0, NebulaHost::setting(NEBULA_PATCH_MAX_STAR_BITS, 9999));
+    mStockedStarPiece = MR::clamp(stockedStarPiece, 0, GameRules::maxStarBits());
 }

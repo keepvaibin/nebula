@@ -1,4 +1,4 @@
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -761,9 +761,9 @@ namespace MarioAccess {
                 return;
             }
 
-            if (getPlayerActor()->mMaxHealth > static_cast< u32 >(NebulaHost::setting(NEBULA_PATCH_PLAYER_HEALTH, 3))) {
+            if (getPlayerActor()->mMaxHealth > static_cast< u32 >(GameRules::playerHealth())) {
                 MR::startSound(getPlayerActor(), "SE_OJ_MORPH_ITEM_INVALID");
-                getPlayerActor()->changeMaxLife(NebulaHost::setting(NEBULA_PATCH_LIFE_UP_HEALTH, 6));
+                getPlayerActor()->changeMaxLife(GameRules::lifeUpHealth());
                 return;
             }
 

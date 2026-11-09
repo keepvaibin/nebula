@@ -7,7 +7,7 @@
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
 
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace {
@@ -671,8 +671,7 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         return true;
     }
 
-    if (NebulaHost::codePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
-                                                                      : MR::isMsgPlayerHitAll(msg)) {
+    if (GameRules::dodoryuShellOnly() ? MR::isMsgJetTurtleAttack(msg) : MR::isMsgPlayerHitAll(msg)) {
         Vec3f attackDir = pReceiver->mPosition;
         attackDir.sub(pSender->mPosition);
         mAttackDir.set(attackDir);

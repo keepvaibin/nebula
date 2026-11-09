@@ -40,22 +40,6 @@ namespace galaxy::mods {
 // name of only dots and spaces, or device name.
 [[nodiscard]] bool safe_path_part(std::string_view part);
 
-// nebula_game_api.h's NEBULA_PATCH_*: native equivalents of the code patches mods.cpp recognises.
-enum : std::uint32_t {
-    kPatchFlipPanelGroup = 1,
-    kPatchFlipPanelObserverGroup,
-    kPatchWaterBazookaShotFlag,
-    kPatchKameckBarrierOffsetY,
-    kPatchSkeletalFishBabyNoBubble,
-    kPatchDodoryuShellOnly,
-    kPatchMissStarPieces,
-    kPatchNoHiddenStarTable,
-    kPatchNoSuddenDeathDodoryu,
-    kPatchBegomanFireProof,
-    kPatchMessengerAlwaysEx,
-    kPatchMessengerExOneUps,
-};
-
 // A Riivolution option (its XML's options): its choices; `selected` 0 is off, else a choice (1-based).
 struct ModOption {
     std::string key;      // the option's id, else its section and name (Riivolution's config key)
@@ -95,13 +79,12 @@ struct ModInfo {
     bool loose = false;
     bool package = false;  // a .luma: luma.json, and layers of the mod's files
     std::shared_ptr<const galaxy::luma::Manifest> luma;
-    bool luma_changes_game = false;  // its layers in use set files or switches
+    bool luma_changes_game = false;  // its layers in use set files or tunables
     std::vector<std::filesystem::path> luma_textures;  // its layers' textures/ and movies/ in use, in order
     std::vector<std::filesystem::path> luma_movies;
     //                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
-    unsigned native_patches = 0;              // patches over the game's code that the game has natively
     unsigned code_patches = 0;                // patches over the game's original code: the mod stays off (problem says so)
     unsigned changed_files = 0;               // game files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
@@ -183,7 +166,6 @@ struct ModPlan {
     ModRows rows;
     std::vector<std::string> notes;  // what could not apply, for the log
     unsigned code_patches = 0;
-    std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to
     std::filesystem::path save_folder;
     bool save_clone = true;
     std::filesystem::path save_start;  // files its saves begin from

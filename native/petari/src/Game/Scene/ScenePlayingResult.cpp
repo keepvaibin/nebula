@@ -6,27 +6,32 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
-// The host's settings are fixed for the session, so each is read once per call.
 namespace {
     NEBULA_TUNABLE(s32, cCoinNumMin, 0);
+    // Coins for a 1-up (50); 0: none.
+    NEBULA_TUNABLE(s32, cCoinStepNum, 50);
+    // Purple coins that bring out the Power Star (100).
+    NEBULA_TUNABLE(s32, cPurpleCoinPowerStarAppearNum, 100);
+    // Star bits for a 1-up (50); 0: none.
+    NEBULA_TUNABLE(s32, cStarPieceStepNum, 50);
 
     s32 getCoinNumMax() {
-        return NebulaHost::setting(NEBULA_PATCH_MAX_COINS, 999);
+        return GameRules::maxCoins();
     }
 
     s32 getCoinStepNum() {
-        return NebulaHost::setting(NEBULA_PATCH_COINS_PER_ONE_UP, 50);
+        return ::cCoinStepNum;
     }
 
     s32 getPurpleCoinPowerStarAppearNum() {
-        return NebulaHost::setting(NEBULA_PATCH_PURPLE_COINS_FOR_STAR, 100);
+        return ::cPurpleCoinPowerStarAppearNum;
     }
 
     s32 getStarPieceStepNum() {
-        return NebulaHost::setting(NEBULA_PATCH_STAR_BITS_PER_ONE_UP, 50);
+        return ::cStarPieceStepNum;
     }
 
     // A 1-up each time the count crosses a multiple of stepNum; none for stepNum <= 0.

@@ -15,7 +15,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 
 namespace NrvBegomanBaby {
     NEW_NERVE_ONEND(HostTypeNrvNoCalcWait, BegomanBaby, NoCalcWait, NoCalcWait);
@@ -166,7 +166,7 @@ void BegomanBaby::control() {
         }
     }
 
-    if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
+    if (!GameRules::begomanFireProof() &&MR::isBindedGroundDamageFire(this)) {
         killWithGenItem();
         MR::emitEffect(this, "Fall");
         return;

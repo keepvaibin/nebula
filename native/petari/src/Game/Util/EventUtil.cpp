@@ -17,9 +17,11 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
 
 namespace {
+    // Daredevil comets keep their rules (one health, no Life Up).
+    NEBULA_TUNABLE(bool, cDarkCometRules, true);
     ScenePlayingResult* getScenePlayingResult() {
         return MR::getSceneObj< ScenePlayingResult >(SceneObj_ScenePlayingResult);
     }
@@ -965,7 +967,7 @@ namespace MR {
     }
 
     bool isGalaxyDarkCometAppearInCurrentStage() {
-        if (NebulaHost::codePatch(NEBULA_PATCH_NO_DARK_COMET_RULES, nullptr)) {
+        if (!::cDarkCometRules) {
             return false;
         }
         return EventFunction::isStartCometEvent("Dark");

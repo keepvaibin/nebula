@@ -1,4 +1,4 @@
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -358,7 +358,7 @@ namespace GameDataFunction {
     void addStockedStarPiece(int num) {
         getCurrentGameDataHolder()->addStockedStarPiece(num);
 
-        if (getCurrentGameDataHolder()->getStockedStarPieceNum() != NebulaHost::setting(NEBULA_PATCH_MAX_STAR_BITS, 9999)) {
+        if (getCurrentGameDataHolder()->getStockedStarPieceNum() != GameRules::maxStarBits()) {
             return;
         }
 

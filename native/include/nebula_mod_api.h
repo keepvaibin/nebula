@@ -13,7 +13,8 @@
 extern "C" {
 #endif
 
-#define NEBULA_MOD_API_VERSION 1u
+/* 2: setting() and setting_by_number() gave way to get_tunable(); a plugin built for 1 is not started. */
+#define NEBULA_MOD_API_VERSION 2u
 
 #if defined(_WIN32)
 #define NEBULA_PLUGIN_EXPORT __declspec(dllexport)
@@ -479,8 +480,9 @@ typedef struct NebulaModApi {
     void (*set_star)(const char* galaxy, int32_t star, int32_t have);
     int32_t (*stars_in_galaxy)(const char* galaxy);
     int32_t (*stars_won_in_galaxy)(const char* galaxy);
-    /* A game setting by its name (the names of a layer's `switches`). `missing`: no mod set it. */
-    int32_t (*setting)(const char* name, int32_t missing);
+    /* A tuning number by its key, as set_tunable takes it ("GameRules.cPlayerHealth"): the number now and the game's. 0: done; -1: no such
+       number. */
+    int32_t (*get_tunable)(const char* key, double* value, double* game_value);
 
     /* A layout on the screen, for this stage. Null if it has no such archive. */
     NebulaLayout* (*layout_open)(const char* name);
@@ -497,8 +499,6 @@ typedef struct NebulaModApi {
     /* Text kept for this mod across plays, in place of store_get's numbers: how much was read. */
     int32_t (*store_get_text)(const NebulaPlugin* self, const char* key, char* out, int32_t size);
     void (*store_set_text)(const NebulaPlugin* self, const char* key, const char* text);
-    /* The game's answer behind setting(), by the setting's number. Plugins use setting(). */
-    int32_t (*setting_by_number)(uint32_t number, int32_t missing);
     /* The star-choosing screen of a galaxy, as a launch star opens it. */
     void (*open_scenario_select)(const char* galaxy);
     /* Only in nebula_plugin_start. The game's journey: "first_stage" (and "first_mission", a number as text) is where a new file begins, in place of

@@ -56,7 +56,6 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include <nebula_format.h>
 #include <nebula_module.h>
@@ -666,6 +665,10 @@ namespace {
         return nebula::setTunable(pKey, value);
     }
 
+    int32_t apiGetTunable(const char* pKey, double* pValue, double* pGameValue) {
+        return nebula::getTunable(pKey, pValue, pGameValue) ? 0 : -1;
+    }
+
     int32_t apiTunableAt(int32_t index, const char** pFile, const char** pName, int32_t* pPlace, int32_t* pKind, double* pGameValue, double* pValue) {
         u32 kind = 0;
         s32 place = -1;
@@ -694,12 +697,6 @@ namespace {
         if (isGalaxy(pGalaxy) && sStageFrames > 0) {
             MR::requestStartScenarioSelect(copyText(pGalaxy));
         }
-    }
-
-    int32_t apiSettingByNumber(uint32_t id, int32_t missing) {
-        u32 value = static_cast< u32 >(missing);
-        NebulaHost::codePatch(id, &value);
-        return static_cast< s32 >(value);
     }
 
     int32_t apiAddPowerUp(const NebulaPowerUpClass* pClass) {
@@ -1974,7 +1971,7 @@ namespace {
         apiSetStar,
         apiStarsInGalaxy,
         apiStarsWonInGalaxy,
-        nullptr,
+        apiGetTunable,
         apiLayoutOpen,
         apiLayoutShow,
         apiLayoutSetText,
@@ -1986,7 +1983,6 @@ namespace {
         apiLayoutSetAlpha,
         nullptr,
         nullptr,
-        apiSettingByNumber,
         apiOpenScenarioSelect,
         apiSetStory,
         apiSaveGame,

@@ -12,7 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace {
@@ -345,8 +345,7 @@ bool DodoryuStateLv1::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         return true;
     }
 
-    if (NebulaHost::codePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
-                                                                      : MR::isMsgPlayerHitAll(msg)) {
+    if (GameRules::dodoryuShellOnly() ? MR::isMsgJetTurtleAttack(msg) : MR::isMsgPlayerHitAll(msg)) {
         mKnockDir.set(pReceiver->mPosition - pSender->mPosition);
 
         if (!calcVerticalizedDir(&mKnockDir, mKnockDir)) {

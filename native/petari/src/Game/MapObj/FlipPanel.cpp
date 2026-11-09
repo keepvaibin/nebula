@@ -7,7 +7,14 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/System/NebulaHost.hpp"
+#include "Game/Util/Tunable.hpp"
+
+namespace {
+    // The most panels in a FlipPanel group (0x20).
+    NEBULA_TUNABLE(s32, cPanelGroupSize, 0x20);
+    // The same for the group the observer reads.
+    NEBULA_TUNABLE(s32, cObserverGroupSize, 0x20);
+};  // namespace
 
 namespace NrvFlipPanel {
     NEW_NERVE(FlipPanelNrvFrontLand, FlipPanel, FrontLand);
@@ -58,9 +65,7 @@ void FlipPanel::init(const TableIter& rIter) {
     initialize(rIter, info);
     mIsReverse = isObjectName("FlipPanelReverse");
     mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &FlipPanel::calcJointMove, "Panel");
-    u32 groupSize = 0x20;
-    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
-    MR::joinToGroupArray(this, rIter, 0, groupSize);
+    MR::joinToGroupArray(this, rIter, 0, ::cPanelGroupSize);
     MR::invalidateClipping(this);
     MR::startBck(this, "PanelB");
     f32 frameMax = MR::getBckFrameMax(this);
@@ -271,9 +276,7 @@ void FlipPanelObserver::init(const TableIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::invalidateClipping(this);
-    u32 groupSize = 0x20;
-    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP, &groupSize);
-    mGroup = MR::joinToGroupArray(this, rIter, 0, groupSize);
+    mGroup = MR::joinToGroupArray(this, rIter, 0, ::cObserverGroupSize);
     MR::useStageSwitchWriteA(this, rIter);
     initSound(2, false);
     MR::getPlacementArg7NoInit(rIter, &mPowerStarId);

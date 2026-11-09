@@ -45,6 +45,8 @@ namespace nebula {
     // By "<file stem>.<name>", or "<file stem>.<name>[<i>]" for a list's place: every number of that name in that file.
     // 0: set; -1: no such number.
     s32 setTunable(const char* pKey, f64 value);
+    // The number the key names now and the game's number (the first, if several share the name). false: no such number.
+    bool getTunable(const char* pKey, f64* pValue, f64* pGameValue);
     // The index-th number (a list counts each place): file, name, its place in a list (-1 for one number), kind, the
     // game's number and the number now. false: past the end.
     bool tunableAt(s32 index, const char** pFile, const char** pName, s32* pPlace, u32* pKind, f64* pGameValue, f64* pValue);

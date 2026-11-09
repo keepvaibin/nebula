@@ -26,7 +26,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/System/NebulaHost.hpp"
+#include "Game/System/GameRules.hpp"
 #include "Game/Util/Tunable.hpp"
 
 namespace NrvBegomanSpring {
@@ -234,7 +234,7 @@ void BegomanSpring::control() {
         return;
     }
 
-    if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
+    if (!GameRules::begomanFireProof() &&MR::isBindedGroundDamageFire(this)) {
         makeActorDead();
         MR::emitEffect(this, "Fall");
         return;

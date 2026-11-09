@@ -3,6 +3,7 @@
 #include "galaxy/luma.h"
 #include "galaxy/test_temp.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -38,7 +39,7 @@ constexpr const char* kGood = R"({
     { "id": "bad", "name": "Falls back", "default": "nope", "choices": [ { "id": "first", "name": "F" } ] }
   ],
   "layers": [
-    { "path": "layers/base", "switches": { "dodoryu_shell_only": 1, "miss_star_pieces": 4294966297 } },
+    { "path": "layers/base", "tunables": { "GameRules.cDodoryuShellOnly": true, "SequenceUtil.cMissStarPieceNum": -999 } },
     { "path": "layers/one", "when": { "option": { "lives": ["one"] } } },
     { "path": "layers/jp", "when": { "version": ["J"], "language": ["JpJapanese"], "platform": ["android", "windows"] } },
     { "when": { "someday": true } }
@@ -70,7 +71,10 @@ int main() {
     check(m.load_after.size() == 1u, "load_after");
     check(m.options.size() == 2u && m.options[0].fallback == "one", "options");
     check(m.options[1].fallback == "first", "a default that isn't a choice falls back to the first");
-    check(m.layers.size() == 4u && m.layers[0].switches.at("miss_star_pieces") == 4294966297u, "a switch's value");
+    check(m.layers.size() == 4u && std::any_of(m.layers[0].tunables.begin(), m.layers[0].tunables.end(), [](const Tunable& t) {
+              return t.key == "SequenceUtil.cMissStarPieceNum" && t.value == -999.0;
+          }),
+          "a layer's tunable");
     check(m.save_path == "save" && m.save_mode == SaveMode::Copy && m.save_tag == "family" && m.save_player_can_change, "save");
     const std::optional<Manifest> plain = parse_manifest(R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[]})");
     check(plain && plain->save_mode == SaveMode::Shared && plain->save_tag == "a" && !plain->save_player_can_change, "normal saves unless it says");
@@ -115,6 +119,9 @@ int main() {
     check(refusal(later, "RMGE01", "2.1.0", "windows").empty(), "a plugin with a build for this device");
     later.plugins[0].api = kPluginApi + 1u;
     check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a plugin for a later game");
+    later.plugins[0].api = kPluginApi - 1u;
+    check(refusal(later, "RMGE01", "2.1.0", "windows") == "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT, SETTING() IS NOW GET_TUNABLE()",
+          "a plugin for plugin API 1 names the replacement");
 
     const std::optional<Manifest> newer = parse_manifest(R"({"format":2,"everything":"different"})");
     check(newer && refusal(*newer, "RMGE01", "2.1.0", "windows") == "THIS MOD NEEDS A NEWER NEBULA", "a newer format is named, not damaged");
@@ -133,7 +140,9 @@ int main() {
     check(compare_versions("2.1", "2.1.0") == 0, "2.1 equals 2.1.0");
     check(compare_versions("1", "1.0.1") < 0, "1 is below 1.0.1");
 
-    check(switch_number("dodoryu_shell_only") != 0u && switch_number("nope") == 0u, "switches by name");
+    check(switch_tunable("dodoryu_shell_only").key == "GameRules.cDodoryuShellOnly" && !switch_tunable("dodoryu_shell_only").opposite &&
+              switch_tunable("no_low_health_warning").opposite && switch_tunable("nope").key.empty(),
+          "a switch's tunable by its name");
     check(language_code("EuFrench") == "fr" && language_code("JpJapanese") == "ja" && language_code("?") == "en", "language codes");
 
     // Rows: a dome is any number from 1 (the game checks it against the domes its data has), a number is cut to its type.
@@ -212,16 +221,15 @@ int main() {
         }
     }
     {
-        // Switch values are 32-bit numbers that wrap; a value past the type stops at its end.
+        // A layer's "switches" are refused, naming the tunable that took the first one's place.
         const std::optional<Manifest> switches = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[)") +
-            R"({"switches":{"a":-1,"b":1e300,"c":4294967295,"d":-1e300,"e":7}}]})");
-        check(switches && switches->layers.size() == 1u, "switch values read");
-        if (switches && switches->layers.size() == 1u) {
-            const auto& values = switches->layers[0].switches;
-            check(values.at("a") == 0xFFFFFFFFu && values.at("b") == 0xFFFFFFFFu && values.at("c") == 0xFFFFFFFFu && values.at("d") == 0x80000000u &&
-                      values.at("e") == 7u,
-                  "switch values stop at the type's ends");
-        }
+            R"({"switches":{"no_low_health_warning":1}}]})");
+        check(switches && refusal(*switches, "RMGE01", "2.1.0", "windows") ==
+                              "\"SWITCHES\" ARE NOW \"TUNABLES\": no_low_health_warning IS MarioEffect.cLowHealthWarning (THE OPPOSITE SENSE)",
+              "switches refused with their tunable");
+        const std::optional<Manifest> unknown = parse_manifest(std::string(R"({"format":1,"id":"a","name":"b","version":"1.0.0","game":"RMG","layers":[)") +
+            R"({"switches":{"nope":1}}]})");
+        check(unknown && refusal(*unknown, "RMGE01", "2.1.0", "windows") == "\"SWITCHES\" ARE NOW \"TUNABLES\"", "a switch this game never had");
     }
     {
         // The manifest file is read only when it is a sensible size.

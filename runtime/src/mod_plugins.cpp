@@ -223,15 +223,6 @@ void api_store_set_text(const NebulaPlugin* self, const char* key, const char* t
     std::filesystem::rename(temporary, path, error);
 }
 
-// A setting by the name a layer's switches give it. The game answers by number.
-std::int32_t (*g_setting_by_number)(std::uint32_t, std::int32_t) = nullptr;
-
-std::int32_t api_setting(const char* name, std::int32_t missing) {
-    if (name == nullptr || g_setting_by_number == nullptr) return missing;
-    const std::uint32_t number = luma::switch_number(name);
-    return number != 0u ? g_setting_by_number(number, missing) : missing;
-}
-
 int32_t api_hook(void* target, void* replacement, void** original) {
     if (!g_starting || target == nullptr || replacement == nullptr || original == nullptr) return -1;
 #if defined(NEBULA_HAS_FUNCTION_HOOKS)
@@ -316,8 +307,6 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.store_set = api_store_set;
     g_api.store_get_text = api_store_get_text;
     g_api.store_set_text = api_store_set_text;
-    g_setting_by_number = game_api->setting_by_number;
-    g_api.setting = api_setting;
     for (const auto& [id, words] : rows.texts) {
         g_api.add_text(id.c_str(), words.c_str());
     }
@@ -436,6 +425,12 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         if (api_version() > NEBULA_MOD_API_VERSION) {
             say(name + " not started: it needs a newer Nebula");
+            close_library(module);
+            continue;
+        }
+        if (api_version() < NEBULA_MOD_API_VERSION) {
+            say(name + " not started: it was built for plugin interface " + std::to_string(api_version()) +
+                "; rebuild it with this nebula_mod_api.h (setting() is now get_tunable())");
             close_library(module);
             continue;
         }
