@@ -26,10 +26,6 @@ public:
     void setOne();
     f32 getValue() const;
 
-    s32 getDirection() const {
-        return mDirection;
-    }
-
     void resetFrame();
 
     inline bool isFrameMaxFrame() const {
