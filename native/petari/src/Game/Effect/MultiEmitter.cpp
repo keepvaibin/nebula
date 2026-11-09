@@ -8,12 +8,13 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include <cstring>
 
 
 MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const Vec3f* pRotation, const Vec3f* pScale, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mName(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pTranslation, pRotation, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -21,7 +22,7 @@ MultiEmitter::MultiEmitter(const char* pName, const Vec3f* pTranslation, const V
 }
 
 MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mName(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -29,7 +30,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f& rOffset)
 }
 
 MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pScale, const Vec3f& rOffset)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mName(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, pMtx, pScale, rOffset);
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -37,7 +38,7 @@ MultiEmitter::MultiEmitter(const char* pName, MtxPtr pMtx, const Vec3f* pScale, 
 }
 
 MultiEmitter::MultiEmitter(const char* pName)
-    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
+    : mEmitters(), mCallBack(), mParticleCallBack(), mSyncBck(), mAutoInfo(), mLightAffect(), mHash(), mName(), mCreateOnUnclipped(), mForceDeleteOnClipped() {
     mCallBack = new MultiEmitterCallBack(this, Vec3f(0.0f, 0.0f, 0.0f));
     mParticleCallBack = new MultiEmitterParticleCallBack();
 
@@ -142,10 +143,18 @@ void MultiEmitter::setBaseScale(f32 scale) {
 
 void MultiEmitter::setName(const char* pName) {
     mHash = MR::getHashCode(pName);
+    const u32 size = static_cast< u32 >(strlen(pName)) + 1;
+    char* pCopy = new (NebulaArena::findFromRoot(this), 0) char[size];
+    memcpy(pCopy, pName, size);
+    mName = pCopy;
 }
 
 bool MultiEmitter::isEqualName(u16 hash) const {
-    return mHash == hash;
+    return static_cast< u16 >(mHash) == hash;
+}
+
+bool MultiEmitter::isEqualName(const char* pName, u32 hash) const {
+    return mName != nullptr && mHash == hash && MR::isEqualString(mName, pName);
 }
 
 ParticleEmitter* MultiEmitter::getParticleEmitter(int idx) const {

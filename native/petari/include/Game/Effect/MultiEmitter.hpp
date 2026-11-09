@@ -38,7 +38,10 @@ public:
     void setOffset(const Vec3f&);
     void setBaseScale(f32);
     void setName(const char*);
+    // By the low 16 bits of the name's hash (PaneEffectKeeper, until it finds by name).
     bool isEqualName(u16) const;
+    // The name set, given its MR::getHashCode; an emitter never named matches nothing.
+    bool isEqualName(const char* pName, u32 hash) const;
 
     ParticleEmitter* getParticleEmitter(int) const;
     void create(EffectSystem*);
@@ -99,7 +102,8 @@ public:
     SyncBckEffectInfo* mSyncBck;
     const AutoEffectInfo* mAutoInfo;  // the effect's table row; none for effects made by code
     f32 mLightAffect;                 // near 0: the emitters keep their own colours
-    u16 mHash;
-    bool mCreateOnUnclipped;     // onCreateSyncClipping: made again when the actor comes back into view
+    u32 mHash;           // MR::getHashCode(mName); 0 while unnamed
+    const char* mName;   // setName's copy; null: unnamed
+    bool mCreateOnUnclipped;    // onCreateSyncClipping: made again when the actor comes back into view
     bool mForceDeleteOnClipped;  // onForceDeleteSyncClipping: gone at once when the actor is clipped
 };
