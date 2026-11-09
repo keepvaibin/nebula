@@ -32,6 +32,10 @@ namespace MR {
 
     void updateModelAnimPlayer(LiveActor* pActor) {
         XanimePlayer* pAnimePlayer = pActor->mModelManager->mXanimePlayer;
+        if (pAnimePlayer == nullptr) {
+            return;
+        }
+
         pAnimePlayer->updateBeforeMovement();
         pAnimePlayer->updateAfterMovement();
     }
@@ -83,7 +87,8 @@ namespace MR {
     }
 
     bool isBckPlaying(XanimePlayer* pAnimePlayer, const char* pBckName) {
-        return !pAnimePlayer->isTerminate() && pAnimePlayer->isRun(pBckName) && pAnimePlayer->getRate() != 0.0f;
+        // A model with no skeletal animations has no player: nothing plays.
+        return pAnimePlayer != nullptr && !pAnimePlayer->isTerminate() && pAnimePlayer->isRun(pBckName) && pAnimePlayer->getRate() != 0.0f;
     }
 
     bool findBckNameStringInResource(const char** pOut, const ResourceHolder* pHolder, const char* pNameString) {

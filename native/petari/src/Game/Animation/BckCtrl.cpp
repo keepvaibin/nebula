@@ -157,6 +157,11 @@ inline f32 calcPlayRate(const FrameCtrl& rCtrl, s32 playFrame, f32 baseRate = 1.
 }
 
 void BckCtrlFunction::reflectBckCtrlData(const BckCtrlData& rData, XanimePlayer* pPlayer) {
+    // A model with no skeletal animations (a mod's, made like a class that has them) has nothing to set.
+    if (pPlayer == nullptr) {
+        return;
+    }
+
     XanimeFrameCtrl* pFrameCtrl = pPlayer->getFrameCtrl();
 
     if (rData.mStartFrame >= 0 && rData.mStartFrame <= pFrameCtrl->getEnd()) {

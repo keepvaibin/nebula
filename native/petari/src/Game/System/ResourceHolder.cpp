@@ -23,7 +23,7 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mMaterialBound(false),
-      mBckCtrl(nullptr), mBackupMaterialData(nullptr), mBackupMaterialFirst(nullptr), mArchive(&rArchive) {
+      mBckCtrl(nullptr), mBackupMaterialData(nullptr), mBackupMaterialFirst(nullptr), mArchive(&rArchive), mLender(nullptr) {
     mArena = NebulaArena::current();
     initializeArc(*mArchive);
 
@@ -37,6 +37,44 @@ ResourceHolder::ResourceHolder(AssetFolder& rArchive)
 
     if (mModelResTable->mCount != 0) {
         backupInitMaterialData(reinterpret_cast< ModelData* >(mModelResTable->getRes(getModelName())));
+    }
+}
+
+void* ResourceHolder::findFile(const char* pName) const {
+    if (mFileInfoTable->isExistRes(pName)) {
+        return mFileInfoTable->getRes(pName);
+    }
+
+    return mLender != nullptr && mLender->mFileInfoTable->isExistRes(pName) ? mLender->mFileInfoTable->getRes(pName) : nullptr;
+}
+
+void* ResourceHolder::findSoundAnimation(const char* pName) const {
+    if (mBasResTable->isExistRes(pName)) {
+        return mBasResTable->getRes(pName);
+    }
+
+    return mLender != nullptr && mLender->mBasResTable->isExistRes(pName) ? mLender->mBasResTable->getRes(pName) : nullptr;
+}
+
+void ResourceHolder::takePlayModesFromLender() {
+    if (mLender == nullptr) {
+        return;
+    }
+
+    ResTable* const ResourceHolder::* const clipTables[] = {&ResourceHolder::mMotionResTable, &ResourceHolder::mBtkResTable,
+                                                            &ResourceHolder::mBpkResTable,    &ResourceHolder::mBtpResTable,
+                                                            &ResourceHolder::mBrkResTable,    &ResourceHolder::mBvaResTable};
+    for (ResTable* const ResourceHolder::* pTable : clipTables) {
+        const ResTable* const pMine = this->*pTable;
+        const ResTable* const pLent = mLender->*pTable;
+        for (u32 i = 0; i < pMine->mCount; i++) {
+            const char* const pName = pMine->getResName(i);
+            Clip* const pClip = static_cast< Clip* >(pMine->getRes(i));
+            const Clip* const pLentClip = pLent->isExistRes(pName) ? static_cast< const Clip* >(pLent->getRes(pName)) : nullptr;
+            if (pClip != nullptr && pLentClip != nullptr) {
+                pClip->mAttribute = pLentClip->getAttribute();
+            }
+        }
     }
 }
 

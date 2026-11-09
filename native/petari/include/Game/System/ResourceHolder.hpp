@@ -41,6 +41,14 @@ public:
         return mModelResTable->getResName(static_cast<u32>(0));
     }
 
+    // The archive's file of that name (a table: a .bcsv), or, when it has none, its lender's. Null when neither has it.
+    void* findFile(const char* pName) const;
+    // The archive's sound animation (.bas) of that name, or its lender's. Null when neither has it.
+    void* findSoundAnimation(const char* pName) const;
+    // Each of its animations the lender has one of the same name and kind of plays as the lender's does (once, looping,
+    // back and forth): the class's code waits for the ends of those it plays once.
+    void takePlayModesFromLender();
+
     ResTable* mModelResTable;
     ResTable* mMotionResTable;
     ResTable* mBtkResTable;
@@ -60,4 +68,7 @@ public:
     u32* mBackupMaterialFirst;
     AssetFolder* mArchive;
     NebulaArena* mArena;
+    // A mod's archive standing for a game class's (luma.json object_classes "like"): the game class's archive, whose
+    // tables and sound animations its own lacks are read from there. Its models and animations are never lent.
+    const ResourceHolder* mLender;
 };

@@ -32,6 +32,9 @@ public:
     void deleteEmitterAll();
     void forceDeleteEmitterAll();
     MultiEmitter* getEmitter(const char*) const;
+    // The emitter of that name, or, when the keeper has none (a mod's class made like a game class, its model lacking
+    // an effect the class's code names), the keeper's emitter with no particles: what the code does with it shows nothing.
+    MultiEmitter* getEmitterOrNone(const char*) const;
     MultiEmitter* getEmitter(s32) const;
     void changeEffectName(const char*, const char*);
     void update();
@@ -64,4 +67,6 @@ public:
     s32 mEffectFloorCode;  // the code the running forever effects were made for
     s32 mFloorCodeSteps;   // the steps in a row mFloorCode has differed from it
     bool mHasAttributeEffect;
+    // getEmitterOrNone's emitter with no particles, made in the keeper's arena when first wanted.
+    mutable MultiEmitter* mNoEffect;
 };

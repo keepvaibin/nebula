@@ -22,6 +22,9 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/System/ResourceHolder.hpp"
+#include "Game/Util/FileUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Model.hpp"
@@ -357,11 +360,20 @@ void LiveActor::prepareDrawClipped() {
 void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAnimName, bool deferMaterials) {
     mModelManager = new ModelManager();
     // A class of the mod's: its files in place of those the object it is made as asks for.
+    const char* const pAskedName = pAnimName != nullptr ? pAnimName : pModelName;
     pModelName = NebulaMods::modelFor(mName, pModelName);
     if (pAnimName != nullptr) {
         pAnimName = NebulaMods::modelFor(mName, pAnimName);
     }
     mModelManager->init(pModelName, pAnimName, deferMaterials);
+
+    // The tables and sound animations its archive lacks are those of the archive it stands for.
+    ResourceHolder* const pHolder = mModelManager->getResourceHolder();
+    const char* const pGivenName = pAnimName != nullptr ? pAnimName : pModelName;
+    if (pGivenName != pAskedName && pHolder->mLender == nullptr && MR::isExistObjectOrLayoutArchive(pAskedName)) {
+        pHolder->mLender = MR::createAndAddResourceHolder(pAskedName);
+        pHolder->takePlayModesFromLender();
+    }
 
     MR::getModel(this)->setBaseScale(mScale);
     LiveActor::calcAndSetBaseMtx();

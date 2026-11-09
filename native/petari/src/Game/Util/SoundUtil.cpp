@@ -201,9 +201,7 @@ namespace MR {
         ResourceHolder* pResourceHolder = getResourceHolder(pActor);
         SoundAnimation* pSoundAnimation = nullptr;
 
-        if (pResourceHolder->mBasResTable->isExistRes(pName)) {
-            pSoundAnimation = static_cast< SoundAnimation* >(pResourceHolder->mBasResTable->getRes(pName));
-        }
+        pSoundAnimation = static_cast< SoundAnimation* >(pResourceHolder->findSoundAnimation(pName));
 
         pActor->mSoundObject->setMapCode(getMapSoundCodeFoot(pActor));
         pActor->mSoundObject->startAnimation(pSoundAnimation, reversed, loopStartFrame, loopEndFrame);

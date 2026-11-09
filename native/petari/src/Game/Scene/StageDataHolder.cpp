@@ -152,7 +152,9 @@ TableIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const Table**
 }
 
 s32 StageDataHolder::getCommonPathInfoElementNum() const {
-    return findJmpInfoFromArray(&mPathObjs, "CommonPathInfo")->getNumEntries();
+    // A zone with no rail table (a mod's new stage that has no rails) has none.
+    const Table* const pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
+    return pInfo != nullptr ? pInfo->getNumEntries() : 0;
 }
 
 s32 StageDataHolder::getStartPosNum() const {
