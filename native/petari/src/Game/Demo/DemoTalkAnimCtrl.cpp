@@ -60,17 +60,17 @@ namespace {
 };  // namespace
 
 void DemoTalkAnimCtrl::createBckCtrlData(BckCtrlData* pBck, s32 totalSteps) const {
-    s16 temp_r0 = MR::max(mAnimFrame - 1, 0);
+    s16 startFrame = MR::max(mAnimFrame - 1, 0);
     pBck->mLoopMode = 2;
-    pBck->mStartFrame = temp_r0;
-    pBck->mRepeatFrame = temp_r0 + 1;
+    pBck->mStartFrame = startFrame;
+    pBck->mRepeatFrame = startFrame + 1;
     pBck->mInterpole = mInterpole;
-    pBck->mEndFrame = temp_r0 + totalSteps + 1;
+    pBck->mEndFrame = startFrame + totalSteps + 1;
 
     if (mIsTalkPart) {
         s32 step = ::calcDemoPartStep(mExecutorName, mPartName);
         if (step > 0) {
-            pBck->mRepeatFrame = temp_r0 + step;
+            pBck->mRepeatFrame = startFrame + step;
         }
     }
 }

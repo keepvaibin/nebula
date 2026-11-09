@@ -6,9 +6,9 @@
 #include "Game/System/NebulaSystemSettings.hpp"
 
 namespace {
-    // The game data's release row (Japan, the Americas, PAL), as NebulaRegion names it.
+    // The game data's release row (Japan, the Americas, Europe), as NebulaRegion names it.
     s32 regionRow() {
-        return NebulaRegion::isJapan() ? 0 : NebulaRegion::isPal() ? 2 : 1;
+        return NebulaRegion::isJapan() ? 0 : NebulaRegion::isEurope() ? 2 : 1;
     }
 
     const s32 cSystemLanguageNum = 10;

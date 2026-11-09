@@ -7,7 +7,7 @@
 namespace MR {
     /// @brief Room for a list with no limit that can also be a static: no constructor (zero-initialised), it grows to at
     /// least `count` (doubling, from 16), keeps what it held, and never shrinks. It grows in the arena that holds it, so a
-    /// member goes with its owner's arena; a static's room is the root heap's. Pointers into it do not survive a call
+    /// member goes with its owner's arena; a static's room is the root arena's. Pointers into it do not survive a call
     /// that grows it.
     template < class T >
     struct GrowBuffer {
@@ -21,7 +21,7 @@ namespace MR {
                     room *= 2;
                 }
                 NebulaArena* const pHome = NebulaArena::findFromRoot(this);
-                T* const pNew = new (pHome != nullptr ? pHome : NebulaArena::getRootHeap(), 0) T[room];
+                T* const pNew = new (pHome != nullptr ? pHome : NebulaArena::root(), 0) T[room];
                 for (u32 i = 0; i < mRoom; i++) {
                     pNew[i] = mItems[i];
                 }
@@ -41,7 +41,31 @@ namespace MR {
         }
     };
 
-    /// @brief A full table: twice the room, in the heap it lies in, and the old one goes. Pointers into it do not survive this.
+    /// @brief Scratch for `count` items: room for N in itself, from the current arena past that, freed at scope end.
+    template < class T, int N >
+    class LocalArray {
+    public:
+        explicit LocalArray(u32 count) : mItems(count <= static_cast< u32 >(N) ? mRoom : new T[count]) {
+        }
+
+        ~LocalArray() {
+            if (mItems != mRoom) {
+                delete[] mItems;
+            }
+        }
+
+        LocalArray(const LocalArray&) = delete;
+        LocalArray& operator=(const LocalArray&) = delete;
+
+        T& operator[](u32 index) {
+            return mItems[index];
+        }
+
+        T mRoom[N];
+        T* const mItems;
+    };
+
+    /// @brief A full table: twice the room, in the arena it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {
         T* const pNew = new (NebulaArena::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
@@ -52,7 +76,7 @@ namespace MR {
         return pNew;
     }
 
-    /// @brief A heap array of mMaxSize; grow() doubles it (16 when empty).
+    /// @brief An arena array of mMaxSize; grow() doubles it (16 when empty).
     template < class T >
     class AssignableArray {
     public:
@@ -186,20 +210,12 @@ namespace MR {
         s32 mSize;
     };
 
-    /// @brief A contiguous array with room for N in itself; a Vector over it past that moves to the arena it lies in.
+    /// @brief A contiguous array with room for N in itself; grow() moves it to twice the room in the arena it lies in (an
+    /// InlineVector does when full).
     template < class T, int N >
-    class FixedArray {
+    class InlineArray {
     public:
         typedef T Item;
-        template < class X >
-        struct RemovePtr {
-            typedef X Type;
-        };
-        template < class X >
-        struct RemovePtr< X* > {
-            typedef X Type;
-        };
-        typedef typename RemovePtr< T >::Type Base;
 
         void grow() {
             const s32 num = size();
@@ -257,7 +273,7 @@ namespace MR {
         s32 mMovedSize = 0;
     };
 
-    /// @brief mCount items over a storage T (AssignableArray or FixedArray); push_back and insert grow the storage when full.
+    /// @brief mCount items over a storage T (AssignableArray or InlineArray); push_back and insert grow the storage when full.
     template < class T >
     class Vector {
     public:
@@ -361,6 +377,10 @@ namespace MR {
         T mArray;
         s32 mCount;
     };
+
+    /// @brief A Vector with room for N in itself before it moves to the arena it lies in.
+    template < class T, int N >
+    using InlineVector = Vector< InlineArray< T, N > >;
 
     template < class T >
     AssignableArray< T >::~AssignableArray() {

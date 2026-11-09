@@ -3,7 +3,7 @@
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
@@ -43,9 +43,9 @@ LayoutHolder* ResourceHolderManager::createAndAddGameLayoutHolder(const char* pA
     }
 
     CreateResourceHolderArgs args = CreateResourceHolderArgs();
-    args.mHeap = pArena;
+    args.mArena = pArena;
     {
-        MR::CurrentHeapRestorer heapRestorer(pArena);
+        NebulaArena::CurrentScope scope(pArena);
         args.mLayoutHolder = new LayoutHolder(*pArchive);
     }
     return add(name.c_str(), args)->mLayoutHolder;
@@ -58,13 +58,13 @@ LayoutHolder* ResourceHolderManager::createAndAddLayoutHolderRawData(const char*
     return add(pArcPath, args)->mLayoutHolder;
 }
 
-void ResourceHolderManager::removeIfIsEqualHeap(NebulaArena* pHeap) {
-    if (pHeap == nullptr) {
+void ResourceHolderManager::removeArenaHolders(NebulaArena* pArena) {
+    if (pArena == nullptr) {
         return;
     }
 
     for (ResourceHolderManagerName2Resource* pIter = mResourceArray.begin(); pIter != mResourceArray.end(); pIter++) {
-        if (pIter->mHeap != pHeap) {
+        if (pIter->mArena != pArena) {
             continue;
         }
 
@@ -76,13 +76,13 @@ void ResourceHolderManager::removeIfIsEqualHeap(NebulaArena* pHeap) {
             delete pIter->mLayoutHolder;
         }
 
-        pIter->mHeap = nullptr;
+        pIter->mArena = nullptr;
         pIter->mLayoutHolder = nullptr;
         pIter->mResourceHolder = nullptr;
     }
 
     for (ResourceHolderManagerName2Resource* pIter = mResourceArray.begin(); pIter != mResourceArray.end();) {
-        if (pIter->mHeap == nullptr) {
+        if (pIter->mArena == nullptr) {
             mResourceArray.erase(pIter);
         } else {
             pIter++;
@@ -114,16 +114,16 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInner(con
 // A holder lives in its archive's arena, so it goes with the archive.
 void ResourceHolderManager::createResourceHolder(const char* pArcPath, CreateResourceHolderArgs* pArgs) {
     AssetFolder* const pArchive = MR::getArchive(pArcPath);
-    pArgs->mHeap = MR::getArchiveArena(pArcPath);
-    MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
+    pArgs->mArena = MR::getArchiveArena(pArcPath);
+    NebulaArena::CurrentScope scope(pArgs->mArena);
 
     pArgs->mResourceHolder = new ResourceHolder(*pArchive);
 }
 
 void ResourceHolderManager::createLayoutHolder(const char* pArcPath, CreateResourceHolderArgs* pArgs) {
     AssetFolder* const pArchive = MR::getArchive(pArcPath);
-    pArgs->mHeap = MR::getArchiveArena(pArcPath);
-    MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
+    pArgs->mArena = MR::getArchiveArena(pArcPath);
+    NebulaArena::CurrentScope scope(pArgs->mArena);
 
     pArgs->mLayoutHolder = new LayoutHolder(*pArchive);
 }
@@ -134,7 +134,7 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::add(const char* pPath
     name2Resource.mHash = MR::getHashCodeLower(MR::getBasename(pPath));
     name2Resource.mResourceHolder = rArgs.mResourceHolder;
     name2Resource.mLayoutHolder = rArgs.mLayoutHolder;
-    name2Resource.mHeap = rArgs.mHeap;
+    name2Resource.mArena = rArgs.mArena;
 
     mResourceArray.push_back(name2Resource);
 
@@ -153,17 +153,17 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::find(const char* pNam
     return nullptr;
 }
 
-ResourceHolderManagerName2Resource::ResourceHolderManagerName2Resource() : mResourceHolder(), mLayoutHolder(), mHeap() {
+ResourceHolderManagerName2Resource::ResourceHolderManagerName2Resource() : mResourceHolder(), mLayoutHolder(), mArena() {
 }
 
 ResourceHolderManagerName2Resource& ResourceHolderManagerName2Resource::operator=(const ResourceHolderManagerName2Resource& rOther) {
     mResourceHolder = rOther.mResourceHolder;
     mLayoutHolder = rOther.mLayoutHolder;
     mHash = rOther.mHash;
-    mHeap = rOther.mHeap;
+    mArena = rOther.mArena;
 
     return *this;
 }
 
-CreateResourceHolderArgs::CreateResourceHolderArgs() : mResourceHolder(), mLayoutHolder(), mHeap() {
+CreateResourceHolderArgs::CreateResourceHolderArgs() : mResourceHolder(), mLayoutHolder(), mArena() {
 }

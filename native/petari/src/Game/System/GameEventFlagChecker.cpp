@@ -138,11 +138,11 @@ bool GameEventFlagChecker::isOnGalaxy(const char* pGalaxyName) const {
 }
 
 bool GameEventFlagChecker::isOnGalaxyDepended(const char* pGalaxyName) const {
-    const char* galaxyDependedFlags[3];
+    MR::InlineVector< const char*, 3 > galaxyDependedFlags;
+    GameEventFlagTable::getGalaxyDependedFlags(&galaxyDependedFlags, pGalaxyName);
 
-    s32 length = GameEventFlagTable::getGalaxyDependedFlags(galaxyDependedFlags, ARRAY_SIZE(galaxyDependedFlags), pGalaxyName);
-    for (s32 i = 0; i < length; i++) {
-        if (!isOn(galaxyDependedFlags[i])) {
+    for (const char* const* pFlag = galaxyDependedFlags.begin(); pFlag != galaxyDependedFlags.end(); pFlag++) {
+        if (!isOn(*pFlag)) {
             return false;
         }
     }

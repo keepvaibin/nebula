@@ -15,7 +15,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/GameLog.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <cstdio>
 #include <cstring>
@@ -219,7 +218,7 @@ void LayoutManager::draw() const {
         return;
     }
 
-    MR::setupDrawForNW4RLayout(1.0f, true);
+    MR::setupDrawForLayout();
     mLayout->Draw(mDrawInfo);
 }
 

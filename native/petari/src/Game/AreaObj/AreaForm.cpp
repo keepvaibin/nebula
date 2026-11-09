@@ -66,15 +66,12 @@ void AreaFormCube::calcWorldBox(DirBox3f* pBox) const {
     pBox->mAxisX.x = pos.mMtx[0][0];
     pBox->mAxisY.x = pos.mMtx[0][1];
     pBox->mAxisZ.x = pos.mMtx[0][2];
-    pBox->mCorner.x = pos.mMtx[0][3];
     pBox->mAxisX.y = pos.mMtx[1][0];
     pBox->mAxisY.y = pos.mMtx[1][1];
     pBox->mAxisZ.y = pos.mMtx[1][2];
-    pBox->mCorner.y = pos.mMtx[1][3];
     pBox->mAxisX.z = pos.mMtx[2][0];
     pBox->mAxisY.z = pos.mMtx[2][1];
     pBox->mAxisZ.z = pos.mMtx[2][2];
-    pBox->mCorner.z = pos.mMtx[2][3];
 
     pBox->mSize.sub(mBounding.f, mBounding.i);
     pos.mult(mBounding.i, pBox->mCorner);
@@ -191,9 +188,9 @@ AreaFormCylinder::AreaFormCylinder() {
     mTranslation.x = 0.0f;
     mTranslation.y = 0.0f;
     mTranslation.z = 0.0f;
-    mRotation.x = 0.0f;
-    mRotation.y = 0.0f;
-    mRotation.z = 0.0f;
+    mUp.x = 0.0f;
+    mUp.y = 0.0f;
+    mUp.z = 0.0f;
     mRadius = 0.0f;
     mHeight = 0.0f;
 }
@@ -216,10 +213,10 @@ void AreaFormCylinder::calcCenterPos(Vec3f* pCenterPos) const {
 
 void AreaFormCylinder::calcUpVec(Vec3f* pUpVec) const {
     if (mFollowMtx != nullptr) {
-        mFollowMtx->mult33(mRotation, *pUpVec);
+        mFollowMtx->mult33(mUp, *pUpVec);
         MR::normalize(pUpVec);
     } else {
-        pUpVec->set(mRotation);
+        pUpVec->set(mUp);
     }
 }
 
@@ -238,17 +235,17 @@ bool AreaFormCylinder::isInVolume(const Vec3f& rVec) const {
 }
 
 void AreaFormCylinder::calcDir(const Vec3f& rRotation) {
-    mRotation.x = 0.0f;
-    mRotation.y = 1.0f;
-    mRotation.z = 0.0f;
+    mUp.x = 0.0f;
+    mUp.y = 1.0f;
+    mUp.z = 0.0f;
 
     MtxPtr mtx_x = MR::tmpMtxRotXDeg(rRotation.x);
-    NebulaMtxMultVec(mtx_x, (const Vec*)&mRotation, (Vec*)&mRotation);
+    NebulaMtxMultVec(mtx_x, (const Vec*)&mUp, (Vec*)&mUp);
     MtxPtr mtx_y = MR::tmpMtxRotYDeg(rRotation.y);
-    NebulaMtxMultVec(mtx_y, (const Vec*)&mRotation, (Vec*)&mRotation);
+    NebulaMtxMultVec(mtx_y, (const Vec*)&mUp, (Vec*)&mUp);
     MtxPtr mtx_z = MR::tmpMtxRotZDeg(rRotation.z);
-    NebulaMtxMultVec(mtx_z, (const Vec*)&mRotation, (Vec*)&mRotation);
-    mRotation.normalize();
+    NebulaMtxMultVec(mtx_z, (const Vec*)&mUp, (Vec*)&mUp);
+    mUp.normalize();
 }
 
 void AreaFormSphere::init(const TableIter& rIter) {

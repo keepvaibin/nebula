@@ -349,7 +349,7 @@ typedef struct NebulaDisplay {
     int32_t wide;          /* 0: 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
     int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
-    float layout_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
+    float layout_width;    /* the layout canvas (608 at 16:9 and narrower) */
     float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
 } NebulaDisplay;
 
@@ -429,7 +429,7 @@ typedef struct NebulaSaveRequest {
     void* buffer;
     uint32_t size;
     uint32_t* length;          /* read: the file's length (may be NULL) */
-    int32_t* status; /* the host sets NEBULA_SAVE_PENDING at once and the result when done (a release store) */
+    int32_t* status;  /* the host sets NEBULA_SAVE_PENDING at once and the result when done (a release store; the game loads it acquire) */
 } NebulaSaveRequest;
 
 /* Nebula's settings menu as the host has it now (settings_view), for the game to draw in its own windows and words.

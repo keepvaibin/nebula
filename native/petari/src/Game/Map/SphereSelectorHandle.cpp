@@ -226,12 +226,12 @@ void SphereSelectorHandle::rotateAxisX() {
 }
 
 void SphereSelectorHandle::updateBaseMtx() {
-    Pos3f mtx;
-    MR::makeMtxUpFront(&mtx, mUp, mFront);
-    mtx.zeroTrans();
-    Pos3f mtx2;
-    mtx2.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
-    mBaseMtx.concat(mtx, mtx2);
+    Pos3f frame;
+    MR::makeMtxUpFront(&frame, mUp, mFront);
+    frame.zeroTrans();
+    Pos3f yawMtx;
+    yawMtx.makeRotate(Vec3f(0.0f, 1.0f, 0.0f), MR::toRadian(mRotation.y));
+    mBaseMtx.concat(frame, yawMtx);
     mBaseMtx.setTrans(mPosition);
 }
 

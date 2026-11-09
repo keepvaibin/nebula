@@ -253,7 +253,7 @@ namespace MR {
             count++;
         }
 
-        Effect::initEffectSyncBck(::getEffectKeeper(pActor), pActor->mModelManager, pEffectName, pStrList[0], count, 0.0f, -1.0f, false);
+        Effect::initEffectSyncBck(::getEffectKeeper(pActor), pActor->mModelManager, pEffectName, pStrList[0], count, 0.0f, -1.0f);
         pStrList = &pStrList[1];
 
         while (pStrList[0] != nullptr) {

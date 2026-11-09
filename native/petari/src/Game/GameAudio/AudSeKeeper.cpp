@@ -2,7 +2,7 @@
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 
@@ -27,7 +27,7 @@ void AudSeKeeperBox::add(Joint* pJoint, u16 hash) {
     mJoint = pJoint;
     mHash = hash;
     updateJointPos();
-    mSoundObj = new AudSoundObject(&mPos, 8, MR::getCurrentHeap());
+    mSoundObj = new AudSoundObject(&mPos, 8, NebulaArena::current());
 }
 
 void AudSeKeeperBox::updateJointPos() {

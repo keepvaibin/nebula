@@ -5,6 +5,7 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Render/GameTexture.hpp"
@@ -244,9 +245,9 @@ bool SnowFloorTile::doErase(const Vec3f& rPosition, f32 radius, f32 amount) {
 
 namespace {
     // Floors move on the game thread.
-    u16 sXs[4096];
-    u16 sYs[4096];
-    f32 sWeights[4096];
+    MR::GrowBuffer< u16 > sXs;
+    MR::GrowBuffer< u16 > sYs;
+    MR::GrowBuffer< f32 > sWeights;
 }  // namespace
 
 f32 SnowFloorTile::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
@@ -258,9 +259,6 @@ f32 SnowFloorTile::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     u32 count = 0;
     Vec2f unitDirection(to - from);
     unitDirection.normalize();
-    u16* const xs = sXs;
-    u16* const ys = sYs;
-    f32* const weights = sWeights;
     outerRadius = 1.732051f * radius;
     to.x *= mTextureSize;
     to.y *= mTextureSize;
@@ -272,6 +270,10 @@ f32 SnowFloorTile::doMove(Vec2f from, Vec2f to, f32 radius, f32 amount) {
     u32 minY = MR::clamp(top, 0, static_cast< s32 >(mTextureSize));
     u32 maxX = MR::clamp(right, 0, static_cast< s32 >(mTextureSize));
     u32 maxY = MR::clamp(bottom, 0, static_cast< s32 >(mTextureSize));
+    const u32 room = (maxX - minX) * (maxY - minY);  // every cell of the box
+    u16* const xs = sXs.room(room);
+    u16* const ys = sYs.room(room);
+    f32* const weights = sWeights.room(room);
     f32 radiusSq;
     f32 totalSnow = 0.0f;
     outerRadius *= outerRadius;

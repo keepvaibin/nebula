@@ -369,7 +369,7 @@ void AreaObjContainer::init(const TableIter& rIter) {
     mManagers.init(ARRAY_SIZE(::cCreateTable));
     for (u32 i = 0; i < ARRAY_SIZE(::cCreateTable); i++) {
         const Name2CreateManagerFunc* pName2CreateManagerFunc = &::cCreateTable[i];
-        AreaObjMgr* mgr = pName2CreateManagerFunc->mCreateFunc(pName2CreateManagerFunc->mMaxCount, pName2CreateManagerFunc->mName);
+        AreaObjMgr* mgr = pName2CreateManagerFunc->mCreateFunc(pName2CreateManagerFunc->mFirstCapacity,pName2CreateManagerFunc->mName);
         mgr->init(TableIter());
         mManagers.push_back(mgr);
     }

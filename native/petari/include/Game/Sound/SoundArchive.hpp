@@ -13,10 +13,10 @@ class SoundTable;
 // sequences and the music; the effect programs answer for the effect manager.
 class SoundArchive : public SeqSource {
 public:
-    explicit SoundArchive(NebulaArena* pHeap);
+    explicit SoundArchive(NebulaArena* pArena);
 
-    NebulaArena* getHeap() const {
-        return mHeap;
+    NebulaArena* getArena() const {
+        return mArena;
     }
 
     // The archive at pPath (none: no tables, no banks). Sets the engine's banks up: before its clock starts.
@@ -53,7 +53,7 @@ private:
 
     void setWaveGroup(u32 waveBank, u32 group, bool live);
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     AssetFolder* mSeqArchive = nullptr;
     const SoundArchiveFile* mFile = nullptr;
     const SoundStatic* mStatics = nullptr;

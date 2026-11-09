@@ -3,9 +3,8 @@
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/Util/Table.hpp"
 
-AutoEffectGroup::AutoEffectGroup(const char* pName, int capacity) : mName(pName), mEffects(), mCapacity(), mCount() {
+AutoEffectGroup::AutoEffectGroup(const char* pName, int capacity) : mName(pName), mEffects(), mCount() {
     mEffects = new AutoEffectInfo*[capacity];
-    mCapacity = capacity;
 }
 
 void AutoEffectGroup::add(const TableIter& rIter) {

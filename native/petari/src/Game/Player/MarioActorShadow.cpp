@@ -492,7 +492,7 @@ void MarioActor::calcViewBlurModel() {
     }
 
     if (mBlurState == 2) {
-        for (u32 i = 0; i < 8; i++) {
+        for (u32 i = 0; i < cBlurPoseNum; i++) {
             Model::copyPose(&mBlurPoses[0][i], *pModel->getDrawPose());
             Model::copyPose(&mBlurPoses[1][i], *pModel->getDrawPose());
         }
@@ -500,7 +500,7 @@ void MarioActor::calcViewBlurModel() {
         mBlurPoseIndex = 0;
         mBlurState = 1;
     } else if (mFrameCount % 3 == 0) {
-        mBlurPoseIndex = (mBlurPoseIndex + 1) & 7;
+        mBlurPoseIndex = (mBlurPoseIndex + 1) % cBlurPoseNum;
         Model::copyPose(&mBlurPoses[1 - mBlurPoseSet][mBlurPoseIndex], *pModel->getDrawPose());
     }
 

@@ -52,7 +52,6 @@ public:
     bool isRotateStart() const;
 
     f32 mSurfSpeed;
-    f32 mOrthoSpeed;
     Vec3f mOrthoVelocity;
 
     f32 mSteerRate;

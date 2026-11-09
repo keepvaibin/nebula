@@ -1025,7 +1025,7 @@ void Mario::tryDrop() {
     mActionStates.jumpTakeoff = false;
     mMovementStates.hipDrop = false;
 
-    if (isAnimationRun("坂すべり上向きうつぶせ", 2) || isAnimationRun("坂すべり下向きあおむけ", 3)) {
+    if (isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown) || isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
         mAirControlInhibitTimer = 0xF;
     }
 
@@ -1819,7 +1819,6 @@ PROC_HIP_DROP_MOVE:
         if (mActionStates.spinHipDrop && isAnimationRun("スピンヒップドロップ")) {
             playSound("スピン尻ドロップ落下");
 
-            Triangle strikeTriangles[0x20];
             HitSensor* homingSensor = nullptr;
 
             f32 maxAngle = 45.0f;
@@ -1897,8 +1896,8 @@ void Mario::doAirWalk() {
     if (mAirControlInhibitTimer != 0) {
         mAirControlInhibitTimer--;
         if (mAirControlInhibitTimer == 0) {
-            stopAnimation("坂すべり上向きうつぶせ", 2);
-            stopAnimation("坂すべり下向きあおむけ", 3);
+            stopAnimation("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown);
+            stopAnimation("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp);
         }
 
         return;
@@ -2580,7 +2579,7 @@ void Mario::doLanding() {
             changeAnimation("ハチ匍匐着地", "基本");
         }
     } else {
-        if (!isAnimationRun("坂すべり上向きうつぶせ", 2) && !isAnimationRun("坂すべり下向きあおむけ", 3)) {
+        if (!isAnimationRun("坂すべり上向きうつぶせ", MarioIndexedAnime_SlideUpFaceDown) && !isAnimationRun("坂すべり下向きあおむけ", MarioIndexedAnime_SlideDownFaceUp)) {
             stopAnimation(nullptr, "基本");
         }
 

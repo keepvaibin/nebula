@@ -33,5 +33,5 @@ public:
     LiveActorGroup* findGroup(const TableIter&) const;
     LiveActorGroup* entry(LiveActor*, const TableIter&, const char*, s32);
 
-    MR::Vector< MR::FixedArray< MsgSharedGroup*, 32 > > mGroups;
+    MR::InlineVector< MsgSharedGroup*, 32 > mGroups;
 };

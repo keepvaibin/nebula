@@ -107,10 +107,7 @@ s32 GameDataHolder::getPictureBookChapterCanRead() const {
     s32 canRead = 0;
 
     for (u32 idx = 0; idx < sizeof(::cPictureBookChapterSuffix) - 1; idx++) {
-        char name[256];
-        nebula_snprintf(name, sizeof(name), "PictureBook%c", ::cPictureBookChapterSuffix[idx]);
-
-        if (!isOnGameEventFlag(name)) {
+        if (!isOnGameEventFlag(MR::FormattedName("PictureBook%c", ::cPictureBookChapterSuffix[idx]).c_str())) {
             break;
         }
 
@@ -176,10 +173,7 @@ bool GameDataHolder::hasPowerStar(const char* pGalaxyName, s32 scenarioNum) cons
 }
 
 bool GameDataHolder::hasGrandStar(int index) const {
-    char name[256];
-    nebula_snprintf(name, sizeof(name), "SpecialStarGrand%1d", index);
-
-    return isOnGameEventFlag(name);
+    return isOnGameEventFlag(MR::FormattedName("SpecialStarGrand%1d", index).c_str());
 }
 
 void GameDataHolder::setPowerStar(const char* pGalaxyName, s32 scenarioNum, bool set) {

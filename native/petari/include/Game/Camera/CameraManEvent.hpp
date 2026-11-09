@@ -11,26 +11,17 @@ class CameraParamChunkHolder;
 
 class CameraManEvent : public CameraMan {
 public:
-    enum EPriority {
-
-    };
-
-    class ChunkFIFOItem {
-    public:
-        ChunkFIFOItem();
-
+    // An event camera's chunk with its target and the blend frame start/end asked for.
+    struct Request {
         CameraParamChunkEvent* mChunk;
         CameraTargetArg mTargetArg;
         u32 mFrame;
     };
 
-    class ChunkFIFOItemPair {
-    public:
-        inline ChunkFIFOItemPair() {
-        }
-
-        ChunkFIFOItem mFirst;
-        ChunkFIFOItem mSecond;
+    // One event priority's camera: mRequested is the start made since the last calc, which calc makes mActive.
+    struct PrioritySlot {
+        Request mActive;
+        Request mRequested;
     };
 
     CameraManEvent(CameraHolder*, CameraParamChunkHolder*, const char*);
@@ -53,30 +44,29 @@ public:
     u32 getAnimCameraFrame(s32, const char*) const;
     void pauseOnAnimCamera(s32, const char*);
     void pauseOffAnimCamera(s32, const char*);
-    void updateChunkFIFO();
+    void takeRequests();
     void applyChunk();
-    void checkReset(ChunkFIFOItem*);
+    void checkReset(Request*);
     void changeCamera();
     void setExtraParam();
     void setVPanParam();
     void resetCameraIfRequested();
     void setSafePose();
     CameraParamChunkEvent* findChunk(s32, const char*) const;
-    void requestChunk(CameraParamChunkEvent*, EPriority, const CameraTargetArg&, s32);
-    bool cleanChunkFIFO(CameraParamChunk*);
-    bool isChunkFIFOEmpty() const;
+    void request(CameraParamChunkEvent*, u32 priority, const CameraTargetArg&, s32);
+    bool removeRequest(CameraParamChunk*);
+    bool hasNoRequest() const;
     void sendStartInterpolateFrame(CameraParamChunkEvent*, s32);
     s32 getInterpolateFrame(CameraParamChunkEvent*, s32) const;
     void sendFinishInterpolateFrame(CameraParamChunkEvent*, s32);
-    s32 searchPriority(CameraParamChunk*) const;
-    bool isInFIFO(CameraParamChunk*) const;
+    bool isRequested(CameraParamChunk*) const;
     bool isAnimCameraEnd(s32, const char*) const;
 
     CameraHolder* mHolder;
     CameraParamChunkHolder* mChunkHolder;
     Camera* mCamera;
-    static const u32 cFifoItemNum = 2;
-    ChunkFIFOItemPair mItems[cFifoItemNum];
+    static const u32 cPriorityNum = 2;
+    PrioritySlot mSlots[cPriorityNum];
     CameraParamChunkEvent* mChunk;
     bool mRequestReset;
 };

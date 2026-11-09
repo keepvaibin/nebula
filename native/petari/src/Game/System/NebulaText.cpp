@@ -1,10 +1,11 @@
 #include "Game/System/NebulaText.hpp"
-#include "Game/System/GameLog.hpp"
+#include <nebula_module.h>
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
@@ -171,7 +172,7 @@ namespace {
                 if (column >= 0) {
                     sColumn = column;
                 } else {
-                    GameLog("NebulaText: unknown language in NebulaText.txt\n");
+                    nebula_log("NebulaText: unknown language in NebulaText.txt\n");
                 }
                 continue;
             }
@@ -187,7 +188,7 @@ namespace {
         const char* pPrefix = MR::getCurrentLanguagePrefix();
         const s32 column = findColumn(pPrefix, lengthOf(pPrefix));
         sColumn = column >= 0 ? column : 0;
-        GameLog("NebulaText: %s\n", pPrefix);
+        nebula_log("NebulaText: %s\n", pPrefix);
 
         MR::FormattedName path("/%s/MessageData/NebulaText.txt", pPrefix);
         GameAssets::File file;
@@ -205,14 +206,14 @@ namespace {
             }
         }
         const u32 bytes = overrideRoom * sizeof(Override) + textRoom * sizeof(char16_t) + length + longest + 1;
-        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 8, NebulaArena::getRootHeap()));
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 8, NebulaArena::root()));
         sOverrides = reinterpret_cast< Override* >(pBlock);
         sText = reinterpret_cast< char16_t* >(pBlock + overrideRoom * sizeof(Override));
         sFile = reinterpret_cast< u8* >(sText + textRoom);
         sTokenId = reinterpret_cast< char* >(sFile + length);
         if (length > 0 && GameAssets::read(&file, sFile, static_cast< s32 >(length), 0) >= 0) {
             parse(sFile, static_cast< s32 >(length));
-            GameLog("NebulaText: %s (%d texts)\n", path.c_str(), sOverrideNum);
+            nebula_log("NebulaText: %s (%d texts)\n", path.c_str(), sOverrideNum);
         }
     }
 
@@ -376,6 +377,16 @@ namespace NebulaText {
         return sink.mLength;
     }
 
+    s32 length(const char* pId) {
+        return measure(pId);
+    }
+
+    const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId) {
+        const s32 units = measure(pId) + 1;
+        get(pText->room(units), units, pId);
+        return pText->mItems;
+    }
+
     // Japanese and Chinese lines may break between characters (Korean, as English, at spaces): before a wide character
     // that is not closing punctuation or a small kana, after one that is not an opening bracket.
     bool breaksBefore(char16_t c, char16_t previous) {
@@ -426,7 +437,7 @@ namespace NebulaText {
             // Both pages, the page tag between them and the terminator; then a break after every unit.
             sTalkRoom = (measure("LumaGreeting") + 3 + measure("LumaBoard") + 1) * 2;
             const u32 bytes = sTalkRoom * (3 * sizeof(s32) + 2 * sizeof(char16_t));
-            u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 4, NebulaArena::getRootHeap()));
+            u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 4, NebulaArena::root()));
             sTalkBreaks = reinterpret_cast< s32* >(pBlock);
             sTalkChosen = sTalkBreaks + sTalkRoom;
             sTalkTrial = sTalkChosen + sTalkRoom;

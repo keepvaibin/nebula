@@ -667,10 +667,10 @@ namespace MR {
     }
 
     void normalize(Vec2f* pVec) {
-        Vec3f vec3(pVec->x, pVec->y, 0.0f);
-        normalize(&vec3);
-        pVec->x = vec3.x;
-        pVec->y = vec3.y;
+        Vec3f vec(pVec->x, pVec->y, 0.0f);
+        normalize(&vec);
+        pVec->x = vec.x;
+        pVec->y = vec.y;
     }
 
     void normalize(Vec3f* pVec) {

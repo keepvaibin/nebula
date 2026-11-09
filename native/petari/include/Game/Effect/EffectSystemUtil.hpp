@@ -30,7 +30,7 @@ namespace MR {
         bool isExistInResource(u16* pIndex, const char* pName);
         bool isEffect2D(const MultiEmitter* pEmitter);
         void initEffectSyncBck(EffectKeeper* pKeeper, const ModelManager* pModelManager, const char* pEffectName, const char* pAnimName,
-                               s32 animCount, f32 startFrame, f32 endFrame, bool deleteOnEnd);
+                               s32 animCount, f32 startFrame, f32 endFrame);
         void addEffectSyncBck(MultiEmitter* pEmitter, const ModelManager* pModelManager, const char* pAnimName);
         int getAutoEffectNum(const char* pName);
         Table* getAutoEffectListBinary();
@@ -53,6 +53,6 @@ namespace MR {
                                    u8 resourceManagerId);
         bool isExistInResource(u16* pIndex, const char* pName, s32 number);
         const char* getEffectAttributeName(s32 floorCode);
-        AutoEffectInfo* createAutoEffect(const char* pGroupName, const char* pUniqueName);
+        AutoEffectInfo* createAutoEffect(const char* pUniqueName);
     };  // namespace Effect
 };  // namespace MR

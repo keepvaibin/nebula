@@ -7,7 +7,6 @@
 #include "Game/Camera/CameraMan.hpp"
 #include "Game/Camera/CameraManEvent.hpp"
 #include "Game/Camera/CameraManGame.hpp"
-#include "Game/Camera/CameraManPause.hpp"
 #include "Game/Camera/CameraManSubjective.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraParamChunkHolder.hpp"
@@ -66,7 +65,6 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     mRotChecker = new CameraRotChecker();
     mCameraManGame = new CameraManGame(mHolder, mChunkHolder, "ゲームカメラマン");
     mCameraManEvent = new CameraManEvent(mHolder, mChunkHolder, "イベントカメラマン");
-    mCameraManPause = new CameraManPause("ポーズカメラマン");
     mCameraManSubjective = new CameraManSubjective("主観カメラマン");
     mEventNum = 0;
     mIsStartCameraActive = true;

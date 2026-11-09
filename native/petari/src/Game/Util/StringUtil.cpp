@@ -433,7 +433,7 @@ namespace MR {
             }
         }
         InternedName* const pNew = static_cast< InternedName* >(
-            NebulaArena::alloc(static_cast< u32 >(offsetof(InternedName, mText)) + length + 1, 4, NebulaArena::getRootHeap()));
+            NebulaArena::alloc(static_cast< u32 >(offsetof(InternedName, mText)) + length + 1, 4, NebulaArena::root()));
         pNew->mNext = sInterned;
         pNew->mHash = hash;
         memcpy(pNew->mText, pName, length + 1);

@@ -25,7 +25,7 @@ public:
     void registerEffect(const char* pName, MtxPtr pMtx, const char* pUniqueName);
     void registerEffect(const char* pName, MtxPtr pMtx, const Vec3f* pScale, const char* pUniqueName);
     void registerEffectWithoutSRT(const char* pName, const char* pUniqueName);
-    void registerSyncBckEffect(XanimePlayer*, const char*, const char*, s32, f32, f32, bool);
+    void registerSyncBckEffect(XanimePlayer*, const char*, const char*, s32, f32, f32);
     MultiEmitter* createEmitter(const char*);
     void deleteEmitter(const char*);
     void forceDeleteEmitter(const char*);

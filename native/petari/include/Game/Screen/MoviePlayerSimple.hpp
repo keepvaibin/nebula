@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/LayoutActor.hpp"
-#include "Game/System/ArenaOwned.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Screen/MovieStream.hpp"
 
 // The scene's movie: as large as the screen holds it at its own shape, centred, black around it; its time is its

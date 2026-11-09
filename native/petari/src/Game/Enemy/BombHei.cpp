@@ -576,19 +576,19 @@ bool BombHei::calcJoint(Pos3f* pMtx, const JointControllerInfo& rJointInfo) {
     Pos3f mtx;
     mtx.makeQuat(mRotQuat);
 
-    // interesting way to transpose a matrix
-    Pos3f mtx2;
+    // The base rotation's transpose (its axes as rows).
+    Pos3f base;
     Vec3f x, y, z;
-    mtx2.setInline(getBaseMtx());
-    mtx2.getXYZDir(x, y, z);
-    Pos3f mtx3;
-    mtx3.setXYZDir2(x, y, z);
+    base.setInline(getBaseMtx());
+    base.getXYZDir(x, y, z);
+    Pos3f baseT;
+    baseT.setXYZDir2(x, y, z);
 
     Vec3f t;
     pMtx->getTrans(t);
 
     pMtx->zeroTransInline2();
-    pMtx->concat(mtx3, *pMtx);
+    pMtx->concat(baseT, *pMtx);
     pMtx->concat(mtx, *pMtx);
     pMtx->setTrans(t);
 

@@ -10,5 +10,5 @@ void WaterArea::init(const TableIter& rIter) {
     WaterAreaFunction::createWaterAreaHolder();
 }
 
-WaterAreaMgr::WaterAreaMgr(s32 maxNum, const char* pName) : AreaObjMgr(maxNum, pName) {
+WaterAreaMgr::WaterAreaMgr(s32 firstCapacity, const char* pName) : AreaObjMgr(firstCapacity, pName) {
 }

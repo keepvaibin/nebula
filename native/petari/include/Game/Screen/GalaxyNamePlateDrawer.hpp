@@ -24,9 +24,9 @@ public:
     GalaxyNamePlatePrioritied* registerPlate(const LayoutActor*);
 
 private:
-    MR::Vector< MR::FixedArray< GalaxyNamePlatePrioritied*, 16 > > mPlateArray;
+    MR::InlineVector< GalaxyNamePlatePrioritied*, 16 > mPlateArray;
     // The plates in drawing order, sorted again at each draw.
-    mutable MR::Vector< MR::FixedArray< const GalaxyNamePlatePrioritied*, 16 > > mDrawOrder;
+    mutable MR::InlineVector< const GalaxyNamePlatePrioritied*, 16 > mDrawOrder;
 };
 
 namespace MR {

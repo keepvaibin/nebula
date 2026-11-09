@@ -14,7 +14,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
@@ -93,7 +93,7 @@ void GalaxyMapController::init(const TableIter& rIter) {
     mWipe->initWithoutIter();
 
     {
-        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
+        NebulaArena::CurrentScope heapRestorer(Arenas::scene());
 
         mCaptureTexture = GameTexture::createTarget(0.5f, 0.5f);
     }

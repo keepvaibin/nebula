@@ -21,7 +21,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Model.hpp"
@@ -408,9 +408,9 @@ void LiveActor::initEffectKeeper(int extraEmitterNum, const char* pResourceName)
 
 void LiveActor::initSound(int numHandles, bool is2D) {
     if (!is2D) {
-        mSoundObject = new AudAnmSoundObject(&mPosition, numHandles, MR::getCurrentHeap());
+        mSoundObject = new AudAnmSoundObject(&mPosition, numHandles, NebulaArena::current());
     } else {
-        mSoundObject = new AudAnmSoundObject(nullptr, numHandles, MR::getCurrentHeap());
+        mSoundObject = new AudAnmSoundObject(nullptr, numHandles, NebulaArena::current());
     }
 }
 

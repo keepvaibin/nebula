@@ -6,7 +6,9 @@
 #include "Game/Map/CollisionDirector.hpp"
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Map/KCollision.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -523,23 +525,22 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
 }
 
 namespace {
-    // Area lists are asked for on the game thread: one buffer for them all (the root arena's: it outlives scenes), grown
-    // to the longest list asked for.
+    // Area lists are asked for on the game thread. The list lives in the permanent arena and grows to the largest request.
     KC_PrismData** sAreaPrisms = nullptr;
-    u32 sAreaPrismRoom = 0;
+    u32 sAreaPrismCapacity = 0;
 
-    KC_PrismData** areaPrisms(u32 count) {
-        if (count > sAreaPrismRoom) {
+    KC_PrismData** areaPrisms(u32 maxTriangles) {
+        if (maxTriangles > sAreaPrismCapacity) {
             delete[] sAreaPrisms;
-            sAreaPrismRoom = count < 512u ? 512u : count;
-            sAreaPrisms = new (NebulaArena::getRootHeap(), 0) KC_PrismData*[sAreaPrismRoom];
+            sAreaPrisms = new (Arenas::permanent(), 0) KC_PrismData*[maxTriangles];
+            sAreaPrismCapacity = maxTriangles;
         }
         return sAreaPrisms;
     }
 }  // namespace
 
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rMin, const Vec3f& rMax) {
-    KC_PrismData** const prisms = areaPrisms(maxTriangles);
+    KC_PrismData** const prisms = ::areaPrisms(maxTriangles);
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
@@ -563,7 +564,7 @@ u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTria
     if (numPoints == 0) {
         return 0;
     }
-    KC_PrismData** const prisms = areaPrisms(maxTriangles);
+    KC_PrismData** const prisms = ::areaPrisms(maxTriangles);
     Pos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();

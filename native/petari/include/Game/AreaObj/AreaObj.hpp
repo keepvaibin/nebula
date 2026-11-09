@@ -71,7 +71,7 @@ public:
 
 class AreaObjMgr : public NameObj {
 public:
-    AreaObjMgr(s32, const char*);
+    AreaObjMgr(s32 firstCapacity, const char* pName);
 
     void entry(AreaObj*);
     AreaObj* find_in(const Vec3f&) const;
@@ -85,5 +85,5 @@ public:
     }
 
     MR::Vector< MR::AssignableArray< AreaObj* > > mArray;
-    s32 mMaxCount;
+    s32 mFirstCapacity;  // entry grows past it
 };

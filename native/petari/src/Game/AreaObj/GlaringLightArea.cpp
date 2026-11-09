@@ -1,7 +1,7 @@
 #include "Game/AreaObj/GlaringLightArea.hpp"
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
@@ -19,7 +19,7 @@ void GlaringLightArea::init(const TableIter& rIter) {
 
     mPos.set(pos);
 
-    mSoundObj = new AudSoundObject(&mPos, 4, MR::getCurrentHeap());
+    mSoundObj = new AudSoundObject(&mPos, 4, NebulaArena::current());
 
     if (isValidSwitchA()) {
         MR::connectToSceneAreaObj(this);

@@ -11,8 +11,8 @@
 
 namespace {
     static const f32 sEffectEmitterInterval = 600.0f;
-    static const s32 sStepBrowWindMin = 60;
-    static const s32 sStepBrowWindMax = 240;
+    static const s32 sStepBlowWindMin = 60;
+    static const s32 sStepBlowWindMax = 240;
     static const s32 sStepToValidateClipping = 180;
 
     FluffWindHolder* getFluffWindHolder() {
@@ -21,21 +21,21 @@ namespace {
 };  // namespace
 
 namespace NrvFluffWindEffect {
-    NEW_NERVE(FluffWindEffectNrvBrowWind, FluffWindEffect, BrowWind);
+    NEW_NERVE(FluffWindEffectNrvBlowWind, FluffWindEffect, BlowWind);
 };  // namespace NrvFluffWindEffect
 
 FluffWindEffect::FluffWindEffect(const char* pName) : LiveActor(pName), mEffectName(), mTimer(-1) {
     mMtx.identity();
 }
 
-void FluffWindEffect::initEffectInfo(const Vec3f& rFront, const Vec3f& rUp, const Vec3f& rPos, const char* pEffectName, f32 radius) {
-    mPosition.set(rFront);
+void FluffWindEffect::initEffectInfo(const Vec3f& rPos, const Vec3f& rFront, const Vec3f& rUp, const char* pEffectName, f32 radius) {
+    mPosition.set(rPos);
     MR::connectToSceneMapObjMovement(this);
-    MR::makeMtxFrontUpPos(&mMtx, rUp, rPos, rFront);
+    MR::makeMtxFrontUpPos(&mMtx, rFront, rUp, rPos);
     mEffectName = pEffectName;
     initEffectKeeper(0, pEffectName);
     MR::setEffectHostMtx(this, mEffectName, mMtx);
-    initNerve(GET_NERVE(FluffWindEffect, FluffWindEffectNrvBrowWind));
+    initNerve(GET_NERVE(FluffWindEffect, FluffWindEffectNrvBlowWind));
     if (radius > 0.0f) {
         MR::setClippingTypeSphere(this, radius);
     }
@@ -50,10 +50,10 @@ void FluffWindEffect::makeActorDead() {
     MR::deleteEffect(this, mEffectName);
 }
 
-void FluffWindEffect::exeBrowWind() {
+void FluffWindEffect::exeBlowWind() {
     if (MR::isFirstStep(this)) {
         MR::emitEffect(this, mEffectName);
-        mTimer = MR::getRandom(::sStepBrowWindMin, ::sStepBrowWindMax);
+        mTimer = MR::getRandom(::sStepBlowWindMin, ::sStepBlowWindMax);
     }
 
     if (MR::isStep(this, ::sStepToValidateClipping)) {
@@ -62,12 +62,8 @@ void FluffWindEffect::exeBrowWind() {
 
     if (MR::isStep(this, mTimer)) {
         MR::invalidateClipping(this);
-        setNerve(GET_NERVE(FluffWindEffect, FluffWindEffectNrvBrowWind));
+        setNerve(GET_NERVE(FluffWindEffect, FluffWindEffectNrvBlowWind));
     }
-}
-
-void FluffWindEffect::startClipped() {
-    LiveActor::startClipped();
 }
 
 FluffWind::FluffWind(const char* pName) : LiveActor(pName), mNumEffects(), mEffects() {
@@ -115,15 +111,11 @@ FluffWindHolder::FluffWindHolder() : LiveActorGroup("わたげ風", 8) {
 }
 
 void FluffWindHolder::calcWindInfo(const Vec3f& rPosition, Vec3f* pWindDirection, f32* pWindDistance) const {
-    pWindDirection->zero();
-    *pWindDistance = -1.0f;
-
     f32 bestDistance = 1000000.0f;
     Vec3f bestDir(0.0f, 0.0f, 0.0f);
 
-    LiveActor* pActor;
     for (s32 i = 0; i < getObjNum(); i++) {
-        pActor = getActor(i);
+        LiveActor* pActor = getActor(i);
 
         Vec3f railDir(0.0f, 0.0f, 0.0f);
         Vec3f nearestPos;

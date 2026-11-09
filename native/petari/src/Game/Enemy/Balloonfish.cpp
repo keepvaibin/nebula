@@ -230,9 +230,9 @@ void Balloonfish::calcAndSetBaseMtx() {
     Pos3f mtx;
     mtx.makeQuat(mQuat);
 
-    Pos3f mtx2;
-    mtx2.makeRotate(Vec3f(0.0f, 0.0f, 1.0f), mRotateAngle);
-    mtx.concat(mtx, mtx2);
+    Pos3f spinMtx;
+    spinMtx.makeRotate(Vec3f(0.0f, 0.0f, 1.0f), mRotateAngle);
+    mtx.concat(mtx, spinMtx);
 
     mtx.setTrans(mPosition);
     MR::setBaseTRMtx(this, mtx);

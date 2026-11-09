@@ -947,8 +947,6 @@ namespace MR {
     }
 
     bool isKoopaFortressAppearInGalaxy() {
-        char key[256];
-
         if (!MR::isEqualStageName("AstroDome")) {
             return false;
         }
@@ -959,11 +957,11 @@ namespace MR {
             return false;
         }
 
-        nebula_snprintf(key, sizeof(key), "SpecialStarGrand%1d", scenarioNo + 1);
+        const MR::FormattedName key("SpecialStarGrand%1d", scenarioNo + 1);
 
-        GameEventFlagAccessor accessor = GameEventFlagTable::makeAccessor(key);
+        GameEventFlagAccessor accessor = GameEventFlagTable::makeAccessor(key.c_str());
 
-        return MR::isOnGameEventFlagGalaxyOpen(accessor.getGalaxyName()) && !MR::isOnGameEventFlagGalaxyOpen(key);
+        return MR::isOnGameEventFlagGalaxyOpen(accessor.getGalaxyName()) && !MR::isOnGameEventFlagGalaxyOpen(key.c_str());
     }
 
     bool isGalaxyRedCometAppearInCurrentStage() {

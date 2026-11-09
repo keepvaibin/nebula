@@ -10,7 +10,7 @@ namespace {
     const OscData cEnvOsc = {Oscillator::TARGET_VOLUME, 1.0f, nullptr, nullptr, 1.0f, 0.0f};
     const OscData cPitchEnvOsc = {Oscillator::TARGET_PITCH, 1.0f, nullptr, nullptr, 1.0f, 0.0f};
 
-    enum Condition : u32 { COND_ALWAYS, COND_NULL, COND_NONNULL, COND_1, COND_NEGATIVE, COND_POSITIVE };
+    enum Condition : u32 { COND_ALWAYS, COND_NULL, COND_NONNULL, COND_EQUAL_ONE, COND_NEGATIVE, COND_POSITIVE };
     // Interrupt kinds: 0 unpause, 1 pause, 2 and 3 a write to port 0 or 1, 5 the interrupt timer, 6 every tick.
     const u32 cIntrTimer = 5;
     const u32 cIntrTick = 6;
@@ -1207,7 +1207,7 @@ bool SeqTrack::conditionCheck(u32 condition) const {
         return flag == 0;
     case COND_NONNULL:
         return flag != 0;
-    case COND_1:
+    case COND_EQUAL_ONE:
         return flag == 1;
     case COND_NEGATIVE:
         return flag >= 0x8000;

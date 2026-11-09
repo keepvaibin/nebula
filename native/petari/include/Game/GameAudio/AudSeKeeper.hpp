@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/System/ArenaOwned.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 class AudSoundObject;
 class Joint;

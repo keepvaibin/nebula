@@ -25,8 +25,8 @@ namespace MR {
             (mCaller->*mCallee)();
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV0M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV0M(*this);
         };
 
         T mCaller;
@@ -36,10 +36,10 @@ namespace MR {
     template < typename T, typename U, typename V >
     class FunctorV1M : public FunctorBase {
     public:
-        inline FunctorV1M(T call, U callee, V arg_0) {
+        inline FunctorV1M(T call, U callee, V arg0) {
             mCaller = call;
             mCallee = callee;
-            mArg0 = arg_0;
+            mArg0 = arg0;
         }
 
         inline FunctorV1M() {
@@ -49,8 +49,8 @@ namespace MR {
             (mCaller->*mCallee)(mArg0);
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV1M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV1M(*this);
         };
 
         T mCaller;
@@ -61,11 +61,11 @@ namespace MR {
     template < typename T, typename U, typename V, typename W >
     class FunctorV2M : public FunctorBase {
     public:
-        inline FunctorV2M(T call, U callee, V arg_0, W arg_1) {
+        inline FunctorV2M(T call, U callee, V arg0, W arg1) {
             mCaller = call;
             mCallee = callee;
-            mArg0 = arg_0;
-            mArg1 = arg_1;
+            mArg0 = arg0;
+            mArg1 = arg1;
         }
 
         inline FunctorV2M() {
@@ -75,8 +75,8 @@ namespace MR {
             (mCaller->*mCallee)(mArg0, mArg1);
         }
 
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV2M(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV2M(*this);
         };
 
         T mCaller;
@@ -96,23 +96,23 @@ namespace MR {
     }
 
     template < class T, typename U >
-    static FunctorV1M< T*, void (T::*)(U), U > Functor(T* pObject, void (T::*pFunction)(U), U arg_0) {
-        return FunctorV1M< T*, void (T::*)(U), U >(pObject, pFunction, arg_0);
+    static FunctorV1M< T*, void (T::*)(U), U > Functor(T* pObject, void (T::*pFunction)(U), U arg0) {
+        return FunctorV1M< T*, void (T::*)(U), U >(pObject, pFunction, arg0);
     }
 
     template < class T, typename U >
-    static FunctorV1M< const T*, void (T::*)(U), U > Functor(const T* pObject, void (T::*pFunction)(U) const, U arg_0) {
-        return FunctorV1M< const T*, void (T::*)(U) const, U >(pObject, pFunction, arg_0);
+    static FunctorV1M< const T*, void (T::*)(U), U > Functor(const T* pObject, void (T::*pFunction)(U) const, U arg0) {
+        return FunctorV1M< const T*, void (T::*)(U) const, U >(pObject, pFunction, arg0);
     }
 
     template < class T, typename U, typename V >
-    static FunctorV2M< T*, void (T::*)(U, V), U, V > Functor(T* pObject, void (T::*pFunction)(U, V), U arg_0, V arg_1) {
-        return FunctorV2M< T*, void (T::*)(U, V), U, V >(pObject, pFunction, arg_0, arg_1);
+    static FunctorV2M< T*, void (T::*)(U, V), U, V > Functor(T* pObject, void (T::*pFunction)(U, V), U arg0, V arg1) {
+        return FunctorV2M< T*, void (T::*)(U, V), U, V >(pObject, pFunction, arg0, arg1);
     }
 
     template < class T, typename U, typename V >
-    static FunctorV2M< const T*, void (T::*)(U, V) const, U, V > Functor(const T* pObject, void (T::*pFunction)(U, V) const, U arg_0, V arg_1) {
-        return FunctorV2M< const T*, void (T::*)(U, V) const, U, V >(pObject, pFunction, arg_0, arg_1);
+    static FunctorV2M< const T*, void (T::*)(U, V) const, U, V > Functor(const T* pObject, void (T::*pFunction)(U, V) const, U arg0, V arg1) {
+        return FunctorV2M< const T*, void (T::*)(U, V) const, U, V >(pObject, pFunction, arg0, arg1);
     }
 
     class FunctorV0F : public FunctorBase {
@@ -127,8 +127,8 @@ namespace MR {
         virtual void operator()() const {
             (*mFunc)();
         }
-        virtual FunctorBase* clone(NebulaArena* pHeap) const {
-            return new (pHeap, 0) FunctorV0F(*this);
+        virtual FunctorBase* clone(NebulaArena* pArena) const {
+            return new (pArena, 0) FunctorV0F(*this);
         }
 
         void (*mFunc)();

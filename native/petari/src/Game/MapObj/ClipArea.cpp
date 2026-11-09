@@ -9,7 +9,6 @@
 
 namespace {
     static const Color8 sShapeColor(0, 0, 0, 4);
-    static const Color8 sDebugShapeColor(255, 0, 0, 128);
 };  // namespace
 
 ClipArea::ClipArea(const char* pName) : LiveActor(pName), mShape() {

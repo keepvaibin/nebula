@@ -28,7 +28,7 @@ public:
     void setResource(void*);
 
     u32 mNumEntries;
-    AudMePlayingParams* mParams;
+    const AudMePlayingParams* mParams;
     // The ME table file (host order, as the importer cooks it) and its name offsets from the file's start.
     const u8* mBase;
     const u32* mNameOffsets;
@@ -70,7 +70,7 @@ public:
     void update();
     void setTimedParam(s32, f32, u32);
     void initTimed();
-    void updateTimedParams(bool);
+    void updateTimedParams();
     void setOuterPlayingParams(f32, f32, f32, s32, s32);
     void doneStop();
     void setPauseFlag(bool);
@@ -113,7 +113,7 @@ private:
 
 class AudMeMgr : public SoundGlobal< AudMeMgr > {
 public:
-    AudMeMgr(NebulaArena* pHeap);
+    AudMeMgr(NebulaArena* pArena);
 
     void setMeSeq(const void*);
     void setMeTable(void*);
@@ -133,7 +133,7 @@ public:
         return mParams.mParams[index].mPriority;
     }
 
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     const MeProgramFile* mMeSeq;
     NebulaList< AudMe > mMeList;
     f32 mMeVolume;

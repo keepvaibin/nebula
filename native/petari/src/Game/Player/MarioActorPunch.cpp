@@ -163,10 +163,6 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
         }
     }
 
-    if (mAirPunchHitCount >= 8) {
-        return false;
-    }
-
     if (!mPunchSensorOn && mPlayerMode != 1) {
         Vec3f vec(pSensor->mPosition - getSensor("body")->mPosition);
         MR::vecKillElement(vec, getGravityVector(), &vec);
@@ -177,7 +173,7 @@ bool MarioActor::tryPunchAirAfter(HitSensor* pSensor) {
     }
 
     if (sendPunch(pSensor, true)) {
-        mAirPunchHits[mAirPunchHitCount] = pSensor;
+        mAirPunchHits.at(mAirPunchHitCount) = pSensor;
         mRushSensor = pSensor;
         mAirPunchHitCount++;
 

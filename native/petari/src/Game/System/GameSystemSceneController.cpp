@@ -4,7 +4,6 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
-#include "Game/Scene/PlayTimerScene.hpp"
 #include "Game/Scene/ScenarioSelectScene.hpp"
 #include "Game/Scene/SceneFactory.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -12,13 +11,12 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
-#include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -48,15 +46,10 @@ namespace NrvGameSystemSceneController {
     NEW_NERVE(GameSystemSceneControllerDestroyed, GameSystemSceneController, Destroyed);
 };  // namespace NrvGameSystemSceneController
 
-SceneControlInfo::SceneControlInfo() : mScene(""), mIsGameScene(false), mStage(""), mStartIdInfo() {
+SceneControlInfo::SceneControlInfo() : mScene(SceneKind_None), mStage(""), mStartIdInfo() {
     mScenarioNo = 1;
     mSelectedScenarioNo = 1;
     mStartIdInfo = new PlacementId(MR::getInitializeStartIdInfo());
-}
-
-void SceneControlInfo::setScene(const char* pSceneName) {
-    mScene = MR::internName(pSceneName);
-    mIsGameScene = MR::isEqualString(mScene, "Game");
 }
 
 void SceneControlInfo::setStage(const char* pStageName) {
@@ -69,11 +62,10 @@ void SceneControlInfo::setStartIdInfo(const PlacementId& rInfo) {
 
 GameSystemSceneController::GameSystemSceneController()
     : mSpine(), mNextNerve(), mIsResetProcessing(), mScenarioParser(), mObjHolder(), mScene(), mSceneInitializeState(), mIntermissionScene(),
-      mPlayTimerScene(), mScenarioSelectScene() {
+      mScenarioSelectScene() {
     mObjHolder = new NameObjHolder(0x1300);
     mSpine = new Spine(this, GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNotInitialized));
-    mIntermissionScene = static_cast< IntermissionScene* >(MR::createScene("Intermission"));
-    mPlayTimerScene = new PlayTimerScene();
+    mIntermissionScene = static_cast< IntermissionScene* >(MR::createScene(SceneKind_Intermission));
     mScenarioSelectScene = new ScenarioSelectScene();
 }
 
@@ -81,7 +73,6 @@ void GameSystemSceneController::initAfterSystemArchiveLoaded() {
     mScenarioParser = new ScenarioDataParser("シナリオデータ解析");
     mScenarioParser->initWithoutIter();
 
-    mPlayTimerScene->init();
     mScenarioSelectScene->init();
 }
 
@@ -119,16 +110,16 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
 
 void GameSystemSceneController::initializeScene() {
     NebulaLoadTrace::Scope loadingTrace("initializeScene");
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
+    NebulaArena::CurrentScope restorer(NebulaArena::current());
     mSceneInitializeState = SceneInitializeState_Init;
     mSceneInitializeHeld = false;
 
-    if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
-        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap();
+    if (Arenas::sceneFiles() == nullptr || !isSameAtNextSceneAndStage()) {
+        Arenas::createSceneFiles();
     }
 
-    SingletonHolder< HeapMemoryWatcher >::get()->createSceneHeapOnGameHeap();
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    Arenas::createScene();
+    Arenas::scene()->makeCurrent();
     updateSceneControlInfo();
     MR::setRandomSeedFromStageName();
 
@@ -158,8 +149,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
     if (!mSceneInitializeHeld) {
         return false;
     }
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
-    SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToSceneHeap();
+    NebulaArena::CurrentScope restorer(Arenas::scene());
     bool complete = false;
     NebulaLoadTrace::measure("initAfterScenarioChosen", [&] { complete = mScene->initAfterScenarioChosen(); });
     if (!complete) return false;
@@ -170,7 +160,7 @@ bool GameSystemSceneController::resumeSceneInitialize() {
 }
 
 void GameSystemSceneController::destroyScene() {
-    MR::CurrentHeapRestorer restorer(NebulaArena::getCurrentHeap());
+    NebulaArena::CurrentScope restorer(NebulaArena::current());
     bool stopSound = isStopSound();
 
     delete mScene;
@@ -183,43 +173,38 @@ void GameSystemSceneController::destroyScene() {
     }
 
     GameSystemFunction::resetAllControllerRumble();
-    MR::removeResourceHolders(MR::getSceneHeap());
+    MR::removeResourceHolders(Arenas::scene());
 
-    if (tryDestroyFileCacheHeap(false)) {
-        SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
+    if (releaseSceneFiles(false)) {
+        Arenas::resetGame();
     } else {
-        SingletonHolder< HeapMemoryWatcher >::get()->destroySceneHeap();
+        Arenas::destroyScene();
     }
 }
 
 bool GameSystemSceneController::isStopSound() const {
-    if (MR::isEqualSceneName("Title")) {
+    const bool isNextGame = mNextSceneControlInfo.mScene == SceneKind_Game;
+    if (MR::isEqualStageName("AstroDome") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroDome") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame && MR::isEqualString(mNextSceneControlInfo.mStage, "AstroDome")) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
-        MR::isEqualString(mNextSceneControlInfo.mStage, "AstroDome")) {
+    if (MR::isEqualStageName("LibraryRoom") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("LibraryRoom") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame && MR::isEqualString(mNextSceneControlInfo.mStage, "LibraryRoom")) {
         return false;
     }
 
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
-        MR::isEqualString(mNextSceneControlInfo.mStage, "LibraryRoom")) {
+    if (MR::isEqualStageName("HeavensDoorGalaxy") && isNextGame) {
         return false;
     }
 
-    if (MR::isEqualStageName("HeavensDoorGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game")) {
-        return false;
-    }
-
-    if (MR::isEqualStageName("AstroGalaxy") && MR::isEqualString(mNextSceneControlInfo.mScene, "Game") &&
+    if (MR::isEqualStageName("AstroGalaxy") && isNextGame &&
         MR::isEqualString(mNextSceneControlInfo.mStage, "HeavensDoorGalaxy")) {
         return false;
     }
@@ -250,7 +235,6 @@ void GameSystemSceneController::updateScene() {
 
     if (pScene != nullptr) {
         pScene->update();
-        mPlayTimerScene->update();
         mScenarioSelectScene->update();
     }
 }
@@ -266,7 +250,6 @@ void GameSystemSceneController::calcAnimScene() {
 
     if (pScene != nullptr) {
         pScene->calcAnim();
-        mPlayTimerScene->calcAnim();
         mScenarioSelectScene->calcAnim();
     }
 }
@@ -276,14 +259,13 @@ void GameSystemSceneController::drawScene() {
 
     if (pScene != nullptr) {
         pScene->draw();
-        mPlayTimerScene->draw();
         mScenarioSelectScene->draw();
     }
 }
 
 void GameSystemSceneController::drawSceneOverlay() {
     Scene* pScene = getCurrentSceneForExecute();
-    if (pScene != nullptr && MR::isEqualSceneName("Game")) {
+    if (pScene != nullptr && mCurrSceneControlInfo.mScene == SceneKind_Game) {
         static_cast< GameScene* >(pScene)->drawOverlay();
     }
 }
@@ -366,7 +348,7 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
 
 void GameSystemSceneController::exeDestroyScene() {
     if (mSpine->mStep == 0) {
-        mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
+        mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", MR::getSceneKindName(mCurrSceneControlInfo.mScene));
         destroyScene();
 
         const Nerve* pNerve = GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChoosePlayerVoices);
@@ -386,7 +368,7 @@ void GameSystemSceneController::exeChoosePlayerVoices() {
 
 void GameSystemSceneController::exeInitializeScene() {
     if (mSpine->mStep == 0) {
-        mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", mNextSceneControlInfo.mScene);
+        mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", MR::getSceneKindName(mNextSceneControlInfo.mScene));
         mSceneInitializeDone = false;
         initializeScene();
     }
@@ -434,8 +416,6 @@ void GameSystemSceneController::exeReadyToStartScene() {
 void GameSystemSceneController::prepareReset() {
     mIsResetProcessing = true;
 
-    mPlayTimerScene->stop();
-
     bool isInitializingScene = isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene)) ||
                                isNextNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene));
 
@@ -455,8 +435,8 @@ bool GameSystemSceneController::isPreparedReset() {
 }
 
 void GameSystemSceneController::restartGameAfterResetting() {
-    tryDestroyFileCacheHeap(true);
-    SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
+    releaseSceneFiles(true);
+    Arenas::resetGame();
 
     mIsResetProcessing = false;
 }
@@ -467,21 +447,19 @@ bool GameSystemSceneController::isExistRequest() const {
 }
 
 bool GameSystemSceneController::isSameAtNextSceneAndStage() const {
-    return MR::isEqualString(mCurrSceneControlInfo.mScene, mNextSceneControlInfo.mScene) &&
+    return mCurrSceneControlInfo.mScene == mNextSceneControlInfo.mScene &&
            MR::isEqualString(mCurrSceneControlInfo.mStage, mNextSceneControlInfo.mStage) &&
            mCurrSceneControlInfo.mScenarioNo == mNextSceneControlInfo.mScenarioNo;
 }
 
 void GameSystemSceneController::updateSceneControlInfo() {
     mCurrSceneControlInfo.mScene = mNextSceneControlInfo.mScene;
-    mCurrSceneControlInfo.mIsGameScene = mNextSceneControlInfo.mIsGameScene;
     mCurrSceneControlInfo.mStage = mNextSceneControlInfo.mStage;
     mCurrSceneControlInfo.mScenarioNo = mNextSceneControlInfo.mScenarioNo;
     mCurrSceneControlInfo.mSelectedScenarioNo = mNextSceneControlInfo.mSelectedScenarioNo;
     mCurrSceneControlInfo.setStartIdInfo(*mNextSceneControlInfo.mStartIdInfo);
 
-    mNextSceneControlInfo.mScene = "";
-    mNextSceneControlInfo.mIsGameScene = false;
+    mNextSceneControlInfo.mScene = SceneKind_None;
     mNextSceneControlInfo.mStage = "";
     mNextSceneControlInfo.mScenarioNo = -1;
     mNextSceneControlInfo.mSelectedScenarioNo = -1;
@@ -518,12 +496,12 @@ const Nerve* GameSystemSceneController::getNextNerveOnResetProcessing() const {
     return nextNerve;
 }
 
-bool GameSystemSceneController::tryDestroyFileCacheHeap(bool isForce) {
-    if (!isForce && SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap != nullptr && isSameAtNextSceneAndStage()) {
+bool GameSystemSceneController::releaseSceneFiles(bool isForce) {
+    if (!isForce && Arenas::sceneFiles() != nullptr && isSameAtNextSceneAndStage()) {
         return false;
     }
 
-    MR::removeResourceHolders(SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap);
+    MR::removeResourceHolders(Arenas::sceneFiles());
 
     return true;
 }

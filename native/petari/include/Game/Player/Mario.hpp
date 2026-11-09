@@ -829,7 +829,7 @@ public:
 
     AreaObj* mArrivedWarpCube;  // the warp cube he came out of: entering it doesn't warp back (doCubeWarp)
     void* mGroundCheckOwner;  // who locked the ground check (lockGroundCheck)
-    MR::Vector< MR::FixedArray< Triangle, 32 > > mTouchedWalls;  // walls touched this frame
+    MR::InlineVector< Triangle, 32 > mTouchedWalls;  // walls touched this frame
     const HitSensor* mOnimasuSensor;  // the nearest Onimasu block's sensor (checkOnimasu)
     Vec3f mOnimasuLocalPos;  // his position in that block's space (updateOnimasu)
     u8 mOnimasuFound;  // a block was found this frame
@@ -980,5 +980,5 @@ public:
     Vec3f mHipDropSlideSide;  // the hip-drop slide's side
     f32 mHipDropSlideSpeed;  // the hip-drop slide's speed
     HitSensor* mHipDropSlideSensor;  // what the hip-drop slide follows
-    u8 mIndexedAnimeOn[0x20];  // which indexed animations count as running (MarioModule::isAnimationRun(name, index)); nothing sets one: find, listed
+    u8 mIndexedAnimeOn[MarioIndexedAnime_Count];  // set by MarioModule::changeAnimation(name, anime), cleared once it stops
 };

@@ -65,7 +65,7 @@ void GlaringLight::connectToScene(const MapObjActorInitInfo& rInfo) {
     }
 }
 
-SimpleMirrorObj::SimpleMirrorObj(const char* pName, const char* pA2, MtxPtr mtx) : MapObjActor(pName, pA2) {
+SimpleMirrorObj::SimpleMirrorObj(const char* pName, const char* pObjName, MtxPtr mtx) : MapObjActor(pName, pObjName) {
     mMtx = mtx;
     MR::createMirrorCamera();
 }

@@ -145,7 +145,6 @@ void SpaceCocoon::init(const TableIter& rIter) {
         spawnPos.scale((mNumPoints - idx) * delta);
         spawnPos.add(mBasePos);
 
-
         f32 thickness = 1.0f;
         if ((mNumPoints - 1) - idx < ::sWidthBottomPointNum) {
             thickness = MR::getEaseOutValue(static_cast< f32 >((mNumPoints - 1) - idx) / ::sWidthBottomPointNum, ::sWidthTop, ::sWidthBottom, 1.0f);
@@ -183,9 +182,7 @@ void SpaceCocoon::exeStop() {
         mTouchTime = 0;
     }
 
-    if (tryTouch()) {
-        return;
-    }
+    tryTouch();
 }
 
 void SpaceCocoon::exeFree() {
@@ -337,9 +334,6 @@ void SpaceCocoon::exeBindAttack() {
 }
 
 void SpaceCocoon::exeBindAttackSuccess() {
-    if (MR::isFirstStep(this)) {
-    }
-
     updateBindAttack();
 
     if (MR::isStep(this, ::sStepToStopScene)) {
@@ -387,9 +381,7 @@ void SpaceCocoon::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (MR::tryGetItem(pSender, pReceiver)) {
-        return;
-    }
+    MR::tryGetItem(pSender, pReceiver);
 }
 
 bool SpaceCocoon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -467,15 +459,8 @@ bool SpaceCocoon::updateBindWait() {
             MR::requestStarPointerModeBlueStarReady(this);
         }
 
-        bool set;
         if (MR::isStarPointerPointing(this, PLAYER_1, true, "弱") && MR::isPressedJump(PLAYER_1) &&
             MR::tryStartStarPointerCommandStream(this, &mPosition, PLAYER_1, false)) {
-            set = true;
-        } else {
-            set = false;
-        }
-
-        if (set) {
             mPadChannel = PLAYER_1;
         }
 
@@ -530,7 +515,6 @@ void SpaceCocoon::updateHang() {
 
     Vec3f pos = mPointerPos;
     if (pos.distance(mNeutralPos) > ::sDistanceMax) {
-        pos.set(mPointerPos);
         pos.sub(mNeutralPos);
         MR::normalize(&pos);
         pos.scale(::sDistanceMax);
@@ -618,17 +602,14 @@ void SpaceCocoon::updateDrawPoints() {
         prevPos.set(pos);
     }
 
-    PlantPoint* top = mPlantPoints[0];
-    mTopMtx.setXYZDir(mPlantPoints[0]->mSide, mPlantPoints[0]->mUp, mPlantPoints[0]->mFront);
+    const PlantPoint* top = mPlantPoints[0];
+    mTopMtx.setXYZDir(top->mSide, top->mUp, top->mFront);
     mTopMtx.setTrans(top->mPosition);
 }
 
 namespace {
     bool tryTouchPointer(LiveActor* pActor, s32 padChannel) {
-        if (MR::isStarPointerPointing(pActor, padChannel, false, "弱") && MR::getStarPointerScreenSpeed(padChannel) > ::sPointerSpeedMin) {
-            return true;
-        }
-        return false;
+        return MR::isStarPointerPointing(pActor, padChannel, false, "弱") && MR::getStarPointerScreenSpeed(padChannel) > ::sPointerSpeedMin;
     }
 };  // namespace
 
@@ -749,13 +730,9 @@ bool SpaceCocoon::tryAttackMap() {
 }
 
 bool SpaceCocoon::isKinopioAttached() const {
-    if (isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioWait)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvWaitKinopioAimDemo)) ||
-        isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAim)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAttack)) ||
-        isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAttackSuccess))) {
-        return true;
-    }
-
-    return false;
+    return isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioWait)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvWaitKinopioAimDemo)) ||
+           isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAim)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAttack)) ||
+           isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvKinopioAttackSuccess));
 }
 
 void SpaceCocoon::endBind(const Vec3f& rJumpVec, bool attackSuccess) {
@@ -850,8 +827,7 @@ SiteMaterial SpaceCocoon::loadMaterial() const {
     // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, opaque; drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
     SiteMaterial material;
-    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
-                       NEBULA_CULL_BACK);
+    material.init(NEBULA_SHADER_TEX_MODULATE, SiteMaterial::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true, NEBULA_CULL_BACK);
     material.constants[0] = 1.0f;
     material.constants[1] = 1.0f;
     material.setTexture(0, mTexture);

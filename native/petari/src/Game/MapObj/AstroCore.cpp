@@ -10,6 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 namespace {
     static const f32 sSensorSizeTable[] = {100.0f, 300.0f, 350.0f, 420.0f, 480.0f, 540.0f, 600.0f, 0.0f};
@@ -70,18 +71,15 @@ void AstroCore::startDemo() {
 
 void AstroCore::startAnimGrow() {
     s32 stage = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum() + 1, 0, 6);
-    char animName[256];
-    nebula_snprintf(animName, sizeof(animName), "Revival%d", stage);
-    MR::startAllAnim(this, animName);
+    MR::startAllAnim(this, MR::FormattedName("Revival%d", stage).c_str());
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[stage];
 }
 
 void AstroCore::setStateBeforeGrow() {
     s32 stage = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum(), 0, 6);
-    char animName[256];
-    nebula_snprintf(animName, sizeof(animName), "Revival%d", stage);
-    MR::startAllAnim(this, animName);
-    MR::setAllAnimFrameAtEnd(this, animName);
+    const MR::FormattedName animName("Revival%d", stage);
+    MR::startAllAnim(this, animName.c_str());
+    MR::setAllAnimFrameAtEnd(this, animName.c_str());
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[stage];
 }
 

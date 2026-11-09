@@ -5,7 +5,7 @@
 #include "Game/Util/FurDrawer.hpp"
 #include "Game/Util/FurParam.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/Arenas.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/Material.hpp"
@@ -113,7 +113,7 @@ namespace MR {
         u32 i;
         u32 shape;
         FurMulti* pMulti;
-        CurrentHeapRestorer heapRestorer(getSceneHeap());
+        NebulaArena::CurrentScope heapRestorer(Arenas::scene());
         ModelData* pModelData = getModelData(pActor);
         count = 0;
 

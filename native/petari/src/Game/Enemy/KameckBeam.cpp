@@ -319,9 +319,9 @@ bool KameckBeam::tryChangeFire() {
         if (mKameckFireBalls[i] != nullptr) {
             mKameckFireBalls[i]->setEventListener(mEventListener);
             mKameckFireBalls[i]->mPosition.set(mPosition);
-            Vec3f result2;
-            MR::rotateVecDegree(&result2, result, mGravity, ::sFireAngleList[fireAngleListIndex][i]);
-            mKameckFireBalls[i]->appearDirection(result2);
+            Vec3f fireDir;
+            MR::rotateVecDegree(&fireDir, result, mGravity, ::sFireAngleList[fireAngleListIndex][i]);
+            mKameckFireBalls[i]->appearDirection(fireDir);
             isAnyFired = true;
         }
     }

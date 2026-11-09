@@ -27,17 +27,15 @@ FurMulti* FurBank::check(ModelData* pModelData, u32 layer) {
 }
 
 void FurDrawManager::add(FurCtrl* pCtrl, u8 index) {
-    if (mCapacity != mCounts[index]) {
-        mFurCtrls[index][mCounts[index]] = pCtrl;
-        mCounts[index]++;
-    }
+    mFurCtrls[index].push_back(pCtrl);
 }
 
 void FurDrawManager::draw() const {
-    for (u32 i = 0; i < mCounts[1]; i++) {
-        if (!MR::isClipped(mFurCtrls[1][i]->mActor) && !MR::isDead(mFurCtrls[1][i]->mActor) && !MR::isHiddenModel(mFurCtrls[1][i]->mActor)) {
-            if (mFurCtrls[1][i]->mVisible == 1) {
-                mFurCtrls[1][i]->drawFur();
+    for (s32 i = 0; i < mFurCtrls[1].size(); i++) {
+        FurCtrl* const ctrl = mFurCtrls[1][i];
+        if (!MR::isClipped(ctrl->mActor) && !MR::isDead(ctrl->mActor) && !MR::isHiddenModel(ctrl->mActor)) {
+            if (ctrl->mVisible == 1) {
+                ctrl->drawFur();
             }
         }
     }
@@ -134,12 +132,9 @@ namespace MR {
     }
 };  // namespace MR
 
-FurDrawManager::FurDrawManager(u8 capacity) : NameObj("ファー描画マネージャ") {
-    mCounts[0] = 0;
-    mCounts[1] = 0;
-    mFurCtrls[0] = new FurCtrl*[capacity];
-    mFurCtrls[1] = new FurCtrl*[capacity];
-    mCapacity = capacity;
+FurDrawManager::FurDrawManager(u32 capacity) : NameObj("ファー描画マネージャ") {
+    mFurCtrls[0].init(capacity);
+    mFurCtrls[1].init(capacity);
     mBank = new FurBank;
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_Fur);
 }

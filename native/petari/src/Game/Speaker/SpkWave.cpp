@@ -8,38 +8,7 @@ void SpkWave::setResource(void* pResource) {
     mResource = pResource;
 }
 
-s32 SpkWave::getWaveSize(s32 wave) const {
-    if (mResource == nullptr) {
-        return 0;
-    }
-
-    return getWaveData(wave)->mSize;
-}
-
-u32 SpkWave::getLoopStartPos(s32 wave) const {
-    if (mResource == nullptr) {
-        return 0;
-    }
-
-    return getWaveData(wave)->mLoopStartPos;
-}
-
-u32 SpkWave::getLoopEndPos(s32 wave) const {
-    if (mResource == nullptr) {
-        return 0;
-    }
-
-    return getWaveData(wave)->mLoopEndPos;
-}
-
-s16* SpkWave::getWave(s32 wave) const {
-    if (mResource == nullptr) {
-        return nullptr;
-    }
-
-    return getWaveData(wave)->mWave;
-}
-
-WaveData* SpkWave::getWaveData(s32 wave) const {
-    return (WaveData*)((uintptr_t)mResource + readBytes< u32 >(static_cast< const u8* >(mResource) + wave * 4 + 8));
+const WaveData* SpkWave::getWaveData(s32 wave) const {
+    const u8* const pFile = static_cast< const u8* >(mResource);
+    return reinterpret_cast< const WaveData* >(pFile + readBytes< u32 >(pFile + wave * 4 + 8));
 }

@@ -1,5 +1,4 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
-#include "Game/System/GameLog.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
@@ -58,8 +57,8 @@ void MapObjActorInitInfo::setupHitSensorCallBack() {
     mHasHitSensorCB = true;
 }
 
-void MapObjActorInitInfo::setupHitSensorParam(u16 a1, f32 radius, const Vec3f& rPosition) {
-    mSensorType = a1;
+void MapObjActorInitInfo::setupHitSensorParam(u16 sensorType, f32 radius, const Vec3f& rPosition) {
+    mSensorType = sensorType;
     mSensorRadius = radius;
     mSensorPosition.set(rPosition);
 }

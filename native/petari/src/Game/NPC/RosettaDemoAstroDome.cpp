@@ -13,6 +13,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 
 namespace NrvRosettaDemoAstroDomeExplain {
@@ -57,9 +58,7 @@ void RosettaMonologue::appear() {
     MR::startAnim(this, "FadeIn", 0);
     MR::startPaneAnim(this, "TalkBalloon", "WinFadeIn", 0);
 
-    char messageId[256];
-    nebula_snprintf(messageId, sizeof(messageId), "RosettaMonologue%03d", mMessageNo);
-    mTextFormer.formMessage(MR::getGameMessageDirect(messageId), 1);
+    mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), 1);
 }
 
 void RosettaMonologue::calcAnim() {
@@ -114,10 +113,7 @@ void RosettaMonologue::control() {
     } else {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
 
-        char messageId[256];
-        nebula_snprintf(messageId, sizeof(messageId), "RosettaMonologue%03d", mMessageNo);
-
-        mTextFormer.formMessage(MR::getGameMessageDirect(messageId), 1);
+        mTextFormer.formMessage(MR::getGameMessageDirect(MR::FormattedName("RosettaMonologue%03d", mMessageNo).c_str()), 1);
     }
 
     switch (mMessageNo) {

@@ -47,25 +47,25 @@ void DynamicCollisionObj::updateTriangle() {
         MR::normalizeOrZero(&a);
         MR::normalizeOrZero(&b);
         MR::normalizeOrZero(&c);
-        Vec3f cross = b.cross(a);
-        MR::normalizeOrZero(&cross);
+        Vec3f faceNormal = b.cross(a);
+        MR::normalizeOrZero(&faceNormal);
 
-        Vec3f cross2 = (-a).cross(cross);
-        Vec3f cross3 = b.cross(cross);
-        Vec3f cross4 = c.cross(cross);
+        Vec3f edgeNormalA = (-a).cross(faceNormal);
+        Vec3f edgeNormalB = b.cross(faceNormal);
+        Vec3f edgeNormalC = c.cross(faceNormal);
 
-        MR::normalizeOrZero(&cross2);
-        MR::normalizeOrZero(&cross3);
-        MR::normalizeOrZero(&cross4);
+        MR::normalizeOrZero(&edgeNormalA);
+        MR::normalizeOrZero(&edgeNormalB);
+        MR::normalizeOrZero(&edgeNormalC);
 
         mKCLFile->mPos[i] = Vertex1;
-        mKCLFile->mNorms[normalidx + 0] = cross;
+        mKCLFile->mNorms[normalidx + 0] = faceNormal;
         nrmidxa = normalidx + 1;
-        mKCLFile->mNorms[nrmidxa] = cross2;
+        mKCLFile->mNorms[nrmidxa] = edgeNormalA;
         nrmidxb = normalidx + 2;
-        mKCLFile->mNorms[nrmidxb] = cross3;
+        mKCLFile->mNorms[nrmidxb] = edgeNormalB;
         nrmidxc = normalidx + 3;
-        mKCLFile->mNorms[nrmidxc] = cross4;
+        mKCLFile->mNorms[nrmidxc] = edgeNormalC;
 
         prismidx = i + 1;
         KC_PrismData* prism = &mKCLFile->mPrisms[prismidx];

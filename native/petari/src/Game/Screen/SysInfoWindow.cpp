@@ -350,7 +350,7 @@ void SysInfoWindow::drawDim() const {
     if (pManager == nullptr || pManager->mIsScreenHidden) {
         return;
     }
-    MR::setupDrawForNW4RLayout(1.0f, true);
+    MR::setupDrawForLayout();
     const u8 alpha = mDimPane->mGlbAlpha;
     mDimPane->mGlbAlpha = static_cast< u8 >(mDim * 255.0f + 0.5f);
     mDimPane->Draw(pManager->mDrawInfo);

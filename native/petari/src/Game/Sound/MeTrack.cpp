@@ -412,13 +412,13 @@ void MeTrack::gframeProc() {
     }
 }
 
-void MeTrack::setBaseNoteFromChord(const u8* pChordData, s32 numNotes, bool random) {
+void MeTrack::setBaseNoteFromChord(const u8* pChordData, u8 numNotes, bool random) {
     ChordInfo& rChord = mSystem->chord();
     if (!rChord.isAvailable()) {
         mBaseNote = cNullNote;
         return;
     }
-    s32 ctrlList[256] = {};
+    s32 ctrlList[cNoteListRoom] = {};
     s32 chordNotes[ChordInfo::NUM_CHORD_NOTES] = {};
     makeRandomSearchList(ctrlList, numNotes, !random);
     makeRandomSearchList(chordNotes, ChordInfo::NUM_CHORD_NOTES, false);
@@ -441,13 +441,13 @@ void MeTrack::setBaseNoteFromChord(const u8* pChordData, s32 numNotes, bool rand
     mBaseNote = cNullNote;
 }
 
-void MeTrack::setBaseNoteFromScale(const u8* pScaleData, s32 numNotes, bool random) {
+void MeTrack::setBaseNoteFromScale(const u8* pScaleData, u8 numNotes, bool random) {
     ChordInfo& rChord = mSystem->chord();
     if (!rChord.isAvailable()) {
         mBaseNote = cNullNote;
         return;
     }
-    s32 ctrlList[256] = {};
+    s32 ctrlList[cNoteListRoom] = {};
     makeRandomSearchList(ctrlList, numNotes, !random);
     for (s32 i = 0; i < numNotes; i++) {
         const u8 ctrl = pScaleData[ctrlList[i]];
@@ -460,12 +460,12 @@ void MeTrack::setBaseNoteFromScale(const u8* pScaleData, s32 numNotes, bool rand
     mBaseNote = cNullNote;
 }
 
-void MeTrack::setBaseNoteFromChromatic(const u8* pChromData, s32 numNotes, bool random) {
+void MeTrack::setBaseNoteFromChromatic(const u8* pChromData, u8 numNotes, bool random) {
     if (!mSystem->chord().isAvailable()) {
         mBaseNote = cNullNote;
         return;
     }
-    s32 ctrlList[256] = {};
+    s32 ctrlList[cNoteListRoom] = {};
     makeRandomSearchList(ctrlList, numNotes, !random);
     mBaseNote = pChromData[ctrlList[0]];
 }

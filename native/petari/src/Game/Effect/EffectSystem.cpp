@@ -10,7 +10,7 @@
 #include "Game/Effect/SingleEmitter.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Particle/ParticleCore.hpp"
@@ -96,7 +96,7 @@ namespace MR {
 };  // namespace MR
 
 void EffectSystem::entry(ParticleResourceHolder* pResourceHolder, u32 emitterCount) {
-    mEmitterManager = new EmitterManager(emitterCount, MR::getCurrentHeap(), 9, 1);
+    mEmitterManager = new EmitterManager(emitterCount, NebulaArena::current(), 9, 1);
     mEmitterManager->entryResourceManager(pResourceHolder->mResourceMgr, 0);
     startScene();
     mEmitterHolder = new ParticleEmitterHolder(this, emitterCount);

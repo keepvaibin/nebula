@@ -10,12 +10,14 @@
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/System/Arenas.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
 namespace {
-    // getNearPolyOnLineSort's hits, nearest first, in the system heap; it grows to the most hits one line has had.
+    // getNearPolyOnLineSort's hits, nearest first, in the permanent arena; it grows to the most hits one line has had.
     HitInfo* sSortBuffer = nullptr;
     f32* sSortDistance = nullptr;
     u32 sSortRoom = 0;
@@ -237,8 +239,8 @@ namespace MR {
             delete[] sSortBuffer;
             delete[] sSortDistance;
             sSortRoom = count * 2;
-            sSortBuffer = new (NebulaArena::getSystemHeap(), 0) HitInfo[sSortRoom];
-            sSortDistance = new (NebulaArena::getSystemHeap(), 0) f32[sSortRoom];
+            sSortBuffer = new (Arenas::permanent(), 0) HitInfo[sSortRoom];
+            sSortDistance = new (Arenas::permanent(), 0) f32[sSortRoom];
         }
 
         // Insertion by distance: equal distances keep the order the keeper found them in.

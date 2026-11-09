@@ -3,16 +3,7 @@
 #include "Game/Sound/EffectManager.hpp"
 
 namespace AudParams {
-    extern const f32 scCtgVolume[][16];
-    extern const int numFreeSe;
-    extern const int numFreeSeq;
-    extern const int numFreeStream;
-    extern const int numFreeSoundChild;
-    extern const int workAreaSize;
-    extern const int numFreeTracks;
-    extern const int numFreeTrackChannels;
-    extern const int streamBlockSize;
-    extern const int numStreamChannels;
+    extern const f32 scCtgVolume[][cEffectCategoryNum];
     extern const f32 outputGain;
     extern const s32 numInspectableSoundObj;
     extern const f32 masterVolBgm;

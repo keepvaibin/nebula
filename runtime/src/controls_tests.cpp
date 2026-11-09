@@ -1101,7 +1101,7 @@ void test_rumble_gate() {
     expect(!rb::motor_should_run(clock_back), "a publication from the future is not trusted");
 }
 
-// SphereAccelSensorController::calcXY for the Wii Remote: X from (a.x, |a.y|),
+// Tamakoro's calcTiltXY for the Wii Remote: X from (a.x, |a.y|),
 // Y the signed angle of (-a.y, a.z) from (cos 10, sin 10); 5-degree dead zone,
 // full at 25 degrees.
 std::array<float, 2> star_ball_calc_xy(const tilt::Vec3& a) {

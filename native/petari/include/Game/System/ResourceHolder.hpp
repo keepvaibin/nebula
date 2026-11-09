@@ -32,19 +32,6 @@ public:
     ResFileInfo* createAndRegisterObject(const AssetFolder::Item&);
     void backupInitMaterialData(const ModelData*);
 
-    // bool checkCorrectMotionsAndModel(ModelData*, const char*) const;
-
-    bool isCreatedAtSameHeap(ResourceHolder* pOther) const {
-        return mHeap == pOther->mHeap;
-    }
-
-    // void makeStringAnmInfoAll(char*, u32) const;
-    // bool verifyBckData(ModelData*, const char*) const;
-    // bool verifyBvaData(ModelData*, const char*) const;
-    // bool verifyBtpData(ModelData*, const char*) const;
-    // bool verifyModelData(ModelData*, const char*) const;
-    // bool verifyFileSize(u32, const char*) const;
-
     static int findBckIndex(const ResourceHolder* pResHolder, const char* pName) {
         return pResHolder->mMotionResTable->getResIndex(pName);
     }
@@ -89,6 +76,6 @@ public:
     BckCtrl* mBckCtrl;
     Mtx44* mBackupMaterialData;
     AssetFolder* mArchive;
-    NebulaArena* mHeap;
+    NebulaArena* mArena;
     u32 mTotalResourceSize;
 };

@@ -1,44 +1,8 @@
 #include "Game/System/SaveBinary.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/System/HeapMemoryWatcher.hpp"
-#include "Game/Util/SingletonHolder.hpp"
-#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 namespace MR {
-    CurrentHeapRestorer::CurrentHeapRestorer(NebulaArena* pHeap) {
-        mPrevHeap = NebulaArena::getCurrentHeap();
-        MR::becomeCurrentHeap(pHeap);
-    }
-
-    CurrentHeapRestorer::~CurrentHeapRestorer() {
-        MR::becomeCurrentHeap(mPrevHeap);
-    }
-
-    NebulaArena* getCurrentHeap() {
-        return NebulaArena::getCurrentHeap();
-    }
-
-    NebulaArena* getSceneArchiveHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
-    }
-
-    NebulaArena* getPermanentHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mPermanent;
-    }
-
-    NebulaArena* getSceneHeap() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
-    }
-
-    void becomeCurrentHeap(NebulaArena* pHeap) {
-        pHeap->becomeCurrentHeap();
-    }
-
-    bool isEqualCurrentHeap(NebulaArena* pHeap) {
-        return NebulaArena::getCurrentHeap() == pHeap;
-    }
-
     void copyMemory(void* pDst, const void* pSrc, u32 size) {
         memmove(pDst, pSrc, size);
     }

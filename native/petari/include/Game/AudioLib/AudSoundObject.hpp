@@ -3,7 +3,7 @@
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Sound/SoundObject.hpp"
-#include "Game/System/ArenaOwned.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 class SoundID;
 class SoundHandle;

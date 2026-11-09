@@ -1,10 +1,9 @@
 #pragma once
 
 // Tilt sections (Star Ball, ray surfing): the game steers them with the Wii
-// Remote accelerometer only (SphereAccelSensorController::calcXY and
-// SurfRay::updateRotate, both through MR::getCorePadAcceleration;
-// SpherePadController's stick path is overridden), so a controller without
-// that sensor cannot play them. While one is active the virtual remote's
+// Remote accelerometer only (Tamakoro's calcTiltXY and SurfRay::updateRotate,
+// both through MR::getMainTilt), so a controller without that sensor cannot
+// play them. While one is active the virtual remote's
 // acceleration is a gravity direction built from the tilt of the
 // controller in use when it has motion sensors (Pro Controller, Pro
 // Controller 2) or else from the Nunchuk stick (Xbox left stick, keyboard
