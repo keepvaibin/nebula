@@ -12,6 +12,7 @@
 #include <nebula_game_api.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cinttypes>
@@ -62,7 +63,7 @@ std::string text(const char* value) { return value != nullptr ? std::string(valu
 
 struct Settings {
     std::string dir, programs, includes;
-    bool dump = false, solo_on = false, pixel_on = false, motion_on = false, names = false, views = false;
+    bool dump = false, solo_on = false, pixel_on = false, motion_on = false, names = false, views = false, probe = false, inputs = false;
     std::uint32_t solo = 0u;
     int x = 0, y = 0;
     std::uint32_t show = 0u;  // 1 normal, 2 depth, 3 + n coordinate n
@@ -111,6 +112,8 @@ const Settings& settings() {
         s.includes = text(o.inspect_includes);
         s.names = !text(o.inspect_names).empty();
         s.every = ::galaxy::run_option_u64(o.present_snapshot_every, 0u);
+        s.probe = ::galaxy::run_option_flag(o.test_motion_probe, false);
+        s.inputs = ::galaxy::run_option_flag(o.test_frame_inputs, false);
         return s;
     }();
     return kept;
@@ -126,6 +129,12 @@ struct State {
     std::map<std::tuple<std::uint32_t, std::uint32_t, std::uint8_t>, std::uint32_t> occurrences;
     std::uint32_t last_dumped = 0u;
     bool replaying = false;
+    bool probing = false;                          // the motion probe's replay: one item drawn, no one-pixel scissor
+    std::uint32_t probe_item = NEBULA_NONE32;      // the item the probe's replay draws alone
+    std::uint64_t probe_frames = 0u;               // real frames seen by the probe
+    bool probe_unavailable_told = false;
+    std::uint64_t input_frames = 0u;                       // real frames seen by the frame-inputs check
+    std::vector<std::array<float, 6>> last_terms;          // the previous real frame's view terms (the camera check)
     std::vector<Run> runs;
     bool query_open = false;
     std::map<std::uint64_t, std::string> stage_sources;
@@ -331,6 +340,9 @@ struct Access {
         if (c.solo_on && first.source_hash != c.solo && first.slot != c.solo) {
             return false;
         }
+        if (s.probing && s.probe_item != NEBULA_NONE32 && index != s.probe_item) {
+            return false;
+        }
         if (s.dump != nullptr) {
             for (std::uint32_t n = 0u; n < instances; ++n) {
                 write_item(core, s.dump, index + n, pass, aux, nullptr);
@@ -368,7 +380,7 @@ struct Access {
     static void draw_begin(RenderCore& core, std::uint32_t index, std::uint32_t instances, const NebulaFramePass& pass, gpu::Encoder& encoder,
                            const gpu::Rect& scissor) {
         State& s = state();
-        if (!s.replaying || pass.target != 0u) {
+        if (!s.replaying || s.probing || pass.target != 0u) {
             return;
         }
         const Settings& c = settings();
@@ -457,6 +469,385 @@ struct Access {
                      computed[0], computed[1], got ? "" : "none ", read[0], read[1]);
     }
 
+    // A pixel of the scene's viewport for a point in an item's local space: through the matrix rows and the view's terms
+    // (write_motion's rule, which the vertex stage of every program follows).
+    static void project_point(const NebulaFrameView& view, const ScaledViewport& vp, const float (*rows)[4], const std::array<float, 6>& terms,
+                              const float* p, float* out) {
+        float eye[3];
+        for (unsigned r = 0u; r < 3u; ++r) {
+            eye[r] = rows[r][0] * p[0] + rows[r][1] * p[1] + rows[r][2] * p[2] + rows[r][3];
+        }
+        float x, y, w;
+        if (view.orthographic != 0u) {
+            x = terms[0] * eye[0] + terms[1];
+            y = terms[2] * eye[1] + terms[3];
+            w = 1.0f;
+        } else {
+            x = terms[0] * eye[0] + terms[1] * eye[2];
+            y = terms[2] * eye[1] + terms[3] * eye[2];
+            w = -eye[2];
+        }
+        out[0] = vp.x + (x / w * 0.5f + 0.5f) * vp.width;
+        out[1] = vp.y + (0.5f - y / w * 0.5f) * vp.height;
+    }
+
+    enum ProbeKind : unsigned { kProbeModel, kProbeSkinned, kProbeParticle, kProbeBillboard, kProbeUi, kProbeKinds };
+
+    struct ProbeTotals {
+        unsigned items = 0u, samples = 0u, skipped = 0u;
+        float worst = 0.0f;
+        std::uint32_t worst_source = 0u;
+    };
+
+    // The motion probe (GALAXY_TEST_MOTION_PROBE=1), every 300 real frames: a few draws of each kind of mover are replayed one
+    // at a time (the frame's list again, only that item drawn, so nothing covers it), each projected on the CPU where it was
+    // a game frame ago and where it is now (the matrices and view terms the GPU's motion vectors use), and the motion target
+    // read back around those pixels. The difference is in pixels of the scene's resolution: the largest per kind is logged.
+    // A sample counts when the target holds a vector near the place (the item drew there) or none is expected; an item whose
+    // samples all fell outside what it drew is only counted as skipped. Kinds: model (one matrix), skinned (a matrix per
+    // vertex), particle (instanced, the first quad's middle), billboard (CPU-built vertices in a perspective view), UI
+    // (orthographic views and glyph runs: expected still, drawn after the upscale). Needs a temporal upscaler (the target
+    // exists only then). The replays leave the upscaler's history wrong for a frame: a probing run is for reading.
+    static void motion_probe(RenderCore& core, RenderCore::ListEntry& entry) {
+        State& s = state();
+        const NebulaFrameList& list = *entry.data.list;
+        constexpr unsigned kPerKind = 4u;
+        constexpr unsigned kVerticesPerItem = 8u;
+        static constexpr const char* const names[kProbeKinds] = {"model", "skinned", "particle", "billboard", "UI"};
+        std::vector<std::uint32_t> candidates[kProbeKinds];
+        for (std::uint32_t p = 0u; p < list.pass_count; ++p) {
+            const NebulaFramePass& pass = list.passes[p];
+            if (pass.kind != NEBULA_PASS_DRAW || pass.target != 0u) {
+                continue;
+            }
+            for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count; ++i) {
+                const NebulaFrameItem& item = list.items[i];
+                const bool ortho = list.views[item.view].orthographic != 0u;
+                ProbeKind kind;
+                if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
+                    kind = item.mesh == core::kParticleRows && !ortho ? kProbeParticle : kProbeUi;
+                } else if ((item.flags & NEBULA_ITEM_RING) != 0u) {
+                    kind = ortho ? kProbeUi : kProbeBillboard;
+                } else {
+                    const core::GpuMesh& mesh = core.registries_.mesh(item.mesh);
+                    kind = ortho ? kProbeUi : mesh.matrices != 0u && (item.flags & NEBULA_ITEM_ONE_MATRIX) == 0u ? kProbeSkinned : kProbeModel;
+                }
+                candidates[kind].push_back(i);
+            }
+        }
+        ProbeTotals totals[kProbeKinds];
+        bool target_seen = false;
+        const auto* ring_rows = reinterpret_cast<const float (*)[4]>(core.renderer_.matrix_ring().cpu_base());
+        s.replaying = true;
+        s.probing = true;
+        for (unsigned kind = 0u; kind < kProbeKinds; ++kind) {
+            const std::vector<std::uint32_t>& list_of_kind = candidates[kind];
+            const std::size_t chosen_count = std::min<std::size_t>(list_of_kind.size(), kPerKind);
+            for (std::size_t n = 0u; n < chosen_count; ++n) {
+                const std::uint32_t index = list_of_kind[n * list_of_kind.size() / chosen_count];
+                const NebulaFrameItem& item = list.items[index];
+                s.probe_item = index;
+                s.runs.clear();
+                core.renderer_.inspect_queries_open(list.item_count);
+                core.walk_frame(entry, core::WalkTime{}, false);
+                core.renderer_.wait_for_gpu_idle();
+                // Where the item's points are: (position now, position a game frame ago, matrix) triples in local space.
+                struct Point {
+                    float now[3], was[3];
+                    std::uint32_t matrix;
+                };
+                std::vector<Point> points;
+                if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u) {
+                    const std::uint32_t rows = item.mesh != 0u ? item.mesh : 1u;
+                    const std::uint32_t count = item.ring_count;
+                    for (std::uint32_t k = 0u; k < std::min(count, kVerticesPerItem); ++k) {
+                        const float (*r)[4] = list.instance_rows + item.ring_at + std::size_t{count > 1u ? k * (count - 1u) / (kVerticesPerItem - 1u) : 0u} * rows;
+                        Point point{};
+                        point.matrix = item.matrix;
+                        if (rows == core::kParticleRows) {
+                            // The middle of the first quad of the quad tables (plane xy, 50 units across, down from the origin).
+                            const float local[3] = {25.0f, -25.0f, 0.0f};
+                            for (unsigned c = 0u; c < 3u; ++c) {
+                                point.now[c] = r[c][0] * local[0] + r[c][1] * local[1] + r[c][2] * local[2] + r[c][3];
+                                point.was[c] = r[3u + c][0] * local[0] + r[3u + c][1] * local[1] + r[3u + c][2] * local[2] + r[3u + c][3];
+                            }
+                        } else {
+                            // A glyph: the middle of its quad in the draw matrix's plane.
+                            point.now[0] = point.was[0] = 0.5f * (r[0][0] + r[0][2]);
+                            point.now[1] = point.was[1] = 0.5f * (r[0][1] + r[0][3]);
+                        }
+                        points.push_back(point);
+                    }
+                } else {
+                    const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
+                    const core::GpuMesh* mesh = ring ? nullptr : &core.registries_.mesh(item.mesh);
+                    const std::byte* positions = ring ? static_cast<const std::byte*>(list.ring_vertices) + item.ring_at
+                                                      : core.registries_.mesh_cpu(*mesh, mesh->positions);
+                    const std::uint32_t stride = ring ? item.mesh : mesh->site_stride != 0u ? mesh->site_stride : 12u;
+                    const std::uint32_t count = ring ? item.ring_count : mesh->vertex_count;
+                    const auto* matrices = !ring && mesh->matrices != 0u && (item.flags & NEBULA_ITEM_ONE_MATRIX) == 0u
+                                               ? reinterpret_cast<const std::uint32_t*>(core.registries_.mesh_cpu(*mesh, mesh->matrices))
+                                               : nullptr;
+                    if (positions != nullptr && count != 0u && (ring || mesh->matrices == 0u || (item.flags & NEBULA_ITEM_ONE_MATRIX) != 0u || matrices != nullptr)) {
+                        for (std::uint32_t k = 0u; k < std::min(count, kVerticesPerItem); ++k) {
+                            const std::uint32_t v = count > 1u ? k * (count - 1u) / (kVerticesPerItem - 1u) : 0u;
+                            Point point{};
+                            std::memcpy(point.now, positions + std::size_t{v} * stride, sizeof(point.now));
+                            std::memcpy(point.was, point.now, sizeof(point.was));
+                            point.matrix = matrices != nullptr ? matrices[v] : item.matrix;
+                            points.push_back(point);
+                        }
+                    }
+                }
+                const NebulaFrameView& view = list.views[item.view];
+                const ScaledViewport vp = viewport_pixels(view.viewport, core.renderer_.frame_map());
+                ProbeTotals& total = totals[kind];
+                ++total.items;
+                unsigned item_samples = 0u;
+                for (const Point& point : points) {
+                    const float (*now_rows)[4] = core.walk_rows_cpu_ + core.walk_block_rows_[item.block] + point.matrix * core::kRowsPerMatrix;
+                    const float (*before_rows)[4] = ring_rows + core.walk_previous_[item.block] + point.matrix * core::kRowsPerMatrix;
+                    float here[2], was[2];
+                    project_point(view, vp, now_rows, core.walk_view_terms_[item.view], point.now, here);
+                    project_point(view, vp, before_rows, core.walk_view_previous_[item.view], point.was, was);
+                    if (!(std::isfinite(here[0]) && std::isfinite(here[1]) && std::isfinite(was[0]) && std::isfinite(was[1])) ||
+                        here[0] < 1.0f || here[1] < 1.0f) {
+                        continue;
+                    }
+                    const float expected[2] = {was[0] - here[0], was[1] - here[1]};
+                    const float expected_size = std::sqrt(expected[0] * expected[0] + expected[1] * expected[1]);
+                    const int cx = static_cast<int>(here[0]), cy = static_cast<int>(here[1]);
+                    float best = 1e30f;
+                    bool written = false, read_any = false;
+                    for (int dy = -1; dy <= 1; ++dy) {
+                        for (int dx = -1; dx <= 1; ++dx) {
+                            std::uint16_t halves[2]{};
+                            if (!core.renderer_.inspect_motion_pixel(static_cast<unsigned>(cx + dx), static_cast<unsigned>(cy + dy), halves)) {
+                                continue;
+                            }
+                            read_any = true;
+                            const float read[2] = {half_to_float(halves[0]), half_to_float(halves[1])};
+                            if (!std::isfinite(read[0]) || !std::isfinite(read[1])) {
+                                continue;
+                            }
+                            written = written || std::fabs(read[0]) > 1e-3f || std::fabs(read[1]) > 1e-3f;
+                            best = std::min(best, std::hypot(read[0] - expected[0], read[1] - expected[1]));
+                        }
+                    }
+                    target_seen = target_seen || read_any;
+                    if (!read_any) {
+                        continue;
+                    }
+                    ++item_samples;
+                    if (!written && expected_size >= 0.01f) {
+                        ++total.skipped;  // nothing was drawn there: the sample says nothing about the vector
+                        continue;
+                    }
+                    ++total.samples;
+                    if (best > total.worst) {
+                        total.worst = best;
+                        total.worst_source = item.source_hash;
+                    }
+                }
+                static_cast<void>(item_samples);
+            }
+        }
+        s.probe_item = NEBULA_NONE32;
+        s.probing = false;
+        s.replaying = false;
+        if (!target_seen) {
+            if (!s.probe_unavailable_told) {
+                s.probe_unavailable_told = true;
+                std::fprintf(stderr, "[motion-probe] no motion target to read (the motion vectors exist only with a temporal upscaler)%c", '\n');
+            }
+            return;
+        }
+        std::fprintf(stderr, "[motion-probe] frame %" PRIu64 ":", s.probe_frames);
+        bool wrong = false;
+        for (unsigned kind = 0u; kind < kProbeKinds; ++kind) {
+            const ProbeTotals& total = totals[kind];
+            wrong = wrong || total.worst > 1.0f;
+            std::fprintf(stderr, " %s items %u samples %u skipped %u largest %.3f px (%08x);", names[kind], total.items, total.samples, total.skipped,
+                         static_cast<double>(total.worst), total.worst_source);
+        }
+        std::fprintf(stderr, " %s%c", wrong ? "WRONG (over 1 px)" : "ok", '\n');
+    }
+
+    // The Halton sequence the upscalers document (bases 2 and 3, phase index % count + 1, centred), in the same float steps.
+    static float halton_value(unsigned index, unsigned base) {
+        float result = 0.0f;
+        float fraction = 1.0f / static_cast<float>(base);
+        while (index > 0u) {
+            result += fraction * static_cast<float>(index % base);
+            index /= base;
+            fraction /= static_cast<float>(base);
+        }
+        return result;
+    }
+
+    // GALAXY_TEST_FRAME_INPUTS=1: every real frame the previous view terms are kept; every 300th one the inputs the temporal
+    // upscaler gets are checked and one line says ok, WRONG or skipped for each:
+    //   depth        the scene projection maps the near plane to the far end of the viewport's depth range and the far plane to
+    //                the other end (reversed: near = 1, far = 0), in range and falling with distance, as the upscalers are told;
+    //   jitter       the offset used equals the Halton value of its index in the sequence the upscaler built, bit for bit;
+    //   camera       each view's previous terms equal the terms the last real frame had (its current);
+    //   reactive and transparency   the reactive mask and the effects layer's transmittance read back where particles draw
+    //                (a replay of the frame): something is written near at least one of them;
+    //   hudless      not checked (the renderer keeps no UI coverage mask to compare the HUD-less picture with).
+    static void frame_inputs_check(RenderCore& core, RenderCore::ListEntry& entry, bool report) {
+        State& s = state();
+        const NebulaFrameList& list = *entry.data.list;
+        const std::vector<std::array<float, 6>> terms_now = core.walk_.now->view_terms;
+        if (report) {
+            std::fprintf(stderr, "[frame-inputs] frame %" PRIu64 ":", s.input_frames);
+            // jitter, before any replay moves it
+            unsigned index = 0u, phases = 0u;
+            core.renderer_.scene_jitter_info(index, phases);
+            if (phases == 0u) {
+                std::fprintf(stderr, " jitter skipped (no temporal scene);");
+            } else {
+                const float expected_x = halton_value(index % phases + 1u, 2u) - 0.5f;
+                const float expected_y = halton_value(index % phases + 1u, 3u) - 0.5f;
+                const bool exact = std::bit_cast<std::uint32_t>(expected_x) == std::bit_cast<std::uint32_t>(core.scene_jitter_px_[0]) &&
+                                   std::bit_cast<std::uint32_t>(expected_y) == std::bit_cast<std::uint32_t>(core.scene_jitter_px_[1]);
+                std::fprintf(stderr, " jitter %s (%u of %u: %.6f,%.6f);", exact ? "ok" : "WRONG", index, phases,
+                             static_cast<double>(core.scene_jitter_px_[0]), static_cast<double>(core.scene_jitter_px_[1]));
+            }
+            // depth
+            const NebulaFramePass* scene = nullptr;
+            for (std::uint32_t p = 0u; p < list.pass_count && scene == nullptr; ++p) {
+                if (list.passes[p].kind == NEBULA_PASS_SCENE_BEGIN) {
+                    scene = &list.passes[p];
+                }
+            }
+            if (scene == nullptr || list.views[scene->scene_view].orthographic != 0u) {
+                std::fprintf(stderr, " depth skipped (no 3D scene);");
+            } else {
+                const std::array<float, 6>& terms = core.walk_view_terms_[scene->scene_view];
+                const ScaledViewport vp = viewport_pixels(list.views[scene->scene_view].viewport, core.renderer_.frame_map());
+                const float e = terms[4], f = terms[5];
+                constexpr float kFarEps = 1.0f - 1e-7f;
+                const float near_plane = f / (e - 1.0f), far_plane = f / e;
+                const auto depth_at = [&](float distance) {
+                    const float ndc = (e - f / distance) * kFarEps;  // clip z over w at eye z = -distance
+                    return vp.min_depth + ndc * (vp.max_depth - vp.min_depth);
+                };
+                const float d_near = depth_at(near_plane), d_far = depth_at(far_plane);
+                bool ok = std::isfinite(d_near) && std::isfinite(d_far) && near_plane > 0.0f && far_plane > near_plane &&
+                          vp.min_depth == 0.0f && vp.max_depth == 1.0f && std::fabs(d_near - 1.0f) < 1e-4f && std::fabs(d_far) < 1e-4f;
+                float last = d_near;
+                for (unsigned i = 1u; ok && i <= 16u; ++i) {
+                    const float d = depth_at(near_plane + (far_plane - near_plane) * static_cast<float>(i) / 16.0f);
+                    ok = d <= last + 1e-6f && d >= -1e-4f && d <= 1.0f + 1e-4f;
+                    last = d;
+                }
+                std::fprintf(stderr, " depth %s (reversed: near %g -> %.6f, far %g -> %.6f, range %g..%g);", ok ? "ok" : "WRONG",
+                             static_cast<double>(near_plane), static_cast<double>(d_near), static_cast<double>(far_plane),
+                             static_cast<double>(d_far), static_cast<double>(vp.min_depth), static_cast<double>(vp.max_depth));
+            }
+            // camera
+            unsigned compared = 0u, different = 0u;
+            const std::vector<std::uint32_t>& before = core.walk_.now->view_before;
+            for (std::uint32_t v = 0u; v < list.view_count && !before.empty(); ++v) {
+                const std::uint32_t pair = before[v];
+                if (pair == NEBULA_NONE32 || pair >= s.last_terms.size() ||
+                    std::memcmp(core.walk_view_previous_[v].data(), core.walk_view_terms_[v].data(), 6u * sizeof(float)) == 0) {
+                    continue;  // not paired, or no previous (the first list, a cut): the terms stand for themselves
+                }
+                ++compared;
+                different += std::memcmp(core.walk_view_previous_[v].data(), s.last_terms[pair].data(), 6u * sizeof(float)) != 0 ? 1u : 0u;
+            }
+            if (compared == 0u) {
+                std::fprintf(stderr, " camera skipped (no moved view paired with the last frame);");
+            } else {
+                std::fprintf(stderr, " camera %s (%u of %u views' previous terms differ from the last frame's);", different == 0u ? "ok" : "WRONG",
+                             different, compared);
+            }
+            // reactive and transparency masks where particles draw
+            std::vector<std::uint32_t> particles;
+            for (std::uint32_t p = 0u; p < list.pass_count; ++p) {
+                const NebulaFramePass& pass = list.passes[p];
+                if (pass.kind != NEBULA_PASS_DRAW || pass.target != 0u) {
+                    continue;
+                }
+                for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count; ++i) {
+                    const NebulaFrameItem& item = list.items[i];
+                    if ((item.flags & NEBULA_ITEM_INSTANCES) != 0u && item.mesh == core::kParticleRows && list.views[item.view].orthographic == 0u) {
+                        particles.push_back(i);
+                    }
+                }
+            }
+            if (particles.empty()) {
+                std::fprintf(stderr, " reactive skipped (no particles drawn); transparency skipped (no particles drawn);");
+            } else {
+                s.replaying = true;
+                s.probing = true;
+                s.probe_item = NEBULA_NONE32;
+                s.runs.clear();
+                core.renderer_.inspect_queries_open(list.item_count);
+                core.walk_frame(entry, core::WalkTime{}, false);
+                core.renderer_.wait_for_gpu_idle();
+                s.probing = false;
+                s.replaying = false;
+                const auto* ring_rows = reinterpret_cast<const float (*)[4]>(core.renderer_.matrix_ring().cpu_base());
+                static_cast<void>(ring_rows);
+                unsigned read[2] = {0u, 0u}, written[2] = {0u, 0u};
+                constexpr unsigned kSamples = 16u;
+                for (unsigned n = 0u; n < kSamples; ++n) {
+                    const NebulaFrameItem& item = list.items[particles[n * particles.size() / kSamples]];
+                    const std::uint32_t count = item.ring_count;
+                    if (count == 0u) {
+                        continue;
+                    }
+                    const float (*r)[4] = list.instance_rows + item.ring_at + std::size_t{(n * 7u) % count} * core::kParticleRows;
+                    const float local[3] = {25.0f, -25.0f, 0.0f};
+                    float p[3];
+                    for (unsigned c = 0u; c < 3u; ++c) {
+                        p[c] = r[c][0] * local[0] + r[c][1] * local[1] + r[c][2] * local[2] + r[c][3];
+                    }
+                    const NebulaFrameView& view = list.views[item.view];
+                    const ScaledViewport vp = viewport_pixels(view.viewport, core.renderer_.frame_map());
+                    float here[2];
+                    project_point(view, vp, core.walk_rows_cpu_ + core.walk_block_rows_[item.block] + item.matrix * core::kRowsPerMatrix,
+                                  core.walk_view_terms_[item.view], p, here);
+                    if (!(std::isfinite(here[0]) && std::isfinite(here[1])) || here[0] < 1.0f || here[1] < 1.0f) {
+                        continue;
+                    }
+                    for (unsigned kind = 0u; kind < 2u; ++kind) {
+                        bool any_read = false, any_written = false;
+                        for (int dy = -1; dy <= 1; ++dy) {
+                            for (int dx = -1; dx <= 1; ++dx) {
+                                std::uint16_t value[4]{};
+                                if (!core.renderer_.inspect_mask_pixel(kind, static_cast<unsigned>(static_cast<int>(here[0]) + dx),
+                                                                       static_cast<unsigned>(static_cast<int>(here[1]) + dy), value)) {
+                                    continue;
+                                }
+                                any_read = true;
+                                // Reactive: any coverage. Transmittance (cleared to 1): any channel below it.
+                                any_written = any_written || (kind == 0u ? value[0] != 0u
+                                                                         : half_to_float(value[0]) < 0.998f || half_to_float(value[1]) < 0.998f ||
+                                                                               half_to_float(value[2]) < 0.998f);
+                            }
+                        }
+                        read[kind] += any_read ? 1u : 0u;
+                        written[kind] += any_read && any_written ? 1u : 0u;
+                    }
+                }
+                static constexpr const char* const mask_names[2] = {"reactive", "transparency"};
+                for (unsigned kind = 0u; kind < 2u; ++kind) {
+                    if (read[kind] == 0u) {
+                        std::fprintf(stderr, " %s skipped (no mask to read: no temporal upscaler, or a one-pass scene);", mask_names[kind]);
+                    } else {
+                        std::fprintf(stderr, " %s %s (written near %u of %u particles);", mask_names[kind],
+                                     written[kind] != 0u || read[kind] < 4u ? "ok" : "WRONG", written[kind], read[kind]);
+                    }
+                }
+            }
+            std::fprintf(stderr, " hudless not checked (no UI coverage mask to compare with)\n");
+        }
+        s.last_terms = terms_now;
+    }
+
     static void end_walk(RenderCore&) {
         State& s = state();
         if (s.dump != nullptr) {
@@ -470,6 +861,12 @@ struct Access {
         State& s = state();
         auto& entry = *static_cast<RenderCore::ListEntry*>(opaque);
         const std::uint32_t number = entry.data.list->snapshot_number;
+        if (c.probe && !s.replaying && ++s.probe_frames % 300u == 0u) {
+            motion_probe(core, entry);
+        }
+        if (c.inputs && !s.replaying) {
+            frame_inputs_check(core, entry, ++s.input_frames % 300u == 0u);
+        }
         if (s.replaying || (!c.pixel_on && !c.motion_on) || !chosen(number)) {
             return;
         }

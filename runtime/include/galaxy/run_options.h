@@ -56,6 +56,9 @@ struct RunOptions {
     const char* present_snapshot_every = nullptr;
     const char* present_snapshot_first = nullptr;
     const char* present_snapshot_last = nullptr;
+    const char* present_snapshot_game_only = nullptr;  // a generated (interpolated) present is neither captured nor counted
+    const char* test_frame_inputs = nullptr;           // every 300 frames: the upscaler's inputs checked (jitter, depth, camera, masks)
+    const char* test_motion_probe = nullptr;           // every 300 frames: CPU-projected motion against the motion target, by mover kind
     const char* profile_game = nullptr;
     const char* render_config_path = nullptr;
     const char* runtime_settings_path = nullptr;

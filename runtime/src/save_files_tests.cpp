@@ -1,6 +1,7 @@
 // Tests for galaxy/save_files.h: a save written and read back whole, replaced by a shorter one, a buffer too small,
 // missing files, deletes, and names that would leave the save folder.
 #include "galaxy/save_files.h"
+#include "galaxy/test_temp.h"
 
 #include <array>
 #include <chrono>
@@ -24,8 +25,8 @@ int main() {
     using namespace galaxy::saves;
     namespace fs = std::filesystem;
     bool passed = true;
-    const fs::path root = fs::temp_directory_path() /
-        ("galaxy_save_files_tests_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const fs::path root = galaxy::test_temp_path("galaxy_save_files_tests");
+    fs::remove_all(root);  // left by an earlier run that had this process id
     // The save folder does not exist until the first save.
     const fs::path folder = root / "title" / "data";
 

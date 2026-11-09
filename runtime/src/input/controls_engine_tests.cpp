@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/controls_engine.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/input_bindings.h"
 
 #if defined(_WINDOWS_) || defined(_INC_WINDOWS)
@@ -19,7 +20,7 @@ constexpr auto header =
     "meta\tkey_order\tLButton,RButton,Space,Enter,Shift,LShift,RShift,Left,Up,Right,Down,1,2,A,B,C,D,E,I,J,K,L,Q,R,S,W,Z,Ctrl,LCtrl,RCtrl\n"
     "elapsed_ms\tgame_focused\tmouse_client_x\tmouse_client_y\tclient_w\tclient_h\tkeys_hold_hex\txinput_connected\txinput_buttons_hex\tleft_trigger\tright_trigger\tthumb_lx\tthumb_ly\tthumb_rx\tthumb_ry\n";
 void replay_parser() {
-    const auto file = std::filesystem::temp_directory_path() / "controls_engine_replay.tsv";
+    const auto file = galaxy::test_temp_path("controls_engine_replay.tsv");
     const auto write = [&](const std::string& content) {
         std::ofstream out(file, std::ios::binary); out << content;
         if (!out) throw std::runtime_error("write replay fixture");

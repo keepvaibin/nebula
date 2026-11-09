@@ -58,6 +58,16 @@ the game's own gate, drawn like any frame). A draw whose pipeline is not made ye
 driver's cache file is written whole (temporary file, then a rename), once when the first queue drains and once at exit, never on the
 render thread.
 
+On Vulkan with `VK_EXT_graphics_pipeline_library` and a driver that links fast, a pipeline is four parts linked: the vertex input, the
+pre-raster shaders (vertex program, raster state), the fragment shader (pixel program, depth and stencil) and the fragment output
+(blend, targets). Each part is made once per distinct state of its own and shared by every pipeline that has it. A draw whose pipeline
+is not ready links one from parts at once (no optimisation, little wait) and a worker links the optimised one and replaces it for the
+draws after; the workers' own builds are optimised links. A part or link the driver refuses sends that pipeline down the whole-pipeline
+path. `[pipelines] graphics pipeline libraries` is logged at the first use; without the extension nothing changes. Direct3D 12 has no
+parts to link: its `ID3D12PipelineLibrary` (the driver cache loaded at start) makes a pipeline a load, not a compile, for every one an
+earlier run made, and a draw that misses still waits for its whole pipeline. Test builds also keep the order pipelines were first drawn
+in (`pipeline_use.tsv` in the shader cache folder, written at shutdown) and warm in that order; a release warms in the cooked order.
+
 ## No fixed caps
 
 A count of things (textures, tables, lights, layers, draws, uploads, descriptors, pads, monitors, files) never refuses or stalls at a
@@ -75,8 +85,9 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   more on tier 3: it names none, so the heaps double from their first sizes until the device refuses one; a refused
   `CreateDescriptorHeap` is logged once and the old heap stays). The texture region doubles to that limit; the persistent region
   doubles when full (a new heap and persistent shadow, indices kept, the replaced heap freed at the fence). A frame's segment holds the
-  renderer's own tables only (a few hundred), so it is sized by design and reported (`frame_high_water`). The sampler heap holds 2048
-  (the API's number) and starts again between frames.
+  renderer's own tables only (a few hundred): it starts at 32 768 and doubles too if a frame fills it (`grow_frames`), reported by
+  `frame_high_water`. The sampler heap holds 2048 (the API's number) and starts again between frames. Every ring, table and pool with
+  its first size and how it grows is listed in `helpers/present_audit.md`.
 - **Textures per draw**: with descriptor indexing (both backends) a draw's textures and samplers are one run of any length in the
   bindless heaps (`write_texture_list`; the table records its length; the list's buffer grows). A device without it (Vulkan, bound
   tables, `NEBULA_BOUND_TABLES`) binds an array whose length is the shader's compile-time size (16, `vk::kBoundTableSlots`); a list
@@ -91,7 +102,8 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   driver's cache file keeps them between runs); the only number is the driver's two refusals of a program pair.
 - **Worker threads** follow the logical processors of every processor group (`logical_cores()`, `galaxy/cpu_count.h`): pipeline builds,
   mod shader builds, picture conversion, texture pack decoding. Queues grow.
-- **Vulkan descriptors**: a new pool when one is full; the image array doubles to the device's update-after-bind limit.
+- **Vulkan descriptors**: a new pool, twice the size of the last, when one is full; the image array doubles to the device's
+  update-after-bind limit.
 - **Texture tables**: a table no walk has named for 600 frames releases what was built for it (its persistent descriptor table on a
   device without descriptor indexing, freed after the fence) and is rebuilt when a walk names it again. Ids are never reused (32 bits do
   not run out in a session), because the game keeps them in its materials; a retired table keeps only its small record.
@@ -112,11 +124,29 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   draws blank until the next list's first walk, which has it made again from the image the game keeps (staged on the game's thread in
   `take_ops`). The memory returns as the frames that may read it finish; on Direct3D 12 a placed heap with nothing in it (not the first)
   is released, so usage can fall. `GALAXY_TEST_VRAM_BUDGET_MB=N` sets the budget in test builds; `[vram]` is logged every 600 frames.
-- **Out of sight**: a minimised window, or on Direct3D 12 one the OS reports covered (`DXGI_STATUS_OCCLUDED`, asked again every 100 ms
-  with a test present), stops the game and its sound and the renderer's own presents (no repeated pictures, no generated frames), and the
-  threads wait on events (the host's message wait is at most 100 ms). The device and swap chain stay, so showing the window again
-  rebuilds nothing; the game's clock starts again from the return and owes no steps. A second start of the game finds the first's window
-  by its data folder's key, lets it take the foreground and ends.
+- **Out of sight**: a minimised window stops the game and its sound and the renderer's own presents (no repeated pictures, no generated
+  frames), and the threads wait on events. The device and swap chain stay, so showing the window again rebuilds nothing; the game's
+  clock starts again from the return and owes no steps. A window the OS reports covered (Direct3D 12: `DXGI_STATUS_OCCLUDED`, asked
+  again every 100 ms with a test present) does not stop the game or its sound: the frames are drawn and submitted, nothing is presented,
+  and no generated frames are made, until the window shows again. On Vulkan a surface with no area (the window minimised) is not
+  retried or waited for until it has one. A second start of the game finds the first's window by its data folder's key, lets it take
+  the foreground and ends.
+- **Displays**: the process is per-monitor DPI aware (version 2, from the manifest). A move to another monitor, a change of the
+  window's density, or a display mode change makes the renderer read the output again: the refresh rate (the pacing period), and on
+  Direct3D 12 the colour space and peak luminance (logged when they change; the picture is SDR on every display, so nothing is
+  rebuilt), on Vulkan whether the surface still offers the swap chain's format, colour space and present mode (the swap chain is made
+  again only if not). A window takes the rectangle Windows suggests for its new density; the menus' size follows the window's width in
+  density-independent units.
+- **Present modes**: Direct3D 12 with VSync off presents with `ALLOW_TEARING` when the system offers it (flip model, windowed or
+  borderless; `[present]` says which). Vulkan: FIFO with VSync; without it MAILBOX, else IMMEDIATE, else FIFO. Where the device takes a
+  present mode per present (swapchain maintenance 1) a frame that reaches the present a quarter of a period late is presented as
+  FIFO_RELAXED (shown at once, it may tear) instead of waiting for the next refresh. The latency rule is one frame: Direct3D 12 waits on
+  the swap chain's latency object, Vulkan on `vkWaitForPresentKHR` for the previous present (`VK_KHR_present_wait`), both at most 100 ms;
+  without present wait the frame fences bound the queue. `[vk] swap chain:` names the modes offered, the one chosen and which of these
+  is used.
+- **GPU timing**: the SYSTEM page of the settings has a GPU TIMING switch (off at every start). While it is on, both renderers write a
+  timestamp at each pass boundary of every frame and read them a frame later, and the page shows each pass's running average in
+  milliseconds; while it is off nothing is recorded or read (`GpuPassTime` in `render_api.h`).
 - **Power**: every limiter sleeps on a high-resolution waitable timer; none spins. A synced present waits for the swap chain's frame
   latency object (asleep, 100 ms at most). On battery, background threads (pipeline workers, shape builder) ask the OS for efficiency; the
   frame threads never do.
@@ -127,6 +157,13 @@ A lost device (driver reset) restarts the game from its save, twice in a row at 
 ([ERROR_CODES.md](ERROR_CODES.md)). Vulkan drivers' refused features are learned per driver build (`vk_compat.txt`, [VULKAN.md](VULKAN.md)).
 
 ## Testing
+
+Test aids (test builds only): `GALAXY_TEST_MOTION_PROBE=1` replays a few draws of each kind of mover alone every 300 frames and compares
+the CPU-projected motion of their vertices with the motion target (`[motion-probe]`); `GALAXY_TEST_FRAME_INPUTS=1` checks the
+temporal upscaler's inputs (jitter against Halton, depth range and reversed Z, the previous camera, the reactive and transparency masks
+where particles draw: `[frame-inputs]`); `GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1` leaves interpolated frames out of the snapshot
+numbering, `tools/verify/interp_real.sh` uses it to compare a run with interpolation on against one with it off by the game's own
+frames. `GALAXY_VK_TEST_NO_FEATURE` also takes `present_wait`, `present_mode_switch` and `pipeline_library`.
 
 `tools/verify`: identical pictures between builds in deterministic mode (`GALAXY_TEST_DETERMINISTIC=1`), a window against the same build's
 control in real time, all stops in the tour, `[loss]` counters for draws without a material or pipeline.

@@ -1,6 +1,7 @@
 // Achievements: the catalogue, unlocking once, keeping them across sessions, and writing them in the background
 // (galaxy/achievements.h).
 #include "galaxy/achievements.h"
+#include "galaxy/test_temp.h"
 
 #include <chrono>
 #include <cstdio>
@@ -27,7 +28,7 @@ std::string read_file(const std::filesystem::path& path) {
 
 int main() {
     namespace ach = galaxy::achievements;
-    const std::filesystem::path path = std::filesystem::temp_directory_path() / "nebula_achievements_test.ini";
+    const std::filesystem::path path = galaxy::test_temp_path("nebula_achievements_test.ini");
     std::filesystem::remove(path);
     ach::set_path_for_tests(path);
 

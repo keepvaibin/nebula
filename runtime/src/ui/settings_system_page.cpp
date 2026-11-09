@@ -9,7 +9,8 @@ const char* exposed_text(const render::RenderFeatureStatus& status) {
 }
 
 }  // namespace
-std::vector<SettingsRow> system_page(const render::RenderFeatureCaps& caps, std::string post, void (*record_diagnostics)()) {
+std::vector<SettingsRow> system_page(const render::RenderFeatureCaps& caps, std::string post, void (*record_diagnostics)(),
+                                     const GpuTimingView* timing) {
     std::vector<SettingsRow> rows;
     {
         std::string name = mods_ui_text(caps.adapter_description.data(), 32u);
@@ -34,6 +35,25 @@ std::vector<SettingsRow> system_page(const render::RenderFeatureCaps& caps, std:
     rows.push_back(button_row("DIAGNOSTICS", {"RECORD"},
                               [record_diagnostics](RenderConfig&, unsigned) { if (record_diagnostics) record_diagnostics(); },
                               {}));
+    if (timing != nullptr) {
+        rows.push_back({"PERFORMANCE", {}, nullptr, {}, true});
+        void (*const toggle)() = timing->toggle;
+        rows.push_back({"GPU TIMING", timing->on ? "ON" : "OFF",
+                        [toggle](RenderConfig&, int) { if (toggle) toggle(); },
+                        "MILLISECONDS THE GPU SPENDS ON EACH PASS OF A FRAME. OFF AT EVERY START; WHILE OFF NOTHING IS MEASURED"});
+        float total = 0.0f;
+        for (const auto& [name, ms] : timing->passes) {
+            char value[24]{};
+            std::snprintf(value, sizeof(value), "%.2f MS", static_cast<double>(ms));
+            rows.push_back({upper_ascii(name), value, nullptr, "AVERAGE OVER THE LAST FRAMES THAT RAN THIS PASS"});
+            total += ms;
+        }
+        if (timing->on && !timing->passes.empty()) {
+            char value[24]{};
+            std::snprintf(value, sizeof(value), "%.2f MS", static_cast<double>(total));
+            rows.push_back({"ALL PASSES", value, nullptr, "THE SUM OF THE PASSES ABOVE"});
+        }
+    }
     return rows;
 }
 

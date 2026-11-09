@@ -1,4 +1,5 @@
 #include "galaxy/render/render_config.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 
 #include "galaxy/windows_api.h"
@@ -133,8 +134,7 @@ int main() {
     }
 
     {
-        const auto root = std::filesystem::temp_directory_path() /
-            ("galaxy_config_validation_" + std::to_string(_getpid()));
+        const auto root = galaxy::test_temp_path("galaxy_config_validation");
         const auto path = root / "config.ini";
         std::filesystem::create_directories(root);
         ScopedEnv config_path("GALAXY_RENDER_CONFIG_PATH", path.string().c_str());
@@ -367,10 +367,7 @@ int main() {
         "set_render_config keeps ray tracing and its reflections choice, and clamps the reserved DXR keys off");
 
     {
-        const std::filesystem::path root =
-            std::filesystem::temp_directory_path() /
-            ("galaxy_render_config_tests_" +
-             std::to_string(static_cast<unsigned>(_getpid())));
+        const std::filesystem::path root = galaxy::test_temp_path("galaxy_render_config_tests");
         const std::filesystem::path path = root / "config.ini";
         std::filesystem::remove_all(root);
         const ScopedEnv config_path(
@@ -432,10 +429,7 @@ int main() {
     }
 
     {
-        const std::filesystem::path root =
-            std::filesystem::temp_directory_path() /
-            ("galaxy_custom_window_size_tests_" +
-             std::to_string(static_cast<unsigned>(_getpid())));
+        const std::filesystem::path root = galaxy::test_temp_path("galaxy_custom_window_size_tests");
         const std::filesystem::path path = root / "config.ini";
         std::filesystem::remove_all(root);
         const ScopedEnv config_path(

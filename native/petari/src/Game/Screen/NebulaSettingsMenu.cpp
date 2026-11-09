@@ -1086,6 +1086,7 @@ private:
     f32 mScreenWidth = 0.0f;
     f32 mScreenHeight = 0.0f;
     s32 mTextSizeChosen = 0;
+    s32 mWindowDp = 0;  // the window's width in density-independent units at the last arrange: a move to a monitor of another density re-arranges
     f32 mWidth;
     f32 mHeight;
     f32 mPanelWidth;
@@ -1505,6 +1506,7 @@ bool NebulaSettingsScreen::build() {
 void NebulaSettingsScreen::arrange() {
     readScreen(&mScaleX, &mWidth, &mHeight);
     mTextSizeChosen = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE));
+    mWindowDp = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_WINDOW_WIDTH_DP));
     mScreenWidth = mWidth;
     mScreenHeight = mHeight;
     // The menu's size: the player's, or large enough that its text is readable on this screen.
@@ -3213,7 +3215,8 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     f32 height;
     readScreen(&scaleX, &width, &height);
     if (scaleX != mScaleX || __builtin_fabsf(width - mScreenWidth) > 0.5f || __builtin_fabsf(height - mScreenHeight) > 0.5f ||
-        static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE)) != mTextSizeChosen) {
+        static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE)) != mTextSizeChosen ||
+        static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_WINDOW_WIDTH_DP)) != mWindowDp) {
         arrange();
     }
     if (!mHome && rView.page == rView.controls_page && rView.status != NEBULA_SETTINGS_STATUS_JOYCON) {

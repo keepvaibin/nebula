@@ -34,6 +34,17 @@ int main() {
         galaxy::ui::RenderConfig config;
         row(rows, "DIAGNOSTICS").press(config, 0);
         check(recorded == 1, "recording action");
+        galaxy::ui::GpuTimingView off;
+        off.toggle = [] {};
+        check(row(galaxy::ui::system_page(caps, "POST: SMAA", record, &off), "GPU TIMING").value == "OFF", "timing is off by default");
+        galaxy::ui::GpuTimingView on;
+        on.on = true;
+        on.toggle = [] {};
+        on.passes = {{"scene", 3.0f}, {"present", 0.5f}};
+        auto timed = galaxy::ui::system_page(caps, "POST: SMAA", record, &on);
+        check(row(timed, "GPU TIMING").value == "ON" && row(timed, "SCENE").value == "3.00 MS" && row(timed, "ALL PASSES").value == "3.50 MS",
+              "passes and their sum are shown while on");
+        check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "GPU TIMING"; }), "no timing rows without a view");
         std::cout << "System page: passed\n";
         return 0;
     } catch (const std::exception& error) {

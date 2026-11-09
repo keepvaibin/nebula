@@ -160,10 +160,10 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 void pump_messages();
 [[nodiscard]] bool quit_requested() noexcept;
 
-// The window is out of sight (minimised, or covered so the OS shows none of it): the renderer presents nothing of its own
-// (no repeated pictures, no generated frames) and waits for work without polling. The host sets it with the game's own
-// suspension. `window_occluded` is the OS's own word that the whole window is covered (Direct3D 12's present status; Vulkan on
-// Windows reports none, so false there).
+// The window is minimised: the renderer presents nothing of its own (no repeated pictures, no generated frames) and waits for
+// work without polling. The host sets it together with the game's own suspension. A covered window is not this: the game
+// goes on and the renderer stops presenting by itself. `window_occluded` is the OS's own word that the whole window is covered
+// (Direct3D 12's present status; Vulkan on Windows reports none, so false there).
 void set_window_hidden(bool hidden) noexcept;
 [[nodiscard]] bool window_occluded() noexcept;
 
@@ -325,6 +325,18 @@ struct NativeSettingsView {
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
 enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue };
 void native_settings_input(NativeSettingsInput input, int arg);
+
+// GPU time by pass (the settings overlay's SYSTEM page): off at every start; while it is on, the renderer writes a timestamp at
+// each pass boundary of every frame and reads them back a frame later; while it is off it records and reads nothing. A pass's
+// time is a running average (about ten frames) over the frames that ran it, in milliseconds.
+struct GpuPassTime {
+    const char* name;  // static text
+    float ms;
+};
+void set_gpu_timing(bool on) noexcept;
+[[nodiscard]] bool gpu_timing_on() noexcept;
+// The passes that have a time, at most `capacity`; how many.
+[[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) noexcept;
 
 // The frames the game has shown (display copies) and how the presents met them.
 [[nodiscard]] std::uint64_t pictures_made() noexcept;

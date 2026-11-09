@@ -80,6 +80,18 @@ bool window_occluded() noexcept {
     return backend().window_occluded();
 }
 
+void set_gpu_timing(bool on) noexcept {
+    backend().set_gpu_timing(on);
+}
+
+bool gpu_timing_on() noexcept {
+    return backend().gpu_timing_on();
+}
+
+std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) noexcept {
+    return backend().gpu_pass_times(out, capacity);
+}
+
 std::uint64_t pictures_made() noexcept {
     return backend().pictures_made();
 }

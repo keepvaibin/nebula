@@ -233,7 +233,9 @@ public:
     // given in its materials (checked against its own stamps), so an id given to another list would draw the wrong textures.
     static constexpr std::uint64_t kTableIdleFrames = 600u;
     static constexpr std::uint64_t kTableSweepFrames = 60u;
-    void retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired);
+    // `idle_frames`: the idle time in frames as the renderer counts them (kTableIdleFrames at 60 a second, more when each game
+    // frame is shown in several).
+    void retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired, std::uint64_t idle_frames = kTableIdleFrames);
     struct TableCounts {
         std::uint32_t live = 0u;     // named within kTableIdleFrames
         std::uint32_t retired = 0u;  // idle longer: built resources released

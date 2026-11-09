@@ -65,17 +65,6 @@ std::array<Row, kPhases> build_filter() noexcept {
 // Built at startup so the first sound costs nothing extra on the game thread.
 const std::array<Row, kPhases> kFilter = build_filter();
 
-std::int32_t load_le16(const std::byte* sample) noexcept {
-    return static_cast<std::int16_t>(
-        std::to_integer<std::uint16_t>(sample[0]) | (std::to_integer<std::uint16_t>(sample[1]) << 8u));
-}
-
-void store_le16(std::byte* sample, std::int32_t value) noexcept {
-    const auto bits = static_cast<std::uint16_t>(static_cast<std::int16_t>(value));
-    sample[0] = static_cast<std::byte>(bits & 0xFFu);
-    sample[1] = static_cast<std::byte>(bits >> 8u);
-}
-
 }  // namespace
 
 void Speaker::push(std::span<const std::int16_t> samples, std::uint32_t rate) noexcept {

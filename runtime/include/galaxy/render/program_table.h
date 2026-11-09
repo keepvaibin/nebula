@@ -43,8 +43,6 @@ void program_use_bound_tables(bool bound) noexcept;
 [[nodiscard]] std::uint32_t program_coords(std::uint64_t vertex) noexcept;
 // It lights at the pixel: a form drawn only under per-pixel or enhanced lighting.
 [[nodiscard]] bool program_lit(std::uint64_t pixel) noexcept;
-// How many programs the build holds, for the census.
-[[nodiscard]] std::uint32_t program_count(bool pixel) noexcept;
 
 // The file of this build's graphics interface in a mod's shaders folder: "dxil.shaders" or "spirv.shaders".
 [[nodiscard]] const char* program_file_name() noexcept;

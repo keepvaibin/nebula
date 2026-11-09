@@ -866,6 +866,7 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         if (scene_layer && motion_scene_ && one_pass && aux != 1u) {
             aux = 4u;
         }
+        NEBULA_PIPELINE_USE(item.pipeline, entry);
         gpu::Pipeline* pipeline = pipelines_.get(item.pipeline, entry, target_variant, aux);
         if (pipeline == nullptr) {  // the driver refused it: the player misses this draw
             galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);

@@ -115,6 +115,14 @@ public:
     // Out of sight (render_api.h set_window_hidden): no presents of its own, longer waits. Any thread.
     void set_window_hidden(bool hidden) noexcept { window_hidden_.store(hidden, std::memory_order_relaxed); }
     [[nodiscard]] bool window_occluded() const noexcept { return initialized_ && renderer_.occluded(); }
+    // Minimised (the host's word) or covered (the OS's): nothing of its own is presented and no generated frame is made.
+    [[nodiscard]] bool out_of_sight() const noexcept { return window_hidden_.load(std::memory_order_relaxed) || window_occluded(); }
+    // GPU time by pass (render_api.h); any thread.
+    void set_gpu_timing(bool on) noexcept { renderer_.set_gpu_timing(on); }
+    [[nodiscard]] bool gpu_timing_on() const noexcept { return renderer_.gpu_timing_on(); }
+    [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
+        return renderer_.gpu_pass_times(out, capacity);
+    }
     [[nodiscard]] std::uint64_t pictures_made() const noexcept;
     [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 

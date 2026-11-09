@@ -173,8 +173,8 @@ public:
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE persistent_cpu(std::uint32_t index) const noexcept;
     // The heaps growth replaced, for the renderer to free once the GPU is past the commands that may read them.
     [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::move(replaced_); }
-    // The most a frame's segment and the persistent region have held (diagnostics; the frame segment is sized by design, see
-    // kSrvPerFrame).
+    // The most a frame's segment and the persistent region have held (diagnostics). A segment that a frame fills doubles, as the
+    // persistent region does (grow_frames); its first size is kSrvPerFrame.
     [[nodiscard]] unsigned frame_high_water() const noexcept { return frame_high_water_; }
     [[nodiscard]] unsigned persistent_used() const noexcept { return persistent_cursor_; }
     [[nodiscard]] unsigned persistent_capacity() const noexcept { return persistent_descriptors_; }
@@ -205,6 +205,7 @@ public:
 
 private:
     void grow_persistent(unsigned persistent);
+    void grow_frames(unsigned per_frame);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE shadow_at(unsigned index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE heap_cpu_at(unsigned index) const noexcept;  // a ring index, past the textures
     void fill_null(unsigned index, unsigned count);
@@ -312,8 +313,20 @@ public:
     void inspect_queries_read(std::uint32_t count, std::uint64_t* out);
     // The motion target's value at a pixel of the frame that just ended.
     [[nodiscard]] bool inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out);
+    // The reactive mask (kind 0: R8, out[0] the byte) and the effects layer's transmittance (kind 1: RGBA16F, four halves) at a
+    // pixel of the frame that just ended, from the same replay as inspect_motion_pixel. False: not read.
+    [[nodiscard]] bool inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out);
     void wait_for_gpu_idle() { wait_for_gpu(); }
 #endif
+    // GPU time by pass (render_api.h GpuPassTime): any thread. Off: no query is recorded or read.
+    void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
+    [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
+    [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
+    // The latest scene's jitter: its index in the sequence and the sequence's length (0 phases: no temporal scene yet).
+    void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
+        index = scene_jitter_index_;
+        phases = scene_jitter_phases_;
+    }
     // Bounded wait for one queue signal (the synchronous rendering path only).
     void wait_for_fence_value(std::uint64_t fence_value);
 
@@ -738,6 +751,13 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
+    // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics
+    // record passes); each pass's running average for the page.
+    std::atomic<bool> gpu_timing_wanted_{false};
+    bool diagnostic_passes_ = false;
+    bool pass_timing_on_ = false;
+    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    void ensure_pass_queries();
     // GALAXY_GPU_PASSES=1 also counts each command list's pipeline statistics (shader invocations, primitives) for
     // present-stats' gpu-stats.
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> stats_query_heap_;
@@ -814,7 +834,12 @@ private:
     bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, TextureStore& textures);
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
-    static constexpr std::uint64_t kTargetIdleFrames = 600u;
+    static constexpr std::uint64_t kTargetIdleFrames = 600u;  // frames at the game's 60 a second
+    // The same idle time at the rate frames are being presented (a 240 Hz picture counts four frames per game frame).
+    [[nodiscard]] std::uint64_t target_idle_frames() const noexcept {
+        const double rate = measured_present_hz_.load(std::memory_order_relaxed);
+        return kTargetIdleFrames * std::max<std::uint64_t>(1u, static_cast<std::uint64_t>(rate / kGameStepRate + 0.5));
+    }
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     std::uint64_t target_key_ = 0;
     SceneTargetSet target_scene_;
@@ -946,7 +971,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> inspect_query_readback_, inspect_motion_readback_;
     std::uint32_t inspect_query_capacity_ = 0u, inspect_queries_used_ = 0u;
     UINT inspect_motion_pitch_ = 0u;
+    Microsoft::WRL::ComPtr<ID3D12Resource> inspect_mask_readback_[2];
+    UINT inspect_mask_pitch_[2]{};
 #endif
+    unsigned scene_jitter_index_ = 0u, scene_jitter_phases_ = 0u;
     // A scene colour that could not take the scene's place, kept until the GPU is done with it.
     struct OldSceneTarget {
         gpu::TextureRef texture;
@@ -1072,6 +1100,16 @@ private:
     // screen (DXGI frame statistics; index 4 counts 4 or more).
     double display_refresh_hz_ = 0.0;
     std::uint64_t display_refresh_presents_ = 0;
+    // The output's colour space and peak luminance as last read (read_display_output).
+    struct DisplayReading {
+        bool valid = false;
+        DXGI_COLOR_SPACE_TYPE colour_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
+        UINT bits = 8u;
+        float peak_nits = 0.0f;
+        HMONITOR monitor = nullptr;
+    };
+    DisplayReading display_reading_;
+    void read_display_output();
     UINT last_stats_present_count_ = 0;
     UINT last_stats_present_refresh_count_ = 0;
     std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};

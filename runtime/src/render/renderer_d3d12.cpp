@@ -528,9 +528,81 @@ void DescriptorRing::commit(const Persistent& table, unsigned count) {
     copy_in(table.index, count);
 }
 
+// Larger frame segments: a new heap (the textures, the persistent region, then `per_frame` descriptors for each frame in flight)
+// and a new shadow. Commands already recorded read the old heap, which gets this frame's tables first and then goes to
+// replaced_; the tables of this frame so far move to the same places in their new segment, and the persistent descriptors keep
+// their indices. A transient table's handle belongs to the heap that was current when it was allocated, as with grow_persistent.
+void DescriptorRing::grow_frames(unsigned per_frame) {
+    const std::uint64_t total = std::uint64_t{texture_descriptors_} + persistent_descriptors_ + std::uint64_t{per_frame} * frames_in_flight_;
+    if (total > heap_limit_) {
+        throw std::runtime_error("DescriptorRing frame segment past the shader-visible heap limit");
+    }
+    D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+    dhd.Type           = type_;
+    dhd.NumDescriptors = static_cast<UINT>(total);
+    dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next;
+    if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next)))) {
+        static std::atomic<bool> told{false};
+        if (!told.exchange(true)) {
+            std::cerr << "[gpu] a descriptor heap of " << total << " descriptors could not be made; the frame segment keeps its size\n";
+        }
+        throw std::runtime_error("DescriptorRing frame segment: the device refused a larger heap");
+    }
+    dhd.NumDescriptors = per_frame * frames_in_flight_ + kNullBlock;
+    dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> next_shadow;
+    d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&next_shadow)), "CreateDescriptorHeap frame shadow");
+    // The null block, after the segments.
+    D3D12_SHADER_RESOURCE_VIEW_DESC null_view{};
+    null_view.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    null_view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    null_view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    null_view.Texture2D.MipLevels = 1u;
+    const D3D12_CPU_DESCRIPTOR_HANDLE shadow_start = next_shadow->GetCPUDescriptorHandleForHeapStart();
+    for (unsigned i = 0; i < kNullBlock; ++i) {
+        D3D12_CPU_DESCRIPTOR_HANDLE at = shadow_start;
+        at.ptr += static_cast<SIZE_T>(per_frame * frames_in_flight_ + i) * increment_;
+        device_->CreateShaderResourceView(nullptr, &null_view, at);
+    }
+    const unsigned used = frame_ready_ ? cursor_ - frame_base_ : 0u;
+    flush();  // what the replaced heap's commands read
+    if (used != 0u) {
+        D3D12_CPU_DESCRIPTOR_HANDLE to = shadow_start;
+        to.ptr += static_cast<SIZE_T>(frame_slot_) * per_frame * increment_;
+        device_->CopyDescriptorsSimple(used, to, shadow_at(frame_base_), type_);
+    }
+    replaced_.push_back(std::move(heap_));
+    heap_ = std::move(next);
+    shadow_ = std::move(next_shadow);
+    descriptors_per_frame_ = per_frame;
+    if (frame_ready_) {
+        frame_base_ = persistent_descriptors_ + frame_slot_ * descriptors_per_frame_;
+        cursor_ = frame_base_ + used;
+    }
+    copy_in(0u, persistent_cursor_);
+    flush();
+    bound_list_ = nullptr;
+    bound_heap_ = nullptr;
+}
+
 DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
-    if (!frame_ready_ || count > descriptors_per_frame_ - (cursor_ - frame_base_)) {
-        throw std::runtime_error("DescriptorRing frame segment exhausted or no frame begun");
+    if (!frame_ready_) {
+        throw std::runtime_error("DescriptorRing no frame begun");
+    }
+    if (count > descriptors_per_frame_ - (cursor_ - frame_base_)) {
+        // Doubled (at least to what is needed): a frame's tables never refuse a descriptor below the device's heap limit.
+        const std::uint64_t needed = std::uint64_t{cursor_ - frame_base_} + count;
+        std::uint64_t grown = std::max<std::uint64_t>(std::uint64_t{descriptors_per_frame_} * 2u, 256u);
+        while (grown < needed) {
+            grown *= 2u;
+        }
+        const std::uint64_t other = std::uint64_t{texture_descriptors_} + persistent_descriptors_;
+        const std::uint64_t room = heap_limit_ > other ? (heap_limit_ - other) / frames_in_flight_ : 0u;
+        if (needed > room) {
+            throw std::runtime_error("DescriptorRing frame segment exhausted: past the shader-visible heap limit");
+        }
+        grow_frames(static_cast<unsigned>(std::min(grown, room)));
     }
     frame_high_water_ = std::max(frame_high_water_, cursor_ - frame_base_ + count);
     Table table{shadow_at(cursor_), heap_->GetGPUDescriptorHandleForHeapStart()};
@@ -623,8 +695,9 @@ bool g_selected_adapter_valid = false;
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
 // boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
 // A frame's segment of the descriptor ring: its tables are the renderer's own passes' (a few hundred descriptors at most, by
-// design, not by content: draws read the texture region), so the segment is sized, not grown; frame_high_water() reports use.
-static constexpr unsigned    kSrvPerFrame = 32768u;
+// design, not by content: draws read the texture region). It starts at this size and doubles if a frame ever fills it
+// (DescriptorRing::grow_frames); frame_high_water() reports use.
+static constexpr unsigned    kSrvPerFrame = 32768u;  // the first size of a frame's segment; it doubles when a frame fills it
 // The descriptor ring's persistent descriptors, outside the rewound frame segments: the scene target conversion sources
 // (the scene target's views, the output scene target's, the MSAA depth's, then the wide scene's).
 static constexpr unsigned    kPersistentSrvDescriptors = 64u * 1024u;  // the first size: the region doubles when it is full
@@ -2048,6 +2121,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().gpu_passes) == 0 && length > 1u &&
                        value[0] == '1';
             }();
+            diagnostic_passes_ = passes;
             if (passes) {
                 qhd.Count = kFramesInFlight * kGpuPassSlots;
                 d3d_check(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&pass_query_heap_)), "Create pass query heap");
@@ -2627,6 +2701,16 @@ bool RendererD3D12::create_swap_chain(bool fsr) {
         scd.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
     }
     tearing_allowed_ = (scd.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) != 0u;
+    {
+        // Once, and again only when it changes (a swap chain made again).
+        static int logged_tearing = -1;
+        if (logged_tearing != (tearing_allowed_ ? 1 : 0)) {
+            logged_tearing = tearing_allowed_ ? 1 : 0;
+            std::cerr << "[present] flip-model swap chain, " << (tearing_allowed_ ? "VSync off presents with ALLOW_TEARING (no wait for the display)"
+                                                                                   : "VSync off still waits for the compositor (tearing not offered here)")
+                      << ", VSync on: Present(1..4) paced by the latency object" << '\n';
+        }
+    }
     ComPtr<IDXGISwapChain1> sc1;
     ID3D12CommandQueue* const native = fsr ? streamline::native_queue(queue_.Get()) : queue_.Get();
     // Through Streamline's factory when it runs and the swap chain is not AMD's: its presents go through it.
@@ -2854,13 +2938,58 @@ gpu::Address RendererD3D12::zero_stream(std::uint32_t bytes) {
     return zero_stream_.gpu;
 }
 
+namespace {
+constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
+                                          "upscale", "ray tracing", "present", "camera"};
+}  // namespace
+
+std::size_t RendererD3D12::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
+    std::size_t count = 0u;
+    for (std::size_t pass = 0u; pass < std::size(kPassTimeNames) && count < capacity; ++pass) {
+        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
+            out[count++] = {kPassTimeNames[pass], ms};
+        }
+    }
+    return count;
+}
+
+// The pass timestamps' query heap and readback, made when the settings page asks for them (the diagnostics make theirs at start).
+void RendererD3D12::ensure_pass_queries() {
+    if (pass_query_heap_ || !device_) {
+        return;
+    }
+    D3D12_QUERY_HEAP_DESC qhd{};
+    qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    qhd.Count = kFramesInFlight * kGpuPassSlots;
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    rd.Width = kFramesInFlight * kGpuPassSlots * sizeof(std::uint64_t);
+    rd.Height = 1;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.SampleDesc.Count = 1;
+    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> heap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+    if (FAILED(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&heap))) ||
+        FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                IID_PPV_ARGS(&readback)))) {
+        gpu_timing_wanted_.store(false, std::memory_order_relaxed);  // this device cannot: the page shows it off
+        return;
+    }
+    pass_readback_ = std::move(readback);
+    pass_query_heap_ = std::move(heap);
+}
+
 void RendererD3D12::gpu_pass(GpuPass pass) {
     if (pass == current_pass_) {
         return;
     }
     current_pass_ = pass;
     unsigned& marks = pass_mark_count_[frame_slot_];
-    if (!pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
+    if (!pass_timing_on_ || !pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
         return;
     }
     command_list_->EndQuery(pass_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * kGpuPassSlots + marks);
@@ -3029,11 +3158,21 @@ void RendererD3D12::begin_frame() {
         void* mapped = nullptr;
         if (SUCCEEDED(pass_readback_->Map(0, &read_range, &mapped))) {
             const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
+            std::array<double, static_cast<std::size_t>(GpuPass::Count)> frame_ms{};
             for (unsigned i = 0; i + 1u < marks; ++i) {
                 if (ticks[i + 1u] >= ticks[i]) {
-                    telemetry_pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] +=
-                        static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 /
-                        static_cast<double>(timestamp_frequency_);
+                    const double ms = static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 /
+                                      static_cast<double>(timestamp_frequency_);
+                    telemetry_pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
+                    frame_ms[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] += ms;
+                }
+            }
+            // The page's running average of each pass over the frames that ran it.
+            for (std::size_t pass = 0u; pass < frame_ms.size(); ++pass) {
+                if (frame_ms[pass] > 0.0) {
+                    const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
+                    const float value = static_cast<float>(frame_ms[pass]);
+                    pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
                 }
             }
             const D3D12_RANGE no_write{0, 0};
@@ -3077,6 +3216,19 @@ void RendererD3D12::begin_frame() {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
             frame_slot_ * 2u);
+    }
+    {
+        // The page's timing is on for the frames begun while it is asked for (nothing is recorded or read otherwise).
+        const bool timing = diagnostic_passes_ || gpu_timing_wanted_.load(std::memory_order_relaxed);
+        if (timing && !pass_query_heap_) {
+            ensure_pass_queries();
+        }
+        if (!timing && pass_timing_on_) {
+            for (std::atomic<float>& average : pass_ema_ms_) {
+                average.store(0.0f, std::memory_order_relaxed);
+            }
+        }
+        pass_timing_on_ = timing && pass_query_heap_;
     }
     pass_list_open_ = true;
     if (stats_query_heap_) {
@@ -3156,6 +3308,34 @@ void RendererD3D12::refresh_display_rate() {
     display_refresh_hz_ = hz;
 }
 
+// The output the window is on, read again after a move to another monitor, a density change or a display mode change: its
+// colour space (HDR10 / scRGB when Windows has HDR on for it), bits and peak luminance. The picture is SDR on every display
+// (the swap chain is RGBA8 in the Rec.709 / 2.2 colour space, which Windows maps onto an HDR display itself), so a change here
+// rebuilds nothing; the refresh rate, which sets the pacing period, is read by refresh_display_rate right after, and the
+// change is logged once.
+void RendererD3D12::read_display_output() {
+    if (swap_chain_ == nullptr) {
+        return;
+    }
+    Microsoft::WRL::ComPtr<IDXGIOutput> output;
+    Microsoft::WRL::ComPtr<IDXGIOutput6> output6;
+    DXGI_OUTPUT_DESC1 desc{};
+    if (FAILED(swap_chain_->GetContainingOutput(&output)) || output == nullptr || FAILED(output.As(&output6)) ||
+        FAILED(output6->GetDesc1(&desc))) {
+        return;
+    }
+    const DisplayReading now{true, desc.ColorSpace, desc.BitsPerColor, desc.MaxLuminance, desc.Monitor};
+    const DisplayReading& before = display_reading_;
+    if (!before.valid || before.colour_space != now.colour_space || before.bits != now.bits || before.monitor != now.monitor ||
+        before.peak_nits != now.peak_nits) {
+        const bool hdr = now.colour_space == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020 ||
+                         now.colour_space == DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+        std::cerr << "[display] output " << (hdr ? "HDR" : "SDR") << ", colour space " << static_cast<int>(now.colour_space) << ", "
+                  << now.bits << " bits, peak " << now.peak_nits << " nits" << '\n';
+    }
+    display_reading_ = now;
+}
+
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     const bool game_frame = std::exchange(present_game_frame_, false);
     if (configured != 1u) {
@@ -3179,9 +3359,22 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
 }
 
 void RendererD3D12::present_to_swap_chain() {
+    // A covered window (the last present said DXGI_STATUS_OCCLUDED): the frame is drawn and submitted as always, but nothing is
+    // presented; the render thread's probe (probe_occlusion, every 100 ms) clears the state when the window shows again. Not
+    // under frame generation, whose presents belong to its library.
+    if (occluded_.load(std::memory_order_relaxed) && !frame_generation_running() && !fsr_swap_chain_) {
+        present_game_frame_ = false;
+        streamline_frame_open_ = false;
+        return;
+    }
     // Automatic-rate interpolation needs the display clock even with VSync and diagnostics off.
-    // Also at once when the window has moved to another monitor, whose rate may differ.
-    if (host_window::monitor_changed.exchange(false, std::memory_order_acq_rel) || display_refresh_presents_++ % 120u == 0u) {
+    // Also at once when the window has moved to another monitor (or its density or the display mode changed), whose rate,
+    // colour space and HDR state may differ: read again, and only what differs is acted on.
+    const bool display_moved = host_window::monitor_changed.exchange(false, std::memory_order_acq_rel);
+    if (display_moved) {
+        read_display_output();
+    }
+    if (display_moved || display_refresh_presents_++ % 120u == 0u) {
         refresh_display_rate();
     }
     const RenderConfig cfg = get_render_config();
@@ -3958,6 +4151,8 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
     temporal_->jitter_offset(static_cast<unsigned>(temporal_frame_ % phases), phases,
                              jitter_x, jitter_y);
+    scene_jitter_index_ = static_cast<unsigned>(temporal_frame_ % phases);
+    scene_jitter_phases_ = phases;
     ++temporal_frame_;
     scene_jitter_[0] = jitter_x;
     scene_jitter_[1] = jitter_y;
@@ -4111,6 +4306,37 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         command_list_->CopyTextureRegion(&to, 0u, 0u, 0u, &from, nullptr);
         uses.undo();
+        // The reactive mask and the effects layer's transmittance, the same way (GALAXY_TEST_FRAME_INPUTS).
+        ID3D12Resource* const masks[2] = {reactive_target_.Get(), layer_trans_.Get()};
+        for (unsigned kind = 0u; kind < 2u; ++kind) {
+            inspect_mask_readback_[kind].Reset();
+            if (masks[kind] == nullptr) {
+                continue;
+            }
+            const D3D12_RESOURCE_DESC mask_desc = masks[kind]->GetDesc();
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT mask_footprint{};
+            UINT64 mask_bytes = 0u;
+            device_->GetCopyableFootprints(&mask_desc, 0u, 1u, 0u, &mask_footprint, nullptr, nullptr, &mask_bytes);
+            D3D12_RESOURCE_DESC mask_buffer = buffer;
+            mask_buffer.Width = mask_bytes;
+            if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &mask_buffer, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                        IID_PPV_ARGS(&inspect_mask_readback_[kind])))) {
+                continue;
+            }
+            inspect_mask_pitch_[kind] = mask_footprint.Footprint.RowPitch;
+            BarriersD3D12 mask_uses{command_list_.Get()};
+            mask_uses.texture(masks[kind], gpu::Use::ColorWrite, gpu::Use::CopySource);
+            mask_uses.issue();
+            D3D12_TEXTURE_COPY_LOCATION mask_to{};
+            mask_to.pResource = inspect_mask_readback_[kind].Get();
+            mask_to.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            mask_to.PlacedFootprint = mask_footprint;
+            D3D12_TEXTURE_COPY_LOCATION mask_from{};
+            mask_from.pResource = masks[kind];
+            mask_from.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            command_list_->CopyTextureRegion(&mask_to, 0u, 0u, 0u, &mask_from, nullptr);
+            mask_uses.undo();
+        }
     }
 #endif
     TemporalUpscaleInputs in{};
@@ -4470,7 +4696,7 @@ void RendererD3D12::end_target_pass(std::uint8_t channels, TextureStore& texture
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
     // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        it = it->second.used + kTargetIdleFrames < frame_index_ ? target_slots_.erase(it) : std::next(it);
+        it = it->second.used + target_idle_frames() < frame_index_ ? target_slots_.erase(it) : std::next(it);
     }
 }
 
@@ -4967,6 +5193,24 @@ bool RendererD3D12::inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* 
     const auto* row = static_cast<const std::byte*>(mapped) + std::size_t{y} * inspect_motion_pitch_;
     std::memcpy(out, row + std::size_t{x} * 4u, 4u);
     inspect_motion_readback_->Unmap(0u, nullptr);
+    return true;
+}
+
+bool RendererD3D12::inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out) {
+    if (kind > 1u || !inspect_mask_readback_[kind] || x >= frame_.width || y >= frame_.height) {
+        return false;
+    }
+    void* mapped = nullptr;
+    if (FAILED(inspect_mask_readback_[kind]->Map(0u, nullptr, &mapped))) {
+        return false;
+    }
+    const auto* row = static_cast<const std::byte*>(mapped) + std::size_t{y} * inspect_mask_pitch_[kind];
+    if (kind == 0u) {
+        out[0] = static_cast<std::uint8_t>(row[x]);
+    } else {
+        std::memcpy(out, row + std::size_t{x} * 8u, 8u);
+    }
+    inspect_mask_readback_[kind]->Unmap(0u, nullptr);
     return true;
 }
 #endif

@@ -566,9 +566,10 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        // A frame with more distinct tables than the pool holds: another pool, freed with the slot.
-        const VkDescriptorPool pool =
-            vk_detail::create_pool(device, vk_detail::kFrameSets, vk_detail::frame_pool(!bindless_));
+        // A frame with more distinct tables than the pool holds: another pool twice the size of the last one, freed with the slot (the
+        // size is kept, so a frame that needed it once does not chain small pools again).
+        frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets : frame.overflow_sets * 2u;
+        const VkDescriptorPool pool = vk_detail::create_pool(device, frame.overflow_sets, vk_detail::frame_pool(!bindless_, frame.overflow_sets));
         frame.overflow_descriptors.push_back(pool);
         info.descriptorPool = pool;
         result = vkAllocateDescriptorSets(device, &info, &set);
@@ -674,7 +675,7 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) 
     // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
         TargetSlot& idle = it->second;
-        if (idle.used + kTargetIdleFrames >= frame_index_) {
+        if (idle.used + target_idle_frames() >= frame_index_) {
             ++it;
             continue;
         }
@@ -849,6 +850,8 @@ bool RendererVk::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     }
     const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
     temporal_->jitter_offset(temporal_frame_ % phases, phases, jitter_x, jitter_y);
+    scene_jitter_index_ = static_cast<unsigned>(temporal_frame_ % phases);
+    scene_jitter_phases_ = phases;
     ++temporal_frame_;
     scene_jitter_[0] = jitter_x;
     scene_jitter_[1] = jitter_y;
@@ -1242,6 +1245,28 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
         region.imageExtent = {motion.width, motion.height, 1u};
         vkCmdCopyImageToBuffer(commands_, motion.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, inspect_motion_buffer_->buffer, 1u, &region);
         image_barrier(commands_, motion.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
+        // The reactive mask (1 byte a pixel) and the effects layer's transmittance (8), the same way (GALAXY_TEST_FRAME_INPUTS).
+        const vk::Texture* const masks[2] = {motion_.reactive.get(), motion_.layer_trans.get()};
+        const std::uint64_t mask_pixel_bytes[2] = {1u, 8u};
+        for (unsigned kind = 0u; kind < 2u; ++kind) {
+            if (inspect_mask_buffer_[kind]) {
+                frames_[frame_slot_].retired_buffers.push_back(std::move(inspect_mask_buffer_[kind]));
+            }
+            if (masks[kind] == nullptr) {
+                continue;
+            }
+            const vk::Texture& mask = *masks[kind];
+            inspect_mask_buffer_[kind] =
+                vk::Context::get().create_readback_buffer(std::uint64_t{mask.width} * mask.height * mask_pixel_bytes[kind], "inspector mask");
+            inspect_mask_width_[kind] = mask.width;
+            inspect_mask_height_[kind] = mask.height;
+            image_barrier(commands_, mask.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
+            VkBufferImageCopy mask_region{};
+            mask_region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
+            mask_region.imageExtent = {mask.width, mask.height, 1u};
+            vkCmdCopyImageToBuffer(commands_, mask.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, inspect_mask_buffer_[kind]->buffer, 1u, &mask_region);
+            image_barrier(commands_, mask.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
+        }
     }
 #endif
     vk::TemporalUpscaleInputs in = temporal_inputs(*scene_.color, *scene_.depth, *motion_.motion, *motion_.reactive, *alt_scene_.color);
@@ -1823,8 +1848,10 @@ VkDescriptorSet RendererVk::allocate_persistent_set(VkDescriptorSetLayout layout
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        const VkDescriptorPool pool =
-            vk_detail::create_pool(device, vk_detail::kPersistentSets, vk_detail::kPersistentPool);
+        // Twice the sets of the last pool (these pools live until the device does).
+        persistent_overflow_sets_ = persistent_overflow_sets_ == 0u ? vk_detail::kPersistentSets : persistent_overflow_sets_ * 2u;
+        const VkDescriptorPool pool = vk_detail::create_pool(
+            device, persistent_overflow_sets_, vk_detail::scaled(vk_detail::kPersistentPool, persistent_overflow_sets_ / vk_detail::kPersistentSets));
         persistent_overflow_.push_back(pool);
         info.descriptorPool = pool;
         result = vkAllocateDescriptorSets(device, &info, &set);
@@ -2964,6 +2991,21 @@ bool RendererVk::inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out
     vk::Context::get().invalidate(*inspect_motion_buffer_);
     const auto* row = static_cast<const std::byte*>(inspect_motion_buffer_->mapped) + std::size_t{y} * inspect_motion_width_ * 4u;
     std::memcpy(out, row + std::size_t{x} * 4u, 4u);
+    return true;
+}
+
+bool RendererVk::inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out) {
+    if (kind > 1u || !inspect_mask_buffer_[kind] || x >= inspect_mask_width_[kind] || y >= inspect_mask_height_[kind]) {
+        return false;
+    }
+    vk::Context::get().invalidate(*inspect_mask_buffer_[kind]);
+    const std::size_t pixel = kind == 0u ? 1u : 8u;
+    const auto* row = static_cast<const std::byte*>(inspect_mask_buffer_[kind]->mapped) + std::size_t{y} * inspect_mask_width_[kind] * pixel;
+    if (kind == 0u) {
+        out[0] = static_cast<std::uint8_t>(row[x]);
+    } else {
+        std::memcpy(out, row + std::size_t{x} * 8u, 8u);
+    }
     return true;
 }
 #endif

@@ -1,4 +1,5 @@
 #include "galaxy/runtime_settings.h"
+#include "galaxy/test_temp.h"
 #include "galaxy/input_bindings.h"
 
 #include "galaxy/windows_api.h"
@@ -136,11 +137,8 @@ int main() {
     const ScopedEnv scoped_voice("GALAXY_AUDIO_VOICE_GAIN");
     const ScopedEnv scoped_ambience("GALAXY_AUDIO_AMBIENCE_GAIN");
 
-    const std::filesystem::path root =
-        std::filesystem::temp_directory_path() /
-        ("galaxy_runtime_settings_tests_" +
-         std::to_string(GetCurrentProcessId()) + "_" +
-         std::to_string(GetTickCount64()));
+    const std::filesystem::path root = galaxy::test_temp_path("galaxy_runtime_settings_tests");
+    std::filesystem::remove_all(root);  // left by an earlier run that had this process id
     const std::filesystem::path settings_path = root / "runtime_settings.ini";
     if (!std::filesystem::create_directory(root)) {
         std::cerr << "FAILED: fixture directory was not newly created\n";

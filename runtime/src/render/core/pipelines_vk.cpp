@@ -13,12 +13,15 @@
 #include <nebula_model.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
 #include <system_error>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -148,6 +151,59 @@ struct Modules {
 };
 Modules gModules;
 
+// Graphics pipeline library parts (VK_EXT_graphics_pipeline_library), shared by every pipeline that has the same state for that part:
+// the vertex input, the pre-raster shaders (vertex program, raster state), the fragment shader (pixel program, depth and
+// stencil) and the fragment output (blend, targets). A pipeline is these four linked. Kept for the device's life.
+struct LibraryParts {
+    std::mutex lock;
+    std::unordered_map<std::uint64_t, VkPipeline> input, pre_raster, fragment, output;
+    std::atomic<bool> told{false};
+};
+LibraryParts gParts;
+
+// A key from the values that decide a part's compiled state (a mix of 64-bit words).
+class PartKey {
+public:
+    void add(std::uint64_t value) noexcept {
+        hash_ = (hash_ ^ value) * 0x9E3779B97F4A7C15ull;
+        hash_ ^= hash_ >> 29u;
+    }
+    // A Vulkan handle: a pointer on 64-bit targets, a 64-bit integer on 32-bit ones.
+    template <typename T>
+    void handle(T value) noexcept {
+        if constexpr (std::is_pointer_v<T>) {
+            add(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(value)));
+        } else {
+            add(static_cast<std::uint64_t>(value));
+        }
+    }
+    [[nodiscard]] std::uint64_t value() const noexcept { return hash_; }
+
+private:
+    std::uint64_t hash_ = 0xCBF29CE484222325ull;
+};
+
+// The part under `key`, made from `info` (a library create info) the first time. Two threads may both make it; one is kept.
+VkPipeline library_part(std::unordered_map<std::uint64_t, VkPipeline>& parts, std::uint64_t key, VkDevice device, VkPipelineCache cache,
+                        const VkGraphicsPipelineCreateInfo& info) {
+    {
+        std::lock_guard guard(gParts.lock);
+        if (const auto it = parts.find(key); it != parts.end()) {
+            return it->second;
+        }
+    }
+    VkPipeline made = VK_NULL_HANDLE;
+    if (vkCreateGraphicsPipelines(device, cache, 1u, &info, nullptr, &made) != VK_SUCCESS) {
+        return VK_NULL_HANDLE;
+    }
+    std::lock_guard guard(gParts.lock);
+    const auto [at, inserted] = parts.emplace(key, made);
+    if (!inserted) {
+        vkDestroyPipeline(device, made, nullptr);  // another thread made it first; nothing has used this one
+    }
+    return at->second;
+}
+
 std::uint64_t bytes_hash(const std::vector<char>& bytes) noexcept {
     return cache_bytes_hash(bytes.data(), bytes.size());
 }
@@ -259,6 +315,16 @@ VkPipelineCache driver_cache(VkDevice device) {
 }  // namespace
 
 gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    return build_vk(entry, variant, aux, false);
+}
+
+gpu::Pipeline* Pipelines::build_fast(const PipelineEntry& entry, unsigned variant, unsigned aux) {
+    return vk::Context::get().pipeline_libraries() ? build_vk(entry, variant, aux, true) : nullptr;
+}
+
+// `fast`: only the quick link of library parts, or null (the caller builds the whole pipeline); else the optimised link when
+// the device has libraries, and the monolithic pipeline when that is not possible.
+gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant, unsigned aux, bool fast) {
     const NebulaPipelineDesc& desc = entry.desc;
     const auto* layout = static_cast<const vk::RenderLayout*>(root_);
     const VkDevice device = device_;
@@ -471,6 +537,97 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     }
 
     const VkPipelineCache cache = driver_cache(device);
+    if (vk::Context::get().pipeline_libraries()) {
+        // The four parts (made once for each distinct state of that part), linked: quickly for a draw that waits, with the
+        // link-time optimisation on a worker. Any part the driver refuses sends the pipeline down the monolithic path.
+        if (!gParts.told.exchange(true)) {
+            std::fprintf(stderr, "[pipelines] graphics pipeline libraries: draws link their pipeline from parts at once, workers optimise the link\n");
+        }
+        constexpr VkPipelineCreateFlags kPart = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+        const auto part_info = [&](VkGraphicsPipelineLibraryCreateInfoEXT& kind, VkGraphicsPipelineLibraryFlagsEXT flags) {
+            kind = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT};
+            kind.flags = flags;
+            VkGraphicsPipelineCreateInfo part{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+            part.pNext = &kind;
+            part.flags = kPart;
+            part.layout = layout->layout;
+            part.renderPass = info.renderPass;
+            part.basePipelineIndex = -1;
+            return part;
+        };
+        PartKey input_key;
+        for (std::uint32_t i = 0; i < binding_count; ++i) {
+            input_key.add(std::uint64_t{bindings[i].binding} << 32u | bindings[i].stride);
+        }
+        for (const VkVertexInputAttributeDescription& attribute : attributes) {
+            input_key.add(std::uint64_t{attribute.location} << 40u | std::uint64_t{attribute.binding} << 32u | static_cast<std::uint32_t>(attribute.format));
+            input_key.add(attribute.offset);
+        }
+        PartKey pre_key;
+        pre_key.handle(vs_module);
+        pre_key.handle(info.renderPass);
+        pre_key.handle(layout->layout);
+        const auto u = [](auto value) { return static_cast<std::uint64_t>(value); };
+        pre_key.add(u(raster.cullMode) << 8u | u(raster.depthClampEnable) << 1u | u(depth_clip.depthClipEnable));
+        PartKey fragment_key;
+        fragment_key.handle(ps_module);
+        fragment_key.handle(info.renderPass);
+        fragment_key.handle(layout->layout);
+        fragment_key.add(u(depth.depthTestEnable) | u(depth.depthWriteEnable) << 1u | u(depth.depthCompareOp) << 4u |
+                         u(depth.stencilTestEnable) << 8u | u(depth.front.compareOp) << 12u | u(depth.front.passOp) << 16u |
+                         u(multisample.rasterizationSamples) << 24u);
+        PartKey output_key;
+        output_key.handle(info.renderPass);
+        output_key.add(u(blend.attachmentCount) | u(multisample.rasterizationSamples) << 8u);
+        for (std::uint32_t i = 0; i < blend.attachmentCount; ++i) {
+            const VkPipelineColorBlendAttachmentState& a = targets[i];
+            output_key.add(u(a.blendEnable) | u(a.srcColorBlendFactor) << 4u | u(a.dstColorBlendFactor) << 9u | u(a.colorBlendOp) << 14u |
+                           u(a.srcAlphaBlendFactor) << 18u | u(a.dstAlphaBlendFactor) << 23u | u(a.alphaBlendOp) << 28u |
+                           u(a.colorWriteMask) << 32u);
+        }
+        VkGraphicsPipelineLibraryCreateInfoEXT input_kind{}, pre_kind{}, fragment_kind{}, output_kind{};
+        VkGraphicsPipelineCreateInfo input_info = part_info(input_kind, VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT);
+        input_info.pVertexInputState = &vertex_input;
+        input_info.pInputAssemblyState = &input_assembly;
+        VkGraphicsPipelineCreateInfo pre_info = part_info(pre_kind, VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT);
+        pre_info.stageCount = 1u;
+        pre_info.pStages = &stages[0];
+        pre_info.pViewportState = &viewport;
+        pre_info.pRasterizationState = &raster;
+        pre_info.pDynamicState = &dynamic;
+        VkGraphicsPipelineCreateInfo fragment_info = part_info(fragment_kind, VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT);
+        fragment_info.stageCount = 1u;
+        fragment_info.pStages = &stages[1];
+        fragment_info.pMultisampleState = &multisample;
+        fragment_info.pDepthStencilState = &depth;
+        VkGraphicsPipelineCreateInfo output_info = part_info(output_kind, VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT);
+        output_info.pMultisampleState = &multisample;
+        output_info.pColorBlendState = &blend;
+        const VkPipeline parts[4] = {library_part(gParts.input, input_key.value(), device, cache, input_info),
+                                     library_part(gParts.pre_raster, pre_key.value(), device, cache, pre_info),
+                                     library_part(gParts.fragment, fragment_key.value(), device, cache, fragment_info),
+                                     library_part(gParts.output, output_key.value(), device, cache, output_info)};
+        if (parts[0] != VK_NULL_HANDLE && parts[1] != VK_NULL_HANDLE && parts[2] != VK_NULL_HANDLE && parts[3] != VK_NULL_HANDLE) {
+            VkPipelineLibraryCreateInfoKHR libraries{VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR};
+            libraries.libraryCount = 4u;
+            libraries.pLibraries = parts;
+            VkGraphicsPipelineCreateInfo linked{VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+            linked.pNext = &libraries;
+            linked.flags = fast ? 0u : VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT;
+            linked.layout = layout->layout;
+            linked.renderPass = info.renderPass;
+            linked.basePipelineIndex = -1;
+            VkPipeline whole = VK_NULL_HANDLE;
+            if (vkCreateGraphicsPipelines(device, cache, 1u, &linked, nullptr, &whole) == VK_SUCCESS) {
+                std::lock_guard guard(lock_);
+                owned_.push_back(whole);
+                return whole;
+            }
+        }
+        if (fast) {
+            return nullptr;  // the caller builds the whole pipeline (the optimised path, then the monolithic one)
+        }
+    }
     VkPipeline pipeline = VK_NULL_HANDLE;
     VkResult result = vkCreateGraphicsPipelines(device, cache, 1u, &info, nullptr, &pipeline);
     if (result != VK_SUCCESS && raster.depthClampEnable == VK_TRUE) {
@@ -498,6 +655,16 @@ void Pipelines::destroy_all() noexcept {
         vkDestroyPipeline(device, pipeline, nullptr);
     }
     owned_.clear();
+    {
+        std::lock_guard parts(gParts.lock);
+        for (auto* map : {&gParts.input, &gParts.pre_raster, &gParts.fragment, &gParts.output}) {
+            for (const auto& [key, part] : *map) {
+                vkDestroyPipeline(device, part, nullptr);
+            }
+            map->clear();
+        }
+        gParts.told.store(false);
+    }
     write_driver_cache();
     std::lock_guard guard(gModules.lock);
     for (const auto& [data, module] : gModules.modules) {

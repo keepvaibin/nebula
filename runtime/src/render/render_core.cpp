@@ -56,6 +56,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_set>
 #include <vector>
@@ -110,10 +111,23 @@ bool g_snapshot_hold = false;
 std::uint64_t g_next_snapshot_number = 0u;
 bool g_next_snapshot_set = false;
 
-std::string present_snapshot_path() {
+// `kind` tags the present in the log: "game" (a picture the game made, shown for the first time), "repeat" (a picture shown
+// again) or "generated" (an interpolated frame between two game frames), so a capture with interpolation on can be compared with
+// one with it off by its game frames alone (tools/verify/interp_real.sh).
+std::string present_snapshot_path(const char* kind) {
     static const std::uint64_t every = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_every, 0u);
     static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
     static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
+    // GALAXY_PRESENT_SNAPSHOT_GAME_ONLY=1: an interpolated present is not counted, so a run with interpolation on numbers the
+    // pictures the game made as a run with it off does and the two compare picture for picture.
+    static const bool game_only = ::galaxy::run_option_flag(::galaxy::run_options().present_snapshot_game_only, false);
+    if (game_only && std::string_view(kind) == "generated") {
+        static std::uint64_t left_out = 0u;
+        if (++left_out % 300u == 0u) {
+            std::cerr << "[snapshot] " << left_out << " generated presents left out" << '\n';
+        }
+        return {};
+    }
     static const std::string directory = [] {
         const char* value = ::galaxy::run_options().present_snapshot_dir;
         return value != nullptr ? std::string(value) : std::string{};
@@ -124,7 +138,7 @@ std::string present_snapshot_path() {
         return {};
     }
     // Its time, for latency measurements against the input's (GALAXY_INPUT_POINTER_PATH's jumps).
-    std::cerr << "[snapshot] present=" << presents << " qpc=" << galaxy::qpc_now() << '\n';
+    std::cerr << "[snapshot] present=" << presents << " qpc=" << galaxy::qpc_now() << " kind=" << kind << '\n';
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
 }
 
@@ -145,62 +159,6 @@ struct GameWaitTimer {
         total.fetch_add(static_cast<std::uint64_t>(galaxy::qpc_now() - start), std::memory_order_relaxed);
     }
 };
-
-std::uint64_t elapsed_us(
-    std::chrono::steady_clock::time_point start,
-    std::chrono::steady_clock::time_point end) {
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(
-            end - start).count());
-}
-
-// A per-thread counter sample; `available` is false when the query failed (zero is a valid value).
-struct ThreadCounterSample {
-    std::uint64_t value = 0u;
-    bool available = false;
-};
-
-ThreadCounterSample thread_counter_interval(
-    ThreadCounterSample begin, ThreadCounterSample end) noexcept {
-    if (!begin.available || !end.available || end.value < begin.value) return {};
-    return {end.value - begin.value, true};
-}
-
-ThreadCounterSample thread_cycle_count() noexcept {
-#if defined(_WIN32)
-    ULONG64 cycles = 0u;
-    if (QueryThreadCycleTime(GetCurrentThread(), &cycles) == FALSE) return {};
-    // Raw cycles, not convertible to time.
-    return {static_cast<std::uint64_t>(cycles), true};
-#else
-    return {};  // no per-thread cycle counter here; thread_cpu_time_100ns covers it
-#endif
-}
-
-ThreadCounterSample thread_cpu_time_100ns() noexcept {
-#if defined(_WIN32)
-    // Kernel plus user CPU time of this thread, in 100 ns units.
-    FILETIME creation{};
-    FILETIME exit{};
-    FILETIME kernel{};
-    FILETIME user{};
-    if (GetThreadTimes(
-            GetCurrentThread(), &creation, &exit, &kernel, &user) == FALSE) {
-        return {};
-    }
-    ULARGE_INTEGER kernel_ticks{};
-    kernel_ticks.LowPart = kernel.dwLowDateTime;
-    kernel_ticks.HighPart = kernel.dwHighDateTime;
-    ULARGE_INTEGER user_ticks{};
-    user_ticks.LowPart = user.dwLowDateTime;
-    user_ticks.HighPart = user.dwHighDateTime;
-    return {kernel_ticks.QuadPart + user_ticks.QuadPart, true};
-#else
-    timespec now{};
-    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) != 0) return {};
-    return {(static_cast<std::uint64_t>(now.tv_sec) * 1000000000u + static_cast<std::uint64_t>(now.tv_nsec)) / 100u, true};
-#endif
-}
 
 }  // anonymous namespace
 
@@ -1662,10 +1620,11 @@ void RenderCore::render_loop() {
             fail_queued_utilities(std::current_exception());
             break;
         }
-        // Out of sight: no picture of its own is presented, and nothing polls. A covered window is looked at every 100 ms to see
-        // whether the OS shows it again (the host resumes the game then); the device and its resources stay as they are, so a
-        // return costs no rebuild.
-        const bool hidden = window_hidden_.load(std::memory_order_relaxed);
+        // Out of sight (minimised: the host stopped the game; covered: the game goes on and its frames are drawn but not presented,
+        // RendererD3D12::present_to_swap_chain): no picture of its own is presented, no generated frame is made, and nothing
+        // polls. A covered window is looked at every 100 ms to see whether the OS shows it again; the device and its
+        // resources stay as they are, so a return costs no rebuild.
+        const bool hidden = out_of_sight();
         if (hidden) {
             try {
                 if (interp_sequence_.active) {
@@ -1693,7 +1652,7 @@ void RenderCore::render_loop() {
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop: queued frames present without generated frames.
-            interp_stopping_ = stop_render_thread_;
+            interp_stopping_ = stop_render_thread_ || hidden;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
             // interpolation waits while the settings are open): the latest frame again at each display slot, so the
             // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
@@ -1939,7 +1898,7 @@ void RenderCore::present_black_picture(bool in_frame) {
     if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
-    const std::string snapshot_path = present_snapshot_path();
+    const std::string snapshot_path = present_snapshot_path("game");
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
@@ -1995,7 +1954,7 @@ void RenderCore::present_cached_display_on_thread(
     if (skip_duplicate_present) {
         return;
     }
-    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path();
+    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path(duplicate_stamp ? "repeat" : "game");
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
@@ -2214,9 +2173,12 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         }
         // Tables no walk has named for a long while give up what was built for them (core::Registries::retire_idle_tables).
         if (frame_index_ >= table_sweep_at_) {
-            table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames;
+            // The idle time and the sweep interval are counted in frames at 60 a second; each game frame shown in 1 + interp_frames_
+            // of them makes the same time that many frames more.
+            const std::uint64_t per_game_frame = 1u + interp_frames_;
+            table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames * per_game_frame;
             retired_tables_.clear();
-            registries_.retire_idle_tables(frame_index_, retired_tables_);
+            registries_.retire_idle_tables(frame_index_, retired_tables_, core::Registries::kTableIdleFrames * per_game_frame);
 #if defined(NEBULA_GPU_VULKAN)
             if (!renderer_.bindless()) {
                 for (const gpu::Table table : retired_tables_) {
@@ -2280,7 +2242,26 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             std::vector<unsigned> variants{samples, 8u};
             if (samples != 0u) variants.push_back(0u);
             if (wide) variants.push_back(samples | kSceneVariantHdr);
+            std::vector<std::uint32_t> order;
             for (std::uint32_t id = pipelines_queued_.load(std::memory_order_relaxed); id < count; ++id) {
+                order.push_back(id);
+            }
+#if defined(NEBULA_DEV)
+            // A test build warms the pipelines the last runs drew first, in the order they first drew them, the others after
+            // (core/pipelines.h); a release keeps the cooked order.
+            {
+                std::vector<std::pair<std::uint32_t, std::uint32_t>> ranked;
+                ranked.reserve(order.size());
+                for (const std::uint32_t id : order) {
+                    ranked.emplace_back(core::pipeline_use_rank(registries_.pipeline(id)), id);
+                }
+                std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+                for (std::size_t i = 0u; i < ranked.size(); ++i) {
+                    order[i] = ranked[i].second;
+                }
+            }
+#endif
+            for (const std::uint32_t id : order) {
                 const core::PipelineEntry& pipeline = registries_.pipeline(id);
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
@@ -2302,7 +2283,7 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
     const bool real = time.t >= 1.0f;
     const DisplayTexture* const selected = present ? display_pictures_.latest() : nullptr;
-    const std::string snapshot_path = selected != nullptr ? present_snapshot_path() : std::string{};
+    const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? "game" : "generated") : std::string{};
     if (selected != nullptr) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
@@ -2426,7 +2407,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         note_interp_real_present();
     }
     if (present_swap_chain) {
-        const std::string snapshot_path = present_snapshot_path();
+        const std::string snapshot_path = present_snapshot_path(duplicate_display_present ? "repeat" : "game");
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }
