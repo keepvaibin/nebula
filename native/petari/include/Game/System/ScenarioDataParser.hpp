@@ -2,6 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class GalaxyStatusAccessor;
 class Table;
@@ -21,14 +22,11 @@ public:
     GalaxyStatusAccessor makeAccessor(const char*) const;
 
 private:
-    static constexpr u32 cNoSlot = 0xFFFFFFFFu;
-
     // Every stage folder with a scenario file, in galaxy info table order; built once, sized to the folders.
     ScenarioData** mScenarioData = nullptr;
     s32 mScenarioDataNum = 0;
-    // Open addressing on the case-folded name, at most half full: an index into mScenarioData, or cNoSlot.
-    u32* mNameSlots = nullptr;
-    u32 mNameSlotMask = 0;
+    // Galaxy name (any case) -> its index in mScenarioData, the first of a name in sorted order.
+    MR::NameIndexOf< MR::NameKeyCase > mNames;
 };
 
 class ScenarioDataIter {
