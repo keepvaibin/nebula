@@ -52,12 +52,6 @@ inline constexpr unsigned kFramesInFlight = 2;
 [[nodiscard]] inline std::size_t first_ring_bytes(std::size_t bytes) noexcept {
     return test_small_heaps() ? std::size_t{1} << 20u : bytes;
 }
-// GALAXY_TEST_WIDE_TABLES=1 (test builds): every texture list walks as at least kWideTestTextures maps long (the extra
-// maps repeat the list's last), so the runs past the old sixteen are written and read on both backends.
-inline constexpr std::uint32_t kWideTestTextures = 24u;
-[[nodiscard]] inline std::uint32_t walked_textures(std::uint32_t listed) noexcept {
-    return ::galaxy::run_option_flag(::galaxy::run_options().test_wide_tables, false) ? std::max(listed, kWideTestTextures) : listed;
-}
 // The vertex and matrix rings' segments:a frame reads the rows and vertices of the walk before it.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
 inline constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;
@@ -151,7 +145,6 @@ struct ScreenProbePixel {
 // fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
 // overlay's textured and solid quads (root constants / push constants b0).
 [[nodiscard]] std::string_view depth_resolve_pixel_shader_source() noexcept;
-[[nodiscard]] std::string_view motion_debug_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;

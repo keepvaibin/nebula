@@ -203,13 +203,9 @@ MultiEmitter* EffectKeeper::getEmitter(s32 index) const {
 
 void EffectKeeper::changeEffectName(const char* pEffectName, const char* pNewName) {
     const bool renamed = mNames.rename(pEffectName, pNewName);
-#if defined(NEBULA_DEV)
     if (!renamed) {
         nebula_log("effect %s of %s: not renamed to %s (absent, or the name is held)\n", pEffectName, mName != nullptr ? mName : "", pNewName);
     }
-#else
-    (void)renamed;
-#endif
 }
 
 void EffectKeeper::update() {

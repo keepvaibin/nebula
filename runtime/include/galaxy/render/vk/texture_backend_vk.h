@@ -91,7 +91,7 @@ public:
     // recorded there, the acquire in the frame's upload list by submit_uploads, before the first frame whose draws name the
     // image (note_named, called wherever a handle is given out); that frame's submission waits for the transfer timeline
     // semaphore. An image already acquired is rewritten on the graphics queue as before. Not for images host copies write.
-    // False: the same queue, as before. GALAXY_TEST_SAME_QUEUE_UPLOADS=1 keeps the old path.
+    // False: the same queue, as before.
     bool enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot);
     [[nodiscard]] bool async_uploads() const noexcept { return !async_slots_.empty(); }
     // At the start of a frame in `frame_slot`, after the renderer has waited for the slot's fence: waits until the transfer

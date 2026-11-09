@@ -336,8 +336,7 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
 bool TextureBackend::enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot) {
     destroy_async();
     vk::Context& context = vk::Context::get();
-    if (frames_in_flight == 0u || context.transfer_queue() == VK_NULL_HANDLE ||
-        ::galaxy::run_option_flag(::galaxy::run_options().test_same_queue_uploads, false)) {
+    if (frames_in_flight == 0u || context.transfer_queue() == VK_NULL_HANDLE) {
         return false;
     }
     const VkDevice device = context.device();

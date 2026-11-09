@@ -1066,7 +1066,7 @@ bool RendererVk::wants_hdr() const {
 
 // What the display offers, read at the first frame, after a move to another monitor and when the post chain becomes ready:
 // the surface lists an HDR10 format (VK_EXT_swapchain_colorspace) and, where Windows describes the output, the output is in HDR
-// mode (its figures set the peak). GALAXY_TEST_FORCE_HDR=1 takes the display as HDR when the surface lists the format.
+// mode (its figures set the peak).
 void RendererVk::read_display_hdr() {
     const vk::Context& context = vk::Context::get();
     hdr_read_ = true;
@@ -1100,8 +1100,7 @@ void RendererVk::read_display_hdr() {
         hdr.min_nits_10000 = output.hdr ? output.min_nits_10000 : 0u;
     }
 #endif
-    const bool forced = ::galaxy::run_option_flag(::galaxy::run_options().test_force_hdr, false);
-    hdr.available = offered && (display_is_hdr || forced) && post_.ready() && post_.present_ready();
+    hdr.available = offered && display_is_hdr && post_.ready() && post_.present_ready();
     hdr.active = swapchain_.hdr;
     set_display_hdr(hdr);
 }
@@ -1464,13 +1463,6 @@ void RendererVk::shutdown() {
     const VkDevice device = context.device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
-#if defined(NEBULA_DEV)
-        if (inspect_query_pool_ != VK_NULL_HANDLE) {
-            vkDestroyQueryPool(device, inspect_query_pool_, nullptr);
-            inspect_query_pool_ = VK_NULL_HANDLE;
-        }
-        inspect_motion_buffer_.reset();
-#endif
         if (swapchain_fsr_) {
             fsr_generation_.destroy(swapchain_.handle);
         }
@@ -1505,10 +1497,6 @@ void RendererVk::shutdown() {
                 if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
                 pipeline = VK_NULL_HANDLE;
             }
-        }
-        for (VkPipeline& pipeline : motion_debug_pipelines_) {
-            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-            pipeline = VK_NULL_HANDLE;
         }
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
@@ -1809,12 +1797,6 @@ void RendererVk::begin_frame() {
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
     commands_ = frame.commands;
-#if defined(NEBULA_DEV)
-    if (inspect_queries_reset_) {
-        vkCmdResetQueryPool(commands_, inspect_query_pool_, 0u, inspect_query_capacity_);
-        inspect_queries_reset_ = false;
-    }
-#endif
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -2286,10 +2268,24 @@ void RendererVk::report_present_stats() {
     stats_.last_present_qpc = now;
 }
 
+namespace {
+constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
+                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
+                                          "ao denoise", "ao upsample", "ao apply"};
+}  // namespace
+
 void RendererVk::gpu_pass(GpuPass pass) {
+    const bool changed = pass != current_pass_;
     current_pass_ = pass;
     unsigned& marks = pass_mark_count_[frame_slot_];
     const VkCommandBuffer commands = frames_[frame_slot_].commands;
+    // The pass by name for RenderDoc and the validation layer.
+    if (changed && pass_recording_ && commands_ != VK_NULL_HANDLE && pass != GpuPass::Count && vk::Context::get().debug_labels() &&
+        vkCmdInsertDebugUtilsLabelEXT != nullptr) {
+        VkDebugUtilsLabelEXT label{VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT};
+        label.pLabelName = kPassTimeNames[static_cast<std::size_t>(pass)];
+        vkCmdInsertDebugUtilsLabelEXT(commands_, &label);
+    }
     // Tiled GPUs execute a render pass tile by tile. Interior timestamps do not delimit whole-image work;
     // record only at existing pass boundaries, never split a pass to measure it.
     if (scene_pass_open_ || pass_queries_ == VK_NULL_HANDLE || !pass_recording_ || commands_ != commands ||
@@ -2300,12 +2296,6 @@ void RendererVk::gpu_pass(GpuPass pass) {
                         frame_slot_ * kGpuPassSlots + marks);
     pass_marks_[frame_slot_][marks++] = pass;
 }
-
-namespace {
-constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
-                                          "ao denoise", "ao upsample", "ao apply"};
-}  // namespace
 
 std::size_t RendererVk::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
     std::size_t count = 0u;

@@ -17,8 +17,6 @@ public:
     FfxInterface generation{};
     std::vector<unsigned char> shared_scratch;
     std::vector<unsigned char> generation_scratch;
-    // A test's copy of each frame made and the real one after it.
-    void (*dump_generated)(FfxCommandList commands, const FfxResource& real, const FfxResource& made, std::uint64_t index) = nullptr;
 
     [[nodiscard]] bool created() const noexcept { return created_; }
     [[nodiscard]] bool matches(unsigned render_width, unsigned render_height, unsigned display_width, unsigned display_height) const noexcept {
@@ -217,17 +215,6 @@ private:
         d.minMaxLuminance[0] = in.minMaxLuminance[0];
         d.minMaxLuminance[1] = in.minMaxLuminance[1];
         result |= ffxFrameInterpolationDispatch(&interpolation_, &d);
-#if defined(NEBULA_DEV)
-        if (dump_generated != nullptr) {
-            dump_generated(in.commandList, in.presentColor, in.outputs[0], generated_);
-        }
-        if (result != FFX_OK) {
-            ++generate_failures_;
-        }
-        if (++generated_ % 300u == 1u) {
-            std::cerr << "[fsr3-fg] generated " << generated_ << " failed " << generate_failures_ << " of " << frame_id_ << " prepared\n";
-        }
-#endif
         return result;
     }
 

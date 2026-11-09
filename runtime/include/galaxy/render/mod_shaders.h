@@ -21,10 +21,6 @@ enum class ModShadersResult { Loaded, Unreadable, OtherInterface };
 // headers differ: the mod must be converted again.
 ModShadersResult load_mod_shaders(const std::filesystem::path& file);
 [[nodiscard]] ProgramBytes mod_program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexcept;
-#if defined(NEBULA_DEV)
-// A program the inspector compiled for this run.
-void add_mod_program(std::uint64_t id, unsigned variant, bool pixel, std::vector<std::uint8_t> bytes);
-#endif
 // What building a mod's missing programs came to.
 struct ModShaderBuild {
     unsigned wanted = 0;  // programs neither the build nor `brought` holds

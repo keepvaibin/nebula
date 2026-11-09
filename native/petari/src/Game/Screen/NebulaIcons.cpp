@@ -695,8 +695,8 @@ namespace {
     const u32 cWhite = 0xFFFFFFFF;
     // The GameCube pad's face buttons: A green, B red, X and Y silver grey.
     const u32 cGameCubeA = 0x2EA65CFF;
-    const u32 cGameCubeB = 0xCC3333FF;
-    const u32 cGameCubeXY = 0xC4C9D1FF;
+    const u32 cGameCubeB = NEBULA_RGBA(0xCC, 0x33, 0x33, 0xFF);
+    const u32 cGameCubeXY = NEBULA_RGBA(0xC4, 0xC9, 0xD1, 0xFF);
     const u32 cPadRim = 0x6A6E78FF;  // an inner ring on a dark button
 
     Rgba darkened(const Rgba& rColor) {

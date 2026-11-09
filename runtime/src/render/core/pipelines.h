@@ -123,19 +123,6 @@ private:
     bool quit_ = false;
 };
 
-#if defined(NEBULA_DEV)
-// The order pipelines were first drawn in, for the warm-up (test builds only; a release warms in the cooked order). A run notes
-// each pipeline's first draw and its draw count and writes shader_cache_directory()/pipeline_use.tsv when its pipelines shut
-// down (key, first draw, draws; the earlier file's pipelines this run did not draw follow, in their old order); the next run
-// reads it, and the warm-up queue orders the pipelines a list adds by it, pipelines no run has drawn last.
-void note_pipeline_use(std::uint32_t id, const PipelineEntry& entry);
-// The place of `entry` in the file's order; kPipelineUnranked when it is not there or there is no file.
-inline constexpr std::uint32_t kPipelineUnranked = 0xFFFFFFFFu;
-[[nodiscard]] std::uint32_t pipeline_use_rank(const PipelineEntry& entry);
-#define NEBULA_PIPELINE_USE(id, entry) ::galaxy::render::core::note_pipeline_use(id, entry)
-#else
-#define NEBULA_PIPELINE_USE(id, entry)
-#endif
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept;

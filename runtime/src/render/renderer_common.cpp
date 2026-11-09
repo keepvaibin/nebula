@@ -105,22 +105,12 @@ float main(float4 pos : SV_Position) : SV_Depth {
 }
 )HLSL";
 
-constexpr char kMotionDebugPs[] =
-    "Texture2D<float2> mv:register(t0);"
-    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
-    "float4 main(V v):SV_Target{"
-    " float2 m=mv.Load(int3(int2(v.p.xy),0));"
-    " return float4(saturate(0.5+m.x/16.0),saturate(0.5+m.y/16.0),0.5,1.0);}";
-
 }  // namespace
 
 std::string_view depth_resolve_pixel_shader_source() noexcept {
     return {kDepthResolvePs, sizeof(kDepthResolvePs) - 1u};
 }
 
-std::string_view motion_debug_pixel_shader_source() noexcept {
-    return {kMotionDebugPs, sizeof(kMotionDebugPs) - 1u};
-}
 
 std::string_view blit_vertex_shader_source() noexcept {
     return {kBlitVs, sizeof(kBlitVs) - 1u};

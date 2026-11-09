@@ -276,23 +276,12 @@ public:
         std::uint32_t slots = 0u;         // material slots registered
     };
     [[nodiscard]] MemoryStats memory_stats() noexcept;
-#if defined(NEBULA_DEV)
-    // The rows a registered slot holds, and what a registered mesh's stream holds, for the inspector.
-    [[nodiscard]] const float* slot_rows(std::uint32_t id) const noexcept { return id < slot_rows_.size() ? slot_rows_[id] : nullptr; }
-    [[nodiscard]] const std::byte* mesh_cpu(const GpuMesh& mesh, gpu::Address address) const noexcept {
-        const Arena& arena = arenas_[mesh.arena];
-        return arena.shadow ? arena.shadow.get() + (address - arena.memory.gpu) : nullptr;
-    }
-#endif
 
 private:
     // A page of upload memory models and meshes are placed in: free ranges (offset -> size), taken best fit and given back
     // when what was placed retires, so a model that lives on does not keep the space of the ones freed around it.
     struct Arena {
         gpu::UploadMemory memory;  // video memory where the device offers it: written in order, never read back
-#if defined(NEBULA_DEV)
-        std::unique_ptr<std::byte[]> shadow;  // a CPU copy of the page, for the inspector
-#endif
         std::size_t bytes = 0u;
         std::size_t free_bytes = 0u;
         std::map<std::size_t, std::size_t> free;
@@ -303,9 +292,6 @@ private:
         gpu::Address gpu = 0u;
         std::uint32_t arena = 0u;
         std::size_t offset = 0u, size = 0u;
-#if defined(NEBULA_DEV)
-        std::byte* shadow = nullptr;
-#endif
     };
     struct Retired {
         std::uint64_t fence = 0u;
@@ -379,9 +365,6 @@ private:
     std::size_t slot_page_used_ = 0u, slot_page_capacity_ = 0u;
     std::uint64_t slot_bytes_ = 0u;
     std::vector<gpu::UploadMemory> slot_pages_;
-#if defined(NEBULA_DEV)
-    std::vector<const float*> slot_rows_;
-#endif
 };
 
 // Whether ring item `now` has the shape of its pair `before`: the same vertex count, index count and vertex stride. Only
@@ -418,27 +401,6 @@ private:
     std::vector<CameraCandidate> camera_pairs_;
     std::vector<std::uint8_t> camera_used_;
     float camera_move_ = 0.0f;
-    // GALAXY_TEST_PAIR_LOG (test builds): the ring draws that lost their pair, each drawer material and reason once.
-    void log_lost_ring_pairs(const ListData& now, const NebulaFrameList& last);
-    std::unordered_set<std::uint64_t> pair_logged_;
-    // GALAXY_TEST_FLICKER_LOG (test builds): per draw identity, game frame to game frame, a value that goes A, B, A:
-    // drawn, missing for one frame, drawn again; a light of its set; a colour row of its material.
-    static constexpr std::uint32_t kFlickerSlots = 8u;
-    struct FlickerEntry {
-        std::uint32_t last = 0u;  // the list serial it was last drawn in
-        std::uint32_t bits = 0u;  // bit n: drawn n lists before `last`
-        std::uint32_t light_count[2]{}, row_count[2]{};
-        std::uint64_t light[2][kFlickerSlots]{};  // [0] the list before, [1] the one before that
-        std::uint64_t row[2][kFlickerSlots]{};
-        // The list before's lights and colour rows themselves, so a flicker prints its B beside its A.
-        NebulaFrameLight light_before[kFlickerSlots]{};
-        float row_before[kFlickerSlots][4]{};
-    };
-    void log_flicker(const ListData& now);
-    std::unordered_map<std::uint64_t, FlickerEntry> flicker_;
-    std::unordered_map<std::uint64_t, std::uint32_t> flicker_nth_;
-    std::unordered_map<std::uint64_t, std::uint32_t> flicker_counts_;  // (material, or 1 << 32 | slot) << 2 | kind
-    std::uint32_t flicker_lists_ = 0u;
 };
 
 // A block's joints at t through its motions, `out` three rows each. An eye-space block's are eye matrices under `camera_t`.

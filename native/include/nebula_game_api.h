@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 148u
+#define NEBULA_GAME_API_VERSION 149u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -229,13 +229,6 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 
-/* The shaders a NEBULA_DEV build adds after the last (tools/dev/compile_programs.py --dev): the inspector's picture of a
-   value, and the wide-table probe (GALAXY_TEST_WIDE_TABLES). A release build has neither program. */
-enum {
-    NEBULA_SHADER_INSPECT_SHOW = 44,
-    NEBULA_SHADER_WIDE_PROBE = 45
-};
-
 enum {
     NEBULA_BLEND_REPLACE = 0,  /* blend_op: the source replaces */
     NEBULA_BLEND_ADD = 1,      /* source * blend_src + destination * blend_dst */
@@ -386,13 +379,9 @@ enum {
     NEBULA_OPTION_PREPARATION,       /* a preparation the title waits for (NebulaPrepare): 0 none, 1 it opens, 2 it runs
                                         (the preparation screen shows) */
     NEBULA_OPTION_PREPARE_PROGRESS,  /* while NEBULA_OPTION_PREPARATION is 2: its progress, 0 to 10000, never going back */
-    NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
-    NEBULA_OPTION_TEST_WIDE_TABLES,    /* tests (GALAXY_TEST_WIDE_TABLES): 1 draws the 24-map probe (NebulaWideProbe) */
-    NEBULA_OPTION_TEST_DRAW_NAMES,     /* tests (GALAXY_TEST_FLICKER_LOG or GALAXY_TEST_PAIR_LOG): 1 logs the names behind draw
-                                          identities, "[names] material <hash> <model>/<material>" and "[names] slot <n> <object>" */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

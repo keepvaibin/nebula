@@ -604,15 +604,6 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
         // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
         opened.shown = !hidden_window;
-#if defined(NEBULA_DEV)
-        // GALAXY_TEST_WINDOW_OFF_DESKTOP: shown, one column of pixels on the desktop, behind everything: what runs only for a shown
-        // window runs, and nothing appears.
-        if (hidden_window && ::galaxy::run_options().test_window_off_desktop) {
-            SetWindowPos(opened.window, HWND_BOTTOM, GetSystemMetrics(SM_XVIRTUALSCREEN) - static_cast<int>(outer_width) + 1,
-                         GetSystemMetrics(SM_YVIRTUALSCREEN), static_cast<int>(outer_width), static_cast<int>(outer_height),
-                         SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        }
-#endif
     }
     return opened;
 }

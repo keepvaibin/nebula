@@ -245,25 +245,6 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         s_grab_armed_end = !captured && touch_target_under(state, state.finger_land_x, state.finger_land_y, s_grab_target)
             ? frame + kGrabArmFrames : 0u;
     }
-#if defined(NEBULA_DEV)
-    {
-        static std::uint32_t s_logged_targets = 0xffffffffu;
-        std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
-        if (g_touch_targets.count != s_logged_targets) {
-            s_logged_targets = g_touch_targets.count;
-            const TouchTarget target = g_touch_targets.list[0];
-            SDL_Log("[touch] targets %u, first x %.3f y %.3f radius %.3f mode %d", static_cast<unsigned>(s_logged_targets),
-                    static_cast<double>(target.x), static_cast<double>(target.y), static_cast<double>(target.radius),
-                    static_cast<int>(star_pointer_mode));
-        }
-    }
-    if (state.finger_land_ms == s_land_ms && frame + kGrabArmFrames == s_grab_armed_end) {
-        SDL_Log("[touch] armed on x %.3f y %.3f", static_cast<double>(s_grab_target.x), static_cast<double>(s_grab_target.y));
-    }
-    if (frame < s_grab_armed_end && star_pointer_mode == kStarPointerModeBlueStarReady) {
-        SDL_Log("[touch] grab %llu frames after landing", static_cast<unsigned long long>(frame + kGrabArmFrames - s_grab_armed_end));
-    }
-#endif
     if (frame < s_grab_armed_end && star_pointer_mode == kStarPointerModeBlueStarReady) {
         s_grab_armed_end = 0u;
         s_grabbing = true;

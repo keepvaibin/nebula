@@ -232,13 +232,4 @@ void ModelData::setResourceName(const char* pName) {
     for (u32 i = 0; i < mFile->material_count; i++) {
         mMaterials[i].mSourceHash = hashName(mResourceHash, getMaterialName(i), false);
     }
-    if (MotionSignal::drawNamesWanted()) {
-        s32 baseLength = 0;
-        while (pBase[baseLength] != '\0' && pBase[baseLength] != '.') {
-            baseLength++;
-        }
-        for (u32 i = 0; i < mFile->material_count; i++) {
-            nebula_log("[names] material %08x %.*s/%s\n", mMaterials[i].mSourceHash, baseLength, pBase, getMaterialName(i));
-        }
-    }
 }

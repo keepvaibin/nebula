@@ -70,7 +70,6 @@ public:
     // is given out). A texture already acquired is rewritten on the graphics list as before. Not with direct_writes() (no
     // copy to overlap). `frames_in_flight` sizes the per-slot lists, `frame_slot` is the frame now open. False: the same
     // queue, as before.
-    // GALAXY_TEST_SAME_QUEUE_UPLOADS=1 keeps the old path.
     bool enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot);
     [[nodiscard]] bool async_uploads() const noexcept { return copy_queue_ != nullptr; }
     // At the start of a frame in `frame_slot`, after the renderer has waited for the slot's fence: waits until the copy queue

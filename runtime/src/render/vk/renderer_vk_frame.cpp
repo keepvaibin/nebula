@@ -11,7 +11,6 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/temporal_dump.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -1188,44 +1187,6 @@ void RendererVk::clear_depth_in_pass(float reversed_depth, const VkRect2D& rect)
     }
 }
 
-// Test builds: the motion vectors as colour (0.5 + motion / 16 in red and green) over the 8-bit single-sample scene target, as
-// RendererD3D12's. The motion target is sampled between two passes and goes back to its attachment layout; the scene pass
-// begins again with the next draw.
-void RendererVk::record_motion_debug_view() {
-#if defined(NEBULA_DEV)
-    if (!motion_.motion || scene_.wide || scene_.samples != 1u || target_pass_active_ || !scene_.color) {
-        return;
-    }
-    VkPipeline& pipeline = motion_debug_pipelines_[scene_variant()];
-    if (pipeline == VK_NULL_HANDLE) {
-        constexpr VkColorComponentFlags kAll = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
-                                               VK_COLOR_COMPONENT_A_BIT;
-        pipeline = create_utility_pipeline(draw_layout_.pass_for(scene_variant(), false), utility_layout_, vk::UtilitySpirv::BlitVs,
-                                           vk::UtilitySpirv::MotionDebugPs, kAll, false, false, false, VK_SAMPLE_COUNT_1_BIT);
-    }
-    end_scene_pass("record_motion_debug_view");
-    vk::BarriersVk uses(commands_);
-    uses.image(motion_.motion->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::PixelRead);
-    uses.issue();
-    begin_scene_pass_with(0u, nullptr, false, "record_motion_debug_view");
-    const VkCommandBuffer commands = commands_;
-    const VkDescriptorSet source = allocate_frame_set(utility_set_layout_);
-    write_conversion_input(source, motion_.motion->view);
-    const float width = static_cast<float>(scene_.color->width);
-    const float height = static_cast<float>(scene_.color->height);
-    const VkViewport viewport{0.0f, height, width, -height, 0.0f, 1.0f};
-    const VkRect2D scissor{{0, 0}, {scene_.color->width, scene_.color->height}};
-    vkCmdSetViewport(commands, 0, 1, &viewport);
-    vkCmdSetScissor(commands, 0, 1, &scissor);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
-    vkCmdDraw(commands, 3, 1, 0, 0);
-    end_scene_pass("record_motion_debug_view");
-    uses.undo();
-    reset_draw_bindings();
-    bind_scene();
-#endif
-}
 
 bool RendererVk::defer_scene_depth_clear(std::uint32_t clear_rgba) {
     if (!scene_pass_open_ || held_probe_slots_.empty() || target_pass_active_) {
@@ -1343,47 +1304,6 @@ vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, 
     return in;
 }
 
-// GALAXY_TEST_MOTION_DUMP (temporal_dump.h): this frame's inputs copied out; the frame before's written.
-void RendererVk::dump_temporal_inputs(const vk::Texture& color, const vk::Texture& motion, std::uint64_t index) {
-#if !defined(NEBULA_DEV)
-    (void)color, (void)motion, (void)index;
-#else
-    struct Pending {
-        const char* name;
-        std::uint64_t frame;
-        unsigned width, height;
-        gpu::BufferRef buffer;
-    };
-    static const temporal_dump::Plan plan = temporal_dump::read_plan();
-    static std::vector<Pending> pending;
-    if (plan.every == 0u) {
-        return;
-    }
-    if (!pending.empty()) {
-        vkQueueWaitIdle(vk::Context::get().queue());
-        for (Pending& p : pending) {
-            vk::Context::get().invalidate(*p.buffer);
-            temporal_dump::write(plan, p.name, p.frame, p.width, p.height, 4u, p.buffer->mapped, p.width * 4u);
-        }
-        pending.clear();
-    }
-    if (!plan.wanted(index)) {
-        return;
-    }
-    const auto copy = [&](const vk::Texture& image, const char* name) {
-        gpu::BufferRef buffer = vk::Context::get().create_readback_buffer(image.width * image.height * 4u, "motion dump");
-        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
-        VkBufferImageCopy region{};
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
-        region.imageExtent = {image.width, image.height, 1u};
-        vkCmdCopyImageToBuffer(commands_, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buffer->buffer, 1u, &region);
-        image_barrier(commands_, image.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
-        pending.push_back({name, index, image.width, image.height, std::move(buffer)});
-    };
-    copy(color, "color");
-    copy(motion, "motion");
-#endif
-}
 
 bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
@@ -1395,46 +1315,6 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
         temporal_history_valid_ = false;
         return false;
     }
-    dump_temporal_inputs(*scene_.color, *motion_.motion, frame_index_);
-#if defined(NEBULA_DEV)
-    if (inspect_query_pool_ != VK_NULL_HANDLE) {
-        const vk::Texture& motion = *motion_.motion;
-        if (inspect_motion_buffer_) {
-            frames_[frame_slot_].retired_buffers.push_back(std::move(inspect_motion_buffer_));
-        }
-        inspect_motion_buffer_ = vk::Context::get().create_readback_buffer(std::uint64_t{motion.width} * motion.height * 4u, "inspector motion");
-        inspect_motion_width_ = motion.width;
-        inspect_motion_height_ = motion.height;
-        image_barrier(commands_, motion.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
-        VkBufferImageCopy region{};
-        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
-        region.imageExtent = {motion.width, motion.height, 1u};
-        vkCmdCopyImageToBuffer(commands_, motion.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, inspect_motion_buffer_->buffer, 1u, &region);
-        image_barrier(commands_, motion.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
-        // The reactive mask (1 byte a pixel) and the effects layer's transmittance (8), the same way (GALAXY_TEST_FRAME_INPUTS).
-        const vk::Texture* const masks[2] = {motion_.reactive.get(), motion_.layer_trans.get()};
-        const std::uint64_t mask_pixel_bytes[2] = {1u, 8u};
-        for (unsigned kind = 0u; kind < 2u; ++kind) {
-            if (inspect_mask_buffer_[kind]) {
-                frames_[frame_slot_].retired_buffers.push_back(std::move(inspect_mask_buffer_[kind]));
-            }
-            if (masks[kind] == nullptr) {
-                continue;
-            }
-            const vk::Texture& mask = *masks[kind];
-            inspect_mask_buffer_[kind] =
-                vk::Context::get().create_readback_buffer(std::uint64_t{mask.width} * mask.height * mask_pixel_bytes[kind], "inspector mask");
-            inspect_mask_width_[kind] = mask.width;
-            inspect_mask_height_[kind] = mask.height;
-            image_barrier(commands_, mask.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource);
-            VkBufferImageCopy mask_region{};
-            mask_region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 0u, 1u};
-            mask_region.imageExtent = {mask.width, mask.height, 1u};
-            vkCmdCopyImageToBuffer(commands_, mask.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, inspect_mask_buffer_[kind]->buffer, 1u, &mask_region);
-            image_barrier(commands_, mask.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite);
-        }
-    }
-#endif
     vk::TemporalUpscaleInputs in = temporal_inputs(*scene_.color, *scene_.depth, *motion_.motion, *motion_.reactive, *alt_scene_.color);
     in.commands = commands_;
     in.render_width = scene_map_.width;
@@ -3218,75 +3098,6 @@ void RendererVk::debug_log_backbuffer_readback() {
     backbuffer_capture_.fence = 0u;
 }
 
-#if defined(NEBULA_DEV)
-void RendererVk::inspect_mark(const char* name) {
-    if (vkCmdInsertDebugUtilsLabelEXT != nullptr) {
-        VkDebugUtilsLabelEXT label{};
-        label.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
-        label.pLabelName = name;
-        vkCmdInsertDebugUtilsLabelEXT(commands_, &label);
-    }
-}
-
-void RendererVk::inspect_queries_open(std::uint32_t count) {
-    inspect_queries_reset_ = true;
-    if (count <= inspect_query_capacity_) {
-        return;
-    }
-    wait_for_gpu_idle();
-    const VkDevice device = vk::Context::get().device();
-    if (inspect_query_pool_ != VK_NULL_HANDLE) {
-        vkDestroyQueryPool(device, inspect_query_pool_, nullptr);
-    }
-    VkQueryPoolCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-    info.queryType = VK_QUERY_TYPE_OCCLUSION;
-    info.queryCount = count;
-    vk::check(vkCreateQueryPool(device, &info, nullptr, &inspect_query_pool_), "Create inspector queries");
-    inspect_query_capacity_ = count;
-}
-
-void RendererVk::inspect_query_begin(std::uint32_t index) {
-    vkCmdBeginQuery(commands_, inspect_query_pool_, index, 0u);
-}
-
-void RendererVk::inspect_query_end(std::uint32_t index) {
-    vkCmdEndQuery(commands_, inspect_query_pool_, index);
-}
-
-// A query no draw reached stays unavailable and reads as no samples.
-void RendererVk::inspect_queries_read(std::uint32_t count, std::uint64_t* out) {
-    std::memset(out, 0, std::size_t{count} * 8u);
-    if (count != 0u) {
-        (void)vkGetQueryPoolResults(vk::Context::get().device(), inspect_query_pool_, 0u, count, std::size_t{count} * 8u, out, 8u, VK_QUERY_RESULT_64_BIT);
-    }
-}
-
-bool RendererVk::inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out) {
-    if (!inspect_motion_buffer_ || x >= inspect_motion_width_ || y >= inspect_motion_height_) {
-        return false;
-    }
-    vk::Context::get().invalidate(*inspect_motion_buffer_);
-    const auto* row = static_cast<const std::byte*>(inspect_motion_buffer_->mapped) + std::size_t{y} * inspect_motion_width_ * 4u;
-    std::memcpy(out, row + std::size_t{x} * 4u, 4u);
-    return true;
-}
-
-bool RendererVk::inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out) {
-    if (kind > 1u || !inspect_mask_buffer_[kind] || x >= inspect_mask_width_[kind] || y >= inspect_mask_height_[kind]) {
-        return false;
-    }
-    vk::Context::get().invalidate(*inspect_mask_buffer_[kind]);
-    const std::size_t pixel = kind == 0u ? 1u : 8u;
-    const auto* row = static_cast<const std::byte*>(inspect_mask_buffer_[kind]->mapped) + std::size_t{y} * inspect_mask_width_[kind] * pixel;
-    if (kind == 0u) {
-        out[0] = static_cast<std::uint8_t>(row[x]);
-    } else {
-        std::memcpy(out, row + std::size_t{x} * 8u, 8u);
-    }
-    return true;
-}
-#endif
 
 bool RendererVk::interpolation_mode() const {
     const RenderConfig cfg = get_render_config();

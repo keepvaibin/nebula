@@ -412,8 +412,7 @@ void copy_level(ID3D12GraphicsCommandList* list, ID3D12Resource* texture, ID3D12
 
 bool TextureBackend::enable_async_uploads(unsigned frames_in_flight, unsigned frame_slot) {
     copy_queue_.Reset();
-    if (device_ == nullptr || direct_ || frames_in_flight == 0u ||
-        ::galaxy::run_option_flag(::galaxy::run_options().test_same_queue_uploads, false)) {
+    if (device_ == nullptr || direct_ || frames_in_flight == 0u) {
         return false;
     }
     D3D12_COMMAND_QUEUE_DESC desc{};

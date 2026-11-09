@@ -327,20 +327,6 @@ public:
         bool generated = false);
     [[nodiscard]] std::uint64_t completed_fence_value() const;
     [[nodiscard]] std::uint64_t submitted_fence_value() const noexcept { return next_fence_value_; }
-#if defined(NEBULA_DEV)
-    void inspect_mark(const char* name);
-    void inspect_queries_open(std::uint32_t count);
-    void inspect_query_begin(std::uint32_t index);
-    void inspect_query_end(std::uint32_t index);
-    // After the walk's frame ended and the GPU went idle.
-    void inspect_queries_read(std::uint32_t count, std::uint64_t* out);
-    // The motion target's value at a pixel of the frame that just ended.
-    [[nodiscard]] bool inspect_motion_pixel(unsigned x, unsigned y, std::uint16_t* out);
-    // The reactive mask (kind 0: R8, out[0] the byte) and the effects layer's transmittance (kind 1: RGBA16F, four halves) at a
-    // pixel of the frame that just ended, from the same replay as inspect_motion_pixel. False: not read.
-    [[nodiscard]] bool inspect_mask_pixel(unsigned kind, unsigned x, unsigned y, std::uint16_t* out);
-    void wait_for_gpu_idle() { wait_for_gpu(); }
-#endif
     // GPU time by pass (render_api.h GpuPassTime): any thread. Off: no query is recorded or read.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
@@ -430,7 +416,6 @@ public:
     // GALAXY_MOTION_DEBUG: at the scene's end, replaces the scene target color with
     // the motion field (grey = still; red/green = +x/+y towards the previous
     // position, 8 pixels to full scale).
-    void record_motion_debug_view();
     // The temporal history does not match the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
 
@@ -642,7 +627,6 @@ private:
     [[nodiscard]] FrameMap output_frame_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
-    void dump_temporal_inputs(ID3D12Resource* color, ID3D12Resource* motion, std::uint64_t index);
     [[nodiscard]] bool ensure_output_scene(const FrameMap& map);
     void swap_scene_sets();
     void swap_target_set();
@@ -1035,14 +1019,6 @@ private:
     PostProcessor post_process_;
     AmbientOcclusion ambient_occlusion_;
     GameBloom game_bloom_;
-#if defined(NEBULA_DEV)
-    Microsoft::WRL::ComPtr<ID3D12QueryHeap> inspect_query_heap_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> inspect_query_readback_, inspect_motion_readback_;
-    std::uint32_t inspect_query_capacity_ = 0u, inspect_queries_used_ = 0u;
-    UINT inspect_motion_pitch_ = 0u;
-    Microsoft::WRL::ComPtr<ID3D12Resource> inspect_mask_readback_[2];
-    UINT inspect_mask_pitch_[2]{};
-#endif
     unsigned scene_jitter_index_ = 0u, scene_jitter_phases_ = 0u;
     // A scene colour that could not take the scene's place, kept until the GPU is done with it.
     struct OldSceneTarget {
@@ -1238,8 +1214,6 @@ private:
     // Per scene target variant (scene_variant: samples, then HDR).
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_rgb_pipelines_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, kSceneVariantCount> clear_alpha_pipelines_;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 
     // Screen probes (ScreenProbeCs): the values a slot's dispatch writes, copied to its readback, fenced with its frame.
     Microsoft::WRL::ComPtr<ID3D12RootSignature> probe_root_signature_;

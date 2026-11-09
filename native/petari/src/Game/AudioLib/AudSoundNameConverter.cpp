@@ -69,11 +69,7 @@ void AudSoundNameConverter::init() {
             }
         }
     }
-#if defined(NEBULA_DEV)
     if (heldTwice != 0) {
         nebula_log("sound names: %u of %u held twice (the first is used)\n", heldTwice, count);
     }
-#else
-    (void)heldTwice;
-#endif
 }

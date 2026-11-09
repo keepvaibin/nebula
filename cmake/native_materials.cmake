@@ -15,20 +15,16 @@ function(galaxy_program_blob out_var backend)
         "${galaxy_programs_root}/runtime/src/render/materials/*.hlsli"
         "${galaxy_programs_root}/runtime/src/render/programs/*.hlsl")
     list(APPEND sources "${galaxy_programs_root}/runtime/src/render/programs/table.tsv")
-    set(dev_arg "")
-    if(NOT NEBULA_RELEASE)
-        set(dev_arg --dev)
-    endif()
     if(backend STREQUAL "dxil")
         add_custom_command(OUTPUT "${blob}"
             COMMAND ${CMAKE_COMMAND} -E env "GALAXY_DXC=${GALAXY_DXC}"
-                "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxil "${blob}" ${dev_arg}
+                "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" dxil "${blob}"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py"
             VERBATIM)
     else()
         add_custom_command(OUTPUT "${blob}"
             COMMAND "${Python3_EXECUTABLE}" "${galaxy_programs_root}/tools/dev/compile_programs.py" spirv "${blob}"
-                "$<TARGET_FILE:galaxy_native_spirv>" ${dev_arg}
+                "$<TARGET_FILE:galaxy_native_spirv>"
             DEPENDS ${sources} "${galaxy_programs_root}/tools/dev/compile_programs.py" galaxy_native_spirv
             VERBATIM)
     endif()
