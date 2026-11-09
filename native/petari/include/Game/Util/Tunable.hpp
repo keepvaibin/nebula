@@ -66,9 +66,10 @@ namespace nebula {
 #define NEBULA_TUNABLE_KEEP __attribute__((used))
 #endif
 
-#define NEBULA_TUNABLE(type, name, value)                                                                                     \
-    static type name = (value);                                                                                               \
-    static const type name##_nebula_game = (value);                                                                           \
+// (The number's parameter is not called "value": that would also replace TunableKindOf<type>::value.)
+#define NEBULA_TUNABLE(type, name, number)                                                                                    \
+    static type name = (number);                                                                                              \
+    static const type name##_nebula_game = (number);                                                                          \
     NEBULA_TUNABLE_SECTION NEBULA_TUNABLE_KEEP static const ::nebula::Tunable name##_nebula_tunable = {                       \
         __FILE_NAME__, #name, &name, &name##_nebula_game, ::nebula::TunableKindOf<type>::value, 1u}
 

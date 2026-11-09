@@ -264,9 +264,18 @@ namespace {
 // GALAXY_DUMP_TUNABLES=<file>: every tuning number mods can set, one "<key>\t<kind>\t<game's number>" line each (a list's
 // places as <key>[i]), for the mod docs.
 void dump_tunables(const NebulaModApi* game_api) {
-    const char* path = std::getenv("GALAXY_DUMP_TUNABLES");
-    if (path == nullptr || *path == '\0' || game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return;
-    std::ofstream out(std::filesystem::u8path(path), std::ios::binary | std::ios::trunc);
+    if (game_api == nullptr || game_api->size < sizeof(NebulaModApi) || game_api->tunable_at == nullptr) return;
+#if defined(_WIN32)
+    wchar_t text[1024];
+    const DWORD length = GetEnvironmentVariableW(L"GALAXY_DUMP_TUNABLES", text, 1024);
+    if (length == 0 || length >= 1024) return;
+    const std::filesystem::path path(std::wstring(text, length));
+#else
+    const char* text = std::getenv("GALAXY_DUMP_TUNABLES");
+    if (text == nullptr || *text == '\0') return;
+    const std::filesystem::path path(text);
+#endif
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) return;
     static constexpr const char* kKinds[] = {"?", "f32", "f64", "s32", "u32", "s16", "u16", "s8", "u8", "bool"};
     const char* file = nullptr;
