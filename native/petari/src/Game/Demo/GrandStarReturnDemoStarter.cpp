@@ -114,8 +114,10 @@ void GrandStarReturnDemoStarter::calcOffsetStarToCore(Vec3f* pOffset) const {
     Vec3f namePos;
     Vec3f jointPos;
 
-    MR::findNamePos("コア中心", &namePos, nullptr);
     MR::copyJointPos(mPowerStar, "PowerStar", &jointPos);
+    // A level without the core point leaves the offset zero.
+    namePos.set(jointPos);
+    MR::findNamePos("コア中心", &namePos, nullptr);
 
     pOffset->sub(namePos, jointPos);
 }

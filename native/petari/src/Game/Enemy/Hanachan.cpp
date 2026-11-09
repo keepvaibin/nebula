@@ -1162,7 +1162,7 @@ void Hanachan::setNerveBlow(const Vec3f& rPos) {
     Vec3f side = dir.cross(rGravity);
 
     f32 angle = ::hInitBlowRadian;
-    f32 numSegments = mBodyParts.size() - 1;
+    f32 numSegments = mBodyParts.size() > 1 ? static_cast< f32 >(mBodyParts.size() - 1) : 1.0f;
     f32 angleStep = (MR::pi() - ::hInitBlowRadian * 2.0f) / numSegments;
     Vec3f blow;
     Vec3f up;

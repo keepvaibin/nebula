@@ -27,10 +27,11 @@ namespace {
     // The walk weaves, turning the other way every period.
     const s32 cWeavePeriod = 100;
     const f32 cWeaveDegree = 0.75f;
-    // Each cycle the tail burns, cools, then warns before burning again.
+    // Each cycle the tail burns, cools, then warns before burning again. All three are plain step counts, so the
+    // sign window is the cycle's last 20 steps at any step rate.
     const s32 cFireCycle = 200;
     const s32 cFireSteps = 80;
-    const s32 cFireSignStep = NebulaFrameClock::stepsOfSeconds(3);
+    const s32 cFireSignStep = 180;
 };  // namespace
 
 namespace NrvDinoPackunBattleEggVs2 {

@@ -362,6 +362,12 @@ void HomingKiller::initMapToolInfo(const TableIter& rIter) {
 
     s32 turnRadius = 3;
     MR::getPlacementArg1NoInit(rIter, &turnRadius);
+    // The turn rate is a cosine: keep it within -1 to 1.
+    if (turnRadius < 0) {
+        turnRadius = 0;
+    } else if (turnRadius > 20000) {
+        turnRadius = 20000;
+    }
     mChaseRotateSpeed = 1.0f - turnRadius * 0.0001f;
 
     MR::getPlacementArg2NoInit(rIter, &mIsLinearShot);

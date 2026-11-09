@@ -126,6 +126,9 @@ void IceMerameraKing::init(const TableIter& rIter) {
     mBreakModel->makeActorDead();
     // The child objects are the Meramera the second angry demo summons.
     s32 childNum = MR::getChildObjNum(rIter);
+    if (childNum < 0) {
+        childNum = 0;
+    }
     mWeaponNum = childNum;
     mModelArray = new Meramera*[childNum];
 
