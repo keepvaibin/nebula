@@ -5,6 +5,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/vk/renderer_vk.h"
+#include "galaxy/render/vk/shader_compile_vk.h"
 #include "galaxy/render/vk/vk_context.h"
 
 #include <nebula_model.h>
@@ -159,6 +160,47 @@ std::uint64_t bytes_hash(const std::vector<char>& bytes) noexcept {
     return hash;
 }
 
+// The cache file: this header, then the driver's cache data. The header names what the data is good for (the programs'
+// compiler revision and the device's vendor, id, driver version and pipeline cache UUID); a file that differs, is short, or
+// whose data does not hash to the header's is never handed to the driver, so the cache starts empty and is written again.
+struct CacheFileHeader {
+    char magic[8];
+    std::uint32_t compiler_revision;
+    std::uint32_t vendor_id;
+    std::uint32_t device_id;
+    std::uint32_t driver_version;
+    std::uint8_t uuid[VK_UUID_SIZE];
+    std::uint64_t size;
+    std::uint64_t hash;
+};
+constexpr char kCacheMagic[8] = {'N', 'B', 'V', 'K', 'P', 'C', 'H', '1'};
+
+CacheFileHeader cache_header(const std::vector<char>& data) noexcept {
+    const VkPhysicalDeviceProperties& properties = vk::Context::get().properties();
+    CacheFileHeader header{};
+    std::memcpy(header.magic, kCacheMagic, sizeof(kCacheMagic));
+    header.compiler_revision = vk::kCompilerRevision;
+    header.vendor_id = properties.vendorID;
+    header.device_id = properties.deviceID;
+    header.driver_version = properties.driverVersion;
+    std::memcpy(header.uuid, properties.pipelineCacheUUID, VK_UUID_SIZE);
+    header.size = data.size();
+    header.hash = bytes_hash(data);
+    return header;
+}
+
+// The driver data inside a cache file; empty when the file is not this device's with the same programs.
+std::vector<char> unwrap_cache_file(const std::vector<char>& file) {
+    CacheFileHeader header{};
+    if (file.size() <= sizeof(header)) {
+        return {};
+    }
+    std::memcpy(&header, file.data(), sizeof(header));
+    std::vector<char> data(file.begin() + sizeof(header), file.end());
+    const CacheFileHeader expected = cache_header(data);
+    return std::memcmp(&header, &expected, sizeof(header)) == 0 ? data : std::vector<char>{};
+}
+
 // The cache is internally synchronised, so the workers keep building while a copy goes out; one writer at a time.
 std::size_t write_driver_cache() noexcept {
     static std::mutex writing;
@@ -184,7 +226,14 @@ std::size_t write_driver_cache() noexcept {
     }
     bytes.resize(size);
     const std::uint64_t hash = bytes_hash(bytes);
-    if (hash == on_disk || !replace_file(file, bytes.data(), bytes.size())) {
+    if (hash == on_disk) {
+        return 0u;
+    }
+    const CacheFileHeader header = cache_header(bytes);
+    std::vector<char> out(sizeof(header) + bytes.size());
+    std::memcpy(out.data(), &header, sizeof(header));
+    std::memcpy(out.data() + sizeof(header), bytes.data(), bytes.size());
+    if (!replace_file(file, out.data(), out.size())) {
         return 0u;
     }
     std::lock_guard guard(gModules.lock);
@@ -217,9 +266,10 @@ VkPipelineCache driver_cache(VkDevice device) {
     gModules.cache_file = shader_cache_directory() / "vk_pipelines.bin";
     std::vector<char> bytes;
     if (std::ifstream in(gModules.cache_file, std::ios::binary | std::ios::ate); in) {
-        bytes.resize(static_cast<std::size_t>(in.tellg()));
+        std::vector<char> file(static_cast<std::size_t>(in.tellg()));
         in.seekg(0);
-        in.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+        in.read(file.data(), static_cast<std::streamsize>(file.size()));
+        bytes = unwrap_cache_file(file);
     }
     gModules.on_disk = bytes.empty() ? 0u : bytes_hash(bytes);
     VkPipelineCacheCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
@@ -295,8 +345,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     if (aux == 1u) {
         add(kBefore, VK_FORMAT_R32G32B32_SFLOAT, gpu::kStreamBefore, position_stride, 0u);
     }
-    for (std::uint32_t i = 0; i < desc.input_count; ++i) {
-        const NebulaLayoutInput& input = desc.inputs[i];
+    for (const NebulaLayoutInput& input : entry.inputs) {
         const bool zero = input.stream == NEBULA_STREAM_ZERO;
         const std::uint32_t slot = zero ? std::uint32_t{gpu::kStreamZero} : std::uint32_t{input.stream};
         add(input_location(input.semantic), input_format(input.format), slot, zero ? 0u : input.stride, input.offset);

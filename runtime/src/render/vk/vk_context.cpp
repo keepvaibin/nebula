@@ -242,12 +242,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.pApplicationName = "Nebula";
     app.pEngineName = "Nebula";
-    // FSR 3's shaders are SPIR-V 1.5: a Vulkan 1.2 instance where the loader has it.
+    // FSR 3's shaders are SPIR-V 1.5: a Vulkan 1.2 instance where the loader has it. A 1.3 loader gets a 1.3 instance, so
+    // a 1.3 device takes synchronization2 as core Vulkan (no extension).
     std::uint32_t loader_version = VK_API_VERSION_1_1;
     if (vkEnumerateInstanceVersion != nullptr) {
         (void)vkEnumerateInstanceVersion(&loader_version);
     }
-    app.apiVersion = fsr3_compiled() && loader_version >= VK_API_VERSION_1_2 ? VK_API_VERSION_1_2 : VK_API_VERSION_1_1;
+    app.apiVersion = loader_version >= VK_API_VERSION_1_3                    ? VK_API_VERSION_1_3
+                     : fsr3_compiled() && loader_version >= VK_API_VERSION_1_2 ? VK_API_VERSION_1_2
+                                                                               : VK_API_VERSION_1_1;
 #if defined(_WIN32)
     // DLSS: what Streamline needs of the instance, where its files and an RTX adapter are here.
     bool streamline = streamline_vk::start();
@@ -411,13 +414,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
     // GALAXY_VK_TEST_NO_FEATURE=<names, comma-separated>: this GPU acts without those features, as a phone's may, so
-    // the paths for it run on any GPU.
+    // the paths for it run on any GPU. "indexing": no descriptor indexing (draws bind their own tables).
+    bool test_no_indexing = false;
     if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
         const std::string list = std::string(",") + names + ",";
         const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         if (off("bc")) available.textureCompressionBC = VK_FALSE;
         if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
         if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
+        test_no_indexing = off("indexing");
     }
     VkPhysicalDeviceFeatures enabled{};
     enabled.sampleRateShading = available.sampleRateShading;
@@ -446,6 +451,54 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
     VkPhysicalDeviceVulkan12Features features12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
     VkPhysicalDeviceVulkan13Features features13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     VkPhysicalDeviceOpticalFlowFeaturesNV optical_flow{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPTICAL_FLOW_FEATURES_NV};
+    // Descriptor indexing: one array of every texture and one of every sampler, written while bound and read by an
+    // index that is the same for every pixel of a draw (no non-uniform indexing). Core in Vulkan 1.2, else
+    // VK_EXT_descriptor_indexing. It is used only when all of it is here.
+    const bool indexing_extension =
+        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+    std::string indexing_note = test_no_indexing ? "switched off by GALAXY_VK_TEST_NO_FEATURE" : "no descriptor indexing";
+    if (!test_no_indexing && (core_12 || indexing_extension)) {
+        VkPhysicalDeviceDescriptorIndexingFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &have;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        VkPhysicalDeviceDescriptorIndexingProperties limits{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES};
+        VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        properties.pNext = &limits;
+        vkGetPhysicalDeviceProperties2(physical_, &properties);
+        // The shaders' arrays are runtime-sized (OpTypeRuntimeArray: runtimeDescriptorArray) and the image set's length is
+        // chosen at allocation (descriptorBindingVariableDescriptorCount).
+        const bool bits = have.runtimeDescriptorArray == VK_TRUE && have.descriptorBindingPartiallyBound == VK_TRUE &&
+                          have.descriptorBindingSampledImageUpdateAfterBind == VK_TRUE &&
+                          have.descriptorBindingUpdateUnusedWhilePending == VK_TRUE &&
+                          have.descriptorBindingVariableDescriptorCount == VK_TRUE &&
+                          available.shaderSampledImageArrayDynamicIndexing == VK_TRUE;
+        // The image array's upper bound: the set and per-stage update-after-bind image limits, what the per-stage resource
+        // limit leaves beside the sampler array and set 0's buffers (16 with room), and half of what all pools may hold
+        // (a larger set is made while the frames that read the smaller finish: together at most twice the larger).
+        const std::uint64_t others = std::uint64_t{kBindlessSamplerSlots} + 16u;
+        const auto beyond = [others](std::uint64_t limit) { return limit > others ? limit - others : 0u; };
+        const std::uint64_t images =
+            std::min({std::uint64_t{limits.maxDescriptorSetUpdateAfterBindSampledImages},
+                      std::uint64_t{limits.maxPerStageDescriptorUpdateAfterBindSampledImages},
+                      beyond(limits.maxPerStageUpdateAfterBindResources), beyond(limits.maxUpdateAfterBindDescriptorsInAllPools) / 2u,
+                      std::uint64_t{kBindlessTextureSlotsCap}});
+        const bool room = images >= kBindlessTextureSlotsMin &&
+                          limits.maxDescriptorSetUpdateAfterBindSamplers >= kBindlessSamplerSlots &&
+                          limits.maxPerStageDescriptorUpdateAfterBindSamplers >= kBindlessSamplerSlots;
+        bindless_ = bits && room;
+        texture_array_max_ = bindless_ ? static_cast<std::uint32_t>(images) : 0u;
+        indexing_note = bindless_ ? "descriptor indexing"
+                        : !bits   ? "descriptor indexing lacks a needed feature"
+                                  : "descriptor indexing limits below the texture and sampler arrays";
+    }
+    {
+        // A bound table's maps: what the per-stage image, sampler and resource limits leave beside the three constants
+        // buffers and two storage buffers of set 0.
+        const VkPhysicalDeviceLimits& limits = properties_.limits;
+        const std::uint32_t by_resources = limits.maxPerStageResources > 16u ? (limits.maxPerStageResources - 16u) / 2u : 0u;
+        table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
+    }
     std::vector<float> queue_priorities(1u, priority);
     VkDeviceQueueCreateInfo queue_infos[2]{};
     std::uint32_t queue_info_count = 1u;
@@ -466,7 +519,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         std::uint32_t extra = needs.graphics_queues + needs.compute_queues;
         // Frame generation on a Vulkan 1.3 instance and device that give all it asks.
         const std::uint32_t generation_extra = needs.generation_graphics_queues + needs.generation_compute_queues;
-        if (app.apiVersion >= VK_API_VERSION_1_3 && 1u + generation_extra <= props[queue_family_].queueCount &&
+        if (needs.frame_generation && app.apiVersion >= VK_API_VERSION_1_3 &&
+            1u + generation_extra <= props[queue_family_].queueCount &&
             streamline_vk::device_meets_generation_needs(physical_, optical_flow_family)) {
             generation_device = true;
             extra = generation_extra;
@@ -537,6 +591,31 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
             device_extensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
         }
     }
+    // Synchronization2 (barriers_vk.h): copy, resolve and clear apart from other transfers, stages per image. A device
+    // and instance of Vulkan 1.3 (the frame generation device always) take it as core through the 1.3 features chain;
+    // a 1.2 device takes the extension where it has it; any other uses version-1 barriers.
+    const bool core_13 = app.apiVersion >= VK_API_VERSION_1_3 && properties_.apiVersion >= VK_API_VERSION_1_3;
+    bool sync2_core = generation_device;
+    if (core_13 && !generation_device) {
+        VkPhysicalDeviceVulkan13Features have13{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &have13;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        sync2_core = have13.synchronization2 == VK_TRUE;
+        features13.synchronization2 = have13.synchronization2;
+    }
+    VkPhysicalDeviceSynchronization2FeaturesKHR sync2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
+    bool sync2_extension = false;
+    if (!sync2_core && has_device_extension(physical_, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &sync2;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        sync2_extension = sync2.synchronization2 == VK_TRUE;
+        if (sync2_extension) {
+            device_extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+        }
+        sync2.pNext = nullptr;
+    }
     // FSR 3 (temporal_upscaler_vk.cpp): half floats, 16-bit storage and its compute shaders' subgroup sizes, and a depth
     // aspect read while the stencil aspect stays an attachment (its barriers name the depth alone).
     VkPhysicalDeviceShaderFloat16Int8Features float16{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
@@ -576,12 +655,16 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         depth_clip.depthClipEnable = VK_TRUE;
         device_info.pNext = &depth_clip;
     }
+    if (sync2_extension) {
+        sync2.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &sync2;
+    }
     if (core_12) {
         if (temporal_upscaling_) {
             features11.storageBuffer16BitAccess = VK_TRUE;
             features12.shaderFloat16 = VK_TRUE;
             features12.separateDepthStencilLayouts = VK_TRUE;
-            if (generation_device) {
+            if (sync2_core) {
                 // On a 1.3 chain the subgroup features are its own: the separate structure must not appear beside it.
                 features13.subgroupSizeControl = subgroup.subgroupSizeControl;
                 features13.computeFullSubgroups = subgroup.computeFullSubgroups;
@@ -590,14 +673,39 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
                 device_info.pNext = &subgroup;
             }
         }
-        if (generation_device) {
-            optical_flow.pNext = const_cast<void*>(device_info.pNext);
-            features13.pNext = &optical_flow;
+        if (sync2_core) {
+            // The 1.3 features structure: synchronization2 (and, on the frame generation device, its own features).
+            void* tail = const_cast<void*>(device_info.pNext);
+            if (generation_device) {
+                optical_flow.pNext = tail;
+                tail = &optical_flow;
+            }
+            features13.pNext = tail;
             device_info.pNext = &features13;
         }
         features12.pNext = const_cast<void*>(device_info.pNext);
         features11.pNext = &features12;
         device_info.pNext = &features11;
+    }
+    VkPhysicalDeviceDescriptorIndexingFeatures indexing_enabled{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
+    if (bindless_) {
+        enabled.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+        if (core_12) {
+            features12.runtimeDescriptorArray = VK_TRUE;
+            features12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+            features12.descriptorBindingPartiallyBound = VK_TRUE;
+            features12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+            features12.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+        } else {
+            indexing_enabled.runtimeDescriptorArray = VK_TRUE;
+            indexing_enabled.descriptorBindingVariableDescriptorCount = VK_TRUE;
+            indexing_enabled.descriptorBindingPartiallyBound = VK_TRUE;
+            indexing_enabled.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+            indexing_enabled.descriptorBindingUpdateUnusedWhilePending = VK_TRUE;
+            indexing_enabled.pNext = const_cast<void*>(device_info.pNext);
+            device_info.pNext = &indexing_enabled;
+            device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        }
     }
 #if defined(_WIN32)
     // XeSS's device needs, where its library is here: its features through the chain (its function adds to it).
@@ -629,6 +737,47 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         }
     }
 #endif
+    // A library that added its own Vulkan 1.3 features structure (a chain may hold each structure once): ours leaves
+    // after its bits are set in the library's.
+    if (sync2_core) {
+        auto* ours = &features13;
+        VkPhysicalDeviceVulkan13Features* other = nullptr;
+        for (auto* node = static_cast<VkBaseOutStructure*>(const_cast<void*>(device_info.pNext)); node != nullptr; node = node->pNext) {
+            if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES &&
+                node != reinterpret_cast<VkBaseOutStructure*>(ours)) {
+                other = reinterpret_cast<VkPhysicalDeviceVulkan13Features*>(node);
+            }
+        }
+        if (other != nullptr) {
+            other->synchronization2 = VK_TRUE;
+            other->maintenance4 = (other->maintenance4 || ours->maintenance4) ? VK_TRUE : VK_FALSE;
+            other->subgroupSizeControl = (other->subgroupSizeControl || ours->subgroupSizeControl) ? VK_TRUE : VK_FALSE;
+            other->computeFullSubgroups = (other->computeFullSubgroups || ours->computeFullSubgroups) ? VK_TRUE : VK_FALSE;
+            for (auto* node = reinterpret_cast<VkBaseOutStructure*>(&device_info); node->pNext != nullptr; node = node->pNext) {
+                if (node->pNext == reinterpret_cast<VkBaseOutStructure*>(ours)) {
+                    node->pNext = reinterpret_cast<VkBaseOutStructure*>(ours)->pNext;
+                    break;
+                }
+            }
+        }
+    }
+    // A library that added its own synchronization2 structure (a chain may hold each structure once): ours leaves.
+    if (sync2_extension) {
+        const auto* ours = reinterpret_cast<const VkBaseInStructure*>(&sync2);
+        bool other = false;
+        for (const auto* node = static_cast<const VkBaseInStructure*>(device_info.pNext); node != nullptr; node = node->pNext) {
+            other = other || (node != ours && node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES);
+        }
+        if (other) {
+            for (auto* node = reinterpret_cast<VkBaseInStructure*>(&device_info); node->pNext != nullptr;
+                 node = const_cast<VkBaseInStructure*>(node->pNext)) {
+                if (node->pNext == ours) {
+                    node->pNext = ours->pNext;
+                    break;
+                }
+            }
+        }
+    }
     device_info.queueCreateInfoCount = queue_info_count;
     queue_infos[0] = queue_info;
     device_info.pQueueCreateInfos = queue_infos;
@@ -647,6 +796,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
         return fail("vkCreateDevice failed");
     }
     volkLoadDevice(device_);
+    pipeline_barrier2_ = sync2_core ? vkCmdPipelineBarrier2 : sync2_extension ? vkCmdPipelineBarrier2KHR : nullptr;
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
     if (generation_queues_at != 0u) {
         vkGetDeviceQueue(device_, queue_family_, generation_queues_at, &generation_present_queue_);
@@ -691,12 +841,20 @@ bool Context::initialize(const std::string& chosen_gpu, bool prefer_integrated, 
                  properties_.driverVersion, layers.empty() ? 0 : 1);
     std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
                  describe(quirks_).c_str());
+    if (bindless_) {
+        std::fprintf(stderr, "[vulkan] textures: bindless, image array from %u up to %u slots, %u sampler slots (%s)\n",
+                     kBindlessTextureSlotsMin, texture_array_max_, kBindlessSamplerSlots, indexing_note.c_str());
+    } else {
+        std::fprintf(stderr, "[vulkan] textures: bound tables of up to %u maps (%s)\n", table_slots_, indexing_note.c_str());
+    }
     std::fprintf(stderr,
                  "[vulkan] features: depth-clamp=%d depth-clip=%d bc=%d "
-                 "anisotropy=%d display-timing=%d queues=%u temporal-upscaling=%d frame-generation-queues=%d\n",
+                 "anisotropy=%d display-timing=%d queues=%u temporal-upscaling=%d frame-generation-queues=%d "
+                 "synchronization2=%s\n",
                  depth_clamp_, depth_clip_enable_, bc_textures_,
                  sampler_anisotropy_, display_timing_, queue_info.queueCount, temporal_upscaling_ ? 1 : 0,
-                 generation_present_queue_ != VK_NULL_HANDLE ? 1 : 0);
+                 generation_present_queue_ != VK_NULL_HANDLE ? 1 : 0,
+                 sync2_core ? "core" : sync2_extension ? "extension" : "off");
     // The memory BufferPlace chooses from: each heap's size (L: device-local), each type's heap and flags (L device
     // local, V host visible, C coherent, $ cached).
     {
@@ -760,6 +918,7 @@ void Context::shutdown() noexcept {
     if (device_ != VK_NULL_HANDLE) {
         vkDestroyDevice(device_, nullptr);
         device_ = VK_NULL_HANDLE;
+        pipeline_barrier2_ = nullptr;
     }
     if (messenger_ != VK_NULL_HANDLE) {
         vkDestroyDebugUtilsMessengerEXT(instance_, messenger_, nullptr);

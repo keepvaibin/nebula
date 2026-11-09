@@ -1,4 +1,4 @@
-// The picture's shape the game draws for. The host latches the output's client size at a retrace (host_main.cpp);
+// The picture's shape the game draws for. The host latches the output's client size at a frame start (host_main.cpp);
 // the renderer, the game (display_native.c) and the pointer read it from one atomic word.
 #pragma once
 
@@ -29,7 +29,7 @@ struct ExperimentalUltrawideAspect {
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 make_experimental_ultrawide_aspect(double content_aspect) noexcept;
 
-// Set at a completed retrace and read as one value, so camera, screen width, layouts, presentation and pointer never
+// Set at a completed frame start and read as one value, so camera, screen width, layouts, presentation and pointer never
 // see half a resize. The upper word is a generation; the lower holds width << 16 | height in client pixels, or zero
 // for a shape that falls back to the game's 16:9.
 inline std::atomic<std::uint64_t> g_experimental_dynamic_aspect_word{0u};

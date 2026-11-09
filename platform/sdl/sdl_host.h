@@ -22,15 +22,15 @@ void pump_events(int timeout_ms) noexcept;
 // The app is out of sight (Android: the activity stopped); the host stops the game's clocks meanwhile.
 [[nodiscard]] bool in_background() noexcept;
 
-// The display's vsync as the game's retrace clock (Android: Choreographer's vsync times, display_clock.cpp): sleeps
-// until the vsync one retrace period after `last_ns` (CLOCK_MONOTONIC nanoseconds; updated) on the grid the latest
+// The display's vsync as the game's frame clock (Android: Choreographer's vsync times, display_clock.cpp): sleeps
+// until the vsync one frame period after `last_ns` (CLOCK_MONOTONIC nanoseconds; updated) on the grid the latest
 // vsync times predict, so every frame stays on screen for the same number of vsyncs. False, at once, when there are
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
-// no display clock: the host's own clock runs the retrace then.
-bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
-// The retrace grid (CLOCK_MONOTONIC nanoseconds): the latest retrace, the retrace period, the display's vsync
-// interval and now; false while the retrace follows the host's clock.
-[[nodiscard]] bool display_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+// no display clock: the host's own clock times the frame then.
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
+// The frame grid (CLOCK_MONOTONIC nanoseconds): the latest frame slot, the frame period, the display's vsync
+// interval and now; false while frames follow the host's clock.
+[[nodiscard]] bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
                                 std::int64_t& now_ns) noexcept;
 // The latest vsync and the interval between vsyncs (the stated period when known; CLOCK_MONOTONIC nanoseconds);
 // false while not known.

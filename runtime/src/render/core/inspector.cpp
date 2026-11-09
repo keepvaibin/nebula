@@ -303,12 +303,13 @@ struct Access {
                     std::vector<const char*> defines = form.defines;
                     defines.push_back(stage_define.c_str());
                     std::string problem;
-                    std::vector<std::uint8_t> bytes = compile_mod_shader_stage(text.str(), includes, true, defines, problem);
+                    const bool bound = program_bound_tables();
+                    std::vector<std::uint8_t> bytes = compile_mod_shader_stage(text.str(), includes, true, defines, problem, bound);
                     if (bytes.empty()) {
                         std::fprintf(stderr, "[inspect] stage of %016" PRIx64 ": %s\n", pixel, problem.c_str());
                         built = built && form.variant == kProgramSample;
                     } else {
-                        add_mod_program(id, form.variant, true, std::move(bytes));
+                        add_mod_program(id, form.variant + (bound ? kProgramBoundOffset : 0u), true, std::move(bytes));
                     }
                 }
             }

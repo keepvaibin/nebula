@@ -5,6 +5,7 @@
 #include <nebula_format.h>
 #include <string.h>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/Array.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -692,6 +693,12 @@ namespace Frame {
         sPassStencilOp = op;
     }
 
+    static MR::GrowBuffer< NebulaLayoutInput > sLayoutRooms[cLayoutRooms];
+
+    NebulaLayoutInput* layoutRoom(u32 which, u32 count) {
+        return sLayoutRooms[which].room(count);
+    }
+
     u32 sitePipeline(u32 shader, u32 state, const NebulaLayoutInput* pInputs, u32 inputCount, u32 stride, bool wide) {
         u64 key = static_cast< u64 >(shader) << 1 | (wide ? 1 : 0);
         key = key << 16 | stride;
@@ -710,10 +717,9 @@ namespace Frame {
                 // The description's own room is the frame list's limit (nebula_frame_list.h NEBULA_LAYOUT_MAX_INPUTS).
                 inputCount = inputCount > NEBULA_LAYOUT_MAX_INPUTS ? static_cast< u32 >(NEBULA_LAYOUT_MAX_INPUTS) : inputCount;
                 desc.input_count = static_cast< u32 >(inputCount);
-                memcpy(desc.inputs, pInputs, inputCount * sizeof(NebulaLayoutInput));
                 rEntry.mKey = key;
                 rEntry.mState = state;
-                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
+                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc, pInputs);
                 return rEntry.mPipeline;
         }
     }
@@ -734,7 +740,7 @@ namespace Frame {
         desc.position_stride = instanceBytes;
         rEntry.mKey = key;
         rEntry.mState = state;
-        rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
+        rEntry.mPipeline = host()->pipeline_register(host()->user, &desc, nullptr);
         return rEntry.mPipeline;
     }
 
@@ -757,15 +763,16 @@ namespace Frame {
                 desc.pixel = NEBULA_PROGRAM_SITE | static_cast< u64 >(shader) << 1;
                 desc.state = state;
                 static const u8 cSemantics[] = {NEBULA_INPUT_NORMAL, NEBULA_INPUT_COLOR0, NEBULA_INPUT_COLOR1, NEBULA_INPUT_TANGENT, NEBULA_INPUT_BINORMAL};
+                NebulaLayoutInput* pRoom = layoutRoom(cLayoutRoomBuild, static_cast< u32 >(sizeof(cSemantics)) + NEBULA_MATERIAL_SLOTS);
                 for (u8 semantic : cSemantics) {
-                    meshLayoutInput(&desc, semantic, *pMesh);
+                    meshLayoutInput(&desc, pRoom, semantic, *pMesh);
                 }
-                for (u8 coord = 0; coord < NEBULA_MATERIAL_SLOTS; coord++) {
-                    meshLayoutInput(&desc, static_cast< u8 >(NEBULA_INPUT_COORD0 + coord), *pMesh);
+                for (u16 coord = 0; coord < NEBULA_MATERIAL_SLOTS; coord++) {
+                    meshLayoutInput(&desc, pRoom, static_cast< u16 >(NEBULA_INPUT_COORD0 + coord), *pMesh);
                 }
                 rEntry.mKey = key;
                 rEntry.mState = state;
-                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
+                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc, pRoom);
                 return rEntry.mPipeline;
         }
     }
@@ -788,9 +795,10 @@ namespace Frame {
                 desc.pixel = pixel;
                 desc.state = state;
                 desc.position_stride = static_cast< u32 >(stride);
-                u8 programCoord = 0;
+                u16 programCoord = 0;
+                NebulaLayoutInput* pRoom = layoutRoom(cLayoutRoomBuild, formInputCount);
                 for (u32 f = 0; f < formInputCount; f++) {
-                    NebulaLayoutInput& rInput = desc.inputs[desc.input_count++];
+                    NebulaLayoutInput& rInput = pRoom[desc.input_count++];
                     const u8 semantic = pFormInputs[f];
                     rInput.semantic = semantic;
                     rInput.stream = NEBULA_STREAM_ZERO;
@@ -802,12 +810,12 @@ namespace Frame {
                         }
                     }
                     if (semantic >= NEBULA_INPUT_COORD0) {
-                        rInput.semantic = static_cast< u8 >(NEBULA_INPUT_COORD0 + programCoord++);
+                        rInput.semantic = static_cast< u16 >(NEBULA_INPUT_COORD0 + programCoord++);
                     }
                 }
                 rEntry.mKey = key;
                 rEntry.mState = state;
-                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc);
+                rEntry.mPipeline = host()->pipeline_register(host()->user, &desc, pRoom);
                 return rEntry.mPipeline;
         }
     }
@@ -903,16 +911,39 @@ namespace Frame {
         if (!GameAssets::open("/NebulaData/Pipelines.bin", &file)) {
             return;
         }
-        const auto* pDesc = static_cast< const NebulaPipelineDesc* >(GameAssets::map(file.mEntry));
+        // The file's format: nebula_frame_list.h NEBULA_PIPELINE_FILE_MAGIC. Records follow each other unaligned.
+        const u8* pBytes = static_cast< const u8* >(GameAssets::map(file.mEntry));
+        const u32 length = static_cast< u32 >(file.mLength);
+        if (length < NEBULA_PIPELINE_FILE_HEADER_BYTES || memcmp(pBytes, NEBULA_PIPELINE_FILE_MAGIC, 8) != 0) {
+            return;
+        }
+        u32 count;
+        memcpy(&count, pBytes + 8, sizeof(count));
+        u32 at = NEBULA_PIPELINE_FILE_HEADER_BYTES;
         const NebulaHostServices* pHost = nebula_host();
-        for (u32 i = 0; i < file.mLength / sizeof(NebulaPipelineDesc); i++) {
-            pHost->pipeline_register(pHost->user, &pDesc[i]);
-            if (pDesc[i].pixel == (NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE) << 1)) {
+        for (u32 i = 0; i < count; i++) {
+            if (length - at < NEBULA_PIPELINE_RECORD_BYTES) {
+                return;
+            }
+            NebulaPipelineDesc desc;
+            memcpy(&desc.vertex, pBytes + at, 8);
+            memcpy(&desc.pixel, pBytes + at + 8, 8);
+            memcpy(&desc.state, pBytes + at + 16, 4);
+            memcpy(&desc.input_count, pBytes + at + 20, 4);
+            memcpy(&desc.position_stride, pBytes + at + 24, 4);
+            at += NEBULA_PIPELINE_RECORD_BYTES;
+            if ((length - at) / NEBULA_LAYOUT_INPUT_BYTES < desc.input_count) {
+                return;
+            }
+            NebulaLayoutInput* pInputs = layoutRoom(cLayoutRoomBuild, desc.input_count);
+            memcpy(pInputs, pBytes + at, desc.input_count * sizeof(NebulaLayoutInput));
+            at += desc.input_count * NEBULA_LAYOUT_INPUT_BYTES;
+            pHost->pipeline_register(pHost->user, &desc, pInputs);
+            if (desc.pixel == (NEBULA_PROGRAM_SITE | static_cast< u64 >(NEBULA_SHADER_PARTICLE) << 1)) {
                 // Dynamic emitters choose this form only after proving their alpha test cannot reject. Prepare both
                 // forms with the existing particle state list, before play, so the optimization adds no first-use hitch.
-                NebulaPipelineDesc pixel = pDesc[i];
-                pixel.state |= NEBULA_STATE_PIXEL_SHADING;
-                pHost->pipeline_register(pHost->user, &pixel);
+                desc.state |= NEBULA_STATE_PIXEL_SHADING;
+                pHost->pipeline_register(pHost->user, &desc, pInputs);
             }
         }
     }

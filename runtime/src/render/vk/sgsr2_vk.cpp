@@ -7,6 +7,8 @@
 #include "galaxy/render/vk/utility_spirv.h"
 #include "galaxy/render/vk/vk_context.h"
 
+#include "barriers_vk.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -55,19 +57,6 @@ VkShaderModule module_of(VkDevice device, UtilitySpirv shader) {
     info.pCode = spirv.data();
     VkShaderModule module = VK_NULL_HANDLE;
     return vkCreateShaderModule(device, &info, nullptr, &module) == VK_SUCCESS ? module : VK_NULL_HANDLE;
-}
-
-VkImageMemoryBarrier image_barrier(VkImage image, VkImageAspectFlags aspects, VkImageLayout from, VkImageLayout to,
-                                   VkAccessFlags src, VkAccessFlags dst) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = src;
-    barrier.dstAccessMask = dst;
-    barrier.oldLayout = from;
-    barrier.newLayout = to;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange = {aspects, 0u, 1u, 0u, 1u};
-    return barrier;
 }
 
 // The descriptor pool, kept until the last deferred free of its sets has run.
@@ -156,44 +145,40 @@ public:
         const bool reset = in.reset || !history_ready_;
         if (!history_ready_) {
             // Both histories start black and readable; the reset ignores the one read this frame.
-            VkImageMemoryBarrier to_clear[2];
+            BarriersVk to_clear(commands);
             for (unsigned i = 0; i < 2u; ++i) {
-                to_clear[i] = image_barrier(history_[i]->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 0u, VK_ACCESS_TRANSFER_WRITE_BIT);
+                to_clear.image_scoped(history_[i]->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                                      VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 1u);
             }
-            vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
-                                 nullptr, 2u, to_clear);
+            to_clear.issue();
             const VkClearColorValue black{};
             const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
             for (unsigned i = 0; i < 2u; ++i) {
                 vkCmdClearColorImage(commands, history_[i]->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1u, &range);
-                to_clear[i] = image_barrier(history_[i]->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_ACCESS_TRANSFER_WRITE_BIT,
-                                            VK_ACCESS_SHADER_READ_BIT);
             }
-            vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
-                                 0, nullptr, 2u, to_clear);
+            BarriersVk to_read(commands);
+            for (unsigned i = 0; i < 2u; ++i) {
+                to_read.image(history_[i]->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopyDest, gpu::Use::PixelRead,
+                              gpu::Contents::Keep, 1u);
+            }
+            to_read.issue();
             history_ready_ = true;
         }
 
         // The scene's colour, motion and depth from their attachment layouts to read; back after.
-        constexpr VkAccessFlags kColorWrite = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        constexpr VkAccessFlags kColorAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        constexpr VkAccessFlags kDepthAccess =
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        constexpr VkPipelineStageFlags kAttachmentStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                                                           VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                                                           VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        VkImageMemoryBarrier to_read[3] = {
-            image_barrier(in.color.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, kColorWrite, VK_ACCESS_SHADER_READ_BIT),
-            image_barrier(in.motion.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, kColorWrite, VK_ACCESS_SHADER_READ_BIT),
-            image_barrier(in.depth.image, in.depth.barrier_aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                          VK_ACCESS_SHADER_READ_BIT)};
-        vkCmdPipelineBarrier(commands, kAttachmentStages, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 3u,
-                             to_read);
+        constexpr VkPipelineStageFlags2 kDepthStages =
+            VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+        BarriersVk scene_to_read(commands);
+        scene_to_read.image(in.color.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::PixelRead,
+                            gpu::Contents::Keep, 1u);
+        scene_to_read.image(in.motion.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::PixelRead,
+                            gpu::Contents::Keep, 1u);
+        scene_to_read.image_scoped(in.depth.image, in.depth.barrier_aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, kDepthStages,
+                                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 1u);
+        scene_to_read.issue();
 
         const Constants constants = constants_for(in, reset);
         const VkClearValue unused[2]{};
@@ -215,15 +200,16 @@ public:
              constants);
         vkCmdEndRenderPass(commands);
 
-        VkImageMemoryBarrier back[3] = {
-            image_barrier(in.color.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0u, kColorAccess),
-            image_barrier(in.motion.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 0u, kColorAccess),
-            image_barrier(in.depth.image, in.depth.barrier_aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 0u, kDepthAccess)};
-        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, kAttachmentStages, 0, 0, nullptr, 0, nullptr, 3u,
-                             back);
+        BarriersVk scene_back(commands);
+        scene_back.image(in.color.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::PixelRead, gpu::Use::ColorWrite,
+                         gpu::Contents::Keep, 1u);
+        scene_back.image(in.motion.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::PixelRead, gpu::Use::ColorWrite,
+                         gpu::Contents::Keep, 1u);
+        scene_back.image_scoped(in.depth.image, in.depth.barrier_aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+                                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                VK_ACCESS_2_NONE, kDepthStages,
+                                VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, 1u);
+        scene_back.issue();
         history_index_ = write;
         return true;
     }

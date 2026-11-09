@@ -84,9 +84,9 @@ void set_state_wake(void* event) noexcept;
 // The grid as last timed, without starting the timing.
 [[nodiscard]] bool vblank_grid_known(std::int64_t& vblank, std::int64_t& period) noexcept;
 [[nodiscard]] bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period) noexcept;
-// Where the game's retrace follows the display's vsync (Android): the latest retrace, the retrace period, the
+// Where the game's frames follow the display's vsync (Android): the latest frame slot, the frame period, the
 // display's vsync interval and now (CLOCK_MONOTONIC nanoseconds), for presents timed to it; else false.
-[[nodiscard]] bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+[[nodiscard]] bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
                                 std::int64_t& now_ns) noexcept;
 
 // Each present: the vendor upscaler download's progress, and GALAXY_TEST_WINDOW_SIZES (a live resize at a present).

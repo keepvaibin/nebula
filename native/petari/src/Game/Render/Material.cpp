@@ -707,11 +707,10 @@ u32 MaterialDraw::tableOf(s32 formIndex, const NebulaModelForm& rForm) {
     return table;
 }
 
-void meshLayoutInput(NebulaPipelineDesc* pDesc, u8 semantic, const NebulaModelMesh& rMesh) {
+void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 semantic, const NebulaModelMesh& rMesh) {
     {
-        NebulaLayoutInput& rInput = pDesc->inputs[pDesc->input_count++];
+        NebulaLayoutInput& rInput = pInputs[pDesc->input_count++];
         rInput.semantic = semantic;
-        rInput.reserved = 0;
         const auto place = [&rInput](u8 stream, u8 format, u32 offset, u32 stride) {
             rInput.stream = stream;
             rInput.format = format;
@@ -799,15 +798,16 @@ u32 MaterialDraw::pipelineOf(s32 formIndex, const NebulaModelForm& rForm, const 
     desc.pixel = rForm.pixel;
     desc.state = state;
     const u8* pInputs = reinterpret_cast< const u8* >(pMaterial->mData->at(rForm.inputs_at));
-    u8 programCoord = 0;
+    u16 programCoord = 0;
+    NebulaLayoutInput* pRoom = Frame::layoutRoom(Frame::cLayoutRoomBuild, rForm.input_count);
     for (u32 i = 0; i < rForm.input_count; i++) {
-        meshLayoutInput(&desc, pInputs[i], *pMesh->mFile);
+        meshLayoutInput(&desc, pRoom, pInputs[i], *pMesh->mFile);
         if (pInputs[i] >= NEBULA_INPUT_COORD0) {
-            desc.inputs[desc.input_count - 1].semantic = static_cast< u8 >(NEBULA_INPUT_COORD0 + programCoord++);
+            pRoom[desc.input_count - 1].semantic = static_cast< u16 >(NEBULA_INPUT_COORD0 + programCoord++);
         }
     }
     const NebulaHostServices* pHost = nebula_host();
-    pState->mPipeline = pHost->pipeline_register(pHost->user, &desc);
+    pState->mPipeline = pHost->pipeline_register(pHost->user, &desc, pRoom);
     pState->mPipelineState = state;
     pState->mPipelineAttributes = attributes;
     pState->mPipelineStride = stride;

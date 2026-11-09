@@ -41,7 +41,6 @@ static_assert(sizeof(NebulaParticleInstance) == kParticleRows * 16u);
 // An instanced glyph's rows (NebulaGlyphInstance), as glyph_instances.hlsl reads them.
 inline constexpr std::uint32_t kGlyphRows = 3u;
 static_assert(sizeof(NebulaGlyphInstance) == kGlyphRows * 16u);
-using render::kTableTextures;
 
 // A presented frame's place between two lists.
 struct WalkTime {
@@ -84,14 +83,15 @@ struct GpuModel {
     std::uint32_t generation = 0u;
 };
 
-// One registered list of textures: what it names, and what the draws read it through (Direct3D 12: this walk's
-// texture list of {texture slot, sampler slot} pairs; Vulkan: the bound tables).
+// One registered list of textures: what it names, and what the draws read it through (this walk's texture list of
+// {texture slot, sampler slot} pairs; Vulkan without descriptor indexing: the bound tables).
 struct TextureTable {
     std::vector<NebulaFrameTexture> list;
     std::uint32_t count = 0u;
     std::vector<std::uint32_t> sampler_slots;
     gpu::Address lists = 0u;
     std::uint32_t list_first = 0u;
+    bool clamp_logged = false;  // a bound table drew fewer maps than the list names (told once)
     std::uint64_t key = 0u;
     gpu::Table textures{};
     gpu::Table samplers{};
@@ -108,6 +108,7 @@ struct StaticSlot {
 
 struct PipelineEntry {
     NebulaPipelineDesc desc{};
+    std::vector<NebulaLayoutInput> inputs;  // desc.input_count of them
     bool reads_world = false;  // its vertex program reads the world rows
     bool lit_form = false;     // its pixel program lights at the pixel
     // Where its vertices keep their matrix number (NEBULA_INPUT_MATRIX, one uint, stream 0), or none.
@@ -202,7 +203,7 @@ public:
     std::uint32_t mesh_register(const NebulaFrameMesh& mesh);
     void mesh_free(std::uint32_t mesh);
     std::uint32_t material_register(const float (*rows)[4], std::uint32_t vertex_rows, std::uint32_t pixel_rows);
-    std::uint32_t pipeline_register(const NebulaPipelineDesc& desc);
+    std::uint32_t pipeline_register(const NebulaPipelineDesc& desc, const NebulaLayoutInput* inputs);
     std::uint32_t texture_table(const NebulaFrameTexture* list, std::uint32_t count);
 
     // Game thread, as a list is handed over: what the services queued since the last list.
@@ -301,7 +302,8 @@ private:
     TextureTable no_table_;
 
     std::uint32_t next_model_ = 1u, next_mesh_ = 1u, next_slot_ = 0u, next_table_ = 1u;
-    std::vector<NebulaPipelineDesc> all_pipelines_;
+    // Every pipeline the game registered, with its inputs (the entries' copies, in registration order).
+    std::vector<PipelineEntry> all_pipelines_;
     std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> pipeline_by_hash_;
     std::unordered_map<std::uint64_t, std::vector<TableKey>> table_by_hash_;
     std::unordered_map<std::uint64_t, std::vector<SlotRecord>> slot_by_hash_;

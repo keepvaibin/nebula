@@ -8,7 +8,9 @@
 #include <nebula_model.h>
 
 #include <array>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <cwchar>
 #include <filesystem>
 #include <fstream>
@@ -17,6 +19,65 @@
 
 namespace galaxy::render::core {
 namespace {
+
+// The cache file: a header (magic, size and hash of the library blob), then the blob. A file whose header or hash does not
+// fit is never handed to the runtime. The runtime itself refuses a blob from another driver version or adapter
+// (D3D12_ERROR_DRIVER_VERSION_MISMATCH, D3D12_ERROR_ADAPTER_NOT_FOUND) and the cache starts empty; the file's name carries the
+// adapter's identity, so two cards do not take turns replacing one file.
+struct CacheFileHeader {
+    char magic[8];
+    std::uint64_t size;
+    std::uint64_t hash;
+};
+constexpr char kCacheMagic[8] = {'N', 'B', 'D', '3', 'D', 'P', 'L', '1'};
+
+std::uint64_t blob_hash(const void* data, std::size_t size) noexcept {
+    const auto* bytes = static_cast<const unsigned char*>(data);
+    std::uint64_t hash = 0x9E3779B97F4A7C15ull ^ size;
+    std::size_t i = 0u;
+    for (; i + 8u <= size; i += 8u) {
+        std::uint64_t word;
+        std::memcpy(&word, bytes + i, 8u);
+        hash = (hash ^ word) * 0xFF51AFD7ED558CCDull;
+        hash ^= hash >> 32u;
+    }
+    for (; i < size; ++i) {
+        hash = (hash ^ bytes[i]) * 0x100000001B3ull;
+    }
+    return hash;
+}
+
+// The library blob inside a cache file; empty when the header, the size or the hash is wrong.
+std::vector<char> unwrap_cache_file(const std::vector<char>& file) {
+    CacheFileHeader header{};
+    if (file.size() <= sizeof(header)) {
+        return {};
+    }
+    std::memcpy(&header, file.data(), sizeof(header));
+    if (std::memcmp(header.magic, kCacheMagic, sizeof(kCacheMagic)) != 0 || header.size != file.size() - sizeof(header) ||
+        header.hash != blob_hash(file.data() + sizeof(header), static_cast<std::size_t>(header.size))) {
+        return {};
+    }
+    return std::vector<char>(file.begin() + sizeof(header), file.end());
+}
+
+// What the cache is good for: the adapter's vendor, device and revision and its user-mode driver's version.
+std::string adapter_key(gpu::Device* device) {
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) || FAILED(factory->EnumAdapterByLuid(device->GetAdapterLuid(), IID_PPV_ARGS(&adapter)))) {
+        return "unknown";
+    }
+    DXGI_ADAPTER_DESC1 desc{};
+    LARGE_INTEGER driver{};
+    if (FAILED(adapter->GetDesc1(&desc)) || FAILED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &driver))) {
+        return "unknown";
+    }
+    char text[64]{};
+    std::snprintf(text, sizeof(text), "%04x_%04x_%02x_%016llx", desc.VendorId, desc.DeviceId, desc.Revision,
+                  static_cast<unsigned long long>(driver.QuadPart));
+    return text;
+}
 
 // The driver's compiled pipelines, kept between runs. A blob from another driver or device fails to open and starts over.
 struct DriverCache {
@@ -44,11 +105,12 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1)))) {
         return nullptr;
     }
-    gCache.file = shader_cache_directory() / "d3d12_pipelines.bin";
+    gCache.file = shader_cache_directory() / (std::string("d3d12_pipelines_") + adapter_key(device) + ".bin");
     if (std::ifstream in(gCache.file, std::ios::binary | std::ios::ate); in) {
-        gCache.blob.resize(static_cast<std::size_t>(in.tellg()));
+        std::vector<char> file(static_cast<std::size_t>(in.tellg()));
         in.seekg(0);
-        in.read(gCache.blob.data(), static_cast<std::streamsize>(gCache.blob.size()));
+        in.read(file.data(), static_cast<std::streamsize>(file.size()));
+        gCache.blob = unwrap_cache_file(file);
     }
     if (gCache.blob.empty() || FAILED(device1->CreatePipelineLibrary(gCache.blob.data(), gCache.blob.size(), IID_PPV_ARGS(&gCache.library)))) {
         gCache.blob.clear();
@@ -71,10 +133,16 @@ std::size_t write_driver_cache() noexcept {
         if (gCache.library == nullptr || !gCache.changed) {
             return 0u;
         }
-        bytes.resize(gCache.library->GetSerializedSize());
-        if (bytes.empty() || FAILED(gCache.library->Serialize(bytes.data(), bytes.size()))) {
+        const std::size_t blob_size = gCache.library->GetSerializedSize();
+        bytes.resize(sizeof(CacheFileHeader) + blob_size);
+        if (blob_size == 0u || FAILED(gCache.library->Serialize(bytes.data() + sizeof(CacheFileHeader), blob_size))) {
             return 0u;
         }
+        CacheFileHeader header{};
+        std::memcpy(header.magic, kCacheMagic, sizeof(kCacheMagic));
+        header.size = blob_size;
+        header.hash = blob_hash(bytes.data() + sizeof(header), blob_size);
+        std::memcpy(bytes.data(), &header, sizeof(header));
         gCache.changed = false;
         file = gCache.file;
     }
@@ -95,15 +163,35 @@ void release_driver_cache() noexcept {
     gCache.changed = false;
 }
 
-// A pipeline's key in the library: every field of its description, and the programs' bytes by their hash.
-std::uint64_t cache_hash(const NebulaPipelineDesc& desc, unsigned program, unsigned variant, unsigned aux) noexcept {
+// A pipeline's key in the library: every field of its description and of its inputs, and the programs' bytes, so a program
+// cooked again under the same id gets a name of its own (a stored name is never replaced).
+std::uint64_t cache_hash(const PipelineEntry& entry, unsigned program, unsigned variant, unsigned aux, const ProgramBytes& vs,
+                         const ProgramBytes& ps) noexcept {
     std::uint64_t hash = 14695981039346656037ull;
-    const auto* bytes = reinterpret_cast<const unsigned char*>(&desc);
-    for (std::size_t i = 0; i < sizeof(desc); ++i) {
-        hash = (hash ^ bytes[i]) * 1099511628211ull;
+    const auto mix_bytes = [&hash](const void* data, std::size_t size) {
+        const auto* bytes = static_cast<const unsigned char*>(data);
+        for (std::size_t i = 0; i < size; ++i) {
+            hash = (hash ^ bytes[i]) * 1099511628211ull;
+        }
+    };
+    const NebulaPipelineDesc& desc = entry.desc;
+    mix_bytes(&desc.vertex, sizeof(desc.vertex));
+    mix_bytes(&desc.pixel, sizeof(desc.pixel));
+    mix_bytes(&desc.state, sizeof(desc.state));
+    mix_bytes(&desc.input_count, sizeof(desc.input_count));
+    mix_bytes(&desc.position_stride, sizeof(desc.position_stride));
+    for (const NebulaLayoutInput& input : entry.inputs) {
+        mix_bytes(&input.semantic, sizeof(input.semantic));
+        mix_bytes(&input.stream, sizeof(input.stream));
+        mix_bytes(&input.format, sizeof(input.format));
+        mix_bytes(&input.offset, sizeof(input.offset));
+        mix_bytes(&input.stride, sizeof(input.stride));
     }
     for (const unsigned value : {program, variant, aux}) {
         hash = (hash ^ value) * 1099511628211ull;
+    }
+    for (const ProgramBytes* bytes : {&vs, &ps}) {
+        hash = (hash ^ blob_hash(bytes->data, bytes->size)) * 1099511628211ull;
     }
     return hash;
 }
@@ -166,7 +254,8 @@ DXGI_FORMAT input_format(std::uint32_t format) noexcept {
     }
 }
 
-void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) {
+void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
+    const NebulaPipelineDesc& desc = entry.desc;
     const bool site = (desc.vertex & NEBULA_PROGRAM_SITE) != 0u;
     const bool wide = site && (desc.vertex & 1u) != 0u;
     list.add("POSITION", 0u, DXGI_FORMAT_R32G32B32_FLOAT, gpu::kStreamPosition, 0u);
@@ -176,8 +265,7 @@ void fill_inputs(const NebulaPipelineDesc& desc, bool motion, InputList& list) {
     if (site && motion) {
         list.add("POSITION", 1u, DXGI_FORMAT_R32G32B32_FLOAT, gpu::kStreamBefore, 0u);
     }
-    for (std::uint32_t i = 0; i < desc.input_count; ++i) {
-        const NebulaLayoutInput& input = desc.inputs[i];
+    for (const NebulaLayoutInput& input : entry.inputs) {
         const UINT slot = input.stream == NEBULA_STREAM_ZERO ? UINT{gpu::kStreamZero} : UINT{input.stream};
         const DXGI_FORMAT format = input_format(input.format);
         switch (input.semantic) {
@@ -241,7 +329,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     pd.VS = {vs.data, vs.size};
     pd.PS = {ps.data, ps.size};
     InputList inputs;
-    fill_inputs(desc, aux == 1u, inputs);
+    fill_inputs(entry, aux == 1u, inputs);
     if (inputs.elements.size() > D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT) {
         std::fprintf(stderr, "[pipelines] %zu vertex inputs: the device takes %u\n", inputs.elements.size(),
                      static_cast<unsigned>(D3D12_IA_VERTEX_INPUT_STRUCTURE_ELEMENT_COUNT));
@@ -361,7 +449,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     ID3D12PipelineLibrary* cache = driver_cache(device_);
     HRESULT hr = E_FAIL;
     if (cache != nullptr) {
-        const std::uint64_t hash = cache_hash(desc, program, variant, aux);
+        const std::uint64_t hash = cache_hash(entry, program, variant, aux, vs, ps);
         const std::array<wchar_t, 40> name = cache_name(hash);
         std::mutex& named = gNameLocks[hash % gNameLocks.size()];
         {

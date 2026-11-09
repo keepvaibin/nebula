@@ -173,22 +173,41 @@ SceneClearValues make_scene_clear_values(std::uint32_t rgba, std::uint8_t frame_
             0.0f};
 }
 
-std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const noexcept {
+namespace {
+// FNV-1a over a sampler's words and the settings it depends on.
+struct SamplerHash {
     std::uint64_t hash = 0xCBF29CE484222325ull;
-    const auto mix = [&hash](std::uint32_t value) {
+    void mix(std::uint32_t value) noexcept {
         for (unsigned byte = 0u; byte < 4u; ++byte) {
             hash ^= (value >> (byte * 8u)) & 0xffu;
             hash *= 0x100000001B3ull;
         }
-    };
-    for (const auto& sampler : key.samplers) {
-        mix(sampler.filter);
-        const auto bits = [](float f) { return f == 0.0f ? 0u : std::bit_cast<std::uint32_t>(f); };
-        mix(bits(sampler.min_lod)); mix(bits(sampler.max_lod)); mix(bits(sampler.lod_bias));
     }
-    mix(key.count);
-    mix(key.config);
-    return static_cast<std::size_t>(hash);
+    void sampler(const SamplerKey& key) noexcept {
+        const auto bits = [](float f) { return f == 0.0f ? 0u : std::bit_cast<std::uint32_t>(f); };
+        mix(key.filter);
+        mix(bits(key.min_lod));
+        mix(bits(key.max_lod));
+        mix(bits(key.lod_bias));
+    }
+};
+}  // namespace
+
+std::size_t SamplerSlotKeyHasher::operator()(const SamplerSlotKey& key) const noexcept {
+    SamplerHash h;
+    h.sampler(key.sampler);
+    h.mix(key.config);
+    return static_cast<std::size_t>(h.hash);
+}
+
+std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const noexcept {
+    SamplerHash h;
+    for (const SamplerKey& sampler : key.samplers) {
+        h.sampler(sampler);
+    }
+    h.mix(static_cast<std::uint32_t>(key.samplers.size()));
+    h.mix(key.config);
+    return static_cast<std::size_t>(h.hash);
 }
 
 std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
@@ -196,27 +215,23 @@ std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
         (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
 }
 
-SamplerTableKey make_sampler_table_key(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count,
-                                       const RenderConfig& cfg) noexcept {
-    SamplerTableKey key{};
-    key.count = std::min(count, kSamplerTableSlots);
-    std::copy_n(keys.begin(), key.count, key.samplers.begin());
+SamplerSlotKey make_sampler_slot_key(const SamplerKey& sampler, const RenderConfig& cfg) noexcept {
+    return SamplerSlotKey{sampler, sampler_config_key(cfg)};
+}
+
+SamplerTableKey make_sampler_table_key(const SamplerKey* keys, unsigned count, const RenderConfig& cfg) {
+    SamplerTableKey key;
+    key.samplers.assign(keys, keys + count);
     key.config = sampler_config_key(cfg);
     return key;
 }
 
-SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTableKey& key) {
-    if (const auto it = tables_.find(key); it != tables_.end()) {
+SamplerSlotCache::Allocation SamplerSlotCache::get_or_allocate(const SamplerSlotKey& key) {
+    if (const auto it = slots_.find(key); it != slots_.end()) {
         return {it->second, false};
     }
-    // A descriptor table never straddles a physical heap. Further pages grow
-    // without substituting a default sampler for a requested material.
-    if (cursor_ % kSamplerHeapSlots + key.count > kSamplerHeapSlots) {
-        cursor_ += kSamplerHeapSlots - cursor_ % kSamplerHeapSlots;
-    }
-    const unsigned index = cursor_;
-    cursor_ += key.count;
-    tables_.emplace(key, index);
+    const unsigned index = cursor_++;
+    slots_.emplace(key, index);
     return {index, true};
 }
 

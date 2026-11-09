@@ -9,6 +9,7 @@
 #include <volk.h>
 
 #include "galaxy/render/vk/device_quirks_vk.h"
+#include "galaxy/render/vk/shader_compile_vk.h"
 
 #include <array>
 #include <atomic>
@@ -135,12 +136,26 @@ public:
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
     // What FSR 3's compute passes need, enabled (temporal_upscaler_vk.cpp).
     [[nodiscard]] bool temporal_upscaling() const noexcept { return temporal_upscaling_; }
+    // Descriptor indexing, decided in initialize: true when every texture sits in one update-after-bind array and every
+    // sampler in another (runtime-sized, partially bound, update after bind and while pending, variable count, dynamic
+    // indexing of sampled images, and update-after-bind limits that hold kBindlessTextureSlotsMin images and
+    // kBindlessSamplerSlots samplers), enabled here. False: draws bind
+    // their own tables of kBoundTableSlots maps (program.hlsli NEBULA_BOUND_TABLES).
+    [[nodiscard]] bool bindless() const noexcept { return bindless_; }
+    // With bindless(): the most image slots one array can hold on this device (its update-after-bind limits, room for the old
+    // array beside a larger one while the frames that read it finish); the renderer allocates what the views need.
+    [[nodiscard]] std::uint32_t texture_array_max() const noexcept { return texture_array_max_; }
+    // The most maps one bound table can hold on this device: its per-stage image, sampler and resource limits.
+    [[nodiscard]] std::uint32_t table_slots() const noexcept { return table_slots_; }
     [[nodiscard]] bool device_extension_enabled(const char* name) const noexcept {
         return std::find(enabled_device_extensions_.begin(), enabled_device_extensions_.end(), name) != enabled_device_extensions_.end();
     }
     // What XeSS asked for, enabled (Context::create).
     [[nodiscard]] bool xess_upscaling() const noexcept { return xess_upscaling_; }
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
+    // vkCmdPipelineBarrier2: the core function on a Vulkan 1.3 device with the feature, the KHR one on a 1.2 device with
+    // VK_KHR_synchronization2, else null (barriers_vk.h falls back to version-1 barriers).
+    [[nodiscard]] PFN_vkCmdPipelineBarrier2 pipeline_barrier2() const noexcept { return pipeline_barrier2_; }
     // The largest device-local heap's use and budget (the driver's with VK_EXT_memory_budget, else VMA's estimate).
     bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
 
@@ -240,9 +255,13 @@ private:
     bool bc_textures_ = false;
     bool memory_budget_ = false;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
+    PFN_vkCmdPipelineBarrier2 pipeline_barrier2_ = nullptr;
     bool depth_clamp_ = false;
     bool depth_clip_enable_ = false;
     bool temporal_upscaling_ = false;
+    bool bindless_ = false;
+    std::uint32_t texture_array_max_ = 0;
+    std::uint32_t table_slots_ = 0;
     std::vector<std::string> enabled_device_extensions_;
     bool xess_upscaling_ = false;
     bool xess_instance_ready_ = false;

@@ -18,12 +18,11 @@
 #include <limits>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace galaxy::render {
 
 using ScreenProbe = ::NebulaScreenProbe;
-// Textures one draw can read.
-inline constexpr std::uint32_t kTableTextures = NEBULA_MATERIAL_SLOTS;
 
 // A scene target kind, as a pipeline is built for it: log2 samples, then these bits.
 inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
@@ -45,39 +44,54 @@ inline constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;
 inline constexpr std::size_t kIndexRingBytes = 12u * 1024u * 1024u;
 inline constexpr std::size_t kConstantRingBytes = 12u * 1024u * 1024u;
 inline constexpr std::size_t kMatrixRingBytes = 32u * 1024u * 1024u;
+// The sampler array's length: Direct3D 12's sampler heap limit, and Vulkan's bindless sampler array (vk::kBindlessSamplerSlots).
 inline constexpr unsigned kSamplerHeapSlots = 2048;
-inline constexpr unsigned kSamplerTableSlots = NEBULA_MATERIAL_SLOTS;
+// The slots before the first sampler a draw names: the default sampler's.
+inline constexpr unsigned kSamplerReservedSlots = 1;
 
+// The render settings sampler slots depend on (anisotropy, LOD bias).
+[[nodiscard]] std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept;
+
+// One sampler slot's identity: the sampler and the settings it was made under.
+struct SamplerSlotKey {
+    SamplerKey sampler{};
+    std::uint32_t config = 0;
+    bool operator==(const SamplerSlotKey&) const = default;
+};
+struct SamplerSlotKeyHasher {
+    [[nodiscard]] std::size_t operator()(const SamplerSlotKey& key) const noexcept;
+};
+[[nodiscard]] SamplerSlotKey make_sampler_slot_key(const SamplerKey& sampler, const RenderConfig& cfg) noexcept;
+
+// A slot for each distinct sampler of one sampler array, made once. The renderer starts again between frames, with the
+// GPU past them, when the array is nearly full.
+class SamplerSlotCache {
+public:
+    struct Allocation { unsigned index; bool created; };
+    // The index may pass kSamplerHeapSlots: the renderer checks it where it writes the slot.
+    [[nodiscard]] Allocation get_or_allocate(const SamplerSlotKey& key);
+    void reset() noexcept {
+        slots_.clear();
+        cursor_ = kSamplerReservedSlots;
+    }
+    // Slots taken, the reserved ones included.
+    [[nodiscard]] unsigned used() const noexcept { return cursor_; }
+private:
+    std::unordered_map<SamplerSlotKey, unsigned, SamplerSlotKeyHasher> slots_;
+    unsigned cursor_ = kSamplerReservedSlots;
+};
+
+// A bound table's samplers (Vulkan without descriptor indexing): one descriptor set holds them all, as many as the table
+// has maps.
 struct SamplerTableKey {
-    std::array<SamplerKey, kSamplerTableSlots> samplers{};
-    std::uint32_t count = 0;
+    std::vector<SamplerKey> samplers;
     std::uint32_t config = 0;
     bool operator==(const SamplerTableKey&) const = default;
 };
 struct SamplerTableKeyHasher {
     [[nodiscard]] std::size_t operator()(const SamplerTableKey& key) const noexcept;
 };
-// The render settings sampler tables depend on (anisotropy, LOD bias).
-[[nodiscard]] std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept;
-[[nodiscard]] SamplerTableKey make_sampler_table_key(const std::array<SamplerKey, kSamplerTableSlots>& keys, unsigned count,
-                                                     const RenderConfig& cfg) noexcept;
-
-// The tables written in one sampler heap: each takes only the slots it uses. Written once; the renderer starts again between
-// frames, with the GPU idle, when the heap is nearly full.
-class SamplerTableCache {
-public:
-    struct Allocation { unsigned index; bool created; };
-    [[nodiscard]] Allocation get_or_allocate(const SamplerTableKey& key);
-    void reset() noexcept {
-        tables_.clear();
-        cursor_ = kSamplerTableSlots;
-    }
-    // Slots taken, the default table's included.
-    [[nodiscard]] unsigned used() const noexcept { return cursor_; }
-private:
-    std::unordered_map<SamplerTableKey, unsigned, SamplerTableKeyHasher> tables_;
-    unsigned cursor_ = kSamplerTableSlots;
-};
+[[nodiscard]] SamplerTableKey make_sampler_table_key(const SamplerKey* keys, unsigned count, const RenderConfig& cfg);
 
 
 struct SceneClearValues {

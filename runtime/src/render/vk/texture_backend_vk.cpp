@@ -3,6 +3,8 @@
 
 #include "galaxy/render/gpu_texture_backend.h"
 
+#include "barriers_vk.h"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -10,18 +12,11 @@ namespace galaxy::render {
 
 namespace {
 
-void transition(VkCommandBuffer commands, vk::Texture& texture, VkImageLayout to, VkPipelineStageFlags src_stage,
-                VkAccessFlags src_access, VkPipelineStageFlags dst_stage, VkAccessFlags dst_access) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = src_access;
-    barrier.dstAccessMask = dst_access;
-    barrier.oldLayout = texture.layout;
-    barrier.newLayout = to;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = texture.image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture.levels, 0, 1};
-    vkCmdPipelineBarrier(commands, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+// The texture from its tracked layout to `to`, over all its levels.
+void transition(VkCommandBuffer commands, vk::Texture& texture, VkImageLayout to, VkPipelineStageFlags2 src_stage,
+                VkAccessFlags2 src_access, VkPipelineStageFlags2 dst_stage, VkAccessFlags2 dst_access) {
+    vk::image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, texture.layout, to, src_stage, src_access,
+                      dst_stage, dst_access, texture.levels);
     texture.layout = to;
 }
 
@@ -42,6 +37,10 @@ bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
 
 void TextureBackend::shutdown() {
     views_.clear();
+    mirror_ = VK_NULL_HANDLE;
+    mirror_count_ = 0;
+    mirror_grow_ = nullptr;
+    mirror_owner_ = nullptr;
     null_texture_.reset();
     upload_list_ = VK_NULL_HANDLE;
 }
@@ -50,18 +49,84 @@ void TextureBackend::prepare_null_view(VkCommandBuffer commands) {
     if (!null_texture_ || null_texture_->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
         return;
     }
-    transition(commands, *null_texture_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-               VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+    transition(commands, *null_texture_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+               VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     const VkClearColorValue black{};
     const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     vkCmdClearColorImage(commands, null_texture_->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
-    transition(commands, *null_texture_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-               VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    transition(commands, *null_texture_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 void TextureBackend::write_view(std::uint32_t index, vk::Texture* texture, unsigned) {
     ensure_view(index);
     views_[index] = texture->view;
+    publish_view(index);
+}
+
+std::uint32_t TextureBackend::live_views() const noexcept {
+    for (std::size_t i = views_.size(); i > 0; --i) {
+        if (views_[i - 1] != VK_NULL_HANDLE && (null_texture_ == nullptr || views_[i - 1] != null_texture_->view)) {
+            return static_cast<std::uint32_t>(i);
+        }
+    }
+    return 0u;
+}
+
+void TextureBackend::mirror_into(VkDescriptorSet images, std::uint32_t count, GrowFn grow, void* owner) {
+    mirror_ = images;
+    mirror_count_ = count;
+    mirror_grow_ = grow;
+    mirror_owner_ = owner;
+    // The initial vector's last entry is the null view, whose slot the renderer writes.
+    for (std::uint32_t i = 0; i < views_.size(); ++i) {
+        if (views_[i] != VK_NULL_HANDLE && views_[i] != null_texture_->view) {
+            publish_view(i);
+        }
+    }
+}
+
+void TextureBackend::publish_view(std::uint32_t index) {
+    if (mirror_ == VK_NULL_HANDLE || views_[index] == VK_NULL_HANDLE) {
+        return;
+    }
+    if (index >= mirror_count_) {
+        // A larger set that already holds the earlier views (move_mirror); this one is written below.
+        if (mirror_grow_ != nullptr) {
+            mirror_grow_(mirror_owner_, index);
+        }
+        if (index >= mirror_count_) {
+            throw std::runtime_error("[textures] more texture views than the device's image array holds");
+        }
+    }
+    const VkDescriptorImageInfo image{VK_NULL_HANDLE, views_[index], VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = mirror_;
+    write.dstBinding = 0;
+    write.dstArrayElement = index;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = &image;
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+}
+
+void TextureBackend::release_view(std::uint32_t index) {
+    if (index >= views_.size()) {
+        return;
+    }
+    views_[index] = VK_NULL_HANDLE;
+    if (mirror_ == VK_NULL_HANDLE || index >= mirror_count_ || null_texture_ == nullptr) {
+        return;
+    }
+    const VkDescriptorImageInfo image{VK_NULL_HANDLE, null_texture_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = mirror_;
+    write.dstBinding = 0;
+    write.dstArrayElement = index;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = &image;
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
 }
 
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {
@@ -135,8 +200,8 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
         texture->layout = VK_IMAGE_LAYOUT_UNDEFINED;
     }
     transition(upload_list_, *texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-               reused ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0,
-               VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+               reused ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+               VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
     std::vector<VkBufferImageCopy> regions(levels);
     const unsigned count = levels;
     for (unsigned l = 0; l < count; ++l) {
@@ -154,8 +219,8 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
     }
     vkCmdCopyBufferToImage(upload_list_, staging.resource->buffer, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                            count, regions.data());
-    transition(upload_list_, *texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-               VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+    transition(upload_list_, *texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT,
+               VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 }
 
 }  // namespace galaxy::render

@@ -1048,6 +1048,16 @@ void pump_events(int timeout_ms) noexcept {
                     static_cast<std::uint32_t>(g_input.window_height),
                 std::memory_order_release);
             break;
+#if !defined(__ANDROID__)
+        // A minimised desktop window: the host stops the game's clocks and sound (in_background) as for an app out of
+        // sight, so nothing renders to a surface of no size (Android's activity reports this itself).
+        case SDL_EVENT_WINDOW_MINIMIZED:
+            g_background.store(true, std::memory_order_release);
+            break;
+        case SDL_EVENT_WINDOW_RESTORED:
+            g_background.store(false, std::memory_order_release);
+            break;
+#endif
         case SDL_EVENT_WINDOW_FOCUS_GAINED:
             g_input.window_focused = true;
             break;
@@ -1463,9 +1473,9 @@ bool vblank_grid(NativeWindow, std::int64_t& vblank, std::int64_t& period) noexc
     return galaxy::sdl::vsync_grid(vblank, period);  // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows
 }
 
-bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
                   std::int64_t& now_ns) noexcept {
-    return galaxy::sdl::display_grid(retrace_ns, period_ns, vsync_ns, now_ns);
+    return galaxy::sdl::display_grid(slot_ns, period_ns, vsync_ns, now_ns);
 }
 
 // What the settings menu asks of its platform (host_window.h).

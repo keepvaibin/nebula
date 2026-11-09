@@ -15,8 +15,12 @@ std::uint32_t mod_shader_compiler_revision() noexcept {
     return 0u;
 }
 
+bool mod_shader_has_bound_form() noexcept {
+    return false;
+}
+
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
-                                                   const std::vector<const char*>& defines, std::string& problem) {
+                                                   const std::vector<const char*>& defines, std::string& problem, bool) {
     namespace fs = std::filesystem;
     wchar_t exe[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, exe, MAX_PATH);

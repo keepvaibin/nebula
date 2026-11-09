@@ -2,6 +2,8 @@
 // FSR 3.1 on Vulkan (temporal_upscaler_vk.h).
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
 
+#include "barriers_vk.h"
+
 #if defined(_WIN32)
 #include "galaxy/render/xess_library.h"
 
@@ -23,20 +25,6 @@
 namespace galaxy::render::vk {
 
 namespace {
-
-void image_to_compute(VkCommandBuffer commands, const TemporalImage& image, VkImageLayout from, VkImageLayout to, VkPipelineStageFlags stage,
-                      VkAccessFlags access, VkAccessFlags compute_access, bool back) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = back ? compute_access : access;
-    barrier.dstAccessMask = back ? access : compute_access;
-    barrier.oldLayout = back ? to : from;
-    barrier.newLayout = back ? from : to;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image.image;
-    barrier.subresourceRange = {image.barrier_aspects, 0u, 1u, 0u, 1u};
-    vkCmdPipelineBarrier(commands, back ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : stage, back ? stage : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &barrier);
-}
 
 float halton(unsigned index, unsigned base) {
     float f = 1.0f;
@@ -144,19 +132,37 @@ private:
 }  // namespace
 
 void temporal_barriers(const TemporalUpscaleInputs& in, bool back) {
-    constexpr VkPipelineStageFlags kColor = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    constexpr VkPipelineStageFlags kDepth = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    constexpr VkAccessFlags kColorAccess = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    constexpr VkAccessFlags kDepthAccess = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    constexpr VkPipelineStageFlags2 kColor = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    constexpr VkPipelineStageFlags2 kDepth = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    constexpr VkAccessFlags2 kColorWrite = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    constexpr VkAccessFlags2 kColorAccess = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    constexpr VkAccessFlags2 kDepthWrite = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    constexpr VkAccessFlags2 kDepthAccess = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    constexpr VkAccessFlags2 kSampled = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+    constexpr VkAccessFlags2 kStorage = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
     constexpr VkImageLayout attachment = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     constexpr VkImageLayout read = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    const VkCommandBuffer commands = in.commands;
-    image_to_compute(commands, in.color, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-    image_to_compute(commands, in.motion, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-    image_to_compute(commands, in.reactive, attachment, read, kColor, kColorAccess, VK_ACCESS_SHADER_READ_BIT, back);
-    image_to_compute(commands, in.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, read, kDepth, kDepthAccess, VK_ACCESS_SHADER_READ_BIT, back);
-    image_to_compute(commands, in.output, attachment, VK_IMAGE_LAYOUT_GENERAL, kColor, kColorAccess,
-                     VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT, back);
+    // The attachments to the compute passes' layouts, or back, in one call. Reads before a write need no access: the
+    // way back makes available only the output's storage writes.
+    BarriersVk barriers(in.commands);
+    const auto change = [&](const TemporalImage& image, VkImageLayout attached, VkImageLayout computed,
+                            VkPipelineStageFlags2 stage, VkAccessFlags2 attached_write, VkAccessFlags2 attached_access,
+                            VkAccessFlags2 compute_access) {
+        if (back) {
+            barriers.image_scoped(image.image, image.barrier_aspects, computed, attached,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, compute_access & VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                                  stage, attached_access, 1u);
+        } else {
+            barriers.image_scoped(image.image, image.barrier_aspects, attached, computed, stage, attached_write,
+                                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, compute_access, 1u);
+        }
+    };
+    change(in.color, attachment, read, kColor, kColorWrite, kColorAccess, kSampled);
+    change(in.motion, attachment, read, kColor, kColorWrite, kColorAccess, kSampled);
+    change(in.reactive, attachment, read, kColor, kColorWrite, kColorAccess, kSampled);
+    change(in.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, read, kDepth, kDepthWrite, kDepthAccess, kSampled);
+    change(in.output, attachment, VK_IMAGE_LAYOUT_GENERAL, kColor, kColorWrite, kColorAccess, kStorage);
+    barriers.issue();
 }
 
 #if defined(_WIN32)

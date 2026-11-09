@@ -478,7 +478,7 @@ void RenderCore::report_frame_tail_window() noexcept {
                <<' '<<name<<"-p95-upper-us="<<percentile(95u)<<' '<<name<<"-p99-upper-us="<<percentile(99u)
                <<' '<<name<<"-max-us="<<a.monitor_max_ns/1000u;
             // Percentile ladder (1 ms bins) to show the shape of the interval distribution: even steps
-            // for a continuous process, plateaus for intervals quantized to display retraces. Meaningful
+            // for a continuous process, plateaus for intervals quantized to display refreshes. Meaningful
             // only in a window with tens of intervals.
             row<<' '<<name<<"-pct-upper-us="
                <<percentile(5u)<<'/'<<percentile(10u)<<'/'<<percentile(25u)<<'/'
@@ -868,7 +868,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
     const std::uint64_t serial = interp_sequence_serial_;
-    if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
+    if (serial - interp_gpu_checked_ >= 30u && galaxy::qpc_now() >= interp_gpu_warm_until_qpc_) {
         interp_gpu_checked_ = serial;
         const double generated_ms = renderer_.interpolation_gpu_cost_ms();
         if (generated_ms > 0.0) {
@@ -923,7 +923,7 @@ void RenderCore::restart_interp_governors() {
     interp_gpu_cap_ = 7u;
     interp_gpu_cap_serial_ = interp_sequence_serial_;
     interp_gpu_checked_ = interp_sequence_serial_;
-    interp_gpu_warm_until_ = interp_sequence_serial_ + 60u;
+    interp_gpu_warm_until_qpc_ = now + frequency;  // one second of generated-frame times left out
     renderer_.reset_generated_gpu_ema();
     interp_cadence_cap_ = 7u;
     interp_cadence_interval_s_ = 2u;
@@ -939,7 +939,8 @@ void RenderCore::restart_interp_governors() {
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     const bool trace = ::galaxy::diagnostics_recording() || ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
-    const std::int64_t period = frequency * 1001 / 60000;
+    // The game frame period the arrivals follow (start_interp_sequence's smoothed estimate), else the game step.
+    const std::int64_t period = interp_frame_period_qpc_ != 0 ? interp_frame_period_qpc_ : frequency / galaxy::kGameStepsPerSecond;
     // Since the frame before: the game's waits on the render thread, and the render thread's generated frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
     const auto waited = static_cast<std::int64_t>(waited_total - interp_cadence_wait_seen_);
@@ -1693,7 +1694,7 @@ void RenderCore::render_loop() {
             interp_stopping_ = stop_render_thread_;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
             // interpolation waits while the settings are open): the latest frame again at each display slot, so the
-            // overlay keeps the rate play had instead of the video retrace's 60 Hz.
+            // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
             overlay_idle = !stop_render_thread_ && overlay_idle_presents();
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
@@ -2166,9 +2167,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         retired_tables_.clear();
         registries_.forget_textures(freed_textures_, retired_tables_);
 #if defined(NEBULA_GPU_VULKAN)
-        // Direct3D 12 draws keep no tables: their lists are written each walk.
-        for (const gpu::Table table : retired_tables_) {
-            renderer_.retire_texture_table(table);
+        // Draws with texture lists keep no tables: their lists are written each walk.
+        if (!renderer_.bindless()) {
+            for (const gpu::Table table : retired_tables_) {
+                renderer_.retire_texture_table(table);
+            }
         }
 #endif
         for (const std::uint32_t id : freed_textures_) {

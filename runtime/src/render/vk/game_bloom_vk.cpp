@@ -2,6 +2,7 @@
 // The game's bloom on Vulkan (game_bloom_vk.h): game_bloom.cpp's chain with Vulkan's resources.
 #include "galaxy/render/vk/game_bloom_vk.h"
 
+#include "barriers_vk.h"
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/vk/utility_spirv.h"
 
@@ -19,28 +20,9 @@ constexpr VkFormat kWorkFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-void image_barrier(VkCommandBuffer commands, VkImage image, VkImageLayout from, VkImageLayout to,
-                   VkPipelineStageFlags src_stage, VkAccessFlags src_access, VkPipelineStageFlags dst_stage,
-                   VkAccessFlags dst_access) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = src_access;
-    barrier.dstAccessMask = dst_access;
-    barrier.oldLayout = from;
-    barrier.newLayout = to;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-    vkCmdPipelineBarrier(commands, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
 // A pass's writes before the next pass's (or the composite's) reads.
 void written(VkCommandBuffer commands) {
-    VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1, &barrier,
-                         0, nullptr, 0, nullptr);
+    shader_written(commands, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 }
 
 }  // namespace
@@ -286,28 +268,25 @@ bool GameBloomVk::copy_frame(VkCommandBuffer commands, const Inputs& in, std::sh
     if (!ensure(target, in.frame_width, in.frame_height, in.color->format, false, name)) {
         return false;
     }
-    image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-    // The last reads of the copy (an earlier composite) finish before it is written again.
-    image_barrier(commands, target->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                  VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+    // The scene colour to a copy source; the last reads of the copy (an earlier composite) finish before it is written again.
+    BarriersVk before(commands);
+    before.image(in.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::CopySource,
+                 gpu::Contents::Keep, 1u);
+    before.image(target->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::CopyDest,
+                 gpu::Contents::Discard, 1u);
+    before.issue();
     VkImageCopy region{};
     region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.extent = {in.frame_width, in.frame_height, 1};
     vkCmdCopyImage(commands, in.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target->image,
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-    image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-    image_barrier(commands, target->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                  VK_ACCESS_TRANSFER_WRITE_BIT,
-                  VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                  VK_ACCESS_SHADER_READ_BIT);
+    BarriersVk after(commands);
+    after.image(in.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource, gpu::Use::ColorWrite,
+                gpu::Contents::Keep, 1u);
+    after.image(target->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopyDest, gpu::Use::ShaderRead,
+                gpu::Contents::Keep, 1u);
+    after.issue();
     target->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     return true;
 }
@@ -401,25 +380,26 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     }
     // The work images live in GENERAL (written as storage, read as sampled images); the earlier frame's reads of them
     // finish before this one writes.
+    BarriersVk work(commands);
     for (std::shared_ptr<Texture>* t : {&dummy_, &work_, &box_tmp_, &mask_, &level1_, &blur_h_[0], &blur_h_[1],
                                         &level2_in_, &level2_, &blur2_h_[0], &blur2_h_[1], &blur2_h_[2]}) {
         if (*t && (*t)->layout != VK_IMAGE_LAYOUT_GENERAL) {
-            image_barrier(commands, (*t)->image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
-                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                          VK_ACCESS_SHADER_WRITE_BIT);
+            work.image_scoped((*t)->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                              VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                              VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 1u);
             (*t)->layout = VK_IMAGE_LAYOUT_GENERAL;
         }
     }
-    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+    // Execution only: the earlier frame's reads of the work images finish before this frame writes them.
+    work.memory(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE,
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE);
+    work.issue();
 
     const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
     // The selection's source: the glowing models drawn over black (normal: the scene target itself), the scene (simple).
     if (normal) {
-        image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                      VK_ACCESS_SHADER_READ_BIT);
+        image_barrier(commands, in.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ColorWrite, gpu::Use::ComputeRead,
+                      gpu::Contents::Keep, 1u);
     }
     {
         Constants c{};
@@ -434,10 +414,8 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
                  s.w1, s.h1);
     }
     if (normal) {
-        image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        image_barrier(commands, in.color->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeRead, gpu::Use::ColorWrite,
+                      gpu::Contents::Keep, 1u);
     }
     // The game's 4 x 4 pixel footprint (across, then down with the selection).
     const bool across = s.box > 1.0f;

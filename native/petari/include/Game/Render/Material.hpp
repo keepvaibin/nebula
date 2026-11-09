@@ -271,8 +271,8 @@ namespace MaterialAmbient {
     const f32* get(u32 channel);
 }  // namespace MaterialAmbient
 
-// Where a mesh keeps a vertex input, or the zero stream.
-void meshLayoutInput(NebulaPipelineDesc* pDesc, u8 semantic, const NebulaModelMesh& rMesh);
+// Where a mesh keeps a vertex input, or the zero stream: appended to `pInputs` at pDesc->input_count, which counts it.
+void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 semantic, const NebulaModelMesh& rMesh);
 
 // A colour register a draw sets, by name: the numbers are the material data's (0 the stage output, which no draw sets), so a
 // call can never land one register down.

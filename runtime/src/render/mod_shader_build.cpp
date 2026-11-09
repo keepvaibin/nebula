@@ -147,17 +147,28 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
                         (variant.only_with_discard && job.text.find("discard") == std::string::npos)) {
                         continue;
                     }
-                    std::string problem;
-                    std::vector<std::uint8_t> bytes = compile_mod_shader_stage(job.text, sources, job.pixel, variant.defines, problem);
-                    if (bytes.empty()) {
-                        good = false;
-                        const std::lock_guard<std::mutex> guard(lock);
-                        if (result.problem.empty()) {
-                            result.problem = problem;
+                    // A pixel program's second form, where this build has one.
+                    for (const bool bound : {false, true}) {
+                        if (bound && (!job.pixel || !mod_shader_has_bound_form())) {
+                            continue;
                         }
+                        std::string problem;
+                        std::vector<std::uint8_t> bytes =
+                            compile_mod_shader_stage(job.text, sources, job.pixel, variant.defines, problem, bound);
+                        if (bytes.empty()) {
+                            good = false;
+                            const std::lock_guard<std::mutex> guard(lock);
+                            if (result.problem.empty()) {
+                                result.problem = problem;
+                            }
+                            break;
+                        }
+                        const unsigned stored = variant.number + (bound ? kProgramBoundOffset : 0u);
+                        stages.push_back({job.id, static_cast<std::uint8_t>(stored), job.pixel, std::move(bytes)});
+                    }
+                    if (!good) {
                         break;
                     }
-                    stages.push_back({job.id, variant.number, job.pixel, std::move(bytes)});
                 }
                 if (good) {
                     const std::lock_guard<std::mutex> guard(lock);

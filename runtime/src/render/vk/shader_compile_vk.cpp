@@ -29,7 +29,12 @@ constexpr RegisterBinding kDrawBindings[] = {
     {"b2", 0, 2},
     {"t16", 0, 3},
     {"t17", 0, 4},
+    {"t18", 0, 5},
     {"b3", 0, 0, true},
+    // Set 1 the images and set 2 the samplers, as one array each over every texture and sampler (space1) or as a bound
+    // table (program.hlsli).
+    {"t0, space1", 1, 0},
+    {"s0, space1", 2, 0},
     {"t0", 1, 0},
     {"s0", 2, 0},
 };
@@ -309,8 +314,12 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     shader.setSourceEntryPoint(entry);
     // Constant-buffer matrices are row-major, as the D3D12 compile's D3DCOMPILE_PACK_MATRIX_ROW_MAJOR: the shared code
     // writes them row by row and the shaders multiply mul(matrix, vector).
-    // Vulkan draws bind each draw's own texture table (program.hlsli NEBULA_BOUND_TABLES).
-    std::string preamble = "#define NEBULA_VULKAN 1\n#define NEBULA_BOUND_TABLES 1\n#pragma pack_matrix(row_major)\n";
+    std::string preamble = "#define NEBULA_VULKAN 1\n#pragma pack_matrix(row_major)\n";
+    if (compile_options.bound_tables) {
+        // A device without descriptor indexing: each draw binds its own table of maps (program.hlsli); else the arrays are
+        // runtime-sized (OpTypeRuntimeArray, capability RuntimeDescriptorArray).
+        preamble += "#define NEBULA_BOUND_TABLES 1\n#define NEBULA_TABLE_SLOTS " + std::to_string(kBoundTableSlots) + "\n";
+    }
     for (const char* define : defines) {
         const char* equals = std::strchr(define, '=');
         if (equals == nullptr) {

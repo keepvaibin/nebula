@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace galaxy::render {
@@ -596,16 +597,17 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
     return count;
 }
 
-#if !defined(NEBULA_GPU_VULKAN)
 void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
     core::TextureTable& table = registries_.table(id);
-    if (table.walk_stamp == walk_.serial) {
+    // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
+    // the Vulkan image array grew and its null slot moved): then it is written again.
+    const auto generation = renderer_.sampler_generation();
+    if (table.walk_stamp == walk_.serial && table.samplers_generation == generation) {
         lists = table.lists;
         first = table.list_first;
         return;
     }
     const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
-    const auto generation = renderer_.sampler_generation();
     const std::uint32_t count = table.count;
     walk_handles_.assign(count, TextureHandle{});
     bool has_target = false;
@@ -664,11 +666,18 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
     lists = table.lists;
     first = table.list_first;
 }
-#else
-// Vulkan draws bind their table: as many maps as the bound table has (program.hlsli NEBULA_BOUND_TABLES).
-void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
+
+#if defined(NEBULA_GPU_VULKAN)
+// A device without descriptor indexing: each draw binds its table, as many maps as a bound table holds on this device
+// (renderer_.table_slots(); program.hlsli NEBULA_BOUND_TABLES). A longer list draws with its first maps.
+void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
     core::TextureTable& table = registries_.table(id);
-    const std::uint32_t count = std::min(table.count, core::kTableTextures);
+    const std::uint32_t count = std::min(table.count, renderer_.table_slots());
+    if (count < table.count && !table.clamp_logged) {
+        table.clamp_logged = true;
+        std::fprintf(stderr, "[textures] a list of %u maps: this device's bound tables hold %u, the first are drawn\n",
+                     table.count, count);
+    }
     const bool stale = table.textures.ptr == 0u || table.textures_revision != texture_store_.revision();
     const bool per_walk = table.has_target && table.walk_stamp != walk_.serial;
     const float mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
@@ -676,7 +685,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
     const bool samplers_stale = table.samplers.ptr == 0u || table.samplers_generation != generation ||
         table.samplers_mip_lines != mip_lines || table.samplers_scene_bias != scene_mip_bias_;
     if (stale || per_walk || samplers_stale) {
-        std::array<TextureHandle, core::kTableTextures> handles{};
+        walk_handles_.assign(count, TextureHandle{});
+        std::vector<TextureHandle>& handles = walk_handles_;
         bool has_target = false;
         for (std::uint32_t i = 0; i < count; ++i) {
             const std::uint32_t texture = table.list[i].texture;
@@ -703,7 +713,8 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
             table.textures_revision = texture_store_.revision();
         }
         if (samplers_stale || has_target) {
-            std::array<SamplerKey, core::kTableTextures> keys{};
+            std::vector<SamplerKey>& keys = walk_keys_;
+            keys.assign(count, SamplerKey{});
             for (std::uint32_t i = 0; i < count; ++i) {
                 const NebulaFrameTexture& t = table.list[i];
                 TextureSampler mode;
@@ -725,7 +736,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Table& textures, gpu::Table&
                 keys[i] = make_sampler_key(mode, generated, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary,
                                            mip_lines, scene_mip_bias_);
             }
-            table.samplers = renderer_.sampler_table_for(keys, count);
+            table.samplers = renderer_.sampler_table_for(keys.data(), count);
             table.samplers_generation = generation;
             table.samplers_mip_lines = mip_lines;
             table.samplers_scene_bias = scene_mip_bias_;
@@ -859,15 +870,18 @@ void RenderCore::walk_draw_pass(const NebulaFramePass& pass) {
         encoder.set_material(material.vertex_rows, material.pixel_rows);
         gpu::DrawRoot root;
 #if defined(NEBULA_GPU_VULKAN)
-        gpu::Table textures{}, samplers{};
-        walk_tables(item.textures, textures, samplers);
-        renderer_.bind_draw_tables(textures, samplers);
-        encoder.set_tables(textures, samplers);
-#else
-        gpu::Address lists = 0u;
-        walk_tables(item.textures, lists, root.table);
-        renderer_.bind_draw_textures(lists);
+        if (!renderer_.bindless()) {
+            gpu::Table textures{}, samplers{};
+            walk_bound_tables(item.textures, textures, samplers);
+            renderer_.bind_draw_tables(textures, samplers);
+            encoder.set_tables(textures, samplers);
+        } else
 #endif
+        {
+            gpu::Address lists = 0u;
+            walk_tables(item.textures, lists, root.table);
+            renderer_.bind_draw_textures(lists);
+        }
         root.first_instance = i;
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      ((item.flags & NEBULA_ITEM_SPREAD_POINTS) != 0u ? 2u : 0u) | NEBULA_INSPECT_FLAGS();

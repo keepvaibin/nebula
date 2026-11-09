@@ -10,6 +10,8 @@
 #include <bit>
 #include <cstring>
 #include <fstream>
+#include <new>
+#include <stdexcept>
 
 #if defined(_MSC_VER)
 #pragma warning(push, 0)
@@ -46,7 +48,8 @@ bool read_file(const std::filesystem::path& path, std::vector<std::uint8_t>& byt
     std::ifstream in(path, std::ios::binary | std::ios::ate);
     if (!in) return false;
     const std::streamoff size = in.tellg();
-    if (size <= 0 || size > (std::streamoff{1} << 31)) return false;
+    // Below 2 GiB: the PNG decoder takes the length as an int.
+    if (size <= 0 || size >= (std::streamoff{1} << 31)) return false;
     bytes.resize(static_cast<std::size_t>(size));
     in.seekg(0);
     return static_cast<bool>(in.read(reinterpret_cast<char*>(bytes.data()), size));
@@ -134,6 +137,9 @@ void box_level(
 // Levels below the given ones, each a box of the one above.
 void generate_levels(TexturePackPixels& image) {
     const auto count = static_cast<std::uint32_t>(std::bit_width(std::max(image.width, image.height)));
+    if (image.levels.empty()) {
+        return;
+    }
     std::vector<RGBA8> above;
     for (std::uint32_t level = static_cast<std::uint32_t>(image.levels.size()); level < count; ++level) {
         const std::uint32_t aw = std::max(1u, image.width >> (level - 1u));
@@ -212,7 +218,9 @@ bool decode_dds_level(DdsFormat format, const std::uint8_t* src, std::uint32_t w
 
 }  // namespace
 
-bool load_texture_pack_image(const std::filesystem::path& file, bool dds, TexturePackPixels& out, std::string* error) {
+namespace {
+
+bool load_image(const std::filesystem::path& file, bool dds, TexturePackPixels& out, std::string* error) {
     out = TexturePackPixels{};
     std::vector<std::uint8_t> bytes;
     if (!read_file(file, bytes)) {
@@ -254,6 +262,21 @@ bool load_texture_pack_image(const std::filesystem::path& file, bool dds, Textur
     }
     generate_levels(out);
     return true;
+}
+
+}  // namespace
+
+// A file too large for the memory left (a 16384 x 16384 picture and its levels are over a gigabyte) is skipped like a bad
+// one: the loader threads must not die of it.
+bool load_texture_pack_image(const std::filesystem::path& file, bool dds, TexturePackPixels& out, std::string* error) {
+    try {
+        return load_image(file, dds, out, error);
+    } catch (const std::bad_alloc&) {
+    } catch (const std::length_error&) {
+    }
+    out = TexturePackPixels{};
+    if (error != nullptr) *error = "not enough memory for the picture";
+    return false;
 }
 
 bool write_png(const std::filesystem::path& file, std::uint32_t width, std::uint32_t height, const std::uint8_t* rgba) {

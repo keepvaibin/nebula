@@ -39,7 +39,27 @@ public:
 
     void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels);
     void ensure_view(std::uint32_t index) { if (index >= views_.size()) { views_.resize(std::max<std::size_t>(std::size_t{index} + 1u, views_.size() * 2u), VK_NULL_HANDLE); } }
-    void write_view(std::uint32_t index, VkImageView view) { ensure_view(index); views_[index] = view; }
+    void write_view(std::uint32_t index, VkImageView view) {
+        ensure_view(index);
+        views_[index] = view;
+        publish_view(index);
+    }
+    // The bindless image array (RendererVk): `images` the descriptor set whose first `count` image slots hold every view
+    // at its index. The views made so far are written now, each later one when it is written (write_view). A view whose
+    // index reaches `count` calls `grow(owner, index)`, which must move the mirror to a larger set (move_mirror).
+    using GrowFn = void (*)(void* owner, std::uint32_t index);
+    void mirror_into(VkDescriptorSet images, std::uint32_t count, GrowFn grow, void* owner);
+    // The later views go to `images` (its first `count` slots), which already holds the earlier ones.
+    void move_mirror(VkDescriptorSet images, std::uint32_t count) noexcept {
+        mirror_ = images;
+        mirror_count_ = count;
+    }
+    // One past the highest index that holds a view of a texture (the null view excluded).
+    [[nodiscard]] std::uint32_t live_views() const noexcept;
+    void publish_view(std::uint32_t index);
+    // A view index the store gave up (its texture is gone and the GPU is past the frames that read it): the slot of the
+    // image array holds the null view again, so a copy of the array never moves a destroyed view.
+    void release_view(std::uint32_t index);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
@@ -65,6 +85,10 @@ public:
 private:
     std::vector<VkImageView> views_;
     std::shared_ptr<vk::Texture> null_texture_;
+    VkDescriptorSet mirror_ = VK_NULL_HANDLE;
+    std::uint32_t mirror_count_ = 0;
+    GrowFn mirror_grow_ = nullptr;
+    void* mirror_owner_ = nullptr;
     VkCommandBuffer upload_list_ = VK_NULL_HANDLE;
 };
 

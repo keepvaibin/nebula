@@ -281,8 +281,7 @@ void scene_aa_on_warp() {
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         list->ResourceBarrier(1, &b);
-        ID3D12DescriptorHeap* heaps[] = {ring.heap()};
-        list->SetDescriptorHeaps(1, heaps);
+        ring.bind(list.Get());
         ran = post.record_scene_aa(list.Get(), ring, target.Get(), rtv, kSize, kSize, kSize, kSize, display,
                                    display, 1u, 1u);
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -290,6 +289,7 @@ void scene_aa_on_warp() {
         list->ResourceBarrier(1, &b);
         buffer.pResource = readback.Get();
         list->CopyTextureRegion(&buffer, 0, 0, 0, &texture, nullptr);
+        ring.flush();
         list->Close();
         ID3D12CommandList* lists[] = {list.Get()};
         queue->ExecuteCommandLists(1, lists);

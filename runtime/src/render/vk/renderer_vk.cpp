@@ -14,6 +14,11 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/host_window.h"
+#if defined(_WIN32)
+#include "galaxy/render/display_modes.h"
+#include "galaxy/render/host_window_win32.h"
+#endif
+#include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/game_paths.h"
 
@@ -38,14 +43,6 @@ void RendererVk::test_lose_device() {
 }
 
 namespace {
-
-bool env_flag(const char* name, bool fallback) {
-    const char* value = std::getenv(name);
-    if (value == nullptr || value[0] == '\0') {
-        return fallback;
-    }
-    return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-}
 
 bool trace_present_stats_enabled() {
     static const bool enabled = ::galaxy::run_option_flag(::galaxy::run_options().trace_present_stats, false);
@@ -159,10 +156,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "vkAllocateCommandBuffers");
             frame.uploads = buffers[0];
             frame.commands = buffers[1];
-            frame.descriptors =
-                create_pool(device, kFrameSets, vk_detail::constants_sets(kFrameSets,
-                    {.images = kFrameSets * kTableTextures + 64u, .samplers = kFrameUtilitySamplers,
-                     .storage = vk_detail::kPassStorageBuffers, .storage_images = vk_detail::kPassStorageImages}));
+            frame.descriptors = create_pool(device, kFrameSets, vk_detail::frame_pool(!bindless_));
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");
         }
@@ -186,8 +180,9 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         }
         gpu::Encoder::Layout encoding{};
         encoding.layout = draw_layout_.layout;
-        encoding.constants_set = [](void* renderer, const VkBuffer* buffers, gpu::Address rows, gpu::Address instances) {
-            return static_cast<RendererVk*>(renderer)->constants_set(buffers, rows, instances);
+        encoding.constants_set = [](void* renderer, const VkBuffer* buffers, gpu::Address rows, gpu::Address instances,
+                                    gpu::Address lists) {
+            return static_cast<RendererVk*>(renderer)->constants_set(buffers, rows, instances, lists);
         };
         encoding.resolve = [](void*, gpu::Address address, VkBuffer& buffer, VkDeviceSize& offset) {
             const vk::Context::BufferOffset resolved = vk::Context::get().resolve(address);
@@ -196,7 +191,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         };
         encoding.renderer = this;
         encoder_.configure(encoding);
-        refresh_default_sampler_table();
+        reset_sampler_frame();
         // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
         bloom_.initialize();
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
@@ -304,35 +299,100 @@ bool RendererVk::create_layouts() {
                                                                                          : VK_FORMAT_D32_SFLOAT_S8_UINT;
 
     const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Descriptor indexing, or each draw's own tables (shader_compile_vk.h kBoundTableSlots); the programs, loaded by the form
+    // chosen here, are built for one.
+    bindless_ = context.bindless();
+    // The image set's binding: a runtime-sized array, its length chosen when a set is allocated (up to the layout's count).
+    const VkDescriptorBindingFlags sampler_flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+                                                   VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+                                                   VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT;
+    const VkDescriptorBindingFlags image_flags = sampler_flags | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+    texture_array_limit_ = 0u;
+    if (bindless_) {
+        // The device's answer for the image layout: whether it can be made and how long its variable binding may be.
+        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, context.texture_array_max(),
+                                                   VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+        VkDescriptorSetLayoutBindingFlagsCreateInfo flag_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+        flag_info.bindingCount = 1;
+        flag_info.pBindingFlags = &image_flags;
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        info.pNext = &flag_info;
+        info.bindingCount = 1;
+        info.pBindings = &binding;
+        VkDescriptorSetVariableDescriptorCountLayoutSupport variable{
+            VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_LAYOUT_SUPPORT};
+        VkDescriptorSetLayoutSupport support{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_SUPPORT};
+        support.pNext = &variable;
+        vkGetDescriptorSetLayoutSupport(device, &info, &support);
+        texture_array_limit_ = std::min(context.texture_array_max(), variable.maxVariableDescriptorCount);
+        if (support.supported != VK_TRUE || texture_array_limit_ < vk::kBindlessTextureSlotsMin) {
+            std::fprintf(stderr, "[vulkan] textures: the image array layout is not supported (up to %u slots); bound tables\n",
+                         texture_array_limit_);
+            bindless_ = false;
+            texture_array_limit_ = 0u;
+        }
+    }
+    if (!bindless_ && context.table_slots() < vk::kBoundTableSlots) {
+        throw std::runtime_error("the GPU's per-stage descriptor limits hold fewer than " + std::to_string(vk::kBoundTableSlots) +
+                                 " maps in a table, and it has no descriptor indexing");
+    }
+    program_use_bound_tables(!bindless_);
+    static_assert(kSamplerHeapSlots == vk::kBindlessSamplerSlots);
     {
-        // Set 0: b0, b1, b2, the composed rows, the instance table.
+        // Set 0: b0, b1, b2, the composed rows, the instance table and, with descriptor indexing, the frame's texture lists.
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},
             {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},
+            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 5;
+        info.bindingCount = bindless_ ? 6 : 5;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[0]), "set 0 layout");
     }
     {
-        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, kTableTextures,
-                                                   VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 1;
-        info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[1]), "set 1 layout");
+        // Sets 1 and 2: the images and the samplers. With descriptor indexing each is one array over every texture and
+        // every sampler, written while bound or in use by earlier frames, with slots left empty; the image binding is the
+        // last of its set and takes its length when a set is allocated (at most texture_array_limit_); else a table of
+        // one draw.
+        for (unsigned set = 1; set <= 2; ++set) {
+            const bool images = set == 1;
+            VkDescriptorSetLayoutBindingFlagsCreateInfo flag_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO};
+            flag_info.bindingCount = 1;
+            flag_info.pBindingFlags = images ? &image_flags : &sampler_flags;
+            const VkDescriptorSetLayoutBinding binding{
+                0, images ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER,
+                bindless_ ? (images ? texture_array_limit_ : vk::kBindlessSamplerSlots) : vk::kBoundTableSlots,
+                VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+            VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+            info.bindingCount = 1;
+            info.pBindings = &binding;
+            if (bindless_) {
+                info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+                info.pNext = &flag_info;
+            }
+            vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[set]), images ? "set 1 layout" : "set 2 layout");
+        }
     }
-    {
-        const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLER, kTableTextures, VK_SHADER_STAGE_FRAGMENT_BIT,
-                                                   nullptr};
-        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 1;
-        info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[2]), "set 2 layout");
+    if (bindless_) {
+        // The sampler array: one set of the cache's length (kSamplerHeapSlots), made once and kept. The image set is
+        // made when the texture store is first attached (install_texture_array), sized by its views.
+        const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_SAMPLER, vk::kBindlessSamplerSlots};
+        VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+        pool.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        pool.maxSets = 1;
+        pool.poolSizeCount = 1;
+        pool.pPoolSizes = &size;
+        vk::check(vkCreateDescriptorPool(device, &pool, nullptr, &bindless_pool_), "sampler array descriptor pool");
+        VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        allocate.descriptorPool = bindless_pool_;
+        allocate.descriptorSetCount = 1;
+        allocate.pSetLayouts = &draw_layout_.sets[2];
+        vk::check(vkAllocateDescriptorSets(device, &allocate, &bindless_samplers_), "sampler array descriptor set");
     }
     {
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -447,31 +507,22 @@ bool RendererVk::create_layouts() {
         subpass.pColorAttachments = &color;
         subpass.pResolveAttachments = samples_log2 != 0u ? &resolve : nullptr;
         subpass.pDepthStencilAttachment = &depth;
-        // Work before the pass (copies out of the scene target, uploads) completes before its draws; draws complete before
-        // anything after it reads the scene target.
+        // The pass against the passes before and after it: attachment writes complete before the next pass's attachment
+        // accesses. Whoever copies from or samples the scene target, or writes it outside a pass, changes its layout
+        // with a barrier of its own (it ends in the attachment layout), so no pass dependency names those stages.
         VkSubpassDependency dependencies[2]{};
         dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
         dependencies[0].dstSubpass = 0;
         dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_TRANSFER_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
         dependencies[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_SHADER_READ_BIT;
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1] = dependencies[0];
         dependencies[1].srcSubpass = 0;
         dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT |
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT |
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
         VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
         info.attachmentCount = samples_log2 != 0u ? 3u : 2u;
         info.pAttachments = attachments;
@@ -536,30 +587,21 @@ bool RendererVk::create_layouts() {
         subpass.colorAttachmentCount = 2;
         subpass.pColorAttachments = colors;
         subpass.pDepthStencilAttachment = &depth;
+        // As the scene target's passes: the compute passes that read or write these targets change their layouts with
+        // temporal_barriers.
         VkSubpassDependency dependencies[2]{};
         dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
         dependencies[0].dstSubpass = 0;
         dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-            VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
         dependencies[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
         dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_SHADER_READ_BIT;
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        dependencies[1] = dependencies[0];
         dependencies[1].srcSubpass = 0;
         dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT |
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-            VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT |
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
         VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
         info.attachmentCount = 3;
         info.pAttachments = attachments;
@@ -1185,6 +1227,18 @@ void RendererVk::shutdown() {
         }
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
+        sampler_slots_.reset();
+        sampler_slots_ready_ = false;
+        if (bindless_pool_ != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, bindless_pool_, nullptr);
+        bindless_pool_ = VK_NULL_HANDLE;
+        if (bindless_images_pool_ != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, bindless_images_pool_, nullptr);
+        bindless_images_pool_ = VK_NULL_HANDLE;
+        bindless_images_ = bindless_samplers_ = VK_NULL_HANDLE;
+        texture_array_slots_ = texture_array_limit_ = null_texture_slot_ = 0u;
+        mirrored_backend_ = nullptr;
+        mirrored_store_ = nullptr;
+        texture_lists_ = {};
+        texture_lists_used_ = 0u;
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
@@ -1197,6 +1251,7 @@ void RendererVk::shutdown() {
         for (Frame& frame : frames_) {
             frame.retired.clear();
     frame.retired_buffers.clear();
+            destroy_retired_pools(frame);
             if (frame.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, frame.pool, nullptr);
             if (frame.descriptors != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, frame.descriptors, nullptr);
             for (VkDescriptorPool pool : frame.overflow_descriptors) vkDestroyDescriptorPool(device, pool, nullptr);
@@ -1213,6 +1268,8 @@ void RendererVk::shutdown() {
         held_probe_slots_.clear();
         scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
+        display_capture_ = Readback{};
+        display_capture_pending_path_.clear();
         vertex_ring_.reset();
         index_ring_.reset();
         constant_ring_.reset();
@@ -1427,7 +1484,8 @@ void RendererVk::begin_frame() {
     context.collect();
     frame.retired.clear();
     frame.retired_buffers.clear();
-    refresh_default_sampler_table();
+    destroy_retired_pools(frame);
+    reset_sampler_frame();
     vk::check(vkResetCommandPool(device, frame.pool, 0), "vkResetCommandPool");
     vk::check(vkResetDescriptorPool(device, frame.descriptors, 0), "vkResetDescriptorPool");
     for (VkDescriptorPool pool : frame.overflow_descriptors) {
@@ -1475,6 +1533,7 @@ void RendererVk::begin_frame() {
     index_ring_.begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
     constants_sets_.clear();
+    texture_lists_used_ = 0u;
     encoder_.attach(frame.commands);
     reset_draw_bindings();
     scene_pass_open_ = false;
@@ -1531,6 +1590,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u &&
         !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
+    }
+    if (display_capture_.buffer && display_capture_.fence == 0u && !display_capture_pending_path_.empty()) {
+        display_capture_.fence = fence;
     }
     if (on_submitted != nullptr) {
         on_submitted(submission_context, fence);
@@ -1617,21 +1679,21 @@ void RendererVk::present_swapchain_image() {
     info.pImageIndices = &swap_image_;
     VkPresentTimeGOOGLE present_time{};
     VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
-    std::int64_t retrace = 0, period = 0, vsync = 0, now = 0;
-    if (context.display_timing() && host_window::present_grid(retrace, period, vsync, now)) {
+    std::int64_t frame_start = 0, period = 0, vsync = 0, now = 0;
+    if (context.display_timing() && host_window::present_grid(frame_start, period, vsync, now)) {
         PresentTiming& timing = present_timing_;
-        // Interpolating, slots step by one presented frame: the game's retrace period times 60 / the present rate
-        // (90 Hz: 1.5 presents per retrace).
+        // Interpolating, slots step by one presented frame: the game's frame period times 60 / the present rate
+        // (90 Hz: 1.5 presents per game frame).
         const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
         const std::int64_t step = std::max<std::int64_t>(1, std::llround(1e9 / rate));
-        // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
+        // The slot after the previous frame's, on the grid of the latest frame start; two frame periods after that start
         // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.
         std::int64_t slot = timing.last_slot + step;
-        const std::int64_t first = retrace + 2 * period;
-        if (timing.last_slot == 0 || slot > first + period || slot < retrace + step) {
+        const std::int64_t first = frame_start + 2 * period;
+        if (timing.last_slot == 0 || slot > first + period || slot < frame_start + step) {
             slot = first;
         } else {
-            slot = retrace + (slot - retrace + step / 2) / step * step;
+            slot = frame_start + (slot - frame_start + step / 2) / step * step;
         }
         // A frame too late for its slot takes a later one: a slot is in reach once the frame can be shown by then, at
         // least a vsync on (the compositor latches about one ahead) and as long as this device's frames have lately
@@ -1720,7 +1782,7 @@ void RendererVk::present_swapchain_image() {
 }
 
 // The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
-// one retrace period after the frame before it. Every 600 frames to the log.
+// one frame period after the frame before it. Every 600 frames to the log.
 void RendererVk::report_present_timing() {
     const VkDevice device = vk::Context::get().device();
     if (swapchain_.handle == VK_NULL_HANDLE) {
@@ -1781,7 +1843,7 @@ void RendererVk::report_present_timing() {
         }
         timing.last_actual = actual;
         if (++timing.frames == 600u) {
-            std::fprintf(stderr, "[present-timing] %u frames: %u shown at their retrace slot, %u late, %u without one "
+            std::fprintf(stderr, "[present-timing] %u frames: %u shown at their requested slot, %u late, %u without one "
                          "(unmatched); %u at the target interval; actual-hz %.2f, interval-max %.2f ms, duplicate-times %u; "
                          "late(available/delayed)=%u/%u margin %.2f ms (driver refresh %.2f, display %.2f ms); "
                          "present lead %.2f ms (a late frame's need, highest %.2f)\n",
@@ -1991,6 +2053,57 @@ bool RendererVk::wants_vsync() const {
            (!frame_generation_running() || fsr_generation_wanted() || vk::streamline_vk::generation_vsync());
 }
 
+#if defined(_WIN32)
+void RendererVk::reconcile_display_state() {
+    if (window_ == nullptr || host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    const RenderConfig cfg = get_render_config();
+    const unsigned mode = std::min(cfg.display_mode, kDisplayBorderless);
+    AppliedDisplay& applied = applied_display_;
+    const bool same_display = !host_window::display_changed.exchange(false, std::memory_order_acq_rel) && applied.valid &&
+                              applied.mode == mode && applied.monitor == cfg.monitor;
+    if (same_display) {
+        if (mode != kDisplayWindowed ||
+            (applied.window_width == cfg.window_width && applied.window_height == cfg.window_height) ||
+            host_window::move_size_active.load(std::memory_order_acquire)) {
+            return;
+        }
+    }
+    const std::vector<MonitorInfo> monitors = enumerate_monitors();
+    const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
+    if (monitor == nullptr) {
+        return;
+    }
+    host_window::WindowPlacement placement{};
+    if (mode == kDisplayWindowed) {
+        placement.style = host_window::kWindowStyle;
+        placement.rect = host_window::windowed_rect_on_monitor(*monitor, cfg.window_width, cfg.window_height);
+        placement.borderless = false;
+    } else {
+        placement.style = WS_POPUP;
+        placement.rect = monitor->bounds;
+        placement.borderless = true;
+    }
+    DWORD_PTR result = 0u;
+    if (SendMessageTimeoutW(window_, host_window::kPlaceWindowMessage, 0u, reinterpret_cast<LPARAM>(&placement), SMTO_NORMAL,
+                            2000u, &result) == 0) {
+        std::cerr << "[Renderer] display change: the window did not respond\n";
+        return;
+    }
+    // The size message of the placement reaches the swap chain through pending_resize_extent; a surface whose size did
+    // not change is remade only if the monitor or transform did (surface_changed).
+    swapchain_dirty_ = true;
+    applied.valid = true;
+    applied.mode = mode;
+    applied.monitor = cfg.monitor;
+    applied.window_width = cfg.window_width;
+    applied.window_height = cfg.window_height;
+    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed" : "borderless") << ' '
+              << narrow_utf8(monitor->device) << '\n';
+}
+#endif
+
 void RendererVk::follow_window_and_resize() {
     // The window's surface: dropped while withdrawn or after the driver lost it, made again once it is back.
     if (surface_lost_ || host_window::surface_withdrawn.load(std::memory_order_acquire)) {
@@ -2001,6 +2114,9 @@ void RendererVk::follow_window_and_resize() {
         (host_window::surface_withdrawn.load(std::memory_order_acquire) || !restore_surface())) {
         return;
     }
+#if defined(_WIN32)
+    reconcile_display_state();
+#endif
     const std::uint64_t extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent != 0u) {
         const auto width = static_cast<std::uint32_t>(extent >> 32u);
@@ -2061,27 +2177,21 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     const VkCommandBuffer commands = commands_;
     vk::Texture& display_picture = *source->texture;
     if (display_picture.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-        VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = display_picture.image;
-        barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
-                             nullptr, 0, nullptr, 1, &barrier);
+        image_barrier(commands, display_picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
+                      VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, 1u);
         const VkClearColorValue black{};
         const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         vkCmdClearColorImage(commands, display_picture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                             nullptr, 0, nullptr, 1, &barrier);
+        image_barrier(commands, display_picture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopyDest, gpu::Use::PixelRead,
+                      gpu::Contents::Keep, 1u);
         display_picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
     vk::Texture* shown = &display_picture;
+    if (capture_backbuffer && !present_black_) {
+        // A test snapshot also keeps the picture itself, before the post chain scales it.
+        static_cast<void>(debug_copy_selected_display_to_readback(*source));
+    }
 
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
@@ -2195,8 +2305,8 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     const auto hand_to_amd = [&] {
         if (swapchain_fsr_) {
             image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                          VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
         }
     };
 
@@ -2208,27 +2318,17 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
             backbuffer_capture_.buffer = context.create_readback_buffer(bytes, "backbuffer capture");
         }
         if (backbuffer_capture_.buffer) {
-            VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-            barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.image = swapchain_.images[image];
-            barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-            vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                 VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+            image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
+                          VK_ACCESS_2_TRANSFER_READ_BIT, 1u);
             VkBufferImageCopy region{};
             region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
             region.imageExtent = {swapchain_.image.width, swapchain_.image.height, 1};
             vkCmdCopyImageToBuffer(commands, swapchain_.images[image], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                    backbuffer_capture_.buffer->buffer, 1, &region);
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            barrier.dstAccessMask = 0;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
-                                 nullptr, 0, nullptr, 1, &barrier);
+            image_barrier(commands, swapchain_.images[image], VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopySource,
+                          gpu::Use::Present, gpu::Contents::Keep, 1u);
             backbuffer_capture_.fence = 0u;
             backbuffer_capture_pending_path_ = backbuffer_capture_path_;
             backbuffer_capture_width_ = swapchain_.image.width;

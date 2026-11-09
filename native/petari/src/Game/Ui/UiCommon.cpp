@@ -29,10 +29,9 @@ namespace {
     u32 sDrawState = 0;
 
     void setInput(NebulaLayoutInput& rInput, u32 semantic, u32 format, u32 offset, u32 stride) {
-        rInput.semantic = static_cast< u8 >(semantic);
+        rInput.semantic = static_cast< u16 >(semantic);
         rInput.stream = 0;
         rInput.format = static_cast< u8 >(format);
-        rInput.reserved = 0;
         rInput.offset = offset;
         rInput.stride = stride;
     }

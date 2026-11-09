@@ -53,11 +53,13 @@ void Encoder::flush_constants() noexcept {
         pixel_buffer_ = view_buffer_;
     }
     const std::array<VkBuffer, 3> buffers{view_buffer_, vertex_buffer_, pixel_buffer_};
-    if (set0_ == VK_NULL_HANDLE || buffers != set_buffers_ || rows_ != bound_rows_ || instances_ != bound_instances_) {
-        set0_ = layout_.constants_set(layout_.renderer, buffers.data(), rows_, instances_);
+    if (set0_ == VK_NULL_HANDLE || buffers != set_buffers_ || rows_ != bound_rows_ || instances_ != bound_instances_ ||
+        lists_ != bound_lists_) {
+        set0_ = layout_.constants_set(layout_.renderer, buffers.data(), rows_, instances_, lists_);
         set_buffers_ = buffers;
         bound_rows_ = rows_;
         bound_instances_ = instances_;
+        bound_lists_ = lists_;
     }
     vkCmdBindDescriptorSets(commands_, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_.layout, 0u, 1u, &set0_, 3u, offsets_.data());
     offsets_valid_ = true;

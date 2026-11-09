@@ -5,7 +5,7 @@ Xbox (XInput) controllers, Switch Pro Controllers, Joy-Con (a pair as one contro
 PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the Steam
 Controller (2026 and 2015), the Steam Deck's controls and generic HID game controllers work at the same time; every
 Wii input can be rebound. The game gets their state the moment it reads its remotes each frame (a report built then),
-and every 10 ms between frames: a press made just before a frame's read is in that frame. Measured from the retrace a
+and every 10 ms between frames: a press made just before a frame's read is in that frame. Measured from the frame start a
 scripted press begins on to the first frame that shows it, at 60 fps: spin 37.3 -> 20.4 ms, pause 37.0 -> 20.3 ms
 (the i7-6500U stand-in 39.7 -> 22.7 and 39.7 -> 22.1 ms); a press at a random moment gains about 5 ms on average.
 

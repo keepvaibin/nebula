@@ -39,8 +39,13 @@ ModShaderBuild build_missing_mod_shaders(const std::filesystem::path& sources, c
 // end and its location rules (vk::kCompilerRevision); 0 for D3D12, whose programs bind by name. Shaders built for
 // mods on this device are built again when it changes.
 [[nodiscard]] std::uint32_t mod_shader_compiler_revision() noexcept;
-// One stage of a program for this build's graphics interface; empty, with the reason, when it can't be.
+// Vulkan: a pixel program is also built in its bound-table form (program.hlsli NEBULA_BOUND_TABLES), for a device without
+// descriptor indexing, stored at the variant + kProgramBoundOffset. The cooking machine need not be the one that plays.
+[[nodiscard]] bool mod_shader_has_bound_form() noexcept;
+// One stage of a program for this build's graphics interface; empty, with the reason, when it can't be. `bound_tables`: the
+// bound-table form (only where mod_shader_has_bound_form).
 std::vector<std::uint8_t> compile_mod_shader_stage(const std::string& source, const std::filesystem::path& includes, bool pixel,
-                                                   const std::vector<const char*>& defines, std::string& problem);
+                                                   const std::vector<const char*>& defines, std::string& problem,
+                                                   bool bound_tables = false);
 
 }  // namespace galaxy::render

@@ -56,14 +56,24 @@ public:
     [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const { return texture_heap_.stats(); }
 
     void ensure_view(std::uint32_t index);
+    // A view index the store gave up (its texture is gone and the GPU is past the frames that read it): the slot holds the
+    // null view again, in the CPU page and in the shader-visible copy.
+    void release_view(std::uint32_t index);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu(std::uint32_t index) const noexcept;
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
-    // The shader-visible slots every view is copied into, a view's slot its index (the renderer's texture array):
-    // the views made so far are copied now, each later one when it is written (write_view, publish_view).
-    void mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count);
-    void publish_view(std::uint32_t index) const;
+    // The shader-visible slots every view is copied into, a view's slot its index (the texture region of the renderer's
+    // descriptor heap): the views made so far are copied now, each later one when it is written (write_view,
+    // publish_view). A view whose index reaches `count` calls `grow(owner, index)`, which makes a larger heap and calls
+    // mirror_into again for it (the earlier heap keeps the views it has for the draws already recorded).
+    using GrowFn = void (*)(void* owner, std::uint32_t index);
+    void mirror_into(D3D12_CPU_DESCRIPTOR_HANDLE slots, std::uint32_t count, GrowFn grow, void* owner);
+    void publish_view(std::uint32_t index);
+    // One past the highest view index made so far.
+    [[nodiscard]] std::uint32_t views_made() const noexcept { return views_made_; }
 
 private:
+    // `count` descriptors from `first` take the null view (a copy, then doubling copies).
+    void fill_null(D3D12_CPU_DESCRIPTOR_HANDLE first, std::uint32_t count);
     PlacedTextureAllocator texture_heap_{D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
@@ -74,6 +84,8 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE mirror_{};
     std::uint32_t mirror_count_ = 0u;
+    GrowFn mirror_grow_ = nullptr;
+    void* mirror_owner_ = nullptr;
     std::uint32_t views_made_ = 0u;  // one past the highest view index ensured
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
 };
