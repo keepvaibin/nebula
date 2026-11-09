@@ -189,8 +189,10 @@ bool CameraViewInterpolator::calcBinder(Vec3f* pBindDir, const Vec3f& rTargetPos
     Vec3f grav = Vec3f(0.0f, -1.0f, 0.0f);
     mGravity.set(grav);
 
-    f32 nearPlaneHeight = MR::tanDegree(MR::getFovy() * 0.5f) * ::sNearZ;
-    f32 nearPlaneWidth = nearPlaneHeight * 16.0f / 9.0f;
+    // The near plane the picture is drawn with: the render field of view (taller below 4:3) and the screen's own aspect,
+    // so the ball keeps the near plane out of walls on any screen, not only 16:9.
+    f32 nearPlaneHeight = MR::tanDegree(MR::getRenderFovy() * 0.5f) * ::sNearZ;
+    f32 nearPlaneWidth = nearPlaneHeight * MR::getAspect();
 
     mBinder->mRadius = MR::sqrt(::sCollisionBallRadius + nearPlaneHeight * nearPlaneHeight + nearPlaneWidth * nearPlaneWidth);
     *pBindDir = mBinder->bind(diff);
