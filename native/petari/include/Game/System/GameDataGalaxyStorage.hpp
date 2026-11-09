@@ -11,26 +11,33 @@ class GalaxyStatusAccessor;
 class GameDataSomeGalaxyStorage {
 public:
     GameDataSomeGalaxyStorage(const GalaxyStatusAccessor&);
+    // No missions: what a galaxy the save keeps nothing for reads (nothing owned, nothing kept).
+    GameDataSomeGalaxyStorage();
 
     void resetAllData();
     s32 getPowerStarNumOwned() const;
     s32 deserialize(const BinaryDataContentAccessor&, const u8*);
     void serialize(const BinaryDataContentAccessor&, u8*) const;
 
+    // A mission index (scenario number - 1) it has room for; scenario 0 gives -1, which has none.
+    bool hasSlot(int scenarioNo) const {
+        return static_cast< u32 >(scenarioNo) < static_cast< u32 >(mSlots);
+    }
+
     bool hasPowerStar(int scenarioNo) const {
-        return scenarioNo < mSlots && (mPowerStarOwnedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
+        return hasSlot(scenarioNo) && (mPowerStarOwnedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
     }
 
     bool isAlreadyVisited(int scenarioNo) const {
-        return scenarioNo < mSlots && (mAlreadyVisitedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
+        return hasSlot(scenarioNo) && (mAlreadyVisitedFlags[scenarioNo >> 3] & (1 << (scenarioNo & 7))) != 0;
     }
 
     u16 getMaxCoinNum(int scenarioNo) const {
-        return scenarioNo < mSlots ? mMaxCoinNum[scenarioNo] : 0;
+        return hasSlot(scenarioNo) ? mMaxCoinNum[scenarioNo] : 0;
     }
 
     void setMaxCoinNum(s32 scenarioNo, u16 coinNum) {
-        if (scenarioNo < mSlots) {
+        if (hasSlot(scenarioNo)) {
             mMaxCoinNum[scenarioNo] = coinNum;
         }
     }
@@ -92,4 +99,5 @@ public:
     BinaryDataContentHeaderSerializer* mHeaderSerializer;
     MR::NameIndex mNames;       // galaxy name -> index in mSomeGalaxyStorages
     MR::NameIndex mSaveHashes;  // keyed by the 16-bit name hash a save holds, first galaxy of a hash
+    GameDataSomeGalaxyStorage* mNoGalaxy;  // makeAccessor's for a name it holds none for
 };
