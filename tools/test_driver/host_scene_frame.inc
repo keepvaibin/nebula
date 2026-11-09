@@ -27,6 +27,7 @@
         std::string name;  // NEBULA_TEST_KILL_ACTOR's model
     };
     static std::vector<Event> events;
+    constexpr uint32_t kAudioCounters = 0xFFFFFFFFu;  // audio@frame: the host's, no game action
     static uint64_t tour_frames = 1200;
     static bool touring = false;
     static bool loaded = false;
@@ -88,6 +89,8 @@
                         events.push_back({NEBULA_TEST_KILL_ACTOR, frame, 0, kind.substr(7)});
                     } else if (kind == "wait") {
                         events.push_back({0, frame, 0});
+                    } else if (kind == "audio") {
+                        events.push_back({kAudioCounters, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
                         events.push_back({NEBULA_TEST_START_MOVIE, frame, std::atoi(kind.c_str() + 5)});
                     }
@@ -214,6 +217,14 @@
     }
     const uint64_t frame = scene_frames - stop_frame;
     for (const Event& event : events) {
+        if (frame == event.frame && event.kind == kAudioCounters) {
+#if defined(NEBULA_HOST_RENDERER)
+            if (gAudio != nullptr) {
+                log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
+            }
+#endif
+            continue;
+        }
         if (frame == event.frame && event.kind != 0) {
             action->kind = event.kind;
             action->scenario = event.value >= 0 ? event.value : (next > 0 ? stops[next - 1].scenario : 1);
