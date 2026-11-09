@@ -3554,6 +3554,9 @@ void RendererD3D12::begin_frame() {
     reset_sampler_frame();
     bound_rt_aux_ = 0u;
     retired_targets_[frame_slot_].clear();
+    game_bloom_.trim_idle(frame_index_, kFramesInFlight);
+    ambient_occlusion_.trim_idle(frame_index_, kFramesInFlight);
+    trim_idle_effect_targets();
     if (frame_index_ % 120u == 0u) {
         sweep_target_slots();
     }
@@ -3758,6 +3761,7 @@ void RendererD3D12::apply_hdr_metadata(const PostOutput& levels) {
 // The frame's picture as the SDR window would show it, for a capture (screenshots and test pictures stay SDR whatever the
 // swap chain is): the post chain's last write run again into an 8-bit target of the swap chain's size.
 ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source, const D3D12_VIEWPORT& viewport) {
+    hdr_capture_used_frame_ = frame_index_;
     if (!hdr_capture_target_ || hdr_capture_target_->GetDesc().Width != host_window::backbuffer_width ||
         hdr_capture_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (hdr_capture_target_) {
@@ -4327,7 +4331,41 @@ bool RendererD3D12::temporal_mode() const {
            (upscaler == 4u && xess_library::available());
 }
 
+void RendererD3D12::trim_idle_effect_targets() {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    // ComPtr's operator& yields a ComPtrRef, so each resource goes through a reference.
+    const auto retire = [this](Microsoft::WRL::ComPtr<ID3D12Resource>& resource) {
+        if (resource) {
+            retired_targets_[frame_slot_].push_back(std::move(resource));
+        }
+    };
+    if (frame_generation_running()) {
+        fg_hudless_used_frame_ = frame_index_;
+    }
+    if (frame_index_ > fg_hudless_used_frame_ + kIdleFrames) {
+        retire(fg_hudless_scene_target_.color);
+        retire(fg_hudless_scene_target_.depth);
+        retire(fg_hudless_scene_target_.msaa.color);
+        retire(fg_hudless_scene_target_.msaa.depth);
+        retire(fg_hudless_display_.texture);
+        retire(fg_hudless_target_);
+        fg_hudless_scene_target_.map = FrameMap{};
+        fg_hudless_scene_ = fg_hudless_taken_ = fg_hudless_ready_ = false;
+    }
+    if (frame_index_ > hdr_capture_used_frame_ + kIdleFrames) {
+        retire(hdr_capture_target_);
+    }
+    if (motion_target_ && !layer_window_ && frame_index_ > motion_used_frame_ + kIdleFrames) {
+        retire(motion_target_);
+        retire(reactive_target_);
+        retire(layer_color_);
+        retire(layer_trans_);
+        motion_target_map_ = FrameMap{};
+    }
+}
+
 bool RendererD3D12::ensure_motion_target() {
+    motion_used_frame_ = frame_index_;
     if (motion_target_ && motion_target_map_ == frame_) {
         return true;
     }

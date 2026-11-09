@@ -297,12 +297,31 @@ std::shared_ptr<Texture> GameBloomVk::take_kept_image() {
 
 void GameBloomVk::keep_picture(std::shared_ptr<Texture> picture) {
     keep_ = std::move(picture);
+    keep_used_ = clock_;
     kept_ = true;
+}
+
+void GameBloomVk::trim_idle() {
+    constexpr std::uint64_t kIdleFrames = 600u;
+    ++clock_;
+    const auto idle = [&](std::uint64_t used) { return clock_ > used + kIdleFrames; };
+    if (idle(keep_used_)) keep_.reset();
+    if (idle(work_used_)) {
+        for (std::shared_ptr<Texture>* t : {&work_, &box_tmp_, &mask_, &level1_, &blur_h_[0]}) t->reset();
+    }
+    if (idle(normal_used_)) {
+        for (std::shared_ptr<Texture>* t : {&blur_h_[1], &blur_h_[2], &level2_in_, &level2_, &blur2_h_[0], &blur2_h_[1],
+                                            &blur2_h_[2]}) {
+            t->reset();
+        }
+    }
+    if (idle(simple_used_)) source_.reset();
 }
 
 bool GameBloomVk::keep(VkCommandBuffer commands, const Inputs& in) {
     kept_ = ready_ && in.color != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
             copy_frame(commands, in, keep_, "bloom kept scene");
+    keep_used_ = clock_;
     return kept_;
 }
 
@@ -348,6 +367,11 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     const bool normal = p.kind == Kind::Normal;
     if (!ready_ || in.color == nullptr || in.frame_width == 0u || in.frame_height == 0u || ((normal || restore) && !kept)) {
         return false;
+    }
+    keep_used_ = clock_;
+    if (!restore) {
+        work_used_ = clock_;
+        (normal ? normal_used_ : simple_used_) = clock_;
     }
     composite_width_ = in.frame_width;
     composite_height_ = in.frame_height;

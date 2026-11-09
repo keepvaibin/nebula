@@ -63,6 +63,11 @@ public:
     // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
     // stays).
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
+    // Once a frame, outside a submission being recorded: hands back the images no pass has asked for in 600 frames (the
+    // bloom switched off, a scene without one, the other bloom's kind); prepare() makes them again. The images go
+    // through the context's deferred destruction, behind the fence of any submission naming them.
+    void trim_idle();
+
 private:
     // game_bloom.hlsl's BloomConstants (pushed).
     struct Constants {
@@ -116,6 +121,14 @@ private:
     std::shared_ptr<Texture> work_, box_tmp_, mask_, level1_, level2_in_, level2_;
     std::array<std::shared_ptr<Texture>, 3> blur_h_;
     std::array<std::shared_ptr<Texture>, 3> blur2_h_;
+
+    // trim_idle() calls, and the clock at the last use of each group: the kept scene, the level 1 images, the normal
+    // bloom's level 2 and second blur, the simple bloom's source.
+    std::uint64_t clock_ = 0;
+    std::uint64_t keep_used_ = 0;
+    std::uint64_t work_used_ = 0;
+    std::uint64_t normal_used_ = 0;
+    std::uint64_t simple_used_ = 0;
 };
 
 }  // namespace galaxy::render::vk

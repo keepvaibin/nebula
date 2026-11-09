@@ -527,6 +527,12 @@ private:
     bool fg_hudless_scene_ = false;       // this frame's scene was taken
     bool fg_hudless_taken_ = false;       // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;  // the picture it went with
+    std::uint64_t fg_hudless_used_frame_ = 0u;  // the last frame frame generation ran
+    std::uint64_t hdr_capture_used_frame_ = 0u;  // the last frame a capture drew the SDR picture
+    std::uint64_t motion_used_frame_ = 0u;      // the last frame a scene asked for the motion, reactive and layer targets
+    // Once a frame, after the slot's retired images are freed: hands the frame generation and temporal targets back after
+    // 600 frames unused, behind the fence of the slot's frame.
+    void trim_idle_effect_targets();
     bool streamline_frame_open_ = false;
     // FSR 3 frame generation: its pacing swap chain while it is chosen, and the swap chain calls in use.
     vk::FsrFrameGenerationVk fsr_generation_;
