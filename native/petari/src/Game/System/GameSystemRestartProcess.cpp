@@ -1,4 +1,4 @@
-#include "Game/System/GameSystemResetAndPowerProcess.hpp"
+#include "Game/System/GameSystemRestartProcess.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -20,19 +20,19 @@ namespace {
     static const s32 sFadeinoutFrame = 30;
 };  // namespace
 
-namespace NrvGameSystemResetAndPowerProcess {
-    NEW_NERVE(GameSystemResetAndPowerProcessIdle, GameSystemResetAndPowerProcess, Idle);
-    NEW_NERVE(GameSystemResetAndPowerProcessFadeOut, GameSystemResetAndPowerProcess, FadeOut);
-    NEW_NERVE(GameSystemResetAndPowerProcessWaitPrepareFadein, GameSystemResetAndPowerProcess, WaitPrepareFadein);
-    NEW_NERVE(GameSystemResetAndPowerProcessFadein, GameSystemResetAndPowerProcess, Fadein);
-};  // namespace NrvGameSystemResetAndPowerProcess
+namespace NrvGameSystemRestartProcess {
+    NEW_NERVE(GameSystemRestartProcessIdle, GameSystemRestartProcess, Idle);
+    NEW_NERVE(GameSystemRestartProcessFadeOut, GameSystemRestartProcess, FadeOut);
+    NEW_NERVE(GameSystemRestartProcessWaitPrepareFadein, GameSystemRestartProcess, WaitPrepareFadein);
+    NEW_NERVE(GameSystemRestartProcessFadein, GameSystemRestartProcess, Fadein);
+};  // namespace NrvGameSystemRestartProcess
 
-void GameSystemResetAndPowerProcess::init(const TableIter& rIter) {
-    initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
+void GameSystemRestartProcess::init(const TableIter& rIter) {
+    initNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessIdle));
     appear();
 }
 
-void GameSystemResetAndPowerProcess::draw() const {
+void GameSystemRestartProcess::draw() const {
     if (!isActive()) {
         return;
     }
@@ -43,32 +43,32 @@ void GameSystemResetAndPowerProcess::draw() const {
     MR::drawScreenColor(Color8(0, 0, 0, alpha));
 }
 
-bool GameSystemResetAndPowerProcess::isActive() const {
-    return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
+bool GameSystemRestartProcess::isActive() const {
+    return !isNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessIdle));
 }
 
-void GameSystemResetAndPowerProcess::setResetOperationApplicationReset() {
+void GameSystemRestartProcess::setResetOperationApplicationReset() {
     mResetOperation = ResetOperation_ApplicationReset;
 }
 
-void GameSystemResetAndPowerProcess::setResetOperationQuit() {
+void GameSystemRestartProcess::setResetOperationQuit() {
     mResetOperation = ResetOperation_Quit;
 }
 
-void GameSystemResetAndPowerProcess::requestReset(bool isImmediate) {
+void GameSystemRestartProcess::requestReset(bool isImmediate) {
     if (!isActive()) {
         beginFadeOut(isImmediate);
     }
 }
 
-void GameSystemResetAndPowerProcess::requestQuitGame(bool isImmediate) {
+void GameSystemRestartProcess::requestQuitGame(bool isImmediate) {
     if (!isActive()) {
         setResetOperationQuit();
         beginFadeOut(isImmediate);
     }
 }
 
-void GameSystemResetAndPowerProcess::beginFadeOut(bool isImmediate) {
+void GameSystemRestartProcess::beginFadeOut(bool isImmediate) {
     if (isImmediate) {
         mFadeinoutControl->setZero();
     } else {
@@ -76,15 +76,15 @@ void GameSystemResetAndPowerProcess::beginFadeOut(bool isImmediate) {
     }
 
     GameSystemFunction::activateScreenPreserver();
-    setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessFadeOut));
+    setNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessFadeOut));
 }
 
 // Resets come from the system menu (requestReset, requestQuitGame) and the file select's quit.
-void GameSystemResetAndPowerProcess::exeIdle() {
+void GameSystemRestartProcess::exeIdle() {
 }
 
 // The scene, the sound (stopped, then faded to silence) and the save sequence wind down while the picture fades.
-void GameSystemResetAndPowerProcess::exeFadeOut() {
+void GameSystemRestartProcess::exeFadeOut() {
     if (MR::isFirstStep(this)) {
         GameSystemFunction::prepareResetAudioSystem();
         GameSystemFunction::prepareResetSystem();
@@ -99,7 +99,7 @@ void GameSystemResetAndPowerProcess::exeFadeOut() {
     }
 }
 
-void GameSystemResetAndPowerProcess::reset() {
+void GameSystemRestartProcess::reset() {
     GameSystemFunction::setPermissionToCheckInput(false);
 
     // New mods need a new run: the same fade and sound, then the game starts again with them.
@@ -107,10 +107,10 @@ void GameSystemResetAndPowerProcess::reset() {
         exitApplication();
     }
 
-    setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitPrepareFadein));
+    setNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessWaitPrepareFadein));
 }
 
-void GameSystemResetAndPowerProcess::exeWaitPrepareFadein() {
+void GameSystemRestartProcess::exeWaitPrepareFadein() {
     if (MR::isFirstStep(this)) {
         GameSystemFunction::deactivateScreenPreserver();
         GameSystemFunction::resumeResetAudioSystem();
@@ -118,11 +118,11 @@ void GameSystemResetAndPowerProcess::exeWaitPrepareFadein() {
     }
 
     if (GameSystemFunction::isPreparedFadeinSystem()) {
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessFadein));
+        setNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessFadein));
     }
 }
 
-void GameSystemResetAndPowerProcess::exeFadein() {
+void GameSystemRestartProcess::exeFadein() {
     if (MR::isFirstStep(this)) {
         GameSystemFunction::restoreFromResetSaveDataHandleSequence();
     }
@@ -133,11 +133,11 @@ void GameSystemResetAndPowerProcess::exeFadein() {
 
     if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
         GameSystemFunction::restartSceneController();
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
+        setNerve(GET_NERVE(GameSystemRestartProcess, GameSystemRestartProcessIdle));
     }
 }
 
-void GameSystemResetAndPowerProcess::exitApplication() {
+void GameSystemRestartProcess::exitApplication() {
     // The counts Nebula's achievements hold for the host (jumps, coins, play time), before the game ends.
     NebulaAchievements::flushStats();
     NebulaFrameClock::show(false);
@@ -152,11 +152,11 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     }
 }
 
-void GameSystemResetAndPowerProcess::control() {
+void GameSystemRestartProcess::control() {
     mFadeinoutControl->update();
 }
 
-GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()
+GameSystemRestartProcess::GameSystemRestartProcess()
     : LayoutActor("リセット・電源", false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart) {
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
