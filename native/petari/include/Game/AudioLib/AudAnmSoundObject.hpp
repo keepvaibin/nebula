@@ -12,7 +12,6 @@ public:
     AudAnmSoundObject(Vec3f*, u8, NebulaArena*);
 
     void update(f32);
-    void modifySoundParams(SoundParams*, const SoundAnimationSound*, f32);
     bool playsSound(const SoundAnimationSound*, const Vec3f&, f32);
     u32 getSoundID(const SoundAnimationSound*, const Vec3f&, f32);
     SoundHandle* getFreeHandle(const SoundAnimationSound*);

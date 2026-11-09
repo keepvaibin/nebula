@@ -146,10 +146,11 @@ class SoundAnimator {
 public:
     SoundAnimator(SoundHandles*);
 
-    virtual SoundHandle* getFreeHandle(const SoundAnimationSound* pAnimation);
-    virtual u32 getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed);
-    virtual bool playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed);
-    virtual void modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pAnimation, f32 time);
+    SoundHandle* getFreeHandle(const SoundAnimationSound* pAnimation);
+    // Whether the sound plays at this frame and in this direction.
+    bool playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed);
+    // The speed counts up to 3.
+    void modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pAnimation, f32 time);
 
     void ageSounds_();
     void setLoopFrame(f32 loopStartFrame, f32 loopEndFrame) {

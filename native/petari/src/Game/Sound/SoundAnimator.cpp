@@ -159,10 +159,6 @@ SoundHandle* SoundAnimator::getFreeHandle(const SoundAnimationSound* pAnimation)
     return nullptr;
 }
 
-u32 SoundAnimator::getSoundID(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed) {
-    return pAnimation->getSoundID();
-}
-
 bool SoundAnimator::playsSound(const SoundAnimationSound* pAnimation, const Vec3f& rPos, f32 speed) {
     if (pAnimation->playsOnlyOnce()) {
         if (mTime != pAnimation->mPlayTime) {
@@ -186,6 +182,9 @@ bool SoundAnimator::playsSound(const SoundAnimationSound* pAnimation, const Vec3
 }
 
 void SoundAnimator::modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pAnimation, f32 time) {
+    if (time > 3.0f) {
+        time = 3.0f;
+    }
     time = time < 0.0f ? -time - 1.0f : time - 1.0f;
 
     f32 volume = pAnimation->mBaseVolume;

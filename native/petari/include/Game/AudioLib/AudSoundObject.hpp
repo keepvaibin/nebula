@@ -34,8 +34,8 @@ class AudSoundObject : public SoundObject, ArenaOwned {
 public:
     AudSoundObject(Vec3f*, u8, NebulaArena*);
 
-    virtual SoundHandle* startSound(SoundID);
-    virtual SoundHandle* startLevelSound(SoundID);
+    SoundHandle* startSound(SoundID);
+    SoundHandle* startLevelSound(SoundID);
     virtual ~AudSoundObject();
 
     void addToSoundObjHolder();
