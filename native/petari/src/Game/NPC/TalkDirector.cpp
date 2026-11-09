@@ -368,9 +368,18 @@ bool TalkDirector::isInvalidTalk() const {
 }
 
 void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
-    const char* pBranchID = pCtrl->getBranchID();
-    MR::FormattedName yesName("Select_%s_Yes", pBranchID);
-    MR::FormattedName noName("Select_%s_No", pBranchID);
+    MR::FormattedName yesName;
+    MR::FormattedName noName;
+
+    if (const s32 ownNode = pCtrl->getOwnSelectNode(); ownNode >= 0) {
+        yesName.format("Select_Nebula%d_Yes", ownNode);
+        noName.format("Select_Nebula%d_No", ownNode);
+    } else {
+        // A select the game does not know names no lines: no choice words, not a null name.
+        const char* pBranchID = pCtrl->getBranchID();
+        yesName.format("Select_%s_Yes", pBranchID != nullptr ? pBranchID : "");
+        noName.format("Select_%s_No", pBranchID != nullptr ? pBranchID : "");
+    }
 
     if (pCtrl->isSelectYesNo()) {
         MR::resetYesNoSelectorSE();

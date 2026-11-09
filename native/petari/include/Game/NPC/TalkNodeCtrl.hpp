@@ -40,6 +40,10 @@ enum BranchKind {
     BranchKind_MessageRead,
 };
 
+// A select branch's parameter for choices that are a mod's own lines, cooked as Select_Nebula<branch node>_Yes and _No
+// (crates/nebula-import cook/message_merge.rs SELECT_OWN_CHOICES). The game's selects are 0 to 18.
+const u32 cSelectOwnChoices = 0x100;
+
 // An event node's kind (TalkNode::mGroupID).
 enum EventKind {
     EventKind_Func,

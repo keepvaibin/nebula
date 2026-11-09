@@ -84,6 +84,8 @@ public:
     bool inMessageArea() const;
     void startCamera(s32 frames);
     const char* getBranchID() const;
+    // A select with choices of its own (cSelectOwnChoices): its branch node's number; -1 for any other.
+    s32 getOwnSelectNode() const;
 
     LiveActor* mHostActor;
     TalkNodeCtrl* mNodeCtrl;

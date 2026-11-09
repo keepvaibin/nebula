@@ -307,8 +307,12 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     g_api.store_set = api_store_set;
     g_api.store_get_text = api_store_get_text;
     g_api.store_set_text = api_store_set_text;
-    for (const auto& [id, words] : rows.texts) {
-        g_api.add_text(id.c_str(), words.c_str());
+    for (const ModRows::TextToAdd& text : rows.texts) {
+        if (text.like.empty()) {
+            g_api.add_text(text.id.c_str(), text.words.c_str());
+        } else {
+            g_api.add_text_like(text.id.c_str(), text.words.c_str(), text.like.c_str());
+        }
     }
     for (const GalaxyToAdd& galaxy : rows.galaxies) {
         NebulaGalaxy row{};

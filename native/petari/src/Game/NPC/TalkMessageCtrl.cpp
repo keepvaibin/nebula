@@ -354,6 +354,16 @@ const char* TalkMessageCtrl::getBranchID() const {
     return ::sSelectBranchID[pNode->mNextIdx];
 }
 
+s32 TalkMessageCtrl::getOwnSelectNode() const {
+    const TalkNode* pNode = ::getSelectBranch(mNodeCtrl);
+
+    if (pNode == nullptr || pNode->mNextIdx != cSelectOwnChoices) {
+        return -1;
+    }
+
+    return static_cast< s32 >(pNode - MessageSystem::getSceneMessageData()->getNode(0));
+}
+
 bool TalkFunction::isShortTalk(const TalkMessageCtrl* pCtrl) {
     return pCtrl->mNodeCtrl->mMessageInfo.isShortTalk();
 }

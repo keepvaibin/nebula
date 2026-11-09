@@ -1,4 +1,5 @@
 #include "Game/System/NebulaMods.hpp"
+#include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -140,6 +141,8 @@ namespace {
     struct ModText {
         const char* mId;
         const char16_t* mWords;
+        // A game message whose talk (camera, sound, talk and balloon type) a new line takes; nullptr: its own, or none.
+        const char* mLike;
     };
     List< ModText > sTexts;
     List< NebulaPowerUpClass > sPowerUps;
@@ -591,28 +594,12 @@ namespace {
         }
     }
 
-    // UTF-8 as the game's UTF-16, kept as copyText keeps text.
+    // UTF-8 as the game's UTF-16 with the game's message tags written in brackets (nebula_text_tags.h), kept as copyText
+    // keeps text.
     const char16_t* wordsOf(const char* pUtf8, NebulaArena* pArena = NebulaArena::root()) {
-        const size_t length = strlen(pUtf8);
-        char16_t* pWords = new (pArena, 0) char16_t[length + 1];
-        size_t out = 0;
-        for (size_t i = 0; i < length;) {
-            const u8 lead = static_cast< u8 >(pUtf8[i]);
-            const size_t extra = lead < 0x80 ? 0 : lead < 0xE0 ? 1 : lead < 0xF0 ? 2 : 3;
-            u32 code = extra == 0 ? lead : extra == 1 ? lead & 0x1F : extra == 2 ? lead & 0x0F : lead & 0x07;
-            for (size_t c = 1; c <= extra && i + c < length; c++) {
-                code = (code << 6) | (static_cast< u8 >(pUtf8[i + c]) & 0x3F);
-            }
-            i += extra + 1;
-            if (code >= 0x10000) {
-                code -= 0x10000;
-                pWords[out++] = static_cast< char16_t >(0xD800 | (code >> 10));
-                pWords[out++] = static_cast< char16_t >(0xDC00 | (code & 0x3FF));
-            } else {
-                pWords[out++] = static_cast< char16_t >(code);
-            }
-        }
-        pWords[out] = 0;
+        const u32 units = nebula_text::encode(pUtf8, nullptr, 0);
+        char16_t* pWords = new (pArena, 0) char16_t[units + 1];
+        nebula_text::encode(pUtf8, pWords, units + 1);
         return pWords;
     }
 
@@ -620,8 +607,18 @@ namespace {
         if (pId == nullptr || pUtf8 == nullptr) {
             return -1;
         }
-        ModText text = {copyText(pId), wordsOf(pUtf8, NebulaArena::root())};
+        ModText text = {copyText(pId), wordsOf(pUtf8, NebulaArena::root()), nullptr};
         sTexts.add(text);
+        return 0;
+    }
+
+    int32_t apiAddTextLike(const char* pId, const char* pUtf8, const char* pLike) {
+        if (apiAddText(pId, pUtf8) != 0) {
+            return -1;
+        }
+        if (pLike != nullptr && pLike[0] != 0) {
+            sTexts.mItems[sTexts.mCount - 1].mLike = copyText(pLike);
+        }
         return 0;
     }
 
@@ -2245,6 +2242,7 @@ namespace {
         apiSetGameSpeed,
         apiStepGame,
         apiDrawText,
+        apiAddTextLike,
     };
 }  // namespace
 
@@ -2429,9 +2427,12 @@ namespace NebulaMods {
         return pPower != nullptr ? static_cast< u16 >(pPower->looks_like) : mode;
     }
 
-    const char16_t* text(const char* pId) {
+    const char16_t* text(const char* pId, const char** ppLike) {
         for (int i = sTexts.mCount - 1; i >= 0; i--) {
             if (MR::isEqualString(sTexts.mItems[i].mId, pId)) {
+                if (ppLike != nullptr) {
+                    *ppLike = sTexts.mItems[i].mLike;
+                }
                 return sTexts.mItems[i].mWords;
             }
         }

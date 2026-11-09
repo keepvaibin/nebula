@@ -36,8 +36,9 @@ namespace NebulaMods {
     const char* powerUpModel(s32 index);
     // The game's power-up a mode looks like: itself, if it's the game's.
     u16 powerUpLook(u16 mode);
-    // A mod's words for a message: nullptr if none has any.
-    const char16_t* text(const char* pId);
+    // A mod's words for a message: nullptr if none has any. ppLike, if given: the game message whose talk a new line takes
+    // (nullptr: none named).
+    const char16_t* text(const char* pId, const char** ppLike = nullptr);
     // What a hungry Luma of this slot costs, if a mod says: -1 otherwise.
     s32 hungryLumaPrice(s32 slot);
     s32 hungryLumaSlots();

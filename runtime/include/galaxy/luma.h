@@ -144,6 +144,9 @@ struct Rows {
     std::vector<EventFlag> event_flags;
     std::vector<CometSchedule> comet_schedule;
     std::map<std::string, Text> text;  // a message's id: its words
+    // A new message's id: the game's message whose talk it takes (camera, sound, talk and balloon type): `"like"` in its
+    // words' object.
+    std::map<std::string, std::string> text_like;
     std::map<std::string, std::string> story;  // first_stage, first_mission, hub, story_scenes
 };
 

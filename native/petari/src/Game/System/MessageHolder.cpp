@@ -21,7 +21,14 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
         return false;
     }
 
-    if (const char16_t* pWords = NebulaMods::text(pMessage)) {
+    // A mod's words: a line of the game keeps its talk (camera set, sound, camera, talk and balloon type, area), a new line
+    // takes the talk of the game's line it names as like, else an ordinary talk.
+    const char* pLike = nullptr;
+    if (const char16_t* pWords = NebulaMods::text(pMessage, &pLike)) {
+        const s32 talkIndex = findMessageIndex(pLike != nullptr ? pLike : pMessage);
+        if (talkIndex < 0 || !getMessage(pMessageInfo, static_cast< u32 >(talkIndex))) {
+            *pMessageInfo = TalkMessageInfo();
+        }
         pMessageInfo->mMessage = pWords;
         return true;
     }

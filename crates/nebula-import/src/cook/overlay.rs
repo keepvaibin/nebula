@@ -193,6 +193,34 @@ fn merge_start(path: &str, base: Option<&Path>, temporary: &Path, pak: &mut File
     store::read_file(base.context("the mod adds to a file of the game, and the game isn't known")?, path)
 }
 
+/// Every language folder a game of the series has messages in.
+const MESSAGE_LANGUAGES: [&str; 14] = [
+    "UsEnglish", "UsFrench", "UsSpanish", "EuEnglish", "EuFrench", "EuGerman", "EuItalian", "EuSpanish", "EuDutch", "JpJapanese",
+    "KrKorean", "CnSimpChinese", "TwTradChinese", "UsPortuguese",
+];
+
+/// The languages a messages merge is for: `<Language>/MessageData/Message.arc/message.bmg.json` one, and
+/// `MessageData/messages.json` each the game has. None: the path is no messages merge.
+fn message_languages(path: &str, base: Option<&Path>, placed: &[store::Placed]) -> Result<Option<Vec<String>>> {
+    let lower = path.trim_start_matches('/').to_ascii_lowercase();
+    if lower == "messagedata/messages.json" {
+        let has = |language: &str| {
+            let file = format!("{language}/MessageData/Message.arc/message.bmg");
+            placed.iter().any(|p| store::same_path(&p.path, &file)) || base.is_some_and(|base| store::read_file(base, &file).is_ok())
+        };
+        let found: Vec<String> = MESSAGE_LANGUAGES.iter().filter(|l| has(l)).map(|l| l.to_string()).collect();
+        if found.is_empty() {
+            bail!("the game's languages aren't known: it has no <Language>/MessageData/Message.arc");
+        }
+        return Ok(Some(found));
+    }
+    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    if parts.len() == 4 && lower.ends_with("/messagedata/message.arc/message.bmg.json") {
+        return Ok(Some(vec![parts[0].to_string()]));
+    }
+    Ok(None)
+}
+
 /// Each merge in its mod's order: a mod's names before its particles, which are numbered from them. A merge that can't
 /// apply is left out and named.
 #[allow(clippy::too_many_arguments)]
@@ -202,11 +230,31 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
     merges.sort_by_key(|c| c.path.to_ascii_lowercase().ends_with(".jpc"));
     let mut merged: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     let mut first_particle: BTreeMap<PathBuf, u16> = BTreeMap::new();
+    let mut cased: BTreeMap<String, String> = BTreeMap::new();
     let lower = |text: &str| text.to_ascii_lowercase();
     for change in merges {
         let result = (|| -> Result<()> {
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
-            if let Some(table) = lower(&change.path).strip_suffix(".json") {
+            if let Some(languages) = message_languages(&change.path, base, placed)? {
+                // Every language or none: a merge that fails in one is left out of all.
+                let mut done = Vec::new();
+                for language in languages {
+                    let folder = format!("{language}/MessageData/Message.arc");
+                    let (file_path, ids_path) = (format!("{folder}/message.bmg"), format!("{folder}/messageid.tbl"));
+                    let mut current = |path: &str| match merged.get(&lower(path)) {
+                        Some(bytes) => Ok(bytes.clone()),
+                        None => merge_start(path, base, temporary, pak, placed),
+                    };
+                    let (file, ids) = (current(&file_path)?, current(&ids_path)?);
+                    let (file, ids) = super::message_merge::merge(&file, &ids, &bytes, &language).with_context(|| language.clone())?;
+                    done.push((file_path, file));
+                    done.push((ids_path, ids));
+                }
+                for (path, bytes) in done {
+                    merged.insert(lower(&path), bytes);
+                    cased.insert(lower(&path), path);
+                }
+            } else if let Some(table) = lower(&change.path).strip_suffix(".json") {
                 let table_key = table.to_string();
                 let path = change.path[..table.len()].to_string();
                 let current = match merged.remove(&table_key) {
@@ -241,7 +289,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
             } else {
-                bail!("only tables (.json) and particles (.jpc) can be added to");
+                bail!("only tables (.json), messages (message.bmg.json, messages.json) and particles (.jpc) can be added to");
             }
             Ok(())
         })();
@@ -256,6 +304,7 @@ fn apply_merges(changes: &[Change], base: Option<&Path>, pak: &mut File, tempora
             .find(|p| store::same_path(&p.path, &key))
             .map(|p| p.path.clone())
             .or_else(|| changes.iter().filter(|c| c.merge).map(|c| c.path.trim_end_matches(".json").to_string()).find(|p| store::same_path(p, &key)))
+            .or_else(|| cased.get(&key).cloned())
             .unwrap_or(key);
         placed.retain(|p| !store::same_path(&p.path, &path));
         placed.extend(place(pak, at, &path, vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }], stats)?);
@@ -402,6 +451,55 @@ mod tests {
         assert_eq!(failed[0].0, "StageData/missing.txt");
         assert_eq!(store::read_file(&output, "StageData/note.txt").unwrap(), b"hello");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn messages_merge_into_every_language_then_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("game.pak");
+        let (file, ids) = super::super::message_merge::tests::game();
+        let mut pak = File::create(&base).unwrap();
+        pak.write_all(&vec![0u8; 0x100]).unwrap();
+        let mut placed = Vec::new();
+        for language in ["UsEnglish", "UsFrench"] {
+            for (name, bytes) in [("message.bmg", &file), ("messageid.tbl", &ids)] {
+                let position = pak.stream_position().unwrap();
+                pak.write_all(bytes).unwrap();
+                placed.push(store::Placed { path: format!("{language}/MessageData/Message.arc/{name}"), position, size: bytes.len() as u64, folder: false });
+            }
+        }
+        let end = pak.stream_position().unwrap();
+        store::write_index(&mut pak, end, &placed, b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let all = dir.path().join("messages.json");
+        fs::write(&all, br#"{"lines":{"Mod_Hello":{"default":"Hello","UsFrench":"Bonjour"}},"flows":{"Game_A":"Mod_Hello"}}"#).unwrap();
+        let french = dir.path().join("message.bmg.json");
+        fs::write(&french, br#"{"lines":{"Mod_Bye":"Au revoir"},"flows":{"Mod_Hello":"Mod_Bye"}}"#).unwrap();
+        let broken = dir.path().join("broken.json");
+        fs::write(&broken, br#"{"lines":{"Mod_X":{"French":"x"}}}"#).unwrap();
+        let changes = vec![
+            Change { path: "MessageData/messages.json".into(), source: all, merge: true },
+            Change { path: "UsFrench/MessageData/Message.arc/message.bmg.json".into(), source: french, merge: true },
+            Change { path: "MessageData/messages.json".into(), source: broken, merge: true },
+        ];
+        let output = dir.path().join("mods.pak");
+        let failed = write_overlay("RMGE01", &changes, Some(&base), &output, &mut Stats::default()).unwrap();
+        // The broken merge has words in French only: English has none, so no language takes it.
+        assert_eq!(failed.len(), 1, "{failed:?}");
+        assert!(failed[0].1.contains("UsEnglish"), "{failed:?}");
+        for (language, hello, bye) in [("UsEnglish", "Hello", None), ("UsFrench", "Bonjour", Some("Au revoir"))] {
+            let folder = format!("{language}/MessageData/Message.arc");
+            let file = store::read_file(&output, &format!("{folder}/message.bmg")).unwrap();
+            let ids = store::read_file(&output, &format!("{folder}/messageid.tbl")).unwrap();
+            let nmsg = super::super::message::Nmsg::from_nmsg(&file).unwrap();
+            let words: Vec<String> = (0..nmsg.messages.len()).map(|i| super::super::message_merge::tests::words(&nmsg, i)).collect();
+            assert!(words.contains(&hello.to_string()), "{language}: {words:?}");
+            assert_eq!(words.iter().any(|w| w == "Au revoir"), bye.is_some(), "{language}: {words:?}");
+            assert_eq!(super::super::table::row_count(&ids).unwrap(), 3 + usize::from(bye.is_some()), "{language}");
+            // Game_A's talk goes on to the new line.
+            let next = nmsg.nodes[0].next as usize;
+            assert_eq!(words[nmsg.nodes[next].index as usize], hello, "{language}");
+        }
     }
 
     /// A disc table with one row: one long column.

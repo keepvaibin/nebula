@@ -330,7 +330,8 @@ typedef struct NebulaModApi {
     /* A hungry Luma: placed in a level as TicoGalaxy with its Arg7 at `slot`, it opens `galaxy` when fed `star_bits`.
        The game's own are slots 0 to 6: using one takes its place. */
     int32_t (*add_hungry_luma)(const char* galaxy, int32_t slot, int32_t star_bits);
-    /* A message of the game by its id, in place of its own or new: GalaxyName_<galaxy>, ScenarioName_<galaxy><n>, a talk's id. */
+    /* A message of the game by its id, in place of its own or new: GalaxyName_<galaxy>, ScenarioName_<galaxy><n>, a talk's id.
+       A line of the game keeps its talk settings. The words may hold the game's message tags in brackets (nebula_text_tags.h). */
     int32_t (*add_text)(const char* id, const char* utf8);
     /* Its number, for set_value. Below 0: it can't be added. */
     int32_t (*add_power_up)(const NebulaPowerUpClass* power_up);
@@ -577,6 +578,10 @@ typedef struct NebulaModApi {
        `rgba`: its colour, 0xRRGGBBAA. Null or "" takes the line away; it stays until then, across stages. 0: done; -1: no
        such slot. */
     int32_t (*draw_text)(int32_t line, float x, float y, float size, uint32_t rgba, const char* utf8);
+    /* As add_text, and a new line takes the talk (camera, sound, talk and balloon type) of the game's message `like_id`;
+       null or "": add_text. The words may hold the game's message tags in brackets ([wait 30], [color 1], [player]...:
+       nebula_text_tags.h), as add_text's may. */
+    int32_t (*add_text_like)(const char* id, const char* utf8, const char* like_id);
 } NebulaModApi;
 
 /* The HUD's parts, for show_hud: any together. */

@@ -16,6 +16,7 @@ pub mod material;
 pub mod kcl;
 pub mod camera;
 pub mod message;
+pub mod message_merge;
 pub mod mii_parts;
 pub mod merge;
 pub mod clip;

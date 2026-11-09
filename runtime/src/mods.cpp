@@ -1450,7 +1450,8 @@ void add_layer_rows(ModPlan& plan, const ModInfo& mod, const std::string& langua
         plan.rows.story[key] = value;
     }
     for (const auto& [id, words] : rows.text) {
-        plan.rows.texts.emplace_back(id, words.in(luma::language_code(language)));
+        const auto like = rows.text_like.find(id);
+        plan.rows.texts.push_back({id, words.in(luma::language_code(language)), like != rows.text_like.end() ? like->second : std::string()});
     }
     for (const luma::Galaxy& galaxy : rows.galaxies) {
         plan.rows.galaxies.push_back({mod.id, galaxy.name, galaxy.map_pane, galaxy.open_conditions, galaxy.stars_to_open, galaxy.dome, galaxy.hungry_slot, galaxy.hungry_star_bits, galaxy.has_map_position, galaxy.map_x, galaxy.map_y});
