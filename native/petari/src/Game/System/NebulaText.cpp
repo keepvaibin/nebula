@@ -63,6 +63,17 @@ namespace {
         return aLength == bLength && memcmp(pA, pB, aLength) == 0;
     }
 
+    // Whether the terminated text pA is the `bLength` bytes of pB (a terminated text of that length). Stops at the first
+    // difference: most of the table's ids differ in their first characters, and find asks for every row.
+    bool sameTerminated(const char* pA, const char* pB, s32 bLength) {
+        for (s32 i = 0; i < bLength; i++) {
+            if (pA[i] != pB[i]) {
+                return false;
+            }
+        }
+        return pA[bLength] == 0;
+    }
+
     s32 findColumn(const char* pLanguage, s32 length) {
         for (s32 i = 0; i < cNebulaTextLanguageNum; i++) {
             if (same(cNebulaTextLanguages[i], lengthOf(cNebulaTextLanguages[i]), pLanguage, length)) {
@@ -226,7 +237,7 @@ namespace {
         }
         for (u32 i = 0; i < sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]); i++) {
             const NebulaTextRow& rRow = cNebulaTextRows[i];
-            if (!same(rRow.mId, lengthOf(rRow.mId), pId, idLength)) {
+            if (!sameTerminated(rRow.mId, pId, idLength)) {
                 continue;
             }
             if (rRow.mText[sColumn] != nullptr) {

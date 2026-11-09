@@ -806,6 +806,15 @@ void sample_gamepads() {
         if (button(SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER)) bits |= pad::bit(pad::kRightShoulderBit);
         if (button(SDL_GAMEPAD_BUTTON_GUIDE)) bits |= pad::bit(pad::kHomeBit);
         if (button(SDL_GAMEPAD_BUTTON_MISC1)) bits |= pad::bit(pad::kCaptureBit);
+        // Back buttons: SDL's upper pair is the Edge's paddles (the Steam controllers' L4 R4), its lower pair the Edge's
+        // Fn buttons (L5 R5).
+        if (sample.scheme == galaxy::input::ControlScheme::PlayStation || sample.scheme == galaxy::input::ControlScheme::Steam) {
+            const bool steam = sample.scheme == galaxy::input::ControlScheme::Steam;
+            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1)) bits |= pad::bit(pad::kGripLeftBit);
+            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1)) bits |= pad::bit(pad::kGripRightBit);
+            if (button(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripLeft2Bit : pad::kFnLeftBit);
+            if (button(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2)) bits |= pad::bit(steam ? pad::kGripRight2Bit : pad::kFnRightBit);
+        }
         if (button(SDL_GAMEPAD_BUTTON_SOUTH)) bits |= pad::bit(pad::kSouthBit);
         if (button(SDL_GAMEPAD_BUTTON_EAST)) bits |= pad::bit(pad::kEastBit);
         if (button(SDL_GAMEPAD_BUTTON_WEST)) bits |= pad::bit(pad::kWestBit);

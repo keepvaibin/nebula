@@ -108,7 +108,7 @@ struct BindingTable {
 
 // Unified gamepad state. Bits 0..15 are the XInput wButtons layout, so an
 // XINPUT_GAMEPAD word is a valid button mask; the two reserved XInput bits
-// carry Home/Capture and bits 16..22 the extra buttons of the Pro Controller 2,
+// carry Home/Capture and bits 16..24 the extra buttons of the Pro Controller 2,
 // the DualSense family and the Steam Controller. Face buttons are positional:
 // South is Xbox A, Nintendo B and PlayStation Cross.
 namespace pad {
@@ -135,7 +135,9 @@ inline constexpr unsigned kGripLeft2Bit = 19;   // Steam L5
 inline constexpr unsigned kGripRight2Bit = 20;  // Steam R5
 inline constexpr unsigned kLeftPadBit = 21;     // Steam left trackpad click
 inline constexpr unsigned kRightPadBit = 22;    // Steam right trackpad click
-inline constexpr unsigned kButtonBitCount = 23;
+inline constexpr unsigned kFnLeftBit = 23;      // DualSense Edge left Fn
+inline constexpr unsigned kFnRightBit = 24;     // DualSense Edge right Fn
+inline constexpr unsigned kButtonBitCount = 25;
 [[nodiscard]] constexpr std::uint32_t bit(unsigned index) noexcept {
     return 1u << index;
 }
@@ -259,11 +261,13 @@ struct ControlsConfig {
     case ControlScheme::Xbox: return kBase | kFace;
     case ControlScheme::SwitchPro: return kBase | kHomeCapture | kFace;
     case ControlScheme::SwitchPro2: return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kChatBit);
-    case ControlScheme::PlayStation: return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kChatBit);
+    case ControlScheme::PlayStation:
+        return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kChatBit) | pad::bit(pad::kFnLeftBit) |
+               pad::bit(pad::kFnRightBit);
     case ControlScheme::Steam:
         return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kGripLeft2Bit) |
                pad::bit(pad::kGripRight2Bit) | pad::bit(pad::kLeftPadBit) | pad::bit(pad::kRightPadBit);
-    case ControlScheme::Generic: return (1u << pad::kButtonBitCount) - 1u;
+    case ControlScheme::Generic: return (1u << pad::kFnLeftBit) - 1u;  // a HID pad has no Fn buttons
     }
     return 0u;
 }

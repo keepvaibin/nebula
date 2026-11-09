@@ -24,7 +24,7 @@ these checks cover what only a real controller shows. Mark each cell pass, fail 
 |---|---|---|
 | Xbox Series / One / 360 | USB, Bluetooth, receiver | XInput; vibration on the light motor |
 | DualShock 4 | USB, Bluetooth | gyro; light bar set once |
-| DualSense, DualSense Edge | USB, Bluetooth | gyro; Edge paddles unbound by default |
+| DualSense, DualSense Edge | USB, Bluetooth | gyro; Edge paddles and Fn buttons unbound by default |
 | Switch Pro Controller | USB, Bluetooth | gyro, HD rumble |
 | Joy-Con (L) + (R) | Bluetooth, charging grip | pair by themselves; CONTROLS > PAIR JOY-CON with two pairs; pointer from the right half; both vibrate; slide one into the grip after it is plugged in |
 | Steam Controller (2026) | USB, Bluetooth, puck | no mouse or keyboard from it; gyro |

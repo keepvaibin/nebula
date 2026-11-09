@@ -395,6 +395,8 @@ S.Mute	Mute		Muet	Muet	Silencio	Silencio	Stumm	Muto	Dempen	Mudo	ミュート	음
 S.Steam	Steam		Steam	Steam	Steam	Steam	Steam	Steam	Steam	Steam	Steam	Steam	Steam	Steam
 S.LPad	Left trackpad		Pavé gauche	Pavé gauche	Panel izquierdo	Panel izquierdo	Linkes Trackpad	Trackpad sinistro	Linker trackpad	Trackpad esquerdo	左トラックパッド	왼쪽 트랙패드	左触控板	左觸控板
 S.RPad	Right trackpad		Pavé droit	Pavé droit	Panel derecho	Panel derecho	Rechtes Trackpad	Trackpad destro	Rechter trackpad	Trackpad direito	右トラックパッド	오른쪽 트랙패드	右触控板	右觸控板
+S.LeftFn	Left Fn		Fn gauche	Fn gauche	Fn izquierda	Fn izquierda	Linke Fn-Taste	Fn sinistro	Linker Fn	Fn esquerda	左Fnボタン	왼쪽 Fn	左Fn键	左Fn鍵
+S.RightFn	Right Fn		Fn droite	Fn droite	Fn derecha	Fn derecha	Rechte Fn-Taste	Fn destro	Rechter Fn	Fn direita	右Fnボタン	오른쪽 Fn	右Fn键	右Fn鍵
 S.Button#	Button {0}		Bouton {0}	Bouton {0}	Botón {0}	Botón {0}	Taste {0}	Pulsante {0}	Knop {0}	Botão {0}	ボタン{0}	버튼 {0}	按钮 {0}	按鈕 {0}
 S.MASTER	Master volume		Volume général	Volume général	Volumen general	Volumen general	Gesamtlautstärke	Volume generale	Hoofdvolume	Volume geral	全体の音量	전체 음량	总音量	總音量
 S.MUSIC	Music		Musique	Musique	Música	Música	Musik	Musica	Muziek	Música	音楽	음악	音乐	音樂

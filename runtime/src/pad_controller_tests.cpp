@@ -267,6 +267,12 @@ void test_dualsense() {
     expect((edge.state.buttons & (bit(pad::kGripLeftBit) | bit(pad::kGripRightBit))) ==
                (bit(pad::kGripLeftBit) | bit(pad::kGripRightBit)),
            "DualSense Edge paddles are GL and GR");
+    r = ds5_usb();
+    r[10] = 0x01 | 0x10 | 0x20;
+    const Decoded fn = decode(ps::Model::DualSenseEdge, ps::Transport::Usb, r);
+    expect(fn.state.buttons == (bit(pad::kHomeBit) | bit(pad::kFnLeftBit) | bit(pad::kFnRightBit)) &&
+               (decode(ps::Model::DualSense, ps::Transport::Usb, r).state.buttons & (bit(pad::kFnLeftBit) | bit(pad::kFnRightBit))) == 0u,
+           "DualSense Edge Fn buttons are bits 4 and 5 of the third button byte, an Edge feature");
 
     r = ds5_usb();
     r[1] = 0; r[2] = 255; r[3] = 255; r[4] = 0;
@@ -907,7 +913,7 @@ void test_generic() {
     expect(gh::button_bit(0) == -1 && gh::button_bit(20) == -1, "button 0 and buttons past 19 have no bit");
     std::uint32_t seen = 0;
     for (unsigned n = 1; n <= gh::kMappedButtons; ++n) seen |= 1u << static_cast<unsigned>(gh::button_bit(n));
-    expect(seen == (((1u << pad::kButtonBitCount) - 1u) & ~0xfu), "buttons 1..19 cover every unified bit but the d-pad");
+    expect(seen == (((1u << pad::kFnLeftBit) - 1u) & ~0xfu), "buttons 1..19 cover every unified bit but the d-pad and the Edge's Fn");
 
     const gh::Layout layout = usb_pad_layout();
     gh::Raw raw{};

@@ -77,6 +77,9 @@ void decode_buttons(const std::uint8_t* b, Model model, bool full, switch_hid::D
         // The DualShock 4 keeps a report counter in the upper six bits.
         if (b[2] & 0x04u) buttons |= pad::bit(pad::kChatBit);
         if (model == Model::DualSenseEdge) {
+            // The Edge's own buttons: bits 4 and 5 are the Fn buttons, 6 and 7 the back paddles.
+            if (b[2] & 0x10u) buttons |= pad::bit(pad::kFnLeftBit);
+            if (b[2] & 0x20u) buttons |= pad::bit(pad::kFnRightBit);
             if (b[2] & 0x40u) buttons |= pad::bit(pad::kGripLeftBit);
             if (b[2] & 0x80u) buttons |= pad::bit(pad::kGripRightBit);
         }

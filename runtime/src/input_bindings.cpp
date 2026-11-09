@@ -80,25 +80,25 @@ constexpr std::array<const char*, kMouseButtonCount> kMouseNames{
 constexpr std::array<const char*, pad::kButtonBitCount> kXboxButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Menu", "View", "LS", "RS",
     "LB", "RB", "Guide", "Share", "A", "B", "X", "Y", "GL", "GR", "C",
-    "GL2", "GR2", "LPad", "RPad"};
+    "GL2", "GR2", "LPad", "RPad", "LeftFn", "RightFn"};
 constexpr std::array<const char*, pad::kButtonBitCount> kSwitchButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Plus", "Minus", "LS", "RS",
     "L", "R", "Home", "Capture", "B", "A", "Y", "X", "GL", "GR", "C",
-    "GL2", "GR2", "LPad", "RPad"};
+    "GL2", "GR2", "LPad", "RPad", "LeftFn", "RightFn"};
 constexpr std::array<const char*, pad::kButtonBitCount> kPlayStationButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Options", "Share", "L3", "R3",
     "L1", "R1", "PS", "Touchpad", "Cross", "Circle", "Square", "Triangle",
-    "LeftPaddle", "RightPaddle", "Mute", "GL2", "GR2", "LPad", "RPad"};
+    "LeftPaddle", "RightPaddle", "Mute", "GL2", "GR2", "LPad", "RPad", "LeftFn", "RightFn"};
 constexpr std::array<const char*, pad::kButtonBitCount> kSteamButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Menu", "View", "LS", "RS",
     "LB", "RB", "Steam", "QAM", "A", "B", "X", "Y", "L4", "R4", "C",
-    "L5", "R5", "LPad", "RPad"};
+    "L5", "R5", "LPad", "RPad", "LeftFn", "RightFn"};
 
 // Generic controllers by HID button number (generic_hid.h button_bit).
 constexpr std::array<const char*, pad::kButtonBitCount> kGenericButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Button10", "Button9", "Button11", "Button12",
     "Button5", "Button6", "Button13", "Button14", "Button1", "Button2", "Button3", "Button4", "Button7", "Button8",
-    "Button15", "Button16", "Button17", "Button18", "Button19"};
+    "Button15", "Button16", "Button17", "Button18", "Button19", "LeftFn", "RightFn"};
 
 constexpr std::array<const char*, 4> kStickAxisNames{"LX", "LY", "RX", "RY"};
 
@@ -1164,6 +1164,8 @@ GlyphPlace glyph_of(InputSource source) noexcept {
     case pad::kGripRight2Bit: return {ButtonGlyph::Grip, 3u};
     case pad::kLeftPadBit: return {ButtonGlyph::Trackpad, 0u};
     case pad::kRightPadBit: return {ButtonGlyph::Trackpad, 1u};
+    case pad::kFnLeftBit: return {ButtonGlyph::Grip, 4u};
+    case pad::kFnRightBit: return {ButtonGlyph::Grip, 5u};
     default: return {};
     }
 }
@@ -1308,10 +1310,14 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
     static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
         GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,
         GameInput::Minus};
-    const auto first = [&table](GameInput target) {
+    // The Fn buttons (grip places 4 and 5) have a cell on the Edge model alone; elsewhere the game's own icon stays.
+    const bool fn_cells = spec.model == ButtonIconModel::DualSenseEdge;
+    const auto first = [&table, fn_cells](GameInput target) {
         for (const InputSource source : table[target]) {
             const GlyphPlace found = glyph_of(source);
-            if (found.glyph != ButtonGlyph::Keep) return found;
+            if (found.glyph == ButtonGlyph::Keep) continue;
+            if (found.glyph == ButtonGlyph::Grip && found.place >= 4u && !fn_cells) continue;
+            return found;
         }
         return GlyphPlace{};
     };
