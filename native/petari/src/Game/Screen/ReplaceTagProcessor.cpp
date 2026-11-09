@@ -158,17 +158,43 @@ namespace ReplaceTagProcessor {
         return rTag.getTagLength() / 2 + 1;
     }
 
-    u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
-        va_list copy;
-        const char16_t* pString = nullptr;
-        // A va_list is a pointer.
-        va_copy(copy, args);
-        for (u32 i = 0; i <= rTag.getParam32(1); i++) {
-            pString = va_arg(copy, const char16_t*);
+    namespace {
+        // The string argument a string tag names.
+        const char16_t* findStringArg(const MessageEditorMessageTag& rTag, va_list args) {
+            va_list copy;
+            const char16_t* pString = nullptr;
+            va_copy(copy, args);
+            for (u32 i = 0; i <= rTag.getParam32(1); i++) {
+                pString = va_arg(copy, const char16_t*);
+            }
+            va_end(copy);
+            return pString;
         }
-        va_end(copy);
 
-        return MR::formatText(pDst, 0x100, u"%ls", pString);
+        u32 stringUnits(const char16_t* pString) {
+            u32 units = 0;
+            if (pString != nullptr) {
+                while (pString[units] != 0) {
+                    units++;
+                }
+            }
+            return units;
+        }
+    }  // namespace
+
+    u32 getStringGroupRoom(const MessageEditorMessageTag& rTag, va_list args) {
+        return stringUnits(findStringArg(rTag, args));
+    }
+
+    // The whole argument, however long.
+    u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
+        const char16_t* pString = findStringArg(rTag, args);
+        const u32 units = stringUnits(pString);
+        for (u32 i = 0; i < units; i++) {
+            pDst[i] = pString[i];
+        }
+        pDst[units] = 0;
+        return units;
     }
 
     u32 exeNumberGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
@@ -240,14 +266,20 @@ namespace ReplaceTagProcessor {
 };  // namespace ReplaceTagProcessor
 
 u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, ...) {
-    // Room for the replaced text: a number tag gives at most 12 units, a string tag at most the 0x100 its group
-    // function writes, any other tag keeps its length.
+    va_list args;
+    va_start(args, pFormat);
+    // Room for the replaced text: a number tag gives at most 12 units, a string tag its argument's length, any other
+    // tag keeps its length.
     u32 room = 1;
     for (const char16_t* pText = pFormat; *pText != 0 && !MR::isMessageEditorNextTag(pText);) {
         if (*pText == 0x1A) {
             MessageEditorMessageTag tag(pText + 1);
             const u32 skip = tag.getSkipLength() + 1;
-            room += tag.getGroup() == 7 ? 0x100 : tag.getGroup() == 6 ? 12 : skip;
+            if (tag.getGroup() == 7) {
+                room += ReplaceTagProcessor::getStringGroupRoom(tag, args);
+            } else {
+                room += tag.getGroup() == 6 ? 12 : skip;
+            }
             pText += skip;
         } else {
             room++;
@@ -258,15 +290,13 @@ u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* 
     char16_t stack[0x200];
     MR::Text16 heap;
     char16_t* const buffer = room <= 0x200 ? stack : heap.room(room);
-    va_list args;
-    va_start(args, pFormat);
-    s32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args);
-    if (result >= length) {
-        buffer[length - 1] = 0;
-        length = result;
-    }
-
-    MR::copyString(pDst, buffer, length);
+    const u32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args);
     va_end(args);
-    return length;
+    if (pDst != nullptr && length > 0) {
+        if (result >= static_cast< u32 >(length)) {
+            buffer[length - 1] = 0;
+        }
+        MR::copyString(pDst, buffer, length);
+    }
+    return result;
 }

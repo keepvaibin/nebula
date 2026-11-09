@@ -74,16 +74,16 @@ namespace MR {
         rDst.format("%s/%s", pParent, pChild);
     }
 
-    void makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day) {
+    u32 makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day) {
         const char16_t* pMessage = MR::getGameMessageDirect("System_Date000");
 
-        ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, year, month, day);
+        return ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, year, month, day);
     }
 
-    void makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute) {
+    u32 makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute) {
         const char16_t* pMessage = MR::getGameMessageDirect("System_Time002");
 
-        ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, hour, minute);
+        return ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, hour, minute);
     }
 
     void makeClearTimeString(char16_t* pDst, u32 frame) {
@@ -514,6 +514,18 @@ namespace MR {
             mRoom = room;
         }
         return mText;
+    }
+
+    const char16_t* Text16::format(const char16_t* pFormat, va_list args) {
+        for (u32 units = mRoom;; units *= 2) {
+            va_list copy;
+            va_copy(copy, args);
+            const int count = MR::formatTextV(room(units), units, pFormat, copy);
+            va_end(copy);
+            if (count >= 0) {
+                return mText;
+            }
+        }
     }
 
     Text16::~Text16() {
