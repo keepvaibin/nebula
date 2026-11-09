@@ -48,11 +48,6 @@ inline void lower_current_thread_priority() noexcept {
     }
 }
 
-// Request execution-speed QoS for the process and calling thread, and retain
-// the process's timer-resolution requests when Windows supports that policy.
-// This does not select a core or override thermal/power limits. The timer flag
-// requires a newer OS than execution-speed control, so retry the older policy
-// if the combined request is rejected. Unsupported OS versions may reject both.
 // timeBeginPeriod(1) while held; repeated calls with the same value do nothing.
 inline void hold_high_resolution_timer(bool hold) noexcept {
     static std::atomic<bool> held{false};
@@ -81,6 +76,34 @@ inline void opt_out_of_power_throttling_process() noexcept {
         (void)SetProcessInformation(
             GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state));
     }
+}
+
+// The process asks the OS for efficiency (EcoQoS: efficiency cores, lower clocks, and no wish to keep the timer fast), or goes
+// back to the opt-out above. A thread that must keep its time (the audio device's) opts out on its own with
+// set_current_thread_efficiency(false); that wins over the process. The same fallback as the opt-out: the combined request first,
+// then execution speed alone.
+inline void set_process_efficiency(bool efficient) noexcept {
+    if (!efficient) {
+        opt_out_of_power_throttling_process();
+        return;
+    }
+    PROCESS_POWER_THROTTLING_STATE state{};
+    state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    state.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | 0x4u;
+    state.StateMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | 0x4u;
+    if (!SetProcessInformation(
+            GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state))) {
+        state.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+        state.StateMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+        (void)SetProcessInformation(
+            GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof(state));
+    }
+}
+
+// The display (and with it the system) stays awake while held, or the OS's own idle timers rule again. Per thread: call both from
+// the same thread (the host's main thread).
+inline void keep_display_on(bool keep) noexcept {
+    (void)SetThreadExecutionState(keep ? (ES_CONTINUOUS | ES_DISPLAY_REQUIRED) : ES_CONTINUOUS);
 }
 
 }  // namespace galaxy::host

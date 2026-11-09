@@ -317,6 +317,10 @@ private:
     bool pipeline_statistics_ = false;
     bool bc_textures_ = false;
     bool memory_budget_ = false;
+    // device_memory_budget's last read of the driver's figures (VK_EXT_memory_budget): at most every 100 ms; render thread.
+    mutable std::int64_t memory_read_ms_ = 0;
+    mutable std::uint64_t memory_usage_ = 0u;
+    mutable std::uint64_t memory_budget_bytes_ = 0u;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool present_wait_ = false;             // VK_KHR_present_wait and present_id, enabled
     bool pipeline_libraries_ = false;       // VK_EXT_graphics_pipeline_library, enabled, fast linking

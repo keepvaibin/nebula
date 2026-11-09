@@ -25,6 +25,7 @@
 #include <vk_mem_alloc.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -1653,6 +1654,35 @@ bool Context::grey_view(Texture& texture) const {
 
 bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
     usage = budget = 0u;
+    if (memory_budget_ && physical_ != VK_NULL_HANDLE) {
+        // The driver's own figures, whole-process and whoever else is on the card, read afresh at most ten times a second.
+        const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     std::chrono::steady_clock::now().time_since_epoch()).count();
+        if (memory_budget_bytes_ == 0u || now - memory_read_ms_ >= 100) {
+            VkPhysicalDeviceMemoryBudgetPropertiesEXT extension{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT};
+            VkPhysicalDeviceMemoryProperties2 memory2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
+            memory2.pNext = &extension;
+            vkGetPhysicalDeviceMemoryProperties2(physical_, &memory2);
+            std::uint64_t largest = 0u;
+            std::uint64_t used = 0u;
+            // The largest device-local heap holds the render targets (the only one on most devices).
+            for (std::uint32_t i = 0; i < memory2.memoryProperties.memoryHeapCount; ++i) {
+                if ((memory2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u &&
+                    extension.heapBudget[i] > largest) {
+                    largest = extension.heapBudget[i];
+                    used = extension.heapUsage[i];
+                }
+            }
+            memory_read_ms_ = now;
+            memory_budget_bytes_ = largest;
+            memory_usage_ = used;
+        }
+        if (memory_budget_bytes_ != 0u) {
+            usage = memory_usage_;
+            budget = memory_budget_bytes_;
+            return true;
+        }
+    }
     if (allocator_ == nullptr) {
         return false;
     }

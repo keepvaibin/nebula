@@ -40,6 +40,25 @@ int main() {
                 requests[1].StateMask == 0u;
         }
     }
+    // Efficiency on: the same two-step request, with the state bits set instead of cleared; off is the opt-out.
+    for (unsigned scenario = 0u; scenario < 3u; ++scenario) {
+        process_calls = 0u;
+        accept_combined = scenario == 0u;
+        accept_fallback = scenario == 1u;
+        galaxy::host::set_process_efficiency(true);
+        passed &= process_calls == (accept_combined ? 1u : 2u);
+        passed &= requests[0].Version == PROCESS_POWER_THROTTLING_CURRENT_VERSION &&
+            requests[0].ControlMask == (PROCESS_POWER_THROTTLING_EXECUTION_SPEED | 0x4u) &&
+            requests[0].StateMask == (PROCESS_POWER_THROTTLING_EXECUTION_SPEED | 0x4u);
+        if (!accept_combined) {
+            passed &= requests[1].ControlMask == PROCESS_POWER_THROTTLING_EXECUTION_SPEED &&
+                requests[1].StateMask == PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+        }
+    }
+    process_calls = 0u;
+    accept_combined = true;
+    galaxy::host::set_process_efficiency(false);
+    passed &= process_calls == 1u && requests[0].StateMask == 0u;
     std::puts(passed ? "Windows power policy fallback checks passed" :
         "Windows power policy fallback checks FAILED");
     return passed ? 0 : 1;

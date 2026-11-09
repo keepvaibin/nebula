@@ -115,6 +115,8 @@ public:
     [[nodiscard]] bool quit_requested() const noexcept;
     // Out of sight (render_api.h set_window_hidden): no presents of its own, longer waits. Any thread.
     void set_window_hidden(bool hidden) noexcept { window_hidden_.store(hidden, std::memory_order_relaxed); }
+    // Open but not in front (render_api.h set_window_background): the game's own frames only, at the game's rate. Any thread.
+    void set_window_background(bool background) noexcept { window_background_.store(background, std::memory_order_relaxed); }
     [[nodiscard]] bool window_occluded() const noexcept { return initialized_ && renderer_.occluded(); }
     // Minimised (the host's word) or covered (the OS's): nothing of its own is presented and no generated frame is made.
     [[nodiscard]] bool out_of_sight() const noexcept { return window_hidden_.load(std::memory_order_relaxed) || window_occluded(); }
@@ -277,8 +279,12 @@ private:
     std::uint32_t device_losses_ = 0u;
     std::uint64_t table_sweep_at_ = 0u;  // the frame the next texture table sweep and (test builds) its log line are due
     std::uint64_t table_log_at_ = 0u;
-    std::uint64_t vram_log_at_ = 0u;  // (test builds) the frame the next video memory line is due
+    std::uint64_t vram_log_at_ = 0u;  // the frame the next look at whether a video memory line is due
+    std::uint64_t vram_report_at_ = 0u;  // the frame the line is due whatever changed
+    std::uint64_t vram_logged_budget_mb_ = 0u;
+    std::uint64_t vram_logged_left_out_mb_ = 0u;
     std::atomic<bool> window_hidden_{false};
+    std::atomic<bool> window_background_{false};
     std::int64_t occlusion_probe_due_qpc_ = 0;  // render thread: the next look at whether a covered window shows again
     // The frame boundary's read of the adapter's video memory: past its budget the texture store gives textures back.
     void enforce_video_memory();

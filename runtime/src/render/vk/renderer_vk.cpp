@@ -1646,11 +1646,15 @@ void RendererVk::shutdown() {
 }
 
 void RendererVk::grow_rings() {
-    if (ring_growth_failed_ || (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
-                                !matrix_ring_.wants_growth())) {
+    // A ring whose frames took over half their budget (or spilled) grows; one whose last 600 frames stayed under a quarter of it
+    // gives half of its memory back.
+    if (ring_growth_failed_ ||
+        (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
+         !matrix_ring_.wants_growth() && !vertex_ring_.wants_shrink() && !index_ring_.wants_shrink() &&
+         !constant_ring_.wants_shrink() && !matrix_ring_.wants_shrink())) {
         return;
     }
-    // No wait for the GPU: a ring grows into a new buffer (the same size when only its segments change). The old buffer and its
+    // No wait for the GPU: a ring is made again as a new buffer (the same size when only its segments change). The old buffer and its
     // chunks are released here, which hands them to the context to destroy once the work submitted so far has completed.
     const VkDevice device = vk::Context::get().device();
     std::vector<gpu::BufferRef> old;
@@ -1660,10 +1664,13 @@ void RendererVk::grow_rings() {
         if (capacity == 0u) {
             ring_growth_failed_ = true;
             capacity = had;
+        } else if (ring.wants_shrink()) {
+            capacity = ring.shrunk_capacity(segments);
         }
         if (capacity != had) {
-            std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
-                      << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
+            std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << name
+                      << " frame-high-water-kb=" << (ring.high_water() >> 10u) << " mb=" << (had >> 20u) << "->"
+                      << (capacity >> 20u) << '\n';
         }
         ring.release_into(old);
         if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity, chunks)) {

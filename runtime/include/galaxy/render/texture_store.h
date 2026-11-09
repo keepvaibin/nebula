@@ -96,16 +96,20 @@ public:
             backend_.note_named(entries_[id]->current.resource);
         }
     }
-    // At a frame boundary, with the adapter's video memory `usage` and its `budget` (0: not known): past the budget, textures
-    // that no frame in flight names are given back, the least recently named first, at most kEvictBytesPerFrame a call. An
-    // evicted texture draws blank when a list names it and is made again from the game's image (the next list's first walk
-    // has it). Memory comes back as the frames that may read it finish (and, on Direct3D 12, when a whole heap empties).
+    // At a frame boundary, with the adapter's video memory `usage` and its `budget` (0: not known): past the budget, the textures
+    // that no frame in flight names give back their top levels, the least recently named first, the largest first among equals,
+    // at most kReduceBytesPerBatch freed a batch and one batch every kReduceBatchFrames. A texture is never blank: the old one
+    // draws until the smaller one (made from the game's image with its top levels left out, by the next take_ops) takes its place,
+    // and a texture a walk names again while there is room is made whole again the same way. Memory comes back as the frames that
+    // may read the old texture finish (and, on Direct3D 12, when a whole heap empties). Render thread.
     void enforce_budget(std::uint64_t usage, std::uint64_t budget);
-    static constexpr std::uint64_t kEvictBytesPerFrame = 64ull << 20u;
+    static constexpr std::uint64_t kReduceBytesPerBatch = 64ull << 20u;
+    static constexpr std::uint64_t kRestoreBytesPerFrame = 32ull << 20u;
+    static constexpr std::uint64_t kReduceBatchFrames = 12u;
     struct BudgetStats {
-        std::uint32_t resident = 0, evicted = 0;  // ids with a texture, ids given back now
-        std::uint64_t resident_bytes = 0;
-        std::uint64_t evictions = 0, evicted_bytes = 0, rebuilds = 0, blank_draws = 0;  // since the start
+        std::uint32_t resident = 0, reduced = 0;  // ids with a texture, ids whose top levels are left out now
+        std::uint64_t resident_bytes = 0, reduced_bytes = 0;  // what the textures hold; what the reduced ones leave out
+        std::uint64_t reductions = 0, freed_bytes = 0, restores = 0;  // since the start
     };
     [[nodiscard]] BudgetStats budget_stats() const;
 #if defined(NEBULA_DEV)
@@ -155,7 +159,10 @@ private:
         Staged staged;
         PackName name;
         bool generated = false;
-        bool rebuild = false;  // a Create for an evicted id: dropped if the id is not evicted any more
+        // A Create with `resize` makes an existing id's texture again with its `drop` top levels left out (0: whole). It is
+        // dropped if the id is gone or already has that many dropped.
+        bool resize = false;
+        std::uint32_t drop = 0u;
     };
     struct Entry {
         gpu::TextureRef texture;
@@ -167,16 +174,24 @@ private:
         std::uint32_t pack_slot = TexturePacks::kNone;
         bool pack_waiting = false;
         TextureReplacement built_in;
-        // The frame a walk last named it, the bytes its own texture holds, and whether it was given back (budget).
+        // The frame a walk last named it, the bytes its own texture holds, and what the budget made of it: the top levels left
+        // out of its own texture (`dropped`; own.width and own.height stay the game's), the levels and bytes it has whole.
         std::uint64_t named = 0u;
         std::uint64_t bytes = 0u;
-        std::uint64_t asked_at = ~std::uint64_t{0};  // when it was last asked for again
-        bool evicted = false;
+        std::uint64_t full_bytes = 0u;
+        std::uint64_t asked_at = ~std::uint64_t{0};  // the frame a resize of it was last asked for
+        std::uint64_t demanded_at = ~std::uint64_t{0};  // the frame a walk last wanted it whole with no room for it
+        std::uint32_t dropped = 0u;
+        std::uint32_t full_levels = 0u;
+    };
+    struct ResizeRequest {
+        std::uint32_t id = 0u;
+        std::uint32_t drop = 0u;
     };
     struct Retired {
         gpu::TextureRef texture;
         std::uint32_t view = ~0u;
-        std::uint64_t evicted_bytes = 0u;  // an eviction's: counted in evicting_bytes_ until it is released
+        std::uint64_t evicted_bytes = 0u;  // what a budget resize freed: counted in evicting_bytes_ until it is released
     };
     struct LinearImage {
         std::uint32_t width = 0u, height = 0u;
@@ -193,14 +208,16 @@ private:
     [[nodiscard]] Staged stage(const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
                                std::uint32_t levels, std::uint8_t layout);
     [[nodiscard]] ChunkRef allocate_staging(std::uint64_t bytes, std::uint64_t& offset);
+    // `drop` leaves that many top levels out of a record (false when it has no more levels than that, or is a single image).
     bool stage_image(Op& op, const void* bytes, std::uint32_t size, std::uint32_t width, std::uint32_t height,
-                     std::uint8_t format);
+                     std::uint8_t format, std::uint32_t drop = 0u);
     void queue_built_in(std::uint32_t id, const void* record);
     void create_entry(Op& op);
     // `once`: the texture's levels are written once (a new id), so it may be a direct-write texture; an id that is updated
     // keeps a texture the GPU copies into.
     void make_own(Entry& entry, const Op& op, bool once);
     void update_entry(Op& op);
+    void resize_entry(Op& op);
     void free_entry(std::uint32_t id);
     void apply_built_in(Op& op);
     void dump_base_level(const Staged& staged, const PackName& name);
@@ -209,7 +226,8 @@ private:
     void show(Entry& entry, const TextureReplacement& replacement, std::uint32_t slot);
     void stop_showing(Entry& entry);
     void retire(gpu::TextureRef texture, std::uint32_t view, std::uint64_t evicted_bytes = 0u);
-    void evict(Entry& entry);
+    // Asks the next take_ops for texture `id` made again with `drop` top levels left out.
+    void request_resize(std::uint32_t id, Entry& entry, std::uint32_t drop);
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     // Calling threads, under lock_.
@@ -219,7 +237,7 @@ private:
     std::unordered_map<std::uint32_t, LinearImage> linear_images_;
     std::unordered_map<std::uint32_t, Source> sources_;
     std::unordered_map<std::uint32_t, const void*> built_ins_;
-    std::vector<std::uint32_t> rebuild_ids_;  // evicted ids a list named: staged again by the next take_ops
+    std::vector<ResizeRequest> resize_requests_;  // the budget's: staged by the next take_ops
     DeviceGate* gate_ = nullptr;
     ChunkRef arena_chunk_;
     std::uint64_t arena_used_ = 0u;
@@ -228,10 +246,14 @@ private:
     // Render thread. Ids are never used again, so a table naming a freed image reads nothing, not another image.
     std::vector<std::unique_ptr<Entry>> entries_;
     std::uint64_t revision_ = 1u;
-    // Budget: frames begun, bytes of evicted textures still held by frames in flight, and the counts since the start.
+    // Budget: frames begun, bytes of replaced textures still held by frames in flight, the bytes a walk may still ask to have
+    // back this frame, the frame the next batch of reductions may start, and the counts since the start. (Render thread.)
     std::uint64_t frame_ = 0u;
     std::uint64_t evicting_bytes_ = 0u;
-    std::uint64_t evictions_ = 0u, evicted_bytes_total_ = 0u, rebuilds_ = 0u, evicted_draws_ = 0u;
+    std::uint64_t restore_room_ = 0u;
+    std::uint64_t restore_demand_ = 0u;  // bytes walks wanted whole this frame with no room: the next enforce_budget makes room
+    std::uint64_t reduce_after_frame_ = 0u;
+    std::uint64_t reductions_ = 0u, freed_bytes_total_ = 0u, restores_ = 0u;
     std::unordered_set<std::uint32_t> blank_images_;
     // The frees the list walking now came with.
     std::vector<std::uint32_t> held_frees_;

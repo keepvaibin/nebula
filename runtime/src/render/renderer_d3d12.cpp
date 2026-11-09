@@ -1621,13 +1621,38 @@ bool RendererD3D12::video_memory(std::uint64_t& usage, std::uint64_t& budget) co
     if (!adapter3_) {
         return false;
     }
-    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-    if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
-        return false;
+    // The use moves with every allocation and is read at most every 100 ms; the budget moves when the OS says (the event), and
+    // that is read at once.
+    const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch()).count();
+    const bool moved = budget_event_ != nullptr && WaitForSingleObject(budget_event_, 0u) == WAIT_OBJECT_0;
+    if (moved || memory_budget_ == 0u || now - memory_read_ms_ >= 100) {
+        DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+        if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+            return false;
+        }
+        if (moved) {
+            std::cout << "[vram] the OS moved the budget from " << (memory_budget_ >> 20u) << " MB to " << (info.Budget >> 20u)
+                      << " MB\n";
+        }
+        memory_read_ms_ = now;
+        memory_usage_ = info.CurrentUsage;
+        memory_budget_ = info.Budget;
     }
-    usage = info.CurrentUsage;
-    budget = info.Budget;
+    usage = memory_usage_;
+    budget = memory_budget_;
     return true;
+}
+
+void RendererD3D12::release_budget_notification() noexcept {
+    if (adapter3_ && budget_cookie_ != 0u) {
+        adapter3_->UnregisterVideoMemoryBudgetChangeNotification(budget_cookie_);
+    }
+    budget_cookie_ = 0u;
+    if (budget_event_ != nullptr) {
+        CloseHandle(budget_event_);
+        budget_event_ = nullptr;
+    }
 }
 
 bool RendererD3D12::create_clear_pipeline() {
@@ -1896,6 +1921,15 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                                        std::wcsstr(adapter_desc.Description, L"RTX") != nullptr,
                                        std::memory_order_relaxed);
         (void)adapter.As(&adapter3_);
+        release_budget_notification();
+        if (adapter3_) {
+            budget_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+            if (budget_event_ != nullptr &&
+                FAILED(adapter3_->RegisterVideoMemoryBudgetChangeNotificationEvent(budget_event_, &budget_cookie_))) {
+                budget_cookie_ = 0u;
+                release_budget_notification();
+            }
+        }
         {
             const std::string narrow = narrow_utf8(adapter_desc.Description);
             const bool is_software =
@@ -2568,6 +2602,7 @@ void RendererD3D12::shutdown() {
         streamline::shutdown();
     });
     if (fence_event_) { CloseHandle(fence_event_); fence_event_ = nullptr; }
+    release_budget_notification();
     host_window::pending_resize_extent.store(0u, std::memory_order_relaxed);
     s_blit_root_sig.Reset();
     post_process_.shutdown();
@@ -3170,10 +3205,12 @@ void RendererD3D12::begin_frame() {
             // The settings changed: decided again.
             temporal_interp_suspended_ = false;
         }
-        // A ring whose frames took over half their budget (or spilled) grows before the next frame.
+        // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 600 frames
+        // stayed under a quarter of it gives half of its memory back.
         if (!ring_growth_failed_ && (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
-                                     matrix_ring_.wants_growth())) {
-            // No wait for the GPU: a ring grows into a new buffer (the same size when only its segments change), and the old
+                                     matrix_ring_.wants_growth() || vertex_ring_.wants_shrink() || index_ring_.wants_shrink() ||
+                                     constant_ring_.wants_shrink() || matrix_ring_.wants_shrink())) {
+            // No wait for the GPU: a ring is made again as a new buffer (the same size when only its segments change), and the old
             // one and its chunks go to the newest frame in flight's retired list, released after that frame's fence, which is
             // past every earlier frame's.
             std::vector<gpu::BufferRef>& old = retired_targets_[(frame_index_ + kFramesInFlight - 1u) % kFramesInFlight];
@@ -3183,9 +3220,12 @@ void RendererD3D12::begin_frame() {
                 if (capacity == 0u) {
                     ring_growth_failed_ = true;
                     capacity = had;
+                } else if (ring.wants_shrink()) {
+                    capacity = ring.shrunk_capacity(count);
                 }
                 if (capacity != had) {
-                    std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                    std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << name
+                              << " frame-high-water-kb=" << (ring.high_water() >> 10u)
                               << " budget-kb=" << (ring.bytes_per_frame() >> 10u) << " mb=" << (had >> 20u) << "->"
                               << (capacity >> 20u) << '\n';
                 }

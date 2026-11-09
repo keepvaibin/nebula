@@ -135,10 +135,13 @@ void TextureStore::shutdown() {
     entries_.clear();
     retired_.clear();
     evicting_bytes_ = 0u;
+    restore_room_ = 0u;
+    restore_demand_ = 0u;
+    reduce_after_frame_ = 0u;
     kept_.clear();
     {
         const std::lock_guard guard(lock_);
-        rebuild_ids_.clear();
+        resize_requests_.clear();
         queued_ = std::make_shared<Ops>();
         arena_chunk_.reset();
         free_chunks_.clear();
@@ -245,11 +248,12 @@ TextureStore::Staged TextureStore::stage(const std::uint8_t* texels, std::uint32
 
 // An image as the game hands it over, staged and named.
 bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, std::uint32_t width, std::uint32_t height,
-                               std::uint8_t format) {
+                               std::uint8_t format, std::uint32_t drop) {
     const auto* first = static_cast<const std::uint8_t*>(bytes);
     if (format >= NEBULA_TEXTURE_LINEAR_L8 && format <= NEBULA_TEXTURE_LINEAR_RGBA8) {
         const std::uint8_t layout = nebula_texture_linear_layout(format);
-        if (first == nullptr || width == 0u || height == 0u || size < nebula_texture_level_bytes(width, height, 1u, layout)) {
+        if (drop != 0u || first == nullptr || width == 0u || height == 0u ||
+            size < nebula_texture_level_bytes(width, height, 1u, layout)) {
             return false;
         }
         op.staged = stage(first, width, height, 1u, layout);
@@ -260,12 +264,26 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
     }
     const NebulaTexture* const record = nebula_texture_record(bytes);
     if (record == nullptr || record->levels == 0u || record->levels > NEBULA_TEXTURE_MAX_LEVELS ||
-        NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(record->width, record->height, record->levels, record->layout) > size) {
+        NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(record->width, record->height, record->levels, record->layout) > size ||
+        drop >= record->levels) {
         return false;
     }
     const std::uint8_t* const texels = first + NEBULA_TEXTURE_HEADER;
-    op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
     op.generated = (record->flags & NEBULA_TEXTURE_GENERATED_LEVELS) != 0u;
+    if (drop != 0u) {
+        // The levels after the dropped ones, in the record's own order; the name stays with the whole texture.
+        const std::uint8_t* kept = texels;
+        std::uint32_t level_width = record->width;
+        std::uint32_t level_height = record->height;
+        for (std::uint32_t l = 0; l < drop; ++l) {
+            kept += nebula_texture_level_bytes(level_width, level_height, 1u, record->layout);
+            level_width = std::max(1u, level_width >> 1u);
+            level_height = std::max(1u, level_height >> 1u);
+        }
+        op.staged = stage(kept, level_width, level_height, record->levels - drop, record->layout);
+        return true;
+    }
+    op.staged = stage(texels, record->width, record->height, record->levels, record->layout);
     if (record->source_format != NEBULA_TEXTURE_MADE) {
         op.name.format = record->source_format;
         op.name.hash = record->pack_hash;
@@ -377,41 +395,33 @@ void TextureStore::queue_built_in(std::uint32_t id, const void* record_bytes) {
 }
 
 std::shared_ptr<TextureStore::Ops> TextureStore::take_ops() {
-    // Evicted textures a list named: staged again here, on the game's thread (the caller holds the device gate), from the
-    // memory the game keeps for them while the id lives.
-    std::vector<std::uint32_t> wanted;
+    // Textures the budget wants made smaller or whole again: staged here, on the game's thread (the caller holds the device
+    // gate), from the memory the game keeps for them while the id lives.
+    std::vector<ResizeRequest> wanted;
     {
         const std::lock_guard guard(lock_);
-        wanted.swap(rebuild_ids_);
+        wanted.swap(resize_requests_);
     }
-    for (const std::uint32_t id : wanted) {
+    for (const ResizeRequest& request : wanted) {
         Source source;
-        const void* built_in = nullptr;
         {
             const std::lock_guard guard(lock_);
-            const auto found = sources_.find(id);
+            const auto found = sources_.find(request.id);
             if (found == sources_.end()) {
                 continue;
             }
             source = found->second;
-            if (const auto painting = built_ins_.find(id); painting != built_ins_.end()) {
-                built_in = painting->second;
-            }
         }
         Op op;
         op.kind = Op::Kind::Create;
-        op.id = id;
-        op.rebuild = true;
-        if (!stage_image(op, source.bytes, source.size, source.width, source.height, source.format)) {
+        op.id = request.id;
+        op.resize = true;
+        op.drop = request.drop;
+        if (!stage_image(op, source.bytes, source.size, source.width, source.height, source.format, request.drop)) {
             continue;
         }
-        {
-            const std::lock_guard guard(lock_);
-            queued_->list.push_back(std::move(op));
-        }
-        if (built_in != nullptr) {
-            queue_built_in(id, built_in);
-        }
+        const std::lock_guard guard(lock_);
+        queued_->list.push_back(std::move(op));
     }
     const std::lock_guard guard(lock_);
     if (queued_->list.empty()) {
@@ -484,8 +494,9 @@ void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
     for (Op& op : ops.list) {
         switch (op.kind) {
         case Op::Kind::Create:
-            // A made-again texture whose id was freed or made again since is dropped.
-            if (!op.rebuild || (op.id < entries_.size() && entries_[op.id] != nullptr && entries_[op.id]->evicted)) {
+            if (op.resize) {
+                resize_entry(op);  // dropped if the id is gone since
+            } else {
                 create_entry(op);
             }
             break;
@@ -501,8 +512,8 @@ void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
 
 void TextureStore::apply_built_in(Op& op) {
     Entry* const entry = op.id < entries_.size() ? entries_[op.id].get() : nullptr;
-    if (entry == nullptr || entry->evicted) {
-        return;  // an evicted texture takes the game's painting again with its rebuild (built_ins_)
+    if (entry == nullptr) {
+        return;
     }
     if (entry->built_in.texture) {
         retire(std::move(entry->built_in.texture), ~0u);
@@ -537,6 +548,12 @@ void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     std::uint64_t allocation = 0u;
     entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format, once);
     entry.bytes = allocation;
+    // A whole texture is what the budget measures a reduced one against.
+    entry.dropped = op.drop;
+    if (op.drop == 0u) {
+        entry.full_bytes = allocation;
+        entry.full_levels = op.staged.levels;
+    }
     backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                            op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
     keep(op.staged.chunk);
@@ -569,23 +586,21 @@ void TextureStore::create_entry(Op& op) {
         }
     }
     look_up(op.id, *entry);
-    if (entries_[op.id] != nullptr && entries_[op.id]->evicted) {
-        ++rebuilds_;
-        ++revision_;  // the tables naming it read the new texture
-    }
     entries_[op.id] = std::move(entry);
 }
 
 void TextureStore::update_entry(Op& op) {
-    if (op.id >= entries_.size() || entries_[op.id] == nullptr || entries_[op.id]->evicted) {
+    if (op.id >= entries_.size() || entries_[op.id] == nullptr) {
         create_entry(op);
         return;
     }
     Entry& entry = *entries_[op.id];
     TextureHandle& own = entry.own;
-    // A texture written from the CPU (direct_writes) is never rewritten in place: a frame in flight may read it.
-    const bool same = own.width == op.staged.width && own.height == op.staged.height && own.mip_levels == op.staged.levels &&
-                      entry.name.format == op.name.format && !TextureBackend::direct_written(gpu::raw(entry.texture));
+    // A texture written from the CPU (direct_writes) is never rewritten in place: a frame in flight may read it. A reduced
+    // one is not the size of the new image.
+    const bool same = entry.dropped == 0u && own.width == op.staged.width && own.height == op.staged.height &&
+                      own.mip_levels == op.staged.levels && entry.name.format == op.name.format &&
+                      !TextureBackend::direct_written(gpu::raw(entry.texture));
     if (same) {
         backend_.record_upload(gpu::raw(entry.texture), true, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                                op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
@@ -608,6 +623,49 @@ void TextureStore::update_entry(Op& op) {
         dump_base_level(op.staged, op.name);
     }
     look_up(op.id, entry);
+}
+
+// The budget's resize: the texture of a live id made again from the game's image with `op.drop` top levels left out (0: whole).
+// The old texture goes to the retired list, so frames in flight and this frame's draws read it until they finish: a texture is
+// never blank. The game's size stays in `own` (packs are matched by it, and the samplers take the smaller texture's own levels).
+void TextureStore::resize_entry(Op& op) {
+    Entry* const found = op.id < entries_.size() ? entries_[op.id].get() : nullptr;
+    if (found == nullptr || !found->texture || found->dropped == op.drop) {
+        return;
+    }
+    Entry& entry = *found;
+    const std::uint32_t game_width = entry.own.width;
+    const std::uint32_t game_height = entry.own.height;
+    const std::uint32_t previous_view = entry.own.srv_index;
+    const std::uint64_t held = entry.bytes;
+    const bool showing_own = entry.current.srv_index == previous_view;
+    gpu::TextureRef previous = std::move(entry.texture);
+    try {
+        make_own(entry, op, true);
+    } catch (const std::exception& error) {
+        // Out of video memory or staging: what the id had stays.
+        std::cerr << "[texture] resize failed: " << error.what() << '\n';
+        if (!entry.texture) {
+            entry.texture = std::move(previous);
+        } else {
+            retire(std::move(previous), previous_view);
+        }
+        return;
+    }
+    entry.own.width = game_width;
+    entry.own.height = game_height;
+    const std::uint64_t freed = held > entry.bytes ? held - entry.bytes : 0u;
+    retire(std::move(previous), previous_view, freed);
+    if (freed != 0u) {
+        ++reductions_;
+        freed_bytes_total_ += freed;
+    } else {
+        ++restores_;
+    }
+    if (showing_own) {
+        entry.current = entry.own;
+    }
+    ++revision_;  // the tables naming it read the new texture
 }
 
 void TextureStore::free_entry(std::uint32_t id) {
@@ -733,15 +791,19 @@ TextureHandle TextureStore::handle(std::uint32_t id) {
     if (id < entries_.size() && entries_[id] != nullptr) {
         Entry& entry = *entries_[id];
         entry.named = frame_;
-        if (entry.evicted) [[unlikely]] {
-            // Given back for the budget: blank until the next list's first walk, which has it made again.
-            ++evicted_draws_;
+        if (entry.dropped != 0u) [[unlikely]] {
+            // Reduced for the budget and named again: it draws as it is and is made whole when there is room for it. With no room,
+            // what it lacks is asked of the next enforce_budget, which makes room from the textures nothing names.
             if (entry.asked_at == ~std::uint64_t{0} || frame_ - entry.asked_at > 30u) {
-                entry.asked_at = frame_;
-                const std::lock_guard guard(lock_);
-                rebuild_ids_.push_back(id);
+                const std::uint64_t extra = entry.full_bytes > entry.bytes ? entry.full_bytes - entry.bytes : 0u;
+                if (extra <= restore_room_) {
+                    restore_room_ -= extra;
+                    request_resize(id, entry, 0u);
+                } else if (entry.demanded_at != frame_) {
+                    entry.demanded_at = frame_;
+                    restore_demand_ += extra;
+                }
             }
-            return {};
         }
         backend_.note_named(entry.current.resource);
         return entry.current;
@@ -767,39 +829,59 @@ void TextureStore::retire(gpu::TextureRef texture, std::uint32_t view, std::uint
     retired_[frame_slot_].push_back(Retired{std::move(texture), view, evicted_bytes});
 }
 
-// Gives an entry's textures back to the device; it keeps its place (name, id) and draws blank until it is made again.
-void TextureStore::evict(Entry& entry) {
-    stop_showing(entry);
-    std::uint64_t bytes = entry.bytes;
-    if (entry.built_in.texture) {
-        bytes += entry.built_in.bytes;
-        retire(std::move(entry.built_in.texture), ~0u);
-        entry.built_in = {};
-    }
-    retire(std::move(entry.texture), entry.own.srv_index, bytes);
-    entry.own = TextureHandle{};
-    entry.own.srv_index = ~0u;
-    entry.current = entry.own;
-    entry.bytes = 0u;
-    entry.evicted = true;
-    entry.asked_at = ~std::uint64_t{0};
-    ++evictions_;
-    evicted_bytes_total_ += bytes;
-    ++revision_;
+void TextureStore::request_resize(std::uint32_t id, Entry& entry, std::uint32_t drop) {
+    entry.asked_at = frame_;
+    const std::lock_guard guard(lock_);
+    resize_requests_.push_back(ResizeRequest{id, drop});
 }
 
+namespace {
+// How many top levels an entry can leave out: the chain has to keep a level, and that level at least 4 texels on its short side.
+std::uint32_t most_dropped(std::uint32_t levels, std::uint32_t width, std::uint32_t height) noexcept {
+    std::uint32_t most = std::min(levels > 1u ? levels - 1u : 0u, 31u);
+    const std::uint32_t shortest = std::min(width, height);
+    while (most != 0u && (shortest >> most) < 4u) {
+        --most;
+    }
+    return most;
+}
+}  // namespace
+
+// Video memory: past the budget (or when walks want reduced textures whole and nothing is free), the textures nothing has named
+// for the longest leave out their top levels, the largest of equals first. Never a texture blank or a draw skipped: a request
+// goes to the next take_ops, which stages the smaller image from the game's memory; the old texture draws until it is replaced.
 void TextureStore::enforce_budget(std::uint64_t usage, std::uint64_t budget) {
-    // Not while a dump wants every image, and not before the frame slots exist.
-    if (budget == 0u || retired_.empty() || packs_.dumping()) {
+    const std::uint64_t demand = std::exchange(restore_demand_, 0u);
+    // Not before the frame slots exist.
+    if (retired_.empty()) {
+        restore_room_ = 0u;
         return;
     }
-    // What earlier evictions still hold will be gone once their frames finish: it counts as freed already.
+    // A dump wants every image whole, and an unknown budget limits nothing.
+    if (budget == 0u || packs_.dumping()) {
+        restore_room_ = kRestoreBytesPerFrame;
+        return;
+    }
+    // What the textures replaced earlier still hold will be gone once their frames finish: it counts as freed already.
     const std::uint64_t pending = std::min(evicting_bytes_, usage);
-    if (usage - pending <= budget) {
+    const std::uint64_t held = usage - pending;
+    // Reduced textures come back while the memory in use is under 80% of the budget.
+    const std::uint64_t calm = budget - budget / 5u;
+    restore_room_ = held < calm ? std::min(kRestoreBytesPerFrame, calm - held) : 0u;
+    // Down to 95% of the budget when over it, so the next frame is not over again; down to 80% with the demand when walks want
+    // reduced textures whole and the memory in use would pass 90% of the budget.
+    std::uint64_t need = 0u;
+    if (held > budget) {
+        need = held - (budget - budget / 20u);
+    }
+    const std::uint64_t wanted = held + std::min(demand, kReduceBytesPerBatch);
+    if (demand != 0u && wanted > budget - budget / 10u) {
+        need = std::max(need, wanted - calm);
+    }
+    need = std::min(need, kReduceBytesPerBatch);
+    if (need == 0u || frame_ < reduce_after_frame_) {
         return;
     }
-    // Down to 95% of the budget, so the next frame is not over it again.
-    std::uint64_t need = std::min(usage - pending - (budget - budget / 20u), kEvictBytesPerFrame);
     // Not named by this frame's walks or by any frame in flight (a table writes its handles in the walk that names it).
     const std::uint64_t idle = static_cast<std::uint64_t>(retired_.size()) + 2u;
     struct Candidate {
@@ -809,7 +891,9 @@ void TextureStore::enforce_budget(std::uint64_t usage, std::uint64_t budget) {
     std::vector<Candidate> found;
     for (std::uint32_t id = 0; id < entries_.size(); ++id) {
         const Entry* const entry = entries_[id].get();
-        if (entry != nullptr && !entry->evicted && entry->bytes != 0u && frame_ - entry->named > idle) {
+        if (entry != nullptr && entry->texture && entry->bytes != 0u && frame_ - entry->named > idle &&
+            (entry->asked_at == ~std::uint64_t{0} || frame_ - entry->asked_at > 30u) &&
+            entry->dropped < most_dropped(entry->full_levels, entry->own.width, entry->own.height)) {
             found.push_back(Candidate{id, entry->named, entry->bytes});
         }
     }
@@ -817,7 +901,7 @@ void TextureStore::enforce_budget(std::uint64_t usage, std::uint64_t budget) {
         return;
     }
     {
-        // Only an id whose image the game still keeps can be made again.
+        // Only an id whose image the game still keeps can be staged again.
         const std::lock_guard guard(lock_);
         std::erase_if(found, [this](const Candidate& candidate) { return sources_.find(candidate.id) == sources_.end(); });
     }
@@ -828,28 +912,37 @@ void TextureStore::enforce_budget(std::uint64_t usage, std::uint64_t budget) {
         if (need == 0u) {
             break;
         }
-        evict(*entries_[candidate.id]);
-        need -= std::min(need, candidate.bytes);
+        Entry& entry = *entries_[candidate.id];
+        const std::uint32_t most = most_dropped(entry.full_levels, entry.own.width, entry.own.height);
+        // The fewest levels that free what is needed (each is a quarter of the size), at least one.
+        std::uint32_t drop = entry.dropped + 1u;
+        std::uint64_t freed = entry.bytes - (entry.bytes >> 2u);
+        while (freed < need && drop < most) {
+            ++drop;
+            freed = entry.bytes - (entry.bytes >> (2u * (drop - entry.dropped)));
+        }
+        request_resize(candidate.id, entry, drop);
+        need -= std::min(need, freed);
+        reduce_after_frame_ = frame_ + kReduceBatchFrames;
     }
 }
 
 TextureStore::BudgetStats TextureStore::budget_stats() const {
     BudgetStats stats;
     for (const std::unique_ptr<Entry>& entry : entries_) {
-        if (entry == nullptr) {
+        if (entry == nullptr || !entry->texture) {
             continue;
         }
-        if (entry->evicted) {
-            ++stats.evicted;
-        } else {
-            ++stats.resident;
-            stats.resident_bytes += entry->bytes;
+        ++stats.resident;
+        stats.resident_bytes += entry->bytes;
+        if (entry->dropped != 0u) {
+            ++stats.reduced;
+            stats.reduced_bytes += entry->full_bytes > entry->bytes ? entry->full_bytes - entry->bytes : 0u;
         }
     }
-    stats.evictions = evictions_;
-    stats.evicted_bytes = evicted_bytes_total_;
-    stats.rebuilds = rebuilds_;
-    stats.blank_draws = evicted_draws_;
+    stats.reductions = reductions_;
+    stats.freed_bytes = freed_bytes_total_;
+    stats.restores = restores_;
     return stats;
 }
 
@@ -884,7 +977,7 @@ void TextureStore::apply_texture_packs() {
         // New index, packs turned off, or dumping toggled: every texture is looked up again.
         pack_waiters_.clear();
         for (std::uint32_t id = 0; id < entries_.size(); ++id) {
-            if (entries_[id] != nullptr && !entries_[id]->evicted) {
+            if (entries_[id] != nullptr) {
                 look_up(id, *entries_[id]);
             }
         }

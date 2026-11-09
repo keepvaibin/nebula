@@ -118,12 +118,22 @@ Q's), **D** design (58: page sizes, rings of frames, policy, algorithm constants
   3D scene runs (`wide_probe.hlsl`, `Game/Render/NebulaWideProbe.cpp`): a list of 24 one-texel maps, the shader samples map 23 and writes
   its red as the pixel's depth, a depth probe brings it back, and one line says `[wide-table] map 23 of 24: red read 240, expected 240:
   ok` (or `WRONG`) on either backend.
-- **Video memory**: no size of it is assumed. Each frame boundary reads the adapter's usage and budget (DXGI `QueryVideoMemoryInfo`;
-  Vulkan's device-local heap budget, `VK_EXT_memory_budget` when the device has it). Past the budget the texture store gives back textures
-  no frame in flight names, least recently named first (at most 64 MB a frame, down to 95% of the budget); the id keeps its place and
-  draws blank until the next list's first walk, which has it made again from the image the game keeps (staged on the game's thread in
-  `take_ops`). The memory returns as the frames that may read it finish; on Direct3D 12 a placed heap with nothing in it (not the first)
-  is released, so usage can fall. `GALAXY_TEST_VRAM_BUDGET_MB=N` sets the budget in test builds; `[vram]` is logged every 600 frames.
+- **Video memory**: no size of it is assumed. Each frame boundary reads the adapter's usage and budget: DXGI `QueryVideoMemoryInfo`
+  (usage at most every 100 ms; the budget at once when the OS signals `RegisterVideoMemoryBudgetChangeNotificationEvent`, which is
+  also logged), Vulkan `VK_EXT_memory_budget` of the largest device-local heap (read at most every 100 ms), else the allocator's
+  estimate. Past the budget (or when walks want reduced textures whole and nothing is free) the texture store makes the textures no
+  frame in flight names smaller: the least recently named first, the largest of equals first, its top levels left out, at least 4 texels
+  on the short side kept, at most 64 MB freed a batch and a batch every 12 frames, down to 95% of the budget. The old texture draws
+  until the smaller one, staged from the image the game keeps (on the game's thread in `take_ops`, from level `drop` of the record),
+  replaces it at the next list's first walk: a texture is never blank and no draw is skipped. A reduced texture a walk names again is
+  made whole the same way while the memory in use is under 80% of the budget (at most 32 MB a frame); with no room, what it lacks
+  makes room from the textures nothing names. A texture of one level cannot be reduced. The memory returns as the frames that may read
+  the old texture finish; on Direct3D 12 a placed heap with nothing in it (not the first) is released, so usage can fall.
+  `GALAXY_TEST_VRAM_BUDGET_MB=N` sets the budget in test builds. Log: `[vram] budget N MB used M MB evicted K MB (R textures reduced
+  of T)`, when the budget or K changes (looked at once a second) and once an hour.
+- **Host memory**: the four upload rings (vertex, index, constant, matrix) grow when a frame takes over half its budget; after 600
+  frames in a row in which no frame took more than a quarter of the budget they are made again at half the capacity, never under the
+  capacity they first had (`UploadRing::wants_shrink`, `shrunk_capacity`; log `[gpu-rings] shrink`).
 - **Out of sight**: a minimised window stops the game and its sound and the renderer's own presents (no repeated pictures, no generated
   frames), and the threads wait on events. The device and swap chain stay, so showing the window again rebuilds nothing; the game's
   clock starts again from the return and owes no steps. A window the OS reports covered (Direct3D 12: `DXGI_STATUS_OCCLUDED`, asked
@@ -207,6 +217,37 @@ the last write again for an 8-bit window into a scratch target and reads that. H
 DLSS), on a pre-rotated Vulkan surface, and without the post chain. `GALAXY_TEST_FORCE_HDR=1` offers HDR on any monitor (Vulkan:
 whose surface lists the format) to run the path; `GALAXY_VK_TEST_NO_FEATURE=hdr` leaves the Vulkan extensions out.
 Log lines: `[display] output HDR|SDR ...`, `[hdr] on peak N nits paper M`, `[hdr] off`.
+
+## Power
+
+**Waiting.** Every wait for a time is on a waitable timer made with `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION` (Linux and Android:
+`clock_nanosleep` on `CLOCK_MONOTONIC`, absolute on the display's vsync grid on Android), never a spin: the host's frame clock
+(`sleep_until_precise`, host_main.cpp), the present pacer's wait for its slot (`PresentPacer::sleep_before`, at most 2 ms, renderer_common.cpp)
+and the render thread's wait for an interpolated frame's slot (`RenderCore::interp_sleep_us`, render_core.cpp; coarse by condition variable
+until 1.5 ms before the slot, then the timer). A whole-tree search for `yield`, `Sleep(0)`, `_mm_pause`, `YieldProcessor`, `SwitchToThread`
+and loops on an atomic found none outside tests. The waits that poll are the render thread's 1 ms park while it presents repeated
+pictures (a frame rate above the game's, which the frame must follow), the movie decoder's 4 ms retry for a free upload buffer, and the exit
+path's 10 ms look at saves still being written. Everything else waits on an event, a condition variable or the message queue.
+
+**In the background.** A window that is minimised or covered presents nothing and makes no GPU work (`RenderCore::out_of_sight`; the host
+holds the game when minimised). A window that is open but not in front (`host_window::is_background`, `WM_ACTIVATEAPP`) keeps the game running
+but the renderer, told by `render::set_window_background`, makes no generated frames (`interp_stopping_`) and no repeated pictures
+(`idle_present`, `overlay_idle`): the game's own frames at the game's rate, which is the display's rate or less. Coming back to the front
+restarts generated frames from a new sequence, as after a minimise.
+
+**Hints to the OS** (`runtime/include/galaxy/power_policy.h` decides, `apply_power_wish` in host_main.cpp tells, Windows host): the process
+asks for efficiency (`PROCESS_POWER_THROTTLING_EXECUTION_SPEED` and `IGNORE_TIMER_RESOLUTION` set, EcoQoS) while the window is behind
+another or minimised, or while the game has had no button, stick, spin or pointer movement for 60 s and no cutscene (movie sound within
+2 s); it goes back to the opt-out of the start as soon as any of that ends. The device's audio thread opts out of it on its own
+(`set_current_thread_efficiency(false)`, which the OS honours over the process; Lane Q's line, helpers/q01.md). `SetThreadExecutionState(
+ES_CONTINUOUS | ES_DISPLAY_REQUIRED)` holds the display on only while the window is in front and an input came in the last 3 minutes or a
+cutscene plays; never in the background. Log lines `[power] efficiency requested (away or idle)`, `[power] full speed (playing)`,
+`[power] display held on (playing)`, `[power] display left to the OS's timers`.
+
+**Android.** The performance hint session (`perf_hint.cpp`, `APerformanceHint`, looked up at run time: API 33) holds the game and render
+threads, reports each frame's CPU time, and takes the frame clock's period as its target (`perf_hint_set_target` from `svc_frame_wait`,
+through `APerformanceHint_updateTargetWorkDuration` where present, else a new session): the short boot frame, then the game step. The
+frame itself is paced by Choreographer's vsync grid (`display_clock.cpp`). Log lines `[perf] performance hint session ...`, `[perf] frame target N ms`.
 
 ## Failure
 

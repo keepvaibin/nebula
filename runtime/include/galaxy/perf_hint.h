@@ -12,6 +12,10 @@ namespace galaxy::host {
 
 // The calling thread does frame work (call once, from the thread itself).
 void perf_hint_add_current_thread() noexcept;
+// The frame's target duration in nanoseconds, as the frame clock keeps it (the game step, the shorter boot frame): the hint
+// session's target follows it, through APerformanceHint_updateTargetWorkDuration where the system has it, else a new session.
+// Any thread; a no-op where there are no hints.
+void perf_hint_set_target(std::int64_t target_ns) noexcept;
 // Once per game step: the step's work since the last call, reported to the hints and returned (nanoseconds; 0 where
 // threads' CPU times cannot be read).
 std::int64_t perf_hint_frame_done() noexcept;
