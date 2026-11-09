@@ -16,6 +16,10 @@ s32 GalaxyStatusAccessor::getScenarioNum() const {
     return mScenarioData->getScenarioNum();
 }
 
+s32 GalaxyStatusAccessor::getScenarioNoMax() const {
+    return mScenarioData->getScenarioNoMax();
+}
+
 s32 GalaxyStatusAccessor::getPowerStarNum() const {
     return mScenarioData->getPowerStarNum();
 }

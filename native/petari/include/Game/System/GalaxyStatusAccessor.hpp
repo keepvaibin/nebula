@@ -13,6 +13,7 @@ public:
 
     const char* getName() const;
     s32 getScenarioNum() const;
+    s32 getScenarioNoMax() const;
     s32 getPowerStarNum() const;
     s32 getZoneNum() const;
     s32 getZoneId(const char*) const;

@@ -47,6 +47,8 @@ public:
     ScenarioData(const char* pGalaxyName, u32 galaxyNameLength, const char* pFilePath);
 
     s32 getScenarioNum() const;
+    // The highest ScenarioNo in the table, hidden scenarios included (they number past getScenarioNum).
+    s32 getScenarioNoMax() const;
     s32 getPowerStarNum() const;
     bool getValueString(const char*, s32, const char**) const;
     const char* getZoneName(s32) const;

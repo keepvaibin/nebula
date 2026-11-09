@@ -66,6 +66,19 @@ s32 ScenarioData::getScenarioNum() const {
     return count;
 }
 
+s32 ScenarioData::getScenarioNoMax() const {
+    s32 maxNo = 0;
+    for (s32 idx = 0; idx < mScenarioData->getNumEntries(); idx++) {
+        s32 scenarioNo = 0;
+        mScenarioData->getValue< s32 >(idx, "ScenarioNo", &scenarioNo);
+        if (maxNo < scenarioNo) {
+            maxNo = scenarioNo;
+        }
+    }
+
+    return maxNo;
+}
+
 s32 ScenarioData::getPowerStarNum() const {
     s32 count = 0;
     for (s32 scenarioNo = 1; scenarioNo <= mScenarioData->getNumEntries(); scenarioNo++) {
