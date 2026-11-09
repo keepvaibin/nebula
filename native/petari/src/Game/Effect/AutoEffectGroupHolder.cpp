@@ -1,33 +1,19 @@
 #include "Game/Effect/AutoEffectGroupHolder.hpp"
 #include "Game/Effect/AutoEffectGroup.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <algorithm>
 
-namespace MR {
-    template < typename T >
-    struct eq_ptr_case {
-        eq_ptr_case(const char* pName) : mName(pName) {
-        }
-
-        bool operator()(T pValue) const {
-            return MR::strcasecmp(pValue->getName(), mName) == 0;
-        }
-
-        const char* mName;
-    };
-};  // namespace MR
-
-AutoEffectGroupHolder::AutoEffectGroupHolder() : mCount() {
+AutoEffectGroupHolder::AutoEffectGroupHolder() : mCount(), mIndex() {
 }
 
 AutoEffectGroup* AutoEffectGroupHolder::find(const char* pName) const {
-    AutoEffectGroup* const* pGroup = std::find_if(mGroups.begin(), mGroups.begin() + mCount, MR::eq_ptr_case< AutoEffectGroup* >(pName));
+    const u32 place = mIndex.find(pName);
+    return place != MR::NameIndexOf< MR::NameKeyCase >::cNoValue ? mGroups.begin()[place] : nullptr;
+}
 
-    if (pGroup != mGroups.begin() + mCount) {
-        return *pGroup;
-    }
-
-    return nullptr;
+void AutoEffectGroupHolder::add(AutoEffectGroup* pGroup) {
+    const s32 index = mCount++;
+    mGroups.at(index) = pGroup;
+    mIndex.add(pGroup->getName(), static_cast< u32 >(index));
 }
 
 bool AutoEffectGroupHolder::isExist(const char* pName) const {
@@ -47,8 +33,7 @@ namespace MR {
                 return false;
             }
 
-            const s32 index = pHolder->mCount++;
-            pHolder->mGroups.at(index) = pGroup;
+            pHolder->add(pGroup);
             return true;
         }
 

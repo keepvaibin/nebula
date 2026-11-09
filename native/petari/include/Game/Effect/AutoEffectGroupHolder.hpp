@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 
 class AutoEffectGroup;
@@ -16,9 +17,11 @@ public:
     AutoEffectGroupHolder();
     AutoEffectGroup* find(const char* pName) const;
     bool isExist(const char* pName) const;
+    void add(AutoEffectGroup* pGroup);
 
     MR::GrowTable< AutoEffectGroup*, 0x100 > mGroups;
     s32 mCount;
+    MR::NameIndexOf< MR::NameKeyCase > mIndex;  // group name -> its place in mGroups
 };
 
 namespace MR {

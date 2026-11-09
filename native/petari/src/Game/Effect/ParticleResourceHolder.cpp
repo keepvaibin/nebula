@@ -21,7 +21,8 @@ namespace {
 };  // namespace
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
-    : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mNumEffectNums() {
+    : mResourceMgr(), mAutoEffectList(new Table), mParticleNames(new Table), mEffectNums(nullptr), mNumEffectNums(), mGroupIndex(),
+      mNextRows(nullptr) {
     AssetFolder* pArchive = MR::getArchive(pArchiveName);
     mResourceMgr = new ParticleResources(pArchive->getResource("Particles.jpc"), NebulaArena::current());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
@@ -84,27 +85,38 @@ u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
     return 0xFFFF;
 }
 
+// One pass: at most one group per row.
 void ParticleResourceHolder::countAutoEffectNum() {
+    const s32 rows = static_cast< s32 >(mAutoEffectList->getNumEntries());
+    mEffectNums = new EffectNum[rows > 0 ? rows : 1];
+    mNextRows = new s32[rows > 0 ? rows : 1];
+    mGroupIndex.reset(static_cast< u32 >(rows));
+
     for (TableIter iter = mAutoEffectList->begin(); iter != mAutoEffectList->end(); iter.mIndex++) {
+        const s32 row = iter.mIndex;
+        mNextRows[row] = -1;
+
         const char* pGroupName = nullptr;
         iter.getValue("GroupName", &pGroupName);
 
-        if (pGroupName != nullptr) {
-            bool found = false;
+        if (pGroupName == nullptr) {
+            continue;
+        }
 
-            for (EffectNum** pParticle = mEffectNums; pParticle != mEffectNums + mNumEffectNums; pParticle++) {
-                if (MR::isEqualStringCase((*pParticle)->mGroupName, pGroupName)) {
-                    (*pParticle)->mCount++;
-                    found = true;
-                    break;
-                }
-            }
-
-            if (!found) {
-                EffectNum* pParticle = new EffectNum(pGroupName);
-                const int index = mNumEffectNums++;
-                mEffectNums.at(index) = pParticle;
-            }
+        const u32 group = mGroupIndex.find(pGroupName);
+        if (group == MR::NameIndexOf< MR::NameKeyCase >::cNoValue) {
+            EffectNum& rGroup = mEffectNums[mNumEffectNums];
+            rGroup.mGroupName = pGroupName;
+            rGroup.mCount = 1;
+            rGroup.mFirstRow = row;
+            rGroup.mLastRow = row;
+            mGroupIndex.add(pGroupName, static_cast< u32 >(mNumEffectNums));
+            mNumEffectNums++;
+        } else {
+            EffectNum& rGroup = mEffectNums[group];
+            rGroup.mCount++;
+            mNextRows[rGroup.mLastRow] = row;
+            rGroup.mLastRow = row;
         }
     }
 }
@@ -136,11 +148,19 @@ int ParticleResourceHolder::getAutoEffectNum(const char* pGroupName) const {
         return 0;
     }
 
-    for (EffectNum* const* pParticle = mEffectNums; pParticle != mEffectNums + mNumEffectNums; pParticle++) {
-        if (MR::isEqualStringCase((*pParticle)->mGroupName, pGroupName)) {
-            return (*pParticle)->mCount;
-        }
+    const u32 group = mGroupIndex.find(pGroupName);
+    return group != MR::NameIndexOf< MR::NameKeyCase >::cNoValue ? mEffectNums[group].mCount : 0;
+}
+
+s32 ParticleResourceHolder::getAutoEffectFirstRow(const char* pGroupName) const {
+    if (pGroupName == nullptr) {
+        return -1;
     }
 
-    return 0;
+    const u32 group = mGroupIndex.find(pGroupName);
+    return group != MR::NameIndexOf< MR::NameKeyCase >::cNoValue ? mEffectNums[group].mFirstRow : -1;
+}
+
+s32 ParticleResourceHolder::getAutoEffectNextRow(s32 row) const {
+    return mNextRows[row];
 }
