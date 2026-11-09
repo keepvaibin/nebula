@@ -18,7 +18,6 @@ namespace {
 };  // namespace
 
 GalaxyNamePlateDrawer::GalaxyNamePlateDrawer() : NameObj("ギャラクシー名プレート描画") {
-    MR::zeroMemory(&mPlateArray, sizeof(mPlateArray.mArray));
 }
 
 void GalaxyNamePlateDrawer::init(const TableIter&) {
@@ -26,19 +25,23 @@ void GalaxyNamePlateDrawer::init(const TableIter&) {
 }
 
 void GalaxyNamePlateDrawer::draw() const {
-    const GalaxyNamePlatePrioritied* sortArray[16];
-    MR::copyMemory(sortArray, &mPlateArray[0], mPlateArray.size() * sizeof(GalaxyNamePlatePrioritied*));
-    MR::sort(sortArray, sortArray + mPlateArray.size(), ::PlatePriorityLt());
+    mDrawOrder.clear();
+    for (s32 i = 0; i < mPlateArray.size(); i++) {
+        mDrawOrder.push_back(mPlateArray[i]);
+    }
+    if (mDrawOrder.size() == 0) {
+        return;
+    }
+    MR::sort(&mDrawOrder[0], &mDrawOrder[0] + mDrawOrder.size(), ::PlatePriorityLt());
 
-    for(int i = 0; i < mPlateArray.size(); i++) {
-        sortArray[i]->mHostActor->draw();
+    for (s32 i = 0; i < mDrawOrder.size(); i++) {
+        mDrawOrder[i]->mHostActor->draw();
     }
 }
 
 GalaxyNamePlatePrioritied* GalaxyNamePlateDrawer::registerPlate(const LayoutActor* pPlate) {
     GalaxyNamePlatePrioritied* newEntry = new GalaxyNamePlatePrioritied(pPlate);
-    mPlateArray.mArray[mPlateArray.mCount] = newEntry;
-    mPlateArray.mCount++;
+    mPlateArray.push_back(newEntry);
     return newEntry;
 }
 
