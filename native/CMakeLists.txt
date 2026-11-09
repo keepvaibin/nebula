@@ -124,8 +124,8 @@ target_compile_options(smg_game PRIVATE
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation
 >
-    # Every new-expression tests the allocation before constructing: JKRHeap's and the arenas' operator new return
-    # null when full, and the game checks. Standard C++ lets the compiler drop those checks for an operator new that
+    # Every new-expression tests the allocation before constructing: the arenas' operator new returns null when an
+    # arena is full, and the game checks. Standard C++ lets the compiler drop those checks for an operator new that
     # is not noexcept, which would run a constructor on null.
     $<$<COMPILE_LANGUAGE:CXX>:-fcheck-new>
     # The Microsoft C++ ABI sizes a member pointer by its class's inheritance, known only where the class is complete;

@@ -719,10 +719,10 @@ typedef struct NebulaHostServices {
     uint32_t size;
     void* user;
 
-    /* One line of the game's reports (OSReport) or the native layer's log, without a trailing newline. */
+    /* One line of the game's log (nebula_log), without a trailing newline. */
     void (*log)(void* user, const char* text);
-    /* The game cannot go on (an OSPanic, a JUTException panic, a native-layer error): the host reports `text` with
-       its own diagnostics and ends the process. Does not return. */
+    /* The game cannot go on (NEBULA_PANIC, a failed check): the host reports `text` with its own diagnostics and
+       ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
     /* The module's own bookkeeping memory, outside its arenas. */
     void* (*heap_alloc)(void* user, size_t size);

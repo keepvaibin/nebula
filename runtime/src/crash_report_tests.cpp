@@ -61,7 +61,7 @@ int main() {
 
     Facts game_fatal;
     game_fatal.kind = Facts::Kind::GameFatal;
-    game_fatal.text = "JKRHeap: out of heap";
+    game_fatal.text = "Game/Map/StageSwitch.cpp:120: no switch table for the zone";
     expect(code_of(game_fatal) == "NEB-C02", "the game's own fatal stop");
 
     Facts host_fault;
