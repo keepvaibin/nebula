@@ -791,13 +791,13 @@ void RenderCore::start_interp_sequence() {
     }
 }
 
-// As many generated frames per game frame as the GPU fits in 15 ms (of the 16.7 ms frame). A generated frame
+// As many generated frames per game frame as the GPU fits in nine tenths of a game step. A generated frame
 // walks the whole frame list, so a game frame costs about (k + 1) generated frame times. k drops at once
 // when over budget and rises after 2 s with current native scene timings (10 s for temporal reconstruction).
 // Only temporal reconstruction needs a generated-frame retry; native scene frames keep its cost estimate live.
 // A capped sequence runs the slot clock at 60 * (k + 1).
 unsigned RenderCore::interp_gpu_governor(double& rate) {
-    constexpr double budget_ms = 15.0;
+    constexpr double budget_ms = 0.9 * 1000.0 / kGameStepRate;
     const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
     if (configured == 0u) {
         return configured;

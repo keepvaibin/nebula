@@ -55,6 +55,19 @@ namespace {
         return dx * dx + dy * dy + dz * dz > cJumpSquared;
     }
 
+    // The particle's first write of a game frame (its matrix or a corner). It continues from the game frame before only if
+    // it wrote then: what it wrote becomes its place a frame ago. A particle that was reached and skipped (invisible, no
+    // direction) wrote nothing, so a frame it sat out starts it over at its new place instead of at an older one.
+    void startFrame(ParticleCore* pParticle) {
+        sFresh = false;
+        const u32 frame = NebulaFrameClock::count();
+        pParticle->mDrawnContinues = pParticle->mDrawnFrame + 1 == frame;
+        pParticle->mDrawnFrame = frame;
+        if (pParticle->mDrawnContinues) {
+            memcpy(pParticle->mDrawnBefore, pParticle->mDrawnNow, sizeof(pParticle->mDrawnBefore));
+        }
+    }
+
     // `pMtx`: the particle's matrix to eye space. Its first draw of a game frame keeps it in the world.
     void setParticleMtx(const Mtx pMtx) {
         NebulaMtxConcat(sEyeToWorld, pMtx, sWorld);
@@ -64,7 +77,7 @@ namespace {
             return;
         }
         if (sFresh) {
-            sFresh = false;
+            startFrame(pParticle);
             memcpy(pParticle->mDrawnNow, sWorld, sizeof(Mtx));
             const f32 before[3] = {pParticle->mDrawnBefore[3], pParticle->mDrawnBefore[7], pParticle->mDrawnBefore[11]};
             if (!pParticle->mDrawnContinues || jumped(before, sWorld[0][3], sWorld[1][3], sWorld[2][3])) {
@@ -128,20 +141,16 @@ namespace ParticleDraw {
         }
     }
 
+    // The particle to draw next; its first write of the game frame (setParticleMtx, corner) starts its frame.
     void particle(ParticleCore* pParticle) {
         sParticle = pParticle;
-        const u32 frame = NebulaFrameClock::count();
-        sFresh = pParticle->mDrawnFrame != frame;
-        if (sFresh) {
-            pParticle->mDrawnContinues = pParticle->mDrawnFrame + 1 == frame;
-            pParticle->mDrawnFrame = frame;
-            if (pParticle->mDrawnContinues) {
-                memcpy(pParticle->mDrawnBefore, pParticle->mDrawnNow, sizeof(pParticle->mDrawnBefore));
-            }
-        }
+        sFresh = pParticle->mDrawnFrame != NebulaFrameClock::count();
     }
 
     void corner(u32 index, f32 x, f32 y, f32 z, f32 s, f32 t) {
+        if (sFresh) {
+            startFrame(sParticle);
+        }
         f32* const pNow = sParticle->mDrawnNow + index * 3;
         f32* const pBefore = sParticle->mDrawnBefore + index * 3;
         pNow[0] = x;

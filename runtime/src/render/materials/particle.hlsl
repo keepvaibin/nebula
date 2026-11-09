@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Particles (Game/Particle: ParticleShape, ParticleResource::setPTev/setCTev): the particle texture (0, or 1
 // for child particles; its lookup moved by the indirect texture 2 when the emitter has one) combined with the
-// emitter's prm (register 0) and env (register 1) colours by its colour mode, alpha the texture's by prm's or prm's
-// alone; a second texture (3) multiplied in; the shape's alpha test; fog. The register file follows the game's changes
-// (per-emitter and per-particle colours).
+// emitter's prm and env colours (each particle's or corner's, from the vertex stage) by its colour mode, alpha the
+// texture's by prm's or prm's alone; a second texture (3) multiplied in; the shape's alpha test; fog. The colour
+// registers below are not written (zero) and not read.
 struct MaterialConstants {
-    float4 reg[4];        // the colour registers PREV, REG0 (prm), REG1 (env), REG2
+    float4 reg[4];        // the colour registers (layout kept; unused)
     float4 kcolor[4];
     float4 mat_color[2];
     float4 amb_color[2];
