@@ -275,6 +275,31 @@ FILE* open_for_writing(const fs::path& file) {
 #endif
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+// The unlocks and counts waiting out their write delay (galaxy::achievements 0.25 s, galaxy::stats 1.5 s) are written before a
+// process ends the hard way (a crash, a fatal error). On a thread of its own and waited for at most `wait_ms`: the thread that
+// failed may hold the lock of one of them, and the report must not wait on it for ever.
+#if defined(_WIN32)
+DWORD WINAPI flush_progress_thread(LPVOID) {
+    galaxy::achievements::flush();
+    galaxy::stats::flush();
+    return 0;
+}
+#endif
+void flush_progress_bounded(unsigned wait_ms) {
+#if defined(_WIN32)
+    if (const HANDLE thread = CreateThread(nullptr, 0, flush_progress_thread, nullptr, 0, nullptr); thread != nullptr) {
+        WaitForSingleObject(thread, wait_ms);
+        CloseHandle(thread);
+    }
+#else
+    (void)wait_ms;
+    galaxy::achievements::flush();
+    galaxy::stats::flush();
+#endif
+}
+#endif
+
 // gCrashFacts as a report: its code logged, its text written beside `dump` (or as nebula-<time>.txt in the crash
 // folder) and, for the player, shown by a new instance of this executable (this process may be what failed; it ends
 // right after). The SDL hosts show it in a message box here.
@@ -336,6 +361,9 @@ void report_crash_facts(const fs::path& dump) {
     std::fflush(stdout);
     gather_crash_facts(galaxy::crash::Facts::Kind::Startup, text);
     report_crash_facts({});
+#if defined(NEBULA_HOST_RENDERER)
+    flush_progress_bounded(1500u);
+#endif
     std::fflush(stdout);
     std::_Exit(3);
 }
@@ -619,6 +647,11 @@ extern galaxy::host::NativeGameAudio* gAudio;
 std::mutex gSuspendLock;
 std::condition_variable gSuspendWake;
 bool gSuspended = false;  // guarded by gSuspendLock
+
+// The window lost focus and the player chose PAUSE (runtime settings, focus_loss): set when it is lost, taken by the game
+// once it can open its pause menu (svc_take_pause_request), dropped when the window is in front again unless it was minimised
+// (the game is held then and takes it at its first frame after the return).
+std::atomic<bool> gPauseRequest{false};
 
 // The start runs ahead: the game shows nothing until its first 3D scene (the title's, or a test's galaxy), and its
 // loads advance a step each frame while it takes well under a millisecond a frame, so until then frames come every
@@ -990,6 +1023,9 @@ void crash_writer() {
             CloseHandle(file);
         }
         report_crash_facts(fs::path(path));
+#if defined(NEBULA_HOST_RENDERER)
+        flush_progress_bounded(1500u);
+#endif
         SetEvent(gCrashDone);
         // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
         // held when it stopped) never keeps the process alive.
@@ -1751,6 +1787,11 @@ uint32_t svc_layer_2d_lines(void*) {
 #else
     return 0u;
 #endif
+}
+
+// The game asks while it could pause: 1 once per request.
+int svc_take_pause_request(void*) {
+    return gPauseRequest.exchange(false, std::memory_order_acq_rel) ? 1 : 0;
 }
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -3662,6 +3703,7 @@ int main(int argc, char** argv) {
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
+    services.take_pause_request = svc_take_pause_request;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.texture_hd = svc_texture_hd;
     services.model_register = svc_model_register;
@@ -3861,6 +3903,45 @@ int main(int argc, char** argv) {
         // own. The game's clock starts again from the return (svc_frame_wait: no step is owed), and the device is kept, so
         // showing the window again rebuilds nothing. A covered window is not this: the game and its sound go on, and the
         // renderer alone stops presenting (RenderCore, which looks at the window itself every 100 ms).
+        // A window that is not in front, by the player's choice (ON LOSING FOCUS): PAUSE has the game open its pause menu (the
+        // pause button's path, so its timers stop), MUTE silences the sound (the mixer reads background_muted) and the game
+        // goes on; KEEP RUNNING does nothing. Minimising holds the game whatever is chosen.
+        {
+            static bool was_away = false;
+            static bool away_minimised = false;
+            static Clock::time_point lapse{};
+            const galaxy::FocusLoss focus = galaxy::get_runtime_settings().focus_loss;
+            const bool minimised_now = galaxy::render::host_window::is_minimized();
+            const bool away = galaxy::render::host_window::is_background() || minimised_now;
+            if (away && !was_away && focus == galaxy::FocusLoss::Pause) {
+                gPauseRequest.store(true, std::memory_order_release);
+            }
+            if (away) {
+                away_minimised = away_minimised || minimised_now;
+            }
+            if (!away && was_away) {
+                if (!away_minimised) {
+                    gPauseRequest.store(false, std::memory_order_release);
+                } else {
+                    // Held while minimised: the game takes the request at its first frame back; a game that cannot pause then
+                    // (a cutscene) lets it lapse rather than pause long after the player returned.
+                    lapse = Clock::now() + std::chrono::seconds(3);
+                }
+                away_minimised = false;
+            }
+            if (focus != galaxy::FocusLoss::Pause && !away_minimised) {
+                gPauseRequest.store(false, std::memory_order_release);
+            }
+            if (!away && lapse != Clock::time_point{} && Clock::now() >= lapse) {
+                gPauseRequest.store(false, std::memory_order_release);
+                lapse = Clock::time_point{};
+            }
+            if (away != was_away) {
+                log_line("host:", away ? "window not in front" : "window in front");
+            }
+            was_away = away;
+            galaxy::set_background_muted(away && focus == galaxy::FocusLoss::Mute);
+        }
         const bool minimised = galaxy::render::host_window::is_minimized();
         if (minimised != gSuspended) {
             galaxy::render::set_window_hidden(minimised);

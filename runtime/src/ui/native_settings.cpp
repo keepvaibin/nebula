@@ -500,7 +500,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& d = s_runtime_draft;
     const RuntimeSettings& b = s_runtime_base;
     // A setting added to RuntimeSettings is drafted here too: these bindings stop compiling until it is.
-    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star, menu_text_size] = d;
+    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star, menu_text_size, focus_loss] = d;
     [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker, sound_output] = d.audio;
     RuntimeSettings scratch{};
     RuntimeSettings& out = live != nullptr ? *live : scratch;
@@ -525,6 +525,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     take(d.button_icons, b.button_icons, out.button_icons);
     take(d.co_star, b.co_star, out.co_star);
     take(d.menu_text_size, b.menu_text_size, out.menu_text_size);
+    take(d.focus_loss, b.focus_loss, out.focus_loss);
     return changes;
 }
 
@@ -548,6 +549,7 @@ unsigned pending_settings_changes() {
     changes += d.spatial_quality != live.spatial_quality;
     changes += d.internal_height != live.internal_height;
     changes += d.sharpness != live.sharpness;
+    changes += d.hdr != live.hdr || d.paper_white != live.paper_white;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
     changes += d.curved_surfaces != live.curved_surfaces;
@@ -970,6 +972,8 @@ void apply_native_settings_draft() {
     applied.spatial_quality = next.spatial_quality;
     applied.internal_height = next.internal_height;
     applied.sharpness = next.sharpness;
+    applied.hdr = next.hdr;
+    applied.paper_white = next.paper_white;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.curved_surfaces = next.curved_surfaces;
@@ -1783,6 +1787,11 @@ public:
         state.fullscreen_only = true;
 #endif
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
+        {
+            const DisplayHdr hdr = get_display_hdr();
+            state.hdr_offered = hdr.available;
+            state.hdr_active = hdr.active;
+        }
         state.output_size = settings_output_size(render);
         state.window_sizes = settings_window_sizes(current, render.aspect_mode);
         state.frame_rates = settings_frame_rate_caps(render);
@@ -2594,6 +2603,9 @@ public:
         }
         state.choosing_miis = s_mii_dialog_open.load(std::memory_order_acquire);
         state.folders_open = host_window::folders_open();
+#if defined(_WIN32)
+        state.focus_loss_offered = true;  // the Windows host pauses or mutes a game whose window is not in front (host_main.cpp)
+#endif
         state.mii_count = s_mii_count.load(std::memory_order_acquire);
         if (state.mii_count < 0) {
             state.mii_count = static_cast<int>(galaxy::host::mii_library_count());

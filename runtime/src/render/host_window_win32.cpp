@@ -2,6 +2,8 @@
 // The game's Win32 window on both renderers (host_window_win32.h): the window procedure, the pointer, and what the
 // settings menu asks of its platform (host_window.h).
 
+#include "galaxy/achievements.h"
+#include "galaxy/stats.h"
 #include "galaxy/vendor_download.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/xess_library.h"
@@ -75,6 +77,7 @@ std::atomic<bool> monitor_changed{false};
 namespace {
 HMONITOR s_window_monitor = nullptr;  // the window's thread only
 std::atomic<bool> s_minimized{false};
+std::atomic<bool> s_background{false};  // the program is not the active one (WM_ACTIVATEAPP)
 }
 std::atomic<HANDLE> s_state_wake{nullptr};
 
@@ -90,6 +93,10 @@ void set_state_wake(void* event) noexcept {
 
 bool is_minimized() noexcept {
     return s_minimized.load(std::memory_order_relaxed);
+}
+
+bool is_background() noexcept {
+    return s_background.load(std::memory_order_relaxed);
 }
 
 namespace {
@@ -947,6 +954,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_ACTIVATEAPP) {
         // The 1 ms timer only while in front: it costs a laptop's battery for every program.
         galaxy::host::hold_high_resolution_timer(wp != FALSE);
+        // What the game does without focus is the host's to decide (runtime_settings focus_loss): it is woken to look.
+        s_background.store(wp == FALSE, std::memory_order_relaxed);
+        wake_main_thread();
     }
     if (msg == WM_SIZE) {
         s_minimized.store(wp == SIZE_MINIMIZED, std::memory_order_relaxed);
@@ -1013,6 +1023,20 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SetCursor(LoadCursorA(nullptr, IDC_ARROW));
         }
         return 0;
+    }
+    if (msg == WM_QUERYENDSESSION || msg == WM_ENDSESSION) {
+        // Windows is ending the session (shutdown, restart, sign-out): the unlocks and counts waiting out their write delay
+        // (galaxy::achievements, galaxy::stats: 0.25 s and 1.5 s) are written now, on the window's thread, before the process
+        // can be ended under them. WM_ENDSESSION's wp says the session is ending; the query allows it (and writes early: a
+        // session another program refuses loses nothing by it).
+        if (msg == WM_QUERYENDSESSION || wp != FALSE) {
+            galaxy::achievements::flush();
+            galaxy::stats::flush();
+        }
+        if (msg == WM_ENDSESSION && wp != FALSE) {
+            save_native_settings_now();
+        }
+        return msg == WM_QUERYENDSESSION ? TRUE : 0;
     }
     if (msg == WM_CLOSE) {
         save_native_settings_now();

@@ -169,8 +169,117 @@ namespace {
 
 std::mutex g_status_mutex;
 PostProcessStatus g_status{};
+std::mutex g_hdr_mutex;
+DisplayHdr g_hdr{};
 
 }  // namespace
+
+DisplayHdr get_display_hdr() {
+    const std::lock_guard<std::mutex> lock(g_hdr_mutex);
+    return g_hdr;
+}
+
+void set_display_hdr(const DisplayHdr& display) {
+    const std::lock_guard<std::mutex> lock(g_hdr_mutex);
+    g_hdr = display;
+}
+
+unsigned clamp_paper_white(unsigned nits) noexcept {
+    return std::clamp(nits, kPaperWhiteMin, kPaperWhiteMax);
+}
+
+bool hdr_output_wanted(const RenderConfig& cfg, const DisplayHdr& display) noexcept {
+    return cfg.hdr && display.available;
+}
+
+PostOutput post_output_for(const RenderConfig& cfg, const DisplayHdr& display) noexcept {
+    PostOutput output;
+    output.hdr = true;
+    output.paper_white_nits = clamp_paper_white(cfg.paper_white);
+    const unsigned reported = display.peak_nits != 0u ? display.peak_nits : 1000u;
+    output.peak_nits = std::clamp(reported, std::max(output.paper_white_nits, 100u), 10000u);
+    return output;
+}
+
+std::int32_t post_output_word(const PostOutput& output) noexcept {
+    const unsigned paper = std::min(output.paper_white_nits, 1023u);
+    const unsigned peak = std::min(output.peak_nits, 10000u);
+    return static_cast<std::int32_t>(paper | (peak << 10u));
+}
+
+void set_post_output(PostConstants& constants, const PostOutput& output) noexcept {
+    constants.origin[2] = output.hdr ? 2 : 1;
+    constants.origin[3] = output.hdr ? post_output_word(output) : 0;
+}
+
+float pq_encode(float nits) noexcept {
+    const float y = std::pow(std::clamp(nits / 10000.0f, 0.0f, 1.0f), 0.1593017578125f);
+    return std::pow((0.8359375f + 18.8515625f * y) / (1.0f + 18.6875f * y), 78.84375f);
+}
+
+float pq_decode(float code) noexcept {
+    const float p = std::pow(std::clamp(code, 0.0f, 1.0f), 1.0f / 78.84375f);
+    return 10000.0f * std::pow(std::max(p - 0.8359375f, 0.0f) / (18.8515625f - 18.6875f * p), 1.0f / 0.1593017578125f);
+}
+
+void hdr10_encode(const float picture[3], unsigned paper_white_nits, unsigned peak_nits, float code[3]) noexcept {
+    // Gamma 2.2 decoded (the picture is graded for a 2.2 display), then BT.709 to BT.2020, then nits.
+    const float r = std::pow(std::max(picture[0], 0.0f), 2.2f);
+    const float g = std::pow(std::max(picture[1], 0.0f), 2.2f);
+    const float b = std::pow(std::max(picture[2], 0.0f), 2.2f);
+    const float paper = static_cast<float>(paper_white_nits);
+    float nits[3] = {(0.627404f * r + 0.329283f * g + 0.043313f * b) * paper,
+                     (0.069097f * r + 0.919540f * g + 0.011362f * b) * paper,
+                     (0.016391f * r + 0.088013f * g + 0.895595f * b) * paper};
+    // BT.2390 on the brightest channel, the other two scaled with it (the hue stays), black level 0.
+    const float display_peak = static_cast<float>(peak_nits);
+    const float source_peak = std::min(paper * kHdrHeadroom, 10000.0f);
+    const float brightest = std::max(nits[0], std::max(nits[1], nits[2]));
+    if (brightest > 0.0f) {
+        float shown = brightest;
+        if (display_peak < source_peak) {
+            const float source_code = pq_encode(source_peak);
+            float e = std::min(pq_encode(brightest) / source_code, 1.0f);
+            const float max_lum = pq_encode(display_peak) / source_code;
+            const float knee = std::max(1.5f * max_lum - 0.5f, 0.0f);
+            if (e > knee) {
+                const float t = (e - knee) / (1.0f - knee);
+                const float t2 = t * t;
+                const float t3 = t2 * t;
+                e = (2.0f * t3 - 3.0f * t2 + 1.0f) * knee + (t3 - 2.0f * t2 + t) * (1.0f - knee) + (-2.0f * t3 + 3.0f * t2) * max_lum;
+            }
+            shown = pq_decode(e * source_code);
+        }
+        const float scale = std::min(shown, display_peak) / brightest;
+        for (float& value : nits) {
+            value *= scale;
+        }
+    }
+    for (unsigned i = 0u; i < 3u; ++i) {
+        code[i] = pq_encode(nits[i]);
+    }
+}
+
+HdrMetadata hdr10_metadata(const DisplayHdr& display, unsigned paper_white_nits) noexcept {
+    HdrMetadata metadata{};
+    metadata.red[0] = 0.708f;
+    metadata.red[1] = 0.292f;
+    metadata.green[0] = 0.170f;
+    metadata.green[1] = 0.797f;
+    metadata.blue[0] = 0.131f;
+    metadata.blue[1] = 0.046f;
+    metadata.white[0] = 0.3127f;
+    metadata.white[1] = 0.3290f;
+    RenderConfig reported{};
+    reported.paper_white = paper_white_nits;
+    const PostOutput levels = post_output_for(reported, display);
+    metadata.max_luminance = static_cast<float>(levels.peak_nits);
+    metadata.min_luminance = static_cast<float>(display.min_nits_10000) / 10000.0f;
+    metadata.max_content_light = static_cast<float>(levels.peak_nits);
+    metadata.max_frame_average_light = static_cast<float>(
+        display.full_frame_nits != 0u ? std::min(display.full_frame_nits, levels.peak_nits) : levels.peak_nits / 2u);
+    return metadata;
+}
 
 PostProcessStatus get_post_process_status() {
     const std::lock_guard<std::mutex> lock(g_status_mutex);

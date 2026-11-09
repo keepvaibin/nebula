@@ -48,6 +48,22 @@ struct MonitorInfo {
 [[nodiscard]] std::vector<std::pair<unsigned, unsigned>> monitor_resolutions(
     const MonitorInfo& monitor);
 
+// What the output the window is on reports of itself (IDXGIOutput6::GetDesc1 of the output with the window's monitor, read
+// through a new factory: a factory made before a display change describes the old one).
+struct OutputHdr {
+    bool known = false;            // the output was found and described
+    bool hdr = false;              // Windows has HDR on for it (colour space HDR10 / ST 2084)
+    unsigned bits = 8u;
+    unsigned peak_nits = 0;        // MaxLuminance
+    unsigned full_frame_nits = 0;  // MaxFullFrameLuminance
+    unsigned min_nits_10000 = 0;   // MinLuminance in units of 0.0001 nit
+    int colour_space = 0;          // DXGI_COLOR_SPACE_TYPE
+    HMONITOR monitor = nullptr;
+
+    [[nodiscard]] bool operator==(const OutputHdr&) const = default;
+};
+[[nodiscard]] OutputHdr read_output_hdr(HWND window);
+
 [[nodiscard]] std::string narrow_utf8(std::wstring_view text);
 [[nodiscard]] std::wstring widen_utf8(std::string_view text);
 #endif

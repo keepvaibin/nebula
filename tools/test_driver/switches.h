@@ -299,6 +299,15 @@ inline constexpr const char* test_same_queue_uploads_name() noexcept { return "G
 inline constexpr const wchar_t* test_same_queue_uploads_wide_name() noexcept { return L"GALAXY_TEST_SAME_QUEUE_UPLOADS"; }
 #endif
 #if !defined(NEBULA_DEV)
+inline const char* test_force_hdr() noexcept { return nullptr; }
+inline constexpr const char* test_force_hdr_name() noexcept { return ""; }
+inline constexpr const wchar_t* test_force_hdr_wide_name() noexcept { return L""; }
+#else
+inline const char* test_force_hdr() noexcept { return std::getenv("GALAXY_TEST_FORCE_HDR"); }
+inline constexpr const char* test_force_hdr_name() noexcept { return "GALAXY_TEST_FORCE_HDR"; }
+inline constexpr const wchar_t* test_force_hdr_wide_name() noexcept { return L"GALAXY_TEST_FORCE_HDR"; }
+#endif
+#if !defined(NEBULA_DEV)
 inline const char* test_record_threshold() noexcept { return nullptr; }
 inline constexpr const char* test_record_threshold_name() noexcept { return ""; }
 inline constexpr const wchar_t* test_record_threshold_wide_name() noexcept { return L""; }

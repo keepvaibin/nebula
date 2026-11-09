@@ -46,6 +46,9 @@ extern std::atomic<bool> display_changed;
 extern std::atomic<bool> monitor_changed;
 // The window is minimised, as the last message said.
 [[nodiscard]] bool is_minimized() noexcept;
+// Another program is in front (WM_ACTIVATEAPP said this one was deactivated). A dialog of this program's own does not count.
+// The host's wake event is set when it changes.
+[[nodiscard]] bool is_background() noexcept;
 
 // One game per data folder. `key` names this process's folder: the window made afterwards carries it, and a second start finds
 // the first's window by it (another folder's game is not disturbed). show_existing_instance waits up to `wait_ms` for the

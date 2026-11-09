@@ -120,4 +120,9 @@ namespace NebulaHost {
     inline void galaxySelectName(u32 index, u32 star, const u16* pName) {
         nebula_host()->galaxy_select_name(nebula_host()->user, index, star, pName);
     }
+
+    // 1 once when the window lost focus and the player chose to pause then (the game opens its pause menu as the button does).
+    inline int takePauseRequest() {
+        return nebula_host()->take_pause_request(nebula_host()->user);
+    }
 }  // namespace NebulaHost

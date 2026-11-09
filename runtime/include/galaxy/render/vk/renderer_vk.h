@@ -16,6 +16,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
+#include "galaxy/render/display_modes.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/render_config.h"
@@ -418,6 +419,8 @@ private:
         VkSurfaceTransformFlagBitsKHR surface_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
         bool vsync = true;      // wants_vsync() when it was made (FIFO may be all a surface offers with VSync off)
+        bool hdr_asked = false; // wants_hdr() when it was made (the surface may not offer the format: then no HDR10 and no remake)
+        bool hdr = false;       // the images are HDR10 (a 10-bit format in the ST 2084 colour space)
         bool relaxed = false;   // made with {FIFO, FIFO_RELAXED}: a late present may ask for the second (present_swapchain_image)
         bool copyable = false;  // transfer source (test snapshots of the backbuffer)
         std::vector<VkImage> images;
@@ -519,6 +522,24 @@ private:
     void take_fg_hudless_scene();
     void present_fg_hudless(const DisplayTexture& source, const galaxy::ContentViewport& content);
     [[nodiscard]] bool wants_vsync() const;
+    // HDR10 output (E-17): the swap chain is made with a 10-bit ST 2084 format while the settings ask for HDR, the display is in
+    // HDR mode, the post chain can write the last pass for it (never on a pre-rotated surface or under frame generation); the
+    // last write then encodes with hdr_output_'s levels. read_display_hdr publishes what the display offers (the settings page
+    // shows its HDR rows from it) at the first frame, after a move to another monitor and when the post chain becomes ready.
+    [[nodiscard]] bool wants_hdr() const;
+    void read_display_hdr();
+    void apply_hdr_metadata(const PostOutput& levels);
+    // A capture while the swap chain is HDR10 is the SDR picture, drawn again into hdr_capture_ and copied out.
+    [[nodiscard]] bool capture_sdr_picture(VkCommandBuffer commands, const vk::Texture& picture, const galaxy::ContentViewport& content,
+                                           const vk::PostProcessorVk::SetAllocator& allocate);
+    bool hdr_read_ = false;
+    bool hdr_post_ready_ = false;
+    PostOutput hdr_output_{};
+    VkFormat present_pass_format_ = VK_FORMAT_UNDEFINED;  // the swap chain's format present_pass_ was made for
+    gpu::TextureRef hdr_capture_;
+#if defined(_WIN32)
+    OutputHdr hdr_reading_{};
+#endif
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
     // At each frame's start: the sampler array (or the default table) starts again when the settings changed or the array

@@ -4,6 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameScene.hpp"
 #include "Game/Screen/GamePauseSequence.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/PauseButtonCheckerInGame.hpp"
 
 namespace {
@@ -42,7 +43,10 @@ bool GameScenePauseControl::tryStartPauseMenu() {
     if (mScene->isPermitToPauseMenu()) {
         mPauseChecker->update();
 
-        if (mPauseChecker->isPermitToMinusPause() || mPauseChecker->isPermitToPlusPause()) {
+        // The window lost focus and the player chose to pause then: asked only while the pause menu may open, so a request in
+        // a cutscene waits for the end of it (the host drops it when the window is in front again).
+        const bool hostPause = NebulaHost::takePauseRequest() != 0;
+        if (hostPause || mPauseChecker->isPermitToMinusPause() || mPauseChecker->isPermitToPlusPause()) {
             mScene->mPauseSeq->startPause(GamePauseSequence::ActivePause);
             mScene->setNerve(mPauseMenuNerve);
             return true;

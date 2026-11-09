@@ -105,6 +105,11 @@ struct RenderConfig {
     unsigned internal_height     = 0;
     // RCAS strength 0-100; 0 skips the pass.
     unsigned sharpness           = 0;
+    // HDR10 output (post_process_settings.h): offered only while the display reports HDR mode, and written only then
+    // (get_display_hdr); the picture is otherwise the SDR one, bit for bit. paper_white is the luminance of the picture's white
+    // in nits (kPaperWhiteMin..kPaperWhiteMax).
+    bool     hdr                 = false;
+    unsigned paper_white         = 200;
 
     // Ray tracing on adapters with DXR 1.1, shader model 6.5 and dedicated video memory; ignored elsewhere.
     // rt_shadow_quality and rt_ao_enabled are not implemented and clamped off.

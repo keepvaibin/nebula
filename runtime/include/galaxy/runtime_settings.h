@@ -64,6 +64,11 @@ inline constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLan
                                                   GameLanguage::Spanish, GameLanguage::Italian, GameLanguage::Dutch,
                                                   GameLanguage::Japanese};
 
+// What the game does while its window is not in front (another program is; Windows): goes on, pauses through its own pause menu
+// (the pause button's path, so its timers stop), or goes on with its sound silent. A minimised window holds the game in every
+// case, as it always has.
+enum class FocusLoss : std::uint8_t { KeepRunning = 0, Pause = 1, Mute = 2 };
+
 struct RuntimeSettings {
     // Auto: whatever is attached and in use.
     RuntimeInputMode input_mode = RuntimeInputMode::Auto;
@@ -79,6 +84,8 @@ struct RuntimeSettings {
     bool co_star = false;
     // The menus' text and everything around it, in percent; 0: as large as the screen's size calls for.
     unsigned menu_text_size = 0u;
+    // What the game does when its window loses focus (runtime_settings.ini: focus_loss=keep|pause|mute).
+    FocusLoss focus_loss = FocusLoss::KeepRunning;
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
@@ -101,6 +108,14 @@ void set_disc_languages(std::span<const std::string> folders) noexcept;
 // "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
 [[nodiscard]] const char* sound_output_key(SoundOutput output) noexcept;
+// "keep", "pause" or "mute" (runtime_settings.ini).
+[[nodiscard]] const char* focus_loss_key(FocusLoss focus_loss) noexcept;
+
+// The host sets this while the window is in the background with FocusLoss::Mute: the game's sound is silent (master gain 0,
+// ramped as any gain change) until it is cleared. Any thread; not a setting, never saved. The mixer reads background_muted()
+// where it reads the master gain (native_audio.cpp: Lane Q, helpers/q01.md).
+void set_background_muted(bool muted) noexcept;
+[[nodiscard]] bool background_muted() noexcept;
 
 // The generation changes only when the input mode changes, so device queues can reject reports acquired
 // under an older source.

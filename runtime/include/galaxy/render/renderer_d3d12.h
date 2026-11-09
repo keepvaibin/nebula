@@ -26,6 +26,7 @@
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/post_process.h"
+#include "galaxy/render/display_modes.h"
 #include "galaxy/render/ambient_occlusion.h"
 #include "galaxy/render/scene_camera.h"
 #include "galaxy/render/game_bloom.h"
@@ -1130,16 +1131,25 @@ private:
     // it in its range (variable_refresh_cap), the sync interval is the configured one, and presents are spaced at the cap.
     bool variable_refresh_ = false;
     std::uint64_t display_refresh_presents_ = 0;
-    // The output's colour space and peak luminance as last read (read_display_output).
-    struct DisplayReading {
-        bool valid = false;
-        DXGI_COLOR_SPACE_TYPE colour_space = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
-        UINT bits = 8u;
-        float peak_nits = 0.0f;
-        HMONITOR monitor = nullptr;
-    };
-    DisplayReading display_reading_;
+    // The output's colour space and luminances as last read (read_display_output; read_output_hdr), and whether it has been read.
+    OutputHdr display_reading_{};
+    bool display_read_ = false;
     void read_display_output();
+    // HDR10 output: the swap chain is R10G10B10A2 in the ST 2084 colour space while hdr_active_, and the post chain's last
+    // write encodes for it with hdr_output_'s levels. reconcile_hdr_output follows the setting, the display and frame
+    // generation at a frame boundary; set_swap_chain_hdr changes the buffers' format (ResizeBuffers) and colour space.
+    bool hdr_active_ = false;
+    bool hdr_failed_ = false;  // the last switch to HDR10 failed: not tried again until the setting or the display changes
+    PostOutput hdr_output_{};
+    void reconcile_hdr_output();
+    void publish_display_hdr();
+    bool set_swap_chain_hdr(bool hdr, const PostOutput& levels);
+    void apply_hdr_metadata(const PostOutput& levels);
+    // The SDR picture of the frame for a capture while the swap chain is HDR: the post chain's last write again, into an
+    // R8G8B8A8 target of the swap chain's size (kept). Null when the target cannot be made.
+    [[nodiscard]] ID3D12Resource* hdr_capture_picture(const DisplayTexture& source, const D3D12_VIEWPORT& viewport);
+    Microsoft::WRL::ComPtr<ID3D12Resource> hdr_capture_target_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_capture_rtv_heap_;
     UINT last_stats_present_count_ = 0;
     UINT last_stats_present_refresh_count_ = 0;
     std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};

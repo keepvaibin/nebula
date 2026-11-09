@@ -14,6 +14,7 @@ struct GeneralPageState {
     bool choosing_miis = false;
     int mii_count = 0;
     bool folders_open = true;  // the platform shows a folder's files (host_window::folders_open)
+    bool focus_loss_offered = false;  // the host acts on a window that loses focus (the desktop host)
 };
 
 enum class GeneralPageAction { ImportMiis, OpenMiiFolder };

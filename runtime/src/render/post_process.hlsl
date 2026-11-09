@@ -22,7 +22,9 @@ cbuffer PostConstants : register(b0) {
     uint4 g_con3;
     // Resample: xy source size, zw target size in pixels.
     float4 g_params;
-    // xy: viewport origin in render-target pixels.
+    // xy: viewport origin in render-target pixels. z: 0 an intermediate picture, 1 the last write into an 8-bit window
+    // (dithered), 2 the last write as HDR10 (FinalWriteHdr). w: with z = 2, the paper white (bits 0-9) and the display's
+    // peak (bits 10-23), both in nits (post_process_settings.h post_output_word).
     int4 g_origin;
 };
 
@@ -57,9 +59,67 @@ float NoiseRandom(inout uint seed) {
     seed = NoiseHash(seed);
     return float(seed >> 8u) * (1.0 / 16777216.0);
 }
+// HDR10 (SMPTE ST 2084 PQ, BT.2020) for a display in HDR mode; the CPU twin is hdr10_encode in post_process_settings.cpp.
+float PqEncode(float nits) {
+    const float y = pow(saturate(nits / 10000.0), 0.1593017578125);
+    return pow((0.8359375 + 18.8515625 * y) / (1.0 + 18.6875 * y), 78.84375);
+}
+float PqDecode(float code) {
+    const float p = pow(saturate(code), 1.0 / 78.84375);
+    return 10000.0 * pow(max(p - 0.8359375, 0.0) / (18.8515625 - 18.6875 * p), 1.0 / 0.1593017578125);
+}
+// The picture's range, in times the paper white, that the roll-off keeps (kHdrHeadroom).
+static const float kHdrHeadroom = 4.0;
+// BT.2390 EETF on the brightest channel (the others follow it, so the hue stays), black level 0: a display whose peak is
+// under the source range gets the highlights above the knee rolled into it, one with the range gets them untouched.
+float3 HdrRolloff(float3 nits, float paper, float display_peak) {
+    const float source_peak = min(paper * kHdrHeadroom, 10000.0);
+    const float brightest = max(nits.r, max(nits.g, nits.b));
+    if (brightest <= 0.0) {
+        return nits;
+    }
+    float shown = brightest;
+    if (display_peak < source_peak) {
+        const float source_code = PqEncode(source_peak);
+        float e = min(PqEncode(brightest) / source_code, 1.0);
+        const float max_lum = PqEncode(display_peak) / source_code;
+        const float knee = max(1.5 * max_lum - 0.5, 0.0);
+        if (e > knee) {
+            const float t = (e - knee) / (1.0 - knee);
+            const float t2 = t * t;
+            const float t3 = t2 * t;
+            e = (2.0 * t3 - 3.0 * t2 + 1.0) * knee + (t3 - 2.0 * t2 + t) * (1.0 - knee) + (-2.0 * t3 + 3.0 * t2) * max_lum;
+        }
+        shown = PqDecode(e * source_code);
+    }
+    return nits * (min(shown, display_peak) / brightest);
+}
+// The last write as HDR10: the code values PQ stores, a triangular noise of a level either way at 10 bits.
+float3 FinalWriteHdr(float3 color, int2 p) {
+    const uint word = uint(g_origin.w);
+    const float paper = float(word & 1023u);
+    const float display_peak = float((word >> 10u) & 16383u);
+    const float3 linear709 = pow(max(color, 0.0), 2.2);
+    const float3 linear2020 = float3(dot(linear709, float3(0.627404, 0.329283, 0.043313)),
+                                     dot(linear709, float3(0.069097, 0.919540, 0.011362)),
+                                     dot(linear709, float3(0.016391, 0.088013, 0.895595)));
+    const float3 nits = HdrRolloff(linear2020 * paper, paper, display_peak);
+    if (max(nits.r, max(nits.g, nits.b)) <= 0.0) {
+        return float3(0.0, 0.0, 0.0);
+    }
+    const float3 code = float3(PqEncode(nits.r), PqEncode(nits.g), PqEncode(nits.b));
+    const float3 level = code * 1023.0;
+    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
+    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
+                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
+    return saturate((level + noise) / 1023.0);
+}
 float3 FinalWrite(float3 color, int2 p) {
     if (g_origin.z == 0) {
         return color;
+    }
+    if (g_origin.z == 2) {
+        return FinalWriteHdr(color, p);
     }
     const float3 level = color * 255.0;
     const float3 between = step(0.02, abs(level - round(level)));

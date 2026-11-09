@@ -162,6 +162,12 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         }
     } else if (std::strcmp(key, "discord_status") == 0) {
         settings.discord_status = value[0] != '0';
+    } else if (std::strcmp(key, "focus_loss") == 0) {
+        for (unsigned i = 0; i <= static_cast<unsigned>(FocusLoss::Mute); ++i) {
+            if (::galaxy::text_iequal(value, focus_loss_key(static_cast<FocusLoss>(i)))) {
+                settings.focus_loss = static_cast<FocusLoss>(i);
+            }
+        }
     } else if (std::strcmp(key, "menu_text_size") == 0) {
         settings.menu_text_size = static_cast<unsigned>(std::strtoul(value, nullptr, 10));
     } else if (std::strcmp(key, "audio_sound_output") == 0) {
@@ -419,6 +425,23 @@ const char* button_icons_key(ButtonIcons icons) noexcept {
     return kKeys[std::min<std::size_t>(static_cast<std::size_t>(icons), std::size(kKeys) - 1u)];
 }
 
+const char* focus_loss_key(FocusLoss focus_loss) noexcept {
+    static constexpr const char* kKeys[] = {"keep", "pause", "mute"};
+    return kKeys[std::min<std::size_t>(static_cast<std::size_t>(focus_loss), std::size(kKeys) - 1u)];
+}
+
+namespace {
+std::atomic<bool> s_background_muted{false};
+}  // namespace
+
+void set_background_muted(bool muted) noexcept {
+    s_background_muted.store(muted, std::memory_order_relaxed);
+}
+
+bool background_muted() noexcept {
+    return s_background_muted.load(std::memory_order_relaxed);
+}
+
 const char* game_language_key(GameLanguage language) noexcept {
     switch (language) {
     case GameLanguage::Japanese: return "japanese";
@@ -519,6 +542,7 @@ bool save_runtime_settings_to_file() {
                  << "discord_status=" << (settings.discord_status ? 1 : 0) << '\n'
                  << "button_icons=" << button_icons_key(settings.button_icons) << '\n'
                  << "menu_text_size=" << settings.menu_text_size << '\n'
+                 << "focus_loss=" << focus_loss_key(settings.focus_loss) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

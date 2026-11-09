@@ -7,7 +7,10 @@
 
 #include <dxgi1_4.h>
 
+#include "galaxy/render/render_config.h"
+
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -44,6 +47,103 @@ PostProcessSettings with(Aa aa, unsigned sharpness = 0u) {
     s.aa = aa;
     s.sharpness = static_cast<std::uint8_t>(sharpness);
     return s;
+}
+
+bool close_to(float a, float b, float tolerance) { return std::fabs(a - b) <= tolerance; }
+
+// HDR10: the PQ curve, the paper white, the roll-off to the display's peak, the colour primaries and the constants the
+// shader reads (post_process.hlsl FinalWriteHdr is these formulas; the SDR write is unchanged).
+void hdr_output() {
+    using namespace galaxy::render;
+    expect(close_to(pq_encode(0.0f), 0.0f, 1e-5f), "pq of black");
+    expect(close_to(pq_encode(10000.0f), 1.0f, 1e-5f), "pq of the top of the range");
+    expect(close_to(pq_encode(100.0f), 0.5081f, 1e-3f), "pq of 100 nits");
+    expect(close_to(pq_encode(1000.0f), 0.7518f, 1e-3f), "pq of 1000 nits");
+    for (const float nits : {0.1f, 1.0f, 100.0f, 203.0f, 1000.0f, 4000.0f}) {
+        expect(close_to(pq_decode(pq_encode(nits)) / nits, 1.0f, 2e-3f), "pq round trip");
+    }
+    float code[3]{};
+    const float white[3] = {1.0f, 1.0f, 1.0f};
+    hdr10_encode(white, 200u, 1000u, code);
+    expect(close_to(code[0], pq_encode(200.0f), 2e-3f) && close_to(code[1], code[0], 2e-3f) && close_to(code[2], code[0], 2e-3f),
+           "SDR white lands on the paper white, neutral");
+    hdr10_encode(white, 400u, 1000u, code);
+    expect(close_to(code[0], pq_encode(400.0f), 2e-3f), "a higher paper white is brighter");
+    const float black[3] = {0.0f, 0.0f, 0.0f};
+    hdr10_encode(black, 200u, 1000u, code);
+    expect(close_to(code[0], 0.0f, 1e-5f) && close_to(code[1], 0.0f, 1e-5f) && close_to(code[2], 0.0f, 1e-5f), "black stays black");
+    const float red[3] = {1.0f, 0.0f, 0.0f};
+    hdr10_encode(red, 200u, 1000u, code);
+    expect(code[0] > code[1] && code[1] > code[2], "sRGB red in BT.2020: red leads, green next");
+    // Highlights above the paper white (bloom): brighter than white, inside the peak, never past it.
+    const float bright[3] = {2.0f, 2.0f, 2.0f};
+    hdr10_encode(bright, 200u, 1000u, code);
+    expect(code[0] > pq_encode(200.0f) && pq_decode(code[0]) <= 1001.0f, "highlights rise above the paper white");
+    // A display under the source range: the curve ends at its peak, rising all the way up.
+    const float huge[3] = {4.0f, 4.0f, 4.0f};
+    float last = 0.0f;
+    bool rising = true;
+    for (const float level : {0.5f, 1.0f, 1.5f, 2.0f, 3.0f, 4.0f, 8.0f}) {
+        const float picture[3] = {level, level, level};
+        hdr10_encode(picture, 200u, 600u, code);
+        const float nits = pq_decode(code[0]);
+        rising = rising && nits >= last - 0.5f && nits <= 600.5f;
+        last = nits;
+    }
+    expect(rising, "roll-off to a 600 nit display rises and never passes the peak");
+    hdr10_encode(huge, 200u, 600u, code);
+    expect(close_to(pq_decode(code[0]), 600.0f, 2.0f), "the top of the source range reaches the peak");
+    // A hue-preserving roll-off: the channels keep their ratios.
+    const float tint[3] = {3.0f, 1.5f, 0.75f};
+    hdr10_encode(tint, 200u, 600u, code);
+    const float ratio = pq_decode(code[1]) / pq_decode(code[0]);
+    float untouched[3]{};
+    hdr10_encode(tint, 200u, 10000u, untouched);
+    expect(close_to(ratio, pq_decode(untouched[1]) / pq_decode(untouched[0]), 2e-3f), "roll-off keeps the hue");
+
+    // The levels and the constants word.
+    RenderConfig cfg{};
+    cfg.hdr = true;
+    cfg.paper_white = 10u;
+    DisplayHdr display{};
+    display.available = true;
+    PostOutput levels = post_output_for(cfg, display);
+    expect(levels.hdr && levels.paper_white_nits == kPaperWhiteMin && levels.peak_nits == 1000u, "paper white floor, 1000 nit default peak");
+    cfg.paper_white = 9999u;
+    display.peak_nits = 20000u;
+    levels = post_output_for(cfg, display);
+    expect(levels.paper_white_nits == kPaperWhiteMax && levels.peak_nits == 10000u, "paper white ceiling, PQ range");
+    display.peak_nits = 120u;
+    cfg.paper_white = 300u;
+    levels = post_output_for(cfg, display);
+    expect(levels.peak_nits == 300u, "the peak stays at or above the paper white");
+    levels.paper_white_nits = 200u;
+    levels.peak_nits = 1000u;
+    const std::int32_t word = post_output_word(levels);
+    expect((word & 1023) == 200 && ((word >> 10) & 16383) == 1000, "the constants word holds paper white and peak");
+    PostConstants constants{};
+    set_post_output(constants, levels);
+    expect(constants.origin[2] == 2 && constants.origin[3] == word, "HDR last write constants");
+    set_post_output(constants, PostOutput{});
+    expect(constants.origin[2] == 1 && constants.origin[3] == 0, "SDR last write constants are the window's, as before HDR");
+    // HDR is wanted only with the setting and a display that offers it.
+    cfg.hdr = false;
+    expect(!hdr_output_wanted(cfg, display), "HDR off in the settings");
+    cfg.hdr = true;
+    display.available = false;
+    expect(!hdr_output_wanted(cfg, display), "no HDR display");
+    display.available = true;
+    expect(hdr_output_wanted(cfg, display), "HDR on and offered");
+    // The static metadata: BT.2020 primaries, the display's range.
+    display.peak_nits = 800u;
+    display.full_frame_nits = 600u;
+    display.min_nits_10000 = 50u;
+    const HdrMetadata metadata = hdr10_metadata(display, 200u);
+    expect(close_to(metadata.red[0], 0.708f, 1e-4f) && close_to(metadata.blue[1], 0.046f, 1e-4f) && close_to(metadata.white[0], 0.3127f, 1e-4f),
+           "BT.2020 primaries");
+    expect(close_to(metadata.max_luminance, 800.0f, 0.5f) && close_to(metadata.min_luminance, 0.005f, 1e-5f) &&
+               close_to(metadata.max_frame_average_light, 600.0f, 0.5f),
+           "metadata luminances");
 }
 
 void plans() {
@@ -339,6 +439,7 @@ void scene_aa_on_warp() {
 }  // namespace
 
 int main() {
+    hdr_output();
     plans();
     texts();
     self_test_on_warp();
