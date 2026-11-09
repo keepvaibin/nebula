@@ -26,7 +26,6 @@ public:
 
 private:
     Vec3f mNearTarget;
-    Vec3f mPrevNearTarget;
     Vec3f mWPoint;
     Vec3f mPrevWPoint;
     f32 mFovy;
