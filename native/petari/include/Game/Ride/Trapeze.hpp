@@ -76,7 +76,6 @@ public:
     GameTexture* mTexture;
 };
 
-// these have to be header bodies because for some reason they are actually linked in NameObjFactory
 namespace NrvTrapeze {
     NEW_NERVE(TrapezeNrvStop, Trapeze, Stop);
     NEW_NERVE(TrapezeNrvFree, Trapeze, Free);

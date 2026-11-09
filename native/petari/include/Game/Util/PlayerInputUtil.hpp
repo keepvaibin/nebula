@@ -55,7 +55,6 @@ namespace MR {
 
     bool isPressedMap(s32 channel);
 
-
     bool isPressedHome(s32 channel);
 
     bool isPressedCamera(s32 channel);
@@ -79,7 +78,6 @@ namespace MR {
     bool isMoveStickPressedLeft(s32 channel);
 
     bool isMoveStickPressedRight(s32 channel);
-
 
     bool isSubSpin(s32 channel);
 

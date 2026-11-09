@@ -6,8 +6,14 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+
+// NameObjExecuteInfo keeps each list type in an s8.
+static_assert(MR::MovementType_ShadowControllerHolder <= 127 && MR::CalcAnimType_AnimParticleIgnorePause <= 127 && MR::DrawType_CameraCover <= 127 &&
+                  MR::DrawBufferType_MirrorMapObj <= 127,
+              "list types fit an s8");
 
 namespace {
     NameObjExecuteHolder* getNameObjExecuteHolder() {
@@ -207,46 +213,60 @@ void NameObjExecuteHolder::initConnectting() {
     }
 }
 
+// The lists grow in the holder's arena: a request made in a frame (the permanent arena current) stays the scene's.
 void NameObjExecuteHolder::push(PendingList* pList, s32 index) {
-    if (pList->mCount >= pList->mCapacity) {
-        const s32 grown = pList->mCapacity > 0 ? pList->mCapacity * 2 : 64;
-        s32* pIndices = new s32[grown];
-        for (s32 i = 0; i < pList->mCount; i++) {
-            pIndices[i] = pList->mIndices[i];
+    const s32 word = index >> 6;
+    if (word >= pList->mWords) {
+        s32 words = pList->mWords > 0 ? pList->mWords : 16;
+        while (words <= word) {
+            words *= 2;
         }
-        delete[] pList->mIndices;
-        pList->mIndices = pIndices;
-        pList->mCapacity = grown;
+        NebulaArena* pArena = NebulaArena::findFromRoot(this);
+        u64* pBits = new (pArena, 0) u64[words];
+        u64* pRunBits = new (pArena, 0) u64[words];
+        for (s32 i = 0; i < words; i++) {
+            pBits[i] = i < pList->mWords ? pList->mBits[i] : 0;
+            pRunBits[i] = i < pList->mWords ? pList->mRunBits[i] : 0;
+        }
+        delete[] pList->mBits;
+        delete[] pList->mRunBits;
+        pList->mBits = pBits;
+        pList->mRunBits = pRunBits;
+        pList->mWords = words;
     }
-    pList->mIndices[pList->mCount++] = index;
+
+    const u64 bit = 1ull << (index & 63);
+    if ((pList->mBits[word] & bit) == 0) {
+        pList->mBits[word] |= bit;
+        pList->mCount++;
+    }
 }
 
-// Requests made while the list runs wait for the next run.
+// An index asked for twice runs once: a run after the first finds nothing pending.
 void NameObjExecuteHolder::run(PendingList* pList, void (NameObjExecuteInfo::*pExecute)()) {
-    const s32 count = pList->mCount;
-    if (count == 0) {
+    if (pList->mCount == 0) {
         return;
     }
 
-    s32* pIndices = pList->mIndices;
-    for (s32 i = 1; i < count; i++) {
-        const s32 index = pIndices[i];
-        s32 j = i;
-        for (; j > 0 && pIndices[j - 1] > index; j--) {
-            pIndices[j] = pIndices[j - 1];
+    u64* pTaken = pList->mBits;
+    pList->mBits = pList->mRunBits;
+    pList->mRunBits = pTaken;
+    pList->mCount = 0;
+
+    // A push while running may grow both sets: read them through pList.
+    const s32 words = pList->mWords;
+    for (s32 word = 0; word < words; word++) {
+        u64 bits = pList->mRunBits[word];
+        if (bits == 0) {
+            continue;
         }
-        pIndices[j] = index;
+        pList->mRunBits[word] = 0;
+        while (bits != 0) {
+            const s32 index = (word << 6) + __builtin_ctzll(bits);
+            bits &= bits - 1;
+            (mExecuteArray[index].*pExecute)();
+        }
     }
-
-    for (s32 i = 0; i < count; i++) {
-        (mExecuteArray[pList->mIndices[i]].*pExecute)();
-    }
-
-    const s32 later = pList->mCount - count;
-    for (s32 i = 0; i < later; i++) {
-        pList->mIndices[i] = pList->mIndices[count + i];
-    }
-    pList->mCount = later;
 }
 
 void NameObjExecuteHolder::connectToScene(NameObj* pObj) {

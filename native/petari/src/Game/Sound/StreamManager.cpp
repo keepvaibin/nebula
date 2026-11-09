@@ -1,9 +1,10 @@
 #include "Game/Sound/StreamManager.hpp"
 #include "Game/Sound/SoundHandles.hpp"
+#include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StdSoundInfo.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 StreamManager::StreamManager(bool setInstance) : SoundGlobal< StreamManager >(setInstance) {
-    soundStrategyMgr = nullptr;
     mAudience = nullptr;
     mParams.init();
     mActivity.init();
@@ -88,7 +89,7 @@ void StreamManager::mixOut() {
 }
 
 StreamSound* StreamManager::newStream_() {
-    StreamSound* stream = new StreamSound(this, soundStrategyMgr);
+    StreamSound* stream = new (SoundMemory::arena(), 0) StreamSound(this);
     if (stream == nullptr) {
         return nullptr;
     }

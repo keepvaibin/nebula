@@ -9,7 +9,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 void MarioActor::memorizeSensorThrow(HitSensor* pSensor) {
     mTakeSensors.at(mTakeCount) = pSensor;
@@ -277,7 +277,6 @@ void MarioActor::tryPullTrans(Vec3f* pVelocity, const Vec3f& rPosition) {
 }
 
 bool MarioActor::releaseThrowMemoSensor() {
-    // FIXME: missing class at 0x988 that has HitSensor* at 0xA4
     if (mTakeCount != 0) {
         if (mMario->isStatusActive(MarioStatus_Wall) || mMario->isStatusActive(MarioStatus_SideStep)) {
             return false;
@@ -391,7 +390,7 @@ void MarioActor::tryTornadoPull(HitSensor* pSensor) {
     }
 
     s32 type = pSensor->mType;
-    if (strcmp(pSensor->mHost->mName, "カメックビーム用カメ") == 0) {
+    if (MR::isEqualString(pSensor->mHost->mName, "カメックビーム用カメ")) {
         type = 5555;
     }
 

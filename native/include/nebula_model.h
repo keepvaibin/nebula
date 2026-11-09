@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define NEBULA_MODEL_MAGIC 0x4C444D4Eu /* "NMDL" */
-#define NEBULA_MODEL_VERSION 3u
+#define NEBULA_MODEL_VERSION 4u
 #define NEBULA_MODEL_NONE NEBULA_NONE32
 
 enum { NEBULA_SCALE_BASIC = 0, NEBULA_SCALE_SOFTIMAGE = 1, NEBULA_SCALE_MAYA = 2 };
@@ -97,12 +97,19 @@ enum {
     NEBULA_MESH_COLOR0 = 1u << 1,
     NEBULA_MESH_COLOR1 = 1u << 2,
     NEBULA_MESH_TANGENTS = 1u << 3,
-    NEBULA_MESH_COORD0 = 1u << 8, /* bit n: coordinate n, 24 bits' worth */
 };
 
-/* Stream 0: position, 3 floats. Stream 1: normal 3 floats, colour word, first coordinate 2 floats (24 bytes).
-   Stream 2: draw matrix number, u32, present when single_matrix is NEBULA_MODEL_NONE. Stream 3: further coordinates,
-   2 floats each in ascending order, then colour 1, then tangent and binormal. */
+/* Where a mesh keeps coordinate n: stream 1 at 16 for coordinate 0, stream 3 at `offset` for the others;
+   NEBULA_MESH_NO_COORD in `stream` when it has none. */
+#define NEBULA_MESH_NO_COORD 0xFFu
+typedef struct NebulaModelMeshCoord {
+    uint8_t stream, reserved;
+    uint16_t offset;
+} NebulaModelMeshCoord;
+
+/* Stream 0: position, 3 floats. Stream 1: normal 3 floats, colour word, coordinate 0 2 floats (24 bytes).
+   Stream 2: draw matrix number, u32, present when single_matrix is NEBULA_MODEL_NONE. Stream 3: the further
+   coordinates, 2 floats each in ascending order, then colour 1, then tangent and binormal. */
 typedef struct NebulaModelMesh {
     float min[3], max[3], radius;
     uint32_t vertex_count, index_count;
@@ -116,9 +123,21 @@ typedef struct NebulaModelMesh {
        refined_index_count indices at refined_indices_at draw it round, 0 when it has no bending triangles. */
     uint32_t refined_vertex_count, refined_index_count, refined_indices_at;
     uint32_t flats_at; /* a bit per vertex: a flat solid's corner shaded soft, ray tracing shades its face. 0: none */
+    uint32_t coord_count, coords_at; /* NebulaModelMeshCoord by coordinate number, at coords_at from this record */
 } NebulaModelMesh;
 
-/* What a constant row of a program holds: the material fills its rows by these. */
+static inline const NebulaModelMeshCoord* nebula_mesh_coords(const NebulaModelMesh* mesh) {
+    return (const NebulaModelMeshCoord*)((const uint8_t*)mesh + mesh->coords_at);
+}
+
+static inline int nebula_mesh_has_coord(const NebulaModelMesh* mesh, uint32_t coord) {
+    return coord < mesh->coord_count && nebula_mesh_coords(mesh)[coord].stream != NEBULA_MESH_NO_COORD;
+}
+
+/* What a constant row of a program holds: the material fills its rows by these. A row is a kind and an index,
+   kind << 16 | index: kind 0 the fixed rows, then a coordinate's scale, a warp matrix's rows, a coordinate's rows. */
+#define NEBULA_ROW_KIND(row) ((uint32_t)(row) >> 16)
+#define NEBULA_ROW_INDEX(row) ((uint32_t)(row) & 0xFFFFu)
 enum {
     NEBULA_ROW_REGISTER = 0,       /* registers 1 to 3 of the stages */
     NEBULA_ROW_CONSTANT = 3,       /* constant colours 0 to 3 */
@@ -128,9 +147,9 @@ enum {
     NEBULA_ROW_FOG_COLOR = 12,
     NEBULA_ROW_ALPHA_REF = 13,
     NEBULA_ROW_OVERRIDE = 14,      /* the replacing forms' values */
-    NEBULA_ROW_SCALE = 32,         /* per texture number: xy its coordinate's scale, zw its size */
-    NEBULA_ROW_WARP = 64,          /* two per warp matrix */
-    NEBULA_ROW_COORD = 128,        /* three per coordinate */
+    NEBULA_ROW_SCALE = 1 << 16,    /* + coordinate: xy its scale, zw the size of the map of its number */
+    NEBULA_ROW_WARP = 2 << 16,     /* + two per warp matrix */
+    NEBULA_ROW_COORD = 3 << 16,    /* + three per coordinate */
 };
 
 /* A form's vertex inputs after position and matrix. */
@@ -210,15 +229,24 @@ enum {
     NEBULA_MATERIAL_ON_BILLBOARD = 1u << 4, /* its joint turns to the eye; eye-space coordinates read world rows */
 };
 
+/* NebulaModelSlot.uses: the stages read the map, the stages or warp orders read the coordinate. */
+enum { NEBULA_SLOT_USES_MAP = 1u << 0, NEBULA_SLOT_USES_COORD = 1u << 1 };
+#define NEBULA_SLOT_NO_MAP 0xFFFFu
+
+/* A material's slot n: map n, coordinate n and matrix n, as many as anything in the material names. */
+typedef struct NebulaModelSlot {
+    uint32_t texture;   /* the model texture map n shows, NEBULA_MODEL_NONE none */
+    uint16_t scale_map; /* the map coordinate n's scale comes from, NEBULA_SLOT_NO_MAP none */
+    uint8_t uses, reserved;
+} NebulaModelSlot;
+
 typedef struct NebulaModelMaterial {
     uint32_t name_at, name_hash;
     uint32_t same_as; /* materials of a model with one value are the same in everything */
     uint32_t mesh, joint;
     uint8_t mode, cull, flags, early_depth;
-    uint32_t channel_count, coord_count, warp_count, texture_count;
+    uint32_t channel_count, coord_count, warp_count, slot_count;
     uint32_t matrix_count, form_count;
-    uint16_t used_maps, used_coords; /* a bit per map and coordinate the stages use */
-    uint8_t coord_map[NEBULA_MATERIAL_SLOTS]; /* the map each coordinate's scale comes from, 255 none */
     uint8_t material_color[2][4], ambient_color[2][4];
     int16_t registers[4][4];
     uint8_t constants[4][4];
@@ -229,7 +257,7 @@ typedef struct NebulaModelMaterial {
     float normal_scale[3];
     NebulaModelFog fog;
     uint32_t state; /* its pipeline state, NEBULA_STATE_* */
-    uint32_t coords_at, textures_at, matrices_at, warps_at, forms_at;
+    uint32_t coords_at, slots_at, matrices_at, warps_at, forms_at;
 } NebulaModelMaterial;
 
 typedef struct NebulaModelTexture {
@@ -243,16 +271,16 @@ typedef struct NebulaModelTexture {
 
 #ifdef __cplusplus
 }
-static_assert(NEBULA_ROW_SCALE + NEBULA_MATERIAL_SLOTS <= NEBULA_ROW_WARP);
-static_assert(NEBULA_ROW_COORD + 3 * NEBULA_MATERIAL_SLOTS <= 256);
 static_assert(sizeof(NebulaModelCoord) == 8);
+static_assert(sizeof(NebulaModelMeshCoord) == 4);
+static_assert(sizeof(NebulaModelSlot) == 8);
 static_assert(sizeof(NebulaModelStep) == 8);
 static_assert(sizeof(NebulaModelDrawMatrix) == 8);
 static_assert(sizeof(NebulaModelHeader) == 28 * 4);
 static_assert(sizeof(NebulaModelJoint) == 96);
-static_assert(sizeof(NebulaModelMesh) == 92);
+static_assert(sizeof(NebulaModelMesh) == 100);
 static_assert(sizeof(NebulaModelForm) == 64);
-static_assert(sizeof(NebulaModelMaterial) == 228);
+static_assert(sizeof(NebulaModelMaterial) == 208);
 static_assert(sizeof(NebulaModelTexture) == 40);
 static_assert(sizeof(NebulaModelCoordMatrix) == 104);
 static_assert(sizeof(NebulaModelWarp) == 24);

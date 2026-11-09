@@ -7,10 +7,8 @@ class LiveActor;
 
 typedef MR::Vector< MR::AssignableArray< DrawBufferGroup* > > ExecutorList;
 
-// One row per draw buffer type; a row with mDrawBufferType 0xFFFFFFFF ends the table.
 struct DrawBufferInitialTable {
     u32 mDrawBufferType;
-    s32 mCapacity;
     u32 mLightType;
     u32 mDrawCameraType;
 };

@@ -11,7 +11,7 @@ public:
         return mPlayer != nullptr;
     }
     // A player for `tracks` tracks, started at `start` of the program `pData` with these values.
-    void start(u32 tracks, const u8* pData, u32 start, const SoundParams& rSound);
+    void start(u32 tracks, u32 stack, const u8* pData, u32 start, const SoundParams& rSound);
     // The values each frame, with the phrase's frame work after them.
     void frame(const SoundParams& rSound);
     void stopAtNoteEnd();

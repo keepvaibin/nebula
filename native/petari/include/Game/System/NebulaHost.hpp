@@ -28,6 +28,12 @@ namespace NebulaHost {
         nebula_host()->game_context(nebula_host()->user, what, value);
     }
 
+    // The players the host's input serves, fixed for the session (a host without the service: one).
+    inline u32 inputPlayers() {
+        const NebulaHostServices* const host = nebula_host();
+        return host->input_players != nullptr ? host->input_players(host->user) : 1;
+    }
+
     inline int testSceneFrame(NebulaTestAction* pAction) {
         return nebula_host()->test_scene_frame(nebula_host()->user, pAction);
     }

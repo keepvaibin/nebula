@@ -1442,7 +1442,7 @@ void Mario::checkWallJumpHit() {
     if (mJumpKind == 0x5) {
         if ((mMovementStates.frontWall) && !checkWallJumpCode()) {
             const f32 wallDot = cutVecElementFromJumpVec(getWallNorm());
-            if (checkWallCode("NoAction", true)) {
+            if (checkWallCode(CollisionWallCode_NoAction, true)) {
                 return;
             }
 
@@ -1493,11 +1493,11 @@ void Mario::decideSlipUp() {
     }
 
     if (!mMovementStates.wallSlipUp) {
-        if (checkWallCode("NotWallSlip", true)) {
+        if (checkWallCode(CollisionWallCode_NotWallSlip, true)) {
             return;
         }
 
-        if (checkWallCode("NoAction", true)) {
+        if (checkWallCode(CollisionWallCode_NoAction, true)) {
             return;
         }
 
@@ -2365,7 +2365,7 @@ void Mario::doLanding() {
             }
 
             if ((mFloorCode == 0x1B || mFloorCode == 0x1C)) {
-                if (!strcmp(MR::getSoundCodeString(mShadowPolygon), "Sand")) {
+                if (MR::getSoundCodeIndex(mShadowPolygon) == CollisionSoundCode_Sand) {
                     stopAnimation(nullptr, "基本");
                     mSinkTimer = 32;
                     return;

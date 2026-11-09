@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/NameIndex.hpp"
 
 class Camera;
 
@@ -20,4 +21,5 @@ public:
 
     s32 mDefaultCameraIndex;
     Camera** mCameras;
+    MR::NameIndex mIndex;  // camera type name -> its index, the first of a name
 };

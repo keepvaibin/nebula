@@ -248,6 +248,9 @@ void FishGroup::init(const TableIter& rIter) {
     MR::moveCoordToNearestPos(this, mPosition);
 
     MR::getPlacementArg0NoInit(rIter, &mFishNum);
+    if (mFishNum < 0) {
+        mFishNum = 0;
+    }
 
     bool canEscape = false;
     MR::getPlacementArg1NoInit(rIter, &canEscape);

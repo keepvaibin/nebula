@@ -60,13 +60,12 @@ namespace MR {
     bool isBindedDamageFire(const LiveActor*);
     bool isBindedDamageElectric(const LiveActor*);
     u32 getCameraID(const Triangle*);
-    const char* getFloorCodeString(const Triangle*);
-    const char* getWallCodeString(const Triangle*);
-    const char* getSoundCodeString(const Triangle*);
+    // A polygon's codes (CollisionFloorCode, CollisionWallCode, CollisionSoundCode); no attributes: 0.
     s32 getFloorCodeIndex(const TableIter&);
     s32 getSoundCodeIndex(const TableIter&);
     s32 getFloorCodeIndex(const Triangle*);
     s32 getWallCodeIndex(const Triangle*);
+    s32 getSoundCodeIndex(const Triangle*);
     bool isGroundCodeWaterIter(const TableIter&);
     bool isGroundCodeDeath(const Triangle*);
     bool isGroundCodeDamage(const Triangle*);

@@ -26,7 +26,6 @@ public:
     void exeRideFly();
     void exeRideFlyOnWind();
     void exeRideSpinUp();
-    void exeRideSpinUpOnWind();
 
     bool updateRide();
     void updateWind();

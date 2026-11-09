@@ -33,14 +33,23 @@ void MeChannelMgr::setPauseFlag(bool pause) {
     }
 }
 
-void MeArena::setup(void* pMemory, u32 count) {
-    mBase = static_cast< MeTrack* >(pMemory);
+// A record: the track, then its call and loop entries (u32 addresses, then u16 counts).
+u32 MeArena::recordBytes(u32 stack) {
+    const u32 bytes = sizeof(MeTrack) + stack * (sizeof(u32) + sizeof(u16));
+    return (bytes + 15) & ~15u;
+}
+
+void MeArena::setup(void* pMemory, u32 count, u32 stack) {
+    mBase = static_cast< u8* >(pMemory);
     mCount = count;
+    mRecordBytes = recordBytes(stack);
+    mStack = stack;
     mFree = nullptr;
     mHolder.mHeld = 0;
     for (u32 i = count; i-- > 0;) {
-        mBase[i].mNextFree = mFree;
-        mFree = &mBase[i];
+        MeTrack* const track = reinterpret_cast< MeTrack* >(mBase + i * mRecordBytes);
+        track->mNextFree = mFree;
+        mFree = track;
     }
 }
 
@@ -50,8 +59,10 @@ MeTrack* MeArena::alloc(RhythmSystem* pSystem, MePlayer* pPlayer) {
         return nullptr;
     }
     mFree = free->mNextFree;
-    MeTrack* track = new (free) MeTrack();
-    track->construct(pSystem, pPlayer, this);
+    u8* const record = reinterpret_cast< u8* >(free);
+    MeTrack* track = new (record) MeTrack();
+    u32* const stack = reinterpret_cast< u32* >(record + sizeof(MeTrack));
+    track->construct(pSystem, pPlayer, this, stack, reinterpret_cast< u16* >(stack + mStack), mStack);
     return track;
 }
 
@@ -65,28 +76,31 @@ const void* MeArena::begin() const {
 }
 
 const void* MeArena::end() const {
-    return mBase + mCount;
+    return mBase + mCount * mRecordBytes;
 }
 
-u32 MePlayer::bytes(u32 tracks) {
-    return align16(sizeof(MePlayer)) + tracks * sizeof(MeTrack);
+u32 MePlayer::bytes(u32 tracks, u32 stack) {
+    return align16(sizeof(MePlayer)) + tracks * MeArena::recordBytes(stack);
 }
 
-MePlayer* MePlayer::create(void* pMemory, u32 tracks) {
+MePlayer* MePlayer::create(void* pMemory, u32 tracks, u32 stack) {
     u8* cursor = static_cast< u8* >(pMemory);
     MePlayer* player = new (cursor) MePlayer();
     cursor += align16(sizeof(MePlayer));
-    player->mArena.setup(cursor, tracks);
+    player->mArena.setup(cursor, tracks, stack);
     player->mArena.mHolder.mKind = OWNER_ME;
     player->mArena.mHolder.mPlayer = player;
     player->mRoot = player->mArena.alloc(&SoundEngine::get()->rhythm(), player);
     return player;
 }
 
-void MeTrack::construct(RhythmSystem* pSystem, MePlayer* pPlayer, MeArena* pArena) {
+void MeTrack::construct(RhythmSystem* pSystem, MePlayer* pPlayer, MeArena* pArena, u32* pStack, u16* pLoopCounts, u32 stackRoom) {
     mSystem = pSystem;
     mPlayer = pPlayer;
     mArena = pArena;
+    mStack = pStack;
+    mLoopCounts = pLoopCounts;
+    mStackRoom = stackRoom;
     mMgr.mTrack = this;
     init();
 }
@@ -202,7 +216,7 @@ void MeTrack::setSeqData(const u8* pData, u32 start) {
     mIsLocked = false;
     mData = pData;
     mStackDepth = 0;
-    for (u32 i = 0; i < cStackDepth; i++) {
+    for (u32 i = 0; i < mStackRoom; i++) {
         mStack[i] = 0;
         mLoopCounts[i] = 0;
     }
@@ -623,8 +637,9 @@ u32 MeTrack::read24() {
     return value;
 }
 
+// The cook's mStackBound covers every path: full is a phrase that was not cooked from its program.
 bool MeTrack::call(u32 address) {
-    if (mStackDepth >= cStackDepth) {
+    if (mStackDepth >= mStackRoom) {
         return false;
     }
     mStack[mStackDepth++] = mCursor;
@@ -641,7 +656,7 @@ bool MeTrack::ret() {
 }
 
 bool MeTrack::loopStart(u16 count) {
-    if (mStackDepth >= cStackDepth) {
+    if (mStackDepth >= mStackRoom) {
         return false;
     }
     mStack[mStackDepth] = mCursor;

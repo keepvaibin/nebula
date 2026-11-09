@@ -34,6 +34,8 @@ namespace GameAssets {
     const void* map(s32 entryNum);
     // Every file mapped for this arena: its views go with it, and the archives held for it.
     void unloadArena(const NebulaArena* pArena);
+    // The arena a file view holding p was mapped for; null when p is in none.
+    NebulaArena* viewArena(const void* p);
 
     // The archive held under pPath (letters in either case), or null; *ppArena, when asked, gets the arena holding it.
     // `game`: the game's own copy held apart from a mod's (getGameArchive).

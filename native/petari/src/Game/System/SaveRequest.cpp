@@ -37,7 +37,7 @@ SaveRequest::Result SaveRequest::getResult() const {
 }
 
 void SaveRequest::start() {
-    static const u32 cOps[] = {0, NEBULA_SAVE_DELETE, NEBULA_SAVE_WRITE, NEBULA_SAVE_READ};
+    static const u32 cOps[] = {0, NEBULA_SAVE_WRITE, NEBULA_SAVE_READ};
     if (mType == Type_None) {
         return;
     }
@@ -66,4 +66,3 @@ const char* SaveRequest::setReadSeq(const char* pName, void* pBuf, u32 capacity,
     mName = pName;
     return mName;
 }
-

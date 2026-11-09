@@ -85,8 +85,14 @@ void WaterPlant::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
     MR::getPlacementArg0NoInit(rIter, &mPlantNum);
+    if (mPlantNum < 0) {
+        mPlantNum = 0;
+    }
     MR::getPlacementArg1NoInit(rIter, &mAreaRadius);
     MR::getPlacementArg3NoInit(rIter, &mType);
+    if (mType < 0 || mType >= ARRAY_SIZE(::cHeightTable)) {
+        mType = 0;
+    }
 
     mHeight = ::cHeightTable[mType];
     initPlant();

@@ -6,7 +6,7 @@
 // place. Offsets count from the file's start; 0 is none. Names are offsets into the file's string pool. Panes are in
 // tree order (a pane's descendants follow it), so a subtree is the index range [pane, mSubtreeEnd).
 
-enum { cUiLayoutMagic = 0x54594C4E /* NLYT */, cUiAnimationMagic = 0x4E414C4E /* NLAN */, cUiDataVersion = 2 };
+enum { cUiLayoutMagic = 0x54594C4E /* NLYT */, cUiAnimationMagic = 0x4E414C4E /* NLAN */, cUiDataVersion = 3 };
 enum { cUiNone16 = 0xFFFF };
 
 enum {

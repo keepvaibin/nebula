@@ -14,11 +14,14 @@ public:
     void requestStopSceneDelay(s32, s32);
     bool isSceneStopped() const;
 
+    // Requests due on the same count share one entry: their stops land together, and the longest wins.
     struct DelayRequest {
         s32 mFrame;
-        s32 mDelay;  // 0 when free
+        s32 mDelay;
     };
 
-    DelayRequest mDelayRequests[16];
+    DelayRequest* mDelayRequests;
+    s32 mDelayRequestNum;
+    s32 mDelayRequestMax;
     s32 mFrame;
 };

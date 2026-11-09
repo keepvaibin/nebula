@@ -10,7 +10,7 @@ class StreamManager;
 // goes. Children name its channels.
 class StreamSound final : public Sound, public NebulaListLink< StreamSound > {
 public:
-    StreamSound(StreamManager* streamMgr, SoundStrategyMgr< StreamSound >* soundStrategyMgr);
+    explicit StreamSound(StreamManager* streamMgr);
     virtual ~StreamSound();
     void startID_(SoundID id, s32 streamFileEntry, const Vec3f* posPtr, SoundAudience* audience, int category);
     bool prepare_prepareStream_();
@@ -46,12 +46,12 @@ public:
     int mCategory;
     SoundChild* children[NUM_CHILDREN];
     StreamManager* streamMgr;
-    SoundStrategy< StreamSound >* soundStrategy;
-    SoundStrategyMgr< StreamSound >* soundStrategyMgr;
     bool mIsPaused;
 
 private:
     SoundCommand& next(u16 kind);
+    // A start, stop or pause: a bigger room goes first when the messages not yet taken could fill the stream's.
+    SoundCommand& nextMessage(u16 kind);
     u64 send();
     void sendChannel(u32 channel, const SoundParams& rValues, f32 pitch);
     void initStream();
@@ -59,6 +59,10 @@ private:
     bool finished() const;
 
     StreamPlayer* mStream;
+    // The room the stream's messages have (the last one sent; null: inline) and the messages sent.
+    StreamPlayer::MessageRoom* mRoom;
+    u32 mMessageRoom;
+    u32 mPosted;
     // The stream's file is mapped: it is loaded the moment it is prepared.
     bool mLoaded;
     // Finished: its last channel stopped (a count the audio thread raises) or it was cancelled.

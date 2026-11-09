@@ -9,8 +9,4 @@ void MarioMove::initAfter() {
     mFrontVec = getPlayer()->mFrontVec;
     mSideVec = getPlayer()->mSideVec;
 
-    mHeadVec2 = mHeadVec;
-    mFrontVec2 = mFrontVec;
-    mSideVec2 = mSideVec;
-
 }

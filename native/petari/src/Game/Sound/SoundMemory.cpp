@@ -19,6 +19,10 @@ void SoundMemory::setArena(NebulaArena* pArena) {
     sArena = pArena;
 }
 
+NebulaArena* SoundMemory::arena() {
+    return sArena;
+}
+
 void* SoundMemory::alloc(u32 bytes) {
     u8* memory = static_cast< u8* >(NebulaArena::alloc(cHeaderBytes + bytes, 64, sArena));
     if (memory == nullptr) {
@@ -33,6 +37,10 @@ void SoundMemory::retire(void* pMemory, const NebulaAtomic< bool >& rReleased) {
     header->mReleased = &rReleased;
     header->mNext = sRetired;
     sRetired = header;
+}
+
+void SoundMemory::free(void* pMemory) {
+    NebulaArena::free(static_cast< u8* >(pMemory) - cHeaderBytes, sArena);
 }
 
 void SoundMemory::collect() {

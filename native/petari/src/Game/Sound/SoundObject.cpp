@@ -19,18 +19,10 @@ SoundObject::~SoundObject() {
 void SoundObject::dispose() {
     for (u32 idx = 0; idx < mNumHandles; idx++) {
         if (mHandles[idx].isSoundAttached()) {
-            if (stopOK(mHandles[idx])) {
-                mHandles[idx].getSound()->stop();
-            } else {
-                mHandles[idx].releaseSound();
-            }
+            mHandles[idx].getSound()->stop();
         }
     }
     mIsAllocated = false;
-}
-
-bool SoundObject::stopOK(SoundHandle& rHandle) {
-    return true;
 }
 
 void SoundObject::process() {

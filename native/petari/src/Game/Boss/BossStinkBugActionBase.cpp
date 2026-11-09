@@ -206,7 +206,6 @@ void BossStinkBugActionBase::updateSound() {
 }
 
 void BossStinkBugActionBase::updateSoundFly() {
-
     if (MR::isNearPlayer(getHost(), 2000.0f)) {
         mIsNearPlayer = true;
     } else {

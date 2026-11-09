@@ -194,6 +194,9 @@ void WarpPod::init(const TableIter& rIter) {
         MR::getPlacementArg6NoInit(rIter, &mGlowColorIndex);
         MR::getPlacementArg7NoInit(rIter, &drawsPathArg);
     }
+    if (mGlowColorIndex < 0 || mGlowColorIndex >= ARRAY_SIZE(::cGlowColors)) {
+        mGlowColorIndex = 0;
+    }
 
     mDrawsPath = drawsPathArg == 1;
 

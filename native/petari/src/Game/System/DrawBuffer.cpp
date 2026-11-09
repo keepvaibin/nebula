@@ -4,6 +4,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Render/Model.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry* pMatPacket)
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
@@ -11,15 +12,18 @@ DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry*
 
 void DrawBufferShapeDrawer::init(s32 maxActors) {
     mMaxPackets = maxActors * mNumShapes;
-    mPackets = new PacketInfo*[mMaxPackets];
+    mPackets = new PacketInfo[mMaxPackets]();
+}
 
-    for (s32 idx = 0; idx < mMaxPackets; idx++) {
-        PacketInfo* packet = new PacketInfo();
-        mPackets[idx] = packet;
-        mPackets[idx]->mShapePacket = nullptr;
-        mPackets[idx]->mLightLoader = nullptr;
-        mPackets[idx]->mLightCtrl = nullptr;
+void DrawBufferShapeDrawer::reserve(s32 maxActors) {
+    const s32 maxPackets = maxActors * mNumShapes;
+    PacketInfo* pPackets = new (NebulaArena::findFromRoot(this), 0) PacketInfo[maxPackets]();
+    for (s32 idx = 0; idx < mNumPackets; idx++) {
+        pPackets[idx] = mPackets[idx];
     }
+    delete[] mPackets;
+    mPackets = pPackets;
+    mMaxPackets = maxPackets;
 }
 
 void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
@@ -41,7 +45,7 @@ void DrawBufferShapeDrawer::draw() const {
     MaterialDraw draw(pShared);
 
     for (s32 idx = 0; idx < mNumPackets; idx++) {
-        MeshEntry* packet = mPackets[idx]->mShapePacket;
+        MeshEntry* packet = mPackets[idx].mShapePacket;
 
         if (getLightLoader(idx) != nullptr) {
             getLightLoader(idx)->loadLight();
@@ -62,48 +66,44 @@ void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightC
     bool setLightLoader = false;
     s32 index = findLightSortIndex(pLightCtrl, &setLightLoader);
 
-    PacketInfo* packet = mPackets[mNumPackets];
-    packet->mShapePacket = const_cast< MeshEntry* >(pShapePacket);
-    packet->mLightCtrl = const_cast< ActorLightCtrl* >(pLightCtrl);
-
-    if (setLightLoader) {
-        packet->mLightLoader = const_cast< ActorLightCtrl* >(pLightCtrl);
-    } else {
-        packet->mLightLoader = nullptr;
-    }
-
     for (s32 idx = mNumPackets - 1; idx >= index; idx--) {
         mPackets[idx + 1] = mPackets[idx];
     }
 
-    mPackets[index] = packet;
+    PacketInfo& rPacket = mPackets[index];
+    rPacket.mShapePacket = const_cast< MeshEntry* >(pShapePacket);
+    rPacket.mLightCtrl = const_cast< ActorLightCtrl* >(pLightCtrl);
+
+    if (setLightLoader) {
+        rPacket.mLightLoader = const_cast< ActorLightCtrl* >(pLightCtrl);
+    } else {
+        rPacket.mLightLoader = nullptr;
+    }
+
     mNumPackets++;
 }
 
+// A removed run head hands the light load to the packet after it.
 void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
-    PacketInfo* packet;
     for (s32 removeIdx = 0; removeIdx < mNumPackets; removeIdx++) {
-        packet = mPackets[removeIdx];
-        if (packet->mShapePacket == pShapePacket) {
+        if (mPackets[removeIdx].mShapePacket == pShapePacket) {
+            const bool loadsLight = mPackets[removeIdx].mLightLoader != nullptr;
             for (s32 idx = removeIdx; idx < mNumPackets - 1; idx++) {
                 mPackets[idx] = mPackets[idx + 1];
             }
-            if (packet->mLightLoader != nullptr && removeIdx < mNumPackets - 1) {
-                mPackets[removeIdx]->mLightLoader = mPackets[removeIdx]->mLightCtrl;
+            if (loadsLight && removeIdx < mNumPackets - 1) {
+                mPackets[removeIdx].mLightLoader = mPackets[removeIdx].mLightCtrl;
             }
             mNumPackets--;
-            mPackets[mNumPackets] = packet;
             return;
         }
     }
 }
 
 void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
-    PacketInfo* packet;
     for (s32 idx = 0; idx < mNumPackets; idx++) {
-        packet = mPackets[idx];
-        if (packet->mLightCtrl == pLightCtrl) {
-            MeshEntry* shapePacket = packet->mShapePacket;
+        if (mPackets[idx].mLightCtrl == pLightCtrl) {
+            MeshEntry* shapePacket = mPackets[idx].mShapePacket;
             remove(shapePacket);
             add(shapePacket, pLightCtrl);
             return;
@@ -125,12 +125,12 @@ s32 DrawBufferShapeDrawer::findLightSortIndex(const ActorLightCtrl* pLightCtrl, 
 
     bool foundLight = false;
     for (s32 idx = 0; idx < mNumPackets; idx++) {
-        if (mPackets[idx]->mLightLoader != nullptr) {
+        if (mPackets[idx].mLightLoader != nullptr) {
             if (foundLight) {
                 return idx;
             }
 
-            if (pLightCtrl->isSameLight(mPackets[idx]->mLightLoader)) {
+            if (pLightCtrl->isSameLight(mPackets[idx].mLightLoader)) {
                 foundLight = true;
             }
         }
@@ -150,6 +150,13 @@ DrawBuffer::DrawBuffer(Model* pModel)
 void DrawBuffer::init(int maxActors) {
     mMaxActors = maxActors;
     initTable();
+}
+
+void DrawBuffer::reserve(int maxActors) {
+    mMaxActors = maxActors;
+    for (s32 idx = 0; idx < mNumShapeDrawers; idx++) {
+        mShapeDrawers[idx]->reserve(maxActors);
+    }
 }
 
 void DrawBuffer::add(const LiveActor* pActor) {

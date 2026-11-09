@@ -6,7 +6,7 @@
 
 class WaterPoint {
 public:
-    WaterPoint(const Vec3f&, const Vec3f&, f32, f32, f32, f32);
+    WaterPoint(const Vec3f&, const Vec3f&, f32, f32, f32);
 
     void initAfterPlacement();
     void updatePos(f32 waveTheta1, f32 waveTheta2, f32 waveHeight1, f32 waveHeight2, f32 heightRate);
@@ -18,6 +18,5 @@ public:
     f32 mCoordOnRail;
     Vec3f mUpVec;
     f32 mHeight;
-    f32 mFlowSpeedRate;
     u8 mAlpha;
 };

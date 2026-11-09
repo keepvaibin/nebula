@@ -10,9 +10,9 @@ namespace {
     const f32 sAlphaMin = 30.0f;
 };  // namespace
 
-WaterPoint::WaterPoint(const Vec3f& rPos, const Vec3f& rUpVec, f32 coordAcrossRail, f32 coordOnRail, f32 height, f32 flowSpeedRate)
+WaterPoint::WaterPoint(const Vec3f& rPos, const Vec3f& rUpVec, f32 coordAcrossRail, f32 coordOnRail, f32 height)
     : mPosition(rPos), mOrigPos(rPos), mCoordAcrossRail(coordAcrossRail), mCoordOnRail(coordOnRail), mUpVec(rUpVec), mHeight(height),
-      mFlowSpeedRate(flowSpeedRate), mAlpha(-1) {
+      mAlpha(-1) {
 }
 
 void WaterPoint::initAfterPlacement() {

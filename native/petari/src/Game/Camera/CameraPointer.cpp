@@ -148,5 +148,5 @@ CameraTargetObj* CameraPointer::calc() {
 
 void CameraPointer::setParamFromChunk(const CameraParamChunk* pChunk) {
     CameraGeneralParam* general = pChunk->mGeneralParam;
-    setParam(general->mNum1, general->mDist, general->mAngleA, general->mAngleB, general->mWPoint.z, general->mWPoint.x, general->mWPoint.y, general->mNum2 == CameraType_UpdateWithTarget, general->mUp.x);
+    setParam(general->mNum1, general->mDist, general->mAngleA, general->mAngleB, general->mWPoint.z, general->mWPoint.x, general->mWPoint.y, general->mUp.x);
 }

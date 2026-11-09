@@ -76,7 +76,8 @@ private:
         u32 mCursor;
         bool mFailed;
         u32 mCallDepth;
-        u32 mCallStack[8];
+        u32* mCallStack;  // the track's scanStack(), mCallRoom entries
+        u32 mCallRoom;
         u8 read8();
         u32 read16();
         u32 read24();

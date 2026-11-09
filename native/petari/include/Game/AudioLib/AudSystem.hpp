@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Game/AudioLib/AudAudience.hpp"
 #include "Game/AudioLib/AudBgmMgr.hpp"
 #include "Game/AudioLib/AudLimitedSound.hpp"
 #include "Game/Sound/SoundAudible.hpp"
@@ -15,7 +14,6 @@ class AudMeObject;
 class AudRemixMgr;
 class AudRhythmMeSystem;
 class AudSceneMgr;
-class AudSeStrategyMgr;
 class AudSoundObjHolder;
 class AudSoundObject;
 class AudSystemVolumeController;
@@ -132,8 +130,7 @@ public:
     bool mIsLevelSeBlocked;  // blocks startLevelSound
     s32 mSeMuteFrames;
     SoundArchive* mSoundArchive;
-    AudAudience< 4 > mAudience;
-    AudDopplerAudible< 4 >* mAudible;
+    SoundAudience mAudience;
     AudSoundObject* mSystemSeObject;
     AudSoundObject* mAtmosphereSeObject;
     AudMeObject* mSystemMeObject;
@@ -143,7 +140,6 @@ public:
     AudRhythmMeSystem* mRhythmMeSystem;
     AudRemixMgr* mRemixMgr;
     AudEffector* mAudEffector;
-    AudSeStrategyMgr* mSeStrategyMgr;
     AudSystemVolumeController* mVolumeController;
     s32 mHomeButtonMenuState;
     s32 mHomeButtonToggleTime;

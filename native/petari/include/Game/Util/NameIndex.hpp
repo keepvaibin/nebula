@@ -3,9 +3,11 @@
 #include <nebula_types.h>
 #include <cstring>
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 namespace MR {
     u32 getHashCode(const char*);
+    u32 getHashCodeLower(const char*);
 
     // A name's key in a NameIndex: its hash and whether two names are the same. Exact: the whole name.
     struct NameKeyExact {
@@ -14,6 +16,16 @@ namespace MR {
         }
         static bool equal(const char* pA, const char* pB) {
             return isEqualString(pA, pB);
+        }
+    };
+
+    // ASCII case folded, as isEqualStringCase compares (names it calls equal hash alike).
+    struct NameKeyCase {
+        static u32 hash(const char* pName) {
+            return getHashCodeLower(pName);
+        }
+        static bool equal(const char* pA, const char* pB) {
+            return isEqualStringCase(pA, pB);
         }
     };
 
@@ -46,7 +58,7 @@ namespace MR {
             }
             if (mSlots == nullptr || size > mMask + 1) {
                 delete[] mSlots;
-                mSlots = new Slot[size];
+                mSlots = allocSlots(size);
                 mMask = size - 1;
             }
             for (u32 i = 0; i <= mMask; i++) {
@@ -121,6 +133,12 @@ namespace MR {
             u32 mValue;
         };
 
+        // In the index's own arena (the current one for an index outside them all): an index that outlives a scene,
+        // as a holder's does, keeps its table when the scene's arena is reset.
+        Slot* allocSlots(u32 size) {
+            return new (NebulaArena::findFromRoot(this), alignof(Slot)) Slot[size];
+        }
+
         s32 slotOf(const char* pName, u32 hash) const {
             if (mCount == 0) {
                 return -1;
@@ -156,7 +174,7 @@ namespace MR {
             Slot* pOld = mSlots;
             const u32 oldSize = mSlots == nullptr ? 0 : mMask + 1;
             const u32 size = oldSize == 0 ? 8 : 2 * oldSize;
-            mSlots = new Slot[size];
+            mSlots = allocSlots(size);
             mMask = size - 1;
             for (u32 i = 0; i < size; i++) {
                 mSlots[i].mName = nullptr;

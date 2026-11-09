@@ -8,6 +8,7 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/PlayerEvent.hpp"
 #include "Game/Player/RushEndInfo.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/AreaObjUtil.hpp"

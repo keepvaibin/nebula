@@ -31,7 +31,7 @@ namespace {
 }  // namespace
 
 InputStick::InputStick(const PlayerInput* pPad)
-    : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease(), mIsHoldUp(), mIsHoldDown() {
+    : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease() {
 }
 
 void InputStick::update() {
@@ -50,17 +50,4 @@ void InputStick::update() {
     mHold = directions;
     mTrigger = directions & ~directionsPrev;
     mRelease = directionsPrev & ~directions;
-
-    // Any vertical deflection counts here (no dead zone).
-    if (mStick.y == 0.0f) {
-        mIsHoldUp = false;
-        mIsHoldDown = false;
-    } else if (mStick.y > 0.0f) {
-        mIsHoldUp = true;
-        mIsHoldDown = false;
-    } else {
-        mIsHoldDown = true;
-        mIsHoldUp = false;
-    }
 }
-

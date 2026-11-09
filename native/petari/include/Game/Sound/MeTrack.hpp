@@ -10,10 +10,10 @@ class MeTrack;
 class MePlayer;
 
 // A cooked Me program file (crates/nebula-import/src/cook/sound.rs me_program): the phrases' authored bytecode, read in
-// place, and per entry its start and the tracks it can have alive at once.
+// place, and per entry its start, the tracks it can have alive at once and the call and loop entries a track holds at once.
 struct MeProgramFile {
     static const u32 cMagic = 0x53454d4e;  // "NMES"
-    static const u32 cVersion = 1;
+    static const u32 cVersion = 2;
 
     u32 mMagic;
     u32 mVersion;
@@ -26,8 +26,9 @@ static_assert(sizeof(MeProgramFile) == 16, "NMES header");
 struct MeEntry {
     u32 mStart;
     u32 mTrackBound;
+    u32 mStackBound;  // call and loop entries a track holds at once
 };
-static_assert(sizeof(MeEntry) == 8, "NMES entry");
+static_assert(sizeof(MeEntry) == 12, "NMES entry");
 
 // A Me track's mix values and its note. A Me track plays one note at a time: its start's slot 1,
 // the only slot it plays; its timer is never set, so no note ends by it.
@@ -45,7 +46,8 @@ struct MeChannelMgr {
 // The tracks of one phrase, in the memory the game gave its player.
 class MeArena {
 public:
-    void setup(void* pMemory, u32 count);
+    static u32 recordBytes(u32 stack);
+    void setup(void* pMemory, u32 count, u32 stack);
     MeTrack* alloc(RhythmSystem* pSystem, MePlayer* pPlayer);
     void free(MeTrack* pTrack);
     const void* begin() const;
@@ -54,8 +56,10 @@ public:
     NoteHolder mHolder;
 
 private:
-    MeTrack* mBase = nullptr;
+    u8* mBase = nullptr;
     u32 mCount = 0;
+    u32 mRecordBytes = 0;
+    u32 mStack = 0;
     MeTrack* mFree = nullptr;
 };
 
@@ -64,9 +68,7 @@ private:
 class MeTrack {
 public:
     enum Status : s32 { STATUS_FREE, STATUS_READY, STATUS_RUN, STATUS_START };
-    static const u32 cStackDepth = 8;
-
-    void construct(RhythmSystem* pSystem, MePlayer* pPlayer, MeArena* pArena);
+    void construct(RhythmSystem* pSystem, MePlayer* pPlayer, MeArena* pArena, u32* pStack, u16* pLoopCounts, u32 stackRoom);
     void setSeqData(const u8* pData, u32 start);
     void setStatus(s32 status);
     void stopSeq();
@@ -154,8 +156,10 @@ private:
     const u8* mData = nullptr;
     u32 mCursor = 0;
     u32 mStackDepth = 0;
-    u32 mStack[cStackDepth] = {};
-    u16 mLoopCounts[cStackDepth] = {};
+    // Call and loop entries, in the track's record: room for the phrase's mStackBound.
+    u32* mStack = nullptr;
+    u16* mLoopCounts = nullptr;
+    u32 mStackRoom = 0;
     s32 mWaitType = -1;
     s32 mWaitTime = 0;
     s32 mProgress = -1;
@@ -195,8 +199,8 @@ private:
 // tracks. The game frees it once mReleased says the audio thread has let go.
 class MePlayer {
 public:
-    static u32 bytes(u32 tracks);
-    static MePlayer* create(void* pMemory, u32 tracks);
+    static u32 bytes(u32 tracks, u32 stack);
+    static MePlayer* create(void* pMemory, u32 tracks, u32 stack);
 
     // Read by the game thread: the main track's status.
     NebulaAtomic< s32 > mStatus = MeTrack::STATUS_FREE;

@@ -14,8 +14,4 @@ public:
     Vec3f mFrontVec;
     Vec3f mSideVec;
 
-    Vec3f mHeadVec2;
-    Vec3f mFrontVec2;
-    Vec3f mSideVec2;
-
 };

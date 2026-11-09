@@ -4,9 +4,8 @@
 //! the game's wind clockwise (measured on Kuribo, Coin and Mario: 650 to 2, 268 to 0, 4514 to 363).
 
 use super::clip::{ClipIr, Track, KIND_JOINTS};
-use super::limits::MATERIAL_SLOTS;
 use super::model_ir::CoordIr;
-use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_COORD0, ATTR_MATRIX, ATTR_NORMAL, NONE};
+use super::model_ir::{important_joints, plain_material, plain_texture, ArraysIr, Corner, GroupIr, JointIr, ModelIr, ShapeIr, ATTR_MATRIX, ATTR_NORMAL, NONE};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -545,8 +544,9 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             let image = root["textures"][index]["source"].as_u64().context("a material layer with no image")? as usize;
             images.push((image, layer["texCoord"].as_u64().unwrap_or(0)));
         }
-        if images.len() > MATERIAL_SLOTS || images.iter().any(|(_, uv)| *uv >= MATERIAL_SLOTS as u64) {
-            bail!("a material exceeds the native {MATERIAL_SLOTS}-texture/coordinate table");
+        // A program's inputs name coordinates in a byte past NEBULA_INPUT_COORD0, maps and coordinates in a byte.
+        if images.len() > 240 || images.iter().any(|(_, uv)| *uv >= 240) {
+            bail!("a material with more than 240 textures or coordinates");
         }
         let images = images.into_iter().map(|(image, uv)| (image, uv as u8)).collect();
         materials.push(SourceMaterial {
@@ -564,7 +564,7 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     let mut ir = ModelIr::default();
     let mut positions = Pool::<3>::new();
     let mut normals = Pool::<3>::new();
-    let mut coordinates: [Pool<2>; MATERIAL_SLOTS] = std::array::from_fn(|_| Pool::new());
+    let mut coordinates: Vec<Pool<2>> = Vec::new();
     // A vertex's draw matrix: joints first (by joint number), then envelopes.
     let mut envelope_ids: BTreeMap<Vec<(u32, u32)>, u32> = BTreeMap::new();
     let mut first_of_material: BTreeMap<usize, u32> = BTreeMap::new();
@@ -589,22 +589,31 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                 Some(index) => document.floats(index as usize, 3)?,
                 None => [0.0, 1.0, 0.0].repeat(count),
             };
-            let mut coordinate_values = Vec::with_capacity(MATERIAL_SLOTS);
-            let mut uv_mask = 0u64;
-            for k in 0..MATERIAL_SLOTS {
-                let values = match attributes[format!("TEXCOORD_{k}")].as_u64() {
-                    Some(index) => { uv_mask |= ATTR_COORD0 << k; document.floats(index as usize, 2)? },
-                    None => vec![0.0; count * 2],
-                };
-                coordinate_values.push(values);
-            }
             let weights = match (attributes["JOINTS_0"].as_u64(), attributes["WEIGHTS_0"].as_u64(), skinned) {
                 (Some(j), Some(w), true) => Some((document.floats(j as usize, 4)?, document.floats(w as usize, 4)?)),
                 _ => None,
             };
             let material = primitive["material"].as_u64().map_or(default_material, |m| m as usize);
             let source = materials.get(material).context("a mesh naming a material it doesn't have")?;
-            for &(_, uv) in &source.images { uv_mask |= ATTR_COORD0 << uv; }
+            // Every TEXCOORD_n the primitive has, and every set its material's images read (zeros where it has none).
+            let named = attributes.as_object().map_or(0, |a| {
+                a.keys().filter_map(|k| k.strip_prefix("TEXCOORD_")?.parse::<usize>().ok()).map(|k| k + 1).max().unwrap_or(0)
+            });
+            let read = source.images.iter().map(|&(_, uv)| usize::from(uv) + 1).max().unwrap_or(0);
+            let room = named.max(read);
+            let mut coordinate_present = vec![false; room];
+            let mut coordinate_values = Vec::with_capacity(room);
+            for (k, present) in coordinate_present.iter_mut().enumerate() {
+                let values = match attributes[format!("TEXCOORD_{k}")].as_u64() {
+                    Some(index) => { *present = true; document.floats(index as usize, 2)? },
+                    None => vec![0.0; count * 2],
+                };
+                coordinate_values.push(values);
+            }
+            for &(_, uv) in &source.images { coordinate_present[usize::from(uv)] = true; }
+            if coordinates.len() < room {
+                coordinates.resize_with(room, Pool::new);
+            }
             let source_indices = document.indices(primitive, count)?;
             let mut corners: Vec<Corner> = Vec::new();
             let mut draws: Vec<u32> = Vec::new();
@@ -667,8 +676,8 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                 widen(&mut whole_low, &mut whole_high, transform(&world[*node], position, 1.0).map(|v| v * UNITS_PER_METRE));
                 let length = (turned[0] * turned[0] + turned[1] * turned[1] + turned[2] * turned[2]).sqrt().max(1e-6);
                 let normal_number = normals.add(turned.map(|v| v / length));
-                let mut coord = [0u32; MATERIAL_SLOTS];
-                for k in 0..MATERIAL_SLOTS {
+                let mut coord = vec![0u32; room];
+                for k in 0..room {
                     coord[k] = coordinates[k].add(coordinate_values[k][i * 2..i * 2 + 2].try_into()?);
                 }
                 let number = corners.len() as u32;
@@ -680,7 +689,7 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                     color: [0; 2],
                     coord,
                     matrix: 0,
-                    texture_matrix: [0; MATERIAL_SLOTS],
+                    texture_matrix: Vec::new(),
                 });
                 draws.push(draw);
                 corner_of.insert(*index, number);
@@ -738,11 +747,11 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
             let mut made = plain_material(&source.name, source.color, texture, source.blend, source.cutoff, source.two_sided);
             if !texture_ids.is_empty() {
                 made.coords.clear();
+                made.textures = texture_ids.clone();
+                made.coordinate_maps = (0..texture_ids.len()).map(|map| map as u8).collect();
                 let first = made.stages[0];
                 made.stages.clear();
-                for (map, (&texture, &(_, uv))) in texture_ids.iter().zip(&source.images).enumerate() {
-                    made.textures[map] = texture;
-                    made.coordinate_maps[map] = map as u8;
+                for (map, &(_, uv)) in source.images.iter().enumerate() {
                     made.coords.push(CoordIr { kind: 1, source: 4 + uv, matrix: NONE });
                     let mut stage = first;
                     stage.map = map as u8; stage.coord = map as u8;
@@ -761,7 +770,8 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
                 min: low,
                 max: high,
                 groups: vec![GroupIr {
-                    attributes: ATTR_NORMAL | uv_mask | if blended { ATTR_MATRIX } else { 0 },
+                    attributes: ATTR_NORMAL | if blended { ATTR_MATRIX } else { 0 },
+                    coordinates: coordinate_present,
                     corners,
                     indices,
                     places,
@@ -776,12 +786,9 @@ pub fn to_ir(bytes: &[u8], folder: Option<&Path>) -> Result<(ModelIr, Vec<(Strin
     }
 
     ir.arrays = ArraysIr { normal_floats: 3, ..Default::default() };
-    ir.arrays.counts[0] = positions.values.len() as u32;
-    ir.arrays.counts[1] = normals.values.len() as u32;
-    for (k, pool) in coordinates.iter().enumerate() { ir.arrays.counts[5 + k] = pool.values.len() as u32; }
     ir.arrays.positions = positions.values;
     ir.arrays.normals = normals.values;
-    for (k, pool) in coordinates.into_iter().enumerate() { ir.arrays.coords[k] = pool.values; }
+    ir.arrays.coords = coordinates.into_iter().map(|pool| pool.values).collect();
 
     let whole_radius = bounds_radius(&whole_low, &whole_high);
     ir.joints = joints
@@ -1117,7 +1124,13 @@ mod tests {
         let word = |at| u32::from_le_bytes(block[at..at + 4].try_into().unwrap());
         assert_eq!(word(4), super::super::model_write::VERSION);
         let at = word(24 * 4) as usize;
-        assert_eq!(u16::from_le_bytes(block[at + 48..at + 50].try_into().unwrap()), 0x0FFF);
+        assert_eq!(word(at + 36), 12);
+        let slots = word(at + super::super::model_write::MATERIAL_BYTES - 16) as usize;
+        for n in 0..12 {
+            let slot = slots + n * super::super::model_write::SLOT_BYTES;
+            assert_eq!(word(slot), n as u32);
+            assert_eq!(block[slot + 6], super::super::model_write::SLOT_USES_MAP | super::super::model_write::SLOT_USES_COORD);
+        }
     }
 
     #[test]

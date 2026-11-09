@@ -118,5 +118,5 @@ public:
     void setTexMtx(u32, CoordMatrix*);
     virtual void updateMaterial(Material*) override;
 
-    CoordMatrix* mMatricies[NEBULA_MATERIAL_SLOTS];
+    MR::GrowTable< CoordMatrix*, 4 > mMatricies;  // by slot, null: the material's own
 };

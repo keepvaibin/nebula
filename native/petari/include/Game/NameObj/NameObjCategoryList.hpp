@@ -23,8 +23,9 @@ public:
         u32 mCheck;  // objects registered before allocateBuffer
     };
 
-    NameObjCategoryList(u32 categoryNum, NameObjMethod);
-    NameObjCategoryList(u32 categoryNum, NameObjMethodConst);
+    // placeSlot: the NameObj::mListPlace entry this list keeps (an object is in at most one category of a list).
+    NameObjCategoryList(u32 categoryNum, NameObjMethod, s32 placeSlot);
+    NameObjCategoryList(u32 categoryNum, NameObjMethodConst, s32 placeSlot);
 
     void execute(int);
     void incrementCheck(NameObj*, int);
@@ -40,4 +41,5 @@ public:
     // draws belong to (MotionSignal::drawObject).
     NameObjMethod mMethod;
     NameObjMethodConst mMethodConst;
+    s32 mPlaceSlot;
 };

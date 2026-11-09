@@ -41,10 +41,6 @@ public:
         seqDataMgr = seqDataMgr_;
     }
 
-    SoundStrategyMgr< SequenceSound >* getSoundStrategyMgr() {
-        return soundStrategyMgr;
-    }
-
     SoundMove* getParams() {
         return &mMove;
     }
@@ -61,7 +57,6 @@ public:
 private:
     SoundAudience* mAudience;
     SeqSource* seqDataMgr;
-    SoundStrategyMgr< SequenceSound >* soundStrategyMgr;
     SoundMove mMove;
     NebulaList< SequenceSound > mSeqList;
     int mNumTracks;

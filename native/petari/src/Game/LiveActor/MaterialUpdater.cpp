@@ -66,7 +66,7 @@ void MaterialUpdater::checkViewProjmapEffectMtx() {
     Material* material;
     for (u32 i = 0; i < mModel->getModelData()->getMaterialCount(); i++) {
         material = mModel->getModelData()->getMaterialAt(i);
-        for (u32 j = 0; j < NEBULA_MATERIAL_SLOTS; j++) {
+        for (u32 j = 0; j < material->getSlotCount(); j++) {
             CoordMatrix* texMtx = material->getCoordMatrix(j);
             if (texMtx && texMtx->getMode() == CoordMatrixMode_ViewProjmap && MR::isUseTexMtx(material, j)) {
                 addViewProjmapEffectMtxSetter();

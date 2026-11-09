@@ -23,11 +23,23 @@ struct ChannelMgr {
     u32 mSlots = 0;
 };
 
+// What one track's record holds room for: note slots a channel group, call and loop entries, and envelope points an oscillator
+// (a program's SeqFile bounds; none for a player with no program).
+struct TrackRoom {
+    static TrackRoom of(const SeqFile* pFile) {
+        return pFile != nullptr ? TrackRoom{pFile->mNoteSlots, pFile->mStackBound, pFile->mEnvelopePoints} : TrackRoom{1, 0, 0};
+    }
+
+    u32 mSlots;
+    u32 mStack;
+    u32 mEnvelope;
+};
+
 // The tracks of one player: records carved from the memory the game gave it, each a track, its channel groups and their slots.
 class TrackArena {
 public:
-    static u32 recordBytes(u32 mgrCount, u32 slots);
-    void setup(void* pMemory, u32 count, u32 mgrCount, u32 slots);
+    static u32 recordBytes(u32 mgrCount, const TrackRoom& rRoom);
+    void setup(void* pMemory, u32 count, u32 mgrCount, const TrackRoom& rRoom);
     SeqTrack* alloc(SoundEngine* pEngine);
     void free(SeqTrack* pTrack);
     const u8* begin() const {
@@ -47,7 +59,7 @@ private:
     u32 mCount = 0;
     u32 mRecordBytes = 0;
     u32 mMgrCount = 0;
-    u32 mSlots = 0;
+    TrackRoom mRoom = {};
     SeqTrack* mFree = nullptr;
 };
 
@@ -57,8 +69,6 @@ extern const s16 cIIRCutoff[129][4];
 class SeqTrack {
 public:
     enum Status : s32 { STATUS_FREE, STATUS_RUN, STATUS_STOPPED };
-    static const u32 cStackDepth = 8;
-    static const u32 cOscTablePoints = 32;
     static const u32 cTimedParams = 6;
     typedef f64 (*SecondsClock)(void*);
 
@@ -68,7 +78,8 @@ public:
         u32 mCount;
     };
 
-    void construct(SoundEngine* pEngine, TrackArena* pArena, ChannelMgr* pMgrs, u32 mgrCapacity, Note** pSlots, u32 slots);
+    // In a record of TrackArena::recordBytes: pTail is the memory past the track.
+    void construct(SoundEngine* pEngine, TrackArena* pArena, u8* pTail, u32 mgrCapacity, const TrackRoom& rRoom);
     SoundEngine* engine() const {
         return mEngine;
     }
@@ -160,6 +171,13 @@ public:
     // The byte offset of the next operation (the program's end past the last).
     u32 nextOffset() const;
     s32 stackTopOffset() const;
+    // Room for a look ahead's own calls (RhythmSeqParser::nextNoteOff): as deep as the track's stack.
+    u32* scanStack() const {
+        return mScanStack;
+    }
+    u32 stackRoom() const {
+        return mStackRoom;
+    }
 
     s32 mStatus = STATUS_FREE;
     bool mPauseFlag = false;
@@ -228,8 +246,11 @@ private:
     const u32* mOffsets = nullptr;
     const u8* mData = nullptr;
     s32 mPc = -1;
-    s32 mStack[cStackDepth] = {};
-    u16 mLoopCounts[cStackDepth] = {};
+    // Call and loop entries, in the track's record: room for the file's mStackBound.
+    s32* mStack = nullptr;
+    u16* mLoopCounts = nullptr;
+    u32* mScanStack = nullptr;
+    u32 mStackRoom = 0;
     u32 mStackDepth = 0;
     s32 mTimer = 0;
     // The operation an interrupt returns to (-1: none running).
@@ -250,7 +271,9 @@ private:
     MoveParam mMoveParam[cTimedParams] = {};
     OscData mOscParam[2] = {};
     SeqPoint mOscPoint[4] = {};
-    SeqPoint mOscTable[2][cOscTablePoints] = {};
+    // The two oscillators' envelopes (setOscTable), in the record: mEnvelopeRoom points each.
+    SeqPoint* mOscTable[2] = {};
+    u32 mEnvelopeRoom = 0;
 
     SeqTrack* mParent = nullptr;
     // Children in index order.

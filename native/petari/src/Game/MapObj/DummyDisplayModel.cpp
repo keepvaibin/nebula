@@ -50,7 +50,7 @@ namespace {
     DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const TableIter& rIter, s32 defaultModelId, int drawBufferType) {
         s32 modelId = MR::getDummyDisplayModelId(rIter, defaultModelId);
 
-        if (modelId == -1) {
+        if (modelId < 0 || modelId >= cDummyDisplayModelCount) {
             return nullptr;
         }
 

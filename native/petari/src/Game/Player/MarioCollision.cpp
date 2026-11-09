@@ -17,7 +17,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 #include <nebula_math.h>
 
 bool Mario::isIgnoreTriangle(const Triangle* pTriangle) {
@@ -1298,9 +1298,7 @@ void Mario::checkHeadPoint() {
                 addVelocity(*triangle->getNormal(0), radius - (hit->mHitPos - center).length());
             }
 
-            const char* wallCode = MR::getWallCodeString(triangle);
-
-            if (wallCode != nullptr && !strcmp(wallCode, "Fur")) {
+            if (MR::getWallCodeIndex(triangle) == CollisionWallCode_Fur) {
                 mDrawStates.headHit = true;
             }
 
@@ -1587,7 +1585,7 @@ bool Mario::updateBinderInfo() {
             Vec3f horizontal;
 
             if (firstCeiling && (MR::vecKillElement(mJumpVec, normal, &horizontal) < 0.0f || mPrevDrawStates.pressed) && calcAngleD(normal) > 100.0f) {
-                if (strcmp(triangle->mSensor->mHost->mName, "マンホールのふた(クッパ船)")) {
+                if (!MR::isEqualString(triangle->mSensor->mHost->mName, "マンホールのふた(クッパ船)")) {
                     mJumpVec = horizontal;
                 }
 
@@ -1610,9 +1608,7 @@ bool Mario::isThroughWall(const Triangle* pTriangle) const {
             return false;
         }
 
-        const char* code = MR::getWallCodeString(pTriangle);
-
-        if (code != nullptr && !strcmp(code, "GhostThroughCode")) {
+        if (MR::getWallCodeIndex(pTriangle) == CollisionWallCode_GhostThroughCode) {
             return true;
         }
     }
@@ -1788,9 +1784,7 @@ bool Mario::checkGround() {
                     recordLastGround();
                 }
 
-                const char* wallCode = MR::getWallCodeString(&triangles[i]);
-
-                if (wallCode != nullptr && !strcmp(wallCode, "Fur")) {
+                if (MR::getWallCodeIndex(&triangles[i]) == CollisionWallCode_Fur) {
                     mDrawStates.onFur = true;
                 }
             }

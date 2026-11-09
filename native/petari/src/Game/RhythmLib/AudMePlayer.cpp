@@ -15,7 +15,7 @@ void AudMeHandle::releaseMe() {
 
 AudMe::AudMe()
     : mHandle(), mLink(), mPos(), mMeId(-1), mStopTime(-1), mTimer(), mStartRequested(false), mTrackBound(),
-      mPlace(), mMgrVolume(1.0f), mVolume(1.0f), mOuterPan(0.5f), mOuterDolby(0.0f), mPriority(), mFadeTime() {
+      mStackBound(), mPlace(), mMgrVolume(1.0f), mVolume(1.0f), mOuterPan(0.5f), mOuterDolby(0.0f), mPriority(), mFadeTime() {
     initTimed();
 }
 
@@ -23,14 +23,15 @@ AudMe::~AudMe() {
     release();
 }
 
-void AudMe::requestStart(u32 trackBound, u32 place) {
+void AudMe::requestStart(u32 trackBound, u32 stackBound, u32 place) {
     mTrackBound = trackBound;
+    mStackBound = stackBound;
     mPlace = place;
     mStartRequested = true;
 }
 
 void AudMe::start() {
-    mLink.start(mTrackBound, AudMeMgr::getInstance()->programData(), mPlace, sound());
+    mLink.start(mTrackBound, mStackBound, AudMeMgr::getInstance()->programData(), mPlace, sound());
 }
 
 void AudMe::stop(s32 time) {
@@ -258,7 +259,7 @@ bool AudMeMgr::startMe(u32 meId, AudMeHandle* pHandle, const Vec3f* pPos) {
 
     me->mMeId = meId;
     setOuterPlayingParam(meId, me);
-    me->requestStart(pEntry->mTrackBound, pEntry->mStart);
+    me->requestStart(pEntry->mTrackBound, pEntry->mStackBound, pEntry->mStart);
     mMeList.append(me);
     me->mMgrVolume = mMeVolume;
     return true;

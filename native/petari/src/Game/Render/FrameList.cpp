@@ -816,7 +816,7 @@ namespace Frame {
     }
 
     u32 sitePipeline(u32 shader, u32 state, const NebulaModelMesh* pMesh) {
-        const u64 key = (static_cast< u64 >(shader) << 40 | static_cast< u64 >(pMesh->further_stride) << 32 | pMesh->attributes) ^ 0x4000000000000000ull;
+        const u64 key = (meshLayoutKey(*pMesh) * 0x9E3779B97F4A7C15ull + shader) ^ 0x4000000000000000ull;
         SitePipeline& rEntry = siteEntry(key, state);
         if (rEntry.mPipeline != 0) { return rEntry.mPipeline; }
         {

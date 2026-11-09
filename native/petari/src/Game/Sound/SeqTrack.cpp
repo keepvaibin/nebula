@@ -80,17 +80,20 @@ void ChannelMgr::setPauseFlag(bool pause) {
     }
 }
 
-u32 TrackArena::recordBytes(u32 mgrCount, u32 slots) {
-    const u32 bytes = sizeof(SeqTrack) + mgrCount * sizeof(ChannelMgr) + mgrCount * slots * sizeof(Note*);
+// A record: the track, its channel managers, their note slots, its call and loop entries (s32 operations, u32 look-ahead
+// offsets), its two envelopes, then the u16 loop counts.
+u32 TrackArena::recordBytes(u32 mgrCount, const TrackRoom& rRoom) {
+    const u32 bytes = sizeof(SeqTrack) + mgrCount * sizeof(ChannelMgr) + mgrCount * rRoom.mSlots * sizeof(Note*) +
+                      rRoom.mStack * (sizeof(s32) + sizeof(u32)) + 2 * rRoom.mEnvelope * sizeof(SeqPoint) + rRoom.mStack * sizeof(u16);
     return (bytes + 15) & ~15u;
 }
 
-void TrackArena::setup(void* pMemory, u32 count, u32 mgrCount, u32 slots) {
+void TrackArena::setup(void* pMemory, u32 count, u32 mgrCount, const TrackRoom& rRoom) {
     mBase = static_cast< u8* >(pMemory);
     mCount = count;
-    mRecordBytes = recordBytes(mgrCount, slots);
+    mRecordBytes = recordBytes(mgrCount, rRoom);
     mMgrCount = mgrCount;
-    mSlots = slots;
+    mRoom = rRoom;
     mFree = nullptr;
     mHolder.mHeld = 0;
     for (u32 i = count; i-- > 0;) {
@@ -108,9 +111,7 @@ SeqTrack* TrackArena::alloc(SoundEngine* pEngine) {
     mFree = free->mNextRoot;
     u8* const record = reinterpret_cast< u8* >(free);
     SeqTrack* const track = new (record) SeqTrack();
-    ChannelMgr* const mgrs = reinterpret_cast< ChannelMgr* >(record + sizeof(SeqTrack));
-    Note** const notes = reinterpret_cast< Note** >(record + sizeof(SeqTrack) + mMgrCount * sizeof(ChannelMgr));
-    track->construct(pEngine, this, mgrs, mMgrCount, notes, mSlots);
+    track->construct(pEngine, this, record + sizeof(SeqTrack), mMgrCount, mRoom);
     return track;
 }
 
@@ -119,17 +120,31 @@ void TrackArena::free(SeqTrack* pTrack) {
     mFree = pTrack;
 }
 
-void SeqTrack::construct(SoundEngine* pEngine, TrackArena* pArena, ChannelMgr* pMgrs, u32 mgrCapacity, Note** pSlots, u32 slots) {
+void SeqTrack::construct(SoundEngine* pEngine, TrackArena* pArena, u8* pTail, u32 mgrCapacity, const TrackRoom& rRoom) {
+    ChannelMgr* const mgrs = reinterpret_cast< ChannelMgr* >(pTail);
+    Note** const slots = reinterpret_cast< Note** >(mgrs + mgrCapacity);
+    s32* const stack = reinterpret_cast< s32* >(slots + mgrCapacity * rRoom.mSlots);
+    u32* const scanStack = reinterpret_cast< u32* >(stack + rRoom.mStack);
+    SeqPoint* const envelopes = reinterpret_cast< SeqPoint* >(scanStack + rRoom.mStack);
+    u16* const loopCounts = reinterpret_cast< u16* >(envelopes + 2 * rRoom.mEnvelope);
+
     mEngine = pEngine;
     mArena = pArena;
-    mMgrs = pMgrs;
+    mStack = stack;
+    mScanStack = scanStack;
+    mLoopCounts = loopCounts;
+    mStackRoom = rRoom.mStack;
+    mOscTable[0] = envelopes;
+    mOscTable[1] = envelopes + rRoom.mEnvelope;
+    mEnvelopeRoom = rRoom.mEnvelope;
+    mMgrs = mgrs;
     mMgrCapacity = mgrCapacity;
     for (u32 i = 0; i < mgrCapacity; i++) {
-        new (&pMgrs[i]) ChannelMgr();
-        pMgrs[i].mTrack = this;
-        pMgrs[i].mNotes = pSlots + i * slots;
-        pMgrs[i].mSlots = slots;
-        pMgrs[i].init();
+        new (&mgrs[i]) ChannelMgr();
+        mgrs[i].mTrack = this;
+        mgrs[i].mNotes = slots + i * rRoom.mSlots;
+        mgrs[i].mSlots = rRoom.mSlots;
+        mgrs[i].init();
     }
     init();
 }
@@ -141,7 +156,7 @@ void SeqTrack::init() {
     mOffsets = nullptr;
     mPc = -1;
     mStackDepth = 0;
-    for (u32 i = 0; i < cStackDepth; i++) {
+    for (u32 i = 0; i < mStackRoom; i++) {
         mStack[i] = -1;
         mLoopCounts[i] = 0;
     }
@@ -267,7 +282,7 @@ void SeqTrack::setSeqData(const SeqFile* pFile, u32 entryOp) {
     mOps = reinterpret_cast< const SeqOp* >(mOffsets + pFile->mOpCount);
     mData = reinterpret_cast< const u8* >(mOps + pFile->mOpCount);
     mStackDepth = 0;
-    for (u32 i = 0; i < cStackDepth; i++) {
+    for (u32 i = 0; i < mStackRoom; i++) {
         mStack[i] = -1;
         mLoopCounts[i] = 0;
     }
@@ -692,8 +707,9 @@ void SeqTrack::setSecondsClock(SecondsClock clock, void* pData) {
 void SeqTrack::setOscTable(u32 osc, const u8* pBigEndian) {
     SeqPoint* const table = mOscTable[osc];
     for (u32 i = 0;; i++) {
-        if (i == cOscTablePoints) {
-            NEBULA_PANIC("a sequence's envelope longer than %u points", cOscTablePoints);
+        // The cook's mEnvelopePoints covers every envelope operation.
+        if (i == mEnvelopeRoom) {
+            NEBULA_PANIC("an envelope past the file's %u points (not cooked from its program)", mEnvelopeRoom);
         }
         table[i].mMode = static_cast< s16 >(be16(pBigEndian));
         table[i].mTime = static_cast< s16 >(be16(pBigEndian + 2));
@@ -1217,8 +1233,9 @@ bool SeqTrack::conditionCheck(u32 condition) const {
     return false;
 }
 
+// The cook's mStackBound covers every path: full is a file that was not cooked from its program.
 bool SeqTrack::call(u32 op) {
-    if (mStackDepth >= cStackDepth) {
+    if (mStackDepth >= mStackRoom) {
         return false;
     }
     mStack[mStackDepth++] = mPc;
@@ -1235,7 +1252,7 @@ bool SeqTrack::ret() {
 }
 
 bool SeqTrack::loopStart(u32 count) {
-    if (mStackDepth >= cStackDepth) {
+    if (mStackDepth >= mStackRoom) {
         return false;
     }
     mStack[mStackDepth] = mPc;

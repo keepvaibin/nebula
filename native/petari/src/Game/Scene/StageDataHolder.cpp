@@ -233,11 +233,15 @@ s32 StageDataHolder::getChildObjNum(const TableIter& rIter) const {
     s32 count = 0;
     MR::getPlacementLinkID(rIter, &linkID);
 
+    // A table without the column has no children.
     for (const Table* pInfo = mChildObjs.begin(); pInfo != mChildObjs.end(); pInfo++) {
+        const s32 column = pInfo->searchItemInfo("ParentID");
+        if (column < 0) {
+            continue;
+        }
         for (s32 i = 0; i < pInfo->getNumEntries(); i++) {
             s32 parentID;
-            pInfo->getValue(i, "ParentID", &parentID);
-            if (parentID == linkID) {
+            if (pInfo->getValueFast(i, column, &parentID) && parentID == linkID) {
                 count++;
             }
         }
@@ -252,10 +256,13 @@ TableIter StageDataHolder::getChildObjInfoFromDataIndex(const TableIter& rIter, 
     MR::getPlacementLinkID(rIter, &linkID);
 
     for (const Table* pInfo = mChildObjs.begin(); pInfo != mChildObjs.end(); pInfo++) {
+        const s32 column = pInfo->searchItemInfo("ParentID");
+        if (column < 0) {
+            continue;
+        }
         for (s32 i = 0; i < pInfo->getNumEntries(); i++) {
             s32 parentID;
-            pInfo->getValue(i, "ParentID", &parentID);
-            if (parentID == linkID) {
+            if (pInfo->getValueFast(i, column, &parentID) && parentID == linkID) {
                 if (count == index) {
                     return TableIter(pInfo, i);
                 }
@@ -332,12 +339,13 @@ bool StageDataHolder::isPlacedZone(int zoneID) const {
 }
 
 const char* StageDataHolder::getJapaneseObjectName(const char* pName) const {
-    const TableIter englishName = mObjNameTbl->findElement< const char* >("en_name", pName, 0);
+    const u32 row = mObjNameIndex.find(pName);
 
-    if (englishName == mObjNameTbl->end()) {
+    if (row == MR::NameIndex::cNoValue) {
         return nullptr;
     }
 
+    const TableIter englishName(mObjNameTbl, static_cast< s32 >(row));
     const char* japaneseName;
     englishName.getValue< const char* >("jp_name", &japaneseName);
     return japaneseName;
@@ -451,6 +459,17 @@ void StageDataHolder::initTableData() {
 
     mObjNameTbl = new Table();
     mObjNameTbl->attach(tableFile);
+
+    // en_name -> its first row, as findElement found it.
+    const s32 column = mObjNameTbl->searchItemInfo("en_name");
+    if (column >= 0) {
+        mObjNameIndex.reset(static_cast< u32 >(mObjNameTbl->getNumEntries()));
+        for (s32 row = 0; row < mObjNameTbl->getNumEntries(); row++) {
+            const char* pEnglishName;
+            mObjNameTbl->getValueFast(row, column, &pEnglishName);
+            mObjNameIndex.add(pEnglishName, static_cast< u32 >(row));
+        }
+    }
 }
 
 void StageDataHolder::initPlacementInfoOrderedCommon() {

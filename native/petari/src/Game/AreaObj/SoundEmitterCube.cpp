@@ -18,7 +18,8 @@ SoundEmitterCube::SoundEmitterCube(int formType, const char* pName) : AreaObj(fo
 void SoundEmitterCube::init(const TableIter& rIter) {
     AreaObj::init(rIter);
 
-    mSoundName = ::cSoundNameTable[mObjArg0];
+    // Outside the table (unset is -1): silent.
+    mSoundName = mObjArg0 >= 0 && mObjArg0 < ARRAY_SIZE(::cSoundNameTable) ? ::cSoundNameTable[mObjArg0] : nullptr;
     mSoundObj = new AudAnmSoundObject(&mSoundPos, 4, NebulaArena::current());
 
     MR::connectToSceneAreaObj(this);
@@ -86,5 +87,7 @@ void SoundEmitterCube::movement() {
     }
 
     mSoundObj->process();
-    MR::startSoundObjectLevel(mSoundObj, mSoundName);
+    if (mSoundName != nullptr) {
+        MR::startSoundObjectLevel(mSoundObj, mSoundName);
+    }
 }

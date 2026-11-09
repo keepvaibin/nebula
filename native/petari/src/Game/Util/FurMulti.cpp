@@ -118,7 +118,7 @@ namespace MR {
         count = 0;
 
         for (i = 0; i < pModelData->getMaterialCount(); i++) {
-            if (strstr(pModelData->getMaterialName(i), "Fur")) {
+            if (MR::isEqualSubString(pModelData->getMaterialName(i), "Fur")) {
                 count++;
             }
         }
@@ -135,7 +135,7 @@ namespace MR {
         u32 layer = 0;
 
         for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
-            if (strstr(pModelData->getMaterialName(i), "Fur")) {
+            if (MR::isEqualSubString(pModelData->getMaterialName(i), "Fur")) {
                 shape = pModelData->getMaterialAt(i)->getMesh()->getIndex();
                 MR::FormattedName name("%sBody", pModelData->getMaterialName(i));
                 ResTIMG* pBody;

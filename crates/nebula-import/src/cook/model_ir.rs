@@ -5,7 +5,7 @@ use super::{formats, Stats};
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
-pub use super::limits::{NONE, MATERIAL_SLOTS};
+pub use super::limits::NONE;
 pub const ANGLE_UNIT: f32 = std::f32::consts::PI / 32768.0;
 pub fn source_index(n: u32) -> u32 { if n == 0xFFFF { NONE } else { n } }
 
@@ -14,8 +14,8 @@ pub const ATTR_COLOR0: u64 = 1 << 1;
 pub const ATTR_NBT: u64 = 1 << 19;
 pub const ATTR_NBT_THREE: u64 = 1 << 20;
 pub const ATTR_MATRIX: u64 = 1 << 21;
-pub const ATTR_TEX_MATRIX0: u64 = 1 << 22;
-pub const ATTR_COORD0: u64 = 1 << 3;
+/// J3D's vertex formats: eight coordinate attributes, each with an optional texture matrix index.
+pub const J3D_COORDINATES: usize = 8;
 
 #[derive(Clone, Default)]
 pub struct JointIr {
@@ -36,22 +36,33 @@ pub struct JointIr {
     pub meshes: Vec<u32>,
 }
 
-/// One corner of a source group, by what it holds.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub const NO_TEXTURE_MATRIX: u8 = 0xFF;
+
+/// One corner of a source group, by what it holds. `coord` and `texture_matrix` by coordinate number, as many as its
+/// group's `coordinates`; NO_TEXTURE_MATRIX where the group has no texture matrix number.
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Corner {
     pub position: u32,
     pub normal: u32,
     pub tangent: u32,
     pub binormal: u32,
     pub color: [u32; 2],
-    pub coord: [u32; MATERIAL_SLOTS],
+    pub coord: Vec<u32>,
     pub matrix: u32,
-    pub texture_matrix: [u8; MATERIAL_SLOTS],
+    pub texture_matrix: Vec<u8>,
+}
+
+impl Corner {
+    pub fn coord_at(&self, k: usize) -> u32 {
+        self.coord.get(k).copied().unwrap_or(0)
+    }
 }
 
 #[derive(Clone)]
 pub struct GroupIr {
     pub attributes: u64,
+    /// Which coordinate numbers its corners carry.
+    pub coordinates: Vec<bool>,
     pub corners: Vec<Corner>,
     pub indices: Vec<u32>,
     pub places: u32,
@@ -181,7 +192,14 @@ pub struct MaterialIr {
     pub swaps: [[u8; 4]; 4],
     pub warp_orders: Vec<[u8; 4]>,
     pub pixel_stage_count: u32,
-    pub coordinate_maps: [u8; MATERIAL_SLOTS],
+    /// The map each coordinate's scale comes from (255 none), by coordinate number.
+    pub coordinate_maps: Vec<u8>,
+}
+
+impl GroupIr {
+    pub fn has_coord(&self, k: usize) -> bool {
+        self.coordinates.get(k).copied().unwrap_or(false)
+    }
 }
 
 #[derive(Clone)]
@@ -211,8 +229,14 @@ pub struct ArraysIr {
     pub nbt: Vec<[f32; 9]>,
     pub normal_floats: u32,
     pub colors: [Vec<u32>; 2],
-    pub coords: [Vec<[f32; 2]>; MATERIAL_SLOTS],
-    pub counts: [u32; 5 + MATERIAL_SLOTS],
+    /// By coordinate number.
+    pub coords: Vec<Vec<[f32; 2]>>,
+}
+
+impl ArraysIr {
+    pub fn coord(&self, k: usize, index: u32) -> [f32; 2] {
+        self.coords.get(k).and_then(|c| c.get(index as usize)).copied().unwrap_or([0.0; 2])
+    }
 }
 
 #[derive(Default)]
@@ -377,8 +401,8 @@ fn read_arrays(b: &[u8]) -> Result<(ArraysIr, Vec<(u32, Format)>)> {
     starts.dedup();
     let bound = |s: usize| starts.iter().copied().find(|&x| x > s).unwrap_or(size);
     let normal = format_of(&formats, 10);
-    let mut out = ArraysIr { normal_floats: if normal.cnt != 0 { 9 } else { 3 }, ..Default::default() };
-    for array in 0..13usize {
+    let mut out = ArraysIr { normal_floats: if normal.cnt != 0 { 9 } else { 3 }, coords: vec![Vec::new(); J3D_COORDINATES], ..Default::default() };
+    for array in 0..5 + J3D_COORDINATES {
         let start = be32(b, 0xC + array * 4)? as usize;
         if start == 0 {
             continue;
@@ -397,7 +421,6 @@ fn read_arrays(b: &[u8]) -> Result<(ArraysIr, Vec<(u32, Format)>)> {
                     }
                     out.positions.push(v);
                 }
-                out.counts[0] = (region.len() / stride) as u32;
             }
             1 | 2 => {
                 let f = normal;
@@ -428,14 +451,12 @@ fn read_arrays(b: &[u8]) -> Result<(ArraysIr, Vec<(u32, Format)>)> {
                         out.normals.push([nine[0], nine[1], nine[2]]);
                     }
                 }
-                out.counts[array] = count as u32;
             }
             3 | 4 => {
                 let f = format_of(&formats, 11 + array as u32 - 3);
                 for e in region.chunks_exact(4) {
                     out.colors[array - 3].push(color(e, f.kind));
                 }
-                out.counts[array] = (region.len() / 4) as u32;
             }
             _ => {
                 let f = format_of(&formats, 13 + array as u32 - 5);
@@ -450,7 +471,6 @@ fn read_arrays(b: &[u8]) -> Result<(ArraysIr, Vec<(u32, Format)>)> {
                     }
                     out.coords[array - 5].push(v);
                 }
-                out.counts[array] = count as u32;
             }
         }
     }
@@ -463,6 +483,9 @@ struct Layout {
     bytes: [usize; 21],
     nbt: bool,
     nbt_three: bool,
+    /// One past the last coordinate and texture matrix index the format carries.
+    coordinates: usize,
+    texture_matrices: usize,
 }
 
 const ATTR_PNMTX: usize = 0;
@@ -488,7 +511,7 @@ fn layout_of(desc: &[(u32, u32)], formats: &[(u32, Format)]) -> Result<Layout> {
     let normal = format_of(formats, 10);
     let nbt_three = normal.cnt == 2;
     let wide_nbt = nbt || normal.cnt != 0;
-    let mut l = Layout { stride: 0, offset: [-1; 21], bytes: [0; 21], nbt: wide_nbt, nbt_three };
+    let mut l = Layout { stride: 0, offset: [-1; 21], bytes: [0; 21], nbt: wide_nbt, nbt_three, coordinates: 0, texture_matrices: 0 };
     let mut at = 0;
     for a in 0..21 {
         if kind[a] == 0 {
@@ -503,6 +526,8 @@ fn layout_of(desc: &[(u32, u32)], formats: &[(u32, Format)]) -> Result<Layout> {
         at += n;
     }
     l.stride = at;
+    l.coordinates = (0..J3D_COORDINATES).rposition(|k| l.offset[ATTR_TEX0 + k] >= 0).map_or(0, |k| k + 1);
+    l.texture_matrices = (0..J3D_COORDINATES).rposition(|k| l.offset[1 + k] >= 0).map_or(0, |k| k + 1);
     if l.offset[ATTR_POS] < 0 {
         bail!("a shape without positions");
     }
@@ -530,26 +555,22 @@ fn corner_of(v: &[u8], l: &Layout) -> Corner {
         tangent: 0,
         binormal: 0,
         color: [index_at(v, l, ATTR_CLR0, 0), index_at(v, l, ATTR_CLR0 + 1, 0)],
-        coord: [0; MATERIAL_SLOTS],
+        coord: (0..l.coordinates).map(|k| index_at(v, l, ATTR_TEX0 + k, 0)).collect(),
         matrix: 0,
-        texture_matrix: [0; MATERIAL_SLOTS],
+        texture_matrix: (0..l.texture_matrices)
+            .map(|k| {
+                let at = l.offset[1 + k];
+                if at < 0 { NO_TEXTURE_MATRIX } else if v[at as usize] >= 30 { (v[at as usize] - 30) / 3 } else { 0 }
+            })
+            .collect(),
     };
     if l.offset[ATTR_NRM] >= 0 {
         c.normal = index_at(v, l, ATTR_NRM, 0);
         c.tangent = if three { index_at(v, l, ATTR_NRM, 1) } else { c.normal };
         c.binormal = if three { index_at(v, l, ATTR_NRM, 2) } else { c.normal };
     }
-    for k in 0..8 {
-        c.coord[k] = index_at(v, l, ATTR_TEX0 + k, 0);
-    }
     if l.offset[ATTR_PNMTX] >= 0 {
         c.matrix = u32::from(v[l.offset[ATTR_PNMTX] as usize] / 3);
-    }
-    for k in 0..8 {
-        let at = l.offset[1 + k];
-        if at >= 0 && v[at as usize] >= 30 {
-            c.texture_matrix[k] = (v[at as usize] - 30) / 3;
-        }
     }
     c
 }
@@ -593,10 +614,15 @@ fn read_group(list: &[u8], l: &Layout) -> Result<GroupIr> {
             };
             for k in v {
                 let c = corner_of(&vertices[k * l.stride..(k + 1) * l.stride], l);
-                let index = *seen.entry(c).or_insert_with(|| {
-                    corners.push(c);
-                    (corners.len() - 1) as u32
-                });
+                let index = match seen.get(&c) {
+                    Some(&index) => index,
+                    None => {
+                        let index = corners.len() as u32;
+                        corners.push(c.clone());
+                        seen.insert(c, index);
+                        index
+                    }
+                };
                 indices.push(index);
             }
         }
@@ -613,21 +639,14 @@ fn read_group(list: &[u8], l: &Layout) -> Result<GroupIr> {
     if l.offset[ATTR_PNMTX] >= 0 {
         attributes |= ATTR_MATRIX;
     }
-    for t in 0..8 {
-        if l.offset[ATTR_TEX0 + t] >= 0 {
-            attributes |= ATTR_COORD0 << t;
-        }
-        if l.offset[1 + t] >= 0 {
-            attributes |= ATTR_TEX_MATRIX0 << t;
-        }
-    }
+    let coordinates = (0..l.coordinates).map(|t| l.offset[ATTR_TEX0 + t] >= 0).collect();
     let mut places = 0u32;
     if l.offset[ATTR_PNMTX] >= 0 {
         for c in &corners {
             places |= 1u32.checked_shl(u32::from(c.matrix)).unwrap_or(0);
         }
     }
-    Ok(GroupIr { attributes, corners, indices, places, use_table: Vec::new() })
+    Ok(GroupIr { attributes, coordinates, corners, indices, places, use_table: Vec::new() })
 }
 
 fn read_shapes(b: &[u8], formats: &[(u32, Format)]) -> Result<Vec<ShapeIr>> {
@@ -895,7 +914,7 @@ fn read_material(m: &Mat3, i: usize, names: &[String], source: Source) -> Result
     out.depth_func = depth[1];
     out.depth_write = depth[2];
     out.early_depth = m.byte(i, 5, 0x78)?.unwrap_or(0);
-    out.textures = vec![NONE; MATERIAL_SLOTS];
+    out.textures = vec![NONE; tex_num];
     for k in 0..tex_num {
         let index = be16(init, 0x84 + k * 2)?;
         if index != 0xFFFF {
@@ -1031,7 +1050,7 @@ fn read_stages(m: &Mat3, i: usize, out: &mut MaterialIr, ind: Option<&[u8]>, ena
         out.stages.push(st);
     }
     // Decode the source pair/indirect order registers into final scale sources.
-    let mut scale_sources = [255u8; MATERIAL_SLOTS];
+    let mut scale_sources = vec![255u8; J3D_COORDINATES];
     for stage in &out.stages {
         scale_sources[usize::from(stage.coord & 7)] = stage.map & 7;
     }
@@ -1189,8 +1208,7 @@ pub fn important_joints(draw_matrices: &[(u8, u32)], full_weight_count: u32, env
 pub fn plain_material(name: &str, color: [u8; 4], image: Option<u32>, blend: bool, cutoff: Option<u8>, two_sided: bool) -> MaterialIr {
     let channel = |enable, mask| ChannelIr { enable, material_source: 0, ambient_source: 0, light_mask: mask, diffuse: 2, attenuation: 2 };
     let textured = image.is_some();
-    let mut textures = vec![NONE; MATERIAL_SLOTS];
-    textures[0] = image.unwrap_or(NONE);
+    let textures = vec![image.unwrap_or(NONE)];
     let stage = StageIr {
         coord: if textured { 0 } else { 255 },
         map: if textured { 0 } else { 255 },
@@ -1234,7 +1252,7 @@ pub fn plain_material(name: &str, color: [u8; 4], image: Option<u32>, blend: boo
         stages: vec![stage],
         swaps: [[0, 1, 2, 3]; 4],
         pixel_stage_count: 1,
-        coordinate_maps: std::array::from_fn(|n| if n == 0 && textured { 0 } else { 255 }),
+        coordinate_maps: vec![if textured { 0 } else { 255 }],
         ..Default::default()
     }
 }

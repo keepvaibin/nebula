@@ -3,6 +3,8 @@
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/Table.hpp"
 
+class NameObjHolder;
+
 // The base of every scene object.
 class NameObj {
 public:
@@ -41,12 +43,19 @@ public:
     const char* mName;
     // MovementFlag bits.
     u16 mMovementFlag;
-    // The index into the NameObjExecuteInfo array.
+    // The index into the NameObjExecuteInfo array (which grows past any 16-bit count).
     s32 mExecutorIdx;
     // Names its draws from frame to frame.
     mutable u32 mDrawSlot;
     // Counts the object's lives (MotionSignal).
     u32 mMotionEpoch;
+    // Its place in the scene's movement, calc-anim and draw category lists (NameObjCategoryList::mPlaceSlot); -1: none.
+    s32 mListPlace[3];
+    // An actor's place in its draw buffer executer's list (DrawBufferExecuter); -1: none.
+    s32 mDrawBufferPlace;
+    // The holder that finds it by name, and its place there (NameObjHolder::add); null and -1: none.
+    NameObjHolder* mNameHolder;
+    s32 mHolderPlace;
 };
 
 class NameObjFunction {

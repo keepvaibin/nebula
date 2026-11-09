@@ -19,7 +19,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
-#include <cstring>
 
 MarioAnimator::MarioAnimator(MarioActor* pActor) : MarioModule(pActor) {
     init();
@@ -462,7 +461,7 @@ void MarioAnimator::updateWalkBas(const char* pAnimName, f32 speed) {
         Mario* player = getPlayer();
         const char* currentBck = mXanimePlayer->getCurrentBckName();
 
-        if (strcmp(currentBck, player->mRunningBas) != 0) {
+        if (!MR::isEqualString(currentBck, player->mRunningBas)) {
             shouldStart = true;
             if (MR::strcasecmp("DamageWait", getPlayer()->mRunningBas) == 0) {
                 if (mActor->mHealth == 1) {
@@ -896,7 +895,7 @@ void MarioAnimator::changeDefault(const char* pName) {
 }
 
 bool MarioAnimator::isDefaultAnimationRun(const char* pName) const {
-    return strcmp(mXanimePlayer->getDefaultAnimationName(), pName) == 0;
+    return MR::isEqualString(mXanimePlayer->getDefaultAnimationName(), pName);
 }
 
 void MarioAnimator::changeDefaultUpper(const char* pName) {

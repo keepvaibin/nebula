@@ -21,6 +21,7 @@ public:
     DrawBufferShapeDrawer(Material*, MaterialEntry*);
 
     void init(s32 maxActors);
+    void reserve(s32 maxActors);
     void swap(DrawBufferShapeDrawer*);
     void draw() const;
     void add(const MeshEntry*, const ActorLightCtrl*);
@@ -29,11 +30,11 @@ public:
     s32 findLightSortIndex(const ActorLightCtrl*, bool*) const;
 
     MeshEntry* getMeshEntry(int index) const {
-        return mPackets[index]->mShapePacket;
+        return mPackets[index].mShapePacket;
     }
 
     ActorLightCtrl* getLightLoader(int index) const {
-        return mPackets[index]->mLightLoader;
+        return mPackets[index].mLightLoader;
     }
 
     Material* mMaterial;
@@ -41,7 +42,7 @@ public:
     s32 mNumShapes;
     s32 mMaxPackets;
     s32 mNumPackets;
-    PacketInfo** mPackets;
+    PacketInfo* mPackets;  // mNumPackets in draw order: same light runs together, the first of a run loads it
 };
 
 class DrawBuffer {
@@ -49,6 +50,8 @@ public:
     DrawBuffer(Model* pModel);
 
     void init(int maxActors);
+    // Room for more actors after init (actors made mid-scene).
+    void reserve(int maxActors);
     void add(const LiveActor*);
     void remove(const LiveActor*);
     void resetLightSort(const ActorLightCtrl*);
