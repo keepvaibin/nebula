@@ -1,12 +1,16 @@
 #include "Game/LiveActor/Spine.hpp"
 #include "Game/LiveActor/ActorStateKeeper.hpp"
+#include "Game/LiveActor/Nerve.hpp"
 
 Spine::Spine(void* pExecutor, const Nerve* pNerve) : mExecutor(pExecutor), mCurrNerve(pNerve), mNextNerve(), mStep(), mStateKeeper() {
 }
 
+// A nerve a plugin hooks has mNebulaHook set (NerveRegistry.cpp): one load beside the nerve's vtable, and a branch, for the rest.
 void Spine::update() {
     changeNerve();
-    mCurrNerve->execute(this);
+    if (mCurrNerve->mNebulaHook == 0 || nebula::gNerveHook(this, mCurrNerve, nebula::NervePhase_Frame)) {
+        mCurrNerve->execute(this);
+    }
     mStep++;
     changeNerve();
 }
@@ -14,6 +18,9 @@ void Spine::update() {
 void Spine::setNerve(const Nerve* pNerve) {
     if (mStep >= 0) {
         mCurrNerve->executeOnEnd(this);
+        if (mCurrNerve->mNebulaHook != 0) {
+            nebula::gNerveHook(this, mCurrNerve, nebula::NervePhase_Leave);
+        }
     }
 
     mNextNerve = pNerve;
@@ -41,6 +48,9 @@ void Spine::changeNerve() {
     mCurrNerve = mNextNerve;
     mNextNerve = nullptr;
     mStep = 0;
+    if (mCurrNerve->mNebulaHook != 0) {
+        nebula::gNerveHook(this, mCurrNerve, nebula::NervePhase_Enter);
+    }
 }
 
 void Spine::initStateKeeper() {
