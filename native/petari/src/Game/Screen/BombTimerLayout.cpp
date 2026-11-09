@@ -16,7 +16,7 @@ namespace NrvBombTimerLayout {
 };  // namespace NrvBombTimerLayout
 
 BombTimerLayout::BombTimerLayout(bool isConnectToScene)
-    : LayoutActor("ボムタイマーレイアウト", true), mDangerTransFrame(::sDangerTransFrame), mFrame(), mIsSuspend() {
+    : LayoutActor("ボムタイマーレイアウト", true), mTimeLimit(), mDangerTransFrame(::sDangerTransFrame), mFrame(), mIsSuspend() {
     if (isConnectToScene) {
         MR::connectToSceneLayout(this);
     }

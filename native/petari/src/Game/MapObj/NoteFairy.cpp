@@ -149,6 +149,11 @@ void NoteFairy::init(const TableIter& rIter) {
         mMelodyNoteNum = 0;
     }
 
+    // A note spacing near zero (a mod's) would make millions of notes: the game's longest runs are far under this.
+    if (mMelodyNoteNum > 1024) {
+        mMelodyNoteNum = 1024;
+    }
+
     mNoteArray = new Note*[mMelodyNoteNum];
 
     for (s32 i = 0; i < mMelodyNoteNum; i++) {

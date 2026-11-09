@@ -210,7 +210,8 @@ void NebulaAchievementToast::loadTextures() {
             nebula_log("NebulaAchievementToast: no %s in %s\n", pIcon->mTexture, pIcon->mArchive);
         }
     }
-    if (mTextures[0] != nullptr) {
+    // No icon textures at all: no picture (the first slot does not exist).
+    if (count > 0 && mTextures[0] != nullptr) {
         mPicture = mIcon->GetLayout()->NewPane< Ui::Picture >(*mTextures[0]);
     }
     if (mPicture != nullptr) {
