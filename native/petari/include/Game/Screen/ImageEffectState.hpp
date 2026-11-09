@@ -64,7 +64,6 @@ namespace ImageEffectStateImpl {
 
     private:
         bool _8;
-        u32 _C;
         f32 mBloomIntensityNow;
         u8 mBloomIntensity;
         f32 mThresholdNow;

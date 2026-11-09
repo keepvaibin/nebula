@@ -4,7 +4,7 @@
 #include "Game/Sound/SoundControls.hpp"
 #include "Game/Sound/PlayerLink.hpp"
 
-AudTrackController::AudTrackController() : mTrackNo(-1), mHandle(nullptr), mAutoMute(false), mVolume(1.0f) {
+AudTrackController::AudTrackController() : mTrackNo(-1), mHandle(nullptr), mVolume(1.0f), mAutoMute(false) {
 }
 
 void AudTrackController::start(SoundHandle* pHandle) {
