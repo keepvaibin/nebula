@@ -170,8 +170,8 @@ public:
 
     template < typename T >
     bool getValue(const char* pKey, T* pValueOut) const {
-        // An object made with no placement behind it (a mod's spawn): its numbers are simply not there.
-        if (mInfo == nullptr) {
+        // An object made with no placement behind it (a mod's spawn), or a row a find did not find (end()): no value.
+        if (!isValid()) {
             return false;
         }
         return mInfo->getValue(mIndex, pKey, pValueOut);
