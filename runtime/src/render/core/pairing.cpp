@@ -245,6 +245,47 @@ std::uint64_t fnv(const void* data, std::size_t bytes, std::uint64_t h = 0xCBF29
     return h;
 }
 
+// A light as shading resolves it: whole steps of its 0-255 colour, its direction at 1e-4, its eye-space position as a
+// direction at 1e-4 and a distance, and the distance and attenuation terms to 13 mantissa bits (about 1e-4 relative).
+// Bit noise below that (a far sun's position through a view matrix that moves in its last bits) is the same light.
+std::uint64_t shading_hash(const NebulaFrameLight& light) noexcept {
+    const auto steps = [](double v, double per_unit) { return static_cast<std::int64_t>(std::llround(v * per_unit)); };
+    const auto relative = [](float v) {
+        std::uint32_t bits = 0u;
+        std::memcpy(&bits, &v, sizeof(bits));
+        return (bits + 0x200u) & ~0x3FFu;
+    };
+    const double length = std::sqrt(static_cast<double>(light.position[0]) * light.position[0] +
+                                    static_cast<double>(light.position[1]) * light.position[1] +
+                                    static_cast<double>(light.position[2]) * light.position[2]);
+    std::int64_t fixed[10]{};
+    for (unsigned c = 0; c < 4u; ++c) fixed[c] = steps(light.color[c], 1.0);
+    for (unsigned d = 0; d < 3u; ++d) {
+        fixed[4u + d] = steps(light.direction[d], 1e4);
+        fixed[7u + d] = length > 0.0 ? steps(light.position[d] / length, 1e4) : 0;
+    }
+    std::uint32_t terms[7]{relative(static_cast<float>(length))};
+    for (unsigned t = 0; t < 3u; ++t) {
+        terms[1u + t] = relative(light.angle[t]);
+        terms[4u + t] = relative(light.distance[t]);
+    }
+    return fnv(terms, sizeof(terms), fnv(fixed, sizeof(fixed)));
+}
+
+// A colour row in whole 1/255 steps.
+std::uint64_t row_hash(const float* row) noexcept {
+    std::int64_t fixed[4]{};
+    for (unsigned c = 0; c < 4u; ++c) fixed[c] = static_cast<std::int64_t>(std::llround(static_cast<double>(row[c]) * 255.0));
+    return fnv(fixed, sizeof(fixed));
+}
+
+// The largest change of a colour row's channels, in 1/255 steps.
+float row_change(const float* a, const float* b) noexcept {
+    float most = 0.0f;
+    for (unsigned c = 0; c < 4u; ++c) most = std::max(most, std::fabs(a[c] - b[c]) * 255.0f);
+    return most;
+}
+
 }  // namespace
 
 // Flicker the game makes, before any picture: per draw identity (slot, generation, part, material, pipeline, and its
@@ -273,7 +314,7 @@ void Pairing::log_flicker(const ListData& now) {
             light_count = set.count;
             light_record = list.lights + set.first;
             for (std::uint32_t l = 0; l < set.count && l < kFlickerSlots; ++l) {
-                light[l] = fnv(list.lights + set.first + l, sizeof(NebulaFrameLight));
+                light[l] = shading_hash(list.lights[set.first + l]);
             }
         }
         std::uint32_t row_count = 0u;
@@ -282,7 +323,7 @@ void Pairing::log_flicker(const ListData& now) {
         if (constants.rows != nullptr) {
             row_count = constants.pixel_rows;
             for (std::uint32_t r = 0; r < constants.pixel_rows && r < kFlickerSlots; ++r) {
-                row[r] = fnv(constants.rows[constants.vertex_rows + r], sizeof(float[4]));
+                row[r] = row_hash(constants.rows[constants.vertex_rows + r]);
             }
         }
 
@@ -302,8 +343,9 @@ void Pairing::log_flicker(const ListData& now) {
                 }
             }
             for (std::uint32_t r = 0; kind < 0 && r < kFlickerSlots && r < row_count; ++r) {
+                // A step of 1/255 is an animated colour's rounding; two or more can be seen.
                 if (entry.row_count[1] == row_count && entry.row_count[0] == row_count && row[r] == entry.row[1][r] &&
-                    row[r] != entry.row[0][r]) {
+                    row_change(constants.rows[constants.vertex_rows + r], entry.row_before[r]) >= 2.0f) {
                     kind = 2;
                     which = r;
                 }
