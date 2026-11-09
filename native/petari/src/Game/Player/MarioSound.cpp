@@ -8,7 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
-#include <cstring>
+#include "Game/Util/StringUtil.hpp"
 
 struct SoundList {
     const char* name;
@@ -248,6 +248,7 @@ void Mario::initSound() {
     }
 
     mRunningBas = nullptr;
+    mRunningDamageWait = false;
 }
 
 // The reference also tries the hash sum of "声" and the name (a voice by its short name); no sum matches a listed
@@ -321,6 +322,7 @@ void Mario::startBas(const char* pAnimName, bool isLoop, f32 startFrame, f32 spe
         }
 
         mRunningBas = pAnimName;
+        mRunningDamageWait = pAnimName != nullptr && MR::isEqualString(pAnimName, "DamageWait");
     }
 }
 
@@ -329,7 +331,7 @@ bool Mario::isRunningBas(const char* pAnimName) const {
         return false;
     }
 
-    if (strcmp(mRunningBas, pAnimName) == 0) {
+    if (MR::isEqualString(mRunningBas, pAnimName)) {
         return true;
     }
 

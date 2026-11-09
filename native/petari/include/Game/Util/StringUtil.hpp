@@ -46,6 +46,8 @@ namespace MR {
     bool isEqualStringCase(const char* pStr1, const char* pStr2);
     // Whether pStr contains pSubStr.
     bool isEqualSubString(const char* pStr, const char* pSubStr);
+    // Whether pStr starts with pHead.
+    bool isHeadString(const char* pStr, const char* pHead);
     bool hasStringSpace(const char* pStr);
     // Whether the last digitNum characters are digits.
     bool isDigitStringTail(const char* pStr, int digitNum);

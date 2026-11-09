@@ -965,6 +965,7 @@ public:
 
     MR::NameIndex mSounds;  // a sound's name to its index in soundlist
     const char* mRunningBas;  // the sound animation running (isRunningBas)
+    bool mRunningDamageWait;  // mRunningBas is "DamageWait": set with it in startBas
     MarioModuleTask* mTaskHead;  // the first module task (execTask, delTask)
 
 

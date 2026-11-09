@@ -6,9 +6,10 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 
 void Mario::checkOnimasu(const HitSensor* pSensor) {
-    if (strstr(pSensor->mHost->mName, "オニマス") == nullptr) {
+    if (!MR::isEqualSubString(pSensor->mHost->mName, "オニマス")) {
         return;
     }
 
@@ -26,7 +27,7 @@ bool Mario::isDossun(const Triangle* pTriangle) const {
         return false;
     }
 
-    if (strstr(pTriangle->mSensor->mHost->getName(), "ドッスン") != nullptr) {
+    if (MR::isEqualSubString(pTriangle->mSensor->mHost->getName(), "ドッスン")) {
         return true;
     }
 
@@ -354,7 +355,7 @@ bool Mario::isHeadPushEnableArea() const {
 bool Mario::isOnimasuBinderPressSkip() const {
     if (isStatusActive(MarioStatus_SideStep)) {
         if (mFrontWallTriangle->mSensor != nullptr) {
-            if (strstr(mFrontWallTriangle->mSensor->mHost->mName, "オニマス")) {
+            if (MR::isEqualSubString(mFrontWallTriangle->mSensor->mHost->mName, "オニマス")) {
                 return true;
             }
         }

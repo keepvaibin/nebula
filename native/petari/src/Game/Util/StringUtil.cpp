@@ -285,6 +285,15 @@ namespace MR {
         return strstr(pStr, pSubStr) != nullptr;
     }
 
+    bool isHeadString(const char* pStr, const char* pHead) {
+        for (; *pHead != '\0'; pStr++, pHead++) {
+            if (*pStr != *pHead) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     bool hasStringSpace(const char* pStr) {
         return strchr(pStr, ' ') != nullptr;
     }

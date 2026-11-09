@@ -1479,7 +1479,7 @@ void MarioActor::incLife(u32 amt) {
 
         if (health == 1 && mMarioAnim->isAnimationStop()) {
             mMarioAnim->mXanimePlayer->changeTrackAnimation(3, "ノーマルウエイト");
-            if (mMario->mRunningBas && strcmp(mMario->mRunningBas, "DamageWait")) {
+            if (mMario->mRunningBas && !mMario->mRunningDamageWait) {
                 mMario->startBas(nullptr, false, 0.0f, 0.0f);
                 setBlink(nullptr);
             }
