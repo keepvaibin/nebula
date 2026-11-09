@@ -41,54 +41,6 @@ private:
     std::filesystem::path old_;
 };
 
-class ScopedEnv {
-public:
-    explicit ScopedEnv(const char* name, const char* value) : name_(name) {
-        save_old();
-        _putenv_s(name_.c_str(), value);
-    }
-
-    ~ScopedEnv() {
-        _putenv_s(name_.c_str(), had_old_ ? old_value_.c_str() : "");
-    }
-
-    ScopedEnv(const ScopedEnv&) = delete;
-    ScopedEnv& operator=(const ScopedEnv&) = delete;
-
-private:
-    void save_old() {
-        char* old = nullptr;
-        std::size_t length = 0;
-        if (_dupenv_s(&old, &length, name_.c_str()) == 0 && old != nullptr) {
-            had_old_ = true;
-            old_value_ = old;
-            std::free(old);
-        }
-    }
-
-    std::string name_;
-    bool had_old_ = false;
-    std::string old_value_;
-};
-
-class ScopedWideEnv {
-public:
-    ScopedWideEnv(const wchar_t* name, const wchar_t* value) : name_(name) {
-        wchar_t* old = nullptr;
-        std::size_t length = 0;
-        if (_wdupenv_s(&old, &length, name) == 0 && old != nullptr) {
-            had_old_ = true;
-            old_value_ = old;
-            std::free(old);
-        }
-        _wputenv_s(name, value);
-    }
-    ~ScopedWideEnv() { _wputenv_s(name_.c_str(), had_old_ ? old_value_.c_str() : L""); }
-private:
-    std::wstring name_, old_value_;
-    bool had_old_ = false;
-};
-
 }  // namespace
 
 int main() {
@@ -155,12 +107,14 @@ int main() {
         const ScopedSettingsFolder config_folder(root);
         for (const char* text : {"nan", "inf", "-1", "60junk", "0.00001", "10000000", "1e100"}) {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
-            ScopedEnv fps("GALAXY_MAX_FPS", text);
+            {
+                std::ofstream file(path, std::ios::binary | std::ios::trunc);
+                file << "max_fps=" << text << '\n';
+            }
             galaxy::render::load_render_config_from_file();
             passed &= expect(galaxy::render::get_render_config().max_fps == 60.0f,
                 "malformed and unsafe FPS text preserves the prior cap");
         }
-        ScopedEnv fps("GALAXY_MAX_FPS", "");
         {
             // The GPU chosen in Nebula Settings (config.ini gpu): the game starts on it and keeps it for the
             // session; a GPU chosen while it runs is kept in the file for the next start.
@@ -221,16 +175,11 @@ int main() {
             galaxy::render::set_render_config(live);
             passed &= expect(galaxy::render::save_render_config_to_file() && saved_gpu() == chosen,
                 "the game's own gpu is never what it saves");
-            {
-                ScopedEnv override_gpu("GALAXY_GPU", started.c_str());
-                passed &= expect(write("aa=1\n", 132'000'000'400'000'000ull), "gpu fixture without the key");
-                galaxy::render::load_render_config_from_file();
-                passed &= expect(session_gpu() == started && galaxy::render::next_start_gpu().empty() &&
-                        galaxy::render::save_render_config_to_file() && saved_gpu().empty(),
-                    "GALAXY_GPU chooses this session's GPU and is not saved; a file without the key is automatic");
-            }
+            passed &= expect(write("aa=1\n", 132'000'000'400'000'000ull), "gpu fixture without the key");
             galaxy::render::load_render_config_from_file();
-            passed &= expect(galaxy::render::get_render_config().gpu[0] == '\0', "an empty gpu is the automatic choice");
+            passed &= expect(galaxy::render::get_render_config().gpu[0] == '\0' && galaxy::render::next_start_gpu().empty() &&
+                    galaxy::render::save_render_config_to_file() && saved_gpu().empty(),
+                "a file without the key is the automatic choice, and saves as one");
         }
         for (float invalid : {std::numeric_limits<float>::quiet_NaN(),
                 std::numeric_limits<float>::infinity(), -1.0f, 0.00001f, 10000000.0f}) {
@@ -448,8 +397,6 @@ int main() {
         const std::filesystem::path path = root / "config.ini";
         std::filesystem::remove_all(root);
         const ScopedSettingsFolder config_folder(root);
-        const ScopedEnv width_env("GALAXY_WINDOW_WIDTH", "");
-        const ScopedEnv height_env("GALAXY_WINDOW_HEIGHT", "");
         galaxy::render::RenderConfig custom{};
         custom.internal_height = 240u;
         custom.window_width = 3440u;
@@ -519,16 +466,15 @@ int main() {
             "positive non-preset Win32-representable dimensions parse exactly");
 
         {
-            const ScopedEnv invalid_width("GALAXY_WINDOW_WIDTH", "1920pixels");
-            const ScopedEnv invalid_height("GALAXY_WINDOW_HEIGHT", "0");
-            galaxy::render::load_render_config_from_file();
-            passed &= expect(
-                galaxy::render::get_render_config().window_width == 1u &&
-                    galaxy::render::get_render_config().window_height ==
-                        static_cast<unsigned>(
-                            std::numeric_limits<int>::max()),
-                "malformed and zero window environment overrides are ignored");
+            std::ofstream file(path, std::ios::binary | std::ios::app);
+            file << "window_width=1920pixels\nwindow_height=0\n";
         }
+        galaxy::render::load_render_config_from_file();
+        passed &= expect(
+            galaxy::render::get_render_config().window_width == 1u &&
+                galaxy::render::get_render_config().window_height ==
+                    static_cast<unsigned>(std::numeric_limits<int>::max()),
+            "a malformed or zero window size after a good one is ignored");
 
         galaxy::render::RenderConfig direct{};
         direct.window_width = 0u;
@@ -543,50 +489,45 @@ int main() {
     }
 
     {
-        ScopedEnv msaa("GALAXY_MSAA_SAMPLES", "8");
-        ScopedEnv taa("GALAXY_TAA_ENABLED", "1");
-        ScopedEnv rt("GALAXY_RAY_TRACING_ENABLED", "1");
-        ScopedEnv rt_shadow("GALAXY_RT_SHADOW_QUALITY", "3");
-        ScopedEnv rt_ao("GALAXY_RT_AO_ENABLED", "1");
-        ScopedEnv rt_reflect("GALAXY_RT_REFLECTIONS", "0");
-        galaxy::render::load_render_config_from_file();
-    }
-    const galaxy::render::RenderConfig loaded =
-        galaxy::render::get_render_config();
-    passed &= expect(
-        loaded.msaa_samples == 8 &&
-            !loaded.taa_enabled &&
-            loaded.ray_tracing_enabled &&
-            loaded.rt_shadow_quality == 0 &&
-            !loaded.rt_ao_enabled &&
-            !loaded.rt_reflections,
-        "file/env render config enables ray tracing, takes its reflections choice, and no unimplemented feature");
+        const auto root = galaxy::test_temp_path("galaxy_config_features");
+        std::filesystem::create_directories(root);
+        const ScopedSettingsFolder config_folder(root);
+        const auto load = [&root](const char* text) {
+            {
+                std::ofstream file(root / "config.ini", std::ios::binary | std::ios::trunc);
+                file << text;
+            }
+            galaxy::render::load_render_config_from_file();
+            return galaxy::render::get_render_config();
+        };
+        const galaxy::render::RenderConfig loaded = load(
+            "msaa_samples=8\ntaa_enabled=1\nray_tracing_enabled=1\nrt_shadow_quality=3\nrt_ao_enabled=1\nrt_reflections=0\n");
+        passed &= expect(
+            loaded.msaa_samples == 8 &&
+                !loaded.taa_enabled &&
+                loaded.ray_tracing_enabled &&
+                loaded.rt_shadow_quality == 0 &&
+                !loaded.rt_ao_enabled &&
+                !loaded.rt_reflections,
+            "the file's render config enables ray tracing, takes its reflections choice, and no unimplemented feature");
 
-    {
-        ScopedEnv lod_bias("GALAXY_TEXTURE_LOD_BIAS", "99");
-        ScopedEnv aniso("GALAXY_ANISOTROPIC_FILTERING", "99");
-        ScopedEnv mipmaps("GALAXY_ENHANCED_MIPMAPS", "0");
-        galaxy::render::load_render_config_from_file();
-    }
-    const galaxy::render::RenderConfig quality =
-        galaxy::render::get_render_config();
-    passed &= expect(
-        quality.texture_lod_bias == 8,
-        "texture LOD bias env is clamped to the supported range");
-    passed &= expect(
-        quality.anisotropic_filtering == 16,
-        "anisotropic filtering env is clamped to the supported range");
-    passed &= expect(
-        !quality.enhanced_mipmaps,
-        "enhanced mipmaps env override is applied");
+        const galaxy::render::RenderConfig quality =
+            load("texture_lod_bias=99\nanisotropic_filtering=99\nenhanced_mipmaps=0\n");
+        passed &= expect(
+            quality.texture_lod_bias == 8,
+            "texture LOD bias is clamped to the supported range");
+        passed &= expect(
+            quality.anisotropic_filtering == 16,
+            "anisotropic filtering is clamped to the supported range");
+        passed &= expect(
+            !quality.enhanced_mipmaps,
+            "enhanced mipmaps off is applied");
 
-    {
-        ScopedEnv decouple("GALAXY_FRAME_RATE_DECOUPLE", "1");
-        galaxy::render::load_render_config_from_file();
+        passed &= expect(
+            !load("frame_rate_decouple=1\n").frame_rate_decouple,
+            "frame-rate decoupling stays off");
+        std::filesystem::remove_all(root);
     }
-    passed &= expect(
-        !galaxy::render::get_render_config().frame_rate_decouple,
-        "frame-rate decoupling stays off");
 
     galaxy::render::RenderFeatureCaps caps{};
     caps.d3d12_device_created = true;

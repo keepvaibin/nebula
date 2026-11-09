@@ -54,13 +54,6 @@ inline constexpr const char* input_autopress_script_name() noexcept { return "";
 inline constexpr const char* input_autopress_script_name() noexcept { return "GALAXY_INPUT_AUTOPRESS_SCRIPT"; }
 #endif
 #if !defined(NEBULA_DEV)
-inline const char* input_mode() noexcept { return nullptr; }
-inline constexpr const char* input_mode_name() noexcept { return ""; }
-#else
-inline const char* input_mode() noexcept { return std::getenv("GALAXY_INPUT_MODE"); }
-inline constexpr const char* input_mode_name() noexcept { return "GALAXY_INPUT_MODE"; }
-#endif
-#if !defined(NEBULA_DEV)
 inline constexpr const char* input_pointer2_duration_name() noexcept { return ""; }
 #else
 inline constexpr const char* input_pointer2_duration_name() noexcept { return "GALAXY_INPUT_POINTER2_DURATION"; }
