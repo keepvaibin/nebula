@@ -274,14 +274,32 @@ namespace Nebula.Setup
             File.WriteAllText(Path.Combine(dir, "install.json"), "{\"schema\":\"nebula.install.v1\",\"version\":\"" + version + "\",\"contentFormatVersion\":" + format + ",\"files\":{}}");
         }
 
+        // This version's format holds a store of this store version (the header Setup reads), then the text; older formats
+        // hold the text alone.
         static void WriteContent(string folder, int format, string text)
         {
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "content.json"), "{\"formatVersion\":" + format + "}");
-            File.WriteAllText(Path.Combine(folder, "game.pak"), text);
+            using (var writer = new BinaryWriter(File.Create(Path.Combine(folder, "game.pak"))))
+            {
+                if (format == InstallEngine.ContentFormatVersion)
+                {
+                    writer.Write(System.Text.Encoding.ASCII.GetBytes(StoreMagic));
+                    writer.Write(BuildInfo.StoreVersion);
+                }
+                writer.Write(System.Text.Encoding.UTF8.GetBytes(text));
+            }
         }
 
-        static string Pak(string folder) { return File.ReadAllText(Path.Combine(folder, "game.pak")); }
+        const string StoreMagic = "NBSTORE\0";
+
+        // The text WriteContent put in a game.pak, past a store header.
+        static string Pak(string folder)
+        {
+            byte[] bytes = File.ReadAllBytes(Path.Combine(folder, "game.pak"));
+            int skip = bytes.Length >= 12 && System.Text.Encoding.ASCII.GetString(bytes, 0, 8) == StoreMagic ? 12 : 0;
+            return System.Text.Encoding.UTF8.GetString(bytes, skip, bytes.Length - skip);
+        }
 
 
         static void CheckRollback()

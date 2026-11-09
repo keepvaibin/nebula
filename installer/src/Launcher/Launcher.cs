@@ -168,6 +168,11 @@ namespace Nebula.Launcher
 
         private static readonly string[] Releases = { "RMGE01", "RMGP01", "RMGJ01" };
 
+        // The game's lease names (host_main.cpp hold_runtime_lease: Local\Nebula.<release>.NativeRuntime). Tests set their own
+        // namespace, so a game open in the same session is not the game the test starts or holds.
+        internal static string LeaseNamespace = @"Local\Nebula.";
+        internal static string LeaseName(string release) { return LeaseNamespace + release + ".NativeRuntime"; }
+
         // Waits up to `milliseconds` for the game of every release to end: its lease is free (or abandoned) once the
         // process is gone.
         internal static bool WaitForRuntimeLease(int milliseconds)
@@ -176,7 +181,7 @@ namespace Nebula.Launcher
             foreach (string release in Releases)
             {
                 Mutex lease;
-                if (!Mutex.TryOpenExisting(@"Local\Nebula." + release + ".NativeRuntime", out lease)) continue;
+                if (!Mutex.TryOpenExisting(LeaseName(release), out lease)) continue;
                 using (lease)
                 {
                     bool acquired;
@@ -195,7 +200,7 @@ namespace Nebula.Launcher
             foreach (string release in Releases)
             {
                 Mutex lease;
-                if (!Mutex.TryOpenExisting(@"Local\Nebula." + release + ".NativeRuntime", out lease)) continue;
+                if (!Mutex.TryOpenExisting(LeaseName(release), out lease)) continue;
                 using (lease)
                 {
                     bool acquired;
