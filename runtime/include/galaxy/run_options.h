@@ -95,6 +95,7 @@ struct RunOptions {
     const char* test_mods_screen = nullptr;
     const char* test_mods_changed = nullptr;
     const char* trace_memory = nullptr;
+    const char* trace_cuts = nullptr;
     const char* trace_interp_slots = nullptr;
     const char* trace_present_stats = nullptr;
     const char* trace_thread_cpu = nullptr;
