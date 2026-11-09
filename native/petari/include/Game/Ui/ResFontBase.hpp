@@ -73,6 +73,8 @@ namespace Ui {
             void* mResource;
             FontFile* mFile;
             Tables mTables;
+            // The codes text asked this font for without a glyph, a bit each (every code once in the log).
+            mutable u32 mMissingLogged[0x10000 / 32];
         };
     };  // namespace detail
 }  // namespace Ui

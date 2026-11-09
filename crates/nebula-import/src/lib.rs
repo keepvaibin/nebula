@@ -40,6 +40,29 @@ pub fn release(game_id: &str) -> Option<&'static Release> {
     RELEASES.iter().find(|release| release.game_id == game_id)
 }
 
+/// The release whose main.dol has this SHA-1: the executable decides what a copy is. A copy with its disc id renamed
+/// (a translation or other changed copy, such as RMGR01: RMGP01's main.dol, a Russian EuEnglish) plays as that
+/// release.
+pub fn release_of_dol(sha1: &str) -> Option<&'static Release> {
+    RELEASES.iter().find(|release| release.dol_sha1 == sha1)
+}
+
+/// The release a copy is: its id's, or for a renamed Super Mario Galaxy id ("RMG..."), its main.dol's.
+fn release_of_copy(game_id: &str, dol_sha1: Option<&str>) -> Option<&'static Release> {
+    release(game_id).or_else(|| game_id.starts_with("RMG").then(|| dol_sha1.and_then(release_of_dol)).flatten())
+}
+
+/// The release a boot header and main.dol are; a renamed copy's header takes the release's id, so game.pak names the
+/// release the module, saves, packs and mods go by.
+fn name_release(boot: &mut [u8], dol_sha1: &str) -> Option<&'static Release> {
+    if boot.len() != BOOT_BIN_SIZE {
+        return None;
+    }
+    let known = std::str::from_utf8(&boot[..6]).ok().and_then(|id| release_of_copy(id, Some(dol_sha1)))?;
+    boot[..6].copy_from_slice(known.game_id.as_bytes());
+    Some(known)
+}
+
 const BOOT_BIN_SIZE: usize = 0x440;
 const BI2_BIN_SIZE: usize = 0x2000;
 const APPLOADER_HEADER_SIZE: usize = 0x20;
@@ -92,7 +115,7 @@ impl InputIdentity {
         main_dol_sha1: Option<String>,
         languages: Vec<String>,
     ) -> Self {
-        let known = release(&game_id);
+        let known = release_of_copy(&game_id, main_dol_sha1.as_deref());
         let message = match known {
             None if game_id.starts_with("RMG") => format!(
                 "This is Super Mario Galaxy for {} ({game_id}, revision {revision}){}. Nebula plays the releases for \
@@ -115,6 +138,13 @@ impl InputIdentity {
         InputIdentity {
             supported: message.is_empty(),
             message: match known {
+                Some(known) if message.is_empty() && known.game_id != game_id => format!(
+                    "Supported: Super Mario Galaxy ({}, {}, revision {revision}; {game_id} on this disc, a changed copy \
+                     of it){}.",
+                    known.region,
+                    known.game_id,
+                    in_languages(&languages)
+                ),
                 Some(known) if message.is_empty() => format!(
                     "Supported: Super Mario Galaxy ({}, {game_id}, revision {revision}){}.",
                     known.region,
@@ -250,6 +280,11 @@ impl DiscFile {
         DiscFile { file: Arc::new(file), position: 0 }
     }
 
+    /// The same file from its start.
+    fn again(&self) -> Self {
+        DiscFile { file: Arc::clone(&self.file), position: 0 }
+    }
+
     fn read_at(&self, buffer: &mut [u8], offset: u64) -> io::Result<usize> {
         #[cfg(unix)]
         {
@@ -294,8 +329,13 @@ fn refuse_images() -> Result<()> {
 }
 
 fn open_disc(disc: DiscFile) -> Result<Disc> {
+    open_disc_checked(disc, true)
+}
+
+/// `validate_hashes`: each block read is checked against the partition's hash tables.
+fn open_disc_checked(disc: DiscFile, validate_hashes: bool) -> Result<Disc> {
     refuse_images()?;
-    Disc::new_stream_with_options(Box::new(disc), &OpenOptions { rebuild_encryption: false, validate_hashes: true })
+    Disc::new_stream_with_options(Box::new(disc), &OpenOptions { rebuild_encryption: false, validate_hashes })
         .map_err(|error| anyhow!("this is not a readable GameCube or Wii disc image: {error}"))
 }
 
@@ -306,8 +346,18 @@ pub fn identify(disc: DiscFile) -> Result<Identity> {
     let format = disc.meta().format.to_string();
     let game_id = header.game_id_str().to_owned();
     let title = header.game_title_str().to_owned();
+    let renamed = if header.is_wii() && release(&game_id).is_none() && game_id.starts_with("RMG") {
+        disc.open_partition_kind(PartitionKind::Data)
+            .and_then(|mut partition| partition.meta())
+            .ok()
+            .and_then(|meta| release_of_dol(&sha1_hex(&meta.raw_dol)))
+    } else {
+        None
+    };
     let (supported, message) = if !header.is_wii() {
         (false, format!("{title} is a GameCube game, not Super Mario Galaxy."))
+    } else if let Some(known) = renamed {
+        (true, format!("Super Mario Galaxy ({}; {game_id} on this disc, a changed copy of it), {format}", known.game_id))
     } else if release(&game_id).is_none() {
         (
             false,
@@ -340,12 +390,15 @@ pub fn identify_input(input: &Path) -> Result<InputIdentity> {
     let mut languages = Vec::new();
     if header.is_wii() && game_id.starts_with("RMG") {
         // Another release's languages are read for its message; a partition that cannot be read leaves them out.
+        // Another id's main.dol tells a renamed copy of a release from another release; a partition that cannot be
+        // read leaves it and the languages out.
         let opened = disc.open_partition_kind(PartitionKind::Data);
         if release(&game_id).is_some() {
             let meta = opened.context("the disc's game partition cannot be opened")?.meta().context("the game partition cannot be read")?;
             main_dol_sha1 = Some(sha1_hex(&meta.raw_dol));
             languages = language_folders(&meta.raw_fst);
         } else if let Ok(meta) = opened.and_then(|mut partition| partition.meta()) {
+            main_dol_sha1 = Some(sha1_hex(&meta.raw_dol));
             languages = language_folders(&meta.raw_fst);
         }
     }
@@ -434,23 +487,47 @@ struct Extent {
     label: String,
     start: u64,
     end: u64,
+    /// A file of the file table (two of them may share the very same bytes).
+    file: bool,
 }
 
-/// The furthest end of non-overlapping extents inside the partition: game.pak's logical size.
-fn validate_extents(mut extents: Vec<Extent>, partition_size: u64) -> Result<u64> {
+/// The furthest end of the extents inside the partition (game.pak's logical size), and how many files of the file table
+/// lie on bytes of another file (a copy changed by a tool that wrote one file over others: each is read as the table
+/// says). Files on exactly the same bytes count once and are not counted. A system file shares no byte.
+fn validate_extents(mut extents: Vec<Extent>, partition_size: u64) -> Result<(u64, usize)> {
     extents.retain(|extent| extent.start != extent.end);
     extents.sort_by(|a, b| a.start.cmp(&b.start).then(a.end.cmp(&b.end)));
+    extents.dedup_by(|later, kept| later.file && kept.file && later.start == kept.start && later.end == kept.end);
     for extent in &extents {
         if extent.end < extent.start || extent.end > partition_size {
             bail!("{} lies outside the game partition", extent.label);
         }
     }
-    for pair in extents.windows(2) {
-        if pair[0].end > pair[1].start {
-            bail!("{} and {} overlap on the disc", pair[0].label, pair[1].label);
+    // Sorted by start, an extent overlaps an earlier one exactly when it starts before the furthest end so far.
+    let mut reach: Option<&Extent> = None;
+    let mut shared = 0;
+    for extent in &extents {
+        if let Some(prior) = reach {
+            if prior.end > extent.start {
+                if !(prior.file && extent.file) {
+                    bail!(
+                        "{} ({:#x}..{:#x}) and {} ({:#x}..{:#x}) overlap on the disc",
+                        prior.label,
+                        prior.start,
+                        prior.end,
+                        extent.label,
+                        extent.start,
+                        extent.end
+                    );
+                }
+                shared += 1;
+            }
+        }
+        if reach.map_or(true, |prior| extent.end > prior.end) {
+            reach = Some(extent);
         }
     }
-    Ok(extents.last().map_or(0, |extent| extent.end))
+    Ok((reach.map_or(0, |extent| extent.end), shared))
 }
 
 /// A file of the game partition's file table.
@@ -611,11 +688,23 @@ impl Partition {
         Partition::from_disc(DiscFile::new(file))
     }
 
-    /// The game partition of a disc image.
+    /// The game partition of a disc image. A partition whose hash tables do not match its data (a copy re-packed
+    /// after dumping) is read without them: main.dol's SHA-1 still names the release (Partition::new).
     pub fn from_disc(disc: DiscFile) -> Result<Partition> {
-        let disc = open_disc(disc)?;
+        match Partition::from_disc_checked(disc.again(), true) {
+            Err(error) if format!("{error:#}").contains(" hash") => {
+                println!("NOTE the disc's hash tables do not match its data (a re-packed copy): it is read without them");
+                Partition::from_disc_checked(disc, false)
+            }
+            result => result,
+        }
+    }
+
+    fn from_disc_checked(disc: DiscFile, validate_hashes: bool) -> Result<Partition> {
+        let disc = open_disc_checked(disc, validate_hashes)?;
         let header = disc.header();
-        if !header.is_wii() || release(header.game_id_str()).is_none() {
+        // A renamed id ("RMG...") is checked by its main.dol in Partition::new.
+        if !header.is_wii() || !header.game_id_str().starts_with("RMG") {
             bail!("this disc is not Super Mario Galaxy for North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01)");
         }
         let mut partition =
@@ -661,10 +750,9 @@ impl Partition {
     }
 
     fn new(system: SystemFiles, source: Source) -> Result<Partition> {
-        let SystemFiles { boot, bi2, apploader, dol, fst, tmd } = system;
-        let known = (boot.len() == BOOT_BIN_SIZE)
-            .then(|| std::str::from_utf8(&boot[..6]).ok().and_then(release))
-            .flatten()
+        let SystemFiles { mut boot, bi2, apploader, dol, fst, tmd } = system;
+        let dol_sha1 = sha1_hex(&dol);
+        let known = name_release(&mut boot, &dol_sha1)
             .context("the game partition's boot header is not Super Mario Galaxy's (RMGE01, RMGP01 or RMGJ01)")?;
         if bi2.len() != BI2_BIN_SIZE || apploader.len() < APPLOADER_HEADER_SIZE {
             bail!("the game partition's system files have unexpected sizes");
@@ -674,7 +762,6 @@ impl Partition {
         if apploader.len() != apploader_size {
             bail!("the game partition's apploader has an unexpected size");
         }
-        let dol_sha1 = sha1_hex(&dol);
         if dol_sha1 != known.dol_sha1 {
             bail!(
                 "main.dol differs from Super Mario Galaxy's ({}, SHA-1 {dol_sha1}): the disc image may be damaged",
@@ -705,6 +792,7 @@ impl Partition {
                 label: label.to_string(),
                 start: *start,
                 end: start + bytes.len() as u64,
+                file: false,
             })
             .collect();
         // The boot header reserves room for a larger file table; no file may lie there.
@@ -713,12 +801,16 @@ impl Partition {
                 label: "the file table's reserve".into(),
                 start: fst_offset + fst_size,
                 end: fst_offset + fst_max,
+                file: false,
             });
         }
         for file in &files {
-            extents.push(Extent { label: file.path.clone(), start: file.offset, end: file.offset + file.length });
+            extents.push(Extent { label: file.path.clone(), start: file.offset, end: file.offset + file.length, file: true });
         }
-        let size = validate_extents(extents, partition_size)?;
+        let (size, shared) = validate_extents(extents, partition_size)?;
+        if shared != 0 {
+            println!("NOTE {shared} of the disc's files lie on bytes of another file (a changed copy): each is read as its table says");
+        }
         Ok(Partition { system, files, source, size })
     }
 
@@ -911,19 +1003,39 @@ mod tests {
     }
 
     fn extent(label: &str, start: u64, end: u64) -> Extent {
-        Extent { label: label.into(), start, end }
+        Extent { label: label.into(), start, end, file: true }
     }
 
     #[test]
     fn extents_must_not_overlap_or_leave_the_partition() {
         let size = RMGE01_PARTITION_DATA_BYTES;
-        assert_eq!(validate_extents(vec![extent("b", 0x500, 0x600), extent("a", 0, 0x440)], size).unwrap(), 0x600);
-        assert!(validate_extents(vec![extent("boot.bin", 0, 0x440), extent("file", 0x400, 0x500)], size)
+        let system = |label: &str, start: u64, end: u64| Extent { label: label.into(), start, end, file: false };
+        assert_eq!(validate_extents(vec![extent("b", 0x500, 0x600), extent("a", 0, 0x440)], size).unwrap(), (0x600, 0));
+        assert!(validate_extents(vec![system("boot.bin", 0, 0x440), extent("file", 0x400, 0x500)], size)
             .unwrap_err()
             .to_string()
             .contains("overlap"));
         assert!(validate_extents(vec![extent("file", size - 3, size + 1)], size).is_err());
-        assert_eq!(validate_extents(vec![extent("empty", size + 8, size + 8)], size).unwrap(), 0);
+        assert_eq!(validate_extents(vec![extent("empty", size + 8, size + 8)], size).unwrap(), (0, 0));
+        // Two files on the same bytes are one; a system file never shares.
+        assert_eq!(validate_extents(vec![extent("EuEnglish/a.arc", 0x500, 0x600), extent("EuFrench/a.arc", 0x500, 0x600)], size)
+            .unwrap(), (0x600, 0));
+        assert!(validate_extents(vec![system("boot.bin", 0, 0x440), extent("file", 0, 0x440)], size).is_err());
+        // A file written over the next ones (RMGR01's EuEnglish strap layout holds its EuFrench one): read as listed.
+        assert_eq!(
+            validate_extents(
+                vec![extent("EuEnglish/a.arc", 0x1000, 0x5000), extent("EuFrench/a.arc", 0x2000, 0x3000), extent("b", 0x4000, 0x6000)],
+                size
+            )
+            .unwrap(),
+            (0x6000, 2)
+        );
+        // A system file inside a long file's bytes, past a shorter file that ends before it, is still caught.
+        assert!(validate_extents(
+            vec![extent("long", 0x1000, 0x5000), extent("short", 0x1800, 0x2000), system("fst.bin", 0x3000, 0x3100)],
+            size
+        )
+        .is_err());
     }
 
     enum Node<'a> {
@@ -1224,6 +1336,25 @@ mod tests {
         );
         assert!(japan.supported);
         assert_eq!(japan.message, "Supported: Super Mario Galaxy (Japan, RMGJ01, revision 0), in Japanese.");
+        let renamed = InputIdentity::new(
+            "ISO".into(),
+            "RMGR01".into(),
+            "x".into(),
+            0,
+            Some("9bd1daa520bd1f573b6a4b82e03336e9c51b511f".into()),
+            europe.clone(),
+        );
+        assert!(renamed.supported);
+        assert_eq!(
+            renamed.message,
+            "Supported: Super Mario Galaxy (Europe, RMGP01, revision 0; RMGR01 on this disc, a changed copy of it), in \
+             English, German and French."
+        );
+        let renamed_other =
+            InputIdentity::new("ISO".into(), "RMGR01".into(), "x".into(), 0, Some("00".repeat(20)), europe.clone());
+        assert!(!renamed_other.supported && renamed_other.message.starts_with("This is Super Mario Galaxy for region R"));
+        assert!(!InputIdentity::new("ISO".into(), "RMCP01".into(), "x".into(), 0, Some(RMGE01_DOL_SHA1.into()), Vec::new())
+            .supported);
         let other_dol =
             InputIdentity::new("ISO".into(), "RMGP01".into(), "x".into(), 0, Some(RMGE01_DOL_SHA1.into()), europe);
         assert!(!other_dol.supported && other_dol.message.starts_with("This RMGP01 copy is revision 0 with main.dol"));
@@ -1241,6 +1372,24 @@ mod tests {
             Vec::new(),
         );
         assert!(!revision.supported && revision.message.starts_with("This RMGE01 copy is revision 1"));
+    }
+
+    #[test]
+    fn a_renamed_copy_cooks_as_its_executables_release() {
+        let pal = "9bd1daa520bd1f573b6a4b82e03336e9c51b511f";
+        let mut boot = vec![0u8; BOOT_BIN_SIZE];
+        boot[..6].copy_from_slice(b"RMGR01");
+        assert_eq!(name_release(&mut boot, pal).map(|release| release.game_id), Some("RMGP01"));
+        assert_eq!(&boot[..6], b"RMGP01");
+        // A release's own id keeps it, whatever main.dol is (Partition::new then refuses another executable).
+        boot[..6].copy_from_slice(b"RMGJ01");
+        assert_eq!(name_release(&mut boot, pal).map(|release| release.game_id), Some("RMGJ01"));
+        // Another game, an unknown executable, a short header.
+        boot[..6].copy_from_slice(b"RMCP01");
+        assert!(name_release(&mut boot, pal).is_none());
+        boot[..6].copy_from_slice(b"RMGR01");
+        assert!(name_release(&mut boot, &"00".repeat(20)).is_none() && &boot[..6] == b"RMGR01");
+        assert!(name_release(&mut boot[..6], pal).is_none());
     }
 
     #[test]

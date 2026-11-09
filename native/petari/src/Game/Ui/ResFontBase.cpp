@@ -1,4 +1,5 @@
 #include "Game/Ui/ResFontBase.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 namespace Ui {
     namespace detail {
@@ -10,6 +11,9 @@ namespace Ui {
             mTables.pPages = nullptr;
             mTables.pPageBlocks = nullptr;
             mTables.pageBlockNum = 0;
+            for (u32 i = 0; i < sizeof(mMissingLogged) / sizeof(mMissingLogged[0]); i++) {
+                mMissingLogged[i] = 0;
+            }
         }
 
         ResFontBase::~ResFontBase() {
@@ -139,7 +143,27 @@ namespace Ui {
 
         u16 ResFontBase::GetGlyphIndex(u16 ch) const {
             const u16 index = FindGlyphIndex(ch);
-            return index != cNoGlyph ? index : mFile->alterGlyph;
+            if (index != cNoGlyph) {
+                return index;
+            }
+            // A no-break space (French "50 %") draws as the font's space; line breaking still keeps it.
+            if (ch == 0x00A0 || ch == 0x202F) {
+                const u16 space = FindGlyphIndex(0x20);
+                if (space != cNoGlyph) {
+                    return space;
+                }
+            }
+            // Text that draws a code the font has no glyph for shows the alternate: said once a code, with the
+            // font's cell (messagefont26 26x32, menufont64 59x63, cinemafont26 27x33): a tour in each language proves
+            // its text drawable (tools/nebula_text.py --fonts checks the table against the disc's fonts).
+            u32& bits = mMissingLogged[ch >> 5];
+            const u32 bit = 1u << (ch & 31u);
+            if (ch >= 0x20 && (bits & bit) == 0) {
+                bits |= bit;
+                JUTNativeLog("[font] no glyph U+%04X in the %ux%u font\n", static_cast< unsigned >(ch),
+                             static_cast< unsigned >(mFile->cellWidth), static_cast< unsigned >(mFile->cellHeight));
+            }
+            return mFile->alterGlyph;
         }
 
         u16* ResFontBase::GlyphSlot(CharCode c) const {
