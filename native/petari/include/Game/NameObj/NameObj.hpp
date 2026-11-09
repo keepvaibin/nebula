@@ -41,8 +41,8 @@ public:
     const char* mName;
     // MovementFlag bits.
     u16 mMovementFlag;
-    // The index into the NameObjExecuteInfo array.
-    s16 mExecutorIdx;
+    // The index into the NameObjExecuteInfo array (which grows past any 16-bit count).
+    s32 mExecutorIdx;
     // Names its draws from frame to frame.
     mutable u32 mDrawSlot;
     // Counts the object's lives (MotionSignal).

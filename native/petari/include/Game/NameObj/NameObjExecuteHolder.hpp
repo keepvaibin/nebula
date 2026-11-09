@@ -71,14 +71,16 @@ public:
     NameObjExecuteInfo* getConnectToSceneInfo(const NameObj*) const;
 
 private:
-    // Objects with a pending change, by index; run in index order, as the game's full scans did.
+    // Objects with a pending change, one bit per index; run in index order, as the game's full scans did. A run takes
+    // mBits and leaves a clear set for requests made while it runs, which wait for the next run.
     struct PendingList {
-        s32* mIndices;
-        s32 mCount;
-        s32 mCapacity;
+        u64* mBits;
+        u64* mRunBits;
+        s32 mWords;
+        s32 mCount;  // bits set in mBits
     };
 
-    static void push(PendingList*, s32 index);
+    void push(PendingList*, s32 index);
     void run(PendingList*, void (NameObjExecuteInfo::*pExecute)());
 
     NameObjExecuteInfo* mExecuteArray;
