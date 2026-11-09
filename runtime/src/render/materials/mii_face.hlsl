@@ -20,6 +20,7 @@ struct MaterialConstants {
     float4 lights;     // x the colour channel's light mask, y its diffuse function, z its attenuation form
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

@@ -31,7 +31,3 @@ const fn definition(name: &[u8]) -> u32 {
 }
 pub const NONE: u32 = definition(b"NONE32");
 pub const MATERIAL_SLOTS: usize = definition(b"MATERIAL_SLOTS") as usize;
-
-pub const LIT_EYE_INDEX: u32 = definition(b"LIT_EYE_INDEX");
-pub const LIT_NORMAL_INDEX: u32 = definition(b"LIT_NORMAL_INDEX");
-pub const LIT_SET_INDEX: u32 = definition(b"LIT_SET_INDEX");

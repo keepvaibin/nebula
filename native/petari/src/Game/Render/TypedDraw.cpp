@@ -34,7 +34,7 @@ namespace SiteTextures {
 void SiteMaterial::init(NebulaShaderId shader, Blend blend, u8 depthFunc, bool depthWrite, u8 cull) {
     mCoordRows.clear();
     mTextureCount = 0;
-    memset(mTextures, 0, sizeof(mTextures));
+    mTextures.clear();
     mShader = shader;
     mState = PassStates::plain();
     mState.blend_op = blend == BLEND_OPAQUE ? NEBULA_BLEND_REPLACE : blend == BLEND_SUBTRACT ? NEBULA_BLEND_SUBTRACT : NEBULA_BLEND_ADD;
@@ -480,7 +480,7 @@ void TypedDraw::widen() {
     u32* pIndices = FrameRing::indices(segments * 6, &first);
     writeIndices(NEBULA_PRIMITIVE_QUADS, segments * 4, pIndices);
 
-    NebulaLayoutInput inputs[NEBULA_LAYOUT_MAX_INPUTS];
+    NebulaLayoutInput* const inputs = Frame::alloc< NebulaLayoutInput >(mLayoutCount + 2);
     for (u32 i = 0; i < mLayoutCount; i++) {
         inputs[i] = mLayout[i];
         inputs[i].stride = static_cast< u32 >(stride);

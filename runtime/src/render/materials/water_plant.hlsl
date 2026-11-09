@@ -6,6 +6,7 @@ struct MaterialConstants {
     float4 fog_color;  // rgb
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

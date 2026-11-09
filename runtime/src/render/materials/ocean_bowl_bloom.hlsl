@@ -9,6 +9,7 @@ struct MaterialConstants {
     float4 scroll;  // the two scrolls of the water texture (xy, zw)
 };
 
+#define NATIVE_COORDS 2
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

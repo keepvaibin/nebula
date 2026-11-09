@@ -707,6 +707,8 @@ namespace Frame {
                 desc.pixel = NEBULA_PROGRAM_SITE | static_cast< u64 >(shader) << 1;
                 desc.state = state;
                 desc.position_stride = static_cast< u32 >(stride);
+                // The description's own room is the frame list's limit (nebula_frame_list.h NEBULA_LAYOUT_MAX_INPUTS).
+                inputCount = inputCount > NEBULA_LAYOUT_MAX_INPUTS ? static_cast< u32 >(NEBULA_LAYOUT_MAX_INPUTS) : inputCount;
                 desc.input_count = static_cast< u32 >(inputCount);
                 memcpy(desc.inputs, pInputs, inputCount * sizeof(NebulaLayoutInput));
                 rEntry.mKey = key;

@@ -19,32 +19,56 @@ const NebulaColor16 DefaultBlackColor = {0, 0, 0, 0};
 
 namespace Ui {
     namespace {
-        // The values a form's rows read.
+        // The values a form's rows read; the lists are sized by the material's counted tables.
         struct LayoutValues {
             f32 registers[3][4];
             f32 constants[4][4];
             f32 material_color[4];
-            f32 warp[3][2][3];
-            f32 coord[8][12];
-            f32 map_size[8][2];
-            f32 coord_size[8][2];
             f32 alpha_ref[2];
+            u32 coord_count;
+            f32* coord;  // coord_count x 12: each coordinate's matrix rows
+            u32 scale_count;
+            f32* map_size;    // scale_count x 2
+            f32* coord_size;  // scale_count x 2
+            u32 warp_count;
+            f32* warp;  // warp_count x 6: each indirect matrix's two rows
         };
+
+        // `count` zeroed entries of this frame's memory; none for none.
+        template < class T >
+        T* frameZeroed(u32 count) {
+            if (count == 0) {
+                return nullptr;
+            }
+            T* const pItems = Frame::alloc< T >(count);
+            memset(static_cast< void* >(pItems), 0, count * sizeof(T));
+            return pItems;
+        }
 
         void layoutRow(u32 row, const LayoutValues& rValues, f32* pOut) {
             pOut[0] = pOut[1] = pOut[2] = pOut[3] = 0.0f;
             if (row >= NEBULA_ROW_COORD) {
                 const u32 index = row - NEBULA_ROW_COORD;
-                memcpy(pOut, rValues.coord[index / 3] + (index % 3) * 4, 4 * sizeof(f32));
+                if (index / 3 < rValues.coord_count) {
+                    memcpy(pOut, rValues.coord + (index / 3) * 12 + (index % 3) * 4, 4 * sizeof(f32));
+                } else {
+                    pOut[index % 3] = 1.0f;  // a coordinate the material does not name: the identity
+                }
             } else if (row >= NEBULA_ROW_WARP) {
                 const u32 index = row - NEBULA_ROW_WARP;
-                memcpy(pOut, rValues.warp[index / 2][index % 2], 3 * sizeof(f32));
+                if (index / 2 < rValues.warp_count) {
+                    memcpy(pOut, rValues.warp + (index / 2) * 6 + (index % 2) * 3, 3 * sizeof(f32));
+                }
             } else if (row >= NEBULA_ROW_SCALE) {
                 const u32 index = row - NEBULA_ROW_SCALE;
-                pOut[0] = rValues.coord_size[index][0];
-                pOut[1] = rValues.coord_size[index][1];
-                pOut[2] = rValues.map_size[index][0];
-                pOut[3] = rValues.map_size[index][1];
+                if (index < rValues.scale_count) {
+                    pOut[0] = rValues.coord_size[index * 2];
+                    pOut[1] = rValues.coord_size[index * 2 + 1];
+                    pOut[2] = rValues.map_size[index * 2];
+                    pOut[3] = rValues.map_size[index * 2 + 1];
+                } else {
+                    pOut[0] = pOut[1] = pOut[2] = pOut[3] = 1.0f;
+                }
             } else if (row == NEBULA_ROW_ALPHA_REF) {
                 pOut[0] = rValues.alpha_ref[0];
                 pOut[1] = rValues.alpha_ref[1];
@@ -191,16 +215,16 @@ namespace Ui {
 
 
     namespace {
-        TexSRT RecordSRT(const f32 (&srt)[5]) {
+        TexSRT RecordSRT(const UiSrtData& rSrt) {
             TexSRT out;
-            out.translate = Vec2f(srt[0], srt[1]);
-            out.rotate = srt[2];
-            out.scale = Vec2f(srt[3], srt[4]);
+            out.translate = Vec2f(rSrt.mTranslate[0], rSrt.mTranslate[1]);
+            out.rotate = rSrt.mRotate;
+            out.scale = Vec2f(rSrt.mScale[0], rSrt.mScale[1]);
             return out;
         }
     }  // namespace
 
-    // A cooked material (UiMaterialData): counts within the storage caps, the forms written by the cook.
+    // A cooked material (UiMaterialData): room for each counted list, the forms written by the cook.
     Material::Material(const UiMaterialData* pRes, const ResBlockSet& resBlockSet) {
         Init();
 
@@ -217,38 +241,41 @@ namespace Ui {
             mConstantColors[i] = detail::RecordColor(pRes->mConstants[i]);
         }
 
-        const u8 texMapNum = pRes->mMapCount;
-        const u8 texSRTNum = pRes->mSrtCount;
-        const u8 texCoordGenNum = pRes->mGeneratorCount;
-        const bool allocChanCtrl = pRes->mHasChannel != 0;
-        const bool allocMatCol = pRes->mHasMaterialColor != 0;
-        const bool allocAlpComp = pRes->mHasAlphaCompare != 0;
-        const bool allocBlendMode = pRes->mHasBlend != 0;
-        const u8 indTexSRTNum = pRes->mIndirectSrtCount;
+        const u32 texMapNum = pRes->mMaps.mCount;
+        const u32 texSRTNum = pRes->mSrts.mCount;
+        const u32 texCoordGenNum = pRes->mGenerators.mCount;
+        const bool allocChanCtrl = (pRes->mFlags & UiMaterialFlag_Channel) != 0;
+        const bool allocMatCol = (pRes->mFlags & UiMaterialFlag_MaterialColor) != 0;
+        const bool allocAlpComp = (pRes->mFlags & UiMaterialFlag_AlphaCompare) != 0;
+        const bool allocBlendMode = (pRes->mFlags & UiMaterialFlag_Blend) != 0;
+        const u32 indTexSRTNum = pRes->mIndirectSrts.mCount;
 
         ReserveStorage(texMapNum, texSRTNum, texCoordGenNum, indTexSRTNum, allocChanCtrl, allocMatCol,
                      allocAlpComp, allocBlendMode);
 
         if (mpStorage) {
             SetTextureNum(texMapNum);
+            const UiMapData* const pMaps = resBlockSet.At< UiMapData >(pRes->mMaps.mOffset);
             TexMap* const texMaps = GetTexMapAry();
-            for (u8 i = 0; i < texMapNum; ++i) {
-                const UiMapData& rMap = pRes->mMaps[i];
+            for (u32 i = 0; i < texMapNum; ++i) {
+                const UiMapData& rMap = pMaps[i];
                 void* const pTplRes = resBlockSet.pResAccessor->GetResource(0x74696D67, resBlockSet.TextureName(rMap.mTexture), nullptr);
                 texMaps[i].ReplaceImage(pTplRes, 0);
                 texMaps[i].SetWrapMode(rMap.mWrapS, rMap.mWrapT);
                 texMaps[i].SetFilter(rMap.mMinFilter, rMap.mMagFilter);
             }
 
+            const UiSrtData* const pSrts = resBlockSet.At< UiSrtData >(pRes->mSrts.mOffset);
             TexSRT* texSRTs = GetTexSRTAry();
-            for (int i = 0; i < texSRTNum; ++i) {
-                texSRTs[i] = RecordSRT(pRes->mSrts[i]);
+            for (u32 i = 0; i < texSRTNum; ++i) {
+                texSRTs[i] = RecordSRT(pSrts[i]);
             }
 
+            const UiGeneratorData* const pGenerators = resBlockSet.At< UiGeneratorData >(pRes->mGenerators.mOffset);
             TexCoordGen* texCoordGens = GetTexCoordGenAry();
             SetTexCoordGenNum(texCoordGenNum);
-            for (int i = 0; i < mNum.texCoordGen; ++i) {
-                texCoordGens[i] = TexCoordGen(pRes->mGenerators[i][0], pRes->mGenerators[i][1], pRes->mGenerators[i][2]);
+            for (u32 i = 0; i < mNum.texCoordGen; ++i) {
+                texCoordGens[i] = TexCoordGen(pGenerators[i].mType, pGenerators[i].mSource, pGenerators[i].mMatrix);
             }
 
             if (allocChanCtrl) {
@@ -259,9 +286,10 @@ namespace Ui {
                 GetMatColAry()[0] = detail::RecordColor(pRes->mMaterialColor);
             }
 
+            const UiSrtData* const pIndSrts = resBlockSet.At< UiSrtData >(pRes->mIndirectSrts.mOffset);
             TexSRT* const indTexSRTs = GetIndTexSRTAry();
-            for (int i = 0; i < indTexSRTNum; ++i) {
-                indTexSRTs[i] = RecordSRT(pRes->mIndirectSrts[i]);
+            for (u32 i = 0; i < indTexSRTNum; ++i) {
+                indTexSRTs[i] = RecordSRT(pIndSrts[i]);
             }
 
             if (allocAlpComp) {
@@ -274,9 +302,11 @@ namespace Ui {
                 *GetBlendModePtr() = BlendMode(b[0], b[1], b[2], b[3]);
             }
         }
+        mpFile = resBlockSet.pLayout;
         mNativeForms = pRes->mForms;
-        memcpy(mCoordMap, pRes->mCoordMap, sizeof(mCoordMap));
-        mHasStages = pRes->mHasStages != 0;
+        mCoordMap = resBlockSet.At< u8 >(pRes->mCoordMap.mOffset);
+        mCoordCount = pRes->mCoordMap.mCount;
+        mHasStages = (pRes->mFlags & UiMaterialFlag_Stages) != 0;
     }
 
 
@@ -289,11 +319,10 @@ namespace Ui {
         InitStorageNums(&mNum);
 
         mpStorage = 0;
+        mpFile = nullptr;
         mNativeForms = nullptr;
-        // A material without its own stages: each texture by its own coordinate.
-        for (u32 i = 0; i < 8; i++) {
-            mCoordMap[i] = static_cast< u8 >(i);
-        }
+        mCoordMap = nullptr;
+        mCoordCount = 0;
         mHasStages = false;
     }
 
@@ -317,12 +346,12 @@ namespace Ui {
         ptr->blendMode = 0;
     }
 
-    void Material::ReserveStorage(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 indSRTNum,
+    void Material::ReserveStorage(u32 texMapNum, u32 texSRTNum, u32 texCoordGenNum, u32 indSRTNum,
                                 bool allocChanCtrl, bool allocMatCol, bool allocAlpComp, bool allocBlendMode) {
-        const int chanCtrlNum = allocChanCtrl ? 1 : 0;
-        const int matColNum = allocMatCol ? 1 : 0;
-        const int alpCompNum = allocAlpComp ? 1 : 0;
-        const int blendModeNum = allocBlendMode ? 1 : 0;
+        const u32 chanCtrlNum = allocChanCtrl ? 1 : 0;
+        const u32 matColNum = allocMatCol ? 1 : 0;
+        const u32 alpCompNum = allocAlpComp ? 1 : 0;
+        const u32 blendModeNum = allocBlendMode ? 1 : 0;
 
         if (mCap.texMap < texMapNum || mCap.texSRT < texSRTNum || mCap.texCoordGen < texCoordGenNum ||
             mCap.indSRT < indSRTNum || mCap.chanCtrl < chanCtrlNum || mCap.matCol < matColNum || mCap.alpComp < alpCompNum ||
@@ -416,7 +445,7 @@ namespace Ui {
         mName.set(pName);
     }
 
-    void Material::SetTextureNum(u8 num) {
+    void Material::SetTextureNum(u32 num) {
         if (num > 0) {
             TexMap* const pTexMap = GetTexMapAry();
 
@@ -428,7 +457,7 @@ namespace Ui {
         mNum.texMap = num;
     }
 
-    void Material::SetTexCoordGenNum(u8 num) {
+    void Material::SetTexCoordGenNum(u32 num) {
         if (num > 0) {
             TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
@@ -565,55 +594,63 @@ namespace Ui {
             values.material_color[0] = values.material_color[1] = values.material_color[2] = values.material_color[3] = 1.0f;
         }
 
+        // The material's counted tables size what the rows read.
+        const u32 mapCount = mNum.texMap;
+        const u32 genCount = mNum.texCoordGen;
+        const u32 coordCount = mCoordCount > genCount ? mCoordCount : genCount;
+        const u32 scaleCount = coordCount > mapCount ? coordCount : mapCount;
+        values.coord_count = coordCount;
+        values.coord = frameZeroed< f32 >(coordCount * 12);
+        values.scale_count = scaleCount;
+        values.map_size = frameZeroed< f32 >(scaleCount * 2);
+        values.coord_size = frameZeroed< f32 >(scaleCount * 2);
+        values.warp_count = mNum.indSRT;
+        values.warp = frameZeroed< f32 >(values.warp_count * 6);
+
         bool setTexMtx = false;
-        bool useTexMtx[10];
-
-        for (int i = 0; i < 10; i++) {
-            useTexMtx[i] = false;
-        }
-
-        u8 places[8] = {MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY,
-                        MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY, MODEL_FILE_IDENTITY};
-        for (u32 c = 0; c < 8; c++) {
-            values.coord[c][0] = values.coord[c][5] = values.coord[c][10] = 1.0f;
+        bool* const useTexMtx = frameZeroed< bool >(mNum.texSRT);
+        u8* const places = frameZeroed< u8 >(coordCount);
+        for (u32 c = 0; c < coordCount; c++) {
+            places[c] = MODEL_FILE_IDENTITY;
+            values.coord[c * 12] = values.coord[c * 12 + 5] = values.coord[c * 12 + 10] = 1.0f;
         }
         if (mNum.texCoordGen > 0) {
             const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
-            for (int i = 0; i < mNum.texCoordGen; i++) {
+            for (u32 i = 0; i < genCount; i++) {
                 u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
                 if (pTexCoordGen[i].GetTexGenType() == MODEL_FILE_TG_MTX2x4 && texMtx != MODEL_FILE_IDENTITY) {
-                    useTexMtx[GetTexMtxIdx(texMtx)] = true;
+                    if (GetTexMtxIdx(texMtx) < mNum.texSRT) {
+                        useTexMtx[GetTexMtxIdx(texMtx)] = true;
+                    }
                     setTexMtx = true;
                 }
 
-                if (i < 8) {
-                    places[i] = static_cast< u8 >(texMtx);
-                }
+                places[i] = static_cast< u8 >(texMtx);
             }
         }
 
         if (setTexMtx) {
             const TexSRT* const pTexSrt = GetTexSRTAry();
 
-            for (u8 c = 0; c < 8; c++) {
+            for (u32 c = 0; c < coordCount; c++) {
                 if (places[c] == MODEL_FILE_IDENTITY || GetTexMtxIdx(places[c]) >= mNum.texSRT || !useTexMtx[GetTexMtxIdx(places[c])]) {
                     continue;
                 }
 
                 Mtx34f mtx;
                 CalcTextureMtx(&mtx, pTexSrt[GetTexMtxIdx(places[c])]);
-                memcpy(values.coord[c], &mtx, sizeof(values.coord[c]));
+                memcpy(values.coord + c * 12, &mtx, 12 * sizeof(f32));
             }
         }
 
-        SiteTexture maps[8];
-        bool mapUsed[8] = {false, false, false, false, false, false, false, false};
+        SiteTexture* const maps = frameZeroed< SiteTexture >(mapCount);
+        bool* const mapUsed = frameZeroed< bool >(mapCount);
         if (mNum.texMap > 0) {
             const TexMap* const pTexMap = GetTexMapAry();
 
-            for (int i = 0; i < mNum.texMap && i < 8; i++) {
+            for (u32 i = 0; i < mapCount; i++) {
                 pTexMap[i].Get(&maps[i]);
                 mapUsed[i] = maps[i].mImage != nullptr;
             }
@@ -633,13 +670,14 @@ namespace Ui {
         }
 
         // Each map's size, and each coordinate's scale: the size of the map the cook found it samples.
-        for (u32 k = 0; k < 8; k++) {
-            values.map_size[k][0] = mapUsed[k] && maps[k].mWidth != 0 ? maps[k].mWidth : 1.0f;
-            values.map_size[k][1] = mapUsed[k] && maps[k].mHeight != 0 ? maps[k].mHeight : 1.0f;
-            const u32 map = mCoordMap[k];
-            const bool known = map < 8 && mapUsed[map];
-            values.coord_size[k][0] = known && maps[map].mWidth != 0 ? maps[map].mWidth : values.map_size[k][0];
-            values.coord_size[k][1] = known && maps[map].mHeight != 0 ? maps[map].mHeight : values.map_size[k][1];
+        for (u32 k = 0; k < scaleCount; k++) {
+            const bool own = k < mapCount && mapUsed[k];
+            values.map_size[k * 2] = own && maps[k].mWidth != 0 ? maps[k].mWidth : 1.0f;
+            values.map_size[k * 2 + 1] = own && maps[k].mHeight != 0 ? maps[k].mHeight : 1.0f;
+            const u32 map = k < mCoordCount ? mCoordMap[k] : 255u;
+            const bool known = map < mapCount && mapUsed[map];
+            values.coord_size[k * 2] = known && maps[map].mWidth != 0 ? maps[map].mWidth : values.map_size[k * 2];
+            values.coord_size[k * 2 + 1] = known && maps[map].mHeight != 0 ? maps[map].mHeight : values.map_size[k * 2 + 1];
         }
         if (mHasStages || mNum.texMap == 0) {
             useRasStage = true;
@@ -648,8 +686,8 @@ namespace Ui {
         {
             const TexSRT* const pIndTexSrt = GetIndTexSRTAry();
 
-            for (int i = 0; i < mNum.indSRT && i < 3; i++) {
-                CalcIndTexMtx(values.warp[i], pIndTexSrt[i]);
+            for (u32 i = 0; i < values.warp_count; i++) {
+                CalcIndTexMtx(reinterpret_cast< f32 (*)[3] >(values.warp + i * 6), pIndTexSrt[i]);
             }
         }
 
@@ -677,37 +715,46 @@ namespace Ui {
 
         const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
         const UiFormData* pForm = mNativeForms + ((useRasStage ? 1 : 0) | (remap ? 2 : 0));
+        const u32* const pFormRows = uiAt< u32 >(mpFile, pForm->mRows.mOffset);
+        const u8* const pFormTextures = uiAt< u8 >(mpFile, pForm->mTextures.mOffset);
+        const u8* const pFormInputs = uiAt< u8 >(mpFile, pForm->mInputs.mOffset);
 
-        const u32 rowCount = static_cast< u32 >(pForm->mVertexRows) + pForm->mPixelRows;
+        const u32 vertexRows = pForm->mVertexRows;
+        const u32 rowCount = pForm->mRows.mCount;
         f32 (*pRows)[4] = static_cast< f32 (*)[4] >(Frame::arena(rowCount * 16, 16));
         DrawMatrixRows coordRows;
         for (u32 i = 0; i < rowCount; i++) {
-            const u32 row = pForm->mRows[i];
+            const u32 row = pFormRows[i];
             layoutRow(row, values, pRows[i]);
-            if (row >= NEBULA_ROW_COORD && i < pForm->mVertexRows) {
+            if (row >= NEBULA_ROW_COORD && i < vertexRows) {
                 if ((row - NEBULA_ROW_COORD) % 3 == 0) { coordRows.add(i); }
             }
         }
-        const u32 constants = Frame::addConstants(NEBULA_NONE32, pForm->mVertexRows, pForm->mPixelRows, pRows, coordRows.data(), coordRows.count());
+        const u32 constants = Frame::addConstants(NEBULA_NONE32, vertexRows, rowCount - vertexRows, pRows, coordRows.data(), coordRows.count());
 
-        NebulaFrameTexture list[NEBULA_MATERIAL_SLOTS];
-        for (u32 i = 0; i < pForm->mTextureCount; i++) {
-            const u32 map = pForm->mTextures[i];
-            if (map < 8 && mapUsed[map]) {
+        // The renderer's per-draw texture table takes NEBULA_MATERIAL_SLOTS textures, and a pipeline NEBULA_LAYOUT_MAX_INPUTS
+        // inputs: this check goes with the texture binding step.
+        const u32 textureCount = pForm->mTextures.mCount;
+        if (textureCount > NEBULA_MATERIAL_SLOTS || pForm->mInputs.mCount > NEBULA_LAYOUT_MAX_INPUTS) {
+            detail::SetDrawNothing();
+            return false;
+        }
+        NebulaFrameTexture* const list = frameZeroed< NebulaFrameTexture >(textureCount);
+        for (u32 i = 0; i < textureCount; i++) {
+            const u32 map = pFormTextures[i];
+            if (map < mapCount && mapUsed[map]) {
                 SiteTextures::toFrame(maps[map], &list[i]);
-            } else {
-                memset(&list[i], 0, sizeof(list[i]));
             }
         }
         const NebulaHostServices* pHost = nebula_host();
-        const u32 table = pForm->mTextureCount != 0 ? pHost->texture_table(pHost->user, list, pForm->mTextureCount) : 0;
+        const u32 table = textureCount != 0 ? pHost->texture_table(pHost->user, list, textureCount) : 0;
 
         // A layout material is the last word on ambient: models after it that keep the ambient in force read black.
         const NebulaColor8 black = {0, 0, 0, 0};
         MaterialAmbient::set(0, black);
         MaterialAmbient::set(1, black);
 
-        detail::SetDrawForm(pForm, constants, table, state.word());
+        detail::SetDrawForm(pForm, pFormInputs, constants, table, state.word());
 
         return useRasStage && useVtxColor;
     }
@@ -750,7 +797,7 @@ namespace Ui {
     }
 
     namespace detail {
-        const Size GetTextureSize(Material* pMaterial, u8 idx) {
+        const Size GetTextureSize(Material* pMaterial, u32 idx) {
             if (idx >= pMaterial->GetTextureNum()) {
                 return Size(0.0f, 0.0f);
             }

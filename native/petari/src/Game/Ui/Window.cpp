@@ -140,7 +140,7 @@ namespace Ui {
         }
 
         if (pResContent->mCoordCount > 0) {
-            u8 num = Min< u8 >(pResContent->mCoordCount, 8);
+            const u8 num = pResContent->mCoordCount;
             mContent.texCoordAry.Reserve(num);
 
             if (!mContent.texCoordAry.IsEmpty()) {

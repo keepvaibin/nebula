@@ -11,6 +11,7 @@
 #include "Game/Ui/UiUtil.hpp"
 #include "Game/Ui/Window.hpp"
 #include "Game/Ui/Rect.hpp"
+#include "Game/System/GameLog.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include <cstring>
 
@@ -248,6 +249,10 @@ namespace Ui {
     bool Layout::Build(const void* lytResBuf, ResourceAccessor* pResAcsr) {
         const UiLayoutHeader* const pHead = static_cast< const UiLayoutHeader* >(lytResBuf);
         if (pHead->mMagic != cUiLayoutMagic || pHead->mVersion != cUiDataVersion) {
+            if (pHead->mMagic == cUiLayoutMagic) {
+                GameLog("UiData: a layout of version %u; this game reads version %u (the pak needs a new cook)\n",
+                        static_cast< unsigned >(pHead->mVersion), static_cast< unsigned >(cUiDataVersion));
+            }
             return false;
         }
 

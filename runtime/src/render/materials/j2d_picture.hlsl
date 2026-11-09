@@ -11,6 +11,7 @@ struct MaterialConstants {
     float4 params;       // x: the texture count (1-4), y: the textures with alpha (bit s)
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

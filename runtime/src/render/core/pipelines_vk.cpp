@@ -21,7 +21,8 @@
 namespace galaxy::render::core {
 namespace {
 
-// The vertex inputs' locations (shader_compile_vk.cpp semantic_location).
+// The vertex inputs' locations (shader_compile_vk.cpp semantic_location): the fixed attributes, then the coordinates,
+// as many as a program names.
 enum Location : std::uint32_t {
     kPosition = 0u,
     kNormal = 1u,
@@ -29,12 +30,12 @@ enum Location : std::uint32_t {
     kBinormal = 3u,
     kColor0 = 4u,
     kColor1 = 5u,
-    kCoord0 = 6u,
-    kMatrix = kCoord0 + NEBULA_MATERIAL_SLOTS,
-    kBefore = kMatrix + 1u,
-    kWiden = kMatrix + 2u,
-    kLocations = kMatrix + 3u,
+    kMatrix = 6u,
+    kBefore = 7u,
+    kWiden = 8u,
+    kCoord0 = 9u,
 };
+constexpr std::uint32_t kNoLocation = ~0u;
 
 VkFormat location_format(std::uint32_t location) noexcept {
     switch (location) {
@@ -69,12 +70,12 @@ std::uint32_t input_location(std::uint32_t semantic) noexcept {
     case NEBULA_INPUT_BINORMAL: return kBinormal;
     case NEBULA_INPUT_WIDEN: return kWiden;
     case NEBULA_INPUT_MATRIX: return kMatrix;
-    default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kLocations;
+    default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kNoLocation;
     }
 }
 
-// The locations of a program's stage inputs, as a mask.
-std::uint32_t input_mask(const ProgramBytes& program) noexcept {
+// The locations of a program's stage inputs, one flag for each up to the highest.
+std::vector<bool> input_locations(const ProgramBytes& program) {
     constexpr std::uint32_t kOpVariable = 59u, kOpDecorate = 71u, kDecorationLocation = 30u, kStorageInput = 1u;
     const auto* spirv = static_cast<const std::uint32_t*>(program.data);
     const std::size_t words = program.size / 4u;
@@ -88,13 +89,16 @@ std::uint32_t input_mask(const ProgramBytes& program) noexcept {
             inputs.push_back(spirv[at + 2u]);
         }
     }
-    std::uint32_t mask = 0u;
+    std::vector<bool> reads;
     for (const std::uint32_t input : inputs) {
-        if (const auto it = locations.find(input); it != locations.end() && it->second < kLocations) {
-            mask |= 1u << it->second;
+        if (const auto it = locations.find(input); it != locations.end()) {
+            if (it->second >= reads.size()) {
+                reads.resize(std::size_t{it->second} + 1u, false);
+            }
+            reads[it->second] = true;
         }
     }
-    return mask;
+    return reads;
 }
 
 VkBlendFactor blend_factor(std::uint32_t f) noexcept {
@@ -261,10 +265,12 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
 
     // What the vertex program reads; each from the list if named there, else the stream of zeros. A stride belongs to a
     // pipeline here, so the description's input strides decide the bindings.
-    const std::uint32_t reads = input_mask(vs);
-    VkVertexInputAttributeDescription attributes[kLocations]{};
+    const std::vector<bool> reads = input_locations(vs);
+    std::vector<VkVertexInputAttributeDescription> attributes;
+    attributes.reserve(reads.size());
+    std::vector<bool> placed(reads.size(), false);
     VkVertexInputBindingDescription bindings[gpu::kStreamCount]{};
-    std::uint32_t attribute_count = 0u, binding_count = 0u, placed = 0u;
+    std::uint32_t binding_count = 0u;
     const auto bind = [&](std::uint32_t slot, std::uint32_t stride) {
         for (std::uint32_t i = 0; i < binding_count; ++i) {
             if (bindings[i].binding == slot) {
@@ -274,11 +280,11 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         bindings[binding_count++] = {slot, stride, VK_VERTEX_INPUT_RATE_VERTEX};
     };
     const auto add = [&](std::uint32_t location, VkFormat format, std::uint32_t slot, std::uint32_t stride, std::uint32_t offset) {
-        if (location >= kLocations || ((reads >> location) & 1u) == 0u || ((placed >> location) & 1u) != 0u) {
+        if (location >= reads.size() || !reads[location] || placed[location]) {
             return;
         }
-        placed |= 1u << location;
-        attributes[attribute_count++] = {location, slot, format, offset};
+        placed[location] = true;
+        attributes.push_back({location, slot, format, offset});
         bind(slot, stride);
     };
     const std::uint32_t position_stride = desc.position_stride != 0u ? desc.position_stride : 12u;
@@ -295,14 +301,14 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         const std::uint32_t slot = zero ? std::uint32_t{gpu::kStreamZero} : std::uint32_t{input.stream};
         add(input_location(input.semantic), input_format(input.format), slot, zero ? 0u : input.stride, input.offset);
     }
-    for (std::uint32_t location = 0; location < kLocations; ++location) {
+    for (std::uint32_t location = 0; location < reads.size(); ++location) {
         add(location, location_format(location), gpu::kStreamZero, 0u, 0u);
     }
     VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vertex_input.vertexBindingDescriptionCount = binding_count;
     vertex_input.pVertexBindingDescriptions = bindings;
-    vertex_input.vertexAttributeDescriptionCount = attribute_count;
-    vertex_input.pVertexAttributeDescriptions = attributes;
+    vertex_input.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(attributes.size());
+    vertex_input.pVertexAttributeDescriptions = attributes.data();
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

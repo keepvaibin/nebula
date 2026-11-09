@@ -17,6 +17,10 @@ namespace {
         }
         const UiLayoutHeader* const pLayout = static_cast< const UiLayoutHeader* >(pHolder->mLayoutRes.getRes(0u));
         if (pLayout == nullptr || pLayout->mMagic != cUiLayoutMagic || pLayout->mVersion != cUiDataVersion) {
+            if (pLayout != nullptr && pLayout->mMagic == cUiLayoutMagic) {
+                GameLog("UiData: a layout of version %u; this game reads version %u (the pak needs a new cook)\n",
+                        static_cast< unsigned >(pLayout->mVersion), static_cast< unsigned >(cUiDataVersion));
+            }
             return Ui::ResBlockSet{nullptr, nullptr, nullptr};
         }
         return Ui::ResBlockSet{pLayout, pHolder, nullptr};

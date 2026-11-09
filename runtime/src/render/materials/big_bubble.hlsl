@@ -8,6 +8,7 @@ struct MaterialConstants {
     float4 env_row[3];  // eye-space normal -> the environment map's s, t, q
 };
 
+#define NATIVE_COORDS 2
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

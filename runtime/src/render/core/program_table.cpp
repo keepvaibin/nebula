@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The compiled programs' file, linked into the program. Written by tools/dev/compile_programs.py:
 //   "NBPROG01", vertex rows u32, pixel rows u32, the interface (40 hexadecimal digits), padding to 64 bytes;
-//   rows sorted by id within each stage: id u64, flags u32, reserved u32, then per variant offset u32 and size u32.
+//   rows sorted by id within each stage: id u64, flags u32, coords u32 (a written vertex program's texture coordinate
+//   inputs, 0 for others), then per variant offset u32 and size u32.
 #include "galaxy/render/program_table.h"
 
 #include "galaxy/render/mod_shaders.h"
@@ -26,7 +27,7 @@ constexpr std::uint32_t kLit = 2u;
 struct Row {
     std::uint64_t id;
     std::uint32_t flags;
-    std::uint32_t reserved;
+    std::uint32_t coords;
     struct {
         std::uint32_t offset, size;
     } variants[kProgramVariants];
@@ -119,6 +120,11 @@ unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log
 bool program_reads_world(std::uint64_t vertex) noexcept {
     const Row* row = find(vertex, false);
     return row == nullptr || (row->flags & kReadsWorld) != 0u;
+}
+
+std::uint32_t program_coords(std::uint64_t vertex) noexcept {
+    const Row* row = find(vertex, false);
+    return row != nullptr ? row->coords : 0u;
 }
 
 bool program_lit(std::uint64_t pixel) noexcept {

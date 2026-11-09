@@ -39,6 +39,19 @@ READS_WORLD = 1
 LIT = 2
 
 
+def native_coords(path):
+    """The texture coordinates a written shader's vertex stage reads: its NATIVE_COORDS, from the file or the .hlsl it includes."""
+    text = read(path)
+    found = re.search(r"^\s*#\s*define\s+NATIVE_COORDS\s+(\d+)", text, re.M)
+    if found:
+        return int(found.group(1))
+    for name in re.findall(r'^\s*#\s*include\s+"([^"]+\.hlsl)"', text, re.M):
+        inner = native_coords(os.path.join(MATERIALS, name))
+        if inner is not None:
+            return inner
+    return None
+
+
 def read(path):
     with open(path, encoding="utf-8", errors="replace", newline="") as f:
         return f.read().replace("\r\n", "\n")
@@ -62,6 +75,7 @@ def main():
     jobs = {}
     rows = {}
     flags = {}
+    coords = {}
 
     def add(stage, row, source, text, entry, defines, variant):
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
@@ -85,6 +99,11 @@ def main():
     for number, name in enumerate(WRITTEN + (["inspect_show"] if dev else []), 1):
         source = os.path.join(MATERIALS, name + ".hlsl")
         row = SITE | number << 1
+        count = native_coords(source)
+        if count is None:
+            print(f"{source} defines no NATIVE_COORDS")
+            return 1
+        coords[("vs", row)] = coords[("vs", row | 1)] = count
         add_program("vs", row, source, "native_vs")
         if name in VERTEX_ONLY:
             continue
@@ -179,7 +198,7 @@ def main():
             words = [(0, 0)] * len(VARIANTS)
             for variant, key in rows[(stage, row)].items():
                 words[variant] = place(key)
-            packed.append(struct.pack("<QII", row, flags[(stage, row)], 0) + b"".join(struct.pack("<II", *w) for w in words))
+            packed.append(struct.pack("<QII", row, flags[(stage, row)], coords.get((stage, row), 0)) + b"".join(struct.pack("<II", *w) for w in words))
     head = b"NBPROG01" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
     blob = head + b"".join(packed) + b"".join(chunks)
     temp = out + ".tmp"

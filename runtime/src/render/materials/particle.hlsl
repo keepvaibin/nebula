@@ -21,6 +21,7 @@ struct MaterialConstants {
 };
 
 #define NATIVE_PARTICLE 1
+#define NATIVE_COORDS 3
 #include "native_material.hlsli"
 
 // What the vertex stage hands on: coordinate 0 final (with its projection's q in z), 1 the corner's own; prm and env.

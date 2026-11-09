@@ -5,8 +5,27 @@
 // and output variants are every program's (program.hlsli); b1 holds the material in both stages. NATIVE_WIDE: the vertices
 // are corners a site's line or point became. NATIVE_PARTICLE: the corners place themselves by the presented frame's time.
 // NATIVE_OWN_VERTEX: the includer writes its own vertex stage (particle_instances.hlsl).
+// NATIVE_COORDS (set by the includer before this header): how many texture coordinates the material reads and its
+// varyings carry. Any number: the device's own interpolator count is the limit.
+//
+// The motion varyings come first (TEXCOORD0 and 1), the coordinates after them, so no place depends on the count.
 
 #include "program.hlsli"
+
+#ifndef NATIVE_COORDS
+#error a written material defines NATIVE_COORDS before including native_material.hlsli
+#endif
+#if NATIVE_COORDS < 1
+#error NATIVE_COORDS is at least 1
+#endif
+
+#define NEBULA_MOTION_CURRENT_INDEX 0
+#define NEBULA_MOTION_PREVIOUS_INDEX 1
+#if NATIVE_MOTION
+#define NATIVE_UV_SEMANTIC TEXCOORD2
+#else
+#define NATIVE_UV_SEMANTIC TEXCOORD0
+#endif
 
 cbuffer MaterialBlock : register(b2) {
     MaterialConstants material;
@@ -46,7 +65,7 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
 }
 
 #define NATIVE_VARYING_MEMBERS \
-    float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD0; \
+    float4 pos : SV_Position; PER_SAMPLE float4 color : COLOR0; PER_SAMPLE float4 color1 : COLOR1; PER_SAMPLE float4 uv[NATIVE_COORDS] : NATIVE_UV_SEMANTIC; \
     VARYINGS_MOTION
 
 // What the vertex stage writes and the pixel stage reads.
@@ -69,7 +88,7 @@ struct NativeVertexIn {
     float3 binormal : BINORMAL;
     float4 color0 : COLOR0;
     float4 color1 : COLOR1;
-    float2 uv[NEBULA_MATERIAL_SLOTS] : TEXCOORD;
+    float2 uv[NATIVE_COORDS] : TEXCOORD;
     uint draw_matrix : BLENDINDICES0;
 #if NATIVE_MOTION
     float3 before : POSITION1;  // where the vertex was a frame ago
@@ -88,7 +107,7 @@ struct NativeVertex {
     float3 binormal;
     float4 color0;
     float4 color1;
-    float2 uv[NEBULA_MATERIAL_SLOTS];
+    float2 uv[NATIVE_COORDS];
     uint pn_row;     // the position matrix's first row
 };
 
@@ -97,7 +116,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o);
 #if NATIVE_WIDE
 // A spreading line's or point's texture coordinates move a whole texel-space unit on its far edges.
 void native_texcoord_spread(inout NativeVaryings v, bool right, bool bottom) {
-    [unroll] for (uint i = 0u; i < 3u; ++i) {
+    [unroll] for (uint i = 0u; i < (NATIVE_COORDS < 3 ? NATIVE_COORDS : 3); ++i) {
         v.uv[i].x += right ? 1.0 : 0.0;
         v.uv[i].y += bottom ? 1.0 : 0.0;
     }
@@ -138,7 +157,7 @@ NativeVaryings native_vs(NativeVertexIn input) {
     v.eye_nrm = dot(n, n) > 0.0 ? normalize(n) : n;
     v.color0 = input.color0;
     v.color1 = input.color1;
-    [unroll] for (uint i = 0u; i < NEBULA_MATERIAL_SLOTS; ++i) {
+    [unroll] for (uint i = 0u; i < NATIVE_COORDS; ++i) {
         v.uv[i] = input.uv[i];
     }
     NativeVaryings o = (NativeVaryings)0;

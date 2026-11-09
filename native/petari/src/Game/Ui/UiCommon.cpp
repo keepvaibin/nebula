@@ -1,107 +1,70 @@
 #include "Game/Ui/UiCommon.hpp"
+#include "Game/Render/FrameList.hpp"
 #include "Game/Render/TypedDraw.hpp"
 #include "Game/Ui/Layout.hpp"
 #include <cstdio>
 #include <string.h>
 
-// A pane's quad: position, colour, its matrix number (0: the quad's own; the renderer numbers merged neighbours'
-// from the first one's), as many coordinates as its material reads.
-template < u32 N >
-struct LayoutQuadVertex {
-    f32 x, y, z;
-    Rgba8 color;
-    u32 matrix;
-    f32 uv[N + (N == 0 ? 1 : 0)][2];
-};
-
 namespace {
+    // A pane's quad: position, colour, its matrix number (0: the quad's own; the renderer numbers merged neighbours'
+    // from the first one's), then as many coordinates as its material reads, two floats each.
+    struct LayoutQuadVertex {
+        f32 x, y, z;
+        Rgba8 color;
+        u32 matrix;
+    };
     constexpr u32 cQuadMatrixAt = 16;
-}  // namespace
+    constexpr u32 cQuadCoordAt = 20;
+    static_assert(sizeof(LayoutQuadVertex) == cQuadCoordAt, "the coordinates follow the matrix number");
+    static_assert(offsetof(LayoutQuadVertex, matrix) == cQuadMatrixAt, "NEBULA_INPUT_MATRIX's place");
 
-template < u32 N >
-struct VertexLayout< LayoutQuadVertex< N > > {
-    static constexpr u32 count = 2 + N;
-    static constexpr u16 cStride = sizeof(LayoutQuadVertex< N >);
-    static_assert(offsetof(LayoutQuadVertex< N >, matrix) == cQuadMatrixAt, "NEBULA_INPUT_MATRIX's place");
-    static_assert(cStride % 4 == 0, "four vertices fill whole 16-byte ring rooms: neighbouring quads sit whole vertices apart");
-    static const NebulaLayoutInput* inputs() {
-        static constexpr NebulaLayoutInput list[10] = {
-            {NEBULA_INPUT_MATRIX, 0, 3, 0, cQuadMatrixAt, cStride},
-            {NEBULA_INPUT_COLOR0, 0, 2, 0, 12, cStride},
-            {NEBULA_INPUT_COORD0, 0, 1, 0, 20, cStride},
-            {NEBULA_INPUT_COORD0 + 1, 0, 1, 0, 28, cStride},
-            {NEBULA_INPUT_COORD0 + 2, 0, 1, 0, 36, cStride},
-            {NEBULA_INPUT_COORD0 + 3, 0, 1, 0, 44, cStride},
-            {NEBULA_INPUT_COORD0 + 4, 0, 1, 0, 52, cStride},
-            {NEBULA_INPUT_COORD0 + 5, 0, 1, 0, 60, cStride},
-            {NEBULA_INPUT_COORD0 + 6, 0, 1, 0, 68, cStride},
-            {NEBULA_INPUT_COORD0 + 7, 0, 1, 0, 76, cStride},
-        };
-        return list;
-    }
-};
-
-namespace {
     enum DrawKind { Draw_Nothing, Draw_Picture, Draw_Form };
     DrawKind sDrawKind = Draw_Nothing;
     Mtx sDrawMtx;
     SiteMaterial sDrawPicture;
     const UiFormData* sDrawForm = nullptr;
+    const u8* sDrawInputs = nullptr;
     u32 sDrawConstants = 0;
     u32 sDrawTable = 0;
     u32 sDrawState = 0;
 
-    template < u32 N >
-    void writeQuadOf(TypedDraw& rSite, const Vec2f& rBase, const Ui::Size& rSize, const Vec2f (*pCoords)[4],
-                     const Color8* pColors) {
-        LayoutQuadVertex< N >* pOut = rSite.template vertices< LayoutQuadVertex< N > >(NEBULA_PRIMITIVE_QUADS, 4);
+    void setInput(NebulaLayoutInput& rInput, u32 semantic, u32 format, u32 offset, u32 stride) {
+        rInput.semantic = static_cast< u8 >(semantic);
+        rInput.stream = 0;
+        rInput.format = static_cast< u8 >(format);
+        rInput.reserved = 0;
+        rInput.offset = offset;
+        rInput.stride = stride;
+    }
+
+    // Four vertices of a quad, `num` coordinates each: the stride and the inputs follow from the count. A quad with no
+    // coordinate still has room for one, which nothing reads.
+    void writeQuad(TypedDraw& rSite, const Vec2f& rBase, const Ui::Size& rSize, u8 num, const Vec2f (*pCoords)[4],
+                   const Color8* pColors) {
+        const u32 stride = cQuadCoordAt + 8 * (num > 0 ? num : 1);
+        const u32 inputCount = 2 + num;
+        NebulaLayoutInput* const pInputs = Frame::alloc< NebulaLayoutInput >(inputCount);
+        setInput(pInputs[0], NEBULA_INPUT_MATRIX, 3, cQuadMatrixAt, stride);
+        setInput(pInputs[1], NEBULA_INPUT_COLOR0, 2, 12, stride);
+        for (u32 c = 0; c < num; c++) {
+            setInput(pInputs[2 + c], NEBULA_INPUT_COORD0 + c, 1, cQuadCoordAt + 8 * c, stride);
+        }
+        u8* const pVertices = static_cast< u8* >(rSite.vertices(NEBULA_PRIMITIVE_QUADS, 4, stride, pInputs, inputCount));
         // Corners in the quad's order; a pane's arrays hold them left to right, top to bottom.
         constexpr u8 cCorner[4] = {0, 1, 3, 2};
         for (u32 i = 0; i < 4; i++) {
             const u32 corner = cCorner[i];
-            LayoutQuadVertex< N >& rOut = pOut[i];
+            LayoutQuadVertex& rOut = *reinterpret_cast< LayoutQuadVertex* >(pVertices + i * stride);
+            f32 (*pUv)[2] = reinterpret_cast< f32 (*)[2] >(pVertices + i * stride + cQuadCoordAt);
             rOut.x = rBase.x + ((corner & 1) != 0 ? rSize.width : 0.0f);
             rOut.y = rBase.y + ((corner & 2) != 0 ? rSize.height : 0.0f);
             rOut.z = 0.0f;
             rOut.color = pColors != nullptr ? Rgba8(pColors[corner]) : Rgba8(0, 0, 0, 0);
             rOut.matrix = 0;
-            for (u32 c = 0; c < N; c++) {
-                rOut.uv[c][0] = pCoords[c][corner].x;
-                rOut.uv[c][1] = pCoords[c][corner].y;
+            for (u32 c = 0; c < num; c++) {
+                pUv[c][0] = pCoords[c][corner].x;
+                pUv[c][1] = pCoords[c][corner].y;
             }
-        }
-    }
-
-    void writeQuad(TypedDraw& rSite, const Vec2f& rBase, const Ui::Size& rSize, u8 num, const Vec2f (*pCoords)[4],
-                   const Color8* pColors) {
-        switch (num) {
-        case 0:
-            writeQuadOf< 0 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 1:
-            writeQuadOf< 1 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 2:
-            writeQuadOf< 2 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 3:
-            writeQuadOf< 3 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 4:
-            writeQuadOf< 4 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 5:
-            writeQuadOf< 5 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 6:
-            writeQuadOf< 6 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        case 7:
-            writeQuadOf< 7 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
-        default:
-            writeQuadOf< 8 >(rSite, rBase, rSize, pCoords, pColors);
-            break;
         }
     }
 }  // namespace
@@ -214,9 +177,10 @@ namespace Ui {
             sDrawPicture = rMaterial;
         }
 
-        void SetDrawForm(const UiFormData* pForm, u32 constants, u32 table, u32 state) {
+        void SetDrawForm(const UiFormData* pForm, const u8* pInputs, u32 constants, u32 table, u32 state) {
             sDrawKind = Draw_Form;
             sDrawForm = pForm;
+            sDrawInputs = pInputs;
             sDrawConstants = constants;
             sDrawTable = table;
             sDrawState = state;
@@ -232,7 +196,7 @@ namespace Ui {
                 return;
             }
             TypedDraw site = TypedDraw::eyeSpace(sDrawMtx);
-            site.setForm(sDrawForm->mVertex, sDrawForm->mPixel, sDrawForm->mInputs, sDrawForm->mInputCount, sDrawConstants, sDrawTable,
+            site.setForm(sDrawForm->mVertex, sDrawForm->mPixel, sDrawInputs, sDrawForm->mInputs.mCount, sDrawConstants, sDrawTable,
                          sDrawState);
             writeQuad(site, basePt, size, num, texCoords, vtxColors);
         }

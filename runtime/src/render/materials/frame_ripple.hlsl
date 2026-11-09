@@ -7,6 +7,7 @@ struct MaterialConstants {
     float4 time;  // x: the wave's phase; y: its change per row
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

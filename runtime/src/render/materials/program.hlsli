@@ -165,6 +165,7 @@ float fog_rev_exp2(float f) { const float g = 1.0 - f; return exp2(-8.0 * g * g)
 #if NATIVE_MOTION
 #define NEBULA_TEXCOORD_IMPL(n) TEXCOORD##n
 #define NEBULA_TEXCOORD(n) NEBULA_TEXCOORD_IMPL(n)
+// The motion varyings follow the program's own coordinates: the text that uses them defines the two indices (numbers).
 #define VARYINGS_MOTION float4 mv_cur : NEBULA_TEXCOORD(NEBULA_MOTION_CURRENT_INDEX); float4 mv_prev : NEBULA_TEXCOORD(NEBULA_MOTION_PREVIOUS_INDEX);
 #define PLACE_OUT(o, p) o.pos = p.clip; o.mv_cur = p.mv_cur; o.mv_prev = p.mv_prev
 #else

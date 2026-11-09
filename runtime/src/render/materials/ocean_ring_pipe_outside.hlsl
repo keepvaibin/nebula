@@ -10,6 +10,7 @@ struct MaterialConstants {
     float4 coord[6];  // texture matrices, three rows each
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

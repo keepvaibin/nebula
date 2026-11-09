@@ -12,6 +12,7 @@ struct MaterialConstants {
     float4 params;  // x the mode
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

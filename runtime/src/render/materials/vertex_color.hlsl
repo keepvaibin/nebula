@@ -5,6 +5,7 @@ struct MaterialConstants {
     float4 params;  // x: the alpha reference (0-255; drawn where the alpha is above it), -1 always drawn
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {

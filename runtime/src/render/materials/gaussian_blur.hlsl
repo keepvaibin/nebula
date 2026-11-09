@@ -5,6 +5,7 @@ struct MaterialConstants {
     float4 axis;  // xy the axis (1, 0 or 0, 1), z the width as a fraction of the picture along it, w above 0: the alpha alone, times w and clamped
 };
 
+#define NATIVE_COORDS 1
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
