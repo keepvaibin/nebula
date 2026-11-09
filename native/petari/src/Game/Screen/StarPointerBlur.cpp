@@ -14,7 +14,6 @@
 namespace {
     NEBULA_TUNABLE(f32, sBeginThick, 10.0f);
     static const s32 BLUR_POINT_NUM = 20;
-    NEBULA_TUNABLE(s32, sDrawMode, 2);
     NEBULA_TUNABLE(f32, sEndThick, 0.0f);
 };  // namespace
 
@@ -138,20 +137,7 @@ void StarPointerBlur::draw() const {
 
     const SiteMaterial material = loadMaterial();
     TypedDraw site = TypedDraw::eyeSpace(material, cIdentityMtx);
-    switch (::sDrawMode) {
-    case 0:
-        draw0((NebulaColor8){0, 0, 0, 0});  // this mode draws without a colour
-        break;
-    case 1:
-        draw1();
-        break;
-    case 2:
-        draw2(site);
-        break;
-    }
-}
-
-void StarPointerBlur::draw1() const {
+    draw2(site);
 }
 
 void StarPointerBlur::draw2(TypedDraw& rDraw) const {
