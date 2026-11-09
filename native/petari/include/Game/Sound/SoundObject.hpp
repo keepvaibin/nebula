@@ -14,13 +14,12 @@ public:
     SoundObject(Vec3f*, u8, NebulaArena*);
     ~SoundObject();
 
-    virtual void process();
-    virtual void dispose();
-    virtual bool stopOK(SoundHandle&);
-    virtual SoundHandle* startSound(SoundID);
-    virtual SoundHandle* startSoundIndex(SoundID, u8);
-    virtual SoundHandle* startLevelSound(SoundID);
-    virtual SoundHandle* startLevelSoundIndex(SoundID, u8);
+    void process();
+    void dispose();
+    SoundHandle* startSound(SoundID);
+    SoundHandle* startSoundIndex(SoundID, u8);
+    SoundHandle* startLevelSound(SoundID);
+    SoundHandle* startLevelSoundIndex(SoundID, u8);
 
     void stopSound(SoundID, u32);
     SoundHandle* getLowPrioSound(SoundID);
