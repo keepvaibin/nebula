@@ -58,6 +58,7 @@
 #include "galaxy/windows_power.h"
 #endif
 #include "galaxy/platform_time.h"
+#include "galaxy/input/controls_engine.h"
 #include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
@@ -2239,6 +2240,9 @@ const char* svc_game_id(void*) {
 
 std::atomic<uint32_t> gGameFrames{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
+constexpr uint64_t kNoStopFrames = ~uint64_t{0};
+// Scene frames since the tour's current stop began (GALAXY_TEST_SCRIPT_CLOCK=stop), kNoStopFrames before the first stop.
+std::atomic<uint64_t> gStopFrames{kNoStopFrames};
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
@@ -2643,15 +2647,26 @@ bool input_device_missing(bool wii_remote) {
 
 // The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops).
 galaxy::input::PlayerInput controls_input() {
-    static const bool frame_clock = [] {
+    enum class ScriptClock { Game, Scene, Stop };
+    static const ScriptClock script_clock = [] {
         const char* value = ::galaxy::run_options().test_script_clock;
-        return value != nullptr && std::strcmp(value, "frames") == 0;
+        if (value != nullptr && std::strcmp(value, "frames") == 0) {
+            return ScriptClock::Scene;
+        }
+        return value != nullptr && std::strcmp(value, "stop") == 0 ? ScriptClock::Stop : ScriptClock::Game;
     }();
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
     galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
-    return galaxy::host::native_game_input(
-        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gGameFrames.load(std::memory_order_relaxed), mode,
-        static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
+    uint64_t frame = gGameFrames.load(std::memory_order_relaxed);
+    if (script_clock == ScriptClock::Scene) {
+        frame = gSceneFrames.load(std::memory_order_relaxed);
+    } else if (script_clock == ScriptClock::Stop) {
+        // The scripts count from the current stop and give nothing before the first one.
+        const uint64_t since_stop = gStopFrames.load(std::memory_order_relaxed);
+        galaxy::host::controls::g_native_input_script_held.store(since_stop == kNoStopFrames, std::memory_order_relaxed);
+        frame = since_stop == kNoStopFrames ? 0u : since_stop;
+    }
+    return galaxy::host::native_game_input(frame, mode, static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
 
 // Whether the sample is someone playing: a button down, a stick pushed past its dead zone, a spin, or the pointer moved. Taken
@@ -3057,6 +3072,9 @@ int svc_home_menu(void*, uint32_t what, uint32_t value) {
 //     defeat ends: what they leave appears (KuriboChief, the Gateway's big Goomba: its key).
 //   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of frames, so a
 //     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
+//   GALAXY_TEST_SCRIPT_CLOCK=stop: the scripted input counts scene frames since the tour's current stop began (the clock
+//     of GALAXY_TEST_EVENTS and GALAXY_TEST_TELEPORT) and gives nothing before the first stop; without a tour it is the
+//     scene frames from boot, as frames is.
 std::atomic<bool> gTourDone{false};
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 HANDLE gHostWake = nullptr;

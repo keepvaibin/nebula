@@ -4,6 +4,7 @@
 
 #include "galaxy/runtime_settings.h"
 #include "galaxy/test_temp.h"
+#include "galaxy/input/controls_engine.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/native_input.h"
 
@@ -57,6 +58,14 @@ void scripted_input() {
     expect(input_at(320).stick_x == 0.0f, "the stick lets go after its window");
     set_env("GALAXY_INPUT_AUTOPRESS_SCRIPT", nullptr);
     set_env("GALAXY_INPUT_STICK_SCRIPT", nullptr);
+
+    // The stop clock before the first stop holds the scripts; the first stop lets them act.
+    set_env("GALAXY_INPUT_AUTOPRESS_SCRIPT", "0:10:A");
+    galaxy::host::controls::g_native_input_script_held.store(true);
+    expect(!input_at(5).buttons.a, "a held script presses nothing");
+    galaxy::host::controls::g_native_input_script_held.store(false);
+    expect(input_at(5).buttons.a, "a released script presses again");
+    set_env("GALAXY_INPUT_AUTOPRESS_SCRIPT", nullptr);
 
     set_env("GALAXY_INPUT_POINTER_X", "-0.26");
     set_env("GALAXY_INPUT_POINTER_Y", "0.3");

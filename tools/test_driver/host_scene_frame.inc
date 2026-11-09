@@ -113,6 +113,7 @@
     }
     ++scene_frames;
     gSceneFrames.store(scene_frames, std::memory_order_relaxed);
+    gStopFrames.store(touring && stop_frame == 0 ? kNoStopFrames : scene_frames - stop_frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     // The settings' galaxy select (ADVANCED page): a travel the player asked for, through the game's own stage change,
     // and the Grand Stars with the Observatory they power.
@@ -187,6 +188,7 @@
     if (touring && next < stops.size() && ++since_stop >= tour_frames) {
         since_stop = 0;
         stop_frame = scene_frames;
+        gStopFrames.store(0, std::memory_order_relaxed);
         const Stop& stop = stops[next++];
         action->kind = NEBULA_TEST_CHANGE_STAGE;
         action->scenario = stop.scenario;

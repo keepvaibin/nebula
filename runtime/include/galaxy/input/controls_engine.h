@@ -3,6 +3,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/tilt.h"
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -49,6 +50,9 @@ inline constexpr std::uint8_t kXInputTriggerThreshold = 96u;
 inline constexpr float kReplayStickPointerSpeed = 2.4f;
 inline constexpr float kReplayKeyboardPointerSpeed = 1.6f;
 
+
+// Set while the test driver's stop clock has no stop yet (GALAXY_TEST_SCRIPT_CLOCK=stop): the scripted input gives nothing.
+inline std::atomic<bool> g_native_input_script_held{false};
 
 struct ScriptServices {
     std::int64_t (*clock_ticks)() noexcept = nullptr;
